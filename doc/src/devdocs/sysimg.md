@@ -22,6 +22,32 @@ This operation is useful for multiple reasons. A user may:
 The [`PackageCompiler.jl` package](https://github.com/JuliaLang/PackageCompiler.jl) contains convenient
 wrapper functions to automate this process.
 
+## Coverage instrumentation
+
+Set `JULIA_COVERAGE_IMAGES=1` in `Make.user` before building Julia to compile
+`hit`-mode coverage counters into the system image and the bundled package
+images. Coverage runs in `hit` mode then reuse the native code instead of
+recompiling it in each process. This configuration is intended for coverage
+CI: the images retain instrumentation overhead even when coverage is disabled,
+and cached inference effects can differ from those of an ordinary build.
+
+Like `--check-bounds`, coverage uses the system image as built, without
+invalidating its native code at startup. For newly compiled and interpreted
+code, `@<path>` uses the same instrumentation policy as `user`: Base and Core
+code are excluded. The path filters reports, not compilation. Compatible image
+counters can still report Base and Core locations under the selected path;
+relative Base filenames are resolved against the installed Base source directory.
+Complete coverage of Base requires suitable instrumented images and `all` for
+newly compiled Base code.
+An instrumented image carries counters for every statement, and the requested
+scope selects which of them contribute to the report. The counters contribute
+only when their mode can serve the request: count counters can serve hit mode,
+but hit counters cannot serve count mode. An ordinary system image has no
+counters. Package images are selected separately by their instrumentation flags.
+Allocation tracking retains its per-method recompilation fallback because
+images carry no allocation counters. Image generation does not record coverage
+hits for its own precompile workload.
+
 ## [System image optimized for multiple microarchitectures](@id sysimg-multi-versioning)
 
 The system image can be compiled simultaneously for multiple CPU microarchitectures

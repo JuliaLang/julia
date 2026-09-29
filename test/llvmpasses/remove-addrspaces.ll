@@ -1,6 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='RemoveJuliaAddrspaces' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='RemoveJuliaAddrspaces' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
 ; COM: check that the addrspace of the global itself is removed
 ; OPAQUE: @ejl_enz_runtime_exc = external global {}

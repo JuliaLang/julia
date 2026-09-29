@@ -1265,7 +1265,7 @@ static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv, i
     do {
         jl_value_t *tab_i = jl_atomic_load_relaxed(&tab[index]);
         if (tab_i == jl_nothing) {
-            jl_gc_wb(a, (jl_value_t*)val);
+            jl_gc_wb(a, (void*)&tab[index], (jl_value_t*)val);
             if (atomic)
                 jl_atomic_store_release(&tab[index], (jl_value_t*)val);
             else
@@ -2642,8 +2642,9 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         // complain, but this is used as rooting storage for normalized types
         // below so it must be rooted properly by the GC
         p = jl_alloc_svec_uninit(ntp);
-        for (size_t i = 0; i < ntp; i++)
-            jl_svecset(p, i, iparams[i]);
+        for (size_t i = 0; i < ntp; i++) {
+            jl_gc_write_fresh(p, jl_svec_data(p)[i], jl_value_t, iparams[i]);
+        }
         iparams = jl_svec_data(p);
     }
     assert(jl_is_svec(p) && iparams == jl_svec_data(p));
@@ -2745,7 +2746,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     ndt->types = NULL; // to be filled in below
     int invalid = 0;
     if (istuple) {
-        ndt->types = p; // TODO: this may need to filter out certain types
+        jl_gc_write(ndt, ndt->types, jl_svec_t, p); // TODO: this may need to filter out certain types
     }
     else if (isnamedtuple) {
         jl_value_t *names_tup = jl_svecref(p, 0);
@@ -2778,15 +2779,19 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             }
             else {
                 if (!jl_is_datatype(values_tt)) {
-                    // should have been checked within `check_datatype_parameters`.
-                    jl_error("NamedTuple field type must be a tuple datatype");
-                }
-                if (jl_is_va_tuple((jl_datatype_t*)values_tt) || jl_nparams(values_tt) != nf) {
+                    // reachable for `NamedTuple{(), Union{}}`, e.g. from type intersection
                     if (!nothrow)
-                        jl_error("NamedTuple names and field types must have matching lengths");
+                        jl_error("NamedTuple field type must be a tuple datatype");
                     invalid = 1;
                 }
-                jl_gc_write(ndt, ndt->types, jl_svec_t, ((jl_datatype_t*)values_tt)->parameters);
+                else {
+                    if (jl_is_va_tuple((jl_datatype_t*)values_tt) || jl_nparams(values_tt) != nf) {
+                        if (!nothrow)
+                            jl_error("NamedTuple names and field types must have matching lengths");
+                        invalid = 1;
+                    }
+                    jl_gc_write(ndt, ndt->types, jl_svec_t, ((jl_datatype_t*)values_tt)->parameters);
+                }
             }
         }
         else {
@@ -3451,8 +3456,8 @@ JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROP
     // concurrent first queries compute equal values; the compare-and-swap
     // keeps a single winner
     super = NULL;
+    jl_gc_wb(ndt, (void*)superp, s);
     if (jl_atomic_cmpswap(superp, &super, (jl_datatype_t*)s)) {
-        jl_gc_wb(ndt, s);
         super = (jl_datatype_t*)s;
     }
     return super;
@@ -3543,6 +3548,21 @@ void export_jl_small_typeof(void)
     memcpy(&jl_small_typeof, &ijl_small_typeof, sizeof(jl_small_typeof));
 }
 
+#ifdef JL_LIBRARY_STATIC
+// defined in static_exports.c
+extern const void **const jl_static_exported_data_ptrs[];
+
+void export_jl_sysimg_globals(void)
+{
+    // fill the public copies defined in static_exports.c through the table,
+    // since their names are macros for the internal copies here
+    size_t i = 0;
+#define XX(name, type) *jl_static_exported_data_ptrs[i++] = (const void*)jl_##name;
+    JL_EXPORTED_DATA_POINTERS(XX)
+    JL_CONST_GLOBAL_VARS(XX)
+#undef XX
+}
+#else
 void export_jl_sysimg_globals(void)
 {
     // Use jl_dlsym to reference "jl_"#name from the jl_libjulia_handle instead
@@ -3562,6 +3582,7 @@ void export_jl_sysimg_globals(void)
     JL_CONST_GLOBAL_VARS(YY)
 #undef YY
 }
+#endif
 
 #define XX(name) \
     ijl_small_typeof[(jl_##name##_tag << 4) / sizeof(*ijl_small_typeof)] = jl_##name##_type; \
@@ -3759,9 +3780,11 @@ void jl_init_types(void) JL_GC_DISABLED
                                         jl_emptysvec, 0, 0, 2);
     jl_intersect_type->name->mayinlinealloc = 0;
 
+    // `T` must be declared `Any`: jl_valid_type_param admits non-type values
+    // (`Type{1}`), so a narrower field type would be unsound (#62897)
     jl_typeeq_type = jl_new_datatype(jl_symbol("TypeEq"), core, jl_anytype_type, jl_emptysvec,
                                      jl_perm_symsvec(1, "T"),
-                                     jl_svec(1, kind_or_typevar_type),
+                                     jl_svec(1, jl_any_type),
                                      jl_emptysvec, 0, 0, 1);
     XX(typeeq);
     // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist

@@ -384,9 +384,14 @@ end
 inlining_enabled() = (JLOptions().can_inline == 1)
 
 function instrumentation_enabled(m::Module, only_if_affects_optimizer::Bool)
-    generating_output() && return false # don't alter caches
+    if generating_output()
+        # an image is instrumented for every scope or not at all
+        # (jl_image_coverage_config), and the scope is applied when its counters
+        # are registered; the generating process itself is not instrumented
+        return only_if_affects_optimizer && ccall(:jl_image_coverage_config, UInt8, ()) != 0
+    end
     cov = JLOptions().code_coverage
-    if cov == 1 # user
+    if cov == 1 || cov == 3 # user instrumentation; @path filters reports
         m = moduleroot(m)
         m === Core && return false
         isdefined(Main, :Base) && m === Main.Base && return false

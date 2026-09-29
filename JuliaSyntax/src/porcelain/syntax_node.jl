@@ -86,7 +86,7 @@ end
                raw::GreenNode{SyntaxHead}; keep_parens=false)
 
 A pointer-y AST constructed by removing all trivia from the raw parser output
-(see [`RawGreenNode`](@ref)).  The layout of `SyntaxNode` is different from that
+(see `RawGreenNode`).  The layout of `SyntaxNode` is different from that
 of `Expr` due to the invariant that each node's children are in the order they
 appeared in the source text.
 """

@@ -902,7 +902,11 @@ static void jl_dump_asm_internal(
       TheTarget->createMCSubtargetInfo(TripleArg, cpu, features));
     assert(STI && "Unable to create subtarget info!");
 
+#if JL_LLVM_VERSION >= 230000
+    MCContext Ctx(TheTriple, *MAI, *MRI, *STI, &SrcMgr);
+#else
     MCContext Ctx(TheTriple, MAI.get(), MRI.get(), STI.get(), &SrcMgr);
+#endif
     std::unique_ptr<MCObjectFileInfo> MOFI(
       TheTarget->createMCObjectFileInfo(Ctx, /*PIC=*/false, /*LargeCodeModel=*/ false));
     Ctx.setObjectFileInfo(MOFI.get());
@@ -954,7 +958,11 @@ static void jl_dump_asm_internal(
                                      /*ShowInst*/ false)
 #endif
     );
+#if JL_LLVM_VERSION >= 230000
+    Streamer->initSections(*STI);
+#else
     Streamer->initSections(true, *STI);
+#endif
 
     // Make the MemoryObject wrapper
     ArrayRef<uint8_t> memoryObject(const_cast<uint8_t*>((const uint8_t*)Fptr),Fsize);
@@ -1286,9 +1294,15 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
                 return jl_an_empty_string;
             Context->setGenDwarfForAssembly(false);
             // Duplicate CodeGenTargetMachineImpl::addAsmPrinter here so we can set the asm dialect and add the custom annotation printer
+#if JL_LLVM_VERSION >= 230000
+            const MCSubtargetInfo &STI = TM->getMCSubtargetInfo();
+            const MCAsmInfo &MAI = TM->getMCAsmInfo();
+            const MCRegisterInfo &MRI = TM->getMCRegisterInfo();
+#else
             const MCSubtargetInfo &STI = *TM->getMCSubtargetInfo();
             const MCAsmInfo &MAI = *TM->getMCAsmInfo();
             const MCRegisterInfo &MRI = *TM->getMCRegisterInfo();
+#endif
             const MCInstrInfo &MII = *TM->getMCInstrInfo();
             unsigned OutputAsmDialect = MAI.getAssemblerDialect();
             if (!strcmp(asm_variant, "att"))

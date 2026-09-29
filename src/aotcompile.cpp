@@ -174,6 +174,9 @@ typedef struct {
     // were presented in `codeinfos`; consumed by staticdata.c to rewrite each
     // MethodInstance's `cache` field into a `next`-linked list
     SmallVector<jl_code_instance_t*, 0> jl_ci_order;
+    // coverage counters emitted into the image: (file, line, flags, symbol),
+    // serialized as the `jl_image_coverage` table
+    SmallVector<std::tuple<std::string, int32_t, uint32_t, std::string>, 0> jl_coverage_entries;
 } jl_native_code_desc_t;
 
 extern "C" JL_DLLEXPORT_CODEGEN
@@ -442,7 +445,7 @@ static void makeSafeName(GlobalObject &G)
 }
 
 namespace { // file-local namespace
-class egal_set {
+class JL_GC_TRACKED_TYPE egal_set {
 public:
     jl_genericmemory_t *list = (jl_genericmemory_t*)jl_an_empty_memory_any;
     jl_genericmemory_t *keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
@@ -623,6 +626,14 @@ static void generate_cfunc_thunks(jl_codegen_output_t &out) JL_CANSAFEPOINT
     }
 }
 
+// Coverage counters are the module-local globals `newCoverageCounter` in
+// codegen.cpp creates; they are identified by their name prefix. Keep both in
+// sync if counters ever get a metadata tag or a dedicated section instead.
+static bool isCoverageCounter(const GlobalValue &G)
+{
+    return G.getName().starts_with("jl_covctr");
+}
+
 static bool canPartition(const Function &F)
 {
     return !F.hasFnAttribute(Attribute::AlwaysInline) &&
@@ -703,6 +714,15 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
         }
         for (GlobalObject &G : M.global_objects()) {
             if (!G.isDeclaration()) {
+                if (isCoverageCounter(G)) {
+                    // Coverage counters are referenced by name from the image
+                    // coverage table in the separately-compiled metadata module,
+                    // so they must stay visible across the image's objects.
+                    G.setLinkage(GlobalValue::ExternalLinkage);
+                    G.setVisibility(GlobalValue::HiddenVisibility);
+                    G.setDSOLocal(true);
+                    continue;
+                }
                 G.setLinkage(GlobalValue::InternalLinkage);
                 G.setDSOLocal(true);
                 makeSafeName(G);
@@ -1004,6 +1024,13 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
         gv->setInitializer(Constant::getNullValue(gv->getValueType()));
         gv->setLinkage(GlobalValue::InternalLinkage);
         gv->setDSOLocal(true);
+    }
+
+    data->jl_coverage_entries.reserve(out.image_coverage_counters.size());
+    for (auto &covctr : out.image_coverage_counters) {
+        uint32_t flags = covctr.second.second ? JL_IMAGE_COVERAGE_ENTRY_USER : 0;
+        data->jl_coverage_entries.push_back({covctr.first.first, covctr.first.second, flags,
+                                             covctr.second.first->getName().str()});
     }
 
     for (auto &[ci, funcs] : out.ci_funcs) {
@@ -1325,6 +1352,9 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
                     continue;
                 }
                 if (GVNames[val->getName()] != GVNames[GV.getName()]) {
+                    // coverage counters are shared across partitions by design
+                    if (isCoverageCounter(GV) || isCoverageCounter(*val))
+                        continue;
                     bad = true;
                     dbgs() << "Global " << val->getName() << " used by " << GV.getName() << ", which is in partition " << GVNames[GV.getName()] << " but " << val->getName() << " is in partition " << GVNames[val->getName()] << "\n";
                 }
@@ -1401,6 +1431,12 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     for (auto &G : M.global_values()) {
         if (G.isDeclaration())
             continue;
+        // Coverage counters are shared by commonly inlined code, so
+        // partitioning them together with their users would collapse most of
+        // the module into a single partition. Skip them here; they are
+        // assigned round-robin once the code partitions are settled.
+        if (isCoverageCounter(G))
+            continue;
         // Currently ccallable global aliases have extern linkage, we only want to make the
         // internally linked functions/global variables extern+hidden
         if (G.hasLocalLinkage()) {
@@ -1420,9 +1456,13 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
         for (ConstantUses<GlobalValue> uses(partitioner.nodes[i].GV, M); !uses.done(); uses.next()) {
             auto val = uses.get_info().val;
             auto idx = partitioner.node_map.find(val);
-            // This can fail if we can't partition a global, but it uses something we can partition
-            // This should be fixed by altering canPartition to not permit partitioning this global
-            assert(idx != partitioner.node_map.end());
+            if (idx == partitioner.node_map.end()) {
+                // only coverage counters are deliberately left out of the
+                // partitioning above; anything else is a global that
+                // partitionModule failed to account for
+                assert(isCoverageCounter(*val) && "unpartitioned global that is not a coverage counter");
+                continue;
+            }
             partitioner.merge(i, idx->second);
         }
     }
@@ -1480,6 +1520,19 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
             node.weight = 0;
             node.size = partitioner.nodes[root].size;
         }
+    }
+
+    // Assign the coverage counters that were skipped above, now that the code
+    // partitions are settled. Any partition works: the counters are external
+    // hidden symbols, so cross-partition references resolve at link time.
+    for (auto &G : M.globals()) {
+        if (G.isDeclaration() || !isCoverageCounter(G))
+            continue;
+        auto &P = *pq.top();
+        pq.pop();
+        P.globals.insert({G.getName(), true});
+        P.weight += 1;
+        pq.push(&P);
     }
 
     bool verified = verify_partitioning(partitions, M, fvars, gvars);
@@ -1917,15 +1970,16 @@ static inline void schedule_uv_thread(uv_thread_t *worker, CB &&cb)
 
 // Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
 // as well as partitioning, serialization, and deserialization. `threads` is the
-// partition (shard) count and the ceiling on concurrency; when `jobserver` is
-// non-null the actual thread pool is rationed elastically from the shared
-// imaging token budget.
+// partition (shard) count and `workers` the ceiling on concurrency; when
+// `jobserver` is non-null the actual thread pool is rationed elastically from
+// the shared imaging token budget.
 template<typename ModuleReleasedFunc>
-static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, StringRef name, unsigned threads,
+static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, StringRef name, unsigned threads, unsigned workers,
                 bool unopt_out, bool opt_out, bool obj_out, bool asm_out,
                 JobserverClient *jobserver, ModuleReleasedFunc module_released) {
     SmallVector<AOTOutputs, 16> outputs(threads);
     assert(threads);
+    assert(workers && workers <= threads);
     assert(unopt_out || opt_out || obj_out || asm_out);
     // Timers for timing purposes
     TimerGroup timer_group("add_output", ("Time to optimize and emit LLVM module " + name).str());
@@ -2014,7 +2068,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     // Compile the partitions with a pool of worker threads pulling from a
     // shared queue. The partition count fixes the shard layout; the pool size
     // only controls how many compile concurrently. Without a jobserver the pool
-    // is one thread per partition. With one it is elastic: it starts with the
+    // is `workers` threads. With one it is elastic: it starts with the
     // baseline thread plus whatever tokens are free, polls for tokens released
     // by sibling workers while unclaimed partitions remain, and returns each
     // token as soon as its thread runs out of work.
@@ -2024,11 +2078,11 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
         std::mutex pool_mutex; // guards held_tokens and live_threads
         unsigned held_tokens = 0;
         unsigned live_threads = 0;
-        std::vector<uv_thread_t> workers(threads);
+        std::vector<uv_thread_t> worker_threads(threads);
         unsigned spawned = 0;
         auto spawn_worker = [&]() {
             unsigned t = spawned++;
-            schedule_uv_thread(&workers[t], [&, t]() {
+            schedule_uv_thread(&worker_threads[t], [&, t]() {
                 // Initialize time trace profiler for this thread if enabled
                 if (jl_is_timing_trace)
                     timeTraceProfilerInitialize(jl_timing_trace_granularity, ("aot_thread_" + std::to_string(t)).c_str());
@@ -2088,11 +2142,11 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
             });
         };
 
-        unsigned initial_pool = threads;
+        unsigned initial_pool = workers;
         if (jobserver) {
             // The orchestrator already holds this worker's baseline token (its
             // main thread only sleeps/polls below); ration the rest from the pool.
-            held_tokens = jobserver->acquire(threads - 1);
+            held_tokens = jobserver->acquire(workers - 1);
             initial_pool = 1 + held_tokens;
         }
         live_threads = initial_pool;
@@ -2101,11 +2155,11 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
 
         // Elastic scale-up: while unclaimed partitions remain, grow the pool
         // as sibling precompile workers return tokens to the budget.
-        while (jobserver && spawned < threads) {
+        while (jobserver && spawned < workers) {
             unsigned claimed = next_partition.load(std::memory_order_relaxed);
             if (claimed >= threads)
                 break;
-            unsigned want = std::min(threads - claimed, threads - spawned);
+            unsigned want = std::min(threads - claimed, workers - spawned);
             unsigned got = jobserver->acquire(want);
             if (got) {
                 {
@@ -2123,7 +2177,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
 
         // Wait for all of the worker threads to finish
         for (unsigned t = 0; t < spawned; t++)
-            uv_thread_join(&workers[t]);
+            uv_thread_join(&worker_threads[t]);
         assert(held_tokens == 0 && "precompile jobserver tokens leaked");
     }
 
@@ -2151,11 +2205,6 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
 }
 
 static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserver_active) {
-    // 32-bit systems are very memory-constrained
-#ifdef _P32
-    LLVM_DEBUG(dbgs() << "32-bit systems are restricted to a single thread\n");
-    return 1;
-#endif
     if (jl_is_timing_passes) // LLVM isn't thread safe when timing the passes https://github.com/llvm/llvm-project/issues/44417
         return 1;
     // This is not overridable because empty modules do occasionally appear, but they'll be very small and thus exit early to
@@ -2171,7 +2220,6 @@ static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserve
     unsigned threads = jobserver_active
         ? std::max(jl_effective_threads(), 1)
         : std::max(jl_effective_threads() / 2, 1);
-
     auto max_threads = info.globals / 100;
     if (max_threads < threads) {
         LLVM_DEBUG(dbgs() << "Low global count limiting threads to " << max_threads << " (" << info.globals << "globals)\n");
@@ -2209,9 +2257,25 @@ static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserve
         }
     }
 
+#ifdef _P32
+    // shards are compiled one at a time, so this bounds memory, not parallelism
+    if (!env_threads_set)
+        threads = std::max<size_t>(threads, std::min<size_t>(max_threads, 8));
+#endif
+
     threads = std::max(threads, 1u);
 
     return threads;
+}
+
+// Number of shards compiled concurrently. Each worker holds one shard's IR and
+// object code, which is what keeps a 32-bit sysimage build within address space.
+static unsigned compute_image_worker_count(unsigned threads) {
+#ifdef _P32
+    return 1;
+#else
+    return threads;
+#endif
 }
 
 jl_emission_params_t default_emission_params = { 1 };
@@ -2222,6 +2286,10 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                            const char *unpack_func, jl_emission_params_t *params,
                            Module &dataM)
 {
+    // `data` is deleted when the text outputs finish compiling, well before
+    // the metadata module is built, so take what the coverage table needs now.
+    auto coverage_entries = std::move(data->jl_coverage_entries);
+
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
     // want less optimizations there.
@@ -2269,8 +2337,8 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
     std::string StackProtectorGuard = dataM.getStackProtectorGuard().str();
     unsigned OverrideStackAlignment = dataM.getOverrideStackAlignment();
 
-    auto compile = [&](Module &M, StringRef name, unsigned threads, JobserverClient *jobserver, auto module_released) {
-        return add_output(M, *SourceTM, name, threads, !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname, jobserver, module_released);
+    auto compile = [&](Module &M, StringRef name, unsigned threads, unsigned workers, JobserverClient *jobserver, auto module_released) {
+        return add_output(M, *SourceTM, name, threads, workers, !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname, jobserver, module_released);
     };
 
     SmallVector<AOTOutputs, 16> sysimg_outputs;
@@ -2331,11 +2399,12 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
         // Note that we don't set z to null, this allows the check in WRITE_ARCHIVE
         // to function as expected
         // no need to free the module/context, destructor handles that
-        sysimg_outputs = compile(sysimgM, "sysimg", 1, nullptr, [](Module &) {});
+        sysimg_outputs = compile(sysimgM, "sysimg", 1, 1, nullptr, [](Module &) {});
     }
 
     const bool imaging_mode = true;
     unsigned threads = 1;
+    unsigned workers = 1;
     unsigned nfvars = 0;
     unsigned ngvars = 0;
 
@@ -2391,13 +2460,14 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                 << "    weight: " << module_info.weight << "\n"
             );
             threads = compute_image_thread_count(module_info, jobserver.active());
-            if (jobserver.active() && threads > 1) {
-                // `threads` is the partition count and concurrency ceiling;
-                // add_output rations the actual pool size from the shared
-                // token budget, growing it as sibling workers finish.
+            workers = compute_image_worker_count(threads);
+            if (jobserver.active() && workers > 1) {
+                // `threads` is the partition count and `workers` the concurrency
+                // ceiling; add_output rations the actual pool size from the
+                // shared token budget, growing it as sibling workers finish.
                 text_jobserver = &jobserver;
             }
-            LLVM_DEBUG(dbgs() << "Using up to " << threads << " threads to emit aot image\n");
+            LLVM_DEBUG(dbgs() << "Using " << threads << " shards and up to " << workers << " threads to emit aot image\n");
             nfvars = data->jl_sysimg_fvars.size();
             ngvars = data->jl_sysimg_gvars.size();
             emit_table(dataM, data->jl_sysimg_gvars, "jl_gvars", T_psize);
@@ -2440,7 +2510,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
         // auto lock = TSCtx.getLock();
         // auto dataM = data->M.getModuleUnlocked();
 
-        data_outputs = compile(dataM, "text", threads, text_jobserver, [data](Module &) {
+        data_outputs = compile(dataM, "text", threads, workers, text_jobserver, [data](Module &) {
             // Delete data when add_output thinks it's done with it
             // Saves memory for use when multithreading
             delete data;
@@ -2522,6 +2592,45 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                                                        GlobalVariable::InternalLinkage,
                                                        cpu_target_data, "jl_cpu_target_string");
 
+            // Emit the coverage counter table (jl_image_coverage_t); the loader
+            // registers the counters so image code contributes to reports. An
+            // empty table still marks the image as instrumented.
+            if (jl_image_coverage_config() != 0) {
+                Type *T_i32 = Type::getInt32Ty(Context);
+                Type *T_i64 = Type::getInt64Ty(Context);
+                StructType *ET = StructType::get(Context, {T_ptr, T_ptr, T_i32, T_i32});
+                StringMap<GlobalVariable*> files;
+                SmallVector<Constant*, 0> entries;
+                entries.reserve(coverage_entries.size());
+                for (auto &[file, line, flags, sym] : coverage_entries) {
+                    GlobalVariable *&fgv = files[file];
+                    if (!fgv) {
+                        auto fdata = ConstantDataArray::getString(Context, file, true);
+                        fgv = new GlobalVariable(metadataM, fdata->getType(), true,
+                                                 GlobalVariable::PrivateLinkage, fdata,
+                                                 "jl_coverage_file");
+                    }
+                    auto counter = cast<GlobalVariable>(metadataM.getOrInsertGlobal(sym, T_i64));
+                    counter->setVisibility(GlobalValue::HiddenVisibility);
+                    counter->setDSOLocal(true);
+                    entries.push_back(ConstantStruct::get(ET, {(Constant*)fgv, (Constant*)counter,
+                        ConstantInt::get(T_i32, line), ConstantInt::get(T_i32, flags)}));
+                }
+                auto entries_arr = ConstantArray::get(ArrayType::get(ET, entries.size()), entries);
+                auto entries_gv = new GlobalVariable(metadataM, entries_arr->getType(), true,
+                                                     GlobalVariable::PrivateLinkage, entries_arr,
+                                                     "jl_coverage_entries");
+                StructType *CT = StructType::get(Context, {T_i32, T_i64, T_ptr});
+                auto cov = new GlobalVariable(metadataM, CT, true,
+                                              GlobalVariable::ExternalLinkage,
+                                              ConstantStruct::get(CT, {
+                                                  ConstantInt::get(T_i32, jl_image_coverage_config()),
+                                                  ConstantInt::get(T_i64, entries.size()),
+                                                  (Constant*)entries_gv}),
+                                              "jl_image_coverage");
+                addComdat(cov, TheTriple);
+            }
+
             AT = ArrayType::get(T_psize, 6);
             auto pointers = new GlobalVariable(metadataM, AT, false,
                                             GlobalVariable::ExternalLinkage,
@@ -2539,7 +2648,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
         }
 
         // no need to free module/context, destructor handles that
-        metadata_outputs = compile(metadataM, "data", 1, nullptr, [](Module &) {});
+        metadata_outputs = compile(metadataM, "data", 1, 1, nullptr, [](Module &) {});
     }
 
     {

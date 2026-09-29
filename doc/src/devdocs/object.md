@@ -88,8 +88,10 @@ For updates that are not a single assignment, the barrier can be issued on its o
 run *before* the store it guards:
 
 ```c
-void jl_gc_wb(jl_value_t *parent, jl_value_t *ptr);
+void jl_gc_wb(jl_value_t *parent, void *slot, jl_value_t *ptr);
 ```
+
+Here `slot` is the address of the field being written and `ptr` is the value stored into it.
 
 However, the [Embedding Julia](@ref) section of the manual is also required reading at this point,
 for covering other details of boxing and unboxing various types, and understanding the gc interactions.

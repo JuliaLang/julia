@@ -1130,13 +1130,20 @@ function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_c
 end
 
 """
-    fbody = bodyfunction(basemethod::Method)
+    fbody = bodyfunction(basemethod::Method; world::UInt=Base.get_world_counter())
 
 Find the keyword "body function" (the function that contains the body of the method
 as written, called after all missing keyword-arguments have been assigned default values).
 `basemethod` is the method you obtain via [`which`](@ref) or [`methods`](@ref).
+
+The binding of the body function is looked up in the world age given by `world`, which
+defaults to the current world counter.
+
+!!! compat "Julia 1.14"
+    The `world` keyword argument requires Julia 1.14 or later. Before Julia 1.14,
+    the binding was looked up in the world age of the calling task.
 """
-function bodyfunction(basemethod::Method)
+function bodyfunction(basemethod::Method; world::UInt=get_world_counter())
     fmod = parentmodule(basemethod)
     # The lowered code for `basemethod` should look like
     #   %1 = mkw(kwvalues..., #self#, args...)
@@ -1149,7 +1156,7 @@ function bodyfunction(basemethod::Method)
             fsym = callexpr.args[1]
             while true
                 if isa(fsym, Symbol)
-                    return getfield(fmod, fsym)
+                    return invoke_in_world(world, getglobal, fmod, fsym)
                 elseif isa(fsym, GlobalRef)
                     if fsym.mod === Core && fsym.name === :_apply
                         fsym = callexpr.args[2]
@@ -1157,9 +1164,9 @@ function bodyfunction(basemethod::Method)
                         fsym = callexpr.args[3]
                     end
                     if isa(fsym, Symbol)
-                        return getfield(fmod, fsym)::Function
+                        return invoke_in_world(world, getglobal, fmod, fsym)::Function
                     elseif isa(fsym, GlobalRef)
-                        return getfield(fsym.mod, fsym.name)::Function
+                        return invoke_in_world(world, getglobal, fsym.mod, fsym.name)::Function
                     elseif isa(fsym, Core.SSAValue)
                         fsym = ast.code[fsym.id]
                     else

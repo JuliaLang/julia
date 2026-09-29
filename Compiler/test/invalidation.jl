@@ -463,3 +463,51 @@ let mi = Base.method_instance(co_caller, (COBox,))
     @test ci.owner === InvalidationTesterToken()
     @test ci.max_world == typemax(UInt)
 end
+
+# Unit tests for `Compiler.ReinferUtils`
+# --------------------------------------------------------
+
+module BindingRevalidationTest
+    module Flagged
+        const x = 1
+    end
+    module Provider
+        export only_via_using
+        const only_via_using = 2
+    end
+    module Consumer
+    end
+end
+
+# An `export`/`public` flip repartitions a binding without changing what any lookup of it
+# finds, so the access range must still span it.
+let gr = GlobalRef(BindingRevalidationTest.Flagged, :x)
+    b = convert(Core.Binding, gr)
+    w1 = Base.get_world_counter()
+    r1, _ = Compiler.binding_access_range(gr, Compiler.WorldWithRange(w1, Compiler.WorldRange(UInt(1), w1)), false)
+    p1 = b.partitions.min_world
+    Base.set_binding_visibility!(BindingRevalidationTest.Flagged, :x, :export)
+    w2 = Base.get_world_counter()
+    # A new partition really was created ...
+    @test b.partitions.min_world > p1
+    # ... but the access range is unchanged, because the flip does not change the access key.
+    r2, _ = Compiler.binding_access_range(gr, Compiler.WorldWithRange(w2, Compiler.WorldRange(UInt(1), w2)), false)
+    @test Compiler.min_world(r2) == Compiler.min_world(r1)
+end
+
+# A binding that has never been resolved is not short-circuited to "unchanged": the
+# revalidation predicate resolves it, and judges the resolution it gets.
+let RU = Compiler.ReinferUtils
+    gr = GlobalRef(BindingRevalidationTest.Consumer, :only_via_using)
+    b = convert(Core.Binding, gr)
+    @test !isdefined(b, :partitions)
+    @eval BindingRevalidationTest.Consumer using ..Provider
+    @test RU.binding_changed_since_require_world(b, Base.get_world_counter())
+end
+
+# A binding untouched since the require world is unchanged, via the cheap fast path.
+let RU = Compiler.ReinferUtils
+    b = convert(Core.Binding, GlobalRef(Base, :sin))
+    @test b.partitions.min_world <= Base.get_require_world()
+    @test !RU.binding_changed_since_require_world(b, Base.get_world_counter())
+end

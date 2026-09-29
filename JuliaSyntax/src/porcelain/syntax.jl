@@ -1431,7 +1431,7 @@ function _string_to_est(st::SyntaxTree, cs::SyntaxList; unwrap_literal)
         end
     end
     if unwrap_literal && length(ret_cs) === 1 && kind(ret_cs[1]) === literal_k
-        return ret_cs[1]
+        return _setattr(ret_cs[1], :source, st)
     end
     return mknode(st, ret_cs)
 end

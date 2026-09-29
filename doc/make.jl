@@ -239,6 +239,98 @@ function generate_agent_skill_docs()
 end
 AgentSkillDocs = generate_agent_skill_docs()
 
+# Shared machinery for the generated tab-completion tables in
+# `manual/unicode-input.md` and `manual/emoji-input.md`. The LaTeX and emoji
+# tables are each large enough that rendering both on one page takes the
+# generated HTML past Documenter's `size_threshold`, so they live on separate
+# pages and both call into this module.
+module UnicodeTables
+
+import Markdown
+
+const NBSP = '\u00A0'
+
+# Invert the completion tables: map each completed string to every tab
+# completion sequence that produces it.
+function tab_completions(symbols...)
+    completions = Dict{String, Vector{String}}()
+    for each in symbols, (k, v) in each
+        completions[v] = push!(get!(completions, v, String[]), k)
+    end
+    return completions
+end
+
+# `UnicodeData.txt` is downloaded into the build root by `doc/Makefile`, which
+# is not the directory this file lives in for out-of-tree builds.
+unicode_data_file() = joinpath(Main.buildrootdoc, "UnicodeData.txt")
+
+# Parsed once and shared by every page that renders a table.
+const UNICODE_NAMES = Dict{UInt32, String}()
+
+function unicode_data()
+    isempty(UNICODE_NAMES) || return UNICODE_NAMES
+    open(unicode_data_file()) do unidata
+        for line in readlines(unidata)
+            id, name, desc = split(line, ";")[[1, 2, 11]]
+            codepoint = parse(UInt32, "0x$id")
+            UNICODE_NAMES[codepoint] = titlecase(lowercase(
+                name == "" ? desc : desc == "" ? name : "$name / $desc"))
+        end
+    end
+    return UNICODE_NAMES
+end
+
+# Surround combining characters with no-break spaces (i.e '\u00A0'). Follows the same format
+# for how unicode is displayed on the unicode.org website:
+# https://util.unicode.org/UnicodeJsps/character.jsp?a=0300
+function fix_combining_chars(char)
+    cat = Base.Unicode.category_code(char)
+    return cat == 6 || cat == 8 ? "$NBSP$char$NBSP" : "$char"
+end
+
+function table_entries(completions, unicode_dict)
+    entries = Any[Any[
+        ["Code point(s)"],
+        ["Character(s)"],
+        ["Tab completion sequence(s)"],
+        ["Unicode name(s)"],
+    ]]
+    for (chars, inputs) in sort!(collect(completions), by = first)
+        code_points, unicode_names, characters = String[], String[], String[]
+        for char in chars
+            push!(code_points, "U+$(uppercase(string(UInt32(char), base = 16, pad = 5)))")
+            push!(unicode_names, get(unicode_dict, UInt32(char), "(No Unicode name)"))
+            push!(characters, isempty(characters) ? fix_combining_chars(char) : "$char")
+        end
+        inputs_md = []
+        for (i, input) in enumerate(inputs)
+            i > 1 && push!(inputs_md, ", ")
+            push!(inputs_md, Markdown.Code("", input))
+        end
+        push!(entries, [
+            [join(code_points, " + ")],
+            [join(characters)],
+            inputs_md,
+            [join(unicode_names, " + ")],
+        ])
+    end
+    table = Markdown.Table(entries, [:l, :c, :l, :l])
+    # We also need to wrap the Table in a Markdown.MD "document"
+    return Markdown.MD([table])
+end
+
+"""
+    symbol_table(symbols...)
+
+Render the tab completions in `symbols` (dictionaries mapping a completion
+sequence to the string it expands to, such as `REPL.REPLCompletions.latex_symbols`)
+as a Markdown table, annotated with the code points and Unicode names of each
+completed character.
+"""
+symbol_table(symbols...) = table_entries(tab_completions(symbols...), unicode_data())
+
+end # module UnicodeTables
+
 Manual = [
     "manual/getting-started.md",
     "manual/installation.md",
@@ -280,6 +372,7 @@ Manual = [
     "manual/faq.md",
     "manual/noteworthy-differences.md",
     "manual/unicode-input.md",
+    "manual/emoji-input.md",
     "manual/command-line-interface.md",
     "manual/worldage.md",
 ]

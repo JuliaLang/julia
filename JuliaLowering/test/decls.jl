@@ -762,6 +762,27 @@ gr_mod = Module()
     @test getproperty(gr_mod, sym) isa Function
     @test !Base.isdefinedglobal(test_mod, sym)
 
+    # Declaring gr must not capture a plain `sym` in the evaluating module, in
+    # either order
+    for gr_first in (true, false)
+        @gensym sym
+        decl_gr = Expr(:global, GlobalRef(gr_mod, sym))
+        decl_sym = Expr(:global, sym)
+        decls = gr_first ? (decl_gr, decl_sym) : (decl_sym, decl_gr)
+        @test 1 == jl_eval(test_mod, Expr(:block, decls..., Expr(:(=), sym, 1)))
+        Core.@latestworld
+        @test getproperty(test_mod, sym) == 1
+        @test !Base.isdefinedglobal(gr_mod, sym)
+    end
+
+    # Likewise after `function gr end`
+    @gensym sym
+    @test 1 == jl_eval(test_mod, Expr(:block,
+                                      Expr(:function, GlobalRef(gr_mod, sym)),
+                                      Expr(:(=), sym, 1)))
+    @test getproperty(test_mod, sym) == 1
+    @test getproperty(gr_mod, sym) isa Function
+
     # function gr(x); x; end
     @gensym sym
     @test jl_eval(test_mod, Expr(:function,
@@ -914,9 +935,18 @@ end
     # flisp bug: isdefined throws because `_` is assumed global
     @testset "placeholder" for p_inner in [maybe_int(:_), Expr(:(=), maybe_int(:_), 1)],
         p_block in [p_inner, Expr(:block, p_inner)]
-        @test run(test_mod, Expr(:let, p_block,
-                                 Expr(:block, Expr(:islocal, :_)))) == false
+        ex = Expr(:let, p_block, Expr(:block, Expr(:islocal, :_)))
+        @test run(test_mod, ex) == false context=ex
     end
+    # placeholder should still run rhs
+    @test run(test_mod, :(let v = Int[]
+                              let _ = push!(v, 1); end
+                              length(v)
+                          end)) == 1
+    @test run(test_mod, :(let v::Vector{Int} = Int[]
+                              let _ = push!(v, 1); end
+                              length(v)
+                          end)) == 1
 
     # assignment forms
     @test run(test_mod,

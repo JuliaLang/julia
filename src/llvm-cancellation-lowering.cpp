@@ -98,15 +98,14 @@ static bool isImplicitRuntimeCall(CallInst *CI) {
 
 namespace {
 
-struct CancellationLowering {
-    Function *cancel_point_func;
+struct CancellationLowering : public JuliaPassContext {
     Value *pgcstack;
     Value *reset_ctx_ptr;  // Computed once in entry block, dominates all uses
     Value *ptls_field_ptr; // Pointer to task->ptls, computed alongside reset_ctx_ptr
     Value *eh_field_ptr;   // Pointer to task->eh, computed alongside reset_ctx_ptr
 
-    CancellationLowering(Module &M) : cancel_point_func(nullptr), pgcstack(nullptr), reset_ctx_ptr(nullptr), ptls_field_ptr(nullptr), eh_field_ptr(nullptr) {
-        cancel_point_func = M.getFunction("julia.cancellation_point");
+    CancellationLowering(Module &M) : pgcstack(nullptr), reset_ctx_ptr(nullptr), ptls_field_ptr(nullptr), eh_field_ptr(nullptr) {
+        initFunctions(M);
     }
 
     bool runOnFunction(Function &F);
@@ -172,8 +171,6 @@ bool CancellationLowering::runOnFunction(Function &F) {
     reset_ctx_ptr = nullptr;
     eh_field_ptr = nullptr;
     Instruction *pgcstack_inst = nullptr;  // Only set if pgcstack is from a call, not an argument
-    Function *pgcstack_getter = F.getParent()->getFunction("julia.get_pgcstack");
-    Function *adoptthread_func = F.getParent()->getFunction("julia.get_pgcstack_or_new");
     if (pgcstack_getter || adoptthread_func) {
         for (auto &I : F.getEntryBlock()) {
             if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
@@ -574,8 +571,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
                     // argument-conversion glue (unsafe_convert of a mutable
                     // object), and must not invalidate a reset region
                     // published across an adjacent reset-safe foreign call.
-                    if (Callee && (Callee->getName() == "julia.pointer_from_objref" ||
-                                   Callee->getName() == "julia.gc_loaded"))
+                    if (Callee && (Callee == pointer_from_objref_func || Callee == gc_loaded_func))
                         continue;
                     // Allocations and write barriers are safe to span:
                     // FinalLowerGC (stock and MMTk) lowers annotated sites
@@ -583,8 +579,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
                     // unpublish the region around the operation and
                     // republish it on the way out (so the region even
                     // survives the operation).
-                    if (Callee && (Callee->getName() == "julia.gc_alloc_obj" ||
-                                   Callee->getName() == "julia.write_barrier"))
+                    if (Callee && (Callee == alloc_obj_func || isWriteBarrierFunc(Callee)))
                         continue;
                     UnsafePoints.push_back(CI);
                 }
@@ -688,9 +683,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
                 Function *Callee = CI->getCalledFunction();
                 if (!Callee)
                     continue;
-                StringRef Name = Callee->getName();
-                if (region_open && (Name == "julia.gc_alloc_obj" ||
-                                    Name == "julia.write_barrier")) {
+                if (region_open && (Callee == alloc_obj_func || isWriteBarrierFunc(Callee))) {
                     CI->setMetadata("julia.reset_region", MDNode::get(F.getContext(), {}));
                     Changed = true;
                 }

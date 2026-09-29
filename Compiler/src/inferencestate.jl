@@ -667,8 +667,10 @@ should_insert_coverage(mod::Module, debuginfo::DebugInfo) = should_instrument(mo
 
 function should_instrument(mod::Module, debuginfo::DebugInfo, only_if_affects_optimizer::Bool=false)
     instrumentation_enabled(mod, only_if_affects_optimizer) && return true
-    JLOptions().code_coverage == 3 || JLOptions().malloc_log == 3 || return false
-    # path-specific coverage mode: if any line falls in a tracked file enable coverage for all
+    # an instrumented image covers every path (see instrumentation_enabled)
+    generating_output() && return false
+    JLOptions().malloc_log == 3 || return false
+    # Path-specific allocation tracking: instrument methods with a matching source file.
     return _should_instrument(debuginfo)
 end
 
@@ -1464,6 +1466,9 @@ function get_max_methods_for_func(@nospecialize(f))
     end
     return nothing
 end
+
+max_methods_callee(@nospecialize(f), argtypes::Vector{Any}) =
+    f === Core.kwcall && length(argtypes) >= 3 ? singleton_type(argtypes[3]) : f
 
 # Whether `f` is marked to only allow inference of call sites with fully concrete
 # argument types. `f === nothing` means the callee value is unknown.

@@ -987,19 +987,9 @@ function pi_on_argument(x)
     end
     return -2
 end
-let code = code_typed(pi_on_argument, Tuple{Any})[1].first.code,
-    nisa = 0, found_pi = false
-    for stmt in code
-        if Meta.isexpr(stmt, :call)
-            callee = stmt.args[1]
-            if (callee === isa || callee === :isa || (isa(callee, GlobalRef) &&
-                                                      callee.name === :isa))
-                nisa += 1
-            end
-        elseif stmt === Core.PiNode(Core.Argument(2), Core.Argument)
-            found_pi = true
-        end
-    end
+let src = code_typed(pi_on_argument, Tuple{Any})[1].first
+    nisa = count(iscall((src, isa)), src.code)
+    found_pi = any(==(Core.PiNode(Core.Argument(2), Core.Argument)), src.code)
     @test nisa == 1
     @test found_pi
 end
@@ -2163,6 +2153,15 @@ let src = code_typed1(()) do
     end
     @test count(iscall((src, isdefined)), src.code) == 0
 end
+
+# eliminating a `setfield!` must keep its return value
+sroa_setfield_return(y::Int) = setfield!(Ref(0), :x, y)
+let src = code_typed1(sroa_setfield_return, (Int,))
+    @test !any(iscall((src, setfield!)), src.code)
+    @test src.code[end] == ReturnNode(Argument(2))
+end
+@test sroa_setfield_return(42) == 42
+
 # We should successfully fold the default values of a ScopedValue
 const svalconstprop = ScopedValue(1)
 foosvalconstprop() = svalconstprop[]

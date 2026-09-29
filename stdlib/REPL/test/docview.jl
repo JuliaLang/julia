@@ -77,6 +77,21 @@ end
     @test exact_match_export ≈ 1.0
 end
 
+@testset "string distance skips a shared prefix" begin
+    distance(a, b) = REPL.string_distance(a, length(a), b, length(b))
+
+    @test distance("kitten", "sitting") == 3
+    @test distance("abc", "acb") == 1
+
+    # a prefix shared by both strings contributes nothing, so skipping it must not
+    # change the distance
+    for (a, b) in (("kitten", "sitting"), ("abc", "acb"), ("αkδψm", "αkδm"), ("", "abc")),
+        prefix in ("x", "prefix_", "αβ")
+
+        @test distance(prefix * a, prefix * b) == distance(a, b)
+    end
+end
+
 @testset "Unicode doc lookup (#41589)" begin
     @test REPL.lookup_doc(:(÷=)) isa Markdown.MD
 end

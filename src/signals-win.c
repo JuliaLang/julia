@@ -208,7 +208,10 @@ static SRWLOCK ctx_rewrite_lock = SRWLOCK_INIT;
 // before any frame-based SEH search, so the synthetic frame needs no unwind
 // information.)
 
-static void *jl_win_restore_page = NULL;
+// Only the assembly of jl_win_restore_trigger refers to this by name, which
+// LTO cannot see, so keep it external and marked used: otherwise it is
+// internalized away and the stub is left with an undefined reference.
+__attribute__((used)) void *jl_win_restore_page = NULL;
 
 static inline int jl_addr_is_win_restore_trigger(uintptr_t addr)
 {
@@ -583,6 +586,12 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
             break;
         }
     }
+    else if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION &&
+             jl_get_safe_restore()) {
+        // Also honor unwind recovery on unmanaged threads, such as the profiler.
+        jl_throw_in_ctx(NULL, NULL, ExceptionInfo->ContextRecord);
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
     ios_t full_error, summary;
     ios_mem(&full_error, 0);
     if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION) {
@@ -684,6 +693,10 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
     static int recursion = 0;
     if (recursion++)
         exit(1);
+    else if (ct == NULL)
+        // Avoid Julia teardown on an unmanaged thread: the profiler may have
+        // faulted with a thread suspended that the atexit hooks need to run.
+        jl_raise(SIGSEGV);
     else
         jl_exit(1);
 }
@@ -697,7 +710,6 @@ static TIMECAPS timecaps;
 static HANDLE hBtThread = 0;
 static uv_cond_t bt_data_prof_cond = CONDITION_VARIABLE_INIT;
 
-#ifdef _CPU_X86_64_
 // Callback data structure for profile timeout
 typedef struct {
     _Atomic(int) *abort_ptr;
@@ -715,7 +727,6 @@ static void CALLBACK profile_timeout_cb(PVOID lpParam, BOOLEAN TimerOrWaitFired)
         }
     }
 }
-#endif
 
 static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
 {
@@ -776,6 +787,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
         jl_safe_fprintf(ios_safe_stderr, "failed to create profile watchdog timer queue.\n");
         abort();
     }
+    jl_profile_prefault_tls();
     while (1) {
         DWORD timeout_ms = nsecprof / (GIGA / 1000);
         Sleep(timeout_ms > 0 ? timeout_ms : 1);
@@ -806,7 +818,6 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 }
 
                 // Set up timeout handler for stackwalk
-#ifdef _CPU_X86_64_
                 _Atomic(int) abort_profiling = 0;
                 profile_timeout_data_t timeout_data;
                 timeout_data.abort_ptr = &abort_profiling;
@@ -819,10 +830,16 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                     // Failed to register wait, proceed without timeout protection
                     hTimer = NULL;
                 }
-#endif
 
-                if (!jl_thread_suspend(tid, &c))
+                if (!jl_thread_suspend(tid, &c)) {
+                    // Retire the watchdog with the sample it was armed for:
+                    // left running it fires against a later iteration's
+                    // window and resumes a thread nobody suspended.
+                    jl_set_profile_abort_ptr(NULL);
+                    if (hTimer != NULL)
+                        DeleteTimerQueueTimer(hTimerQueue, hTimer, INVALID_HANDLE_VALUE);
                     continue;
+                }
 
                 jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
                 jl_task_t *t2 = jl_atomic_load_relaxed(&ptls->current_task);
@@ -838,7 +855,6 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                             profile_bt_size_max - profile_bt_size_cur - 1, 0);
                 }
 
-#ifdef _CPU_X86_64_
                 // Clear abort pointer from TLS
                 jl_set_profile_abort_ptr(NULL);
                 if (timeout_data.tid != -1)
@@ -846,9 +862,6 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 // Wait for callback to complete or cancel before continuing
                 if (hTimer != NULL)
                     DeleteTimerQueueTimer(hTimerQueue, hTimer, INVALID_HANDLE_VALUE);
-#else
-                jl_thread_resume(tid);
-#endif
 
                 // META_OFFSET_THREADID store threadid but add 1 as 0 is preserved to indicate end of block
                 profile_bt_data_prof[profile_bt_size_cur++].uintptr = tid + 1;

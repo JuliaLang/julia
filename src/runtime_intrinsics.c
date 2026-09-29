@@ -365,10 +365,14 @@ float julia_bfloat_to_float(uint16_t param) JL_NOTSAFEPOINT {
 }
 
 // starting with GCC 13 and Clang 17, we have __bf16 on most platforms
-// (but not on Windows; this may be a bug in the MSYS2 GCC compilers)
+// (but not on Windows; this may be a bug in the MSYS2 GCC compilers).
+// With Clang on x86, use the emulated return ABI below: returning the computed
+// bits as __bf16 can introduce __truncsfbf2 calls that compiler-rt may not provide.
+// The emulated return ABI puts the same bits in XMM0 without the extra conversion.
 #if ((defined(__GNUC__) && __GNUC__ > 12) || \
      (defined(__clang__) && __clang_major__ > 16)) && \
     !defined(_CPU_PPC64_) && !defined(_CPU_PPC_) && \
+    !(defined(__clang__) && (defined(_CPU_X86_64_) || defined(_CPU_X86_))) && \
     !defined(_OS_WINDOWS_) && !defined(_CPU_RISCV64_)
     #define BFLOAT16_TYPE __bf16
     #define BFLOAT16_TO_UINT16(x) (*(uint16_t*)&(x))

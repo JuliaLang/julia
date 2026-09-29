@@ -256,7 +256,10 @@ end
 # `IndexStyle(a) == IndexLinear()`, it's advantageous to retain pseudo-linear indexing.
 struct IndexSCartesian2{K} <: IndexStyle end   # K = aligned_sizeof(S) ÷ aligned_sizeof(T), a static-sized 2d cartesian iterator
 
-IndexStyle(::Type{ReinterpretArray{T,N,S,A,false}}) where {T,N,S,A<:AbstractArray{S,N}} = IndexStyle(A)
+# only `IndexLinear` is known to be valid when the axes change (#63305)
+IndexStyle(::Type{ReinterpretArray{T,N,S,A,false}}) where {T,N,S,A<:AbstractArray{S,N}} =
+    IndexStyle(A) === IndexLinear() ? IndexLinear() : IndexCartesian()
+
 function IndexStyle(::Type{ReinterpretArray{T,N,S,A,true}}) where {T,N,S,A<:AbstractArray{S}}
     if aligned_sizeof(T) < aligned_sizeof(S)
         IndexStyle(A) === IndexLinear() && return IndexSCartesian2{aligned_sizeof(S) ÷ aligned_sizeof(T)}()
@@ -271,6 +274,10 @@ struct SCartesianIndex2{K}   # can't make <:AbstractCartesianIndex without N, an
     j::Int
 end
 to_index(i::SCartesianIndex2) = i
+nextind(::AbstractArray, i::SCartesianIndex2{K}) where {K} =
+    i.i < K ? SCartesianIndex2{K}(i.i + 1, i.j) : SCartesianIndex2{K}(1, i.j + 1)
+prevind(::AbstractArray, i::SCartesianIndex2{K}) where {K} =
+    i.i > 1 ? SCartesianIndex2{K}(i.i - 1, i.j) : SCartesianIndex2{K}(K, i.j - 1)
 
 struct SCartesianIndices2{K,R<:AbstractUnitRange{Int}} <: AbstractMatrix{SCartesianIndex2{K}}
     indices2::R
@@ -458,7 +465,7 @@ end
     @boundscheck checkbounds(a, inds...)
     li = _to_linear_index(a, inds...)
     ap = cconvert(Ptr{T}, a)
-    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - 1)
+    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - firstindex(a))
     GC.@preserve ap return unsafe_load(p)
 end
 
@@ -607,7 +614,7 @@ end
     @boundscheck checkbounds(a, inds...)
     li = _to_linear_index(a, inds...)
     ap = cconvert(Ptr{T}, a)
-    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - 1)
+    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - firstindex(a))
     GC.@preserve ap unsafe_store!(p, v)
     return a
 end

@@ -11,6 +11,8 @@ New language features
 * `ᵅ` (U+U+1D45), `ᵋ` (U+1D4B), `ᶲ` (U+1DB2), `˱` (U+02F1), `˲` (U+02F2), and `ₔ` (U+2094) can now also be used as
   operator suffixes, accessible as `\^alpha`, `\^epsilon`, `\^ltphi`, `\_<`, `\_>`, and `\_schwa` at the REPL
   ([#60285]).
+* Latex expansions can now be searched like `\?search<tab>` to show all symbols *containing* rather than starting
+    with the search string ([#61464]).
 * The `@label` macro can now create labeled blocks that can be exited early with `break name [value]`. Use
   `@label name expr` for named blocks or `@label expr` for anonymous blocks. Anonymous `@label` blocks
   participate in the default break scope: a plain `break` or `break _` exits the innermost breakable scope,
@@ -89,15 +91,38 @@ Compiler/Runtime improvements
   the LLVM threads each spawns to compile its native image, sharing a single thread budget so idle cores are
   filled during the long tail without oversubscribing the machine when many packages compile at once. The total
   budget can be set with the new `JULIA_PRECOMPILE_THREADS` environment variable ([#61958]).
+* Parallel package precompilation no longer attempts packages whose dependencies failed to precompile;
+  they are reported as skipped instead, and extensions of a failed package are dropped silently. Pass
+  `skip_dependents=false` to `Base.Precompilation.precompilepkgs` to attempt the packages anyway. A new `force`
+  keyword recompiles packages whose cache files are already fresh ([#63122]).
 * Coverage reports now include code executed by the interpreter, such as top-level statements and method
   bodies run with `--compile=min`. Consequently, LCOV output and `.cov` files may contain source lines that
   were absent in earlier releases ([#62514]).
-* Coverage and allocation tracking no longer update counters atomically. This reduces the overhead of
-  instrumented code, but counter values may be inaccurate when the same source line runs concurrently on
-  multiple threads ([#62514]).
+* Coverage and allocation tracking use separate unordered atomic loads and stores. This avoids the atomic
+  read-modify-write overhead reported in [#62424] while keeping concurrent accesses well-defined; execution
+  counts may still be inaccurate when the same source line runs on multiple threads ([#62724]).
 * `--code-coverage=user` no longer includes inlined Base methods whose module cannot be recovered from debug
   information. This prevents coverage from writing `.cov` files for Base sources into the Julia installation
   ([#62514]).
+* Coverage now records only whether each source line ran by default, and reports a count of 1 for executed
+  lines in `.cov` files and LCOV tracefiles. Use `--code-coverage-mode=count` to collect execution counts
+  instead. The default `hit` mode avoids the load and increment at each instrumentation point ([#62724]).
+* Coverage runs can reuse instrumented package images across processes. The counter mode is part of
+  the cache identity; `user`, `all`, and `@path` select the same image variants and filter the counters
+  reported. Count images can also serve hit requests ([#62724]).
+* `--code-coverage=all` no longer invalidates system-image code at startup. To collect coverage from
+  that code, build Julia with `JULIA_COVERAGE_IMAGES=1`, which instruments the system image and bundled
+  package images in hit mode. `@path` instruments newly compiled and interpreted code like `user`,
+  while also reporting compatible image counters under the selected path ([#62724]).
+* Resolved global variable accesses now carry the binding partition they act on through lowered code, instead
+  of code generation re-deriving it by scanning a binding's partitions. After optimization, an access that
+  previously appeared as a `GlobalRef`, `getglobal` or `setglobal!` may instead appear as a
+  `Core.BindingPartition`, as the left-hand side of an assignment to one, or as a call to one of the new
+  `Core.getglobal_partition`, `Core.setglobal_partition`, `Core.swapglobal_partition`,
+  `Core.modifyglobal_partition`, `Core.replaceglobal_partition`, `Core.setglobalonce_partition`,
+  `Core.isdefinedglobal_partition` or `Core.depwarn_partition` builtin function. This does not change the
+  meaning of the program, but packages that inspect optimized IR (e.g. from `code_typed`) will encounter
+  these new forms. See the "Lowered form" section of the developer documentation for their semantics ([#62452]).
 
 Command-line option changes
 ---------------------------
@@ -141,6 +166,8 @@ Build system changes
 New library functions
 ---------------------
 
+* `Base.decompose(x::Real)` has been made `public` (but not exported); it is the point
+  where rational-valued `Real` subtypes that support hashing hook into the hashing protocol ([#63262]).
 * `tap(f)` creates a function that calls `f(x)` for side effects and returns `x` ([#61340]).
 * `unsplat(f)` creates a function that bundles its arguments into a tuple and passes them to `f`;
   it is the inverse of `splat` ([#62714]).
@@ -192,6 +219,16 @@ Standard library changes
 
 * `codepoint(c)` now succeeds for overlong encodings.  `Base.ismalformed`, `Base.isoverlong`, and
   `Base.show_invalid` are now `public` and documented (but not exported) ([#55152]).
+* `isspace` now returns `true` for U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR),
+  so that it matches the Unicode `White_Space` property. This affects functions that default to
+  `isspace`, such as `split`, `strip` and `parse`, as well as word splitting in command literals.
+* The `Precompiling` messages printed while loading name packages without their uuid when the
+  name is unambiguous in the environment, name extensions by their parent package, and say which
+  dependency is already loaded at a different version when that is why a cache was not reused ([#63185]).
+* Precompile cache file names now also include the `environment_id` that Pkg records in the manifest
+  (the project uuid, or a generated one), so containers sharing a depot with different projects mounted
+  at the same path keep their caches from overwriting each other. Loading is unaffected, as it checks
+  file contents rather than names ([#63268]).
 
 #### JuliaSyntaxHighlighting
 
@@ -204,12 +241,20 @@ Standard library changes
 * Many improvements and bugfixes for rendering Markdown lists in a terminal ([#55456], [#60519]).
 * Strikethrough text via `~strike~` or `~~through~~` is now supported by the Markdown parser ([#60537]).
 * Many, many bug fixes and minor tweaks; overall behavior is now much closer to CommonMark ([#59977], [#60502]).
+* Table columns whose delimiter cell has no `:` (such as `---`) are now left-aligned, as on
+  GitHub, instead of right-aligned.
 
 #### Profile
 
 #### Random
 
 #### REPL
+
+* Tab completion now supports `\escape` for `⎋` and `\xmark` for `✗`.
+* The Julia REPL now emits OSC 133 semantic prompt markers for terminal integration.
+* A `using`/`import` statement that loads several packages, such as `using A, B, C`, now precompiles
+  all of them (and the extensions they make loadable) in a single parallel session, rather than one
+  session per package ([#63185]).
 
 #### Sockets
 

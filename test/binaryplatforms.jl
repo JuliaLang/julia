@@ -309,6 +309,50 @@ end
     @test eval(Meta.parse(repr(p))) == p
 end
 
+@testset "Deterministic serialization" begin
+    # "base" tags, which have a forced order
+    base_tags = [
+        "libgfortran_version" => "5.0.0", "cxxstring_abi" => "cxx11", "os_version" => "20",
+    ]
+    # "extra" tags, which will just be sorted
+    extra_tags = [
+        "tag1" => "a", "tag2" => "b", "tag8" => "c", "tag9" => "d", "cuda" => "10.1",
+    ]
+
+    function permutations(v::Vector)
+        length(v) <= 1 && return [v]
+        return [vcat(v[i], rest) for i in eachindex(v) for rest in permutations(deleteat!(copy(v), i))]
+    end
+
+    function check_platform(p)
+        @test p == reference
+        @test triplet(p) == triplet(reference)
+        @test repr(p) == repr(reference)
+        @test string(p) == string(reference)
+    end
+
+    reference = Platform("aarch64", "macos", Dict{String,String}(vcat(base_tags, extra_tags)))
+    check_platform(reference)
+
+    for (i, extra_tags_ordered) in enumerate(permutations(extra_tags))
+        all_tags = vcat(base_tags, extra_tags_ordered)
+        # `Dict` constructor, inserting in the given order
+        p = Platform("aarch64", "macos", Dict{String,String}(all_tags))
+        check_platform(p)
+
+        # Keyword constructor, passing in the given order
+        p = Platform("aarch64", "macos"; (Symbol(k) => v for (k, v) in all_tags)...)
+        check_platform(p)
+
+        # Dict-like mutation, setting tags in the given order
+        p = Platform("aarch64", "macos")
+        for (k, v) in all_tags
+            p[k] = v
+        end
+        check_platform(p)
+    end
+end
+
 @testset "platforms_match()" begin
     # Just do a quick combinatorial sweep for completeness' sake for platform matching
     linux = P("x86_64", "linux")

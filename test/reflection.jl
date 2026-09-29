@@ -1293,6 +1293,20 @@ end
     @test occursin("f2#", String(nameof(f)))
 end
 
+module BodyFunctionWorld
+const before = Base.get_world_counter()
+f(x; a=1) = x + a
+end
+
+@testset "bodyfunction world age" begin
+    m = only(methods(BodyFunctionWorld.f))
+    # the body function is found even when the calling task runs in a world age
+    # that predates its definition
+    f = Base.invoke_in_world(BodyFunctionWorld.before, Base.bodyfunction, m)
+    @test occursin("f#", String(nameof(f)))
+    @test Base.bodyfunction(m; world=m.primary_world) === f
+end
+
 
 @testset "code_typed(; world)" begin
     mod = @eval module $(gensym()) end

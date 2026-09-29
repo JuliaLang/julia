@@ -51,8 +51,10 @@ static void attach_exception_port(thread_port_t thread, int segv_only);
 
 static mach_port_t segv_port = 0;
 
-// Dedicated PROT_NONE page for the kernel-assisted restore trigger.
-void *jl_mach_restore_page = NULL;
+// Dedicated PROT_NONE page for the kernel-assisted restore trigger. Only the
+// assembly of jl_mach_restore_trigger refers to it by name, which LTO cannot
+// see, so mark it used to keep it from being internalized.
+__attribute__((used)) void *jl_mach_restore_page = NULL;
 
 // Maximum float state count (in natural_t units) across all supported flavors.
 #if defined(_CPU_X86_64_)

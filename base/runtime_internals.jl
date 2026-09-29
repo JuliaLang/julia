@@ -279,6 +279,8 @@ is_some_implicit(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT_GLOBAL || kind 
 is_some_explicit_imported(kind::UInt8) = (kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED)
 is_some_binding_imported(kind::UInt8) = is_some_explicit_imported(kind) || kind == PARTITION_KIND_IMPLICIT_GLOBAL
 is_some_guard(kind::UInt8) = (kind == PARTITION_KIND_GUARD || kind == PARTITION_KIND_FAILED || kind == PARTITION_KIND_UNDEF_CONST)
+# A global variable: accessed through the binding's own value slot (typed, or `Any` if weakly declared).
+is_some_global(kind::UInt8) = (kind == PARTITION_KIND_GLOBAL || kind == PARTITION_KIND_DECLARED)
 
 function lookup_binding_partition(world::UInt, b::Core.Binding)
     ccall(:jl_get_binding_partition, Ref{Core.BindingPartition}, (Any, UInt), b, world)
@@ -302,6 +304,17 @@ function lookup_binding_partition(world::UInt, gr::Core.GlobalRef)
 end
 
 partition_restriction(bpart::Core.BindingPartition) = ccall(:jl_bpart_get_restriction_value, Any, (Any,), bpart)
+
+# Recover the `Core.Binding` that owns `bpart` by walking the chain to its end: the
+# last (oldest) partition's `next` is a backreference to the owning binding, so the
+# list can be traversed circularly.
+function partition_owner(bpart::Core.BindingPartition)
+    next = bpart.next
+    while next isa Core.BindingPartition
+        next = next.next
+    end
+    return next::Core.Binding
+end
 
 binding_kind(bpart::Core.BindingPartition) = UInt8(bpart.kind & PARTITION_MASK_KIND)
 binding_kind(m::Module, s::Symbol) = binding_kind(lookup_binding_partition(tls_world_age(), GlobalRef(m, s)))

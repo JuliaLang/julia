@@ -281,6 +281,7 @@ function may_dispatch(@nospecialize ftyp)
                Core.finalizer isa ftyp ||
                Core.modifyfield! isa ftyp ||
                Core.modifyglobal! isa ftyp ||
+               Core.modifyglobal_partition isa ftyp ||
                Core.memoryrefmodify! isa ftyp
     else
         return true
@@ -369,6 +370,8 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                     error = "trim verification not yet implemented for builtin `Core.modifyfield!`"
                 elseif Core.modifyglobal! isa ftyp
                     error = "trim verification not yet implemented for builtin `Core.modifyglobal!`"
+                elseif Core.modifyglobal_partition isa ftyp
+                    error = "trim verification not yet implemented for builtin `Core.modifyglobal_partition`"
                 elseif Core.memoryrefmodify! isa ftyp
                     error = "trim verification not yet implemented for builtin `Core.memoryrefmodify!`"
                 else @assert false "unexpected builtin" end

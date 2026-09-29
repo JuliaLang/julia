@@ -133,6 +133,18 @@ end
         @test (min(NaN,Inf), min(NaN,-Inf), min(-NaN,Inf), min(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
         @test minmax(-Inf,NaN) ≣ (min(-Inf,NaN), max(-Inf,NaN))
     end
+    for S in Base.BitInteger_types, T in Base.BitInteger_types
+        xvals = S <: Signed ? [typemin(S), -one(S), zero(S), one(S), typemax(S)] : [zero(S), one(S), typemax(S)]
+        yvals = T <: Signed ? [typemin(T), -one(T), zero(T), one(T), typemax(T)] : [zero(T), one(T), typemax(T)]
+        for x in xvals, y in yvals
+            z = @inferred min(x, y)
+            @test z <= x && z <= y && z in (x, y)
+            z = @inferred max(x, y)
+            @test z >= x && z >= y && z in (x, y)
+            z = @inferred minmax(x, y)
+            @test z == (min(x, y), max(x, y))
+        end
+    end
 end
 @testset "Base._extrema_rf for float" begin
     for T in (Float16, Float32, Float64, BigFloat)
@@ -144,11 +156,13 @@ end
             z = ordered[min(i1,j1)], ordered[max(i2,j2)]
             @test Base._extrema_rf(x, y) === z
         end
+        # a NaN operand wins, but its sign is not preserved: the sign of a NaN
+        # result is non-deterministic, so compare with `isequal` rather than `===`
         for i in 1:2, j1 in 1:6, j2 in 1:6 # unordered test (only 1 NaN)
             x = unorded[i] , unorded[i]
             y = ordered[j1], ordered[j2]
-            @test Base._extrema_rf(x, y) === x
-            @test Base._extrema_rf(y, x) === x
+            @test Base._extrema_rf(x, y) ≣ x
+            @test Base._extrema_rf(y, x) ≣ x
         end
         for i in 1:2, j in 1:2 # unordered test (2 NaNs)
             x = unorded[i], unorded[i]

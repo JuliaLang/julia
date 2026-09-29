@@ -155,7 +155,7 @@ typedef struct jl_ivarbinding_t {
 } jl_ivarbinding_t;
 
 // subtype algorithm state
-typedef struct jl_stenv_t {
+typedef struct JL_GC_TRACKED_TYPE jl_stenv_t {
     // N.B.: varbindings are created on the stack and rooted there
     jl_varbinding_t *vars;    // type variable environment
     jl_unionstate_t Lunions;  // union state for unions on the left of A <: B
@@ -488,11 +488,17 @@ static void free_env(jl_savedenv_t *se) JL_NOTSAFEPOINT
 {
     if (se->gcframe.nroots) {
         assert(jl_current_task->gcstack == &se->gcframe);
+#ifndef __clang_gcanalyzer__
+        // `alloc_env` pushes this frame by hand rather than with JL_GC_PUSH*,
+        // and the GC analyzer models only the macros, so it never sees that
+        // push. Hide the matching pop from it as well.
         JL_GC_POP();
+#endif
     }
     if (se->buf != se->_space)
         free(se->buf);
     se->buf = NULL;
+    se->gcframe.nroots = 0;
 }
 
 static void free_stenv(jl_stenv_t *e) JL_NOTSAFEPOINT
@@ -6216,7 +6222,7 @@ jl_svec_t *jl_outer_unionall_vars(jl_value_t *u)
     int i;
     for (i = 0; i < ntvars; i++) {
         assert(jl_is_unionall(ua));
-        jl_svecset(vec, i, ua->var);
+        jl_gc_write_fresh(vec, jl_svec_data(vec)[i], jl_value_t, (jl_value_t*)ua->var);
         ua = (jl_unionall_t*)ua->body;
     }
     return vec;

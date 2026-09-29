@@ -281,8 +281,9 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
             jl_svec_t *nc = jl_alloc_svec_uninit(ncl);
             if (i > 0)
                 memcpy((char*)jl_svec_data(nc), jl_svec_data(specializations), sizeof(void*) * i);
-            for (int j = 0; j < ncl - cl; j++)
-                jl_svecset(nc, j+i, jl_nothing);
+            for (int j = 0; j < ncl - cl; j++) {
+                jl_gc_write_fresh(nc, jl_svec_data(nc)[j+i], jl_value_t, jl_nothing);
+            }
             if (i < cl)
                 memcpy((char*)jl_svec_data(nc) + sizeof(void*) * (i + ncl - cl),
                        (char*)jl_svec_data(specializations) + sizeof(void*) * i,
@@ -597,7 +598,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_uninferred(
                 return codeinst;
             jl_debuginfo_t *debuginfo = jl_atomic_load_relaxed(&codeinst->debuginfo);
             if (di != debuginfo) {
-                jl_gc_wb(codeinst, di);
+                jl_gc_wb(codeinst, (void*)&codeinst->debuginfo, di);
                 if (!(debuginfo == NULL && jl_atomic_cmpswap_relaxed(&codeinst->debuginfo, &debuginfo, di)))
                     if (!(debuginfo && jl_egal((jl_value_t*)debuginfo, (jl_value_t*)di)))
                         continue;
@@ -1097,10 +1098,8 @@ static void drop_all_methcache(jl_methcache_t *mc) JL_CANSAFEPOINT
             }
         }
     }
-    // Deletion barrier: snapshot the old cache/leafcache for SATB collectors.
-    jl_gc_wb(mc, NULL);
-    jl_atomic_store_relaxed(&mc->cache, jl_nothing);
-    jl_atomic_store_relaxed(&mc->leafcache, (jl_genericmemory_t*)jl_an_empty_memory_any);
+    jl_gc_write_atomic(mc, mc->cache, jl_value_t, jl_nothing, relaxed);
+    jl_gc_write_atomic(mc, mc->leafcache, jl_genericmemory_t, (jl_genericmemory_t*)jl_an_empty_memory_any, relaxed);
     JL_UNLOCK(&mc->writelock);
 }
 
@@ -2479,8 +2478,7 @@ static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_ins
     if (!replaced_ci) {
         // We know all backedges are deleted - clear them eagerly
         // Clears both array and flags
-        jl_gc_wb(replaced_mi, NULL);
-        replaced_mi->backedges = NULL;
+        jl_gc_write(replaced_mi, replaced_mi->backedges, jl_array_t, NULL);
         jl_atomic_fetch_and_relaxed(&replaced_mi->flags, ~MI_FLAG_BACKEDGES_ALL);
     }
     JL_GC_PUSH1(&backedges);
@@ -2796,9 +2794,8 @@ static void _typename_invalidate_backedges(jl_typename_t *tn, int explct, void *
                     jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)backedgetyp);
             }
             // remove this entry (cf. `jl_eqtable_pop`)
-            jl_gc_wb(table, NULL); // deletion barrier: snapshot the overwritten key/value for SATB collectors
-            jl_atomic_store_relaxed(&tab[i], jl_nothing); // clear the key
-            jl_atomic_store_relaxed(&tab[i + 1], NULL); // and the value
+            jl_gc_write_atomic(table, tab[i], jl_value_t, jl_nothing, relaxed); // clear the key
+            jl_gc_write_atomic(table, tab[i + 1], jl_value_t, NULL, relaxed); // and the value
         }
         else {
             alive++;
@@ -2806,6 +2803,19 @@ static void _typename_invalidate_backedges(jl_typename_t *tn, int explct, void *
     }
     if (alive == 0)
         jl_eqtable_pop(jl_method_table->backedges, (jl_value_t*)tn, NULL, NULL);
+}
+
+static void invalidate_missing_backedges(struct _typename_invalidate_backedge *env) JL_CANSAFEPOINT
+{
+    if (!jl_foreach_top_typename_for(_typename_invalidate_backedges, env->type, 1, env)) {
+        jl_genericmemory_t *allbackedges = jl_method_table->backedges;
+        for (size_t i = 0, n = allbackedges->length; i < n; i += 2) {
+            jl_value_t *tn = jl_genericmemory_ptr_ref(allbackedges, i);
+            jl_value_t *backedges = jl_genericmemory_ptr_ref(allbackedges, i+1);
+            if (tn && tn != jl_nothing && backedges)
+                _typename_invalidate_backedges((jl_typename_t*)tn, 0, env);
+        }
+    }
 }
 
 struct invalidate_mt_env {
@@ -2907,7 +2917,10 @@ static void _method_table_invalidate(jl_methcache_t *mc, void *env0) JL_CANSAFEP
     }
 }
 
-static void jl_method_table_invalidate(jl_method_t *replaced, size_t max_world) JL_CANSAFEPOINT
+// Invalidate everything compiled against `replaced`. `deleted` is set when the
+// method is being removed outright rather than replaced by one with the same
+// signature.
+static void jl_method_table_invalidate(jl_method_t *replaced, size_t max_world, int deleted) JL_CANSAFEPOINT
 {
     if (jl_options.incremental && jl_generating_output())
         jl_error("Method deletion is not possible during Module precompile.");
@@ -2933,9 +2946,18 @@ static void jl_method_table_invalidate(jl_method_t *replaced, size_t max_world) 
     mt_cache_env.max_world = max_world;
     mt_cache_env.replaced = replaced;
     _method_table_invalidate(mt->cache, &mt_cache_env);
+    if (deleted) {  // xref #63224; ambiguous callees may not leave backedges, so scan the signature edges too
+        jl_value_t *isect = NULL, *isect2 = NULL;
+        JL_GC_PUSH2(&isect, &isect2);
+        jl_methcache_t *mc = jl_method_table->cache;
+        JL_LOCK(&mc->writelock);
+        struct _typename_invalidate_backedge typename_env = {(jl_value_t*)replaced->sig, &isect, &isect2, NULL, 0, max_world, 0};
+        invalidate_missing_backedges(&typename_env);
+        JL_UNLOCK(&mc->writelock);
+        JL_GC_POP();
+        invalidated |= typename_env.invalidated;
+    }
     JL_GC_POP();
-    // XXX: this might have resolved an ambiguity, for which we have not tracked the edge here,
-    // and thus now introduce a mistake into inference
     if (invalidated && _jl_debug_method_invalidation) {
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)replaced);
         jl_value_t *loctag = jl_cstr_to_string("jl_method_table_disable");
@@ -2955,15 +2977,13 @@ static int erase_method_backedges(jl_typemap_entry_t *def, void *closure) JL_CAN
         for (i = 0; i < l; i++) {
             jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, i);
             if ((jl_value_t*)mi != jl_nothing) {
-                jl_gc_wb(mi, NULL);
-                mi->backedges = 0;
+                jl_gc_write(mi, mi->backedges, jl_array_t, NULL);
             }
         }
     }
     else {
         jl_method_instance_t *mi = (jl_method_instance_t*)specializations;
-        jl_gc_wb(mi, NULL);
-        mi->backedges = 0;
+        jl_gc_write(mi, mi->backedges, jl_array_t, NULL);
     }
     JL_UNLOCK(&method->writelock);
     return 1;
@@ -3006,7 +3026,7 @@ JL_DLLEXPORT void jl_method_table_disable(jl_method_t *method) JL_CANSAFEPOINT
         jl_atomic_store_relaxed(&method->dispatch_status, 0);
         assert(jl_atomic_load_relaxed(&methodentry->max_world) == ~(size_t)0);
         jl_atomic_store_relaxed(&methodentry->max_world, world);
-        jl_method_table_invalidate(method, world);
+        jl_method_table_invalidate(method, world, 1);
         jl_atomic_store_release(&jl_world_counter, world + 1);
     }
     JL_UNLOCK(&world_counter_lock);
@@ -3252,7 +3272,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
             invalidated = 1;
             method_overwrite(newentry, m);
             // This is an optimized version of below, given we know the type-intersection is exact
-            jl_method_table_invalidate(m, max_world);
+            jl_method_table_invalidate(m, max_world, 0);
             int m_dispatch = jl_atomic_load_relaxed(&m->dispatch_status);
             // Clear METHOD_SIG_LATEST_ONLY and METHOD_SIG_LATEST_WHICH bits
             jl_atomic_store_relaxed(&m->dispatch_status, 0);
@@ -3407,16 +3427,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     jl_methcache_t *mc = jl_method_table->cache;
     JL_LOCK(&mc->writelock);
     struct _typename_invalidate_backedge typename_env = {type, &isect, &isect2, d, n, max_world, invalidated};
-    if (!jl_foreach_top_typename_for(_typename_invalidate_backedges, type, 1, &typename_env)) {
-        // if the new method cannot be split into exact backedges, scan the whole table for anything that might be affected
-        jl_genericmemory_t *allbackedges = jl_method_table->backedges;
-        for (size_t i = 0, n = allbackedges->length; i < n; i += 2) {
-            jl_value_t *tn = jl_genericmemory_ptr_ref(allbackedges, i);
-            jl_value_t *backedges = jl_genericmemory_ptr_ref(allbackedges, i+1);
-            if (tn && tn != jl_nothing && backedges)
-                _typename_invalidate_backedges((jl_typename_t*)tn, 0, &typename_env);
-        }
-    }
+    invalidate_missing_backedges(&typename_env);
     invalidated |= typename_env.invalidated;
     if (oldmi && jl_array_nrows(oldmi)) {
         // drop leafcache and search mc->cache and drop anything that might overlap with the new method
@@ -5672,7 +5683,8 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
             arraylist_push(&result, minmax);
             j++;
         }
-        memcpy(jl_array_data(env.t, jl_method_match_t*), result.items, j * sizeof(jl_method_match_t*));
+        for (size_t k = 0; k < j; k++)
+            jl_array_ptr_set(env.t, k, (jl_value_t*)result.items[k]);
         arraylist_free(&result);
         if (j != len)
             jl_array_del_end((jl_array_t*)env.t, len - j);

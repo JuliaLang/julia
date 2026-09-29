@@ -40,7 +40,7 @@ using Core.Intrinsics, Core.IR
 using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, AnyType, MethodInstance, MethodMatch,
     MethodTable, MethodCache, PartialOpaque, SimpleVector, TypeofVararg,
     TypeEq,
-    _apply_iterate, apply_type, compilerbarrier, donotdelete, memoryref_isassigned,
+    _apply_iterate, apply_type, compilerbarrier, const_memoryrefget, donotdelete, memoryref_isassigned,
     memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, memoryrefunset!, print, println, show, svec,
     typename, unsafe_write, write, stdout, stderr
 
@@ -59,11 +59,11 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     hasgenerator, hasintersect, indexed_iterate, isType, isTypeEq, isTypeEgal,
     is_file_tracked, is_function_def,
     is_meta_expr, is_meta_expr_head, is_nospecialized, is_nospecializeinfer, is_defined_const_binding,
-    is_some_const_binding, is_some_guard, is_some_imported, is_some_explicit_imported, is_some_binding_imported, is_valid_intrinsic_elptr,
+    is_some_const_binding, is_some_guard, is_some_global, is_some_imported, is_some_explicit_imported, is_some_binding_imported, is_valid_intrinsic_elptr,
     isbitsunion, isconcretedispatch, isdispatchelem, isexpr, isfieldatomic, isidentityfree,
     iskindtype, ismutabletypename, ismutationfree, issingletontype, isvarargtype, isvatuple,
-    kwerr, lookup_binding_partition, may_invoke_generator, methods, midpoint, moduleroot,
-    partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method,
+    PARTITION_KIND_CONST, kwerr, lookup_binding_partition, may_invoke_generator, methods, midpoint, moduleroot,
+    partition_owner, partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method,
     structdiff, tls_world_age, type_parameter, unconstrain_vararg_length, unionlen, uniontype_layout,
     uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
     _uncompressed_ir, datatype_min_ninitialized,
@@ -244,8 +244,8 @@ end
 # `[syntax]` entry (and defining over it would error), so skip it then.
 if !isdefined(@__MODULE__, Symbol("#_internal_julia_parse"))
 function var"#_internal_julia_parse"(code, filename::String, lineno::Int, offset::Int, options::Symbol)
-    return Base.JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options;
-                                             syntax_version=Base.VersionNumber(1, 14, 0))
+    return Base.JuliaSyntax.core_parser_hook(
+        code, filename, lineno, offset, options, Base.VersionNumber(1, 14, 0))
 end
 end
 

@@ -487,32 +487,7 @@ end
 #-------------------------------------------------------------------------------
 # Expand comparison chains
 
-function expand_scalar_compare_chain(ctx, srcref, terms, i)
-    comparisons = nothing
-    while i + 2 <= length(terms)
-        lhs = terms[i]
-        op = terms[i+1]
-        rhs = terms[i+2]
-        if kind(op) == K"."
-            break
-        end
-        comp = @ast ctx op [K"call"
-            op
-            lhs
-            rhs
-        ]
-        if isnothing(comparisons)
-            comparisons = comp
-        else
-            comparisons = @ast ctx srcref [K"&&"
-                comparisons
-                comp
-            ]
-        end
-        i += 2
-    end
-    (comparisons, i)
-end
+is_dotted(x) = kind(x) === K"." && numchildren(x) == 1
 
 # Expanding comparison chains: (comparison a op b op c ...)
 #
@@ -526,45 +501,118 @@ end
 # a .< b .< c < d < e   ==>  (a .< b) .& (b .< c) .& (c < d && d < e)
 function expand_compare_chain(ctx, ex)
     @jl_assert kind(ex) == K"comparison" ex
-    terms = children(ex)
+    terms = copy(children(ex))
     @jl_assert numchildren(ex) >= 3 ex
     @jl_assert isodd(numchildren(ex)) ex
-    i = 1
+
     comparisons = nothing
-    # Combine any number of dotted comparisons
-    while i + 2 <= length(terms)
-        if kind(terms[i+1]) != K"."
-            (comp, i) = expand_scalar_compare_chain(ctx, ex, terms, i)
-        else
+    i = 1
+
+    while i+2 <= length(terms)
+        subcomparison = if is_dotted(terms[i+1])
             lhs = terms[i]
             op = terms[i+1]
             rhs = terms[i+2]
-            i += 2
-            comp = @ast ctx op [K"dotcall"
-                op[1]
-                lhs
+
+            rhs = if i + 2 < length(terms) && !is_effect_free(rhs)
+                rhs_ident = ssavar(ctx, rhs, "rhs_ident")
+                terms[i+2] = rhs_ident
+                @ast ctx rhs [K"block"
+                    [K"=" rhs_ident rhs]
+                    rhs_ident
+                ]
+            else
                 rhs
-            ]
-        end
-        if isnothing(comparisons)
-            comparisons = comp
+            end
+
+            i += 2
+
+            @ast ctx op [K"dotcall"
+                    op[1]
+                    lhs
+                    rhs
+                ]
         else
-            comparisons = @ast ctx ex [K"dotcall"
-                "&"::K"top"
-                # ^^ NB: Flisp bug. Flisp lowering essentially does
-                #     adopt_scope("&"::K"Identifier", ctx.mod)
-                # here which seems wrong if the comparison chain arose from
-                # a macro in a different module. One fix would be to use
-                #     adopt_scope("&"::K"Identifier", ex)
-                # to get the module of the comparison expression for the
-                # `&` operator. But a simpler option is probably to always
-                # use `Base.&` so we do that.
+            dotchain_head = nothing
+            # move the first evaluation of a following dot-chain to the top
+            # in order to avoid it getting skipped by short circuiting
+            next_dotop = findnext(is_dotted, terms, i+3)
+            if !isnothing(next_dotop)
+                dotop_lhs = terms[next_dotop-1]
+                if !is_effect_free(dotop_lhs)
+                    dotop_lhs_ident = ssavar(ctx, dotop_lhs, "dotop_lhs_ident")
+                    terms[next_dotop-1] = dotop_lhs_ident
+                    dotchain_head = @ast ctx dotop_lhs [K"=" dotop_lhs_ident dotop_lhs]
+                end
+            end
+
+            (scalar_chain, i) = expand_scalar_compare_chain(ctx, ex, terms, i)
+            if !isnothing(dotchain_head)
+                @ast ctx ex [K"block" dotchain_head scalar_chain]
+            else
+                scalar_chain
+            end
+        end
+
+        comparisons = if isnothing(comparisons)
+            subcomparison
+        else
+            @ast ctx ex [K"dotcall"
+            "&"::K"top"
+            # ^^ NB: Flisp bug. Flisp lowering essentially does
+            #     adopt_scope("&"::K"Identifier", ctx.mod)
+            # here which seems wrong if the comparison chain arose from
+            # a macro in a different module. One fix would be to use
+            #     adopt_scope("&"::K"Identifier", ex)
+            # to get the module of the comparison expression for the
+            # `&` operator. But a simpler option is probably to always
+            # use `Base.&` so we do that.
+            comparisons
+            subcomparison
+        ]
+        end
+    end
+    return comparisons
+end
+
+function expand_scalar_compare_chain(ctx, srcref, terms, i)
+    comparisons = nothing
+
+    while i+2 <= length(terms)
+        lhs = terms[i]
+        op = terms[i+1]
+        rhs = terms[i+2]
+
+        is_dotted(op) && break
+
+        rhs = if i + 2 < length(terms) && !is_effect_free(rhs)
+            rhs_ident = ssavar(ctx, rhs, "rhs_ident")
+            terms[i+2] = rhs_ident
+            @ast ctx rhs [K"block"
+                @ast ctx rhs [K"=" rhs_ident rhs]
+                rhs_ident
+            ]
+        else
+            rhs
+        end
+
+        comp = @ast ctx op [K"call"
+            op
+            lhs
+            rhs
+        ]
+
+        comparisons = if isnothing(comparisons)
+            comp
+        else
+            @ast ctx srcref [K"&&"
                 comparisons
                 comp
             ]
         end
+        i+=2
     end
-    comparisons
+    (comparisons, i)
 end
 
 #-------------------------------------------------------------------------------
@@ -1548,36 +1596,43 @@ function expand_let(ctx, ex)
             lhs = binding[1]
             rhs = binding[2]
             if is_identifier_like(lhs)
-                kind(lhs) === K"Placeholder" && continue
-                blk = @ast ctx binding [K"block"
-                    tmp := rhs
-                    [K"scope_block"(ex) scope_type
-                        [K"local"(lhs) lhs]
-                        [K"always_defined" lhs]
-                        [K"="(binding) lhs tmp]
-                        blk
+                if kind(lhs) === K"Placeholder"
+                    blk = @ast ctx binding [K"block" rhs blk]
+                else
+                    blk = @ast ctx binding [K"block"
+                        tmp := rhs
+                        [K"scope_block"(ex) scope_type
+                            [K"local"(lhs) lhs]
+                            [K"always_defined" lhs]
+                            [K"="(binding) lhs tmp]
+                            blk
+                        ]
                     ]
-                ]
+                end
             elseif kind(lhs) == K"::"
                 var = lhs[1]
-                kind(var) === K"Placeholder" && continue
                 if !is_identifier_like(var)
                     throw(LoweringError(var, "Invalid assignment location in let syntax"))
-                end
-                blk = @ast ctx binding [K"block"
-                    tmp := rhs
-                    # type := lhs[2]
-                    [K"scope_block"(ex) scope_type
-                        # n.b. the declared type is referenced directly (not
-                        # hoisted into a temporary) so that the declaration
-                        # works for variables captured into other lambdas, where
-                        # it is re-evaluated at each assignment like flisp does
-                        [K"local"(lhs) [K"::" var lhs[2]]]
-                        [K"always_defined" var]
-                        [K"="(binding) var tmp]
-                        blk
+                elseif kind(var) === K"Placeholder"
+                    # do a typeassert/convert here? (this falls through flisp as
+                    # a typed global...)
+                    blk = @ast ctx binding [K"block" rhs blk]
+                else
+                    blk = @ast ctx binding [K"block"
+                        tmp := rhs
+                        # type := lhs[2]
+                        [K"scope_block"(ex) scope_type
+                            # n.b. the declared type is referenced directly (not
+                            # hoisted into a temporary) so that the declaration
+                            # works for variables captured into other lambdas, where
+                            # it is re-evaluated at each assignment like flisp does
+                            [K"local"(lhs) [K"::" var lhs[2]]]
+                            [K"always_defined" var]
+                            [K"="(binding) var tmp]
+                            blk
+                        ]
                     ]
-                ]
+                end
             elseif kind(lhs) == K"tuple"
                 lhs_locals = SyntaxList()
                 foreach_lhs_name(lhs) do var
@@ -2140,16 +2195,46 @@ function match_try(ex)
     (try_, catch_, else_, finally_)
 end
 
+function _symboliclabel_defs(st, labels=Set{NameKey}())
+    if kind(st) === K"symboliclabel"
+        push!(labels, NameKey(st))
+    elseif !(is_leaf(st) || is_quoted(st))
+        for c in children(st)
+            _symboliclabel_defs(c, labels)
+        end
+    end
+    labels
+end
+function _symboliclabel_refs(st, labels=Vector{SyntaxTree}())
+    if kind(st) === K"symbolicgoto"
+        push!(labels, st)
+    elseif !(is_leaf(st) || is_quoted(st))
+        for c in children(st)
+            _symboliclabel_refs(c, labels)
+        end
+    end
+    labels
+end
+function error_if_unmatched_symbolicgoto(ctx, st, hint)
+    refs = _symboliclabel_refs(st)
+    isempty(refs) && return nothing
+    defs = _symboliclabel_defs(st)
+    unmatched = nothing
+    for r in refs
+        NameKey(r) in defs || (unmatched = r)
+    end
+    isnothing(unmatched) || throw(LoweringError(
+        unmatched, "`goto` out of $hint block is not permitted with `finally`"))
+end
+
 function expand_try(ctx, ex)
     (try_, catch_, else_, finally_) = match_try(ex)
-
     if !isnothing(finally_)
-        # TODO: check unmatched symbolic gotos in try.
-        # TODO: Disallow @goto from try/catch/else blocks when there's a finally clause
+        error_if_unmatched_symbolicgoto(ctx, try_, "a `try`")
+        !isnothing(catch_) && error_if_unmatched_symbolicgoto(ctx, catch_, "a `catch`")
+        !isnothing(else_) && error_if_unmatched_symbolicgoto(ctx, else_, "an `else`")
     end
-
     try_body = @ast ctx try_ [K"scope_block" [K"neutral_scope"] try_]
-
     if isnothing(catch_)
         try_block = try_body
     else
@@ -2260,7 +2345,7 @@ function expand_decls(ctx, ex)
             [K".=" x _] -> x
             [K"op=" x _ _] -> x
             [K".op=" x _ _] -> x
-            [K"function" x _] -> x
+            [K"function" x _...] -> x
         end
         # type decls are handled elsewhere unless simple
         make_lhs_decls(ctx, stmts, declkind, ex.meta, lhs, simple)
@@ -2296,8 +2381,8 @@ function expand_const_decl(ctx, ex)
     end
     @stm ex[1] begin
         # const is ignored on function
-        [K"function" _ _] -> expand_forms_2(ctx, ex[1])
-        [K"global" [K"function" _ _]] -> expand_forms_2(ctx, ex[1])
+        [K"function" _...] -> expand_forms_2(ctx, ex[1])
+        [K"global" [K"function" _...]] -> expand_forms_2(ctx, ex[1])
 
         [K"global" x] -> let decls = SyntaxList()
             @jl_assert kind(x) === K"=" ex
@@ -2685,7 +2770,7 @@ is_vararg_type_expr(st) = @stm st begin
     _ -> kind(st) in KSet"core Identifier" && syntax_name(st) == "Vararg"
 end
 
-function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
+function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, overlay)
     kws = argl[end]
     pargl = argl[1:end-1]
     @jl_assert kind(kws) === K"parameters" src
@@ -2714,9 +2799,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
     prop_metas = getmeta(body, :method_metas, nothing)
 
     m1_name = let n = kind(mtable) === K"nothing" ? "_" : syntax_name(mtable),
-        mangled = reserve_module_binding_simple(
-            ctx.layer.mod,
-            string("#", n, "#kw_body"))
+        mangled = string("#", n, "#kw_body#", module_unique_name(ctx.layer.mod))
         # probably not desirable, but fixes eval-into-closed-module
         m1_sc = escape_layer(mtable.context::SyntaxContext, true)
         @mknode(newsym(ctx, mtable, mangled);
@@ -2843,7 +2926,9 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
     end
     @ast ctx src [K"block"
         [K"function_decl" m1_name]
-        kind(mtable) === K"nothing" ? nothing : [K"function_decl" mtable]
+        # hack: define closure type for next decl
+        overlay || kind(mtable) === K"nothing" ? nothing : [K"no_method_defs" m1_name]
+        overlay || kind(mtable) === K"nothing" ? nothing : [K"function_decl" mtable]
         [K"method_defs" m1_name method_def_sparams(ctx, src, sparams) mdefs1]
         [K"method_defs" mtable method_def_sparams(ctx, src, pos_sparams) mdefs2]
         [K"method_defs" mtable method_def_sparams(ctx, src, pos_sparams) mdefs3]
@@ -2956,7 +3041,8 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
     end
     sparams = mapsyntax(typevar_bounds, wheres)
     if has_kws
-        keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
+        keywords_method_def_expr(
+            ctx, src, mtable, sparams, argl, body, rett, overlay)
     elseif overlay
         mtmp = ssavar(ctx, mtable)
         @ast ctx src [K"block"
@@ -3027,12 +3113,18 @@ end
 #-------------------------------------------------------------------------------
 # Expand macro definitions
 
+# Name is hygienic-global in compat mode, hygienic otherwise
 function _make_macro_name(ctx, ex)
     k = kind(ex)
     if k == K"Identifier" || k == K"Symbol"
-        @mknode(ex; kind=k, value="@$(syntax_name(ex))", children=nothing)
+        if k === K"Identifier" && is_flisp_compat(ex)
+            @mknode(ex; kind=k, value="@$(syntax_name(ex))",
+                    mod=syntax_module(ex))
+        else
+            @mknode(ex; kind=k, value="@$(syntax_name(ex))")
+        end
     elseif k == K"Placeholder"
-        @mknode(ex; kind=K"Identifier", value="@$(syntax_name(ex))", children=nothing)
+        @mknode(ex; kind=K"Identifier", value="@$(syntax_name(ex))")
     elseif is_valid_modref(ex)
         @jl_assert numchildren(ex) == 2 ex
         @ast ctx ex [K"." ex[1] _make_macro_name(ctx, ex[2])]
@@ -3041,7 +3133,6 @@ function _make_macro_name(ctx, ex)
     end
 end
 
-# flisp: expand-macro-def
 function expand_macro_def(ctx, ex)
     if numchildren(ex) == 1
         # macro with zero methods
@@ -3592,9 +3683,9 @@ function insert_struct_shim(ctx, fieldtypes, name)
     map(ex->_insert_fieldtype_struct_shim(ctx, name, ex), fieldtypes)
 end
 
-# Replace all (call core.apply_type ...) with (call core.apply_type_or_typeapp ...)
-# in an expression tree. Used for typegroup to handle TypeVar/TypeApp references
-# during type resolution before real DataTypes exist.
+# Used to handle TypeVar/TypeApp references during type resolution before real
+# DataTypes exist.  flisp: "Skips method bodies since constructors should use
+# plain apply_type for correct effects inference."
 function _replace_type_constructors(ctx, ex)
     if is_leaf(ex)
         return ex
@@ -3608,6 +3699,8 @@ function _replace_type_constructors(ctx, ex)
             push!(new_children, _replace_type_constructors(ctx, ex[i]))
         end
         return @ast ctx ex [K"call" new_children...]
+    elseif k === K"method" || is_quoted(ex)
+        ex
     else
         return mapchildren(e->_replace_type_constructors(ctx, e), ex)
     end
@@ -3772,10 +3865,9 @@ function expand_typegroup_def(ctx, ex)
         ])
         push!(old_type_vars, old_var)
     end
-
     # 2e. Call resolve_typegroup
-    push!(stmts, @ast ctx ex [K"="
-        [K"tuple" struct_names...]
+    resolve_tmp = ssavar(ctx, ex)
+    push!(stmts, @ast ctx ex [K"=" resolve_tmp
         [K"call" "resolve_typegroup"::K"core"
             typegroup_mod::K"Value"
             [K"call" "svec"::K"core" struct_names...]
@@ -3786,7 +3878,10 @@ function expand_typegroup_def(ctx, ex)
 
     # 2f. Bind to global constants
     for i in 1:n
-        push!(stmts, @ast ctx entries[i].sdef [K"constdecl" global_names[i] struct_names[i]])
+        prov = entries[i].sdef
+        push!(stmts, @ast ctx prov [K"=" struct_names[i]
+                [K"call" "getfield"::K"core" resolve_tmp i::K"Value"]])
+        push!(stmts, @ast ctx prov [K"constdecl" global_names[i] struct_names[i]])
     end
 
     # 2f. latestworld
@@ -4326,7 +4421,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"function"
         if numchildren(ex) == 1
             return @ast ctx ex [K"block"
-                [K"global_if_global" ex[1]] [K"function_decl" ex[1]] ex[1]]
+                [K"global_if_global" ex[1]]
+                [K"function_decl" ex[1]]
+                [K"no_method_defs" ex[1]]
+                ex[1]]
         end
         sig, wheres = flatten_wheres(ex[1])
         name, args, rett = @stm sig begin
@@ -4335,11 +4433,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             [K"tuple" as...] -> (nothing, as, @ast(ctx, sig, "Any"::K"core"))
         end
         if isnothing(name)
-            @static if VERSION < v"1.14.0-DEV.3063"
-                name = newsym(ctx, sig, "#anon#")
-            else
-                name = newsym(ctx, sig, string(module_next_counter(ctx.layer.mod)))
-            end
+            name = newsym(ctx, sig, "#anon#")
             @ast ctx ex [K"block" [K"local" name] expand_function_def(
                 ctx, ex, SyntaxList(name, args...), wheres, ex[2], rett)]
         else
@@ -4349,11 +4443,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"->"
         sig, wheres = flatten_wheres(ex[1])
         @jl_assert kind(sig) === K"tuple" ex
-        @static if VERSION < v"1.14.0-DEV.3063"
-            name = newsym(ctx, sig, "#->#")
-        else
-            name = newsym(ctx, sig, string(module_next_counter(ctx.layer.mod)))
-        end
+        name = newsym(ctx, sig, "#->#")
         rett = @ast(ctx, sig, "Any"::K"core")
         @ast ctx ex [K"block" [K"local" name] expand_function_def(
             ctx, ex, SyntaxList(name, children(sig)...), wheres, ex[2], rett)]

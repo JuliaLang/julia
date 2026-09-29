@@ -104,7 +104,7 @@ map(f, t::Tuple{Any}) @ Base tuple.jl:358
   0 └──       goto #3 if not %4
   0 2 ─          invoke Base.Math.throw_complex_domainerror(:sqrt::Symbol, %3::Float64)::Union{}
   0 └──       unreachable
- 20 3 ─ %8  = intrinsic Base.Math.sqrt_llvm(%3)::Float64
+ 20 3 ─ %8  = intrinsic Core.Intrinsics.sqrt_llvm(%3)::Float64
   0 └──       goto #4
   0 4 ─       goto #5
   0 5 ─ %11 =   builtin Core.tuple(%8)::Tuple{Float64}

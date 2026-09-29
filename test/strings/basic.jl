@@ -1285,6 +1285,9 @@ end
 
     @test lazy"$(Float64(pi))"c == "3.14159" # :compact=>true
     @test lazy"$(collect(1:1000))"c == repr(collect(1:1000), context=:limit=>true) # :limit=>true
+
+    # Bound allocations for construction and first materialization of a short lazy string.
+    @test @allocations(String(lazy"item: $(1000)")) <= 7
 end
 
 @testset "String Effects" begin

@@ -1,13 +1,13 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// RUN: clang-tidy %s --checks=-*,julia-static-or-declared -load libStaticOrDeclaredPlugin%shlibext -- -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CLANGSA_CXXFLAGS} ${CPPFLAGS} ${CFLAGS} -x c -std=c11 | FileCheck --check-prefixes=CHECK %s
-// RUN: clang-tidy %s --checks=-*,julia-static-or-declared -load libStaticOrDeclaredPlugin%shlibext -- -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CLANGSA_CXXFLAGS} ${CPPFLAGS} ${CFLAGS} ${CXXFLAGS} -x c++ -std=c++11 | FileCheck --check-prefixes=CHECK,CHECK-CXX %s
-// RUN: clang-tidy %s --checks=-*,julia-static-or-declared -load libStaticOrDeclaredPlugin%shlibext -- --target=x86_64-w64-windows-gnu -I%julia_home/src -I%julia_home/src/support -x c -std=c11 | FileCheck --check-prefixes=CHECK %s
+// RUN: clang-tidy %s --checks=-*,julia-static-or-declared -load libStaticOrDeclaredPlugin%{shlibext} -- -I%{julia_home}/src -I%{julia_home}/src/support -I%{julia_home}/usr/include %{clangsa_flags} %{clangsa_cxxflags} %{cppflags} %{cflags} -x c -std=c11 | FileCheck --check-prefixes=CHECK %s
+// RUN: clang-tidy %s --checks=-*,julia-static-or-declared -load libStaticOrDeclaredPlugin%{shlibext} -- -I%{julia_home}/src -I%{julia_home}/src/support -I%{julia_home}/usr/include %{clangsa_flags} %{clangsa_cxxflags} %{cppflags} %{cflags} %{cxxflags} -x c++ -std=c++11 | FileCheck --check-prefixes=CHECK,CHECK-CXX %s
+// RUN: clang-tidy %s --checks=-*,julia-static-or-declared -load libStaticOrDeclaredPlugin%{shlibext} -- --target=x86_64-w64-windows-gnu -I%{julia_home}/src -I%{julia_home}/src/support -x c -std=c11 | FileCheck --check-prefixes=CHECK %s
 //
 // Each flagged C++ type gets a fix-it that wraps it in an anonymous namespace.
 // The fixes are checked from the exported-fixes YAML (the source itself already
 // contains `namespace {` blocks, which would defeat a fixed-source CHECK).
-// RUN: clang-tidy %s --quiet --checks=-*,julia-static-or-declared -load libStaticOrDeclaredPlugin%shlibext --export-fixes=%t.yaml -- -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CLANGSA_CXXFLAGS} ${CPPFLAGS} ${CFLAGS} ${CXXFLAGS} -x c++ -std=c++11
+// RUN: clang-tidy %s --quiet --checks=-*,julia-static-or-declared -load libStaticOrDeclaredPlugin%{shlibext} --export-fixes=%t.yaml -- -I%{julia_home}/src -I%{julia_home}/src/support -I%{julia_home}/usr/include %{clangsa_flags} %{clangsa_cxxflags} %{cppflags} %{cflags} %{cxxflags} -x c++ -std=c++11
 // RUN: FileCheck --check-prefix=FIXYAML %s < %t.yaml
 
 // FIXYAML: Message:{{.*}}sod_vis_hidden

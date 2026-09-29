@@ -314,50 +314,51 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
     jl_value_t *global_type = set_type;
     if (strong && !global_type)
         global_type = (jl_value_t*)jl_any_type;
-    while (1) {
-        bpart = jl_get_binding_partition(b, new_world);
-        enum jl_partition_kind kind = jl_binding_kind(bpart);
-        if (kind != PARTITION_KIND_GLOBAL) {
-            if (jl_bkind_is_some_implicit(kind) || kind == PARTITION_KIND_DECLARED) {
-                if (kind == new_kind) {
-                    if (!set_type)
-                        goto done;
-                    goto check_type;
-                }
+    int replaced = 0; // whether a new partition was installed (so the world must be bumped)
+    int update_partition = 0;
+    int update_in_place = 0;
+    bpart = jl_get_binding_partition(b, new_world);
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (kind != PARTITION_KIND_GLOBAL) {
+        if (jl_bkind_is_some_implicit(kind) || kind == PARTITION_KIND_DECLARED) {
+            if (kind != new_kind) {
                 check_safe_newbinding(gm, gs);
-                if (jl_atomic_load_relaxed(&bpart->min_world) == new_world) {
-                    bpart->kind = new_kind | jl_carried_binding_flags(bpart);
-                    jl_gc_write(bpart, bpart->restriction, jl_value_t, global_type);
-                    continue;
-                } else {
-                    jl_replace_binding_locked(b, bpart, global_type, new_kind, new_world);
-                }
-                break;
-            } else if (set_type) {
-                if (jl_bkind_is_some_constant(kind)) {
-                    jl_errorf("cannot set type for constant %s.%s.",
-                            jl_symbol_name(gm->name), jl_symbol_name(gs));
-                } else {
-                    jl_errorf("cannot set type for imported binding %s.%s.",
-                            jl_symbol_name(gm->name), jl_symbol_name(gs));
-                }
+                update_partition = 1;
+                update_in_place = jl_atomic_load_relaxed(&bpart->min_world) == new_world;
             }
         }
-        if (set_type)
-        {
-check_type: ;
-            jl_value_t *old_ty = bpart->restriction;
-            JL_GC_PROMISE_ROOTED(old_ty);
-            if (!jl_types_equal(set_type, old_ty)) {
-                jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
+        else if (set_type) {
+            if (jl_bkind_is_some_constant(kind)) {
+                jl_errorf("cannot set type for constant %s.%s.",
                         jl_symbol_name(gm->name), jl_symbol_name(gs));
             }
-
+            else {
+                jl_errorf("cannot set type for imported binding %s.%s.",
+                        jl_symbol_name(gm->name), jl_symbol_name(gs));
+            }
         }
-        goto done;
     }
-    jl_atomic_store_release(&jl_world_counter, new_world);
-done:
+    else if (set_type) {
+        jl_value_t *old_ty = bpart->restriction;
+        JL_GC_PROMISE_ROOTED(old_ty);
+        if (!jl_types_equal(set_type, old_ty)) {
+            jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
+                    jl_symbol_name(gm->name), jl_symbol_name(gs));
+        }
+    }
+
+    if (update_partition) {
+        if (update_in_place) {
+            bpart->kind = new_kind | jl_carried_binding_flags(bpart);
+            jl_gc_write(bpart, bpart->restriction, jl_value_t, global_type);
+        }
+        else {
+            jl_replace_binding_locked(b, bpart, global_type, new_kind, new_world);
+            replaced = 1;
+        }
+    }
+    if (replaced)
+        jl_atomic_store_release(&jl_world_counter, new_world);
     JL_UNLOCK(&world_counter_lock);
 }
 
@@ -862,7 +863,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
     JL_GC_PUSH3(&ast, &result, &expression);
 
     ast = jl_svecref(jl_parse(jl_string_data(text), jl_string_len(text),
-                              filename, 1, 0, (jl_value_t*)jl_all_sym, module), 0);
+                              filename, module), 0);
     if (!jl_is_expr(ast) || ((jl_expr_t*)ast)->head != jl_toplevel_sym) {
         jl_errorf("jl_parse() must generate a top level expression");
     }

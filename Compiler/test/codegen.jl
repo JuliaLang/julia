@@ -388,6 +388,40 @@ str = String(take!(io))
 @test occursin("aliasscope", str)
 @test occursin("noalias", str)
 
+# Issue #63129: inside `@aliasscope`, only loads of `Const` arrays may be assumed not to
+# alias the stores in the scope. A recurrence carried through a plain array must be exact.
+function fwd63129!(B, a, n)
+    for l in axes(B, 1)
+        @Base.Experimental.aliasscope begin
+            @inbounds for i in 2:n
+                B[l, i] -= a[i] * B[l, i-1]
+            end
+        end
+    end
+    return B
+end
+function acc63129!(output, input, n)
+    for I in CartesianIndices(output)
+        i, j = I.I
+        @Base.Experimental.aliasscope begin
+            for k in j:n
+                output[I] += input[i, k]
+            end
+        end
+    end
+    return output
+end
+let n = 16, B = rand(4, n), a = rand(n)
+    Bref = copy(B)
+    for l in axes(Bref, 1), i in 2:n
+        Bref[l, i] -= a[i] * Bref[l, i-1]
+    end
+    @test fwd63129!(copy(B), a, n) == Bref
+    input = rand(n, n)
+    ref = [sum(@view input[i, j:n]) for i in 1:n, j in 1:n]
+    @test acc63129!(zeros(n, n), input, n) ≈ ref
+end
+
 # Issue #10208 - Unnecessary boxing for calling objectid
 struct FooDictHash{T}
     x::T
@@ -455,6 +489,34 @@ function f33590(b, x)
 end
 @test f33590(true, (3,)) == (3,)
 @test f33590(false, (3,)) == (4,)
+
+# ifelse on two values of the same isbits union, with a wider result type.
+# Assigning y in a closure keeps its inferred type wider than its value's.
+function ifelse_union_narrow(c, v)
+    y::Union{Int,Float64,Nothing} = nothing
+    (() -> y = v[1])()
+    return Core.ifelse(c, v[2], y)
+end
+function ifelse_union_any(c, v)
+    y = nothing
+    (() -> y = v[1])()
+    return Core.ifelse(c, v[2], y)
+end
+function ifelse_union_large(c, v)
+    y::Union{eltype(v),Nothing} = nothing
+    (() -> y = v[1])()
+    return ifelse(c, v[2], y)
+end
+let v = Union{Int,Float64}[1, 2.5]
+    @test ifelse_union_narrow(true, v) === 2.5
+    @test ifelse_union_narrow(false, v) === 1
+    @test ifelse_union_any(true, v) === 2.5
+    @test ifelse_union_any(false, v) === 1
+end
+let v = Union{Int8,Int16,Int32,Int64,Float64}[Int8(1), 2.5]
+    @test ifelse_union_large(true, v) === 2.5
+    @test ifelse_union_large(false, v) === Int8(1)
+end
 
 # issue 29864
 const c29864 = VecElement{Union{Int,Nothing}}(2)
@@ -887,7 +949,7 @@ let io = IOBuffer()
     code_llvm(io,foo54166, (Vector{Union{Missing,Int}}, Int, Int), dump_module=true, raw=true)
     str = String(take!(io))
     @test !occursin("jtbaa_unionselbyte", str)
-    @test occursin("jtbaa_arrayselbyte", str)
+    @test occursin("jtbaa_memoryselbyte", str)
 end
 
 ex54166 = Union{Missing, Int64}[missing -2; missing -2];
@@ -1077,7 +1139,78 @@ end
 let io = IOBuffer()
     code_llvm(io, (x, y) -> (@atomic x[1] = y; nothing), (AtomicMemory{Pair{Any,Any}}, Pair{Any,Any},), raw=true, optimize=false)
     str = String(take!(io))
-    @test occursin("julia.write_barrier", str)
+    @test occursin("julia.field_write_barrier", str)
+end
+
+# Aggregate barriers identify the stored payload's references, including locked elements.
+struct FieldBarrierElement
+    tag::Int
+    a::Any
+    b::Any
+    c::Any
+end
+unset_field_barrier(r, ::Val{order}) where {order} = Core.memoryrefunset!(r, order, false)
+set_field_barrier(r, x, ::Val{order}) where {order} = (Core.memoryrefset!(r, x, order, false); nothing)
+swap_field_barrier(r, x, ::Val{order}) where {order} = Core.memoryrefswap!(r, x, order, false)
+set_object_field_barrier(r, x) = (r[] = x; nothing)
+
+@testset "aggregate field barriers" begin
+    T = FieldBarrierElement
+    function check_slots(ir, slot_as; clear=false)
+        lines = split(ir, '\n')
+        barriers = filter(line -> occursin("call void", line) && occursin("@julia.field_write_barrier", line), lines)
+        @test length(barriers) == 1
+        isempty(barriers) && return
+        slots = [m.captures[1] for m in eachmatch(r"ptr addrspace\((?:11|13)\) (%[^ ,]+), ptr addrspace\(10\)", only(barriers))]
+        @test length(slots) == 3
+        @test occursin("@julia.field_write_barrier.p$slot_as", only(barriers))
+        if clear
+            @test length(collect(eachmatch(r"ptr addrspace\(10\) null", only(barriers)))) == 3
+        end
+        geps = Dict(m.captures[1] => (m.captures[2], parse(Int, m.captures[3]))
+                    for m in eachmatch(r"(%[^ ,]+) = getelementptr(?: inbounds)? i8, ptr addrspace\((?:11|13)\) (%[^ ,]+), i(?:32|64) ([0-9]+)", ir))
+        payloads = String[]
+        offsets = Int[]
+        for slot in slots
+            @test haskey(geps, slot)
+            haskey(geps, slot) || continue
+            payload, offset = geps[slot]
+            push!(payloads, payload)
+            push!(offsets, offset)
+        end
+        @test offsets == [fieldoffset(T, i) for i in 2:4]
+        @test length(unique(payloads)) == 1
+        if clear && !isempty(payloads)
+            @test any(line -> occursin("store ", line) && occursin("zeroinitializer, ptr addrspace(13) $(first(payloads)),", line), lines)
+        end
+    end
+    for (M, order) in ((Memory{T}, :not_atomic), (AtomicMemory{T}, :sequentially_consistent))
+        R = typeof(GenericMemoryRef(M(undef, 0)))
+        check_slots(get_llvm(unset_field_barrier, Tuple{R,Val{order}}, true, false, false), 13; clear=true)
+        for f in (set_field_barrier, swap_field_barrier)
+            check_slots(get_llvm(f, Tuple{R,T,Val{order}}, true, false, false), 13)
+        end
+    end
+    check_slots(get_llvm(set_object_field_barrier, Tuple{Base.RefValue{T},T}, true, false, false), 11)
+end
+
+# Cancellation-token clears and rebinds must barrier the slot before storing it.
+cancellation_binding_barrier(src) = Core.cancellation_point!(src)
+@testset "cancellation binding barriers" begin
+    ir = get_llvm(cancellation_binding_barrier, Tuple{Union{Nothing,Core.CancellationTokenSource}}, true, false, false)
+    lines = split(ir, '\n')
+    barriers = findall(line -> occursin("call void", line) && occursin("@julia.field_write_barrier.p11", line), lines)
+    @test length(barriers) == 2
+    casts = Dict(m.captures[1] => m.captures[2]
+                 for m in eachmatch(r"(%[^ ,]+) = addrspacecast ptr (%[^ ,]+) to ptr addrspace\(11\)", ir))
+    for i in barriers
+        operands = match(r"@julia.field_write_barrier.p11\(ptr addrspace\(10\) [^,]+, ptr addrspace\(11\) ([^,]+), ptr addrspace\(10\) (.*)\)", lines[i])
+        @test operands !== nothing
+        operands === nothing && continue
+        slot, child = operands.captures
+        destination = haskey(casts, slot) ? "ptr $(casts[slot])" : "ptr addrspace(11) $slot"
+        @test occursin("store atomic ptr addrspace(10) $child, $destination", lines[i + 1])
+    end
 end
 
 # Test phi node codegen for union types with inline roots

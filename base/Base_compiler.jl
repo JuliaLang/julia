@@ -150,7 +150,12 @@ function _setup_module!(mod::Module, Core.@nospecialize syntax_ver)
     Core.declare_const(mod, :include, IncludeInto(mod))
     Core.declare_const(mod, :eval, Core.EvalInto(mod))
     if syntax_ver === nothing
-        return nothing
+        # two cases: (1) VERSION is assumed in bootstrap, and (2) after
+        # bootstrap, NON_VERSIONED_SYNTAX module forms have no version
+        if Core._parse === nothing || Core._parse === Base.fl_parse
+            return nothing
+        end
+        syntax_ver = NON_VERSIONED_SYNTAX
     end
     set_syntax_version(mod, syntax_ver)
     return nothing

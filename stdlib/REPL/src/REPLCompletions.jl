@@ -676,13 +676,9 @@ function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef, baile
     # Ignore saw_latestworld
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_stack_uncached(sv))
         partition = CC.abstract_eval_binding_partition!(interp, g, sv)
-        if CC.is_defined_const_binding(CC.binding_kind(partition))
-            return CC.RTEffects(Const(CC.partition_restriction(partition)), Union{}, CC.EFFECTS_TOTAL)
-        else
-            b = convert(Core.Binding, g)
-            if CC.binding_kind(partition) == CC.PARTITION_KIND_GLOBAL && isdefined(b, :value)
-                return CC.RTEffects(Const(b.value), Union{}, CC.EFFECTS_TOTAL)
-            end
+        if Core.isdefinedglobal_partition(partition, :monotonic)
+            value = Core.getglobal_partition(g, partition, :monotonic)
+            return CC.RTEffects(Const(value), Union{}, CC.EFFECTS_TOTAL)
         end
         return CC.RTEffects(Union{}, UndefVarError, CC.EFFECTS_THROWS)
     end
@@ -1000,8 +996,9 @@ function bslash_completions(string::String, pos::Int, hint::Bool=false)
         # return possible matches; these cannot be mixed with regular
         # Julian completions as only latex / emoji symbols contain the leading \
         symbol_dict = startswith(s, "\\:") ? emoji_symbols : latex_symbols
-        namelist = Iterators.filter(k -> startswith(k, s), keys(symbol_dict))
-        completions = Completion[BslashCompletion(name, "$(symbol_dict[name]) $name") for name in sort!(collect(namelist))]
+        filt = startswith(s, "\\?") ? k -> contains(k, s[3:end]) : k -> startswith(k, s)
+        namelist = Iterators.filter(filt, keys(symbol_dict)) |> collect |> sort!
+        completions = Completion[BslashCompletion(name, "$(symbol_dict[name]) $name") for name in namelist]
         return (true, (completions, slashpos:pos, true))
     end
     return (false, (Completion[], 1:0, false))

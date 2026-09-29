@@ -10,6 +10,41 @@ include("setup_Compiler.jl")
 include("irutils.jl")
 include("newinterp.jl")
 
+# Inlined IR drops coverage effects when the process does not instrument the
+# inlinee. Every coverage scope instruments this user module.
+coverage_strip_callee() = nothing
+let mi = Base.method_instance(coverage_strip_callee, ()),
+    src = make_codeinfo(Any[Expr(:code_coverage_effect), ReturnNode(nothing)];
+                        ssavaluetypes=Any[Nothing, Nothing],
+                        slottypes=Any[typeof(coverage_strip_callee)], slotnames=[:self])
+    ir, _, _ = Compiler.retrieve_ir_for_inlining(mi, src, true)
+    instrumented = Base.JLOptions().code_coverage != 0
+    @test any(stmt -> isexpr(stmt, :code_coverage_effect), ir.stmts.stmt) == instrumented
+    @test isexpr(src.code[1], :code_coverage_effect)
+end
+
+# Hit mode omits the inlining entry marker when the inlinee carries its own
+# markers; count mode always inserts it. The rule only applies when the process
+# instruments the callee.
+coverage_entry_callee() = nothing
+if Base.JLOptions().code_coverage != 0
+    let mi = Base.method_instance(coverage_entry_callee, ())
+        for has_marker in (false, true)
+            code = has_marker ? Any[Expr(:code_coverage_effect), ReturnNode(nothing)] :
+                                Any[ReturnNode(nothing)]
+            src = make_codeinfo(code; ssavaluetypes=Any[Nothing for _ in code],
+                                slottypes=Any[typeof(coverage_entry_callee)], slotnames=[:self])
+            callee_ir, spec_info, di = Compiler.retrieve_ir_for_inlining(mi, src, true)
+            @test any(stmt -> isexpr(stmt, :code_coverage_effect), callee_ir.stmts.stmt) == has_marker
+            ir = make_ircode(Any[ReturnNode(nothing)])
+            Compiler.ir_prepare_inlining!(Compiler.InsertBefore(ir, SSAValue(1)), ir, callee_ir,
+                                          spec_info, di, mi, (Int32(1), Int32(0), Int32(0)), Any[])
+            inserted = any(stmt -> isexpr(stmt, :code_coverage_effect), ir.new_nodes.stmts.stmt)
+            @test inserted == (!has_marker || Base.JLOptions().code_coverage_mode != 0)
+        end
+    end
+end
+
 """
 Helper to walk the AST and call a function on every node.
 """
@@ -151,14 +186,8 @@ end
     end
 
     (src, _) = only(code_typed(sum27403, Tuple{Vector{Int}}))
-    is_bounds_throw_invoke_target(@nospecialize(callee)) =
-        callee === Base.throw_boundserror ||
-        callee == Core.GlobalRef(Base, :throw_boundserror) ||
-        callee == Core.GlobalRef(Base, :_throw_boundserror_indices) ||
-        (callee isa Core.MethodInstance && (callee.def.def.name === :throw_boundserror ||
-                                            callee.def.def.name === :_throw_boundserror_indices))
     @test !any(src.code) do x
-        x isa Expr && x.head === :invoke && !is_bounds_throw_invoke_target(x.args[2])
+        isexpr(x, :invoke) && !(isinvoke(:throw_boundserror, x) || isinvoke(:_throw_boundserror_indices, x))
     end
 end
 
@@ -322,7 +351,7 @@ end
 const _a_global_array = [1]
 f_inline_global_getindex() = _a_global_array[1]
 let ci = code_typed(f_inline_global_getindex, Tuple{})[1].first
-    @test any(x->(isexpr(x, :call) && x.args[1] in (GlobalRef(Base, :memoryrefget), Base.memoryrefget)), ci.code)
+    @test any(iscall((ci, Base.memoryrefget)), ci.code)
 end
 
 # Issue #29114 & #36087 - Inlining of non-tuple splats
@@ -2195,7 +2224,10 @@ for run_finalizer_escape_test in (run_finalizer_escape_test1, run_finalizer_esca
     global finalizer_escape::Int = 0
 
     let src = code_typed1(run_finalizer_escape_test, Tuple{Bool, Bool})
-        @test any(iscall((src, Core.setglobal!)), src.code)
+        # `reformulate_globals_pass!` rewrites the resolved default `setglobal!` store to
+        # an `Expr(:(=), ::Core.BindingPartition, value)` form.
+        @test any(x -> iscall((src, Core.setglobal!))(x) ||
+                       (Meta.isexpr(x, :(=)) && isa(x.args[1], Core.BindingPartition)), src.code)
     end
 
     let
@@ -2462,4 +2494,27 @@ let mi = Compiler.specialize_method(only(methods(ndims, (Matrix{Float64},))),
     @test Compiler.ci_get_source(interp, codeinst) isa Core.CodeInfo
 end
 
+
+# `statement_cost` prices the reformulated global-access builtin calls via their registered
+# tfunc cost: `getglobal_partition` reads are free (matching plain `getglobal`), and the
+# `setglobal_partition` store matches the store builtins' tfunc cost, as does the `:(=)` form.
+let m = Module()
+    Core.eval(m, :(global gcost::Int = 0))
+    gr = GlobalRef(m, :gcost)
+    b = convert(Core.Binding, gr)
+    part = Base.lookup_binding_partition(Base.get_world_counter(), b)
+    src = code_typed(() -> nothing, ())[1][1]
+    params = Compiler.OptimizationParams()
+    sptypes = Compiler.VarState[]
+    getcall = Expr(:call, GlobalRef(Core, :getglobal_partition), QuoteNode(gr), QuoteNode(part),
+                   QuoteNode(:acquire))
+    setcall = Expr(:call, GlobalRef(Core, :setglobal_partition), QuoteNode(part), 0,
+                   QuoteNode(:release))
+    @test Compiler.statement_cost(getcall, -1, src, sptypes, params) ==
+          Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.getglobal_partition)] == 0
+    store_cost = Compiler.statement_cost(setcall, -1, src, sptypes, params)
+    assign_cost = Compiler.statement_cost(Expr(:(=), part, 0), -1, src, sptypes, params)
+    @test store_cost == Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.setglobal_partition)]
+    @test assign_cost == Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.setglobal!)]
+end
 end # module inline_tests

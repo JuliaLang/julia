@@ -381,6 +381,19 @@ end
     end
 end
 
+# Check both comparison directions at signed and unsigned limits, including equal values.
+@testset "mixed signedness comparisons" begin
+    for S in Base.BitSigned_types,
+        U in Base.BitUnsigned_types,
+        s in (typemin(S), S(-1), S(0), S(1), typemax(S)),
+        u in (U(0), U(1), typemax(U)),
+        op in (==, <, <=)
+
+        @test op(s, u) === op(BigInt(s), BigInt(u))
+        @test op(u, s) === op(BigInt(u), BigInt(s))
+    end
+end
+
 @testset "Underscores in big_str" begin
     @test big"1_0_0_0" == BigInt(1000)
     @test_throws ArgumentError big"1_0_0_0_"

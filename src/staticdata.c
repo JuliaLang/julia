@@ -198,6 +198,7 @@ typedef struct {
     void *relocs_base;       // reloc_t* for GC sweep
     jl_module_t *top_mod;    // owning top-level module
     size_t idx;              // range index in image_tree (for serialization)
+    int coverage_compatible; // counters support the requested coverage mode
 } image_metadata_t;
 
 void jl_init_staticdata(void)
@@ -268,6 +269,14 @@ JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT
         return (jl_value_t*)meta->top_mod;
     // The object is runtime allocated
     return (jl_value_t*)jl_nothing;
+}
+
+// Whether this code instance's image has compatible coverage counters,
+// as determined at load time by jl_register_image_coverage.
+JL_DLLEXPORT int jl_codeinst_coverage_compatible(jl_code_instance_t *ci) JL_NOTSAFEPOINT
+{
+    image_metadata_t *meta = external_blob_metadata((jl_value_t*)ci);
+    return meta != NULL && meta->coverage_compatible;
 }
 
 // hash of definitions for predefined function pointers
@@ -2550,9 +2559,8 @@ static void jl_prune_tn_backedges(jl_genericmemory_t *table)
         jl_array_del_end((jl_array_t*)callers, l - ins);
         if (ins == 0) {
             // no caller is being serialized: drop the entry (cf. `jl_eqtable_pop`)
-            jl_gc_wb(table, NULL);
-            jl_atomic_store_relaxed(&tab[i], jl_nothing); // clear the key
-            jl_atomic_store_relaxed(&tab[i + 1], NULL); // and the value
+            jl_gc_write_atomic(table, tab[i], jl_value_t, jl_nothing, relaxed); // clear the key
+            jl_gc_write_atomic(table, tab[i + 1], jl_value_t, NULL, relaxed); // and the value
         }
     }
 }
@@ -2682,7 +2690,7 @@ static void strip_specializations_(jl_method_instance_t *mi) JL_CANSAFEPOINT
             }
             else if (jl_options.strip_metadata) {
                 jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, codeinst);
-                jl_gc_wb(codeinst, stripped);
+                jl_gc_wb(codeinst, (void*)&codeinst->inferred, stripped);
                 jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped);
             }
         }
@@ -2976,6 +2984,32 @@ static int jl_prune_internal_mtable(jl_methtable_t *mt, void *env)
     record_field_change((jl_value_t**)&mc->cache, jl_nothing);
     record_field_change((jl_value_t**)&mc->leafcache, jl_an_empty_memory_any);
     return 1;
+}
+
+// Write a section to the image. The first `skip` bytes of `sec` are not copied:
+// Used only when sysimg is written; every other caller passes 0.
+//
+// If the image stream cannot be grown to fit the section, fail rather than return
+// with a truncated section.
+static void write_section(ios_t *f, ios_t *sec, size_t align, size_t skip, const char *name) JL_CANSAFEPOINT
+{
+    size_t payload = sec->size - skip;
+    // write_uint writes sizeof(uintptr_t) bytes
+    size_t payload_start = LLT_ALIGN(ios_pos(f) + sizeof(uintptr_t), align);
+    write_uint(f, payload);
+    write_padding(f, LLT_ALIGN(ios_pos(f), align) - ios_pos(f));
+    ios_seek(sec, skip);
+    ios_copyall(f, sec);
+    if ((size_t)ios_pos(f) != payload_start + payload) {
+        jl_printf(
+            JL_STDERR,
+            "ERROR: failed to write system image: the %s section needs %" PRIu64 " bytes at offset %" PRIu64 " "
+            "but the stream reached only %" PRIu64 " (out of memory)\n",
+            name, (uint64_t)payload, (uint64_t)payload_start, (uint64_t)ios_pos(f)
+        );
+        jl_exit(1);
+    }
+    ios_close(sec);
 }
 
 // In addition to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
@@ -3289,25 +3323,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     // step 3: combine all of the sections into one file
     assert(ios_pos(f) % JL_CACHE_BYTE_ALIGNMENT == 0);
     ssize_t sysimg_offset = ios_pos(f);
-    write_uint(f, sysimg.size - sizeof(uintptr_t));
-    ios_seek(&sysimg, sizeof(uintptr_t));
-    ios_copyall(f, &sysimg);
-    size_t sysimg_size = s.s->size;
-    assert(ios_pos(f) - sysimg_offset == sysimg_size);
-    ios_close(&sysimg);
-
-    write_uint(f, const_data.size);
-    // realign stream to max-alignment for data
-    write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
-    ios_seek(&const_data, 0);
-    ios_copyall(f, &const_data);
-    ios_close(&const_data);
-
-    write_uint(f, symbols.size);
-    write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
-    ios_seek(&symbols, 0);
-    ios_copyall(f, &symbols);
-    ios_close(&symbols);
+    size_t sysimg_size = s.s->size; // write_section closes the stream
+    write_section(f, &sysimg, 1, sizeof(uintptr_t), "sysimg"); // align 1: `f` is already cache-aligned; skip sizeof(uintptr_t): write_section will write the actual size
+    write_section(f, &const_data, JL_CACHE_BYTE_ALIGNMENT, 0, "const_data"); // realign stream to max-alignment for data
+    write_section(f, &symbols, 8, 0, "symbols");
 
     // Prepare and write the relocations sections, now that the rest of the image is laid out
     char *base = &f->buf[0];
@@ -3323,23 +3342,11 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         jl_write_arraylist(s.relocs, &s.fixup_types);
     }
     jl_write_arraylist(s.relocs, &s.fixup_objs);
-    write_uint(f, relocs.size);
-    write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
-    ios_seek(&relocs, 0);
-    ios_copyall(f, &relocs);
-    ios_close(&relocs);
+    write_section(f, &relocs, 8, 0, "relocs");
 
-    write_uint(f, gvar_record.size);
-    write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
-    ios_seek(&gvar_record, 0);
-    ios_copyall(f, &gvar_record);
-    ios_close(&gvar_record);
+    write_section(f, &gvar_record, 8, 0, "gvar_record");
 
-    write_uint(f, fptr_record.size);
-    write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
-    ios_seek(&fptr_record, 0);
-    ios_copyall(f, &fptr_record);
-    ios_close(&fptr_record);
+    write_section(f, &fptr_record, 8, 0, "fptr_record");
 
     { // step 4: record locations of special roots
         write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
@@ -3439,6 +3446,8 @@ static uint8_t jl_get_toplevel_syntax_version(void) JL_CANSAFEPOINT
 static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_array_t *mod_array, jl_array_t **udeps, int64_t *srctextpos) JL_CANSAFEPOINT
 {
     write_uint8(f, jl_cache_flags());
+    // coverage instrumentation of the image, part of the cache identity
+    write_uint8(f, jl_image_coverage_config());
     // write the syntax version marker. Note that unlike a VersionNumber, this is
     // private to the serialization format and only needs to be reloaded by the
     // same version of Julia that wrote it. As a result, we don't store the full
@@ -3589,11 +3598,29 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     return checksum;
 }
 
+#ifdef JL_LIBRARY_STATIC
+// The sysimage is linked into the same binary as libjulia-internal, so the
+// static linker resolves its symbols and `handle` is unused.
+extern const char jl_system_image_data[];
+extern const size_t jl_system_image_size;
+extern const uint32_t jl_system_image_checksum;
+extern const jl_image_pointers_t jl_image_pointers;
+
+#define JL_IMAGE_SYM(handle, name, out) (*(void **)(out) = (void *)&name)
+#else
+#define JL_IMAGE_SYM(handle, name, out) jl_dlsym(handle, #name, (void **)(out), 1, 0)
+#endif
+
 // Takes in a path of the form "usr/lib/julia/sys.so"
 JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
 {
     if (jl_sysimage_buf.kind != JL_IMAGE_KIND_NONE)
         return jl_sysimage_buf;
+
+#ifdef JL_LIBRARY_STATIC
+    // the sysimage is linked into this binary; nothing is loaded from `fname`
+    return jl_set_sysimg_so(NULL);
+#endif
 
     char *dot = (char*) strrchr(fname, '.');
     int is_ji = (dot && !strcmp(dot, ".ji"));
@@ -3634,17 +3661,19 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
 
 static void jl_image_load_metadata(void *handle, jl_image_buf_t *image)
 {
-    jl_dlsym(handle, "jl_image_pointers", (void **)&image->pointers, 1, 0);
+    JL_IMAGE_SYM(handle, jl_image_pointers, &image->pointers);
     uint32_t *pchecksum;
-    jl_dlsym(handle, "jl_system_image_checksum", (void **)&pchecksum, 1, 0);
+    JL_IMAGE_SYM(handle, jl_system_image_checksum, &pchecksum);
     image->heap_checksum = *pchecksum;
+    // only present if the image was built with coverage counters
+    jl_dlsym(handle, "jl_image_coverage", (void **)&image->coverage, 0, 0);
 }
 
 JL_DLLEXPORT void jl_image_unpack_uncomp(void *handle, jl_image_buf_t *image)
 {
     size_t *plen;
-    jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1, 0);
-    jl_dlsym(handle, "jl_system_image_data", (void **)&image->data, 1, 0);
+    JL_IMAGE_SYM(handle, jl_system_image_size, &plen);
+    JL_IMAGE_SYM(handle, jl_system_image_data, &image->data);
     image->size = *plen;
     jl_image_load_metadata(handle, image);
 }
@@ -3737,8 +3766,8 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image) JL_C
 {
     size_t *plen;
     char *data;
-    jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1, 0);
-    jl_dlsym(handle, "jl_system_image_data", (void **)&data, 1, 0);
+    JL_IMAGE_SYM(handle, jl_system_image_size, &plen);
+    JL_IMAGE_SYM(handle, jl_system_image_data, &data);
     jl_image_load_metadata(handle, image);
     jl_image_decompress(image, data, *plen);
 
@@ -3836,19 +3865,23 @@ JL_DLLEXPORT void jl_image_unpack_split_zstd(void *handle, jl_image_buf_t *image
     free(comp_data);
 }
 
+// Compute the load address of the image containing `addr`
+static intptr_t jl_image_base(const void *addr) JL_NOTSAFEPOINT
+{
+#ifdef _OS_WINDOWS_
+    // an HMODULE is the load address of the module
+    return (intptr_t)jl_find_dynamic_library_by_addr((void*)addr, /* throw_err */ 0, /* close */ 0);
+#else
+    Dl_info dlinfo;
+    if (dladdr((void*)addr, &dlinfo) != 0)
+        return (intptr_t)dlinfo.dli_fbase;
+    return 0;
+#endif
+}
+
 // From a shared library handle, verify consistency and return a jl_image_buf_t
 static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage) JL_NOTSAFEPOINT
 {
-    // verify that the linker resolved the symbols in this image against ourselves (libjulia-internal)
-    typedef void** (JL_NOTSAFEPOINT *jl_RTLD_DEFAULT_handle_func_t)(void);
-    jl_RTLD_DEFAULT_handle_func_t get_jl_RTLD_DEFAULT_handle_addr = NULL;
-    if (handle != jl_RTLD_DEFAULT_handle) {
-        int symbol_found = jl_dlsym(handle, "get_jl_RTLD_DEFAULT_handle_addr", (void **)&get_jl_RTLD_DEFAULT_handle_addr, 0, 0);
-        if (!symbol_found || (void*)&jl_RTLD_DEFAULT_handle != (get_jl_RTLD_DEFAULT_handle_addr()))
-            jl_error("Image file failed consistency check: maybe opened the wrong version?");
-    }
-
-    jl_image_unpack_func_t *unpack;
     jl_image_buf_t image = {
         .kind = JL_IMAGE_KIND_SO,
         .pointers = NULL,
@@ -3858,28 +3891,27 @@ static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage) JL_NOTSAFEPOI
         .is_split = 0,
     };
 
-    // verification passed, lookup the buffer pointers
-    if (jl_image_unpack == NULL || is_pkgimage) {
-        // in the usual case, the sysimage was not statically linked to libjulia-internal
-        // look up the external sysimage symbols via the dynamic linker
-        jl_dlsym(handle, "jl_image_unpack", (void **)&unpack, 1, 0);
-    }
-    else {
-        // the sysimage was statically linked directly against libjulia-internal
-        // use the internal symbols
-        unpack = &jl_image_unpack;
-    }
-    (*unpack)(handle, &image);
-
-#ifdef _OS_WINDOWS_
-    image.base = (intptr_t)handle;
+#ifdef JL_LIBRARY_STATIC
+    // `handle` is ignored: the sysimage is linked in (see JL_IMAGE_SYM) and
+    // pkgimages cannot be loaded into a static libjulia-internal
+    assert(!is_pkgimage);
+    (*jl_image_unpack)(NULL, &image);
 #else
-    Dl_info dlinfo;
-    if (dladdr((void*)image.pointers, &dlinfo) != 0)
-        image.base = (intptr_t)dlinfo.dli_fbase;
-    else
-        image.base = 0;
+    // verify that the linker resolved the symbols in this image against ourselves (libjulia-internal)
+    typedef void** (JL_NOTSAFEPOINT *jl_RTLD_DEFAULT_handle_func_t)(void);
+    jl_RTLD_DEFAULT_handle_func_t get_jl_RTLD_DEFAULT_handle_addr = NULL;
+    if (handle != jl_RTLD_DEFAULT_handle) {
+        int symbol_found = jl_dlsym(handle, "get_jl_RTLD_DEFAULT_handle_addr", (void **)&get_jl_RTLD_DEFAULT_handle_addr, 0, 0);
+        if (!symbol_found || (void*)&jl_RTLD_DEFAULT_handle != (get_jl_RTLD_DEFAULT_handle_addr()))
+            jl_error("Image file failed consistency check: maybe opened the wrong version?");
+    }
+
+    // verification passed, lookup the buffer pointers
+    jl_image_unpack_func_t *unpack;
+    jl_dlsym(handle, "jl_image_unpack", (void **)&unpack, 1, 0);
+    (*unpack)(handle, &image);
 #endif
+    image.base = jl_image_base(image.pointers);
 
     return image;
 }
@@ -3890,6 +3922,15 @@ JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle)
     if (jl_sysimage_buf.kind != JL_IMAGE_KIND_NONE)
         return jl_sysimage_buf;
 
+#ifdef JL_LIBRARY_STATIC
+    // the linked-in sysimage is used regardless of `handle` (see get_image_buf);
+    // record the binary containing it as the image file
+    const char *path = jl_pathname_for_symbol((void*)&jl_image_pointers);
+    if (path != NULL && path[0] == '\0') // ELF reports the main executable as ""
+        path = jl_options.julia_bin;
+    if (path != NULL)
+        jl_options.image_file = path;
+#endif
     jl_sysimage_buf = get_image_buf(handle, /* is_pkgimage */ 0);
     return jl_sysimage_buf;
 }
@@ -4535,6 +4576,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     meta->base = (uintptr_t)image_base;
     meta->relocs_base = (void*)relocs_base;
     meta->idx = n_linkage_blobs();
+    // adopt the image's coverage counters
+    meta->coverage_compatible = jl_register_image_coverage(image->coverage, !s.incremental);
     if (restored == NULL) {
         meta->top_mod = jl_top_module;
     } else {
@@ -4593,6 +4636,8 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_
         // Syntax version mismatch is not fatal to load
         if (!jl_match_cache_flags_current(read_uint8(f)))
             return jl_get_exceptionf(jl_errorexception_type, "Pkgimage flags mismatch");
+        if (!jl_match_cache_coverage(jl_image_coverage_config(), read_uint8(f)))
+            return jl_get_exceptionf(jl_errorexception_type, "Pkgimage coverage instrumentation mismatch");
 
         (void)read_uint8(f); // syntax_version
 
