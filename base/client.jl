@@ -315,8 +315,7 @@ function exec_options(opts)
     # remove filename from ARGS
     global PROGRAM_FILE = arg_is_program ? popfirst!(ARGS) : ""
 
-    # A program that is its own environment (a script with inline project metadata, see
-    # `init_active_project`, or a file given to `--project` explicitly) runs in script mode.
+    # Enter script mode when the program is the active project.
     script_env = nothing
     if arg_is_program && PROGRAM_FILE != "-"
         script_path = abspath(PROGRAM_FILE)

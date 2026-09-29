@@ -304,9 +304,7 @@ function init_active_project()
     )
 end
 
-# The path of the program file if it is a script with inline project metadata, which is then
-# its own environment when no project is given explicitly. `nothing` if there is no such program
-# (e.g. no program, `-`, or `-e`/`-E` which suppress running the program).
+# Return the script environment to activate when no project was specified.
 function program_script_env()
     opts = JLOptions()
     program_file = opts.program_file != C_NULL ? unsafe_string(opts.program_file) : ""

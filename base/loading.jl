@@ -209,37 +209,20 @@ function version_slug(uuid::UUID, sha1::SHA1, p::Int=5)
 end
 
 ## scripts with inline project metadata ##
-#
-# A script can carry its own project (and optionally manifest) as TOML inside
-# comment blocks:
-#
-#     # /// project
-#     # [deps]
-#     # Example = "7876af07-990d-54b4-ab0e-23690620f79a"
-#     # ///
-#
-# The project block must be part of the leading comment region of the file
-# (only blank lines, comments and a shebang may precede it). The manifest
-# block (`# /// manifest`) may appear anywhere after it; Pkg keeps it at the
-# end of the file.
-# Every line inside a block is a comment; its leading `#` and one optional
-# space are stripped to obtain the TOML text.
 
 const SCRIPT_BLOCK_START = "# /// "
 const SCRIPT_BLOCK_END = "# ///"
 
-# strip a trailing '\r' so that CRLF files parse like LF files
+# Normalize CRLF line endings.
 _script_line(line::AbstractString) = chopsuffix(line, "\r")
-# a leading byte order mark is whitespace to the Julia parser; ignore it on the first line
+# Ignore a leading byte order mark, as the Julia parser does.
 _script_first_line(line::AbstractString) = chopprefix(line, "\ufeff")
 
-# blank lines and line comments (including a shebang) are "trivia"
 function _script_trivia_line(line::AbstractString)
     s = lstrip(line)
     return isempty(s) || startswith(s, '#')
 end
 
-# `# /// name` starts a block, `# ///` ends one
 function _script_block_marker(line::AbstractString)
     line = rstrip(line)
     line == SCRIPT_BLOCK_END && return :end
@@ -249,15 +232,8 @@ function _script_block_marker(line::AbstractString)
     return String(name)
 end
 
-"""
-    Base.ScriptMetadata
-
-The project and manifest TOML embedded in a script, as returned by
-`Base.parse_script_metadata`. `project` and `manifest` hold the TOML text of the
-respective blocks (or `nothing`). `project_lines` and `manifest_lines` are the 1-based line
-ranges of the blocks, marker lines included, and `header_end` is the last line of the leading
-comment region (0 if the file starts with code).
-"""
+# Embedded TOML and 1-based block ranges, including markers.
+# header_end is the last leading comment or blank line (0 if the file starts with code).
 struct ScriptMetadata
     project::Union{Nothing, String}
     manifest::Union{Nothing, String}
@@ -266,8 +242,7 @@ struct ScriptMetadata
     header_end::Int
 end
 
-# Returns `true` if the leading comment region contains a `# /// project` block.
-# Scans only up to the first line of code. Uses `readline`, as `eachline` is not trimmable.
+# Uses `readline`, as `eachline` is not trimmable.
 function _has_project_block(io::IO)
     first = true
     while !eof(io)
@@ -281,12 +256,7 @@ function _has_project_block(io::IO)
 end
 _has_project_block(content::String) = _has_project_block(IOBuffer(content))
 
-"""
-    Base.has_project_block(path)
-
-Return `true` if the leading comment region of the file at `path` contains a `# /// project`
-block. Only such a file is activated automatically when run as `julia path`.
-"""
+# Check for a project block before the first line of code.
 function has_project_block(path::AbstractString)::Bool
     isfile_casesensitive(path) || return false
     basename(path) in project_names && return false
@@ -298,30 +268,18 @@ function has_project_block(path::AbstractString)::Bool
     end
 end
 
-"""
-    Base.is_script_env(path)
-
-Return `true` if `path` is a file that serves as an environment through inline project
-metadata: an existing file that is neither a project file nor a TOML file. Its project is
-its `# /// project` block (see `Base.has_project_block`), or empty if it has none yet.
-"""
+# Any existing non-TOML, non-project file can be a script environment.
 function is_script_env(path::AbstractString)::Bool
     basename(path) in project_names && return false
     endswith(path, ".toml") && return false
     return isfile_casesensitive(path)
 end
 
-"""
-    Base.parse_script_metadata(content::AbstractString; path::AbstractString="")
-
-Parse the inline project metadata blocks of a script with the given `content`, returning
-a `Base.ScriptMetadata`. Throws if the blocks are malformed or misplaced.
-`path` is only used in error messages.
-"""
+# Extract TOML blocks and reject malformed or misplaced blocks.
 function parse_script_metadata(content::AbstractString; path::AbstractString="")
     at = isempty(path) ? "" : " in $path"
     lines = split(content, '\n')
-    # `split` yields a trailing empty string for a trailing newline; drop it
+    # Drop the empty line from a trailing newline.
     if !isempty(lines) && isempty(lines[end])
         pop!(lines)
     end
@@ -379,17 +337,9 @@ function parse_script_metadata(content::AbstractString; path::AbstractString="")
     return ScriptMetadata(project, manifest, project_lines, manifest_lines, header_end)
 end
 
-"""
-    Base.read_script_metadata(path::AbstractString)
-
-Read and parse the inline project metadata of the script at `path`.
-See `Base.parse_script_metadata`.
-"""
 read_script_metadata(path::AbstractString) = parse_script_metadata(read(path, String); path=String(path))
 
-# State for running a script with inline project metadata. While the script is being
-# included, `using`/`import` from it resolve as if the script were a package (only its own
-# project and manifest are consulted), and the environment is instantiated on demand.
+# Track the running script and whether instantiation has been checked.
 mutable struct ScriptEnvState
     const path::String
     const pkg::PkgId
@@ -400,10 +350,7 @@ const SCRIPT_ENV_LOCK = ReentrantLock() # serializes the instantiation check acr
 
 script_env_pkg(path::String) = project_file_name_uuid(path, first(splitext(basename(path))))
 
-# Enter script mode for the script at `path` (a file used as its own environment):
-# `using`/`import` in `Main` then resolve only against the script's own project and manifest,
-# and the environment is instantiated on first use if needed. Throws if the metadata blocks
-# of the script are malformed or misplaced. `script_env_end!` leaves script mode again.
+# Restrict imports from Main to the script's project and manifest.
 function script_env_begin!(path::String)
     read_script_metadata(path) # validate block placement up front
     SCRIPT_ENV[] = ScriptEnvState(path, script_env_pkg(path), false)
@@ -413,7 +360,7 @@ script_env_end!() = (SCRIPT_ENV[] = nothing)
 
 const PKG_PKGID = PkgId(UUID((0x44cfe95a_1eb2_52ea, 0xb672_e2afdf69b78f)), "Pkg")
 
-# Does the script declare dependencies that are not available on disk?
+# Check for unresolved or missing dependencies.
 function script_env_needs_instantiate(state::ScriptEnvState)
     @lock require_lock begin
         deps = get(parsed_toml(state.path), "deps", nothing)
@@ -433,17 +380,13 @@ function script_env_needs_instantiate(state::ScriptEnvState)
     end
 end
 
-# Called on `using`/`import` from `into`. The first time this happens while running a
-# script with inline project metadata, install its dependencies if any are missing (or the
-# manifest has not been resolved yet) by loading Pkg. Nothing is loaded when the environment
-# is already instantiated. Set `JULIA_AUTO_INSTANTIATE=false` to disable.
+# Instantiate on the first import, unless JULIA_AUTO_INSTANTIATE=false.
 function script_env_ensure_instantiated(into::Module)
     state = SCRIPT_ENV[]
     state === nothing && return
     state.instantiate_checked && return
     moduleroot(into) === Main || return
-    # running Pkg while this task holds the loading lock (e.g. a `using` from an `__init__`)
-    # could deadlock its precompilation tasks, so leave it to the user in that case
+    # Holding require_lock while Pkg precompiles could deadlock.
     require_lock.locked_by === current_task() && return
     @lock SCRIPT_ENV_LOCK begin
         state.instantiate_checked && return # another task got here first
@@ -468,12 +411,11 @@ mutable struct CachedTOMLDict
     size::Int64
     hash::UInt32
     d::Dict{String, Any}
-    # for scripts with inline metadata: whether this entry holds the manifest section
+    # Whether this caches a script's manifest block.
     manifest::Bool
 end
 
-# Parse either the whole file or, for a script with inline metadata, the requested section
-# (empty if the script does not have that block).
+# Parse a TOML file or the requested script block; missing blocks are empty.
 function _parse_env_toml(p::TOML.Parser, path::String, content::String, manifest::Bool)
     if basename(path) ∉ project_names && !endswith(path, ".toml")
         meta = parse_script_metadata(content; path)
@@ -564,10 +506,8 @@ TOMLCache(p::TOML.Parser, d::Dict{String, Dict{String, Any}}) = TOMLCache(p, con
 
 const TOML_CACHE = TOMLCache(TOML.Parser{nothing}())
 
-# Parse (and cache) the TOML file at `toml_file`. If the file is a script with inline
-# project metadata, the project section is returned, or the manifest section when
-# `manifest=true` (an empty dict if the script has no manifest block). Pass `manifest=true`
-# whenever `toml_file` came from `project_file_manifest_path`.
+# For scripts, cache project and manifest blocks separately.
+# Pass manifest=true for paths returned by project_file_manifest_path.
 parsed_toml(toml_file::AbstractString; manifest::Bool=false) =
     parsed_toml(toml_file, TOML_CACHE, require_lock; manifest)
 function parsed_toml(toml_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock; manifest::Bool=false)
@@ -633,8 +573,7 @@ is also returned, except when the identity is not identified.
 function identify_package_env(where::Module, name::String)
     state = SCRIPT_ENV[]
     if state !== nothing && moduleroot(where) === Main
-        # code of a script with inline project metadata loads packages like a package does:
-        # only the script's own project and manifest are consulted
+        # Resolve against the script's dependencies.
         return identify_package_env(state.pkg, name)
     end
     return identify_package_env(PkgId(where), name)
@@ -996,7 +935,6 @@ function env_project_file(env::String)::Union{Bool,String}
     elseif basename(env) in project_names && isfile_casesensitive(env)
         project_file = env
     elseif is_script_env(env)
-        # a script with inline project metadata is its own project file
         project_file = env
     else
         project_file = false
@@ -1297,7 +1235,7 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     isfile_casesensitive(project_file) || return nothing
     d = parsed_toml(project_file)
     script = basename(project_file) ∉ project_names && is_script_env(project_file)
-    # a script is never part of a workspace
+    # Scripts do not belong to workspaces.
     base_manifest = script ? nothing : workspace_manifest(project_file)
     if base_manifest !== nothing
         return base_manifest
@@ -1311,8 +1249,7 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
         end
     end
     if manifest_path === nothing && script
-        # the manifest of a script is its own `# /// manifest` block (or the file named by
-        # its `manifest` key), never a manifest file that happens to be in the same directory
+        # Use the inline manifest; do not search for neighboring manifest files.
         if explicit_manifest === nothing && read_script_metadata(project_file).manifest !== nothing
             manifest_path = project_file
         end

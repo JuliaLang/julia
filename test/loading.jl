@@ -2541,9 +2541,8 @@ end
         @test meta.project == "name = \"A\"" && meta.header_end == 3
         # empty block
         @test Base.parse_script_metadata("# /// project\n# ///\n").project == ""
-        # project after code is not a script
+        # Reject project blocks after code.
         @test_throws ErrorException Base.parse_script_metadata("x = 1\n# /// project\n# ///\n")
-        # misplaced/malformed blocks
         # the manifest block may be followed by code
         meta = Base.parse_script_metadata("# /// project\n# ///\n# /// manifest\n# a = 1\n# ///\nx = 1\n")
         @test meta.manifest == "a = 1" && meta.manifest_lines == 3:5
@@ -2567,7 +2566,7 @@ end
         @test !Base.has_project_block(joinpath(scripts, "invalid_project_after_code.jl"))
         @test !Base.has_project_block(joinpath(scripts, "Manifest.toml"))
         @test !Base.has_project_block(joinpath(scripts, "nonexistent.jl"))
-        # any existing file that is not a project or TOML file can serve as a script environment
+        # Script environments need not have a project block.
         @test Base.is_script_env(joinpath(scripts, "script.jl"))
         @test Base.is_script_env(joinpath(scripts, "regular_script.jl"))
         @test !Base.is_script_env(joinpath(scripts, "Manifest.toml"))
@@ -2602,8 +2601,7 @@ end
         ok, out, err = run_script(joinpath(scripts, "script_crlf.jl"))
         @test ok && occursin("crlf ok: $(joinpath(scripts, "script_crlf.jl"))", out)
 
-        # a manifest file next to the script is never used, and without a manifest
-        # block the script has no manifest
+        # Ignore the neighboring Manifest.toml.
         script_nm = joinpath(scripts, "script_no_manifest.jl")
         ok, out, err = run_script(script_nm)
         @test ok
@@ -2615,11 +2613,10 @@ end
         @test ok
         @test occursin("Active manifest: $(joinpath(scripts, "external.toml"))", out)
 
-        # a regular file is not activated automatically ...
+        # Files without project blocks require explicit activation.
         regular = joinpath(scripts, "regular_script.jl")
         ok, out, err = run_script(regular)
         @test ok && occursin("Active project: nothing", out)
-        # ... but can be activated explicitly, as an environment with an empty project
         ok, out, err = run_script("--project=$regular", regular)
         @test ok && occursin("Active project: $(repr(regular))", out)
         ok, out, err = run_script("--project=$regular", "-e", "println(Base.active_manifest()); using Random; println(\"stacked\")")
@@ -2633,7 +2630,7 @@ end
     end
 
     @testset "package-like loading and instantiation" begin
-        # packages (including stdlibs) not in the project are not found, even if in the default env
+        # Imports must be declared, including stdlibs.
         ok, out, err = run_script(joinpath(scripts, "script_undeclared_stdlib.jl"); env=Dict("JULIA_AUTO_INSTANTIATE" => "false"))
         @test !ok && occursin("Package Random not found in current path", err)
         # a missing dependency with instantiation disabled gives the usual error
@@ -2646,8 +2643,7 @@ end
         run(pipeline(ignorestatus(cmd); stdin=IOBuffer("using Random; println(\"stacked ok\")\n"), stdout=out, stderr=devnull))
         @test occursin("stacked ok", String(take!(out)))
 
-        # a script that declares a dependency which is not installed gets instantiated on
-        # the first `using`: a path dependency (Rot13) with no manifest block
+        # Instantiate a path dependency on the first import.
         mktempdir() do dir
             script = joinpath(dir, "instantiate_me.jl")
             write(script, """

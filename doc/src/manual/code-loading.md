@@ -399,9 +399,8 @@ dependencies.
 
 ### [Scripts with inline project metadata](@id inline-project-scripts)
 
-A single Julia file can carry its own project, and optionally its manifest, as TOML embedded in
-comment blocks. Such a script is a complete, self-describing environment: it can be shared as one
-file and run with `julia script.jl` without any `Project.toml` or `Manifest.toml` next to it.
+A Julia script can embed its project and optional manifest as TOML comment blocks.
+Run it with `julia script.jl`; no separate `Project.toml` or `Manifest.toml` is needed.
 
 ```julia
 #!/usr/bin/env julia
@@ -456,16 +455,14 @@ returns the script as well when the manifest is inline.
 When the script itself is run in this way, code loading from it follows the rules of a package rather
 than of a stacked environment: `using` and `import` statements in the script (and in files it includes)
 only see the packages listed in the script's own project and manifest, plus the standard libraries
-listed there. Nothing from the default environment leaks in, so a script that runs on one machine will
-find the same packages on another. In an interactive session started with `julia -i script.jl`, code
-entered at the REPL afterwards uses the usual [environment stack](@ref Environment-stacks), with the
-script as the primary environment.
+listed there. Packages from the default environment are not available. In an interactive session
+started with `julia -i script.jl`, code entered at the REPL afterwards uses the usual
+[environment stack](@ref Environment-stacks), with the script as the primary environment.
 
 If a script declares dependencies that are not installed, or has no manifest yet, the first `using`
 or `import` in the script loads Pkg and instantiates the environment before continuing, resolving a
-manifest if needed. When all dependencies are already installed nothing is loaded, so this has no
-cost on subsequent runs. Set the environment variable `JULIA_AUTO_INSTANTIATE=false` to disable this
-and get the usual error instead.
+manifest if needed. When all dependencies are already installed, Pkg is not loaded. Set
+`JULIA_AUTO_INSTANTIATE=false` to disable automatic instantiation and get the usual error instead.
 
 Pkg understands these scripts as environments: `Pkg.activate("script.jl")` activates a script, and
 every operation that would modify the project or
