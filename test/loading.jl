@@ -2499,3 +2499,169 @@ end
             """))
     end
 end
+
+@testset "scripts with inline project metadata" begin
+    scripts = joinpath(@__DIR__, "project", "scripts")
+    julia = `$(Base.julia_cmd()) --startup-file=no`
+    run_script(args...; env=Dict{String,String}()) = begin
+        out = IOBuffer(); err = IOBuffer()
+        cmd = addenv(`$julia $args`, env)
+        ok = success(pipeline(ignorestatus(cmd); stdout=out, stderr=err))
+        (ok, String(take!(out)), String(take!(err)))
+    end
+
+    @testset "parse_script_metadata" begin
+        meta = Base.parse_script_metadata("""
+            #!/usr/bin/env julia
+            # /// project
+            # [deps]
+            # Example = "7876af07-990d-54b4-ab0e-23690620f79a"
+            # ///
+
+            using Example
+
+            # /// manifest
+            # julia_version = "1.13.0"
+            #
+            # [[deps.Example]]
+            # uuid = "7876af07-990d-54b4-ab0e-23690620f79a"
+            # ///
+            # trailing comments are fine
+            """)
+        @test meta.project == "[deps]\nExample = \"7876af07-990d-54b4-ab0e-23690620f79a\""
+        @test meta.manifest == "julia_version = \"1.13.0\"\n\n[[deps.Example]]\nuuid = \"7876af07-990d-54b4-ab0e-23690620f79a\""
+        @test meta.project_lines == 2:5
+        @test meta.manifest_lines == 9:14
+        @test meta.header_end == 6
+        # no blocks
+        meta = Base.parse_script_metadata("x = 1\n")
+        @test meta.project === nothing && meta.manifest === nothing && meta.header_end == 0
+        # CRLF and no trailing newline
+        meta = Base.parse_script_metadata("# /// project\r\n# name = \"A\"\r\n# ///\r\nx = 1")
+        @test meta.project == "name = \"A\"" && meta.header_end == 3
+        # empty block
+        @test Base.parse_script_metadata("# /// project\n# ///\n").project == ""
+        # project after code is not a script
+        @test_throws ErrorException Base.parse_script_metadata("x = 1\n# /// project\n# ///\n")
+        # misplaced/malformed blocks
+        @test_throws "must be the last thing" Base.parse_script_metadata("# /// project\n# ///\n# /// manifest\n# ///\nx = 1\n")
+        @test_throws "unterminated" Base.parse_script_metadata("# /// project\n# [deps]\n")
+        @test_throws "not a comment" Base.parse_script_metadata("# /// project\n[deps]\n# ///\n")
+        @test_throws "duplicate" Base.parse_script_metadata("# /// project\n# ///\n# /// project\n# ///\n")
+        @test_throws "no `# /// project` block" Base.parse_script_metadata("# /// manifest\n# ///\n")
+        # a leading byte order mark is ignored
+        @test Base.parse_script_metadata("\ufeff# /// project\n# ///\n").project == ""
+        @test Base._has_project_block("\ufeff# /// project\n# ///\n")
+        # unknown block types are ignored
+        @test Base.parse_script_metadata("# /// other\n# a = 1\n# ///\nx = 1\n").project === nothing
+    end
+
+    @testset "is_script_env" begin
+        @test Base.is_script_env(joinpath(scripts, "script.jl"))
+        @test Base.is_script_env(joinpath(scripts, "script_noext"))
+        @test Base.is_script_env(joinpath(scripts, "script_crlf.jl"))
+        @test !Base.is_script_env(joinpath(scripts, "regular_script.jl"))
+        @test !Base.is_script_env(joinpath(scripts, "invalid_project_after_code.jl"))
+        @test !Base.is_script_env(joinpath(scripts, "Manifest.toml"))
+        @test !Base.is_script_env(joinpath(scripts, "nonexistent.jl"))
+    end
+
+    @testset "running a script" begin
+        script = joinpath(scripts, "script.jl")
+        ok, out, err = run_script(script)
+        @test ok
+        @test occursin("Active project: $script", out)
+        @test occursin("Active manifest: $script", out)
+        @test occursin("rot13: Uryyb", out)
+        @test occursin("rand: true", out)
+
+        # --project=@script and --project=<script> activate it as well
+        for proj in ("@script", script)
+            ok, out, err = run_script("--project=$proj", script)
+            @test ok
+            @test occursin("Active project: $script", out)
+        end
+
+        # an explicit other project wins
+        ok, out, err = run_script("--project=$(joinpath(@__DIR__, "project", "Rot13"))", script)
+        @test ok
+        @test occursin("Active project: $(joinpath(@__DIR__, "project", "Rot13", "Project.toml"))", out)
+
+        # extensionless shebang-style file and CRLF line endings
+        ok, out, err = run_script(joinpath(scripts, "script_noext"))
+        @test ok && occursin("noext ok: $(joinpath(scripts, "script_noext"))", out)
+        ok, out, err = run_script(joinpath(scripts, "script_crlf.jl"))
+        @test ok && occursin("crlf ok: $(joinpath(scripts, "script_crlf.jl"))", out)
+
+        # a manifest file next to the script is never used, and without a manifest
+        # block the script has no manifest
+        script_nm = joinpath(scripts, "script_no_manifest.jl")
+        ok, out, err = run_script(script_nm)
+        @test ok
+        @test occursin("Active manifest: nothing", out)
+
+        # `manifest = ` in the project block points at a separate manifest file
+        script_em = joinpath(scripts, "script_external_manifest.jl")
+        ok, out, err = run_script(script_em)
+        @test ok
+        @test occursin("Active manifest: $(joinpath(scripts, "external.toml"))", out)
+
+        # a regular file is not activated
+        regular = joinpath(scripts, "regular_script.jl")
+        ok, out, err = run_script(regular)
+        @test ok && occursin("Active project: nothing", out)
+        # ... and cannot be used as a project
+        ok, out, err = run_script("--project=$regular", regular)
+        @test !ok && occursin("neither a project file nor a script", err)
+        # a project block after code does not make a script
+        ok, out, err = run_script(joinpath(scripts, "invalid_project_after_code.jl"))
+        @test ok && occursin("not a script env: nothing", out)
+        # a manifest block followed by code is an error
+        ok, out, err = run_script(joinpath(scripts, "invalid_manifest_not_last.jl"))
+        @test !ok && occursin("must be the last thing in the file", err)
+    end
+
+    @testset "package-like loading and instantiation" begin
+        # packages (including stdlibs) not in the project are not found, even if in the default env
+        ok, out, err = run_script(joinpath(scripts, "script_undeclared_stdlib.jl"); env=Dict("JULIA_AUTO_INSTANTIATE" => "false"))
+        @test !ok && occursin("Package Random not found in current path", err)
+        # a missing dependency with instantiation disabled gives the usual error
+        ok, out, err = run_script(joinpath(scripts, "script_missing_dep.jl"); env=Dict("JULIA_AUTO_INSTANTIATE" => "false"))
+        @test !ok && occursin("Package Rot13 not found in current path", err)
+        # in the REPL after the script, the usual stacked environments apply
+        script = joinpath(scripts, "script_undeclared_stdlib.jl")
+        cmd = addenv(`$julia -i $script`, "JULIA_AUTO_INSTANTIATE" => "false")
+        out = IOBuffer()
+        run(pipeline(ignorestatus(cmd); stdin=IOBuffer("using Random; println(\"stacked ok\")\n"), stdout=out, stderr=devnull))
+        @test occursin("stacked ok", String(take!(out)))
+
+        # a script that declares a dependency which is not installed gets instantiated on
+        # the first `using`: a path dependency (Rot13) with no manifest block
+        mktempdir() do dir
+            script = joinpath(dir, "instantiate_me.jl")
+            write(script, """
+                # /// project
+                # [deps]
+                # Rot13 = "43ef800a-eac4-47f4-949b-25107b932e8f"
+                # [sources]
+                # Rot13 = {path = "$(escape_string(joinpath(@__DIR__, "project", "Rot13")))"}
+                # ///
+                using Rot13
+                println("instantiated: ", Rot13.rot13("Hello"))
+                """)
+            depot = joinpath(dir, "depot")
+            ok, out, err = run_script(script; env=Dict("JULIA_DEPOT_PATH" => depot * (Sys.iswindows() ? ";" : ":"), "JULIA_PKG_OFFLINE" => "true"))
+            @test ok
+            @test occursin("Instantiating", err)
+            @test occursin("instantiated: Uryyb", out)
+            content = read(script, String)
+            @test occursin("# /// manifest", content)
+            @test occursin("# [[deps.Rot13]]", content)
+            # second run: nothing to instantiate
+            ok, out, err = run_script(script; env=Dict("JULIA_DEPOT_PATH" => depot * (Sys.iswindows() ? ";" : ":"), "JULIA_PKG_OFFLINE" => "true"))
+            @test ok
+            @test !occursin("Instantiating", err)
+            @test occursin("instantiated: Uryyb", out)
+        end
+    end
+end
