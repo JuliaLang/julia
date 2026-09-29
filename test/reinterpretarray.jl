@@ -731,3 +731,36 @@ end
     @test M[:, 3] == zeros(Int8, 4)
     @test M[:, [1, 2, 4]] == reshape(Int8.([1:8; 13:16]), 4, 3)
 end
+
+@testset "reshaped reinterpret through a pass-through wrapper with offset axes" begin
+    v = UInt32[0x04030201, 0x08070605, 0x0c0b0a09]
+    O = OffsetArray(reinterpret(reshape, UInt8, v), 0, 10)
+    @test sum(O) == sum(collect(O)) == 78
+    @test maximum(O) == 0x0c
+    O = OffsetArray(reinterpret(reshape, UInt8, v), 5, 10)
+    @test sum(O) == sum(collect(O)) == 78
+    w = zeros(UInt32, 3)
+    copyto!(OffsetArray(reinterpret(reshape, UInt8, w), 5, 10), reshape(UInt8.(1:12), 4, 3))
+    @test w == v
+
+    big = UInt32[0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d, 0xaaaaaaaa, 0xbbbbbbbb]
+    R = reinterpret(reshape, UInt16, OffsetArray(view(big, 1:4), 2))
+    O = OffsetArray(R, 0, 0)
+    @test sum(O) == sum(R)
+    copyto!(O, zeros(UInt16, 2, 4))
+    @test big == UInt32[0, 0, 0, 0, 0xaaaaaaaa, 0xbbbbbbbb]
+    src = UInt16[1 3 5 7; 2 4 6 8]
+    copyto!(O, src)
+    @test [O[i, j] for i in 1:2, j in 3:6] == src
+    @test big[5:6] == UInt32[0xaaaaaaaa, 0xbbbbbbbb]
+
+    m = UInt32[1 2; 3 4]
+    R3 = reinterpret(reshape, UInt8, OffsetArray(m, 5, -2))
+    O3 = OffsetArray(R3, 0, 0, 0)
+    @test sum(O3) == sum(R3) == 10
+    fill!(O3, 0x01)
+    @test all(==(0x01010101), m)
+    src3 = reshape(UInt8.(1:16), 4, 2, 2)
+    copyto!(O3, src3)
+    @test [O3[i, j, k] for i in 1:4, j in 6:7, k in -1:0] == src3
+end
