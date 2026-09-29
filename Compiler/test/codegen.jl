@@ -1289,3 +1289,24 @@ end
     ir = get_llvm(f_srettest, Tuple{Float32}, true, true, true)
     @test occursin(r"sret\([^)]+\) align \d+", ir)
 end
+
+# issue #63480: LICM hoists loads of `const` fields (and immutable-object fields) into
+# the loop preheader and strips their metadata; late-gc-lowering must still refine
+# them to the parent object
+mutable struct ConstCols63480{S<:Tuple}
+    const cols::S
+end
+struct ImmutCols63480{S<:Tuple}
+    cols::S
+end
+@noinline op63480!(c::Vector{Float64}) = (@inbounds c[1] += 1.0; nothing)
+function driver63480!(s, n::Int, k::Int)
+    for _ in 1:n
+        Base.Cartesian.@nexprs 64 i -> i == k && op63480!(s.cols[i])
+    end
+end
+if opt_level > 0
+    for T in (ConstCols63480, ImmutCols63480)
+        @test !occursin("%gcframe", get_llvm(driver63480!, Tuple{T{NTuple{64,Vector{Float64}}}, Int, Int}))
+    end
+end

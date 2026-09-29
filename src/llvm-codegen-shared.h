@@ -211,6 +211,34 @@ static inline bool isRootedRegionName(llvm::StringRef name)
     return name == "jnoalias_immutdata" || name == "jnoalias_mutconstdata";
 }
 
+// The '!annotation' string codegen puts on a load of tracked pointers from a rooted
+// region. LLVM drops '!tbaa', '!alias.scope' and '!invariant.load' when it speculates
+// a load (e.g. LICM hoisting it above a branch), but keeps '!annotation', so this is
+// what lets late-gc-lowering still refine the hoisted load to its base.
+#define JL_ROOTED_LOAD_ANNOTATION "julia.rooted"
+
+static inline bool hasRootedLoadAnnotation(llvm::LoadInst *LI)
+{
+    using namespace llvm;
+    MDNode *md = LI->getMetadata(LLVMContext::MD_annotation);
+    if (!md)
+        return false;
+    for (const MDOperand &op : md->operands()) {
+        MDString *str = dyn_cast_or_null<MDString>(op.get());
+        if (str && str->getString() == JL_ROOTED_LOAD_ANNOTATION)
+            return true;
+    }
+    return false;
+}
+
+static inline void markRootedLoad(llvm::LoadInst *LI)
+{
+    using namespace llvm;
+    LLVMContext &ctx = LI->getContext();
+    LI->setMetadata(LLVMContext::MD_annotation,
+                    MDNode::get(ctx, {MDString::get(ctx, JL_ROOTED_LOAD_ANNOTATION)}));
+}
+
 // Whether the object rooting the address `LI` loads from also roots the loaded value
 // -- so that late-gc-lowering may refine the loaded pointer to the load's pointer
 // operand instead of giving it a gc-frame slot of its own.
@@ -222,6 +250,9 @@ static inline bool isRootedRegionName(llvm::StringRef name)
 static inline bool isLoadFromRootedRegion(llvm::LoadInst *LI)
 {
     using namespace llvm;
+    // Codegen's own record of the answer, which survives speculation.
+    if (hasRootedLoadAnnotation(LI))
+        return true;
     // Constant memory never changes, so the base can never stop referencing what is
     // stored here, wherever it lives. This is also the only leg that fires on foreign
     // IR carrying no region metadata.

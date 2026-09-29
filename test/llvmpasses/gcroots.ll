@@ -358,6 +358,36 @@ top:
     ret {} addrspace(10)* %v1
 }
 
+; A load of a tracked pointer from a rooted field whose '!tbaa'/'!invariant.load' were
+; dropped (as LICM does when it speculates a load) but which still carries codegen's
+; '!annotation' is refined to its base and needs no slot of its own.
+define void @rooted_load_annotation({} addrspace(10)* %obj) {
+; CHECK-LABEL: @rooted_load_annotation
+; CHECK-NOT: %gcframe
+top:
+    %pgcstack = call {}*** @julia.get_pgcstack()
+    %ptls = call {}*** @julia.ptls_states()
+    %decayed = addrspacecast {} addrspace(10)* %obj to {} addrspace(11)*
+    %field = load {} addrspace(10)*, {} addrspace(11)* %decayed, align 8, !annotation !4
+    call void @jl_safepoint()
+    call void @one_arg_boxed({} addrspace(10)* %field)
+    ret void
+}
+
+; Without it, the same load must be rooted.
+define void @unrooted_load_no_annotation({} addrspace(10)* %obj) {
+; CHECK-LABEL: @unrooted_load_no_annotation
+; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 3
+top:
+    %pgcstack = call {}*** @julia.get_pgcstack()
+    %ptls = call {}*** @julia.ptls_states()
+    %decayed = addrspacecast {} addrspace(10)* %obj to {} addrspace(11)*
+    %field = load {} addrspace(10)*, {} addrspace(11)* %decayed, align 8, !nonnull !3
+    call void @jl_safepoint()
+    call void @one_arg_boxed({} addrspace(10)* %field)
+    ret void
+}
+
 define {} addrspace(10)* @vec_jlcallarg({} addrspace(10)*, {} addrspace(10)**, i32) {
 ; CHECK-LABEL: @vec_jlcallarg
 ; CHECK-NOT: %gcframe
@@ -805,3 +835,4 @@ top:
 !1 = !{!"jtbaa_const", !0, i64 0}
 !2 = !{!1, !1, i64 0, i64 1}
 !3 = !{}
+!4 = !{!"julia.rooted"}

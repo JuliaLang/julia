@@ -1816,6 +1816,12 @@ struct jl_aliasinfo_t {
         if (this->isConstant() && isa<LoadInst>(inst))
             inst->setMetadata(LLVMContext::MD_invariant_load, MDNode::get(inst->getContext(), {}));
 
+        // Record in metadata LLVM keeps across speculation that the base roots
+        // the tracked pointers loaded here (see `isLoadFromRootedRegion`).
+        if (auto *LI = dyn_cast<LoadInst>(inst))
+            if (CountTrackedPointers(LI->getType()).count && isLoadFromRootedRegion(LI))
+                markRootedLoad(LI);
+
         return inst;
     }
 

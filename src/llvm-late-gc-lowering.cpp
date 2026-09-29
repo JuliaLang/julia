@@ -1922,6 +1922,8 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
             if (auto *LI = dyn_cast<LoadInst>(I)){
                 if (isSpecialPtr(LI->getPointerOperand()->getType()) && LI->getMetadata(LLVMContext::MD_invariant_load))
                     LI->setMetadata(LLVMContext::MD_invariant_load, NULL);
+                if (hasRootedLoadAnnotation(LI))
+                    LI->setMetadata(LLVMContext::MD_annotation, NULL);
             }
             if (MDNode *TBAA = I->getMetadata(LLVMContext::MD_tbaa)) {
                 if (TBAA->getNumOperands() == 4 && isTBAA(TBAA, {"jtbaa_const", "jtbaa_memory"})) {
