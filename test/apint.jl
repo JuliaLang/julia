@@ -713,4 +713,65 @@ const NRANDOM = 50
     end
 end
 
+# ---------------------------------------------------------------------------
+# Base functions at widths no C integer type has
+# ---------------------------------------------------------------------------
+
+# `@enum`, `Core.check_top_bit` and the multiplicative inverses must take the
+# width from `Core.bitsizeof`, not `8 * sizeof`. Give the types of these widths
+# the arithmetic those functions need.
+const ARITH_WIDTHS = (4, 12, 20, 24, 40, 63)
+for nbits in ARITH_WIDTHS, signed in (false, true)
+    T = Symbol(signed ? "IntN" : "UIntN", nbits)
+    W = signed ? Int128 : UInt128 # holds every value of T
+    ext, div_, rem_, lt, le, shr = signed ?
+        (I.sext_int, I.sdiv_int, I.srem_int, I.slt_int, I.sle_int, I.ashr_int) :
+        (I.zext_int, I.udiv_int, I.urem_int, I.ult_int, I.ule_int, I.lshr_int)
+    @eval begin
+        $T(x::Integer) = I.trunc_int($T, x % $W)
+        Base.$(nameof(W))(x::$T) = $ext($W, x)
+        Base.Int(x::$T) = Int($W(x))
+        Base.rem(x::Integer, ::Type{$T}) = $T(x)
+        Base.rem(x::$T, ::Type{S}) where {S<:Base.BitInteger} = $W(x) % S
+        Base.rem(x::$T, ::Type{$T}) = x
+        Base.promote_rule(::Type{$T}, ::Type{Int}) = Int
+        Base.promote_rule(::Type{$T}, ::Type{<:Base.BitInteger}) = $W
+        Base.widen(::Type{$T}) = $W
+        Base.hash(x::$T, h::UInt) = hash($W(x), h)
+        Base.:-(x::$T) = I.neg_int(x)
+        Base.:(<<)(x::$T, n::UInt) = n < $nbits ? I.shl_int(x, n) : zero($T)
+        Base.:(>>)(x::$T, n::UInt) = $shr(x, min(n, $(UInt(nbits - 1))))
+        Base.:(>>>)(x::$T, n::UInt) = n < $nbits ? I.lshr_int(x, n) : zero($T)
+        Base.leading_zeros(x::$T) = Int(I.zext_int(UInt64, I.ctlz_int(x)))
+        Base.top_set_bit(x::$T) = $nbits - leading_zeros(x)
+    end
+    for (f, op) in ((:+, I.add_int), (:-, I.sub_int), (:*, I.mul_int), (:div, div_), (:rem, rem_),
+                    (:+%, I.add_int), (:-%, I.sub_int), (:*%, I.mul_int), (:<, lt), (:<=, le))
+        @eval Base.$f(a::$T, b::$T) = $op(a, b)
+    end
+    if signed
+        U = Symbol("UIntN", nbits)
+        @eval Base.unsigned(::Type{$T}) = $U
+        @eval Base.unsigned(x::$T) = I.bitcast($U, x)
+        @eval Base.flipsign(x::$T, y::$T) = I.flipsign_int(x, y)
+    end
+end
+
+@testset "Base functions of $nbits-bit integers" for nbits in ARITH_WIDTHS
+    U, S = uint_type(nbits), int_type(nbits)
+    for T in (U, S)
+        top = T(Int128(1) << (nbits - 1))
+        @test_throws InexactError Core.check_top_bit(T, top)
+        @test Core.check_top_bit(T, top - one(T)) === top - one(T)
+        ns = T.(-300:300)
+        @test all(filter(!iszero, T.(-40:40))) do d
+            m = Base.multiplicativeinverse(d)
+            all(n -> div(n, d) == div(n, m) || T <: Signed && d == -one(T) && n == typemin(T), ns)
+        end
+    end
+    E = Symbol(:EnumN, nbits)
+    @eval @enum $E::$U $(Symbol(:enum_a, nbits))=1 $(Symbol(:enum_b, nbits))=2
+    @test Core.bitsizeof(getfield(@__MODULE__, E)) == nbits
+end
+
 end # module APIntTests
