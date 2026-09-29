@@ -3190,8 +3190,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
 end
 
 # a simplified model of abstract_call_gf_by_type for applicable
-function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
-                             sv::AbsIntState, max_methods::Int)
+function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::AbsIntState)
     length(argtypes) < 2 && return Future(CallMeta(Bottom, ArgumentError, EFFECTS_THROWS, NoCallInfo()))
     isvarargtype(argtypes[2]) && return Future(CallMeta(Bool, ArgumentError, EFFECTS_THROWS, NoCallInfo()))
     argtypes = argtypes[2:end]
@@ -3199,6 +3198,7 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
     if atype === Union{}
         rt = Union{} # accidentally unreachable code
     else
+        max_methods = get_max_methods(interp, max_methods_callee(singleton_type(argtypes[1]), argtypes), sv)
         matches = find_method_matches(interp, argtypes, atype; max_methods)
         info = NoCallInfo()
         if isa(matches, FailedMethodMatch)
