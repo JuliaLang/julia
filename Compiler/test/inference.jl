@@ -6094,11 +6094,20 @@ end
 
 # Test that a function-wise `@max_methods` works as expected
 Base.Experimental.@max_methods 1 function f_max_methods end
-f_max_methods(x::Int) = 1
-f_max_methods(x::Float64) = 2
+f_max_methods(x::Int; k=1) = 1
+f_max_methods(x::Float64; k=1) = 2
+f_max_methods(x; k=1) = 3
 g_max_methods(x) = f_max_methods(x)
-@test only(Base.return_types(g_max_methods, Tuple{Int})) === Int
-@test only(Base.return_types(g_max_methods, Tuple{Any})) === Any
+@test Base.infer_return_type(g_max_methods, Tuple{Int}) === Int
+@test Base.infer_return_type(g_max_methods, Tuple{Any}) === Any
+@test Base.infer_return_type(x -> f_max_methods(x...), Tuple{Tuple{Int}}) === Int
+@test Base.infer_return_type(x -> f_max_methods(x...), Tuple{Tuple{Any}}) === Any
+@test Base.infer_return_type(x -> f_max_methods(x; k=2), Tuple{Int}) === Int
+@test Base.infer_return_type(x -> f_max_methods(x; k=2), Tuple{Any}) === Any
+@test Base.infer_return_type(x -> applicable(f_max_methods, x) ? 1 : nothing, Tuple{Int}) === Int
+@test Base.infer_return_type(x -> applicable(f_max_methods, x) ? 1 : nothing, Tuple{Any}) === Union{Nothing,Int}
+@test Base.infer_return_type(x -> applicable(f_max_methods, x; k=2) ? 1 : nothing, Tuple{Int}) === Int
+@test Base.infer_return_type(x -> applicable(f_max_methods, x; k=2) ? 1 : nothing, Tuple{Any}) === Union{Nothing,Int}
 
 # Test that `Core.TypeName.concrete_only` makes inference give up at call sites with
 # non-concrete argument types while keeping concrete call sites precise
