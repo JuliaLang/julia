@@ -889,6 +889,14 @@ end
     @test vec(c) == reinterpret(UInt8, a)
 end
 
+@testset "BitArray from and into a reshaped reinterpret" begin
+    X = reinterpret(reshape, Bool, UInt16[0x0001, 0x0100, 0x0101])
+    @test BitArray(X) == Bool[1 0 1; 0 1 1]
+    @test copyto!(falses(2, 3), X) == Bool[1 0 1; 0 1 1]
+    @test all(nextind(X, a) == b for (a, b) in zip(eachindex(X), Iterators.drop(eachindex(X), 1)))
+    @test all(prevind(X, b) == a for (a, b) in zip(eachindex(X), Iterators.drop(eachindex(X), 1)))
+end
+
 @testset "pointer indexing with an offset axis" begin
     M = collect(Int8.(reshape(1:16, 4, 4)))
     R = reinterpret(reshape, Int32, view(M, :, Base.IdentityUnitRange(2:3)))

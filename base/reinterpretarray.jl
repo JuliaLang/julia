@@ -274,6 +274,10 @@ struct SCartesianIndex2{K}   # can't make <:AbstractCartesianIndex without N, an
     j::Int
 end
 to_index(i::SCartesianIndex2) = i
+nextind(::AbstractArray, i::SCartesianIndex2{K}) where {K} =
+    i.i < K ? SCartesianIndex2{K}(i.i + 1, i.j) : SCartesianIndex2{K}(1, i.j + 1)
+prevind(::AbstractArray, i::SCartesianIndex2{K}) where {K} =
+    i.i > 1 ? SCartesianIndex2{K}(i.i - 1, i.j) : SCartesianIndex2{K}(K, i.j - 1)
 
 struct SCartesianIndices2{K,R<:AbstractUnitRange{Int}} <: AbstractMatrix{SCartesianIndex2{K}}
     indices2::R
