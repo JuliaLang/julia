@@ -142,6 +142,8 @@ let x = reinterpret(Float32, 0x00400000) # 2^-127, exactly the bf16 subnormal 0x
 end
 # BFloat16 values that are exactly halfway after rounding to Float32 must not double round
 @test Base.invokelatest(Core.Intrinsics.fptrunc, Core.BFloat16, 1 + 0x1p-8 + 0x1p-40) === reinterpret(Core.BFloat16, 0x3f81)
+# 1.75 * 0.578125 - 2^-40 is just below a BFloat16 halfway point
+@test Base.invokelatest(Core.Intrinsics.fma_float, reinterpret.(Core.BFloat16, (0x3fe0, 0x3f14, 0xab80))...) === reinterpret(Core.BFloat16, 0x3f81)
 @test_throws ErrorException compiled_fptrunc(Float64, 1.234f0)
 @test_throws ErrorException compiled_fptrunc(Int32, 1.234)
 @test_throws ErrorException compiled_fptrunc(Float32, 1234)
@@ -383,6 +385,8 @@ end
     @test_intrinsic Core.Intrinsics.muladd_float Float16(3.3) Float16(4.4) Float16(5.5) Float16(20.02)
     @test_intrinsic Core.Intrinsics.fma_float Float16(0x1.004p0) Float16(1.25) Float16(0x1p-12) Float16(0x1.408p0)
     @test Float16(0x1.004p0)*Float16(1.25)+Float16(0x1p-12) === Float16(0x1.404p0) # for comparison
+    # a*b+c rounded to Float32 is exactly halfway between two Float16 values
+    @test_intrinsic Core.Intrinsics.fma_float Float16(-336.0) Float16(-37.25) Float16(0.0003653) Float16(1.252e4)
 
     # boolean
     @test_intrinsic Core.Intrinsics.eq_float Float16(3.3) Float16(3.3) true
