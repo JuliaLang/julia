@@ -4662,6 +4662,58 @@ precompile_test_harness("Ambiguities and package-image edge validation") do load
     end
 end
 
+# Loading marks the accepted cache file as recently used, but only in the depot that
+# `compilecache` writes to: other depots may be read-only, shared, or bundled with Julia.
+precompile_test_harness("cache files are only touched in the primary depot") do load_path
+    function set_mtime(path, t)
+        f = Base.Filesystem.open(path, Base.Filesystem.JL_O_WRONLY)
+        try
+            Base.Filesystem.futime(f, t, t)
+        finally
+            close(f)
+        end
+        return mtime(path) # as stored by the filesystem
+    end
+    past = floor(time()) - 3600
+    cachefiles = map(("TouchPrimary", "TouchSecondary")) do name
+        mkpath(joinpath(load_path, name, "src"))
+        write(joinpath(load_path, name, "Project.toml"),
+              "name = \"$name\"\nuuid = \"$(Base.UUID(rand(UInt128)))\"\n")
+        write(joinpath(load_path, name, "src", "$name.jl"), "module $name end")
+        cachefile, _ = Base.compilecache(Base.identify_package(name))
+        # Only a file that was not the first candidate gets touched, so put an
+        # invalid cache file ahead of the real one.
+        decoy = replace(cachefile, r"_[^_]*\.ji$" => "_decoy.ji")
+        write(decoy, "not a cache file")
+        touch(Base.ocachefile_from_cachefile(decoy))
+        return cachefile
+    end
+    primary, secondary = cachefiles
+
+    pkg = Base.identify_package("TouchPrimary")
+    set_mtime(primary, past)
+    @test Base.isprecompiled(pkg)
+    @test mtime(primary) > past
+    set_mtime(primary, past)
+    @eval using TouchPrimary
+    @test Base.pkgorigins[pkg].cachepath == primary
+    @test mtime(primary) > past
+
+    mkdepottempdir() do new_primary_depot
+        pushfirst!(DEPOT_PATH, new_primary_depot)
+        try
+            pkg = Base.identify_package("TouchSecondary")
+            old = set_mtime(secondary, past)
+            @test Base.isprecompiled(pkg)
+            @eval using TouchSecondary
+            @test Base.pkgorigins[pkg].cachepath == secondary
+            @test mtime(secondary) == old
+        finally
+            filter!((≠)(new_primary_depot), DEPOT_PATH)
+        end
+    end
+end
+
 finish_precompile_test!()
 if original_num_precompile_tasks === nothing
     delete!(ENV, "JULIA_NUM_PRECOMPILE_TASKS")
