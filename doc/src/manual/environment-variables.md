@@ -195,9 +195,9 @@ Sets the maximum number of different instances of a single package that are to b
 
 ### [`XDG_CACHE_HOME`](@id XDG_CACHE_HOME)
 
-If this is set to an absolute path on a system other than Windows, and the user depot
-(`DEPOT_PATH[1]`) is the default `~/.julia`, then when Julia first creates `~/.julia/compiled`
-it makes it a symbolic link to `$XDG_CACHE_HOME/julia/compiled`, following the
+If this is set to an absolute path and the user depot (`DEPOT_PATH[1]`) is the default
+`~/.julia`, then when Julia first creates `~/.julia/compiled` it makes it a symbolic link to
+`$XDG_CACHE_HOME/julia/compiled`, following the
 [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/latest/).
 Precompile cache files then sit with other regenerable caches (for instance, where backups exclude
 them), while their paths under `~/.julia` stay the same. Julia never moves an existing
@@ -205,6 +205,11 @@ them), while their paths under `~/.julia` stay the same. Julia never moves an ex
 link can't be made, Julia creates a plain directory instead. Deleting `$XDG_CACHE_HOME/julia`
 only means packages are precompiled again. Other depots, and `XDG_CACHE_HOME` when unset, leave
 the depot layout unchanged.
+
+On Windows the link is a directory junction, which needs no administrator rights or Developer
+Mode. There, the recommended value is `%LOCALAPPDATA%` (`XDG_CACHE_HOME=%LOCALAPPDATA%`), which
+is local to the machine and is not copied with a roaming profile. `%LOCALAPPDATA%` alone does not
+enable this behavior.
 
 ### [`JULIA_VERBOSE_LINKING`](@id JULIA_VERBOSE_LINKING)
 

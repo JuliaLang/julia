@@ -868,13 +868,14 @@ end
     end
 end
 
-Sys.iswindows() || @testset "compiled cache under XDG_CACHE_HOME" begin
+@testset "compiled cache under XDG_CACHE_HOME" begin
     compiled_entry = joinpath("compiled", "v$(VERSION.major).$(VERSION.minor)")
     # makes the user depot's `compiled` directory the way precompilation does
     function make_compiled(home, cache_home; depot=nothing, dir=home)
         script = "Base.compilecache_path(Base.PkgId(\"XDGCacheFoo\"), \"\")"
         cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
-        cmd = addenv(cmd, "HOME" => home, "XDG_CACHE_HOME" => cache_home, "JULIA_DEPOT_PATH" => depot)
+        cmd = addenv(cmd, "HOME" => home, "USERPROFILE" => home, "XDG_CACHE_HOME" => cache_home,
+                     "JULIA_DEPOT_PATH" => depot)
         @test success(pipeline(setenv(cmd; dir); stdout, stderr))
     end
     mktempdir() do tmp
@@ -883,8 +884,8 @@ Sys.iswindows() || @testset "compiled cache under XDG_CACHE_HOME" begin
         target = joinpath(cache, "julia", "compiled")
         mkpath(home)
         make_compiled(home, cache)
-        @test islink(compiled)
-        @test readlink(compiled) == target
+        @test islink(compiled) # a junction on Windows
+        @test realpath(compiled) == realpath(target)
         @test isdir(joinpath(target, "v$(VERSION.major).$(VERSION.minor)"))
 
         # clearing the cache home leaves a dangling link, whose target is made again
@@ -897,8 +898,9 @@ Sys.iswindows() || @testset "compiled cache under XDG_CACHE_HOME" begin
         pkgs = joinpath(tmp, "pkgs")
         mkpath(joinpath(pkgs, "XDGCacheBar", "src"))
         write(joinpath(pkgs, "XDGCacheBar", "src", "XDGCacheBar.jl"), "module XDGCacheBar\nf() = 1\nend\n")
-        loadenv = ("HOME" => home, "XDG_CACHE_HOME" => cache, "JULIA_DEPOT_PATH" => nothing,
-                   "JULIA_PROJECT" => nothing, "JULIA_LOAD_PATH" => "$pkgs:@stdlib")
+        loadenv = ("HOME" => home, "USERPROFILE" => home, "XDG_CACHE_HOME" => cache,
+                   "JULIA_DEPOT_PATH" => nothing, "JULIA_PROJECT" => nothing,
+                   "JULIA_LOAD_PATH" => join([pkgs, "@stdlib"], Sys.iswindows() ? ';' : ':'))
         cmd = `$(Base.julia_cmd()) --startup-file=no -e 'using XDGCacheBar; exit(XDGCacheBar.f() == 1 ? 0 : 1)'`
         @test success(pipeline(addenv(cmd, loadenv...); stdout, stderr))
         @test any(endswith(".ji"), readdir(joinpath(target, "v$(VERSION.major).$(VERSION.minor)")))
@@ -933,8 +935,9 @@ Sys.iswindows() || @testset "compiled cache under XDG_CACHE_HOME" begin
         @test !ispath(cache)
         @test !ispath(joinpath(home, ".julia"))
     end
-    # root can write to a read-only directory, so the fallback can only be forced as a user
-    Libc.geteuid() == 0 || mktempdir() do tmp
+    # root can write to a read-only directory, and Windows ignores the read-only bit on
+    # directories, so the fallback can only be forced as a user on Unix
+    Sys.isunix() && Libc.geteuid() != 0 && mktempdir() do tmp
         # a cache home that can't be written to leaves a plain directory in the depot
         home, cache = joinpath(tmp, "home"), joinpath(tmp, "cache")
         mkpath(home)

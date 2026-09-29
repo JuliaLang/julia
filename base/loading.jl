@@ -3667,11 +3667,12 @@ function mkpath_compilecache_dir(cachepath::String)
     elseif !ispath(compiled)
         cache_home = get(ENV, "XDG_CACHE_HOME", "")
         # the XDG spec says a relative path in XDG_CACHE_HOME is invalid and must be ignored
-        if !Sys.iswindows() && isabspath(cache_home) && depot == joinpath(homedir(), ".julia")
+        if isabspath(cache_home) && depot == joinpath(homedir(), ".julia")
             try
                 target = mkpath(joinpath(cache_home, "julia", "compiled"))
                 mkpath(depot)
-                symlink(target, compiled)
+                # an absolute directory target makes a junction on Windows, which needs no privileges
+                symlink(target, compiled; dir_target=true)
             catch err
                 # another process made `compiled` first, or the link can't be made: the
                 # `mkpath` below then follows that link or makes a plain directory
