@@ -699,6 +699,43 @@ let ambig = Ref{Int32}(0)
     @test ms[4].method === which(ambig10, (Vararg{Number},))
 end
 
+# A pair of methods can be unordered where they overlap without contesting
+# anything inside a given query.
+module AmbigDisjointInQuery
+struct Q <: Number end
+f(a::T, b::T) where {T} = 1
+f(a::T, b::T) where {T<:Real} = 2
+f(a::Real, b::Real) = 3
+f(a, b::Q) = 4
+f(a::Q, b::Q) = 5 # resolves the pair where it does overlap
+end
+let ambig = Ref{Int32}(0), f = AmbigDisjointInQuery.f, Q = AmbigDisjointInQuery.Q
+    @test !Base.morespecific(which(f, (Any, Q)), which(f, (String, String)))
+    @test !Base.morespecific(which(f, (String, String)), which(f, (Any, Q)))
+    ms = Base._methods_by_ftype(Tuple{typeof(f), Int, Any}, nothing, -1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test length(ms) == 3
+    @test ambig[] == 0
+    @test f(1, Q()) == 4
+    @test f(1, 1) == 2
+    @test f(Q(), Q()) == 5
+end
+
+# The same holds when only the signatures, and not the match regions, show the
+# pair to be disjoint.
+module AmbigDiagInQuery
+abstract type A end
+g(::Type{Union{}}, x...) = 0
+g(::Type{T}, x::T) where {T} = 1
+g(::Type{T}, x) where {T<:A} = 2
+end
+let ambig = Ref{Int32}(0), g = AmbigDiagInQuery.g
+    m1, m2 = which(g, (Type{Int}, Int)), which(g, (Type{AmbigDiagInQuery.A}, Int))
+    @test !Base.morespecific(m1, m2) && !Base.morespecific(m2, m1)
+    ms = Base._methods_by_ftype(Tuple{typeof(g), Type{<:Function}, Function}, nothing, -1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test length(ms) == 2
+    @test ambig[] == 0
+end
+
 # issue #62262: an ambiguity can be resolved by the union of several more
 # specific methods, without any single method covering the intersection
 module Ambig62262
