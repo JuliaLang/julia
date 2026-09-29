@@ -1545,6 +1545,16 @@ end
         @test func(1.6341681540852291e308, -2., floatmax(Float64)) == -1.4706431733081426e308 # case where inv(a)*c*a == Inf
         @test func(-2., 1.6341681540852291e308, floatmax(Float64)) == -1.4706431733081426e308 # case where inv(b)*c*b == Inf
         @test func(-1.9369631f13, 2.1513551f-7, -1.7354427f-24) == -4.1670958f6
+        # a*b+c rounds (in Float64) to exactly halfway between two Float32 subnormals
+        @test func(reinterpret(Float32, 0x97000800), reinterpret(Float32, 0x1cfff001), reinterpret(Float32, 0x00010002)) === reinterpret(Float32, 0x00010001)
+    end
+    # Float16 `fma_float` is not always correctly rounded (it may be lowered through Float32)
+    for func in (fma, Base.fma_emulated)
+        @test func(Float16(-336.0), Float16(-37.25), Float16(0.0003653)) === Float16(1.252e4)
+        for _ in 1:2^18
+            a, b, c = reinterpret.(Float16, rand(UInt16, 3))
+            @test isequal(func(a, b, c), Float16(big(a) * big(b) + big(c))) context=(a,b,c)
+        end
     end
 end
 
