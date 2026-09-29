@@ -1574,6 +1574,11 @@ end
         @test func(-1.9369631f13, 2.1513551f-7, -1.7354427f-24) == -4.1670958f6
         # a*b+c rounds (in Float64) to exactly halfway between two Float32 subnormals
         @test func(reinterpret(Float32, 0x97000800), reinterpret(Float32, 0x1cfff001), reinterpret(Float32, 0x00010002)) === reinterpret(Float32, 0x00010001)
+        # abhi+c is exactly halfway between two Float64 values and ablo decides the rounding
+        @test func(reinterpret(Float64, 0x3ca0000000000001), reinterpret(Float64, 0x3feffffffffffffe), reinterpret(Float64, 0x3ff0000000000001)) === reinterpret(Float64, 0x3ff0000000000001)
+        @test func(-floatmin(Float64), nextfloat(0.0), nextfloat(0.0)) === nextfloat(0.0)
+        # tiny normal b makes the fma-free two_mul inexact
+        @test func(reinterpret(Float64, 0xfee492df2d70dce5), reinterpret(Float64, 0x801ad51356e60077), reinterpret(Float64, 0xbf1140536185456e)) === 1.669822474902846e-21
     end
     # Float16 `fma_float` is not always correctly rounded (it may be lowered through Float32)
     for func in (fma, Base.fma_emulated)
