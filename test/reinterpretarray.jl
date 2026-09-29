@@ -880,3 +880,63 @@ end
     @test !Base.array_subpadding(T_5, S_1_3)
     @test !Base.array_subpadding(S_1_3, T_5)
 end
+
+@testset "issue #63305" begin
+    a = ones(UInt64, 2)
+    b = reinterpret(UInt8, reinterpret(reshape, UInt16, a))
+    c = collect(b)
+    @test c[5] == b[5] == 0x00
+    @test vec(c) == reinterpret(UInt8, a)
+end
+
+@testset "BitArray from and into a reshaped reinterpret" begin
+    X = reinterpret(reshape, Bool, UInt16[0x0001, 0x0100, 0x0101])
+    @test BitArray(X) == Bool[1 0 1; 0 1 1]
+    @test copyto!(falses(2, 3), X) == Bool[1 0 1; 0 1 1]
+    @test all(nextind(X, a) == b for (a, b) in zip(eachindex(X), Iterators.drop(eachindex(X), 1)))
+    @test all(prevind(X, b) == a for (a, b) in zip(eachindex(X), Iterators.drop(eachindex(X), 1)))
+end
+
+@testset "pointer indexing with an offset axis" begin
+    M = collect(Int8.(reshape(1:16, 4, 4)))
+    R = reinterpret(reshape, Int32, view(M, :, Base.IdentityUnitRange(2:3)))
+    @test axes(R) == (Base.IdentityUnitRange(2:3),)
+    @test R[2] == reinterpret(Int32, M[:, 2])[1]
+    @test R[3] == reinterpret(Int32, M[:, 3])[1]
+    R[3] = 0
+    @test M[:, 3] == zeros(Int8, 4)
+    @test M[:, [1, 2, 4]] == reshape(Int8.([1:8; 13:16]), 4, 3)
+end
+
+@testset "reshaped reinterpret through a pass-through wrapper with offset axes" begin
+    v = UInt32[0x04030201, 0x08070605, 0x0c0b0a09]
+    O = OffsetArray(reinterpret(reshape, UInt8, v), 0, 10)
+    @test sum(O) == sum(collect(O)) == 78
+    @test maximum(O) == 0x0c
+    O = OffsetArray(reinterpret(reshape, UInt8, v), 5, 10)
+    @test sum(O) == sum(collect(O)) == 78
+    w = zeros(UInt32, 3)
+    copyto!(OffsetArray(reinterpret(reshape, UInt8, w), 5, 10), reshape(UInt8.(1:12), 4, 3))
+    @test w == v
+
+    big = UInt32[0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d, 0xaaaaaaaa, 0xbbbbbbbb]
+    R = reinterpret(reshape, UInt16, OffsetArray(view(big, 1:4), 2))
+    O = OffsetArray(R, 0, 0)
+    @test sum(O) == sum(R)
+    copyto!(O, zeros(UInt16, 2, 4))
+    @test big == UInt32[0, 0, 0, 0, 0xaaaaaaaa, 0xbbbbbbbb]
+    src = UInt16[1 3 5 7; 2 4 6 8]
+    copyto!(O, src)
+    @test [O[i, j] for i in 1:2, j in 3:6] == src
+    @test big[5:6] == UInt32[0xaaaaaaaa, 0xbbbbbbbb]
+
+    m = UInt32[1 2; 3 4]
+    R3 = reinterpret(reshape, UInt8, OffsetArray(m, 5, -2))
+    O3 = OffsetArray(R3, 0, 0, 0)
+    @test sum(O3) == sum(R3) == 10
+    fill!(O3, 0x01)
+    @test all(==(0x01010101), m)
+    src3 = reshape(UInt8.(1:16), 4, 2, 2)
+    copyto!(O3, src3)
+    @test [O3[i, j, k] for i in 1:4, j in 6:7, k in -1:0] == src3
+end

@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "julia.h"
+#include <libgen.h> // dirname
 #include "options.h"
 #include "julia_assert.h"
 #include "julia_internal.h"
@@ -173,12 +174,12 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
 {
     jl_value_t *r;
     jl_task_t *ct = jl_current_task;
+    jl_value_t *ast = NULL;
     JL_TRY {
-        const char filename[] = "none";
-        jl_value_t *ast = jl_parse_all(str, strlen(str),
-                filename, strlen(filename), 1);
-        JL_GC_PUSH1(&ast);
-        r = jl_toplevel_eval_in(jl_main_module, ast);
+        jl_value_t *fname = jl_cstr_to_string("none");
+        JL_GC_PUSH2(&fname, &ast);
+        ast = jl_parse(str, strlen(str), fname, jl_main_module);
+        r = jl_toplevel_eval_in(jl_main_module, jl_svecref(ast, 0));
         JL_GC_POP();
         _jl_exception_clear(ct);
     }
@@ -1254,7 +1255,12 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bi
     if (julia_bindir == NULL) {
         jl_options.julia_bindir = getenv("JULIA_BINDIR");
         if (!jl_options.julia_bindir) {
-#ifdef _OS_WINDOWS_
+#if defined(JL_LIBRARY_STATIC)
+            // no libjulia to locate: use the directory of the executable
+            char *bin = strdup(jl_options.julia_bin);
+            jl_options.julia_bindir = strdup(dirname(bin));
+            free(bin);
+#elif defined(_OS_WINDOWS_)
             jl_options.julia_bindir = strdup(jl_get_libdir());
 #else
             int written = asprintf((char**)&jl_options.julia_bindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", jl_get_libdir(), "bin");

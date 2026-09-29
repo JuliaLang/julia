@@ -487,32 +487,7 @@ end
 #-------------------------------------------------------------------------------
 # Expand comparison chains
 
-function expand_scalar_compare_chain(ctx, srcref, terms, i)
-    comparisons = nothing
-    while i + 2 <= length(terms)
-        lhs = terms[i]
-        op = terms[i+1]
-        rhs = terms[i+2]
-        if kind(op) == K"." && numchildren(op) == 1
-            break
-        end
-        comp = @ast ctx op [K"call"
-            op
-            lhs
-            rhs
-        ]
-        if isnothing(comparisons)
-            comparisons = comp
-        else
-            comparisons = @ast ctx srcref [K"&&"
-                comparisons
-                comp
-            ]
-        end
-        i += 2
-    end
-    (comparisons, i)
-end
+is_dotted(x) = kind(x) === K"." && numchildren(x) == 1
 
 # Expanding comparison chains: (comparison a op b op c ...)
 #
@@ -526,45 +501,118 @@ end
 # a .< b .< c < d < e   ==>  (a .< b) .& (b .< c) .& (c < d && d < e)
 function expand_compare_chain(ctx, ex)
     @jl_assert kind(ex) == K"comparison" ex
-    terms = children(ex)
+    terms = copy(children(ex))
     @jl_assert numchildren(ex) >= 3 ex
     @jl_assert isodd(numchildren(ex)) ex
-    i = 1
+
     comparisons = nothing
-    # Combine any number of dotted comparisons
-    while i + 2 <= length(terms)
-        if !(kind(terms[i+1]) == K"." && numchildren(terms[i+1]) == 1)
-            (comp, i) = expand_scalar_compare_chain(ctx, ex, terms, i)
-        else
+    i = 1
+
+    while i+2 <= length(terms)
+        subcomparison = if is_dotted(terms[i+1])
             lhs = terms[i]
             op = terms[i+1]
             rhs = terms[i+2]
-            i += 2
-            comp = @ast ctx op [K"dotcall"
-                op[1]
-                lhs
+
+            rhs = if i + 2 < length(terms) && !is_effect_free(rhs)
+                rhs_ident = ssavar(ctx, rhs, "rhs_ident")
+                terms[i+2] = rhs_ident
+                @ast ctx rhs [K"block"
+                    [K"=" rhs_ident rhs]
+                    rhs_ident
+                ]
+            else
                 rhs
-            ]
-        end
-        if isnothing(comparisons)
-            comparisons = comp
+            end
+
+            i += 2
+
+            @ast ctx op [K"dotcall"
+                    op[1]
+                    lhs
+                    rhs
+                ]
         else
-            comparisons = @ast ctx ex [K"dotcall"
-                "&"::K"top"
-                # ^^ NB: Flisp bug. Flisp lowering essentially does
-                #     adopt_scope("&"::K"Identifier", ctx.mod)
-                # here which seems wrong if the comparison chain arose from
-                # a macro in a different module. One fix would be to use
-                #     adopt_scope("&"::K"Identifier", ex)
-                # to get the module of the comparison expression for the
-                # `&` operator. But a simpler option is probably to always
-                # use `Base.&` so we do that.
+            dotchain_head = nothing
+            # move the first evaluation of a following dot-chain to the top
+            # in order to avoid it getting skipped by short circuiting
+            next_dotop = findnext(is_dotted, terms, i+3)
+            if !isnothing(next_dotop)
+                dotop_lhs = terms[next_dotop-1]
+                if !is_effect_free(dotop_lhs)
+                    dotop_lhs_ident = ssavar(ctx, dotop_lhs, "dotop_lhs_ident")
+                    terms[next_dotop-1] = dotop_lhs_ident
+                    dotchain_head = @ast ctx dotop_lhs [K"=" dotop_lhs_ident dotop_lhs]
+                end
+            end
+
+            (scalar_chain, i) = expand_scalar_compare_chain(ctx, ex, terms, i)
+            if !isnothing(dotchain_head)
+                @ast ctx ex [K"block" dotchain_head scalar_chain]
+            else
+                scalar_chain
+            end
+        end
+
+        comparisons = if isnothing(comparisons)
+            subcomparison
+        else
+            @ast ctx ex [K"dotcall"
+            "&"::K"top"
+            # ^^ NB: Flisp bug. Flisp lowering essentially does
+            #     adopt_scope("&"::K"Identifier", ctx.mod)
+            # here which seems wrong if the comparison chain arose from
+            # a macro in a different module. One fix would be to use
+            #     adopt_scope("&"::K"Identifier", ex)
+            # to get the module of the comparison expression for the
+            # `&` operator. But a simpler option is probably to always
+            # use `Base.&` so we do that.
+            comparisons
+            subcomparison
+        ]
+        end
+    end
+    return comparisons
+end
+
+function expand_scalar_compare_chain(ctx, srcref, terms, i)
+    comparisons = nothing
+
+    while i+2 <= length(terms)
+        lhs = terms[i]
+        op = terms[i+1]
+        rhs = terms[i+2]
+
+        is_dotted(op) && break
+
+        rhs = if i + 2 < length(terms) && !is_effect_free(rhs)
+            rhs_ident = ssavar(ctx, rhs, "rhs_ident")
+            terms[i+2] = rhs_ident
+            @ast ctx rhs [K"block"
+                @ast ctx rhs [K"=" rhs_ident rhs]
+                rhs_ident
+            ]
+        else
+            rhs
+        end
+
+        comp = @ast ctx op [K"call"
+            op
+            lhs
+            rhs
+        ]
+
+        comparisons = if isnothing(comparisons)
+            comp
+        else
+            @ast ctx srcref [K"&&"
                 comparisons
                 comp
             ]
         end
+        i+=2
     end
-    comparisons
+    (comparisons, i)
 end
 
 #-------------------------------------------------------------------------------
@@ -2147,16 +2195,46 @@ function match_try(ex)
     (try_, catch_, else_, finally_)
 end
 
+function _symboliclabel_defs(st, labels=Set{NameKey}())
+    if kind(st) === K"symboliclabel"
+        push!(labels, NameKey(st))
+    elseif !(is_leaf(st) || is_quoted(st))
+        for c in children(st)
+            _symboliclabel_defs(c, labels)
+        end
+    end
+    labels
+end
+function _symboliclabel_refs(st, labels=Vector{SyntaxTree}())
+    if kind(st) === K"symbolicgoto"
+        push!(labels, st)
+    elseif !(is_leaf(st) || is_quoted(st))
+        for c in children(st)
+            _symboliclabel_refs(c, labels)
+        end
+    end
+    labels
+end
+function error_if_unmatched_symbolicgoto(ctx, st, hint)
+    refs = _symboliclabel_refs(st)
+    isempty(refs) && return nothing
+    defs = _symboliclabel_defs(st)
+    unmatched = nothing
+    for r in refs
+        NameKey(r) in defs || (unmatched = r)
+    end
+    isnothing(unmatched) || throw(LoweringError(
+        unmatched, "`goto` out of $hint block is not permitted with `finally`"))
+end
+
 function expand_try(ctx, ex)
     (try_, catch_, else_, finally_) = match_try(ex)
-
     if !isnothing(finally_)
-        # TODO: check unmatched symbolic gotos in try.
-        # TODO: Disallow @goto from try/catch/else blocks when there's a finally clause
+        error_if_unmatched_symbolicgoto(ctx, try_, "a `try`")
+        !isnothing(catch_) && error_if_unmatched_symbolicgoto(ctx, catch_, "a `catch`")
+        !isnothing(else_) && error_if_unmatched_symbolicgoto(ctx, else_, "an `else`")
     end
-
     try_body = @ast ctx try_ [K"scope_block" [K"neutral_scope"] try_]
-
     if isnothing(catch_)
         try_block = try_body
     else

@@ -11,6 +11,11 @@
 extern "C" {
 #endif
 
+// Slow paths for `jl_gc_wb` and `jl_gc_multi_wb` respectively.
+JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, void *slot, const void *ptr) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_multi_wb_cold(const struct _jl_value_t *parent, void *dest, const void *stored,
+                                        struct _jl_datatype_t *dt) JL_NOTSAFEPOINT;
+
 STATIC_INLINE void jl_gc_wb(const void *parent, void *slot, const void *ptr) JL_NOTSAFEPOINT
 {
     // parent isa jl_value_t* and ptr isa jl_value_t* or NULL
@@ -18,12 +23,10 @@ STATIC_INLINE void jl_gc_wb(const void *parent, void *slot, const void *ptr) JL_
         jl_gc_wb_cold(parent, slot, ptr);
 }
 
-STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_value_t*
+STATIC_INLINE void jl_gc_wb_object(const void *parent) JL_NOTSAFEPOINT // parent isa jl_value_t*
 {
-    // if ptr is old
-    if (__unlikely(jl_astaggedvalue(ptr)->bits.gc == 3 /* GC_OLD_MARKED */)) {
-        jl_gc_queue_root((jl_value_t*)ptr);
-    }
+    if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 /* GC_OLD_MARKED */)) // parent is old and not in remset
+        jl_gc_queue_root((jl_value_t*)parent);
 }
 
 STATIC_INLINE void jl_gc_wb_finalizer_queue(arraylist_t *queue JL_UNUSED) JL_NOTSAFEPOINT
@@ -57,7 +60,7 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, void *dest, const jl_value
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(ptr);
     const jl_datatype_layout_t *ly = dt->layout;
     if (ly->npointers)
-        jl_gc_queue_multiroot((jl_value_t*)parent, dest, ptr, dt);
+        jl_gc_multi_wb_cold((jl_value_t*)parent, dest, ptr, dt);
 }
 
 STATIC_INLINE void jl_gc_wb_module_usings(const void *mod, const void *from) JL_NOTSAFEPOINT

@@ -1,5 +1,5 @@
 .PHONY: all clean clean-profiles clean-pgo-profiles clean-bolt-profiles restore-originals delete-originals \
-	print-profile-artifacts top
+	print-profile-artifacts top stage-path
 
 # Abort recipes on the first failed command, including inside loops.
 .SHELLFLAGS := -ec
@@ -31,9 +31,10 @@ STAGE1_CPU_TARGET ?= generic
 # and a plain `make binary-dist` of the optimized build would then consider
 # build_h.jl stale and rebuild the system image.
 # Preserve command-line variables, but omit flags such as -n from the probe.
-JULIA_BUILD_VARS:=$(shell MAKEFLAGS='-- $(subst ','"'"',$(MAKEOVERRIDES))' $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-OS print-ARCH print-EXE print-BUILD_MACHINE)
+JULIA_BUILD_VARS:=$(shell MAKEFLAGS='-- $(subst ','"'"',$(MAKEOVERRIDES))' $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-OS print-ARCH print-BINARY print-EXE print-BUILD_MACHINE)
 HOST_OS:=$(patsubst OS=%,%,$(filter OS=%,$(JULIA_BUILD_VARS)))
 HOST_ARCH:=$(patsubst ARCH=%,%,$(filter ARCH=%,$(JULIA_BUILD_VARS)))
+HOST_BINARY:=$(patsubst BINARY=%,%,$(filter BINARY=%,$(JULIA_BUILD_VARS)))
 EXE:=$(patsubst EXE=%,%,$(filter EXE=%,$(JULIA_BUILD_VARS)))
 BUILD_MACHINE:=$(patsubst BUILD_MACHINE=%,%,$(filter BUILD_MACHINE=%,$(JULIA_BUILD_VARS)))
 ifeq (,$(HOST_OS))
@@ -54,6 +55,14 @@ endif
 endif
 USE_BOLT ?= 0
 
+# Each concurrent ThinLTO backend holds a module and the PGO profile.
+# Limit their number on 32-bit targets so wide hosts do not exhaust the
+# linker's address space. Empty leaves the linker's default.
+ifeq ($(HOST_BINARY),32)
+LTO_JOBS ?= 8
+endif
+LTO_JOBS ?=
+
 # Settings taken from https://github.com/rust-lang/rust/blob/master/src/tools/opt-dist/src/bolt.rs
 BOLT_ARGS :=
 # Reorder basic blocks within functions
@@ -64,15 +73,20 @@ BOLT_ARGS += -reorder-functions=cdsort
 BOLT_ARGS += -split-functions
 # Split as many basic blocks as possible
 BOLT_ARGS += -split-all-cold
-# Move jump tables to a separate section
+# Move jump tables to a separate section (only supported on x86-64).
+ifeq ($(HOST_ARCH),x86_64)
 BOLT_ARGS += -jump-tables=move
+endif
 # Use regular size pages for code alignment
 BOLT_ARGS += -no-huge-pages
-# Fold functions with identical code
-BOLT_ARGS += -icf=all
-# Split using best available strategy (three-way splitting, Cache-Directed Sort)
-# Disabled for libjulia-internal till https://github.com/llvm/llvm-project/issues/89508 is fixed
-# BOLT_ARGS += -split-strategy=cdsplit
+# Preserve function addresses, including those obtained through dlsym.
+BOLT_ARGS += -icf=none
+# Cache-directed splitting is incompatible with AArch64's default code model.
+# On x86-64, apply it below except for libjulia-internal until
+# https://github.com/llvm/llvm-project/issues/89508 is fixed.
+ifeq ($(HOST_ARCH),x86_64)
+BOLT_SPLIT_STRATEGY := -split-strategy=cdsplit
+endif
 # Update DWARF debug info in the final binary
 BOLT_ARGS += -update-debug-sections
 # Print optimization statistics
@@ -155,6 +169,29 @@ AFTER_STAGE1_MESSAGE:='You can now optionally collect more profiling data for us
 	Note that running extensive scripts may result in counter overflows, which can be detected by running $\
 	`make top`. Afterwards run `make stage2`.'
 
+# Native programs need Windows paths in LLVM_PROFILE_FILE. Keep compiler
+# arguments in MSYS2 form so its argument conversion does not mangle them.
+ifeq ($(HOST_OS),WINNT)
+native_path = $(shell cygpath -m '$(1)')
+else
+native_path = $(1)
+endif
+
+# Platform hooks for toolchain setup, stage flags and DLL lookup.
+STAGE0_EXTRA_TARGETS:=
+STAGE0_EXTRA_FLAGS:=
+# Turn [cd]tors into init/fini_array sections in libclang_rt, since lld doesn't
+# do that, and otherwise the profile constructor is not executed.
+STAGE0_POST = find $(STAGE0_BUILD) -name 'libclang_rt.profile-*.a' -exec $(LLVM_OBJCOPY) --rename-section .ctors=.init_array --rename-section .dtors=.fini_array {} +
+STAGE1_PLATFORM_FLAGS:=
+# Which C/C++ runtime headers and libraries to build against.
+SYSROOT_FLAGS:=
+# How a stage's own shared libraries are made findable by the tools built
+# during it. 1: that stage's build directory.
+STAGE_PATH =
+# What STAGE_PATH needs set up before a stage.
+STAGE_PATH_SETUP =
+
 # How to drive the toolchain on this platform. Everything else below is
 # platform independent.
 ifeq ($(HOST_OS),Darwin)
@@ -167,30 +204,76 @@ export SDKROOT ?= $(shell xcrun --show-sdk-path)
 LINKER:=$(shell xcrun --find ld)
 LINKER_FLAGS:=--ld-path=$(LINKER) -Wl,-lto_library,$(STAGE0_BUILD)/usr/lib/libLTO.dylib
 LINK_ONLY_FLAGS:=
-STAGE2_LINK_ONLY_FLAGS:=
 # For the same reason, LLVM's static libraries cannot be created with Xcode's
 # libtool, which does not index the stage-0 bitcode.
 PLATFORM_FLAGS:="LLVM_LIBTOOL=$(STAGE0_TOOLS)llvm-libtool-darwin"
 else ifeq ($(HOST_OS),WINNT)
-# Use lld's MinGW driver; the ELF-only flags below do not apply to PE/COFF.
-LINKER:=$(STAGE0_TOOLS)lld$(EXE)
-LINKER_FLAGS:=-fuse-ld=lld
+# Julia invokes LD directly; ld.lld selects lld's MinGW driver.
+LINKER:=$(STAGE0_TOOLS)ld.lld$(EXE)
+# MSYS2's GCC links winpthread through its spec file, which is what its libstdc++
+# expects; clang only does so for -pthread.
+LINKER_FLAGS:=-fuse-ld=lld -pthread
+# The ELF-only flags do not apply to PE/COFF.
 LINK_ONLY_FLAGS:=
-STAGE2_LINK_ONLY_FLAGS:=
-PLATFORM_FLAGS:=
+# Apply the export map through a COFF definition for lld's MinGW driver.
+# Keep the caller's linker flags, but not the driver flags added by this flow.
+PLATFORM_FLAGS:="WIN_LD_USE_DEF=1" "LINK_LDFLAGS=$(LDFLAGS)"
+# BinaryBuilder's tools need its compiler support libraries (MSYS2's
+# libstdc++ lacks some of their imports), plus libLLVM's compression DLLs.
+# Place these beside the tools before running any of them. Skip the ELF
+# constructor fixup: COFF's profile runtime registers through .CRT$XCU.
+STAGE0_EXTRA_TARGETS:=install-zlib install-csl
+STAGE0_EXTRA_FLAGS:=USE_BINARYBUILDER_CSL=1
+STAGE0_POST = cp $(STAGE0_BUILD)/usr/bin/*.dll $(STAGE0_TOOLS)
+# Those direct linker invocations also miss the profile runtime that
+# -fprofile-generate would otherwise have contributed to the link.
+STAGE1_PLATFORM_FLAGS = "WIN_LD_EXTRA_LIBS=$(wildcard $(STAGE0_BUILD)/usr/lib/clang/*/lib/windows/libclang_rt.profile-*.a)"
+# Let newly built tools such as llvm-tblgen find the stage's zstd/zlib DLLs.
+# Append so the sysroot's compiler support libraries retain PATH precedence.
+STAGE_PATH = PATH="$$PATH:$(1)/usr/bin"
 else
 LINKER:=$(STAGE0_TOOLS)ld.lld$(EXE)
 LINKER_FLAGS:=-fuse-ld=lld
 # Julia's version script names symbols that not every configuration defines.
 LINK_ONLY_FLAGS:=-Wl,--undefined-version
-STAGE2_LINK_ONLY_FLAGS:=-Wl,--icf=safe
+ifneq (,$(LTO_JOBS))
+LINK_ONLY_FLAGS+=-Wl,--thinlto-jobs=$(LTO_JOBS)
+endif
 PLATFORM_FLAGS:=
+# Build against the GCC installation and sysroot of the regular build's C
+# compiler, i.e. the same libstdc++ headers and C library. Left to itself, clang
+# picks the newest GCC under /usr instead, and whatever C library that one uses:
+# BinaryBuilder's build images keep their GCC with an old glibc in /usr/local,
+# next to a newer distribution toolchain that the binaries would then require.
+# Both can also be given explicitly, e.g. for a toolchain that cannot run here.
+ifeq (,$(TOOLCHAIN_GCC_INSTALL_DIR))
+HOST_CC:=$(patsubst CC=%,%,$(shell MAKEFLAGS='-- $(subst ','"'"',$(MAKEOVERRIDES))' $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-CC))
+ifeq (,$(shell $(HOST_CC) -dM -E -x c /dev/null 2>/dev/null | grep __clang__))
+TOOLCHAIN_GCC_INSTALL_DIR:=$(patsubst %/,%,$(dir $(wildcard $(shell LANG=C $(HOST_CC) -print-libgcc-file-name 2>/dev/null))))
+TOOLCHAIN_SYSROOT:=$(shell $(HOST_CC) -print-sysroot 2>/dev/null)
+endif
+endif
+ifneq (,$(TOOLCHAIN_GCC_INSTALL_DIR))
+SYSROOT_FLAGS:=--gcc-install-dir=$(TOOLCHAIN_GCC_INSTALL_DIR) $(if $(TOOLCHAIN_SYSROOT),--sysroot=$(TOOLCHAIN_SYSROOT))
+# That libstdc++ can be newer than the build machine's, which the tools built
+# during a stage, e.g. llvm-tblgen, then need to run. Expose that library on its
+# own: it can live in a system library directory (e.g. with a distribution GCC),
+# whose other libraries would then take precedence over the stage's own, such as
+# an older libzstd over the one Julia's zstd executable requires.
+STAGE_LIBSTDCXX = $(realpath $(wildcard $(shell $(STAGE0_TOOLS)clang++ $(SYSROOT_FLAGS) -print-file-name=libstdc++.so.6)))
+STAGE_LIBSTDCXX_DIR:=$(STAGE0_BUILD)/libstdcxx
+STAGE_PATH_SETUP = rm -rf $(STAGE_LIBSTDCXX_DIR)$(if $(STAGE_LIBSTDCXX), && mkdir -p $(STAGE_LIBSTDCXX_DIR) && ln -s $(STAGE_LIBSTDCXX) $(STAGE_LIBSTDCXX_DIR)/libstdc++.so.6)
+STAGE_PATH = LD_LIBRARY_PATH="$(STAGE_LIBSTDCXX_DIR)$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}"
+endif
 endif
 
+# The toolchain flags go into CC/CXX rather than *FLAGS, because not every part of
+# the build uses those: the loader in cli/, for one, compiles and links with
+# JCFLAGS/JLDFLAGS only.
 TOOLCHAIN_FLAGS = $\
-	"CC=$(STAGE0_TOOLS)clang$(EXE)" $\
+	"CC=$(strip $(STAGE0_TOOLS)clang$(EXE) $(SYSROOT_FLAGS))" $\
 	"BUILD_MACHINE=$(BUILD_MACHINE)" $\
-	"CXX=$(STAGE0_TOOLS)clang++$(EXE)" $\
+	"CXX=$(strip $(STAGE0_TOOLS)clang++$(EXE) $(SYSROOT_FLAGS))" $\
 	"LD=$(LINKER)" $\
 	"AR=$(STAGE0_TOOLS)llvm-ar$(EXE)" $\
 	"RANLIB=$(STAGE0_TOOLS)llvm-ranlib$(EXE)" $\
@@ -221,20 +304,22 @@ endif
 $(STAGE0_BUILD) $(STAGE1_BUILD) $(STAGE2_BUILD):
 	$(MAKE) -C $(JULIA_ROOT) O=$@ configure
 
-# Stage 0: a toolchain to build with. BinaryBuilder has no BOLT, so that one is
-# built from source; everything else is downloaded.
+# Stage 0: download the toolchain.
 stage0: export USE_BINARYBUILDER_LLVM=1
 stage0: | $(STAGE0_BUILD)
 	@echo "--- Stage 0: toolchain"
 	# The toolchain links against zstd, which macOS does not provide.
-	$(MAKE) -C $(STAGE0_BUILD)/deps install-clang install-llvm install-lld install-llvm-tools install-zstd
+	$(MAKE) -C $(STAGE0_BUILD)/deps $(STAGE0_EXTRA_FLAGS) install-clang install-llvm install-lld install-llvm-tools install-zstd $(STAGE0_EXTRA_TARGETS)
 ifeq ($(USE_BOLT),1)
 	$(MAKE) -C $(STAGE0_BUILD)/deps install-BOLT
 endif
-	# Turn [cd]tors into init/fini_array sections in libclang_rt, since lld
-	# doesn't do that, and otherwise the profile constructor is not executed
-	find $(STAGE0_BUILD) -name 'libclang_rt.profile-*.a' -exec $(LLVM_OBJCOPY) --rename-section .ctors=.init_array --rename-section .dtors=.fini_array {} +
+	$(STAGE0_POST)
 	touch $@
+
+# Order-only for the stages below: refreshed on every run, without making them
+# out of date.
+stage-path: stage0
+	$(STAGE_PATH_SETUP)
 
 # Stage 1: an instrumented Julia. Building its system image and package images
 # is the workload that the PGO profile is collected from.
@@ -242,13 +327,13 @@ stage1: STAGE_CFLAGS:=$(PGO_GENERATE_FLAGS) $(PGO_COUNTER_FLAGS)
 stage1: STAGE_CXXFLAGS:=$(PGO_GENERATE_FLAGS) $(PGO_COUNTER_FLAGS)
 stage1: STAGE_LDFLAGS:=$(LTO_FLAGS) $(PGO_GENERATE_FLAGS)
 stage1: export USE_BINARYBUILDER_LLVM=0
-stage1: stage0 | $(STAGE1_BUILD)
+stage1: stage0 | $(STAGE1_BUILD) stage-path
 	@echo "--- Stage 1: instrumented build"
 	# Building the dependencies runs instrumented build tools, e.g. llvm-tblgen,
 	# which share code with libLLVM but not Julia's workload. Keep their
 	# profiles out of the profile directory.
-	LLVM_PROFILE_FILE=$(STAGE1_BUILD)/deps-profiles/%m.profraw $(MAKE) -C $(STAGE1_BUILD) $(TOOLCHAIN_FLAGS) JULIA_CPU_TARGET=$(STAGE1_CPU_TARGET) julia-deps
-	$(MAKE) -C $(STAGE1_BUILD) $(TOOLCHAIN_FLAGS) JULIA_CPU_TARGET=$(STAGE1_CPU_TARGET)
+	$(call STAGE_PATH,$(STAGE1_BUILD)) LLVM_PROFILE_FILE=$(call native_path,$(STAGE1_BUILD))/deps-profiles/%m.profraw $(MAKE) -C $(STAGE1_BUILD) $(TOOLCHAIN_FLAGS) $(STAGE1_PLATFORM_FLAGS) JULIA_CPU_TARGET=$(STAGE1_CPU_TARGET) julia-deps
+	$(call STAGE_PATH,$(STAGE1_BUILD)) $(MAKE) -C $(STAGE1_BUILD) $(TOOLCHAIN_FLAGS) $(STAGE1_PLATFORM_FLAGS) JULIA_CPU_TARGET=$(STAGE1_CPU_TARGET)
 	# Remove the empty profile emitted by the instrumented launcher.
 	rm -f $(JULIA_ROOT)/base/default.profraw
 	touch $@
@@ -272,16 +357,16 @@ top: $(PGO_PROFILE_FILE)
 # which would silently disable PIC and break the libLLVM link).
 stage2 bolt-train: STAGE_CFLAGS:=$(PGO_USE_FLAGS) $(PGO_WARNING_FLAGS) $(LTO_FLAGS) $(LINKER_FLAGS) -Qunused-arguments
 stage2 bolt-train: STAGE_CXXFLAGS:=$(PGO_USE_FLAGS) $(PGO_WARNING_FLAGS) $(LTO_FLAGS) $(LINKER_FLAGS) -Qunused-arguments
-stage2 bolt-train: STAGE_LDFLAGS:=$(LTO_FLAGS) $(PGO_USE_FLAGS) $(STAGE2_LINK_ONLY_FLAGS)
+stage2 bolt-train: STAGE_LDFLAGS:=$(LTO_FLAGS) $(PGO_USE_FLAGS)
 stage2 bolt-train: export USE_BINARYBUILDER_LLVM=0
 ifeq ($(USE_PGO),1)
 stage2: $(PGO_PROFILE_FILE)
 else
 stage2: stage0
 endif
-stage2: | $(STAGE2_BUILD)
+stage2: | $(STAGE2_BUILD) stage-path
 	@echo "--- Stage 2: optimized build"
-	$(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(BOLT_FLAGS) $(STAGE2_TARGETS)
+	$(call STAGE_PATH,$(STAGE2_BUILD)) $(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(BOLT_FLAGS) $(STAGE2_TARGETS)
 	touch $@
 
 # Keep a copy of the libraries as linked, since both the instrumentation and
@@ -311,11 +396,11 @@ bolt-instrument: bolt-originals
 
 # Build the rest of Julia against the instrumented libraries: the system image
 # and the stdlib package images are the BOLT training workload.
-bolt-train: bolt-instrument
+bolt-train: bolt-instrument | stage-path
 	@echo "--- BOLT: training build"
 	# Keep $(BOLT_FLAGS) here: anything relinked during this stage must carry
 	# --emit-relocs, or the later BOLT rewrite of it fails.
-	$(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(BOLT_FLAGS)
+	$(call STAGE_PATH,$(STAGE2_BUILD)) $(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(BOLT_FLAGS)
 	touch $@
 
 bolt-merge: bolt-train $(BOLT_PROFRAW_FILES)
@@ -333,7 +418,7 @@ bolt: bolt-merge
 	for link in $(SYMLINKS_TO_OPTIMIZE); do \
 		file=$$(readlink $(STAGE2_BUILD)/usr/lib/$$link); \
 		abs_file=$(STAGE2_BUILD)/usr/lib/$$file; \
-		if [ "$$link" = libjulia-internal.so ]; then extra_args=; else extra_args="--use-old-text -split-strategy=cdsplit"; fi; \
+		if [ "$$link" = libjulia-internal.so ]; then extra_args=; else extra_args="--use-old-text $(BOLT_SPLIT_STRATEGY)"; fi; \
 		$(LLVM_BOLT) "$$abs_file.original" -data "$(BOLT_PROFILE_DIR)/$$file-prof.merged.fdata" -o $$abs_file $(BOLT_ARGS) $$extra_args; \
 		touch -r "$$abs_file.original" $$abs_file; \
 	done

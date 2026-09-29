@@ -418,10 +418,11 @@ JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int ma
 
 #if defined(_OS_WINDOWS_)
 
+static __thread _Atomic(int) *abort_profile_ptr = NULL;
+
 // XXX: these caches should be per-thread
 #ifdef _CPU_X86_64_
 static __thread UNWIND_HISTORY_TABLE HistoryTable;
-static __thread _Atomic(int) *abort_profile_ptr = NULL;
 
 static PVOID CALLBACK JuliaFunctionTableAccess64(
         _In_  HANDLE hProcess,
@@ -634,12 +635,46 @@ void jl_fin_stackwalk(void)
 }
 
 // Set the abort_profile_ptr in TLS
-#ifdef _CPU_X86_64_
 JL_DLLEXPORT void jl_set_profile_abort_ptr(_Atomic(int) *abort_ptr) JL_NOTSAFEPOINT
 {
     abort_profile_ptr = abort_ptr;
 }
-#endif
+
+// Touch the thread-locals the unwinder uses while another thread is suspended.
+// mingw emulates TLS, and `__emutls_get_address` calls `calloc` on a variable's
+// first use in each thread - under the process heap lock, which a suspended
+// thread can be holding. The sampler thread calls this before it suspends
+// anything.
+void jl_profile_prefault_tls(void) JL_NOTSAFEPOINT
+{
+    abort_profile_ptr = NULL;
+    memset(&HistoryTable, 0, sizeof(HistoryTable));
+}
+
+// Open the abort window around a Windows-runtime call made while the profiled
+// thread is suspended (dbghelp, `RtlLookupFunctionEntry`, ...): the watchdog
+// resumes that thread if the call blocks on a lock it holds, and the unwind
+// then gives up rather than reading a stack that is running again. Returns
+// whether the window opened; `close` reports whether the step may continue.
+STATIC_INLINE int profile_abort_window_open(_Atomic(int) **abort_ptr) JL_NOTSAFEPOINT
+{
+    _Atomic(int) *p = abort_profile_ptr;
+    *abort_ptr = p;
+    if (p && jl_atomic_exchange_relaxed(p, 1) != 0) {
+        jl_atomic_store_relaxed(p, 3);
+        return 0;
+    }
+    return 1;
+}
+
+STATIC_INLINE int profile_abort_window_close(_Atomic(int) *abort_ptr) JL_NOTSAFEPOINT
+{
+    if (abort_ptr && jl_atomic_exchange_relaxed(abort_ptr, 0) != 1) {
+        jl_atomic_store_relaxed(abort_ptr, 3);
+        return 0;
+    }
+    return 1;
+}
 
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context, int from_signal_handler)
 {
@@ -655,11 +690,16 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context, int from_sign
     cursor->stackframe.AddrStack.Mode = AddrModeFlat;
     cursor->stackframe.AddrFrame.Mode = AddrModeFlat;
     cursor->context = *Context;
+    _Atomic(int) *abort_ptr;
+    if (!profile_abort_window_open(&abort_ptr))
+        return 0;
     uv_mutex_lock(&jl_in_stackwalk);
     result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
             &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64,
             JuliaGetModuleBase64, NULL);
     uv_mutex_unlock(&jl_in_stackwalk);
+    if (!profile_abort_window_close(abort_ptr))
+        return 0;
 #else
     *cursor = *Context;
     result = 1;
@@ -695,10 +735,15 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
         return cursor->stackframe.AddrPC.Offset != 0;
     }
 
+    _Atomic(int) *abort_ptr;
+    if (!profile_abort_window_open(&abort_ptr))
+        return 0;
     uv_mutex_lock(&jl_in_stackwalk);
     BOOL result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
         &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64, JuliaGetModuleBase64, NULL);
     uv_mutex_unlock(&jl_in_stackwalk);
+    if (!profile_abort_window_close(abort_ptr))
+        return 0;
     return result;
 #else
     *ip = (uintptr_t)cursor->Rip;
@@ -711,22 +756,16 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
         return cursor->Rip != 0;
     }
 
-    // Set can-abort flag
-    _Atomic(int) *abort_ptr = abort_profile_ptr;
-    if (abort_ptr && jl_atomic_exchange_relaxed(abort_ptr, 1) != 0) {
-        jl_atomic_store_relaxed(abort_ptr, 3);
-        return 0; // aborted
-    }
+    _Atomic(int) *abort_ptr;
+    if (!profile_abort_window_open(&abort_ptr))
+        return 0;
 
     DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), cursor->Rip - !from_signal_handler);
     PRUNTIME_FUNCTION FunctionEntry = ImageBase ? (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(
         GetCurrentProcess(), cursor->Rip - !from_signal_handler) : NULL;
 
-    // Check if can-abort flag was removed, or remove it
-    if (abort_ptr && jl_atomic_exchange_relaxed(abort_ptr, 0) != 1) {
-        jl_atomic_store_relaxed(abort_ptr, 3);
-        return 0; // abort
-    }
+    if (!profile_abort_window_close(abort_ptr))
+        return 0;
 
     if (!FunctionEntry) {
         // Not code or bad unwind?

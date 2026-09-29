@@ -3,19 +3,8 @@
 // Bring in the curated lists of exported data and function symbols, then
 // perform C preprocessor magic upon them to generate lists of declarations and
 // functions to re-export our function symbols from libjulia-internal to libjulia.
-#include "../src/jl_exported_data.inc"
+#include "../src/jl_exported_data_defs.inc"
 #include "../src/jl_exported_funcs.inc"
-
-// Define pointer data as `const void * $(name);`
-#define XX(name, type)    JL_DLLEXPORT const void * jl_##name;
-JL_EXPORTED_DATA_POINTERS(XX)
-JL_CONST_GLOBAL_VARS(XX)
-#undef XX
-
-// Define symbol data as `$(type) $(name);`
-#define XX(name, type)    JL_DLLEXPORT type name;
-JL_EXPORTED_DATA_SYMBOLS(XX)
-#undef XX
 
 // define a copy of exported data
 #define jl_max_tags 64

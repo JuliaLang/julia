@@ -164,6 +164,19 @@ binding_ex(ctx, id::IdTag) = binding_ex(ctx, get_binding(ctx, id))
 binding_type_ex(ctx::AbstractLoweringContext, b::BindingInfo) =
     b.type
 
+"""
+Key to use when transforming names into bindings
+"""
+struct NameKey
+    name::String
+    layer::ScopeLayer
+end
+
+function NameKey(ex::SyntaxTree)
+    @jl_assert kind(ex) in KSet"Identifier symboliclabel symbolicgoto" ex
+    NameKey(syntax_name(ex), (ex.context::SyntaxContext).layer)
+end
+
 # One lambda's variables
 struct LambdaBindings
     # Binding ID of #self#

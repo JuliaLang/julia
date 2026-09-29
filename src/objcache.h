@@ -30,7 +30,7 @@ using CompileFn = llvm::unique_function<std::unique_ptr<llvm::MemoryBuffer>()>;
 
 class MDBTxn;
 
-typedef struct _jl_value_t jl_value_t;
+typedef struct JL_GC_TRACKED_TYPE _jl_value_t jl_value_t;
 
 class ObjCache {
 public:

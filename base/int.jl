@@ -573,12 +573,29 @@ top_set_bit(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
 (<=)(x::T, y::T) where {T<:BitSigned}   = sle_int(x, y)
 (<=)(x::T, y::T) where {T<:BitUnsigned} = ule_int(x, y)
 
-==(x::BitSigned,   y::BitUnsigned) = (x >= 0) & (unsigned(x) == y)
-==(x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x == unsigned(y))
-<( x::BitSigned,   y::BitUnsigned) = (x <  0) | (unsigned(x) <  y)
-<( x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x <  unsigned(y))
-<=(x::BitSigned,   y::BitUnsigned) = (x <  0) | (unsigned(x) <= y)
-<=(x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x <= unsigned(y))
+==(x::BitSigned, y::BitUnsigned) = y == x
+<(x::BitSigned, y::BitUnsigned) = !(y <= x)
+<=(x::BitSigned, y::BitUnsigned) = !(y < x)
+
+for op in (:(==), :<, :<=)
+    @eval function $op(x::BitUnsigned, y::BitSigned)
+        if Core.sizeof(x) < Core.sizeof(y)
+            $op(typeof(y)(x), y)
+        else
+            (y >= 0) & $op(x, unsigned(y) % typeof(x))
+        end
+    end
+end
+
+function max(x::S, y::T) where {S <: BitInteger, T <: BitInteger}
+    R = promote_type(S, T)
+    ifelse(x < y, y % R, x % R)
+end
+
+min(x::S, y::BitUnsigned) where S <: BitSigned = ifelse(x < y, x, y % S)
+min(x::BitUnsigned, y::T) where T <: BitSigned = ifelse(x < y, x % T, y)
+
+minmax(x::BitInteger, y::BitInteger) = (min(x, y), max(x, y))
 
 ## integer shifts ##
 
@@ -804,8 +821,10 @@ promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 """
     typemin(T)
+    typemin(::T)
 
-The lowest value representable by the given (real) numeric DataType `T`.
+The lowest value representable by the given (real) numeric type `T`.
+The argument can alternatively be an instance of `T`.
 
 See also: [`floatmin`](@ref), [`maxintfloat`](@ref), [`typemax`](@ref), [`eps`](@ref).
 
@@ -834,8 +853,10 @@ function typemin end
 
 """
     typemax(T)
+    typemax(::T)
 
-The highest value representable by the given (real) numeric `DataType`.
+The highest value representable by the given (real) numeric type `T`.
+The argument can alternatively be an instance of `T`.
 
 See also: [`floatmax`](@ref), [`maxintfloat`](@ref), [`typemin`](@ref), [`eps`](@ref).
 

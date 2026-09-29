@@ -256,7 +256,10 @@ end
 # `IndexStyle(a) == IndexLinear()`, it's advantageous to retain pseudo-linear indexing.
 struct IndexSCartesian2{K} <: IndexStyle end   # K = aligned_sizeof(S) ÷ aligned_sizeof(T), a static-sized 2d cartesian iterator
 
-IndexStyle(::Type{ReinterpretArray{T,N,S,A,false}}) where {T,N,S,A<:AbstractArray{S,N}} = IndexStyle(A)
+# only `IndexLinear` is known to be valid when the axes change (#63305)
+IndexStyle(::Type{ReinterpretArray{T,N,S,A,false}}) where {T,N,S,A<:AbstractArray{S,N}} =
+    IndexStyle(A) === IndexLinear() ? IndexLinear() : IndexCartesian()
+
 function IndexStyle(::Type{ReinterpretArray{T,N,S,A,true}}) where {T,N,S,A<:AbstractArray{S}}
     if aligned_sizeof(T) < aligned_sizeof(S)
         IndexStyle(A) === IndexLinear() && return IndexSCartesian2{aligned_sizeof(S) ÷ aligned_sizeof(T)}()
@@ -271,6 +274,10 @@ struct SCartesianIndex2{K}   # can't make <:AbstractCartesianIndex without N, an
     j::Int
 end
 to_index(i::SCartesianIndex2) = i
+nextind(::AbstractArray, i::SCartesianIndex2{K}) where {K} =
+    i.i < K ? SCartesianIndex2{K}(i.i + 1, i.j) : SCartesianIndex2{K}(1, i.j + 1)
+prevind(::AbstractArray, i::SCartesianIndex2{K}) where {K} =
+    i.i > 1 ? SCartesianIndex2{K}(i.i - 1, i.j) : SCartesianIndex2{K}(K, i.j - 1)
 
 struct SCartesianIndices2{K,R<:AbstractUnitRange{Int}} <: AbstractMatrix{SCartesianIndex2{K}}
     indices2::R
@@ -334,28 +341,22 @@ function _setindex!(::IndexSCartesian2, A::AbstractArray, v, I::Vararg{Int, N}) 
 end
 # fallbacks for array types that use "pass-through" indexing (e.g., `IndexStyle(A) = IndexStyle(parent(A))`)
 # but which don't handle SCartesianIndex2
-function _getindex(::IndexSCartesian2, A::AbstractArray{T,N}, ind::SCartesianIndex2) where {T,N}
+function _getindex(style::IndexSCartesian2, A::AbstractArray, ind::SCartesianIndex2)
     @_propagate_inbounds_meta
-    J = _ind2sub(tail(axes(A)), ind.j)
-    getindex(A, ind.i, J...)
+    getindex(A, first(axes(A, 1)) + ind.i - 1, _scartesian2_trailing(style, A, ind)...)
 end
 
-function _getindex(::IndexSCartesian2{2}, A::AbstractArray{T,2}, ind::SCartesianIndex2) where {T}
+function _setindex!(style::IndexSCartesian2, A::AbstractArray, v, ind::SCartesianIndex2)
     @_propagate_inbounds_meta
-    J = first(axes(A, 2)) + ind.j - 1
-    getindex(A, ind.i, J)
+    setindex!(A, v, first(axes(A, 1)) + ind.i - 1, _scartesian2_trailing(style, A, ind)...)
 end
 
-function _setindex!(::IndexSCartesian2, A::AbstractArray{T,N}, v, ind::SCartesianIndex2) where {T,N}
-    @_propagate_inbounds_meta
-    J = _ind2sub(tail(axes(A)), ind.j)
-    setindex!(A, v, ind.i, J...)
-end
-
-function _setindex!(::IndexSCartesian2{2}, A::AbstractArray{T,2}, v, ind::SCartesianIndex2) where {T}
-    @_propagate_inbounds_meta
-    J = first(axes(A, 2)) + ind.j - 1
-    setindex!(A, v, ind.i, J)
+# `ind.j` is a linear index of the innermost reinterpreted parent, which may not start at 1.
+# Convert it to the matching indices in the trailing axes of `A`.
+@propagate_inbounds function _scartesian2_trailing(style::IndexSCartesian2, A::AbstractArray, ind::SCartesianIndex2)
+    k = ind.j - first(eachindex(style, A).indices2)
+    ax = tail(axes(A))
+    return length(ax) == 1 ? (first(ax[1]) + k,) : Tuple(CartesianIndices(ax)[k + 1])
 end
 
 eachindex(style::IndexSCartesian2, A::AbstractArray) = eachindex(style, parent(A))
@@ -458,7 +459,7 @@ end
     @boundscheck checkbounds(a, inds...)
     li = _to_linear_index(a, inds...)
     ap = cconvert(Ptr{T}, a)
-    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - 1)
+    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - firstindex(a))
     GC.@preserve ap return unsafe_load(p)
 end
 
@@ -607,7 +608,7 @@ end
     @boundscheck checkbounds(a, inds...)
     li = _to_linear_index(a, inds...)
     ap = cconvert(Ptr{T}, a)
-    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - 1)
+    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - firstindex(a))
     GC.@preserve ap unsafe_store!(p, v)
     return a
 end

@@ -24,6 +24,20 @@ for T in (Int64, Float64)
     @test complex(Complex{T}) == Complex{T}
 end
 
+# Invalid bottom-type calls must not contribute a type object to numeric inference.
+@testset "bottom-type numeric conversions" begin
+    @test Base.infer_return_type(complex, (Any, Any)) === Complex
+    @test Base.infer_return_type(real, (Any, Any)) === Union{}
+    @test Base.infer_return_type(float, (Any, Any)) === Union{}
+    for f in (complex, real, float)
+        @test f(Missing) === Missing
+        @test f(Union{Float64, Missing}) === Union{f(Float64), Missing}
+    end
+    for T in (Float32, Float64)
+        @test @inferred(complex(T(1), T(2))) === Complex{T}(1, 2)
+    end
+end
+
 @testset "show for complex" begin
     @test sprint(show, complex(1, 0), context=:compact => true) == "1+0im"
     @test sprint(show, complex(true, true)) == "Complex(true,true)"

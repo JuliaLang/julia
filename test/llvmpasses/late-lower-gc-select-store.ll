@@ -70,3 +70,33 @@ merge:
   ; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
   ret void
 }
+
+; Store through a phi of allocas of different shapes (a single root and a root
+; array), as produced by SimplifyCFG sinking two stores into a common successor.
+; This is a regression test for https://github.com/JuliaLang/julia/issues/63288
+define void @store_phi_mixed_shapes(ptr addrspace(10) %val, i1 %cond) {
+top:
+  ; CHECK-LABEL: @store_phi_mixed_shapes
+  ; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 4)
+  ; CHECK-DAG: %alloca1 = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 {{[0-9]+}})
+  ; CHECK-DAG: %alloca2 = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 {{[0-9]+}})
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %alloca1 = alloca ptr addrspace(10), align 8
+  %alloca2 = alloca [3 x ptr addrspace(10)], align 8
+  br i1 %cond, label %left, label %right
+
+left:
+  br label %merge
+
+right:
+  br label %merge
+
+merge:
+  %phi = phi ptr [ %alloca1, %left ], [ %alloca2, %right ]
+  ; CHECK: %phi = phi ptr [ %alloca1, %left ], [ %alloca2, %right ]
+  ; CHECK-NEXT: store ptr addrspace(10) %val, ptr %phi
+  store ptr addrspace(10) %val, ptr %phi, align 8
+  call void @safepoint()
+  ; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret void
+}

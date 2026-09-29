@@ -272,6 +272,7 @@ end
         @lock cond notify(cond, :legit)
         @test fetch(t) === :legit
     end
+    # JET.@test_call notify(::Condition)
 end
 
 # the cached WaitEntry makes the steady-state park/wake cycle allocation-free:
@@ -773,7 +774,8 @@ end
                      # Remove all variables which could affect the default number of threads
                      "OPENBLAS_NUM_THREADS"=>nothing,
                      "GOTO_NUM_THREADS"=>nothing,
-                     "OMP_NUM_THREADS"=>nothing)
+                     "OMP_NUM_THREADS"=>nothing,
+                     "JULIA_CPU_THREADS"=>nothing)
         for n in 1:min(length(allowed_cpus), 8) # Cap to 8 to avoid too many tests on large systems
             @test readchomp(setcpuaffinity(cmd, allowed_cpus[1:n])) == string(max(1, n ÷ 2))
         end

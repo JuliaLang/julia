@@ -34,7 +34,8 @@ that you may be able to leverage; see the
 abstract type BroadcastStyle end
 
 struct Unknown <: BroadcastStyle end
-BroadcastStyle(::Type{Union{}}, slurp...) = Unknown()  # ambiguity resolution
+BroadcastStyle(::Type{Union{}}) = Unknown()  # ambiguity resolution
+BroadcastStyle(::Type{Union{}}, slurp...) = throw(MethodError(BroadcastStyle, (Union{}, slurp...)))
 
 """
 `Broadcast.Style{C}()` defines a [`BroadcastStyle`](@ref) signaling through the type
@@ -1036,7 +1037,9 @@ end
     ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
     ndims(dest) == 0 && (dest[] = bc[]; return dest)
     bc′ = preprocess(dest, bc)
-    ax = axes(bc′)
+    # The broadcast axes can have an unsigned eltype, so use the destination's Int axes
+    # to keep the index arithmetic below from wrapping.
+    ax = axes(dest)
     ax1, out = ax[1], CartesianIndices(tail(ax))
     destc, indc = dest.chunks, 0
     bitst, remain = 0, UInt64(0)

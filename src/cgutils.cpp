@@ -1740,20 +1740,6 @@ static Value *emit_sizeof(jl_codectx_t &ctx, const jl_cgval_t &p)
 }
 */
 
-static Value *emit_datatype_mutabl(jl_codectx_t &ctx, Value *dt)
-{
-    jl_aliasinfo_t ai = ctx.alias().constant;
-    Value *Ptr = decay_derived(ctx, dt);
-    Value *Idx = ConstantInt::get(ctx.types().T_size, offsetof(jl_datatype_t, name));
-    Value *Nam = ai.decorateInst(
-            ctx.builder.CreateAlignedLoad(getPointerTy(ctx.builder.getContext()), ctx.builder.CreateInBoundsGEP(getPointerTy(ctx.builder.getContext()), Ptr, Idx), Align(sizeof(int8_t*))));
-    Value *Idx2 = ConstantInt::get(ctx.types().T_size, offsetof(jl_typename_t, n_uninitialized) + sizeof(((jl_typename_t*)nullptr)->n_uninitialized));
-    Value *mutabl = ai.decorateInst(
-            ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), Nam, Idx2), Align(1)));
-    mutabl = ctx.builder.CreateLShr(mutabl, 1);
-    return ctx.builder.CreateTrunc(mutabl, getInt1Ty(ctx.builder.getContext()));
-}
-
 static Value *emit_datatype_isprimitivetype(jl_codectx_t &ctx, Value *typ)
 {
     Value *isprimitive;
@@ -2623,15 +2609,15 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     if (intcast) {
         ctx.builder.CreateAlignedStore(instr, intcast, Align(alignment));
         instr = nullptr;
-    }
-    if (maybe_null_if_boxed) {
-        if (intcast)
+        // The pointers in `intcast` are stored as an integer, so the slot does not root
+        // them: reload the value with its pointer-exposing type to keep them tracked.
+        if (CountTrackedPointers(intcast->getAllocatedType()).count > 0)
             instr = ctx.builder.CreateAlignedLoad(intcast->getAllocatedType(), intcast, Align(alignment));
+    }
+    if (maybe_null_if_boxed && instr) {
         Value *first_ptr = isboxed ? instr : extract_first_ptr(ctx, instr);
         if (first_ptr)
             null_pointer_check(ctx, first_ptr, nullcheck);
-        if (intcast && !first_ptr)
-            instr = nullptr;
     }
     if (jltype == (jl_value_t*)jl_bool_type) { // "freeze" undef memory to a valid value
         // NOTE: if we zero-initialize arrays, this optimization should become valid

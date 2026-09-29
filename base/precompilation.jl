@@ -49,7 +49,7 @@ end
 # Slots are handed out by priority rather than in request order: a package that a
 # long chain of other packages is waiting on starts before one nothing depends on,
 # so the environment's critical path is not delayed behind leaves that happened to
-# become ready first (see `schedule_priorities`).
+# become ready first.
 mutable struct WorkerLimiter
     const cond::Threads.Condition   # guards `active`, `seq` and `waiting`
     const max::Int
@@ -2408,31 +2408,40 @@ end
 # slots out in this order starts the environment's critical path as early as
 # possible; in a cold precompile of a large environment the last package on that
 # path, not the total amount of work, sets the wall-clock time.
-function schedule_priorities(direct_deps::Dict{PkgId,Vector{PkgId}}, cost::Dict{PkgId,Float64})
+# Computed on demand, so a run with little to compile doesn't read every package's source.
+struct SchedulePriorities
+    lock::ReentrantLock
+    dependents::Dict{PkgId,Vector{PkgId}}
+    sourcespecs::Dict{PkgId,Union{Nothing,Base.PkgLoadSpec}}
+    cost::Dict{PkgId,Float64}
+    height::Dict{PkgId,Float64}
+    visiting::Set{PkgId}
+end
+
+function SchedulePriorities(direct_deps::Dict{PkgId,Vector{PkgId}},
+                            sourcespecs::Dict{PkgId,Union{Nothing,Base.PkgLoadSpec}})
     dependents = Dict{PkgId,Vector{PkgId}}()
     for (pkg, deps) in direct_deps, dep in deps
         push!(get!(Vector{PkgId}, dependents, dep), pkg)
     end
-    height = Dict{PkgId,Float64}()
-    visiting = Set{PkgId}()
-    for pkg in keys(direct_deps)
-        schedule_height!(height, visiting, dependents, cost, pkg)
-    end
-    return height
+    return SchedulePriorities(ReentrantLock(), dependents, sourcespecs,
+                              Dict{PkgId,Float64}(), Dict{PkgId,Float64}(), Set{PkgId}())
 end
 
+schedule_priority(p::SchedulePriorities, pkg::PkgId) = @lock p.lock schedule_height!(p, pkg)
+
 # A top-level function rather than a local one so the recursion does not box it.
-function schedule_height!(height::Dict{PkgId,Float64}, visiting::Set{PkgId},
-                          dependents::Dict{PkgId,Vector{PkgId}}, cost::Dict{PkgId,Float64}, pkg::PkgId)
-    haskey(height, pkg) && return height[pkg]
-    pkg in visiting && return 0.0 # circular dependency, reported elsewhere
-    push!(visiting, pkg)
+function schedule_height!(p::SchedulePriorities, pkg::PkgId)
+    haskey(p.height, pkg) && return p.height[pkg]
+    pkg in p.visiting && return 0.0 # circular dependency, reported elsewhere
+    push!(p.visiting, pkg)
     best = 0.0
-    for d in get(dependents, pkg, PkgId[])
-        best = max(best, schedule_height!(height, visiting, dependents, cost, d))
+    for d in get(p.dependents, pkg, PkgId[])
+        best = max(best, schedule_height!(p, d))
     end
-    delete!(visiting, pkg)
-    return height[pkg] = get(cost, pkg, 1.0) + best
+    delete!(p.visiting, pkg)
+    cost = get!(() -> precompile_cost_estimate(get(p.sourcespecs, pkg, nothing)), p.cost, pkg)
+    return p.height[pkg] = cost + best
 end
 
 # Standard libraries ship precompiled with julia, so `force` leaves them alone
@@ -2459,7 +2468,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
         requested_pkgids, pkg_names, requested_pkgs, from_loading)
     batch_tasks = Task[]
     sourcespecs = Dict{PkgId,Union{Nothing,Base.PkgLoadSpec}}(pkg => Base.locate_package_load_spec(pkg) for pkg in keys(direct_deps))
-    priorities = schedule_priorities(direct_deps, Dict{PkgId,Float64}(pkg => precompile_cost_estimate(spec) for (pkg, spec) in sourcespecs))
+    priorities = SchedulePriorities(direct_deps, sourcespecs)
     for (pkg, deps) in direct_deps
         cachepaths = Base.find_all_in_cache_path(pkg)
         freshpaths = String[]
@@ -2546,7 +2555,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                         end
                         return
                     end
-                    Base.acquire(s.parallel_limiter; priority=get(priorities, pkg, 0.0), cancel=() -> should_stop(s))
+                    Base.acquire(s.parallel_limiter; priority=schedule_priority(priorities, pkg), cancel=() -> should_stop(s))
 
                     std_pipe = Base.link_pipe!(Pipe(); reader_supports_async=true, writer_supports_async=true)
                     t_monitor = Threads.@spawn :samepool precompilepkgs_monitor_std(s, pkg_config, job, std_pipe,

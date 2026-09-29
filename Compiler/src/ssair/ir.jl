@@ -2220,7 +2220,7 @@ function just_fixup!(compact::IncrementalCompact, new_new_nodes_offset::Union{In
 end
 
 simple_dce!(compact::IncrementalCompact) = simple_dce!(null_dce_callback, compact)
-function simple_dce!(callback::Function, compact::IncrementalCompact)
+function simple_dce!(callback::T, compact::IncrementalCompact) where {T<:Function}
     # Perform simple DCE for unused values
     @assert isempty(compact.new_new_used_ssas) # just_fixup! wasn't run?
     extra_worklist = Int[]

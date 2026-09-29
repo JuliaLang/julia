@@ -4303,4 +4303,165 @@ end
     end
 end
 
+# Issue #63268: containers sharing a depot can hold different environments at the same
+# project path, so the cache file name also carries the manifest's `environment_id`
+# (the project uuid, or one Pkg generates). Loading reads file contents, so the name only
+# decides which existing file a compile overwrites.
+@testset "cache file names carry the manifest environment_id" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        dep_uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+        top_uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+        for (dirname, marker, version) in (("DepOld", 1, "0.1.0"), ("DepNew", 2, "0.2.0"))
+            path = joinpath(dir, "dev", dirname)
+            mkpath(joinpath(path, "src"))
+            write(joinpath(path, "Project.toml"),
+                  """
+                  name = "Dep"
+                  uuid = "$dep_uuid"
+                  version = "$version"
+                  """)
+            write(joinpath(path, "src", "Dep.jl"),
+                  """
+                  module Dep
+                  const _v = $marker
+                  end
+                  """)
+        end
+        top_path = joinpath(dir, "dev", "Top")
+        mkpath(joinpath(top_path, "src"))
+        write(joinpath(top_path, "Project.toml"),
+              """
+              name = "Top"
+              uuid = "$top_uuid"
+              version = "0.1.0"
+
+              [deps]
+              Dep = "$dep_uuid"
+              """)
+        function write_top(edit)
+            write(joinpath(top_path, "src", "Top.jl"),
+                  """
+                  module Top
+                  using Dep
+                  const _edit = $edit
+                  end
+                  """)
+        end
+        write_top(0)
+        project_path = joinpath(dir, "project")
+        mkpath(project_path)
+        write(joinpath(project_path, "Project.toml"),
+              """
+              [deps]
+              Top = "$top_uuid"
+              """)
+        # the same project path resolving one version of Dep or the other, as two
+        # containers with their projects mounted at the same path would
+        function use_dep(dirname, version, environment_id)
+            id_line = environment_id === nothing ? "" : "environment_id = \"$environment_id\""
+            write(joinpath(project_path, "Manifest.toml"),
+                  """
+                  $id_line
+                  manifest_format = "2.0"
+
+                  [[deps.Dep]]
+                  path = "../dev/$dirname/"
+                  uuid = "$dep_uuid"
+                  version = "$version"
+
+                  [[deps.Top]]
+                  deps = ["Dep"]
+                  path = "../dev/Top/"
+                  uuid = "$top_uuid"
+                  version = "0.1.0"
+                  """)
+            # A same-size rewrite can keep the same mtime on Windows, so this process's
+            # TOML cache would still return the old id
+            @lock Base.require_lock delete!(Base.TOML_CACHE.d, joinpath(project_path, "Manifest.toml"))
+        end
+        script = """
+            top = Base.identify_package("Top")
+            println("PRECOMPILED=", Base.isprecompiled(top))
+            using Top
+            println("DEP_VERSION=", Top.Dep._v)
+            """
+        function run_top()
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(project_path) -e $script`,
+                         "JULIA_DEPOT_PATH" => depot)
+            logfile = joinpath(dir, "run.log")
+            proc = run(pipeline(ignorestatus(cmd), stdout=logfile, stderr=logfile))
+            output = read(logfile, String)
+            @test success(proc) || (println(output); false)
+            return output
+        end
+        compiled = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)")
+        cachefiles(name) = filter(endswith(".ji"), readdir(joinpath(compiled, name)))
+        id_a = "c3c3c3c3-0000-0000-0000-00000000000a"
+        id_b = "c3c3c3c3-0000-0000-0000-00000000000b"
+
+        # Incompatible versions written under different ids coexist, dependents included,
+        # and alternating between them reuses the caches
+        use_dep("DepOld", "0.1.0", id_a)
+        output = run_top()
+        @test occursin("PRECOMPILED=false", output)
+        @test occursin("DEP_VERSION=1", output)
+        @test length(cachefiles("Dep")) == 1
+        @test length(cachefiles("Top")) == 1
+        use_dep("DepNew", "0.2.0", id_b)
+        output = run_top()
+        @test occursin("PRECOMPILED=false", output)
+        @test occursin("DEP_VERSION=2", output)
+        @test length(cachefiles("Dep")) == 2
+        @test length(cachefiles("Top")) == 2
+        use_dep("DepOld", "0.1.0", id_a)
+        output = run_top()
+        @test occursin("PRECOMPILED=true", output)
+        @test occursin("DEP_VERSION=1", output)
+        use_dep("DepNew", "0.2.0", id_b)
+        output = run_top()
+        @test occursin("PRECOMPILED=true", output)
+        @test occursin("DEP_VERSION=2", output)
+        @test length(cachefiles("Dep")) == 2
+        @test length(cachefiles("Top")) == 2
+
+        # A compatible cache is reused under any other id, or none
+        use_dep("DepNew", "0.2.0", "c3c3c3c3-0000-0000-0000-00000000000c")
+        output = run_top()
+        @test occursin("PRECOMPILED=true", output)
+        @test occursin("DEP_VERSION=2", output)
+        use_dep("DepNew", "0.2.0", nothing)
+        output = run_top()
+        @test occursin("PRECOMPILED=true", output)
+        @test length(cachefiles("Dep")) == 2
+        @test length(cachefiles("Top")) == 2
+
+        # A rebuild under the same id and project replaces the same file
+        use_dep("DepNew", "0.2.0", id_b)
+        top_files = cachefiles("Top")
+        write_top(1)
+        output = run_top()
+        @test occursin("PRECOMPILED=false", output)
+        @test cachefiles("Top") == top_files
+
+        # Without an id the name only depends on the project path, as before
+        pkg = Base.PkgId(Base.UUID(dep_uuid), "Dep")
+        project_file = joinpath(project_path, "Project.toml")
+        use_dep("DepNew", "0.2.0", nothing)
+        @test Base.project_environment_id(project_file) == ""
+        no_id = Base.compilecache_path(pkg, ""; project=project_file)
+        @test no_id == Base.compilecache_path(pkg, ""; project=project_file, environment_id="")
+        use_dep("DepNew", "0.2.0", id_a)
+        @test Base.project_environment_id(project_file) == id_a
+        with_a = Base.compilecache_path(pkg, ""; project=project_file)
+        @test with_a == Base.compilecache_path(pkg, ""; project=project_file, environment_id=id_a)
+        @test with_a != no_id
+        use_dep("DepNew", "0.2.0", id_b)
+        @test Base.compilecache_path(pkg, ""; project=project_file) != with_a
+        @test Base.project_environment_id("") == ""
+        @test Base.project_environment_id(joinpath(dir, "missing", "Project.toml")) == ""
+        # the pidfile path ignores the id so locking stays shared
+        @test Base.compilecache_pidfile_path(pkg) == Base.compilecache_path(pkg, ""; project="", environment_id="") * ".pidfile"
+    end end
+end
+
 finish_precompile_test!()

@@ -161,10 +161,11 @@ endif
 endif
 endif
 
-# winpthread is only Windows, pthread is only others
+# winpthread is only Windows, pthread is only others. Not on Linux, where libpthread is
+# part of glibc: a copy from a toolchain's sysroot would not match the system's libc.
 ifeq ($(OS),WINNT)
 $(eval $(call copy_csl,$(call versioned_libname,libwinpthread,1)))
-else
+else ifneq ($(OS),Linux)
 $(eval $(call copy_csl,$(call versioned_libname,libpthread,0)))
 endif
 

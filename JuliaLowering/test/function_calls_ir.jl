@@ -115,57 +115,57 @@ x .&& y .|| z
 
 ########################################
 # Scalar comparison chain
-x < y < z
+x < y(1) < z
 #---------------------
 1   TestMod.<
 2   TestMod.x
 3   TestMod.y
-4   (call %₁ %₂ %₃)
-5   (gotoifnot %₄ label₁₁)
-6   TestMod.<
-7   TestMod.y
+4   (call %₃ 1)
+5   (call %₁ %₂ %₄)
+6   (gotoifnot %₅ label₁₁)
+7   TestMod.<
 8   TestMod.z
-9   (call %₆ %₇ %₈)
+9   (call %₇ %₄ %₈)
 10  (return %₉)
 11  (return false)
 
 ########################################
 # Broadcasted comparison chain
-x .< y .< z
+x .< y(1) .< z
 #---------------------
 1   TestMod.<
 2   TestMod.x
 3   TestMod.y
-4   (call top.broadcasted %₁ %₂ %₃)
-5   TestMod.<
-6   TestMod.y
+4   (call %₃ 1)
+5   (call top.broadcasted %₁ %₂ %₄)
+6   TestMod.<
 7   TestMod.z
-8   (call top.broadcasted %₅ %₆ %₇)
-9   (call top.broadcasted top.& %₄ %₈)
+8   (call top.broadcasted %₆ %₄ %₇)
+9   (call top.broadcasted top.& %₅ %₈)
 10  (call top.materialize %₉)
 11  (return %₁₀)
 
 ########################################
 # Mixed scalar / broadcasted comparison chain
-a < b < c .< d .< e
+a < b < c(1) .< d .< e
 #---------------------
-1   TestMod.<
-2   TestMod.a
-3   TestMod.b
-4   (call %₁ %₂ %₃)
-5   (gotoifnot %₄ label₁₁)
-6   TestMod.<
-7   TestMod.b
-8   TestMod.c
-9   (= slot₁/if_val (call %₆ %₇ %₈))
-10  (goto label₁₂)
-11  (= slot₁/if_val false)
-12  slot₁/if_val
-13  TestMod.<
-14  TestMod.c
+1   TestMod.c
+2   (call %₁ 1)
+3   TestMod.<
+4   TestMod.a
+5   TestMod.b
+6   (call %₃ %₄ %₅)
+7   (gotoifnot %₆ label₁₂)
+8   TestMod.<
+9   TestMod.b
+10  (= slot₁/if_val (call %₈ %₉ %₂))
+11  (goto label₁₃)
+12  (= slot₁/if_val false)
+13  slot₁/if_val
+14  TestMod.<
 15  TestMod.d
-16  (call top.broadcasted %₁₃ %₁₄ %₁₅)
-17  (call top.broadcasted top.& %₁₂ %₁₆)
+16  (call top.broadcasted %₁₄ %₂ %₁₅)
+17  (call top.broadcasted top.& %₁₃ %₁₆)
 18  TestMod.<
 19  TestMod.d
 20  TestMod.e
@@ -221,6 +221,29 @@ x .+ (a .< b .< c)
 12  (call top.broadcasted %₁ %₂ %₁₁)
 13  (call top.materialize %₁₂)
 14  (return %₁₃)
+
+########################################
+# Dotted comparison chain after short circuiting scalar comparison (https://github.com/JuliaLang/julia/issues/62454)
+1 < 0 < 2 < identity(3) .< 4
+#---------------------
+1   TestMod.identity
+2   (call %₁ 3)
+3   TestMod.<
+4   (call %₃ 1 0)
+5   (gotoifnot %₄ label₁₂)
+6   TestMod.<
+7   (call %₆ 0 2)
+8   (gotoifnot %₇ label₁₂)
+9   TestMod.<
+10  (= slot₁/if_val (call %₉ 2 %₂))
+11  (goto label₁₃)
+12  (= slot₁/if_val false)
+13  slot₁/if_val
+14  TestMod.<
+15  (call top.broadcasted %₁₄ %₂ 4)
+16  (call top.broadcasted top.& %₁₃ %₁₅)
+17  (call top.materialize %₁₆)
+18  (return %₁₇)
 
 ########################################
 # Broadcast with literal_pow

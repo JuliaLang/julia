@@ -56,14 +56,16 @@ Look up a symbol from a shared library handle, return callable function pointer 
 If the symbol cannot be found, this method throws an error, unless the keyword argument
 `throw_error` is set to `false`, in which case this method returns `nothing`.
 """
-function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString}; throw_error::Bool = true)
+Base.@constprop :aggressive function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString}; throw_error::Bool = true)
+    # Propagate `throw_error=true` to exclude `nothing` from the inferred return type,
+    # even when string conversion makes the keyword body too costly to inline.
     hnd == C_NULL && throw(ArgumentError("NULL library handle"))
     val = Ref(Ptr{Cvoid}(0))
     symbol_found = ccall(:jl_dlsym, Cint,
         (Ptr{Cvoid}, Cstring, Ref{Ptr{Cvoid}}, Cint, Cint),
         hnd, s, val, Int64(throw_error), Int64(1)
     )
-    if symbol_found == 0
+    if symbol_found == 0 && !throw_error
         return nothing
     end
     return val[]

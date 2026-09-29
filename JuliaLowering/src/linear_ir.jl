@@ -831,7 +831,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         elseif needs_value
             throw(LoweringError(ex, "misplaced label in value position"))
         end
-    elseif k == K"symbolicgoto" || k == K"oldsymbolicgoto"
+    elseif k == K"symbolicgoto"
         push!(ctx.symbolic_jump_origins, JumpOrigin(ex, length(ctx.code)+1, ctx))
         emit(ctx, newleaf(ex, K"TOMBSTONE")) # ? pop_exception
         emit(ctx, newleaf(ex, K"TOMBSTONE")) # ? leave

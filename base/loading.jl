@@ -991,13 +991,13 @@ struct VersionedParse
 end
 
 function (vp::VersionedParse)(code, filename::String, lineno::Int, offset::Int, options::Symbol)
-    if !isdefined(Base, :JuliaSyntax)
-        if vp.ver === VERSION
-            return Core._parse
-        end
-        error("JuliaSyntax module is required for syntax version $(vp.ver), but it is not loaded.")
+    pm = parentmodule(Core._parse)
+    # hack to support old copies of JuliaSyntax
+    if !isdefined(pm, :_has_v1_14_version_hooks) && isdefined(pm, :_has_v1_10_hooks)
+        invokelatest(Core._parse, code, filename, lineno, offset, options)
+    else
+        invokelatest(Core._parse, code, filename, lineno, offset, options, vp.ver)
     end
-    Base.JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options; syntax_version=vp.ver)
 end
 
 function parser_for_active_project()
@@ -1165,7 +1165,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
     manifest_file === nothing && return nothing # manifest not found--keep searching LOAD_PATH
     d = get_deps(parsed_toml(manifest_file))
     for (dep_name, entries) in d
-        entries::Vector{Any}
+        entries = entries::Vector{Any}
         for entry in entries
             entry = entry::Dict{String, Any}
             uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
@@ -1756,7 +1756,7 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
         manifest_file === nothing && return
         d = get_deps(parsed_toml(manifest_file))
         for (dep_name, entries) in d
-            entries::Vector{Any}
+            entries = entries::Vector{Any}
             for entry in entries
                 entry = entry::Dict{String, Any}
                 uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
@@ -1777,7 +1777,7 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                         deps′_expanded = Dict{String, Any}()
                         for (dep_name, entries) in d
                             dep_name in deps′ || continue
-                            entries::Vector{Any}
+                            entries = entries::Vector{Any}
                             if length(entries) != 1
                                 error("expected a single entry for $(repr(dep_name)) in $(repr(project_file))")
                             end
@@ -2121,7 +2121,9 @@ function compilecache_freshest_path(pkg::PkgId;
             if staledeps === true
                 continue
             end
-            staledeps, _, _ = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
+            staledeps, _, id_build = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
+            # Record the result so dependents don't check this file again.
+            stale_cache[(pkg, id_build, sourcespec, path_to_try, ignore_loaded, flags)::StaleCacheKey] = false
             # finish checking staledeps module graph
             @label next_dep for dep in staledeps
                 dep isa Module && continue
@@ -2944,7 +2946,7 @@ register_root_module(Main)
 # to the loaded_modules table instead of getting bindings.
 baremodule __toplevel__
 using Base
-global var"#_internal_julia_parse" = Core._parse
+global var"#_internal_julia_parse" = Base.VersionedParse(VERSION)
 global _internal_julia_lower = Core._lower
 
 # Used for version checking of precompiled cache files only
@@ -3141,7 +3143,7 @@ function __require_prelocked(pkg::PkgId, env)
         include(__toplevel__, path)
         loaded = maybe_root_module(pkg)
     finally
-        __toplevel__.var"#_internal_julia_parse" = Core._parse
+        __toplevel__.var"#_internal_julia_parse" = VersionedParse(VERSION)
         lock(require_lock)
         if uuid !== old_uuid
             ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
@@ -3637,12 +3639,23 @@ function track_nested_precomp(pkgs::Vector{PkgId})
     end
 end
 
+# The `environment_id` Pkg records in the manifest of `project_file`: the project uuid,
+# or a generated one. Empty when there is no manifest or it predates the entry.
+function project_environment_id(project_file::String)::String
+    isempty(project_file) && return ""
+    manifest_file = project_file_manifest_path(project_file)
+    manifest_file === nothing && return ""
+    id = get(parsed_toml(manifest_file), "environment_id", nothing)
+    return id isa String ? id : ""
+end
+
 function compilecache_dir(pkg::PkgId)
     entrypath, entryfile = cache_file_entry(pkg)
     return joinpath(DEPOT_PATH[1], entrypath)
 end
 
-function compilecache_path(pkg::PkgId, prefs_blob::String; flags::CacheFlags=CacheFlags(), project::String=something(Base.active_project(), ""))::String
+function compilecache_path(pkg::PkgId, prefs_blob::String; flags::CacheFlags=CacheFlags(), project::String=something(Base.active_project(), ""),
+                           environment_id::String=project_environment_id(project))::String
     entrypath, entryfile = cache_file_entry(pkg)
     cachepath = joinpath(DEPOT_PATH[1], entrypath)
     isdir(cachepath) || mkpath(cachepath)
@@ -3650,6 +3663,9 @@ function compilecache_path(pkg::PkgId, prefs_blob::String; flags::CacheFlags=Cac
         abspath(cachepath, entryfile) * ".ji"
     else
         crc = _crc32c(project)
+        # environments sharing a depot can sit at the same project path (containers mounting
+        # different projects at /work), so the manifest's environment id also keys the name (#63268)
+        isempty(environment_id) || (crc = _crc32c(environment_id, crc))
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
         crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
         crc = _crc32c(_cacheflag_to_uint8(flags), crc)
@@ -4419,7 +4435,7 @@ global parse_pidfile_hook::Any
 # The preferences blob is only known after precompilation so just assume no preferences.
 # Also ignore the active project, which means that if all other conditions are equal,
 # the same package cannot be precompiled from different projects and/or different preferences at the same time.
-compilecache_pidfile_path(pkg::PkgId; flags::CacheFlags=CacheFlags()) = compilecache_path(pkg, ""; project="", flags) * ".pidfile"
+compilecache_pidfile_path(pkg::PkgId; flags::CacheFlags=CacheFlags()) = compilecache_path(pkg, ""; project="", environment_id="", flags) * ".pidfile"
 
 const compilecache_pidlock_stale_age = 10
 

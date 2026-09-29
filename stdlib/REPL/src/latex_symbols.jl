@@ -100,6 +100,7 @@ const latex_symbols = Dict(
 
 # manual additions:
 
+    "\\zwj" => "\u200D",
     "\\sqrt" => "\u221A",
     "\\cbrt" => "\u221B",
     "\\female" => "♀",
@@ -120,6 +121,17 @@ const latex_symbols = Dict(
     "\\ohm" => "Ω",
     "\\escape" => "⎋",
     "\\xmark" => "✗",
+
+# manually added arrows
+
+    "\\leftblackarrow" => "⬅",
+    "\\upblackarrow" => "⬆",
+    "\\rightblackarrow" => "➡",
+    "\\downblackarrow" => "⬇",
+    "\\curvearrowrightdown" => "⤵",
+    "\\curvearrowrightup" => "⤴",
+    "\\curvearrowdownleft" => "⤶",
+    "\\curvearrowdownright" => "⤷",
 
     # Music Symbols
     # Music Symbols - Accidentals

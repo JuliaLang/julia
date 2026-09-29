@@ -33,8 +33,12 @@
 #include <sys/time.h>
 #endif
 
+// Windows exports are selected by the linker; Clang's hidden visibility would
+// exclude these symbols even when they match the export map.
+#ifndef _OS_WINDOWS_
 // pragma visibility is more useful than -fvisibility
 #pragma GCC visibility push(hidden)
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -159,14 +163,23 @@ static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT 
 #if defined(_CPU_X86_64_)
     // install the unhandled exception handler at the top of our stack
     // to call directly into our personality handler
+// N.B. do not switch sections here: with function sections, which LTO turns on,
+// the rest of the function would be emitted away from its own section, leaving
+// the entry point running off the end of a prologue.
 #define CFI_NORETURN \
-    asm volatile ("\t.seh_handler __julia_personality, @except\n\t.text");
+    asm volatile ("\t.seh_handler __julia_personality, @except");
 #else
 #define CFI_NORETURN
 #endif
 #else
 // wipe out the call-stack unwind capability beyond this function
 // (we are noreturn, so it is not a total lie)
+// N.B. these directives apply to whichever function the code ends up in, so
+// every function using CFI_NORETURN must be NOINLINE: inlined into a caller,
+// `.cfi_return_column` rebinds the caller's whole FDE to a CIE whose return
+// address register is undefined, and unwinding through any suspended task
+// switch stops there (the PGO+ThinLTO macOS aarch64 build inlined
+// jl_start_fiber_set into ctx_switch and jl_start_fiber_swap).
 #if defined(_CPU_X86_64_)
 // per nongnu libunwind: "x86_64 ABI specifies that end of call-chain is marked with a NULL RBP or undefined return address"
 // so we do all 3, to be extra certain of it
@@ -290,8 +303,9 @@ extern uv_mutex_t bt_data_prof_lock;
 #define PROFILE_STATE_THREAD_SLEEPING (2)
 #define PROFILE_STATE_WALL_TIME_PROFILING (3)
 void jl_profile_task(void) JL_NOTSAFEPOINT;
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+#if defined(_OS_WINDOWS_)
 JL_DLLEXPORT void jl_set_profile_abort_ptr(_Atomic(int) *abort_ptr) JL_NOTSAFEPOINT;
+void jl_profile_prefault_tls(void) JL_NOTSAFEPOINT;
 #endif
 
 // number of cycles since power-on
@@ -698,10 +712,11 @@ const extern uint64_t _jl_buff_tag[3];
 #define jl_buff_tag ((uintptr_t)LLT_ALIGN((uintptr_t)&_jl_buff_tag[1],16))
 JL_DLLEXPORT uintptr_t jl_get_buff_tag(void) JL_NOTSAFEPOINT;
 
-typedef void jl_gc_tracked_buffer_t; // For the benefit of the static analyzer
+// A GC-allocated buffer, tracked by the static analyzer
+typedef struct JL_GC_TRACKED_TYPE _jl_gc_tracked_buffer_t jl_gc_tracked_buffer_t;
 STATIC_INLINE jl_gc_tracked_buffer_t *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz) JL_CANSAFEPOINT
 {
-    return jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
+    return (jl_gc_tracked_buffer_t*)jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
 }
 
 jl_value_t *jl_permbox8(jl_datatype_t *t, uintptr_t tag, uint8_t x) JL_NOTSAFEPOINT;
@@ -943,7 +958,7 @@ extern _Atomic(int) jl_sigint_dispatch_pending;
 extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream) JL_CANSAFEPOINT;
 
-typedef struct jl_typeenv_t {
+typedef struct JL_GC_TRACKED_TYPE jl_typeenv_t {
     jl_tvar_t *var;
     jl_value_t *val;
     struct jl_typeenv_t *prev;
@@ -1472,9 +1487,6 @@ jl_tupletype_t *arg_type_tuple(jl_value_t *arg1, jl_value_t **args, size_t nargs
 
 JL_DLLEXPORT int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
-                                  size_t lineno, size_t offset, jl_value_t *options, jl_module_t *inmodule) JL_CANSAFEPOINT;
-
 //--------------------------------------------------
 // Backtraces
 
@@ -1607,9 +1619,9 @@ typedef struct {
     CONTEXT context;
 } bt_cursor_t;
 #endif
-extern uv_mutex_t jl_dll_notify_lock;
+extern JL_DLLEXPORT uv_mutex_t jl_dll_notify_lock;
 extern JL_DLLEXPORT uv_mutex_t jl_in_stackwalk;
-void jl_profile_process_dll_events(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_profile_process_dll_events(void) JL_NOTSAFEPOINT;
 #elif !defined(JL_DISABLE_LIBUNWIND)
 // This gives unwind only local unwinding options ==> faster code
 #  define UNW_LOCAL_ONLY
@@ -1669,7 +1681,7 @@ JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_data,
 
 // Exception stack: a stack of pairs of (exception,raw_backtrace).
 // The stack may be traversed and accessed with the functions below.
-struct _jl_excstack_t { // typedef in julia.h
+struct JL_GC_TRACKED_TYPE _jl_excstack_t { // typedef in julia.h
     size_t top;
     size_t reserved_size;
     // Pack all stack entries into a growable buffer to amortize allocation
@@ -1755,15 +1767,15 @@ JL_DLLEXPORT extern void *jl_RTLD_DEFAULT_handle;
 
 #if defined(_OS_WINDOWS_)
 JL_DLLEXPORT extern const char *jl_crtdll_basename;
-extern void *jl_ntdll_handle;
-extern void *jl_kernel32_handle;
-extern void *jl_crtdll_handle;
-extern void *jl_winsock_handle;
+JL_DLLEXPORT extern void *jl_ntdll_handle;
+JL_DLLEXPORT extern void *jl_kernel32_handle;
+JL_DLLEXPORT extern void *jl_crtdll_handle;
+JL_DLLEXPORT extern void *jl_winsock_handle;
 void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT;
 #endif
 
 JL_DLLEXPORT void *jl_get_library_(const char *f_lib, int throw_err) JL_CANSAFEPOINT;
-void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err, int close) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err, int close) JL_NOTSAFEPOINT;
 #define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd) JL_CANSAFEPOINT;
 JL_DLLEXPORT void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name) JL_CANSAFEPOINT;
@@ -1959,9 +1971,9 @@ STATIC_INLINE jl_typemap_entry_t *jl_typemap_assoc_exact(
 typedef int (*jl_typemap_visitor_fptr)(jl_typemap_entry_t *l, void *closure) JL_CANSAFEPOINT;
 int jl_typemap_visitor(jl_typemap_t *a, jl_typemap_visitor_fptr fptr, void *closure) JL_CANSAFEPOINT;
 
-struct typemap_intersection_env;
+struct JL_GC_TRACKED_TYPE typemap_intersection_env;
 typedef int (*jl_typemap_intersection_visitor_fptr)(jl_typemap_entry_t *l, struct typemap_intersection_env *closure) JL_CANSAFEPOINT;
-struct typemap_intersection_env {
+struct JL_GC_TRACKED_TYPE typemap_intersection_env {
     // input values
     jl_typemap_intersection_visitor_fptr const fptr; // fptr to call on a match
     jl_value_t *const type; // type to match
@@ -2312,7 +2324,9 @@ JL_DLLIMPORT void jl_jit_unregister_ci(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
 }
 #endif
 
+#ifndef _OS_WINDOWS_
 #pragma GCC visibility pop
+#endif
 
 
 #ifdef USE_DTRACE
