@@ -1494,7 +1494,13 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         sv = sv::SimpleVector
         internal_methods = sv[3]::Vector{Any}
         Compiler.@zone "CC: INSERT_BACKEDGES" begin
-            ReinferUtils.insert_backedges_typeinf(internal_methods)
+            # edge replay is bounded by this image's dependency closure (jl_edge_sig_replayable)
+            ccall(:jl_set_loading_closure_from_depmods, Cvoid, (Any, Any), depmods, internal_methods)
+            try
+                ReinferUtils.insert_backedges_typeinf(internal_methods)
+            finally
+                ccall(:jl_clear_loading_closure, Cvoid, ())
+            end
         end
         restored = register_restored_modules(sv, pkg, path)
 
