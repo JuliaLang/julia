@@ -1009,7 +1009,9 @@ _MPQ(x::Rational{BigInt}) = _MPQ(x.num, x.den)
 function _MPQ(zq::_MPQ, x::Rational{BigInt})
     z = zq.rat
     x === z && return zq
-    (x.num === z.num || x.den === z.den) && return _MPQ(MPZ.set(x.num), MPZ.set(x.den))
+    if x.num === z.num || x.num === z.den || x.den === z.num || x.den === z.den
+        return _MPQ(MPZ.set(x.num), MPZ.set(x.den))
+    end
     return _MPQ(x)
 end
 

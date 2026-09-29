@@ -779,6 +779,25 @@ t = Rational{BigInt}(0, 1)
         @test Base.GMP.MPQ.add!(z, Base.unsafe_rational(BigInt, n, big(2))) == 3//2
     end
 
+    @testset "reciprocal arguments" begin
+        # Reciprocal inputs share the output's BigInts in opposite positions.
+        z = big(1)//2
+        @test Base.GMP.MPQ.set!(z, inv(z)) == 2//1
+        @test z == 2//1
+        for (op!, op) in ((Base.GMP.MPQ.add!, +), (Base.GMP.MPQ.sub!, -),
+                          (Base.GMP.MPQ.mul!, *), (Base.GMP.MPQ.div!, /))
+            z = big(1)//2
+            @test op!(z, inv(z)) == op(1//2, 2//1)
+            @test z == op(1//2, 2//1)
+            z = big(1)//2
+            @test op!(z, inv(z), big(3)//5) == op(2//1, 3//5)
+            @test z == op(2//1, 3//5)
+            z = big(1)//2
+            @test op!(z, big(3)//5, inv(z)) == op(3//5, 2//1)
+            @test z == op(3//5, 2//1)
+        end
+    end
+
     @testset "set" begin
         @test Base.GMP.MPQ.set!(a, b) == b
         @test a == b == bb
