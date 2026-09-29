@@ -193,6 +193,19 @@ $(DEPOT_PATH[1])/logs/repl_history.jl
 
 Sets the maximum number of different instances of a single package that are to be stored in the precompile cache (default = 10).
 
+### [`XDG_CACHE_HOME`](@id XDG_CACHE_HOME)
+
+If this is set to an absolute path on a system other than Windows, and the user depot
+(`DEPOT_PATH[1]`) is the default `~/.julia`, then when Julia first creates `~/.julia/compiled`
+it makes it a symbolic link to `$XDG_CACHE_HOME/julia/compiled`, following the
+[XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/latest/).
+Precompile cache files then sit with other regenerable caches (for instance, where backups exclude
+them), while their paths under `~/.julia` stay the same. Julia never moves an existing
+`~/.julia/compiled`, so creating that directory yourself keeps the cache in the depot, and if the
+link can't be made, Julia creates a plain directory instead. Deleting `$XDG_CACHE_HOME/julia`
+only means packages are precompiled again. Other depots, and `XDG_CACHE_HOME` when unset, leave
+the depot layout unchanged.
+
 ### [`JULIA_VERBOSE_LINKING`](@id JULIA_VERBOSE_LINKING)
 
 If set to true, linker commands will be displayed during precompilation.

@@ -229,6 +229,14 @@ Standard library changes
   (the project uuid, or a generated one), so containers sharing a depot with different projects mounted
   at the same path keep their caches from overwriting each other. Loading is unaffected, as it checks
   file contents rather than names ([#63268]).
+* When `XDG_CACHE_HOME` is set to an absolute path (outside Windows) and the user depot is the
+  default `~/.julia`, a newly created `~/.julia/compiled` is now a symbolic link to
+  `$XDG_CACHE_HOME/julia/compiled`, so the regenerable precompile cache sits with other caches
+  while every path under `~/.julia` stays valid. An existing `~/.julia/compiled` is kept as it is,
+  other depots are unaffected, and nothing changes when `XDG_CACHE_HOME` is unset. Environments
+  that set `XDG_CACHE_HOME` themselves, such as Flatpak sandboxes and some NixOS/home-manager
+  setups, get this layout automatically for a fresh depot; to keep the cache in the depot there,
+  create `~/.julia/compiled` as a directory ([#4630]).
 
 #### JuliaSyntaxHighlighting
 

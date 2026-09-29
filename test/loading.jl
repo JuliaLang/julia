@@ -868,6 +868,85 @@ end
     end
 end
 
+Sys.iswindows() || @testset "compiled cache under XDG_CACHE_HOME" begin
+    compiled_entry = joinpath("compiled", "v$(VERSION.major).$(VERSION.minor)")
+    # makes the user depot's `compiled` directory the way precompilation does
+    function make_compiled(home, cache_home; depot=nothing, dir=home)
+        script = "Base.compilecache_path(Base.PkgId(\"XDGCacheFoo\"), \"\")"
+        cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
+        cmd = addenv(cmd, "HOME" => home, "XDG_CACHE_HOME" => cache_home, "JULIA_DEPOT_PATH" => depot)
+        @test success(pipeline(setenv(cmd; dir); stdout, stderr))
+    end
+    mktempdir() do tmp
+        home, cache = joinpath(tmp, "home"), joinpath(tmp, "cache")
+        compiled = joinpath(home, ".julia", "compiled")
+        target = joinpath(cache, "julia", "compiled")
+        mkpath(home)
+        make_compiled(home, cache)
+        @test islink(compiled)
+        @test readlink(compiled) == target
+        @test isdir(joinpath(target, "v$(VERSION.major).$(VERSION.minor)"))
+
+        # clearing the cache home leaves a dangling link, whose target is made again
+        rm(cache; recursive=true)
+        make_compiled(home, cache)
+        @test islink(compiled)
+        @test isdir(joinpath(home, ".julia", compiled_entry))
+
+        # packages precompile into, and load from, the linked directory
+        pkgs = joinpath(tmp, "pkgs")
+        mkpath(joinpath(pkgs, "XDGCacheBar", "src"))
+        write(joinpath(pkgs, "XDGCacheBar", "src", "XDGCacheBar.jl"), "module XDGCacheBar\nf() = 1\nend\n")
+        loadenv = ("HOME" => home, "XDG_CACHE_HOME" => cache, "JULIA_DEPOT_PATH" => nothing,
+                   "JULIA_PROJECT" => nothing, "JULIA_LOAD_PATH" => "$pkgs:@stdlib")
+        cmd = `$(Base.julia_cmd()) --startup-file=no -e 'using XDGCacheBar; exit(XDGCacheBar.f() == 1 ? 0 : 1)'`
+        @test success(pipeline(addenv(cmd, loadenv...); stdout, stderr))
+        @test any(endswith(".ji"), readdir(joinpath(target, "v$(VERSION.major).$(VERSION.minor)")))
+        cmd = `$(Base.julia_cmd()) --startup-file=no -e 'exit(Base.isprecompiled(Base.identify_package("XDGCacheBar")) ? 0 : 1)'`
+        @test success(pipeline(addenv(cmd, loadenv...); stdout, stderr))
+    end
+    mktempdir() do tmp
+        # an existing `compiled` directory is kept as it is
+        home, cache = joinpath(tmp, "home"), joinpath(tmp, "cache")
+        mkpath(joinpath(home, ".julia", "compiled"))
+        make_compiled(home, cache)
+        @test !islink(joinpath(home, ".julia", "compiled"))
+        @test isdir(joinpath(home, ".julia", compiled_entry))
+        @test !ispath(cache)
+    end
+    for cache_home in (nothing, "", "relative/cache")
+        mktempdir() do tmp
+            # without an absolute XDG_CACHE_HOME the depot layout is unchanged
+            make_compiled(tmp, cache_home)
+            @test !islink(joinpath(tmp, ".julia", "compiled"))
+            @test isdir(joinpath(tmp, ".julia", compiled_entry))
+            @test !ispath(joinpath(tmp, "relative"))
+        end
+    end
+    mktempdir() do tmp
+        # a depot other than the default user depot is unchanged
+        home, cache, depot = joinpath(tmp, "home"), joinpath(tmp, "cache"), joinpath(tmp, "depot")
+        mkpath(home)
+        make_compiled(home, cache; depot)
+        @test !islink(joinpath(depot, "compiled"))
+        @test isdir(joinpath(depot, compiled_entry))
+        @test !ispath(cache)
+        @test !ispath(joinpath(home, ".julia"))
+    end
+    # root can write to a read-only directory, so the fallback can only be forced as a user
+    Libc.geteuid() == 0 || mktempdir() do tmp
+        # a cache home that can't be written to leaves a plain directory in the depot
+        home, cache = joinpath(tmp, "home"), joinpath(tmp, "cache")
+        mkpath(home)
+        mkpath(cache)
+        chmod(cache, 0o555)
+        make_compiled(home, cache)
+        @test !islink(joinpath(home, ".julia", "compiled"))
+        @test isdir(joinpath(home, ".julia", compiled_entry))
+        chmod(cache, 0o755)
+    end
+end
+
 @testset "Issue #25719" begin
     empty!(LOAD_PATH)
     @test Base.root_module(Core, :Core) == Core

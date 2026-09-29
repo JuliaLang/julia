@@ -527,7 +527,8 @@ often involves compiling a large amount of code.
 Julia creates precompiled caches of the module to reduce this time.
 
 Precompiled module files (sometimes called "cache files") are created and used automatically when `import` or `using` loads a module. If the cache file(s) do not yet exist, the module will be compiled and saved for future reuse. You can also manually call [`Base.compilecache(Base.identify_package("modulename"))`](@ref) to create these files without loading the module. The resulting
-cache files will be stored in the `compiled` subfolder of `DEPOT_PATH[1]`. If nothing about your system changes,
+cache files will be stored in the `compiled` subfolder of `DEPOT_PATH[1]` (see [`XDG_CACHE_HOME`](@ref XDG_CACHE_HOME)
+for when that subfolder is a link into the user's cache directory). If nothing about your system changes,
 such cache files will be used when you load the module with `import` or `using`.
 
 Precompilation cache files store definitions of modules, types, methods, and constants. They may also store method specializations and the code generated for them, but this typically requires that the developer add explicit [`precompile`](@ref) directives or execute workloads that force compilation during the package build.

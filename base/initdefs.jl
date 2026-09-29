@@ -111,7 +111,8 @@ Here is an overview of some of the subdirectories that may exist in a depot:
 * `artifacts`: Contains content that packages use for which Pkg manages the installation of.
 * `clones`: Contains full clones of package repos. Maintained by `Pkg.jl` and used as a cache.
 * `config`: Contains julia-level configuration such as a `startup.jl`.
-* `compiled`: Contains precompiled `*.ji` files for packages. Maintained by Julia.
+* `compiled`: Contains precompiled `*.ji` files for packages. Maintained by Julia. In the default user depot this
+  may be a symbolic link into [`XDG_CACHE_HOME`](@ref XDG_CACHE_HOME).
 * `dev`: Default directory for `Pkg.develop`. Maintained by `Pkg.jl` and the user.
 * `environments`: Default package environments. For instance the global environment for a specific julia version. Maintained by `Pkg.jl`.
 * `logs`: Contains logs of `Pkg` and `REPL` operations. Maintained by `Pkg.jl` and Julia.

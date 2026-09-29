@@ -3654,11 +3654,39 @@ function compilecache_dir(pkg::PkgId)
     return joinpath(DEPOT_PATH[1], entrypath)
 end
 
+# The compile cache is regenerable, so a user who sets an absolute `XDG_CACHE_HOME` gets a new
+# `compiled` of the default user depot made at `$XDG_CACHE_HOME/julia/compiled`, linked from its
+# usual path. An existing `compiled` is kept; a link that can't be made becomes a plain directory.
+function mkpath_compilecache_dir(cachepath::String)
+    isdir(cachepath) && return cachepath
+    depot = DEPOT_PATH[1]
+    compiled = joinpath(depot, "compiled")
+    if islink(compiled)
+        # the cache home was cleared after the link was made
+        isdir(compiled) || mkpath(joinpath(depot, readlink(compiled)))
+    elseif !ispath(compiled)
+        cache_home = get(ENV, "XDG_CACHE_HOME", "")
+        # the XDG spec says a relative path in XDG_CACHE_HOME is invalid and must be ignored
+        if !Sys.iswindows() && isabspath(cache_home) && depot == joinpath(homedir(), ".julia")
+            try
+                target = mkpath(joinpath(cache_home, "julia", "compiled"))
+                mkpath(depot)
+                symlink(target, compiled)
+            catch err
+                # another process made `compiled` first, or the link can't be made: the
+                # `mkpath` below then follows that link or makes a plain directory
+                err isa IOError || rethrow()
+            end
+        end
+    end
+    return mkpath(cachepath)
+end
+
 function compilecache_path(pkg::PkgId, prefs_blob::String; flags::CacheFlags=CacheFlags(), project::String=something(Base.active_project(), ""),
                            environment_id::String=project_environment_id(project))::String
     entrypath, entryfile = cache_file_entry(pkg)
     cachepath = joinpath(DEPOT_PATH[1], entrypath)
-    isdir(cachepath) || mkpath(cachepath)
+    mkpath_compilecache_dir(cachepath)
     if pkg.uuid === nothing
         abspath(cachepath, entryfile) * ".ji"
     else
@@ -3724,7 +3752,7 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
 
     # create a temporary file in `cachepath` directory, write the cache in it,
     # write the checksum, _and then_ atomically move the file to `cachefile`.
-    mkpath(cachepath)
+    mkpath_compilecache_dir(cachepath)
     cache_objects = JLOptions().use_pkgimages == 1
     tmppath, tmpio = mktemp(cachepath)
 
