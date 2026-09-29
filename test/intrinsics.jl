@@ -214,10 +214,11 @@ end
         @test addr(boxboolunion(t)) === addr(true) && addr(boxboolunion(f)) === addr(false)
     end
 
-    # Runtime intrinsics leave the bits above a primitive's width zero, and ignore
-    # them in operands read from memory, which may hold anything there. The helpers
-    # take `@nospecialize` arguments so that they get the box an intrinsic returned,
-    # not a copy that codegen boxes anew with those bits cleared.
+    # Runtime intrinsics must write the bits above a result's width as zero, and
+    # ignore them in operands, which may hold anything there. `===` ignores those
+    # bits, but they reach memory and package images, so check the bytes of the
+    # box the runtime returns. The helpers take `@nospecialize` arguments: a
+    # specialized method would receive the value unboxed and box it anew.
     rawbytes(@nospecialize x) = GC.@preserve x [unsafe_load(Ptr{UInt8}(addr(x)), i) for i in 1:sizeof(x)]
     highbits(@nospecialize x) = [b & ~(0xff >> (8 - clamp(Core.bitsizeof(typeof(x)) - 8(i - 1), 0, 8)))
                                  for (i, b) in enumerate(rawbytes(x))]
