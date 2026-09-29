@@ -227,6 +227,12 @@ end
             @test ldexp(floatmin(T)/3, 11) == T(ldexp(big(floatmin(T)/3), 11))
             @test ldexp(floatmin(T)/11, -10) == T(ldexp(big(floatmin(T)/11), -10))
             @test ldexp(-floatmin(T)/11, -10) == T(ldexp(big(-floatmin(T)/11), -10))
+            # results between nextfloat(zero(T))/2 and nextfloat(zero(T)) round up (ties to even)
+            p = -exponent(nextfloat(zero(T)))
+            @test ldexp(T(0.75), -p) === nextfloat(zero(T))
+            @test ldexp(-nextfloat(T(1)), -p-1) === -nextfloat(zero(T))
+            @test ldexp(T(1), -p-1) === zero(T)
+            @test ldexp(prevfloat(T(1)), -p-1) === zero(T)
         end
     end
 end
