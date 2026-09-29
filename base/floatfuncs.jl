@@ -306,9 +306,23 @@ function twomul(a::Float64, b::Float64)
     return abhi, ablo
 end
 
+# Error of `r = abhi + c` plus `ablo`, rounded to odd. Rounding to odd (rather than
+# nearest) makes `r + fma_correction(...)` round correctly to nearest, since rounding
+# `s` to nearest could land on a tie of `r + s` whose direction depends on the lost bits.
+@inline function fma_correction(abhi::Float64, ablo::Float64, c::Float64, r::Float64)
+    e = (abs(abhi) > abs(c)) ? (abhi-r+c) : (c-r+abhi) # exact
+    s = e + ablo
+    serr = (abs(e) > abs(ablo)) ? (e-s+ablo) : (ablo-s+e) # exact
+    if !iszero(serr) && iseven(reinterpret(UInt64, s))
+        s = nextfloat(s, serr > 0 ? 1 : -1)
+    end
+    return s
+end
+
 function fma_emulated(a::Float64, b::Float64,c::Float64)
     abhi, ablo = @inline twomul(a,b)
-    if !isfinite(abhi+c) || isless(abs(abhi), nextfloat(0x1p-969)) || issubnormal(a) || issubnormal(b)
+    # twomul is only exact if the low parts of a and b (and their product) don't underflow
+    if !isfinite(abhi+c) || isless(abs(abhi), nextfloat(0x1p-969)) || isless(abs(a), 0x1p-969) || isless(abs(b), 0x1p-969)
         aandbfinite = isfinite(a) && isfinite(b)
         if !(isfinite(c) && aandbfinite)
             return aandbfinite ? c : abhi+c
@@ -328,7 +342,7 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
             # abhi <= 4 -> isfinite(r)      (α)
             r = abhi+c
             # s ≈ 0                         (β)
-            s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
+            s = fma_correction(abhi, ablo, c, r)
             # α ⩓ β -> isfinite(sumhi)      (γ)
             sumhi = r+s
             # If result is subnormal, ldexp will cause double rounding because subnormals have fewer mantisa bits.
@@ -350,7 +364,7 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
         # fall through
     end
     r = abhi+c
-    s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
+    s = fma_correction(abhi, ablo, c, r)
     return r+s
 end
 

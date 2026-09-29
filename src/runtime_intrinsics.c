@@ -1459,12 +1459,22 @@ int issubnormal(double d) {
 #define VDOUBLE double
 #endif
 
+// Base.fma_correction(::Float64, ::Float64, ::Float64, ::Float64)
+double fma_correction(double abhi, double ablo, double c, double r) {
+    double e = (fabs(abhi) > fabs(c)) ? (abhi-r+c) : (c-r+abhi);
+    double s = e + ablo;
+    double serr = (fabs(e) > fabs(ablo)) ? (e-s+ablo) : (ablo-s+e);
+    if (serr != 0 && (bitcast_d2u(s) & 1) == 0)
+        s = nextafter(s, copysign(1.0/0.0, serr));
+    return s;
+}
+
 // Base.fma_emulated(::Float64, ::Float64, ::Float64)
 double julia_fma(double a, double b, double c) {
     double abhi, ablo, r, s;
     two_mul(&abhi, &ablo, a, b);
     if (!isfinite(abhi+c) || fabs(abhi) < 2.0041683600089732e-292 ||
-        issubnormal(a) || issubnormal(b)) {
+        fabs(a) < 0x1p-969 || fabs(b) < 0x1p-969) {
         int aandbfinite = isfinite(a) && isfinite(b);
         if (!(aandbfinite && isfinite(c)))
             return aandbfinite ? c : abhi+c;
@@ -1482,7 +1492,7 @@ double julia_fma(double a, double b, double c) {
             c = c_denorm;
             two_mul(&abhi, &ablo, a, b);
             r = abhi+c;
-            s = (fabs(abhi) > fabs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo);
+            s = fma_correction(abhi, ablo, c, r);
             double sumhi = r+s;
             if (issubnormal(ldexp(sumhi, bias))) {
                 double sumlo = r-sumhi+s;
@@ -1497,7 +1507,7 @@ double julia_fma(double a, double b, double c) {
             return abhi;
     }
     r = abhi+c;
-    s = (fabs(abhi) > fabs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo);
+    s = fma_correction(abhi, ablo, c, r);
     return r+s;
 }
 #define fma(a, b, c) \
