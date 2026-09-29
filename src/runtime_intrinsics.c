@@ -718,8 +718,8 @@ static inline unsigned select_by_size(unsigned sz) JL_NOTSAFEPOINT
 }
 
 /* The C op for a size runs only when the width fills all of its bytes; any
- * other width goes to the APInt op, list[0], which reads only the value
- * bytes. So the ops take the operands as they are. */
+ * other width goes to the APInt op, list[0]. Either way the op reads only the
+ * value bytes, so operands need not be copied or widened to a C type. */
 #define SELECTOR_FUNC(intrinsic) \
     typedef intrinsic##_t select_##intrinsic##_t[6]; \
     static inline intrinsic##_t select_##intrinsic(unsigned sz, unsigned runtime_nbits, const select_##intrinsic##_t list) JL_NOTSAFEPOINT \
