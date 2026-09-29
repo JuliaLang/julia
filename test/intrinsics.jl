@@ -254,6 +254,15 @@ end
         (f, op) in ((shl, Core.Intrinsics.shl_int), (lshr, Core.Intrinsics.lshr_int), (ashr, Core.Intrinsics.ashr_int))
         @test Base.invokelatest(op, x, y) === f(x, y)
     end
+    # an amount that does not fit the width fills with the sign for `ashr_int`,
+    # and the bits above the width of the result are zero
+    let neg = Core.Intrinsics.trunc_int(TestInt17, Int32(-4)), pos = Core.Intrinsics.trunc_int(TestInt17, Int32(4))
+        r = Base.invokelatest(Core.Intrinsics.ashr_int, neg, UInt32(0x20000))
+        @test r === Core.Intrinsics.trunc_int(TestInt17, Int32(-1)) && all(iszero, highbits(r))
+        @test Base.invokelatest(Core.Intrinsics.ashr_int, pos, UInt32(0x20000)) === Core.Intrinsics.trunc_int(TestInt17, Int32(0))
+        @test Base.invokelatest(Core.Intrinsics.ashr_int, dirty(TestInt17, 0xfc, 0xff, 0xf1), UInt32(0x20000)) ===
+              Core.Intrinsics.trunc_int(TestInt17, Int32(-1))
+    end
 
     # a runtime replace compares values, not the bits above their width
     mutable struct AtomicTestUInt5
