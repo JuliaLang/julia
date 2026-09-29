@@ -299,10 +299,21 @@ function init_active_project()
         unsafe_string(JLOptions().project) :
         get(ENV, "JULIA_PROJECT", nothing))
     set_active_project(
-        project === nothing ? nothing :
-        project == "" ? nothing :
+        project === nothing || project == "" ? program_script_env() :
         startswith(project, "@") ? load_path_expand(project) : abspath(expanduser(project))
     )
+end
+
+# The path of the program file if it is a script with inline project metadata, which is then
+# its own environment when no project is given explicitly. `nothing` if there is no such program
+# (e.g. no program, `-`, or `-e`/`-E` which suppress running the program).
+function program_script_env()
+    opts = JLOptions()
+    program_file = opts.program_file != C_NULL ? unsafe_string(opts.program_file) : ""
+    (isempty(program_file) || program_file == "-") && return nothing
+    any(cmd_suppresses_program(cmd) for (cmd, _) in unsafe_load_commands(opts.commands)) && return nothing
+    path = abspath(program_file)
+    return has_project_block(path) ? path : nothing
 end
 
 function init_named_env!(path)
@@ -337,6 +348,9 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
             program_file = JLOptions().program_file
             program_file = program_file != C_NULL ? unsafe_string(program_file) : nothing
             isnothing(program_file) && return nothing # User did not pass a script
+
+            # a script with inline project metadata is its own project
+            env == "@script" && has_project_block(program_file) && return abspath(program_file)
 
             # Expand trailing relative path
             dir = dirname(program_file)
@@ -377,7 +391,9 @@ load_path_expand(::Nothing) = nothing
 """
     active_project()
 
-Return the path of the active `Project.toml` file. See also [`Base.set_active_project`](@ref).
+Return the path of the active `Project.toml` file, or of the active script when the active
+project is a [script with inline project metadata](@ref inline-project-scripts).
+See also [`Base.set_active_project`](@ref).
 """
 function active_project(search_load_path::Bool=true)
     for project in (ACTIVE_PROJECT[],)
@@ -406,7 +422,9 @@ end
 """
     set_active_project(projfile::Union{AbstractString,Nothing})
 
-Set the active `Project.toml` file to `projfile`. See also [`Base.active_project`](@ref).
+Set the active `Project.toml` file to `projfile`, or clear the active project with `nothing`.
+`projfile` may also be the path of a [script with inline project metadata](@ref inline-project-scripts).
+See also [`Base.active_project`](@ref).
 
 !!! compat "Julia 1.8"
     This function requires at least Julia 1.8.
@@ -427,6 +445,8 @@ end
     active_manifest(project_file::AbstractString)
 
 Return the path of the active manifest file, or the manifest file that would be used for a given `project_file`.
+For a [script with inline project metadata](@ref inline-project-scripts) that embeds its manifest, this is
+the path of the script itself.
 
 In a stacked environment (where multiple environments exist in the load path), this returns the manifest
 file for the primary (active) environment only, not the manifests from other environments in the stack.

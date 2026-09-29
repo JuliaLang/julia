@@ -397,6 +397,81 @@ are stored in the manifest file in the section for that package. The dependency 
 a package are the same as for its "parent" except that the listed triggers are also considered as
 dependencies.
 
+### [Scripts with inline project metadata](@id inline-project-scripts)
+
+A single Julia file can carry its own project, and optionally its manifest, as TOML embedded in
+comment blocks. Such a script is a complete, self-describing environment: it can be shared as one
+file and run with `julia script.jl` without any `Project.toml` or `Manifest.toml` next to it.
+
+```julia
+#!/usr/bin/env julia
+# /// project
+# [deps]
+# Example = "7876af07-990d-54b4-ab0e-23690620f79a"
+# [compat]
+# Example = "0.5"
+# ///
+
+using Example
+println(Example.hello("world"))
+
+# /// manifest
+# julia_version = "1.13.0"
+# manifest_format = "2.0"
+#
+# [[deps.Example]]
+# git-tree-sha1 = "46e44e869b4d90b96bd8ed1fdcf32244fddfb612"
+# uuid = "7876af07-990d-54b4-ab0e-23690620f79a"
+# version = "0.5.3"
+# ///
+```
+
+The format follows these rules:
+
+- A block starts with a line `# /// project` or `# /// manifest` and ends with a line `# ///`.
+  Every line in between is a comment; its leading `#` and one optional space are removed to obtain
+  the TOML text, which is interpreted exactly like the contents of a `Project.toml` or `Manifest.toml`.
+- The `# /// project` block must be part of the leading comment region of the file: only blank lines
+  and comments (including a shebang line) may come before it. It is the marker that makes
+  `julia script.jl` activate the file; a project block that appears after code does not, and is an
+  error when the file is activated explicitly.
+- The `# /// manifest` block may appear anywhere after the project block. Pkg writes it as the last
+  thing in the file, and moves it back there when it rewrites it, so code can be added at the end of
+  the file without regard to it.
+- The blocks are found by scanning the lines of the file, without parsing the Julia code. A line that
+  looks like a block marker inside a multi-line string literal is therefore taken for one.
+- The manifest block is optional. A `manifest = "path"` entry in the project block instead stores the
+  manifest in a separate file, relative to the directory of the script. Without either, the script has
+  no manifest until one is resolved (see below). A `Manifest.toml` that happens to be in the same
+  directory as the script is never used.
+
+Running `julia script.jl` activates the script as the active project if no `--project` or
+`JULIA_PROJECT` was given, and `--project=@script` expands to the script itself when the script has a
+project block. Any existing Julia file can also be activated explicitly, with `--project=script.jl` or
+`Pkg.activate("script.jl")`, before it has a project block: it is then an environment with an empty
+project, and Pkg adds the block on the first operation that writes the project.
+[`Base.active_project`](@ref) returns the path of the script and [`Base.active_manifest`](@ref)
+returns the script as well when the manifest is inline.
+
+When the script itself is run in this way, code loading from it follows the rules of a package rather
+than of a stacked environment: `using` and `import` statements in the script (and in files it includes)
+only see the packages listed in the script's own project and manifest, plus the standard libraries
+listed there. Nothing from the default environment leaks in, so a script that runs on one machine will
+find the same packages on another. In an interactive session started with `julia -i script.jl`, code
+entered at the REPL afterwards uses the usual [environment stack](@ref Environment-stacks), with the
+script as the primary environment.
+
+If a script declares dependencies that are not installed, or has no manifest yet, the first `using`
+or `import` in the script loads Pkg and instantiates the environment before continuing, resolving a
+manifest if needed. When all dependencies are already installed nothing is loaded, so this has no
+cost on subsequent runs. Set the environment variable `JULIA_AUTO_INSTANTIATE=false` to disable this
+and get the usual error instead.
+
+Pkg understands these scripts as environments: `Pkg.activate("script.jl")` activates a script, and
+every operation that would modify the project or
+manifest file of an environment rewrites the corresponding block inside the script instead, leaving the
+rest of the file untouched.
+
 ### [Workspaces](@id workspaces)
 
 A project file can define a workspace by giving a set of projects that is part of that workspace:

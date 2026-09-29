@@ -1,0 +1,4 @@
+# /// project
+# [deps]
+# ///
+using Random
