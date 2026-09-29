@@ -194,19 +194,16 @@ static inline uint16_t double_to_half(double param) JL_NOTSAFEPOINT
     uint32_t tempi;
     memcpy(&tempi, &temp, sizeof(temp));
 
-    // if Float16(res) is subnormal
-    if ((tempi&0x7fffffffu) < 0x38800000u) {
-        // shift so that the mantissa lines up where it would for normal Float16
-        uint32_t shift = 113u-((tempi & 0x7f800000u)>>23u);
-        if (shift<23u) {
-            tempi |= 0x00800000; // set implicit bit
-            tempi >>= shift;
-        }
-    }
+    // number of low significand bits of temp that Float16 can't represent:
+    // 13 for normal Float16, more if Float16(temp) is subnormal
+    uint32_t e = (tempi & 0x7f800000u) >> 23u;
+    uint32_t nbits = e < 113u ? 126u - e : 13u;
+    // significand with implicit bit
+    uint32_t sig = (tempi & 0x007fffffu) | 0x00800000u;
 
     // if we are halfway between 2 Float16 values
-    if ((tempi & 0x1fffu) == 0x1000u) {
-        memcpy(&tempi, &temp, sizeof(temp));
+    // (e < 102 means temp is less than half the smallest Float16 subnormal)
+    if (e >= 102u && (sig & ((1u << nbits) - 1u)) == (1u << (nbits - 1u))) {
         // adjust the value by 1 ULP in the direction that will make Float16(temp) give the right answer
         tempi += (fabs(temp) < fabs(param)) - (fabs(param) < fabs(temp));
         memcpy(&temp, &tempi, sizeof(temp));
@@ -337,7 +334,7 @@ static inline uint16_t double_to_bfloat(double param) JL_NOTSAFEPOINT
     // for subnormals when truncating float64 to bfloat16.
 
     // if we are halfway between 2 bfloat16 values
-    if ((tempi & 0x1ffu) == 0x100u) {
+    if ((tempi & 0xffffu) == 0x8000u) {
         // adjust the value by 1 ULP in the direction that will make bfloat16(temp) give the right answer
         tempi += (fabs(temp) < fabs(param)) - (fabs(param) < fabs(temp));
         memcpy(&temp, &tempi, sizeof(temp));

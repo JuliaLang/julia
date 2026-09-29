@@ -395,6 +395,8 @@ let x = reinterpret(Float32, 0x00400000) # 2^-127, exactly the bf16 subnormal 0x
     @test reinterpret(UInt16, compiled_bfloat_fptrunc(x)) === 0x0040
     @test reinterpret(UInt16, compiled_bfloat_fptrunc(-x)) === 0x8040
 end
+# BFloat16 values that are exactly halfway after rounding to Float32 must not double round
+@test Base.invokelatest(Core.Intrinsics.fptrunc, Core.BFloat16, 1 + 0x1p-8 + 0x1p-40) === reinterpret(Core.BFloat16, 0x3f81)
 @static if Sys.ARCH === :x86_64 || Sys.ARCH === :i686
     script = """
         using InteractiveUtils
@@ -600,6 +602,8 @@ end
     #   0       00000 0000000000 (incorrect)
     @test_intrinsic Core.Intrinsics.fptrunc Float16 0x1.0000000001p-25 Float16(6.0e-8)
     @test_intrinsic Core.Intrinsics.fptrunc Float16 -0x1.0000000001p-25 Float16(-6.0e-8)
+    # Float64 -> Float32 rounds to one Float32 ulp above a Float16 subnormal midpoint
+    @test_intrinsic Core.Intrinsics.fptrunc Float16 2.2917987282156105e-5 Float16(2.295e-5)
 
     # float_to_half/bfloat_to_float special cases
     @test_intrinsic Core.Intrinsics.fptrunc Float16 Inf32 Inf16
