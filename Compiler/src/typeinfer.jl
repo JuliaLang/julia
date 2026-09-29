@@ -179,10 +179,11 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         end
         # if we aren't cached, we don't need this edge
         # but our caller might, so let's just make it anyways
+        unique_backedges = false
         if max_world >= validation_world
             # if we can record all of the backedges in the global reverse-cache,
             # we can now widen our applicability in the global cache too
-            store_backedges(ci, edges)
+            unique_backedges = store_backedges(ci, edges)
         end
         ipo_effects = encode_effects(result.ipo_effects)
         time_now = _time_ns()
@@ -192,6 +193,9 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             ci, widenconst(result_type), widenconst(result.exc_result), rettype_const, inferred_result,
             const_flags, min_world, max_world,
             ipo_effects, result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, debuginfo, edges)
+        if unique_backedges
+            @atomic :monotonic ci.flags |= CI_FLAGS_UNIQUE_BACKEDGES
+        end
     elseif caller.cache_mode === CACHE_MODE_LOCAL
         result.src = transform_result_for_local_cache(interp, result)
     end
@@ -282,13 +286,17 @@ function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstan
     if max_world >= get_world_counter()
         max_world = typemax(UInt)
     end
+    unique_backedges = false
     if max_world == typemax(UInt)
         # if we can record all of the backedges in the global reverse-cache,
         # we can now widen our applicability in the global cache too
-        store_backedges(ci, edges)
+        unique_backedges = store_backedges(ci, edges)
     end
     ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Float64, Any, Any),
         ci, rettype, exctype, nothing, nothing, const_flags, min_world, max_world, ipo_effects, nothing, 0.0, 0.0, 0.0, di, edges)
+    if unique_backedges
+        @atomic :monotonic ci.flags |= CI_FLAGS_UNIQUE_BACKEDGES
+    end
     code_cache(interp)[mi] = ci
     codegen = codegen_cache(interp)
     if codegen !== nothing
@@ -870,38 +878,105 @@ function maybe_add_binding_backedge!(b::Core.Binding, edge::Union{Method, CodeIn
     return nothing
 end
 
-function store_backedges(caller::CodeInstance, edges::SimpleVector)
-    isa(get_ci_mi(caller).def, Method) || return # don't add backedges to toplevel method instance
+# Whether the (invokesig, item) backedge at iterator state `upto` already appeared earlier in
+# `edges`. Used instead of a hash table for short edge lists, which is nearly all of them.
+function backedge_seen_before(edges::SimpleVector, upto::Int, @nospecialize(invokesig), @nospecialize(item))
+    backedges = ForwardToBackedgeIterator(edges)
+    next = iterate(backedges)
+    while next !== nothing
+        (invokesig2, item2), i = next
+        i > upto && return false
+        if item2 === item && invokesig2 == invokesig
+            return true
+        end
+        next = iterate(backedges, i)
+    end
+    return false
+end
+
+# Above this many forward edges, dedup with hash tables instead of rescanning the list.
+const STORE_BACKEDGES_SCAN_LIMIT = 64
+
+# Set on a CodeInstance once its edges are known to give no backedge twice. Package images keep
+# this flag, so loading the code can register its backedges without checking for duplicates again.
+const CI_FLAGS_UNIQUE_BACKEDGES = 0b10000
+
+function add_backedge!(caller::CodeInstance, @nospecialize(invokesig), @nospecialize(item))
+    if item isa Core.Binding
+        maybe_add_binding_backedge!(item, caller)
+    elseif item isa MethodTable
+        ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any), invokesig, caller)
+    else
+        item::MethodInstance
+        ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), item, invokesig, caller)
+    end
+    return nothing
+end
+
+# Returns whether no backedge appeared twice in `edges`.
+# `scratch` lets a caller storing many edge lists in a row reuse one set for the long ones.
+function store_backedges(caller::CodeInstance, edges::SimpleVector, scratch::Union{Nothing,IdSet{Any}}=nothing)
+    isa(get_ci_mi(caller).def, Method) || return false # don't add backedges to toplevel method instance
 
     backedges = ForwardToBackedgeIterator(edges)
-    # `Compiler` is loaded before `Set` during bootstrap, so keep the signatures
-    # for each identity-keyed dependency in a small vector.
-    seen = IdDict{Any,Vector{Any}}()
-    for (invokesig, item) in backedges
-        if haskey(seen, item)
-            signatures = seen[item]
-            duplicate_found = false
-            for signature in signatures
-                if signature == invokesig
-                    duplicate_found = true
-                    break
-                end
-            end
-            duplicate_found && continue
-            push!(signatures, invokesig)
-        else
-            seen[item] = Any[invokesig]
+    if (@atomic :monotonic caller.flags) & CI_FLAGS_UNIQUE_BACKEDGES != 0 && edges === caller.edges
+        for (invokesig, item) in backedges
+            add_backedge!(caller, invokesig, item)
         end
-        if item isa Core.Binding
-            maybe_add_binding_backedge!(item, caller)
-        elseif item isa MethodTable
-            ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any), invokesig, caller)
-        else
-            item::MethodInstance
-            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), item, invokesig, caller)
-        end
+        return true
     end
-    nothing
+    # Nearly all edge lists are short (a median of three backedges), so a quadratic rescan
+    # avoids allocating any hash table for them. Longer lists key plain dispatch edges in an
+    # `IdSet` and `invoke`/`MethodTable` edges by their signatures: almost every such item is
+    # seen with a single signature, so that is stored bare and only promoted to a vector on
+    # the second one.
+    scan = length(edges) <= STORE_BACKEDGES_SCAN_LIMIT
+    unique = true
+    plain = nothing
+    invoked = nothing
+    next = iterate(backedges)
+    prev_i = 1
+    while next !== nothing
+        (invokesig, item), i = next
+        if scan
+            duplicate = backedge_seen_before(edges, prev_i, invokesig, item)
+        elseif invokesig === nothing
+            if plain === nothing
+                plain = scratch === nothing ? IdSet{Any}() : empty!(scratch)
+            end
+            duplicate = item in plain
+            duplicate || push!(plain, item)
+        else
+            if invoked === nothing
+                invoked = IdDict{Any,Any}()
+            end
+            signatures = get(invoked, item, nothing)
+            if signatures === nothing
+                invoked[item] = invokesig
+                duplicate = false
+            elseif signatures isa Vector{Any}
+                duplicate = false
+                for signature in signatures
+                    if signature == invokesig
+                        duplicate = true
+                        break
+                    end
+                end
+                duplicate || push!(signatures, invokesig)
+            else
+                duplicate = signatures == invokesig
+                duplicate || (invoked[item] = Any[signatures, invokesig])
+            end
+        end
+        prev_i = i
+        next = iterate(backedges, i)
+        if duplicate
+            unique = false
+            continue
+        end
+        add_backedge!(caller, invokesig, item)
+    end
+    return unique
 end
 
 function compute_edges!(sv::InferenceState)
