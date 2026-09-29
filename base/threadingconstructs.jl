@@ -177,7 +177,11 @@ struct _ThreadsFun
     fun
 end
 
-Base.@nospecializeinfer function threading_run(@nospecialize(fun), static::Bool)
+# Isolate the dynamic dispatch so that `--trim` checks the loop body at each call of the
+# runner, where its type is known. The runner must stay out of line for that call to exist.
+@noinline _threads_call(tfun::_ThreadsFun, i::Int) = tfun.fun(i)
+
+@noinline Base.@nospecializeinfer function threading_run(@nospecialize(fun), static::Bool)
     tfun = _ThreadsFun(fun)
     if static && ccall(:jl_in_threaded_region, Cint, ()) != 0
         error("`@threads :static` cannot be used concurrently or nested")
@@ -195,7 +199,7 @@ Base.@nospecializeinfer function threading_run(@nospecialize(fun), static::Bool)
     try
         Base.ScopedValues.with(Base.CANCEL_TOKEN => tok) do
             for i = 1:n
-                t = Task(() -> tfun.fun(i)) # pass in tid
+                t = Task(() -> _threads_call(tfun, i)) # pass in tid
                 t.sticky = static
                 if static
                     ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
