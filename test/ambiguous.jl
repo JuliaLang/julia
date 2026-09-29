@@ -619,7 +619,9 @@ let has_ambig = Ref(Int32(0))
     ms = Base._methods_by_ftype(Tuple{typeof(fnoambig), Any, Any}, nothing, 4, Base.get_world_counter(), false, Ref(typemin(UInt)), Ref(typemax(UInt)), has_ambig)
     @test ms isa Vector
     @test length(ms) == 4
-    @test has_ambig[] == 1 # 0 is better, but expensive and probably unnecessary to compute
+    # the (Int,Any)/(Any,Int) pair is unordered, but everywhere both apply the
+    # (Int,Int) method wins, so the call is not ambiguous anywhere
+    @test has_ambig[] == 0
 end
 
 # issue #11407
@@ -686,17 +688,84 @@ let ambig = Ref{Int32}(0)
     ms = Base._methods_by_ftype(Tuple{typeof(ambig10), Vararg}, nothing, -1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
     @test ms isa Vector
     @test length(ms) == 6
-    @test_broken ambig[] == 0
+    @test ambig[] == 0
 end
 let ambig = Ref{Int32}(0)
     ms = Base._methods_by_ftype(Tuple{typeof(ambig10), Vararg{Number}}, nothing, -1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
     @test ms isa Vector
     @test length(ms) == 4
-    @test_broken ambig[] == 0
+    @test ambig[] == 0
     @test ms[1].method === which(ambig10, ())
     @test ms[2].method === which(ambig10, (Vararg{Union{Int32, Int64}},))
     @test ms[3].method === which(ambig10, Tuple{Vararg{N}} where N<:Number,)
     @test ms[4].method === which(ambig10, (Vararg{Number},))
+end
+
+# An unordered pair is only ambiguous where no other method beats them both:
+# `ambig10` above resolves at the empty tuple, and this is the same shape without
+# the `Vararg`.
+module AmbigEmptyCover
+k(::Int, ::Any, ::Any) = 1
+k(::Any, ::Int, ::Any) = 2
+k(::Int, ::Int, ::Any) = 3 # empty interference set: beats both, covers their overlap
+p(::Int, ::Any, ::Any) = 1
+p(::Any, ::Int, ::Any) = 2
+p(::Int, ::Int, ::Int) = 3 # covers only part of the overlap
+q(::Int, ::Any, ::Any) = 1
+q(::Any, ::Int, ::Any) = 2
+q(::Int, ::Int, ::Any) = 3
+q(::Integer, ::Int, ::Int) = 4 # leaves `q`'s cover unordered with this one
+end
+let ambig = Ref{Int32}(0)
+    ms = Base._methods_by_ftype(Tuple{typeof(AmbigEmptyCover.k), Vararg{Any}}, nothing, -1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test length(ms) == 3
+    @test ambig[] == 0
+    @test AmbigEmptyCover.k(1, 1, "x") == 3
+end
+let ambig = Ref{Int32}(0)
+    # the cover contains only part of the contested region, so the rest of it is
+    # a real ambiguity
+    ms = Base._methods_by_ftype(Tuple{typeof(AmbigEmptyCover.p), Vararg{Any}}, nothing, -1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test length(ms) == 3
+    @test ambig[] == 1
+    @test AmbigEmptyCover.p(1, 1, 1) == 3
+    @test_throws MethodError AmbigEmptyCover.p(1, 1, "x")
+end
+let ambig = Ref{Int32}(0)
+    # `q(::Integer, ::Int, ::Int)` cannot apply within this query, so nothing here
+    # is ambiguous, even though the cover is no longer morespecific than
+    # everything it intersects
+    ms = Base._methods_by_ftype(Tuple{typeof(AmbigEmptyCover.q), Int, Union{Int,String}, String, Vararg{Any}}, nothing, -1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test length(ms) == 2
+    @test ambig[] == 0
+    @test AmbigEmptyCover.q(1, 1, "x") == 3
+    @test AmbigEmptyCover.q(1, "y", "x") == 1
+end
+let ambig = Ref{Int32}(0)
+    # but where it does apply, the cover of the pair is itself unordered with it,
+    # and that pair is still reported
+    ms = Base._methods_by_ftype(Tuple{typeof(AmbigEmptyCover.q), Int, Int, Any}, nothing, -1, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test ambig[] == 1
+    @test any(m -> m.method === which(AmbigEmptyCover.q, (Int, Int, String)), ms)
+    @test any(m -> m.method === which(AmbigEmptyCover.q, (Int8, Int, Int)), ms)
+    @test_throws MethodError AmbigEmptyCover.q(1, 1, 1)
+end
+
+# The matches beating both members of an unordered pair may cover the region
+# they contest only jointly.
+module AmbigUnionPairCover
+g(::Integer, ::Union{Integer,String}) = 1
+g(::Any, ::Integer) = 2
+g(::Int, ::Integer) = 3 # these two jointly beat both members where they overlap
+g(::Int8, ::Integer) = 4
+g(::Int, ::Int) = 5
+end
+let ambig = Ref{Int32}(0), g = AmbigUnionPairCover.g
+    ms = Base._methods_by_ftype(Tuple{typeof(g), Union{Int,Int8}, Any}, nothing, -1, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test ambig[] == 0
+    @test g(1, 1) == 5
+    @test g(Int8(1), 1) == 4
+    @test g(1, Int8(1)) == 3
 end
 
 # A pair of methods can be unordered where they overlap without contesting
