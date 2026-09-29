@@ -734,7 +734,6 @@ for nbits in ARITH_WIDTHS, signed in (false, true)
         Base.rem(x::Integer, ::Type{$T}) = $T(x)
         Base.rem(x::$T, ::Type{S}) where {S<:Base.BitInteger} = $W(x) % S
         Base.rem(x::$T, ::Type{$T}) = x
-        Base.promote_rule(::Type{$T}, ::Type{Int}) = Int
         Base.promote_rule(::Type{$T}, ::Type{<:Base.BitInteger}) = $W
         Base.widen(::Type{$T}) = $W
         Base.hash(x::$T, h::UInt) = hash($W(x), h)
