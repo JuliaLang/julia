@@ -174,6 +174,20 @@ isa_compileable_sig(@nospecialize(atype), sparams::SimpleVector, method::Method)
 isa_compileable_sig(m::MethodInstance) = (def = m.def; !isa(def, Method) || isa_compileable_sig(m.specTypes, m.sparam_vals, def))
 isa_compileable_sig(::ABIOverride) = false
 
+# Image CodeInstances may leave `def` unset until it is decoded, and `isdefined` const-folds
+# to true, so always read it through the C accessor.
+ci_def(ci::CodeInstance) = ccall(:jl_ci_def, Any, (Any,), ci)
+# Decode any fields an image CodeInstance still stores in compact form. Call this before
+# reading fields of a CodeInstance taken directly from an image or from a cache chain
+# walked in Julia (cache chain walks in C already do it).
+ci_materialize!(ci::CodeInstance) = (ccall(:jl_ci_materialize_all, Cvoid, (Any,), ci); ci)
+# For readers that use `getfield` on the DebugInfo.
+function ci_debuginfo(ci::CodeInstance)
+    di = ci_materialize!(ci).debuginfo
+    di isa DebugInfo && ccall(:jl_di_materialize_all, Cvoid, (Any,), di)
+    return di
+end
+
 
 """
     is_declared_inline(method::Method)::Bool

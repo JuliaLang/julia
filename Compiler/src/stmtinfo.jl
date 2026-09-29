@@ -259,7 +259,7 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
             mi = specialize_method(m) # don't allow `Method`-edge for this optimized format
             edge = mi
         else
-            mi = edge.def::MethodInstance
+            mi = ci_def(edge)::MethodInstance
         end
         if mi.specTypes === m.spec_types
             add_one_edge!(edges, edge)
@@ -275,7 +275,7 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
         for i = 1:nmatches
             edge = method_match_edge(info, i, mi_edge)
             if edge isa CodeInstance
-                @assert edge.def.def === info.results[i].method
+                @assert get_ci_mi(edge).def === info.results[i].method
             end
             push!(edges, edge)
         end
@@ -305,7 +305,7 @@ function add_one_edge!(edges::Vector{Any}, edge::CodeInstance)
         edgeᵢ isa Int && (i += 2 + abs(edgeᵢ); continue)
         edgeᵢ isa CodeInstance && (edgeᵢ = get_ci_mi(edgeᵢ))
         edgeᵢ isa MethodInstance || (i += 1; continue)
-        if edgeᵢ === edge.def && !(i > 1 && edges[i-1] isa Type)
+        if edgeᵢ === ci_def(edge) && !(i > 1 && edges[i-1] isa Type)
             if edgeᵢ_orig isa MethodInstance
                 # found edge we can upgrade
                 edges[i] = edge
@@ -482,7 +482,7 @@ function add_invoke_edge!(edges::Vector{Any}, @nospecialize(atype), edge::Union{
             i += 2 + abs(edgeᵢ)
             continue
         end
-        edgeᵢ isa CodeInstance && (edgeᵢ = edgeᵢ.def)
+        edgeᵢ isa CodeInstance && (edgeᵢ = ci_def(edgeᵢ))
         if !(edgeᵢ isa MethodInstance || edgeᵢ isa Method)
             i += 1
             continue
@@ -508,9 +508,10 @@ function add_invoke_edge!(edges::Vector{Any}, @nospecialize(atype), edge::CodeIn
             i += 2 + abs(edgeᵢ)
             continue
         end
-        edgeᵢ isa CodeInstance && (edgeᵢ = edgeᵢ.def)
-        if ((edgeᵢ isa MethodInstance && edgeᵢ === edge.def) ||
-            (edgeᵢ isa Method && edgeᵢ === edge.def.def))
+        edgeᵢ isa CodeInstance && (edgeᵢ = ci_def(edgeᵢ))
+        edgedef = ci_def(edge)
+        if ((edgeᵢ isa MethodInstance && edgeᵢ === edgedef) ||
+            (edgeᵢ isa Method && edgedef isa MethodInstance && edgeᵢ === edgedef.def))
             i == 1 && (i += 1; continue)
             edge_minus_1 = edges[i - 1]
             if edge_minus_1 isa Type && edge_minus_1 == atype
@@ -546,7 +547,7 @@ function add_inlining_edge!(edges::Vector{Any}, edge::MethodInstance)
             edges[i] = edge
             return
         end
-        edgeᵢ isa CodeInstance && (edgeᵢ = edgeᵢ.def)
+        edgeᵢ isa CodeInstance && (edgeᵢ = ci_def(edgeᵢ))
         if edgeᵢ isa MethodInstance && edgeᵢ === edge
             return # found existing covered edge
         end
@@ -566,12 +567,13 @@ function add_inlining_edge!(edges::Vector{Any}, edge::CodeInstance)
             i += 2 + abs(edgeᵢ)
             continue
         end
-        if edgeᵢ isa Method && edgeᵢ === edge.def.def
+        edgedef = ci_def(edge)
+        if edgeᵢ isa Method && edgedef isa MethodInstance && edgeᵢ === edgedef.def
             # found edge we can upgrade
             edges[i] = edge
             return
         end
-        if edgeᵢ isa MethodInstance && edgeᵢ === edge.def
+        if edgeᵢ isa MethodInstance && edgeᵢ === edgedef
             # found edge we can upgrade
             edges[i] = edge
             return

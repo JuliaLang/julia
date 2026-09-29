@@ -273,6 +273,7 @@ function hash(x::CodeInfo, h::UInt)
 end
 
 function hash(x::DebugInfo, h::UInt)
+    ccall(:jl_di_materialize_all, Cvoid, (Any,), x) # decode image fields before the raw reads below
     h ⊻= UInt === UInt64 ? 0x2c97bf8b3de87020 : 0x469d72af
     for i in 1:nfields(x)
         h = hash(getfield(x, i), h)

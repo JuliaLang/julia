@@ -316,6 +316,7 @@ function enqueue_specialization!(all::Bool, worklist, mi::MethodInstance)
     codeinst = isdefined(mi, :cache) ? mi.cache : nothing
     while codeinst !== nothing
         do_compile = false
+        ci_materialize!(codeinst)
         if codeinst.owner !== nothing
             # This code instance is from a foreign interpreter, so we skip it
         elseif use_const_api(codeinst) # Check if invoke is jl_fptr_const_return

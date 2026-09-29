@@ -1802,10 +1802,36 @@ function _uncompressed_ir(m::Method)
 end
 
 _uncompressed_ir(codeinst::CodeInstance, s::String) =
-    ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), codeinst.def.def::Method, codeinst, s)
+    ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), (get_ci_mi(codeinst).def)::Method, codeinst, s)
+
+# Image CodeInstances and DebugInfos may leave some fields unset until they are decoded,
+# and `isdefined` const-folds to true, so always read them through the C accessors.
+ci_def(codeinst::CodeInstance) = ccall(:jl_ci_def, Any, (Any,), codeinst)
+
+# `next` is not listed: it is runtime cache-chain state and is never stored in compact form.
+const _ci_interned_fields = (:def, :owner, :rettype, :exctype,
+                             :rettype_const, :inferred, :debuginfo, :analysis_results)
+
+# `isdefined` const-folds to true for these fields, so the check must be the C call.
+# The call is cheap when nothing needs decoding.
+function getproperty(ci::CodeInstance, name::Symbol)
+    name in _ci_interned_fields && ccall(:jl_ci_materialize_all, Cvoid, (Any,), ci)
+    return getfield(ci, name)
+end
+function getproperty(ci::CodeInstance, name::Symbol, order::Symbol)
+    name in _ci_interned_fields && ccall(:jl_ci_materialize_all, Cvoid, (Any,), ci)
+    return getfield(ci, name, order)
+end
+
+function getproperty(di::Core.DebugInfo, name::Symbol)
+    if name === :def || name === :linetable || name === :codelocs || name === :edges
+        ccall(:jl_di_materialize_all, Cvoid, (Any,), di)
+    end
+    return getfield(di, name)
+end
 
 function get_ci_mi(codeinst::CodeInstance)
-    def = codeinst.def
+    def = ci_def(codeinst)
     if def isa Core.ABIOverride
         return def.def
     else
