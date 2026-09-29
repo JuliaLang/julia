@@ -315,6 +315,15 @@ function exec_options(opts)
     # remove filename from ARGS
     global PROGRAM_FILE = arg_is_program ? popfirst!(ARGS) : ""
 
+    # Enter script mode when the program is the active project.
+    script_env = nothing
+    if arg_is_program && PROGRAM_FILE != "-"
+        script_path = abspath(PROGRAM_FILE)
+        if active_project(false) == script_path && is_script_env(script_path)
+            script_env = script_path
+        end
+    end
+
     # Load Distributed module only if any of the Distributed options have been specified.
     distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
@@ -374,6 +383,10 @@ function exec_options(opts)
         try
             if PROGRAM_FILE == "-"
                 __script_entry_include_string(Main, read(stdin, String), "stdin")
+            elseif script_env !== nothing
+                # script mode lasts until `main` has run or the REPL starts, see `_start`
+                script_env_begin!(script_env)
+                __script_entry_include(Main, PROGRAM_FILE)
             else
                 __script_entry_include(Main, PROGRAM_FILE)
             end
@@ -694,7 +707,9 @@ function _start()
             else
                 ret = invokelatest(main, ARGS)
             end
+            script_env_end!()
         elseif (repl_was_requested || is_interactive)
+            script_env_end!()
             # Run the Base `main`, which will either load the REPL stdlib
             # or run the fallback REPL
             ret = repl_main(ARGS)

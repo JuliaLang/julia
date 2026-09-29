@@ -1,0 +1,14 @@
+# /// project
+# [deps]
+# Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+# ///
+# /// manifest
+# julia_version = "1.13.0"
+# manifest_format = "2.0"
+#
+# [[deps.Random]]
+# uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+# version = "1.11.0"
+# ///
+using Random
+println("after manifest: ", Base.active_manifest() == @__FILE__)
