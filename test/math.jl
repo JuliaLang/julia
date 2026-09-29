@@ -1579,9 +1579,7 @@ end
         @test func(-floatmin(Float64), nextfloat(0.0), nextfloat(0.0)) === nextfloat(0.0)
         # tiny normal b makes the fma-free two_mul inexact
         @test func(reinterpret(Float64, 0xfee492df2d70dce5), reinterpret(Float64, 0x801ad51356e60077), reinterpret(Float64, 0xbf1140536185456e)) === 1.669822474902846e-21
-    end
-    # Float16 `fma_float` is not always correctly rounded (it may be lowered through Float32)
-    for func in (fma, Base.fma_emulated)
+        # a*b+c rounded to Float32 is exactly halfway between two Float16 values
         @test func(Float16(-336.0), Float16(-37.25), Float16(0.0003653)) === Float16(1.252e4)
         for _ in 1:2^18
             a, b, c = reinterpret.(Float16, rand(UInt16, 3))

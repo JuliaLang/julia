@@ -902,6 +902,7 @@ static void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *p
     *(c_type*)pr = (c_type)OP(a, b, c); \
 }
 
+// OP(a, b, c) returns a double that rounds to the result
 #define ter_intrinsic_half(OP, name) \
 static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pc, void *pr) JL_NOTSAFEPOINT \
 { \
@@ -912,10 +913,11 @@ static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pc, 
     float B = half_to_float(b); \
     float C = half_to_float(c); \
     runtime_nbits = 16; \
-    float R = OP(A, B, C); \
-    *(uint16_t*)pr = float_to_half(R); \
+    double R = OP(A, B, C); \
+    *(uint16_t*)pr = double_to_half(R); \
 }
 
+// OP(a, b, c) returns a double that rounds to the result
 #define ter_intrinsic_bfloat(OP, name) \
 static void jl_##name##bf16(unsigned runtime_nbits, void *pa, void *pb, void *pc, void *pr) JL_NOTSAFEPOINT \
 { \
@@ -926,8 +928,8 @@ static void jl_##name##bf16(unsigned runtime_nbits, void *pa, void *pb, void *pc
     float B = bfloat_to_float(b); \
     float C = bfloat_to_float(c); \
     runtime_nbits = 16; \
-    float R = OP(A, B, C); \
-    *(uint16_t*)pr = float_to_bfloat(R); \
+    double R = OP(A, B, C); \
+    *(uint16_t*)pr = double_to_bfloat(R); \
 }
 
 
@@ -1345,9 +1347,9 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
     return cmp ? jl_true : jl_false; \
 }
 
-#define ter_fintrinsic(OP, name) \
-    ter_intrinsic_bfloat(OP, name) \
-    ter_intrinsic_half(OP, name) \
+#define ter_fintrinsic(OP16, OP, name) \
+    ter_intrinsic_bfloat(OP16, name) \
+    ter_intrinsic_half(OP16, name) \
     ter_intrinsic_ctype(OP, name, 32, float) \
     ter_intrinsic_ctype(OP, name, 64, double) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) \
@@ -1440,6 +1442,23 @@ static double max_double(double x, double y) JL_NOTSAFEPOINT
 bi_fintrinsic(_max, max_float)
 
 // ternary operators //
+
+// Base.fma_emulated(::T, ::T, ::T) for T with at most 26 significand bits: returns a*b+c
+// rounded to odd, so that rounding it to T (which has at least 2 fewer bits) is correct.
+static inline double fma_narrow(double a, double b, double c) JL_NOTSAFEPOINT
+{
+    double ab = a * b; // exact
+    double res = ab + c;
+    double bb = res - ab;
+    double err = (ab - (res - bb)) + (c - bb); // exact error of ab + c (TwoSum)
+    uint64_t u;
+    memcpy(&u, &res, sizeof(res));
+    if (fabs(err) > 0 && (u & 1) == 0) // false if err is zero or NaN (from Inf/NaN inputs)
+        u = !signbit(err) == !signbit(res) ? u + 1 : u - 1;
+    memcpy(&res, &u, sizeof(res));
+    return res;
+}
+
 // runtime fma is broken on windows, define julia_fma(f) ourself with fma_emulated as reference.
 #if defined(_OS_WINDOWS_)
 // reinterpret(UInt64, ::Float64)
@@ -1467,15 +1486,7 @@ int exponent(double a) {
 }
 // Base.fma_emulated(::Float32, ::Float32, ::Float32)
 float julia_fmaf(float a, float b, float c) {
-    double ab, res;
-    ab = (double)a * b;
-    res = ab + (double)c;
-    if ((bitcast_d2u(res) & 0x1fffffff) == 0x10000000){
-        double reslo = fabsf(c) > fabs(ab) ? ab-(res - c) : c-(res - ab);
-        if (reslo != 0)
-            res = nextafter(res, copysign(1.0/0.0, reslo));
-    }
-    return (float)res;
+    return (float)fma_narrow(a, b, c);
 }
 // Base.twomul(::Float64, ::Float64)
 void two_mul(double *abhi, double *ablo, double a, double b) {
@@ -1557,8 +1568,9 @@ double julia_fma(double a, double b, double c) {
 #endif
 
 #define muladd(a, b, c) a * b + c
-ter_fintrinsic(fma,fma_float)
-ter_fintrinsic(muladd,muladd_float)
+#define muladd_narrow(a, b, c) (double)((a) * (b) + (c))
+ter_fintrinsic(fma_narrow,fma,fma_float)
+ter_fintrinsic(muladd_narrow,muladd,muladd_float)
 
 // same-type comparisons
 #define eq(a,b) a == b
