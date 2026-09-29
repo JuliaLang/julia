@@ -83,6 +83,10 @@ Compiler/Runtime improvements
   (e.g. `val = x.field; if !isnothing(val) ... end`) ([#41199], [#47574]).
 * Stack traces now show full method signatures with argument types for inlined frames, matching the display
   of non-inlined frames ([#53925]).
+* `@code_typed` (and IR printing in general) no longer prints the `::Any` annotation on SSA
+  values whose call result is unused. Inference deliberately widens the return type of unused
+  calls to `Any` to avoid committing a backedge, so the annotation carried no real information
+  ([#52772]).
 * Stack traces of errors raised while loading code no longer show the internals of the
   code loading machinery, which are collapsed to the single frame that entered loading.
   Frames for user code that runs during loading are unaffected. Set the

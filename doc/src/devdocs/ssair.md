@@ -191,7 +191,7 @@ The corresponding IR (with irrelevant types stripped) is:
 │   %5  = ϒ (1)
 │   %6  = ϒ (true)
 │   %7  = ϒ (2)
-│         invoke Main.opaque()::Any
+│         invoke Main.opaque()
 │   %9  = ϒ (true)
 │   %10 = ϒ (3)
 │         invoke Main.error()::Union{}

@@ -213,6 +213,11 @@ end
 
 function default_expr_type_printer(io::IO; @nospecialize(type), used::Bool, show_type::Bool=true, _...)
     show_type || return nothing
+    # Inference widens the inferred return type of an unused call to `Any`
+    # (see `widen_call_result`) to avoid committing a backedge. The resulting
+    # `::Any` annotation is uninformative and misleading (cf. issue #52772),
+    # so suppress it when nothing else uses the value.
+    (used || type !== Any) || return nothing
     printstyled(io, "::", type, color=(used ? :cyan : :light_black))
     return nothing
 end
