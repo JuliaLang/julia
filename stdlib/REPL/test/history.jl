@@ -3,7 +3,7 @@
 using Test
 using REPL
 using Dates
-using StyledStrings: @styled_str, Face, SimpleColor, withfaces, getface
+using StyledStrings: @styled_str, annotations, Face, SimpleColor, withfaces, getface
 using REPL.History: region_highlight, highlightcand
 
 using REPL.History
