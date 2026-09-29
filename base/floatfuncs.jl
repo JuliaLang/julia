@@ -334,17 +334,17 @@ significantly more expensive than `x*y+z`. `fma` is used to improve accuracy in 
 algorithms. See [`muladd`](@ref).
 """
 function fma end
-function fma_emulated(a::Float16, b::Float16, c::Float16)
-    Float16(muladd(Float32(a), Float32(b), Float32(c))) #don't use fma if the hardware doesn't have it.
-end
-function fma_emulated(a::Float32, b::Float32, c::Float32)::Float32
-    ab = Float64(a) * b
-    res = ab+c
-    reinterpret(UInt64, res)&0x1fff_ffff!=0x1000_0000 && return res
-    # yes error compensation is necessary. It sucks
-    reslo = abs(c)>abs(ab) ? ab-(res - c) : c-(res - ab)
-    res = iszero(reslo) ? res : (signbit(reslo) ? prevfloat(res) : nextfloat(res))
-    return res
+function fma_emulated(a::T, b::T, c::T) where {T<:Union{Float16, Float32}}
+    W = widen(T)
+    ab = W(a) * b # exact
+    res = ab + c
+    bb = res - ab
+    err = (ab - (res - bb)) + (c - bb) # exact error of ab + c (TwoSum)
+    # Round res to odd, so that rounding it to T (which has at least 2 fewer bits) is correct
+    u = reinterpret(Unsigned, res)
+    adjust = (abs(err) > 0) & iseven(u) # false if err is zero or NaN (from Inf/NaN inputs)
+    u += ifelse(adjust, ifelse(signbit(err) == signbit(res), one(u), -one(u)), zero(u))
+    return T(reinterpret(W, u))
 end
 
 """ Splits a Float64 into a hi bit and a low bit where the high bit has 27 trailing 0s and the low bit has 26 trailing 0s"""
