@@ -742,10 +742,12 @@ end
 # Return a byte index to Bool map for each byte of an aligned `T`
 # if false, that byte is undefined padding that should not be observed.
 # Preconditions, already checked by the `reinterpret` constructors and `_reinterpret`:
-# `isbitstype(T)` and `!has_bit_padding(T)`
+# `isbitstype(T)` and `!has_bit_padding(T)`. A byte holding both value and padding
+# bits is neither, so the latter is checked here as well.
 function non_padding_bytes(T::DataType)::Memory{Bool}
     # @assert isbitstype(T)
-    # @assert !has_bit_padding(T)
+    has_bit_padding(T) && throw(ArgumentError(LazyString("type `", T,
+        "` contains non-byte-aligned primitive fields, so its padding bytes are not defined")))
     used = Memory{Bool}(undef, aligned_sizeof(T))
     fill!(used, false)
     fill_nonpadding_bytes!(T, 0, used)
@@ -754,8 +756,8 @@ end
 function fill_nonpadding_bytes!(T::DataType, offset::Int, used::Memory{Bool})
     if isprimitivetype(T)
         # sizeof rounds the value bytes up to a multiple of the alignment, so the
-        # bytes past them are padding; a byte holding any value bits is not
-        for i in 1:((Core.bitsizeof(T) + 7) >> 3)
+        # bytes past them are padding
+        for i in 1:cld(Core.bitsizeof(T), 8)
             used[i + offset] = true
         end
     else

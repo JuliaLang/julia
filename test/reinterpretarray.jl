@@ -687,9 +687,9 @@ end
     @test Base.non_padding_bytes(RUInt24) == Bool[1, 1, 1, 0]
     @test Base.non_padding_bytes(RUInt40) == Bool[1, 1, 1, 1, 1, 0, 0, 0]
     @test Base.non_padding_bytes(RUInt48) == Bool[1, 1, 1, 1, 1, 1, 0, 0]
-    # a partial byte holds value bits, so it is not padding
-    @test Base.non_padding_bytes(RUInt17) == Bool[1, 1, 1, 0]
-    @test Base.packedsize(RUInt17) == 3
+    # a partial byte is neither value nor padding
+    @test_throws ArgumentError Base.non_padding_bytes(RUInt17)
+    @test_throws ArgumentError Base.packedsize(RUInt17)
     @test Base.packedsize(RUInt24) == 3
     @test Base.packedsize(RUInt40) == 5
     @test Base.packedsize(RUInt48) == 6
