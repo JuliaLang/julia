@@ -562,6 +562,9 @@ function test_Type()
     @test  isa(Union{Int,String}, Type{>:String})
     @test  isa(Any, Type{>:String})
 
+    @test isa(DataType, Union{Type{DataType}, Ref{<:Integer}})
+    @test (x -> x isa Union{Type{DataType}, Ref{<:Integer}})(Base.inferencebarrier(DataType))
+
     # `Type{Int}` also has `UnionAll`-tagged members under `==`-class semantics
     # (#33136), so no concrete `T` covers both slots (the dispatch key
     # `Tuple{TypeEgal{Int},TypeEgal{Int8}}` still matches with `T == DataType`)
