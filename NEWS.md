@@ -10,6 +10,11 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
+* After a sweep, Julia's default garbage collector now lets any thread reuse the free cells of
+  pages that still hold live objects, instead of only the thread that allocated the page. This
+  reduces the memory footprint of workloads that allocate many small objects on many threads and
+  keep few of them, such as a language server that runs type inference repeatedly ([#63512]).
+
 Command-line option changes
 ---------------------------
 
