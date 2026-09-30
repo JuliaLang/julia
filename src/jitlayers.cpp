@@ -811,7 +811,7 @@ void JLDebuginfoPlugin::notifyMaterializingWithInfo(
     auto NewObj =
         cantFail(object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef()));
 
-    // Objects added through the C API (see notifyMaterializing) have no LinkerInfo.
+    // n.b. Objects added through the external API have no LinkerInfo.
     SmallVector<std::pair<_Atomic(uint64_t) *, jitlink::Symbol *>, 0> CoverageCounters;
     if (LinkerInfo && !LinkerInfo->coverage_counters.empty()) {
         StringMap<jitlink::Symbol *> DefinedSymbols;
