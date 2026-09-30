@@ -44,6 +44,11 @@ using Dates: Timestamp, ISOTimestampFormat, timestamp2unix, unix2timestamp
     @test_throws ArgumentError Timestamp(2026, 1, 1, 0, 0, 0, 1000)
     @test_throws ArgumentError Timestamp(2026, 1, 1, 0, 0, 0, 0, 1000)
     @test_throws ArgumentError Timestamp(2026, 1, 1, 0, 0, 0, 0, 0, 1000000000)
+    # Constructor errors describe the resolution and bounds without printing types.
+    errmsg(f) = try; f(); ""; catch e; e.msg; end
+    @test errmsg(() -> Timestamp(1000, 1, 1)) == "Year: 1000 out of range for Timestamp{Nanosecond}"
+    @test errmsg(() -> Timestamp{Nanosecond}(1677, 9, 21)) == "Timestamp: 1677-9-21 out of range for Timestamp{Nanosecond} (1677-9-21 to 2262-4-11)"
+    @test errmsg(() -> Timestamp{Second}(2026, 1, 1, 0, 0, 0, 500)) == "Fractional second is not exactly representable as Timestamp{Second}"
     # ns can hold a full fraction of a second if the total stays below 1s
     @test Timestamp(2026, 1, 1, 0, 0, 0, 0, 0, 999999999) ==
         Timestamp(2026, 1, 1, 0, 0, 0, 999, 999, 999)

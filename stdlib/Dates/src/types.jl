@@ -468,7 +468,7 @@ function validargs(::Type{Timestamp{P}}, y::Int64, m::Int64, d::Int64, h::Int64,
                    s::Int64, ms::Int64, us::Int64, ns::Int64, ampm::AMPM=TWENTYFOURHOUR) where {P}
     # Check the year first: `totaldays` below can overflow for years far out of range
     year(typemin(Timestamp{P})) <= y <= year(typemax(Timestamp{P})) ||
-        return ArgumentError("Year: $y out of range for Timestamp{$P}")
+        return ArgumentError("Year: $y out of range for Timestamp{$(nameof(P))}")
     0 < m < 13 || return ArgumentError("Month: $m out of range (1:12)")
     0 < d < daysinmonth(y, m) + 1 || return ArgumentError("Day: $d out of range (1:$(daysinmonth(y, m)))")
     if ampm == TWENTYFOURHOUR # 24-hour clock
@@ -487,13 +487,22 @@ function validargs(::Type{Timestamp{P}}, y::Int64, m::Int64, d::Int64, h::Int64,
     epochdays = timestamp_totaldays(P, y, m, d) - UNIXEPOCHDAYS
     nsofday = ns + 1000us + 1000000ms + 1000000000 * (s + 60mi + 3600 * adjusthour(h, ampm))
     ticks, remainder = divrem(nsofday, timestamp_scale(P))
-    iszero(remainder) || return ArgumentError("Fractional second is not exactly representable as Timestamp{$P}")
+    iszero(remainder) || return ArgumentError("Fractional second is not exactly representable as Timestamp{$(nameof(P))}")
     # Compare (day, time of day) pairs with the range limits, so the check cannot overflow
     fldmod(value(typemin(P)), timestamp_ticks_per_day(P)) <= (epochdays, ticks) <=
         fldmod(value(typemax(P)), timestamp_ticks_per_day(P)) ||
-        return ArgumentError("Timestamp: $y-$m-$d out of range ($(typemin(Timestamp{P})) to $(typemax(Timestamp{P})))")
+        return timestamp_range_error(P, y, m, d)
     return nothing
 end
+
+# Keep error formatting concrete and short so it compiles under --trim=safe.
+@noinline function timestamp_range_error(::Type{P}, y::Int64, m::Int64, d::Int64) where {P}
+    lo, hi = typemin(Timestamp{P}), typemax(Timestamp{P})
+    return ArgumentError(string("Timestamp: ", timestamp_ymd(y, m, d), " out of range for Timestamp{", nameof(P), "} (", timestamp_ymd(lo), " to ", timestamp_ymd(hi), ")"))
+end
+
+timestamp_ymd(y, m, d) = string(y, '-', m, '-', d)
+timestamp_ymd(ts::Timestamp) = timestamp_ymd(year(ts), month(ts), day(ts))
 
 validargs(::Type{Timestamp}, args...) = validargs(Timestamp{Nanosecond}, args...)
 
