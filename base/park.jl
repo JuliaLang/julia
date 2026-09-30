@@ -343,7 +343,7 @@ function wait_recheck(x::SourceWait, w::WaitEntry)
     # Post-publication recheck: either the concurrent cancellation walk
     # observes our push/arm, or we observe its state write here.
     st = @atomic :sequentially_consistent x.src.state
-    return st != 0x00 && st >= x.floor
+    return st != 0x00 && st & SEVERITY_MASK >= x.floor
 end
 
 wait_dequeue!(x::SourceWait, w::WaitEntry, why::UInt8) = nothing
@@ -377,7 +377,8 @@ wait_enqueue!(x::WatcherWait, w::WaitEntry, first::Bool) =
         WAIT_AUX_WATCHER_BIT | UInt64(max(x.floor, CANCEL_REQUEST_SAFE.request)))
 
 wait_recheck(x::WatcherWait, w::WaitEntry) =
-    (@atomic :sequentially_consistent x.src.state) >= max(x.floor, CANCEL_REQUEST_SAFE.request)
+    (@atomic :sequentially_consistent x.src.state) & SEVERITY_MASK >=
+        max(x.floor, CANCEL_REQUEST_SAFE.request)
 
 wait_dequeue!(x::WatcherWait, w::WaitEntry, why::UInt8) = nothing
 
