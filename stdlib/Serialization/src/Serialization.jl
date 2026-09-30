@@ -682,13 +682,23 @@ function serialize(s::AbstractSerializer, g::GlobalRef)
         (g.mod === Main && isdefined(g.mod, g.name) && isconst(g.mod, g.name))
 
         v = getglobal(g.mod, g.name)
-        unw = unwrap_unionall(v)
-        if isa(unw,DataType) && v === unw.name.wrapper && should_send_whole_type(s, unw)
-            # handle references to types in Main by sending the whole type.
-            # needed to be able to send nested functions (#15451).
-            writetag(s.io, FULL_GLOBALREF_TAG)
-            serialize(s, v)
-            return
+        if v isa Function
+            if should_send_whole_type(s, typeof(v))
+                # send references to anonymous functions in Main as the whole
+                # function, so the receiver gets its type and methods too (#56815).
+                writetag(s.io, FULL_GLOBALREF_TAG)
+                serialize(s, v)
+                return
+            end
+        else
+            unw = unwrap_unionall(v)
+            if isa(unw,DataType) && v === unw.name.wrapper && should_send_whole_type(s, unw)
+                # handle references to types in Main by sending the whole type.
+                # needed to be able to send nested functions (#15451).
+                writetag(s.io, FULL_GLOBALREF_TAG)
+                serialize(s, v)
+                return
+            end
         end
     end
     writetag(s.io, GLOBALREF_TAG)
@@ -743,7 +753,8 @@ function should_send_whole_type(s, t::DataType)
     isanonfunction = mod === Main && # only Main
         t.super === Function && # only Functions
         unsafe_load(unsafe_convert(Ptr{UInt8}, tn.name)) == UInt8('#') && # hidden type
-        (!isdefined(mod, name) || t != typeof(getglobal(mod, name))) # XXX: 95% accurate test for this being an inner function
+        (startswith(string(name), '#') || # gensym'd singletonname means anonymous even if bound (issue #56815)
+         (!isdefined(mod, name) || t != typeof(getglobal(mod, name)))) # XXX: 95% accurate test for this being an inner function
         # TODO: more accurate test? (tn.name !== "#" name)
     return isanonfunction
 end
@@ -1097,6 +1108,19 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return GlobalRef(deserialize(s)::Module, deserialize(s)::Symbol)
     elseif b == FULL_GLOBALREF_TAG
         ty = deserialize(s)
+        if ty isa Function
+            # a whole anonymous function: bind the deserialized instance under a
+            # fresh name in its type's module and reference that (#56815).
+            tn = typeof(ty).name
+            mod = tn.module
+            nm = tn.singletonname
+            while isdefined(mod, nm) && getglobal(mod, nm) !== ty
+                nm = gensym(nm)
+            end
+            isdefined(mod, nm) ||
+                ccall(:jl_set_const, Cvoid, (Any, Any, Any), mod, nm, ty)
+            return GlobalRef(mod, nm)
+        end
         tn = unwrap_unionall(ty).name
         return GlobalRef(tn.module, tn.name)
     elseif b == LONGTUPLE_TAG

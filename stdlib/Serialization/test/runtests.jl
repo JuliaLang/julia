@@ -674,6 +674,65 @@ end
     end
 end
 
+# issue #56815: the lowered body of a kwarg-taking anonymous function in Main
+# reaches the receiver as a by-name GlobalRef that either does not exist in a
+# fresh session or whose method only accepts the original wrapper type, so the
+# function must be sent whole instead
+@eval Main begin
+    f56815 = (; p = 2) -> 0
+    f56815_plain = p -> 0
+    f56815_named(x) = x
+end
+
+# should_send_whole_type: an internal ('#'-prefixed) singletonname means
+# anonymous even when the binding exists and typeof matches
+let s = Serialization.Serializer(IOBuffer())
+    gr = only(code_lowered(Main.f56815)).code[1]::GlobalRef
+    @test gr.mod === Main
+    @test Serialization.should_send_whole_type(s, typeof(getglobal(gr.mod, gr.name)))
+    @test Serialization.should_send_whole_type(s, typeof(Main.f56815_plain))
+    @test Serialization.should_send_whole_type(s, typeof(Main.f56815))
+    @test !Serialization.should_send_whole_type(s, typeof(Main.f56815_named))
+end
+
+# the issue's MWE, in-session: round-trip, call, and serialize the copy again
+let f = Main.f56815
+    buf = IOBuffer()
+    serialize(buf, f)
+    seekstart(buf)
+    ff = deserialize(buf)
+    @test invokelatest(ff) == 0
+    @test invokelatest(ff, p = 5) == 0
+    buf = IOBuffer()
+    serialize(buf, ff)
+    seekstart(buf)
+    @test invokelatest(deserialize(buf)) == 0
+    # identity sharing within one stream
+    buf = IOBuffer()
+    serialize(buf, (f, f))
+    seekstart(buf)
+    a, b = deserialize(buf)
+    @test a === b
+    # the body GlobalRef round-trips to a callable whole function
+    gr = only(code_lowered(f)).code[1]::GlobalRef
+    f3, gr3 = deserialize(IOBuffer(sprint(serialize, (f, gr))))
+    @test invokelatest(getglobal(gr3.mod, gr3.name), 2, f3) == 0
+end
+
+# a fresh session has no binding for the original body function
+mktempdir() do dir
+    path = joinpath(dir, "issue56815.ser")
+    serialize(path, Main.f56815)
+    script = """
+        using Serialization
+        ff = deserialize($(repr(path)))
+        @assert ff() == 0
+        @assert ff(p = 3) == 0
+    """
+    cmd = `$(Base.julia_cmd()) --startup-file=no --history-file=no -e $script`
+    @test success(run(pipeline(ignorestatus(cmd), stdout=devnull, stderr=stderr)))
+end
+
 let c1 = Threads.Condition()
     c2 = Threads.Condition(c1.lock)
     lock(c2)
