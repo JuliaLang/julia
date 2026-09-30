@@ -305,8 +305,9 @@ its value in the first `cld(N, 8)` bytes. Its alignment is that of the smallest 
 `Int16`, `Int32` and `Int64` that holds those bytes, or that of `Int128` if none does, and
 `sizeof(T)` rounds the value bytes up to a multiple of that alignment; it always equals
 `Base.elsize(Array{T})`. Up to 64 bits this is the layout the platform's C ABI gives
-`_BitInt(N)`. Wider types can differ: x86-64 aligns `_BitInt(136)` to 8 bytes with size 24, while
-`primitive type T 136 end` has alignment 16 and size 32. Bits past the declared width are padding
+`_BitInt(N)`. Wider types can differ: x86-64 aligns `_BitInt(128)` to 8 bytes, but
+`primitive type T 128 end`, like `UInt128` and C's `unsigned __int128`, to 16; so `_BitInt(136)`
+takes 24 bytes where a 136-bit primitive type takes 32. Bits past the declared width are padding
 and take no part in comparison or hashing. Use `Core.bitsizeof(T)` to query the declared logical
 width — for `primitive type T 24 end`, `Core.bitsizeof(T)` is 24 while `sizeof(T)` is 4.
 
