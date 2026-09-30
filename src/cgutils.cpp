@@ -369,7 +369,11 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
         return result;
     }
     if (!inlined && x.ispointer()) {
-        assert(x.V);
+        if (x.V == nullptr) {
+            // a union of ghost types has a tag but no data to root
+            assert(x.TIndex);
+            return {};
+        }
         assert(x.V->getType()->getPointerAddressSpace() != AddressSpace::Tracked);
         return {x.V};
     }
