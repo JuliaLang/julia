@@ -4507,6 +4507,21 @@ precompile_test_harness("cache files are only touched in the primary depot") do 
             filter!((≠)(new_primary_depot), DEPOT_PATH)
         end
     end
+
+    # not even when the bundled depot comes first
+    bundled_depot = dirname(dirname(Sys.STDLIB))
+    pkg = Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test")
+    pushfirst!(DEPOT_PATH, bundled_depot)
+    try
+        for cachefile in Base.find_all_in_cache_path(pkg)
+            startswith(cachefile, bundled_depot) || continue
+            old = mtime(cachefile)
+            Base.touch_cachefile(pkg, cachefile)
+            @test mtime(cachefile) == old
+        end
+    finally
+        popfirst!(DEPOT_PATH)
+    end
 end
 
 finish_precompile_test!()

@@ -1416,10 +1416,13 @@ end
 # Mark a cache file as recently used, for the ordering above and for the eviction
 # in `compilecache`. Only files in the directory `compilecache` writes to are
 # touched: other depots may be shared, read-only, or part of a signed app bundle
-# where even a failed write attempt makes macOS warn the user.
+# where even a failed write attempt makes macOS warn the user. For the same
+# reason, the depot bundled with Julia is never touched, even when it comes first.
+# The bundled depot is matched exactly: juliaup installs it inside the user depot.
 function touch_cachefile(pkg::PkgId, path::String)
     isempty(DEPOT_PATH) && return
-    startswith(abspath(path), joinpath(abspath(compilecache_dir(pkg)), "")) || return
+    startswith(path, joinpath(compilecache_dir(pkg), "")) || return
+    startswith(path, joinpath(dirname(dirname(Sys.STDLIB)), "compiled", "")) && return
     try
         touch(path)
     catch
