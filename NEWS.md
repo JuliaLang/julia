@@ -59,6 +59,7 @@ New language features
   and a fresh ^C epoch is re-armed at each prompt; a script that catches a ^C
   cancellation continues under the cancelled scope unless it re-arms one itself
   (`ScopedValues.@with Base.CANCEL_TOKEN => Base.sigint_new_episode!() ...`) ([#60281]).
+* Support for Unicode 18 ([#63349]).
 
 Language changes
 ----------------
