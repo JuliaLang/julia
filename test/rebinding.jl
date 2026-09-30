@@ -458,6 +458,50 @@ module UndefinedTransitions
     end
 end
 
+# Overlapping using paths must invalidate each old partition, not revisit its replacement (#63493).
+module OverlappingUsings63493
+    using Test
+    module Leaf
+        export w
+        global w = 2
+    end
+    module Mid
+        using ..Leaf
+        export w
+    end
+    module User
+        using ..Leaf, ..Mid
+        w
+        getw() = w
+    end
+    module ReversedUser
+        using ..Mid, ..Leaf
+        w
+        getw() = w
+    end
+    module Downstream
+        using ..User: w
+        getw() = w
+    end
+    @test User.getw() == ReversedUser.getw() == Downstream.getw() == 2
+    const old_world = Base.get_world_counter()
+    const cached = map((User.getw, ReversedUser.getw, Downstream.getw)) do f
+        Base.method_instance(f, ()).cache
+    end
+    @test Base.deprecate(Leaf, :w) === nothing
+    @test all(ci -> ci.max_world < Base.get_world_counter(), cached)
+    @test Base.isdeprecated(User, :w)
+    @test Base.isdeprecated(ReversedUser, :w)
+    @test !Base.isdeprecated(Downstream, :w)
+    @test Base.invoke_in_world(old_world, User.getw) == 2
+    @test Base.invoke_in_world(old_world, ReversedUser.getw) == 2
+    @test Base.invoke_in_world(old_world, Downstream.getw) == 2
+    @test Base.deprecate(Leaf, :w, 0) === nothing
+    @test !Base.isdeprecated(User, :w)
+    @test !Base.isdeprecated(ReversedUser, :w)
+    @test User.getw() == ReversedUser.getw() == Downstream.getw() == 2
+end
+
 # Identical implicit partitions should be merged (#57923)
 for binding in (convert(Core.Binding, GlobalRef(Base, :Math)),)
     # Test that these both only have two partitions

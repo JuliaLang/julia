@@ -122,6 +122,7 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
                 isdefined(edge, :partitions) || continue
                 latest_bpart = edge.partitions
                 latest_bpart.max_world == typemax(UInt) || continue
+                latest_bpart.min_world > new_max_world && continue
                 is_some_imported(binding_kind(latest_bpart)) || continue
                 if is_some_binding_imported(binding_kind(latest_bpart))
                     partition_restriction(latest_bpart) === b || continue
@@ -144,6 +145,8 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
                 isdefined(user_binding, :partitions) || continue
                 latest_bpart = user_binding.partitions
                 latest_bpart.max_world == typemax(UInt) || continue
+                # Another using path may already have queued this binding's old partition.
+                latest_bpart.min_world > new_max_world && continue
                 is_some_implicit(binding_kind(latest_bpart)) || continue
                 new_bpart = ccall(:jl_maybe_reresolve_implicit, Any, (Any, Csize_t), user_binding, new_max_world)
                 if need_to_invalidate_code || new_bpart !== latest_bpart
