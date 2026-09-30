@@ -133,6 +133,12 @@ Command-line option changes
   filesystem root as `@/` tracks every absolute path. `Base.is_file_tracked` now returns `false` when Julia was
   not started with either `@<path>` option ([#62514]).
 
+* The garbage collector now pools pages that still have free cells after a sweep per size
+  class and lets any thread reuse them, instead of returning them only to the thread that
+  allocated them. This substantially reduces the memory footprint of multithreaded workloads
+  that allocate many small objects and retain few of them, such as a language server process
+  that runs type inference over and over, without changing single-threaded behavior ([#63512]).
+
 Multi-threading changes
 -----------------------
 
