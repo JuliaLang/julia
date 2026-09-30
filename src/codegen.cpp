@@ -509,7 +509,7 @@ static bool is_uniquerep_Type(jl_value_t *t)
 }
 
 namespace {
-class jl_codectx_t;
+class JL_GC_TRACKED_TYPE jl_codectx_t;
 }  // anonymous namespace
 namespace {
 struct JuliaVariable {
@@ -1933,7 +1933,7 @@ public:
 // metadata tracking for a llvm Value* during codegen
 const uint8_t UNION_BOX_MARKER = 0x80;
 namespace {
-struct jl_cgval_t {
+struct JL_GC_TRACKED_TYPE jl_cgval_t {
     Value *V; // may be of type T* or T, or set to NULL if ghost (or if the value has not been initialized yet, for a variable definition)
     // For unions, we may need to keep a reference to the boxed part individually.
     // If this is non-NULL, then, at runtime, we satisfy the invariant that (for the corresponding
@@ -2146,7 +2146,7 @@ struct jl_varinfo_t {
 // information about the context of a piece of code: its enclosing
 // function and module, and visible local variables and labels.
 namespace {
-class jl_codectx_t {
+class JL_GC_TRACKED_TYPE jl_codectx_t {
 public:
     IRBuilder<> builder;
     jl_codegen_output_t &emission_context;
@@ -5038,7 +5038,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
     }
 
-    else if (f == BUILTIN(memoryrefget) && nargs == 3) {
+    else if ((f == BUILTIN(memoryrefget) || f == BUILTIN(const_memoryrefget)) && nargs == 3) {
+        // only const_memoryrefget loads may carry the current aliasscope (see Base.Experimental.Const)
+        bool isconstload = f == BUILTIN(const_memoryrefget);
         const jl_cgval_t &ref = argv[1];
         jl_value_t *mty_dt = jl_unwrap_unionall(ref.typ);
         if (jl_is_genericmemoryref_type(mty_dt) && jl_is_concrete_type(mty_dt)) {
@@ -5142,7 +5144,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 }
                 *ret = typed_load(ctx, ptr, nullptr, ety,
                         memorybuf_aliasinfo(ctx, layout),
-                        ctx.noalias().aliasscope.current,
+                        isconstload ? ctx.noalias().aliasscope.current : nullptr,
                         isboxed, Order, maybenull, al);
                 if (needlock) {
                     emit_lockstate_value(ctx, lock, false);
@@ -8570,11 +8572,7 @@ static Function *gen_cfun_wrapper(
                 ctx.builder.CreateBr(afterBB);
                 isanyBB = ctx.builder.GetInsertBlock(); // could have changed
                 ctx.builder.SetInsertPoint(notanyBB);
-                jl_cgval_t runtime_dt_val = mark_julia_type(ctx, runtime_dt, true, jl_any_type);
-                Value *isrtboxed = // (!jl_is_datatype(runtime_dt) || !jl_is_concrete_datatype(runtime_dt) || jl_is_mutable_datatype(runtime_dt))
-                    emit_guarded_test(ctx, emit_exactly_isa(ctx, runtime_dt_val, jl_datatype_type), true, [&] () {
-                            return ctx.builder.CreateOr(ctx.builder.CreateNot(emit_isconcrete(ctx, runtime_dt)), emit_datatype_mutabl(ctx, runtime_dt));
-                    });
+                Value *isrtboxed = ctx.builder.CreateIsNull(runtime_dt);
                 ctx.builder.CreateCondBr(isrtboxed, boxedBB, unboxedBB);
                 ctx.builder.SetInsertPoint(boxedBB);
                 Value *p2 = track_pjlvalue(ctx, val);
@@ -8876,7 +8874,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
                  literal_pointer_val(ctx, (jl_value_t*)fill),
                  F,
                  closure_types ? literal_pointer_val(ctx, (jl_value_t*)unionall_env) : Constant::getNullValue(ctx.types().T_pjlvalue),
-                 closure_types ? decay_derived(ctx, ctx.spvals_ptr) : ConstantPointerNull::get(ctx.builder.getPtrTy(AddressSpace::Derived))
+                 closure_types ? emit_ptrgep(ctx, decay_derived(ctx, ctx.spvals_ptr), sizeof(jl_svec_t)) : ConstantPointerNull::get(ctx.builder.getPtrTy(AddressSpace::Derived))
              });
         outboxed = true;
     }

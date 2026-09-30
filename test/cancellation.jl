@@ -326,6 +326,15 @@ end
     @test_throws CancellationRequest Base.@cancel_check(dead)
     @test (Base.@cancel_check(nothing); :ran) === :ran
 
+    # without a source, a cancellation point reports at most a preemption request, so
+    # the slow path neither asserts a source nor throws a request
+    let ct = current_task()
+        @atomic :monotonic ct.preempt_request = 0x01
+        @test (Base.@cancel_check(nothing); :ran) === :ran
+        @test (@atomic :monotonic ct.preempt_request) == 0x00
+    end
+    # JET.@test_call println(::Float64)
+
     # level-triggered: after catching one request, the next point throws again
     with(CANCEL_TOKEN => dead) do
         caught = 0

@@ -259,11 +259,14 @@ JL_DLLEXPORT int jl_types_struct_equiv(jl_value_t *a, jl_value_t *b)
     return egal_types(a, b, NULL, 0);
 }
 
+#ifndef JL_LIBRARY_STATIC
+// in the static build the public jl_egal is an alias of ijl_egal (julia.h)
 JL_DLLEXPORT int (jl_egal)(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
     // warning: a,b may NOT have been gc-rooted by the caller
     return jl_egal(a, b);
 }
+#endif
 
 JL_DLLEXPORT int jl_egal__unboxed(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, uintptr_t dtag) JL_NOTSAFEPOINT
 {
@@ -2314,6 +2317,12 @@ JL_CALLABLE(jl_f_memoryrefget)
     if (m.mem->length == 0)
         jl_bounds_error_int((jl_value_t*)m.mem, 1);
     return jl_memoryrefget(m, kind == (jl_value_t*)jl_atomic_sym);
+}
+
+// same as memoryrefget, but codegen tags the load with the current aliasscope (see Base.Experimental.Const)
+JL_CALLABLE(jl_f_const_memoryrefget)
+{
+    return jl_f_memoryrefget(F, args, nargs);
 }
 
 JL_CALLABLE(jl_f_memoryrefset)

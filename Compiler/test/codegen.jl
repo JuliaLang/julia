@@ -388,6 +388,40 @@ str = String(take!(io))
 @test occursin("aliasscope", str)
 @test occursin("noalias", str)
 
+# Issue #63129: inside `@aliasscope`, only loads of `Const` arrays may be assumed not to
+# alias the stores in the scope. A recurrence carried through a plain array must be exact.
+function fwd63129!(B, a, n)
+    for l in axes(B, 1)
+        @Base.Experimental.aliasscope begin
+            @inbounds for i in 2:n
+                B[l, i] -= a[i] * B[l, i-1]
+            end
+        end
+    end
+    return B
+end
+function acc63129!(output, input, n)
+    for I in CartesianIndices(output)
+        i, j = I.I
+        @Base.Experimental.aliasscope begin
+            for k in j:n
+                output[I] += input[i, k]
+            end
+        end
+    end
+    return output
+end
+let n = 16, B = rand(4, n), a = rand(n)
+    Bref = copy(B)
+    for l in axes(Bref, 1), i in 2:n
+        Bref[l, i] -= a[i] * Bref[l, i-1]
+    end
+    @test fwd63129!(copy(B), a, n) == Bref
+    input = rand(n, n)
+    ref = [sum(@view input[i, j:n]) for i in 1:n, j in 1:n]
+    @test acc63129!(zeros(n, n), input, n) ≈ ref
+end
+
 # Issue #10208 - Unnecessary boxing for calling objectid
 struct FooDictHash{T}
     x::T
@@ -455,6 +489,34 @@ function f33590(b, x)
 end
 @test f33590(true, (3,)) == (3,)
 @test f33590(false, (3,)) == (4,)
+
+# ifelse on two values of the same isbits union, with a wider result type.
+# Assigning y in a closure keeps its inferred type wider than its value's.
+function ifelse_union_narrow(c, v)
+    y::Union{Int,Float64,Nothing} = nothing
+    (() -> y = v[1])()
+    return Core.ifelse(c, v[2], y)
+end
+function ifelse_union_any(c, v)
+    y = nothing
+    (() -> y = v[1])()
+    return Core.ifelse(c, v[2], y)
+end
+function ifelse_union_large(c, v)
+    y::Union{eltype(v),Nothing} = nothing
+    (() -> y = v[1])()
+    return ifelse(c, v[2], y)
+end
+let v = Union{Int,Float64}[1, 2.5]
+    @test ifelse_union_narrow(true, v) === 2.5
+    @test ifelse_union_narrow(false, v) === 1
+    @test ifelse_union_any(true, v) === 2.5
+    @test ifelse_union_any(false, v) === 1
+end
+let v = Union{Int8,Int16,Int32,Int64,Float64}[Int8(1), 2.5]
+    @test ifelse_union_large(true, v) === 2.5
+    @test ifelse_union_large(false, v) === Int8(1)
+end
 
 # issue 29864
 const c29864 = VecElement{Union{Int,Nothing}}(2)

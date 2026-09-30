@@ -587,6 +587,16 @@ for op in (:(==), :<, :<=)
     end
 end
 
+function max(x::S, y::T) where {S <: BitInteger, T <: BitInteger}
+    R = promote_type(S, T)
+    ifelse(x < y, y % R, x % R)
+end
+
+min(x::S, y::BitUnsigned) where S <: BitSigned = ifelse(x < y, x, y % S)
+min(x::BitUnsigned, y::T) where T <: BitSigned = ifelse(x < y, x % T, y)
+
+minmax(x::BitInteger, y::BitInteger) = (min(x, y), max(x, y))
+
 ## integer shifts ##
 
 # unsigned shift counts always shift in the same direction
@@ -811,8 +821,10 @@ promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 """
     typemin(T)
+    typemin(::T)
 
-The lowest value representable by the given (real) numeric DataType `T`.
+The lowest value representable by the given (real) numeric type `T`.
+The argument can alternatively be an instance of `T`.
 
 See also: [`floatmin`](@ref), [`maxintfloat`](@ref), [`typemax`](@ref), [`eps`](@ref).
 
@@ -841,8 +853,10 @@ function typemin end
 
 """
     typemax(T)
+    typemax(::T)
 
-The highest value representable by the given (real) numeric `DataType`.
+The highest value representable by the given (real) numeric type `T`.
+The argument can alternatively be an instance of `T`.
 
 See also: [`floatmax`](@ref), [`maxintfloat`](@ref), [`typemin`](@ref), [`eps`](@ref).
 

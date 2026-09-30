@@ -18,7 +18,7 @@ import json, os, pathlib, sys
 root = pathlib.Path(__file__).parent
 args = sys.argv[1:]
 if args[0] == 'build':
-    args.append({k: os.getenv(k) for k in ['PATH', 'LLVM_PROFILE_FILE']})
+    args.append({k: os.getenv(k) for k in ['PATH', 'LLVM_PROFILE_FILE', 'LD_LIBRARY_PATH']})
 with (root / 'events').open('a') as f:
     f.write(json.dumps([pathlib.Path.cwd().name, args]) + '\n')
 if args[0] == 'configure':
@@ -26,7 +26,7 @@ if args[0] == 'configure':
     if p.exists():
         sys.exit('configure called on existing directory')
     (p / 'deps').mkdir(parents=True)
-    recipe = 'all julia-deps julia-src-release julia-symlink julia-libccalltest julia-libccalllazyfoo julia-libccalllazybar julia-libllvmcalltest:\n\t@python3 ' + str(root / 'helper.py') + ' build $@ "$(CFLAGS)" "$(LDFLAGS)" "$(JULIA_CPU_TARGET)" "$(USE_BINARYBUILDER_LLVM)" "$(LD)" "$(WIN_LD_USE_DEF)" "$(WIN_LD_EXTRA_LIBS)" "$(LINK_LDFLAGS)"\n'
+    recipe = 'all julia-deps julia-src-release julia-symlink julia-libccalltest julia-libccalllazyfoo julia-libccalllazybar julia-libllvmcalltest:\n\t@python3 ' + str(root / 'helper.py') + ' build $@ "$(CFLAGS)" "$(LDFLAGS)" "$(JULIA_CPU_TARGET)" "$(USE_BINARYBUILDER_LLVM)" "$(LD)" "$(WIN_LD_USE_DEF)" "$(WIN_LD_EXTRA_LIBS)" "$(LINK_LDFLAGS)" "$(CXXFLAGS)" "$(CC)" "$(CXX)"\n'
     (p / 'Makefile').write_text(recipe)
     (p / 'deps/Makefile').write_text('%:\n\t@python3 ' + str(root / 'helper.py') + ' install $@ "$(USE_BINARYBUILDER_LLVM)" "$(OS)" "$(USE_BINARYBUILDER_CSL)"\n')
 elif args[0] == 'install' and args[3] == 'WINNT':
@@ -37,6 +37,11 @@ elif args[0] == 'install' and args[3] == 'WINNT':
     runtime = stage / 'usr/lib/clang/22/lib/windows'
     runtime.mkdir(parents=True, exist_ok=True)
     (runtime / 'libclang_rt.profile-x86_64.a').write_text('runtime')
+elif args[0] == 'install' and args[1] == 'install-clang' and os.getenv('MOCK_LIBSTDCXX'):
+    tools = pathlib.Path.cwd().parent / 'usr/tools'
+    tools.mkdir(parents=True, exist_ok=True)
+    (tools / 'clang++').write_text('#!/bin/sh\necho ' + os.environ['MOCK_LIBSTDCXX'] + '\n')
+    (tools / 'clang++').chmod(0o755)
 elif args[0] == 'build':
     p = pathlib.Path.cwd()
     if p.name == 'pgo-instrumented.build' and args[1] == 'all':
@@ -178,6 +183,64 @@ class FlowTests(unittest.TestCase):
             self.assertEqual('-jump-tables=move' in out, x86_only, out)
             self.assertEqual('-split-strategy=cdsplit' in out, x86_only, out)
             self.assertIn('-reorder-blocks=ext-tsp', out)
+
+    def test_host_compiler_runtime(self):
+        # Clang has to use the regular build's GCC installation and sysroot.
+        install = self.root / 'gcc/lib/gcc/x86_64-linux-gnu/9.1.0'
+        install.mkdir(parents=True)
+        (install / 'libgcc.a').write_text('')
+        for name, clang in [('fake-gcc', False), ('fake-clang', True)]:
+            with self.subTest(compiler=name):
+                cc = self.root / name
+                cc.write_text('#!/bin/sh\ncase "$*" in\n'
+                              '*-dM*) ' + ('echo "#define __clang__ 1"' if clang else 'true') + ' ;;\n'
+                              '-print-libgcc-file-name) echo ' + str(install / 'libgcc.a') + ' ;;\n'
+                              '-print-sysroot) echo /opt/sysroot ;;\nesac\n')
+                cc.chmod(0o755)
+                for child in self.flow.iterdir():
+                    if child.name != 'Makefile':
+                        shutil.rmtree(child) if child.is_dir() else child.unlink()
+                (self.root / 'events').unlink(missing_ok=True)
+                self.make('all', 'CC=' + str(cc), 'USE_BOLT=0')
+                flags = f'--gcc-install-dir={install} --sysroot=/opt/sysroot'
+                builds = [a for d, a in self.events() if a[0] == 'build']
+                self.assertTrue(builds)
+                for a in builds:
+                    # In CC/CXX, which every compile and link uses (unlike *FLAGS).
+                    for compiler in (a[11], a[12]):
+                        self.assertEqual(compiler.endswith(flags), not clang, compiler)
+                    self.assertNotIn('--gcc-install-dir', ' '.join(a[2:4] + a[10:11]))
+
+    def test_stage_libstdcxx(self):
+        # Only that libstdc++ goes on the stages' LD_LIBRARY_PATH, not the rest
+        # of its (possibly system) library directory.
+        libdir = self.root / 'gcc/lib64'
+        libdir.mkdir(parents=True)
+        (libdir / 'libstdc++.so.6.0.34').write_text('')
+        (libdir / 'libstdc++.so.6').symlink_to('libstdc++.so.6.0.34')
+        (libdir / 'libzstd.so.1').write_text('')
+        install = self.root / 'gcc/lib/gcc/x86_64-linux-gnu/9.1.0'
+        install.mkdir(parents=True)
+        (install / 'libgcc.a').write_text('')
+        cc = self.root / 'fake-gcc'
+        cc.write_text('#!/bin/sh\ncase "$*" in\n-print-libgcc-file-name) echo ' + str(install / 'libgcc.a') + ' ;;\nesac\n')
+        cc.chmod(0o755)
+        env = {k: v for k, v in os.environ.items() if k != 'LD_LIBRARY_PATH'}
+        env['MOCK_LIBSTDCXX'] = str(libdir / 'libstdc++.so.6')
+        link_dir = self.flow / 'toolchain/libstdcxx'
+        self.make('all', 'CC=' + str(cc), 'USE_BOLT=0', env=env)
+        # A dry run of the stages must not touch it.
+        self.make('clean')
+        shutil.rmtree(link_dir)
+        self.make('-n', 'all', 'CC=' + str(cc), 'USE_BOLT=0', env=env)
+        self.assertFalse(link_dir.exists())
+        self.make('all', 'CC=' + str(cc), 'USE_BOLT=0', env=env)
+        self.assertEqual([p.name for p in link_dir.iterdir()], ['libstdc++.so.6'])
+        self.assertEqual((link_dir / 'libstdc++.so.6').resolve(), libdir / 'libstdc++.so.6.0.34')
+        builds = [a for d, a in self.events() if a[0] == 'build']
+        self.assertTrue(builds)
+        for a in builds:
+            self.assertEqual(a[-1]['LD_LIBRARY_PATH'], str(link_dir))
 
     def test_custom_bolt_profiles(self):
         self.make('bolt-train')

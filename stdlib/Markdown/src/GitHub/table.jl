@@ -23,7 +23,7 @@ function rowlength!(row, len)
     return row
 end
 
-const default_align = :r
+const default_align = :l
 
 function parsealign(row)
     align = Symbol[]

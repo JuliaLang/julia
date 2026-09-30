@@ -155,7 +155,7 @@ typedef struct jl_ivarbinding_t {
 } jl_ivarbinding_t;
 
 // subtype algorithm state
-typedef struct jl_stenv_t {
+typedef struct JL_GC_TRACKED_TYPE jl_stenv_t {
     // N.B.: varbindings are created on the stack and rooted there
     jl_varbinding_t *vars;    // type variable environment
     jl_unionstate_t Lunions;  // union state for unions on the left of A <: B
