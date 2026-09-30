@@ -151,10 +151,9 @@ millisecond(t::Time) = mod(fld(value(t), Int64(1000000)), Int64(1000))
 microsecond(t::Time) = mod(fld(value(t), Int64(1000)), Int64(1000))
 nanosecond(t::Time) = mod(value(t), Int64(1000))
 # A time field of `dt` that is `unit` nanoseconds long, counted modulo `modulus`
-# (24 for hours). Fields finer than P are zero.
+# (24 for hours).
 @inline timestamp_part(dt::Timestamp{P}, unit, modulus) where {P} =
-    unit < timestamp_scale(P) ? Int64(0) :
-    mod(fld(value(dt), unit ÷ timestamp_scale(P)), modulus)
+    Int64(mod(fld(nsofday(dt), unit), modulus))
 hour(dt::Timestamp) = timestamp_part(dt, 3600000000000, Int64(24))
 minute(dt::Timestamp) = timestamp_part(dt, 60000000000, Int64(60))
 second(dt::Timestamp) = timestamp_part(dt, Int64(1000000000), Int64(60))

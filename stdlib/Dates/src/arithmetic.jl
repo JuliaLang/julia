@@ -86,9 +86,7 @@ end
 (-)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) - tons(y)))
 # The period `y` as a count of P. Throws an InexactError if `y` has more precision than P.
 function timestamp_period_ticks(::Type{P}, y::Union{FixedPeriod,TimePeriod}) where {P}
-    unit, scale = tons(oneunit(y)), timestamp_scale(P)
-    unit >= scale && return value(y) * (unit ÷ scale)
-    ticks, remainder = divrem(value(y), scale ÷ unit)
+    ticks, remainder = divrem(widen(value(y)) * tons(oneunit(y)), timestamp_scale(P))
     iszero(remainder) || throw(InexactError(:convert, P, y))
     return ticks
 end

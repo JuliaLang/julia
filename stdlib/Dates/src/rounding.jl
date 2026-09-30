@@ -102,13 +102,13 @@ function timestamp_rounding_value(dt::Timestamp{P}, ns, op::Symbol) where {P}
     return Timestamp{P}(UTInstant(P(ticks)))
 end
 
-# Rata Die day of the first day of month `m` of year `y`, as an Int128. A very large
-# rounding period can give a year for which `totaldays` overflows Int64.
+# Rata Die day of the first day of month `m` of year `y`. A very large year or
+# rounding period can require more than Int128 nanoseconds.
 @inline function timestamp_rounding_days(y, m)
     if typemin(Int64) ÷ 366 + 1 <= y <= typemax(Int64) ÷ 366 - 1
         return Int128(totaldays(Int64(y), Int64(m), 1))
     end
-    return totaldays(Int128(y), m, 1)
+    return totaldays(big(y), m, 1)
 end
 
 # `months` is the month of `dt`, counted from 0000-01, and `step` is the period in months
@@ -117,7 +117,7 @@ end
     fy, fm = fldmod(lower, 12)
     f = (timestamp_rounding_days(fy, fm + 1) - UNIXEPOCHDAYS) * NS_PER_DAY
     upper || return f, f
-    x = Int128(value(dt)) * timestamp_scale(typeof(dt))
+    x = widen(value(dt)) * timestamp_scale(typeof(dt))
     x == f && return f, f
     cy, cm = fldmod(lower + step, 12)
     c = (timestamp_rounding_days(cy, cm + 1) - UNIXEPOCHDAYS) * NS_PER_DAY
@@ -139,8 +139,8 @@ end
     value(p) < 1 && throw(DomainError(p))
     epoch = p isa Week ? WEEKEPOCH : DATEEPOCH
     epochns = Int128(UNIXEPOCHDAYS - epoch) * NS_PER_DAY
-    x = Int128(value(dt)) * timestamp_scale(typeof(dt))
-    step = Int128(value(p)) * tons(oneunit(p))
+    x = widen(value(dt)) * timestamp_scale(typeof(dt))
+    step = widen(value(p)) * tons(oneunit(p))
     f = x - mod(x + epochns, step)
     return f, !upper || x == f ? f : f + step
 end
@@ -155,7 +155,7 @@ function floorceil(dt::Timestamp, p::Period)
 end
 function Base.round(dt::Timestamp, p::Period, ::RoundingMode{:NearestTiesUp})
     f, c = timestamp_rounding_bounds(dt, p, true)
-    x = Int128(value(dt)) * timestamp_scale(typeof(dt))
+    x = widen(value(dt)) * timestamp_scale(typeof(dt))
     return timestamp_rounding_value(dt, x - f < c - x ? f : c, :round)
 end
 

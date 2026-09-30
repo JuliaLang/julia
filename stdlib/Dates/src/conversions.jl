@@ -38,7 +38,7 @@ Timestamp{P}(dt::TimeType) where {P} = convert(Timestamp{P}, dt)
 Base.convert(::Type{Timestamp}, dt::Union{Date,DateTime}) = convert(Timestamp{Nanosecond}, dt)
 Base.convert(::Type{Timestamp{P}}, dt::Timestamp{P}) where {P} = dt
 Base.convert(::Type{Timestamp{P}}, dt::Timestamp{Q}) where {P,Q} =
-    Timestamp{P}(UTInstant(P(timestamp_ticks(P, Int128(value(dt)) * timestamp_scale(Q)))))
+    Timestamp{P}(UTInstant(P(timestamp_ticks(P, widen(value(dt)) * timestamp_scale(Q)))))
 
 Base.convert(::Type{DateTime}, dt::Date) = DateTime(UTM(value(dt) * 86400000))
 Base.convert(::Type{Date}, dt::DateTime) = Date(UTD(days(dt)))
@@ -51,7 +51,7 @@ function Base.convert(::Type{Timestamp{P}}, dt::DateTime) where {P}
 end
 Base.convert(::Type{Timestamp{P}}, dt::Date) where {P} = Timestamp{P}(dt)
 Base.convert(::Type{DateTime}, dt::Timestamp{P}) where {P} =
-    DateTime(UTM(Int64(fld(Int128(value(dt)) * timestamp_scale(P), 1000000) + UNIXEPOCH)))
+    DateTime(UTM(Int64(fld(widen(value(dt)) * timestamp_scale(P), 1000000) + UNIXEPOCH)))
 Base.convert(::Type{Date}, dt::Timestamp) = Date(UTD(days(dt)))
 Base.convert(::Type{Time}, dt::Timestamp) = Time(Nanosecond(nsofday(dt)))
 
@@ -62,9 +62,9 @@ Base.convert(::Type{Day},dt::Date) = Day(value(dt))            # Converts Date t
 Base.convert(::Type{Timestamp},x::Nanosecond)  = Timestamp(UTInstant(x))       # Converts Unix nanoseconds to a Timestamp
 # Convert between a Timestamp and a period counted from the Unix epoch
 Base.convert(::Type{P}, dt::Timestamp{Q}) where {P<:TimePeriod,Q} =
-    P(timestamp_ticks(P, Int128(value(dt)) * timestamp_scale(Q), tons(oneunit(P))))
+    P(timestamp_ticks(P, widen(value(dt)) * timestamp_scale(Q), tons(oneunit(P))))
 Base.convert(::Type{Timestamp{P}}, x::Q) where {P,Q<:TimePeriod} =
-    Timestamp{P}(UTInstant(P(timestamp_ticks(P, Int128(value(x)) * tons(oneunit(Q))))))
+    Timestamp{P}(UTInstant(P(timestamp_ticks(P, widen(value(x)) * tons(oneunit(Q))))))
 
 ### External Conversions
 const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00:00:00
@@ -195,8 +195,9 @@ now(::Type{Timestamp}) = now(Timestamp{Nanosecond})
 function now(::Type{Timestamp{P}}) where {P}
     ts = clock_realtime()
     tm = Libc.TmStruct(ts.sec)
-    ns = fld(Int64(ts.nsec), timestamp_scale(P)) * timestamp_scale(P)
-    return Timestamp{P}(tm.year + 1900, tm.month + 1, tm.mday, tm.hour, tm.min, tm.sec, 0, 0, ns)
+    base = Timestamp{P}(tm.year + 1900, tm.month + 1, tm.mday, tm.hour, tm.min, tm.sec)
+    ticks = widen(value(base)) + fld(Int64(ts.nsec), timestamp_scale(P))
+    return Timestamp{P}(UTInstant(P(ticks)))
 end
 
 """
