@@ -3876,6 +3876,23 @@ precompile_test_harness("cache rejection reasons") do dir
     @test reasons == Dict(:incompatible_header => 1)
     @test Base.list_reasons(reasons) == " (no compatible cache for this version of Julia)"
 
+    # a cache for different flags is rejected before the rest of its header is read,
+    # so this works even for a cache file that ends right after the flags
+    if Base.CacheFlags().use_pkgimages # without pkgimages, the flags are not checked
+        flagscache = joinpath(dirname(cachefile), "RejectReasons_flagsonly.ji")
+        header = open(cachefile) do io
+            Base.isvalid_cache_header(io)
+            nbytes = position(io) + 2
+            read(seekstart(io), nbytes)
+        end
+        write(flagscache, header)
+        cf = Base.CacheFlags()
+        requested_flags = Base.CacheFlags(cf; check_bounds = cf.check_bounds == 1 ? 2 : 1)
+        reasons = Dict{Symbol,Int}()
+        @test Base.stale_cachefile(pkgfile, flagscache; reasons, requested_flags) === true
+        @test reasons == Dict(:flags_mismatch => 1)
+    end
+
     # changing the source makes the compatible cache stale for an actionable reason
     write(pkgfile,
           """

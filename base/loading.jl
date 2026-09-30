@@ -4716,10 +4716,13 @@ end
             record_reason(reasons, :incompatible_header)
             return true # incompatible cache file
         end
-        modules, (includes, _, requires), required_modules, srctextpos, prefs_blob, clone_targets, actual_flags, syntax_version = parse_cache_header(io, cachefile)
-        if isempty(modules)
-            return true # ignore empty file
-        end
+        # Check the flags, which come first, before parsing the rest of the header.
+        # A depot often holds caches of the same package for different flags (e.g.
+        # the bundled stdlibs, with and without `--check-bounds=yes`), and which one
+        # is tried first depends on file modification times, so rejecting the wrong
+        # one should be cheap.
+        header_start = position(io)
+        actual_flags = CacheFlags(read(io, UInt8), read(io, UInt8))
         if @ccall(jl_match_cache_flags(_cacheflag_to_uint8(requested_flags)::UInt8, _cacheflag_to_uint8(actual_flags)::UInt8)::UInt8) == 0 ||
            !match_cache_coverage(requested_flags, actual_flags)
             @debug """
@@ -4729,6 +4732,11 @@ end
             """
             record_reason(reasons, :flags_mismatch)
             return true
+        end
+        seek(io, header_start)
+        modules, (includes, _, requires), required_modules, srctextpos, prefs_blob, clone_targets, _, syntax_version = parse_cache_header(io, cachefile)
+        if isempty(modules)
+            return true # ignore empty file
         end
         if stalecheck && syntax_version != cache_syntax_version(modspec.julia_syntax_version)
             @debug "Rejecting cache file $cachefile for $modkey since it was parsed for a different Julia syntax version"
