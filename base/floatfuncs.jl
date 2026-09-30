@@ -159,17 +159,6 @@ function Base.round(x::AbstractFloat, ::typeof(RoundFromZero))
     signbit(x) ? round(x, RoundDown) : round(x, RoundUp)
 end
 
-"""
-    _tolerance(atol, scaled_rtol)
-
-The tolerance `max(atol, scaled_rtol)` used in approximate comparisons. The absolute tolerance
-`atol` has the units of the compared quantities, and so has `scaled_rtol`, the (dimensionless)
-relative tolerance multiplied by their magnitude. The default `atol = 0`, however, is a plain
-number without units, which cannot be compared with a dimensionful `scaled_rtol`; a zero `atol`
-is therefore taken to be `zero(scaled_rtol)`.
-"""
-_tolerance(atol, scaled_rtol) = iszero(atol) ? scaled_rtol : max(atol, scaled_rtol)
-
 # isapprox: approximate equality of numbers
 """
     isapprox(x, y; atol::Number=0, rtol::Real=atol>0 ? 0 : √eps, nans::Bool=false[, norm::Function])
@@ -185,8 +174,9 @@ the square root of [`eps`](@ref) of the type of `x` or `y`, whichever is bigger 
 This corresponds to requiring equality of about half of the significant digits. Otherwise,
 e.g. for integer arguments or if an `atol > 0` is supplied, `rtol` defaults to zero.
 
-The absolute tolerance `atol` has the same units as `x` and `y` (for dimensionful number
-types), whereas the relative tolerance `rtol` is a dimensionless number.
+The absolute tolerance `atol` has the same units as `x` and `y`; for dimensionful number types
+its default is the zero of those units, `zero(real(x))`. The relative tolerance `rtol` is a
+dimensionless number.
 
 The `norm` keyword defaults to `abs` for numeric `(x,y)` and to `LinearAlgebra.norm` for
 arrays (where an alternative `norm` choice is sometimes useful).
@@ -236,11 +226,11 @@ true
 ```
 """
 function isapprox(x::Number, y::Number;
-                  atol::Number=0, rtol::Real=rtoldefault(x,y,atol),
+                  atol::Number=zero(real(x)), rtol::Real=rtoldefault(x,y,atol),
                   nans::Bool=false, norm::Function=abs)
     x′, y′ = promote(x, y) # to avoid integer overflow
     x == y ||
-        (isfinite(x) && isfinite(y) && norm(x-y) <= _tolerance(atol, rtol*max(norm(x′), norm(y′)))) ||
+        (isfinite(x) && isfinite(y) && norm(x-y) <= max(atol, rtol*max(norm(x′), norm(y′)))) ||
          (nans && isnan(x) && isnan(y))
 end
 
@@ -307,7 +297,7 @@ function isapprox(x::Integer, y::Integer;
         return overflowed || _uabsdiff_le(x, y, max(atol, b))
     end
     return x == y ||
-        norm(_uabsdiff(x, y)) <= _tolerance(atol, rtol*max(norm(uabs(x)), norm(uabs(y))))
+        norm(_uabsdiff(x, y)) <= max(atol, rtol*max(norm(uabs(x)), norm(uabs(y))))
 end
 
 """

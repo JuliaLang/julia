@@ -243,11 +243,6 @@ end
     struct NoDefaultRtol <: Number end
     Base.one(::Type{NoDefaultRtol}) = NoDefaultRtol()
     @test_throws MethodError Base.rtoldefault(NoDefaultRtol)
-    @test Base._tolerance(0, x) === x
-    @test Base._tolerance(0, 0.25) === 0.25
-    @test Base._tolerance(0.5, 0.25) === 0.5
-    @test Base._tolerance(0.1, 0.25) === 0.25
-    @test isnan(Base._tolerance(0, NaN))
 end
 
 @testset "isapprox and integer overflow" begin
