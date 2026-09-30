@@ -594,7 +594,7 @@ module M
     end
 
     macro __FILE__()
-        JuliaLowering.filename(__context__.macrocall)
+        JuliaLowering.filename(__context__.macrocall) |> string
     end
 
     macro __LINE__()
@@ -1988,7 +1988,7 @@ end
     # tolerate nothing
     mac_ex = Expr(:macrocall, Symbol("@srcfile"), nothing)
     mac_st = JuliaLowering.expr_to_est(mac_ex, LineNumberNode(1, "badfile"))
-    @test JuliaLowering.eval(test_mod, mac_st) == "none"
+    @test JuliaLowering.eval(test_mod, mac_st) == ""
 end
 
 @testset "macro QuoteNode + inert behavior" begin

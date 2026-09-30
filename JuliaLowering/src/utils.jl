@@ -132,7 +132,13 @@ function Base.showerror(io::IO, exc::LoweringError; show_detail=true)
         st = exc.sts[i]
         msg = exc.msgs[i]
         src = sourceref(st)
-        highlight(io, src; note=msg)
+        if src isa LineNumberNode
+            l_str = (src.file === nothing || src.file === :var"") ?
+                "line " : "$(src.file):"
+            println(io, " at $(l_str)$(src.line): $msg")
+        else
+            highlight(io, src; note=msg)
+        end
         if exc.internal || src isa LineNumberNode
             print(io, "\nExpression:\n  ")
             show(io, MIME"text/x.sexpression"(), st)
@@ -170,10 +176,8 @@ function _show_provtree(io::IO, ex::SyntaxTree, indent)
         _show_provtree(io, src, string(indent, msrc === nothing ? "   " : "│  "))
     else
         @jl_assert ex.source isa Union{LineNumberNode, SourceRef} ex
-        src = sourceref(ex)
-        fn = filename(src)
-        line, _ = source_location(src)
-        printstyled(io, "@ $fn:$line\n", color=:light_black)
+        lno = first_linenode(ex)
+        printstyled(io, "@ $(lno.file):$(lno.line)\n", color=:light_black)
     end
     if msrc isa SyntaxTree
         printstyled(io, string(indent, "└─ "); color=:light_black)
@@ -197,7 +201,7 @@ function showprov(io::IO, exs::AbstractVector;
 
         if include_location
             line, _ = source_location(sr)
-            locstr = "$(filename(sr)):$line"
+            locstr = "$(filename(ex)):$line"
             JuliaSyntax._printstyled(io, "\n# @ $locstr", fgcolor=:light_black)
         end
     end

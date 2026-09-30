@@ -578,7 +578,7 @@ end
 25  (call core.declare_const TestMod :X %₂₄)
 26  latestworld
 27  TestMod.X
-28  SourceLocation:none:1:0
+28  SourceLocation::1:0
 29  (call top._defaultctors %₂₇ %₂₈)
 30  latestworld
 31  (= slot₁/val core.nothing)
@@ -588,7 +588,7 @@ end
 35  (call Pair{Symbol, Any} :b "field b docs")
 36  (call Dict{Symbol, Any} %₃₄ %₃₅)
 37  (call Pair :fields %₃₆)
-38  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod %₃₇)
+38  (call Dict{Symbol, Any} :path => "" :linenumber => 1 :module => TestMod %₃₇)
 39  (call Base.Docs.docstr %₃₃ %₃₈)
 40  TestMod.Union
 41  (call core.apply_type %₄₀)

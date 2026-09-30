@@ -12,15 +12,15 @@ else
     using JuliaSyntax
 end
 
-using Base: ScopeLayer, SyntaxContext, SourceRef, Syntax, SourceAttrType,
-    head, flattened_provenance, sourceref, unexpanded_sourceref,
+using Base: ScopeLayer, SyntaxContext, SourceCode, SourceRef, Syntax,
+    SourceAttrType, head, flattened_provenance, sourceref, unexpanded_sourceref,
     mapchildren, provenance, JL_NEW_EDITION, JL_OLD_EDITION, DEBUG_LOWERING,
     is_base_layer, base_layer, escape_layer, remove_scope, fill_context,
-    syntax_module, edition, adopt_scope, assert_syntax, @mknode, macro_prov
+    syntax_module, edition, adopt_scope, assert_syntax, @mknode, macro_prov,
+    isa_lowering_ast_node, filename, source_line, first_linenode
 
-using .JuliaSyntax: children, filename, first_byte, highlight, is_leaf,
-    last_byte, numchildren, source_location, sourcefile, source_line_range,
-    source_line
+using .JuliaSyntax: children, first_byte, highlight, is_leaf,
+    last_byte, numchildren, source_location
 
 
 const DEBUG = DEBUG_LOWERING

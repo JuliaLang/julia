@@ -319,7 +319,7 @@ Base.Experimental.@overlay mt f() = 1
 2   (call core.TypeEqOf %₁)
 3   (call core.svec %₂)
 4   (call core.svec)
-5   SourceLocation:nothing:1:0
+5   SourceLocation::1:0
 6   (call core.svec %₃ %₄ %₅)
 7   (call core.define_method TestMod TestMod.mt %₆
     --- code_info

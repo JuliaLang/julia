@@ -46,10 +46,16 @@ end
 
 # ignore_linenums=false is good for checking, but too noisy to use much
 function expr_equal_forgiving(e1, e2; ignore_linenums=true)
-    if e1 isa QuoteNode && e2 isa QuoteNode
+    typeof(e1) == typeof(e2) || return false
+    if e1 isa QuoteNode
         return expr_equal_forgiving(e1.value, e2.value; ignore_linenums)
+    elseif e1 isa LineNumberNode && !ignore_linenums
+        e1.file === nothing && (e1 = LineNumberNode(e1.line, :var""))
+        e2.file === nothing && (e2 = LineNumberNode(e2.line, :var""))
+    elseif e1 isa Core.MacroSource
+        return true # todo: remove this case
     end
-    !(e1 isa Expr && e2 isa Expr) && return e1 == e2
+    !(e1 isa Expr) && return e1 == e2
     if ignore_linenums
         e1, e2 = let e1b = Expr(e1.head), e2b = Expr(e2.head)
             e1b.args = filter(x->!(x isa LineNumberNode), e1.args)
@@ -493,7 +499,9 @@ test_toplevel_programs = [
                 a,b,c
             end
             """
-            @test JL.est_to_expr(JS.parsestmt(SyntaxTree, s)) == JS.parsestmt(Expr, s)
+            @test expr_equal_forgiving(
+                JL.est_to_expr(JS.parsestmt(SyntaxTree, s)),
+                JS.parsestmt(Expr, s); ignore_linenums=false)
         end
         @testset "linenodes equal in `for`" begin
             s = """
@@ -501,7 +509,9 @@ test_toplevel_programs = [
                 a,b,c
             end
             """
-            @test JL.est_to_expr(JS.parsestmt(SyntaxTree, s)) == JS.parsestmt(Expr, s)
+            @test expr_equal_forgiving(
+                JL.est_to_expr(JS.parsestmt(SyntaxTree, s)),
+                JS.parsestmt(Expr, s); ignore_linenums=false)
         end
     end
 

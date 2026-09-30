@@ -256,7 +256,7 @@ function bind_static_docs!(mod::Module, name::Symbol, docstr, lnn::LineNumberNod
     metadata = Dict{Symbol, Any}(
         :linenumber => lnn.line,
         :module => mod,
-        :path => something(lnn.file, "none"),
+        :path => string(something(lnn.file, :var"")),
     )
     bind = Base.Docs.Binding(mod, name)
     Docs.doc!(mod, bind, Base.Docs.docstr(docstr, metadata), sigtypes)
@@ -315,9 +315,10 @@ function _lower_generated_code(g::GeneratedFunctionStub, source::Method,
                                sc::SyntaxContext, __module__::Module,
                                world::UInt, @nospecialize(ex0))
     if ex0 isa Expr
-        ex0 = expr_to_est(ex0, source_location(LineNumberNode, g.srcref))
+        ex0 = expr_to_est(ex0, LineNumberNode(Int(source.line), source.file))
     end
-    # TODO: rebase mistake above?
+    # TODO: the above is possible with interpolated `return`, matching flisp,
+    # but we want to throw an error like below
     if !(ex0 isa SyntaxTree)
         ex0 isa Expr && throw(LoweringError(
             ex0, "implicit expr->syntaxtree: may later be allowed, but is probably a mistake today"))

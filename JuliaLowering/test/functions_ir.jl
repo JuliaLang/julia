@@ -1379,7 +1379,7 @@ end
 6   (call core.TypeEqOf %₅)
 7   (call core.svec %₆)
 8   (call core.svec)
-9   SourceLocation:nothing:4:0
+9   SourceLocation::4:0
 10  (call core.svec %₇ %₈ %₉)
 11  (call core.define_method TestMod TestMod.f %₁₀
     --- code_info
@@ -1390,7 +1390,7 @@ end
 14  (= slot₁/val %₁₃)
 15  (call Base.Docs.Binding TestMod :f)
 16  (call Core.svec "some docs\n")
-17  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod)
+17  (call Dict{Symbol, Any} :path => "" :linenumber => 1 :module => TestMod)
 18  (call Base.Docs.docstr %₁₆ %₁₇)
 19  TestMod.Union
 20  TestMod.Tuple
@@ -1415,7 +1415,7 @@ end
 3   TestMod.T
 4   (call core.svec %₃)
 5   (call core.svec)
-6   SourceLocation:nothing:4:0
+6   SourceLocation::4:0
 7   (call core.svec %₄ %₅ %₆)
 8   (call core.define_method TestMod core.nothing %₇
     --- code_info
@@ -1425,7 +1425,7 @@ end
 10  (= slot₁/val core.nothing)
 11  (call Base.Docs.Binding TestMod :T)
 12  (call Core.svec "some docs\n")
-13  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod)
+13  (call Dict{Symbol, Any} :path => "" :linenumber => 1 :module => TestMod)
 14  (call Base.Docs.docstr %₁₂ %₁₃)
 15  TestMod.Union
 16  TestMod.Tuple

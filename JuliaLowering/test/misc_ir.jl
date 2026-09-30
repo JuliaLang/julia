@@ -35,7 +35,8 @@ x."b"
 @ast_ [:. "x"::identifier "a"::identifier 3::value]
 #---------------------
 LoweringError:
-#= line 1 =# - invalid syntax: unknown form `.` or number of arguments 3
+ at line 1: invalid syntax: unknown form `.` or number of arguments 3
+
 Expression:
   (. x a 3)
 
@@ -255,7 +256,8 @@ LoweringError:
 @ast_ [:if]
 #---------------------
 LoweringError:
-#= line 1 =# - expected (if cond body) or (if cond body else)
+ at line 1: expected (if cond body) or (if cond body else)
+
 Expression:
   (if)
 
@@ -266,7 +268,8 @@ let
 end
 #---------------------
 LoweringError:
-#= none:2 =# - unimplemented or unsupported `atomic` declaration
+ at line 2: unimplemented or unsupported `atomic` declaration
+
 Expression:
   (atomic x)
 

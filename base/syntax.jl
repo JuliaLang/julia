@@ -24,9 +24,18 @@ mutable struct SyntaxContext
     const internal::Bool
 end
 
+# Similar to JuliaSyntax.SourceFile
+mutable struct SourceCode
+    const text::SubString{String}
+    const byte_offset::Int
+    const filename::Symbol
+    const first_line::Int
+    const line_starts::Vector{Int}
+end
+
 # Reference to bytes within a source file
 struct SourceRef
-    file::Any # Base.RefValue{JuliaSyntax.SourceFile}
+    code::SourceCode
     first_byte::UInt32
     last_byte::UInt32
 end
@@ -507,4 +516,195 @@ function _flattened_provenance(st::Syntax, out)
         _flattened_provenance(msrc, out)
     push!(out, prov_end(st))
     out
+end
+
+# TODO: We want a bigger API (probably like Compiler.source_location),
+# but avoid duplication with JuliaSyntax for now
+function filename(s::Syntax)
+    sr = sourceref(s)
+    n = sr isa LineNumberNode ? sr.file : sr.code.filename
+    n === nothing ? :var"" : n
+end
+function source_line(src::SourceCode, b)
+    src.first_line - 1 +
+        searchsortedlast(src.line_starts, b - src.byte_offset)
+end
+first_linenode(s::Syntax) = first_linenode(sourceref(s))
+first_linenode(sr::SourceRef) =
+    LineNumberNode(source_line(sr.code, sr.first_byte), sr.code.filename)
+first_linenode(lnn::LineNumberNode) = lnn
+
+#-------------------------------------------------------------------------------
+# Expr <-> Syntax
+#
+# Adding more cases to these functions is almost certainly wrong, since these
+# operates on arbitrary heads and arguments throughout macro expansion, not
+# well-formed syntax after expansion is done.  Most of the complexity here is
+# LineNumberNode absorption logic: linenodes are always considered provenance if
+# unquoted, then removed in certain forms.  If `src` is not an linenode, it is
+# assumed to be a better provenance source, so linenodes in `e` are not used for
+# provenance (but still removed).
+
+function _first_linenode(e::Expr)
+    e.head in (:macrocall, :quote, :inert) || for a in e.args
+        a isa LineNumberNode && return a
+        if a isa Expr
+            a_out = _first_linenode(a)
+            a_out isa LineNumberNode && return a_out
+        end
+    end
+    return nothing
+end
+first_linenode(e::Expr) = something(_first_linenode(e), LineNumberNode(0, :var""))
+
+_unescape_lnn(@nospecialize(e)) =
+    e isa LineNumberNode ? e :
+    (e isa Expr &&
+    (e.head === :escape || e.head === Symbol("hygienic-scope")) &&
+    length(e.args) > 0) ? _unescape_lnn(e.args[1]) : nothing
+
+# Linenodes usually apply to the following form, but some forms contain the
+# relevant line node as an argument.
+function _get_inner_lnn(e::Expr, default::LineNumberNode)
+    e.head in (:function, :macro, :module, :(=)) || return default
+    length(e.args) >= 2 || return default
+    b = e.args[end]
+    b isa Expr || return default
+    b.head === :block || return default
+    length(b.args) >= 1 || return default
+    b_lnn = _unescape_lnn(b.args[1])
+    return b_lnn isa LineNumberNode ? b_lnn : default
+end
+
+# List of Expr-AST forms that are always converted to some Syntax form and
+# never inserted as an opaque `:value`. Note no LineNumberNode, which appears
+# unwrapped in a macrocall (possibly generated functions too, TODO check)
+isa_lowering_ast_node(@nospecialize(e)) =
+    e isa Symbol || e isa QuoteNode || e isa Expr || e isa GlobalRef
+
+function expr_to_syntax(@nospecialize(e),
+                        src::Union{LineNumberNode, SourceRef}=
+                            e isa Expr ? first_linenode(e) : LineNumberNode(0, :var""),
+                        context=SyntaxContext(nothing, nothing, JL_OLD_EDITION, false))
+    _expr_to_syntax(e, context, src, false)[1]
+end
+function expr_to_syntax(@nospecialize(e), src::Syntax)
+    _expr_to_syntax(e, src.context, src, false)[1]
+end
+function _expr_to_syntax(@nospecialize(e), context::SyntaxContext,
+                      src::SourceAttrType, quoted::Bool)
+    s = if e isa Symbol
+        @mknode(;head=:identifier, value=String(e), source=src, context)
+    elseif e isa QuoteNode
+        cid, _ = _expr_to_syntax(e.value, context, src, true)
+        @mknode(;head=:inert, source=src, children=Syntax[cid], context)
+    elseif e isa Expr
+        h = e.head
+        if h === :value || h === :identifier
+            error("expr heads :value and :identifier are reserved")
+        end
+        src = old_src = src isa LineNumberNode ? _get_inner_lnn(e, src) : src
+        cs = Syntax[]
+        rm_linenodes = h in (:block, :toplevel)
+        quoted |= h in (:quote, :inert)
+        for arg in e.args
+            if rm_linenodes && (lnn = quoted ? arg : _unescape_lnn(arg);
+                                lnn isa LineNumberNode)
+                src isa LineNumberNode && (src = lnn)
+            else
+                cid, src = _expr_to_syntax(arg, context, src, quoted)
+                push!(cs, cid)
+            end
+        end
+        @mknode(;head=h, source=old_src, children=cs, context)
+    elseif e isa GlobalRef
+        # Represent globalref as :identifier with :mod attribute
+        @mknode(;head=:identifier, source=src, value=string(e.name),
+                mod=e.mod, context)
+    else
+        # We may want additional special cases for other types where
+        # `Base.isa_ast_node(e)`, but `:value` should be fine for most, since
+        # most are produced in or after lowering
+        if e isa LineNumberNode && src isa LineNumberNode
+            # linenode outside of block or toplevel
+            src = e
+        end
+        @mknode(;head=:value, value=e, source=src, context)
+    end
+    @assert isa_lowering_ast_node(e) || head(s) === :value s
+
+    return s, src
+end
+
+# @__doc__ is brittle
+function _is_meta_doc_block(s::Syntax)
+    head(s) === :block && numchildren(s) == 2 && let s1 = s[1]
+        head(s1) === :meta && numchildren(s1) == 1 && let s11 = s1[1]
+            head(s11) === :identifier && s11.value === "doc"
+        end
+    end
+end
+
+# `suppress_linenodes` is true if `st`'s parent knows `st` is an exception to
+# normal linenode rules.  It only applies to `st`, and not transitively to its
+# children.
+function syntax_to_expr(s::Syntax, suppress_linenodes=false)
+    h = head(s)
+    if h === :identifier
+        # @assert scope layer is base
+        n = Symbol(s.value::String)
+        mod = s.mod
+        !isnothing(mod) ? GlobalRef(mod, n) : n
+    elseif h === :value
+        v = s.value
+        # Let `s.value isa Symbol` (or other AST node).  Since we enforce that
+        # this is never produced by the reverse Expr->Syntax transformation,
+        # there is no lonely Expr for which `s` is the only Syntax
+        # representation.  This means we can pick some other expr this
+        # represents, namely Expr(`(inert ,s.value)) rather than
+        # Expr(s.value).
+        isa_lowering_ast_node(v) ? QuoteNode(v) : v
+    elseif h === :inert
+        QuoteNode(syntax_to_expr(s[1]))
+    else
+        # TODO: should handle post-lowering forms as well
+        @assert !is_leaf(s) (s, "syntax_to_expr should only be used pre-desugaring")
+        out = Expr(h)
+
+        # (Move the following assumptions to the docs if they turn out accurate)
+        # The only mandatory LineNumberNode is the second macrocall argument.
+        # Other than that, optional linenodes may show up anywhere within:
+        # - `block`, unless the block is the first child of `for` or `let`
+        # - `toplevel`
+        # Macro authors are responsible for handling any linenodes that follow
+        # the rules above (but the presence of optional linenodes can't be
+        # counted upon).
+        need_lnns = h in (:block, :toplevel) && !suppress_linenodes &&
+            !_is_meta_doc_block(s)
+        for (i, c) in enumerate(children(s))
+            need_lnns && push!(out.args, first_linenode(c))
+            let suppress_c = i == 1 && (h == :for || h == :let)
+                push!(out.args, syntax_to_expr(c, suppress_c))
+            end
+        end
+        # Add extra linenodes to some blocks for better provenance
+        if h === :block && length(out.args) == 0 && !suppress_linenodes
+            push!(out.args, first_linenode(s))
+        elseif h in (:module, :function, :macro) && length(out.args) > 0
+            let b = out.args[end]
+                b isa Expr && b.head === :block && pushfirst!(
+                    b.args, first_linenode(s))
+            end
+        elseif h in (:for, :while) && length(out.args) > 0
+            let b = out.args[end]
+                b isa Expr && b.head === :block && let sr = sourceref(s)
+                    last_lno = sr isa LineNumberNode ? sr :
+                        LineNumberNode(source_line(sr.code, sr.last_byte),
+                                       filename(s))
+                    push!(b.args, last_lno)
+                end
+            end
+        end
+        out
+    end
 end

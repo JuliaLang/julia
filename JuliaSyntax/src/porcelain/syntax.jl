@@ -1,13 +1,9 @@
-using Base: SyntaxContext, Syntax, SourceRef, @mknode, sourceref
+using Base: SyntaxContext, Syntax, SourceRef, @mknode, sourceref, SourceCode,
+    first_linenode
 
-sourcefile(src::SourceRef) = (src.file::Base.RefValue{SourceFile})[]
-first_byte(src::SourceRef) = Int(src.first_byte)
-last_byte(src::SourceRef) = Int(src.last_byte)
-byte_range(src::SourceRef) = first_byte(src):last_byte(src)
+sourcefile(src::SourceRef) = JuliaSyntax.SourceFile(src.code)
+byte_range(src::SourceRef) = Int(src.first_byte):Int(src.last_byte)
 
-# TODO: Adding these methods to support LineNumberNode is kind of hacky but we
-# can remove these after JuliaLowering becomes self-bootstrapping for macros
-# and we a proper SourceRef for @ast's @HERE form.
 byte_range(::LineNumberNode) = 0:0
 source_location(src::LineNumberNode) = (src.line, 0)
 source_location(::Type{LineNumberNode}, src::LineNumberNode) = src
@@ -33,14 +29,6 @@ function highlight(io::IO, src::LineNumberNode; note="")
     print(io, src, " - ", note)
 end
 
-function highlight(io::IO, src::SourceRef; kws...)
-    highlight(io, sourcefile(src), first_byte(src):last_byte(src); kws...)
-end
-
-# function Base.show(io::IO, ::MIME"text/plain", src::SourceRef)
-#     highlight(io, src; note="these are the bytes you're looking for 😊", context_lines_inner=20)
-# end
-
 function flags(ex::Syntax)
     ex.syntax_flags
 end
@@ -52,6 +40,15 @@ head(ex::Syntax) = Base.head(ex)
 
 # todo: remove
 SyntaxList(rest::Syntax...) = Syntax[rest...]
+
+Base.SourceCode(sf::SourceFile) = SourceCode(
+    sf.code, sf.byte_offset,
+    sf.filename === nothing ? :var"" : Symbol(sf.filename), sf.first_line,
+    sf.line_starts)
+
+SourceFile(src::SourceCode) = SourceFile(
+    src.text, src.byte_offset, string(src.filename),
+    src.first_line, src.line_starts)
 
 #-------------------------------------------------------------------------------
 # RawGreenNode->Syntax1
@@ -95,13 +92,13 @@ end
 function build_tree(::Type{Syntax}, stream::ParseStream;
                     filename=nothing, first_line=1)
     cursor = RedTreeCursor(stream)
-    sf = Ref(SourceFile(stream; filename, first_line))
-    source = SourceRef(sf, first_byte(stream), last_byte(stream))
+    src = SourceCode(SourceFile(stream; filename, first_line))
+    source = SourceRef(src, first_byte(stream), last_byte(stream))
     cs = SyntaxList()
     context = SyntaxContext(nothing, nothing, stream.version, false)
     for c in reverse_toplevel_siblings(cursor)
         is_trivia(c) && !is_error(kind(c)) && continue
-        push!(cs, Syntax(sf, c, context))
+        push!(cs, Syntax(src, c, context))
     end
     # There may be multiple non-trivia toplevel nodes (e.g. parse error)
     length(cs) === 1 && return only(cs)
@@ -109,11 +106,11 @@ function build_tree(::Type{Syntax}, stream::ParseStream;
     return id
 end
 
-function Base.Syntax(sf::Base.RefValue{SourceFile}, cursor::RedTreeCursor, context)
-    green_id = GC.@preserve sf begin
-        raw_offset, txtbuf = _unsafe_wrap_substring(sf[].code)
-        offset = raw_offset - sf[].byte_offset
-        _insert_green(sf, txtbuf, offset, cursor, context)
+function Base.Syntax(src::SourceCode, cursor::RedTreeCursor, context)
+    green_id = GC.@preserve src begin
+        raw_offset, txtbuf = _unsafe_wrap_substring(src.text)
+        offset = raw_offset - src.byte_offset
+        _insert_green(src, txtbuf, offset, cursor, context)
     end
     gst = green_id
     out = _green_to_est(gst, 0, gst)
@@ -121,10 +118,10 @@ function Base.Syntax(sf::Base.RefValue{SourceFile}, cursor::RedTreeCursor, conte
     return out
 end
 
-function _insert_green(sf::Base.RefValue{SourceFile},
+function _insert_green(src::SourceCode,
                        txtbuf::Vector{UInt8}, offset::Int,
                        cursor::RedTreeCursor, context::SyntaxContext)
-    source = SourceRef(sf, first_byte(cursor), last_byte(cursor))
+    source = SourceRef(src, first_byte(cursor), last_byte(cursor))
     k = kind(cursor)
     h = kind_to_head(k)
     syntax_flags = remove_flags(flags(cursor), NON_TERMINAL_FLAG)
@@ -138,7 +135,7 @@ function _insert_green(sf::Base.RefValue{SourceFile},
     elseif !is_leaf(cursor)
         cs = SyntaxList()
         for c in reverse(cursor)
-            push!(cs, _insert_green(sf, txtbuf, offset, c, context))
+            push!(cs, _insert_green(src, txtbuf, offset, c, context))
         end
         st = @mknode(;head=h, children=reverse!(cs), source, context, syntax_flags)
     else
@@ -231,7 +228,7 @@ function _green_to_est(parent::Syntax, parent_i::Int,
     elseif k === :cmdstring && n_cs > 0
         # (cmdstring _...) => (macrocall Core.@cmd lno joined_str)
         cmd_arg = _string_to_est(st, cs; unwrap_literal=true)
-        loc_st = valleaf(source_location(LineNumberNode, st))
+        loc_st = valleaf(first_linenode(st))
         return @mknode(;source=st, context, head=:macrocall,
                        children=SyntaxList(core_globalref("@cmd"), loc_st, cmd_arg))
     elseif k === :macro_name && n_cs === 1
@@ -282,7 +279,7 @@ function _green_to_est(parent::Syntax, parent_i::Int,
     elseif k === :macrocall && n_cs > 0
         # LineNumberNodes are not usually added to the tree as they are in Expr,
         # but this specifically inserts the macrocall child for compatibility
-        loc_st = let loc = source_location(LineNumberNode, st)
+        loc_st = let loc = first_linenode(st)
             if n_cs >= 2 && head(cs[2]) === :version
                 v = version_to_expr(popat!(cs, 2))
                 @static if isdefined(Core, :MacroSource)
@@ -305,7 +302,7 @@ function _green_to_est(parent::Syntax, parent_i::Int,
     elseif k === :doc
         # (doc str obj) => (macrocall Core.@doc lno str obj)
         ret_k = :macrocall
-        pushfirst!(cs, valleaf(source_location(LineNumberNode, st)))
+        pushfirst!(cs, valleaf(first_linenode(st)))
         pushfirst!(cs, core_globalref("@doc"))
     elseif k === :dotcall || k === :call && n_cs > 0
         if is_infix_op_call(st) || is_postfix_op_call(st)
