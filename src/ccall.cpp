@@ -2416,8 +2416,9 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     else if (sret) {
         jlretboxed = sretboxed;
         if (!jlretboxed) {
-            // something alloca'd above is SSA. A primitive is reloaded instead:
-            // the callee need not define its padding.
+            // something alloca'd above is SSA. A primitive is reloaded instead,
+            // keeping only its value bits: a C function returning `_BitInt(N)`
+            // leaves the bits above N unspecified.
             if (static_rt && !jl_is_primitivetype(rt))
                 return mark_julia_slot(result, rt, NULL, ctx.alias().stack);
             ++SRetCCalls;

@@ -749,8 +749,6 @@ static Type *julia_primitive_storage_type(Type *register_type)
 // The width `jt` occupies in memory. A primitive type's size is its value bytes
 // rounded up to a multiple of its alignment, so an odd-bit integer is reached with
 // one power-of-two access rather than several.
-// Only the canonical register type widens this way; ABI coercions, which may sit on
-// a smaller object, keep their own width.
 static Type *julia_memory_access_type(Type *register_type, jl_value_t *jt)
 {
     if (jl_is_primitivetype(jt) && register_type->isIntegerTy() &&

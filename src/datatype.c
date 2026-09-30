@@ -1041,9 +1041,9 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
     bt->ismutationfree = 1;
     bt->isidentityfree = 1;
     bt->isbitstype = (parameters == jl_emptysvec);
-    // Round the value bytes up to a multiple of the alignment, as C23 lays out
-    // `_BitInt(N)`: `Core.sizeof` is that allocation size, and the trailing bytes
-    // are padding.
+    // Round the value bytes up to a multiple of the alignment, so that `Core.sizeof`
+    // is the allocation size; the trailing bytes are padding. Up to 64 bits this is
+    // how C lays out `_BitInt(N)`.
     uint32_t size = LLT_ALIGN(nbytes, alignm);
     uint8_t unused_bits = (uint8_t)(size * 8 - nbits);
     bt->layout = jl_get_layout(size, 0, 0, alignm, unused_bits != 0, 1, 0, unused_bits, NULL, NULL);

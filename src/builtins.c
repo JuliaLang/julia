@@ -98,8 +98,8 @@ static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b) JL_NOTSAFEPOINT
     return 1;
 }
 
-// Bytes of a primitive type that hold value bits, and the mask of the last of them.
-// The remaining bytes up to jl_datatype_size are padding.
+// Bytes of a primitive type that hold value bits. The remaining bytes up to
+// jl_datatype_size are padding.
 static inline size_t used_bytes(jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     return (jl_datatype_nbits(dt) + 7) / 8;
