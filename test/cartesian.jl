@@ -627,3 +627,11 @@ end
         end
     end
 end
+
+@testset "zero-dimensional CartesianIndex with a colon" begin
+    A = collect(reshape(1:6, 2, 3))
+    @test A[:, CartesianIndex()] == A[CartesianIndex(), :] == A[:]
+    @test view(A, :, CartesianIndex()) == A[:]
+    A[:, CartesianIndex()] .= 0
+    @test iszero(A)
+end
