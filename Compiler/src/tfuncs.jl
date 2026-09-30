@@ -167,6 +167,34 @@ end
 # IntrinsicFunction
 # =================
 
+# If `t` is a SIMD vector type, i.e. an `NTuple{N,VecElement{T}}` that codegen represents as an
+# LLVM `<N x T>` (see `jl_simd_vector_eltype`), return the lane type `T`, otherwise `nothing`.
+function simd_vector_eltype(@nospecialize t)
+    (isa(t, DataType) && t.name === Tuple.name && isconcretetype(t)) || return nothing
+    params = t.parameters
+    n = length(params)
+    n == 0 && return nothing
+    el = params[1]
+    for i = 2:n
+        params[i] === el || return nothing
+    end
+    (isa(el, DataType) && el.name === VecElement.body.name) || return nothing
+    T = el.parameters[1]
+    isprimitivetype(T) || return nothing
+    sz = Core.sizeof(T)
+    (sz & (sz - 1) == 0 && Core.bitsizeof(T) == 8sz) || return nothing
+    return T
+end
+
+# For a type `t` accepted by the elementwise intrinsics, return its number of lanes (0 for a
+# primitive type) and (lane) element type, otherwise `nothing`.
+function intrinsic_lanes(@nospecialize t)
+    isprimitivetype(t) && return (0, t)
+    T = simd_vector_eltype(t)
+    T === nothing && return nothing
+    return (length((t::DataType).parameters), T)
+end
+
 # conversion
 # ----------
 
@@ -289,7 +317,14 @@ add_tfunc(sqrt_llvm_fast, 1, 1, math_tfunc, 20)
 # -----------
 
 @nospecs cmp_tfunc(𝕃::AbstractLattice, a, b) = cmp_tfunc(widenlattice(𝕃), a, b)
-@nospecs cmp_tfunc(::JLTypeLattice, a, b) = Bool
+@nospecs function cmp_tfunc(::JLTypeLattice, a, b)
+    # comparisons of SIMD vectors produce a vector of Bool. Both arguments must have the same
+    # type at runtime, so their intersection bounds that type.
+    t = typeintersect(widenconst(a), widenconst(b))
+    simd_vector_eltype(t) === nothing || return NTuple{length((t::DataType).parameters), VecElement{Bool}}
+    hasintersect(t, Tuple{Vararg{VecElement}}) || return Bool
+    return Union{Bool, Tuple{Vararg{VecElement{Bool}}}}
+end
 
 add_tfunc(eq_int, 2, 2, cmp_tfunc, 1)
 add_tfunc(ne_int, 2, 2, cmp_tfunc, 1)
@@ -2822,6 +2857,15 @@ const _FLOAT_INTRINSICS = Any[
 # Types compatible with fpext/fptrunc
 const CORE_FLOAT_TYPES = Union{Core.BFloat16, Float16, Float32, Float64}
 
+const _CHECKED_INTRINSICS = Any[
+    Intrinsics.checked_sadd_int,
+    Intrinsics.checked_uadd_int,
+    Intrinsics.checked_ssub_int,
+    Intrinsics.checked_usub_int,
+    Intrinsics.checked_smul_int,
+    Intrinsics.checked_umul_int,
+]
+
 function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     # consistent if the first arg is immutable
     na = length(argtypes)
@@ -3346,7 +3390,11 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
         if !isconcrete
             return Union{ErrorException, TypeError}
         end
-        if !(isprimitivetype(ty) && isprimitivetype(xty) && Core.bitsizeof(ty) === Core.bitsizeof(xty))
+        tyl = intrinsic_lanes(ty)
+        xtyl = intrinsic_lanes(xty)
+        (tyl === nothing || xtyl === nothing) && return ErrorException
+        # SIMD vectors are bitcast as a whole
+        if max(tyl[1], 1) * Core.bitsizeof(tyl[2]) !== max(xtyl[1], 1) * Core.bitsizeof(xtyl[2])
             return ErrorException
         end
         return Union{}
@@ -3362,9 +3410,13 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
             return Union{ErrorException, TypeError}
         end
         xty = widenconst(argtypes[2])
-        if !(isprimitivetype(ty) && isprimitivetype(xty))
+        # SIMD vectors convert lane-wise to vectors with the same number of lanes
+        tyl = intrinsic_lanes(ty)
+        xtyl = intrinsic_lanes(xty)
+        if tyl === nothing || xtyl === nothing || tyl[1] != xtyl[1]
             return ErrorException
         end
+        ty, xty = tyl[2], xtyl[2]
 
         # fpext, sext_int, zext_int, fptrunc, trunc_int, fptoui, fptosi, uitofp, and sitofp
         # have further restrictions on the allowed types.
@@ -3421,17 +3473,25 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
 
     # The remaining intrinsics are math/bits/comparison intrinsics.
     # All the non-floating point intrinsics work on primitive values of the same type.
+    # They also work lane-wise on SIMD vectors, except for checked arithmetic.
     isshift = f === shl_int || f === lshr_int || f === ashr_int
     argtype1 = widenconst(argtypes[1])
-    isprimitivetype(argtype1) || return ErrorException
-    f === bswap_int && Core.bitsizeof(argtype1) % 16 != 0 && return ErrorException
+    lanes1 = intrinsic_lanes(argtype1)
+    lanes1 === nothing && return ErrorException
+    nlanes, eltype1 = lanes1
+    nlanes != 0 && contains_is(_CHECKED_INTRINSICS, f) && return ErrorException
+    f === bswap_int && Core.bitsizeof(eltype1) % 16 != 0 && return ErrorException
     if contains_is(_FLOAT_INTRINSICS, f)
-        argtype1 <: CORE_FLOAT_TYPES || return ErrorException
+        eltype1 <: CORE_FLOAT_TYPES || return ErrorException
     end
 
     for i = 2:length(argtypes)
         argtype = widenconst(argtypes[i])
-        if isshift ? !isprimitivetype(argtype) : argtype !== argtype1
+        if isshift
+            # the shift amount may have a different (lane) type, but must have the same number of lanes
+            lanes = intrinsic_lanes(argtype)
+            (lanes === nothing || lanes[1] != nlanes) && return ErrorException
+        elseif argtype !== argtype1
             return ErrorException
         end
     end

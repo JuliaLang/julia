@@ -148,6 +148,10 @@ static Type *FLOATT(Type *t)
 {
     if (t->isFloatingPointTy())
         return t;
+    if (auto *vt = dyn_cast<VectorType>(t)) {
+        Type *et = FLOATT(vt->getElementType());
+        return et ? VectorType::get(et, vt->getElementCount()) : NULL;
+    }
     unsigned nb = (t->isPointerTy() ? sizeof(void*) * 8 : t->getPrimitiveSizeInBits());
     auto &ctxt = t->getContext();
     if (nb == 64)
@@ -169,6 +173,8 @@ static Type *INTT(Type *t, const DataLayout &DL)
         return t;
     if (t->isPointerTy())
         return DL.getIntPtrType(t);
+    if (auto *vt = dyn_cast<VectorType>(t))
+        return VectorType::get(INTT(vt->getElementType(), DL), vt->getElementCount());
     if (t == getDoubleTy(ctxt))
         return getInt64Ty(ctxt);
     if (t == getFloatTy(ctxt))
@@ -559,6 +565,51 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
     emit_memcpy(ctx, dest, dest_ai, x, jl_datatype_size(x.typ), Align(align_dst), align_src ? *align_src : Align(julia_alignment(x.typ)), isVolatile);
 }
 
+// The LLVM type that intrinsics operate on for values of Julia type `typ`: for primitive types
+// this is `bitstype_to_llvm` (with Bool as i1), for SIMD vectors (see `jl_simd_vector_eltype`) a
+// vector of that. `*elty` is set to the (lane) element type. Returns NULL for other types.
+static Type *intrinsic_type_to_llvm(jl_value_t *typ, LLVMContext &ctxt, jl_value_t **elty = nullptr)
+{
+    if (jl_is_primitivetype(typ)) {
+        if (elty)
+            *elty = typ;
+        return bitstype_to_llvm(typ, ctxt, true);
+    }
+    jl_datatype_t *et = jl_simd_vector_eltype(typ);
+    if (!et)
+        return NULL;
+    Type *lt = bitstype_to_llvm((jl_value_t*)et, ctxt, true);
+    // vectors of pointers are left to the runtime
+    if (lt->isPointerTy())
+        return NULL;
+    if (elty)
+        *elty = (jl_value_t*)et;
+    return FixedVectorType::get(lt, jl_nparams(typ));
+}
+
+static bool is_bool_vector(Type *t)
+{
+    return t->isVectorTy() && t->getScalarType()->isIntegerTy(1);
+}
+
+// unbox an intrinsic argument as type `to`; Bool lanes are stored as i8 but operated on as i1
+static Value *emit_unbox_intrinsic_arg(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x) JL_CANSAFEPOINT
+{
+    if (is_bool_vector(to)) {
+        Type *storage = VectorType::get(getInt8Ty(ctx.builder.getContext()), cast<VectorType>(to)->getElementCount());
+        return ctx.builder.CreateTrunc(emit_unbox(ctx, storage, x), to);
+    }
+    return emit_unbox(ctx, to, x);
+}
+
+// the inverse of `emit_unbox_intrinsic_arg` for the result of an intrinsic
+static jl_cgval_t mark_intrinsic_result(jl_codectx_t &ctx, Value *v, jl_value_t *typ) JL_CANSAFEPOINT
+{
+    if (is_bool_vector(v->getType()))
+        v = ctx.builder.CreateZExt(v, VectorType::get(getInt8Ty(ctx.builder.getContext()), cast<VectorType>(v->getType())->getElementCount()));
+    return mark_julia_type(ctx, v, false, typ);
+}
+
 static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
 {
     // evaluate an argument at compile time to determine what type it is.
@@ -575,6 +626,17 @@ static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
     return NULL;
 }
 
+// like `staticeval_bitstype`, but for SIMD vector types
+static jl_datatype_t *staticeval_simd_vectortype(const jl_cgval_t &targ)
+{
+    if (is_uniquerep_Type(targ.typ)) {
+        jl_value_t *bt = jl_some_Type_T(targ.typ);
+        if (jl_simd_vector_eltype(bt))
+            return (jl_datatype_t*)bt;
+    }
+    return NULL;
+}
+
 static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, ArrayRef<jl_cgval_t> argv, size_t nargs)
 {
     Function *func = prepare_call(runtime_func()[f]);
@@ -586,6 +648,37 @@ static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, ArrayR
     return mark_julia_type(ctx, r, true, (jl_value_t*)jl_any_type);
 }
 
+// bitcast where the target type `bt` and/or the value is a SIMD vector
+static jl_cgval_t emit_simd_vector_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv, jl_datatype_t *bt) JL_CANSAFEPOINT
+{
+    const jl_cgval_t &v = argv[1];
+    LLVMContext &ctxt = ctx.builder.getContext();
+    // reinterpret the storage, where Bool is i8
+    auto storage_type = [&](jl_value_t *typ) -> Type* {
+        Type *t = intrinsic_type_to_llvm(typ, ctxt);
+        if (!t || t->isPointerTy())
+            return nullptr;
+        if (t->getScalarType()->isIntegerTy(1)) {
+            Type *i8 = getInt8Ty(ctxt);
+            t = t->isVectorTy() ? VectorType::get(i8, cast<VectorType>(t)->getElementCount()) : i8;
+        }
+        return t;
+    };
+    Type *to = storage_type((jl_value_t*)bt);
+    Type *from = storage_type(v.typ);
+    // it's easier to throw a good error from C than llvm
+    if (!jl_is_concrete_type((jl_value_t*)bt) || !to || !from ||
+        jl_Module->getDataLayout().getTypeSizeInBits(to) != jl_Module->getDataLayout().getTypeSizeInBits(from))
+        return emit_runtime_call(ctx, bitcast, argv, 2);
+    Value *vx = ctx.builder.CreateBitCast(emit_unbox(ctx, from, v), to);
+    Type *opt = intrinsic_type_to_llvm((jl_value_t*)bt, ctxt);
+    if (opt->getScalarType()->isIntegerTy(1)) {
+        // as for scalars, only the low bit of each Bool is kept
+        return mark_intrinsic_result(ctx, ctx.builder.CreateTrunc(vx, opt), (jl_value_t*)bt);
+    }
+    return mark_julia_type(ctx, vx, false, (jl_value_t*)bt);
+}
+
 // put a bits type tag on some value (despite the name, this doesn't necessarily actually change anything about the value however)
 static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) JL_CANSAFEPOINT
 {
@@ -593,6 +686,11 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) 
     const jl_cgval_t &bt_value = argv[0];
     const jl_cgval_t &v = argv[1];
     jl_datatype_t *bt = staticeval_bitstype(bt_value);
+
+    if (jl_datatype_t *vbt = staticeval_simd_vectortype(bt_value))
+        return emit_simd_vector_bitcast(ctx, argv, vbt);
+    if (bt && jl_simd_vector_eltype(v.typ))
+        return emit_simd_vector_bitcast(ctx, argv, bt);
 
     // it's easier to throw a good error from C than llvm
     if (!bt)
@@ -701,11 +799,17 @@ static jl_cgval_t generic_cast(
     const jl_cgval_t &targ = argv[0];
     const jl_cgval_t &v = argv[1];
     jl_datatype_t *jlto = staticeval_bitstype(targ);
-    if (!jlto || !jl_is_primitivetype(v.typ))
+    if (!jlto)
+        jlto = staticeval_simd_vectortype(targ);
+    if (!jlto)
         return emit_runtime_call(ctx, f, argv, 2);
     uint32_t nb = jl_datatype_size(jlto);
-    Type *to = bitstype_to_llvm((jl_value_t*)jlto, ctx.builder.getContext(), true);
-    Type *vt = bitstype_to_llvm(v.typ, ctx.builder.getContext(), true);
+    Type *to = intrinsic_type_to_llvm((jl_value_t*)jlto, ctx.builder.getContext());
+    Type *vt = intrinsic_type_to_llvm(v.typ, ctx.builder.getContext());
+    // SIMD vectors convert lane-wise to vectors with the same number of lanes
+    if (!to || !vt || to->isVectorTy() != vt->isVectorTy() ||
+        (to->isVectorTy() && cast<VectorType>(to)->getElementCount() != cast<VectorType>(vt)->getElementCount()))
+        return emit_runtime_call(ctx, f, argv, 2);
 
     // fptrunc and fpext depend on the specific floating point
     // format to work correctly, and so do not pun their argument types.
@@ -729,7 +833,7 @@ static jl_cgval_t generic_cast(
     if (!to || !vt)
         return emit_runtime_call(ctx, f, argv, 2);
 
-    Value *from = emit_unbox(ctx, vt, v);
+    Value *from = emit_unbox_intrinsic_arg(ctx, vt, v);
     if (!CastInst::castIsValid(Op, from, to))
         return emit_runtime_call(ctx, f, argv, 2);
     if (Op == Instruction::FPExt) {
@@ -752,7 +856,7 @@ static jl_cgval_t generic_cast(
     if (f == fptosi || f == fptoui)
         ans = ctx.builder.CreateFreeze(ans);
     if (jl_is_concrete_type((jl_value_t*)jlto)) {
-        return mark_julia_type(ctx, ans, false, jlto);
+        return mark_intrinsic_result(ctx, ans, (jl_value_t*)jlto);
     }
     else {
         Value *targ_rt = boxed(ctx, targ);
@@ -1466,12 +1570,13 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         ++Emitted_not_int;
         assert(nargs == 1);
         const jl_cgval_t &x = argv[0];
-        if (!jl_is_primitivetype(x.typ))
+        Type *xt = intrinsic_type_to_llvm(x.typ, ctx.builder.getContext());
+        if (!xt)
             return emit_runtime_call(ctx, f, argv, nargs);
-        Type *xt = INTT(bitstype_to_llvm(x.typ, ctx.builder.getContext(), true), DL);
-        Value *from = emit_unbox(ctx, xt, x);
+        xt = INTT(xt, DL);
+        Value *from = emit_unbox_intrinsic_arg(ctx, xt, x);
         Value *ans = ctx.builder.CreateNot(from);
-        return mark_julia_type(ctx, ans, false, x.typ);
+        return mark_intrinsic_result(ctx, ans, x.typ);
     }
 
     case have_fma: {
@@ -1501,15 +1606,23 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         const jl_cgval_t &xinfo = argv[0];
 
         // verify argument types
-        if (!jl_is_primitivetype(xinfo.typ))
+        jl_value_t *xel = NULL;
+        Type *xtyp = intrinsic_type_to_llvm(xinfo.typ, ctx.builder.getContext(), &xel);
+        if (!xtyp)
             return emit_runtime_call(ctx, f, argv, nargs);
-        if (f == bswap_int && jl_datatype_nbits((jl_datatype_t*)xinfo.typ) % 16 != 0) {
+        bool isvector = xtyp->isVectorTy();
+        // checked arithmetic is not defined for SIMD vectors
+        if (isvector && (f == checked_sadd_int || f == checked_uadd_int || f == checked_ssub_int ||
+                         f == checked_usub_int || f == checked_smul_int || f == checked_umul_int ||
+                         f == checked_sdiv_int || f == checked_udiv_int || f == checked_srem_int ||
+                         f == checked_urem_int))
+            return emit_runtime_call(ctx, f, argv, nargs);
+        if (f == bswap_int && jl_datatype_nbits((jl_datatype_t*)xel) % 16 != 0) {
             emit_error(ctx, "bswap_int: argument bitsize must be a multiple of 16");
             return jl_cgval_t();
         }
-        Type *xtyp = bitstype_to_llvm(xinfo.typ, ctx.builder.getContext(), true);
         if (float_func()[f]) {
-            if (!xtyp->isFloatingPointTy())
+            if (!xtyp->getScalarType()->isFloatingPointTy())
                 return emit_runtime_call(ctx, f, argv, nargs);
         }
         else {
@@ -1531,9 +1644,12 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         argt[0] = xtyp;
 
         if (f == shl_int || f == lshr_int || f == ashr_int) {
-            if (!jl_is_primitivetype(argv[1].typ))
+            // the shift amount may have a different (lane) type, but must have the same number of lanes
+            Type *yt = intrinsic_type_to_llvm(argv[1].typ, ctx.builder.getContext());
+            if (!yt || yt->isVectorTy() != isvector ||
+                (isvector && cast<VectorType>(yt)->getElementCount() != cast<VectorType>(xtyp)->getElementCount()))
                 return emit_runtime_call(ctx, f, argv, nargs);
-            argt[1] = INTT(bitstype_to_llvm(argv[1].typ, ctx.builder.getContext(), true), DL);
+            argt[1] = INTT(yt, DL);
         }
         else {
             for (size_t i = 1; i < nargs; ++i) {
@@ -1546,16 +1662,23 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         // unbox the arguments
         SmallVector<Value *, 0> argvalues(nargs);
         for (size_t i = 0; i < nargs; ++i) {
-            argvalues[i] = emit_unbox(ctx, argt[i], argv[i]);
+            argvalues[i] = emit_unbox_intrinsic_arg(ctx, argt[i], argv[i]);
         }
 
         // call the intrinsic
         jl_value_t *newtyp = xinfo.typ;
         Value *r = emit_untyped_intrinsic(ctx, f, argvalues, nargs, (jl_datatype_t**)&newtyp, xinfo.typ);
-        // Turn Bool operations into mod 1 now, if needed
-        if (newtyp == (jl_value_t*)jl_bool_type && !r->getType()->isIntegerTy(1))
-            r = ctx.builder.CreateTrunc(r, getInt1Ty(ctx.builder.getContext()));
-        return mark_julia_type(ctx, r, false, newtyp);
+        if (newtyp == (jl_value_t*)jl_bool_type) {
+            if (isvector) {
+                // comparisons of SIMD vectors produce a vector of Bool
+                newtyp = jl_simd_vector_type(cast<FixedVectorType>(xtyp)->getNumElements(), jl_bool_type);
+            }
+            else if (!r->getType()->isIntegerTy(1)) {
+                // Turn Bool operations into mod 1 now, if needed
+                r = ctx.builder.CreateTrunc(r, getInt1Ty(ctx.builder.getContext()));
+            }
+        }
+        return mark_intrinsic_result(ctx, r, newtyp);
     }
     }
     assert(0 && "unreachable");
@@ -1749,10 +1872,10 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
 
     case shl_int: {
         Value *the_shl = ctx.builder.CreateShl(x, uint_cnvt(ctx, t, y));
-        if (ConstantInt::isValueValidForType(y->getType(), t->getPrimitiveSizeInBits())) {
+        if (ConstantInt::isValueValidForType(y->getType()->getScalarType(), (uint64_t)t->getScalarSizeInBits())) {
             return ctx.builder.CreateSelect(
                     ctx.builder.CreateICmpUGE(y, ConstantInt::get(y->getType(),
-                                                                  t->getPrimitiveSizeInBits())),
+                                                                  t->getScalarSizeInBits())),
                     ConstantInt::get(t, 0),
                     the_shl);
         }
@@ -1762,10 +1885,10 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
     }
     case lshr_int: {
         Value *the_shr = ctx.builder.CreateLShr(x, uint_cnvt(ctx, t, y));
-        if (ConstantInt::isValueValidForType(y->getType(), t->getPrimitiveSizeInBits())) {
+        if (ConstantInt::isValueValidForType(y->getType()->getScalarType(), (uint64_t)t->getScalarSizeInBits())) {
             return ctx.builder.CreateSelect(
                     ctx.builder.CreateICmpUGE(y, ConstantInt::get(y->getType(),
-                                                                  t->getPrimitiveSizeInBits())),
+                                                                  t->getScalarSizeInBits())),
                     ConstantInt::get(t, 0),
                     the_shr);
         }
@@ -1775,11 +1898,11 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
     }
     case ashr_int: {
         Value *the_shr = ctx.builder.CreateAShr(x, uint_cnvt(ctx, t, y));
-        if (ConstantInt::isValueValidForType(y->getType(), t->getPrimitiveSizeInBits())) {
+        if (ConstantInt::isValueValidForType(y->getType()->getScalarType(), (uint64_t)t->getScalarSizeInBits())) {
             return ctx.builder.CreateSelect(
                     ctx.builder.CreateICmpUGE(y, ConstantInt::get(y->getType(),
-                                                                  t->getPrimitiveSizeInBits())),
-                    ctx.builder.CreateAShr(x, ConstantInt::get(t, t->getPrimitiveSizeInBits() - 1)),
+                                                                  t->getScalarSizeInBits())),
+                    ctx.builder.CreateAShr(x, ConstantInt::get(t, t->getScalarSizeInBits() - 1)),
                     the_shr);
         }
         else {
@@ -1849,7 +1972,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
             APInt iy = cy->getValue();
             return iy.isNonNegative() ? x : ctx.builder.CreateSub(ConstantInt::get(t, 0), x);
         }
-        Value *tmp = ctx.builder.CreateAShr(y, ConstantInt::get(t, cast<IntegerType>(t)->getBitWidth() - 1));
+        Value *tmp = ctx.builder.CreateAShr(y, ConstantInt::get(t, t->getScalarSizeInBits() - 1));
         return ctx.builder.CreateXor(ctx.builder.CreateAdd(x, tmp), tmp);
     }
     case ceil_llvm: {

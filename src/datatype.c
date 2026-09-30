@@ -351,6 +351,44 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
     return next_power_of_two(size);
 }
 
+// If `t` is a SIMD vector type, i.e. an `NTuple{N,VecElement{T}}` that codegen represents as an
+// LLVM `<N x T>`, return the lane type `T`, otherwise NULL.
+// The conditions on the lane type match those of `jl_special_vector_alignment`.
+JL_DLLEXPORT jl_datatype_t *jl_simd_vector_eltype(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    if (!jl_is_tuple_type(t) || !jl_is_concrete_type(t))
+        return NULL;
+    size_t nfields = jl_nparams(t);
+    if (nfields == 0)
+        return NULL;
+    jl_value_t *el = jl_tparam0(t);
+    for (size_t i = 1; i < nfields; i++) {
+        if (jl_tparam(t, i) != el)
+            return NULL;
+    }
+    if (!jl_is_vecelement_type(el))
+        return NULL;
+    jl_value_t *ty = jl_tparam0(el);
+    if (!jl_is_primitivetype(ty))
+        return NULL;
+    size_t elsz = jl_datatype_size(ty);
+    if (next_power_of_two(elsz) != elsz || jl_datatype_nbits((jl_datatype_t*)ty) != elsz * 8)
+        return NULL;
+    return (jl_datatype_t*)ty;
+}
+
+// Construct the SIMD vector type `NTuple{n,VecElement{el}}`.
+JL_DLLEXPORT jl_value_t *jl_simd_vector_type(size_t n, jl_datatype_t *el)
+{
+    jl_value_t *vecel = jl_apply_type1(jl_vecelement_typename->wrapper, (jl_value_t*)el);
+    jl_svec_t *params = NULL;
+    JL_GC_PUSH2(&vecel, &params);
+    params = jl_svec_fill(n, vecel);
+    jl_value_t *vt = jl_apply_tuple_type(params, 0);
+    JL_GC_POP();
+    return vt;
+}
+
 STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d) JL_NOTSAFEPOINT
 {
     // Check d->layout first to avoid NULL dereference (can be NULL during typegroup resolution)

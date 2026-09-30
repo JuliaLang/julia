@@ -6,7 +6,7 @@ import ..Random: rand!
 using ..Random: TaskLocalRNG, rand, Xoshiro, CloseOpen01, UnsafeView, SamplerType, SamplerTrivial, getstate, setstate!, _uint2float
 using Base: BitInteger_types
 using Base.Libc: memcpy
-using Core.Intrinsics: llvmcall
+using Core.Intrinsics: add_int, and_int, bitcast, lshr_int, mul_float, or_int, shl_int, uitofp, xor_int
 
 # Vector-width. Influences random stream.
 xoshiroWidth() = Val(8)
@@ -22,13 +22,7 @@ simdThreshold(::Type{Bool}) = 640
 @inline _and(x::UInt64, y::UInt64) = x & y
 @inline _or(x::UInt64, y::UInt64) = x | y
 @inline _lshr(x, y::Int32) = _lshr(x, y % Int64)
-@inline _lshr(x::UInt64, y::Int64) = llvmcall("""
-    %res = lshr i64 %0, %1
-    ret i64 %res
-    """,
-    UInt64,
-    Tuple{UInt64, Int64},
-    x, y)
+@inline _lshr(x::UInt64, y::Int64) = lshr_int(x, y)
 
 # `_bits2float(x::UInt64, T)` takes `x::UInt64` as input, it splits it in `N` parts where
 # `N = sizeof(UInt64) / sizeof(T)` (`N = 1` for `Float64`, `N = 2` for `Float32`, etc.), it
@@ -61,92 +55,35 @@ end
     return (UInt64(reinterpret(UInt16, f1)) << 48) | (UInt64(reinterpret(UInt16, f2)) << 32) | (UInt64(reinterpret(UInt16, f3)) << 16) | UInt64(reinterpret(UInt16, f4))
 end
 
-# required operations. These could be written more concisely with `ntuple`, but the compiler
-# sometimes refuses to properly vectorize.
-for N in [4,8,16]
-    let code, s, fshl = "llvm.fshl.v$(N)i64",
-        VT = :(NTuple{$N, VecElement{UInt64}})
+# required operations on SIMD vectors. These could be written more concisely with `ntuple`, but
+# the compiler sometimes refuses to properly vectorize, so they use the intrinsics directly.
+const UInt64Vec{N} = NTuple{N, VecElement{UInt64}}
+@inline _splat(::Val{N}, x) where {N} = ntuple(_ -> VecElement(x), Val(N))
+@inline _vshl(x::NTuple{N, VecElement{T}}, k) where {N, T} = shl_int(x, _splat(Val(N), k % T))
+@inline _vlshr(x::NTuple{N, VecElement{T}}, k) where {N, T} = lshr_int(x, _splat(Val(N), k % T))
 
-        s = ntuple(_->VecElement(UInt64(45)), N)
-        @eval @inline _rotl45(x::$VT) = ccall($fshl, llvmcall, $VT, ($VT, $VT, $VT), x, x, $s)
+@inline _plus(x::UInt64Vec{N}, y::UInt64Vec{N}) where {N} = add_int(x, y)
+@inline _xor(x::UInt64Vec{N}, y::UInt64Vec{N}) where {N} = xor_int(x, y)
+@inline _and(x::UInt64Vec{N}, y::UInt64Vec{N}) where {N} = and_int(x, y)
+@inline _or(x::UInt64Vec{N}, y::UInt64Vec{N}) where {N} = or_int(x, y)
+@inline _lshr(x::UInt64Vec, y::Int64) = _vlshr(x, y)
+@inline _shl17(x::UInt64Vec) = _vshl(x, 17)
+@inline _rotl45(x::UInt64Vec) = _or(_vshl(x, 45), _vlshr(x, 19))
+@inline _rotl23(x::UInt64Vec) = _or(_vshl(x, 23), _vlshr(x, 41))
 
-        s = ntuple(_->VecElement(UInt64(23)), N)
-        @eval @inline _rotl23(x::$VT) = ccall($fshl, llvmcall, $VT, ($VT, $VT, $VT), x, x, $s)
-
-        code = """
-        %lshiftOp = shufflevector <1 x i64> <i64 17>, <1 x i64> undef, <$N x i32> zeroinitializer
-        %res = shl <$N x i64> %0, %lshiftOp
-        ret <$N x i64> %res
-        """
-        @eval @inline _shl17(x::$VT) = llvmcall($code, $VT, Tuple{$VT}, x)
-
-        code = """
-        %res = add <$N x i64> %1, %0
-        ret <$N x i64> %res
-        """
-        @eval @inline _plus(x::$VT, y::$VT) = llvmcall($code, $VT, Tuple{$VT, $VT}, x, y)
-
-        code = """
-        %res = xor <$N x i64> %1, %0
-        ret <$N x i64> %res
-        """
-        @eval @inline _xor(x::$VT, y::$VT) = llvmcall($code, $VT, Tuple{$VT, $VT}, x, y)
-
-        code = """
-        %res = and <$N x i64> %1, %0
-        ret <$N x i64> %res
-        """
-        @eval @inline _and(x::$VT, y::$VT) = llvmcall($code, $VT, Tuple{$VT, $VT}, x, y)
-
-        code = """
-        %res = or <$N x i64> %1, %0
-        ret <$N x i64> %res
-        """
-        @eval @inline _or(x::$VT, y::$VT) = llvmcall($code, $VT, Tuple{$VT, $VT}, x, y)
-
-        code = """
-        %tmp = insertelement <1 x i64> undef, i64 %1, i32 0
-        %shift = shufflevector <1 x i64> %tmp, <1 x i64> %tmp, <$N x i32> zeroinitializer
-        %res = lshr <$N x i64> %0, %shift
-        ret <$N x i64> %res
-        """
-        @eval @inline _lshr(x::$VT, y::Int64) = llvmcall($code, $VT, Tuple{$VT, Int64}, x, y)
-
-        code = """
-        %shiftamt = shufflevector <1 x i64> <i64 11>, <1 x i64> undef, <$N x i32> zeroinitializer
-        %sh = lshr <$N x i64> %0, %shiftamt
-        %f = uitofp <$N x i64> %sh to <$N x double>
-        %scale = shufflevector <1 x double> <double 0x3ca0000000000000>, <1 x double> undef, <$N x i32> zeroinitializer
-        %m = fmul <$N x double> %f, %scale
-        %i = bitcast <$N x double> %m to <$N x i64>
-        ret <$N x i64> %i
-        """
-        @eval @inline _bits2float(x::$VT, ::Type{Float64}) = llvmcall($code, $VT, Tuple{$VT}, x)
-
-        code = """
-        %as32 = bitcast <$N x i64> %0 to <$(2N) x i32>
-        %shiftamt = shufflevector <1 x i32> <i32 8>, <1 x i32> undef, <$(2N) x i32> zeroinitializer
-        %sh = lshr <$(2N) x i32> %as32, %shiftamt
-        %f = uitofp <$(2N) x i32> %sh to <$(2N) x float>
-        %scale = shufflevector <1 x float> <float 0x3e70000000000000>, <1 x float> undef, <$(2N) x i32> zeroinitializer
-        %m = fmul <$(2N) x float> %f, %scale
-        %i = bitcast <$(2N) x float> %m to <$N x i64>
-        ret <$N x i64> %i
-        """
-        @eval @inline _bits2float(x::$VT, ::Type{Float32}) = llvmcall($code, $VT, Tuple{$VT}, x)
-
-        code = """
-        %as16 = bitcast <$N x i64> %0 to <$(4N) x i16>
-        %shiftamt = shufflevector <1 x i16> <i16 5>, <1 x i16> undef, <$(4N) x i32> zeroinitializer
-        %sh = lshr <$(4N) x i16> %as16, %shiftamt
-        %f = uitofp <$(4N) x i16> %sh to <$(4N) x half>
-        %scale = shufflevector <1 x half> <half 0x3f40000000000000>, <1 x half> undef, <$(4N) x i32> zeroinitializer
-        %m = fmul <$(4N) x half> %f, %scale
-        %i = bitcast <$(4N) x half> %m to <$N x i64>
-        ret <$N x i64> %i
-        """
-        @eval @inline _bits2float(x::$VT, ::Type{Float16}) = llvmcall($code, $VT, Tuple{$VT}, x)
-    end
+@inline function _bits2float(x::UInt64Vec{N}, ::Type{Float64}) where {N}
+    f = uitofp(NTuple{N, VecElement{Float64}}, _vlshr(x, 11))
+    return bitcast(UInt64Vec{N}, mul_float(f, _splat(Val(N), 0x1p-53)))
+end
+@inline function _bits2float(x::UInt64Vec{N}, ::Type{Float32}) where {N}
+    i = _vlshr(bitcast(NTuple{2N, VecElement{UInt32}}, x), 8)
+    f = uitofp(NTuple{2N, VecElement{Float32}}, i)
+    return bitcast(UInt64Vec{N}, mul_float(f, _splat(Val(2N), Float32(0x1p-24))))
+end
+@inline function _bits2float(x::UInt64Vec{N}, ::Type{Float16}) where {N}
+    i = _vlshr(bitcast(NTuple{4N, VecElement{UInt16}}, x), 5)
+    f = uitofp(NTuple{4N, VecElement{Float16}}, i)
+    return bitcast(UInt64Vec{N}, mul_float(f, _splat(Val(4N), Float16(0x1p-11))))
 end
 
 
