@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import ..Compiler: verify_typeinf_trim, NativeInterpreter, argtypes_to_type, compileable_specialization_for_call
+import ..Compiler: verify_typeinf_trim, NativeInterpreter, argtypes_to_type, compileable_specialization_for_call,
+    threads_deferred_call_type, is_threads_call_def
 
 using ..Compiler:
      # operators
@@ -289,6 +290,8 @@ end
 
 function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance, codeinfo::CodeInfo, inspected::IdSet{CodeInstance}, caches::IdDict{MethodInstance,CodeInstance}, parents::ParentMap, errors::ErrorList)
     mi = get_ci_mi(codeinst)
+    # The dynamic call of a `@threads` loop body is checked where the loop starts instead.
+    is_threads_call_def(mi.def) && return
     sptypes = sptypes_from_meth_instance(mi)
     src = codeinfo.code
     for i = 1:length(src)
@@ -299,6 +302,14 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
         if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
             error = "unresolved invoke"
             edge = stmt.args[1]
+            atype = isexpr(stmt, :invoke) ? threads_deferred_call_type(stmt, codeinfo, sptypes) : nothing
+            if atype !== nothing
+                mi = compileable_specialization_for_call(interp, atype)
+                ci = mi === nothing ? nothing : get(caches, mi, nothing)
+                if !(ci isa CodeInstance)
+                    push!(errors, false => CallMissing(codeinst, codeinfo, sptypes, i, "unresolved `Threads.@threads` loop body"))
+                end
+            end
             if edge isa CodeInstance
                 haskey(parents, edge) || (parents[edge] = (codeinst, i))
                 edge in inspected && continue
