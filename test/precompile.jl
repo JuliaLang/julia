@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, Random, Logging, Libdl
+using Test, Distributed, Random, Logging, Libdl, Sockets
 using REPL # testing the doc lookup function should be outside of the scope of this file, but is currently tested here
 
 include("precompile_utils.jl")
@@ -4642,6 +4642,60 @@ precompile_test_harness("JIT names of image methods") do dir
     @test invokelatest(@eval(x -> JITNames.jitname2(Val(0), x)), 5) == -5
     for i in 0:30
         @test invokelatest(@eval(x -> JITNames.jitname(Val($i), x)), 5) == 5 + i
+    end
+end
+
+# A worker whose parent gets killed should not keep precompiling as an orphan
+@testset "precompilation worker exits with its parent" begin
+    julia = `$(Base.julia_cmd()) --startup-file=no`
+    # the request is not passed on to the worker's own children
+    @test readchomp(addenv(`$julia -e 'print(get(ENV, "JULIA_EXIT_WITH_PARENT_PID", "unset"))'`,
+                           "JULIA_EXIT_WITH_PARENT_PID" => getpid())) == "unset"
+    @test success(addenv(`$julia -e 'exit()'`, "JULIA_EXIT_WITH_PARENT_PID" => "invalid"))
+    if Sys.islinux() || Sys.isfreebsd() || Sys.isapple()
+        # the worker exits immediately if its parent isn't the expected one (anymore)
+        @test !success(addenv(`$julia -e 'exit()'`, "JULIA_EXIT_WITH_PARENT_PID" => typemax(Cint)))
+
+        dir = mkdepottempdir()
+        pidfile = joinpath(dir, "worker.pid")
+        # the worker connects to us, and that connection only closes once it
+        # has exited (regardless of whether its new parent reaps it)
+        server = listen(joinpath(dir, "worker.sock"))
+        write(joinpath(dir, "Orphaned.jl"), """
+            module Orphaned
+            using Sockets
+            let conn = connect($(repr(joinpath(dir, "worker.sock"))))
+                write($(repr(pidfile)) * ".tmp", string(getpid()))
+                mv($(repr(pidfile)) * ".tmp", $(repr(pidfile)))
+                # precompilation that doesn't yield, and would outlast the test
+                t = time(); while time() - t < 300; end
+                close(conn)
+            end
+            end
+            """)
+        cmd = addenv(`$julia -e 'using Orphaned'`,
+                     "JULIA_LOAD_PATH" => "$dir:@stdlib", "JULIA_DEPOT_PATH" => "$dir:")
+        accepted = @async accept(server)
+        parent = run(pipeline(cmd; stdout=devnull, stderr=devnull); wait=false)
+        closed = nothing
+        try
+            ready = timedwait(() -> isfile(pidfile) && istaskdone(accepted), 120) === :ok
+            @test ready
+            if ready
+                closed = @async read(fetch(accepted))
+                kill(parent, Base.SIGKILL)
+                wait(parent)
+                @test timedwait(() -> istaskdone(closed), 60) === :ok
+            end
+        finally
+            kill(parent, Base.SIGKILL)
+            wait(parent)
+            if (closed === nothing || !istaskdone(closed)) && isfile(pidfile)
+                worker = parse(Cint, read(pidfile, String))
+                ccall(:kill, Cint, (Cint, Cint), worker, Base.SIGKILL)
+            end
+            close(server)
+        end
     end
 end
 

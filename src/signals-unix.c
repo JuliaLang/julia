@@ -40,6 +40,9 @@
 #ifdef HAVE_KEVENT
 #include <sys/event.h>
 #endif
+#ifdef _OS_FREEBSD_
+#include <sys/procctl.h>
+#endif
 
 // 8M signal stack, same as default stack size (though we barely use this)
 static const size_t sig_stack_size = 8 * 1024 * 1024;
@@ -1085,11 +1088,52 @@ const static int sigwait_sigs[] = {
     0
 };
 
+// The process whose exit should terminate ours, if any (see jl_exit_with_parent)
+static pid_t exit_with_parent_pid = 0;
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+// Sent by the kernel when our parent exits, and received by the signal listener.
+// Other platforms have it watch the parent through its kqueue instead.
+#define PARENT_DEATH_SIGNAL SIGRTMIN
+#endif
+
 static void jl_sigsetset(sigset_t *sset)
 {
     sigemptyset(sset);
     for (const int *sig = sigwait_sigs; *sig; sig++)
         sigaddset(sset, *sig);
+#ifdef PARENT_DEATH_SIGNAL
+    if (exit_with_parent_pid)
+        sigaddset(sset, PARENT_DEATH_SIGNAL);
+#endif
+}
+
+// Have the signal listener terminate this process when `parent` exits. This
+// is best-effort: we keep running if the platform does not support it, if
+// setting it up fails, or if Julia does not handle signals. Must be called
+// before any threads are started.
+void jl_exit_with_parent(pid_t parent) JL_NOTSAFEPOINT
+{
+    if (jl_options.handle_signals != JL_OPTIONS_HANDLE_SIGNALS_ON)
+        return;
+#if defined(PARENT_DEATH_SIGNAL)
+    // keep the signal blocked until the signal listener waits for it
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, PARENT_DEATH_SIGNAL);
+    if (pthread_sigmask(SIG_BLOCK, &sset, NULL) != 0)
+        return;
+#if defined(_OS_LINUX_)
+    if (prctl(PR_SET_PDEATHSIG, PARENT_DEATH_SIGNAL) != 0)
+        return;
+#else
+    int sig = PARENT_DEATH_SIGNAL;
+    if (procctl(P_PID, 0, PROC_PDEATHSIG_CTL, &sig) != 0)
+        return;
+#endif
+    exit_with_parent_pid = parent;
+#elif defined(HAVE_KEVENT)
+    exit_with_parent_pid = parent;
+#endif
 }
 
 #ifdef HAVE_KEVENT
@@ -1109,6 +1153,16 @@ static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
         // Installing SIG_IGN for SIGINT can race with its handler installation.
         signal(sig, sig == SIGINT ? sigint_handler : SIG_IGN);
     }
+}
+
+static void kqueue_parent(int sigqueue, struct kevent *ev)
+{
+    EV_SET(ev, exit_with_parent_pid, EVFILT_PROC, EV_ADD, NOTE_EXIT, 0, NULL);
+    // the parent may have exited before we started watching it, in which case
+    // registering fails or no exit event will be delivered
+    if ((kevent(sigqueue, ev, 1, NULL, 0, NULL) != 0 && errno == ESRCH) ||
+        getppid() != exit_with_parent_pid)
+        _exit(1);
 }
 #endif
 
@@ -1246,6 +1300,9 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             for (const int *sig = sigwait_sigs; *sig; sig++)
                 signal(*sig, SIG_DFL);
         }
+        else if (exit_with_parent_pid) {
+            kqueue_parent(sigqueue, &ev);
+        }
     }
 #endif
     while (1) {
@@ -1266,6 +1323,11 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                     signal(*sig, SIG_DFL);
                 continue;
             }
+            if (ev.filter == EVFILT_PROC) {
+                if (ev.fflags & NOTE_EXIT)
+                    _exit(1); // our parent exited
+                continue;
+            }
             sig = ev.ident;
         }
         else
@@ -1281,6 +1343,15 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 continue;
             sig = SIGABRT; // this branch can't occur, unless we had stack memory corruption of sset
         }
+#ifdef PARENT_DEATH_SIGNAL
+        if (sig == PARENT_DEATH_SIGNAL) {
+            // Linux also sends this when the thread that spawned us exits,
+            // in which case another thread of the parent adopts us
+            if (getppid() != exit_with_parent_pid)
+                _exit(1); // our parent exited
+            continue;
+        }
+#endif
         profile = 0;
 #ifndef HAVE_MACH
 #if defined(HAVE_TIMER)
