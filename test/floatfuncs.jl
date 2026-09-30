@@ -225,8 +225,25 @@ end
     @test !isapprox(x, Furlong(2.0); rtol=0)
     @test isapprox(Furlong(0.0), Furlong(-0.0); rtol=1e-8)
     @test isapprox(Furlong(1), Furlong(1); rtol=0)
+    # the absolute tolerance has the units of the compared numbers
+    @test isapprox(x, Furlong(1.0 + 1e-10); atol=Furlong(1e-8))
+    @test !isapprox(x, Furlong(1.0 + 1e-6); atol=Furlong(1e-8))
+    @test isapprox(Furlong(0.0), Furlong(1e-10); atol=Furlong(1e-8))
+    @test isapprox(x, Furlong(1.0 + 1e-6); atol=Furlong(1e-8), rtol=1e-5)
+    # the default relative tolerance is that of the dimensionless `one(x)`
+    @test Base.rtoldefault(typeof(x)) === Base.rtoldefault(Float64)
+    @test Base.rtoldefault(Furlong{2,Float32}) === Base.rtoldefault(Float32)
+    @test Base.rtoldefault(x, x, Furlong(1e-8)) === 0.0
+    @test x ≈ Furlong(1.0 + 1e-10)
+    @test x ≉ Furlong(1.0 + 1e-6)
+    @test Furlong(0.0) ≈ Furlong(-0.0)
+    @test Furlong(3) ≈ Furlong(3)
+    @test !(x ≈ Furlong(2.0))
+    # a `Number` type without a distinct multiplicative identity has no default
+    struct NoDefaultRtol <: Number end
+    Base.one(::Type{NoDefaultRtol}) = NoDefaultRtol()
+    @test_throws MethodError Base.rtoldefault(NoDefaultRtol)
     @test Base._tolerance(0, x) === x
-    @test Base._tolerance(0, -x) === zero(x)
     @test Base._tolerance(0, 0.25) === 0.25
     @test Base._tolerance(0.5, 0.25) === 0.5
     @test Base._tolerance(0.1, 0.25) === 0.25
