@@ -906,6 +906,6 @@ let
 
     f_f64_to_ptr(x) = Core.bitcast(Ptr{UInt8}, x)
     f_ptr_to_f64(x) = Core.bitcast(Float64, x)
-    @test f_f64_to_ptr(0.0) === C_NULL
+    @test f_f64_to_ptr(0.0) == C_NULL
     @test f_ptr_to_f64(C_NULL) === 0.0
 end
