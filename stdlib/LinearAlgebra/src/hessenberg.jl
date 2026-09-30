@@ -122,7 +122,7 @@ for T = (:UniformScaling, :Diagonal, :Bidiagonal, :Tridiagonal, :SymTridiagonal,
     end
 end
 
-for T = (:Number, :UniformScaling, :Diagonal)
+for T = (:Number, :UniformScaling)
     @eval begin
         *(H::UpperHessenberg, x::$T) = UpperHessenberg(H.data * x)
         *(x::$T, H::UpperHessenberg) = UpperHessenberg(x * H.data)
@@ -131,19 +131,23 @@ for T = (:Number, :UniformScaling, :Diagonal)
     end
 end
 
-function *(H::UpperHessenberg, U::UpperOrUnitUpperTriangular)
+mul(H::UpperHessenberg, D::Diagonal) = UpperHessenberg(H.data * D)
+mul(D::Diagonal, H::UpperHessenberg) = UpperHessenberg(D * H.data)
+function mul(H::UpperHessenberg, U::UpperOrUnitUpperTriangular)
     HH = mul!(_initarray(*, eltype(H), eltype(U), H), H, U)
     UpperHessenberg(HH)
 end
-function *(U::UpperOrUnitUpperTriangular, H::UpperHessenberg)
+function mul(U::UpperOrUnitUpperTriangular, H::UpperHessenberg)
     HH = mul!(_initarray(*, eltype(U), eltype(H), H), U, H)
     UpperHessenberg(HH)
 end
 
+/(H::UpperHessenberg, D::Diagonal) = UpperHessenberg(H.data / D)
 function /(H::UpperHessenberg, U::UpperTriangular)
     HH = _rdiv!(_initarray(/, eltype(H), eltype(U), H), H, U)
     UpperHessenberg(HH)
 end
+\(D::Diagonal, H::UpperHessenberg) = UpperHessenberg(D \ H.data)
 function /(H::UpperHessenberg, U::UnitUpperTriangular)
     HH = _rdiv!(_initarray(/, eltype(H), eltype(U), H), H, U)
     UpperHessenberg(HH)
@@ -341,7 +345,7 @@ function dot(x::AbstractVector, H::UpperHessenberg, y::AbstractVector)
     m = size(H, 1)
     (length(x) == m == length(y)) || throw(DimensionMismatch())
     if iszero(m)
-        return dot(zero(eltype(x)), zero(eltype(H)), zero(eltype(y)))
+        return zero(dot(zero(eltype(x)), zero(eltype(H)), zero(eltype(y))))
     end
     x₁ = x[1]
     r = dot(x₁, H[1,1], y[1])

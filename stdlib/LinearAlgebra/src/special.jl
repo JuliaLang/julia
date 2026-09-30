@@ -115,12 +115,12 @@ mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix, alpha::Number, b
 mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular, alpha::Number, beta::Number) =
     _mul!(C, A, B, MulAddMul(alpha, beta))
 
-function *(H::UpperHessenberg, B::Bidiagonal)
+function mul(H::UpperHessenberg, B::Bidiagonal)
     T = promote_op(matprod, eltype(H), eltype(B))
     A = mul!(similar(H, T, size(H)), H, B)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
-function *(B::Bidiagonal, H::UpperHessenberg)
+function mul(B::Bidiagonal, H::UpperHessenberg)
     T = promote_op(matprod, eltype(B), eltype(H))
     A = mul!(similar(H, T, size(H)), B, H)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
