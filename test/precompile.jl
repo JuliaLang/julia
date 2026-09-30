@@ -4464,4 +4464,64 @@ end
     end end
 end
 
+
+# Loading marks the accepted cache file as recently used, but only in the depot that
+# `compilecache` writes to: other depots may be read-only, shared, or bundled with Julia.
+precompile_test_harness("cache files are only touched in the primary depot") do load_path
+    function set_mtime(path, t)
+        f = Base.Filesystem.open(path, Base.Filesystem.JL_O_WRONLY)
+        try
+            Base.Filesystem.futime(f, t, t)
+        finally
+            close(f)
+        end
+        return mtime(path) # as stored by the filesystem
+    end
+    past = floor(time()) - 3600
+    cachefiles = map(("TouchPrimary", "TouchSecondary")) do name
+        write(joinpath(load_path, "$name.jl"), "module $name end")
+        cachefile, _ = Base.compilecache(Base.PkgId(name))
+        return cachefile
+    end
+    primary, secondary = cachefiles
+
+    pkg = Base.PkgId("TouchPrimary")
+    set_mtime(primary, past)
+    @test Base.isprecompiled(pkg)
+    @test mtime(primary) > past
+    set_mtime(primary, past)
+    @eval using TouchPrimary
+    @test Base.pkgorigins[pkg].cachepath == primary
+    @test mtime(primary) > past
+
+    mkdepottempdir() do new_primary_depot
+        pushfirst!(DEPOT_PATH, new_primary_depot)
+        try
+            pkg = Base.PkgId("TouchSecondary")
+            old = set_mtime(secondary, past)
+            @test Base.isprecompiled(pkg)
+            @eval using TouchSecondary
+            @test Base.pkgorigins[pkg].cachepath == secondary
+            @test mtime(secondary) == old
+        finally
+            filter!((≠)(new_primary_depot), DEPOT_PATH)
+        end
+    end
+
+    # not even when the bundled depot comes first
+    bundled_depot = dirname(dirname(Sys.STDLIB))
+    pkg = Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test")
+    pushfirst!(DEPOT_PATH, bundled_depot)
+    try
+        for cachefile in Base.find_all_in_cache_path(pkg)
+            startswith(cachefile, bundled_depot) || continue
+            old = mtime(cachefile)
+            Base.touch_cachefile(pkg, cachefile)
+            @test mtime(cachefile) == old
+        end
+    finally
+        popfirst!(DEPOT_PATH)
+    end
+end
+
 finish_precompile_test!()
