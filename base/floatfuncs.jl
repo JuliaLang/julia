@@ -159,6 +159,16 @@ function Base.round(x::AbstractFloat, ::typeof(RoundFromZero))
     signbit(x) ? round(x, RoundDown) : round(x, RoundUp)
 end
 
+"""
+    _tolerance(atol, scaled_rtol)
+
+The tolerance `max(atol, scaled_rtol)` used in approximate comparisons, where `scaled_rtol` is
+a relative tolerance that has already been multiplied by the magnitude of the compared
+quantities and hence carries their units. The default `atol = 0` is a dimensionless number that
+cannot be compared with a dimensionful `scaled_rtol`; it is treated as `zero(scaled_rtol)`.
+"""
+_tolerance(atol, scaled_rtol) = iszero(atol) ? max(scaled_rtol, zero(scaled_rtol)) : max(atol, scaled_rtol)
+
 # isapprox: approximate equality of numbers
 """
     isapprox(x, y; atol::Real=0, rtol::Real=atol>0 ? 0 : √eps, nans::Bool=false[, norm::Function])
@@ -226,7 +236,7 @@ function isapprox(x::Number, y::Number;
                   nans::Bool=false, norm::Function=abs)
     x′, y′ = promote(x, y) # to avoid integer overflow
     x == y ||
-        (isfinite(x) && isfinite(y) && norm(x-y) <= max(atol, rtol*max(norm(x′), norm(y′)))) ||
+        (isfinite(x) && isfinite(y) && norm(x-y) <= _tolerance(atol, rtol*max(norm(x′), norm(y′)))) ||
          (nans && isnan(x) && isnan(y))
 end
 
@@ -293,7 +303,7 @@ function isapprox(x::Integer, y::Integer;
         return overflowed || _uabsdiff_le(x, y, max(atol, b))
     end
     return x == y ||
-        norm(_uabsdiff(x, y)) <= max(atol, rtol*max(norm(uabs(x)), norm(uabs(y))))
+        norm(_uabsdiff(x, y)) <= _tolerance(atol, rtol*max(norm(uabs(x)), norm(uabs(y))))
 end
 
 """

@@ -214,6 +214,25 @@ end
     @test !isnan(CustomNumber())
 end
 
+@testset "isapprox with dimensionful numbers" begin
+    isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
+    using .Main.Furlongs
+    x = Furlong(1.0)
+    # the default `atol = 0` must not be compared with the dimensionful `rtol*max(|x|, |y|)`
+    @test isapprox(x, Furlong(1.0 + 1e-10); rtol=1e-8)
+    @test !isapprox(x, Furlong(1.0 + 1e-6); rtol=1e-8)
+    @test isapprox(x, x; rtol=0)
+    @test !isapprox(x, Furlong(2.0); rtol=0)
+    @test isapprox(Furlong(0.0), Furlong(-0.0); rtol=1e-8)
+    @test isapprox(Furlong(1), Furlong(1); rtol=0)
+    @test Base._tolerance(0, x) === x
+    @test Base._tolerance(0, -x) === zero(x)
+    @test Base._tolerance(0, 0.25) === 0.25
+    @test Base._tolerance(0.5, 0.25) === 0.5
+    @test Base._tolerance(0.1, 0.25) === 0.25
+    @test isnan(Base._tolerance(0, NaN))
+end
+
 @testset "isapprox and integer overflow" begin
     for T in (Int8, Int16, Int32)
         T === Int && continue
