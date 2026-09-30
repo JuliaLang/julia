@@ -704,8 +704,9 @@ static int FPtoInt(jl_datatype_t *ty, void *pa, jl_datatype_t *oty,
         jl_error("FPtoSI: runtime floating point intrinsics are not "
                  "implemented for bit sizes other than 16, 32 and 64");
 
-    unsigned onumbytes = jl_datatype_size(oty);
     unsigned onumbits = jl_datatype_nbits(oty);
+    unsigned onumbytes = APINT_NBYTES(onumbits);
+    unsigned opaddingbytes = jl_datatype_size(oty) - onumbytes;
     unsigned nw = APINT_NWORDS(onumbits);
     uint64_t *result = (uint64_t *)alloca(nw * sizeof(uint64_t));
     memset(result, 0, nw * sizeof(uint64_t));
@@ -734,9 +735,8 @@ static int FPtoInt(jl_datatype_t *ty, void *pa, jl_datatype_t *oty,
         negate_words(result, result, nw);
     mask_top(result, nw, onumbits);
 
-    unsigned onumbytes_value = APINT_NBYTES(onumbits);
-    memcpy(pr, result, onumbytes_value);
-    memset((char *)pr + onumbytes_value, 0, onumbytes - onumbytes_value);
+    memcpy(pr, result, onumbytes);
+    memset((char *)pr + onumbytes, 0, opaddingbytes);
 
     double limit = ldexp(1.0, isSigned ? onumbits - 1 : onumbits);
     return (trunc(Val) == Val) && (absVal < limit);
