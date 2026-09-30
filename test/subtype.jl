@@ -1791,16 +1791,9 @@ end
                Tuple{LT,R,I} where LT<:Union{I, R} where R<:Rational{I} where I<:Integer,
                Tuple{LT,Rational{Int},Int} where LT<:Union{Rational{Int},Int})
 
-# @testintersect(Tuple{Any,Tuple{Int},Int},
-#                Tuple{LT,R,I} where LT<:Union{I, R} where R<:Tuple{I} where I<:Integer,
-#                Tuple{LT,Tuple{Int},Int} where {I<:Integer, LT<:Union{Tuple{Int}, I}})
-let S = Tuple{Any,Tuple{Int},Int},
-    T = Tuple{LT,R,I} where LT<:Union{I, R} where R<:Tuple{I} where I<:Integer
-    A = Tuple{LT,Tuple{Int},Int} where {I<:Integer, LT<:Union{Tuple{Int}, I}}
-    @test A <: S && A <: T
-    @test_broken  A <: typeintersect(S, T)
-    @test_broken  A <: typeintersect(T, S)
-end
+@testintersect(Tuple{Any,Tuple{Int},Int},
+               Tuple{LT,R,I} where LT<:Union{I, R} where R<:Tuple{I} where I<:Integer,
+               Tuple{LT,Tuple{Int},Int} where {I<:Integer, LT<:Union{Tuple{Int}, I}})
 
 let U = Tuple{Union{LT, LT1},Union{R, R1},Int} where LT1<:R1 where R1<:Tuple{Int} where LT<:Int where R<:Tuple{Int},
     U2 = Union{Tuple{LT,R,Int} where LT<:Int where R<:Tuple{Int}, Tuple{LT,R,Int} where LT<:R where R<:Tuple{Int}},
@@ -2966,16 +2959,16 @@ end
     Tuple{Type{Tuple{Int, T}}, Type{String}} where {T<:Real},
     Union{}
 )
-# @testintersect(
-#     Tuple{Int, T, Type{<:Tuple{T}}} where {T},
-#     Tuple{Any, Int, Type{Tuple{Nothing}}},
-#     Tuple{Int, Int, Type{Tuple{Nothing}}}
-# )
-# @testintersect(
-#     Tuple{Type{T}, Type{<:Tuple{F}}, Type{<:F}} where {T, F<:Union{String, T}},
-#     Tuple{Type{Complex{T}} where T, Type{Tuple{Complex{T}}} where T, Type{String}},
-#     Tuple{Type{Complex{T}}, Type{Tuple{Complex{T}}}, Type{String}} where T
-# )
+@testintersect(
+    Tuple{Int, T, Type{<:Tuple{T}}} where {T},
+    Tuple{Any, Int, Type{Tuple{Nothing}}},
+    Tuple{Int, Int, Type{Tuple{Nothing}}}
+)
+@testintersect(
+    Tuple{Type{T}, Type{<:Tuple{F}}, Type{<:F}} where {T, F<:Union{String, T}},
+    Tuple{Type{Complex{T}} where T, Type{Tuple{Complex{T}}} where T, Type{String}},
+    Tuple{Type{Complex{T}}, Type{Tuple{Complex{T}}}, Type{String}} where T
+)
 
 #issue 58129
 for k in 1:500

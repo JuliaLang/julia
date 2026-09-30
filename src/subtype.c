@@ -84,6 +84,7 @@ typedef struct jl_varbinding_t {
     jl_value_t *JL_NONNULL lb;
     jl_value_t *JL_NONNULL ub;
     int8_t existential; // whether this variable should be treated as existential
+    int8_t occurs;      // occurs in any position
     int8_t occurs_inv;  // occurs in invariant position
     int8_t pinned;      // an invariant occurrence matched a term free of existential vars
     int8_t occurs_cov;  // # of occurrences in covariant position within the
@@ -381,8 +382,8 @@ static int current_env_length(jl_stenv_t *e)
 }
 
 // Per-var saved env layout:
-// [occurs_inv, occurs_cov, cov_diag, max_offset, lb_certainty, lb_required, lb_spell, pinned].
-#define JL_SAVEDENV_BYTES_PER_VAR 8
+// [occurs, occurs_inv, occurs_cov, cov_diag, max_offset, lb_certainty, lb_required, lb_spell, pinned].
+#define JL_SAVEDENV_BYTES_PER_VAR 9
 
 // Combined covariance count used for diagonal-rule decisions: the max of the
 // counter for the current consistency-check scope and the largest count
@@ -396,7 +397,7 @@ static inline int8_t cov_count(const jl_varbinding_t *vb) JL_NOTSAFEPOINT
 typedef struct {
     int8_t *buf;
     int rdepth;
-    int8_t _space[64]; // == 8 * JL_SAVEDENV_BYTES_PER_VAR
+    int8_t _space[72]; // == 8 * JL_SAVEDENV_BYTES_PER_VAR
     jl_gcframe_t gcframe;
     jl_value_t *roots[24]; // == 8 * 3 (lb, ub, innervars)
 } jl_savedenv_t;
@@ -437,6 +438,7 @@ static void re_save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
             roots[i++] = v->ub;
             roots[i++] = (jl_value_t*)v->innervars;
         }
+        se->buf[j++] = v->occurs;
         se->buf[j++] = v->occurs_inv;
         se->buf[j++] = v->occurs_cov;
         se->buf[j++] = v->cov_diag;
@@ -541,6 +543,7 @@ static void restore_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_NOTSAFEPO
             v->ub = roots[i++];
             v->innervars = (jl_array_t*)roots[i++];
         }
+        v->occurs = se->buf[j++];
         v->occurs_inv = se->buf[j++];
         v->occurs_cov = se->buf[j++];
         v->cov_diag = se->buf[j++];
@@ -933,7 +936,7 @@ static int env_unchanged(jl_stenv_t *e, jl_savedenv_t *se) JL_NOTSAFEPOINT
         roots = se->roots;
     }
     jl_varbinding_t *v = e->vars;
-    int i = 0, j = 1;
+    int i = 0, j = 2;
     while (v != NULL) {
         assert(roots != NULL);
         if (v->existential) {
@@ -1041,15 +1044,14 @@ static void record_var_pin(jl_varbinding_t *vb, jl_value_t *a, jl_stenv_t *e, jl
 
 static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, jl_param_pos_t param) JL_NOTSAFEPOINT
 {
-    if (vb != NULL && param != PARAM_NONE) {
+    if (vb != NULL) {
         // saturate counters at 2; we don't need values bigger than that
-        if (param == PARAM_INVARIANT && e->invdepth > vb->depth0) {
-            if (vb->occurs_inv < 2)
-                vb->occurs_inv++;
-        }
-        else if (vb->occurs_cov < 2) {
+        if (vb->occurs < 2)
+            vb->occurs++;
+        if (param == PARAM_INVARIANT && e->invdepth > vb->depth0 && vb->occurs_inv < 2)
+            vb->occurs_inv++;
+        else if (param == PARAM_COVARIANT && vb->occurs_cov < 2)
             vb->occurs_cov++;
-        }
         // Always set `max_offset` to `-1` during the 1st round intersection.
         // Would be recovered in `intersect_varargs`/`subtype_tuple_varargs` if needed.
         if (!vb->intersected)
@@ -5197,9 +5199,7 @@ static int always_occurs_cov(jl_value_t *v, jl_tvar_t *var, jl_param_pos_t param
     }
     else if (jl_is_unionall(v)) {
         jl_unionall_t *ua = (jl_unionall_t*)v;
-        return ua->var != var && (
-            always_occurs_cov(ua->var->ub, var, PARAM_NONE) ||
-            always_occurs_cov(ua->body, var, param));
+        return ua->var != var && always_occurs_cov(ua->body, var, param);
     }
     else if (jl_is_vararg(v)) {
         jl_vararg_t *vm = (jl_vararg_t*)v;
@@ -5216,6 +5216,37 @@ static int always_occurs_cov(jl_value_t *v, jl_tvar_t *var, jl_param_pos_t param
         }
     }
     return 0;
+}
+
+static int never_occurs_in_inside_ub(jl_value_t *v, jl_tvar_t *var) JL_NOTSAFEPOINT
+{
+    if (jl_is_uniontype(v)) {
+        return never_occurs_in_inside_ub(((jl_uniontype_t*)v)->a, var) &&
+               never_occurs_in_inside_ub(((jl_uniontype_t*)v)->b, var);
+    }
+    else if (jl_is_unionall(v)) {
+        jl_unionall_t *ua = (jl_unionall_t*)v;
+        if (ua->var == var) return 1;
+        return !jl_has_typevar((jl_value_t *)(ua->var->ub), var) && never_occurs_in_inside_ub(ua->body, var);
+    }
+    else if (jl_is_vararg(v)) {
+        jl_vararg_t *vm = (jl_vararg_t*)v;
+        return (vm->T == NULL || never_occurs_in_inside_ub(vm->T, var)) &&
+               (vm->N == NULL || never_occurs_in_inside_ub(vm->N, var));
+    }
+    else if (jl_is_some_Type(v)) {
+        return never_occurs_in_inside_ub(jl_some_Type_T(v), var);
+    }
+    else if (jl_is_datatype(v)) {
+        for (size_t i = 0; i < jl_nparams(v); i++) {
+            if (!never_occurs_in_inside_ub(jl_tparam(v, i), var))
+                return 0;
+        }
+        return 1;
+    }
+    // conservative for internal nodes (TypeEq, TypeApp, Intersect); plain
+    // values contain no typevars
+    return jl_is_typevar(v) || !jl_has_typevar(v, var);
 }
 
 static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param) JL_CANSAFEPOINT
@@ -5235,7 +5266,8 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     JL_GC_PUSH4(&res, &vb.lb, &vb.ub, &vb.innervars);
     save_env(e, &se, 1);
     int noinv = !body_occurs_inv;
-    if (is_leaf_typevar(u->var) && noinv && always_occurs_cov(u->body, u->var, param))
+    // Setting constraintkind=1 for covariant var might be invalid if it also occurs in triangular positions.
+    if (is_leaf_typevar(u->var) && noinv && always_occurs_cov(u->body, u->var, param) && never_occurs_in_inside_ub(u->body, u->var))
         vb.constraintkind = 1;
     res = intersect_unionall_(t, u, e, R, param, &vb);
     vb.intersected = 1;
@@ -5250,7 +5282,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             vb.constraintkind = vb.concrete ? 1 : 2;
         else if (u->var->lb != jl_bottom_type)
             vb.constraintkind = 2;
-        else if (cov_count(&vb) && noinv)
+        else if (cov_count(&vb) && vb.occurs < 2 && noinv)
             vb.constraintkind = 1;
         int reintersection = constraint1 != vb.constraintkind || vb.concrete;
         if (reintersection) {
@@ -5259,7 +5291,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
                 vb.ub = vb.var->ub;
             }
             restore_env(e, &se, vb.constraintkind == 1 ? 1 : 0);
-            vb.occurs_cov = vb.occurs_inv = vb.cov_diag = 0;
+            vb.occurs = vb.occurs_cov = vb.occurs_inv = vb.cov_diag = 0;
             res = intersect_unionall_(t, u, e, R, param, &vb);
         }
     }
@@ -5271,7 +5303,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             if (is_leaf_bound(vb.ub)) {
                 restore_env(e, &se, 1);
                 vb.lb = vb.var->lb;
-                vb.occurs_cov = vb.occurs_inv = vb.cov_diag = 0;
+                vb.occurs = vb.occurs_cov = vb.occurs_inv = vb.cov_diag = 0;
                 res = intersect_unionall_(t, u, e, R, param, &vb);
             }
         }
@@ -5282,7 +5314,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             vb.ub = vb.var->ub;
             vb.constraintkind = 0;
             vb.widened_to_kind = 0;
-            vb.occurs_cov = vb.occurs_inv = vb.cov_diag = 0;
+            vb.occurs = vb.occurs_cov = vb.occurs_inv = vb.cov_diag = 0;
             res = intersect_unionall_(t, u, e, R, param, &vb);
         }
     }
@@ -6162,25 +6194,27 @@ static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int co
             else
                 merged[n+2] = b2;
         }
-        // merge occurs_inv/cov/cov_diag by max (never decrease)
-        if (v->occurs_inv > me->buf[m])
-            me->buf[m] = v->occurs_inv;
-        if (v->occurs_cov > me->buf[m+1])
-            me->buf[m+1] = v->occurs_cov;
-        if (v->cov_diag > me->buf[m+2])
-            me->buf[m+2] = v->cov_diag;
+        // merge occurs/occurs_inv/occurs_cov/cov_diag by max (never decrease)
+        if (v->occurs > me->buf[m])
+            me->buf[m] = v->occurs;
+        if (v->occurs_inv > me->buf[m+1])
+            me->buf[m+1] = v->occurs_inv;
+        if (v->occurs_cov > me->buf[m+2])
+            me->buf[m+2] = v->occurs_cov;
+        if (v->cov_diag > me->buf[m+3])
+            me->buf[m+3] = v->cov_diag;
         // merge max_offset by min
-        if (!v->intersected && v->max_offset < me->buf[m+3])
-            me->buf[m+3] = v->max_offset;
+        if (!v->intersected && v->max_offset < me->buf[m+4])
+            me->buf[m+4] = v->max_offset;
         // required lower-bound evidence must hold for every merged branch
         if (!v->lb_required)
-            me->buf[m+5] = 0;
+            me->buf[m+6] = 0;
         // the merged binding's spelling is only as authoritative as its
         // weakest contributor
-        if (v->lb_spell < me->buf[m+6])
-            me->buf[m+6] = v->lb_spell;
+        if (v->lb_spell < me->buf[m+7])
+            me->buf[m+7] = v->lb_spell;
         if (!v->pinned)
-            me->buf[m+7] = 0;
+            me->buf[m+8] = 0;
         m = m + JL_SAVEDENV_BYTES_PER_VAR;
         n = n + 3;
         v = v->prev;
