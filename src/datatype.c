@@ -1381,11 +1381,17 @@ JL_DLLEXPORT int jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_value_t *y /* NEW 
     }
     else if (nb == 1) {
         uint8_t *y8 = (uint8_t*)y;
-        assert(dt->layout->flags.isbitsegal && !dt->layout->flags.haspadding);
         if (dt == et) {
             *y8 = *(uint8_t*)expected;
             uint8_t z8 = *(uint8_t*)src;
-            success = jl_atomic_cmpswap((_Atomic(uint8_t)*)dst, y8, z8);
+            while (1) {
+                success = jl_atomic_cmpswap((_Atomic(uint8_t)*)dst, y8, z8);
+                // A failure leaves the current bytes in `y`. If they differ from
+                // `expected` only in padding bits, the values are `===`: retry with
+                // them, here and for the larger sizes below.
+                if (success || (dt->layout->flags.isbitsegal && !dt->layout->flags.haspadding) || !jl_egal__bits(y, expected, dt))
+                    break;
+            }
         }
         else {
             *y8 = jl_atomic_load((_Atomic(uint8_t)*)dst);
@@ -1394,11 +1400,14 @@ JL_DLLEXPORT int jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_value_t *y /* NEW 
     }
     else if (nb == 2) {
         uint16_t *y16 = (uint16_t*)y;
-        assert(dt->layout->flags.isbitsegal && !dt->layout->flags.haspadding);
         if (dt == et) {
             *y16 = *(uint16_t*)expected;
             uint16_t z16 = *(uint16_t*)src;
-            success = jl_atomic_cmpswap((_Atomic(uint16_t)*)dst, y16, z16);
+            while (1) {
+                success = jl_atomic_cmpswap((_Atomic(uint16_t)*)dst, y16, z16);
+                if (success || (dt->layout->flags.isbitsegal && !dt->layout->flags.haspadding) || !jl_egal__bits(y, expected, dt))
+                    break;
+            }
         }
         else {
             *y16 = jl_atomic_load((_Atomic(uint16_t)*)dst);

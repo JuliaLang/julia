@@ -1025,16 +1025,14 @@ eval(Core, :((NT::Type{NamedTuple{names,T}})(args::T) where {names, T <: Tuple} 
 
 # constructors for built-in types
 
-import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int
+import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int,
+    slt_int, xor_int
 
 function is_top_bit_set(x)
     @inline
-    eq_int(trunc_int(UInt8, lshr_int(x, sub_int(shl_int(sizeof(x), 3), 1))), trunc_int(UInt8, 1))
-end
-
-function is_top_bit_set(x::Union{Int8,UInt8})
-    @inline
-    eq_int(lshr_int(x, 7), trunc_int(typeof(x), 1))
+    # the top bit is set iff x is negative as a signed number; Core has no
+    # `zero`, and `xor_int(x, x)` is a zero of any width
+    slt_int(x, xor_int(x, x))
 end
 
 # n.b. This function exists for CUDA to overload to configure error behavior (see #48097)
@@ -1043,8 +1041,8 @@ throw_inexacterror(func::Symbol, to, val) = throw(InexactError(func, to, val))
 function check_sign_bit(::Type{To}, x) where {To}
     @inline
     # the top bit is the sign bit of x but "sign bit" sounds better in stacktraces
-    # n.b. if x is signed, then sizeof(x) === sizeof(To), otherwise sizeof(x) >= sizeof(To)
-    is_top_bit_set(x) && throw_inexacterror(sizeof(x) === sizeof(To) ? :convert : :trunc, To, x)
+    # n.b. if x is signed, then bitsizeof(x) === bitsizeof(To), otherwise bitsizeof(x) >= bitsizeof(To)
+    is_top_bit_set(x) && throw_inexacterror(bitsizeof(x) === bitsizeof(To) ? :convert : :trunc, To, x)
     x
 end
 

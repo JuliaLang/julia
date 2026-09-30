@@ -730,10 +730,9 @@ static int FPtoInt(jl_datatype_t *ty, void *pa, jl_datatype_t *oty,
         }
     }
 
-    if (isSigned && Val < 0) {
+    if (isSigned && Val < 0)
         negate_words(result, result, nw);
-        mask_top(result, nw, onumbits);
-    }
+    mask_top(result, nw, onumbits);
 
     memcpy(pr, result, onumbytes);
 
@@ -803,7 +802,8 @@ JL_DLLEXPORT void APInt_sext(jl_datatype_t *ty, integerPart *pa,
     unsigned inumbits = jl_datatype_nbits(ty);
     unsigned onumbits = jl_datatype_nbits(otys);
     unsigned inumbytes = APINT_NBYTES(inumbits);
-    unsigned onumbytes = jl_datatype_size(otys);
+    unsigned onumbytes = APINT_NBYTES(onumbits);
+    unsigned opaddingbytes = jl_datatype_size(otys) - onumbytes;
     if (!(onumbits > inumbits))
         jl_error("SExt: output bitsize must be > input bitsize");
     unsigned bits = (8 - (inumbits % 8)) % 8;
@@ -816,7 +816,11 @@ JL_DLLEXPORT void APInt_sext(jl_datatype_t *ty, integerPart *pa,
             ? (byte | (unsigned char)(0xFF << (8 - bits)))
             : (byte & (unsigned char)(0xFF >> bits));
     }
+    // the sign fills the value bits only; the bits above them stay zero
     memset((char *)pr + inumbytes, sign, onumbytes - inumbytes);
+    if (onumbits % 8)
+        ((unsigned char *)pr)[onumbytes - 1] &= (1 << (onumbits % 8)) - 1;
+    memset((char *)pr + onumbytes, 0, opaddingbytes);
 }
 
 JL_DLLEXPORT void APInt_zext(jl_datatype_t *ty, integerPart *pa,
@@ -862,8 +866,12 @@ JL_DLLEXPORT void APInt_flipsign(unsigned numbits, integerPart *pa,
     unsigned numbytes = APINT_NBYTES(numbits);
     int signbit = (numbits - 1) % 8;
     int sign = ((unsigned char *)pb)[numbytes - 1] & (1 << signbit);
-    if (sign)
+    if (sign) {
         APInt_neg(numbits, pa, pr);
-    else
+    }
+    else {
         memcpy(pr, pa, numbytes);
+        if (numbits % 8)
+            ((unsigned char *)pr)[numbytes - 1] &= (1 << (numbits % 8)) - 1;
+    }
 }

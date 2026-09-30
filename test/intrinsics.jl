@@ -214,6 +214,67 @@ end
         @test addr(boxboolunion(t)) === addr(true) && addr(boxboolunion(f)) === addr(false)
     end
 
+    # Runtime intrinsics ignore the bits above an operand's width, which may hold
+    # anything there, and write them as zero in results. `===` ignores those bits,
+    # but zeros keep memory and package images consistent, so check the bytes of
+    # the box the runtime returns. The helpers take `@nospecialize` arguments: a
+    # specialized method would receive the value unboxed and box it anew.
+    rawbytes(@nospecialize x) = GC.@preserve x [unsafe_load(Ptr{UInt8}(addr(x)), i) for i in 1:sizeof(x)]
+    highbits(@nospecialize x) = [b & ~(0xff >> (8 - clamp(Core.bitsizeof(typeof(x)) - 8(i - 1), 0, 8)))
+                                 for (i, b) in enumerate(rawbytes(x))]
+    dirty(T, bytes...) = (m = UInt8[bytes...];
+                          GC.@preserve m Base.invokelatest(Core.Intrinsics.pointerref, Ptr{T}(pointer(m)), 1, 1))
+    @test all(iszero, highbits(Base.invokelatest(Core.Intrinsics.sext_int, TestInt17, Int8(-1))))
+    @test all(iszero, highbits(Base.invokelatest(Core.Intrinsics.sext_int, TestInt63, Int8(-1))))
+    # out of range, so only the bits above the width are defined
+    @test all(iszero, highbits(Base.invokelatest(Core.Intrinsics.fptoui, TestUInt17, 0x1p20)))
+    let x = Base.invokelatest(Core.Intrinsics.flipsign_int, dirty(TestInt17, 0xfd, 0xff, 0xff, 0xff),
+                              Core.Intrinsics.trunc_int(TestInt17, Int32(1)))
+        @test x === Core.Intrinsics.trunc_int(TestInt17, Int32(-3))
+        @test all(iszero, highbits(x))
+    end
+    let one17 = dirty(TestUInt17, 0x01, 0x00, 0xfe, 0x00), one24 = dirty(TestUInt24, 0x01, 0x00, 0x00, 0xff)
+        @test Base.invokelatest(Core.Intrinsics.shl_int, UInt64(1), one17) === UInt64(2)
+        @test Base.invokelatest(Core.Intrinsics.shl_int, UInt64(1), one24) === UInt64(2)
+        @test Base.invokelatest(Core.Intrinsics.lshr_int, UInt64(4), one24) === UInt64(2)
+    end
+    # an amount wider than the shifted value shifts it all out, as in codegen (#63460)
+    @test Base.invokelatest(Core.Intrinsics.shl_int, UInt8(1), UInt16(256)) === 0x00
+    @test Base.invokelatest(Core.Intrinsics.lshr_int, UInt8(0x80), UInt16(257)) === 0x00
+    @test Base.invokelatest(Core.Intrinsics.ashr_int, Int8(-128), UInt16(256)) === Int8(-1)
+    @test Base.invokelatest(Core.Intrinsics.shl_int, Core.Intrinsics.trunc_int(TestUInt5, 0x01),
+                            UInt16(256)) === Core.Intrinsics.trunc_int(TestUInt5, 0x00)
+    # so does an amount of 2^width or more when the width is no C type's
+    shl(x, y) = Core.Intrinsics.shl_int(x, y)
+    lshr(x, y) = Core.Intrinsics.lshr_int(x, y)
+    ashr(x, y) = Core.Intrinsics.ashr_int(x, y)
+    for x in (Core.Intrinsics.trunc_int(TestUInt5, 0x01), Core.Intrinsics.trunc_int(TestUInt17, 0x0001ffff),
+              Core.Intrinsics.trunc_int(TestInt17, Int32(-4)), Core.Intrinsics.trunc_int(TestUInt24, 0x00000001)),
+        y in (UInt8(32), UInt8(33), UInt32(1 << 17 + 1), UInt32(1 << 24)),
+        (f, op) in ((shl, Core.Intrinsics.shl_int), (lshr, Core.Intrinsics.lshr_int), (ashr, Core.Intrinsics.ashr_int))
+        @test Base.invokelatest(op, x, y) === f(x, y)
+    end
+    # an amount that does not fit the width fills with the sign for `ashr_int`,
+    # and the bits above the width of the result are zero
+    let neg = Core.Intrinsics.trunc_int(TestInt17, Int32(-4)), pos = Core.Intrinsics.trunc_int(TestInt17, Int32(4))
+        r = Base.invokelatest(Core.Intrinsics.ashr_int, neg, UInt32(0x20000))
+        @test r === Core.Intrinsics.trunc_int(TestInt17, Int32(-1)) && all(iszero, highbits(r))
+        @test Base.invokelatest(Core.Intrinsics.ashr_int, pos, UInt32(0x20000)) === Core.Intrinsics.trunc_int(TestInt17, Int32(0))
+        @test Base.invokelatest(Core.Intrinsics.ashr_int, dirty(TestInt17, 0xfc, 0xff, 0xf1), UInt32(0x20000)) ===
+              Core.Intrinsics.trunc_int(TestInt17, Int32(-1))
+    end
+
+    # a runtime replace compares values, not the bits above their width
+    mutable struct AtomicTestUInt5
+        @atomic x::TestUInt5
+    end
+    let s = AtomicTestUInt5(Core.Intrinsics.trunc_int(TestUInt5, 0x1f))
+        Base.invokelatest(setfield!, s, :x, dirty(TestUInt5, 0xff), :sequentially_consistent)
+        @test Base.invokelatest(replacefield!, s, :x, Core.Intrinsics.trunc_int(TestUInt5, 0x1f),
+                                Core.Intrinsics.trunc_int(TestUInt5, 0x00),
+                                :sequentially_consistent, :sequentially_consistent).success
+    end
+
     x63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(0xffff_ffff_ffff_ffff))
     @test Core.Intrinsics.zext_int(UInt64, x63) === 0x7fff_ffff_ffff_ffff
 
