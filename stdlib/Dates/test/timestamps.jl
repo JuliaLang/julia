@@ -619,6 +619,52 @@ Dates.tons(x::TestNanosecond{S}) where {S} = Dates.value(x) * S
     end
 end
 
+# Floating metadata must not round integer counts, even when the unit is exactly 1.0.
+Dates.tons(x::TestNanosecond{1.0}) = Dates.value(x) == 1 ? 1.0 : big(Dates.value(x))
+
+@testset "Timestamp period scales require exact representations" begin
+    E = Timestamp{TestNanosecond{1}}
+    origin = E(Dates.UTInstant(TestNanosecond{1}(0)))
+    counts = (typemin(Int128), -(Int128(2)^53 + 1), Int128(-1), Int128(0),
+              Int128(1), Int128(2)^53 + 1, typemax(Int128))
+    for scale in (Float32(1), 1.0, 0.5, 1000000000.0, 0.0, -1.0, Inf, NaN)
+        P = TestNanosecond{scale}
+        T = Timestamp{P}
+        @test_throws ArgumentError("Timestamp period scale must be an Integer or Rational number of nanoseconds") T(Dates.UTInstant(P(1)))
+        for n in counts
+            @test_throws ArgumentError T(Dates.UTInstant(P(n)))
+            @test_throws ArgumentError Timestamp(Dates.UTInstant(P(n)))
+            @test_throws ArgumentError convert(E, P(n))
+            @test_throws ArgumentError convert(P, E(Dates.UTInstant(TestNanosecond{1}(n))))
+            @test_throws ArgumentError origin + P(n)
+            @test_throws ArgumentError origin - P(n)
+        end
+        @test_throws ArgumentError T(1970)
+        @test_throws ArgumentError T(Date(1970))
+        @test_throws ArgumentError T(DateTime(1970))
+        @test_throws ArgumentError unix2timestamp(T, 1)
+        @test_throws ArgumentError unix2timestamp(T, 1//2)
+        @test_throws ArgumentError now(T)
+        @test_throws ArgumentError now(T, UTC)
+        @test_throws ArgumentError floor(origin, P(1))
+        @test_throws ArgumentError ceil(origin, P(1))
+        @test_throws ArgumentError round(origin, P(1))
+        @test_throws ArgumentError Dates.guess(origin, origin, P(1))
+        @test_throws ArgumentError length(origin:P(1):origin)
+    end
+    for scale in (1, 1//1)
+        P = TestNanosecond{scale}
+        T = Timestamp{P}
+        for n in counts
+            t = T(Dates.UTInstant(P(n)))
+            @test Dates.value(E(t)) == n
+            @test Dates.value(T(E(t))) == n
+            @test Dates.value(convert(P, E(t))) == n
+            @test Dates.value(origin + P(n)) == n
+        end
+    end
+end
+
 @testset "Rational Unix conversion avoids intermediate overflow" begin
     for P in (Microsecond, Nanosecond), sign in (-1, 1)
         x = sign * (9007199254740991 // 999999999)

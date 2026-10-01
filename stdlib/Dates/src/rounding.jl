@@ -140,7 +140,7 @@ end
     epoch = p isa Week ? WEEKEPOCH : DATEEPOCH
     epochns = Int128(UNIXEPOCHDAYS - epoch) * NS_PER_DAY
     x = widen(value(dt)) * timestamp_scale(typeof(dt))
-    step = widen(value(p)) * tons(oneunit(p))
+    step = widen(value(p)) * timestamp_period_scale(typeof(p))
     f = x - mod(x + epochns, step)
     return f, !upper || x == f ? f : f + step
 end

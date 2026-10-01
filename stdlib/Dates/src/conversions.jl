@@ -62,9 +62,9 @@ Base.convert(::Type{Day},dt::Date) = Day(value(dt))            # Converts Date t
 Base.convert(::Type{Timestamp},x::Nanosecond)  = Timestamp(UTInstant(x))       # Converts Unix nanoseconds to a Timestamp
 # Convert between a Timestamp and a period counted from the Unix epoch
 Base.convert(::Type{P}, dt::Timestamp{Q}) where {P<:TimePeriod,Q} =
-    P(timestamp_ticks(P, widen(value(dt)) * timestamp_scale(Q), tons(oneunit(P))))
+    P(timestamp_ticks(P, widen(value(dt)) * timestamp_scale(Q), timestamp_period_scale(P)))
 Base.convert(::Type{Timestamp{P}}, x::Q) where {P,Q<:TimePeriod} =
-    Timestamp{P}(UTInstant(P(timestamp_ticks(P, widen(value(x)) * tons(oneunit(Q))))))
+    Timestamp{P}(UTInstant(P(timestamp_ticks(P, widen(value(x)) * timestamp_period_scale(Q)))))
 
 ### External Conversions
 const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00:00:00

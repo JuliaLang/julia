@@ -9,8 +9,11 @@ Base.:(:)(a::T, b::T) where {T<:Date} = (:)(a, Day(1), b)
 # Given a start and end date, how many steps/periods are in between
 guess(a::DateTime, b::DateTime, c) = floor(Int64, (Int128(value(b)) - Int128(value(a))) / toms(c))
 # Integer division keeps step counts above 2^53 exact
-guess(a::T, b::T, c) where {T<:Timestamp} =
-    floor(Int64, div(widen(value(b)) * timestamp_scale(T) - widen(value(a)) * timestamp_scale(T), widen(value(c)) * tons(oneunit(c))))
+function guess(a::T, b::T, c) where {T<:Timestamp}
+    # Calendar steps use an average length for this estimate; len corrects it below.
+    scale = c isa Union{Year,Quarter,Month} ? tons(oneunit(c)) : timestamp_period_scale(typeof(c))
+    return floor(Int64, div(widen(value(b)) * timestamp_scale(T) - widen(value(a)) * timestamp_scale(T), widen(value(c)) * scale))
+end
 guess(a::Date, b::Date, c) = Int64(div(value(b - a), days(c)))
 len(a::Time, b::Time, c) = Int64(div(value(b - a), tons(c)))
 function len(a, b, c)

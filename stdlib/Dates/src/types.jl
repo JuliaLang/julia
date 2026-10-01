@@ -251,9 +251,11 @@ differ even when `ts == dt`.
 
 A package can add a resolution with its own `TimePeriod` type, such as a 128-bit count
 of picoseconds. The type needs methods for `Dates.value`, `typemin`, `typemax`, and
-`Dates.tons`, which returns the length of a period in nanoseconds (a `Rational` for a
-unit shorter than a nanosecond). One unit must divide a second evenly. When two periods
-have the same unit, promotion picks the one with the wider count, or uses period
+`Dates.tons`, which returns the length of a period in nanoseconds as an `Integer` or
+`Rational` (including a unit shorter than a nanosecond). Floating-point scales, even
+`1.0`, are rejected to keep count arithmetic exact. One unit must divide a second
+evenly. When two periods have the same unit, promotion picks the one with the wider
+count, or uses period
 promotion if both counts are the same width. For years whose day count overflows `Int64`,
 also add a method for `Dates.timestamp_totaldays(P, y, m, d)`. Printing and the `n`
 format code round digits finer than a nanosecond down.
@@ -274,9 +276,16 @@ Timestamp(ts::Timestamp) = ts
 timestamp_count_type(::Type{P}) where {P} = typeof(value(zero(P)))
 # Rata Die day number of a date. A package period with a huge range can use a wider type.
 timestamp_totaldays(::Type{P}, y, m, d) where {P} = totaldays(y, m, d)
+# Exact nanoseconds per period unit, including periods longer than a second.
+function timestamp_period_scale(::Type{P}) where {P<:Period}
+    scale = tons(oneunit(P))
+    scale isa Union{Integer,Rational} ||
+        throw(ArgumentError("Timestamp period scale must be an Integer or Rational number of nanoseconds"))
+    return scale
+end
 # Nanoseconds per unit of P (a Rational below a nanosecond), and units of P per day
 function timestamp_scale(::Type{P}) where {P<:Period}
-    scale = tons(oneunit(P))
+    scale = timestamp_period_scale(P)
     scale > 0 && iszero(rem(1000000000, scale)) ||
         throw(ArgumentError("Timestamp resolution must be a positive exact subdivision of a second"))
     return scale
