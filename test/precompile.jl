@@ -4554,4 +4554,72 @@ end
     end end
 end
 
+@testset "a package from another environment is cached under that environment's name" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        dep_uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+        top_uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+        for (dirname, version) in (("DepOld", "0.1.0"), ("DepNew", "0.2.0"))
+            path = joinpath(dir, "dev", dirname)
+            mkpath(joinpath(path, "src"))
+            write(joinpath(path, "Project.toml"), "name = \"Dep\"\nuuid = \"$dep_uuid\"\nversion = \"$version\"\n")
+            write(joinpath(path, "src", "Dep.jl"), "module Dep\nend\n")
+        end
+        top_path = joinpath(dir, "dev", "Top")
+        mkpath(joinpath(top_path, "src"))
+        write(joinpath(top_path, "Project.toml"),
+              "name = \"Top\"\nuuid = \"$top_uuid\"\nversion = \"0.1.0\"\n\n[deps]\nDep = \"$dep_uuid\"\n")
+        write_top(edit) = write(joinpath(top_path, "src", "Top.jl"), "module Top\nusing Dep\nconst edit = $edit\nend\n")
+        dep_entry(dirname, version) = """
+            [[deps.Dep]]
+            path = "../dev/$dirname/"
+            uuid = "$dep_uuid"
+            version = "$version"
+            """
+        # Top lives only in a shared environment, like a tool in the default one
+        shared = joinpath(dir, "shared")
+        mkpath(shared)
+        write(joinpath(shared, "Project.toml"), "[deps]\nTop = \"$top_uuid\"\n")
+        write(joinpath(shared, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            $(dep_entry("DepOld", "0.1.0"))
+            [[deps.Top]]
+            deps = ["Dep"]
+            path = "../dev/Top/"
+            uuid = "$top_uuid"
+            version = "0.1.0"
+            """)
+        function project(name, dirname, version)
+            path = joinpath(dir, name)
+            mkpath(path)
+            write(joinpath(path, "Project.toml"), "[deps]\nDep = \"$dep_uuid\"\n")
+            write(joinpath(path, "Manifest.toml"), "manifest_format = \"2.0\"\n\n" * dep_entry(dirname, version))
+            return path
+        end
+        same_a = project("same_a", "DepOld", "0.1.0")
+        same_b = project("same_b", "DepOld", "0.1.0")
+        other = project("other", "DepNew", "0.2.0")
+        load_path = join(["@", shared, "@stdlib"], Sys.iswindows() ? ';' : ':')
+        using_top(proj) = success(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$proj -e "using Top"`,
+                                         "JULIA_DEPOT_PATH" => depot, "JULIA_LOAD_PATH" => load_path))
+        compiled = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)")
+        top_files() = filter(endswith(".ji"), readdir(joinpath(compiled, "Top")))
+
+        # Builds that match the shared environment replace one file, whichever project made them
+        write_top(0)
+        @test using_top(same_a)
+        @test length(top_files()) == 1
+        write_top(1)
+        @test using_top(same_b)
+        @test length(top_files()) == 1
+        # A build against another Dep is named after the project that made it
+        @test using_top(other)
+        @test length(top_files()) == 2
+        write_top(2)
+        @test using_top(same_a)
+        @test using_top(other)
+        @test length(top_files()) == 2
+    end end
+end
+
 finish_precompile_test!()

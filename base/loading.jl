@@ -3795,10 +3795,11 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             # Read preferences blob back from .ji file (we can't precompute because we don't
             # actually know what the list of compile-time preferences are without compiling)
             prefs_blob = preferences_blob(tmppath)
-            cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags)
+            required_modules = parse_cache_header(tmppath)[3]
+            cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags, project=cachefile_project(pkg, required_modules))
             # Keep the usual name for the build that matches the environment, which the next
             # session will want, and give a build that only suits this session another one.
-            if pkg.uuid !== nothing && built_against_other_sources(tmppath)
+            if pkg.uuid !== nothing && built_against_other_sources(required_modules)
                 cachefile = unused_cachefile_name(cachefile)
             end
             ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
@@ -3934,8 +3935,7 @@ end
 
 # Whether a new cache was built against a loaded package whose source is not the one the
 # environment now gives it, as after updating a package that is loaded.
-function built_against_other_sources(cachefile::String)
-    required_modules = parse_cache_header(cachefile)[3]
+function built_against_other_sources(required_modules::Vector{Pair{PkgId,UInt128}})
     @lock require_lock for (dep, build_id) in required_modules
         m = get(loaded_modules, dep, nothing)
         (m === nothing || module_build_id(m) != build_id) && continue
@@ -3946,6 +3946,28 @@ function built_against_other_sources(cachefile::String)
         path === nothing || samefile(path, origin.path) || return true
     end
     return false
+end
+
+# The project to name a new cache after. A package from another environment in the load
+# path, such as the default one, is named after that environment when the build matches its
+# manifest, so the projects that use it share one file. A build against other versions
+# from the active project is named after the active project.
+function cachefile_project(pkg::PkgId, required_modules::Vector{Pair{PkgId,UInt128}})
+    active = something(active_project(), "")
+    @lock require_lock begin
+        specenv = locate_package_env(pkg)
+        specenv === nothing && return active
+        env = specenv[2]
+        project_file = env_project_file(env)
+        (project_file isa String && project_file != active) || return active
+        for (dep, _) in required_modules
+            (dep.uuid === nothing || in_sysimage(dep)) && continue
+            path = locate_package(dep)
+            spec = manifest_uuid_load_spec(env, dep)
+            (path !== nothing && spec isa PkgLoadSpec && samefile(spec.path, path)) || return active
+        end
+        return project_file
+    end
 end
 
 function is_loaded_cachefile(pkg::PkgId, path::String)
