@@ -226,8 +226,6 @@ end
 elsize(::Type{Union{}}) = 0
 elsize(::Type{Union{}}, slurp...) = throw(MethodError(elsize, (Union{}, slurp...)))
 
-pointer(a::Array{T}) where {T} = unsafe_convert(Ptr{T}, a)
-
 sizeof(a::Array) = length(a) * elsize(typeof(a)) # n.b. this ignores bitsunion bytes, as a historical fact
 
 function isassigned(a::Array, i::Int...)

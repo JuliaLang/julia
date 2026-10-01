@@ -408,9 +408,6 @@ function elsize(::Type{<:ReinterpretArray{T,<:Any,S,A}}) where {T,S,A}
 end
 cconvert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = cconvert(Ptr{S}, a.parent)
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
-# Only retype plain `Ptr`s; other pointer types (e.g. device pointers) must not become a `Ptr`
-_reinterpret_pointer(::Type{T}, p::Ptr) where {T} = Ptr{T}(p)
-pointer(a::ReinterpretArray{T}) where {T} = _reinterpret_pointer(T, pointer(a.parent))
 
 @propagate_inbounds function getindex(a::NonReshapedReinterpretArray{T,0,S}) where {T,S}
     if _is_scalar_reinterpret_applicable(T, S)

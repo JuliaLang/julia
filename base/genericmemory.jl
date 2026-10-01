@@ -86,7 +86,6 @@ julia> Base.memoryindex(memoryref(Memory{Nothing}(undef, 10), 8))
 """
 memoryindex(ref::GenericMemoryRef) = memoryrefoffset(ref)
 
-pointer(mem::GenericMemory{<:Any,T}) where {T} = unsafe_convert(Ptr{T}, mem)
 pointer(mem::GenericMemoryRef) = unsafe_convert(Ptr{Cvoid}, mem) # no bounds check, even for empty array
 
 """
