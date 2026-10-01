@@ -1575,6 +1575,9 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
 
     # Enable output from do_precompile
     @lock BG BG.monitoring = true
+    # cursor and clearing codes only mean something to a terminal showing the progress display
+    clear = can_fancyprint(io) ? ansi_cleartoend : ""
+    restore = isempty(clear) ? "" : ansi_enablecursor * clear
 
     exit_requested = Ref(false)
     cancel_requested = Ref(false)
@@ -1752,8 +1755,8 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
         # If user requested cancel, stop the background task
         if cancel_requested[]
             key_task !== nothing && wait(key_task)
-            print(io, ansi_enablecursor, ansi_cleartoend)
-            printpkgstyle(io, :Info, "Canceling precompilation...$(ansi_cleartoend)", color = Base.info_color())
+            print(io, restore)
+            printpkgstyle(io, :Info, "Canceling precompilation...$(clear)", color = Base.info_color())
             # Wait for the task to emit its final report before clearing
             # `BG.monitoring`, which gates that report's output.
             wait(task; throw=false)
@@ -1780,7 +1783,7 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
                 wake_key_task()
                 wait(key_task)
             end
-            print(io, ansi_enablecursor, ansi_cleartoend)
+            print(io, restore)
             return
         end
 
@@ -1788,10 +1791,10 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
         if exit_requested[]
             @lock BG BG.monitoring = false
             key_task !== nothing && wait(key_task)
-            print(io, ansi_enablecursor, ansi_cleartoend)
+            print(io, restore)
             n_pending = @lock BG length(BG.pending_pkgids)
             progress = n_pending > 0 ? " ($n_pending packages remaining)." : "."
-            printpkgstyle(io, :Precompiling, "detached$(progress) Precompilation will continue in the background. Monitor with `precompile --monitor`.$(ansi_cleartoend)", color = Base.info_color())
+            printpkgstyle(io, :Precompiling, "detached$(progress) Precompilation will continue in the background. Monitor with `precompile --monitor`.$(clear)", color = Base.info_color())
             return
         end
 
