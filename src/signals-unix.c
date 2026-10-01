@@ -1294,7 +1294,10 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #endif
 
         if (sig == SIGINT) {
-            if (jl_ignore_sigint()) {
+            if (jl_atomic_load_relaxed(&jl_heap_released)) {
+                critical = 1;
+            }
+            else if (jl_ignore_sigint()) {
                 continue;
             }
             else if (exit_on_sigint) {
