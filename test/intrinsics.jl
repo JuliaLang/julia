@@ -899,13 +899,16 @@ primitive type UIntN256 <: Unsigned 256 end
 
 # https://github.com/JuliaLang/julia/issues/63218
 let
-    f_f64_to_llvmptr(x) = Core.bitcast(Core.LLVMPtr{UInt32,1}, x)
-    f_llvmptr_to_f64(x) = Core.bitcast(Float64, x)
-    p = f_f64_to_llvmptr(0.0)
-    @test f_llvmptr_to_f64(p) === 0.0
+    # pick the float type matching the pointer bitsize, so the bitcast is
+    # size-valid on both 32- and 64-bit
+    F = Sys.WORD_SIZE == 64 ? Float64 : Float32
+    f_f_to_llvmptr(x) = Core.bitcast(Core.LLVMPtr{UInt32,1}, x)
+    f_llvmptr_to_f(x) = Core.bitcast(F, x)
+    p = f_f_to_llvmptr(zero(F))
+    @test f_llvmptr_to_f(p) === zero(F)
 
-    f_f64_to_ptr(x) = Core.bitcast(Ptr{UInt8}, x)
-    f_ptr_to_f64(x) = Core.bitcast(Float64, x)
-    @test f_f64_to_ptr(0.0) == C_NULL
-    @test f_ptr_to_f64(C_NULL) === 0.0
+    f_f_to_ptr(x) = Core.bitcast(Ptr{UInt8}, x)
+    f_ptr_to_f(x) = Core.bitcast(F, x)
+    @test f_f_to_ptr(zero(F)) == C_NULL
+    @test f_ptr_to_f(C_NULL) === zero(F)
 end
