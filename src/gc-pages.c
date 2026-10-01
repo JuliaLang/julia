@@ -11,6 +11,7 @@ extern "C" {
 #endif
 
 uv_mutex_t gc_pages_lock;
+arraylist_t gc_page_blocks;
 
 JL_DLLEXPORT uint64_t jl_get_pg_size(void)
 {
@@ -30,6 +31,7 @@ static int block_pg_cnt = DEFAULT_BLOCK_PG_ALLOC;
 
 void jl_gc_init_page(void)
 {
+    arraylist_new(&gc_page_blocks, 0);
     if (GC_PAGE_SZ * block_pg_cnt < jl_page_size)
         block_pg_cnt = jl_page_size / GC_PAGE_SZ; // exact division
 }
@@ -48,6 +50,8 @@ static char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
                                     MEM_RESERVE, PAGE_READWRITE);
     if (mem == NULL)
         return NULL;
+    arraylist_push(&gc_page_blocks, mem);
+    arraylist_push(&gc_page_blocks, (void*)(pages_sz + GC_PAGE_SZ));
 #else
     if (GC_PAGE_SZ > jl_page_size)
         pages_sz += GC_PAGE_SZ;
@@ -55,6 +59,8 @@ static char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
                             MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (mem == MAP_FAILED)
         return NULL;
+    arraylist_push(&gc_page_blocks, mem);
+    arraylist_push(&gc_page_blocks, (void*)pages_sz);
 #endif
     if (GC_PAGE_SZ > jl_page_size)
         // round data pointer up to the nearest gc_page_data-aligned
@@ -76,12 +82,12 @@ STATIC_INLINE char *jl_gc_try_alloc_pages(void) JL_NOTSAFEPOINT_LEAVE_ENTER
 {
     unsigned pg_cnt = block_pg_cnt;
     char *mem = NULL;
+    size_t min_block_pg_alloc = MIN_BLOCK_PG_ALLOC;
+    if (GC_PAGE_SZ * min_block_pg_alloc < jl_page_size)
+        min_block_pg_alloc = jl_page_size / GC_PAGE_SZ; // exact division
     while (1) {
         if (__likely((mem = jl_gc_try_alloc_pages_(pg_cnt))))
             break;
-        size_t min_block_pg_alloc = MIN_BLOCK_PG_ALLOC;
-        if (GC_PAGE_SZ * min_block_pg_alloc < jl_page_size)
-            min_block_pg_alloc = jl_page_size / GC_PAGE_SZ; // exact division
         if (pg_cnt >= 4 * min_block_pg_alloc) {
             pg_cnt /= 4;
             block_pg_cnt = pg_cnt;

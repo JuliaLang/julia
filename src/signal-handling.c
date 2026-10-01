@@ -264,7 +264,7 @@ void jl_profile_task(void) JL_NOTSAFEPOINT JL_NO_SAFEPOINT_ANALYSIS
     }
     got_mutex = 1;
 
-    {
+    if (profile_running) {
         arraylist_t *tasks = jl_get_all_tasks_arraylist();
         uint64_t seed = jl_rand();
         const int n_max_random_attempts = 4;
@@ -853,6 +853,10 @@ static int jl_notify_signal_watchers(int sig) JL_NOTSAFEPOINT
 {
     if (sig <= 0 || sig > JL_MAX_WATCHED_SIGNAL || jl_atomic_load_acquire(&signal_watchers[sig]) == 0)
         return 0;
+    // The watchers are Julia code, which can never run again once the heap is
+    // gone; deliver the signal normally instead.
+    if (jl_atomic_load_relaxed(&jl_heap_released))
+        return 0;
     jl_atomic_store_release(&signal_pending[sig], 1);
     jl_wake_signal_watchers();
     return jl_atomic_load_relaxed(&signal_interceptors[sig]) > 0;
@@ -1141,7 +1145,7 @@ void jl_fprint_critical_error(ios_t *s, int sig, int si_code, bt_context_t *cont
             jl_safe_fprintf(s, "\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, jl_strsignal(sig));
         else
             jl_safe_fprintf(s, "\n[%d] signal %d: %s\n", getpid(), sig, jl_strsignal(sig));
-        if (sig == SIGQUIT) {
+        if (sig == SIGQUIT && !jl_atomic_load_relaxed(&jl_heap_released)) {
             jl_print_task_backtraces(0);
         }
     }
