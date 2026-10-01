@@ -1232,12 +1232,11 @@ end
 #    Core._parse(text, filename, lineno, offset, options, edition)
 #
 # Parse Julia code from the buffer `text`, starting at `offset` and attributing
-# it to `filename`. `text` may be a `String` or `svec(ptr::Ptr{UInt8},
-# len::Int)` for a raw unmanaged buffer. `options` should be one of `:atom`,
-# `:statement` or `:all`, indicating how much the parser will consume.
+# it to `filename`. `options` should be one of `:atom`, `:statement` or `:all`,
+# indicating how much the parser will consume.
 #
-# `_parse` must return an `svec` containing an `Expr` and the new offset as an
-# `Int`.
+# Return (ast, offset) containing an `Expr` (or `Syntax` on newer versions) and
+# the new offset as an `Int`.
 _parse = nothing
 
 #    Core._lower(code, module, filename="none", linenum=0, world=0xfff..., warn=false)
