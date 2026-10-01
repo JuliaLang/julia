@@ -2665,6 +2665,7 @@ static Type *zext_struct_type(Type *T);
 static Value *zext_struct(jl_codectx_t &ctx, Value *V);
 static Value *zext_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2);
 static Value *trunc_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2);
+static Type *julia_memory_access_type(Type *register_type, jl_value_t *jt);
 
 // TODO: in the future, assume all callers will handle the interior pointers separately, and have
 // have zext_struct strip them out, so we aren't saving those to the stack here causing shadow stores
@@ -2672,7 +2673,7 @@ static Value *trunc_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2);
 static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_t *typ, Value *tindex) JL_CANSAFEPOINT
 {
     Value *loc;
-    v = zext_struct(ctx, v);
+    v = zext_struct_helper(ctx, v, julia_memory_access_type(v->getType(), typ));
     Align align(julia_alignment(typ));
     // A write-once copy of the value, so it keeps the type's access tag and the
     // `immutdata` region the value has anywhere else.
@@ -8638,6 +8639,10 @@ static Function *gen_cfun_wrapper(
     // Create the call
     jl_cgval_t retval = emit_abi_call(ctx, declrt, sigt, inputargs, nargs + 1);
     bool jlfunc_sret = retval.V && isa<AllocaInst>(retval.V) && !retval.TIndex && retval.inline_roots.empty();
+    // The Julia callee writes all of `sizeof`, but a C caller sizes the buffer
+    // by the C ABI, which can leave out the padding of a primitive.
+    bool fuse_sret = sig.sret && jlfunc_sret &&
+        !(jl_is_primitivetype(declrt) && ((jl_datatype_t*)declrt)->layout->flags.haspadding);
 
     // Prepare the return value
     Value *r;
@@ -8646,7 +8651,7 @@ static Function *gen_cfun_wrapper(
         // return a jl_value_t*
         r = boxed(ctx, retval);
     }
-    else if (sig.sret && jlfunc_sret) {
+    else if (fuse_sret) {
         // fuse the two sret together
         assert(retval.ispointer());
         AllocaInst *result = cast<AllocaInst>(retval.V);
@@ -10526,7 +10531,8 @@ static jl_llvm_functions_t
                 }
                 else if (retvalinfo.V) {
                     Align align(returninfo.union_align);
-                    sret_ai.decorateInst(ctx.builder.CreateAlignedStore(zext_struct(ctx, retvalinfo.V), sret, align));
+                    Value *unboxed = zext_struct_helper(ctx, retvalinfo.V, julia_memory_access_type(retvalinfo.V->getType(), jlrettype));
+                    sret_ai.decorateInst(ctx.builder.CreateAlignedStore(unboxed, sret, align));
                     assert(retvalinfo.TIndex == NULL && "unreachable"); // unimplemented representation
                 }
             }

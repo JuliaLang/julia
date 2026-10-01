@@ -742,10 +742,12 @@ end
 # Return a byte index to Bool map for each byte of an aligned `T`
 # if false, that byte is undefined padding that should not be observed.
 # Preconditions, already checked by the `reinterpret` constructors and `_reinterpret`:
-# `isbitstype(T)` and `!has_bit_padding(T)`
+# `isbitstype(T)` and `!has_bit_padding(T)`. A byte holding both value and padding
+# bits is neither, so the latter is checked here as well.
 function non_padding_bytes(T::DataType)::Memory{Bool}
     # @assert isbitstype(T)
-    # @assert !has_bit_padding(T)
+    has_bit_padding(T) && throw(ArgumentError(LazyString("type `", T,
+        "` contains non-byte-aligned primitive fields, so its padding bytes are not defined")))
     used = Memory{Bool}(undef, aligned_sizeof(T))
     fill!(used, false)
     fill_nonpadding_bytes!(T, 0, used)
@@ -753,7 +755,9 @@ function non_padding_bytes(T::DataType)::Memory{Bool}
 end
 function fill_nonpadding_bytes!(T::DataType, offset::Int, used::Memory{Bool})
     if isprimitivetype(T)
-        for i in 1:sizeof(T)
+        # sizeof rounds the value bytes up to a multiple of the alignment, so the
+        # bytes past them are padding
+        for i in 1:cld(Core.bitsizeof(T), 8)
             used[i + offset] = true
         end
     else
@@ -763,22 +767,18 @@ function fill_nonpadding_bytes!(T::DataType, offset::Int, used::Memory{Bool})
     end
 end
 
-@assume_effects :foldable function isarraypacked(T)
-    !datatype_haspadding(T) && sizeof(T) == aligned_sizeof(T)
-end
-
 # Preconditions, already checked by the `reinterpret` constructors:
 # `isbitstype(T/S)` and `!has_bit_padding(T/S)`
 @assume_effects :foldable function array_subpadding(S, T)
     # Fast path: if every byte of `T` is a non-padding byte, any byte can be
     # read. This also covers zero-size `T`.
-    if isarraypacked(T)
+    if ispacked(T)
         return true
     end
     # `T` has at least one padding byte here. If `S` has none, the byte cycle
     # below visits every byte of `T`, so some readable byte of `S` must land on
     # padding in `T`. This also covers zero-size `S`.
-    if isarraypacked(S)
+    if ispacked(S)
         return false
     end
     s_used, t_used = non_padding_bytes(S), non_padding_bytes(T)
@@ -837,6 +837,10 @@ end
 end
 
 function _copytopacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
+    if isprimitivetype(In)
+        memcpy(ptr_out, ptr_in, packedsize(In))
+        return
+    end
     writeoffset = 0
     for i ∈ 1:fieldcount(In)
         readoffset = fieldoffset(In, i)
@@ -853,6 +857,10 @@ function _copytopacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
 end
 
 function _copyfrompacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
+    if isprimitivetype(Out)
+        memcpy(ptr_out, ptr_in, packedsize(Out))
+        return
+    end
     readoffset = 0
     for i ∈ 1:fieldcount(Out)
         writeoffset = fieldoffset(Out, i)

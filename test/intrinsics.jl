@@ -89,6 +89,9 @@ end
     primitive type TestUInt63 63 end
     primitive type TestInt17 <: Signed 17 end
     primitive type TestInt63 <: Signed 63 end
+    primitive type TestUInt129 129 end
+    primitive type TestP24{T} 24 end
+    primitive type TestUInt28 28 end
 
     @test Core.bitsizeof(TestUInt24) == 24
     @test Core.bitsizeof(TestUInt40) == 40
@@ -112,31 +115,75 @@ end
     x17 = Core.Intrinsics.trunc_int(TestUInt17, UInt32(0xffff_ffff))
     @test Core.Intrinsics.zext_int(UInt32, x17) === 0x0001_ffff
 
-    # Memory operations use the byte-rounded storage width.
+    # A whole primitive is loaded and stored at its full size: sizeof is 4 here,
+    # so one i32 access rather than several sub-word ones.
     load17(p::Ptr{TestUInt17}) = unsafe_load(p)
     store17(p::Ptr{TestUInt17}, x::TestUInt17) = unsafe_store!(p, x)
     load_boxed17(x::Any) = Core.Intrinsics.zext_int(UInt32, x::TestUInt17)
     bitcast17(x::Any) = Core.Intrinsics.bitcast(TestInt17, x::TestUInt17)
     load_tuple17(x::Any) = x::Tuple{TestUInt17,TestUInt17}
+    box17(x::TestUInt17) = Ref{Any}(x)[]
+    objectid17(x::TestUInt17) = objectid(x) # spills x to a stack slot
+    # global, for `@cfunction`; returns through sret
+    @eval ret129(x::UInt128) = Core.Intrinsics.zext_int($TestUInt129, x)
+    ccall129(p::Ptr{Cvoid}, x::UInt128) = ccall(p, TestUInt129, (UInt128,), x)
+    # codegen does not know `T`, so it boxes the result with the runtime type
+    ccallp24(@nospecialize(x::Vector{T}), p::Ptr{Cvoid}) where {T} = ccall(p, TestP24{T}, ())
+    @eval cfunction129() = @cfunction(ret129, $TestUInt129, (UInt128,))
+    ccall_narrow(p::Ptr{Cvoid}, x::TestInt17, y::TestUInt24, z::TestUInt28) =
+        ccall(p, Cvoid, (TestInt17, TestUInt24, TestUInt28), x, y, z)
     # Under Revise these `code_llvm` queries can fail in InteractiveUtils'
     # reflective inference path before reaching the odd-bit lowering.
     if !isdefined(Main, :Revise)
         load_ir = sprint(io -> code_llvm(io, load17, Tuple{Ptr{TestUInt17}};
             debuginfo=:none, optimize=false))
-        @test occursin(r"\bload i24\b", load_ir)
-        @test occursin(r"\btrunc i24\b", load_ir)
+        @test occursin(r"\bload i32\b", load_ir)
+        @test occursin(r"\btrunc i32\b", load_ir)
         boxed_ir = sprint(io -> code_llvm(io, load_boxed17, Tuple{Any};
             debuginfo=:none, optimize=false))
-        @test occursin(r"\bload i24\b", boxed_ir)
-        @test occursin(r"\btrunc i24\b", boxed_ir)
+        @test occursin(r"\bload i32\b", boxed_ir)
+        @test occursin(r"\btrunc i32\b", boxed_ir)
         store_ir = sprint(io -> code_llvm(io, store17,
             Tuple{Ptr{TestUInt17}, TestUInt17}; debuginfo=:none, optimize=false))
-        @test occursin(r"\bzext i17\b.*\bto i24\b", store_ir)
-        @test occursin(r"\bstore i24\b", store_ir)
+        @test occursin(r"\bzext i17\b.*\bto i32\b", store_ir)
+        @test occursin(r"\bstore i32\b", store_ir)
+        box_ir = sprint(io -> code_llvm(io, box17, Tuple{TestUInt17};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bstore i32\b", box_ir)
+        objectid_ir = sprint(io -> code_llvm(io, objectid17, Tuple{TestUInt17};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bstore i32\b", objectid_ir)
+        store129 = Regex("\\bstore i$(8 * sizeof(TestUInt129))\\b")
+        ret_ir = sprint(io -> code_llvm(io, ret129, Tuple{UInt128};
+            debuginfo=:none, optimize=false))
+        @test occursin(store129, ret_ir)
+        ccall_ir = sprint(io -> code_llvm(io, ccall129, Tuple{Ptr{Cvoid}, UInt128};
+            debuginfo=:none, optimize=false))
+        @test occursin(store129, ccall_ir)
+        ccallp24_ir = sprint(io -> code_llvm(io, ccallp24, Tuple{Vector, Ptr{Cvoid}};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bstore i32\b", ccallp24_ir)
+        # A C caller sizes an sret buffer by the C ABI, which may be less than
+        # `sizeof`, so the wrapper writes only the value bytes. 32-byte results
+        # return through sret on these architectures.
+        if Sys.ARCH in (:x86_64, :aarch64)
+            cfunction_ir = sprint(io -> code_llvm(io, cfunction129, Tuple{};
+                debuginfo=:none, dump_module=true, optimize=false))
+            wrapper = match(r"^define [^\n]*@jlcapi_ret129_.*?^}"ms, cfunction_ir).match
+            @test occursin(r"\bstore i136\b", wrapper)
+        end
+        # Arguments narrower than 32 bits are extended by signedness, as for
+        # `_BitInt(N)` in C, although `sizeof` rounds them up to 4. RISC-V
+        # sign-extends everything stored in 4 bytes.
+        narrow_ir = sprint(io -> code_llvm(io, ccall_narrow,
+            Tuple{Ptr{Cvoid}, TestInt17, TestUInt24, TestUInt28}; debuginfo=:none, optimize=false))
+        narrow_call = only(filter(contains("call void %\"p::Ptr\""), split(narrow_ir, '\n')))
+        @test count("signext", narrow_call) == (Sys.ARCH === :riscv64 ? 3 : 1)
+        @test count("zeroext", narrow_call) == (Sys.ARCH === :riscv64 ? 0 : 2)
         bitcast_ir = sprint(io -> code_llvm(io, bitcast17, Tuple{Any};
             debuginfo=:none, optimize=false))
         @test occursin(r"\bload i24\b", bitcast_ir)
-        # Aggregate elements widen elementwise, not just bare primitives. On
+        # Aggregate elements are still reached at the byte-rounded width. On
         # 32-bit targets the tuple is returned through sret as a single memcpy
         # instead, which never materializes the elements.
         if Sys.WORD_SIZE == 64
@@ -193,6 +240,17 @@ end
         v = GC.@preserve dirty ccall(:jl_new_bits, Any, (Any, Ptr{Cvoid}), T, pointer(dirty))
         @test Core.Intrinsics.zext_int(UInt64, v::T) == mask
         @test v::T === Core.Intrinsics.trunc_int(T, typemax(UInt64))
+    end
+
+    # sizeof rounds the value bytes up to a multiple of the alignment
+    for (nb, sz) in ((1, 1), (2, 1), (5, 1), (8, 1), (9, 2), (17, 4), (24, 4), (25, 4),
+                     (33, 8), (40, 8), (48, 8), (63, 8), (64, 8), (65, 16), (128, 16))
+        T = Core.eval(@__MODULE__, :(primitive type $(Symbol("TestSz", nb)) $nb end;
+                                     $(Symbol("TestSz", nb))))
+        @test Core.bitsizeof(T) == nb
+        @test sizeof(T) == sz
+        @test sizeof(T) == Base.aligned_sizeof(T)
+        @test Base.datatype_haspadding(T) == (nb != 8 * sz)
     end
 
     # A 1-bit primitive is not a Bool: boxing must keep its own type.
@@ -260,7 +318,7 @@ end
         r = Base.invokelatest(Core.Intrinsics.ashr_int, neg, UInt32(0x20000))
         @test r === Core.Intrinsics.trunc_int(TestInt17, Int32(-1)) && all(iszero, highbits(r))
         @test Base.invokelatest(Core.Intrinsics.ashr_int, pos, UInt32(0x20000)) === Core.Intrinsics.trunc_int(TestInt17, Int32(0))
-        @test Base.invokelatest(Core.Intrinsics.ashr_int, dirty(TestInt17, 0xfc, 0xff, 0xf1), UInt32(0x20000)) ===
+        @test Base.invokelatest(Core.Intrinsics.ashr_int, dirty(TestInt17, 0xfc, 0xff, 0xf1, 0xff), UInt32(0x20000)) ===
               Core.Intrinsics.trunc_int(TestInt17, Int32(-1))
     end
 
@@ -274,6 +332,25 @@ end
                                 Core.Intrinsics.trunc_int(TestUInt5, 0x00),
                                 :sequentially_consistent, :sequentially_consistent).success
     end
+
+    # The padding that rounding `sizeof` up to the alignment adds is zero in the
+    # results of runtime intrinsics.
+    let a = Core.Intrinsics.trunc_int(TestUInt24, 0x00123456),
+        b = Core.Intrinsics.trunc_int(TestUInt24, 0x00000789)
+        # fill recycled GC cells with all-ones, so an unwritten byte shows
+        Base.donotdelete([Ref(typemax(UInt64)) for _ in 1:100_000])
+        GC.gc(false)
+        # byte 4 is the padding of the tuple's first field
+        @test all(1:100) do _
+            r = Base.invokelatest(Core.Intrinsics.checked_sadd_int, a, b)
+            GC.@preserve r unsafe_load(Ptr{UInt8}(addr(r)), 4) == 0
+        end
+        @test all(iszero, highbits(Base.invokelatest(Core.Intrinsics.fptoui, TestUInt129, 3.0)))
+    end
+    # `compilerbarrier` hides the constant from inference, so codegen boxes the
+    # folded LLVM constant
+    const129() = Ref{Any}(Core.Intrinsics.zext_int(TestUInt129, Base.compilerbarrier(:const, 0x01)))[]
+    @test rawbytes(const129()) == [0x01; zeros(UInt8, sizeof(TestUInt129) - 1)]
 
     x63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(0xffff_ffff_ffff_ffff))
     @test Core.Intrinsics.zext_int(UInt64, x63) === 0x7fff_ffff_ffff_ffff
