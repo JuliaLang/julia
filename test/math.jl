@@ -339,6 +339,13 @@ end
             @test isequal(cscd(T(90)), one(T))
             @test isequal(sech(log(one(T))), one(T))
             @test isequal(csch(zero(T)), T(Inf))
+            # cosh and sinh overflow before sech and csch underflow
+            let x = T == Float16 ? T(12) : T == Float32 ? T(90) : T(711)
+                @test sech(x) == csch(x) == T(2exp(-big(x)))
+                @test sech(-x) == -csch(-x) == sech(x)
+                @test issubnormal(sech(x))
+            end
+            @test sech(T(Inf)) === csch(T(Inf)) === -csch(-T(Inf)) === zero(T)
             @test zero(T)^y === zero(T)
             @test zero(T)^zero(T) === one(T)
             @test zero(T)^(-y) === T(Inf)
