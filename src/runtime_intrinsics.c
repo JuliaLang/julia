@@ -1417,7 +1417,14 @@ static inline double fma_narrow(double a, double b, double c) JL_NOTSAFEPOINT
     return res;
 }
 
-// runtime fma is broken on windows, define julia_fma(f) ourself with fma_emulated as reference.
+// Base.fma_emulated(::Float32, ::Float32, ::Float32)
+// Used on all systems, since some libm fmaf (e.g. FreeBSD's) double round subnormal results.
+static float julia_fmaf(float a, float b, float c) JL_NOTSAFEPOINT
+{
+    return (float)fma_narrow(a, b, c);
+}
+
+// runtime fma is broken on windows, define julia_fma ourself with fma_emulated as reference.
 #if defined(_OS_WINDOWS_)
 // reinterpret(UInt64, ::Float64)
 uint64_t bitcast_d2u(double d) {
@@ -1441,10 +1448,6 @@ int exponent(double a) {
     int e;
     frexp(a, &e);
     return e - 1;
-}
-// Base.fma_emulated(::Float32, ::Float32, ::Float32)
-float julia_fmaf(float a, float b, float c) {
-    return (float)fma_narrow(a, b, c);
 }
 // Base.twomul(::Float64, ::Float64)
 void two_mul(double *abhi, double *ablo, double a, double b) {
@@ -1520,9 +1523,9 @@ double julia_fma(double a, double b, double c) {
 }
 #define fma(a, b, c) \
     sizeof(a) == sizeof(float) ? julia_fmaf(a, b, c) : julia_fma(a, b, c)
-#else // On other systems use fma(f) directly
+#else // On other systems use fma directly
 #define fma(a, b, c) \
-    sizeof(a) == sizeof(float) ? fmaf(a, b, c) : fma(a, b, c)
+    sizeof(a) == sizeof(float) ? julia_fmaf(a, b, c) : fma(a, b, c)
 #endif
 
 #define muladd(a, b, c) a * b + c
