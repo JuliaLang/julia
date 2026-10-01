@@ -48,6 +48,11 @@ end
     @test Printf.@sprintf("%#.1a", 3.14) == "0x1.9p+1"
     @test Printf.@sprintf("%#.2a", 3.14) == "0x1.92p+1"
     @test Printf.@sprintf("%.6a", 1.5) == "0x1.800000p+0"
+    # the precision must not overflow the scaling for narrow types
+    for prec in 0:15, x in (1.5, -3.14, 0x1.ffcp15, 0x1p-24, 0x1.ffcp-15)
+        @test Printf.@sprintf("%.*a", prec, Float16(x)) == Printf.@sprintf("%.*a", prec, Float64(Float16(x)))
+        @test Printf.@sprintf("%.*a", prec, Float32(x)) == Printf.@sprintf("%.*a", prec, Float64(Float32(x)))
+    end
 
 end
 

@@ -596,7 +596,8 @@ function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
                 newpos += 3
             else
                 if prec > -1
-                    s, p = frexp(x)
+                    # scale in Float64, since ldexp(s, 1 + sigbits) can overflow narrower types
+                    s, p = frexp(Float64(x))
                     sigbits = 4 * min(prec, 13)
                     s = 0.25 * round(ldexp(s, 1 + sigbits))
                     # ensure last 2 exponent bits either 01 or 10
