@@ -1806,7 +1806,10 @@
                       (or (not (pair? R)) (quoted? R) (equal? R '(null)))
                       ;; overwrite var immediately if it doesn't occur elsewhere
                       (not (contains (lambda (e) (eq-sym? e L)) (cdr rhss)))
-                      (not (contains (lambda (e) (eq-sym? e R)) assigned)))
+                      (not (contains (lambda (e) (eq-sym? e R)) assigned))
+                      ;; nor in an earlier target that is assigned later, like `x[i]` in `x[i], i = ...`
+                      (or (underscore-symbol? L)
+                          (not (contains (lambda (e) (eq-sym? e L)) after))))
                  (loop (cdr lhss)
                        (cons L assigned)
                        (cdr rhss)
@@ -2566,11 +2569,16 @@
   (if (null? lhss)
       '()
       (let* ((lhs  (car lhss))
-             (lhs- (cond ((or (symbol? lhs) (ssavalue? lhs))
+             ;; a variable used in an earlier target, like `i` in `x[i], i = ...`, is assigned
+             ;; after that target, in order
+             (used-earlier? (lambda (v) (and (symbol? v) (not (underscore-symbol? v))
+                                             (contains (lambda (e) (eq-sym? e v)) (car end)))))
+             (lhs- (cond ((ssavalue? lhs) lhs)
+                         ((and (symbol? lhs) (not (used-earlier? lhs)))
                           lhs)
                          ((vararg? lhs)
                           (let ((lhs- (cadr lhs)))
-                            (if (or (symbol? lhs-) (ssavalue? lhs-))
+                            (if (or (ssavalue? lhs-) (and (symbol? lhs-) (not (used-earlier? lhs-))))
                                 lhs
                                 `(|...| ,(if (eventually-call? lhs-)
                                              (gensy)

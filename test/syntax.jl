@@ -3168,6 +3168,51 @@ end
     @test x == [2, 3, 1]
 end
 
+mutable struct DestructuringOrder
+    v
+end
+struct DestructuringOnlyFirst end
+Base.iterate(::DestructuringOnlyFirst) = (10, nothing)
+Base.rest(::DestructuringOnlyFirst, ::Nothing) = error("the rest should not be requested")
+
+@testset "destructuring assigns targets from left to right" begin
+    # a variable used in an earlier target is assigned after it
+    x = [0, 0, 0]; i = 1
+    x[i], i = 10, 2
+    @test x == [10, 0, 0] && i == 2
+    x = [0, 0, 0]; i = 1; t = (10, 2)
+    x[i], i = t
+    @test x == [10, 0, 0] && i == 2
+    x = [0, 0, 0]; i = 1
+    x[i], i... = [10, 2]
+    @test x == [10, 0, 0] && i == [2]
+
+    r = DestructuringOrder(0); s = r; u = DestructuringOrder(1)
+    r.v, r = 5, u
+    @test s.v == 5 && r === u && u.v == 1
+    r = s; s.v = 0; t = (5, u)
+    r.v, r = t
+    @test s.v == 5 && r === u && u.v == 1
+
+    # a repeated target and a slurp that is not last
+    x = [0, 0, 0]; i = 1
+    i, x[i], i = 2, 10, 3
+    @test x == [0, 10, 0] && i == 3
+    x = [0, 0, 0]; i = 1
+    x[i], i..., z = [10, 2, 3, 4]
+    @test x == [10, 0, 0] && i == [2, 3] && z == 4
+
+    # the other order is unchanged
+    x = [0, 0, 0]; i = 1
+    i, x[i] = 2, 10
+    @test x == [0, 10, 0]
+
+    # an `_...` placeholder still discards the rest without computing it
+    d = Dict(:_ => 0)
+    d[:_], _... = DestructuringOnlyFirst()
+    @test d[:_] == 10
+end
+
 @testset "escaping newlines inside strings" begin
     c = "c"
 

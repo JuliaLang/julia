@@ -2,6 +2,26 @@ test_mod = Module()
 
 @testset "Destructuring via iteration" begin
 
+# A variable used in an earlier target is assigned after that target
+@test JuliaLowering.include_string(test_mod, """
+let
+    x = [0, 0, 0]
+    i = 1
+    t = (10, 2)
+    x[i], i = t
+    (x, i)
+end
+""") == ([10, 0, 0], 2)
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    x = [0, 0, 0]
+    i = 1
+    x[i], i... = [10, 2]
+    (x, i)
+end
+""") == ([10, 0, 0], [2])
+
 @test JuliaLowering.include_string(test_mod, """
 let
     as = [1,2,3]
