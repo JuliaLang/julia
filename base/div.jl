@@ -245,7 +245,7 @@ cld(a, b) = div(a, b, RoundUp)
 """
     fld1(a, b)
 
-Legacy spelling of `cld(a, b)` for integers.
+Legacy spelling of `cld(a, b)` for integers of the same type.
 
 See also [`cld`](@ref).
 """
