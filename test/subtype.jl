@@ -3277,21 +3277,33 @@ let X = Tuple{Vector{M62174{D,F,V,A}} where {D,F,V<:P62174{D},A<:P62174{F}}},
     @test p[4].ub.parameters[1] === p[2]
 end
 
-# Dependent static-parameter values must resolve method variables, including when substitution fails.
-@noinline function dependent_sparams(read::Bool, x::T, y::Union{Nothing,Ref{S}}) where {T,S>:T}
-    read ? (T, S) : ((@isdefined(T) ? T : :undefined), (@isdefined(S) ? S : :undefined))
+# Static-parameter values must not contain method variables left unresolved by dependent bounds.
+struct DependentSparams57427{N, Tup}
+    DependentSparams57427{N, Tup}() where {N, Tuple{Vararg{Nothing, N}} <: Tup <: Tuple{Vararg{Nothing, N}}} = new{N, Tup}()
 end
-struct DependentSparamBound{X<:Integer} end
-@noinline dependent_sparams_invalid(x::T, y::Ref{S}) where {T,S>:Tuple{DependentSparamBound{T}}} = S
-@noinline dependent_sparams_invalid_chain(::T, ::U, ::Ref{S}) where {T,U>:T,S>:Tuple{DependentSparamBound{U}}} = S
+@noinline dependent_sparams(::T, ::Ref{S}) where {T,S>:T} = (T, S)
+@noinline dependent_sparams_leaf(::Union{Nothing,S}, ::Ref{T}) where {T,S>:Type{T}} = S
+@noinline dependent_sparams_open(::Type{T}, ::Type{S}) where {T,S>:T} = (T, S)
+@inline dependent_sparams_unpinned(::T, ::Ref{U}) where {T,S>:T,U>:Vector{S}} = S
+dependent_sparams_unpinned_caller(r) = dependent_sparams_unpinned(1, r)
+@generated dependent_sparams_gen(::Vector{S}, ::T) where {T,S>:Vector{T}} = Base.has_free_typevars(T)
+Base.@nospecializeinfer dependent_sparams_gen_caller(@nospecialize(x::Type)) = dependent_sparams_gen(Vector{Vector}(), x)
 @testset "dependent static parameters" begin
-    @test dependent_sparams(false, 1, Ref(1)) === (Int, Int)
-    @test dependent_sparams(true, 1, Ref{Integer}(1)) === (Int, Integer)
-    @test dependent_sparams_invalid("s", Ref{Tuple{Any}}((1,))) === Tuple{Any}
-    @test dependent_sparams_invalid_chain("s", "s", Ref{Tuple{Any}}((1,))) === Tuple{Any}
-    _, env = intersection_env(Tuple{Union{Int8,Int16},Ref{Integer},Ref{Real}},
-                             Tuple{T,Ref{S},Ref{U}} where {T,S>:T,U>:S})
-    @test (env[2], env[3]) === (Integer, Real)
+    @test dependent_sparams(1, Ref{Integer}(1)) === (Int, Integer)
+    @test DependentSparams57427{0, Tuple{}}() isa DependentSparams57427{0, Tuple{}}
+    @test_throws UndefVarError dependent_sparams_leaf(nothing, Ref(1))
+    let open = Union{Int, TypeVar(:X)}
+        @test dependent_sparams_open(Int, open) === (Int, open)
+    end
+    @test_throws UndefVarError dependent_sparams_unpinned_caller(Ref{Vector}())
+    _, env = intersection_env(Tuple{Vector{Vector}, Number}, Tuple{Vector{S}, T} where {T, S>:Vector{T}})
+    @test env[1] !== Number
+    Base.code_typed_by_type(Tuple{typeof(dependent_sparams_gen), Vector{Vector}, Type{P}} where P)
+    @test !dependent_sparams_gen_caller(Int)
+    _, env = intersection_env(Tuple{Integer,Vector{Integer}}, Tuple{T,S} where {T,S>:Vector{T}})
+    @test env[2] !== Vector{Integer}
+    _, env = intersection_env(Tuple{Integer,Vector{Integer}}, Tuple{T,S} where {T<:Integer,S>:Vector{T}})
+    @test env[2] !== Vector{Integer}
 end
 
 # Hoisted union-split of a `∀` variable's upper bound: a left-side `where` var
