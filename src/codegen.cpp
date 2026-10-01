@@ -821,6 +821,14 @@ static const auto jltypeerror_func = new JuliaFunction<>{
             {getPointerTy(C), JuliaType::get_prjlvalue_ty(C), PointerType::get(C, AddressSpace::CalleeRooted)}, false); },
     get_attrs_noreturn,
 };
+static const auto jltypeerror_global_func = new JuliaFunction<>{
+    XSTR(jl_type_error_global),
+    [](LLVMContext &C) {
+        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
+        return FunctionType::get(getVoidTy(C),
+            {getPointerTy(C), T_prjlvalue, T_prjlvalue, T_prjlvalue, PointerType::get(C, AddressSpace::CalleeRooted)}, false); },
+    get_attrs_noreturn,
+};
 static const auto jlundefvarerror_func = new JuliaFunction<>{
     XSTR(jl_undefined_var_error),
     [](LLVMContext &C) {
@@ -3965,7 +3973,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_binding_t *bnd, jl_binding
     if (bpart && jl_binding_kind(bpart) == PARTITION_KIND_GLOBAL && bpart->restriction) {
         jl_value_t *ty = bpart->restriction;
         if (op != StoreKind::Modify) {
-            emit_typecheck(ctx, rval, ty, fname);
+            emit_typecheck_global(ctx, rval, ty, fname, mod, sym);
             rval = update_julia_type(ctx, rval, ty);
             if (rval.typ == jl_bottom_type)
                 return jl_cgval_t();
@@ -11266,6 +11274,7 @@ static void init_jit_functions(void)
     add_named_global(setjmp_func, &jl_setjmp_f);
     add_named_global(memcmp_func, &memcmp);
     add_named_global(jltypeerror_func, &jl_type_error);
+    add_named_global(jltypeerror_global_func, &jl_type_error_global);
     add_named_global(jlcheckassign_func, &jl_checked_assignment);
     add_named_global(jlcheckbpwritable_func, &jl_check_binding_currently_writable);
     add_named_global(jlboundp_func, &jl_boundp);
