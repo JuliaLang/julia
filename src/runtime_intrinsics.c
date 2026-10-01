@@ -1528,12 +1528,14 @@ double julia_fma(double a, double b, double c) {
                 b *= 4.503599627370496e15;
             a = bitcast_u2d((bitcast_d2u(a) & 0x800fffffffffffff) | 0x3ff0000000000000);
             b = bitcast_u2d((bitcast_d2u(b) & 0x800fffffffffffff) | 0x3ff0000000000000);
-            c = c_denorm;
+            // if c underflowed when rescaled, only its sign matters (to break ties)
+            c = ldexp(c_denorm, bias) == c ? c_denorm : copysign(0x1p-1022, c);
             two_mul(&abhi, &ablo, a, b);
             r = abhi+c;
             s = fma_correction(abhi, ablo, c, r);
             double sumhi = r+s;
-            if (issubnormal(ldexp(sumhi, bias))) {
+            // decide before rounding, which can carry the result to 0 or floatmin
+            if (sumhi != 0 && -bias-exponent(sumhi)-1022 > 0) {
                 double sumlo = r-sumhi+s;
                 int bits_lost = -bias-exponent(sumhi)-1022;
                 if ((bits_lost != 1) ^ ((bitcast_d2u(sumhi)&1) == 1))

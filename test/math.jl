@@ -1579,6 +1579,12 @@ end
         @test func(-floatmin(Float64), nextfloat(0.0), nextfloat(0.0)) === nextfloat(0.0)
         # tiny normal b makes the fma-free two_mul inexact
         @test func(reinterpret(Float64, 0xfee492df2d70dce5), reinterpret(Float64, 0x801ad51356e60077), reinterpret(Float64, 0xbf1140536185456e)) === 1.669822474902846e-21
+        # a*b is just above nextfloat(0.0)/2, or just below the midpoint of floatmin and its predecessor
+        @test func(0x1.0000002p-538, 0x1.ffffffc000001p-538, 0.0) === nextfloat(0.0)
+        @test func(0x1.0000001p-511, 0x1.ffffffdffffffp-512, 0.0) === prevfloat(floatmin(Float64))
+        # a*b is exactly halfway between two Float64 values, and a tiny c breaks the tie
+        @test func(0x1.8p-999, 0x1.0000000000001p1000, -nextfloat(0.0)) === 0x1.8000000000001p1
+        @test func(0x1.ffffffcp511, 0x1.0000002p512, -nextfloat(0.0)) === floatmax(Float64)
         # a*b+c rounded to Float32 is exactly halfway between two Float16 values
         @test func(Float16(-336.0), Float16(-37.25), Float16(0.0003653)) === Float16(1.252e4)
         for _ in 1:2^18
