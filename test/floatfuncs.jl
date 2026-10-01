@@ -239,6 +239,15 @@ end
     @test Furlong(0.0) ≈ Furlong(-0.0)
     @test Furlong(3) ≈ Furlong(3)
     @test !(x ≈ Furlong(2.0))
+    # incompatible numbers (dimensionful vs. dimensionless, or different dimensions) throw
+    @test_throws ErrorException isapprox(x, 1.0)
+    @test_throws ErrorException isapprox(1.0, x)
+    @test_throws ErrorException isapprox(x, Furlong{2}(1.0))
+    @test_throws ErrorException x ≈ 0
+    @test_throws ErrorException isapprox(x, 1.0; rtol=1e-8)
+    # so does an absolute tolerance with the wrong units (unless the numbers are equal)
+    @test_throws MethodError isapprox(x, Furlong(2.0); atol=1e-8)
+    @test_throws MethodError isapprox(x, Furlong(1.0 + 1e-10); atol=Furlong{2}(1e-8))
     # a `Number` type without a distinct multiplicative identity has no default
     struct NoDefaultRtol <: Number end
     Base.one(::Type{NoDefaultRtol}) = NoDefaultRtol()
