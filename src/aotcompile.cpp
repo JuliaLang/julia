@@ -1761,7 +1761,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
             // BFloat16 conversion routines
             injectCRTAlias(M, "__truncsfbf2", "julia__truncsfbf2",
                     FunctionType::get(Type::getBFloatTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
-            injectCRTAlias(M, "__truncsdbf2", "julia__truncdfbf2",
+            injectCRTAlias(M, "__truncdfbf2", "julia__truncdfbf2",
                     FunctionType::get(Type::getBFloatTy(M.getContext()), { Type::getDoubleTy(M.getContext()) }, false));
         }
         timers.optimize.stopTimer();
