@@ -1611,6 +1611,15 @@ end
                 end
             end
         end
+        # integer powers, including those too large for power by squaring
+        for x in (0.0, -0.0, 1.0, -1.0, Inf, -Inf, NaN), n in (3, 5, 7, -3, -5, 2^15, 2^15+1, -2^15, -(2^15+1))
+            got, expected = T(x)^n, T(big(x)^n)
+            if isnan(expected)
+                @test isnan_type(T, got) context=(T(x),n)
+            else
+                @test got === expected context=(T(x),n)
+            end
+        end
         for _ in 1:2^16
             # note x won't be subnormal here
             x=rand(T)*100; y=rand(T)*200-100
