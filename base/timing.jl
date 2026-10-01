@@ -761,14 +761,26 @@ end
 
 # Exported, documented, and tested in InteractiveUtils
 # here so it's possible to time/trace all imports, including InteractiveUtils and its deps
-macro time_imports(ex)
+macro time_imports(args...)
+    isempty(args) && throw(ArgumentError("`@time_imports` requires an expression to evaluate"))
+    invalidations = false
+    for arg in args[1:end-1]
+        if arg isa Expr && arg.head === :(=) && arg.args[1] === :invalidations
+            invalidations = arg.args[2]
+        else
+            throw(ArgumentError("unrecognized `@time_imports` option: $arg"))
+        end
+    end
+    ex = args[end]
     quote
+        local invalidations_state = Base.timing_imports_invalidations_start($(esc(invalidations)))
         Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
         @__tryfinally(
             # try
             $(esc(ex)),
             # finally
-            Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
+            (Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1);
+             Base.timing_imports_invalidations_stop(invalidations_state))
         )
     end
 end

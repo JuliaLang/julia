@@ -1098,7 +1098,13 @@ function print_module_path_file(io, modul, file, line; modulecolor = :light_blac
 
     # filepath
     file = fixup_stdlib_path(file)
-    stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
+    if stacktrace_expand_basepaths()
+        file = something(find_source_file(file), file)
+    else
+        # a stdlib location is shown as `@stdlib/Pkg/src/file.jl`
+        stdlib = string(Sys.STDLIB, Filesystem.path_separator)
+        startswith(file, stdlib) && (file = string("@stdlib", Filesystem.path_separator, chopprefix(file, stdlib)))
+    end
     stacktrace_contract_userdir() && (file = contractuser(file))
     print(io, " ")
     dir = dirname(file)
