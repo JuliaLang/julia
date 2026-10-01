@@ -174,7 +174,7 @@ the square root of [`eps`](@ref) of the type of `x` or `y`, whichever is bigger 
 This corresponds to requiring equality of about half of the significant digits. Otherwise,
 e.g. for integer arguments or if an `atol > 0` is supplied, `rtol` defaults to zero.
 
-The absolute tolerance `atol` has the same units as `x` and `y`; for dimensionful number types
+The absolute tolerance `atol` has the same units as `x`; for dimensionful number types
 its default is the zero of those units, `zero(real(x))`. The relative tolerance `rtol` is a
 dimensionless number.
 
