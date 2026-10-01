@@ -714,6 +714,10 @@ end
     @test Float16(0x1.004p0)*Float16(1.25)+Float16(0x1p-12) === Float16(0x1.404p0) # for comparison
     # a*b+c rounded to Float32 is exactly halfway between two Float16 values
     @test_intrinsic Core.Intrinsics.fma_float Float16(-336.0) Float16(-37.25) Float16(0.0003653) Float16(1.252e4)
+    # muladd must be either fma(x, y, z) or x*y + z, not a*b+c rounded to Float32 then to Float16
+    let (x, y, z) = reinterpret.(Float16, (0x8d2e, 0x7258, 0x85fe))
+        @test Base.invokelatest(Core.Intrinsics.muladd_float, x, y, z) === x * y + z
+    end
 
     # boolean
     @test_intrinsic Core.Intrinsics.eq_float Float16(3.3) Float16(3.3) true

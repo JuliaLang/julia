@@ -1333,8 +1333,8 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
     return cmp ? jl_true : jl_false; \
 }
 
-#define ter_fintrinsic(OP16, OP, name) \
-    ter_intrinsic_bfloat(OP16, name) \
+#define ter_fintrinsic(OPBF16, OP16, OP, name) \
+    ter_intrinsic_bfloat(OPBF16, name) \
     ter_intrinsic_half(OP16, name) \
     ter_intrinsic_ctype(OP, name, 32, float) \
     ter_intrinsic_ctype(OP, name, 64, double) \
@@ -1559,9 +1559,12 @@ double julia_fma(double a, double b, double c) {
 #endif
 
 #define muladd(a, b, c) a * b + c
-#define muladd_narrow(a, b, c) (double)((a) * (b) + (c))
-ter_fintrinsic(fma_narrow,fma,fma_float)
-ter_fintrinsic(muladd_narrow,muladd,muladd_float)
+// round the product separately, as compiled code does: computing a * b + c in
+// float and then rounding to 16 bits would round twice
+#define muladd_half(a, b, c) (double)(half_to_float(float_to_half((a) * (b))) + (c))
+#define muladd_bfloat(a, b, c) (double)(bfloat_to_float(float_to_bfloat((a) * (b))) + (c))
+ter_fintrinsic(fma_narrow,fma_narrow,fma,fma_float)
+ter_fintrinsic(muladd_bfloat,muladd_half,muladd,muladd_float)
 
 // same-type comparisons
 #define eq(a,b) a == b
