@@ -311,8 +311,8 @@ static const char opts[]  =
     "                                               than the given value. The value may be specified as a\n"
     "                                               number of bytes, optionally in units of: B,\n"
     "                                               K (kibibytes), M (mebibytes), G (gibibytes),\n"
-    "                                               T (tebibytes), or % (percentage of physical memory).\n\n"
-;
+    "                                               T (tebibytes), or % (percentage of available memory,\n"
+    "                                               respecting cgroup/container limits when present).\n\n"
 
 static const char opts_hidden[] =
     "Switches (a '*' marks the default value, if applicable):\n\n"

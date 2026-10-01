@@ -36,7 +36,7 @@ You can provide a hint to Julia about the maximum amount of memory to use:
 
 ```bash
 julia --heap-size-hint=4G  # To set the hint to ~4GB
-julia --heap-size-hint=50% # or to 50% of physical memory
+julia --heap-size-hint=50% # or to 50% of available memory
 ```
 
 The `--heap-size-hint` option tells the garbage collector to trigger collection more aggressively when approaching the specified limit. This is particularly useful in:
