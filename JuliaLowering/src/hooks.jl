@@ -62,9 +62,11 @@ function activate!(enable=true)
 
     if enable
         Core._setlowerer!(core_lowering_hook)
+        Core._set_toplevel_eval!(JuliaLowering.eval)
         ccall(:jl_set_lowering_world, Cvoid, (Csize_t,), Base.get_world_counter())
     else
         Core._setlowerer!(Base.fl_lower)
+        Core._set_toplevel_eval!(nothing)
         # Unlike JL, `jl_lower` dispatches the flisp wrapper at the latest world
         ccall(:jl_set_lowering_world, Cvoid, (Csize_t,), 0)
     end
