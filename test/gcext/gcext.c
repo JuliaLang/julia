@@ -625,7 +625,7 @@ static void test_tagged_immediate_roots(void)
         args[0] = (jl_value_t *)0x5;                // tag 0b01, even slot
         args[1] = jl_box_int64(42424242);
         args[2] = (jl_value_t *)0x6;                // tag 0b10, even slot
-        args[3] = (jl_value_t *)0x7;                // tag 0b11, odd slot
+        args[3] = (jl_value_t *)0x5;                // tag 0b01, odd slot
         args[4] = jl_box_int64(43434343);
         args[5] = (jl_value_t *)(large_imm | 0x1);  // last slot
         jl_gc_add_ptr_finalizer(ptls, args[1], (void *)tagged_root_finalizer);
@@ -636,7 +636,7 @@ static void test_tagged_immediate_roots(void)
         // Large payloads must not be mistaken for object pointers either.
         args[0] = (jl_value_t *)(large_imm | 0x1);
         args[2] = (jl_value_t *)(large_imm | 0x2);
-        args[3] = (jl_value_t *)(large_imm | 0x3);
+        args[3] = (jl_value_t *)(large_imm | 0x1);
         jl_gc_collect(JL_GC_FULL);
         check_fins_ran(0, "JL_GC_PUSHARGS frame, large tagged immediates");
         JL_GC_POP();
@@ -656,7 +656,7 @@ static void test_tagged_immediate_roots(void)
         jl_gc_collect(JL_GC_FULL);
         check_fins_ran(0, "JL_GC_PUSH frame, small tagged immediates");
 
-        tagged = (jl_value_t *)(large_imm | 0x3);
+        tagged = (jl_value_t *)(large_imm | 0x1);
         tagged2 = (jl_value_t *)(large_imm | 0x2);
         jl_gc_collect(JL_GC_FULL);
         check_fins_ran(0, "JL_GC_PUSH frame, large tagged immediates");
