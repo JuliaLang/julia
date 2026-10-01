@@ -650,6 +650,13 @@ end
         @test T(big"2"^(n+1)) === T(Inf)
         @test T(big"2"^(n+1) - big"2"^(n-precision(T))) === T(Inf)
         @test T(big"2"^(n+1) - big"2"^(n-precision(T)) - 1) === floatmax(T)
+        # rounding toward zero never overflows
+        for s in (1, -1)
+            x = s * big"2"^(n+1)
+            @test T(x, RoundToZero) === copysign(floatmax(T), s)
+            @test T(x, RoundDown) === (s > 0 ? floatmax(T) : -T(Inf))
+            @test T(x, RoundUp) === (s > 0 ? T(Inf) : -floatmax(T))
+        end
     end
 end
 
