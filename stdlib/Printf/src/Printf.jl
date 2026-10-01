@@ -656,7 +656,8 @@ function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
             # right aligned
             n = width - (newpos - pos)
             if zero && isfinite(x)
-                ex = (arg < 0 || (plus | space)) + (T <: Union{Val{'a'}, Val{'A'}} ? 2 : 0)
+                # check the written sign rather than `arg < 0`, which is false for -0.0
+                ex = (buf[pos] == UInt8('-') || (plus | space)) + (T <: Union{Val{'a'}, Val{'A'}} ? 2 : 0)
                 so = pos + ex
                 len = (newpos - pos) - ex
                 copyto!(buf, so + n, buf, so, len)
