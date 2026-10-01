@@ -710,6 +710,16 @@ function syntax_to_expr(s::Syntax, suppress_linenodes=false)
     end
 end
 
+# convenience function for `jl_parse`
+function _c_parseall_expr(code::Core.SimpleVector, filename::String,
+                          lineno::Int, mod::Union{Module, Nothing})
+    (ptr, len) = code
+    str = String(unsafe_wrap(Array, ptr, len))
+    pfm = Meta.parser_for_module(mod)
+    ex, offset = Meta._parse_string(str, filename, lineno, 1, :all, Expr, pfm)
+    return Core.svec(ex, offset-1)
+end
+
 #-------------------------------------------------------------------------------
 # Printing
 

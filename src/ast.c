@@ -1254,41 +1254,32 @@ JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t 
                                   jl_module_t *inmodule)
 {
     JL_TYPECHK(parse, module, (jl_value_t*)inmodule)
-    jl_value_t *parser = NULL;
+    jl_value_t *parse = NULL;
     int lno = 1;
     int offset = 0;
     jl_value_t *options = (jl_value_t *)jl_all_sym;
     jl_value_t **args;
     jl_task_t *ct = jl_current_task;
-    JL_GC_PUSHARGS(args, 6);
+    JL_GC_PUSHARGS(args, 5);
     if (jl_base_module) {
-        size_t last_age = ct->world_age;
-        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        jl_value_t *pfm = jl_get_global(jl_base_module, jl_symbol("parser_for_module"));
-        if (pfm) {
-            args[0] = pfm;
-            args[1] = (jl_value_t*)inmodule;
-            parser = jl_apply(args, 2);
-        }
-        ct->world_age = last_age;
+        parse = jl_get_global(jl_base_module, jl_symbol("_c_parseall_expr"));
     }
-    if (!parser || parser == jl_nothing) {
+    if (!parse) {
         // In bootstrap, directly call the builtin parser.
         JL_GC_POP();
         jl_value_t *result = jl_fl_parse(text, text_len, filename, lno, offset, options);
         return result;
     }
-    args[0] = parser;
+    args[0] = parse;
     args[1] = (jl_value_t*)jl_alloc_svec(2);
     jl_svecset(args[1], 0, jl_box_uint8pointer((uint8_t*)text));
     jl_svecset(args[1], 1, jl_box_long(text_len));
     args[2] = filename;
     args[3] = jl_box_long(lno);
-    args[4] = jl_box_long(offset);
-    args[5] = options;
+    args[4] = (jl_value_t*)inmodule;
     size_t last_age = ct->world_age;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-    jl_value_t *result = jl_apply(args, 6);
+    jl_value_t *result = jl_apply(args, 5);
     ct->world_age = last_age;
     args[0] = result; // root during error checks below
     JL_TYPECHK(parse, simplevector, result);

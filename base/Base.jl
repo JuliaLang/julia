@@ -30,10 +30,13 @@ let os = ccall(:jl_get_UNAME, Any, ())
     end
 end
 
+# meta.jl uses this to convert parse results
+function syntax_to_expr end
+
 # metaprogramming
 include("meta.jl")
 using .Meta
-using .Meta: is_id_char, parser_for_module
+using .Meta: is_id_char
 
 # Strings
 include("multimedia.jl")

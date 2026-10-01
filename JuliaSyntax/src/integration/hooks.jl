@@ -306,6 +306,71 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int,
     end
 end
 
+@static if _has_v1_14_version_hooks
+    _make_error_ex(prov, tag, value) = @mknode(
+        prov;
+        head=(tag === :none ? :error : :incomplete),
+        children=Syntax[@mknode(prov; head=:value, value, children=nothing)])
+
+    function new_core_parser_hook(code, filename::String, lineno::Int, offset::Int,
+                                  options::Symbol, edition::Tuple{Int, Int})
+        try
+            if !(code isa String || code isa SubString || code isa Vector{UInt8})
+                code = Base.invokelatest(String, code)
+            end
+
+            stream = ParseStream(code, offset+1; version=VersionNumber(edition))
+            if options === :statement || options === :atom
+                bump_trivia(stream)
+                if peek(stream) == K"EndMarker"
+                    return nothing, last_byte(stream)
+                end
+            end
+            parse!(stream; rule=options)
+            if options === :statement
+                bump_trivia(stream; skip_newlines=false)
+                if peek(stream) == K"NewlineWs"
+                    bump(stream)
+                end
+            end
+
+            ex = build_tree(Syntax, stream; filename=filename, first_line=lineno)
+            if any_error(stream)
+                pos_before_comments = last_non_whitespace_byte(stream)
+                errspec = first_tree_error(stream)
+                tag = _incomplete_tag(errspec, pos_before_comments)
+                exc = ParseError(stream, filename=filename, first_line=lineno,
+                                 incomplete_tag=tag)
+                msg = sprint(showerror, exc)
+                ex = if options === :all
+                    # Lift error and remove all :toplevel args after err
+                    # (consumers don't handle nested errors)
+                    let nested_err(x::Syntax) = head(x) === :error ? true :
+                            any(@__FUNCTION__(), children(x))
+                        i = findfirst(nested_err, children(ex))
+                        @mknode(ex; children=[
+                            children(ex)[1:i-1]...,
+                            _make_error_ex(ex[i], tag, Meta.ParseError(msg, exc))])
+                    end
+                else
+                    _make_error_ex(ex, tag, Meta.ParseError(msg, exc))
+                end
+            end
+            return ex, last_byte(stream)
+        catch exc
+            @error("""JuliaSyntax parser failed — falling back to flisp!
+                      This is not your fault. Please submit a bug report to https://github.com/JuliaLang/julia""",
+                   exception=(exc,catch_backtrace()),
+                   offset=offset,
+                   code=code)
+
+            fl_ex, fl_off = _fl_parse_hook(code, filename, lineno, offset, options)
+            fl_ex = Base.expr_to_syntax(fl_ex, LineNumberNode(lineno, filename))
+            return fl_ex, fl_off
+        end
+    end
+end
+
 # Core._parse gained a `lineno` argument in
 # https://github.com/JuliaLang/julia/pull/43876
 # Prior to this, the following signature was needed:
@@ -347,8 +412,9 @@ function enable_in_core!(enable=true; freeze_world_age = true)
         error("Cannot use JuliaSyntax as the main Julia parser in Julia version $VERSION < 1.6")
     end
     if enable
+        hook = _has_v1_14_version_hooks ? new_core_parser_hook : core_parser_hook
         world_age = freeze_world_age ? Base.get_world_counter() : typemax(UInt)
-        _set_core_parse_hook(fix_world_age(core_parser_hook, world_age))
+        _set_core_parse_hook(fix_world_age(hook, world_age))
     else
         @assert !isnothing(_default_system_parser)
         _set_core_parse_hook(_default_system_parser)

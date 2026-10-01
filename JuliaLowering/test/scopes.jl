@@ -215,8 +215,8 @@ distraction_scope_end === "resolve me!"
         decls_s in (decls_func, decls_hard, decls_neutral, decls_none),
         local_s in (wrap_func, wrap_hard, wrap_neutral),
         lhs in lhs_names,
-        assign_ex in (:(local $lhs = "resolve me"; $lhs *= '!'; $lhs),
-                      :(global $lhs = "resolve me"; $lhs *= '!'; $lhs))
+        assign_ex in (Base.remove_linenums!(:(local $lhs = "resolve me"; $lhs *= '!'; $lhs)),
+                      Base.remove_linenums!(:(global $lhs = "resolve me"; $lhs *= '!'; $lhs)))
 
         ex = decls_s(local_s(assign_ex))
         soft_mode && (ex = enable_softscope(ex))
