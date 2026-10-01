@@ -2790,7 +2790,7 @@ end
     # uninformative; `default_expr_type_printer` should suppress it.
     @noinline f_52772() = (println(); true)
     caller_52772(x) = (f_52772(); return x + 1)
-    src = Base.code_typed(caller_52772, (Int,))[1][1]
+    src = code_typed(caller_52772, (Int,))[1][1]
     output = sprint(io -> show(io, src))
     @test !occursin("::Any", output)
     @test occursin("f_52772", output) # the unused call is still shown, just without `::Any`
