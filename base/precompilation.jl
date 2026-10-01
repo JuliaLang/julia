@@ -323,12 +323,13 @@ mutable struct BackgroundPrecompileState
     confirm_deadline::Float64  # time() deadline for confirmation
     info_requested::Bool  # whether SIGINFO/SIGUSR1 has been broadcast at least once
     key_listening::Bool  # whether a key listener task is currently consuming stdin
+    foreground_monitors::Int  # number of foreground tasks currently monitoring the run
 end
 Base.lock(f, bg::BackgroundPrecompileState) = lock(f, bg.lock)
 Base.lock(bg::BackgroundPrecompileState) = lock(bg.lock)
 Base.unlock(bg::BackgroundPrecompileState) = unlock(bg.lock)
 
-const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Dict{PkgId, Int}(), Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, :none, 0.0, false, false)
+const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Dict{PkgId, Int}(), Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, :none, 0.0, false, false, 0)
 
 # Serializes the inject-vs-launch decision in `_precompilepkgs` with the launch
 # itself. Lock ordering: acquired before (outside) BG.lock, never while holding it.
@@ -1541,7 +1542,8 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
                                         key_controls::Union{Bool, Nothing})
     # By default only enable key controls when this task is the foreground task (see #61563, #61698).
     # Falls back to roottask when no foreground task is registered (e.g. non-REPL interactive scripts).
-    key_controls = @something key_controls current_task() === something(Base.foreground_task(), Base.roottask)
+    foreground = current_task() === something(Base.foreground_task(), Base.roottask)
+    key_controls = @something key_controls foreground
     local completed_at::Union{Nothing, Float64}
     local task
 
@@ -1743,7 +1745,12 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
         nothing
     end
 
+    counted = false
     return try
+        if foreground
+            @lock BG BG.foreground_monitors += 1
+            counted = true
+        end
         # Wait for task completion or user action
         @lock BG.task_done begin
             while !exit_requested[] && !cancel_requested[] && !interrupt_requested[]
@@ -1778,12 +1785,14 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
 
         # If we were waiting for a specific package and it finished, clean up silently
         if exit_requested[] && wait_for_pkg !== nothing
-            @lock BG BG.monitoring = false
+            # keep showing the run to a foreground task still waiting on it, but not over the
+            # prompt this request returns to
+            others = stop_monitoring_unless_waited_on(counted)
             if key_task !== nothing
                 wake_key_task()
                 wait(key_task)
             end
-            print(io, restore)
+            others || print(io, restore)
             return
         end
 
@@ -1807,13 +1816,26 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
         wait(task; throw=false)
     catch
         # Clean up on error
-        @lock BG BG.monitoring = false
+        stop_monitoring_unless_waited_on(counted)
         if key_task !== nothing
             exit_requested[] = true
             wake_key_task()
             try; wait(key_task); catch; end
         end
         rethrow()
+    finally
+        counted && @lock BG BG.foreground_monitors -= 1
+    end
+end
+
+# Turn output off, unless a foreground task other than this monitor's is still waiting on
+# the run. Checked and written under one lock, so a foreground request merging in meanwhile
+# cannot be left with output off. Returns whether output stays on.
+function stop_monitoring_unless_waited_on(counted::Bool)
+    @lock BG begin
+        others = BG.foreground_monitors > (counted ? 1 : 0)
+        others || (BG.monitoring = false)
+        others
     end
 end
 
@@ -1945,6 +1967,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     # Try to inject into a running background task, else launch a new one, under
     # launch_lock so concurrent callers cannot spawn competing background tasks.
     local req = nothing
+    live_display = false
     injected = @lock launch_lock begin
         did_inject = @lock BG begin
             if BG.task !== nothing && !istaskdone(BG.task) &&
@@ -1957,6 +1980,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     # non-verbose merge doesn't disable an already-verbose run.
                     verbose && (BG.verbose = true)
                     put!(BG.work_channel, req)
+                    # verbose output prints lines rather than a live display
+                    live_display = BG.monitoring && !BG.verbose
                     true
                 catch
                     req = nothing
@@ -1973,7 +1998,9 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         end
         did_inject
     end
-    if injected
+    # a live progress display already shows the merged packages, and a line printed into it
+    # from here would be overwritten
+    if injected && !(can_fancyprint(io) && live_display)
         printpkgstyle(io, :Precompiling, "Merging precompilation request into existing run...", color = Base.info_color())
     end
 
