@@ -544,6 +544,22 @@ end
     @test rad2deg(pi + (pi/3)*im) ≈ 180 + 60im
 end
 
+@testset "Float16 degree-based trig functions" begin
+    # computed in Float32, so within a hair of half an ulp (a few results double round)
+    ulps(r, ref) = Float64(abs(big(Float64(r)) - ref) / Float64(eps(max(Float16(abs(ref)), floatmin(Float16)))))
+    xs = filter(isfinite, reinterpret.(Float16, 0x0000:0xffff))
+    for f in (sind, cosd, tand, atand, acotd), x in xs[1:97:end]
+        @test ulps(f(x), f(big(Float64(x)))) <= 0.501 context=(f, x)
+    end
+    for f in (asind, acosd), x in filter(x -> abs(x) <= 1, xs)[1:37:end]
+        @test ulps(f(x), f(big(Float64(x)))) <= 0.501 context=(f, x)
+    end
+    @test sind(Float16(30)) === cosd(Float16(60)) === Float16(0.5)
+    @test asind(Float16(1)) === acosd(Float16(0)) === Float16(90)
+    @test atand(Float16(1)) === atand(Float16(2), Float16(2)) === Float16(45)
+    @test_throws DomainError(Inf16, "`sind(x)` is only defined for finite `x`.") sind(Inf16)
+end
+
 # ensure zeros are signed the same
 ⩲(x,y) = typeof(x) == typeof(y) && x == y && signbit(x) == signbit(y)
 ⩲(x::Tuple, y::Tuple) = length(x) == length(y) && all(map(⩲,x,y))
