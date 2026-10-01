@@ -460,6 +460,38 @@ end
 @test Base.invokelatest(Core.Intrinsics.fptrunc, Core.BFloat16, 1 + 0x1p-8 + 0x1p-40) === reinterpret(Core.BFloat16, 0x3f81)
 # 1.75 * 0.578125 - 2^-40 is just below a BFloat16 halfway point
 @test Base.invokelatest(Core.Intrinsics.fma_float, reinterpret.(Core.BFloat16, (0x3fe0, 0x3f14, 0xab80))...) === reinterpret(Core.BFloat16, 0x3f81)
+@noinline compiled_fma(a, b, c) = Core.Intrinsics.fma_float(a, b, c)
+let fma_cases = (
+        (0x3fe0, 0x3f14, 0xab80) => 0x3f81, # rounds incorrectly via Float32
+        (0x3fc0, 0x3f81, 0x8d80) => 0x3fc1, # 1.5 * (1 + 2^-7) is a halfway point, -2^-100 breaks the tie (lost in Float64)
+        (0x5f80, 0x5fc0, 0xff7f) => 0x7f01, # 1.5 * 2^128 overflows Float32, but -floatmax(BFloat16) brings it back
+    )
+    for (args, res) in fma_cases
+        a, b, c = reinterpret.(Core.BFloat16, args)
+        @test compiled_fma(a, b, c) === reinterpret(Core.BFloat16, res)
+        @test Base.invokelatest(Core.Intrinsics.fma_float, a, b, c) === reinterpret(Core.BFloat16, res)
+    end
+end
+# integer to BFloat16 conversions must not double round through Float32
+@noinline compiled_sitofp(::Type{T}, x) where {T} = Core.Intrinsics.sitofp(T, x)
+@noinline compiled_uitofp(::Type{T}, x) where {T} = Core.Intrinsics.uitofp(T, x)
+@test compiled_sitofp(Core.BFloat16, Int32(2^24 + 2^16 + 1)) === reinterpret(Core.BFloat16, 0x4b81)
+@test compiled_sitofp(Core.BFloat16, -Int32(2^24 + 2^16 + 1)) === reinterpret(Core.BFloat16, 0xcb81)
+@test compiled_uitofp(Core.BFloat16, UInt64(2)^60 + UInt64(2)^52 + 1) === reinterpret(Core.BFloat16, 0x5d81)
+let vals = Any[Int8(-128), Int16(-32768), typemin(Int32), typemax(Int32), typemin(Int64), typemax(Int64),
+               typemin(Int128), typemax(Int128), typemax(UInt32), typemax(UInt64), typemax(UInt128), 0, -1, 1]
+    for T in (Int16, Int32, Int64, Int128, UInt16, UInt32, UInt64, UInt128), _ in 1:200
+        # BFloat16 halfway points (9 significant bits, the last one set), and their neighbors
+        h = T(rand(0x0101:0x0002:0x01ff)) << rand(0:8sizeof(T) - 9 - (T <: Signed))
+        push!(vals, h, h - one(T), h + one(T))
+        T <: Signed && push!(vals, -h, -h - one(T), -h + one(T))
+    end
+    for n in vals
+        cvt = n isa Signed ? Core.Intrinsics.sitofp : Core.Intrinsics.uitofp
+        compiled = n isa Signed ? compiled_sitofp : compiled_uitofp
+        @test compiled(Core.BFloat16, n) === Base.invokelatest(cvt, Core.BFloat16, n)
+    end
+end
 @static if Sys.ARCH === :x86_64 || Sys.ARCH === :i686
     script = """
         using InteractiveUtils
