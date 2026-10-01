@@ -1626,7 +1626,6 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
                         end
                         if confirmed_action == :cancel
                             cancel_requested[] = true
-                            println(io)
                             @lock BG BG.cancel_requested = true
                             broadcast_signal(Base.SIGKILL)
                             break
@@ -1642,7 +1641,6 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
                             end
                         elseif detachable && c in ('d', 'D', 'q', 'Q', ']')
                             exit_requested[] = true
-                            println(io)  # newline after keypress
                             break
                         elseif c == '\x03'  # Ctrl-C
                             interrupt_requested[] = true
