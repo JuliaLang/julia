@@ -1348,7 +1348,7 @@ void jl_init_intrinsic_properties(void) JL_GC_DISABLED JL_NOTSAFEPOINT;
 void jl_init_staticdata(void) JL_NOTSAFEPOINT;
 // TypeApp: immutable struct with head::Any, param::Any
 // Represents a single lazy type application step (like UnionAll for where bindings).
-typedef struct {
+typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_value_t *head;
     jl_value_t *param;
