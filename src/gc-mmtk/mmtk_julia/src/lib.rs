@@ -6,11 +6,11 @@ extern crate mmtk;
 #[macro_use]
 extern crate lazy_static;
 
-use mmtk::util::opaque_pointer::*;
-use mmtk::util::Address;
-use mmtk::vm::VMBinding;
-use mmtk::MMTKBuilder;
 use mmtk::MMTK;
+use mmtk::MMTKBuilder;
+use mmtk::util::Address;
+use mmtk::util::opaque_pointer::*;
+use mmtk::vm::VMBinding;
 
 use std::collections::HashMap;
 use std::sync::atomic::AtomicIsize;
@@ -72,7 +72,7 @@ lazy_static! {
 pub static mut JULIA_HEADER_SIZE: usize = 0;
 pub static mut JULIA_BUFF_TAG: usize = 0;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static USER_TRIGGERED_GC: AtomicIsize = AtomicIsize::new(0);
 
 lazy_static! {
@@ -102,7 +102,7 @@ lazy_static! {
 type ProcessSlotFn = *const extern "C" fn(closure: Address, slot: Address);
 
 #[allow(improper_ctypes)]
-extern "C" {
+unsafe extern "C" {
     pub fn jl_gc_scan_julia_exc_obj(obj: Address, closure: Address, process_slot: ProcessSlotFn);
     pub fn jl_gc_get_stackbase(tid: i16) -> usize;
     pub fn jl_throw_out_of_memory_error();
