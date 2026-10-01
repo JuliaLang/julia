@@ -11,11 +11,6 @@ export JULIA_LOAD_PATH := @$(PATHSEP)@stdlib
 unexport JULIA_PROJECT :=
 unexport JULIA_BINDIR :=
 
-# used by JuliaLowering_stdlibs.jl test (invokes `make` for JL sysimage)
-export MAKE
-export BUILDROOT
-export JULIA_BUILD_MODE
-
 TESTGROUPS = unicode strings compiler Compiler JuliaSyntax JuliaLowering
 TESTS = all default stdlib $(TESTGROUPS) \
 		$(patsubst $(STDLIBDIR)/%/,%,$(dir $(wildcard $(STDLIBDIR)/*/.))) \

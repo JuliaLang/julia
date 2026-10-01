@@ -13,7 +13,7 @@ end
 
 let old_active_project = Base.active_project()
     try
-        # test local (dev) copy of JuliaLowering, not yet vendored into Base
+        # test local (dev) copy of JuliaLowering, not the copy vendored into Base
         Base.set_active_project(joinpath(@__DIR__, "..", "Project.toml"))
 
         # `Manifest.toml` is not checked in (see `JuliaLowering/.gitignore`), so
