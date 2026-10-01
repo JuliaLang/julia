@@ -242,35 +242,6 @@ function parse_input_line(s::String; filename::String="none", depwarn=true, mod:
 end
 parse_input_line(s::AbstractString; kwargs...) = parse_input_line(String(s); kwargs...)
 
-# detect the reason which caused an :incomplete expression
-# from the error message
-# NOTE: the error messages are defined in src/julia-parser.scm
-function fl_incomplete_tag(msg::AbstractString)
-    occursin("string", msg) && return :string
-    occursin("comment", msg) && return :comment
-    occursin("requires end", msg) && return :block
-    occursin("\"`\"", msg) && return :cmd
-    occursin("character", msg) && return :char
-    return :other
-end
-
-incomplete_tag(ex) = :none
-function incomplete_tag(ex::Expr)
-    if ex.head !== :incomplete
-        return :none
-    elseif isempty(ex.args)
-        return :other
-    else
-        a = ex.args[1]
-        if a isa String
-            return fl_incomplete_tag(a)::Symbol
-        else
-            return incomplete_tag(a)::Symbol
-        end
-    end
-end
-incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
-
 function exec_options(opts)
     startup               = (opts.startupfile != 2)
     global have_color     = colored_text(opts)
