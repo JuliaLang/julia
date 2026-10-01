@@ -290,6 +290,19 @@ include("initdefs.jl")
 # worker threads
 include("threadcall.jl")
 
+# Compatibility with when Compiler was in Core
+@eval Core const Compiler = $Base.Compiler
+@eval Compiler const fl_parse = $Base.fl_parse
+
+# Compiler frontend
+include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
+JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
+
+# May be replaced in incremental sysimage build after-the-fact
+const JuliaLowering = nothing
+
+set_syntax_version(Base, VERSION)
+
 # code loading
 include("uuid.jl")
 include("pkgid.jl")
@@ -337,20 +350,6 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 @noinline include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
 (this::IncludeInto)(fname::AbstractString) = include(identity, this.m, fname)
 (this::IncludeInto)(mapexpr::Function, fname::AbstractString) = include(mapexpr, this.m, fname)
-
-# Compatibility with when Compiler was in Core
-@eval Core const Compiler = $Base.Compiler
-@eval Compiler const fl_parse = $Base.fl_parse
-
-# Compiler frontend
-Core.println("JuliaSyntax/src/JuliaSyntax.jl")
-include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
-JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
-
-Core.println("JuliaLowering/src/JuliaLowering.jl")
-include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
-
-set_syntax_version(Base, VERSION)
 
 end_base_include = time_ns()
 
