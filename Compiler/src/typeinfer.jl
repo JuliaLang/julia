@@ -838,7 +838,10 @@ function Base.iterate(it::ForwardToBackedgeIterator, i::Int = 1)
     i > length(edges) && return nothing
     while i ≤ length(edges)
         item = edges[i]
-        if item isa Int
+        if item isa PossiblyAmbiguous
+            i += 1
+            continue
+        elseif item isa Int
             i += 2
             continue # ignore the query information if present but process the contents
         elseif isa(item, Method)

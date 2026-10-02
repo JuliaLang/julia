@@ -713,31 +713,27 @@ end
 function ambig_rt_edge_counts(ci::Core.CodeInstance, callee_mi::Core.MethodInstance)
     # the number of edges from `ci` to `callee_mi`, as
     # (possibly ambiguous, not possibly ambiguous)
-    possibly_ambiguous = other = 0
-    isdefined(ci, :edges) || return (possibly_ambiguous, other)
+    counts = [0, 0]
+    isdefined(ci, :edges) || return (counts[1], counts[2])
     edges = ci.edges
     i = 1
+    possibly_ambiguous = false
     while i <= length(edges)
         e = edges[i]
-        if e isa Int
-            n = abs(e)
-            group_possibly_ambiguous = edges[i+1] isa Core.PossiblyAmbiguous
-            for j in i+2:i+1+n
-                x = edges[j]
-                x isa Core.CodeInstance && (x = x.def)
-                if x === callee_mi
-                    group_possibly_ambiguous ? (possibly_ambiguous += 1) : (other += 1)
-                end
-            end
-            i += 2 + n
-        else
-            x = e
-            x isa Core.CodeInstance && (x = x.def)
-            x === callee_mi && (other += 1)
+        if e isa Core.PossiblyAmbiguous
+            possibly_ambiguous = true
             i += 1
+            continue
         end
+        targets = e isa Int ? edges[i+2:i+1+abs(e)] : (e,)
+        for x in targets
+            x isa Core.CodeInstance && (x = x.def)
+            x === callee_mi && (counts[possibly_ambiguous ? 1 : 2] += 1)
+        end
+        i += e isa Int ? 2 + abs(e) : 1
+        possibly_ambiguous = false
     end
-    return (possibly_ambiguous, other)
+    return (counts[1], counts[2])
 end
 
 # the ambiguity exists at inference time, so the edge is possibly ambiguous

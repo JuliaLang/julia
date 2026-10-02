@@ -691,8 +691,7 @@ struct PartialTask
 end
 
 struct PossiblyAmbiguous
-    sig
-    PossiblyAmbiguous(@nospecialize(sig)) = new(sig)
+    PossiblyAmbiguous() = new()
 end
 
 eval(Core, quote
