@@ -1090,21 +1090,12 @@ const static int sigwait_sigs[] = {
 
 // The process whose exit should terminate ours, if any (see jl_exit_with_parent)
 static pid_t exit_with_parent_pid = 0;
-#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
-// Sent by the kernel when our parent exits, and received by the signal listener.
-// Other platforms have it watch the parent through its kqueue instead.
-#define PARENT_DEATH_SIGNAL SIGRTMIN
-#endif
 
 static void jl_sigsetset(sigset_t *sset)
 {
     sigemptyset(sset);
     for (const int *sig = sigwait_sigs; *sig; sig++)
         sigaddset(sset, *sig);
-#ifdef PARENT_DEATH_SIGNAL
-    if (exit_with_parent_pid)
-        sigaddset(sset, PARENT_DEATH_SIGNAL);
-#endif
 }
 
 // Have the signal listener terminate this process when `parent` exits. This
@@ -1115,18 +1106,19 @@ void jl_exit_with_parent(pid_t parent) JL_NOTSAFEPOINT
 {
     if (jl_options.handle_signals != JL_OPTIONS_HANDLE_SIGNALS_ON)
         return;
-#if defined(PARENT_DEATH_SIGNAL)
-    // keep the signal blocked until the signal listener waits for it
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+    // have the kernel send SIGUSR1 when our parent exits, and keep it blocked
+    // until the signal listener waits for it
     sigset_t sset;
     sigemptyset(&sset);
-    sigaddset(&sset, PARENT_DEATH_SIGNAL);
+    sigaddset(&sset, SIGUSR1);
     if (pthread_sigmask(SIG_BLOCK, &sset, NULL) != 0)
         return;
 #if defined(_OS_LINUX_)
-    if (prctl(PR_SET_PDEATHSIG, PARENT_DEATH_SIGNAL) != 0)
+    if (prctl(PR_SET_PDEATHSIG, SIGUSR1) != 0)
         return;
 #else
-    int sig = PARENT_DEATH_SIGNAL;
+    int sig = SIGUSR1;
     if (procctl(P_PID, 0, PROC_PDEATHSIG_CTL, &sig) != 0)
         return;
 #endif
@@ -1162,7 +1154,7 @@ static void kqueue_parent(int sigqueue, struct kevent *ev)
     // registering fails or no exit event will be delivered
     if ((kevent(sigqueue, ev, 1, NULL, 0, NULL) != 0 && errno == ESRCH) ||
         getppid() != exit_with_parent_pid)
-        _exit(1);
+        kill(getpid(), SIGTERM);
 }
 #endif
 
@@ -1323,12 +1315,8 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                     signal(*sig, SIG_DFL);
                 continue;
             }
-            if (ev.filter == EVFILT_PROC) {
-                if (ev.fflags & NOTE_EXIT)
-                    _exit(1); // our parent exited
-                continue;
-            }
-            sig = ev.ident;
+            // exit as if terminated when our parent exits (see jl_exit_with_parent)
+            sig = ev.filter == EVFILT_PROC ? SIGTERM : ev.ident;
         }
         else
 #endif
@@ -1343,14 +1331,12 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 continue;
             sig = SIGABRT; // this branch can't occur, unless we had stack memory corruption of sset
         }
-#ifdef PARENT_DEATH_SIGNAL
-        if (sig == PARENT_DEATH_SIGNAL) {
-            // Linux also sends this when the thread that spawned us exits,
-            // in which case another thread of the parent adopts us
-            if (getppid() != exit_with_parent_pid)
-                _exit(1); // our parent exited
-            continue;
-        }
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+        // exit as if terminated when our parent exits (see jl_exit_with_parent).
+        // Linux also sends this when the thread that spawned us exits, in which case
+        // another thread of the parent adopts us and we handle it as a normal SIGUSR1.
+        if (sig == SIGUSR1 && exit_with_parent_pid && getppid() != exit_with_parent_pid)
+            sig = SIGTERM;
 #endif
         profile = 0;
 #ifndef HAVE_MACH
