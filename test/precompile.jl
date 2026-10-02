@@ -4540,6 +4540,10 @@ end
             @test moved_file != loaded_file
             @test first(Base.parse_cache_buildid(moved_file)) == Base.module_build_id(Dep)
             @test first(Base.parse_cache_buildid(new_file)) != Base.module_build_id(Dep)
+            moved_so = Base.ocachefile_from_cachefile(moved_file)
+            if Sys.isapple() && isfile(moved_so)
+                @test isfile(joinpath(moved_so * ".dSYM", "Contents", "Resources", "DWARF", basename(moved_so)))
+            end
             env_top, _ = Base.compilecache(top, Base.locate_package_load_spec(top), devnull, devnull, false)
             # Top is built against the loaded Dep, which its worker must still find, and that
             # build must not replace the one for the environment

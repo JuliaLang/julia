@@ -3886,6 +3886,9 @@ function move_aside_loaded_cachefile(pkg::PkgId, cachefile::String)
                     # only debug info, so a failure here does not matter
                     isdir(ocachefile * ".dSYM") && try
                         Filesystem.rename(ocachefile * ".dSYM", aside_ocachefile * ".dSYM")
+                        # debug info is looked up by the library's file name inside the bundle
+                        dwarf = joinpath(aside_ocachefile * ".dSYM", "Contents", "Resources", "DWARF")
+                        Filesystem.rename(joinpath(dwarf, basename(ocachefile)), joinpath(dwarf, basename(aside_ocachefile)))
                     catch e
                         e isa IOError || rethrow()
                     end
