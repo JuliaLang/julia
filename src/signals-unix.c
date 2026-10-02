@@ -1088,7 +1088,7 @@ const static int sigwait_sigs[] = {
     0
 };
 
-// The process whose exit should terminate ours, if any (see jl_exit_with_parent)
+// The process whose exit should terminate ours, if any
 static pid_t exit_with_parent_pid = 0;
 
 static void jl_sigsetset(sigset_t *sset)
@@ -1098,10 +1098,9 @@ static void jl_sigsetset(sigset_t *sset)
         sigaddset(sset, *sig);
 }
 
-// Have the signal listener terminate this process when `parent` exits. This
-// is best-effort: we keep running if the platform does not support it, if
-// setting it up fails, or if Julia does not handle signals. Must be called
-// before any threads are started.
+// Terminate this process when `parent` exits. This is best-effort: we keep
+// running if the platform does not support it, if setting it up fails, or if
+// Julia does not handle signals. Must be called before any threads are started.
 void jl_exit_with_parent(pid_t parent) JL_NOTSAFEPOINT
 {
     if (jl_options.handle_signals != JL_OPTIONS_HANDLE_SIGNALS_ON)
@@ -1147,14 +1146,13 @@ static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
     }
 }
 
-static void kqueue_parent(int sigqueue, struct kevent *ev)
+// Returns whether the parent already exited before we started watching it, in
+// which case registering fails or no exit event will be delivered.
+static int kqueue_parent(int sigqueue, struct kevent *ev)
 {
     EV_SET(ev, exit_with_parent_pid, EVFILT_PROC, EV_ADD, NOTE_EXIT, 0, NULL);
-    // the parent may have exited before we started watching it, in which case
-    // registering fails or no exit event will be delivered
-    if ((kevent(sigqueue, ev, 1, NULL, 0, NULL) != 0 && errno == ESRCH) ||
-        getppid() != exit_with_parent_pid)
-        kill(getpid(), SIGTERM);
+    return (kevent(sigqueue, ev, 1, NULL, 0, NULL) != 0 && errno == ESRCH) ||
+           getppid() != exit_with_parent_pid;
 }
 #endif
 
@@ -1280,6 +1278,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #endif
 #ifdef HAVE_KEVENT
     struct kevent ev;
+    int parent_gone = 0;
     int sigqueue = kqueue();
     if (sigqueue == -1) {
         perror("signal kqueue");
@@ -1293,7 +1292,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 signal(*sig, SIG_DFL);
         }
         else if (exit_with_parent_pid) {
-            kqueue_parent(sigqueue, &ev);
+            parent_gone = kqueue_parent(sigqueue, &ev);
         }
     }
 #endif
@@ -1301,7 +1300,12 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
         sig = 0;
         errno = 0;
 #ifdef HAVE_KEVENT
-        if (sigqueue != -1) {
+        if (parent_gone) {
+            // exit as if terminated, as we would on the parent's exit event
+            parent_gone = 0;
+            sig = SIGTERM;
+        }
+        else if (sigqueue != -1) {
             int nevents = kevent(sigqueue, NULL, 0, &ev, 1, NULL);
             if (nevents == -1) {
                 if (errno == EINTR)
@@ -1315,7 +1319,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                     signal(*sig, SIG_DFL);
                 continue;
             }
-            // exit as if terminated when our parent exits (see jl_exit_with_parent)
+            // exit as if terminated when our parent exits
             sig = ev.filter == EVFILT_PROC ? SIGTERM : ev.ident;
         }
         else
@@ -1332,7 +1336,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             sig = SIGABRT; // this branch can't occur, unless we had stack memory corruption of sset
         }
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
-        // exit as if terminated when our parent exits (see jl_exit_with_parent).
+        // exit as if terminated when our parent exits.
         // Linux also sends this when the thread that spawned us exits, in which case
         // another thread of the parent adopts us and we handle it as a normal SIGUSR1.
         if (sig == SIGUSR1 && exit_with_parent_pid && getppid() != exit_with_parent_pid)

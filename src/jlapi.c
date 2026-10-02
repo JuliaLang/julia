@@ -1121,7 +1121,7 @@ static void exit_with_parent(void) JL_NOTSAFEPOINT
         return;
     jl_exit_with_parent((pid_t)parent);
     // the parent may have exited before we started watching it
-    // (N.B.: Julia is not initialized yet, so jl_exit amounts to exit)
+    // (N.B.: Julia is not initialized yet, so there is nothing to clean up)
     if (getppid() != (pid_t)parent)
         exit(1);
 #endif
