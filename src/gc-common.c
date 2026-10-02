@@ -245,7 +245,7 @@ static void finalize_object(arraylist_t *list, jl_value_t *o,
 static void jl_gc_push_arraylist(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOINT
 {
     void **items = list->items;
-    items[0] = (void*)JL_GC_ENCODE_PUSHARGS(list->len - 2);
+    items[0] = (void*)JL_GC_ENCODE_PUSHFINLIST(list->len - 2);
     items[1] = ct->gcstack;
     ct->gcstack = (jl_gcframe_t*)items;
 }
