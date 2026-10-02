@@ -211,7 +211,7 @@ function paynehanek(x::Float64)
 end
 
 """
-    rem_pio2_kernel(x::Union{Float32, Float64})
+    rem_pio2_kernel(x::Float64)
 
 Calculate `x` divided by `π/2` accurately for arbitrarily large `x`.
 Returns a pair `(k, r)`, where `k` is the quadrant of the result
@@ -281,15 +281,3 @@ The remainder is given as a double-double pair.
     return paynehanek(x)
 end
 
-@inline function rem_pio2_kernel(x::Float32)
-    xd = convert(Float64, x)
-    # use Cody Waite reduction with two coefficients
-    if abs(x) < Float32(pi*0x1p27) # x < 2^28 * pi/2
-        fn = round(xd * (2/pi))
-        r  = fma(fn, -pi/2, xd)
-        y = fma(fn, -6.123233995736766e-17, r) # big(pi)/2 - pi/2 remainder
-        return unsafe_trunc(Int, fn), DoubleFloat32(y)
-    end
-    n, y = @noinline paynehanek(xd)
-    return n, DoubleFloat32(y.hi)
-end

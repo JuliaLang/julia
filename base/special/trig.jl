@@ -5,9 +5,6 @@ struct DoubleFloat64
     hi::Float64
     lo::Float64
 end
-struct DoubleFloat32
-    hi::Float64
-end
 
 # sin_kernel and cos_kernel functions are only valid for |x| < pi/4 = 0.7854
 # translated from openlibm code: k_sin.c, k_cos.c, k_sinf.c, k_cosf.c.
@@ -25,7 +22,7 @@ end
 
 # Trigonometric functions
 # sin methods
-function sin(x::T) where T<:Union{Float32, Float64}
+function sin(x::T) where T<:Float64
     absx = abs(x)
     if absx < T(pi)/4 #|x| ~<= pi/4, no need for reduction
         if absx < sqrt(eps(T))
@@ -80,20 +77,8 @@ end
     y+y³*(DS1+y²*r)
 end
 
-# sin_kernels accepting values from rem_pio2 in the Float32 case
-@inline sin_kernel(x::Float32) = sin_kernel(DoubleFloat32(x))
-@inline function sin_kernel(y::DoubleFloat32)
-    S1 = -0.16666666641626524
-    S2 = 0.008333329385889463
-    z = y.hi*y.hi
-    w = z*z
-    r = @horner(z, -0.00019839334836096632, 2.718311493989822e-6)
-    s = z*y.hi
-    Float32((y.hi + s*@horner(z, S1, S2)) + s*w*r)
-end
-
 # cos methods
-function cos(x::T) where T<:Union{Float32, Float64}
+function cos(x::T) where T<:Float64
     absx = abs(x)
     if absx < T(pi)/4
         if absx < sqrt(eps(T)/T(2.0))
@@ -148,17 +133,6 @@ end
     w + (((1.0-w)-half_y²) + (y²*r))
 end
 
-# cos_kernels accepting values from rem_pio2 in the Float32 case
-cos_kernel(x::Float32) = cos_kernel(DoubleFloat32(x))
-@inline function cos_kernel(y::DoubleFloat32)
-    C0 = -0.499999997251031
-    C1 = 0.04166662332373906
-    y² = y.hi*y.hi
-    y⁴ = y²*y²
-    r = @horner(y², -0.001388676377460993, 2.439044879627741e-5)
-    Float32(((1.0+y²*C0) + y⁴*C1) + (y⁴*y²)*r)
-end
-
 ### sincos methods
 
 """
@@ -171,7 +145,7 @@ Throw a [`DomainError`](@ref) if `isinf(x)`, return a `(T(NaN), T(NaN))` if `isn
 
 See also [`cis`](@ref), [`sincospi`](@ref), [`sincosd`](@ref).
 """
-function sincos(x::T) where T<:Union{Float32, Float64}
+function sincos(x::T) where T<:Float64
     if abs(x) < T(pi)/4
         if x == zero(T)
             return x, one(T)
@@ -208,10 +182,124 @@ sincos(x) = _sincos(float(x))
 
 # There's no need to write specialized kernels, as inlining takes care of remo-
 # ving superfluous calculations.
-@inline sincos_kernel(y::Union{Float32, Float64, DoubleFloat32, DoubleFloat64}) = (sin_kernel(y), cos_kernel(y))
+@inline sincos_kernel(y::Union{Float64, DoubleFloat64}) = (sin_kernel(y), cos_kernel(y))
+
+# Float16 and Float32 sin/cos/sincos/tan, the corresponding functions of π*x (sinpi, ...) and of
+# x in degrees (sind, ...), based on CORE-MATH's sinf/cosf (https://core-math.gitlabpages.inria.fr/,
+# MIT licensed). The angle is reduced to π/16*(n + z) with |z| <= 1/2, and the angle-addition
+# formulas are applied with sin(π n/16) and cos(π n/16) from a 32-entry table, so there is no
+# branch on the quadrant. Float16 is computed in Float32 and Float32 in Float64, so each result is
+# rounded only once at the end. Only the reduction differs between radians, π*x and degrees.
+
+# sin(π j/16) for j = 0:31; cos(π j/16) is entry j + 8
+const SINPI16_TABLE = (0x0p+0, 0x1.8f8b83c69a60bp-3, 0x1.87de2a6aea963p-2, 0x1.1c73b39ae68c8p-1,
+    0x1.6a09e667f3bcdp-1, 0x1.a9b66290ea1a3p-1, 0x1.d906bcf328d46p-1, 0x1.f6297cff75cbp-1,
+    0x1p+0, 0x1.f6297cff75cbp-1, 0x1.d906bcf328d46p-1, 0x1.a9b66290ea1a3p-1,
+    0x1.6a09e667f3bcdp-1, 0x1.1c73b39ae68c8p-1, 0x1.87de2a6aea963p-2, 0x1.8f8b83c69a60bp-3,
+    0x0p+0, -0x1.8f8b83c69a60bp-3, -0x1.87de2a6aea963p-2, -0x1.1c73b39ae68c8p-1,
+    -0x1.6a09e667f3bcdp-1, -0x1.a9b66290ea1a3p-1, -0x1.d906bcf328d46p-1, -0x1.f6297cff75cbp-1,
+    -0x1p+0, -0x1.f6297cff75cbp-1, -0x1.d906bcf328d46p-1, -0x1.a9b66290ea1a3p-1,
+    -0x1.6a09e667f3bcdp-1, -0x1.1c73b39ae68c8p-1, -0x1.87de2a6aea963p-2, -0x1.8f8b83c69a60bp-3)
+const SINPI16_TABLE_F32 = map(Float32, SINPI16_TABLE)
+# :nothrow needed since the compiler can't prove the index is inbounds.
+@assume_effects :nothrow sinpi16_table(::Type{Float64}, n::Int) = getfield(SINPI16_TABLE, n & 31 + 1)
+@assume_effects :nothrow sinpi16_table(::Type{Float32}, n::Int) = getfield(SINPI16_TABLE_F32, n & 31 + 1)
+
+# Returns (sin(π z/16), 1 - cos(π z/16)): minimax polynomials with errors of about 2^-37 (relative)
+# and 2^-34 (absolute) in Float64 (for Float32 results), and 2^-23 and 2^-20 in Float32 (for Float16
+# results). They are fitted for |z| <= 0.53, which covers the rounding of n in the reductions.
+@inline function sincos16_poly(z::Float64)
+    z2 = z*z
+    z4 = z2*z2
+    sz = z*muladd(z4, 2.4310853410670896e-6, muladd(z2, -0.0012616485288428397, 0.1963495408478149))
+    omc = z2*muladd(z2, -6.189991248606663e-5, 0.01927656839146767)
+    return sz, omc
+end
+@inline function sincos16_poly(z::Float32)
+    z2 = z*z
+    return z*muladd(z2, -0.0012609607f0, 0.19634952f0), z2*0.019262165f0
+end
+
+# For Float16 and Float32 (computed in Float32 and Float64) and |z| <= 1/2, returns
+# (sin(π(n+z)/16), cos(π(n+z)/16)) via the angle-addition formulas.
+@inline function sincos16_kernel(z::T, n::Int) where T<:Union{Float32, Float64}
+    sz, omc = sincos16_poly(z)
+    s0 = sinpi16_table(T, n)
+    c0 = sinpi16_table(T, n + 8)
+    return muladd(sz, c0, muladd(-omc, s0, s0)), muladd(-sz, s0, muladd(-omc, c0, c0))
+end
+
+# tan as sin/cos
+@inline function tan16(z::Union{Float32, Float64}, n::Int)
+    si, co = sincos16_kernel(z, n)
+    return si/co
+end
+
+# The reductions for π*x and degrees, returning the same form as rem_pio16 (radians, in
+# pi_remainders.jl): they take a = |x| for finite x and return (z, n) with |z| <= 1/2 and
+# a = (n + z)/16 (for π*x) or a = 11.25*(n + z) (for degrees).
+
+# π*x: 16a is exact. All Float32 with a >= 2^24 are even integers, which behave like a = 0.
+@inline function rem_pi16(a::Float32)
+    ad = Float64(ifelse(a < 0x1p24, a, 0f0))
+    id, n = roundmul(ad, 16.0)
+    return 16*ad - id, n
+end
+@inline function rem_pi16(a::Float16)
+    af = Float32(a)
+    id, n = roundmul(af, 16f0)
+    return 16*af - id, n
+end
+
+# Degrees: 11.25 is exact, and for a < 2^48 (all finite Float16) both n*11.25 and a - n*11.25
+# are exact, so multiples of 11.25 (including all zeros of sind and cosd) give z == 0. Larger
+# Float32 are first reduced exactly by 360 = 32*11.25, which doesn't change n & 31.
+@inline function rem_deg16(a::Float32)
+    ad = a < 0x1p48 ? Float64(a) : Float64(@noinline rem(a, 360f0))
+    fn, n = roundmul(ad, 4/45)
+    return (ad - 11.25*fn)*(4/45), n
+end
+@inline function rem_deg16(a::Float16)
+    af = Float32(a)
+    fn, n = roundmul(af, 4f0/45)
+    return (af - 11.25f0*fn)*(4f0/45), n
+end
+
+@noinline trig16_nonfinite(f::Symbol, x) = isnan(x) ? x : throw_finite_domainerror(f, x)
+
+for T in (Float16, Float32), (rem16, fsin, fcos, fsincos, ftan) in (
+        (:rem_pio16, :sin, :cos, :sincos, :tan),
+        (:rem_pi16, :sinpi, :cospi, :sincospi, :tanpi),
+        (:rem_deg16, :sind, :cosd, :sincosd, :tand))
+    @eval begin
+        # The odd functions are computed at |x| and flipsign keeps the sign of zero results.
+        function $fsin(x::$T)
+            isfinite(x) || return trig16_nonfinite($(QuoteNode(fsin)), x)
+            si, _ = sincos16_kernel($rem16(abs(x))...)
+            return flipsign($T(si), x)
+        end
+        function $fcos(x::$T)
+            isfinite(x) || return trig16_nonfinite($(QuoteNode(fcos)), x)
+            _, co = sincos16_kernel($rem16(abs(x))...)
+            return $T(co)
+        end
+        function $fsincos(x::$T)
+            if !isfinite(x)
+                y = trig16_nonfinite($(QuoteNode(fsincos)), x)
+                return y, y
+            end
+            si, co = sincos16_kernel($rem16(abs(x))...)
+            return flipsign($T(si), x), $T(co)
+        end
+        function $ftan(x::$T)
+            isfinite(x) || return trig16_nonfinite($(QuoteNode(ftan)), x)
+            return flipsign($T(tan16($rem16(abs(x))...)), x)
+        end
+    end
+end
 
 # tangent methods
-function tan(x::T) where T<:Union{Float32, Float64}
+function tan(x::T) where T<:Float64
     absx = abs(x)
     if absx < T(pi)/4
         if absx < sqrt(eps(T))/2 # first order dominates, but also allows tan(-0)=-0
@@ -331,23 +419,6 @@ end
         s = 1.0 + t * Px0
         return t + a * (s + t * v)
     end
-end
-
-@inline tan_kernel(y::Float32) = tan_kernel(DoubleFloat32(y), 1)
-@inline function tan_kernel(y::DoubleFloat32, k)
-    # |tan(y)/y - t(y)| < 2**-25.5 (~[-2e-08, 2e-08]). */
-    y² = y.hi*y.hi
-    r  = @horner(y², 0.00297435743359967304927, 0.00946564784943673166728)
-    t  = @horner(y², 0.0533812378445670393523, 0.0245283181166547278873)
-    y⁴ = y²*y²
-    y³ = y²*y.hi
-    u  = @horner(y², 0.333331395030791399758, 0.133392002712976742718)
-    Py  = (y.hi+y³*u)+(y³*y⁴)*(t+y⁴*r)
-    if k == 1
-        return Float32(Py)
-    end
-
-    return Float32(-1.0/Py)
 end
 
 # fallback methods
@@ -728,22 +799,6 @@ end
 @inline function sinpi_kernel_wide(x::Float64)
     _sinpi_kernel_f64(x)
 end
-@inline function sinpi_kernel(x::Float32)
-    _sinpi_kernel_f32(x)
-end
-@inline function sinpi_kernel_wide(x::Float32)
-    x = Float64(x)
-    return x*evalpoly(x*x, (3.1415926535762266, -5.167712769188119,
-                            2.5501626483206374, -0.5992021090314925, 0.08100185277841528))
-end
-
-@inline function sinpi_kernel(x::Float16)
-    Float16(sinpi_kernel_wide(x))
-end
-@inline function sinpi_kernel_wide(x::Float16)
-    x = Float32(x)
-    return x*evalpoly(x*x, (3.1415927f0, -5.1677127f0, 2.5501626f0, -0.5992021f0, 0.081001855f0))
-end
 
 # Uses minimax polynomial of cos(π * x) for π * x in [0, .25]
 @inline function cospi_kernel(x::Float64)
@@ -751,21 +806,6 @@ end
 end
 @inline function cospi_kernel_wide(x::Float64)
     _cospi_kernel_f64(x)
-end
-@inline function cospi_kernel(x::Float32)
-    _cospi_kernel_f32(x)
-end
-@inline function cospi_kernel_wide(x::Float32)
-    x = Float64(x)
-    return evalpoly(x*x, (1.0, -4.934802200541122, 4.058712123568637,
-                          -1.3352624040152927, 0.23531426791507182, -0.02550710082498761))
-end
-@inline function cospi_kernel(x::Float16)
-    Float16(cospi_kernel_wide(x))
-end
-@inline function cospi_kernel_wide(x::Float16)
-    x = Float32(x)
-    return evalpoly(x*x, (1.0f0, -4.934802f0, 4.058712f0, -1.3352624f0, 0.23531426f0, -0.0255071f0))
 end
 
 function _cospi_kernel(x::AbstractFloat, sch)
@@ -801,24 +841,6 @@ end
 
 Constrain the zeroth coefficient to `1` to achieve exact behavior for zero input.
 
-* `Float32`:
-
-  ```sollya
-  handTuned = 3;
-  prec = 500!;
-  accurate = cos(pi * x);
-  kernelDomain = [-2^-3, 2^-2];
-  constrainedPart = 1;
-  machinePrecision = 24;
-  doubleWordPrecision = 2 * machinePrecision + handTuned;
-  freeMonomials = [|2, 4, 6, 8|];
-  freeMonomialPrecisions = [|doubleWordPrecision, machinePrecision, machinePrecision, machinePrecision|];
-  polynomial = fpminimax(accurate, freeMonomials, freeMonomialPrecisions, kernelDomain, constrainedPart);
-  supnormPrecision = 2^-10;
-  sup(supnorm(polynomial, accurate, kernelDomain, relative, supnormPrecision));
-  polynomial;
-  ```
-
 * `Float64`:
 
   ```sollya
@@ -839,23 +861,6 @@ Constrain the zeroth coefficient to `1` to achieve exact behavior for zero input
 
 ## `sinpi`
 
-* `Float32`:
-
-  ```sollya
-  handTuned = 5;
-  prec = 500!;
-  accurate = sin(pi * x);
-  kernelDomain = [-2^-3, 2^-2];
-  machinePrecision = 24;
-  doubleWordPrecision = 2 * machinePrecision + handTuned;
-  freeMonomials = [|1, 3, 5, 7, 9|];
-  freeMonomialPrecisions = [|doubleWordPrecision, machinePrecision, machinePrecision, machinePrecision, machinePrecision|];
-  polynomial = fpminimax(accurate, freeMonomials, freeMonomialPrecisions, kernelDomain);
-  supnormPrecision = 2^-10;
-  sup(supnorm(polynomial, accurate, kernelDomain, relative, supnormPrecision));
-  polynomial;
-  ```
-
 * `Float64`:
 
   ```sollya
@@ -874,24 +879,6 @@ Constrain the zeroth coefficient to `1` to achieve exact behavior for zero input
   ```
 =#
 
-const _cospi_kernel_polynomial_f32 = (;
-    c₀ = Float32(1),
-    c₂ = (-4.934802f0, -1.1607644f-7),
-    rest = (
-        4.0587077f0,
-        -1.3350532f0,
-        0.23138562f0,
-    ),
-)
-const _sinpi_kernel_polynomial_f32 = (;
-    c₁ = (3.1415927f0, -8.764345f-8),
-    rest = (
-        -5.1677127f0,
-        2.5501568f0,
-        -0.5990627f0,
-        0.079937235f0,
-    ),
-)
 const _cospi_kernel_polynomial_f64 = (;
     c₀ = Float64(1),
     c₂ = (-4.934802200544679, -2.6451348079795815e-16),
@@ -917,9 +904,7 @@ const _sinpi_kernel_polynomial_f64 = (;
     ),
 )
 
-const _cospi_kernel_f32 = Base.Fix2(_cospi_kernel, _cospi_kernel_polynomial_f32)
 const _cospi_kernel_f64 = Base.Fix2(_cospi_kernel, _cospi_kernel_polynomial_f64)
-const _sinpi_kernel_f32 = Base.Fix2(_sinpi_kernel, _sinpi_kernel_polynomial_f32)
 const _sinpi_kernel_f64 = Base.Fix2(_sinpi_kernel, _sinpi_kernel_polynomial_f64)
 
 """
@@ -931,7 +916,7 @@ Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
 See also [`sind`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
-function sinpi(_x::T) where T<:IEEEFloat
+function sinpi(_x::T) where T<:Float64
     x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x
@@ -965,7 +950,7 @@ Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
 See also [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
 """
-function cospi(x::T) where T<:IEEEFloat
+function cospi(x::T) where T<:Float64
     x = abs(x)
     if !isfinite(x)
         isnan(x) && return x
@@ -1002,7 +987,7 @@ Throw a [`DomainError`](@ref) if `isinf(x)`, return a `(T(NaN), T(NaN))` tuple i
 
 See also [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
 """
-function sincospi(_x::T) where T<:IEEEFloat
+function sincospi(_x::T) where T<:Float64
     x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x, x
@@ -1041,7 +1026,7 @@ Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
 See also [`tand`](@ref), [`sinpi`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
-function tanpi(_x::T) where T<:IEEEFloat
+function tanpi(_x::T) where T<:Float64
     # This is modified from sincospi.
     # Would it be faster or more accurate to make a tanpi_kernel?
     x = abs(_x)
@@ -1467,7 +1452,6 @@ function deg2rad_ext(x::Float64)
 
     DoubleFloat64(y_hi,y_lo)
 end
-deg2rad_ext(x::Float32) = DoubleFloat32(deg2rad(Float64(x)))
 deg2rad_ext(x::Real) = deg2rad(x) # Fallback
 
 function sind(x::Real)
