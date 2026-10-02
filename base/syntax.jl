@@ -688,7 +688,9 @@ function syntax_to_expr(s::Syntax, suppress_linenodes=false)
                 push!(out.args, syntax_to_expr(c, suppress_c))
             end
         end
-        # Add extra linenodes to some blocks for better provenance
+        # Add extra linenodes to some blocks for better provenance.  Note no
+        # short-form function, since we don't know here whether the original rhs
+        # was a block
         if h === :block && length(out.args) == 0 && !suppress_linenodes
             push!(out.args, first_linenode(s))
         elseif h in (:module, :function, :macro) && length(out.args) > 0
