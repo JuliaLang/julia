@@ -214,6 +214,46 @@ end
     @test !isnan(CustomNumber())
 end
 
+@testset "isapprox with dimensionful numbers" begin
+    isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
+    using .Main.Furlongs
+    x = Furlong(1.0)
+    # the default `atol = 0` must not be compared with the dimensionful `rtol*max(|x|, |y|)`
+    @test isapprox(x, Furlong(1.0 + 1e-10); rtol=1e-8)
+    @test !isapprox(x, Furlong(1.0 + 1e-6); rtol=1e-8)
+    @test isapprox(x, x; rtol=0)
+    @test !isapprox(x, Furlong(2.0); rtol=0)
+    @test isapprox(Furlong(0.0), Furlong(-0.0); rtol=1e-8)
+    @test isapprox(Furlong(1), Furlong(1); rtol=0)
+    # the absolute tolerance has the units of the compared numbers
+    @test isapprox(x, Furlong(1.0 + 1e-10); atol=Furlong(1e-8))
+    @test !isapprox(x, Furlong(1.0 + 1e-6); atol=Furlong(1e-8))
+    @test isapprox(Furlong(0.0), Furlong(1e-10); atol=Furlong(1e-8))
+    @test isapprox(x, Furlong(1.0 + 1e-6); atol=Furlong(1e-8), rtol=1e-5)
+    # the default relative tolerance is that of the dimensionless `one(x)`
+    @test Base.rtoldefault(typeof(x)) === Base.rtoldefault(Float64)
+    @test Base.rtoldefault(Furlong{2,Float32}) === Base.rtoldefault(Float32)
+    @test Base.rtoldefault(x, x, Furlong(1e-8)) === 0.0
+    @test x ≈ Furlong(1.0 + 1e-10)
+    @test x ≉ Furlong(1.0 + 1e-6)
+    @test Furlong(0.0) ≈ Furlong(-0.0)
+    @test Furlong(3) ≈ Furlong(3)
+    @test !(x ≈ Furlong(2.0))
+    # incompatible numbers (dimensionful vs. dimensionless, or different dimensions) throw
+    @test_throws ErrorException isapprox(x, 1.0)
+    @test_throws ErrorException isapprox(1.0, x)
+    @test_throws ErrorException isapprox(x, Furlong{2}(1.0))
+    @test_throws ErrorException x ≈ 0
+    @test_throws ErrorException isapprox(x, 1.0; rtol=1e-8)
+    # so does an absolute tolerance with the wrong units (unless the numbers are equal)
+    @test_throws MethodError isapprox(x, Furlong(2.0); atol=1e-8)
+    @test_throws MethodError isapprox(x, Furlong(1.0 + 1e-10); atol=Furlong{2}(1e-8))
+    # a `Number` type without a distinct multiplicative identity has no default
+    struct NoDefaultRtol <: Number end
+    Base.one(::Type{NoDefaultRtol}) = NoDefaultRtol()
+    @test_throws MethodError Base.rtoldefault(NoDefaultRtol)
+end
+
 @testset "isapprox and integer overflow" begin
     for T in (Int8, Int16, Int32)
         T === Int && continue

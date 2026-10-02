@@ -161,7 +161,7 @@ end
 
 # isapprox: approximate equality of numbers
 """
-    isapprox(x, y; atol::Real=0, rtol::Real=atol>0 ? 0 : √eps, nans::Bool=false[, norm::Function])
+    isapprox(x, y; atol::Number=0, rtol::Real=atol>0 ? 0 : √eps, nans::Bool=false[, norm::Function])
 
 Inexact equality comparison. Two numbers compare equal if their relative distance *or* their
 absolute distance is within tolerance bounds: `isapprox` returns `true` if
@@ -173,6 +173,10 @@ For real or complex floating-point values, if an `atol > 0` is not specified, `r
 the square root of [`eps`](@ref) of the type of `x` or `y`, whichever is bigger (least precise).
 This corresponds to requiring equality of about half of the significant digits. Otherwise,
 e.g. for integer arguments or if an `atol > 0` is supplied, `rtol` defaults to zero.
+
+The absolute tolerance `atol` has the same units as `x`; for dimensionful number types
+its default is the zero of those units, `zero(real(x))`. The relative tolerance `rtol` is a
+dimensionless number.
 
 The `norm` keyword defaults to `abs` for numeric `(x,y)` and to `LinearAlgebra.norm` for
 arrays (where an alternative `norm` choice is sometimes useful).
@@ -222,7 +226,7 @@ true
 ```
 """
 function isapprox(x::Number, y::Number;
-                  atol::Real=0, rtol::Real=rtoldefault(x,y,atol),
+                  atol::Number=zero(real(x)), rtol::Real=rtoldefault(x,y,atol),
                   nans::Bool=false, norm::Function=abs)
     x′, y′ = promote(x, y) # to avoid integer overflow
     x == y ||
@@ -319,9 +323,16 @@ This is equivalent to `!isapprox(x,y)` (see [`isapprox`](@ref)).
 # default tolerance arguments
 rtoldefault(::Type{T}) where {T<:AbstractFloat} = sqrt(eps(T))
 rtoldefault(::Type{<:Real}) = 0
-function rtoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}, atol::Real) where {T<:Number,S<:Number}
+# other number types, e.g. dimensionful quantities: the relative tolerance is dimensionless,
+# so it is determined by the type of the multiplicative identity
+function rtoldefault(::Type{T}) where {T<:Number}
+    S = typeof(one(T))
+    S === T && throw(MethodError(rtoldefault, (T,)))
+    return rtoldefault(S)
+end
+function rtoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}, atol::Number) where {T<:Number,S<:Number}
     rtol = max(rtoldefault(real(T)),rtoldefault(real(S)))
-    return atol > 0 ? zero(rtol) : rtol
+    return atol > zero(atol) ? zero(rtol) : rtol
 end
 
 # fused multiply-add
