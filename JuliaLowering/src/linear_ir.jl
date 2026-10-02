@@ -3,10 +3,11 @@
 
 # Must outline anything that can throw, e.g. globalrefs, static params
 function is_valid_ir_argument(ctx, ex)
-    k = kind(ex)
-    if is_simple_atom(ctx, ex) || k in KSet"inert syntaxinert top core quote static_eval foreignsymbol"
+    k = head(ex)
+    if is_simple_atom(ctx, ex) ||
+            k in (:inert, :syntaxinert, :top, :core, :quote, :static_eval, :foreignsymbol)
         true
-    elseif k == K"BindingId"
+    elseif k == :bindingid
         binfo = get_binding(ctx, ex)
         bk = binfo.kind
         bk === :slot
@@ -16,7 +17,7 @@ function is_valid_ir_argument(ctx, ex)
 end
 
 function is_ssa(ctx, ex)
-    kind(ex) == K"BindingId" && get_binding(ctx, ex).is_ssa
+    head(ex) == :bindingid && get_binding(ctx, ex).is_ssa
 end
 
 # Target to jump to, including info on try handler nesting and catch block
@@ -103,7 +104,7 @@ end
 function is_valid_body_ir_argument(ctx, ex)
     if is_valid_ir_argument(ctx, ex)
         true
-    elseif kind(ex) == K"BindingId"
+    elseif head(ex) == :bindingid
         get_binding(ctx, ex).is_always_defined
     else
         false
@@ -111,42 +112,43 @@ function is_valid_body_ir_argument(ctx, ex)
 end
 
 function is_simple_arg(ctx, ex)
-    k = kind(ex)
-    return is_simple_atom(ctx, ex) || k == K"BindingId" || k == K"quote" ||
-        k == K"inert" || k == K"syntaxinert" || k == K"top" ||
-        k == K"core" || k == K"globalref" || k == K"static_eval" ||
-        k == K"foreignsymbol"
+    k = head(ex)
+    return is_simple_atom(ctx, ex) || k == :bindingid || k == :quote ||
+        k == :inert || k == :syntaxinert || k == :top ||
+        k == :core || k == :globalref || k == :static_eval ||
+        k == :foreignsymbol
 end
 
 # flisp note: arguments are always counted as single-assign, so effects on
 # arguments within compile_args are thrown out (intentional?)
 function is_single_assign_var(ctx::LinearIRContext, ex)
-    kind(ex) == K"BindingId" || return false
+    head(ex) == :bindingid || return false
     binfo = get_binding(ctx, ex)
     return binfo.kind == :argument || binfo.is_assigned_once
 end
 
 function is_const_read_arg(ctx, ex)
-    k = kind(ex)
+    k = head(ex)
     # Even if we have side effects, we know that singly-assigned
     # locals cannot be affected by them so we can inline them anyway.
     # TODO from flisp: "We could also allow const globals here"
-    return k == K"inert" || k == K"syntaxinert" || k == K"top" ||
-        k == K"core" || k == K"static_eval" || k == K"foreignsymbol" ||
+    return k == :inert || k == :syntaxinert || k == :top ||
+        k == :core || k == :static_eval || k == :foreignsymbol ||
         is_simple_atom(ctx, ex) || is_single_assign_var(ctx, ex)
 end
 
 function is_valid_ir_rvalue(ctx, lhs, rhs)
     return is_ssa(ctx, lhs) ||
            is_valid_ir_argument(ctx, rhs) ||
-           (kind(lhs) == K"BindingId" &&
+           (head(lhs) == :bindingid &&
             # FIXME: add: invoke ?
-            kind(rhs) in KSet"new splatnew cfunction isdefined call foreigncall foreignglobal gc_preserve_begin new_opaque_closure")
+            head(rhs) in (:new, :splatnew, :cfunction, :isdefined, :call, :foreigncall,
+                          :foreignglobal, :gc_preserve_begin, :new_opaque_closure))
 end
 
 function check_no_local_bindings(ctx, ex, msg)
     contains_nonglobal_binding = contains_unquoted(ex) do e
-        kind(e) == K"BindingId" && get_binding(ctx, e).kind !== :global
+        head(e) == :bindingid && get_binding(ctx, e).kind !== :global
     end
     if contains_nonglobal_binding
         throw(LoweringError(ex, msg))
@@ -183,7 +185,7 @@ end
 # Emit computation of ex, assigning the result to an ssavar and returning that
 function emit_assign_tmp(ctx::LinearIRContext, ex, name="tmp")
     tmp = ssavar(ctx, ex, name)
-    emit(ctx, @ast ctx ex [K"=" tmp ex])
+    emit(ctx, @ast ctx ex [:(=) tmp ex])
     return tmp
 end
 
@@ -195,7 +197,7 @@ function compile_pop_exception(ctx, srcref, src_tokens, dest_tokens)
     jump_ok = n == 0 || (n <= length(src_tokens) && syntax_id(dest_tokens[n]) == syntax_id(src_tokens[n]))
     jump_ok || throw(LoweringError(srcref, "Attempt to jump into catch block"))
     if n < length(src_tokens)
-        @ast ctx srcref [K"pop_exception" src_tokens[n+1]]
+        @ast ctx srcref [:pop_exception src_tokens[n+1]]
     else
         nothing
     end
@@ -206,7 +208,7 @@ function compile_leave_handler(ctx, srcref, src_tokens, dest_tokens)
     jump_ok = n == 0 || (n <= length(src_tokens) && syntax_id(dest_tokens[n]) == syntax_id(src_tokens[n]))
     jump_ok || throw(LoweringError(srcref, "Attempt to jump into try block"))
     if n < length(src_tokens)
-        @ast ctx srcref [K"leave" src_tokens[n+1:end]...]
+        @ast ctx srcref [:leave src_tokens[n+1:end]...]
     else
         nothing
     end
@@ -236,11 +238,11 @@ function enter_finally_block(ctx, srcref, on_exit, value)
     handler = last(ctx.finally_handlers)
     push!(handler.exit_actions, (on_exit, value))
     tag = length(handler.exit_actions)
-    emit(ctx, @ast ctx srcref [K"=" handler.tagvar tag::K"Integer"])
+    emit(ctx, @ast ctx srcref [:(=) handler.tagvar tag::value])
     if on_exit != :rethrow
         emit_pop_exception(ctx, srcref, handler.target.catch_token_stack)
         emit_leave_handler(ctx, srcref, handler.target.handler_token_stack[1:end-1])
-        emit(ctx, @ast ctx srcref [K"goto" handler.target.label])
+        emit(ctx, @ast ctx srcref [:goto handler.target.label])
     end
     tag
 end
@@ -253,13 +255,13 @@ function _actually_return(ctx, ex)
     end
     simple_ret_val = isempty(ctx.catch_token_stack) ?
         # returning lambda directly is needed for @generated
-        (is_valid_ir_argument(ctx, ex) || kind(ex) == K"lambda") :
+        (is_valid_ir_argument(ctx, ex) || head(ex) == :lambda) :
         is_simple_atom(ctx, ex)
     if !simple_ret_val
         ex = emit_assign_tmp(ctx, ex, "return_tmp")
     end
     emit_pop_exception(ctx, ex, SyntaxList())
-    emit(ctx, @ast ctx ex [K"return" ex])
+    emit(ctx, @ast ctx ex [:return ex])
     return nothing
 end
 
@@ -279,7 +281,7 @@ function emit_return(ctx, srcref, ex)
         # though we don't mutate it?
         # tmp = ssavar(ctx, srcref, "returnval_via_finally") # <- can we use this?
         tmp = new_local_binding(ctx, srcref, "returnval_via_finally")
-        emit(ctx, @ast ctx srcref [K"=" tmp ex])
+        emit(ctx, @ast ctx srcref [:(=) tmp ex])
         tmp
     else
         emit_assign_tmp(ctx, ex, "returnval_via_finally")
@@ -287,7 +289,7 @@ function emit_return(ctx, srcref, ex)
     if !isempty(ctx.finally_handlers)
         enter_finally_block(ctx, srcref, :return, x)
     else
-        emit(ctx, @ast ctx srcref [K"leave" ctx.handler_token_stack...])
+        emit(ctx, @ast ctx srcref [:leave ctx.handler_token_stack...])
         _actually_return(ctx, x)
     end
     return nothing
@@ -348,20 +350,20 @@ function emit_break(ctx, ex)
     else
         emit_pop_exception(ctx, ex, target.catch_token_stack)
         emit_leave_handler(ctx, ex, target.handler_token_stack)
-        emit(ctx, @ast ctx ex [K"goto" target.label])
+        emit(ctx, @ast ctx ex [:goto target.label])
     end
 end
 
-# `op` may be either K"=" (where global assignments are converted to setglobal!)
-# or K"constdecl".  flisp: emit-assignment-or-setglobal
-function emit_simple_assignment(ctx, srcref, lhs, rhs, op=K"=")
+# `op` may be either :(=) (where global assignments are converted to setglobal!)
+# or :constdecl.  flisp: emit-assignment-or-setglobal
+function emit_simple_assignment(ctx, srcref, lhs, rhs, op=:(=))
     binfo = get_binding(ctx, lhs)
     if binfo.kind == :global
         emit(ctx, @ast ctx srcref [
-            K"call"
-            op == K"constdecl" ? "declare_const"::K"core" : "setglobal!"::K"core"
-            binfo.mod::K"Value"
-            binfo.name::K"Symbol"
+            :call
+            op == :constdecl ? "declare_const"::core : "setglobal!"::core
+            binfo.mod::value
+            binfo.name::symbol
             rhs
         ])
     else
@@ -369,7 +371,7 @@ function emit_simple_assignment(ctx, srcref, lhs, rhs, op=K"=")
     end
 end
 
-function emit_assignment(ctx, srcref, lhs, rhs, op=K"=")
+function emit_assignment(ctx, srcref, lhs, rhs, op=:(=))
     if !isnothing(rhs)
         if is_valid_ir_rvalue(ctx, lhs, rhs)
             emit_simple_assignment(ctx, srcref, lhs, rhs, op)
@@ -388,7 +390,7 @@ end
 function make_label(ctx, srcref)
     id = ctx.next_label_id[]
     ctx.next_label_id[] += 1
-    newleaf(srcref, K"label", id)
+    newleaf(srcref, :label, id)
 end
 
 # flisp: make&mark-label
@@ -396,7 +398,7 @@ function emit_label(ctx, srcref)
     if !isempty(ctx.code)
         # Use current label if available
         e = ctx.code[end]
-        if kind(e) == K"label"
+        if head(e) == :label
             return e
         end
     end
@@ -406,9 +408,9 @@ function emit_label(ctx, srcref)
 end
 
 function emit_latestworld(ctx, srcref)
-    (isempty(ctx.code) || kind(last(ctx.code)) != K"latestworld") &&
-        emit(ctx, kind(srcref) === K"latestworld" ? srcref :
-        newleaf(srcref, K"latestworld"))
+    (isempty(ctx.code) || head(last(ctx.code)) != :latestworld) &&
+        emit(ctx, head(srcref) === :latestworld ? srcref :
+        newleaf(srcref, :latestworld))
 end
 
 function compile_condition_term(ctx, ex)
@@ -422,7 +424,7 @@ end
 
 # flisp: emit-cond
 function compile_conditional(ctx, ex, false_label)
-    if kind(ex) == K"block" && numchildren(ex) >= 1
+    if head(ex) == :block && numchildren(ex) >= 1
         for i in 1:numchildren(ex)-1
             compile(ctx, ex[i], false, false)
         end
@@ -430,8 +432,8 @@ function compile_conditional(ctx, ex, false_label)
     else
         test = ex
     end
-    k = kind(test)
-    if k == K"||"
+    k = head(test)
+    if k == :||
         true_label = make_label(ctx, test)
         for (i,e) in enumerate(children(test))
             c = compile_condition_term(ctx, e)
@@ -439,24 +441,24 @@ function compile_conditional(ctx, ex, false_label)
             if i < numchildren(test)
                 next_term_label = make_label(ctx, test)
                 # Jump over short circuit
-                emit(ctx, @ast ctx e [K"gotoifnot" c next_term_label])
+                emit(ctx, @ast ctx e [:gotoifnot c next_term_label])
                 # Short circuit to true
-                emit(ctx, @ast ctx e [K"goto" true_label])
+                emit(ctx, @ast ctx e [:goto true_label])
                 emit(ctx, next_term_label)
             else
-                emit(ctx, @ast ctx e [K"gotoifnot" c false_label])
+                emit(ctx, @ast ctx e [:gotoifnot c false_label])
             end
         end
         emit(ctx, true_label)
-    elseif k == K"&&"
+    elseif k == :&&
         for e in children(test)
             c = compile_condition_term(ctx, e)
             isnothing(c) && break
-            emit(ctx, @ast ctx e [K"gotoifnot" c false_label])
+            emit(ctx, @ast ctx e [:gotoifnot c false_label])
         end
     else
         c = compile_condition_term(ctx, test)
-        isnothing(c) || emit(ctx, @ast ctx test [K"gotoifnot" c false_label])
+        isnothing(c) || emit(ctx, @ast ctx test [:gotoifnot c false_label])
     end
 end
 
@@ -545,10 +547,10 @@ end
 # the tag.
 function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     (try_block, catch_block, else_block, finally_block, catch_label, scope) = @stm ex begin
-         [K"trycatchelse" t c] -> (t, c, nothing, nothing, make_label(ctx, c), nothing)
-         [K"trycatchelse" t c e] -> (t, c, e, nothing, make_label(ctx, c), nothing)
-         [K"tryfinally" t f] -> (t, nothing, nothing, f, make_label(ctx, f), nothing)
-         [K"tryfinally" t f scope] -> (t, nothing, nothing, f, make_label(ctx, f), scope)
+         [:trycatchelse t c] -> (t, c, nothing, nothing, make_label(ctx, c), nothing)
+         [:trycatchelse t c e] -> (t, c, e, nothing, make_label(ctx, c), nothing)
+         [:tryfinally t f] -> (t, nothing, nothing, f, make_label(ctx, f), nothing)
+         [:tryfinally t f scope] -> (t, nothing, nothing, f, make_label(ctx, f), scope)
      end
 
     has_finally_block = !isnothing(finally_block)
@@ -563,9 +565,9 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     end
     # Exception handler block prefix
     handler_token = ssavar(ctx, ex, "handler_token")
-    emit(ctx, @ast ctx ex [K"="
+    emit(ctx, @ast ctx ex [:(=)
         handler_token
-        [K"enter" catch_label enter_scope_arg...]
+        [:enter catch_label enter_scope_arg...]
     ])
     push!(ctx.handler_token_stack, handler_token)
     if has_finally_block
@@ -574,7 +576,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         finally_handler = FinallyHandler(new_local_binding(ctx, finally_block, "finally_tag"),
                                          JumpTarget(end_label, ctx))
         push!(ctx.finally_handlers, finally_handler)
-        emit(ctx, @ast ctx finally_block [K"=" finally_handler.tagvar (-1)::K"Integer"])
+        emit(ctx, @ast ctx finally_block [:(=) finally_handler.tagvar (-1)::value])
     end
 
     # Try block code.
@@ -589,14 +591,14 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             if needs_value && !isnothing(try_val)
                 emit_assignment(ctx, ex, try_result, try_val)
             end
-            emit(ctx, @ast ctx ex [K"leave" handler_token])
+            emit(ctx, @ast ctx ex [:leave handler_token])
         end
         pop!(ctx.handler_token_stack)
     else
         if !isnothing(try_val) && (in_tail_pos || needs_value)
             emit(ctx, try_val) # TODO: Only for any side effects ?
         end
-        emit(ctx, @ast ctx ex [K"leave" handler_token])
+        emit(ctx, @ast ctx ex [:leave handler_token])
         pop!(ctx.handler_token_stack)
         # Else block code
         else_val = compile(ctx, else_block, needs_value, in_tail_pos)
@@ -607,7 +609,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     end
     if !in_tail_pos
-        emit(ctx, @ast ctx ex [K"goto" end_label])
+        emit(ctx, @ast ctx ex [:goto end_label])
     end
 
     # Catch pad
@@ -629,21 +631,21 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
                 make_label(ctx, srcref) : nothing
             if !isnothing(next_action_label)
                 tmp = ssavar(ctx, srcref, "do_finally_action")
-                emit(ctx, @ast ctx srcref [K"=" tmp
-                    [K"call"
-                        "==="::K"core"
+                emit(ctx, @ast ctx srcref [:(=) tmp
+                    [:call
+                        "==="::core
                         finally_handler.tagvar
-                        tag::K"Integer"
+                        tag::value
                     ]
                 ])
-                emit(ctx, @ast ctx srcref [K"gotoifnot" tmp next_action_label])
+                emit(ctx, @ast ctx srcref [:gotoifnot tmp next_action_label])
             end
             if on_exit === :return
                 emit_return(ctx, value)
             elseif on_exit === :break
                 emit_break(ctx, value)
             elseif on_exit === :rethrow
-                emit(ctx, @ast ctx srcref [K"call" "rethrow"::K"top"])
+                emit(ctx, @ast ctx srcref [:call "rethrow"::top])
             else
                 @jl_assert false finally_block
             end
@@ -659,7 +661,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             emit_assignment(ctx, ex, try_result, catch_val)
         end
         if !in_tail_pos
-            emit(ctx, @ast ctx ex [K"pop_exception" handler_token])
+            emit(ctx, @ast ctx ex [:pop_exception handler_token])
             emit(ctx, end_label)
         else
             # (pop_exception done in emit_return)
@@ -674,17 +676,17 @@ end
 # needs to be done. In value position, it returns an expression computing
 # the needed value.
 function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
-    k = kind(ex)
-    if k == K"BindingId" || is_literal(k) || k == K"nothing" ||
-            k == K"inert" || k == K"syntaxinert" || k == K"top" ||
-            k == K"core" || k == K"Value" || k == K"Symbol" ||
-            k == K"SourceLocation" || k == K"static_eval" ||
-            k == K"foreignsymbol" || k == K"static_parameter"
+    k = head(ex)
+    if k == :bindingid || k == :value || k == :nothing ||
+            k == :inert || k == :syntaxinert || k == :top ||
+            k == :core || k == :symbol ||
+            k == :sourcelocation || k == :static_eval ||
+            k == :foreignsymbol || k == :static_parameter
         ex1 = ex
-        if kind(ex1) == K"BindingId"
+        if head(ex1) == :bindingid
             binfo = get_binding(ctx, ex1)
             if haskey(ctx.argmap, binfo.id)
-                ex1 = newleaf(ex1, K"BindingId", ctx.argmap[binfo.id])
+                ex1 = newleaf(ex1, :bindingid, ctx.argmap[binfo.id])
             end
         end
         if in_tail_pos
@@ -692,21 +694,21 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         elseif needs_value
             ex1
         else
-            if k == K"BindingId" && !is_ssa(ctx, ex1)
+            if k == :bindingid && !is_ssa(ctx, ex1)
                 emit(ctx, ex1) # keep identifiers for undefined-var checking
             end
             nothing
         end
-    elseif k == K"Placeholder"
+    elseif k == :placeholder
         if needs_value
             throw(LoweringError(ex, "all-underscore identifiers are write-only and their values cannot be used in expressions"))
         end
         nothing
-    elseif k == K"TOMBSTONE"
+    elseif k == :tombstone
         @jl_assert !needs_value (ex,"TOMBSTONE encountered in value position")
         nothing
-    elseif k == K"call" || k == K"new" || k == K"splatnew" || k == K"foreigncall" ||
-            k == K"foreignglobal" || k == K"new_opaque_closure" || k == K"cfunction"
+    elseif k == :call || k == :new || k == :splatnew || k == :foreigncall ||
+            k == :foreignglobal || k == :new_opaque_closure || k == :cfunction
         callex = newnode(ex, k, compile_args(ctx, children(ex)))
         if in_tail_pos
             emit_return(ctx, ex, callex)
@@ -716,28 +718,28 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             emit(ctx, callex)
             nothing
         end
-    elseif k == K"=" || k == K"constdecl"
+    elseif k == :(=) || k == :constdecl
         lhs = ex[1]
-        res = if kind(lhs) == K"Placeholder"
+        res = if head(lhs) == :placeholder
             compile(ctx, ex[2], needs_value, in_tail_pos)
-        elseif k == K"constdecl" && numchildren(ex) == 1
+        elseif k == :constdecl && numchildren(ex) == 1
             # No RHS - make undefined constant
-            mod, name = if kind(ex[1]) == K"BindingId"
+            mod, name = if head(ex[1]) == :bindingid
                 binfo = get_binding(ctx, ex[1])
                 binfo.mod, binfo.name
             else
-                @jl_assert kind(ex[1]) == K"Value" && typeof(ex[1].value) === GlobalRef ex
+                @jl_assert head(ex[1]) == :value && typeof(ex[1].value) === GlobalRef ex
                 gr = ex[1].value
                 gr.mod, String(gr.name)
             end
-            emit(ctx, @ast ctx ex [K"call" "declare_const"::K"core"
-                                   mod::K"Value" name::K"Symbol"])
+            emit(ctx, @ast ctx ex [:call "declare_const"::core
+                                   mod::value name::symbol])
         else
             rhs = compile(ctx, ex[2], true, false)
-            if kind(lhs) == K"BindingId"
+            if head(lhs) == :bindingid
                 binfo = get_binding(ctx, lhs)
                 if haskey(ctx.argmap, binfo.id)
-                    lhs = newleaf(lhs, K"BindingId", ctx.argmap[binfo.id])
+                    lhs = newleaf(lhs, :bindingid, ctx.argmap[binfo.id])
                 end
             end
             if needs_value && !isnothing(rhs)
@@ -752,9 +754,9 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
                 emit_assignment(ctx, ex, lhs, rhs, k)
             end
         end
-        k == K"constdecl" && emit_latestworld(ctx, ex)
+        k == :constdecl && emit_latestworld(ctx, ex)
         res
-    elseif k == K"block" || k == K"scope_block"
+    elseif k == :block || k == :scope_block
         nc = numchildren(ex)
         if nc == 0
             if in_tail_pos
@@ -772,7 +774,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
             res
         end
-    elseif k == K"symbolicblock"
+    elseif k == :symbolicblock
         name = syntax_name(ex[1])
         # Skip duplicate check for default-scope labels (loop-exit, loop-cont) which allow nesting
         if name != "loop-exit" && name != "loop-cont"
@@ -803,9 +805,9 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         if !isnothing(result_var)
             defined_label = make_label(ctx, ex)
             done_label = make_label(ctx, ex)
-            isdef = emit_assign_tmp(ctx, @ast ctx ex [K"isdefined" result_var])
-            emit(ctx, @ast ctx ex [K"gotoifnot" isdef defined_label])
-            emit(ctx, @ast ctx ex [K"goto" done_label])
+            isdef = emit_assign_tmp(ctx, @ast ctx ex [:isdefined result_var])
+            emit(ctx, @ast ctx ex [:gotoifnot isdef defined_label])
+            emit(ctx, @ast ctx ex [:goto done_label])
             emit(ctx, defined_label)
             emit_assignment(ctx, ex, result_var, nothing_(ctx, ex))
             emit(ctx, done_label)
@@ -816,10 +818,10 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         elseif needs_value
             result_var
         end
-    elseif k == K"break"
+    elseif k == :break
         emit_break(ctx, ex)
         nothing
-    elseif k == K"symboliclabel"
+    elseif k == :symboliclabel
         label = emit_label(ctx, ex)
         name = syntax_name(ex)
         if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
@@ -831,22 +833,22 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         elseif needs_value
             throw(LoweringError(ex, "misplaced label in value position"))
         end
-    elseif k == K"symbolicgoto"
+    elseif k == :symbolicgoto
         push!(ctx.symbolic_jump_origins, JumpOrigin(ex, length(ctx.code)+1, ctx))
-        emit(ctx, newleaf(ex, K"TOMBSTONE")) # ? pop_exception
-        emit(ctx, newleaf(ex, K"TOMBSTONE")) # ? leave
-        emit(ctx, newleaf(ex, K"TOMBSTONE")) # ? goto
+        emit(ctx, newleaf(ex, :tombstone)) # ? pop_exception
+        emit(ctx, newleaf(ex, :tombstone)) # ? leave
+        emit(ctx, newleaf(ex, :tombstone)) # ? goto
         nothing
-    elseif k == K"return"
+    elseif k == :return
         compile(ctx, ex[1], true, true)
         nothing
-    elseif k == K"removable"
+    elseif k == :removable
         if needs_value
             compile(ctx, ex[1], needs_value, in_tail_pos)
         else
             nothing
         end
-    elseif k == K"if" || k == K"elseif"
+    elseif k == :if || k == :elseif
         @jl_assert numchildren(ex) <= 3 ex
         has_else = numchildren(ex) > 2
         else_label = make_label(ctx, ex)
@@ -868,7 +870,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
             if has_else || needs_value
                 end_label = make_label(ctx, ex)
-                emit(ctx, @ast ctx ex [K"goto" end_label])
+                emit(ctx, @ast ctx ex [:goto end_label])
             else
                 end_label = nothing
             end
@@ -886,23 +888,23 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
             val
         end
-    elseif k == K"trycatchelse" || k == K"tryfinally"
+    elseif k == :trycatchelse || k == :tryfinally
         compile_try(ctx, ex, needs_value, in_tail_pos)
-    elseif k == K"method"
+    elseif k == :method
         @jl_assert ctx.is_toplevel_thunk (ex, "method not at top level")
         mval = if numchildren(ex) == 1
             # Generic function declaration: define_method(module, name)
             func_name = ex[1]
-            mod, name = if kind(func_name) == K"BindingId"
+            mod, name = if head(func_name) == :bindingid
                 binfo = get_binding(ctx, func_name)
                 binfo.mod, binfo.name
-            elseif kind(func_name) == K"globalref"
+            elseif head(func_name) == :globalref
                 func_name.mod, syntax_name(func_name)
             else
                 ctx.mod, syntax_name(func_name)
             end
-            emit_assign_tmp(ctx, @ast ctx ex [K"call" "define_method"::K"core"
-                                              mod::K"Value" name::K"Symbol"])
+            emit_assign_tmp(ctx, @ast ctx ex [:call "define_method"::core
+                                              mod::value name::symbol])
         else
             @jl_assert numchildren(ex) == 3 ex
             fname = ex[1]
@@ -911,13 +913,13 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
                 sig = emit_assign_tmp(ctx, sig)
             end
             lam = ex[3]
-            if kind(lam) == K"lambda"
+            if head(lam) == :lambda
                 lam = compile_lambda(ctx, lam)
             else
                 lam = emit_assign_tmp(ctx, compile(ctx, lam, true, false))
             end
-            emit_assign_tmp(ctx, @ast ctx ex [K"call" "define_method"::K"core"
-                                              ctx.mod::K"Value" fname sig lam])
+            emit_assign_tmp(ctx, @ast ctx ex [:call "define_method"::core
+                                              ctx.mod::value fname sig lam])
         end
         emit_latestworld(ctx, ex)
         out = if in_tail_pos
@@ -928,15 +930,15 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             nothing
         end
         out
-    elseif k == K"opaque_closure_method"
-        @ast ctx ex [K"opaque_closure_method"
+    elseif k == :opaque_closure_method
+        @ast ctx ex [:opaque_closure_method
             ex[1]
             ex[2]
             ex[3]
             ex[4]
             compile_lambda(ctx, ex[5])
         ]
-    elseif k in KSet"lambda generated_lambda toplevel_lambda"
+    elseif k === :lambda || k === :generated_lambda || k === :toplevel_lambda
         lam = compile_lambda(ctx, ex)
         if in_tail_pos
             emit_return(ctx, lam)
@@ -945,27 +947,27 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         else
             emit(ctx, lam)
         end
-    elseif k == K"gc_preserve_begin"
+    elseif k == :gc_preserve_begin
         newnode(ex, k, compile_args(ctx, children(ex)))
-    elseif k == K"gc_preserve_end" || k == K"loopinfo"
+    elseif k == :gc_preserve_end || k == :loopinfo
         if needs_value
             throw(LoweringError(ex, "misplaced kind $k in value position"))
         end
         emit(ctx, ex)
         nothing
-    elseif k == K"meta"
+    elseif k == :meta
         if numchildren(ex) >= 1
             # Certain blessed forms are allowed to share a meta expression;
             # others (nkw, optlevel) treat ex[1] as head and ex[2:end] as args
-            if kind(ex[1]) === K"purity" ||
-                kind(ex[1]) === K"Symbol" && syntax_name(ex[1]) in (
+            if head(ex[1]) === :purity ||
+                head(ex[1]) === :symbol && syntax_name(ex[1]) in (
                     "inline", "noinline", "propagate_inbounds",
                     "nospecializeinfer", "aggressive_constprop", "no_constprop")
                 for c in children(ex)
-                    if kind(c) === K"purity"
+                    if head(c) === :purity
                         old = get(ctx.meta, :purity, UInt16(0))
                         ctx.meta[:purity] = (old | purity_expr_to_flags(c))::UInt16
-                    elseif kind(c) === K"Symbol"
+                    elseif head(c) === :symbol
                         ctx.meta[Symbol(syntax_name(c))] = true
                     else
                         @jl_assert false c
@@ -976,75 +978,75 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
         end
         if needs_value
-            val = @ast ctx ex (::K"nothing")
+            val = @ast ctx ex (::nothing)
             if in_tail_pos
                 emit_return(ctx, val)
             else
                 val
             end
         end
-    elseif k == K"inbounds" || k == K"inbounds_pop" ||
-        k == K"inline" || k == K"noinline" || k == K"purity" ||
-        k == K"aliasscope" || k == K"popaliasscope"
+    elseif k == :inbounds || k == :inbounds_pop ||
+        k == :inline || k == :noinline || k == :purity ||
+        k == :aliasscope || k == :popaliasscope
         emit(ctx, ex) # if absorbed in flags, converted to nothing later
         if needs_value
-            val = @ast ctx ex (::K"nothing")
+            val = @ast ctx ex (::nothing)
             if in_tail_pos
                 emit_return(ctx, val)
             else
                 val
             end
         end
-    elseif k == K"_while"
+    elseif k == :_while
         end_label = make_label(ctx, ex)
         top_label = emit_label(ctx, ex)
         compile_conditional(ctx, ex[1], end_label)
         compile(ctx, ex[2], false, false)
-        emit(ctx, @ast ctx ex [K"goto" top_label])
+        emit(ctx, @ast ctx ex [:goto top_label])
         emit(ctx, end_label)
         if needs_value
             compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
         end
-    elseif k == K"_do_while"
+    elseif k == :_do_while
         end_label = make_label(ctx, ex)
         top_label = emit_label(ctx, ex)
         compile(ctx, ex[1], false, false)
         compile_conditional(ctx, ex[2], end_label)
-        emit(ctx, @ast ctx ex [K"goto" top_label])
+        emit(ctx, @ast ctx ex [:goto top_label])
         emit(ctx, end_label)
         if needs_value
             compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
         end
-    elseif k == K"isdefined" || k == K"captured_local" ||
-        k == K"throw_undef_if_not" || k == K"boundscheck"
+    elseif k == :isdefined || k == :captured_local ||
+        k == :throw_undef_if_not || k == :boundscheck
         if in_tail_pos
             emit_return(ctx, ex)
         elseif needs_value
             ex
         end
-    elseif k == K"newvar"
+    elseif k == :newvar
         @jl_assert !needs_value ex
         is_duplicate = !isempty(ctx.code) &&
-            (e = last(ctx.code); kind(e) == K"newvar" && syntax_id(e[1]) == syntax_id(ex[1]))
+            (e = last(ctx.code); head(e) == :newvar && syntax_id(e[1]) == syntax_id(ex[1]))
         if !is_duplicate
             # TODO: also exclude deleted vars
             emit(ctx, ex)
         end
-    elseif k == K"latestworld"
+    elseif k == :latestworld
         if needs_value
             throw(LoweringError(ex, "misplaced latestworld"))
         end
         emit_latestworld(ctx, ex)
-    elseif k == K"latestworld_if_toplevel"
+    elseif k == :latestworld_if_toplevel
         ctx.is_toplevel_thunk && emit_latestworld(ctx, ex)
-    elseif k == K"unused_only"
+    elseif k == :unused_only
         if needs_value && !in_tail_pos
             throw(LoweringError(
                 ex, "global declaration doesn't read the variable and can't return a value"))
         end
         if needs_value && in_tail_pos && !ctx.is_toplevel_thunk
             compile(ctx, ex[1], false, false)
-            compile(ctx, @ast(ctx, ex, (::K"nothing")), needs_value, in_tail_pos)
+            compile(ctx, @ast(ctx, ex, (::nothing)), needs_value, in_tail_pos)
         else
             compile(ctx, ex[1], needs_value, in_tail_pos)
         end
@@ -1054,9 +1056,9 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
 end
 
 function _remove_vars_with_isdefined_check!(vars, ex)
-    if is_leaf(ex) || is_quoted(ex) || kind(ex) == K"static_eval"
+    if is_leaf(ex) || is_quoted(ex) || head(ex) == :static_eval
         return
-    elseif kind(ex) == K"isdefined"
+    elseif head(ex) == :isdefined
         delete!(vars, syntax_id(ex[1]))
     else
         for e in children(ex)
@@ -1080,15 +1082,15 @@ function unnecessary_newvar_ids(ctx, stmts)
     ids_assigned_before_branch = Set{IdTag}()
     for ex in stmts
         _remove_vars_with_isdefined_check!(vars, ex)
-        k = kind(ex)
-        if k == K"newvar"
+        k = head(ex)
+        if k == :newvar
             id = syntax_id(ex[1])
             if !get_binding(ctx, id).is_captured
                 push!(vars, id)
             end
-        elseif k == K"goto" || k == K"gotoifnot" || (k == K"=" && kind(ex[2]) == K"enter")
+        elseif k == :goto || k == :gotoifnot || (k == :(=) && head(ex[2]) == :enter)
             empty!(vars)
-        elseif k == K"="
+        elseif k == :(=)
             id = syntax_id(ex[1])
             if id in vars
                 delete!(vars, id)
@@ -1119,25 +1121,25 @@ function compile_body(ctx::LinearIRContext, ex)
         pop_ex = compile_pop_exception(ctx, origin.goto, origin.catch_token_stack,
                                      target.catch_token_stack)
         if !isnothing(pop_ex)
-            @jl_assert kind(ctx.code[i]) == K"TOMBSTONE" ctx.code[i]
+            @jl_assert head(ctx.code[i]) == :tombstone ctx.code[i]
             ctx.code[i] = pop_ex
             i += 1
         end
         leave_ex = compile_leave_handler(ctx, origin.goto, origin.handler_token_stack,
                                          target.handler_token_stack)
         if !isnothing(leave_ex)
-            @jl_assert kind(ctx.code[i]) == K"TOMBSTONE" ctx.code[i]
+            @jl_assert head(ctx.code[i]) == :tombstone ctx.code[i]
             ctx.code[i] = leave_ex
             i += 1
         end
-        @jl_assert kind(ctx.code[i]) == K"TOMBSTONE" ctx.code[i]
-        ctx.code[i] = @ast ctx origin.goto [K"goto" target.label]
+        @jl_assert head(ctx.code[i]) == :tombstone ctx.code[i]
+        ctx.code[i] = @ast ctx origin.goto [:goto target.label]
     end
 
     # Filter out unnecessary newvar nodes
     ids_assigned_before_branch = unnecessary_newvar_ids(ctx, ctx.code)
     filter!(ctx.code) do ex
-        !(kind(ex) == K"newvar" && syntax_id(ex[1]) in ids_assigned_before_branch)
+        !(head(ex) == :newvar && syntax_id(ex[1]) in ids_assigned_before_branch)
     end
 end
 
@@ -1146,27 +1148,27 @@ end
 # Recursively renumber an expression within linear IR
 # flisp: renumber-stuff
 function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
-    k = kind(ex)
-    if k == K"BindingId"
+    k = head(ex)
+    if k == :bindingid
         id = syntax_id(ex)
         if haskey(ssa_rewrites, id)
-            newleaf(ex, K"SSAValue", ssa_rewrites[id])
+            newleaf(ex, :ssavalue, ssa_rewrites[id])
         else
             new_id = get(slot_rewrites, id, nothing)
             binfo = get_binding(ctx, id)
             if !isnothing(new_id)
-                sk = binfo.kind == :local || binfo.kind == :argument ? K"slot"             :
-                     binfo.kind == :static_parameter                 ? K"static_parameter" :
+                sk = binfo.kind == :local || binfo.kind == :argument ? :slot             :
+                     binfo.kind == :static_parameter                 ? :static_parameter :
                      throw(LoweringError(ex, "Found unexpected binding of kind $(binfo.kind)"))
                 newleaf(ex, sk, new_id)
             else
                 if binfo.kind !== :global
                     throw(LoweringError(ex, "Found unexpected binding of kind $(binfo.kind)"))
                 end
-                @mknode(ex; kind=K"globalref", value=binfo.name, mod=binfo.mod)
+                @mknode(ex; head=:globalref, value=binfo.name, mod=binfo.mod)
             end
         end
-    elseif k == K"meta" || k == K"static_eval"
+    elseif k == :meta || k == :static_eval
         # Somewhat-hack for Expr(:meta, :generated, gen) which has
         # weird top-level semantics for `gen`, but we still need to translate
         # the binding it contains to a globalref. (TODO: use
@@ -1174,11 +1176,11 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
         mapchildren(ex) do e
             _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, e)
         end
-    elseif is_literal(k) || is_quoted(k)
+    elseif k == :value || is_quoted(ex)
         ex
-    elseif k == K"label"
-        @ast ctx ex label_table[syntax_id(ex)]::K"label"
-    elseif k == K"code_info"
+    elseif k == :label
+        @ast ctx ex label_table[syntax_id(ex)]::label
+    elseif k == :code_info
         ex
     else
         mapchildren(ex) do e
@@ -1194,9 +1196,9 @@ function renumber_body(ctx, input_code, slot_rewrites)
     label_table = Dict{Int,Int}()
     code = SyntaxList()
     for ex in input_code
-        k = kind(ex)
+        k = head(ex)
         ex_out = nothing
-        if k == K"=" && (b = get_binding(ctx, ex[1]); b.is_ssa || b.kind == :typevar)
+        if k == :(=) && (b = get_binding(ctx, ex[1]); b.is_ssa || b.kind == :typevar)
             lhs_id = syntax_id(ex[1])
             @jl_assert(!haskey(ssa_rewrites, lhs_id),
                        (ex, "multiple assignments to ssavalue"))
@@ -1209,9 +1211,9 @@ function renumber_body(ctx, input_code, slot_rewrites)
                 ssa_rewrites[lhs_id] = length(code) + 1
                 ex_out = ex[2]
             end
-        elseif k == K"label"
+        elseif k == :label
             label_table[syntax_id(ex)] = length(code) + 1
-        elseif k == K"TOMBSTONE"
+        elseif k == :tombstone
             # remove statement
         else
             ex_out = ex
@@ -1241,20 +1243,20 @@ struct Slot
 end
 
 function compile_lambda(outer_ctx, ex)
-    k = kind(ex)
+    k = head(ex)
     lbs = lambda_bindings(ex[1])
     lambda_args = ex[2]
     static_parameters = ex[3]
     ctx = LinearIRContext(
-        outer_ctx, k === K"toplevel_lambda", lbs)
+        outer_ctx, k === :toplevel_lambda, lbs)
     if numchildren(ex) == 5
         tmp = ssavar(ctx, ex[5], "rett")
         ctx.rettype_ssa[] = tmp
-        compile(ctx, @ast(ctx, ex[5], [K"=" tmp ex[5]]), false, false)
+        compile(ctx, @ast(ctx, ex[5], [:(=) tmp ex[5]]), false, false)
     end
     for arg in children(lambda_args)
-        kind(arg) == K"Placeholder" && continue
-        @jl_assert kind(arg) == K"BindingId" ex
+        head(arg) == :placeholder && continue
+        @jl_assert head(arg) == :bindingid ex
         binfo = get_binding(ctx, arg)
         if binfo.is_assigned
             @jl_assert !haskey(ctx.argmap, binfo.id) ex arg
@@ -1265,18 +1267,18 @@ function compile_lambda(outer_ctx, ex)
     for (id, remapped) in pairs(ctx.argmap)
         binding = binding_ex(ctx, id)
         local_slot = binding_ex(ctx, remapped)
-        pushfirst!(ctx.code, @ast ctx binding [K"=" local_slot binding])
+        pushfirst!(ctx.code, @ast ctx binding [:(=) local_slot binding])
     end
     slots = Vector{Slot}()
     slot_rewrites = Dict{IdTag,Int}()
     for arg in children(lambda_args)
-        if kind(arg) == K"Placeholder"
+        if head(arg) == :placeholder
             # Unused functions arguments like: `_` or `::T`
             push!(slots, Slot(UNUSED, :argument,
                               getmeta(arg, :nospecialize, false)::Bool,
                               false, false, false, false))
         else
-            @jl_assert kind(arg) == K"BindingId" ex arg
+            @jl_assert head(arg) == :bindingid ex arg
             id = syntax_id(arg)
             binfo = get_binding(ctx, id)
             @jl_assert binfo.kind == :local || binfo.kind == :argument ex arg
@@ -1299,7 +1301,7 @@ function compile_lambda(outer_ctx, ex)
         end
     end
     for (i,arg) in enumerate(children(static_parameters))
-        @jl_assert kind(arg) == K"BindingId" arg
+        @jl_assert head(arg) == :bindingid arg
         id = syntax_id(arg)
         info = get_binding(ctx.bindings, id)
         @jl_assert info.kind == :static_parameter arg
@@ -1310,7 +1312,7 @@ function compile_lambda(outer_ctx, ex)
             if s.is_nospecialize
                 s.kind === :argument || throw(LoweringError(
                     ex, "nospecialize on non-argument"))
-                push!(ns_slots, newleaf(lambda_args[i], K"slot", i))
+                push!(ns_slots, newleaf(lambda_args[i], :slot, i))
             end
         end
         if !isempty(ns_slots)
@@ -1319,7 +1321,7 @@ function compile_lambda(outer_ctx, ex)
             # all args but self
             length(ns_slots) == nargs - 1 && empty!(ns_slots)
             pushfirst!(ctx.code,
-                  @ast ctx lambda_args [K"meta" "nospecialize"::K"Symbol" ns_slots...])
+                  @ast ctx lambda_args [:meta "nospecialize"::symbol ns_slots...])
         end
     end
     code = renumber_body(ctx, ctx.code, slot_rewrites)
@@ -1327,11 +1329,11 @@ function compile_lambda(outer_ctx, ex)
     for (k, v) in ctx.meta
         meta = CompileHints(meta, k, v)
     end
-    out = @ast ctx ex [K"code_info"(;meta=meta)
-        slots::K"Slots"
-        [K"block"(ex[4]) code...]
+    out = @ast ctx ex [:code_info(;meta=meta)
+        slots::slots
+        [:block(ex[4]) code...]
     ]
-    k === K"toplevel_lambda" ? @ast(ctx, ex, [K"thunk" out]) : out
+    k === :toplevel_lambda ? @ast(ctx, ex, [:thunk out]) : out
 end
 
 """
@@ -1340,7 +1342,7 @@ statements (ie, Julia's linear/untyped IR).
 
 Most of the complexity of this pass is in lowering structured control flow (if,
 loops, etc) to gotos and exception handling to enter/leave. We also convert
-`K"BindingId"` into `K"slot"`, `K"globalref"` or `K"SSAValue"` as appropriate.
+`:bindingid` into `:slot`, `:globalref` or `:ssavalue` as appropriate.
 """
 @fzone "JL: linearize" function linearize_ir(ctx::ClosureConversionCtx, ex)
     ctx_out = LinearIRContext(ctx, false, LambdaBindings())
