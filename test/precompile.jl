@@ -4553,6 +4553,23 @@ end
 
         rebuild_script = joinpath(dir, "rebuild_dep.jl")
         write(rebuild_script, "Base.compilecache(Base.PkgId(Base.UUID(\"$dep_uuid\"), \"Dep\"))\n")
+        # Windows cannot replace a loaded file, so this case cannot happen there
+        if !Sys.iswindows()
+            # Another process replaces the file this session loaded Dep from. That build is
+            # not this session's, so it is not moved aside as if it were.
+            @test success(run_script("""
+                using Test
+                dep = Base.PkgId(Base.UUID("$dep_uuid"), "Dep")
+                using Dep
+                loaded_file = Base.pkgorigins[dep].cachepath
+                run(`\$(Base.julia_cmd()) --startup-file=no --project=$(repr(project_path)) $(repr(rebuild_script))`)
+                @test first(Base.parse_cache_buildid(loaded_file)) != Base.module_build_id(Dep)
+                Base.compilecache(dep)
+                @test Base.pkgorigins[dep].cachepath == loaded_file
+                """))
+            @test length(cachefiles("Dep")) == 2
+        end
+
         # Updating the loaded Dep again and again keeps at most two extra files for this
         # project, so it cannot push out the file of another project
         old_manifest_file = joinpath(dir, "OldManifest.toml")

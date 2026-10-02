@@ -3867,8 +3867,8 @@ end
 # replace the file. Move it to `<slot>_<n>.ji`, where the cache search still finds it.
 function move_aside_loaded_cachefile(pkg::PkgId, cachefile::String)
     @lock require_lock begin
-        origin = get(pkgorigins, pkg, nothing)
-        (origin === nothing || origin.cachepath === nothing || !samefile(origin.cachepath, cachefile)) && return nothing
+        is_loaded_cachefile(pkg, cachefile) || return nothing
+        origin = pkgorigins[pkg]
         aside_cachefile = unused_cachefile_name(cachefile)
         ocachefile = ocachefile_from_cachefile(cachefile)
         aside_ocachefile = ocachefile_from_cachefile(aside_cachefile)
@@ -3979,9 +3979,22 @@ function cachefile_project(pkg::PkgId, required_modules::Vector{Pair{PkgId,UInt1
     end
 end
 
+# Another process may have replaced the file at the loaded path since, so check the build too.
 function is_loaded_cachefile(pkg::PkgId, path::String)
-    origin = @lock require_lock get(pkgorigins, pkg, nothing)
-    return origin !== nothing && origin.cachepath !== nothing && samefile(origin.cachepath, path)
+    @lock require_lock begin
+        origin = get(pkgorigins, pkg, nothing)
+        (origin === nothing || origin.cachepath === nothing || !samefile(origin.cachepath, path)) && return false
+        # not only the registered module, since a package's `__init__` runs before registration
+        mods = get(loaded_precompiles, pkg, nothing)
+        mods === nothing && return false
+        build_id = try
+            parse_cache_buildid(path)[1]
+        catch e
+            e isa InterruptException && rethrow()
+            return false
+        end
+        return any(m -> module_build_id(m) == build_id, mods)
+    end
 end
 
 function rename_unique_ocachefile(tmppath_so::String, ocachefile_orig::String, ocachefile::String = ocachefile_orig, num = 0;
