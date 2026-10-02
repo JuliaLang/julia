@@ -428,15 +428,8 @@ end
 # min and max arguments for expm1 by type
 MAX_EXP(::Type{Float64}) =  709.7827128933845   # log 2^1023*(2-2^-52)
 MIN_EXP(::Type{Float64}) = -37.42994775023705   # log 2^-54
-MAX_EXP(::Type{Float32}) =  88.72284f0          # log 2^127 *(2-2^-23)
-MIN_EXP(::Type{Float32}) = -17.32868f0          # log 2^-25
 MAX_EXP(::Type{Float16}) =  Float16(11.09)      # log 2^15 *(2-2^-10)
 MIN_EXP(::Type{Float16}) = -Float16(8.32)       # log 2^-12
-
-Ln2INV(::Type{Float64}) = 1.4426950408889634
-Ln2(::Type{Float64}) = -0.6931471805599453
-Ln2INV(::Type{Float32}) = 1.442695f0
-Ln2(::Type{Float32}) = -0.6931472f0
 
 # log(.75) <= x <= log(1.25)
 @inline function expm1_small(x::Float64)
@@ -446,13 +439,6 @@ Ln2(::Type{Float32}) = -0.6931472f0
     p2 = exthorner(x, (1.0, .5, p))
     return fma(x, p2[1], x*p2[2])
 end
-@inline function expm1_small(x::Float32)
-    p = evalpoly(x, (0.16666666f0, 0.041666627f0, 0.008333682f0,
-                     0.0013908712f0, 0.0001933096f0))
-    p2 = exthorner(x, (1f0, .5f0, p))
-    return fma(x, p2[1], x*p2[2])
-end
-
 function expm1(x::Float64)
     T = Float64
     if -0.2876820724517809 <= x <= 0.22314355131420976
@@ -480,36 +466,41 @@ function expm1(x::Float64)
 end
 
 function expm1(x::Float32)
-    x > MAX_EXP(Float32) && return Inf32
-    x < MIN_EXP(Float32) && return -1f0
-    if -0.2876821f0 <=x <= 0.22314355f0
-        return expm1_small(x)
+    # Computed in Float64 using the Float64 exp table: with x = (k + j/256 + r/256)*log(2),
+    # expm1(x) = scale*(1 + p) - 1 where scale = 2^k*2^(j/256) and p = 2^(r/256) - 1.
+    # scale - 1 is exact whenever it cancels, so the result rounds (almost) only once.
+    if (reinterpret(UInt32, x) << 1) >= 0x8700_0000 # |x| >= 256, ±Inf, or NaN
+        isnan(x) && return x
+        return x > 0 ? Inf32 : -1.0f0
     end
-    x = Float64(x)
-    N_float = round(x*Ln2INV(Float64))
-    N = unsafe_trunc(Int64, N_float)
-    r = muladd(N_float, Ln2(Float64), x)
-    hi = evalpoly(r, (1.0, .5, 0.16666667546642386, 0.041666183019487026,
-                      0.008332997481506921, 0.0013966479175977883, 0.0002004037059220124))
-    small_part = r*hi
-    twopk = reinterpret(Float64, (N+1023) << 52)
-    return Float32(muladd(twopk, small_part, twopk-1.0))
+    t = Float64(x) * LogBo256INV(Val(:ℯ), Float64)
+    N_float = t + MAGIC_ROUND_CONST(Float64)
+    N = reinterpret(UInt64, N_float) % Int32
+    r = t - (N_float - MAGIC_ROUND_CONST(Float64)) # exact, |r| <= 1/2
+    jU, _ = table_unpack(N)
+    scale = reinterpret(Float64, reinterpret(Int64, jU) + (Int64(N >> 8) << 52))
+    p = r * evalpoly(r, (0.0027076061740622863, 3.6655655969101062e-6, 3.3083026805413713e-9))
+    return copysign(Float32(fma(scale, p, scale - 1.0)), x) # copysign keeps expm1(-0.0) == -0.0
 end
 
-function expm1(x::Float16)
-    x > MAX_EXP(Float16) && return Inf16
-    x < MIN_EXP(Float16) && return Float16(-1.0)
-    x = Float32(x)
-    if -0.2876821f0 <=x <= 0.22314355f0
-        return Float16(x*evalpoly(x, (1f0, .5f0, 0.16666628f0, 0.04166785f0, 0.008351848f0, 0.0013675707f0)))
-    end
-    N_float = round(x*Ln2INV(Float32))
-    N = unsafe_trunc(Int32, N_float)
-    r = muladd(N_float, Ln2(Float32), x)
-    hi = evalpoly(r, (1f0, .5f0, 0.16666667f0, 0.041665863f0, 0.008333111f0, 0.0013981499f0, 0.00019983904f0))
-    small_part = r*hi
-    twopk = reinterpret(Float32, (N+Int32(127)) << Int32(23))
-    return Float16(muladd(twopk, small_part, twopk-1f0))
+function expm1(a::Float16)
+    # Computed in Float32 with x = N*log(2) + r, |r| <= log(2)/2, as
+    # expm1(x) = 2^N*(e^r - 1) + (2^N - 1), where 2^N - 1 is exact, so no separate
+    # small-argument path is needed (N == 0 gives e^r - 1 directly).
+    a > MAX_EXP(Float16) && return Inf16
+    a < MIN_EXP(Float16) && return Float16(-1.0)
+    iszero(a) && return a # keeps the sign of zero
+    x = Float32(a)
+    N = round(x*(LogBo64INV(Val(:ℯ), Float32)/64))
+    r = muladd(N, 64*(LogBo64U(Val(:ℯ), Float32) + LogBo64L(Val(:ℯ), Float32)), x) # single-word -log(2), as in exp_impl(::Float16)
+    r2 = r*r
+    # e^r - 1 = r*(1 + r*q(r)) with q a degree 4 Taylor polynomial, evaluated with Estrin's scheme.
+    # Computing p in this form (rather than as r + r^2*q(r)) matters: it rounds every Float16
+    # input correctly, including ones whose correctly rounded Float32 result is a Float16 tie.
+    q = muladd(r2, muladd(r2, 0.0013888889f0, muladd(r, 0.008333334f0, 0.041666668f0)), muladd(r, 0.16666667f0, 0.5f0))
+    p = r * muladd(r, q, 1f0)
+    twopk = reinterpret(Float32, (unsafe_trunc(Int32, N) + Int32(127)) << Int32(23))
+    return Float16(fma(twopk, p, twopk - 1f0))
 end
 
 """
