@@ -1889,6 +1889,51 @@ callback27178(cb::CTF) where CTF<:CallThisFunc27178 = nothing
 get_c_func(fcn::FCN_TYPE) where {FCN_TYPE<:Function} = return make_cfunc27178(CallThisFunc27178(fcn))
 @test isa(get_c_func(sin), Ptr)
 
+# A static parameter with no value must not make `@cfunction` or `ccall` types dynamic (#27813)
+@testset "cfunction static parameters (#27813)" begin
+    @test_warn r"declares type variable S but does not use it" @eval begin
+        @noinline function cfunction27813(x::T, ::Union{Nothing,Ref{S}}) where {T,S}
+            cf = @cfunction identity Ref{T} (Ref{T},)
+            ccall(cf, Ref{T}, (Ref{T},), x)
+        end
+        @noinline cfunction_arg27813(::Ref{T}) where {T,S} =
+            @cfunction(identity, Any, (Ref{T},))
+        @noinline cfunction_ret27813(::Ref{T}) where {T,S} =
+            @cfunction(identity, Ref{T}, (Any,))
+        @noinline cfunction_undefined27813(x::T) where {T,S} =
+            @cfunction(identity, Ref{S}, (Any,))
+    end
+    ccall_conditional27813(::AbstractArray{T}, ::Union{Nothing,Ref{S}}) where {T,S} =
+        ccall(:free, Cvoid, (Ptr{T},), C_NULL)
+    @test cfunction27813(1, nothing) === 1
+    @test !occursin("jl_get_cfunction_trampoline", sprint(code_llvm, cfunction27813, (Int, Nothing)))
+    @test ccall_conditional27813([1], nothing) === nothing
+    # `T` is still resolved statically where `S` can vary at run time
+    @test !occursin("llvm.trap", sprint(code_llvm, ccall_conditional27813, (Vector{Int}, Union{Nothing,Ref})))
+
+    r = Ref{Any}("callback")
+    cf = cfunction_arg27813(r)
+    @test ccall(cf, Any, (Ref{Any},), r) === r[]
+
+    cf = cfunction_ret27813(Ref(1))
+    @test ccall(cf, Any, (Any,), 1) === 1
+    @test_throws TypeError ccall(cf, Any, (Any,), "1")
+    @test_throws ErrorException("cfunction return type Ref{Any} is invalid. Use Any or Ptr{Any} instead.") cfunction_ret27813(Ref{Any}(1))
+    @test_throws UndefVarError cfunction_undefined27813(1)
+end
+
+# Abstract struct arguments passed indirectly by the C ABI still need a known layout.
+struct CCallByRef27813{T}
+    a::Int
+    b::Int
+    c::Int
+    d::Int
+    e::Int
+end
+ccall_byref27813(@nospecialize(x), ::Union{Nothing,Ref{S}}) where {S} =
+    ccall(C_NULL, Int, (CCallByRef27813{S},), x)
+@test_throws UndefVarError(:S, :static_parameter) ccall_byref27813(CCallByRef27813{Int}(1, 2, 3, 4, 5), nothing)
+
 # issue #27215
 function once_removed()
     function mycompare(a, b)::Cint

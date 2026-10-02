@@ -799,7 +799,7 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
             return nothing
         end
     end
-    if unionall_depth(method.sig) != length(sparams) || !validate_sparams(sparams)
+    if unionall_depth(method.sig) != length(sparams) || !validate_sparams(sparams, mi_invoke)
         return nothing
     end
     # prefer using a CodeInstance gotten from the cache, since that is where the invoke target should get compiled to normally
@@ -899,9 +899,11 @@ function resolve_todo(mi::MethodInstance, call_result::Union{Nothing,LocalInfere
     return InliningTodo(mi, ir, spec_info, debuginfo, effects)
 end
 
-function validate_sparams(sparams::SimpleVector)
+# With `mi`, also accept static parameters that are undefined for every call to `mi`
+function validate_sparams(sparams::SimpleVector, mi::Union{MethodInstance,Nothing}=nothing)
     for i = 1:length(sparams)
         spᵢ = sparams[i]
+        isa(spᵢ, SimpleVector) && mi !== nothing && sparam_is_undef(mi, i) && continue
         (isa(spᵢ, SimpleVector) || has_free_typevars(spᵢ) || isvarargtype(spᵢ)) && return false
     end
     return true
