@@ -4699,4 +4699,161 @@ end
     end
 end
 
+precompile_test_harness("Ambiguities and package-image edge validation") do load_path
+    write(joinpath(load_path, "AmbigEdgeA.jl"),
+        """
+        module AmbigEdgeA
+        pruned(x::Integer, y) = 1
+        seen(x::Integer, y) = 1
+        seen(x, y::AbstractString) = 2
+        added(x::Integer, y) = 1
+        added(x, y::AbstractString) = 2
+        uncovered(x::Integer, y::Integer) = 1
+        reachable(x::Integer, y) = 1
+        reachable(x, y::AbstractString) = 2
+        removed(x::Integer, y) = 1
+        removed(x, y::AbstractString) = 2
+        pair(x::Int8, y) = 1
+        pair(x, y::AbstractString) = 2
+        pair_reachable(x::Int8, y) = 1
+        pair_reachable(x, y::AbstractString) = 2
+        end
+        """)
+    write(joinpath(load_path, "AmbigEdgeB.jl"),
+        """
+        module AmbigEdgeB
+        using AmbigEdgeA
+        pruned(x::Int8, @nospecialize(y)) = AmbigEdgeA.pruned(x, y)
+        seen(x::Int8, @nospecialize(y)) = AmbigEdgeA.seen(x, y)
+        added(x::Int8, @nospecialize(y)) = AmbigEdgeA.added(x, y)
+        uncovered(x::Int8, @nospecialize(y)) = AmbigEdgeA.uncovered(x, y)
+        reachable(x::Int8, @nospecialize(y)) = AmbigEdgeA.reachable(x, y)
+        removed(x::Int8, @nospecialize(y)) = AmbigEdgeA.removed(x, y)
+        pair(@nospecialize(x), @nospecialize(y)) = AmbigEdgeA.pair(x, y)
+        pair_reachable(@nospecialize(x), @nospecialize(y)) = AmbigEdgeA.pair_reachable(x, y)
+        precompile(pruned, (Int8, Any))
+        precompile(seen, (Int8, Any))
+        precompile(added, (Int8, Any))
+        precompile(uncovered, (Int8, Any))
+        precompile(reachable, (Int8, Any))
+        precompile(removed, (Int8, Any))
+        precompile(pair, (Any, Any))
+        precompile(pair_reachable, (Any, Any))
+        end
+        """)
+    Base.compilecache(Base.PkgId("AmbigEdgeB"))
+
+    @eval using AmbigEdgeA
+    # `pruned(x, y::AbstractString)` is fully ambiguous with `pruned(x::Integer, y)` for
+    # `(Int8, AbstractString)`, so it doesn't appear in the `ml_matches` result but should
+    # still invalidate
+    @eval AmbigEdgeA.pruned(x, y::AbstractString) = 2
+    # `seen` does not change
+    @eval AmbigEdgeA.added(x, y::AbstractChar) = 3
+    # ambiguous with each other for `(Int8, String)`
+    @eval AmbigEdgeA.uncovered(x::Union{Int8,Int16}, y::String) = 2
+    @eval AmbigEdgeA.uncovered(x::Union{Int8,Int32}, y::String) = 3
+    # more specific than `reachable(x::Integer, y)` for `(Int8, Int)`, and not ambiguous
+    @eval AmbigEdgeA.reachable(x::Int8, y::Int) = 3
+    invokelatest() do
+        Base.delete_method(which(AmbigEdgeA.removed, (Any, AbstractString)))
+    end
+    # `pair` does not change
+    # more specific than both methods for `(Int8, String)`
+    @eval AmbigEdgeA.pair_reachable(x::Int8, y::String) = 3
+    @eval using AmbigEdgeB
+
+    invokelatest() do
+        B = AmbigEdgeB
+        # the CodeInstance from the image, if it is still valid
+        function image_ci(caller, argtypes...)
+            target = Tuple{typeof(caller), argtypes...}
+            mi = nothing
+            for spec in Base.specializations(only(methods(caller)))
+                spec === nothing && continue
+                if spec.specTypes == target
+                    mi = spec
+                    break
+                end
+            end
+            @test mi !== nothing
+            ci = mi !== nothing && isdefined(mi, :cache) ? mi.cache : nothing
+            while ci !== nothing
+                ci.max_world == typemax(UInt) && return ci
+                ci = isdefined(ci, :next) ? ci.next : nothing
+            end
+            return nothing
+        end
+        # look before the call to each caller, because the call makes a new CodeInstance
+        pruned_ci = image_ci(B.pruned, Int8, Any)
+        seen_ci = image_ci(B.seen, Int8, Any)
+        added_ci = image_ci(B.added, Int8, Any)
+        uncovered_ci = image_ci(B.uncovered, Int8, Any)
+        reachable_ci = image_ci(B.reachable, Int8, Any)
+        removed_ci = image_ci(B.removed, Int8, Any)
+        pair_ci = image_ci(B.pair, Any, Any)
+        pair_reachable_ci = image_ci(B.pair_reachable, Any, Any)
+        # `inferencebarrier` prevents inference of a caller when this closure compiles
+
+        # Fully ambiguous method invalidates a not-possibly-ambiguous call
+        @test pruned_ci === nothing
+        @test_throws MethodError Base.inferencebarrier(B.pruned)(Int8(1), "hi")
+
+        # Ambiguity that inference saw keeps a possibly-ambiguous edge valid:
+        # the ambiguity already existed when the image is built, so the possibly ambiguous edge
+        # should not invalidate
+        @test seen_ci !== nothing
+        @test Base.inferencebarrier(B.seen)(Int8(1), 2) === 1
+        @test_throws MethodError Base.inferencebarrier(B.seen)(Int8(1), "hi")
+
+        # New ambiguity keeps a possibly-ambiguous edge valid
+        @test added_ci !== nothing
+        @test Base.inferencebarrier(B.added)(Int8(1), 2) === 1
+        @test_throws MethodError Base.inferencebarrier(B.added)(Int8(1), "hi")
+        @test_throws MethodError Base.inferencebarrier(B.added)(Int8(1), 'c')
+
+        # Ambiguities exclusively in the "uncovered" region of a dispatch should not cause invalidation
+        # (they already MethodError / dynamic-dispatch, even w/o ambiguity)
+        #
+        # ml_matches is overly-conservative in the presence of an ambiguity, even if it does not overlap
+        # with any valid dispatch and currently reports `has_ambig` (arguably incorrectly) so this test
+        # is broken.
+        @test_broken uncovered_ci !== nothing
+        @test Base.inferencebarrier(B.uncovered)(Int8(1), 2) === 1
+        @test_throws MethodError Base.inferencebarrier(B.uncovered)(Int8(1), "hi")
+
+        # New dispatch-reachable method invalidates a possibly-ambiguous edge
+        @test reachable_ci === nothing
+        @test Base.inferencebarrier(B.reachable)(Int8(1), 2) === 3
+        @test Base.inferencebarrier(B.reachable)(Int8(1), 1.5) === 1
+        @test_throws MethodError Base.inferencebarrier(B.reachable)(Int8(1), "hi")
+
+        # Removed ambiguity keeps a possibly-ambiguous edge valid
+        @test removed_ci !== nothing
+        @test Base.inferencebarrier(B.removed)(Int8(1), "hi") === 1
+        @test Base.inferencebarrier(B.removed)(Int8(1), 2) === 1
+
+        # Possibly-ambiguous edge with two matches:
+        # the edge stays valid while the ambiguity does not change, but a new dispatch-reachable
+        # method invalidates it
+        @test pair_ci !== nothing
+        if pair_ci !== nothing
+            edgelist = collect(Any, pair_ci.edges)
+            idx = findfirst(e -> e isa Int && e == -2, edgelist)
+            @test idx !== nothing
+            if idx !== nothing
+                @test edgelist[idx+1] isa Core.PossiblyAmbiguous
+                @test edgelist[idx+2] isa Core.CodeInstance
+                @test edgelist[idx+3] isa Core.CodeInstance
+            end
+            @test count(e -> e isa Core.PossiblyAmbiguous, edgelist) == 1
+        end
+        @test Base.inferencebarrier(B.pair)(Int8(1), 1.5) === 1
+        @test Base.inferencebarrier(B.pair)("a", "b") === 2
+        @test_throws MethodError Base.inferencebarrier(B.pair)(Int8(1), "hi")
+        @test pair_reachable_ci === nothing
+        @test Base.inferencebarrier(B.pair_reachable)(Int8(1), "hi") === 3
+    end
+end
+
 finish_precompile_test!()

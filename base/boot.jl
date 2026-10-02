@@ -690,6 +690,11 @@ struct PartialTask
     PartialTask(@nospecialize(fetch_type)) = new(fetch_type)
 end
 
+struct PossiblyAmbiguous
+    sig
+    PossiblyAmbiguous(@nospecialize(sig)) = new(sig)
+end
+
 eval(Core, quote
     GotoNode(label::Int) = $(Expr(:new, :GotoNode, :label))
     NewvarNode(slot::SlotNumber) = $(Expr(:new, :NewvarNode, :slot))

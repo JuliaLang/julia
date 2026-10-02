@@ -408,6 +408,14 @@ end
         @test Compiler.materialize_inference_edges(encoded_root.edges) ==
             Core.svec(1, atype, ci1)
 
+        # a possibly-ambiguous group does not replace a later edge to the same target
+        possibly_ambiguous_leaf = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(1, Core.PossiblyAmbiguous(atype), ci1))
+        possibly_ambiguous_root = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(possibly_ambiguous_leaf, standalone_leaf))
+        @test Compiler.materialize_inference_edges(possibly_ambiguous_root.edges) ==
+            Core.svec(1, Core.PossiblyAmbiguous(atype), ci1, ci1)
+
         regular_inf = Compiler.InferenceResult(mi, Compiler.typeinf_lattice(interp))
         regular_inf.result = Int
         regular_inf.valid_worlds = Compiler.WorldRange(world - 2, world)
