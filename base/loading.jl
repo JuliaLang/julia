@@ -3276,7 +3276,17 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
     end # release lock
 end
 
-# relative-path load
+# Check global TRACE_EVAL first, fall back to command line option
+function current_trace_eval_level()
+    if TRACE_EVAL in (:no, :loc, :full)
+        TRACE_EVAL
+    elseif TRACE_EVAL === nothing
+        x = JLOptions().trace_eval
+        x == 1 ? :loc : x == 2 ? :full : :no
+    else
+        error("Invalid TRACE_EVAL value: $TRACE_EVAL. Must be :no, :loc, or :full")
+    end
+end
 
 """
     include_string([mapexpr::Function,] m::Module, code::AbstractString, filename::AbstractString="string")
@@ -3292,45 +3302,24 @@ actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`i
 """
 function include_string(mapexpr::Function, mod::Module, code::AbstractString,
                         filename::AbstractString="string")
-    loc = LineNumberNode(1, Symbol(filename))
+    loc = LineNumberNode(1, filename)
     try
-        _parse = invokelatest(Meta.parser_for_module, mod)
-        ast = Meta.parseall(code; filename, _parse)
+        s = Meta.parseall(code; filename, mod, type=Syntax)
+        isnothing(s) && return
+        s::Syntax
         result = nothing
-        line_and_ex = Expr(:toplevel, loc, nothing)
-        for ex in ast.args
-            if ex isa LineNumberNode
-                loc = ex
-                line_and_ex.args[1] = ex
-                continue
+        for c in children(s)
+            loc = first_linenode(c)
+            if mapexpr !== identity
+                c = expr_to_syntax(mapexpr(syntax_to_expr(c)),
+                                   first_linenode(c), c.context)
             end
-            ex = mapexpr(ex)
-            # Wrap things to be eval'd in a :toplevel expr to carry line
-            # information as part of the expr.
-            line_and_ex.args[2] = ex
-            # Check global TRACE_EVAL first, fall back to command line option
-            trace_eval_setting = TRACE_EVAL
-            trace_eval = if trace_eval_setting !== nothing
-                # Convert symbol to integer value
-                setting = trace_eval_setting
-                if setting === :no
-                    0
-                elseif setting === :loc
-                    1
-                elseif setting === :full
-                    2
-                else
-                    error("Invalid TRACE_EVAL value: $(setting). Must be :no, :loc, or :full")
-                end
-            else
-                JLOptions().trace_eval
+            if (tel = current_trace_eval_level(); tel !== :no)
+                c_ex = syntax_to_expr(c)
+                tel === :full && println(stderr, "eval: ", Expr(:toplevel, loc, c_ex))
+                tel === :loc && println(stderr, "eval: ", loc)
             end
-            if trace_eval == 2 # show everything
-                println(stderr, "eval: ", line_and_ex)
-            elseif trace_eval == 1 # show top location only
-                println(stderr, "eval: ", line_and_ex.args[1])
-            end
-            result = Core.eval(mod, line_and_ex)
+            result = Core.eval(mod, c)
         end
         return result
     catch exc
@@ -3339,7 +3328,6 @@ function include_string(mapexpr::Function, mod::Module, code::AbstractString,
         rethrow(LoadError(filename, loc.line, exc))
     end
 end
-
 include_string(m::Module, txt::AbstractString, fname::AbstractString="string") =
     include_string(identity, m, txt, fname)
 
