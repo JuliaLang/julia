@@ -4551,6 +4551,29 @@ end
         @test length(cachefiles("Top")) == 2
         @test success(run_script("exit(Base.isprecompiled(Base.PkgId(Base.UUID(\"$top_uuid\"), \"Top\")) ? 0 : 1)"))
 
+        rebuild_script = joinpath(dir, "rebuild_dep.jl")
+        write(rebuild_script, "Base.compilecache(Base.PkgId(Base.UUID(\"$dep_uuid\"), \"Dep\"))\n")
+        # Updating the loaded Dep again and again keeps at most two extra files for this
+        # project, so it cannot push out the file of another project
+        old_manifest_file = joinpath(dir, "OldManifest.toml")
+        write(old_manifest_file, manifest("DepOld", "0.1.0"))
+        other_project_path = joinpath(dir, "other")
+        cp(project_path, other_project_path)
+        dep_files = cachefiles("Dep")
+        @test success(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$other_project_path $rebuild_script`,
+                             "JULIA_DEPOT_PATH" => depot))
+        other_file = only(setdiff(cachefiles("Dep"), dep_files))
+        for next_manifest_file in (old_manifest_file, new_manifest_file, old_manifest_file, new_manifest_file)
+            @test success(run_script("""
+                dep = Base.PkgId(Base.UUID("$dep_uuid"), "Dep")
+                using Dep
+                cp($(repr(next_manifest_file)), $(repr(manifest_file)); force=true)
+                @lock Base.require_lock delete!(Base.TOML_CACHE.d, $(repr(manifest_file)))
+                Base.compilecache(dep)
+                """))
+        end
+        @test other_file in cachefiles("Dep")
+        @test length(cachefiles("Dep")) == 4
     end end
 end
 
