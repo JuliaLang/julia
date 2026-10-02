@@ -2642,4 +2642,15 @@ let src = code_typed1((Base.RefValue{Any},)) do r
     @test count(iscall((src, Core._apply_iterate)), src.code) == 0
 end
 
+# A static parameter that is undefined for every call does not prevent a direct invoke (#27813)
+@test_warn r"declares type variable S but does not use it" @eval begin
+    @noinline undef_sparam_invoke27813(x::T) where {T,S} = x
+end
+@noinline cond_sparam_invoke27813(x::T, ::Union{Nothing,Ref{S}}) where {T,S} = x
+let code = get_code((Int,)) do x
+        undef_sparam_invoke27813(x) + cond_sparam_invoke27813(x, nothing)
+    end
+    @test count(isinvoke(:undef_sparam_invoke27813), code) == 1
+    @test count(isinvoke(:cond_sparam_invoke27813), code) == 1
+end
 end # module inline_tests
