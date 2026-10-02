@@ -698,3 +698,124 @@ let ci = method_instance(iter61667, ()).cache
     Base.iterate(A::IterInval61667, y...) = iterate(A.v, y...)
     @test ci.max_world == typemax(UInt)
 end
+
+# a new method that is only ambiguous with the callee does not invalidate a
+# possibly-ambiguous edge
+function ambig_rt_find_mi(f, target::Type)
+    for m in methods(f)
+        for spec in Base.specializations(m)
+            spec === nothing && continue
+            spec.specTypes == target && return spec
+        end
+    end
+    return nothing
+end
+function ambig_rt_edge_counts(ci::Core.CodeInstance, callee_mi::Core.MethodInstance)
+    # the number of edges from `ci` to `callee_mi`, as
+    # (possibly ambiguous, not possibly ambiguous)
+    possibly_ambiguous = other = 0
+    isdefined(ci, :edges) || return (possibly_ambiguous, other)
+    edges = ci.edges
+    i = 1
+    while i <= length(edges)
+        e = edges[i]
+        if e isa Int
+            n = abs(e)
+            group_possibly_ambiguous = edges[i+1] isa Core.PossiblyAmbiguous
+            for j in i+2:i+1+n
+                x = edges[j]
+                x isa Core.CodeInstance && (x = x.def)
+                if x === callee_mi
+                    group_possibly_ambiguous ? (possibly_ambiguous += 1) : (other += 1)
+                end
+            end
+            i += 2 + n
+        else
+            x = e
+            x isa Core.CodeInstance && (x = x.def)
+            x === callee_mi && (other += 1)
+            i += 1
+        end
+    end
+    return (possibly_ambiguous, other)
+end
+
+# the ambiguity exists at inference time, so the edge is possibly ambiguous
+ambig_rt_q(x::Integer, y) = 1
+ambig_rt_q(x, y::AbstractString) = 2
+ambig_rt_qcaller(x::Int8, @nospecialize(y)) = ambig_rt_q(x, y)
+# a caller of the caller, to test that the invalidation propagates
+ambig_rt_qouter(@nospecialize(y)) = ambig_rt_qcaller(Int8(1), y)
+let
+    @test precompile(ambig_rt_qcaller, (Int8, Any))
+    @test precompile(ambig_rt_qouter, (Any,))
+    qmi = ambig_rt_find_mi(ambig_rt_qcaller, Tuple{typeof(ambig_rt_qcaller), Int8, Any})
+    calleemi = ambig_rt_find_mi(ambig_rt_q, Tuple{typeof(ambig_rt_q), Int8, Any})
+    outermi = ambig_rt_find_mi(ambig_rt_qouter, Tuple{typeof(ambig_rt_qouter), Any})
+    @test qmi !== nothing && calleemi !== nothing && outermi !== nothing
+    qci = qmi.cache
+    outerci = outermi.cache
+    @test qci.max_world == typemax(UInt)
+    @test outerci.max_world == typemax(UInt)
+    @test ambig_rt_edge_counts(qci, calleemi) == (1, 0)
+    # only ambiguous with the callee, so the edge stays valid
+    @eval ambig_rt_q(x, y::AbstractChar) = 3
+    @test qci.max_world == typemax(UInt)
+    @test outerci.max_world == typemax(UInt)
+    @test Base.inferencebarrier(ambig_rt_qcaller)(Int8(1), 2) === 1
+    @test_throws MethodError Base.inferencebarrier(ambig_rt_qcaller)(Int8(1), "s")
+    @test_throws MethodError Base.inferencebarrier(ambig_rt_qcaller)(Int8(1), 'c')
+    # more specific than the callee for `(Int8, Integer)`, so it invalidates both callers
+    @eval ambig_rt_q(x::Int8, y::Integer) = 4
+    @test qci.max_world != typemax(UInt)
+    @test outerci.max_world != typemax(UInt)
+    @test Base.inferencebarrier(ambig_rt_qcaller)(Int8(1), 2) === 4
+end
+
+# without an ambiguity at inference time, the edge is not possibly ambiguous, so a new
+# ambiguity invalidates it
+ambig_rt_p(x::Integer, y) = 1
+ambig_rt_pcaller(x::Int8, @nospecialize(y)) = ambig_rt_p(x, y)
+let
+    @test precompile(ambig_rt_pcaller, (Int8, Any))
+    pmi = ambig_rt_find_mi(ambig_rt_pcaller, Tuple{typeof(ambig_rt_pcaller), Int8, Any})
+    calleemi = ambig_rt_find_mi(ambig_rt_p, Tuple{typeof(ambig_rt_p), Int8, Any})
+    @test pmi !== nothing && calleemi !== nothing
+    pci = pmi.cache
+    @test pci.max_world == typemax(UInt)
+    @test ambig_rt_edge_counts(pci, calleemi) == (0, 1)
+    @eval ambig_rt_p(x, y::AbstractString) = 2
+    @test pci.max_world != typemax(UInt)
+    @test_throws MethodError Base.inferencebarrier(ambig_rt_pcaller)(Int8(1), "s")
+    @test Base.inferencebarrier(ambig_rt_pcaller)(Int8(1), 2) === 1
+end
+
+# a method that creates a specificity cycle also makes points within its own signature
+# ambiguous that dispatched to other methods before, so it invalidates the caller
+abstract type AmbigCycRTAbsC end
+abstract type AmbigCycRTCplx <: AmbigCycRTAbsC end
+struct AmbigCycRTCplxF64 <: AmbigCycRTCplx end
+abstract type AmbigCycRTAbsF end
+struct AmbigCycRTF <: AmbigCycRTAbsF end
+struct AmbigCycRTOtherC <: AmbigCycRTAbsC end
+Base.Experimental.@max_methods 5 function ambig_rt_cyc end
+ambig_rt_cyc(::AmbigCycRTCplx) = 1
+ambig_rt_cyc(::AmbigCycRTAbsC) = 2
+ambig_rt_cyc(::Union{AmbigCycRTF, AmbigCycRTAbsC}) = 3
+ambig_rt_cyc(::AmbigCycRTAbsF) = 4
+ambig_rt_cyccaller(@nospecialize(x)) = ambig_rt_cyc(x)
+let
+    @test Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTF()) === 3
+    @test precompile(ambig_rt_cyccaller, (Any,))
+    cmi = ambig_rt_find_mi(ambig_rt_cyccaller, Tuple{typeof(ambig_rt_cyccaller), Any})
+    @test cmi !== nothing
+    cci = cmi.cache
+    @test cci.max_world == typemax(UInt)
+    @test !any(e -> e isa Core.PossiblyAmbiguous, cci.edges)
+    # create the cycle
+    @eval ambig_rt_cyc(::Union{AmbigCycRTCplxF64, AmbigCycRTAbsF}) = 5
+    @test cci.max_world != typemax(UInt)
+    @test_throws MethodError Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTF())
+    @test_throws MethodError Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTCplxF64())
+    @test Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTOtherC()) === 2
+end
