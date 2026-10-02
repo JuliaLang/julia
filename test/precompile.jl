@@ -4595,6 +4595,24 @@ end
         end
         @test other_file in cachefiles("Dep")
         @test length(cachefiles("Dep")) == 4
+
+        # If the loaded file cannot be moved aside, it stays and the new build gets another name
+        @test success(run_script("""
+            using Test
+            dep = Base.PkgId(Base.UUID("$dep_uuid"), "Dep")
+            using Dep
+            loaded_file = Base.pkgorigins[dep].cachepath
+            @eval Base.Filesystem function rename(src::String, dst::String)
+                isfile(src) && samefile(src, \$loaded_file) && throw(Base.IOError("rename refused for the test", -1))
+                invoke(rename, Tuple{AbstractString,AbstractString}, src, dst)
+            end
+            cp($(repr(old_manifest_file)), $(repr(manifest_file)); force=true)
+            @lock Base.require_lock delete!(Base.TOML_CACHE.d, $(repr(manifest_file)))
+            new_file, _ = Base.compilecache(dep)
+            @test new_file != loaded_file
+            @test Base.pkgorigins[dep].cachepath == loaded_file
+            @test first(Base.parse_cache_buildid(loaded_file)) == Base.module_build_id(Dep)
+            """))
     end end
 end
 

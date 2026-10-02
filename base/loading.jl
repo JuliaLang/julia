@@ -3813,6 +3813,12 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             chmod(tmppath, filemode(spec.path) & 0o777 | 0o200)
 
             moved_ocachefile = pkg.uuid === nothing ? nothing : move_aside_loaded_cachefile(pkg, cachefile)
+            if moved_ocachefile === false
+                # the loaded build could not be moved, so leave it there and use another name
+                moved_ocachefile = nothing
+                cachefile = unused_cachefile_name(cachefile)
+                ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
+            end
 
             # prune the directory with cache files
             if pkg.uuid !== nothing
@@ -3865,6 +3871,8 @@ end
 # A package loaded in this session keeps the cache file it was loaded from. Workers started
 # by this session look up that build by its id, so a new build for the same slot must not
 # replace the file. Move it to `<slot>_<n>.ji`, where the cache search still finds it.
+# Return the new path of its library, `nothing` if no loaded build is there, or `false` if
+# it could not be moved.
 function move_aside_loaded_cachefile(pkg::PkgId, cachefile::String)
     @lock require_lock begin
         is_loaded_cachefile(pkg, cachefile) || return nothing
@@ -3897,7 +3905,7 @@ function move_aside_loaded_cachefile(pkg::PkgId, cachefile::String)
         catch e
             e isa IOError || rethrow()
             @debug "Could not move the loaded cache file of $(repr("text/plain", pkg)) aside" cachefile exception=e
-            return nothing
+            return false
         end
         origin.cachepath = aside_cachefile
         return aside_ocachefile
