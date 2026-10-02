@@ -277,6 +277,11 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                     local min_valid2::UInt, max_valid2::UInt
                     edge = initial.callees[j]
                     @assert !(edge isa Method) "unexpected Method edge indicates corrupt edges list creation"
+                    possibly_ambiguous = edge isa Core.PossiblyAmbiguous
+                    if possibly_ambiguous
+                        j += 1
+                        edge = initial.callees[j]
+                    end
 
                     if edge isa CodeInstance
                         # Convert CodeInstance to MethodInstance for validation (like original)
@@ -285,14 +290,10 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
 
                     if edge isa MethodInstance
                         sig = edge.specTypes
-                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, #=possibly_ambiguous=#false, workspace)
+                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, possibly_ambiguous, workspace)
                         j += 1
                     elseif edge isa Int
                         sig = initial.callees[j+1]
-                        possibly_ambiguous = sig isa Core.PossiblyAmbiguous
-                        if possibly_ambiguous
-                            sig = (sig::Core.PossiblyAmbiguous).sig
-                        end
                         nmatches = abs(edge)
                         fully_covers = edge > 0
                         min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, possibly_ambiguous, workspace)

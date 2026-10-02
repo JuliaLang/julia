@@ -4842,7 +4842,8 @@ precompile_test_harness("Ambiguities and package-image edge validation") do load
             idx = findfirst(e -> e isa Int && e == -2, edgelist)
             @test idx !== nothing
             if idx !== nothing
-                @test edgelist[idx+1] isa Core.PossiblyAmbiguous
+                @test idx > 1 && edgelist[idx-1] isa Core.PossiblyAmbiguous
+                @test edgelist[idx+1] isa Type
                 @test edgelist[idx+2] isa Core.CodeInstance
                 @test edgelist[idx+3] isa Core.CodeInstance
             end
