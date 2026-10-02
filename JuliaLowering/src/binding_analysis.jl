@@ -290,6 +290,23 @@ function du_visit!(ctx, state::DefUseState, e)
             return false
         end
 
+    elseif k === :&& || k === :||
+        # A nested condition chain: only its first term always executes, so
+        # treat the rest like branches of an `if`
+        has_label = du_visit!(ctx, state, e[1])
+        prev = copy(state.live)
+        later_label = false
+        for child in children(e)[2:end]
+            later_label |= du_visit!(ctx, state, child)
+            du_kill!(state)
+        end
+        if later_label
+            return true
+        else
+            du_restore!(state, prev)
+            return has_label
+        end
+
     elseif k === :_while || k === :_do_while
         prev = copy(state.live)
         old_decl = du_enter_loop!(state)
