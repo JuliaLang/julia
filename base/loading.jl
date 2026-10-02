@@ -3960,7 +3960,9 @@ end
 # The project to name a new cache after. A package from another environment in the load
 # path, such as the default one, is named after that environment when the build matches its
 # manifest, so the projects that use it share one file. A build against other versions
-# from the active project is named after the active project.
+# from the active project is named after the active project. So is a build whose
+# dependencies have preferences, since those can differ between projects and the name only
+# covers the package's own.
 function cachefile_project(pkg::PkgId, required_modules::Vector{Pair{PkgId,UInt128}})
     active = something(active_project(), "")
     @lock require_lock begin
@@ -3974,6 +3976,7 @@ function cachefile_project(pkg::PkgId, required_modules::Vector{Pair{PkgId,UInt1
             path = locate_package(dep)
             spec = manifest_uuid_load_spec(env, dep)
             (path !== nothing && spec isa PkgLoadSpec && samefile(spec.path, path)) || return active
+            isempty(get_preferences(dep.uuid)) || return active
         end
         return project_file
     end

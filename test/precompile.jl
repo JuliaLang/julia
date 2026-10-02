@@ -4602,7 +4602,15 @@ end
             path = joinpath(dir, "dev", dirname)
             mkpath(joinpath(path, "src"))
             write(joinpath(path, "Project.toml"), "name = \"Dep\"\nuuid = \"$dep_uuid\"\nversion = \"$version\"\n")
-            write(joinpath(path, "src", "Dep.jl"), "module Dep\nend\n")
+            # a compile-time preference, so projects that set it differently build Dep differently
+            write(joinpath(path, "src", "Dep.jl"), """
+                module Dep
+                const flavor = let uuid = Base.UUID("$dep_uuid")
+                    Base.record_compiletime_preference(uuid, "flavor")
+                    get(Base.get_preferences(uuid), "flavor", nothing)
+                end
+                end
+                """)
         end
         top_path = joinpath(dir, "dev", "Top")
         mkpath(joinpath(top_path, "src"))
@@ -4629,10 +4637,10 @@ end
             uuid = "$top_uuid"
             version = "0.1.0"
             """)
-        function project(name, dirname, version)
+        function project(name, dirname, version; prefs="")
             path = joinpath(dir, name)
             mkpath(path)
-            write(joinpath(path, "Project.toml"), "[deps]\nDep = \"$dep_uuid\"\n")
+            write(joinpath(path, "Project.toml"), "[deps]\nDep = \"$dep_uuid\"\n" * prefs)
             write(joinpath(path, "Manifest.toml"), "manifest_format = \"2.0\"\n\n" * dep_entry(dirname, version))
             return path
         end
@@ -4659,6 +4667,17 @@ end
         @test using_top(same_a)
         @test using_top(other)
         @test length(top_files()) == 2
+        # Projects that set different preferences for Dep keep their own builds of Top
+        # rather than replacing one shared file on every switch
+        pref_a = project("pref_a", "DepOld", "0.1.0"; prefs="\n[preferences.Dep]\nflavor = \"a\"\n")
+        pref_b = project("pref_b", "DepOld", "0.1.0"; prefs="\n[preferences.Dep]\nflavor = \"b\"\n")
+        @test using_top(pref_a)
+        @test using_top(pref_b)
+        @test length(top_files()) == 4
+        top_builds() = Dict(f => Base.parse_cache_buildid(joinpath(compiled, "Top", f)) for f in top_files())
+        builds = top_builds()
+        @test using_top(pref_a)
+        @test top_builds() == builds
     end end
 end
 
