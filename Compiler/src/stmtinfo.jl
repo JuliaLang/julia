@@ -92,10 +92,12 @@ function _materialize_inference_edges!(edges::Vector{Any}, source,
             for j = i:last
                 push!(edges, source[j])
             end
-            for j = i + 2:last
-                target = source[j]
-                if target isa Union{Method,MethodInstance,CodeInstance,Core.Binding}
-                    push!(standalone, target)
+            if !(source[i + 1] isa PossiblyAmbiguous)
+                for j = i + 2:last
+                    target = source[j]
+                    if target isa Union{Method,MethodInstance,CodeInstance,Core.Binding}
+                        push!(standalone, target)
+                    end
                 end
             end
             i = last + 1
@@ -199,31 +201,34 @@ function method_match_edge(info::MethodMatchInfo, i::Int, mi_edge::Bool)
         specialize_method(match) : match.method
 end
 
-function has_encoded_lookup(edges::Vector{Any}, info::MethodMatchInfo,
-                            encoded_nmatches::Int, mi_edge::Bool)
+function find_encoded_lookup(edges::Vector{Any}, info::MethodMatchInfo,
+                             encoded_nmatches::Int, mi_edge::Bool)
     i = 1
     while i <= length(edges)
         entry = edges[i]
         if entry isa Int
             n = abs(entry)
             next_i = i + 2 + n
-            if next_i - 1 <= length(edges) && entry === encoded_nmatches &&
-                    edges[i + 1] == info.atype
-                matches = true
-                for j = 1:n
-                    if edges[i + 1 + j] !== method_match_edge(info, j, mi_edge)
-                        matches = false
-                        break
+            if next_i - 1 <= length(edges) && entry === encoded_nmatches
+                atypeᵢ = edges[i + 1]
+                atypeᵢ isa PossiblyAmbiguous && (atypeᵢ = atypeᵢ.sig)
+                if atypeᵢ == info.atype
+                    matches = true
+                    for j = 1:n
+                        if edges[i + 1 + j] !== method_match_edge(info, j, mi_edge)
+                            matches = false
+                            break
+                        end
                     end
+                    matches && return i + 1
                 end
-                matches && return true
             end
             i = next_i
         else
             i += 1
         end
     end
-    return false
+    return 0
 end
 
 function add_method_match_proofs!(edges::Vector{Any}, info::MethodMatchInfo,
@@ -249,7 +254,8 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
         end
     end
     nmatches = length(info.results)
-    if nmatches == length(info.edges) == 1 && fully_covering(info)
+    possibly_ambiguous = any_ambig(info)
+    if !possibly_ambiguous && nmatches == length(info.edges) == 1 && fully_covering(info)
         # try the optimized format for the representation, if possible and applicable
         # if this doesn't succeed, the backedge will be less precise,
         # but the forward edge will maintain the precision
@@ -270,8 +276,9 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
     # add check for whether this lookup already existed in the edges list
     # encode nmatches as negative if fully_covers is false
     encoded_nmatches = fully_covering(info) ? nmatches : -nmatches
-    if !has_encoded_lookup(edges, info, encoded_nmatches, mi_edge)
-        push!(edges, encoded_nmatches, info.atype)
+    sigidx = find_encoded_lookup(edges, info, encoded_nmatches, mi_edge)
+    if sigidx == 0
+        push!(edges, encoded_nmatches, possibly_ambiguous ? PossiblyAmbiguous(info.atype) : info.atype)
         for i = 1:nmatches
             edge = method_match_edge(info, i, mi_edge)
             if edge isa CodeInstance
@@ -279,6 +286,9 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
             end
             push!(edges, edge)
         end
+    elseif !possibly_ambiguous && edges[sigidx] isa PossiblyAmbiguous
+        # another call with this signature does not expect the ambiguity
+        edges[sigidx] = info.atype
     end
     add_method_match_proofs!(edges, info, mi_edge)
     nothing
