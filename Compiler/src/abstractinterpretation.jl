@@ -2953,8 +2953,6 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         arginfo::ArgInfo, si::StmtInfo, vtypes::Union{VarTable,Nothing},
         sv::AbsIntState, max_methods::Int = get_max_methods(interp, f, sv))
     (; fargs, argtypes) = arginfo
-    argtypes::Vector{Any} = arginfo.argtypes  # declare type because the closure below captures `argtypes`
-    fargs = arginfo.fargs
     la = length(argtypes)
     𝕃ᵢ = typeinf_lattice(interp)
     if isa(f, Builtin)
@@ -3106,12 +3104,9 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
                 end
                 pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
                 typevar_argtypes = Any[n, lb_var, ub_var]
-                effects = builtin_effects(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
-                if effects.nothrow
-                    exct = Union{}
-                else
-                    exct = builtin_exct(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
-                end
+                local effects = builtin_effects(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
+                local exct = effects.nothrow ? Union{} :
+                    builtin_exct(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
                 return CallMeta(pT, exct, effects, call.info)
             end
         end

@@ -5,8 +5,7 @@ include("testhelpers/withlocales.jl")
 
 # Tests that do not really go anywhere else
 
-# Modify when (intentionally) changing the number of boxes in Base methods
-@test length(Test.detect_closure_boxes(Base)) == 3
+@test isempty(Test.detect_closure_boxes(Base))
 
 # test @assert macro
 @test_throws AssertionError (@assert 1 == 2)

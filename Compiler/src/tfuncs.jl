@@ -1505,19 +1505,18 @@ end
         op = unwrapva(argtypes[op_argi])
         v = unwrapva(argtypes[v_argi])
         callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true, si.saw_latestworld), vtypes, sv, #=max_methods=#1)
-        TF = Core.Box(TF)
-        RT = Core.Box(RT)
+        TF0 = TF
+        RT0 = RT
         return Future{CallMeta}(callinfo, interp, sv) do callinfo, interp, sv
-            TF = TF.contents
-            RT = RT.contents
+            local TF = TF0
+            local RT = RT0
             TF2 = tmeet(ipo_lattice(interp), callinfo.rt, widenconst(TF))
             if TF2 === Bottom
                 RT = Bottom
             elseif isconcretetype(RT) && has_nontrivial_extended_info(𝕃ᵢ, TF2) # isconcrete condition required to form a PartialStruct
                 RT = PartialStruct(fallback_lattice, RT, Union{Nothing,Bool}[false,false], Any[TF, TF2])
             end
-            info = ModifyOpInfo(callinfo.info)
-            return CallMeta(RT, Any, Effects(), info)
+            return CallMeta(RT, Any, Effects(), ModifyOpInfo(callinfo.info))
         end
     end
     return Future(CallMeta(RT, Any, Effects(), info))
@@ -3479,8 +3478,8 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     # Run the abstract_call without restricting abstract call
     # sites. Otherwise, our behavior model of abstract_call
     # below will be wrong.
+    old_restrict = isa(sv, InferenceState) && sv.restrict_abstract_call_sites
     if isa(sv, InferenceState)
-        old_restrict = sv.restrict_abstract_call_sites
         sv.restrict_abstract_call_sites = false
     end
     # TODO: Could pass vtypes here to enable Conditional/MustAlias refinements
@@ -3488,13 +3487,12 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     # slot-dependent refinements will be widened. This is conservative but
     # may miss some precision opportunities.
     call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, nothing, sv, #=max_methods=#-1)
-    tt = Core.Box(tt)
     return Future{CallMeta}(call, interp, sv) do call, _, sv
         if isa(sv, InferenceState)
             sv.restrict_abstract_call_sites = old_restrict
         end
         info = MethodResultPure(ReturnTypeCallInfo(call.info))
-        rt = widenslotwrapper(call.rt)
+        local rt = widenslotwrapper(call.rt)
         if isa(rt, Const)
             # output was computed to be constant
             return CallMeta(Const(typeof(rt.val)), Union{}, RT_CALL_EFFECTS, info)
@@ -3508,7 +3506,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
             # in two ways: both as being a subtype of this, and
             # because of LimitedAccuracy causes
             return CallMeta(Type{<:rt}, Union{}, RT_CALL_EFFECTS, info)
-        elseif isa(tt.contents, Const) || isconstType(tt.contents)
+        elseif isa(tt, Const) || isconstType(tt)
             # input arguments were known for certain
             # XXX: this doesn't imply we know anything about rt
             return CallMeta(Const(rt), Union{}, RT_CALL_EFFECTS, info)
