@@ -4810,4 +4810,16 @@ end
         while (n < 3 && (a || b)) || (n < 1 && e); n += 1; end
         @test n == (a | b ? 3 : e ? 1 : 0)
     end
+    # an assignment in a skipped term of a nested chain does not define a captured variable
+    function g1(c)
+        if (c && (x = 1; true)) || (h = () -> x; false)
+            return 1
+        end
+        return 2
+    end
+    g2(c) = (y = (c && (x = 1; true)) || (h = () -> x; false); h)
+    g3(c) = ((c || (x = 1; false)) && (h = () -> x; true); h)
+    @test g1(false) == 2
+    @test_throws UndefVarError(:x, :local) g2(false)()
+    @test_throws UndefVarError(:x, :local) g3(true)()
 end

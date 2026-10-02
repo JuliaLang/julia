@@ -4187,6 +4187,16 @@ f(x) = yt(x)
                    ;; variable initialization
                    (begin (kill) #t)
                    (begin (restore prev) #f))))
+            ((memq (car e) '(&& |\|\||))
+             ;; a nested condition chain: only its first term always executes,
+             ;; so treat the rest like branches of an `if`
+             (let* ((first (visit (cadr e)))
+                    (prev  (table.clone live)))
+               (if (eager-any (lambda (e) (begin0 (visit e)
+                                                  (kill)))
+                              (cddr e))
+                   (begin (kill) #t)
+                   (begin (restore prev) first))))
             ((or (eq? (car e) '_while) (eq? (car e) '_do_while))
              (let ((prev  (table.clone live))
                    (old-decls (enter-loop!)))
