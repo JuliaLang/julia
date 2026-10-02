@@ -300,11 +300,10 @@ include("threadcall.jl")
 # Compiler frontend
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
 JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
-
-# May be replaced in incremental sysimage build after-the-fact
-const JuliaLowering = nothing
-
 set_syntax_version(Base, VERSION)
+
+include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
+JuliaLowering.activate!(true; freeze_world_age=false)
 
 # code loading
 include("uuid.jl")
@@ -619,9 +618,10 @@ function __init__()
     else
         JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
     end
-
-    if get_bool_env("JULIA_USE_FLISP_LOWERING", true) === false
-        JuliaLowering.activate!()
+    if get_bool_env("JULIA_USE_FLISP_LOWERING", true) === true
+        JuliaLowering.activate!(false)
+    else
+        JuliaLowering.activate!(true; freeze_world_age=true)
     end
 
     CoreLogging.global_logger(CoreLogging.ConsoleLogger())

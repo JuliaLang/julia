@@ -759,7 +759,7 @@ end
     if !(ex isa SyntaxTree)
         ex = expr_to_est(ex)
     end
-    return invoke_in_lowering_world(_lower_and_eval, mod, ex, soft_scope)
+    return _lower_and_eval(mod, ex, soft_scope)
 end
 
 function _lower_and_eval(mod::Module, st::SyntaxTree,
@@ -772,7 +772,9 @@ function _eval(mod::Module, iter::LoweringIterator; soft_scope::Union{Nothing,Bo
     modules = Module[mod]
     result = nothing
     while true
-        thunk = lower_step(iter, modules[end], Base.get_world_counter(); soft_scope)::Core.SimpleVector
+        thunk = invoke_in_lowering_world(
+            ()->lower_step(iter, modules[end],
+                           Base.get_world_counter(); soft_scope))::Core.SimpleVector
         type = thunk[1]::Symbol
         if type == :done
             break

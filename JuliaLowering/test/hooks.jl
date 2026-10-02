@@ -22,14 +22,8 @@
         @test Core.eval(test_mod, lwr) === 2
     end
 
-    function jeval(str)
-        prog = parseall(Expr, str)
-        try
-            JL.activate!()
-            return Core.eval(test_mod, prog)
-        finally
-            JL.activate!(false)
-        end
+    jeval(str) = with_lowering(true) do
+        Core.eval(test_mod, parseall(Expr, str))
     end
     @testset "integration: `JuliaLowering.activate!`" begin
         out = jeval("global asdf = 1")
