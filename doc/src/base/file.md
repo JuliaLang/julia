@@ -33,6 +33,8 @@ Base.Filesystem.mv
 Base.Filesystem.rename
 Base.Filesystem.rm
 Base.Filesystem.touch
+Base.Filesystem.trylockfile
+Base.Filesystem.unlockfile
 Base.Filesystem.tempname
 Base.Filesystem.tempdir
 Base.Filesystem.mktemp(::AbstractString)

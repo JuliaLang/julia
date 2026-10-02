@@ -2289,3 +2289,28 @@ end
 end
 
 @test Base.infer_return_type(stat, (String,)) == Base.Filesystem.StatStruct
+
+@testset "trylockfile" begin
+    mktempdir() do dir
+        path = joinpath(dir, "file")
+        write(path, "data")
+        fopen() = Base.Filesystem.open(path, Base.Filesystem.JL_O_RDWR)
+        a, b, c = fopen(), fopen(), fopen()
+        try
+            @test Base.Filesystem.trylockfile(a; shared=true)
+            @test Base.Filesystem.trylockfile(b; shared=true)
+            @test !Base.Filesystem.trylockfile(c)
+            # the file can still be read, renamed and removed while it is locked
+            @test read(path, String) == "data"
+            mv(path, path * "2")
+            Base.Filesystem.unlockfile(a)
+            @test !Base.Filesystem.trylockfile(c)
+            close(b)
+            @test Base.Filesystem.trylockfile(c)
+            @test !Base.Filesystem.trylockfile(a; shared=true)
+            rm(path * "2")
+        finally
+            close(a); close(b); close(c)
+        end
+    end
+end
