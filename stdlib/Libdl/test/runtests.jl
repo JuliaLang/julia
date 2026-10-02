@@ -52,6 +52,15 @@ else
     dirname(abspath(Libdl.dlpath("libjulia-internal")))
 end
 
+# libjulia-internal is a shared library here, so it reports its own path
+let p = ccall(:jl_get_libjulia_internal_path, Cstring, ())
+    @test p != C_NULL
+    Sys.iswindows() && Libc.free(p)
+end
+if !Base.DARWIN_FRAMEWORK
+    @test realpath(Base.Libc.Libdl.private_shlibdir()) == realpath(private_libdir)
+end
+
 @test !isempty(Libdl.find_library(["libccalltest"], [private_libdir]))
 @test !isempty(Libdl.find_library("libccalltest", [private_libdir]))
 @test !isempty(Libdl.find_library(:libccalltest, [private_libdir]))
