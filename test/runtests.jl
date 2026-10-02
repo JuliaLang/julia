@@ -94,6 +94,14 @@ for prependme in ["LinearAlgebra", "SparseArrays"]
     deleteat!(tests, prependme_test_ids)
     prepend!(tests, prependme_tests)
 end
+# `choosetests` placed `ambiguous` first so that it runs in a fresh worker, before any
+# other test has had a chance to define methods (e.g. constructors of test-only `Number`
+# subtypes) that are ambiguous with methods in `Base`. Keep it in front of the tests
+# that were just moved forward.
+if "ambiguous" in tests
+    splice!(tests, findfirst(isequal("ambiguous"), tests))
+    pushfirst!(tests, "ambiguous")
+end
 
 import LinearAlgebra
 cd(@__DIR__) do
