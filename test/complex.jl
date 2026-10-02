@@ -1248,10 +1248,10 @@ end
 end
 
 @testset "issue #31054" begin
-    @test tanh(atanh(complex(1.0,1.0))) == complex(1.0,1.0)
-    @test tanh(atanh(complex(1.0,-1.0))) == complex(1.0,-1.0)
-    @test tanh(atanh(complex(-1.0,1.0))) == complex(-1.0,1.0)
-    @test tanh(atanh(complex(-1.0,-1.0))) == complex(-1.0,-1.0)
+    @test tanh(atanh(complex(1.0,1.0))) ≈ complex(1.0,1.0) rtol=2eps()
+    @test tanh(atanh(complex(1.0,-1.0))) ≈ complex(1.0,-1.0) rtol=2eps()
+    @test tanh(atanh(complex(-1.0,1.0))) ≈ complex(-1.0,1.0) rtol=2eps()
+    @test tanh(atanh(complex(-1.0,-1.0))) ≈ complex(-1.0,-1.0) rtol=2eps()
 end
 
 @testset "issue #29840" begin

@@ -11,6 +11,11 @@
 ## software is freely granted, provided that this notice
 ## is preserved.
 
+struct DoubleFloat64
+    hi::Float64
+    lo::Float64
+end
+
 # Bits of 1/2π
 #   1/2π == sum(x / 0x1p64^i for i,x = enumerate(INV_2PI))
 # Can be obtained by:
