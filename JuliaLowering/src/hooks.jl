@@ -8,24 +8,21 @@ Returns an svec with the lowered code (usually expr) as its first element, and
 """
 function core_lowering_hook(@nospecialize(code), mod::Module, file::String="none",
                             line::Int=0, world::UInt=typemax(Csize_t), _warn::Bool=false)
+    return invoke_in_lowering_world(_core_lowering_hook, code, mod, file, line, world, _warn)
+end
+
+function _core_lowering_hook(@nospecialize(code), mod::Module, file::String,
+                             line::Int, world::UInt, _warn::Bool)
     if !(code isa SyntaxTree || code isa Expr)
         # e.g. LineNumberNode, integer...
         return Core.svec(code)
     end
 
-    if _has_v1_13_hooks && Core._lower === core_lowering_hook &&
-            unsafe_load(cglobal(:jl_lowering_world, Csize_t)) == 0
-        # Refuse to run as `Core._lower` without a pinned world
-        error("`Core._lower` was set without pinning the lowering world; use `JuliaLowering.activate!()`")
-    end
     local st0, st1 = nothing, nothing
     try
         st0 = code isa Expr ? expr_to_est(code, LineNumberNode(line, file)) : code
         if head(st0) === :toplevel || head(st0) === :module
             return Core.svec(code)
-        elseif head(st0) === :doc && numchildren(st0) >= 2 && head(st0[2]) === :module
-            # TODO: this ignores module docstrings for now
-            return Core.svec(est_to_expr(st0[2]))
         end
         st0 = rebase_layers(st0, mod)
         st1 = expand_forms_1(st0, world, true)
@@ -55,19 +52,30 @@ end
 
 const _has_v1_13_hooks = isdefined(Core, :_lower)
 
-function activate!(enable=true)
+function activate!(enable=true; freeze_world_age=true)
     if !_has_v1_13_hooks
         error("Cannot use JuliaLowering without `Core._lower` binding or in $VERSION < 1.13")
     end
 
+    _lowering_world[] = (enable && freeze_world_age) ? Base.get_world_counter() : UInt(0)
     if enable
         Core._setlowerer!(core_lowering_hook)
         Core._set_toplevel_eval!(JuliaLowering.eval)
-        ccall(:jl_set_lowering_world, Cvoid, (Csize_t,), Base.get_world_counter())
     else
         Core._setlowerer!(Base.fl_lower)
-        Core._set_toplevel_eval!(nothing)
-        # Unlike JL, `jl_lower` dispatches the flisp wrapper at the latest world
-        ccall(:jl_set_lowering_world, Cvoid, (Csize_t,), 0)
+        Core._set_toplevel_eval!(_fl_toplevel_eval)
     end
+end
+
+function _fl_toplevel_eval(mod::Module, @nospecialize(x))
+    ex = if x isa SyntaxTree
+        Expr(:toplevel, first_linenode(x), est_to_expr(x))
+    else
+        x
+    end
+    ccall(:jl_toplevel_eval, Any, (Any, Any), mod, ex)
+end
+
+function __init__()
+    _lowering_world[] = 0
 end

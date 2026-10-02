@@ -405,28 +405,21 @@ macro newmod(name="newmod_$(string(__source__))", parentmod=__module__,
          Expr(Symbol("latestworld-if-toplevel")), :mod)
 end
 
-function _flisp_toplevel_eval(mod::Module, @nospecialize(ex))
-    if ex isa Base.Syntax
-        ex = Expr(:toplevel, Base.first_linenode(ex), Base.syntax_to_expr(ex))
-    end
-    ccall(:jl_toplevel_eval, Any, (Any, Any), mod, ex)
-end
-
-function with_flisp(f)
+function with_lowering(f, enable::Bool)
     lowerer = Core._lower
     toplevel_eval = Core._toplevel_eval
-    world = unsafe_load(cglobal(:jl_lowering_world, Csize_t))
-    Core._setlowerer!(Base.fl_lower)
-    Core._set_toplevel_eval!(_flisp_toplevel_eval)
-    ccall(:jl_set_lowering_world, Cvoid, (Csize_t,), 0)
+    world = JuliaLowering._lowering_world[]
     try
+        JuliaLowering.activate!(enable)
         f()
     finally
         Core._setlowerer!(lowerer)
         Core._set_toplevel_eval!(toplevel_eval)
-        ccall(:jl_set_lowering_world, Cvoid, (Csize_t,), world)
+        JuliaLowering._lowering_world[] = world
     end
 end
+
+with_flisp(f) = with_lowering(f, false)
 
 function fl_macroexpand(mod::Module, x::Expr)
     with_flisp() do
