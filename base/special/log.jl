@@ -92,52 +92,6 @@ const t_log_Float64 = ((0.0,0.0),(0.007782140442941454,-8.865052917267247e-13),
     (0.6853040030982811,6.383161517064652e-13),(0.6892332812385575,2.5144230728376075e-13),
     (0.6931471805601177,-1.7239444525614835e-13))
 
-# Float32 lookup table
-# to generate values:
-  # N=16
-  # sN = 2f0^N
-  # isN = 1f0/sN
-  # s7 = 2.0^7
-  # is7 = 1.0/s7
-  # for j=0:128
-  #   j % 4 == 0 && print("\n    ")
-  #   print(float64(Base.log(big(1.0+j*is7))),",")
-  # end
-
-const t_log_Float32 = (0.0,0.007782140442054949,0.015504186535965254,0.02316705928153438,
-    0.030771658666753687,0.0383188643021366,0.0458095360312942,0.053244514518812285,
-    0.06062462181643484,0.06795066190850775,0.07522342123758753,0.08244366921107459,
-    0.08961215868968714,0.09672962645855111,0.10379679368164356,0.11081436634029011,
-    0.11778303565638346,0.12470347850095724,0.13157635778871926,0.13840232285911913,
-    0.1451820098444979,0.15191604202584197,0.15860503017663857,0.16524957289530717,
-    0.17185025692665923,0.1784076574728183,0.184922338494012,0.19139485299962947,
-    0.19782574332991987,0.2042155414286909,0.21056476910734964,0.21687393830061436,
-    0.22314355131420976,0.22937410106484582,0.2355660713127669,0.24171993688714516,
-    0.24783616390458127,0.25391520998096345,0.25995752443692605,0.26596354849713794,
-    0.27193371548364176,0.2778684510034563,0.2837681731306446,0.28963329258304266,
-    0.2954642128938359,0.3012613305781618,0.3070250352949119,0.3127557100038969,
-    0.3184537311185346,0.324119468654212,0.329753286372468,0.3353555419211378,
-    0.3409265869705932,0.34646676734620857,0.3519764231571782,0.3574558889218038,
-    0.3629054936893685,0.3683255611587076,0.37371640979358406,0.37907835293496944,
-    0.38441169891033206,0.3897167511400252,0.394993808240869,0.4002431641270127,
-    0.4054651081081644,0.4106599249852684,0.415827895143711,0.42096929464412963,
-    0.4260843953109001,0.4311734648183713,0.43623676677491807,0.4412745608048752,
-    0.44628710262841953,0.45127464413945856,0.4562374334815876,0.46117571512217015,
-    0.46608972992459924,0.470979715218791,0.4758459048699639,0.4806885293457519,
-    0.4855078157817008,0.4903039880451938,0.4950772667978515,0.4998278695564493,
-    0.5045560107523953,0.5092619017898079,0.5139457511022343,0.5186077642080457,
-    0.5232481437645479,0.5278670896208424,0.5324647988694718,0.5370414658968836,
-    0.5415972824327444,0.5461324375981357,0.5506471179526623,0.5551415075405016,
-    0.5596157879354227,0.564070138284803,0.5685047353526688,0.5729197535617855,
-    0.5773153650348236,0.5816917396346225,0.5860490450035782,0.5903874466021763,
-    0.5947071077466928,0.5990081896460834,0.6032908514380843,0.6075552502245418,
-    0.6118015411059929,0.616029877215514,0.6202404097518576,0.6244332880118935,
-    0.6286086594223741,0.6327666695710378,0.6369074622370692,0.6410311794209312,
-    0.6451379613735847,0.6492279466251099,0.6533012720127457,0.65735807270836,
-    0.661398482245365,0.6654226325450905,0.6694306539426292,0.6734226752121667,
-    0.6773988235918061,0.6813592248079031,0.6853040030989194,0.689233281238809,
-    0.6931471805599453)
-
 logb(::Type{Float32},::Val{2})  = 1.4426950408889634
 logb(::Type{Float32},::Val{:ℯ}) = 1.0
 logb(::Type{Float32},::Val{10}) = 0.4342944819032518
@@ -206,48 +160,6 @@ end
     return fma(m_hi, u, fma(m_lo, u, m_hi*fma(fma(-u,f,2(f-u)), g, q)))
 end
 
-# Procedure 1
-@inline function log_proc1(y::Float32,mf::Float32,F::Float32,f::Float32,base=Val(:ℯ))
-    jp = unsafe_trunc(Int,128.0f0*F)-127
-
-    ## Steps 1 and 2
-    Base.@assume_effects :nothrow :noub @inbounds hi = t_log_Float32[jp]
-    l = mf*0.6931471805599453 + hi
-
-    ## Step 3
-    # @inbounds u = f*c_invF[jp]
-    # q = u*u*@horner(u,
-    #                 Float32(-0x1.00006p-1),
-    #                 Float32(0x1.55546cp-2))
-
-    ## Step 3' (alternative)
-    u = (2f0f)/(y+F)
-    v = u*u
-    q = u*v*0.08333351f0
-
-    ## Step 4
-    Float32(logb(Float32, base)*(l + (u + q)))
-end
-
-# Procedure 2
-@inline function log_proc2(f::Float32,base=Val(:ℯ))
-    ## Step 1
-    # compute in higher precision
-    u64 = Float64(2f0*f)/(2.0+f)
-    u = Float32(u64)
-    v = u*u
-
-    ## Step 2
-    q = u*v*@horner(v,
-                    0.08333332f0,
-                    0.012512346f0)
-
-    ## Step 3: not required
-
-    ## Step 4
-    Float32(logb(Float32, base)*(u64 + q))
-end
-
 @noinline log2(x::Float32)  = _log(x, Val(2),  :log2)
 @noinline log(x::Float32)   = _log(x, Val(:ℯ), :log)
 @noinline log10(x::Float32) = _log(x, Val(10), :log10)
@@ -292,38 +204,17 @@ end
 end
 
 @inline function _log(x::Float32, base, func::Symbol)
-    if x > 0f0
-        x == Inf32 && return x
-
-        # Step 2
-        if 0.939413f0 < x < 1.0644945f0
-            f = x-1f0
-            return log_proc2(f, base)
-        end
-
-        # Step 3
-        xu = reinterpret(UInt32,x)
-        m = Int(xu >> 23) & 0x00ff
-        if m == 0 # x is subnormal
-            x *= 3.3554432f7 # 0x1p25, normalise significand
-            xu = reinterpret(UInt32,x)
-            m = Int(xu >> 23) & 0x00ff - 25
-        end
-        m -= 127
-        y = reinterpret(Float32,(xu & 0x007f_ffff) | 0x3f80_0000)
-
-        mf = Float32(m)
-        F = (y + 65536.0f0) - 65536.0f0 # 0x1p-7*round(0x1p7*y)
-        f = y-F
-
-        return log_proc1(y,mf,F,f,base)
-    elseif x == 0f0
-        return -Inf32
-    elseif isnan(x)
-        return NaN32
-    else
-        throw_complex_domainerror(func, x)
+    # x <= 0 (including -0.0), +Inf, or NaN; positive subnormals are handled by the kernel
+    if reinterpret(UInt32, x) - 0x0000_0001 >= 0x7f7f_ffff
+        return _log_special(x, func)
     end
+    return Float32(logb(Float32, base) * _log_kernel_f32(Float64(x)))
+end
+@noinline function _log_special(x::Float32, func::Symbol)
+    x == 0f0 && return -Inf32
+    isnan(x) && return NaN32
+    x == Inf32 && return x
+    throw_complex_domainerror(func, x)
 end
 
 
@@ -362,35 +253,18 @@ function log1p(x::Float64)
 end
 
 function log1p(x::Float32)
-    if x > -1f0
-        x == Inf32 && return x
-        if -5.9604645f-8 < x < 5.9604645f-8
-            return x # Inexact
-        # Step 2
-        elseif -0.06058694f0 < x < 0.06449446f0
-            return log_proc2(x)
-        end
-
-        # Step 3
-        z = 1f0 + x
-        zu = reinterpret(UInt32,z)
-        s = reinterpret(Float32,0x7f000000 - (zu & 0xff80_0000)) # 2^-m
-        m = Int(zu >> 23) & 0x00ff - 127 # z cannot be subnormal
-        c = m > 0 ? 1f0-(z-x) : x-(z-1f0) # 1+x = z+c
-        y = reinterpret(Float32,(zu & 0x007f_ffff) | 0x3f80_0000)
-
-        mf = Float32(m)
-        F = (y + 65536.0f0) - 65536.0f0 # 0x1p-7*round(0x1p7*y)
-        f = (y - F) + s*c #2^m(F+f) = 1+x = z+c
-
-        log_proc1(y,mf,F,f)
-    elseif x == -1f0
-        -Inf32
-    elseif isnan(x)
-        NaN32
-    else
+    if !(x > -1f0)
+        x == -1f0 && return -Inf32
+        isnan(x) && return x
         throw_complex_domainerror_neg1(:log1p, x)
     end
+    x == Inf32 && return x
+    d = Float64(x)
+    s = 1.0 + d # exact unless |x| < 2^-29 or x > 2^29
+    # 1 + x == s + c, so log1p(x) ≈ log(s) + c/s. The correction only matters when s ≈ 1.
+    c = ifelse(s < 2.0, d - (s - 1.0), 0.0)
+    # copysign keeps log1p(-0.0) == -0.0
+    return copysign(Float32(_log_kernel_f32(s) + c), x)
 end
 
 #function make_compact_table(N)
@@ -543,6 +417,23 @@ const t_log_table_compact = (
     invc = UInt64(t&UInt64(0xff)|0x1ff00)<<45
     logc = t&(~UInt64(0xff))
     return (reinterpret(Float64, invc), reinterpret(Float64, logc))
+end
+
+# log(x) for positive normal Float64 x, accurate to about 2^-32 (enough for Float32 results).
+# Uses the table of `_log_ext`: x = 2^k z, log(x) = k*log(2) + log(c) + log1p(z/c - 1).
+@inline function _log_kernel_f32(x::Float64)
+    xu = reinterpret(UInt64, x)
+    tmp = reinterpret(Int64, xu -% 0x3fe6955500000000) # 0x1.69555p-1
+    z = reinterpret(Float64, xu -% (tmp & 0xfff0000000000000))
+    k = Float64(tmp >> 52)
+    # N.B. :nothrow and :noub since `idx` is known to be `1 ≤ idx ≤ length(t_log_table_compact)`
+    idx = (tmp >> 45) & (length(t_log_table_compact)-1) + 1
+    t, _ = Base.@assume_effects :nothrow :noub @inbounds t_log_table_compact[idx]
+    invc, logc = log_tab_unpack(t)
+    r = fma(z, invc, -1.0) # |r| < 0.0056
+    hi = muladd(k, 0.6931471805599453, logc)
+    r2 = r*r
+    return (hi + r) + muladd(r2, muladd(r, 0.3333333333333333, -0.5), (r2*r2)*-0.25) # log1p(r) - r
 end
 
 # Log implementation that returns 2 numbers which sum to give true value with about 68 bits of precision
