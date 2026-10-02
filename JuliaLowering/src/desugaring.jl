@@ -1534,16 +1534,28 @@ end
 #-------------------------------------------------------------------------------
 # Expand logical conditional statements
 
-# Flatten nested && or || nodes and expand their children
-function expand_cond_children(ctx, ex, cond_kind=head(ex), flat_children=SyntaxList())
+# Flatten nested && or || nodes
+function flatten_cond_children(ex, cond_kind=head(ex), flat_children=SyntaxList())
     for e in children(ex)
         if head(e) == cond_kind
-            expand_cond_children(ctx, e, cond_kind, flat_children)
+            flatten_cond_children(e, cond_kind, flat_children)
         else
-            push!(flat_children, expand_forms_2(ctx, e))
+            push!(flat_children, e)
         end
     end
     flat_children
+end
+
+# Expand a term of a && or || chain which is used only as a condition. A nested
+# chain of the other kind is kept as a condition so it also compiles to jumps.
+function expand_cond_term(ctx, ex)
+    k = head(ex)
+    k == :&& || k == :|| ? expand_condition(ctx, ex) : expand_forms_2(ctx, ex)
+end
+
+# Flatten nested && or || nodes and expand their children
+function expand_cond_children(ctx, ex)
+    mapsyntax(e->expand_cond_term(ctx, e), flatten_cond_children(ex))
 end
 
 # Expand condition in, eg, `if` or `while`
@@ -4327,8 +4339,13 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         @jl_assert numchildren(ex) == 3 ex
         expand_forms_2(ctx, @ast ctx ex [:if children(ex)...])
     elseif k == :&& || k == :||
-        cs = expand_cond_children(ctx, ex)
+        # Only the last term is used as a value; the others are conditions.
+        cs = flatten_cond_children(ex)
         isempty(cs) && return @ast ctx ex (k === :&&)::value
+        for i in 1:length(cs)-1
+            cs[i] = expand_cond_term(ctx, cs[i])
+        end
+        cs[end] = expand_forms_2(ctx, cs[end])
         length(cs) == 1 && return @ast ctx ex cs[1]
         # Attributing correct provenance for `cs[1:end-1]` is tricky in cases
         # like `a && (b && c)` because the expression constructed here arises
