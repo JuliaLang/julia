@@ -1302,16 +1302,16 @@ include("special/pow.jl")
 
 # Float16 definitions
 
-# Float16 sin, cos, sincos, and tan have dedicated methods in special/trig.jl
-for func in (:asin,:acos,:atan,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:log,:log2,:log10,:log1p)
+# Float16 sin, cos, sincos, and tan have dedicated methods in special/trig.jl,
+# and log, log2, log10, and log1p in special/log.jl
+for func in (:asin,:acos,:atan,:cosh,:tanh,:asinh,:acosh,:atanh)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
         $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
     end
 end
 
-for func in (:exp,:exp2,:exp10,:sinh,:sin,:cos,:tan)
+for func in (:exp,:exp2,:exp10,:sinh,:sin,:cos,:tan,:log,:log2,:log10,:log1p)
      @eval $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
 end
 
