@@ -207,6 +207,21 @@ macro _total_meta()
         #=:consistent_overlay=#false,
         #=:nortcall=#true))
 end
+# can be used in place of `@assume_effects :total !:consistent` (supposed to be used for bootstrapping)
+macro _total_notconsistent_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#true,
+        #=:nothrow=#true,
+        #=:terminates_globally=#true,
+        #=:terminates_locally=#false,
+        #=:notaskstate=#true,
+        #=:inaccessiblememonly=#true,
+        #=:noub=#true,
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false,
+        #=:nortcall=#true))
+end
 # can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
 macro _foldable_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
@@ -742,8 +757,10 @@ cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_conve
 unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
 unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with the next method
 unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
-unsafe_convert(::Type{Ptr{UInt8}}, s::String) = ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s)
-unsafe_convert(::Type{Ptr{Int8}}, s::String) = ccall(:jl_string_ptr, Ptr{Int8}, (Any,), s)
+# `jl_string_ptr` is pure pointer arithmetic on the object; it is not :consistent because
+# two egal strings have distinct addresses.
+unsafe_convert(::Type{Ptr{UInt8}}, s::String) = (@_total_notconsistent_meta; ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s))
+unsafe_convert(::Type{Ptr{Int8}}, s::String) = (@_total_notconsistent_meta; ccall(:jl_string_ptr, Ptr{Int8}, (Any,), s))
 
 # We don't add any _reinterpret methods until we include reinterpretarray.jl,
 # but defining the function up front avoids a whole lot of invalidations when we
