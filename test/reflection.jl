@@ -1277,6 +1277,70 @@ end
     @test length(methods(g, ())) == 1
 end
 
+module TestCtors
+struct P{T}
+    x::T
+    P{T}(x::T) where T = new{T}(x)
+    P{T}(x::String) where T = new{T}(parse(T, x))
+end
+P(x::T) where T = P{T}(x)
+P{Int}(x::Bool) = P{Int}(Int(x))
+(::Type{S})(x::Char) where S<:P = S(string(x))
+struct Q
+    x::Int
+end
+struct D{T,S}
+    t::T
+    s::S
+end
+(::Type{D{Int,S}})(t::Bool, s::S) where S = D{Int,S}(Int(t), s)
+(::Type{D{T,Float64}})(t::T, s::Char) where T = D{T,Float64}(t, Float64(s))
+module Sub
+import ..TestCtors: P
+P{Float64}(::Nothing) = P{Float64}(0.0)
+end
+end
+
+@testset "constructors" begin
+    using .TestCtors: P, Q, D
+    # methods() sees only what dispatches on the queried type object itself
+    @test length(methods(P)) == 1
+    @test length(constructors(P)) == 6
+    @test Set(constructors(P)) ==
+        (P, P{Int}, P{Float64}) .|> methods |> Iterators.flatten |> Set
+
+    # a type without proper subtypes has no further parameterizations to collect
+    @test Set(constructors(P{Int})) == Set(methods(P{Int}))
+    @test Set(constructors(Q)) == Set(methods(Q))
+
+    # for a two-parameter type nothing dispatches on a partial parameterization at all,
+    # since `D{Int}` is the type object `D{Int,S} where S`
+    @test isempty(methods(D{Int}))
+    @test length(constructors(D)) == 4
+    # querying `D` adds exactly what is written for `D` itself
+    @test D |> constructors |> Set ==
+        (D{Int}, D) .|> (constructors, methods) |> Iterators.flatten |> Set
+    # the two incomparable partial parameterizations collect the same constructors,
+    # since a signature matches by intersection and they meet at `D{Int,Float64}`
+    @test allequal((D{Int}, D{T,Float64} where T) .|> constructors .|> Set)
+
+    @test length(constructors(P, TestCtors)) == 5
+    @test length(constructors(P, [TestCtors])) == 5
+    @test length(constructors(P, TestCtors.Sub)) == 1
+    @test length(constructors(P, Set([TestCtors, TestCtors.Sub]))) == 6
+
+    # boot.jl's Union{}(a...) matches every query, since Union{} <: T
+    @test isempty(constructors(Union{}))
+    @test !any(m -> m.sig === Tuple{Type{Union{}}, Vararg{Any}}, constructors(Any))
+
+    # non-DataType arguments are accepted
+    @test Set(constructors(Union{Int8,UInt8})) ==
+        (Int8, UInt8) .|> constructors |> Iterators.flatten |> Set
+
+    @test constructors(P) isa Base.MethodList
+    @test occursin("6 methods", sprint(show, constructors(P)))
+end
+
 module BodyFunctionLookup
 f1(x, y; a=1) = error("oops")
 f2(f::Function, args...; kwargs...) = f1(args...; kwargs...)
