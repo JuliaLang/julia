@@ -1299,6 +1299,8 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bi
         jl_options.outputji = absrealpath(jl_options.outputji, 0);
     if (jl_options.outputbc)
         jl_options.outputbc = absrealpath(jl_options.outputbc, 0);
+    if (jl_options.outputunoptbc)
+        jl_options.outputunoptbc = absrealpath(jl_options.outputunoptbc, 0);
     if (jl_options.outputasm)
         jl_options.outputasm = absrealpath(jl_options.outputasm, 0);
     if (jl_options.machine_file)

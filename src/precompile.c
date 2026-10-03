@@ -9,6 +9,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "threading.h"
 #include "julia_assert.h"
 #include "serialize.h"
 
@@ -95,6 +96,67 @@ static void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) JL_CA
     write_int32(f, 0); // mark the end of the source text
 }
 
+static struct {
+    void *native_code;
+    ios_t *s; // If not writing a split image, the heap to embed into the output.
+    uint32_t checksum;
+    const char *unpack_func;
+} pending_native;
+
+_Atomic(int) jl_heap_released = 0;
+
+// When we emit code on exit, we tear down the heap, bringing every Task struct
+// allocated there with it.  We switch to this stub task before destroying
+// everything.
+static struct {
+    jl_value_t *type;
+    jl_task_t value;
+} exit_task;
+
+// Release the heap and emit the native code left by jl_write_compiler_output,
+// if any. Destroys the current task and replaces it with `exit_task`, which is
+// returned from the function (or returns the current task if there was nothing
+// to emit).  Anything that runs Julia code on another thread after this point
+// is undefined behavior.
+jl_task_t *jl_write_native_output_at_exit(void)
+{
+    jl_task_t *ct = jl_current_task;
+    if (pending_native.native_code == NULL)
+        return ct;
+    // Stop the profiler, and wait for a sample that may still be walking the
+    // tasks (see jl_profile_task).
+    jl_profile_stop_timer();
+    uv_mutex_lock(&live_tasks_lock);
+    uv_mutex_unlock(&live_tasks_lock);
+    // Wait for a collection still in progress, and keep new ones from starting.
+    jl_gc_enable(0);
+    jl_atomic_store_release(&jl_heap_released, 1);
+    // Crash reports print this, and it may point into the heap.
+    jl_atomic_store_relaxed(&jl_filename, "none");
+    jl_task_t *t = &exit_task.value;
+    jl_atomic_store_relaxed(&t->tid, jl_atomic_load_relaxed(&ct->tid));
+    t->ptls = ct->ptls;
+    jl_atomic_store_relaxed(&ct->ptls->current_task, t);
+    jl_set_pgcstack(&t->gcstack);
+    // Make sure all the suspended threads have no task so backtraces work.
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
+    for (int t_i = 0; t_i < nthreads; t_i++) {
+        jl_ptls_t ptls2 = all_tls_states[t_i];
+        if (ptls2 != NULL && ptls2 != ct->ptls)
+            jl_atomic_store_relaxed(&ptls2->current_task, NULL);
+    }
+    jl_gc_release_heap_at_exit();
+
+    // jl_dump_native will close and free s when appropriate
+    // this is a horrible abstraction, but
+    // this helps reduce live memory significantly
+    jl_dump_native(pending_native.native_code, jl_options.outputbc, jl_options.outputunoptbc,
+                   jl_options.outputo, jl_options.outputasm, pending_native.s,
+                   pending_native.checksum, pending_native.unpack_func, NULL);
+    return t;
+}
+
 JL_DLLEXPORT void jl_write_compiler_output(void)
 {
     if (!jl_generating_output()) {
@@ -142,9 +204,8 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
                                jl_options.incremental ? worklist : NULL, emit_split, comp,
                                &s, &udeps, &srctextpos, jl_module_init_order);
 
-    ios_t f;
-
     if (outputji) {
+        ios_t f;
         if (ios_file(&f, outputji, 1, 1, 1, 1) == NULL)
             jl_errorf("cannot open system image file \"%s\" for writing", outputji);
         // It would be a waste to allocate a huge buffer only to write it all
@@ -153,28 +214,22 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         ios_write(&f, (const char *)s->buf, (size_t)s->size);
         ios_close(s);
         free(s);
+        s = NULL;
         ios_bufmode(&f, bm_block);
-    }
-
-    if (native_code) {
-        const char *unpack_func =
-            emit_split ? (comp ? "jl_image_unpack_split_zstd" : "jl_image_unpack_split") :
-                         (comp ? "jl_image_unpack_zstd" : "jl_image_unpack_uncomp");
-
-        // jl_dump_native will close and free s when appropriate
-        // this is a horrible abstraction, but
-        // this helps reduce live memory significantly
-        jl_dump_native(native_code, jl_options.outputbc, jl_options.outputunoptbc,
-                       jl_options.outputo, jl_options.outputasm, outputji ? NULL : s,
-                       checksum, unpack_func, NULL);
-        jl_postoutput_hook();
-    }
-
-    if (outputji) {
         if (jl_options.incremental) {
             write_srctext(&f, udeps, srctextpos);
         }
         ios_close(&f);
+    }
+
+    if (native_code) {
+        pending_native.native_code = native_code;
+        pending_native.s = s;
+        pending_native.checksum = checksum;
+        pending_native.unpack_func =
+            emit_split ? (comp ? "jl_image_unpack_split_zstd" : "jl_image_unpack_split") :
+                         (comp ? "jl_image_unpack_zstd" : "jl_image_unpack_uncomp");
+        jl_postoutput_hook();
     }
 
     for (size_t i = 0; i < jl_current_modules.size; i += 2) {
@@ -185,6 +240,10 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         }
     }
     if (jl_options.trim) {
+        if (native_code) {
+            jl_safepoint_suspend_all_threads(ct);
+            jl_write_native_output_at_exit();
+        }
         exit(0); // Some finalizers need to run and we've blown up the bindings table
         // TODO: Is this still needed
     }

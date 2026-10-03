@@ -759,6 +759,12 @@ size_t jl_genericmemory_nbytes(jl_genericmemory_t *a) JL_NOTSAFEPOINT;
 size_t memory_block_usable_size(void *mem, int isaligned) JL_NOTSAFEPOINT;
 void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT;
 void jl_gc_run_all_finalizers(jl_task_t *ct) JL_CANSAFEPOINT;
+// Destroy the entire heap.  Julia objects are inaccessible after and the GC is
+// permanently disabled.
+void jl_gc_release_heap_at_exit(void) JL_NOTSAFEPOINT;
+extern _Atomic(int) jl_heap_released;
+jl_task_t *jl_write_native_output_at_exit(void);
+JL_DLLEXPORT void jl_profile_stop_timer(void) JL_NOTSAFEPOINT;
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
 void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT;
 
