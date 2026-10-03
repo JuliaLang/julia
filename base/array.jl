@@ -2533,15 +2533,18 @@ findfirst(::typeof(isone), r::OneTo) = isempty(r) ? nothing : oneunit(keytype(r)
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange{<:Integer}) where {T<:Integer}
     first(r) <= p.x <= last(r) || return nothing
     i1 = first(keys(r))
-    return i1 + oftype(i1, p.x - first(r))
+    return checked_add(i1, convert(typeof(i1), maybe_unsigned(p.x - first(r))))
 end
 
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
-    d = p.x - first(r)
-    iszero(d % step(r)) || return nothing
-    return convert(keytype(r), d ÷ step(r) + 1)
+    f, h = first(r), step(r)
+    d, s = h > zero(h) ? (maybe_unsigned(p.x - f), maybe_unsigned(h)) :
+                         (maybe_unsigned(f - p.x), maybe_unsigned(zero(h) - h))
+    n, m = divrem(d, s)
+    iszero(m) || return nothing
+    return checked_add(oneunit(keytype(r)), convert(keytype(r), n))
 end
 
 findfirst(::typeof(iszero), r::AbstractRange) = findfirst(==(zero(first(r))), r)
