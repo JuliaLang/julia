@@ -1010,7 +1010,16 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     data->jl_value_to_llvm.reserve(out.global_targets.size());
     data->jl_sysimg_gvars.reserve(out.global_targets.size() + out.external_fns.size());
 
-    for (auto &[val, gv] : out.global_targets) {
+    // sort by name: global_targets is keyed by the address of the object a slot
+    // names, so the slot numbering would differ between builds
+    SmallVector<std::pair<void *, GlobalVariable *>, 0> ordered_globals(
+        out.global_targets.begin(), out.global_targets.end());
+    std::sort(ordered_globals.begin(), ordered_globals.end(),
+              [](const std::pair<void *, GlobalVariable *> &a,
+                 const std::pair<void *, GlobalVariable *> &b) {
+                  return a.second->getName() < b.second->getName();
+              });
+    for (auto &[val, gv] : ordered_globals) {
         data->jl_value_to_llvm.push_back(val);
         data->jl_sysimg_gvars.push_back(gv);
     }
