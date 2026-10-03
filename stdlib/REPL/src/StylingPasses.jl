@@ -24,7 +24,7 @@ StylingContext(cursor_pos::Int) = StylingContext(cursor_pos, 0, 0)
 abstract type StylingPass end
 
 function merge_annotations(annotated_strings::Vector{<:AnnotatedString})
-    isempty(annotated_strings) && return AnnotatedString("")
+    isempty(annotated_strings) && return AnnotatedString{String, Face}("")
 
     result = AnnotatedString(annotated_strings[1])
 
