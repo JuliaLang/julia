@@ -4246,22 +4246,28 @@ f(x) = yt(x)
 ;; What to do when a closure captures a variable that needs a `Core.Box`:
 ;; 0 = allow, 1 = warn, 2 = error. Set per lowering call from the module's
 ;; `closure_boxes` setting and the `--closure-boxes` command line option.
-(define *closure-box-policy* 2)
+(define *closure-box-policy* 0)
 
-;; Variables that `(meta allow_box ...)` annotations in the bodies of `lams` (the
-;; methods of one closure, including any closures nested inside them) allow to
-;; be boxed, or #t if a bare `(meta allow_box)` allows all of them.
+(define (allow-box-meta? e)
+  (and (pair? e) (eq? (car e) 'meta) (pair? (cdr e)) (eq? (cadr e) 'allow_box)))
+
+;; Variables that `(meta allow_box ...)` annotations allow a closure with methods
+;; `lams` to box, or #t for all of them. A bare `(meta allow_box)` applies only to
+;; the closure whose body directly contains it; `(meta allow_box x ...)` also
+;; applies to the enclosing closures, which capture `x` to pass it inward.
 (define (closure-allowed-boxes lams)
-  (let ((metas (apply append
-                      (map (lambda (l)
-                             (expr-find-all (lambda (e) (and (pair? e) (eq? (car e) 'meta)
-                                                             (pair? (cdr e)) (eq? (cadr e) 'allow_box)))
-                                            (lam:body l)
-                                            identity))
-                           lams))))
-    (if (any (lambda (m) (null? (cddr m))) metas)
-        #t
-        (apply append (map cddr metas)))))
+  (let ((all #f) (names '()))
+    (define (walk e nested)
+      (cond ((atom? e) #f)
+            ((allow-box-meta? e)
+             (if (null? (cddr e))
+                 (if (not nested) (set! all #t))
+                 (set! names (append (cddr e) names))))
+            ((quoted? e) #f)
+            ((eq? (car e) 'lambda) (walk (lam:body e) #t))
+            (else (for-each (lambda (x) (walk x nested)) (cdr e)))))
+    (for-each (lambda (l) (walk (lam:body l) #f)) lams)
+    (if all #t names)))
 
 ;; Apply the closure box policy to a closure with methods `lams` that captures
 ;; `vars` from the enclosing lambda `lam`.
@@ -4288,8 +4294,9 @@ f(x) = yt(x)
                    (vs   (string.join (map (lambda (v) (string "`" v "`")) bad) ", "))
                    (msg  (string "closure captures " (if one "variable " "variables ") vs
                                  ", which " (if one "requires" "require")
-                                 " a `Core.Box` because " (if one "it is" "they are")
-                                 " assigned more than once or after being captured"
+                                 " a `Core.Box` because lowering cannot prove that "
+                                 (if one "it is" "they are")
+                                 " assigned exactly once before the closure is created"
                                  (if (= *closure-box-policy* 2) (format-loc lno) "")
                                  ". To avoid the box, assign " (if one "it" "them")
                                  " only once before creating the closure (e.g. with `let "
@@ -4300,7 +4307,7 @@ f(x) = yt(x)
               (if (= *closure-box-policy* 2)
                   (error msg)
                   (let ((lf (extract-line-file lno)))
-                    (lowering-warning 1000 'warn (cadr lf) (car lf) msg))))))))
+                    (lowering-warning 1000 'closure_boxes (cadr lf) (car lf) msg))))))))
 
 (define (toplevel-preserving? e)
   (and (pair? e) (memq (car e) '(if elseif block trycatch tryfinally trycatchelse = const))))
@@ -4378,7 +4385,9 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core globalref thismodule thisfunction lineinfo line inert module toplevel null true false meta) e)
+          ((quote top core globalref thismodule thisfunction lineinfo line inert module toplevel null true false) e)
+          ((meta) ;; `allow_box` annotations are consumed by check-closure-boxes!
+           (if (allow-box-meta? e) '(null) e))
           ((break)
            ;; break may have a value that needs closure conversion
            (if (length> e 2)

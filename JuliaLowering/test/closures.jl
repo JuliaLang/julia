@@ -1530,6 +1530,28 @@ if hasfield(Base.JLOptions, :closure_boxes)
     end
     f_box_nested()
     """) == 1
+    # a bare annotation covers only the closure containing it
+    @test_throws "closure captures variable `x`" JuliaLowering.include_string(box_mod, """
+    function f_box_nested_bare()
+        x = 0
+        g = () -> (() -> (Base.Experimental.@allow_box; x))
+        x = 1
+        g
+    end
+    """)
+    # the annotation does not remain in the lowered code
+    g = JuliaLowering.include_string(box_mod, """
+    function f_box_allowed_closure()
+        x = 0
+        g = () -> (Base.Experimental.@allow_box x; x)
+        x = 1
+        g
+    end
+    f_box_allowed_closure()
+    """)
+    @test Base.invokelatest(g) == 1
+    @test !any(st -> Meta.isexpr(st, :meta) && st.args[1] === :allow_box,
+               Base.uncompressed_ast(only(methods(g))).code)
     @test JuliaLowering.include_string(box_mod, "let x = 0; g = () -> x; g(); end") == 0
 
     warn_mod = Module()

@@ -37,6 +37,9 @@ end
 # from now on, this is now a top-module for resolving syntax
 const is_primary_base_module = ccall(:jl_module_parent, Ref{Module}, (Any,), Base) === Core.Main
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
+# closures in Base (including Compiler) must not box captured variables, regardless of
+# `--closure-boxes`. This is `Base.Experimental.@closure_boxes :error`, which isn't defined yet.
+ccall(:jl_toplevel_eval_in, Any, (Any, Any), Base, Expr(:meta, :closure_boxes, 2))
 
 # The @inline/@noinline macros that can be applied to a function declaration are not available
 # until after array.jl, and so we will mark them within a function body instead.
@@ -409,9 +412,6 @@ Core._setlowerer!(fl_lower)
 # Ensure this file is also tracked
 @assert !isassigned(_included_files, 1)
 _included_files[1] = (@__MODULE__, ccall(:jl_prepend_cwd, Any, (Any,), "Base_compiler.jl"))
-
-# closures in Base must not box captured variables, regardless of `--closure-boxes`
-ccall(:jl_set_module_closure_boxes, Cvoid, (Any, Int32), Base, 2)
 
 end # module Base
 using .Base

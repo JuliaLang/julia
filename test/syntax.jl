@@ -4829,7 +4829,7 @@ end
             g
         end))
     # the error points at the code using a macro that creates the closure, not the macro
-    @test_throws r"captured around \S*syntax\.jl:\d+" Core.eval(merr, :(
+    @test_throws r"is created around \S*syntax\.jl:\d+" Core.eval(merr, :(
         function f()
             x = 0
             t = @async begin
@@ -4876,8 +4876,8 @@ end
             x = y = 1
             g
         end))
-    # an annotation in an inner closure also covers the closures that capture the
-    # variable in order to pass it inward
+    # an annotation naming a variable also covers the closures that capture it in
+    # order to pass it inward; a bare one covers only the closure containing it
     Core.eval(merr, :(
         function nested()
             x = 0
@@ -4886,6 +4886,21 @@ end
             g
         end))
     @test merr.nested()()() == 1
+    @test_throws "closure captures variable `x`" Core.eval(merr, :(
+        function nested_bare()
+            x = 0
+            g = () -> (() -> (Base.Experimental.@allow_box; x))
+            x = 1
+            g
+        end))
+    # the annotation does not remain in the lowered code
+    @test !occursin("allow_box", string(Meta.lower(merr, :(
+        function f()
+            x = 0
+            g = () -> (Base.Experimental.@allow_box x; x)
+            x = 1
+            g
+        end))))
     # submodules inherit the setting
     Core.eval(merr, :(module Sub end))
     @test_throws "closure captures variable `x`" Core.eval(merr.Sub, :(

@@ -314,8 +314,9 @@ function closure_box_policy(mod::Module)
 end
 
 # Find the `@allow_box` annotations (`[K"meta" "allow_box" vars...]`) in `ex`.
-# An annotation applies to the lambda containing it and to all enclosing
-# lambdas, which may need to capture the same variables to pass them inward.
+# A bare annotation applies only to the lambda containing it; one naming
+# variables also applies to the enclosing lambdas, which capture those
+# variables to pass them inward.
 function collect_allowed_boxes(ex)
     allowed = Dict{ScopeId,Union{Nothing,Set{String}}}()
     _collect_allowed_boxes!(allowed, ScopeId[], ex)
@@ -332,10 +333,14 @@ function _collect_allowed_boxes!(allowed, lambdas, ex)
         pop!(lambdas)
     elseif k == K"meta" && numchildren(ex) >= 1 && kind(ex[1]) == K"Symbol" &&
             syntax_name(ex[1]) == "allow_box"
-        names = Set{String}(syntax_name(v) for v in children(ex)[2:end])
-        for id in lambdas
-            prev = get(allowed, id, Set{String}())
-            allowed[id] = isnothing(prev) || isempty(names) ? nothing : union!(prev, names)
+        if numchildren(ex) == 1
+            isempty(lambdas) || (allowed[lambdas[end]] = nothing)
+        else
+            names = Set{String}(syntax_name(v) for v in children(ex)[2:end])
+            for id in lambdas
+                prev = get(allowed, id, Set{String}())
+                isnothing(prev) || (allowed[id] = union!(prev, names))
+            end
         end
     else
         foreach(e->_collect_allowed_boxes!(allowed, lambdas, e), children(ex))
@@ -363,8 +368,8 @@ function check_closure_boxes(ctx, srcref, closure_binds, field_bindings, field_i
     single = length(bad) == 1
     msg = string("closure captures ", single ? "variable " : "variables ",
                  join(("`$v`" for v in bad), ", "), ", which ", single ? "requires" : "require",
-                 " a `Core.Box` because ", single ? "it is" : "they are",
-                 " assigned more than once or after being captured. To avoid the box, assign ",
+                 " a `Core.Box` because lowering cannot prove that ", single ? "it is" : "they are",
+                 " assigned exactly once before the closure is created. To avoid the box, assign ",
                  single ? "it" : "them", " only once before creating the closure (e.g. with `let ",
                  bad[1], " = ", bad[1], "; ... end`) or use a `Ref`. To allow the box, add ",
                  "`Base.Experimental.@allow_box ", join(bad, " "), "` to the closure body.")
@@ -763,7 +768,9 @@ Invariants:
                                    lbs, lbs, ctx.sp_typevars,
                                    false, true, true, SyntaxList(),
                                    Dict{ClosureKey,ClosureInfo}(),
-                                   collect_allowed_boxes(ex))
+                                   closure_box_policy(ctx.layer.mod) == 0 ?
+                                       Dict{ScopeId,Union{Nothing,Set{String}}}() :
+                                       collect_allowed_boxes(ex))
     ex_out = closure_convert_lambda(ctx_out, ex, children(ex[3]))
     if !isempty(ctx_out.toplevel_stmts)
         throw(LoweringError(first(ctx_out.toplevel_stmts), "Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension"))

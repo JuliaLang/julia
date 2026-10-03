@@ -196,14 +196,15 @@ module setting takes precedence over the `--closure-boxes` command line option.
 
 `policy` is one of
   * `:error`: lowering throws an error
-  * `:warn`: lowering emits a warning
+  * `:warn`: lowering emits a warning, in the same situations as other lowering warnings
+    (currently these are not reported for code inside `module` blocks)
   * `:allow` (the default): boxes are allowed silently
 
 Base and the standard libraries use `:error`.
 
-A captured variable needs a box when it is assigned more than once or after a closure
-captures it. Access to a boxed variable cannot be inferred, and every access to it
-requires a heap-allocated `Core.Box`, so this is a common source of poor performance.
+A captured variable needs a box unless lowering can prove that it is assigned exactly once
+before the closure is created. Access to a boxed variable cannot be inferred, and the box
+is heap-allocated, so this is a common source of poor performance.
 Individual closures can allow boxes with [`@allow_box`](@ref Base.Experimental.@allow_box).
 
 The setting applies to code lowered after this macro is evaluated.
@@ -219,10 +220,11 @@ end
     Experimental.@allow_box
     Experimental.@allow_box vars...
 
-Allow the closure whose body contains this annotation to capture `vars` (or all of its
-captured variables, if none are listed) even if they must be stored in a `Core.Box`.
-The annotation also applies to the variables that any enclosing closures capture in
-order to pass them to this closure.
+Allow the closure whose body contains this annotation to capture `vars` even if they must
+be stored in a `Core.Box`. Enclosing closures that capture the same variables in order to
+pass them to this closure are allowed to box them too. Without arguments, the annotation
+allows every captured variable of the closure that directly contains it, but not those of
+enclosing closures.
 
 See [`@closure_boxes`](@ref Base.Experimental.@closure_boxes).
 

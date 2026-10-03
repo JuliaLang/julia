@@ -4,9 +4,9 @@ Julia v1.14 Release Notes
 New language features
 ---------------------
 
-* Lowering can now report closures that capture a variable needing a `Core.Box` (because the
-  variable is assigned more than once or after being captured), since such variables cannot
-  be inferred. Use `Base.Experimental.@closure_boxes :error` or `:warn` to enable this for a
+* Lowering can now report closures that capture a variable needing a `Core.Box` (because
+  lowering cannot prove that the variable is assigned exactly once before the closure is
+  created), since such variables cannot be inferred. Use `Base.Experimental.@closure_boxes :error` or `:warn` to enable this for a
   module, or `--closure-boxes={error|warn|allow}` to set it globally; the default is `allow`.
   A closure can permit a box with `Base.Experimental.@allow_box var` in its body. Base and the
   standard libraries now use `:error`.

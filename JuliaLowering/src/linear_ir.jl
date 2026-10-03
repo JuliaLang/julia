@@ -958,7 +958,9 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         if numchildren(ex) >= 1
             # Certain blessed forms are allowed to share a meta expression;
             # others (nkw, optlevel) treat ex[1] as head and ex[2:end] as args
-            if kind(ex[1]) === K"purity" ||
+            if kind(ex[1]) === K"Symbol" && syntax_name(ex[1]) == "allow_box"
+                # consumed by closure conversion
+            elseif kind(ex[1]) === K"purity" ||
                 kind(ex[1]) === K"Symbol" && syntax_name(ex[1]) in (
                     "inline", "noinline", "propagate_inbounds",
                     "nospecializeinfer", "aggressive_constprop", "no_constprop")
