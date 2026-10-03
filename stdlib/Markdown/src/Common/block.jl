@@ -43,7 +43,7 @@ mutable struct Header{level} <: MarkdownElement
     text
 end
 
-Header(s, level::Int) = Header{level}(s)
+Header(s, level::Integer) = Header{Int(level)}(s)
 Header(s) = Header(s, 1)
 
 @breaking true ->
