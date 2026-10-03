@@ -1505,11 +1505,13 @@ end
         op = unwrapva(argtypes[op_argi])
         v = unwrapva(argtypes[v_argi])
         callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true, si.saw_latestworld), vtypes, sv, #=max_methods=#1)
-        TF0 = TF
-        RT0 = RT
+        # pass the types through `Any` cells so the callback's closure type is not
+        # parameterized on `Type{...}` (which would compile a new callback per signature)
+        TFref = RefValue{Any}(TF)
+        RTref = RefValue{Any}(RT)
         return Future{CallMeta}(callinfo, interp, sv) do callinfo, interp, sv
-            local TF = TF0
-            local RT = RT0
+            local TF = TFref[]
+            local RT = RTref[]
             TF2 = tmeet(ipo_lattice(interp), callinfo.rt, widenconst(TF))
             if TF2 === Bottom
                 RT = Bottom
@@ -3487,6 +3489,8 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     # slot-dependent refinements will be widened. This is conservative but
     # may miss some precision opportunities.
     call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, nothing, sv, #=max_methods=#-1)
+    # computed outside the callback so its closure type is not parameterized on `tt`
+    tt_known = isa(tt, Const) || isconstType(tt)
     return Future{CallMeta}(call, interp, sv) do call, _, sv
         if isa(sv, InferenceState)
             sv.restrict_abstract_call_sites = old_restrict
@@ -3506,7 +3510,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
             # in two ways: both as being a subtype of this, and
             # because of LimitedAccuracy causes
             return CallMeta(Type{<:rt}, Union{}, RT_CALL_EFFECTS, info)
-        elseif isa(tt, Const) || isconstType(tt)
+        elseif tt_known
             # input arguments were known for certain
             # XXX: this doesn't imply we know anything about rt
             return CallMeta(Const(rt), Union{}, RT_CALL_EFFECTS, info)
