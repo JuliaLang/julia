@@ -199,7 +199,6 @@ The following is a complete list of command-line switches available when launchi
 |`--depwarn={yes\|no*\|error}`          |Enable or disable syntax and method deprecation warnings (`error` turns warnings into errors)|
 |`--warn-overwrite={yes\|no*}`          |Enable or disable method overwrite warnings|
 |`--warn-scope={yes*\|no}`              |Enable or disable warning for ambiguous top-level scope|
-|`--closure-boxes={error\|warn\|allow*}`|Error, warn, or allow when a closure captures a variable that must be stored in a `Core.Box` (overridden by per-module settings)|
 |`-C`, `--cpu-target <target>`          |Limit usage of CPU features up to `<target>`; set to `help` to see the available options|
 |`-O`, `--optimize={0\|1\|2*\|3}`       |Set the optimization level (level is 3 if `-O` is used without a level) ($)|
 |`--min-optlevel={0*\|1\|2\|3}`         |Set the lower bound on per-module optimization|

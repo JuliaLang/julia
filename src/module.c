@@ -897,8 +897,8 @@ JL_DLLEXPORT void jl_set_module_closure_boxes(jl_module_t *self, int value)
     self->closure_boxes = value;
 }
 
-// The effective policy for lowering code in `m`: an explicit setting on `m` or one of its
-// parents takes precedence over `--closure-boxes`, which takes precedence over the default.
+// The effective policy for lowering code in `m`: the setting of `m` or the nearest parent
+// that has one, else allow.
 JL_DLLEXPORT int jl_get_module_closure_boxes(jl_module_t *m) JL_NOTSAFEPOINT
 {
     int value = -1;
@@ -909,8 +909,6 @@ JL_DLLEXPORT int jl_get_module_closure_boxes(jl_module_t *m) JL_NOTSAFEPOINT
             value = m->closure_boxes;
         }
     }
-    if (value == -1 && jl_options.closure_boxes != JL_OPTIONS_CLOSURE_BOXES_DEFAULT)
-        value = jl_options.closure_boxes - 1;
     if (value == -1)
         value = JL_CLOSURE_BOXES_ALLOW;
     return value;

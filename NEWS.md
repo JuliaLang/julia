@@ -4,13 +4,6 @@ Julia v1.14 Release Notes
 New language features
 ---------------------
 
-* Lowering can now report closures that capture a variable needing a `Core.Box` (because
-  lowering cannot prove that the variable is assigned exactly once before the closure is
-  created), since such variables cannot be inferred. Use `Base.Experimental.@closure_boxes :error` or `:warn` to enable this for a
-  module, or `--closure-boxes={error|warn|allow}` to set it globally; the default is `allow`.
-  A closure can permit a box with `Base.Experimental.@allow_box var` in its body. Base and the
-  standard libraries now use `:error`.
-
 * It is now possible to control which version of the Julia syntax will be used to parse a package by setting the
   `compat.julia` or `syntax.julia_version` key in Project.toml. This feature is similar to the notion of "editions"
   in other language ecosystems and will allow non-breaking evolution of Julia syntax in future versions.
@@ -74,6 +67,13 @@ Language changes
 
 Compiler/Runtime improvements
 -----------------------------
+
+* Lowering can now report closures that capture a variable needing a `Core.Box` (because
+  lowering cannot prove that the variable is assigned exactly once before the closure is
+  created), since such variables cannot be inferred. `Base.Experimental.@closure_boxes :error`
+  or `:warn` enables this for a module and its submodules; the default is to allow boxes
+  silently. A closure can permit a box with `Base.Experimental.@allow_box var` in its body.
+  Base and the standard libraries now use `:error`.
 
 * Type inference now refines field types through conditional checks and call signatures.
   For example, after `if !isnothing(x.field)`, inference knows `x.field` is not `nothing` within the branch.

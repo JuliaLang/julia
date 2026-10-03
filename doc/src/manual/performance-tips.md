@@ -946,8 +946,7 @@ insertion of `let` statements as in `abmult3`.
 
 Because boxing is easy to introduce by accident, lowering can report it. After
 [`Base.Experimental.@closure_boxes :error`](@ref Base.Experimental.@closure_boxes) in a
-module (or with the `--closure-boxes=error` command line option), lowering `abmult` or
-`abmult2` throws an error:
+module, lowering `abmult` or `abmult2` throws an error:
 ```
 ERROR: syntax: closure captures variable `r`, which requires a `Core.Box` because lowering
 cannot prove that it is assigned exactly once before the closure is created [...]
@@ -965,8 +964,7 @@ function abmult4(r::Int)
     return f
 end
 ```
-A module setting applies to its submodules too, and takes precedence over the
-`--closure-boxes` option, which sets the behavior for modules that don't choose one.
+The setting applies to the module's submodules too.
 
 #### Use `@__FUNCTION__` for recursive closures
 

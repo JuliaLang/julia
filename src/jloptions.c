@@ -166,7 +166,6 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // target_sanitize_memory
                         0, // target_sanitize_thread
                         0, // target_sanitize_address
-                        JL_OPTIONS_CLOSURE_BOXES_DEFAULT, // closure_boxes
     };
     jl_options_initialized = 1;
 }
@@ -255,10 +254,7 @@ static const char opts[]  =
     "                                               warnings (`error` turns warnings into errors)\n"
     " --warn-overwrite={yes|no*}                    Enable or disable method overwrite warnings\n"
     " --warn-scope={yes*|no}                        Enable or disable warning for ambiguous top-level\n"
-    "                                               scope\n"
-    " --closure-boxes={error|warn|allow*}           Error, warn, or allow when a closure captures a\n"
-    "                                               variable that must be stored in a `Core.Box`\n"
-    "                                               (overridden by per-module settings)\n\n"
+    "                                               scope\n\n"
 
     // code generation options
     " -C, --cpu-target <target>                     Limit usage of CPU features up to <target>; set to\n"
@@ -397,7 +393,6 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_depwarn,
            opt_warn_overwrite,
            opt_warn_scope,
-           opt_closure_boxes,
            opt_inline,
            opt_polly,
            opt_timeout_for_safepoint_straggler,
@@ -485,7 +480,6 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "depwarn",         required_argument, 0, opt_depwarn },
         { "warn-overwrite",  required_argument, 0, opt_warn_overwrite },
         { "warn-scope",      required_argument, 0, opt_warn_scope },
-        { "closure-boxes",   required_argument, 0, opt_closure_boxes },
         { "inline",          required_argument, 0, opt_inline },
         { "polly",           required_argument, 0, opt_polly },
         { "timeout-for-safepoint-straggler", required_argument, 0, opt_timeout_for_safepoint_straggler },
@@ -955,16 +949,6 @@ restart_switch:
                 jl_options.warn_scope = JL_OPTIONS_WARN_SCOPE_OFF;
             else
                 jl_errorf("julia: invalid argument to --warn-scope={yes|no} (%s)", optarg);
-            break;
-        case opt_closure_boxes:
-            if (!strcmp(optarg,"error"))
-                jl_options.closure_boxes = JL_OPTIONS_CLOSURE_BOXES_ERROR;
-            else if (!strcmp(optarg,"warn"))
-                jl_options.closure_boxes = JL_OPTIONS_CLOSURE_BOXES_WARN;
-            else if (!strcmp(optarg,"allow"))
-                jl_options.closure_boxes = JL_OPTIONS_CLOSURE_BOXES_ALLOW;
-            else
-                jl_errorf("julia: invalid argument to --closure-boxes={error|warn|allow} (%s)", optarg);
             break;
         case opt_inline:
             if (!strcmp(optarg,"yes"))

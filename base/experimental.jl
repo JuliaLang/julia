@@ -191,8 +191,7 @@ end
     Experimental.@closure_boxes policy
 
 Set what lowering does when a closure in the current module captures a variable that must
-be stored in a `Core.Box`. Submodules inherit the setting of their parent module, and a
-module setting takes precedence over the `--closure-boxes` command line option.
+be stored in a `Core.Box`. Submodules inherit the setting of their parent module.
 
 `policy` is one of
   * `:error`: lowering throws an error

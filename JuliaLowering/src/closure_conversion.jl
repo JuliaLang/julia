@@ -306,7 +306,7 @@ end
 # What to do when a closure captures a variable that needs a `Core.Box`:
 # 0 = allow, 1 = warn, 2 = error. See `Base.Experimental.@closure_boxes`.
 function closure_box_policy(mod::Module)
-    @static if hasfield(Base.JLOptions, :closure_boxes)
+    @static if isdefined(Base.Experimental, Symbol("@closure_boxes"))
         Int(ccall(:jl_get_module_closure_boxes, Cint, (Any,), mod))
     else
         0
@@ -370,8 +370,9 @@ function check_closure_boxes(ctx, srcref, closure_binds, field_bindings, field_i
                  join(("`$v`" for v in bad), ", "), ", which ", single ? "requires" : "require",
                  " a `Core.Box` because lowering cannot prove that ", single ? "it is" : "they are",
                  " assigned exactly once before the closure is created. To avoid the box, assign ",
-                 single ? "it" : "them", " only once before creating the closure (e.g. with `let ",
-                 bad[1], " = ", bad[1], "; ... end`) or use a `Ref`. To allow the box, add ",
+                 single ? "it" : "them", " only once before creating the closure, or use a `Ref`; ",
+                 "if the closure does not need to see later assignments, `let ", bad[1], " = ", bad[1],
+                 "; ... end` around it gives it a copy. To allow the box, add ",
                  "`Base.Experimental.@allow_box ", join(bad, " "), "` to the closure body.")
     if policy == 2
         throw(LoweringError(srcref, msg))

@@ -2858,11 +2858,6 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 #define JL_OPTIONS_WARN_SCOPE_OFF 0
 #define JL_OPTIONS_WARN_SCOPE_ON 1
 
-#define JL_OPTIONS_CLOSURE_BOXES_DEFAULT 0
-#define JL_OPTIONS_CLOSURE_BOXES_ALLOW 1
-#define JL_OPTIONS_CLOSURE_BOXES_WARN 2
-#define JL_OPTIONS_CLOSURE_BOXES_ERROR 3
-
 // per-module closure box policy (see jl_get_module_closure_boxes)
 #define JL_CLOSURE_BOXES_ALLOW 0
 #define JL_CLOSURE_BOXES_WARN 1

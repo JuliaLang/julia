@@ -4245,7 +4245,7 @@ f(x) = yt(x)
 
 ;; What to do when a closure captures a variable that needs a `Core.Box`:
 ;; 0 = allow, 1 = warn, 2 = error. Set per lowering call from the module's
-;; `closure_boxes` setting and the `--closure-boxes` command line option.
+;; `closure_boxes` setting (see `Base.Experimental.@closure_boxes`).
 (define *closure-box-policy* 0)
 
 (define (allow-box-meta? e)
@@ -4299,8 +4299,9 @@ f(x) = yt(x)
                                  " assigned exactly once before the closure is created"
                                  (if (= *closure-box-policy* 2) (format-loc lno) "")
                                  ". To avoid the box, assign " (if one "it" "them")
-                                 " only once before creating the closure (e.g. with `let "
-                                 (car bad) " = " (car bad) "; ... end`) or use a `Ref`."
+                                 " only once before creating the closure, or use a `Ref`;"
+                                 " if the closure does not need to see later assignments, `let "
+                                 (car bad) " = " (car bad) "; ... end` around it gives it a copy."
                                  " To allow the box, add `Base.Experimental.@allow_box "
                                  (string.join (map string bad) " ")
                                  "` to the closure body.")))

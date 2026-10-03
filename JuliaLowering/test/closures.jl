@@ -1482,7 +1482,7 @@ end
 
 # Closures capturing variables that need a `Core.Box` follow the module's closure box
 # policy, and `@allow_box` annotations in the closure body opt out
-if hasfield(Base.JLOptions, :closure_boxes)
+if isdefined(Base.Experimental, Symbol("@closure_boxes"))
     box_mod = Module()
     Core.eval(box_mod, :(Base.Experimental.@closure_boxes :error))
     @test_throws "closure captures variable `x`" JuliaLowering.include_string(box_mod, """
