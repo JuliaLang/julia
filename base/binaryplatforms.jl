@@ -871,21 +871,38 @@ this function returns `"libfoo", v"3.2"`.  If the path name is not a
 valid dynamic library, this method throws an error.  If no soversion
 can be extracted from the filename, as in "libbar.so" this method
 returns `"libbar", nothing`.
+
+A soversion may carry a trailing tag, as Julia's own LLVM does; the tag is not part of the
+name and is not reported.
+
+# Examples
+```jldoctest
+julia> parse_dl_name_version("lib/libfoo.so.3.2", "linux")
+("libfoo", v"3.2.0")
+
+julia> parse_dl_name_version("libbar.so", "linux")
+("libbar", nothing)
+
+julia> parse_dl_name_version("libLLVM.so.21.1jl", "linux")
+("libLLVM", v"21.1.0")
+```
 """
 function parse_dl_name_version(path::String, os::String=_this_os_name())
-    # Use an extraction regex that matches the given OS
+    # Use an extraction regex that matches the given OS.
+    # A soversion may be followed by a tag (the third group), as in `libLLVM.so.21.1jl`.
+    # The tag is only accepted after a version, so a name like `libmp3lame` keeps its letters.
     local dlregex
     # Keep this up to date with _this_os_name
     if os == "windows"
         # On Windows, libraries look like `libnettle-6.dll`.
         # Stay case-insensitive, the suffix might be `.DLL`.
-        dlregex = r"^(.*?)(?:-((?:[\.\d]+)*))?\.dll$"isa
+        dlregex = r"^(.*?)(?:-(?:((?:[\.\d]+)+)([A-Za-z][\w\.]*)?)?)?\.dll$"isa
     elseif os == "macos"
         # On OSX, libraries look like `libnettle.6.3.dylib`
-        dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"sa
+        dlregex = r"^(.*?)(?:((?:\.[\d]+)+)([A-Za-z][\w\-]*)?)?\.dylib$"sa
     else
         # On Linux and other BSDs, libraries look like `libnettle.so.6.3.0`
-        dlregex = r"^(.*?)\.so((?:\.[\d]+)*)$"sa
+        dlregex = r"^(.*?)\.so(?:((?:\.[\d]+)+)([A-Za-z][\w\-]*)?)?$"sa
     end
 
     m = match(dlregex, basename(path))
