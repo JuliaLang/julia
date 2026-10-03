@@ -4622,4 +4622,27 @@ end
     end end
 end
 
+precompile_test_harness("JIT names of image methods") do dir
+    # When JIT-compiled code calls into a package image, the callee's symbol is
+    # named after its method plus a counter. These names must not collide, e.g.
+    # the 21st `jitname` and the first `jitname2` used to both end in `jitname20`.
+    write(joinpath(dir, "JITNames.jl"),
+          """
+          module JITNames
+              @noinline jitname(::Val{N}, x::Int) where {N} = x + N
+              @noinline jitname2(::Val{N}, x::Int) where {N} = -x
+              for i in 0:30
+                  precompile(jitname, (Val{i}, Int))
+              end
+              precompile(jitname2, (Val{0}, Int))
+          end
+          """)
+    Base.compilecache(Base.PkgId("JITNames"))
+    @eval using JITNames
+    @test invokelatest(@eval(x -> JITNames.jitname2(Val(0), x)), 5) == -5
+    for i in 0:30
+        @test invokelatest(@eval(x -> JITNames.jitname(Val($i), x)), 5) == 5 + i
+    end
+end
+
 finish_precompile_test!()
