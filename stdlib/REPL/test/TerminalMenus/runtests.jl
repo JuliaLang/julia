@@ -2,7 +2,7 @@
 
 import REPL
 using REPL.TerminalMenus
-using Test
+using Test, Logging
 
 function simulate_input(menu::TerminalMenus.AbstractMenu, keys...; kwargs...)
     keydict =  Dict(:up => "\e[A",
@@ -27,6 +27,8 @@ include("multiselect_menu.jl")
 include("dynamic_menu.jl")
 include("multiselect_with_skip_menu.jl")
 include("pager.jl")
+include("quit_selection.jl")
+include("custom_header.jl")
 
 # Legacy tests
 include("legacytests/old_radio_menu.jl")
