@@ -23,7 +23,6 @@ mutable struct BindingInfo
     is_assigned_once::Bool
     is_captured::Bool
     is_always_defined::Bool
-    is_used_undef::Bool
 end
 
 """
@@ -56,14 +55,13 @@ function BindingInfo(bindings::Bindings,
                      is_assigned::Bool = false,
                      is_assigned_once::Bool = false,
                      is_captured::Bool = false,
-                     is_always_defined::Bool = is_ssa || kind === :argument,
-                     is_used_undef::Bool = false)
+                     is_always_defined::Bool = is_ssa || kind === :argument)
     bid = next_binding_id(bindings)
     b = BindingInfo(
         bid, name, kind, node_id, mod, type, lambda_id, is_const, is_ssa,
         is_internal, is_ambiguous_local, unboxed, is_nospecialize,
         is_read, is_called, is_assigned, is_assigned_once, is_captured,
-        is_always_defined, is_used_undef)
+        is_always_defined)
     add_binding(bindings, b)
     b
 end
@@ -88,7 +86,6 @@ function Base.show(io::IO, binfo::BindingInfo)
     binfo.is_assigned_once   && print(io, ", is_assigned_once=true")
     binfo.is_captured        && print(io, ", is_captured=true")
     binfo.is_always_defined  && print(io, ", is_always_defined=true")
-    binfo.is_used_undef      && print(io, ", is_used_undef=true")
     print(io, ")")
 end
 
