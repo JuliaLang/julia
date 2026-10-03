@@ -24,18 +24,41 @@ sysbase-debug: $(build_private_libdir)/sysbase-debug.$(SHLIB_EXT)
 
 VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 
-$(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%-o.a
-	@$(call PRINT_LINK, $(call link-dll,$@, \
-		--disable-auto-import --disable-runtime-pseudo-reloc $(WIN_LD_LIBPATHS), \
-		$(WIN_LD_DLL_CRT_START) \
-		$(call whole_archive,$<) \
-		$(if $(findstring -debug,$(notdir $@)),-ljulia-internal-debug -ljulia-debug,-ljulia-internal -ljulia) \
-		$(LIBM) $(WIN_MINGW_LIBS) -lssp $(WIN_LD_CRT_END), \
-		$(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir), \
-		$(call whole_archive,$<) \
-		$(if $(findstring -debug,$(notdir $@)),-ljulia-internal-debug -ljulia-debug,-ljulia-internal -ljulia)))
-	@$(INSTALL_NAME_CMD)$(notdir $@) $@
-	@$(DSYMUTIL) $@
+define bootstrap_sysimage_link
+$$(build_private_libdir)/$1$2.$$(SHLIB_EXT): $$(build_private_libdir)/$1$2-o.a
+	@$$(call PRINT_LINK, $$(call link-dll,$$@, \
+		--disable-auto-import --disable-runtime-pseudo-reloc $$(WIN_LD_LIBPATHS), \
+		$$(WIN_LD_DLL_CRT_START) \
+		$$(call whole_archive,$$<) \
+		-ljulia-internal$2 -ljulia$2 \
+		$$(LIBM) $$(WIN_MINGW_LIBS) -lssp $$(WIN_LD_CRT_END), \
+		$$(CXX) $$(LDFLAGS) -shared $$(fPIC) -L$$(build_private_libdir) -L$$(build_libdir) -L$$(build_shlibdir), \
+		$$(call whole_archive,$$<) \
+		-ljulia-internal$2 -ljulia$2))
+	@$$(INSTALL_NAME_CMD)$$(notdir $$@) $$@
+	@$$(DSYMUTIL) $$@
+endef
+
+$(eval $(call bootstrap_sysimage_link,basecompiler,))
+$(eval $(call bootstrap_sysimage_link,basecompiler,-debug))
+$(eval $(call bootstrap_sysimage_link,sysbase,))
+$(eval $(call bootstrap_sysimage_link,sysbase,-debug))
+
+define sysimage_link
+$$(build_private_libdir)/$1$2.$$(SHLIB_EXT): $$(build_private_libdir)/$1$2-o.a $$(build_private_libdir)/sysbase$2.$$(SHLIB_EXT)
+	@$$(call PRINT_LINK, $$(call spawn,$3) -J $$(call cygpath_w,$$(build_private_libdir)/sysbase$2.$$(SHLIB_EXT)) --startup-file=no -e \
+		'Base.Linking.link_image(ARGS[1], ARGS[2]; is_sysimage=true)' -- $$(call cygpath_w,$$<) $$(call cygpath_w,$$@))
+	@$$(INSTALL_NAME_CMD)$$(notdir $$@) $$@
+ifeq ($$(OS), Darwin)
+	@$$(call spawn,$3) -J $$(call cygpath_w,$$(build_private_libdir)/sysbase$2.$$(SHLIB_EXT)) --startup-file=no -e \
+		'run(`$$$$(Base.Linking.dsymutil()) $$$$(ARGS[1])`)' -- $$(call cygpath_w,$$@)
+endif
+endef
+
+$(eval $(call sysimage_link,sys,,$(JULIA_EXECUTABLE_release)))
+$(eval $(call sysimage_link,sys,-debug,$(JULIA_EXECUTABLE_debug)))
+$(eval $(call sysimage_link,sys-JL,,$(JULIA_EXECUTABLE_release)))
+$(eval $(call sysimage_link,sys-JL,-debug,$(JULIA_EXECUTABLE_debug)))
 
 COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/Base_compiler.jl \
