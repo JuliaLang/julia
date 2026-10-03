@@ -10,6 +10,7 @@ const TESTNAMES = [
         "keywordargs", "numbers", "subtype", "typegroup",
         "char", "strings", "triplequote", "unicode", "intrinsics", "apint",
         "dict", "hashing", "iobuffer", "staged", "offsetarray",
+        "lightboundserrors", "nonresizablevectors",
         "arrayops", "tuple", "reduce", "reducedim", "abstractarray",
         "intfuncs", "simdloop", "vecelement", "rational",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
