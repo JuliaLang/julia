@@ -100,7 +100,11 @@ static inline llvm::AttributeList getWriteBarrierAttributes(llvm::LLVMContext &C
 {
     using namespace llvm;
     AttrBuilder FnAttrs(C);
-    auto effects = MemoryEffects::inaccessibleMemOnly();
+    // The barrier inspects the parent's and children's headers, and it must
+    // stay ordered after the store it guards: a store may not be sunk past
+    // a later safepoint (see add_fn_attrs_for_effects in codegen.cpp), and
+    // reading the slot's memory here pins the store above the barrier.
+    auto effects = MemoryEffects::inaccessibleMemOnly() | MemoryEffects::argMemOnly(ModRefInfo::Ref);
 #ifdef GC_BARRIER_SNAPSHOT
     // Snapshot barriers read old fields, including out-of-line object storage.
     effects |= MemoryEffects::readOnly();
