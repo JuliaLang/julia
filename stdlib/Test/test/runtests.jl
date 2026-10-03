@@ -165,6 +165,9 @@ end
                    "Message: \"BoundsError: attempt to access 1-element Vector{$Int} at index [2]\"")
     @test_throws "\"" throw("\"")
     @test_throws Returns(false) throw(Returns(false))
+    @test_throws(ArgumentError) do
+        throw(ArgumentError("test"))
+    end
 end
 
 @testset "Pass - exception with pattern (3-arg form)" begin
@@ -182,6 +185,10 @@ end
         output = sprint(show, result)
         @test occursin("Test Passed", output)
         @test occursin("Thrown: ErrorException", output)
+    end
+
+    @test_throws(ErrorException, "fails") do
+        error("fails")
     end
 end
 
