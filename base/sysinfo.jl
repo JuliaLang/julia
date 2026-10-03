@@ -492,7 +492,7 @@ function which(program_name::String)
     if isempty(program_dirname)
         # If we have been given just a program name (not a relative or absolute
         # path) then we should search `PATH` for it here:
-        pathsep = iswindows() ? ';' : ':'
+        pathsep = Base.Filesystem.path_list_separator
         path_dirs = map(abspath, eachsplit(get(ENV, "PATH", ""), pathsep))
 
         # On windows we always check the current directory as well
