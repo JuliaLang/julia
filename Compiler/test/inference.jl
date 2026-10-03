@@ -408,6 +408,14 @@ end
         @test Compiler.materialize_inference_edges(encoded_root.edges) ==
             Core.svec(1, atype, ci1)
 
+        # a possibly-ambiguous group does not replace a later edge to the same target
+        possibly_ambiguous_leaf = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(Core.PossiblyAmbiguous(), 1, atype, ci1))
+        possibly_ambiguous_root = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(possibly_ambiguous_leaf, standalone_leaf))
+        @test Compiler.materialize_inference_edges(possibly_ambiguous_root.edges) ==
+            Core.svec(Core.PossiblyAmbiguous(), 1, atype, ci1, ci1)
+
         regular_inf = Compiler.InferenceResult(mi, Compiler.typeinf_lattice(interp))
         regular_inf.result = Int
         regular_inf.valid_worlds = Compiler.WorldRange(world - 2, world)
@@ -558,6 +566,42 @@ end
         @test Compiler.getedge(Compiler.InvokeCallInfo(ci1, match, nothing, atype), 1) === ci1
         @test Compiler.getedge(Compiler.OpaqueClosureCallInfo(ci2, match, nothing), 1) === ci2
         @test Compiler.getedge(Compiler.VirtualMethodMatchInfo(split), 2) === ci2
+    end
+
+    @testset "possibly-ambiguous edges" begin
+        pa = Core.PossiblyAmbiguous()
+        edges = Any[]
+        Compiler.add_one_edge!(edges, mi, true)
+        Compiler.add_one_edge!(edges, mi, true)
+        @test edges == Any[pa, mi]
+        # an edge that is not possibly ambiguous takes over the record
+        Compiler.add_one_edge!(edges, mi)
+        @test edges == Any[mi]
+        Compiler.add_one_edge!(edges, mi, true)
+        @test edges == Any[mi]
+
+        edges = Any[pa, mi]
+        Compiler.add_one_edge!(edges, ci1, true)
+        @test edges == Any[pa, ci1]
+        Compiler.add_one_edge!(edges, ci1)
+        @test edges == Any[ci1]
+
+        # an inlined call is not possibly ambiguous
+        edges = Any[pa, mi]
+        Compiler.add_inlining_edge!(edges, mi)
+        @test edges == Any[mi]
+        edges = Any[pa, mi]
+        Compiler.add_inlining_edge!(edges, ci1)
+        @test edges == Any[ci1]
+
+        # the same rule holds when inference proofs are flattened
+        proof(edges...) = Compiler.LocalInferenceProof(Compiler.WorldRange(world), Core.svec(edges...))
+        flatten(proofs...) = Compiler.materialize_inference_edges(Core.svec(proofs...))
+        @test flatten(proof(pa, ci1), proof(ci1)) == Core.svec(ci1)
+        @test flatten(proof(ci1), proof(pa, ci1)) == Core.svec(ci1)
+        @test flatten(proof(pa, ci1), proof(pa, ci1)) == Core.svec(pa, ci1)
+        @test flatten(proof(pa, ci1), proof(1, atype, ci1)) == Core.svec(ci1, 1, atype, ci1)
+        @test flatten(proof(1, atype, ci1), proof(pa, ci1)) == Core.svec(1, atype, ci1)
     end
 
     @testset "encoded groups are immutable units" begin

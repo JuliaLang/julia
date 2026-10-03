@@ -2603,6 +2603,45 @@ static int _invalidate_dispatch_backedges(jl_method_instance_t *mi, jl_value_t *
         else {
             replaced_edge = replaced_dispatch;
         }
+        if (replaced_edge && invokeTypes == NULL && ambig) {
+            // the new method only makes calls to `mi` ambiguous: avoid the invalidation
+            // if every edge from `caller` to `mi` is marked as possibly ambiguous
+            jl_svec_t *edges = jl_atomic_load_relaxed(&caller->edges);
+            size_t nedges = jl_svec_len(edges);
+            int found_ambig = 0;
+            int edge_ambig = 0;
+            for (size_t j = 0; j < nedges; ) {
+                jl_value_t *edge = jl_svecref(edges, j);
+                if (jl_typetagis(edge, jl_possibly_ambiguous_type)) {
+                    edge_ambig = 1;
+                    j += 1;
+                    continue;
+                }
+                size_t first = j, n = 1;
+                if (jl_is_long(edge)) {
+                    ssize_t nmatches = jl_unbox_long(edge);
+                    first = j + 2;
+                    n = nmatches < 0 ? -nmatches : nmatches;
+                }
+                for (size_t k = first; k < first + n && k < nedges; k++) {
+                    jl_value_t *callee = jl_svecref(edges, k);
+                    if (jl_is_code_instance(callee))
+                        callee = (jl_value_t*)jl_get_ci_mi((jl_code_instance_t*)callee);
+                    if (callee == (jl_value_t*)mi) {
+                        if (!edge_ambig)
+                            goto must_invalidate;
+                        found_ambig = 1;
+                    }
+                }
+                j = first + n;
+                edge_ambig = 0;
+            }
+            if (found_ambig) {
+                insb = set_next_edge(backedges, insb, invokeTypes, caller);
+                continue;
+            }
+        must_invalidate:;
+        }
         if (replaced_edge) {
             invalidate_code_instance(caller, max_world, 1);
             insb = clear_next_edge(backedges, insb, invokeTypes, caller);
