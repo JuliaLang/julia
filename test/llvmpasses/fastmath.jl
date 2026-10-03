@@ -14,5 +14,14 @@ include(joinpath("..", "testhelpers", "llvmpasses.jl"))
 
 import Base.FastMath
 
+# CHECK-LABEL: @julia_sqrt_fast
 # CHECK: call fast float @llvm.sqrt.f32(float %"x::Float32")
 emit(FastMath.sqrt_fast, Float32)
+
+# CHECK-LABEL: @julia_inv_fast
+# CHECK: fdiv fast float 1.000000e+00, %"x::Float32"
+emit(FastMath.inv_fast, Float32)
+
+# CHECK-LABEL: @julia_inv_fast
+# CHECK: fdiv fast double 1.000000e+00, %"x::Float64"
+emit(FastMath.inv_fast, Float64)
