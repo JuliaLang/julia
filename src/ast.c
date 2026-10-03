@@ -214,6 +214,8 @@ static jl_ast_context_t *jl_ast_ctx_enter(jl_module_t *m) JL_GLOBALLY_ROOTED JL_
         jl_init_ast_ctx(ctx);
     }
     ctx->module = m;
+    fl_context_t *fl_ctx = &ctx->fl;
+    set(symbol(fl_ctx, "*closure-box-policy*"), fixnum(jl_get_module_closure_boxes(m)));
     return ctx;
 }
 
@@ -312,6 +314,7 @@ void jl_init_common_symbols(void)
     jl_force_compile_sym = jl_symbol("force_compile");
     jl_infer_sym = jl_symbol("infer");
     jl_max_methods_sym = jl_symbol("max_methods");
+    jl_closure_boxes_sym = jl_symbol("closure_boxes");
     jl_macrocall_sym = jl_symbol("macrocall");
     jl_escape_sym = jl_symbol("escape");
     jl_hygienicscope_sym = jl_symbol("hygienic-scope");

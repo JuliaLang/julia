@@ -671,6 +671,7 @@ static jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent) JL_CANS
     m->compile = -1;
     m->infer = -1;
     m->max_methods = -1;
+    m->closure_boxes = -1;
     jl_atomic_store_relaxed(&m->has_reexports, 0);
     jl_atomic_store_relaxed(&m->export_set_changed_since_require_world, 0);
     m->file = jl_empty_sym;
@@ -886,6 +887,32 @@ JL_DLLEXPORT int jl_get_module_max_methods(jl_module_t *m)
         m = m->parent;
         value = m->max_methods;
     }
+    return value;
+}
+
+JL_DLLEXPORT void jl_set_module_closure_boxes(jl_module_t *self, int value)
+{
+    if (value < JL_CLOSURE_BOXES_ALLOW || value > JL_CLOSURE_BOXES_ERROR)
+        jl_errorf("invalid closure_boxes setting %d", value);
+    self->closure_boxes = value;
+}
+
+// The effective policy for lowering code in `m`: an explicit setting on `m` or one of its
+// parents takes precedence over `--closure-boxes`, which takes precedence over the default.
+JL_DLLEXPORT int jl_get_module_closure_boxes(jl_module_t *m) JL_NOTSAFEPOINT
+{
+    int value = -1;
+    if (m) {
+        value = m->closure_boxes;
+        while (value == -1 && m->parent != m && m != jl_base_module) {
+            m = m->parent;
+            value = m->closure_boxes;
+        }
+    }
+    if (value == -1 && jl_options.closure_boxes != JL_OPTIONS_CLOSURE_BOXES_DEFAULT)
+        value = jl_options.closure_boxes - 1;
+    if (value == -1)
+        value = JL_CLOSURE_BOXES_ALLOW;
     return value;
 }
 

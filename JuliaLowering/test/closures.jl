@@ -1479,3 +1479,68 @@ end
    @test only(Base.return_types(test_mod.f_boxed_localvar_typed, (Vector{Int}, Int))) ===
        Vector{Int}
 end
+
+# Closures capturing variables that need a `Core.Box` follow the module's closure box
+# policy, and `@allow_box` annotations in the closure body opt out
+if hasfield(Base.JLOptions, :closure_boxes)
+    box_mod = Module()
+    Core.eval(box_mod, :(Base.Experimental.@closure_boxes :error))
+    @test_throws "closure captures variable `x`" JuliaLowering.include_string(box_mod, """
+    function f_box_err()
+        x = 0
+        g = () -> x
+        x = 1
+        g
+    end
+    """)
+    @test_throws "closure captures variables `x`, `y`" JuliaLowering.include_string(box_mod, """
+    function f_box_err2()
+        x = y = 0
+        g = () -> (Base.Experimental.@allow_box z; x + y)
+        x = y = 1
+        g
+    end
+    """)
+    @test JuliaLowering.include_string(box_mod, """
+    function f_box_allowed()
+        x = 0
+        g = () -> (Base.Experimental.@allow_box x; x)
+        x = 1
+        g()
+    end
+    f_box_allowed()
+    """) == 1
+    @test JuliaLowering.include_string(box_mod, """
+    function f_box_allow_all(xs)
+        n = 0
+        foreach(xs) do x
+            Base.Experimental.@allow_box
+            n += x
+        end
+        n
+    end
+    f_box_allow_all(1:3)
+    """) == 6
+    @test JuliaLowering.include_string(box_mod, """
+    function f_box_nested()
+        x = 0
+        g = () -> (() -> (Base.Experimental.@allow_box x; x))
+        x = 1
+        g()()
+    end
+    f_box_nested()
+    """) == 1
+    @test JuliaLowering.include_string(box_mod, "let x = 0; g = () -> x; g(); end") == 0
+
+    warn_mod = Module()
+    Core.eval(warn_mod, :(Base.Experimental.@closure_boxes :warn))
+    @test 1 == @test_logs (:warn, r"closure captures variable `x`") JuliaLowering.include_string(warn_mod, """
+    function f_box_warn()
+        x = 0
+        g = () -> x
+        x = 1
+        g()
+    end
+    f_box_warn()
+    """)
+end

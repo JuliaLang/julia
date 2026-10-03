@@ -942,6 +942,32 @@ In the meantime, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
 
+#### Reporting boxed captured variables
+
+Because boxing is easy to introduce by accident, lowering can report it. After
+[`Base.Experimental.@closure_boxes :error`](@ref Base.Experimental.@closure_boxes) in a
+module (or with the `--closure-boxes=error` command line option), lowering `abmult` or
+`abmult2` throws an error:
+```
+ERROR: syntax: closure captures variable `r`, which requires a `Core.Box` because it is
+assigned more than once or after being captured [...]
+```
+Use `:warn` instead to only print a warning. If a box is acceptable, for example in code
+that isn't performance-critical, put
+[`Base.Experimental.@allow_box r`](@ref Base.Experimental.@allow_box) in the body of the
+closure:
+```julia
+function abmult4(r::Int)
+    if r < 0
+        r = -r
+    end
+    f = x -> (Base.Experimental.@allow_box r; x * r)
+    return f
+end
+```
+A module setting applies to its submodules too, and takes precedence over the
+`--closure-boxes` option, which sets the behavior for modules that don't choose one.
+
 #### Use `@__FUNCTION__` for recursive closures
 
 For recursive closures specifically, the [`@__FUNCTION__`](@ref) macro can avoid both type instability and boxing.

@@ -31,6 +31,9 @@ mutable struct ClosureConversionCtx <: AbstractLoweringContext
     const toplevel_pure::Bool
     const toplevel_stmts::Vector{SyntaxTree}
     const closure_infos::Dict{ClosureKey,ClosureInfo}
+    # Names of the captured variables that `@allow_box` annotations allow each
+    # lambda to box (`nothing` allows all of them)
+    const allowed_boxes::Dict{ScopeId,Union{Nothing,Set{String}}}
 end
 
 function current_lambda_bindings(ctx::ClosureConversionCtx)
@@ -275,6 +278,7 @@ function closure_type_fields(ctx, srcref, closure_binds, is_opaque)
         push!(field_is_box, is_boxed(ctx, id))
         field_inds[id] = i
     end
+    check_closure_boxes(ctx, srcref, closure_binds, field_orig_bindings, field_is_box)
     capt_sp2 = SyntaxList()
     for sp in sort!(collect(capt_sp))
         push!(capt_sp2, binding_ex(ctx, sp))
@@ -297,6 +301,79 @@ end
 
 function is_boxed(ctx, x)
     is_boxed(get_binding(ctx, x))
+end
+
+# What to do when a closure captures a variable that needs a `Core.Box`:
+# 0 = allow, 1 = warn, 2 = error. See `Base.Experimental.@closure_boxes`.
+function closure_box_policy(mod::Module)
+    @static if hasfield(Base.JLOptions, :closure_boxes)
+        Int(ccall(:jl_get_module_closure_boxes, Cint, (Any,), mod))
+    else
+        0
+    end
+end
+
+# Find the `@allow_box` annotations (`[K"meta" "allow_box" vars...]`) in `ex`.
+# An annotation applies to the lambda containing it and to all enclosing
+# lambdas, which may need to capture the same variables to pass them inward.
+function collect_allowed_boxes(ex)
+    allowed = Dict{ScopeId,Union{Nothing,Set{String}}}()
+    _collect_allowed_boxes!(allowed, ScopeId[], ex)
+    allowed
+end
+
+function _collect_allowed_boxes!(allowed, lambdas, ex)
+    k = kind(ex)
+    if is_leaf(ex)
+        return
+    elseif k in KSet"lambda toplevel_lambda generated_lambda"
+        push!(lambdas, lambda_bindings(ex[1]).scope_id)
+        foreach(e->_collect_allowed_boxes!(allowed, lambdas, e), children(ex))
+        pop!(lambdas)
+    elseif k == K"meta" && numchildren(ex) >= 1 && kind(ex[1]) == K"Symbol" &&
+            syntax_name(ex[1]) == "allow_box"
+        names = Set{String}(syntax_name(v) for v in children(ex)[2:end])
+        for id in lambdas
+            prev = get(allowed, id, Set{String}())
+            allowed[id] = isnothing(prev) || isempty(names) ? nothing : union!(prev, names)
+        end
+    else
+        foreach(e->_collect_allowed_boxes!(allowed, lambdas, e), children(ex))
+    end
+end
+
+# Apply the closure box policy of `ctx.mod` to a closure with methods
+# `closure_binds.lambdas`, which stores the captured variables `field_bindings`
+# in boxes where `field_is_box` is set.
+function check_closure_boxes(ctx, srcref, closure_binds, field_bindings, field_is_box)
+    any(field_is_box) || return
+    policy = closure_box_policy(ctx.mod)
+    policy == 0 && return
+    bad = String[]
+    for (id, boxed) in zip(field_bindings, field_is_box)
+        boxed || continue
+        name = get_binding(ctx, id).name
+        allowed = any(closure_binds.lambdas) do lbs
+            names = get(ctx.allowed_boxes, lbs.scope_id, Set{String}())
+            isnothing(names) || name in names
+        end
+        allowed || push!(bad, name)
+    end
+    isempty(bad) && return
+    single = length(bad) == 1
+    msg = string("closure captures ", single ? "variable " : "variables ",
+                 join(("`$v`" for v in bad), ", "), ", which ", single ? "requires" : "require",
+                 " a `Core.Box` because ", single ? "it is" : "they are",
+                 " assigned more than once or after being captured. To avoid the box, assign ",
+                 single ? "it" : "them", " only once before creating the closure (e.g. with `let ",
+                 bad[1], " = ", bad[1], "; ... end`) or use a `Ref`. To allow the box, add ",
+                 "`Base.Experimental.@allow_box ", join(bad, " "), "` to the closure body.")
+    if policy == 2
+        throw(LoweringError(srcref, msg))
+    else
+        loc = source_location(LineNumberNode, srcref)
+        @warn msg _file=string(loc.file) _line=loc.line _group=:closure_boxes _module=ctx.mod
+    end
 end
 
 # Is a field in the closure argument `self`.  Exception: non-OC sparams are type
@@ -382,7 +459,7 @@ function map_cl_convert(ctx::ClosureConversionCtx, ex)
             ctx.bindings, ctx.mod,
             ctx.closure_bindings, ctx.capture_rewriting, ctx.top_bindings,
             ctx.lambda_bindings, ctx.sp_typevars, true, ctx.lifted,
-            ctx.toplevel_pure, toplevel_stmts, ctx.closure_infos)
+            ctx.toplevel_pure, toplevel_stmts, ctx.closure_infos, ctx.allowed_boxes)
         res = mapchildren(e->_convert_closures(ctx2, e), ex)
         if isempty(toplevel_stmts)
             res
@@ -536,7 +613,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             ctx.closure_bindings, cap_rewrite,
             ctx.top_bindings, ctx.lambda_bindings, ctx.sp_typevars,
             ctx.toplevel, true, ctx.toplevel_pure, ctx.toplevel_stmts,
-            ctx.closure_infos)
+            ctx.closure_infos, ctx.allowed_boxes)
         tvs = map_cl_convert(ctx2, ex[2])
         if !ctx.toplevel
             push!(ctx2.toplevel_stmts, tvs)
@@ -565,7 +642,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             ctx.bindings, ctx.mod,
             ctx.closure_bindings, capture_rewrites, ctx.top_bindings,
             ctx.lambda_bindings, ctx.sp_typevars, false, false,
-            ctx.toplevel_pure, ctx.toplevel_stmts, ctx.closure_infos)
+            ctx.toplevel_pure, ctx.toplevel_stmts, ctx.closure_infos, ctx.allowed_boxes)
 
         argt = _convert_closures(ctx, ex[2])
         rt_lb = _convert_closures(ctx, ex[3])
@@ -616,7 +693,7 @@ function closure_convert_lambda(ctx, ex, sps)
         lbs, ctx.sp_typevars,
         k === K"toplevel_lambda", k === K"toplevel_lambda",
         ctx.toplevel_pure && k == K"generated_lambda",
-        ctx.toplevel_stmts, ctx.closure_infos)
+        ctx.toplevel_stmts, ctx.closure_infos, ctx.allowed_boxes)
     lambda_children = SyntaxList()
     push!(lambda_children, ex[1])
     push!(lambda_children, ex[2])
@@ -685,7 +762,8 @@ Invariants:
                                    ctx.closure_bindings, nothing,
                                    lbs, lbs, ctx.sp_typevars,
                                    false, true, true, SyntaxList(),
-                                   Dict{ClosureKey,ClosureInfo}())
+                                   Dict{ClosureKey,ClosureInfo}(),
+                                   collect_allowed_boxes(ex))
     ex_out = closure_convert_lambda(ctx_out, ex, children(ex[3]))
     if !isempty(ctx_out.toplevel_stmts)
         throw(LoweringError(first(ctx_out.toplevel_stmts), "Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension"))

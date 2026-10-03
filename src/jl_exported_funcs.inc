@@ -215,6 +215,7 @@
     XX(jl_get_JIT) \
     XX(jl_get_julia_bin) \
     XX(jl_get_julia_bindir) \
+    XX(jl_get_module_closure_boxes) \
     XX(jl_get_module_compile) \
     XX(jl_get_module_infer) \
     XX(jl_get_module_of_binding) \
@@ -417,6 +418,7 @@
     XX(jl_set_errno) \
     XX(jl_set_global) \
     XX(jl_set_istopmod) \
+    XX(jl_set_module_closure_boxes) \
     XX(jl_set_module_compile) \
     XX(jl_set_module_infer) \
     XX(jl_set_module_nospecialize) \

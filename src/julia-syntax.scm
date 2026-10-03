@@ -4243,6 +4243,65 @@ f(x) = yt(x)
   (let ((vi (assq v (car (lam:vinfo lam)))))
     (and vi (vinfo:nospecialize vi))))
 
+;; What to do when a closure captures a variable that needs a `Core.Box`:
+;; 0 = allow, 1 = warn, 2 = error. Set per lowering call from the module's
+;; `closure_boxes` setting and the `--closure-boxes` command line option.
+(define *closure-box-policy* 2)
+
+;; Variables that `(meta allow_box ...)` annotations in the bodies of `lams` (the
+;; methods of one closure, including any closures nested inside them) allow to
+;; be boxed, or #t if a bare `(meta allow_box)` allows all of them.
+(define (closure-allowed-boxes lams)
+  (let ((metas (apply append
+                      (map (lambda (l)
+                             (expr-find-all (lambda (e) (and (pair? e) (eq? (car e) 'meta)
+                                                             (pair? (cdr e)) (eq? (cadr e) 'allow_box)))
+                                            (lam:body l)
+                                            identity))
+                           lams))))
+    (if (any (lambda (m) (null? (cddr m))) metas)
+        #t
+        (apply append (map cddr metas)))))
+
+;; Apply the closure box policy to a closure with methods `lams` that captures
+;; `vars` from the enclosing lambda `lam`.
+(define (check-closure-boxes! vars lam lams)
+  (if (> *closure-box-policy* 0)
+      (let* ((boxed   (filter (lambda (v) (is-var-boxed? v lam)) vars))
+             (allowed (if (null? boxed) '() (closure-allowed-boxes lams)))
+             (bad     (if (eq? allowed #t)
+                          '()
+                          (filter (lambda (v) (not (memq v allowed))) boxed))))
+        (if (pair? bad)
+            (let* ((lines (lambda (l) (expr-find-all (lambda (e) (and (pair? e) (eq? (car e) 'line)))
+                                                     (lam:body l) identity)))
+                   (ls   (apply append (map lines lams)))
+                   ;; Prefer a location in the file of the enclosing code: the first
+                   ;; lines of a closure created by a macro are often in the macro's file.
+                   (file (let ((outer (lines lam)))
+                           (and (pair? outer) (length> (car outer) 2) (caddr (car outer)))))
+                   (same (filter (lambda (l) (and (length> l 2) (eq? (caddr l) file))) ls))
+                   (lno  (cond ((pair? same) (car same))
+                               ((pair? ls)   (car ls))
+                               (else #f)))
+                   (one  (length= bad 1))
+                   (vs   (string.join (map (lambda (v) (string "`" v "`")) bad) ", "))
+                   (msg  (string "closure captures " (if one "variable " "variables ") vs
+                                 ", which " (if one "requires" "require")
+                                 " a `Core.Box` because " (if one "it is" "they are")
+                                 " assigned more than once or after being captured"
+                                 (if (= *closure-box-policy* 2) (format-loc lno) "")
+                                 ". To avoid the box, assign " (if one "it" "them")
+                                 " only once before creating the closure (e.g. with `let "
+                                 (car bad) " = " (car bad) "; ... end`) or use a `Ref`."
+                                 " To allow the box, add `Base.Experimental.@allow_box "
+                                 (string.join (map string bad) " ")
+                                 "` to the closure body.")))
+              (if (= *closure-box-policy* 2)
+                  (error msg)
+                  (let ((lf (extract-line-file lno)))
+                    (lowering-warning 1000 'warn (cadr lf) (car lf) msg))))))))
+
 (define (toplevel-preserving? e)
   (and (pair? e) (memq (car e) '(if elseif block trycatch tryfinally trycatchelse = const))))
 
@@ -4394,6 +4453,7 @@ f(x) = yt(x)
                   (vis   (lam:vinfo lam2))
                   (cvs   (map car (cadr vis))))
              (prepare-lambda! lam2)
+             (check-closure-boxes! cvs lam (list lam2))
              (let ((var-exprs (map (lambda (v)
                                      (let ((cv (assq v (cadr (lam:vinfo lam)))))
                                        (if cv
@@ -4608,6 +4668,9 @@ f(x) = yt(x)
                          (latestworld))
                        (begin
                          (put! defined name #t)
+                         (check-closure-boxes! capt-vars lam
+                                               (append (if lam2 (list lam2) '())
+                                                       (map cadddr alldefs)))
                          `(toplevel-butfirst
                            ,(convert-assignment name mk-closure fname lam interp opaq toplevel-pure parsed-method-stack globals locals)
                            ,@typedef

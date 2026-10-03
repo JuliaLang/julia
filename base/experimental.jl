@@ -188,6 +188,62 @@ macro max_methods(n::Int, fdef::Expr)
 end
 
 """
+    Experimental.@closure_boxes policy
+
+Set what lowering does when a closure in the current module captures a variable that must
+be stored in a `Core.Box`. Submodules inherit the setting of their parent module, and a
+module setting takes precedence over the `--closure-boxes` command line option.
+
+`policy` is one of
+  * `:error`: lowering throws an error
+  * `:warn`: lowering emits a warning
+  * `:allow` (the default): boxes are allowed silently
+
+Base and the standard libraries use `:error`.
+
+A captured variable needs a box when it is assigned more than once or after a closure
+captures it. Access to a boxed variable cannot be inferred, and every access to it
+requires a heap-allocated `Core.Box`, so this is a common source of poor performance.
+Individual closures can allow boxes with [`@allow_box`](@ref Base.Experimental.@allow_box).
+
+The setting applies to code lowered after this macro is evaluated.
+"""
+macro closure_boxes(policy::QuoteNode)
+    p = policy.value
+    n = p === :allow ? 0 : p === :warn ? 1 : p === :error ? 2 :
+        error("invalid closure_boxes policy $(repr(p)); expected :error, :warn, or :allow")
+    return Expr(:meta, :closure_boxes, n)
+end
+
+"""
+    Experimental.@allow_box
+    Experimental.@allow_box vars...
+
+Allow the closure whose body contains this annotation to capture `vars` (or all of its
+captured variables, if none are listed) even if they must be stored in a `Core.Box`.
+The annotation also applies to the variables that any enclosing closures capture in
+order to pass them to this closure.
+
+See [`@closure_boxes`](@ref Base.Experimental.@closure_boxes).
+
+# Examples
+```julia
+function count_calls(f, xs)
+    n = 0
+    foreach(xs) do x
+        Base.Experimental.@allow_box n
+        n += 1
+        f(x)
+    end
+    return n
+end
+```
+"""
+macro allow_box(vars::Symbol...)
+    return Expr(:meta, :allow_box, vars...)
+end
+
+"""
     Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={true,false} max_methods={default,1,2,3,4}
 
 Set compiler options for code in the enclosing module. Options correspond directly to

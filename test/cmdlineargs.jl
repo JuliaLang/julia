@@ -1017,6 +1017,26 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             (true, "true", "")
     end
 
+    # --closure-boxes
+    let code = "let x = 0; g = () -> x; x = 1; g(); end"
+        # `exename` propagates any `--closure-boxes` of this process, so check the default without it
+        @test readchomperrors(`$(Base.julia_cmd()[1]) --startup-file=no -E "$code"`) == (true, "1", "")
+        @test errors_not_signals(`$exename -E "$code" --closure-boxes=error`)
+        @test readchomperrors(`$exename -E "$code" --closure-boxes=allow`) == (true, "1", "")
+        ok, out, err = readchomperrors(`$exename -E "$code" --closure-boxes=warn`)
+        @test ok && out == "1" && occursin("closure captures variable `x`", err)
+        @test occursin("--closure-boxes=allow",
+                       readchomp(`$exename --closure-boxes=allow -E "Base.julia_cmd()"`))
+        # module settings take precedence
+        @test readchomperrors(`$exename --closure-boxes=error -E "
+            Base.Experimental.@closure_boxes :allow
+            $code"`) == (true, "1", "")
+        @test errors_not_signals(`$exename --closure-boxes=allow -E "
+            Base.Experimental.@closure_boxes :error
+            $code"`)
+        @test errors_not_signals(`$exename --closure-boxes=maybe`)
+    end
+
     # --inline
     @test readchomp(`$exename -E "Bool(Base.JLOptions().can_inline)"`) == "true"
     @test readchomp(`$exename --inline=yes -E "Bool(Base.JLOptions().can_inline)"`) == "true"

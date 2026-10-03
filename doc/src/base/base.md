@@ -326,6 +326,8 @@ Base.@simd
 Base.@polly
 Base.@generated
 Base.@assume_effects
+Base.Experimental.@allow_box
+Base.Experimental.@closure_boxes
 ```
 
 ## Managing deprecations

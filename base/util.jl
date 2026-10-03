@@ -149,8 +149,8 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
 Return a julia command similar to the one of the running process.
 Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
 `--compiled-modules`, `--pkgimages`, `--inline`, `--check-bounds`, `--optimize`, `--min-optlevel`, `-g`,
-`--code-coverage`, `--track-allocation`, `--color`, `--startup-file`, and `--depwarn`
-command line arguments that are not at their default values.
+`--code-coverage`, `--track-allocation`, `--color`, `--startup-file`, `--depwarn`, and
+`--closure-boxes` command line arguments that are not at their default values.
 
 Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notably not propagated currently.
 
@@ -194,6 +194,17 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
                       "" # default = "no"
                   end
         isempty(depwarn) || push!(addflags, "--depwarn=$depwarn")
+    end
+    let closure_boxes = if opts.closure_boxes == 1
+                      "allow"
+                  elseif opts.closure_boxes == 2
+                      "warn"
+                  elseif opts.closure_boxes == 3
+                      "error"
+                  else
+                      "" # default
+                  end
+        isempty(closure_boxes) || push!(addflags, "--closure-boxes=$closure_boxes")
     end
     let check_bounds = if opts.check_bounds == 1
                       "yes" # on

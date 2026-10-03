@@ -950,7 +950,7 @@ typedef struct {
 //   usings_backedges (TODO)
 // No lock is required to read these fields, set once on construction:
 //   name, parent, file, line, build_id, uuid, nospecialize, optlevel, compile,
-//   infer, iistopmod, max_methods
+//   infer, iistopmod, max_methods, closure_boxes
 typedef struct _jl_module_t {
     JL_DATA_TYPE
     jl_sym_t *name;
@@ -972,6 +972,7 @@ typedef struct _jl_module_t {
     int8_t infer;
     uint8_t istopmod;
     int8_t max_methods;
+    int8_t closure_boxes; // JL_CLOSURE_BOXES_* policy for captured variables that need a Core.Box, or -1 to inherit
     // If cleared no binding partition in this module has PARTITION_FLAG_EXPORTED and min_world > jl_require_world.
     _Atomic(int8_t) export_set_changed_since_require_world;
     // Set if this module has any reexport usings (used to bypass fast-path in implicit resolution)
@@ -2248,6 +2249,8 @@ JL_DLLEXPORT void jl_set_module_infer(jl_module_t *self, int value);
 JL_DLLEXPORT int jl_get_module_infer(jl_module_t *m);
 JL_DLLEXPORT void jl_set_module_max_methods(jl_module_t *self, int value);
 JL_DLLEXPORT int jl_get_module_max_methods(jl_module_t *m);
+JL_DLLEXPORT void jl_set_module_closure_boxes(jl_module_t *self, int value);
+JL_DLLEXPORT int jl_get_module_closure_boxes(jl_module_t *m) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_module_usings_backedges(jl_module_t *m);
 JL_DLLEXPORT jl_value_t *jl_get_module_scanned_methods(jl_module_t *m);
 JL_DLLEXPORT jl_value_t *jl_get_module_binding_or_nothing(jl_module_t *m, jl_sym_t *s) JL_CANSAFEPOINT;
@@ -2854,6 +2857,16 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 
 #define JL_OPTIONS_WARN_SCOPE_OFF 0
 #define JL_OPTIONS_WARN_SCOPE_ON 1
+
+#define JL_OPTIONS_CLOSURE_BOXES_DEFAULT 0
+#define JL_OPTIONS_CLOSURE_BOXES_ALLOW 1
+#define JL_OPTIONS_CLOSURE_BOXES_WARN 2
+#define JL_OPTIONS_CLOSURE_BOXES_ERROR 3
+
+// per-module closure box policy (see jl_get_module_closure_boxes)
+#define JL_CLOSURE_BOXES_ALLOW 0
+#define JL_CLOSURE_BOXES_WARN 1
+#define JL_CLOSURE_BOXES_ERROR 2
 
 #define JL_OPTIONS_POLLY_ON 1
 #define JL_OPTIONS_POLLY_OFF 0

@@ -4781,3 +4781,140 @@ end
     ]
     @test_throws "invalid assignment location" Core.eval(@__MODULE__, ex)
 end
+
+# Closures that capture variables needing a `Core.Box` are an error, warning or allowed,
+# depending on `@closure_boxes`, and individual closures can opt out with `@allow_box`
+@testset "closure box policy" begin
+    function boxmod(policy)
+        m = Module()
+        Core.eval(m, :(Base.Experimental.@closure_boxes $(QuoteNode(policy))))
+        return m
+    end
+    boxed_fields(c) = [fieldname(typeof(c), i) for i in 1:fieldcount(typeof(c))
+                       if fieldtype(typeof(c), i) === Core.Box]
+    merr = boxmod(:error)
+    @test_throws "closure captures variable `x`, which requires a `Core.Box`" Core.eval(merr, :(
+        function f()
+            x = 0
+            g = () -> x
+            x = 1
+            g
+        end))
+    @test_throws "closure captures variables `x`, `y`" Core.eval(merr, :(
+        function f(c)
+            x = y = 0
+            g = () -> x + y
+            x += 1
+            y += 1
+            g
+        end))
+    @test_throws "closure captures variable `n`" Core.eval(merr, :(
+        function f(xs)
+            n = 0
+            foreach(x -> (n += x), xs)
+            n
+        end))
+    @test_throws "closure captures variable `s`" Core.eval(merr, :(
+        function f(v)
+            s = 0
+            g = (s * i for i in v)
+            s = 1
+            g
+        end))
+    @test_throws "closure captures variable `x`" Core.eval(merr, :(
+        function f()
+            x = 0
+            g = Base.Experimental.@opaque () -> x
+            x = 1
+            g
+        end))
+    # the error points at the code using a macro that creates the closure, not the macro
+    @test_throws r"captured around \S*syntax\.jl:\d+" Core.eval(merr, :(
+        function f()
+            x = 0
+            t = @async begin
+                x
+            end
+            x = 1
+            t
+        end))
+    # no box needed
+    Core.eval(merr, :(nobox() = (x = 1; () -> x)))
+    @test merr.nobox()() == 1
+    # per-closure opt-outs
+    Core.eval(merr, :(
+        function allow_one()
+            x = 0
+            g = () -> (Base.Experimental.@allow_box x; x)
+            x = 1
+            g
+        end))
+    @test merr.allow_one()() == 1
+    @test boxed_fields(merr.allow_one()) == [:x]
+    Core.eval(merr, :(
+        function allow_all()
+            x = y = 0
+            g = () -> (Base.Experimental.@allow_box; x + y)
+            x = y = 1
+            g
+        end))
+    @test merr.allow_all()() == 2
+    Core.eval(merr, :(
+        function count_calls(xs)
+            n = 0
+            foreach(xs) do x
+                Base.Experimental.@allow_box n
+                n += x
+            end
+            n
+        end))
+    @test merr.count_calls(1:3) == 6
+    @test_throws "closure captures variable `y`" Core.eval(merr, :(
+        function allow_other()
+            x = y = 0
+            g = () -> (Base.Experimental.@allow_box x; x + y)
+            x = y = 1
+            g
+        end))
+    # an annotation in an inner closure also covers the closures that capture the
+    # variable in order to pass it inward
+    Core.eval(merr, :(
+        function nested()
+            x = 0
+            g = () -> (() -> (Base.Experimental.@allow_box x; x))
+            x = 1
+            g
+        end))
+    @test merr.nested()()() == 1
+    # submodules inherit the setting
+    Core.eval(merr, :(module Sub end))
+    @test_throws "closure captures variable `x`" Core.eval(merr.Sub, :(
+        function f()
+            x = 0
+            g = () -> x
+            x = 1
+            g
+        end))
+    @test Meta.isexpr(Meta.lower(merr, :(let x = 0; g = () -> x; x = 1; end)), :error)
+
+    mwarn = boxmod(:warn)
+    @test_logs (:warn, r"closure captures variable `x`") Core.eval(mwarn, :(
+        function f()
+            x = 0
+            g = () -> x
+            x = 1
+            g
+        end))
+    @test boxed_fields(mwarn.f()) == [:x]
+
+    mallow = boxmod(:allow)
+    @test_logs Core.eval(mallow, :(
+        function f()
+            x = 0
+            g = () -> x
+            x = 1
+            g
+        end))
+    @test boxed_fields(mallow.f()) == [:x]
+    @test_throws "invalid closure_boxes policy" Core.eval(mallow, :(Base.Experimental.@closure_boxes :maybe))
+end

@@ -410,5 +410,8 @@ Core._setlowerer!(fl_lower)
 @assert !isassigned(_included_files, 1)
 _included_files[1] = (@__MODULE__, ccall(:jl_prepend_cwd, Any, (Any,), "Base_compiler.jl"))
 
+# closures in Base must not box captured variables, regardless of `--closure-boxes`
+ccall(:jl_set_module_closure_boxes, Cvoid, (Any, Int32), Base, 2)
+
 end # module Base
 using .Base

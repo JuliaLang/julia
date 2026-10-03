@@ -2036,6 +2036,7 @@ JL_DLLEXPORT int jl_isabspath(const char *in) JL_NOTSAFEPOINT;
     XX(boundscheck_sym) \
     XX(call_sym) \
     XX(cfunction_sym) \
+    XX(closure_boxes_sym) \
     XX(colon_sym) \
     XX(compile_sym) \
     XX(const_sym) \
