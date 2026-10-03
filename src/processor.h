@@ -191,6 +191,15 @@ JL_DLLEXPORT jl_value_t *jl_get_sysimage_cpu_target(void) JL_CANSAFEPOINT;
 // Check if the CPU has native FMA instructions;
 // For debugging only
 JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits);
+// Check if codegen for the JIT target enables every LLVM feature in the
+// comma-separated list `features`
+JL_DLLEXPORT int jl_cpu_has_features(const char *features) JL_NOTSAFEPOINT;
+// Return the LLVM features (comma-separated) of the host architecture that codegen
+// can enable: hardware features that are usable outside the kernel
+JL_DLLEXPORT jl_value_t *jl_cpu_codegen_features(void) JL_CANSAFEPOINT;
+// Return the LLVM features (comma-separated) that a clone targeting `cpu_name`
+// is compiled with, or `nothing` if the name is unknown
+JL_DLLEXPORT jl_value_t *jl_cpu_target_features(const char *cpu_name) JL_CANSAFEPOINT;
 // Dump the name and feature set of the host CPU
 JL_DLLEXPORT void jl_dump_host_cpu(void);
 JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char* data) JL_CANSAFEPOINT;
