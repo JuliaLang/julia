@@ -16,6 +16,9 @@ logbL(::Type{Float64},::Val{:ℯ}) = 0.0
 logbU(::Type{Float64},::Val{10}) = 0.4342944819032518
 logbL(::Type{Float64},::Val{10}) = 1.098319650216765e-17
 
+@noinline log2(x::Float16)  = _log(x, Val(2),  :log2)
+@noinline log(x::Float16)   = _log(x, Val(:ℯ), :log)
+@noinline log10(x::Float16) = _log(x, Val(10), :log10)
 @noinline log2(x::Float32)  = _log(x, Val(2),  :log2)
 @noinline log(x::Float32)   = _log(x, Val(:ℯ), :log)
 @noinline log10(x::Float32) = _log(x, Val(10), :log10)
@@ -55,11 +58,40 @@ end
     end
     return Float32(logb(Float32, base) * _log_kernel_f32(Float64(x)))
 end
-@noinline function _log_special(x::Float32, func::Symbol)
-    x == 0f0 && return -Inf32
-    isnan(x) && return NaN32
-    x == Inf32 && return x
+@noinline function _log_special(x::T, func::Symbol) where {T<:Union{Float16,Float32}}
+    x == 0 && return T(-Inf)
+    isnan(x) && return T(NaN)
+    x == Inf && return x
     throw_complex_domainerror(func, x)
+end
+
+# Float16 needs no table: in Float32, x = 2^k m with m in [sqrt(2)/2, sqrt(2)) and f = m - 1 exact,
+# then log1p(f) from one polynomial.
+@inline function _log_f16_reduce(x::Float32)
+    xu = reinterpret(UInt32, x)
+    tmp = reinterpret(Int32, xu - 0x3f3504f3) # sqrt(2)/2
+    m = reinterpret(Float32, xu - (reinterpret(UInt32, tmp) & 0xff80_0000))
+    return tmp >> 23, m - 1f0
+end
+# log1p(f) for f in [sqrt(2)/2 - 1, sqrt(2) - 1], relative error 2^-22.4
+@inline function _log1p_f16_poly(f::Float32)
+    f2 = f*f
+    f4 = f2*f2
+    q = muladd(f2, muladd(f, 0.19906883f0, -0.24971229f0), muladd(f, 0.33334714f0, -0.5000032f0)) +
+        f4 * muladd(f2, -0.10082381f0, muladd(f, 0.16180502f0, -0.17243224f0))
+    return muladd(f2, q, f)
+end
+@inline function _log(x::Float16, base, func::Symbol)
+    # x <= 0 (including -0.0), +Inf, or NaN; positive subnormals are normal in Float32
+    if reinterpret(UInt16, x) - 0x0001 >= 0x7bff
+        return _log_special(x, func)
+    end
+    k, f = _log_f16_reduce(Float32(x))
+    p = _log1p_f16_poly(f)
+    kf = Float32(k)
+    base === Val(2) && return Float16(muladd(p, 1.442695f0, kf))
+    base === Val(10) && return Float16(muladd(kf, 0.30103f0, p * 0.4342945f0))
+    return Float16(muladd(kf, 0.6931472f0, p))
 end
 
 
@@ -101,6 +133,23 @@ function log1p(x::Float32)
     c = ifelse(s < 2.0, d - (s - 1.0), 0.0)
     # copysign keeps log1p(-0.0) == -0.0
     return copysign(Float32(_log_kernel_f32(s) + c), x)
+end
+
+function log1p(x::Float16)
+    xf = Float32(x)
+    s = 1f0 + xf # exact unless |x| < 2^-13
+    # x <= -1, NaN, or +Inf (s is +Inf only for x == Inf)
+    if reinterpret(UInt32, s) - 0x0000_0001 >= 0x7f7f_ffff
+        x == -1 && return -Inf16
+        isnan(x) && return x
+        x == Inf16 && return x
+        throw_complex_domainerror_neg1(:log1p, x)
+    end
+    k, f = _log_f16_reduce(s)
+    # with k == 0, x itself is the reduced argument, which is exact even where s is not
+    f = ifelse(k == 0, xf, f)
+    # copysign keeps log1p(-0.0) == -0.0
+    return Float16(copysign(muladd(Float32(k), 0.6931472f0, _log1p_f16_poly(f)), xf))
 end
 
 #function make_compact_table(N)
