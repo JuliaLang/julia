@@ -932,7 +932,8 @@ JL_DLLEXPORT void jl_check_binding_currently_writable(jl_binding_t *b, jl_bindin
 {
     if (bpart == NULL) {
         bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-        jl_binding_deprecation_check(bpart);
+        if (bpart->kind & PARTITION_FLAG_DEPWARN)
+            jl_binding_depwarn(b);
     }
     enum jl_partition_kind kind = jl_binding_kind(bpart);
     if (kind != PARTITION_KIND_GLOBAL && kind != PARTITION_KIND_DECLARED)
@@ -2119,10 +2120,10 @@ JL_DLLEXPORT void jl_module_set_visibility(jl_module_t *m, jl_sym_t *var, int st
         jl_atomic_fetch_and_relaxed(&b->flags, (uint8_t)~BINDING_FLAG_PUBLICP);
 }
 
-JL_DLLEXPORT void jl_binding_deprecation_check(jl_binding_partition_t *bpart) JL_CANSAFEPOINT
+JL_DLLEXPORT void jl_binding_depwarn(jl_binding_t *b) JL_CANSAFEPOINT
 {
-    if (jl_options.depwarn && (bpart->kind & PARTITION_FLAG_DEPWARN))
-        jl_binding_deprecation_warning(jl_binding_partition_owner(bpart));
+    if (jl_options.depwarn)
+        jl_binding_deprecation_warning(b);
 }
 
 // Whether an access to `b` at the current world is deprecated, for reflection (`isdeprecated`).
