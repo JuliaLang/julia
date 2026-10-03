@@ -35,4 +35,7 @@ Debugging
 | Name                           |  Description                                                |
 | ------------------------------ | ----------------------------------------------------------- |
 |[ debug_bootstrap.gdb ](https://github.com/JuliaLang/julia/blob/master/contrib/debug_bootstrap.gdb) | Bootstrap process using the debug build |
+|[ julia_debug_core.py ](https://github.com/JuliaLang/julia/blob/master/contrib/julia_debug_core.py) | Shared renderer for the gdb/lldb debugger extensions below |
+|[ julia_gdb.py ](https://github.com/JuliaLang/julia/blob/master/contrib/julia_gdb.py) | GDB pretty-printers for Julia runtime values and GC safepoint signal filtering |
+|[ julia_lldb.py ](https://github.com/JuliaLang/julia/blob/master/contrib/julia_lldb.py) | LLDB type summaries for Julia runtime values and GC safepoint signal filtering |
 |[ valgrind-julia.supp ](https://github.com/JuliaLang/julia/blob/master/contrib/valgrind-julia.supp) | Suppressions for Valgrind debugging tool |
