@@ -251,9 +251,12 @@ typedef void *(*init_trampoline_t)(void *tramp, void **nval) JL_NOTSAFEPOINT;
 // `ty` still has free type variables after instantiation, so it uses a static parameter with no value
 static void JL_NORETURN cfunction_sparam_error(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals)
 {
+    // `ty` sits under the whole binder chain of `env`, so the i-th (outermost
+    // first) binder is referenced from `ty` by de Bruijn index `nenv - i`
+    size_t nenv = jl_subtype_env_size((jl_value_t*)env);
     for (size_t i = 0; jl_is_unionall(env); i++, env = (jl_unionall_t*)env->body) {
-        if (jl_sparam_defined_value(vals[i]) == NULL && jl_has_typevar(ty, env->var))
-            jl_undefined_var_error(env->var->name, (jl_value_t*)jl_static_parameter_sym);
+        if (jl_sparam_defined_value(vals[i]) == NULL && jl_tvarref_occurs(ty, nenv - i))
+            jl_undefined_var_error(env->name, (jl_value_t*)jl_static_parameter_sym);
     }
     jl_error("cfunction: could not resolve the static parameters of a callback argument type");
 }

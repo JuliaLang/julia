@@ -129,7 +129,9 @@ function eval_closure_type(mod::Module, closure_type_name::Symbol,
                             length(field_names))
     Core._setsuper!(type, Core.Function)
     Core.declare_const(mod, closure_type_name, type)
-    Core._typebody!(type, Core.svec(field_types...))
+    # pass the type parameters so the field types' TypeVars are rebound as
+    # positional references to the wrapper's binders
+    Core._typebody!(type, Core.svec(field_types...), Core.svec(type_params...))
     type
 end
 
