@@ -178,6 +178,14 @@ function verify_ir(ir::IRCode, print::Bool=true,
         @verify_error "IR flag length is invalid $(length(ir.stmts.flag)) / $(length(ir.stmts))"
         raise_error()
     end
+    for (idx, info) in pairs(ir.new_nodes.info)
+        if !(1 <= info.pos <= length(ir.stmts))
+            if print
+                @verify_error "Insertion position $(info.pos) of new node $idx is out of bounds for IR"
+            end
+            raise_error()
+        end
+    end
     # For now require compact IR
     # @assert isempty(ir.new_nodes)
     # Verify CFG
@@ -229,6 +237,14 @@ function verify_ir(ir::IRCode, print::Bool=true,
     end
     # Verify statements
     domtree = construct_domtree(ir.cfg.blocks)
+    for (bb, idom) in pairs(domtree.idoms_bb)
+        if idom >= bb
+            if print
+                @verify_error "Immediate dominator $idom of basic block $bb does not precede it"
+            end
+            raise_error()
+        end
+    end
     for (idx, block) in pairs(ir.cfg.blocks)
         if first(block.stmts) != last_end + 1
             #ranges = [(idx,first(bb.stmts),last(bb.stmts)) for (idx, bb) in pairs(ir.cfg.blocks)]
