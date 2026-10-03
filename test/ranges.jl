@@ -2143,6 +2143,32 @@ end
     @test_throws MethodError mod(3, UnitRange(1.0,5.0))
     @test_throws MethodError mod(3, 1:2:7)
     @test_throws DivideError mod(3, 1:0)
+
+    # mod used to be computed as `mod(i - first(r), length(r)) + first(r)`,
+    # where `i - first(r)` can overflow (wrong residue) and, for ranges of more
+    # than `typemax` values, `length(r)` wraps (results outside the range).
+    @test mod(typemax(Int), -10:10) == 7
+    @test mod(typemin(Int), 3:23) == 13
+    @test mod(typemax(Int), typemin(Int):typemin(Int)+8) == typemin(Int) + 6
+    @test mod(5, 0:typemax(Int)) == 5
+    @test mod(-5, 0:typemax(Int)) == typemax(Int) - 4
+    @test mod(5, typemin(Int):typemax(Int)) == 5
+    @test mod(5, typemin(Int):0) == typemin(Int) + 4
+    # exhaustive over Int8 triples, against exact (widened) arithmetic
+    let bad = nothing
+        for x in typemin(Int8):typemax(Int8), lo in typemin(Int8):typemax(Int8), hi in typemin(Int8):typemax(Int8)
+            lo <= hi || continue
+            y = mod(x, lo:hi)
+            if !(y in lo:hi && mod(Int(x) - Int(y), Int(hi) - Int(lo) + 1) == 0)
+                bad = (x, lo, hi, y)
+                break
+            end
+        end
+        @test bad === nothing
+    end
+    # a dividend wider than the range's element type is reduced exactly
+    @test mod(Int128(2)^100, -3:11) == mod(Int128(2)^100 + 3, 15) - 3
+    @test mod(typemax(Int64), Int8(-10):Int8(10)) == 7
 end
 
 @testset "clamp with unitrange" begin
