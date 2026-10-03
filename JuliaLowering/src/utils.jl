@@ -23,10 +23,10 @@ function _value_string(ex)
           k == :symboliclabel ? "label:$(syntax_name(ex))" :
           k == :symbolicgoto ? "goto:$(syntax_name(ex))" :
           k == :sourcelocation ?
-              "SourceLocation:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
+              "SourceLocation:$(filename(ex)):$(join(source_location(ex), ':'))" :
               k == :value ?
               (ex.value isa SourceRef ?
-              "SourceRef:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
+              "SourceRef:$(filename(ex)):$(join(source_location(ex), ':'))" :
               ex.value isa SyntaxContext ? "SyntaxContext(#=omitted=#)" : repr(ex.value)) :
               ex.value !== nothing ? repr(ex.value) : "::$k"
 
@@ -80,7 +80,7 @@ function _show_syntax_tree(io, ex, indent, show_kinds, @nospecialize(parent_sc))
 end
 
 function Base.show(io::IO, ::MIME"text/plain", ex::SyntaxTree, show_kinds=true)
-    assert_syntaxtree(ex)
+    assert_syntax(ex)
     _show_syntax_tree(io, ex, "", show_kinds, nothing)
 end
 function _show_syntax_tree_sexpr(io, ex)
@@ -97,12 +97,12 @@ function _show_syntax_tree_sexpr(io, ex)
 end
 
 function Base.show(io::IO, ::MIME"text/x.sexpression", node::SyntaxTree)
-    assert_syntaxtree(node)
+    assert_syntax(node)
     _show_syntax_tree_sexpr(io, node)
 end
 
 function Base.show(io::IO, node::SyntaxTree)
-    assert_syntaxtree(node)
+    assert_syntax(node)
     _show_syntax_tree_sexpr(io, node)
 end
 
@@ -118,7 +118,7 @@ message per tree.  If `!internal`, caused by bad user code in `syntax` (flisp:
 `Expr(:error, msg)`).
 """
 struct LoweringError <: Exception
-    sts::SyntaxList
+    sts::Vector{SyntaxTree}
     msgs::Vector{String}
     internal::Bool
 end
@@ -163,7 +163,7 @@ function _show_provtree(io::IO, ex::SyntaxTree, indent)
     print(io, "\n")
 
     src = ex.source
-    msrc = JuliaSyntax.macro_prov(ex)
+    msrc = macro_prov(ex)
     printstyled(io, string(
         indent, msrc === nothing ? "└─ " : "├─ "); color=:light_black)
     if src isa SyntaxTree

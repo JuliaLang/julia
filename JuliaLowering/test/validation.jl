@@ -3,7 +3,6 @@
 
 function vst1_ok(x::Expr)
     est = JuliaLowering.expr_to_est(x)
-    est = JuliaSyntax.fill_context(est, JuliaSyntax.SyntaxContext(@__MODULE__, OLDEST_EDITION))
     JuliaLowering.valid_st1(est).ok
 end
 

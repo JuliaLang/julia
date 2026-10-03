@@ -258,7 +258,7 @@ end
 function SourceByteTable(sf::SourceFile, spans::Vector{Tuple{Int32, Int32}})
     # Trim all newlines outside SBT's range
     line_starts = map(ls->Int32(ls+sf.byte_offset), sf.line_starts)
-    b0, _ = JuliaSyntax.source_line_range(sf, spans[1][1])
+    b0, _ = source_line_range(sf, spans[1][1])
     first_line = sf.first_line
     while length(line_starts) >= 2 && line_starts[2] <= b0
         popfirst!(line_starts)
@@ -371,7 +371,7 @@ const _has_byte_precise_debuginfo =
     hasmethod(Core.DebugInfo, Tuple{Symbol, String, Core.SimpleVector, String})
 
 function _di_pos(st::SyntaxTree)
-    src = JuliaSyntax.unexpanded_sourceref(st)
+    src = unexpanded_sourceref(st)
     pos = if src isa SourceRef
         (Int32(first_byte(src)), Int32(last_byte(src)))
     elseif src isa LineNumberNode
@@ -383,7 +383,7 @@ end
 
 # TODO sourcefile(::LNN) should return Symbol, not LNN
 function _di_sourcefile(st)
-    x = JuliaSyntax.unexpanded_sourceref(st)
+    x = unexpanded_sourceref(st)
     x isa LineNumberNode ? x.file : x.file[]::SourceFile
 end
 
@@ -452,7 +452,7 @@ function add_debuginfo!(st::SyntaxTree)
         # so the line-based path below emits valid `DebugInfo` (same shape as the
         # `LineNumberNode` case).
         for id in collect(keys(node_sources))
-            line = Int32(JuliaSyntax.source_line(top_sf, node_sources[id][1]))
+            line = Int32(source_line(top_sf, node_sources[id][1]))
             node_sources[id] = (line, LINENODE_SPAN_END)
         end
     end

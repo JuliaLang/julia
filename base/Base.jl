@@ -98,6 +98,8 @@ include("some.jl")
 include("dict.jl")
 include("set.jl")
 
+include("syntax.jl")
+
 # Dynamic scopes (types only; the ScopedValues API is included much later)
 include("scope.jl")
 # Cancellation tokens (the `cancel` keyword-argument machinery is used from
