@@ -807,6 +807,38 @@ jl_gc_page_stack_t global_page_pool_clean;
 jl_gc_page_stack_t global_page_pool_freed;
 pagetable_t alloc_map;
 
+// Pages that still have free cells after a sweep, pooled per size class so that any thread
+// can adopt them once its own free list runs out (see `gc_adopt_page`). Two banks alternate
+// between sweeps: mutators pop from bank `gc_partial_pages_epoch`, and the sweep drains that
+// bank and refills the other one, so a page popped by the GC is never pushed back onto the
+// stack it was popped from (see the lock-free stack invariants in gc-stock.h).
+static jl_gc_page_stack_t global_page_pool_partial[2][JL_GC_N_POOLS];
+static _Atomic(int) gc_partial_pages_epoch = 0;
+
+jl_gc_pagemeta_t *gc_next_page(gc_page_iterator_t *it) JL_NOTSAFEPOINT
+{
+    while (it->next == NULL) {
+        if (it->stack_idx >= gc_n_threads + 2 * JL_GC_N_POOLS)
+            return NULL;
+        int i = it->stack_idx++;
+        jl_gc_page_stack_t *stack;
+        if (i < gc_n_threads) {
+            jl_ptls_t ptls = gc_all_tls_states[i];
+            if (ptls == NULL)
+                continue;
+            stack = &ptls->gc_tls.page_metadata_allocd;
+        }
+        else {
+            i -= gc_n_threads;
+            stack = &global_page_pool_partial[i / JL_GC_N_POOLS][i % JL_GC_N_POOLS];
+        }
+        it->next = jl_atomic_load_relaxed(&stack->bottom);
+    }
+    jl_gc_pagemeta_t *pg = it->next;
+    it->next = pg->next;
+    return pg;
+}
+
 // Add a new page to the pool. Discards any pages in `p->newpages` before.
 static NOINLINE jl_taggedvalue_t *gc_add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
 {
@@ -821,6 +853,33 @@ static NOINLINE jl_taggedvalue_t *gc_add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
     jl_taggedvalue_t *fl = gc_reset_page(ptls, p, pg);
     jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, GC_PAGE_SZ);
     p->newpages = fl;
+    return fl;
+}
+
+// Adopt a partially free page left behind by the last sweep, from whichever thread used to
+// own it: the page moves to this thread's list and its free cells become `p->freelist`.
+// Returns the first free cell, or NULL if no such page is available.
+static NOINLINE jl_taggedvalue_t *gc_adopt_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    int pool_n = p - ptls->gc_tls.heap.norm_pools;
+    int epoch = jl_atomic_load_relaxed(&gc_partial_pages_epoch);
+    jl_gc_pagemeta_t *pg = try_pop_lf_back(&global_page_pool_partial[epoch][pool_n]);
+    if (pg == NULL)
+        return NULL;
+    assert(pg->osize == p->osize);
+    assert(pg->pool_n == pool_n);
+    assert(pg->fl_begin_offset != UINT16_MAX);
+    pg->thread_n = ptls->tid;
+    push_lf_back(&ptls->gc_tls.page_metadata_allocd, pg);
+    jl_taggedvalue_t *fl = (jl_taggedvalue_t*)(pg->data + pg->fl_begin_offset);
+    jl_taggedvalue_t *next = fl->next;
+    p->freelist = next;
+    if (gc_page_data(next) != pg->data) {
+        // the page had a single free cell, so it is full now
+        pg->nfree = 0;
+        pg->has_young = 1;
+    }
     return fl;
 }
 
@@ -873,6 +932,13 @@ STATIC_INLINE jl_value_t *jl_gc_small_alloc_inner(jl_ptls_t ptls, int offset,
             assert(pg->osize == p->osize);
             pg->nfree = 0;
             pg->has_young = 1;
+        }
+        // prefer the free cells of a page swept on any thread over a fresh page
+        jl_taggedvalue_t *adopted = gc_adopt_page(p);
+        if (adopted != NULL) {
+            p->newpages = NULL;
+            msan_allocated_memory(adopted, osize);
+            return jl_valueof(adopted);
         }
         v = gc_add_page(p);
         next = (jl_taggedvalue_t*)((char*)v + osize);
@@ -1530,19 +1596,24 @@ static void gc_sweep_pool(void) JL_NOTSAFEPOINT
     // For the benefit of the analyzer, which doesn't know that gc_n_threads
     // doesn't change over the course of this function
     size_t n_threads = gc_n_threads;
+    jl_ptls_t ptls = jl_current_task->ptls;
+    int epoch = jl_atomic_load_relaxed(&gc_partial_pages_epoch);
 
-    // allocate enough space to hold the end of the free list chain
-    // for every thread and pool size
-    jl_taggedvalue_t ***pfl = (jl_taggedvalue_t ***) malloc_s(n_threads * JL_GC_N_POOLS * sizeof(jl_taggedvalue_t**));
+    // partially free pages that no thread adopted since the last sweep are on no thread's
+    // list; hand them to this thread so that they are swept like any other page
+    for (int i = 0; i < JL_GC_N_POOLS; i++) {
+        jl_gc_pagemeta_t *pg;
+        while ((pg = pop_lf_back_nosync(&global_page_pool_partial[epoch][i])) != NULL) {
+            pg->thread_n = ptls->tid;
+            push_lf_back_nosync(&ptls->gc_tls.page_metadata_allocd, pg);
+        }
+    }
 
     // update metadata of pages that were pointed to by freelist or newpages from a pool
     // i.e. pages being the current allocation target
     for (int t_i = 0; t_i < n_threads; t_i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
         if (ptls2 == NULL) {
-            for (int i = 0; i < JL_GC_N_POOLS; i++) {
-                pfl[t_i * JL_GC_N_POOLS + i] = NULL;
-            }
             continue;
         }
         jl_atomic_store_relaxed(&ptls2->gc_tls_common.gc_num.pool_live_bytes, 0);
@@ -1554,8 +1625,7 @@ static void gc_sweep_pool(void) JL_NOTSAFEPOINT
                 gc_pool_sync_nfree(pg, last);
                 pg->has_young = 1;
             }
-            p->freelist =  NULL;
-            pfl[t_i * JL_GC_N_POOLS + i] = &p->freelist;
+            p->freelist = NULL;
 
             last = p->newpages;
             if (last != NULL) {
@@ -1572,7 +1642,6 @@ static void gc_sweep_pool(void) JL_NOTSAFEPOINT
     {
         // the actual sweeping
         jl_gc_padded_page_stack_t *new_gc_allocd_scratch = (jl_gc_padded_page_stack_t *) calloc_s(n_threads * sizeof(jl_gc_padded_page_stack_t));
-        jl_ptls_t ptls = jl_current_task->ptls;
         gc_reset_fragmentation_data_for_size_classes();
         gc_sweep_wake_all_pages(ptls, new_gc_allocd_scratch);
         gc_sweep_pool_parallel(ptls);
@@ -1590,38 +1659,33 @@ static void gc_sweep_pool(void) JL_NOTSAFEPOINT
             }
         }
 
-        // merge free lists
+        // pool the pages that still have free cells per size class, for adoption by any
+        // thread; pages without free cells stay on the list of the thread that owns them
+        jl_gc_page_stack_t *partial = global_page_pool_partial[epoch ^ 1];
         for (int t_i = 0; t_i < n_threads; t_i++) {
             jl_ptls_t ptls2 = gc_all_tls_states[t_i];
             if (ptls2 == NULL) {
                 continue;
             }
-            jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->gc_tls.page_metadata_allocd.bottom);
-            while (pg != NULL) {
-                jl_gc_pagemeta_t *pg2 = pg->next;
+            jl_gc_page_stack_t full;
+            memset(&full, 0, sizeof(full));
+            jl_gc_pagemeta_t *pg;
+            while ((pg = pop_lf_back_nosync(&ptls2->gc_tls.page_metadata_allocd)) != NULL) {
                 if (pg->fl_begin_offset != UINT16_MAX) {
-                    char *cur_pg = pg->data;
-                    jl_taggedvalue_t *fl_beg = (jl_taggedvalue_t*)(cur_pg + pg->fl_begin_offset);
-                    jl_taggedvalue_t *fl_end = (jl_taggedvalue_t*)(cur_pg + pg->fl_end_offset);
-                    *pfl[t_i * JL_GC_N_POOLS + pg->pool_n] = fl_beg;
-                    pfl[t_i * JL_GC_N_POOLS + pg->pool_n] = &fl_end->next;
+                    // each page carries its own NULL-terminated free list
+                    jl_taggedvalue_t *fl_end = (jl_taggedvalue_t*)(pg->data + pg->fl_end_offset);
+                    fl_end->next = NULL;
+                    push_lf_back_nosync(&partial[pg->pool_n], pg);
                 }
-                pg = pg2;
-            }
-        }
-
-        // null out terminal pointers of free lists
-        for (int t_i = 0; t_i < n_threads; t_i++) {
-            jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-            if (ptls2 != NULL) {
-                for (int i = 0; i < JL_GC_N_POOLS; i++) {
-                    *pfl[t_i * JL_GC_N_POOLS + i] = NULL;
+                else {
+                    push_lf_back_nosync(&full, pg);
                 }
             }
+            ptls2->gc_tls.page_metadata_allocd = full;
         }
+        jl_atomic_store_relaxed(&gc_partial_pages_epoch, epoch ^ 1);
 
         // cleanup
-        free(pfl);
         free(new_gc_allocd_scratch);
     }
     uint64_t t_page_walk_end = jl_hrtime();
