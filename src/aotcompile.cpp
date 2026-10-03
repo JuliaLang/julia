@@ -2222,11 +2222,6 @@ static unsigned compute_image_thread_count() {
     if (jl_is_timing_passes) // LLVM isn't thread safe when timing the passes https://github.com/llvm/llvm-project/issues/44417
         return 1;
 
-#ifdef _P32
-    // We need to be very careful about using too much memory on 32 bit.
-    return 1;
-#endif
-
     // environment variable override.
     // this controls how many threads we request from the jobserver (if it is enabled)
     // but the question of whether to enable it or not is decided upstream
@@ -2236,6 +2231,10 @@ static unsigned compute_image_thread_count() {
     }
 
     unsigned threads = jl_effective_threads();
+#ifdef _P32
+    // We need to be very careful about using too much memory on 32 bit.
+    threads = std::min(threads, 8u);
+#endif
 
     // more defaults
     unsigned requested = get_env_threads("JULIA_CPU_THREADS");
