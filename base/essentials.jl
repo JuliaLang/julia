@@ -715,7 +715,7 @@ julia> oftype(y, x)
 4.0
 ```
 """
-oftype(x, y) = y isa typeof(x) ? y : convert(typeof(x), y)::typeof(x)
+oftype(x, y) = (y isa typeof(x) ? y : convert(typeof(x), y))::typeof(x)
 
 unsigned(x::Int) = reinterpret(UInt, x)
 signed(x::UInt) = reinterpret(Int, x)
