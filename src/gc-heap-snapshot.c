@@ -13,7 +13,7 @@
 #include <string.h>
 
 // https://stackoverflow.com/a/33799784/751061
-static void print_str_escape_json(ios_t *stream, const char *s, size_t len) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_print_str_escape_json(ios_t *stream, const char *s, size_t len) JL_NOTSAFEPOINT
 {
     ios_putc('"', stream);
     for (size_t i = 0; i < len; i++) {
@@ -126,7 +126,7 @@ static void st_print_json_array(string_table_t *t, ios_t *stream, int newlines) 
     for (size_t i = 0; i < t->count; i++) {
         if (i > 0)
             ios_printf(stream, newlines ? ",\n" : ",");
-        print_str_escape_json(stream, t->strings[i], t->lengths[i]);
+        jl_print_str_escape_json(stream, t->strings[i], t->lengths[i]);
     }
     ios_printf(stream, "]");
 }

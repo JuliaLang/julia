@@ -81,9 +81,10 @@ import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, ge
     getindex, haskey, in, isempty, isready, iterate, iterate, last, length, max_world,
     min_world, popfirst!, push!, resize!, setindex!, size, intersect
 
-# Needs to match UUID defined in Project.toml
+# Needs to match UUID defined in Project.toml, given as its (lo, hi) halves in
+# the layout of `jl_uuid_t` (a 128-bit literal cannot be parsed this early)
 ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Compiler,
-    (0x807dbc54_b67e_4c79, 0x8afb_eafe4df6f2e1))
+    (0x8afb_eafe4df6f2e1, 0x807dbc54_b67e_4c79))
 
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!
