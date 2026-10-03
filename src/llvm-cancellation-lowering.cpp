@@ -166,34 +166,12 @@ void CancellationLowering::computeResetCtxPtr(Function &F, Instruction *insertAf
 bool CancellationLowering::runOnFunction(Function &F) {
     bool Changed = false;
 
-    // Find pgcstack - either as a call to julia.get_pgcstack or as an argument with "gcstack" attribute
-    pgcstack = nullptr;
+    // Find pgcstack - either as an argument with "gcstack" attribute or as a call to julia.get_pgcstack
+    pgcstack = getPGCstack(F);
     reset_ctx_ptr = nullptr;
     eh_field_ptr = nullptr;
-    Instruction *pgcstack_inst = nullptr;  // Only set if pgcstack is from a call, not an argument
-    if (pgcstack_getter || adoptthread_func) {
-        for (auto &I : F.getEntryBlock()) {
-            if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
-                Value *callee = callInst->getCalledOperand();
-                if ((pgcstack_getter && callee == pgcstack_getter) ||
-                    (adoptthread_func && callee == adoptthread_func)) {
-                    pgcstack = callInst;
-                    pgcstack_inst = callInst;
-                    break;
-                }
-            }
-        }
-    }
-    // If not found via call, check for argument with "gcstack" attribute
-    if (!pgcstack) {
-        for (auto &arg : F.args()) {
-            AttributeSet attrs = F.getAttributes().getParamAttrs(arg.getArgNo());
-            if (attrs.hasAttribute("gcstack")) {
-                pgcstack = &arg;
-                break;
-            }
-        }
-    }
+    // Only set if pgcstack is from a call, not an argument
+    Instruction *pgcstack_inst = dyn_cast_or_null<Instruction>(pgcstack);
 
     // First, find all cancellation_point intrinsics (walking the users of
     // the declaration rather than every instruction of the function)

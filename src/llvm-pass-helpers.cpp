@@ -83,6 +83,16 @@ void JuliaPassContext::initAll(Module &M)
 
 llvm::Value *JuliaPassContext::getPGCstack(llvm::Function &F) const
 {
+    // A function that receives its pgcstack as an argument may still call the getter,
+    // e.g. after an `llvmcall` that uses it got inlined. LowerPTLS replaces such a call
+    // with the argument. Until then it must not be taken for the pgcstack of the function:
+    // the GC frame is pushed after that value, and the call can come after safepoints.
+    for (auto &arg : F.args()) {
+        AttributeSet attrs = F.getAttributes().getParamAttrs(arg.getArgNo());
+        if (attrs.hasAttribute("gcstack")) {
+            return &arg;
+        }
+    }
     if (pgcstack_getter || adoptthread_func) {
         for (auto &I : F.getEntryBlock()) {
             if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
@@ -92,13 +102,6 @@ llvm::Value *JuliaPassContext::getPGCstack(llvm::Function &F) const
                     return callInst;
                 }
             }
-        }
-    }
-    for (auto &arg : F.args()) {
-        // Check for the "gcstack" attribute
-        AttributeSet attrs = F.getAttributes().getParamAttrs(arg.getArgNo());
-        if (attrs.hasAttribute("gcstack")) {
-            return &arg;
         }
     }
     return nullptr;
