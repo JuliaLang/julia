@@ -2711,10 +2711,12 @@ CISymbolPtr *JuliaOJIT::linkCISymbol(jl_code_instance_t *CI)
     SymbolMap Symbols;
     const char *Name = jl_symbol_name(jl_get_ci_mi(CI)->def.method->name);
 
-    auto SpecSym = mangle(Names(jl_symbol_prefix(JL_SYMBOL_SPECPTR_IMG, API), "#", Name));
+    // The trailing "#" keeps the counter `Names` appends from running into the
+    // method name: otherwise the 11th `norm` and the first `norm1` would both be `#norm10`.
+    auto SpecSym = mangle(Names(jl_symbol_prefix(JL_SYMBOL_SPECPTR_IMG, API), "#", Name, "#"));
     Symbols[SpecSym] = {ExecutorAddr::fromPtr(SpecPtr), JITSymbolFlags::Exported};
     if (API == JL_INVOKE_SPECSIG) {
-        InvokeSym = mangle(Names(jl_symbol_prefix(JL_SYMBOL_INVOKE_IMG, API), "#", Name));
+        InvokeSym = mangle(Names(jl_symbol_prefix(JL_SYMBOL_INVOKE_IMG, API), "#", Name, "#"));
         Symbols[InvokeSym] = {ExecutorAddr::fromPtr(Invoke), JITSymbolFlags::Exported};
     }
     cantFail(JD.define(orc::absoluteSymbols(Symbols)));

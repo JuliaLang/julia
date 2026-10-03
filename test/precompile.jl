@@ -4622,4 +4622,36 @@ end
     end end
 end
 
+# The JIT names the symbols it links to image code after the method name and a counter;
+# the 11th specialization of `foo` must not clash with the first one of `foo1`.
+precompile_test_harness("JIT symbols for image code instances") do load_path
+    write(joinpath(load_path, "ImageSymbolNames.jl"),
+        """
+        module ImageSymbolNames
+        @noinline foo(::Val{N}, x::Int) where {N} = x + N
+        @noinline foo1(x::Int) = x + 100
+        for i in 0:11
+            precompile(foo, (Val{i}, Int))
+        end
+        precompile(foo1, (Int,))
+        end
+        """)
+    Base.compilecache(Base.PkgId("ImageSymbolNames"))
+    script = """
+        using ImageSymbolNames
+        h(x) = ImageSymbolNames.foo1(x)
+        s = h(1)
+        for i in 0:11
+            @eval g(::Val{\$i}, x) = ImageSymbolNames.foo(Val(\$i), x)
+            global s += @eval g(Val(\$i), 1)
+        end
+        print(s)
+        """
+    sep = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                 "JULIA_DEPOT_PATH" => join([DEPOT_PATH[1], ""], sep),
+                 "JULIA_LOAD_PATH" => join([load_path, "@stdlib"], sep))
+    @test readchomp(cmd) == string(101 + sum(i -> 1 + i, 0:11))
+end
+
 finish_precompile_test!()
