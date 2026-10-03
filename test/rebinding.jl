@@ -134,6 +134,24 @@ module RebindingVisibility
     @test_throws ArgumentError Base.set_binding_visibility!(SrcMod, :visg, :bogus)
 end
 
+# The flag-only repartitionings replace in the next world, not the tls world.
+module RebindingStaleWorldFlags
+    using Test
+    module M; export f, g; f() = 1; g() = 2; end
+    w = Base.get_world_counter()
+    Base.delete_binding(M, :f)                                          # newer partition
+    Base.invoke_in_world(w, Base.set_binding_visibility!, M, :f, :none)
+    @test !Base.isexported(M, :f)
+    @test !Base.isdefinedglobal(M, :f)                                  # still deleted
+    Base.delete_binding(M, :g)
+    Base.invoke_in_world(w, Base.deprecate, M, :g)
+    @test Base.isdeprecated(M, :g)
+    @test !Base.isdefinedglobal(M, :g)
+    Base.invoke_in_world(w, Base.deprecate, M, :g, 0)
+    @test !Base.isdeprecated(M, :g)
+    @test !Base.isdefinedglobal(M, :g)
+end
+
 module RebindingPrecompile
     using Test
     include("precompile_utils.jl")
