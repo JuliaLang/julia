@@ -57,6 +57,7 @@ Julia's `stdlib` uses the following external libraries, which have their own lic
   - [`libumfpack`](https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/dev/UMFPACK/Doc/License.txt) [GPL-2.0+]
 - [LIBBLASTRAMPOLINE](https://github.com/staticfloat/libblastrampoline/blob/main/LICENSE) [MIT]
 - [NGHTTP2](https://github.com/nghttp2/nghttp2/blob/master/COPYING) [MIT]
+- [PICOSAT](https://github.com/JuliaLang/PicoSAT/blob/master/LICENSE) [MIT]
 
 Julia's build process uses the following external tools:
 
