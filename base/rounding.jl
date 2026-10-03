@@ -488,4 +488,12 @@ round(::Type{T}, x) where T = round(T, x, RoundNearest)
 round(::Type{T}, x, r::RoundingMode) where T = _round_convert(T, round(x, r), x, r)
 _round_convert(::Type{T}, x_integer, x, r) where T = convert(T, x_integer)
 
-round(x::Integer, r::RoundingMode) = x
+function round(x::Integer, r::RoundingMode;
+               digits::Union{Nothing,Integer}=nothing,
+               sigdigits::Union{Nothing,Integer}=nothing,
+               base::Union{Nothing,Integer}=nothing)
+    if digits === nothing && sigdigits === nothing
+        return x
+    end
+    return round(float(x), r; digits=digits, sigdigits=sigdigits, base=base)
+end
