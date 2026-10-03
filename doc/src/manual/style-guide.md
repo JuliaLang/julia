@@ -292,7 +292,7 @@ Foo{Float64}(3.0)
 
 To maintain code clarity and ensure type consistency, always design constructors to return an instance of the type they are supposed to construct.
 
-## Don't use unnecessary static parameters
+## Don't use unnecessary type parameters
 
 A function signature:
 
