@@ -1125,7 +1125,9 @@ This macro can then be called with the following syntax:
 foo"str"flag
 ```
 
-The type of flag in the above mentioned syntax would be a `String` with contents of whatever trails after the string literal.
+The value of `flag` will be the numeric literal (without a leading `+` or `-`) or variable name
+(including keywords) immediately following the string literal. The type of `flag` will be the
+corresponding numeric type (including `Bool`) in the former case and `String` in the latter.
 
 ## Generated functions
 
