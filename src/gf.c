@@ -2313,7 +2313,7 @@ static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_in
         }
     }
     jl_array_ptr_1d_push((jl_array_t*)closure->shadowed, (jl_value_t*)oldmethod);
-    typemap_slurp_search(oldentry, &closure->match);
+    typemap_bottom_search(oldentry, &closure->match);
     return 1;
 }
 
@@ -2331,7 +2331,7 @@ static jl_value_t *get_intersect_matches(jl_typemap_t *defs, jl_typemap_entry_t 
             va = NULL;
     }
     // search for all intersecting methods active in the previous world, to determine the changes needed to be made for the next world
-    struct matches_env env = {{get_intersect_visitor, (jl_value_t*)type, va, /* .search_slurp = */ 0,
+    struct matches_env env = {{get_intersect_visitor, (jl_value_t*)type, va, /* .search_bottom = */ 0,
             /* .min_valid = */ world, /* .max_valid = */ world,
             /* .ti = */ NULL, /* .env = */ NULL, /* .issubty = */ 0,
             /* .emptiness_only = */ 1},
@@ -5108,7 +5108,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     }
     // don't need to consider other similar methods if this ml will always fully intersect with them and dominates all of them
     if (!closure->include_ambiguous || closure->lim != -1)
-        typemap_slurp_search(ml, &closure->match);
+        typemap_bottom_search(ml, &closure->match);
     return 1;
 }
 
@@ -5418,7 +5418,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
             /* vararg type / tparam0 */ va,
 
             /* temporaries */
-            /* .search_slurp = */ 0,
+            /* .search_bottom = */ 0,
 
             /* outputs */
             /* .min_valid = */ *min_valid,

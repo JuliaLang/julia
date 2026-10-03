@@ -558,14 +558,37 @@ static void restore_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_NOTSAFEPO
 
 // type utilities
 
+// Whether every type `T` may take is `Union{}`, through typevar upper bounds and unions
+static int is_bottom_bound(jl_value_t *T) JL_NOTSAFEPOINT
+{
+    while (1) {
+        if (jl_is_typevar(T)) {
+            T = ((jl_tvar_t*)T)->ub;
+        }
+        else if (jl_is_uniontype(T)) {
+            if (!is_bottom_bound(((jl_uniontype_t*)T)->a))
+                return 0;
+            T = ((jl_uniontype_t*)T)->b;
+        }
+        else {
+            return T == jl_bottom_type;
+        }
+    }
+}
+
+// Whether `t` is `==` to `TypeofBottom`: `Type{Union{}}`, or `Type{T}` with `T <: Union{}`
+// (directly or through the bounds of other typevars), which forces `T == Union{}` but which
+// method definition cannot normalize away when `T` is also used elsewhere. Callers may
+// substitute `TypeofBottom` for `t`, even in invariant positions.
 static int is_typeofbottom_typealias(jl_value_t *t) JL_NOTSAFEPOINT
 {
     if (t == NULL)
         return 0;
     if (jl_typeofbottom_type == NULL)
         return 0;
-    return t == (jl_value_t*)jl_typeofbottom_type ||
-           (jl_is_typeeq(t) && jl_typeeq_T(t) == jl_bottom_type);
+    if (t == (jl_value_t*)jl_typeofbottom_type)
+        return 1;
+    return jl_is_typeeq(t) && is_bottom_bound(jl_typeeq_T(t));
 }
 
 static jl_value_t *normalize_typeofbottom_typealias(jl_value_t *t) JL_NOTSAFEPOINT
@@ -4056,8 +4079,9 @@ int jl_tuple_isa(jl_value_t **child, size_t cl, jl_datatype_t *pdt)
     return jl_tuple1_isa(child[0], &child[1], cl, pdt);
 }
 
-// returns true if the intersection of `t` and `Type` is non-empty and not a kind
-// this is sufficient to determine if `isa(x, T)` can instead simply check for `typeof(x) <: T`
+// returns true if `t` may match a type object by its identity (a `Type{...}` or
+// `TypeEgal{...}` component), rather than only through a kind it contains in full;
+// if false, `isa(x, t)` can instead simply check for `typeof(x) <: t`
 int jl_has_intersect_type_not_kind(jl_value_t *t)
 {
     t = jl_unwrap_unionall(t);
@@ -4067,31 +4091,12 @@ int jl_has_intersect_type_not_kind(jl_value_t *t)
     if (jl_is_uniontype(t))
         return jl_has_intersect_type_not_kind(((jl_uniontype_t*)t)->a) ||
                jl_has_intersect_type_not_kind(((jl_uniontype_t*)t)->b);
-    if (jl_is_some_Type(t)) {
-        jl_value_t *T = jl_some_Type_T(t);
-        return jl_is_typevar(T) || !is_kind_or_anytype(T);
-    }
+    // even when `T` is a kind, `Type{T}` holds only the type objects equal to `T`,
+    // not every instance of that kind, so `typeof(x) <: t` cannot decide membership
+    if (jl_is_some_Type(t))
+        return 1;
     if (jl_is_typevar(t))
         return jl_has_intersect_type_not_kind(((jl_tvar_t*)t)->ub);
-    return 0;
-}
-
-// compute if DataType<:t || Union<:t || UnionAll<:t etc.
-int jl_has_intersect_kind_not_type(jl_value_t *t)
-{
-    t = jl_unwrap_unionall(t);
-    if (t == (jl_value_t*)jl_any_type || is_kind_or_anytype(t))
-        return 1;
-    assert(!jl_is_vararg(t));
-    if (jl_is_uniontype(t))
-        return jl_has_intersect_kind_not_type(((jl_uniontype_t*)t)->a) ||
-               jl_has_intersect_kind_not_type(((jl_uniontype_t*)t)->b);
-    if (jl_is_some_Type(t)) {
-        jl_value_t *T = jl_some_Type_T(t);
-        return jl_is_typevar(T) || is_kind_or_anytype(T);
-    }
-    if (jl_is_typevar(t))
-        return jl_has_intersect_kind_not_type(((jl_tvar_t*)t)->ub);
     return 0;
 }
 
@@ -7123,6 +7128,35 @@ static int num_occurs(jl_tvar_t *v, jl_typeenv_t *env)
     return 0;
 }
 
+// Whether the signature parameter `t` admits `Union{}` as its only argument, so that
+// `tuple_cmp_typeofbottom` ranks it above any other parameter. This must accept every `t` that
+// subtyping proves `<: Type{Union{}}`: a method whose parameter is such a `t` can beat a
+// `Type{Union{}}` method as a strict subtype, and the typemap's `Union{}` pruning relies on
+// the winner of those calls also beating every method it skips. Subtyping proves this for an
+// alias of `TypeofBottom` (see above), a typevar through its upper bound, and a union through
+// each of its components; the latter two are not aliases (`S <: TypeofBottom` may also be
+// `Union{}`, so `Vector{S}` is not `Vector{TypeofBottom}`). Since this ranks such a parameter
+// first at any position, the typemap files all of these only in buckets that hold nothing
+// else, so that pruning at a later position never skips one (see `jl_typemap_level_insert_`).
+int jl_is_typeofbottom_param(jl_value_t *t) JL_NOTSAFEPOINT
+{
+    if (t == NULL)
+        return 0;
+    while (1) {
+        if (jl_is_typevar(t)) {
+            t = ((jl_tvar_t*)t)->ub;
+        }
+        else if (jl_is_uniontype(t)) {
+            if (!jl_is_typeofbottom_param(((jl_uniontype_t*)t)->a))
+                return 0;
+            t = ((jl_uniontype_t*)t)->b;
+        }
+        else {
+            return is_typeofbottom_typealias(t);
+        }
+    }
+}
+
 static int tuple_cmp_typeofbottom(jl_datatype_t *a, jl_datatype_t *b)
 {
     size_t i, la = jl_nparams(a), lb = jl_nparams(b);
@@ -7130,8 +7164,8 @@ static int tuple_cmp_typeofbottom(jl_datatype_t *a, jl_datatype_t *b)
         jl_value_t *pa = i < la ? jl_tparam(a, i) : NULL;
         jl_value_t *pb = i < lb ? jl_tparam(b, i) : NULL;
         assert(jl_typeofbottom_type); // for clang-sa
-        int xa = is_typeofbottom_typealias(pa);
-        int xb = is_typeofbottom_typealias(pb);
+        int xa = jl_is_typeofbottom_param(pa);
+        int xb = jl_is_typeofbottom_param(pb);
         if (xa != xb)
             return xa - xb;
     }
@@ -7218,8 +7252,8 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
             if (sub_msp(b, (jl_value_t*)jl_type_type, (jl_value_t*)jl_type_type, env))
                 return 1;
         }
-        else if (b == (jl_value_t*)jl_datatype_type || b == (jl_value_t*)jl_unionall_type ||
-                 b == (jl_value_t*)jl_uniontype_type) {
+        else if (jl_is_kind(b)) {
+            // including the wrapper kinds: `Type{Type{Int}}` is more specific than `TypeEq`
             return 1;
         }
     }
