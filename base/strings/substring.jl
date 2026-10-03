@@ -159,7 +159,16 @@ end
 
 function getindex(s::SubString, i::Integer)
     @boundscheck checkbounds(s, i)
+    @inbounds isvalid(s, i) || string_index_err(s, i)
     @inbounds return getindex(s.string, s.offset + i)
+end
+
+@propagate_inbounds function getindex(s::SubString{String}, i::Int)
+    @boundscheck checkbounds(s, i)
+    b = @inbounds codeunit(s, i)
+    u = UInt32(b) << 24
+    between(b, 0x80, 0xf7) || return reinterpret(Char, u)
+    return getindex_continued(s, i, u)
 end
 
 # `isascii(::AbstractVector)` reduces to `@inbounds codeunit(::SubString{String}, ::Int)`, total.
