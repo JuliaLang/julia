@@ -68,6 +68,11 @@ Base.IndexCartesian
 Base.conj!
 Base.stride
 Base.strides
+Base.isstrided
+Base.islinearstrided
+Base.isdense
+Base.isunsafeloadable
+Base.isunsafestorable
 ```
 
 ## Broadcast and vectorization
