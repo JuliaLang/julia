@@ -1306,3 +1306,153 @@ end
     ir = get_llvm(f_srettest, Tuple{Float32}, true, true, true)
     @test occursin(r"sret\([^)]+\) align \d+", ir)
 end
+
+# ipo_purity_bits are translated into LLVM call-site attributes
+function _fib_cse_test(n::Int)
+    n <= 1 && return n
+    n == 2 && return 1
+    return _fib_cse_test(n-1) + _fib_cse_test(n-2)
+end
+_bench_cse_test() = _fib_cse_test(40)
+_fib_cse_test(5); _bench_cse_test()
+@noinline _pure_effects_attrtest(x::Float64) = x * x + 1.0
+_pure_effects_attrcaller(x::Float64) = _pure_effects_attrtest(x) + 1.0
+_pure_effects_attrtest(1.0); _pure_effects_attrcaller(1.0)
+@noinline _pure_effects_licmcallee(x::Float64) = x * x * x + 2.0 * x * x + x + 1.0
+function _pure_effects_licmloop(A::Vector{Float64}, x::Float64)
+    for i in eachindex(A)
+        A[i] = _pure_effects_licmcallee(x)
+    end
+    return A
+end
+function _blackbox_licmloop(A::Vector{Float64}, x::Float64)
+    for i in eachindex(A)
+        A[i] = _pure_effects_licmcallee(Base.blackbox(x))
+    end
+    return A
+end
+_pure_effects_licmcallee(1.0); _pure_effects_licmloop(Float64[0.0], 1.0)
+_blackbox_licmloop(Float64[0.0], 1.0)
+# sret out-parameter: the callee writes to caller memory through it
+@noinline _sret_effects_callee(x::Float64) = (x, x + 1.0, x + 2.0, x + 3.0)
+_sret_effects_caller(x::Float64) = _sret_effects_callee(x)[2]
+_sret_effects_callee(1.0); _sret_effects_caller(1.0)
+# :inaccessiblememonly (argmem) + :effect_free: reads through its argument only
+@noinline _refread_effects_callee(r::Base.RefValue{Int}) = r[]
+_refread_effects_caller(r::Base.RefValue{Int}) = _refread_effects_callee(r) + 1
+_refread_effects_callee(Ref(1)); _refread_effects_caller(Ref(1))
+# :inaccessiblememonly (argmem) + :effect_free_if_inaccessiblememonly: writes through its argument
+@noinline _refwrite_effects_callee(r::Base.RefValue{Int}) = (r[] = 1; nothing)
+_refwrite_effects_caller(r::Base.RefValue{Int}) = (_refwrite_effects_callee(r); r[])
+_refwrite_effects_callee(Ref(1)); _refwrite_effects_caller(Ref(1))
+# spin-wait on a @noinline atomic load: the load is :effect_free but synchronizes
+@noinline _spin_effects_load(a::Threads.Atomic{Int}) = a[]
+function _spin_effects_caller(a::Threads.Atomic{Int})
+    n = 0
+    while _spin_effects_load(a) == 0
+        n += 1
+    end
+    return n
+end
+_spin_effects_load(Threads.Atomic{Int}(1)); _spin_effects_caller(Threads.Atomic{Int}(1))
+# Union return: the result buffer is the first argument but carries no `sret`
+# attribute; it is written by the callee and must be treated as an out-parameter
+@noinline _unionret_effects_callee(x::Int) = x > 0 ? x : nothing
+function _unionret_effects_caller(x::Int)
+    r = _unionret_effects_callee(x)
+    return r === nothing ? -1 : r
+end
+_unionret_effects_callee(1); _unionret_effects_caller(1)
+# :effect_free but reads mutable global memory (not :consistent)
+const _global_effects_ref = Ref(0)
+@noinline _globalread_effects_callee() = _global_effects_ref[]
+_globalread_effects_caller() = _globalread_effects_callee() + 1
+_globalread_effects_callee(); _globalread_effects_caller()
+# :effect_free, returns a fresh mutable object: must not be CSE'd
+@noinline _fresh_effects_callee(n::Int) = Base.RefValue(n)
+function _fresh_effects_caller(n::Int)
+    a = _fresh_effects_callee(n)
+    b = _fresh_effects_callee(n)
+    a[] = n + 1
+    return b[]
+end
+_fresh_effects_callee(1); _fresh_effects_caller(1)
+@testset "effects to LLVM attributes" begin
+    # Attribute emission: ipo_purity_bits translated to LLVM attrs on pure @noinline calls
+    ir_attrs = get_llvm(_pure_effects_attrcaller, Tuple{Float64}, true, true, false)
+    m = match(r"call [^\n]*@j__pure_effects_attrtest[^\n]* (#\d+)", ir_attrs)
+    @test m !== nothing
+    if m !== nothing
+        attrs = match(Regex("attributes " * m[1] * " = \\{([^}]*)\\}"), ir_attrs)[1]
+        @test occursin("nounwind", attrs)
+        @test occursin("mustprogress", attrs)
+        @test occursin("willreturn", attrs)
+        @test occursin("memory(argmem: read)", attrs)
+        @test occursin("\"julia.safepoint\"", attrs)
+    end
+
+    function callsite_attrs(ir, callee)
+        m = match(Regex("call [^\\n]*@" * callee * "[^\\n]* (#\\d+)"), ir)
+        m === nothing && return nothing
+        return match(Regex("attributes " * m[1] * " = \\{([^}]*)\\}"), ir)[1]
+    end
+
+    # sret callee: the out-parameter is written, everything else is read
+    ir_sret = get_llvm(_sret_effects_caller, Tuple{Float64}, true, true, false)
+    attrs = callsite_attrs(ir_sret, "j__sret_effects_callee")
+    @test attrs !== nothing && occursin("nounwind", attrs) && occursin("memory(argmem: readwrite)", attrs)
+
+    # reader of mutable argument memory (not :consistent): no memory claim, since
+    # the read could be an acquire load that LLVM must not hoist or forward across
+    ir_rr = get_llvm(_refread_effects_caller, Tuple{Base.RefValue{Int}}, true, true, false)
+    attrs = callsite_attrs(ir_rr, "j__refread_effects_callee")
+    @test attrs !== nothing && occursin("nounwind", attrs) && !occursin("memory(", attrs)
+
+    # writer of argument memory: no memory claim either (could be a release store)
+    ir_rw = get_llvm(_refwrite_effects_caller, Tuple{Base.RefValue{Int}}, true, true, false)
+    attrs = callsite_attrs(ir_rw, "j__refwrite_effects_callee")
+    @test attrs !== nothing && occursin("nounwind", attrs) && !occursin("memory(", attrs)
+    @test !occursin(r"@j__refwrite_effects_callee\w*\(ptr addrspace\(10\) readonly", ir_rw)
+
+    # a spin-wait on a @noinline atomic load must keep the call inside the loop
+    ir_spin = get_llvm(_spin_effects_caller, Tuple{Threads.Atomic{Int}}, true, false, true)
+    @test count(r"call\b.*@j__spin_effects_load", ir_spin) >= 1
+    attrs = callsite_attrs(get_llvm(_spin_effects_caller, Tuple{Threads.Atomic{Int}}, true, true, false), "j__spin_effects_load")
+    @test attrs === nothing || !occursin("memory(", attrs)
+
+    # Union-returning callee: the union buffer is written
+    ir_ur = get_llvm(_unionret_effects_caller, Tuple{Int}, true, true, false)
+    attrs = callsite_attrs(ir_ur, "j__unionret_effects_callee")
+    @test attrs !== nothing && occursin("memory(argmem: readwrite)", attrs)
+    @test _unionret_effects_caller(2) == 2 && _unionret_effects_caller(-2) == -1
+
+    # effect_free reader of mutable global memory (not :consistent): no memory claim
+    ir_gr = get_llvm(_globalread_effects_caller, Tuple{}, true, true, false)
+    attrs = callsite_attrs(ir_gr, "j__globalread_effects_callee")
+    @test attrs !== nothing && !occursin("memory(", attrs)
+
+    # fresh mutable allocation: not value-numberable, both calls survive
+    ir_fr = get_llvm(_fresh_effects_caller, Tuple{Int}, true, true, false)
+    attrs = callsite_attrs(ir_fr, "j__fresh_effects_callee")
+    @test attrs !== nothing && occursin("inaccessiblemem: readwrite", attrs)
+    @test count(r"call\b.*@j__fresh_effects_callee", get_llvm(_fresh_effects_caller, Tuple{Int}, true, false, true)) == 2
+    @test _fresh_effects_caller(1) == 1
+
+    # CSE: duplicate fib call eliminated by GVN
+    ir_bench = get_llvm(_bench_cse_test, Tuple{}, true, false, true)
+    @test count(r"call (swiftcc )?i\d+ @j__fib", ir_bench) == 3  # 4 calls reduced to 3
+
+    re_licmcall = r"call\b.*@j__pure_effects_licmcallee"
+    re_raw_arg = r"@j__pure_effects_licmcallee\w*\(double %\"x::Float64\"\)"
+
+    # LICM: loop-invariant pure call hoisted out of loop (takes raw argument)
+    ir_licm = get_llvm(_pure_effects_licmloop, Tuple{Vector{Float64}, Float64}, true, false, true)
+    @test count(re_licmcall, ir_licm) == 1
+    @test occursin(re_raw_arg, ir_licm)
+
+    # blackbox prevents LICM: the callee takes the asm barrier output instead
+    # of the raw argument, proving it depends on the barrier.
+    ir_bb = get_llvm(_blackbox_licmloop, Tuple{Vector{Float64}, Float64}, true, false, true)
+    @test count(re_licmcall, ir_bb) == 1
+    @test !occursin(re_raw_arg, ir_bb)
+end

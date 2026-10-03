@@ -2477,6 +2477,143 @@ static bool effects_ipo_reset_safe(uint32_t effects) JL_NOTSAFEPOINT
            ((effects >> 15) & 0x03u) == 0u;  // is_reset_safe
 }
 
+// Kill switch for the effects -> attributes translation below
+// (`JULIA_LLVM_ARGS=-julia-effects-attrs=0`), so a miscompile caused by it
+// can be worked around in the field without a rebuild.
+static cl::opt<bool> julia_effects_attrs("julia-effects-attrs",
+    cl::desc("Translate inferred Julia effects into LLVM call-site attributes"),
+    cl::init(true));
+
+// Translate the callee's encoded ipo_purity_bits into LLVM attributes on a
+// specsig call site so that the middle end (LICM, GVN, DSE, ...) can exploit
+// what inference already proved. N.B.: bit layout kept in sync with
+// Compiler/src/effects.jl (encode_effects).
+//
+// The memory mapping:
+//
+//   :consistent           :effect_free   memory(...)
+//   ALWAYS_TRUE           ALWAYS_TRUE    argmem: read
+//   ALWAYS_TRUE           IF_INACCESS.   argmem: read, inaccessiblemem: readwrite
+//                                        (only with :inaccessiblememonly)
+//   IF_NOTRETURNED        as above       ... plus inaccessiblemem: readwrite
+//   otherwise                            (no claim)
+//
+// Out-parameters (sret, return_roots, the Union result buffer) are written
+// by the callee and add `argmem: write`; the other pointer parameters get
+// `readonly`.
+//
+// Why :consistent is required: Julia's effects have no notion of
+// synchronization. An atomic load is :effect_free, so a callee that
+// spin-waits on `@atomic x.done` is (+e, ?m) like any other reader of
+// mutable memory, but LLVM would hoist a readonly call out of the loop and
+// forward loads across it, neither of which is legal across an acquire.
+// :consistent (ALWAYS_TRUE) means the result cannot depend on mutable
+// memory, so no atomic load can be involved (CONSISTENT_IF_NOTRETURNED is
+// fine too: a fresh object's identity is the only mutable input). For the
+// same reason there is no mapping for writers: a release store is
+// (+c, ?e, ?m) and must keep every preceding store above it.
+//
+// Two further refinements matter for soundness:
+//  - CONSISTENT_IF_NOTRETURNED callees return a fresh mutable object, so
+//    two calls must never be merged (GVN/EarlyCSE value-number readonly
+//    calls). They get `inaccessiblemem: readwrite`, which keeps load/store
+//    forwarding across the call but makes it neither mergeable nor
+//    hoistable.
+//  - The Union calling convention's result buffer carries no `sret`
+//    attribute, so out-parameters are derived from `returninfo.cc`.
+//
+// The memory effects are optimistic: every Julia call is a GC safepoint, and
+// a safepoint reads and writes memory that LLVM cannot see (GC metadata, the
+// caller's GC frame once it exists, WeakRef.value, finalizers). We still make
+// these claims because the only GC interactions that matter for correctness
+// are handled elsewhere:
+//  - rooting: the call site is tagged "julia.safepoint", and LateLowerGCFrame
+//    treats tagged calls as safepoints regardless of their memory effects,
+//    then strips the memory attributes before any post-lowering pass could
+//    use them against the now-explicit GC frame stores;
+//  - the store/write-barrier pairing: the write barrier intrinsics read
+//    their argument memory (see getWriteBarrierAttributes), so a store can
+//    never be sunk below its own barrier and hence not past a safepoint that
+//    follows it;
+//  - WeakRef.value loads and finalizer side effects may be reordered across
+//    such a call; both are already permitted at the Julia level for
+//    :effect_free callees.
+// Attributes are only added to the call site (never to the callee's
+// declaration or definition), so nothing has to be undone at module scope.
+// `first_param_is_out`: the call uses the SRet or Union calling convention,
+// whose caller-provided result buffer is the first argument (the Union
+// buffer carries no `sret` attribute, so it cannot be recognized from the
+// attribute list alone).
+static void add_fn_attrs_for_effects(CallInst *call, uint32_t effects, bool first_param_is_out) JL_NOTSAFEPOINT
+{
+    if (effects == 0 || !julia_effects_attrs)
+        return;
+    uint8_t consistent    = effects & 0x07u;
+    uint8_t effect_free   = (effects >> 3) & 0x03u;
+    bool is_nothrow       = (effects >> 5) & 0x01u;
+    bool is_terminates    = (effects >> 6) & 0x01u;
+    bool is_notaskstate   = (effects >> 7) & 0x01u;
+    uint8_t inaccessmem   = (effects >> 8) & 0x03u;
+    // Compiler/src/effects.jl: ALWAYS_TRUE = 0, ALWAYS_FALSE = 1,
+    // CONSISTENT_IF_NOTRETURNED = 2, CONSISTENT_IF_INACCESSIBLEMEMONLY = 4,
+    // EFFECT_FREE_IF_INACCESSIBLEMEMONLY = 2, INACCESSIBLEMEM_OR_ARGMEMONLY = 2
+    bool is_consistent_if_notreturned = (consistent & 0x02u) != 0u;
+    // ALWAYS_TRUE, or only tainted by a returned fresh mutable allocation:
+    // the result does not depend on mutable memory (see above)
+    bool is_consistent    = (consistent & ~0x02u) == 0u;
+    bool is_effect_free   = effect_free == 0u;
+    bool is_effect_free_if_inaccessiblememonly = effect_free == 2u;
+    bool is_inaccessiblememonly = inaccessmem == 0u;
+    LLVMContext &C = call->getContext();
+    AttrBuilder attrs(C);
+    // Marks the call as a GC safepoint for LateLowerGCFrame, whatever the
+    // memory effects below claim.
+    attrs.addAttribute("julia.safepoint");
+    if (is_nothrow)
+        attrs.addAttribute(Attribute::NoUnwind);
+    if (is_terminates)
+        attrs.addAttribute(Attribute::MustProgress);
+    if (is_nothrow && is_terminates)
+        attrs.addAttribute(Attribute::WillReturn);
+
+    std::optional<MemoryEffects> ME;
+    if (is_consistent) {
+        if (is_effect_free)
+            ME = MemoryEffects::argMemOnly(ModRefInfo::Ref);
+        else if (is_effect_free_if_inaccessiblememonly && is_inaccessiblememonly)
+            ME = MemoryEffects::argMemOnly(ModRefInfo::Ref) | MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef);
+    }
+    if (ME) {
+        if (is_consistent_if_notreturned)
+            *ME |= MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef);
+        FunctionType *ft = call->getFunctionType();
+        for (unsigned i = 0; i < ft->getNumParams(); i++) {
+            if (!ft->getParamType(i)->isPointerTy())
+                continue;
+            if ((i == 0 && first_param_is_out) ||
+                call->paramHasAttr(i, Attribute::StructRet) ||
+                call->getParamAttr(i, "julia.return_roots").isValid()) {
+                // out-parameter, written by the callee
+                *ME |= MemoryEffects::argMemOnly(ModRefInfo::Mod);
+            }
+            else if (call->getParamAttr(i, "gcstack").isValid()) {
+                // A :notaskstate callee never observes task-local state
+                // (world age, scope, ...) through pgcstack, and its GC frame
+                // push/pop restores the stack on return, so from the
+                // caller's point of view the gcstack argument is untouched.
+                if (is_notaskstate)
+                    call->addParamAttr(i, Attribute::ReadNone);
+            }
+            else if (is_effect_free) {
+                // writes through a pointer argument would be observable
+                call->addParamAttr(i, Attribute::ReadOnly);
+            }
+        }
+        attrs.addMemoryAttr(*ME);
+    }
+    call->setAttributes(call->getAttributes().addFnAttributes(C, attrs));
+}
+
 // Mark a call instruction with reset_safe metadata if the current statement has the flag
 static void mark_reset_safe(jl_codectx_t &ctx, CallInst *call)
 {
@@ -6164,6 +6301,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
     call->setAttributes(returninfo.attrs);
     if (gcstack_arg && ctx.emission_context.use_swiftcc)
         call->setCallingConv(CallingConv::Swift);
+    add_fn_attrs_for_effects(call, effects, returninfo.cc == jl_returninfo_t::SRet || returninfo.cc == jl_returninfo_t::Union);
     // Mark as reset_safe only if the current statement has that flag AND the
     // invoked code's own IPO effects agree: the statement flag may stem from
     // a constant-propagation refinement stronger than the generic code being
