@@ -426,6 +426,7 @@ DevDocs = [
         "devdocs/meta.md",
         "devdocs/subarrays.md",
         "devdocs/isbitsunionarrays.md",
+        "devdocs/taggedunions.md",
         "devdocs/sysimg.md",
         "devdocs/pkgimg.md",
         "devdocs/llvm-passes.md",
