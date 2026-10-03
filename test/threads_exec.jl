@@ -877,6 +877,17 @@ end
 @test _atthreads_greedy_schedule(10) == (10, ones(10))
 @test _atthreads_greedy_schedule(threadpoolsize(:default) * 2) == (threadpoolsize(:default) * 2, ones(threadpoolsize(:default) * 2))
 
+# the iterator expression is evaluated once
+function _atthreads_greedy_iterator_evals()
+    nevals = Ref(0)
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :greedy for _ in (nevals[] += 1; 1:10)
+        Threads.atomic_add!(inc, 1)
+    end
+    return nevals[], inc[]
+end
+@test _atthreads_greedy_iterator_evals() == (1, 10)
+
 # nested greedy schedule
 function _atthreads_greedy_greedy_schedule()
     inc = Threads.Atomic{Int}(0)

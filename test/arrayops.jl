@@ -1888,6 +1888,12 @@ end
     A = [1,2]
     @test append!(A, A) == [1,2,1,2]
     @test prepend!(A, A) == [1,2,1,2,1,2,1,2]
+    A = collect(1:5)
+    @test prepend!(A, view(A, 4:5)) == [4,5,1,2,3,4,5]
+    A = collect(1:5)
+    @test prepend!(A, view(A, 5:-1:1)) == [5,4,3,2,1,1,2,3,4,5]
+    A = Any[1,2,3]
+    @test prepend!(A, view(A, 2:3)) == Any[2,3,1,2,3]
 
     # iterators with length:
     @test append!([1,2], (9,8)) == [1,2,9,8] == push!([1,2], (9,8)...)
@@ -2364,6 +2370,23 @@ end
     @test_throws BoundsError copyto!(a,b)
     @test_throws ArgumentError copyto!(a,2:3,1:3,b,1:5,2:7)
     @test_throws ArgumentError LinearAlgebra.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
+
+    # Memory to Memory, with the same and with different element types
+    for S in (Int, Float64, Any)
+        dest = Memory{Float64}(undef, 2)
+        src = Memory{S}(undef, 3); fill!(src, 1)
+        @test_throws BoundsError copyto!(dest, src)
+        @test_throws BoundsError copyto!(dest, 1, src, 1, 3)
+        @test_throws BoundsError copyto!(dest, 2, src, 1, 2)
+        @test_throws BoundsError copyto!(dest, 1, src, 3, 2)
+        @test_throws BoundsError copyto!(dest, 0, src, 1, 1)
+        @test_throws BoundsError copyto!(dest, 1, src, 0, 1)
+        @test_throws ArgumentError copyto!(dest, 1, src, 1, -1)
+        @test copyto!(dest, 0, src, 0, 0) === dest
+        src[3] = 2
+        @test copyto!(dest, Int8(1), src, Int8(2), Int8(2)) === dest
+        @test dest == [1.0, 2.0]
+    end
 end
 
 @testset "empty copyto!" begin

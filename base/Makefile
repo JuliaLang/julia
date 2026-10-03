@@ -209,6 +209,25 @@ $(build_private_libexecdir)/7z$(EXE):
 	rm -f "$@" && \
 	ln -sf "$(7Z_PATH)" "$@"
 
+symlink_zstd: $(build_private_libexecdir)/zstd$(EXE)
+symlink_zstdmt: $(build_private_libexecdir)/zstdmt$(EXE)
+
+ifneq ($(USE_SYSTEM_ZSTD),0)
+SYMLINK_SYSTEM_LIBRARIES += symlink_zstd symlink_zstdmt
+ZSTD_PATH := $(shell which zstd$(EXE))
+ZSTDMT_PATH := $(shell which zstdmt$(EXE))
+endif
+
+$(build_private_libexecdir)/zstd$(EXE):
+	[ -e "$(ZSTD_PATH)" ] && \
+	rm -f "$@" && \
+	ln -sf "$(ZSTD_PATH)" "$@"
+
+$(build_private_libexecdir)/zstdmt$(EXE):
+	[ -e "$(ZSTDMT_PATH)" ] && \
+	rm -f "$@" && \
+	ln -sf "$(ZSTDMT_PATH)" "$@"
+
 symlink_llvm_utils: $(build_depsbindir)/lld$(EXE) $(build_depsbindir)/dsymutil$(EXE)
 
 ifneq ($(USE_SYSTEM_LLD),0)
