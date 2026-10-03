@@ -92,6 +92,23 @@ Base.broadcastable(x::Enum) = Ref(x)
 
 @noinline enum_argument_error(typename, x) = throw(ArgumentError(LazyString("invalid value for Enum ", typename, ": ", x)))
 
+function extractdefs!(out, xs, mod)
+    for x in xs
+        if x isa Expr
+            if x.head === :macrocall && x.args[1] === Symbol("@static")
+                x = macroexpand(mod, x)
+                x === nothing && continue
+            end
+            if x.head === :block
+                extractdefs!(out, x.args, mod)
+                continue
+            end
+        end
+        x isa LineNumberNode || push!(out, x)
+    end
+    return out
+end
+
 """
     @enum EnumName[::BaseType] value1[=x] value2[=y]
 
@@ -167,6 +184,7 @@ macro enum(T::Union{Symbol,Expr}, syms...)
     if length(syms) == 1 && syms[1] isa Expr && syms[1].head === :block
         syms = syms[1].args
     end
+    syms = extractdefs!(Any[], syms, __module__)
     for s in syms
         s isa LineNumberNode && continue
         if isa(s, Expr) && s.head === :macrocall && s.args[1] == GlobalRef(Core, Symbol("@doc"))
@@ -182,7 +200,11 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         elseif isa(s, Expr) &&
                (s.head === :(=) || s.head === :kw) &&
                length(s.args) == 2 && isa(s.args[1], Symbol)
-            i = Core.eval(__module__, s.args[2]) # allow exprs, e.g. uint128"1"
+            # Allow expressions, e.g. `uint128"1"`, as well as ones that depend on preceding
+            # instance values, e.g. `x; y; z = x | y`
+            ex = Expr(:let, Expr(:block, (Expr(:(=), sym, val) for (val, sym) in namemap)...),
+                      Expr(:block, s.args[2]))
+            i = Core.eval(__module__, ex)
             if !isa(i, Integer)
                 throw(ArgumentError(LazyString("invalid value for Enum ", typename, ", ", s, "; values must be integers")))
             end
