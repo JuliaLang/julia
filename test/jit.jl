@@ -144,7 +144,9 @@ end
 function test_gc_codeinst()
     for i=1:10000
         @async eval(:(ccall(:sqrt, Float64, (Float64,), $i); wait()))
-        i % 100 == 0 && GC.gc()
+        # yield() so that the Tasks have a chance to be scheduled and then
+        # available for recollection by the GC
+        i % 100 == 0 && (yield(); GC.gc())
     end
     true
 end
