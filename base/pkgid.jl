@@ -10,7 +10,7 @@ end
 PkgId(name::AbstractString) = PkgId(nothing, name)
 
 function PkgId(m::Module, name::String = String(nameof(moduleroot(m))))
-    uuid = UUID(ccall(:jl_module_uuid, NTuple{2, UInt64}, (Any,), m))
+    uuid = ccall(:jl_module_uuid, UUID, (Any,), m)
     UInt128(uuid) == 0 ? PkgId(name) : PkgId(uuid, name)
 end
 

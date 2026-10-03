@@ -27,6 +27,7 @@ const libmpfr = LazyLibrary(
     else
         error("MPFR_jll: Library 'libmpfr' is not available for $(Sys.KERNEL)")
     end,
+    id = LibraryID(Base.UUID("3a97d323-0669-5f0c-9066-3539efd106a3"), "libmpfr"),
     dependencies = if Sys.iswindows()
         LazyLibrary[libgmp, libgcc_s]
     else
