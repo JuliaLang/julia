@@ -4540,6 +4540,10 @@ end
             @test moved_file != loaded_file
             @test first(Base.parse_cache_buildid(moved_file)) == Base.module_build_id(Dep)
             @test first(Base.parse_cache_buildid(new_file)) != Base.module_build_id(Dep)
+            moved_so = Base.ocachefile_from_cachefile(moved_file)
+            if Sys.isapple() && isfile(moved_so)
+                @test isfile(joinpath(moved_so * ".dSYM", "Contents", "Resources", "DWARF", basename(moved_so)))
+            end
             env_top, _ = Base.compilecache(top, Base.locate_package_load_spec(top), devnull, devnull, false)
             # Top is built against the loaded Dep, which its worker must still find, and that
             # build must not replace the one for the environment
@@ -4551,6 +4555,64 @@ end
         @test length(cachefiles("Top")) == 2
         @test success(run_script("exit(Base.isprecompiled(Base.PkgId(Base.UUID(\"$top_uuid\"), \"Top\")) ? 0 : 1)"))
 
+        rebuild_script = joinpath(dir, "rebuild_dep.jl")
+        write(rebuild_script, "Base.compilecache(Base.PkgId(Base.UUID(\"$dep_uuid\"), \"Dep\"))\n")
+        # Windows cannot replace a loaded file, so this case cannot happen there
+        if !Sys.iswindows()
+            # Another process replaces the file this session loaded Dep from. That build is
+            # not this session's, so it is not moved aside as if it were.
+            @test success(run_script("""
+                using Test
+                dep = Base.PkgId(Base.UUID("$dep_uuid"), "Dep")
+                using Dep
+                loaded_file = Base.pkgorigins[dep].cachepath
+                run(`\$(Base.julia_cmd()) --startup-file=no --project=$(repr(project_path)) $(repr(rebuild_script))`)
+                @test first(Base.parse_cache_buildid(loaded_file)) != Base.module_build_id(Dep)
+                Base.compilecache(dep)
+                @test Base.pkgorigins[dep].cachepath == loaded_file
+                """))
+            @test length(cachefiles("Dep")) == 2
+        end
+
+        # Updating the loaded Dep again and again keeps at most two extra files for this
+        # project, so it cannot push out the file of another project
+        old_manifest_file = joinpath(dir, "OldManifest.toml")
+        write(old_manifest_file, manifest("DepOld", "0.1.0"))
+        other_project_path = joinpath(dir, "other")
+        cp(project_path, other_project_path)
+        dep_files = cachefiles("Dep")
+        @test success(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$other_project_path $rebuild_script`,
+                             "JULIA_DEPOT_PATH" => depot))
+        other_file = only(setdiff(cachefiles("Dep"), dep_files))
+        for next_manifest_file in (old_manifest_file, new_manifest_file, old_manifest_file, new_manifest_file)
+            @test success(run_script("""
+                dep = Base.PkgId(Base.UUID("$dep_uuid"), "Dep")
+                using Dep
+                cp($(repr(next_manifest_file)), $(repr(manifest_file)); force=true)
+                @lock Base.require_lock delete!(Base.TOML_CACHE.d, $(repr(manifest_file)))
+                Base.compilecache(dep)
+                """))
+        end
+        @test other_file in cachefiles("Dep")
+        @test length(cachefiles("Dep")) == 4
+
+        # If the loaded file cannot be moved aside, it stays and the new build gets another name
+        @test success(run_script("""
+            using Test
+            dep = Base.PkgId(Base.UUID("$dep_uuid"), "Dep")
+            using Dep
+            loaded_file = Base.pkgorigins[dep].cachepath
+            @eval Base.Filesystem function rename(src::String, dst::String)
+                isfile(src) && samefile(src, \$loaded_file) && throw(Base.IOError("rename refused for the test", -1))
+                invoke(rename, Tuple{AbstractString,AbstractString}, src, dst)
+            end
+            cp($(repr(old_manifest_file)), $(repr(manifest_file)); force=true)
+            @lock Base.require_lock delete!(Base.TOML_CACHE.d, $(repr(manifest_file)))
+            new_file, _ = Base.compilecache(dep)
+            @test new_file != loaded_file
+            @test Base.pkgorigins[dep].cachepath == loaded_file
+            @test first(Base.parse_cache_buildid(loaded_file)) == Base.module_build_id(Dep)
+            """))
     end end
 end
 
@@ -4562,7 +4624,15 @@ end
             path = joinpath(dir, "dev", dirname)
             mkpath(joinpath(path, "src"))
             write(joinpath(path, "Project.toml"), "name = \"Dep\"\nuuid = \"$dep_uuid\"\nversion = \"$version\"\n")
-            write(joinpath(path, "src", "Dep.jl"), "module Dep\nend\n")
+            # a compile-time preference, so projects that set it differently build Dep differently
+            write(joinpath(path, "src", "Dep.jl"), """
+                module Dep
+                const flavor = let uuid = Base.UUID("$dep_uuid")
+                    Base.record_compiletime_preference(uuid, "flavor")
+                    get(Base.get_preferences(uuid), "flavor", nothing)
+                end
+                end
+                """)
         end
         top_path = joinpath(dir, "dev", "Top")
         mkpath(joinpath(top_path, "src"))
@@ -4589,10 +4659,10 @@ end
             uuid = "$top_uuid"
             version = "0.1.0"
             """)
-        function project(name, dirname, version)
+        function project(name, dirname, version; prefs="")
             path = joinpath(dir, name)
             mkpath(path)
-            write(joinpath(path, "Project.toml"), "[deps]\nDep = \"$dep_uuid\"\n")
+            write(joinpath(path, "Project.toml"), "[deps]\nDep = \"$dep_uuid\"\n" * prefs)
             write(joinpath(path, "Manifest.toml"), "manifest_format = \"2.0\"\n\n" * dep_entry(dirname, version))
             return path
         end
@@ -4619,6 +4689,17 @@ end
         @test using_top(same_a)
         @test using_top(other)
         @test length(top_files()) == 2
+        # Projects that set different preferences for Dep keep their own builds of Top
+        # rather than replacing one shared file on every switch
+        pref_a = project("pref_a", "DepOld", "0.1.0"; prefs="\n[preferences.Dep]\nflavor = \"a\"\n")
+        pref_b = project("pref_b", "DepOld", "0.1.0"; prefs="\n[preferences.Dep]\nflavor = \"b\"\n")
+        @test using_top(pref_a)
+        @test using_top(pref_b)
+        @test length(top_files()) == 4
+        top_builds() = Dict(f => Base.parse_cache_buildid(joinpath(compiled, "Top", f)) for f in top_files())
+        builds = top_builds()
+        @test using_top(pref_a)
+        @test top_builds() == builds
     end end
 end
 

@@ -3782,7 +3782,8 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             # actually know what the list of compile-time preferences are without compiling)
             prefs_blob = preferences_blob(tmppath)
             required_modules = parse_cache_header(tmppath)[3]
-            cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags, project=cachefile_project(pkg, required_modules))
+            slot_cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags, project=cachefile_project(pkg, required_modules))
+            cachefile = slot_cachefile
             # Keep the usual name for the build that matches the environment, which the next
             # session will want, and give a build that only suits this session another one.
             if pkg.uuid !== nothing && built_against_other_sources(required_modules)
@@ -3812,26 +3813,25 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             chmod(tmppath, filemode(spec.path) & 0o777 | 0o200)
 
             moved_ocachefile = pkg.uuid === nothing ? nothing : move_aside_loaded_cachefile(pkg, cachefile)
+            if moved_ocachefile === false
+                # the loaded build could not be moved, so leave it there and use another name
+                moved_ocachefile = nothing
+                cachefile = unused_cachefile_name(cachefile)
+                ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
+            end
 
             # prune the directory with cache files
             if pkg.uuid !== nothing
+                # Keep a few extra `<slot>_<n>.ji` files per slot, so one project that keeps
+                # updating loaded packages cannot fill the directory and push out other projects.
+                prune_extra_cachefiles(pkg, slot_cachefile, cachefile != slot_cachefile)
                 entrypath, entryfile = cache_file_entry(pkg)
                 cachefiles = filter!(x -> startswith(x, entryfile * "_") && endswith(x, ".ji"), readdir(cachepath))
                 # never the file of a loaded package, which this session's workers may need
                 evictable = filter(x -> !is_loaded_cachefile(pkg, joinpath(cachepath, x)), cachefiles)
                 if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES[] && !isempty(evictable)
                     idx = findmin(mtime.(joinpath.(cachepath, evictable)))[2]
-                    evicted_cachefile = joinpath(cachepath, evictable[idx])
-                    @debug "Evicting file from cache" evicted_cachefile
-                    rm(evicted_cachefile; force=true)
-                    try
-                        rm(ocachefile_from_cachefile(evicted_cachefile); force=true)
-                        @static if Sys.isapple()
-                            rm(ocachefile_from_cachefile(evicted_cachefile) * ".dSYM"; force=true, recursive=true)
-                        end
-                    catch e
-                        e isa IOError || rethrow()
-                    end
+                    evict_cachefile(joinpath(cachepath, evictable[idx]))
                 end
             end
 
@@ -3871,10 +3871,12 @@ end
 # A package loaded in this session keeps the cache file it was loaded from. Workers started
 # by this session look up that build by its id, so a new build for the same slot must not
 # replace the file. Move it to `<slot>_<n>.ji`, where the cache search still finds it.
+# Return the new path of its library, `nothing` if no loaded build is there, or `false` if
+# it could not be moved.
 function move_aside_loaded_cachefile(pkg::PkgId, cachefile::String)
     @lock require_lock begin
-        origin = get(pkgorigins, pkg, nothing)
-        (origin === nothing || origin.cachepath === nothing || !samefile(origin.cachepath, cachefile)) && return nothing
+        is_loaded_cachefile(pkg, cachefile) || return nothing
+        origin = pkgorigins[pkg]
         aside_cachefile = unused_cachefile_name(cachefile)
         ocachefile = ocachefile_from_cachefile(cachefile)
         aside_ocachefile = ocachefile_from_cachefile(aside_cachefile)
@@ -3892,6 +3894,9 @@ function move_aside_loaded_cachefile(pkg::PkgId, cachefile::String)
                     # only debug info, so a failure here does not matter
                     isdir(ocachefile * ".dSYM") && try
                         Filesystem.rename(ocachefile * ".dSYM", aside_ocachefile * ".dSYM")
+                        # debug info is looked up by the library's file name inside the bundle
+                        dwarf = joinpath(aside_ocachefile * ".dSYM", "Contents", "Resources", "DWARF")
+                        Filesystem.rename(joinpath(dwarf, basename(ocachefile)), joinpath(dwarf, basename(aside_ocachefile)))
                     catch e
                         e isa IOError || rethrow()
                     end
@@ -3900,10 +3905,39 @@ function move_aside_loaded_cachefile(pkg::PkgId, cachefile::String)
         catch e
             e isa IOError || rethrow()
             @debug "Could not move the loaded cache file of $(repr("text/plain", pkg)) aside" cachefile exception=e
-            return nothing
+            return false
         end
         origin.cachepath = aside_cachefile
         return aside_ocachefile
+    end
+end
+
+const MAX_NUM_EXTRA_PRECOMPILE_FILES = 2
+
+# Remove the oldest extra files of a slot that are not loaded, leaving room for the new
+# file when it is an extra one too.
+function prune_extra_cachefiles(pkg::PkgId, slot_cachefile::String, adding_extra::Bool)
+    dir, slot = splitdir(chopsuffix(slot_cachefile, ".ji"))
+    extras = filter!(x -> startswith(x, slot * "_") && endswith(x, ".ji"), readdir(dir))
+    n = length(extras) + adding_extra
+    evictable = filter(x -> !is_loaded_cachefile(pkg, joinpath(dir, x)), extras)
+    sort!(evictable; by = x -> mtime(joinpath(dir, x)))
+    while n > MAX_NUM_EXTRA_PRECOMPILE_FILES && !isempty(evictable)
+        evict_cachefile(joinpath(dir, popfirst!(evictable)))
+        n -= 1
+    end
+end
+
+function evict_cachefile(cachefile::String)
+    @debug "Evicting file from cache" cachefile
+    rm(cachefile; force=true)
+    try
+        rm(ocachefile_from_cachefile(cachefile); force=true)
+        @static if Sys.isapple()
+            rm(ocachefile_from_cachefile(cachefile) * ".dSYM"; force=true, recursive=true)
+        end
+    catch e
+        e isa IOError || rethrow()
     end
 end
 
@@ -3937,7 +3971,9 @@ end
 # The project to name a new cache after. A package from another environment in the load
 # path, such as the default one, is named after that environment when the build matches its
 # manifest, so the projects that use it share one file. A build against other versions
-# from the active project is named after the active project.
+# from the active project is named after the active project. So is a build whose
+# dependencies have preferences, since those can differ between projects and the name only
+# covers the package's own.
 function cachefile_project(pkg::PkgId, required_modules::Vector{Pair{PkgId,UInt128}})
     active = something(active_project(), "")
     @lock require_lock begin
@@ -3951,14 +3987,28 @@ function cachefile_project(pkg::PkgId, required_modules::Vector{Pair{PkgId,UInt1
             path = locate_package(dep)
             spec = manifest_uuid_load_spec(env, dep)
             (path !== nothing && spec isa PkgLoadSpec && samefile(spec.path, path)) || return active
+            isempty(get_preferences(dep.uuid)) || return active
         end
         return project_file
     end
 end
 
+# Another process may have replaced the file at the loaded path since, so check the build too.
 function is_loaded_cachefile(pkg::PkgId, path::String)
-    origin = @lock require_lock get(pkgorigins, pkg, nothing)
-    return origin !== nothing && origin.cachepath !== nothing && samefile(origin.cachepath, path)
+    @lock require_lock begin
+        origin = get(pkgorigins, pkg, nothing)
+        (origin === nothing || origin.cachepath === nothing || !samefile(origin.cachepath, path)) && return false
+        # not only the registered module, since a package's `__init__` runs before registration
+        mods = get(loaded_precompiles, pkg, nothing)
+        mods === nothing && return false
+        build_id = try
+            parse_cache_buildid(path)[1]
+        catch e
+            e isa InterruptException && rethrow()
+            return false
+        end
+        return any(m -> module_build_id(m) == build_id, mods)
+    end
 end
 
 function rename_unique_ocachefile(tmppath_so::String, ocachefile_orig::String, ocachefile::String = ocachefile_orig, num = 0;
