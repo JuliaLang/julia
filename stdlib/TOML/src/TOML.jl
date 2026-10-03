@@ -7,6 +7,8 @@ and to serialize Julia data structures to TOML format.
 """
 module TOML
 
+Base.Experimental.@closure_boxes :error
+
 using Dates
 
 module Internals

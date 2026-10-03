@@ -22,6 +22,8 @@ Profiling support.
 """
 module Profile
 
+Base.Experimental.@closure_boxes :error
+
 global print
 export @profile, @profile_walltime
 public clear,

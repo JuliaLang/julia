@@ -9,6 +9,8 @@ literals `md"..."` and `doc"..."`.
 """
 module Markdown
 
+Base.Experimental.@closure_boxes :error
+
 import Base: AnnotatedString, AnnotatedIOBuffer, show, ==, with_output_color, mapany
 using Base64: stringmime
 

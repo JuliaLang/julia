@@ -5,6 +5,8 @@ Utilities for monitoring files and file descriptors for events.
 """
 module FileWatching
 
+Base.Experimental.@closure_boxes :error
+
 export
     # one-shot API (returns results, race-y):
     watch_file, # efficient for small numbers of files

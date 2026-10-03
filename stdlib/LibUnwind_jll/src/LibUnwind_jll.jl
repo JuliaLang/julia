@@ -4,6 +4,7 @@
 
 baremodule LibUnwind_jll
 using Base, Libdl
+Base.Experimental.@closure_boxes :error
 using Zlib_jll
 if !Sys.isfreebsd()
     using CompilerSupportLibraries_jll

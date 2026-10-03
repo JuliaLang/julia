@@ -4,6 +4,8 @@
 which will replace the current version in a future release of Julia."
 module Future
 
+Base.Experimental.@closure_boxes :error
+
 using Random
 
 ## copy!

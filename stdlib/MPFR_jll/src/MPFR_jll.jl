@@ -3,6 +3,7 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/MPFR_jll.jl
 baremodule MPFR_jll
 using Base, Libdl, GMP_jll
+Base.Experimental.@closure_boxes :error
 if Sys.iswindows()
     using CompilerSupportLibraries_jll
 end

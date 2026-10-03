@@ -8,6 +8,8 @@ that would be convenient to place within an immutable, life-cycled datastore.
 """
 module Artifacts
 
+Base.Experimental.@closure_boxes :error
+
 import Base: get, SHA1
 using Base.BinaryPlatforms: AbstractPlatform, Platform, HostPlatform
 using Base.BinaryPlatforms: tags, triplet, select_platform

@@ -5,6 +5,8 @@ Provide the [`SharedArray`](@ref) type. It represents an array, which is shared 
 """
 module SharedArrays
 
+Base.Experimental.@closure_boxes :error
+
 using Mmap, Distributed, Random
 
 import Base: length, size, elsize, ndims, IndexStyle, reshape, convert, deepcopy_internal,

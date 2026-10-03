@@ -5,6 +5,8 @@ Interface to [libgit2](https://libgit2.org/).
 """
 module LibGit2
 
+Base.Experimental.@closure_boxes :error
+
 import Base: ==
 using Base: something
 using NetworkOptions

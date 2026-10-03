@@ -4,6 +4,7 @@
 
 baremodule CompilerSupportLibraries_jll
 using Base, Libdl, Base.BinaryPlatforms
+Base.Experimental.@closure_boxes :error
 
 export libgfortran, libstdcxx, libgomp, libatomic, libgcc_s
 

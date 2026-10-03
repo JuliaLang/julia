@@ -7,6 +7,8 @@ See [`CRC32c.crc32c`](@ref) for more information.
 """
 module CRC32c
 
+Base.Experimental.@closure_boxes :error
+
 import Base.FastContiguousSubArray
 import Base: DenseUInt8OrInt8
 

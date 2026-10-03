@@ -20,6 +20,8 @@ Environment variables:
 """
 module Test
 
+Base.Experimental.@closure_boxes :error
+
 export @test, @test_throws, @test_broken, @test_skip,
     @test_warn, @test_nowarn,
     @test_logs, @test_deprecated

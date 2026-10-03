@@ -32,6 +32,8 @@ for more information.
 """
 module Dates
 
+Base.Experimental.@closure_boxes :error
+
 import Base: ==, isless, div, fld, mod, rem, gcd, lcm, +, -, *, /, %
 using Printf: @sprintf
 

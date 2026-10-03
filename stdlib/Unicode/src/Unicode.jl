@@ -6,6 +6,8 @@ enabling effective Unicode data handling.
 """
 module Unicode
 
+Base.Experimental.@closure_boxes :error
+
 export graphemes, isequal_normalized
 
 public normalize

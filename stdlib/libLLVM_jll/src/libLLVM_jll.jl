@@ -4,6 +4,7 @@
 
 baremodule libLLVM_jll
 using Base, Libdl, Zlib_jll, Zstd_jll
+Base.Experimental.@closure_boxes :error
 
 if !Sys.isapple()
     using CompilerSupportLibraries_jll

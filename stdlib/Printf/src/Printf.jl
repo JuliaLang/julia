@@ -4,6 +4,8 @@ The `Printf` module provides formatted output functions similar to the C standar
 """
 module Printf
 
+Base.Experimental.@closure_boxes :error
+
 using Base.Ryu
 
 export @printf, @sprintf

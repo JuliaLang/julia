@@ -4,6 +4,7 @@
 
 baremodule LibCURL_jll
 using Base, Libdl, nghttp2_jll, LibSSH2_jll, Zlib_jll, Zstd_jll
+Base.Experimental.@closure_boxes :error
 if !Sys.iswindows()
     using OpenSSL_jll
 end

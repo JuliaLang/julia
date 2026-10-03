@@ -8,6 +8,8 @@ and available by default.
 """
 module Logging
 
+Base.Experimental.@closure_boxes :error
+
 import Base.CoreLogging:
     LogLevel,
     AbstractLogger,

@@ -3,6 +3,7 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/SuiteSparse_jll.jl
 baremodule SuiteSparse_jll
 using Base, Libdl
+Base.Experimental.@closure_boxes :error
 using libblastrampoline_jll
 if !(Sys.isfreebsd() || Sys.isapple())
     using CompilerSupportLibraries_jll

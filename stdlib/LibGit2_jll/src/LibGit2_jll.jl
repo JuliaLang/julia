@@ -4,6 +4,7 @@
 
 baremodule LibGit2_jll
 using Base, Libdl, LibSSH2_jll, PCRE2_jll, Zlib_jll
+Base.Experimental.@closure_boxes :error
 if !(Sys.iswindows() || Sys.isapple())
     using OpenSSL_jll
 end

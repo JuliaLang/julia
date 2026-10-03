@@ -6,6 +6,8 @@ along with functions for creating the different variants.
 """
 module UUIDs
 
+Base.Experimental.@closure_boxes :error
+
 using Random
 
 import SHA

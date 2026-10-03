@@ -14,6 +14,8 @@ REPL.run_repl(repl)
 """
 module REPL
 
+Base.Experimental.@closure_boxes :error
+
 Base.Experimental.@optlevel 1
 Base.Experimental.@max_methods 1
 

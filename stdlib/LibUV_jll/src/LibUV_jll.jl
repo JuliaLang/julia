@@ -4,6 +4,7 @@
 
 baremodule LibUV_jll
 using Base, Libdl
+Base.Experimental.@closure_boxes :error
 
 # NOTE: This file is currently empty, as we link libuv statically for now.
 is_available() = true

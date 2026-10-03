@@ -7,6 +7,8 @@ It is intended for interactive work and is loaded automatically in interactive m
 """
 module InteractiveUtils
 
+Base.Experimental.@closure_boxes :error
+
 Base.Experimental.@optlevel 1
 
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,

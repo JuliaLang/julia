@@ -8,6 +8,8 @@ a method to represent binary data using text, common on the web.
 """
 module Base64
 
+Base.Experimental.@closure_boxes :error
+
 using Base: require_one_based_indexing
 
 export

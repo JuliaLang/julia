@@ -4,6 +4,7 @@
 
 baremodule OpenSSL_jll
 using Base, Libdl, Base.BinaryPlatforms
+Base.Experimental.@closure_boxes :error
 
 export libcrypto, libssl
 

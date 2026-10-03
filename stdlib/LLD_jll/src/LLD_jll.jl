@@ -4,6 +4,7 @@
 
 baremodule LLD_jll
 using Base, Libdl
+Base.Experimental.@closure_boxes :error
 
 const PATH_list = String[]
 const LIBPATH_list = String[]

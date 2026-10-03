@@ -4,6 +4,7 @@
 
 baremodule LibSSH2_jll
 using Base, Libdl
+Base.Experimental.@closure_boxes :error
 if Sys.isfreebsd() || Sys.isapple()
     using Zlib_jll
 end
