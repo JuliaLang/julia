@@ -1534,6 +1534,14 @@ let code = quote
 
             @test (@test_deprecated oldfunc()) == 42
 
+            # A block is the expression to run, not the pattern (issue #62197)
+            @test (@test_deprecated begin
+                oldfunc()
+            end) == 42
+            @test (@test_deprecated r"deprecated" begin
+                oldfunc()
+            end) == 42
+
             fails = @testset NoThrowTestSet "check that @test_deprecated detects bad input" begin
                 @test_deprecated newfunc()
                 @test_deprecated r"Not found in message" oldfunc()
@@ -1566,6 +1574,15 @@ let code = quote
             @test length(results) == 1
             @test results[1] isa Test.Broken
             @test results[1].test_type === :skipped
+
+            # keywords combine with a block expression
+            results = @testset NoThrowTestSet begin
+                @test_deprecated begin
+                    newfunc()
+                end broken=true
+            end
+            @test length(results) == 1
+            @test results[1] isa Test.Broken
         end
     end
     incl = "include($(repr(joinpath(@__DIR__, "nothrow_testset.jl"))))"
