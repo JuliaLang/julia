@@ -12,7 +12,7 @@ module Markdown
 import Base: AnnotatedString, AnnotatedIOBuffer, show, ==, with_output_color, mapany
 using Base64: stringmime
 
-using StyledStrings: StyledStrings, Face, addface!, @styled_str, styled
+using StyledStrings: StyledStrings, Face, addface!, @styled_str, styled, getface
 using JuliaSyntaxHighlighting: highlight, highlight!
 
 # Margin for printing in terminal.
