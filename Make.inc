@@ -941,6 +941,26 @@ else ifneq (${USE_THIRD_PARTY_GC},0)
 $(error "Unsupported third-party GC: $(WITH_THIRD_PARTY_GC). Supported option(s): mmtk")
 endif
 
+# GC memory regions (src/gc-regions.c), off by default. The flag defines
+# WITH_GC_REGIONS and compiles gc-regions.c; without it the runtime is the
+# stock collector, object for object.
+WITH_GC_REGIONS ?= 0
+ifeq ($(WITH_GC_REGIONS),1)
+ifeq (${USE_THIRD_PARTY_GC},mmtk)
+$(error "WITH_GC_REGIONS=1 needs the stock collector, not a third-party GC")
+endif
+JCXXFLAGS += -DWITH_GC_REGIONS
+JCFLAGS += -DWITH_GC_REGIONS
+# The escape barrier of the regions, on by default. WITH_GC_REGION_BARRIER=0
+# builds the regions without it: no store is checked, no escape is reported,
+# for a program that was validated with the barrier on.
+WITH_GC_REGION_BARRIER ?= 1
+ifeq ($(WITH_GC_REGION_BARRIER),1)
+JCXXFLAGS += -DWITH_GC_REGION_BARRIER
+JCFLAGS += -DWITH_GC_REGION_BARRIER
+endif
+endif
+
 ifeq ($(WITH_DTRACE), 1)
 JCXXFLAGS += -DUSE_DTRACE
 JCFLAGS += -DUSE_DTRACE
