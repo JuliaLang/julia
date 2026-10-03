@@ -89,6 +89,8 @@ canonical `SKILL.md` directly.
 - [`doc/src/devdocs/agents/skills/compiler-jl/`](doc/src/devdocs/agents/skills/compiler-jl/SKILL.md) — developing and testing Compiler.jl.
 - [`doc/src/devdocs/agents/skills/julia-syntax-lowering/`](doc/src/devdocs/agents/skills/julia-syntax-lowering/SKILL.md) — developing and testing JuliaSyntax and JuliaLowering.
 
+Do not edit `Manifest.toml` files yourself. Instead, make Pkg operations, and let Pkg edit `Manifest.toml`.
+
 ## Commit messages and pull requests
 
 When writing commit messages, follow the format "component: Brief summary" for
