@@ -329,6 +329,50 @@ end
     end
 end
 
+@testset "map! with a Tuple source" begin
+    foo(x) = 2x
+    longtuple = ntuple(identity, 20)
+    vlongtuple = ntuple(identity, 33)
+
+    @test map!(foo, zeros(Int, 3), (1, 2, 3)) == [2, 4, 6]
+    @test map!(foo, zeros(Int, 0), ()) == Int[]
+    @test map!(foo, zeros(Int, 2), ()) == [0, 0]
+    @test map!(foo, zeros(Int, 20), longtuple) == collect(map(foo, longtuple))
+    @test map!(foo, zeros(Int, 33), vlongtuple) == collect(map(foo, vlongtuple))
+    dest = zeros(Int, 3)
+    @test map!(foo, dest, (1, 2, 3)) === dest
+
+    # like for arrays, it stops at the end of `dest` and leaves the rest of it untouched
+    @test map!(foo, zeros(Int, 2), (1, 2, 3)) == [2, 4]
+    @test map!(foo, zeros(Int, 5), (1, 2, 3)) == [2, 4, 6, 0, 0]
+    calls = Int[]
+    map!(x -> (push!(calls, x); x), zeros(Int, 2), (1, 2, 3))
+    @test calls == [1, 2]
+
+    # elements of different types, and conversion to the element type of `dest`
+    @test map!(sizeof, zeros(Int, 3), (1, 2.0, 3f0)) == [8, 8, 4]
+    @test map!(foo, zeros(3), (1, 2.0, 3f0)) == [2.0, 4.0, 6.0]
+    @test map!(identity, Vector{Any}(undef, 3), (1, "a", :b)) == Any[1, "a", :b]
+
+    # destinations that are not a `Vector`
+    @test map!(foo, zeros(2, 2), (1, 2, 3, 4)) == [2 6; 4 8]
+    M = zeros(3, 3)
+    @test map!(foo, view(M, 1:2, 1:2), (1, 2, 3, 4)) == [2 6; 4 8]
+    @test M == [2 6 0; 4 8 0; 0 0 0]
+
+    # same result as for the equivalent array
+    for t in ((1, 2, 3), (1.0, 2, 3f0), vlongtuple)
+        @test map!(foo, zeros(length(t)), t) == map!(foo, zeros(length(t)), collect(t))
+    end
+
+    # it does not allocate, also if the elements have different types
+    let t = (1, 2.0, 3f0, 0x04, "five", 6//1), dest = zeros(Int, 6)
+        map!(sizeof, dest, t)
+        @test dest == [8, 8, 4, 1, 4, 16]
+        @test @allocated(map!(sizeof, dest, t)) == 0
+    end
+end
+
 @testset "foreach" begin
     longtuple = ntuple(identity, 33)
 

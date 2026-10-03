@@ -224,6 +224,8 @@ New library features
   fit on a single line, truncated to the display width, instead of showing no data at all ([#62543]).
 * The element type of broadcast expressions now uses regular inference machinery rather than an idiosyncratic
   heuristic. This can help fused or empty broadcasts infer to more precise element types ([#62564]).
+* `map!(f, destination, collection)` now accepts a `Tuple` as the `collection`, without allocating when its elements
+  have different types ([#63526]).
 
 Standard library changes
 ------------------------
