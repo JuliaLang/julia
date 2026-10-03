@@ -88,3 +88,41 @@ java -cp tla2tools.jar tlc2.TLC -config MCFixed.cfg MCFixed.tla
 Toggling the model back to the unsound `n_threads_running` short-circuit (by
 making `Wakeup` return early when `nrun >= N`) makes TLC report a `NoLostWakeup`
 violation, confirming the danger window described above is real.
+
+## The event loop thread
+
+Outside a threaded region, only one thread (`io_loop_tid`, normally thread 0)
+runs the libuv event loop. When it has nothing else to do it publishes
+`sleeping`, runs `uv_run(loop, UV_RUN_ONCE)` under the iolock (`jl_uv_mutex`),
+and parks on its condition variable if the loop is idle afterwards (`uv_run`
+returned 0) and nobody woke it in the meantime.
+
+Other threads arm libuv handles (`uv_poll_start`, `uv_timer_start`, ...) under the
+iolock, but they don't run the loop to get those handles serviced. A thread that
+goes to sleep therefore wakes `io_loop_tid` unless it can tell that the loop has
+nothing to do: it takes the iolock with a trylock, checks whether the loop is
+alive, and releases it without running finalizers. If the iolock is busy, it
+wakes the event loop thread.
+
+Skipping the wake whenever the iolock is held, and leaving it to the holder,
+is not enough. `JL_UV_UNLOCK` runs pending finalizers, and finalizers of
+libuv-backed objects (`uvfinalize`) take the iolock. After the event loop
+thread's unlock following `uv_run` releases the iolock, another thread can arm a
+handle. If a finalizer then reacquires the iolock before that thread checks its
+owner, the thread would skip the wake, and the event loop thread subsequently
+parks based on its earlier idle result: nobody runs the loop again.
+
+[`IoLoopWake.tla`](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/scheduler-wakeup/IoLoopWake.tla)
+models this handoff outside threaded regions, including iolock contention and
+finalizers that take the iolock before the loop runs and after its unlock. It
+abstracts away blocking inside `uv_run` and shutdown, and checks the absence of
+globally stranded armed handles, not eventual IO service while another thread
+keeps running. With `IoLoopWake.cfg`, TLC finds no `NoLostWakeup` violation for
+the given bounds; `IoLoopWakeUnfixed.cfg` skips the wake whenever the iolock is
+held and produces a counterexample:
+
+```sh
+cd doc/src/devdocs/scheduler-wakeup
+java -cp tla2tools.jar tlc2.TLC -config IoLoopWake.cfg IoLoopWake.tla
+java -cp tla2tools.jar tlc2.TLC -config IoLoopWakeUnfixed.cfg IoLoopWake.tla
+```
