@@ -149,6 +149,19 @@ function autolink(stream::IO, md::MD)
     end
 end
 
+@trigger 'h' ->
+function httplink(stream::IO, md::MD)
+    withstream(stream) do
+        startswith(stream, r"^https?://"; eat=false) || return
+        url = readuntil(stream, r"^(?=[.,!]?\s)")                   # punctuation and/or whitespace
+        url ≡ nothing && (url = readuntil(stream, r"^(?=[.,!]$)"))  # punctuation and end of stream
+        url ≡ nothing && (url = read(stream, String))               # end of stream
+        url ≡ nothing && return
+        _is_link(url) && return Link([url], url)
+        return
+    end
+end
+
 # This list is taken from the commonmark spec
 # http://spec.commonmark.org/0.19/#absolute-uri
 const _allowable_schemes = Set(split("coap doi javascript aaa aaas about acap cap cid crid data dav dict dns file ftp geo go gopher h323 http https iax icap im imap info ipp iris iris.beep iris.xpc iris.xpcs iris.lwz ldap mailto mid msrp msrps mtqp mupdate news nfs ni nih nntp opaquelocktoken pop pres rtsp service session shttp sieve sip sips sms snmp,soap.beep soap.beeps tag tel telnet tftp thismessage tn3270 tip tv urn vemmi ws wss xcon xcon-userid xmlrpc.beep xmlrpc.beeps xmpp z39.50r z39.50s
