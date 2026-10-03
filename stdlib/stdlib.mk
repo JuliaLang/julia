@@ -1,6 +1,5 @@
 STDLIBS_WITHIN_SYSIMG := \
-	Artifacts FileWatching Libdl SHA libblastrampoline_jll OpenBLAS_jll Random \
-	LinearAlgebra Sockets
+	Artifacts FileWatching Libdl SHA Random Sockets
 
 INDEPENDENT_STDLIBS := \
 	ArgTools Base64 CRC32c Dates DelimitedFiles Distributed Downloads Future \
