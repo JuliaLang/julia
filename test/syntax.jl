@@ -4789,3 +4789,37 @@ end
     ]
     @test_throws "invalid assignment location" Core.eval(@__MODULE__, ex)
 end
+
+# Non-final terms of `&&`/`||` chains, including nested chains of the other kind,
+# are lowered as conditions, so their type refinements reach the branches
+@testset "nested `&&`/`||` conditions" begin
+    f1(x) = ((x isa Int32 && true) || return; return x)
+    f2(x) = ((x isa Int32 || false) && return x; return)
+    f3(x) = (if (x isa Int32 && true) || false; return x; end; return)
+    f4(x) = (while (x isa Int32 && true) || false; return x; end; return)
+    for f in (f1, f2, f3, f4)
+        @test Base.return_types(f, (Union{Int32,Int64},)) == [Union{Nothing,Int32}]
+    end
+    B = (false, true)
+    for a in B, b in B, c in B, d in B, e in B
+        @test ((a || b) && (c || d) && e) == ((a | b) & (c | d) & e)
+        @test (a || (b && (c || d)) || e) == (a | (b & (c | d)) | e)
+        @test (if (a && b) || (c && d) || e; 1 else 2 end) == ((a & b) | (c & d) | e ? 1 : 2)
+        @test (if (a || (b && (c || !d))) && (e || a); 1 else 2 end) == ((a | (b & (c | !d))) & (e | a) ? 1 : 2)
+        n = 0
+        while (n < 3 && (a || b)) || (n < 1 && e); n += 1; end
+        @test n == (a | b ? 3 : e ? 1 : 0)
+    end
+    # an assignment in a skipped term of a nested chain does not define a captured variable
+    function g1(c)
+        if (c && (x = 1; true)) || (h = () -> x; false)
+            return 1
+        end
+        return 2
+    end
+    g2(c) = (y = (c && (x = 1; true)) || (h = () -> x; false); h)
+    g3(c) = ((c || (x = 1; false)) && (h = () -> x; true); h)
+    @test g1(false) == 2
+    @test_throws UndefVarError(:x, :local) g2(false)()
+    @test_throws UndefVarError(:x, :local) g3(true)()
+end
