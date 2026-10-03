@@ -282,10 +282,25 @@ function tryparse_internal(::Type{Float32}, s::DenseUTF8String, startpos::Int, e
 end
 
 tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s)::String)
-tryparse(::Type{Float16}, s::AbstractString) =
-    convert(Union{Float16, Nothing}, tryparse(Float32, s))
+# Parse as Float64 and round that to Float16. Since Float16 midpoints are Float64 values,
+# this rounds correctly unless the Float64 is exactly a midpoint, in which case the digits
+# beyond Float64's precision decide which way to round.
+function _float16_from_float64(x::Union{Float64, Nothing}, s::AbstractString)
+    x === nothing && return nothing
+    lo, hi = Float16(prevfloat(x)), Float16(nextfloat(x))
+    if isfinite(x) && lo != hi
+        # x is representable, so rounding s up (down) exceeds x iff s > x (s < x)
+        if tryparse(BigFloat, s; precision=precision(Float64)+1, rounding=MPFR.MPFRRoundUp)::BigFloat > x
+            return hi
+        elseif tryparse(BigFloat, s; precision=precision(Float64)+1, rounding=MPFR.MPFRRoundDown)::BigFloat < x
+            return lo
+        end
+    end
+    return Float16(x)
+end
+tryparse(::Type{Float16}, s::AbstractString) = _float16_from_float64(tryparse(Float64, s), s)
 tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int) =
-    convert(Union{Float16, Nothing}, tryparse_internal(Float32, s, startpos, endpos))
+    _float16_from_float64(tryparse_internal(Float64, s, startpos, endpos), SubString(s, startpos, endpos))
 
 ## string to complex functions ##
 

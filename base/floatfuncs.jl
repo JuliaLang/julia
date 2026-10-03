@@ -426,7 +426,9 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
             issubnormal(b) && (b *= 0x1p52)
             a = reinterpret(Float64, (reinterpret(UInt64, a) & ~Base.exponent_mask(Float64)) | Base.exponent_one(Float64))
             b = reinterpret(Float64, (reinterpret(UInt64, b) & ~Base.exponent_mask(Float64)) | Base.exponent_one(Float64))
-            c = c_denorm
+            # If c underflowed when rescaled, it is far below every rounding boundary
+            # of a*b, so only its sign matters (to break ties). Keep it nonzero.
+            c = ldexp(c_denorm, bias) == c ? c_denorm : copysign(floatmin(Float64), c)
             abhi, ablo = two_mul(a, b)
             # abhi <= 4 -> isfinite(r)      (α)
             r = abhi+c
@@ -436,12 +438,10 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
             sumhi = r+s
             # If result is subnormal, ldexp will cause double rounding because subnormals have fewer mantisa bits.
             # As such, we need to check whether round to even would lead to double rounding and manually round sumhi to avoid it.
-            if issubnormal(ldexp(sumhi, bias))
+            # This must be decided before rounding, which can carry the result to 0 or floatmin.
+            # finite: See γ
+            if !iszero(sumhi) && (bits_lost = -bias-Math._exponent_finite_nonzero(sumhi)-1022) > 0
                 sumlo = r-sumhi+s
-                # finite: See γ
-                # non-zero: If sumhi == ±0., then ldexp(sumhi, bias) == ±0,
-                # so we don't take this branch.
-                bits_lost = -bias-Math._exponent_finite_nonzero(sumhi)-1022
                 sumhiInt = reinterpret(UInt64, sumhi)
                 if (bits_lost != 1) ⊻ (sumhiInt&1 == 1)
                     sumhi = nextfloat(sumhi, cmp(sumlo, 0))

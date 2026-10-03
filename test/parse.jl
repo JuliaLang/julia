@@ -273,6 +273,27 @@ end
 @test tryparse(Float32, "1.23") === 1.23f0
 @test tryparse(Float16, "1.23") === Float16(1.23)
 
+@testset "Float16 parsing rounds once" begin
+    one_ulp = nextfloat(Float16(1))
+    @test parse(Float16, "1.00048828126") === one_ulp # rounds to a Float32 tie
+    @test parse(Float16, "1.00048828125") === Float16(1) # exact tie, to even
+    @test parse(Float16, "1.00048828125000000000001") === one_ulp # rounds to a Float64 tie
+    @test parse(Float16, "1.00048828124999999999999") === Float16(1)
+    @test parse(Float16, "-1.00048828125000000000001") === -one_ulp
+    @test parse(Float16, "1.00048828125000000000001 ") === one_ulp
+    @test parse(Float16, "65519.99999999999999999") === floatmax(Float16)
+    @test parse(Float16, "65520") === Inf16
+    @test parse(Float16, "2.98023223876953125e-8") === Float16(0) # half of nextfloat(0), to even
+    @test parse(Float16, "2.98023223876953125000001e-8") === nextfloat(Float16(0))
+    @test parse(Float16, SubString("x1.00048828125000000000001y", 2, 26)) === one_ulp
+    @test tryparse(Float16, "abc") === nothing
+    # trailing whitespace must not drop the precision and rounding of a BigFloat parse
+    let x = tryparse(BigFloat, "1.1 "; precision=10, rounding=Base.MPFR.MPFRRoundUp)
+        @test precision(x) == 10
+        @test x == big"1.1015625"
+    end
+end
+
 # parsing complex numbers (#22250)
 @testset "complex parsing" begin
     for sign in ('-','+'), Im in ("i","j","im"), s1 in (""," "), s2 in (""," "), s3 in (""," "), s4 in (""," ")
