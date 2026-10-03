@@ -834,7 +834,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             println(iob)
 
             m = parentmodule_before_main(method)
-            modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
+            modulecolor = get_stacktrace_color(m)
             print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
             push!(lines, takestring!(buf))
             push!(line_score, -(right_matches * 2 + (length(arg_types_param) < 2 ? 1 : 0)))
@@ -879,6 +879,12 @@ const update_stackframes_callback = Ref{Function}(identity)
 
 const STACKTRACE_MODULECOLORS = Iterators.Stateful(Iterators.cycle([:magenta, :cyan, :green, :yellow]))
 const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
+# Profile's package colors share the same color cycler.
+const STACKTRACE_COLORS_LOCK = ReentrantLock()
+
+function get_stacktrace_color(key, colordict=STACKTRACE_FIXEDCOLORS, colorcycler=STACKTRACE_MODULECOLORS)
+    return @lock STACKTRACE_COLORS_LOCK get!(() -> popfirst!(colorcycler), colordict, key)
+end
 
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
 
@@ -1028,7 +1034,7 @@ function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested
     m = Base.parentmodule(frame)
     modulecolor = if m !== nothing
         m = parentmodule_before_main(m)
-        get!(() -> popfirst!(modulecolorcycler), modulecolordict, m)
+        get_stacktrace_color(m, modulecolordict, modulecolorcycler)
     else
         :default
     end
