@@ -404,7 +404,7 @@ JL_DLLEXPORT BFLOAT16_TYPE julia__truncdfbf2(double param) JL_NOTSAFEPOINT
 
 
 // run time version of bitcast intrinsic
-JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
+jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
 {
     JL_TYPECHK(bitcast, datatype, ty);
     if (!jl_is_concrete_type(ty) || !jl_is_primitivetype(ty))
@@ -421,7 +421,7 @@ JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
 }
 
 // run time version of pointerref intrinsic (warning: i is not rooted)
-JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align)
+jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align)
 {
     JL_TYPECHK(pointerref, pointer, p);
     JL_TYPECHK(pointerref, long, i)
@@ -441,7 +441,7 @@ JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t 
 }
 
 // run time version of pointerset intrinsic (warning: x is not gc-rooted)
-JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *i, jl_value_t *align)
+jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *i, jl_value_t *align)
 {
     JL_TYPECHK(pointerset, pointer, p);
     JL_TYPECHK(pointerset, long, i);
@@ -464,7 +464,7 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
     return p;
 }
 
-JL_DLLEXPORT jl_value_t *jl_atomic_pointerref(jl_value_t *p, jl_value_t *order)
+jl_value_t *jl_atomic_pointerref(jl_value_t *p, jl_value_t *order)
 {
     JL_TYPECHK(atomic_pointerref, pointer, p);
     JL_TYPECHK(atomic_pointerref, symbol, order)
@@ -484,7 +484,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerref(jl_value_t *p, jl_value_t *order)
     }
 }
 
-JL_DLLEXPORT jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *order)
+jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *order)
 {
     JL_TYPECHK(atomic_pointerset, pointer, p);
     JL_TYPECHK(atomic_pointerset, symbol, order);
@@ -507,7 +507,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_v
     return p;
 }
 
-JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_value_t *order)
+jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_value_t *order)
 {
     JL_TYPECHK(atomic_pointerswap, pointer, p);
     JL_TYPECHK(atomic_pointerswap, symbol, order);
@@ -531,7 +531,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_
     return y;
 }
 
-JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order)
+jl_value_t *jl_atomic_pointermodify_invoke(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order, jl_value_t *op_target)
 {
     JL_TYPECHK(atomic_pointermodify, pointer, p);
     JL_TYPECHK(atomic_pointermodify, symbol, order)
@@ -555,7 +555,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, j
     args[0] = expected;
     while (1) {
         args[1] = x;
-        jl_value_t *y = jl_apply_generic(f, args, 2);
+        jl_value_t *y = jl_apply_modifyop(f, args, op_target);
         args[1] = y;
         if (ety == (jl_value_t*)jl_any_type) {
             if (jl_atomic_cmpswap((_Atomic(jl_value_t*)*)pp, &expected, y))
@@ -583,8 +583,11 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, j
     return args[0];
 }
 
+jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order) {
+    return jl_atomic_pointermodify_invoke(p, f, x, order, NULL);
+}
 
-JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *expected, jl_value_t *x, jl_value_t *success_order_sym, jl_value_t *failure_order_sym)
+jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *expected, jl_value_t *x, jl_value_t *success_order_sym, jl_value_t *failure_order_sym)
 {
     JL_TYPECHK(atomic_pointerreplace, pointer, p);
     JL_TYPECHK(atomic_pointerreplace, symbol, success_order_sym);
@@ -634,7 +637,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
     return result;
 }
 
-JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order_sym, jl_value_t *syncscope_sym)
+jl_value_t *jl_atomic_fence(jl_value_t *order_sym, jl_value_t *syncscope_sym)
 {
     JL_TYPECHK(fence, symbol, order_sym);
     JL_TYPECHK(fence, symbol, syncscope_sym);
@@ -675,7 +678,7 @@ jl_value_t *jl_lookup_foreignsymbol(jl_value_t *v)
 }
 
 // The auto-switching behavior here is deprecated, but preserved for Core.Intrinsics.cglobal
-JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty) {
+jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty) {
     JL_TYPECHK(cglobal, type, ty);
     jl_value_t *rt =
         ty == (jl_value_t*)jl_nothing_type ? (jl_value_t*)jl_voidpointer_type : // a common case
@@ -697,7 +700,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty) {
     return r;
 }
 
-JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v) {
+jl_value_t *jl_cglobal_auto(jl_value_t *v) {
     return jl_cglobal(v, (jl_value_t*)jl_nothing_type);
 }
 
