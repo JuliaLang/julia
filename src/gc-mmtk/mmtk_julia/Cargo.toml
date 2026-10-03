@@ -28,7 +28,7 @@ dashmap = "6.2.1"
 # - change branch
 # - change repo name
 # But other changes including adding/removing whitespaces in commented lines may break the CI
-mmtk = { git = "https://github.com/mmtk/mmtk-core.git", rev = "91bca960a2df99530180cb9078cd952fe6fa3d64" }
+mmtk = { git = "https://github.com/mmtk/mmtk-core.git", rev = "243b4221574b01cbe380add6f25ca9ed2815038a" }
 # Uncomment the following to build locally
 # mmtk = { path = "../repos/mmtk-core" }
 log = {version = "0.4", features = ["max_level_trace", "release_max_level_off"] }
@@ -41,7 +41,7 @@ memoffset = "*"
 # ykstackmaps = { git = "https://github.com/udesou/ykstackmaps.git", branch = "udesou-master", version = "*" }
 
 [features]
-default = ["mmtk/vm_space", "julia_copy_stack", "object_pinning"]
+default = ["mmtk/vm_space", "mmtk/non_moving_root", "julia_copy_stack", "object_pinning"]
 
 # Plans
 nogc = []
