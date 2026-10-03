@@ -200,7 +200,8 @@ function link_image_cmd(path, out)
     else
         # From `gcc -shared -Wl,--verbose`
         # but without repeated libraries (lld auto-resolves circular library references)
-        libc           = _find_loaded(r"/libc\.so\.\d+$")                       # system libc
+        # musl has no separate libc.so: its dynamic loader is also the C library
+        libc           = _find_loaded(r"/(?:libc|ld-musl-[^/]+)\.so\.\d+$")     # system libc
         ld_linux       = _find_loaded(r"/ld-(?:linux|musl|elf)[^/]*\.so\.\d+$") # system ld
         libc_nonshared = _find_static("libc_nonshared.a")
         append!(LIBS,     String["-lgcc", "--as-needed", "-lgcc_s", "-latomic", "-lopenlibm", "--no-as-needed", libc])
