@@ -1013,7 +1013,7 @@ block:
 end
 ```
 
-## [Non-Standard String Literals](@id meta-non-standard-string-literals)
+## [Non-Standard String Literals and String Macros](@id meta-non-standard-string-literals)
 
 Recall from [Strings](@ref non-standard-string-literals) that string literals prefixed by an identifier are called non-standard
 string literals, and can have different semantics than un-prefixed string literals. For example:
@@ -1023,8 +1023,8 @@ string literals, and can have different semantics than un-prefixed string litera
 
 Perhaps surprisingly, these behaviors are not hard-coded into the Julia parser or compiler. Instead,
 they are custom behaviors provided by a general mechanism that anyone can use: prefixed string
-literals are parsed as calls to specially-named macros. For example, the regular expression macro
-is just the following:
+literals are parsed as calls to specially-named macros ("string macros").
+For example, the regular expression string macro is just the following:
 
 ```julia
 macro r_str(p)
@@ -1112,7 +1112,7 @@ it is possible to qualify the string or command literal with a module name. For 
 or `Bar.x"literal"` to disambiguate between the two.
 
 
-Another way to define a macro would be like this:
+Another way to define a string macro would be like this:
 
 ```julia
 macro foo_str(str, flag)
@@ -1125,7 +1125,10 @@ This macro can then be called with the following syntax:
 foo"str"flag
 ```
 
-The type of flag in the above mentioned syntax would be a `String` with contents of whatever trails after the string literal.
+The value of `flag` will be the result of parsing the longest sequence of characters immediately
+following the string literal that either form a numeric literal or a valid variable name. The type
+of `flag` will be the corresponding numeric type (including `Bool`) in the former case and `String`
+in the latter.
 
 ## Generated functions
 
