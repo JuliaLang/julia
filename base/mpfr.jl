@@ -182,13 +182,12 @@ end
 # BigFloat interface
 @inline function Base.getproperty(x::BigFloat, s::Symbol)
     d = getfield(x, :d)
-    p = Base.unsafe_convert(Ptr{Limb}, d)
     if s === :prec
-        return GC.@preserve d unsafe_load(Ptr{Clong}(p) + offset_prec)
+        return Core.unsafe_memoryrefload(memoryref(d), Clong, offset_prec, false)
     elseif s === :sign
-        return GC.@preserve d unsafe_load(Ptr{Cint}(p) + offset_sign)
+        return Core.unsafe_memoryrefload(memoryref(d), Cint, offset_sign, false)
     elseif s === :exp
-        return GC.@preserve d unsafe_load(Ptr{Clong}(p) + offset_exp)
+        return Core.unsafe_memoryrefload(memoryref(d), Clong, offset_exp, false)
     elseif s === :d
         return BigFloatData(d)
     else
