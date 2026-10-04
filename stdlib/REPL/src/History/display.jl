@@ -15,8 +15,6 @@ SelectorState((height, width), query::String, filter::FilterSpec, candidates::Ve
 
 const EMPTY_STATE = SelectorState((0, 0), "", FilterSpec(), [], 0, (active = Int[], gathered = HistEntry[]), 0)
 
-STATES = Pair{SelectorState, SelectorState}[]
-
 const LABELS = (
     gatherdivider = S"{italic:carried over}",
     preview_suggestion = S"Ctrl+S to save",
@@ -170,7 +168,6 @@ Redraw just the prompt line with updated query, separators, and hints.
 Styles prefixes, match-type indicators, and result counts based on cursor position in `pstate`.
 """
 function redisplay_prompt(io::IO, oldstate::SelectorState, newstate::SelectorState, pstate::REPL.LineEdit.PromptState)
-    # oldstate.query == newstate.query && return
     hov = gethover(newstate)
     query = newstate.query
     styquery = S"$query"
@@ -543,7 +540,7 @@ function focus_matches(search::FilterSpec, content::AnnotatedString{String}, tar
     mlast = first(mregions)
     ellipwidth = textwidth(LINE_ELLIPSIS)
     # Assume approximately one cell per character, and refine later
-    for (i, region) in Iterators.reverse(enumerate(mregions))
+    for region in Iterators.reverse(mregions)
         if first(region) - mstart <= targetwidth - 2 * ellipwidth
             mlast = region
             break
@@ -564,37 +561,20 @@ function focus_matches(search::FilterSpec, content::AnnotatedString{String}, tar
     # Check to see if we have reached the beginning of the first match,
     # if we haven't we want to shrink the region to the left until the
     # beginning of the first match is reached.
-    if left > first(mstart)
-        while left > first(mstart)
-            left = prevind(cstr, left)
-            lwidth = textwidth(cstr[left])
-            width += lwidth
-            # We'll move according to the assumption that each character
-            # is one cell wide, but account for the width correctly and
-            # adjust for any underestimate later.
-            for _ in 1:lwidth
-                width -= textwidth(cstr[right])
-                right = prevind(cstr, right)
-                right == left && break
-            end
+    while left > mstart
+        left = prevind(cstr, left)
+        lwidth = textwidth(cstr[left])
+        width += lwidth
+        # We'll move according to the assumption that each character
+        # is one cell wide, but account for the width correctly and
+        # adjust for any underestimate later.
+        for _ in 1:lwidth
+            width -= textwidth(cstr[right])
+            right = prevind(cstr, right)
+            right == left && break
         end
     end
     isltrunc, isrtrunc = left > firstindex(cstr), right < lastindex(cstr)
-    # Use any available space to extend to the left.
-    if width < targetwidth - (isltrunc + isrtrunc) * ellipwidth && left < firstindex(cstr)
-        while left < firstindex(cstr)
-            lnext = prevind(cstr, left)
-            lwidth = textwidth(cstr[lnext])
-            isnextltrunc = lnext > firstindex(cstr)
-            nellipsis = isnextltrunc + isrtrunc
-            if width + lwidth > targetwidth - nellipsis * ellipwidth
-                break
-            end
-            width += lwidth
-            left = lnext
-        end
-        isltrunc = left > firstindex(cstr)
-    end
     # Use any available space to extend to the right.
     if width < targetwidth - (isltrunc + isrtrunc) * ellipwidth && right < lastindex(cstr)
         while right < lastindex(cstr)
@@ -671,7 +651,7 @@ function redisplay_preview(io::IO, oldstate::SelectorState, oldrows::Int, newsta
         println(io)
     end
     if newrows - 2 < 1
-        # Well, this is awkward.
+        # Too short for any content, so just the frame
     elseif isempty(newstate.selection.active) && isempty(newstate.selection.gathered)
         linesprinted = if (gethover(newstate) != gethover(oldstate) ||
             oldstate.area != newstate.area ||
