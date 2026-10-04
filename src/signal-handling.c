@@ -684,104 +684,134 @@ static void stack_overflow_warning(void)
 // string literals avoids gettext/malloc entirely and is portable across libc flavors
 // (musl/BSD/macOS lack glibc's sigdescr_np/sigabbrev_np). Cases are #ifdef-guarded so this
 // compiles wherever a given signal is (or is not) defined.
-static const char *jl_strsignal(int sig) JL_NOTSAFEPOINT
+typedef struct {
+    const char *name;
+    const char *description;
+} jl_signal_names_t;
+
+#define SIGNAL_CASE(sig, description) case sig: return (jl_signal_names_t){#sig, description}
+
+static jl_signal_names_t jl_signal_names(int sig) JL_NOTSAFEPOINT
 {
     switch (sig) {
 #ifdef SIGHUP
-    case SIGHUP:     return "Hangup";
+    SIGNAL_CASE(SIGHUP, "Hangup");
 #endif
 #ifdef SIGINT
-    case SIGINT:     return "Interrupt";
+    SIGNAL_CASE(SIGINT, "Interrupt");
 #endif
 #ifdef SIGQUIT
-    case SIGQUIT:    return "Quit";
+    SIGNAL_CASE(SIGQUIT, "Quit");
 #endif
 #ifdef SIGILL
-    case SIGILL:     return "Illegal instruction";
+    SIGNAL_CASE(SIGILL, "Illegal instruction");
 #endif
 #ifdef SIGTRAP
-    case SIGTRAP:    return "Trace/breakpoint trap";
+    SIGNAL_CASE(SIGTRAP, "Trace/breakpoint trap");
 #endif
 #ifdef SIGABRT
-    case SIGABRT:    return "Aborted";
+    SIGNAL_CASE(SIGABRT, "Aborted");
 #endif
 #if defined(SIGABRT_COMPAT) && (!defined(SIGABRT) || SIGABRT_COMPAT != SIGABRT)
-    case SIGABRT_COMPAT: return "Aborted";
+    case SIGABRT_COMPAT: return (jl_signal_names_t){"SIGABRT", "Aborted"};
 #endif
 #ifdef SIGBUS
-    case SIGBUS:     return "Bus error";
+    SIGNAL_CASE(SIGBUS, "Bus error");
 #endif
 #ifdef SIGFPE
-    case SIGFPE:     return "Floating point exception";
+    SIGNAL_CASE(SIGFPE, "Floating point exception");
 #endif
 #ifdef SIGKILL
-    case SIGKILL:    return "Killed";
+    SIGNAL_CASE(SIGKILL, "Killed");
 #endif
 #ifdef SIGUSR1
-    case SIGUSR1:    return "User defined signal 1";
+    SIGNAL_CASE(SIGUSR1, "User defined signal 1");
 #endif
 #ifdef SIGSEGV
-    case SIGSEGV:    return "Segmentation fault";
+    SIGNAL_CASE(SIGSEGV, "Segmentation fault");
 #endif
 #ifdef SIGUSR2
-    case SIGUSR2:    return "User defined signal 2";
+    SIGNAL_CASE(SIGUSR2, "User defined signal 2");
 #endif
 #ifdef SIGPIPE
-    case SIGPIPE:    return "Broken pipe";
+    SIGNAL_CASE(SIGPIPE, "Broken pipe");
 #endif
 #ifdef SIGALRM
-    case SIGALRM:    return "Alarm clock";
+    SIGNAL_CASE(SIGALRM, "Alarm clock");
 #endif
 #ifdef SIGTERM
-    case SIGTERM:    return "Terminated";
+    SIGNAL_CASE(SIGTERM, "Terminated");
 #endif
 #ifdef SIGBREAK
-    case SIGBREAK:   return "Break";
+    SIGNAL_CASE(SIGBREAK, "Break");
 #endif
 #ifdef SIGSTKFLT
-    case SIGSTKFLT:  return "Stack fault";
+    SIGNAL_CASE(SIGSTKFLT, "Stack fault");
 #endif
 #ifdef SIGCHLD
-    case SIGCHLD:    return "Child exited";
+    SIGNAL_CASE(SIGCHLD, "Child exited");
 #endif
 #ifdef SIGCONT
-    case SIGCONT:    return "Continued";
+    SIGNAL_CASE(SIGCONT, "Continued");
 #endif
 #ifdef SIGSTOP
-    case SIGSTOP:    return "Stopped (signal)";
+    SIGNAL_CASE(SIGSTOP, "Stopped (signal)");
 #endif
 #ifdef SIGTSTP
-    case SIGTSTP:    return "Stopped";
+    SIGNAL_CASE(SIGTSTP, "Stopped");
 #endif
 #ifdef SIGTTIN
-    case SIGTTIN:    return "Stopped (tty input)";
+    SIGNAL_CASE(SIGTTIN, "Stopped (tty input)");
 #endif
 #ifdef SIGTTOU
-    case SIGTTOU:    return "Stopped (tty output)";
+    SIGNAL_CASE(SIGTTOU, "Stopped (tty output)");
 #endif
 #ifdef SIGURG
-    case SIGURG:     return "Urgent I/O condition";
+    SIGNAL_CASE(SIGURG, "Urgent I/O condition");
 #endif
 #ifdef SIGXCPU
-    case SIGXCPU:    return "CPU time limit exceeded";
+    SIGNAL_CASE(SIGXCPU, "CPU time limit exceeded");
 #endif
 #ifdef SIGXFSZ
-    case SIGXFSZ:    return "File size limit exceeded";
+    SIGNAL_CASE(SIGXFSZ, "File size limit exceeded");
 #endif
 #ifdef SIGVTALRM
-    case SIGVTALRM:  return "Virtual timer expired";
+    SIGNAL_CASE(SIGVTALRM, "Virtual timer expired");
 #endif
 #ifdef SIGPROF
-    case SIGPROF:    return "Profiling timer expired";
+    SIGNAL_CASE(SIGPROF, "Profiling timer expired");
 #endif
 #ifdef SIGWINCH
-    case SIGWINCH:   return "Window changed";
+    SIGNAL_CASE(SIGWINCH, "Window changed");
 #endif
 #ifdef SIGSYS
-    case SIGSYS:     return "Bad system call";
+    SIGNAL_CASE(SIGSYS, "Bad system call");
 #endif
-    default:         return "Unknown signal";
+#ifdef SIGIO
+    SIGNAL_CASE(SIGIO, "I/O possible");
+#endif
+#ifdef SIGINFO
+    SIGNAL_CASE(SIGINFO, "Information request");
+#endif
+#if defined(SIGPWR) && (!defined(SIGINFO) || SIGPWR != SIGINFO)
+    SIGNAL_CASE(SIGPWR, "Power failure");
+#endif
+#ifdef SIGEMT
+    SIGNAL_CASE(SIGEMT, "EMT trap");
+#endif
+    default:         return (jl_signal_names_t){NULL, "Unknown signal"};
     }
+}
+#undef SIGNAL_CASE
+
+static const char *jl_strsignal(int sig) JL_NOTSAFEPOINT
+{
+    return jl_signal_names(sig).description;
+}
+
+JL_DLLEXPORT const char *jl_signal_name(int sig)
+{
+    return jl_signal_names(sig).name;
 }
 
 #if defined(_WIN32)
