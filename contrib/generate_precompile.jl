@@ -65,6 +65,9 @@ precompile(Base.create_expr_cache, (Base.PkgId, Base.PkgLoadSpec, String, Nothin
 precompile(Tuple{Type{Base.Val{x} where x}, Module})
 precompile(Tuple{Type{NamedTuple{(:honor_overrides,), T} where T<:Tuple}, Tuple{Bool}})
 precompile(Tuple{typeof(Base.unique!), Array{String, 1}})
+# `unique!` checks whether the paths are sorted in reverse, and a JLL's library paths
+# often are, e.g. when the julia install sorts after the depot
+precompile(Tuple{typeof(Base.issorted), Array{String, 1}, Base.Order.ReverseOrdering{Base.Order.ForwardOrdering}})
 precompile(Tuple{typeof(Base.vcat), Array{String, 1}, Array{String, 1}})
 
 # Pkg loading
