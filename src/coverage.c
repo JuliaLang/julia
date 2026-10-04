@@ -36,6 +36,11 @@ JL_DLLEXPORT int jl_match_cache_coverage(uint8_t requested, uint8_t actual) JL_N
     return actual == requested || actual == JL_IMAGE_COVERAGE_COUNT;
 }
 
+JL_DLLEXPORT uint8_t jl_sysimage_coverage_config(void) JL_NOTSAFEPOINT
+{
+    return sysimg_coverage_config;
+}
+
 // Logging for code coverage and memory allocation
 
 #define logdata_blocksize 32 // target getting nearby lines in the same general cache area and reducing calls to malloc by chunking
@@ -134,9 +139,8 @@ static int is_skip_filename(const char *filename) JL_NOTSAFEPOINT
     return 0;
 }
 
-JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_path_is_tracked_by(const char *path, const char *tracked) JL_NOTSAFEPOINT
 {
-    const char *tracked = jl_options.tracked_path;
     if (tracked == NULL || path == NULL)
         return 0;
     size_t tlen = strlen(tracked);
@@ -150,6 +154,11 @@ JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT
         return 0;
     char next = path[tlen];
     return next == '\0' || next == '/' || next == PATHSEPSTRING[0];
+}
+
+JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT
+{
+    return jl_path_is_tracked_by(path, jl_options.tracked_path);
 }
 
 JL_DLLEXPORT int jl_coverage_enabled_for(jl_module_t *m, const char *filename) JL_NOTSAFEPOINT
@@ -224,6 +233,42 @@ int jl_register_image_coverage(const void *table, int is_sysimg)
         jl_coverage_register_counter(jl_coverage_data_pointer(e->file, e->line), e->counter);
     }
     return 1;
+}
+
+// Build ids of the plain images the loader approved for path coverage.
+// Protected by coverage_lock.
+static jl_uuid_t *plain_images;
+static size_t nplain_images, plain_images_cap;
+
+// The caller must hold coverage_lock.
+static int plain_image_accepted(uint64_t hi, uint64_t lo) JL_NOTSAFEPOINT
+{
+    for (size_t i = 0; i < nplain_images; i++) {
+        if (plain_images[i].hi == hi && plain_images[i].lo == lo)
+            return 1;
+    }
+    return 0;
+}
+
+JL_DLLEXPORT int jl_coverage_plain_image_accepted(uint64_t hi, uint64_t lo)
+{
+    uv_mutex_lock(&coverage_lock);
+    int accepted = plain_image_accepted(hi, lo);
+    uv_mutex_unlock(&coverage_lock);
+    return accepted;
+}
+
+JL_DLLEXPORT void jl_coverage_accept_plain_image(uint64_t hi, uint64_t lo)
+{
+    uv_mutex_lock(&coverage_lock);
+    if (!plain_image_accepted(hi, lo)) {
+        if (nplain_images == plain_images_cap) {
+            plain_images_cap = plain_images_cap ? 2 * plain_images_cap : 16;
+            plain_images = (jl_uuid_t*)realloc_s(plain_images, plain_images_cap * sizeof(jl_uuid_t));
+        }
+        plain_images[nplain_images++] = (jl_uuid_t){hi, lo};
+    }
+    uv_mutex_unlock(&coverage_lock);
 }
 
 JL_DLLEXPORT void jl_coverage_visit_line(const char *filename, size_t len, int line) JL_CANSAFEPOINT
