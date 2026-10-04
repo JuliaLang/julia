@@ -25,7 +25,8 @@ end
 let p = Pipe(),
     c = pipeline(`$(Base.julia_cmd()) --startup-file=no --compile=min -E 'error()'`, stderr=p)
     proc = run(c, wait=false)
-    readline(p)
+    # skip anything printed before the error, such as an objcache warning (#62800)
+    while !eof(p) && !occursin("ERROR:", readline(p)) end
     @test readline(p) == "Stacktrace:"
     wait(proc)
     close(p)
