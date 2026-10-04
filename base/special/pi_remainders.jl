@@ -9,18 +9,18 @@ const INV_PIO16 = 0x1.45f306dc9c883p+2
 const PIO16_HI = 0x1.921fb54442d18p-3
 const PIO16_LO = 0x1.1a62633145c07p-57
 
-# round(a*c) as a float and as an Int, for |a*c| < 2^51 (Float64) or 2^21 (Float32), using
+# round(a*c) as a float and as an Int64, for |a*c| < 2^51 (Float64) or 2^21 (Float32), using
 # MAGIC_ROUND_CONST: the integer is then also the low bits of the sum, which avoids separate round
 # and float-to-int instructions.
 @inline function roundmul(a::T, c::T) where T<:Union{Float32, Float64}
     t = muladd(a, c, MAGIC_ROUND_CONST(T))
-    return t - MAGIC_ROUND_CONST(T), Int(reinterpret(Signed, t) - reinterpret(Signed, MAGIC_ROUND_CONST(T)))
+    return t - MAGIC_ROUND_CONST(T), Int64(reinterpret(Signed, t) - reinterpret(Signed, MAGIC_ROUND_CONST(T)))
 end
 
 ## Payne-Hanek
 
-# Bits of 1/2π
-#   1/2π == sum(x / 0x1p64^i for i,x = enumerate(INV_2PI))
+# Bits of 1/2π, after a zero word that lets paynehanek read the word before the first one
+#   1/2π == sum(x / 0x1p64^(i-1) for i,x = enumerate(INV_2PI))
 # Can be obtained by:
 #
 #    setprecision(BigFloat, 4096)
@@ -33,6 +33,7 @@ end
 #    end
 
 const INV_2PI = (
+    0x0000_0000_0000_0000,
     0x28be_60db_9391_054a,
     0x7f09_d5f4_7d4d_3770,
     0x36d8_a566_4f10_e410,
@@ -53,19 +54,22 @@ const INV_2PI = (
     0x9afe_d7ec_47e3_5742,
     0x1580_cc11_bf1e_daea)
 
-# f/2^128 as a double-double (z_hi, z_lo) with |z_lo| <= ulp(z_hi)/2. f >> 1 is exact (f is w << 5),
-# and |f >> 1| <= 2^126, so rounding it to Float64 can't leave the range of Int128.
-function fromfraction(f::Int128)
-    g = f >> 1
-    h = Float64(g)
-    return h*0x1p-127, Float64(g - unsafe_trunc(Int128, h))*0x1p-127
+# f/2^128 as a double-double (z_hi, z_lo): with |f| normalized by leading_zeros, z_hi holds its
+# leading 53 bits and z_lo the next 53, so both conversions are exact, z_lo has the sign of z_hi and
+# |z_lo| < ulp(z_hi). This avoids the slow software conversions between Int128 and Float64.
+@inline function fromfraction(f::Int128)
+    x = Base.uabs(f)
+    lz = leading_zeros(x)
+    y = x << (lz & 127) # lz == 128 only for f == 0
+    scale = reinterpret(Float64, ((f < 0) % UInt64) << 63 | ((970 - lz) % UInt64) << 52) # ±2^(-53 - lz)
+    return Float64((y >> 75) % Int64)*scale, Float64(((y << 53) >> 75) % Int64)*(scale*0x1p-53)
 end
 
 """
     paynehanek(x::Float64)
 
-Reduce `x > 0` modulo π/16 for arbitrarily large `x`, using the Payne-Hanek algorithm. Returns
-`(n, z_hi, z_lo)` with `0 <= n <= 32`, `|z_hi + z_lo| <= 1/2` and `|z_lo| <= ulp(z_hi)/2`, such that
+Reduce `x >= 1` modulo π/16 for arbitrarily large `x`, using the Payne-Hanek algorithm. Returns
+`(n, z_hi, z_lo)` with `0 <= n <= 32`, `|z_hi + z_lo| <= 1/2` and `|z_lo| < ulp(z_hi)`, such that
 ``x ≡ π/16*(n + z_{hi} + z_{lo}) \\pmod{2π}``.
 """
 function paynehanek(x::Float64)
@@ -76,19 +80,16 @@ function paynehanek(x::Float64)
     k = raw_exponent - exponent_bias(Float64) - significand_bits(Float64)
 
     # 2. With α = 1/2π, α*x mod 1 ≡ [(α*2^k mod 1)*X] mod 1, so the first k bits of α can be
-    # skipped: take the next three 64-bit words a1, a2, a3 of α from INV_2PI.
-    # (idx, shift = divrem(k, 64), but divrem is slower.)
+    # skipped: take the next three 64-bit words a1, a2, a3 of α from INV_2PI. k >= -64 for x >= 1,
+    # so idx >= -1, and the leading zero word of INV_2PI covers idx == -1. Each word is
+    # (hi << shift) | (lo >> (64 - shift)), with the right shift split in two so that neither shift
+    # amount reaches 64, which avoids both a branch on shift == 0 and Julia's overshift checks.
     idx = k >> 6
-    shift = k - (idx << 6)
-    @assume_effects :nothrow :noub @inbounds if shift == 0
-        a1 = INV_2PI[idx+1]
-        a2 = INV_2PI[idx+2]
-        a3 = INV_2PI[idx+3]
-    else
-        # use shifts to extract the relevant 64 bit window
-        a1 = (idx < 0 ? zero(UInt64) : INV_2PI[idx+1] << shift) | (INV_2PI[idx+2] >> (64 - shift))
-        a2 = (INV_2PI[idx+2] << shift) | (INV_2PI[idx+3] >> (64 - shift))
-        a3 = (INV_2PI[idx+3] << shift) | (INV_2PI[idx+4] >> (64 - shift))
+    shift = (k & 63) % UInt8
+    @assume_effects :nothrow :noub @inbounds begin
+        a1 = (INV_2PI[idx+2] << shift) | ((INV_2PI[idx+3] >> 0x1) >> (0x3f - shift))
+        a2 = (INV_2PI[idx+3] << shift) | ((INV_2PI[idx+4] >> 0x1) >> (0x3f - shift))
+        a3 = (INV_2PI[idx+4] << shift) | ((INV_2PI[idx+5] >> 0x1) >> (0x3f - shift))
     end
 
     # 3. Multiply, keeping only the fraction w of α*x as a 128-bit fixed-point number
@@ -104,14 +105,14 @@ function paynehanek(x::Float64)
     w = w1 +% w2 +% w3
 
     # 4. Round to the nearest multiple n of π/16, leaving the fraction f/2^128 in [-1/2, 1/2).
-    n = (((w>>122)%Int + 1)>>1)
+    n = (((w>>122)%Int64 + 1)>>1)
     f = (w<<5) % Int128
     return n, fromfraction(f)...
 end
 
 ## rem_pio16
 
-# rem_pio16(a) takes a = |x| for NaN or a < trig16_limit(rem_pio16, a) (defined below) and returns
+# rem_pio16(a) takes a = |x| < trig16_limit_hi(rem_pio16, a) (defined below) and returns
 # n and the remainder z, with |z| <= 1/2 and a = π/16*(n + z); rem_pio16_large handles larger
 # finite a. Float16 and Float32 return (z, n), with z in Float32 and Float64 respectively; Float64
 # returns (rh, rl, n), with the reduced angle π/16*z = rh + rl in radians.
@@ -133,7 +134,7 @@ end
     id, n = roundmul(ad, INV_PIO16)
     return (idh - id) + idl, n
 end
-@noinline function rem_pio16_large(a::Float32)
+@inline function rem_pio16_large(a::Float32)
     n, z, _ = paynehanek(Float64(a))
     return z, n
 end
@@ -149,16 +150,16 @@ end
     rl = ((rh0 - rh) - t) - fma(n, -0x1.f1976b7ed8fbcp-113, fma(n, PIO16_LO, -t))
     return rh, rl, k
 end
-@noinline function rem_pio16_large(a::Float64)
+@inline function rem_pio16_large(a::Float64)
     n, z_hi, z_lo = paynehanek(a)
     # π/16*(z_hi + z_lo) as hi + lo
     rh = z_hi*PIO16_HI
     return rh, fma(z_hi, PIO16_HI, -rh) + muladd(z_lo, PIO16_HI, z_hi*PIO16_LO), n
 end
 
-trig16_limit(::typeof(rem_pio16), ::Float32) = Float32(0x1p26)
-trig16_limit(::typeof(rem_pio16), ::Float64) = 0x1p30
-trig16_large(::typeof(rem_pio16), a::Union{Float32, Float64}) = rem_pio16_large(a)
+trig16_limit_hi(::typeof(rem_pio16), ::Float32) = Float32(0x1p26)
+trig16_limit_hi(::typeof(rem_pio16), ::Float64) = 0x1p30
+@inline trig16_large(::typeof(rem_pio16), a::Union{Float32, Float64}) = rem_pio16_large(a)
 
 ## rem2pi
 
@@ -169,12 +170,12 @@ const pi4o2_l  = 2.4492935982947064e-16 # convert(Float64, pi * BigFloat(2) - pi
 # Returns (rh, rl, k) with x ≡ π/16*k + rh + rl (mod 2π), 0 <= k < 32 and |rh + rl| <= π/32.
 @inline function rem2pi_kernel(x::Float64)
     a = abs(x)
-    rh, rl, n = a < trig16_limit(rem_pio16, a) ? rem_pio16(a) : rem_pio16_large(a)
+    rh, rl, n = a < trig16_limit_hi(rem_pio16, a) ? rem_pio16(a) : @noinline rem_pio16_large(a)
     return flipsign(rh, x), flipsign(rl, x), flipsign(n, x) & 31
 end
 
 # π/16*k + rh + rl, rounded to Float64
-@inline function add_kpio16(rh::Float64, rl::Float64, k::Int)
+@inline function add_kpio16(rh::Float64, rl::Float64, k::Int64)
     kf = Float64(k)
     kh = kf*PIO16_HI
     return add22condh(rh, rl, kh, muladd(kf, PIO16_LO, fma(kf, PIO16_HI, -kh)))

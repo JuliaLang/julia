@@ -203,7 +203,7 @@ testModPi()
              2.0^30*pi/4, 2.0^80*pi/4, 6381956970095103.0 * 2.0^797, 0x1.921fb54442d18p-3,
              3632982096228748*pi/2, 1135326194816*pi/2]
     for x in cases
-        rh, rl, n = Base.Math.trig16_reduce(:sin, Base.Math.rem_pio16, x)
+        rh, rl, n = Base.Math.rem2pi_kernel(x)
         a, k = setprecision(BigFloat, 4096) do
             rem(big(x), big(pi)/16, RoundNearest), round(big(x)/(big(pi)/16))
         end

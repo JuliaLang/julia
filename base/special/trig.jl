@@ -50,8 +50,8 @@ const SINPI16_TABLE = (0x0p+0, 0x1.8f8b83c69a60bp-3, 0x1.87de2a6aea963p-2, 0x1.1
     -0x1.6a09e667f3bcdp-1, -0x1.1c73b39ae68c8p-1, -0x1.87de2a6aea963p-2, -0x1.8f8b83c69a60bp-3)
 const SINPI16_TABLE_F32 = map(Float32, SINPI16_TABLE)
 # :nothrow needed since the compiler can't prove the index is inbounds.
-@assume_effects :nothrow sinpi16_table(::Type{Float64}, n::Int) = getfield(SINPI16_TABLE, n & 31 + 1)
-@assume_effects :nothrow sinpi16_table(::Type{Float32}, n::Int) = getfield(SINPI16_TABLE_F32, n & 31 + 1)
+@assume_effects :nothrow sinpi16_table(::Type{Float64}, n::Int64) = getfield(SINPI16_TABLE, (n & 31) % Int + 1)
+@assume_effects :nothrow sinpi16_table(::Type{Float32}, n::Int64) = getfield(SINPI16_TABLE_F32, (n & 31) % Int + 1)
 
 # Float64: the low parts of SINPI16_TABLE, so that sin(π j/16) ≈ hi + lo
 const SINPI16_TABLE_LO = (0.0, -0x1.26d19b9ff8d82p-57, -0x1.72cedd3d5a61p-57, 0x1.b25dd267f66p-55,
@@ -62,8 +62,10 @@ const SINPI16_TABLE_LO = (0.0, -0x1.26d19b9ff8d82p-57, -0x1.72cedd3d5a61p-57, 0x
     0x1.bdd3413b26456p-55, -0x1.9f630e8b6dac8p-60, -0x1.457e610231ac2p-56, -0x1.562172a361fd3p-56,
     0.0, -0x1.562172a361fd3p-56, -0x1.457e610231ac2p-56, -0x1.9f630e8b6dac8p-60,
     0x1.bdd3413b26456p-55, -0x1.b25dd267f66p-55, 0x1.72cedd3d5a61p-57, 0x1.26d19b9ff8d82p-57)
-@assume_effects :nothrow sinpi16_table_hilo(n::Int) =
-    getfield(SINPI16_TABLE, n & 31 + 1), getfield(SINPI16_TABLE_LO, n & 31 + 1)
+@assume_effects :nothrow function sinpi16_table_hilo(n::Int64)
+    i = (n & 31) % Int + 1
+    return getfield(SINPI16_TABLE, i), getfield(SINPI16_TABLE_LO, i)
+end
 
 # Returns (sin(π z/16), 1 - cos(π z/16)): minimax polynomials with errors of about 2^-37 (relative)
 # and 2^-34 (absolute) in Float64 (for Float32 results), and 2^-23 and 2^-20 in Float32 (for Float16
@@ -82,7 +84,7 @@ end
 
 # For Float16 and Float32 (computed in Float32 and Float64) and |z| <= 1/2, returns
 # (sin(π(n+z)/16), cos(π(n+z)/16)) via the angle-addition formulas.
-@inline function sincos16_kernel(z::T, n::Int) where T<:Union{Float32, Float64}
+@inline function sincos16_kernel(z::T, n::Int64) where T<:Union{Float32, Float64}
     sz, omc = sincos16_poly(z)
     s0 = sinpi16_table(T, n)
     c0 = sinpi16_table(T, n + 8)
@@ -95,7 +97,7 @@ end
 # since |cos(π n/16)*rh| <= 0.494|sin(π n/16)| unless sin(π n/16) == 0, and similarly for cos.
 # The other terms are below 2^-7, so they only need Float64 accuracy and are combined with as few
 # operations as possible.
-@inline function sincos16_kernel_hilo(rh::Float64, rl::Float64, n::Int)
+@inline function sincos16_kernel_hilo(rh::Float64, rl::Float64, n::Int64)
     s0h, s0l = sinpi16_table_hilo(n)
     c0h, c0l = sinpi16_table_hilo(n + 8)
     r2 = rh*rh
@@ -114,14 +116,14 @@ end
     cl = fma(-s0h, sr, fma(c0h, cr, fma(-s0l, rh, c0l) + fma(-s0h, rh, c0h - ch)))
     return sh, sl, ch, cl
 end
-@inline function sincos16_kernel(rh::Float64, rl::Float64, n::Int)
+@inline function sincos16_kernel(rh::Float64, rl::Float64, n::Int64)
     sh, sl, ch, cl = sincos16_kernel_hilo(rh, rl, n)
     return sh + sl, ch + cl
 end
 
 # tan as sin/cos. For Float64, the quotient of the unevaluated sums is compensated with one
 # reciprocal; when cos is exactly zero (only at table points), the quotient is already ±Inf.
-@inline function tan16(rh::Float64, rl::Float64, n::Int)
+@inline function tan16(rh::Float64, rl::Float64, n::Int64)
     sh, sl, ch, cl = sincos16_kernel_hilo(rh, rl, n)
     s = sh + sl
     se = (sh - s) + sl
@@ -131,13 +133,13 @@ end
     q = s*ic
     return ifelse(iszero(c), q, muladd(fma(-q, c, s) + muladd(-q, ce, se), ic, q))
 end
-@inline function tan16(z::Union{Float32, Float64}, n::Int)
+@inline function tan16(z::Union{Float32, Float64}, n::Int64)
     si, co = sincos16_kernel(z, n)
     return si/co
 end
 
 # The reductions for π*x and degrees, returning the same form as rem_pio16 (radians, in
-# pi_remainders.jl): they take a = |x| for finite or NaN x and find n and z with |z| <= 1/2 and
+# pi_remainders.jl): they take a = |x| for finite x and find n and z with |z| <= 1/2 and
 # a = (n + z)/16 (for π*x) or a = 11.25*(n + z) (for degrees). Float16 and Float32 return (z, n);
 # Float64 returns (rh, rl, n), with the reduced angle π/16*z = rh + rl in radians.
 
@@ -161,7 +163,7 @@ end
     n = round(t)
     z = t - n
     rh = PIO16_HI*z
-    return rh, muladd(PIO16_LO, z, fma(PIO16_HI, z, -rh)), unsafe_trunc(Int, n)
+    return rh, muladd(PIO16_LO, z, fma(PIO16_HI, z, -rh)), unsafe_trunc(Int64, n)
 end
 
 # Degrees: 11.25 is exact, and for a < 2^48 (all finite Float16) both n*11.25 and a - n*11.25
@@ -188,51 +190,103 @@ end
     return rh, muladd(0x1.5c1d8becdd291p-62, d, fma(0x1.1df46a2529d39p-6, d, -rh)), k
 end
 
-# The reductions above and rem_pio16 are valid for a < trig16_limit(rem16, a), and trig16_large
-# reduces finite a beyond that. By default (Float16) every finite a takes the fast reduction, so
-# the comparison is just isinf.
-trig16_limit(rem16, a) = typemax(a)
+# The reductions above and rem_pio16 are valid for trig16_limit_lo(rem16, a) < a <
+# trig16_limit_hi(rem16, a). trig16_large reduces finite a above that range and trig16_small computes
+# f(x) below it. By default there is no lower limit (nothing, which skips the comparison, since LLVM
+# doesn't fold one against -Inf), and the upper limit is Inf, where the comparison only catches ±Inf
+# and NaN.
+trig16_limit_lo(rem16, a) = nothing
+trig16_limit_hi(rem16, a) = typemax(a)
 trig16_large(rem16, a) = rem16(a)
-trig16_limit(::typeof(rem_pi16), ::Float32) = Float32(0x1p24)
-trig16_limit(::typeof(rem_pi16), ::Float64) = 0x1p53
+@inline function trig16_inrange(rem16, a)
+    lo = trig16_limit_lo(rem16, a)
+    return (lo === nothing || lo < a) && a < trig16_limit_hi(rem16, a)
+end
+trig16_limit_hi(::typeof(rem_pi16), ::Float32) = Float32(0x1p24)
+trig16_limit_hi(::typeof(rem_pi16), ::Float64) = 0x1p53
 trig16_large(::typeof(rem_pi16), a::Union{Float32, Float64}) = rem_pi16(zero(a))
-trig16_limit(::typeof(rem_deg16), ::Float32) = Float32(0x1p48)
-trig16_limit(::typeof(rem_deg16), ::Float64) = 0x1p45
+trig16_limit_hi(::typeof(rem_deg16), ::Float32) = Float32(0x1p48)
+trig16_limit_hi(::typeof(rem_deg16), ::Float64) = 0x1p45
 trig16_large(::typeof(rem_deg16), a::Union{Float32, Float64}) = rem_deg16(rem(a, oftype(a, 360)))
 
-# Reduces x for the kernels, throwing for ±Inf. NaN takes the fast reduction and propagates through
-# the kernels.
-@inline function trig16_reduce(f::Symbol, rem16, x)
+# trig16(f, rem16, x) computes f(x) when |x| is in the range of the fast reduction, and otherwise
+# calls trig16_slow, which returns x for NaN, throws for ±Inf and handles small and large x. NaN
+# takes the slow path because the sign of a NaN computed by the kernels depends on the platform
+# (LLVM leaves it unspecified, and AArch64 negates NaNs in fnmadd), and the range check costs
+# nothing extra.
+@inline function trig16(f::F, rem16::R, x) where {F, R}
     a = abs(x)
-    a >= trig16_limit(rem16, a) || return rem16(a)
-    return @noinline trig16_slow(f, rem16, x)
+    trig16_inrange(rem16, a) || return @noinline trig16_slow(f, rem16, x)
+    return trig16_finish(f, x, rem16(a)...)
 end
-@noinline function trig16_slow(f::Symbol, rem16, x)
-    isinf(x) && throw_finite_domainerror(f, x)
-    return trig16_large(rem16, abs(x))
+function sincospi end
+function sincosd end
+# For Float16 and Float32 sincos, the two paths merge the results separately: a merged tuple goes
+# through the stack, which adds a store-forwarding delay to the fast path. (A merged Float64 tuple
+# is faster.)
+@inline function trig16(f::Union{typeof(sincos), typeof(sincospi), typeof(sincosd)}, rem16::R,
+                        x::Union{Float16, Float32}) where R
+    a = abs(x)
+    if trig16_inrange(rem16, a)
+        si, co = trig16_finish(f, x, rem16(a)...)
+    else
+        si, co = @noinline trig16_slow(f, rem16, x)
+    end
+    return si, co
 end
+@noinline function trig16_slow(f::F, rem16::R, x) where {F, R}
+    isnan(x) && return trig16_nan(f, x)
+    isinf(x) && throw_finite_domainerror(nameof(f), x)
+    a = abs(x)
+    lo = trig16_limit_lo(rem16, a)
+    lo !== nothing && a <= lo && return trig16_small(f, rem16, x)
+    return trig16_finish(f, x, trig16_large(rem16, a)...)
+end
+trig16_nan(f, x) = x
 
 for T in (Float16, Float32, Float64), (rem16, fsin, fcos, fsincos, ftan) in (
         (:rem_pio16, :sin, :cos, :sincos, :tan),
         (:rem_pi16, :sinpi, :cospi, :sincospi, :tanpi),
         (:rem_deg16, :sind, :cosd, :sincosd, :tand))
     @eval begin
+        $fsin(x::$T) = trig16($fsin, $rem16, x)
+        $fcos(x::$T) = trig16($fcos, $rem16, x)
+        $fsincos(x::$T) = trig16($fsincos, $rem16, x)
+        $ftan(x::$T) = trig16($ftan, $rem16, x)
         # The odd functions are computed at |x| and flipsign keeps the sign of zero results.
-        function $fsin(x::$T)
-            si, _ = sincos16_kernel(trig16_reduce($(QuoteNode(fsin)), $rem16, x)...)
-            return flipsign($T(si), x)
-        end
-        function $fcos(x::$T)
-            _, co = sincos16_kernel(trig16_reduce($(QuoteNode(fcos)), $rem16, x)...)
-            return $T(co)
-        end
-        function $fsincos(x::$T)
-            si, co = sincos16_kernel(trig16_reduce($(QuoteNode(fsincos)), $rem16, x)...)
+        @inline trig16_finish(::typeof($fsin), x::$T, r...) = flipsign($T(sincos16_kernel(r...)[1]), x)
+        @inline trig16_finish(::typeof($fcos), x::$T, r...) = $T(sincos16_kernel(r...)[2])
+        @inline function trig16_finish(::typeof($fsincos), x::$T, r...)
+            si, co = sincos16_kernel(r...)
             return flipsign($T(si), x), $T(co)
         end
-        function $ftan(x::$T)
-            return flipsign($T(tan16(trig16_reduce($(QuoteNode(ftan)), $rem16, x)...)), x)
-        end
+        @inline trig16_finish(::typeof($ftan), x::$T, r...) = flipsign($T(tan16(r...)), x)
+    end
+end
+trig16_nan(::Union{typeof(sincos), typeof(sincospi), typeof(sincosd)}, x) = (x, x)
+
+# Float64 π*x and degrees: below 2^-1000, the low part of the reduced angle loses bits to underflow.
+# There sin(c*x) and tan(c*x) round to c*x and cos(c*x) to 1, for c = π or π/180 = c_hi + c_lo.
+# c*|x| = p + r is computed with x scaled by 2^200 so that nothing underflows. When the result is
+# subnormal, scaling p back rounds it again, so y is corrected with the rest of c*|x| instead.
+trig16_limit_lo(::Union{typeof(rem_pi16), typeof(rem_deg16)}, ::Float64) = 0x1p-1000
+@inline function mul_small(c_hi::Float64, c_lo::Float64, x::Float64)
+    s = abs(x)*0x1p200
+    p = c_hi*s
+    r = fma(c_hi, s, -p) + c_lo*s
+    y = p*0x1p-200
+    cx = y >= floatmin(Float64) ? (p + r)*0x1p-200 : y + ((p - y*0x1p200) + r)*0x1p-200
+    return copysign(cx, x)
+end
+for (rem16, fsin, fcos, fsincos, ftan, c_hi, c_lo) in (
+        (:rem_pi16, :sinpi, :cospi, :sincospi, :tanpi, 0x1.921fb54442d18p+1, 0x1.1a62633145c07p-53),
+        (:rem_deg16, :sind, :cosd, :sincosd, :tand, 0x1.1df46a2529d39p-6, 0x1.5c1d8becdd291p-62))
+    @eval begin
+        trig16_small(::Union{typeof($fsin), typeof($ftan)}, ::typeof($rem16), x::Float64) =
+            mul_small($c_hi, $c_lo, x)
+        trig16_small(::typeof($fcos), ::typeof($rem16), x::Float64) = 1.0
+        trig16_small(::typeof($fsincos), ::typeof($rem16), x::Float64) =
+            (mul_small($c_hi, $c_lo, x), 1.0)
     end
 end
 
