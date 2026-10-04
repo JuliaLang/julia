@@ -3470,3 +3470,25 @@ end
     @test parent(ref) === mem
     @test Base.memoryindex(ref) === 8
 end
+
+# `Any[...]` and varargs `push!`/`pushfirst!` for `Vector{Any}` store all their arguments, and
+# with a few arguments of non-concrete types, their varargs tuple is eliminated rather than
+# allocated with element types computed at runtime
+@testset "`Any[...]` and varargs `push!`/`pushfirst!` for `Vector{Any}`" begin
+    for n = 0:7
+        xs = Any[i for i = 1:n]
+        @test Any[xs...] == xs
+        @test push!(Any[:a], xs...) == Any[:a; xs]
+        @test pushfirst!(Any[:a], xs...) == Any[xs; :a]
+    end
+    isdyntuplecall(@nospecialize(stmt), @nospecialize(typ)) =
+        Meta.isexpr(stmt, :call) && stmt.args[1] === GlobalRef(Core, :tuple) &&
+        !(typ isa Type && isconcretetype(typ))
+    for (f, tt) in (((x, y) -> Any[x, y], (Any, Any)),
+                    ((x, y, z, w) -> Any[x, y, z, w], (Any, Any, Any, Any)),
+                    ((v, x, y) -> push!(v, x, y), (Vector{Any}, Any, Any)),
+                    ((v, x, y) -> pushfirst!(v, x, y), (Vector{Any}, Any, Any)))
+        src = only(code_typed(f, tt))[1]
+        @test !any(i -> isdyntuplecall(src.code[i], src.ssavaluetypes[i]), eachindex(src.code))
+    end
+end

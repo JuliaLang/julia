@@ -133,7 +133,13 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     end
     current_world = get_world_counter()
-    matches = find_method_matches(interp, argtypes, atype; max_methods, fargs=arginfo.fargs)
+    # Split on `fargs::Union{Nothing,Vector{Any}}` so that each keyword call is made with a
+    # concretely typed `NamedTuple`: otherwise the `NamedTuple` type would be computed at
+    # runtime and `Core.kwcall` would be dispatched dynamically.
+    fargs = arginfo.fargs
+    matches = fargs === nothing ?
+        find_method_matches(interp, argtypes, atype; max_methods) :
+        find_method_matches(interp, argtypes, atype; max_methods, fargs)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))

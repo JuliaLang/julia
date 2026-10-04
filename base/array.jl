@@ -460,13 +460,33 @@ function getindex(::Type{T}, vals...) where T
     return a
 end
 
+# Store `vals` into `a[offset+1:offset+length(vals)]`, which must already be in bounds.
+# The leading elements are stored with constant indices so that, once this is inlined into a
+# call site where the length of `vals` is known, the varargs tuple `vals` can be eliminated
+# by SROA. Indexing it with a loop variable would otherwise require the tuple to be allocated,
+# and since its element types are not known statically, allocating it involves a lookup of
+# its runtime type, which also mints a new tuple type for every new combination of
+# argument types.
+function _unsafe_setvals!(a::Vector{Any}, offset::Int, @nospecialize(vals::Tuple))
+    @inline
+    @_terminates_locally_meta
+    n = length(vals)
+    @_safeindex begin
+        n ≥ 1 || return a; a[offset+1] = vals[1]
+        n ≥ 2 || return a; a[offset+2] = vals[2]
+        n ≥ 3 || return a; a[offset+3] = vals[3]
+        n ≥ 4 || return a; a[offset+4] = vals[4]
+        for i = 5:n
+            a[offset+i] = vals[i]
+        end
+    end
+    return a
+end
+
 function getindex(::Type{Any}, @nospecialize vals...)
     @_effect_free_terminates_locally_meta
     a = Vector{Any}(undef, length(vals))
-    @_safeindex for i = 1:length(vals)
-        a[i] = vals[i]
-    end
-    return a
+    return _unsafe_setvals!(a, 0, vals)
 end
 getindex(::Type{Any}) = Vector{Any}()
 
@@ -1369,14 +1389,9 @@ function push!(a::Vector{Any}, @nospecialize x)
     return a
 end
 function push!(a::Vector{Any}, @nospecialize x...)
-    @_terminates_locally_meta
     na = length(a)
-    nx = length(x)
-    _growend!(a, nx)
-    @_safeindex for i = 1:nx
-        a[na+i] = x[i]
-    end
-    return a
+    _growend!(a, length(x))
+    return _unsafe_setvals!(a, na, x)
 end
 
 """
@@ -1785,13 +1800,8 @@ function pushfirst!(a::Vector{Any}, @nospecialize x)
     return a
 end
 function pushfirst!(a::Vector{Any}, @nospecialize x...)
-    @_terminates_locally_meta
-    nx = length(x)
-    _growbeg!(a, nx)
-    @_safeindex for i = 1:nx
-        a[i] = x[i]
-    end
-    return a
+    _growbeg!(a, length(x))
+    return _unsafe_setvals!(a, 0, x)
 end
 
 """

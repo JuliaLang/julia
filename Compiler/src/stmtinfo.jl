@@ -69,7 +69,8 @@ function record_invoke_edge!(invokes::IdDict{Any,Vector{Any}},
     return true
 end
 
-function _materialize_inference_edges!(edges::Vector{Any}, source,
+function _materialize_inference_edges!(edges::Vector{Any},
+                                       source::Union{Vector{Any},SimpleVector},
                                        seen_proofs::IdSet{LocalInferenceProof},
                                        standalone::IdSet{Any},
                                        invokes::IdDict{Any,Vector{Any}})
@@ -117,7 +118,7 @@ function _materialize_inference_edges!(edges::Vector{Any}, source,
     return nothing
 end
 
-function materialize_inference_edges(source)
+function materialize_inference_edges(source::Union{Vector{Any},SimpleVector})
     has_local_proof = false
     for edge in source
         if edge isa LocalInferenceProof
