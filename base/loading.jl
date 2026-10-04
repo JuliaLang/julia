@@ -1459,6 +1459,9 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
             depmods[i] = dep
         end
 
+        # lock the file before restoring it, so no other process removes or replaces it meanwhile
+        lockfile = cachefile_needs_lock(pkg, path) ? lock_cachefile_shared(path) : nothing
+        lockfile === false && return ErrorException("Cache file $(repr(path)) is being removed or replaced.")
         ignore_native = false
         unlock(require_lock) # temporarily _unlock_ during these operations
         sv = try
@@ -1475,6 +1478,7 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
             lock(require_lock)
         end
         if isa(sv, Exception)
+            lockfile isa Filesystem.File && close(lockfile)
             return sv
         end
 
@@ -1483,7 +1487,7 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         Compiler.@zone "CC: INSERT_BACKEDGES" begin
             ReinferUtils.insert_backedges_typeinf(internal_methods)
         end
-        restored = register_restored_modules(sv, pkg, path)
+        restored = register_restored_modules(sv, pkg, path; lockfile)
 
         for M in restored
             M = M::Module
@@ -1571,7 +1575,7 @@ function extension_parent_name(M::Module)
     return nothing
 end
 
-function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
+function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String; lockfile=nothing)
     # This function is also used by PkgCacheInspector.jl
     assert_havelock(require_lock)
     restored = sv[1]::Vector{Any}
@@ -1588,7 +1592,7 @@ function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
 
     # Register this cache path now - If Requires.jl is loaded, Revise may end
     # up looking at the cache path during the init callback.
-    get!(PkgOrigin, pkgorigins, pkg).cachepath = path
+    get!(PkgOrigin, pkgorigins, pkg).cachepath = keep_restored_cachefile_lock(pkg, path, restored, lockfile)
 
     inits = sv[2]::Vector{Any}
     if !isempty(inits)
@@ -3781,11 +3785,11 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             # Read preferences blob back from .ji file (we can't precompute because we don't
             # actually know what the list of compile-time preferences are without compiling)
             prefs_blob = preferences_blob(tmppath)
-            required_modules = parse_cache_header(tmppath)[3]
-            cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags, project=cachefile_project(pkg, required_modules))
+            slot_cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags)
+            cachefile = slot_cachefile
             # Keep the usual name for the build that matches the environment, which the next
             # session will want, and give a build that only suits this session another one.
-            if pkg.uuid !== nothing && built_against_other_sources(required_modules)
+            if pkg.uuid !== nothing && built_against_other_sources(parse_cache_header(tmppath)[3])
                 cachefile = unused_cachefile_name(cachefile)
             end
             ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
@@ -3811,44 +3815,39 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             # inherit permission from the source file (and make them writable)
             chmod(tmppath, filemode(spec.path) & 0o777 | 0o200)
 
-            moved_ocachefile = pkg.uuid === nothing ? nothing : move_aside_loaded_cachefile(pkg, cachefile)
-
-            # prune the directory with cache files
+            moved_ocachefile = guard = nothing
             if pkg.uuid !== nothing
-                entrypath, entryfile = cache_file_entry(pkg)
-                cachefiles = filter!(x -> startswith(x, entryfile * "_") && endswith(x, ".ji"), readdir(cachepath))
-                # never the file of a loaded package, which this session's workers may need
-                evictable = filter(x -> !is_loaded_cachefile(pkg, joinpath(cachepath, x)), cachefiles)
-                if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES[] && !isempty(evictable)
-                    idx = findmin(mtime.(joinpath.(cachepath, evictable)))[2]
-                    evicted_cachefile = joinpath(cachepath, evictable[idx])
-                    @debug "Evicting file from cache" evicted_cachefile
-                    rm(evicted_cachefile; force=true)
-                    try
-                        rm(ocachefile_from_cachefile(evicted_cachefile); force=true)
-                        @static if Sys.isapple()
-                            rm(ocachefile_from_cachefile(evicted_cachefile) * ".dSYM"; force=true, recursive=true)
-                        end
-                    catch e
-                        e isa IOError || rethrow()
+                moved_ocachefile, guard = make_way_for_cachefile(pkg, cachefile)
+                if moved_ocachefile === false
+                    # the build in use could not be moved, so leave it there and use another name
+                    moved_ocachefile = nothing
+                    cachefile = unused_cachefile_name(cachefile)
+                    ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
+                end
+                # this session may be about to load a build under an extra name, so keep it
+                # from being pruned before then
+                cachefile == slot_cachefile || keep_cachefile_lock(lock_cachefile_shared(tmppath))
+                prune_cachefiles(pkg, slot_cachefile)
+            end
+
+            try
+                if cache_objects
+                    ocachefile_new = rename_unique_ocachefile(tmppath_so, ocachefile; keep=moved_ocachefile)
+                    if ocachefile_new != ocachefile
+                        cachefile = cachefile_from_ocachefile(ocachefile_new)
+                        ocachefile = ocachefile_new
+                    end
+                    @static if Sys.isapple()
+                        run(`$(Linking.dsymutil()) $ocachefile`, Base.DevNull(), Base.DevNull(), Base.DevNull())
                     end
                 end
+                # this is atomic according to POSIX (not Win32):
+                # but force=true means it will fall back to non atomic
+                # move if the initial rename fails.
+                mv(tmppath, cachefile; force=true)
+            finally
+                guard isa Filesystem.File && close(guard)
             end
-
-            if cache_objects
-                ocachefile_new = rename_unique_ocachefile(tmppath_so, ocachefile; keep=moved_ocachefile)
-                if ocachefile_new != ocachefile
-                    cachefile = cachefile_from_ocachefile(ocachefile_new)
-                    ocachefile = ocachefile_new
-                end
-                @static if Sys.isapple()
-                    run(`$(Linking.dsymutil()) $ocachefile`, Base.DevNull(), Base.DevNull(), Base.DevNull())
-                end
-            end
-            # this is atomic according to POSIX (not Win32):
-            # but force=true means it will fall back to non atomic
-            # move if the initial rename fails.
-            mv(tmppath, cachefile; force=true)
             return cachefile, ocachefile
         end
     finally
@@ -3868,13 +3867,158 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
     end
 end
 
-# A package loaded in this session keeps the cache file it was loaded from. Workers started
-# by this session look up that build by its id, so a new build for the same slot must not
-# replace the file. Move it to `<slot>_<n>.ji`, where the cache search still finds it.
-function move_aside_loaded_cachefile(pkg::PkgId, cachefile::String)
+# A session holds a shared lock on each cache file it loaded, for as long as it runs. A process
+# that is about to remove or replace a cache file takes an exclusive lock on it first, which
+# fails while a running session may still need that build, for example for its precompile
+# workers. The operating system drops the locks when a process exits, so they never go stale.
+const loaded_cachefile_locks = Dict{Tuple{UInt,UInt},Filesystem.File}()
+
+# Open `cachefile` with a shared lock. Return the `File`, `false` if another process is
+# removing or replacing it, or `nothing` if it cannot be locked here.
+function lock_cachefile_shared(cachefile::String)
+    f = try
+        Filesystem.open(cachefile, Filesystem.JL_O_RDONLY)
+    catch e
+        e isa IOError || rethrow()
+        return nothing
+    end
+    locked = try
+        Filesystem.trylockfile(f; shared=true)
+    catch e
+        e isa SystemError || rethrow()
+        nothing
+    end
+    locked === true || close(f)
+    return locked === true ? f : locked
+end
+
+# Open `cachefile` with an exclusive lock. Return the `File`, `false` if a running session may
+# use it, or `nothing` if it cannot be locked here.
+function lock_cachefile_exclusive(cachefile::String)
+    # on Linux NFS an exclusive lock needs the file open for writing
+    f = try
+        Filesystem.open(cachefile, Filesystem.JL_O_RDWR)
+    catch e
+        e isa IOError || rethrow()
+        try
+            Filesystem.open(cachefile, Filesystem.JL_O_RDONLY)
+        catch e
+            e isa IOError || rethrow()
+            return nothing
+        end
+    end
+    locked = try
+        Filesystem.trylockfile(f)
+    catch e
+        e isa SystemError || rethrow()
+        nothing
+    end
+    locked === true || close(f)
+    return locked === true ? f : locked
+end
+
+function keep_cachefile_lock(f)
+    f isa Filesystem.File || return
+    st = stat(f)
+    key = (UInt(st.device), UInt(st.inode))
+    @lock require_lock haskey(loaded_cachefile_locks, key) ? close(f) : (loaded_cachefile_locks[key] = f)
+    return
+end
+
+# Keep the lock on the file this session restored `pkg` from, and return its path. If another
+# process moved or replaced the file before it was locked, lock the file that holds the
+# restored build instead.
+# Files of a package without a uuid are never moved aside, and Julia never writes to the depot
+# that ships with it, so neither needs a lock. Holding them open would only cost descriptors
+# and, on Windows, stop the file from being replaced.
+function cachefile_needs_lock(pkg::PkgId, path::String)
+    pkg.uuid === nothing && return false
+    bundled = joinpath(dirname(dirname(Sys.STDLIB)), "compiled") * Filesystem.path_separator
+    return !startswith(path, bundled)
+end
+
+function keep_restored_cachefile_lock(pkg::PkgId, path::String, restored::Vector{Any}, lockfile)
+    i = findfirst(M -> is_root_module(M) && PkgId(M) == pkg, restored)
+    i === nothing && return path
+    build_id = module_build_id(restored[i]::Module)
+    cachefile_needs_lock(pkg, path) || return path
+    lockfile === nothing && (lockfile = lock_cachefile_shared(path))
+    if lockfile isa Filesystem.File && samefile(stat(lockfile), stat(path)) && cachefile_build_id(path) == build_id
+        keep_cachefile_lock(lockfile)
+        return path
+    end
+    lockfile isa Filesystem.File && close(lockfile)
+    dir = dirname(path)
+    for x in readdir(dir)
+        candidate = joinpath(dir, x)
+        endswith(x, ".ji") && cachefile_build_id(candidate) == build_id || continue
+        lockfile = lock_cachefile_shared(candidate)
+        if lockfile isa Filesystem.File && cachefile_build_id(candidate) == build_id
+            keep_cachefile_lock(lockfile)
+            return candidate
+        end
+        lockfile isa Filesystem.File && close(lockfile)
+    end
+    return path
+end
+
+function cachefile_build_id(path::String)
+    try
+        return parse_cache_buildid(path)[1]
+    catch e
+        e isa InterruptException && rethrow()
+        return nothing
+    end
+end
+
+# Another process may have replaced the file at the loaded path since, so check the build too.
+function is_loaded_cachefile(pkg::PkgId, path::String)
     @lock require_lock begin
         origin = get(pkgorigins, pkg, nothing)
-        (origin === nothing || origin.cachepath === nothing || !samefile(origin.cachepath, cachefile)) && return nothing
+        (origin === nothing || origin.cachepath === nothing || !samefile(origin.cachepath, path)) && return false
+        # not only the registered module, since a package's `__init__` runs before registration
+        mods = get(loaded_precompiles, pkg, nothing)
+        mods === nothing && return false
+        build_id = cachefile_build_id(path)
+        return any(m -> module_build_id(m) == build_id, mods)
+    end
+end
+
+# Run `f` on `cachefile` unless a running session may use it, holding an exclusive lock
+# meanwhile so that no session starts to. Return whether `f` ran.
+function with_unused_cachefile(f, pkg::PkgId, cachefile::String)
+    is_loaded_cachefile(pkg, cachefile) && return false
+    guard = lock_cachefile_exclusive(cachefile)
+    guard === false && return false
+    try
+        f()
+    finally
+        guard isa Filesystem.File && close(guard)
+    end
+    return true
+end
+
+# Make way for a new build at `cachefile`. A build there that a running session may use moves to
+# `<slot>_<n>.ji`, where the cache search still finds it by its id, and the new path of its
+# library is returned, or `false` if it could not be moved. Any other build there is returned
+# locked, to be released once the new build replaces it, so that no session starts to use it
+# meanwhile.
+function make_way_for_cachefile(pkg::PkgId, cachefile::String)
+    @lock require_lock begin
+        isfile(cachefile) || return nothing, nothing
+        own = is_loaded_cachefile(pkg, cachefile)
+        if !own
+            guard = lock_cachefile_exclusive(cachefile)
+            @static if Sys.iswindows()
+                # Windows cannot replace a file that is open, even by this process, so move the
+                # unused build away while it is still locked, then remove it
+                if guard isa Filesystem.File
+                    discard_cachefile(cachefile, guard)
+                    return nothing, nothing
+                end
+            end
+            guard === false || return nothing, guard
+        end
         aside_cachefile = unused_cachefile_name(cachefile)
         ocachefile = ocachefile_from_cachefile(cachefile)
         aside_ocachefile = ocachefile_from_cachefile(aside_cachefile)
@@ -3892,6 +4036,9 @@ function move_aside_loaded_cachefile(pkg::PkgId, cachefile::String)
                     # only debug info, so a failure here does not matter
                     isdir(ocachefile * ".dSYM") && try
                         Filesystem.rename(ocachefile * ".dSYM", aside_ocachefile * ".dSYM")
+                        # debug info is looked up by the library's file name inside the bundle
+                        dwarf = joinpath(aside_ocachefile * ".dSYM", "Contents", "Resources", "DWARF")
+                        Filesystem.rename(joinpath(dwarf, basename(ocachefile)), joinpath(dwarf, basename(aside_ocachefile)))
                     catch e
                         e isa IOError || rethrow()
                     end
@@ -3899,11 +4046,85 @@ function move_aside_loaded_cachefile(pkg::PkgId, cachefile::String)
             end
         catch e
             e isa IOError || rethrow()
-            @debug "Could not move the loaded cache file of $(repr("text/plain", pkg)) aside" cachefile exception=e
-            return nothing
+            @debug "Could not move the cache file in use of $(repr("text/plain", pkg)) aside" cachefile exception=e
+            return false, nothing
         end
-        origin.cachepath = aside_cachefile
-        return aside_ocachefile
+        own && (pkgorigins[pkg].cachepath = aside_cachefile)
+        return aside_ocachefile, nothing
+    end
+end
+
+const MAX_NUM_UNLOCKABLE_EXTRA_FILES = 2
+
+# Remove the extra `<slot>_<n>.ji` builds of this slot that no session uses any more. Then, if
+# the directory is full, remove one unused file: an extra build of any slot first, otherwise
+# the least recently used.
+function prune_cachefiles(pkg::PkgId, slot_cachefile::String)
+    dir = dirname(slot_cachefile)
+    _, entryfile = cache_file_entry(pkg)
+    slot_prefix = chopsuffix(basename(slot_cachefile), ".ji") * "_"
+    cachefiles = filter!(x -> startswith(x, entryfile * "_") && endswith(x, ".ji"), readdir(dir))
+    unknown = String[]
+    nloaded = 0
+    for x in cachefiles
+        startswith(x, slot_prefix) || continue
+        path = joinpath(dir, x)
+        is_loaded_cachefile(pkg, path) && (nloaded += 1; continue)
+        guard = lock_cachefile_exclusive(path)
+        if guard === nothing
+            push!(unknown, x)
+        elseif guard !== false
+            try
+                evict_cachefile(path)
+            finally
+                close(guard)
+            end
+        end
+    end
+    # Where locks do not work, another running session may still use an extra build, so keep
+    # the newest few rather than none.
+    sort!(unknown; by = x -> mtime(joinpath(dir, x)))
+    while nloaded + length(unknown) > MAX_NUM_UNLOCKABLE_EXTRA_FILES && !isempty(unknown)
+        evict_cachefile(joinpath(dir, popfirst!(unknown)))
+    end
+    filter!(x -> isfile(joinpath(dir, x)), cachefiles)
+    length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES[] || return
+    # slug characters are alphanumeric, so only an extra build has another `_` in its name
+    isextra(x) = occursin('_', chopprefix(x, entryfile * "_"))
+    sort!(cachefiles; by = x -> (!isextra(x), mtime(joinpath(dir, x))))
+    for x in cachefiles
+        with_unused_cachefile(() -> evict_cachefile(joinpath(dir, x)), pkg, joinpath(dir, x)) && break
+    end
+end
+
+function discard_cachefile(cachefile::String, guard::Filesystem.File)
+    trash = String[]
+    try
+        for path in (cachefile, ocachefile_from_cachefile(cachefile))
+            isfile(path) || continue
+            t = tempname(dirname(cachefile); cleanup=false)
+            Filesystem.rename(path, t)
+            push!(trash, t)
+        end
+    catch e
+        e isa IOError || rethrow()
+        @debug "Could not move the unused cache file $(repr(cachefile)) away" exception=e
+    finally
+        close(guard)
+    end
+    foreach(t -> rm(t; force=true), trash)
+end
+
+function evict_cachefile(cachefile::String)
+    @debug "Evicting file from cache" cachefile
+    rm(cachefile; force=true)
+    try
+        rm(ocachefile_from_cachefile(cachefile); force=true)
+        @static if Sys.isapple()
+            rm(ocachefile_from_cachefile(cachefile) * ".dSYM"; force=true, recursive=true)
+        end
+    catch e
+        e isa IOError || rethrow()
     end
 end
 
@@ -3934,33 +4155,6 @@ function built_against_other_sources(required_modules::Vector{Pair{PkgId,UInt128
     return false
 end
 
-# The project to name a new cache after. A package from another environment in the load
-# path, such as the default one, is named after that environment when the build matches its
-# manifest, so the projects that use it share one file. A build against other versions
-# from the active project is named after the active project.
-function cachefile_project(pkg::PkgId, required_modules::Vector{Pair{PkgId,UInt128}})
-    active = something(active_project(), "")
-    @lock require_lock begin
-        specenv = locate_package_env(pkg)
-        specenv === nothing && return active
-        env = specenv[2]
-        project_file = env_project_file(env)
-        (project_file isa String && project_file != active) || return active
-        for (dep, _) in required_modules
-            (dep.uuid === nothing || in_sysimage(dep)) && continue
-            path = locate_package(dep)
-            spec = manifest_uuid_load_spec(env, dep)
-            (path !== nothing && spec isa PkgLoadSpec && samefile(spec.path, path)) || return active
-        end
-        return project_file
-    end
-end
-
-function is_loaded_cachefile(pkg::PkgId, path::String)
-    origin = @lock require_lock get(pkgorigins, pkg, nothing)
-    return origin !== nothing && origin.cachepath !== nothing && samefile(origin.cachepath, path)
-end
-
 function rename_unique_ocachefile(tmppath_so::String, ocachefile_orig::String, ocachefile::String = ocachefile_orig, num = 0;
                                   keep::Union{Nothing,String} = nothing)
     try
@@ -3978,7 +4172,7 @@ function rename_unique_ocachefile(tmppath_so::String, ocachefile_orig::String, o
         # that cache file does not exist.
         ocachename, ocacheext = splitext(ocachefile_orig)
         ocachefile_unique = ocachename * "_$num" * ocacheext
-        if ocachefile_unique == keep # the loaded build moved aside, which must not be replaced
+        if ocachefile_unique == keep # the build in use moved aside, which must not be replaced
             num += 1
             ocachefile_unique = ocachename * "_$num" * ocacheext
         end

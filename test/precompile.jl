@@ -4534,6 +4534,7 @@ end
             using Dep
             loaded_file = Base.pkgorigins[dep].cachepath
             cp($(repr(new_manifest_file)), $(repr(manifest_file)); force=true)
+            # the manifest may change within the cache's timestamp resolution, so drop its entry
             @lock Base.require_lock delete!(Base.TOML_CACHE.d, $(repr(manifest_file)))
             new_file, _ = Base.compilecache(dep)
             moved_file = Base.pkgorigins[dep].cachepath
@@ -4551,74 +4552,88 @@ end
         @test length(cachefiles("Top")) == 2
         @test success(run_script("exit(Base.isprecompiled(Base.PkgId(Base.UUID(\"$top_uuid\"), \"Top\")) ? 0 : 1)"))
 
+        old_manifest_file = joinpath(dir, "OldManifest.toml")
+        write(old_manifest_file, manifest("DepOld", "0.1.0"))
+        switch_manifest(file) = """
+            cp($(repr(file)), $(repr(manifest_file)); force=true)
+            @lock Base.require_lock delete!(Base.TOML_CACHE.d, $(repr(manifest_file)))
+            """
+
+        # If the loaded file cannot be moved aside, it stays and the new build gets another name
+        @test success(run_script("""
+            using Test
+            dep = Base.PkgId(Base.UUID("$dep_uuid"), "Dep")
+            using Dep
+            loaded_file = Base.pkgorigins[dep].cachepath
+            @eval Base.Filesystem function rename(src::String, dst::String)
+                isfile(src) && samefile(src, \$loaded_file) && throw(Base.IOError("rename refused for the test", -1))
+                invoke(rename, Tuple{AbstractString,AbstractString}, src, dst)
+            end
+            $(switch_manifest(old_manifest_file))
+            new_file, _ = Base.compilecache(dep)
+            @test new_file != loaded_file
+            @test Base.pkgorigins[dep].cachepath == loaded_file
+            @test first(Base.parse_cache_buildid(loaded_file)) == Base.module_build_id(Dep)
+            """))
+
+        # Where file locks do not work, the newest two extra files of a slot are kept, as other
+        # running sessions may still use them
+        for next_manifest_file in (new_manifest_file, old_manifest_file, new_manifest_file, old_manifest_file)
+            @test success(run_script("""
+                @eval Base.Filesystem trylockfile(f::File; shared::Bool=false) = throw(SystemError("trylockfile", Libc.ENOLCK))
+                dep = Base.PkgId(Base.UUID("$dep_uuid"), "Dep")
+                using Dep
+                $(switch_manifest(next_manifest_file))
+                Base.compilecache(dep)
+                """))
+        end
+        @test length(cachefiles("Dep")) == 3
     end end
 end
 
-@testset "a package from another environment is cached under that environment's name" begin
+@testset "a build that another running session loaded stays until it exits" begin
     mkdepottempdir() do depot; mktempdir() do dir
         dep_uuid = "a1a1a1a1-0000-0000-0000-000000000001"
-        top_uuid = "b2b2b2b2-0000-0000-0000-000000000002"
-        for (dirname, version) in (("DepOld", "0.1.0"), ("DepNew", "0.2.0"))
-            path = joinpath(dir, "dev", dirname)
-            mkpath(joinpath(path, "src"))
-            write(joinpath(path, "Project.toml"), "name = \"Dep\"\nuuid = \"$dep_uuid\"\nversion = \"$version\"\n")
-            write(joinpath(path, "src", "Dep.jl"), "module Dep\nend\n")
-        end
-        top_path = joinpath(dir, "dev", "Top")
-        mkpath(joinpath(top_path, "src"))
-        write(joinpath(top_path, "Project.toml"),
-              "name = \"Top\"\nuuid = \"$top_uuid\"\nversion = \"0.1.0\"\n\n[deps]\nDep = \"$dep_uuid\"\n")
-        write_top(edit) = write(joinpath(top_path, "src", "Top.jl"), "module Top\nusing Dep\nconst edit = $edit\nend\n")
-        dep_entry(dirname, version) = """
-            [[deps.Dep]]
-            path = "../dev/$dirname/"
-            uuid = "$dep_uuid"
-            version = "$version"
-            """
-        # Top lives only in a shared environment, like a tool in the default one
-        shared = joinpath(dir, "shared")
-        mkpath(shared)
-        write(joinpath(shared, "Project.toml"), "[deps]\nTop = \"$top_uuid\"\n")
-        write(joinpath(shared, "Manifest.toml"), """
+        dep_path = joinpath(dir, "dev", "Dep")
+        mkpath(joinpath(dep_path, "src"))
+        write(joinpath(dep_path, "Project.toml"), "name = \"Dep\"\nuuid = \"$dep_uuid\"\nversion = \"0.1.0\"\n")
+        write(joinpath(dep_path, "src", "Dep.jl"), "module Dep\nend\n")
+        project_path = joinpath(dir, "project")
+        mkpath(project_path)
+        write(joinpath(project_path, "Project.toml"), "[deps]\nDep = \"$dep_uuid\"\n")
+        write(joinpath(project_path, "Manifest.toml"), """
             manifest_format = "2.0"
 
-            $(dep_entry("DepOld", "0.1.0"))
-            [[deps.Top]]
-            deps = ["Dep"]
-            path = "../dev/Top/"
-            uuid = "$top_uuid"
+            [[deps.Dep]]
+            path = "../dev/Dep/"
+            uuid = "$dep_uuid"
             version = "0.1.0"
             """)
-        function project(name, dirname, version)
-            path = joinpath(dir, name)
-            mkpath(path)
-            write(joinpath(path, "Project.toml"), "[deps]\nDep = \"$dep_uuid\"\n")
-            write(joinpath(path, "Manifest.toml"), "manifest_format = \"2.0\"\n\n" * dep_entry(dirname, version))
-            return path
-        end
-        same_a = project("same_a", "DepOld", "0.1.0")
-        same_b = project("same_b", "DepOld", "0.1.0")
-        other = project("other", "DepNew", "0.2.0")
-        load_path = join(["@", shared, "@stdlib"], Sys.iswindows() ? ';' : ':')
-        using_top(proj) = success(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$proj -e "using Top"`,
-                                         "JULIA_DEPOT_PATH" => depot, "JULIA_LOAD_PATH" => load_path))
-        compiled = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)")
-        top_files() = filter(endswith(".ji"), readdir(joinpath(compiled, "Top")))
+        julia(script, env::Pair...) = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$project_path -e $script`,
+                                             "JULIA_DEPOT_PATH" => depot, env...)
+        compiled = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Dep")
+        builds() = [first(Base.parse_cache_buildid(joinpath(compiled, f))) for f in readdir(compiled) if endswith(f, ".ji")]
+        rebuild = "Base.compilecache(Base.PkgId(Base.UUID(\"$dep_uuid\"), \"Dep\"))"
 
-        # Builds that match the shared environment replace one file, whichever project made them
-        write_top(0)
-        @test using_top(same_a)
-        @test length(top_files()) == 1
-        write_top(1)
-        @test using_top(same_b)
-        @test length(top_files()) == 1
-        # A build against another Dep is named after the project that made it
-        @test using_top(other)
-        @test length(top_files()) == 2
-        write_top(2)
-        @test using_top(same_a)
-        @test using_top(other)
-        @test length(top_files()) == 2
+        session = open(pipeline(julia("using Dep; println(Base.module_build_id(Dep)); readline()"); stderr=devnull), "r+")
+        local loaded_build
+        try
+            loaded_build = parse(UInt128, readline(session))
+            # Other processes build Dep under the name the session loaded it from, then evict
+            # with the directory full
+            @test success(julia(rebuild))
+            @test loaded_build in builds()
+            @test success(julia(rebuild, "JULIA_MAX_NUM_PRECOMPILE_FILES" => "1"))
+            @test loaded_build in builds()
+        finally
+            println(session)
+            wait(session)
+        end
+        @test success(session)
+        # Once the session exits, the next build removes its file
+        @test success(julia(rebuild))
+        @test !(loaded_build in builds())
+        @test length(builds()) == 1
     end end
 end
 

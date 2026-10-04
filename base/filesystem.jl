@@ -136,6 +136,8 @@ export File,
        S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXG,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
+public trylockfile, unlockfile
+
 import .Base:
     IOError, _UVError, _sizeof_uv_fs, check_open, close, closewrite, eof, eventloop, fd, isopen,
     bytesavailable, position, read, read!, readbytes!, readavailable, seek, seekend, show,
@@ -211,6 +213,91 @@ function close(f::File)
         uv_error("close", err)
     end
     nothing
+end
+
+@static if Sys.iswindows()
+    struct Overlapped
+        internal::UInt
+        internal_high::UInt
+        offset::UInt32
+        offset_high::UInt32
+        event::Ptr{Cvoid}
+    end
+    # Windows locks are mandatory, so a lock on the file's data would make reads by other
+    # processes fail. Locking one byte far beyond the end keeps it advisory, as on Unix.
+    const LOCKFILE_OVERLAPPED = Overlapped(0, 0, 0xfffffffe, 0x7fffffff, C_NULL)
+    const LOCKFILE_FAIL_IMMEDIATELY = 0x1
+    const LOCKFILE_EXCLUSIVE_LOCK = 0x2
+    const ERROR_LOCK_VIOLATION = 0x21
+    const ERROR_IO_PENDING = 0x3e5
+else
+    const LOCK_SH = Cint(1)
+    const LOCK_EX = Cint(2)
+    const LOCK_NB = Cint(4)
+    const LOCK_UN = Cint(8)
+end
+
+"""
+    trylockfile(f::File; shared::Bool=false)::Bool
+
+Try to take a lock on the file `f`, opened with `Base.Filesystem.open(path, flags)`, without
+waiting, and return whether it was taken.
+
+The lock is advisory: it only decides whether other attempts to lock the same file succeed. It
+does not stop this or any other process from opening, reading, writing, renaming or deleting
+the file, so it only coordinates processes that all take it.
+
+Any number of shared locks can be held at once, while an exclusive lock (`shared=false`)
+excludes every other lock. Each `File` holds its own lock, so two `File`s opened on the same path
+conflict even within one process.
+
+The lock is released by [`unlockfile`](@ref), by closing `f`, or when the process exits. A child
+process that is forked without `exec` shares the lock and keeps it until it exits too.
+
+Throw a `SystemError` if the file cannot be locked, for example because the file system does not
+support locks. On some network file systems a lock is only seen by processes on the same machine,
+and on Linux NFS an exclusive lock needs `f` to be open for writing.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+function trylockfile(f::File; shared::Bool=false)
+    check_open(f)
+    @static if Sys.iswindows()
+        flags = shared ? LOCKFILE_FAIL_IMMEDIATELY : LOCKFILE_FAIL_IMMEDIATELY | LOCKFILE_EXCLUSIVE_LOCK
+        ok = ccall(:LockFileEx, stdcall, Cint, (OS_HANDLE, UInt32, UInt32, UInt32, UInt32, Ref{Overlapped}),
+                   f.handle, flags, 0, 1, 0, LOCKFILE_OVERLAPPED) != 0
+        ok && return true
+        code = Libc.GetLastError()
+        (code == ERROR_LOCK_VIOLATION || code == ERROR_IO_PENDING) && return false
+        windowserror("trylockfile", code)
+    else
+        ccall(:flock, Cint, (OS_HANDLE, Cint), f.handle, (shared ? LOCK_SH : LOCK_EX) | LOCK_NB) == 0 && return true
+        # a lock held elsewhere is reported as EWOULDBLOCK, the same value as EAGAIN
+        Libc.errno() == Libc.EAGAIN && return false
+        systemerror("trylockfile")
+    end
+end
+
+"""
+    unlockfile(f::File)
+
+Release the lock that `f` holds through [`trylockfile`](@ref). On Windows this throws a
+`SystemError` if `f` holds no lock; elsewhere it does nothing then.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+function unlockfile(f::File)
+    check_open(f)
+    @static if Sys.iswindows()
+        ok = ccall(:UnlockFileEx, stdcall, Cint, (OS_HANDLE, UInt32, UInt32, UInt32, Ref{Overlapped}),
+                   f.handle, 0, 1, 0, LOCKFILE_OVERLAPPED) != 0
+        windowserror("unlockfile", !ok)
+    else
+        systemerror("unlockfile", ccall(:flock, Cint, (OS_HANDLE, Cint), f.handle, LOCK_UN) != 0)
+    end
+    return nothing
 end
 
 closewrite(f::File) = nothing
