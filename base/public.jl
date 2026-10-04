@@ -56,6 +56,7 @@ public
     memoryindex,
     unsetindex!,
     unsetindex_atomic!,
+    growat!,
 
 # collections
     IteratorEltype,
