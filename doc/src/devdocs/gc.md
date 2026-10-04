@@ -39,6 +39,8 @@ Julia's pool allocator stores memory blocks into different global lock-free list
 
 ![Diagram of tiered pool allocation](./img/gc-tiered-allocation.jpg)
 
+A program that must not take a page fault inside a loop, a hard real-time loop for example, can map its heap before the loop starts: `jl_gc_heap_reserve(bytes)` maps `bytes` of blocks, populated by the kernel, into `page_pool_clean`, and populates every block mapped from then on. The allocator serves the clean pool before it maps anything, so a loop whose heap fits the reserve maps nothing and faults nothing while it runs.
+
 ### Large Object Allocation
 
 Sufficiently large objects, above the 2k byte threshold mentioned in the previous section, are allocated through `libc` `malloc`. Large allocations are typically less performance-critical than small allocations, as they occur less frequently.

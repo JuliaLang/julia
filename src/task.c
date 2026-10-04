@@ -26,6 +26,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "builtin_proto.h"
+#include "gc-regions.h"
 #include "threading.h"
 #include "julia_assert.h"
 
@@ -327,6 +328,8 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
     // ensure that state is cleared
     ct->ptls->in_finalizer = 0;
     ct->ptls->in_pure_callback = 0;
+    // The window of a task that ends is closed here (gc-regions.h).
+    jl_gc_region_close_window(ct);
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     // let the runtime know this task is dead and find a new task to run
     jl_value_t *done = jl_atomic_load_relaxed(&task_done_hook_func);
@@ -514,6 +517,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt) JL_CANSAFEPOINT
     jl_signal_fence();
     jl_set_pgcstack(&t->gcstack);
     jl_signal_fence();
+    jl_gc_region_task_switch(ptls, lastt, t);
     lastt->ptls = NULL;
 #ifdef MIGRATE_TASKS
     ptls->previous_task = lastt;
@@ -1106,9 +1110,11 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     t->cached_cancel_entry = jl_nothing;
     t->tls = jl_nothing;
     jl_atomic_store_relaxed(&t->_state, JL_TASK_STATE_RUNNABLE);
+    jl_gc_wb_fresh(t, &t->start, start);
     t->start = start;
     t->invoked = NULL;
     t->result = jl_nothing;
+    jl_gc_wb_fresh(t, &t->donenotify, completion_future);
     t->donenotify = completion_future;
     jl_atomic_store_relaxed(&t->_isexception, 0);
     // Inherit scope from parent task
@@ -1118,6 +1124,10 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     // there is no active exception handler available on this stack yet
     t->eh = NULL;
     t->sticky = 1;
+#ifdef WITH_GC_REGIONS
+    t->region = 0;
+    t->sticky_before_region = 0;
+#endif
     t->gcstack = NULL;
     t->excstack = NULL;
     t->ctx.started = 0;
@@ -1595,6 +1605,10 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     jl_atomic_store_relaxed(&ct->tid, ptls->tid);
     ct->threadpoolid = jl_threadpoolid(ptls->tid);
     ct->sticky = 1;
+#ifdef WITH_GC_REGIONS
+    ct->region = 0;
+    ct->sticky_before_region = 0;
+#endif
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task
     ct->reentrant_timing = 0;
@@ -2067,9 +2081,13 @@ JL_DLLEXPORT jl_value_t *jl_new_wait_entry(jl_value_t *task, size_t nslots)
     if (nslots > UINT32_MAX ||
         nslots > (SIZE_MAX - sizeof(jl_wait_entry_t)) / sizeof(jl_wait_slot_t))
         jl_error("WaitEntryN: too many slots");
+    // A wait entry is linked from the task, a region-0 object: it is made in
+    // region 0 whatever GC region window the task holds (gc-regions.h).
+    int parked_region = jl_gc_region_suspend();
     jl_wait_entry_t *w = (jl_wait_entry_t*)jl_gc_alloc(
         ct->ptls, sizeof(jl_wait_entry_t) + nslots * sizeof(jl_wait_slot_t),
         jl_wait_entry_type);
+    jl_gc_region_resume(parked_region);
     jl_set_typetagof(w, jl_wait_entry_tag, 0);
     jl_atomic_store_relaxed(&w->task, task);
     w->nslots = (uint32_t)nslots;

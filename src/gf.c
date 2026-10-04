@@ -12,6 +12,7 @@
 #include <string.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "gc-regions.h"
 #ifndef _OS_WINDOWS_
 #include <unistd.h>
 #endif
@@ -424,7 +425,12 @@ static jl_code_instance_t *jl_method_inferred_with_abi(jl_method_instance_t *mi 
 // returns the inferred source, and may cache the result in mi
 // if successful, also updates the mi argument to describe the validity of this src
 // if inference doesn't occur (or can't finish), returns NULL instead
+#ifdef WITH_GC_REGIONS
+// The body runs in a region-0 zone (gc-regions.h): the wrapper at the end of the file.
+static jl_code_instance_t *jl_type_infer_impl(jl_method_instance_t *mi, size_t world, uint8_t source_mode, uint8_t trim_mode) JL_CANSAFEPOINT
+#else
 jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_t source_mode, uint8_t trim_mode)
+#endif
 {
     if (jl_typeinf_func == NULL)
         return NULL;
@@ -3488,6 +3494,8 @@ static void JL_NORETURN jl_method_error_bare(jl_value_t *f, jl_value_t *args, si
             size_t world;
         } *pe = (struct jl_method_error*)e,
            ee = {f, args, world};
+        jl_gc_wb_fresh(e, &pe->f, f);
+        jl_gc_wb_fresh(e, &pe->args, args);
         *pe = ee;
         jl_throw(e);
     }
@@ -3969,7 +3977,27 @@ static jl_value_t *normalize_to_cacheable_sig(jl_method_instance_t *mi JL_PROPAG
     return mi2->specTypes;
 }
 
+#ifdef WITH_GC_REGIONS
+// Compilation allocates runtime state that outlives any GC region window
+// of the caller: the body runs in a region-0 zone (gc-regions.h).
+static jl_code_instance_t *jl_compile_method_very_internal_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world,
+    jl_value_t *F, jl_value_t **args, uint32_t nargs,
+    enum internal_compilation_triggers cause) JL_CANSAFEPOINT;
+
 static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world,
+    jl_value_t *F, jl_value_t **args, uint32_t nargs,
+    enum internal_compilation_triggers cause) JL_CANSAFEPOINT
+{
+    int saved = jl_gc_region_zone_enter();
+    jl_code_instance_t *ci = jl_compile_method_very_internal_impl(mi, world, F, args, nargs, cause);
+    jl_gc_region_zone_leave(saved);
+    return ci;
+}
+
+static jl_code_instance_t *jl_compile_method_very_internal_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world,
+#else
+static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world,
+#endif
     jl_value_t *F, jl_value_t **args, uint32_t nargs,
     enum internal_compilation_triggers cause) JL_CANSAFEPOINT
 {
@@ -4731,6 +4759,9 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
     int i;
     jl_tupletype_t *tt = NULL;
     int64_t last_alloc = 0;
+#ifdef WITH_GC_REGIONS
+    int saved_region = 0;
+#endif
     // check each cache entry to see if it matches
     //#pragma unroll
     //for (i = 0; i < 4; i++) {
@@ -4752,6 +4783,11 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
 #undef LOOP_BODY
     i = 4;
     if (i == 4) {
+#ifdef WITH_GC_REGIONS
+        // The lookup past the associative cache allocates runtime state (a
+        // tuple type, a specialization): a region-0 zone (gc-regions.h).
+        saved_region = jl_gc_region_zone_enter();
+#endif
         // if no method was found in the associative cache, check the full cache
         JL_TIMING(METHOD_LOOKUP_FAST, METHOD_LOOKUP_FAST);
         jl_methcache_t *mc = jl_method_table->cache;
@@ -4822,6 +4858,9 @@ have_entry:
             record_dispatch_statement_on_first_dispatch(mfunc);
         }
     }
+#ifdef WITH_GC_REGIONS
+    jl_gc_region_zone_leave(saved_region);
+#endif
 
 #ifdef JL_TRACE
     if (traceen && for_call)
@@ -5860,5 +5899,16 @@ JL_DLLEXPORT void jl_drop_all_caches(void)
 
 
 #ifdef __cplusplus
+}
+#endif
+
+#ifdef WITH_GC_REGIONS
+// The region-0 zone around inference (see jl_compile_method_very_internal).
+jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_t source_mode, uint8_t trim_mode)
+{
+    int saved = jl_gc_region_zone_enter();
+    jl_code_instance_t *ci = jl_type_infer_impl(mi, world, source_mode, trim_mode);
+    jl_gc_region_zone_leave(saved);
+    return ci;
 }
 #endif

@@ -111,6 +111,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_string_to_genericmemory(jl_value_t *str) JL_
     jl_genericmemory_t *m = (jl_genericmemory_t*)jl_gc_alloc(ct->ptls, tsz, jl_memory_uint8_type);
     m->length = jl_string_len(str);
     m->ptr = jl_string_data(str);
+    jl_gc_wb_fresh(m, &jl_genericmemory_data_owner_field(m), str);
     jl_genericmemory_data_owner_field(m) = str;
     return m;
 }
@@ -275,10 +276,24 @@ JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t 
         memcpy(new_mem->ptr, (char*)mem->ptr + (size_t)data * elsz, len * elsz);
         memcpy(jl_genericmemory_typetagdata(new_mem), jl_genericmemory_typetagdata(mem) + (size_t)data, len);
     }
+#ifdef WITH_GC_REGIONS
+    // The elements of a boxed memory are the references, and its layout
+    // lists no pointer field: the region check of the copy, as a bulk copy.
+    else if (layout->flags.arrayelem_isboxed) {
+        if (data != NULL) {
+            jl_gc_region_wb_copy_boxed_check(new_mem, mem, (_Atomic(void*)*)data, len);
+            memcpy(new_mem->ptr, data, len * elsz);
+        }
+    }
+#endif
     else if (layout->first_ptr != -1) {
         if (data == NULL) {
             assert(len * elsz / sizeof(void*) == 0); // make static analyzer happy
         }
+#ifdef WITH_GC_REGIONS
+        jl_gc_region_wb_copy_inline_check(new_mem, mem, (const char*)data, len, elsz,
+                                          (jl_datatype_t*)jl_tparam1(mtype));
+#endif
         memmove_refs((_Atomic(void*)*)new_mem->ptr, (_Atomic(void*)*)data, len * elsz / sizeof(void*));
     }
     else if (data != NULL) {
@@ -303,6 +318,7 @@ jl_genericmemoryref_t *jl_new_memoryref(jl_value_t *typ, jl_genericmemory_t *mem
 {
     jl_task_t *ct = jl_current_task;
     jl_genericmemoryref_t *m = (jl_genericmemoryref_t*)jl_gc_alloc(ct->ptls, sizeof(jl_genericmemoryref_t), typ);
+    jl_gc_wb_fresh(m, &m->mem, mem);
     m->mem = mem;
     m->ptr_or_offset = data;
     return m;
@@ -369,6 +385,7 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefget(jl_genericmemoryref_t m, int isatomic)
         jl_lock_field((jl_mutex_t*)data);
         memcpy((char*)r, data + LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT), fsz);
         jl_unlock_field((jl_mutex_t*)data);
+        jl_gc_multi_wb_fresh(r, r, (jl_datatype_t*)eltype);
     }
     else {
         // TODO: a finalizer here could make the isunion case not quite right
