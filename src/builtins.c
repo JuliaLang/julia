@@ -2348,6 +2348,60 @@ JL_CALLABLE(jl_f_const_memoryrefget)
     return jl_f_memoryrefget(F, args, nargs);
 }
 
+static char *unsafe_memoryref_ptr(jl_genericmemoryref_t *ref, intptr_t offset,
+                                 size_t size, int boundscheck) JL_CANSAFEPOINT
+{
+    jl_datatype_t *mty = (jl_datatype_t*)jl_typetagof(ref->mem);
+    jl_value_t *addrspace = jl_tparam2(mty);
+    if (jl_tparam0(mty) != (jl_value_t*)jl_not_atomic_sym ||
+        !jl_is_addrspacecore(addrspace) || jl_unbox_uint8(addrspace) != 0 ||
+        !jl_isbits(jl_tparam1(mty)) || mty->layout->size == 0)
+        jl_error("memoryref byte access requires non-atomic CPU memory with nonzero-size isbits elements");
+    if (boundscheck) {
+        size_t len = mty->layout->size * ref->mem->length;
+        size_t pos = (uintptr_t)ref->ptr_or_offset - (uintptr_t)ref->mem->ptr;
+        size_t start = pos + (size_t)offset;
+        if (pos > len || size > len || start > len - size)
+            jl_bounds_error_int((jl_value_t*)ref, offset);
+    }
+    return (char*)ref->ptr_or_offset + offset;
+}
+
+JL_CALLABLE(jl_f_unsafe_memoryrefload)
+{
+    JL_NARGS(unsafe_memoryrefload, 4, 4);
+    JL_TYPECHK(unsafe_memoryrefload, genericmemoryref, args[0]);
+    JL_TYPECHK(unsafe_memoryrefload, long, args[2]);
+    JL_TYPECHK(unsafe_memoryrefload, bool, args[3]);
+    jl_genericmemoryref_t *ref = (jl_genericmemoryref_t*)args[0];
+    if (!jl_isbits(args[1]))
+        jl_error("unsafe_memoryrefload: target type must be an isbits type");
+    size_t size = jl_datatype_size((jl_datatype_t*)args[1]);
+    char *ptr = unsafe_memoryref_ptr(ref, jl_unbox_long(args[2]), size, args[3] == jl_true);
+    if (size <= 16) {
+        JL_ALIGNED_ATTR(16) char data[16];
+        memcpy(data, ptr, size);
+        return jl_new_bits(args[1], data);
+    }
+    return jl_new_bits(args[1], ptr);
+}
+
+JL_CALLABLE(jl_f_unsafe_memoryrefstore)
+{
+    JL_NARGS(unsafe_memoryrefstore!, 4, 4);
+    JL_TYPECHK(unsafe_memoryrefstore!, genericmemoryref, args[0]);
+    JL_TYPECHK(unsafe_memoryrefstore!, long, args[2]);
+    JL_TYPECHK(unsafe_memoryrefstore!, bool, args[3]);
+    jl_genericmemoryref_t *ref = (jl_genericmemoryref_t*)args[0];
+    jl_value_t *typ = jl_typeof(args[1]);
+    if (!jl_isbits(typ))
+        jl_error("unsafe_memoryrefstore!: value must have an isbits type");
+    size_t size = jl_datatype_size(typ);
+    char *ptr = unsafe_memoryref_ptr(ref, jl_unbox_long(args[2]), size, args[3] == jl_true);
+    memcpy(ptr, jl_data_ptr(args[1]), size);
+    return args[1];
+}
+
 JL_CALLABLE(jl_f_memoryrefset)
 {
     enum jl_memory_order order = jl_memory_order_notatomic;

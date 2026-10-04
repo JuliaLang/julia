@@ -794,6 +794,25 @@ let tt = (MemoryRef{Any},Any,Symbol,Bool)
         @test Compiler.is_terminates(effects)
     end
 end
+
+# Byte accesses retain argument-memory effects and account for bounds checks.
+@testset "MemoryRef byte access effects" begin
+    geteffects = Base.infer_effects((MemoryRef{UInt8}, Int)) do ref, offset
+        Core.unsafe_memoryrefload(ref, UInt32, offset, true)
+    end
+    seteffects = Base.infer_effects((MemoryRef{UInt8}, UInt32, Int)) do ref, value, offset
+        Core.unsafe_memoryrefstore!(ref, value, offset, true)
+    end
+    for effects in (geteffects, seteffects)
+        @test Compiler.is_consistent_if_inaccessiblememonly(effects)
+        @test Compiler.is_inaccessiblemem_or_argmemonly(effects)
+        @test !Compiler.is_nothrow(effects)
+        @test Compiler.is_noub(effects)
+    end
+    @test Compiler.is_effect_free(geteffects)
+    @test Compiler.is_effect_free_if_inaccessiblememonly(seteffects)
+end
+
 # nothrow for arrayset
 @test Base.infer_effects((MemoryRef{Int},Int)) do a, v
     Core.memoryrefset!(a, v, :not_atomic, true)
