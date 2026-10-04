@@ -262,26 +262,26 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`,
     end
     real_threads = string(ccall(:jl_cpu_threads, Int32, ()))
     for nc in ("0", "-2", "x", "2x", " ", "")
-        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc, "HOME" => homedir()))
+        v = readchomperrors(addenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc))
         @test v == (true, real_threads,
             "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $real_threads.")
     end
     for nc in ("1", " 1 ", " +1 ", " 0x1 ")
-        @testset let v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc, "HOME" => homedir()))
+        @testset let v = readchomperrors(addenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc))
             @test v[1]
             @test v[2] == "1"
             @test isempty(v[3])
         end
     end
 
-    @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options", "HOME" => homedir()))
+    @testset let v = readchomperrors(addenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options"))
         @test v[1]
         @test contains(v[2], r"print-options + = 1")
         @test contains(v[2], r"combiner-store-merge-dependence-limit + = 4")
         @test contains(v[2], r"enable-tail-merge + = 2")
         @test isempty(v[3])
     end
-    @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -combiner-store-merge-dependence-limit=6", "HOME" => homedir()))
+    @testset let v = readchomperrors(addenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -combiner-store-merge-dependence-limit=6"))
         @test v[1]
         @test contains(v[2], r"print-options + = 1")
         @test contains(v[2], r"combiner-store-merge-dependence-limit + = 6")
@@ -289,7 +289,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`,
         @test isempty(v[3])
     end
     if Base.libllvm_version < v"15" #LLVM over 15 doesn't care for multiple options
-        @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -enable-tail-merge=1", "HOME" => homedir()))
+        @testset let v = readchomperrors(addenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -enable-tail-merge=1"))
             @test !v[1]
             @test isempty(v[2])
             @test v[3] == "julia: for the --enable-tail-merge option: may only occur zero or one times!"
@@ -300,7 +300,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`,
             tracefile = joinpath(dir, "test_trace.json")
             # Use forward slashes on Windows to avoid LLVM command line parser issues with backslashes
             tracefile_arg = Sys.iswindows() ? replace(tracefile, "\\" => "/") : tracefile
-            v = readchomperrors(setenv(`$exename -e "1+1"`, "JULIA_LLVM_ARGS" => "-time-trace -time-trace-file=$tracefile_arg", "HOME" => homedir()))
+            v = readchomperrors(addenv(`$exename -e "1+1"`, "JULIA_LLVM_ARGS" => "-time-trace -time-trace-file=$tracefile_arg"))
             @test v[1]
             @test isfile(tracefile)
             content = read(tracefile, String)
@@ -331,7 +331,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         let expanded = abspath(expanduser("~/foo/Project.toml"))
             @test expanded == readchomp(`$exename --project='~/foo' -e 'println(Base.active_project())'`)
             @test expanded == readchomp(`$exename -P '~/foo' -e 'println(Base.active_project())'`)
-            @test expanded == readchomp(setenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "~/foo", "HOME" => homedir()))
+            @test expanded == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "~/foo"))
         end
     end
 
@@ -1900,7 +1900,7 @@ end
 # test --bug-report=rr
 if Sys.islinux() && Sys.ARCH in (:i686, :x86_64) # rr is only available on these platforms
     mktempdir() do temp_trace_dir
-        cmd = setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
+        cmd = addenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
                      "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
                      "_RR_TRACE_DIR" => temp_trace_dir)
         success, out, err = readchomperrors(cmd)
@@ -2113,4 +2113,4 @@ let n = 6000
 end
 
 # https://github.com/JuliaLang/julia/issues/59103
-@test test_read_success(setenv(`$(Base.julia_cmd()) -g2 -e 'println("done")'`, "ENABLE_GDBLISTENER" => "1")) == "done"
+@test test_read_success(addenv(`$(Base.julia_cmd()) -g2 -e 'println("done")'`, "ENABLE_GDBLISTENER" => "1")) == "done"
