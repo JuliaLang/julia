@@ -315,6 +315,50 @@ void example() {
 }
 ```
 
+### `JL_GC_TRACKED_TYPE`
+
+Marks a type whose values the analyzer tracks for rooting, exactly as it tracks a
+`jl_value_t*`. Julia's GC-managed object types all carry this annotation, as do a
+few stack structures that are treated as roots. A type is recognised by the
+annotation alone, so code embedding Julia can mark its own object types the same
+way.
+
+For a `struct` or C++ `class`, put the annotation on every declaration of it,
+forward declarations included, so that a file sees it whichever declarations it
+includes. This also covers pointers to the type, including those declared
+through typedef aliases:
+
+```c
+struct JL_GC_TRACKED_TYPE MyObject;
+typedef struct MyObject *MyValue;   // tracked
+typedef MyValue MyValueAlias;       // also tracked
+
+extern MyValue my_alloc(void);
+extern void my_use(MyValue v);
+
+void example() {
+  MyValue v = my_alloc();
+  JL_GC_PUSH1(&v);
+  my_use(v);
+  JL_GC_POP();
+}
+```
+
+For memory that has no struct or class type, such as a raw buffer, annotate an
+opaque struct, as Julia does for `jl_gc_tracked_buffer_t`:
+
+```c
+typedef struct JL_GC_TRACKED_TYPE MyBuffer MyBuffer;
+```
+
+An annotation on a typedef that is not a pointer type also works, e.g.
+`typedef void MyBuffer JL_GC_TRACKED_TYPE;`.
+
+Misplaced annotations are reported: by the analyzer where the annotation would
+have no effect, such as on a pointer typedef like `MyValue` above, and by the
+`julia-first-decl-annotations` clang-tidy check where a declaration of the type
+lacks it.
+
 ## Completeness of analysis
 
 The analyzer only looks at local information. In particular, e.g. in the `PROPAGATES_ROOT` case

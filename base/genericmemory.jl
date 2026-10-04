@@ -263,11 +263,8 @@ function copy(a::T) where {T<:Memory}
 end
 
 copyto!(dest::Memory, src::Memory) = copyto!(dest, 1, src, 1, length(src))
-function copyto!(dest::Memory, doffs::Integer, src::Memory, soffs::Integer, n::Integer)
-    n < 0 && _throw_argerror("Number of elements to copy must be non-negative.")
-    unsafe_copyto!(dest, doffs, src, soffs, n)
-    return dest
-end
+copyto!(dest::Memory, doffs::Integer, src::Memory, soffs::Integer, n::Integer) =
+    _copyto_impl!(dest, doffs, src, soffs, n)
 
 
 ## Constructors ##
@@ -350,7 +347,7 @@ function setindex!(A::Memory{T}, X::Memory{T}, I::AbstractUnitRange{Int}) where 
     @inline
     @boundscheck checkbounds(A, I)
     lI = length(I)
-    @boundscheck setindex_shape_check(X, lI)
+    setindex_shape_check(X, lI)
     if lI > 0
         unsafe_copyto!(A, first(I), X, 1, lI)
     end
@@ -359,7 +356,7 @@ end
 function setindex!(A::Memory{T}, X::Memory{T}, c::Colon) where T
     @inline
     lI = length(A)
-    @boundscheck setindex_shape_check(X, lI)
+    setindex_shape_check(X, lI)
     if lI > 0
         unsafe_copyto!(A, 1, X, 1, lI)
     end

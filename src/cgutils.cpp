@@ -583,7 +583,11 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
         return result;
     }
     if (!inlined && x.ispointer()) {
-        assert(x.V);
+        if (x.V == nullptr) {
+            // a union of ghost types has a tag but no data to root
+            assert(x.TIndex);
+            return {};
+        }
         assert(x.V->getType()->getPointerAddressSpace() != AddressSpace::Tracked);
         return {x.V};
     }
@@ -740,6 +744,17 @@ static Type *julia_primitive_storage_type(Type *register_type)
     if (storage_bits == IT->getBitWidth())
         return register_type;
     return IntegerType::get(IT->getContext(), storage_bits);
+}
+
+// The width `jt` occupies in memory. A primitive type's size is its value bytes
+// rounded up to a multiple of its alignment, so an odd-bit integer is reached with
+// one power-of-two access rather than several.
+static Type *julia_memory_access_type(Type *register_type, jl_value_t *jt)
+{
+    if (jl_is_primitivetype(jt) && register_type->isIntegerTy() &&
+            cast<IntegerType>(register_type)->getBitWidth() == jl_datatype_nbits((jl_datatype_t*)jt))
+        return Type::getIntNTy(register_type->getContext(), 8 * jl_datatype_size(jt));
+    return zext_struct_type(register_type);
 }
 
 static inline void maybe_mark_argument_dereferenceable(AttrBuilder &B, jl_value_t *jt) JL_CANSAFEPOINT
@@ -1740,20 +1755,6 @@ static Value *emit_sizeof(jl_codectx_t &ctx, const jl_cgval_t &p)
 }
 */
 
-static Value *emit_datatype_mutabl(jl_codectx_t &ctx, Value *dt)
-{
-    jl_aliasinfo_t ai = ctx.alias().constant;
-    Value *Ptr = decay_derived(ctx, dt);
-    Value *Idx = ConstantInt::get(ctx.types().T_size, offsetof(jl_datatype_t, name));
-    Value *Nam = ai.decorateInst(
-            ctx.builder.CreateAlignedLoad(getPointerTy(ctx.builder.getContext()), ctx.builder.CreateInBoundsGEP(getPointerTy(ctx.builder.getContext()), Ptr, Idx), Align(sizeof(int8_t*))));
-    Value *Idx2 = ConstantInt::get(ctx.types().T_size, offsetof(jl_typename_t, n_uninitialized) + sizeof(((jl_typename_t*)nullptr)->n_uninitialized));
-    Value *mutabl = ai.decorateInst(
-            ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), Nam, Idx2), Align(1)));
-    mutabl = ctx.builder.CreateLShr(mutabl, 1);
-    return ctx.builder.CreateTrunc(mutabl, getInt1Ty(ctx.builder.getContext()));
-}
-
 static Value *emit_datatype_isprimitivetype(jl_codectx_t &ctx, Value *typ)
 {
     Value *isprimitive;
@@ -2563,7 +2564,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     if (idx_0based)
         ptr = ctx.builder.CreateInBoundsGEP(elty, ptr, idx_0based);
     unsigned nb = isboxed ? sizeof(void*) : jl_datatype_size(jltype);
-    // note that nb == jl_Module->getDataLayout().getTypeAllocSize(elty) or getTypeStoreSize, depending on whether it is a struct or primitive type
+    // note that nb == jl_Module->getDataLayout().getTypeAllocSize(elty)
     AllocaInst *intcast = NULL;
     if (Order == AtomicOrdering::NotAtomic && !isboxed && !aliasscope && elty->isAggregateType() && !jl_is_genericmemoryref_type(jltype)) {
         // use split_value to do this load
@@ -2575,10 +2576,10 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         return mark_julia_slot(val, jltype, NULL, result_ai, std::move(roots));
     }
     Type *realelty = elty;
-    // The GEP above indexes by the allocation size, but the memory access
-    // itself uses the byte-rounded storage width.
+    // The GEP above indexes by the allocation size; the access itself covers the
+    // whole element, which for a primitive type is wider than its register type.
     if (Order == AtomicOrdering::NotAtomic) {
-        elty = zext_struct_type(elty);
+        elty = julia_memory_access_type(elty, jltype);
     }
     else {
         if (!isboxed && !elty->isIntOrPtrTy()) {
@@ -2765,10 +2766,9 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             }
         }
         realelty = elty;
-        // Memory accesses use the byte-rounded storage width; realelty stays
-        // the register width.
+        // Memory accesses cover the whole element; realelty stays the register width.
         if (Order == AtomicOrdering::NotAtomic)
-            elty = zext_struct_type(elty);
+            elty = julia_memory_access_type(elty, jltype);
         else if (isa<IntegerType>(elty)) {
             unsigned nb2 = PowerOf2Ceil(nb);
             unsigned bitwidth = cast<IntegerType>(elty)->getBitWidth();
@@ -2784,7 +2784,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 emit_unbox_store(ctx, rhs, intcast, ctx.alias().stack, MaybeAlign(), intcast->getAlign());
                 r = ctx.builder.CreateLoad(realelty, intcast);
             }
-            else if (aliasscope || Order != AtomicOrdering::NotAtomic || (tracked_pointers && rhs.inline_roots.empty())) {
+            else if (aliasscope || Order != AtomicOrdering::NotAtomic || (tracked_pointers && rhs.inline_roots.empty())
+                     || (realelty != elty && elty->isIntegerTy())) {
                 r = emit_unbox(ctx, realelty, rhs);
             }
             // If r is unset, the value is stored by emit_unbox_store instead,
@@ -3050,7 +3051,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                     if (!tracked_pointers) // oldval is a slot, so put the oldval back
                         ctx.builder.CreateStore(realCompare, intcast);
                 }
-                else if (Order != AtomicOrdering::NotAtomic || (tracked_pointers && rhs.inline_roots.empty())) {
+                else if (Order != AtomicOrdering::NotAtomic || (tracked_pointers && rhs.inline_roots.empty())
+                         || (realelty != elty && elty->isIntegerTy())) {
                     r = emit_unbox(ctx, realelty, rhs);
                 }
                 if (r && realelty != elty)
@@ -3845,8 +3847,12 @@ static jl_value_t *static_constant_instance(const llvm::DataLayout &DL, Constant
     if (ConstantInt *cint = dyn_cast<ConstantInt>(constant)) {
         if (jst == jl_bool_type)
             return cint->isZero() ? jl_false : jl_true;
-        return jl_new_bits(jt,
-            const_cast<uint64_t *>(cint->getValue().getRawData()));
+        // `jl_new_bits` reads all of `sizeof`, which can exceed the words of the APInt
+        const APInt &val = cint->getValue();
+        size_t nb = jl_datatype_size(jst);
+        SmallVector<uint64_t, 4> data(alignTo(nb, sizeof(uint64_t)) / sizeof(uint64_t), 0);
+        memcpy(data.data(), val.getRawData(), std::min<size_t>(nb, val.getNumWords() * sizeof(uint64_t)));
+        return jl_new_bits(jt, data.data());
     }
 
     if (ConstantFP *cfp = dyn_cast<ConstantFP>(constant)) {

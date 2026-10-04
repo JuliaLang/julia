@@ -211,6 +211,22 @@ timesofar("promotions")
         @test Base.num_bit_chunks(typemax(Int)) == div(typemax(Int), 64) + 1
         overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
         @test_throws ArgumentError reshape(trues(2), 3, overflow_dim)
+
+        b1 = bitrand(v1)
+        @test_throws BoundsError resize!(b1, -1; first=true)
+        b2 = copy(b1)
+        @test resize!(b1, v1+100; first=true)[end-v1+1:end] == b2
+        @test resize!(b1, v1+200)[end-100-v1+1:end-100] == b2
+
+        b1 = bitrand(128)
+        b2 = copy(b1)
+        @test resize!(b1, 256; first=true)[end-128+1:end] == b2
+        b2 = copy(b1)
+        @test resize!(b1, 300; first=true)[end-256+1:end] == b2
+        b2 = copy(b1)
+        @test resize!(b1, 340; first=true)[end-300+1:end] == b2
+        b2 = copy(b1)
+        @test resize!(b1, 404; first=true)[end-340+1:end] == b2
     end
 
     @testset "sizeof (issue #7515)" begin
@@ -600,6 +616,13 @@ timesofar("constructors")
         @check_bit_operation setindex!(b1, b2, 1:m1, t2)       BitMatrix
         @check_bit_operation setindex!(b1, b2, n1-m1+1:n1, t2) BitMatrix
         @check_bit_operation setindex!(b1, b2, k1, t2)         BitMatrix
+    end
+
+    @testset "logical setindex! with an empty Cartesian-indexed value" begin
+        b = falses(4)
+        @test_throws DimensionMismatch b[BitVector([1, 1, 1, 0])] = PermutedDimsArray(Array{Bool}(undef, 2, 0), (2, 1))
+        e = falses(1, 2, 1, 0)
+        @test setindex!(e, view(zeros(3, 3, 3), 2:1, 2:2, 2:2), falses(1, 2, 1, 0)) === e
     end
 end
 

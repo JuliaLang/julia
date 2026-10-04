@@ -6094,11 +6094,20 @@ end
 
 # Test that a function-wise `@max_methods` works as expected
 Base.Experimental.@max_methods 1 function f_max_methods end
-f_max_methods(x::Int) = 1
-f_max_methods(x::Float64) = 2
+f_max_methods(x::Int; k=1) = 1
+f_max_methods(x::Float64; k=1) = 2
+f_max_methods(x; k=1) = 3
 g_max_methods(x) = f_max_methods(x)
-@test only(Base.return_types(g_max_methods, Tuple{Int})) === Int
-@test only(Base.return_types(g_max_methods, Tuple{Any})) === Any
+@test Base.infer_return_type(g_max_methods, Tuple{Int}) === Int
+@test Base.infer_return_type(g_max_methods, Tuple{Any}) === Any
+@test Base.infer_return_type(x -> f_max_methods(x...), Tuple{Tuple{Int}}) === Int
+@test Base.infer_return_type(x -> f_max_methods(x...), Tuple{Tuple{Any}}) === Any
+@test Base.infer_return_type(x -> f_max_methods(x; k=2), Tuple{Int}) === Int
+@test Base.infer_return_type(x -> f_max_methods(x; k=2), Tuple{Any}) === Any
+@test Base.infer_return_type(x -> applicable(f_max_methods, x) ? 1 : nothing, Tuple{Int}) === Int
+@test Base.infer_return_type(x -> applicable(f_max_methods, x) ? 1 : nothing, Tuple{Any}) === Union{Nothing,Int}
+@test Base.infer_return_type(x -> applicable(f_max_methods, x; k=2) ? 1 : nothing, Tuple{Int}) === Int
+@test Base.infer_return_type(x -> applicable(f_max_methods, x; k=2) ? 1 : nothing, Tuple{Any}) === Union{Nothing,Int}
 
 # Test that `Core.TypeName.concrete_only` makes inference give up at call sites with
 # non-concrete argument types while keeping concrete call sites precise
@@ -7114,6 +7123,60 @@ struct NewExctInference
 end
 @test Base.infer_exception_type(NewExctInference, (Float64,)) == TypeError
 
+# exception types of atomic intrinsics (#63357)
+function atomic_load_invalid_order(p::Ptr{Int})
+    try
+        unsafe_load(p, :release)
+        return false
+    catch e
+        return e isa ConcurrencyViolationError
+    end
+end
+function atomic_fence_invalid_order()
+    try
+        Core.Intrinsics.atomic_fence(:unordered, :system)
+        return nothing
+    catch e
+        return e
+    end
+end
+@testset "exception types of atomic intrinsics" begin
+    buf = Int[0]
+    @test GC.@preserve buf atomic_load_invalid_order(pointer(buf))
+    @test Base.infer_return_type(atomic_fence_invalid_order, ()) >: ConcurrencyViolationError
+    @test atomic_fence_invalid_order() isa ConcurrencyViolationError
+
+    # the inferred exception type must cover what is thrown at run time, and only widen
+    # to `Any` when the call involves arbitrary code
+    U = Union{ConcurrencyViolationError, TypeError, ErrorException}
+    for (f, E, maxexct) in Any[
+            (p -> unsafe_load(p, :release), ConcurrencyViolationError, U),
+            (p -> unsafe_load(p, Base.inferencebarrier(:release)::Symbol), ConcurrencyViolationError, Any),
+            (p -> unsafe_store!(p, 1, :acquire), ConcurrencyViolationError, U),
+            (p -> unsafe_swap!(p, 1, :unordered), ConcurrencyViolationError, U),
+            (p -> unsafe_modify!(p, +, 1, :unordered), ConcurrencyViolationError, Any),
+            (p -> unsafe_replace!(p, 0, 1, :sequentially_consistent, :release), ConcurrencyViolationError, U),
+            (p -> unsafe_replace!(p, 0, 1, :monotonic, :acquire), ConcurrencyViolationError, U),
+            (p -> Core.Intrinsics.atomic_fence(:unordered, :system), ConcurrencyViolationError, U),
+            (p -> Core.Intrinsics.atomic_fence(:acquire, :invalid), ErrorException, U),
+            (p -> Core.Intrinsics.atomic_pointerref(p, 1), TypeError, U),
+            (p -> Core.Intrinsics.atomic_pointerset(p, 1.0, :release), TypeError, U),
+            (p -> unsafe_load(Ptr{NTuple{3,UInt8}}(p), :acquire), ErrorException, U)]
+        exct = Base.infer_exception_type(f, (Ptr{Int},))
+        @test E <: exct <: maxexct
+        ex = try
+            GC.@preserve buf f(pointer(buf))
+            nothing
+        catch e
+            e
+        end
+        @test ex isa E
+        @test ex isa exct
+    end
+    @test Compiler.builtin_exct(Compiler.SimpleInferenceLattice.instance,
+        Core.Intrinsics.atomic_pointermodify, Any[Ptr{Int}, typeof(+), Int, Symbol], Pair{Int,Int}) === Any
+end
+
 # semi-concrete interpretation accuracy
 # https://github.com/JuliaLang/julia/issues/50037
 @inline countvars50037(bitflags::Int, var::Int) = bitflags >> 0
@@ -8108,6 +8171,8 @@ f60252(f, nt::NamedTuple) = NamedTuple{keys(nt)}(f(v) for v in values(nt))
 @inferred f60252(identity, (a=1, b=2))
 f60252_2(t::Tuple) = NamedTuple{(:a, :b), typeof(t)}(t)
 @test Base.infer_return_type(f60252_2, (Tuple{Vararg{Int64}},)) == @NamedTuple{a::Int64, b::Int64}
+f60252_3(::Type{T}) where {T<:Tuple{Any}} = NamedTuple{(), T}(())
+@test Base.infer_return_type(f60252_3, (Type{T} where T<:Tuple{Any},)) === Union{}
 
 # perform post const-prop' concrete evaluation when effects are further improved by const-prop'
 @noinline function concrete_eval_eligible_if_false(x::Float64, n::Int, y::Bool)
@@ -8241,5 +8306,34 @@ invoke_covered(x::Int) = invoke(invoke_narrower_target, Tuple{Integer}, x)
     @test Compiler.is_nothrow(Base.infer_effects(invoke_covered, (Int,)))
     @test fully_eliminated(invoke_covered, (Int,); retval=1)
 end
+
+# JuliaLang/julia#63351: merging vararg-tuple `PartialStruct`s must keep the trailing `Vararg`
+issue63351(c, xs) = c ? (1, :a, xs...) : (2, :a, xs...)
+@testset "tmerge of vararg-tuple `PartialStruct`s" begin
+    @test Base.infer_return_type(issue63351, (Bool, Vector{Any})) == Tuple{Int, Symbol, Vararg{Any}}
+    @test issue63351(true, Any[3]) === (1, :a, 3)
+end
+
+# irinterp must visit every reachable block even when block numbers are not in
+# topological order: once constant folding kills the fall-through path into a join
+# block, that block may be reachable only through a jump from a higher-numbered block (#63136)
+struct IRInterpScanDual{V}
+    value::V
+    partial::V
+end
+Base.one(x::IRInterpScanDual{V}) where {V} = IRInterpScanDual(one(V), zero(V))
+Base.:*(x::IRInterpScanDual, y::IRInterpScanDual) = IRInterpScanDual(x.value*y.value, x.partial*y.value + y.partial*x.value)
+Base.:*(x::IRInterpScanDual, y::Int) = IRInterpScanDual(x.value*y, x.partial*y)
+@inline function Base.:^(x::IRInterpScanDual, y::Int)
+    v = x.value
+    p = (y == 0 || x.partial == 0) ? x.partial * 0 : x.partial * y * v^(y-1)
+    return IRInterpScanDual(v^y, p)
+end
+@inline irinterp_scan_derivative(f, x) = f(IRInterpScanDual(x, one(x))).partial
+irinterp_scan_square(t) = t^2
+irinterp_scan_d1(t) = irinterp_scan_derivative(irinterp_scan_square, t)
+irinterp_scan_d2(t) = irinterp_scan_derivative(irinterp_scan_d1, t)
+@test Base.infer_return_type(irinterp_scan_d2, (Int,)) === Int
+@test irinterp_scan_d2(2) == 2
 
 end # module inference

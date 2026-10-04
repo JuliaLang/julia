@@ -203,12 +203,13 @@ JL_DLLEXPORT int32_t jl_get_default_nans(void) JL_NOTSAFEPOINT;
 /**
  * System image contents.
  *
- * These symbols are typically dummy values, unless statically linking
- * libjulia-* and the sysimage together (see null_sysimage.c), in which
- * case they allow accessing the local copy of the sysimage.
+ * Defined by the sysimage and only referenced when it is statically linked
+ * with libjulia-internal (JL_LIBRARY_STATIC); see get_image_buf in staticdata.c.
  **/
 typedef void (JL_NOTSAFEPOINT *jl_image_unpack_func_t)(void *handle, jl_image_buf_t *image);
+#ifdef JL_LIBRARY_STATIC
 extern jl_image_unpack_func_t jl_image_unpack;
+#endif
 
 /**
  * CPU name and feature string for LLVM.

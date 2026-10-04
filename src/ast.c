@@ -28,7 +28,7 @@ static const uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
 };
 
-typedef struct _jl_ast_context_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_ast_context_t {
     fl_context_t fl;
     fltype_t *jvtype;
 
@@ -1219,9 +1219,6 @@ JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
                                   const char *filename, int line, size_t world, bool_t warn)
 {
     jl_value_t *julia_lower = NULL;
-    if (inmodule) {
-        julia_lower = jl_get_global(inmodule, jl_symbol("_internal_julia_lower"));
-    }
     if ((!julia_lower || julia_lower == jl_nothing) && jl_core_module)
         julia_lower = jl_get_global_value(jl_core_module, jl_symbol("_lower"), jl_current_task->world_age);
     if (!julia_lower || julia_lower == jl_nothing) {

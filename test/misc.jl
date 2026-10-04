@@ -1402,16 +1402,16 @@ module KwdefWithEsc
                 $(esc(quote
                     e
                     f = val2
-                    g::Int2
-                    h::Int2 = val2
+                    g::Bool1
+                    h::Bool1 = val2
                 end))
 
                 $(esc(:(i = val2)))
-                $(esc(:(j::Int2)))
-                $(esc(:(k::Int2 = val2)))
+                $(esc(:(j::Bool1)))
+                $(esc(:(k::Bool1 = val2)))
 
-                l::$(esc(:Int2))
-                m::$(esc(:Int2)) = val1
+                l::$(esc(:Bool1))
+                m::$(esc(:Bool1)) = $(esc(:val2))
 
                 n = $(esc(:val2))
                 o::Int1 = $(esc(:val2))
@@ -1427,11 +1427,18 @@ end
 
 module KwdefWithEsc_TestModule
     using ..KwdefWithEsc
-    const Int2 = Int
-    const val2 = 42
+    const Bool1 = Bool
+    const val2 = true
     KwdefWithEsc.@define_struct()
 end
 @test isdefined(KwdefWithEsc_TestModule, :Struct)
+@test fieldnames(KwdefWithEsc_TestModule.Struct) ==
+    (:a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o, :p, :q, :s, :t)
+@test fieldtypes(KwdefWithEsc_TestModule.Struct) ==
+    (Any, Any, Int, Int, Any, Any, Bool, Bool, Any, Bool, Bool, Bool, Bool, Any,
+     Int, Any, Any, Int, Int)
+@test KwdefWithEsc_TestModule.Struct(
+    ; a='a',c=0,e='e',g=true,j=true,l=true,p='p',s=0) isa KwdefWithEsc_TestModule.Struct
 
 @testset "exports of modules" begin
     @testset "$mod" for (_, mod) in Base.loaded_modules

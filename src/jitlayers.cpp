@@ -239,6 +239,7 @@ static std::string make_name_unique(Ts... args) JL_NOTSAFEPOINT
     std::string name;
     raw_string_ostream s{name};
     (s << ... << args);
+    assert(name.empty() || !isDigit(name.back())); // see jl_name_counter_t
     s << global_name_counter.fetch_add(1, memory_order_relaxed);
     return name;
 }
@@ -811,8 +812,9 @@ void JLDebuginfoPlugin::notifyMaterializingWithInfo(
     auto NewObj =
         cantFail(object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef()));
 
+    // n.b. Objects added through the external API have no LinkerInfo.
     SmallVector<std::pair<_Atomic(uint64_t) *, jitlink::Symbol *>, 0> CoverageCounters;
-    if (!LinkerInfo->coverage_counters.empty()) {
+    if (LinkerInfo && !LinkerInfo->coverage_counters.empty()) {
         StringMap<jitlink::Symbol *> DefinedSymbols;
         for (auto *Sym : G.defined_symbols()) {
             if (Sym->hasName())
@@ -2617,7 +2619,12 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
         ++i;
         ++LinkedGlobals;
     }
-    cantFail(JD.define(orc::absoluteSymbols(std::move(GlobalSyms))));
+    // Not cantFail, which only checks in LLVM assertion builds: on a name
+    // collision, code would silently use another global.
+    if (auto Err = JD.define(orc::absoluteSymbols(std::move(GlobalSyms)))) {
+        logAllUnhandledErrors(std::move(Err), errs(), "Failed to define global symbols in JIT: ");
+        abort();
+    }
 
     DebuginfoPlugin->notifyMaterializingWithInfo(MR, G, ObjBuf, std::move(Info));
     return true;
@@ -2710,13 +2717,18 @@ CISymbolPtr *JuliaOJIT::linkCISymbol(jl_code_instance_t *CI)
     SymbolMap Symbols;
     const char *Name = jl_symbol_name(jl_get_ci_mi(CI)->def.method->name);
 
-    auto SpecSym = mangle(Names(jl_symbol_prefix(JL_SYMBOL_SPECPTR_IMG, API), "#", Name));
+    auto SpecSym = mangle(Names(jl_symbol_prefix(JL_SYMBOL_SPECPTR_IMG, API), "#", Name, "#"));
     Symbols[SpecSym] = {ExecutorAddr::fromPtr(SpecPtr), JITSymbolFlags::Exported};
     if (API == JL_INVOKE_SPECSIG) {
-        InvokeSym = mangle(Names(jl_symbol_prefix(JL_SYMBOL_INVOKE_IMG, API), "#", Name));
+        InvokeSym = mangle(Names(jl_symbol_prefix(JL_SYMBOL_INVOKE_IMG, API), "#", Name, "#"));
         Symbols[InvokeSym] = {ExecutorAddr::fromPtr(Invoke), JITSymbolFlags::Exported};
     }
-    cantFail(JD.define(orc::absoluteSymbols(Symbols)));
+    // Not cantFail, which only checks in LLVM assertion builds: on a name
+    // collision, calls would silently be linked to another method.
+    if (auto Err = JD.define(orc::absoluteSymbols(Symbols))) {
+        logAllUnhandledErrors(std::move(Err), errs(), "Failed to define image function symbols in JIT: ");
+        abort();
+    }
 
     auto &CISym = CISymbols[CI] = {API, InvokeSym, SpecSym};
     return &CISym;

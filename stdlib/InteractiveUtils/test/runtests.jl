@@ -262,6 +262,10 @@ end
             @test occursin("Environment:", read(setenv(
                 `$exename -e 'using InteractiveUtils; versioninfo()'`,
                 [home, "JULIA_CPU_THREADS=1"]), String))
+            # when Sys.EFFECTIVE_CPU_THREADS < Sys.CPU_THREADS, both counts are reported
+            @test occursin(r"99999 virtual cores; \d+ effective\)", read(setenv(
+                `$exename -e 'using InteractiveUtils; versioninfo()'`,
+                [home, "JULIA_CPU_THREADS=99999"]), String))
         end
     end
 end
@@ -1076,6 +1080,82 @@ end # module
     @test_nowarn subtypes(Integer);
 end
 
+# PR #45399
+# Values of the arguments of the call that a reflection macro analyzes for `ex`
+function which_call_args(ex)
+    args = Any[]
+    function walk(x)
+        x isa Expr || return
+        if x.head === :call && (x.args[1] == :(Core.Typeof) || x.args[1] === GlobalRef(Core, :Typeof))
+            push!(args, Core.eval(@__MODULE__, x.args[2]))
+        else
+            foreach(walk, x.args)
+        end
+    end
+    walk(macroexpand(@__MODULE__, :(@which $ex)))
+    return args
+end
+
+const hvncat_x, hvncat_y, hvncat_z, hvncat_w = 1, 2.0, 0x3, 4//1
+const hvncat_v = [1, 2]
+
+@testset "hvncat/typed_hvncat" begin
+    # one-dimensional
+    @test which_call_args(:([1;;;])) == [hvncat, 3, 1]
+    @test which_call_args(:([1 ;;;; 3;;;; 9])) == [hvncat, 4, 1, 3, 9]
+    @test which_call_args(:(Int64[1;;;])) == [Base.typed_hvncat, Int64, 3, 1]
+    @test which_call_args(:(Int64[1 ;;;; 3;;;; 9])) == [Base.typed_hvncat, Int64, 4, 1, 3, 9]
+    @test which_call_args(:([string() ;;; string()])) == [hvncat, 3, "", ""]
+
+    # balanced
+    @test which_call_args(:([1 4 ;;; 3 4 ;;; 1 9])) == [hvncat, (1, 2, 3), true, 1, 4, 3, 4, 1, 9]
+    @test which_call_args(:([1 ;; 4 ;;;; 3;; 9])) == [hvncat, (1, 2, 1, 2), false, 1, 4, 3, 9]
+    @test which_call_args(:(Int64[1 4 ;;; 3 4 ;;; 1 9])) == [Base.typed_hvncat, Int64, (1, 2, 3), true, 1, 4, 3, 4, 1, 9]
+    @test which_call_args(:(Int64[1 ;; 4 ;;;; 3;; 9])) == [Base.typed_hvncat, Int64, (1, 2, 1, 2), false, 1, 4, 3, 9]
+
+    # ragged
+    @test which_call_args(:([1 4 ;;; 3 4 ;;;; 4])) ==
+        [hvncat, ((2, 2, 1), (2, 2, 1), (4, 1), (5,)), true, 1, 4, 3, 4, 4]
+    @test which_call_args(:([1; 4 ;;; 3; 4 ;;;; 4])) ==
+        [hvncat, ((2, 2, 1), (2, 2, 1), (4, 1), (5,)), false, 1, 4, 3, 4, 4]
+    @test which_call_args(:([1 2 3 ;;; 4 5; 6 ;;; 7 8; 9])) ==
+        [hvncat, ((3, 2, 1, 2, 1), (3, 3, 3), (9,)), true, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    # row lengths whose deviations from the first row cancel out
+    @test which_call_args(:([1 2; 3; 4 5 6 ;;; 7 8; 9; 10 11 12])) ==
+        [hvncat, ((2, 1, 3, 2, 1, 3), (6, 6), (12,)), true, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    @test which_call_args(:(Int64[1; 2 ;; 3 ;; 4; 5; 6])) ==
+        [Base.typed_hvncat, Int64, ((2, 1, 3), (6,)), false, 1, 2, 3, 4, 5, 6]
+    @test which_call_args(:(Int64[1 4 ;;; 3 4 ;;;; 4])) ==
+        [Base.typed_hvncat, Int64, ((2, 2, 1), (2, 2, 1), (4, 1), (5,)), true, 1, 4, 3, 4, 4]
+    @test which_call_args(:(Int64[1; 4 ;;; 3; 4 ;;;; 4])) ==
+        [Base.typed_hvncat, Int64, ((2, 2, 1), (2, 2, 1), (4, 1), (5,)), false, 1, 4, 3, 4, 4]
+
+    # elements that are not expressions
+    @test which_call_args(:([hvncat_x hvncat_y ;;; hvncat_z hvncat_w])) ==
+        [hvncat, (1, 2, 2), true, hvncat_x, hvncat_y, hvncat_z, hvncat_w]
+    @test which_call_args(:([hvncat_x ;;; hvncat_y])) == [hvncat, 3, hvncat_x, hvncat_y]
+    @test which_call_args(:(["ab" "cd" ;;; "e" "f"])) == [hvncat, (1, 2, 2), true, "ab", "cd", "e", "f"]
+    @test which_call_args(:(["ab" ;;; "cd"])) == [hvncat, 3, "ab", "cd"]
+    @test which_call_args(:([:a ;; :b ;;; :c ;; :d])) == [hvncat, (1, 2, 2), false, :a, :b, :c, :d]
+    @test which_call_args(:([nothing ;;; nothing])) == [hvncat, 3, nothing, nothing]
+
+    # the analyzed call must build the same array as the literal
+    for ex in (:([1 4 ;;; 3 4 ;;; 1 9]), :([1 ;; 4 ;;;; 3;; 9]), :(Int64[1 ;; 4 ;;;; 3;; 9]),
+               :([[1 2] 3 ;;; 4 5 6]), :([[1 2] 3; 4 5 6 ;;; 7 8 9; [10 11] 12]),
+               :([hvncat_x hvncat_y ;;; hvncat_z hvncat_w]), :(["ab" "cd" ;;; "e" "f"]))
+        f, args... = which_call_args(ex)
+        @test f(args...) == Core.eval(@__MODULE__, ex)
+    end
+
+    @test (@which [1 2 ;;; 3 4]) == which(hvncat, (Tuple{Int,Int,Int}, Bool, Int, Int, Int, Int))
+    @test (@which [hvncat_x ;;; hvncat_y]) == which(hvncat, (Int, Int, Float64))
+
+    # splatting is only supported by lowering in the one-dimensional case
+    @test (@which [hvncat_v... ;;; hvncat_v...]) == which(hvncat, (Int, Int, Int, Int, Int))
+    @test_throws "Splatting ... in an hvncat with multiple dimensions is not supported" @which [hvncat_v... 1 ;;; 2 3]
+    @test_throws "Splatting ... in an hvncat with multiple dimensions is not supported" @which [hvncat_v... ;; 1 ;;; 2 ;; 3]
+end
+
 let code = """
         using InteractiveUtils
         @activate Compiler[:codegen, :reflection]
@@ -1097,6 +1177,30 @@ var_line = @__LINE__()+1
 const _interactiveutils_some_var_ = 0
 
 @test InteractiveUtils.varloc(@__MODULE__, :_interactiveutils_some_var_) == (@__FILE__, var_line)
+
+@testset "code_llvm and code_warntype run the compiler in the typeinf world" begin
+    # Methods with broad signatures invalidate compiler code that normal inference never
+    # notices, because it runs in the frozen typeinf world. `code_llvm`, `code_native` and
+    # `code_warntype` used to run `typeinf_code` in the current world instead, so the first
+    # call after such a definition recompiled the invalidated compiler.
+    script = """
+        using InteractiveUtils
+        struct Displacement <: Integer; val::Int; end
+        Base.convert(::Type{Int64}, x::Displacement) = x.val
+        Base.Int64(x::Displacement) = x.val
+        struct NotReal; val; end
+        Base.isless(x, y::NotReal) = isless(x, y.val)
+        code_llvm(devnull, sin, (Float64,))
+        code_native(devnull, sin, (Float64,))
+        code_warntype(devnull, sin, (Float64,))
+        """
+    trace = mktemp() do path, io
+        run(pipeline(`$(Base.julia_cmd()) --startup-file=no --trace-compile=$path -e $script`, stderr=devnull))
+        read(path, String)
+    end
+    recompiled = filter(l -> occursin("# recompile", l) && occursin("Base.Compiler.", l), split(trace, '\n'))
+    @test isempty(recompiled)
+end
 
 @testset "world argument for varinfo and subtypes" begin
     # varinfo: a non-const binding added after the recorded world should not

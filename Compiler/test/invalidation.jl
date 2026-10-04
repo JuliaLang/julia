@@ -249,6 +249,15 @@ begin
         # A single `store_backedges` invocation should de-duplicate any of the
         # edges it is adding.
         @test N′ - N == 1
+
+        # Long edge lists take a different (hashed) path: the same MethodInstance seen
+        # plainly and via `invoke` (which stores its signature alongside the caller)
+        # should each be added once.
+        invokesig = Tuple{typeof(deduped_callee), Int}
+        long_edges = Core.svec(invokesig, callee_mi, callee_mi, invokesig, callee_mi, fill(callee_mi, 80)...)
+        Core.Compiler.store_backedges(ci, long_edges)
+        N″ = length(callee_mi.backedges)
+        @test N″ - N′ == 3
     end
 end
 

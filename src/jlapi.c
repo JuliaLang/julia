@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "julia.h"
+#include <libgen.h> // dirname
 #include "options.h"
 #include "julia_assert.h"
 #include "julia_internal.h"
@@ -1254,7 +1255,12 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bi
     if (julia_bindir == NULL) {
         jl_options.julia_bindir = getenv("JULIA_BINDIR");
         if (!jl_options.julia_bindir) {
-#ifdef _OS_WINDOWS_
+#if defined(JL_LIBRARY_STATIC)
+            // no libjulia to locate: use the directory of the executable
+            char *bin = strdup(jl_options.julia_bin);
+            jl_options.julia_bindir = strdup(dirname(bin));
+            free(bin);
+#elif defined(_OS_WINDOWS_)
             jl_options.julia_bindir = strdup(jl_get_libdir());
 #else
             int written = asprintf((char**)&jl_options.julia_bindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", jl_get_libdir(), "bin");

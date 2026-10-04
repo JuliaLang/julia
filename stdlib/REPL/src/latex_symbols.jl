@@ -100,6 +100,7 @@ const latex_symbols = Dict(
 
 # manual additions:
 
+    "\\zwj" => "\u200D",
     "\\sqrt" => "\u221A",
     "\\cbrt" => "\u221B",
     "\\female" => "♀",
@@ -120,6 +121,17 @@ const latex_symbols = Dict(
     "\\ohm" => "Ω",
     "\\escape" => "⎋",
     "\\xmark" => "✗",
+
+# manually added arrows
+
+    "\\leftblackarrow" => "⬅",
+    "\\upblackarrow" => "⬆",
+    "\\rightblackarrow" => "➡",
+    "\\downblackarrow" => "⬇",
+    "\\curvearrowrightdown" => "⤵",
+    "\\curvearrowrightup" => "⤴",
+    "\\curvearrowdownleft" => "⤶",
+    "\\curvearrowdownright" => "⤷",
 
     # Music Symbols
     # Music Symbols - Accidentals
@@ -273,13 +285,17 @@ const latex_symbols = Dict(
     "\\_t" => "ₜ",
     "\\_u" => "ᵤ",
     "\\_v" => "ᵥ",
+    "\\_w" => "₝",
     "\\_x" => "ₓ",
+    "\\_y" => "₞",
+    "\\_z" => "₟",
     "\\_schwa" => "ₔ",
     "\\_beta" => "ᵦ",
     "\\_gamma" => "ᵧ",
     "\\_rho" => "ᵨ",
     "\\_phi" => "ᵩ",
     "\\_chi" => "ᵪ",
+    "\\_pgamma" => "𝿐",
 
     # Misc. Math and Physics
     "\\ldots" => "…",

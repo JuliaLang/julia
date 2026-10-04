@@ -57,15 +57,15 @@ end
         setfield!(asp, :x, (y, z))
     end
     """)
-    @test jl_eval(test_mod, Expr(:(=), Expr(:., :anydotsetproperty, 1), 2)) == 2
+    @test jl_eval(test_mod, Expr(:(=), Expr(:., :anydotsetproperty, 1), 2); edition=JL_NEW_EDITION) == 2
     @test test_mod.anydotsetproperty.x == (1,2)
     @test jl_eval(test_mod,
                   Expr(:(=), Expr(:., :anydotsetproperty,
-                                  Expr(:call, :identity, 1)), 2)) == 2
+                                  Expr(:call, :identity, 1)), 2); edition=JL_NEW_EDITION) == 2
     @test test_mod.anydotsetproperty.x == (1,2)
     @test jl_eval(test_mod,
                   Expr(:(=), Expr(:., :anydotsetproperty,
-                                  QuoteNode(Expr(:call, :identity, 1))), 2)) == 2
+                                  QuoteNode(Expr(:call, :identity, 1))), 2); edition=JL_NEW_EDITION) == 2
     @test test_mod.anydotsetproperty.x == (Expr(:call, :identity, 1),2)
 end
 
@@ -325,7 +325,7 @@ end
                                 Expr(:(=), Expr(:call, :chain_f), Expr(:(=), :c, 1))),
                            Expr(:call, :(===), :a, :chain_f))
         @test fl_eval(test_mod, ex) == true
-        @test jl_eval(test_mod, ex) == true
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == true
     end
 
     # curly (type alias definition) in the middle of a chain
@@ -423,29 +423,29 @@ end
         # call
         @testset let ex = Expr(:call, :collect_args, eq)
             @test fl_eval(test_mod, ex) == (1, :semicolon)
-            @test jl_eval(test_mod, ex) == (1, :semicolon)
+            @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (1, :semicolon)
             # `=` in a call assigns the value
             @test fl_eval(test_mod, outer_ab(ex)) == (1, 0)
-            @test jl_eval(test_mod, outer_ab(ex)) == (1, 0)
+            @test jl_eval(test_mod, outer_ab(ex); edition=JL_NEW_EDITION) == (1, 0)
         end
         @testset let ex = Expr(:call, :collect_args, peq)
             @test fl_eval(test_mod, ex) == (:semicolon, :a=>1)
-            @test jl_eval(test_mod, ex) == (:semicolon, :a=>1)
+            @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (:semicolon, :a=>1)
             @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
-            @test jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+            @test jl_eval(test_mod, outer_ab(ex); edition=JL_NEW_EDITION) == (0, 0)
         end
         # `kw` always passes a kwarg and does not assign a value
         @testset let ex = Expr(:call, :collect_args, kw)
             @test fl_eval(test_mod, ex) == (:semicolon, :b=>2)
-            @test jl_eval(test_mod, ex) == (:semicolon, :b=>2)
+            @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (:semicolon, :b=>2)
             @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
-            @test jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+            @test jl_eval(test_mod, outer_ab(ex); edition=JL_NEW_EDITION) == (0, 0)
         end
         @testset let ex = Expr(:call, :collect_args, pkw)
             @test fl_eval(test_mod, ex) == (:semicolon, :b=>2)
-            @test jl_eval(test_mod, ex) == (:semicolon, :b=>2)
+            @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (:semicolon, :b=>2)
             @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
-            @test jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+            @test jl_eval(test_mod, outer_ab(ex); edition=JL_NEW_EDITION) == (0, 0)
         end
     end
 
@@ -457,27 +457,27 @@ end
 
             @testset let ex = Expr(:(.), :collect_args, Expr(:tuple, eq))
                 @test fl_eval(test_mod, ex) == [(1, :semicolon)]
-                @test jl_eval(test_mod, ex) == [(1, :semicolon)]
+                @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == [(1, :semicolon)]
                 @test fl_eval(test_mod, outer_ab(ex)) == ([1], 0)
-                @test jl_eval(test_mod, outer_ab(ex)) == ([1], 0)
+                @test jl_eval(test_mod, outer_ab(ex); edition=JL_NEW_EDITION) == ([1], 0)
             end
             @testset let ex = Expr(:(.), :collect_args, Expr(:tuple, peq))
                 @test fl_eval(test_mod, ex) == (:semicolon, :a=>[1])
-                @test jl_eval(test_mod, ex) == (:semicolon, :a=>[1])
+                @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (:semicolon, :a=>[1])
                 @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
-                @test jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+                @test jl_eval(test_mod, outer_ab(ex); edition=JL_NEW_EDITION) == (0, 0)
             end
             @testset let ex = Expr(:(.), :collect_args, Expr(:tuple, kw))
                 @test fl_eval(test_mod, ex) == (:semicolon, :b=>2)
-                @test jl_eval(test_mod, ex) == (:semicolon, :b=>2)
+                @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (:semicolon, :b=>2)
                 @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
-                @test jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+                @test jl_eval(test_mod, outer_ab(ex); edition=JL_NEW_EDITION) == (0, 0)
             end
             @testset let ex = Expr(:(.), :collect_args, Expr(:tuple, pkw))
                 @test fl_eval(test_mod, ex) == (:semicolon, :b=>2)
-                @test jl_eval(test_mod, ex) == (:semicolon, :b=>2)
+                @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (:semicolon, :b=>2)
                 @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
-                @test jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+                @test jl_eval(test_mod, outer_ab(ex); edition=JL_NEW_EDITION) == (0, 0)
             end
         end
     end
@@ -489,97 +489,97 @@ end
         end
         @testset let ex = Expr(:ref, test_mod.DummyGetIndex(1), eq)
             @test fl_eval(test_mod, ex) == (1, :semicolon)
-            @test jl_eval(test_mod, ex) == (1, :semicolon)
+            @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (1, :semicolon)
             @test fl_eval(test_mod, outer_ab(ex)) == (1, 0)
-            @test jl_eval(test_mod, outer_ab(ex)) == (1, 0)
+            @test jl_eval(test_mod, outer_ab(ex); edition=JL_NEW_EDITION) == (1, 0)
         end
         @testset let ex = Expr(:ref, test_mod.DummyGetIndex(1), peq)
             @test_throws "unexpected semicolon" fl_eval(test_mod, ex)
-            @test_throws "unexpected semicolon" jl_eval(test_mod, ex)
+            @test_throws "unexpected semicolon" jl_eval(test_mod, ex; edition=JL_NEW_EDITION)
         end
         @testset let ex = Expr(:ref, test_mod.DummyGetIndex(1), kw)
             @test fl_eval(test_mod, ex) == (:semicolon, :b=>2)
-            @test jl_eval(test_mod, ex) == (:semicolon, :b=>2)
+            @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (:semicolon, :b=>2)
             @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
-            @test jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+            @test jl_eval(test_mod, outer_ab(ex); edition=JL_NEW_EDITION) == (0, 0)
         end
         @testset let ex = Expr(:ref, test_mod.DummyGetIndex(1), pkw)
             @test_throws "unexpected semicolon" fl_eval(test_mod, ex)
-            @test_throws "unexpected semicolon" jl_eval(test_mod, ex)
+            @test_throws "unexpected semicolon" jl_eval(test_mod, ex; edition=JL_NEW_EDITION)
         end
     end
 
     @testset "in :tuple" begin
         @testset let ex = Expr(:tuple, eq)
             @test fl_eval(test_mod, ex) == (a=1,)
-            @test jl_eval(test_mod, ex) == (a=1,)
+            @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (a=1,)
         end
         @testset let ex = Expr(:tuple, peq)
             @test fl_eval(test_mod, ex) == (a=1,)
-            @test jl_eval(test_mod, ex) == (a=1,)
+            @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (a=1,)
         end
         @testset let ex = Expr(:tuple, kw) # calls tuple constructor with kw
             @test_throws MethodError fl_eval(test_mod, ex)
-            @test_throws MethodError jl_eval(test_mod, ex) broken=true
+            @test_throws MethodError jl_eval(test_mod, ex; edition=JL_NEW_EDITION) broken=true
         end
         @testset let ex = Expr(:tuple, pkw)
             @test fl_eval(test_mod, ex) == (b=2,)
-            @test jl_eval(test_mod, ex) == (b=2,)
+            @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (b=2,)
         end
     end
 
     @testset "in :curly" begin
         @testset let ex = Expr(:curly, Array, Int, eq)
             @test_throws ErrorException fl_eval(test_mod, ex)
-            @test_throws LoweringError jl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex; edition=JL_NEW_EDITION)
         end
         @testset let ex = Expr(:curly, Array, Int, peq)
             @test_throws ErrorException fl_eval(test_mod, ex)
-            @test_throws LoweringError jl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex; edition=JL_NEW_EDITION)
         end
         @testset let ex = Expr(:curly, Array, Int, kw) # calls constructor with kw
             @test_throws MethodError fl_eval(test_mod, ex)
-            @test_throws MethodError jl_eval(test_mod, ex) broken=true
+            @test_throws MethodError jl_eval(test_mod, ex; edition=JL_NEW_EDITION) broken=true
         end
         @testset let ex = Expr(:curly, Array, Int, pkw)
             @test_throws ErrorException fl_eval(test_mod, ex)
-            @test_throws LoweringError jl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex; edition=JL_NEW_EDITION)
         end
     end
     @testset "in :vect" begin
         @testset let ex = Expr(:vect, eq)
             @test_throws ErrorException fl_eval(test_mod, ex)
-            @test_throws LoweringError jl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex; edition=JL_NEW_EDITION)
         end
         @testset let ex = Expr(:vect, peq)
             @test_throws ErrorException fl_eval(test_mod, ex)
-            @test_throws LoweringError jl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex; edition=JL_NEW_EDITION)
         end
         @testset let ex = Expr(:vect, kw) # calls vect constructor with kw
             @test_throws MethodError fl_eval(test_mod, ex)
-            @test_throws MethodError jl_eval(test_mod, ex) broken=true
+            @test_throws MethodError jl_eval(test_mod, ex; edition=JL_NEW_EDITION) broken=true
         end
         @testset let ex = Expr(:vect, pkw)
             @test_throws ErrorException fl_eval(test_mod, ex)
-            @test_throws LoweringError jl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex; edition=JL_NEW_EDITION)
         end
     end
     @testset "in :braces" begin
         @testset let ex = Expr(:braces, eq)
             @test_throws ErrorException fl_eval(test_mod, ex)
-            @test_throws LoweringError jl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex; edition=JL_NEW_EDITION)
         end
         @testset let ex = Expr(:braces, peq)
             @test_throws ErrorException fl_eval(test_mod, ex)
-            @test_throws LoweringError jl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex; edition=JL_NEW_EDITION)
         end
         @testset let ex = Expr(:braces, kw)
             @test_throws ErrorException fl_eval(test_mod, ex)
-            @test_throws LoweringError jl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex; edition=JL_NEW_EDITION)
         end
         @testset let ex = Expr(:braces, pkw)
             @test_throws ErrorException fl_eval(test_mod, ex)
-            @test_throws LoweringError jl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex; edition=JL_NEW_EDITION)
         end
     end
 end
@@ -608,6 +608,6 @@ end
     @test JuliaLowering.include_string(m, "@_(3)") == 3
 
     # empty name is usable (though won't parse)
-    @test jl_eval(m, Expr(:macro, Expr(:call, Symbol(""), :x), :x)) isa Function
-    @test jl_eval(m, Expr(:macrocall, Symbol("@"), LineNumberNode(1), 123)) == 123
+    @test jl_eval(m, Expr(:macro, Expr(:call, Symbol(""), :x), :x); edition=JL_NEW_EDITION) isa Function
+    @test jl_eval(m, Expr(:macrocall, Symbol("@"), LineNumberNode(1), 123); edition=JL_NEW_EDITION) == 123
 end

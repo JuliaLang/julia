@@ -11,7 +11,7 @@ const I = Core.Intrinsics
 const STANDARD_WIDTHS = (8, 16, 32, 64, 128)
 
 # Declare IntN/UIntN primitive types for non-standard widths
-for w in (24, 40, 56, 72, 80, 88, 96, 120, 136, 176, 192, 200, 248, 256, 264, 320, 512)
+for w in (4, 12, 17, 20, 24, 40, 56, 63, 72, 80, 88, 96, 100, 120, 129, 136, 176, 192, 200, 248, 256, 264, 320, 512)
     uname = Symbol("UIntN", w)
     sname = Symbol("IntN", w)
     @eval primitive type $uname <: Unsigned $w end
@@ -29,18 +29,17 @@ for w in (24, 40, 56, 72, 80, 88, 96, 120, 136, 176, 192, 200, 248, 256, 264, 32
         end
     end
     @eval Base.show(io::IO, x::$sname) = (print(io, $(string(sname)), "("); show(io, reinterpret($uname, x)); print(io, ")"))
-    nbytes = w ÷ 8
-    # typemax(UIntN) = all 0xff bytes
-    @eval Base.typemax(::Type{$uname}) = reinterpret($uname, $(ntuple(_ -> 0xff, nbytes)))
+    nbytes = cld(w, 8)
+    topbit = ntuple(i -> i == nbytes ? UInt8(1) << ((w - 1) % 8) : 0x00, nbytes)
+    # typemax(UIntN) = all ones
+    @eval Base.typemax(::Type{$uname}) = from_bytes($uname, $(ntuple(_ -> 0xff, nbytes)))
     # typemin(UIntN) = 0
-    @eval Base.typemin(::Type{$uname}) = reinterpret($uname, $(ntuple(_ -> 0x00, nbytes)))
+    @eval Base.typemin(::Type{$uname}) = from_bytes($uname, $(ntuple(_ -> 0x00, nbytes)))
     # typemax(IntN) = 0111...1 (high bit clear)
     @eval Base.typemax(::Type{$sname}) = reinterpret($sname, I.xor_int(
-        reinterpret($uname, $(ntuple(_ -> 0xff, nbytes))),
-        reinterpret($uname, $(ntuple(i -> i == nbytes ? 0x80 : 0x00, nbytes)))))
+        typemax($uname), from_bytes($uname, $topbit)))
     # typemin(IntN) = 1000...0 (high bit set)
-    @eval Base.typemin(::Type{$sname}) = reinterpret($sname,
-        reinterpret($uname, $(ntuple(i -> i == nbytes ? 0x80 : 0x00, nbytes))))
+    @eval Base.typemin(::Type{$sname}) = reinterpret($sname, from_bytes($uname, $topbit))
 end
 
 # Map bit-width to Julia type
@@ -65,26 +64,34 @@ end
 # Value construction helpers
 # ---------------------------------------------------------------------------
 
-# Construct an n-bit unsigned value from a byte tuple (little-endian)
+# Construct an n-bit value from a byte tuple (little-endian), clearing the bits
+# above n. `reinterpret` rejects widths that are not a multiple of 8, so load
+# the value from memory instead.
 function from_bytes(::Type{T}, bytes::NTuple{N,UInt8}) where {T,N}
-    reinterpret(T, bytes)
+    buf = zeros(UInt8, sizeof(T))
+    for i in 1:N
+        buf[i] = bytes[i]
+    end
+    r = Core.bitsizeof(T) % 8
+    r == 0 || (buf[N] &= 0xff >> (8 - r))
+    return GC.@preserve buf unsafe_load(Ptr{T}(pointer(buf)))
 end
 
 # Construct the zero value for an unsigned type of width n
 function make_zero(::Type{T}, n::Int) where T
-    nbytes = n ÷ 8
+    nbytes = cld(n, 8)
     from_bytes(T, ntuple(_ -> 0x00, nbytes))
 end
 
 # Construct an unsigned value with a single byte set (0-indexed byte position)
 function make_byte(::Type{T}, n::Int, byte_pos::Int, val::UInt8) where T
-    nbytes = n ÷ 8
+    nbytes = cld(n, 8)
     from_bytes(T, ntuple(i -> i == byte_pos + 1 ? val : 0x00, nbytes))
 end
 
 # Construct value with bit `b` set (0-indexed)
 function make_bit(::Type{T}, n::Int, b::Int) where T
-    nbytes = n ÷ 8
+    nbytes = cld(n, 8)
     byte_idx = b ÷ 8     # 0-indexed
     bit_idx  = b % 8
     from_bytes(T, ntuple(i -> i == byte_idx + 1 ? UInt8(1) << bit_idx : 0x00, nbytes))
@@ -92,7 +99,7 @@ end
 
 # Construct value with multiple bits set (0-indexed)
 function make_bits(::Type{T}, n::Int, bits) where T
-    nbytes = n ÷ 8
+    nbytes = cld(n, 8)
     bytes = zeros(UInt8, nbytes)
     for b in bits
         bytes[b ÷ 8 + 1] |= UInt8(1) << (b % 8)
@@ -185,7 +192,7 @@ end
 """Generate a vector of random n-bit unsigned values as the appropriate type."""
 function random_ints(rng::AbstractRNG, n::Int, count::Int)
     T = uint_type(n)
-    nbytes = n ÷ 8
+    nbytes = cld(n, 8)
     [from_bytes(T, ntuple(_ -> rand(rng, UInt8), nbytes)) for _ in 1:count]
 end
 
@@ -193,7 +200,7 @@ end
 function interesting_ints(n::Int)
     T = uint_type(n)
     ST = int_type(n)
-    nbytes = n ÷ 8
+    nbytes = cld(n, 8)
     zero_v = make_zero(T, n)
     one_v  = make_byte(T, n, 0, 0x01)
     two_v  = make_byte(T, n, 0, 0x02)
@@ -336,7 +343,8 @@ end
 # Tests
 # ---------------------------------------------------------------------------
 
-const TEST_WIDTHS = [8, 16, 24, 32, 40, 56, 64, 72, 80, 88, 96, 120, 128, 136, 176, 192, 200, 248, 256, 264, 320, 512]
+const TEST_WIDTHS = [4, 8, 12, 16, 17, 20, 24, 32, 40, 56, 63, 64, 72, 80, 88, 96, 100, 120, 128, 129, 136,
+                     176, 192, 200, 248, 256, 264, 320, 512]
 const NRANDOM = 50
 
 @testset "APInt intrinsics" begin
@@ -703,6 +711,66 @@ const NRANDOM = 50
             end
         end
     end
+end
+
+# ---------------------------------------------------------------------------
+# Base functions at widths no C integer type has
+# ---------------------------------------------------------------------------
+
+# `@enum`, `Core.check_top_bit` and the multiplicative inverses must take the
+# width from `Core.bitsizeof`, not `8 * sizeof`. Give the types of these widths
+# the arithmetic those functions need.
+const ARITH_WIDTHS = (4, 12, 20, 24, 40, 63)
+for nbits in ARITH_WIDTHS, signed in (false, true)
+    T = Symbol(signed ? "IntN" : "UIntN", nbits)
+    W = signed ? Int128 : UInt128 # holds every value of T
+    ext, div_, rem_, lt, le, shr = signed ?
+        (I.sext_int, I.sdiv_int, I.srem_int, I.slt_int, I.sle_int, I.ashr_int) :
+        (I.zext_int, I.udiv_int, I.urem_int, I.ult_int, I.ule_int, I.lshr_int)
+    @eval begin
+        $T(x::Integer) = I.trunc_int($T, x % $W)
+        Base.$(nameof(W))(x::$T) = $ext($W, x)
+        Base.Int(x::$T) = Int($W(x))
+        Base.rem(x::Integer, ::Type{$T}) = $T(x)
+        Base.rem(x::$T, ::Type{S}) where {S<:Base.BitInteger} = $W(x) % S
+        Base.rem(x::$T, ::Type{$T}) = x
+        Base.promote_rule(::Type{$T}, ::Type{<:Base.BitInteger}) = $W
+        Base.widen(::Type{$T}) = $W
+        Base.hash(x::$T, h::UInt) = hash($W(x), h)
+        Base.:-(x::$T) = I.neg_int(x)
+        Base.:(<<)(x::$T, n::UInt) = n < $nbits ? I.shl_int(x, n) : zero($T)
+        Base.:(>>)(x::$T, n::UInt) = $shr(x, min(n, $(UInt(nbits - 1))))
+        Base.:(>>>)(x::$T, n::UInt) = n < $nbits ? I.lshr_int(x, n) : zero($T)
+        Base.leading_zeros(x::$T) = Int(I.zext_int(UInt64, I.ctlz_int(x)))
+        Base.top_set_bit(x::$T) = $nbits - leading_zeros(x)
+    end
+    for (f, op) in ((:+, I.add_int), (:-, I.sub_int), (:*, I.mul_int), (:div, div_), (:rem, rem_),
+                    (:+%, I.add_int), (:-%, I.sub_int), (:*%, I.mul_int), (:<, lt), (:<=, le))
+        @eval Base.$f(a::$T, b::$T) = $op(a, b)
+    end
+    if signed
+        U = Symbol("UIntN", nbits)
+        @eval Base.unsigned(::Type{$T}) = $U
+        @eval Base.unsigned(x::$T) = I.bitcast($U, x)
+        @eval Base.flipsign(x::$T, y::$T) = I.flipsign_int(x, y)
+    end
+end
+
+@testset "Base functions of $nbits-bit integers" for nbits in ARITH_WIDTHS
+    U, S = uint_type(nbits), int_type(nbits)
+    for T in (U, S)
+        top = T(Int128(1) << (nbits - 1))
+        @test_throws InexactError Core.check_top_bit(T, top)
+        @test Core.check_top_bit(T, top - one(T)) === top - one(T)
+        ns = T.(-300:300)
+        @test all(filter(!iszero, T.(-40:40))) do d
+            m = Base.multiplicativeinverse(d)
+            all(n -> div(n, d) == div(n, m) || T <: Signed && d == -one(T) && n == typemin(T), ns)
+        end
+    end
+    E = Symbol(:EnumN, nbits)
+    @eval @enum $E::$U $(Symbol(:enum_a, nbits))=1 $(Symbol(:enum_b, nbits))=2
+    @test Core.bitsizeof(getfield(@__MODULE__, E)) == nbits
 end
 
 end # module APIntTests

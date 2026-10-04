@@ -1152,7 +1152,9 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
 }
 
 // Look through selects and phis to find all possible alloca bases of a pointer.
-// Returns an empty set if a non-alloca base is encountered.
+// Returns an empty set if a non-alloca base is encountered. The bases may differ
+// in size and type (e.g. after SimplifyCFG sinks stores to different allocas into
+// a common successor), so callers must handle each base on its own.
 static SmallSetVector<AllocaInst *, 1> FindAllocaBases(Value *V) {
     SmallSetVector<AllocaInst *, 1> allocas;
     if (AllocaInst *AI = dyn_cast<AllocaInst>(V)) {
@@ -1186,11 +1188,6 @@ static SmallSetVector<AllocaInst *, 1> FindAllocaBases(Value *V) {
             }
         }
     }
-    assert(std::all_of(allocas.begin(), allocas.end(), [&] (AllocaInst *AI) JL_NOTSAFEPOINT {
-            return (AI->getArraySize() == allocas[0]->getArraySize() &&
-                AI->getAllocatedType() == allocas[0]->getAllocatedType());
-        }
-    ));
     return allocas;
 }
 

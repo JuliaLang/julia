@@ -17,6 +17,10 @@ using .Main.OffsetArrays
         @test all(result[i] == i^2 for i in 1:n)
         @test issorted(result)  # should be ordered for default scheduling
 
+        # The body never runs on the interactive threadpool, not even for the first element
+        @test all(==(:default), @threads [threadpool() for _ in 1:8])
+        @test all(==(:default), @threads :static [threadpool() for _ in 1:8])
+
         # Test static scheduling
         result_static = @threads :static [i^2 for i in 1:n]
         @test length(result_static) == n
@@ -47,12 +51,21 @@ using .Main.OffsetArrays
         # Test greedy scheduling with filter (does not guarantee element order)
         result_greedy = @threads :greedy [i^2 for i in 1:n if iseven(i)]
         @test sort(result_greedy) == expected
-        @test_broken typeof(result_greedy) == typeof(expected)
+        @test typeof(result_greedy) == typeof(expected)
         g_untyped(m) = Threads.@threads :greedy [i for i in 1:m if iseven(i)]
         g_typed(m)   = Threads.@threads :greedy Int[i for i in 1:m if iseven(i)]
         g_untyped(10); g_typed(10)
-        @test_broken @allocations(g_untyped(1_000_000)) < 1_000
-        @test_broken @allocations(g_typed(1_000_000)) < 1_000
+        @test @allocations(g_untyped(1_000_000)) < 1_000
+        @test @allocations(g_typed(1_000_000)) < 1_000
+
+        # Destructured loop variables
+        pairs_in = [(1, 2), (3, 4), (5, 6)]
+        expected_pairs = [a + b for (a, b) in pairs_in if a > 1]
+        @test (@threads [a + b for (a, b) in pairs_in if a > 1]) == expected_pairs
+        @test (@threads :static [a + b for (a, b) in pairs_in if a > 1]) == expected_pairs
+        @test sort(@threads :greedy [a + b for (a, b) in pairs_in if a > 1]) == expected_pairs  # (does not guarantee order)
+        d = Dict("a" => 1, "b" => 2)
+        @test (@threads [k for (k, v) in d if v > 1]) == ["b"]
 
         # Test with more complex filter
         expected_complex = [i for i in 1:100 if i % 3 == 0 && i > 20]
@@ -75,6 +88,15 @@ using .Main.OffsetArrays
         # Empty range
         result_empty = @threads [i for i in 1:0]
         @test result_empty == []
+        @test typeof(result_empty) == typeof([i for i in 1:0])
+        @test typeof(@threads :greedy [i for i in 1:0]) == typeof([i for i in 1:0])
+        @test typeof(@threads [i + j for i in 1:0, j in 1:3]) == typeof([i + j for i in 1:0, j in 1:3])
+        # An empty filtered result takes the element type inferred with the filter, as serially
+        @test typeof(@threads [i for i in 1:3 if false]) == typeof([i for i in 1:3 if false])
+        @test typeof(@threads [x for x in Any[1, "a"] if x isa Float64]) == typeof([x for x in Any[1, "a"] if x isa Float64])
+        # The condition cannot change the loop variable the body sees, as serially
+        @test (@threads [x for x in 1:3 if (x = 1.5; true)]) == [1, 2, 3]
+        @test (@threads :greedy [x for x in 1:3 if (x = 1.5; true)]) |> sort == [1, 2, 3]
 
         # Single element
         result_single = @threads [i^2 for i in 1:1]
@@ -137,7 +159,53 @@ using .Main.OffsetArrays
         # Test 3D with filter
         result_3d_filt = @threads [i + j + k for i in 1:3, j in 1:3, k in 1:3 if (i + j + k) % 2 == 0]
         expected_3d_filt = [i + j + k for i in 1:3, j in 1:3, k in 1:3 if (i + j + k) % 2 == 0]
-        @test result_3d_filt == expected_3d_filt    end
+        @test result_3d_filt == expected_3d_filt
+
+        # The result has the shape of the product of the iterators, as in a serial comprehension
+        M = [1 2; 3 4]
+        @test (@threads [x + y for x in M, y in 1:2]) == [x + y for x in M, y in 1:2]
+        @test (@threads [x + y for x in fill(5), y in 1:3]) == [x + y for x in fill(5), y in 1:3]
+        @test (@threads [x * y for x in (1, 2), y in Set([3])]) == [x * y for x in (1, 2), y in Set([3])]
+
+        # Each iterator expression is evaluated once
+        nevals = Ref(0)
+        counted_range() = (nevals[] += 1; 1:3)
+        @threads [x + y for x in counted_range(), y in 1:2]
+        @threads :static [x + y for x in counted_range(), y in 1:2]
+        @threads :greedy [x + y for x in counted_range(), y in 1:2]
+        @threads :greedy [x for x in counted_range()]
+        @test nevals[] == 4
+
+        # :greedy keeps the serial shape (does not guarantee element order)
+        result_greedy_M = @threads :greedy [x for x in M]
+        @test size(result_greedy_M) == size(M)
+        @test sort(vec(result_greedy_M)) == sort(vec(M))
+    end
+
+    @testset "multiple for clauses" begin
+        expected = [(i, j) for i in 1:10 for j in 1:i]
+        @test (@threads [(i, j) for i in 1:10 for j in 1:i]) == expected
+        @test (@threads :static [(i, j) for i in 1:10 for j in 1:i]) == expected
+        @test sort(@threads :greedy [(i, j) for i in 1:10 for j in 1:i]) == expected  # (does not guarantee order)
+        @test (@threads Float64[i * j for i in 1:10 for j in 1:i]) == Float64[i * j for i in 1:10 for j in 1:i]
+
+        # Filters at each level, three levels, and several iterators in a clause
+        @test (@threads [i + j for i in 1:9 if isodd(i) for j in 1:i if j != 2]) ==
+            [i + j for i in 1:9 if isodd(i) for j in 1:i if j != 2]
+        @test (@threads [(i, j, k) for i in 1:3 for j in 1:i for k in j:3]) ==
+            [(i, j, k) for i in 1:3 for j in 1:i for k in j:3]
+        @test (@threads [(i, j, k) for i in 1:3, k in 1:2 for j in 1:i]) ==
+            [(i, j, k) for i in 1:3, k in 1:2 for j in 1:i]
+        @test (@threads [(i, j, k) for i in 1:3 for j in 1:i, k in 1:2]) ==
+            [(i, j, k) for i in 1:3 for j in 1:i, k in 1:2]
+
+        # Element type matches serial, including widening and empty results
+        @test typeof(@threads [i == 2 ? 1.0 : j for i in 1:3 for j in 1:i]) == typeof([i == 2 ? 1.0 : j for i in 1:3 for j in 1:i])
+        @test typeof(@threads [j for i in 1:0 for j in 1:i]) == typeof([j for i in 1:0 for j in 1:i])
+        # Every inner element counts for the element type, not only the first
+        @test (@threads [x for _ in 1:2 for x in (1, 2.5)]) == [x for _ in 1:2 for x in (1, 2.5)]
+        @test typeof(@threads [x for _ in 1:2 for x in (1, 2.5)]) == typeof([x for _ in 1:2 for x in (1, 2.5)])
+    end
 
     # Test non-indexable iterators
     @testset "non-indexable iterators" begin
@@ -174,13 +242,13 @@ using .Main.OffsetArrays
 
         result_greedy = @threads :greedy [x for x in t]
         @test sort(result_greedy) == sort(collect(t))
-        @test_broken typeof(result_greedy) == typeof([x for x in t])
+        @test typeof(result_greedy) == typeof([x for x in t])
 
         # :greedy with filter over Tuple (uses atomic work-stealing path)
         result_greedy_filt = @threads :greedy [x for x in t if x > 25]
         expected_greedy_filt = [x for x in t if x > 25]
         @test sort(result_greedy_filt) == expected_greedy_filt
-        @test_broken typeof(result_greedy_filt) == typeof(expected_greedy_filt)
+        @test typeof(result_greedy_filt) == typeof(expected_greedy_filt)
 
         result_filter = @threads [x for x in t if x > 25]
         @test result_filter == [x for x in t if x > 25]
@@ -202,7 +270,7 @@ using .Main.OffsetArrays
         result_ch_filter = @threads :greedy [i for i in ch2 if iseven(i)]
         expected_ch_filter = [i for i in 1:10 if iseven(i)]
         @test sort(result_ch_filter) == expected_ch_filter
-        @test_broken typeof(result_ch_filter) == typeof(expected_ch_filter)
+        @test typeof(result_ch_filter) == typeof(expected_ch_filter)
     end
 
     # Test mixed element types
@@ -223,7 +291,7 @@ using .Main.OffsetArrays
         result_greedy_filt = @threads :greedy [x for x in [1, 2.0, "3", 4, 5.0] if x isa Number]
         expected_greedy_filt = [x for x in [1, 2.0, "3", 4, 5.0] if x isa Number]
         @test sort(result_greedy_filt, by=string) == sort(expected_greedy_filt, by=string)
-        @test_broken typeof(result_greedy_filt) == typeof(expected_greedy_filt)
+        @test typeof(result_greedy_filt) == typeof(expected_greedy_filt)
 
         # Test with :static scheduler
         result_static = @threads :static [x for x in [1, 2.0, "3"]]
@@ -250,7 +318,7 @@ using .Main.OffsetArrays
         # :greedy with type-widening body — must match serial's promote_typejoin result (does not guarantee order)
         result_greedy = @threads :greedy [i == 50 ? 1.0 : i for i in 1:100]
         @test sort(result_greedy) == sort(expected)
-        @test_broken typeof(result_greedy) == typeof(expected)
+        @test typeof(result_greedy) == typeof(expected)
 
         # Verify widening allocations aren't significantly worse than serial
         widen_threaded() = @threads [i == 100 ? 1.0 : i for i in 1:100_000]

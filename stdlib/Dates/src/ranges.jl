@@ -8,6 +8,12 @@ Base.:(:)(a::T, b::T) where {T<:Date} = (:)(a, Day(1), b)
 
 # Given a start and end date, how many steps/periods are in between
 guess(a::DateTime, b::DateTime, c) = floor(Int64, (Int128(value(b)) - Int128(value(a))) / toms(c))
+# Integer division keeps step counts above 2^53 exact
+function guess(a::T, b::T, c) where {T<:Timestamp}
+    # Calendar steps use an average length for this estimate; len corrects it below.
+    scale = c isa Union{Year,Quarter,Month} ? tons(oneunit(c)) : timestamp_period_scale(typeof(c))
+    return floor(Int64, div(widen(value(b)) * timestamp_scale(T) - widen(value(a)) * timestamp_scale(T), widen(value(c)) * scale))
+end
 guess(a::Date, b::Date, c) = Int64(div(value(b - a), days(c)))
 len(a::Time, b::Time, c) = Int64(div(value(b - a), tons(c)))
 function len(a, b, c)
@@ -23,6 +29,9 @@ function len(a, b, c)
     return i - 1
 end
 Base.length(r::StepRange{<:TimeType}) = isempty(r) ? Int64(0) : len(r.start, r.stop, r.step) + 1
+# A Timestamp range can have more than typemax(Int64) elements
+Base.length(r::StepRange{<:Timestamp}) = isempty(r) ? Int64(0) :
+    Base.Checked.checked_add(len(r.start, r.stop, r.step), Int64(1))
 # Period ranges hook into Int64 overflow detection
 Base.length(r::StepRange{<:Period}) = length(StepRange(value(r.start), value(r.step), value(r.stop)))
 Base.checked_length(r::StepRange{<:Period}) = Base.checked_length(StepRange(value(r.start), value(r.step), value(r.stop)))

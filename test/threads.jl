@@ -272,6 +272,7 @@ end
         @lock cond notify(cond, :legit)
         @test fetch(t) === :legit
     end
+    # JET.@test_call notify(::Condition)
 end
 
 # the cached WaitEntry makes the steady-state park/wake cycle allocation-free:
