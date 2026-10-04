@@ -31,6 +31,25 @@ end
 # are not actually materialized as call instructions.
 strip_debug_calls(ir) = replace(ir, r"call void @llvm\.dbg\.declare.*\n" => "", r"call void @llvm\.dbg\.value.*\n" => "")
 
+# Regression tests for #51658 and #48801.
+@testset "ReinterpretArray vectorization" begin
+    zigzag_bytes(n) = (n >> one(n)) ⊻ -(n & one(n))
+    function zigzag_reinterpret!(a)
+        @simd for i in eachindex(a)
+            a[i] = zigzag_bytes(a[i])
+        end
+        nothing
+    end
+    increment_reinterpret!(a) = (a .+= Int32(1); nothing)
+    for (f, T) in ((zigzag_reinterpret!, Int16), (increment_reinterpret!, Int32))
+        if !is_debug_build && opt_level >= 2 && !coverage && Sys.ARCH in (:x86_64, :i686, :aarch64)
+            ir = get_llvm(f, Tuple{typeof(reinterpret(T, UInt8[]))})
+            @test occursin(r"load <[0-9]+ x i(16|32)>", ir)
+            @test occursin(r"store <[0-9]+ x i(16|32)>", ir)
+        end
+    end
+end
+
 if !is_debug_build && opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
     @test !occursin(" call ", strip_debug_calls(get_llvm(identity, Tuple{String})))
