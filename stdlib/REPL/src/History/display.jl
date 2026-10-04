@@ -53,7 +53,7 @@ function redisplay_all(io::IO, oldstate::SelectorState, newstate::SelectorState,
     else
         println(buf) # Move to line under prompt
         currentrow += 1
-        if oldstate.area.width > newstate.area.width || oldstate.query == FILTER_SHORTHELP_QUERY
+        if oldstate.area.width > newstate.area.width || oldstate.query ∈ (FILTER_SHORTHELP_QUERY, FILTER_LONGHELP_QUERY)
             print(buf, CLEAR_BELOW)
             oldstate = EMPTY_STATE
         end
@@ -84,7 +84,8 @@ function redisplay_all(io::IO, oldstate::SelectorState, newstate::SelectorState,
     print(buf, "\e[", currentrow, "A\e[1G")
     redisplay_prompt(buf, oldstate, newstate, pstate)
     # Restore column pos
-    print(buf, "\e[", textwidth(PROMPT_TEXT) + position(pstate.input_buffer) + 1, 'G')
+    querybuf = pstate.input_buffer
+    print(buf, "\e[", textwidth(PROMPT_TEXT) + textwidth(String(querybuf.data[1:position(querybuf)])) + 1, 'G')
     synccap && print(buf, SYNC_UPDATE_END)
     if Base.generating_output()
         # Writing output in chunks seems to avoid a hang that happens here during precompilation
@@ -223,7 +224,11 @@ function redisplay_prompt(io::IO, oldstate::SelectorState, newstate::SelectorSta
     end
     prefix = S"{bold:▪:} "
     ncand = length(newstate.candidates)
-    resultnum = S"{REPL_History_search_results:[$(ncand - newstate.hover + 1)/$ncand]}"
+    resultnum = if newstate.hover > 0
+        S"{REPL_History_search_results:[$(ncand - newstate.hover + 1)/$ncand]}"
+    else # Carried-over entries are unnumbered
+        S"{REPL_History_search_results:[•/$ncand]}"
+    end
     padspaces = newstate.area.width - sum(textwidth, (prefix, styquery, resultnum))
     suffix = if isempty(styquery)
         LABELS.help_prompt
@@ -337,9 +342,6 @@ function candidates(state::SelectorState, rows::Int)
     actcands = @view state.candidates[max(begin, begin+offset):min(end, candend)]
     actempty = actcount - length(actcands)
     actsel = Int[idx - offset for idx in state.selection.active]
-    if !isempty(state.selection.gathered)
-        append!(actsel, filter!(!isnothing, indexin(state.selection.gathered, actcands)))
-    end
     active = CandsState(
         state.filter,
         actcands,
@@ -498,12 +500,15 @@ end
     highlightcand(cand::HistEntry) -> AnnotatedString
 
 Syntax-highlight Julia content or return raw content otherwise.
+
+Tabs are expanded to spaces, since terminals give them a width that `textwidth` does not.
 """
 function highlightcand(cand::HistEntry)
+    content = replace(cand.content, '\t' => "    ")
     if cand.mode === :julia
-        highlight(cand.content)
+        highlight(content)
     else
-        S"$(cand.content)"
+        S"$content"
     end
 end
 
@@ -779,6 +784,7 @@ function boxedcontent(io::IO, content::AnnotatedString{String}, width::Int, maxl
     innerwidth = width - 4
     for (i, line) in enumerate(lines)
         printedlines >= maxlines && break
+        line = rstrip(line)
         if textwidth(line) <= innerwidth
             println(io, left, rpad(line, innerwidth), right)
             printedlines += 1
@@ -790,6 +796,7 @@ function boxedcontent(io::IO, content::AnnotatedString{String}, width::Int, maxl
             indent += textwidth(plainline[ichars])
             ichars = nextind(plainline, ichars)
         end
+        indent = min(indent, innerwidth ÷ 2)
         line = @view line[ichars:end]
         spans = breaklines(AnnotatedString(line), innerwidth - 2 - indent)
         for (i, span) in enumerate(spans)

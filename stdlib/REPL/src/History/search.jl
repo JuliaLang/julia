@@ -89,7 +89,7 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
                 nextevent = if !isempty(events) first(events.data) end
                 while nextevent ∈ (:up, :down, :pageup, :pagedown)
                     take!(events)
-                    state = movehover(state, nextevent ∈ (:up, :pageup), event ∈ (:pageup, :pagedown))
+                    state = movehover(state, nextevent ∈ (:up, :pageup), nextevent ∈ (:pageup, :pagedown))
                     nextevent = if !isempty(events) first(events.data) end
                 end
             end
@@ -162,11 +162,12 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
                isempty(filter_spec.regexps) && isempty(filter_spec.modes)
                 # No filtering needed, just copy all candidates
                 append!(state.candidates, cands_current)
+                state = sync_selection!(state, length(state.candidates))
                 filter_idx = 0
             else
                 # Filtering needed, deduplicate results
                 empty!(filter_seen)
-                filter_idx = filterchunkrev!(
+                state, filter_idx = filterchunkrev!(
                     state, cands_current, filter_seen;
                     maxtime = time() + 0.01,
                     maxresults = outsize[1])
@@ -198,8 +199,8 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
             append!(empty!(cands_temp), state.candidates)
             prevstate = SelectorState(
                 state.area, state.query, state.filter, cands_temp,
-                state.scroll, state.selection, state.hover)
-            filter_idx = filterchunkrev!(
+                state.scroll, map(copy, state.selection), state.hover)
+            state, filter_idx = filterchunkrev!(
                 state, cands_current, filter_seen, filter_idx;
                 maxtime = time() + 0.01)
             if filter_idx == 0
@@ -207,9 +208,11 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
                     cands_cache, cands_cachestate, cands_cond => state.candidates)
             end
             # If there are now new candidates in the view, update
-            length(state.candidates) != length(prevstate.candidates) &&
-                length(prevstate.candidates) - state.hover < outsize[1] &&
+            gathchange = length(state.selection.gathered) != length(prevstate.selection.gathered)
+            if gathchange || length(state.candidates) != length(prevstate.candidates) &&
+                    length(prevstate.candidates) - state.hover < outsize[1]
                 redisplay_all(out, prevstate, state, pstate; buf)
+            end
         elseif isnothing(event)
             yield()
             sleep(0.01)
@@ -223,17 +226,42 @@ function filterchunkrev!(state::SelectorState, candidates::DenseVector{HistEntry
     oldlen = length(state.candidates)
     idx = filterchunkrev!(state.candidates, candidates, state.filter, seen, idx;
                           maxtime = maxtime, maxresults = maxresults)
-    newlen = length(state.candidates)
-    newcands = view(state.candidates, (oldlen + 1):newlen)
+    sync_selection!(state, length(state.candidates) - oldlen), idx
+end
+
+"""
+    sync_selection!(state::SelectorState, nadded::Int) -> SelectorState
+
+Update the selection in `state` after `nadded` candidates were prepended.
+
+The active selection is shifted to keep referring to the same entries, and any
+gathered entries among the new candidates are moved into the active selection.
+The returned state has its scroll and hover fitted to the remaining gathered
+entries.
+"""
+function sync_selection!(state::SelectorState, nadded::Int)
+    (; active, gathered) = state.selection
+    active .+= nadded
+    newcands = view(state.candidates, 1:nadded)
     gfound = Int[]
-    for (i, g) in enumerate(state.selection.gathered)
+    for (i, g) in enumerate(gathered)
         cind = searchsorted(newcands, g, by = e -> e.index)
         isempty(cind) && continue
-        push!(state.selection.active, oldlen + first(cind))
+        insert!(active, length(gfound) + 1, first(cind))
         push!(gfound, i)
     end
-    isempty(gfound) || deleteat!(state.selection.gathered, gfound)
-    idx
+    isempty(gfound) && return state
+    deleteat!(gathered, gfound)
+    # Negative scroll and hover index into `gathered`, so must stay within it
+    ngathered = length(gathered)
+    hover = if state.hover >= -ngathered
+        state.hover
+    else
+        ifelse(iszero(ngathered), 1, -ngathered)
+    end
+    SelectorState(
+        state.area, state.query, state.filter, state.candidates,
+        max(state.scroll, -ngathered), state.selection, hover)
 end
 
 """
@@ -294,9 +322,6 @@ function toggleselection(state::SelectorState)
         if isempty(selsearch)
             insert!(activecopy, first(selsearch), hoveridx)
         else
-            elt = activecopy[selsearch]
-            gidx = findfirst(==(elt), state.selection.gathered)
-            isnothing(gidx) || deleteat!(state.selection.gathered, gidx)
             deleteat!(activecopy, first(selsearch))
         end
         (active = activecopy, gathered = state.selection.gathered)

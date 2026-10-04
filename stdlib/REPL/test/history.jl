@@ -8,7 +8,8 @@ using REPL.History
 using REPL.History: HistoryFile, HistEntry, update!,
     ConditionSet, FilterSpec, filterchunkrev!, ismorestrict, matchregions,
     SelectorState, componentrows, countlines_selected, hoveridx, ishover, gethover,
-    candidates, movehover, toggleselection, fullselection, addcache!
+    candidates, movehover, toggleselection, fullselection, addcache!, sync_selection!,
+    boxedcontent, highlightcand
 
 const HISTORY_SAMPLE_FORMAT_1 = """
 # time: 2020-10-31 05:16:39 AWST
@@ -568,6 +569,18 @@ end
             @test cands.active.entries == few
         end
     end
+    @testset "Rendering" begin
+        # Tabs are zero-width to `textwidth` but not to terminals, so must not be displayed
+        for mode in (:julia, :shell)
+            @test '\t' ∉ String(highlightcand(HistEntry(mode, now(UTC), "a\tb", 1)))
+        end
+        # Every boxed line must exactly fill the box
+        for content in (" "^200 * "\nx", "x\n" * " "^100 * "\n" * "y"^100, "x\n" * " "^100 * "y")
+            io = IOBuffer()
+            boxedcontent(io, Base.AnnotatedString(content), 40, 10)
+            @test all(==(40) ∘ textwidth, eachsplit(chomp(String(take!(io))), '\n'))
+        end
+    end
 end
 
 @testset "Search state manipulation" begin
@@ -689,6 +702,36 @@ end
             state = SelectorState((30, 80), "", FilterSpec(), HistEntry[], 0, (active = Int[], gathered), -1)
             @test fullselection(state) == (mode = :julia, text = "old_1")
         end
+    end
+    @testset "Selection as candidates arrive" begin
+        many = [HistEntry(:julia, now(UTC), "foo $i", i) for i in 1:100]
+        function filterstate(gathered = HistEntry[])
+            state = SelectorState((30, 80), "foo", FilterSpec(ConditionSet("foo")), HistEntry[], gathered)
+            seen = Set{Tuple{Symbol,String}}()
+            state, idx = filterchunkrev!(state, many, seen; maxresults = 10)
+            state, seen, idx
+        end
+        # Selections made while filtering is incomplete keep their entries
+        state, seen, idx = filterstate()
+        state = toggleselection(state)
+        while idx != 0
+            state, idx = filterchunkrev!(state, many, seen, idx)
+        end
+        @test fullselection(state).text == "foo 100"
+        # Carried-over entries become active once filtering reaches them
+        state, seen, idx = filterstate([many[50]])
+        while idx != 0
+            state, idx = filterchunkrev!(state, many, seen, idx)
+        end
+        @test isempty(state.selection.gathered)
+        @test fullselection(state).text == "foo 50"
+        # Carried-over entries become active in an unfiltered list too, so they can be deselected
+        state = SelectorState((30, 80), "", FilterSpec(), HistEntry[], [many[100]])
+        append!(state.candidates, many)
+        state = sync_selection!(state, length(many))
+        @test state.selection == (active = [100], gathered = HistEntry[])
+        @test state.scroll == 0
+        @test isempty(toggleselection(state).selection.active)
     end
     @testset "addcache!" begin
         cache, state = Int[], zero(UInt8)
