@@ -280,7 +280,6 @@ function filterchunkrev!(out::Vector{HistEntry}, candidates::DenseVector{HistEnt
                          maxtime::Float64 = Inf, maxresults::Int = length(candidates))
     batchsize = clamp(length(candidates) ÷ 512, 10, 1000)
     for batch in Iterators.partition(idx:-1:1, batchsize)
-        time() > maxtime && break
         for outer idx in batch
             entry = candidates[idx]
             if (entry.mode, entry.content) ∈ seen
@@ -315,6 +314,7 @@ function filterchunkrev!(out::Vector{HistEntry}, candidates::DenseVector{HistEnt
             pushfirst!(out, entry)
             length(out) == maxresults && break
         end
+        (length(out) >= maxresults || time() > maxtime) && break
     end
     max(0, idx - 1)
 end

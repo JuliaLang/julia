@@ -399,6 +399,24 @@ end
                 @test results[1] == mode_entries[2]  # :shell ls
                 @test results[2] == mode_entries[3]  # :julia ls (most recent)
             end
+            @testset "Resumption" begin
+                many = [HistEntry(:julia, now(UTC), "foo $i", i) for i in 1:500]
+                spec = FilterSpec(ConditionSet("foo"))
+                function filterresumed(; maxresults = length(many), maxtime = Inf)
+                    found, seen = HistEntry[], Set{Tuple{Symbol,String}}()
+                    idx = filterchunkrev!(found, many, spec, seen; maxresults, maxtime)
+                    while idx != 0
+                        idx = filterchunkrev!(found, many, spec, seen, idx; maxtime)
+                    end
+                    found
+                end
+                # Stopping early, by result count or by time, must neither skip
+                # nor repeat entries, wherever that falls relative to batch boundaries.
+                for maxresults in (1, 7, 10, 43, 499, 500, 1000)
+                    @test filterresumed(; maxresults) == many
+                end
+                @test filterresumed(; maxtime = 0.0) == many
+            end
         end
         @testset "matchregions with multibyte characters" begin
             # Handle search for multi-byte characters (issue 61653)
