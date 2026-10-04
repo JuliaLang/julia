@@ -180,6 +180,8 @@ New library functions
 * `Base.decompose(x::Real)` has been made `public` (but not exported); it is the point
   where rational-valued `Real` subtypes that support hashing hook into the hashing protocol ([#63262]).
 * `tap(f)` creates a function that calls `f(x)` for side effects and returns `x` ([#61340]).
+* `Base.growat!(a::Vector, i, delta)` is a new public (but not exported) function that grows `a`
+  by `delta` uninitialized elements inserted at index `i`.
 * `unsplat(f)` creates a function that bundles its arguments into a tuple and passes them to `f`;
   it is the inverse of `splat` ([#62714]).
 * `Base.set_binding_visibility!` sets the declared visibility (`:none`, `:public`, or `:export`) of a name
@@ -224,6 +226,8 @@ New library features
   fit on a single line, truncated to the display width, instead of showing no data at all ([#62543]).
 * The element type of broadcast expressions now uses regular inference machinery rather than an idiosyncratic
   heuristic. This can help fused or empty broadcasts infer to more precise element types ([#62564]).
+* New method `insert!(a::Vector, indices::AbstractUnitRange, items)` inserts several elements at once,
+  so that afterwards `a[indices] == items`.
 
 Standard library changes
 ------------------------

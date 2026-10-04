@@ -1572,6 +1572,52 @@ function resize!(a::Vector, nl_::Integer; first::Bool=false)
 end
 
 """
+    growat!(a::Vector, i::Integer, delta::Integer) -> a
+
+Grow `a` by `delta` elements inserted at index `i`, so that the new elements occupy
+`i:i+delta-1` and the elements previously at `i:end` move to `i+delta:end`. `i` must be
+between `1` and `length(a) + 1`, and `delta` must be non-negative. As with
+[`resize!`](@ref), the new elements are not guaranteed to be initialized.
+
+If `a` has spare capacity at the end nearer to `i`, only the elements between `i` and that
+end are moved, so growing near either end of `a` is cheap.
+
+`growat!(a, i, delta)` is undone by `deleteat!(a, i:i+delta-1)`.
+
+See also [`resize!`](@ref), [`insert!`](@ref), [`deleteat!`](@ref).
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+
+# Examples
+```jldoctest
+julia> a = Any[1, 2, 3];
+
+julia> Base.growat!(a, 2, 2)
+5-element Vector{Any}:
+   1
+ #undef
+ #undef
+   2
+   3
+
+julia> a[2:3] = ["x", "y"];
+
+julia> a
+5-element Vector{Any}:
+ 1
+  "x"
+  "y"
+ 2
+ 3
+```
+"""
+function growat!(a::Vector, i::Integer, delta::Integer)
+    _growat!(a, i, delta)
+    return a
+end
+
+"""
     sizehint!(s, n; first::Bool=false, shrink::Bool=true) -> s
 
 Suggest that collection `s` reserve capacity for at least `n` elements. That is, if
@@ -1867,6 +1913,42 @@ function _insert!(a::Vector{T}, i::Integer, item::T) where T
     _growat!(a, i, 1)
     # :noub, because _growat! already did bound check
     @inbounds a[i] = item
+    return a
+end
+
+"""
+    insert!(a::Vector, indices::AbstractUnitRange{<:Integer}, items)
+
+Insert the elements of `items` into `a` so that they occupy `indices` in the resulting
+`a`, i.e. afterwards `a[indices] == items`. `length(items)` must equal `length(indices)`,
+and `first(indices)` must be between `1` and `length(a) + 1`.
+
+See also [`splice!`](@ref), [`append!`](@ref), [`prepend!`](@ref).
+
+!!! compat "Julia 1.14"
+    This method requires at least Julia 1.14.
+
+# Examples
+```jldoctest
+julia> insert!([1, 2, 3, 4], 2:3, [10, 20])
+6-element Vector{Int64}:
+  1
+ 10
+ 20
+  2
+  3
+  4
+```
+"""
+function insert!(a::Vector{T}, r::AbstractUnitRange{<:Integer}, items) where T
+    n = length(r)
+    length(items) == n || throw(DimensionMismatch(LazyString(
+        "length of indices (", n, ") does not match the number of items (", length(items), ")")))
+    f = Int(first(r))
+    1 <= f <= length(a) + 1 || throw(BoundsError(a, f))
+    n == 0 && return a
+    _growat!(a, f, n)
+    copyto!(a, f, items)
     return a
 end
 
