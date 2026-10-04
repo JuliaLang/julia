@@ -40,6 +40,9 @@
 #ifdef HAVE_KEVENT
 #include <sys/event.h>
 #endif
+#ifdef _OS_FREEBSD_
+#include <sys/procctl.h>
+#endif
 
 // 8M signal stack, same as default stack size (though we barely use this)
 static const size_t sig_stack_size = 8 * 1024 * 1024;
@@ -1085,11 +1088,43 @@ const static int sigwait_sigs[] = {
     0
 };
 
+// The process whose exit should terminate ours, if any
+static pid_t exit_with_parent_pid = 0;
+
 static void jl_sigsetset(sigset_t *sset)
 {
     sigemptyset(sset);
     for (const int *sig = sigwait_sigs; *sig; sig++)
         sigaddset(sset, *sig);
+}
+
+// Terminate this process when `parent` exits. This is best-effort: we keep
+// running if the platform does not support it, if setting it up fails, or if
+// Julia does not handle signals. Must be called before any threads are started.
+void jl_exit_with_parent(pid_t parent) JL_NOTSAFEPOINT
+{
+    if (jl_options.handle_signals != JL_OPTIONS_HANDLE_SIGNALS_ON)
+        return;
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+    // have the kernel send SIGUSR1 when our parent exits, and keep it blocked
+    // until the signal listener waits for it
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, SIGUSR1);
+    if (pthread_sigmask(SIG_BLOCK, &sset, NULL) != 0)
+        return;
+#if defined(_OS_LINUX_)
+    if (prctl(PR_SET_PDEATHSIG, SIGUSR1) != 0)
+        return;
+#else
+    int sig = SIGUSR1;
+    if (procctl(P_PID, 0, PROC_PDEATHSIG_CTL, &sig) != 0)
+        return;
+#endif
+    exit_with_parent_pid = parent;
+#elif defined(HAVE_KEVENT)
+    exit_with_parent_pid = parent;
+#endif
 }
 
 #ifdef HAVE_KEVENT
@@ -1109,6 +1144,15 @@ static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
         // Installing SIG_IGN for SIGINT can race with its handler installation.
         signal(sig, sig == SIGINT ? sigint_handler : SIG_IGN);
     }
+}
+
+// Returns whether the parent already exited before we started watching it, in
+// which case registering fails or no exit event will be delivered.
+static int kqueue_parent(int sigqueue, struct kevent *ev)
+{
+    EV_SET(ev, exit_with_parent_pid, EVFILT_PROC, EV_ADD, NOTE_EXIT, 0, NULL);
+    return (kevent(sigqueue, ev, 1, NULL, 0, NULL) != 0 && errno == ESRCH) ||
+           getppid() != exit_with_parent_pid;
 }
 #endif
 
@@ -1234,6 +1278,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #endif
 #ifdef HAVE_KEVENT
     struct kevent ev;
+    int parent_gone = 0;
     int sigqueue = kqueue();
     if (sigqueue == -1) {
         perror("signal kqueue");
@@ -1246,13 +1291,21 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             for (const int *sig = sigwait_sigs; *sig; sig++)
                 signal(*sig, SIG_DFL);
         }
+        else if (exit_with_parent_pid) {
+            parent_gone = kqueue_parent(sigqueue, &ev);
+        }
     }
 #endif
     while (1) {
         sig = 0;
         errno = 0;
 #ifdef HAVE_KEVENT
-        if (sigqueue != -1) {
+        if (parent_gone) {
+            // exit as if terminated, as we would on the parent's exit event
+            parent_gone = 0;
+            sig = SIGTERM;
+        }
+        else if (sigqueue != -1) {
             int nevents = kevent(sigqueue, NULL, 0, &ev, 1, NULL);
             if (nevents == -1) {
                 if (errno == EINTR)
@@ -1266,7 +1319,8 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                     signal(*sig, SIG_DFL);
                 continue;
             }
-            sig = ev.ident;
+            // exit as if terminated when our parent exits
+            sig = ev.filter == EVFILT_PROC ? SIGTERM : ev.ident;
         }
         else
 #endif
@@ -1281,6 +1335,13 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 continue;
             sig = SIGABRT; // this branch can't occur, unless we had stack memory corruption of sset
         }
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+        // exit as if terminated when our parent exits.
+        // Linux also sends this when the thread that spawned us exits, in which case
+        // another thread of the parent adopts us and we handle it as a normal SIGUSR1.
+        if (sig == SIGUSR1 && exit_with_parent_pid && getppid() != exit_with_parent_pid)
+            sig = SIGTERM;
+#endif
         profile = 0;
 #ifndef HAVE_MACH
 #if defined(HAVE_TIMER)
