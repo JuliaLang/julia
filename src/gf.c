@@ -4204,6 +4204,26 @@ JL_DLLEXPORT jl_value_t *jl_sparam_slot_value(jl_value_t *sp JL_PROPAGATES_ROOT)
     return jl_sparam_defined_value(sp);
 }
 
+// Whether static parameter `i` is undefined for every call to `mi`: its slot is an
+// unconstrained marker, and the variable is unused in the signature or `mi` is a dispatch tuple
+JL_DLLEXPORT int jl_sparam_is_undef(jl_method_instance_t *mi, size_t i) JL_NOTSAFEPOINT
+{
+    if (!jl_is_method(mi->def.method) || i >= jl_svec_len(mi->sparam_vals))
+        return 0;
+    jl_value_t *sp = jl_svecref(mi->sparam_vals, i);
+    if (!jl_is_svec(sp) || jl_svec_len(sp) != 2 || jl_svecref(sp, 1) != jl_false)
+        return 0;
+    jl_value_t *env = mi->def.method->sig;
+    for (size_t j = 0; j < i && jl_is_unionall(env); j++)
+        env = ((jl_unionall_t*)env)->body;
+    if (!jl_is_unionall(env))
+        return 0;
+    jl_tvar_t *var = ((jl_unionall_t*)env)->var;
+    if (jl_svecref(sp, 0) != (jl_value_t*)var)
+        return 0;
+    return !jl_has_typevar(((jl_unionall_t*)env)->body, var) || jl_is_dispatch_tupletype(mi->specTypes);
+}
+
 jl_value_t *jl_fptr_sparam(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
 {
     jl_svec_t *sparams = jl_get_ci_mi(m)->sparam_vals;
