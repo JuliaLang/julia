@@ -247,10 +247,16 @@ function FilterSpec(cset::ConditionSet)
         end
     end
     for itlsm in cset.initialisms
-        rx = Regex(join((string("(?:(?:\\b|_+)(?:\\Q", ltr, "\\E|\\Q", uppercase(ltr),
-                                "\\E)\\w+|\\p{Ll}\\Q", uppercase(ltr), "\\E)")
-                         for ltr in itlsm), "[\\W_]*?"))
-        push!(spec.regexps, rx)
+        initials = map(enumerate(itlsm)) do (i, ltr)
+            lower, upper = string("\\Q", ltr, "\\E"), string("\\Q", uppercase(ltr), "\\E")
+            # Lookbehinds let PCRE skip ahead to the first letter, but would change later matches
+            if i == 1
+                string("(?:(?<![^\\W_])(?:", lower, '|', upper, ")\\w+|(?<=\\p{Ll})", upper, ')')
+            else
+                string("(?:(?:\\b|_+)(?:", lower, '|', upper, ")\\w+|\\p{Ll}", upper, ')')
+            end
+        end
+        push!(spec.regexps, Regex(join(initials, "[\\W_]*?")))
     end
     for fuzz in cset.fuzzy
         for word in eachsplit(fuzz)
@@ -267,24 +273,20 @@ end
 
 
 """
-    filterchunkrev!(out, candidates, spec, seen, idx; maxtime, maxresults) -> Int
+    filterchunkrev!(out, candidates, spec, idx; maxtime, maxresults) -> Int
 
 Incrementally filter `candidates[1:idx]` in reverse order.
 
 Pushes matches onto `out` until either `maxtime` is exceeded or `maxresults`
-collected, then returns the new resume index. Only unique entries (by mode and content)
-are added to avoid showing duplicate history items.
+collected, then returns the new resume index.
 """
 function filterchunkrev!(out::Vector{HistEntry}, candidates::DenseVector{HistEntry},
-                         spec::FilterSpec, seen::Set{Tuple{Symbol,String}}, idx::Int = length(candidates);
+                         spec::FilterSpec, idx::Int = length(candidates);
                          maxtime::Float64 = Inf, maxresults::Int = length(candidates))
     batchsize = clamp(length(candidates) ÷ 512, 10, 1000)
     for batch in Iterators.partition(idx:-1:1, batchsize)
         for outer idx in batch
             entry = candidates[idx]
-            if (entry.mode, entry.content) ∈ seen
-                continue
-            end
             if !isempty(spec.modes)
                 entry.mode ∈ spec.modes || continue
             end
@@ -310,7 +312,6 @@ function filterchunkrev!(out::Vector{HistEntry}, candidates::DenseVector{HistEnt
                 end
             end
             matchfail && continue
-            push!(seen, (entry.mode, entry.content))
             pushfirst!(out, entry)
             length(out) == maxresults && break
         end
