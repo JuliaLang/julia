@@ -6521,6 +6521,18 @@ mutable struct ANonIsBitsType
     v::Int64
 end
 @test Base.uniontypes(Union{Int64, ANonIsBitsType}) == Base.uniontypes(Union{ANonIsBitsType, Int64})
+# components differing only in value parameters
+@test Union{Val{1}, Val{2}} === Union{Val{2}, Val{1}}
+@test Union{Val{:a}, Val{:b}} === Union{Val{:b}, Val{:a}}
+@test Union{Val{true}, Val{false}} === Union{Val{false}, Val{true}}
+@test Union{Val{1.0}, Val{2.0}} === Union{Val{2.0}, Val{1.0}}
+@test Union{Val{'a'}, Val{'b'}} === Union{Val{'b'}, Val{'a'}}
+@test Union{Val{1}, Val{:a}} === Union{Val{:a}, Val{1}}
+@test Union{Val{1}, Val{:a}, Val{1.0}} === Union{Val{1.0}, Val{:a}, Val{1}}
+@test Base.uniontypes(Union{Val{1}, Val{-1}, Val{256}}) == Any[Val{-1}, Val{1}, Val{256}]
+@test Base.uniontypes(Union{Val{:b}, Val{:a}}) == Any[Val{:a}, Val{:b}]
+@test Base.uniontypes(Union{Val{:a}, Val{1}}) == Any[Val{1}, Val{:a}]
+@test Union{Pair{Val{1}, Val{2}}, Pair{Val{2}, Val{1}}} === Union{Pair{Val{2}, Val{1}}, Pair{Val{1}, Val{2}}}
 
 # issue 18933
 module GlobalDef18933
