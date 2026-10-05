@@ -3,7 +3,7 @@
 environment_id = "dd8a69ad-5fb8-4982-8386-9647fd58ac86"  # generated
 julia_version = "1.14.0-DEV"
 manifest_format = "2.2"
-project_hash = "9b958b62d41055451bda1610bdbb124b641de9e2"
+project_hash = "6f30eb0e4462e9a5c59d7323aed6b40fd6e2f3da"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -213,11 +213,11 @@ version = "1.11.0"
 
 [[deps.Revise]]
 deps = ["CRC32c", "CodeTracking", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Preferences", "REPL", "UUIDs"]
-git-tree-sha1 = "6098400ed73008c45f5f47b35ae114475436ad37"
-repo-rev = "kf/define_method"
-repo-url = "https://github.com/KenoAIStaging/Revise.jl.git"
+git-tree-sha1 = "df91ef1008af48368d40cf452d3c01fa2270a312"
+repo-rev = "9eaa442e78838987b0fe2fb2888401c563e33a19"
+repo-url = "https://github.com/timholy/Revise.jl.git"
 uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
-version = "3.16.2"
+version = "3.17.2"
 
     [deps.Revise.extensions]
     DistributedExt = "Distributed"
