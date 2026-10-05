@@ -650,12 +650,35 @@ end
         @test T(big"2"^(n+1)) === T(Inf)
         @test T(big"2"^(n+1) - big"2"^(n-precision(T))) === T(Inf)
         @test T(big"2"^(n+1) - big"2"^(n-precision(T)) - 1) === floatmax(T)
-        # rounding toward zero never overflows
+
+        # 2^p + 1 is halfway between 2^p and 2^p + 2, which have even and odd significands
+        p = precision(T)
+        x = big"2"^p + 1
+        lo = T(2)^p
+        hi = lo + 2
         for s in (1, -1)
-            x = s * big"2"^(n+1)
-            @test T(x, RoundToZero) === copysign(floatmax(T), s)
-            @test T(x, RoundDown) === (s > 0 ? floatmax(T) : -T(Inf))
-            @test T(x, RoundUp) === (s > 0 ? T(Inf) : -floatmax(T))
+            @test T(s * x) === s * lo
+            @test T(s * (x + 2)) === s * (lo + 4)
+            @test T(s * x, RoundNearestTiesAway) === s * hi
+            @test T(s * x, RoundToZero) === s * lo
+            @test T(s * x, RoundFromZero) === s * hi
+        end
+        @test T(x, RoundNearestTiesUp) === hi
+        @test T(-x, RoundNearestTiesUp) === -lo
+        @test T(x, RoundUp) === hi
+        @test T(-x, RoundUp) === -lo
+        @test T(x, RoundDown) === lo
+        @test T(-x, RoundDown) === -hi
+
+        # values beyond the finite range only round to floatmax(T) when rounding towards zero
+        for x in (big"2"^(n+1), big"2"^(n+2) + 1)
+            @test T(x, RoundToZero) === floatmax(T)
+            @test T(-x, RoundToZero) === -floatmax(T)
+            @test T(x, RoundDown) === floatmax(T)
+            @test T(-x, RoundDown) === T(-Inf)
+            @test T(x, RoundUp) === T(Inf)
+            @test T(-x, RoundUp) === -floatmax(T)
+            @test T(-x, RoundNearestTiesUp) === T(-Inf)
         end
     end
 end
