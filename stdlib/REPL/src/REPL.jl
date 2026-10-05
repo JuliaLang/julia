@@ -1769,9 +1769,9 @@ function setup_interface(
                     LineEdit.commit_line(s)
                     # execute the statement
                     terminal = LineEdit.terminal(s) # This is slightly ugly but ok for now
-                    raw!(terminal, false) && disable_bracketed_paste(terminal)
+                    LineEdit.leave_input_mode(terminal)
                     @invokelatest LineEdit.mode(s).on_done(s, LineEdit.buffer(s), true)
-                    raw!(terminal, true) && enable_bracketed_paste(terminal)
+                    LineEdit.enter_input_mode(terminal)
                     LineEdit.push_undo(s) # when the last line is incomplete
                 end
                 oldpos = pos

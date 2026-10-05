@@ -41,34 +41,29 @@ mutable struct TerminalProperties
 end
 
 """
-    receive_da1!(props::TerminalProperties, io::IO)
+    receive_private_csi!(props::TerminalProperties, term::TextTerminal)
 
-Read and parse a DA1 (Device Attributes) response from `io`
-(after `\\e[?` has been consumed by the keymap).
-Reads until `c` (DA1 terminator) or `^C` (bail-out), parses the semicolon-separated
-parameters as integers, and stores them in `props.da1`.
+Read a private CSI sequence from `term` (after `\\e[?` has been consumed by the
+keymap) up to its final byte or `^C` (bail-out), and act on it:
+- a DA1 (Device Attributes) response, `\\e[?…c`, has its parameters stored in `props.da1`;
+- a palette update notification, `\\e[?997;<1|2>n`, prompts a [`query_colors`](@ref).
+
+Anything else, or a sequence cut short, is discarded.
 """
-function receive_da1!(props::TerminalProperties, io::IO)
-    buf = IOBuffer()
-    while !eof(io)
-        b = read(io, UInt8)
-        if b == UInt8('c')  # DA1 terminator
-            break
-        elseif b == 0x03  # ^C bail-out
-            break
-        else
-            write(buf, b)
-        end
+function receive_private_csi!(props::TerminalProperties, term::TextTerminal)
+    buf = Base.StringVector(0)
+    final = 0x00
+    while !eof(term)
+        final = read(term, UInt8)
+        (final == 0x03 || final in 0x40:0x7e) && break
+        push!(buf, final)
     end
-    body = String(take!(buf))
-    params = Int[]
-    for part in split(body, ';')
-        n = tryparse(Int, part)
-        if n !== nothing
-            push!(params, n)
-        end
+    body = String(buf)
+    if final == UInt8('c')
+        props.da1 = Int[n for n in tryparse.(Int, split(body, ';')) if !isnothing(n)]
+    elseif final == UInt8('n') && startswith(body, "997;")
+        props.awaiting_colors || query_colors(props, term)
     end
-    props.da1 = params
     return
 end
 
@@ -218,6 +213,27 @@ function query_colors(props::TerminalProperties, term::TextTerminal)
     flush(term)
     nothing
 end
+
+"""
+    enter_input_mode(term::TextTerminal)
+
+Turn on:
+- raw mode (no line editing, no echo, no signal generation)
+- bracketed paste mode (so pasted text is not interpreted as commands)
+- palette update notifications (so the terminal can tell us when its palette changes)
+
+Undone by `leave_input_mode`.
+"""
+enter_input_mode(term::UnixTerminal) = raw!(term, true) && write(term.out_stream, "\e[?2004h\e[?2031h")
+enter_input_mode(term::TextTerminal) = raw!(term, true)
+
+"""
+    leave_input_mode(term::TextTerminal)
+
+Undo `enter_input_mode`: turn off raw mode, bracketed paste, and palette update notifications.
+"""
+leave_input_mode(term::UnixTerminal) = raw!(term, false) && write(term.out_stream, "\e[?2004l\e[?2031l")
+leave_input_mode(term::TextTerminal) = raw!(term, false)
 
 # interface for TextInterface
 function Base.getproperty(ti::TextInterface, name::Symbol)
@@ -2280,8 +2296,8 @@ const escape_defaults = merge!(
         "\e*" => nothing,
         "\e[*" => nothing,
         "\eO*" => nothing,
-        # Intercept DA1 responses
-        "\e[?" => (s::MIState, o...) -> receive_da1!(s.terminal_properties, terminal(s)),
+        # Intercept DA1 responses and palette update notifications
+        "\e[?" => (s::MIState, o...) -> receive_private_csi!(s.terminal_properties, terminal(s)),
         # Intercept OSC responses
         "\e]" => (s::MIState, o...) -> receive_osc!(s.terminal_properties, terminal(s)),
         # Also ignore extended escape sequences
@@ -2968,7 +2984,7 @@ function history_search(mistate::MIState)
         mistate.mode_state[mimode] = init_state(term, mimode)
     end
     pstate = mistate.mode_state[mimode]
-    raw!(term, true) && enable_bracketed_paste(term)
+    enter_input_mode(term)
     mistate.current_mode = mimode
     activate(mimode, state(mistate, mimode), termbuf, term)
     commit_changes(term, termbuf)
@@ -3242,8 +3258,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
         end
         status ∈ (:ok, :ignore) || break
     end
-    raw!(term, true)
-    enable_bracketed_paste(term)
+    enter_input_mode(term)
     try
         activate(prompt, s, term, term)
         # Notify that prompt is ready for input
@@ -3293,7 +3308,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
     finally
         put!(s.async_channel, Returns(:done))
         wait(t1)
-        raw!(term, false) && disable_bracketed_paste(term)
+        leave_input_mode(term)
     end
     # unreachable
 end

@@ -32,7 +32,6 @@ precompile(Base._atexit, (Cint,))
 # used by REPL
 precompile(Tuple{typeof(Base.getproperty), Base.Terminals.TTYTerminal, Symbol})
 precompile(Tuple{typeof(Base.reseteof), Base.Terminals.TTYTerminal})
-precompile(Tuple{typeof(Base.Terminals.enable_bracketed_paste), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.Terminals.width), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.Terminals.height), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.write), Base.Terminals.TTYTerminal, Array{UInt8, 1}})
