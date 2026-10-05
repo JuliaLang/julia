@@ -210,6 +210,7 @@ uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/juli
 - **[curl](https://curl.se)**                 — libcurl provides download and proxy support.
 - **[libssh2](https://www.libssh2.org)**              — library for SSH transport, used by libgit2 for packages with SSH remotes.
 - **[OpenSSL](https://www.openssl.org/)**              — library used for cryptography and transport layer security, used by libgit2 and libssh2.
+- **[PicoSAT](https://github.com/JuliaLang/PicoSAT)**  — SAT solver, used by Julia's package manager to resolve package versions.
 - **[utf8proc](https://julialang.org/utf8proc/)**             — a library for processing UTF-8 encoded Unicode strings.
 - **[LLVM libunwind](https://www.nongnu.org/libunwind)**       — LLVM's fork of [libunwind], a library that determines the call-chain of a program.
 - **[ITTAPI](https://github.com/intel/ittapi)**               — Intel's Instrumentation and Tracing Technology and Just-In-Time API.
