@@ -240,6 +240,9 @@ Standard library changes
   (the project uuid, or a generated one), so containers sharing a depot with different projects mounted
   at the same path keep their caches from overwriting each other. Loading is unaffected, as it checks
   file contents rather than names ([#63268]).
+* `libpicosat_jll` is a new standard library that bundles the [PicoSAT](https://github.com/JuliaLang/PicoSAT)
+  SAT solver for the package manager's dependency resolver. It is not part of Julia's public interface
+  and may stop being bundled in a future release ([#59119]).
 
 #### JuliaSyntaxHighlighting
 
