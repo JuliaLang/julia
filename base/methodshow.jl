@@ -303,7 +303,7 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
                     "generic function")
         print(io, " for ", what, " ", namedisplay, " from ")
 
-        col = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, parentmodule_before_main(tn.module))
+        col = get_stacktrace_color(parentmodule_before_main(tn.module))
 
         printstyled(io, tn.module, color=col)
     elseif '#' in sname
@@ -333,7 +333,7 @@ function _modulecolor(method::Method)
         return nothing
     end
     m = parentmodule_before_main(method)
-    return get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
+    return get_stacktrace_color(m)
 end
 
 function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
