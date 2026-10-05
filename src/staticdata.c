@@ -289,6 +289,10 @@ void *native_functions;   // opaque jl_native_code_desc_t blob used for fetching
 static htable_t field_replace;
 static htable_t bits_replace;
 
+// queued Strings, keyed by content (idset uses egal), so equal Strings are serialized once
+static jl_genericmemory_t *serialized_strings_list;
+static jl_genericmemory_t *serialized_strings_keyset;
+
 
 typedef struct {
     ios_t *s;                   // the main stream
@@ -1090,6 +1094,18 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
     if (jl_is_foreign_type(t) == 1) {
         jl_error("Cannot serialize instances of foreign datatypes");
     }
+    if (t == jl_string_type) {
+        // equal String already queued: _backref_id redirects references to it
+        jl_value_t *str = jl_idset_get(serialized_strings_list, serialized_strings_keyset, v);
+        if (str == NULL) {
+            ssize_t idx;
+            serialized_strings_list = jl_idset_put_key(serialized_strings_list, v, &idx);
+            serialized_strings_keyset = jl_idset_put_idx(serialized_strings_list, serialized_strings_keyset, idx);
+        }
+        else if (str != v) {
+            return;
+        }
+    }
 
     // Items that require postorder traversal must visit their children prior to insertion into
     // the worklist/serialization_order (and also before their first use)
@@ -1257,6 +1273,11 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
         return item;
     }
     void *idx = ptrhash_get(&serialization_order, v);
+    if (idx == HT_NOTFOUND && jl_is_string(v)) {
+        jl_value_t *str = jl_idset_get(serialized_strings_list, serialized_strings_keyset, v);
+        if (str != NULL)
+            idx = ptrhash_get(&serialization_order, str);
+    }
     if (idx == HT_NOTFOUND) {
         jl_(jl_typeof(v));
         jl_(v);
@@ -3149,6 +3170,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         ptrhash_put(&fptr_to_id, (void*)(uintptr_t)jl_builtin_f_addrs[i], (void*)(i + 2));
     }
     htable_new(&serialization_order, 25000);
+    serialized_strings_list = jl_alloc_memory_any(0);
+    serialized_strings_keyset = jl_alloc_memory_any(0);
     htable_new(&nullptrs, 0);
     arraylist_new(&object_worklist, 0);
     arraylist_new(&deferred_supers, 0);
@@ -3438,6 +3461,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     htable_free(&field_replace);
     htable_free(&bits_replace);
     htable_free(&serialization_order);
+    serialized_strings_list = NULL;
+    serialized_strings_keyset = NULL;
     htable_free(&nullptrs);
     htable_free(&symbol_table);
     htable_free(&fptr_to_id);
