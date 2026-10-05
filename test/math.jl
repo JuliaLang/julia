@@ -227,6 +227,12 @@ end
             @test ldexp(floatmin(T)/3, 11) == T(ldexp(big(floatmin(T)/3), 11))
             @test ldexp(floatmin(T)/11, -10) == T(ldexp(big(floatmin(T)/11), -10))
             @test ldexp(-floatmin(T)/11, -10) == T(ldexp(big(-floatmin(T)/11), -10))
+            # results between nextfloat(zero(T))/2 and nextfloat(zero(T)) round up (ties to even)
+            p = -exponent(nextfloat(zero(T)))
+            @test ldexp(T(0.75), -p) === nextfloat(zero(T))
+            @test ldexp(-nextfloat(T(1)), -p-1) === -nextfloat(zero(T))
+            @test ldexp(T(1), -p-1) === zero(T)
+            @test ldexp(prevfloat(T(1)), -p-1) === zero(T)
         end
     end
 end
@@ -1545,6 +1551,19 @@ end
         @test func(1.6341681540852291e308, -2., floatmax(Float64)) == -1.4706431733081426e308 # case where inv(a)*c*a == Inf
         @test func(-2., 1.6341681540852291e308, floatmax(Float64)) == -1.4706431733081426e308 # case where inv(b)*c*b == Inf
         @test func(-1.9369631f13, 2.1513551f-7, -1.7354427f-24) == -4.1670958f6
+        # a*b+c rounds (in Float64) to exactly halfway between two Float32 subnormals
+        @test func(reinterpret(Float32, 0x97000800), reinterpret(Float32, 0x1cfff001), reinterpret(Float32, 0x00010002)) === reinterpret(Float32, 0x00010001)
+        # abhi+c is exactly halfway between two Float64 values and ablo decides the rounding
+        @test func(reinterpret(Float64, 0x3ca0000000000001), reinterpret(Float64, 0x3feffffffffffffe), reinterpret(Float64, 0x3ff0000000000001)) === reinterpret(Float64, 0x3ff0000000000001)
+        @test func(-floatmin(Float64), nextfloat(0.0), nextfloat(0.0)) === nextfloat(0.0)
+        # tiny normal b makes the fma-free two_mul inexact
+        @test func(reinterpret(Float64, 0xfee492df2d70dce5), reinterpret(Float64, 0x801ad51356e60077), reinterpret(Float64, 0xbf1140536185456e)) === 1.669822474902846e-21
+        # a*b+c rounded to Float32 is exactly halfway between two Float16 values
+        @test func(Float16(-336.0), Float16(-37.25), Float16(0.0003653)) === Float16(1.252e4)
+        for _ in 1:2^18
+            a, b, c = reinterpret.(Float16, rand(UInt16, 3))
+            @test isequal(func(a, b, c), Float16(big(a) * big(b) + big(c))) context=(a,b,c)
+        end
     end
 end
 
