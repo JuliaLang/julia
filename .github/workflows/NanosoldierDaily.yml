@@ -22,7 +22,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BODY: |
-            Executing the daily benchmark build, I will reply here when finished:
+            Executing the daily benchmark build, Nanosoldier will reply here when finished:
 
             @nanosoldier `runbenchmarks(isdaily = true, priority = "low")`
         run: gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" -f body="$BODY"
