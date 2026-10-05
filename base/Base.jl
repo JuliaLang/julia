@@ -298,6 +298,8 @@ include("loading.jl")
 # BinaryPlatforms, used by Artifacts.  Needs `Sort`.
 include("binaryplatforms.jl")
 
+using .BinaryPlatforms.CPUID: @cpu_supports
+
 # misc useful functions & macros
 include("timing.jl")
 include("client.jl")
