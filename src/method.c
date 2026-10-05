@@ -1396,13 +1396,15 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
 // stored in a flat list (`m.roots`), and during serialization and
 // deserialization of code we replace C-pointers to these items with a
 // relocatable reference. We use a bipartite reference, `(key, index)` pair,
-// where `key` identifies the module that added the root and `index` numbers
-// just those roots with the same `key`.
+// where `key` is the build id of the image that added the root and `index`
+// numbers just those roots with the same `key`. The build id of an image is
+// the checksum of its content, which is not known while it is being written,
+// so the roots it adds are keyed `JL_BUILD_ID_PENDING` until it is loaded.
 //
 // During precompilation (serialization), we save roots that were added to
-// methods that are tagged with this package's module-key, even for "external"
-// methods not owned by a module currently being precompiled. During
-// deserialization, we load the new roots and append them to the method. When
+// methods with the pending key, even for "external" methods not owned by a
+// module currently being precompiled. During deserialization, we load the new
+// roots and append them to the method under the build id of the image. When
 // code is deserialized (see ircode.c), we replace the bipartite reference with
 // the pointer to the memory address in the current session. The bipartite
 // reference allows us to cache both roots and references in precompilation .ji
@@ -1461,14 +1463,15 @@ static void prepare_method_for_roots(jl_method_t *m, uint64_t modid) JL_CANSAFEP
     }
 }
 
-// Add a single root with owner `mod` to a method
+// Add a single root to a method. `mod` is the module being precompiled, whose image will own
+// the root (see `jl_precompile_toplevel_module`), or NULL outside of precompilation.
 JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_t* root)
 {
     JL_GC_PUSH2(&m, &root);
     uint64_t modid = 0;
     if (mod) {
         assert(jl_is_module(mod));
-        modid = mod->build_id.lo;
+        modid = JL_BUILD_ID_PENDING; // the image is not written yet, so its build id is not known
     }
     assert(jl_is_method(m));
     prepare_method_for_roots(m, modid);

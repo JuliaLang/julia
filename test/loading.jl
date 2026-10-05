@@ -1789,7 +1789,7 @@ module loaded_pkgid4 end
     pkid2 = Base.PkgId("pkgid2")
     pkid3 = Base.PkgId("pkgid3")
     pkid4 = Base.PkgId("pkgid4")
-    build_id = UInt128(0)
+    build_id = UInt64(0)
     e = Base.Event()
     @test nothing === @lock Base.require_lock Base.start_loading(pkid4, build_id, false)     # module pkgid4
     @test nothing === @lock Base.require_lock Base.start_loading(pkid1, build_id, false)     # module pkgid1
@@ -2280,7 +2280,7 @@ end
         oldBase64 = Base.unreference_module(Base64_key)
         cc = Base.compilecache(Base64_key)
         sourcespec = Base.locate_package_load_spec(Base64_key)
-        @test Base.stale_cachefile(Base64_key, UInt128(0), sourcespec, cc[1]) !== true
+        @test Base.stale_cachefile(Base64_key, UInt64(0), sourcespec, cc[1]) !== true
         empty!(DEPOT_PATH)
         Base.require_stdlib(Base64_key)
         push!(DEPOT_PATH, depot_path)

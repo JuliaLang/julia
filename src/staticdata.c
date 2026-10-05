@@ -319,7 +319,6 @@ typedef struct {
     jl_array_t *link_ids_external_fnvars;
     jl_array_t *method_roots_list;
     htable_t method_roots_index;
-    uint64_t worklist_key;
     jl_query_cache *query_cache;
     jl_ptls_t ptls;
     jl_image_t *image;
@@ -874,7 +873,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                         void **pfound = ptrhash_bp(&s->method_roots_index, def);
                         if (*pfound == HT_NOTFOUND) {
                             *pfound = def;
-                            size_t nwithkey = nroots_with_key(def, s->worklist_key);
+                            size_t nwithkey = nroots_with_key(def, JL_BUILD_ID_PENDING);
                             if (nwithkey) {
                                 jl_array_ptr_1d_push(s->method_roots_list, (jl_value_t*)def);
                                 jl_array_t *newroots = jl_alloc_vec_any(nwithkey);
@@ -889,7 +888,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                                     nblocks2 = jl_array_nrows(def->root_blocks);
                                 }
                                 while (rle_iter_increment(&rootiter, nroots, rletable, nblocks2)) {
-                                    if (rootiter.key == s->worklist_key) {
+                                    if (rootiter.key == JL_BUILD_ID_PENDING) {
                                         jl_value_t *newroot = jl_array_ptr_ref(def->roots, rootiter.i);
                                         jl_queue_for_serialization(s, newroot);
                                         jl_array_ptr_set(newroots, k++, newroot);
@@ -1291,6 +1290,7 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
 
     // Handle the fields requiring special attention
     jl_module_t *newm = (jl_module_t*)&s->s->buf[reloc_offset];
+    newm->build_id = 0; // the checksum of the image, set when it is loaded
     newm->name = NULL;
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, name)));
     arraylist_push(&s->relocs_list, (void*)backref_id(s, m->name, s->link_ids_relocs));
@@ -3171,7 +3171,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     jl_value_t ***tags = s.incremental ? NULL : _tags;
     if (worklist) {
         s.method_roots_list = jl_alloc_vec_any(0);
-        s.worklist_key = jl_worklist_key(worklist);
     }
     else {
         get_tags(_tags);
@@ -3443,7 +3442,7 @@ static uint8_t jl_get_toplevel_syntax_version(void) JL_CANSAFEPOINT
     return jl_unbox_uint8(syntax_version);
 }
 
-static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_array_t *mod_array, jl_array_t **udeps, int64_t *srctextpos) JL_CANSAFEPOINT
+static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_array_t *mod_array, jl_array_t **udeps, int64_t *srctextpos, arraylist_t *build_id_pos) JL_CANSAFEPOINT
 {
     write_uint8(f, jl_cache_flags());
     // coverage instrumentation of the image, part of the cache identity
@@ -3455,7 +3454,7 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
     // select.
     write_uint8(f, jl_get_toplevel_syntax_version());
     // write description of contents (name, uuid, buildid)
-    write_worklist_for_header(f, worklist);
+    write_worklist_for_header(f, worklist, build_id_pos);
     // Determine unique (module, abspath, fsize, hash, mtime) dependencies for the files defining modules in the worklist
     // (see Base._require_dependencies). These get stored in `udeps` and written to the ji-file header
     // (abspath will be converted to a relocatable @depot path before writing, cf. Base.replace_depot_path).
@@ -3468,7 +3467,15 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
     write_mod_list(f, mod_array);
 }
 
-JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *worklist,
+// The build id of an image: a hash of its content, which is never 0 (the key of method roots of
+// unknown origin) and leaves the marker bits clear (see `JL_BUILD_ID_HASH_MASK`).
+static uint64_t jl_image_build_id(const char *buf, size_t n) JL_NOTSAFEPOINT
+{
+    uint64_t h = memhash(buf, n) & JL_BUILD_ID_HASH_MASK;
+    return h ? h : 1;
+}
+
+JL_DLLEXPORT uint64_t jl_create_system_image(void **_native_data, jl_array_t *worklist,
                                              bool_t emit_split, bool_t compress, ios_t **s,
                                              jl_array_t **udeps JL_REQUIRE_ROOTED_SLOT,
                                              int64_t *srctextpos,
@@ -3482,6 +3489,8 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
 
     jl_array_t *mod_array = NULL, *extext_methods = NULL, *new_ext = NULL, *ext_foreign_cis = NULL;
     int64_t datastartpos = 0;
+    arraylist_t build_id_pos; // header positions of the build ids of the modules of the image
+    arraylist_new(&build_id_pos, 0);
     JL_GC_PUSH4(&mod_array, &extext_methods, &new_ext, &ext_foreign_cis);
 
     ext_foreign_cis = jl_alloc_vec_any(0);
@@ -3495,7 +3504,7 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
                 newly_inferred = NULL;
             *_native_data = jl_create_native(NULL, 0, 1, jl_atomic_load_acquire(&jl_world_counter), NULL, suppress_precompile ? (jl_array_t*)jl_an_empty_vec_any : worklist, 0, module_init_order, ext_foreign_cis);
         }
-        jl_write_header_for_incremental(f, worklist, mod_array, udeps, srctextpos);
+        jl_write_header_for_incremental(f, worklist, mod_array, udeps, srctextpos, &build_id_pos);
     }
     else if (_native_data != NULL) {
         *_native_data = jl_create_native(NULL, jl_options.trim, 0, jl_atomic_load_acquire(&jl_world_counter), mod_array, NULL, jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL, module_init_order, ext_foreign_cis);
@@ -3568,7 +3577,7 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     ct->reentrant_timing &= ~0b1000u;
 
     int64_t dataendpos = ios_pos(f);
-    uint32_t checksum = checksumpos ? jl_crc32c(0, &f->buf[datastartpos], dataendpos - datastartpos) : 0;
+    uint64_t checksum = jl_image_build_id(&f->buf[datastartpos], dataendpos - datastartpos);
 
     if (compress) {
         size_t heap_size = dataendpos - datastartpos;
@@ -3584,11 +3593,16 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
         dataendpos = ios_pos(f);
     }
 
-    // Go back and update the checksum in the header
+    // Go back and update the checksum in the header, which is the build id of the modules of the image
     ios_seek(f, checksumpos);
-    write_uint32(f, checksum);
+    write_uint64(f, checksum);
     write_uint64(f, datastartpos);
     write_uint64(f, dataendpos);
+    for (size_t i = 0; i < build_id_pos.len; i++) {
+        ios_seek(f, (int64_t)(uintptr_t)build_id_pos.items[i]);
+        write_uint64(f, checksum);
+    }
+    arraylist_free(&build_id_pos);
     ios_seek(f, dataendpos);
 
     destroy_query_cache(&query_cache);
@@ -3603,7 +3617,7 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
 // static linker resolves its symbols and `handle` is unused.
 extern const char jl_system_image_data[];
 extern const size_t jl_system_image_size;
-extern const uint32_t jl_system_image_checksum;
+extern const uint64_t jl_system_image_checksum;
 extern const jl_image_pointers_t jl_image_pointers;
 
 #define JL_IMAGE_SYM(handle, name, out) (*(void **)(out) = (void *)&name)
@@ -3662,7 +3676,7 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
 static void jl_image_load_metadata(void *handle, jl_image_buf_t *image)
 {
     JL_IMAGE_SYM(handle, jl_image_pointers, &image->pointers);
-    uint32_t *pchecksum;
+    uint64_t *pchecksum;
     JL_IMAGE_SYM(handle, jl_system_image_checksum, &pchecksum);
     image->heap_checksum = *pchecksum;
     // only present if the image was built with coverage counters
@@ -3731,7 +3745,7 @@ static void jl_image_decompress(jl_image_buf_t *image, char *data, size_t len) J
     // Only parse the header here; for incremental images the dependency
     // modules are not known yet, so the full cache validation happens later,
     // against the decompressed buffer.
-    uint32_t checksum;
+    uint64_t checksum;
     int err = jl_read_verify_header(&f, &flags, &checksum, &dataendpos, &datastartpos);
     if (err != 0)
         jl_error("Precompile file header verification checks failed.");
@@ -4043,7 +4057,7 @@ static int all_usings_unchanged_implicit(jl_module_t *mod)
 }
 
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
-                                                 jl_array_t *depmods, uint32_t checksum,
+                                                 jl_array_t *depmods, uint64_t checksum,
                                 /* outputs */    jl_array_t **restored JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **init_order JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **extext_methods JL_REQUIRE_ROOTED_SLOT,
@@ -4450,6 +4464,18 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
         jl_value_t *obj = (jl_value_t*)(image_base + item);
         if (jl_typetagis(obj, jl_typemap_entry_type) || jl_is_method(obj) || jl_is_code_instance(obj)) {
+            if (jl_is_method(obj)) {
+                // the roots this image added to the method are keyed by its build id, which was
+                // not known when they were added (see `jl_add_method_root`)
+                jl_array_t *root_blocks = ((jl_method_t*)obj)->root_blocks;
+                if (root_blocks) {
+                    uint64_t *blocks = jl_array_data(root_blocks, uint64_t);
+                    size_t nx2 = jl_array_nrows(root_blocks);
+                    for (size_t j = 0; j < nx2; j += 2)
+                        if (blocks[j] == JL_BUILD_ID_PENDING)
+                            blocks[j] = checksum;
+                }
+            }
             jl_array_ptr_1d_push(*internal_methods, obj);
             assert(s.incremental);
         }
@@ -4470,7 +4496,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             // TODO: maybe want to hold the lock on `v`, but that only strongly matters for async / thread safety
             // and we are already bad at that
             jl_module_t *mod = (jl_module_t*)obj;
-            mod->build_id.hi = checksum;
+            mod->build_id = checksum;
             if (mod->usings.items != &mod->usings._space[0]) {
                 // arraylist_t assumes we called malloc to get this memory, so make that true now
                 void **newitems = (void**)malloc_s(mod->usings.max * sizeof(void*));
@@ -4586,7 +4612,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         jl_module_t *topmod = (jl_module_t*)jl_array_ptr_ref(*restored, len-1);
         // Ordinarily set during deserialization, but our compiler stub image,
         // just returns a reference to the sysimage version, so we set it here.
-        topmod->build_id.hi = checksum;
+        topmod->build_id = checksum;
         assert(jl_is_module(topmod));
         meta->top_mod = topmod;
     }
@@ -4604,8 +4630,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
 
 }
 
-static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_t *checksum,
-                                          bool_t is_split, uint32_t expect_checksum, int64_t *dataendpos,
+static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_t *checksum,
+                                          bool_t is_split, uint64_t expect_checksum, int64_t *dataendpos,
                                           int64_t *datastartpos) JL_CANSAFEPOINT
 {
     uint32_t flags = 0;
@@ -4661,7 +4687,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Pkgimg);
     jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, pkgname);
-    uint32_t checksum = 0;
+    uint64_t checksum = 0;
     int64_t dataendpos = 0;
     int64_t datastartpos = 0;
     jl_value_t *verify_fail =
@@ -4706,7 +4732,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             JL_SIGATOMIC_END();
 
             // Add roots to methods
-            int failed = jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
+            int failed = jl_copy_roots(method_roots_list, checksum);
             if (failed != 0) {
                 jl_printf(JL_STDERR, "Error copying roots to methods from Module: %s\n", pkgname);
                 abort();
@@ -4765,7 +4791,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
 static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image) JL_CANSAFEPOINT
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Sysimg);
-    uint32_t checksum;
+    uint64_t checksum;
     int64_t dataendpos, datastartpos;
     jl_value_t *exc =
         jl_validate_cache_file(f, NULL, &checksum, image->is_split, image->heap_checksum,

@@ -454,9 +454,9 @@ typedef struct JL_GC_TRACKED_TYPE _jl_method_t {
     _Atomic(jl_method_instance_t*) unspecialized;  // unspecialized executable method instance, or null
     jl_value_t *generator;  // executable code-generating function if available
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
-    // Identify roots by module-of-origin. We only track the module for roots added during incremental compilation.
+    // Identify roots by the image that added them. We only track this for roots added during incremental compilation.
     // May be NULL if no external roots have been added, otherwise it's a Vector{UInt64}
-    jl_array_t *root_blocks;   // RLE (build_id.lo, offset) pairs (even/odd indexing)
+    jl_array_t *root_blocks;   // RLE (build_id, offset) pairs (even/odd indexing)
     int32_t nroots_sysimg;     // # of roots stored in the system image
     jl_svec_t *ccallable; // svec(rettype, sig) if a ccallable entry point is requested for this
 
@@ -986,7 +986,9 @@ struct JL_GC_TRACKED_TYPE _jl_module_t {
     jl_value_t *scanned_methods;
     // hidden fields:
     arraylist_t usings; /* arraylist of struct jl_module_using */  // modules with all bindings potentially imported
-    jl_uuid_t build_id;
+    // The checksum of the image the module was loaded from, or a random id (which no image
+    // has) for a module created at runtime.
+    uint64_t build_id;
     jl_uuid_t uuid;
     _Atomic(uint32_t) counter;
     int32_t nospecialize;  // global bit flags: initialization for new methods
@@ -2458,7 +2460,7 @@ typedef struct {
     const char *data;
     size_t size;
     uint64_t base;
-    uint32_t heap_checksum;
+    uint64_t heap_checksum;
     bool_t is_split;
     const void *coverage; // jl_image_coverage_t *, if built with coverage counters
 } jl_image_buf_t;
@@ -2486,7 +2488,7 @@ JL_DLLEXPORT const char *jl_get_libjulia_internal_path(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
 JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint32_t jl_create_system_image(void **, jl_array_t *worklist, bool_t emit_split, bool_t compress, ios_t **s, jl_array_t **udeps JL_REQUIRE_ROOTED_SLOT, int64_t *srctextpos, jl_array_t *module_init_order) JL_CANSAFEPOINT;
+JL_DLLEXPORT uint64_t jl_create_system_image(void **, jl_array_t *worklist, bool_t emit_split, bool_t compress, ios_t **s, jl_array_t **udeps JL_REQUIRE_ROOTED_SLOT, int64_t *srctextpos, jl_array_t *module_init_order) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods, int complete, const char *pkgimage) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT;

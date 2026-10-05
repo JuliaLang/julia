@@ -83,18 +83,6 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
     return 0;
 }
 
-static uint64_t jl_worklist_key(jl_array_t *worklist) JL_NOTSAFEPOINT
-{
-    assert(jl_is_array(worklist));
-    size_t len = jl_array_nrows(worklist);
-    if (len > 0) {
-        jl_module_t *topmod = (jl_module_t*)jl_array_ptr_ref(worklist, len-1);
-        assert(jl_is_module(topmod));
-        return topmod->build_id.lo;
-    }
-    return 0;
-}
-
 static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED /*FIXME*/;
 // Mutex for newly_inferred
 jl_mutex_t newly_inferred_mutex;
@@ -639,8 +627,7 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
             ios_write(s, modname, l);
             write_uint64(s, m->uuid.hi);
             write_uint64(s, m->uuid.lo);
-            write_uint64(s, m->build_id.hi);
-            write_uint64(s, m->build_id.lo);
+            write_uint64(s, m->build_id);
         }
     }
     write_int32(s, 0);
@@ -718,7 +705,7 @@ static const char *jl_git_commit(void) JL_CANSAFEPOINT
 
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 16;
+static const int JI_FORMAT_VERSION = 17;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 
@@ -745,7 +732,7 @@ static int64_t write_header(ios_t *s, uint32_t flags) JL_CANSAFEPOINT
         ios_write(s, commit, strlen(commit)+1);
     }
     int64_t checksumpos = ios_pos(s);
-    write_uint32(s, 0); // eventually will hold checksum for the content portion of this (build_id.hi)
+    write_uint64(s, 0); // eventually will hold checksum for the content portion of this (the build id of the image)
     write_uint64(s, 0); // eventually will hold datastartpos
     write_uint64(s, 0); // eventually will hold dataendpos
     return checksumpos;
@@ -757,7 +744,9 @@ static int is_serialization_root_module(jl_module_t *mod) JL_NOTSAFEPOINT
 }
 
 // serialize information about the result of deserializing this file
-static void write_worklist_for_header(ios_t *s, jl_array_t *worklist)
+// `build_id_pos` collects the positions of the build ids of the modules, which are the checksum
+// of the file, to be written once the content has been.
+static void write_worklist_for_header(ios_t *s, jl_array_t *worklist, arraylist_t *build_id_pos)
 {
     int i, l = jl_array_nrows(worklist);
     for (i = 0; i < l; i++) {
@@ -768,7 +757,8 @@ static void write_worklist_for_header(ios_t *s, jl_array_t *worklist)
             ios_write(s, jl_symbol_name(workmod->name), l);
             write_uint64(s, workmod->uuid.hi);
             write_uint64(s, workmod->uuid.lo);
-            write_uint64(s, workmod->build_id.lo);
+            arraylist_push(build_id_pos, (void*)(uintptr_t)ios_pos(s));
+            write_uint64(s, 0);
         }
     }
     write_int32(s, 0);
@@ -993,10 +983,6 @@ static int jl_copy_roots(jl_array_t *method_roots_list, uint64_t key) JL_CANSAFE
 
 static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *depmods) JL_CANSAFEPOINT
 {
-    if (!jl_main_module->build_id.lo) {
-        return jl_get_exceptionf(jl_errorexception_type,
-                "Main module uuid state is invalid for module deserialization.");
-    }
     size_t i, l = jl_array_nrows(depmods);
     for (i = 0; ; i++) {
         size_t len = read_int32(s);
@@ -1010,13 +996,11 @@ static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *depmods) JL_CANSAF
         jl_uuid_t uuid;
         uuid.hi = read_uint64(s);
         uuid.lo = read_uint64(s);
-        jl_uuid_t build_id;
-        build_id.hi = read_uint64(s);
-        build_id.lo = read_uint64(s);
+        uint64_t build_id = read_uint64(s);
         jl_sym_t *sym = _jl_symbol(name, len);
         jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(depmods, i);
         if (!m || !jl_is_module(m) || m->uuid.hi != uuid.hi || m->uuid.lo != uuid.lo || m->name != sym ||
-                m->build_id.hi != build_id.hi || m->build_id.lo != build_id.lo) {
+                m->build_id != build_id) {
             return jl_get_exceptionf(jl_errorexception_type,
                 "Invalid input in module list: expected %s.", name);
         }
@@ -1032,7 +1016,7 @@ static int readstr_verify(ios_t *s, const char *str, int include_null)
     return 1;
 }
 
-JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint32_t *checksum, int64_t *dataendpos, int64_t *datastartpos) JL_CANSAFEPOINT
+JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint64_t *checksum, int64_t *dataendpos, int64_t *datastartpos) JL_CANSAFEPOINT
 {
     uint16_t bom;
     if (!(readstr_verify(s, JI_MAGIC, 0) &&
@@ -1051,7 +1035,7 @@ JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint32_t *chec
         !(readstr_verify(s, jl_git_branch(), 1) && readstr_verify(s, jl_git_commit(), 1)))
         return -1;
 
-    *checksum = read_uint32(s);
+    *checksum = read_uint64(s);
     *datastartpos = (int64_t)read_uint64(s);
     *dataendpos = (int64_t)read_uint64(s);
 

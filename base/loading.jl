@@ -1453,7 +1453,7 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         for i in eachindex(depmods)
             dep = depmods[i]
             dep isa Module && continue
-            _, depkey, depbuild_id = dep::Tuple{PkgLoadSpec, PkgId, UInt128}
+            _, depkey, depbuild_id = dep::Tuple{PkgLoadSpec, PkgId, UInt64}
             dep = something(maybe_loaded_precompile(depkey, depbuild_id))
             @assert PkgId(dep) == depkey && module_build_id(dep) === depbuild_id
             depmods[i] = dep
@@ -2071,7 +2071,7 @@ function show(io::IO, it::ImageTarget)
 end
 
 # should sync with the types of arguments of `stale_cachefile`
-const StaleCacheKey = Tuple{PkgId, UInt128, PkgLoadSpec, String, Bool, CacheFlags}
+const StaleCacheKey = Tuple{PkgId, UInt64, PkgLoadSpec, String, Bool, CacheFlags}
 
 function compilecache_freshest_path(pkg::PkgId;
         ignore_loaded::Bool=false,
@@ -2093,7 +2093,7 @@ function compilecache_freshest_path(pkg::PkgId;
     set_cache = LOADING_CACHE[] === nothing
     set_cache && (LOADING_CACHE[] = LoadingCache())
     try
-    try_build_ids = UInt128[UInt128(0)]
+    try_build_ids = UInt64[UInt64(0)]
     if !ignore_loaded
         let loaded = get(loaded_precompiles, pkg, nothing)
             if loaded !== nothing
@@ -2112,11 +2112,11 @@ function compilecache_freshest_path(pkg::PkgId;
             if staledeps === true
                 continue
             end
-            staledeps, ocachefile, id_build = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
+            staledeps, ocachefile, id_build = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt64}
             # finish checking staledeps module graph
             @label next_dep for dep in staledeps
                 dep isa Module && continue
-                modspec, modkey, modbuild_id = dep::Tuple{PkgLoadSpec, PkgId, UInt128}
+                modspec, modkey, modbuild_id = dep::Tuple{PkgLoadSpec, PkgId, UInt64}
                 modpaths = get(() -> find_all_in_cache_path(modkey), cachepath_cache, modkey)
                 for modpath_to_try in modpaths::Vector{String}
                     stale_cache_key = (modkey, modbuild_id, modspec, modpath_to_try, ignore_loaded, flags)::StaleCacheKey
@@ -2210,7 +2210,7 @@ function parse_cache_buildid(cachepath::String)
         n == 0 && error("no module defined in $cachepath")
         skip(f, n) # module name
         uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
-        build_id = (UInt128(checksum) << 64) | read(f, UInt64)
+        build_id = read(f, UInt64)
         return build_id, uuid
     finally
         close(f)
@@ -2218,7 +2218,7 @@ function parse_cache_buildid(cachepath::String)
 end
 
 # search for a precompile cache file to load, after some various checks
-function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
+function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64)
     assert_havelock(require_lock)
     loaded = start_loading(modkey, build_id, false)
     if loaded === nothing
@@ -2283,11 +2283,11 @@ end
 
 # returns `nothing` if require found a precompile cache for this sourcepath, but couldn't load it or it was stale
 # returns the set of modules restored if the cache load succeeded
-@constprop :none function _require_search_from_serialized(pkg::PkgId, sourcespec::PkgLoadSpec, build_id::UInt128, stalecheck::Bool; reasons=nothing, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT_PATH)
+@constprop :none function _require_search_from_serialized(pkg::PkgId, sourcespec::PkgLoadSpec, build_id::UInt64, stalecheck::Bool; reasons=nothing, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT_PATH)
     assert_havelock(require_lock)
     newdeps = PkgId[]
-    try_build_ids = UInt128[build_id]
-    if build_id == UInt128(0)
+    try_build_ids = UInt64[build_id]
+    if build_id == UInt64(0)
         let loaded = get(loaded_precompiles, pkg, nothing)
             if loaded !== nothing
                 for mod in loaded # try these in reverse original load order to see if one is already valid
@@ -2314,7 +2314,7 @@ end
             if staledeps === true
                 continue
             end
-            staledeps, ocachefile, newbuild_id = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
+            staledeps, ocachefile, newbuild_id = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt64}
             startedloading = length(staledeps) + 1
             try # any exit from here (goto, break, continue, return) will end_loading
                 # finish checking staledeps module graph, while acquiring all start_loading locks
@@ -2328,7 +2328,7 @@ end
                         i += 1
                         dep = staledeps[i]
                         dep isa Module && continue
-                        _, modkey, modbuild_id = dep::Tuple{PkgLoadSpec, PkgId, UInt128}
+                        _, modkey, modbuild_id = dep::Tuple{PkgLoadSpec, PkgId, UInt64}
                         dep = canstart_loading(modkey, modbuild_id, stalecheck)
                         if dep isa Module
                             if PkgId(dep) == modkey && module_build_id(dep) === modbuild_id
@@ -2349,7 +2349,7 @@ end
                 @label next_dep for i in reverse(eachindex(staledeps))
                     dep = staledeps[i]
                     dep isa Module && continue
-                    modspec, modkey, modbuild_id = dep::Tuple{PkgLoadSpec, PkgId, UInt128}
+                    modspec, modkey, modbuild_id = dep::Tuple{PkgLoadSpec, PkgId, UInt64}
                     # inline a call to start_loading here
                     @assert canstart_loading(modkey, modbuild_id, stalecheck) === nothing
                     package_locks[modkey] = (current_task(), Threads.Condition(require_lock), modbuild_id)
@@ -2364,11 +2364,11 @@ end
                         if modstaledeps === true
                             continue
                         end
-                        modstaledeps, modocachepath, _ = modstaledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
+                        modstaledeps, modocachepath, _ = modstaledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt64}
                         staledeps[i] = (modspec, modkey, modbuild_id, modpath_to_try, modstaledeps, modocachepath)
                         continue next_dep
                     end
-                    @debug "Rejecting cache file $path_to_try because required dependency $modkey with build ID $(UUID(modbuild_id)) is missing from the cache."
+                    @debug "Rejecting cache file $path_to_try because required dependency $modkey with build ID $(repr(modbuild_id)) is missing from the cache."
                     continue next_path
                 end
                 M = maybe_loaded_precompile(pkg, newbuild_id)
@@ -2389,7 +2389,7 @@ end
                 for i in eachindex(staledeps)
                     dep = staledeps[i]
                     dep isa Module && continue
-                    modspec, modkey, modbuild_id, modcachepath, modstaledeps, modocachepath = dep::Tuple{PkgLoadSpec, PkgId, UInt128, String, Vector{Any}, Union{Nothing, String}}
+                    modspec, modkey, modbuild_id, modcachepath, modstaledeps, modocachepath = dep::Tuple{PkgLoadSpec, PkgId, UInt64, String, Vector{Any}, Union{Nothing, String}}
                     set_pkgorigin_version_path(modkey, modspec.path)
                     dep = _include_from_serialized(modkey, modcachepath, modocachepath, modstaledeps; register = stalecheck)
                     if !isa(dep, Module)
@@ -2413,10 +2413,10 @@ end
                 for i in startedloading:length(staledeps)
                     dep = staledeps[i]
                     dep isa Module && continue
-                    if dep isa Tuple{PkgLoadSpec, PkgId, UInt128}
+                    if dep isa Tuple{PkgLoadSpec, PkgId, UInt64}
                         _, modkey, _ = dep
                     else
-                        _, modkey, _ = dep::Tuple{PkgLoadSpec, PkgId, UInt128, String, Vector{Any}, Union{Nothing, String}}
+                        _, modkey, _ = dep::Tuple{PkgLoadSpec, PkgId, UInt64, String, Vector{Any}, Union{Nothing, String}}
                     end
                     end_loading(modkey, nothing)
                 end
@@ -2431,26 +2431,26 @@ end
 end
 
 # to synchronize multiple tasks trying to import/using something
-const package_locks = Dict{PkgId,Tuple{Task,Threads.Condition,UInt128}}()
+const package_locks = Dict{PkgId,Tuple{Task,Threads.Condition,UInt64}}()
 
 debug_loading_deadlocks::Bool = true # Enable a slightly more expensive, but more complete algorithm that can handle simultaneous tasks.
                                # This only triggers if you have multiple tasks trying to load the same package at the same time,
                                # so it is unlikely to make a performance difference normally.
 
-function canstart_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
+function canstart_loading(modkey::PkgId, build_id::UInt64, stalecheck::Bool)
     assert_havelock(require_lock)
     require_lock.reentrancy_cnt == 1 || throw(ConcurrencyViolationError("recursive call to start_loading"))
     loading = get(package_locks, modkey, nothing)
     if loading === nothing
         loaded = stalecheck ? maybe_root_module(modkey) : nothing
         loaded isa Module && return loaded
-        if build_id != UInt128(0)
+        if build_id != UInt64(0)
             loaded = maybe_loaded_precompile(modkey, build_id)
             loaded isa Module && return loaded
         end
         return nothing
     end
-    if !stalecheck && build_id != UInt128(0) && loading[3] != build_id
+    if !stalecheck && build_id != UInt64(0) && loading[3] != build_id
         # don't block using an existing specific loaded module on needing a different concurrently loaded one
         loaded = maybe_loaded_precompile(modkey, build_id)
         loaded isa Module && return loaded
@@ -2507,7 +2507,7 @@ function canstart_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
     return cond
 end
 
-function start_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
+function start_loading(modkey::PkgId, build_id::UInt64, stalecheck::Bool)
     # handle recursive and concurrent calls to require
     while true
         loaded = canstart_loading(modkey, build_id, stalecheck)
@@ -2539,7 +2539,7 @@ const package_callbacks = Any[]
 const include_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
-const _concrete_dependencies = Pair{PkgId,UInt128}[] # these dependency versions are "set in stone", because they are explicitly loaded, and the process should try to avoid invalidating them
+const _concrete_dependencies = Pair{PkgId,UInt64}[] # these dependency versions are "set in stone", because they are explicitly loaded, and the process should try to avoid invalidating them
 
 # Cache files supplied by the parent precompile driver.
 const preresolved_cachefiles = Dict{PkgId,String}() # protected by require_lock
@@ -2862,7 +2862,7 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
         _precompile_dep_load_depth[] += 1
     end
     try
-        m = start_loading(uuidkey, UInt128(0), true)
+        m = start_loading(uuidkey, UInt64(0), true)
         if m === nothing
             last = toplevel_load[]
             try
@@ -2900,7 +2900,7 @@ const loaded_modules_order = Vector{Module}()
 
 root_module_key(m::Module) = PkgId(m)
 
-function maybe_loaded_precompile(key::PkgId, buildid::UInt128)
+function maybe_loaded_precompile(key::PkgId, buildid::UInt64)
     @lock require_lock begin
     mods = get(loaded_precompiles, key, nothing)
     mods === nothing && return
@@ -2910,9 +2910,9 @@ function maybe_loaded_precompile(key::PkgId, buildid::UInt128)
     end
 end
 
+# The checksum of the cache file `m` was loaded from, or a random id if it was not loaded from one
 function module_build_id(m::Module)
-    hi, lo = ccall(:jl_module_build_id, NTuple{2,UInt64}, (Any,), m)
-    return (UInt128(hi) << 64) | lo
+    return ccall(:jl_module_build_id, UInt64, (Any,), m)
 end
 
 @constprop :none function register_root_module(m::Module)
@@ -3012,7 +3012,7 @@ function __require_prelocked(pkg::PkgId, env)
     # attempt to load the module file via the precompile cache locations
     if JLOptions().use_compiled_modules != 0
         @label load_from_cache
-        loaded = _require_search_from_serialized(pkg, spec, UInt128(0), true; reasons)
+        loaded = _require_search_from_serialized(pkg, spec, UInt64(0), true; reasons)
         if loaded isa Module
             return loaded
         end
@@ -3026,7 +3026,7 @@ function __require_prelocked(pkg::PkgId, env)
     # rather than reported as a precompilation failure.
     for (concrete_pkg, concrete_build_id) in _concrete_dependencies
         if pkg == concrete_pkg
-            @warn """Module $(pkg.name) with build ID $((UUID(concrete_build_id))) is missing from the cache.
+            @warn """Module $(pkg.name) with build ID $(repr(concrete_build_id)) is missing from the cache.
                  This may mean $(repr("text/plain", pkg)) does not support precompilation but is imported by a module that does."""
             if JLOptions().incremental != 0
                 # during incremental precompilation, this should be fail-fast
@@ -3051,7 +3051,7 @@ function __require_prelocked(pkg::PkgId, env)
                          cache_fetch_attempted = cache_fetch_attempted
                 maybe_cachefile_lock(pkg, spec.path) do
                     # double-check the search now that we have lock
-                    m = _require_search_from_serialized(pkg, spec, UInt128(0), true)
+                    m = _require_search_from_serialized(pkg, spec, UInt64(0), true)
                     m isa Module && return m
 
                     local verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
@@ -3224,7 +3224,7 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
     # the PkgId of the ext, or package if not an ext
     this_uuidkey = ext isa String ? PkgId(uuid5(package_uuidkey.uuid, ext), ext) : package_uuidkey
     env = Sys.STDLIB
-    newm = start_loading(this_uuidkey, UInt128(0), true)
+    newm = start_loading(this_uuidkey, UInt64(0), true)
     newm === nothing || return newm
     try
         depot_path = append_bundled_depot_path!(empty(DEPOT_PATH))
@@ -3248,7 +3248,7 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
                 sourcepath = find_ext_path(normpath(joinpath(env, package_uuidkey.name)), ext)
             end
             set_pkgorigin_version_path(this_uuidkey, sourcepath)
-            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, VERSION_EDITION), UInt128(0), false; DEPOT_PATH=depot_path)
+            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, VERSION_EDITION), UInt64(0), false; DEPOT_PATH=depot_path)
         end
     finally
         end_loading(this_uuidkey, newm)
@@ -3457,7 +3457,7 @@ function include_package_for_output(pkg::PkgId, input::String, edition::Tuple{In
                                     preresolved::Vector{Pair{PkgId,String}}=Pair{PkgId,String}[])
 
     @lock require_lock begin
-    m = start_loading(pkg, UInt128(0), false)
+    m = start_loading(pkg, UInt64(0), false)
     @assert m === nothing
     append!(empty!(Base.DEPOT_PATH), depot_path)
     append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
@@ -3923,7 +3923,7 @@ end
 
 # Whether a new cache was built against a loaded package whose source is not the one the
 # environment now gives it, as after updating a package that is loaded.
-function built_against_other_sources(required_modules::Vector{Pair{PkgId,UInt128}})
+function built_against_other_sources(required_modules::Vector{Pair{PkgId,UInt64}})
     @lock require_lock for (dep, build_id) in required_modules
         m = get(loaded_modules, dep, nothing)
         (m === nothing || module_build_id(m) != build_id) && continue
@@ -3940,7 +3940,7 @@ end
 # path, such as the default one, is named after that environment when the build matches its
 # manifest, so the projects that use it share one file. A build against other versions
 # from the active project is named after the active project.
-function cachefile_project(pkg::PkgId, required_modules::Vector{Pair{PkgId,UInt128}})
+function cachefile_project(pkg::PkgId, required_modules::Vector{Pair{PkgId,UInt64}})
     active = something(active_project(), "")
     @lock require_lock begin
         specenv = locate_package_env(pkg)
@@ -4002,8 +4002,8 @@ const JI_FLAG_SPLIT::UInt32 = 1 << 1
 
 function isvalid_cache_header(f::IOStream)
     flags = Ref{UInt32}()
-    checksum = Ref{UInt32}()
-    err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}), f.ios, flags, checksum, Ref{Int64}(), Ref{Int64}())
+    checksum = Ref{UInt64}()
+    err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt64}, Ptr{Int64}, Ptr{Int64}), f.ios, flags, checksum, Ref{Int64}(), Ref{Int64}())
 
     if err == 0 && (flags[] & JI_FLAG_PKGIMAGE == 0)
         @debug "Cache header was for a system image"
@@ -4047,7 +4047,7 @@ function checksums_invalid(io::IOStream, cachefile::String, ocachefile::Union{No
 end
 
 # With `unverified`, a file already in the record passes without being read and is added to `unverified`.
-function checksums_invalid(cachefile::String, ocachefile::Union{Nothing, String}, id_build::UInt128, reasons;
+function checksums_invalid(cachefile::String, ocachefile::Union{Nothing, String}, id_build::UInt64, reasons;
                            unverified::Union{Nothing, Set{String}}=nothing)
     io = try
         open(cachefile, "r")
@@ -4059,7 +4059,7 @@ function checksums_invalid(cachefile::String, ocachefile::Union{Nothing, String}
     try
         # The file may have been replaced since its header was checked.
         checksum = isvalid_cache_header(io)
-        if checksum === nothing || UInt128(checksum) != id_build >> 64
+        if checksum === nothing || checksum != id_build
             @debug "Rejecting cache file $cachefile because it changed while being checked"
             return true
         end
@@ -4149,15 +4149,14 @@ function resolve_depot(inc::AbstractString, hint::Union{String, Nothing}=nothing
     return :no_depot_found
 end
 
-function read_module_list(f::IO, has_buildid_hi::Bool)
-    modules = Vector{Pair{PkgId, UInt128}}()
+function read_module_list(f::IO)
+    modules = Vector{Pair{PkgId, UInt64}}()
     while true
         n = read(f, Int32)
         n == 0 && break
         sym = String(read(f, n)) # module name
         uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
-        build_id_hi = UInt128(has_buildid_hi ? read(f, UInt64) : UInt64(0)) << 64
-        build_id = (build_id_hi | read(f, UInt64)) # build id (checksum + time - not a UUID)
+        build_id = read(f, UInt64) # the checksum of the cache file of the module
         push!(modules, PkgId(uuid, sym) => build_id)
     end
     return modules
@@ -4166,7 +4165,7 @@ end
 function _parse_cache_header(f::IO, cachefile::AbstractString)
     flags = CacheFlags(read(f, UInt8), read(f, UInt8))
     syntax_version = read(f, UInt8)
-    modules = read_module_list(f, false)
+    modules = read_module_list(f)
     totbytes = Int64(read(f, UInt64)) # total bytes for file dependencies + preferences
     # read the list of requirements
     # and split the list into include and requires statements
@@ -4217,7 +4216,7 @@ function _parse_cache_header(f::IO, cachefile::AbstractString)
     totbytes -= 8
     @assert totbytes == 0 "header of cache file appears to be corrupt (totbytes == $(totbytes))"
     # read the list of modules that are required to be present during loading
-    required_modules = read_module_list(f, true)
+    required_modules = read_module_list(f)
     l = read(f, Int32)
     clone_targets = read(f, l)
 
@@ -4878,9 +4877,9 @@ end
     return stale_cachefile(PkgLoadSpec(modpath, VERSION_EDITION), cachefile; kwargs...)
 end
 @constprop :none function stale_cachefile(modspec::PkgLoadSpec, cachefile::String; ignore_loaded::Bool = false, requested_flags::CacheFlags=CacheFlags(), reasons=nothing, verify_checksums::Bool=true)
-    return stale_cachefile(PkgId(""), UInt128(0), modspec, cachefile; ignore_loaded, requested_flags, reasons, verify_checksums)
+    return stale_cachefile(PkgId(""), UInt64(0), modspec, cachefile; ignore_loaded, requested_flags, reasons, verify_checksums)
 end
-@constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modspec::PkgLoadSpec, cachefile::String;
+@constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt64, modspec::PkgLoadSpec, cachefile::String;
                                           ignore_loaded::Bool=false, requested_flags::CacheFlags=CacheFlags(),
                                           reasons::Union{Dict{Symbol,Int},Nothing}=nothing, stalecheck::Bool=true,
                                           verify_checksums::Bool=true)
@@ -4959,10 +4958,9 @@ end
             return true
         end
         id_build = id.second
-        id_build = (UInt128(checksum) << 64) | (id_build % UInt64)
-        if build_id != UInt128(0)
+        if build_id != UInt64(0)
             if id_build != build_id
-                @debug "Ignoring cache file $cachefile for $modkey ($(UUID(id_build))) since it does not provide desired build_id ($((UUID(build_id))))"
+                @debug "Ignoring cache file $cachefile for $modkey ($(repr(id_build))) since it does not provide desired build_id ($(repr(build_id)))"
                 record_reason(reasons, :buildid_mismatch)
                 return true
             end
@@ -5021,12 +5019,11 @@ end
         for (req_key, req_build_id) in _concrete_dependencies
             build_id = get(modules, req_key, UInt64(0))
             if build_id !== UInt64(0)
-                build_id |= UInt128(checksum) << 64
                 if build_id === req_build_id
                     stalecheck = false
                     break
                 end
-                @debug "Rejecting cache file $cachefile because it provides the wrong build_id (got $((UUID(build_id)))) for $req_key (want $(UUID(req_build_id)))"
+                @debug "Rejecting cache file $cachefile because it provides the wrong build_id (got $(repr(build_id))) for $req_key (want $(repr(req_build_id)))"
                 record_reason(reasons, :dep_buildid_mismatch)
                 return true # cachefile doesn't provide the required version of the dependency
             end
