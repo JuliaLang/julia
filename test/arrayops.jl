@@ -581,7 +581,7 @@ end
     @test insert!(copy(v), 2:3, (10, 20)) == [1, 10, 20, 2, 3, 4, 5]
     @test insert!(copy(v), 2:3, (i for i in 7:8)) == [1, 7, 8, 2, 3, 4, 5]
     # element conversion
-    @test insert!(Float64.(v), 2:3, [7, 8]) == [1, 7, 8, 2, 3, 4, 5]
+    @test insert!(copy(v), 2:3, [7., 8.]) == [1, 7, 8, 2, 3, 4, 5]
     @test insert!(Any[1, 2], 2:3, ["x", :y]) == Any[1, "x", :y, 2]
     @test insert!(["a", "b"], 2:3, ["x", "y"]) == ["a", "x", "y", "b"]
     # errors are thrown before `a` is modified
