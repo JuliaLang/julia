@@ -8,7 +8,8 @@ using REPL.History
 using REPL.History: HistoryFile, HistEntry, update!,
     ConditionSet, FilterSpec, filterchunkrev!, ismorestrict, matchregions,
     SelectorState, componentrows, countlines_selected, hoveridx, ishover, gethover,
-    candidates, movehover, toggleselection, fullselection, addcache!
+    candidates, movehover, toggleselection, fullselection, addcache!, sync_selection!,
+    boxedcontent, highlightcand
 
 const HISTORY_SAMPLE_FORMAT_1 = """
 # time: 2020-10-31 05:16:39 AWST
@@ -281,123 +282,98 @@ end
                 empty!(results)
                 cset = ConditionSet("hello")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
-                @test filterchunkrev!(results, entries, spec, seen) == 0
+                @test filterchunkrev!(results, entries, spec) == 0
                 @test results == [entries[1], entries[7]]
                 empty!(results)
                 cset2 = ConditionSet("world")
                 spec2 = FilterSpec(cset2)
-                empty!(seen)
-                @test filterchunkrev!(results, entries, spec2, seen) == 0
+                @test filterchunkrev!(results, entries, spec2) == 0
                 @test results == [entries[1], entries[7]]
                 empty!(results)
                 cset3 = ConditionSet("World")
                 spec3 = FilterSpec(cset3)
-                empty!(seen)
-                @test filterchunkrev!(results, entries, spec3, seen) == 0
+                @test filterchunkrev!(results, entries, spec3) == 0
                 @test results == [entries[7]]
             end
             @testset "Exact" begin
                 empty!(results)
                 cset = ConditionSet("=test")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
-                @test filterchunkrev!(results, entries, spec, seen; maxresults = 2) == 5
+                @test filterchunkrev!(results, entries, spec; maxresults = 2) == 5
                 @test results == [entries[6], entries[9]]
                 empty!(results)
                 cset2 = ConditionSet("=test case")
                 spec2 = FilterSpec(cset2)
-                empty!(seen)
-                @test filterchunkrev!(results, entries, spec2, seen) == 0
+                @test filterchunkrev!(results, entries, spec2) == 0
                 @test results == [entries[3]]
             end
             @testset "Negative" begin
                 empty!(results)
                 cset = ConditionSet("!hello ; !test;! cos")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
-                @test filterchunkrev!(results, entries, spec, seen) == 0
+                @test filterchunkrev!(results, entries, spec) == 0
                 @test results == [entries[2], entries[7], entries[8]]
             end
             @testset "Initialism" begin
                 empty!(results)
                 cset = ConditionSet("`tc")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
-                @test filterchunkrev!(results, entries, spec, seen) == 0
+                @test filterchunkrev!(results, entries, spec) == 0
                 @test results == [entries[3]]
                 empty!(results)
                 cset2 = ConditionSet("`fb")
                 spec2 = FilterSpec(cset2)
-                empty!(seen)
-                @test filterchunkrev!(results, entries, spec2, seen) == 0
+                @test filterchunkrev!(results, entries, spec2) == 0
                 @test results == [entries[8]]
+                # Initials start a word, follow underscores, or begin a camelCase hump
+                isinitialism(q, s) = all(rx -> occursin(rx, s), FilterSpec(ConditionSet("`" * q)).regexps)
+                for s in ("foo bar", "foo_bar", "_foo_bar", "fooBar", "getF(bar)", "(foo).bar")
+                    @test isinitialism("fb", s)
+                end
+                for s in ("afoo bar", "f bar", "foo b", "bar foo")
+                    @test !isinitialism("fb", s)
+                end
+                @test isinitialism("fb", "false):iBar")
+                @test isinitialism("λf", "λx fy")
             end
             @testset "Regexp" begin
                 empty!(results)
                 cset = ConditionSet("/^c.s\\b")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
-                @test filterchunkrev!(results, entries, spec, seen) == 0
+                @test filterchunkrev!(results, entries, spec) == 0
                 @test results == [entries[4], entries[5]]
             end
             @testset "Mode" begin
                 empty!(results)
                 cset = ConditionSet("shell>")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
-                @test filterchunkrev!(results, entries, spec, seen) == 0
+                @test filterchunkrev!(results, entries, spec) == 0
                 @test results == [entries[7]]
             end
             @testset "Fuzzy" begin
                 empty!(results)
                 cset = ConditionSet("~cs")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
-                @test filterchunkrev!(results, entries, spec, seen) == 0
+                @test filterchunkrev!(results, entries, spec) == 0
                 @test results == entries[3:6]
             end
-            @testset "Uniqueness" begin
-                empty!(results)
-                # Create entries with duplicate content in the same mode
-                dup_entries = [
-                    HistEntry(:julia, now(UTC), "println(\"hello\")", 1),
-                    HistEntry(:julia, now(UTC), "cos(2π)", 2),
-                    HistEntry(:julia, now(UTC), "println(\"hello\")", 3),  # duplicate
-                    HistEntry(:julia, now(UTC), "sin(π)", 4),
-                    HistEntry(:julia, now(UTC), "cos(2π)", 5),  # duplicate
-                    HistEntry(:julia, now(UTC), "println(\"hello\")", 6),  # duplicate
-                    HistEntry(:julia, now(UTC), "tan(π/4)", 7),
-                ]
-                # When filtering with seen Set, duplicates are removed
-                cset = ConditionSet("cos")
-                spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
-                @test filterchunkrev!(results, dup_entries, spec, seen) == 0
-                # Should only get unique entries matching the filter
-                # Since we iterate in reverse (7->1), we keep the most recent occurrence of each unique content
-                @test length(results) == 1
-                @test results[1] == dup_entries[5]  # cos(2π) - most recent
-                # When browsing without filtering, duplicates are kept
-                empty!(results)
-                append!(results, dup_entries)
-                @test length(results) == 7  # All entries, including duplicates
-                @test results == dup_entries
-                # Test that same content in different modes is NOT deduplicated
-                empty!(results)
-                mode_entries = [
-                    HistEntry(:julia, now(UTC), "ls", 1),
-                    HistEntry(:shell, now(UTC), "ls", 2),
-                    HistEntry(:julia, now(UTC), "ls", 3),  # duplicate in :julia mode
-                    HistEntry(:shell, now(UTC), "pwd", 4),
-                ]
-                empty!(seen)
-                cset3 = ConditionSet("ls")
-                spec3 = FilterSpec(cset3)
-                @test filterchunkrev!(results, mode_entries, spec3, seen) == 0
-                @test length(results) == 2  # "ls" from :julia and "ls" from :shell
-                @test results[1] == mode_entries[2]  # :shell ls
-                @test results[2] == mode_entries[3]  # :julia ls (most recent)
+            @testset "Resumption" begin
+                many = [HistEntry(:julia, now(UTC), "foo $i", i) for i in 1:500]
+                spec = FilterSpec(ConditionSet("foo"))
+                function filterresumed(; maxresults = length(many), maxtime = Inf)
+                    found = HistEntry[]
+                    idx = filterchunkrev!(found, many, spec; maxresults, maxtime)
+                    while idx != 0
+                        idx = filterchunkrev!(found, many, spec, idx; maxtime)
+                    end
+                    found
+                end
+                # Stopping early, by result count or by time, must neither skip
+                # nor repeat entries, wherever that falls relative to batch boundaries.
+                for maxresults in (1, 7, 10, 43, 499, 500, 1000)
+                    @test filterresumed(; maxresults) == many
+                end
+                @test filterresumed(; maxtime = 0.0) == many
             end
         end
         @testset "matchregions with multibyte characters" begin
@@ -550,6 +526,18 @@ end
             @test cands.active.entries == few
         end
     end
+    @testset "Rendering" begin
+        # Tabs are zero-width to `textwidth` but not to terminals, so must not be displayed
+        for mode in (:julia, :shell)
+            @test '\t' ∉ String(highlightcand(HistEntry(mode, now(UTC), "a\tb", 1)))
+        end
+        # Every boxed line must exactly fill the box
+        for content in (" "^200 * "\nx", "x\n" * " "^100 * "\n" * "y"^100, "x\n" * " "^100 * "y")
+            io = IOBuffer()
+            boxedcontent(io, Base.AnnotatedString(content), 40, 10)
+            @test all(==(40) ∘ textwidth, eachsplit(chomp(String(take!(io))), '\n'))
+        end
+    end
 end
 
 @testset "Search state manipulation" begin
@@ -671,6 +659,34 @@ end
             state = SelectorState((30, 80), "", FilterSpec(), HistEntry[], 0, (active = Int[], gathered), -1)
             @test fullselection(state) == (mode = :julia, text = "old_1")
         end
+    end
+    @testset "Selection as candidates arrive" begin
+        many = [HistEntry(:julia, now(UTC), "foo $i", i) for i in 1:100]
+        function filterstate(gathered = HistEntry[])
+            state = SelectorState((30, 80), "foo", FilterSpec(ConditionSet("foo")), HistEntry[], gathered)
+            filterchunkrev!(state, many; maxresults = 10)
+        end
+        # Selections made while filtering is incomplete keep their entries
+        state, idx = filterstate()
+        state = toggleselection(state)
+        while idx != 0
+            state, idx = filterchunkrev!(state, many, idx)
+        end
+        @test fullselection(state).text == "foo 100"
+        # Carried-over entries become active once filtering reaches them
+        state, idx = filterstate([many[50]])
+        while idx != 0
+            state, idx = filterchunkrev!(state, many, idx)
+        end
+        @test isempty(state.selection.gathered)
+        @test fullselection(state).text == "foo 50"
+        # Carried-over entries become active in an unfiltered list too, so they can be deselected
+        state = SelectorState((30, 80), "", FilterSpec(), HistEntry[], [many[100]])
+        append!(state.candidates, many)
+        state = sync_selection!(state, length(many))
+        @test state.selection == (active = [100], gathered = HistEntry[])
+        @test state.scroll == 0
+        @test isempty(toggleselection(state).selection.active)
     end
     @testset "addcache!" begin
         cache, state = Int[], zero(UInt8)
