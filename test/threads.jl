@@ -422,6 +422,18 @@ end
     @test io_thread_test()
 end
 
+@testset "event loop thread wakeup with pending finalizers" begin
+    # if this fails, the child hangs in the event loop, so kill it
+    script = joinpath(@__DIR__, "ioloop_wakeup.jl")
+    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --threads=1,1 $script`
+    proc = run(pipeline(cmd; stdout, stderr); wait=false)
+    t = Timer(60) do _
+        kill(proc, Base.SIGKILL)
+    end
+    @test success(proc)
+    close(t)
+end
+
 # Make sure default number of BLAS threads respects CPU affinity: issue #55572.
 @testset "LinearAlgebra number of default threads" begin
     if AFFINITY_SUPPORTED
