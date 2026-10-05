@@ -3036,8 +3036,7 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
         f === Intrinsics.atomic_pointerset || f === Intrinsics.atomic_pointerswap ||
         f === Intrinsics.atomic_pointerreplace)
         # Invalid orderings throw `ConcurrencyViolationError`, badly-typed arguments
-        # `TypeError`, and unsupported element types or sizes, or an invalid syncscope,
-        # `ErrorException`.
+        # `TypeError`, and unsupported element types or sizes `ErrorException`.
         return Union{ConcurrencyViolationError, TypeError, ErrorException}
     end
 
