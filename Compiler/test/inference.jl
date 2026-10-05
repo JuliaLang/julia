@@ -5989,7 +5989,7 @@ function atomic_load_invalid_order(p::Ptr{Int})
 end
 function atomic_fence_invalid_order()
     try
-        Core.Intrinsics.atomic_fence(:unordered, :system)
+        Core.Intrinsics.atomic_fence(:unordered)
         return nothing
     catch e
         return e
@@ -6012,8 +6012,7 @@ end
             (p -> unsafe_modify!(p, +, 1, :unordered), ConcurrencyViolationError, Any),
             (p -> unsafe_replace!(p, 0, 1, :sequentially_consistent, :release), ConcurrencyViolationError, U),
             (p -> unsafe_replace!(p, 0, 1, :monotonic, :acquire), ConcurrencyViolationError, U),
-            (p -> Core.Intrinsics.atomic_fence(:unordered, :system), ConcurrencyViolationError, U),
-            (p -> Core.Intrinsics.atomic_fence(:acquire, :invalid), ErrorException, U),
+            (p -> Core.Intrinsics.atomic_fence(:unordered), ConcurrencyViolationError, U),
             (p -> Core.Intrinsics.atomic_pointerref(p, 1), TypeError, U),
             (p -> Core.Intrinsics.atomic_pointerset(p, 1.0, :release), TypeError, U),
             (p -> unsafe_load(Ptr{NTuple{3,UInt8}}(p), :acquire), ErrorException, U)]
