@@ -1593,7 +1593,7 @@ See also [`resize!`](@ref), [`insert!`](@ref), [`deleteat!`](@ref).
 ```jldoctest
 julia> a = Any[1, 2, 3];
 
-julia> Base.growat!(a, 2, 2)
+julia> growat!(a, 2, 2)
 5-element Vector{Any}:
    1
  #undef
