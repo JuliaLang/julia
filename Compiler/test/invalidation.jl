@@ -590,6 +590,22 @@ let M = UninformativeFold, interp = InvalidationTester()
     @test ci.max_world != typemax(UInt)
 end
 
+# Folding one split of such a site must not make the caller depend on the other splits,
+# which stay dynamic calls.
+module UninformativeFoldOtherSplit
+    Base.@assume_effects :foldable @noinline callee(x) = Base.inferencebarrier(identity)(1)
+    @noinline callee(x::Integer) = Base.inferencebarrier(identity)(x)
+    caller(v::Vector{Union{Nothing,Integer}}) = callee(v[1])
+end
+let M = UninformativeFoldOtherSplit, interp = InvalidationTester()
+    Base.return_types(M.caller, (Vector{Union{Nothing,Integer}},); interp)
+    ci = Base.method_instance(M.caller, (Vector{Union{Nothing,Integer}},)).cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+    @eval M callee(::Int8) = 3
+    @test ci.max_world == typemax(UInt)
+end
+
 # `return_type` observes the inferred result of an uninformative call as a value, so
 # redefining the callee must invalidate the caller.
 module UninformativeReturnType
