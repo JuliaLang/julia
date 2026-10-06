@@ -844,6 +844,8 @@ function add_inlining_dispatch_edge!(edges::Vector{Any}, mi::MethodInstance,
                                      @nospecialize(info::CallInfo))
     if info isa InvokeCallInfo
         add_invoke_edge!(edges, info.atype, mi)
+    elseif info isa UninformativeCallInfo && info.info isa UnionSplitInfo
+        add_committed_split_edges!(edges, mi, info.info)
     elseif info isa VirtualMethodMatchInfo || info isa UninformativeCallInfo
         add_inlining_dispatch_edge!(edges, mi, info.info)
     elseif info isa MethodMatchInfo || info isa UnionSplitInfo
@@ -865,6 +867,21 @@ function add_uninformative_dispatch_edge!(edges::Vector{Any}, mi::MethodInstance
     if info isa UninformativeCallInfo
         add_inlining_dispatch_edge!(edges, mi, info)
     end
+    return nothing
+end
+
+# Certify only the splits whose lookup can reach the committed method. The other splits stay
+# dynamic calls, so a method added for them must not invalidate the caller.
+function add_committed_split_edges!(edges::Vector{Any}, mi::MethodInstance, info::UnionSplitInfo)
+    found = false
+    for split in info.split
+        if any(match::MethodMatch -> match.method === mi.def, split.results) &&
+           hasintersect(mi.specTypes, split.atype)
+            _add_edges_impl(edges, split, #=mi_edge=#true)
+            found = true
+        end
+    end
+    found || _add_edges_impl(edges, info, #=mi_edge=#true)
     return nothing
 end
 
