@@ -63,17 +63,8 @@ function activate!(enable=true; freeze_world_age=true)
         Core._set_toplevel_eval!(JuliaLowering.eval)
     else
         Core._setlowerer!(Base.fl_lower)
-        Core._set_toplevel_eval!(_fl_toplevel_eval)
+        Core._set_toplevel_eval!(Base.fl_toplevel_eval)
     end
-end
-
-function _fl_toplevel_eval(mod::Module, @nospecialize(x))
-    ex = if x isa SyntaxTree
-        Expr(:toplevel, first_linenode(x), est_to_expr(x))
-    else
-        x
-    end
-    ccall(:jl_toplevel_eval, Any, (Any, Any), mod, ex)
 end
 
 function __init__()

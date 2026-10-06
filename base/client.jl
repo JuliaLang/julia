@@ -115,7 +115,7 @@ function is_driver_machinery(frame)
     frame.from_c && return false
     mod = parentmodule(frame)
     (mod === Base || mod === Core || mod === nothing) || return false
-    return frame.func in (:eval, :include_string, :_include, :include)
+    return frame.func in (:eval, :include_string, :_include, :include, :fl_toplevel_eval)
 end
 
 function scrub_repl_backtrace(bt)
