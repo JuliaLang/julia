@@ -68,12 +68,6 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
-* Lowering can now report closures that capture a variable needing a `Core.Box` (because
-  lowering cannot prove that the variable is assigned exactly once before the closure is
-  created), since such variables cannot be inferred. `Base.Experimental.@closure_boxes :error`
-  or `:warn` enables this for a module and its submodules; the default is to allow boxes
-  silently. A closure can permit a box with `Base.Experimental.@allow_box var` in its body.
-
 * Type inference now refines field types through conditional checks and call signatures.
   For example, after `if !isnothing(x.field)`, inference knows `x.field` is not `nothing` within the branch.
   Similarly, after a call like `func(x.field)` where `func(::Int)` is the only matching method, inference
@@ -100,6 +94,9 @@ Compiler/Runtime improvements
 * `--code-coverage=user` no longer includes inlined Base methods whose module cannot be recovered from debug
   information. This prevents coverage from writing `.cov` files for Base sources into the Julia installation
   ([#62514]).
+* Lowering can report closures that capture a variable needing a `Core.Box`. Each module can opt-in to this
+  with `Base.Experimental.@closure_boxes :error` or `:warn`; also applies to submodules. A closure can permit
+  a box with `Base.Experimental.@allow_box var`.
 
 Command-line option changes
 ---------------------------

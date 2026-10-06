@@ -188,21 +188,22 @@ macro max_methods(n::Int, fdef::Expr)
 end
 
 """
-    Experimental.@closure_boxes policy
+    Experimental.@closure_boxes policy::Symbol
 
 Set what lowering does when a closure in the current module captures a variable that must
 be stored in a `Core.Box`. Submodules inherit the setting of their parent module.
 
 `policy` is one of
-  * `:error`: lowering throws an error
-  * `:warn`: lowering emits a warning, in the same situations as other lowering warnings
-    (currently these are not reported for code inside `module` blocks)
-  * `:allow` (the default): boxes are allowed silently
+  * `:error`: throws an error
+  * `:warn`: emits a warning; currently not reported for code inside `module` blocks
+  * `:allow`: no action; default
 
 A captured variable needs a box unless lowering can prove that it is assigned exactly once
-before the closure is created. Access to a boxed variable cannot be inferred, and the box
-is heap-allocated, so this is a common source of poor performance.
-Individual closures can allow boxes with [`@allow_box`](@ref Base.Experimental.@allow_box).
+before the closure is created. Access to a boxed variable cannot be inferred, so the box
+is heap-allocated. This is a common source of poor performance.
+
+When the policy for a module is `:error` or `:warn`, individual closures can allow a
+variable to be boxed with [`@allow_box`](@ref Base.Experimental.@allow_box).
 
 The setting applies to code lowered after this macro is evaluated.
 """
@@ -218,15 +219,15 @@ end
     Experimental.@allow_box vars...
 
 Allow the closure whose body contains this annotation to capture `vars` even if they must
-be stored in a `Core.Box`. Enclosing closures that capture the same variables in order to
-pass them to this closure are allowed to box them too. Without arguments, the annotation
-allows every captured variable of the closure that directly contains it, but not those of
-enclosing closures.
+be stored in a `Core.Box`. Without a named variable, all captured variables are allowed.
 
-When the module's policy is `:error` or `:warn` (see
-[`@closure_boxes`](@ref Base.Experimental.@closure_boxes)), an annotation that has no effect,
-because the closure does not capture the variable or does not need to box it, produces a
-warning (not an error), so annotations don't outlive the boxes they were written for.
+If the closure is itself in a closure, an `allow_box` on named variables in the inner
+closure also applies to the same variables in the outer closure.
+
+When the policy for a module is `:error` or `:warn` (see
+[`@closure_boxes`](@ref Base.Experimental.@closure_boxes)) and the closure does not capture
+the variable or does not need to box it, a warning is produced so that the unneeded
+annotation can be removed.
 
 See [`@closure_boxes`](@ref Base.Experimental.@closure_boxes).
 
