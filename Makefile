@@ -474,9 +474,15 @@ endif
 
 	# Copy public headers
 	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
-	# Copy system image
+	# Copy system image and static runtime. The archive goes beside the library
+	# that `-ljulia-internal` finds, so linkers keep preferring that library.
 ifeq ($(JULIA_BUILD_MODE),release)
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
+ifeq ($(OS),WINNT)
+	$(INSTALL_F) $(build_libdir)/libjulia-internal.a $(DESTDIR)$(libdir)
+else
+	$(INSTALL_F) $(build_libdir)/libjulia-internal.a $(DESTDIR)$(private_libdir)
+endif
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 endif
