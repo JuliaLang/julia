@@ -216,6 +216,7 @@ The following is a complete list of command-line switches available when launchi
 |`--task-metrics={yes\|no*}`             |Enable the collection of per-task metrics|
 |`--bug-report=KIND`                    |Launch a bug report session. It can be used to start a REPL, run a script, or evaluate expressions. It first tries to use BugReporting.jl installed in current environment and falls back to the latest compatible BugReporting.jl if not. For more information, see `--bug-report=help`.|
 |`--heap-size-hint=<size>`              |Forces garbage collection if memory usage is higher than the given value. The value may be specified as a number of bytes, optionally in units of KB, MB, GB, or TB, or as a percentage of physical memory with %. See [Memory Management and Garbage Collection](@ref man-memory-management) for more details.|
+|`--prune-objcache[=<age>]`           |Remove the entries of the [native code cache](@ref JULIA_OBJCACHE) that were not used within `<age>` (default `7d`), shrink the cache file, and exit. The age may be given in units of `s`, `m`, `h` or `d` (the default unit). The file is only replaced if no other Julia process is using the cache.|
 |`--compile={yes*\|no\|all\|min}`       |Enable or disable JIT compiler, or request exhaustive or minimal compilation|
 |`--output-o <name>`                    |Generate an object file (including system image data)|
 |`--output-ji <name>`                   |Generate a system image data file (.ji)|

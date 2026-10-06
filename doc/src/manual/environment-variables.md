@@ -193,6 +193,22 @@ $(DEPOT_PATH[1])/logs/repl_history.jl
 
 Sets the maximum number of different instances of a single package that are to be stored in the precompile cache (default = 10).
 
+### [`JULIA_OBJCACHE`](@id JULIA_OBJCACHE)
+
+Julia keeps machine code compiled by the JIT in a native code cache, so that later sessions
+that compile the same code can load it instead. Setting `JULIA_OBJCACHE` to `0` disables the
+cache.
+
+The cache is stored in `cache/v<major>.<minor>/objcache-lmdb1/<target>` in the first depot of
+[`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), or in the directory given by
+`JULIA_OBJCACHE_PATH`. It is disabled on network file systems.
+
+`JULIA_OBJCACHE_CAPACITY` sets the size in bytes at which the least recently used entries
+start to be removed (512 MiB by default, 32 MiB on 32-bit systems). The file keeps its size
+after entries are removed; [`--prune-objcache`](@ref command-line-interface) removes the
+entries not used recently and shrinks the file, for example before saving the cache between
+CI jobs.
+
 ### [`JULIA_VERBOSE_LINKING`](@id JULIA_VERBOSE_LINKING)
 
 If set to true, linker commands will be displayed during precompilation.
