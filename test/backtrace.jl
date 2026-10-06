@@ -297,6 +297,25 @@ let code = """
     @test occursin("InterpreterIP in top-level CodeInfo for Main.A", bt_str)
 end
 
+# Interpreted method and generated function frames show their method
+let code = """
+    module A
+    foo() = error("Expected")
+    @generated gen(x) = :(error("Expected"))
+    end
+    for f in (A.foo, () -> A.gen(1))
+        bt = try f() catch; catch_backtrace() end
+        for sf in stacktrace(bt)
+            sf.func in (:foo, :gen) && println(sf, " | ", parentmodule(sf))
+        end
+    end
+    """
+
+    bt_str = read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String)
+    @test occursin("foo() at none:2 | Main.A", bt_str)
+    @test occursin("gen(x::$Int) at none:3 | Main.A", bt_str)
+end
+
 """
     _reformat_sp(bt_data...) -> sp::Vector{Ptr{Cvoid}}
 

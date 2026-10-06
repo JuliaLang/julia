@@ -10206,6 +10206,8 @@ static jl_llvm_functions_t
                     jl_module_t *modu = func ? jl_debuginfo_module1(func) : NULL;
                     info.file = jl_cdi_file(debuginfo);
                     info.line = i;
+                    if (pc > 0 && jl_is_string(debuginfo->linetable))
+                        info.line = std::max(0, jl_cdi_firstxy(debuginfo, pc).first);
                     info.line0 = 0;
                     if (pc == 1) {
                         int32_t line0 = jl_cdi_external_firstline(debuginfo);
@@ -10417,8 +10419,11 @@ static jl_llvm_functions_t
                     struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
                     if (lineidx.loc == -1)
                         break;
-                    if (lineidx.loc > 0)
-                        coverageAllocLine(ctx, file, lineidx.loc, is_user_code);
+                    int32_t line = lineidx.loc;
+                    if (line > 0 && jl_is_string(debuginfo->linetable))
+                        line = jl_cdi_firstxy(debuginfo, pc).first;
+                    if (line > 0)
+                        coverageAllocLine(ctx, file, line, is_user_code);
                 }
             }
         };

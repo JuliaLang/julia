@@ -124,14 +124,6 @@ function _add_linetable_frames!(frames, pointer, di::Core.DebugInfo, pc::Int)
     nothing
 end
 
-# The line number comes from the innermost line table, so take the file from there too.
-function _debuginfo_file(di::Core.DebugInfo)
-    while di.linetable isa Core.DebugInfo
-        di = di.linetable
-    end
-    return IRShow.debuginfo_file1(di)
-end
-
 # 1. Push our own frame
 # 2. If there is a linetable, recurse on edges there (and not the linetable)
 # 3. Recurse on any of our own edges
@@ -139,7 +131,7 @@ function _add_di_frames!(frames, pointer, di::Core.DebugInfo, pc::Int)
     @assert pc > 0 "invalid pc"
     push!(frames, StackFrame(
         di.def isa Symbol ? Symbol("macro expansion") : IRShow.method_name(di.def),
-        _debuginfo_file(di),
+        IRShow.debuginfo_file(di),
         @ccall(jl_cdi_firstxy(di::Any, pc::Int32)::NTuple{2, Int32})[1],
         di.def isa Core.MethodInstance ? di.def : nothing,
         false, # we can assume C frames aren't inlined into julia
@@ -214,29 +206,28 @@ function lookup(ip::Base.InterpreterIP)
             top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
     elseif code isa MethodInstance && (meth = code.def; meth isa Method)
         func = meth.name
+        linfo = code
         codeinfo = meth.source
-        di = codeinfo.debuginfo
     elseif code isa Core.CodeInstance
+        # uninferred CodeInstances have no `debuginfo`
         codeinfo = code.inferred::CodeInfo
         def = code.def isa Core.ABIOverride ? code.def.def : code.def
         @assert def isa MethodInstance "unexpected $(typeof(def))"
         meth = def.def
         func = meth isa Method ? meth.name : top_level_scope_sym
-        di = code.debuginfo
-        while Base.Compiler.has_prev_debuginfo(di, pc)
-            di, pc = Base.Compiler.prev_debuginfo(di, pc)
-        end
+        linfo = def
     else
         codeinfo = code::CodeInfo
-        di = codeinfo.debuginfo
+        linfo = codeinfo
         func = top_level_scope_sym
     end
-    file = IRShow.debuginfo_file1(di)
-    line = pc > 0 ? Base.Compiler.source_location(di, pc).line :
-        IRShow.debuginfo_firstline(di)
-    frames = [StackFrame(func, file, line, codeinfo, false, false, 0, pc, di)]
-    _add_linetable_frames!(frames, 0, di, pc)
-    return frames
+    di = codeinfo.debuginfo
+    line = pc > 0 ? @ccall(jl_cdi_firstxy(di::Any, pc::Int32)::NTuple{2, Int32})[1] :
+        IRShow.debuginfo_firstline(di)[2]
+    frames = [StackFrame(func, IRShow.debuginfo_file(di), line, linfo, false, false, 0, pc, di)]
+    edi, epc = Base.Compiler.edge_debuginfo(di, pc)
+    edi !== nothing && _add_di_frames!(frames, 0, edi, epc)
+    return reverse!(frames)
 end
 
 """
