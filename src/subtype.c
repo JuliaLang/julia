@@ -468,7 +468,7 @@ static jl_value_t *frame_substitute(jl_value_t *t, jl_varbinding_t *frame, jl_st
         // Only a level that actually occurs forces its binding's variable;
         // a non-occurring level is a pure shift and any value works.
         jl_value_t *v = jl_tvarref_occurs(t, 1) ? (jl_value_t*)binding_var(e, f) : jl_bottom_type;
-        jl_value_t *t2 = jl_substitute_tvarref_nothrow(t, 1, v);
+        jl_value_t *t2 = jl_rename_tvarref(t, 1, v);
         if (t2 == NULL)
             break;
         t = t2;

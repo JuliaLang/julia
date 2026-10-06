@@ -2122,6 +2122,22 @@ jl_value_t *jl_substitute_tvarref(jl_value_t *t, size_t idx, jl_value_t *val)
     return substitute_tvarref(t, idx, val, 0);
 }
 
+// rename the dangling TypeVarRef with root-index `idx` in `t` to the variable
+// `val` that stands for the same binder (same bounds): a renaming preserves
+// validity and `Union` normalization, so neither is re-checked (cf. the
+// `check == 0` fast path in `inst_type_w_`)
+jl_value_t *jl_rename_tvarref(jl_value_t *t, size_t idx, jl_value_t *val)
+{
+    assert(idx > 0);
+    jl_typeenv_t *env = (jl_typeenv_t*)alloca(idx * sizeof(jl_typeenv_t));
+    for (size_t i = 0; i < idx; i++) {
+        env[i].var = NULL;
+        env[i].val = (i == idx - 1) ? val : NULL;
+        env[i].prev = (i == idx - 1) ? NULL : &env[i + 1];
+    }
+    return inst_type_w_(t, &env[0], NULL, 0, 0, NULL);
+}
+
 // tolerant variant: a `Union` bound arm that becomes invalid under the
 // substitution is dropped (cf. the body instantiation in `jl_unionall_open`);
 // returns NULL if the substituted term is invalid beyond repair
