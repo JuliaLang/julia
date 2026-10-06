@@ -2348,7 +2348,10 @@ const TRIM_NO = 0x0
 const TRIM_SAFE = 0x1
 const TRIM_UNSAFE = 0x2
 const TRIM_UNSAFE_WARN = 0x3
-function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8, external_linkage::Bool)
+# Callees reached only through uninformative call sites are also pushed to the optional roots
+# vector, because no serialized edge leads to them.
+function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8, external_linkage::Bool,
+                              image_roots::Union{Nothing,Vector{Any}}=nothing)
     # During `--trim`, infer against an isolated cache namespace. The owner is re-stamped
     # back to `nothing` at serialization time (see `src/staticdata.c`).
     cache_owner = trim_mode == TRIM_NO ? nothing : :trim
@@ -2397,6 +2400,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
     # first (worlds are processed newest-first).
     cis = Any[]
     seen = IdSet{CodeInstance}()
+    uninformative_only = IdSet{CodeInstance}()
     for i = 1:length(codeinfos)
         item = codeinfos[i]
         if item isa CodeInstance && !(item in seen)
@@ -2435,6 +2439,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
                 if !(callee in seen)
                     push!(seen, callee)
                     push!(cis, callee)
+                    push!(uninformative_only, callee)
                 end
             end
             i += 1
@@ -2450,6 +2455,11 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
         mi = get_ci_mi(ci)
         return !iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, ci)) ||
             ccall(:jl_get_ci_equiv, Any, (Any, UInt), ci, 0x0)::CodeInstance !== ci
+    end
+    if image_roots !== nothing
+        for ci in cis
+            ci in uninformative_only && push!(image_roots, ci)
+        end
     end
 
     return Core.svec(codeinfos, cis)
