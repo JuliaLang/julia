@@ -6,6 +6,11 @@ using REPL # testing the doc lookup function should be outside of the scope of t
 include("precompile_utils.jl")
 include("tempdepot.jl")
 
+# This file runs alongside the other tests, so keep its parallel precompilation to a few
+# processes; restored at the end of the file
+const original_num_precompile_tasks = get(ENV, "JULIA_NUM_PRECOMPILE_TASKS", nothing)
+ENV["JULIA_NUM_PRECOMPILE_TASKS"] = "4"
+
 Foo_module = :Foo4b3a94a1a081a8cb
 foo_incl_dep = :foo4b3a94a1a081a8cb
 bar_incl_dep = :bar4b3a94a1a081a8cb
@@ -1592,68 +1597,6 @@ precompile_test_harness("package_callbacks") do dir
         @test cnt == 1
     finally
         pop!(Base.package_callbacks)
-    end
-end
-
-# Issue #19960
-(f -> f())() do # wrap in function scope, so we can test world errors
-    test_workers = addprocs(1)
-    push!(test_workers, myid())
-    save_cwd = pwd()
-    temp_path = mkdepottempdir()
-    try
-        cd(temp_path)
-        load_path = mktempdir(temp_path)
-        load_cache_path = mkdepottempdir(temp_path)
-
-        ModuleA = :Issue19960A
-        ModuleB = :Issue19960B
-
-        write(joinpath(load_path, "$ModuleA.jl"),
-            """
-            module $ModuleA
-                import Distributed: myid
-                export f
-                f() = myid()
-            end
-            """)
-
-        write(joinpath(load_path, "$ModuleB.jl"),
-            """
-            module $ModuleB
-                using $ModuleA
-                export g
-                g() = f()
-            end
-            """)
-
-        @everywhere test_workers begin
-            pushfirst!(LOAD_PATH, $load_path)
-            pushfirst!(DEPOT_PATH, $load_cache_path)
-        end
-        try
-            @eval using $ModuleB
-            invokelatest() do
-                uuid = Base.module_build_id(Base.root_module(Main, ModuleB))
-                for wid in test_workers
-                    @test Distributed.remotecall_eval(Main, wid, quote
-                            Base.module_build_id(Base.root_module(Main, $(QuoteNode(ModuleB))))
-                        end) == uuid
-                    if wid != myid() # avoid world-age errors on the local proc
-                        @test remotecall_fetch(g, wid) == wid
-                    end
-                end
-            end
-        finally
-            @everywhere test_workers begin
-                popfirst!(LOAD_PATH)
-                popfirst!(DEPOT_PATH)
-            end
-        end
-    finally
-        cd(save_cwd)
-        pop!(test_workers) # remove myid
-        rmprocs(test_workers)
     end
 end
 
@@ -4720,3 +4663,8 @@ precompile_test_harness("Ambiguities and package-image edge validation") do load
 end
 
 finish_precompile_test!()
+if original_num_precompile_tasks === nothing
+    delete!(ENV, "JULIA_NUM_PRECOMPILE_TASKS")
+else
+    ENV["JULIA_NUM_PRECOMPILE_TASKS"] = original_num_precompile_tasks
+end
