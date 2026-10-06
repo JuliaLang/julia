@@ -1074,21 +1074,21 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # (op= a + b) => (+= a b)
         # (.op= a + b) => (.+= a b) below
         # TODO: worst Expr, defined in terms of isoperator, fix me pls
-        op_s = string(cs[2]) * '='
+        op_s = syntax_name(cs[2]) * '='
         lhs = _green_to_est(st, 0, cs[1])
         rhs = _green_to_est(st, 0, cs[3])
         return newnode(st, Symbol(op_s), SyntaxList(lhs, rhs))
     elseif k === :var".op=" && n_cs === 3
-        op_s = '.' * string(cs[2]) * '='
+        op_s = '.' * syntax_name(cs[2]) * '='
         lhs = _green_to_est(st, 0, cs[1])
         rhs = _green_to_est(st, 0, cs[3])
         return newnode(st, Symbol(op_s), SyntaxList(lhs, rhs))
     elseif k === :var"op=" && n_cs === 1
         # (op= +) => +=   (the operator name itself, eg when quoted as `:(+=)`)
-        return symleaf(string(cs[1]) * '=')
+        return symleaf(syntax_name(cs[1]) * '=')
     elseif k === :var".op=" && n_cs === 1
         # (.op= +) => .+=
-        return symleaf('.' * string(cs[1]) * '=')
+        return symleaf('.' * syntax_name(cs[1]) * '=')
     elseif k === :dotsidentifier
         # `..`/`...` used as an ordinary identifier (eg the `..` operator)
         return symleaf(repeat('.', numeric_flags(st)))
