@@ -1004,7 +1004,7 @@ end
 @testset "show_completions" begin
     term = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
 
-    function getcompletion(completions)
+    function getcompletion(completions, term=term)
         promptstate = REPL.LineEdit.init_state(term, REPL.LineEdit.mode(new_state()))
         REPL.LineEdit.show_completions(promptstate, completions)
         return String(take!(term.out_stream))
@@ -1023,6 +1023,20 @@ end
     # Check that newlines in completions are handled correctly (issue #45836)
     strings3 = ["abcdef", "123456\nijklmn"]
     @test getcompletion(strings3) == "\033[0B\nabcdef\n123456\nijklmn\n"
+
+    # Internal names come after the public ones, dimmed, and laid out in their own columns
+    # under headers. Lists without internal names get no headers, as checked above.
+    named = [LineEdit.NamedCompletion("b", "b", true), LineEdit.NamedCompletion("a"),
+             LineEdit.NamedCompletion("long_internal", "long_internal", true)]
+    @test getcompletion(named) ==
+        "\033[0B\n\r\e[1mPublic:\e[0m\n\ra\n\r\e[1mInternal:\e[0m\n\r\e[90mb\e[0m\n\r\e[90mlong_internal\e[0m\n"
+    named2 = vcat(map(LineEdit.NamedCompletion, strings2),
+                  [LineEdit.NamedCompletion("internal", "internal", true) for _ in strings2])
+    @test getcompletion(named2) ==
+        "\033[0B\n\r\e[1mPublic:\e[0m\n\rfoo\r\e[5Cfoo\n\rfoo\r\e[5Cfoo\n\rfoo\r\e[5Cfoo\n\r\e[1mInternal:\e[0m\n" *
+        "\r\e[90minternal\e[0m\r\e[10C\e[90minternal\e[0m\n" ^ 3
+    nocolor = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer(), false)
+    @test getcompletion(named, nocolor) == "\033[0B\n\rPublic:\n\ra\n\rInternal:\n\rb\n\rlong_internal\n"
 end
 
 # Test bracket insertion functionality
