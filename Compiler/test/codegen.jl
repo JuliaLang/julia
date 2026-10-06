@@ -609,8 +609,8 @@ let a = Core.Intrinsics.trunc_int(UInt24, 3),
     @test f((a, true)) === true
     @test f((a, false)) === false
     @test sizeof(Tuple{UInt24,Bool}) == 8
-    @test sizeof(UInt24) == 3
-    @test sizeof(Union{UInt8,UInt24}) == 3
+    @test sizeof(UInt24) == 4 # 3 value bytes rounded up to the 4-byte alignment
+    @test sizeof(Union{UInt8,UInt24}) == 4
     @test sizeof(Base.RefValue{Union{UInt8,UInt24}}) == 8
 end
 
@@ -655,6 +655,23 @@ end
         return cond
     end
     @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f4, Tuple{Bool}, true, false, false))
+
+    # unions of ghosts have nothing to preserve, from a PhiNode or a return value (#63482)
+    function f5(cond)
+        val = cond ? nothing : missing
+        GC.@preserve val begin end
+        return cond
+    end
+    @test f5(true)
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f5, Tuple{Bool}, true, false, false))
+    @noinline f6_ghosts(cond) = cond ? nothing : missing
+    function f6(cond)
+        val = f6_ghosts(cond)
+        GC.@preserve val begin end
+        return cond
+    end
+    @test f6(true)
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f6, Tuple{Bool}, true, false, false))
 end
 
 # issue #32843

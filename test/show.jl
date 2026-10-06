@@ -1554,6 +1554,15 @@ let m = Memory{StaticShowUInt63}(undef, 1)
     @test occursin("StaticShowUInt63(0x7fffffffffffffff)", shown)
     @test !occursin("StaticShowUInt63(0xffffffffffffffff)", shown)
 end
+# ... and padding bytes: sizeof is 4 for these, with 1 resp. 2 bytes of padding
+primitive type StaticShowUInt24 24 end
+primitive type StaticShowUInt17 17 end
+let m = Memory{StaticShowUInt24}(undef, 1), m17 = Memory{StaticShowUInt17}(undef, 1)
+    GC.@preserve m unsafe_store!(Ptr{UInt32}(pointer(m)), typemax(UInt32))
+    @test occursin("StaticShowUInt24(0xffffff)", static_shown(m))
+    GC.@preserve m17 unsafe_store!(Ptr{UInt32}(pointer(m17)), typemax(UInt32))
+    @test occursin("StaticShowUInt17(0x01ffff)", static_shown(m17))
+end
 
 # PR #22160
 @test static_shown(:aa) == ":aa"
@@ -2642,6 +2651,13 @@ let T = TypeVar(:T, Union{}, Integer), S = TypeVar(:S, Union{}, T)
     @test string(Union{MBoundedAlias2.A{T,S}, MBoundedAlias2.B{T,S}}) ==
         "$(curmod_prefix)MBoundedAlias2.U{T, S} where {T<:Integer, S<:T}"
 end
+
+for T in (Union{Int, Vector{Vector{C}} where C}, Union{Int, Vector{Vector{C}} where C<:Real},
+          Union{Nothing, Matrix{Int}, Vector{Vector{C}} where C},
+          Union{Nothing, Vector{Vector{C}} where C<:D} where D)
+    @test eval(Meta.parse(repr(T))) == T
+end
+@test string(Union{Int64, Vector{Vector{C}} where C}) == "Union{Int64, Vector{Vector{C}} where C}"
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"

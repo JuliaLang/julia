@@ -42,6 +42,7 @@ struct VerifyMethodLookup
     result::Union{Nothing,Vector{Any}}
     min_world::UInt
     max_world::UInt
+    has_ambig::Int32
 end
 
 # Container for all the work arrays
@@ -276,6 +277,11 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                     local min_valid2::UInt, max_valid2::UInt
                     edge = initial.callees[j]
                     @assert !(edge isa Method) "unexpected Method edge indicates corrupt edges list creation"
+                    possibly_ambiguous = edge isa Core.PossiblyAmbiguous
+                    if possibly_ambiguous
+                        j += 1
+                        edge = initial.callees[j]
+                    end
 
                     if edge isa CodeInstance
                         # Convert CodeInstance to MethodInstance for validation (like original)
@@ -284,13 +290,13 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
 
                     if edge isa MethodInstance
                         sig = edge.specTypes
-                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, workspace)
+                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, possibly_ambiguous, workspace)
                         j += 1
                     elseif edge isa Int
                         sig = initial.callees[j+1]
                         nmatches = abs(edge)
                         fully_covers = edge > 0
-                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, workspace)
+                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, possibly_ambiguous, workspace)
                         j += 2 + nmatches
                         edge = sig
                     elseif edge isa Core.Binding
@@ -533,7 +539,7 @@ function verify_call_lookup(@nospecialize(sig), lim::Int, world::UInt, workspace
         cached = get(workspace.lookups, sig, nothing)
         if cached !== nothing && cached.lim == lim
             if cached.result === nothing ? cached.world == world : (cached.min_world <= world <= cached.max_world)
-                return cached.result, cached.min_world, cached.max_world
+                return cached.result, cached.min_world, cached.max_world, cached.has_ambig
             end
         end
     end
@@ -545,12 +551,12 @@ function verify_call_lookup(@nospecialize(sig), lim::Int, world::UInt, workspace
     has_ambig[] = 0
     result = _methods_by_ftype(sig, nothing, lim, world, #=ambig=#false, minworld, maxworld, has_ambig)
     if memoize
-        workspace.lookups[sig] = VerifyMethodLookup(lim, world, result, minworld[], maxworld[])
+        workspace.lookups[sig] = VerifyMethodLookup(lim, world, result, minworld[], maxworld[], has_ambig[])
     end
-    return result, minworld[], maxworld[]
+    return result, minworld[], maxworld[], has_ambig[]
 end
 
-function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool, workspace::VerifyMethodWorkspace)
+function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool, possibly_ambiguous::Bool, workspace::VerifyMethodWorkspace)
     # verify that these edges intersect with the same methods as before
     matches = workspace.matches
     # Collect the expected methods once: indexing the edges list boxes the index (no inline
@@ -671,11 +677,14 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
     # next, compare the current result of ml_matches to the old result
     debug = _jl_debug_method_invalidation[] !== nothing
     lim = debug ? Int(typemax(Int32)) : n
-    result, minworld, maxworld = verify_call_lookup(sig, lim, world, workspace, !debug)
+    result, minworld, maxworld, has_ambig = verify_call_lookup(sig, lim, world, workspace, !debug)
     if result === nothing
         empty!(matches)
         maxworld = UInt(0)
     else
+        if has_ambig != 0 && !possibly_ambiguous
+            maxworld = UInt(0)
+        end
         # setdiff!(result, expected)
         if length(result) ≠ n
             maxworld = UInt(0)

@@ -162,33 +162,88 @@ end
 # function.
 
 """
+Return the character immediately before the current position of `stream`, or
+`nothing` at the start of the stream. The position of `stream` is unchanged.
+"""
+function peekprev(stream::IO)
+    pos = position(stream)
+    pos == 0 && return nothing
+    # step back over UTF-8 continuation bytes so that we read a whole character
+    i = pos - 1
+    while i > 0
+        seek(stream, i)
+        (peek(stream) & 0xc0) == 0x80 || break
+        i -= 1
+    end
+    seek(stream, i)
+    c = read(stream, Char)
+    seek(stream, pos)
+    return c
+end
+
+"""
+Return true if `c` is a Unicode whitespace character as defined by CommonMark.
+"""
+ismarkdownspace(c::Char) =
+    c in ('\t', '\n', '\f', '\r') || Base.Unicode.category_code(c) == Base.Unicode.UTF8PROC_CATEGORY_ZS
+
+"""
+Return true if `c` is neither a Unicode whitespace character nor a Unicode
+punctuation character, as those terms are defined by CommonMark.
+"""
+function isword(c::Char)
+    # the spec replaces NUL with U+FFFD (So), so it counts as punctuation
+    (c == '\0' || ismarkdownspace(c)) && return false
+    cat = Base.Unicode.category_code(c)
+    # PC..SO are the P and S categories; above CO are malformed or out-of-range characters,
+    # treated like NUL
+    return !(Base.Unicode.UTF8PROC_CATEGORY_PC <= cat <= Base.Unicode.UTF8PROC_CATEGORY_SO ||
+             cat > Base.Unicode.UTF8PROC_CATEGORY_CO)
+end
+
+"""
 Parse a symmetrical delimiter which wraps words.
 i.e. `*word word*` but not `*word * word`.
 `rep` specifies whether the delimiter can be repeated.
+`intraword` specifies whether the delimiter may appear inside a word: with it
+disabled a run touching a word character on its outer side can neither open nor
+close, so that `foo_bar_` is left alone while `_foo_bar_baz_` still emphasises
+across its inner underscores.
 Escaped delimiters are not yet supported.
 """
-function parse_inline_wrapper(stream::IO, delimiter::AbstractString; rep::Bool = false)
+function parse_inline_wrapper(stream::IO, delimiter::AbstractString;
+                              rep::Bool = false, intraword::Bool = true)
     delimiter, nmin = string(delimiter[1]), length(delimiter)
     withstream(stream) do
-        if position(stream) >= 1
-            # check the previous byte isn't a delimiter
-            skip(stream, -1)
-            (read(stream, Char) in delimiter) && return nothing
+        prev = peekprev(stream)
+        if prev !== nothing
+            # check the previous character isn't a delimiter
+            (prev in delimiter) && return nothing
+            # an intraword-forbidden delimiter can't open after a word character
+            !intraword && isword(prev) && return nothing
         end
         n = nmin
         startswith(stream, delimiter^n) || return nothing
         while startswith(stream, delimiter); n += 1; end
         !rep && n > nmin && return nothing
-        !eof(stream) && isspace(peek(stream, Char)) && return nothing
+        !eof(stream) && ismarkdownspace(peek(stream, Char)) && return nothing
 
         buffer = IOBuffer()
         for char in readeach(stream, Char)
             write(buffer, char)
-            if !(isspace(char) || char in delimiter) && startswith(stream, delimiter^n)
+            if !(ismarkdownspace(char) || char in delimiter) && startswith(stream, delimiter^n)
                 trailing = 0
                 while startswith(stream, delimiter); trailing += 1; end
-                trailing == 0 && return takestring!(buffer)
-                write(buffer, delimiter ^ (n + trailing))
+                if trailing == 0
+                    # an intraword-forbidden delimiter can't close before a word
+                    # character; keep scanning for a later run instead
+                    if intraword || eof(stream) || !isword(peek(stream, Char))
+                        return takestring!(buffer)
+                    end
+                    write(buffer, delimiter ^ n)
+                else
+                    write(buffer, delimiter ^ (n + trailing))
+                end
             end
         end
     end

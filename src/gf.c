@@ -2603,6 +2603,45 @@ static int _invalidate_dispatch_backedges(jl_method_instance_t *mi, jl_value_t *
         else {
             replaced_edge = replaced_dispatch;
         }
+        if (replaced_edge && invokeTypes == NULL && ambig) {
+            // the new method only makes calls to `mi` ambiguous: avoid the invalidation
+            // if every edge from `caller` to `mi` is marked as possibly ambiguous
+            jl_svec_t *edges = jl_atomic_load_relaxed(&caller->edges);
+            size_t nedges = jl_svec_len(edges);
+            int found_ambig = 0;
+            int edge_ambig = 0;
+            for (size_t j = 0; j < nedges; ) {
+                jl_value_t *edge = jl_svecref(edges, j);
+                if (jl_typetagis(edge, jl_possibly_ambiguous_type)) {
+                    edge_ambig = 1;
+                    j += 1;
+                    continue;
+                }
+                size_t first = j, n = 1;
+                if (jl_is_long(edge)) {
+                    ssize_t nmatches = jl_unbox_long(edge);
+                    first = j + 2;
+                    n = nmatches < 0 ? -nmatches : nmatches;
+                }
+                for (size_t k = first; k < first + n && k < nedges; k++) {
+                    jl_value_t *callee = jl_svecref(edges, k);
+                    if (jl_is_code_instance(callee))
+                        callee = (jl_value_t*)jl_get_ci_mi((jl_code_instance_t*)callee);
+                    if (callee == (jl_value_t*)mi) {
+                        if (!edge_ambig)
+                            goto must_invalidate;
+                        found_ambig = 1;
+                    }
+                }
+                j = first + n;
+                edge_ambig = 0;
+            }
+            if (found_ambig) {
+                insb = set_next_edge(backedges, insb, invokeTypes, caller);
+                continue;
+            }
+        must_invalidate:;
+        }
         if (replaced_edge) {
             invalidate_code_instance(caller, max_world, 1);
             insb = clear_next_edge(backedges, insb, invokeTypes, caller);
@@ -4608,6 +4647,34 @@ JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t na
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_FOREIGN);
 }
 
+jl_value_t *jl_invoke_target(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_value_t *target)
+{
+    if (jl_is_method_instance(target))
+        return jl_invoke(F, args, nargs, (jl_method_instance_t*)target);
+    assert(jl_is_code_instance(target));
+    jl_code_instance_t *codeinst = (jl_code_instance_t*)target;
+    assert(jl_atomic_load_relaxed(&codeinst->min_world) <= jl_current_task->world_age &&
+           jl_current_task->world_age <= jl_atomic_load_relaxed(&codeinst->max_world));
+    jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
+    if (!invoke) {
+        jl_compile_codeinst(codeinst);
+        invoke = jl_atomic_load_acquire(&codeinst->invoke);
+    }
+    if (invoke)
+        return invoke(F, args, nargs, codeinst);
+    if (codeinst->owner != jl_nothing)
+        jl_error("Failed to invoke or compile external codeinst");
+    return jl_invoke(F, args, nargs, jl_get_ci_mi(codeinst));
+}
+
+// Apply the modify function `op`, using the forwarded op_target from `:invoke_modify` if present
+jl_value_t *jl_apply_modifyop(jl_value_t *op, jl_value_t **args, jl_value_t *op_target)
+{
+    if (op_target)
+        return jl_invoke_target(op, args, 2, op_target);
+    return jl_apply_generic(op, args, 2);
+}
+
 jl_value_t *jl_invoke_fromdispatch(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
 {
     size_t world = jl_current_task->world_age;
@@ -4643,7 +4710,7 @@ jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, 
     return verify_type(res);
 }
 
-JL_DLLEXPORT jl_value_t *jl_invoke_oc(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
+jl_value_t *jl_invoke_oc(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
 {
     jl_opaque_closure_t *oc = (jl_opaque_closure_t*)F;
     jl_task_t *ct = jl_current_task;

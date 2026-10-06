@@ -59,6 +59,9 @@ New language features
   and a fresh ^C epoch is re-armed at each prompt; a script that catches a ^C
   cancellation continues under the cancelled scope unless it re-arms one itself
   (`ScopedValues.@with Base.CANCEL_TOKEN => Base.sigint_new_episode!() ...`) ([#60281]).
+* Support for Unicode 18 ([#63349]). The new subscripts `₝` (U+209D), `₞` (U+209E), `₟` (U+209F),
+  and `𝿐` (U+1DFD0) can also be used as operator suffixes, accessible as `\_w`, `\_y`, `\_z`, and `\_pgamma`
+  at the REPL ([#63505]).
 
 Language changes
 ----------------
@@ -70,6 +73,14 @@ Language changes
   (e.g. `Type{Int} <: Union{DataType,UnionAll}` holds). `isa` and dispatch of type *values* are
   unaffected, and a method on `Type{Int}` remains more specific than one on `DataType`
   ([#33136], [#62141]).
+
+* `Core.sizeof` of a `primitive type` now rounds its value bytes up to a multiple of its
+  alignment rather than only up to a whole byte, so it always equals `Base.elsize(Array{T})`
+  and, up to 64 bits, matches C23's `_BitInt(N)`. For example `primitive type Int24 24 end`
+  now has `sizeof` 4 rather than 3. Pointer loads and stores, `read` and `write`, and the layout
+  of structs follow the new size: `unsafe_store!` through a `Ptr{Int24}` now writes 4 bytes.
+  Such types now report `Base.datatype_haspadding`; the trailing padding is not part of the
+  value and does not affect `===` or `objectid` ([#61361]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -120,7 +131,7 @@ Compiler/Runtime improvements
   `Core.BindingPartition`, as the left-hand side of an assignment to one, or as a call to one of the new
   `Core.getglobal_partition`, `Core.setglobal_partition`, `Core.swapglobal_partition`,
   `Core.modifyglobal_partition`, `Core.replaceglobal_partition`, `Core.setglobalonce_partition`,
-  `Core.isdefinedglobal_partition` or `Core.depwarn_partition` builtin function. This does not change the
+  `Core.isdefinedglobal_partition` or `Core.depwarn_binding` builtin function. This does not change the
   meaning of the program, but packages that inspect optimized IR (e.g. from `code_typed`) will encounter
   these new forms. See the "Lowered form" section of the developer documentation for their semantics ([#62452]).
 
@@ -229,6 +240,9 @@ Standard library changes
   (the project uuid, or a generated one), so containers sharing a depot with different projects mounted
   at the same path keep their caches from overwriting each other. Loading is unaffected, as it checks
   file contents rather than names ([#63268]).
+* `libpicosat_jll` is a new standard library that bundles the [PicoSAT](https://github.com/JuliaLang/PicoSAT)
+  SAT solver for the package manager's dependency resolver. It is not part of Julia's public interface
+  and may stop being bundled in a future release ([#59119]).
 
 #### JuliaSyntaxHighlighting
 
@@ -243,6 +257,13 @@ Standard library changes
 * Many, many bug fixes and minor tweaks; overall behavior is now much closer to CommonMark ([#59977], [#60502]).
 * Table columns whose delimiter cell has no `:` (such as `---`) are now left-aligned, as on
   GitHub, instead of right-aligned.
+
+### Mmap
+
+* Refactored for consistent behavior between Windows, Linux, and macOS; also made more robust and avoids surfacing
+  system errors in favor of Julia exceptions, addressing several longstanding issues ([#60955]).
+* `Mmap.Anonymous` deprecated in favor of new `Mmap.SharedMemory`, which acts like an IO object abstracting over
+  a named or anonymous shared memory segment supporting the `open`/`close` convention ([#60955]).
 
 #### Profile
 
@@ -262,6 +283,9 @@ Standard library changes
 
 #### SharedArrays
 
+* Naming of the internal shared memory segment has changed to reduce chance of collisions ([#60955]).
+* `unshare!(::SharedArray)` eagerly releases the shared-memory mappings on workers while leaving the
+  array available on the host process ([#60955]).
 * `close(::SharedArray)` eagerly releases the shared-memory mappings referenced through the
   array on all processes, e.g. so the file backing a file-backed `SharedArray` can be deleted
   immediately ([#62488]).
@@ -295,6 +319,17 @@ Standard library changes
 #### Dates
 
 * `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
+* New public (unexported) `Dates.Timestamp{P}` type: a point in time stored as an `Int64` count of `P` (`Second`, `Millisecond`,
+  `Microsecond`, or `Nanosecond`) since the Unix epoch. `Timestamp(...)` creates a
+  `Timestamp{Nanosecond}`, which covers the years 1677 through 2262. The helpers
+  `Dates.unix2timestamp`, `Dates.timestamp2unix`, and `Dates.ISOTimestampFormat` are also public
+  but not exported ([#62994]).
+* Equal `Date`, `DateTime`, and `Timestamp` values now have equal hashes, as `==` requires ([#62994]).
+* New `n` format code for fractional seconds with up to nanosecond precision. A format that used `n`
+  as a literal character must now escape it with a backslash. The default `Time` format,
+  `ISOTimeFormat`, now uses `n`, so `Time` values with sub-millisecond parts round-trip through
+  `string`. The `ns` argument of `Time` now accepts a full fraction of a second, `0` through
+  `999999999` ([#62994]).
 
 #### InteractiveUtils
 

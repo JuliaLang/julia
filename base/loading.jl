@@ -261,7 +261,7 @@ and wherefrom to load a julia package.
 """
 struct PkgLoadSpec
     path::String
-    julia_syntax_version::VersionNumber
+    julia_edition::Tuple{Int, Int}
 end
 
 struct LoadingCache
@@ -920,7 +920,7 @@ function project_file_ext_load_spec(project_file::String, ext::PkgId)
     if exts !== nothing
         if ext.name in keys(exts) && ext.uuid == uuid5(UUID(d["uuid"]::String), ext.name)
             # Syntax version of the main package applies to its extensions
-            return PkgLoadSpec(find_ext_path(p, ext.name), project_get_syntax_version(d))
+            return PkgLoadSpec(find_ext_path(p, ext.name), project_get_edition(d))
         end
     end
     return nothing
@@ -935,9 +935,7 @@ function project_file_name_uuid(project_file::String, name::String)::PkgId
     return PkgId(uuid, name)
 end
 
-const NON_VERSIONED_SYNTAX = v"1.13"
-
-function project_get_syntax_version(d::Dict)
+function project_get_edition(d::Dict)
     # Syntax Evolution. First check syntax.julia_version entry
     sv = nothing
     ds = get(d, "syntax", nothing)
@@ -957,14 +955,16 @@ function project_get_syntax_version(d::Dict)
     # Finally, if neither of those are set, default to the current Julia version.
     # N.B.: This choice is less "compatible" than defaulting to a fixed older version.
     # However, it avoids surprises from moving over scripts and REPL code to packages
-    if sv === nothing
-        sv = VERSION
-    elseif sv <= NON_VERSIONED_SYNTAX
+    ed = if sv === nothing
+        VERSION_EDITION
+    elseif sv <= VersionNumber(OLDEST_EDITION)
         # Syntax versioning was first introduced in Julia 1.14 - we do not support
         # going back to versions before syntax version 1.13.
-        sv = NON_VERSIONED_SYNTAX
+        OLDEST_EDITION
+    else
+        EditionNumber(sv::VersionNumber)
     end
-    return sv
+    return ed
 end
 
 function project_file_load_spec(project_file::String, name::String)
@@ -974,7 +974,7 @@ function project_file_load_spec(project_file::String, name::String)
     if entryfile === nothing
         entryfile = get(d, "entryfile", nothing)::Union{String, Nothing}
     end
-    sv = project_get_syntax_version(d)
+    sv = project_get_edition(d)
     return PkgLoadSpec(entry_path(dirname(project_file), name, entryfile), sv)
 end
 
@@ -986,26 +986,12 @@ function workspace_manifest(project_file)
     return nothing
 end
 
-struct VersionedParse
-    ver::VersionNumber
-end
-
-function (vp::VersionedParse)(code, filename::String, lineno::Int, offset::Int, options::Symbol)
-    pm = parentmodule(Core._parse)
-    # hack to support old copies of JuliaSyntax
-    if !isdefined(pm, :_has_v1_14_version_hooks) && isdefined(pm, :_has_v1_10_hooks)
-        invokelatest(Core._parse, code, filename, lineno, offset, options)
-    else
-        invokelatest(Core._parse, code, filename, lineno, offset, options, vp.ver)
-    end
-end
-
 function parser_for_active_project()
     project = active_project()
-    sv = VERSION
+    sv = VERSION_EDITION
     if project !== nothing && isfile(project)
         try
-            sv = project_get_syntax_version(parsed_toml(project))
+            sv = project_get_edition(parsed_toml(project))
         catch e
             @warn "Failed to read project $project - defaulting to latest syntax. err=$e"
         end
@@ -1263,7 +1249,7 @@ function explicit_manifest_uuid_load_spec(project_file::String, pkg::PkgId)::Uni
                 end
                 parent_path = parent_load_spec.path
                 p = normpath(dirname(parent_path), "..")
-                return PkgLoadSpec(find_ext_path(p, pkg.name), parent_load_spec.julia_syntax_version)
+                return PkgLoadSpec(find_ext_path(p, pkg.name), parent_load_spec.julia_edition)
             end
         end
     end
@@ -1276,13 +1262,14 @@ function explicit_manifest_entry_load_spec(manifest_file::String, pkg::PkgId, en
     # manifest was created by an older version of julia that did not support syntax versioning.
     # Newer versions of Pkg will provide syntax version information in the manifest,
     # even if absent from the project file.
-    syntax_version = NON_VERSIONED_SYNTAX
+    edition = OLDEST_EDITION
     syntax_table = get(entry, "syntax", nothing)
     if syntax_table !== nothing
-        syntax_version = VersionNumber(get(syntax_table, "julia_version", nothing))
+        edition = EditionNumber(
+            VersionNumber(get(syntax_table, "julia_version", nothing)))
         # Clamp to minimum supported syntax version
-        if syntax_version <= NON_VERSIONED_SYNTAX
-            syntax_version = NON_VERSIONED_SYNTAX
+        if VersionNumber(edition) <= VersionNumber(OLDEST_EDITION)
+            edition = OLDEST_EDITION
         end
     end
 
@@ -1291,7 +1278,7 @@ function explicit_manifest_entry_load_spec(manifest_file::String, pkg::PkgId, en
     entryfile = get(entry, "entryfile", nothing)::Union{Nothing, String}
     if path !== nothing
         path = entry_path(normpath(abspath(dirname(manifest_file), path)), pkg.name, entryfile)
-        return PkgLoadSpec(path, syntax_version)
+        return PkgLoadSpec(path, edition)
     end
     hash = get(entry, "git-tree-sha1", nothing)::Union{Nothing, String}
     if hash === nothing
@@ -1310,7 +1297,7 @@ function explicit_manifest_entry_load_spec(manifest_file::String, pkg::PkgId, en
     for slug in (version_slug(uuid, hash), version_slug(uuid, hash, 4))
         for depot in DEPOT_PATH
             path = joinpath(depot, "packages", pkg.name, slug)
-            ispath(path) && return PkgLoadSpec(entry_path(abspath(path), pkg.name, entryfile), syntax_version)
+            ispath(path) && return PkgLoadSpec(entry_path(abspath(path), pkg.name, entryfile), edition)
         end
     end
     # no depot contains the package, return missing to stop looking
@@ -1347,11 +1334,11 @@ function implicit_manifest_uuid_load_spec(dir::String, pkg::PkgId)::Union{Nothin
     if project_file === nothing
         pkg.uuid === nothing || return nothing
         # Without a project file, treat as empty - which defaults to VERSION
-        return PkgLoadSpec(path, VERSION)
+        return PkgLoadSpec(path, VERSION_EDITION)
     end
     proj = project_file_name_uuid(project_file, pkg.name)
     proj == pkg || return nothing
-    return PkgLoadSpec(path, project_get_syntax_version(parsed_toml(project_file)))
+    return PkgLoadSpec(path, project_get_edition(parsed_toml(project_file)))
 end
 
 ## other code loading functionality ##
@@ -2099,6 +2086,7 @@ function compilecache_freshest_path(pkg::PkgId;
         # driver) must keep them on, so that a corrupted cache is recompiled
         # rather than reported as loadable
         verify_checksums::Bool=true,
+        unverified::Union{Nothing,Set{String}}=nothing,
         reasons::Union{Dict{Symbol,Int},Nothing}=nothing)
     isnothing(sourcespec) && error("Cannot locate source for $(repr("text/plain", pkg))")
     @lock require_lock begin
@@ -2115,15 +2103,16 @@ function compilecache_freshest_path(pkg::PkgId;
             end
         end
     end
+    tried = 0
     for build_id in try_build_ids
         @label next_path for path_to_try in cachepaths
-            staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; ignore_loaded, requested_flags=flags, verify_checksums, reasons)
+            tried += 1
+            # Checksums read the whole file, so check them after the deps.
+            staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; ignore_loaded, requested_flags=flags, verify_checksums=false, reasons)
             if staledeps === true
                 continue
             end
-            staledeps, _, id_build = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
-            # Record the result so dependents don't check this file again.
-            stale_cache[(pkg, id_build, sourcespec, path_to_try, ignore_loaded, flags)::StaleCacheKey] = false
+            staledeps, ocachefile, id_build = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
             # finish checking staledeps module graph
             @label next_dep for dep in staledeps
                 dep isa Module && continue
@@ -2139,11 +2128,17 @@ function compilecache_freshest_path(pkg::PkgId;
                 end
                 continue next_path
             end
-            try
-                # update timestamp of precompilation file so that it is the first to be tried by code loading
-                touch(path_to_try)
-            catch
-                # file might be read-only and then we fail to update timestamp, which is fine
+            verify_checksums && checksums_invalid(path_to_try, ocachefile, id_build, reasons; unverified) && continue
+            # Record the result so dependents don't check this file again.
+            stale_cache[(pkg, id_build, sourcespec, path_to_try, ignore_loaded, flags)::StaleCacheKey] = false
+            # The first candidate tried is already the one code loading prefers.
+            if tried > 1
+                try
+                    # update timestamp of precompilation file so that it is the first to be tried by code loading
+                    touch(path_to_try)
+                catch
+                    # file might be read-only and then we fail to update timestamp, which is fine
+                end
             end
             return path_to_try
         end
@@ -2308,11 +2303,14 @@ end
     # Try the driver's validated cache first; fall back to the normal search.
     pre = get(preresolved_cachefiles, pkg, nothing)
     pre !== nothing && (paths = Iterators.flatten(((pre,), paths)))
+    tried = 0
     for build_id in try_build_ids
         @label next_path for path_to_try in paths
+            tried += 1
             trusted = path_to_try === pre
+            # Checksums read the whole file, so check them after the deps.
             staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; reasons,
-                                        stalecheck = stalecheck && !trusted, verify_checksums = !trusted)
+                                        stalecheck = stalecheck && !trusted, verify_checksums = false)
             if staledeps === true
                 continue
             end
@@ -2378,7 +2376,8 @@ end
                     stalecheck && register_root_module(M)
                     return M
                 end
-                if stalecheck
+                !trusted && checksums_invalid(path_to_try, ocachefile, newbuild_id, reasons) && continue next_path
+                if stalecheck && tried > 1
                     try
                         touch(path_to_try) # update timestamp of precompilation file
                     catch
@@ -2946,8 +2945,7 @@ register_root_module(Main)
 # to the loaded_modules table instead of getting bindings.
 baremodule __toplevel__
 using Base
-global var"#_internal_julia_parse" = Base.VersionedParse(VERSION)
-global _internal_julia_lower = Core._lower
+global var"#_internal_julia_parse" = Base.VersionedParse(Base.VERSION_EDITION)
 
 # Used for version checking of precompiled cache files only
 global _internal_syntax_version::UInt8 = 0
@@ -3137,13 +3135,13 @@ function __require_prelocked(pkg::PkgId, env)
     if uuid !== old_uuid
         ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, uuid)
     end
-    __toplevel__.var"#_internal_julia_parse" = VersionedParse(spec.julia_syntax_version)
+    __toplevel__.var"#_internal_julia_parse" = VersionedParse(spec.julia_edition)
     unlock(require_lock)
     try
         include(__toplevel__, path)
         loaded = maybe_root_module(pkg)
     finally
-        __toplevel__.var"#_internal_julia_parse" = VersionedParse(VERSION)
+        __toplevel__.var"#_internal_julia_parse" = VersionedParse(VERSION_EDITION)
         lock(require_lock)
         if uuid !== old_uuid
             ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
@@ -3250,7 +3248,7 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
                 sourcepath = find_ext_path(normpath(joinpath(env, package_uuidkey.name)), ext)
             end
             set_pkgorigin_version_path(this_uuidkey, sourcepath)
-            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, VERSION), UInt128(0), false; DEPOT_PATH=depot_path)
+            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, VERSION_EDITION), UInt128(0), false; DEPOT_PATH=depot_path)
         end
     finally
         end_loading(this_uuidkey, newm)
@@ -3454,7 +3452,7 @@ end
 const newly_inferred = []
 
 # this is called in the external process that generates precompiled package files
-function include_package_for_output(pkg::PkgId, input::String, syntax_version::VersionNumber, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
+function include_package_for_output(pkg::PkgId, input::String, edition::Tuple{Int, Int}, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
                                     concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String},
                                     preresolved::Vector{Pair{PkgId,String}}=Pair{PkgId,String}[])
 
@@ -3490,9 +3488,9 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     keep_ir = JLOptions().outputo != C_NULL
     keep_ir && ccall(:jl_set_precompile_keep_ir, Cvoid, (Int8,), 1)
     # This one changes the parser behavior
-    __toplevel__.var"#_internal_julia_parse" = VersionedParse(syntax_version)
+    __toplevel__.var"#_internal_julia_parse" = VersionedParse(edition)
     # This one is the compatibility marker for cache loading
-    __toplevel__._internal_syntax_version = cache_syntax_version(syntax_version)
+    __toplevel__._internal_syntax_version = cache_edition(edition)
     cumulative_compile_timing(true)
     _precompile_dep_load_ns[] = 0
     _precompile_dep_load_depth[] = 0
@@ -3608,7 +3606,9 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
            --startup-file=no --history-file=no --warn-overwrite=yes
            $(have_color === nothing ? "--color=auto" : have_color ? "--color=yes" : "--color=no")
            -`
-    cmd = addenv(cmd, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
+    cmd = addenv(cmd, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1,
+                 # don't let the worker outlive us if we get killed
+                 "JULIA_EXIT_WITH_PARENT_PID" => getpid())
     # Only request per-package timing reports when explicitly asked for (e.g. by
     # precompilepkgs), so that the marker lines don't leak into normal load logs.
     report_timing && (cmd = addenv(cmd, "JULIA_PRECOMP_REPORT_TIMING" => 1))
@@ -3620,7 +3620,7 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
         Base.track_nested_precomp($(_pkg_str(vcat(Base.precompilation_stack, pkg))))
         Base.loadable_extensions = $(_pkg_str(loadable_exts))
         Base.precompiling_extension = $(loading_extension)
-        Base.include_package_for_output($(_pkg_str(pkg)), $(repr(abspath(input.path))), $(repr(input.julia_syntax_version)), $(repr(depot_path)), $(repr(dl_load_path)),
+        Base.include_package_for_output($(_pkg_str(pkg)), $(repr(abspath(input.path))), $(repr(input.julia_edition)), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $(_pkg_str(concrete_deps)), $(repr(source_path(nothing))), $(_pkg_str(preresolved)))
         """)
     close(io.in)
@@ -3783,7 +3783,13 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             # Read preferences blob back from .ji file (we can't precompute because we don't
             # actually know what the list of compile-time preferences are without compiling)
             prefs_blob = preferences_blob(tmppath)
-            cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags)
+            required_modules = parse_cache_header(tmppath)[3]
+            cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags, project=cachefile_project(pkg, required_modules))
+            # Keep the usual name for the build that matches the environment, which the next
+            # session will want, and give a build that only suits this session another one.
+            if pkg.uuid !== nothing && built_against_other_sources(required_modules)
+                cachefile = unused_cachefile_name(cachefile)
+            end
             ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
 
             # append checksum for so to the end of the .ji file:
@@ -3807,13 +3813,17 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             # inherit permission from the source file (and make them writable)
             chmod(tmppath, filemode(spec.path) & 0o777 | 0o200)
 
+            moved_ocachefile = pkg.uuid === nothing ? nothing : move_aside_loaded_cachefile(pkg, cachefile)
+
             # prune the directory with cache files
             if pkg.uuid !== nothing
                 entrypath, entryfile = cache_file_entry(pkg)
                 cachefiles = filter!(x -> startswith(x, entryfile * "_") && endswith(x, ".ji"), readdir(cachepath))
-                if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES[]
-                    idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
-                    evicted_cachefile = joinpath(cachepath, cachefiles[idx])
+                # never the file of a loaded package, which this session's workers may need
+                evictable = filter(x -> !is_loaded_cachefile(pkg, joinpath(cachepath, x)), cachefiles)
+                if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES[] && !isempty(evictable)
+                    idx = findmin(mtime.(joinpath.(cachepath, evictable)))[2]
+                    evicted_cachefile = joinpath(cachepath, evictable[idx])
                     @debug "Evicting file from cache" evicted_cachefile
                     rm(evicted_cachefile; force=true)
                     try
@@ -3828,7 +3838,7 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             end
 
             if cache_objects
-                ocachefile_new = rename_unique_ocachefile(tmppath_so, ocachefile)
+                ocachefile_new = rename_unique_ocachefile(tmppath_so, ocachefile; keep=moved_ocachefile)
                 if ocachefile_new != ocachefile
                     cachefile = cachefile_from_ocachefile(ocachefile_new)
                     ocachefile = ocachefile_new
@@ -3860,7 +3870,101 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
     end
 end
 
-function rename_unique_ocachefile(tmppath_so::String, ocachefile_orig::String, ocachefile::String = ocachefile_orig, num = 0)
+# A package loaded in this session keeps the cache file it was loaded from. Workers started
+# by this session look up that build by its id, so a new build for the same slot must not
+# replace the file. Move it to `<slot>_<n>.ji`, where the cache search still finds it.
+function move_aside_loaded_cachefile(pkg::PkgId, cachefile::String)
+    @lock require_lock begin
+        origin = get(pkgorigins, pkg, nothing)
+        (origin === nothing || origin.cachepath === nothing || !samefile(origin.cachepath, cachefile)) && return nothing
+        aside_cachefile = unused_cachefile_name(cachefile)
+        ocachefile = ocachefile_from_cachefile(cachefile)
+        aside_ocachefile = ocachefile_from_cachefile(aside_cachefile)
+        try
+            Filesystem.rename(cachefile, aside_cachefile)
+            if isfile(ocachefile)
+                try
+                    Filesystem.rename(ocachefile, aside_ocachefile)
+                catch
+                    # a cache file without its library cannot be loaded, so keep them together
+                    Filesystem.rename(aside_cachefile, cachefile)
+                    rethrow()
+                end
+                @static if Sys.isapple()
+                    # only debug info, so a failure here does not matter
+                    isdir(ocachefile * ".dSYM") && try
+                        Filesystem.rename(ocachefile * ".dSYM", aside_ocachefile * ".dSYM")
+                    catch e
+                        e isa IOError || rethrow()
+                    end
+                end
+            end
+        catch e
+            e isa IOError || rethrow()
+            @debug "Could not move the loaded cache file of $(repr("text/plain", pkg)) aside" cachefile exception=e
+            return nothing
+        end
+        origin.cachepath = aside_cachefile
+        return aside_ocachefile
+    end
+end
+
+# The first `<name>_<n>.ji` next to `cachefile` that has none of its files yet.
+function unused_cachefile_name(cachefile::String)
+    stem = chopsuffix(cachefile, ".ji")
+    num = 0
+    while true
+        name = string(stem, "_", num, ".ji")
+        ocachefile = ocachefile_from_cachefile(name)
+        any(ispath, (name, ocachefile, ocachefile * ".dSYM")) || return name
+        num += 1
+    end
+end
+
+# Whether a new cache was built against a loaded package whose source is not the one the
+# environment now gives it, as after updating a package that is loaded.
+function built_against_other_sources(required_modules::Vector{Pair{PkgId,UInt128}})
+    @lock require_lock for (dep, build_id) in required_modules
+        m = get(loaded_modules, dep, nothing)
+        (m === nothing || module_build_id(m) != build_id) && continue
+        origin = get(pkgorigins, dep, nothing)
+        # a package in the system image is used whatever the environment says
+        (origin === nothing || origin.path === nothing || origin.cachepath === nothing) && continue
+        path = locate_package(dep)
+        path === nothing || samefile(path, origin.path) || return true
+    end
+    return false
+end
+
+# The project to name a new cache after. A package from another environment in the load
+# path, such as the default one, is named after that environment when the build matches its
+# manifest, so the projects that use it share one file. A build against other versions
+# from the active project is named after the active project.
+function cachefile_project(pkg::PkgId, required_modules::Vector{Pair{PkgId,UInt128}})
+    active = something(active_project(), "")
+    @lock require_lock begin
+        specenv = locate_package_env(pkg)
+        specenv === nothing && return active
+        env = specenv[2]
+        project_file = env_project_file(env)
+        (project_file isa String && project_file != active) || return active
+        for (dep, _) in required_modules
+            (dep.uuid === nothing || in_sysimage(dep)) && continue
+            path = locate_package(dep)
+            spec = manifest_uuid_load_spec(env, dep)
+            (path !== nothing && spec isa PkgLoadSpec && samefile(spec.path, path)) || return active
+        end
+        return project_file
+    end
+end
+
+function is_loaded_cachefile(pkg::PkgId, path::String)
+    origin = @lock require_lock get(pkgorigins, pkg, nothing)
+    return origin !== nothing && origin.cachepath !== nothing && samefile(origin.cachepath, path)
+end
+
+function rename_unique_ocachefile(tmppath_so::String, ocachefile_orig::String, ocachefile::String = ocachefile_orig, num = 0;
+                                  keep::Union{Nothing,String} = nothing)
     try
         mv(tmppath_so, ocachefile; force=true)
     catch e
@@ -3876,7 +3980,11 @@ function rename_unique_ocachefile(tmppath_so::String, ocachefile_orig::String, o
         # that cache file does not exist.
         ocachename, ocacheext = splitext(ocachefile_orig)
         ocachefile_unique = ocachename * "_$num" * ocacheext
-        ocachefile = rename_unique_ocachefile(tmppath_so, ocachefile_orig, ocachefile_unique, num + 1)
+        if ocachefile_unique == keep # the loaded build moved aside, which must not be replaced
+            num += 1
+            ocachefile_unique = ocachename * "_$num" * ocacheext
+        end
+        ocachefile = rename_unique_ocachefile(tmppath_so, ocachefile_orig, ocachefile_unique, num + 1; keep)
     end
     return ocachefile
 end
@@ -3911,6 +4019,81 @@ function isvalid_pkgimage_crc(f::IOStream, ocachefile::String)
     expected_crc_so = read(f, UInt32)
     crc_so = open(_crc32c, ocachefile, "r")
     expected_crc_so == crc_so
+end
+
+# Cache files whose checksums passed in this process; a replaced file gets a new key.
+# Only the precompile driver's freshness scan uses it; loading always checks.
+const checksums_valid = Set{NTuple{2, NTuple{5, Float64}}}() # protected by require_lock
+
+file_identity(st::StatStruct) = (Float64(st.device), Float64(st.inode), Float64(st.size), st.mtime, st.ctime)
+
+function checksum_key(io::IOStream, ocachefile::Union{Nothing, String})
+    oid = ocachefile === nothing ? ntuple(_ -> 0.0, 5) : file_identity(stat(ocachefile))
+    return (file_identity(stat(io)), oid)
+end
+
+function checksums_invalid(io::IOStream, cachefile::String, ocachefile::Union{Nothing, String}, reasons)
+    if !isvalid_file_crc(io)
+        @debug "Rejecting cache file $cachefile because it has an invalid checksum"
+        record_reason(reasons, :checksum_invalid)
+        return true
+    end
+    if ocachefile !== nothing && !isvalid_pkgimage_crc(io, ocachefile)
+        @debug "Rejecting cache file $cachefile because $ocachefile has an invalid checksum"
+        record_reason(reasons, :ocache_checksum_invalid)
+        return true
+    end
+    return false
+end
+
+# With `unverified`, a file already in the record passes without being read and is added to `unverified`.
+function checksums_invalid(cachefile::String, ocachefile::Union{Nothing, String}, id_build::UInt128, reasons;
+                           unverified::Union{Nothing, Set{String}}=nothing)
+    io = try
+        open(cachefile, "r")
+    catch ex
+        ex isa IOError || ex isa SystemError || rethrow()
+        @debug "Rejecting cache file $cachefile because it could not be opened" isfile(cachefile)
+        return true
+    end
+    try
+        # The file may have been replaced since its header was checked.
+        checksum = isvalid_cache_header(io)
+        if checksum === nothing || UInt128(checksum) != id_build >> 64
+            @debug "Rejecting cache file $cachefile because it changed while being checked"
+            return true
+        end
+        unverified === nothing && return checksums_invalid(io, cachefile, ocachefile, reasons)
+        assert_havelock(require_lock)
+        key = checksum_key(io, ocachefile)
+        if key in checksums_valid
+            push!(unverified, cachefile)
+            return false
+        end
+        invalid = checksums_invalid(io, cachefile, ocachefile, reasons)
+        # a saved image must not carry file identities from this machine
+        invalid || generating_output() || push!(checksums_valid, key)
+        return invalid
+    finally
+        close(io)
+    end
+end
+
+# Checksum a file the driver accepted from the record, before it is trusted without checks.
+function checksums_valid_now(cachefile::String)
+    opath = ocachefile_from_cachefile(cachefile)
+    ocachefile = isfile(opath) ? opath : nothing
+    try
+        open(cachefile, "r") do io
+            key = checksum_key(io, ocachefile)
+            invalid = checksums_invalid(io, cachefile, ocachefile, nothing)
+            invalid && @lock require_lock delete!(checksums_valid, key)
+            return !invalid
+        end
+    catch ex
+        ex isa IOError || ex isa SystemError || rethrow()
+        return false
+    end
 end
 
 mutable struct CacheHeaderIncludes
@@ -4637,8 +4820,8 @@ function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::St
     return false
 end
 
-function cache_syntax_version(ver::VersionNumber)
-    UInt8(clamp(ver.minor - 13, 0, 255))
+function cache_edition(ver::Tuple{Int, Int})
+    UInt8(clamp(ver[2] - 13, 0, 255))
 end
 
 # This custom equality predicate is analogous to `===`, except that it also
@@ -4692,7 +4875,7 @@ end
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; kwargs...)
-    return stale_cachefile(PkgLoadSpec(modpath, VERSION), cachefile; kwargs...)
+    return stale_cachefile(PkgLoadSpec(modpath, VERSION_EDITION), cachefile; kwargs...)
 end
 @constprop :none function stale_cachefile(modspec::PkgLoadSpec, cachefile::String; ignore_loaded::Bool = false, requested_flags::CacheFlags=CacheFlags(), reasons=nothing, verify_checksums::Bool=true)
     return stale_cachefile(PkgId(""), UInt128(0), modspec, cachefile; ignore_loaded, requested_flags, reasons, verify_checksums)
@@ -4716,10 +4899,13 @@ end
             record_reason(reasons, :incompatible_header)
             return true # incompatible cache file
         end
-        modules, (includes, _, requires), required_modules, srctextpos, prefs_blob, clone_targets, actual_flags, syntax_version = parse_cache_header(io, cachefile)
-        if isempty(modules)
-            return true # ignore empty file
-        end
+        # Check the flags, which come first, before parsing the rest of the header.
+        # A depot often holds caches of the same package for different flags (e.g.
+        # the bundled stdlibs, with and without `--check-bounds=yes`), and which one
+        # is tried first depends on file modification times, so rejecting the wrong
+        # one should be cheap.
+        header_start = position(io)
+        actual_flags = CacheFlags(read(io, UInt8), read(io, UInt8))
         if @ccall(jl_match_cache_flags(_cacheflag_to_uint8(requested_flags)::UInt8, _cacheflag_to_uint8(actual_flags)::UInt8)::UInt8) == 0 ||
            !match_cache_coverage(requested_flags, actual_flags)
             @debug """
@@ -4730,7 +4916,12 @@ end
             record_reason(reasons, :flags_mismatch)
             return true
         end
-        if stalecheck && syntax_version != cache_syntax_version(modspec.julia_syntax_version)
+        seek(io, header_start)
+        modules, (includes, _, requires), required_modules, srctextpos, prefs_blob, clone_targets, _, syntax_version = parse_cache_header(io, cachefile)
+        if isempty(modules)
+            return true # ignore empty file
+        end
+        if stalecheck && syntax_version != cache_edition(modspec.julia_edition)
             @debug "Rejecting cache file $cachefile for $modkey since it was parsed for a different Julia syntax version"
             record_reason(reasons, :syntax_version)
             return true
@@ -4868,20 +5059,8 @@ end
             end
         end
 
-        if verify_checksums
-            if !isvalid_file_crc(io)
-                @debug "Rejecting cache file $cachefile because it has an invalid checksum"
-                record_reason(reasons, :checksum_invalid)
-                return true
-            end
-
-            if pkgimage
-                if !isvalid_pkgimage_crc(io, ocachefile::String)
-                    @debug "Rejecting cache file $cachefile because $ocachefile has an invalid checksum"
-                    record_reason(reasons, :ocache_checksum_invalid)
-                    return true
-                end
-            end
+        if verify_checksums && checksums_invalid(io, cachefile, ocachefile, reasons)
+            return true
         end
 
         if stale_prefs(prefs_blob)

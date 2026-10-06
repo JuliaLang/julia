@@ -6,6 +6,7 @@ Core._import(Base, Core, :_eval_import, :_eval_import, true)
 Core._import(Base, Core, :_eval_using, :_eval_using, true)
 
 using .Core.Intrinsics, .Core.IR
+import .Core: VERSION_EDITION, OLDEST_EDITION
 
 # to start, we're going to use a very simple definition of `include`
 # that doesn't require any function (except what we can get from the `Core` top-module)
@@ -144,20 +145,20 @@ include("exports.jl")
 
 function set_syntax_version end
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
-function _setup_module!(mod::Module, Core.@nospecialize syntax_ver)
+function _setup_module!(mod::Module, edition)
     # using Base
     Core._using(mod, _topmod(mod), UInt8(0))
     Core.declare_const(mod, :include, IncludeInto(mod))
     Core.declare_const(mod, :eval, Core.EvalInto(mod))
-    if syntax_ver === nothing
-        # two cases: (1) VERSION is assumed in bootstrap, and (2) after
-        # bootstrap, NON_VERSIONED_SYNTAX module forms have no version
+    if edition === nothing
+        # two cases: (1) VERSION_EDITION is assumed in bootstrap, and (2) after
+        # bootstrap, OLDEST_EDITION module forms have no version
         if Core._parse === nothing || Core._parse === Base.fl_parse
             return nothing
         end
-        syntax_ver = NON_VERSIONED_SYNTAX
+        edition = OLDEST_EDITION
     end
-    set_syntax_version(mod, syntax_ver)
+    set_syntax_version(mod, edition)
     return nothing
 end
 
@@ -309,6 +310,20 @@ function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke_in_world), world::UInt,
     return Core.invoke_in_world(world, Core.kwcall, kwargs, f, args...)
 end
 setfield!(typeof(invoke_in_world).name, :max_args, Int32(3), :monotonic) # invoke_in_world, world, f, args...
+
+struct VersionedParse
+    edition::Tuple{Int, Int}
+end
+
+function (vp::VersionedParse)(code, filename::String, lineno::Int, offset::Int, options::Symbol)
+    pm = parentmodule(Core._parse)
+    # hack to support old copies of JuliaSyntax
+    if !isdefined(pm, :_has_v1_14_version_hooks) && isdefined(pm, :_has_v1_10_hooks)
+        invokelatest(Core._parse, code, filename, lineno, offset, options)
+    else
+        invokelatest(Core._parse, code, filename, lineno, offset, options, vp.edition)
+    end
+end
 
 # core operations & types
 include("promotion.jl")

@@ -1095,6 +1095,7 @@ end === (3, String)
 @test Meta.parse("3 +̂′ 4") == Expr(:call, :+̂′, 3, 4)
 @test Meta.parse("3 +⁽¹⁾ 4") == Expr(:call, :+⁽¹⁾, 3, 4)
 @test Meta.parse("3 +₍₀₎ 4") == Expr(:call, :+₍₀₎, 3, 4)
+@test Meta.parse("3 +₝₞₟𝿐 4") == Expr(:call, :+₝₞₟𝿐, 3, 4)
 for bad in ('=', '$', ':', "||", "&&", "->", "<:")
     @test_parseerror "3 $(bad)⁽¹⁾ 4"
 end

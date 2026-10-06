@@ -1012,7 +1012,7 @@ function show_unionaliases(io::IO, x::Union)
     if first && !tvar && length(aliases) == 1
         alias = aliases[1]
         env = alias[2]::SimpleVector
-        wheres = make_wheres(io, env, x)
+        wheres = make_wheres(io, env, alias[3])
         show_typealias(io, alias[1], env, wheres)
         show_wheres(io, wheres)
     else
@@ -1020,7 +1020,7 @@ function show_unionaliases(io::IO, x::Union)
             print(io, first ? "Union{" : ", ")
             first = false
             env = alias[2]::SimpleVector
-            wheres = make_wheres(io, env, x)
+            wheres = make_wheres(io, env, alias[3])
             show_typealias(io, alias[1], env, wheres)
             show_wheres(io, wheres)
         end
