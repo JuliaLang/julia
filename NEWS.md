@@ -175,7 +175,8 @@ Build system changes
 --------------------
 
 * Release builds now install `libjulia-internal.a`, a static build of the runtime without the JIT,
-  so that tools such as JuliaC.jl can link it with a trimmed system image into one executable.
+  so that tools such as JuliaC.jl can link it with a trimmed system image into one executable
+  ([#63618]).
 
 New library functions
 ---------------------
