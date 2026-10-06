@@ -4719,4 +4719,136 @@ precompile_test_harness("Ambiguities and package-image edge validation") do load
     end
 end
 
+@testset "a new build does not replace the cache file of a loaded package" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        dep_uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+        top_uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+        for (dirname, version) in (("DepOld", "0.1.0"), ("DepNew", "0.2.0"))
+            path = joinpath(dir, "dev", dirname)
+            mkpath(joinpath(path, "src"))
+            write(joinpath(path, "Project.toml"), "name = \"Dep\"\nuuid = \"$dep_uuid\"\nversion = \"$version\"\n")
+            write(joinpath(path, "src", "Dep.jl"), "module Dep\nconst v = \"$version\"\nend\n")
+        end
+        top_path = joinpath(dir, "dev", "Top")
+        mkpath(joinpath(top_path, "src"))
+        write(joinpath(top_path, "Project.toml"),
+              "name = \"Top\"\nuuid = \"$top_uuid\"\nversion = \"0.1.0\"\n\n[deps]\nDep = \"$dep_uuid\"\n")
+        write(joinpath(top_path, "src", "Top.jl"), "module Top\nusing Dep\nend\n")
+        project_path = joinpath(dir, "project")
+        mkpath(project_path)
+        write(joinpath(project_path, "Project.toml"), "[deps]\nDep = \"$dep_uuid\"\nTop = \"$top_uuid\"\n")
+        manifest(dirname, version) = """
+            manifest_format = "2.0"
+
+            [[deps.Dep]]
+            path = "../dev/$dirname/"
+            uuid = "$dep_uuid"
+            version = "$version"
+
+            [[deps.Top]]
+            deps = ["Dep"]
+            path = "../dev/Top/"
+            uuid = "$top_uuid"
+            version = "0.1.0"
+            """
+        manifest_file = joinpath(project_path, "Manifest.toml")
+        write(manifest_file, manifest("DepOld", "0.1.0"))
+        new_manifest_file = joinpath(dir, "NewManifest.toml")
+        write(new_manifest_file, manifest("DepNew", "0.2.0"))
+        run_script(script) = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$project_path -e $script`,
+                                    "JULIA_DEPOT_PATH" => depot)
+        compiled = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)")
+        cachefiles(name) = filter(endswith(".ji"), readdir(joinpath(compiled, name)))
+
+        # The manifest moves the loaded Dep to another version, as an update in the REPL
+        # does, and both builds use the same file name.
+        @test success(run_script("""
+            using Test
+            dep = Base.PkgId(Base.UUID("$dep_uuid"), "Dep")
+            top = Base.PkgId(Base.UUID("$top_uuid"), "Top")
+            using Dep
+            loaded_file = Base.pkgorigins[dep].cachepath
+            cp($(repr(new_manifest_file)), $(repr(manifest_file)); force=true)
+            @lock Base.require_lock delete!(Base.TOML_CACHE.d, $(repr(manifest_file)))
+            new_file, _ = Base.compilecache(dep)
+            moved_file = Base.pkgorigins[dep].cachepath
+            @test moved_file != loaded_file
+            @test first(Base.parse_cache_buildid(moved_file)) == Base.module_build_id(Dep)
+            @test first(Base.parse_cache_buildid(new_file)) != Base.module_build_id(Dep)
+            moved_so = Base.ocachefile_from_cachefile(moved_file)
+            if Sys.isapple() && isfile(moved_so)
+                @test isfile(joinpath(moved_so * ".dSYM", "Contents", "Resources", "DWARF", basename(moved_so)))
+            end
+            env_top, _ = Base.compilecache(top, Base.locate_package_load_spec(top), devnull, devnull, false)
+            # Top is built against the loaded Dep, which its worker must still find, and that
+            # build must not replace the one for the environment
+            session_top, _ = Base.compilecache(top)
+            @test session_top != env_top
+            @test isfile(env_top)
+            """))
+        @test length(cachefiles("Dep")) == 2
+        @test length(cachefiles("Top")) == 2
+        @test success(run_script("exit(Base.isprecompiled(Base.PkgId(Base.UUID(\"$top_uuid\"), \"Top\")) ? 0 : 1)"))
+
+        rebuild_script = joinpath(dir, "rebuild_dep.jl")
+        write(rebuild_script, "Base.compilecache(Base.PkgId(Base.UUID(\"$dep_uuid\"), \"Dep\"))\n")
+        # Windows cannot replace a loaded file, so this case cannot happen there
+        if !Sys.iswindows()
+            # Another process replaces the file this session loaded Dep from. That build is
+            # not this session's, so it is not moved aside as if it were.
+            @test success(run_script("""
+                using Test
+                dep = Base.PkgId(Base.UUID("$dep_uuid"), "Dep")
+                using Dep
+                loaded_file = Base.pkgorigins[dep].cachepath
+                run(`\$(Base.julia_cmd()) --startup-file=no --project=$(repr(project_path)) $(repr(rebuild_script))`)
+                @test first(Base.parse_cache_buildid(loaded_file)) != Base.module_build_id(Dep)
+                Base.compilecache(dep)
+                @test Base.pkgorigins[dep].cachepath == loaded_file
+                """))
+            @test length(cachefiles("Dep")) == 2
+        end
+
+        # Updating the loaded Dep again and again keeps at most two extra files for this
+        # project, so it cannot push out the file of another project
+        old_manifest_file = joinpath(dir, "OldManifest.toml")
+        write(old_manifest_file, manifest("DepOld", "0.1.0"))
+        other_project_path = joinpath(dir, "other")
+        cp(project_path, other_project_path)
+        dep_files = cachefiles("Dep")
+        @test success(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$other_project_path $rebuild_script`,
+                             "JULIA_DEPOT_PATH" => depot))
+        other_file = only(setdiff(cachefiles("Dep"), dep_files))
+        for next_manifest_file in (old_manifest_file, new_manifest_file, old_manifest_file, new_manifest_file)
+            @test success(run_script("""
+                dep = Base.PkgId(Base.UUID("$dep_uuid"), "Dep")
+                using Dep
+                cp($(repr(next_manifest_file)), $(repr(manifest_file)); force=true)
+                @lock Base.require_lock delete!(Base.TOML_CACHE.d, $(repr(manifest_file)))
+                Base.compilecache(dep)
+                """))
+        end
+        @test other_file in cachefiles("Dep")
+        @test length(cachefiles("Dep")) == 4
+
+        # If the loaded file cannot be moved aside, it stays and the new build gets another name
+        @test success(run_script("""
+            using Test
+            dep = Base.PkgId(Base.UUID("$dep_uuid"), "Dep")
+            using Dep
+            loaded_file = Base.pkgorigins[dep].cachepath
+            @eval Base.Filesystem function rename(src::String, dst::String)
+                isfile(src) && samefile(src, \$loaded_file) && throw(Base.IOError("rename refused for the test", -1))
+                invoke(rename, Tuple{AbstractString,AbstractString}, src, dst)
+            end
+            cp($(repr(old_manifest_file)), $(repr(manifest_file)); force=true)
+            @lock Base.require_lock delete!(Base.TOML_CACHE.d, $(repr(manifest_file)))
+            new_file, _ = Base.compilecache(dep)
+            @test new_file != loaded_file
+            @test Base.pkgorigins[dep].cachepath == loaded_file
+            @test first(Base.parse_cache_buildid(loaded_file)) == Base.module_build_id(Dep)
+            """))
+    end end
+end
+
 finish_precompile_test!()
