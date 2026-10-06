@@ -724,8 +724,10 @@ void jl_timing_task_init(jl_task_t *t)
     char *task_name;
 
     // We try to get the method instance to get module and file name
-    jl_method_instance_t *mi = jl_method_lookup(&t->start, 1, jl_get_world_counter());
-    if (mi != NULL) {
+    JL_GC_PUSH1(&t);
+    jl_method_instance_t *mi = jl_apply_lookup(&t->start, 1, jl_get_world_counter());
+    JL_GC_POP();
+    if (mi != NULL && jl_is_method(mi->def.value)) {
         const char *filename = gnu_basename(jl_symbol_name(mi->def.method->file));
         const char *module_name = jl_symbol_name(mi->def.method->module->name);
 
