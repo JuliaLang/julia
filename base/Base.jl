@@ -142,6 +142,7 @@ using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 
 # More strings & printing
 include("regex.jl")
+include("parsers/Parsers.jl")
 include("parse.jl")
 include("shell.jl")
 const IRShow = Compiler.IRShow # an alias for compatibility

@@ -236,6 +236,80 @@ end
     end
 end
 
+# `Base.Parsers.parsevalue` parses all of a byte vector, returning a `ParseFailure` instead
+# of throwing. GMP's `BigInt` parser is the reference for the values.
+@testset "Base.Parsers.parsevalue" begin
+    P = Base.Parsers
+    for T in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128),
+            base in (2, 8, 10, 16, 36, 62),
+            x in (big(typemin(T)) - 1, typemin(T), typemin(T) ÷ 7, 0, 1, typemax(T) ÷ 3,
+                  typemax(T), big(typemax(T)) + 1)
+        sign = x < 0 ? "-" : ""
+        expected = T <: Unsigned && x < 0 ? P.INVALID :
+                   typemin(T) <= x <= typemax(T) ? T(x) : P.OVERFLOW
+        for s in (sign * string(abs(big(x)); base), sign * "0"^45 * string(abs(big(x)); base))
+            @test parse(BigInt, s; base) == x
+            bytes = Vector{UInt8}(s)
+            padded = [0x2c; bytes; 0x2c]
+            for buf in (bytes, codeunits(s), Memory{UInt8}(bytes), view(bytes, 1:1:length(bytes)),
+                        view(padded, 2:length(padded) - 1))
+                @test P.parsevalue(T, buf; base) === expected
+            end
+        end
+    end
+    # a bad byte at each position of one and two eight-digit blocks
+    for n in (8, 16, 17), k in 1:n, c in ('/', ':', ' ', 'a', '\xff'), T in (Int64, UInt64, Int128)
+        s = "9"^(k - 1) * c * "7"^(n - k)
+        @test P.parsevalue(T, codeunits(s)) === P.INVALID
+    end
+    @test P.parsevalue(Int, view(codeunits("x=-42;"), 3:5)) === -42
+    for s in ("", "-", "+", " 1", "1 ", "--1", "0x1")
+        @test P.parsevalue(Int, codeunits(s)) === P.INVALID
+    end
+    @test P.parsevalue(UInt8, codeunits("+1")) === P.INVALID
+    @test_throws ArgumentError P.parsevalue(Int, codeunits("12"); base = 63)
+    @test repr(P.OVERFLOW) == "Base.Parsers.OVERFLOW"
+    # integer types other than the fixed-width ones take a generic method
+    generic(T, s, base, neg) = invoke(P.parseint,
+        Tuple{Type{<:Integer}, AbstractVector{UInt8}, Int, Int, Int, Bool},
+        T, codeunits(s), 1, ncodeunits(s), base, neg)
+    for T in (Int8, Int64, Int128, UInt8, UInt64, UInt128), base in (2, 10, 16, 62),
+            s in (string(typemax(T); base), string(big(typemax(T)) + 1; base), "0"^40 * "1", "12x"),
+            neg in (false, T <: Signed)
+        @test generic(T, s, base, neg) === P.parseint(T, codeunits(s), 1, ncodeunits(s), base, neg)
+    end
+end
+
+# Base's grammar around the digits, for every kind of string, and its error messages,
+# which name the first problem from the left.
+@testset "integer parsing grammar and errors" begin
+    @test parse(Int, "\u202f-\u00a042\u202f") === -42
+    @test parse(Int, "\u85 7\u3000") === 7
+    @test parse(Int8, "- 0x80") === typemin(Int8)
+    @test parse(UInt8, " 0xff ") === 0xff
+    @test Base.tryparse_internal(Int, "x-123y", 2, 5, 10, true) === -123
+    for s in ("12", " 12 ", "-0x7f", "1 2")
+        x = tryparse(Int, s)
+        @test tryparse(Int, GenericString(s)) === x
+        @test tryparse(Int, SubString("<$s>", 2, ncodeunits(s) + 1)) === x
+        @test tryparse(Int, StringView(view(Vector{UInt8}(s), 1:1:ncodeunits(s)))) === x
+    end
+    msg(T, s) = try parse(T, s); "" catch err sprint(showerror, err) end
+    @test msg(Int, " - ") == "ArgumentError: input string is empty or only contains whitespace"
+    @test msg(Int, "0x") == "ArgumentError: premature end of integer: \"0x\""
+    @test msg(Int, "0x ") == "ArgumentError: invalid base 16 digit ' ' in \"0x \""
+    @test msg(Int, "0x-1") == "ArgumentError: invalid base 16 digit '-' in \"0x-1\""
+    @test msg(UInt8, "+1") == "ArgumentError: invalid base 10 digit '+' in \"+1\""
+    @test msg(Int, "12β") == "ArgumentError: invalid base 10 digit 'β' in \"12β\""
+    s = "1\xff"
+    @test msg(Int, s) == "ArgumentError: invalid base 10 digit $(repr(s[2])) in $(repr(s))"
+    s = "1\u202f2"
+    @test msg(Int, s) == "ArgumentError: extra characters after whitespace in $(repr(s))"
+    @test msg(Int8, "1000x") == "OverflowError: overflow parsing \"1000x\""
+    @test msg(Int8, "1000 2") == "OverflowError: overflow parsing \"1000 2\""
+    @test msg(Int8, "10x00") == "ArgumentError: invalid base 10 digit 'x' in \"10x00\""
+end
+
 # make sure base can be any Integer
 @testset "issue #15597, T=$T" for T in (Int, BigInt)
     let n = parse(T, "123", base = Int8(10))
@@ -309,7 +383,12 @@ end
 end
 
 @testset "parse and tryparse type inference" begin
-    @inferred parse(Int, "12")
+    for T in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
+        @inferred parse(T, "12")
+        @inferred Nothing tryparse(T, "12")
+        @inferred Base.Parsers.ParseFailure Base.Parsers.parsevalue(T, codeunits("12"))
+        @test eltype([parse(T, s) for s in AbstractString[]]) == T
+    end
     @inferred parse(Float64, "12")
     @inferred parse(Complex{Int}, "12")
     @test eltype([parse(Int, s, base=16) for s in String[]]) == Int

@@ -304,7 +304,7 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     # don't make a copy in the common case where we are parsing a whole String
     bstr = startpos == firstindex(s) && endpos == lastindex(s) ? String(s) : String(SubString(s,startpos,endpos))
 
-    sgn, base, i = Base.parseint_preamble(true,Int(base_),bstr,firstindex(bstr),lastindex(bstr))
+    sgn, base, i = Base.parseint_preamble(true,Int(base_),bstr,firstindex(bstr),ncodeunits(bstr))
     if !(2 <= base <= 62)
         raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
         return nothing
