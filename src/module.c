@@ -1827,7 +1827,7 @@ JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var, int flag)
                                    0;
     JL_LOCK(&world_counter_lock);
     size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
-    jl_binding_partition_t *old_bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    jl_binding_partition_t *old_bpart = jl_get_binding_partition(b, new_world);
     if ((old_bpart->kind & DEPWARN_FLAGS) == new_flags) {
         JL_UNLOCK(&world_counter_lock);
         return;
