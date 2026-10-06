@@ -78,8 +78,6 @@
     XX(jl_capture_interp_frame) \
     XX(jl_ceil_llvm) \
     XX(jl_ceil_llvm_withtype) \
-    XX(jl_cglobal) \
-    XX(jl_cglobal_auto) \
     XX(jl_checked_assignment) \
     XX(jl_clear_implicit_imports) \
     XX(jl_close_uv) \
@@ -367,8 +365,6 @@
     XX(jl_pathname_for_symbol) \
     XX(jl_pchar_to_array) \
     XX(jl_pchar_to_string) \
-    XX(jl_pointerref) \
-    XX(jl_pointerset) \
     XX(jl_pop_handler) \
     XX(jl_pop_handler_noexcept) \
     XX(jl_preload_sysimg) \

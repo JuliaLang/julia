@@ -2211,7 +2211,7 @@ JL_DLLEXPORT jl_value_t *jl_checked_replace(jl_binding_t *b, jl_binding_partitio
     return r;
 }
 
-JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *op, jl_value_t *rhs)
+JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *op, jl_value_t *rhs, jl_value_t *op_target)
 {
     jl_binding_partition_t *cur_bpart = bpart;
     if (cur_bpart == NULL)
@@ -2230,7 +2230,7 @@ JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_binding_partition
     args[0] = r;
     while (1) {
         args[1] = rhs;
-        jl_value_t *y = jl_apply_generic(op, args, 2);
+        jl_value_t *y = jl_apply_modifyop(op, args, op_target);
         args[1] = y;
         ty = jl_check_binding_assign_value(b, cur_bpart, mod, var, y, "modifyglobal!");
         jl_gc_wb(b, (void*)&b->value, y);
