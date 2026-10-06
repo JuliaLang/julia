@@ -134,6 +134,24 @@ module RebindingVisibility
     @test_throws ArgumentError Base.set_binding_visibility!(SrcMod, :visg, :bogus)
 end
 
+# The flag-only repartitionings replace in the next world, not the tls world.
+module RebindingStaleWorldFlags
+    using Test
+    module M; export f, g; f() = 1; g() = 2; end
+    w = Base.get_world_counter()
+    Base.delete_binding(M, :f)                                          # newer partition
+    Base.invoke_in_world(w, Base.set_binding_visibility!, M, :f, :none)
+    @test !Base.isexported(M, :f)
+    @test !Base.isdefinedglobal(M, :f)                                  # still deleted
+    Base.delete_binding(M, :g)
+    Base.invoke_in_world(w, Base.deprecate, M, :g)
+    @test Base.isdeprecated(M, :g)
+    @test !Base.isdefinedglobal(M, :g)
+    Base.invoke_in_world(w, Base.deprecate, M, :g, 0)
+    @test !Base.isdeprecated(M, :g)
+    @test !Base.isdefinedglobal(M, :g)
+end
+
 module RebindingPrecompile
     using Test
     include("precompile_utils.jl")
@@ -849,4 +867,22 @@ module StoreNoFrozenDefinedness
     @test fswap() === 1
     @test occursin("cmpxchg", sprint(code_llvm, fonce, ()))
     @test occursin("jl_undefined_var_error", sprint(code_llvm, fswap, ()))
+end
+
+# A store to a typed global that codegen validates inline raises the same `TypeError` as
+# one the runtime validates: the global form, naming the binding in `context`.
+module CompiledStoreTypeError
+    using Test
+    module T; global ix::Int = 11; end
+    rt = (m, s, v) -> setglobal!(m, s, v)
+    compiled = () -> setglobal!(T, :ix, "x")
+    swapped = () -> swapglobal!(T, :ix, "x")
+    modified = () -> modifyglobal!(T, :ix, (_, x) -> x, "x")
+    err(f, args...) = try; f(args...); catch e; e; end
+    for e in (err(rt, T, :ix, "x"), err(compiled), err(swapped), err(modified))
+        @test e isa TypeError
+        @test e.context == GlobalRef(T, :ix)
+        @test e.expected === Int && e.got == "x"
+    end
+    @test T.ix === 11
 end

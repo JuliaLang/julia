@@ -726,7 +726,12 @@ function _start()
         end
     end
     if is_interactive && get(stdout, :color, false)
-        print(color_normal)
+        try
+            print(color_normal)
+        catch e
+            # the terminal may be gone by now (that may be why the session ended)
+            e isa IOError || rethrow()
+        end
     end
     return ret
 end

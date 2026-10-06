@@ -67,6 +67,8 @@ static ssize_t idset_compact(jl_genericmemory_t *keys)
     return rehash ? -j : j;
 }
 
+// Insert `key` into the first free slot at the end of the ordered set
+// `keys` (growing and compacting are insertion-order-preserving).
 jl_genericmemory_t *jl_idset_put_key(jl_genericmemory_t *keys, jl_value_t *key, ssize_t *newidx)
 {
     ssize_t l = keys->length;
@@ -111,7 +113,11 @@ jl_genericmemory_t *jl_idset_put_idx(jl_genericmemory_t *keys, jl_genericmemory_
     return jl_atomic_load_relaxed(&newidxs);
 }
 
-/* returns idx if key is in hash, otherwise -1 */
+// Removal NULLs the key's slot in place, leaving an interior hole until a
+// later insertion compacts the list. That breaks the packed-prefix guarantee
+// of the ordered-set insertion, so this must not be used on sets whose
+// consumers rely on that property for lock-free iteration (such as `Method.interferences`).
+// Returns idx if key is in hash, otherwise -1.
 ssize_t jl_idset_pop(jl_genericmemory_t *keys, jl_genericmemory_t *idxs, jl_value_t *key) JL_NOTSAFEPOINT
 {
     uintptr_t hv = jl_object_id(key);

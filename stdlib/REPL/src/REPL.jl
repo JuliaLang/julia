@@ -1837,6 +1837,10 @@ function setup_interface(
     return ModalInterface(allprompts)
 end
 
+# A write to a hung-up terminal fails with EIO (Linux) or ENXIO (FreeBSD).
+terminal_gone(@nospecialize e) =
+    e isa Base.IOError && e.code in (Base.UV_EIO, Base.UV_ENXIO, Base.UV_EPIPE)
+
 function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     repl.frontend_task = current_task()
     d = REPLDisplay(repl)
@@ -1854,7 +1858,13 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     if isdefined(repl, :prompt_ready_event) && repl.prompt_ready_event !== nothing
         repl.mistate.prompt_ready_event = repl.prompt_ready_event
     end
-    run_interface(terminal(repl), interface, repl.mistate)
+    try
+        run_interface(terminal(repl), interface, repl.mistate)
+    catch e
+        # The terminal went away (e.g. its window was closed): end the session
+        # like ^D does, rather than failing on the next write to it.
+        terminal_gone(e) || rethrow()
+    end
     # Terminate Backend
     put!(backend.repl_channel, (nothing, -1))
     dopushdisplay && popdisplay(d)

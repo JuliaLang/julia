@@ -131,7 +131,7 @@ Compiler/Runtime improvements
   `Core.BindingPartition`, as the left-hand side of an assignment to one, or as a call to one of the new
   `Core.getglobal_partition`, `Core.setglobal_partition`, `Core.swapglobal_partition`,
   `Core.modifyglobal_partition`, `Core.replaceglobal_partition`, `Core.setglobalonce_partition`,
-  `Core.isdefinedglobal_partition` or `Core.depwarn_partition` builtin function. This does not change the
+  `Core.isdefinedglobal_partition` or `Core.depwarn_binding` builtin function. This does not change the
   meaning of the program, but packages that inspect optimized IR (e.g. from `code_typed`) will encounter
   these new forms. See the "Lowered form" section of the developer documentation for their semantics ([#62452]).
 

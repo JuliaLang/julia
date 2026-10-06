@@ -2063,7 +2063,7 @@ jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_
     }
 }
 
-inline jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic)
+inline jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_value_t *op_target)
 {
     jl_value_t *r = isatomic ? jl_atomic_load(p) : jl_atomic_load_relaxed(p);
     if (__unlikely(r == NULL))
@@ -2073,7 +2073,7 @@ inline jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_valu
     args[0] = r;
     while (1) {
         args[1] = rhs;
-        jl_value_t *y = jl_apply_generic(op, args, 2);
+        jl_value_t *y = jl_apply_modifyop(op, args, op_target);
         args[1] = y;
         if (!jl_isa(y, ty))
             jl_type_error(jl_is_genericmemory(parent) ? "memoryrefmodify!" : "modifyfield!", ty, y);
@@ -2093,7 +2093,7 @@ inline jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_valu
     return args[0];
 }
 
-inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, enum atomic_kind isatomic)
+inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, enum atomic_kind isatomic, jl_value_t *op_target)
 {
     jl_value_t *layout_ty = normalize_typeofbottom_layout_alias(ty);
     int hasptr;
@@ -2130,7 +2130,7 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
             jl_throw(jl_undefref_exception);
         args[0] = r;
         args[1] = rhs;
-        jl_value_t *y = jl_apply_generic(op, args, 2);
+        jl_value_t *y = jl_apply_modifyop(op, args, op_target);
         args[1] = y;
         if (!jl_isa(y, ty)) {
             jl_type_error(jl_is_genericmemory(parent) ? "memoryrefmodify!" : "modifyfield!", ty, y);
@@ -2187,17 +2187,17 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
     return args[0];
 }
 
-jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *op, jl_value_t *rhs, int isatomic)
+jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_value_t *op_target)
 {
     size_t offs = jl_field_offset(st, i);
     jl_value_t *ty = jl_field_type_concrete(st, i);
     char *p = (char*)v + offs;
     if (jl_field_isptr(st, i)) {
-        return modify_value(ty, (_Atomic(jl_value_t*)*)p, v, op, rhs, isatomic);
+        return modify_value(ty, (_Atomic(jl_value_t*)*)p, v, op, rhs, isatomic, op_target);
     }
     else {
         uint8_t *psel = jl_is_uniontype(ty) ? (uint8_t*)&p[jl_field_size(st, i) - 1] : NULL;
-        return modify_bits(ty, p, psel, v, op, rhs, isatomic ? isatomic_object : isatomic_none);
+        return modify_bits(ty, p, psel, v, op, rhs, isatomic ? isatomic_object : isatomic_none, op_target);
     }
 }
 

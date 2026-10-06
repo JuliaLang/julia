@@ -436,7 +436,7 @@ typedef struct JL_GC_TRACKED_TYPE _jl_method_t {
     jl_module_t *module;
     jl_sym_t *file;
     int32_t line;
-    _Atomic(uint8_t) dispatch_status; // bits defined in staticdata.jl
+    _Atomic(uint8_t) dispatch_status; // bits defined in julia_internal.h or staticdata.jl
     _Atomic(jl_genericmemory_t*) interferences; // set of intersecting methods not more specific
     _Atomic(size_t) primary_world;
 
@@ -528,7 +528,7 @@ struct JL_GC_TRACKED_TYPE _jl_method_instance_t {
     //   bit 2: The ->backedges field is currently being walked higher up the stack - entries may be deleted, but not moved
     //   bit 3: The ->backedges field was modified and should be compacted when clearing bit 2
     _Atomic(uint8_t) flags;
-    _Atomic(uint8_t) dispatch_status; // bits defined in staticdata.jl
+    _Atomic(uint8_t) dispatch_status; // bits defined in julia_internal.h or staticdata.jl
     _Atomic(uint8_t) precompile; // if set, this will be added to the output system image
 };
 #define JL_MI_FLAGS_MASK_PRECOMPILED    0x01
@@ -2289,18 +2289,6 @@ JL_DLLEXPORT jl_value_t *jl_genericmemory_to_string(jl_genericmemory_t *m, size_
 JL_DLLEXPORT jl_genericmemory_t *jl_alloc_memory_any(size_t n) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_genericmemoryref(jl_genericmemory_t *m, size_t i) JL_CANSAFEPOINT;  // 0-indexed
 
-JL_DLLEXPORT jl_genericmemoryref_t *jl_new_memoryref(jl_value_t *typ, jl_genericmemory_t *mem, void *data) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_memoryrefget(jl_genericmemoryref_t m JL_PROPAGATES_ROOT, int isatomic) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_ptrmemoryrefget(jl_genericmemoryref_t m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_memoryref_isassigned(jl_genericmemoryref_t m, int isatomic) JL_GLOBALLY_ROOTED;
-JL_DLLEXPORT jl_genericmemoryref_t jl_memoryrefindex(jl_genericmemoryref_t m JL_PROPAGATES_ROOT, size_t idx) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m, jl_value_t *v JL_ROOTED_BY_ARG(0) JL_MAYBE_UNROOTED, int isatomic) JL_CANSAFEPOINT;
-JL_DLLEXPORT void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic);
-JL_DLLEXPORT jl_value_t *jl_memoryrefswap(jl_genericmemoryref_t m, jl_value_t *v, int isatomic) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_memoryrefmodify(jl_genericmemoryref_t m, jl_value_t *op, jl_value_t *v, int isatomic) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_memoryrefreplace(jl_genericmemoryref_t m, jl_value_t *expected, jl_value_t *v, int isatomic) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_memoryrefsetonce(jl_genericmemoryref_t m, jl_value_t *v, int isatomic) JL_CANSAFEPOINT;
-
 // strings
 JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s);
 
@@ -2337,7 +2325,7 @@ void jl_set_initial_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val JL_ROOT
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_checked_replace(jl_binding_t *b, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *expected, jl_value_t *rhs) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *op, jl_value_t *rhs) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *op, jl_value_t *rhs, jl_value_t *op_target) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(1) JL_MAYBE_UNROOTED) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(1) JL_MAYBE_UNROOTED, enum jl_partition_kind) JL_CANSAFEPOINT;
