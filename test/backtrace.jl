@@ -298,22 +298,23 @@ let code = """
 end
 
 # Interpreted method and generated function frames show their method
-let code = """
-    module A
-    foo() = error("Expected")
-    @generated gen(x) = :(error("Expected"))
-    end
-    for f in (A.foo, () -> A.gen(1))
-        bt = try f() catch; catch_backtrace() end
-        for sf in stacktrace(bt)
-            sf.func in (:foo, :gen) && println(sf, " | ", parentmodule(sf))
-        end
-    end
-    """
-
-    bt_str = read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String)
-    @test occursin("foo() at none:2 | Main.A", bt_str)
-    @test occursin("gen(x::$Int) at none:3 | Main.A", bt_str)
+module InterpFrames
+Base.Experimental.@compiler_options compile=min infer=false
+foo() = error("Expected")
+@generated gen(x) = :(error("Expected"))
+end
+# the method's own frame is outermost (a generated body comes as a macro expansion)
+function interp_frame(f)
+    bt = try f() catch; catch_backtrace() end
+    return last(lookup(bt[findfirst(ip -> ip isa Base.InterpreterIP, bt)]))
+end
+let sf = interp_frame(InterpFrames.foo)
+    @test sprint(show, sf) == "foo() at backtrace.jl:$(only(methods(InterpFrames.foo)).line)"
+    @test parentmodule(sf) === InterpFrames
+end
+let sf = interp_frame(() -> InterpFrames.gen(1))
+    @test sprint(show, sf) == "gen(x::$Int) at backtrace.jl:$(only(methods(InterpFrames.gen)).line)"
+    @test parentmodule(sf) === InterpFrames
 end
 
 """

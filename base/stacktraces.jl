@@ -314,7 +314,7 @@ function frame_location(frame::StackFrame)
     else
         # Ideally this would just be a source_location call, but we need to
         # check for pc=0 recursively since source_location doesn't have a good
-        # answer for that until we stop producing that.
+        # answer for pc=0 until we stop producing it from lowering.
         di, pc = frame.debuginfo, frame.pc
         while Base.Compiler.has_prev_debuginfo(di, pc)
             di, pc = Base.Compiler.prev_debuginfo(di, pc)
