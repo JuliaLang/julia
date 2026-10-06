@@ -337,6 +337,7 @@ function syntax_module(st::Syntax)
     st_mod === nothing || return st_mod::Module
     syntax_module(st.context)
 end
+syntax_name(s::Syntax) = s.value::String
 
 edition(st::Syntax) = st.context.edition
 edition(@nospecialize(st)) = JL_OLD_EDITION
@@ -707,4 +708,117 @@ function syntax_to_expr(s::Syntax, suppress_linenodes=false)
         end
         out
     end
+end
+
+#-------------------------------------------------------------------------------
+# Printing
+
+attrsummary(name, _value) = string(name)
+attrsummary(name, value::Number) = "$name=$value"
+attrsummary(name, value::LineNumberNode) = "$name=L$(value.line)"
+attrsummary(name, value::Module) = "$name=$value"
+
+function subscript_str(i)
+     replace(string(i),
+             "0"=>"₀", "1"=>"₁", "2"=>"₂", "3"=>"₃", "4"=>"₄",
+             "5"=>"₅", "6"=>"₆", "7"=>"₇", "8"=>"₈", "9"=>"₉")
+end
+
+function _value_string(ex)
+    k = head(ex)
+    str = k == :identifier  ? syntax_name(ex)           :
+          k == :placeholder ? syntax_name(ex)           :
+          k == :ssavalue    ? "%"                   :
+          k == :bindingid   ? "#"                   :
+          k == :label       ? "label"               :
+          k == :nothing     ? "core.nothing"        :
+          k == :core        ? "core.$(syntax_name(ex))" :
+          k == :top         ? "top.$(syntax_name(ex))"  :
+          k == :symbol      ? ":$(syntax_name(ex))" :
+          k == :globalref   ? "$(ex.mod).$(syntax_name(ex))" :
+          k == :slot        ? "slot" :
+          k == :slots       ? "Slots" :
+          k == :lambdabindings ? "LambdaBindings" :
+          k == :latestworld ? "latestworld" :
+          k == :static_parameter ? "static_parameter" :
+          k == :symboliclabel ? "label:$(syntax_name(ex))" :
+          k == :symbolicgoto ? "goto:$(syntax_name(ex))" :
+          k == :sourcelocation ?
+              "SourceLocation:$(first_linenode(ex).line)" :
+              k == :value ?
+              (ex.value isa SourceRef ?
+              "SourceRef:$(first_linenode(ex).line)" :
+              ex.value isa SyntaxContext ? "SyntaxContext(#=omitted=#)" : repr(ex.value)) :
+              ex.value !== nothing ? repr(ex.value) : "::$k"
+
+    if head(ex) in (:bindingid, :slot, :ssavalue, :static_parameter, :label)
+        idstr = subscript_str(ex.value::Int)
+        str = "$(str)$idstr"
+    end
+    if k == :slot || k == :bindingid
+        for p in provenance(ex)
+            if head(p) == :identifier
+                str = "$(str)/$(syntax_name(p))"
+                break
+            end
+        end
+    end
+    return str
+end
+
+function _show_syntax_tree(io, ex, indent, show_kinds, @nospecialize(parent_sc))
+    nodestr = !is_leaf(ex) ? "[$(string(head(ex)))]" : _value_string(ex)
+
+    treestr = rpad(string(indent, nodestr), 40)
+    if show_kinds && is_leaf(ex)
+        treestr = treestr*" :: "*string(head(ex))
+    end
+
+    std_attrs = Set([:value,:head,:syntax_flags,:source,:context])
+    attrstr = join([attrsummary(n, getproperty(ex, n))
+                    for n in fieldnames(typeof(ex)) if n ∉ std_attrs &&
+                        getproperty(ex, n) !== nothing], ",")
+    print(io, rpad(treestr, 60))
+    print(io, " | ")
+    sc = ex.context
+    if sc !== parent_sc
+        print(io, sc)
+        print(io, ",")
+    end
+    print(io, attrstr)
+    println(io)
+
+    if !is_leaf(ex)
+        new_indent = indent*"  "
+        for n in children(ex)
+            _show_syntax_tree(io, n, new_indent, show_kinds, sc)
+        end
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", ex::Syntax, show_kinds=true)
+    assert_syntax(ex)
+    _show_syntax_tree(io, ex, "", show_kinds, nothing)
+end
+function _show_syntax_tree_sexpr(io, ex)
+    if is_leaf(ex)
+        print(io, _value_string(ex))
+    else
+        print(io, "(", string(head(ex)))
+        for n in children(ex)
+            print(io, ' ')
+            _show_syntax_tree_sexpr(io, n)
+        end
+        print(io, ')')
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/x.sexpression", node::Syntax)
+    assert_syntax(node)
+    _show_syntax_tree_sexpr(io, node)
+end
+
+function Base.show(io::IO, node::Syntax)
+    assert_syntax(node)
+    _show_syntax_tree_sexpr(io, node)
 end

@@ -380,7 +380,7 @@ end
 4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any)
 6   (call core.svec)
-7   SourceLocation::1:1
+7   SourceLocation:1
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.f %₈
     --- code_info

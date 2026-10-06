@@ -547,7 +547,7 @@ const f(x::Int)::Int = x+1
 5   TestMod.Int
 6   (call core.svec %₄ %₅)
 7   (call core.svec)
-8   SourceLocation::1:6
+8   SourceLocation:1
 9   (call core.svec %₆ %₇ %₈)
 10  (call core.define_method TestMod TestMod.f %₉
     --- code_info
