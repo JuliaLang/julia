@@ -426,9 +426,11 @@ function resolve_and_get_bindings(
         mod::Module, ex;
         world::UInt = Base.get_world_counter(),
         soft_scope::Union{Nothing,Bool} = nothing,
+        edition = JL_NEW_EDITION,
     )
-    est = JuliaLowering.expr_to_est(ex)
-    ex0 = JuliaLowering.rebase_layers(est, mod, JuliaLowering.JL_NEW_SYNTAX_VERSION)
+    est = JuliaLowering.expr_to_est(ex, LineNumberNode(1),
+                                    JuliaSyntax.SyntaxContext(mod, edition))
+    ex0 = JuliaLowering.rebase_layers(est, mod)
     ex1 = JuliaLowering.expand_forms_1(ex0, world, true)
     ctx2, ex2 = JuliaLowering.expand_forms_2(ex1, world)
     ctx3, _ = JuliaLowering.resolve_scopes(ctx2, ex2; soft_scope)
@@ -440,6 +442,35 @@ end
     kw_body_bindings = filter(b -> contains(b.name, "#kw_body#"), bindings)
     @test !isempty(kw_body_bindings)
     @test all(b -> b.is_internal, kw_body_bindings)
+end
+
+@testset "explicit-module definition names share one binding" begin
+    # Definition names pinned to a module via an explicit `mod` (compat-mode
+    # macro names, struct names) resolve every mention to the single
+    # non-internal global declared for the definition, like other names.
+    for (ex, name, edition) in (
+            (:(macro foo(x) x end), "@foo", JL_OLD_EDITION),
+            (:(macro foo end), "@foo", JL_OLD_EDITION),
+            (:(struct Foo; x; Foo(x) = new(x); end), "Foo", JL_OLD_EDITION),
+            (:(struct Foo; x; Foo(x) = new(x); end), "Foo", JL_NEW_EDITION),
+        )
+        bindings = resolve_and_get_bindings(Module(), ex; edition)
+        globals = filter(b -> b.name == name && b.kind === :global, bindings)
+        @test length(globals) == 1
+        @test all(b -> !b.is_internal, globals)
+    end
+end
+
+@testset "explicit-module names share the plain global's binding" begin
+    # A `GlobalRef` and a plain identifier for the same global resolve to one
+    # binding, in either order
+    mod = Module()
+    for ex in (Expr(:block, :y, GlobalRef(mod, :y)),
+               Expr(:block, GlobalRef(mod, :y), :y))
+        ys = filter(b -> b.name == "y" && b.kind === :global,
+                    resolve_and_get_bindings(mod, ex))
+        @test length(ys) == 1
+    end
 end
 
 @testset "is_ambiguous_local" begin
@@ -600,7 +631,7 @@ end
     # The const may be escaped into test_mod
     JuliaLowering.include_string(test_mod, "macro_mod.@mesc const c_nonlocal_2 = 1")
     @test isdefined(test_mod, :c_nonlocal_2)
-    JuliaLowering.include_string(test_mod, "macro_mod.@mesc const c_nonlocal_3 = 1"; expr_compat_mode=true)
+    jl_eval(test_mod, "macro_mod.@mesc const c_nonlocal_3 = 1"; edition=JL_OLD_EDITION)
     @test isdefined(test_mod, :c_nonlocal_3)
 end
 
@@ -634,8 +665,8 @@ end
     # global in the calling module).
     @testset "passed as an argument" for (ctx, mod, run) in [
         ("flisp reference (delete if fail)", fl_mod, x->fl_eval(fl_mod, x)),
-        ("jl expr_compat_mode=true", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=true)),
-        ("jl expr_compat_mode=false", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=false))]
+        ("jl edition=JL_OLD_EDITION", jl_mod, x->jl_eval(jl_mod, x; edition=JL_OLD_EDITION)),
+        ("jl edition=JL_NEW_EDITION", jl_mod, x->jl_eval(jl_mod, x; edition=JL_NEW_EDITION))]
 
         @testset for str in [
             # "@old_hyg const GENSYM = 1; GENSYM == 1" # flisp mangles, JL counts local
@@ -698,8 +729,8 @@ end
     # represent a global declaration in the macro module.
     @testset "from the macro body" for (ctx, mod, run) in [
         ("flisp reference (delete if fail)", fl_mod, x->fl_eval(fl_mod, x)),
-        ("jl expr_compat_mode=true", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=true)),
-        ("jl expr_compat_mode=false", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=false))]
+        ("jl edition=JL_OLD_EDITION", jl_mod, x->jl_eval(jl_mod, x; edition=JL_OLD_EDITION)),
+        ("jl edition=JL_NEW_EDITION", jl_mod, x->jl_eval(jl_mod, x; edition=JL_NEW_EDITION))]
 
         # interpolating global name here appears to hit a bug
         fl_eval(test_mod, :(macro old_hyg_globalvar(str);
@@ -865,8 +896,8 @@ end
 
     @testset "references outside the declaring scope" for (ctx, mod, run) in [
         ("flisp reference (delete if fail)", fl_mod, x->fl_eval(fl_mod, x)),
-        ("jl expr_compat_mode=true", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=true)),
-        ("jl expr_compat_mode=false", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=false))]
+        ("jl edition=JL_OLD_EDITION", jl_mod, x->jl_eval(jl_mod, x; edition=JL_OLD_EDITION)),
+        ("jl edition=JL_NEW_EDITION", jl_mod, x->jl_eval(jl_mod, x; edition=JL_NEW_EDITION))]
 
         fl_eval(test_mod, :(macro old_hyg_g_in_let();
                                 quote
@@ -929,8 +960,8 @@ end
     @testset "rescoping conflicts" for (ctx, mod, run) in [
         # flisp is quite unpredictable here: segfaults, local-form-assigns-global
         # ("flisp reference (delete if fail)", fl_mod, x->fl_eval(fl_mod, x)),
-        ("jl expr_compat_mode=true", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=true)),
-        ("jl expr_compat_mode=false", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=false))]
+        ("jl edition=JL_OLD_EDITION", jl_mod, x->jl_eval(jl_mod, x; edition=JL_OLD_EDITION)),
+        ("jl edition=JL_NEW_EDITION", jl_mod, x->jl_eval(jl_mod, x; edition=JL_NEW_EDITION))]
 
         fl_eval(test_mod, :(macro old_hyg_g_rescope_conflict_old();
                                 quote
@@ -995,8 +1026,8 @@ end
     # created in the calling module, which is more consistent.
     @testset "references in the declaring scope" for (ctx, mod, run, ref_resolves) in [
         ("flisp reference (delete if fail)", fl_mod, x->fl_eval(fl_mod, x), false),
-        ("jl expr_compat_mode=true", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=true), false),
-        ("jl expr_compat_mode=false", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=false), false)]
+        ("jl edition=JL_OLD_EDITION", jl_mod, x->jl_eval(jl_mod, x; edition=JL_OLD_EDITION), false),
+        ("jl edition=JL_NEW_EDITION", jl_mod, x->jl_eval(jl_mod, x; edition=JL_NEW_EDITION), false)]
 
         fl_eval(test_mod, :(macro old_hyg_g_ref_top();
                                 quote
@@ -1069,8 +1100,8 @@ end
     # the same name in the macro's module.
     @testset "soft scope assignments stay hygienic" for (ctx, mod, run) in [
         ("flisp reference (delete if fail)", fl_mod, x->fl_eval(fl_mod, x)),
-        ("jl expr_compat_mode=true", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=true)),
-        ("jl expr_compat_mode=false", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=false))]
+        ("jl edition=JL_OLD_EDITION", jl_mod, x->jl_eval(jl_mod, x; edition=JL_OLD_EDITION)),
+        ("jl edition=JL_NEW_EDITION", jl_mod, x->jl_eval(jl_mod, x; edition=JL_NEW_EDITION))]
 
         fl_eval(test_mod, :(macro old_hyg_soft();
                                 quote
@@ -1114,8 +1145,8 @@ end
     # global from within the struct's scope.
     @testset "struct from the macro body" for (ctx, mod, run) in [
         ("flisp reference (delete if fail)", fl_mod, x->fl_eval(fl_mod, x)),
-        ("jl expr_compat_mode=true", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=true)),
-        ("jl expr_compat_mode=false", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=false))]
+        ("jl edition=JL_OLD_EDITION", jl_mod, x->jl_eval(jl_mod, x; edition=JL_OLD_EDITION)),
+        ("jl edition=JL_NEW_EDITION", jl_mod, x->jl_eval(jl_mod, x; edition=JL_NEW_EDITION))]
 
         fl_eval(test_mod, :(macro old_hyg_struct_ctor();
                                 quote

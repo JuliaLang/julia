@@ -592,7 +592,7 @@ The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
 
-const main_parser = Base.ScopedValues.ScopedValue{Any}(Core._parse)
+const main_parser = Base.ScopedValues.ScopedValue{Any}(Base.VersionedParse(Base.VERSION_EDITION))
 function var"#_internal_julia_parse"(args...)
     main_parser[](args...)
 end
@@ -726,7 +726,12 @@ function _start()
         end
     end
     if is_interactive && get(stdout, :color, false)
-        print(color_normal)
+        try
+            print(color_normal)
+        catch e
+            # the terminal may be gone by now (that may be why the session ended)
+            e isa IOError || rethrow()
+        end
     end
     return ret
 end

@@ -1639,7 +1639,9 @@ end
     @test isempty(test_complete("\\^(123)nX")[1])
     @test "₍₁₂₃₎ₙ" in test_complete("\\_(123)n")[1]
     @test "ₙ" in test_complete("\\_n")[1]
+    @test "ₓ₝₞₟" in test_complete("\\_xwyz")[1]
     @test "ᵧ" in test_complete("\\_gamma")[1]
+    @test "𝿐" in test_complete("\\_pgamma")[1]
     @test isempty(test_complete("\\_(123)nq")[1])
 end
 

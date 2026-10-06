@@ -434,6 +434,14 @@ end  |> only == Core.TypeEgal{typejoin(Int, UInt, Float64)}
 @test ccall(:jl_types_struct_equiv, Cint, (Any, Any), Int, Int) == 1
 @test ccall(:jl_types_struct_equiv, Cint, (Any, Any), Int, String) == 0
 
+# issue #62897: `Type{v}` with a non-type parameter is constructible (like 1.13), so the
+# `T` field of `TypeEq` must be declared `Any` — a narrower field type would let inference
+# unsoundly assume the parameter is a type or TypeVar.
+@test fieldtype(Core.TypeEq, :T) === Any
+@test Base.type_parameter(Type{setindex!}) === setindex!
+@test Base.type_parameter(Type{1}) === 1
+@test Base.type_parameter(Type{:sym}) === :sym
+
 # `isType` covers both type-object kinds; use split predicates when exactness matters.
 @test Base.isType(Type{Int})
 @test Base.isType(Core.TypeEgal{Int})
@@ -6897,6 +6905,15 @@ for U in unboxedunions
             @test A[1] === initvalue2(F2)
             @test typeof(A[end]) === F2
 
+            A = U[initvalue2(F2) for i = 1:len]
+            resize!(A, 1; first=true)
+            @test length(A) === 1
+            @test A[1] === initvalue2(F2)
+            resize!(A, len; first=true)
+            @test length(A) === len
+            @test A[end] === initvalue2(F2)
+            @test typeof(A[end]) === F2
+
             # deleteat!
             F = Base.uniontypes(U)[2]
             A = U[rand(F(1):F(len)) for i = 1:len]
@@ -7102,7 +7119,7 @@ setindex!(A, missing, 2)
 setindex!(A, 0x03, 3)
 setindex!(A, missing, 4)
 setindex!(A, 0x05, 5)
-Base._growat!(A, 1, 1)
+resize!(A, 6; first=true)
 
 @test getindex(A, 1) === missing
 @test getindex(A, 2) === 0x01
@@ -7112,7 +7129,7 @@ Base._growat!(A, 1, 1)
 @test getindex(A, 6) === 0x05
 
 # grow_at_beg 2
-Base._growat!(A, 1, 1)
+resize!(A, 7; first=true)
 @test getindex(A, 1) === missing
 @test getindex(A, 2) === missing
 @test getindex(A, 3) === 0x01
@@ -7133,7 +7150,7 @@ Base._growat!(A, 2, 1)
 @test getindex(A, 8) === 0x05
 
 # grow_at_beg 9
-Base._growat!(A, 1, 1)
+resize!(A, 9; first=true)
 @test getindex(A, 1) === missing
 @test getindex(A, 2) === missing
 @test getindex(A, 3) === missing
@@ -7189,6 +7206,11 @@ Base._growat!(A, 2, 3)
 @test getindex(A, 8) === missing
 @test getindex(A, 9) === missing
 @test getindex(A, 10) === 0x05
+
+resize!(A, 2; first=true)
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === 0x05
+@test length(A) === 2
 
 # grow_at_beg 3
 A = Vector{Union{Missing, UInt8}}(undef, 1048577)
@@ -8213,6 +8235,8 @@ primitive type P36104 8 end
 const orig_P36104 = P36104
 primitive type P36104 16 end
 @test P36104 !== orig_P36104
+primitive type P36104 12 end # same size as 16 bits
+@test Core.bitsizeof(P36104) == 12
 
 # Malformed invoke
 f_bad_invoke(x::Int) = invoke(x, (Any,), x)
@@ -9169,8 +9193,14 @@ end
 #58434 bitsegal comparison of oddly sized fields
 primitive type ByteString58434 (18 * 8) end
 
-@test Base.datatype_isbitsegal(Tuple{ByteString58434}) == false
+@test Base.datatype_haspadding(Tuple{ByteString58434})
 @test Base.datatype_haspadding(Tuple{ByteString58434}) == !Base.ispacked(Tuple{ByteString58434})
+# padding must not affect egality or hashing
+let mk = t -> reinterpret(ByteString58434, t), x = ntuple(i -> UInt8(i), 18)
+    @test mk(x) === mk(x)
+    @test mk(x) !== mk(ntuple(i -> UInt8(i == 18 ? 0 : i), 18))
+    @test objectid(mk(x)) == objectid(mk(x))
+end
 
 # #60659 - Behavior of using'd ambiguous bindings
 module AmbiguousUsing60659

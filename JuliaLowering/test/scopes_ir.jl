@@ -89,7 +89,7 @@ end
 16  (return core.nothing)
 
 ########################################
-# Error: Invalid `let` var with K"::"
+# Error: Invalid `let` var with :(::)
 let f[]::T = rhs
 end
 #---------------------

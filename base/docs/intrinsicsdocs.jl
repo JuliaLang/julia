@@ -64,6 +64,19 @@ The memory ordering specified must be compatible with the `isatomic` parameter.
 Core.memoryrefget
 
 """
+    Core.const_memoryrefget(::GenericMemoryRef, ordering::Symbol, boundscheck::Bool)
+
+Same as [`Core.memoryrefget`](@ref), but additionally promises that the memory being read is
+not modified by any store inside the enclosing `Base.Experimental.@aliasscope` region.
+Used to implement indexing of `Base.Experimental.Const`. Loads emitted by plain
+[`Core.memoryrefget`](@ref) make no such promise.
+
+!!! compat "Julia 1.14"
+    This function requires Julia 1.14 or later.
+"""
+Core.const_memoryrefget
+
+"""
     Core.memoryrefset!(::GenericMemoryRef, value, ordering::Symbol, boundscheck::Bool)
 
 Store the value to the `MemoryRef`, throwing a `BoundsError` if the `Memory` is empty. See `ref[] = value`.
@@ -232,7 +245,7 @@ freezes into code are already leaves, so no walk happens there.
 
 A deprecation the walk reaches warns as it would for [`getglobal`](@ref), but `partition`
 itself does not: having named a partition, the caller owns its deprecation, and can ask for it
-with [`Core.depwarn_partition`](@ref).
+with [`Core.depwarn_binding`](@ref).
 """
 Core.getglobal_partition
 
@@ -290,11 +303,9 @@ memory `order`. An import partition is followed to its leaf, as for
 Core.isdefinedglobal_partition
 
 """
-    Core.depwarn_partition(partition::Core.BindingPartition)
+    Core.depwarn_binding(binding::Core.Binding)
 
-Emit the deprecation warning `partition` calls for, if the command line argument `--depwarn` is
-enabled (and throwing under `--depwarn=error`). The compiler emits this alongside a global read
-or store it has resolved, in place of the warning [`getglobal`](@ref) or [`setglobal!`](@ref)
-would have issued while resolving the name.
+Emit a deprecation warning naming `binding` if the command line argument
+`--depwarn` is enabled and throwing under `--depwarn=error`.
 """
-Core.depwarn_partition
+Core.depwarn_binding

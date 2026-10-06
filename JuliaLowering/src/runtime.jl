@@ -33,7 +33,7 @@ end
 end
 
 # Return the current exception. In JuliaLowering we use this rather than the
-# special form `K"the_exception"` to reduce the number of special forms.
+# special form `:the_exception` to reduce the number of special forms.
 Base.@assume_effects :removable function current_exception()
     @ccall jl_current_exception(current_task()::Any)::Any
 end
@@ -71,15 +71,15 @@ end
 
 function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
     is_leaf(st) && return st
-    k = kind(st)
-    inner_depth = k == K"syntaxquote" ? depth + 1 :
-        k == K"syntaxunquote" ? depth - 1 : depth
+    k = head(st)
+    inner_depth = k == :syntaxquote ? depth + 1 :
+        k == :syntaxunquote ? depth - 1 : depth
     cs_out = SyntaxList()
     for c in children(st)
-        if kind(c) == K"syntaxunquote" && inner_depth == 0
+        if head(c) == :syntaxunquote && inner_depth == 0
             tup = vals[val_i[] += 1]::Tuple
             @jl_assert numchildren(c) == 1 st
-            @jl_assert kind(c[1]) === K"..." || length(tup) == 1 st
+            @jl_assert head(c[1]) === :... || length(tup) == 1 st
             for v in tup
                 v2 = !(v isa SyntaxTree) ? expr_to_est(v, c) : v
                 push!(cs_out, v2)
@@ -94,7 +94,7 @@ function _interpolate_syntax(st::SyntaxTree, @nospecialize(vals::Tuple))
     # TODO: copy probably not required if immutable
     st = mktree(st)
     val_i = Ref(0)
-    out = __interpolate_syntax((@ast _ st [K"None" st]), 0, vals, val_i)
+    out = __interpolate_syntax((@ast _ st [:none st]), 0, vals, val_i)
     @jl_assert val_i[] == length(vals) st
     @jl_assert numchildren(out) == 1 st
     out[1]
@@ -160,7 +160,9 @@ end
 #--------------------------------------------------
 # Functions which create modules or mutate their bindings
 
+# For partial compatibility with older julia (JETLS)
 const _Base_has_eval_import = isdefined(Base, :_eval_import)
+const _has_jl_module_public = VERSION >= v"1.14.0-DEV.1556"
 
 function eval_import(imported::Bool, to::Module, from::Union{Expr, Nothing}, paths::Expr...)
     if _Base_has_eval_import
@@ -182,9 +184,15 @@ function eval_using(to::Module, path::Expr)
     end
 end
 
-function eval_public(mod::Module, is_exported::Bool, identifiers)
-    # symbol jl_module_public is no longer exported as of #57765
-    Core.eval(mod, Expr((is_exported ? :export : :public), map(Symbol, identifiers)...))
+function eval_public(mod::Module, is_exported::Bool, identifiers::Vector{String})
+    if _has_jl_module_public
+        syms = Symbol[Symbol(x) for x in identifiers]
+        ccall(:jl_module_public, Cvoid, (Any, Ptr{Any}, Csize_t, Cint),
+              mod, syms, length(syms), is_exported)
+    else
+        Core.eval(mod, Expr((is_exported ? :export : :public),
+                            map(Symbol, identifiers)...))
+    end
 end
 
 #--------------------------------------------------
@@ -240,8 +248,8 @@ function bind_docs!(type::Type, docstr, lineno::LineNumberNode; field_docs=Core.
 end
 
 """
-Called in the unfortunate cases (K"call", K".", K"Identifier") where docstrings
-change the semantics of the expressions they annotate, no longer requiring the
+Called in the unfortunate cases (call, ., identifier) where docstrings change
+the semantics of the expressions they annotate, no longer requiring the
 expression to execute.
 """
 function bind_static_docs!(mod::Module, name::Symbol, docstr, lnn::LineNumberNode, sigtypes::Type)
@@ -270,7 +278,7 @@ end
 function _gen_args_from_syms(ctx, src, args, sc)
     out = SyntaxList()
     for a in args
-        id = newleaf(src, K"Identifier", string(a))
+        id = newleaf(src, :identifier, string(a))
         id = est_to_dst_ident(SyntaxCompatContext(), id) # support placeholders
         id = @mknode(id; context=sc)
         push!(out, id)
@@ -313,7 +321,7 @@ function _lower_generated_code(g::GeneratedFunctionStub, source::Method,
     if !(ex0 isa SyntaxTree)
         ex0 isa Expr && throw(LoweringError(
             ex0, "implicit expr->syntaxtree: may later be allowed, but is probably a mistake today"))
-        ex0 = expr_to_est(ex0, g.srcref)
+        ex0 = expr_to_est(ex0, g.srcref, sc)
     end
 
     @jl_assert base_layer(sc).mod == __module__ ex0
@@ -324,9 +332,9 @@ function _lower_generated_code(g::GeneratedFunctionStub, source::Method,
     ctx2, ex2 = expand_forms_2(ex1, world)
 
     # Wrap expansion in a non-toplevel lambda and run scope resolution
-    ex2 = @ast ctx2 ex0 [K"generated_lambda"
-        [K"block" _gen_args_from_syms(ctx2, ex1, g.argnames, sc)...]
-        [K"block" _gen_args_from_syms(ctx2, ex1, g.spnames, sc)...]
+    ex2 = @ast ctx2 ex0 [:generated_lambda
+        [:block _gen_args_from_syms(ctx2, ex1, g.argnames, sc)...]
+        [:block _gen_args_from_syms(ctx2, ex1, g.spnames, sc)...]
         ex2
     ]
     ctx3, ex3 = resolve_scopes(ctx2, ex2)
@@ -361,34 +369,44 @@ end
 # Get the binding for `name` if one is already resolved in module `mod`. Note
 # that we cannot use `isdefined(::Module, ::Symbol)` here, because that causes
 # binding resolution which is a massive side effect we must avoid in lowering.
-function _get_module_binding(mod, name; create=false)
+function _get_module_binding(mod::Module, name::Symbol; create::Bool=false)
     b = @ccall jl_get_module_binding(mod::Module, name::Symbol, create::Cint)::Ptr{Core.Binding}
     b == C_NULL ? nothing : unsafe_pointer_to_objref(b)
 end
 
-# Reserve a global binding named "$basename##$i" in module `mod` for the
-# smallest `i` starting at `0`.
+_module_binding_i_taken(mod::Module, basename::AbstractString, i::Int) =
+    _get_module_binding(mod, Symbol(basename, "##", i); create=false) !== nothing
+
+# Reserve a global binding named "$basename##$i" in module `mod` for some
+# free `i`.  We could scan 0:n here, but we instead try exponentially
+# increasing `i` and backwards binary search to achieve `log(n)` performance
 #
 # TODO: Remove the use of this where possible. Currently this is used within
 # lowering to create unique global names for keyword function bodies and
 # closure types as a more local alternative to current-julia-module-counter.
 # However, we should ideally defer it to eval-time to make lowering itself
 # completely non-mutating.
-function reserve_module_binding_i(mod, basename)
-    i = 0
-    while true
-        name = "$basename##$i"
-        # TODO: Fix the race condition here: We should really hold the Module's
-        # binding lock during this test-and-set type operation. But the binding
-        # lock is only accessible from C. See also the C code in
-        # `fl_module_unique_name`.
-        symname = Symbol(name)
-        if _get_module_binding(mod, symname; create=false) === nothing
-            _get_module_binding(mod, symname; create=true)
-            return name
-        end
-        i += 1
+function reserve_module_binding_i(mod::Module, basename::AbstractString)
+    hi = 0
+    while _module_binding_i_taken(mod, basename, hi)
+        hi = 2hi + 1
     end
+    lo = hi == 0 ? 0 : (hi - 1) ÷ 2 + 1
+    while lo < hi
+        mid = (lo + hi) ÷ 2
+        if _module_binding_i_taken(mod, basename, mid)
+            lo = mid + 1
+        else
+            hi = mid
+        end
+    end
+    name = "$basename##$hi"
+    # TODO: Fix the race condition here: We should really hold the Module's
+    # binding lock during this test-and-set type operation. But the binding
+    # lock is only accessible from C. See also the C code in
+    # `fl_module_unique_name`.
+    _get_module_binding(mod, Symbol(name); create=true)
+    return name
 end
 
 # Even less likely to be deterministic than the above, but necessary to avoid

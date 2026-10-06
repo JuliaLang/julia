@@ -798,7 +798,8 @@ end
     sizeof(obj)
 
 Size, in bytes, of the canonical binary representation of the given `DataType` `T`, if any.
-Or the size, in bytes, of object `obj` if it is not a `DataType`.
+Or the size, in bytes, of object `obj` if it is not a `DataType`. The size of a primitive type
+includes padding, while `Core.bitsizeof` does not.
 
 See also [`Base.summarysize`](@ref).
 
@@ -846,8 +847,9 @@ sizeof(x) = Core.sizeof(x)
 Logical size, in bits, of the canonical binary representation of the given `DataType` `T`, if any.
 Or the logical size, in bits, of object `obj` if it is not a `DataType`.
 
-For primitive types, this may differ from `8*sizeof(T)` when the type uses byte-rounded storage
-with unused bits in the last byte.
+For primitive types, this may differ from `8*sizeof(T)`: `sizeof` rounds the value bytes up to
+a multiple of the type's alignment (see the manual section on primitive types), and the bits past
+the declared width are padding.
 
 # Examples
 ```jldoctest
@@ -1052,15 +1054,8 @@ end
 
 `@label` and `@goto` cannot create jumps to different top-level statements. Attempts cause an
 error. To still use `@goto`, enclose the `@label` and `@goto` in a block.
-
-!!! compat "Julia syntax version 1.14"
-    As of Julia syntax version 1.14, `@goto` is not allowed for jumping out of a `try`, `catch`,
-    or `else` block when a `finally` block is present.
 """
 macro goto(name::Symbol)
-    return esc(Expr(:oldsymbolicgoto, name))
-end
-function var"@goto"(__source__::Core.MacroSource, __module__::Module, name::Symbol)
     return esc(Expr(:symbolicgoto, name))
 end
 

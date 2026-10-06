@@ -679,7 +679,7 @@ function abstract_call_method(interp::AbstractInterpreter,
     # look through the parents list to see if there's a call to the same method
     # and from the same method.
     # Returns the topmost occurrence of that repeated edge.
-    edgecycle = edgelimited = false
+    edgecycle = edgelimited = edgerecursed = false
     topmost = nothing
 
     for sv′ in AbsIntStackUnwind(sv)
@@ -687,9 +687,9 @@ function abstract_call_method(interp::AbstractInterpreter,
         if method === infmi.def
             if infmi.specTypes::Type == sig::Type
                 # avoid widening when detecting self-recursion
-                # TODO: merge call cycle and return right away
                 topmost = nothing
                 edgecycle = true
+                edgerecursed = true
                 break
             end
             topmost === nothing || continue
@@ -796,7 +796,7 @@ function abstract_call_method(interp::AbstractInterpreter,
         #     sig = ?
     end
 
-    return typeinf_edge(interp, method, sig, sparams, sv, edgecycle, edgelimited)
+    return typeinf_edge(interp, method, sig, sparams, sv, edgecycle, edgelimited, edgerecursed)
 end
 
 function edge_matches_sv(interp::I, frame::AbsIntState,
@@ -867,14 +867,6 @@ function matches_sv(parent::AbsIntState, sv::AbsIntState)
     return (frame_instance(parent).def === frame_instance(sv).def &&
             method_for_inference_limit_heuristics(sv) === method_for_inference_limit_heuristics(parent))
 end
-
-function is_edge_recursed(edge::MethodInstance, caller::AbsIntState)
-    return any(AbsIntStackUnwind(caller)) do sv::AbsIntState
-        return edge === frame_instance(sv)
-    end
-end
-is_edge_recursed(edge::CodeInstance, caller::AbsIntState) =
-    is_edge_recursed(edge.def, caller)
 
 function is_method_recursed(method::Method, caller::AbsIntState)
     return any(AbsIntStackUnwind(caller)) do sv::AbsIntState
@@ -2007,8 +1999,7 @@ end
 
 # do apply(af, fargs...), where af is a function value
 function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo,
-                        vtypes::Union{VarTable,Nothing}, sv::AbsIntState,
-                        max_methods::Int=get_max_methods(interp, sv))
+                        vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     itft = Core.Box(argtype_by_index(argtypes, 2))
     aft = argtype_by_index(argtypes, 3)
     (itft.contents === Bottom || aft === Bottom) && return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
@@ -2135,7 +2126,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
                     break
                 end
             end
-            state.callfuture = abstract_call(interp, ArgInfo(nothing, ct), si, vtypes, sv, max_methods)::Future{CallMeta}
+            state.callfuture = abstract_call(interp, ArgInfo(nothing, ct), si, vtypes, sv)::Future{CallMeta}
             if !isready(state.callfuture)
                 state.nextstate = 0x3
                 return false
@@ -2595,7 +2586,9 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     ti = tienv[1]
     env = tienv[2]::SimpleVector
     mresult = abstract_call_method(interp, method, ti, env, false, si, sv)::Future
-    match = MethodMatch(ti, env, method, argtype <: method.sig)
+    # `invoke` checks the arguments against the requested signature (`lookupsig`),
+    # which may be narrower than `method.sig`.
+    match = MethodMatch(ti, env, method, argtype <: lookupsig)
     ft′_box = Core.Box(ft′)
     lookupsig_box = Core.Box(lookupsig)
     invokecall = InvokeCall(types)
@@ -2751,8 +2744,9 @@ binding_world_hints(world::UInt, sv::AbsIntState) = WorldWithRange(world, sv.val
         end
         gr = GlobalRef(M, s)
         world = get_inference_world(interp)
-        valid_worlds, (_, partition) = binding_access_range(gr, binding_world_hints(world, sv), false)
+        valid_worlds, leaf = binding_access_range(gr, binding_world_hints(world, sv), false)
         update_valid_age!(sv, world, valid_worlds)
+        partition = leaf.partition
         kind = binding_kind(partition)
         if is_some_guard(kind) || kind == PARTITION_KIND_DECLARED
             # We do not currently assume an invalidation for guard -> defined transitions
@@ -2798,12 +2792,10 @@ function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, 
         end
         return CallMeta(Union{}, Union{TypeError, ErrorException}, EFFECTS_THROWS, NoCallInfo())
     end
-    ⊑ = partialorder(typeinf_lattice(interp))
     if !(hasintersect(widenconst(M), Module) && hasintersect(widenconst(s), Symbol))
         return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
-    elseif M ⊑ Module && s ⊑ Symbol
-        return CallMeta(v, ErrorException, setglobal!_effects, NoCallInfo())
     end
+    # even a known `Module` and `Symbol` may name a typed global that rejects `v`
     return CallMeta(v, Union{TypeError, ErrorException}, setglobal!_effects, NoCallInfo())
 end
 
@@ -2853,9 +2845,10 @@ function abstract_eval_rmwglobal!(interp::AbstractInterpreter, sv::AbsIntState, 
                     merge_effects(generic_getglobal_effects, setglobal!_effects), info), nothing)
             end
             world = get_inference_world(interp)
-            valid_worlds, (b, partition) = binding_access_range(gr, binding_world_hints(world, sv), true)
+            valid_worlds, leaf = binding_access_range(gr, binding_world_hints(world, sv), true)
             update_valid_age!(sv, world, valid_worlds)
-            rte = abstract_eval_partition_load(interp, b, partition)
+            partition = leaf.partition
+            rte = abstract_eval_partition_load(interp, leaf)
             (srt, sexct) = global_assignment_binding_rt_exct(interp, partition, v)
             exct = Union{rte.exct, sexct}
             effects = merge_effects(rte.effects, Effects(setglobal!_effects, nothrow=exct===Bottom))
@@ -2864,14 +2857,11 @@ function abstract_eval_rmwglobal!(interp::AbstractInterpreter, sv::AbsIntState, 
         end
         return Pair{CallMeta,Any}(CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo()), nothing)
     end
-    ⊑ = partialorder(typeinf_lattice(interp))
     if !(hasintersect(widenconst(M), Module) && hasintersect(widenconst(s), Symbol))
         return Pair{CallMeta,Any}(CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo()), nothing)
-    elseif M ⊑ Module && s ⊑ Symbol
-        exct = Union{UndefVarError, ErrorException}
-    else
-        exct = Union{UndefVarError, TypeError, ErrorException}
     end
+    # even a known `Module` and `Symbol` may name a typed global that rejects `v`
+    exct = Union{UndefVarError, TypeError, ErrorException}
     return Pair{CallMeta,Any}(CallMeta(Any, exct,
         merge_effects(generic_getglobal_effects, setglobal!_effects), NoCallInfo()), nothing)
 end
@@ -2971,7 +2961,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     𝕃ᵢ = typeinf_lattice(interp)
     if isa(f, Builtin)
         if f === _apply_iterate
-            return abstract_apply(interp, argtypes, si, vtypes, sv, max_methods)
+            return abstract_apply(interp, argtypes, si, vtypes, sv)
         elseif f === invoke
             return abstract_invoke(interp, arginfo, si, vtypes, sv)
         elseif f === modifyfield! || f === Core.modifyglobal! ||
@@ -2981,7 +2971,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif f === Core.finalizer
             return abstract_finalizer(interp, argtypes, vtypes, sv)
         elseif f === applicable
-            return abstract_applicable(interp, argtypes, sv, max_methods)
+            return abstract_applicable(interp, argtypes, sv)
         elseif f === throw
             return abstract_throw(interp, argtypes, sv)
         elseif f === Core.throw_methoderror
@@ -3242,7 +3232,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtIn
         max_methods = max_methods == typemin(Int) ? get_max_methods(interp, sv) : max_methods
         return abstract_call_unknown(interp, ft, arginfo, si, vtypes, sv, max_methods)
     end
-    max_methods = max_methods == typemin(Int) ? get_max_methods(interp, f, sv) : max_methods
+    max_methods = max_methods == typemin(Int) ? get_max_methods(interp, max_methods_callee(f, arginfo.argtypes), sv) : max_methods
     return abstract_call_known(interp, f, arginfo, si, vtypes, sv, max_methods)
 end
 
@@ -3413,7 +3403,10 @@ function is_field_pointerfree(dt::DataType, fidx::Int)
     dt.layout::Ptr{Cvoid} == C_NULL && return false
     DataTypeFieldDesc(dt)[fidx].isptr && return false
     ft = fieldtype(dt, fidx)
-    return ft isa DataType && datatype_pointerfree(ft)
+    ft isa DataType || return false
+    # Without a field layout, conservatively treat the allocation as inconsistent.
+    ft.layout::Ptr{Cvoid} == C_NULL && return true
+    return datatype_pointerfree(ft)
 end
 
 function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::StatementState,
@@ -3712,9 +3705,9 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, mod::Module,
     end
 
     world = get_inference_world(interp)
-    valid_worlds, (leaf_b, leaf_p) = binding_access_range(gr, binding_world_hints(world, sv), false)
+    valid_worlds, leaf = binding_access_range(gr, binding_world_hints(world, sv), false)
     update_valid_age!(sv, world, valid_worlds)
-    rte = abstract_eval_partition_load(interp, leaf_b, leaf_p)
+    rte = abstract_eval_partition_load(interp, leaf)
     if rte.exct == Union{}
         rt = Const(true)
     elseif rte.rt === Union{} && rte.exct === UndefVarError
@@ -3992,31 +3985,18 @@ world_range(ci::CodeInfo) = WorldRange(ci.min_world, ci.max_world)
 world_range(ci::CodeInstance) = WorldRange(ci.min_world, ci.max_world)
 world_range(compact::IncrementalCompact) = world_range(compact.ir)
 
-# Like `walk_binding_partition` but drops the WorldRange tracking — IR-only callers don't use it.
-#
-# Walk imports to the leaf partition, also reporting whether `getglobal` would
-# deprecation-warn for the access: the deprecation flag is ORed across the walk but
-# suppressed once an explicit import is passed (the `import`/`using: x` site warns
-# instead), mirroring the runtime `jl_walk_binding_inplace_depwarn`.
-@inline function walk_to_leaf_partition_depwarn(binding::Core.Binding, partition::Core.BindingPartition, world::UInt)
-    passed_explicit = false
-    depwarn = false
-    while true
-        kind = binding_kind(partition)
-        if !passed_explicit
-            depwarn |= (partition.kind & PARTITION_FLAG_DEPWARN) != 0
-        end
-        is_leaf_partition(partition) && break
-        is_some_explicit_imported(kind) && (passed_explicit = true)
-        binding = partition_restriction(partition)::Core.Binding
-        partition = lookup_binding_partition(world, binding)
-    end
-    return (binding, partition, depwarn)
+# The leaf a global access resolves to: the binding and partition that carry
+# the access's behavior, and whether `getglobal` would deprecation-warn for it.
+struct LeafAccess
+    binding::Core.Binding
+    partition::Core.BindingPartition
+    depwarn::Bool
 end
 
+# Like `walk_binding_partition` but drops the WorldRange tracking — IR-only callers don't use it.
 @inline function walk_to_leaf_partition(binding::Core.Binding, partition::Core.BindingPartition, world::UInt)
-    binding, partition, _ = walk_to_leaf_partition_depwarn(binding, partition, world)
-    return (binding, partition)
+    leaf = walk_binding_partition(binding, partition, world, false).second
+    return (leaf.binding, leaf.partition)
 end
 
 # Whether `partition` is a leaf partition is the inverse of asking if it is imported.
@@ -4087,17 +4067,23 @@ function lookup_binding_partition!(interp::AbstractInterpreter, g::Union{GlobalR
     partition
 end
 
+# Walk `(b, partition)` to the `LeafAccess` of a read (`write=false`), following imports, or
+# of a store (`write=true`), which never follows them, along with the world range over which
+# every partition on the walk is the one looked up.
 function walk_binding_partition(b::Core.Binding, partition::Core.BindingPartition, world::UInt, write::Bool)
     valid_worlds = WorldRange(partition.min_world, partition.max_world)
+    depwarn = (partition.kind & PARTITION_FLAG_DEPWARN) != 0
     if !write
+        passed_explicit = false
         while !is_leaf_partition(partition)
+            is_some_explicit_imported(binding_kind(partition)) && (passed_explicit = true)
             b = partition_restriction(partition)::Core.Binding
             partition = lookup_binding_partition(world, b)
             valid_worlds = intersect(valid_worlds, WorldRange(partition.min_world, partition.max_world))
+            passed_explicit || (depwarn |= (partition.kind & PARTITION_FLAG_DEPWARN) != 0)
         end
     end
-    return Pair{WorldRange, Pair{Core.Binding, Core.BindingPartition}}(
-            valid_worlds, b=>partition)
+    return Pair{WorldRange, LeafAccess}(valid_worlds, LeafAccess(b, partition, depwarn))
 end
 
 
@@ -4105,17 +4091,23 @@ function abstract_eval_binding_partition!(interp::AbstractInterpreter, g::Global
     b = convert(Core.Binding, g)
     partition = lookup_binding_partition!(interp, b, sv)
     world = get_inference_world(interp)
-    valid_worlds, (_, partition) = walk_binding_partition(b, partition, world, false)
+    valid_worlds, leaf = walk_binding_partition(b, partition, world, false)
     update_valid_age!(sv, world, valid_worlds)
-    return partition
+    return leaf.partition
 end
 
+abstract_eval_partition_load(interp::AbstractInterpreter, leaf::LeafAccess) =
+        abstract_eval_partition_load(leaf, InferenceParams(interp).assume_bindings_static)
 abstract_eval_partition_load(interp::AbstractInterpreter, binding::Core.Binding, partition::Core.BindingPartition) =
         abstract_eval_partition_load(binding, partition, InferenceParams(interp).assume_bindings_static)
+abstract_eval_partition_load(leaf::LeafAccess, assume_bindings_static::Bool) =
+        abstract_eval_partition_load(leaf.binding, leaf.partition, assume_bindings_static, leaf.depwarn)
 
-function abstract_eval_partition_load(binding::Core.Binding, partition::Core.BindingPartition, assume_bindings_static::Bool)
+# The load of a bare `partition`, where `isdepwarn` can either be its own flag
+# or computed from a leaf walk, depending on how partition was arrived at.
+function abstract_eval_partition_load(binding::Core.Binding, partition::Core.BindingPartition, assume_bindings_static::Bool,
+                                      isdepwarn::Bool = (partition.kind & PARTITION_FLAG_DEPWARN) != 0)
     kind = binding_kind(partition)
-    isdepwarn = (partition.kind & PARTITION_FLAG_DEPWARN) != 0
     local_getglobal_effects = Effects(generic_getglobal_effects, effect_free=isdepwarn ? ALWAYS_FALSE : ALWAYS_TRUE)
     if !is_leaf_partition(partition)
         return RTEffects(Any, UndefVarError, local_getglobal_effects)
@@ -4179,10 +4171,12 @@ end
 # Within `DECLARED` the key deliberately says less than it does for `GLOBAL`: it does not separate a
 # deprecated partition from an undeprecated one. That is correct as things stand since nothing ever freezes a
 # `DECLARED` partition, and would need to fixed if we ever want to start optimizing these.
-function binding_access_key(b::Core.Binding, p::Core.BindingPartition)
-    kind = binding_kind(p)
-    slot = is_some_global(kind) ? b : nothing
-    return Pair{Any,Any}(abstract_eval_partition_load(b, p, false), slot)
+#
+# The depwarn flag is carried through the effect_free of the result.
+function binding_access_key(leaf::LeafAccess)
+    kind = binding_kind(leaf.partition)
+    slot = is_some_global(kind) ? leaf.binding : nothing
+    return Pair{RTEffects,Union{Core.Binding,Nothing}}(abstract_eval_partition_load(leaf, false), slot)
 end
 
 # Evaluate the query "which world range is a global access to `g` valid over, and which partition does it resolve to."
@@ -4204,8 +4198,7 @@ function binding_access_range(binding::Core.Binding, wwr::WorldWithRange, write:
     # the common case (the binding was last repartitioned before `wwr_min`), so
     # materializing a key that is never compared would dominate the cost of the query.
     total_min <= wwr_min && return total_validity, leaf
-    (leaf_binding, leaf_partition) = leaf
-    key = binding_access_key(leaf_binding, leaf_partition)
+    key = binding_access_key(leaf)
     lookup_world = total_min - 1
 
     # Scan backwards to find the largest sub-range of valid_worlds that
@@ -4216,9 +4209,8 @@ function binding_access_range(binding::Core.Binding, wwr::WorldWithRange, write:
         end
         while lookup_world >= binding_partition.min_world && total_min > wwr_min
             this_partition_validity, this_leaf = walk_binding_partition(binding, binding_partition, lookup_world, write)
-            (this_leaf_binding, this_leaf_partition) = this_leaf
             @assert lookup_world in this_partition_validity
-            this_key = binding_access_key(this_leaf_binding, this_leaf_partition)
+            this_key = binding_access_key(this_leaf)
             if this_key === key
                 total_validity = union(total_validity, this_partition_validity)
             else
@@ -4245,9 +4237,9 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, saw_
     # only care about its type, but we still narrow `valid_worlds` to the binding's access range.
     # The optimizer would have to narrow to that anyways in order to be valid to optimize this load to a single pointer.
     world = get_inference_world(interp::I)
-    valid_worlds, (leaf_b, leaf_p) = binding_access_range(g, binding_world_hints(world, sv), false)
+    valid_worlds, leaf = binding_access_range(g, binding_world_hints(world, sv), false)
     update_valid_age!(sv, world, valid_worlds)
-    return abstract_eval_partition_load(interp, leaf_b, leaf_p)
+    return abstract_eval_partition_load(interp, leaf)
 end
 
 function global_assignment_rt_exct(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, g::GlobalRef, @nospecialize(newty))
@@ -4255,9 +4247,9 @@ function global_assignment_rt_exct(interp::AbstractInterpreter, sv::AbsIntState,
         return Pair{Any,Any}(newty, Union{TypeError, ErrorException})
     end
     world = get_inference_world(interp)
-    valid_worlds, (_, partition) = binding_access_range(g, binding_world_hints(world, sv), true)
+    valid_worlds, leaf = binding_access_range(g, binding_world_hints(world, sv), true)
     update_valid_age!(sv, world, valid_worlds)
-    return global_assignment_binding_rt_exct(interp, partition, newty)
+    return global_assignment_binding_rt_exct(interp, leaf.partition, newty)
 end
 
 function global_assignment_binding_rt_exct(interp::AbstractInterpreter, partition::Core.BindingPartition, @nospecialize(newty))

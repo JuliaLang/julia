@@ -397,12 +397,6 @@ static void clear_weak_refs(void) JL_NOTSAFEPOINT
 // the unlink pass. Only touched by the serial parts of the sweep.
 static arraylist_t big_weak_corpses;
 
-// Does this (live or dead-this-cycle) cell hold a cancellation source?
-STATIC_INLINE int gc_is_cancel_source(jl_taggedvalue_t *v) JL_NOTSAFEPOINT
-{
-    return (v->header & ~(uintptr_t)0xf) == (jl_cancel_source_tag << 4);
-}
-
 // Is `v` (a dead cell whose header is known valid) a cancellation source
 // that is still linked into some parent's child list?
 STATIC_INLINE int gc_is_dead_linked_cancel_source(jl_taggedvalue_t *v) JL_NOTSAFEPOINT
@@ -1324,13 +1318,6 @@ JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls
     uv_mutex_unlock(&live_tasks_lock);
 }
 
-void jl_gc_notify_task_suspend(jl_task_t *task) JL_NOTSAFEPOINT
-{
-    // Remember stack and task-field updates made while the task was running,
-    // even if termination is about to discard its stack.
-    jl_gc_wb_back(task);
-}
-
 void jl_gc_notify_task_resume(jl_task_t *task) JL_NOTSAFEPOINT
 {
     // do nothing
@@ -1703,7 +1690,7 @@ JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, void *slot JL_UNUSED, const 
     jl_gc_queue_root((jl_value_t*)parent);
 }
 
-void jl_gc_queue_multiroot(const jl_value_t *parent, void *dest JL_UNUSED, const void *ptr, jl_datatype_t *dt) JL_NOTSAFEPOINT
+void jl_gc_multi_wb_cold(const jl_value_t *parent, void *dest JL_UNUSED, const void *ptr, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     const jl_datatype_layout_t *ly = dt->layout;
     uint32_t npointers = ly->npointers;
@@ -1711,8 +1698,8 @@ void jl_gc_queue_multiroot(const jl_value_t *parent, void *dest JL_UNUSED, const
     //    return;
     jl_value_t *ptrf = ((jl_value_t**)ptr)[ly->first_ptr];
     if (ptrf && (jl_astaggedvalue(ptrf)->bits.gc & 1) == 0) {
-        // this pointer was young, move the barrier back now
-        jl_gc_wb_back(parent);
+        // this pointer is young
+        jl_gc_wb_object(parent);
         return;
     }
     assert(ly->flags.fielddesc_type != JL_FIELDDESC_FOREIGN);
@@ -1733,8 +1720,8 @@ void jl_gc_queue_multiroot(const jl_value_t *parent, void *dest JL_UNUSED, const
         }
         jl_value_t *ptrf = ((jl_value_t**)ptr)[fld];
         if (ptrf && (jl_astaggedvalue(ptrf)->bits.gc & 1) == 0) {
-            // this pointer was young, move the barrier back now
-            jl_gc_wb_back(parent);
+            // this pointer is young
+            jl_gc_wb_object(parent);
             return;
         }
     }
@@ -2235,14 +2222,18 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
     uint32_t nr = nroots >> 2;
     while (1) {
         jl_value_t ***rts = (jl_value_t ***)(((void **)s) + 2);
+        uint32_t frame_kind = nroots & JL_GCFRAME_KIND_MASK;
         for (uint32_t i = 0; i < nr; i++) {
-            if (nroots & 1) {
+            if (frame_kind == JL_GCFRAME_INDIRECT) {
+                // slots hold addresses of local `jl_value_t*` variables
                 void **slot = (void **)gc_read_stack(&rts[i], offset, lb, ub);
                 new_obj = (jl_value_t *)gc_read_stack(slot, offset, lb, ub);
                 if (new_obj == NULL)
                     continue;
+                if (gc_is_tagged_immediate(new_obj))
+                    continue;
             }
-            else {
+            else if (frame_kind == JL_GCFRAME_FINLIST) {
                 new_obj = (jl_value_t *)gc_read_stack(&rts[i], offset, lb, ub);
                 if (gc_ptr_tag(new_obj, GC_FIN_CFUNC_TAG)) {
                     // handle tagged pointers in finalizer list
@@ -2251,6 +2242,13 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
                     i++;
                 }
                 if (gc_ptr_tag(new_obj, GC_FIN_COBJ_TAG))
+                    continue;
+                if (new_obj == NULL)
+                    continue;
+            }
+            else {
+                new_obj = (jl_value_t *)gc_read_stack(&rts[i], offset, lb, ub);
+                if (gc_is_tagged_immediate(new_obj))
                     continue;
                 // conservatively check for the presence of any smalltag type, instead of just NULL
                 // in the very unlikely event that codegen decides to root the result of julia.typeof

@@ -242,7 +242,6 @@ register_kinds!(JuliaSyntax, 0, [
             "abstract"
             "as"
             "doc"
-            "goto"
             "mutable"
             "outer"
             "primitive"
@@ -395,26 +394,13 @@ register_kinds!(JuliaSyntax, 0, [
         "wrapper"
     "END_SYNTAX_KINDS"
 
-    # Kinds not corresponding to surface syntax in RawGreenNode, but required
-    # for parsing to a provenance-containing structure that is compatible with
-    # Expr.  May shrink with syntax evolution.
-    "BEGIN_SYNTAXTREE_KINDS"
-        # A literal Julia value of any kind, as might be inserted into the
-        # AST during macro expansion.  Only used in parsing to SyntaxTree.
-        "Value"
-        "unknown_head"
-        "flatten"
-        # QuoteNode; not quasiquote
-        "inert"
-        "syntaxinert"
-    "END_SYNTAXTREE_KINDS"
-
     # Special tokens
     "TOMBSTONE"    # Empty placeholder for kind to be filled later
     "None"         # Never emitted by lexer/parser
     "EndMarker"    # EOF
 
     "BEGIN_ERRORS"
+        "incomplete"
         # Tokenization errors
         "ErrorEofMultiComment"
         "ErrorInvalidNumericConstant"

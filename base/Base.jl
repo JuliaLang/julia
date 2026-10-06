@@ -33,7 +33,7 @@ end
 # metaprogramming
 include("meta.jl")
 using .Meta
-using .Meta: is_id_char
+using .Meta: is_id_char, parser_for_module
 
 # Strings
 include("multimedia.jl")
@@ -273,7 +273,7 @@ include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
 
-# experimental API's
+# experimental APIs
 include("experimental.jl")
 
 # utilities
@@ -343,10 +343,11 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 # Compiler frontend
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
+JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
+
 # May be replaced in incremental sysimage build after-the-fact
 const JuliaLowering = nothing
 
-# Now that JuliaSyntax is bootstrapped and ready to use, set Base's syntax version.
 set_syntax_version(Base, VERSION)
 
 end_base_include = time_ns()
@@ -593,6 +594,7 @@ function __init__()
     init_active_project()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
     empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
+    empty!(checksums_valid)
     for mod in loaded_modules_order
         push!(get!(Vector{Module}, loaded_precompiles, PkgId(mod)), mod)
     end
@@ -608,9 +610,12 @@ function __init__()
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")
-    if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
-        JuliaSyntax.enable_in_core!()
+    if get_bool_env("JULIA_USE_FLISP_PARSER", false) === true
+        JuliaSyntax.enable_in_core!(false)
+    else
+        JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
     end
+
     if JuliaLowering !== nothing && get_bool_env("JULIA_USE_FLISP_LOWERING", true) === false
         # This is not available by default, but JuliaLowering can be added to
         # Base after-the-fact via an incremental sysimage build.

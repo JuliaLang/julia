@@ -390,7 +390,7 @@ function horizontalrule(stream::IO, block::MD)
        n = 1
        for char in readeach(stream, Char)
            char == '\n' && break
-           isspace(char) && continue
+           char in whitespace && continue
            char == rule || return false
            n += 1
        end
@@ -507,7 +507,7 @@ function html_block(stream::IO, block::MD)
         if endcond === nothing
             while !eof(stream)
                 line = readline(stream)
-                all(isspace, line) && break
+                all(in(whitespace), line) && break
                 push!(html.content, line)
             end
         else
@@ -536,7 +536,7 @@ function html_block_type7(stream::IO, block::MD)
         seek(stream, pos)
         while !eof(stream)
             line = readline(stream)
-            all(isspace, line) && break
+            all(in(whitespace), line) && break
             push!(html.content, line)
         end
         push!(block, html)

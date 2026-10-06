@@ -133,6 +133,18 @@ end
         @test (min(NaN,Inf), min(NaN,-Inf), min(-NaN,Inf), min(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
         @test minmax(-Inf,NaN) ≣ (min(-Inf,NaN), max(-Inf,NaN))
     end
+    for S in Base.BitInteger_types, T in Base.BitInteger_types
+        xvals = S <: Signed ? [typemin(S), -one(S), zero(S), one(S), typemax(S)] : [zero(S), one(S), typemax(S)]
+        yvals = T <: Signed ? [typemin(T), -one(T), zero(T), one(T), typemax(T)] : [zero(T), one(T), typemax(T)]
+        for x in xvals, y in yvals
+            z = @inferred min(x, y)
+            @test z <= x && z <= y && z in (x, y)
+            z = @inferred max(x, y)
+            @test z >= x && z >= y && z in (x, y)
+            z = @inferred minmax(x, y)
+            @test z == (min(x, y), max(x, y))
+        end
+    end
 end
 @testset "Base._extrema_rf for float" begin
     for T in (Float16, Float32, Float64, BigFloat)
@@ -2454,6 +2466,11 @@ end
     @test all(x -> (m=mod1(x,3); 0<m<=3), -5:+5)
     @test all(x -> x == (cld(x,3)-1)*3 + mod1(x,3), -5:+5)
     @test all(x -> cldmod1(x,3) == (cld(x,3), mod1(x,3)), -5:+5)
+    # the legacy names promote mixed arguments first, unlike `cld`
+    @test fld1(0x05, -3) === -1
+    @test fldmod1(0x05, -3) === (-1, -1)
+    @test fld1(0x05, 3) === 2
+    @test_throws InexactError fld1(UInt(5), -3)
 end
 #Issue #5570
 @test map(x -> Int(mod1(UInt(x),UInt(5))), 0:15) == [5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5]

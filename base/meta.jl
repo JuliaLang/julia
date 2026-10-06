@@ -304,12 +304,12 @@ end
 
 ParseError(msg::AbstractString) = ParseError(msg, nothing)
 
-# N.B.: Should match definition in src/ast.c:jl_parse
 function parser_for_module(mod::Union{Module, Nothing})
-    mod === nothing && return Core._parse
-    isdefined(mod, Symbol("#_internal_julia_parse")) ?
-        getglobal(mod, Symbol("#_internal_julia_parse")) :
-        Core._parse
+    if mod isa Module && invokelatest(isdefined, mod, Symbol("#_internal_julia_parse"))
+        invokelatest(getglobal, mod, Symbol("#_internal_julia_parse"))
+    else
+        Base.VersionedParse(Base.VERSION_EDITION)
+    end
 end
 
 function _parse_string(text::AbstractString, filename::AbstractString,

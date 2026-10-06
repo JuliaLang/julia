@@ -1152,7 +1152,9 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
 }
 
 // Look through selects and phis to find all possible alloca bases of a pointer.
-// Returns an empty set if a non-alloca base is encountered.
+// Returns an empty set if a non-alloca base is encountered. The bases may differ
+// in size and type (e.g. after SimplifyCFG sinks stores to different allocas into
+// a common successor), so callers must handle each base on its own.
 static SmallSetVector<AllocaInst *, 1> FindAllocaBases(Value *V) {
     SmallSetVector<AllocaInst *, 1> allocas;
     if (AllocaInst *AI = dyn_cast<AllocaInst>(V)) {
@@ -1186,11 +1188,6 @@ static SmallSetVector<AllocaInst *, 1> FindAllocaBases(Value *V) {
             }
         }
     }
-    assert(std::all_of(allocas.begin(), allocas.end(), [&] (AllocaInst *AI) JL_NOTSAFEPOINT {
-            return (AI->getArraySize() == allocas[0]->getArraySize() &&
-                AI->getAllocatedType() == allocas[0]->getAllocatedType());
-        }
-    ));
     return allocas;
 }
 
@@ -1282,6 +1279,11 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     }
                 }
                 NoteOperandUses(S, BBS, I);
+                // Calls tagged "julia.safepoint" by codegen are Julia calls
+                // whose memory effects were narrowed from inferred effects.
+                // They can still reach a GC safepoint, so never let those
+                // effects skip rooting here.
+                bool MarkedSafepoint = CI->hasFnAttr("julia.safepoint");
                 if (!CI->canReturnTwice()) {
                     if (callee) {
                         if (callee == gc_preserve_begin_func) {
@@ -1319,8 +1321,9 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                             callee->getName() == "memcmp") {
                             continue;
                         }
-                        if (callee->getMemoryEffects().onlyReadsMemory() ||
-                            callee->getMemoryEffects().onlyAccessesArgPointees()) {
+                        if (!MarkedSafepoint &&
+                            (callee->getMemoryEffects().onlyReadsMemory() ||
+                             callee->getMemoryEffects().onlyAccessesArgPointees())) {
                             continue;
                         }
                     }
@@ -1328,7 +1331,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         // Intrinsics are never safepoints.
                         continue;
                     auto effects = CI->getMemoryEffects();
-                    if (effects.onlyAccessesArgPointees() || effects.onlyReadsMemory())
+                    if (!MarkedSafepoint &&
+                        (effects.onlyAccessesArgPointees() || effects.onlyReadsMemory()))
                         // Readonly functions and functions that cannot change GC state (which is inaccessiblemem) are not safepoints
                         continue;
                 }
@@ -2592,6 +2596,23 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
 
     pgcstack = getPGCstack(F);
     if (pgcstack) {
+      // Drop the optimistic memory effects codegen put on "julia.safepoint"
+      // calls (see add_fn_attrs_for_effects). They were only valid while the
+      // GC frame was implicit: once this pass makes the frame stores
+      // explicit, a callee that claims not to read them would let DSE/GVN
+      // delete or forward the roots it actually scans through pgcstack.
+      for (auto &BB : F) {
+          for (auto &I : BB) {
+              auto *CI = dyn_cast<CallInst>(&I);
+              if (!CI || !CI->hasFnAttr("julia.safepoint"))
+                  continue;
+              CI->removeFnAttr(Attribute::Memory);
+              for (unsigned i = 0; i < CI->arg_size(); i++) {
+                  if (CI->getParamAttr(i, "gcstack").isValid())
+                      CI->removeParamAttr(i, Attribute::ReadNone);
+              }
+          }
+      }
       State S = LocalScan(F);
       // If there is no safepoint after the first reachable def, then we don't need any roots (even those for allocas)
       if (std::any_of(S.BBStates.begin(), S.BBStates.end(),

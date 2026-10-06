@@ -78,8 +78,6 @@
     XX(jl_capture_interp_frame) \
     XX(jl_ceil_llvm) \
     XX(jl_ceil_llvm_withtype) \
-    XX(jl_cglobal) \
-    XX(jl_cglobal_auto) \
     XX(jl_checked_assignment) \
     XX(jl_clear_implicit_imports) \
     XX(jl_close_uv) \
@@ -166,12 +164,12 @@
     XX(jl_gc_mark_queue_obj) \
     XX(jl_gc_mark_queue_objarray) \
     XX(jl_gc_max_internal_obj_size) \
+    XX(jl_gc_multi_wb_cold) \
     XX(jl_gc_new_weakref) \
     XX(jl_gc_new_weakref_th) \
     XX(jl_gc_num) \
     XX(jl_gc_small_alloc) \
     XX(jl_gc_small_alloc_reset_safe) \
-    XX(jl_gc_queue_multiroot) \
     XX(jl_gc_queue_root) \
     XX(jl_gc_queue_root_reset_safe) \
     XX(jl_gc_safepoint) \
@@ -215,6 +213,7 @@
     XX(jl_get_JIT) \
     XX(jl_get_julia_bin) \
     XX(jl_get_julia_bindir) \
+    XX(jl_get_libjulia_internal_path) \
     XX(jl_get_module_compile) \
     XX(jl_get_module_infer) \
     XX(jl_get_module_of_binding) \
@@ -361,14 +360,11 @@
     XX(jl_obvious_subtype) \
     XX(jl_operator_precedence) \
     XX(jl_parse) \
-    XX(jl_parse_all) \
     XX(jl_parse_opts) \
     XX(jl_pathname_for_handle) \
     XX(jl_pathname_for_symbol) \
     XX(jl_pchar_to_array) \
     XX(jl_pchar_to_string) \
-    XX(jl_pointerref) \
-    XX(jl_pointerset) \
     XX(jl_pop_handler) \
     XX(jl_pop_handler_noexcept) \
     XX(jl_preload_sysimg) \

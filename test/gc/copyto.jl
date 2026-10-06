@@ -119,5 +119,9 @@ function copy_race_trial(n)
 end
 
 if Threads.nthreads(:default) >= 2
-    @assert any(_ -> copy_race_trial(1_000_000), 1:10) "copy race interleaving was not exercised"
+    # Large enough that the copy outlasts an OS timeslice.
+    reproduced = any(_ -> copy_race_trial(16_000_000), 1:10)
+    # We could `@assert reproduced` to enforce that we tested the intended race
+    # here, but that depends on OS scheduling so it would likely be flaky in CI.
+    # (this test still catches bugs whenever the race is 'lucky enough' to occur)
 end

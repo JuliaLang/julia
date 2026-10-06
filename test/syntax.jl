@@ -5,7 +5,7 @@
 using Random
 using Base: remove_linenums!
 
-using_JuliaSyntax = parentmodule(Core._parse) != Core.Compiler
+using_JuliaSyntax = parentmodule(Core._parse) != Base
 
 macro test_parseerror(str, msg)
     if using_JuliaSyntax
@@ -1095,6 +1095,7 @@ end === (3, String)
 @test Meta.parse("3 +̂′ 4") == Expr(:call, :+̂′, 3, 4)
 @test Meta.parse("3 +⁽¹⁾ 4") == Expr(:call, :+⁽¹⁾, 3, 4)
 @test Meta.parse("3 +₍₀₎ 4") == Expr(:call, :+₍₀₎, 3, 4)
+@test Meta.parse("3 +₝₞₟𝿐 4") == Expr(:call, :+₝₞₟𝿐, 3, 4)
 for bad in ('=', '$', ':', "||", "&&", "->", "<:")
     @test_parseerror "3 $(bad)⁽¹⁾ 4"
 end
@@ -1679,6 +1680,11 @@ function f32620(x::T) where T
     return (T, y)
 end
 @test f32620(0) === (Int, 2)
+
+# Static parameter reads must be separate statements in lowered IR.
+f_sparam_assign(::Val{S}) where {S} = (println(devnull, repr(begin value = S end)); S)
+@test f_sparam_assign(Val(1)) === 1
+@test isempty(Base.Compiler.validate_code(only(code_lowered(f_sparam_assign, (Val{1},)))))
 
 # issue #28044
 code28044(x) = 10x
@@ -3771,7 +3777,9 @@ end
 end
 
 @testset "public keyword" begin
-    p(str) = Base.remove_linenums!(Meta.parse(str))
+    local test_mod = Module()
+    Base.set_syntax_version(test_mod, v"1.13")
+    p(str) = Base.remove_linenums!(Meta.parse(str; mod=test_mod))
     # tests ported from JuliaSyntax.jl
     @test p("function f(public)\n    public + 3\nend") == Expr(:function, Expr(:call, :f, :public), Expr(:block, Expr(:call, :+, :public, 3)))
     @test p("public A, B") == Expr(:public, :A, :B)

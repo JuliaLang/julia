@@ -6,7 +6,7 @@ using Test, Libdl, OpenSSL_jll
     major = ccall((:OPENSSL_version_major, libcrypto), Cuint, ())
     minor = ccall((:OPENSSL_version_minor, libcrypto), Cuint, ())
     patch = ccall((:OPENSSL_version_patch, libcrypto), Cuint, ())
-    @test VersionNumber(major, minor, patch) == v"3.5.8"
+    @test VersionNumber(major, minor, patch) == v"3.5.9"
 
     # Preserve the JLLWrappers path compatibility accessors used by packages.
     @test OpenSSL_jll.get_libcrypto_path() == OpenSSL_jll.libcrypto_path

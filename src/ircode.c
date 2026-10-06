@@ -81,7 +81,7 @@ extern "C" {
 #define MAX_SMALL_INT32 20
 
 
-typedef struct {
+typedef struct JL_GC_TRACKED_TYPE {
     ios_t *s;
     size_t ssaid;
     // method we're compressing for

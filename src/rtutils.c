@@ -421,6 +421,9 @@ void jl_push_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLO
     jl_reserve_excstack(ct, stack, (*stack ? (*stack)->top : 0) + bt_size + 2);
     jl_excstack_t *s = *stack;
     jl_bt_element_t *rawstack = jl_excstack_raw(s);
+#ifdef GC_BARRIER_ON_TASKS
+    jl_gc_wb_object(ct); // the exception stack is only reachable through `ct`
+#endif
     memcpy(rawstack + s->top, bt_data, sizeof(jl_bt_element_t)*bt_size);
     s->top += bt_size + 2;
     rawstack[s->top-2].uintptr = bt_size;
@@ -1535,11 +1538,14 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         size_t nb = jl_datatype_size(vt);
         if (nb > 0 && tlen == 0) {
             uint8_t *data = (uint8_t*)v;
-            unsigned topbits = jl_datatype_nbits(vt) % 8;
+            // print only the value bytes; the rest of nb is padding
+            unsigned nbits = jl_datatype_nbits(vt);
+            int used = (nbits + 7) / 8;
+            unsigned topbits = nbits % 8;
             n += jl_printf(out, "0x");
-            for (int i = nb - 1; i >= 0; --i) {
+            for (int i = used - 1; i >= 0; --i) {
                 uint8_t byte = data[i];
-                if (i == nb - 1 && topbits)
+                if (i == used - 1 && topbits)
                     byte &= (1u << topbits) - 1;
                 n += jl_printf(out, "%02" PRIx8, byte);
             }

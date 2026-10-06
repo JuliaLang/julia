@@ -240,6 +240,34 @@ end
     GC.gc()
     cancel!(root)
     @test Base.iscancelled(keep)
+
+    # Children dying in the *middle* of a parent's list, mixed with fresh
+    # attachments and with quick and full collections interleaved. A dead
+    # source must survive - intact and still linked - until the unlink pass
+    # runs, so that its neighbours' back-pointers stay valid. A build with
+    # WITH_GC_DEBUG_ENV=1 additionally exercises gc_scrub, which rewrites
+    # dead pool objects that a conservative stack scan happens to find and
+    # must leave these lists alone.
+    for round in 1:40
+        roots = [CancellationTokenSource() for _ in 1:8]
+        for p in roots
+            tok = CancellationToken(p)
+            kids = CancellationTokenSource[CancellationTokenSource(tok) for _ in 1:64]
+            # replace every other child: kills one mid-list and prepends a new one
+            for i in 1:2:length(kids)
+                kids[i] = CancellationTokenSource(tok)
+            end
+            kids = nothing
+            GC.gc(false)
+        end
+        GC.gc(round % 3 == 0)
+        survivor = CancellationTokenSource(CancellationToken(roots[1]))
+        cancel!(roots[1])
+        @test Base.iscancelled(survivor)
+        roots = nothing
+    end
+    GC.gc()
+    GC.gc()
 end
 
 @testset "cancellation source memory accounting" begin
@@ -297,6 +325,15 @@ end
     end
     @test_throws CancellationRequest Base.@cancel_check(dead)
     @test (Base.@cancel_check(nothing); :ran) === :ran
+
+    # without a source, a cancellation point reports at most a preemption request, so
+    # the slow path neither asserts a source nor throws a request
+    let ct = current_task()
+        @atomic :monotonic ct.preempt_request = 0x01
+        @test (Base.@cancel_check(nothing); :ran) === :ran
+        @test (@atomic :monotonic ct.preempt_request) == 0x00
+    end
+    # JET.@test_call println(::Float64)
 
     # level-triggered: after catching one request, the next point throws again
     with(CANCEL_TOKEN => dead) do
@@ -1722,6 +1759,21 @@ end
     flush(p; cancel=nothing)
     @test read(p, UInt8; cancel=nothing) == UInt8('o')
     close(p)
+end
+
+@testset "eachline resolves the default token per line" begin
+    src = CancellationTokenSource()
+    cancel!(src)
+    ctok = CancellationToken(src)
+    # made inside a cancelled scope, read outside it
+    itr = with(() -> eachline(IOBuffer("ab\n")), CANCEL_TOKEN => ctok)
+    @test with(() -> iterate(itr), CANCEL_TOKEN => nothing) == ("ab", nothing)
+    # made outside a cancelled scope, read inside it
+    itr = with(() -> eachline(IOBuffer("ab\n")), CANCEL_TOKEN => nothing)
+    @test_throws CancellationRequest with(() -> iterate(itr), CANCEL_TOKEN => ctok)
+    # an explicit token stays with the iterator
+    itr = eachline(IOBuffer("ab\n"); cancel=ctok)
+    @test_throws CancellationRequest with(() -> iterate(itr), CANCEL_TOKEN => nothing)
 end
 
 @testset "explicit tokens and shields thread through call chains" begin

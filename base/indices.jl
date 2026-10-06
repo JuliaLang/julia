@@ -92,7 +92,8 @@ particular, [`eachindex`](@ref) creates an iterator whose type depends
 on the setting of this trait.
 """
 IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
-IndexStyle(::Type{Union{}}, slurp...) = IndexLinear()
+IndexStyle(::Type{Union{}}) = IndexLinear()
+IndexStyle(::Type{Union{}}, slurp...) = throw(MethodError(IndexStyle, (Union{}, slurp...)))
 IndexStyle(::Type{<:AbstractArray}) = IndexCartesian()
 IndexStyle(::Type{<:Array}) = IndexLinear()
 IndexStyle(::Type{<:AbstractRange}) = IndexLinear()
@@ -357,8 +358,12 @@ julia> to_indices(A, (1,2)) # no shape checking
 (1, 2)
 ```
 """
-to_indices(A, I::Tuple) = (@inline; to_indices(A, axes(A), I))
+to_indices(A, I::Tuple) = (@inline; _to_indices(A, _drop_zerodim(I), I))
 to_indices(A, I::Tuple{Any}) = (@inline; to_indices(A, (eachindex(IndexLinear(), A),), I))
+_to_indices(A, ::Tuple, I::Tuple) = (@inline; to_indices(A, axes(A), I))
+_to_indices(A, J::Tuple{Any}, ::Tuple) = (@inline; to_indices(A, J))
+_drop_zerodim(::Tuple{}) = ()
+_drop_zerodim(I::Tuple) = (@inline; (I[1], _drop_zerodim(tail(I))...))
 # In simple cases, we know that we don't need to use axes(A), optimize those.
 # Having this here avoids invalidations from multidimensional.jl: to_indices(A, I::Tuple{Vararg{Union{Integer, CartesianIndex}}})
 to_indices(A, I::Tuple{}) = ()

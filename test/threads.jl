@@ -272,6 +272,7 @@ end
         @lock cond notify(cond, :legit)
         @test fetch(t) === :legit
     end
+    # JET.@test_call notify(::Condition)
 end
 
 # the cached WaitEntry makes the steady-state park/wake cycle allocation-free:
@@ -640,7 +641,7 @@ close(proc.in)
     script = "profile_spawnmany_exec.jl"
     cmd_base = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no $script`
     @testset for n in [20000, 200000, 2000000]
-        cmd = ignorestatus(setenv(cmd_base, "NTASKS" => n; dir = @__DIR__))
+        cmd = ignorestatus(addenv(Cmd(cmd_base; dir = @__DIR__), "NTASKS" => n))
         cmd = pipeline(cmd; stdout = stderr, stderr)
         proc = run(cmd; wait = false)
         done = Threads.Atomic{Bool}(false)
@@ -765,6 +766,18 @@ end
     @test io_thread_test()
 end
 
+@testset "event loop thread wakeup with pending finalizers" begin
+    # if this fails, the child hangs in the event loop, so kill it
+    script = joinpath(@__DIR__, "ioloop_wakeup.jl")
+    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --threads=1,1 $script`
+    proc = run(pipeline(cmd; stdout, stderr); wait=false)
+    t = Timer(60) do _
+        kill(proc, Base.SIGKILL)
+    end
+    @test success(proc)
+    close(t)
+end
+
 # Make sure default number of BLAS threads respects CPU affinity: issue #55572.
 @testset "LinearAlgebra number of default threads" begin
     if AFFINITY_SUPPORTED
@@ -773,7 +786,8 @@ end
                      # Remove all variables which could affect the default number of threads
                      "OPENBLAS_NUM_THREADS"=>nothing,
                      "GOTO_NUM_THREADS"=>nothing,
-                     "OMP_NUM_THREADS"=>nothing)
+                     "OMP_NUM_THREADS"=>nothing,
+                     "JULIA_CPU_THREADS"=>nothing)
         for n in 1:min(length(allowed_cpus), 8) # Cap to 8 to avoid too many tests on large systems
             @test readchomp(setcpuaffinity(cmd, allowed_cpus[1:n])) == string(max(1, n ÷ 2))
         end

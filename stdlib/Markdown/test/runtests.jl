@@ -42,6 +42,34 @@ import Base: show
     @test md"*foo **bar** baz*" == MD(Paragraph(Italic(["foo ", Bold("bar"), " baz"])))
 end
 
+@testset "intraword emphasis" begin
+    # `_` may not open or close emphasis from inside a word, so `snake_case`
+    # names written in prose survive intact (CommonMark rules 2 and 6).
+    @test md"call deliver_result and connect_to_peer here" ==
+        MD(Paragraph("call deliver_result and connect_to_peer here"))
+    @test md"foo_bar_" == MD(Paragraph("foo_bar_"))
+    @test md"_foo_bar" == MD(Paragraph("_foo_bar"))
+    @test md"5_6_78" == MD(Paragraph("5_6_78"))
+    @test md"foo__bar__" == MD(Paragraph("foo__bar__"))
+    @test md"__foo__bar" == MD(Paragraph("__foo__bar"))
+    @test Markdown.parse("a_\"foo\"_") == MD(Paragraph("a_\"foo\"_"))
+    # the character before the delimiter may be multi-byte
+    @test md"пристаням_стремятся_" == MD(Paragraph("пристаням_стремятся_"))
+    @test md"пристаням__стремятся__" == MD(Paragraph("пристаням__стремятся__"))
+
+    # a run that cannot close is skipped rather than abandoning the scan
+    @test md"_foo_bar_baz_" == MD(Paragraph(Italic("foo_bar_baz")))
+    @test md"__foo__bar__baz__" == MD(Paragraph(Bold("foo__bar__baz")))
+
+    # `*` has no such restriction
+    @test md"foo*bar*" == MD(Paragraph(["foo", Italic("bar")]))
+    @test md"foo**bar**" == MD(Paragraph(["foo", Bold("bar")]))
+
+    # and the delimiters still pair when they aren't inside a word
+    @test md"a _foo_ b" == MD(Paragraph(["a ", Italic("foo"), " b"]))
+    @test md"a __foo__ b" == MD(Paragraph(["a ", Bold("foo"), " b"]))
+end
+
 @testset "fenced code blocks" begin
 
     @test md"""```julia
@@ -429,7 +457,7 @@ end
      1 | 2
     """
     @test latex(table) ==
-        "\\begin{tabular}\n{r | r}\na & b \\\\\n\\hline\n1 & 2 \\\\\n\\end{tabular}\n"
+        "\\begin{tabular}\n{l | l}\na & b \\\\\n\\hline\n1 & 2 \\\\\n\\end{tabular}\n"
 
     # mime output
     @test sprint(show, "text/plain", book) ==
@@ -616,7 +644,7 @@ end
     a  | b
     ---|---
     1  | 2""" == MD(Table(Any[["a","b"],
-                              ["1","2"]], [:r, :r]))
+                              ["1","2"]], [:l, :l]))
 
     @test md"""
     | a  |  b | c |
@@ -625,7 +653,7 @@ end
                                                       Any[["d",Code("gh"),"hg"],
                                                           ["hgh",Bold("jhj"),"ge"],
                                                           "f"]],
-                                                  [:l, :r, :r]))
+                                                  [:l, :r, :l]))
     @test md"""
     |   | b |
     |:--|--:|
@@ -672,6 +700,13 @@ end
     table = Markdown.parse(text)
     @test text == Markdown.plain(table)
     @test Markdown.html(table) == """<table><tr><th align="left">a</th><th align="right">b</th></tr><tr><td align="left"><code>x | y</code></td><td align="right">2</td></tr></table>\n"""
+
+    # a delimiter cell with no colon means no alignment, which GFM renders left-aligned
+    table = Markdown.parse("|a|b|c|d|\n|---|:--|--:|:-:|\n|1|2|3|4|").content[1]
+    @test table.align == [:l, :l, :r, :c]
+    @test Markdown.parse(Markdown.plain(table)).content[1].align == table.align
+    @test Markdown.html(Markdown.parse("|a|\n|---|\n|1|")) ==
+        """<table><tr><th align="left">a</th></tr><tr><td align="left">1</td></tr></table>\n"""
 end
 
 @testset "LaTeX extension" begin
@@ -1778,6 +1813,26 @@ end
     @test all(i -> md[1].content[i] isa LineBreak, 2:2:16)
     @test all(i -> md[1].content[i] isa String, 1:2:15)
 
+end
+
+@testset "only spaces and tabs separate thematic breaks and end HTML blocks" begin
+    # other Unicode whitespace is ordinary text in block structure, unlike `Base.isspace`
+    for sp in (" ", "\t")
+        @test only(Markdown.parse("*$(sp)*$(sp)*", flavor=:common).content) isa Markdown.HorizontalRule
+    end
+    for sp in ("\u00a0", "　", "\v")
+        @test only(Markdown.parse("*$(sp)*$(sp)*", flavor=:common).content) isa Markdown.Paragraph
+    end
+    for tag in ("div", "custom")
+        for sp in ("", " \t", "\r")
+            md = Markdown.parse("<$tag>\nfoo\n$sp\n*bar*\n</$tag>", flavor=:common)
+            @test length(md.content) == 2
+        end
+        for sp in ("\u00a0", "　")
+            md = Markdown.parse("<$tag>\nfoo\n$sp\n*bar*\n</$tag>", flavor=:common)
+            @test only(md.content) isa Markdown.HTMLBlock
+        end
+    end
 end
 
 include("test_spec_roundtrip_common.jl")

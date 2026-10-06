@@ -179,10 +179,11 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         end
         # if we aren't cached, we don't need this edge
         # but our caller might, so let's just make it anyways
+        unique_backedges = false
         if max_world >= validation_world
             # if we can record all of the backedges in the global reverse-cache,
             # we can now widen our applicability in the global cache too
-            store_backedges(ci, edges)
+            unique_backedges = store_backedges(ci, edges)
         end
         ipo_effects = encode_effects(result.ipo_effects)
         time_now = _time_ns()
@@ -192,6 +193,9 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             ci, widenconst(result_type), widenconst(result.exc_result), rettype_const, inferred_result,
             const_flags, min_world, max_world,
             ipo_effects, result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, debuginfo, edges)
+        if unique_backedges
+            @atomic :monotonic ci.flags |= CI_FLAGS_UNIQUE_BACKEDGES
+        end
     elseif caller.cache_mode === CACHE_MODE_LOCAL
         result.src = transform_result_for_local_cache(interp, result)
     end
@@ -282,13 +286,17 @@ function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstan
     if max_world >= get_world_counter()
         max_world = typemax(UInt)
     end
+    unique_backedges = false
     if max_world == typemax(UInt)
         # if we can record all of the backedges in the global reverse-cache,
         # we can now widen our applicability in the global cache too
-        store_backedges(ci, edges)
+        unique_backedges = store_backedges(ci, edges)
     end
     ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Float64, Any, Any),
         ci, rettype, exctype, nothing, nothing, const_flags, min_world, max_world, ipo_effects, nothing, 0.0, 0.0, 0.0, di, edges)
+    if unique_backedges
+        @atomic :monotonic ci.flags |= CI_FLAGS_UNIQUE_BACKEDGES
+    end
     code_cache(interp)[mi] = ci
     codegen = codegen_cache(interp)
     if codegen !== nothing
@@ -830,7 +838,10 @@ function Base.iterate(it::ForwardToBackedgeIterator, i::Int = 1)
     i > length(edges) && return nothing
     while i ≤ length(edges)
         item = edges[i]
-        if item isa Int
+        if item isa PossiblyAmbiguous
+            i += 1
+            continue
+        elseif item isa Int
             i += 2
             continue # ignore the query information if present but process the contents
         elseif isa(item, Method)
@@ -870,38 +881,105 @@ function maybe_add_binding_backedge!(b::Core.Binding, edge::Union{Method, CodeIn
     return nothing
 end
 
-function store_backedges(caller::CodeInstance, edges::SimpleVector)
-    isa(get_ci_mi(caller).def, Method) || return # don't add backedges to toplevel method instance
+# Whether the (invokesig, item) backedge at iterator state `upto` already appeared earlier in
+# `edges`. Used instead of a hash table for short edge lists, which is nearly all of them.
+function backedge_seen_before(edges::SimpleVector, upto::Int, @nospecialize(invokesig), @nospecialize(item))
+    backedges = ForwardToBackedgeIterator(edges)
+    next = iterate(backedges)
+    while next !== nothing
+        (invokesig2, item2), i = next
+        i > upto && return false
+        if item2 === item && invokesig2 == invokesig
+            return true
+        end
+        next = iterate(backedges, i)
+    end
+    return false
+end
+
+# Above this many forward edges, dedup with hash tables instead of rescanning the list.
+const STORE_BACKEDGES_SCAN_LIMIT = 64
+
+# Set on a CodeInstance once its edges are known to give no backedge twice. Package images keep
+# this flag, so loading the code can register its backedges without checking for duplicates again.
+const CI_FLAGS_UNIQUE_BACKEDGES = 0b10000
+
+function add_backedge!(caller::CodeInstance, @nospecialize(invokesig), @nospecialize(item))
+    if item isa Core.Binding
+        maybe_add_binding_backedge!(item, caller)
+    elseif item isa MethodTable
+        ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any), invokesig, caller)
+    else
+        item::MethodInstance
+        ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), item, invokesig, caller)
+    end
+    return nothing
+end
+
+# Returns whether no backedge appeared twice in `edges`.
+# `scratch` lets a caller storing many edge lists in a row reuse one set for the long ones.
+function store_backedges(caller::CodeInstance, edges::SimpleVector, scratch::Union{Nothing,IdSet{Any}}=nothing)
+    isa(get_ci_mi(caller).def, Method) || return false # don't add backedges to toplevel method instance
 
     backedges = ForwardToBackedgeIterator(edges)
-    # `Compiler` is loaded before `Set` during bootstrap, so keep the signatures
-    # for each identity-keyed dependency in a small vector.
-    seen = IdDict{Any,Vector{Any}}()
-    for (invokesig, item) in backedges
-        if haskey(seen, item)
-            signatures = seen[item]
-            duplicate_found = false
-            for signature in signatures
-                if signature == invokesig
-                    duplicate_found = true
-                    break
-                end
-            end
-            duplicate_found && continue
-            push!(signatures, invokesig)
-        else
-            seen[item] = Any[invokesig]
+    if (@atomic :monotonic caller.flags) & CI_FLAGS_UNIQUE_BACKEDGES != 0 && edges === caller.edges
+        for (invokesig, item) in backedges
+            add_backedge!(caller, invokesig, item)
         end
-        if item isa Core.Binding
-            maybe_add_binding_backedge!(item, caller)
-        elseif item isa MethodTable
-            ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any), invokesig, caller)
-        else
-            item::MethodInstance
-            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), item, invokesig, caller)
-        end
+        return true
     end
-    nothing
+    # Nearly all edge lists are short (a median of three backedges), so a quadratic rescan
+    # avoids allocating any hash table for them. Longer lists key plain dispatch edges in an
+    # `IdSet` and `invoke`/`MethodTable` edges by their signatures: almost every such item is
+    # seen with a single signature, so that is stored bare and only promoted to a vector on
+    # the second one.
+    scan = length(edges) <= STORE_BACKEDGES_SCAN_LIMIT
+    unique = true
+    plain = nothing
+    invoked = nothing
+    next = iterate(backedges)
+    prev_i = 1
+    while next !== nothing
+        (invokesig, item), i = next
+        if scan
+            duplicate = backedge_seen_before(edges, prev_i, invokesig, item)
+        elseif invokesig === nothing
+            if plain === nothing
+                plain = scratch === nothing ? IdSet{Any}() : empty!(scratch)
+            end
+            duplicate = item in plain
+            duplicate || push!(plain, item)
+        else
+            if invoked === nothing
+                invoked = IdDict{Any,Any}()
+            end
+            signatures = get(invoked, item, nothing)
+            if signatures === nothing
+                invoked[item] = invokesig
+                duplicate = false
+            elseif signatures isa Vector{Any}
+                duplicate = false
+                for signature in signatures
+                    if signature == invokesig
+                        duplicate = true
+                        break
+                    end
+                end
+                duplicate || push!(signatures, invokesig)
+            else
+                duplicate = signatures == invokesig
+                duplicate || (invoked[item] = Any[signatures, invokesig])
+            end
+        end
+        prev_i = i
+        next = iterate(backedges, i)
+        if duplicate
+            unique = false
+            continue
+        end
+        add_backedge!(caller, invokesig, item)
+    end
+    return unique
 end
 
 function compute_edges!(sv::InferenceState)
@@ -1062,17 +1140,12 @@ function poison_callstack!(infstate::InferenceState, topmost::InferenceState)
     nothing
 end
 
-# Walk through `mi`'s upstream call chain, starting at `parent`. If a parent
-# frame matching `mi` is encountered, then there is a cycle in the call graph
-# (i.e. `mi` is a descendant callee of itself). Upon encountering this cycle,
-# we "resolve" it by merging the call chain, which entails updating each intermediary
-# frame's `cycleid` field. Finally, we return `mi`'s pre-existing frame.
-# If no cycles are found, `nothing` is returned instead.
-function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, parent::AbsIntState)
+# Find `mi` in the contiguous inference portion of `parent`'s upstream call chain.
+function find_call_cycle(interp::AbstractInterpreter, mi::MethodInstance, parent::AbsIntState)
     # TODO (#48913) implement a proper recursion handling for irinterp:
     # This works most of the time currently just because the irinterp code doesn't get used much with
     # `@assume_effects`, so it never sees a cycle normally, but that may not be a sustainable solution.
-    parent isa InferenceState || return false
+    parent isa InferenceState || return nothing
     frames = parent.callstack
     uncached = false
     for frameid = reverse(1:length(frames))
@@ -1080,24 +1153,33 @@ function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, pa
         isa(frame, InferenceState) || break
         uncached |= !is_cached(frame) # ensure we never add a (globally) uncached frame to a cycle
         if is_same_frame(interp, mi, frame)
-            if uncached
-                # our attempt to speculate into a constant call lead to an undesired self-cycle
-                # that cannot be converged: if necessary, poison our call-stack (up to the discovered duplicate frame)
-                # with the limited flag and abort (set return type to Any) now
-                poison_callstack!(parent, frame)
-                return true
-            end
-            merge_call_chain!(interp, parent, frame)
-            return frame
+            return frame, uncached
         end
     end
-    return false
+    return nothing
+end
+
+# Resolve a cycle by merging its call chain and return `mi`'s pre-existing frame.
+# Return `true` for an unresolvable cycle and `false` when no cycle was found.
+function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, parent::AbsIntState)
+    cycle = find_call_cycle(interp, mi, parent)
+    cycle === nothing && return false
+    frame, uncached = cycle
+    if uncached
+        # our attempt to speculate into a constant call lead to an undesired self-cycle
+        # that cannot be converged: if necessary, poison our call-stack (up to the discovered duplicate frame)
+        # with the limited flag and abort (set return type to Any) now
+        poison_callstack!(parent::InferenceState, frame)
+        return true
+    end
+    merge_call_chain!(interp, parent::InferenceState, frame)
+    return frame
 end
 
 ipo_effects(code::CodeInstance) = decode_effects(code.ipo_purity_bits)
 
 # return cached result of regular inference
-function return_cached_result(interp::AbstractInterpreter, method::Method, codeinst::CodeInstance, @nospecialize(src), caller::AbsIntState, edgecycle::Bool, edgelimited::Bool)
+function return_cached_result(interp::AbstractInterpreter, method::Method, codeinst::CodeInstance, @nospecialize(src), caller::AbsIntState, edgecycle::Bool, edgelimited::Bool, edgerecursed::Bool)
     rt = cached_return_type(codeinst)
     exct = codeinst.exctype
     effects = ipo_effects(codeinst)
@@ -1120,13 +1202,14 @@ function return_cached_result(interp::AbstractInterpreter, method::Method, codei
     caller.time_caches += reinterpret(Float16, codeinst.time_infer_total)
     caller.time_caches += reinterpret(Float16, codeinst.time_infer_cache_saved)
     return Future(MethodCallResult(interp, caller, method, rt, exct, effects, codeinst,
-        edgecycle, edgelimited, local_result))
+        edgecycle, edgelimited, edgerecursed, local_result))
 end
 
 function return_cached_result(interp::AbstractInterpreter, method::Method,
                               local_result::LocalInferenceResult,
                               codeinst::Union{Nothing,CodeInstance},
-                              caller::AbsIntState, edgecycle::Bool, edgelimited::Bool)
+                              caller::AbsIntState, edgecycle::Bool, edgelimited::Bool,
+                              edgerecursed::Bool)
     inf_result = local_result.result
     rt = inf_result.result
     exct = inf_result.exc_result
@@ -1139,24 +1222,24 @@ function return_cached_result(interp::AbstractInterpreter, method::Method,
         caller.time_caches += reinterpret(Float16, codeinst.time_infer_cache_saved)
     end
     return Future(MethodCallResult(interp, caller, method, rt, exct, effects,
-        codeinst, edgecycle, edgelimited, local_result))
+        codeinst, edgecycle, edgelimited, edgerecursed, local_result))
 end
 
 function lookup_cached_edge(interp::AbstractInterpreter, method::Method,
                             mi::MethodInstance, caller::AbsIntState, force_inline::Bool,
-                            edgecycle::Bool, edgelimited::Bool)
+                            edgecycle::Bool, edgelimited::Bool, edgerecursed::Bool)
     local_result = lookup_local_inference_result(interp, mi)
     codeinst = get(code_cache(interp), mi, nothing)
     if !(codeinst isa CodeInstance)
         local_result === nothing && return nothing, nothing
         return return_cached_result(interp, method, local_result, nothing, caller,
-            edgecycle, edgelimited), nothing
+            edgecycle, edgelimited, edgerecursed), nothing
     end
     @assert codeinst.def === mi "MethodInstance for cached edge does not match"
 
     if local_result !== nothing
         return return_cached_result(interp, method, local_result, codeinst, caller,
-            edgecycle, edgelimited), nothing
+            edgecycle, edgelimited, edgerecursed), nothing
     end
 
     inferred = @atomic :monotonic codeinst.inferred
@@ -1166,17 +1249,17 @@ function lookup_cached_edge(interp::AbstractInterpreter, method::Method,
         src = ci_get_source(interp, codeinst, inferred)
         src === nothing && return nothing, codeinst
         return return_cached_result(interp, method, codeinst, src, caller,
-            edgecycle, edgelimited), nothing
+            edgecycle, edgelimited, edgerecursed), nothing
     end
     return return_cached_result(interp, method, codeinst, nothing, caller,
-        edgecycle, edgelimited), nothing
+        edgecycle, edgelimited, edgerecursed), nothing
 end
 
 
 function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method,
                           @nospecialize(rt), @nospecialize(exct), effects::Effects,
                           edge::Union{Nothing,CodeInstance}, edgecycle::Bool, edgelimited::Bool,
-                          call_result::Union{Nothing,InferredCallResult} = nothing;
+                          edgerecursed::Bool, call_result::Union{Nothing,InferredCallResult} = nothing;
                           force_edgecycle::Bool = true, needs_mi_edge::Bool = false)
     if force_edgecycle && edge === nothing && call_result === nothing
         edgecycle = edgelimited = true
@@ -1192,12 +1275,7 @@ function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method
         effects = Effects(effects; terminates=true)
     elseif edgecycle
         # Some sort of recursion was detected.
-        edge_mi = if edge !== nothing
-            edge.def
-        elseif call_result isa LocalInferenceResult
-            call_result.result.linfo
-        end
-        if edge_mi !== nothing && !edgelimited && !is_edge_recursed(edge_mi, sv)
+        if (edge !== nothing || call_result isa LocalInferenceResult) && !edgelimited && !edgerecursed
             # no `MethodInstance` cycles -- don't taint :terminate
         else
             # we cannot guarantee that the call will terminate
@@ -1233,7 +1311,7 @@ end
 
 function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, result::InferenceResult,
                                     method::Method, edge_ci::Union{Nothing,CodeInstance},
-                                    edgecycle::Bool, edgelimited::Bool)
+                                    edgecycle::Bool, edgelimited::Bool, edgerecursed::Bool)
     mresult = Future{MethodCallResult}()
     push!(caller.tasks, function get_infer_result(interp, caller)
         update_valid_age!(caller, get_inference_world(interp), frame.valid_worlds)
@@ -1282,7 +1360,7 @@ function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, 
         # A missing target here is deliberate; preserve the cycle/limiting decision made
         # by `abstract_call_method` instead of inferring a new cycle from target absence.
         mresult[] = MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects,
-            edge, edgecycle, edgelimited, call_result;
+            edge, edgecycle, edgelimited, edgerecursed, call_result;
             force_edgecycle=false, needs_mi_edge)
         return true
     end)
@@ -1290,16 +1368,22 @@ function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, 
 end
 
 # compute (and cache) an inferred AST and return the current best estimate of the result type
-function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::AbsIntState, edgecycle::Bool, edgelimited::Bool)
+function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::AbsIntState, edgecycle::Bool, edgelimited::Bool, edgerecursed::Bool)
     mi = specialize_method(method, atype, sparams)
     cache_mode = CACHE_MODE_GLOBAL # cache edge targets globally by default
     force_inline = is_stmt_inline(get_curr_ssaflag(caller))
     edge_ci = nothing
     cached, missing_source_edge = lookup_cached_edge(interp, method, mi, caller,
-        force_inline, edgecycle, edgelimited)
+        force_inline, edgecycle, edgelimited, edgerecursed)
     if cached !== nothing
         return cached
     elseif missing_source_edge !== nothing
+        # Reuse a sourceless result only when `mi` is already active in this
+        # interpreter's inference cycle; otherwise local inference may recover source.
+        if edgerecursed && find_call_cycle(interp, mi, caller) !== nothing
+            return return_cached_result(interp, method, missing_source_edge, nothing, caller,
+                edgecycle, edgelimited, edgerecursed)
+        end
         # A globally published executable target exists, but its source was discarded.
         # Re-infer only the source/facts and certify that local work with a local proof.
         cache_mode = CACHE_MODE_LOCAL
@@ -1307,9 +1391,13 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     end
     if !InferenceParams(interp).force_enable_inference && ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
         add_remark!(interp, caller, "[typeinf_edge] Inference is disabled for the target module")
-        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
+        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited, edgerecursed))
     end
-    if !is_cached(caller) && frame_parent(caller) === nothing
+    if !edgerecursed && !edgelimited
+        # the callstack walk proved there is no cycle to resolve, as long as
+        # `atype` was not coarsened to an on-stack specialization after that walk
+        frame = false
+    elseif !is_cached(caller) && frame_parent(caller) === nothing
         # this caller exists to return to the user
         # (if we asked resolve_call_cycle!, it might instead detect that there is a cycle that it can't merge)
         frame = false
@@ -1323,7 +1411,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             ci_from_engine = engine_reserve(interp, mi)
             caller.time_paused += (_time_ns() - reserve_start)
             cached, missing_source_edge = lookup_cached_edge(interp, method, mi, caller,
-                force_inline, edgecycle, edgelimited)
+                force_inline, edgecycle, edgelimited, edgerecursed)
             if cached !== nothing
                 engine_reject(interp, ci_from_engine)
                 return cached
@@ -1350,16 +1438,16 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             if ci_from_engine !== nothing
                 engine_reject(interp, ci_from_engine)
             end
-            return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
+            return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited, edgerecursed))
         end
         assign_parentchild!(frame, caller)
         # the actual inference task for this edge is going to be scheduled within `typeinf_local` via the callstack queue
         # while splitting off the rest of the work for this caller into a separate workq thunk
-        return _schedule_edge_infer_task!(caller, frame, result, method, edge_ci, edgecycle, edgelimited)
+        return _schedule_edge_infer_task!(caller, frame, result, method, edge_ci, edgecycle, edgelimited, edgerecursed)
     elseif frame === true
         # unresolvable cycle
         add_remark!(interp, caller, "[typeinf_edge] Unresolvable cycle")
-        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
+        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited, edgerecursed))
     end
     # return the current knowledge about this cycle
     frame = frame::InferenceState
@@ -1375,7 +1463,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         update_valid_age!(caller, get_inference_world(interp), proof_worlds(edge))
     end
     return Future(MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects,
-        edge, edgecycle, edgelimited;
+        edge, edgecycle, edgelimited, edgerecursed;
         force_edgecycle=false, needs_mi_edge=edge === nothing))
 end
 
@@ -1895,6 +1983,29 @@ function has_valid_abi_sparams(mi::MethodInstance)
     return true
 end
 
+# The runner of a `Threads.@threads` loop is not specialized on the loop body, so its tasks
+# call the body through a dynamic dispatch, which `--trim` cannot follow. So at each call of
+# the runner, where the body type is known, return the signature of that body call for the
+# trim compiler to compile and verify. Return `nothing` for any other invoke.
+function threads_deferred_call_type(stmt::Expr, ci::CodeInfo, sptypes::Vector{VarState})
+    length(stmt.args) == 4 || return nothing
+    edge = stmt.args[1]
+    def = edge isa CodeInstance ? get_ci_mi(edge).def : edge isa MethodInstance ? edge.def : nothing
+    def isa Method || return nothing
+    is_base_threads_method(def, :threading_run) || return nothing
+    ft = argextype(stmt.args[3], ci, sptypes)
+    return argtypes_to_type(Any[ft, Int])
+end
+
+# Identified by name rather than through the `Base.Threads` binding, which does not exist
+# in the world this code is compiled in.
+function is_base_threads_method(def::Method, name::Symbol)
+    m = def.module
+    return def.name === name && nameof(m) === :Threads && parentmodule(m) === Base
+end
+
+is_threads_call_def(@nospecialize def) = def isa Method && is_base_threads_method(def, :_threads_call)
+
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
 function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vector{VarState};
                          invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
@@ -1929,6 +2040,13 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
                 push!(workqueue, edge)
             elseif enqueue_unprepared_invokes && edge isa MethodInstance && has_valid_abi_sparams(edge)
                 push!(workqueue, edge)
+            end
+        end
+        if invokelatest_queue !== nothing && isexpr(stmt, :invoke)
+            atype = threads_deferred_call_type(stmt, ci, sptypes)
+            if atype !== nothing
+                mi = compileable_specialization_for_call(invokelatest_queue.interp, atype)
+                mi === nothing || push!(invokelatest_queue, mi)
             end
         end
 

@@ -161,7 +161,7 @@ See also: [`@code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref)
 """
 function code_warntype(io::IO, arginfo::ArgInfo;
                        world=Base.get_world_counter(),
-                       interp::Base.Compiler.AbstractInterpreter=Base.Compiler.NativeInterpreter(world),
+                       interp::Union{Nothing,Base.Compiler.AbstractInterpreter}=nothing,
                        debuginfo::Symbol=:default, optimize::Bool=false, kwargs...)
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection cannot be used from generated functions")
@@ -176,12 +176,14 @@ function code_warntype(io::IO, arginfo::ArgInfo;
         return nothing
     end
     tt = arginfo.tt
-    matches = findall(tt, Base.Compiler.method_table(interp))
+    passed_interp = interp
+    interp = passed_interp === nothing ? Base.invoke_default_compiler(:_default_interp, world) : interp
+    matches = Base.invoke_interp_compiler(passed_interp, :_findall_matches, interp, tt)
     matches === nothing && Base.raise_match_failure(:code_warntype, tt)
     for match in matches.matches
         match = match::Core.MethodMatch
-        src = Base.Compiler.typeinf_code(interp, match, optimize)
-        mi = Base.Compiler.specialize_method(match)
+        src = Base.invoke_interp_compiler(passed_interp, :typeinf_code, interp, match, optimize)
+        mi = Base.specialize_method(match)
         mi.def isa Method && (nargs = (mi.def::Method).nargs)
         print_warntype_mi(io, mi)
         if src isa Core.CodeInfo
@@ -255,7 +257,7 @@ function _dump_function(arginfo::ArgInfo, native::Bool, wrapper::Bool,
         if isempty(str)
             # if that failed (or we want metadata), use LLVM to generate more accurate assembly output
             if arginfo.oc === nothing
-                src = Base.Compiler.typeinf_code(Base.Compiler.NativeInterpreter(world), mi, true)
+                src = Base.invoke_interp_compiler(nothing, :typeinf_code, Base.invoke_default_compiler(:_default_interp, world), mi, true)
             else
                 src, rt = Base.get_oc_code_rt(nothing, arginfo.oc, arginfo.tt, true)
             end
@@ -264,7 +266,7 @@ function _dump_function(arginfo::ArgInfo, native::Bool, wrapper::Bool,
         end
     else
         if arginfo.oc === nothing
-            src = Base.Compiler.typeinf_code(Base.Compiler.NativeInterpreter(world), mi, true)
+            src = Base.invoke_interp_compiler(nothing, :typeinf_code, Base.invoke_default_compiler(:_default_interp, world), mi, true)
         else
             src, rt = Base.get_oc_code_rt(nothing, arginfo.oc, arginfo.tt, true)
         end

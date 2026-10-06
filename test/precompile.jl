@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, Random, Logging, Libdl
+using Test, Distributed, Random, Logging, Libdl, Sockets
 using REPL # testing the doc lookup function should be outside of the scope of this file, but is currently tested here
 
 include("precompile_utils.jl")
@@ -698,6 +698,9 @@ precompile_test_harness(false) do dir
         write(f, 0x076cac96) # append 4 random bytes
     end
     @test Base.stale_cachefile(FooBar1_file, joinpath(cachedir2, "FooBar1.ji")) === true
+    reasons = Dict{Symbol,Int}()
+    @test Base.compilecache_freshest_path(Base.PkgId("FooBar1"); reasons) === nothing
+    @test haskey(reasons, :checksum_invalid)
 
     # test behavior of precompile modules that throw errors
     FooBar2_file = joinpath(dir, "FooBar2.jl")
@@ -2140,7 +2143,7 @@ precompile_test_harness("custom MethodTable dispatch status") do load_path
         method = only(ms).method
         @test method.module === M
         @test !iszero(method.dispatch_status & Base.ReinferUtils.METHOD_SIG_LATEST_WHICH)
-        @test !iszero(method.dispatch_status & Base.ReinferUtils.METHOD_SIG_LATEST_ONLY)
+        @test isempty(method.interferences)
     end
     Base.compilecache(Base.PkgId("OverlayDispatchStatusUser"))
     @eval using OverlayDispatchStatusUser
@@ -3876,6 +3879,23 @@ precompile_test_harness("cache rejection reasons") do dir
     @test reasons == Dict(:incompatible_header => 1)
     @test Base.list_reasons(reasons) == " (no compatible cache for this version of Julia)"
 
+    # a cache for different flags is rejected before the rest of its header is read,
+    # so this works even for a cache file that ends right after the flags
+    if Base.CacheFlags().use_pkgimages # without pkgimages, the flags are not checked
+        flagscache = joinpath(dirname(cachefile), "RejectReasons_flagsonly.ji")
+        header = open(cachefile) do io
+            Base.isvalid_cache_header(io)
+            nbytes = position(io) + 2
+            read(seekstart(io), nbytes)
+        end
+        write(flagscache, header)
+        cf = Base.CacheFlags()
+        requested_flags = Base.CacheFlags(cf; check_bounds = cf.check_bounds == 1 ? 2 : 1)
+        reasons = Dict{Symbol,Int}()
+        @test Base.stale_cachefile(pkgfile, flagscache; reasons, requested_flags) === true
+        @test reasons == Dict(:flags_mismatch => 1)
+    end
+
     # changing the source makes the compatible cache stale for an actionable reason
     write(pkgfile,
           """
@@ -4300,6 +4320,402 @@ end
             Base.loaded_modules[Base.PkgId(parent)] === parent || error("EvictParent was replaced")
             println("evicted cache ok")
             """)
+    end
+end
+
+# Issue #63268: containers sharing a depot can hold different environments at the same
+# project path, so the cache file name also carries the manifest's `environment_id`
+# (the project uuid, or one Pkg generates). Loading reads file contents, so the name only
+# decides which existing file a compile overwrites.
+@testset "cache file names carry the manifest environment_id" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        dep_uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+        top_uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+        for (dirname, marker, version) in (("DepOld", 1, "0.1.0"), ("DepNew", 2, "0.2.0"))
+            path = joinpath(dir, "dev", dirname)
+            mkpath(joinpath(path, "src"))
+            write(joinpath(path, "Project.toml"),
+                  """
+                  name = "Dep"
+                  uuid = "$dep_uuid"
+                  version = "$version"
+                  """)
+            write(joinpath(path, "src", "Dep.jl"),
+                  """
+                  module Dep
+                  const _v = $marker
+                  end
+                  """)
+        end
+        top_path = joinpath(dir, "dev", "Top")
+        mkpath(joinpath(top_path, "src"))
+        write(joinpath(top_path, "Project.toml"),
+              """
+              name = "Top"
+              uuid = "$top_uuid"
+              version = "0.1.0"
+
+              [deps]
+              Dep = "$dep_uuid"
+              """)
+        function write_top(edit)
+            write(joinpath(top_path, "src", "Top.jl"),
+                  """
+                  module Top
+                  using Dep
+                  const _edit = $edit
+                  end
+                  """)
+        end
+        write_top(0)
+        project_path = joinpath(dir, "project")
+        mkpath(project_path)
+        write(joinpath(project_path, "Project.toml"),
+              """
+              [deps]
+              Top = "$top_uuid"
+              """)
+        # the same project path resolving one version of Dep or the other, as two
+        # containers with their projects mounted at the same path would
+        function use_dep(dirname, version, environment_id)
+            id_line = environment_id === nothing ? "" : "environment_id = \"$environment_id\""
+            write(joinpath(project_path, "Manifest.toml"),
+                  """
+                  $id_line
+                  manifest_format = "2.0"
+
+                  [[deps.Dep]]
+                  path = "../dev/$dirname/"
+                  uuid = "$dep_uuid"
+                  version = "$version"
+
+                  [[deps.Top]]
+                  deps = ["Dep"]
+                  path = "../dev/Top/"
+                  uuid = "$top_uuid"
+                  version = "0.1.0"
+                  """)
+            # A same-size rewrite can keep the same mtime on Windows, so this process's
+            # TOML cache would still return the old id
+            @lock Base.require_lock delete!(Base.TOML_CACHE.d, joinpath(project_path, "Manifest.toml"))
+        end
+        script = """
+            top = Base.identify_package("Top")
+            println("PRECOMPILED=", Base.isprecompiled(top))
+            using Top
+            println("DEP_VERSION=", Top.Dep._v)
+            """
+        function run_top()
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(project_path) -e $script`,
+                         "JULIA_DEPOT_PATH" => depot)
+            logfile = joinpath(dir, "run.log")
+            proc = run(pipeline(ignorestatus(cmd), stdout=logfile, stderr=logfile))
+            output = read(logfile, String)
+            @test success(proc) || (println(output); false)
+            return output
+        end
+        compiled = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)")
+        cachefiles(name) = filter(endswith(".ji"), readdir(joinpath(compiled, name)))
+        id_a = "c3c3c3c3-0000-0000-0000-00000000000a"
+        id_b = "c3c3c3c3-0000-0000-0000-00000000000b"
+
+        # Incompatible versions written under different ids coexist, dependents included,
+        # and alternating between them reuses the caches
+        use_dep("DepOld", "0.1.0", id_a)
+        output = run_top()
+        @test occursin("PRECOMPILED=false", output)
+        @test occursin("DEP_VERSION=1", output)
+        @test length(cachefiles("Dep")) == 1
+        @test length(cachefiles("Top")) == 1
+        use_dep("DepNew", "0.2.0", id_b)
+        output = run_top()
+        @test occursin("PRECOMPILED=false", output)
+        @test occursin("DEP_VERSION=2", output)
+        @test length(cachefiles("Dep")) == 2
+        @test length(cachefiles("Top")) == 2
+        use_dep("DepOld", "0.1.0", id_a)
+        output = run_top()
+        @test occursin("PRECOMPILED=true", output)
+        @test occursin("DEP_VERSION=1", output)
+        use_dep("DepNew", "0.2.0", id_b)
+        output = run_top()
+        @test occursin("PRECOMPILED=true", output)
+        @test occursin("DEP_VERSION=2", output)
+        @test length(cachefiles("Dep")) == 2
+        @test length(cachefiles("Top")) == 2
+
+        # A compatible cache is reused under any other id, or none
+        use_dep("DepNew", "0.2.0", "c3c3c3c3-0000-0000-0000-00000000000c")
+        output = run_top()
+        @test occursin("PRECOMPILED=true", output)
+        @test occursin("DEP_VERSION=2", output)
+        use_dep("DepNew", "0.2.0", nothing)
+        output = run_top()
+        @test occursin("PRECOMPILED=true", output)
+        @test length(cachefiles("Dep")) == 2
+        @test length(cachefiles("Top")) == 2
+
+        # A rebuild under the same id and project replaces the same file
+        use_dep("DepNew", "0.2.0", id_b)
+        top_files = cachefiles("Top")
+        write_top(1)
+        output = run_top()
+        @test occursin("PRECOMPILED=false", output)
+        @test cachefiles("Top") == top_files
+
+        # Without an id the name only depends on the project path, as before
+        pkg = Base.PkgId(Base.UUID(dep_uuid), "Dep")
+        project_file = joinpath(project_path, "Project.toml")
+        use_dep("DepNew", "0.2.0", nothing)
+        @test Base.project_environment_id(project_file) == ""
+        no_id = Base.compilecache_path(pkg, ""; project=project_file)
+        @test no_id == Base.compilecache_path(pkg, ""; project=project_file, environment_id="")
+        use_dep("DepNew", "0.2.0", id_a)
+        @test Base.project_environment_id(project_file) == id_a
+        with_a = Base.compilecache_path(pkg, ""; project=project_file)
+        @test with_a == Base.compilecache_path(pkg, ""; project=project_file, environment_id=id_a)
+        @test with_a != no_id
+        use_dep("DepNew", "0.2.0", id_b)
+        @test Base.compilecache_path(pkg, ""; project=project_file) != with_a
+        @test Base.project_environment_id("") == ""
+        @test Base.project_environment_id(joinpath(dir, "missing", "Project.toml")) == ""
+        # the pidfile path ignores the id so locking stays shared
+        @test Base.compilecache_pidfile_path(pkg) == Base.compilecache_path(pkg, ""; project="", environment_id="") * ".pidfile"
+    end end
+end
+
+precompile_test_harness("JIT names of image methods") do dir
+    # When JIT-compiled code calls into a package image, the callee's symbol is
+    # named after its method plus a counter. These names must not collide, e.g.
+    # the 21st `jitname` and the first `jitname2` used to both end in `jitname20`.
+    write(joinpath(dir, "JITNames.jl"),
+          """
+          module JITNames
+              @noinline jitname(::Val{N}, x::Int) where {N} = x + N
+              @noinline jitname2(::Val{N}, x::Int) where {N} = -x
+              for i in 0:30
+                  precompile(jitname, (Val{i}, Int))
+              end
+              precompile(jitname2, (Val{0}, Int))
+          end
+          """)
+    Base.compilecache(Base.PkgId("JITNames"))
+    @eval using JITNames
+    @test invokelatest(@eval(x -> JITNames.jitname2(Val(0), x)), 5) == -5
+    for i in 0:30
+        @test invokelatest(@eval(x -> JITNames.jitname(Val($i), x)), 5) == 5 + i
+    end
+end
+
+# A worker whose parent gets killed should not keep precompiling as an orphan
+@testset "precompilation worker exits with its parent" begin
+    julia = `$(Base.julia_cmd()) --startup-file=no`
+    # the request is not passed on to the worker's own children
+    @test readchomp(addenv(`$julia -e 'print(get(ENV, "JULIA_EXIT_WITH_PARENT_PID", "unset"))'`,
+                           "JULIA_EXIT_WITH_PARENT_PID" => getpid())) == "unset"
+    @test success(addenv(`$julia -e 'exit()'`, "JULIA_EXIT_WITH_PARENT_PID" => "invalid"))
+    if Sys.islinux() || Sys.isfreebsd() || Sys.isapple()
+        # the worker exits immediately if its parent isn't the expected one (anymore)
+        @test !success(addenv(`$julia -e 'exit()'`, "JULIA_EXIT_WITH_PARENT_PID" => typemax(Cint)))
+
+        dir = mkdepottempdir()
+        pidfile = joinpath(dir, "worker.pid")
+        # the worker connects to us, and that connection only closes once it
+        # has exited (regardless of whether its new parent reaps it)
+        server = listen(joinpath(dir, "worker.sock"))
+        write(joinpath(dir, "Orphaned.jl"), """
+            module Orphaned
+            using Sockets
+            let conn = connect($(repr(joinpath(dir, "worker.sock"))))
+                write($(repr(pidfile)) * ".tmp", string(getpid()))
+                mv($(repr(pidfile)) * ".tmp", $(repr(pidfile)))
+                # precompilation that doesn't yield, and would outlast the test
+                t = time(); while time() - t < 300; end
+                close(conn)
+            end
+            end
+            """)
+        cmd = addenv(`$julia -e 'using Orphaned'`,
+                     "JULIA_LOAD_PATH" => "$dir:@stdlib", "JULIA_DEPOT_PATH" => "$dir:")
+        accepted = @async accept(server)
+        parent = run(pipeline(cmd; stdout=devnull, stderr=devnull); wait=false)
+        closed = nothing
+        try
+            ready = timedwait(() -> isfile(pidfile) && istaskdone(accepted), 120) === :ok
+            @test ready
+            if ready
+                closed = @async read(fetch(accepted))
+                kill(parent, Base.SIGKILL)
+                wait(parent)
+                @test timedwait(() -> istaskdone(closed), 60) === :ok
+            end
+        finally
+            kill(parent, Base.SIGKILL)
+            wait(parent)
+            if (closed === nothing || !istaskdone(closed)) && isfile(pidfile)
+                worker = parse(Cint, read(pidfile, String))
+                ccall(:kill, Cint, (Cint, Cint), worker, Base.SIGKILL)
+            end
+            close(server)
+        end
+    end
+end
+
+precompile_test_harness("Ambiguities and package-image edge validation") do load_path
+    write(joinpath(load_path, "AmbigEdgeA.jl"),
+        """
+        module AmbigEdgeA
+        pruned(x::Integer, y) = 1
+        seen(x::Integer, y) = 1
+        seen(x, y::AbstractString) = 2
+        added(x::Integer, y) = 1
+        added(x, y::AbstractString) = 2
+        uncovered(x::Integer, y::Integer) = 1
+        reachable(x::Integer, y) = 1
+        reachable(x, y::AbstractString) = 2
+        removed(x::Integer, y) = 1
+        removed(x, y::AbstractString) = 2
+        pair(x::Int8, y) = 1
+        pair(x, y::AbstractString) = 2
+        pair_reachable(x::Int8, y) = 1
+        pair_reachable(x, y::AbstractString) = 2
+        end
+        """)
+    write(joinpath(load_path, "AmbigEdgeB.jl"),
+        """
+        module AmbigEdgeB
+        using AmbigEdgeA
+        pruned(x::Int8, @nospecialize(y)) = AmbigEdgeA.pruned(x, y)
+        seen(x::Int8, @nospecialize(y)) = AmbigEdgeA.seen(x, y)
+        added(x::Int8, @nospecialize(y)) = AmbigEdgeA.added(x, y)
+        uncovered(x::Int8, @nospecialize(y)) = AmbigEdgeA.uncovered(x, y)
+        reachable(x::Int8, @nospecialize(y)) = AmbigEdgeA.reachable(x, y)
+        removed(x::Int8, @nospecialize(y)) = AmbigEdgeA.removed(x, y)
+        pair(@nospecialize(x), @nospecialize(y)) = AmbigEdgeA.pair(x, y)
+        pair_reachable(@nospecialize(x), @nospecialize(y)) = AmbigEdgeA.pair_reachable(x, y)
+        precompile(pruned, (Int8, Any))
+        precompile(seen, (Int8, Any))
+        precompile(added, (Int8, Any))
+        precompile(uncovered, (Int8, Any))
+        precompile(reachable, (Int8, Any))
+        precompile(removed, (Int8, Any))
+        precompile(pair, (Any, Any))
+        precompile(pair_reachable, (Any, Any))
+        end
+        """)
+    Base.compilecache(Base.PkgId("AmbigEdgeB"))
+
+    @eval using AmbigEdgeA
+    # `pruned(x, y::AbstractString)` is fully ambiguous with `pruned(x::Integer, y)` for
+    # `(Int8, AbstractString)`, so it doesn't appear in the `ml_matches` result but should
+    # still invalidate
+    @eval AmbigEdgeA.pruned(x, y::AbstractString) = 2
+    # `seen` does not change
+    @eval AmbigEdgeA.added(x, y::AbstractChar) = 3
+    # ambiguous with each other for `(Int8, String)`
+    @eval AmbigEdgeA.uncovered(x::Union{Int8,Int16}, y::String) = 2
+    @eval AmbigEdgeA.uncovered(x::Union{Int8,Int32}, y::String) = 3
+    # more specific than `reachable(x::Integer, y)` for `(Int8, Int)`, and not ambiguous
+    @eval AmbigEdgeA.reachable(x::Int8, y::Int) = 3
+    invokelatest() do
+        Base.delete_method(which(AmbigEdgeA.removed, (Any, AbstractString)))
+    end
+    # `pair` does not change
+    # more specific than both methods for `(Int8, String)`
+    @eval AmbigEdgeA.pair_reachable(x::Int8, y::String) = 3
+    @eval using AmbigEdgeB
+
+    invokelatest() do
+        B = AmbigEdgeB
+        # the CodeInstance from the image, if it is still valid
+        function image_ci(caller, argtypes...)
+            target = Tuple{typeof(caller), argtypes...}
+            mi = nothing
+            for spec in Base.specializations(only(methods(caller)))
+                spec === nothing && continue
+                if spec.specTypes == target
+                    mi = spec
+                    break
+                end
+            end
+            @test mi !== nothing
+            ci = mi !== nothing && isdefined(mi, :cache) ? mi.cache : nothing
+            while ci !== nothing
+                ci.max_world == typemax(UInt) && return ci
+                ci = isdefined(ci, :next) ? ci.next : nothing
+            end
+            return nothing
+        end
+        # look before the call to each caller, because the call makes a new CodeInstance
+        pruned_ci = image_ci(B.pruned, Int8, Any)
+        seen_ci = image_ci(B.seen, Int8, Any)
+        added_ci = image_ci(B.added, Int8, Any)
+        uncovered_ci = image_ci(B.uncovered, Int8, Any)
+        reachable_ci = image_ci(B.reachable, Int8, Any)
+        removed_ci = image_ci(B.removed, Int8, Any)
+        pair_ci = image_ci(B.pair, Any, Any)
+        pair_reachable_ci = image_ci(B.pair_reachable, Any, Any)
+        # `inferencebarrier` prevents inference of a caller when this closure compiles
+
+        # Fully ambiguous method invalidates a not-possibly-ambiguous call
+        @test pruned_ci === nothing
+        @test_throws MethodError Base.inferencebarrier(B.pruned)(Int8(1), "hi")
+
+        # Ambiguity that inference saw keeps a possibly-ambiguous edge valid:
+        # the ambiguity already existed when the image is built, so the possibly ambiguous edge
+        # should not invalidate
+        @test seen_ci !== nothing
+        @test Base.inferencebarrier(B.seen)(Int8(1), 2) === 1
+        @test_throws MethodError Base.inferencebarrier(B.seen)(Int8(1), "hi")
+
+        # New ambiguity keeps a possibly-ambiguous edge valid
+        @test added_ci !== nothing
+        @test Base.inferencebarrier(B.added)(Int8(1), 2) === 1
+        @test_throws MethodError Base.inferencebarrier(B.added)(Int8(1), "hi")
+        @test_throws MethodError Base.inferencebarrier(B.added)(Int8(1), 'c')
+
+        # Ambiguities exclusively in the "uncovered" region of a dispatch should not cause invalidation
+        # (they already MethodError / dynamic-dispatch, even w/o ambiguity)
+        #
+        # ml_matches is overly-conservative in the presence of an ambiguity, even if it does not overlap
+        # with any valid dispatch and currently reports `has_ambig` (arguably incorrectly) so this test
+        # is broken.
+        @test_broken uncovered_ci !== nothing
+        @test Base.inferencebarrier(B.uncovered)(Int8(1), 2) === 1
+        @test_throws MethodError Base.inferencebarrier(B.uncovered)(Int8(1), "hi")
+
+        # New dispatch-reachable method invalidates a possibly-ambiguous edge
+        @test reachable_ci === nothing
+        @test Base.inferencebarrier(B.reachable)(Int8(1), 2) === 3
+        @test Base.inferencebarrier(B.reachable)(Int8(1), 1.5) === 1
+        @test_throws MethodError Base.inferencebarrier(B.reachable)(Int8(1), "hi")
+
+        # Removed ambiguity keeps a possibly-ambiguous edge valid
+        @test removed_ci !== nothing
+        @test Base.inferencebarrier(B.removed)(Int8(1), "hi") === 1
+        @test Base.inferencebarrier(B.removed)(Int8(1), 2) === 1
+
+        # Possibly-ambiguous edge with two matches:
+        # the edge stays valid while the ambiguity does not change, but a new dispatch-reachable
+        # method invalidates it
+        @test pair_ci !== nothing
+        if pair_ci !== nothing
+            edgelist = collect(Any, pair_ci.edges)
+            idx = findfirst(e -> e isa Int && e == -2, edgelist)
+            @test idx !== nothing
+            if idx !== nothing
+                @test idx > 1 && edgelist[idx-1] isa Core.PossiblyAmbiguous
+                @test edgelist[idx+1] isa Type
+                @test edgelist[idx+2] isa Core.CodeInstance
+                @test edgelist[idx+3] isa Core.CodeInstance
+            end
+            @test count(e -> e isa Core.PossiblyAmbiguous, edgelist) == 1
+        end
+        @test Base.inferencebarrier(B.pair)(Int8(1), 1.5) === 1
+        @test Base.inferencebarrier(B.pair)("a", "b") === 2
+        @test_throws MethodError Base.inferencebarrier(B.pair)(Int8(1), "hi")
+        @test pair_reachable_ci === nothing
+        @test Base.inferencebarrier(B.pair_reachable)(Int8(1), "hi") === 3
     end
 end
 

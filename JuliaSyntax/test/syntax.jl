@@ -1,8 +1,10 @@
 using .JuliaSyntax: SyntaxTree, SyntaxList, @stm, prov, prov_end, provenance,
     macro_prov, macro_prov_end, flattened_provenance, sourceref,
-    unexpanded_sourceref, newleaf, newnode, mkleaf, mknode, mktree, copy_ast,
+    unexpanded_sourceref, newnode, mkleaf, mknode, mktree, copy_ast,
     unalias_nodes, annotate_parent!, _setattr!, getmeta, SyntaxContext,
     ScopeLayer, children
+
+const DUMMY_CONTEXT = SyntaxContext(@__MODULE__, (0,0))
 
 """
 Build a hand-made tree for the DAG-shaped tests below.  Each node carries a
@@ -10,10 +12,9 @@ distinct integer in `.value` so nodes copied by `unalias_nodes` and friends can
 be traced back to the node they were copied from.
 """
 function tnode(tag::Int, cs::SyntaxTree...)
-    st = isempty(cs) ?
-        newleaf(LineNumberNode(tag), K"Value") :
-        newnode(LineNumberNode(tag), K"block", SyntaxList(cs...))
-    _setattr!(st, :value, tag)
+    isempty(cs) ?
+        SyntaxTree(:value, nothing, tag, LineNumberNode(tag), DUMMY_CONTEXT) :
+        SyntaxTree(:block, SyntaxList(cs...), tag, LineNumberNode(tag), DUMMY_CONTEXT)
 end
 
 "All nodes of `st` in preorder, with one entry per occurrence"
@@ -36,6 +37,14 @@ end
     # Malformed literals become ErrorVal-valued leaves rather than identifiers
     @test parsestmt(SyntaxTree, "1.e"; ignore_errors=true) isa SyntaxTree
     @test parsestmt(SyntaxTree, "x = 1._"; ignore_errors=true) isa SyntaxTree
+end
+
+@testset "SyntaxTree compound assignment heads" begin
+    # Must not depend on `show(::SyntaxTree)`, which JuliaLowering defines
+    @test head(parsestmt(SyntaxTree, "x += 1")) === :+=
+    @test head(parsestmt(SyntaxTree, "x .>>>= 1")) === :.>>>=
+    @test parsestmt(SyntaxTree, ":(+=)")[1].value == "+="
+    @test parsestmt(SyntaxTree, ":.>>>=")[1].value == ".>>>="
 end
 
 @testset "SyntaxTree type stability" begin
@@ -71,26 +80,23 @@ end
         ctx_with_unexpanded(u) = SyntaxContext(
             ScopeLayer(JuliaSyntax, nothing),
             u,
-            v"0.0",
+            (0, 0),
             false)
 
-        st1 = _setattr!(newleaf(LineNumberNode(1), K"Identifier"), :value, "st1")
-        st2 = _setattr!(mkleaf(st1), :value, "st2")
-        st3 = _setattr!(mkleaf(st2), :value, "st3")
+        stm_unused = SyntaxTree(:identifier, nothing, "stm_unused", LineNumberNode(0), DUMMY_CONTEXT)
 
-        stm1 = _setattr!(newleaf(LineNumberNode(1, :m), K"Identifier"), :value, "stm1")
-        stm2 = _setattr!(mkleaf(stm1), :value, "stm2")
-        stm3 = _setattr!(mkleaf(stm1), :value, "stm3")
-        stm_unused = _setattr!(newleaf(LineNumberNode(0), K"Identifier"), :value, "stm_unused")
-
-        stmm1 = _setattr!(newleaf(LineNumberNode(1, :mm), K"Identifier"), :value, "stmm1")
+        stmm1 = SyntaxTree(:identifier, nothing, "stmm1", LineNumberNode(1, :mm), DUMMY_CONTEXT)
         stmm2 = _setattr!(mkleaf(stmm1), :value, "stmm2")
         stmm3 = _setattr!(mkleaf(stmm2), :value, "stmm3")
 
-        _setattr!(st1, :context, ctx_with_unexpanded(stm_unused))
-        _setattr!(st2, :context, ctx_with_unexpanded(stm_unused))
-        _setattr!(st3, :context, ctx_with_unexpanded(stm3))
-        _setattr!(stm3, :context, ctx_with_unexpanded(stmm3))
+        stm1 = SyntaxTree(:identifier, nothing, "stm1", LineNumberNode(1, :m), DUMMY_CONTEXT)
+        stm2 = _setattr!(mkleaf(stm1), :value, "stm2")
+        stm3 = SyntaxTree(:identifier, nothing, "stm3", stm2, ctx_with_unexpanded(stmm3))
+
+        st1 = SyntaxTree(:identifier, nothing, "st1", LineNumberNode(1),
+                         ctx_with_unexpanded(stm_unused))
+        st2 = SyntaxTree(:identifier, nothing, "st2", st1, ctx_with_unexpanded(stm_unused))
+        st3 = SyntaxTree(:identifier, nothing, "st3", st2, ctx_with_unexpanded(stm3))
 
         # julia> JL._show_provtree(stdout, st3, "")
         # st3
@@ -102,8 +108,9 @@ end
         # │  └─ stm_unused
         # │     └─ @ nothing:0
         # └─ stm3
-        #    ├─ stm1
-        #    │  └─ @ m:1
+        #    ├─ stm2
+        #    │  └─ stm1
+        #    │     └─ @ m:1
         #    └─ stmm3
         #       └─ stmm2
         #          └─ stmm1
@@ -152,7 +159,7 @@ end
     @testset "copy_ast, mktree" begin
         # A one-child tree whose root also has a provenance chain of its own
         leaf = tnode(3)
-        st2 = newnode(LineNumberNode(1), K"block", SyntaxList(leaf))
+        st2 = newnode(tnode(1), :block, SyntaxList(leaf))
         st = mknode(st2, children(st2))   # st.source === st2
 
         stcopy = copy_ast(st)
@@ -165,7 +172,7 @@ end
 
         # Every node is copied at most once, so aliasing is preserved
         shared = tnode(1)
-        aliased = newnode(LineNumberNode(0), K"block", SyntaxList(shared, shared))
+        aliased = newnode(tnode(0), :block, SyntaxList(shared, shared))
         acopy = copy_ast(aliased)
         @test aliased ≈ acopy
         @test acopy[1] !== shared
@@ -294,33 +301,33 @@ end
         end
 
         @test @stm st begin
-            [K"function" f a b c] -> false
-            [K"call" f a b c] -> true
+            [:function f a b c] -> false
+            [:call f a b c] -> true
         end
 
         @test @stm st begin
-            [K"function" _ _ _ _] -> false
-            [K"call" _ _ _ _] -> true
+            [:function _ _ _ _] -> false
+            [:call _ _ _ _] -> true
         end
 
         @test @stm st begin
-            [K"call" f a b] -> false
-            [K"call" f a b c d] -> false
-            [K"call" f a b c] -> true
+            [:call f a b] -> false
+            [:call f a b c d] -> false
+            [:call f a b c] -> true
         end
 
         @test @stm st begin
-            [K"call" f a b c] ->
-                kind(f) === K"Identifier" &&
-                kind(b) === K"kw" &&
-                kind(c) === K"call"
+            [:call f a b c] ->
+                head(f) === :identifier &&
+                head(b) === :kw &&
+                head(c) === :call
         end
     end
 
     @testset "errors" begin
         # no match
         @test_throws ErrorException @stm st begin
-            [K"Identifier"] -> false
+            [:identifier] -> false
         end
 
         # assuming we run this checker by default
@@ -330,10 +337,10 @@ end
                       [a] -> false
                   end)
                 :(@stm st begin
-                      [K"None",a] -> false
+                      [:none,a] -> false
                   end)
                 :(@stm st begin
-                      [K"None" a a] -> false
+                      [:none a a] -> false
                   end)
                 :(@stm st begin
                       x
@@ -345,7 +352,7 @@ end
                       (a, b=1) -> false
                   end)
                 :(@stm st begin
-                      [K"None" a... b...] -> false
+                      [:none a... b...] -> false
                   end)
             ]
             for e in bad
@@ -359,53 +366,53 @@ end
 
     @testset "nested patterns" begin
         @test 1 === @stm st begin
-            [K"call" [K"Identifier"] [K"Identifier"] [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier"] k2]]] -> 1
-            [K"call" [K"Identifier"] [K"Identifier"] [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" _ k2]]] -> 2
-            [K"call" [K"Identifier"] [K"Identifier"] [K"kw" _ k1] [K"call" _ _]] -> 3
-            [K"call" [K"Identifier"] [K"Identifier"] _ _ ] -> 4
-            [K"call" _ _ _ _] -> 5
+            [:call [:identifier] [:identifier] [:kw [:identifier] k1] [:call [:identifier] [:kw [:identifier] k2]]] -> 1
+            [:call [:identifier] [:identifier] [:kw [:identifier] k1] [:call [:identifier] [:kw _ k2]]] -> 2
+            [:call [:identifier] [:identifier] [:kw _ k1] [:call _ _]] -> 3
+            [:call [:identifier] [:identifier] _ _ ] -> 4
+            [:call _ _ _ _] -> 5
         end
         @test 1 === @stm st begin
-            [K"call" _ _ [K"None" [K"Identifier"] k1] [K"None" [K"Identifier"] [K"None" [K"None"] k2]]] -> 5
-            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"None" [K"Identifier"] [K"None" [K"None"] k2]]] -> 4
-            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"None" [K"None"] k2]]] -> 3
-            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"None"] k2]]] -> 2
-            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier"] k2]]] -> 1
+            [:call _ _ [:none [:identifier] k1] [:none [:identifier] [:none [:none] k2]]] -> 5
+            [:call _ _ [:kw [:identifier] k1] [:none [:identifier] [:none [:none] k2]]] -> 4
+            [:call _ _ [:kw [:identifier] k1] [:call [:identifier] [:none [:none] k2]]] -> 3
+            [:call _ _ [:kw [:identifier] k1] [:call [:identifier] [:kw [:none] k2]]] -> 2
+            [:call _ _ [:kw [:identifier] k1] [:call [:identifier] [:kw [:identifier] k2]]] -> 1
         end
         @test 1 === @stm st begin
-            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier"] k2] bad]] -> 4
-            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier"] k2 bad]]] -> 3
-            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier" bad] k2]]] -> 2
-            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier"] k2]]] -> 1
+            [:call _ _ [:kw [:identifier] k1] [:call [:identifier] [:kw [:identifier] k2] bad]] -> 4
+            [:call _ _ [:kw [:identifier] k1] [:call [:identifier] [:kw [:identifier] k2 bad]]] -> 3
+            [:call _ _ [:kw [:identifier] k1] [:call [:identifier] [:kw [:identifier bad] k2]]] -> 2
+            [:call _ _ [:kw [:identifier] k1] [:call [:identifier] [:kw [:identifier] k2]]] -> 1
         end
     end
 
     @testset "vcat form (newlines in pattern)" begin
         @test @stm st begin
-            [K"call"
+            [:call
              f
              a
              b
              c] -> true
         end
         @test @stm st begin
-            [K"call"
+            [:call
              f a b c] -> true
         end
         @test @stm st begin
-            [K"call"
+            [:call
 
 
              f a b c] -> true
         end
         @test @stm st begin
-            [K"call"
-             [K"Identifier"] [K"Identifier"]
-             [K"kw" [K"Identifier"] k1]
-             [K"call"
-              [K"Identifier"]
-              [K"kw"
-               [K"Identifier"]
+            [:call
+             [:identifier] [:identifier]
+             [:kw [:identifier] k1]
+             [:call
+              [:identifier]
+              [:kw
+               [:identifier]
                k2]]] -> true
         end
     end
@@ -414,40 +421,40 @@ end
         # NB: a splat binds a view of the parent's children, not a SyntaxList
         # trailing splat
         @test @stm st begin
-            [K"call" f _...] -> true
+            [:call f _...] -> true
         end
         @test @stm st begin
-            [K"call" f args...] -> kind(f) === K"Identifier"
+            [:call f args...] -> head(f) === :identifier
         end
         @test @stm st begin
-            [K"call" f args...] ->
+            [:call f args...] ->
                 args isa AbstractVector{SyntaxTree} && length(args) === 3
         end
         @test @stm st begin
-            [K"call" f args...] -> kind(args[1]) === K"Identifier" &&
-                kind(args[2]) === K"kw" &&
-                kind(args[3]) === K"call"
+            [:call f args...] -> head(args[1]) === :identifier &&
+                head(args[2]) === :kw &&
+                head(args[3]) === :call
         end
         @test @stm st begin
-            [K"call" f a b c empty...] ->
+            [:call f a b c empty...] ->
                 empty isa AbstractVector{SyntaxTree} && length(empty) === 0
         end
 
         # binds after splat
         @test @stm st begin
-            [K"call" f args... last] ->
+            [:call f args... last] ->
                 args isa AbstractVector{SyntaxTree} &&
                 length(args) === 2
         end
         @test @stm st begin
-            [K"call" f args... last] ->
-                kind(f) === K"Identifier" &&
-                kind(args[1]) === K"Identifier" &&
-                kind(args[2]) === K"kw" &&
-                kind(last) === K"call"
+            [:call f args... last] ->
+                head(f) === :identifier &&
+                head(args[1]) === :identifier &&
+                head(args[2]) === :kw &&
+                head(last) === :call
         end
         @test @stm st begin
-            [K"call" empty... f a b c] ->
+            [:call empty... f a b c] ->
                 empty isa AbstractVector{SyntaxTree} && length(empty) === 0
         end
     end
@@ -458,14 +465,14 @@ end
             (_, when=true) -> true
         end
         @test @stm st begin
-            ([K"call" _...], when=false) -> false
-            ([K"call" _...], when=true) -> true
+            ([:call _...], when=false) -> false
+            ([:call _...], when=true) -> true
         end
         @test @stm st begin
-            ([K"call" _ _...], when=kind(st[1])===K"Identifier") -> true
+            ([:call _ _...], when=head(st[1])===:identifier) -> true
         end
         @test @stm st begin
-            ([K"call" f _...], when=kind(f)===K"Identifier") -> true
+            ([:call f _...], when=head(f)===:identifier) -> true
         end
     end
 
@@ -484,7 +491,7 @@ end
             empty!(x)
 
             @test @stm st begin
-                ([K"block"], when=(push!(x, 123); false)) -> false
+                ([:block], when=(push!(x, 123); false)) -> false
                 (_, when=(push!(x, 1); true)) -> x == [1]
             end
             empty!(x)

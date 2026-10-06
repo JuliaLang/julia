@@ -9,7 +9,7 @@
 """
 module Experimental
 
-using Base: Threads, sync_varname, is_function_def, @propagate_inbounds
+using Base: Threads, sync_varname, is_function_def
 using Base: GenericCondition
 using Base.Meta
 
@@ -29,7 +29,16 @@ end
 Base.IndexStyle(::Type{<:Const}) = IndexLinear()
 Base.size(C::Const) = size(C.a)
 Base.axes(C::Const) = axes(C.a)
-@propagate_inbounds Base.getindex(A::Const, i1::Int, I::Int...) = A.a[i1, I...]
+Base.@assume_effects :noub_if_noinbounds function Base.getindex(A::Const, i::Int)
+    @inline
+    @boundscheck Base.checkbounds(A.a, i)
+    return Core.const_memoryrefget(Core.memoryrefnew(getfield(A.a, :ref), i, false), :not_atomic, false)
+end
+function Base.getindex(A::Const, i1::Int, i2::Int, I::Int...)
+    @inline
+    @boundscheck Base.checkbounds(A.a, i1, i2, I...) # generally _to_linear_index requires bounds checking
+    return @inbounds A[Base._to_linear_index(A.a, i1, i2, I...)]
+end
 
 """
     @aliasscope expr
@@ -755,28 +764,13 @@ macro reexport(ex)
     return esc(calls)
 end
 
-struct VersionedLower
-    ver::VersionNumber
-end
-
-function (vp::VersionedLower)(@nospecialize(code), mod::Module,
-                              file="none", line=0, world=typemax(Csize_t), warn=false)
-    if !isdefined(Base, :JuliaLowering)
-        if vp.ver === VERSION
-            return Core._parse
-        end
-        error("JuliaLowering module is required for syntax version $(vp.ver), but it is not loaded.")
-    end
-    Base.JuliaLowering.core_lowering_hook(code, filename, lineno, offset, options; syntax_version=vp.ver)
-end
-
-function Base.set_syntax_version(m::Module, ver::VersionNumber)
-    parser = Base.VersionedParse(ver)
+function Base.set_syntax_version(m::Module, edition::Tuple{Int, Int})
+    parser = Base.VersionedParse(edition)
     Core.declare_const(m, Symbol("#_internal_julia_parse"), parser)
-    #lowerer = VersionedLower(ver)
-    #Core.declare_const(m, :_internal_julia_lower, lowerer)
     nothing
 end
+Base.set_syntax_version(mod, e::VersionNumber) =
+    Base.set_syntax_version(mod, Base.EditionNumber(e))
 
 """
     Base.Experimental.@set_syntax_version ver

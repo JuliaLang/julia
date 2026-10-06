@@ -569,6 +569,12 @@ end
             sm = skipmissing(oa)
             @test sum(sm) == 0
         end
+
+        # `mapreduce_impl` returns the reduced value itself even for an imprecisely inferred
+        # array, rather than the `Union{Nothing,Some}` result of the `SkipMissing` helper
+        @test Base.infer_return_type((Any, Int)) do A, n
+            Base.mapreduce_impl(x -> x isa Pair, &, A, 1, n)
+        end === Bool
     end
 
     @testset "filter" begin

@@ -9,9 +9,9 @@ make -C contrib/optimized -j8 all
 ```
 
 The result is in `contrib/optimized/optimized.build`. The build first downloads
-clang, lld and LLVM tools from BinaryBuilder, and builds BOLT from source if
-needed. It then builds an instrumented Julia, using the system image and package
-image builds as the PGO workload, and builds Julia again with the resulting
+clang, lld, LLVM tools and (when enabled) BOLT from BinaryBuilder. It then
+builds an instrumented Julia, using the system image and package image builds as
+the PGO workload, and builds Julia again with the resulting
 profile and ThinLTO. With BOLT enabled, it also instruments `libLLVM`,
 `libjulia-internal` and `libjulia-codegen`, builds the system image and package
 images against them, and rewrites the libraries using that profile.
@@ -23,6 +23,7 @@ images against them, and rewrites the libraries using that profile.
 | `USE_BOLT` | 1 on Linux x86-64 and AArch64, else 0 | Run the BOLT stages |
 | `USE_PGO` | 1 | Build and profile stage 1, then optimize with it |
 | `USE_LTO` | 1 | Build stage 2 with ThinLTO |
+| `LTO_JOBS` | 8 on 32-bit targets, else the linker's default | ThinLTO backend threads per link (Linux only) |
 | `STAGE1_CPU_TARGET` | `generic` | CPU target of the instrumented build |
 | `STAGE0_BUILD` | `$(CURDIR)/toolchain` | Toolchain build directory |
 | `STAGE1_BUILD` | `$(CURDIR)/pgo-instrumented.build` | Instrumented build directory |
@@ -75,10 +76,19 @@ or rewriting again then requires rebuilding the libraries.
 
 ## Platforms
 
-The flow carries the macOS PGO+LTO toolchain settings, including Xcode's linker
-and SDK. BOLT defaults to Linux x86-64 and AArch64, where it can rewrite ELF
-libraries. The Windows linker settings are preparatory; they do not establish
-Windows build support. A default or an explicit optimization setting does not
+The flow supports PGO+ThinLTO on macOS and Windows x86-64. On Windows it uses
+BinaryBuilder's Clang and lld's MinGW driver with an MSYS2 mingw64 sysroot.
+Stage 0 places the matching support DLLs beside the tools; the instrumented
+stage supplies Clang's profile runtime to Julia's direct linker invocations.
+The runtime export map is applied through a COFF export definition. A discovery
+link identifies exports from the objects and archive members actually used;
+the final link exports the matching names and explicitly exported symbols.
+
+Windows i686 optimized builds are not supported. Its native BinaryBuilder
+toolchain is 32-bit, making address space a constraint for ThinLTO links of
+libLLVM; supporting it would require a separate cross-toolchain setup.
+BOLT defaults to Linux x86-64 and AArch64, where it can rewrite ELF libraries.
+It cannot rewrite Windows PE/COFF binaries. An optimization setting does not
 replace validation on the target platform.
 
 Do not strip shared libraries rewritten by BOLT; see

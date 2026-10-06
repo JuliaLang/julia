@@ -121,6 +121,14 @@ function _add_linetable_frames!(frames, pointer, di::Core.DebugInfo, pc::Int)
     nothing
 end
 
+# The line number comes from the innermost line table, so take the file from there too.
+function _debuginfo_file(di::Core.DebugInfo)
+    while di.linetable isa Core.DebugInfo
+        di = di.linetable
+    end
+    return IRShow.debuginfo_file1(di)
+end
+
 # 1. Push our own frame
 # 2. If there is a linetable, recurse on edges there (and not the linetable)
 # 3. Recurse on any of our own edges
@@ -128,7 +136,7 @@ function _add_di_frames!(frames, pointer, di::Core.DebugInfo, pc::Int)
     @assert pc > 0 "invalid pc"
     push!(frames, StackFrame(
         di.def isa Symbol ? Symbol("macro expansion") : IRShow.method_name(di.def),
-        IRShow.debuginfo_file1(di),
+        _debuginfo_file(di),
         @ccall(jl_cdi_firstxy(di::Any, pc::Int32)::NTuple{2, Int32})[1],
         di.def isa Core.MethodInstance ? di.def : nothing,
         false, # we can assume C frames aren't inlined into julia

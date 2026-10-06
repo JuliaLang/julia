@@ -1882,6 +1882,56 @@ let src = code_typed1((AtomicMemoryRef{Int},)) do a
     @test count(isinvokemodify(:+), src.code) == 1
 end
 
+# `invokemodify` should run the exact CodeInstance key and not re-dispatch:
+# there is no surface syntax for doing a `modify*` builtin with an invoke instead of a call,
+# but it could be useful for foreign abstract interpreters, so we build an OpaqueClosure in order to test this.
+modify_target_op(a::Integer, b::Int) = a + b
+modify_target_op(a::Int, b::Int) = a * b
+mutable struct ModifyTargetBox
+    x::Int
+end
+global modify_target_global::Int = 3
+function modify_target_oc(@nospecialize(f), @nospecialize(t))
+    # rewrite the :invoke_modify call to invoke a different MethodInstance than originally specified semantically
+    # (which is constructed here to have the same effects and types)
+    ir = only(Base.code_ircode(f, t))[1]
+    target = Base.specialize_method(which(modify_target_op, (Integer, Int)),
+                                    Tuple{typeof(modify_target_op), Int, Int}, Core.svec())
+    stmts = filter(isinvokemodify(:modify_target_op), ir.stmts.stmt)
+    @test length(stmts) == 1
+    only(stmts).args[1] = target
+    ir.argtypes[1] = Tuple{}
+    return Core.OpaqueClosure(ir)
+end
+let b = ModifyTargetBox(3)
+    @test modify_target_oc((ModifyTargetBox,)) do b
+            modifyfield!(b, :x, modify_target_op, 2)
+        end(b) === (3 => 5)
+    @test modify_target_oc((ModifyTargetBox, Symbol)) do b, o
+            modifyfield!(b, :x, modify_target_op, 2, o)
+        end(b, :not_atomic) === (5 => 7)
+end
+let mem = Memory{Int}(undef, 1)
+    mem[1] = 3
+    @test modify_target_oc((MemoryRef{Int}, Symbol)) do m, o
+            Core.memoryrefmodify!(m, modify_target_op, 2, o, true)
+        end(memoryref(mem), :not_atomic) === (3 => 5)
+end
+let r = Ref(3)
+    GC.@preserve r begin
+        p = Base.unsafe_convert(Ptr{Int}, r)
+        @test modify_target_oc((Ptr{Int},)) do p
+                Core.Intrinsics.atomic_pointermodify(p, modify_target_op, 2, :sequentially_consistent)
+            end(p) === (3 => 5)
+        @test modify_target_oc((Ptr{Int}, Symbol)) do p, o
+                Core.Intrinsics.atomic_pointermodify(p, modify_target_op, 2, o)
+            end(p, :sequentially_consistent) === (5 => 7)
+    end
+end
+@test modify_target_oc(()) do
+        modifyglobal!(@__MODULE__, :modify_target_global, modify_target_op, 2)
+    end() === (3 => 5)
+
 # Core._task handling
 # ===================
 # Test that _task inlines properly with const prop
