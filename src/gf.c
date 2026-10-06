@@ -143,46 +143,17 @@ static int8_t jl_cachearg_offset(void)
 /// ----- Insertion logic for special entries ----- ///
 
 
-// The specializations cache is keyed by `jl_types_equal`, which identifies
-// spellings that are not structurally identical whenever binders are involved
-// (an existential over a covariant position can be written with the `where`
-// inside or outside the tuple, e.g. `Tuple{Type{Memory{T}} where T, ...}` ==
-// `Tuple{Type{Memory{T}}, ...} where T`). The structural type hash
-// distinguishes such spellings, so it can only key this cache for signatures
-// that contain no binders at all; everything else falls back to the
-// linear-scan class (hash 0), as it did when the hash of any type mentioning
-// a type variable was itself 0.
-static int speccache_unhashable(jl_value_t *t) JL_NOTSAFEPOINT
-{
-    if (jl_is_unionall(t) || jl_is_tvarref(t) || jl_is_typevar(t))
-        return 1;
-    if (jl_is_uniontype(t))
-        return speccache_unhashable(((jl_uniontype_t*)t)->a) ||
-               speccache_unhashable(((jl_uniontype_t*)t)->b);
-    if (jl_is_vararg(t)) {
-        jl_vararg_t *v = (jl_vararg_t*)t;
-        return (v->T && speccache_unhashable(v->T)) ||
-               (v->N && speccache_unhashable(v->N));
-    }
-    if (jl_is_typeeq(t))
-        return speccache_unhashable(jl_typeeq_T(t));
-    if (jl_is_typeegal(t))
-        return speccache_unhashable(jl_typeegal_T(t));
-    if (jl_is_datatype(t)) {
-        jl_datatype_t *dt = (jl_datatype_t*)t;
-        size_t i, np = jl_nparams(dt);
-        for (i = 0; i < np; i++) {
-            if (speccache_unhashable(jl_tparam(dt, i)))
-                return 1;
-        }
-    }
-    return 0;
-}
-
+// The structural type hash keys the specializations cache only for
+// signatures that are closed after unwrapping their outer binders (as before
+// the positional representation, where the hash of a type with a free type
+// variable was 0); the others share the linear-scan class (hash 0).
+// Differently spelled but `jl_types_equal` signatures (a `where` written
+// inside or outside a covariant position) can then land in different classes
+// and get separate entries, which costs a duplicate but is never wrong.
 static uint_t speccache_hash_sig(jl_value_t *sig) JL_NOTSAFEPOINT
 {
     jl_value_t *usig = jl_is_unionall(sig) ? jl_unwrap_unionall(sig) : sig;
-    if (speccache_unhashable(usig))
+    if (jl_has_free_or_dangling_typevars(usig))
         return 0;
     return ((jl_datatype_t*)usig)->hash;
 }
