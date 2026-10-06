@@ -1882,11 +1882,11 @@ JL_CALLABLE(jl_f_isdefinedglobal_partition)
     return bound ? jl_true : jl_false;
 }
 
-JL_CALLABLE(jl_f_depwarn_partition)
+JL_CALLABLE(jl_f_depwarn_binding)
 {
-    JL_NARGS(depwarn_partition, 1, 1);
-    JL_TYPECHK(depwarn_partition, binding_partition, args[0]);
-    jl_binding_deprecation_check((jl_binding_partition_t*)args[0]);
+    JL_NARGS(depwarn_binding, 1, 1);
+    JL_TYPECHK(depwarn_binding, binding, args[0]);
+    jl_binding_depwarn((jl_binding_t*)args[0]);
     return jl_nothing;
 }
 

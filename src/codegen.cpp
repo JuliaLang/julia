@@ -915,8 +915,8 @@ static const auto jldeclareglobal_func = new JuliaFunction<>{
             {T_pjlvalue, T_pjlvalue, T_prjlvalue, getInt32Ty(C)}, false); },
     nullptr,
 };
-static const auto jldepcheck_func = new JuliaFunction<>{
-    XSTR(jl_binding_deprecation_check),
+static const auto jldepwarn_func = new JuliaFunction<>{
+    XSTR(jl_binding_depwarn),
     [](LLVMContext &C) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
         return FunctionType::get(getVoidTy(C),
@@ -5514,11 +5514,11 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         return true;
     }
 
-    else if (f == BUILTIN(depwarn_partition) && nargs == 1) {
-        const jl_cgval_t &part = argv[1];
-        if (!part.constant || !jl_is_binding_partition(part.constant))
+    else if (f == BUILTIN(depwarn_binding) && nargs == 1) {
+        const jl_cgval_t &b = argv[1];
+        if (!b.constant || !jl_is_binding(b.constant))
             return false;
-        ctx.builder.CreateCall(prepare_call(jldepcheck_func), { literal_pointer_val(ctx, part.constant) });
+        ctx.builder.CreateCall(prepare_call(jldepwarn_func), { literal_pointer_val(ctx, b.constant) });
         *ret = ghostValue(ctx, jl_nothing_type);
         return true;
     }

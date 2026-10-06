@@ -433,3 +433,51 @@ module DeprecatedShadowTest
     @test (@test_nowarn Consumer.getdep()) === Src._newc
     @test !Base.isdeprecated(Consumer, :OldC)
 end
+
+# Deprecating an importing partition, not the leaf.
+module DeprecatedImporterTest
+    using Test
+    module Src
+        export dg
+        global dg::Int = 1
+        global de::Int = 2
+    end
+    using .Src
+    import .Src: de
+    getdg() = dg
+    getde() = de
+    @test (@test_nowarn getdg()) === 1
+    @test (@test_nowarn getde()) === 2
+
+    # Each `Base.deprecate` is its own top-level statement, so that it sees the partition
+    # the previous one created, rather than the one from the world a block started in,
+    # due to the bug being fixed in #63468.
+    getci(f) = first(methods(f)).specializations.cache
+    ci = getci(getdg)
+    Base.deprecate(@__MODULE__, :dg)
+    @test ci.max_world != typemax(UInt)
+    @test (@test_warn "dg is deprecated" Base.invokelatest(getdg)) === 1
+    @test !Base.isdeprecated(Src, :dg)
+    ci = getci(getdg)
+    Base.deprecate(@__MODULE__, :dg, 0)
+    @test ci.max_world != typemax(UInt)
+    @test (@test_nowarn Base.invokelatest(getdg)) === 1
+
+    ci = getci(getde)
+    Base.deprecate(@__MODULE__, :de)
+    @test ci.max_world != typemax(UInt)
+    @test (@test_warn "de is deprecated" Base.invokelatest(getde)) === 2
+    ci = getci(getde)
+    Base.deprecate(@__MODULE__, :de, 0)
+    @test ci.max_world != typemax(UInt)
+    @test (@test_nowarn Base.invokelatest(getde)) === 2
+    # Deprecating the leaf behind an explicit import does not warn at the use site (the import
+    # site did), while behind an implicit import it does.
+    Base.deprecate(Src, :de)
+    @test (@test_nowarn Base.invokelatest(getde)) === 2
+    Base.deprecate(Src, :de, 0)
+    Base.deprecate(Src, :dg)
+    @test (@test_warn "dg is deprecated" Base.invokelatest(getdg)) === 1
+    Base.deprecate(Src, :dg, 0)
+    @test (@test_nowarn Base.invokelatest(getdg)) === 1
+end
