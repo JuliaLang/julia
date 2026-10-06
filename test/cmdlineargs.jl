@@ -359,7 +359,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test tempdir() == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@temp", "HOME" => homedir()))[1:lastindex(tempdir())]
 
     # --quiet, --banner
-    let p = "print((Base.JLOptions().quiet, Base.JLOptions().banner))"
+    # without the `-q` that `julia_cmd()` passes on from a quiet parent
+    let p = "print((Base.JLOptions().quiet, Base.JLOptions().banner))",
+        exename = `$(filter(!=("-q"), collect(exename)))`
         @test read(`$exename                   -e $p`, String) == "(0, -1)"
         @test read(`$exename -q                -e $p`, String) == "(1, 0)"
         @test read(`$exename --quiet           -e $p`, String) == "(1, 0)"

@@ -238,6 +238,7 @@ Base.@kwdef mutable struct PrecompileSession
     logio::IOContext
     logcalls::Union{Nothing, CoreLogging.LogLevel}
     fancyprint::Bool
+    brief::Bool # only the header, reasons, failures and summary, without a line per package
     hascolor::Bool
     warn_loaded::Bool
     ignore_loaded::Bool
@@ -2830,7 +2831,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                         end
                         if ret isa Exception
                             mark_soft_error!(job)
-                            !s.fancyprint && BG.monitoring && @lock s.print_lock begin
+                            !s.fancyprint && !s.brief && BG.monitoring && @lock s.print_lock begin
                                 println(s.logio, timing_string(t), color_string("  ? ", Base.warn_color(), s.hascolor), name)
                             end
                         else
@@ -2839,7 +2840,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 cf_jl, cf_so = ret::Tuple{String, Union{Nothing, String}}
                                 cache_bytes = _precompile_cache_bytes(cf_jl, cf_so)
                             end
-                            !s.fancyprint && BG.monitoring && @lock s.print_lock begin
+                            !s.fancyprint && !s.brief && BG.monitoring && @lock s.print_lock begin
                                 verbose_prefix = BG.verbose ? format_verbose_timing(job.verbose_timing, t, cache_bytes, job.peak_rss_bytes, s.hascolor) : ""
                                 println(s.logio, timing_string(t), verbose_prefix, color_string("  ✓ ", loaded ? Base.warn_color() : :green, s.hascolor), name)
                             end
@@ -3311,17 +3312,24 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     default_num_tasks = min(default_num_tasks, 16) # limit for better stability on shared resource systems
     num_tasks = max(1, something(tryparse(Int, get(ENV, "JULIA_NUM_PRECOMPILE_TASKS", string(default_num_tasks))), 1))
 
-    # Suppress precompilation progress messages when precompiling for loading packages, except during
-    # interactive sessions, since the complicated IO can have disastrous consequences in the background (#59599)
+    # When loading precompiles outside an interactive session, report only that it is
+    # precompiling, why, and the result, in plain lines, so that a script does not look stuck
+    # and a CI log shows unexpected precompilation without per-package noise. Progress
+    # animation in the background can garble other output (#59599). `-q` silences it all.
     logio = io
     logcalls = nothing
+    brief = false
     if _from_loading
         if isinteractive()
             logcalls = CoreLogging.Info
-        else
+        elseif Base.JLOptions().quiet != 0
             logio = IOContext{IO}(devnull)
             fancyprint′ = false
             logcalls = CoreLogging.Debug
+        else
+            fancyprint′ = false
+            brief = true
+            logcalls = CoreLogging.Info
         end
     end
     fancyprint = fancyprint′
@@ -3364,7 +3372,16 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     nconfigs = length(configs)
     target = if nconfigs == 1
         flags = only(configs)[1]
-        isempty(flags) ? (requested_all ? "project..." : "packages...") : "for configuration $(join(flags, " "))"
+        if !isempty(flags)
+            "for configuration $(join(flags, " "))"
+        elseif requested_all
+            "project..."
+        elseif brief
+            # without a line per package, name what is being loaded
+            "$(join((p.name for p in requested_pkgids), ", ", " and "))..."
+        else
+            "packages..."
+        end
     else
         "for $nconfigs compilation configurations"
     end
@@ -3391,7 +3408,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     end
 
     s = PrecompileSession(;
-        configs, io, logio, logcalls, fancyprint, hascolor,
+        configs, io, logio, logcalls, fancyprint, brief, hascolor,
         warn_loaded, ignore_loaded, internal_call, strict, _from_loading,
         skip_dependents, force, force_stdlibs,
         reasons=copy(_reasons),

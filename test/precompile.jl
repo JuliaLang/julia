@@ -3661,6 +3661,28 @@ end
         output = loading_output(using_depuser; env=stacked)
         @test !occursin("has a different version", output)
 
+        # Outside the REPL the report is brief: a header naming the package and a summary, with
+        # no line per package and no escape codes. `-q` silences it.
+        julia_without_q = `$(filter(!=("-q"), collect(Base.julia_cmd())))`
+        function noninteractive_output(flags)
+            cmd = addenv(`$julia_without_q --startup-file=no --color=no $flags --project=$new_project_path -e "using DepUser"`,
+                         "JULIA_DEPOT_PATH" => depot)
+            out = Pipe()
+            proc = run(pipeline(cmd, stdin=devnull, stdout=out, stderr=out); wait=false)
+            close(out.in)
+            output = read(out, String)
+            @test success(proc)
+            return output
+        end
+        edit_depuser("const EDITED_BRIEF = true")
+        output = noninteractive_output(``)
+        @test startswith(output, "Precompiling DepUser...\n")
+        @test occursin("1 dependency successfully precompiled", output)
+        @test !occursin("✓", output)
+        @test !occursin('\e', output)
+        edit_depuser("const EDITED_QUIET = true")
+        @test isempty(noninteractive_output(`-q`))
+
         # On a tty the explanation offers `c`; canceling must stop the load, not load DepUser
         # from source without a cache. DepUser's precompile sleeps so there is time to cancel.
         if !Sys.iswindows()

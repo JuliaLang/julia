@@ -192,7 +192,7 @@ The following is a complete list of command-line switches available when launchi
 |`-p`, `--procs {N\|auto}`              |Integer value N launches N additional local worker processes; `auto` launches as many workers as the number of local CPU threads (logical cores)|
 |`--machine-file <file>`                |Run processes on hosts listed in `<file>`|
 |`-i`, `--interactive`                  |Interactive mode; REPL runs and `isinteractive()` is true|
-|`-q`, `--quiet`                        |Quiet startup: no banner, suppress REPL warnings|
+|`-q`, `--quiet`                        |Quiet startup: no banner, suppress REPL warnings, and no report of precompilation that loading a package triggers outside the REPL. `Base.julia_cmd` passes it on to child processes.|
 |`--banner={yes\|no\|short\|auto*}`     |Enable or disable startup banner|
 |`--color={yes\|no\|auto*}`             |Enable or disable color text|
 |`--history-file={yes*\|no}`            |Load or save history|
