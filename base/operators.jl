@@ -1343,6 +1343,8 @@ it into the original function. This is useful as an adaptor to pass a
 multi-argument function in a context that expects a single argument, but passes
 a tuple as that single argument.
 
+See also [`unsplat`](@ref).
+
 # Examples
 ```jldoctest
 julia> map(splat(+), zip(1:3,4:6))
