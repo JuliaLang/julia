@@ -75,10 +75,15 @@ void PropagateJuliaAddrspacesVisitor::PoisonValues(SmallVectorImpl<Value *> &Wor
     while (!Worklist.empty()) {
         Value *CurrentV = Worklist.back();
         Worklist.pop_back();
+        // Constant data (undef, poison, null, ...) is uniqued per context and
+        // its users span unrelated functions. Since LLVM 21 it has no use list
+        // at all, so `users()` asserts.
+        if (isa<ConstantData>(CurrentV))
+            continue;
         for (Value *User : CurrentV->users()) {
             if (Visited.count(User))
                 continue;
-            Visited.insert(CurrentV);
+            Visited.insert(User);
             Worklist.push_back(User);
         }
     }
