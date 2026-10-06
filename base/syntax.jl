@@ -726,6 +726,15 @@ function _c_parseall_expr(code::Core.SimpleVector, filename::String,
     return Core.svec(ex, offset-1)
 end
 
+function fl_toplevel_eval(mod::Module, @nospecialize(x))
+    ex = if x isa Syntax
+        Expr(:toplevel, first_linenode(x), syntax_to_expr(x))
+    else
+        x
+    end
+    ccall(:jl_toplevel_eval, Any, (Any, Any), mod, ex)
+end
+
 #-------------------------------------------------------------------------------
 # Printing
 
