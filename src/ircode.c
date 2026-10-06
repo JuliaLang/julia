@@ -1695,6 +1695,10 @@ JL_DLLEXPORT jl_string_t *jl_compress_codelocs(int32_t firstloc, jl_value_t *cod
         }
         ptr += to_bytes;
     }
+    // identical line tables are common (e.g. every one-statement method), so share one object per content
+    JL_GC_PUSH1(&cl);
+    cl = (jl_string_t*)jl_as_global_root((jl_value_t*)cl, 1);
+    JL_GC_POP();
     return cl;
 }
 
