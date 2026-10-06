@@ -54,6 +54,10 @@ mutable struct Syntax
     # TODO: this is almost never populated and semantically irrelevant after
     # parsing
     const syntax_flags::UInt16
+    function Syntax(head, children, value, source, context, jl_source, meta, mod, syntax_flags)
+        @nospecialize
+        new(head, children, value, source, context, jl_source, meta, mod, syntax_flags)
+    end
 end
 const SourceAttrType = Union{Syntax,SourceRef,LineNumberNode}
 
