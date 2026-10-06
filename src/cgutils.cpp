@@ -2326,6 +2326,35 @@ static void emit_typecheck(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *t
     }
 }
 
+// The store-to-global form of `emit_typecheck`, matching where the runtime calls `jl_type_error_global`.
+static void emit_typecheck_global(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *type,
+                                  const Twine &fname, jl_module_t *mod, jl_sym_t *sym) JL_CANSAFEPOINT
+{
+    Value *istype = emit_isa(ctx, x, type, Twine()).first;
+    if (auto *C = dyn_cast<ConstantInt>(istype)) {
+        if (!C->isZero())
+            return;
+        istype = nullptr; // known to fail: the error is unconditional
+    }
+    ++EmittedTypechecks;
+    BasicBlock *passBB = BasicBlock::Create(ctx.builder.getContext(), "pass");
+    if (istype) {
+        BasicBlock *failBB = BasicBlock::Create(ctx.builder.getContext(), "fail", ctx.f);
+        ctx.builder.CreateCondBr(istype, passBB, failBB);
+        ctx.builder.SetInsertPoint(failBB);
+    }
+    Value *msg_val = stringConstPtr(ctx.emission_context, ctx.builder, fname);
+    ctx.builder.CreateCall(prepare_call(jltypeerror_global_func), {
+            msg_val,
+            maybe_decay_untracked(ctx, literal_pointer_val(ctx, (jl_value_t*)mod)),
+            maybe_decay_untracked(ctx, literal_pointer_val(ctx, (jl_value_t*)sym)),
+            maybe_decay_untracked(ctx, literal_pointer_val(ctx, type)),
+            mark_callee_rooted(ctx, boxed(ctx, x))});
+    ctx.builder.CreateUnreachable();
+    passBB->insertInto(ctx.f);
+    ctx.builder.SetInsertPoint(passBB);
+}
+
 static Value *emit_isconcrete(jl_codectx_t &ctx, Value *typ)
 {
     Value *isconcrete;
@@ -2674,7 +2703,10 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, 3, julia_call);
             ret = mark_julia_type(ctx, callval, true, jl_any_type);
         }
-        emit_typecheck(ctx, ret, jltype, fname);
+        if (mod && var)
+            emit_typecheck_global(ctx, ret, jltype, fname, mod, var);
+        else
+            emit_typecheck(ctx, ret, jltype, fname);
         ret = update_julia_type(ctx, ret, jltype);
         return ret;
     };

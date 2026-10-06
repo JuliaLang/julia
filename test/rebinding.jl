@@ -868,3 +868,21 @@ module StoreNoFrozenDefinedness
     @test occursin("cmpxchg", sprint(code_llvm, fonce, ()))
     @test occursin("jl_undefined_var_error", sprint(code_llvm, fswap, ()))
 end
+
+# A store to a typed global that codegen validates inline raises the same `TypeError` as
+# one the runtime validates: the global form, naming the binding in `context`.
+module CompiledStoreTypeError
+    using Test
+    module T; global ix::Int = 11; end
+    rt = (m, s, v) -> setglobal!(m, s, v)
+    compiled = () -> setglobal!(T, :ix, "x")
+    swapped = () -> swapglobal!(T, :ix, "x")
+    modified = () -> modifyglobal!(T, :ix, (_, x) -> x, "x")
+    err(f, args...) = try; f(args...); catch e; e; end
+    for e in (err(rt, T, :ix, "x"), err(compiled), err(swapped), err(modified))
+        @test e isa TypeError
+        @test e.context == GlobalRef(T, :ix)
+        @test e.expected === Int && e.got == "x"
+    end
+    @test T.ix === 11
+end
