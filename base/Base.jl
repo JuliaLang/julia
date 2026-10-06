@@ -304,6 +304,7 @@ include("pkgid.jl")
 include("toml/toml.jl")
 include("linking.jl")
 include("loading.jl")
+include("loading_cache.jl")
 
 # BinaryPlatforms, used by Artifacts.  Needs `Sort`.
 include("binaryplatforms.jl")
@@ -601,6 +602,9 @@ function __init__()
     init_debuginfo_source_paths()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
     empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
+    empty!(loaded_cachefile_locks) # opened by the process that built the image
+    empty!(session_build_locks)
+    atexit(release_cachefile_locks)
     empty!(checksums_valid)
     for mod in loaded_modules_order
         push!(get!(Vector{Module}, loaded_precompiles, PkgId(mod)), mod)
