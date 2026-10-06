@@ -192,6 +192,8 @@ $(DEPOT_PATH[1])/logs/repl_history.jl
 ### [`JULIA_MAX_NUM_PRECOMPILE_FILES`](@id JULIA_MAX_NUM_PRECOMPILE_FILES)
 
 Sets the maximum number of different instances of a single package that are to be stored in the precompile cache (default = 10).
+Cache files that a running session has loaded are not removed, so a package can have more files
+than this while those sessions run.
 
 ### [`JULIA_OBJCACHE`](@id JULIA_OBJCACHE)
 

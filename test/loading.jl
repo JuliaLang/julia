@@ -2188,10 +2188,11 @@ end
             "JULIA_DEPOT_PATH" => depot,
         ))
 
-        # Ensure that there is still only one `.ji` file (it got replaced
-        # and the file size changed).
-        @test length(filter(endswith(".ji"), readdir(foo_compiled_path))) == 1
-        @test filesize(cache_path) != cache_size
+        # Ensure that the new build took the old one's place: there is still only one `.ji`
+        # file, and its size changed.
+        new_cache_path = joinpath(foo_compiled_path, only(filter(endswith(".ji"), readdir(foo_compiled_path))))
+        @test !isfile(cache_path)
+        @test filesize(new_cache_path) != cache_size
     end
 end
 

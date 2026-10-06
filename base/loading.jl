@@ -1487,6 +1487,9 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
             depmods[i] = dep
         end
 
+        # held until exit, so other processes don't remove the file
+        lockfile = cachefile_needs_lock(pkg, path) ? lock_cachefile_shared(path) : nothing
+        lockfile === false && return ErrorException("Cache file $(repr(path)) is being removed.")
         ignore_native = false
         unlock(require_lock) # temporarily _unlock_ during these operations
         sv = try
@@ -1503,8 +1506,10 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
             lock(require_lock)
         end
         if isa(sv, Exception)
+            lockfile isa Filesystem.File && release_cachefile_lock(lockfile)
             return sv
         end
+        keep_cachefile_lock(path, lockfile)
 
         sv = sv::SimpleVector
         internal_methods = sv[3]::Vector{Any}
@@ -2417,7 +2422,13 @@ end
 function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String})
     assert_havelock(require_lock)
     local depmodnames
-    io = open(path, "r")
+    io = try
+        open(path, "r")
+    catch e
+        # another process may have removed the file since it was found
+        e isa SystemError || rethrow()
+        return e
+    end
     try
         isvalid_cache_header(io) === nothing && return ArgumentError("Incompatible header in cache file $path.")
         _, _, depmodnames, _, _, clone_targets, _ = _parse_cache_header(io, path)
@@ -3309,6 +3320,8 @@ function __require_prelocked(pkg::PkgId, env)
             else
                 cachefile, ocachefile = loaded::Tuple{String, Union{Nothing, String}}
                 loaded = _tryrequire_from_serialized(pkg, cachefile, ocachefile)
+                # another process building the same slot may have replaced this build with its own
+                !isa(loaded, Module) && !isfile(cachefile) && @goto load_from_cache
                 if !isa(loaded, Module)
                     @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr(MIME"text/plain"(), pkg))" exception=loaded
                 else
@@ -3961,9 +3974,8 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
 
             # Read preferences blob back from .ji file (we can't precompute because we don't
             # actually know what the list of compile-time preferences are without compiling)
-            prefs_blob = preferences_blob(tmppath)
-            cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags)
-            ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
+            modules, _, required_modules, _, prefs_blob = parse_cache_header(tmppath)
+            slot_cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags)
 
             # append checksum for so to the end of the .ji file:
             crc_so = if cache_objects
@@ -3987,25 +3999,16 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             # (`filemode` is 0 if the source has disappeared in the meantime)
             chmod(tmppath, filemode(spec.path) & 0o777 | 0o600)
 
-            # prune the directory with cache files
+            cachefile = slot_cachefile
+            session_only = false
             if pkg.uuid !== nothing
-                entrypath, entryfile = cache_file_entry(pkg)
-                cachefiles = filter!(x -> startswith(x, entryfile * "_") && endswith(x, ".ji"), readdir(cachepath))
-                if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES[]
-                    idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
-                    evicted_cachefile = joinpath(cachepath, cachefiles[idx])
-                    @debug "Evicting file from cache" evicted_cachefile
-                    rm(evicted_cachefile; force=true)
-                    try
-                        rm(ocachefile_from_cachefile(evicted_cachefile); force=true)
-                        @static if Sys.isapple()
-                            rm(ocachefile_from_cachefile(evicted_cachefile) * ".dSYM"; force=true, recursive=true)
-                        end
-                    catch e
-                        e isa IOError || rethrow()
-                    end
-                end
+                # never replace an older build, as another session may use it; the prune below
+                # removes it once no session holds it
+                cachefile = cachefile_with_build_id(slot_cachefile, last(first(modules)) % UInt64)
+                session_only = built_against_other_sources(required_modules)
+                session_only && keep_session_build_lock(pkg, slot_cachefile, cachefile, lock_cachefile_shared(tmppath))
             end
+            ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
 
             if cache_objects
                 ocachefile_new = rename_unique_ocachefile(tmppath_so, ocachefile)
@@ -4023,6 +4026,7 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             # but force=true means it will fall back to non atomic
             # move if the initial rename fails.
             mv(tmppath, cachefile; force=true)
+            pkg.uuid === nothing || prune_cachefiles(pkg, slot_cachefile, cachefile; session_only)
             return cachefile, ocachefile
         end
     finally
