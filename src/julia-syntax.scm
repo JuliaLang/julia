@@ -4292,19 +4292,11 @@ f(x) = yt(x)
                                (else #f)))
                    (one  (length= bad 1))
                    (vs   (string.join (map (lambda (v) (string "`" v "`")) bad) ", "))
-                   (msg  (string "closure captures " (if one "variable " "variables ") vs
-                                 ", which " (if one "requires" "require")
-                                 " a `Core.Box` because lowering cannot prove that "
-                                 (if one "it is" "they are")
-                                 " assigned exactly once before the closure is created"
+                   (msg  (string "closure captures [" vs "]"
+                                 " which require a `Core.Box`; lowering cannot prove that they are"
+                                 " assigned exactly once before the closure"
                                  (if (= *closure-box-policy* 2) (format-loc lno) "")
-                                 ". To avoid the box, assign " (if one "it" "them")
-                                 " only once before creating the closure, or use a `Ref`;"
-                                 " if the closure does not need to see later assignments, `let "
-                                 (car bad) " = " (car bad) "; ... end` around it gives it a copy."
-                                 " To allow the box, add `Base.Experimental.@allow_box "
-                                 (string.join (map string bad) " ")
-                                 "` to the closure body.")))
+                                 " is created. To suppress this, use `Base.Experimental.@allow_box`.")))
               (if (= *closure-box-policy* 2)
                   (error msg)
                   (let ((lf (extract-line-file lno)))
