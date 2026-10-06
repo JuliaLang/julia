@@ -32,34 +32,35 @@ SUBNORM_EXP(n::Val{:ℯ}, ::Type{Float64}) = 708.3964185322641
 SUBNORM_EXP(n::Val{10}, ::Type{Float32}) = 37.929783f0 # rounded up so the strict checks are exact
 SUBNORM_EXP(n::Val{10}, ::Type{Float64}) = 307.6526555685887
 
-# 256/log(base, 2) (For Float64 reductions)
-LogBo256INV(::Val{2}, ::Type{Float64}) = 256.0
-LogBo256INV(::Val{:ℯ}, ::Type{Float64}) = 369.3299304675746
-LogBo256INV(::Val{10}, ::Type{Float64}) = 850.4135922911647
+# The Float64 and Float32 kernels use a table of S = 2^EXP_TABLE_BITS(T) entries
+EXP_TABLE_BITS(::Type{Float64}) = 8
+EXP_TABLE_BITS(::Type{Float32}) = 6
 
-# -log(base, 2)/256 in upper and lower bits
-# Upper is truncated to only have 34 bits of significand since N has at most
-# ceil(log2(-MIN_EXP(Val(2), Float64)*LogBo256INV(Val(2), Float64))) = 19 bits.
-# This ensures no rounding when multiplying LogBo256U*N for FMAless hardware
-LogBo256U(::Val{2}, ::Type{Float64}) = -0.00390625
-LogBo256U(::Val{:ℯ}, ::Type{Float64}) = -0.002707606173999011
-LogBo256U(::Val{10}, ::Type{Float64}) = -0.0011758984204561784
-LogBo256L(::Val{2}, ::Type{Float64}) = 0.0
-LogBo256L(::Val{:ℯ}, ::Type{Float64}) = -6.327543041662719e-14
-LogBo256L(::Val{10}, ::Type{Float64}) = -1.0624811566412999e-13
+# 1/log(base, 2)
+LogBINV(::Val{2}, ::Type{Float64}) = 1.0
+LogBINV(::Val{:ℯ}, ::Type{Float64}) = 1.4426950408889634
+LogBINV(::Val{10}, ::Type{Float64}) = 3.321928094887362
+LogBINV(::Val{2}, ::Type{Float32}) = 1.0f0
+LogBINV(::Val{:ℯ}, ::Type{Float32}) = 1.442695f0
+LogBINV(::Val{10}, ::Type{Float32}) = 3.321928f0
 
-# 64/log(base, 2) (For Float32 reductions)
-LogBo64INV(::Val{2}, ::Type{Float32}) = 64.0f0
-LogBo64INV(::Val{:ℯ}, ::Type{Float32}) = 92.33248f0
-LogBo64INV(::Val{10}, ::Type{Float32}) = 212.6034f0
-# -log(base, 2)/64 in upper and lower bits, split as for LogBo256U/L: the upper part has
-# 10 bits of significand since N = round(x*LogBo64INV) has at most 14 bits for Float32
-LogBo64U(::Val{2}, ::Type{Float32}) = -0.015625f0
-LogBo64U(::Val{:ℯ}, ::Type{Float32}) = -0.01083374f0
-LogBo64U(::Val{10}, ::Type{Float32}) = -0.0047073364f0
-LogBo64L(::Val{2}, ::Type{Float32}) = 0.0f0
-LogBo64L(::Val{:ℯ}, ::Type{Float32}) = 3.3155382f-6
-LogBo64L(::Val{10}, ::Type{Float32}) = 3.7427435f-6
+# -log(base, 2) in upper and lower bits
+# Upper is truncated so that N*LogBU/S is exact for every N the table reduction can produce,
+# which matters on hardware without FMA. For Float64, it has 34 bits of significand since N has
+# at most ceil(log2(-MIN_EXP(Val(2), Float64)*256)) = 19 bits. For Float32, it has 10 bits of
+# significand since N has at most 14 bits.
+LogBU(::Val{2}, ::Type{Float64}) = -1.0
+LogBU(::Val{:ℯ}, ::Type{Float64}) = -0.6931471805437468
+LogBU(::Val{10}, ::Type{Float64}) = -0.3010299956367817
+LogBL(::Val{2}, ::Type{Float64}) = 0.0
+LogBL(::Val{:ℯ}, ::Type{Float64}) = -1.619851018665656e-11
+LogBL(::Val{10}, ::Type{Float64}) = -2.7199517610017277e-11
+LogBU(::Val{2}, ::Type{Float32}) = -1.0f0
+LogBU(::Val{:ℯ}, ::Type{Float32}) = -0.6933594f0
+LogBU(::Val{10}, ::Type{Float32}) = -0.30126953f0
+LogBL(::Val{2}, ::Type{Float32}) = 0.0f0
+LogBL(::Val{:ℯ}, ::Type{Float32}) = 0.00021219444f0
+LogBL(::Val{10}, ::Type{Float32}) = 0.00023953558f0
 
 # Range reduced kernels
 function expm1b_kernel(::Val{2}, x::Float64)
@@ -177,7 +178,7 @@ const J_TABLE = (0x0000000000000000, 0xaac00b1afa5abcbe, 0x9b60163da9fb3335, 0xa
                  0xa12f7bfdad9cbe13, 0xaeef91d802243c88, 0x874fa7c1819e90d8, 0xacdfbdba3692d513, 0x62efd3c22b8f71f1, 0x74afe9d96b2a23d9)
 
 # :nothrow needed since the compiler can't prove `ind` is inbounds.
-Base.@assume_effects :nothrow function table_unpack(ind::Int32)
+Base.@assume_effects :nothrow function table_unpack(::Type{Float64}, ind::Int32)
     ind = ind & 255 + 1 # 255 == length(J_TABLE) - 1
     j = getfield(J_TABLE, ind) # use getfield so the compiler can prove consistent
     jU = reinterpret(Float64, JU_CONST | (j&JU_MASK))
@@ -201,7 +202,7 @@ const J_TABLE_F32 = (0x3f80000000000000, 0x3f8164d2b1c43fd0, 0x3f82cd87b34ea7a9,
                      0x3ff5257d32292436, 0x3ff7d0df336615a2, 0x3ffa83b3b2923758, 0x3ffd3e0c31cf486c)
 
 # :nothrow needed since the compiler can't prove `ind` is inbounds.
-Base.@assume_effects :nothrow function table_unpack_f32(ind::Int32)
+Base.@assume_effects :nothrow function table_unpack(::Type{Float32}, ind::Int32)
     j = getfield(J_TABLE_F32, ind & 63 + 1)
     return reinterpret(Float32, (j >> 32) % UInt32), reinterpret(Float32, j % UInt32)
 end
@@ -220,17 +221,29 @@ end
 # If b^x is subnormal, a little extra care needs to be taken: the scaling back is done in 2 steps,
 # since just messing with the exponent wouldn't work.
 
+# Returns N = k*S + j and r from step 1, for |x| small enough that N fits in the magic rounding constant.
+@inline function exp_reduce(x::T, base) where T<:Union{Float32,Float64}
+    S = T(1 << EXP_TABLE_BITS(T)) # the scalings by S are exact and fold to constants
+    N_float = muladd(x, S*LogBINV(base, T), MAGIC_ROUND_CONST(T))
+    N = (reinterpret(uinttype(T), N_float) - reinterpret(uinttype(T), MAGIC_ROUND_CONST(T))) % Int32
+    N_float -= MAGIC_ROUND_CONST(T) # N_float now equals round(x*S*LogBINV(base, T))
+    r = muladd(N_float, LogBU(base, T)/S, x)
+    if !iszero(LogBL(base, T)) # for base 2, LogBU is exact
+        r = muladd(N_float, LogBL(base, T)/S, r)
+    end
+    return N, r
+end
+
+# Returns k and small_part such that base^x ≈ 2^k * small_part, with 2^(-1/(2S)) <= small_part <= 2^(1 - 1/(2S))
+@inline function exp_kernel(x::T, base) where T<:Union{Float32,Float64}
+    N, r = exp_reduce(x, base)
+    jU, jL = table_unpack(T, N)
+    return N >> EXP_TABLE_BITS(T), muladd(jU, expm1b_kernel(base, r), jL) + jU
+end
+
 @inline function exp_impl(x::Float64, base)
     T = Float64
-    N_float = muladd(x, LogBo256INV(base, T), MAGIC_ROUND_CONST(T))
-    N = reinterpret(UInt64, N_float) % Int32
-    N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV(base, T))
-    r = muladd(N_float, LogBo256U(base, T), x)
-    r = muladd(N_float, LogBo256L(base, T), r)
-    k = N >> 8
-    jU, jL = table_unpack(N)
-    small_part =  muladd(jU, expm1b_kernel(base, r), jL) + jU
-
+    k, small_part = exp_kernel(x, base)
     if !(abs(x) <= SUBNORM_EXP(base, T))
         isnan(x) && return x
         x >= MAX_EXP(base, T) && return Inf
@@ -248,13 +261,9 @@ end
 # Computes base^(x+xlo). Used for pow.
 @inline function exp_impl(x::Float64, xlo::Float64, base)
     T = Float64
-    N_float = muladd(x, LogBo256INV(base, T), MAGIC_ROUND_CONST(T))
-    N = reinterpret(UInt64, N_float) % Int32
-    N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV(base, T))
-    r = muladd(N_float, LogBo256U(base, T), x)
-    r = muladd(N_float, LogBo256L(base, T), r)
-    k = N >> 8
-    jU, jL = table_unpack(N)
+    N, r = exp_reduce(x, base)
+    k = N >> EXP_TABLE_BITS(T)
+    jU, jL = table_unpack(T, N)
     kern = expm1b_kernel(base, r)
     very_small = muladd(kern, jU*xlo, jL)
     hi, lo = Base.canonicalize2(1.0, kern)
@@ -277,32 +286,17 @@ end
     T = Float64
     x >= MAX_EXP(base, T) && return Inf
     x <= -SUBNORM_EXP(base, T) && return 0.0
-    N_float = muladd(x, LogBo256INV(base, T), MAGIC_ROUND_CONST(T))
-    N = reinterpret(UInt64, N_float) % Int32
-    N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV(base, T))
-    r = muladd(N_float, LogBo256U(base, T), x)
-    r = muladd(N_float, LogBo256L(base, T), r)
-    k = N >> 8
-    jU, _ = table_unpack(N)
+    N, r = exp_reduce(x, base)
+    k = N >> EXP_TABLE_BITS(T)
+    jU, _ = table_unpack(T, N)
     small_part =  muladd(jU, expm1b_kernel(base, r), jU)
     twopk = Int64(k) << 52
     return reinterpret(T, twopk + reinterpret(Int64, small_part))
 end
 
-# Returns k and small_part such that base^x ≈ 2^k * small_part, with 2^(-1/128) <= small_part <= 2^(127/128)
-@inline function exp_kernel_f32(x::Float32, base)
-    T = Float32
-    N_float = round(x*LogBo64INV(base, T))
-    N = unsafe_trunc(Int32, N_float)
-    r = muladd(N_float, LogBo64U(base, T), x)
-    r = muladd(N_float, LogBo64L(base, T), r)
-    jU, jL = table_unpack_f32(N)
-    return N >> 6, muladd(jU, expm1b_kernel(base, r), jL) + jU
-end
-
 @inline function exp_impl(x::Float32, base)
     T = Float32
-    k, small_part = exp_kernel_f32(x, base)
+    k, small_part = exp_kernel(x, base)
     if !(abs(x) < SUBNORM_EXP(base, T))
         isnan(x) && return x
         if x > 0
@@ -322,18 +316,17 @@ end
     T = Float32
     !(x < MAX_EXP(base, T)) && return x + Inf32 # overflow, or NaN
     x <= -SUBNORM_EXP(base, T) && return 0.0f0  # flush subnormal results to zero
-    k, small_part = exp_kernel_f32(x, base)
+    k, small_part = exp_kernel(x, base)
     return reinterpret(T, reinterpret(Int32, small_part) + (k << Int32(23)))
 end
 
 @inline function exp_impl(a::Float16, base)
     T = Float32
     x = T(a)
-    # Float16 needs only a single-word log(base, 2), so the Float32 reduction constants
-    # are combined (the scalings by 64 are exact and fold to constants)
-    N_float = round(x*(LogBo64INV(base, T)/64))
+    # Float16 needs only a single-word log(base, 2), so the Float32 reduction constants are combined
+    N_float = round(x*LogBINV(base, T))
     N = unsafe_trunc(Int32, N_float)
-    r = muladd(N_float, 64*(LogBo64U(base, T) + LogBo64L(base, T)), x)
+    r = muladd(N_float, LogBU(base, T) + LogBL(base, T), x)
     small_part = expb_kernel(base, r)
     if !(abs(x) <= 25)
         x > 16 && return Inf16
@@ -449,13 +442,9 @@ function expm1(x::Float64)
         x < MIN_EXP(Float64) && return -1.0
     end
 
-    N_float = muladd(x, LogBo256INV(Val(:ℯ), T), MAGIC_ROUND_CONST(T))
-    N = reinterpret(UInt64, N_float) % Int32
-    N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV(Val(:ℯ), T))
-    r = muladd(N_float, LogBo256U(Val(:ℯ), T), x)
-    r = muladd(N_float, LogBo256L(Val(:ℯ), T), r)
-    k = Int64(N >> 8)
-    jU, jL = table_unpack(N)
+    N, r = exp_reduce(x, Val(:ℯ))
+    k = Int64(N >> EXP_TABLE_BITS(T))
+    jU, jL = table_unpack(T, N)
     p = expm1b_kernel(Val(:ℯ), r)
     twopk  = reinterpret(Float64, (1023+k) << 52)
     twopnk = reinterpret(Float64, (1023-k) << 52)
@@ -473,12 +462,12 @@ function expm1(x::Float32)
         isnan(x) && return x
         return x > 0 ? Inf32 : -1.0f0
     end
-    t = Float64(x) * LogBo256INV(Val(:ℯ), Float64)
+    t = Float64(x) * (256*LogBINV(Val(:ℯ), Float64))
     N_float = t + MAGIC_ROUND_CONST(Float64)
     N = reinterpret(UInt64, N_float) % Int32
     r = t - (N_float - MAGIC_ROUND_CONST(Float64)) # exact, |r| <= 1/2
-    jU, _ = table_unpack(N)
-    scale = reinterpret(Float64, reinterpret(Int64, jU) + (Int64(N >> 8) << 52))
+    jU, _ = table_unpack(Float64, N)
+    scale = reinterpret(Float64, reinterpret(Int64, jU) + (Int64(N >> EXP_TABLE_BITS(Float64)) << 52))
     p = r * evalpoly(r, (0.0027076061740622863, 3.6655655969101062e-6, 3.3083026805413713e-9))
     return copysign(Float32(fma(scale, p, scale - 1.0)), x) # copysign keeps expm1(-0.0) == -0.0
 end
@@ -491,8 +480,8 @@ function expm1(a::Float16)
     a < MIN_EXP(Float16) && return Float16(-1.0)
     iszero(a) && return a # keeps the sign of zero
     x = Float32(a)
-    N = round(x*(LogBo64INV(Val(:ℯ), Float32)/64))
-    r = muladd(N, 64*(LogBo64U(Val(:ℯ), Float32) + LogBo64L(Val(:ℯ), Float32)), x) # single-word -log(2), as in exp_impl(::Float16)
+    N = round(x*LogBINV(Val(:ℯ), Float32))
+    r = muladd(N, LogBU(Val(:ℯ), Float32) + LogBL(Val(:ℯ), Float32), x) # single-word -log(2), as in exp_impl(::Float16)
     r2 = r*r
     # e^r - 1 = r*(1 + r*q(r)) with q a degree 4 Taylor polynomial, evaluated with Estrin's scheme.
     # Computing p in this form (rather than as r + r^2*q(r)) matters: it rounds every Float16
