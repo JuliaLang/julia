@@ -541,10 +541,13 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                         // the meantime and found the iolock held relies on us to get
                         // the loop serviced, so check again that it is idle, this
                         // time without running finalizers.
+                        // The GCChecker on this branch cannot model a failed trylock
+                        // (JL_NOTSAFEPOINT_ENTER is unconditional), so use the bare
+                        // lock primitives here.
                         active = 1;
-                        if (jl_mutex_trylock_nogc(&jl_uv_mutex)) {
+                        if (_jl_mutex_trylock_nogc(ct, &jl_uv_mutex)) {
                             active = uv_loop_alive(jl_global_event_loop());
-                            jl_mutex_unlock_nogc(&jl_uv_mutex);
+                            _jl_mutex_unlock_nogc(&jl_uv_mutex);
                         }
                     }
                     // optimization: check again first if we may have work to do.
