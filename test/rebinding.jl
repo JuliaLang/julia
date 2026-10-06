@@ -877,8 +877,9 @@ module CompiledStoreTypeError
     rt = (m, s, v) -> setglobal!(m, s, v)
     compiled = () -> setglobal!(T, :ix, "x")
     swapped = () -> swapglobal!(T, :ix, "x")
+    modified = () -> modifyglobal!(T, :ix, (_, x) -> x, "x")
     err(f, args...) = try; f(args...); catch e; e; end
-    for e in (err(rt, T, :ix, "x"), err(compiled), err(swapped))
+    for e in (err(rt, T, :ix, "x"), err(compiled), err(swapped), err(modified))
         @test e isa TypeError
         @test e.context == GlobalRef(T, :ix)
         @test e.expected === Int && e.got == "x"

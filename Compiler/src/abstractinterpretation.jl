@@ -2792,12 +2792,10 @@ function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, 
         end
         return CallMeta(Union{}, Union{TypeError, ErrorException}, EFFECTS_THROWS, NoCallInfo())
     end
-    ⊑ = partialorder(typeinf_lattice(interp))
     if !(hasintersect(widenconst(M), Module) && hasintersect(widenconst(s), Symbol))
         return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
-    elseif M ⊑ Module && s ⊑ Symbol
-        return CallMeta(v, ErrorException, setglobal!_effects, NoCallInfo())
     end
+    # even a known `Module` and `Symbol` may name a typed global that rejects `v`
     return CallMeta(v, Union{TypeError, ErrorException}, setglobal!_effects, NoCallInfo())
 end
 
@@ -2859,14 +2857,11 @@ function abstract_eval_rmwglobal!(interp::AbstractInterpreter, sv::AbsIntState, 
         end
         return Pair{CallMeta,Any}(CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo()), nothing)
     end
-    ⊑ = partialorder(typeinf_lattice(interp))
     if !(hasintersect(widenconst(M), Module) && hasintersect(widenconst(s), Symbol))
         return Pair{CallMeta,Any}(CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo()), nothing)
-    elseif M ⊑ Module && s ⊑ Symbol
-        exct = Union{UndefVarError, ErrorException}
-    else
-        exct = Union{UndefVarError, TypeError, ErrorException}
     end
+    # even a known `Module` and `Symbol` may name a typed global that rejects `v`
+    exct = Union{UndefVarError, TypeError, ErrorException}
     return Pair{CallMeta,Any}(CallMeta(Any, exct,
         merge_effects(generic_getglobal_effects, setglobal!_effects), NoCallInfo()), nothing)
 end

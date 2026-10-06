@@ -7776,6 +7776,19 @@ global invalid_setglobal!_exct_modeling::Int
 @test Base.infer_exception_type((Float64,)) do x
     setglobal!(@__MODULE__, :invalid_setglobal!_exct_modeling, x)
 end == TypeError
+# a store by an unknown name may still reach a typed global that rejects the value
+@test Base.infer_exception_type((Module, Symbol, Float64)) do m, s, x
+    setglobal!(m, s, x)
+end === Union{ErrorException, TypeError}
+@test Base.infer_exception_type((Module, Symbol, Float64)) do m, s, x
+    setglobalonce!(m, s, x)
+end === Union{ErrorException, TypeError}
+@test Base.infer_exception_type((Module, Symbol, Float64)) do m, s, x
+    swapglobal!(m, s, x)
+end === Union{ErrorException, TypeError, UndefVarError}
+@test Base.infer_exception_type((Module, Symbol, Float64)) do m, s, x
+    replaceglobal!(m, s, 1, x)
+end === Union{ErrorException, TypeError, UndefVarError}
 
 # Issue #58257 - Hang in inference during BindingPartition resolution
 module A58257
