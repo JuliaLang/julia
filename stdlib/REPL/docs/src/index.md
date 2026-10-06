@@ -416,6 +416,24 @@ julia> Stri[TAB]
 StridedArray    StridedMatrix    StridedVecOrMat  StridedVector    String
 ```
 
+When completing a name qualified by a module, names that are [public](@ref modules) in that
+module (exported or declared with `public`) are listed first, followed by its other names under an
+`Internal:` header:
+
+```julia-repl
+julia> Base.Iterators.[TAB][TAB]
+Reverse     Stateful    accumulate  countfrom   cycle
+drop        dropwhile   enumerate   filter      findeach
+flatmap     flatten     map         nth         partition
+peel        product     repeated    rest        reverse
+take        takewhile   zip
+Internal:
+Accumulate                 Base                       Count
+Cycle                      Drop                       DropWhile
+Enumerate                  Filter                     Flatten
+⋮
+```
+
 The tab key can also be used to substitute LaTeX math symbols with their Unicode equivalents,
 and get a list of LaTeX matches as well:
 

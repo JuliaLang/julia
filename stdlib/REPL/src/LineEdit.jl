@@ -409,8 +409,10 @@ reset_state(::EmptyHistoryProvider) = nothing
 struct NamedCompletion
     completion::String # what is actually completed, for example "\trianglecdot"
     name::String # what is displayed in lists of possible completions, for example "◬ \trianglecdot"
+    internal::Bool # a non-public name, listed after the public ones
 end
 
+NamedCompletion(completion::String, name::String) = NamedCompletion(completion, name, false)
 NamedCompletion(completion::String) = NamedCompletion(completion, completion)
 
 complete_line(c::EmptyCompletionProvider, s; hint::Bool=false) = NamedCompletion[], "", true
@@ -564,37 +566,55 @@ end
 # does not restrict column length when multiple columns are used.
 const MULTICOLUMN_THRESHOLD = 5
 
-show_completions(s::PromptState, completions::Vector{NamedCompletion}) = show_completions(s, map(x -> x.name, completions))
+function show_completions(s::PromptState, completions::Vector{NamedCompletion})
+    public = String[c.name for c in completions if !c.internal]
+    internal = String[c.name for c in completions if c.internal]
+    show_completions(s, public, internal)
+end
 
 # Show available completions
-function show_completions(s::PromptState, completions::Vector{String})
+function show_completions(s::PromptState, completions::Vector{String}, internal::Vector{String}=String[])
     # skip any lines of input after the cursor
     cmove_down(terminal(s), input_string_newlines_aftercursor(s))
     println(terminal(s))
-    if any(Base.Fix1(occursin, '\n'), completions)
-        foreach(Base.Fix1(println, terminal(s)), completions)
-    else
-        n = length(completions)
-        colmax = 2 + maximum(length, completions; init=1) # n.b. length >= textwidth
-
-        num_cols = min(cld(n, MULTICOLUMN_THRESHOLD),
-                       max(div(width(terminal(s)), colmax), 1))
-
-        entries_per_col = cld(n, num_cols)
-        idx = 0
-        for _ in 1:entries_per_col
-            for col = 0:(num_cols-1)
-                idx += 1
-                idx > n && break
-                cmove_col(terminal(s), colmax*col+1)
-                print(terminal(s), completions[idx])
-            end
-            println(terminal(s))
+    multiline = any(Base.Fix1(occursin, '\n'), completions) || any(Base.Fix1(occursin, '\n'), internal)
+    for group in (completions, internal)
+        isempty(group) && continue
+        if group === internal
+            cmove_col(terminal(s), 1)
+            println(terminal(s), "Internal:")
+        end
+        if multiline
+            foreach(Base.Fix1(println, terminal(s)), group)
+        else
+            # Each group gets its own column layout so that long internal names don't widen
+            # the columns of the public ones
+            show_completion_columns(s, group)
         end
     end
 
     # make space for the prompt
     for i = 1:input_string_newlines(s)
+        println(terminal(s))
+    end
+end
+
+function show_completion_columns(s::PromptState, completions::Vector{String})
+    n = length(completions)
+    colmax = 2 + maximum(length, completions; init=1) # n.b. length >= textwidth
+
+    num_cols = min(cld(n, MULTICOLUMN_THRESHOLD),
+                   max(div(width(terminal(s)), colmax), 1))
+
+    entries_per_col = cld(n, num_cols)
+    idx = 0
+    for _ in 1:entries_per_col
+        for col = 0:(num_cols-1)
+            idx += 1
+            idx > n && break
+            cmove_col(terminal(s), colmax*col+1)
+            print(terminal(s), completions[idx])
+        end
         println(terminal(s))
     end
 end

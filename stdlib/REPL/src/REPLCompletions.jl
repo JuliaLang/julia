@@ -37,7 +37,9 @@ end
 struct ModuleCompletion <: Completion
     parent::Module
     mod::String
+    internal::Bool # not public in the module, which was named explicitly
 end
+ModuleCompletion(parent::Module, mod::String) = ModuleCompletion(parent, mod, false)
 
 struct PackageCompletion <: Completion
     package::String
@@ -126,6 +128,7 @@ _completion_text(c::KeywordArgumentCompletion) = c.kwarg*'='
 completion_text(c) = _completion_text(c)::String
 
 named_completion(c::BslashCompletion) = NamedCompletion(c.completion, c.name)
+named_completion(c::ModuleCompletion) = NamedCompletion(c.mod, c.mod, c.internal)
 
 function named_completion(c)
     text = completion_text(c)::String
@@ -140,19 +143,20 @@ function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
 end
 
-function appendmacro!(syms, macros, needle, endchar)
+function appendmacro!(suggestions, mod, macros, needle, endchar, mark_internal)
     for macsym in macros
         s = String(macsym)
         if endswith(s, needle)
             from = nextind(s, firstindex(s))
             to = prevind(s, sizeof(s)-sizeof(needle)+1)
-            push!(syms, s[from:to]*endchar)
+            push!(suggestions, ModuleCompletion(mod, s[from:to]*endchar, mark_internal && !Base.ispublic(mod, macsym)))
         end
     end
 end
 
 function append_filtered_mod_names!(ffunc::Function, suggestions::Vector{Completion},
-                                    mod::Module, name::String, complete_internal_only::Bool)
+                                    mod::Module, name::String, complete_internal_only::Bool,
+                                    mark_internal::Bool)
     imported = usings = !complete_internal_only
     ssyms = names(mod; all=true, imported, usings)
     filter!(ffunc, ssyms)
@@ -170,12 +174,13 @@ function append_filtered_mod_names!(ffunc::Function, suggestions::Vector{Complet
         end
     end
 
-    syms = String[sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s) for s in ssyms if completes_global(String(s), name)]
-    appendmacro!(syms, macros, "_str", "\"")
-    appendmacro!(syms, macros, "_cmd", "`")
-    for sym in syms
-        push!(suggestions, ModuleCompletion(mod, sym))
+    for s in ssyms
+        completes_global(String(s), name) || continue
+        text = sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s)
+        push!(suggestions, ModuleCompletion(mod, text, mark_internal && !Base.ispublic(mod, s)))
     end
+    appendmacro!(suggestions, mod, macros, "_str", "\"", mark_internal)
+    appendmacro!(suggestions, mod, macros, "_cmd", "`", mark_internal)
     return suggestions
 end
 
@@ -186,6 +191,9 @@ function complete_symbol!(suggestions::Vector{Completion},
                           shift::Bool=false)
     local mod, t, val
     complete_internal_only = isempty(name)
+    # Only mark internal names when a module is named explicitly. Without a prefix, the
+    # user's own definitions would all count as internal.
+    mark_internal = false
     if prefix !== nothing
         res = repl_eval_ex(prefix, context_module)
         res === nothing && return Completion[]
@@ -193,6 +201,7 @@ function complete_symbol!(suggestions::Vector{Completion},
             val = res.val
             if isa(val, Module)
                 mod = val
+                mark_internal = true
                 if !shift
                     # when module is explicitly accessed, show internal bindings that are
                     # defined by the module, unless shift key is pressed
@@ -212,7 +221,7 @@ function complete_symbol!(suggestions::Vector{Completion},
         let mod_for_check = mod,
             modname = nameof(mod_for_check),
             is_main = mod_for_check === Main
-            append_filtered_mod_names!(suggestions, mod, name, complete_internal_only) do s::Symbol
+            append_filtered_mod_names!(suggestions, mod, name, complete_internal_only, mark_internal) do s::Symbol
                 if Base.isdeprecated(mod_for_check, s)
                     return false
                 elseif s === modname

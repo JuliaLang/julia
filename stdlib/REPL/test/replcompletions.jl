@@ -2388,6 +2388,33 @@ end
     @test !Base.isexported(Base, :ispublic)
 end
 
+module TestPublicCompletions
+export pub_exported
+public pub_public, @pub_macro_str
+pub_exported() = 1
+pub_public() = 2
+pub_private() = 3
+macro pub_macro_str(x) end
+macro pub_private_str(x) end
+end
+
+@testset "non-public names are marked internal when the module is named" begin
+    for shift in (false, true)
+        c, r, res = map_named_completion(completions("TestPublicCompletions.pub_", 26, @__MODULE__, shift))
+        @test res
+        internal = Dict(x.completion => x.internal for x in c)
+        @test internal["pub_exported"] === false
+        @test internal["pub_public"] === false
+        @test internal["pub_macro\""] === false
+        @test internal["pub_private"] === true
+        @test internal["pub_private\""] === true
+    end
+    # without a prefix, names defined in the current module are not marked
+    c, r, res = map_named_completion(completions("pub_", 4, TestPublicCompletions, false))
+    @test "pub_private" in map(x -> x.completion, c)
+    @test !any(x -> x.internal, c)
+end
+
 # issue #51194
 for (s, compl) in (("2*CompletionFoo.fmsoe", "fmsoebelkv"),
                    (":a isa CompletionFoo.test!1", "test!12"),
