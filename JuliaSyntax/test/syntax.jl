@@ -39,6 +39,14 @@ end
     @test parsestmt(SyntaxTree, "x = 1._"; ignore_errors=true) isa SyntaxTree
 end
 
+@testset "SyntaxTree compound assignment heads" begin
+    # Must not depend on `show(::SyntaxTree)`, which JuliaLowering defines
+    @test head(parsestmt(SyntaxTree, "x += 1")) === :+=
+    @test head(parsestmt(SyntaxTree, "x .>>>= 1")) === :.>>>=
+    @test parsestmt(SyntaxTree, ":(+=)")[1].value == "+="
+    @test parsestmt(SyntaxTree, ":.>>>=")[1].value == ".>>>="
+end
+
 @testset "SyntaxTree type stability" begin
     st0 = parsestmt(SyntaxTree, "f(::Int)")
     # `children` must not leak the `Union{Nothing}` of the raw field into inference.
