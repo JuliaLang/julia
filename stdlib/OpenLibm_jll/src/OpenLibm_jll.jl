@@ -3,7 +3,6 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/OpenLibm_jll.jl
 baremodule OpenLibm_jll
 using Base, Libdl
-Base.Experimental.@closure_boxes :error
 if Sys.iswindows()
     using CompilerSupportLibraries_jll
 end

@@ -4,7 +4,6 @@
 
 baremodule dSFMT_jll
 using Base, Libdl
-Base.Experimental.@closure_boxes :error
 
 export libdSFMT
 

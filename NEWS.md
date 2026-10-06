@@ -73,7 +73,6 @@ Compiler/Runtime improvements
   created), since such variables cannot be inferred. `Base.Experimental.@closure_boxes :error`
   or `:warn` enables this for a module and its submodules; the default is to allow boxes
   silently. A closure can permit a box with `Base.Experimental.@allow_box var` in its body.
-  Base and the standard libraries now use `:error`.
 
 * Type inference now refines field types through conditional checks and call signatures.
   For example, after `if !isnothing(x.field)`, inference knows `x.field` is not `nothing` within the branch.

@@ -3,7 +3,6 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/OpenBLAS_jll.jl
 baremodule OpenBLAS_jll
 using Base, Libdl
-Base.Experimental.@closure_boxes :error
 using CompilerSupportLibraries_jll
 
 export libopenblas

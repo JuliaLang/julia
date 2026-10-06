@@ -199,8 +199,6 @@ be stored in a `Core.Box`. Submodules inherit the setting of their parent module
     (currently these are not reported for code inside `module` blocks)
   * `:allow` (the default): boxes are allowed silently
 
-Base and the standard libraries use `:error`.
-
 A captured variable needs a box unless lowering can prove that it is assigned exactly once
 before the closure is created. Access to a boxed variable cannot be inferred, and the box
 is heap-allocated, so this is a common source of poor performance.

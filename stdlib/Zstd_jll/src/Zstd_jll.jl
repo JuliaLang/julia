@@ -4,7 +4,6 @@
 #
 baremodule Zstd_jll
 using Base, Libdl
-Base.Experimental.@closure_boxes :error
 if Sys.iswindows() && Sys.WORD_SIZE == 32
     using CompilerSupportLibraries_jll
 end

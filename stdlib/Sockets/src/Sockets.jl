@@ -5,8 +5,6 @@ Support for sockets. Provides [`IPAddr`](@ref) and subtypes, [`TCPSocket`](@ref)
 """
 module Sockets
 
-Base.Experimental.@closure_boxes :error
-
 export
     accept,
     bind,

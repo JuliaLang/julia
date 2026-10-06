@@ -3,7 +3,6 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/p7zip_jll.jl
 baremodule p7zip_jll
 using Base
-Base.Experimental.@closure_boxes :error
 
 export p7zip
 

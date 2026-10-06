@@ -8,8 +8,6 @@ Support for generating random numbers. Provides [`rand`](@ref), [`randn`](@ref),
 """
 module Random
 
-Base.Experimental.@closure_boxes :error
-
 include("DSFMT.jl")
 
 using .DSFMT

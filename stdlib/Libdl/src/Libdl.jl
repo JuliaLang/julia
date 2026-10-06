@@ -6,8 +6,6 @@ granular control. It enables users to search for shared libraries both in memory
 library symbols as low-level pointers.
 """
 module Libdl
-
-Base.Experimental.@closure_boxes :error
 # Just re-export Base.Libc.Libdl:
 export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL,
     RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW, dlclose, dlopen, dlopen_e, dlsym, dlsym_e,

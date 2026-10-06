@@ -4,7 +4,6 @@
 
 baremodule libblastrampoline_jll
 using Base, Libdl
-Base.Experimental.@closure_boxes :error
 
 export libblastrampoline
 

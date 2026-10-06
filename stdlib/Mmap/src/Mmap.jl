@@ -5,8 +5,6 @@ Low level module for mmap (memory mapping of files).
 """
 module Mmap
 
-Base.Experimental.@closure_boxes :error
-
 import Base: OS_HANDLE, INVALID_OS_HANDLE, IOError
 import Base.Filesystem: JL_O_CREAT, JL_O_RDONLY, JL_O_RDWR, JL_O_EXCL, S_IRUSR, S_IWUSR
 using Base.Sys: PAGESIZE

@@ -7,8 +7,6 @@ Provide serialization of Julia objects via the functions
 """
 module Serialization
 
-Base.Experimental.@closure_boxes :error
-
 import Base: Bottom, unsafe_convert
 import Base.ScopedValues: ScopedValue, with
 import Core: svec, SimpleVector

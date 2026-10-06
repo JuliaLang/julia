@@ -3,7 +3,6 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/Zlib_jll.jl
 baremodule Zlib_jll
 using Base, Libdl
-Base.Experimental.@closure_boxes :error
 
 export libz
 

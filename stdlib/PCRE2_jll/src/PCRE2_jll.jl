@@ -3,7 +3,6 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/PCRE2_jll.jl
 baremodule PCRE2_jll
 using Base, Libdl
-Base.Experimental.@closure_boxes :error
 
 export libpcre2_8
 

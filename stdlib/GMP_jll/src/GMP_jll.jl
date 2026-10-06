@@ -3,7 +3,6 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/GMP_jll.jl
 baremodule GMP_jll
 using Base, Libdl
-Base.Experimental.@closure_boxes :error
 if !Sys.isapple()
     using CompilerSupportLibraries_jll
 end
