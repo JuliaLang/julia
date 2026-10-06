@@ -10,6 +10,17 @@ struct ClosureInfo
     capt_sp::Vector{SyntaxTree}
 end
 
+struct AllowBoxAnnotations
+    # Names of the captured variables that annotations allow each lambda to box
+    # (`nothing` allows all of them)
+    allowed::Dict{ScopeId,Union{Nothing,Set{String}}}
+    # The annotations directly in each lambda, as the names they list (`nothing`
+    # for a bare annotation)
+    direct::Dict{ScopeId,Vector{Union{Nothing,String}}}
+end
+AllowBoxAnnotations() = AllowBoxAnnotations(Dict{ScopeId,Union{Nothing,Set{String}}}(),
+                                            Dict{ScopeId,Vector{Union{Nothing,String}}}())
+
 mutable struct ClosureConversionCtx <: AbstractLoweringContext
     const bindings::Bindings
     const mod::Module
@@ -31,9 +42,8 @@ mutable struct ClosureConversionCtx <: AbstractLoweringContext
     const toplevel_pure::Bool
     const toplevel_stmts::Vector{SyntaxTree}
     const closure_infos::Dict{ClosureKey,ClosureInfo}
-    # Names of the captured variables that `@allow_box` annotations allow each
-    # lambda to box (`nothing` allows all of them)
-    const allowed_boxes::Dict{ScopeId,Union{Nothing,Set{String}}}
+    # `@allow_box` annotations, see `collect_allowed_boxes`
+    const allowed_boxes::AllowBoxAnnotations
 end
 
 function current_lambda_bindings(ctx::ClosureConversionCtx)
@@ -318,62 +328,83 @@ end
 # variables also applies to the enclosing lambdas, which capture those
 # variables to pass them inward.
 function collect_allowed_boxes(ex)
-    allowed = Dict{ScopeId,Union{Nothing,Set{String}}}()
-    _collect_allowed_boxes!(allowed, ScopeId[], ex)
-    allowed
+    ann = AllowBoxAnnotations()
+    _collect_allowed_boxes!(ann, ScopeId[], ex)
+    ann
 end
 
-function _collect_allowed_boxes!(allowed, lambdas, ex)
+function _collect_allowed_boxes!(ann, lambdas, ex)
     k = kind(ex)
     if is_leaf(ex)
         return
     elseif k in KSet"lambda toplevel_lambda generated_lambda"
         push!(lambdas, lambda_bindings(ex[1]).scope_id)
-        foreach(e->_collect_allowed_boxes!(allowed, lambdas, e), children(ex))
+        foreach(e->_collect_allowed_boxes!(ann, lambdas, e), children(ex))
         pop!(lambdas)
     elseif k == K"meta" && numchildren(ex) >= 1 && kind(ex[1]) == K"Symbol" &&
             syntax_name(ex[1]) == "allow_box"
+        isempty(lambdas) && return
+        direct = get!(Vector{Union{Nothing,String}}, ann.direct, lambdas[end])
         if numchildren(ex) == 1
-            isempty(lambdas) || (allowed[lambdas[end]] = nothing)
+            ann.allowed[lambdas[end]] = nothing
+            push!(direct, nothing)
         else
             names = Set{String}(syntax_name(v) for v in children(ex)[2:end])
             for id in lambdas
-                prev = get(allowed, id, Set{String}())
-                isnothing(prev) || (allowed[id] = union!(prev, names))
+                prev = get(ann.allowed, id, Set{String}())
+                isnothing(prev) || (ann.allowed[id] = union!(prev, names))
             end
+            union!(direct, names)
         end
     else
-        foreach(e->_collect_allowed_boxes!(allowed, lambdas, e), children(ex))
+        foreach(e->_collect_allowed_boxes!(ann, lambdas, e), children(ex))
     end
 end
 
 # Apply the closure box policy of `ctx.mod` to a closure with methods
 # `closure_binds.lambdas`, which stores the captured variables `field_bindings`
-# in boxes where `field_is_box` is set.
+# in boxes where `field_is_box` is set. Annotations that have no effect produce
+# a warning, even when boxes are errors, so that code keeps working when lowering
+# learns to avoid a box.
 function check_closure_boxes(ctx, srcref, closure_binds, field_bindings, field_is_box)
-    any(field_is_box) || return
     policy = closure_box_policy(ctx.mod)
     policy == 0 && return
+    captured = Set{String}(get_binding(ctx, id).name for id in field_bindings)
+    boxed = Set{String}(get_binding(ctx, id).name
+                        for (id, isbox) in zip(field_bindings, field_is_box) if isbox)
+    unused = String[]
+    for lbs in closure_binds.lambdas, name in get(ctx.allowed_boxes.direct, lbs.scope_id, ())
+        msg = if isnothing(name)
+            isempty(boxed) ? "`Base.Experimental.@allow_box` has no effect: the closure does not box any captured variables" : nothing
+        elseif !(name in captured)
+            "`Base.Experimental.@allow_box $name` has no effect: the closure does not capture `$name`"
+        elseif !(name in boxed)
+            "`Base.Experimental.@allow_box $name` has no effect: `$name` does not need a `Core.Box`"
+        end
+        isnothing(msg) || msg in unused || push!(unused, msg)
+    end
+    if !isempty(unused)
+        loc = source_location(LineNumberNode, srcref)
+        for msg in unused
+            @warn msg _file=string(loc.file) _line=loc.line _group=:closure_boxes _module=ctx.mod
+        end
+    end
+    isempty(boxed) && return
     bad = String[]
-    for (id, boxed) in zip(field_bindings, field_is_box)
-        boxed || continue
+    for (id, isbox) in zip(field_bindings, field_is_box)
+        isbox || continue
         name = get_binding(ctx, id).name
         allowed = any(closure_binds.lambdas) do lbs
-            names = get(ctx.allowed_boxes, lbs.scope_id, Set{String}())
+            names = get(ctx.allowed_boxes.allowed, lbs.scope_id, Set{String}())
             isnothing(names) || name in names
         end
         allowed || push!(bad, name)
     end
     isempty(bad) && return
-    single = length(bad) == 1
-    msg = string("closure captures ", single ? "variable " : "variables ",
-                 join(("`$v`" for v in bad), ", "), ", which ", single ? "requires" : "require",
-                 " a `Core.Box` because lowering cannot prove that ", single ? "it is" : "they are",
-                 " assigned exactly once before the closure is created. To avoid the box, assign ",
-                 single ? "it" : "them", " only once before creating the closure, or use a `Ref`; ",
-                 "if the closure does not need to see later assignments, `let ", bad[1], " = ", bad[1],
-                 "; ... end` around it gives it a copy. To allow the box, add ",
-                 "`Base.Experimental.@allow_box ", join(bad, " "), "` to the closure body.")
+    msg = string("closure captures [", join(("`$v`" for v in bad), ", "), "]",
+                 " which require a `Core.Box`; lowering cannot prove that they are",
+                 " assigned exactly once before the closure is created.",
+                 " To suppress this, use `Base.Experimental.@allow_box`.")
     if policy == 2
         throw(LoweringError(srcref, msg))
     else
@@ -770,8 +801,7 @@ Invariants:
                                    false, true, true, SyntaxList(),
                                    Dict{ClosureKey,ClosureInfo}(),
                                    closure_box_policy(ctx.layer.mod) == 0 ?
-                                       Dict{ScopeId,Union{Nothing,Set{String}}}() :
-                                       collect_allowed_boxes(ex))
+                                       AllowBoxAnnotations() : collect_allowed_boxes(ex))
     ex_out = closure_convert_lambda(ctx_out, ex, children(ex[3]))
     if !isempty(ctx_out.toplevel_stmts)
         throw(LoweringError(first(ctx_out.toplevel_stmts), "Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension"))

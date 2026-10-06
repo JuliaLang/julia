@@ -1485,7 +1485,7 @@ end
 if isdefined(Base.Experimental, Symbol("@closure_boxes"))
     box_mod = Module()
     Core.eval(box_mod, :(Base.Experimental.@closure_boxes :error))
-    @test_throws "closure captures variable `x`" JuliaLowering.include_string(box_mod, """
+    @test_throws "closure captures [`x`]" JuliaLowering.include_string(box_mod, """
     function f_box_err()
         x = 0
         g = () -> x
@@ -1493,7 +1493,7 @@ if isdefined(Base.Experimental, Symbol("@closure_boxes"))
         g
     end
     """)
-    @test_throws "closure captures variables `x`, `y`" JuliaLowering.include_string(box_mod, """
+    @test_logs (:warn, r"`Base.Experimental.@allow_box z` has no effect") @test_throws "closure captures [`x`, `y`]" JuliaLowering.include_string(box_mod, """
     function f_box_err2()
         x = y = 0
         g = () -> (Base.Experimental.@allow_box z; x + y)
@@ -1531,7 +1531,7 @@ if isdefined(Base.Experimental, Symbol("@closure_boxes"))
     f_box_nested()
     """) == 1
     # a bare annotation covers only the closure containing it
-    @test_throws "closure captures variable `x`" JuliaLowering.include_string(box_mod, """
+    @test_throws "closure captures [`x`]" JuliaLowering.include_string(box_mod, """
     function f_box_nested_bare()
         x = 0
         g = () -> (() -> (Base.Experimental.@allow_box; x))
@@ -1554,9 +1554,43 @@ if isdefined(Base.Experimental, Symbol("@closure_boxes"))
                Base.uncompressed_ast(only(methods(g))).code)
     @test JuliaLowering.include_string(box_mod, "let x = 0; g = () -> x; g(); end") == 0
 
+    # annotations that have no effect produce warnings, even when boxes are errors
+    @test 1 == @test_logs (:warn, r"`Base.Experimental.@allow_box x` has no effect: `x` does not need a `Core.Box`") JuliaLowering.include_string(box_mod, """
+    function f_box_unused_nobox()
+        x = 1
+        g = () -> (Base.Experimental.@allow_box x; x)
+        g()
+    end
+    f_box_unused_nobox()
+    """)
+    @test_logs (:warn, r"`Base.Experimental.@allow_box y` has no effect: the closure does not capture `y`") JuliaLowering.include_string(box_mod, """
+    function f_box_unused_nocapture()
+        x = 1
+        y = 2
+        g = () -> (Base.Experimental.@allow_box y; x)
+        g, y
+    end
+    """)
+    @test_logs (:warn, r"`Base.Experimental.@allow_box` has no effect: the closure does not box") JuliaLowering.include_string(box_mod, """
+    function f_box_unused_bare()
+        x = 1
+        g = () -> (Base.Experimental.@allow_box; x)
+        g
+    end
+    """)
+    # annotations that are needed, here or in a nested closure, don't warn
+    @test_logs JuliaLowering.include_string(box_mod, """
+    function f_box_used_nested()
+        x = 0
+        g = () -> (() -> (Base.Experimental.@allow_box x; x))
+        x = 1
+        g
+    end
+    """)
+
     warn_mod = Module()
     Core.eval(warn_mod, :(Base.Experimental.@closure_boxes :warn))
-    @test 1 == @test_logs (:warn, r"closure captures variable `x`") JuliaLowering.include_string(warn_mod, """
+    @test 1 == @test_logs (:warn, r"closure captures \[`x`\]") JuliaLowering.include_string(warn_mod, """
     function f_box_warn()
         x = 0
         g = () -> x

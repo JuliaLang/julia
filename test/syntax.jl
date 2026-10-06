@@ -4793,14 +4793,14 @@ end
     boxed_fields(c) = [fieldname(typeof(c), i) for i in 1:fieldcount(typeof(c))
                        if fieldtype(typeof(c), i) === Core.Box]
     merr = boxmod(:error)
-    @test_throws "closure captures variable `x`, which requires a `Core.Box`" Core.eval(merr, :(
+    @test_throws "closure captures [`x`] which require a `Core.Box`" Core.eval(merr, :(
         function f()
             x = 0
             g = () -> x
             x = 1
             g
         end))
-    @test_throws "closure captures variables `x`, `y`" Core.eval(merr, :(
+    @test_throws "closure captures [`x`, `y`]" Core.eval(merr, :(
         function f(c)
             x = y = 0
             g = () -> x + y
@@ -4808,20 +4808,20 @@ end
             y += 1
             g
         end))
-    @test_throws "closure captures variable `n`" Core.eval(merr, :(
+    @test_throws "closure captures [`n`]" Core.eval(merr, :(
         function f(xs)
             n = 0
             foreach(x -> (n += x), xs)
             n
         end))
-    @test_throws "closure captures variable `s`" Core.eval(merr, :(
+    @test_throws "closure captures [`s`]" Core.eval(merr, :(
         function f(v)
             s = 0
             g = (s * i for i in v)
             s = 1
             g
         end))
-    @test_throws "closure captures variable `x`" Core.eval(merr, :(
+    @test_throws "closure captures [`x`]" Core.eval(merr, :(
         function f()
             x = 0
             g = Base.Experimental.@opaque () -> x
@@ -4869,7 +4869,7 @@ end
             n
         end))
     @test merr.count_calls(1:3) == 6
-    @test_throws "closure captures variable `y`" Core.eval(merr, :(
+    @test_throws "closure captures [`y`]" Core.eval(merr, :(
         function allow_other()
             x = y = 0
             g = () -> (Base.Experimental.@allow_box x; x + y)
@@ -4886,7 +4886,7 @@ end
             g
         end))
     @test merr.nested()()() == 1
-    @test_throws "closure captures variable `x`" Core.eval(merr, :(
+    @test_throws "closure captures [`x`]" Core.eval(merr, :(
         function nested_bare()
             x = 0
             g = () -> (() -> (Base.Experimental.@allow_box; x))
@@ -4903,7 +4903,7 @@ end
         end))))
     # submodules inherit the setting
     Core.eval(merr, :(module Sub end))
-    @test_throws "closure captures variable `x`" Core.eval(merr.Sub, :(
+    @test_throws "closure captures [`x`]" Core.eval(merr.Sub, :(
         function f()
             x = 0
             g = () -> x
@@ -4913,7 +4913,7 @@ end
     @test Meta.isexpr(Meta.lower(merr, :(let x = 0; g = () -> x; x = 1; end)), :error)
 
     mwarn = boxmod(:warn)
-    @test_logs (:warn, r"closure captures variable `x`") Core.eval(mwarn, :(
+    @test_logs (:warn, r"closure captures \[`x`\]") Core.eval(mwarn, :(
         function f()
             x = 0
             g = () -> x
@@ -4932,4 +4932,49 @@ end
         end))
     @test boxed_fields(mallow.f()) == [:x]
     @test_throws "invalid closure_boxes policy" Core.eval(mallow, :(Base.Experimental.@closure_boxes :maybe))
+
+    # annotations that have no effect produce warnings, even when boxes are errors
+    @test_logs (:warn, r"`Base.Experimental.@allow_box x` has no effect: `x` does not need a `Core.Box`") Core.eval(merr, :(
+        function unused_nobox()
+            x = 1
+            g = () -> (Base.Experimental.@allow_box x; x)
+            g
+        end))
+    @test merr.unused_nobox()() == 1
+    @test_logs (:warn, r"`Base.Experimental.@allow_box y` has no effect: the closure does not capture `y`") Core.eval(merr, :(
+        function unused_nocapture()
+            x = 1
+            y = 2
+            g = () -> (Base.Experimental.@allow_box y; x)
+            g, y
+        end))
+    @test_logs (:warn, r"`Base.Experimental.@allow_box` has no effect: the closure does not box") Core.eval(merr, :(
+        function unused_bare()
+            x = 1
+            g = () -> (Base.Experimental.@allow_box; x)
+            g
+        end))
+    @test_logs (:warn, r"no effect") (:warn, r"closure captures \[`x`\]") Core.eval(mwarn, :(
+        function unused_warn()
+            x = 0
+            y = 1
+            g = () -> (Base.Experimental.@allow_box y; x + y)
+            x = 1
+            g
+        end))
+    # annotations that are needed, here or in a nested closure, don't warn
+    @test_logs Core.eval(merr, :(
+        function used_nested()
+            x = 0
+            g = () -> (() -> (Base.Experimental.@allow_box x; x))
+            x = 1
+            g
+        end))
+    # nor do any annotations when boxes are allowed
+    @test_logs Core.eval(mallow, :(
+        function unused_allow()
+            x = 1
+            g = () -> (Base.Experimental.@allow_box x; x)
+            g
+        end))
 end

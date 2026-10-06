@@ -948,8 +948,8 @@ Because boxing is easy to introduce by accident, lowering can report it. After
 [`Base.Experimental.@closure_boxes :error`](@ref Base.Experimental.@closure_boxes) in a
 module, lowering `abmult` or `abmult2` throws an error:
 ```
-ERROR: syntax: closure captures variable `r`, which requires a `Core.Box` because lowering
-cannot prove that it is assigned exactly once before the closure is created [...]
+ERROR: syntax: closure captures [`r`] which require a `Core.Box`; lowering cannot prove that
+they are assigned exactly once before the closure is created [...]
 ```
 Use `:warn` instead to only print a warning. If a box is acceptable, for example in code
 that isn't performance-critical, put

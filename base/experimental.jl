@@ -225,6 +225,11 @@ pass them to this closure are allowed to box them too. Without arguments, the an
 allows every captured variable of the closure that directly contains it, but not those of
 enclosing closures.
 
+When the module's policy is `:error` or `:warn` (see
+[`@closure_boxes`](@ref Base.Experimental.@closure_boxes)), an annotation that has no effect,
+because the closure does not capture the variable or does not need to box it, produces a
+warning (not an error), so annotations don't outlive the boxes they were written for.
+
 See [`@closure_boxes`](@ref Base.Experimental.@closure_boxes).
 
 # Examples

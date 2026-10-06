@@ -4251,34 +4251,53 @@ f(x) = yt(x)
 (define (allow-box-meta? e)
   (and (pair? e) (eq? (car e) 'meta) (pair? (cdr e)) (eq? (cadr e) 'allow_box)))
 
-;; Variables that `(meta allow_box ...)` annotations allow a closure with methods
-;; `lams` to box, or #t for all of them. A bare `(meta allow_box)` applies only to
-;; the closure whose body directly contains it; `(meta allow_box x ...)` also
-;; applies to the enclosing closures, which capture `x` to pass it inward.
-(define (closure-allowed-boxes lams)
-  (let ((all #f) (names '()))
+;; The `(meta allow_box ...)` annotations of a closure with methods `lams`, as a list
+;; `(all names direct-names direct-bare)`: `names` are the variables they allow the
+;; closure to box, or `all` is #t if it may box all of them. A bare `(meta allow_box)`
+;; applies only to the closure whose body directly contains it; `(meta allow_box x ...)`
+;; also applies to the enclosing closures, which capture `x` to pass it inward.
+;; `direct-names` and `direct-bare` describe only the annotations directly in `lams`.
+(define (closure-box-annotations lams)
+  (let ((names '()) (direct-names '()) (direct-bare #f))
     (define (walk e nested)
       (cond ((atom? e) #f)
             ((allow-box-meta? e)
              (if (null? (cddr e))
-                 (if (not nested) (set! all #t))
-                 (set! names (append (cddr e) names))))
+                 (if (not nested) (set! direct-bare #t))
+                 (begin (set! names (append (cddr e) names))
+                        (if (not nested)
+                            (set! direct-names (append (cddr e) direct-names))))))
             ((quoted? e) #f)
             ((eq? (car e) 'lambda) (walk (lam:body e) #t))
             (else (for-each (lambda (x) (walk x nested)) (cdr e)))))
     (for-each (lambda (l) (walk (lam:body l) #f)) lams)
-    (if all #t names)))
+    (list direct-bare names (delete-duplicates direct-names) direct-bare)))
 
 ;; Apply the closure box policy to a closure with methods `lams` that captures
-;; `vars` from the enclosing lambda `lam`.
+;; `vars` from the enclosing lambda `lam`. Annotations that have no effect produce
+;; a warning, even when boxes are errors, so that code keeps working when lowering
+;; learns to avoid a box.
 (define (check-closure-boxes! vars lam lams)
   (if (> *closure-box-policy* 0)
-      (let* ((boxed   (filter (lambda (v) (is-var-boxed? v lam)) vars))
-             (allowed (if (null? boxed) '() (closure-allowed-boxes lams)))
-             (bad     (if (eq? allowed #t)
-                          '()
-                          (filter (lambda (v) (not (memq v allowed))) boxed))))
-        (if (pair? bad)
+      (let* ((boxed (filter (lambda (v) (is-var-boxed? v lam)) vars))
+             (ann   (closure-box-annotations lams))
+             (all   (car ann))
+             (names (cadr ann))
+             (bad   (if all '() (filter (lambda (v) (not (memq v names))) boxed)))
+             (unused
+              (append
+               (if (and (cadddr ann) (null? boxed))
+                   '("`Base.Experimental.@allow_box` has no effect: the closure does not box any captured variables")
+                   '())
+               (apply append
+                      (map (lambda (v)
+                             (cond ((not (memq v vars))
+                                    (list (string "`Base.Experimental.@allow_box " v "` has no effect: the closure does not capture `" v "`")))
+                                   ((not (memq v boxed))
+                                    (list (string "`Base.Experimental.@allow_box " v "` has no effect: `" v "` does not need a `Core.Box`")))
+                                   (else '())))
+                           (caddr ann))))))
+        (if (or (pair? bad) (pair? unused))
             (let* ((lines (lambda (l) (expr-find-all (lambda (e) (and (pair? e) (eq? (car e) 'line)))
                                                      (lam:body l) identity)))
                    (ls   (apply append (map lines lams)))
@@ -4290,17 +4309,19 @@ f(x) = yt(x)
                    (lno  (cond ((pair? same) (car same))
                                ((pair? ls)   (car ls))
                                (else #f)))
-                   (one  (length= bad 1))
-                   (vs   (string.join (map (lambda (v) (string "`" v "`")) bad) ", "))
-                   (msg  (string "closure captures [" vs "]"
-                                 " which require a `Core.Box`; lowering cannot prove that they are"
-                                 " assigned exactly once before the closure"
-                                 (if (= *closure-box-policy* 2) (format-loc lno) "")
-                                 " is created. To suppress this, use `Base.Experimental.@allow_box`.")))
-              (if (= *closure-box-policy* 2)
-                  (error msg)
-                  (let ((lf (extract-line-file lno)))
-                    (lowering-warning 1000 'closure_boxes (cadr lf) (car lf) msg))))))))
+                   (lf   (extract-line-file lno)))
+              (for-each (lambda (msg) (lowering-warning 1000 'closure_boxes (cadr lf) (car lf) msg))
+                        unused)
+              (if (pair? bad)
+                  (let* ((vs   (string.join (map (lambda (v) (string "`" v "`")) bad) ", "))
+                         (msg  (string "closure captures [" vs "]"
+                                       " which require a `Core.Box`; lowering cannot prove that they are"
+                                       " assigned exactly once before the closure is created"
+                                       (if (= *closure-box-policy* 2) (format-loc lno) "")
+                                       ". To suppress this, use `Base.Experimental.@allow_box`.")))
+                    (if (= *closure-box-policy* 2)
+                        (error msg)
+                        (lowering-warning 1000 'closure_boxes (cadr lf) (car lf) msg)))))))))
 
 (define (toplevel-preserving? e)
   (and (pair? e) (memq (car e) '(if elseif block trycatch tryfinally trycatchelse = const))))
