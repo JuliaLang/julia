@@ -1562,7 +1562,7 @@ end
         @test func(Float16(-336.0), Float16(-37.25), Float16(0.0003653)) === Float16(1.252e4)
         for _ in 1:2^18
             a, b, c = reinterpret.(Float16, rand(UInt16, 3))
-            @test isequal(func(a, b, c), Float16(big(a) * big(b) + big(c))) context=(a,b,c)
+            @test isequal(func(a, b, c), Float16(big(a) * big(b) + big(c))) || (a,b,c)
         end
     end
 end

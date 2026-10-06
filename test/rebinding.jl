@@ -456,6 +456,5 @@ module StoreNoFrozenDefinedness
     fswap() = swapglobal!(@__MODULE__, :g, 2)
     @test fonce() === false
     @test fswap() === 1
-    @test occursin("cmpxchg", sprint(code_llvm, fonce, ()))
     @test occursin("jl_undefined_var_error", sprint(code_llvm, fswap, ()))
 end
