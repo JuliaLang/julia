@@ -617,12 +617,18 @@ $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDI
 # the external libraries (libunwind, zstd, ...); `-l` system
 # libraries are left to the consumer.
 STATIC_LIBS := $(filter %.a,$(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBUTF8PROC) $(LIBTARGET_PARSING))
+ifeq ($(BUILD_OS),WINNT)
+# MSYS does not translate the paths that `ar -M` reads from its script
+mri_path = $$(cygpath -m $(1))
+else
+mri_path = $(1)
+endif
 $(build_libdir)/libjulia-internal.a: $(STATIC_OBJS) $(STATIC_LIBS)
 	@rm -rf $@
 ifeq ($(OS),Darwin)
 	@$(call PRINT_LINK, libtool -static -o $@ $(STATIC_OBJS) $(STATIC_LIBS))
 else
-	@$(call PRINT_LINK, { echo "CREATE $@"; $(foreach o,$(STATIC_OBJS),echo "ADDMOD $(o)";) $(foreach l,$(STATIC_LIBS),echo "ADDLIB $(l)";) echo "SAVE"; echo "END"; } | $(AR) -M)
+	@$(call PRINT_LINK, { echo "CREATE $(call mri_path,$@)"; $(foreach o,$(STATIC_OBJS),echo "ADDMOD $(o)";) $(foreach l,$(STATIC_LIBS),echo "ADDLIB $(call mri_path,$(l))";) echo "SAVE"; echo "END"; } | $(AR) -M)
 endif
 
 ifneq ($(OS), WINNT)
