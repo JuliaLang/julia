@@ -2260,28 +2260,31 @@ static unsigned compute_image_thread_count()
     // environment variable override.
     // this controls how many threads we request from the jobserver (if it is enabled)
     // but the question of whether to enable it or not is decided upstream
-    if (unsigned requested = get_env_threads("JULIA_IMAGE_THREADS")) {
-        LLVM_DEBUG(dbgs() << "Overriding threads to " << requested
+    unsigned threads = get_env_threads("JULIA_IMAGE_THREADS");
+    if (threads) {
+        LLVM_DEBUG(dbgs() << "Overriding threads to " << threads
                           << " due to JULIA_IMAGE_THREADS\n");
-        return requested;
+    }
+    else {
+        threads = jl_effective_threads();
+
+        // more defaults
+        unsigned requested = get_env_threads("JULIA_CPU_THREADS");
+        if (requested && requested < threads) {
+            LLVM_DEBUG(dbgs() << "Overriding threads to " << requested << " due to JULIA_CPU_THREADS\n");
+            threads = requested;
+        }
     }
 
-    unsigned threads = jl_effective_threads();
 #ifdef _P32
-    // We need to be very careful about using too much memory on 32 bit.
+    // We need to be very careful about using too much memory on 32 bit, even
+    // when JULIA_IMAGE_THREADS asks for more (CI sets it to the core count).
     // Heuristic derived from experiments: we can use up to 8 threads, provided
     // we have 1 GiB of address space plus 64 MiB for each thread.
     uint64_t avail = get_available_address_space();
     uint64_t fit = avail > (1ull << 30) ? (avail - (1ull << 30)) / (64ull << 20) : 0;
     threads = std::max(1u, (unsigned)std::min<uint64_t>({threads, 8, fit}));
 #endif
-
-    // more defaults
-    unsigned requested = get_env_threads("JULIA_CPU_THREADS");
-    if (requested && requested < threads) {
-        LLVM_DEBUG(dbgs() << "Overriding threads to " << requested << " due to JULIA_CPU_THREADS\n");
-        threads = requested;
-    }
 
     return threads;
 }
