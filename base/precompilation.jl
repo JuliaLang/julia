@@ -649,6 +649,10 @@ precompiles only the given packages and their dependencies (unless
   (defaults to CPU_THREADS + 1, capped at 16, halved on Windows).
 - Extensions are precompiled when all their triggers are available in the environment.
 """
+# Include only cache files that are ready for workers.
+preresolved_snapshot(cachepath_cache) =
+    Pair{Base.PkgId,String}[k => first(v) for (k, v) in cachepath_cache if !isempty(v)]
+
 function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
                         internal_call::Bool=false,
                         strict::Bool = false,
@@ -1273,7 +1277,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                 # loading already took the cachefile_lock and printed logmsg for its explicit requests
                                 t = @elapsed ret = begin
                                     Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, !ignore_loaded;
-                                                      flags, cacheflags, loadable_exts)
+                                                      flags, cacheflags, loadable_exts,
+                                                      preresolved=preresolved_snapshot(cachepath_cache))
                                 end
                             else
                                 # allows processes to wait if another process is precompiling a given package to
@@ -1295,7 +1300,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                         @debug "Precompiling $(repr("text/plain", pkg))"
                                     end
                                     Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, !ignore_loaded;
-                                                      flags, cacheflags, loadable_exts)
+                                                      flags, cacheflags, loadable_exts,
+                                                      preresolved=preresolved_snapshot(cachepath_cache))
                                 end
                             end
                             if ret isa Exception
