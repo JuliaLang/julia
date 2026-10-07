@@ -907,6 +907,9 @@ function expand_generator(ctx, ex)
     if numchildren(ex) > 2
         outervar_assignments = SyntaxList()
         for iterspecs in ex[2:end-1]
+            if head(iterspecs) == :filter
+                iterspecs = iterspecs[1]
+            end
             for iterspec in children(iterspecs)
                 foreach_lhs_name(iterspec[1]) do var
                     @jl_assert head(var) == :identifier ex # Todo: :bindingid?
