@@ -963,6 +963,9 @@ endif
 
 ifneq ($(findstring $(OS),Linux FreeBSD),)
 COMPRESS_DEBUG_SECTIONS ?= zlib
+ifeq ($(USE_SYSTEM_LLVM)$(USE_SYSTEM_LLD),00)
+COMPRESS_IMAGE_DEBUG_SECTIONS ?= zstd
+endif
 endif
 ifneq ($(COMPRESS_DEBUG_SECTIONS),)
 JLDFLAGS += -Wl,--compress-debug-sections=$(COMPRESS_DEBUG_SECTIONS)

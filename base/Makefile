@@ -83,6 +83,7 @@ ifeq ($(OS), Darwin)
 	@printf "%s\n" "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --show-sdk-version)\"" >> $@
 endif
 	@printf "%s\n" "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
+	@printf "%s\n" "const COMPRESS_IMAGE_DEBUG_SECTIONS = \"$(COMPRESS_IMAGE_DEBUG_SECTIONS)\"" >> $@
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
 	@# ensuring we rebuild the system image as infrequently as possible

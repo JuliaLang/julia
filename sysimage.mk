@@ -18,6 +18,8 @@ sysbase-debug: $(build_private_libdir)/sysbase-debug.$(SHLIB_EXT)
 
 VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 
+SYSIMG_COMPRESS_LDFLAGS := $(if $(COMPRESS_IMAGE_DEBUG_SECTIONS),$(shell $(CXX) -shared -o /dev/null -x c /dev/null -Wl$(COMMA)--compress-debug-sections=$(COMPRESS_IMAGE_DEBUG_SECTIONS) >/dev/null 2>&1 && echo -Wl$(COMMA)--compress-debug-sections=$(COMPRESS_IMAGE_DEBUG_SECTIONS)))
+
 $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%-o.a
 	@$(call PRINT_LINK, $(call link-dll,$@, \
 		--disable-auto-import --disable-runtime-pseudo-reloc $(WIN_LD_LIBPATHS), \
@@ -25,7 +27,7 @@ $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%-o.a
 		$(call whole_archive,$<) \
 		$(if $(findstring -debug,$(notdir $@)),-ljulia-internal-debug -ljulia-debug,-ljulia-internal -ljulia) \
 		$(LIBM) $(WIN_MINGW_LIBS) -lssp $(WIN_LD_CRT_END), \
-		$(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir), \
+		$(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) $(SYSIMG_COMPRESS_LDFLAGS), \
 		$(call whole_archive,$<) \
 		$(if $(findstring -debug,$(notdir $@)),-ljulia-internal-debug -ljulia-debug,-ljulia-internal -ljulia)))
 	@$(INSTALL_NAME_CMD)$(notdir $@) $@
