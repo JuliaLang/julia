@@ -1529,6 +1529,45 @@ static int subtype_left_var(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_para
     return subtype(x, y, e, param);
 }
 
+// `subtype(x, y)` with `x` walked under the chain `xframe` instead of the
+// current left chain (a still-raw declared bound, under its binding's own
+// chain). `subtype_left_var`'s identity fast paths compare content, which is
+// only meaningful when at most one operand is chain-relative; `x` always is.
+static int subtype_left_var_frames(jl_value_t *x, jl_varbinding_t *xframe, jl_value_t *y,
+                                   jl_stenv_t *e, jl_param_pos_t param) JL_CANSAFEPOINT
+{
+    jl_varbinding_t *saveL = e->Lframe;
+    e->Lframe = xframe;
+    int sub = jl_has_dangling_tvarrefs(y) ? subtype(x, y, e, param) : subtype_left_var(x, y, e, param);
+    e->Lframe = saveL;
+    return sub;
+}
+
+// `subtype(ub, y)` / `subtype(x, lb)` for a binding's bound: a still-raw
+// declared bound that resolves within its own chain is walked in place,
+// rather than re-expressed in variable form for the comparison
+static int subtype_binding_ub(jl_stenv_t *e, jl_varbinding_t *vb, jl_value_t *y, jl_param_pos_t param) JL_CANSAFEPOINT
+{
+    if (!binding_ub_walkable(vb))
+        return subtype(binding_ub(e, vb), y, e, param);
+    jl_varbinding_t *saveL = e->Lframe;
+    e->Lframe = vb->frame_prev;
+    int sub = subtype(vb->ub, y, e, param);
+    e->Lframe = saveL;
+    return sub;
+}
+
+static int subtype_binding_lb(jl_stenv_t *e, jl_value_t *x, jl_varbinding_t *vb, jl_param_pos_t param) JL_CANSAFEPOINT
+{
+    if (!binding_lb_walkable(vb))
+        return subtype(x, binding_lb(e, vb), e, param);
+    jl_varbinding_t *saveR = e->Rframe;
+    e->Rframe = vb->frame_prev;
+    int sub = subtype(x, vb->lb, e, param);
+    e->Rframe = saveR;
+    return sub;
+}
+
 // use the current context to record where a variable occurred, for the purpose
 // of determining whether the variable is concrete.
 static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, jl_param_pos_t param) JL_NOTSAFEPOINT
@@ -1686,12 +1725,13 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
         return singleton_typevar_subtype(b, a);
     }
     record_var_occurrence(bb, e, param);
-    // a still-raw declared lower bound that resolves within its own chain can
-    // be walked in place (under `frame_prev`); the upper bound's view is
-    // computed eagerly, since every successful path stores through it
+    // a still-raw declared bound that resolves within its own chain is walked
+    // in place (under `frame_prev`); the upper bound is re-expressed only
+    // once a meet with it is stored
     int lb_walk = binding_lb_walkable(bb);
-    jl_value_t *bb_ub = binding_ub(e, bb);
-    if (jl_has_dangling_tvarrefs(bb_ub) || (!lb_walk && jl_has_dangling_tvarrefs(bb->lb))) {
+    int ub_walk = binding_ub_walkable(bb);
+    if ((!ub_walk && jl_has_dangling_tvarrefs(binding_ub(e, bb))) ||
+        (!lb_walk && jl_has_dangling_tvarrefs(bb->lb))) {
         // the binder of a detached fragment: its bounds reference binders
         // outside the query, so they support no bound reasoning -- only the
         // trivial relations hold (cf. the bare-reference leaf rule)
@@ -1707,7 +1747,8 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
         // surrounding tuple body's occurrences.
         int8_t *saved_fb = (int8_t*)alloca(current_env_length(e));
         int nsaved_fb = push_forall_bound_scope(e, saved_fb);
-        int sub = subtype_left_var(bb_ub, a, e, param);
+        int sub = ub_walk ? subtype_left_var_frames(bb->ub, bb->frame_prev, a, e, param)
+                          : subtype_left_var(binding_ub(e, bb), a, e, param);
         pop_forall_bound_scope(e, saved_fb, nsaved_fb);
         return sub;
     }
@@ -1715,11 +1756,16 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     // position), and the stored bound need the canonical spelling. A bare
     // reference is compared by its binding's variable, if it has one yet,
     // and only materialized below, once the bound is updated (cf. var_gt).
+    // Likewise a raw upper bound is compared by its spelling only if that
+    // already exists.
     jl_value_t *av = frame_substitute_peek(a, e->Rframe, e);
     if (b == NULL)
         b = bb->var; // the caller may not have needed it, but it may exist (now)
-    if (av != NULL && bb_ub == av)
-        return 1;
+    if (av != NULL) {
+        jl_value_t *ubv = ub_walk ? frame_substitute_peek(bb->ub, bb->frame_prev, e) : binding_ub(e, bb);
+        if (ubv == av)
+            return 1;
+    }
     int lb_ok = (bb->lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a));
     if (!lb_ok) {
         if (e->intersection && bb->in_ccheck) {
@@ -1742,6 +1788,7 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
         if (b == NULL)
             b = bb->var;
     }
+    jl_value_t *bb_ub = binding_ub(e, bb);
     // for this to work we need to compute issub(left,right) before issub(right,left),
     // since otherwise the issub(a, bb.ub) check in var_gt becomes vacuous.
     if (e->intersection) {
@@ -3732,9 +3779,9 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             int yfree_singleton = yy == NULL && !yinner;
             if (xfree_singleton && yfree_singleton)
                 return 0;
-            jl_value_t *xub = xx ? binding_ub(e, xx) : xinner ? ((jl_tvar_t*)x)->ub : x;
-            jl_value_t *ylb = yy ? binding_lb(e, yy) : yinner ? ((jl_tvar_t*)y)->lb : y;
             if (e->intersection) {
+                jl_value_t *xub = xx ? binding_ub(e, xx) : xinner ? ((jl_tvar_t*)x)->ub : x;
+                jl_value_t *ylb = yy ? binding_lb(e, yy) : yinner ? ((jl_tvar_t*)y)->lb : y;
                 jl_value_t *xlb = xx ? binding_lb(e, xx) : xinner ? ((jl_tvar_t*)x)->lb : x;
                 jl_value_t *yub = yy ? binding_ub(e, yy) : yinner ? ((jl_tvar_t*)y)->ub : y;
                 // find equivalence class for typevars during intersection
@@ -3791,8 +3838,11 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             if (xfree_singleton)
                 return singleton_typevar_subtype((jl_tvar_t*)x, y);
             if (yfree_singleton)
-                return subtype_singleton_typevar(xub, (jl_tvar_t*)y);
-            return subtype(xub, y, e, param) || subtype(x, ylb, e, param);
+                return subtype_singleton_typevar(xx ? binding_ub(e, xx) : ((jl_tvar_t*)x)->ub, (jl_tvar_t*)y);
+            // (the bounds are walked in place where they are still raw)
+            if (xx ? subtype_binding_ub(e, xx, y, param) : subtype(xinner ? ((jl_tvar_t*)x)->ub : x, y, e, param))
+                return 1;
+            return yy ? subtype_binding_lb(e, x, yy, param) : subtype(x, yinner ? ((jl_tvar_t*)y)->lb : y, e, param);
         }
         int xinner = 0;
         jl_varbinding_t *xb = xrb != NULL ? xrb : lookup_binding(e, (jl_tvar_t*)x, &xinner);
@@ -3837,7 +3887,9 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
     }
     // handle forall ("left") vars first
     if (jl_is_unionall(x)) {
-        if (x == y && !(e->envidx < e->envsz))
+        // (identity is only meaningful for frame-free terms: raw ones from
+        // different chains can denote different binders)
+        if (x == y && !(e->envidx < e->envsz) && !jl_has_dangling_tvarrefs(x))
             return 1;
         return subtype_unionall(y, (jl_unionall_t*)x, e, 0, param);
     }
