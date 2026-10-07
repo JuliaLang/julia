@@ -139,10 +139,12 @@ typedef struct jl_varbinding_t {
                             // rule (since #34272). Unlike the dynamic `occurs_inv`
                             // counter, this is a pure structural property of the
                             // UnionAll body and does not change during traversal.
+                            // -1 until computed from `body` (see `vb_body_occurs_inv`).
     int16_t depth0;         // # of invariant constructors nested around the UnionAll type for this var
     // array of typevars that our bounds depend on, whose UnionAlls need to be
     // moved outside ours.
     jl_array_t *innervars;
+    jl_value_t *body;       // the UnionAll body, for computing `body_occurs_inv` on demand
     struct jl_varbinding_t *prev;
 } jl_varbinding_t;
 
@@ -920,6 +922,8 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
 static int is_leaf_typevar(jl_tvar_t *v) JL_NOTSAFEPOINT;
 
 // Check whether env (variable bounds & diagonality) changed compared to saved env.
+static int vb_body_occurs_inv(jl_varbinding_t *vb) JL_NOTSAFEPOINT;
+
 static int env_unchanged(jl_stenv_t *e, jl_savedenv_t *se) JL_NOTSAFEPOINT
 {
     jl_value_t **roots = NULL;
@@ -941,7 +945,7 @@ static int env_unchanged(jl_stenv_t *e, jl_savedenv_t *se) JL_NOTSAFEPOINT
             int8_t saved_cov = se->buf[j];     // saved occurs_cov
             int8_t saved_diag = se->buf[j+1];  // saved cov_diag
             int8_t saved_max = saved_cov > saved_diag ? saved_cov : saved_diag;
-            if (is_leaf_typevar(v->var) && v->body_occurs_inv == 0 && cov_count(v) > 1 && saved_max <= 1)
+            if (is_leaf_typevar(v->var) && cov_count(v) > 1 && saved_max <= 1 && !vb_body_occurs_inv(v))
                 return 0; // check if a variable became diagonal from non-diagonal
             if (v->lb_required != se->buf[j+4])
                 return 0; // check if envout constrainedness changed
@@ -1574,6 +1578,13 @@ static int var_occurs_invariant(jl_value_t *v, jl_tvar_t *var) JL_NOTSAFEPOINT
     return var_occurs_inside(v, var, 0, 1);
 }
 
+static int vb_body_occurs_inv(jl_varbinding_t *vb) JL_NOTSAFEPOINT
+{
+    if (vb->body_occurs_inv < 0)
+        vb->body_occurs_inv = var_occurs_invariant(vb->body, vb->var);
+    return vb->body_occurs_inv;
+}
+
 static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e) JL_CANSAFEPOINT
 {
     jl_varbinding_t *btemp = e->vars;
@@ -1784,11 +1795,11 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     // `unalias_unionall` cannot see it; closed inputs have no such occurrences
     if (may_capture_free_var(t, u->var, e))
         u = jl_rename_unionall(u);
-    int body_occurs_inv = var_occurs_invariant(u->body, u->var);
     vb.var = u->var;
     vb.lb = u->var->lb;
     vb.ub = u->var->ub;
-    vb.body_occurs_inv = body_occurs_inv;
+    vb.body_occurs_inv = -1;
+    vb.body = u->body;
     e->vars = &vb;
     int ans;
     if (R) {
@@ -1808,7 +1819,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         // Split the bound here by registering one ordinary left-union decision
         // per Union node, so that the enclosing ∀∃ loop enumerates all arms.
         if (!e->intersection && vb.lb == jl_bottom_type && jl_is_uniontype(vb.ub) &&
-            !body_occurs_inv && var_occurs_covariant_only(u->body, u->var, 1))
+            !vb_body_occurs_inv(&vb) && var_occurs_covariant_only(u->body, u->var, 1))
             vb.ub = pick_union_element(vb.ub, e, 0);
         ans = subtype(u->body, t, e, param);
     }
@@ -1818,7 +1829,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     //  ( Tuple{Int, Int}    <: Tuple{T, T} where T) but
     // !( Tuple{Int, String} <: Tuple{T, T} where T)
     // Then check concreteness by checking that the lower bound is not an abstract type.
-    int diagonal = cov_count(&vb) > 1 && !vb.body_occurs_inv;
+    int diagonal = cov_count(&vb) > 1 && !vb_body_occurs_inv(&vb);
     // Widen Type{x} to typeof(x) for ordinary argument-slot occurrences and
     // diagonal constraints, but not invariant matches. This is only a local
     // view for checks and envout; keep `vb.lb` structurally precise.
