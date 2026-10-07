@@ -93,20 +93,22 @@ let code = raw"""
     baremodule BM end
     end
     """
-    function parse_all_ways(::Type{T}, code) where {T}
-        parseall(T, code; version=VERSION)
-        parseall(T, code; filename="none", version=VERSION)
-        parsestmt(T, "f(x) = x + 1"; version=VERSION)
-        parsestmt(T, SubString("f(x) = x + 1"); version=VERSION)
-        parseatom(T, ":x"; version=VERSION)
-        parsestmt(T, "x"; version=VERSION)
-        parseall(T, "if x; y ? z end\nf(x"; ignore_errors=true, version=VERSION)
+    function parse_all_ways(::Type{T}, code, version) where {T}
+        parseall(T, code; version=version)
+        parseall(T, code; filename="none", version=version)
+        parsestmt(T, "f(x) = x + 1"; version=version)
+        parsestmt(T, SubString("f(x) = x + 1"); version=version)
+        parseatom(T, ":x"; version=version)
+        parsestmt(T, "x"; version=version)
+        parseall(T, "if x; y ? z end\nf(x"; ignore_errors=true, version=version)
         nothing
     end
+    # requires 1.11 for `public`
+    version = v"1.11"
     trees = isdefined(Base, :Syntax) ? (Expr, SyntaxNode, GreenNode, Base.Syntax) :
                                        (Expr, SyntaxNode, GreenNode)
     for T in trees
-        parse_all_ways(T, code)
+        parse_all_ways(T, code, version)
     end
     try parseall(Expr, "f(x") catch end
 end
