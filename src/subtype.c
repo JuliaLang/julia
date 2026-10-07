@@ -196,7 +196,9 @@ typedef struct JL_GC_TRACKED_TYPE jl_stenv_t {
     int triangular;           // when intersecting Ref{X} with Ref{<:Y}
     int ignore_lb_required;   // true while checking a variable's declared bound
     int closed_inputs;        // true iff the top-level inputs have no free typevars, so a
-                              // UnionAll var can only alias one already in `vars`
+                              // UnionAll var can only alias one already in `vars`;
+                              // -1 until computed from `inputs` (see `may_capture_free_var`)
+    jl_value_t *inputs[2];    // the top-level inputs (rooted by the caller)
     // Used to represent the length difference between 2 vararg.
     // intersect(X, Y) ==> X = Y + Loffset
     int Loffset;
@@ -1756,6 +1758,18 @@ static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u
     return wrap_tvar_env(*new_tvar, constrained);
 }
 
+// Whether `t` may contain `v` as a free input typevar, which is not in `e->vars`
+// and so is invisible to `unalias_unionall`. Closed inputs have no such
+// occurrences; that is only computed once a non-trivial `t` is seen.
+static int may_capture_free_var(jl_value_t *t, jl_tvar_t *v, jl_stenv_t *e) JL_NOTSAFEPOINT
+{
+    if (jl_is_datatype(t) && !((jl_datatype_t*)t)->hasfreetypevars)
+        return 0;
+    if (e->closed_inputs < 0)
+        e->closed_inputs = !jl_has_free_typevars(e->inputs[0]) && !jl_has_free_typevars(e->inputs[1]);
+    return !e->closed_inputs && jl_has_typevar(t, v);
+}
+
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param) JL_CANSAFEPOINT
 {
     u = unalias_unionall(u, e);
@@ -1768,7 +1782,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     JL_GC_PUSH5(&u, &vb.lb, &vb.ub, &vb.innervars, &new_tvar);
     // a free input typevar sharing `u->var`'s identity is not in `e->vars`, so
     // `unalias_unionall` cannot see it; closed inputs have no such occurrences
-    if (!e->closed_inputs && jl_has_typevar(t, u->var))
+    if (may_capture_free_var(t, u->var, e))
         u = jl_rename_unionall(u);
     int body_occurs_inv = var_occurs_invariant(u->body, u->var);
     vb.var = u->var;
@@ -3404,6 +3418,7 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     e->triangular = 0;
     e->ignore_lb_required = 0;
     e->closed_inputs = 0;
+    e->inputs[0] = e->inputs[1] = NULL;
     e->Loffset = 0;
     e->Lunions.depth = 0;      e->Runions.depth = 0;
     e->Lunions.more = 0;       e->Runions.more = 0;
@@ -3901,7 +3916,9 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
         obvious_subtype = 3;
     }
     init_stenv(&e, env, envsz);
-    e.closed_inputs = !jl_has_free_typevars(x) && !jl_has_free_typevars(y);
+    e.closed_inputs = -1;
+    e.inputs[0] = x;
+    e.inputs[1] = y;
     int subtype = forall_exists_subtype(x, y, &e, PARAM_NONE);
     free_stenv(&e);
     assert(obvious_subtype == 3 || obvious_subtype == subtype || jl_has_free_typevars(x) || jl_has_free_typevars(y));
@@ -3924,6 +3941,8 @@ static int subtype_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAF
     e2.envidx = e->envidx;
     e2.ignore_lb_required = e->ignore_lb_required;
     e2.closed_inputs = e->closed_inputs;
+    e2.inputs[0] = e->inputs[0];
+    e2.inputs[1] = e->inputs[1];
     e2.Loffset = e->Loffset;
     return forall_exists_subtype(x, y, &e2, PARAM_NONE);
 }
@@ -5051,7 +5070,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     }
     u = unalias_unionall(u, e);
     JL_GC_PUSH1(&u);
-    if (!e->closed_inputs && jl_has_typevar(t, u->var))
+    if (may_capture_free_var(t, u->var, e))
         u = jl_rename_unionall(u);
     vb->var = u->var;
     e->vars = vb;
@@ -6204,7 +6223,9 @@ static jl_value_t *intersect_types(jl_value_t *x, jl_value_t *y, int emptiness_o
     init_stenv(&e, NULL, 0);
     e.intersection = 1;
     e.emptiness_only = emptiness_only;
-    e.closed_inputs = !jl_has_free_typevars(x) && !jl_has_free_typevars(y);
+    e.closed_inputs = -1;
+    e.inputs[0] = x;
+    e.inputs[1] = y;
     jl_value_t *ans = intersect_all(x, y, &e);
     free_stenv(&e);
     return ans;
@@ -6386,7 +6407,9 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         jl_stenv_t e;
         init_stenv(&e, NULL, 0);
         e.intersection = 1;
-        e.closed_inputs = !jl_has_free_typevars(a) && !jl_has_free_typevars(b);
+        e.closed_inputs = -1;
+        e.inputs[0] = a;
+        e.inputs[1] = b;
         e.envout = env;
         if (szb)
             memset(env, 0, szb*sizeof(void*));
@@ -6929,7 +6952,9 @@ static int sub_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, jl_typeenv_t *e
         env = env->prev;
     }
     init_stenv(&e, NULL, 0);
-    e.closed_inputs = !jl_has_free_typevars(x) && !jl_has_free_typevars(y);
+    e.closed_inputs = -1;
+    e.inputs[0] = x;
+    e.inputs[1] = y;
     int subtype = forall_exists_subtype(x, y, &e, PARAM_NONE);
     assert(obvious_sub == 3 || obvious_sub == subtype || jl_has_free_typevars(x) || jl_has_free_typevars(y));
 #ifndef NDEBUG
