@@ -106,9 +106,9 @@ function move_to_node1(t)
     nothing
 end
 
-# Base.compilecache only works from node 1, so precompile test is handled specially
 move_to_node1("ccall")
-move_to_node1("precompile")
+# These add worker processes, which only node 1 can do
+move_to_node1("precompile_distributed")
 move_to_node1("SharedArrays")
 move_to_node1("threads")
 move_to_node1("Distributed")
@@ -120,11 +120,11 @@ move_to_node1("stress")
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
-# Move LinearAlgebra and Pkg tests to the front, because they take a while, so we might
-# as well get them all started early. JuliaLowering_stdlibs both takes a while and
-# uses a lot of memory at the beginning so try to run it early to keep total memory
-# use flatter.
-for prependme in ["LinearAlgebra", "Pkg", "JuliaLowering_stdlibs"]
+# Move LinearAlgebra, Pkg and precompile tests to the front, because they take a while,
+# so we might as well get them all started early. JuliaLowering_stdlibs both takes a
+# while and uses a lot of memory at the beginning so try to run it early to keep total
+# memory use flatter.
+for prependme in ["precompile", "LinearAlgebra", "Pkg", "JuliaLowering_stdlibs"]
     prependme_test_ids = findall(x->occursin(prependme, x), tests)
     prependme_tests = tests[prependme_test_ids]
     deleteat!(tests, prependme_test_ids)
