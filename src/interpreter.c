@@ -572,6 +572,8 @@ static int coverage_collect(jl_debuginfo_t *debuginfo, jl_value_t *func,
             int n = out->n++;
             out->file[n] = file;
             out->line[n] = i;
+            if (pc > 0 && jl_is_string(debuginfo->linetable))
+                out->line[n] = jl_cdi_firstxy(debuginfo, pc).first;
             out->edgeid[n] = to;
             out->tracked[n] = jl_coverage_enabled_for(modu, file);
         }
