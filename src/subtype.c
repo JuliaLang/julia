@@ -315,6 +315,8 @@ static int has_free_or_dangling_typevars(jl_value_t *v) JL_NOTSAFEPOINT;
 // a variable already visible there would conflate two bindings, so such
 // entries are skipped (intersection leaks binding variables into terms).
 static jl_tvar_t *binding_var(jl_stenv_t *e, jl_varbinding_t *vb) JL_GLOBALLY_ROOTED JL_CANSAFEPOINT;
+static int egal_frames(jl_value_t *x, jl_varbinding_t *xframe, jl_value_t *y, jl_varbinding_t *yframe,
+                       size_t d, jl_stenv_t *e) JL_CANSAFEPOINT;
 
 // master's rule for reusing a binder's variable: not if it is already in use
 // in the environment (directly bound, in a binding's updated bounds, or an
@@ -7249,14 +7251,87 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
         }
         return intersect_sub_datatype((jl_datatype_t*)x, yd, e, 0, param);
     }
-    // egality on raw references from different chains would be meaningless
-    // (and could wrongly claim emptiness); compare the variable forms
-    if (jl_has_dangling_tvarrefs(x))
-        x = frame_substitute(x, e->Lframe, e);
-    if (jl_has_dangling_tvarrefs(y))
-        y = frame_substitute(y, e->Rframe, e);
-    if (jl_egal(x, y)) return y;
-    return jl_bottom_type;
+    // compare the variable forms (raw references from different chains can
+    // spell the same binder differently, or different binders alike); the
+    // result is `y`'s variable form
+    if (!egal_frames(x, e->Lframe, y, e->Rframe, 0, e))
+        return jl_bottom_type;
+    return jl_has_dangling_tvarrefs(y) ? frame_substitute(y, e->Rframe, e) : y;
+}
+
+// the binding a reference inside a term resolves to through the term's
+// chain, with `d` binders of the term entered; NULL for a reference to a
+// binder of the term itself or an unresolved one (which substitution leaves
+// unchanged, so that it is compared by its index either way)
+static jl_varbinding_t *egal_ref_binding(jl_value_t *t, jl_varbinding_t *frame, size_t d) JL_NOTSAFEPOINT
+{
+    size_t k = jl_tvarref_depth(t);
+    return k <= d ? NULL : frame_lookup(frame, k - d);
+}
+
+// `jl_egal` of the variable forms of `x` (under the chain `xframe`) and `y`
+// (under `yframe`), without building them: references are compared by what
+// they resolve to. `d` counts the binders entered inside both terms.
+static int egal_frames(jl_value_t *x, jl_varbinding_t *xframe, jl_value_t *y, jl_varbinding_t *yframe,
+                       size_t d, jl_stenv_t *e) JL_CANSAFEPOINT
+{
+    if (x == y && (xframe == yframe || !jl_has_dangling_tvarrefs(x)))
+        return 1;
+    if (!jl_has_dangling_tvarrefs(x) && !jl_has_dangling_tvarrefs(y))
+        return jl_egal(x, y);
+    if (jl_is_tvarref(x) || jl_is_tvarref(y)) {
+        jl_varbinding_t *xb = jl_is_tvarref(x) ? egal_ref_binding(x, xframe, d) : NULL;
+        jl_varbinding_t *yb = jl_is_tvarref(y) ? egal_ref_binding(y, yframe, d) : NULL;
+        if (xb != NULL && yb != NULL)
+            return xb == yb;
+        if (xb == NULL && yb == NULL)
+            return jl_is_tvarref(x) && jl_is_tvarref(y) && jl_tvarref_depth(x) == jl_tvarref_depth(y);
+        // a binding against anything else: only its variable can be identical
+        jl_value_t *other = xb != NULL ? y : x;
+        if (!jl_is_typevar(other))
+            return 0;
+        return (jl_value_t*)binding_var(e, xb != NULL ? xb : yb) == other;
+    }
+    if (jl_typeof(x) != jl_typeof(y))
+        return 0;
+    if (jl_is_datatype(x)) {
+        if (((jl_datatype_t*)x)->name != ((jl_datatype_t*)y)->name)
+            return 0;
+        size_t i, np = jl_nparams(x);
+        if (jl_nparams(y) != np)
+            return 0;
+        for (i = 0; i < np; i++) {
+            if (!egal_frames(jl_tparam(x, i), xframe, jl_tparam(y, i), yframe, d, e))
+                return 0;
+        }
+        return 1;
+    }
+    if (jl_is_uniontype(x))
+        return egal_frames(((jl_uniontype_t*)x)->a, xframe, ((jl_uniontype_t*)y)->a, yframe, d, e) &&
+               egal_frames(((jl_uniontype_t*)x)->b, xframe, ((jl_uniontype_t*)y)->b, yframe, d, e);
+    if (jl_is_intersecttype(x))
+        return egal_frames(((jl_intersecttype_t*)x)->a, xframe, ((jl_intersecttype_t*)y)->a, yframe, d, e) &&
+               egal_frames(((jl_intersecttype_t*)x)->b, xframe, ((jl_intersecttype_t*)y)->b, yframe, d, e);
+    if (jl_is_unionall(x)) {
+        jl_unionall_t *ux = (jl_unionall_t*)x, *uy = (jl_unionall_t*)y;
+        // (the binder name is observable, as in `jl_egal`; the bounds lie
+        // outside the binder's own scope)
+        return ux->name == uy->name &&
+               egal_frames(ux->lb, xframe, uy->lb, yframe, d, e) &&
+               egal_frames(ux->ub, xframe, uy->ub, yframe, d, e) &&
+               egal_frames(ux->body, xframe, uy->body, yframe, d + 1, e);
+    }
+    if (jl_is_vararg(x)) {
+        jl_vararg_t *vx = (jl_vararg_t*)x, *vy = (jl_vararg_t*)y;
+        if ((vx->T == NULL) != (vy->T == NULL) || (vx->N == NULL) != (vy->N == NULL))
+            return 0;
+        return (vx->T == NULL || egal_frames(vx->T, xframe, vy->T, yframe, d, e)) &&
+               (vx->N == NULL || egal_frames(vx->N, xframe, vy->N, yframe, d, e));
+    }
+    if (jl_is_some_Type(x))
+        return egal_frames(jl_some_Type_T(x), xframe, jl_some_Type_T(y), yframe, d, e);
+    assert(0 && "unexpected term with dangling references");
+    return 0;
 }
 
 static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int count) JL_CANSAFEPOINT
