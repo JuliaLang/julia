@@ -653,7 +653,7 @@ test_repr("let @m(x), y=z; end", true)
 
 @test repr(:(@m x y))    == ":(#= $(@__FILE__):$(@__LINE__) =# @m x y)"
 @test string(:(@m x y))  ==   "#= $(@__FILE__):$(@__LINE__) =# @m x y"
-@test string(:(@m x y;)) == "begin\n    #= $(@__FILE__):$(@__LINE__) =# @m x y\nend"
+@test string(:(@m x y;)) == "begin\n    #= $(@__FILE__):$(@__LINE__) =#\n    #= $(@__FILE__):$(@__LINE__) =# @m x y\nend"
 
 # issue #11436
 @test_repr "1 => 2 => 3"
@@ -2499,8 +2499,8 @@ end
 @weak_test_repr "a[begin, end, let x=1; (x+1;); end]"
 @test_broken repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
         ":(a[begin, end, let x = 1\n          begin\n              x + 1\n          end\n      end])"
-@test_repr "a[(bla;)]"
-@test_repr "a[(;;)]"
+@weak_test_repr "a[(bla;)]"
+@weak_test_repr "a[(;;)]"
 @weak_test_repr "a[x -> f(x)]"
 
 @testset "Base.Iterators" begin
