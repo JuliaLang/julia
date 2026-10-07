@@ -1512,8 +1512,9 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
 
         sv = sv::SimpleVector
         internal_methods = sv[3]::Vector{Any}
+        backedge_log = sv[4]::Union{Vector{Any}, Nothing}
         Compiler.@zone "CC: INSERT_BACKEDGES" begin
-            ReinferUtils.insert_backedges_typeinf(internal_methods)
+            ReinferUtils.insert_backedges_typeinf(internal_methods, backedge_log)
         end
         # collect the `__init__` reports to print after this package's timing is taken, so
         # that any compilation for the printing isn't attributed to this package

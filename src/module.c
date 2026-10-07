@@ -1886,6 +1886,7 @@ JL_DLLEXPORT void jl_add_binding_backedge(jl_binding_t *b, jl_value_t *edge)
     }
     jl_array_ptr_1d_push(b->backedges, edge);
     JL_UNLOCK(&b->globalref->mod->lock);
+    jl_record_binding_backedge(b, edge);
 }
 
 // Called for all GlobalRefs found in lowered code. Adds backedges for cross-module
