@@ -524,6 +524,31 @@ static jl_value_t *frame_substitute(jl_value_t *t, jl_varbinding_t *frame, jl_st
     return t;
 }
 
+// the variable-form spelling of `t` under `frame` if it already exists in
+// this query, without computing it; NULL otherwise. A substituted term
+// carries variables (or still-dangling references), so it is not a cached
+// type: nothing can be identical to it unless it is the memoized result.
+// For the identity fast paths that precede a check which may fail, before
+// spelling a value that is only needed if it is stored.
+static jl_value_t *frame_substitute_peek(jl_value_t *t, jl_varbinding_t *frame, jl_stenv_t *e) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
+{
+    if (frame == NULL || !jl_has_dangling_tvarrefs(t))
+        return t;
+    if (jl_is_tvarref(t)) {
+        jl_varbinding_t *b = frame_lookup(frame, jl_tvarref_depth(t));
+        return b != NULL ? (jl_value_t*)b->var : t;
+    }
+    if (e->substmemo != NULL) {
+        size_t i, l = jl_array_nrows(e->substmemo);
+        for (i = 0; i < l; i += 3) {
+            if (jl_array_ptr_ref(e->substmemo, i) == t &&
+                jl_unbox_uint32(jl_array_ptr_ref(e->substmemo, i + 1)) == frame->serial)
+                return jl_array_ptr_ref(e->substmemo, i + 2);
+        }
+    }
+    return NULL;
+}
+
 // The bounds of a binding are pushed raw (the binder's declared bounds,
 // implicitly under `frame_prev`), and most bindings are never consumed, so
 // their re-expression in variable form is deferred. Rawness is identified by
@@ -1556,14 +1581,23 @@ static int subtype_left_var(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_para
 // of determining whether the variable is concrete.
 static int has_existential_typevar(jl_value_t *x, jl_stenv_t *e) JL_NOTSAFEPOINT;
 
-// `a` is the canonical spelling of the matched term; a bare reference to a
-// binding `ab` (which may have no variable yet, so `a` may be NULL) is
-// classified by that binding
-static void record_var_pin(jl_varbinding_t *vb, jl_value_t *a, jl_varbinding_t *ab, jl_stenv_t *e, jl_param_pos_t param) JL_NOTSAFEPOINT
+// `a` is the matched term in positional form against `frame`: it is free of
+// existential variables when neither a free variable nor a dangling reference
+// of it stands for an existential binding (no spelling is materialized here)
+static void record_var_pin(jl_varbinding_t *vb, jl_value_t *a, jl_varbinding_t *frame, jl_stenv_t *e, jl_param_pos_t param) JL_NOTSAFEPOINT
 {
-    if (e->envsz > 0 && param == PARAM_INVARIANT && e->invdepth > vb->depth0 && !vb->pinned &&
-        (ab != NULL ? !ab->existential : (!jl_has_free_typevars(a) || !has_existential_typevar(a, e))))
-        vb->pinned = 1;
+    if (!(e->envsz > 0 && param == PARAM_INVARIANT && e->invdepth > vb->depth0 && !vb->pinned))
+        return;
+    if (jl_has_free_typevars(a) && has_existential_typevar(a, e))
+        return;
+    if (jl_has_dangling_tvarrefs(a)) {
+        size_t d = 1;
+        for (jl_varbinding_t *fb = frame; fb != NULL; fb = fb->frame_prev, d++) {
+            if (fb->existential && jl_tvarref_occurs(a, d))
+                return;
+        }
+    }
+    vb->pinned = 1;
 }
 
 static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, jl_param_pos_t param) JL_NOTSAFEPOINT
@@ -1746,14 +1780,11 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
         return sub;
     }
     // the identity fast path, the intersection (where `a` enters an x
-    // position), the pin check and the stored bound need the canonical
-    // spelling. A bare reference is compared by its binding's variable, if it
-    // has one yet, and only materialized below, once the bound is updated
-    // (cf. var_gt).
-    jl_varbinding_t *ab = jl_is_tvarref(a) ? frame_lookup(e->Rframe, jl_tvarref_depth(a)) : NULL;
-    jl_value_t *av = ab != NULL ? (jl_value_t*)ab->var :
-                     jl_has_dangling_tvarrefs(a) ? frame_substitute(a, e->Rframe, e) : a;
-    record_var_pin(bb, av, ab, e, param);
+    // position), and the stored bound need the canonical spelling. A bare
+    // reference is compared by its binding's variable, if it has one yet,
+    // and only materialized below, once the bound is updated (cf. var_gt).
+    record_var_pin(bb, a, e->Rframe, e, param);
+    jl_value_t *av = frame_substitute_peek(a, e->Rframe, e);
     if (b == NULL)
         b = bb->var; // the caller may not have needed it, but it may exist (now)
     if (av != NULL && bb_ub == av)
@@ -1775,8 +1806,8 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     }
     if (!lb_ok)
         return 0;
-    if (ab != NULL) {
-        av = (jl_value_t*)binding_var(e, ab);
+    if (av == NULL || jl_is_tvarref(a)) {
+        av = frame_substitute(a, e->Rframe, e);
         if (b == NULL)
             b = bb->var;
     }
@@ -1847,10 +1878,8 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     // the memo. A bare reference is compared by its binding's variable, if it
     // has one yet (one that does not exist occurs in no bound), and only
     // materialized below if it is stored.
-    jl_varbinding_t *ab = jl_is_tvarref(a) ? frame_lookup(e->Lframe, jl_tvarref_depth(a)) : NULL;
-    jl_value_t *av = ab != NULL ? (jl_value_t*)ab->var :
-                     jl_has_dangling_tvarrefs(a) ? frame_substitute(a, e->Lframe, e) : a;
-    record_var_pin(bb, av, ab, e, param);
+    record_var_pin(bb, a, e->Lframe, e, param);
+    jl_value_t *av = frame_substitute_peek(a, e->Lframe, e);
     if (b == NULL)
         b = bb->var; // the caller may not have needed it, but it may exist (now)
     if (av != NULL && bb_lb == av) {
@@ -1880,8 +1909,8 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     // join picking `a` proves `lb <= a`, i.e. `a` respells the same type: keep
     // the existing spelling unless `a`'s is more authoritative (see `lb_spell`)
     // (field identity: raw and updated forms never mix in a pinned pair)
-    if (ab != NULL) {
-        av = (jl_value_t*)binding_var(e, ab);
+    if (av == NULL || jl_is_tvarref(a)) {
+        av = frame_substitute(a, e->Lframe, e);
         if (b == NULL)
             b = bb->var;
     }
@@ -4242,11 +4271,11 @@ static int equal_var_(jl_tvar_t *v, jl_varbinding_t *vb, int innervar, jl_value_
     }
     if (x != jl_bottom_type && vb->lb_certainty < e->bound_channel)
         vb->lb_certainty = e->bound_channel;
-    // the identity fast paths, the pin check and the stored values need the
-    // canonical spelling
-    jl_value_t *xv = jl_has_dangling_tvarrefs(x) ? frame_substitute(x, e->Lframe, e) : x;
-    record_var_pin(vb, xv, NULL, e, PARAM_INVARIANT);
-    if (vb_lb == xv) {
+    record_var_pin(vb, x, e->Lframe, e, PARAM_INVARIANT);
+    // the identity fast paths and the stored values need the canonical
+    // spelling, which is only computed once the check below has passed
+    jl_value_t *xv = frame_substitute_peek(x, e->Lframe, e);
+    if (xv != NULL && vb_lb == xv) {
         if (vb->lb_spell < e->spell_channel)
             vb->lb_spell = e->spell_channel;
         // var_lt canonicalizes right-side operands; `x` is a left term, so
@@ -4256,6 +4285,8 @@ static int equal_var_(jl_tvar_t *v, jl_varbinding_t *vb, int innervar, jl_value_
     if (ub_walk ? !subtype_ccheck_frames(x, e->Lframe, vb->ub, vb->frame_prev, e)
                 : !subtype_ccheck(x, binding_ub(e, vb), e)) // walks `x` natively
         return 0;
+    if (xv == NULL || jl_is_tvarref(x))
+        xv = frame_substitute(x, e->Lframe, e);
     // when the var is pinned (`lb === ub`), `x <= ub` was just checked and a
     // join picking `x` proves `lb <= x`, i.e. `x` respells the same type: keep
     // the existing spelling unless `x`'s is more authoritative (see `lb_spell`)
