@@ -662,6 +662,7 @@ typedef struct JL_GC_TRACKED_TYPE {
 #define JL_UNIONALL_VAROCCURS 0x1  // the binder occurs in `body` (memoized)
 #define JL_UNIONALL_ESCAPINGREFS 0x2  // some reference escapes this node (memoized)
 #define JL_UNIONALL_ALWAYSCOV 0x4  // the binder has a guaranteed covariant occurrence in `body` (memoized)
+#define JL_UNIONALL_OCCURSINV 0x8  // the binder occurs in an invariant position of `body` (memoized)
 
 // represents the "name" part of a DataType, describing the syntactic structure
 // of a type and storing all data common to different instantiations of the type,

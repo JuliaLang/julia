@@ -104,9 +104,9 @@ UnionAll
     inner: mutable struct Array{TypeVarRef(2), TypeVarRef(1)} <: DenseArray{TypeVarRef(2), TypeVarRef(1)}
       ref::GenericMemoryRef{:not_atomic, TypeVarRef(2), Core.AddrSpace{Core}(0x00)}
       size::NTuple{TypeVarRef(1), Int64}
-    flags: UInt32 0x00000007
+    flags: UInt32 0x0000000f
     hash: UInt64 0x4e621bd16d8778bd
-  flags: UInt32 0x00000005
+  flags: UInt32 0x0000000d
   hash: UInt64 0xc278dfd418d847ff
 ```
 
