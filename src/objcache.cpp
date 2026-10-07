@@ -14,6 +14,9 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 #endif
+#ifdef __APPLE__
+#include <sys/sem.h>
+#endif
 
 namespace endian = llvm::support::endian;
 using endianness = llvm::endianness;
@@ -72,16 +75,26 @@ static FILE *getLogFile()
 
 static FILE *LogFile = getLogFile();
 
-// Linux LMDB uses robust process-shared mutexes to recover locks after an
-// owner dies. QEMU user mode returns ENOSYS for both robust-list syscalls,
-// but glibc still allows creating these mutexes, leaving dead owners' locks
-// unrecoverable. Query the current thread without changing libc's robust list.
-static bool robustMutexesAvailable() JL_NOTSAFEPOINT
+// Check that the lock primitives LMDB's robust lock backend relies on work.
+static bool robustLocksAvailable() JL_NOTSAFEPOINT
 {
-#ifdef __linux__
+#if defined(__linux__)
+    // Linux LMDB uses robust process-shared mutexes to recover locks after an
+    // owner dies. QEMU user mode returns ENOSYS for both robust-list syscalls,
+    // but glibc still allows creating these mutexes, leaving dead owners' locks
+    // unrecoverable. Query the current thread without changing libc's robust list.
     void *head = nullptr;
     size_t len = 0;
     return syscall(SYS_get_robust_list, 0, &head, &len) == 0;
+#elif defined(__APPLE__)
+    // Apple LMDB uses SysV semaphores, which sandboxes (e.g. sandbox-exec
+    // without ipc-sysv-sem) may deny. LMDB only finds out after resetting the
+    // lock file, so concurrent openers then fail with MDB_INVALID.
+    int semid = semget(IPC_PRIVATE, 2, IPC_CREAT | 0600);
+    if (semid < 0)
+        return false;
+    semctl(semid, 0, IPC_RMID);
+    return true;
 #else
     return true;
 #endif
@@ -200,8 +213,8 @@ void ObjCache::initDB()
     if (jl_running_under_rr(0))
         goto done;
 
-    if (!robustMutexesAvailable()) {
-        DisabledNotice = "robust mutex support could not be verified";
+    if (!robustLocksAvailable()) {
+        DisabledNotice = "robust lock support could not be verified";
         goto done;
     }
 
@@ -220,9 +233,9 @@ void ObjCache::initDB()
             DisabledNotice = "the cache directory is on a network filesystem";
         else if (Err == MDB_PIDNS_MISMATCH)
             DisabledNotice = "it is in use by a process in a different pid namespace";
-        // EPERM/EACCES: sandboxes (e.g. sandbox-exec on macOS CI) may deny
-        // access to the SysV semaphores LMDB uses on Apple platforms; the
-        // cache cannot work in such environments, so disable it quietly.
+        // EPERM/EACCES: sandboxes may deny access to the SysV semaphores LMDB
+        // uses on Apple platforms (normally caught by robustLocksAvailable);
+        // the cache cannot work in such environments, so disable it quietly.
         else if (Err != ENOENT && Err != EPERM && Err != EACCES)
             checkMDB(Err);
         mdb_env_close(Env);
