@@ -2302,6 +2302,53 @@ precompile_test_harness("edge replay: a method on a kind outside the closure") d
     @test out == "true"
 end
 
+precompile_test_harness("edge replay: outside methods that cannot match") do load_path
+    write(joinpath(load_path, "DisjointDep.jl"),
+        """
+        module DisjointDep
+        f(x) = :dep
+        end
+        """)
+    write(joinpath(load_path, "DisjointUser.jl"),
+        """
+        module DisjointUser
+        using DisjointDep
+        DisjointDep.f(::Integer) = :user
+        callf() = DisjointDep.f(1)
+        precompile(callf, ())
+        end
+        """)
+    # outside DisjointUser's closure; its methods cannot match `f(::Int)` except the last
+    write(joinpath(load_path, "DisjointOther.jl"),
+        """
+        module DisjointOther
+        using DisjointDep
+        DisjointDep.f(::String) = :string
+        DisjointDep.f(::Int, ::Int) = :two
+        end
+        """)
+    write(joinpath(load_path, "DisjointOverlap.jl"),
+        """
+        module DisjointOverlap
+        using DisjointDep
+        DisjointDep.f(::Int) = :overlap
+        end
+        """)
+    for pkg in ("DisjointDep", "DisjointUser", "DisjointOther", "DisjointOverlap")
+        Base.compilecache(Base.PkgId(pkg))
+    end
+    out = edge_replay_test_output(load_path, DEPOT_PATH[1], """
+        using DisjointDep, DisjointOther, DisjointUser
+        print(Base.invokelatest(DisjointUser.callf), " ", DisjointDep.f("s"), " ", DisjointDep.f(1, 2))
+        """)
+    @test out == "user string two"
+    out = edge_replay_test_output(load_path, DEPOT_PATH[1], """
+        using DisjointDep, DisjointOther, DisjointOverlap, DisjointUser
+        print(Base.invokelatest(DisjointUser.callf))
+        """)
+    @test out == "overlap"
+end
+
 precompile_test_harness("activation replay: worklist-owned method tables") do load_path
     # methods of a method table the package itself defines carry no activation
     # certificate; they must not break the (method, certificate) pairing of the

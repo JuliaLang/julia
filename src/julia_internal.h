@@ -1453,6 +1453,7 @@ size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
 size_t jl_n_linkage_blobs(void) JL_NOTSAFEPOINT;
 // method-table contributor tracking and edge replay (gf.c, staticdata.c)
 extern JL_DLLEXPORT jl_genericmemory_t *jl_method_contributors JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_genericmemory_t *jl_method_contributor_methods JL_GLOBALLY_ROOTED;
 extern jl_mutex_t jl_method_contributors_lock;
 void jl_method_table_activate_with_cert(jl_typemap_entry_t *newentry, jl_svec_t *cert) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_activation_cert(jl_method_t *method) JL_NOTSAFEPOINT;
