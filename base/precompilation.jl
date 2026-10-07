@@ -2502,14 +2502,15 @@ function failed_dependency(s::PrecompileSession, deps::Vector{PkgId}, config::Co
     return nothing
 end
 
+# Loading asks only after rejecting a cache, so its requests always read the files.
+unverified_set(s::PrecompileSession, from_loading::Bool) = from_loading ? nothing : s.unverified
+
 function spawn_precompile_tasks!(s::PrecompileSession;
         direct_deps, was_processed, configs, circular_deps,
         requested_pkgids, pkg_names, requested_pkgs, from_loading)
     batch_tasks = Task[]
     sourcespecs = Dict{PkgId,Union{Nothing,Base.PkgLoadSpec}}(pkg => Base.locate_package_load_spec(pkg) for pkg in keys(direct_deps))
     priorities = SchedulePriorities(direct_deps, sourcespecs)
-    # loading asks only after rejecting a cache, so its requests always read the files
-    unverified = from_loading ? nothing : s.unverified
     for (pkg, deps) in direct_deps
         cachepaths = Base.find_all_in_cache_path(pkg)
         freshpaths = String[]
@@ -2553,7 +2554,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                 circular = pkg in circular_deps
                 forced = s.force && !circular && (s.force_stdlibs || !is_stdlib_source(sourcespec))
                 freshpath = @lock s.cache_lock Base.compilecache_freshest_path(pkg; ignore_loaded=s.ignore_loaded,
-                    stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache, cachepaths, sourcespec, flags=cacheflags, unverified)
+                    stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache, cachepaths, sourcespec, flags=cacheflags, unverified=unverified_set(s, from_loading))
                 is_stale = forced || freshpath === nothing
                 if is_stale && !forced && !circular && Base.CACHE_FETCH_HOOK[] !== nothing
                     # a cache-fetch hook gets one chance to materialize a
@@ -2564,7 +2565,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                         local fetched_cachepaths = Base.find_all_in_cache_path(pkg)
                         freshpath = @lock s.cache_lock Base.compilecache_freshest_path(pkg; ignore_loaded=s.ignore_loaded,
                             stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache,
-                            cachepaths=fetched_cachepaths, sourcespec, flags=cacheflags, unverified)
+                            cachepaths=fetched_cachepaths, sourcespec, flags=cacheflags, unverified=unverified_set(s, from_loading))
                         is_stale = freshpath === nothing
                     end
                 end
@@ -2648,7 +2649,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 end
                                 local cachepaths = Base.find_all_in_cache_path(pkg)
                                 local freshpath = @lock s.cache_lock Base.compilecache_freshest_path(pkg; ignore_loaded=s.ignore_loaded,
-                                    stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache, cachepaths, sourcespec, flags=cacheflags, unverified)
+                                    stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache, cachepaths, sourcespec, flags=cacheflags, unverified=unverified_set(s, from_loading))
                                 local is_stale = forced || freshpath === nothing
                                 if !is_stale
                                     @lock s.cache_lock push!(freshpaths, freshpath)
