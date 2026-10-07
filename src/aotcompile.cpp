@@ -2326,6 +2326,10 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
     SmallVector<AOTOutputs, 16> sysimg_outputs;
     SmallVector<AOTOutputs, 16> data_outputs;
     SmallVector<AOTOutputs, 16> metadata_outputs;
+    // The heap image goes into an object of its own (see
+    // jl_write_data_object), written to a temporary file so that z can be
+    // freed before the native code is compiled.
+    std::unique_ptr<MemoryBuffer> image_data_obj;
     {
         JL_TIMING(NATIVE_AOT, NATIVE_Sysimg);
         LLVMContext Context;
@@ -2337,23 +2341,10 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
         sysimgM.setOverrideStackAlignment(OverrideStackAlignment);
 
         if (z) {
-            ArrayRef<char> sysimg_data{z->buf, (size_t)z->size};
-            Constant *data = ConstantDataArray::get(Context, sysimg_data);
-            auto sysdata = new GlobalVariable(sysimgM, data->getType(), false,
-                                              GlobalVariable::ExternalLinkage,
-                                              data, "jl_system_image_data");
-            sysdata->setAlignment(Align(jl_page_size));
-            sysdata->setCodeModel(CodeModel::Large);
-            addComdat(sysdata, TheTriple);
-            Constant *len = ConstantInt::get(sysimgM.getDataLayout().getIntPtrType(Context), sysimg_data.size());
+            Constant *len = ConstantInt::get(sysimgM.getDataLayout().getIntPtrType(Context), z->size);
             addComdat(new GlobalVariable(sysimgM, len->getType(), true,
                                          GlobalVariable::ExternalLinkage,
                                          len, "jl_system_image_size"), TheTriple);
-
-            // Free z here, since we've copied out everything into data
-            // Results in serious memory savings
-            ios_close(z);
-            free(z);
         }
 
         Constant *checksum_val = ConstantInt::get(Type::getInt32Ty(Context), checksum);
@@ -2369,10 +2360,39 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                                      "jl_image_unpack"),
                   TheTriple);
 
-        // Note that we don't set z to null, this allows the check in WRITE_ARCHIVE
-        // to function as expected
         // no need to free the module/context, destructor handles that
-        sysimg_outputs = compile(sysimgM, "sysimg", 1, 1, nullptr, [](Module &) {});
+        // Always emit an object, which jl_write_data_object copies header fields from
+        sysimg_outputs = add_output(sysimgM, *SourceTM, "sysimg", 1, 1, !!unopt_bc_fname, !!bc_fname,
+                                    true, !!asm_fname, nullptr, [](Module &) {});
+
+        if (z) {
+            // Put the temporary file next to any one of the outputs
+            const char *fname = obj_fname ? obj_fname : bc_fname ? bc_fname :
+                                unopt_bc_fname ? unopt_bc_fname : asm_fname;
+            int fd;
+            SmallString<128> path;
+            if (std::error_code EC = sys::fs::createUniqueFile(Twine(fname) + ".data-%%%%%%.o", fd, path))
+                report_fatal_error(Twine("failed to create a temporary file next to ") + fname + ": " + EC.message());
+            // The descriptor and the mapping below keep the data reachable, so
+            // remove the file now: nothing is left behind however the process
+            // exits (on Windows it is deleted once the last handle closes)
+            sys::fs::remove(path);
+            raw_fd_ostream OS(fd, /*shouldClose*/ true);
+            const auto &ref = sysimg_outputs[0].obj;
+            jl_write_data_object(OS, MemoryBufferRef(StringRef(ref.data(), ref.size()), "sysimg.o"), DL,
+                                 "jl_system_image_data", ArrayRef<char>(z->buf, z->size),
+                                 Align(jl_page_size));
+            OS.flush();
+            if (OS.has_error())
+                report_fatal_error(Twine("failed to write system image data: ") + OS.error().message());
+            ios_close(z);
+            free(z);
+            auto buf = MemoryBuffer::getOpenFile(sys::fs::convertFDToNativeFile(fd), path, OS.tell(),
+                                                 /*RequiresNullTerminator*/ false);
+            if (!buf)
+                report_fatal_error(Twine("failed to map system image data: ") + buf.getError().message());
+            image_data_obj = std::move(*buf);
+        }
     }
 
     const bool imaging_mode = true;
@@ -2633,6 +2653,10 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
         buffers.push_back(StringRef(metadata_outputs[0].field.data(), metadata_outputs[0].field.size())); \
         filenames.push_back("sysimg" prefix suffix); \
         buffers.push_back(StringRef(sysimg_outputs[0].field.data(), sysimg_outputs[0].field.size())); \
+        if (image_data_obj) { /* a native object, whatever the output kind */ \
+            filenames.push_back("sysimg_data.o"); \
+            buffers.push_back(image_data_obj->getBuffer()); \
+        } \
         for (size_t i = 0; i < filenames.size(); i++) { \
             archive.push_back(NewArchiveMember(MemoryBufferRef(buffers[i], filenames[i]))); \
         } \
