@@ -854,6 +854,9 @@ enum top_typename_facts {
     SHORT_TUPLE = 1 << 7,
     // The argument is a kind (DataType, UnionAll, ...), which can meet a Type{T} slot of any family
     HAVE_KIND = 1 << 8,
+    // A Type parameter that is a typevar, or Union{} itself, so the slot can hold
+    // Type{Union{}}. Such slots intersect each other whatever their bounds are.
+    TYPE_ADMITS_BOTTOM = 1 << 9,
 };
 
 static void foreach_top_nth_typename(void (*f)(jl_typename_t*, int, void*) JL_CANSAFEPOINT, jl_value_t *a JL_PROPAGATES_ROOT, int n, unsigned *facts, void *env) JL_CANSAFEPOINT
@@ -931,8 +934,14 @@ static void foreach_top_nth_typename(void (*f)(jl_typename_t*, int, void*) JL_CA
             }
         }
         else if (jl_is_typevar(current_a)) {
+            if (current_n == -1)
+                *facts |= TYPE_ADMITS_BOTTOM;
             arraylist_push(&workqueue, ((jl_tvar_t*)current_a)->ub);
             arraylist_push(&workqueue, (void*)(uintptr_t)current_n);
+        }
+        else if (current_a == jl_bottom_type) {
+            if (current_n == -1)
+                *facts |= TYPE_ADMITS_BOTTOM;
         }
         else if (jl_is_unionall(current_a)) {
             arraylist_push(&workqueue, ((jl_unionall_t*)current_a)->body);
@@ -985,6 +994,11 @@ static int jl_foreach_top_typename_for(void (*f)(jl_typename_t*, int, void*) JL_
         // kinds are keyed under their common supertype, and a Type{T} slot meets them
         f(jl_anytype_type->name, 0, env);
     }
+    // Type{T} slots of unrelated families all admit Type{Union{}}, so they get a
+    // shared explicit key too. The typename of Union{}'s type is otherwise unused as
+    // a key: a slot of that type is keyed as a kind.
+    if (facts & TYPE_ADMITS_BOTTOM)
+        f(jl_typeofbottom_type->name, 1, env);
     if (facts & (HAVE_KWCALL | EXACTLY_KWCALL))
         f(jl_kwcall_type->name, facts & EXACTLY_KWCALL ? 1 : 0, env);
     f(jl_any_type->name, facts & EXACTLY_ANY ? 1 : 0, env);
@@ -3102,11 +3116,8 @@ static void contributor_add_tag(jl_typename_t *tn, int32_t tag) JL_CANSAFEPOINT
 static void _typename_tag_contributor(jl_typename_t *tn, int explct, void *env0) JL_CANSAFEPOINT
 {
     // like the mt-backedge table, record only under explicitly encountered
-    // typenames; the check consults every callback. The shared Type typename
-    // is tagged regardless: Type-signatures of unrelated families still
-    // intersect one another (every abstract-bounded constructor admits
-    // Type{Union{}}), so the per-family top typename is not a complete key.
-    if (!explct && tn != jl_type_typename)
+    // typenames; the check consults every callback
+    if (!explct)
         return;
     contributor_add_tag(tn, *(int32_t*)env0);
 }
