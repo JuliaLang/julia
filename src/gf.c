@@ -852,6 +852,8 @@ enum top_typename_facts {
     HAVE_KWCALL = 1 << 5,
     EXACTLY_KWCALL = 1 << 6,
     SHORT_TUPLE = 1 << 7,
+    // The argument is a kind (DataType, UnionAll, ...), which can meet a Type{T} slot of any family
+    HAVE_KIND = 1 << 8,
 };
 
 static void foreach_top_nth_typename(void (*f)(jl_typename_t*, int, void*) JL_CANSAFEPOINT, jl_value_t *a JL_PROPAGATES_ROOT, int n, unsigned *facts, void *env) JL_CANSAFEPOINT
@@ -906,6 +908,8 @@ static void foreach_top_nth_typename(void (*f)(jl_typename_t*, int, void*) JL_CA
                             break;
                         dt = super;
                     }
+                    if (current_n == 0 && dt == jl_anytype_type)
+                        *facts |= HAVE_KIND;
                     f(dt->name, 1, env);
                 }
             }
@@ -970,14 +974,17 @@ static int jl_foreach_top_typename_for(void (*f)(jl_typename_t*, int, void*) JL_
             kwfacts |= (all_subtypes ? EXACTLY_ANY : EXACTLY_KWCALL);
         facts |= kwfacts;
     }
-    if (all_subtypes && (facts & (EXACTLY_FUNCTION | EXACTLY_TYPE | EXACTLY_ANY)))
+    if (all_subtypes && (facts & (EXACTLY_FUNCTION | EXACTLY_TYPE | EXACTLY_ANY | HAVE_KIND)))
         // flag that we have an explicit match that is necessitating a full table scan
         return 0;
     // or inform caller of only which supertypes are applicable
     if (facts & HAVE_FUNCTION)
         f(jl_function_type->name, facts & EXACTLY_FUNCTION ? 1 : 0, env);
-    if (facts & HAVE_TYPE)
+    if (facts & HAVE_TYPE) {
         f(jl_type_typename, facts & EXACTLY_TYPE ? 1 : 0, env);
+        // kinds are keyed under their common supertype, and a Type{T} slot meets them
+        f(jl_anytype_type->name, 0, env);
+    }
     if (facts & (HAVE_KWCALL | EXACTLY_KWCALL))
         f(jl_kwcall_type->name, facts & EXACTLY_KWCALL ? 1 : 0, env);
     f(jl_any_type->name, facts & EXACTLY_ANY ? 1 : 0, env);
