@@ -392,7 +392,7 @@ function find_readme(m::Module)::Union{String, Nothing}
     isnothing(mpath) && return nothing
     !isfile(mpath) && return nothing # modules in sysimage, where src files are omitted
     path = dirname(mpath)
-    top_path = pkgdir(m)
+    top_path = something(pkgdir(m), path)
     while true
         for entry in readdir(path, DirEntry; sort=true)
             isfile(entry) && (lowercase(basename(entry)) in ["readme.md", "readme"]) || continue

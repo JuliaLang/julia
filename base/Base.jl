@@ -420,7 +420,7 @@ const _sigint_episode = Ref{Tuple{Union{Nothing, CancellationTokenSource}, UInt6
 # of the most recent remotely-submitted request.
 const _sigint_foreground_task = Ref{Union{Nothing, Task}}(nothing)
 
-"""
+@doc """
     Base.sigint_new_episode!([src::CancellationTokenSource]) -> CancellationToken
 
 Install `src` (a fresh standalone source by default) as the ^C episode
