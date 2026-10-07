@@ -1,7 +1,9 @@
 # This file is machine-generated - editing it directly is not advised
 
+environment_id = "95defb8a-f82d-44d7-b2c9-37d658f648c1"
+environment_name = "CompilerLoadingTest"
 julia_version = "1.14.0-DEV"
-manifest_format = "2.1"
+manifest_format = "2.2"
 project_hash = "d456eaa69e6fe2f6948e3def3d2e33c75cd7da74"
 
 [[deps.Compiler]]
