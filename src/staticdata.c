@@ -123,6 +123,7 @@ Glossary
 #include "valgrind.h"
 #include "julia_assert.h"
 #include "eytzinger.h"
+#include "bitvector.h"
 
 static const size_t WORLD_AGE_REVALIDATION_SENTINEL = 0x1;
 JL_DLLEXPORT size_t jl_require_world = ~(size_t)0;
@@ -191,7 +192,7 @@ static arraylist_t object_worklist;  // used to mimic recursion by jl_serialize_
 static arraylist_t deferred_supers;  // deferred datatype super fields, handled by jl_serialize_reachable once the pre-order recursion has unwound
 
 // Track image locations and some associated metadata for all loaded sys / pkgimages.
-// (image_tree.ranges[i].data is an image_metadata_t* for build_ids[i])
+// (the data of range i is an image_metadata_t* for build_ids[i])
 static eyt_tree_t image_tree;
 typedef struct {
     uintptr_t base;          // base address of the image
@@ -199,11 +200,25 @@ typedef struct {
     jl_module_t *top_mod;    // owning top-level module
     size_t idx;              // range index in image_tree (for serialization)
     int coverage_compatible; // counters support the requested coverage mode
+    uint32_t *deps;          // bitvector over blobs 0..idx: the sysimage, the images
+                             // this one was loaded against, and itself
+    _Atomic(size_t) world;   // the world in which the image's methods were activated
+                             // (0 until then)
 } image_metadata_t;
+
+// Readers of the image tree take no lock: a reader loads the current snapshot
+// and finishes with it without passing a safepoint, keeping only the
+// image_metadata_t it found, which is never freed. A replaced snapshot is
+// therefore unreachable once every thread has passed a safepoint, which a
+// collection guarantees, so it is freed at the next one.
+static void image_tree_retire(void *snapshot) JL_NOTSAFEPOINT
+{
+    jl_gc_add_quiescent(jl_current_task->ptls, (void**)snapshot, free);
+}
 
 void jl_init_staticdata(void)
 {
-    eyt_tree_init(&image_tree);
+    eyt_tree_init(&image_tree, image_tree_retire);
 }
 
 // HT_NOTFOUND is a valid integer ID, so we store the integer ids mangled.
@@ -224,7 +239,7 @@ static htable_t new_methtables;
 // Query if a Julia object is in a permalloc region (due to part of a sys- pkg-image)
 static size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
 {
-    return image_tree.nranges;
+    return eyt_tree_nranges(&image_tree);
 }
 
 static image_metadata_t *external_blob_metadata(jl_value_t *v) JL_NOTSAFEPOINT
@@ -238,6 +253,58 @@ static size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
 {
     image_metadata_t *meta = external_blob_metadata(v);
     return meta ? meta->idx : (size_t)-1;
+}
+
+JL_DLLEXPORT size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    return external_blob_index(v);
+}
+
+// The dependencies of the image at blob `idx`, as a bitvector over blobs
+// 0..idx: the sysimage, every image in `depmods`, and itself. `depmods` lists
+// every module the precompile worker had loaded, so it is already complete.
+// Blobs are only appended, so the bitvector never changes.
+static uint32_t *image_deps_new(size_t idx, jl_array_t *depmods) JL_NOTSAFEPOINT
+{
+    uint32_t *deps = (uint32_t*)calloc_s(bitvector_nwords(idx + 1) * sizeof(uint32_t));
+    bitvector_set(deps, 0, 1); // the sysimage
+    for (size_t i = 0, ld = depmods ? jl_array_nrows(depmods) : 0; i < ld; i++) {
+        image_metadata_t *dep = external_blob_metadata(jl_array_ptr_ref(depmods, i));
+        if (dep == NULL || dep->idx >= idx)
+            continue;
+        bitvector_set(deps, dep->idx, 1);
+    }
+    bitvector_set(deps, idx, 1);
+#ifndef NDEBUG
+    // a dependency's own dependencies are among ours
+    for (size_t i = 0, ld = depmods ? jl_array_nrows(depmods) : 0; i < ld; i++) {
+        image_metadata_t *dep = external_blob_metadata(jl_array_ptr_ref(depmods, i));
+        if (dep == NULL || dep->idx >= idx)
+            continue;
+        for (size_t w = 0, nw = bitvector_nwords(dep->idx + 1); w < nw; w++)
+            assert((dep->deps[w] & ~deps[w]) == 0);
+    }
+#endif
+    return deps;
+}
+
+// If linkage blob `blob` is a dependency of linkage blob `image` (or the
+// sysimage, or `image` itself), the world in which the methods of `blob` were
+// activated, else 0. A dependency has been loaded in full, so its world is set.
+JL_DLLEXPORT size_t jl_linkage_blob_dep_world(size_t image, size_t blob) JL_NOTSAFEPOINT
+{
+    if (blob > image)
+        return 0;
+    void *data = eyt_tree_range_data(&image_tree, image);
+    if (data == EYT_NOTFOUND)
+        return 0;
+    image_metadata_t *meta = (image_metadata_t*)data;
+    if (meta->deps == NULL || !bitvector_get(meta->deps, blob))
+        return 0;
+    image_metadata_t *blobmeta = (image_metadata_t*)eyt_tree_range_data(&image_tree, blob);
+    size_t world = jl_atomic_load_relaxed(&blobmeta->world);
+    assert(world != 0);
+    return world;
 }
 
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
@@ -328,7 +395,7 @@ typedef struct {
     // record of build_ids for all external linkages, in order of serialization for the current sysimg/pkgimg
     // conceptually, the base pointer for the jth externally-linked item is determined from
     //     i = findfirst(==(link_ids[j]), build_ids)
-    //     blob_base = ((image_metadata_t*)image_tree.ranges[i].data)->base
+    //     blob_base = ((image_metadata_t*)eyt_tree_range_data(&image_tree, i))->base
     // We need separate lists since they are intermingled at creation but split when written.
     jl_array_t *link_ids_relocs;
     jl_array_t *link_ids_gctags;
@@ -800,6 +867,8 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     }
     if (jl_is_mtable(v)) {
         jl_methtable_t *mt = (jl_methtable_t*)v;
+        // The contributor tags name this process's linkage blobs, so they are not saved
+        record_field_change((jl_value_t**)&mt->contributors, jl_an_empty_memory_any);
         // Any back-edges will be re-validated and added by staticdata.jl, so
         // drop them from the image here
         if (s->incremental || jl_options.trim || jl_options.strip_ir) {
@@ -2218,8 +2287,8 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
 #endif
         assert(s->buildid_depmods_idxs && depsidx < jl_array_len(s->buildid_depmods_idxs));
         size_t i = jl_array_data(s->buildid_depmods_idxs, uint32_t)[depsidx];
-        assert(i < image_tree.nranges);
-        image_metadata_t *meta = (image_metadata_t*)image_tree.ranges[i].data;
+        image_metadata_t *meta = (image_metadata_t*)eyt_tree_range_data(&image_tree, i);
+        assert((void*)meta != EYT_NOTFOUND);
         return meta->base + offset*SYS_EXTERNAL_LINK_UNIT;
     }
     case ExternalLinkage: {
@@ -2230,8 +2299,8 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         *link_index += 1;
         assert(depsidx < jl_array_len(s->buildid_depmods_idxs));
         size_t i = jl_array_data(s->buildid_depmods_idxs, uint32_t)[depsidx];
-        assert(i < image_tree.nranges);
-        image_metadata_t *meta = (image_metadata_t*)image_tree.ranges[i].data;
+        image_metadata_t *meta = (image_metadata_t*)eyt_tree_range_data(&image_tree, i);
+        assert((void*)meta != EYT_NOTFOUND);
         return meta->base + offset*SYS_EXTERNAL_LINK_UNIT;
     }
     }
@@ -3637,7 +3706,7 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
         ext_foreign_cis = NULL; // not needed anymore, free it
 
         // Collect method extensions
-        // extext_methods: [method1, ...], worklist-owned "extending external" methods added to functions owned by modules outside the worklist
+        // extext_methods: [method1, record1, ...], worklist-owned "extending external" methods added to functions owned by modules outside the worklist, each paired with its ext_backinterferences (or nothing)
         extext_methods = jl_alloc_vec_any(0);
         jl_collect_extext_methods(extext_methods, mod_array);
 
@@ -4148,7 +4217,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                                                  jl_array_t **extext_methods JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **internal_methods JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **method_roots_list JL_REQUIRE_ROOTED_SLOT,
-                                                 pkgcachesizes *cachesizes) JL_CANSAFEPOINT JL_GC_DISABLED
+                                                 pkgcachesizes *cachesizes,
+                                                 image_metadata_t **meta_out) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     jl_task_t *ct = jl_current_task;
     int en = jl_gc_enable(0);
@@ -4675,7 +4745,12 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     image_metadata_t *meta = (image_metadata_t*)malloc_s(sizeof(image_metadata_t));
     meta->base = (uintptr_t)image_base;
     meta->relocs_base = (void*)relocs_base;
-    meta->idx = n_linkage_blobs();
+    meta->deps = NULL; // until the blob index is known
+    // the sysimage's methods are active by jl_require_world; a package image's
+    // are activated by the caller, which records the world
+    jl_atomic_store_relaxed(&meta->world, restored == NULL ? jl_require_world : 0);
+    if (meta_out)
+        *meta_out = meta;
     // adopt the image's coverage counters
     meta->coverage_compatible = jl_register_image_coverage(image->coverage, !s.incremental);
     if (restored == NULL) {
@@ -4693,13 +4768,15 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         if (!meta->coverage_compatible)
             meta->coverage_compatible = jl_coverage_plain_image_accepted(checksum, topmod->build_id.lo);
     }
-    eyt_tree_add_range(&image_tree,
+    // the tree assigns the index under its lock, as other images may be loading
+    meta->idx = eyt_tree_add_range(&image_tree,
         (uintptr_t)image_base,
         (uintptr_t)image_base + sizeof_sysimg,
         (void*)meta);
+    meta->deps = image_deps_new(meta->idx, depmods);
     jl_timing_counter_inc(JL_TIMING_COUNTER_ImageSize, sizeof_sysimg + sizeof(uintptr_t));
 
-    // jl_printf(JL_STDOUT, "%ld blobs to link against\n", image_tree.nranges);
+    // jl_printf(JL_STDOUT, "%ld blobs to link against\n", n_linkage_blobs());
     jl_gc_enable(en);
 
     if (s.incremental)
@@ -4812,7 +4889,8 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
                 ios_close(f);
             ios_static_buffer(f, sysimg, len);
             pkgcachesizes cachesizes;
-            jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &cachesizes);
+            image_metadata_t *meta = NULL;
+            jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &cachesizes, &meta);
             JL_SIGATOMIC_END();
 
             // Add roots to methods
@@ -4838,13 +4916,18 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             size_t world = jl_atomic_load_relaxed(&jl_world_counter);
             if (new_methods)
                 world += 1;
-            jl_activate_methods(extext_methods, internal_methods, world, pkgname);
+            jl_atomic_store_relaxed(&meta->world, world); // before activation, which asks about this image's dependencies
+            jl_activate_methods(extext_methods, internal_methods, world, pkgname, meta->idx);
             // TODO: inject internal_methods into caches here, so the system can see them immediately as potential candidates (before validation)
             // allow users to start running in this updated world
             if (new_methods)
                 jl_atomic_store_release(&jl_world_counter, world);
             // now permit more methods to be added again
             JL_UNLOCK(&world_counter_lock);
+            // the ext_backinterferences recorded so far saw the method table without this
+            // image: complete them against it (see jl_ext_backinterferences)
+            if (jl_recording_ext_backinterferences())
+                jl_ext_backinterferences_complete(meta->idx);
 
             if (completeinfo) {
                 cachesizes_sv = jl_alloc_svec(7);
@@ -4885,7 +4968,7 @@ static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image) JL_
     ios_t f_payload;
     ios_static_buffer(&f_payload, f->buf + datastartpos, f->size - datastartpos);
     jl_restore_system_image_from_stream_(&f_payload, image, NULL,
-                                         checksum, NULL, NULL, NULL, NULL, NULL, NULL);
+                                         checksum, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(jl_image_buf_t buf, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc) JL_CANSAFEPOINT

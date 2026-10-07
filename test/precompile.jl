@@ -2198,6 +2198,212 @@ precompile_test_harness("Issue #48391") do load_path
     @test_throws ErrorException isless(x, x)
 end
 
+# Scenarios that load package images run in a fresh process, so each load
+# order starts from the images alone.
+let exename = `$(Base.julia_cmd()) --startup-file=no`
+    global function trusted_edge_test_output(load_path, depot, body)
+        code = """
+            insert!(LOAD_PATH, 1, $(repr(load_path)))
+            insert!(DEPOT_PATH, 1, $(repr(depot)))
+            $body
+            """
+        return readchomp(`$exename -e $code`)
+    end
+end
+
+# Method contributors: the method table records, per top typename, which images
+# added or deleted methods under it this session, and each image records its
+# dependencies, so a load can ask whether every method a signature could match
+# came from an image or its dependencies.
+precompile_test_harness("method contributors") do load_path
+    write(joinpath(load_path, "ContribDep.jl"),
+        """
+        module ContribDep
+        f(x) = :dep
+        end
+        """)
+    write(joinpath(load_path, "ContribExt.jl"),
+        """
+        module ContribExt
+        using ContribDep
+        ContribDep.f(::Integer) = :ext
+        end
+        """)
+    Base.compilecache(Base.PkgId("ContribDep"))
+    Base.compilecache(Base.PkgId("ContribExt"))
+    depot = DEPOT_PATH[1]
+    in_deps_def = """
+        in_deps(sig, obj) = Int(0 != ccall(:jl_sig_contributors_world, Csize_t, (Any, Any, Csize_t), sig, Core.methodtable,
+                                     ccall(:jl_external_blob_index, Csize_t, (Any,), obj)))
+        """
+    # an image's dependencies are the images it was loaded against, the sysimage
+    # and itself, and the question is asked for the blob owning an object: the
+    # contributors to ContribDep.f, ContribDep and ContribExt, are among the
+    # dependencies of ContribExt but not of ContribDep, of the sysimage, or of no image
+    out = trusted_edge_test_output(load_path, depot, in_deps_def * """
+        using ContribDep, ContribExt
+        sig = Tuple{typeof(ContribDep.f), Int}
+        print(in_deps(sig, ContribExt), " ", in_deps(sig, which(ContribDep.f, (Integer,))), " ",
+              in_deps(sig, ContribDep), " ", in_deps(sig, Base), " ", in_deps(sig, Main))
+        # a method on Type{Union{}} meets the constructors of every family, so defining one
+        # poisons every constructor signature, but no other
+        ctor = Tuple{Type{Int}, Int}
+        print(" ", in_deps(ctor, ContribExt))
+        (::Type{Union{}})(::Int) = 0
+        print(" ", in_deps(ctor, ContribExt), " ", in_deps(sig, ContribExt))
+        # a method defined in the session is from no image
+        ContribDep.f(::Int) = :session
+        print(" ", in_deps(sig, ContribExt))
+        """)
+    @test out == "1 1 0 0 0 1 0 1 0"
+    # a deletion in the session leaves no method behind but marks the function
+    out = trusted_edge_test_output(load_path, depot, in_deps_def * """
+        using ContribDep
+        ContribDep.f(::Int) = :session
+        Base.delete_method(which(ContribDep.f, (Int,)))
+        using ContribExt
+        print(in_deps(Tuple{typeof(ContribDep.f), Int}, ContribExt))
+        """)
+    @test out == "0"
+end
+
+precompile_test_harness("activation replay: worklist-owned method tables") do load_path
+    # methods of a method table the package itself defines carry no activation
+    # record; they must not break the (method, record) pairing of the image's
+    # method list (Revise's "External method tables" test found this)
+    write(joinpath(load_path, "ReplayOverlay.jl"),
+        """
+        module ReplayOverlay
+        Base.Experimental.@MethodTable(method_table)
+        Base.Experimental.@MethodTable(method_table_2)
+        foo() = 1
+        Base.Experimental.@overlay method_table print(x) = "print"
+        Base.Experimental.@overlay method_table show(x) = "show"
+        Base.Experimental.@overlay method_table cos(x) = "cos"
+        Base.Experimental.@overlay method_table_2 foo() = 2
+        bar() = foo()
+        baz() = bar()
+        end
+        """)
+    Base.compilecache(Base.PkgId("ReplayOverlay"))
+    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
+        using ReplayOverlay
+        nm(sig, mt) = length(Base._methods_by_ftype(sig, mt, -1, Base.get_world_counter()))
+        print(Base.invokelatest(ReplayOverlay.baz), " ", nm(Tuple{typeof(cos), Any}, ReplayOverlay.method_table),
+              " ", nm(Tuple{typeof(ReplayOverlay.foo)}, ReplayOverlay.method_table_2))
+        """)
+    @test out == "1 1 1"
+end
+
+precompile_test_harness("activation replay: record validity") do load_path
+    write(joinpath(load_path, "ActReplayDep.jl"),
+        """
+        module ActReplayDep
+        f(::Any) = :old
+        f(::Int) = :blocker
+        h(::Any) = :any
+        g(::String) = :str
+        end
+        """)
+    # loads another dependency after defining its method, so the worker activated
+    # that method before it could see ActReplayLate's
+    write(joinpath(load_path, "ActReplayLate.jl"),
+        """
+        module ActReplayLate
+        using ActReplayDep
+        ActReplayDep.h(::Integer) = :late
+        callh() = ActReplayDep.h(1)
+        callh()
+        callg() = ActReplayDep.g(1) # no method yet: a missing-method edge
+        precompile(callg, ())
+        end
+        """)
+    write(joinpath(load_path, "ActReplayPkg.jl"),
+        """
+        module ActReplayPkg
+        using ActReplayDep
+        ActReplayDep.f(::Real) = :new
+        ActReplayDep.h(::Int) = :pkg
+        ActReplayDep.g(::Int) = :pkg
+        using ActReplayLate
+        end
+        """)
+    Base.compilecache(Base.PkgId("ActReplayDep"))
+    Base.compilecache(Base.PkgId("ActReplayLate"))
+    Base.compilecache(Base.PkgId("ActReplayPkg"))
+    # a dependency method deleted before loading must not keep shadowing the new one
+    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
+        using ActReplayDep
+        Base.delete_method(which(ActReplayDep.f, (Int,)))
+        g() = ActReplayDep.f(1)
+        g()
+        using ActReplayPkg
+        print(Base.invokelatest(g))
+        """)
+    @test out == "new"
+    # the late dependency's caller is invalidated by the package's more specific method
+    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
+        using ActReplayLate
+        ActReplayLate.callh()
+        using ActReplayPkg
+        print(Base.invokelatest(ActReplayLate.callh))
+        """)
+    @test out == "pkg"
+    # the late dependency's caller of a method missing when it was built is found
+    # through its missing-method backedge, which is always checked live
+    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
+        using ActReplayLate
+        using ActReplayPkg
+        print(Base.invokelatest(ActReplayLate.callg))
+        """)
+    @test out == "pkg"
+end
+
+precompile_test_harness("activation replay: record completed against images loaded later") do load_path
+    write(joinpath(load_path, "ActKeepDep.jl"),
+        """
+        module ActKeepDep
+        h(::Any) = :any
+        k(::Any, ::Any) = :any
+        end
+        """)
+    write(joinpath(load_path, "ActKeepLate.jl"),
+        """
+        module ActKeepLate
+        using ActKeepDep
+        ActKeepDep.h(::Integer) = :late
+        ActKeepDep.k(::Int, ::Any) = :late
+        callh() = ActKeepDep.h(1)
+        callh()
+        end
+        """)
+    # the worker activates the first two methods before the late dependency is loaded,
+    # so their records are completed against it at save; the last one sees it
+    write(joinpath(load_path, "ActKeepPkg.jl"),
+        """
+        module ActKeepPkg
+        using ActKeepDep
+        ActKeepDep.h(::Int) = :pkg
+        ActKeepDep.k(::Any, ::Int) = :pkg
+        using ActKeepLate
+        ActKeepDep.h(::Int8) = :pkg8
+        end
+        """)
+    Base.compilecache(Base.PkgId("ActKeepDep"))
+    Base.compilecache(Base.PkgId("ActKeepLate"))
+    Base.compilecache(Base.PkgId("ActKeepPkg"))
+    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
+        using ActKeepPkg, ActKeepDep, ActKeepLate
+        ambiguous = try
+            ActKeepDep.k(1, 1); false
+        catch err
+            occursin("ambiguous", sprint(showerror, err))
+        end
+        print(ActKeepLate.callh(), " ", ambiguous, " ", ActKeepDep.h(Int8(1)), " ", ActKeepDep.h(big(1)))
+        """)
+    @test out == "pkg true pkg8 late"
+end
+
 precompile_test_harness("Generator nospecialize") do load_path
     write(joinpath(load_path, "GenNoSpec.jl"),
         """
