@@ -732,6 +732,8 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             }
         }
     }
+    if (jl_is_unionall(v)) // a cache, recreated on demand
+        record_field_change((jl_value_t**)&((jl_unionall_t*)v)->canonvar, NULL);
     if (jl_is_binding(v)) {
         jl_binding_t *b = (jl_binding_t*)v;
         if (s->incremental && needs_uniquing(v, s->query_cache)) {

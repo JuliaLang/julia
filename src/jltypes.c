@@ -1357,7 +1357,27 @@ JL_DLLEXPORT jl_value_t *jl_new_unionall_raw(jl_sym_t *name, jl_value_t *lb, jl_
         flags |= JL_UNIONALL_ESCAPINGREFS;
     u->flags = flags;
     u->hash = jl_compute_unionall_hash(u);
+    jl_atomic_store_relaxed(&u->canonvar, NULL);
     return (jl_value_t*)u;
+}
+
+// the binder's canonical variable, created on first use and then kept by the
+// binder (see `jl_unionall_t::canonvar`). The bounds of a node that refer to
+// enclosing binders (a detached fragment) are taken verbatim.
+JL_DLLEXPORT jl_tvar_t *jl_unionall_var(jl_unionall_t *u JL_PROPAGATES_ROOT)
+{
+    jl_tvar_t *v = jl_atomic_load_acquire(&u->canonvar);
+    if (v != NULL)
+        return v;
+    v = (has_refs_above(u->lb, 0) || has_refs_above(u->ub, 0)) ?
+        jl_new_typevar_raw(u->name, u->lb, u->ub) : jl_new_typevar(u->name, u->lb, u->ub);
+    jl_tvar_t *expected = NULL;
+    JL_GC_PUSH1(&v);
+    jl_gc_wb(u, (void*)&u->canonvar, v);
+    if (!jl_atomic_cmpswap(&u->canonvar, &expected, v))
+        v = expected; // another thread installed one first
+    JL_GC_POP();
+    return v;
 }
 
 // raw constructor: `body` must already be in de Bruijn form for the new binder
@@ -4611,12 +4631,13 @@ void jl_init_types(void) JL_GC_DISABLED
     // `body` and `var` to be served as computed compatibility properties by
     // `Base.getproperty` (which materializes a canonical TypeVar per binder)
     jl_unionall_type = jl_new_datatype(jl_symbol("UnionAll"), core, jl_anytype_type, jl_emptysvec,
-                                       jl_perm_symsvec(6, "name", "lb", "ub", "inner", "flags", "hash"),
-                                       jl_svec(6, jl_symbol_type, jl_any_type, jl_any_type, jl_any_type,
-                                               jl_any_type /*jl_uint32_type*/, jl_any_type /*jl_ulong_type*/),
+                                       jl_perm_symsvec(7, "name", "lb", "ub", "inner", "flags", "hash", "canonvar"),
+                                       jl_svec(7, jl_symbol_type, jl_any_type, jl_any_type, jl_any_type,
+                                               jl_any_type /*jl_uint32_type*/, jl_any_type /*jl_ulong_type*/,
+                                               jl_any_type),
                                        jl_emptysvec, 0, 0, 6);
     XX(unionall);
-    const static uint32_t unionall_constfields[1] = { 0x0000003f }; // all fields are constant
+    const static uint32_t unionall_constfields[1] = { 0x0000007f }; // all fields are constant (`canonvar` is a C-side cache)
     jl_unionall_type->name->constfields = unionall_constfields;
     // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist
     jl_unionall_type->name->mayinlinealloc = 0;

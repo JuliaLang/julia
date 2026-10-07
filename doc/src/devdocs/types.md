@@ -91,7 +91,7 @@ All but `f4` can be called with `a = [1,2]`; all but `f2` can be called with `b 
 
 Let's look at these types a little more closely:
 
-```jldoctest; filter = r"hash: UInt64 0x[0-9a-f]+"
+```jldoctest; filter = [r"hash: UInt64 0x[0-9a-f]+", r"\n *canonvar: (#undef|TypeVar(\n +(name|lb|ub): .*){3})"]
 julia> dump(Array)
 UnionAll
   name: Symbol T

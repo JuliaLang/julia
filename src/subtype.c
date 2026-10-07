@@ -316,10 +316,41 @@ static int has_free_or_dangling_typevars(jl_value_t *v) JL_NOTSAFEPOINT;
 // entries are skipped (intersection leaks binding variables into terms).
 static jl_tvar_t *binding_var(jl_stenv_t *e, jl_varbinding_t *vb) JL_GLOBALLY_ROOTED JL_CANSAFEPOINT;
 
+// master's rule for reusing a binder's variable: not if it is already in use
+// in the environment (directly bound, in a binding's updated bounds, or an
+// inner variable of one) or in the term on the other side
+static int canonical_var_aliased(jl_stenv_t *e, jl_tvar_t *v, jl_value_t *t) JL_NOTSAFEPOINT
+{
+    if (t != NULL && jl_has_typevar(t, v))
+        return 1;
+    for (jl_varbinding_t *b = e->vars; b != NULL; b = b->prev) {
+        if (b->var == v)
+            return 1;
+        if (b->u != NULL && ((b->lb != b->u->lb && jl_has_typevar(b->lb, v)) ||
+                             (b->ub != b->u->ub && jl_has_typevar(b->ub, v))))
+            return 1;
+        if (b->innervars != NULL) {
+            for (size_t i = 0; i < jl_array_nrows(b->innervars); i++) {
+                if (jl_array_ptr_ref(b->innervars, i) == (jl_value_t*)v)
+                    return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 // the returned variable is memoized in (and so rooted by) `e->opened`
 static jl_tvar_t *stenv_binding_var(jl_stenv_t *e, jl_unionall_t *u, jl_value_t *lb, jl_value_t *ub,
                                     jl_varbinding_t *frame_prev, jl_value_t *t) JL_GLOBALLY_ROOTED JL_CANSAFEPOINT
 {
+    if (lb == u->lb && ub == u->ub && !jl_has_dangling_tvarrefs(lb) && !jl_has_dangling_tvarrefs(ub)) {
+        // the bounds do not depend on the enclosing chain: share the binder's
+        // canonical variable when it is free to use (the binder keeps it, so
+        // every pass of the query finds the same one)
+        jl_tvar_t *cv = jl_unionall_var(u);
+        if (!canonical_var_aliased(e, cv, t))
+            return cv;
+    }
     // the key must identify the whole enclosing chain, so the previous
     // frame's variable is forced transitively: repeated passes then agree on
     // every variable an already-memoized bound substitution can contain
