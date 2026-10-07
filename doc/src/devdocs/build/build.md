@@ -162,7 +162,7 @@ Notes for various architectures:
 Building Julia requires that the following software be installed:
 
 - **[GNU make](https://www.gnu.org/software/make)**                — building dependencies.
-- **[gcc & g++](https://gcc.gnu.org)** (>= 7.1) or **[Clang](https://clang.llvm.org)** (>= 5.0, >= 9.3 for Apple Clang) — compiling and linking C, C++.
+- **[gcc & g++](https://gcc.gnu.org)** (>= 7.1) or **[Clang](https://clang.llvm.org)** (>= 5.0; Xcode >= 16 on macOS) — compiling and linking C, C++.
   - On Linux with g++, the static version of libstdc++ is also required.  If it is unavailable, set `USE_RT_STATIC_LIBSTDCXX=0` in `Make.user`.
 - **[libatomic](https://gcc.gnu.org)**          — provided by **[gcc]** and needed to support atomic operations.
 - **[python](https://www.python.org/)** (>=2.7)          — needed to build LLVM.

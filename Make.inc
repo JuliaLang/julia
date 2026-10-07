@@ -603,15 +603,15 @@ JCXXFLAGS_CLANG    = $(JCXXFLAGS_COMMON) -pedantic
 JCXXFLAGS_GCC      = $(JCXXFLAGS_COMMON) -fno-gnu-unique
 
 DEBUGFLAGS_COMMON  = -O0 -DJL_DEBUG_BUILD -fstack-protector
-DEBUGFLAGS_CLANG   = $(DEBUGFLAGS_COMMON) -g
-DEBUGFLAGS_GCC     = $(DEBUGFLAGS_COMMON) -ggdb2
+DEBUGFLAGS_CLANG   = $(DEBUGFLAGS_COMMON) -gdwarf-5
+DEBUGFLAGS_GCC     = $(DEBUGFLAGS_COMMON) -ggdb2 -gdwarf-5
 
 ifeq ($(filter 1 2,$(RUNTIME_DEBUG_LEVEL)),)
 $(error RUNTIME_DEBUG_LEVEL must be 1 or 2, got '$(RUNTIME_DEBUG_LEVEL)')
 endif
 SHIPFLAGS_COMMON   = -O3
-SHIPFLAGS_CLANG    = $(SHIPFLAGS_COMMON) $(if $(filter 2,$(RUNTIME_DEBUG_LEVEL)),-g,-gline-tables-only)
-SHIPFLAGS_GCC      = $(SHIPFLAGS_COMMON) -ggdb$(RUNTIME_DEBUG_LEVEL) -falign-functions
+SHIPFLAGS_CLANG    = $(SHIPFLAGS_COMMON) -gdwarf-5 $(if $(filter 2,$(RUNTIME_DEBUG_LEVEL)),-g,-gline-tables-only)
+SHIPFLAGS_GCC      = $(SHIPFLAGS_COMMON) -gdwarf-5 -ggdb$(RUNTIME_DEBUG_LEVEL) -falign-functions
 
 
 BOLT_LDFLAGS :=
