@@ -815,3 +815,11 @@ let
     @test_throws MethodError Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTCplxF64())
     @test Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTOtherC()) === 2
 end
+
+# a keyword method whose function argument is a Vararg still invalidates callers
+# that were compiled against no matching keyword method
+kwvararg_f(x) = 1
+kwvararg_caller() = kwvararg_f(; x=1)
+@test_throws MethodError kwvararg_caller()
+Core.kwcall(::NamedTuple{(:x,)}, ::typeof(kwvararg_f)...) = 2
+@test kwvararg_caller() === 2
