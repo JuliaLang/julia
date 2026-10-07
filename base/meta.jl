@@ -325,6 +325,9 @@ function _parse_string(text::AbstractString, filename::AbstractString,
     ex, offset+1
 end
 
+_is_parse_error(@nospecialize(ex)) = isexpr(ex, :error) ||
+    (isdefined(Base, :Syntax) && ex isa Base.Syntax && Base.head(ex) === :error)
+
 """
     parse(str, start; greedy=true, raise=true, depwarn=true, filename="none")
 
@@ -363,8 +366,8 @@ function parse(str::AbstractString, pos::Integer;
                type=Expr, _parse = parser_for_module(mod))
     ex, pos = _parse_string(str, String(filename), 1, pos,
                             greedy ? :statement : :atom, type, _parse)
-    if raise && isexpr(ex, :error)
-        err = ex.args[1]
+    if raise && _is_parse_error(ex)
+        err = (ex isa Expr ? ex : Base.syntax_to_expr(ex)).args[1]
         if err isa String
             err = ParseError(err) # For flisp parser
         end
@@ -405,12 +408,14 @@ function parse(str::AbstractString;
                mod::Union{Nothing, Module}=nothing, type=Expr,
                _parse = parser_for_module(mod))
     ex, pos = parse(str, 1; filename, greedy=true, raise, depwarn, type, _parse)
-    if isexpr(ex, :error)
+    if _is_parse_error(ex)
         return ex
     end
     if pos <= ncodeunits(str)
         raise && throw(ParseError("extra token after end of expression"))
-        return Expr(:error, "extra token after end of expression")
+        err = Expr(:error, "extra token after end of expression")
+        return type == Expr ? err :
+            Base.expr_to_syntax(err, LineNumberNode(1, Symbol(filename)))
     end
     return ex
 end

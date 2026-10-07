@@ -1081,8 +1081,7 @@ end
 
 let f(x) =
       g(x) = 1
-    # broken: Syntax->Expr gives a multi-line short-form body the body's line
-    @test_broken functionloc(f(1))[2] > functionloc(f)[2]
+    @test functionloc(f(1))[2] > functionloc(f)[2]
 end
 
 # let-bound functions with `where` and static parameters
