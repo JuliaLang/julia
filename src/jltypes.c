@@ -1350,6 +1350,8 @@ JL_DLLEXPORT jl_value_t *jl_new_unionall_raw(jl_sym_t *name, jl_value_t *lb, jl_
         flags |= JL_UNIONALL_VAROCCURS;
         if (jl_tvarref_always_occurs_cov_top(body))
             flags |= JL_UNIONALL_ALWAYSCOV;
+        if (jl_tvarref_occurs_invariant_top(body))
+            flags |= JL_UNIONALL_OCCURSINV;
     }
     if (has_refs_above(lb, 0) || has_refs_above(ub, 0) || has_refs_above(body, 1))
         flags |= JL_UNIONALL_ESCAPINGREFS;

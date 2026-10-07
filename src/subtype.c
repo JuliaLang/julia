@@ -603,6 +603,8 @@ static int tvarref_occurs_inside(jl_value_t *v, size_t d, int inside, int want_i
     }
     else if (jl_is_unionall(v)) {
         jl_unionall_t *ua = (jl_unionall_t*)v;
+        if (!(ua->flags & JL_UNIONALL_ESCAPINGREFS))
+            return 0; // closed: no reference reaches out to the binder
         // the bounds live outside the binder (same frame as `v`), the body
         // one frame further in
         if (tvarref_occurs_inside(ua->lb, d, inside, want_inv) ||
@@ -622,6 +624,8 @@ static int tvarref_occurs_inside(jl_value_t *v, size_t d, int inside, int want_i
         return tvarref_occurs_inside(jl_some_Type_T(v), d, 1, want_inv);
     }
     else if (jl_is_datatype(v)) {
+        if (!((jl_datatype_t*)v)->hasescapingrefs)
+            return 0; // closed: no reference reaches out to the binder
         size_t i;
         int istuple = jl_is_tuple_type(v);
         for (i=0; i < jl_nparams(v); i++) {
@@ -657,6 +661,8 @@ static int tvarref_occurs_covariant_only(jl_value_t *t, size_t d, int covariant)
         return vm->T == NULL || tvarref_occurs_covariant_only(vm->T, d, covariant);
     }
     else if (jl_is_datatype(t)) {
+        if (!((jl_datatype_t*)t)->hasescapingrefs)
+            return 1; // closed: the binder does not occur
         int incov = covariant && jl_is_tuple_type(t);
         for (size_t i = 0; i < jl_nparams(t); i++) {
             if (!tvarref_occurs_covariant_only(jl_tparam(t, i), d, incov))
@@ -2340,7 +2346,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     // most bindings are never used (see `binding_var`).
     vb.lb = u->lb;
     vb.ub = u->ub;
-    int body_occurs_inv = tvarref_occurs_invariant(body, 1);
+    int body_occurs_inv = (u->flags & JL_UNIONALL_OCCURSINV) != 0;
     vb.body_occurs_inv = body_occurs_inv;
     e->vars = &vb;
     if (R)
@@ -6127,6 +6133,12 @@ int jl_tvarref_always_occurs_cov_top(jl_value_t *body) JL_NOTSAFEPOINT
     return tvarref_always_occurs_cov(body, 1, PARAM_COVARIANT);
 }
 
+// construction-time entry for the `JL_UNIONALL_OCCURSINV` flag
+int jl_tvarref_occurs_invariant_top(jl_value_t *body) JL_NOTSAFEPOINT
+{
+    return tvarref_occurs_invariant(body, 1);
+}
+
 static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param) JL_CANSAFEPOINT
 {
     jl_value_t *res = NULL;
@@ -6144,7 +6156,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     vb.lb = u->lb;
     vb.ub = u->ub;
     vb.other_t = t;
-    int body_occurs_inv = tvarref_occurs_invariant(u->body, 1);
+    int body_occurs_inv = (u->flags & JL_UNIONALL_OCCURSINV) != 0;
     vb.existential = R;
     vb.body_occurs_inv = body_occurs_inv;
     vb.depth0 = e->invdepth;
