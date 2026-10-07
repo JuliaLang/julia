@@ -1896,8 +1896,9 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 }
                 jl_atomic_store_relaxed(&newci->time_compile, 0.0);
                 jl_atomic_store_relaxed(&newci->invoke, NULL);
-                // preserve only JL_CI_FLAGS_NATIVE_CACHE_VALID and JL_CI_FLAGS_UNIQUE_BACKEDGES bits
-                jl_atomic_store_relaxed(&newci->flags, jl_atomic_load_relaxed(&newci->flags) & (JL_CI_FLAGS_NATIVE_CACHE_VALID | JL_CI_FLAGS_UNIQUE_BACKEDGES));
+                // preserve only the native-cache-valid, unique-backedges and backedges-logged bits
+                jl_atomic_store_relaxed(&newci->flags, jl_atomic_load_relaxed(&newci->flags) &
+                                        (JL_CI_FLAGS_NATIVE_CACHE_VALID | JL_CI_FLAGS_UNIQUE_BACKEDGES | JL_CI_FLAGS_BACKEDGES_LOGGED));
                 jl_atomic_store_relaxed(&newci->specptr.fptr, NULL);
                 uintptr_t fptr_type = JL_INVOKE_SPECSIG;
                 int8_t builtin_id = 0;
@@ -3033,6 +3034,128 @@ static void write_section(ios_t *f, ios_t *sec, size_t align, size_t skip, const
     ios_close(sec);
 }
 
+// One entry of the backedge log during save. Entries are grouped by the order in
+// which their target and signature first appear in the log, which keeps the
+// image contents independent of object addresses.
+typedef struct {
+    size_t target_first;
+    size_t invokesig_first;
+    uint32_t cls;
+    uint32_t orig;
+} belog_trip_t;
+
+static int belog_trip_cmp(const void *a_, const void *b_) JL_NOTSAFEPOINT
+{
+    const belog_trip_t *a = (const belog_trip_t*)a_, *b = (const belog_trip_t*)b_;
+    if (a->cls != b->cls)
+        return a->cls < b->cls ? -1 : 1;
+    if (a->target_first != b->target_first)
+        return a->target_first < b->target_first ? -1 : 1;
+    if (a->invokesig_first != b->invokesig_first)
+        return a->invokesig_first < b->invokesig_first ? -1 : 1;
+    return a->orig < b->orig ? -1 : a->orig > b->orig ? 1 : 0;
+}
+
+// Compact the backedge log into [unique objects, varint index stream] and flag
+// the callers it covers. Only callers that are saved anyway are kept, so the log
+// does not pull dead CodeInstances into the image.
+static jl_array_t *compact_backedge_log(jl_array_t *belog) JL_CANSAFEPOINT JL_GC_DISABLED
+{
+    size_t bn = jl_array_nrows(belog), ins = 0;
+    jl_value_t **bd = jl_array_ptr_data(belog);
+    for (size_t i = 0; i + 2 < bn; i += 3) {
+        jl_code_instance_t *caller = (jl_code_instance_t*)bd[i + 2];
+        if (jl_atomic_load_relaxed(&caller->max_world) != ~(size_t)0)
+            continue;
+        if (ptrhash_get(&serialization_order, caller) == HT_NOTFOUND)
+            continue;
+        // flagged callers get their backedges from this log, not from their edge lists
+        jl_atomic_fetch_or_relaxed(&caller->flags, JL_CI_FLAGS_BACKEDGES_LOGGED);
+        bd[ins] = bd[i];
+        bd[ins + 1] = bd[i + 1];
+        bd[ins + 2] = bd[i + 2];
+        ins += 3;
+    }
+    size_t ntrip = ins / 3;
+    htable_t uniq;
+    htable_new(&uniq, 1024);
+    jl_array_t *uobjs = jl_alloc_vec_any(0);
+    jl_array_t *idxbytes = jl_alloc_array_1d(jl_array_uint8_type, 0);
+    // Group by target, so the loader locks each callee once. Registration order
+    // does not matter. Per group the stream is target, count, then count pairs of
+    // (invokesig, caller).
+    belog_trip_t *trips = (belog_trip_t*)malloc_s((ntrip ? ntrip : 1) * sizeof(belog_trip_t));
+    htable_t first;
+    htable_new(&first, 1024);
+    for (size_t i = 0; i < ntrip; i++) {
+        jl_value_t *t = bd[3 * i];
+        jl_value_t *sig = bd[3 * i + 1];
+        void **bp = ptrhash_bp(&first, t);
+        if (*bp == HT_NOTFOUND)
+            *bp = (void*)(uintptr_t)(3 * i + 1);
+        trips[i].target_first = (uintptr_t)*bp;
+        bp = ptrhash_bp(&first, sig);
+        if (*bp == HT_NOTFOUND)
+            *bp = (void*)(uintptr_t)(3 * i + 2);
+        trips[i].invokesig_first = (uintptr_t)*bp;
+        trips[i].cls = t == jl_nothing ? 1 : jl_is_method_instance(t) ? 0 : 2;
+        trips[i].orig = (uint32_t)i;
+    }
+    htable_free(&first);
+    qsort(trips, ntrip, sizeof(belog_trip_t), belog_trip_cmp);
+#define BELOG_UNIQ(o, out) do { \
+        void **ubp_ = ptrhash_bp(&uniq, (void*)(o)); \
+        if (*ubp_ == HT_NOTFOUND) { \
+            (out) = jl_array_nrows(uobjs); \
+            *ubp_ = (void*)((out) + 1); \
+            jl_array_ptr_1d_push(uobjs, (o)); \
+        } \
+        else { \
+            (out) = (size_t)(uintptr_t)*ubp_ - 1; \
+        } \
+    } while (0)
+#define BELOG_EMIT(v) do { \
+        size_t v_ = (v); \
+        uint8_t vbuf_[10]; \
+        int nb_ = 0; \
+        do { \
+            vbuf_[nb_] = v_ & 0x7f; \
+            v_ >>= 7; \
+            if (v_) \
+                vbuf_[nb_] |= 0x80; \
+            nb_++; \
+        } while (v_); \
+        size_t pos_ = jl_array_nrows(idxbytes); \
+        jl_array_grow_end(idxbytes, nb_); \
+        memcpy(jl_array_data(idxbytes, uint8_t) + pos_, vbuf_, nb_); \
+    } while (0)
+    for (size_t g = 0; g < ntrip; ) {
+        size_t e = g + 1;
+        jl_value_t *target = bd[3 * (size_t)trips[g].orig];
+        while (e < ntrip && trips[e].cls == trips[g].cls && trips[e].target_first == trips[g].target_first)
+            e++;
+        size_t idx;
+        BELOG_UNIQ(target, idx);
+        BELOG_EMIT(idx);
+        BELOG_EMIT(e - g);
+        for (size_t i = g; i < e; i++) {
+            BELOG_UNIQ(bd[3 * (size_t)trips[i].orig + 1], idx);
+            BELOG_EMIT(idx);
+            BELOG_UNIQ(bd[3 * (size_t)trips[i].orig + 2], idx);
+            BELOG_EMIT(idx);
+        }
+        g = e;
+    }
+#undef BELOG_EMIT
+#undef BELOG_UNIQ
+    free(trips);
+    htable_free(&uniq);
+    jl_array_t *compact = jl_alloc_vec_any(2);
+    jl_array_ptr_set(compact, 0, (jl_value_t*)uobjs);
+    jl_array_ptr_set(compact, 1, (jl_value_t*)idxbytes);
+    return compact;
+}
+
 // In addition to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
 static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                                            jl_array_t *module_init_order, jl_array_t *worklist, jl_array_t *extext_methods,
@@ -3249,6 +3372,13 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         if (jl_options.trim)
             record_gvars(&s, &MIs);
         jl_serialize_reachable(&s);
+        // Compact the log only now, after every other root is queued, so that it
+        // knows which callers are saved.
+        if (worklist && jl_backedge_log) {
+            jl_backedge_log = compact_backedge_log(jl_backedge_log); // keeps it rooted
+            jl_queue_for_serialization(&s, (jl_value_t*)jl_backedge_log);
+            jl_serialize_reachable(&s);
+        }
         // Beyond this point, all content should already have been visited, so now we can prune
         // the rest and add some internal root arrays.
         // step 1.3: include some other special roots
@@ -3404,6 +3534,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_write_value(&s, module_init_order);
             jl_write_value(&s, extext_methods);
             jl_write_value(&s, new_ext);
+            jl_write_value(&s, jl_backedge_log ? (jl_value_t*)jl_backedge_log : jl_nothing);
+            jl_backedge_log = NULL; // the compact form is not a log to append to
             jl_write_value(&s, s.method_roots_list);
         }
         write_uint32(f, jl_array_len(s.link_ids_gctags));
@@ -4068,6 +4200,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                                                  jl_array_t **extext_methods JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **internal_methods JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **method_roots_list JL_REQUIRE_ROOTED_SLOT,
+                                                 jl_array_t **backedge_log JL_REQUIRE_ROOTED_SLOT,
                                                  pkgcachesizes *cachesizes) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     jl_task_t *ct = jl_current_task;
@@ -4139,7 +4272,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
     assert(!ios_eof(f));
     s.s = f;
-    uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_new_ext = 0, offset_method_roots_list = 0;
+    uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_new_ext = 0, offset_backedge_log = 0, offset_method_roots_list = 0;
     if (!s.incremental) {
         size_t i;
         for (i = 0; tags[i] != NULL; i++) {
@@ -4175,6 +4308,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         offset_init_order = jl_read_offset(&s);
         offset_extext_methods = jl_read_offset(&s);
         offset_new_ext = jl_read_offset(&s);
+        offset_backedge_log = jl_read_offset(&s);
         offset_method_roots_list = jl_read_offset(&s);
     }
     s.buildid_depmods_idxs = depmod_to_imageidx(depmods);
@@ -4200,11 +4334,13 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     }
     uint32_t external_fns_begin = read_uint32(f);
     if (s.incremental) {
-        assert(restored && init_order && extext_methods && internal_methods && method_roots_list);
+        assert(restored && init_order && extext_methods && internal_methods && method_roots_list && backedge_log);
         *restored = (jl_array_t*)jl_delayed_reloc(&s, offset_restored);
         *init_order = (jl_array_t*)jl_delayed_reloc(&s, offset_init_order);
         *extext_methods = (jl_array_t*)jl_delayed_reloc(&s, offset_extext_methods);
         (void)(jl_array_t*)jl_delayed_reloc(&s, offset_new_ext);
+        jl_value_t *belog = jl_delayed_reloc(&s, offset_backedge_log);
+        *backedge_log = belog == jl_nothing ? NULL : (jl_array_t*)belog;
         *method_roots_list = (jl_array_t*)jl_delayed_reloc(&s, offset_method_roots_list);
         *internal_methods = jl_alloc_vec_any(0);
     }
@@ -4694,9 +4830,9 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
     needs_permalloc = jl_options.permalloc_pkgimg || needs_permalloc;
 
     jl_value_t *restored = NULL;
-    jl_array_t *init_order = NULL, *extext_methods = NULL, *internal_methods = NULL, *method_roots_list = NULL;
+    jl_array_t *init_order = NULL, *extext_methods = NULL, *internal_methods = NULL, *method_roots_list = NULL, *backedge_log = NULL;
     jl_svec_t *cachesizes_sv = NULL;
-    JL_GC_PUSH6(&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &cachesizes_sv);
+    JL_GC_PUSH7(&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &cachesizes_sv, &backedge_log);
 
     { // make a permanent in-memory copy of f (excluding the header)
         ios_bufmode(f, bm_none);
@@ -4721,7 +4857,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
                 ios_close(f);
             ios_static_buffer(f, sysimg, len);
             pkgcachesizes cachesizes;
-            jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &cachesizes);
+            jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &backedge_log, &cachesizes);
             JL_SIGATOMIC_END();
 
             // Add roots to methods
@@ -4769,10 +4905,11 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
                 // `extext_methods` contains all worklist methods; `internal_methods`
                 // only partially overlaps it and exists only for per-object world-stamp
                 // updates during the fixup walk.
-                restored = (jl_value_t*)jl_svec(6, restored, init_order, internal_methods, extext_methods, method_roots_list, cachesizes_sv);
+                restored = (jl_value_t*)jl_svec(7, restored, init_order, internal_methods, extext_methods, method_roots_list, cachesizes_sv,
+                                                 backedge_log ? (jl_value_t*)backedge_log : jl_nothing);
             }
             else {
-                restored = (jl_value_t*)jl_svec(3, restored, init_order, internal_methods);
+                restored = (jl_value_t*)jl_svec(4, restored, init_order, internal_methods, backedge_log ? (jl_value_t*)backedge_log : jl_nothing);
             }
         }
     }
@@ -4794,7 +4931,7 @@ static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image) JL_
     ios_t f_payload;
     ios_static_buffer(&f_payload, f->buf + datastartpos, f->size - datastartpos);
     jl_restore_system_image_from_stream_(&f_payload, image, NULL,
-                                         checksum, NULL, NULL, NULL, NULL, NULL, NULL);
+                                         checksum, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(jl_image_buf_t buf, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc) JL_CANSAFEPOINT
