@@ -3141,6 +3141,8 @@ static void gc_mark_roots(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
     }
     gc_try_claim_and_push(mq, _jl_debug_method_invalidation, NULL);
     gc_heap_snapshot_record_gc_roots((jl_value_t*)_jl_debug_method_invalidation, "debug_method_invalidation");
+    gc_try_claim_and_push(mq, jl_ext_backinterferences, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_ext_backinterferences, "ext_backinterferences");
     // constants
     gc_try_claim_and_push(mq, jl_emptytuple_type, NULL);
     gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_emptytuple_type, "emptytuple_type");

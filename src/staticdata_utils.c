@@ -587,8 +587,10 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) 
 {
     jl_array_t *s = (jl_array_t*)closure;
     jl_method_t *m = ml->func.method;
-    if (!jl_object_in_image((jl_value_t*)m->module))
+    if (!jl_object_in_image((jl_value_t*)m->module)) {
         jl_array_ptr_1d_push(s, (jl_value_t*)m); // extext
+        jl_array_ptr_1d_push(s, jl_get_ext_backinterferences(m)); // names only objects of images, so it can be saved
+    }
     return 1;
 }
 
@@ -597,8 +599,10 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) 
 static int jl_collect_methcache_internal(jl_typemap_entry_t *ml, void *closure) JL_CANSAFEPOINT
 {
     jl_array_t *s = (jl_array_t*)closure;
-    if (jl_atomic_load_relaxed(&ml->max_world) == ~(size_t)0)
+    if (jl_atomic_load_relaxed(&ml->max_world) == ~(size_t)0) {
         jl_array_ptr_1d_push(s, (jl_value_t*)ml->func.method); // extext
+        jl_array_ptr_1d_push(s, jl_nothing); // no record, but keep the entries in pairs
+    }
     return 1;
 }
 
@@ -718,7 +722,7 @@ static const char *jl_git_commit(void) JL_CANSAFEPOINT
 
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 16;
+static const int JI_FORMAT_VERSION = 17;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 
@@ -906,7 +910,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
 static void jl_add_methods(jl_array_t *external) JL_CANSAFEPOINT
 {
     size_t i, l = jl_array_nrows(external);
-    for (i = 0; i < l; i++) {
+    for (i = 0; i < l; i += 2) { // (method, ext_backinterferences) pairs
         jl_method_t *meth = (jl_method_t*)jl_array_ptr_ref(external, i);
         assert(jl_is_method(meth));
         assert(!meth->is_for_opaque_closure);
@@ -918,7 +922,10 @@ static void jl_add_methods(jl_array_t *external) JL_CANSAFEPOINT
 }
 
 extern _Atomic(int) allow_new_worlds;
-static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size_t world, const char *pkgname) JL_CANSAFEPOINT
+
+// `image` is the linkage blob of the loading image, whose dependencies its
+// methods' ext_backinterferences records cover.
+static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size_t world, const char *pkgname, size_t image) JL_CANSAFEPOINT
 {
     size_t i, l = jl_array_nrows(internal);
     for (i = 0; i < l; i++) {
@@ -953,15 +960,18 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
             jl_printf(JL_STDERR, "WARNING: Method changes for %s have been disabled via a call to disable_new_worlds.\n", pkgname);
             return;
         }
-        for (i = 0; i < l; i++) {
+        jl_set_activation_coverage(image);
+        for (i = 0; i < l; i += 2) {
             jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
+            jl_value_t *record = jl_array_ptr_ref(external, i + 1);
             //uint64_t t0 = uv_hrtime();
-            jl_method_table_activate(entry);
+            jl_method_table_activate_with_record(entry, record == jl_nothing ? NULL : (jl_array_t*)record);
             //jl_printf(JL_STDERR, "%f ", (double)(uv_hrtime() - t0) / 1e6);
             //jl_static_show(JL_STDERR, entry->func.value);
             //jl_printf(JL_STDERR, "\n");
         }
     }
+    jl_set_activation_coverage((size_t)-1);
 }
 
 static int jl_copy_roots(jl_array_t *method_roots_list, uint64_t key) JL_CANSAFEPOINT
