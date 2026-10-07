@@ -78,7 +78,7 @@ end
 end
 
 @testset "string distance skips a shared prefix" begin
-    distance(a, b) = REPL.string_distance(a, length(a), b, length(b))
+    distance(a, b) = Base.string_distance(a, length(a), b, length(b))
 
     @test distance("kitten", "sitting") == 3
     @test distance("abc", "acb") == 1

@@ -1843,3 +1843,43 @@ end
     @test_throws ErrorException("too many parameters for type `Array`: expected 2, got 4") Array{1,2,3,4}
     @test_throws ErrorException("too many parameters for type `BitArray`: expected 1, got 2") BitArray{1,2}
 end
+
+module KeywordSuggestions
+    struct Marker end
+    scaled(x; scale = 1) = x * scale
+    slurpy(x::Marker; kws...) = (x, kws)
+end
+
+@testset "keyword argument suggestions" begin
+    @test occursin("did you mean `scale`?",
+                   sprint(showerror, try KeywordSuggestions.scaled(2; scal = 5) catch err; err end))
+
+    # a name resembling nothing on offer draws no suggestion
+    @test !occursin("did you mean",
+                    sprint(showerror, try KeywordSuggestions.scaled(2; bogus = 5) catch err; err end))
+
+    # a method slurping keywords accepts every name, so none of them is misspelled
+    @test !occursin("did you mean",
+                    sprint(showerror, try KeywordSuggestions.slurpy(1; scal = 1) catch err; err end))
+
+    # `sort` forwards its slurped keywords, so the error names `sort!`, which declares each one
+    @test occursin("did you mean `lt`?",
+                   sprint(showerror, try sort([2, 1]; ltt = <) catch err; err end))
+end
+
+module UndefVarSuggestions
+    thing_one = 1
+end
+
+@testset "undefined variable suggestions" begin
+    @test occursin("Did you mean `thing_one`?",
+                   sprint(showerror, try UndefVarSuggestions.thing_two catch err; err end))
+
+    # a name resembling nothing in scope draws no suggestion
+    @test !occursin("Did you mean",
+                    sprint(showerror, try UndefVarSuggestions.zzqqxxvvwwyy catch err; err end))
+
+    # names exported by Base need no qualification, so they are offered too
+    @test occursin("Did you mean `isnothing`?",
+                   sprint(showerror, try UndefVarSuggestions.isnohting catch err; err end))
+end
