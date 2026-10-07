@@ -124,6 +124,24 @@ function cosh(x::T) where T<:Union{Float32,Float64}
     return T(.5)*(E + 1/E)
 end
 
+# Once cosh and sinh overflow, their inverses 2exp(-|x|) can still be subnormal, so
+# compute them as (2E)*E with E = exp(-|x|/2), which rounds once.
+function sech(x::T) where T<:Union{Float32,Float64}
+    absx = abs(x)
+    absx >= H_LARGE_X(T) || return inv(cosh(x))
+    E = exp(T(-.5)*absx)
+    return (2*E)*E
+end
+function csch(x::T) where T<:Union{Float32,Float64}
+    absx = abs(x)
+    absx >= H_LARGE_X(T) || return inv(sinh(x))
+    E = exp(T(-.5)*absx)
+    return copysign((2*E)*E, x)
+end
+# cosh and sinh overflow Float16 well before sech and csch underflow it
+sech(x::Float16) = Float16(sech(Float32(x)))
+csch(x::Float16) = Float16(csch(Float32(x)))
+
 # tanh methods
 TANH_LARGE_X(::Type{Float64}) = 44.0
 TANH_LARGE_X(::Type{Float32}) = 18.0f0
