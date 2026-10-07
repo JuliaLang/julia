@@ -6704,8 +6704,20 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
 static jl_value_t *intersect_type_type(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int8_t R) JL_CANSAFEPOINT
 {
     assert(e->Loffset == 0);
-    // the payload is small: re-express it in variable form up front, so that
-    // the bound-variable tests below see the binding's variable and the
+    // a bare reference that stays a variable (see `typeeq_unpin_tvar`: its
+    // binder's declared bounds do not pin it) meets no non-kind: decided
+    // without materializing the variable, as this is the common outcome
+    if (jl_is_tvarref(jl_typeeq_T(x)) && !is_kind_or_anytype(y)) {
+        jl_varbinding_t *b = frame_lookup(R ? e->Rframe : e->Lframe, jl_tvarref_depth(jl_typeeq_T(x)));
+        if (b != NULL) {
+            jl_value_t *lb = b->u->lb, *ub = b->u->ub;
+            if (lb != ub && (jl_has_free_or_dangling_typevars(lb) || jl_has_free_or_dangling_typevars(ub) ||
+                             !jl_types_equal(lb, ub)))
+                return jl_bottom_type;
+        }
+    }
+    // the payload is small: re-express it in variable form, so that the
+    // bound-variable tests below see the binding's variable and the
     // `return x` paths are frame-free (`R` says which side `x` came from)
     if (jl_has_dangling_tvarrefs(x))
         x = frame_substitute(x, R ? e->Rframe : e->Lframe, e);
