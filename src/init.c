@@ -678,6 +678,7 @@ JL_DLLEXPORT jl_cgparams_t jl_default_cgparams = {
 static void init_global_mutexes(void) JL_NOTSAFEPOINT {
     JL_MUTEX_INIT(&jl_modules_mutex, "jl_modules_mutex");
     JL_MUTEX_INIT(&precomp_statement_out_lock, "precomp_statement_out_lock");
+    JL_MUTEX_INIT(&jl_method_contributors_lock, "jl_method_contributors_lock");
     JL_MUTEX_INIT(&newly_inferred_mutex, "newly_inferred_mutex");
     JL_MUTEX_INIT(&global_roots_lock, "global_roots_lock");
     JL_MUTEX_INIT(&typecache_lock, "typecache_lock");
