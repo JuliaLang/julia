@@ -138,6 +138,7 @@ typedef struct jl_varbinding_t {
                           // would not be substituted by going to a more concrete LHS
                           // (they live inside Type{...}/etc value positions), so the
                           // binding is leaky regardless of what `constrained` says.
+    int8_t walkable_known, walkable; // `binding_bound_resolves` (bit 0: lb, bit 1: ub)
     int8_t body_occurs_inv; // cached `var_occurs_invariant(u->body, u->var)` — the
                             // static "occurs invariantly" check used by the diagonal
                             // rule (since #34272). Unlike the dynamic `occurs_inv`
@@ -431,6 +432,22 @@ static void flip_frames(jl_stenv_t *e) JL_NOTSAFEPOINT
     e->frames_flipped ^= 1;
 }
 
+// does the binder's declared bound resolve within the binding's chain? Fixed
+// for the binding's lifetime, so computed once (`walkable_known`)
+static int binding_bound_resolves(jl_varbinding_t *vb, int ub) JL_NOTSAFEPOINT
+{
+    if (!(vb->walkable_known & (ub ? 2 : 1))) {
+        jl_value_t *b = ub ? vb->u->ub : vb->u->lb;
+        size_t n = 0;
+        for (jl_varbinding_t *f = vb->frame_prev; f != NULL; f = f->frame_prev)
+            n++;
+        if (!jl_has_refs_above(b, n))
+            vb->walkable |= (ub ? 2 : 1);
+        vb->walkable_known |= (ub ? 2 : 1);
+    }
+    return (vb->walkable & (ub ? 2 : 1)) != 0;
+}
+
 // is the binding's declared bound still raw AND resolvable within its own
 // chain? Such a bound can be walked in place under `frame_prev` (which
 // outlives the binding by construction), materializing nothing.
@@ -438,20 +455,14 @@ static int binding_ub_walkable(jl_varbinding_t *vb) JL_NOTSAFEPOINT
 {
     if (vb->ub != vb->u->ub || !jl_has_dangling_tvarrefs(vb->ub))
         return 0;
-    size_t n = 0;
-    for (jl_varbinding_t *f = vb->frame_prev; f != NULL; f = f->frame_prev)
-        n++;
-    return !jl_has_refs_above(vb->ub, n);
+    return binding_bound_resolves(vb, 1);
 }
 
 static int binding_lb_walkable(jl_varbinding_t *vb) JL_NOTSAFEPOINT
 {
     if (vb->lb != vb->u->lb || !jl_has_dangling_tvarrefs(vb->lb))
         return 0;
-    size_t n = 0;
-    for (jl_varbinding_t *f = vb->frame_prev; f != NULL; f = f->frame_prev)
-        n++;
-    return !jl_has_refs_above(vb->lb, n);
+    return binding_bound_resolves(vb, 0);
 }
 
 // re-express a term in variable form: replace the references escaping `t` by
