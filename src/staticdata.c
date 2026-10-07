@@ -245,6 +245,11 @@ size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
     return external_blob_index(v);
 }
 
+size_t jl_n_linkage_blobs(void) JL_NOTSAFEPOINT
+{
+    return n_linkage_blobs();
+}
+
 // Install, for edge replay during a package image's edge verification, the
 // bitset of linkage blobs forming its dependency closure: the sysimage, each
 // dependency image (depmods), and the loading image itself, found from the
@@ -3401,7 +3406,58 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, module_init_order);
         }
         // step 1.1: as needed, serialize the data needed for insertion into the running system
+        arraylist_t cert_lists; // (cert, slot, list) triples
+        arraylist_new(&cert_lists, 0);
+        jl_array_t *unseen = NULL;
+        size_t unseen_seen = 0;
+        size_t nblobs_now = n_linkage_blobs();
+        JL_GC_PUSH1(&unseen);
         if (extext_methods) {
+            // Detach each certificate's invalidation lists before queueing. Slot 2
+            // holds replaced-dispatch MethodInstances with a flag, and slot 3 holds
+            // invalidated callers. Rooting them here would save dead objects into the
+            // image, so they are pruned and requeued below.
+            for (size_t i = 1, nex = jl_array_nrows(extext_methods); i < nex; i += 2) {
+                jl_value_t *cert = jl_array_ptr_ref(extext_methods, i);
+                if (cert == jl_nothing)
+                    continue;
+                for (int slot = 2; slot <= 3; slot++) {
+                    jl_value_t *lst = jl_svecref(cert, slot);
+                    if (lst == jl_nothing)
+                        continue;
+                    arraylist_push(&cert_lists, cert);
+                    arraylist_push(&cert_lists, (void*)(uintptr_t)slot);
+                    arraylist_push(&cert_lists, lst);
+                    jl_svecset(cert, slot, jl_nothing);
+                }
+                // Slot 4 counts the images loaded when the method was activated. The
+                // ones loaded later were not seen by the scan: replace the count with
+                // their dependency indices, or `nothing` if there are none.
+                jl_value_t *seenv = jl_svecref(cert, 4);
+                if (jl_is_long(seenv) && s.buildid_depmods_idxs == NULL) {
+                    jl_array_ptr_set(extext_methods, i, jl_nothing); // dependencies cannot be named: drop the certificate
+                }
+                else if (jl_is_long(seenv)) {
+                    size_t seen = (size_t)jl_unbox_long(seenv);
+                    if (seen >= nblobs_now) {
+                        jl_svecset(cert, 4, jl_nothing);
+                    }
+                    else if (unseen != NULL && unseen_seen == seen) {
+                        jl_svecset(cert, 4, (jl_value_t*)unseen); // same list as the previous certificate
+                    }
+                    else {
+                        // An image that is not a dependency gets a negative index. It is never
+                        // in the closure at load, so its methods are scanned live anyway.
+                        unseen = jl_alloc_array_1d(jl_array_int32_type, nblobs_now - seen);
+                        unseen_seen = seen;
+                        int32_t *ud = jl_array_data(unseen, int32_t);
+                        int32_t *dm = jl_array_data(s.buildid_depmods_idxs, int32_t);
+                        for (size_t b = seen; b < nblobs_now; b++)
+                            ud[b - seen] = dm[b];
+                        jl_svecset(cert, 4, (jl_value_t*)unseen);
+                    }
+                }
+            }
             // Queue method extensions
             jl_queue_for_serialization(&s, extext_methods);
             // Queue the new specializations
@@ -3414,6 +3470,37 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         if (jl_options.trim)
             record_gvars(&s, &MIs);
         jl_serialize_reachable(&s);
+        // Prune the certificate lists only now, after every other root is queued
+        // (including those from generated code), so no reachable object loses its record.
+        if (cert_lists.len > 0) {
+            // Keep an object only if it will exist at load: it is in a dependency
+            // image, or it is saved in this image anyway. Dropping the rest is
+            // sound, because replay scans live counterparts made outside the closure.
+            for (size_t i = 0; i < cert_lists.len; i += 3) {
+                jl_svec_t *cert = (jl_svec_t*)cert_lists.items[i];
+                int slot = (int)(uintptr_t)cert_lists.items[i + 1];
+                jl_array_t *lst = (jl_array_t*)cert_lists.items[i + 2];
+                size_t stride = slot == 2 ? 2 : 1; // slot 2 holds (mi, flag) pairs
+                size_t n = jl_array_nrows(lst), ins = 0;
+                jl_value_t **d = jl_array_ptr_data(lst);
+                for (size_t k = 0; k + stride <= n; k += stride) {
+                    if (!jl_object_in_image(d[k]) && ptrhash_get(&serialization_order, d[k]) == HT_NOTFOUND)
+                        continue;
+                    for (size_t j = 0; j < stride; j++)
+                        d[ins + j] = d[k + j];
+                    ins += stride;
+                }
+                if (ins < n)
+                    jl_array_del_end(lst, n - ins);
+                if (ins == 0)
+                    continue; // the slot stays `nothing`
+                jl_svecset(cert, slot, (jl_value_t*)lst);
+                jl_queue_for_serialization(&s, (jl_value_t*)lst);
+            }
+            jl_serialize_reachable(&s);
+        }
+        arraylist_free(&cert_lists);
+        JL_GC_POP();
         // Compact the log only now, after every other root is queued, so that it
         // knows which callers are saved.
         if (worklist && jl_backedge_log) {
@@ -3731,7 +3818,7 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
         ext_foreign_cis = NULL; // not needed anymore, free it
 
         // Collect method extensions
-        // extext_methods: [method1, ...], worklist-owned "extending external" methods added to functions owned by modules outside the worklist
+        // extext_methods: [method1, cert1, ...], worklist-owned "extending external" methods added to functions owned by modules outside the worklist
         extext_methods = jl_alloc_vec_any(0);
         jl_collect_extext_methods(extext_methods, mod_array);
 
@@ -4925,7 +5012,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             size_t world = jl_atomic_load_relaxed(&jl_world_counter);
             if (new_methods)
                 world += 1;
-            jl_activate_methods(extext_methods, internal_methods, world, pkgname);
+            jl_activate_methods(extext_methods, internal_methods, world, pkgname, depmods);
             // TODO: inject internal_methods into caches here, so the system can see them immediately as potential candidates (before validation)
             // allow users to start running in this updated world
             if (new_methods)
