@@ -8,6 +8,19 @@ include $(JULIAHOME)/deps/llvm-ver.make
 
 TAGGED_RELEASE_BANNER := ""
 
+# Record which sanitizer (if any) this build uses, so that `HostPlatform()` selects
+# matching sanitized artifacts
+BUILD_TRIPLET_SANITIZE :=
+ifeq ($(SANITIZE),1)
+ifeq ($(SANITIZE_MEMORY),1)
+BUILD_TRIPLET_SANITIZE := -sanitize+memory
+else ifeq ($(SANITIZE_ADDRESS),1)
+BUILD_TRIPLET_SANITIZE := -sanitize+address
+else ifeq ($(SANITIZE_THREAD),1)
+BUILD_TRIPLET_SANITIZE := -sanitize+thread
+endif
+endif
+
 all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony features_h.jl file_constants.jl uv_constants.jl version_git.jl.phony)
 
 PCRE_CONST := 0x[0-9a-fA-F]+|[0-9]+|\([\-0-9]+\)
@@ -87,7 +100,7 @@ ifeq ($(OS), Darwin)
 	@printf "%s\n" "const MACOS_PRODUCT_VERSION = \"$(shell sw_vers -productVersion)\"" >> $@
 	@printf "%s\n" "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --sdk macosx --show-sdk-version)\"" >> $@
 endif
-	@printf "%s\n" "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
+	@printf "%s\n" "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)$(BUILD_TRIPLET_SANITIZE)\"" >> $@
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
 	@# ensuring we rebuild the system image as infrequently as possible

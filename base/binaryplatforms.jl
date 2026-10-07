@@ -307,6 +307,9 @@ function get_compare_strategy(p::Platform, key::String, default = compare_defaul
 end
 get_compare_strategy(p::AbstractPlatform, key::String, default = compare_default) = default
 
+# Tags for which absence is meaningful: a platform without the tag only matches
+# platforms that also lack it (rather than acting as a wildcard).
+const strict_presence_tags = ("sanitize",)
 
 
 """
@@ -1121,14 +1124,22 @@ The reserved tags `os_version` and `libstdcxx_version` use this mechanism to pro
 bounded version constraints, where an artifact can specify that it was built using APIs
 only available in macOS `v"10.11"` and later, or an artifact can state that it requires
 a libstdc++ that is at least `v"3.4.22"`, etc...
+
+Keys present in only one of `a` or `b` are normally ignored, with the exception of the
+`sanitize` tag: a sanitized platform (e.g. `x86_64-linux-gnu-sanitize+memory`) never
+matches a platform without a `sanitize` tag, since instrumented and uninstrumented
+binaries cannot be mixed.
 """
 function platforms_match(a::AbstractPlatform, b::AbstractPlatform)
     for k in union(keys(tags(a)::Dict{String,String}), keys(tags(b)::Dict{String,String}))
         ak = get(tags(a), k, nothing)
         bk = get(tags(b), k, nothing)
 
-        # Only continue if both `ak` and `bk` are not `nothing`
+        # A tag missing from one side acts as a wildcard, except for strict tags
         if ak === nothing || bk === nothing
+            if k in strict_presence_tags
+                return false
+            end
             continue
         end
 
