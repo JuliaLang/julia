@@ -49,7 +49,7 @@ void __cdecl crt_sig_handler(int sig, int num)
     case SIGINT:
         signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler);
         if (!jl_ignore_sigint()) {
-            if (exit_on_sigint)
+            if (jl_sigint_get_policy() == JL_SIGINT_EXIT)
                 jl_exit(130); // 128 + SIGINT
             // This handler runs synchronously on the raising thread. If that
             // is a GC-unsafe Julia mutator, the request path's GC exclusion
@@ -58,14 +58,17 @@ void __cdecl crt_sig_handler(int sig, int num)
             // then holds off any new collection while the sources are
             // touched).
             jl_task_t *ct = jl_get_current_task();
+            int delivered;
             if (ct != NULL && ct->ptls != NULL) {
                 int8_t gc_state = jl_gc_safe_enter(ct->ptls);
-                jl_sigint_request_cancellation();
+                delivered = jl_sigint_request_cancellation();
                 jl_gc_safe_leave(ct->ptls, gc_state);
             }
             else {
-                jl_sigint_request_cancellation();
+                delivered = jl_sigint_request_cancellation();
             }
+            if (!delivered)
+                jl_exit(130); // 128 + SIGINT
         }
         break;
     default: // SIGSEGV, SIGTERM, SIGILL, SIGABRT
@@ -522,12 +525,11 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
         default: sig = SIGTERM; break;
     }
     if (!jl_ignore_sigint()) {
-        if (exit_on_sigint)
+        if (jl_sigint_get_policy() == JL_SIGINT_EXIT)
             jl_exit(128 + sig); // 128 + SIGINT
         if (sig == SIGINT) {
-            // Deliver the press through the cancellation system (see
-            // jl_sigint_request_cancellation).
-            jl_sigint_request_cancellation();
+            if (!jl_sigint_request_cancellation())
+                jl_exit(128 + sig);
         }
         else {
             // Close/logoff/shutdown (and Ctrl+Break): a termination
