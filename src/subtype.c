@@ -439,6 +439,12 @@ static jl_value_t *frame_substitute(jl_value_t *t, jl_varbinding_t *frame, jl_st
 {
     if (frame == NULL)
         return t;
+    if (jl_is_tvarref(t)) {
+        // a bare reference re-expresses as its binding's (memoized, so
+        // stable) variable, or stays as it is if it escapes the chain
+        jl_varbinding_t *b = frame_lookup(frame, jl_tvarref_depth(t));
+        return b != NULL ? (jl_value_t*)binding_var(e, b) : t;
+    }
     if (e->substmemo != NULL) {
         size_t i, l = jl_array_nrows(e->substmemo);
         for (i = 0; i < l; i += 3) {
@@ -1566,6 +1572,18 @@ static int var_outside(jl_stenv_t *e, jl_tvar_t *x, jl_tvar_t *y)
     return 0;
 }
 
+// `var_outside` for bindings (which need not have materialized variables)
+static int binding_outside(jl_stenv_t *e, jl_varbinding_t *x, jl_varbinding_t *y) JL_NOTSAFEPOINT
+{
+    jl_varbinding_t *btemp = e->vars;
+    while (btemp != NULL) {
+        if (btemp == x) return 0;
+        if (btemp == y) return 1;
+        btemp = btemp->prev;
+    }
+    return 0;
+}
+
 static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int depth) JL_CANSAFEPOINT;
 
 static int reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e) JL_CANSAFEPOINT;
@@ -1634,6 +1652,8 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     // the identity fast path, the intersection (where `a` enters an x
     // position), and the stored bound need the canonical spelling
     jl_value_t *av = jl_has_dangling_tvarrefs(a) ? frame_substitute(a, e->Rframe, e) : a;
+    if (b == NULL)
+        b = bb->var; // the caller may not have needed it, but it may exist (now)
     if (bb_ub == av)
         return 1;
     int lb_ok = (bb->lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a));
@@ -1718,6 +1738,8 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     // the identity fast path and the joined bound must see the canonical
     // spelling (the stored content is in variable form); rooted by the memo
     jl_value_t *av = jl_has_dangling_tvarrefs(a) ? frame_substitute(a, e->Lframe, e) : a;
+    if (b == NULL)
+        b = bb->var; // the caller may not have needed it, but it may exist (now)
     if (bb_lb == av) {
         if (bb->lb_spell < e->spell_channel)
             bb->lb_spell = e->spell_channel;
@@ -3304,6 +3326,51 @@ static jl_value_t *typeeq_unpin_tvar(jl_value_t *tp0 JL_PROPAGATES_ROOT) JL_CANS
     return tp0;
 }
 
+// `typeeq_unpin_tvar(resolve_tvarref(t, frame, e))` without materializing the
+// variable of a binding `t` refers to: a binding's variable carries the
+// binder's declared bounds, so whether it is pinned can be read off the
+// binder. Returns NULL for a (non-pinned) variable, where the materialized
+// form would have been a typevar. Bounds that refer to enclosing binders take
+// the materializing path.
+static jl_value_t *typeeq_unpin_ref(jl_value_t *t JL_PROPAGATES_ROOT, jl_varbinding_t *frame, jl_stenv_t *e) JL_CANSAFEPOINT
+{
+    if (jl_is_tvarref(t)) {
+        jl_varbinding_t *b = frame_lookup(frame, jl_tvarref_depth(t));
+        if (b != NULL) {
+            jl_value_t *lb = b->u->lb, *ub = b->u->ub;
+            if (!jl_has_free_or_dangling_typevars(lb) && !jl_has_free_or_dangling_typevars(ub)) {
+                if (lb == ub || jl_types_equal(lb, ub))
+                    return lb; // pinned: a closed bound unpins no further
+                return NULL;
+            }
+        }
+    }
+    t = typeeq_unpin_tvar(resolve_tvarref(t, frame, e));
+    return jl_is_typevar(t) ? NULL : t;
+}
+
+// does `t` refer to a bound or free variable (as seen through `frame`)? and if
+// so, is it unbounded? (without materializing a binding's variable)
+static int typeeq_param_var(jl_value_t *t, jl_varbinding_t *frame, int *unbounded) JL_NOTSAFEPOINT
+{
+    jl_value_t *lb, *ub;
+    if (jl_is_tvarref(t)) {
+        jl_varbinding_t *b = frame_lookup(frame, jl_tvarref_depth(t));
+        if (b == NULL)
+            return 0;
+        lb = b->u->lb; ub = b->u->ub;
+    }
+    else if (jl_is_typevar(t)) {
+        lb = ((jl_tvar_t*)t)->lb; ub = ((jl_tvar_t*)t)->ub;
+    }
+    else {
+        return 0;
+    }
+    if (unbounded)
+        *unbounded = lb == jl_bottom_type && ub == (jl_value_t*)jl_any_type;
+    return 1;
+}
+
 // do all kinds in `mask` lie in the datatype `y`? (the `Type{T} <: y` rule)
 static int typeeq_mask_le(int mask, jl_value_t *y) JL_NOTSAFEPOINT
 {
@@ -3571,16 +3638,16 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
     // in place (see `binding_ub_walkable`) and inject nothing.
     if (jl_is_typevar(x) || xrb != NULL) {
         if (jl_is_typevar(y) || yrb != NULL) {
-            // a variable-variable relation reasons with the variables'
-            // identities throughout, and both occurrences are being consumed:
-            // materialize them (a shared binding is trivially equal first)
+            // a variable-variable relation reasons with the bindings: no
+            // variable is materialized here. A binding's variable is only
+            // needed where a reference to it is stored past its frame, which
+            // `var_lt`/`var_gt` do on success (an unmaterialized variable
+            // occurs nowhere, so it is not identical to anything yet).
             if (xrb != NULL && xrb == yrb)
                 return 1;
-            if (xrb != NULL && jl_is_tvarref(x))
-                x = (jl_value_t*)binding_var(e, xrb);
-            if (yrb != NULL && jl_is_tvarref(y))
-                y = (jl_value_t*)binding_var(e, yrb);
-            if (x == y) return 1;
+            jl_tvar_t *xv = xrb != NULL ? xrb->var : (jl_tvar_t*)x;
+            jl_tvar_t *yv = yrb != NULL ? yrb->var : (jl_tvar_t*)y;
+            if (xv == yv && (xrb == NULL || xv != NULL)) return 1; // (only a binding's variable can be missing)
             int xinner = 0, yinner = 0;
             jl_varbinding_t *xx = xrb != NULL ? xrb : lookup_binding(e, (jl_tvar_t*)x, &xinner);
             jl_varbinding_t *yy = yrb != NULL ? yrb : lookup_binding(e, (jl_tvar_t*)y, &yinner);
@@ -3611,13 +3678,13 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
 
                     // Both variables are existential. We need to annotate the constraint
                     // on the inner-most variable, so check which one that is.
-                    if (var_outside(e, (jl_tvar_t*)x, (jl_tvar_t*)y)) {
+                    if (binding_outside(e, xx, yy)) {
                         record_var_occurrence(xx, e, param);
-                        return var_gt((jl_tvar_t*)y, x, e, param, yy, yinner);
+                        return var_gt(yv, x, e, param, yy, yinner);
                     }
                 }
                 if (yy) record_var_occurrence(yy, e, param);
-                return var_lt((jl_tvar_t*)x, y, e, param, xx, xinner);
+                return var_lt(xv, y, e, param, xx, xinner);
             }
             else if (yr) {
                 if (xx) {
@@ -3637,9 +3704,9 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
                     // so asking which of these cases we're in is equivalent to
                     // asking whether `B`'s depth is greater than `A`'s depth.
                     if (yy && yy->depth0 < xx->depth0)
-                        return var_gt((jl_tvar_t*)y, binding_ub(e, xx), e, param, yy, yinner);
+                        return var_gt(yv, binding_ub(e, xx), e, param, yy, yinner);
                 }
-                return var_gt((jl_tvar_t*)y, x, e, param, yy, yinner);
+                return var_gt(yv, x, e, param, yy, yinner);
             }
             // check ∀x,y . x<:y
             // the bounds of left-side variables never change, and can only lead
@@ -3766,8 +3833,8 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         // `Any`, reachable here when `T` has free vars) need no classification
         if (y == (jl_value_t*)jl_anytype_type || y == (jl_value_t*)jl_any_type)
             return 1;
-        jl_value_t *tp0 = typeeq_unpin_tvar(resolve_tvarref(jl_typeeq_T(x), e->Lframe, e));
-        if (!jl_is_typevar(tp0)) {
+        jl_value_t *tp0 = typeeq_unpin_ref(jl_typeeq_T(x), e->Lframe, e);
+        if (tp0 != NULL) {
             // a dispatch key for one specific open type object (dangling free
             // typevars, see `typeeq_vars_bound_in_env`) is pinned to that
             // object's type tag
@@ -3787,8 +3854,8 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         return subtype((jl_value_t*)jl_anytype_type, y, e, param);
     }
     if (jl_is_datatype(x) && jl_is_typeeq(y) && x != (jl_value_t*)jl_typeofbottom_type) {
-        jl_value_t *tp0 = resolve_tvarref(jl_typeeq_T(y), e->Rframe, e);
-        if (jl_is_typevar(tp0)) {
+        jl_value_t *tp0 = jl_typeeq_T(y);
+        if (typeeq_param_var(tp0, e->Rframe, NULL)) {
             // kinds and `AnyType` are subtypes of `Type` but of no narrower `Type{T'}`,
             // and no `TypeEq` appears in their supertype chains to derive this from; so
             // answer as for `Type <: Type{T}`, at the depth where `Type{T}` occurs (the
@@ -3799,12 +3866,9 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         }
         // `Type{Type{T}}` with an unbounded `T` contains every `Type{X}` value
         // (among others), so a kind contained in `TypeEq` is a subtype
-        if (jl_is_typeeq(tp0)) {
-            jl_value_t *inner = resolve_tvarref(jl_typeeq_T(tp0), e->Rframe, e);
-            if (jl_is_typevar(inner) && ((jl_tvar_t*)inner)->lb == jl_bottom_type &&
-                    ((jl_tvar_t*)inner)->ub == (jl_value_t*)jl_any_type)
-                return subtype(x, (jl_value_t*)jl_typeeq_type, e, param);
-        }
+        int unbounded = 0;
+        if (jl_is_typeeq(tp0) && typeeq_param_var(jl_typeeq_T(tp0), e->Rframe, &unbounded) && unbounded)
+            return subtype(x, (jl_value_t*)jl_typeeq_type, e, param);
         return 0;
     }
     if (jl_is_datatype(x) && jl_is_datatype(y)) {
