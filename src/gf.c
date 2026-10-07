@@ -2673,8 +2673,18 @@ static void invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_w
     jl_atomic_store_relaxed(&replaced_mi->dispatch_status, 0);
 }
 
+static void record_backedge_log(jl_value_t *target, jl_value_t *invokesig, jl_value_t *caller) JL_CANSAFEPOINT;
+static void jl_method_table_add_backedge_batch(jl_value_t *typ, jl_value_t **callers, size_t n) JL_CANSAFEPOINT;
+
+static void method_instance_add_backedge(jl_method_instance_t *callee, jl_value_t *invokesig, jl_code_instance_t *caller, int log) JL_CANSAFEPOINT;
+
 // add a backedge from callee to caller
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_value_t *invokesig, jl_code_instance_t *caller)
+{
+    method_instance_add_backedge(callee, invokesig, caller, 1);
+}
+
+static void method_instance_add_backedge(jl_method_instance_t *callee, jl_value_t *invokesig, jl_code_instance_t *caller, int log) JL_CANSAFEPOINT
 {
     if (!jl_atomic_load_relaxed(&allow_new_worlds))
         return;
@@ -2693,6 +2703,8 @@ JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, 
             jl_gc_write(callee, callee->backedges, jl_array_t, backedges);
         }
         push_edge(backedges, invokesig, caller);
+        if (log)
+            record_backedge_log((jl_value_t*)callee, invokesig, (jl_value_t*)caller);
     }
     JL_UNLOCK(&callee->def.method->writelock);
 }
@@ -2747,6 +2759,206 @@ static void _typename_add_backedge(jl_typename_t *tn, int explct, void *env0) JL
     jl_array_ptr_1d_push(callers, env->caller);
 }
 
+// During incremental precompile, this logs the backedges that new code adds, as
+// (target, invokesig, caller) triples. The target is a MethodInstance, a Binding,
+// or `nothing` for a method-table edge (the signature is then the second entry).
+// The log is saved in the image, and replaying it at load time is cheaper than
+// decoding each CodeInstance's edge list again.
+JL_DLLEXPORT jl_array_t *jl_backedge_log JL_GLOBALLY_ROOTED;
+static jl_mutex_t backedge_log_lock;
+
+static void record_backedge_log(jl_value_t *target, jl_value_t *invokesig, jl_value_t *caller) JL_CANSAFEPOINT
+{
+    if (!jl_generating_output() || !jl_options.incremental)
+        return;
+    if (jl_object_in_image(caller))
+        return; // its own image's log replays it
+    JL_LOCK(&backedge_log_lock);
+    if (jl_backedge_log == NULL)
+        jl_backedge_log = jl_alloc_vec_any(0);
+    jl_array_ptr_1d_push(jl_backedge_log, target);
+    jl_array_ptr_1d_push(jl_backedge_log, invokesig == NULL ? jl_nothing : invokesig);
+    jl_array_ptr_1d_push(jl_backedge_log, caller);
+    JL_UNLOCK(&backedge_log_lock);
+}
+
+void jl_record_binding_backedge(jl_binding_t *b, jl_value_t *edge) JL_CANSAFEPOINT
+{
+    // Loading re-scans method sources for binding edges, so only code edges need logging.
+    if (jl_is_code_instance(edge))
+        record_backedge_log((jl_value_t*)b, NULL, edge);
+}
+
+// Re-apply a loaded image's backedge log for the callers that are still valid.
+// The log is [unique objects, varint index stream]. Storing indexes instead of
+// pointers means each object needs only one relocation in the image.
+JL_DLLEXPORT void jl_apply_backedge_log(jl_array_t *log) JL_CANSAFEPOINT
+{
+    assert(jl_array_nrows(log) == 2);
+    jl_array_t *uobjs = (jl_array_t*)jl_array_ptr_ref(log, 0);
+    jl_array_t *idxb = (jl_array_t*)jl_array_ptr_ref(log, 1);
+    jl_value_t **uo = jl_array_ptr_data(uobjs);
+    size_t nuniq = jl_array_nrows(uobjs);
+    (void)nuniq; // only used in asserts
+    uint8_t *bytes = jl_array_data(idxb, uint8_t);
+    size_t nbytes = jl_array_nrows(idxb);
+    // A caller not valid in the current world was invalidated, or will never become current.
+    size_t world = jl_atomic_load_acquire(&jl_world_counter);
+#define BELOG_NEXT(out) do { \
+        size_t v_ = 0; \
+        int shift_ = 0; \
+        uint8_t c_; \
+        do { \
+            assert(bp < nbytes); \
+            c_ = bytes[bp++]; \
+            v_ |= (size_t)(c_ & 0x7f) << shift_; \
+            shift_ += 7; \
+        } while (c_ & 0x80); \
+        assert(v_ < nuniq); \
+        (out) = uo[v_]; \
+    } while (0)
+    // The stream is a list of groups: target, count, then count (invokesig, caller) pairs.
+    // Groups are sorted by target and then invokesig. That lets us take each lock once
+    // per callee and decompose each signature once.
+    size_t scratchcap = 256;
+    jl_value_t **scratch = (jl_value_t**)malloc_s(scratchcap * sizeof(jl_value_t*));
+    size_t bp = 0;
+    while (bp < nbytes) {
+        jl_value_t *target;
+        size_t n;
+        BELOG_NEXT(target);
+        {
+            size_t v_ = 0;
+            int shift_ = 0;
+            uint8_t c_;
+            do {
+                assert(bp < nbytes);
+                c_ = bytes[bp++];
+                v_ |= (size_t)(c_ & 0x7f) << shift_;
+                shift_ += 7;
+            } while (c_ & 0x80);
+            n = v_;
+        }
+        if (2 * n > scratchcap) {
+            while (2 * n > scratchcap)
+                scratchcap *= 2;
+            scratch = (jl_value_t**)realloc_s(scratch, scratchcap * sizeof(jl_value_t*));
+        }
+        size_t nlive = 0;
+        for (size_t k = 0; k < n; k++) {
+            jl_value_t *invokesig, *caller;
+            BELOG_NEXT(invokesig);
+            BELOG_NEXT(caller);
+            if (jl_atomic_load_relaxed(&((jl_code_instance_t*)caller)->max_world) != world)
+                continue;
+            scratch[2 * nlive] = invokesig;
+            scratch[2 * nlive + 1] = caller;
+            nlive++;
+        }
+        if (nlive == 0)
+            continue;
+        if (target == jl_nothing) {
+            for (size_t k = 0; k < nlive; ) {
+                jl_value_t *invokesig = scratch[2 * k];
+                size_t e = k;
+                while (e < nlive && scratch[2 * e] == invokesig)
+                    e++;
+                for (size_t i = k; i < e; i++)
+                    scratch[2 * k + (i - k)] = scratch[2 * i + 1];
+                jl_method_table_add_backedge_batch(invokesig, &scratch[2 * k], e - k);
+                k = e;
+            }
+        }
+        else if (jl_is_method_instance(target)) {
+            jl_method_instance_t *callee = (jl_method_instance_t*)target;
+            JL_LOCK(&callee->def.method->writelock);
+            if (jl_atomic_load_relaxed(&allow_new_worlds)) {
+                jl_array_t *backedges = jl_mi_get_backedges(callee);
+                if (!backedges) {
+                    backedges = jl_alloc_vec_any(0);
+                    jl_gc_write(callee, callee->backedges, jl_array_t, backedges);
+                }
+                // grow then shrink to reserve capacity; appending one at a time is slow
+                jl_array_grow_end(backedges, 2 * nlive);
+                jl_array_del_end(backedges, 2 * nlive);
+                for (size_t k = 0; k < nlive; k++) {
+                    jl_value_t *invokesig = scratch[2 * k];
+                    jl_value_t *caller = scratch[2 * k + 1];
+                    push_edge(backedges, invokesig == jl_nothing ? NULL : invokesig,
+                              (jl_code_instance_t*)caller);
+                    record_backedge_log((jl_value_t*)callee,
+                                        invokesig == jl_nothing ? NULL : invokesig, caller);
+                }
+            }
+            JL_UNLOCK(&callee->def.method->writelock);
+        }
+        else {
+            for (size_t k = 0; k < nlive; k++) {
+                jl_value_t *caller = scratch[2 * k + 1];
+                jl_maybe_add_binding_backedge((jl_binding_t*)target, caller,
+                                              jl_get_ci_mi((jl_code_instance_t*)caller)->def.method);
+            }
+        }
+    }
+#undef BELOG_NEXT
+    free(scratch);
+}
+
+struct _typename_add_backedge_batch {
+    jl_value_t *typ;
+    jl_value_t **callers;
+    size_t n;
+};
+
+static void _typename_add_backedge_batch(jl_typename_t *tn, int explct, void *env0) JL_CANSAFEPOINT
+{
+    struct _typename_add_backedge_batch *env = (struct _typename_add_backedge_batch*)env0;
+    JL_GC_PROMISE_ROOTED(env->typ);
+    if (!explct)
+        return;
+    // typename -> (signature -> callers)
+    jl_genericmemory_t *allbackedges = jl_method_table->backedges;
+    jl_genericmemory_t *table = (jl_genericmemory_t*)jl_eqtable_get(allbackedges, (jl_value_t*)tn, NULL);
+    jl_array_t *callers = table == NULL ? NULL : (jl_array_t*)jl_eqtable_get(table, env->typ, NULL);
+    if (callers == NULL) {
+        jl_array_t *newcallers = jl_alloc_vec_any(0);
+        jl_genericmemory_t *oldtable = table;
+        JL_GC_PUSH2(&newcallers, &table);
+        if (table == NULL)
+            table = (jl_genericmemory_t*)jl_an_empty_memory_any;
+        table = jl_eqtable_put(table, env->typ, (jl_value_t*)newcallers, NULL);
+        if (table != oldtable) {
+            jl_genericmemory_t *newtable = jl_eqtable_put(allbackedges, (jl_value_t*)tn, (jl_value_t*)table, NULL);
+            if (newtable != allbackedges)
+                jl_gc_write(jl_method_table, jl_method_table->backedges, jl_genericmemory_t, newtable);
+        }
+        JL_GC_POP();
+        callers = newcallers;
+    }
+    JL_GC_PROMISE_ROOTED(callers); // held by the per-typename table
+    // no duplicate check: the callers were just loaded, so they cannot be present yet
+    size_t base = jl_array_nrows(callers);
+    jl_array_grow_end(callers, env->n);
+    for (size_t i = 0; i < env->n; i++)
+        jl_array_ptr_set(callers, base + i, env->callers[i]);
+}
+
+static void jl_method_table_add_backedge_batch(jl_value_t *typ, jl_value_t **callers, size_t n) JL_CANSAFEPOINT
+{
+    if (!jl_atomic_load_relaxed(&allow_new_worlds))
+        return;
+    jl_methtable_t *mt = jl_method_table;
+    jl_methcache_t *mc = mt->cache;
+    JL_LOCK(&mc->writelock);
+    if (jl_atomic_load_relaxed(&allow_new_worlds)) {
+        struct _typename_add_backedge_batch env = {typ, callers, n};
+        jl_foreach_top_typename_for(_typename_add_backedge_batch, typ, 0, &env);
+        for (size_t i = 0; i < n; i++)
+            record_backedge_log(jl_nothing, typ, callers[i]);
+    }
+    JL_UNLOCK(&mc->writelock);
+}
+
 // add a backedge from a non-existent signature to caller
 JL_DLLEXPORT void jl_method_table_add_backedge(jl_value_t *typ, jl_code_instance_t *caller)
 {
@@ -2760,6 +2972,7 @@ JL_DLLEXPORT void jl_method_table_add_backedge(jl_value_t *typ, jl_code_instance
     if (jl_atomic_load_relaxed(&allow_new_worlds)) {
         struct _typename_add_backedge env = {typ, (jl_value_t*)caller};
         jl_foreach_top_typename_for(_typename_add_backedge, typ, 0, &env);
+        record_backedge_log(jl_nothing, typ, (jl_value_t*)caller);
     }
     JL_UNLOCK(&mc->writelock);
 }
@@ -4132,7 +4345,9 @@ static jl_code_instance_t *copy_to_mi_cache(jl_method_instance_t *mi JL_PROPAGAT
         if (max_world2 == ~(size_t)0) {
             JL_LOCK(&world_counter_lock);
             if (jl_atomic_load_relaxed(&codeinst2->max_world) == ~(size_t)0) {
-                jl_method_instance_add_backedge(mi, NULL, codeinst);
+                // Not logged: loading registers this caller's backedges from its edge list,
+                // which records a different edge than this one.
+                method_instance_add_backedge(mi, NULL, codeinst, 0);
                 jl_atomic_store_relaxed(&codeinst->max_world, ~(size_t)0); // jl_promote_ci_to_current
             }
             JL_UNLOCK(&world_counter_lock);

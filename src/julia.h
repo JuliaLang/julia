@@ -557,6 +557,7 @@ typedef struct JL_GC_TRACKED_TYPE _jl_opaque_closure_t {
 #define JL_CI_FLAGS_FROM_IMAGE               0b0100
 #define JL_CI_FLAGS_NATIVE_CACHE_VALID       0b1000
 #define JL_CI_FLAGS_UNIQUE_BACKEDGES         0b10000 // no backedge appears twice in edges
+#define JL_CI_FLAGS_BACKEDGES_LOGGED        0b100000 // the image's backedge log carries this CodeInstance's backedges
 
 struct JL_GC_TRACKED_TYPE _jl_code_instance_t {
     JL_DATA_TYPE

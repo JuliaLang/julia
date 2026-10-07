@@ -1474,6 +1474,9 @@ JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(
 jl_method_instance_t *jl_specializations_get_or_insert(jl_method_instance_t *mi_ins JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_value_t *invokesig, jl_code_instance_t *caller) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_method_table_add_backedge(jl_value_t *typ, jl_code_instance_t *caller) JL_CANSAFEPOINT;
+extern JL_DLLEXPORT jl_array_t *jl_backedge_log JL_GLOBALLY_ROOTED;
+void jl_record_binding_backedge(jl_binding_t *b, jl_value_t *edge) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_apply_backedge_log(jl_array_t *log) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi,
                                      jl_code_instance_t *ci JL_ROOTED_BY_ARG(0) JL_MAYBE_UNROOTED) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi,
