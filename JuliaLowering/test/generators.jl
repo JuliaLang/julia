@@ -62,6 +62,19 @@ end
 @test JuliaLowering.include_string(test_mod, """
 collect((z=y; y=100; z) for y in 1:3 for x in 1:2)
 """) == [1, 1, 2, 2, 3, 3]
+@test JuliaLowering.include_string(test_mod, """
+collect((z=y; y=100; z) for y in 1:3 if y > 0 for x in 1:2)
+""") == [1, 1, 2, 2, 3, 3]
+
+# Filtered outer iteration with a non-call filter condition
+@test JuliaLowering.include_string(test_mod, """
+[x for j in [[1,2],[3]] if true for x in j]
+""") == [1, 2, 3]
+@test JuliaLowering.include_string(test_mod, """
+let flag = true
+    [x for j in [[1,2],[3]] if flag for x in j]
+end
+""") == [1, 2, 3]
 
 # Simple typed comprehension lowered to for loops
 @test JuliaLowering.include_string(test_mod, """
