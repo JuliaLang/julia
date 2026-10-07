@@ -3029,10 +3029,16 @@ static size_t jl_loading_closure_nblobs = 0;
 static htable_t edge_sig_verdicts;
 static int edge_sig_verdicts_init = 0;
 
+// Bumped whenever the closure changes, so per-typename caches built for another
+// closure are rebuilt. Never 0, so a new cache entry's 0 is always stale.
+static int32_t jl_loading_closure_gen = 0;
+
 JL_DLLEXPORT void jl_set_loading_closure_blobs(size_t *bits, size_t nblobs) JL_NOTSAFEPOINT
 {
     jl_loading_closure_bits = bits;
     jl_loading_closure_nblobs = nblobs;
+    if (++jl_loading_closure_gen <= 0)
+        jl_loading_closure_gen = 1;
     if (edge_sig_verdicts_init)
         htable_reset(&edge_sig_verdicts, 0); // the verdicts were for the previous closure
 }
@@ -3113,13 +3119,47 @@ static void contributor_add_tag(jl_typename_t *tn, int32_t tag) JL_CANSAFEPOINT
     jl_array_data(tags, int32_t)[l] = tag;
 }
 
+// Per top typename, the methods added in this session under it, so that a signature
+// with contributors outside the closure can still be replayed when none of their
+// methods can match it. A deletion is stored as `nothing`, which rules that out.
+// Each entry is svec(methods, cache), where the cache groups the methods from
+// outside the current closure (see foreign_buckets), or is `nothing`.
+JL_DLLEXPORT jl_genericmemory_t *jl_method_contributor_methods = NULL;
+
+static void contributor_add_method(jl_typename_t *tn, jl_value_t *m) JL_CANSAFEPOINT
+{
+    if (jl_method_contributor_methods == NULL)
+        jl_method_contributor_methods = (jl_genericmemory_t*)jl_an_empty_memory_any;
+    jl_svec_t *ent = (jl_svec_t*)jl_eqtable_get(jl_method_contributor_methods, (jl_value_t*)tn, NULL);
+    jl_array_t *ms = NULL;
+    JL_GC_PUSH2(&ent, &ms);
+    if (ent == NULL) {
+        ms = jl_alloc_vec_any(0);
+        ent = jl_svec2(ms, jl_nothing);
+        jl_genericmemory_t *newtable = jl_eqtable_put(jl_method_contributor_methods, (jl_value_t*)tn, (jl_value_t*)ent, NULL);
+        if (newtable != jl_method_contributor_methods)
+            jl_method_contributor_methods = newtable;
+    }
+    ms = (jl_array_t*)jl_svecref(ent, 0);
+    jl_array_ptr_1d_push(ms, m);
+    jl_svecset(ent, 1, jl_nothing); // the cache is out of date
+    JL_GC_POP();
+}
+
+struct _contrib_tag {
+    int32_t tag;
+    jl_value_t *method; // `nothing` for a deletion
+};
+
 static void _typename_tag_contributor(jl_typename_t *tn, int explct, void *env0) JL_CANSAFEPOINT
 {
     // like the mt-backedge table, record only under explicitly encountered
     // typenames; the check consults every callback
     if (!explct)
         return;
-    contributor_add_tag(tn, *(int32_t*)env0);
+    struct _contrib_tag *env = (struct _contrib_tag*)env0;
+    contributor_add_tag(tn, env->tag);
+    contributor_add_method(tn, env->method);
 }
 
 static void _typename_check_contributor(jl_typename_t *tn, int explct, void *env0) JL_NOTSAFEPOINT
@@ -3141,10 +3181,11 @@ static void _typename_check_contributor(jl_typename_t *tn, int explct, void *env
     }
 }
 
-static void contributor_tag_method(jl_method_t *method, int32_t tag) JL_CANSAFEPOINT
+static void contributor_tag_method(jl_method_t *method, int32_t tag, int deleted) JL_CANSAFEPOINT
 {
+    struct _contrib_tag env = {tag, deleted ? jl_nothing : (jl_value_t*)method};
     JL_LOCK(&jl_method_contributors_lock);
-    jl_foreach_top_typename_for(_typename_tag_contributor, (jl_value_t*)method->sig, 0, &tag);
+    jl_foreach_top_typename_for(_typename_tag_contributor, (jl_value_t*)method->sig, 0, &env);
     JL_UNLOCK(&jl_method_contributors_lock);
 }
 
@@ -3167,6 +3208,293 @@ static int edge_replay_enabled(void) JL_NOTSAFEPOINT
 // Is `sig`'s method-match set provably the one the loading image's precompile
 // worker saw, i.e. does every contributor to its typenames lie within the
 // dependency closure installed by jl_set_loading_closure_blobs?
+// A type whose only subtypes are itself and Union{}. If such a type is not a subtype
+// of a slot type, the two are disjoint. Kinds are not atoms (Type{X} <: DataType),
+// and a Tuple is one only if its parameters are (Tuple{DataType} has subtypes).
+static int is_atom_type(jl_value_t *a) JL_NOTSAFEPOINT
+{
+    if (!jl_is_datatype(a))
+        return 0;
+    jl_datatype_t *d = (jl_datatype_t*)a;
+    if (!d->isconcretetype || jl_is_kind(a))
+        return 0;
+    if (d->name == jl_tuple_typename) {
+        for (size_t i = 0; i < jl_nparams(d); i++) {
+            if (!is_atom_type(jl_tparam(d, i)))
+                return 0;
+        }
+    }
+    return 1;
+}
+
+// Can no call match both signatures? Cheap tests first, then a full intersection,
+// which counts against `budget`. Returns 0 (not shown disjoint) when the budget runs out.
+static int sigs_disjoint(jl_value_t *msig, jl_value_t *qsig, size_t *budget) JL_CANSAFEPOINT
+{
+    jl_value_t *um = jl_unwrap_unionall(msig);
+    jl_value_t *uq = jl_unwrap_unionall(qsig);
+    if (jl_is_datatype(um) && jl_is_datatype(uq)) {
+        size_t nm = jl_nparams(um), nq = jl_nparams(uq);
+        int mva = nm > 0 && jl_is_vararg(jl_tparam(um, nm - 1));
+        int qva = nq > 0 && jl_is_vararg(jl_tparam(uq, nq - 1));
+        if (!mva && !qva && nm != nq)
+            return 1;
+        size_t n = nm < nq ? nm : nq;
+        for (size_t i = 0; i < n; i++) {
+            jl_value_t *mi = jl_tparam(um, i), *qi = jl_tparam(uq, i);
+            if (jl_is_vararg(mi) || jl_is_vararg(qi))
+                break;
+            if (is_atom_type(qi) && !jl_has_free_typevars(mi) && !jl_subtype(qi, mi))
+                return 1;
+        }
+    }
+    if (*budget == 0)
+        return 0;
+    (*budget)--;
+    return jl_has_empty_intersection(msig, qsig);
+}
+
+struct _foreign_disjoint {
+    jl_value_t *sig;
+    size_t budget;
+    int ok;
+};
+
+// The typename every value of a signature's first argument has, or NULL if there is
+// none: the argument type is a datatype whose typename is concrete and not a kind.
+static jl_typename_t *arg1_key(jl_value_t *sig JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_value_t *u = jl_unwrap_unionall(sig);
+    if (!jl_is_datatype(u) || jl_nparams(u) < 2)
+        return NULL;
+    jl_value_t *t = jl_unwrap_unionall(jl_tparam(u, 1));
+    if (!jl_is_datatype(t) || jl_is_kind(t) || ((jl_datatype_t*)t)->name->abstract)
+        return NULL;
+    return ((jl_datatype_t*)t)->name;
+}
+
+// For a constructor signature, Type{X}, the typename of X. Two constructors whose X
+// have different typenames cannot match the same call, since Type is invariant.
+// NULL for anything else, including Type{T} with a type variable T.
+static jl_typename_t *ctor_key(jl_value_t *sig JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_value_t *u = jl_unwrap_unionall(sig);
+    if (!jl_is_datatype(u) || jl_nparams(u) < 1)
+        return NULL;
+    jl_value_t *t = jl_unwrap_unionall(jl_tparam(u, 0));
+    if (!jl_is_typeeq(t))
+        return NULL;
+    jl_value_t *x = jl_unwrap_unionall(jl_typeeq_T(t));
+    if (!jl_is_datatype(x))
+        return NULL;
+    return ((jl_datatype_t*)x)->name;
+}
+
+// The typename of an abstract upper bound of a signature's first argument, or NULL
+// if it has none that rules anything out (Any, or a bound that admits types).
+static jl_typename_t *arg1_bound(jl_value_t *sig JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_value_t *u = jl_unwrap_unionall(sig);
+    if (!jl_is_datatype(u) || jl_nparams(u) < 2)
+        return NULL;
+    jl_value_t *t = jl_tparam(u, 1);
+    if (jl_is_typevar(t))
+        t = ((jl_tvar_t*)t)->ub;
+    t = jl_unwrap_unionall(t);
+    if (!jl_is_datatype(t) || t == (jl_value_t*)jl_any_type)
+        return NULL;
+    for (jl_datatype_t *w = (jl_datatype_t*)t; w != jl_any_type; w = w->super) {
+        if (w == jl_anytype_type || jl_is_kind((jl_value_t*)w))
+            return NULL; // the bound admits types, whose supertypes are the kinds
+    }
+    return ((jl_datatype_t*)t)->name;
+}
+
+// Is `bound` among the supertypes of the concrete typename `key`?
+static int key_has_supertype(jl_typename_t *key, jl_typename_t *bound) JL_NOTSAFEPOINT
+{
+    for (jl_datatype_t *w = (jl_datatype_t*)jl_unwrap_unionall(key->wrapper); w != NULL; w = w->super) {
+        if (w->name == bound)
+            return 1;
+        if (w == jl_any_type)
+            return 0;
+    }
+    return 1;
+}
+
+// Group the methods under a typename that are outside the current closure:
+// svec(gen, keyed, unkeyed). `keyed` maps arg1_key to a list of (method, ctor_key)
+// pairs; `unkeyed` holds the rest as (method, ctor_key, arg1_bound) triples, with
+// `nothing` for a missing key or bound. Returns NULL if one of the methods was deleted.
+static jl_svec_t *foreign_buckets(jl_svec_t *ent JL_PROPAGATES_ROOT) JL_CANSAFEPOINT
+{
+    jl_value_t *cache = jl_svecref(ent, 1);
+    if (cache != jl_nothing && jl_unbox_int32(jl_svecref((jl_svec_t*)cache, 0)) == jl_loading_closure_gen)
+        return (jl_svec_t*)cache;
+    jl_array_t *ms = (jl_array_t*)jl_svecref(ent, 0);
+    jl_svec_t *b = NULL;
+    jl_value_t *m = NULL, *list = NULL;
+    JL_GC_PUSH4(&ms, &b, &m, &list);
+    b = jl_alloc_svec(3);
+    list = jl_box_int32(jl_loading_closure_gen);
+    jl_svecset(b, 0, list);
+    jl_svecset(b, 1, jl_an_empty_memory_any);
+    list = (jl_value_t*)jl_alloc_vec_any(0);
+    jl_svecset(b, 2, list);
+    int deleted = 0;
+    for (size_t i = 0; i < jl_array_nrows(ms); i++) {
+        m = jl_array_ptr_ref(ms, i);
+        if (m == jl_nothing) {
+            deleted = 1;
+            break;
+        }
+        if (object_in_loading_closure(m))
+            continue;
+        jl_value_t *msig = ((jl_method_t*)m)->sig;
+        jl_typename_t *ck = ctor_key(msig);
+        jl_typename_t *k = arg1_key(msig);
+        if (k != NULL) {
+            jl_genericmemory_t *keyed = (jl_genericmemory_t*)jl_svecref(b, 1);
+            list = jl_eqtable_get(keyed, (jl_value_t*)k, NULL);
+            if (list == NULL) {
+                list = (jl_value_t*)jl_alloc_vec_any(0);
+                keyed = jl_eqtable_put(keyed, (jl_value_t*)k, list, NULL);
+                jl_svecset(b, 1, keyed);
+            }
+            jl_array_ptr_1d_push((jl_array_t*)list, m);
+            jl_array_ptr_1d_push((jl_array_t*)list, ck ? (jl_value_t*)ck : jl_nothing);
+        }
+        else {
+            jl_typename_t *bound = arg1_bound(msig);
+            list = jl_svecref(b, 2);
+            jl_array_ptr_1d_push((jl_array_t*)list, m);
+            jl_array_ptr_1d_push((jl_array_t*)list, ck ? (jl_value_t*)ck : jl_nothing);
+            jl_array_ptr_1d_push((jl_array_t*)list, bound ? (jl_value_t*)bound : jl_nothing);
+        }
+    }
+    jl_svecset(ent, 1, deleted ? jl_nothing : (jl_value_t*)b);
+    JL_GC_POP();
+    return deleted ? NULL : b;
+}
+
+// Is the method at entry `i` of a cache list a candidate for the query, given the
+// query's keys? `stride` 2 lists hold (method, ctor_key), stride 3 lists add the bound.
+static int foreign_candidate(jl_array_t *list, size_t i, size_t stride, jl_typename_t *q, jl_typename_t *qck) JL_NOTSAFEPOINT
+{
+    jl_value_t *ck = jl_array_ptr_ref(list, i + 1);
+    if (qck != NULL && ck != jl_nothing && ck != (jl_value_t*)qck)
+        return 0; // constructors of different types
+    if (stride == 3 && q != NULL) {
+        jl_value_t *bound = jl_array_ptr_ref(list, i + 2);
+        if (bound != jl_nothing && !key_has_supertype(q, (jl_typename_t*)bound))
+            return 0; // bounded by a type the query's argument is not under
+    }
+    return 1;
+}
+
+static size_t count_foreign_candidates(jl_array_t *list, size_t stride, jl_typename_t *q, jl_typename_t *qck) JL_NOTSAFEPOINT
+{
+    size_t n = 0;
+    for (size_t i = 0; i + stride <= jl_array_nrows(list); i += stride)
+        n += foreign_candidate(list, i, stride, q, qck);
+    return n;
+}
+
+// Test the candidates in `list`. A method that is not disjoint is moved to the front,
+// since it often blocks the next query too.
+static int foreign_list_disjoint(jl_array_t *list, size_t stride, jl_value_t *sig, jl_typename_t *q, jl_typename_t *qck, size_t *budget) JL_CANSAFEPOINT
+{
+    jl_value_t *m = NULL;
+    int ok = 1;
+    JL_GC_PUSH2(&list, &m);
+    for (size_t i = 0; i + stride <= jl_array_nrows(list) && ok; i += stride) {
+        if (!foreign_candidate(list, i, stride, q, qck))
+            continue;
+        m = jl_array_ptr_ref(list, i);
+        if (!sigs_disjoint(((jl_method_t*)m)->sig, sig, budget)) {
+            ok = 0;
+            for (size_t k = 0; i > 0 && k < stride; k++) {
+                jl_value_t *front = jl_array_ptr_ref(list, k);
+                jl_array_ptr_set(list, k, jl_array_ptr_ref(list, i + k));
+                jl_array_ptr_set(list, i + k, front);
+            }
+        }
+    }
+    JL_GC_POP();
+    return ok;
+}
+
+static void _typename_check_foreign_disjoint(jl_typename_t *tn, int explct, void *env0) JL_CANSAFEPOINT
+{
+    struct _foreign_disjoint *env = (struct _foreign_disjoint*)env0;
+    (void)explct;
+    if (!env->ok || jl_method_contributor_methods == NULL)
+        return;
+    jl_svec_t *ent = (jl_svec_t*)jl_eqtable_get(jl_method_contributor_methods, (jl_value_t*)tn, NULL);
+    if (ent == NULL)
+        return; // only pre-session (sysimage) contributions
+    jl_value_t *sig = env->sig;
+    jl_svec_t *b = NULL;
+    jl_value_t *list = NULL;
+    JL_GC_PUSH4(&ent, &sig, &b, &list);
+    b = foreign_buckets(ent);
+    if (b == NULL) {
+        env->ok = 0; // a deletion
+        JL_GC_POP();
+        return;
+    }
+    jl_typename_t *q = arg1_key(sig);
+    jl_typename_t *qck = ctor_key(sig);
+    jl_genericmemory_t *keyed = (jl_genericmemory_t*)jl_svecref(b, 1);
+    jl_array_t *unkeyed = (jl_array_t*)jl_svecref(b, 2);
+    // Count first: past the budget, matching the edge again is cheaper than testing.
+    size_t ncand = count_foreign_candidates(unkeyed, 3, q, qck);
+    if (q != NULL) {
+        // methods keyed by another typename cannot match
+        list = jl_eqtable_get(keyed, (jl_value_t*)q, NULL);
+        if (list != NULL)
+            ncand += count_foreign_candidates((jl_array_t*)list, 2, q, qck);
+    }
+    else {
+        for (size_t i = 1; i < keyed->length; i += 2) {
+            list = jl_genericmemory_ptr_ref(keyed, i);
+            if (list != NULL)
+                ncand += count_foreign_candidates((jl_array_t*)list, 2, q, qck);
+        }
+    }
+    if (ncand > env->budget) {
+        env->ok = 0;
+        JL_GC_POP();
+        return;
+    }
+    env->ok = foreign_list_disjoint(unkeyed, 3, sig, q, qck, &env->budget);
+    if (q != NULL) {
+        list = jl_eqtable_get(keyed, (jl_value_t*)q, NULL);
+        if (env->ok && list != NULL)
+            env->ok = foreign_list_disjoint((jl_array_t*)list, 2, sig, q, qck, &env->budget);
+    }
+    else {
+        for (size_t i = 1; i < keyed->length && env->ok; i += 2) {
+            list = jl_genericmemory_ptr_ref(keyed, i);
+            if (list != NULL)
+                env->ok = foreign_list_disjoint((jl_array_t*)list, 2, sig, q, qck, &env->budget);
+        }
+    }
+    JL_GC_POP();
+}
+
+// Every method added under `sig`'s typenames from outside the dependency closure is
+// disjoint from `sig`, so `sig` matches the methods the precompile worker saw.
+// The caller holds jl_method_contributors_lock.
+static int foreign_methods_disjoint(jl_value_t *sig) JL_CANSAFEPOINT
+{
+    // past this many intersections, matching the edge again is cheaper
+    struct _foreign_disjoint env = {sig, 64, 1};
+    int decomposed = jl_foreach_top_typename_for(_typename_check_foreign_disjoint, sig, 1, &env);
+    return decomposed && env.ok;
+}
+
+
 JL_DLLEXPORT int jl_edge_sig_replayable(jl_value_t *sig) JL_CANSAFEPOINT
 {
     if (jl_loading_closure_bits == NULL || !edge_replay_enabled())
@@ -3185,7 +3513,7 @@ JL_DLLEXPORT int jl_edge_sig_replayable(jl_value_t *sig) JL_CANSAFEPOINT
     }
     int clean = 1;
     int decomposed = jl_foreach_top_typename_for(_typename_check_contributor, sig, 1, &clean);
-    int r = decomposed && clean;
+    int r = decomposed && (clean || foreign_methods_disjoint(sig));
     *ptrhash_bp(&edge_sig_verdicts, sig) = (void*)(((uintptr_t)world << 1) | (uintptr_t)r);
     JL_UNLOCK(&jl_method_contributors_lock);
     return r;
@@ -3542,7 +3870,7 @@ JL_DLLEXPORT void jl_method_table_disable(jl_method_t *method) JL_CANSAFEPOINT
         jl_atomic_store_relaxed(&methodentry->max_world, world);
         jl_method_table_invalidate(method, world, 1);
         if (mt == jl_method_table)
-            contributor_tag_method(method, -1); // a deletion poisons the function for edge replay
+            contributor_tag_method(method, -1, 1); // a deletion poisons the function for edge replay
         jl_atomic_store_release(&jl_world_counter, world + 1);
     }
     JL_UNLOCK(&world_counter_lock);
@@ -3567,7 +3895,7 @@ jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method,
 
     if (mt == jl_method_table) {
         update_max_args(method->sig);
-        contributor_tag_method(method, contributor_tag_for(method));
+        contributor_tag_method(method, contributor_tag_for(method), 0);
     }
     JL_UNLOCK(&mt->cache->writelock);
     JL_GC_POP();
@@ -3934,8 +4262,8 @@ void jl_method_table_activate_with_cert(jl_typemap_entry_t *newentry, jl_svec_t 
         int clean = 1;
         JL_LOCK(&jl_method_contributors_lock);
         int decomposed = jl_foreach_top_typename_for(_typename_check_contributor, type, 1, &clean);
-        JL_UNLOCK(&jl_method_contributors_lock);
         closure_clean = decomposed && clean;
+        JL_UNLOCK(&jl_method_contributors_lock);
     }
     jl_typemap_entry_t *replaced = NULL;
     int replaying = cert != NULL && jl_svec_len(cert) == 5 && activate_replay_mode() &&
