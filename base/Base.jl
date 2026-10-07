@@ -594,6 +594,7 @@ function __init__()
     init_depot_path()
     init_load_path()
     init_active_project()
+    init_debuginfo_source_paths()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
     empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
     empty!(checksums_valid)
