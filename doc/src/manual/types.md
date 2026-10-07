@@ -311,6 +311,22 @@ takes 24 bytes where a 136-bit primitive type takes 32. Bits past the declared w
 and take no part in comparison or hashing. Use `Core.bitsizeof(T)` to query the declared logical
 width — for `primitive type T 24 end`, `Core.bitsizeof(T)` is 24 while `sizeof(T)` is 4.
 
+A primitive type may take type parameters, and its bit width may be given by one of them:
+
+```jldoctest
+julia> primitive type BitInt{N} <: Signed N end
+
+julia> Core.bitsizeof(BitInt{21})
+21
+
+julia> sizeof(BitInt{21})
+4
+```
+
+Each instantiation then has its own layout, so `BitInt{21}` and `BitInt{64}` are distinct concrete
+types of different size, while `BitInt` itself has no layout. The width parameter must be a positive
+`Int`, and must be written as a bare parameter name -- an expression such as `8N` is not accepted.
+
 Non-byte primitive widths are accepted, but remain an expert-only feature. They are more likely to
 expose compiler, runtime, or ABI bugs than the standard built-in primitive widths, and arrays store
 each element in `sizeof(T)` bytes rather than packing bits. Therefore, boolean values, although
