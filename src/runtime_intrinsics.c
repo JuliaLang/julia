@@ -1305,8 +1305,8 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
     return cmp ? jl_true : jl_false; \
 }
 
-#define ter_fintrinsic(OP16, OP, name) \
-    ter_intrinsic_bfloat(OP16, name) \
+#define ter_fintrinsic(OPBF16, OP16, OP, name) \
+    ter_intrinsic_bfloat(OPBF16, name) \
     ter_intrinsic_half(OP16, name) \
     ter_intrinsic_ctype(OP, name, 32, float) \
     ter_intrinsic_ctype(OP, name, 64, double) \
@@ -1500,12 +1500,14 @@ double julia_fma(double a, double b, double c) {
                 b *= 4.503599627370496e15;
             a = bitcast_u2d((bitcast_d2u(a) & 0x800fffffffffffff) | 0x3ff0000000000000);
             b = bitcast_u2d((bitcast_d2u(b) & 0x800fffffffffffff) | 0x3ff0000000000000);
-            c = c_denorm;
+            // if c underflowed when rescaled, only its sign matters (to break ties)
+            c = ldexp(c_denorm, bias) == c ? c_denorm : copysign(0x1p-1022, c);
             two_mul(&abhi, &ablo, a, b);
             r = abhi+c;
             s = fma_correction(abhi, ablo, c, r);
             double sumhi = r+s;
-            if (issubnormal(ldexp(sumhi, bias))) {
+            // decide before rounding, which can carry the result to 0 or floatmin
+            if (sumhi != 0 && -bias-exponent(sumhi)-1022 > 0) {
                 double sumlo = r-sumhi+s;
                 int bits_lost = -bias-exponent(sumhi)-1022;
                 if ((bits_lost != 1) ^ ((bitcast_d2u(sumhi)&1) == 1))
@@ -1529,9 +1531,12 @@ double julia_fma(double a, double b, double c) {
 #endif
 
 #define muladd(a, b, c) a * b + c
-#define muladd_narrow(a, b, c) (double)((a) * (b) + (c))
-ter_fintrinsic(fma_narrow,fma,fma_float)
-ter_fintrinsic(muladd_narrow,muladd,muladd_float)
+// round the product separately, as compiled code does: computing a * b + c in
+// float and then rounding to 16 bits would round twice
+#define muladd_half(a, b, c) (double)(half_to_float(float_to_half((a) * (b))) + (c))
+#define muladd_bfloat(a, b, c) (double)(bfloat_to_float(float_to_bfloat((a) * (b))) + (c))
+ter_fintrinsic(fma_narrow,fma_narrow,fma,fma_float)
+ter_fintrinsic(muladd_bfloat,muladd_half,muladd,muladd_float)
 
 // same-type comparisons
 #define eq(a,b) a == b
