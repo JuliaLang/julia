@@ -10,11 +10,17 @@ function activate_codegen!()
     # Register the new unified compile and emit function
     ccall(:jl_set_compile_and_emit_func, Cvoid, (Any,), compile_and_emit_native)
     Core.eval(Compiler, quote
-        let typeinf_world_age = Base.tls_world_age()
-            @eval Core.OptimizedGenerics.CompilerPlugins.typeinf(::Nothing, mi::MethodInstance, source_mode::UInt8) =
-                Base.invoke_in_world($(Expr(:$, :typeinf_world_age)), typeinf_ext_toplevel, mi, Base.tls_world_age(), source_mode, Compiler.TRIM_NO)
-        end
+        Core.OptimizedGenerics.CompilerPlugins.typeinf(::Nothing, mi::MethodInstance, source_mode::UInt8) =
+            Base.invoke_in_world(unsafe_load(cglobal(:jl_typeinf_world, UInt)), typeinf_ext_toplevel, mi, Base.tls_world_age(), source_mode, Compiler.TRIM_NO)
     end)
+end
+
+# Run the compiler in the current world from now on. The system image build calls this once
+# Base is complete: otherwise the compiler keeps running in the world it was bootstrapped in,
+# and its code that later definitions invalidated is saved twice, once for that world.
+function set_typeinf_world!()
+    ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
+    return nothing
 end
 
 global bootstrapping_compiler::Bool = false
