@@ -650,6 +650,11 @@ function _is_meta_doc_block(s::Syntax)
     end
 end
 
+function is_eventually_call(e)
+    return e isa Expr && (e.head === :call ||
+        e.head in (:escape, :where, :(::)) && is_eventually_call(e.args[1]))
+end
+
 # `suppress_linenodes` is true if `st`'s parent knows `st` is an exception to
 # normal linenode rules.  It only applies to `st`, and not transitively to its
 # children.
@@ -688,19 +693,24 @@ function syntax_to_expr(s::Syntax, suppress_linenodes=false)
             !_is_meta_doc_block(s)
         for (i, c) in enumerate(children(s))
             need_lnns && push!(out.args, first_linenode(c))
-            let suppress_c = i == 1 && (h == :for || h == :let)
+            let suppress_c = i == 1 && (h == :for || h == :let) || i == 2 && h == :do
                 push!(out.args, syntax_to_expr(c, suppress_c))
             end
         end
-        # Add extra linenodes to some blocks for better provenance.  Note no
-        # short-form function, since we don't know here whether the original rhs
-        # was a block
-        if h === :block && length(out.args) == 0 && !suppress_linenodes
+        # Add extra linenodes to some blocks for better provenance
+        if !suppress_linenodes && h === :block && length(out.args) == 0
             push!(out.args, first_linenode(s))
         elseif h in (:module, :function, :macro) && length(out.args) > 0
             let b = out.args[end]
                 b isa Expr && b.head === :block && pushfirst!(
                     b.args, first_linenode(s))
+            end
+        elseif length(out.args) == 2 && ((h === :-> && !suppress_linenodes) ||
+            (h === :(=) && is_eventually_call(out.args[1])))
+            let b = out.args[end]
+                b isa Expr && b.head === :block && !isempty(b.args) &&
+                    b.args[1] isa LineNumberNode && first_linenode(s) != b.args[1] &&
+                    pushfirst!(b.args, first_linenode(s))
             end
         elseif h in (:for, :while) && length(out.args) > 0
             let b = out.args[end]
