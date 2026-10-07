@@ -115,6 +115,23 @@ end
 @test_throws ArgumentError("cannot reinterpret `Int64` as `Vector{Int64}`, type `Vector{Int64}` is not a bits type") reinterpret(reshape, Vector{Int64}, Ars)
 @test_throws ArgumentError("cannot reinterpret a zero-dimensional `UInt8` array to `UInt16` which is of a larger size") reinterpret(reshape, UInt16, reshape([0x01]))
 
+# The byte count can overflow Int while the reinterpreted dimension still fits.
+let n = typemax(Int) ÷ sizeof(Int) + 1
+    r = reinterpret(sizeof(Int) == 8 ? UInt32 : UInt16, 1:n)
+    @test size(r) == (2n,)
+    @test axes(r) == (Base.OneTo(2n),)
+    r = reinterpret(UInt8, Base.OneTo(UInt(n)))
+    @test size(r) == (UInt(n) * sizeof(UInt),)
+end
+
+# Dimension arithmetic preserves the promoted integer type of the parent.
+for inds in (UInt(1):UInt(8), Int128(1):Int128(8), big(1):big(8))
+    p = view(zeros(UInt8, 8), inds)
+    r = reinterpret(UInt16, p)
+    @test size(r) isa typeof(size(p))
+    @test axes(r) == (Base.OneTo(4),)
+end
+
 # getindex
 test_many_wrappers(A) do _A
     @test reinterpret(Complex{Int64}, _A) == [1 + 2im, 3 + 4im]
