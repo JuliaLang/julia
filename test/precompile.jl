@@ -2246,7 +2246,8 @@ precompile_test_harness("method contributors") do load_path
         print(in_deps(sig, ContribExt), " ", in_deps(sig, which(ContribDep.f, (Integer,))), " ",
               in_deps(sig, ContribDep), " ", in_deps(sig, Base), " ", in_deps(sig, Main))
         # a method on Type{Union{}} meets the constructors of every family, so defining one
-        # poisons every constructor signature, but no other
+        # is a contributor to every constructor signature, but no other; it cannot match
+        # a constructor of Int, though, so that signature is still trusted
         ctor = Tuple{Type{Int}, Int}
         print(" ", in_deps(ctor, ContribExt))
         (::Type{Union{}})(::Int) = 0
@@ -2255,7 +2256,7 @@ precompile_test_harness("method contributors") do load_path
         ContribDep.f(::Int) = :session
         print(" ", in_deps(sig, ContribExt))
         """)
-    @test out == "1 1 0 0 0 1 0 1 0"
+    @test out == "1 1 0 0 0 1 1 1 0"
     # a deletion in the session leaves no method behind but marks the function
     out = trusted_edge_test_output(load_path, depot, in_deps_def * """
         using ContribDep
@@ -2265,6 +2266,71 @@ precompile_test_harness("method contributors") do load_path
         print(in_deps(Tuple{typeof(ContribDep.f), Int}, ContribExt))
         """)
     @test out == "0"
+end
+
+# A contributor outside the dependencies leaves a signature's match set alone when
+# none of the methods it added can match the signature.
+precompile_test_harness("method contributors: outside methods that cannot match") do load_path
+    write(joinpath(load_path, "DisjointDep.jl"),
+        """
+        module DisjointDep
+        f(x) = :dep
+        g(x) = :dep
+        end
+        """)
+    write(joinpath(load_path, "DisjointUser.jl"),
+        """
+        module DisjointUser
+        using DisjointDep
+        DisjointDep.f(::Integer) = :user
+        end
+        """)
+    # outside DisjointUser's dependencies; none of its methods can match `f(::Int)`
+    write(joinpath(load_path, "DisjointOther.jl"),
+        """
+        module DisjointOther
+        using DisjointDep
+        DisjointDep.f(::String) = :string
+        DisjointDep.f(::Int, ::Int) = :two
+        DisjointDep.f(::Type{String}, ::AbstractString) = :ctor
+        DisjointDep.g(::Integer) = :integer
+        end
+        """)
+    write(joinpath(load_path, "DisjointOverlap.jl"),
+        """
+        module DisjointOverlap
+        using DisjointDep
+        DisjointDep.f(::Int) = :overlap
+        end
+        """)
+    for pkg in ("DisjointDep", "DisjointUser", "DisjointOther", "DisjointOverlap")
+        Base.compilecache(Base.PkgId(pkg))
+    end
+    depot = DEPOT_PATH[1]
+    in_deps_def = """
+        in_deps(sig, obj) = Int(0 != ccall(:jl_sig_contributors_world, Csize_t, (Any, Any, Csize_t), sig, Core.methodtable,
+                                     ccall(:jl_external_blob_index, Csize_t, (Any,), obj)))
+        """
+    out = trusted_edge_test_output(load_path, depot, in_deps_def * """
+        using DisjointDep, DisjointOther, DisjointUser
+        sig = Tuple{typeof(DisjointDep.f), Int}
+        print(in_deps(sig, DisjointUser), " ", in_deps(Tuple{typeof(DisjointDep.g), Int}, DisjointUser))
+        # a session method that cannot match is no obstacle either, but one that can is
+        DisjointDep.f(::Float64, ::Any) = :session
+        print(" ", in_deps(sig, DisjointUser))
+        DisjointDep.f(::Signed) = :session
+        print(" ", in_deps(sig, DisjointUser))
+        """)
+    @test out == "1 0 1 0"
+    out = trusted_edge_test_output(load_path, depot, in_deps_def * """
+        using DisjointDep, DisjointOther, DisjointOverlap, DisjointUser
+        sig = Tuple{typeof(DisjointDep.f), Int}
+        print(in_deps(sig, DisjointUser))
+        # a deletion outside the dependencies ends the test, even of a method that cannot match
+        Base.delete_method(which(DisjointDep.f, (String,)))
+        print(" ", in_deps(Tuple{typeof(DisjointDep.f), Int, Int}, DisjointUser))
+        """)
+    @test out == "0 0"
 end
 
 precompile_test_harness("activation replay: worklist-owned method tables") do load_path

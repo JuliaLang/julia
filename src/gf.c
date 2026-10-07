@@ -2851,34 +2851,50 @@ JL_DLLEXPORT void jl_method_table_add_backedge(jl_value_t *typ, jl_code_instance
 // `mt->contributors` records, under the same top typenames as the table's
 // backedges, who added or deleted methods there during this session: the
 // linkage blob of the image a method came from, or -1 for a method defined or
-// deleted at run time. While the edges of a package image are verified, a call
-// signature whose typenames have no contributor outside that image's
-// dependencies (the sysimage, the images it was loaded against, and itself;
-// see staticdata.c) still has the method-match set the image's precompile
-// worker saw, so the worker's verdict holds (jl_sig_contributors_world). That
-// the set of contributors, whatever their order, determines the match set
-// relies on overwriting a method being an error during incremental
-// precompilation, so no two images among an image's dependencies define the
-// same signature. The tags name this process's blobs, so the table
-// is not saved in images. Writers hold mt->cache->writelock; readers take no
-// lock, as the table is published with release stores and a tag vector is
-// replaced, never grown in place.
+// deleted at run time, along with the methods themselves. While the edges of a
+// package image are verified, a call signature whose typenames have no
+// contributor outside that image's dependencies (the sysimage, the images it was
+// loaded against, and itself; see staticdata.c) still has the method-match set
+// the image's precompile worker saw, so the worker's verdict holds
+// (jl_sig_contributors_world). So does a signature with contributors outside
+// them when every method they added under its typenames is disjoint from it,
+// which the query tests up to a budget of intersections; a deletion outside
+// them ends that test, as it leaves no method behind to test. That the set of
+// contributors, whatever their order, determines the match set relies on
+// overwriting a method being an error during incremental precompilation, so no
+// two images among an image's dependencies define the same signature. The tags
+// name this process's blobs, so the table is not saved in images. Writers hold
+// mt->cache->writelock; readers take no lock, as the table is published with
+// release stores and an entry is replaced, never changed in place. An entry is
+// svec(tags::Vector{Int32}, methods), where `methods` is a list, newest first, of
+// svec(method, or nothing for a deletion; tag; next, or nothing at the end).
 
-// add `tag` to the contributors of `tn` in `mt`, unless already present
-static void contributor_add_tag(jl_methtable_t *mt, jl_typename_t *tn, int32_t tag) JL_CANSAFEPOINT
+// record `tag` and `m` (nothing for a deletion) under `tn` in `mt`
+static void contributor_add(jl_methtable_t *mt, jl_typename_t *tn, int32_t tag, jl_value_t *m) JL_CANSAFEPOINT
 {
     jl_genericmemory_t *contributors = jl_atomic_load_relaxed(&mt->contributors);
-    jl_array_t *tags = (jl_array_t*)jl_eqtable_get(contributors, (jl_value_t*)tn, NULL);
+    jl_svec_t *ent = (jl_svec_t*)jl_eqtable_get(contributors, (jl_value_t*)tn, NULL);
+    jl_array_t *tags = ent == NULL ? NULL : (jl_array_t*)jl_svecref(ent, 0);
+    jl_value_t *head = ent == NULL ? jl_nothing : jl_svecref(ent, 1);
     size_t l = tags == NULL ? 0 : jl_array_nrows(tags);
-    for (size_t i = 0; i < l; i++)
-        if (jl_array_data(tags, int32_t)[i] == tag)
-            return;
-    jl_array_t *newtags = jl_alloc_array_1d(jl_array_int32_type, l + 1);
-    if (l > 0)
-        memcpy(jl_array_data(newtags, int32_t), jl_array_data(tags, int32_t), l * sizeof(int32_t));
-    jl_array_data(newtags, int32_t)[l] = tag;
-    JL_GC_PUSH1(&newtags);
-    jl_genericmemory_t *newtable = jl_eqtable_put(contributors, (jl_value_t*)tn, (jl_value_t*)newtags, NULL);
+    size_t i = 0;
+    while (i < l && jl_array_data(tags, int32_t)[i] != tag)
+        i++;
+    jl_array_t *newtags = tags;
+    jl_value_t *boxed = NULL;
+    jl_value_t *node = NULL;
+    jl_svec_t *newent = NULL;
+    JL_GC_PUSH5(&head, &newtags, &boxed, &node, &newent);
+    if (i == l) {
+        newtags = jl_alloc_array_1d(jl_array_int32_type, l + 1);
+        if (l > 0)
+            memcpy(jl_array_data(newtags, int32_t), jl_array_data(tags, int32_t), l * sizeof(int32_t));
+        jl_array_data(newtags, int32_t)[l] = tag;
+    }
+    boxed = jl_box_int32(tag);
+    node = (jl_value_t*)jl_svec(3, m, boxed, head);
+    newent = jl_svec2((jl_value_t*)newtags, node);
+    jl_genericmemory_t *newtable = jl_eqtable_put(contributors, (jl_value_t*)tn, (jl_value_t*)newent, NULL);
     JL_GC_POP();
     if (newtable != contributors)
         jl_gc_write_atomic(mt, mt->contributors, jl_genericmemory_t, newtable, release);
@@ -2887,6 +2903,7 @@ static void contributor_add_tag(jl_methtable_t *mt, jl_typename_t *tn, int32_t t
 struct _typename_tag_contributor_env {
     jl_methtable_t *mt;
     int32_t tag;
+    jl_value_t *method; // nothing for a deletion
 };
 
 static void _typename_tag_contributor(jl_typename_t *tn, int explct, void *env0) JL_CANSAFEPOINT
@@ -2897,43 +2914,40 @@ static void _typename_tag_contributor(jl_typename_t *tn, int explct, void *env0)
     // table; the query checks every typename it is called for
     if (!explct)
         return;
-    contributor_add_tag(env->mt, tn, env->tag);
+    contributor_add(env->mt, tn, env->tag, env->method);
 }
 
 struct _typename_check_contributor_env {
     jl_methtable_t *mt;
     size_t image; // the linkage blob whose dependencies bound the contributors
-    size_t world; // the youngest contributor's activation world so far
-    int clean;
+    size_t world; // the youngest dependency contributor's activation world so far
+    int foreign;  // a contributor outside the dependencies was seen
 };
 
 static void _typename_check_contributor(jl_typename_t *tn, int explct, void *env0) JL_NOTSAFEPOINT
 {
     struct _typename_check_contributor_env *env = (struct _typename_check_contributor_env*)env0;
     (void)explct;
-    if (!env->clean)
-        return;
     jl_genericmemory_t *contributors = jl_atomic_load_relaxed(&env->mt->contributors);
-    jl_array_t *tags = (jl_array_t*)jl_eqtable_get(contributors, (jl_value_t*)tn, NULL);
-    if (tags == NULL)
+    jl_svec_t *ent = (jl_svec_t*)jl_eqtable_get(contributors, (jl_value_t*)tn, NULL);
+    if (ent == NULL)
         return; // no contributor this session: the sysimage's methods are not tagged
+    jl_array_t *tags = (jl_array_t*)jl_svecref(ent, 0);
     size_t l = jl_array_nrows(tags);
     int32_t *d = jl_array_data(tags, int32_t);
     for (size_t i = 0; i < l; i++) {
         size_t world = d[i] < 0 ? 0 : jl_linkage_blob_dep_world(env->image, (size_t)d[i]);
-        if (world == 0) {
-            env->clean = 0;
-            return;
-        }
-        if (world > env->world)
+        if (world == 0)
+            env->foreign = 1;
+        else if (world > env->world)
             env->world = world;
     }
 }
 
 // record `tag` under every top typename of `method`'s signature in `mt`
-static void contributor_tag_method(jl_methtable_t *mt, jl_method_t *method, int32_t tag) JL_CANSAFEPOINT
+static void contributor_tag_method(jl_methtable_t *mt, jl_method_t *method, int32_t tag, int deleted) JL_CANSAFEPOINT
 {
-    struct _typename_tag_contributor_env env = {mt, tag};
+    struct _typename_tag_contributor_env env = {mt, tag, deleted ? jl_nothing : (jl_value_t*)method};
     jl_foreach_top_typename_for(_typename_tag_contributor, (jl_value_t*)method->sig, 0, &env);
 }
 
@@ -2942,10 +2956,203 @@ static int32_t contributor_tag_for(jl_method_t *method) JL_NOTSAFEPOINT
     return jl_object_in_image((jl_value_t*)method) ? (int32_t)jl_external_blob_index((jl_value_t*)method) : -1;
 }
 
+// A type whose only subtypes are itself and Union{}. If such a type is not a subtype
+// of a slot type, the two are disjoint. Kinds are not atoms (Type{X} <: DataType),
+// and a Tuple is one only if its parameters are (Tuple{DataType} has subtypes).
+static int is_atom_type(jl_value_t *a) JL_NOTSAFEPOINT
+{
+    if (!jl_is_datatype(a))
+        return 0;
+    jl_datatype_t *d = (jl_datatype_t*)a;
+    if (!d->isconcretetype || jl_is_kind(a))
+        return 0;
+    if (d->name == jl_tuple_typename) {
+        for (size_t i = 0; i < jl_nparams(d); i++) {
+            if (!is_atom_type(jl_tparam(d, i)))
+                return 0;
+        }
+    }
+    return 1;
+}
+
+// Can no call match both signatures? Cheap tests first, then a full intersection,
+// which counts against `budget`. Returns 0 (not shown disjoint) when the budget runs out.
+static int sigs_disjoint(jl_value_t *msig, jl_value_t *qsig, size_t *budget) JL_CANSAFEPOINT
+{
+    jl_value_t *um = jl_unwrap_unionall(msig);
+    jl_value_t *uq = jl_unwrap_unionall(qsig);
+    if (jl_is_datatype(um) && jl_is_datatype(uq)) {
+        size_t nm = jl_nparams(um), nq = jl_nparams(uq);
+        int mva = nm > 0 && jl_is_vararg(jl_tparam(um, nm - 1));
+        int qva = nq > 0 && jl_is_vararg(jl_tparam(uq, nq - 1));
+        if (!mva && !qva && nm != nq)
+            return 1;
+        size_t n = nm < nq ? nm : nq;
+        for (size_t i = 0; i < n; i++) {
+            jl_value_t *mi = jl_tparam(um, i), *qi = jl_tparam(uq, i);
+            if (jl_is_vararg(mi) || jl_is_vararg(qi))
+                break;
+            if (is_atom_type(qi) && !jl_has_free_typevars(mi) && !jl_subtype(qi, mi))
+                return 1;
+        }
+    }
+    if (*budget == 0)
+        return 0;
+    (*budget)--;
+    return jl_has_empty_intersection(msig, qsig);
+}
+
+// The typename every value of a signature's first argument has, or NULL if there is
+// none: the argument type is a datatype whose typename is concrete and not a kind.
+static jl_typename_t *arg1_key(jl_value_t *sig JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_value_t *u = jl_unwrap_unionall(sig);
+    if (!jl_is_datatype(u) || jl_nparams(u) < 2)
+        return NULL;
+    jl_value_t *t = jl_unwrap_unionall(jl_tparam(u, 1));
+    if (!jl_is_datatype(t) || jl_is_kind(t) || ((jl_datatype_t*)t)->name->abstract)
+        return NULL;
+    return ((jl_datatype_t*)t)->name;
+}
+
+// For a constructor signature, Type{X}, the typename of X. Two constructors whose X
+// have different typenames cannot match the same call, since Type is invariant.
+// NULL for anything else, including Type{T} with a type variable T.
+static jl_typename_t *ctor_key(jl_value_t *sig JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_value_t *u = jl_unwrap_unionall(sig);
+    if (!jl_is_datatype(u) || jl_nparams(u) < 1)
+        return NULL;
+    jl_value_t *t = jl_unwrap_unionall(jl_tparam(u, 0));
+    if (!jl_is_typeeq(t))
+        return NULL;
+    jl_value_t *x = jl_unwrap_unionall(jl_typeeq_T(t));
+    if (!jl_is_datatype(x))
+        return NULL;
+    return ((jl_datatype_t*)x)->name;
+}
+
+// The typename of an abstract upper bound of a signature's first argument, or NULL
+// if it has none that rules anything out (Any, or a bound that admits types).
+static jl_typename_t *arg1_bound(jl_value_t *sig JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_value_t *u = jl_unwrap_unionall(sig);
+    if (!jl_is_datatype(u) || jl_nparams(u) < 2)
+        return NULL;
+    jl_value_t *t = jl_tparam(u, 1);
+    if (jl_is_typevar(t))
+        t = ((jl_tvar_t*)t)->ub;
+    t = jl_unwrap_unionall(t);
+    if (!jl_is_datatype(t) || t == (jl_value_t*)jl_any_type)
+        return NULL;
+    for (jl_datatype_t *w = (jl_datatype_t*)t; w != jl_any_type; w = w->super) {
+        if (w == jl_anytype_type || jl_is_kind((jl_value_t*)w))
+            return NULL; // the bound admits types, whose supertypes are the kinds
+    }
+    return ((jl_datatype_t*)t)->name;
+}
+
+// Is `bound` among the supertypes of the concrete typename `key`?
+static int key_has_supertype(jl_typename_t *key, jl_typename_t *bound) JL_NOTSAFEPOINT
+{
+    for (jl_datatype_t *w = (jl_datatype_t*)jl_unwrap_unionall(key->wrapper); w != NULL; w = w->super) {
+        if (w->name == bound)
+            return 1;
+        if (w == jl_any_type)
+            return 0;
+    }
+    return 1;
+}
+
+struct _foreign_disjoint_env {
+    jl_methtable_t *mt;
+    size_t image;
+    jl_value_t *sig;
+    jl_typename_t *q;   // arg1_key(sig)
+    jl_typename_t *qck; // ctor_key(sig)
+    size_t budget;      // intersections left
+    int ok;
+};
+
+// Could a method with signature `msig` match the query, by its keys alone?
+static int foreign_candidate(jl_value_t *msig, struct _foreign_disjoint_env *env) JL_NOTSAFEPOINT
+{
+    jl_typename_t *ck = ctor_key(msig);
+    if (env->qck != NULL && ck != NULL && ck != env->qck)
+        return 0; // constructors of different types
+    jl_typename_t *k = arg1_key(msig);
+    if (k != NULL) {
+        if (env->q != NULL && k != env->q)
+            return 0; // keyed by another typename, which no value has along with the query's
+    }
+    else if (env->q != NULL) {
+        jl_typename_t *bound = arg1_bound(msig);
+        if (bound != NULL && !key_has_supertype(env->q, bound))
+            return 0; // bounded by a type the query's argument is not under
+    }
+    return 1;
+}
+
+// Is the method of list node `n` from outside the dependencies, and able to match
+// the query by its keys? A deletion node ends the test instead.
+static int foreign_node_candidate(jl_value_t *n, struct _foreign_disjoint_env *env) JL_NOTSAFEPOINT
+{
+    jl_value_t *m = jl_svecref(n, 0);
+    if (m == jl_nothing) {
+        env->ok = 0; // a deletion: nothing is left to test
+        return 0;
+    }
+    int32_t tag = jl_unbox_int32(jl_svecref(n, 1));
+    if (tag >= 0 && jl_linkage_blob_dep_world(env->image, (size_t)tag) != 0)
+        return 0; // a dependency's method, which the worker saw
+    return foreign_candidate(((jl_method_t*)m)->sig, env);
+}
+
+static void _typename_check_foreign_disjoint(jl_typename_t *tn, int explct, void *env0) JL_CANSAFEPOINT
+{
+    struct _foreign_disjoint_env *env = (struct _foreign_disjoint_env*)env0;
+    (void)explct;
+    JL_GC_PROMISE_ROOTED(env->mt);
+    if (!env->ok)
+        return;
+    jl_genericmemory_t *contributors = jl_atomic_load_relaxed(&env->mt->contributors);
+    jl_svec_t *ent = (jl_svec_t*)jl_eqtable_get(contributors, (jl_value_t*)tn, NULL);
+    if (ent == NULL)
+        return; // no contributor this session
+    jl_value_t *head = jl_svecref(ent, 1);
+    JL_GC_PUSH1(&head); // the entry may be replaced while an intersection safepoints
+    // Count the candidates first: past the budget, matching live is cheaper than testing.
+    size_t ncand = 0;
+    for (jl_value_t *n = head; env->ok && n != jl_nothing; n = jl_svecref(n, 2))
+        ncand += foreign_node_candidate(n, env);
+    if (ncand > env->budget)
+        env->ok = 0;
+    for (jl_value_t *n = head; env->ok && n != jl_nothing; n = jl_svecref(n, 2)) {
+        if (!foreign_node_candidate(n, env))
+            continue;
+        jl_method_t *m = (jl_method_t*)jl_svecref(n, 0);
+        if (!sigs_disjoint(m->sig, env->sig, &env->budget))
+            env->ok = 0;
+    }
+    JL_GC_POP();
+}
+
+// Is every method added under `sig`'s typenames in `mt` from outside the
+// dependencies of `image` disjoint from `sig`, so that it leaves the methods the
+// precompile worker matched `sig` against as they were?
+static int foreign_methods_disjoint(jl_value_t *sig, jl_methtable_t *mt, size_t image) JL_CANSAFEPOINT
+{
+    // past this many intersections, matching the signature live is cheaper
+    struct _foreign_disjoint_env env = {mt, image, sig, arg1_key(sig), ctor_key(sig), 64, 1};
+    jl_foreach_top_typename_for(_typename_check_foreign_disjoint, sig, 1, &env);
+    return env.ok;
+}
+
 // If every contributor to the typenames of `sig` in `mt` is the image at
-// linkage blob `image` or one of its dependencies, the world in which the
-// youngest of them was activated, else 0. From that world on, the methods
-// on those typenames have been exactly the ones that image's precompile worker
+// linkage blob `image` or one of its dependencies, or else added only methods
+// disjoint from `sig`, the world in which the youngest of the dependencies among
+// them was activated, else 0. From that world on, the methods `sig` can match on
+// those typenames have been exactly the ones that image's precompile worker
 // saw, so its method-match set for `sig` has been the worker's. A contributor
 // added concurrently moves the world counter, which the caller stamps its
 // result with.
@@ -2954,9 +3161,12 @@ JL_DLLEXPORT size_t jl_sig_contributors_world(jl_value_t *sig, jl_methtable_t *m
     if (image == (size_t)-1)
         return 0;
     // the sysimage's contributions are not tagged: they are active by jl_require_world
-    struct _typename_check_contributor_env env = {mt, image, jl_require_world, 1};
-    int decomposed = jl_foreach_top_typename_for(_typename_check_contributor, sig, 1, &env);
-    return decomposed && env.clean ? env.world : 0;
+    struct _typename_check_contributor_env env = {mt, image, jl_require_world, 0};
+    if (!jl_foreach_top_typename_for(_typename_check_contributor, sig, 1, &env))
+        return 0;
+    if (env.foreign && !foreign_methods_disjoint(sig, mt, image))
+        return 0;
+    return env.world;
 }
 
 // ---- ext_backinterferences: the activation records of methods ----
@@ -3362,7 +3572,7 @@ JL_DLLEXPORT void jl_method_table_disable(jl_method_t *method) JL_CANSAFEPOINT
         jl_atomic_store_relaxed(&methodentry->max_world, world);
         jl_method_table_invalidate(method, world, 1);
         JL_LOCK(&mt->cache->writelock);
-        contributor_tag_method(mt, method, -1); // a deletion is a contributor of no image
+        contributor_tag_method(mt, method, -1, 1); // a deletion is a contributor of no image
         JL_UNLOCK(&mt->cache->writelock);
         jl_atomic_store_release(&jl_world_counter, world + 1);
     }
@@ -3388,7 +3598,7 @@ jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method,
 
     if (mt == jl_method_table)
         update_max_args(method->sig);
-    contributor_tag_method(mt, method, contributor_tag_for(method));
+    contributor_tag_method(mt, method, contributor_tag_for(method), 0);
     JL_UNLOCK(&mt->cache->writelock);
     JL_GC_POP();
     return newentry;
@@ -4001,7 +4211,8 @@ void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array
     // every intersecting method, as they would from a full scan.
     if (replaying && all_covered) {
         // No method of an uncovered image is under any of this signature's
-        // typenames, so the scan would find nothing. Edge replay relies on the same fact.
+        // typenames, or those that are cannot intersect it, so the scan would find
+        // nothing. Edge replay relies on the same fact.
         oldvalue = NULL;
     }
     else {

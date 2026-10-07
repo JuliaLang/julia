@@ -1079,7 +1079,7 @@ typedef struct JL_GC_TRACKED_TYPE _jl_methtable_t {
     jl_sym_t *name; // sometimes used for debug printing
     jl_module_t *module; // sometimes used for debug printing
     jl_genericmemory_t *backedges; // IdDict{top typenames, Vector{uncovered (sig => caller::CodeInstance)}}
-    _Atomic(jl_genericmemory_t*) contributors; // IdDict{top typename, Vector{Int32}}: the linkage blobs (-1: no image) that added or deleted methods under it this session
+    _Atomic(jl_genericmemory_t*) contributors; // IdDict{top typename, svec(Vector{Int32}, list)}: the linkage blobs (-1: no image) that added or deleted methods under it this session, and those methods (see gf.c)
 } jl_methtable_t;
 
 typedef struct JL_GC_TRACKED_TYPE {
