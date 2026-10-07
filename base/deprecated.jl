@@ -764,6 +764,9 @@ end
 # constructed at any time), and pinning the stored key for exactly as long as
 # its variable is observable is what keeps all egal spellings of a binder on
 # one canonical variable.
+# The variable is minted here rather than taken from the binder's own canonical
+# variable (`jl_unionall_var`, which the binder holds strongly): a stored key
+# must not reference its value, or the entry could never be collected.
 const _unionall_var_cache = WeakValueIdDict{UnionAll,TypeVar}()
 
 function unionall_var(u::UnionAll)

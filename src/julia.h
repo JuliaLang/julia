@@ -658,6 +658,12 @@ typedef struct JL_GC_TRACKED_TYPE {
     // Memoized values are deterministic across sessions, so they may be
     // serialized as-is. Egal ignores this field (like `flags`).
     uintptr_t hash;
+    // the binder's canonical variable, created lazily (`jl_unionall_var`):
+    // subtyping shares it between crossings of this binder where the
+    // variable need not be distinct. (Not the variable `u.var` returns: see
+    // `unionall_var`.) Ignored by egal and hashing; not serialized (images
+    // do not depend on which binders were crossed).
+    _Atomic(jl_tvar_t*) canonvar;
 } jl_unionall_t;
 #define JL_UNIONALL_VAROCCURS 0x1  // the binder occurs in `body` (memoized)
 #define JL_UNIONALL_ESCAPINGREFS 0x2  // some reference escapes this node (memoized)
