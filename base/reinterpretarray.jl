@@ -368,9 +368,17 @@ dataids(a::ReinterpretArray) = dataids(a.parent)
 unaliascopy(a::NonReshapedReinterpretArray{T}) where {T} = reinterpret(T, unaliascopy(a.parent))
 unaliascopy(a::ReshapedReinterpretArray{T}) where {T} = reinterpret(reshape, T, unaliascopy(a.parent))
 
+_reinterpret_div(nbytes, divisor) = div(nbytes, divisor)
+_reinterpret_div(nbytes::BitInteger, divisor) = div(unsigned(nbytes), divisor) % typeof(nbytes)
+
+function _reinterpret_length(len, ::Type{T}, ::Type{S}) where {T,S}
+    issingletontype(T) && return len
+    return _reinterpret_div(len * aligned_sizeof(S), aligned_sizeof(T))
+end
+
 function size(a::NonReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)
-    size1 = issingletontype(T) ? psize[1] : div(psize[1]*aligned_sizeof(S), aligned_sizeof(T))
+    size1 = _reinterpret_length(psize[1], T, S)
     tuple(size1, tail(psize)...)
 end
 function size(a::ReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
@@ -384,7 +392,7 @@ size(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
 function axes(a::NonReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     paxs = axes(a.parent)
     f, l = first(paxs[1]), length(paxs[1])
-    size1 = issingletontype(T) ? l : div(l*aligned_sizeof(S), aligned_sizeof(T))
+    size1 = _reinterpret_length(l, T, S)
     tuple(oftype(paxs[1], f:f+size1-1), tail(paxs)...)
 end
 function axes(a::ReshapedReinterpretArray{T,N,S} where {N}) where {T,S}

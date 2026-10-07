@@ -41,12 +41,14 @@ strip_debug_calls(ir) = replace(ir, r"call void @llvm\.dbg\.declare.*\n" => "", 
         nothing
     end
     increment_reinterpret!(a) = (a .+= Int32(1); nothing)
-    for (f, T) in ((zigzag_reinterpret!, Int16), (increment_reinterpret!, Int32))
-        if !is_debug_build && opt_level >= 2 && !coverage && Sys.ARCH in (:x86_64, :i686, :aarch64)
+    if !is_debug_build && opt_level >= 2 && !coverage && Sys.ARCH in (:x86_64, :i686, :aarch64)
+        for (f, T) in ((zigzag_reinterpret!, Int16), (increment_reinterpret!, Int32))
             ir = get_llvm(f, Tuple{typeof(reinterpret(T, UInt8[]))})
             @test occursin(r"load <[0-9]+ x i(16|32)>", ir)
             @test occursin(r"store <[0-9]+ x i(16|32)>", ir)
         end
+        ir = get_llvm(Base._fill!, Tuple{typeof(reinterpret(Int16, UInt8[])), Int16})
+        @test occursin(r"store <[0-9]+ x i16>", ir)
     end
 end
 
