@@ -464,6 +464,9 @@ function _Meta_parse_string(text::AbstractString, filename::AbstractString,
         throw(BoundsError(text, index))
     end
     ex, offset::Int = JuliaSyntax.core_parser_hook(text, filename, lineno, index-1, options)
+    if JuliaSyntax._has_v1_14_version_hooks
+        ex = Base.syntax_to_expr(ex)
+    end
     ex, offset+1
 end
 
