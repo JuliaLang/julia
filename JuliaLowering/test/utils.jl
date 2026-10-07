@@ -435,9 +435,12 @@ end
 
 function fl_eval(mod::Module, x::Expr)
     with_flisp() do
-        Core.eval(mod, fl_lower(mod, x))
+        Core.eval(mod, x)
     end
 end
+
+fl_eval(mod::Module, code::AbstractString) =
+    fl_eval(mod, Meta.parseall(code; filename="string", mod))
 
 function _force_syntax(x, mod, edition::Tuple{Int, Int})
     if x isa SyntaxTree

@@ -42,7 +42,7 @@ end
 # Basic checks that arbitrary nesting of transparent macros (no new syntax in new
 # macros, escaped/unhygienic in old macros) doesn't introduce opaque layers
 @testset "basic transparent macros: old macros" for run in [
-    (x::String)->Base.include_string(
+    (x::String)->fl_eval(
         test_mod, "#=FLISP SANITY-CHECK=# "*x),
     (x::String)->jl_eval(
         test_mod, "#=JL COMPAT=# "*x; edition=JL_OLD_EDITION),
@@ -423,12 +423,12 @@ end
     end
 
     @testset "(AI) const shows up in caller mod" begin
-        Core.eval(test_mod, :(module MacHome2
+        fl_eval(test_mod, :(module MacHome2
                        macro make_const()
                            :( @eval const CMARKER = 42 )
                        end
                        end))
-        Core.eval(test_mod, :(MacHome2.@make_const()))
+        fl_eval(test_mod, :(MacHome2.@make_const()))
         @test isdefined(test_mod, :CMARKER)
 
         jl_eval(test_mod, :(module MacHome2
@@ -478,7 +478,7 @@ end
 Base.eval(test_mod, :(
     test_hscope(x, mod=$test_mod) = Expr(Symbol("hygienic-scope"), x, mod)
 ))
-Base.eval(test_mod, :(
+fl_eval(test_mod, :(
     # +3 new scopes and -4 escapes = normal unhygienic macro
     macro oldstyle_silly_scopes(x, y)
         stmt1 = test_hscope(test_hscope(test_hscope(esc(esc(esc(esc(:($x = 123))))))))
@@ -486,7 +486,7 @@ Base.eval(test_mod, :(
         Expr(:block, stmt1, stmt2)
     end))
 @testset "escape and hygienic-scope forms" for run in [
-    (x::String)->Base.include_string(
+    (x::String)->fl_eval(
         test_mod, "#=FLISP SANITY-CHECK=# "*x),
     (x::String)->jl_eval(
         test_mod, "#=JL COMPAT=# "*x; edition=JL_OLD_EDITION),
@@ -906,7 +906,7 @@ JuliaLowering.include_string(test_mod, raw"""
 """)
 # TODO: Make this macro lowering go via JuliaSyntax rather than the flisp code
 # (JuliaSyntax needs support for old-style quasiquote processing)
-Base.eval(test_mod, :(
+fl_eval(test_mod, :(
 macro oldstyle(a, b)
     quote
         x = "x in @oldstyle"
@@ -929,7 +929,7 @@ end
 #  "x in @newstyle3")
 
 # Old style unhygienic escaping with esc()
-Base.eval(test_mod, :(
+fl_eval(test_mod, :(
 macro oldstyle_unhygienic()
     esc(:x)
 end
@@ -941,7 +941,7 @@ end
 """) == "x in outer scope"
 
 # Exceptions in old style macros
-Base.eval(test_mod, :(
+fl_eval(test_mod, :(
 macro oldstyle_error()
     error("Some error in old style macro")
 end
@@ -961,7 +961,7 @@ Some error in old style macro
 in expression starting at string:1"""
 
 # Old-style macros returning non-Expr values
-Base.eval(test_mod, :(
+fl_eval(test_mod, :(
 macro oldstyle_non_Expr()
     42
 end
@@ -975,7 +975,7 @@ JuliaLowering.include_string(test_mod, raw"""
 macro method_error_test(a)
 end
 """)
-Base.eval(test_mod, :(
+fl_eval(test_mod, :(
 macro method_error_test()
 end
 ))
@@ -993,8 +993,8 @@ end
 
 @testset "calling with old/new macro signatures" begin
     # Old defined with 1 arg, new with 2 args, both with 3 (but with different values)
-    Base.eval(test_mod, :(macro sig_mismatch(x); x; end))
-    Base.eval(test_mod, :(macro sig_mismatch(x, y, z); z; end))
+    fl_eval(test_mod, :(macro sig_mismatch(x); x; end))
+    fl_eval(test_mod, :(macro sig_mismatch(x, y, z); z; end))
     JuliaLowering.include_string(test_mod, "macro sig_mismatch(x, y); x; end")
     JuliaLowering.include_string(test_mod, "macro sig_mismatch(x, y, z); x; end")
 
@@ -1050,7 +1050,7 @@ end
     """; edition) == 1
 
     # only invokelatest produces :isglobal now, so MWE here
-    Base.eval(test_mod, :(macro isglobal(x); esc(Expr(:isglobal, x)); end))
+    fl_eval(test_mod, :(macro isglobal(x); esc(Expr(:isglobal, x)); end))
     @test jl_eval(test_mod, """
     some_global = 1
     function isglobal_chk(some_arg)
@@ -1101,7 +1101,7 @@ end
     end
 
     # @testset produces :tryfinally with secret third arg
-    @eval test_mod :(using Test)
+    @eval test_mod using Test
     @test JuliaLowering.include_string(test_mod, "@test true") isa Test.Pass
     @testset let jltestset = jl_eval(test_mod, """
     @testset begin
@@ -1168,48 +1168,48 @@ end
             edition))
 
     prog = "Base.@assume_effects :foldable function foo(); end"
-    ref = Meta.lower(test_mod, Meta.parse(prog))
+    ref = fl_lower(test_mod, Meta.parse(prog))
     our = jlower_e(prog)
     @test find_method_ci(ref).purity === find_method_ci(our).purity
 
     prog = "Base.@inline function foo(); end"
-    ref = Meta.lower(test_mod, Meta.parse(prog))
+    ref = fl_lower(test_mod, Meta.parse(prog))
     our = jlower_e(prog)
     @test find_method_ci(ref).inlining === find_method_ci(our).inlining
 
     prog = "Base.@noinline function foo(); end"
-    ref = Meta.lower(test_mod, Meta.parse(prog))
+    ref = fl_lower(test_mod, Meta.parse(prog))
     our = jlower_e(prog)
     @test find_method_ci(ref).inlining === find_method_ci(our).inlining
 
     prog = "Base.@constprop :none function foo(); end"
-    ref = Meta.lower(test_mod, Meta.parse(prog))
+    ref = fl_lower(test_mod, Meta.parse(prog))
     our = jlower_e(prog)
     @test find_method_ci(ref).constprop === find_method_ci(our).constprop
 
     prog = "Base.@nospecializeinfer function foo(); end"
-    ref = Meta.lower(test_mod, Meta.parse(prog))
+    ref = fl_lower(test_mod, Meta.parse(prog))
     our = jlower_e(prog)
     @test find_method_ci(ref).nospecializeinfer === find_method_ci(our).nospecializeinfer
 
     prog = "Base.@propagate_inbounds function foo(); end"
-    ref = Meta.lower(test_mod, Meta.parse(prog))
+    ref = fl_lower(test_mod, Meta.parse(prog))
     our = jlower_e(prog)
     @test find_method_ci(ref).propagate_inbounds === find_method_ci(our).propagate_inbounds
 
     prog = "Base.@assume_effects :total @inline function foo(); end"
-    ref = Meta.lower(test_mod, Meta.parse(prog))
+    ref = fl_lower(test_mod, Meta.parse(prog))
     our = jlower_e(prog)
     @test find_method_ci(ref).inlining === find_method_ci(our).inlining
     @test find_method_ci(ref).purity === find_method_ci(our).purity
 
     prog = "Base.@assume_effects :consistent Base.@assume_effects :nothrow function foo(); end"
-    ref = Meta.lower(test_mod, Meta.parse(prog))
+    ref = fl_lower(test_mod, Meta.parse(prog))
     our = jlower_e(prog)
     @test find_method_ci(ref).purity === find_method_ci(our).purity
 
     prog = "Base.@pure @inline foo(x) = x + 1"
-    ref = Meta.lower(test_mod, Meta.parse(prog))
+    ref = fl_lower(test_mod, Meta.parse(prog))
     our = jlower_e(prog)
     @test find_method_ci(ref).purity === find_method_ci(our).purity
     @test find_method_ci(ref).inlining === find_method_ci(our).inlining
@@ -1427,7 +1427,7 @@ end
         """; edition)
         @test test_mod.f_assume_def(5) == 5
         prog_def = "Base.@assume_effects :total function f_assume_total(x); x; end"
-        ref_ci = find_method_ci(Meta.lower(test_mod, Meta.parse(prog_def)))
+        ref_ci = find_method_ci(fl_lower(test_mod, Meta.parse(prog_def)))
         our_ci = find_method_ci(jlower_e(prog_def))
         @test ref_ci.purity === our_ci.purity
 
@@ -1523,9 +1523,9 @@ end
 end
 
 @testset "toplevel macro hygiene" for run in [JuliaLowering.include_string,
-                                              Base.include_string]
+                                              fl_eval]
     @eval test_mod global mod = $test_mod
-    @eval test_mod module MacroMod
+    fl_eval(test_mod, :(module MacroMod
     global mod = MacroMod
     macro escaped_toplevel()
         esc(Expr(:toplevel, :(mod)))
@@ -1536,7 +1536,7 @@ end
     macro unescaped_toplevel()
         Expr(:toplevel, :(mod))
     end
-    end
+    end))
     Core.@latestworld
     @test run(test_mod, "MacroMod.@escaped_toplevel") === test_mod
     @test run(test_mod, "MacroMod.@inner_escaped_toplevel") === test_mod
@@ -1552,8 +1552,8 @@ end
 end
 
 @testset "toplevel macro hygiene: @__MODULE__" for run in [JuliaLowering.include_string,
-                                                           Base.include_string]
-    @eval test_mod module MacroMod
+                                                           fl_eval]
+    fl_eval(test_mod, :(module MacroMod
     macro atmodule_in_toplevel()
         Expr(:toplevel, :(@__MODULE__))
     end
@@ -1561,7 +1561,7 @@ end
         Expr(:toplevel, Expr(:module, true, esc(:atmod_mod), Expr(
             :block, :(global global_mod = @__MODULE__))))
     end
-    end
+    end))
     Core.@latestworld
     @test run(test_mod, "MacroMod.@atmodule_in_toplevel") === test_mod
     @test run(test_mod, "MacroMod.@atmodule_in_module") isa Module
@@ -1635,7 +1635,7 @@ code = JuliaLowering.include_string(test_mod, """Mod1.@indirect_MODULE()""")
 end
 
 @testset "(AI) old macro attribution survives a nested eval in its body (#32)" begin
-    Base.eval(test_mod, :(module MacDefMod
+    fl_eval(test_mod, :(module MacDefMod
         const secret = 99
         macro getsecret()
             __module__.eval(:(nested_eval_side_effect = 1 + 1))
@@ -1650,13 +1650,13 @@ end
 end
 
 @testset "macros defining macros" begin
-    @eval test_mod macro make_and_use_macro_toplevel()
+    fl_eval(test_mod, :(macro make_and_use_macro_toplevel()
         Expr(:toplevel,
              esc(:(macro from_toplevel_expansion()
                    :(123)
                end)),
              esc(:(@from_toplevel_expansion())))
-    end
+    end))
 
     @test jl_eval(
         test_mod, "@make_and_use_macro_toplevel()"; edition=JL_OLD_EDITION) === 123
@@ -1974,7 +1974,7 @@ end
 end
 
 @testset "macro source LineNumberNode" begin
-    Base.include_string(test_mod, raw"""
+    fl_eval(test_mod, raw"""
     macro srcfile()
         string(__source__.file)
     end
@@ -1992,7 +1992,7 @@ end
 end
 
 @testset "macro QuoteNode + inert behavior" begin
-    Base.include_string(test_mod, raw"""
+    fl_eval(test_mod, raw"""
     macro quoted_gr()
         QuoteNode(GlobalRef(Base, :dontresolveme))
     end

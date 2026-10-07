@@ -600,10 +600,10 @@ end
 end
 
 @testset "unescaped macro expansions introduce a hygienic scope" begin
-    @eval test_mod module macro_mod
+    fl_eval(test_mod, :(module macro_mod
         macro m(x); x; end
         macro mesc(x); esc(x); end
-    end
+    end))
 
     # A function not wrapped in anything is made a macro-module global (#32026)
     JuliaLowering.include_string(test_mod, "macro_mod.@m function f_bug_1(); 1; end")
