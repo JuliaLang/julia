@@ -773,16 +773,16 @@ end
 
 @testset "connect!" begin
     # test the method matching connect!(::TCPSocket, ::Sockets.InetAddr{T<:Base.IPAddr})
-    let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
-        srv = listen(addr)
+    let srv = listen(Sockets.InetAddr(ip"127.0.0.1", 0))
+        addr = Sockets.InetAddr(getsockname(srv)...)
         r = @async close(accept(srv))
         close(connect(addr))
         fetch(r)
         close(srv)
     end
 
-    let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
-        srv = listen(addr)
+    let srv = listen(Sockets.InetAddr(ip"127.0.0.1", 0))
+        addr = Sockets.InetAddr(getsockname(srv)...)
         r = @async close(srv)
         @test_throws Base._UVError("accept", Base.UV_ECONNABORTED) accept(srv)
         fetch(r)
@@ -798,8 +798,8 @@ end
 end
 
 @testset "iswritable" begin
-    let addr = Sockets.InetAddr(ip"127.0.0.1", 4445)
-        srv = listen(addr)
+    let srv = listen(Sockets.InetAddr(ip"127.0.0.1", 0))
+        addr = Sockets.InetAddr(getsockname(srv)...)
         let s = Sockets.TCPSocket()
             Sockets.connect!(s, addr)
             @test iswritable(s) broken=Sys.iswindows()
@@ -813,7 +813,8 @@ end
             close(s)
         end
         close(srv)
-        srv = listen(addr)
+        srv = listen(Sockets.InetAddr(ip"127.0.0.1", 0))
+        addr = Sockets.InetAddr(getsockname(srv)...)
         let s = Sockets.connect(addr)
             let c = accept(srv)
                 Base.errormonitor(@async try; write(c, c); finally; close(c); end)
@@ -920,8 +921,8 @@ end
 @static if !Sys.iswindows()
     # Issue #29234
     @testset "TCPSocket stdin" begin
-        let addr = Sockets.InetAddr(ip"127.0.0.1", 4455)
-            srv = listen(addr)
+        let srv = listen(Sockets.InetAddr(ip"127.0.0.1", 0))
+            addr = Sockets.InetAddr(getsockname(srv)...)
             s = connect(addr)
 
             @test success(pipeline(`$(Base.julia_cmd()) --startup-file=no -e "exit()" -i`, stdin=s))
