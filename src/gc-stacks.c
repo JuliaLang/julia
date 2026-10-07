@@ -215,8 +215,9 @@ arraylist_t *jl_get_all_tasks_arraylist(void) JL_NOTSAFEPOINT
         if (ptls2 == NULL) {
             continue;
         }
+        // root_task is NULL once an adopted thread has exited
         jl_task_t *t = ptls2->root_task;
-        if (t->ctx.stkbuf != NULL) {
+        if (t != NULL && t->ctx.stkbuf != NULL) {
             arraylist_push(tasks, t);
         }
         small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
@@ -244,7 +245,8 @@ restart:
             continue;
         small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
         size_t n = mtarraylist_length(live_tasks);
-        l += n + (ptls2->root_task->ctx.stkbuf != NULL);
+        jl_task_t *t = ptls2->root_task;
+        l += n + (t != NULL && t->ctx.stkbuf != NULL);
     }
     l += l / 20; // add 5% for margin of estimation error
     jl_array_t *a = jl_alloc_vec_any(l); // may gc, changing the number of tasks and forcing us to reload everything
@@ -256,7 +258,7 @@ restart:
         if (ptls2 == NULL)
             continue;
         jl_task_t *t = ptls2->root_task;
-        if (t->ctx.stkbuf != NULL) {
+        if (t != NULL && t->ctx.stkbuf != NULL) {
             if (j == l)
                 goto restart;
             jl_array_data(a,void*)[j++] = t;
