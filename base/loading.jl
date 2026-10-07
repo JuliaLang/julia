@@ -208,6 +208,202 @@ function version_slug(uuid::UUID, sha1::SHA1, p::Int=5)
     return slug(crc, p)
 end
 
+## scripts with inline project metadata ##
+
+const SCRIPT_BLOCK_START = "# /// "
+const SCRIPT_BLOCK_END = "# ///"
+
+# Normalize CRLF line endings.
+_script_line(line::AbstractString) = chopsuffix(line, "\r")
+# Ignore a leading byte order mark, as the Julia parser does.
+_script_first_line(line::AbstractString) = chopprefix(line, "\ufeff")
+
+function _script_trivia_line(line::AbstractString)
+    s = lstrip(line)
+    return isempty(s) || startswith(s, '#')
+end
+
+function _script_block_marker(line::AbstractString)
+    line = rstrip(line)
+    line == SCRIPT_BLOCK_END && return :end
+    startswith(line, SCRIPT_BLOCK_START) || return nothing
+    name = line[length(SCRIPT_BLOCK_START)+1:end]
+    (isempty(name) || any(isspace, name)) && return nothing
+    return String(name)
+end
+
+# Embedded TOML and 1-based block ranges, including markers.
+# header_end is the last leading comment or blank line (0 if the file starts with code).
+struct ScriptMetadata
+    project::Union{Nothing, String}
+    manifest::Union{Nothing, String}
+    project_lines::Union{Nothing, UnitRange{Int}}
+    manifest_lines::Union{Nothing, UnitRange{Int}}
+    header_end::Int
+end
+
+# Uses `readline`, as `eachline` is not trimmable.
+function _has_project_block(io::IO)
+    first = true
+    while !eof(io)
+        line = readline(io)
+        line = _script_line(first ? _script_first_line(line) : line)
+        first = false
+        _script_block_marker(line) == "project" && return true
+        _script_trivia_line(line) || return false
+    end
+    return false
+end
+_has_project_block(content::String) = _has_project_block(IOBuffer(content))
+
+# Check for a project block before the first line of code.
+function has_project_block(path::AbstractString)::Bool
+    isfile_casesensitive(path) || return false
+    basename(path) in project_names && return false
+    io = open(path)
+    try
+        return _has_project_block(io)
+    finally
+        close(io)
+    end
+end
+
+# Any existing non-TOML, non-project file can be a script environment.
+function is_script_env(path::AbstractString)::Bool
+    basename(path) in project_names && return false
+    endswith(path, ".toml") && return false
+    return isfile_casesensitive(path)
+end
+
+# Extract TOML blocks and reject malformed or misplaced blocks.
+function parse_script_metadata(content::AbstractString; path::AbstractString="")
+    at = isempty(path) ? "" : " in $path"
+    lines = split(content, '\n')
+    # Drop the empty line from a trailing newline.
+    if !isempty(lines) && isempty(lines[end])
+        pop!(lines)
+    end
+    project = manifest = nothing
+    project_lines = manifest_lines = nothing
+    header_end = 0
+    seen_code = false
+    i = 1
+    nlines = length(lines)
+    while i <= nlines
+        line = _script_line(i == 1 ? _script_first_line(lines[i]) : lines[i])
+        marker = _script_block_marker(line)
+        if marker isa String && (marker == "project" || marker == "manifest")
+            start = i
+            body = String[]
+            i += 1
+            while true
+                i > nlines && error("unterminated `# /// $marker` block starting at line $start$at (missing `# ///`)")
+                l = _script_line(lines[i])
+                _script_block_marker(l) == :end && break
+                if l == "#"
+                    push!(body, "")
+                elseif startswith(l, "# ")
+                    push!(body, l[3:end])
+                elseif startswith(l, "#")
+                    push!(body, l[2:end])
+                else
+                    error("line $i$at is inside the `# /// $marker` block but is not a comment")
+                end
+                i += 1
+            end
+            toml = join(body, '\n')
+            if marker == "project"
+                project === nothing || error("duplicate `# /// project` block at line $start$at")
+                seen_code && error("the `# /// project` block at line $start$at must come before any code")
+                project = toml
+                project_lines = start:i
+                header_end = i
+            else
+                manifest === nothing || error("duplicate `# /// manifest` block at line $start$at")
+                project === nothing && error("the `# /// manifest` block at line $start$at comes before the `# /// project` block")
+                manifest = toml
+                manifest_lines = start:i
+            end
+        elseif _script_trivia_line(line)
+            seen_code || (header_end = i)
+        else
+            seen_code = true
+        end
+        i += 1
+    end
+    if manifest !== nothing && project === nothing
+        error("found a `# /// manifest` block but no `# /// project` block$at")
+    end
+    return ScriptMetadata(project, manifest, project_lines, manifest_lines, header_end)
+end
+
+read_script_metadata(path::AbstractString) = parse_script_metadata(read(path, String); path=String(path))
+
+# Track the running script and whether instantiation has been checked.
+mutable struct ScriptEnvState
+    const path::String
+    const pkg::PkgId
+    instantiate_checked::Bool
+end
+const SCRIPT_ENV = Ref{Union{Nothing, ScriptEnvState}}(nothing)
+const SCRIPT_ENV_LOCK = ReentrantLock() # serializes the instantiation check across tasks
+
+script_env_pkg(path::String) = project_file_name_uuid(path, first(splitext(basename(path))))
+
+# Restrict imports from Main to the script's project and manifest.
+function script_env_begin!(path::String)
+    read_script_metadata(path) # validate block placement up front
+    SCRIPT_ENV[] = ScriptEnvState(path, script_env_pkg(path), false)
+    return nothing
+end
+script_env_end!() = (SCRIPT_ENV[] = nothing)
+
+const PKG_PKGID = PkgId(UUID((0x44cfe95a_1eb2_52ea, 0xb672_e2afdf69b78f)), "Pkg")
+
+# Check for unresolved or missing dependencies.
+function script_env_needs_instantiate(state::ScriptEnvState)
+    @lock require_lock begin
+        deps = get(parsed_toml(state.path), "deps", nothing)
+        (deps === nothing || isempty(deps)) && return false
+        manifest_file = project_file_manifest_path(state.path)
+        manifest_file === nothing && return true
+        for (name, entries) in get_deps(parsed_toml(manifest_file; manifest=true))
+            for entry in entries::Vector{Any}
+                entry = entry::Dict{String, Any}
+                uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
+                uuid === nothing && continue
+                spec = explicit_manifest_entry_load_spec(manifest_file, PkgId(UUID(uuid), name), entry)
+                spec isa PkgLoadSpec || return true
+            end
+        end
+        return false
+    end
+end
+
+# Instantiate on the first import, unless JULIA_AUTO_INSTANTIATE=false.
+function script_env_ensure_instantiated(into::Module)
+    state = SCRIPT_ENV[]
+    state === nothing && return
+    state.instantiate_checked && return
+    moduleroot(into) === Main || return
+    # Holding require_lock while Pkg precompiles could deadlock.
+    require_lock.locked_by === current_task() && return
+    @lock SCRIPT_ENV_LOCK begin
+        state.instantiate_checked && return # another task got here first
+        try
+            get_bool_env("JULIA_AUTO_INSTANTIATE", true) === false && return
+            script_env_needs_instantiate(state) || return
+            Pkg = require_stdlib(PKG_PKGID)
+            printstyled(stderr, "Instantiating", color=:green, bold=true)
+            println(stderr, " the environment of script `", state.path, "`")
+            invokelatest(Pkg.instantiate)
+        finally
+            state.instantiate_checked = true
+        end
+    end
+    return nothing
+end
+
 mutable struct CachedTOMLDict
     path::String
     inode::UInt64
@@ -215,14 +411,28 @@ mutable struct CachedTOMLDict
     size::Int64
     hash::UInt32
     d::Dict{String, Any}
+    # Whether this caches a script's manifest block.
+    manifest::Bool
 end
 
-function CachedTOMLDict(p::TOML.Parser, path::String)
+# Parse a TOML file or the requested script block; missing blocks are empty.
+function _parse_env_toml(p::TOML.Parser, path::String, content::String, manifest::Bool)
+    if basename(path) ∉ project_names && !endswith(path, ".toml")
+        meta = parse_script_metadata(content; path)
+        toml = manifest ? meta.manifest : meta.project
+        toml === nothing && return Dict{String, Any}()
+        TOML.reinit!(p, toml; filepath=path)
+    else
+        TOML.reinit!(p, content; filepath=path)
+    end
+    return TOML.parse(p)
+end
+
+function CachedTOMLDict(p::TOML.Parser, path::String, manifest::Bool=false)
     s = stat(path)
     content = read(path)
     crc32 = _crc32c(content)
-    TOML.reinit!(p, String(content); filepath=path)
-    d = TOML.parse(p)
+    d = _parse_env_toml(p, path, String(content), manifest)
     return CachedTOMLDict(
         path,
         s.inode,
@@ -230,6 +440,7 @@ function CachedTOMLDict(p::TOML.Parser, path::String)
         s.size,
         crc32,
         d,
+        manifest,
    )
 end
 
@@ -246,8 +457,7 @@ function get_updated_dict(p::TOML.Parser, f::CachedTOMLDict)
             f.mtime = s.mtime
             f.size = s.size
             f.hash = new_hash
-            TOML.reinit!(p, String(content); filepath=f.path)
-            return f.d = TOML.parse(p)
+            return f.d = _parse_env_toml(p, f.path, String(content), f.manifest)
         end
     end
     return f.d
@@ -296,26 +506,31 @@ TOMLCache(p::TOML.Parser, d::Dict{String, Dict{String, Any}}) = TOMLCache(p, con
 
 const TOML_CACHE = TOMLCache(TOML.Parser{nothing}())
 
-parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, require_lock)
-function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
+# For scripts, cache project and manifest blocks separately.
+# Pass manifest=true for paths returned by project_file_manifest_path.
+parsed_toml(toml_file::AbstractString; manifest::Bool=false) =
+    parsed_toml(toml_file, TOML_CACHE, require_lock; manifest)
+function parsed_toml(toml_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock; manifest::Bool=false)
+    # a script holds both sections in one file, so key the cache on the section too
+    cache_key = manifest ? toml_file * "\0manifest" : toml_file
     lock(toml_lock) do
         cache = LOADING_CACHE[]
-        dd = if !haskey(toml_cache.d, project_file)
-            d = CachedTOMLDict(toml_cache.p, project_file)
-            toml_cache.d[project_file] = d
+        dd = if !haskey(toml_cache.d, cache_key)
+            d = CachedTOMLDict(toml_cache.p, String(toml_file), manifest)
+            toml_cache.d[cache_key] = d
             d.d
         else
-            d = toml_cache.d[project_file]
+            d = toml_cache.d[cache_key]
             # We are in a require call and have already parsed this TOML file
             # assume that it is unchanged to avoid hitting disk
-            if cache !== nothing && project_file in cache.require_parsed
+            if cache !== nothing && cache_key in cache.require_parsed
                 d.d
             else
                 get_updated_dict(toml_cache.p, d)
             end
         end
         if cache !== nothing
-            push!(cache.require_parsed, project_file)
+            push!(cache.require_parsed, cache_key)
         end
         return dd
     end
@@ -355,7 +570,14 @@ end
 Same as [`Base.identify_package`](@ref) except that the path to the environment where the package is identified
 is also returned, except when the identity is not identified.
 """
-identify_package_env(where::Module, name::String) = identify_package_env(PkgId(where), name)
+function identify_package_env(where::Module, name::String)
+    state = SCRIPT_ENV[]
+    if state !== nothing && moduleroot(where) === Main
+        # Resolve against the script's dependencies.
+        return identify_package_env(state.pkg, name)
+    end
+    return identify_package_env(PkgId(where), name)
+end
 function identify_package_env(where::PkgId, name::String)
     # Special cases
     if where.name === name
@@ -712,6 +934,8 @@ function env_project_file(env::String)::Union{Bool,String}
         project_file = locate_project_file(env)
     elseif basename(env) in project_names && isfile_casesensitive(env)
         project_file = env
+    elseif is_script_env(env)
+        project_file = env
     else
         project_file = false
     end
@@ -989,7 +1213,7 @@ end
 function parser_for_active_project()
     project = active_project()
     sv = VERSION_EDITION
-    if project !== nothing && isfile(project)
+    if project !== nothing && isfile(project) && (basename(project) in project_names || is_script_env(project))
         try
             sv = project_get_edition(parsed_toml(project))
         catch e
@@ -1010,7 +1234,9 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     dir = abspath(dirname(project_file))
     isfile_casesensitive(project_file) || return nothing
     d = parsed_toml(project_file)
-    base_manifest = workspace_manifest(project_file)
+    script = basename(project_file) ∉ project_names && is_script_env(project_file)
+    # Scripts do not belong to workspaces.
+    base_manifest = script ? nothing : workspace_manifest(project_file)
     if base_manifest !== nothing
         return base_manifest
     end
@@ -1022,7 +1248,12 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
             manifest_path = manifest_file
         end
     end
-    if manifest_path === nothing
+    if manifest_path === nothing && script
+        # Use the inline manifest; do not search for neighboring manifest files.
+        if explicit_manifest === nothing && read_script_metadata(project_file).manifest !== nothing
+            manifest_path = project_file
+        end
+    elseif manifest_path === nothing
         for mfst in manifest_names
             manifest_file = joinpath(dir, mfst)
             if isfile_casesensitive(manifest_file)
@@ -1149,7 +1380,7 @@ dep_stanza_get(stanza::Nothing, name::String) = nothing
 function explicit_manifest_deps_get(project_file::String, where::PkgId, name::String)::Union{Nothing,PkgId}
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # manifest not found--keep searching LOAD_PATH
-    d = get_deps(parsed_toml(manifest_file))
+    d = get_deps(parsed_toml(manifest_file; manifest=true))
     for (dep_name, entries) in d
         entries = entries::Vector{Any}
         for entry in entries
@@ -1223,7 +1454,7 @@ function explicit_manifest_uuid_load_spec(project_file::String, pkg::PkgId)::Uni
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # no manifest, skip env
 
-    d = get_deps(parsed_toml(manifest_file))
+    d = get_deps(parsed_toml(manifest_file; manifest=true))
     entries = get(d, pkg.name, nothing)::Union{Nothing, Vector{Any}}
     if entries !== nothing
         for entry in entries
@@ -1741,7 +1972,7 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
         project_file isa String || return nothing
         manifest_file = project_file_manifest_path(project_file)
         manifest_file === nothing && return
-        d = get_deps(parsed_toml(manifest_file))
+        d = get_deps(parsed_toml(manifest_file; manifest=true))
         for (dep_name, entries) in d
             entries = entries::Vector{Any}
             for entry in entries
@@ -2745,6 +2976,7 @@ function __require(into::Module, mod::Symbol)
     if nameof(topmod) === mod
         return topmod
     end
+    script_env_ensure_instantiated(topmod)
     @lock require_lock begin
     LOADING_CACHE[] = LoadingCache()
     try
@@ -2796,7 +3028,7 @@ function find_unsuitable_manifests_versions()
         project_file isa String || continue # no project file
         manifest_file = project_file_manifest_path(project_file)
         manifest_file isa String || continue # no manifest file
-        m = parsed_toml(manifest_file)
+        m = parsed_toml(manifest_file; manifest=true)
         man_julia_version = get(m, "julia_version", nothing)
         @label check begin
             man_julia_version isa String || break check
@@ -3645,7 +3877,7 @@ function project_environment_id(project_file::String)::String
     isempty(project_file) && return ""
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return ""
-    id = get(parsed_toml(manifest_file), "environment_id", nothing)
+    id = get(parsed_toml(manifest_file; manifest=true), "environment_id", nothing)
     return id isa String ? id : ""
 end
 
@@ -4637,7 +4869,7 @@ function pkg_log_name(pkg::PkgId)
             project_file isa String || continue
             manifest_file = project_file_manifest_path(project_file)
             manifest_file === nothing && continue
-            for entry in get(Vector{Any}, get_deps(parsed_toml(manifest_file)), pkg.name)
+            for entry in get(Vector{Any}, get_deps(parsed_toml(manifest_file; manifest=true)), pkg.name)
                 entry_uuid = get(entry::Dict{String, Any}, "uuid", nothing)::Union{String, Nothing}
                 entry_uuid === nothing || UUID(entry_uuid) == uuid || return repr("text/plain", pkg)
             end
