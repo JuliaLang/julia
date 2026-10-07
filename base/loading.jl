@@ -618,7 +618,6 @@ function pkgdir(m::Module, paths::String...)
     rootmodule = moduleroot(m)
     path = pathof(rootmodule)
     path === nothing && return nothing
-    original = path
     path, base = splitdir(dirname(path))
     if base == "src"
         # package source in `../src/Foo.jl`
@@ -628,7 +627,8 @@ function pkgdir(m::Module, paths::String...)
         # extension source in `../ext/FooExt/FooExt.jl`
         path = dirname(path)
     else
-        error("Unexpected path structure for module source: $original")
+        # not a recognized package layout, e.g. a bare `Foo.jl` in a load path entry
+        return nothing
     end
     return joinpath(path, paths...)
 end
