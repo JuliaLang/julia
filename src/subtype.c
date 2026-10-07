@@ -7114,15 +7114,18 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
         // operand (binding its typevars), else `Bottom`
         int8_t R = 0;
         if (!jl_is_typeegal(x)) { jl_value_t *t = x; x = y; y = t; R = 1; }
-        // these leaves are small: re-express them in variable form up front so
-        // the payload comparisons below and the returned `x` are frame-free
+        // `x` is small and may be the result: re-express it in variable form
+        // up front. `y` is re-expressed only for the payload comparison by
+        // egality; `intersect_invariant` walks a raw payload in place (it is
+        // passed on its own side, which `R` tracks)
         if (jl_has_dangling_tvarrefs(x))
             x = frame_substitute(x, R ? e->Rframe : e->Lframe, e);
-        if (jl_has_dangling_tvarrefs(y))
-            y = frame_substitute(y, R ? e->Lframe : e->Rframe, e);
         jl_value_t *A = jl_typeegal_T(x);
-        if (jl_is_typeegal(y))
+        if (jl_is_typeegal(y)) {
+            if (jl_has_dangling_tvarrefs(y))
+                y = frame_substitute(y, R ? e->Lframe : e->Rframe, e);
             return jl_egal(A, jl_typeegal_T(y)) ? x : jl_bottom_type; // intersection is nonempty iff `A === B`
+        }
         if (jl_is_typeeq(y)) {
             jl_value_t *yp = jl_typeeq_T(y);
             // as in the subtype rule: `A` is egal-known, but `Type{B}` pins `B`
@@ -7137,7 +7140,7 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
         // `A` lies in `y` iff the singleton `typeof(A)` does; `jl_subtype` also
         // covers abstract supertypes (e.g. `AnyType`) when the closed-types
         // fast path above was skipped
-        if (param != PARAM_INVARIANT && !jl_has_free_typevars(y) &&
+        if (param != PARAM_INVARIANT && !jl_has_free_or_dangling_typevars(y) &&
             jl_subtype(jl_typeof(A), y))
             return x;
         return jl_bottom_type;
