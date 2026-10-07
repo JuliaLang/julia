@@ -585,8 +585,8 @@ DEBUGFLAGS_CLANG   = $(DEBUGFLAGS_COMMON) -g
 DEBUGFLAGS_GCC     = $(DEBUGFLAGS_COMMON) -ggdb2
 
 SHIPFLAGS_COMMON   = -O3
-SHIPFLAGS_CLANG    = $(SHIPFLAGS_COMMON) -g
-SHIPFLAGS_GCC      = $(SHIPFLAGS_COMMON) -ggdb2 -falign-functions
+SHIPFLAGS_CLANG    = $(SHIPFLAGS_COMMON) -gline-tables-only
+SHIPFLAGS_GCC      = $(SHIPFLAGS_COMMON) -g1 -falign-functions
 
 
 BOLT_LDFLAGS :=
@@ -959,6 +959,16 @@ else
   JCFLAGS += -ffunction-sections -fdata-sections
   JCXXFLAGS += -ffunction-sections -fdata-sections
 endif
+endif
+
+ifneq ($(findstring $(OS),Linux FreeBSD),)
+COMPRESS_DEBUG_SECTIONS ?= zlib
+ifeq ($(USE_SYSTEM_LLVM)$(USE_SYSTEM_LLD),00)
+COMPRESS_IMAGE_DEBUG_SECTIONS ?= zstd
+endif
+endif
+ifneq ($(COMPRESS_DEBUG_SECTIONS),)
+JLDFLAGS += -Wl,--compress-debug-sections=$(COMPRESS_DEBUG_SECTIONS)
 endif
 
 # ===========================================================================

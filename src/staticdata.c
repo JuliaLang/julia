@@ -852,6 +852,19 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 }
             }
         }
+        if (jl_nulldebuginfo && jl_is_method(mi->def.method)) {
+            // debuginfo is only used together with the inferred IR or the native code,
+            // so there is no need to keep it if the image contains neither
+            jl_value_t *src = get_replaceable_field((jl_value_t**)&ci->inferred, 1);
+            if (!(src && (jl_is_string(src) || jl_is_code_info(src)))) {
+                int32_t invokeptr_id = 0;
+                int32_t specfptr_id = 0;
+                if (native_functions)
+                    jl_get_function_id(native_functions, ci, &invokeptr_id, &specfptr_id);
+                if (invokeptr_id <= 0 && specfptr_id == 0)
+                    record_field_change((jl_value_t**)&ci->debuginfo, (jl_value_t*)jl_nulldebuginfo);
+            }
+        }
     }
 
     if (immediate) // must be things that can be recursively handled, and valid as type parameters
@@ -2902,13 +2915,11 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     htable_new(&bits_replace, 0);
     if (worklist)
         jl_foreach_reachable_mtable(jl_prune_internal_mtable, mod_array, NULL);
+    jl_nulldebuginfo = (jl_debuginfo_t*)jl_get_global(jl_core_module, jl_symbol("NullDebugInfo"));
     // strip metadata and IR when requested
     if (jl_options.strip_metadata || jl_options.strip_ir) {
-        if (jl_options.strip_metadata) {
-            jl_nulldebuginfo = (jl_debuginfo_t*)jl_get_global(jl_core_module, jl_symbol("NullDebugInfo"));
-            if (jl_nulldebuginfo == NULL)
-                jl_errorf("Core.NullDebugInfo required for --strip-metadata option");
-        }
+        if (jl_options.strip_metadata && jl_nulldebuginfo == NULL)
+            jl_errorf("Core.NullDebugInfo required for --strip-metadata option");
         jl_strip_all_codeinfos(mod_array);
         jl_strip_all_docmeta(mod_array);
     }
