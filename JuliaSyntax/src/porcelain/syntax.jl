@@ -612,7 +612,7 @@ end
 #-------------------------------------------------------------------------------
 # AST destructuring utilities
 
-raw"""
+@doc raw"""
 Simple `SyntaxTree` pattern matching
 
 Returns the first result where its corresponding pattern matches `syntax_tree`
