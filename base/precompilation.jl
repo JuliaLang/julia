@@ -1181,6 +1181,20 @@ function filter_dep_graph!(direct_deps, pkg_names, ext_to_parent, requested_pkgi
     return isempty(direct_deps)
 end
 
+# Include only cache files that are ready for workers.
+function preresolved_snapshot(s::PrecompileSession)
+    paths = @lock s.cache_lock Pair{Base.PkgId,String}[k => first(v) for (k, v) in s.cachepath_cache if !isempty(v)]
+    return filter!(kv -> checked_now!(s, kv.second), paths)
+end
+
+# Workers and loading trust these paths without checks, so check a file the scan did not read.
+function checked_now!(s::PrecompileSession, path::String)
+    (@lock s.cache_lock path in s.unverified) || return true
+    Base.checksums_valid_now(path) || return false
+    @lock s.cache_lock delete!(s.unverified, path)
+    return true
+end
+
 ## Public API
 
 """
@@ -1308,20 +1322,6 @@ precompilation:
   is controlled by `JULIA_PRECOMPILE_THREADS` (defaults to CPU_THREADS + 1).
 - Extensions are precompiled when all their triggers are available in the environment.
 """
-# Include only cache files that are ready for workers.
-function preresolved_snapshot(s::PrecompileSession)
-    paths = @lock s.cache_lock Pair{Base.PkgId,String}[k => first(v) for (k, v) in s.cachepath_cache if !isempty(v)]
-    return filter!(kv -> checked_now!(s, kv.second), paths)
-end
-
-# Workers and loading trust these paths without checks, so check a file the scan did not read.
-function checked_now!(s::PrecompileSession, path::String)
-    (@lock s.cache_lock path in s.unverified) || return true
-    Base.checksums_valid_now(path) || return false
-    @lock s.cache_lock delete!(s.unverified, path)
-    return true
-end
-
 function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
                         internal_call::Bool=false,
                         strict::Bool = false,

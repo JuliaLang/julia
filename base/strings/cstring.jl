@@ -106,7 +106,7 @@ cconvert(::Type{Cstring}, s::Symbol) = s
 unsafe_convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
 
 if ccall(:jl_get_UNAME, Any, ()) === :NT
-"""
+@doc """
     Base.cwstring(s)
 
 Convert a string `s` to a NUL-terminated `Vector{Cwchar_t}`, suitable for passing to C
