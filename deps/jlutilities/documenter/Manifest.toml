@@ -2,7 +2,7 @@
 
 julia_version = "1.14.0-DEV"
 manifest_format = "2.1"
-project_hash = "1e9ffa7d4739f7d125a5e2c66af8747a8effd889"
+project_hash = "934c8bd4e617098c83011f8a4c82ae3cfe4d4832"
 
 [[deps.ANSIColoredPrinters]]
 git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
@@ -80,8 +80,9 @@ version = "0.9.5"
 
 [[deps.Documenter]]
 deps = ["ANSIColoredPrinters", "AbstractTrees", "Base64", "CodecZlib", "Dates", "DocStringExtensions", "Downloads", "Git", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "MarkdownAST", "Pkg", "PrecompileTools", "REPL", "RegistryInstances", "SHA", "TOML", "Test", "Unicode"]
-git-tree-sha1 = "191e6bef0cf32cac3a3913cd4787d851715254c2"
-registries = "General"
+git-tree-sha1 = "56cf716933cdc3d079c297c064b1ec1c63435374"
+repo-rev = "ib/stability_fix"
+repo-url = "https://github.com/IanButterworth/Documenter.jl"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 version = "1.19.0"
 
