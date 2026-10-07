@@ -1006,6 +1006,13 @@ JCXXFLAGS += $(LINKER_GC_CXXFLAGS)
 
 endif
 
+ifneq ($(findstring $(OS),Linux FreeBSD),)
+COMPRESS_DEBUG_SECTIONS ?= zlib
+endif
+ifneq ($(COMPRESS_DEBUG_SECTIONS),)
+JLDFLAGS += -Wl,--compress-debug-sections=$(COMPRESS_DEBUG_SECTIONS)
+endif
+
 # ===========================================================================
 
 # Select the cpu architecture to target, or automatically detects the user's compiler
