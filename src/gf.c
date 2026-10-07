@@ -910,7 +910,15 @@ static void foreach_top_nth_typename(void (*f)(jl_typename_t*, int, void*) JL_CA
                 }
             }
             else if (jl_is_tuple_type(current_a)) {
-                if (jl_nparams(current_a) >= current_n) {
+                size_t np = jl_nparams(current_a);
+                jl_value_t *last = np > 0 ? jl_tparam(current_a, np - 1) : NULL;
+                if (last != NULL && jl_is_vararg(last) && np <= (size_t)current_n) {
+                    // The nth argument, if there is one, comes from the trailing Vararg
+                    arraylist_push(&workqueue, jl_unwrap_vararg(last));
+                    arraylist_push(&workqueue, (void*)(uintptr_t)0);
+                    *facts |= SHORT_TUPLE;
+                }
+                else if (np >= (size_t)current_n) {
                     arraylist_push(&workqueue, jl_tparam(current_a, current_n - 1));
                     arraylist_push(&workqueue, (void*)(uintptr_t)0);
                 }
