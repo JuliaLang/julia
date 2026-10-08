@@ -24,7 +24,7 @@ const _lowering_world = Ref{UInt}(0)
     @static if VERSION >= v"1.14.0-DEV.2635"
         w == 0 || return _invoke_in_world(w, f, args...)
     end
-    return f(args...)
+    return invokelatest(f, args...)
 end
 
 # Return the current exception. In JuliaLowering we use this rather than the
