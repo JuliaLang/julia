@@ -8,16 +8,17 @@ include $(JULIAHOME)/deps/llvm-ver.make
 
 TAGGED_RELEASE_BANNER := ""
 
-# Record which sanitizer (if any) this build uses, so that `HostPlatform()` selects
-# matching sanitized artifacts
-BUILD_TRIPLET_SANITIZE :=
+# Extended platform tags (`-key+value`) describing this build, appended to the host
+# triplet after the detected compiler ABI tags.  Currently records which sanitizer
+# (if any) this build uses, so that `HostPlatform()` selects matching sanitized artifacts
+BUILD_EXT_TAGS :=
 ifeq ($(SANITIZE),1)
 ifeq ($(SANITIZE_MEMORY),1)
-BUILD_TRIPLET_SANITIZE := -sanitize+memory
+BUILD_EXT_TAGS := -sanitize+memory
 else ifeq ($(SANITIZE_ADDRESS),1)
-BUILD_TRIPLET_SANITIZE := -sanitize+address
+BUILD_EXT_TAGS := -sanitize+address
 else ifeq ($(SANITIZE_THREAD),1)
-BUILD_TRIPLET_SANITIZE := -sanitize+thread
+BUILD_EXT_TAGS := -sanitize+thread
 endif
 endif
 
@@ -100,7 +101,8 @@ ifeq ($(OS), Darwin)
 	@printf "%s\n" "const MACOS_PRODUCT_VERSION = \"$(shell sw_vers -productVersion)\"" >> $@
 	@printf "%s\n" "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --sdk macosx --show-sdk-version)\"" >> $@
 endif
-	@printf "%s\n" "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)$(BUILD_TRIPLET_SANITIZE)\"" >> $@
+	@printf "%s\n" "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
+	@printf "%s\n" "const BUILD_EXT_TAGS = \"$(BUILD_EXT_TAGS)\"" >> $@
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
 	@# ensuring we rebuild the system image as infrequently as possible

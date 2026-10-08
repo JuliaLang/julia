@@ -1055,15 +1055,16 @@ function detect_cxxstring_abi()
 end
 
 """
-    host_triplet()
+    host_triplet(build_triplet::String = Base.BUILD_TRIPLET, ext_tags::String = Base.BUILD_EXT_TAGS)
 
 Build host triplet out of `Sys.MACHINE` and various introspective utilities that
 detect compiler ABI values such as `libgfortran_version`, `libstdcxx_version` and
 `cxxstring_abi`.  We do this without using any `Platform` tech as it must run before
-we have much of that built.
+we have much of that built.  Extended tags recorded by the build (e.g. `-sanitize+address`)
+are appended after the compiler ABI tags, as the triplet grammar requires.
 """
-function host_triplet()
-    str = Base.BUILD_TRIPLET
+function host_triplet(build_triplet::String = Base.BUILD_TRIPLET, ext_tags::String = Base.BUILD_EXT_TAGS)
+    str = build_triplet
 
     if !occursin("-libgfortran", str)
         libgfortran_version = detect_libgfortran_version()
@@ -1085,6 +1086,9 @@ function host_triplet()
             str = string(str, "-libstdcxx", libstdcxx_version.patch)
         end
     end
+
+    # Add on any extended tags recorded by the build
+    str = string(str, ext_tags)
 
     # Add on julia_version extended tag
     if !occursin("-julia_version+", str)

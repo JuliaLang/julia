@@ -217,6 +217,14 @@ end
     @test haskey(tags(P("x86_64", "linux"; customtag="foo")), "customtag")
     @test tags(HostPlatform())["julia_version"] == string(VERSION.major, ".", VERSION.minor, ".", VERSION.patch)
 
+    # Extended tags recorded by the build (e.g. for sanitizer builds) are appended after
+    # any compiler ABI tags detected at runtime, so that the host triplet still parses
+    sanitized_host = parse(Platform, BinaryPlatforms.host_triplet("x86_64-linux-gnu-libgfortran5-cxx11", "-sanitize+address"))
+    @test tags(sanitized_host)["sanitize"] == "address"
+    @test tags(sanitized_host)["julia_version"] == string(VERSION.major, ".", VERSION.minor, ".", VERSION.patch)
+    @test platforms_match(HostPlatform(sanitized_host), P("x86_64", "linux"; sanitize="address"))
+    @test !platforms_match(HostPlatform(sanitized_host), P("x86_64", "linux"))
+
     # Test that we can modify tags at will using the dict-like interface:
     p = P("x86_64", "linux")
     p["foo"] = "bar"
