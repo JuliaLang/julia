@@ -1968,10 +1968,10 @@ JuliaOJIT::JuliaOJIT()
     libhandles.insert(jl_exe_handle);
 #ifdef _OS_WINDOWS_
     // Find where compiler symbols (assumed by LLVM) are linked from
-    // by looking for an exported data symbol, or by typical name.
-    // libgcc_s_seh-1 doesn't export any data, so we have to hard-code a name.
+    // by looking for an exported data symbol, or by name.
+    // libgcc_s doesn't export any data, so we use its name from Make.inc.
     // libwinpthreads-1 exports a single symbol: the pthread_key_dest table.
-    libhandles.insert(jl_dlopen("libgcc_s_seh-1.dll", JL_RTLD_NOLOAD));
+    libhandles.insert(jl_dlopen(JL_LIBGCC_NAME, JL_RTLD_NOLOAD));
     libhandles.insert(jl_find_dynamic_library_by_addr((void*)&_pthread_key_dest, /* throw_err */ 1, 0));
     // Add system C libraries explicitly too.
     // Unlike posix, these aren't automatically handled by recursive search from libjulia-internal.
