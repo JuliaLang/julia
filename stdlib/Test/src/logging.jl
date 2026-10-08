@@ -342,6 +342,7 @@ end
     @test_deprecated [pattern] expression
     @test_deprecated [pattern] expression broken=cond
     @test_deprecated [pattern] expression skip=cond
+    @test_deprecated [pattern] expression from_c=cond
 
 When `--depwarn=yes`, test that `expression` emits a deprecation warning and
 return the value of `expression`.  The log message string will be matched
@@ -356,6 +357,8 @@ When `--depwarn=no`, simply return the result of executing `expression`.  When
   consistently fails.
 * `skip=cond`: if `cond==true`, marks a test that should not be executed but should
   be included in test summary reporting as `Broken`.
+* `from_c=cond`: if `cond==true`, marks a test that emits a deprecation warning from C code,
+  which does not use the `depwarn` path, and is locked to the original `depwarn` option.
 
 !!! compat "Julia 1.14"
     The `broken` and `skip` keyword arguments require at least Julia 1.14.
@@ -371,9 +374,9 @@ When `--depwarn=no`, simply return the result of executing `expression`.  When
 ```
 """
 macro test_deprecated(exs...)
-    # Parse arguments: [pattern] expression [broken=...] [skip=...]
+    # Parse arguments: [pattern] expression [broken=...] [skip=...] [from_c=true/false]
     length(exs) >= 1 || throw(ArgumentError("""`@test_deprecated` expects at least one argument.
-                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond] [from_c=cond]`"""))
     pattern = r"deprecated"i
     expression = nothing
     kws = Any[]
@@ -385,23 +388,23 @@ macro test_deprecated(exs...)
 
     for (i, e) in enumerate(exs)
         if e isa Expr && e.head === :(=)
-            if e.args[1] in (:broken, :skip)
+            if e.args[1] in (:broken, :skip, :from_c)
                 push!(kws, e)
             else
                 # This is the expression (like `f(x=1)`)
                 expression !== nothing && throw(ArgumentError("""`@test_deprecated` expects at most one expression.
-                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond] [from_c=cond]`"""))
                 expression = e
             end
         elseif e isa Expr && e.head === :call
             # This is the expression (function call)
             expression !== nothing && throw(ArgumentError("""`@test_deprecated` expects at most one expression.
-                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond] [from_c=cond]`"""))
             expression = e
         elseif e isa Expr && e.head === :macrocall && !is_string_macro(e)
             # This is the expression (macro call, but not a string macro like r"...")
             expression !== nothing && throw(ArgumentError("""`@test_deprecated` expects at most one expression.
-                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond] [from_c=cond]`"""))
             expression = e
         elseif i == 1 && (e isa Union{Regex, String, Symbol} || is_string_macro(e) ||
                          (e isa Expr && e.head ∉ (:call, :macrocall)))
@@ -411,43 +414,82 @@ macro test_deprecated(exs...)
         else
             # Assume it's the expression
             expression !== nothing && throw(ArgumentError("""`@test_deprecated` expects at most one expression.
-                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond] [from_c=cond]`"""))
             expression = e
         end
     end
 
     expression === nothing && throw(ArgumentError("""`@test_deprecated` needs an expression to run.
-                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond] [from_c=cond]`"""))
 
-    broken, skip, _ = extract_broken_skip_kws(kws, "@test_deprecated")
+    broken, skip, otherdict = extract_broken_skip_kws(kws, "@test_deprecated"; other_valid = (:from_c,))
+    from_c = get(otherdict, :from_c, false)
 
     pattern_esc = esc(pattern)
     expression_esc = esc(expression)
     broken_esc = broken !== nothing ? esc(broken) : false
     skip_esc = skip !== nothing ? esc(skip) : false
+    orig_expr = QuoteNode(expression)
+    sourceloc = QuoteNode(__source__)
+
+    # Capture at macro-expansion time to avoid hygiene issues: both symbols live
+    # in Base, not in Test, so bare references inside the quote would resolve wrong.
+    _jlopt  = Base.jloptions_scoped
+    _sv_with = Base.ScopedValues.with
+    opts_orig = Base.JLOptions()
 
     res = quote
         if $skip_esc
-            Test.record(Test.get_testset(), Broken(:skipped, $(QuoteNode(expression))))
-            nothing
+            Test.record(Test.get_testset(), Broken(:skipped, $(QuoteNode(expression)))); nothing
         else
-            dw = Base.JLOptions().depwarn
-            if dw == 2
-                # TODO: Remove --depwarn=error if possible and replace with a more
-                # flexible mechanism so we don't have to do this.
-                @test_throws ErrorException $expression_esc broken=$broken_esc
-            elseif dw == 1
-                @test_logs (:warn, $pattern_esc, Ignored(), :depwarn) match_mode=:any broken=$broken_esc $expression_esc
-            else
-                $expression_esc
+            let testres=nothing, value=nothing, _broken=$broken_esc
+                try
+                    throws_ok = $_sv_with($_jlopt => (; $_jlopt[]..., depwarn = 2)) do
+                        try
+                            $expression_esc
+                            false
+                        catch _e
+                            _e isa InterruptException && rethrow()
+                            _e isa ErrorException
+                        end
+                    end
+                    logs_ok, _logs, value = $_sv_with($_jlopt => (; $_jlopt[]..., depwarn = 1)) do
+                        if !($from_c) || $opts_orig.depwarn != 2
+                            # If from C and depwarn=error, this will fail, so don't bother
+                            match_logs((:warn, $pattern_esc, Ignored(), :depwarn); match_mode=:any) do
+                                $expression_esc
+                            end
+                        else
+                            true, nothing, nothing
+                        end
+                    end
+                    if $from_c
+                        # C code doesn't use the depwarn path, so only fail if error detected when `depwarn=error``,
+                        # and ignore warning, which is printed directly rather than logged.
+                        throws_ok |= $opts_orig.depwarn != 2
+                        logs_ok = true
+                    end
+                    context = !throws_ok ? "did not error with `depwarn=error`" : ""
+                    context *= !throws_ok && !logs_ok ? ", and " : ""
+                    context *= !logs_ok ? "did not log a warning including the pattern $($pattern_esc) with `depwarn=yes`" : ""
+                    ok = throws_ok && logs_ok
+                    testres = _broken ?
+                        (ok ?
+                            Error(:test_unbroken, $orig_expr, true, nothing, $sourceloc) :
+                            Broken(:test, $orig_expr)) :
+                        ok ?
+                            Pass(:test, $orig_expr, nothing, value, $sourceloc) :
+                            Fail(:test, $orig_expr, nothing, nothing, context, $sourceloc, false)
+                catch _e
+                    _e isa InterruptException && rethrow()
+                    testres = _broken ?
+                        Broken(:test, $orig_expr) :
+                        Error(:test_error, $orig_expr, _e, Base.current_exceptions(), $sourceloc)
+                end
+                Test.record(Test.get_testset(), testres)
+                value
             end
         end
     end
-    # Propagate source code location of @test_logs to @test macro
-    # FIXME: Use rewrite_sourceloc!() for this - see #22623
-    # Structure: res.args[2] = outer if, .args[3] = else block, .args[4] = inner if
-    # Inner if: .args[2] = @test_throws block, .args[3] = elseif with @test_logs
-    res.args[2].args[3].args[4].args[2].args[2].args[2] = __source__
-    res.args[2].args[3].args[4].args[3].args[2].args[2].args[2] = __source__
-    res
+    Base.Meta.replace_sourceloc!(__source__, res)
 end
