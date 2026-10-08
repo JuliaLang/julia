@@ -1689,6 +1689,56 @@ let errs = IOBuffer()
     @test occursin("disable_new_worlds", String(take!(errs)))
 end
 
+# every library the runtime loads from this installation must be declared
+@testset "Base.Linking.runtime_libraries" begin
+    libs = Base.Linking.runtime_libraries()
+    @test !isempty(libs)
+    @test allunique(libs)
+    @test all(isabspath, libs)
+    @test all(isfile, libs)
+    root = normpath(Sys.BINDIR, "..")
+    @test all(p -> startswith(p, root), libs)
+    for name in ("libjulia", "libjulia-internal")
+        name = Base.isdebugbuild() ? name * "-debug" : name
+        @test any(p -> first(Base.BinaryPlatforms.parse_dl_name_version(basename(p))) == name, libs)
+    end
+    nocodegen = Base.Linking.runtime_libraries(; optional_components=())
+    @test issubset(nocodegen, libs)
+    @test !any(p -> startswith(basename(p), "libLLVM") || startswith(basename(p), "libjulia-codegen"), nocodegen)
+    # unknown components are rejected
+    @test_throws ArgumentError Base.Linking.runtime_libraries(; optional_components=(:codgen,))
+
+    # `library_files` matches whole names, not prefixes
+    internal = "libjulia-internal" * (Base.isdebugbuild() ? "-debug" : "")
+    @test !isempty(Base.Linking.library_files(internal))
+    @test issubset(Base.Linking.library_files(internal), libs)
+    @test Base.Linking.library_files("libthis-is-not-shipped-anywhere") == String[]
+    @test allunique(Base.Linking.library_files(["libjulia", "libjulia"]))
+    for name in ("libz", "libgmp", "libjulia")
+        files = basename.(Base.Linking.library_files(name))
+        @test all(f -> Base.BinaryPlatforms.parse_dl_name_version(f)[1] == name, files)
+    end
+
+    # a missing required library is an error
+    listings = Base.Linking.library_listings()
+    @test_throws "installation is incomplete" Base.Linking.resolve_libraries(["libnope"], String[], listings)
+
+    # a fresh process, so libraries other tests loaded (e.g. `libccalltest`) don't count
+    script = """
+        declared = Set(basename.(Base.Linking.runtime_libraries()))
+        root = normpath(Sys.BINDIR, "..")
+        image = normpath(Base.unsafe_string(Base.JLOptions().image_file))
+        for lib in Base.Libc.Libdl.dllist()
+            occursin(string('.', Base.Libc.Libdl.dlext), basename(lib)) || continue
+            path = normpath(lib)
+            startswith(path, root) || continue # provided by the system, not ours to ship
+            path == image && continue # the system image is not a runtime library
+            basename(path) in declared || println(path)
+        end
+    """
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no -e $script`) == ""
+end
+
 @testset "`@constprop`, `@assume_effects` handling of an unknown setting" begin
     for x ∈ ("constprop", "assume_effects")
         try

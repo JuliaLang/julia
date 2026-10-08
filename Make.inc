@@ -2103,6 +2103,55 @@ LOADER_DEBUG_INSTALL_DEP_LIBS = $(call build_deplibs, \
     @$(LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB) \
 )
 
+# Shared libraries, besides Julia's own, that the runtime needs. The top level Makefile
+# installs them and `base/Makefile` writes them into `Base.RUNTIME_LIBRARY_NAMES`.
+# The `-0`/`-1` suffix is the `USE_SYSTEM_*` value. Only `+=` is used, so that
+# `$(LLVM_SHARED_LIB_NAME)` is expanded later, where `deps/llvm-ver.make` defines it.
+JL_RUNTIME_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
+JL_RUNTIME_LIBS-$(USE_SYSTEM_DSFMT) += libdSFMT
+JL_RUNTIME_LIBS-$(USE_SYSTEM_GMP) += libgmp
+JL_RUNTIME_LIBS-$(USE_SYSTEM_MPFR) += libmpfr
+JL_RUNTIME_LIBS-$(USE_SYSTEM_LIBUV) += libuv
+JL_RUNTIME_LIBS-$(USE_SYSTEM_ZLIB) += libz
+JL_RUNTIME_LIBS-$(USE_SYSTEM_ZSTD) += libzstd
+JL_RUNTIME_LIBS-$(USE_SYSTEM_LIBUNWIND) += libunwind
+ifeq ($(USE_SYSTEM_LIBM),0)
+JL_RUNTIME_LIBS-$(USE_SYSTEM_OPENLIBM) += libopenlibm
+endif
+# compiler support libraries
+JL_RUNTIME_LIBS-$(USE_SYSTEM_CSL) += libgfortran libquadmath libstdc++ libgomp libssp libatomic
+ifeq ($(OS),WINNT)
+# Windows names `libgcc_s` by architecture, like `LIBGCC_NAME`
+ifeq ($(BINARY),32)
+JL_RUNTIME_LIBS-$(USE_SYSTEM_CSL) += libgcc_s_sjlj
+else
+JL_RUNTIME_LIBS-$(USE_SYSTEM_CSL) += libgcc_s_seh
+endif
+JL_RUNTIME_LIBS-$(USE_SYSTEM_CSL) += libwinpthread
+else
+JL_RUNTIME_LIBS-$(USE_SYSTEM_CSL) += libgcc_s
+endif
+ifeq ($(SANITIZE),1)
+ifeq ($(USECLANG),1)
+JL_RUNTIME_LIBS-0 += libclang_rt.asan-*
+else
+JL_RUNTIME_LIBS-0 += libasan
+endif
+endif
+ifeq ($(WITH_TRACY),1)
+JL_RUNTIME_LIBS-0 += libTracyClient
+endif
+ifeq (${USE_THIRD_PARTY_GC},mmtk)
+JL_RUNTIME_LIBS-0 += libmmtk_julia
+endif
+JL_RUNTIME_LIBS = $(JL_RUNTIME_LIBS-0) $(JL_RUNTIME_LIBS-1)
+
+# Libraries needed only to generate code at run time
+ifeq ($(USE_LLVM_SHLIB),1)
+JL_RUNTIME_CODEGEN_LIBS-$(USE_SYSTEM_LLVM) += libLLVM $(LLVM_SHARED_LIB_NAME)
+endif
+JL_RUNTIME_CODEGEN_LIBS = $(JL_RUNTIME_CODEGEN_LIBS-0) $(JL_RUNTIME_CODEGEN_LIBS-1)
+
 # Colors for make
 ifndef VERBOSE
 VERBOSE := 0
