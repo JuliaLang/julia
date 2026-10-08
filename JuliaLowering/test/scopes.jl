@@ -162,6 +162,11 @@ end
 # Switch to Core.eval for sanity-checking
 expr_eval(mod, ex) = JuliaLowering.eval(mod, ex)
 
+# TODO: JuliaLowering doesn't do the same amount of "ambiguous local" logging,
+# so eat flisp logging to avoid CI spam
+@test_broken false
+without_logging(f) = Base.CoreLogging.with_logger(f, Base.CoreLogging.NullLogger())
+
 enable_softscope(e...) = Expr(:block, Expr(:softscope, true), e...)
 wrap_none(e...) = Expr(:block, e...)
 wrap_neutral(e...) = Expr(:try, # use try so that a value is returned
@@ -227,13 +232,13 @@ distraction_scope_end === "resolve me!"
         elseif lhs in (:spname, :argname) && decls_s != decls_func
             continue
         else
-            reference_ok = fl_eval(fl_mod, ex) === "resolve me!"
+            reference_ok = without_logging(() -> fl_eval(fl_mod, ex)) === "resolve me!"
             !reference_ok &&
                 @error("shadow test failed: flisp produced unexpected result; fix that or JL scope tests:\n", ex)
             @test reference_ok
         end
 
-        ok = expr_eval(jl_mod, ex) === "resolve me!"
+        ok = without_logging(() -> expr_eval(jl_mod, ex)) === "resolve me!"
         !ok && @error("shadow test failed:\n", ex)
         @test ok
     end
@@ -346,11 +351,11 @@ f_g_shadow_sp_bound(1)
         else
             @assert !isdefined(jl_mod, lhs) && !isdefined(fl_mod, lhs)
             expected = results[lhs_i]
-            reference_ok = fl_eval(fl_mod, ex) === expected
+            reference_ok = without_logging(() -> fl_eval(fl_mod, ex)) === expected
             !reference_ok && @error("flisp produced unexpected result; fix that or JL scope tests:\n",
                                    "expected $(expected_s(expected)), got $(expected_s(!expected))\n", ex)
             @test reference_ok
-            ok = expr_eval(jl_mod, ex) === expected
+            ok = without_logging(() -> expr_eval(jl_mod, ex)) === expected
             !ok && @error("expected $(expected_s(expected)), got $(expected_s(!expected))\n", ex)
             @test ok
         end
