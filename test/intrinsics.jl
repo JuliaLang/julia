@@ -164,7 +164,7 @@ end
 @test compiled_uitofp(Core.BFloat16, UInt64(2)^60 + UInt64(2)^52 + 1) === reinterpret(Core.BFloat16, 0x5d81)
 let vals = Any[Int8(-128), Int16(-32768), typemin(Int32), typemax(Int32), typemin(Int64), typemax(Int64),
                typemax(UInt32), typemax(UInt64), 0, -1, 1]
-    for T in (Int16, Int32, Int64, UInt16, UInt32, UInt64), _ in 1:200
+    for T in (Int16, Int32, Int64, Int128, UInt16, UInt32, UInt64, UInt128), _ in 1:200
         # BFloat16 halfway points (9 significant bits, the last one set), and their neighbors
         h = T(rand(0x0101:0x0002:0x01ff)) << rand(0:8sizeof(T) - 9 - (T <: Signed))
         push!(vals, h, h - one(T), h + one(T))
