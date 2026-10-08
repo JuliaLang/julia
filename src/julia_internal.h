@@ -1921,7 +1921,7 @@ jl_value_t *jl_memoryrefmodify(jl_genericmemoryref_t m, jl_value_t *op, jl_value
 jl_value_t *jl_memoryrefreplace(jl_genericmemoryref_t m, jl_value_t *expected, jl_value_t *v, int isatomic) JL_CANSAFEPOINT;
 jl_value_t *jl_memoryrefsetonce(jl_genericmemoryref_t m, jl_value_t *v, int isatomic) JL_CANSAFEPOINT;
 
-JL_DLLEXPORT uintptr_t jl_object_id_(uintptr_t tv, jl_value_t *v) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uintptr_t jl_object_id_(uintptr_t tv, jl_value_t *v, htable_t *object_table) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT uint16_t julia_double_to_half(double param) JL_NOTSAFEPOINT;
