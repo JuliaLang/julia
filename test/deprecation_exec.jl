@@ -349,6 +349,32 @@ module DeprecatedReexportTest
     @test !Base.isdeprecated(Consumer, :DepC)
 end
 
+# Deprecating a binding that an importer reaches through more than one `using` (directly and
+# through a reexport) re-resolves the importer once per path in the same invalidation (#63493).
+module DeprecatedMultiPathTest
+    using Test
+    module Leaf; export w; global w = 2; end
+    module Mid; using ..Leaf; export w; end
+    module User; using ..Leaf, ..Mid; readw() = w; end
+    @test (@test_nowarn User.readw()) === 2
+    Base.deprecate(Leaf, :w)
+    @test Base.isdeprecated(User, :w)
+    @test (@test_warn "w is deprecated" Base.invokelatest(User.readw)) === 2
+    Base.deprecate(Leaf, :w, 0)
+    @test !Base.isdeprecated(User, :w)
+    @test (@test_nowarn Base.invokelatest(User.readw)) === 2
+
+    # Same, with the importer's `using` of the leaf preceding the reexporter's.
+    module Leaf2; export w; global w = 2; end
+    module Mid2 end
+    module User2; using ..Leaf2, ..Mid2; readw() = w; end
+    @eval Mid2 (using ..Leaf2; export w)
+    @test (@test_nowarn User2.readw()) === 2
+    Base.deprecate(Leaf2, :w)
+    @test Base.isdeprecated(User2, :w)
+    @test (@test_warn "w is deprecated" Base.invokelatest(User2.readw)) === 2
+end
+
 # Defining a new binding over a deprecated implicit import must not warn: binding
 # resolution in a method definition (or a new `const`/`global`) exists precisely to create
 # a fresh binding when the name was not explicitly imported, and the fresh binding is not
