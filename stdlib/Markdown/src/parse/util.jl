@@ -95,7 +95,7 @@ function matchstart(stream::IO, r::Regex; eat::Bool = true, padding::Bool = fals
     seek(stream, start)
     m = match(r, line)
     if eat && m !== nothing
-        for i in 1:length(m.match)
+        for _ in 1:length(m.match)
             read(stream, Char)
         end
     end
