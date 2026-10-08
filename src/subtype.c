@@ -735,6 +735,22 @@ STATIC_INLINE int is_kind_or_anytype(jl_value_t *t) JL_NOTSAFEPOINT
     return jl_is_kind(t) || t == (jl_value_t*)jl_anytype_type;
 }
 
+// whether instances of `d` may be type objects, i.e. `d` is `Any` or at or below `AnyType`
+static int datatype_may_contain_types(jl_datatype_t *d) JL_NOTSAFEPOINT
+{
+    if (d == jl_any_type)
+        return 1;
+    while (d != jl_any_type) {
+        if (d == jl_anytype_type)
+            return 1;
+        // raw read: a deferred (unset) supertype conservatively proves nothing
+        d = d->super;
+        if (d == NULL)
+            return 1;
+    }
+    return 0;
+}
+
 int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity) JL_NOTSAFEPOINT
 {
     if (a == b || a == (jl_value_t*)jl_any_type || b == (jl_value_t*)jl_any_type)
@@ -751,6 +767,19 @@ int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity) JL_NOTSAFE
     if (jl_is_uniontype(b))
         return obviously_disjoint(a, ((jl_uniontype_t *)b)->a, specificity) &&
                obviously_disjoint(a, ((jl_uniontype_t *)b)->b, specificity);
+    if (!specificity && (jl_is_some_Type(a) || jl_is_some_Type(b))) {
+        if (jl_is_some_Type(a) && jl_is_some_Type(b)) {
+            // the members are the types `==` to each parameter; a concrete type is never
+            // `==` to a type it is disjoint from
+            jl_value_t *ta = jl_some_Type_T(a), *tb = jl_some_Type_T(b);
+            if (jl_has_free_typevars(ta) || jl_has_free_typevars(tb))
+                return 0;
+            return (jl_is_concrete_type(ta) || jl_is_concrete_type(tb)) && obviously_disjoint(ta, tb, 0);
+        }
+        // the members are type objects, which only a supertype of some kind can hold
+        jl_value_t *d = jl_is_some_Type(a) ? b : a;
+        return jl_is_datatype(d) && !datatype_may_contain_types((jl_datatype_t*)d);
+    }
     if (jl_is_datatype(a) && jl_is_datatype(b)) {
         jl_datatype_t *ad = (jl_datatype_t*)a, *bd = (jl_datatype_t*)b;
         if (ad->name != bd->name) {
