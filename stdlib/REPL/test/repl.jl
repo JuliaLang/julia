@@ -1938,9 +1938,33 @@ let io = IOBuffer()
     seek(io, 0)
     @test countlines(io) == 9
     take!(io)
-    @test REPL.banner(io; short=true) === nothing
+    @test REPL.banner(io, :tiny) === nothing
     seek(io, 0)
-    @test countlines(io) == 2
+    @test countlines(io) == 1
+end
+
+@testset "banner" begin
+    render(dims, preferred = :full) =
+        sprint(io -> REPL.banner(IOContext(io, :displaysize => dims), preferred))
+    @testset "size adapts to the display" begin
+        full, narrow = render((100, 200), :full), render((100, 200), :narrow)
+        short, tiny = render((5, 200), :short), render((100, 200), :tiny)
+        @test allunique((full, narrow, short, tiny))
+        @test render((8, 70)) == render((24, 80)) == full
+        @test render((8, 69)) == render((24, 45)) == narrow
+        @test render((7, 50)) == render((3, 80)) == short
+        @test render((8, 44)) == render((2, 80)) == render((7, 49)) == tiny
+    end
+    @testset "preferred size is an upper bound" begin
+        @test render((24, 80), :narrow) == render((24, 50))
+        @test render((5, 80), :full) == render((5, 80), :short)
+        @test render((100, 200), :unknown) == render((100, 200), :full)
+    end
+    @testset "tagged release description" begin
+        info = Base.GitVersionInfo("0123456789abcdef", "0123456789", "main", 0, "2026-01-01 00:00 UTC",
+                                   true, 0, 0.0, "", "")
+        @test String(REPL.banner_commit_string(info)) == Base.TAGGED_RELEASE_BANNER
+    end
 end
 
 @testset "Docstrings" begin

@@ -205,6 +205,21 @@ let
             precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Char})
             precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
             precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
+            # The session above only prints the full banner, and a layout's printing is only
+            # compiled into the image once it has run
+            let out = IOContext(devnull, :color => true, :displaysize => (100, 200))
+                term = REPL.Terminals.TTYTerminal("", devnull, out, devnull)
+                foreach(size -> REPL.banner(term, size), (:full, :narrow, :short, :tiny))
+            end
+            # Reached by the banner only through runtime dispatch within StyledStrings
+            # FIXME: drop after #60527 is merged
+            let FaceKeys = Dict{Tuple{Symbol, Any}, Int}
+                for V in (Symbol, String, REPL.StyledStrings.Face)
+                    precompile(Tuple{typeof(Base.get), FaceKeys, Tuple{Symbol, V}, Int})
+                    precompile(Tuple{typeof(Base.setindex!), FaceKeys, Int, Tuple{Symbol, V}})
+                    precompile(Tuple{typeof(Base.delete!), FaceKeys, Tuple{Symbol, V}})
+                end
+            end
         finally
             ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
         end
