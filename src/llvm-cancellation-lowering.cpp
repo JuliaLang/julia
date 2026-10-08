@@ -111,6 +111,16 @@ struct CancellationLowering : public JuliaPassContext {
     bool runOnFunction(Function &F);
 
 private:
+    // Allocations that FinalLowerGC lowers to a reset-safe runtime entry point. A Memory
+    // allocation only is one if its data is inline; otherwise it calls into the runtime.
+    bool isResetSafeAlloc(CallInst *CI) const {
+        Value *Callee = CI->getCalledOperand();
+        return (alloc_obj_func && Callee == alloc_obj_func) || getInlineMemorySize(CI);
+    }
+    bool isRuntimeMemoryAlloc(CallInst *CI) const {
+        return alloc_memory_func && CI->getCalledOperand() == alloc_memory_func && !getInlineMemorySize(CI);
+    }
+
     // Compute reset_ctx_ptr once in entry block
     // If insertAfter is provided, insert after that instruction
     // Otherwise insert at the beginning of the entry block (after allocas)
@@ -545,7 +555,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
                 // when it is implicitly-inserted runtime machinery (the tag
                 // describes the source statement's IPO contract, not the
                 // runtime frames implementing it).
-                if (!hasResetSafeMetadata(CI) || isImplicitRuntimeCall(CI)) {
+                if (!hasResetSafeMetadata(CI) || isImplicitRuntimeCall(CI) || isRuntimeMemoryAlloc(CI)) {
                     // Also skip intrinsic calls that are known safe
                     Function *Callee = CI->getCalledFunction();
                     if (Callee && Callee->isIntrinsic()) {
@@ -579,7 +589,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
                     // unpublish the region around the operation and
                     // republish it on the way out (so the region even
                     // survives the operation).
-                    if (Callee && (Callee == alloc_obj_func || isWriteBarrierFunc(Callee)))
+                    if (isResetSafeAlloc(CI) || isWriteBarrierFunc(Callee))
                         continue;
                     UnsafePoints.push_back(CI);
                 }
@@ -683,7 +693,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
                 Function *Callee = CI->getCalledFunction();
                 if (!Callee)
                     continue;
-                if (region_open && (Callee == alloc_obj_func || isWriteBarrierFunc(Callee))) {
+                if (region_open && (isResetSafeAlloc(CI) || isWriteBarrierFunc(Callee))) {
                     CI->setMetadata("julia.reset_region", MDNode::get(F.getContext(), {}));
                     Changed = true;
                 }

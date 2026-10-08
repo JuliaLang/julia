@@ -11,6 +11,7 @@ declare ptr @julia.get_pgcstack()
 declare void @some_unsafe_call()
 declare void @some_safe_call()
 declare ptr @julia.gc_alloc_obj(ptr, i64, ptr)
+declare ptr @julia.gc_alloc_memory(ptr, i64, ptr, i64, i1)
 declare ptr @ijl_box_int64(i64)
 declare ptr @ijl_apply_generic(ptr, ptr, i32)
 declare i32 @tail_target(ptr)
@@ -177,6 +178,24 @@ entry:
   %result = call i32 @julia.cancellation_point()
   %obj = call ptr @julia.gc_alloc_obj(ptr %pgcstack, i64 16, ptr null)
   ret ptr %obj
+}
+
+; A Memory allocation is only lowered to a reset-safe entry point if its data
+; is inline. Otherwise it becomes a call into the runtime, which drops the
+; region even when tagged reset_safe.
+define ptr @test_memory_alloc_in_region(i64 %n) {
+entry:
+; CHECK-LABEL: @test_memory_alloc_in_region
+; CHECK: call i32 @{{.*}}setjmp
+; CHECK: %small = call ptr @julia.gc_alloc_memory({{.*}}), !julia.reset_region
+; CHECK-NEXT: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK-NEXT: fence syncscope("singlethread") seq_cst
+; CHECK-NEXT: %large = call ptr @julia.gc_alloc_memory({{.*}}), !julia.reset_safe
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %result = call i32 @julia.cancellation_point()
+  %small = call ptr @julia.gc_alloc_memory(ptr %pgcstack, i64 32, ptr null, i64 4, i1 false)
+  %large = call ptr @julia.gc_alloc_memory(ptr %pgcstack, i64 %n, ptr null, i64 %n, i1 false), !julia.reset_safe !0
+  ret ptr %small
 }
 
 ; Even a reset_safe-tagged call is an unsafe point when it is

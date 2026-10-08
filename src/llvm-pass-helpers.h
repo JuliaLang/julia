@@ -3,6 +3,7 @@
 #ifndef LLVM_PASS_HELPERS_H
 #define LLVM_PASS_HELPERS_H
 
+#include <optional>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -59,6 +60,7 @@ struct JuliaPassContext {
     llvm::Function *pointer_from_objref_func;
     llvm::Function *gc_loaded_func;
     llvm::Function *alloc_obj_func;
+    llvm::Function *alloc_memory_func;
     llvm::Function *typeof_func;
     llvm::Function *blackbox_func;
     llvm::Function *object_write_barrier_func;
@@ -132,6 +134,10 @@ struct JuliaPassContext {
     llvm::Function *getOrDeclare(
         const jl_intrinsics::IntrinsicDescription &desc);
 
+    // If `call` allocates a GenericMemory that will be a single object with inline data,
+    // returns the size of that object.
+    std::optional<size_t> getInlineMemorySize(const llvm::CallInst *call) const;
+
 private:
     llvm::Module *module;
 };
@@ -189,6 +195,9 @@ namespace jl_well_known {
 
     // `jl_gc_alloc_typed`: allocates bytes.
     extern const WellKnownFunctionDescription GCAllocTyped;
+
+    // `jl_alloc_genericmemory_unchecked`: allocates a GenericMemory except for its length.
+    extern const WellKnownFunctionDescription GCAllocGenericMemory;
 
     // Reset-safe variants of the above (minus the narrowed memory effects):
     // used in functions that may carry a published cancellation reset

@@ -1980,6 +1980,54 @@ CallInst *LateLowerGCFrame::EmitGCAllocBytes(IRBuilder<> &builder, CallInst *CI,
     return newI;
 }
 
+// Expand `julia.gc_alloc_memory`, initializing the header and, if requested, zeroing the data.
+// Doing so right after the allocation, without a safepoint in between, ensures the GC never sees
+// it partially initialized.
+Value *LateLowerGCFrame::LowerGCAllocMemory(CallInst *CI)
+{
+    assert(CI->arg_size() == 5);
+    IRBuilder<> builder(CI);
+    builder.SetCurrentDebugLocation(CI->getDebugLoc());
+    auto &ctx = CI->getContext();
+    auto T_size = CI->getModule()->getDataLayout().getIntPtrType(ctx);
+    Type *T_int8 = Type::getInt8Ty(ctx);
+    Value *nbytes = CI->getArgOperand(1);
+    Value *tag = CI->getArgOperand(2);
+    Value *length = CI->getArgOperand(3);
+    bool zeroinit = cast<ConstantInt>(CI->getArgOperand(4))->isOne();
+    CallInst *newI;
+    Value *derived;
+    Value *data;
+    if (auto size = getInlineMemorySize(CI)) {
+        newI = EmitGCAllocBytes(builder, CI, ConstantInt::get(T_size, *size), tag);
+        newI->addDereferenceableRetAttr(*size);
+        derived = builder.CreateAddrSpaceCast(newI, PointerType::get(ctx, AddressSpace::Derived));
+        Value *objref = builder.CreateAddrSpaceCast(derived, PointerType::get(ctx, 0));
+        data = builder.CreateConstInBoundsGEP1_64(T_int8, objref, JL_GENERICMEMORY_INLINE_DATA_OFFSET);
+        Value *ptr_field = builder.CreateConstInBoundsGEP1_64(T_int8, derived, offsetof(jl_genericmemory_t, ptr));
+        builder.CreateAlignedStore(data, ptr_field, Align(sizeof(void*)));
+    }
+    else {
+        // the runtime initializes the data pointer, and the owner if the data is malloc'd
+        auto allocFunc = getOrDeclare(jl_well_known::GCAllocGenericMemory);
+        auto ptls = get_current_ptls_from_task(builder, CI->getArgOperand(0), tbaa_gcframe);
+        Value *untracked_tag = builder.CreateAddrSpaceCast(tag, PointerType::get(ctx, 0));
+        newI = builder.CreateCall(allocFunc, {ptls, nbytes, untracked_tag});
+        newI->setAttributes(allocFunc->getAttributes());
+        newI->addRetAttr(Attribute::getWithAlignment(ctx, Align(JL_HEAP_ALIGNMENT)));
+        newI->addDereferenceableRetAttr(sizeof(jl_genericmemory_t));
+        newI->takeName(CI);
+        derived = builder.CreateAddrSpaceCast(newI, PointerType::get(ctx, AddressSpace::Derived));
+        Value *ptr_field = builder.CreateConstInBoundsGEP1_64(T_int8, derived, offsetof(jl_genericmemory_t, ptr));
+        data = builder.CreateAlignedLoad(PointerType::get(ctx, 0), ptr_field, Align(sizeof(void*)));
+    }
+    if (zeroinit && !(isa<ConstantInt>(nbytes) && cast<ConstantInt>(nbytes)->isZero()))
+        builder.CreateMemSet(data, ConstantInt::get(T_int8, 0), nbytes, Align(sizeof(void*)));
+    Value *length_field = builder.CreateConstInBoundsGEP1_64(T_int8, derived, offsetof(jl_genericmemory_t, length));
+    builder.CreateAlignedStore(length, length_field, Align(sizeof(void*)));
+    return newI;
+}
+
 bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
     auto T_int32 = Type::getInt32Ty(F.getContext());
     auto T_size = F.getParent()->getDataLayout().getIntPtrType(F.getContext());
@@ -2152,6 +2200,10 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 CI->replaceAllUsesWith(newI);
 
                 // Update the pointer numbering.
+                UpdatePtrNumbering(CI, newI, S);
+            } else if (alloc_memory_func && callee == alloc_memory_func) {
+                Value *newI = LowerGCAllocMemory(CI);
+                CI->replaceAllUsesWith(newI);
                 UpdatePtrNumbering(CI, newI, S);
             } else if (typeof_func && callee == typeof_func) {
                 assert(CI->arg_size() == 1);

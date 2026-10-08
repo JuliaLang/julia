@@ -40,23 +40,22 @@ end
 # CHECK: ret
 emit(make_struct_no_ptrs, Int64, Int64)
 
-# COM: Test 3: Memory{Any} (constant length) should emit julia.gc_alloc_zeroinit bundle
+# COM: Test 3: Memory{Any} (constant length) should request zeroed data
 function make_memory_any()
     Memory{Any}(undef, 4)
 end
 
 # CHECK: define {{.*}} @julia_make_memory_any
-# CHECK: julia.gc_alloc_obj
-# CHECK-SAME: [ "julia.gc_alloc_zeroinit"(i64 16, i64 32) ]
+# CHECK: @julia.gc_alloc_memory(ptr {{.*}}, i64 32, ptr addrspace(10) {{.*}}, i64 4, i1 true)
 emit(make_memory_any)
 
-# COM: Test 4: Memory{Int64} (non-boxed) should NOT have zeroinit bundle
+# COM: Test 4: Memory{Int64} (non-boxed) should not
 function make_memory_int()
     Memory{Int64}(undef, 4)
 end
 
 # CHECK: define {{.*}} @julia_make_memory_int
-# CHECK-NOT: julia.gc_alloc_zeroinit
+# CHECK: @julia.gc_alloc_memory(ptr {{.*}}, i64 32, ptr addrspace(10) {{.*}}, i64 4, i1 false)
 # CHECK: ret
 emit(make_memory_int)
 
@@ -74,24 +73,22 @@ end
 # CHECK-SAME: [ "julia.gc_alloc_ptr_offsets"(i64 0) ]
 emit(make_single_ptr, Any)
 
-# COM: Test 6: Variable-length Memory{Any} uses zeroinit_indirect bundle
+# COM: Test 6: Variable-length Memory{Any} should request zeroed data
 function make_memory_any_dynamic(n::Int)
     Memory{Any}(undef, n)
 end
 
 # CHECK: define {{.*}} @julia_make_memory_any_dynamic
-# CHECK: jl_alloc_genericmemory_unchecked
-# CHECK-SAME: [ "julia.gc_alloc_zeroinit_indirect"(i64 8,
+# CHECK: @julia.gc_alloc_memory(ptr {{.*}}, i64 %{{.*}}, ptr addrspace(10) {{.*}}, i64 %{{.*}}, i1 true)
 emit(make_memory_any_dynamic, Int)
 
-# COM: Test 7: Variable-length Memory{Int64} should NOT have zeroinit bundle
+# COM: Test 7: Variable-length Memory{Int64} should not
 function make_memory_int_dynamic(n::Int)
     Memory{Int64}(undef, n)
 end
 
 # CHECK: define {{.*}} @julia_make_memory_int_dynamic
-# CHECK: jl_alloc_genericmemory_unchecked
-# CHECK-NOT: julia.gc_alloc_zeroinit_indirect
+# CHECK: @julia.gc_alloc_memory(ptr {{.*}}, i64 %{{.*}}, ptr addrspace(10) {{.*}}, i64 %{{.*}}, i1 false)
 # CHECK: ret
 emit(make_memory_int_dynamic, Int)
 
