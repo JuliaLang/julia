@@ -755,6 +755,16 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             }
         }
     }
+    if (s->incremental && jl_is_binding_partition(v)) {
+        // Partitions that have ended cannot be reached after loading (they are written
+        // with an empty world range), so leave them out of the chain.
+        jl_binding_partition_t *bpart = (jl_binding_partition_t*)v;
+        jl_value_t *next = (jl_value_t*)jl_atomic_load_relaxed(&bpart->next);
+        while (next && jl_is_binding_partition(next) &&
+               jl_atomic_load_relaxed(&((jl_binding_partition_t*)next)->max_world) != ~(size_t)0)
+            next = (jl_value_t*)jl_atomic_load_relaxed(&((jl_binding_partition_t*)next)->next);
+        record_field_change((jl_value_t**)&bpart->next, next);
+    }
     if (s->incremental && jl_is_globalref(v)) {
         jl_globalref_t *gr = (jl_globalref_t*)v;
         if (jl_object_in_image((jl_value_t*)gr->mod)) {
