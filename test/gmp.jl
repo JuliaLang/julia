@@ -763,6 +763,48 @@ t = Rational{BigInt}(0, 1)
 
     @test aa == a && bb == b && cc == c
 
+    @testset "aliased arguments" begin
+        # inputs sharing BigInts with the output must not be passed to GMP as
+        # separate mpq_t structs (their limb pointers go stale on reallocation)
+        x = big(1)//1
+        @test Base.GMP.MPQ.add!(x, big(1)//2) == 3//2
+        x = big(1)//1
+        @test Base.GMP.MPQ.sub!(x, big(1)//2) == 1//2
+        x = big(1)//1
+        @test Base.GMP.MPQ.mul!(x, big(3)//2) == 3//2
+        x = big(1)//1
+        @test Base.GMP.MPQ.div!(x, big(2)//3) == 3//2
+        z = big(1)//2
+        @test Base.GMP.MPQ.add!(z, big(1)//3, z) == 5//6
+        z = big(1)//1
+        @test Base.GMP.MPQ.add!(z, z, z) == 2
+        z = big(1)//1
+        @test Base.GMP.MPQ.set!(z, z) == 1
+        # partial aliasing: only one BigInt shared with the output
+        n = big(1)
+        z = Base.unsafe_rational(BigInt, n, big(1))
+        @test Base.GMP.MPQ.add!(z, Base.unsafe_rational(BigInt, n, big(2))) == 3//2
+    end
+
+    @testset "reciprocal arguments" begin
+        # Reciprocal inputs share the output's BigInts in opposite positions.
+        z = big(1)//2
+        @test Base.GMP.MPQ.set!(z, inv(z)) == 2//1
+        @test z == 2//1
+        for (op!, op) in ((Base.GMP.MPQ.add!, +), (Base.GMP.MPQ.sub!, -),
+                          (Base.GMP.MPQ.mul!, *), (Base.GMP.MPQ.div!, /))
+            z = big(1)//2
+            @test op!(z, inv(z)) == op(1//2, 2//1)
+            @test z == op(1//2, 2//1)
+            z = big(1)//2
+            @test op!(z, inv(z), big(3)//5) == op(2//1, 3//5)
+            @test z == op(2//1, 3//5)
+            z = big(1)//2
+            @test op!(z, big(3)//5, inv(z)) == op(3//5, 2//1)
+            @test z == op(3//5, 2//1)
+        end
+    end
+
     @testset "set" begin
         @test Base.GMP.MPQ.set!(a, b) == b
         @test a == b == bb
