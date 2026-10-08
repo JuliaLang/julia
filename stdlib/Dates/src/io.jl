@@ -42,13 +42,13 @@ format(io::IO, tok::AbstractDateToken, dt::TimeType, locale)
 end
 
 function Base.string(t::Time)
-    h, mi, s = hour(t), minute(t), second(t)
+    h, mi, s, ms, us, ns = _time_components(t)
     hh = lpad(h, 2, "0")
     mii = lpad(mi, 2, "0")
     ss = lpad(s, 2, "0")
-    nss = tons(Millisecond(t)) + tons(Microsecond(t)) + tons(Nanosecond(t))
-    ns = nss == 0 ? "" : rstrip(@sprintf("%.9f", nss / 1e+9)[2:end], '0')
-    return "$hh:$mii:$ss$ns"
+    nss = ms * 1000000 + us * 1000 + ns
+    ns_str = nss == 0 ? "" : rstrip(@sprintf("%.9f", nss / 1e+9)[2:end], '0')
+    return "$hh:$mii:$ss$ns_str"
 end
 
 Base.show(io::IO, ::MIME"text/plain", t::Time) = print(io, t)
@@ -58,14 +58,7 @@ function Base.show(io::IO, t::Time)
     if get(io, :compact, false)::Bool
         print(io, t)
     else
-        values = [
-            hour(t)
-            minute(t)
-            second(t)
-            millisecond(t)
-            microsecond(t)
-            nanosecond(t)
-        ]
+        values = _time_components(t)
         index = something(findlast(!iszero, values), 1)
 
         print(io, Time, "(")
