@@ -67,14 +67,37 @@ static ssize_t idset_compact(jl_genericmemory_t *keys)
     return rehash ? -j : j;
 }
 
+// Find a free slot: gallop back from the end over the free tail, then bisect.
+// Any NULL slot whose predecessor is used (or index 0) is a valid slot, so holes
+// left by jl_idset_pop don't matter; returns l when the last slot is used.
+static ssize_t idset_free_slot(jl_genericmemory_t *keys) JL_NOTSAFEPOINT
+{
+    ssize_t l = keys->length;
+    if (l == 0 || jl_genericmemory_ptr_ref(keys, l - 1) != NULL)
+        return l;
+    ssize_t hi = l - 1; // known NULL
+    ssize_t step = 1;
+    while (hi - step >= 0 && jl_genericmemory_ptr_ref(keys, hi - step) == NULL) {
+        hi -= step;
+        step <<= 1;
+    }
+    ssize_t lo = hi - step < 0 ? -1 : hi - step; // known used (or -1)
+    while (hi - lo > 1) {
+        ssize_t mid = lo + (hi - lo) / 2;
+        if (jl_genericmemory_ptr_ref(keys, mid) == NULL)
+            hi = mid;
+        else
+            lo = mid;
+    }
+    return hi;
+}
+
 // Insert `key` into the first free slot at the end of the ordered set
 // `keys` (growing and compacting are insertion-order-preserving).
 jl_genericmemory_t *jl_idset_put_key(jl_genericmemory_t *keys, jl_value_t *key, ssize_t *newidx)
 {
     ssize_t l = keys->length;
-    ssize_t i = l;
-    while (i > 0 && jl_genericmemory_ptr_ref(keys, i - 1) == NULL)
-        i--;
+    ssize_t i = idset_free_slot(keys);
     // i points to the place to insert
     *newidx = i;
     if (i == l) {
