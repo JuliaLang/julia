@@ -224,6 +224,10 @@ New library features
   fit on a single line, truncated to the display width, instead of showing no data at all ([#62543]).
 * The element type of broadcast expressions now uses regular inference machinery rather than an idiosyncratic
   heuristic. This can help fused or empty broadcasts infer to more precise element types ([#62564]).
+* New public but unexported macro `Base.@cpu_supports arch name...`, an analog of GCC/Clang's
+  `__builtin_cpu_supports`, tests whether code generation for the current target enables the named
+  LLVM target features or CPU model. It is folded to a constant at compile time, separately for each
+  multiversioning clone, so the untaken branch of an `if` on it is removed ([#61793]).
 
 Standard library changes
 ------------------------
