@@ -249,6 +249,55 @@ static DICompileUnit *getOrCreateJuliaCU(Module &M,
     return CU;
 }
 
+// Render a Julia type the way `jl_static_show` does, e.g. "Complex{Float64}".
+// Debuggers show this string verbatim as the variable's type name.
+static std::string julia_type_di_name(jl_value_t *jt)
+{
+    ios_t buf;
+    ios_mem(&buf, 0);
+    jl_static_show((JL_STREAM*)&buf, jt);
+    std::string name(buf.buf, buf.size);
+    ios_close(&buf);
+    return name;
+}
+
+// Name of field `i` of `dt` for DW_TAG_member: the declared name for structs and
+// NamedTuples, and the 1-based index for Tuples.
+static std::string julia_field_di_name(jl_datatype_t *dt, size_t i)
+{
+    if (jl_is_namedtuple_type(dt)) {
+        jl_value_t *names = jl_tparam0(dt);
+        if (jl_is_tuple(names) && i < jl_nfields(names)) {
+            jl_value_t *s = jl_fieldref_noalloc(names, i);
+            if (jl_is_symbol(s))
+                return jl_symbol_name((jl_sym_t*)s);
+        }
+    }
+    else if (!jl_is_tuple_type(dt)) {
+        jl_svec_t *names = jl_field_names(dt);
+        if (names && i < jl_svec_len(names)) {
+            jl_value_t *s = jl_svecref(names, i);
+            if (jl_is_symbol(s))
+                return jl_symbol_name((jl_sym_t*)s);
+        }
+    }
+    return std::to_string(i + 1);
+}
+
+// DWARF base-type encoding for a Julia primitive type. Anything not listed
+// (Char, BFloat16, user-defined primitives, ...) is described by its raw bits.
+static unsigned julia_primitive_di_encoding(jl_value_t *jt)
+{
+    if (jt == (jl_value_t*)jl_bool_type)
+        return llvm::dwarf::DW_ATE_boolean;
+    if (jt == (jl_value_t*)jl_float16_type || jt == (jl_value_t*)jl_float32_type ||
+        jt == (jl_value_t*)jl_float64_type)
+        return llvm::dwarf::DW_ATE_float;
+    if (jl_subtype(jt, (jl_value_t*)jl_signed_type))
+        return llvm::dwarf::DW_ATE_signed;
+    return llvm::dwarf::DW_ATE_unsigned;
+}
+
 static DIType *_julia_type_to_di(jl_codegen_output_t *ctx, jl_debugcache_t &debuginfo, jl_value_t *jt, DIBuilder *dbuilder, bool isboxed)
 {
     jl_datatype_t *jdt = (jl_datatype_t*)jt;
@@ -259,41 +308,79 @@ static DIType *_julia_type_to_di(jl_codegen_output_t *ctx, jl_debugcache_t &debu
     DIType* &ditype = (ctx ? ctx->ditypes[jdt] : _ditype);
     if (ditype)
         return ditype;
-    const char *tname = jl_symbol_name(jdt->name->name);
-    if (jl_is_primitivetype(jt)) {
-        uint64_t SizeInBits = jl_datatype_nbits(jdt);
-        ditype = dbuilder->createBasicType(tname, SizeInBits, llvm::dwarf::DW_ATE_unsigned);
+    std::string tname = julia_type_di_name(jt);
+    uint64_t SizeInBits = jl_datatype_nbits(jdt);
+    uint32_t AlignInBits = 8 * jl_datatype_align(jdt);
+    if (jl_is_cpointer_type(jt)) {
+        // Ptr{T}: describe the pointee only for primitive T (Ptr{UInt8} and
+        // friends); following struct pointees could recurse through the type
+        // being defined, and Ptr{Cvoid}/abstract T have nothing to show.
+        jl_value_t *elt = jl_tparam0(jdt);
+        DIType *pointee = nullptr;
+        if (jl_is_primitivetype(elt) && !jl_is_cpointer_type(elt))
+            pointee = _julia_type_to_di(ctx, debuginfo, elt, dbuilder, false);
+        ditype = dbuilder->createPointerType(pointee, SizeInBits, AlignInBits, std::nullopt, tname);
+    }
+    else if (jl_is_primitivetype(jt)) {
+        ditype = dbuilder->createBasicType(tname, SizeInBits, julia_primitive_di_encoding(jt));
     }
     else if (jl_is_structtype(jt) && !jl_is_layout_opaque(jdt->layout) && !jl_is_array_type(jdt)) {
-        size_t ntypes = jl_datatype_nfields(jdt);
-        SmallVector<llvm::Metadata*, 0> Elements(ntypes);
-        for (unsigned i = 0; i < ntypes; i++) {
-            jl_value_t *el = jl_field_type_concrete(jdt, i);
-            DIType *di;
-            if (jl_field_isptr(jdt, i))
-                di = debuginfo.jl_pvalue_dillvmt;
-            // TODO: elseif jl_islayout_inline
-            else
-                di = _julia_type_to_di(ctx, debuginfo, el, dbuilder, false);
-            Elements[i] = di;
-        }
-        DINodeArray ElemArray = dbuilder->getOrCreateArray(Elements);
         std::string unique_name;
         raw_string_ostream(unique_name) << (uintptr_t)jdt;
-        ditype = dbuilder->createStructType(
+        // Create the struct first so members can name it as their scope; the
+        // member list is filled in below.
+        DICompositeType *ditstruct = dbuilder->createStructType(
                 NULL,                       // Scope
                 tname,                      // Name
                 NULL,                       // File
                 0,                          // LineNumber
-                jl_datatype_nbits(jdt),     // SizeInBits
-                8 * jl_datatype_align(jdt), // AlignInBits
+                SizeInBits,                 // SizeInBits
+                AlignInBits,                // AlignInBits
                 DINode::FlagZero,           // Flags
                 NULL,                       // DerivedFrom
-                ElemArray,                  // Elements
+                nullptr,                    // Elements
                 dwarf::DW_LANG_Julia,       // RuntimeLanguage
                 nullptr,                    // VTableHolder
                 unique_name                 // UniqueIdentifier
                 );
+        ditype = ditstruct;
+        size_t ntypes = jl_datatype_nfields(jdt);
+        SmallVector<llvm::Metadata*, 0> Elements(ntypes);
+        for (unsigned i = 0; i < ntypes; i++) {
+            jl_value_t *el = jl_field_type_concrete(jdt, i);
+            uint64_t fsz = 8 * (uint64_t)jl_field_size(jdt, i);
+            uint64_t foff = 8 * (uint64_t)jl_field_offset(jdt, i);
+            uint32_t falign;
+            DIType *di;
+            if (jl_field_isptr(jdt, i)) {
+                di = debuginfo.jl_pvalue_dillvmt;
+                falign = 8 * sizeof(void*);
+            }
+            else if (jl_is_datatype(el) && ((jl_datatype_t*)el)->isconcretetype) {
+                di = _julia_type_to_di(ctx, debuginfo, el, dbuilder, false);
+                falign = 8 * jl_datatype_align(el);
+            }
+            else {
+                // Inline-allocated Union: the payload bytes followed by the
+                // selector byte. Expose the raw storage as a byte array.
+                DIType *u8 = _julia_type_to_di(ctx, debuginfo, (jl_value_t*)jl_uint8_type, dbuilder, false);
+                di = dbuilder->createArrayType(fsz, 8, u8,
+                        dbuilder->getOrCreateArray({dbuilder->getOrCreateSubrange(0, fsz / 8)}));
+                falign = 8;
+            }
+            Elements[i] = dbuilder->createMemberType(
+                    ditstruct,                            // Scope
+                    julia_field_di_name(jdt, i),          // Name
+                    NULL,                                 // File
+                    0,                                    // LineNo
+                    fsz,                                  // SizeInBits
+                    falign,                               // AlignInBits
+                    foff,                                 // OffsetInBits
+                    DINode::FlagZero,                     // Flags
+                    di                                    // Ty
+                    );
+        }
+        dbuilder->replaceArrays(ditstruct, dbuilder->getOrCreateArray(Elements));
     }
     else {
         // return a typealias for types with hidden content
