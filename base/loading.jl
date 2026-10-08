@@ -2283,7 +2283,7 @@ end
 
 # returns `nothing` if require found a precompile cache for this sourcepath, but couldn't load it or it was stale
 # returns the set of modules restored if the cache load succeeded
-@constprop :none function _require_search_from_serialized(pkg::PkgId, sourcespec::PkgLoadSpec, build_id::UInt128, stalecheck::Bool; reasons=nothing, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT_PATH)
+@constprop :none function _require_search_from_serialized(pkg::PkgId, sourcespec::PkgLoadSpec, build_id::UInt128, stalecheck::Bool; @nospecialize(reasons::Union{Dict{Symbol,Int},Nothing}=nothing), DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT_PATH)
     assert_havelock(require_lock)
     newdeps = PkgId[]
     try_build_ids = UInt128[build_id]
