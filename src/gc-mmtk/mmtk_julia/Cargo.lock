@@ -739,7 +739,7 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 [[package]]
 name = "mmtk"
 version = "0.33.0"
-source = "git+https://github.com/mmtk/mmtk-core.git?rev=91bca960a2df99530180cb9078cd952fe6fa3d64#91bca960a2df99530180cb9078cd952fe6fa3d64"
+source = "git+https://github.com/mmtk/mmtk-core.git?rev=243b4221574b01cbe380add6f25ca9ed2815038a#243b4221574b01cbe380add6f25ca9ed2815038a"
 dependencies = [
  "atomic 0.6.1",
  "atomic-traits",
@@ -769,6 +769,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "sysinfo",
+ "yoke-derive",
 ]
 
 [[package]]
@@ -793,7 +794,7 @@ dependencies = [
 [[package]]
 name = "mmtk-macros"
 version = "0.33.0"
-source = "git+https://github.com/mmtk/mmtk-core.git?rev=91bca960a2df99530180cb9078cd952fe6fa3d64#91bca960a2df99530180cb9078cd952fe6fa3d64"
+source = "git+https://github.com/mmtk/mmtk-core.git?rev=243b4221574b01cbe380add6f25ca9ed2815038a#243b4221574b01cbe380add6f25ca9ed2815038a"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
