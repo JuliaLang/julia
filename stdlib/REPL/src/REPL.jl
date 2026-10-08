@@ -689,10 +689,17 @@ __repl_entry_display(specialdisplay::Union{AbstractDisplay,Nothing}, val) = Base
 function __repl_entry_display_error(errio::IO, @nospecialize errval)
     # this will be set to true if types in the stacktrace are truncated
     limitflag = Ref(false)
-    errio = IOContext(errio, :stacktrace_types_limited => limitflag)
+    # offering the full trace through `err` is what lets the one shown hide Julia's own frames
+    hiddenflag = Ref(false)
+    errio = IOContext(errio, :stacktrace_types_limited => limitflag,
+                             :stacktrace_frames_hidden => hiddenflag)
     Base.invokelatest(Base.display_error, errio, errval)
     if limitflag[]
         print(errio, "Some type information was truncated. Use `show(err)` to see complete types.")
+        println(errio)
+    end
+    if hiddenflag[]
+        print(errio, "Some frames were hidden. Use `show(err)` to see the complete trace.")
         println(errio)
     end
     return nothing
