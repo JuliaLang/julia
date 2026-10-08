@@ -50,7 +50,7 @@ function _helpmode(io::IO, line::AbstractString, mod::Module=Main, internal_acce
             line = "#"
         end
     end
-    x = Meta.parse(line, raise = false, depwarn = false)
+    x = Meta.parse(line; raise = false, depwarn = false, mod)
     assym = Symbol(line)
     expr =
         if haskey(keywords, assym) || Base.isoperator(assym) || isexpr(x, :error) ||
