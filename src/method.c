@@ -889,7 +889,10 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi JL_PROP
                     else {
                         assert(i < l);
                         ex = data[i++];
-                        jl_method_instance_add_backedge((jl_method_instance_t*)ex, kind, ci);
+                        if (jl_is_mtable(ex)) // abstract dispatch (`invokesig, mt`)
+                            jl_method_table_add_backedge(kind, ci);
+                        else
+                            jl_method_instance_add_backedge((jl_method_instance_t*)ex, kind, ci);
                     }
                 }
             }
