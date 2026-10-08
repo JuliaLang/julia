@@ -885,7 +885,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi JL_PROP
                         ex = data[i++];
                         if ((jl_methtable_t*)kind == jl_method_table)
                             jl_method_table_add_backedge(ex, ci);
-                    }
+}
                     else {
                         assert(i < l);
                         ex = data[i++];
