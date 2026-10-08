@@ -8,17 +8,13 @@
 # to allow them to be used inside the global code cache.
 import Core: Const, InterConditional, PartialStruct, InterMustAlias, PartialTask
 
-function may_form_limited_typ(@nospecialize(aty), @nospecialize(bty), @nospecialize(xty))
-    if aty isa LimitedAccuracy
-        if bty isa LimitedAccuracy
-            return LimitedAccuracy(xty, union!(copy(aty.causes), bty.causes))
-        else
-            return LimitedAccuracy(xty, copy(aty.causes))
-        end
-    elseif bty isa LimitedAccuracy
-        return LimitedAccuracy(xty, copy(bty.causes))
-    end
-    return nothing
+
+# Narrow `x` by the `LimitedAccuracy` of `y`. If `y` is limited, return `x` limited by the
+# causes of `y` (and of `x`, if any). Otherwise return `x` unchanged.
+@nospecializeinfer function narrow_limited_typ(@nospecialize(x), @nospecialize(y))
+    y isa LimitedAccuracy || return x
+    x isa LimitedAccuracy && return LimitedAccuracy(x.typ, union!(copy(x.causes), y.causes))
+    return LimitedAccuracy(x, copy(y.causes))
 end
 
 """
@@ -54,8 +50,8 @@ struct Conditional
                          isdefined::Bool=false)
         assert_nested_slotwrapper(thentype)
         assert_nested_slotwrapper(elsetype)
-        limited = may_form_limited_typ(thentype, elsetype, Bool)
-        limited !== nothing && return limited
+        limited = narrow_limited_typ(narrow_limited_typ(Bool, elsetype), thentype)
+        limited isa LimitedAccuracy && return limited
         return new(slot, ssadef, thentype, elsetype, isdefined)
     end
 end
@@ -102,21 +98,41 @@ struct MustAlias
         assert_nested_slotwrapper(fldtyp)
         # @assert !isalreadyconst(vartyp) "vartyp is already const"
         # @assert !isalreadyconst(fldtyp) "fldtyp is already const"
-        limited = may_form_limited_typ(vartyp, fldtyp, fldtyp)
-        limited !== nothing && return limited
+        limited = narrow_limited_typ(fldtyp, vartyp)
+        limited isa LimitedAccuracy && return limited
         return new(slot, ssadef, vartyp, fldidx, fldtyp)
     end
 end
 MustAlias(var::SlotNumber, ssadef::Int, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp)) =
     MustAlias(slot_id(var), ssadef, vartyp, fldidx, fldtyp)
+MustAlias(alias::MustAlias;
+    slot::Int = alias.slot,
+    ssadef::Int = alias.ssadef,
+    @nospecialize(vartyp = alias.vartyp),
+    fldidx::Int = alias.fldidx,
+    @nospecialize(fldtyp = alias.fldtyp)) =
+    MustAlias(slot, ssadef, vartyp, fldidx, fldtyp)
 
 const AnyMustAlias = Union{MustAlias,InterMustAlias}
 function InterMustAlias(alias::MustAlias)
     @assert alias.ssadef == 0
-    limited = may_form_limited_typ(alias.vartyp, alias.fldtyp, alias.fldtyp)
-    limited !== nothing && return limited
+    limited = narrow_limited_typ(alias.fldtyp, alias.vartyp)
+    limited isa LimitedAccuracy && return limited
     InterMustAlias(alias.slot, alias.vartyp, alias.fldidx, alias.fldtyp)
 end
+InterMustAlias(alias::InterMustAlias;
+    slot::Int = alias.slot,
+    @nospecialize(vartyp = alias.vartyp),
+    fldidx::Int = alias.fldidx,
+    @nospecialize(fldtyp = alias.fldtyp)) =
+    InterMustAlias(slot, vartyp, fldidx, fldtyp)
+(::Type{AnyMustAlias})(alias::AnyMustAlias;
+    slot::Int = alias.slot,
+    @nospecialize(vartyp = alias.vartyp),
+    fldidx::Int = alias.fldidx,
+    @nospecialize(fldtyp = alias.fldtyp)) =
+    alias isa MustAlias ? MustAlias(alias; slot, vartyp, fldidx, fldtyp) :
+                          InterMustAlias(alias; slot, vartyp, fldidx, fldtyp)
 
 struct PartialTypeVar
     tv::TypeVar
@@ -358,6 +374,24 @@ function issubalias(a::AnyMustAlias, b::AnyMustAlias)
         a.vartyp ⊑ b.vartyp && a.fldtyp ⊑ b.fldtyp
 end
 
+is_same_alias(a::MustAlias, b::MustAlias) =
+    a.slot == b.slot && a.ssadef == b.ssadef && a.fldidx == b.fldidx
+is_same_alias(a::InterMustAlias, b::InterMustAlias) = a.slot == b.slot && a.fldidx == b.fldidx
+is_same_alias(@nospecialize(a), @nospecialize(b)) = false
+
+# Narrow `x` by the must-alias information of `y`, if possible.
+# Otherwise return x unchanged.
+@nospecializeinfer function narrow_mustalias(𝕃::AbstractLattice, @nospecialize(x), @nospecialize(y))
+    alias = ignorelimited(y)
+    !isa(alias, AnyMustAlias) && return x
+    typ = ignorelimited(x)
+    typ === Bottom && return x # Union{} is maximally narrow
+    isa(typ, AnyMustAlias) && return x # do not attempt to intersect alias information
+    isa(typ, AnyConditional) && return x # ... or other wrappers
+    # this is an intersection with `y`, so keep the limitations of both
+    return narrow_limited_typ(narrow_limited_typ(AnyMustAlias(alias; fldtyp = typ), x), y)
+end
+
 # LimitedAccuracy
 # ===============
 
@@ -421,7 +455,7 @@ end
         end
         a = widenmustalias(a)
     elseif isa(b, MustAliasT)
-        return ⊏(widenlattice(𝕃), a, widenmustalias(b))
+        return a === Union{}
     end
     return ⊑(widenlattice(𝕃), a, b)
 end
@@ -671,9 +705,12 @@ end
     tmeet(widenlattice(lattice), v, t)
 end
 
-@nospecializeinfer function tmeet(𝕃::MustAliasesLattice, @nospecialize(v), @nospecialize(t::AnyType))
-    if isa(v, MustAlias)
-        v = widenmustalias(v)
+@nospecializeinfer function tmeet(𝕃::AnyMustAliasesLattice, @nospecialize(v), @nospecialize(t::AnyType))
+    if is_valid_lattice_norec(𝕃, v)
+        # The value still is the aliased field, so keep the alias and meet the field type
+        fldtyp = tmeet(widenlattice(𝕃), v.fldtyp, t)
+        fldtyp === Bottom && return Bottom
+        return AnyMustAlias(v; fldtyp)
     end
     return tmeet(widenlattice(𝕃), v, t)
 end
@@ -690,12 +727,6 @@ end
     tmeet(widenlattice(lattice), v, t)
 end
 
-@nospecializeinfer function tmeet(𝕃::InterMustAliasesLattice, @nospecialize(v), @nospecialize(t::AnyType))
-    if isa(v, InterMustAlias)
-        v = widenmustalias(v)
-    end
-    return tmeet(widenlattice(𝕃), v, t)
-end
 
 """
     widenconst(x) -> t::Type
