@@ -116,6 +116,10 @@ move_to_node1("gc")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
 
+# These leave packages loaded and methods added to Base, which breaks later tests on the
+# same worker, so the worker is replaced once they finish
+const recycle_worker_tests = ["precompile"]
+
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
@@ -459,9 +463,10 @@ cd(@__DIR__) do
                             end
                         else
                             print_testworker_stats(test, wrkr, resp)
-                            if resp[end] > max_worker_rss
-                                # the worker has reached the max-rss limit, recycle it
-                                # so future tests start with a smaller working set
+                            if resp[end] > max_worker_rss || test in recycle_worker_tests
+                                # the worker has reached the max-rss limit or holds state
+                                # left behind by the test, recycle it so future tests start
+                                # with a smaller working set and a fresh environment
                                 if n > 1
                                     rmprocs_with_testenv(wrkr, waitfor=rmwait_timeout)
                                     p = addprocs_with_testenv(1)[1]
@@ -469,7 +474,7 @@ cd(@__DIR__) do
                                     if use_revise
                                         Distributed.remotecall_eval(Main, p, revise_init_expr)
                                     end
-                                else # single process testing
+                                elseif resp[end] > max_worker_rss # single process testing
                                     error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
                                 end
                             end
