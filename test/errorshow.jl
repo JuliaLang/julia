@@ -1865,6 +1865,12 @@ end
     # `sort` forwards its slurped keywords, so the error names `sort!`, which declares each one
     @test occursin("did you mean `lt`?",
                    sprint(showerror, try sort([2, 1]; ltt = <) catch err; err end))
+
+    # a slurped `kwargs...` is not a keyword name
+    @test Base.declared_keywords(KeywordSuggestions.scaled) == [:scale]
+    @test isempty(Base.declared_keywords(KeywordSuggestions.slurpy))
+    @test !Base.accepts_any_keyword(KeywordSuggestions.scaled)
+    @test Base.accepts_any_keyword(KeywordSuggestions.slurpy)
 end
 
 module UndefVarSuggestions

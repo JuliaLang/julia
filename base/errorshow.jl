@@ -257,13 +257,25 @@ function show_convert_error(io::IO, ex::MethodError, arg_types_param)
     end
 end
 
+is_keyword_slurp(name::Symbol) = endswith(String(name), "...")
+
 """
     declared_keywords(f) -> Vector{Symbol}
 
-Every keyword argument that some method of `f` declares.
+Every named keyword argument that some method of `f` declares. A slurped `kwargs...`
+is not a name and is excluded; see `accepts_any_keyword`.
 """
 function declared_keywords(@nospecialize(f))
-    return unique([name for m in methods(f) for name in kwarg_decl(m)])
+    return unique([name for m in methods(f) for name in kwarg_decl(m) if !is_keyword_slurp(name)])
+end
+
+"""
+    accepts_any_keyword(f) -> Bool
+
+Whether some method of `f` slurps keyword arguments (`kwargs...`).
+"""
+function accepts_any_keyword(@nospecialize(f))
+    return any(is_keyword_slurp, name for m in methods(f) for name in kwarg_decl(m))
 end
 
 """
@@ -288,11 +300,11 @@ Offer a correction for each given keyword name that no method of `f` accepts but
 that closely resembles a name some method does.
 """
 function show_keyword_suggestions(io::IO, @nospecialize(f), kwargs)
-    accepted = declared_keywords(f)
     # A method slurping keywords accepts every name, so nothing is misspelled.
-    if any(name -> endswith(String(name), "..."), accepted)
+    if accepts_any_keyword(f)
         return nothing
     end
+    accepted = declared_keywords(f)
     for (given, _) in kwargs
         if given in accepted
             continue
