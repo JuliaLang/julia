@@ -804,6 +804,13 @@ type `Y`, then another type `Comp2` with a parameter of type `X<:Y` is not a sub
 type-invariance (by contrast, Tuple is type-covariant in its parameters). See [Parametric Composite
 Types](@ref man-parametric-composite-types) for more explanation of these.
 
+### Why do I get `ERROR: MethodError: objects of type X are not callable`?
+
+This error occurs when you attempt to use an object that is not a function as if it were one. Common causes include:
+
+1. **Accidental Variable Shadowing in the REPL:** If you assign a value to a variable that shares a name with a built-in function (e.g., executing `sqrt = 5`), that name is bound to an integer for the remainder of the session. A subsequent call like `sqrt(25)` will attempt to call the integer `5`, throwing `MethodError: objects of type Int64 are not callable`. To resolve this, restart your Julia REPL session to restore the built-in function bindings.
+2. **Missing Multiplication Operators:** In mathematical expressions, omitting the `*` operator (for example, typing `x(y + 1)` instead of `x * (y + 1)`) causes Julia to treat the variable `x` as a function call.
+
 ### Why does Julia use `*` for string concatenation? Why not `+` or something else?
 
 The [main argument](@ref man-concatenation) against `+` is that string concatenation is not
