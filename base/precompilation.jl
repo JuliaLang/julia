@@ -649,7 +649,6 @@ precompiles only the given packages and their dependencies (unless
   (defaults to CPU_THREADS + 1, capped at 16, halved on Windows).
 - Extensions are precompiled when all their triggers are available in the environment.
 """
-# Include only cache files that are ready for workers.
 preresolved_snapshot(cachepath_cache) =
     Pair{Base.PkgId,String}[k => first(v) for (k, v) in cachepath_cache if !isempty(v)]
 
