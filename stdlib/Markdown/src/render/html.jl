@@ -22,7 +22,8 @@ include("rich.jl")
 # the URI, which is (still) rare. But they do occur in query strings and
 # indeed in the CommonMark spec tests.
 
-percent_escape(s) = '%' * join(map(b -> uppercase(string(b, base=16)), codeunits(s)), '%')
+percent_escape(s::AbstractString) =
+    '%' * join((uppercase(string(b, base=16)) for b in codeunits(s)), '%')
 encode_uri_component(s::AbstractString) = replace(s, r"[^A-Za-z0-9\-_.~/:?#@!$&'()*+,;=]+" => percent_escape)
 encode_uri_component(s::Symbol) = encode_uri_component(string(s))
 

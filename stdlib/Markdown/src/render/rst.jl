@@ -14,7 +14,7 @@ end
 rst(io::IO, md::MD) = rst(io, md.content)
 
 function rst(io::IO, header::Header{l}) where l
-    s = rstinline(header.text)
+    s = sprint(rstinline, header.text)
     println(io, s)
     println(io, string("*=-~:.^"[l])^length(s))
     println(io)
