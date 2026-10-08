@@ -67,9 +67,10 @@ static ssize_t idset_compact(jl_genericmemory_t *keys)
     return rehash ? -j : j;
 }
 
-// Find a free slot: gallop back from the end over the free tail, then bisect.
-// Any NULL slot whose predecessor is used (or index 0) is a valid slot, so holes
-// left by jl_idset_pop don't matter; returns l when the last slot is used.
+// Find the slot just past the last key: gallop back from the end over the free
+// tail, then bisect. Returns l when the last slot is used. This is exact only if
+// the keys form a packed prefix; with holes left by jl_idset_pop it may instead
+// return one of those holes (any NULL slot whose predecessor is used).
 static ssize_t idset_free_slot(jl_genericmemory_t *keys) JL_NOTSAFEPOINT
 {
     ssize_t l = keys->length;
@@ -92,8 +93,11 @@ static ssize_t idset_free_slot(jl_genericmemory_t *keys) JL_NOTSAFEPOINT
     return hi;
 }
 
-// Insert `key` into the first free slot at the end of the ordered set
-// `keys` (growing and compacting are insertion-order-preserving).
+// Insert `key` after the last key of the ordered set `keys` (growing and
+// compacting are insertion-order-preserving). If jl_idset_pop has left holes
+// and the last slot is free, `key` may fill an earlier hole instead, breaking
+// insertion order (Base.IdSet avoids this by only calling here once its last
+// slot is used).
 jl_genericmemory_t *jl_idset_put_key(jl_genericmemory_t *keys, jl_value_t *key, ssize_t *newidx)
 {
     ssize_t l = keys->length;
