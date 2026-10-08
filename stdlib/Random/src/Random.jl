@@ -13,7 +13,6 @@ include("DSFMT.jl")
 using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
-using SHA: SHA, SHA2_256_CTX, SHA2_512_CTX, SHA_CTX
 
 using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing,
     _throw_argerror
@@ -418,6 +417,7 @@ rand!
 
 
 include("Xoshiro.jl")
+include("SeedHasher.jl")
 include("RNGs.jl")
 include("MersenneTwister.jl")
 include("generation.jl")
