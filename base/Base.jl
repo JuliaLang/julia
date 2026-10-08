@@ -299,11 +299,11 @@ include("threadcall.jl")
 
 # Compiler frontend
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
-JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
+JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
 set_syntax_version(Base, VERSION)
 
 include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
-JuliaLowering.activate!(true; freeze_world_age=false)
+JuliaLowering.activate!(true; freeze_world_age=true)
 
 # code loading
 include("uuid.jl")
