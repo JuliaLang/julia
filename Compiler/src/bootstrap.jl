@@ -19,8 +19,48 @@ end
 # Base is complete: otherwise the compiler keeps running in the world it was bootstrapped in,
 # and its code that later definitions invalidated is saved twice, once for that world.
 function set_typeinf_world!()
+    # Infer the compiler's invalidated code for the new world with the compiler of the old one
+    # first. Otherwise the compiler infers itself on first use, where recursion makes it give up
+    # and compile that code without inference, which slows down all inference after.
+    args = Any[compile_invalidated!, tls_world_age()]
+    ccall(:jl_call_in_typeinf_world, Any, (Ptr{Any}, Cint), args, length(args))
     ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
     return nothing
+end
+
+# Infer and compile for `world` all code that has native code in the current world but is
+# not valid in later ones
+function compile_invalidated!(world::UInt)
+    oldworld = tls_world_age()
+    mis = MethodInstance[]
+    visit(Core.methodtable) do method
+        specs = isdefined(method, :specializations) ? method.specializations : nothing
+        if specs isa SimpleVector
+            for i = 1:length(specs)
+                mi = specs[i]
+                mi isa MethodInstance && is_compiled_invalidated(mi, oldworld) && push!(mis, mi)
+            end
+        elseif specs isa MethodInstance
+            is_compiled_invalidated(specs, oldworld) && push!(mis, specs)
+        end
+        return true
+    end
+    for mi in mis
+        typeinf_ext_toplevel(mi, world, SOURCE_MODE_ABI, TRIM_NO)
+    end
+    return nothing
+end
+
+function is_compiled_invalidated(mi::MethodInstance, world::UInt)
+    isdefined(mi, :cache) || return false
+    ci = mi.cache
+    while true
+        if ci.owner === nothing && ci.invoke != C_NULL && ci.min_world <= world <= ci.max_world
+            return ci.max_world != typemax(UInt)
+        end
+        isdefined(ci, :next) || return false
+        ci = ci.next
+    end
 end
 
 global bootstrapping_compiler::Bool = false
