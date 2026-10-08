@@ -307,6 +307,9 @@ function get_compare_strategy(p::Platform, key::String, default = compare_defaul
 end
 get_compare_strategy(p::AbstractPlatform, key::String, default = compare_default) = default
 
+# Tags for which absence is meaningful: a platform without the tag only matches
+# platforms that also lack it (rather than acting as a wildcard).
+const strict_presence_tags = ("sanitize",)
 
 
 """
@@ -1068,15 +1071,16 @@ function detect_cxxstring_abi()
 end
 
 """
-    host_triplet()
+    host_triplet(build_triplet::String = Base.BUILD_TRIPLET, ext_tags::String = Base.BUILD_EXT_TAGS)
 
 Build host triplet out of `Sys.MACHINE` and various introspective utilities that
 detect compiler ABI values such as `libgfortran_version`, `libstdcxx_version` and
 `cxxstring_abi`.  We do this without using any `Platform` tech as it must run before
-we have much of that built.
+we have much of that built.  Extended tags recorded by the build (e.g. `-sanitize+address`)
+are appended after the compiler ABI tags, as the triplet grammar requires.
 """
-function host_triplet()
-    str = Base.BUILD_TRIPLET
+function host_triplet(build_triplet::String = Base.BUILD_TRIPLET, ext_tags::String = Base.BUILD_EXT_TAGS)
+    str = build_triplet
 
     if !occursin("-libgfortran", str)
         libgfortran_version = detect_libgfortran_version()
@@ -1098,6 +1102,9 @@ function host_triplet()
             str = string(str, "-libstdcxx", libstdcxx_version.patch)
         end
     end
+
+    # Add on any extended tags recorded by the build
+    str = string(str, ext_tags)
 
     # Add on julia_version extended tag
     if !occursin("-julia_version+", str)
@@ -1137,14 +1144,22 @@ The reserved tags `os_version` and `libstdcxx_version` use this mechanism to pro
 bounded version constraints, where an artifact can specify that it was built using APIs
 only available in macOS `v"10.11"` and later, or an artifact can state that it requires
 a libstdc++ that is at least `v"3.4.22"`, etc...
+
+Keys present in only one of `a` or `b` are normally ignored, with the exception of the
+`sanitize` tag: a sanitized platform (e.g. `x86_64-linux-gnu-sanitize+memory`) never
+matches a platform without a `sanitize` tag, since instrumented and uninstrumented
+binaries cannot be mixed.
 """
 function platforms_match(a::AbstractPlatform, b::AbstractPlatform)
     for k in union(keys(tags(a)::Dict{String,String}), keys(tags(b)::Dict{String,String}))
         ak = get(tags(a), k, nothing)
         bk = get(tags(b), k, nothing)
 
-        # Only continue if both `ak` and `bk` are not `nothing`
+        # A tag missing from one side acts as a wildcard, except for strict tags
         if ak === nothing || bk === nothing
+            if k in strict_presence_tags
+                return false
+            end
             continue
         end
 

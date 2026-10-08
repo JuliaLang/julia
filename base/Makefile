@@ -8,6 +8,20 @@ include $(JULIAHOME)/deps/llvm-ver.make
 
 TAGGED_RELEASE_BANNER := ""
 
+# Extended platform tags (`-key+value`) describing this build, appended to the host
+# triplet after the detected compiler ABI tags.  Currently records which sanitizer
+# (if any) this build uses, so that `HostPlatform()` selects matching sanitized artifacts
+BUILD_EXT_TAGS :=
+ifeq ($(SANITIZE),1)
+ifeq ($(SANITIZE_MEMORY),1)
+BUILD_EXT_TAGS := -sanitize+memory
+else ifeq ($(SANITIZE_ADDRESS),1)
+BUILD_EXT_TAGS := -sanitize+address
+else ifeq ($(SANITIZE_THREAD),1)
+BUILD_EXT_TAGS := -sanitize+thread
+endif
+endif
+
 all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony features_h.jl file_constants.jl uv_constants.jl version_git.jl.phony)
 
 PCRE_CONST := 0x[0-9a-fA-F]+|[0-9]+|\([\-0-9]+\)
@@ -88,6 +102,7 @@ ifeq ($(OS), Darwin)
 	@printf "%s\n" "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --sdk macosx --show-sdk-version)\"" >> $@
 endif
 	@printf "%s\n" "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
+	@printf "%s\n" "const BUILD_EXT_TAGS = \"$(BUILD_EXT_TAGS)\"" >> $@
 
 	@# From `JL_RUNTIME_LIBS` in Make.inc. A trailing `*` marks a prefix.
 	@printf "%s\n" "const RUNTIME_LIBRARY_NAMES = String[" >> $@
