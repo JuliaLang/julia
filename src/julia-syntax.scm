@@ -1261,7 +1261,7 @@
 
 (define (expand-let e (hard? #t))
   (let ((ex    (caddr e))
-        (binds (let-binds e))
+        (binds (filter (lambda (x) (not (linenum? x))) (let-binds e)))
         (hs    (if hard? '((hardscope)) '())))
     (expand-forms
      (if
@@ -1318,7 +1318,6 @@
                                           (= ,(cadar binds) ,tmp)
                                           ,blk)))))))
                (else (error "invalid let syntax"))))
-             ((linenum? (car binds)) (loop (cdr binds) blk))
              (else (error "invalid let syntax")))))))))
 
 (define (valid-macro-def-name? e)
