@@ -392,7 +392,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                     ast = expr_to_syntax(ast)
                 end
                 ast = _softscope(ast)
-                warn_on_non_owning_accesses(ast)
+                invokelatest(warn_on_non_owning_accesses, ast)
                 if !isempty(backend.ast_transforms)
                     expr = syntax_to_expr(ast)
                     for xf in backend.ast_transforms
