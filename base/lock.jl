@@ -761,6 +761,132 @@ end
     export Event
 end
 
+struct NonReentrantLockState
+    held::Bool
+    waiting::Bool
+end
+
+NonReentrantLockState(; held::Bool=false, waiting::Bool=false) = NonReentrantLockState(held, waiting)
+
+"""
+    NonReentrantLock()
+
+Create a compact, task-owned, non-reentrant lock.
+
+`lock` and `trylock` throw `ConcurrencyViolationError` if the current task already
+holds the lock. Only the owning task may `unlock` it. Other attempts to unlock
+throw `ConcurrencyViolationError`. Waiting tasks are suspended, without a fairness
+guarantee. `trylock` never waits.
+
+Lock/unlock provide acquire/release memory ordering. Finalizers remain inhibited
+for the owning task while the lock is held. The wait condition is allocated only
+on contention.
+
+The `cancel` keyword controls acquisition, not the protected body. The default
+checks the scoped token only on contention. An explicit token is also checked at
+entry. Cancellation detected after a slow-path acquisition releases the lock
+before throwing. `cancel=nothing` shields acquisition. Condition cleanup and
+reacquisition are non-cancellable.
+"""
+mutable struct NonReentrantLock <: AbstractLock
+    @atomic owner::Union{Nothing,Task}
+    @atomic state::NonReentrantLockState
+    @atomic condition::Union{Nothing,ThreadSynchronizer}
+
+    NonReentrantLock() = new(nothing, NonReentrantLockState(), nothing)
+end
+
+function waitcondition(lck::NonReentrantLock)
+    condition = @atomic :acquire lck.condition
+    isnothing(condition) || return condition
+    candidate = ThreadSynchronizer()
+    previous, installed = @atomicreplace :release :acquire lck.condition nothing => candidate
+    return installed ? candidate : previous::ThreadSynchronizer
+end
+
+@inline function trylock(lck::NonReentrantLock)
+    task = current_task()
+    (@atomic :unordered lck.owner) === task && throw(ConcurrencyViolationError("recursive lock acquisition"))
+    state = @atomic :monotonic lck.state
+    state.held && return false
+    GC.disable_finalizers()
+    if (@atomicreplace :acquire :monotonic lck.state state => NonReentrantLockState(held=true, waiting=state.waiting)).success
+        @atomic :unordered lck.owner = task
+        return true
+    end
+    GC.enable_finalizers()
+    return false
+end
+
+@noinline function acquire_slow(lck::NonReentrantLock, cancel)
+    Threads.lock_profiling() && Threads.inc_lock_conflict_count()
+    token = check_cancel_arg(cancel)
+    condition = waitcondition(lck)
+    @lock condition begin
+        while true
+            isnothing(token) || checkcancel(token.source)
+            trylock(lck) && break
+            previous, _ = @atomicreplace :release :monotonic lck.state NonReentrantLockState(held=true) => NonReentrantLockState(held=true, waiting=true)
+            if previous.held
+                wait(condition; cancel=token)
+            end
+        end
+    end
+    if !isnothing(token) && iscancelled(token.source)
+        unlock(lck)
+        checkcancel(token.source)
+    end
+    return nothing
+end
+
+@noinline function release_slow(lck::NonReentrantLock)
+    condition = (@atomic :unordered lck.condition)::ThreadSynchronizer
+    @lock condition begin
+        @atomic :release lck.state = NonReentrantLockState()
+        notify(condition; all=true)
+    end
+    return nothing
+end
+
+@inline function unlock(lck::NonReentrantLock)
+    (@atomic :unordered lck.owner) === current_task() || throw(ConcurrencyViolationError("lock is not owned by the current task"))
+    @atomic :unordered lck.owner = nothing
+    if !(@atomicreplace :release :acquire lck.state NonReentrantLockState(held=true) => NonReentrantLockState()).success
+        release_slow(lck)
+    end
+    GC.enable_finalizers()
+    return nothing
+end
+
+islocked(lck::NonReentrantLock) = (@atomic :monotonic lck.state).held
+
+function assert_havelock(lck::NonReentrantLock)
+    (@atomic :unordered lck.owner) === current_task() || concurrency_violation()
+    return nothing
+end
+
+@inline function lock(lck::NonReentrantLock; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel = precheck_cancel_arg(cancel)
+    trylock(lck) || acquire_slow(lck, cancel)
+    return nothing
+end
+
+@inline function lock(body, lck::NonReentrantLock; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    lock(lck; cancel)
+    try
+        return body()
+    finally
+        unlock(lck)
+    end
+end
+
+lock(condition::GenericCondition{NonReentrantLock}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    lock(condition.lock; cancel)
+lock(body, condition::GenericCondition{NonReentrantLock}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    lock(body, condition.lock; cancel)
+_uncancellable_lock(lck::NonReentrantLock) = lock(lck; cancel=nothing)
+relockall(lck::NonReentrantLock, ::Nothing) = lock(lck; cancel=nothing)
+
 const PerStateInitial       = 0x00
 const PerStateHasrun        = 0x01
 const PerStateErrored       = 0x02
@@ -774,6 +900,9 @@ function `initializer` exactly once per process. All concurrent and future
 calls in the same process will return exactly the same value. This is useful in
 code that will be precompiled, as it allows setting up caches or other state
 which won't get serialized.
+
+Recursive initialization in the same task throws `ConcurrencyViolationError`.
+If the initializer throws, subsequent calls report that initialization failed.
 
 !!! compat "Julia 1.12"
     This type requires Julia 1.12 or later.
@@ -802,10 +931,10 @@ mutable struct OncePerProcess{T, F} <: Function
     @atomic state::UInt8 # 0=initial, 1=hasrun, 2=error
     @atomic allow_compile_time::Bool
     const initializer::F
-    const lock::ReentrantLock
+    const lock::NonReentrantLock
 
     function OncePerProcess{T,F}(initializer::F) where {T, F}
-        once = new{T,F}(nothing, PerStateInitial, true, initializer, ReentrantLock())
+        once = new{T,F}(nothing, PerStateInitial, true, initializer, NonReentrantLock())
         return once
     end
 end
