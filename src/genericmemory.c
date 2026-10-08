@@ -26,12 +26,13 @@ JL_DLLEXPORT char *jl_genericmemory_typetagdata(jl_genericmemory_t *m) JL_NOTSAF
 
 #define MAXINTVAL (((size_t)-1)>>1)
 
-// ONLY USE FROM CODEGEN. It only partially initializes the mem
+// Leaves the length and the data uninitialized. Before the next safepoint, the caller must set
+// the length, and zero the data if the element type requires it.
 JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory_unchecked(jl_ptls_t ptls, size_t nbytes, jl_datatype_t *mtype)
 {
-    size_t tot = nbytes + LLT_ALIGN(sizeof(jl_genericmemory_t),JL_SMALL_BYTE_ALIGNMENT);
-
-    int pooled = tot <= GC_MAX_SZCLASS;
+    // LateLowerGCFrame inlines the pooled case for constant sizes; dynamic sizes still get here
+    int pooled = jl_genericmemory_data_inline(nbytes);
+    size_t tot = nbytes + JL_GENERICMEMORY_INLINE_DATA_OFFSET;
     char *data;
     jl_genericmemory_t *m;
     if (!pooled) {
@@ -40,15 +41,13 @@ JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory_unchecked(jl_ptls_t ptls
     }
     m = (jl_genericmemory_t*)jl_gc_alloc(ptls, tot, mtype);
     if (pooled) {
-        // N.B. if this offset changes, also update emit_const_len_memorynew in cgutils.cpp
-        data = (char*)m + JL_SMALL_BYTE_ALIGNMENT;
+        data = (char*)m + JL_GENERICMEMORY_INLINE_DATA_OFFSET;
     }
     else {
         int isaligned = 1; // jl_gc_managed_malloc is always aligned
         jl_gc_track_malloced_genericmemory(ptls, m, isaligned);
         jl_genericmemory_data_owner_field(m) = (jl_value_t*)m;
     }
-    // length set by codegen
     m->ptr = data;
     return m;
 }
