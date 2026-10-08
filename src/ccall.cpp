@@ -80,8 +80,7 @@ static bool runtime_sym_gvs(jl_codectx_t &ctx, const native_sym_arg_t &symarg,
     // If f_name isn't constant or f_lib_expr is present but f_lib is not,
     // emit a local cache for sym, but do not cache lib
     if (!((f_lib || symarg.f_lib_expr == NULL) && f_name)) {
-        std::string name = "dynccall_";
-        name += std::to_string(jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1));
+        std::string name = ctx.emission_context.make_name("dynccall_");
         Module *M = jl_Module;
         auto T_pvoidfunc = getPointerTy(M->getContext());
         lib = nullptr;
@@ -112,14 +111,12 @@ static bool runtime_sym_gvs(jl_codectx_t &ctx, const native_sym_arg_t &symarg,
         symMap = &ctx.emission_context.symMapDefault;
     }
     else {
-        std::string name = "ccalllib_";
-        name += llvm::sys::path::filename(f_lib);
-        name += std::to_string(jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1));
+        std::string name = ctx.emission_context.make_name(("ccalllib_" + llvm::sys::path::filename(f_lib)).str());
         runtime_lib = true;
         auto &libgv = ctx.emission_context.libMapGV[f_lib];
         if (libgv.first == NULL) {
             libptrgv = new GlobalVariable(*M, getPointerTy(M->getContext()), false,
-                                          GlobalVariable::ExternalLinkage,
+                                          ctx.emission_context.imaging_mode ? GlobalVariable::ExternalLinkage : GlobalVariable::InternalLinkage,
                                           Constant::getNullValue(getPointerTy(M->getContext())), name);
             libgv.first = libptrgv;
         }
@@ -131,13 +128,10 @@ static bool runtime_sym_gvs(jl_codectx_t &ctx, const native_sym_arg_t &symarg,
 
     GlobalVariable *&llvmgv = (*symMap)[f_name];
     if (llvmgv == NULL) {
-        std::string name = "ccall_";
-        name += f_name;
-        name += "_";
-        name += std::to_string(jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1));
+        std::string name = ctx.emission_context.make_name("ccall_", f_name);
         auto T_pvoidfunc = getPointerTy(M->getContext());
         llvmgv = new GlobalVariable(*M, T_pvoidfunc, false,
-                                    GlobalVariable::ExternalLinkage,
+                                    ctx.emission_context.imaging_mode ? GlobalVariable::ExternalLinkage : GlobalVariable::InternalLinkage,
                                     Constant::getNullValue(T_pvoidfunc), name);
     }
 
@@ -273,9 +267,9 @@ static GlobalVariable *emit_plt_thunk(
     }
     std::string fname;
     if (symarg.f_name)
-        raw_string_ostream(fname) << "jlplt_" << symarg.f_name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
+        fname = ctx.emission_context.make_name("jlplt_", symarg.f_name);
     else
-        raw_string_ostream(fname) << "jldynplt_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
+        fname = ctx.emission_context.make_name("jldynplt_");
     Function *plt = Function::Create(functype,
                                      GlobalVariable::PrivateLinkage,
                                      fname, M);
@@ -284,7 +278,7 @@ static GlobalVariable *emit_plt_thunk(
         plt->setCallingConv(cc);
     auto T_pvoidfunc = getPointerTy(M->getContext());
     GlobalVariable *got = new GlobalVariable(*M, T_pvoidfunc, false,
-                                             shared ? GlobalVariable::ExternalLinkage : GlobalVariable::PrivateLinkage,
+                                             (shared && ctx.emission_context.imaging_mode) ? GlobalVariable::ExternalLinkage : GlobalVariable::PrivateLinkage,
                                              plt,
                                              fname + "_got");
     if (shared) {
@@ -911,9 +905,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     // Make sure to find a unique name
     std::string ir_name;
     while (true) {
-        raw_string_ostream(ir_name)
-            << (ctx.f->getName().str()) << "u"
-            << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
+        ir_name = ctx.emission_context.make_name(ctx.f->getName().str() + "u");
         if (jl_Module->getFunction(ir_name) == NULL)
             break;
     }
