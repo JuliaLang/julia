@@ -126,6 +126,8 @@ static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_CANSAF
 static int has_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
 {
     while (1) {
+        if (jl_is_datatype(v) && (env == NULL || !((jl_datatype_t*)v)->hasfreetypevars))
+            return ((jl_datatype_t*)v)->hasfreetypevars;
         if (jl_is_typevar(v)) {
             return !typeenv_has(env, (jl_tvar_t*)v);
         }
@@ -269,6 +271,8 @@ JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v)
 int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
 {
     while (1) {
+        if (jl_is_datatype(v) && !((jl_datatype_t*)v)->hasfreetypevars)
+            return 0;
         if (jl_is_typevar(v)) {
             return typeenv_has_ne(env, (jl_tvar_t*)v);
         }
