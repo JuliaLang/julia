@@ -541,20 +541,31 @@ ERROR: ArgumentError: Cannot call tail on an empty tuple.
 tail(x::Tuple) = argtail(x...)
 tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
 
+# NOTE: the type walkers here (and their siblings elsewhere in Base) read
+# UnionAll fields with `getfield`: property syntax would dispatch to the
+# deprecated `getproperty(::UnionAll, ::Symbol)` compat method, whose
+# `:var`/`:body` branches would pull the TypeVar-minting cache (a locked
+# WeakValueIdDict) into the inference graph of everything that walks types.
 function unwrap_unionall(@nospecialize(a))
     @_foldable_meta
     while isa(a,UnionAll)
-        a = a.body
+        a = getfield(a, :inner)
     end
     return a
 end
 
 function rewrap_unionall(@nospecialize(t), @nospecialize(u))
     @_foldable_meta
-    if !isa(u, UnionAll)
-        return t
-    end
-    return UnionAll(u.var, rewrap_unionall(t, u.body))
+    return ccall(:jl_rewrap_unionall, Any, (Any, Any), t, u)
+end
+
+# re-close exactly one binder (that of `u`) over a body derived from `u.inner`
+# with its reference framing preserved; normalizes like the `where` constructor
+# (drops a vacuous binder, `T where T<:S` => `S`)
+function rewrap_unionall_one(@nospecialize(t), u::UnionAll)
+    @_foldable_meta
+    t === getfield(u, :inner) && return u
+    return ccall(:jl_rewrap_unionall_one, Any, (Any, Any), t, u)
 end
 
 function rewrap_unionall(t::Core.TypeofVararg, @nospecialize(u))
@@ -564,21 +575,47 @@ function rewrap_unionall(t::Core.TypeofVararg, @nospecialize(u))
         return t
     end
     T = rewrap_unionall(t.T, u)
-    if !isdefined(t, :N) || t.N === u.var
+    if !isdefined(t, :N) || (t.N isa TypeVarRef && (t.N::TypeVarRef).depth == unionall_depth(u))
+        # the length was bound by the outermost enclosing binder
         return Vararg{T}
     end
     return Vararg{T, t.N}
 end
 
-# replace TypeVars in all enclosing UnionAlls with fresh TypeVars
-function rename_unionall(@nospecialize(u))
-    if !isa(u, UnionAll)
-        return u
+# number of binders in a `where` chain
+function unionall_depth(@nospecialize(u))
+    @_foldable_meta
+    n = 0
+    while u isa UnionAll
+        n += 1
+        u = getfield(u, :inner)
     end
-    var = u.var::TypeVar
-    body = UnionAll(var, rename_unionall(u.body))
-    nv = TypeVar(var.name, var.lb, var.ub)
-    return UnionAll(nv, body{nv})
+    return n
+end
+
+# under the de Bruijn representation alpha-equivalent types are already
+# structurally identical, so there are no variable identities to freshen
+rename_unionall(@nospecialize(u)) = u
+
+# Open a `where` binder: make a fresh (free) TypeVar carrying the binder's name
+# and bounds and substitute it for the binder's bound-variable references.
+# Returns `(var, body)`. Opening nested binders outside-in keeps every
+# extracted subterm free of dangling references.
+function unionall_open(u::UnionAll)
+    pair = ccall(:jl_unionall_open2, Any, (Any,), u)::Core.SimpleVector
+    return pair[1]::TypeVar, pair[2]
+end
+
+# The positional sibling of `UnionAll(var, body)` is the four-argument
+# `UnionAll(name, lb, ub, body)` constructor (defined in boot.jl): it builds
+# the `where` node directly from a binder's fields, around a body that
+# references the binder by position, validating the fields and normalizing
+# like the translating constructor (a vacuous binder is dropped, and
+# `T where T<:S` becomes `S`). The raw helper below performs the same
+# construction with no checks and no normalization, for internal structural
+# walks that rebuild an existing node and must preserve its exact shape.
+function unionall_raw(name::Symbol, @nospecialize(lb), @nospecialize(ub), @nospecialize(body))
+    return ccall(:jl_new_unionall_raw, Any, (Any, Any, Any, Any), name, lb, ub, body)::UnionAll
 end
 
 # remove concrete constraint on diagonal TypeVar if it comes from troot
@@ -1288,18 +1325,21 @@ const C_NULL = bitcast(Ptr{Cvoid}, 0)
 has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Int32, (Any, Any), t, v) !== Int32(0)
 
 # Check whether all type parameters are constrained by fields or other constrained tvars.
-# `tvars` must be ordered from outermost to innermost `UnionAll`.
+# `tvars` must be ordered from outermost to innermost `UnionAll`, carrying the raw
+# (de Bruijn) bounds; occurrences are checked positionally, so the field types and
+# bounds are the raw stored terms, not materialized against the tvars.
 function _fieldtypes_constrain_typevars(tvars::Array{Any,1}, fts::Core.SimpleVector)
     nparams = length(tvars)
     n = length(fts)
     i = nparams
     while i !== 0
-        @inbounds tv = tvars[i]::TypeVar
+        # binder i (outermost-first) is referenced from field types (which sit
+        # inside all nparams binders) with index nparams - i + 1
         constrained = false
         j = 1
         while j !== n + 1
             ft = fts[j]
-            if has_typevar(ft, tv)
+            if has_typevarref(ft, (nparams - i) + 1)
                 constrained = true
                 break
             end
@@ -1309,13 +1349,11 @@ function _fieldtypes_constrain_typevars(tvars::Array{Any,1}, fts::Core.SimpleVec
             j = i + 1
             remaining = nparams - i
             while remaining !== 0
+                # binder j's bound sits inside binders 1..j-1, so it references
+                # binder i with index j - i
                 @inbounds tv2 = tvars[j]::TypeVar
-                if has_typevar(tv2.ub, tv)
+                if has_typevarref(tv2.ub, j - i)
                     constrained = true
-                    break
-                end
-                if tv2 === tv
-                    constrained = false
                     break
                 end
                 j += 1
@@ -1328,21 +1366,37 @@ function _fieldtypes_constrain_typevars(tvars::Array{Any,1}, fts::Core.SimpleVec
     return true
 end
 
+# whether a de Bruijn reference with root-index `i` occurs in `t`
+has_typevarref(@nospecialize(t), i::Int) = ccall(:jl_tvarref_occurs, Int32, (Any, Int), t, i) !== Int32(0)
+
+# whether `t` contains a bound-variable reference whose binder is not part of
+# `t` itself (i.e. `t` is a subterm detached from under its binders); such
+# fragments are invisible to `has_free_typevars`
+has_dangling_typevarrefs(@nospecialize t) =
+    (@_total_meta; ccall(:jl_has_dangling_tvarrefs, Int32, (Any,), t) !== Int32(0))
+
 # Return the DataType, outer-to-inner type variables, and field types for `ty`.
 function _defaultctor_typeinfo(@nospecialize(ty::Type))
     nparams = 0
     ua = ty
     while isa(ua, UnionAll)
         nparams = nparams + 1
-        ua = ua.body
+        ua = getfield(ua, :inner)
     end
     dt = ua::DataType
+    # n.b. the materialized TypeVars carry the raw (de Bruijn) bounds; they only
+    # provide names and bounds for the method-definition protocol below, which
+    # reads the bound references positionally (so the unvalidated constructor
+    # is required: a bound that is exactly a reference is not a valid TypeVar
+    # bound elsewhere)
     tvars = Array{Any,1}(Core.undef, nparams)
     ua = ty
     i = 1
     while i !== nparams + 1
-        @inbounds tvars[i] = (ua::UnionAll).var
-        ua = (ua::UnionAll).body
+        u = ua::UnionAll
+        @inbounds tvars[i] = ccall(:jl_new_typevar_raw, Any, (Any, Any, Any),
+                                   getfield(u, :name), getfield(u, :lb), getfield(u, :ub))
+        ua = getfield(u, :inner)
         i = i + 1
     end
     fts = ccall(:jl_get_fieldtypes, Any, (Any,), dt)::Core.SimpleVector
@@ -1486,7 +1540,9 @@ function _defaultctors(@nospecialize(ty), functionloc)
     typedt = Core.apply_type(Type, dt)
     i = nparams
     while i !== 0
-        @inbounds typedt = UnionAll(tvars[i], typedt)
+        # raw re-wrap: Type{dt} references the binders positionally already
+        @inbounds tv = tvars[i]::TypeVar
+        typedt = UnionAll(tv.name, tv.lb, tv.ub, typedt)
         i = i - 1
     end
     @inbounds inner_atypes_arr[1] = typedt

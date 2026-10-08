@@ -732,6 +732,8 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             }
         }
     }
+    if (jl_is_unionall(v)) // a cache, recreated on demand
+        record_field_change((jl_value_t**)&((jl_unionall_t*)v)->canonvar, NULL);
     if (jl_is_binding(v)) {
         jl_binding_t *b = (jl_binding_t*)v;
         if (s->incremental && needs_uniquing(v, s->query_cache)) {
@@ -2626,6 +2628,27 @@ static void jl_prune_idset(_Atomic(jl_svec_t*) *pkeys, _Atomic(jl_genericmemory_
         if (ptrhash_get(&serialization_order, k) != HT_NOTFOUND)
             arraylist_push(&keys_list, k);
     }
+    if (keys_list.len == 0) {
+        // Everything was pruned. The replacements below would then be the
+        // shared `jl_emptysvec` / `jl_an_empty_memory_any` singletons, which
+        // must not be re-registered at the pruned objects' serialization slots
+        // (that would alias every other reference to the singletons with those
+        // slots). Point the fields at the singletons directly instead, and put
+        // an unreferenced placeholder into the old `keys` slot, so that the
+        // pruned entries it holds are not serialized (a keyset holds no
+        // pointers and can stay as is).
+        arraylist_free(&keys_list);
+        jl_svec_t *placeholder = jl_alloc_svec_uninit(1);
+        jl_svecset(placeholder, 0, jl_nothing);
+        void *idx = ptrhash_get(&serialization_order, keys);
+        assert(idx != HT_NOTFOUND && idx != (void*)(uintptr_t)-1);
+        assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == keys);
+        ptrhash_put(&serialization_order, placeholder, idx);
+        serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = placeholder;
+        jl_gc_write_atomic(parent, *pkeys, jl_svec_t, jl_emptysvec, relaxed);
+        jl_gc_write_atomic(parent, *pkeyset, jl_genericmemory_t, (jl_genericmemory_t*)jl_an_empty_memory_any, relaxed);
+        return;
+    }
     jl_genericmemory_t *keyset = jl_atomic_load_relaxed(pkeyset);
     _Atomic(jl_genericmemory_t*)keyset2;
     jl_atomic_store_relaxed(&keyset2, (jl_genericmemory_t*)jl_an_empty_memory_any);
@@ -2641,11 +2664,20 @@ static void jl_prune_idset(_Atomic(jl_svec_t*) *pkeys, _Atomic(jl_genericmemory_
     ptrhash_put(&serialization_order, keys2, idx);
     serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = keys2;
 
-    idx = ptrhash_get(&serialization_order, keyset);
-    assert(idx != HT_NOTFOUND && idx != (void*)(uintptr_t)-1);
-    assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == keyset);
-    ptrhash_put(&serialization_order, jl_atomic_load_relaxed(&keyset2), idx);
-    serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = jl_atomic_load_relaxed(&keyset2);
+    if (keyset == (jl_genericmemory_t*)jl_an_empty_memory_any) {
+        // a small set uses the shared empty keyset, whose slot must not be
+        // taken over: give the new keyset its own slot (it holds no pointers,
+        // so it needs no further reachability walk)
+        arraylist_push(&serialization_queue, (void*)jl_atomic_load_relaxed(&keyset2));
+        ptrhash_put(&serialization_order, jl_atomic_load_relaxed(&keyset2), to_seroder_entry(serialization_queue.len - 1));
+    }
+    else {
+        idx = ptrhash_get(&serialization_order, keyset);
+        assert(idx != HT_NOTFOUND && idx != (void*)(uintptr_t)-1);
+        assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == keyset);
+        ptrhash_put(&serialization_order, jl_atomic_load_relaxed(&keyset2), idx);
+        serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = jl_atomic_load_relaxed(&keyset2);
+    }
     jl_gc_write_atomic(parent, *pkeys, jl_svec_t, keys2, relaxed);
     jl_gc_write_atomic(parent, *pkeyset, jl_genericmemory_t, jl_atomic_load_relaxed(&keyset2), relaxed);
 }
@@ -2952,6 +2984,8 @@ static jl_value_t *extract_wrapper(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEP
 
 JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val, int insert)
 {
+    if (jl_global_roots_list == NULL)
+        return NULL; // called before the roots tables exist (early jl_init_types)
     if (jl_is_globally_rooted(val))
         return val;
     jl_value_t *tw = extract_wrapper(val);
