@@ -135,8 +135,8 @@ static uintptr_t jl_lock_profile_rd_held(void) JL_NOTSAFEPOINT
 
 void jl_lock_profile(void)
 {
-    int got = jl_trylock_profile();
-    assert(got); (void)got;
+    if (!jl_trylock_profile())
+        abort();
 }
 
 int jl_trylock_profile(void)
