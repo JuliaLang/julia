@@ -15,7 +15,13 @@
 #include <unistd.h>
 #endif
 #ifdef __APPLE__
-#include <sys/sem.h>
+#include <unistd.h>
+// Private libSystem SPI, not declared in the public SDK. Weakly import it so
+// the early sandbox check remains optional if Apple removes the API.
+extern "C" {
+extern int sandbox_check(pid_t pid, const char *operation, int type, ...)
+    __attribute__((weak_import)) JL_NOTSAFEPOINT;
+}
 #endif
 
 namespace endian = llvm::support::endian;
@@ -87,14 +93,13 @@ static bool robustLocksAvailable() JL_NOTSAFEPOINT
     size_t len = 0;
     return syscall(SYS_get_robust_list, 0, &head, &len) == 0;
 #elif defined(__APPLE__)
-    // Apple LMDB uses SysV semaphores, which sandboxes (e.g. sandbox-exec
-    // without ipc-sysv-sem) may deny. LMDB only finds out after resetting the
-    // lock file, so concurrent openers then fail with MDB_INVALID.
-    int semid = semget(IPC_PRIVATE, 2, IPC_CREAT | 0600);
-    if (semid < 0)
-        return false;
-    semctl(semid, 0, IPC_RMID);
-    return true;
+    // Seatbelt may allow semget to create a set while denying SETALL, semop,
+    // and IPC_RMID. An allocation-based probe would both miss the restriction
+    // and leak the set. Query the policy before LMDB touches the lock file.
+    // The operation takes no filter arguments (SANDBOX_FILTER_NONE = 0).
+    // Only an explicit denial (> 0) disables the cache; if the API is missing
+    // or the query fails (< 0), let LMDB try opening the cache normally.
+    return !sandbox_check || sandbox_check(getpid(), "ipc-sysv-sem", 0) <= 0;
 #else
     return true;
 #endif
