@@ -89,6 +89,7 @@
     end
     @test uppercase(Base.AnnotatedString(SubString("abcd", 1, 3), [(1:1, :n, 1)])) isa Base.AnnotatedString{String, Int}
     @test (@inferred join(split(valued(1) * " " * valued(2)))) isa Base.AnnotatedString{String, Int}
+    @test collect(SubString(valued(1), 1, 1)) isa Vector{Base.AnnotatedChar{Char, Int}} # As its eltype says
     # A value outside the value type is refused with a clear error
     @test_throws ArgumentError Base.annotate!(valued(1), 1:1, :m, "s")
     @test_throws ArgumentError Base.annotate!(Base.AnnotatedIOBuffer{Int}(), 1:1, :m, "s")
