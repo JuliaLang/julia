@@ -2880,7 +2880,9 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, o
 
         # bundle and forward excess if there's a restkw, else throw kwerr
         handle_excess = if !isempty(restkw)
-            excess_kw = ssavar(ctx, arg2_name, "excess_kw")
+            # could be an ssavalue, but show(::Method) expects this...
+            excess_kw = newsym(
+                ctx, restkw[1][1], string(syntax_name(restkw[1][1]), "..."))
             @ast ctx src [:(=)
                 excess_kw
                 [:call "pairs"::top
