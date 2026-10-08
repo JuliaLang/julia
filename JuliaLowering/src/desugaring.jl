@@ -114,7 +114,7 @@ function relayer_global_if_unhygienic(ctx, st::SyntaxTree)
     sc2 = escape_layer(sc, true)
     return _relayer_global_if_unhygienic(relayered, st, sc2), relayered
 end
-function _relayer_global_if_unhygienic(done::SyntaxList, st::SyntaxTree, sc::SyntaxContext)
+function _relayer_global_if_unhygienic(done::Vector{SyntaxTree}, st::SyntaxTree, sc::SyntaxContext)
     k = head(st)
     if k === :identifier && is_flisp_compat(st) && st.context !== sc
         push!(done, st)
@@ -306,7 +306,8 @@ function lower_tuple_assignment(ctx, assignment_srcref, lhss, rhs)
             [:call "getfield"::core tmp i::value]
         ])
     end
-    newnode(assignment_srcref, :block, stmts)
+    @mknode(;source=assignment_srcref, context=assignment_srcref.context,
+            head=:block, children=stmts)
 end
 
 # Implement destructuring with `lhs` a tuple expression (possibly with
@@ -439,7 +440,7 @@ function expand_property_destruct(ctx, ex)
         ]))
     end
     push!(stmts, @ast ctx rhs1 [:removable rhs1])
-    newnode(ex, :block, stmts)
+    @mknode(;source=ex, context=ex.context, head=:block, children=stmts)
 end
 
 # Expands all cases of general tuple destructuring, eg
@@ -480,7 +481,7 @@ function expand_tuple_destruct(ctx, ex, is_const)
     end
     _destructure(ctx, ex, stmts, lhs, rhs1, is_const)
     push!(stmts, @ast ctx rhs1 [:removable rhs1])
-    newnode(ex, :block, stmts)
+    @mknode(;source=ex, context=ex.context, head=:block, children=stmts)
 end
 
 #-------------------------------------------------------------------------------
@@ -1557,7 +1558,7 @@ function expand_condition(ctx, ex)
         cs = expand_cond_children(ctx, test)
         test = isempty(cs) ? (@ast ctx ex (k === :&&)::value) :
             length(cs) == 1 ? (@ast ctx ex cs[1]) :
-            newnode(test, k, cs)
+            @mknode(;source=test, context=test.context, head=k, children=cs)
     else
         test = expand_forms_2(ctx, test)
     end
@@ -1971,7 +1972,7 @@ function expand_cglobal(ctx, ex)
     end
 end
 
-function remove_kw_args!(ctx, args::SyntaxList)
+function remove_kw_args!(ctx, args::Vector{SyntaxTree})
     kws = nothing
     j = 0
     num_parameter_blocks = 0
@@ -2284,7 +2285,8 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
         [:placeholder] -> nothing
         ([:(::) [:identifier] t], when=type_decls) -> let x = ex[1]
             t2 = expand_forms_2(ctx, t)
-            push!(stmts, newnode(ex, :decl, SyntaxList(x, t2)))
+            push!(stmts, @mknode(;source=ex, context=ex.context,
+                                 head=:decl, children=SyntaxList(x, t2)))
             make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
         end
         ([:(::) [:placeholder] t], when=type_decls) -> let
@@ -2351,7 +2353,7 @@ function expand_decls(ctx, ex)
     end
     # flisp quirk: if not a plain `global x` or `local x`, value is readable
     val_nothing && push!(stmts, @ast ctx ex (::nothing))
-    newnode(ex, :block, stmts)
+    @mknode(;source=ex, context=ex.context, head=:block, children=stmts)
 end
 
 # Iterate over the variable names assigned to from a "fancy assignment left hand
@@ -2422,7 +2424,7 @@ end
 # inferable during dispatch as they may only be part of the bounds of another
 # type. Thus we might get false positives here but we shouldn't get false
 # negatives.
-function select_used_typevars(uses::SyntaxList, typevars::SyntaxList)
+function select_used_typevars(uses::Vector{SyntaxTree}, typevars::Vector{SyntaxTree})
     used = BitVector(undef, length(typevars))
     for (i, tv) in enumerate(typevars)
         @jl_assert head(tv) === :_typevar tv
@@ -2450,13 +2452,13 @@ function select_used_typevars(uses::SyntaxList, typevars::SyntaxList)
     return used
 end
 
-used_typevars(uses::SyntaxList, tvs::SyntaxList) =
+used_typevars(uses::Vector{SyntaxTree}, tvs::Vector{SyntaxTree}) =
     tvs[select_used_typevars(uses, tvs)]
 
-unused_typevars(uses::SyntaxList, tvs::SyntaxList) =
+unused_typevars(uses::Vector{SyntaxTree}, tvs::Vector{SyntaxTree}) =
     tvs[map(!, select_used_typevars(uses, tvs))]
 
-function make_assigns(ctx, ls::SyntaxList, rs::SyntaxList)
+function make_assigns(ctx, ls::Vector{SyntaxTree}, rs::Vector{SyntaxTree})
     out = SyntaxList()
     for (l, r) in zip(ls, rs)
         push!(out, @ast ctx r [:(=) l r])
@@ -2471,7 +2473,7 @@ function scope_nest(ctx, assigns, body)
     body
 end
 
-function pos_req_args(argl::SyntaxList)
+function pos_req_args(argl::Vector{SyntaxTree})
     last = lastindex(argl)
     for i in eachindex(argl)
         if head(argl[i]) === :kw || head(argl[i]) === :... || head(argl[i]) === :parameters
@@ -2482,7 +2484,7 @@ function pos_req_args(argl::SyntaxList)
     argl[1:last]
 end
 
-function pos_opt_args(argl::SyntaxList)
+function pos_opt_args(argl::Vector{SyntaxTree})
     opt_start = length(pos_req_args(argl))+1
     opt_end = -1
     for i in opt_start:lastindex(argl)
@@ -2938,8 +2940,8 @@ end
 # (hack, see _expr_arg_syms).
 _lower_destructuring_arg(stmts, ctx, i, ex) = @stm ex begin
     [:tuple _...] -> let arg2 = newsym(ctx, ex, "destructured#" * string(i))
-        push!(stmts, @ast(ctx, ex, [:local(;meta=CompileHints(:is_destructured_arg, true))
-            [:(=) ex arg2]]))
+        ldecl = @ast(ctx, ex, [:local [:(=) ex arg2]])
+        push!(stmts, setmeta!(ldecl, :is_destructured_arg, true))
         arg2
     end
     [:(::) x t] -> @ast ctx ex [:(::) _lower_destructuring_arg(stmts, ctx, i, x) t]
@@ -4336,7 +4338,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         # structure. For now we attribute to the parent node.
         cond = length(cs) == 2 ?
             cs[1] :
-            newnode(ex, k, cs[1:end-1])
+            @mknode(;source=ex, context=ex.context, head=k, children=cs[1:end-1])
         # This transformation assumes the type assertion `cond::Bool` will be
         # added by a later compiler pass (currently done in codegen)
         if k == :&&

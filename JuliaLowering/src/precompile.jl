@@ -18,9 +18,7 @@
         """
     ]
     for thunk in thunks
-        stream = JuliaSyntax.ParseStream(thunk)
-        JuliaSyntax.parse!(stream; rule=:all)
-        st0 = JuliaSyntax.build_tree(SyntaxTree, stream; filename=@__FILE__)
+        st0 = JuliaSyntax.parseall(SyntaxTree, thunk; filename=@__FILE__)
         lwrst = lower(@__MODULE__, st0[1])
         lwr = to_lowered_expr(lwrst)
         @assert Meta.isexpr(lwr, :thunk) && only(lwr.args) isa Core.CodeInfo

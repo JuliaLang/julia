@@ -709,7 +709,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         nothing
     elseif k == :call || k == :new || k == :splatnew || k == :foreigncall ||
             k == :foreignglobal || k == :new_opaque_closure || k == :cfunction
-        callex = newnode(ex, k, compile_args(ctx, children(ex)))
+        callex = @mknode(ex; head=k, children=compile_args(ctx, children(ex)))
         if in_tail_pos
             emit_return(ctx, ex, callex)
         elseif needs_value
@@ -948,7 +948,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             emit(ctx, lam)
         end
     elseif k == :gc_preserve_begin
-        newnode(ex, k, compile_args(ctx, children(ex)))
+        @mknode(ex; head=k, children=compile_args(ctx, children(ex)))
     elseif k == :gc_preserve_end || k == :loopinfo
         if needs_value
             throw(LoweringError(ex, "misplaced kind $k in value position"))
@@ -1325,9 +1325,9 @@ function compile_lambda(outer_ctx, ex)
         end
     end
     code = renumber_body(ctx, ctx.code, slot_rewrites)
-    meta = CompileHints()
+    meta = SyntaxMeta()
     for (k, v) in ctx.meta
-        meta = CompileHints(meta, k, v)
+        meta = SyntaxMeta(meta, k, v)
     end
     out = @ast ctx ex [:code_info(;meta=meta)
         slots::slots

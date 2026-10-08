@@ -20,7 +20,7 @@ end
 11  TestMod.#f#f##0
 12  (call core.svec %₁₁ core.Any)
 13  (call core.svec)
-14  SourceLocation::3:5
+14  SourceLocation:3
 15  (call core.svec %₁₂ %₁₃ %₁₄)
 16  (call core.define_method TestMod core.nothing %₁₅
     --- code_info
@@ -77,7 +77,7 @@ end
 13  TestMod.#f#f##1
 14  (call core.svec %₁₃ core.Any)
 15  (call core.svec)
-16  SourceLocation::3:5
+16  SourceLocation:3
 17  (call core.svec %₁₄ %₁₅ %₁₆)
 18  (call core.define_method TestMod core.nothing %₁₇
     --- code_info
@@ -111,7 +111,7 @@ end
 8   TestMod.#g#f##2
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::2:5
+11  SourceLocation:2
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -125,7 +125,7 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆ core.Any)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  (call core.define_method TestMod TestMod.f %₂₀
     --- code_info
@@ -172,7 +172,7 @@ end
 8   TestMod.#foo##0#foo##1
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::4:16
+11  SourceLocation:4
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -184,7 +184,7 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆ core.Any)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  (call core.define_method TestMod TestMod.foo %₂₀
     --- code_info
@@ -230,7 +230,7 @@ end
 8   TestMod.#g#f##3
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::2:5
+11  SourceLocation:2
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -243,7 +243,7 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆ core.Any)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  (call core.define_method TestMod TestMod.f %₂₀
     --- code_info
@@ -280,7 +280,7 @@ end
 10  (call core.apply_type %₉ %₃)
 11  (call core.svec %₁₀)
 12  (call core.svec %₃)
-13  SourceLocation::2:5
+13  SourceLocation:2
 14  (call core.svec %₁₁ %₁₂ %₁₃)
 15  (call core.define_method TestMod core.nothing %₁₄
     --- code_info
@@ -294,7 +294,7 @@ end
 18  (call core.TypeEqOf %₁₇)
 19  (call core.svec %₁₈ %₃)
 20  (call core.svec %₃)
-21  SourceLocation::1:1
+21  SourceLocation:1
 22  (call core.svec %₁₉ %₂₀ %₂₁)
 23  (call core.define_method TestMod TestMod.f %₂₂
     --- code_info
@@ -334,7 +334,7 @@ end
 8   TestMod.#g#f##5
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::2:5
+11  SourceLocation:2
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -350,7 +350,7 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆ core.Any)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  (call core.define_method TestMod TestMod.f %₂₀
     --- code_info
@@ -416,7 +416,7 @@ end
 8   (call core.TypeEqOf %₇)
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::3:5
+11  SourceLocation:3
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
@@ -454,7 +454,7 @@ x -> x*x
 8   TestMod.#1#2
 9   (call core.svec %₈ core.Any)
 10  (call core.svec)
-11  SourceLocation::1:1
+11  SourceLocation:1
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -483,7 +483,7 @@ end
 8   TestMod.#3#4
 9   (call core.svec %₈ core.Any)
 10  (call core.svec)
-11  SourceLocation::1:1
+11  SourceLocation:1
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -517,7 +517,7 @@ end
 13  TestMod.#5#6
 14  (call core.svec %₁₃ core.Any)
 15  (call core.svec)
-16  SourceLocation::1:10
+16  SourceLocation:1
 17  (call core.svec %₁₄ %₁₅ %₁₆)
 18  (call core.define_method TestMod core.nothing %₁₇
     --- code_info
@@ -557,7 +557,7 @@ end
 3   TestMod.T
 4   (call core.apply_type core.Tuple core.Any %₃)
 5   (call core.apply_type core.Union)
-6   --- opaque_closure_method  core.nothing 2 false SourceLocation::2:31
+6   --- opaque_closure_method  core.nothing 2 false SourceLocation:2
     slots: [slot₁/#self#(!read) slot₂/x slot₃/z]
     1   TestMod.-
     2   TestMod.+
@@ -579,7 +579,7 @@ end
 1   (call core.apply_type core.Vararg core.Any)
 2   (call core.apply_type core.Tuple core.Any %₁)
 3   (call core.apply_type core.Union)
-4   --- opaque_closure_method  core.nothing 2 true SourceLocation::2:31
+4   --- opaque_closure_method  core.nothing 2 true SourceLocation:2
     slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/ys]
     1   slot₃/ys
     2   (return %₁)
@@ -617,7 +617,7 @@ end
 10  TestMod.#recursive_a#recursive_a##0
 11  (call core.svec %₁₀)
 12  (call core.svec)
-13  SourceLocation::2:5
+13  SourceLocation:2
 14  (call core.svec %₁₁ %₁₂ %₁₃)
 15  (call core.define_method TestMod core.nothing %₁₄
     --- code_info
@@ -645,7 +645,7 @@ end
 27  TestMod.#recursive_b#recursive_b##0
 28  (call core.svec %₂₇)
 29  (call core.svec)
-30  SourceLocation::5:5
+30  SourceLocation:5
 31  (call core.svec %₂₈ %₂₉ %₃₀)
 32  (call core.define_method TestMod core.nothing %₃₁
     --- code_info
@@ -699,7 +699,7 @@ end
 24  TestMod.#f_kw_closure#f_kw_closure##0
 25  (call core.svec %₂₂ %₂₃ %₂₄)
 26  (call core.svec)
-27  SourceLocation::2:5
+27  SourceLocation:2
 28  (call core.svec %₂₅ %₂₆ %₂₇)
 29  (call core.define_method TestMod core.nothing %₂₈
     --- code_info
@@ -713,7 +713,7 @@ end
 31  TestMod.#f_kw_closure#f_kw_closure##0
 32  (call core.svec %₃₁)
 33  (call core.svec)
-34  SourceLocation::2:5
+34  SourceLocation:2
 35  (call core.svec %₃₂ %₃₃ %₃₄)
 36  (call core.define_method TestMod core.nothing %₃₅
     --- code_info
@@ -728,7 +728,7 @@ end
 40  TestMod.#f_kw_closure#f_kw_closure##0
 41  (call core.svec %₃₉ core.NamedTuple %₄₀)
 42  (call core.svec)
-43  SourceLocation::2:5
+43  SourceLocation:2
 44  (call core.svec %₄₁ %₄₂ %₄₃)
 45  (call core.define_method TestMod core.nothing %₄₄
     --- code_info
@@ -810,7 +810,7 @@ end
 8   TestMod.#f_after_if##0#f_after_if##1
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::6:5
+11  SourceLocation:6
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -822,7 +822,7 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆ core.Any)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  (call core.define_method TestMod TestMod.f_after_if %₂₀
     --- code_info
@@ -860,7 +860,7 @@ end
 8   TestMod.#f_ternary##0#f_ternary##1
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::3:5
+11  SourceLocation:3
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -872,7 +872,7 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆ core.Any)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  (call core.define_method TestMod TestMod.f_ternary %₂₀
     --- code_info
@@ -916,7 +916,7 @@ end
 8   TestMod.#f_or_guard##0#f_or_guard##1
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::4:5
+11  SourceLocation:4
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -928,7 +928,7 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆ core.Any)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  (call core.define_method TestMod TestMod.f_or_guard %₂₀
     --- code_info
@@ -978,7 +978,7 @@ end
 8   TestMod.#f_arg_reassign##0#f_arg_reassign##1
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::3:12
+11  SourceLocation:3
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -990,7 +990,7 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆ core.Any)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  (call core.define_method TestMod TestMod.f_arg_reassign %₂₀
     --- code_info
@@ -1036,7 +1036,7 @@ end
 15  TestMod.#9#10
 16  (call core.svec %₁₅)
 17  (call core.svec)
-18  SourceLocation::5:5
+18  SourceLocation:5
 19  (call core.svec %₁₆ %₁₇ %₁₈)
 20  (call core.define_method TestMod core.nothing %₁₉
     --- code_info
@@ -1072,7 +1072,7 @@ end
 8   TestMod.#f_local_no_box##0#f_local_no_box##1
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::4:5
+11  SourceLocation:4
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -1084,7 +1084,7 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  (call core.define_method TestMod TestMod.f_local_no_box %₂₀
     --- code_info
@@ -1119,7 +1119,7 @@ end
 8   TestMod.#f_typed_local_no_box##0#f_typed_local_no_box##1
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::4:5
+11  SourceLocation:4
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -1131,7 +1131,7 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  (call core.define_method TestMod TestMod.f_typed_local_no_box %₂₀
     --- code_info
@@ -1169,6 +1169,7 @@ end
 ]
 #---------------------
 LoweringError:
-#= line 1 =# - invalid syntax: unknown form `generated_lambda` or number of arguments 3
+ at line 1: invalid syntax: unknown form `generated_lambda` or number of arguments 3
+
 Expression:
   (generated_lambda (block) (block) (-> (tuple) (block)))

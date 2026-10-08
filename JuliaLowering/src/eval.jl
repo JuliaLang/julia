@@ -135,7 +135,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
             throw(LoweringError(mname, "Expected module name"))
         end
         newmod_name = Symbol(syntax_name(mname))
-        loc = source_location(LineNumberNode, ex)
+        loc = first_linenode(ex)
         push!(iter.todo, (body, true, 1))
         return Core.svec(:begin_module, version, newmod_name, notbare, loc)
     elseif k === :thunk && numchildren(ex) == 1
@@ -145,7 +145,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         throw(err isa String ? ErrorException(string("syntax: ", err)) : err)
     else
         # TODO: code coverage should visit
-        # `source_location(LineNumberNode, ex)::LineNumberNode`
+        # `first_linenode(ex)::LineNumberNode`
          ctx2, ex2 = expand_forms_2(ex, world)
          ctx3, ex3 = resolve_scopes(ctx2, ex2; soft_scope)
          ctx4, ex4 = convert_closures(ctx3, ex3)
@@ -235,7 +235,7 @@ struct SourceByteTable
         @assert allunique(line_starts)
         @assert length(line_starts) > 0
         for s in spans
-            @assert 0 < s[2] "linenode provenance; expected SourceFile"
+            @assert 0 < s[2] "linenode provenance; expected SourceCode"
             @assert 0 < s[1] <= s[2]+1
         end
         if !isempty(spans)
@@ -255,12 +255,11 @@ struct SourceByteTable
         new(file, line_offset, spans, line_starts)
     end
 end
-function SourceByteTable(sf::SourceFile, spans::Vector{Tuple{Int32, Int32}})
+function SourceByteTable(sf::SourceCode, spans::Vector{Tuple{Int32, Int32}})
     # Trim all newlines outside SBT's range
     line_starts = map(ls->Int32(ls+sf.byte_offset), sf.line_starts)
-    b0, _ = JuliaSyntax.source_line_range(sf, spans[1][1])
     first_line = sf.first_line
-    while length(line_starts) >= 2 && line_starts[2] <= b0
+    while length(line_starts) >= 2 && line_starts[2] <= spans[1][1]
         popfirst!(line_starts)
         first_line += 1
     end
@@ -371,7 +370,7 @@ const _has_byte_precise_debuginfo =
     hasmethod(Core.DebugInfo, Tuple{Symbol, String, Core.SimpleVector, String})
 
 function _di_pos(st::SyntaxTree)
-    src = JuliaSyntax.unexpanded_sourceref(st)
+    src = unexpanded_sourceref(st)
     pos = if src isa SourceRef
         (Int32(first_byte(src)), Int32(last_byte(src)))
     elseif src isa LineNumberNode
@@ -381,10 +380,9 @@ function _di_pos(st::SyntaxTree)
     end
 end
 
-# TODO sourcefile(::LNN) should return Symbol, not LNN
 function _di_sourcefile(st)
-    x = JuliaSyntax.unexpanded_sourceref(st)
-    x isa LineNumberNode ? x.file : x.file[]::SourceFile
+    x = unexpanded_sourceref(st)
+    x isa LineNumberNode ? x.file : x.code::SourceCode
 end
 
 # A single pass over all IR to collect unique byte/line positions and CodeInfos
@@ -396,7 +394,7 @@ function collect_locs!(node_sources, codeinfos, top_sf, st)
         for c in children(st[2])
             node_sources[c] =
                 if _di_sourcefile(c) !== top_sf
-                    top_sf isa SourceFile &&
+                    top_sf isa SourceCode &&
                         @warn "inconsistent provenance for child" c st
                     node_sources[st]
                 else
@@ -446,13 +444,13 @@ function add_debuginfo!(st::SyntaxTree)
     codeinfos = SyntaxList()
     top_sf = _di_sourcefile(st)
     collect_locs!(node_sources, codeinfos, top_sf, st)
-    byte_precise = _has_byte_precise_debuginfo && top_sf isa SourceFile
-    if !byte_precise && top_sf isa SourceFile
+    byte_precise = _has_byte_precise_debuginfo && top_sf isa SourceCode
+    if !byte_precise && top_sf isa SourceCode
         # Without byte-precise support, degrade each byte span to its line number
         # so the line-based path below emits valid `DebugInfo` (same shape as the
         # `LineNumberNode` case).
         for id in collect(keys(node_sources))
-            line = Int32(JuliaSyntax.source_line(top_sf, node_sources[id][1]))
+            line = Int32(source_line(top_sf, node_sources[id][1]))
             node_sources[id] = (line, LINENODE_SPAN_END)
         end
     end
@@ -462,7 +460,7 @@ function add_debuginfo!(st::SyntaxTree)
         file = Symbol(top_sf.filename)
     else
         top_sbt = nothing
-        file = top_sf isa SourceFile ? Symbol(top_sf.filename) : Symbol(top_sf)
+        file = top_sf isa SourceCode ? Symbol(top_sf.filename) : Symbol(top_sf)
     end
     for ci in codeinfos
         add_ci_debuginfo!(ci, file, top_sbt, node_sources, spans)
@@ -641,7 +639,7 @@ function _to_lowered_expr(ex::SyntaxTree)
         # TODO: assert false (only reachable from simdloop?)
         Symbol(syntax_name(ex))
     elseif k == :sourcelocation
-        QuoteNode(source_location(LineNumberNode, ex))
+        QuoteNode(first_linenode(ex))
     elseif k == :symbol
         QuoteNode(Symbol(syntax_name(ex)))
     elseif k == :slot
@@ -779,7 +777,7 @@ function _eval(mod::Module, iter::LoweringIterator; soft_scope::Union{Nothing,Bo
         if type == :done
             break
         elseif type == :begin_module
-            filename = something(thunk[5].file, :none)
+            filename = something(thunk[5].file, :var"")
             mod = @ccall jl_begin_new_module(
                 modules[end]::Any, thunk[3]::Symbol, thunk[2]::Any, thunk[4]::Cint,
                 filename::Cstring, thunk[5].line::Cint)::Module
@@ -852,8 +850,7 @@ function include_string(mapexpr::Function, mod::Module, code::AbstractString,
         sc = SyntaxContext(mod, version)
         for c in children(st)
             last = eval(mod, expr_to_est(
-                mapexpr(est_to_expr(c)),
-                source_location(LineNumberNode, c), sc))
+                mapexpr(est_to_expr(c)), first_linenode(c), sc))
         end
         last
     else
