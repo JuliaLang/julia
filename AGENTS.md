@@ -46,3 +46,5 @@ signing in (send `Accept: application/json`):
   `Waiting for`, and `core dumped`.
 - Artifacts: the same URL ending in `/artifacts` lists each `path` and `url`;
   `curl -L "https://buildkite.com<url>"` downloads one.
+
+When asked whether a PR makes CI slower or faster, use `contrib/ci-timing/ci_timing_compare.jl`.
