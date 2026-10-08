@@ -808,6 +808,12 @@ let ex = Expr(:toplevel,
     @test only(methods(f)).debuginfo.def isa Symbol
 end
 
+# let with linenumbernode
+@test !Core.eval(@__MODULE__,
+                 Expr(:let, Expr(:block, LineNumberNode(1)),
+                      Expr(:block, :(g = 1),
+                           Expr(:isglobal, :g))))
+
 # Check qualified string macros
 Base.r"regex" == r"regex"
 
