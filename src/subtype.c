@@ -195,6 +195,8 @@ typedef struct jl_varbinding_t {
     // reference of depth d in that side's term resolves to the d-th entry
     struct jl_varbinding_t *frame_prev;
     uint32_t serial;    // identifies this push of the binding within the query (see `frame_substitute`)
+    // `frame_substitute` memo under this frame (eqtable); rooted by `e->substmemo`
+    jl_genericmemory_t *substmemo;
     // intersection only: the term on the other side of the crossing (used to
     // avoid conflating a memoized variable already visible there; borrowed
     // reference, rooted by the crossing's caller)
@@ -235,7 +237,7 @@ typedef struct JL_GC_TRACKED_TYPE jl_stenv_t {
     jl_varbinding_t *Lframe;  // native binder chain of the left term's position
     jl_varbinding_t *Rframe;  // ... and of the right term's position
     int8_t frames_flipped;    // parity of `flip_frames` (is Lframe the original right chain?)
-    jl_array_t *substmemo;    // frame_substitute memo (triples); rooted like `opened`
+    jl_array_t *substmemo;    // roots the bindings' `substmemo` tables; rooted like `opened`
     // every value the walk computes and stores into a binding (a joined or
     // met bound, a boxed length, a variable, an innervars array) is kept
     // alive here for the query's lifetime: the bindings and their lists are
@@ -668,10 +670,12 @@ static jl_varbinding_t *stenv_push_binding(jl_stenv_t *e, jl_unionall_t *u, int 
     else {
         jl_tvar_t *var = vb->var;
         uint32_t serial = vb->serial;
+        jl_genericmemory_t *substmemo = vb->substmemo;
         jl_varbinding_t *next_alloc = vb->next_alloc;
         memset(vb, 0, sizeof(jl_varbinding_t));
         vb->var = var;
         vb->serial = serial;
+        vb->substmemo = substmemo; // same push for `frame_substitute` (the serial is kept)
         vb->next_alloc = next_alloc;
     }
     vb->u = u;
@@ -933,14 +937,14 @@ static void flip_frames(jl_stenv_t *e) JL_NOTSAFEPOINT
 // the intersection code (whose bounds are types), and walked terms that
 // become results. A reference to a popped binding becomes the variable
 // carrying that binding's final bounds (see `binding_ref_value`).
-// Substitutions are memoized in `e->substmemo` (triples [t, frame-serial,
-// result]): repeated queries must yield the IDENTICAL object, or the
-// identity-based cycle breakers of the intersection code never fire and
-// bound-consistency recursions diverge. The frame's serial (unique per
-// binding push within the query) identifies the whole chain without forcing
-// any variable. The memo also keeps every result reachable for the query's
-// lifetime (the entry points root the `substmemo` slot), so the result is
-// rooted.
+// Substitutions are memoized per frame in `frame->substmemo` (an eqtable from
+// t to result): repeated queries must yield the IDENTICAL object, or the
+// identity-based cycle breakers downstream (`bb->lb == a` and friends) never
+// fire and bound-consistency recursions diverge. A frame (one binding push,
+// its table cleared with it) identifies the whole chain without forcing any
+// variable. `e->substmemo` keeps every table, and so every result, reachable
+// for the query's lifetime (the entry points root that slot), so the result
+// is rooted.
 static jl_value_t *frame_substitute(jl_value_t *t, jl_varbinding_t *frame, jl_stenv_t *e) JL_GLOBALLY_ROOTED JL_CANSAFEPOINT
 {
     if (frame == NULL)
@@ -951,20 +955,14 @@ static jl_value_t *frame_substitute(jl_value_t *t, jl_varbinding_t *frame, jl_st
         jl_varbinding_t *b = frame_lookup(frame, jl_tvarref_depth(t));
         return b != NULL ? binding_ref_value(e, b) : t;
     }
-    if (e->substmemo != NULL) {
-        size_t i, l = jl_array_nrows(e->substmemo);
-        for (i = 0; i < l; i += 3) {
-            if (jl_array_ptr_ref(e->substmemo, i) == t &&
-                jl_unbox_uint32(jl_array_ptr_ref(e->substmemo, i + 1)) == frame->serial)
-                return jl_array_ptr_ref(e->substmemo, i + 2);
-        }
-    }
-    else {
-        e->substmemo = jl_alloc_array_1d(jl_array_any_type, 0);
+    if (frame->substmemo != NULL) {
+        jl_value_t *memo = jl_eqtable_get(frame->substmemo, t, NULL);
+        if (memo != NULL)
+            return memo;
     }
     jl_value_t *t0 = t;
-    jl_value_t *fbox = NULL;
-    JL_GC_PUSH3(&t0, &t, &fbox);
+    jl_genericmemory_t *memo = NULL;
+    JL_GC_PUSH3(&t0, &t, &memo);
     size_t consumed = 0;
     for (jl_varbinding_t *f = frame; f != NULL; f = f->frame_prev) {
         if (!jl_has_dangling_tvarrefs(t))
@@ -992,10 +990,14 @@ static jl_value_t *frame_substitute(jl_value_t *t, jl_varbinding_t *frame, jl_st
     // later resolve against whatever frame the stored term is walked under.
     if (consumed > 0 && jl_has_dangling_tvarrefs(t))
         t = jl_shift_dangling_refs(t, (ssize_t)consumed);
-    fbox = jl_box_uint32(frame->serial);
-    jl_array_ptr_1d_push(e->substmemo, t0);
-    jl_array_ptr_1d_push(e->substmemo, fbox);
-    jl_array_ptr_1d_push(e->substmemo, t);
+    memo = frame->substmemo != NULL ? frame->substmemo : (jl_genericmemory_t*)jl_an_empty_memory_any;
+    memo = jl_eqtable_put(memo, t0, t, NULL);
+    if (memo != frame->substmemo) {
+        if (e->substmemo == NULL)
+            e->substmemo = jl_alloc_array_1d(jl_array_any_type, 0);
+        jl_array_ptr_1d_push(e->substmemo, (jl_value_t*)memo);
+        frame->substmemo = memo;
+    }
     JL_GC_POP();
     return t;
 }
