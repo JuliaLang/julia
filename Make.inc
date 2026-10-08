@@ -35,6 +35,12 @@ FORCE_ASSERTIONS ?= 0
 # Set BOOTSTRAP_DEBUG_LEVEL to 1 to enable Julia-level stacktrace during bootstrapping.
 BOOTSTRAP_DEBUG_LEVEL ?= 0
 
+# Debug info level for the C/C++ runtime in release builds: 1 keeps line tables and
+# inlining information (enough for backtraces), 2 adds variables and types for
+# debugging with gdb/lldb. Defaults to 2 in assert builds or when BOOTSTRAP_DEBUG_LEVEL
+# is set. Debug builds always use 2.
+RUNTIME_DEBUG_LEVEL ?= $(if $(filter 1,$(FORCE_ASSERTIONS))$(filter-out 0,$(BOOTSTRAP_DEBUG_LEVEL)),2,1)
+
 # OPENBLAS build options
 OPENBLAS_TARGET_ARCH:=
 OPENBLAS_SYMBOLSUFFIX:=
@@ -600,9 +606,12 @@ DEBUGFLAGS_COMMON  = -O0 -DJL_DEBUG_BUILD -fstack-protector
 DEBUGFLAGS_CLANG   = $(DEBUGFLAGS_COMMON) -g
 DEBUGFLAGS_GCC     = $(DEBUGFLAGS_COMMON) -ggdb2
 
+ifeq ($(filter 1 2,$(RUNTIME_DEBUG_LEVEL)),)
+$(error RUNTIME_DEBUG_LEVEL must be 1 or 2, got '$(RUNTIME_DEBUG_LEVEL)')
+endif
 SHIPFLAGS_COMMON   = -O3
-SHIPFLAGS_CLANG    = $(SHIPFLAGS_COMMON) -g
-SHIPFLAGS_GCC      = $(SHIPFLAGS_COMMON) -ggdb2 -falign-functions
+SHIPFLAGS_CLANG    = $(SHIPFLAGS_COMMON) $(if $(filter 2,$(RUNTIME_DEBUG_LEVEL)),-g,-gline-tables-only)
+SHIPFLAGS_GCC      = $(SHIPFLAGS_COMMON) -ggdb$(RUNTIME_DEBUG_LEVEL) -falign-functions
 
 
 BOLT_LDFLAGS :=
