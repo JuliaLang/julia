@@ -78,7 +78,7 @@ function Base.:(==)() end
 3   (call core.TypeEqOf %₂)
 4   (call core.svec %₃)
 5   (call core.svec)
-6   SourceLocation::1:1
+6   SourceLocation:1
 7   (call core.svec %₄ %₅ %₆)
 8   (call core.define_method TestMod core.nothing %₇
     --- code_info

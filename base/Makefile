@@ -89,6 +89,14 @@ ifeq ($(OS), Darwin)
 endif
 	@printf "%s\n" "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
 
+	@# From `JL_RUNTIME_LIBS` in Make.inc. A trailing `*` marks a prefix.
+	@printf "%s\n" "const RUNTIME_LIBRARY_NAMES = String[" >> $@
+	@$(foreach lib,$(JL_RUNTIME_LIBS),printf "%s\n" "    \"$(lib)\"," >> $@;)
+	@printf "%s\n" "]" >> $@
+	@printf "%s\n" "const CODEGEN_LIBRARY_NAMES = String[" >> $@
+	@$(foreach lib,$(JL_RUNTIME_CODEGEN_LIBS),printf "%s\n" "    \"$(lib)\"," >> $@;)
+	@printf "%s\n" "]" >> $@
+
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
 	@# ensuring we rebuild the system image as infrequently as possible
 	@if ! cmp -s $@ build_h.jl; then \

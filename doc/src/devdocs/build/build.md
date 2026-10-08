@@ -359,6 +359,11 @@ LLVM_ASSERTIONS=1
 
 Please note that assert builds of Julia will be slower than regular (non-assert) builds.
 
+Assert builds also compile the C/C++ runtime with full debug info (variables and types),
+whereas regular release builds only keep line tables. This is controlled by
+`RUNTIME_DEBUG_LEVEL` (1 or 2), which also defaults to 2 when `BOOTSTRAP_DEBUG_LEVEL` is
+set and can be set independently in `Make.user`.
+
 ## Building a debug build of Julia
 
 A full debug build of Julia can be built with `make debug`.  This builds a debug

@@ -8,7 +8,7 @@
             @test JL.core_lowering_hook(s, test_mod) == Core.svec(s)
         end
 
-        for ast_type in (Expr, JL.SyntaxTree)
+        for ast_type in (Expr, SyntaxTree)
             ex = parsestmt(ast_type, "[1,2,3] .+= 1")
             out = JL.core_lowering_hook(ex, test_mod)
             @test out isa Core.SimpleVector && out[1] isa Expr

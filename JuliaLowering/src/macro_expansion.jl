@@ -136,7 +136,7 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
             pos == :begin   ? (fb:fb-1) :
             pos == :end     ? (lb+1:lb) :
             error("Unknown position $pos")
-        highlight(io, src.file[], byterange, note=exc.msg)
+        highlight(io, JuliaSyntax.SourceFile(src.code), byterange, note=exc.msg)
     end
     if !isnothing(exc.err)
         print(io, "\nCaused by:\n")
@@ -196,15 +196,15 @@ function _macrocall_expr_location(st::SyntaxTree)
             loc
         elseif loc isa LineNumberNode
             # Some macros, e.g. @cmd, don't play nicely with file == nothing
-            isnothing(loc.file) ? LineNumberNode(loc.line, :none) : loc
+            isnothing(loc.file) ? LineNumberNode(loc.line, :var"") : loc
         else
-            LineNumberNode(0, :none)
+            LineNumberNode(0, :var"")
         end
     elseif head(st[2]) === :version
-        loc = source_location(LineNumberNode, st)
+        loc = first_linenode(st)
         @static isdefinedglobal(Core, :MacroSource) ? Core.MacroSource(loc, st[2].value) : loc
     else
-        LineNumberNode(0, :none)
+        LineNumberNode(0, :var"")
     end
 end
 

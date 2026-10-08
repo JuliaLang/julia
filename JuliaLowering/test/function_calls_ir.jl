@@ -71,7 +71,8 @@ x^42.0
 @ast_ [:call]
 #---------------------
 LoweringError:
-#= line 1 =# - malformed `call`
+ at line 1: malformed `call`
+
 Expression:
   (call)
 

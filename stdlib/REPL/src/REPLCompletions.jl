@@ -811,6 +811,8 @@ const COMPLETION_WORLD = Ref{UInt}(typemax(UInt))
 code_typed(CC.typeinf, (REPLInterpreter, CC.InferenceState))
 repl_eval_ex(:(1 + 1), @__MODULE__)
 repl_eval_ex(:((1, 2).first), @__MODULE__)
+repl_eval_ex(:(identity((1, 2)...)), @__MODULE__)
+repl_eval_ex(:(invoke(identity, Tuple{Any}, 1)), @__MODULE__)
 
 # Method completion on function call expression that look like :(max(1))
 MAX_METHOD_COMPLETIONS::Int = 40

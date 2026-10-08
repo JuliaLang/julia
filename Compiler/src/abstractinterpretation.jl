@@ -5139,7 +5139,7 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState{I}) where {I
                 takenext = length(callstack)
             end
         end
-        interp = callee.interp
+        interp = callee.interp::I
         nextstateid = takenext + 1 - frame.frameid
         while length(nextstates) < nextstateid
             push!(nextstates, CurrentState())
@@ -5153,7 +5153,10 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState{I}) where {I
         elseif isdefined(nextstates[nextstateid], :result) || !isempty(callee.ip)
             # Next make progress on this frame
             prev = length(callee.tasks) + 1
-            nextstates[nextstateid] = typeinf_local(interp, callee, nextstates[nextstateid])
+            # dynamic call, so that inference does not fold `typeinf_local` and all it
+            # reaches into one cycle with `typeinf` (cycle members are not inlined into
+            # each other); pass the field (already boxed) so this does not box `interp`
+            nextstates[nextstateid] = compilerbarrier(:type, typeinf_local)(callee.interp, callee, nextstates[nextstateid])::CurrentState
             reverse!(callee.tasks, prev)
         elseif callee.cycleid == length(callstack)
             # With no active ip's and no cycles, frame is done

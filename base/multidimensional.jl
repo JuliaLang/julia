@@ -2089,14 +2089,15 @@ function hash_shaped(A, h0::UInt, eltype_hint=())
     elseif len < 32768
         # separate accumulator streams, unrolled
         @nexprs 8 i -> p_i::UInt = h
+        off = firstindex(A) - 1
         n  = 1
         limit = len - 7
         while n <= limit
-            @nexprs 8 i -> p_i = union_split(hash, A[n + i - 1], eltype_hint, p_i)
+            @nexprs 8 i -> p_i = union_split(hash, A[off + n + i - 1], eltype_hint, p_i)
             n += 8
         end
         while n <= len
-            p_1 = union_split(hash, A[n], eltype_hint, p_1)
+            p_1 = union_split(hash, A[off + n], eltype_hint, p_1)
             n += 1
         end
         # fold all streams back together

@@ -1343,4 +1343,53 @@ let NO_LOSERS = Base.ReinferUtils.METHOD_SIG_NO_LOSERS
     @test iszero(which(NoLosersBit.f, Tuple{Any}).dispatch_status & NO_LOSERS)
 end
 
+# A `Type{T}` query whose typevar is bounded by another `Type{}` must find methods on
+# `Type{Type{...}}` (the filler methods give the typemap a hashed level)
+module TypeOfTypeLookup
+f(::Type{Type{Int}}, ::Type{Int}) = :hit
+for i in 1:12
+    @eval f(::Val{$i}) = $i
+end
+end
+let ms = Base._methods_by_ftype(Tuple{typeof(TypeOfTypeLookup.f), Type{T}, T} where T<:Type{Int}, -1, Base.get_world_counter())
+    @test length(ms) == 1 && ms[1].method === which(TypeOfTypeLookup.f, Tuple{Type{Type{Int}}, Type{Int}})
+end
+
+# A `Type{Union{}}` slurp guard that covers only part of the other arguments must not
+# hide the `Union{}` overlap of two `Type{<:X}` methods from method insertion
+module PartialBottomGuard
+abstract type A end
+abstract type B end
+f(::Vector{<:Real}, ::Type{Union{}}, xs...) = 0
+for i in 1:12
+    @eval f(::Vector, ::Val{$i}) = -1
+end
+f(::Vector, ::Type{T}) where {T<:A} = 1
+caller() = f(String[], Union{})
+end
+@test PartialBottomGuard.caller() == 1
+PartialBottomGuard.eval(:(f(::Vector, ::Type{T}) where {T<:B} = 2))
+@test_throws MethodError Base.invokelatest(PartialBottomGuard.caller)
+@test_throws MethodError Base.invokelatest(PartialBottomGuard.f, String[], Union{})
+
+# Same overlap, with the guard added after both methods and one of them then replaced:
+# the replacement must keep the interference records consistent
+module BottomGuardReplace
+abstract type A end
+abstract type B end
+for i in 1:12
+    @eval f(::Vector, ::Val{$i}) = -1
+end
+f(::Vector, ::Type{T}) where {T<:A} = 1
+f(::Vector, ::Type{T}) where {T<:B} = 2
+f(::Vector{<:Real}, ::Type{Union{}}, xs...) = 0
+f(::Vector, ::Type{T}) where {T<:A} = 3
+end
+let ambig = Ref{Int32}(0),
+    ms = Base._methods_by_ftype(Tuple{typeof(BottomGuardReplace.f), Vector{String}, Type{Union{}}}, nothing, -1,
+                                Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test length(ms) == 2 && ambig[] == 1
+end
+@test_throws MethodError BottomGuardReplace.f(String[], Union{})
+
 nothing

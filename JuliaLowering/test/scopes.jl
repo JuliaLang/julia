@@ -429,7 +429,7 @@ function resolve_and_get_bindings(
         edition = JL_NEW_EDITION,
     )
     est = JuliaLowering.expr_to_est(ex, LineNumberNode(1),
-                                    JuliaSyntax.SyntaxContext(mod, edition))
+                                    SyntaxContext(mod, edition))
     ex0 = JuliaLowering.rebase_layers(est, mod)
     ex1 = JuliaLowering.expand_forms_1(ex0, world, true)
     ctx2, ex2 = JuliaLowering.expand_forms_2(ex1, world)
