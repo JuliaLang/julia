@@ -1012,7 +1012,7 @@ func_in_own_sp(func_in_own_sp)
     @test_throws UndefVarError test_mod.f_isdefined_sp(nothing)
 
     # Closure with an anonymous static parameter of its own plus a captured one
-    @test JuliaLowering.include_string(test_mod, """
+    @test_warn r"declares type variable _\S* but does not use it" @test JuliaLowering.include_string(test_mod, """
     begin
         function f_anon_sp_closure(x::T) where T
             g(y) where _ = (y, T)
