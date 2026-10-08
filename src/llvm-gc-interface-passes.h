@@ -363,6 +363,7 @@ private:
     void PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAssignedColors, State &S, std::map<Value *, std::pair<int, int>>);
     void CleanupWriteBarriers(Function &F, State *S, const SmallVector<CallInst*, 0> &WriteBarriers, bool *CFGModified);
     bool CleanupIR(Function &F, State *S, bool *CFGModified);
+    CallInst *EmitGCAllocBytes(IRBuilder<> &builder, CallInst *CI, Value *size, Value *tag);
     void NoteUseChain(State &S, BBState &BBS, User *TheUser);
     SmallVector<int, 1> GetPHIRefinements(PHINode *phi, State &S);
     void FixUpRefinements(ArrayRef<int> PHINumbers, State &S);
