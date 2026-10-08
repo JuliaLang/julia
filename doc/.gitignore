@@ -2,6 +2,7 @@ deps/
 _build/
 UnicodeData.txt
 src/stdlib/
+src/juliasyntax/
 src/NEWS.md
 src/devdocs/agents/skills/*/index.md
 
