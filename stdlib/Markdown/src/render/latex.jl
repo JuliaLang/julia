@@ -105,7 +105,7 @@ function latex(io::IO, md::List)
     end
 end
 
-function latex(io::IO, md::HorizontalRule)
+function latex(io::IO, ::HorizontalRule)
     println(io, "\\rule{\\textwidth}{1pt}")
 end
 
@@ -139,7 +139,7 @@ function latexinline(io::IO, md::Strikethrough)
     end
 end
 
-function latexinline(io::IO, br::LineBreak)
+function latexinline(io::IO, ::LineBreak)
     println(io, "\\\\")
 end
 

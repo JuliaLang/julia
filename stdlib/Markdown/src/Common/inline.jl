@@ -350,7 +350,7 @@ function skip_open_tag(io::IO)
         # ... optional spaces, tabs, and up to one line ending, ...
         skip_spaces_and_up_to_one_line_ending(io)
         # ... an optional / character, ...
-        res = startswith(io, '/')
+        startswith(io, '/')
         # ... and a > character.
         startswith(io, '>') || return false
         return true

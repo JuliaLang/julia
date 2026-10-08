@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Markdown, StyledStrings
-import Markdown: MD, Paragraph, Header, Italic, Bold, Strikethrough, LineBreak, Table, Code, LaTeX, Footnote
+using Markdown, StyledStrings, Test
+import Markdown: Bold, Code, Footnote, Header, Italic, LaTeX, LineBreak, MD, Paragraph,
+    Strikethrough, Table
 import Base: show
 
 @test isempty(Test.detect_closure_boxes(Markdown))
@@ -589,7 +590,7 @@ end
         ref
     end
 
-    Base.show(io::IO, m::MIME"text/plain", r::Reference1) =
+    Base.show(io::IO, ::MIME"text/plain", r::Reference1) =
         print(io, "$(r.ref) (see Julia docs)")
 
     sum_ref = md"Behaves like $(Reference1(sum))"
@@ -630,9 +631,9 @@ end
     end
 
     sum_ref = md"Behaves like $(Reference2(sum))"
-    Base.show(io::IO, m::MIME"text/plain", r::Reference2) =
+    Base.show(io::IO, ::MIME"text/plain", r::Reference2) =
         print(io, "$(r.ref) (see Julia docs)")
-    Base.show(io::IO, m::MIME"text/html", r::Reference2) =
+    Base.show(io::IO, ::MIME"text/html", r::Reference2) =
         Markdown.withtag(io, :a, :href=>"test") do
             Markdown.htmlesc(io, sprint(Markdown.plaininline, r))
         end

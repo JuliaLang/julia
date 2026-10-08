@@ -152,7 +152,7 @@ function htmltight(io::IO, content::Vector)
     end
 end
 
-function html(io::IO, md::HorizontalRule)
+function html(io::IO, ::HorizontalRule)
     tag(io, :hr)
 end
 
@@ -222,7 +222,7 @@ function htmlinline(io::IO, link::Link)
     end
 end
 
-function htmlinline(io::IO, br::LineBreak)
+function htmlinline(io::IO, ::LineBreak)
     tag(io, :br)
     println(io)
 end

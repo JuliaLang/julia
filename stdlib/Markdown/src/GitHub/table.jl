@@ -138,7 +138,7 @@ function rst(io::IO, md::Table)
     end
 end
 
-function term(io::IO, md::Table, columns)
+function term(io::IO, md::Table, _)
     margin_str = " "^margin
     cells = mapmap(x -> annotprint(terminline, x), md.rows)
     padcells!(cells, md.align, len = textwidth)
