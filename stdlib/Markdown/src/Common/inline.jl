@@ -56,14 +56,27 @@ end
 # Code
 # ––––
 
-@trigger '`' ->
-function inline_code(stream::IO, md::MD)
+"""
+Read a code span: a run of backticks and everything up to the next occurrence of
+that run. Returns the run and the text in between, or `nothing` (leaving `stream`
+where it was) if the run is never closed.
+"""
+function read_code_span(stream::IO)
     withstream(stream) do
         ticks = matchstart(stream, r"^(`+)").match
         result = readuntil(stream, ticks; newlines=true)
-        if result === nothing
+        result === nothing ? nothing : (ticks, result)
+    end
+end
+
+@trigger '`' ->
+function inline_code(stream::IO, md::MD)
+    withstream(stream) do
+        span = read_code_span(stream)
+        if span === nothing
             nothing
         else
+            ticks, result = span
             result = strip(result)
             # in code spans, newlines are replaced by spaces
             result = replace(result, '\n' => ' ')
