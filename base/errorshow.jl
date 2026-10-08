@@ -60,9 +60,11 @@ function showerror(io::IO, ex::BoundsError)
         if isdefined(ex, :i)
             print(io, " at index [")
             if ex.i isa AbstractRange
-                print(io, ex.i)
+                show_index(io, ex.i)
             elseif ex.i isa AbstractString
                 show(io, ex.i)
+            elseif ex.i isa AbstractVector{Bool}
+                summary(io, ex.i)
             else
                 for (i, x) in enumerate(ex.i)
                     i > 1 && print(io, ", ")

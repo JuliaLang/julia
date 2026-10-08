@@ -1091,7 +1091,7 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
     idf, isf = first(destinds), first(srcinds)
     Δi = idf - isf
     (checkbounds(Bool, destinds, isf+Δi) & checkbounds(Bool, destinds, last(srcinds)+Δi)) ||
-        throw(BoundsError(dest, srcinds))
+        throw(BoundsError(dest, isf+Δi:last(srcinds)+Δi))
     if deststyle isa IndexLinear
         if srcstyle isa IndexLinear
             # Single-index implementation
