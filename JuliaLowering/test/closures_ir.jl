@@ -932,31 +932,29 @@ end
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  (call core.define_method TestMod TestMod.f_or_guard %₂₀
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/#->#(single_assign) slot₄/y(single_assign) slot₅/if_val(!read)]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/#->#(single_assign) slot₄/y(single_assign)]
     1   (newvar slot₃/#->#)
     2   TestMod.===
     3   TestMod.nothing
     4   (call %₂ slot₂/x %₃)
-    5   (gotoifnot %₄ label₈)
-    6   (= slot₅/if_val true)
-    7   (goto label₁₁)
-    8   TestMod.===
-    9   TestMod.missing
-    10  (= slot₅/if_val (call %₈ slot₂/x %₉))
-    11  slot₅/if_val
-    12  (gotoifnot %₁₁ label₁₆)
-    13  TestMod.nothing
-    14  (return %₁₃)
-    15  (goto label₁₆)
-    16  slot₂/x
-    17  (= slot₄/y %₁₆)
-    18  TestMod.#f_or_guard##0#f_or_guard##1
-    19  (call core._typeof_captured_variable slot₄/y)
-    20  (call core.apply_type %₁₈ %₁₉)
-    21  (new %₂₀ slot₄/y)
-    22  (= slot₃/#-># %₂₁)
-    23  slot₃/#->#
-    24  (return %₂₃)
+    5   (gotoifnot %₄ label₇)
+    6   (goto label₁₁)
+    7   TestMod.===
+    8   TestMod.missing
+    9   (call %₇ slot₂/x %₈)
+    10  (gotoifnot %₉ label₁₄)
+    11  TestMod.nothing
+    12  (return %₁₁)
+    13  (goto label₁₄)
+    14  slot₂/x
+    15  (= slot₄/y %₁₄)
+    16  TestMod.#f_or_guard##0#f_or_guard##1
+    17  (call core._typeof_captured_variable slot₄/y)
+    18  (call core.apply_type %₁₆ %₁₇)
+    19  (new %₁₈ slot₄/y)
+    20  (= slot₃/#-># %₁₉)
+    21  slot₃/#->#
+    22  (return %₂₁)
 22  latestworld
 23  TestMod.f_or_guard
 24  (return %₂₃)

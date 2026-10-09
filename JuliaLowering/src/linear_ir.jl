@@ -436,25 +436,39 @@ function compile_conditional(ctx, ex, false_label)
     if k == :||
         true_label = make_label(ctx, test)
         for (i,e) in enumerate(children(test))
-            c = compile_condition_term(ctx, e)
-            isnothing(c) && break
             if i < numchildren(test)
                 next_term_label = make_label(ctx, test)
-                # Jump over short circuit
-                emit(ctx, @ast ctx e [:gotoifnot c next_term_label])
+                if head(e) == :&&
+                    # Nested `&&` term: falls through when true
+                    compile_conditional(ctx, e, next_term_label)
+                else
+                    c = compile_condition_term(ctx, e)
+                    isnothing(c) && break
+                    # Jump over short circuit
+                    emit(ctx, @ast ctx e [:gotoifnot c next_term_label])
+                end
                 # Short circuit to true
                 emit(ctx, @ast ctx e [:goto true_label])
                 emit(ctx, next_term_label)
+            elseif head(e) == :&&
+                compile_conditional(ctx, e, false_label)
             else
+                c = compile_condition_term(ctx, e)
+                isnothing(c) && break
                 emit(ctx, @ast ctx e [:gotoifnot c false_label])
             end
         end
         emit(ctx, true_label)
     elseif k == :&&
         for e in children(test)
-            c = compile_condition_term(ctx, e)
-            isnothing(c) && break
-            emit(ctx, @ast ctx e [:gotoifnot c false_label])
+            if head(e) == :||
+                # Nested `||` term: falls through when true
+                compile_conditional(ctx, e, false_label)
+            else
+                c = compile_condition_term(ctx, e)
+                isnothing(c) && break
+                emit(ctx, @ast ctx e [:gotoifnot c false_label])
+            end
         end
     else
         c = compile_condition_term(ctx, test)
