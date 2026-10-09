@@ -57,7 +57,7 @@ struct debug_link_info {
 };
 }  // anonymous namespace
 
-#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
+#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || (defined(_OS_DARWIN_) && (defined(LLVM_SHLIB) || defined(JL_USE_FRAMEHOP))))
 extern "C" {
     JL_DLLIMPORT extern void __register_frame(void*) JL_NOTSAFEPOINT;
     JL_DLLIMPORT extern void __deregister_frame(void*) JL_NOTSAFEPOINT;
@@ -610,7 +610,7 @@ static int lookup_pointer(
 
 
 
-#if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
+#if defined(_OS_DARWIN_) && (defined(LLVM_SHLIB) || defined(JL_USE_FRAMEHOP))
 
 void JITDebugInfoRegistry::libc_frames_t::libc_register_frame(const char *Entry) {
     frame_register_func libc_register_frame_ = this->libc_register_frame_.load(std::memory_order_relaxed);
@@ -1361,7 +1361,7 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_instance_t *jl_gdblookupci(void *p) JL_N
     return getJITDebugRegistry().lookupCodeInstance((size_t)p);
 }
 
-#if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
+#if defined(_OS_DARWIN_) && (defined(LLVM_SHLIB) || defined(JL_USE_FRAMEHOP))
 
 /*
  * We use a custom unwinder, so we need to make sure that when registering dynamic
@@ -1379,6 +1379,11 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
   processFDEs((char*)Addr, Size, [](const char *Entry) JL_NOTSAFEPOINT {
       getJITDebugRegistry().libc_frames.libc_register_frame(Entry);
     });
+#ifdef JL_USE_FRAMEHOP
+  // Also register the JIT .eh_frame with framehop (the backtrace unwinder). The code
+  // range is derived from the FDEs; bytes are copied, so Addr may be freed later.
+  fh_register_jit_auto(Addr, Size);
+#endif
 }
 
 void deregister_eh_frames(uint8_t *Addr, size_t Size)
@@ -1386,6 +1391,9 @@ void deregister_eh_frames(uint8_t *Addr, size_t Size)
    processFDEs((char*)Addr, Size, [](const char *Entry) JL_NOTSAFEPOINT {
       getJITDebugRegistry().libc_frames.libc_deregister_frame(Entry);
     });
+#ifdef JL_USE_FRAMEHOP
+  fh_deregister_jit_eh_frame(Addr);
+#endif
 }
 
 #elif (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && \
@@ -1569,7 +1577,8 @@ static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End) JL_NOTSAFEPOIN
 
 void register_eh_frames(uint8_t *Addr, size_t Size)
 {
-    // System unwinder
+    // System unwinder (used by C++ exception handling) — register regardless of which
+    // backtrace unwinder we use.
     jl_profile_atomic([&]() JL_NOTSAFEPOINT {
         __register_frame(Addr);
     });
@@ -1701,6 +1710,14 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
     jl_profile_atomic([&]() JL_NOTSAFEPOINT {
         _U_dyn_register(di);
     });
+
+#ifdef JL_USE_FRAMEHOP
+    // Also register with framehop (the backtrace unwinder). [start_ip, end_ip) is the code
+    // range already computed above; the .eh_frame bytes are copied internally, so Julia may
+    // free its buffer after deregistration. framehop's readers take no locks, so this needs
+    // neither the profile lock nor blocked signals.
+    fh_register_jit(Addr, Size, (uint64_t)start_ip, (uint64_t)end_ip);
+#endif
 }
 
 void deregister_eh_frames(uint8_t *Addr, size_t Size)
@@ -1711,6 +1728,10 @@ void deregister_eh_frames(uint8_t *Addr, size_t Size)
     // Deregistering with our unwinder (_U_dyn_cancel) requires a lookup table
     // to find the allocated entry above (or looking into libunwind's internal
     // data structures).
+#ifdef JL_USE_FRAMEHOP
+    // framehop keys JIT modules by .eh_frame address, so Addr is enough to deregister.
+    fh_deregister_jit_eh_frame(Addr);
+#endif
 }
 
 #else
