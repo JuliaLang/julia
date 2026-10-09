@@ -38,6 +38,26 @@ _range_wrapping_sub(x, y) = x - y
 _range_wrapping_mul(x::_RangeWrappingInteger, y::_RangeWrappingInteger) = x *% y
 _range_wrapping_mul(x, y) = x * y
 
+function _index_diff(a::_RangeWrappingInteger, b::_RangeWrappingInteger)
+    T = promote_type(typeof(a), typeof(b), Int)
+    S = T <: Signed ? T : widen(signed(T))
+    return convert(S, a) - convert(S, b)
+end
+_index_diff(a, b) = a - b
+
+function _index_diff(::Type{T}, a::_RangeWrappingInteger, b::_RangeWrappingInteger) where {T<:_RangeWrappingInteger}
+    S = signed(promote_type(T, typeof(a), typeof(b), Int))
+    return a % S - b % S
+end
+_index_diff(::Type{F}, a::Unsigned, b::Unsigned) where {F<:AbstractFloat} = a >= b ? F(a - b) : -F(b - a)
+_index_diff(::Type, a, b) = _index_diff(a, b)
+
+_index_diff_mul(a, b, x) = _index_diff(a, b) * x
+_index_diff_mul(a, b, x::AbstractFloat) = _index_diff(typeof(x), a, b) * x
+
+_signed_int(x::_RangeWrappingInteger) = convert(signed(promote_type(typeof(x), Int)), x)
+_signed_int(x) = x
+
 """
     (:)(start, [step], stop)
 
@@ -966,7 +986,7 @@ const OverflowSafe = Union{Bool,Int8,Int16,Int32,Int64,Int128,
                            UInt8,UInt16,UInt32,UInt64,UInt128}
 
 function _getindex(v::UnitRange{T}, i::Integer) where {T<:OverflowSafe}
-    val = v.start + (i - oneunit(i))
+    val = v.start + _index_diff(T, i, oneunit(i))
     @boundscheck _in_unit_range(v, val, i) || throw_boundserror(v, i)
     val % T
 end
@@ -982,10 +1002,9 @@ end
 # it assumes the index is inbounds but does not segfault even if the index is out of bounds.
 # it does not check if the index isa bool.
 unsafe_getindex(v::OneTo{T}, i::Integer) where T = convert(T, i)
-unsafe_getindex(v::AbstractRange{T}, i::Integer) where T = convert(T, first(v) + (i - oneunit(i))*step_hp(v))
+unsafe_getindex(v::AbstractRange{T}, i::Integer) where T = convert(T, first(v) + _index_diff(T, i, oneunit(i))*step_hp(v))
 function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
-    u = oftype(r.offset, i) - r.offset
-    convert(T, (r.ref + u*r.step))
+    convert(T, (r.ref + _index_diff_mul(oftype(r.offset, i), r.offset, r.step)))
 end
 unsafe_getindex(r::LinRange, i::Integer) = lerpi(i-oneunit(i), r.lendiv, r.start, r.stop)
 
@@ -1007,9 +1026,8 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integ
         return range(first(s) ? first(r) : last(r), length = last(s))
     else
         f = first(r)
-        start = oftype(f, f + first(s) - firstindex(r))
-        len = length(s)
-        stop = oftype(f, _range_wrapping_add(start, len - oneunit(len)))
+        start = oftype(f, f + _index_diff(first(s), firstindex(r)))
+        stop = oftype(f, f + _index_diff(last(s), firstindex(r)))
         return range(start, stop)
     end
 end
@@ -1029,10 +1047,9 @@ function getindex(r::AbstractUnitRange, s::StepRange{T}) where {T<:Integer}
         return range(first(s) ? first(r) : last(r), step=oneunit(eltype(r)), length=len)
     else
         f = first(r)
-        start = oftype(f, f + s.start - firstindex(r))
-        st = step(s)
-        len = length(s)
-        stop = oftype(f, start + (len - oneunit(len)) * (iszero(len) ? copysign(oneunit(st), st) : st))
+        st = _signed_int(step(s))
+        start = oftype(f, f + _index_diff(first(s), firstindex(r)))
+        stop = oftype(f, f + _index_diff(last(s), firstindex(r)))
         return range(start, stop; step=st)
     end
 end
@@ -1051,13 +1068,10 @@ function getindex(r::StepRange, s::AbstractRange{T}) where {T<:Integer}
         range((first(s) ⊻ nonempty) ⊻ isempty(r) ? last(r) : first(r), step=step(r), length=Int(nonempty))
     else
         f = r.start
-        fs = first(s)
-        st = r.step
-        start = oftype(f, f + (fs - firstindex(r)) * st)
-        st *= step(s)
-        len = length(s)
+        st = r.step * _signed_int(step(s))
+        start = oftype(f, f + _index_diff(typeof(f), first(s), firstindex(r)) * r.step)
         # mimic steprange_last_empty here, to try to avoid overflow
-        stop = oftype(f, start + (len - oneunit(len)) * (iszero(len) ? copysign(oneunit(st), st) : st))
+        stop = oftype(f, isempty(s) ? start - copysign(oneunit(st), st) : f + _index_diff(typeof(f), last(s), firstindex(r)) * r.step)
         return range(start, stop; step=st)
     end
 end
@@ -1066,7 +1080,7 @@ function getindex(r::StepRangeLen{T}, s::OrdinalRange{S}) where {T, S<:Integer}
     @inline
     @boundscheck checkbounds(r, s)
 
-    len = length(s)
+    len = _signed_int(length(s))
     sstep = step_hp(s)
     rstep = step_hp(r)
     L = typeof(len)
@@ -1085,23 +1099,23 @@ function getindex(r::StepRangeLen{T}, s::OrdinalRange{S}) where {T, S<:Integer}
         end
     else
         # Find closest approach to offset by s
-        ind = LinearIndices(s)
-        offset = L(max(min(1 + round(L, (r.offset - first(s))/sstep), last(ind)), first(ind)))
+        sstep = _signed_int(sstep)
+        d = _index_diff(typeof(r.offset), r.offset, first(s))
+        offset = L(max(min(1 + round(typeof(d), d/sstep), len), oneunit(L)))
         ref = _getindex_hiprec(r, first(s) + (offset - oneunit(offset)) * sstep)
         return StepRangeLen{T}(ref, rstep*sstep, len, offset)
     end
 end
 
 function _getindex_hiprec(r::StepRangeLen, i::Integer)  # without rounding by T
-    u = oftype(r.offset, i) - r.offset
-    r.ref + u*r.step
+    r.ref + _index_diff_mul(oftype(r.offset, i), r.offset, r.step)
 end
 
 function getindex(r::LinRange{T}, s::OrdinalRange{S}) where {T, S<:Integer}
     @inline
     @boundscheck checkbounds(r, s)
 
-    len = length(s)
+    len = _signed_int(length(s))
     L = typeof(len)
     if S === Bool
         if len == 0

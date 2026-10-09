@@ -479,7 +479,7 @@ end
 # This assumes that r.step has already been split so that (0:len-1)*r.step.hi is exact
 function unsafe_getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, i::Integer) where T
     # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add12
-    u = oftype(r.offset, i) - r.offset
+    u = _index_diff(typeof(r.step.hi), oftype(r.offset, i), r.offset)
     shift_hi, shift_lo = u*r.step.hi, u*r.step.lo
     x_hi, x_lo = add12(r.ref.hi, shift_hi)
     T(x_hi + (x_lo + (shift_lo + r.ref.lo)))
@@ -487,7 +487,7 @@ end
 
 function _getindex_hiprec(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision}, i::Integer)
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    u = oftype(r.offset, i) - r.offset
+    u = _index_diff(typeof(r.step.hi), oftype(r.offset, i), r.offset)
     shift_hi, shift_lo = u*r.step.hi, u*r.step.lo
     x_hi, x_lo = add12(r.ref.hi, shift_hi)
     x_hi, x_lo = add12(x_hi, x_lo + (shift_lo + r.ref.lo))
@@ -496,9 +496,9 @@ end
 
 function getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, s::OrdinalRange{S}) where {T, S<:Integer}
     @boundscheck checkbounds(r, s)
-    len = length(s)
+    len = _signed_int(length(s))
     L = typeof(len)
-    sstep = step_hp(s)
+    sstep = _signed_int(step_hp(s))
     rstep = step_hp(r)
     if S === Bool
         #rstep *= one(sstep)
@@ -514,8 +514,9 @@ function getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, s::Ordin
             return StepRangeLen{T}(last(r), step(r), oneunit(L), oneunit(L))
         end
     else
-        soffset = round(L, (r.offset - first(s))/sstep + 1)
-        soffset = clamp(soffset, oneunit(L), len)
+        d = _index_diff(typeof(r.offset), r.offset, first(s))
+        soffset = round(typeof(d), d/sstep + 1)
+        soffset = L(clamp(soffset, oneunit(L), len))
         ioffset = L(first(s) + (soffset - oneunit(L)) * sstep)
         if sstep == 1 || len < 2
             newstep = rstep #* one(sstep)
@@ -527,7 +528,7 @@ function getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, s::Ordin
         if ioffset == r.offset
             return StepRangeLen{T}(r.ref, newstep, len, soffset)
         else
-            return StepRangeLen{T}(r.ref + (ioffset-r.offset)*rstep, newstep, len, soffset)
+            return StepRangeLen{T}(r.ref + _index_diff(ioffset, r.offset)*rstep, newstep, len, soffset)
         end
     end
 end
