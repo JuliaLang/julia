@@ -157,9 +157,8 @@ def get_rt(target, process):
     _RT[0] = rt
     _last_loc[0] = None
     if process.IsValid():
-        # opportunistically install the safepoint stop-hook the first time
-        # we see this process (importing from ~/.lldbinit happens before a
-        # target exists, so it cannot be done at import time)
+        # also cover targets created after the script was imported into an
+        # existing target, which do not inherit that target's stop-hook
         _install_stop_hook(target.GetDebugger())
     return rt
 
@@ -229,15 +228,17 @@ def _run_command(debugger, cmd):
 
 
 def _stop_hook_present(debugger):
-    """Whether the *selected* target has our stop-hook. Stop hooks belong to
-    individual targets, so this must be queried rather than cached."""
+    """Whether the selected (or, with no target yet, the dummy) target has
+    our stop-hook. Stop hooks belong to individual targets, so this must be
+    queried rather than cached."""
     ok, out = _run_command(debugger, "target stop-hook list")
     return ok and "JLSafepointStopHook" in out
 
 
 def _install_stop_hook(debugger):
-    if debugger.GetNumTargets() == 0:
-        return False
+    """Add the stop-hook to the selected target. Before any target exists
+    (e.g. when imported from ~/.lldbinit) it goes to the dummy target, which
+    lldb copies into every target created afterwards."""
     if _stop_hook_present(debugger):
         return True
     ok, _ = _run_command(
