@@ -324,7 +324,12 @@ install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index
 
 	$(INSTALL_M) $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE)) $(DESTDIR)$(bindir)/
 ifeq ($(OS),WINNT)
-	$(INSTALL_M) $(wildcard $(build_bindir)/*.dll) $(DESTDIR)$(bindir)/
+# Windows keeps every DLL in `bin`, under its versioned name (`libgmp-10.dll`) if it has one
+	for lib in $(sort $(JL_TARGETS:%=lib%) $(JL_PRIVATE_LIBS-0) $(JL_PRIVATE_LIBS-1)); do \
+		set -- $(build_bindir)/$$lib-[0-9]*.dll; \
+		[ -e "$$1" ] || set -- $(build_bindir)/$$lib.dll; \
+		$(INSTALL_M) "$$@" $(DESTDIR)$(bindir)/ || exit 1; \
+	done
 ifeq ($(JULIA_BUILD_MODE),release)
 	$(INSTALL_M) $(build_libdir)/libjulia.dll.a $(DESTDIR)$(libdir)/
 	$(INSTALL_M) $(build_libdir)/libjulia-internal.dll.a $(DESTDIR)$(libdir)/
@@ -633,7 +638,7 @@ ifeq ($(OS), Linux)
 	-cp $(build_datarootdir)/julia/cert.pem $(DESTDIR)$(datarootdir)/julia/
 endif
 ifeq ($(OS), WINNT)
-	cd $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
+	cd $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin && rm -f llvm* llc.exe lli.exe opt.exe bugpoint.exe macho-dump.exe
 endif
 	cd $(BUILDROOT) && $(TAR) -zcvf $(JULIA_BINARYDIST_FILENAME).tar.gz julia-$(JULIA_COMMIT)
 
