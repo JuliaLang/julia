@@ -66,7 +66,3 @@ function activate!(enable=true; freeze_world_age=true)
         Core._set_toplevel_eval!(Base.fl_toplevel_eval)
     end
 end
-
-function __init__()
-    _lowering_world[] = 0
-end

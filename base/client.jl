@@ -640,6 +640,15 @@ function cancel_session_work!()
     return true
 end
 
+function init_frontend()
+    JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
+    if get_bool_env("JULIA_USE_FLISP_LOWERING", true) === true
+        JuliaLowering.activate!(false)
+    else
+        JuliaLowering.activate!(true; freeze_world_age=true)
+    end
+end
+
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
@@ -704,6 +713,7 @@ function _start()
             e isa IOError || rethrow()
         end
     end
+    generating_output(false) && init_frontend()
     return ret
 end
 
