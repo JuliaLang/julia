@@ -1096,6 +1096,11 @@ end
     # Check hint message
     hintExpected = "Did you mean to access dict values using key: `:c` ? Consider using indexing syntax dict[:c]\n"
     @test occursin(hintExpected, errorMsg)
+
+    # abstract types have no fields to list, and the hint handler must not throw
+    ex = (@test_throws FieldError fieldtype(Integer, :a)).value::FieldError
+    errorMsg = @test_logs sprint(Base.showerror, ex)
+    @test errorMsg == "FieldError: type Integer has no field `a`"
 end
 
 module FieldErrorTest
