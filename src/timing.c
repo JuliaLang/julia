@@ -763,7 +763,7 @@ void jl_timing_root_task_init(jl_task_t *t) {
     nvtx_attrs.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
 
 
-    nvtxStringHandle_t nvtx_message = nvtxDomainRegisterStringA(jl_timing_nvtx_task_domain, root_task_name); 
+    nvtxStringHandle_t nvtx_message = nvtxDomainRegisterStringA(jl_timing_nvtx_task_domain, root_task_name);
     nvtx_attrs.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
     nvtx_attrs.message.registered = nvtx_message;
     t->nvtx_attrs = nvtx_attrs;
