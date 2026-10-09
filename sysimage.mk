@@ -33,7 +33,7 @@ $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%-o.a
 		$(call whole_archive,$<) \
 		$(if $(findstring -debug,$(notdir $@)),-ljulia-internal-debug -ljulia-debug,-ljulia-internal -ljulia)))
 	@$(INSTALL_NAME_CMD)$(notdir $@) $@
-	@$(DSYMUTIL) $@
+	@$(call dsymutil,$@)
 
 COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/Base_compiler.jl \

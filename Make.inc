@@ -1624,6 +1624,10 @@ else
   DSYMUTIL := true -ignore
 endif
 
+# $(call dsymutil,binary[,bundle]): also drop the bundle's Relocations directory,
+# which only dsymutil itself reads back (to relink mergeable libraries).
+dsymutil = $(DSYMUTIL) -o $(or $(2),$(1).dSYM) $(1) && rm -rf $(or $(2),$(1).dSYM)/Contents/Resources/Relocations
+
 # shared library runtime paths
 ifneq (,$(filter $(OS),WINNT emscripten))
   RPATH :=
