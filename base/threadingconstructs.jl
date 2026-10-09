@@ -168,14 +168,26 @@ This includes both mark threads and concurrent sweep threads.
 """
 ngcthreads() = Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) + 1
 
-function threading_run(fun, static)
+# Hold `fun` in a struct with an untyped field so that the task closures and the runner
+# have the same types at every `@threads` site and compile once into the sysimage.
+# The cost is one dynamic dispatch per task at start.
+struct _ThreadsFun
+    fun
+end
+
+# Isolate the dynamic dispatch so that `--trim` checks the loop body at each call of the
+# runner, where its type is known. The runner must stay out of line for that call to exist.
+@noinline _threads_call(tfun::_ThreadsFun, i::Int) = tfun.fun(i)
+
+@noinline Base.@nospecializeinfer function threading_run(@nospecialize(fun), static::Bool)
+    tfun = _ThreadsFun(fun)
     ccall(:jl_enter_threaded_region, Cvoid, ())
     n = threadpoolsize()
     tid_offset = threadpoolsize(:interactive)
     tasks = Vector{Task}(undef, n)
     try
         for i = 1:n
-            t = Task(() -> fun(i)) # pass in tid
+            t = Task(() -> _threads_call(tfun, i)) # pass in tid
             t.sticky = static
             if static
                 ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
@@ -225,8 +237,8 @@ end
 
 function greedy_func(itr, lidx, lbody)
     quote
-        let c = Channel{eltype($itr)}(threadpoolsize(), spawn=true) do ch
-            for item in $itr
+        let iter = $itr, c = Channel{eltype(iter)}(threadpoolsize(), spawn=true) do ch
+            for item in iter
                 put!(ch, item)
             end
         end

@@ -91,6 +91,20 @@ module Rebinding
     @test_throws UndefVarError f_return_delete_me_implicit()
 end
 
+# The flag-only repartitionings replace in the next world, not the tls world.
+module RebindingStaleWorldFlags
+    using Test
+    module M; export g; g() = 2; end
+    w = Base.get_world_counter()
+    Base.delete_binding(M, :g)                                          # newer partition
+    Base.invoke_in_world(w, Base.deprecate, M, :g)
+    @test Base.isdeprecated(M, :g)
+    @test !Base.isdefinedglobal(M, :g)                                  # still deleted
+    Base.invoke_in_world(w, Base.deprecate, M, :g, 0)
+    @test !Base.isdeprecated(M, :g)
+    @test !Base.isdefinedglobal(M, :g)
+end
+
 module RebindingPrecompile
     using Test
     include("precompile_utils.jl")
@@ -442,4 +456,19 @@ module Invalidate61745_indirect
     @test caller() == "unchanged"
     Core.eval(M, :(const foo = "changed!"))
     @test caller() == "changed!"
+end
+
+# The inline store to a typed global never freezes the value slot's definedness at compile
+# time: `setglobalonce!` compiled while the global is assigned still attempts its store, and
+# the RMW kinds still null-check what they load.
+module StoreNoFrozenDefinedness
+    using Test
+    using InteractiveUtils
+    global g::Int
+    g = 1
+    fonce() = setglobalonce!(@__MODULE__, :g, 2)
+    fswap() = swapglobal!(@__MODULE__, :g, 2)
+    @test fonce() === false
+    @test fswap() === 1
+    @test occursin("jl_undefined_var_error", sprint(code_llvm, fswap, ()))
 end

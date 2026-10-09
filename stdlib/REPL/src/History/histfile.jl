@@ -81,15 +81,6 @@ position will be reset to the start of the entry.
 """
 function update!(hist::HistoryFile)
     (; file, records) = hist
-    # If the file has grown since the last read,
-    # we need to trigger a synchronisation of the
-    # stream state. This can be done with `fseek`,
-    # but that can't easily be called from Julia.
-    # Instead, we can use `filesize` to detect when
-    # we need to do this, and then use `peek` to
-    # trigger the synchronisation. This relies on
-    # undocumented implementation details, but
-    # there's not much to be done about that.
     ensureopen(hist) || return hist
     offset = position(file)
     offset == filesize(file) && return hist

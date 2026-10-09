@@ -386,6 +386,25 @@ int LLVMFPtoUI_exact(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, int
     return isExact;
 }
 
+// Round to odd at `prec` (<= 64) significant bits, so that the final rounding to
+// a format with at most `prec - 2` significant bits is correct.
+static double roundToDoubleOdd(APInt a, bool isSigned, unsigned prec) {
+    bool neg = isSigned && a.isNegative();
+    if (neg)
+        a.negate();
+    unsigned active = a.getActiveBits();
+    unsigned shift = 0;
+    if (active > prec) {
+        shift = active - prec;
+        bool sticky = a.countr_zero() < shift;
+        a.lshrInPlace(shift);
+        if (sticky)
+            a.setBit(0);
+    }
+    double val = ldexp((double)a.getZExtValue(), shift);
+    return neg ? -val : val;
+}
+
 extern "C" JL_DLLEXPORT
 void LLVMSItoFP(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr) {
     double val;
@@ -393,7 +412,8 @@ void LLVMSItoFP(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerP
         unsigned numbytes = jl_datatype_size(ty);
         unsigned numbits = numbytes * host_char_bit;
         CREATE(a)
-        val = a.roundToDouble(true);
+        unsigned prec = oty == jl_float64_type ? 64 : oty == jl_float32_type ? 53 : 24;
+        val = roundToDoubleOdd(a, true, prec);
     }
     if (oty == jl_float16_type)
         *(uint16_t*)pr = julia_float_to_half(val);
@@ -414,7 +434,8 @@ void LLVMUItoFP(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerP
         unsigned numbytes = jl_datatype_size(ty);
         unsigned numbits = numbytes * host_char_bit;
         CREATE(a)
-        val = a.roundToDouble(false);
+        unsigned prec = oty == jl_float64_type ? 64 : oty == jl_float32_type ? 53 : 24;
+        val = roundToDoubleOdd(a, false, prec);
     }
     if (oty == jl_float16_type)
         *(uint16_t*)pr = julia_float_to_half(val);

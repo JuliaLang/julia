@@ -520,9 +520,7 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
         return;
     }
 
-    Value *src = data_pointer(ctx, x);
-    auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
-    emit_memcpy(ctx, dest, dest_ai, src, src_ai, jl_datatype_size(x.typ), Align(align_dst), align_src ? *align_src : Align(julia_alignment(x.typ)), isVolatile);
+    emit_memcpy(ctx, dest, dest_ai, x, jl_datatype_size(x.typ), Align(align_dst), align_src ? *align_src : Align(julia_alignment(x.typ)), isVolatile);
 }
 
 static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
@@ -662,6 +660,66 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
     }
 }
 
+// LLVM lowers integer to bfloat conversions through float, which rounds twice.
+// Round to odd at float precision first so that the final rounding is correct.
+// Mirrors `APInt_inttofp` in APInt.c.
+static Value *emit_inttobfloat(jl_codectx_t &ctx, Value *x, Type *to, bool issigned)
+{
+    IRBuilder<> &B = ctx.builder;
+    Type *T_float = getFloatTy(B.getContext());
+    Type *t = x->getType();
+    unsigned nb = t->getScalarSizeInBits();
+    const unsigned mbits = 24; // significand bits of float
+    if (nb <= mbits + issigned) // exact in float
+        return B.CreateFPTrunc(issigned ? B.CreateSIToFP(x, T_float) : B.CreateUIToFP(x, T_float), to);
+    Value *zero = ConstantInt::get(t, 0);
+    Value *one = ConstantInt::get(t, 1);
+    Value *neg = issigned ? B.CreateICmpSLT(x, zero) : nullptr;
+    Value *m = issigned ? B.CreateSelect(neg, B.CreateNeg(x), x) : x; // magnitude, as unsigned
+    // replace all but the `mbits` most significant bits of `m` with a sticky bit
+    Value *lz = B.CreateBinaryIntrinsic(Intrinsic::ctlz, m, B.getFalse());
+    Value *shift = B.CreateBinaryIntrinsic(Intrinsic::usub_sat, ConstantInt::get(t, nb - mbits), lz);
+    Value *sticky = B.CreateShl(one, shift);
+    Value *lowmask = B.CreateSub(sticky, one);
+    Value *inexact = B.CreateICmpNE(B.CreateAnd(m, lowmask), zero);
+    m = B.CreateOr(B.CreateAnd(m, B.CreateNot(lowmask)), B.CreateSelect(inexact, sticky, zero));
+    Value *f = B.CreateUIToFP(m, T_float); // exact
+    if (issigned)
+        f = B.CreateSelect(neg, B.CreateFNeg(f), f);
+    return B.CreateFPTrunc(f, to);
+}
+
+// LLVM lowers bfloat fma through a float fma, which rounds twice. Instead, compute
+// a*b + c in double (where the product is exact), round it to odd, then round once
+// to bfloat. A float intermediate is not enough, since a*b can overflow it.
+// Mirrors `fma_narrow` in runtime_intrinsics.c.
+static Value *emit_bfloat_fma(jl_codectx_t &ctx, Value *x, Value *y, Value *z)
+{
+    IRBuilder<> &B = ctx.builder;
+    IRBuilder<>::FastMathFlagGuard guard(B);
+    B.setFastMathFlags(FastMathFlags()); // the error-free transformation needs strict semantics
+    Type *T_double = x->getType()->getWithNewType(getDoubleTy(B.getContext()));
+    Type *T_int64 = x->getType()->getWithNewType(getInt64Ty(B.getContext()));
+    Value *a = B.CreateFPExt(x, T_double);
+    Value *b = B.CreateFPExt(y, T_double);
+    Value *c = B.CreateFPExt(z, T_double);
+    Value *ab = B.CreateFMul(a, b); // exact
+    Value *res = B.CreateFAdd(ab, c);
+    // exact error of ab + c (TwoSum)
+    Value *bb = B.CreateFSub(res, ab);
+    Value *err = B.CreateFAdd(B.CreateFSub(ab, B.CreateFSub(res, bb)), B.CreateFSub(c, bb));
+    // round to odd: if inexact and the last bit is even, step toward the exact result
+    Value *u = B.CreateBitCast(res, T_int64);
+    Value *zero = ConstantInt::get(T_int64, 0);
+    Value *inexact = B.CreateFCmpONE(err, ConstantFP::get(T_double, 0.0)); // false for NaN
+    Value *even = B.CreateICmpEQ(B.CreateAnd(u, ConstantInt::get(T_int64, 1)), zero);
+    Value *away = B.CreateICmpEQ(B.CreateICmpSLT(B.CreateBitCast(err, T_int64), zero),
+                                 B.CreateICmpSLT(u, zero));
+    Value *step = B.CreateSelect(away, ConstantInt::get(T_int64, 1), ConstantInt::getSigned(T_int64, -1));
+    u = B.CreateSelect(B.CreateAnd(inexact, even), B.CreateAdd(u, step), u);
+    return B.CreateFPTrunc(B.CreateBitCast(u, T_double), x->getType());
+}
+
 static jl_cgval_t generic_cast(
         jl_codectx_t &ctx,
         intrinsic f, Instruction::CastOps Op,
@@ -719,7 +777,11 @@ static jl_cgval_t generic_cast(
             setName(ctx.emission_context, from, "rounded");
         }
     }
-    Value *ans = ctx.builder.CreateCast(Op, from, to);
+    Value *ans;
+    if ((Op == Instruction::SIToFP || Op == Instruction::UIToFP) && to->getScalarType()->isBFloatTy())
+        ans = emit_inttobfloat(ctx, from, to, Op == Instruction::SIToFP);
+    else
+        ans = ctx.builder.CreateCast(Op, from, to);
     if (f == fptosi || f == fptoui)
         ans = ctx.builder.CreateFreeze(ans);
     if (jl_is_concrete_type((jl_value_t*)jlto)) {
@@ -1238,10 +1300,10 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
             }
             Value *tindex;
             if (!x_tindex && x.constant) {
-                x_tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x80 | get_box_tindex((jl_datatype_t*)jl_typeof(x.constant), rt_hint));
+                x_tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x80 | get_box_tindex((jl_datatype_t*)jl_typeof(x.constant), t1));
             }
             if (!y_tindex && y.constant) {
-                y_tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x80 | get_box_tindex((jl_datatype_t*)jl_typeof(y.constant), rt_hint));
+                y_tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x80 | get_box_tindex((jl_datatype_t*)jl_typeof(y.constant), t1));
             }
             if (x_tindex && y_tindex) {
                 tindex = ctx.builder.CreateSelect(isfalse, y_tindex, x_tindex);
@@ -1256,14 +1318,14 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                     ctx.builder.CreateCondBr(isfalse, compute, post);
                     ret->addIncoming(x_tindex, ctx.builder.GetInsertBlock());
                     ctx.builder.SetInsertPoint(compute);
-                    tindex = compute_tindex_unboxed(ctx, y, rt_hint);
+                    tindex = compute_tindex_unboxed(ctx, y, t1);
                 }
                 else {
                     assert(x.isboxed);
                     ctx.builder.CreateCondBr(isfalse, post, compute);
                     ret->addIncoming(y_tindex, ctx.builder.GetInsertBlock());
                     ctx.builder.SetInsertPoint(compute);
-                    tindex = compute_tindex_unboxed(ctx, x, rt_hint);
+                    tindex = compute_tindex_unboxed(ctx, x, t1);
                 }
                 tindex = ctx.builder.CreateOr(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x80));
                 compute = ctx.builder.GetInsertBlock(); // could have changed
@@ -1274,7 +1336,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 tindex = ret;
                 setName(ctx.emission_context, tindex, "ifelse_tindex");
             }
-            jl_cgval_t ret = mark_julia_slot(ifelse_result, rt_hint, tindex, ifelse_tbaa);
+            jl_cgval_t ret = mark_julia_slot(ifelse_result, t1, tindex, ifelse_tbaa);
             if (x_vboxed || y_vboxed) {
                 if (!x_vboxed)
                     x_vboxed = ConstantPointerNull::get(cast<PointerType>(y_vboxed->getType()));
@@ -1567,6 +1629,8 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
     case fma_float: {
         assert(y->getType() == x->getType());
         assert(z->getType() == y->getType());
+        if (t->getScalarType()->isBFloatTy())
+            return emit_bfloat_fma(ctx, x, y, z);
 #if JL_LLVM_VERSION >= 200000
         FunctionCallee fmaintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::fma, ArrayRef<Type*>(t));
 #else

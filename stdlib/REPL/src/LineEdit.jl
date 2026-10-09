@@ -2773,7 +2773,7 @@ function history_search(mistate::MIState)
         mistate.mode_state[mimode] = init_state(term, mimode)
     end
     pstate = mistate.mode_state[mimode]
-    raw!(term, true)
+    raw!(term, true) && enable_bracketed_paste(term)
     mistate.current_mode = mimode
     activate(mimode, state(mistate, mimode), termbuf, term)
     commit_changes(term, termbuf)

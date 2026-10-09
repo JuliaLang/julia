@@ -2125,6 +2125,15 @@ let src = code_typed1(()) do
     end
     @test count(iscall((src, isdefined)), src.code) == 0
 end
+
+# eliminating a `setfield!` must keep its return value
+sroa_setfield_return(y::Int) = setfield!(Ref(0), :x, y)
+let src = code_typed1(sroa_setfield_return, (Int,))
+    @test !any(iscall((src, setfield!)), src.code)
+    @test src.code[end] == ReturnNode(Argument(2))
+end
+@test sroa_setfield_return(42) == 42
+
 # We should successfully fold the default values of a ScopedValue
 const svalconstprop = ScopedValue(1)
 foosvalconstprop() = svalconstprop[]
