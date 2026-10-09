@@ -3726,7 +3726,7 @@ end
 
 function expand_typegroup_def(ctx, ex)
     @jl_assert numchildren(ex) == 1 ex
-    body = flatten_blocks(ex[1])
+    body = ex[1]
     if head(body) != :block
         throw(LoweringError(body, "expected block for `typegroup` body"))
     end
@@ -3740,18 +3740,12 @@ function expand_typegroup_def(ctx, ex)
     struct_mod_prev = nothing
 
     for child in children(body)
-        if head(child) == :struct
-            sdef = child
-            docs = nothing
-        elseif head(child) == :doc
-            @jl_assert numchildren(child) == 2 child
-            sdef = child[2]
-            if head(sdef) != :struct
-                throw(LoweringError(sdef, "`typegroup` only supports `struct` definitions"))
-            end
-            docs = child
-        else
-            throw(LoweringError(child, "`typegroup` only supports `struct` definitions"))
+        (sdef, docs) = @stm child begin
+            [:struct _...] -> (child, nothing)
+            ([:block [:if [:value] [:(=) _ s]] docs... _],
+             when=head(s) === :struct) ->
+                 (s, nothing) # TODO drop for now
+            _ -> throw(LoweringError(child, "`typegroup` only supports `struct` definitions"))
         end
 
         @jl_assert numchildren(sdef) == 3 sdef
