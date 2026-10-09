@@ -613,14 +613,8 @@ function __init__()
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")
-    JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
-    if get_bool_env("JULIA_USE_FLISP_LOWERING", true) === true
-        JuliaLowering.activate!(false)
-    else
-        JuliaLowering.activate!(true; freeze_world_age=true)
-    end
-
     CoreLogging.global_logger(CoreLogging.ConsoleLogger())
+    init_frontend()
     nothing
 end
 
