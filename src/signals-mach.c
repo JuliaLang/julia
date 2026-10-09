@@ -996,6 +996,7 @@ void jl_profile_thread_mach(int tid)
     if (!valid_thread)
         return;
     if (profile_running) {
+        size_t bt_size_start = profile_bt_size_cur;
 #if defined(LLVMLIBUNWIND) && !defined(JL_USE_FRAMEHOP)
         /*
             *  Unfortunately compact unwind info is incorrectly generated for quite a number of
@@ -1011,7 +1012,6 @@ void jl_profile_thread_mach(int tid)
             *  and during stack unwinding we only ever read memory, but never write it.
             */
 
-        size_t bt_size_start = profile_bt_size_cur;
         forceDwarf = 0;
         unw_getcontext(&profiler_uc); // will resume from this point if the next lines segfault at any point
 
