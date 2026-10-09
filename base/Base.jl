@@ -347,8 +347,8 @@ Core.println("JuliaSyntax/src/JuliaSyntax.jl")
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
 JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
 
-# May be replaced in incremental sysimage build after-the-fact
-const JuliaLowering = nothing
+Core.println("JuliaLowering/src/JuliaLowering.jl")
+include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
 
 set_syntax_version(Base, VERSION)
 
@@ -618,9 +618,7 @@ function __init__()
         JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
     end
 
-    if JuliaLowering !== nothing && get_bool_env("JULIA_USE_FLISP_LOWERING", true) === false
-        # This is not available by default, but JuliaLowering can be added to
-        # Base after-the-fact via an incremental sysimage build.
+    if get_bool_env("JULIA_USE_FLISP_LOWERING", true) === false
         JuliaLowering.activate!()
     end
 
