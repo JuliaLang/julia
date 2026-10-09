@@ -959,6 +959,7 @@ void JLJITLinkMemoryManager::allocate(const jitlink::JITLinkDylib *JD,
         MemProt P = Sec.getMemProt();
         assert(bool(P & MemProt::Exec) ? !bool(P & MemProt::Write) : true);
         Segment &Seg = bool(P & MemProt::Exec) ? RX : bool(P & MemProt::Write) ? RW : RX;
+        unpoisonLinkGraphBlocks(Sec);
         Seg.Blocks.append(Sec.blocks().begin(), Sec.blocks().end());
     }
 

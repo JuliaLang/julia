@@ -784,7 +784,7 @@ void JLDebuginfoPlugin::enableGDBRegistration(orc::ExecutorAddr Registrar)
 // bytes, while allocations made inside the uninstrumented libLLVM touch no
 // shadow state. A block libLLVM carves out of a slab our calls created is
 // therefore live but still shadow-poisoned; repair that before reading it.
-static void unpoisonLinkGraphBlocks(const jitlink::Section &Sec) JL_NOTSAFEPOINT
+void unpoisonLinkGraphBlocks(const jitlink::Section &Sec) JL_NOTSAFEPOINT
 {
 #ifdef _COMPILER_ASAN_ENABLED_
     for (const jitlink::Block *B : Sec.blocks())
