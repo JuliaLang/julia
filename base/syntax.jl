@@ -622,6 +622,8 @@ function _expr_to_syntax(@nospecialize(e), context::SyntaxContext,
             end
         end
         @mknode(;head=h, source=old_src, children=cs, context)
+    elseif (e isa Core.SSAValue || e isa Core.SlotNumber) && !quoted
+        error("SSAValue and SlotNumber objects should not occur in an AST")
     elseif e isa GlobalRef
         # Represent globalref as :identifier with :mod attribute
         @mknode(;head=:identifier, source=src, value=string(e.name),
