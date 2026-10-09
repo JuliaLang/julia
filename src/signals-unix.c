@@ -1432,6 +1432,10 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             do_critical_profile();
         }
         else if (profile) {
+#ifdef JL_USE_FRAMEHOP
+            // Pick up libraries loaded without jl_dlopen, before any thread is suspended.
+            fh_modules_refresh();
+#endif
             if (profile_all_tasks) {
                 // Don't take the stackwalk lock here since it's already taken in `jl_rec_backtrace`
                 jl_profile_task();

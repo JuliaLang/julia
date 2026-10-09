@@ -35,6 +35,14 @@ int jl_unw_get(void *context) { return -1; }
 #define jl_unw_fini(cursor) ((void)0)
 #endif
 
+// Before a walk of the calling thread outside a signal handler, have framehop pick up
+// libraries that were loaded without jl_dlopen. This can take the loader lock.
+#if defined(JL_USE_FRAMEHOP)
+#define jl_unw_refresh() fh_modules_refresh()
+#else
+#define jl_unw_refresh() ((void)0)
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -233,6 +241,7 @@ NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize,
 // `rec_backtrace` itself.
 NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT
 {
+    jl_unw_refresh();
     bt_context_t context;
     memset(&context, 0, sizeof(context));
     int r = jl_unw_get(&context);
@@ -300,6 +309,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
     bt_context_t context;
     bt_cursor_t cursor;
     memset(&context, 0, sizeof(context));
+    jl_unw_refresh();
     int r = jl_unw_get(&context);
     jl_gcframe_t *pgcstack = jl_pgcstack;
     if (r == 0 && jl_unw_init(&cursor, &context, 0)) {
