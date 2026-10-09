@@ -2949,6 +2949,10 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
                 return singleton_typevar_subtype((jl_tvar_t*)x, y);
             if (yfree_singleton)
                 return subtype_singleton_typevar(xub, (jl_tvar_t*)y);
+            // skip <: check during intersection if we meet 2 inner vars,
+            // just like var_lt/var_gt.
+            if (xinner && yinner && e->intersection)
+                return 1;
             return subtype(xub, y, e, param) || subtype(x, ylb, e, param);
         }
         int xinner = 0;
@@ -5818,6 +5822,35 @@ static int has_typevar_via_env(jl_value_t *x, jl_tvar_t *t, jl_stenv_t *e)
     return jl_has_typevar(x, t);
 }
 
+// Check if a type variable always occurs as a parameter in a datatype. (e.g. Set{x}, Union{Set{x},Val{x}}, ...)
+static int var_always_occurs_as_parameter(jl_value_t *t, jl_tvar_t *var, int param) JL_NOTSAFEPOINT
+{
+    if (t == (jl_value_t*)var)
+        return param;
+    else if (jl_is_uniontype(t)) {
+        return var_always_occurs_as_parameter(((jl_uniontype_t*)t)->a, var, 0) &&
+               var_always_occurs_as_parameter(((jl_uniontype_t*)t)->b, var, 0);
+    }
+    else if (jl_is_unionall(t)) {
+        if (((jl_unionall_t*)t)->var == var)
+            return 0;
+        return var_always_occurs_as_parameter(((jl_unionall_t*)t)->body, var, param);
+    }
+    else if (jl_is_vararg(t)) {
+        jl_vararg_t *vm = (jl_vararg_t*)t;
+        return (vm->T != NULL && var_always_occurs_as_parameter(vm->T, var, param)) ||
+               (vm->N != NULL && var_always_occurs_as_parameter(vm->N, var, param)) ;
+    }
+    else if (jl_is_datatype(t)) {
+        for (size_t i = 0; i < jl_nparams(t); i++) {
+            if (var_always_occurs_as_parameter(jl_tparam(t, i), var, 1))
+                return 1;
+        }
+        return 0;
+    }
+    return 0;
+}
+
 static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param)
 {
     if (x == y) return y;
@@ -5909,6 +5942,11 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
                     // special case for e.g.
                     // 1) Val{Y}<:X<:Val{Y} && Val{X}<:Y<:Val{X}
                     // 2) Y<:X<:Y && Val{X}<:Y<:Val{X} => Val{Y}<:Y<:Val{Y}
+                    ccheck = 0;
+                }
+                else if (var_always_occurs_as_parameter(xub, (jl_tvar_t*)y, 0) ||
+                         var_always_occurs_as_parameter(yub, (jl_tvar_t*)x, 0)) {
+                    // special case for X<:Val{Y} ∩ Y
                     ccheck = 0;
                 }
                 else if (yub == xub ||
