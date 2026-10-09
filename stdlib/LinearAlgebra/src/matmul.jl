@@ -101,7 +101,9 @@ julia> [1 1; 0 1] * [1 0; 1 1]
  1  1
 ```
 """
-function (*)(A::AbstractMatrix, B::AbstractMatrix)
+(*)(A::AbstractMatrix, B::AbstractMatrix) = mul(A, B)
+# we add an extra level of indirection to avoid ambiguities in *
+function mul(A::AbstractMatrix, B::AbstractMatrix)
     TS = promote_op(matprod, eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A, 1), size(B, 2))), A, B)
 end
@@ -541,7 +543,7 @@ function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA
     # Result array does not need to be initialized as long as beta==0
     #    C = Matrix{T}(undef, mA, mA)
 
-    if iszero(_add.beta) || issymmetric(C)
+    if iszero(_add.beta) || ishermitian(C)
         alpha, beta = promote(_add.alpha, _add.beta, zero(T))
         if (alpha isa Union{Bool,T} &&
             beta isa Union{Bool,T} &&
@@ -745,11 +747,13 @@ function _generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::Abst
                 C[i] = zero(A[i]*B[1] + A[i]*B[1])
             end
         end
-        for k = 1:mB
-            aoffs = (k-1)*Astride
-            b = _add(B[k])
-            for i = 1:mA
-                C[i] += A[aoffs + i] * b
+        if !iszero(_add.alpha)
+            for k = 1:mB
+                aoffs = (k-1)*Astride
+                b = _add(B[k])
+                for i = 1:mA
+                    C[i] += A[aoffs + i] * b
+                end
             end
         end
     end

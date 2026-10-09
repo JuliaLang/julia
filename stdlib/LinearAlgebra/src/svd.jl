@@ -253,6 +253,7 @@ function ldiv!(A::SVD{T}, B::AbstractVecOrMat) where T
 end
 
 function inv(F::SVD{T}) where T
+    checksquare(F)
     @inbounds for i in eachindex(F.S)
         iszero(F.S[i]) && throw(SingularException(i))
     end
