@@ -1356,7 +1356,8 @@ endif
 # framehop-backed unwinder (opt-in via USE_FRAMEHOP=1). When enabled on a supported
 # (os, arch), this defines JL_ENABLE_FRAMEHOP (so stackwalk.c routes the backtrace cursor
 # to framehop) and links the libframehopunwind built by deps/framehopunwind.mk. libunwind
-# stays linked (task.c context switching + proc-info still use it). The arch is further
+# stays linked (unw_getcontext, and JIT registration + proc-info lookup in debuginfo.cpp
+# still use it). The arch is further
 # gated by the JL_USE_FRAMEHOP predicate in julia_internal.h (x86_64/aarch64 only).
 # DO NOT MERGE: default USE_FRAMEHOP to 1 on supported platforms so every CI
 # pipeline exercises the framehop unwinder. Unsupported combinations keep 0 so
@@ -1377,7 +1378,7 @@ USE_FRAMEHOP ?= 0
 FRAMEHOPUNWIND :=
 ifeq ($(USE_FRAMEHOP), 1)
 ifneq ($(DISABLE_LIBUNWIND), 0)
-$(error USE_FRAMEHOP=1 requires libunwind (framehop replaces only the backtrace cursor; task.c context switching still uses libunwind) — unset DISABLE_LIBUNWIND)
+$(error USE_FRAMEHOP=1 requires libunwind (framehop replaces only the backtrace cursor) — unset DISABLE_LIBUNWIND)
 endif
 ifeq ($(findstring $(OS),Linux FreeBSD Darwin),)
 $(error USE_FRAMEHOP=1 is not supported on OS=$(OS) (supported: Linux, FreeBSD, Darwin))
@@ -1386,7 +1387,7 @@ ifeq ($(filter $(ARCH),x86_64 aarch64),)
 $(error USE_FRAMEHOP=1 is not supported on ARCH=$(ARCH) (supported: x86_64, aarch64))
 endif
 FRAMEHOPUNWIND := -lframehopunwind
-JCPPFLAGS += -DJL_ENABLE_FRAMEHOP
+JCPPFLAGS_COMMON += -DJL_ENABLE_FRAMEHOP
 endif
 
 ifeq ($(origin LLVM_CONFIG), undefined)

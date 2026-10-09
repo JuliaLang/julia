@@ -1650,8 +1650,9 @@ JL_DLLEXPORT void jl_profile_process_dll_events(void) JL_NOTSAFEPOINT;
 #  include <libunwind.h>
 #pragma GCC visibility pop
 typedef unw_context_t bt_context_t;
-// framehop integration is additive: libunwind stays linked (task.c context switching and
-// proc-info lookup still use it), but the *backtrace* cursor is framehop's. On
+// framehop integration is additive: libunwind stays linked (unw_getcontext, and JIT
+// registration and proc-info lookup in debuginfo.cpp still use it), but the backtrace
+// cursor is framehop's. On
 // Linux/FreeBSD unw_context_t == ucontext_t, so jl_unw_init can extract framehop's
 // registers straight from a bt_context_t.
 #  ifdef JL_USE_FRAMEHOP

@@ -796,6 +796,9 @@ ANALYSIS_DEPS += llvmunwind
 else ifneq ($(OS),WINNT)
 ANALYSIS_DEPS += unwind
 endif
+ifeq ($(USE_FRAMEHOP),1)
+ANALYSIS_DEPS += framehopunwind
+endif
 .PHONY: install-analysis-deps
 install-analysis-deps:
 	$(MAKE) -C $(JULIAHOME)/deps $(addprefix install-,$(ANALYSIS_DEPS))
