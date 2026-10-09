@@ -162,6 +162,42 @@ Base.step(r::ConstantRange) = 0
     @test searchsortedlast(r, UInt(1), Forward) == 5
 end
 
+@testset "searchsorted on ranges spanning more than half their element type" begin
+    for r in (Int8(-100):Int8(100), Int8(-100):Int8(3):Int8(100), 0x10:0x05:0xf0,
+              typemin(Int8):typemax(Int8), 0x00:0xff, Int16(-20000):Int16(7):Int16(20000),
+              typemin(Int):2^62:typemax(Int))
+        v = collect(r)
+        T = eltype(r)
+        xs = T <: Union{Int8,UInt8} ? (typemin(T):typemax(T)) :
+            unique([typemin(T), typemax(T), v[1:3]..., v[end-2:end]..., (v .+ one(T))[1:end-1]...])
+        for (a, b, rev) in ((r, v, false), (reverse(r), reverse(v), true)), x in xs
+            @test searchsortedfirst(a, x; rev) == searchsortedfirst(b, x; rev)
+            @test searchsortedlast(a, x; rev) == searchsortedlast(b, x; rev)
+            @test searchsorted(a, x; rev) == searchsorted(b, x; rev)
+            @test findfirst(==(x), a) == findfirst(==(x), b)
+        end
+    end
+    # queries, steps and ranges of other types
+    for (r, xs) in ((Int8(-100):Int8(100), (UInt8(50), 50.5, 101//2, big"50.5", -99.5, Int16(100))),
+                    (StepRange(Int8(-100), Int16(3), Int8(100)), (Int8(50), 51, 50.5)),
+                    (big(-100):big(3):big(100), (big(50), 51, 50.5)),
+                    (reverse(UInt64(0):UInt64(3):UInt64(300)), (UInt64(30), 31, 31.5)),
+                    (false:true, (false, true)))
+        v = collect(r)
+        rev = step(r) < 0
+        for x in xs
+            @test searchsortedfirst(r, x; rev) === searchsortedfirst(v, x; rev)
+            @test searchsortedlast(r, x; rev) === searchsortedlast(v, x; rev)
+        end
+    end
+    # indices that do not fit in `Int` throw rather than wrap
+    r = Int128(0):Int128(typemax(Int)) + 2
+    x = Int128(typemax(Int)) + 1
+    @test_throws InexactError searchsortedfirst(r, x)
+    @test_throws InexactError searchsortedlast(r, x)
+    @test_throws InexactError findfirst(==(x), r)
+end
+
 @testset "Each sorting algorithm individually" begin
     a = rand(1:10000, 1000)
     for alg in [InsertionSort, MergeSort, QuickSort, Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
