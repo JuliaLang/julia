@@ -1233,7 +1233,8 @@ function _backtrace_simplify_include_frames!(trace)
         frame::StackFrame, _ = trace[i]
         mod = parentmodule(frame)
         if mod === Base && frame.func === :IncludeInto ||
-           mod === Core && frame.func === :EvalInto
+           mod === Core && frame.func === :EvalInto ||
+           mod === Base && frame.func === :fl_toplevel_eval
             kept_frames[i] = false
         elseif first_ignored === nothing
             if mod === Base && frame.func === :_include
