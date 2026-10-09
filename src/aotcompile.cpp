@@ -449,6 +449,7 @@ class JL_GC_TRACKED_TYPE egal_set {
 public:
     jl_genericmemory_t *list = (jl_genericmemory_t*)jl_an_empty_memory_any;
     jl_genericmemory_t *keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
+    size_t max = 0;
     egal_set(egal_set&) = delete;
     egal_set(egal_set&&) = delete;
     egal_set() = default;
@@ -461,7 +462,7 @@ public:
         jl_value_t *rval = jl_idset_get(list, keyset, val);
         if (rval == NULL) {
             ssize_t idx;
-            list = jl_idset_put_key(list, val, &idx);
+            list = jl_idset_put_key(list, val, &max, &idx);
             JL_GC_PROMISE_ROOTED(list);
             keyset = jl_idset_put_idx(list, keyset, idx);
         }
