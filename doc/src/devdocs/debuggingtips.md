@@ -15,7 +15,7 @@ For gdb, source [`contrib/julia_gdb.py`](https://github.com/JuliaLang/julia/blob
 $ gdb -x contrib/julia_gdb.py --args ./julia script.jl
 (gdb) print v
 $1 = 3-element Vector{Int64} = {1, 2, 3}
-(gdb) print (jl_datatype_t*)$jl_typeof(v)
+(gdb) print $jl_typeof(v)
 $2 = Vector{Int64}
 ```
 
@@ -52,8 +52,8 @@ expression evaluator cannot look through `jl_value_t*`:
 $jl = "hello"
 (gdb) jl v.vec[2]
 $jl = 42
-(gdb) jl Base.have_fma
-$jl = false
+(gdb) jl Base.Sys.WORD_SIZE
+$jl = 64
 (gdb) jl $jl.name              # continue from the previous result
 ```
 

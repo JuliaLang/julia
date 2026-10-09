@@ -40,6 +40,8 @@ MAX_OUTPUT = 4096
 # Smaller cap for values rendered as part of an enclosing expansion (e.g.
 # each element the debugger prints while expanding an array's children).
 BRIEF_OUTPUT = 512
+# Cap for one-line summaries such as frame arguments in a backtrace.
+SUMMARY_OUTPUT = 120
 
 # The GC safepoint region is this many pages at jl_safepoint_pages
 # (see the layout description in src/safepoint.c).
@@ -53,20 +55,6 @@ SMALL_BYTE_ALIGNMENT = 16
 class JLDebugError(Exception):
     """A memory read / debug info lookup failed, or a `jl` path is invalid."""
 
-
-# Objects whose type tag is a small constant rather than a pointer to the
-# jl_datatype_t (see `enum jl_small_typeof_tags` in julia.h). Only used as a
-# fallback when the `jl_small_typeof` symbol cannot be found; the list is
-# append-only in the runtime so existing indices are stable.
-SMALL_TAG_NAMES = [
-    "#null",
-    "TypeofBottom", "DataType", "UnionAll", "Union",
-    "TypeofVararg", "TypeVar", "Symbol", "Module",
-    "SimpleVector", "String", "Task",
-    "Bool", "Nothing", "Char",
-    "Int16", "Int32", "Int64", "Int8",
-    "UInt16", "UInt32", "UInt64", "UInt8",
-]
 
 PRIMITIVE_FMT = {
     "Core.Int8": ("i", 1), "Core.Int16": ("i", 2),
@@ -135,7 +123,25 @@ def render_char(u):
 
 def is_type_kind(qual):
     return qual in ("Core.DataType", "Core.Union", "Core.UnionAll",
-                    "Core.TypeVar", "Core.TypeofVararg", "Core.TypeofBottom")
+                    "Core.TypeVar", "Core.TypeofVararg", "Core.TypeofBottom",
+                    "Core.TypeEq", "Core.TypeEgal")
+
+
+# Operators that Julia shows as plain `:op` symbols.
+OPERATOR_SYMBOLS = frozenset("""
+    + - * / \\ ^ % ÷ & | ⊻ ~ ! < > <= >= == != === !== ≤ ≥ ≠ ≡ ≢ => -> |> <|
+    ∘ << >> >>> // ∈ ∉ ∋ ⊆ ⊇ ⊂ ⊃ ∪ ∩ ⋅ × √ ∛
+""".split())
+
+_IDENTIFIER_RE = re.compile(r"(?!\d)[\w!]+", re.UNICODE)
+
+
+def render_symbol(name):
+    """`:name` for identifiers and operators, Symbol("...") otherwise."""
+    if name in OPERATOR_SYMBOLS or (_IDENTIFIER_RE.fullmatch(name) and
+                                    not name.startswith("!")):
+        return ":" + name
+    return 'Symbol("%s")' % escape_string(name)
 
 
 _ACCESSOR_RE = re.compile(r"(\.[^\W\d][\w!]*|\.\d+|\[\d+\])$", re.UNICODE)
@@ -220,6 +226,8 @@ class JuliaRuntime:
 
     def typetag(self, addr):
         """Type tag of the object at addr: header word, GC bits masked."""
+        if addr < self.a.ptrsize:
+            raise JLDebugError("0x%x is not a julia value" % addr)
         return self.read_ptr(addr - self.a.ptrsize) & ~15
 
     def typeof_addr(self, addr):
@@ -273,6 +281,17 @@ class JuliaRuntime:
     def typename_of(self, dtaddr):
         tn = self.field_u(dtaddr, "jl_datatype_t", "name")
         return self.symbol_name(self.field_u(tn, "jl_typename_t", "name"))
+
+    def singleton_name(self, dtaddr, tn):
+        """The name of the instance of a function (or similar) singleton
+        type, e.g. "sin" for typeof(sin); None for other types."""
+        if not self.field_u(dtaddr, "jl_datatype_t", "instance") or \
+                not self.a.has_field("jl_typename_t", "singletonname"):
+            return None
+        sname = self.field_u(tn, "jl_typename_t", "singletonname")
+        if sname == 0 or sname == self.field_u(tn, "jl_typename_t", "name"):
+            return None
+        return self.symbol_name(sname)
 
     def is_cpu_addrspace(self, addr):
         """True when addr is an instance of Core.AddrSpace{Core}, value 0."""
@@ -342,6 +361,12 @@ class JuliaRuntime:
             return "%s where %s" % (body, var)
         if qual == "Core.TypeVar":
             return self.render_typevar(addr, False)
+        if qual in ("Core.TypeEq", "Core.TypeEgal"):
+            t = self.render_type(self.field_u(addr, "jl_typeeq_t", "T"),
+                                 depth - 1)
+            if qual == "Core.TypeEq":
+                return "Type{%s}" % t
+            return "Core.TypeEgal{%s}" % t
         if qual == "Core.TypeofVararg":
             t = self.field_u(addr, "jl_vararg_t", "T")
             n = self.field_u(addr, "jl_vararg_t", "N")
@@ -360,9 +385,13 @@ class JuliaRuntime:
         tn = self.field_u(addr, "jl_datatype_t", "name")
         modpath = self.module_path(self.field_u(tn, "jl_typename_t",
                                                 "module"))
-        name = self.symbol_name(self.field_u(tn, "jl_typename_t", "name"))
-        if modpath not in ("Core", "Main") and not name.startswith("typeof("):
-            name = modpath + "." + name
+        prefix = "" if modpath in ("Core", "Main") else modpath + "."
+        fname = self.singleton_name(addr, tn)
+        if fname is not None:
+            # a function's type: typeof(sin) rather than its typename #sin
+            return "typeof(%s%s)" % (prefix, fname)
+        name = prefix + self.symbol_name(self.field_u(tn, "jl_typename_t",
+                                                      "name"))
         params = self.field_u(addr, "jl_datatype_t", "parameters")
         nparams = self.svec_len(params) if params else 0
         if nparams == 0:
@@ -566,6 +595,12 @@ class JuliaRuntime:
                                           "module")) == "Core"
         names = None if istuple else self.field_names(taddr, len(fields))
         ftypes = self.field_types(taddr, len(fields))
+        # render the type name before the fields, so that it is not lost
+        # when the fields use up the output budget
+        head = None
+        if not istuple and tname != "NamedTuple":
+            head = self.render_type(taddr, 2)
+            self.spend(len(head))
         parts = []
         for i, (off, size, isptr) in enumerate(fields[:MAX_ELEMS]):
             if self.exhausted():
@@ -585,9 +620,9 @@ class JuliaRuntime:
                 parts.append("…")
         if istuple and len(fields) == 1:
             return "(%s,)" % parts[0]
-        if istuple or tname == "NamedTuple":
+        if head is None:
             return "(%s)" % ", ".join(parts)
-        return "%s(%s)" % (self.render_type(taddr, 2), ", ".join(parts))
+        return "%s(%s)" % (head, ", ".join(parts))
 
     # ---- arrays -------------------------------------------------------------
 
@@ -810,11 +845,8 @@ class JuliaRuntime:
             return "…"
         dtaddr = self.typeof_addr(addr)
         if dtaddr == 0:
-            tag = self.typetag(addr)
-            idx = tag >> 4
-            if tag < (64 << 4) and idx < len(SMALL_TAG_NAMES):
-                return "<%s 0x%x>" % (SMALL_TAG_NAMES[idx], addr)
-            return "<julia value 0x%x>" % addr
+            return "<julia value 0x%x with type tag %d>" % (
+                addr, self.typetag(addr) >> 4)
         qual = self.datatype_qualname(dtaddr)
 
         if is_type_kind(qual):
@@ -827,10 +859,7 @@ class JuliaRuntime:
         if qual == "Base.Missing":
             return "missing"
         if qual == "Core.Symbol":
-            name = self.symbol_name(addr)
-            if name.isidentifier():
-                return ":" + name
-            return 'Symbol("%s")' % escape_string(name)
+            return render_symbol(self.symbol_name(addr))
         if qual == "Core.String":
             s, strlen = self.string_data(addr)
             suffix = "…" if strlen > len(s.encode("utf-8", "replace")) \
@@ -870,13 +899,12 @@ class JuliaRuntime:
 
         # generic instances
         if self.field_u(dtaddr, "jl_datatype_t", "instance") == addr:
-            tn = self.field_u(dtaddr, "jl_datatype_t", "name")
-            sname = self.field_u(tn, "jl_typename_t", "singletonname") \
-                if self.a.has_field("jl_typename_t", "singletonname") else 0
             # functions and similar get a distinct singleton name ("sin");
             # for other singletons render the type, e.g. Irrational{:π}()
-            if sname and sname != self.field_u(tn, "jl_typename_t", "name"):
-                return self.symbol_name(sname)
+            fname = self.singleton_name(
+                dtaddr, self.field_u(dtaddr, "jl_datatype_t", "name"))
+            if fname is not None:
+                return fname
             return self.render_type(dtaddr, depth) + "()"
         if self.field_u(dtaddr, "jl_datatype_t", "isprimitivetype"):
             return self.render_unboxed(dtaddr, addr, depth)
@@ -895,6 +923,12 @@ class JuliaRuntime:
         output stays bounded when the debugger expands nested children."""
         return self._render_budgeted(self.render_value, addr,
                                      MAX_DEPTH - 1, limit=BRIEF_OUTPUT)
+
+    def render_value_summary(self, addr):
+        """A one-line render_value for places like backtrace frame
+        arguments, where every frame shows several values."""
+        return self._render_budgeted(self.render_value, addr, MAX_DEPTH - 1,
+                                     limit=SUMMARY_OUTPUT)
 
     # ---- Julia-semantics field/index access (the `jl` command) ---------------
     #
@@ -1032,7 +1066,8 @@ class JuliaRuntime:
             except JLDebugError:
                 continue
             return self.binding_value(b, name, depth)
-        raise JLDebugError("%s has no binding named %s"
+        raise JLDebugError("%s has no binding named %s (names that only"
+                           " reach it through `using` are not followed)"
                            % (self.module_path(modaddr), name))
 
     def binding_value(self, baddr, name, depth):

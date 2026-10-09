@@ -32,8 +32,8 @@ Julia-semantics field and index access is available through the `jl` command
     $jl = "hello"
     (gdb) jl v.vec[2]
     $jl = 42
-    (gdb) jl Base.pi
-    $jl = π
+    (gdb) jl Base.Sys.WORD_SIZE
+    $jl = 64
 
 The result is also stored in the convenience variable `$jl` for further use.
 Convenience functions `$jl_typeof(v)` and `$jl_field(v, "name")` compose
@@ -226,6 +226,13 @@ JULIA_POINTER_TYPES = {
 }
 
 
+def _summary_mode():
+    """Whether gdb is printing a one-line summary, e.g. frame arguments in a
+    backtrace (`print frame-arguments scalars`); needs gdb 14."""
+    return hasattr(gdb, "print_options") and \
+        bool(gdb.print_options().get("summary"))
+
+
 class JuliaValuePrinter:
     """to_string-based printer: dispatches on the runtime type tag."""
 
@@ -249,6 +256,8 @@ class JuliaValuePrinter:
                 rt.spend(len(s))
                 return s
             rt._budget = None  # recover from any abandoned expansion
+            if _summary_mode():
+                return rt.render_value_summary(addr)
             return rt.render_value_capped(addr)
         except JLDebugError as e:
             return "<not a julia value: 0x%x (%s)>" % (addr, e)
@@ -352,7 +361,10 @@ class JlTypeofFunction(gdb.Function):
         super().__init__("jl_typeof")
 
     def invoke(self, v):
-        addr = get_rt().typeof_addr(int(v))
+        try:
+            addr = get_rt().typeof_addr(int(v))
+        except JLDebugError as e:
+            raise gdb.GdbError(str(e))
         return gdb.Value(addr).cast(gdb.lookup_type("jl_datatype_t").pointer())
 
 
@@ -399,7 +411,7 @@ class JlCommand(gdb.Command):
         jl v.inner.name
         jl v.vec[2]
         jl v.tup.1
-        jl Base.have_fma
+        jl Base.Sys.WORD_SIZE
         jl $1.x
         jl $jl.name
 

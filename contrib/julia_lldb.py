@@ -32,8 +32,8 @@ Julia-semantics field and index access is available through the `jl` command
     "hello"
     (lldb) jl v.vec[2]
     42
-    (lldb) jl Base.pi
-    π
+    (lldb) jl Base.Sys.WORD_SIZE
+    64
 
 The script also installs a stop-hook that transparently resumes the benign
 SIGSEGVs Julia's GC uses to stop the world at safepoints (real segfaults
@@ -323,7 +323,7 @@ def jl_cmd(debugger, command, exe_ctx, result, internal_dict):
         jl v.inner.name
         jl v.vec[2]
         jl v.tup.1
-        jl Base.have_fma
+        jl Base.Sys.WORD_SIZE
         jl $jl.name    (continue from the previous `jl` result)
     """
     arg = command.strip()
