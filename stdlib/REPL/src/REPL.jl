@@ -53,12 +53,7 @@ export
 
 public TerminalMenus
 
-import Base:
-    AbstractDisplay,
-    display,
-    show,
-    AnyDict,
-    ==,
+import Base: AbstractDisplay, display, show, AnyDict, ==,
     Syntax, syntax_to_expr, expr_to_syntax, syntax_name, head, children, @mknode
 
 _displaysize(io::IO) = displaysize(io)::Tuple{Int,Int}
@@ -177,14 +172,21 @@ mutable struct REPLBackend
     response_channel::Channel{Any}
     "flag indicating the state of this backend"
     in_eval::Bool
-    "transformation functions to apply before evaluating expressions"
+    "functions (Syntax->Syntax) to apply before evaluating expressions"
+    syntax_transforms::Vector{Any}
+    """
+    functions to apply before evaluating expressions.  Note that this degrades
+    provenance (functions are expected to accept and produce Expr with Any
+    leaves); use syntax_transforms instead.
+    """
     ast_transforms::Vector{Any}
     "current backend task"
     backend_task::Task
 
     REPLBackend(repl_channel, response_channel, in_eval,
-                ast_transforms=copy(repl_ast_transforms)) =
-        new(repl_channel, response_channel, in_eval, ast_transforms)
+                ast_transforms=copy(repl_ast_transforms),
+                syntax_transforms=copy(repl_syntax_transforms)) =
+        new(repl_channel, response_channel, in_eval, syntax_transforms, ast_transforms)
 end
 REPLBackend() = REPLBackend(Channel(1), Channel(1), false)
 
@@ -351,6 +353,7 @@ warn_on_non_owning_accesses(ast) = warn_on_non_owning_accesses(Base.active_modul
 
 # defaults for new REPL backends
 const repl_ast_transforms = Any[]
+const repl_syntax_transforms = Any[_softscope, warn_on_non_owning_accesses]
 
 # Allows an external package to add hooks into the code loading.
 # The hook should take a Vector{Symbol} of package names and
@@ -391,14 +394,15 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                     # should only be reachable by external packages
                     ast = expr_to_syntax(ast)
                 end
-                ast = _softscope(ast)
-                invokelatest(warn_on_non_owning_accesses, ast)
                 if !isempty(backend.ast_transforms)
                     expr = syntax_to_expr(ast)
                     for xf in backend.ast_transforms
                         expr = Base.invokelatest(xf, expr)
                     end
                     ast = expr_to_syntax(expr, Base.first_linenode(ast), ast.context)
+                end
+                for xf in backend.syntax_transforms
+                    ast = Base.invokelatest(xf, ast)::Syntax
                 end
                 value = toplevel_eval_with_hooks(mod, ast)
                 backend.in_eval = false
