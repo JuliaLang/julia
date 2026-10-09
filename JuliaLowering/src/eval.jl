@@ -682,6 +682,8 @@ function _to_lowered_expr(ex::SyntaxTree)
         @jl_assert (arg1 isa QuoteNode) ex
         args[1] = arg1.value
         Expr(:meta, args...)
+    elseif k == :throw_undef_if_not
+        Expr(k, Symbol(syntax_name(ex[1])), _to_lowered_expr(ex[2]))
     elseif k == :foreignsymbol
         # foreignsymbol wraps the first argument of a foreigncall /
         # foreignglobal when it should not be lowered (and should mostly be
@@ -729,6 +731,7 @@ function _to_lowered_expr(ex::SyntaxTree)
             k == :aliasscope ||
             k == :popaliasscope ||
             k == :new_opaque_closure ||
+            k == :the_exception ||
             throw(LoweringError(ex, "Unknown syntax form $k"))
         ret = Expr(k)
         for e in children(ex)

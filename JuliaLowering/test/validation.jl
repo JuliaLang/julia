@@ -149,6 +149,8 @@ end
 @test vst1_ok(:(Mod.cglobal))
 @test vst1_ok(:(Mod._ = 1))
 
+@test !vst1_ok(:(local cglobal::Int))
+
 @testset "underscores that should probably not be valid" begin
     @test vst1_ok(:(Mod._))
     @test vst1_ok(:(function f(x::_); x; end))

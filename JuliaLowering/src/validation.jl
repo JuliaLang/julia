@@ -171,8 +171,8 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         (vst1_call(vcx, call) | vst1_dotcall(vcx, call) | vst0_macrocall(vcx, call)) &
         vst1_lam(vcx, lam)
     [:(=) _...] -> vst1_assign(vcx, st)
-    [:return val] -> vcx.return_ok ?
-        vst1(vcx, val) :
+    [:return val] -> vcx.return_ok || true ?
+        vst1(vcx, val) : # TODO: checked in desugaring (buggy in flisp)
         @fail(st, "`return` not allowed inside comprehension or generator")
     ([:continue], when=vcx.in_loop) -> pass()
     ([:continue lab], when=vcx.in_loop) -> vst1_ident(vcx, lab; lhs=true)
@@ -234,6 +234,8 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     (_, when=(vr=vst1_arraylike(vcx, st); is_known(vr))) -> vr
     # syntax TODO: disallow pre-desugared const, broken with complex rhs
     [:const l r] -> vst1_ident(vcx, l; lhs=true) & vst1(vcx, r)
+    [:const [:global [:identifier]]] ->
+        @fail(st, "expected assignment after `const`")
     [:const [:global x]] -> !vcx.toplevel ?
         @fail(st, "unsupported `const` inside function") :
         vst1_const_assign(vcx, x)
@@ -315,6 +317,10 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         all(vst1, with(vcx; in_gscope=false), xs)
     [:aliasscope] -> pass()
     [:popaliasscope] -> pass()
+    # The exception being handled inside a catch block
+    [:the_exception] -> pass()
+    # (throw_undef_if_not var_name cond)
+    [:throw_undef_if_not [:identifier] cond] -> vst1(vcx, cond)
 
     #---------------------------------------------------------------------------
     # Invalid forms for which we want to produce detailed errors
@@ -516,13 +522,14 @@ vst1_calldecl_dot_name_rhs(vcx, st) = @stm st begin
     _ -> @fail(st, "invalid `.` syntax")
 end
 
-vst1_symdecl_or_assign(vcx, st) =
+vst1_symdecl_or_assign(vcx, st) = head(st) === :identifier ?
+    vst1_ident(vcx, st; lhs=true) :
     @fail(st, "expected identifier or assignment") |
     vst1_symdecl(vcx, st) | vst1_assign(vcx, st)
 
 vst1_symdecl(vcx, st) = @stm st begin
-    [:identifier] -> pass()
-    [:(::) [:identifier] t] -> vst1(vcx, t)
+    [:identifier] -> vst1_ident(vcx, st; lhs=true)
+    [:(::) [:identifier] t] -> vst1_ident(vcx, st[1]; lhs=true) & vst1(vcx, t)
     _ -> @fail(st, "expected identifier or `identifier::type`")
 end
 
@@ -1228,6 +1235,8 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
         pass() : @fail(st, "wrong number of args to `purity` expression")
     [:aliasscope] -> pass()
     [:popaliasscope] -> pass()
+    [:the_exception] -> pass()
+    [:throw_undef_if_not [:symbol] cond] -> vst2(vcx, cond)
 
     # Note to variable analysis that x is always defined before use
     [:always_defined x] -> vst2_ident(vcx, x)

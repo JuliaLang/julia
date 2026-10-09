@@ -292,6 +292,15 @@ end
     @test (jeval("(f(_) for _ in 1:3)")).f === test_mod.f
 end
 
+# flisp only checks the outermost generator body for disallowed return :(
+@testset "compat: `return` in flattened generators" begin
+    local jeval(str; edition) = jl_eval(test_mod, parsestmt(SyntaxTree, str); edition)
+    s = "collect((return x + y) for x in 1:2 for y in 1:2)"
+    @test jeval(s; edition=JL_OLD_EDITION) == [2, 3, 3, 4]
+    @test_throws LoweringError jeval(s; edition=JL_NEW_EDITION)
+    @test_throws LoweringError jeval("collect((return x) for x in 1:2)"; edition=JL_OLD_EDITION)
+end
+
 @testset "a comprehension may contain a non-syntactic generator" begin
     ex = Expr(:comprehension,
               Expr(:call, GlobalRef(Base, :Generator), :(i -> 2i), :(1:3)))
