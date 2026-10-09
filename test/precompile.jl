@@ -2526,6 +2526,42 @@ precompile_test_harness("llvmcall validation") do load_path
     end
 end
 
+precompile_test_harness("closure @cfunction") do load_path
+    # Initializing a closure `@cfunction` trampoline uses `llvm.init.trampoline`,
+    # for which LLVM marks the object as needing an executable stack. The pkgimage
+    # must still link, and must not ask for an executable stack.
+    write(joinpath(load_path, "ClosureCFunction.jl"),
+        """
+        module ClosureCFunction
+        function call_adder(k::Int, x::Int)
+            add(y::Int) = y + k
+            f = @cfunction(\$add, Int, (Int,))
+            return GC.@preserve f ccall(Base.unsafe_convert(Ptr{Cvoid}, f), Int, (Int,), x)
+        end
+        precompile(call_adder, (Int, Int))
+        end
+        """)
+    cachefile, ocachefile = Base.compilecache(Base.PkgId("ClosureCFunction"))
+    @eval using ClosureCFunction
+    invokelatest() do
+        @test ClosureCFunction.call_adder(1, 41) == 42
+    end
+    if ocachefile !== nothing && Sys.islinux() && Sys.WORD_SIZE == 64 && ENDIAN_BOM == 0x04030201
+        # Find PT_GNU_STACK in the ELF64 program headers and check that it is not executable
+        gnu_stack_flags = open(ocachefile) do io
+            seek(io, 32); phoff = read(io, UInt64)
+            seek(io, 54); phentsize = read(io, UInt16); phnum = read(io, UInt16)
+            for i in 0:phnum-1
+                seek(io, phoff + i * phentsize)
+                read(io, UInt32) == 0x6474e551 && return read(io, UInt32) # PT_GNU_STACK => p_flags
+            end
+            return nothing
+        end
+        @test gnu_stack_flags !== nothing
+        @test gnu_stack_flags & 0x1 == 0 # PF_X
+    end
+end
+
 precompile_test_harness("BindingReplaceDisallow") do load_path
     write(joinpath(load_path, "BindingReplaceDisallow.jl"),
         """

@@ -41,6 +41,7 @@
 #include <llvm/Bitcode/BitcodeWriterPass.h>
 #include <llvm/Bitcode/BitcodeReader.h>
 #include "llvm/Object/ArchiveWriter.h"
+#include <llvm/Object/ELF.h>
 #include <llvm/IR/IRPrintingPasses.h>
 
 #include <llvm/IR/LegacyPassManagers.h>
@@ -1645,6 +1646,56 @@ static void emit_bitcode(Module &M, TargetMachine &TM, SmallVectorImpl<char> &bu
     MPM.run(M, AM.MAM);
 }
 
+// Since LLVM 22 (llvm/llvm-project#151754), a module that uses
+// `llvm.init.trampoline` gets an executable `.note.GNU-stack` section, which
+// asks the linker for an executable stack. lld rejects such objects unless it
+// is passed `-z execstack`, and glibc 2.41 and later refuse to `dlopen` a
+// library that requests one. Julia only uses that intrinsic in the stub that
+// initializes a closure `@cfunction` trampoline, and the trampoline is written
+// into memory from `trampoline_alloc`, never onto the stack. So clear the flag
+// and keep the stack non-executable.
+template <class ELFT>
+static void clear_execstack_note(SmallVectorImpl<char> &buf)
+{
+    auto Obj = object::ELFFile<ELFT>::create(StringRef(buf.data(), buf.size()));
+    if (!Obj) {
+        consumeError(Obj.takeError());
+        return;
+    }
+    auto Sections = Obj->sections();
+    if (!Sections) {
+        consumeError(Sections.takeError());
+        return;
+    }
+    for (const typename ELFT::Shdr &Sec : *Sections) {
+        if (!(Sec.sh_flags & ELF::SHF_EXECINSTR))
+            continue;
+        auto Name = Obj->getSectionName(Sec);
+        if (!Name) {
+            consumeError(Name.takeError());
+            continue;
+        }
+        if (*Name != ".note.GNU-stack")
+            continue;
+        // The section headers point into `buf`, so update the flags in place.
+        auto *MutSec = reinterpret_cast<typename ELFT::Shdr *>(
+            buf.data() + ((const char *)&Sec - buf.data()));
+        MutSec->sh_flags = MutSec->sh_flags & ~(uint64_t)ELF::SHF_EXECINSTR;
+    }
+}
+
+static void clear_execstack_note(const Triple &TT, SmallVectorImpl<char> &buf)
+{
+    if (!TT.isOSBinFormatELF())
+        return;
+    if (TT.isArch64Bit())
+        TT.isLittleEndian() ? clear_execstack_note<object::ELF64LE>(buf)
+                            : clear_execstack_note<object::ELF64BE>(buf);
+    else
+        TT.isLittleEndian() ? clear_execstack_note<object::ELF32LE>(buf)
+                            : clear_execstack_note<object::ELF32BE>(buf);
+}
+
 static void emit_native(Module &M, TargetMachine &TM, SmallVectorImpl<char> &buf, bool asm_)
 {
     raw_svector_ostream OS(buf);
@@ -1659,6 +1710,8 @@ static void emit_native(Module &M, TargetMachine &TM, SmallVectorImpl<char> &buf
         jl_safe_printf("ERROR: target does not support generation of %s files\n",
                        asm_ ? "assembly" : "object");
     emitter.run(M);
+    if (!asm_)
+        clear_execstack_note(TM.getTargetTriple(), buf);
 }
 
 // Perform the actual optimization and emission of the output files
