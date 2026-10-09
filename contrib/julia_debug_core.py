@@ -45,6 +45,10 @@ BRIEF_OUTPUT = 512
 # (see the layout description in src/safepoint.c).
 SAFEPOINT_PAGES = 4
 
+# JL_SMALL_BYTE_ALIGNMENT in src/julia_internal.h: each element of a locked
+# AtomicMemory starts with a jl_mutex_t padded to this alignment.
+SMALL_BYTE_ALIGNMENT = 16
+
 
 class JLDebugError(Exception):
     """A memory read / debug info lookup failed, or a `jl` path is invalid."""
@@ -589,9 +593,10 @@ class JuliaRuntime:
 
     def array_info(self, addr):
         """(dims, eltype, dataptr, elsize, isboxed, seladdr) of the
-        jl_array_t (or Memory) at addr. For union-layout element storage,
-        seladdr is the address of this view's first selector byte (the
-        selector bytes for the whole Memory sit after its last element, see
+        jl_array_t (or Memory) at addr. Element i's payload is at
+        dataptr + i * elsize. For union-layout element storage, seladdr is
+        the address of this view's first selector byte (the selector bytes
+        for the whole Memory sit after its last element, see
         jl_genericmemory_typetagdata); it is 0 for non-union layouts."""
         dtaddr = self.typeof_addr(addr)
         tname = self.typename_of(dtaddr)
@@ -634,6 +639,17 @@ class JuliaRuntime:
             memptr = self.field_u(mem_addr, "jl_genericmemory_t", "ptr")
             dataptr = memptr + idx * elsize
             seladdr = memptr + memlen * elsize + idx
+        try:
+            islocked = self.field_u(mlayout, "jl_datatype_layout_t", "flags",
+                                    "arrayelem_islocked")
+        except JLDebugError:  # older runtimes have no locked layouts
+            islocked = 0
+        if islocked:
+            # the lock precedes the payload inside each element's stride
+            # (see jl_get_genericmemory_layout)
+            locksz = self.a.type_size("jl_mutex_t")
+            dataptr += ((locksz + SMALL_BYTE_ALIGNMENT - 1)
+                        // SMALL_BYTE_ALIGNMENT * SMALL_BYTE_ALIGNMENT)
         return dims, eltype, dataptr, elsize, isboxed, seladdr
 
     def is_array_value(self, addr):
