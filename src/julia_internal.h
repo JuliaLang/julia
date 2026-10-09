@@ -1661,6 +1661,7 @@ typedef unw_context_t bt_context_t;
 #    pragma GCC visibility push(default)
 #    include "framehopunwind.h"
 #    pragma GCC visibility pop
+extern uintptr_t jl_unw_thread0_stack_hi;
 typedef fh_cursor bt_cursor_t;
 #  else
 typedef unw_cursor_t bt_cursor_t;

@@ -432,6 +432,11 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     // Pre-fault framehop's TLS and record this thread's pthread-stack bounds, which
     // framehop uses when this thread walks its own stack.
     fh_thread_register();
+    if (tid == 0) {
+        void *stack_lo, *stack_hi;
+        jl_init_stack_limits(0, &stack_lo, &stack_hi);
+        jl_unw_thread0_stack_hi = (uintptr_t)stack_hi;
+    }
 #endif
 
     return ptls;

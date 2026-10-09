@@ -846,6 +846,10 @@ static void jl_unw_fh_context(fh_context *c, bt_context_t *context) JL_NOTSAFEPO
 #endif
 }
 
+// The top of thread 0's stack, from pthread. Thread 0's root task records its stack as
+// ending at the frame that started the runtime, below callers such as `main`.
+uintptr_t jl_unw_thread0_stack_hi;
+
 // The stack of `target_task`, or of the task running on `target_ptls`, if `sp` is on it.
 // framehop then reads only that range. Otherwise (0, 0), and framehop picks a range itself.
 static void jl_unw_target_bounds(jl_ptls_t target_ptls, jl_task_t *target_task, uintptr_t sp,
@@ -862,6 +866,9 @@ static void jl_unw_target_bounds(jl_ptls_t target_ptls, jl_task_t *target_task, 
     if ((uintptr_t)total_start <= sp && sp < (uintptr_t)total_end) {
         *lo = (uintptr_t)total_start;
         *hi = (uintptr_t)total_end;
+        if (target_task == jl_atomic_load_relaxed(&jl_all_tls_states)[0]->root_task &&
+            jl_unw_thread0_stack_hi > *hi)
+            *hi = jl_unw_thread0_stack_hi;
     }
 }
 
