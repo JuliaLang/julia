@@ -1527,6 +1527,8 @@ let code = quote
             42
         end
         @deprecate oldfunc newfunc
+        struct HasOldField end
+        Base.getproperty(::HasOldField, ::Symbol) = (Base.depwarn("`old` is deprecated", :old); 42)
 
         @testset "@test_deprecated" begin
             @test_deprecated oldfunc()
@@ -1541,6 +1543,10 @@ let code = quote
             @test (@test_deprecated r"deprecated" begin
                 oldfunc()
             end) == 42
+            # so are a property access and a bare name (issue #62595)
+            @test (@test_deprecated HasOldField().old) == 42
+            @test (@test_deprecated r"`old`" HasOldField().old) == 42
+            @test macroexpand(@__MODULE__, :(@test_deprecated OldName)) isa Expr
 
             fails = @testset NoThrowTestSet "check that @test_deprecated detects bad input" begin
                 @test_deprecated newfunc()
