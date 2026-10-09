@@ -429,9 +429,8 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
 #endif
 
 #ifdef JL_USE_FRAMEHOP
-    // Pre-fault framehop's TLS and record this thread's pthread-stack bounds. The
-    // bounds only cover same-thread walks; cross-thread walks pass exact bounds via
-    // rec_backtrace_ctx_target.
+    // Pre-fault framehop's TLS and record this thread's pthread-stack bounds, which
+    // framehop uses when this thread walks its own stack.
     fh_thread_register();
 #endif
 

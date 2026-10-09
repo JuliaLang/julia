@@ -1028,8 +1028,7 @@ void jl_profile_thread_mach(int tid)
 
         forceDwarf = -2;
 #else
-        // Pass the suspended target's exact stack bounds: out-of-stack reads become
-        // clean truncation; residual faults recover via jl_unw_stepn's safe_restore.
+        // Pass the suspended thread, so the walk stays on its task's stack.
         profile_bt_size_cur += rec_backtrace_ctx_target((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur, profile_bt_size_max - profile_bt_size_cur - 1, uc, NULL,
                                                         jl_atomic_load_relaxed(&jl_all_tls_states)[tid], NULL);
 #endif

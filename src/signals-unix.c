@@ -1233,7 +1233,7 @@ static void do_profile(void) JL_NOTSAFEPOINT
             jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
         }
         else {
-            // Get backtrace data; pass the suspended target for exact stack bounds.
+            // Get backtrace data; pass the suspended thread, so the walk stays on its task's stack.
             profile_bt_size_cur += rec_backtrace_ctx_target((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
                     profile_bt_size_max - profile_bt_size_cur - 1, &signal_context, NULL,
                     jl_atomic_load_relaxed(&jl_all_tls_states)[tid], NULL);

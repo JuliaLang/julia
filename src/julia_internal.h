@@ -1686,8 +1686,8 @@ size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t 
 size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
 #endif
 // rec_backtrace_ctx for a context belonging to another (suspended) thread or a
-// not-currently-running task; under framehop the target supplies exact stack bounds,
-// elsewhere the extra arguments are ignored.
+// not-currently-running task. Under framehop the walk stays on the stack of `target_task`,
+// or of the task running on `target_ptls`; elsewhere the extra arguments are ignored.
 #ifdef JL_USE_FRAMEHOP
 size_t rec_backtrace_ctx_target(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx,
                                 jl_gcframe_t *pgcstack, jl_ptls_t target_ptls,
