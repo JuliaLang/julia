@@ -51,6 +51,21 @@ import julia_debug_core as core
 from julia_debug_core import JLDebugError
 
 
+def _global_addr(target, name):
+    """Load address of the global `name`, from the debug info or else the
+    symbol table (a runtime built without type debug info); 0 if absent."""
+    var = target.FindFirstGlobalVariable(name)
+    if var.IsValid():
+        laddr = var.GetLoadAddress()
+        if laddr != lldb.LLDB_INVALID_ADDRESS:
+            return laddr
+    for sc in target.FindSymbols(name):
+        laddr = sc.GetSymbol().GetStartAddress().GetLoadAddress(target)
+        if laddr != lldb.LLDB_INVALID_ADDRESS:
+            return laddr
+    return 0
+
+
 class LldbAdapter:
     """Debug-info and memory access for julia_debug_core, via lldb."""
 
@@ -68,7 +83,8 @@ class LldbAdapter:
         if t is None:
             t = self.target.FindFirstType(name)
             if not t.IsValid():
-                raise JLDebugError("no type named %s in debug info" % name)
+                raise core.JLNoTypesError("no type named %s in debug info"
+                                          % name)
             self.types[name] = t
         return t
 
@@ -130,12 +146,7 @@ class LldbAdapter:
     def global_addr(self, name):
         addr = self.globals.get(name)
         if addr is None:
-            addr = 0
-            var = self.target.FindFirstGlobalVariable(name)
-            if var.IsValid():
-                laddr = var.GetLoadAddress()
-                if laddr != lldb.LLDB_INVALID_ADDRESS:
-                    addr = laddr
+            addr = _global_addr(self.target, name)
             self.globals[name] = addr
         return addr
 
@@ -181,44 +192,64 @@ def rt_of(valobj):
 _FAULT_ADDR_RE = re.compile(r"fault address:?\s*(0x[0-9a-fA-F]+)")
 
 
-def _global_uint(target, name):
-    var = target.FindFirstGlobalVariable(name)
-    if not var.IsValid():
+def _global_word(target, process, name):
+    addr = _global_addr(target, name)
+    if addr == 0:
         return 0
-    return var.GetValueAsUnsigned()
+    err = lldb.SBError()
+    value = process.ReadPointerFromMemory(addr, err)
+    return value if err.Success() else 0
+
+
+def _at_safepoint(thread, segv, base, end):
+    """Whether `thread` stopped on a SIGSEGV with a fault address in
+    [base, end)."""
+    if thread.GetStopReason() != lldb.eStopReasonSignal or \
+            thread.GetStopReasonDataAtIndex(0) != segv:
+        return False
+    m = _FAULT_ADDR_RE.search(thread.GetStopDescription(1024) or "")
+    return m is not None and base <= int(m.group(1), 16) < end
 
 
 class JLSafepointStopHook:
     enabled = True
+    types_checked = set()  # unique ids of the processes checked for types
 
     def __init__(self, target, extra_args, internal_dict):
         pass
 
     def handle_stop(self, exe_ctx, stream):
         """Return False to silently resume from GC safepoint SIGSEGVs."""
+        target = exe_ctx.GetTarget()
+        process = exe_ctx.GetProcess()
+        self.check_types(target, process, stream)
         if not JLSafepointStopHook.enabled:
             return True
-        thread = exe_ctx.GetThread()
-        if not thread.IsValid() or \
-                thread.GetStopReason() != lldb.eStopReasonSignal:
-            return True
-        process = exe_ctx.GetProcess()
-        signals = process.GetUnixSignals()
-        segv = signals.GetSignalNumberFromName("SIGSEGV")
-        if thread.GetStopReasonDataAtIndex(0) != segv:
-            return True
-        m = _FAULT_ADDR_RE.search(thread.GetStopDescription(1024) or "")
-        if m is None:
-            return True
-        fault = int(m.group(1), 16)
-        target = exe_ctx.GetTarget()
-        base = _global_uint(target, "jl_safepoint_pages")
-        pgsz = _global_uint(target, "jl_page_size")
+        base = _global_word(target, process, "jl_safepoint_pages")
+        pgsz = _global_word(target, process, "jl_page_size")
         if base == 0 or pgsz == 0:
             return True
-        if base <= fault < base + core.SAFEPOINT_PAGES * pgsz:
-            return False
-        return True
+        end = base + core.SAFEPOINT_PAGES * pgsz
+        segv = process.GetUnixSignals().GetSignalNumberFromName("SIGSEGV")
+        # a GC makes several threads fault at once, and another thread may
+        # stop for a real reason in the same stop: resume only when every
+        # thread that stopped did so at a safepoint
+        stopped = [t for t in process if t.GetStopReason() not in
+                   (lldb.eStopReasonNone, lldb.eStopReasonInvalid)]
+        return not stopped or \
+            not all(_at_safepoint(t, segv, base, end) for t in stopped)
+
+    @staticmethod
+    def check_types(target, process, stream):
+        """Once the runtime is loaded, say so if its debug info has no
+        types, so that values cannot be pretty-printed."""
+        uid = process.GetUniqueID()
+        if uid in JLSafepointStopHook.types_checked or \
+                _global_addr(target, "jl_safepoint_pages") == 0:
+            return
+        JLSafepointStopHook.types_checked.add(uid)
+        if not target.FindFirstType("jl_datatype_t").IsValid():
+            stream.Print("julia_lldb: %s\n" % core.NO_TYPES_HINT)
 
 
 def _run_command(debugger, cmd):
@@ -289,6 +320,8 @@ def jl_value_summary(valobj, internal_dict):
     rt = rt_of(valobj)
     try:
         return rt.render_value_capped(addr)
+    except core.JLNoTypesError:
+        return None  # lldb then shows the raw pointer; see NO_TYPES_HINT
     except JLDebugError as e:
         return "<not a julia value: 0x%x (%s)>" % (addr, e)
     except Exception as e:  # never break `p` on a summary bug

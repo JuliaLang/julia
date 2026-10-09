@@ -74,7 +74,7 @@ class GdbAdapter:
             try:
                 t = gdb.lookup_type(name)
             except gdb.error as e:
-                raise JLDebugError(str(e))
+                raise core.JLNoTypesError(str(e))
             self.types[name] = t
         return t
 
@@ -155,10 +155,22 @@ def _clear_cache(event=None):
     _expand_depth[0] = 0
 
 
-gdb.events.new_objfile.connect(_clear_cache)
+# Sourcing this script again (e.g. from both ~/.gdbinit and -x) runs it in
+# the same namespace, so drop the event handlers of the earlier run.
+for _event, _handler in globals().get("_julia_gdb_handlers", ()):
+    _event.disconnect(_handler)
+_julia_gdb_handlers = []
+
+
+def _connect(event, handler):
+    event.connect(handler)
+    _julia_gdb_handlers.append((event, handler))
+
+
+_connect(gdb.events.new_objfile, _clear_cache)
 if hasattr(gdb.events, "free_objfile"):
-    gdb.events.free_objfile.connect(_clear_cache)
-gdb.events.exited.connect(_clear_cache)
+    _connect(gdb.events.free_objfile, _clear_cache)
+_connect(gdb.events.exited, _clear_cache)
 
 
 def jl_value(addr):
@@ -259,6 +271,8 @@ class JuliaValuePrinter:
             if _summary_mode():
                 return rt.render_value_summary(addr)
             return rt.render_value_capped(addr)
+        except core.JLNoTypesError:
+            return "(jl_value_t *) 0x%x" % addr  # see core.NO_TYPES_HINT
         except JLDebugError as e:
             return "<not a julia value: 0x%x (%s)>" % (addr, e)
         except Exception as e:  # never break `print` on a printer bug
@@ -489,63 +503,93 @@ class JlCommand(gdb.Command):
 # SIGSEGV`, we tell gdb not to stop on SIGSEGV in general and install a
 # conditional signal catchpoint that only fires when the faulting address is
 # *outside* the safepoint page region: safepoint hits are resumed silently,
-# real segfaults (including stack overflows) still stop the debugger.
+# real segfaults (including stack overflows) still stop the debugger. The
+# condition reads the runtime's globals through their symbols, so it also
+# works when libjulia-internal has no type debug info.
 # --------------------------------------------------------------------------
 
-SAFEPOINT_COND = (
-    "!((unsigned long)$_siginfo._sifields._sigfault.si_addr"
-    " >= (unsigned long)jl_safepoint_pages"
-    " && (unsigned long)$_siginfo._sifields._sigfault.si_addr"
-    " < (unsigned long)jl_safepoint_pages"
-    " + %d*(unsigned long)jl_page_size)" % core.SAFEPOINT_PAGES)
+SAFEPOINT_COND = "!$_jl_safepoint_fault()"
 
 _segv_catchpoint = [None]
-_segv_cond_armed = [False]
 
 
-def _try_arm_segv_condition(event=None):
-    """Attach the safepoint condition to the SIGSEGV catchpoint. This can
-    only succeed once libjulia-internal's symbols are available, so it is
-    retried every time an objfile is loaded."""
-    if _segv_catchpoint[0] is None or _segv_cond_armed[0]:
+class JlSafepointFaultFunction(gdb.Function):
+    """$_jl_safepoint_fault(): whether the current SIGSEGV is a fault on the
+    GC safepoint pages; the condition of the SIGSEGV catchpoint."""
+
+    def __init__(self):
+        super().__init__("_jl_safepoint_fault")
+
+    def invoke(self):
+        try:
+            fault = int(gdb.parse_and_eval(
+                "(unsigned long)$_siginfo._sifields._sigfault.si_addr"))
+            rt = get_rt()
+            base = rt.read_ptr(rt.a.global_addr("jl_safepoint_pages"))
+            pgsz = rt.read_ptr(rt.a.global_addr("jl_page_size"))
+        except (gdb.error, JLDebugError):
+            return 0
+        return int(base != 0 and
+                   base <= fault < base + core.SAFEPOINT_PAGES * pgsz)
+
+
+def _find_catchpoint():
+    """The number of the catchpoint left by an earlier run of this script
+    (when it is sourced again), or None."""
+    kind = getattr(gdb, "BP_CATCHPOINT", None)  # gdb 13
+    for bp in gdb.breakpoints():
+        if kind is not None and bp.type == kind and \
+                bp.condition == SAFEPOINT_COND:
+            return bp.number
+    return None
+
+
+def _on_breakpoint_deleted(bp):
+    # `delete` with no arguments also removes the catchpoint: restore gdb's
+    # SIGSEGV handling, or real segfaults would no longer stop gdb
+    if _segv_catchpoint[0] is None or bp.number != _segv_catchpoint[0]:
         return
-    try:
-        gdb.execute("condition %d %s" % (_segv_catchpoint[0], SAFEPOINT_COND),
-                    to_string=True)
-        _segv_cond_armed[0] = True
-    except gdb.error:
-        pass
+    _segv_catchpoint[0] = None
+    gdb.execute("handle SIGSEGV stop print pass", to_string=True)
+    print("julia_gdb: the GC safepoint catchpoint was deleted, so gdb stops"
+          " on every SIGSEGV again (`jl-safepoint-filter on` restores it)")
 
 
-gdb.events.new_objfile.connect(_try_arm_segv_condition)
+_connect(gdb.events.breakpoint_deleted, _on_breakpoint_deleted)
 
 
 def enable_safepoint_filter():
+    if _segv_catchpoint[0] is None:
+        _segv_catchpoint[0] = _find_catchpoint()
     if _segv_catchpoint[0] is not None:
         return
     # transactional: never leave SIGSEGV set to nostop without the
     # catchpoint in place, or real segfaults would no longer stop gdb
     gdb.execute("handle SIGSEGV nostop noprint pass", to_string=True)
+    num = None
     try:
         out = gdb.execute("catch signal SIGSEGV", to_string=True)
         m = re.search(r"Catchpoint (\d+)", out)
         if m is None:
             raise gdb.error("cannot parse catchpoint id from: %s"
                             % out.strip())
-        _segv_catchpoint[0] = int(m.group(1))
+        num = int(m.group(1))
+        gdb.execute("condition %d %s" % (num, SAFEPOINT_COND), to_string=True)
     except Exception:
+        if num is not None:
+            gdb.execute("delete %d" % num, to_string=True)
         gdb.execute("handle SIGSEGV stop print pass", to_string=True)
         raise
-    _try_arm_segv_condition()
+    _segv_catchpoint[0] = num
 
 
 def disable_safepoint_filter():
-    if _segv_catchpoint[0] is None:
+    num = _segv_catchpoint[0]
+    if num is None:
         return
-    gdb.execute("delete %d" % _segv_catchpoint[0], to_string=True)
+    _segv_catchpoint[0] = None  # not a deletion _on_breakpoint_deleted reports
+    gdb.execute("delete %d" % num, to_string=True)
     gdb.execute("handle SIGSEGV stop print pass", to_string=True)
-    _segv_catchpoint[0] = None
-    _segv_cond_armed[0] = False
 
 
 class JlSafepointCommand(gdb.Command):
@@ -588,11 +632,34 @@ class JlHandleSignalsCommand(gdb.Command):
         gdb.execute("handle SIGUSR2 nostop noprint pass")
 
 
+_types_checked = [False]
+
+
+def _check_runtime_types(event=None):
+    """Once the runtime is loaded, say so if its debug info has no types:
+    gdb then cannot even name jl_value_t, so values print as raw pointers."""
+    if _types_checked[0]:
+        return
+    try:
+        gdb.parse_and_eval("&jl_safepoint_pages")
+    except gdb.error:
+        return  # the runtime is not loaded yet
+    _types_checked[0] = True
+    try:
+        gdb.lookup_type("jl_datatype_t")
+    except gdb.error:
+        print("julia_gdb: " + core.NO_TYPES_HINT)
+
+
+_connect(gdb.events.stop, _check_runtime_types)
+
+
 def register(obj=None):
     gdb.printing.register_pretty_printer(obj, JuliaPrettyPrinter(),
                                          replace=True)
     JlTypeofFunction()
     JlFieldFunction()
+    JlSafepointFaultFunction()
     JlCommand()
     JlSafepointCommand()
     JlHandleSignalsCommand()
@@ -601,6 +668,7 @@ def register(obj=None):
     except gdb.error as e:
         print("julia_gdb: GC safepoint SIGSEGV filter not installed (%s)"
               % e)
+    _check_runtime_types()  # e.g. when attaching or opening a core file
 
 
 register(gdb.current_objfile())

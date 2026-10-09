@@ -43,6 +43,12 @@ BRIEF_OUTPUT = 512
 # Cap for one-line summaries such as frame arguments in a backtrace.
 SUMMARY_OUTPUT = 120
 
+# Printed once when the runtime is loaded but its debug info has no types.
+NO_TYPES_HINT = (
+    "libjulia-internal has no type debug info, so Julia values are shown"
+    " as raw pointers.\nBuild with RUNTIME_DEBUG_LEVEL=2 in Make.user"
+    " (assert and debug builds have it already) to pretty-print them.")
+
 # The GC safepoint region is this many pages at jl_safepoint_pages
 # (see the layout description in src/safepoint.c).
 SAFEPOINT_PAGES = 4
@@ -54,6 +60,10 @@ SMALL_BYTE_ALIGNMENT = 16
 
 class JLDebugError(Exception):
     """A memory read / debug info lookup failed, or a `jl` path is invalid."""
+
+
+class JLNoTypesError(JLDebugError):
+    """The debug info has no definition of a runtime type (see NO_TYPES_HINT)."""
 
 
 PRIMITIVE_FMT = {

@@ -37,11 +37,13 @@ Any pointer whose static type is a Julia runtime type (`jl_value_t*`,
 types, arrays with their elements, structs with their fields, methods with
 their signatures, and so on. Output is capped (long strings and arrays are
 truncated with a `…`/`(N more)` marker) so printing a huge value is always
-safe. The scripts read struct layouts from the debug info, so they need a
-build with debug info (the default for source builds) but do not need to
-match the exact Julia version. Both files load the shared renderer from
-`contrib/julia_debug_core.py`, so keep the three files together when copying
-them elsewhere.
+safe. The scripts read struct layouts from the runtime's debug info, so they
+do not need to match the exact Julia version, but release builds only
+include type information with `RUNTIME_DEBUG_LEVEL=2` in `Make.user` (assert
+and debug builds have it already); without it values print as raw pointers,
+while the SIGSEGV filtering below still works. Both files load the shared
+renderer from `contrib/julia_debug_core.py`, so keep the three files together
+when copying them elsewhere.
 
 Both debuggers also gain a `jl` command for Julia-semantics field and index
 access (1-based indexing, fields by name, module globals), since the C
