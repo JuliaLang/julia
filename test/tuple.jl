@@ -166,7 +166,10 @@ end
     @test Base.front((1, 2.0, "three", :four)) === (1, 2.0, "three")
 
     let t = ntuple(identity, Val(40))
-        @test Base.front(t) === ntuple(identity, Val(39))
+        @test @inferred(Base.front(t)) === ntuple(identity, Val(39))
+    end
+    let t = (1.0, ntuple(identity, Val(33))...)
+        @test @inferred(Base.front(t)) === (1.0, ntuple(identity, Val(32))...)
     end
 end
 

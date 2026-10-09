@@ -752,8 +752,8 @@ static int dlinfo_helper(struct dl_phdr_info *info, size_t size, void *vdata)
 // into Julia, and may be used from a JL_NOTSAFEPOINT function.
 static void *jl_dlopen_noload(const char *filename) JL_NOTSAFEPOINT
 {
-#ifdef __clang_gcanalyzer__
-    // hidden from the checker, which only knows the general contract of jl_dlopen
+#if defined(__clang_gcanalyzer__) || defined(__clang_safetyanalysis__)
+    // hidden from the checkers, which only know the general contract of jl_dlopen
     return NULL;
 #else
     return jl_dlopen(filename, JL_RTLD_DEFAULT | JL_RTLD_NOLOAD);
@@ -898,6 +898,51 @@ JL_DLLEXPORT const char *jl_pathname_for_symbol(void *symbol) JL_NOTSAFEPOINT
         return NULL;
     return q.is_main_exe ? "" : q.name;
 #endif
+}
+
+// Returns 1 if `symbol` lies within the main executable's image, 0 otherwise
+static int jl_symbol_in_executable(void *symbol) JL_NOTSAFEPOINT
+{
+    if (!symbol)
+        return 0;
+#ifdef _OS_WINDOWS_
+    HMODULE handle;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            (LPCWSTR)symbol, &handle))
+        return 0;
+    // GetModuleHandleW(NULL) is the module used to create the calling process.
+    return handle == GetModuleHandleW(NULL);
+#elif defined(__APPLE__)
+    // dyld guarantees that image index 0 is the main executable.
+    Dl_info info;
+    if (!dladdr(symbol, &info) || !info.dli_fbase)
+        return 0;
+    return info.dli_fbase == (const void *)_dyld_get_image_header(0);
+#elif defined(__GLIBC__)
+    // glibc: the main program's link_map has an empty `l_name`.
+    Dl_info info;
+    struct link_map *map = NULL;
+    if (!dladdr1(symbol, &info, (void **)&map, RTLD_DL_LINKMAP) || map == NULL)
+        return 0;
+    msan_unpoison(&map, sizeof(struct link_map *));
+    msan_unpoison(map, sizeof(struct link_map));
+    msan_unpoison_string(map->l_name);
+    return map->l_name[0] == '\0';
+#else
+    // Other libc: dl_iterate_phdr reports the main program first.
+    struct sym_phdr_query q = { (uintptr_t)symbol, NULL, 0, 0, 0 };
+    dl_iterate_phdr(&sym_phdr_helper, &q);
+    return q.found && q.is_main_exe;
+#endif
+}
+
+// Returns the path of libjulia-internal, or NULL if it is linked into the executable
+JL_DLLEXPORT const char *jl_get_libjulia_internal_path(void) JL_NOTSAFEPOINT
+{
+    static const char dummy = 0;
+    if (jl_symbol_in_executable((void*)&dummy))
+        return NULL;
+    return jl_pathname_for_symbol((void*)&dummy);
 }
 
 #ifdef _OS_WINDOWS_

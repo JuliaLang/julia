@@ -324,8 +324,16 @@ Base.print(io::IO, llp::LazyLibraryPath) = print(io, string(llp))
 # Helper to get `$(private_shlibdir)` at runtime
 struct PrivateShlibdirGetter; end
 const private_shlibdir = Base.OncePerProcess{String}() do
-    libname = ifelse(isdebugbuild(), "libjulia-internal-debug", "libjulia-internal")
-    dirname(dlpath(libname))
+    p = ccall(:jl_get_libjulia_internal_path, Cstring, ())
+    if p == C_NULL
+        # libjulia-internal is linked into the executable, so it cannot tell us
+        # where the private libraries live. Assume the installed layout, which
+        # keeps them in `$(private_shlibdir)` relative to the executable.
+        return Sys.iswindows() ? Sys.BINDIR : abspath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
+    end
+    path = unsafe_string(p)
+    Sys.iswindows() && Libc.free(p)
+    return dirname(path)
 end
 Base.string(::PrivateShlibdirGetter) = private_shlibdir()
 
@@ -346,6 +354,19 @@ const libgmp = LazyLibrary(BundledLazyLibraryPath("libgmp.so.10"))
 See also [`LazyLibrary`](@ref), [`LazyLibraryPath`](@ref).
 """
 BundledLazyLibraryPath(subpath) = LazyLibraryPath(PrivateShlibdirGetter(), subpath)
+
+function Base.show(io::IO, llp::LazyLibraryPath)
+    pieces = llp.pieces
+    # `PrivateShlibdirGetter()` dlopens. Avoid doing so in `show`.
+    # Like `Library`, avoids printing the full path when bundled.
+    if length(pieces) == 2 && pieces[1] isa PrivateShlibdirGetter
+        show(io, pieces[2])
+    else
+        print(io, "LazyLibraryPath(")
+        join(io, (sprint(show, p) for p in pieces), ", ")
+        print(io, ")")
+    end
+end
 
 # Small helper struct to initialize a LazyLibrary with its initial set of dependencies
 struct InitialDependencies{T}
@@ -431,6 +452,13 @@ mutable struct LazyLibrary
             C_NULL,
         )
     end
+end
+
+# Only print the path and avoid printing all the dependencies
+function Base.show(io::IO, ll::LazyLibrary)
+    print(io, "LazyLibrary(")
+    show(io, ll.path)
+    print(io, ")")
 end
 
 # We support adding dependencies only because of very special situations

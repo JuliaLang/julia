@@ -98,6 +98,8 @@ include("some.jl")
 include("dict.jl")
 include("set.jl")
 
+include("syntax.jl")
+
 # Dynamic scopes (types only; the ScopedValues API is included much later)
 include("scope.jl")
 # Cancellation tokens (the `cancel` keyword-argument machinery is used from
@@ -345,8 +347,8 @@ Core.println("JuliaSyntax/src/JuliaSyntax.jl")
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
 JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
 
-# May be replaced in incremental sysimage build after-the-fact
-const JuliaLowering = nothing
+Core.println("JuliaLowering/src/JuliaLowering.jl")
+include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
 
 set_syntax_version(Base, VERSION)
 
@@ -418,7 +420,7 @@ const _sigint_episode = Ref{Tuple{Union{Nothing, CancellationTokenSource}, UInt6
 # of the most recent remotely-submitted request.
 const _sigint_foreground_task = Ref{Union{Nothing, Task}}(nothing)
 
-"""
+@doc """
     Base.sigint_new_episode!([src::CancellationTokenSource]) -> CancellationToken
 
 Install `src` (a fresh standalone source by default) as the ^C episode
@@ -594,6 +596,7 @@ function __init__()
     init_active_project()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
     empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
+    empty!(checksums_valid)
     for mod in loaded_modules_order
         push!(get!(Vector{Module}, loaded_precompiles, PkgId(mod)), mod)
     end
@@ -615,9 +618,7 @@ function __init__()
         JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
     end
 
-    if JuliaLowering !== nothing && get_bool_env("JULIA_USE_FLISP_LOWERING", true) === false
-        # This is not available by default, but JuliaLowering can be added to
-        # Base after-the-fact via an incremental sysimage build.
+    if get_bool_env("JULIA_USE_FLISP_LOWERING", true) === false
         JuliaLowering.activate!()
     end
 

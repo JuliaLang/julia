@@ -18,9 +18,11 @@ signbit(x::Float16) = signbit(bitcast(Int16, x))
 
 """
     maxintfloat(T=Float64)
+    maxintfloat(::T)
 
 The largest consecutive integer-valued floating-point number that is exactly represented in
-the given floating-point type `T` (which defaults to `Float64`).
+the given floating-point type `T` (which defaults to `Float64`). The argument can alternatively
+be an instance of `T`.
 
 That is, `maxintfloat` returns the smallest positive integer-valued floating-point number
 `n` such that `n+1` is *not* exactly representable in the type `T`.
@@ -159,7 +161,7 @@ end
 
 # isapprox: approximate equality of numbers
 """
-    isapprox(x, y; atol::Real=0, rtol::Real=atol>0 ? 0 : √eps, nans::Bool=false[, norm::Function])
+    isapprox(x, y; atol::Number=0, rtol::Real=atol>0 ? 0 : √eps, nans::Bool=false[, norm::Function])
 
 Inexact equality comparison. Two numbers compare equal if their relative distance *or* their
 absolute distance is within tolerance bounds: `isapprox` returns `true` if
@@ -171,6 +173,10 @@ For real or complex floating-point values, if an `atol > 0` is not specified, `r
 the square root of [`eps`](@ref) of the type of `x` or `y`, whichever is bigger (least precise).
 This corresponds to requiring equality of about half of the significant digits. Otherwise,
 e.g. for integer arguments or if an `atol > 0` is supplied, `rtol` defaults to zero.
+
+The absolute tolerance `atol` has the same units as `x`; for dimensionful number types
+its default is the zero of those units, `zero(real(x))`. The relative tolerance `rtol` is a
+dimensionless number.
 
 The `norm` keyword defaults to `abs` for numeric `(x,y)` and to `LinearAlgebra.norm` for
 arrays (where an alternative `norm` choice is sometimes useful).
@@ -220,7 +226,7 @@ true
 ```
 """
 function isapprox(x::Number, y::Number;
-                  atol::Real=0, rtol::Real=rtoldefault(x,y,atol),
+                  atol::Number=zero(real(x)), rtol::Real=rtoldefault(x,y,atol),
                   nans::Bool=false, norm::Function=abs)
     x′, y′ = promote(x, y) # to avoid integer overflow
     x == y ||
@@ -317,9 +323,16 @@ This is equivalent to `!isapprox(x,y)` (see [`isapprox`](@ref)).
 # default tolerance arguments
 rtoldefault(::Type{T}) where {T<:AbstractFloat} = sqrt(eps(T))
 rtoldefault(::Type{<:Real}) = 0
-function rtoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}, atol::Real) where {T<:Number,S<:Number}
+# other number types, e.g. dimensionful quantities: the relative tolerance is dimensionless,
+# so it is determined by the type of the multiplicative identity
+function rtoldefault(::Type{T}) where {T<:Number}
+    S = typeof(one(T))
+    S === T && throw(MethodError(rtoldefault, (T,)))
+    return rtoldefault(S)
+end
+function rtoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}, atol::Number) where {T<:Number,S<:Number}
     rtol = max(rtoldefault(real(T)),rtoldefault(real(S)))
-    return atol > 0 ? zero(rtol) : rtol
+    return atol > zero(atol) ? zero(rtol) : rtol
 end
 
 # fused multiply-add
@@ -332,17 +345,17 @@ significantly more expensive than `x*y+z`. `fma` is used to improve accuracy in 
 algorithms. See [`muladd`](@ref).
 """
 function fma end
-function fma_emulated(a::Float16, b::Float16, c::Float16)
-    Float16(muladd(Float32(a), Float32(b), Float32(c))) #don't use fma if the hardware doesn't have it.
-end
-function fma_emulated(a::Float32, b::Float32, c::Float32)::Float32
-    ab = Float64(a) * b
-    res = ab+c
-    reinterpret(UInt64, res)&0x1fff_ffff!=0x1000_0000 && return res
-    # yes error compensation is necessary. It sucks
-    reslo = abs(c)>abs(ab) ? ab-(res - c) : c-(res - ab)
-    res = iszero(reslo) ? res : (signbit(reslo) ? prevfloat(res) : nextfloat(res))
-    return res
+function fma_emulated(a::T, b::T, c::T) where {T<:Union{Float16, Float32}}
+    W = widen(T)
+    ab = W(a) * b # exact
+    res = ab + c
+    bb = res - ab
+    err = (ab - (res - bb)) + (c - bb) # exact error of ab + c (TwoSum)
+    # Round res to odd, so that rounding it to T (which has at least 2 fewer bits) is correct
+    u = reinterpret(Unsigned, res)
+    adjust = (abs(err) > 0) & iseven(u) # false if err is zero or NaN (from Inf/NaN inputs)
+    u += ifelse(adjust, ifelse(signbit(err) == signbit(res), one(u), -one(u)), zero(u))
+    return T(reinterpret(W, u))
 end
 
 """ Splits a Float64 into a hi bit and a low bit where the high bit has 27 trailing 0s and the low bit has 26 trailing 0s"""
@@ -382,9 +395,23 @@ end
     return Txy, T(xy-Txy)
 end
 
+# Error of `r = abhi + c` plus `ablo`, rounded to odd. Rounding to odd (rather than
+# nearest) makes `r + fma_correction(...)` round correctly to nearest, since rounding
+# `s` to nearest could land on a tie of `r + s` whose direction depends on the lost bits.
+@inline function fma_correction(abhi::Float64, ablo::Float64, c::Float64, r::Float64)
+    e = (abs(abhi) > abs(c)) ? (abhi-r+c) : (c-r+abhi) # exact
+    s = e + ablo
+    serr = (abs(e) > abs(ablo)) ? (e-s+ablo) : (ablo-s+e) # exact
+    if !iszero(serr) && iseven(reinterpret(UInt64, s))
+        s = nextfloat(s, serr > 0 ? 1 : -1)
+    end
+    return s
+end
+
 function fma_emulated(a::Float64, b::Float64,c::Float64)
     abhi, ablo = @inline two_mul(a, b)
-    if !isfinite(abhi+c) || isless(abs(abhi), nextfloat(0x1p-969)) || issubnormal(a) || issubnormal(b)
+    # two_mul is only exact if the low parts of a and b (and their product) don't underflow
+    if !isfinite(abhi+c) || isless(abs(abhi), nextfloat(0x1p-969)) || isless(abs(a), 0x1p-969) || isless(abs(b), 0x1p-969)
         aandbfinite = isfinite(a) && isfinite(b)
         if !(isfinite(c) && aandbfinite)
             return aandbfinite ? c : abhi+c
@@ -399,22 +426,22 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
             issubnormal(b) && (b *= 0x1p52)
             a = reinterpret(Float64, (reinterpret(UInt64, a) & ~Base.exponent_mask(Float64)) | Base.exponent_one(Float64))
             b = reinterpret(Float64, (reinterpret(UInt64, b) & ~Base.exponent_mask(Float64)) | Base.exponent_one(Float64))
-            c = c_denorm
+            # If c underflowed when rescaled, it is far below every rounding boundary
+            # of a*b, so only its sign matters (to break ties). Keep it nonzero.
+            c = ldexp(c_denorm, bias) == c ? c_denorm : copysign(floatmin(Float64), c)
             abhi, ablo = two_mul(a, b)
             # abhi <= 4 -> isfinite(r)      (α)
             r = abhi+c
             # s ≈ 0                         (β)
-            s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
+            s = fma_correction(abhi, ablo, c, r)
             # α ⩓ β -> isfinite(sumhi)      (γ)
             sumhi = r+s
             # If result is subnormal, ldexp will cause double rounding because subnormals have fewer mantisa bits.
             # As such, we need to check whether round to even would lead to double rounding and manually round sumhi to avoid it.
-            if issubnormal(ldexp(sumhi, bias))
+            # This must be decided before rounding, which can carry the result to 0 or floatmin.
+            # finite: See γ
+            if !iszero(sumhi) && (bits_lost = -bias-Math._exponent_finite_nonzero(sumhi)-1022) > 0
                 sumlo = r-sumhi+s
-                # finite: See γ
-                # non-zero: If sumhi == ±0., then ldexp(sumhi, bias) == ±0,
-                # so we don't take this branch.
-                bits_lost = -bias-Math._exponent_finite_nonzero(sumhi)-1022
                 sumhiInt = reinterpret(UInt64, sumhi)
                 if (bits_lost != 1) ⊻ (sumhiInt&1 == 1)
                     sumhi = nextfloat(sumhi, cmp(sumlo, 0))
@@ -426,7 +453,7 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
         # fall through
     end
     r = abhi+c
-    s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
+    s = fma_correction(abhi, ablo, c, r)
     return r+s
 end
 

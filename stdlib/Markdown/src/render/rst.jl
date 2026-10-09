@@ -14,7 +14,7 @@ end
 rst(io::IO, md::MD) = rst(io, md.content)
 
 function rst(io::IO, header::Header{l}) where l
-    s = rstinline(header.text)
+    s = sprint(rstinline, header.text)
     println(io, s)
     println(io, string("*=-~:.^"[l])^length(s))
     println(io)
@@ -90,7 +90,7 @@ function rst(io::IO, md::Admonition)
     println(io)
 end
 
-function rst(io::IO, md::HorizontalRule)
+function rst(io::IO, ::HorizontalRule)
     println(io, "–" ^ 5)
 end
 
@@ -111,7 +111,7 @@ function rstinline(io::IO, md...)
     wasCode = false
     for el in md
         wasCode && isa(el, AbstractString) && !Base.startswith(el, " ") && print(io, "\\ ")
-        wasCode = (isa(el, Code) || isa(el, LaTeX) || isa(el, Link)) && (wasCode = true)
+        wasCode = isa(el, Code) || isa(el, LaTeX) || isa(el, Link)
         rstinline(io, el)
     end
 end
@@ -140,7 +140,7 @@ rstinline(io::IO, md::Italic) = rstinline(io, "*", md.text, "*")
 
 rstinline(io::IO, md::Code) = print(io, "``", md.code, "``")
 
-rstinline(io::IO, br::LineBreak) = println(io)
+rstinline(io::IO, ::LineBreak) = println(io)
 
 rstinline(io::IO, l::LaTeX) = print(io, ":math:`", l.formula, "`")
 

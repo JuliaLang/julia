@@ -743,7 +743,19 @@ function make_typealias(@nospecialize(x::Type), io::Union{IO,Nothing}=nothing)
             end
         end
     end
-    if length(aliases) == 1 # TODO: select the type with the "best" (shortest?) environment
+    if length(aliases) > 1
+        # Compare the original aliases, before applying their parameters.
+        # Equivalent or incomparable aliases remain ambiguous.
+        candidates = aliases
+        aliases = filter(candidates) do (name, _)
+            alias = getglobal(name.mod, name.name)
+            !any(candidates) do (other_name, _)
+                other = getglobal(other_name.mod, other_name.name)
+                other <: alias && !(alias <: other)
+            end
+        end
+    end
+    if length(aliases) == 1
         return aliases[1]
     end
 end
@@ -1000,7 +1012,7 @@ function show_unionaliases(io::IO, x::Union)
     if first && !tvar && length(aliases) == 1
         alias = aliases[1]
         env = alias[2]::SimpleVector
-        wheres = make_wheres(io, env, x)
+        wheres = make_wheres(io, env, alias[3])
         show_typealias(io, alias[1], env, wheres)
         show_wheres(io, wheres)
     else
@@ -1008,7 +1020,7 @@ function show_unionaliases(io::IO, x::Union)
             print(io, first ? "Union{" : ", ")
             first = false
             env = alias[2]::SimpleVector
-            wheres = make_wheres(io, env, x)
+            wheres = make_wheres(io, env, alias[3])
             show_typealias(io, alias[1], env, wheres)
             show_wheres(io, wheres)
         end

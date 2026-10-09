@@ -224,7 +224,8 @@ begin
 end
 #---------------------
 LoweringError:
-#= none:3 =# - Label `foo` defined multiple times
+ at line 3: Label `foo` defined multiple times
+
 Expression:
   label:foo
 
@@ -233,7 +234,8 @@ Expression:
 x = @label foo
 #---------------------
 LoweringError:
-#= none:1 =# - misplaced label in value position
+ at line 1: misplaced label in value position
+
 Expression:
   label:foo
 

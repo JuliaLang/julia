@@ -408,6 +408,14 @@ end
         @test Compiler.materialize_inference_edges(encoded_root.edges) ==
             Core.svec(1, atype, ci1)
 
+        # a possibly-ambiguous group does not replace a later edge to the same target
+        possibly_ambiguous_leaf = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(Core.PossiblyAmbiguous(), 1, atype, ci1))
+        possibly_ambiguous_root = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(possibly_ambiguous_leaf, standalone_leaf))
+        @test Compiler.materialize_inference_edges(possibly_ambiguous_root.edges) ==
+            Core.svec(Core.PossiblyAmbiguous(), 1, atype, ci1, ci1)
+
         regular_inf = Compiler.InferenceResult(mi, Compiler.typeinf_lattice(interp))
         regular_inf.result = Int
         regular_inf.valid_worlds = Compiler.WorldRange(world - 2, world)
@@ -558,6 +566,42 @@ end
         @test Compiler.getedge(Compiler.InvokeCallInfo(ci1, match, nothing, atype), 1) === ci1
         @test Compiler.getedge(Compiler.OpaqueClosureCallInfo(ci2, match, nothing), 1) === ci2
         @test Compiler.getedge(Compiler.VirtualMethodMatchInfo(split), 2) === ci2
+    end
+
+    @testset "possibly-ambiguous edges" begin
+        pa = Core.PossiblyAmbiguous()
+        edges = Any[]
+        Compiler.add_one_edge!(edges, mi, true)
+        Compiler.add_one_edge!(edges, mi, true)
+        @test edges == Any[pa, mi]
+        # an edge that is not possibly ambiguous takes over the record
+        Compiler.add_one_edge!(edges, mi)
+        @test edges == Any[mi]
+        Compiler.add_one_edge!(edges, mi, true)
+        @test edges == Any[mi]
+
+        edges = Any[pa, mi]
+        Compiler.add_one_edge!(edges, ci1, true)
+        @test edges == Any[pa, ci1]
+        Compiler.add_one_edge!(edges, ci1)
+        @test edges == Any[ci1]
+
+        # an inlined call is not possibly ambiguous
+        edges = Any[pa, mi]
+        Compiler.add_inlining_edge!(edges, mi)
+        @test edges == Any[mi]
+        edges = Any[pa, mi]
+        Compiler.add_inlining_edge!(edges, ci1)
+        @test edges == Any[ci1]
+
+        # the same rule holds when inference proofs are flattened
+        proof(edges...) = Compiler.LocalInferenceProof(Compiler.WorldRange(world), Core.svec(edges...))
+        flatten(proofs...) = Compiler.materialize_inference_edges(Core.svec(proofs...))
+        @test flatten(proof(pa, ci1), proof(ci1)) == Core.svec(ci1)
+        @test flatten(proof(ci1), proof(pa, ci1)) == Core.svec(ci1)
+        @test flatten(proof(pa, ci1), proof(pa, ci1)) == Core.svec(pa, ci1)
+        @test flatten(proof(pa, ci1), proof(1, atype, ci1)) == Core.svec(ci1, 1, atype, ci1)
+        @test flatten(proof(1, atype, ci1), proof(pa, ci1)) == Core.svec(1, atype, ci1)
     end
 
     @testset "encoded groups are immutable units" begin
@@ -6094,11 +6138,20 @@ end
 
 # Test that a function-wise `@max_methods` works as expected
 Base.Experimental.@max_methods 1 function f_max_methods end
-f_max_methods(x::Int) = 1
-f_max_methods(x::Float64) = 2
+f_max_methods(x::Int; k=1) = 1
+f_max_methods(x::Float64; k=1) = 2
+f_max_methods(x; k=1) = 3
 g_max_methods(x) = f_max_methods(x)
-@test only(Base.return_types(g_max_methods, Tuple{Int})) === Int
-@test only(Base.return_types(g_max_methods, Tuple{Any})) === Any
+@test Base.infer_return_type(g_max_methods, Tuple{Int}) === Int
+@test Base.infer_return_type(g_max_methods, Tuple{Any}) === Any
+@test Base.infer_return_type(x -> f_max_methods(x...), Tuple{Tuple{Int}}) === Int
+@test Base.infer_return_type(x -> f_max_methods(x...), Tuple{Tuple{Any}}) === Any
+@test Base.infer_return_type(x -> f_max_methods(x; k=2), Tuple{Int}) === Int
+@test Base.infer_return_type(x -> f_max_methods(x; k=2), Tuple{Any}) === Any
+@test Base.infer_return_type(x -> applicable(f_max_methods, x) ? 1 : nothing, Tuple{Int}) === Int
+@test Base.infer_return_type(x -> applicable(f_max_methods, x) ? 1 : nothing, Tuple{Any}) === Union{Nothing,Int}
+@test Base.infer_return_type(x -> applicable(f_max_methods, x; k=2) ? 1 : nothing, Tuple{Int}) === Int
+@test Base.infer_return_type(x -> applicable(f_max_methods, x; k=2) ? 1 : nothing, Tuple{Any}) === Union{Nothing,Int}
 
 # Test that `Core.TypeName.concrete_only` makes inference give up at call sites with
 # non-concrete argument types while keeping concrete call sites precise
@@ -7723,6 +7776,19 @@ global invalid_setglobal!_exct_modeling::Int
 @test Base.infer_exception_type((Float64,)) do x
     setglobal!(@__MODULE__, :invalid_setglobal!_exct_modeling, x)
 end == TypeError
+# a store by an unknown name may still reach a typed global that rejects the value
+@test Base.infer_exception_type((Module, Symbol, Float64)) do m, s, x
+    setglobal!(m, s, x)
+end === Union{ErrorException, TypeError}
+@test Base.infer_exception_type((Module, Symbol, Float64)) do m, s, x
+    setglobalonce!(m, s, x)
+end === Union{ErrorException, TypeError}
+@test Base.infer_exception_type((Module, Symbol, Float64)) do m, s, x
+    swapglobal!(m, s, x)
+end === Union{ErrorException, TypeError, UndefVarError}
+@test Base.infer_exception_type((Module, Symbol, Float64)) do m, s, x
+    replaceglobal!(m, s, 1, x)
+end === Union{ErrorException, TypeError, UndefVarError}
 
 # Issue #58257 - Hang in inference during BindingPartition resolution
 module A58257
@@ -8162,6 +8228,8 @@ f60252(f, nt::NamedTuple) = NamedTuple{keys(nt)}(f(v) for v in values(nt))
 @inferred f60252(identity, (a=1, b=2))
 f60252_2(t::Tuple) = NamedTuple{(:a, :b), typeof(t)}(t)
 @test Base.infer_return_type(f60252_2, (Tuple{Vararg{Int64}},)) == @NamedTuple{a::Int64, b::Int64}
+f60252_3(::Type{T}) where {T<:Tuple{Any}} = NamedTuple{(), T}(())
+@test Base.infer_return_type(f60252_3, (Type{T} where T<:Tuple{Any},)) === Union{}
 
 # perform post const-prop' concrete evaluation when effects are further improved by const-prop'
 @noinline function concrete_eval_eligible_if_false(x::Float64, n::Int, y::Bool)
@@ -8294,6 +8362,13 @@ invoke_covered(x::Int) = invoke(invoke_narrower_target, Tuple{Integer}, x)
     @test Base.infer_exception_type(invoke_covered, (Int,)) === Union{}
     @test Compiler.is_nothrow(Base.infer_effects(invoke_covered, (Int,)))
     @test fully_eliminated(invoke_covered, (Int,); retval=1)
+end
+
+# JuliaLang/julia#63351: merging vararg-tuple `PartialStruct`s must keep the trailing `Vararg`
+issue63351(c, xs) = c ? (1, :a, xs...) : (2, :a, xs...)
+@testset "tmerge of vararg-tuple `PartialStruct`s" begin
+    @test Base.infer_return_type(issue63351, (Bool, Vector{Any})) == Tuple{Int, Symbol, Vararg{Any}}
+    @test issue63351(true, Any[3]) === (1, :a, 3)
 end
 
 # irinterp must visit every reachable block even when block numbers are not in

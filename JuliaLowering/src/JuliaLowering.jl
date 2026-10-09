@@ -12,17 +12,20 @@ else
     using JuliaSyntax
 end
 
-using .JuliaSyntax: @KSet_str, @stm, Kind, SourceAttrType, SourceRef,
-    SyntaxList, SyntaxTree, byte_range, children, filename, first_byte,
-    flattened_provenance, head, highlight,
-    is_leaf, is_literal, kind, last_byte, mapchildren, mapsyntax, newleaf,
-    newnode, node_string, numchildren, provenance, setmeta, setmeta!, getmeta,
-    CompileHints, source_location, sourcefile, sourceref, mapindex, mktree,
-    ScopeLayer, SyntaxContext, is_base_layer, base_layer, escape_layer,
-    syntax_module, is_flisp_compat, adopt_scope, remove_context, fill_context!,
-    fill_context, JL_NEW_SYNTAX_VERSION, JL_OLD_SYNTAX_VERSION
+using Base: ScopeLayer, SyntaxContext, SourceCode, SourceRef, Syntax,
+    SourceAttrType, head, flattened_provenance, sourceref, unexpanded_sourceref,
+    mapchildren, provenance, JL_NEW_EDITION, JL_OLD_EDITION, DEBUG_LOWERING,
+    is_base_layer, base_layer, escape_layer, remove_scope, fill_context,
+    syntax_module, edition, adopt_scope, assert_syntax, @mknode, macro_prov,
+    isa_lowering_ast_node, filename, source_line, first_linenode
 
-const DEBUG = true
+using .JuliaSyntax: children, first_byte, highlight, is_leaf,
+    last_byte, numchildren, source_location
+
+
+const DEBUG = DEBUG_LOWERING
+# const DEBUG = isdefinedglobal(Base, :DEBUG_LOWERING) ?
+#     Base.DEBUG_LOWERING : true
 
 # Falls back to `Union{}` so that `loc isa MacroSource` is always false on Julia < 1.14
 # where `Core.MacroSource` is not defined.
@@ -30,8 +33,10 @@ const MacroSource = isdefinedglobal(Core, :MacroSource) ? Core.MacroSource : Uni
 
 const TypeEqOf = isdefinedglobal(Core, :TypeEqOf) ? "TypeEqOf" : "Typeof"
 
-_include("kinds.jl")
-_register_kinds()
+# todo: remove
+const SyntaxTree = Syntax
+const IdTag = Int
+SyntaxList(rest::SyntaxTree...) = SyntaxTree[rest...]
 
 _include("ast.jl")
 _include("bindings.jl")
@@ -50,10 +55,6 @@ _include("syntax_macros.jl")
 _include("eval.jl")
 _include("compat.jl")
 _include("hooks.jl")
-
-function __init__()
-    _register_kinds()
-end
 
 _include("precompile.jl")
 

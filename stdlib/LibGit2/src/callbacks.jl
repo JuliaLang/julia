@@ -242,7 +242,7 @@ end
 
 
 """
-    credential_callback(...)::Cint
+    credentials_callback(...)::Cint
 
 A LibGit2 credential callback function which provides different credential acquisition
 functionality w.r.t. a connection protocol. The `payload_ptr` is required to contain a

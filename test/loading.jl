@@ -377,6 +377,20 @@ module NotPkgModule; end
         @test pkgdir(NotPkgModule, "src") === nothing
     end
 
+    @testset "pkgdir of a bare module file" begin
+        mktempdir() do dir
+            write(joinpath(dir, "BareModFile.jl"), "__precompile__(false); module BareModFile end")
+            pushfirst!(LOAD_PATH, dir)
+            try
+                m = Base.require(Base.PkgId("BareModFile"))
+                @test pkgdir(m) === nothing
+                @test pkgversion(m) === nothing
+            finally
+                popfirst!(LOAD_PATH)
+            end
+        end
+    end
+
     @testset "pkgversion" begin
         @test pkgversion(Foo) == v"1.2.3"
         @test pkgversion(Foo.SubFoo1) == v"1.2.3"

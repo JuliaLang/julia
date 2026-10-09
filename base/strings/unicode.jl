@@ -598,7 +598,11 @@ ispunct(c::AbstractChar) = UTF8PROC_CATEGORY_PC <= category_code(c) <= UTF8PROC_
 
 Tests whether a character is any whitespace character. Includes ASCII characters '\\t',
 '\\n', '\\v', '\\f', '\\r', and ' ', Latin-1 character U+0085, and characters in Unicode
-category Zs.
+categories Zs, Zl and Zp. This is the Unicode `White_Space` property.
+
+!!! compat "Julia 1.14"
+    Before Julia 1.14, U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR), the
+    only characters in categories Zl and Zp, were not considered whitespace.
 
 # Examples
 ```jldoctest
@@ -617,7 +621,7 @@ true
 """
 @inline isspace(c::AbstractChar) =
     c == ' ' || '\t' <= c <= '\r' || c == '\u85' ||
-    '\ua0' <= c && category_code(c) == UTF8PROC_CATEGORY_ZS
+    '\ua0' <= c && UTF8PROC_CATEGORY_ZS <= category_code(c) <= UTF8PROC_CATEGORY_ZP
 
 """
     isprint(c::AbstractChar)::Bool

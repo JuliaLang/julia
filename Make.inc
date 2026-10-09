@@ -35,6 +35,12 @@ FORCE_ASSERTIONS ?= 0
 # Set BOOTSTRAP_DEBUG_LEVEL to 1 to enable Julia-level stacktrace during bootstrapping.
 BOOTSTRAP_DEBUG_LEVEL ?= 0
 
+# Debug info level for the C/C++ runtime in release builds: 1 keeps line tables and
+# inlining information (enough for backtraces), 2 adds variables and types for
+# debugging with gdb/lldb. Defaults to 2 in assert builds or when BOOTSTRAP_DEBUG_LEVEL
+# is set. Debug builds always use 2.
+RUNTIME_DEBUG_LEVEL ?= $(if $(filter 1,$(FORCE_ASSERTIONS))$(filter-out 0,$(BOOTSTRAP_DEBUG_LEVEL)),2,1)
+
 # OPENBLAS build options
 OPENBLAS_TARGET_ARCH:=
 OPENBLAS_SYMBOLSUFFIX:=
@@ -74,6 +80,7 @@ USE_SYSTEM_ZSTD:=0
 USE_SYSTEM_LMDB:=0
 USE_SYSTEM_P7ZIP:=0
 USE_SYSTEM_LLD:=0
+USE_SYSTEM_LIBPICOSAT:=0
 
 # Link libjulia-internal with static libgcc and libstdc++
 USE_RT_STATIC_LIBGCC:=1
@@ -596,12 +603,15 @@ JCXXFLAGS_CLANG    = $(JCXXFLAGS_COMMON) -pedantic
 JCXXFLAGS_GCC      = $(JCXXFLAGS_COMMON) -fno-gnu-unique
 
 DEBUGFLAGS_COMMON  = -O0 -DJL_DEBUG_BUILD -fstack-protector
-DEBUGFLAGS_CLANG   = $(DEBUGFLAGS_COMMON) -g
-DEBUGFLAGS_GCC     = $(DEBUGFLAGS_COMMON) -ggdb2
+DEBUGFLAGS_CLANG   = $(DEBUGFLAGS_COMMON) -gdwarf-5
+DEBUGFLAGS_GCC     = $(DEBUGFLAGS_COMMON) -ggdb2 -gdwarf-5
 
+ifeq ($(filter 1 2,$(RUNTIME_DEBUG_LEVEL)),)
+$(error RUNTIME_DEBUG_LEVEL must be 1 or 2, got '$(RUNTIME_DEBUG_LEVEL)')
+endif
 SHIPFLAGS_COMMON   = -O3
-SHIPFLAGS_CLANG    = $(SHIPFLAGS_COMMON) -g
-SHIPFLAGS_GCC      = $(SHIPFLAGS_COMMON) -ggdb2 -falign-functions
+SHIPFLAGS_CLANG    = $(SHIPFLAGS_COMMON) -gdwarf-5 $(if $(filter 2,$(RUNTIME_DEBUG_LEVEL)),-g,-gline-tables-only)
+SHIPFLAGS_GCC      = $(SHIPFLAGS_COMMON) -gdwarf-5 -ggdb$(RUNTIME_DEBUG_LEVEL) -falign-functions
 
 
 BOLT_LDFLAGS :=
@@ -1003,6 +1013,16 @@ JLDFLAGS += $(LINKER_GC_LDFLAGS)
 JCFLAGS += $(LINKER_GC_CFLAGS)
 JCXXFLAGS += $(LINKER_GC_CXXFLAGS)
 
+endif
+
+ifneq ($(findstring $(OS),Linux FreeBSD),)
+COMPRESS_DEBUG_SECTIONS ?= zlib
+ifeq ($(USE_SYSTEM_LLVM)$(USE_SYSTEM_LLD),00)
+COMPRESS_PKGIMAGE_DEBUG_SECTIONS ?= zstd
+endif
+endif
+ifneq ($(COMPRESS_DEBUG_SECTIONS),)
+JLDFLAGS += -Wl,--compress-debug-sections=$(COMPRESS_DEBUG_SECTIONS)
 endif
 
 # ===========================================================================
@@ -1539,7 +1559,7 @@ CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.35|GLIBCXX_3\.5\.|GLIBCXX_4\.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD P7ZIP LLD LIBTRACYCLIENT BOLT
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD P7ZIP LLD LIBTRACYCLIENT BOLT LIBPICOSAT
 
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
@@ -1606,6 +1626,10 @@ else
   INSTALL_NAME_CHANGE_CMD := true -ignore
   DSYMUTIL := true -ignore
 endif
+
+# $(call dsymutil,binary[,bundle]): also drop the bundle's Relocations directory,
+# which only dsymutil itself reads back (to relink mergeable libraries).
+dsymutil = $(DSYMUTIL) -o $(or $(2),$(1).dSYM) $(1) && rm -rf $(or $(2),$(1).dSYM)/Contents/Resources/Relocations
 
 # shared library runtime paths
 ifneq (,$(filter $(OS),WINNT emscripten))
@@ -2085,6 +2109,55 @@ LOADER_DEBUG_INSTALL_DEP_LIBS = $(call build_deplibs, \
     @$(LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB) \
     @$(LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB) \
 )
+
+# Shared libraries, besides Julia's own, that the runtime needs. The top level Makefile
+# installs them and `base/Makefile` writes them into `Base.RUNTIME_LIBRARY_NAMES`.
+# The `-0`/`-1` suffix is the `USE_SYSTEM_*` value. Only `+=` is used, so that
+# `$(LLVM_SHARED_LIB_NAME)` is expanded later, where `deps/llvm-ver.make` defines it.
+JL_RUNTIME_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
+JL_RUNTIME_LIBS-$(USE_SYSTEM_DSFMT) += libdSFMT
+JL_RUNTIME_LIBS-$(USE_SYSTEM_GMP) += libgmp
+JL_RUNTIME_LIBS-$(USE_SYSTEM_MPFR) += libmpfr
+JL_RUNTIME_LIBS-$(USE_SYSTEM_LIBUV) += libuv
+JL_RUNTIME_LIBS-$(USE_SYSTEM_ZLIB) += libz
+JL_RUNTIME_LIBS-$(USE_SYSTEM_ZSTD) += libzstd
+JL_RUNTIME_LIBS-$(USE_SYSTEM_LIBUNWIND) += libunwind
+ifeq ($(USE_SYSTEM_LIBM),0)
+JL_RUNTIME_LIBS-$(USE_SYSTEM_OPENLIBM) += libopenlibm
+endif
+# compiler support libraries
+JL_RUNTIME_LIBS-$(USE_SYSTEM_CSL) += libgfortran libquadmath libstdc++ libgomp libssp libatomic
+ifeq ($(OS),WINNT)
+# Windows names `libgcc_s` by architecture, like `LIBGCC_NAME`
+ifeq ($(BINARY),32)
+JL_RUNTIME_LIBS-$(USE_SYSTEM_CSL) += libgcc_s_sjlj
+else
+JL_RUNTIME_LIBS-$(USE_SYSTEM_CSL) += libgcc_s_seh
+endif
+JL_RUNTIME_LIBS-$(USE_SYSTEM_CSL) += libwinpthread
+else
+JL_RUNTIME_LIBS-$(USE_SYSTEM_CSL) += libgcc_s
+endif
+ifeq ($(SANITIZE),1)
+ifeq ($(USECLANG),1)
+JL_RUNTIME_LIBS-0 += libclang_rt.asan-*
+else
+JL_RUNTIME_LIBS-0 += libasan
+endif
+endif
+ifeq ($(WITH_TRACY),1)
+JL_RUNTIME_LIBS-0 += libTracyClient
+endif
+ifeq (${USE_THIRD_PARTY_GC},mmtk)
+JL_RUNTIME_LIBS-0 += libmmtk_julia
+endif
+JL_RUNTIME_LIBS = $(JL_RUNTIME_LIBS-0) $(JL_RUNTIME_LIBS-1)
+
+# Libraries needed only to generate code at run time
+ifeq ($(USE_LLVM_SHLIB),1)
+JL_RUNTIME_CODEGEN_LIBS-$(USE_SYSTEM_LLVM) += libLLVM $(LLVM_SHARED_LIB_NAME)
+endif
+JL_RUNTIME_CODEGEN_LIBS = $(JL_RUNTIME_CODEGEN_LIBS-0) $(JL_RUNTIME_CODEGEN_LIBS-1)
 
 # Colors for make
 ifndef VERBOSE

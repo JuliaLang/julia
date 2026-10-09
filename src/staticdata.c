@@ -289,6 +289,10 @@ void *native_functions;   // opaque jl_native_code_desc_t blob used for fetching
 static htable_t field_replace;
 static htable_t bits_replace;
 
+// queued Strings, keyed by content (idset uses egal), so equal Strings are serialized once
+static jl_genericmemory_t *serialized_strings_list;
+static jl_genericmemory_t *serialized_strings_keyset;
+
 
 typedef struct {
     ios_t *s;                   // the main stream
@@ -755,6 +759,16 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             }
         }
     }
+    if (s->incremental && jl_is_binding_partition(v)) {
+        // Partitions that have ended cannot be reached after loading (they are written
+        // with an empty world range), so leave them out of the chain.
+        jl_binding_partition_t *bpart = (jl_binding_partition_t*)v;
+        jl_value_t *next = (jl_value_t*)jl_atomic_load_relaxed(&bpart->next);
+        while (next && jl_is_binding_partition(next) &&
+               jl_atomic_load_relaxed(&((jl_binding_partition_t*)next)->max_world) != ~(size_t)0)
+            next = (jl_value_t*)jl_atomic_load_relaxed(&((jl_binding_partition_t*)next)->next);
+        record_field_change((jl_value_t**)&bpart->next, next);
+    }
     if (s->incremental && jl_is_globalref(v)) {
         jl_globalref_t *gr = (jl_globalref_t*)v;
         if (jl_object_in_image((jl_value_t*)gr->mod)) {
@@ -900,6 +914,19 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                         }
                     }
                 }
+            }
+        }
+        if (jl_nulldebuginfo && jl_is_method(mi->def.method)) {
+            // debuginfo is only used together with the inferred IR or the native code,
+            // so there is no need to keep it if the image contains neither
+            jl_value_t *src = get_replaceable_field((jl_value_t**)&ci->inferred, 1);
+            if (!(src && (jl_is_string(src) || jl_is_code_info(src)))) {
+                int32_t invokeptr_id = 0;
+                int32_t specfptr_id = 0;
+                if (native_functions)
+                    jl_get_function_id(native_functions, ci, &invokeptr_id, &specfptr_id);
+                if (invokeptr_id <= 0 && specfptr_id == 0)
+                    record_field_change((jl_value_t**)&ci->debuginfo, (jl_value_t*)jl_nulldebuginfo);
             }
         }
     }
@@ -1066,6 +1093,18 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
     }
     if (jl_is_foreign_type(t) == 1) {
         jl_error("Cannot serialize instances of foreign datatypes");
+    }
+    if (t == jl_string_type) {
+        // equal String already queued: _backref_id redirects references to it
+        jl_value_t *str = jl_idset_get(serialized_strings_list, serialized_strings_keyset, v);
+        if (str == NULL) {
+            ssize_t idx;
+            serialized_strings_list = jl_idset_put_key(serialized_strings_list, v, &idx);
+            serialized_strings_keyset = jl_idset_put_idx(serialized_strings_list, serialized_strings_keyset, idx);
+        }
+        else if (str != v) {
+            return;
+        }
     }
 
     // Items that require postorder traversal must visit their children prior to insertion into
@@ -1234,6 +1273,11 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
         return item;
     }
     void *idx = ptrhash_get(&serialization_order, v);
+    if (idx == HT_NOTFOUND && jl_is_string(v)) {
+        jl_value_t *str = jl_idset_get(serialized_strings_list, serialized_strings_keyset, v);
+        if (str != NULL)
+            idx = ptrhash_get(&serialization_order, str);
+    }
     if (idx == HT_NOTFOUND) {
         jl_(jl_typeof(v));
         jl_(v);
@@ -1833,11 +1877,9 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 if (s->incremental) {
                     if (jl_atomic_load_relaxed(&newm->primary_world) > 1) {
                         jl_atomic_store_relaxed(&newm->primary_world, ~(size_t)0); // min-world
+                        // Keep METHOD_SIG_NO_LOSERS across serialization, but re-derive other bits on activation
                         int dispatch_status = jl_atomic_load_relaxed(&newm->dispatch_status);
-                        int new_dispatch_status = 0;
-                        if (!(dispatch_status & METHOD_SIG_LATEST_ONLY))
-                            new_dispatch_status |= METHOD_SIG_PRECOMPILE_MANY;
-                        jl_atomic_store_relaxed(&newm->dispatch_status, new_dispatch_status);
+                        jl_atomic_store_relaxed(&newm->dispatch_status, dispatch_status & METHOD_SIG_NO_LOSERS);
                         arraylist_push(&s->fixup_objs, (void*)reloc_offset);
                     }
                 }
@@ -1875,8 +1917,8 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 }
                 jl_atomic_store_relaxed(&newci->time_compile, 0.0);
                 jl_atomic_store_relaxed(&newci->invoke, NULL);
-                // preserve only JL_CI_FLAGS_NATIVE_CACHE_VALID bits
-                jl_atomic_store_relaxed(&newci->flags, jl_atomic_load_relaxed(&newci->flags) & JL_CI_FLAGS_NATIVE_CACHE_VALID);
+                // preserve only JL_CI_FLAGS_NATIVE_CACHE_VALID and JL_CI_FLAGS_UNIQUE_BACKEDGES bits
+                jl_atomic_store_relaxed(&newci->flags, jl_atomic_load_relaxed(&newci->flags) & (JL_CI_FLAGS_NATIVE_CACHE_VALID | JL_CI_FLAGS_UNIQUE_BACKEDGES));
                 jl_atomic_store_relaxed(&newci->specptr.fptr, NULL);
                 uintptr_t fptr_type = JL_INVOKE_SPECSIG;
                 int8_t builtin_id = 0;
@@ -3021,13 +3063,11 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     htable_new(&bits_replace, 0);
     if (worklist)
         jl_foreach_reachable_mtable(jl_prune_internal_mtable, mod_array, NULL);
+    jl_nulldebuginfo = (jl_debuginfo_t*)jl_get_global(jl_core_module, jl_symbol("NullDebugInfo"));
     // strip metadata and IR when requested
     if (jl_options.strip_metadata || jl_options.strip_ir) {
-        if (jl_options.strip_metadata) {
-            jl_nulldebuginfo = (jl_debuginfo_t*)jl_get_global(jl_core_module, jl_symbol("NullDebugInfo"));
-            if (jl_nulldebuginfo == NULL)
-                jl_errorf("Core.NullDebugInfo required for --strip-metadata option");
-        }
+        if (jl_options.strip_metadata && jl_nulldebuginfo == NULL)
+            jl_errorf("Core.NullDebugInfo required for --strip-metadata option");
         // FIXME: stripping should not rely on objects being installed in the
         // (JIT) cache to be reached for stripping / pruning in this step
         // the AOT-compiled CodeInstances etc. are (partially) provided up-front
@@ -3130,6 +3170,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         ptrhash_put(&fptr_to_id, (void*)(uintptr_t)jl_builtin_f_addrs[i], (void*)(i + 2));
     }
     htable_new(&serialization_order, 25000);
+    serialized_strings_list = jl_alloc_memory_any(0);
+    serialized_strings_keyset = jl_alloc_memory_any(0);
     htable_new(&nullptrs, 0);
     arraylist_new(&object_worklist, 0);
     arraylist_new(&deferred_supers, 0);
@@ -3419,6 +3461,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     htable_free(&field_replace);
     htable_free(&bits_replace);
     htable_free(&serialization_order);
+    serialized_strings_list = NULL;
+    serialized_strings_keyset = NULL;
     htable_free(&nullptrs);
     htable_free(&symbol_table);
     htable_free(&fptr_to_id);

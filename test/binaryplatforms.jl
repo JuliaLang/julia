@@ -217,6 +217,14 @@ end
     @test haskey(tags(P("x86_64", "linux"; customtag="foo")), "customtag")
     @test tags(HostPlatform())["julia_version"] == string(VERSION.major, ".", VERSION.minor, ".", VERSION.patch)
 
+    # Extended tags recorded by the build (e.g. for sanitizer builds) are appended after
+    # any compiler ABI tags detected at runtime, so that the host triplet still parses
+    sanitized_host = parse(Platform, BinaryPlatforms.host_triplet("x86_64-linux-gnu-libgfortran5-cxx11", "-sanitize+address"))
+    @test tags(sanitized_host)["sanitize"] == "address"
+    @test tags(sanitized_host)["julia_version"] == string(VERSION.major, ".", VERSION.minor, ".", VERSION.patch)
+    @test platforms_match(HostPlatform(sanitized_host), P("x86_64", "linux"; sanitize="address"))
+    @test !platforms_match(HostPlatform(sanitized_host), P("x86_64", "linux"))
+
     # Test that we can modify tags at will using the dict-like interface:
     p = P("x86_64", "linux")
     p["foo"] = "bar"
@@ -402,6 +410,18 @@ end
     @test platforms_match(host, P("x86_64", "macos"; os_version=v"10", libstdcxx_version="3.4.18"))
     @test !platforms_match(host, P("x86_64", "macos"; os_version=v"10", libstdcxx_version="3.4.27"))
     @test !platforms_match(host, P("x86_64", "macos"; os_version=v"14", libstdcxx_version=v"4"))
+
+    # A `sanitize` tag present on only one side is a mismatch, not a wildcard
+    msan = P("x86_64", "linux"; sanitize="memory")
+    @test !platforms_match(msan, linux)
+    @test !platforms_match(linux, msan)
+    @test !platforms_match("x86_64-linux-gnu-sanitize+memory", "x86_64-linux-gnu")
+    @test !platforms_match("x86_64-linux-gnu", "x86_64-linux-gnu-sanitize+memory")
+    @test !platforms_match(msan, P("x86_64", "linux"; sanitize="thread"))
+    @test !platforms_match(HostPlatform(msan), linux)
+    @test platforms_match(HostPlatform(P("x86_64", "linux"; sanitize="memory")), msan)
+    # Other extended tags are still wildcards
+    @test platforms_match(P("x86_64", "linux"; cuda="10.1"), linux)
 end
 
 @testset "DL name/version parsing" begin
@@ -409,27 +429,42 @@ end
     @test parse_dl_name_version("libgfortran.so", "linux") == ("libgfortran", nothing)
     @test parse_dl_name_version("libgfortran.so.3", "linux") == ("libgfortran", v"3")
     @test parse_dl_name_version("libgfortran.so.3.4", "linux") == ("libgfortran", v"3.4")
-    @test_throws ArgumentError parse_dl_name_version("libgfortran.so.3.4a", "linux")
     @test_throws ArgumentError parse_dl_name_version("libgfortran", "linux")
     @test_throws ArgumentError parse_dl_name_version("libgfortranso", "linux")
     @test parse_dl_name_version("libgfortran.so", "freebsd") == ("libgfortran", nothing)
     @test parse_dl_name_version("libgfortran.so.3", "freebsd") == ("libgfortran", v"3")
     @test parse_dl_name_version("libgfortran.so.3.4", "freebsd") == ("libgfortran", v"3.4")
-    @test_throws ArgumentError parse_dl_name_version("libgfortran.so.3.4a", "freebsd")
     @test_throws ArgumentError parse_dl_name_version("libgfortran", "freebsd")
     @test_throws ArgumentError parse_dl_name_version("libgfortranso", "freebsd")
     @test parse_dl_name_version("libgfortran.dylib", "macos") == ("libgfortran", nothing)
     @test parse_dl_name_version("libgfortran.3.dylib", "macos") == ("libgfortran", v"3")
     @test parse_dl_name_version("libgfortran.3.4.dylib", "macos") == ("libgfortran", v"3.4")
-    @test parse_dl_name_version("libgfortran.3.4a.dylib", "macos") == ("libgfortran.3.4a", nothing)
     @test_throws ArgumentError parse_dl_name_version("libgfortran", "macos")
     @test_throws ArgumentError parse_dl_name_version("libgfortrandylib", "macos")
     @test parse_dl_name_version("libgfortran.dll", "windows") == ("libgfortran", nothing)
     @test parse_dl_name_version("libgfortran-3.dll", "windows") == ("libgfortran", v"3")
     @test parse_dl_name_version("libgfortran-3.4.dll", "windows") == ("libgfortran", v"3.4")
-    @test parse_dl_name_version("libgfortran-3.4a.dll", "windows") == ("libgfortran-3.4a", nothing)
     @test_throws ArgumentError parse_dl_name_version("libgfortran", "windows")
     @test_throws ArgumentError parse_dl_name_version("libgfortrandll", "windows")
+
+    # a tag after the soversion, as in Julia's LLVM, is dropped
+    @test parse_dl_name_version("libgfortran.so.3.4a", "linux") == ("libgfortran", v"3.4")
+    @test parse_dl_name_version("libgfortran.so.3.4a", "freebsd") == ("libgfortran", v"3.4")
+    @test parse_dl_name_version("libgfortran.3.4a.dylib", "macos") == ("libgfortran", v"3.4")
+    @test parse_dl_name_version("libgfortran-3.4a.dll", "windows") == ("libgfortran", v"3.4")
+    @test parse_dl_name_version("libLLVM.so.21.1jl", "linux") == ("libLLVM", v"21.1")
+    @test parse_dl_name_version("libLLVM.21.1jl.dylib", "macos") == ("libLLVM", v"21.1")
+    @test parse_dl_name_version("libLLVM-21jl.dll", "windows") == ("libLLVM", v"21")
+    # a tag must follow a version
+    @test_throws ArgumentError parse_dl_name_version("libfoo.sofia", "linux")
+    @test parse_dl_name_version("libLLVM-21jl.so", "linux") == ("libLLVM-21jl", nothing)
+    @test parse_dl_name_version("libpcre2-8.so", "linux") == ("libpcre2-8", nothing)
+    @test parse_dl_name_version("libpcre2-8-0.dll", "windows") == ("libpcre2-8", v"0")
+    @test parse_dl_name_version("libmp3lame.dylib", "macos") == ("libmp3lame", nothing)
+    @test parse_dl_name_version("libLLVM-21jl.dylib", "macos") == ("libLLVM-21jl", nothing)
+    @test parse_dl_name_version("libmp3lame.so", "linux") == ("libmp3lame", nothing)
+    @test parse_dl_name_version("libmp3lame.dll", "windows") == ("libmp3lame", nothing)
+    @test parse_dl_name_version("libfoo-bar.dll", "windows") == ("libfoo-bar", nothing)
 end
 
 @testset "Sys.is* overloading" begin
@@ -497,6 +532,9 @@ end
     )
     @test select_platform(platforms, P("x86_64", "linux")) == "normal"
     @test select_platform(platforms, P("x86_64", "linux"; sanitize="memory")) == "sanitized"
+    # Sanitized and unsanitized platforms never stand in for one another
+    @test select_platform(Dict(P("x86_64", "linux"; sanitize="memory") => "sanitized"), P("x86_64", "linux")) === nothing
+    @test select_platform(Dict(P("x86_64", "linux") => "normal"), P("x86_64", "linux"; sanitize="memory")) === nothing
 
     # Ties are broken by reverse-sorting by triplet:
     platforms = Dict(

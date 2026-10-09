@@ -43,6 +43,9 @@ FLAGS_COMMON := -I$(SRCDIR)/gc-mmtk -I$(MMTK_API_INC) $(FLAGS_COMMON)
 endif
 
 FLAGS_COMMON += -DJL_BUILD_ARCH='"$(ARCH)"'
+ifneq ($(LIBGCC_NAME),)
+FLAGS_COMMON += -DJL_LIBGCC_NAME='"$(LIBGCC_NAME)"'
+endif
 ifeq ($(OS),WINNT)
 FLAGS_COMMON += -DJL_BUILD_UNAME='"NT"'
 else
@@ -65,7 +68,7 @@ SRCS := \
 	jltypes gf typemap smallintset ast builtins module interpreter symbol \
 	dlload sys init task array genericmemory staticdata toplevel jl_uv datatype \
 	simplevector runtime_intrinsics precompile jloptions mtarraylist \
-	threading scheduler stackwalk \
+	threading scheduler stackwalk static_exports \
 	method jlapi signal-handling safepoint timing subtype rtutils \
 	crc32c APInt processor ircode opaque_closure codegen-stubs coverage runtime_ccall engine \
 	$(GC_SRCS)
@@ -450,6 +453,7 @@ $(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT): $(SRCDIR)/ccalllazyfoo.c
 		$(CC) $(LDFLAGS) -shared $(COMMON_LIBPATHS) $(call SONAME_FLAGS,libccalllazyfoo.$(SHLIB_EXT)), \
 		$@.tmp.o))
 	@rm -f $@.tmp.o
+	$(INSTALL_NAME_CMD)libccalllazyfoo.$(SHLIB_EXT) $@
 
 $(build_shlibdir)/libccalllazybar.$(SHLIB_EXT): $(SRCDIR)/ccalllazybar.c $(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT)
 	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JCPPFLAGS) $(FLAGS_COMMON) -O3 $< $(fPIC) -c -o $@.tmp.o)
@@ -459,6 +463,7 @@ $(build_shlibdir)/libccalllazybar.$(SHLIB_EXT): $(SRCDIR)/ccalllazybar.c $(build
 		$(CC) $(LDFLAGS) -shared $(COMMON_LIBPATHS) $(call SONAME_FLAGS,libccalllazybar.$(SHLIB_EXT)), \
 		$@.tmp.o -lccalllazyfoo))
 	@rm -f $@.tmp.o
+	$(INSTALL_NAME_CMD)libccalllazybar.$(SHLIB_EXT) $@
 
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvmcalltest.cpp $(LLVM_CONFIG_ABSOLUTE)
 	@$(call PRINT_CC, $(CXX) $(JCXXFLAGS) $(LLVM_CXXFLAGS) $(FLAGS_COMMON) $(CPPFLAGS) $(CXXFLAGS) -O3 $< $(fPIC) -c -o $@.tmp.o)
@@ -510,6 +515,7 @@ $(BUILDDIR)/init.o $(BUILDDIR)/init.dbg.obj $(BUILDDIR)/init.static.o: $(SRCDIR)
 $(BUILDDIR)/interpreter.o $(BUILDDIR)/interpreter.dbg.obj $(BUILDDIR)/interpreter.static.o: $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/jitlayers.o $(BUILDDIR)/jitlayers.dbg.obj: $(addprefix $(SRCDIR)/,jitlayers.h llvm-codegen-shared.h julia-task-dispatcher.h objcache.h processor.h)
 $(BUILDDIR)/jltypes.o $(BUILDDIR)/jltypes.dbg.obj $(BUILDDIR)/jltypes.static.o: $(SRCDIR)/builtin_proto.h
+$(BUILDDIR)/static_exports.static.o: $(SRCDIR)/jl_exported_data_defs.inc $(SRCDIR)/jl_exported_data.inc $(SRCDIR)/jl_exported_funcs.inc
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvm-codegen-shared.h $(BUILDDIR)/julia_version.h
 $(BUILDDIR)/llvm-alloc-helpers.o $(BUILDDIR)/llvm-alloc-helpers.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/llvm-pass-helpers.h $(SRCDIR)/llvm-alloc-helpers.h
 $(BUILDDIR)/llvm-alloc-opt.o $(BUILDDIR)/llvm-alloc-opt.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/llvm-pass-helpers.h $(SRCDIR)/llvm-alloc-helpers.h
@@ -599,7 +605,7 @@ $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/jul
 		$(CXXLD) $(call IMPLIB_FLAGS,$@) $(SHIPFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(RPATH_LIB), \
 		$(OBJS) $(JLDFLAGS) $(BOLT_LDFLAGS) $(JLIBLDFLAGS) $(RT_RELEASE_LIBS) $(call SONAME_FLAGS,libjulia-internal.$(JL_MAJOR_SHLIB_EXT)) $(call LTO_OBJECT_PATH,$(BUILDDIR)/$(notdir $@))))
 	@$(INSTALL_NAME_CMD)libjulia-internal.$(SHLIB_EXT) $@
-	$(DSYMUTIL) $@
+	$(call dsymutil,$@)
 
 $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV) $(LIBTARGET_PARSING)
 	@$(call PRINT_LINK, $(call link-dll,$@, \
@@ -608,11 +614,19 @@ $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDI
 		$(CXXLD) $(call IMPLIB_FLAGS,$@) $(DEBUGFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(RPATH_LIB), \
 		$(DOBJS) $(JLDFLAGS) $(JLIBLDFLAGS) $(RT_DEBUG_LIBS) $(call SONAME_FLAGS,libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT)) $(call LTO_OBJECT_PATH,$(BUILDDIR)/$(notdir $@))))
 	@$(INSTALL_NAME_CMD)libjulia-internal-debug.$(SHLIB_EXT) $@
-	$(DSYMUTIL) $@
+	$(call dsymutil,$@)
 
-$(build_libdir)/libjulia-internal.a: $(STATIC_OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBTARGET_PARSING)
+# Fold in the support archives, so consumers only add the sysimage object and
+# the external libraries (libunwind, LLVMSupport, zstd, ...); `-l` system
+# libraries are left to the consumer.
+STATIC_LIBS := $(filter %.a,$(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBUTF8PROC) $(LIBTARGET_PARSING))
+$(build_libdir)/libjulia-internal.a: $(STATIC_OBJS) $(STATIC_LIBS)
 	@rm -rf $@
-	@$(call PRINT_LINK, $(AR) -rcs $@ $(STATIC_OBJS))
+ifeq ($(OS),Darwin)
+	@$(call PRINT_LINK, libtool -static -o $@ $(STATIC_OBJS) $(STATIC_LIBS))
+else
+	@$(call PRINT_LINK, { echo "CREATE $@"; $(foreach o,$(STATIC_OBJS),echo "ADDMOD $(o)";) $(foreach l,$(STATIC_LIBS),echo "ADDLIB $(l)";) echo "SAVE"; echo "END"; } | $(AR) -M)
+endif
 
 ifneq ($(OS), WINNT)
 $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT): $(build_shlibdir)/libjulia-internal%.$(JL_MAJOR_SHLIB_EXT): \
@@ -642,7 +656,7 @@ $(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/juli
 		$(CXXLD) $(call IMPLIB_FLAGS,$@) $(SHIPFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(RPATH_LIB), \
 		$(CODEGEN_OBJS) $(JLDFLAGS) $(BOLT_LDFLAGS) $(JLIBLDFLAGS) $(CG_RELEASE_LIBS) $(call SONAME_FLAGS,libjulia-codegen.$(JL_MAJOR_SHLIB_EXT)) $(call LTO_OBJECT_PATH,$(BUILDDIR)/$(notdir $@))))
 	@$(INSTALL_NAME_CMD)libjulia-codegen.$(SHLIB_EXT) $@
-	$(DSYMUTIL) $@
+	$(call dsymutil,$@)
 
 $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(CODEGEN_DOBJS) $(BUILDDIR)/support/libsupport-debug.a $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
 	@$(call PRINT_LINK, $(call link-dll,$@, \
@@ -651,7 +665,7 @@ $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR
 		$(CXXLD) $(call IMPLIB_FLAGS,$@) $(DEBUGFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(RPATH_LIB), \
 		$(CODEGEN_DOBJS) $(JLDFLAGS) $(JLIBLDFLAGS) $(CG_DEBUG_LIBS) $(call SONAME_FLAGS,libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT)) $(call LTO_OBJECT_PATH,$(BUILDDIR)/$(notdir $@))))
 	@$(INSTALL_NAME_CMD)libjulia-codegen-debug.$(SHLIB_EXT) $@
-	$(DSYMUTIL) $@
+	$(call dsymutil,$@)
 
 ifneq ($(OS), WINNT)
 $(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT): $(build_shlibdir)/libjulia-codegen%.$(JL_MAJOR_SHLIB_EXT): \

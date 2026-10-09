@@ -56,8 +56,8 @@ precompile(Tuple{typeof(Base.in!), Tuple{Module, String, UInt64, UInt32, Float64
 precompile(Tuple{typeof(Base.Compiler.ir_to_codeinf!), Base.Compiler.OptimizationState{Base.Compiler.NativeInterpreter}})
 precompile(Tuple{typeof(Base.getindex), Type{Pair{Base.PkgId, UInt128}}, Pair{Base.PkgId, UInt128}, Pair{Base.PkgId, UInt128}, Pair{Base.PkgId, UInt128}, Vararg{Pair{Base.PkgId, UInt128}}})
 precompile(Tuple{typeof(Base.Compiler.ir_to_codeinf!), Base.Compiler.OptimizationState{Base.Compiler.NativeInterpreter}, Core.SimpleVector})
-precompile(Base.include_package_for_output, (Base.PkgId, String, VersionNumber, Vector{String}, Vector{String}, Vector{String}, typeof(Base._concrete_dependencies), Nothing))
-precompile(Base.include_package_for_output, (Base.PkgId, String, VersionNumber, Vector{String}, Vector{String}, Vector{String}, typeof(Base._concrete_dependencies), String))
+precompile(Base.include_package_for_output, (Base.PkgId, String, Tuple{Int, Int}, Vector{String}, Vector{String}, Vector{String}, typeof(Base._concrete_dependencies), Nothing))
+precompile(Base.include_package_for_output, (Base.PkgId, String, Tuple{Int, Int}, Vector{String}, Vector{String}, Vector{String}, typeof(Base._concrete_dependencies), String))
 precompile(Base.create_expr_cache, (Base.PkgId, Base.PkgLoadSpec, String, String, typeof(Base._concrete_dependencies), Cmd, Base.CacheFlags, IO, IO))
 precompile(Base.create_expr_cache, (Base.PkgId, Base.PkgLoadSpec, String, Nothing, typeof(Base._concrete_dependencies), Cmd, Base.CacheFlags, IO, IO))
 
@@ -65,6 +65,9 @@ precompile(Base.create_expr_cache, (Base.PkgId, Base.PkgLoadSpec, String, Nothin
 precompile(Tuple{Type{Base.Val{x} where x}, Module})
 precompile(Tuple{Type{NamedTuple{(:honor_overrides,), T} where T<:Tuple}, Tuple{Bool}})
 precompile(Tuple{typeof(Base.unique!), Array{String, 1}})
+# `unique!` checks whether the paths are sorted in reverse, and a JLL's library paths
+# often are, e.g. when the julia install sorts after the depot
+precompile(Tuple{typeof(Base.issorted), Array{String, 1}, Base.Order.ReverseOrdering{Base.Order.ForwardOrdering}})
 precompile(Tuple{typeof(Base.vcat), Array{String, 1}, Array{String, 1}})
 
 # Pkg loading
@@ -110,10 +113,8 @@ precompile(Base.get_preferences, (Base.UUID,))
 precompile(Base.record_compiletime_preference, (Base.UUID, String))
 
 # Threads.@threads
-# threading_run ends with filter!(istaskfailed, tasks), whose sizehint! call pulls the
-# @noinline _growbeg_internal! into the compile unit of whoever runs the first threaded region
-precompile(Tuple{typeof(Base.sizehint!), Vector{Task}, Int})
-precompile(Tuple{typeof(Base._growbeg_internal!), Vector{Task}, Int, Int})
+# Not specialized on the loop body, so this one compile covers every `@threads` site
+precompile(Tuple{typeof(Base.Threads.threading_run), Any, Bool})
 
 # miscellaneous
 precompile(Tuple{typeof(Base.exit)})

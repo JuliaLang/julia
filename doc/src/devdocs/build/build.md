@@ -162,7 +162,7 @@ Notes for various architectures:
 Building Julia requires that the following software be installed:
 
 - **[GNU make](https://www.gnu.org/software/make)**                — building dependencies.
-- **[gcc & g++](https://gcc.gnu.org)** (>= 7.1) or **[Clang](https://clang.llvm.org)** (>= 5.0, >= 9.3 for Apple Clang) — compiling and linking C, C++.
+- **[gcc & g++](https://gcc.gnu.org)** (>= 7.1) or **[Clang](https://clang.llvm.org)** (>= 5.0; Xcode >= 16 on macOS) — compiling and linking C, C++.
   - On Linux with g++, the static version of libstdc++ is also required.  If it is unavailable, set `USE_RT_STATIC_LIBSTDCXX=0` in `Make.user`.
 - **[libatomic](https://gcc.gnu.org)**          — provided by **[gcc]** and needed to support atomic operations.
 - **[python](https://www.python.org/)** (>=2.7)          — needed to build LLVM.
@@ -210,6 +210,7 @@ uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/juli
 - **[curl](https://curl.se)**                 — libcurl provides download and proxy support.
 - **[libssh2](https://www.libssh2.org)**              — library for SSH transport, used by libgit2 for packages with SSH remotes.
 - **[OpenSSL](https://www.openssl.org/)**              — library used for cryptography and transport layer security, used by libgit2 and libssh2.
+- **[PicoSAT](https://github.com/JuliaLang/PicoSAT)**  — SAT solver, used by Julia's package manager to resolve package versions.
 - **[utf8proc](https://julialang.org/utf8proc/)**             — a library for processing UTF-8 encoded Unicode strings.
 - **[LLVM libunwind](https://www.nongnu.org/libunwind)**       — LLVM's fork of [libunwind], a library that determines the call-chain of a program.
 - **[ITTAPI](https://github.com/intel/ittapi)**               — Intel's Instrumentation and Tracing Technology and Just-In-Time API.
@@ -357,6 +358,11 @@ LLVM_ASSERTIONS=1
 ```
 
 Please note that assert builds of Julia will be slower than regular (non-assert) builds.
+
+Assert builds also compile the C/C++ runtime with full debug info (variables and types),
+whereas regular release builds only keep line tables. This is controlled by
+`RUNTIME_DEBUG_LEVEL` (1 or 2), which also defaults to 2 when `BOOTSTRAP_DEBUG_LEVEL` is
+set and can be set independently in `Make.user`.
 
 ## Building a debug build of Julia
 

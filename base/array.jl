@@ -890,29 +890,6 @@ function setindex_widen_up_to(dest::AbstractArray{T}, el, i) where T
     return new
 end
 
-# Batch-widen an array given (index => value) pairs that don't fit the current element type.
-function setindices_widen_up_to(dest::AbstractArray, widen_buffers::Vector{Vector{Pair{Int, Any}}})
-    widen_pairs = reduce(vcat, widen_buffers; init=Pair{Int,Any}[])
-    isempty(widen_pairs) && return dest
-    new_T = eltype(dest)
-    for p in widen_pairs
-        new_T = promote_typejoin(new_T, typeof(p.second))
-    end
-    new_T === eltype(dest) && return dest
-    # Function barrier: specializes on new_T so the compiler sees
-    # concrete element types for both source and destination arrays.
-    return _setindices_widen_up_to(new_T, dest, widen_pairs)
-end
-
-function _setindices_widen_up_to(::Type{T}, dest::AbstractArray, widen_pairs::Vector{Pair{Int, Any}}) where T
-    new = similar(dest, T)
-    copyto!(new, dest)
-    for (idx, val) in widen_pairs
-        @inbounds new[idx] = val
-    end
-    return new
-end
-
 function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
     # collect to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.
@@ -1083,7 +1060,7 @@ __safe_setindex!(A::Vector{T}, x,    i::Int) where {T} = (@inline;
 # This is redundant with the abstract fallbacks but needed and helpful for bootstrap
 function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
     @_propagate_inbounds_meta
-    @boundscheck setindex_shape_check(X, length(I))
+    setindex_shape_check(X, length(I))
     @boundscheck checkbounds(A, I)
     require_one_based_indexing(X)
     X′ = unalias(A, X)
@@ -1101,7 +1078,7 @@ function setindex!(A::Array{T}, X::Array{T}, I::AbstractUnitRange{Int}) where T
     @inline
     @boundscheck checkbounds(A, I)
     lI = length(I)
-    @boundscheck setindex_shape_check(X, lI)
+    setindex_shape_check(X, lI)
     if lI > 0
         unsafe_copyto!(A, first(I), X, 1, lI)
     end
@@ -1110,7 +1087,7 @@ end
 function setindex!(A::Array{T}, X::Array{T}, c::Colon) where T
     @inline
     lI = length(A)
-    @boundscheck setindex_shape_check(X, lI)
+    setindex_shape_check(X, lI)
     if lI > 0
         unsafe_copyto!(A, 1, X, 1, lI)
     end
@@ -1499,7 +1476,12 @@ julia> prepend!([6], [1, 2], [3, 4, 5])
 function prepend! end
 
 function prepend!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
-    items isa Tuple && (items = map(x -> convert(T, x), items))
+    if items isa Tuple
+        items = map(x -> convert(T, x), items)
+    elseif items !== a
+        # growing at the front moves the data of `a`, which a view of `a` would then misread
+        items = unalias(a, items)
+    end
     n = length(items)
     _growbeg!(a, n)
     # in case of aliasing, the _growbeg might have shifted our data, so copy

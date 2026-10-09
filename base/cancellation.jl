@@ -897,13 +897,14 @@ end
         # consume the cooperative-yield request
         @atomic :monotonic ct.preempt_request = 0x00
     end
-    if st & SEVERITY_MASK == 0x00
+    # Without a source the cancellation point never reports a severity, which also lets
+    # inference drop the rest of this function for `src::Nothing`.
+    if src === nothing || st & SEVERITY_MASK == 0x00
         # preempt-only (a pending yield request, or a preempt shootdown that
         # reset this point): let another task run, then resume
         yield()
         return nothing
     end
-    src = src::CancellationTokenSource
     # re-read: deliver the severity current at throw time, not the one the
     # fast path happened to observe
     st = @atomic :acquire src.state

@@ -128,6 +128,10 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
     if (meta != NULL) {
         jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, GC_PAGE_SZ);
         gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
+#ifdef _OS_DARWIN_
+        // the page was released with `MADV_FREE_REUSABLE` in `jl_gc_free_page`
+        madvise(meta->data, GC_PAGE_SZ, MADV_FREE_REUSE);
+#endif
         goto exit;
     }
 
@@ -202,6 +206,17 @@ NOINLINE void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
     VirtualFree(p, decommit_size, MEM_DECOMMIT);
 #elif defined(MADV_FREE)
     static int supports_madv_free = 1;
+#ifdef _OS_DARWIN_
+    // Pages released with `MADV_FREE` stay in the physical footprint of the process until
+    // the kernel actually reclaims them under memory pressure, so the memory looks as if it
+    // were still in use. `MADV_FREE_REUSABLE` drops them from the footprint right away;
+    // `jl_gc_alloc_page` marks them with `MADV_FREE_REUSE` again when they are reused.
+    if (madvise(p, decommit_size, MADV_FREE_REUSABLE) == 0) {
+        msan_unpoison(p, decommit_size);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, -decommit_size);
+        return;
+    }
+#endif
     if (supports_madv_free) {
         if (madvise(p, decommit_size, MADV_FREE) == -1) {
             assert(errno == EINVAL);

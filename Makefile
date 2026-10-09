@@ -141,10 +141,6 @@ julia-cli-release julia-cli-debug: julia-cli-% : julia-deps
 julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-src-% $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-% | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-$*
 
-.PHONY: julia-sysimg-JL-release julia-sysimg-JL-debug
-julia-sysimg-JL-release julia-sysimg-JL-debug : julia-sysimg-JL-% : julia-sysimg-% julia-stdlib | $(build_private_libdir)
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-JL-$*
-
 # Useful for cross-bootstrapping
 .PHONY: julia-sysbase-release julia-sysbase-debug
 julia-sysbase-release julia-sysbase-debug : julia-sysbase-% : julia-src-% $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-% | $(build_private_libdir)
@@ -274,59 +270,27 @@ ifeq ($(USE_GPL_LIBS), 1)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libcholmod librbio libspqr libumfpack
 endif
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBBLASTRAMPOLINE) += libblastrampoline
-JL_PRIVATE_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
-JL_PRIVATE_LIBS-$(USE_SYSTEM_DSFMT) += libdSFMT
-JL_PRIVATE_LIBS-$(USE_SYSTEM_GMP) += libgmp libgmpxx
-JL_PRIVATE_LIBS-$(USE_SYSTEM_MPFR) += libmpfr
+JL_PRIVATE_LIBS-$(USE_SYSTEM_GMP) += libgmpxx
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSSH2) += libssh2
 JL_PRIVATE_LIBS-$(USE_SYSTEM_NGHTTP2) += libnghttp2
 JL_PRIVATE_LIBS-$(USE_SYSTEM_OPENSSL) += libcrypto libssl
 JL_PRIVATE_LIBS-$(USE_SYSTEM_CURL) += libcurl
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBGIT2) += libgit2
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUV) += libuv
-ifeq ($(OS),WINNT)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += zlib
-else
-JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += libz
-endif
-JL_PRIVATE_LIBS-$(USE_SYSTEM_ZSTD) += libzstd
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBPICOSAT) += libpicosat
 JL_PRIVATE_EXES += zstd$(EXE) zstdmt$(EXE)
-ifeq ($(USE_LLVM_SHLIB),1)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM $(LLVM_SHARED_LIB_NAME)
-endif
 JL_PRIVATE_TOOLS += lld$(EXE) dsymutil$(EXE)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUNWIND) += libunwind
-
-ifeq ($(USE_SYSTEM_LIBM),0)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_OPENLIBM) += libopenlibm
-endif
 
 JL_PRIVATE_LIBS-$(USE_SYSTEM_BLAS) += $(LIBBLASNAME)
 ifneq ($(LIBLAPACKNAME),$(LIBBLASNAME))
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LAPACK) += $(LIBLAPACKNAME)
 endif
 
-JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libgfortran libquadmath libstdc++ libgcc_s libgomp libssp libatomic
 ifeq ($(OS),Darwin)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libc++
 endif
-ifeq ($(OS),WINNT)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libwinpthread
-else
+ifneq ($(OS),WINNT)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libpthread
 endif
-ifeq ($(SANITIZE),1)
-ifeq ($(USECLANG),1)
-JL_PRIVATE_LIBS-0 += libclang_rt.asan-*
-else
-JL_PRIVATE_LIBS-0 += libasan
-endif
-endif
-
-ifeq ($(WITH_TRACY),1)
-JL_PRIVATE_LIBS-0 += libTracyClient
-endif
-
 
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
@@ -336,9 +300,9 @@ endif
 endif
 endif
 
-ifeq (${USE_THIRD_PARTY_GC},mmtk)
-JL_PRIVATE_LIBS-0 += libmmtk_julia
-endif
+# the runtime's libraries, listed in Make.inc
+JL_PRIVATE_LIBS-0 += $(JL_RUNTIME_LIBS-0) $(JL_RUNTIME_CODEGEN_LIBS-0)
+JL_PRIVATE_LIBS-1 += $(JL_RUNTIME_LIBS-1) $(JL_RUNTIME_CODEGEN_LIBS-1)
 
 # Note that we disable MSYS2's path munging here, as otherwise
 # it replaces our `:`-separated list as a `;`-separated one.
@@ -425,12 +389,12 @@ else
 # libjulia in Darwin framework has special location and name
 ifeq ($(JULIA_BUILD_MODE),release)
 	$(INSTALL_M) $(build_libdir)/libjulia.$(SOMAJOR).$(SOMINOR).dylib $(DESTDIR)$(prefix)/$(framework_dylib)
-	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/$(FRAMEWORK_NAME).dSYM $(DESTDIR)$(prefix)/$(framework_dylib)
-	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/sys.dylib.dSYM $(build_private_libdir)/sys.dylib
+	@$(call dsymutil,$(DESTDIR)$(prefix)/$(framework_dylib),$(DESTDIR)$(prefix)/$(framework_resources)/$(FRAMEWORK_NAME).dSYM)
+	@$(call dsymutil,$(build_private_libdir)/sys.dylib,$(DESTDIR)$(prefix)/$(framework_resources)/sys.dylib.dSYM)
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(INSTALL_M) $(build_libdir)/libjulia-debug.$(SOMAJOR).$(SOMINOR).dylib $(DESTDIR)$(prefix)/$(framework_dylib)_debug
-	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/$(FRAMEWORK_NAME)_debug.dSYM $(DESTDIR)$(prefix)/$(framework_dylib)_debug
-	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/sys-debug.dylib.dSYM $(build_private_libdir)/sys-debug.dylib
+	@$(call dsymutil,$(DESTDIR)$(prefix)/$(framework_dylib)_debug,$(DESTDIR)$(prefix)/$(framework_resources)/$(FRAMEWORK_NAME)_debug.dSYM)
+	@$(call dsymutil,$(build_private_libdir)/sys-debug.dylib,$(DESTDIR)$(prefix)/$(framework_resources)/sys-debug.dylib.dSYM)
 endif
 endif
 
@@ -601,7 +565,7 @@ endif
 
 	# Fix rpaths for dependencies. This should be fixed in BinaryBuilder later.
 ifeq ($(OS), Linux)
-	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN' $(DESTDIR)$(private_shlibdir)/libLLVM.$(SHLIB_EXT)
+	[ -L $(DESTDIR)$(private_shlibdir)/libLLVM.$(SHLIB_EXT) ] || $(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN' $(DESTDIR)$(private_shlibdir)/libLLVM.$(SHLIB_EXT)
 endif
 ifneq ($(LOADER_BUILD_DEP_LIBS),$(LOADER_INSTALL_DEP_LIBS))
 	# Next, overwrite relative path to libjulia-internal in our loader if $$(LOADER_BUILD_DEP_LIBS) != $$(LOADER_INSTALL_DEP_LIBS)

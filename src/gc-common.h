@@ -193,6 +193,20 @@ extern jl_mutex_t finalizers_lock;
 #define GC_FIN_CFUNC_TAG 1
 #define GC_FIN_COBJ_TAG  2
 #define GC_FIN_TAG_MASK  3
+
+#define JL_GC_ENCODE_PUSHFINLIST(n) ((((size_t)(n)) << 2) | JL_GCFRAME_FINLIST)
+
+// Outside finalizer lists, the GC ignores a value in a GC frame whose two low
+// bits are 01 or 10. Embedders can use these patterns to root their own tagged
+// immediates with JL_GC_PUSH*, as long as such values are never stored in
+// fields the GC scans itself. The pattern 11 is reserved for Julia; such values
+// are currently ignored as well, but embedders must not rely on that. Only
+// 4-byte alignment of objects is needed, so this works on 32-bit platforms too;
+// objects are in fact 16-byte aligned (JL_HEAP_ALIGNMENT).
+STATIC_INLINE int gc_is_tagged_immediate(const void *v) JL_NOTSAFEPOINT
+{
+    return ((uintptr_t)v & 0x3) != 0;
+}
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 

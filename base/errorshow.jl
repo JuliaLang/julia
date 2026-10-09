@@ -834,7 +834,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             println(iob)
 
             m = parentmodule_before_main(method)
-            modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
+            modulecolor = get_stacktrace_color(m)
             print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
             push!(lines, takestring!(buf))
             push!(line_score, -(right_matches * 2 + (length(arg_types_param) < 2 ? 1 : 0)))
@@ -879,6 +879,12 @@ const update_stackframes_callback = Ref{Function}(identity)
 
 const STACKTRACE_MODULECOLORS = Iterators.Stateful(Iterators.cycle([:magenta, :cyan, :green, :yellow]))
 const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
+# Profile's package colors share the same color cycler.
+const STACKTRACE_COLORS_LOCK = ReentrantLock()
+
+function get_stacktrace_color(key, colordict=STACKTRACE_FIXEDCOLORS, colorcycler=STACKTRACE_MODULECOLORS)
+    return @lock STACKTRACE_COLORS_LOCK get!(() -> popfirst!(colorcycler), colordict, key)
+end
 
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
 
@@ -1028,7 +1034,7 @@ function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested
     m = Base.parentmodule(frame)
     modulecolor = if m !== nothing
         m = parentmodule_before_main(m)
-        get!(() -> popfirst!(modulecolorcycler), modulecolordict, m)
+        get_stacktrace_color(m, modulecolordict, modulecolorcycler)
     else
         :default
     end
@@ -1048,12 +1054,13 @@ parentmodule_before_main(x) = parentmodule_before_main(parentmodule(x))
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
 function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested_cycles::Int, nactive_cycles::Int, ncycle_starts::Int, modulecolor; prefix = nothing)
-    file, line = string(frame.file), frame.line
+    file = string(frame.file)
+    fl = StackTraces.frame_location(frame)
 
     # Used by the REPL to make it possible to open
     # the location of a stackframe/method in the editor.
     if haskey(io, :last_shown_line_infos)
-        push!(io[:last_shown_line_infos], (string(frame.file), frame.line))
+        push!(io[:last_shown_line_infos], (string(frame.file), fl.line))
     end
 
     inlined = getfield(frame, :inlined)
@@ -1081,13 +1088,16 @@ function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested
     printstyled(io, "│" ^ nactive_cycles; color = :light_black)
 
     # @ Module path / file : line
-    print_module_path_file(io, modul, file, line; modulecolor, digit_align_width = digit_align_width - 1)
+    print_module_path_file(
+        io, modul, file, fl.line, fl.col;
+        modulecolor, digit_align_width = digit_align_width - 1)
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
 end
 
-function print_module_path_file(io, modul, file, line; modulecolor = :light_black, digit_align_width = 0)
+function print_module_path_file(io, modul, file, line, col = 0;
+                                modulecolor = :light_black, digit_align_width = 0)
     printstyled(io, " " ^ digit_align_width * "@", color = :light_black)
 
     # module
@@ -1104,8 +1114,9 @@ function print_module_path_file(io, modul, file, line; modulecolor = :light_blac
     dir = dirname(file)
     !isempty(dir) && printstyled(io, dir, Filesystem.path_separator, color = :light_black)
 
-    # filename, separator, line
-    printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
+    # filename, separator, line (`?` if unknown), column if available
+    printstyled(io, basename(file), ":", line >= 0 ? line : "?"; color = :light_black, underline = true)
+    col != 0 && printstyled(io, ":", col; color = :light_black, underline = true)
 end
 
 #=
@@ -1177,7 +1188,8 @@ function _backtrace_collapse_and_count_repeated_frames(frames::Vector{StackFrame
     last_frame = StackTraces.UNKNOWN
     tracecount = Any[]
     for frame in frames
-        if frame.file != last_frame.file || frame.line != last_frame.line || frame.func != last_frame.func || frame.linfo !== last_frame.linfo
+        if frame.file != last_frame.file || frame.line != last_frame.line || frame.func != last_frame.func || frame.linfo !== last_frame.linfo ||
+                StackTraces.frame_location(frame).col != StackTraces.frame_location(last_frame).col
             if n > 0
                 push!(tracecount, (last_frame, n))
             end

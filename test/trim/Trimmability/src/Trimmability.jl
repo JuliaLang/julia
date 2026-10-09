@@ -259,6 +259,18 @@ function _test_sparse_factorizations()
     println(Core.stdout, "sparse factorizations: ", cholsolve, " ", ldltsolve, " ", qrsolve)
 end
 
+function _test_threads()
+    v = zeros(Int, 64)
+    Threads.@threads for i in eachindex(v)
+        v[i] = 2i
+    end
+    w = zeros(Int, 8)
+    Threads.@threads :static for i in eachindex(w)
+        w[i] = i^2
+    end
+    println(Core.stdout, "threads: ", sum(v), " ", sum(w))
+end
+
 function @main(args::Vector{String})::Cint
     println(Core.stdout, str())
     println(Core.stdout, PROGRAM_FILE)
@@ -305,6 +317,7 @@ function @main(args::Vector{String})::Cint
     _test_sparse_vectors()
     _test_sparse_reductions()
     _test_sparse_nested_reductions()
+    _test_threads()
     # TODO(#62912): SuiteSparse libraries cannot be loaded under --trim yet
     # _test_sparse_solves()
     # _test_sparse_factorizations()

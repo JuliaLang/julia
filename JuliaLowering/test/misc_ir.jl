@@ -32,10 +32,11 @@ x."b"
 
 ########################################
 # Error: Wrong number of children in `.`
-@ast_ [K"." "x"::K"Identifier" "a"::K"Identifier" 3::K"Integer"]
+@ast_ [:. "x"::identifier "a"::identifier 3::value]
 #---------------------
 LoweringError:
-#= line 1 =# - invalid syntax: unknown form `.` or number of arguments 3
+ at line 1: invalid syntax: unknown form `.` or number of arguments 3
+
 Expression:
   (. x a 3)
 
@@ -252,10 +253,11 @@ LoweringError:
 ########################################
 # Error: Test AST which has no source form and thus must have been constructed
 # programmatically (eg, a malformed if)
-@ast_ [K"if"]
+@ast_ [:if]
 #---------------------
 LoweringError:
-#= line 1 =# - expected (if cond body) or (if cond body else)
+ at line 1: expected (if cond body) or (if cond body else)
+
 Expression:
   (if)
 
@@ -266,7 +268,8 @@ let
 end
 #---------------------
 LoweringError:
-#= none:2 =# - unimplemented or unsupported `atomic` declaration
+ at line 2: unimplemented or unsupported `atomic` declaration
+
 Expression:
   (atomic x)
 
@@ -305,7 +308,7 @@ end
 1   TestMod.f
 2   (call core.tuple %₁)
 3   (call JuliaLowering.interpolate_syntax (syntaxinert (call (syntaxunquote f) x y)) %₂)
-4   (call JuliaSyntax.fill_context %₃ SyntaxContext(#=omitted=#))
+4   (call Base.fill_context %₃ SyntaxContext(#=omitted=#))
 5   (= slot₁/eval_result (call JuliaLowering.eval TestMod %₄))
 6   latestworld
 7   slot₁/eval_result
@@ -319,7 +322,7 @@ end
 2   TestMod.f
 3   (call core.tuple %₂)
 4   (call JuliaLowering.interpolate_syntax (syntaxinert (call (syntaxunquote f) x y)) %₃)
-5   (call JuliaSyntax.fill_context %₄ SyntaxContext(#=omitted=#))
+5   (call Base.fill_context %₄ SyntaxContext(#=omitted=#))
 6   (= slot₁/eval_result (call JuliaLowering.eval %₁ %₅))
 7   latestworld
 8   slot₁/eval_result
@@ -544,7 +547,7 @@ const f(x::Int)::Int = x+1
 5   TestMod.Int
 6   (call core.svec %₄ %₅)
 7   (call core.svec)
-8   SourceLocation::1:6
+8   SourceLocation:1
 9   (call core.svec %₆ %₇ %₈)
 10  (call core.define_method TestMod TestMod.f %₉
     --- code_info

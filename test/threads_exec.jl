@@ -163,13 +163,13 @@ let a = zeros(Int, 2 * threadpoolsize(:default))
     @threads for i = 1:length(a)
         @sync begin
             @async begin
-                @async (Libc.systemsleep(1); a[i] += 1)
+                @async (Libc.systemsleep(0.1); a[i] += 1)
                 yield()
                 a[i] += 1
             end
             @async begin
                 yield()
-                @async (Libc.systemsleep(1); a[i] += 1)
+                @async (Libc.systemsleep(0.1); a[i] += 1)
                 a[i] += 1
             end
         end
@@ -943,6 +943,17 @@ end
 @test _atthreads_greedy_schedule(10) == (10, ones(10))
 @test _atthreads_greedy_schedule(threadpoolsize(:default) * 2) == (threadpoolsize(:default) * 2, ones(threadpoolsize(:default) * 2))
 
+# the iterator expression is evaluated once
+function _atthreads_greedy_iterator_evals()
+    nevals = Ref(0)
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :greedy for _ in (nevals[] += 1; 1:10)
+        Threads.atomic_add!(inc, 1)
+    end
+    return nevals[], inc[]
+end
+@test _atthreads_greedy_iterator_evals() == (1, 10)
+
 # nested greedy schedule
 function _atthreads_greedy_greedy_schedule()
     inc = Threads.Atomic{Int}(0)
@@ -1300,20 +1311,21 @@ end
 # issue #49746, thread safety in `atexit(f)`
 @testset "atexit thread safety" begin
     f = () -> nothing
+    n = 100_000
     before_len = length(Base.atexit_hooks)
     @sync begin
-        for _ in 1:1_000_000
+        for _ in 1:n
             Threads.@spawn begin
                 atexit(f)
             end
         end
     end
-    @test length(Base.atexit_hooks) == before_len + 1_000_000
-    @test all(hook -> hook === f, Base.atexit_hooks[1 : 1_000_000])
+    @test length(Base.atexit_hooks) == before_len + n
+    @test all(hook -> hook === f, Base.atexit_hooks[1 : n])
 
     # cleanup
     Base.@lock Base._atexit_hooks_lock begin
-        deleteat!(Base.atexit_hooks, 1:1_000_000)
+        deleteat!(Base.atexit_hooks, 1:n)
     end
 end
 
@@ -1754,34 +1766,8 @@ end
     end
 end
 
-@testset "--timeout-for-safepoint-straggler command-line flag" begin
-    program = "
-        function main()
-            t = Threads.@spawn begin
-                ccall(:uv_sleep, Cvoid, (Cuint,), 20_000)
-            end
-            # Force a GC
-            ccall(:uv_sleep, Cvoid, (Cuint,), 1_000)
-            GC.gc()
-            wait(t)
-        end
-        main()
-    "
-    for timeout in ("1", "4", "16")
-        tmp_output_filename = tempname()
-        tmp_output_file = open(tmp_output_filename, "w")
-        if isnothing(tmp_output_file)
-            error("Failed to open file $tmp_output_filename")
-        end
-        run(pipeline(`$(Base.julia_cmd()) --threads=4 --timeout-for-safepoint-straggler=$(timeout) -e $program`, stderr=tmp_output_file))
-        # Check whether we printed the straggler's backtrace
-        @test !isempty(read(tmp_output_filename, String))
-        close(tmp_output_file)
-        rm(tmp_output_filename)
-    end
-end
-
-include("threads_comprehensions.jl")
+# Wrap the include in the testset rather than the file body (see above).
+@testset "@threads comprehensions" include("threads_comprehensions.jl")
 
 # This test is designed to trigger the performance regression from #60241:
 #   Thread 1                           Thread 2

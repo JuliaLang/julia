@@ -142,6 +142,10 @@ ifeq ($(USE_SYSTEM_LIBGIT2), 0)
 DEP_LIBS += libgit2
 endif
 
+ifeq ($(USE_SYSTEM_LIBPICOSAT), 0)
+DEP_LIBS += libpicosat
+endif
+
 ifeq ($(USE_SYSTEM_MPFR), 0)
 DEP_LIBS += mpfr
 endif
@@ -211,7 +215,7 @@ DEP_LIBS_STAGED := $(DEP_LIBS)
 # list all targets
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
-	objconv openssl libssh2 nghttp2 curl libgit2 libwhich zlib zstd lmdb p7zip csl \
+	objconv openssl libssh2 nghttp2 curl libgit2 libwhich zlib zstd lmdb p7zip libpicosat csl \
 	sanitizers libsuitesparse lld libtracyclient ittapi nvtx \
 	terminfo cpufeatures
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
@@ -291,6 +295,7 @@ include $(SRCDIR)/libssh2.mk
 include $(SRCDIR)/nghttp2.mk
 include $(SRCDIR)/curl.mk
 include $(SRCDIR)/libgit2.mk
+include $(SRCDIR)/libpicosat.mk
 include $(SRCDIR)/libwhich.mk
 include $(SRCDIR)/p7zip.mk
 include $(SRCDIR)/libtracyclient.mk

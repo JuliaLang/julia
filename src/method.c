@@ -880,16 +880,13 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi JL_PROP
                     else if (jl_is_binding(kind)) {
                         jl_add_binding_backedge((jl_binding_t*)kind, (jl_value_t*)ci);
                     }
-                    else if (jl_is_mtable(kind)) {
-                        assert(i < l);
-                        ex = data[i++];
-                        if ((jl_methtable_t*)kind == jl_method_table)
-                            jl_method_table_add_backedge(ex, ci);
-                    }
                     else {
                         assert(i < l);
                         ex = data[i++];
-                        jl_method_instance_add_backedge((jl_method_instance_t*)ex, kind, ci);
+                        if (jl_is_mtable(ex)) // abstract dispatch (`invokesig, mt`)
+                            jl_method_table_add_backedge(kind, ci);
+                        else
+                            jl_method_instance_add_backedge((jl_method_instance_t*)ex, kind, ci);
                     }
                 }
             }
@@ -1086,7 +1083,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->isva = 0;
     m->nargs = 0;
     jl_atomic_store_relaxed(&m->primary_world, ~(size_t)0);
-    jl_atomic_store_relaxed(&m->dispatch_status, 0);
+    jl_atomic_store_relaxed(&m->dispatch_status, METHOD_SIG_NO_LOSERS);
     jl_atomic_store_relaxed(&m->interferences, (jl_genericmemory_t*)jl_an_empty_memory_any);
     m->is_for_opaque_closure = 0;
     m->nospecializeinfer = 0;

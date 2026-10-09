@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "julia.h"
+#include <libgen.h> // dirname
 #include "options.h"
 #include "julia_assert.h"
 #include "julia_internal.h"
@@ -1096,6 +1097,36 @@ static void rr_detach_teleport(void) JL_NOTSAFEPOINT {
 }
 #endif
 
+// A parent process can request that we terminate when it exits by passing its
+// pid in JULIA_EXIT_WITH_PARENT_PID. This is used for precompilation workers,
+// which would otherwise keep running when their parent is killed abruptly.
+// On Windows, libuv normally puts spawned processes in a job object that
+// already terminates them together with their parent.
+static void exit_with_parent(void) JL_NOTSAFEPOINT
+{
+    const char *env = getenv("JULIA_EXIT_WITH_PARENT_PID");
+    if (env == NULL)
+        return;
+#ifndef _OS_WINDOWS_
+    char *endptr;
+    errno = 0;
+    long parent = strtol(env, &endptr, 10);
+    int valid = errno == 0 && *env != '\0' && *endptr == '\0' && parent > 0 && parent == (pid_t)parent;
+#endif
+    // don't pass the request on to our own children
+    uv_os_unsetenv("JULIA_EXIT_WITH_PARENT_PID");
+#ifndef _OS_WINDOWS_
+    // detaching from rr re-executes us under another parent
+    if (!valid || (jl_options.rr_detach && jl_running_under_rr(0)))
+        return;
+    jl_exit_with_parent((pid_t)parent);
+    // the parent may have exited before we started watching it
+    // (N.B.: Julia is not initialized yet, so there is nothing to clean up)
+    if (getppid() != (pid_t)parent)
+        exit(1);
+#endif
+}
+
 /**
  * @brief Entry point for the Julia REPL (Read-Eval-Print Loop).
  *
@@ -1126,6 +1157,8 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[]) JL_CANSAFEPOINT_ENTE
     }
     char **new_argv = argv;
     jl_parse_opts(&argc, (char***)&new_argv);
+
+    exit_with_parent();
 
     // The parent process requested that we detach from the rr session.
     // N.B.: In a perfect world, we would only do this for the portion of
@@ -1254,7 +1287,12 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bi
     if (julia_bindir == NULL) {
         jl_options.julia_bindir = getenv("JULIA_BINDIR");
         if (!jl_options.julia_bindir) {
-#ifdef _OS_WINDOWS_
+#if defined(JL_LIBRARY_STATIC)
+            // no libjulia to locate: use the directory of the executable
+            char *bin = strdup(jl_options.julia_bin);
+            jl_options.julia_bindir = strdup(dirname(bin));
+            free(bin);
+#elif defined(_OS_WINDOWS_)
             jl_options.julia_bindir = strdup(jl_get_libdir());
 #else
             int written = asprintf((char**)&jl_options.julia_bindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", jl_get_libdir(), "bin");

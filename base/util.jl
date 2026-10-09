@@ -78,40 +78,42 @@ function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}
     try f(IOContext(buf, io), args...)
     finally
         str = takestring!(buf)
-        if !iscolor
-            print(io, str)
-        else
-            bold && color === :bold && (color = :nothing)
-            italic && color === :italic && (color = :nothing)
-            underline && color === :underline && (color = :nothing)
-            blink && color === :blink && (color = :nothing)
-            reverse && color === :reverse && (color = :nothing)
-            hidden && color === :hidden && (color = :nothing)
-            enable_ansi  = get(text_colors, color, text_colors[:default]) *
-                               (bold ? text_colors[:bold] : "") *
-                               (italic ? text_colors[:italic] : "") *
-                               (underline ? text_colors[:underline] : "") *
-                               (blink ? text_colors[:blink] : "") *
-                               (reverse ? text_colors[:reverse] : "") *
-                               (hidden ? text_colors[:hidden] : "")
-
-            disable_ansi = (hidden ? disable_text_style[:hidden] : "") *
-                           (reverse ? disable_text_style[:reverse] : "") *
-                           (blink ? disable_text_style[:blink] : "") *
-                           (underline ? disable_text_style[:underline] : "") *
-                           (bold ? disable_text_style[:bold] : "") *
-                           (italic ? disable_text_style[:italic] : "") *
-                               get(disable_text_style, color, text_colors[:default])
-            first = true
-            for line in eachsplit(str, '\n')
-                first || print(buf, '\n')
-                first = false
-                isempty(line) && continue
-                print(buf, enable_ansi, line, disable_ansi)
-            end
-            print(io, takestring!(buf))
-        end
+        iscolor && (str = output_color_string(buf, str, color, bold, italic, underline, blink, reverse, hidden))
+        print(io, str)
     end
+end
+
+function output_color_string(buf::IOBuffer, str::String, @nospecialize(color::Union{Int, Symbol}),
+        bold::Bool, italic::Bool, underline::Bool, blink::Bool, reverse::Bool, hidden::Bool)
+    bold && color === :bold && (color = :nothing)
+    italic && color === :italic && (color = :nothing)
+    underline && color === :underline && (color = :nothing)
+    blink && color === :blink && (color = :nothing)
+    reverse && color === :reverse && (color = :nothing)
+    hidden && color === :hidden && (color = :nothing)
+    enable_ansi  = get(text_colors, color, text_colors[:default]) *
+                       (bold ? text_colors[:bold] : "") *
+                       (italic ? text_colors[:italic] : "") *
+                       (underline ? text_colors[:underline] : "") *
+                       (blink ? text_colors[:blink] : "") *
+                       (reverse ? text_colors[:reverse] : "") *
+                       (hidden ? text_colors[:hidden] : "")
+
+    disable_ansi = (hidden ? disable_text_style[:hidden] : "") *
+                   (reverse ? disable_text_style[:reverse] : "") *
+                   (blink ? disable_text_style[:blink] : "") *
+                   (underline ? disable_text_style[:underline] : "") *
+                   (bold ? disable_text_style[:bold] : "") *
+                   (italic ? disable_text_style[:italic] : "") *
+                       get(disable_text_style, color, text_colors[:default])
+    first = true
+    for line in eachsplit(str, '\n')
+        first || print(buf, '\n')
+        first = false
+        isempty(line) && continue
+        print(buf, enable_ansi, line, disable_ansi)
+    end
+    return takestring!(buf)
 end
 
 """

@@ -282,6 +282,8 @@ Base.@kwdef mutable struct PrecompileSession
     was_processed::Dict{PkgConfig, Base.Event}
     stale_cache::Dict{StaleCacheKey, Bool}         = Dict{StaleCacheKey,Bool}()
     cachepath_cache::Dict{PkgId, Vector{String}}   = Dict{PkgId,Vector{String}}()
+    # cache files accepted without reading them, because their checksums passed earlier in this process
+    unverified::Set{String}                        = Set{String}()
     pkg_queue::Vector{PkgConfig}                   = PkgConfig[]
     prev_cpu_times::Dict{Int32, UInt64}            = Dict{Int32,UInt64}()
 
@@ -321,12 +323,13 @@ mutable struct BackgroundPrecompileState
     confirm_deadline::Float64  # time() deadline for confirmation
     info_requested::Bool  # whether SIGINFO/SIGUSR1 has been broadcast at least once
     key_listening::Bool  # whether a key listener task is currently consuming stdin
+    foreground_monitors::Int  # number of foreground tasks currently monitoring the run
 end
 Base.lock(f, bg::BackgroundPrecompileState) = lock(f, bg.lock)
 Base.lock(bg::BackgroundPrecompileState) = lock(bg.lock)
 Base.unlock(bg::BackgroundPrecompileState) = unlock(bg.lock)
 
-const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Dict{PkgId, Int}(), Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, :none, 0.0, false, false)
+const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Dict{PkgId, Int}(), Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, :none, 0.0, false, false, 0)
 
 # Serializes the inject-vs-launch decision in `_precompilepkgs` with the launch
 # itself. Lock ordering: acquired before (outside) BG.lock, never while holding it.
@@ -1178,6 +1181,20 @@ function filter_dep_graph!(direct_deps, pkg_names, ext_to_parent, requested_pkgi
     return isempty(direct_deps)
 end
 
+# Include only cache files that are ready for workers.
+function preresolved_snapshot(s::PrecompileSession)
+    paths = @lock s.cache_lock Pair{Base.PkgId,String}[k => first(v) for (k, v) in s.cachepath_cache if !isempty(v)]
+    return filter!(kv -> checked_now!(s, kv.second), paths)
+end
+
+# Workers and loading trust these paths without checks, so check a file the scan did not read.
+function checked_now!(s::PrecompileSession, path::String)
+    (@lock s.cache_lock path in s.unverified) || return true
+    Base.checksums_valid_now(path) || return false
+    @lock s.cache_lock delete!(s.unverified, path)
+    return true
+end
+
 ## Public API
 
 """
@@ -1305,11 +1322,6 @@ precompilation:
   is controlled by `JULIA_PRECOMPILE_THREADS` (defaults to CPU_THREADS + 1).
 - Extensions are precompiled when all their triggers are available in the environment.
 """
-# Include only cache files that are ready for workers.
-function preresolved_snapshot(s::PrecompileSession)
-    @lock s.cache_lock Pair{Base.PkgId,String}[k => first(v) for (k, v) in s.cachepath_cache if !isempty(v)]
-end
-
 function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
                         internal_call::Bool=false,
                         strict::Bool = false,
@@ -1530,7 +1542,8 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
                                         key_controls::Union{Bool, Nothing})
     # By default only enable key controls when this task is the foreground task (see #61563, #61698).
     # Falls back to roottask when no foreground task is registered (e.g. non-REPL interactive scripts).
-    key_controls = @something key_controls current_task() === something(Base.foreground_task(), Base.roottask)
+    foreground = current_task() === something(Base.foreground_task(), Base.roottask)
+    key_controls = @something key_controls foreground
     local completed_at::Union{Nothing, Float64}
     local task
 
@@ -1564,6 +1577,9 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
 
     # Enable output from do_precompile
     @lock BG BG.monitoring = true
+    # cursor and clearing codes only mean something to a terminal showing the progress display
+    clear = can_fancyprint(io) ? ansi_cleartoend : ""
+    restore = isempty(clear) ? "" : ansi_enablecursor * clear
 
     exit_requested = Ref(false)
     cancel_requested = Ref(false)
@@ -1615,7 +1631,6 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
                         end
                         if confirmed_action == :cancel
                             cancel_requested[] = true
-                            println(io)
                             @lock BG BG.cancel_requested = true
                             broadcast_signal(Base.SIGKILL)
                             break
@@ -1631,7 +1646,6 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
                             end
                         elseif detachable && c in ('d', 'D', 'q', 'Q', ']')
                             exit_requested[] = true
-                            println(io)  # newline after keypress
                             break
                         elseif c == '\x03'  # Ctrl-C
                             interrupt_requested[] = true
@@ -1731,7 +1745,12 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
         nothing
     end
 
+    counted = false
     return try
+        if foreground
+            @lock BG BG.foreground_monitors += 1
+            counted = true
+        end
         # Wait for task completion or user action
         @lock BG.task_done begin
             while !exit_requested[] && !cancel_requested[] && !interrupt_requested[]
@@ -1743,8 +1762,8 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
         # If user requested cancel, stop the background task
         if cancel_requested[]
             key_task !== nothing && wait(key_task)
-            print(io, ansi_enablecursor, ansi_cleartoend)
-            printpkgstyle(io, :Info, "Canceling precompilation...$(ansi_cleartoend)", color = Base.info_color())
+            print(io, restore)
+            printpkgstyle(io, :Info, "Canceling precompilation...$(clear)", color = Base.info_color())
             # Wait for the task to emit its final report before clearing
             # `BG.monitoring`, which gates that report's output.
             wait(task; throw=false)
@@ -1766,12 +1785,14 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
 
         # If we were waiting for a specific package and it finished, clean up silently
         if exit_requested[] && wait_for_pkg !== nothing
-            @lock BG BG.monitoring = false
+            # keep showing the run to a foreground task still waiting on it, but not over the
+            # prompt this request returns to
+            others = stop_monitoring_unless_waited_on(counted)
             if key_task !== nothing
                 wake_key_task()
                 wait(key_task)
             end
-            print(io, ansi_enablecursor, ansi_cleartoend)
+            others || print(io, restore)
             return
         end
 
@@ -1779,10 +1800,10 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
         if exit_requested[]
             @lock BG BG.monitoring = false
             key_task !== nothing && wait(key_task)
-            print(io, ansi_enablecursor, ansi_cleartoend)
+            print(io, restore)
             n_pending = @lock BG length(BG.pending_pkgids)
             progress = n_pending > 0 ? " ($n_pending packages remaining)." : "."
-            printpkgstyle(io, :Precompiling, "detached$(progress) Precompilation will continue in the background. Monitor with `precompile --monitor`.$(ansi_cleartoend)", color = Base.info_color())
+            printpkgstyle(io, :Precompiling, "detached$(progress) Precompilation will continue in the background. Monitor with `precompile --monitor`.$(clear)", color = Base.info_color())
             return
         end
 
@@ -1795,13 +1816,26 @@ function _monitor_background_precompile(io::IOContext{IO}, detachable::Bool, wai
         wait(task; throw=false)
     catch
         # Clean up on error
-        @lock BG BG.monitoring = false
+        stop_monitoring_unless_waited_on(counted)
         if key_task !== nothing
             exit_requested[] = true
             wake_key_task()
             try; wait(key_task); catch; end
         end
         rethrow()
+    finally
+        counted && @lock BG BG.foreground_monitors -= 1
+    end
+end
+
+# Turn output off, unless a foreground task other than this monitor's is still waiting on
+# the run. Checked and written under one lock, so a foreground request merging in meanwhile
+# cannot be left with output off. Returns whether output stays on.
+function stop_monitoring_unless_waited_on(counted::Bool)
+    @lock BG begin
+        others = BG.foreground_monitors > (counted ? 1 : 0)
+        others || (BG.monitoring = false)
+        others
     end
 end
 
@@ -1933,6 +1967,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     # Try to inject into a running background task, else launch a new one, under
     # launch_lock so concurrent callers cannot spawn competing background tasks.
     local req = nothing
+    live_display = false
     injected = @lock launch_lock begin
         did_inject = @lock BG begin
             if BG.task !== nothing && !istaskdone(BG.task) &&
@@ -1945,6 +1980,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     # non-verbose merge doesn't disable an already-verbose run.
                     verbose && (BG.verbose = true)
                     put!(BG.work_channel, req)
+                    # verbose output prints lines rather than a live display
+                    live_display = BG.monitoring && !BG.verbose
                     true
                 catch
                     req = nothing
@@ -1961,7 +1998,9 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         end
         did_inject
     end
-    if injected
+    # a live progress display already shows the merged packages, and a line printed into it
+    # from here would be overwritten
+    if injected && !(can_fancyprint(io) && live_display)
         printpkgstyle(io, :Precompiling, "Merging precompilation request into existing run...", color = Base.info_color())
     end
 
@@ -2463,6 +2502,9 @@ function failed_dependency(s::PrecompileSession, deps::Vector{PkgId}, config::Co
     return nothing
 end
 
+# Loading asks only after rejecting a cache, so its requests always read the files.
+unverified_set(s::PrecompileSession, from_loading::Bool) = from_loading ? nothing : s.unverified
+
 function spawn_precompile_tasks!(s::PrecompileSession;
         direct_deps, was_processed, configs, circular_deps,
         requested_pkgids, pkg_names, requested_pkgs, from_loading)
@@ -2512,7 +2554,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                 circular = pkg in circular_deps
                 forced = s.force && !circular && (s.force_stdlibs || !is_stdlib_source(sourcespec))
                 freshpath = @lock s.cache_lock Base.compilecache_freshest_path(pkg; ignore_loaded=s.ignore_loaded,
-                    stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
+                    stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache, cachepaths, sourcespec, flags=cacheflags, unverified=unverified_set(s, from_loading))
                 is_stale = forced || freshpath === nothing
                 if is_stale && !forced && !circular && Base.CACHE_FETCH_HOOK[] !== nothing
                     # a cache-fetch hook gets one chance to materialize a
@@ -2523,7 +2565,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                         local fetched_cachepaths = Base.find_all_in_cache_path(pkg)
                         freshpath = @lock s.cache_lock Base.compilecache_freshest_path(pkg; ignore_loaded=s.ignore_loaded,
                             stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache,
-                            cachepaths=fetched_cachepaths, sourcespec, flags=cacheflags)
+                            cachepaths=fetched_cachepaths, sourcespec, flags=cacheflags, unverified=unverified_set(s, from_loading))
                         is_stale = freshpath === nothing
                     end
                 end
@@ -2607,7 +2649,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 end
                                 local cachepaths = Base.find_all_in_cache_path(pkg)
                                 local freshpath = @lock s.cache_lock Base.compilecache_freshest_path(pkg; ignore_loaded=s.ignore_loaded,
-                                    stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
+                                    stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache, cachepaths, sourcespec, flags=cacheflags, unverified=unverified_set(s, from_loading))
                                 local is_stale = forced || freshpath === nothing
                                 if !is_stale
                                     @lock s.cache_lock push!(freshpaths, freshpath)
@@ -2808,6 +2850,7 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
                         # also wait for skipped packages being compiled by another request
                         foreach(wait, values(new_wp))
                         paths = @lock s.cache_lock collect(String, Iterators.flatten((v for (pkgid, v) in s.cachepath_cache if pkgid in effective_pkgids)))
+                        request._from_loading && filter!(p -> checked_now!(s, p), paths)
                         try; put!(request.result, paths); catch; end
                     finally
                         isready(request.result) || try; put!(request.result, String[]); catch; end

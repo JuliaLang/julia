@@ -280,6 +280,15 @@ end |> Compiler.is_consistent
 @test Base.infer_effects() do
     Maybe{Some{Base.RefValue{Int}}}()
 end |> Compiler.is_consistent
+# the field type of an uninitialized inline field may have no layout
+mutable struct UninitSubArray{T<:Real}
+    a::Int
+    v::SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true}
+    UninitSubArray{T}(a) where {T<:Real} = new{T}(a)
+end
+@test Base.infer_return_type((Any,)) do T
+    UninitSubArray{T}(1)
+end == UninitSubArray
 let f() = Maybe{String}()[]
     @test Base.return_types() do
         f() # this call should be concrete evaluated
@@ -1657,7 +1666,7 @@ let 𝕃 = Compiler.SimpleInferenceLattice.instance,
                      convert(Core.Binding, GlobalRef(PartitionEffects, name)))
     for f in (Core.getglobal_partition, Core.setglobal_partition, Core.swapglobal_partition,
               Core.replaceglobal_partition, Core.setglobalonce_partition,
-              Core.isdefinedglobal_partition, Core.depwarn_partition)
+              Core.isdefinedglobal_partition, Core.depwarn_binding)
         @test f in Compiler._EFFECTS_KNOWN_BUILTINS
     end
 

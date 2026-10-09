@@ -8,7 +8,7 @@
             @test JL.core_lowering_hook(s, test_mod) == Core.svec(s)
         end
 
-        for ast_type in (Expr, JL.SyntaxTree)
+        for ast_type in (Expr, SyntaxTree)
             ex = parsestmt(ast_type, "[1,2,3] .+= 1")
             out = JL.core_lowering_hook(ex, test_mod)
             @test out isa Core.SimpleVector && out[1] isa Expr
@@ -140,15 +140,18 @@
         @test JL.include_string(noop, m, "f(x) = x + 1\nf(2)", "none") === 3
         @test JL.include_string(noop, m, "macro mm(); 7; end\n@mm", "none") === 7
 
-        # `expr_compat_mode` still applies
-        @test JL.include_string(noop, Module(:MapexprCompat),
-                                """
-                                macro plus1(ex)
-                                    :(\$(esc(ex)) + 1)
-                                end
-                                qq = 10
-                                @plus1 qq
-                                """, "none"; expr_compat_mode=true) === 11
+        # the module's syntax edition still applies
+        let m = Module(:MapexprCompat)
+            Base.set_syntax_version(m, JL_OLD_EDITION)
+            @test JL.include_string(noop, m,
+                                    """
+                                    macro plus1(ex)
+                                        :(\$(esc(ex)) + 1)
+                                    end
+                                    qq = 10
+                                    @plus1 qq
+                                    """, "none") === 11
+        end
 
         # Errors in the included code and in `mapexpr` itself both propagate
         @test_throws "boom" JL.include_string(noop, Module(:MapexprErr),

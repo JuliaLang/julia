@@ -15,6 +15,8 @@ Base.trunc(dt::DateTime, p::Type{Minute}) = dt - Second(dt) - Millisecond(dt)
 Base.trunc(dt::DateTime, p::Type{Second}) = dt - Millisecond(dt)
 Base.trunc(dt::DateTime, p::Type{Millisecond}) = dt
 
+Base.trunc(dt::Timestamp, ::Type{T}) where {T<:Period} = floor(dt, oneunit(T))
+
 Base.trunc(t::Time, p::Type{Hour}) = Time(Hour(t))
 Base.trunc(t::Time, p::Type{Minute}) = Time(Hour(t), Minute(t))
 Base.trunc(t::Time, p::Type{Second}) = Time(Hour(t), Minute(t), Second(t))
@@ -50,7 +52,7 @@ julia> firstdayofweek(DateTime("1996-01-05T12:30:00"))
 function firstdayofweek end
 
 firstdayofweek(dt::Date) = Date(UTD(value(dt) - dayofweek(dt) + 1))
-firstdayofweek(dt::DateTime) = DateTime(firstdayofweek(Date(dt)))
+firstdayofweek(dt::T) where T<:AbstractDateTime = T(firstdayofweek(Date(dt)))
 
 """
     lastdayofweek(dt::TimeType)::TimeType
@@ -66,7 +68,7 @@ julia> lastdayofweek(DateTime("1996-01-05T12:30:00"))
 function lastdayofweek end
 
 lastdayofweek(dt::Date) = Date(UTD(value(dt) + (7 - dayofweek(dt))))
-lastdayofweek(dt::DateTime) = DateTime(lastdayofweek(Date(dt)))
+lastdayofweek(dt::T) where T<:AbstractDateTime = T(lastdayofweek(Date(dt)))
 
 """
     firstdayofmonth(dt::TimeType)::TimeType
@@ -82,7 +84,7 @@ julia> firstdayofmonth(DateTime("1996-05-20"))
 function firstdayofmonth end
 
 firstdayofmonth(dt::Date) = Date(UTD(value(dt) - day(dt) + 1))
-firstdayofmonth(dt::DateTime) = DateTime(firstdayofmonth(Date(dt)))
+firstdayofmonth(dt::T) where T<:AbstractDateTime = T(firstdayofmonth(Date(dt)))
 
 """
     lastdayofmonth(dt::TimeType)::TimeType
@@ -101,7 +103,7 @@ function lastdayofmonth(dt::Date)
     y, m, d = yearmonthday(dt)
     return Date(UTD(value(dt) + daysinmonth(y, m) - d))
 end
-lastdayofmonth(dt::DateTime) = DateTime(lastdayofmonth(Date(dt)))
+lastdayofmonth(dt::T) where T<:AbstractDateTime = T(lastdayofmonth(Date(dt)))
 
 """
     firstdayofyear(dt::TimeType)::TimeType
@@ -117,7 +119,7 @@ julia> firstdayofyear(DateTime("1996-05-20"))
 function firstdayofyear end
 
 firstdayofyear(dt::Date) = Date(UTD(value(dt) - dayofyear(dt) + 1))
-firstdayofyear(dt::DateTime) = DateTime(firstdayofyear(Date(dt)))
+firstdayofyear(dt::T) where T<:AbstractDateTime = T(firstdayofyear(Date(dt)))
 
 """
     lastdayofyear(dt::TimeType)::TimeType
@@ -136,7 +138,7 @@ function lastdayofyear(dt::Date)
     y, m, d = yearmonthday(dt)
     return Date(UTD(value(dt) + daysinyear(y) - dayofyear(y, m, d)))
 end
-lastdayofyear(dt::DateTime) = DateTime(lastdayofyear(Date(dt)))
+lastdayofyear(dt::T) where T<:AbstractDateTime = T(lastdayofyear(Date(dt)))
 
 """
     firstdayofquarter(dt::TimeType)::TimeType
@@ -159,7 +161,7 @@ function firstdayofquarter(dt::Date)
     mm = m < 4 ? 1 : m < 7 ? 4 : m < 10 ? 7 : 10
     return Date(y, mm, 1)
 end
-firstdayofquarter(dt::DateTime) = DateTime(firstdayofquarter(Date(dt)))
+firstdayofquarter(dt::T) where T<:AbstractDateTime = T(firstdayofquarter(Date(dt)))
 
 """
     lastdayofquarter(dt::TimeType)::TimeType
@@ -182,7 +184,7 @@ function lastdayofquarter(dt::Date)
     mm, d = m < 4 ? (3, 31) : m < 7 ? (6, 30) : m < 10 ? (9, 30) : (12, 31)
     return Date(y, mm, d)
 end
-lastdayofquarter(dt::DateTime) = DateTime(lastdayofquarter(Date(dt)))
+lastdayofquarter(dt::T) where T<:AbstractDateTime = T(lastdayofquarter(Date(dt)))
 
 # Temporal Adjusters
 struct DateFunction
@@ -308,6 +310,56 @@ function DateTime(func::Function, y, m, d, h, mi; step::Period=Second(1), limit:
 end
 function DateTime(func::Function, y, m, d, h, mi, s; step::Period=Millisecond(1), limit::Int=10000)
     return adjust(DateFunction(func, DateTime(y)), DateTime(y, m, d, h, mi, s), step, limit)
+end
+
+"""
+    Timestamp(f::Function, y, m=1; step=Day(1), limit=10000)::Timestamp
+    Timestamp(f::Function, y, m, d; step=Hour(1), limit=10000)::Timestamp
+    Timestamp(f::Function, y, m, d, h; step=Minute(1), limit=10000)::Timestamp
+    Timestamp(f::Function, y, m, d, h, mi; step=Second(1), limit=10000)::Timestamp
+    Timestamp(f::Function, y, m, d, h, mi, s; step=Millisecond(1), limit=10000)::Timestamp
+    Timestamp(f::Function, y, m, d, h, mi, s, ms; step=Microsecond(1), limit=10000)::Timestamp
+    Timestamp(f::Function, y, m, d, h, mi, s, ms, us; step=Nanosecond(1), limit=10000)::Timestamp
+
+Create a `Timestamp` through the adjuster API. It starts at the time given by
+`y, m, d...` and adds `step` until `f` returns `true`, and throws an error if `f` is
+still `false` after `limit` steps. `Timestamp{P}(f, ...)` works the same way, with a
+default `step` of at least `P(1)`.
+
+!!! compat "Julia 1.14"
+    `Timestamp` requires Julia 1.14 or later.
+
+# Examples
+```jldoctest
+julia> Timestamp(ts -> second(ts) == 40, 2010, 10, 20, 10; step = Second(1))
+2010-10-20T10:00:40
+
+julia> Timestamp(ts -> nanosecond(ts) == 4, 2010, 10, 20, 10, 0, 0, 0, 0; step = Nanosecond(1))
+2010-10-20T10:00:00.000000004
+```
+"""
+Timestamp(::Function, args...)
+
+function Timestamp{P}(func::Function, y, m=1; step::Period=Day(1), limit::Int=10000) where {P}
+    return adjust(func, Timestamp{P}(y, m); step, limit)
+end
+function Timestamp{P}(func::Function, y, m, d; step::Period=Hour(1), limit::Int=10000) where {P}
+    return adjust(func, Timestamp{P}(y, m, d); step, limit)
+end
+function Timestamp{P}(func::Function, y, m, d, h; step::Period=Minute(1), limit::Int=10000) where {P}
+    return adjust(func, Timestamp{P}(y, m, d, h); step, limit)
+end
+function Timestamp{P}(func::Function, y, m, d, h, mi; step::Period=Second(1), limit::Int=10000) where {P}
+    return adjust(func, Timestamp{P}(y, m, d, h, mi); step, limit)
+end
+function Timestamp{P}(func::Function, y, m, d, h, mi, s; step::Period=max(Millisecond(1), eps(Timestamp{P})), limit::Int=10000) where {P}
+    return adjust(func, Timestamp{P}(y, m, d, h, mi, s); step, limit)
+end
+function Timestamp{P}(func::Function, y, m, d, h, mi, s, ms; step::Period=max(Microsecond(1), eps(Timestamp{P})), limit::Int=10000) where {P}
+    return adjust(func, Timestamp{P}(y, m, d, h, mi, s, ms); step, limit)
+end
+function Timestamp{P}(func::Function, y, m, d, h, mi, s, ms, us; step::Period=max(Nanosecond(1), eps(Timestamp{P})), limit::Int=10000) where {P}
+    return adjust(func, Timestamp{P}(y, m, d, h, mi, s, ms, us); step, limit)
 end
 
 """

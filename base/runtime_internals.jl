@@ -631,8 +631,8 @@ struct DataTypeLayout
     # arrayelem_isatomic : 1;
     # arrayelem_islocked : 1;
     # isbitsegal : 1;
-    # unused_bits : 3;
-    # padding : 5;
+    # unused_bits : 7;
+    # padding : 1;
 end
 
 function DataTypeLayout(dt::DataType)
@@ -1458,6 +1458,9 @@ function fieldcount(@nospecialize t)
     @_foldable_meta
     if t === Union{}
         throw(ArgumentError("The empty type does not have a well-defined number of fields since it does not have instances."))
+    end
+    if t isa Core.TypeEgal
+        return nfields(type_parameter(t))
     end
     t = unwrap_unionall(t)
     if t isa Union

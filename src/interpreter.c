@@ -52,7 +52,7 @@ extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 
 #else
 
-#define JL_GC_ENCODE_PUSHFRAME(n)  ((((size_t)(n))<<2)|2)
+#define JL_GC_ENCODE_PUSHFRAME(n)  ((((size_t)(n))<<2)|JL_GCFRAME_INTERP)
 
 #define JL_GC_PUSHFRAME(frame,locals,n)                                             \
   JL_CPPALLOCA(frame, sizeof(*frame)+(((n)+3)*sizeof(jl_value_t*)));                \
@@ -133,30 +133,22 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     size_t i;
     for (i = 1; i < nargs; i++)
         argv[i-1] = eval_value(args[i], s);
-    jl_value_t *c = args[0];
-    assert(jl_is_code_instance(c) || jl_is_method_instance(c));
-    jl_value_t *result = NULL;
-    if (jl_is_code_instance(c)) {
-        jl_code_instance_t *codeinst = (jl_code_instance_t*)c;
-        assert(jl_atomic_load_relaxed(&codeinst->min_world) <= jl_current_task->world_age &&
-               jl_current_task->world_age <= jl_atomic_load_relaxed(&codeinst->max_world));
-        jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
-        if (!invoke) {
-            jl_compile_codeinst(codeinst);
-            invoke = jl_atomic_load_acquire(&codeinst->invoke);
-        }
-        if (invoke) {
-            result = invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, codeinst);
+    jl_value_t *result = jl_invoke_target(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, args[0]);
+    JL_GC_POP();
+    return result;
+}
 
-        } else {
-            if (codeinst->owner != jl_nothing) {
-                jl_error("Failed to invoke or compile external codeinst");
-            }
-            result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, jl_get_ci_mi(codeinst));
-        }
-    } else {
-        result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, (jl_method_instance_t*)c);
-    }
+// `:invoke_modify`: a modify builtin call whose reduce function the compiler resolved to
+// the `CodeInstance` or `MethodInstance` in `args[0]`.
+static jl_value_t *do_invoke_modify(jl_value_t **args, size_t nargs, interpreter_state *s) JL_CANSAFEPOINT
+{
+    jl_value_t **argv;
+    assert(nargs >= 2);
+    JL_GC_PUSHARGS(argv, nargs - 1);
+    size_t i;
+    for (i = 1; i < nargs; i++)
+        argv[i-1] = eval_value(args[i], s);
+    jl_value_t *result = jl_invoke_modify(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, args[0]);
     JL_GC_POP();
     return result;
 }
@@ -271,7 +263,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return do_invoke(args, nargs, s);
     }
     else if (head == jl_invoke_modify_sym) {
-        return do_call(args + 1, nargs - 1, s);
+        return do_invoke_modify(args, nargs, s);
     }
     else if (head == jl_isdefined_sym) {
         jl_value_t *sym = args[0];
@@ -580,6 +572,8 @@ static int coverage_collect(jl_debuginfo_t *debuginfo, jl_value_t *func,
             int n = out->n++;
             out->file[n] = file;
             out->line[n] = i;
+            if (pc > 0 && jl_is_string(debuginfo->linetable))
+                out->line[n] = jl_cdi_firstxy(debuginfo, pc).first;
             out->edgeid[n] = to;
             out->tracked[n] = jl_coverage_enabled_for(modu, file);
         }

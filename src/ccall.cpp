@@ -1189,7 +1189,8 @@ static Value *box_ccall_result(jl_codectx_t &ctx, Value *result, Value *runtime_
 {
     // XXX: need to handle parameterized zero-byte types (singleton)
     const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
-    unsigned nb = DL.getTypeStoreSize(result->getType());
+    result = zext_struct_helper(ctx, result, julia_memory_access_type(result->getType(), rt));
+    unsigned nb = DL.getTypeAllocSize(result->getType());
     unsigned align = sizeof(void*); // Allocations are at least pointer aligned
     jl_aliasinfo_t ai = jl_is_mutable(rt) ? ctx.alias().mutab : ctx.alias().immut;
     Value *strct = emit_allocobj(ctx, nb, runtime_dt, true, align);
@@ -1324,18 +1325,19 @@ std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
             }
             if (jl_is_primitivetype(tti) && t->isIntegerTy()) {
                 // see pull req #978. need to annotate signext/zeroext for
-                // small integer arguments.
+                // small integer arguments. Small means narrower than 32 bits,
+                // as for `_BitInt(N)` in C, although `sizeof` rounds up to 4.
                 jl_datatype_t *bt = (jl_datatype_t*)tti;
-                size_t sz = jl_datatype_size(bt);
-                if (sz < 4) {
+                if (jl_datatype_size(bt) == 4 && ctx->TargetTriple.isRISCV64()) {
+                    // RISC-V sign-extends all 32-bit arguments to XLEN, and clang
+                    // counts any type stored in 4 bytes as 32-bit here.
+                    ab.addAttribute(Attribute::SExt);
+                }
+                else if (jl_datatype_nbits(bt) < 32) {
                     if (jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type))
                         ab.addAttribute(Attribute::SExt);
                     else
                         ab.addAttribute(Attribute::ZExt);
-                }
-                else if (sz == 4 && ctx->TargetTriple.isRISCV64()) {
-                    // RISC-V sign-extends all 32-bit arguments to XLEN.
-                    ab.addAttribute(Attribute::SExt);
                 }
             }
         }
@@ -2414,8 +2416,10 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     else if (sret) {
         jlretboxed = sretboxed;
         if (!jlretboxed) {
-            // something alloca'd above is SSA
-            if (static_rt)
+            // something alloca'd above is SSA. A primitive is reloaded instead,
+            // keeping only its value bits: a C function returning `_BitInt(N)`
+            // leaves the bits above N unspecified.
+            if (static_rt && !jl_is_primitivetype(rt))
                 return mark_julia_slot(result, rt, NULL, ctx.alias().stack);
             ++SRetCCalls;
             result = ctx.builder.CreateLoad(zext_struct_type(sretty), result);
