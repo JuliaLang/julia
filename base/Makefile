@@ -103,6 +103,7 @@ ifeq ($(OS), Darwin)
 endif
 	@printf "%s\n" "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
 	@printf "%s\n" "const BUILD_EXT_TAGS = \"$(BUILD_EXT_TAGS)\"" >> $@
+	@printf "%s\n" "const COMPRESS_PKGIMAGE_DEBUG_SECTIONS = \"$(COMPRESS_PKGIMAGE_DEBUG_SECTIONS)\"" >> $@
 
 	@# From `JL_RUNTIME_LIBS` in Make.inc. A trailing `*` marks a prefix.
 	@printf "%s\n" "const RUNTIME_LIBRARY_NAMES = String[" >> $@
