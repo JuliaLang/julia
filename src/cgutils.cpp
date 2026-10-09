@@ -393,6 +393,18 @@ static DIType *_julia_type_to_di(jl_codegen_output_t *ctx, jl_debugcache_t &debu
     return ditype;
 }
 
+// Whether a variable of debug type `ty` is a jl_value_t* (possibly behind a
+// typedef naming its type), rather than the bytes that a box points to.
+static bool di_type_is_pvalue(jl_debugcache_t &debuginfo, DIType *ty)
+{
+    while (auto *td = dyn_cast_or_null<DIDerivedType>(ty)) {
+        if (td->getTag() != dwarf::DW_TAG_typedef)
+            break;
+        ty = td->getBaseType();
+    }
+    return ty == debuginfo.jl_pvalue_dillvmt;
+}
+
 static DIType *julia_type_to_di(jl_codectx_t &ctx, jl_debugcache_t &debuginfo, jl_value_t *jt, DIBuilder *dbuilder, bool isboxed)
 {
     return _julia_type_to_di(&ctx.emission_context, debuginfo, jt, dbuilder, isboxed);
