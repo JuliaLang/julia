@@ -256,7 +256,8 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [:core [:identifier]] -> pass()
     [:top [:identifier]] -> pass()
     [:meta _...] -> pass() # TODO
-    [:toplevel xs...] -> pass() # this will be validated when we lower it
+    [:toplevel xs...] -> vcx.toplevel ? pass() : # validated when we lower it
+        @fail(st, "`toplevel` can't be used inside a function")
     [:opaque_closure argt lb ub bool lam] ->
         all(vst1, vcx, [argt, lb, ub, bool]) & vst1_lam(vcx, lam)
     [:symboliclabel lab] -> vst1_ident(vcx, lab; lhs=true)

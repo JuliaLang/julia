@@ -185,3 +185,10 @@ end
     @test !vst1_ok(Expr(:import, Expr(:call, :f)))
     @test !vst1_ok(Expr(:import, 42))
 end
+
+@testset "toplevel" begin
+    @test !vst1_ok(Expr(:function, Expr(:tuple), Expr(:block, Expr(:toplevel))))
+    @test !vst1_ok(Expr(:->, Expr(:tuple), Expr(:block, Expr(:toplevel))))
+    @test !vst1_ok(Expr(:(=), Expr(:call, :f), Expr(:block, Expr(:toplevel))))
+    @test vst1_ok(Expr(:let, Expr(:block), Expr(:block, Expr(:toplevel))))
+end

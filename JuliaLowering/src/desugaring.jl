@@ -4520,18 +4520,22 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == :curly
         expand_forms_2(ctx, expand_curly(ctx, ex))
     elseif k == :toplevel
+        tmp = ssavar(ctx, ex)
         # Temporary: It would make more sense to return this unchanged once
         # toplevel iteration over SyntaxTree exists, but for now, a call to
         # `eval` lets JuliaLowering retain provenance and hygiene here.
+        # (alternatively, insert eval in flisp too, simplifying the interpreter)
         ex2 = @ast ctx ex [:block
             [:assert "toplevel_only"::symbol [:syntaxinert ex]]
-            [:call
+            [:(=) tmp [:call
              eval::value
                 # a macro expanding to toplevel does not change the eval module,
                 # but does change the name resolution module
                 ctx.layer.mod::value
                 [:syntaxinert ex]
-            ]
+            ]]
+            (::latestworld)
+            tmp
         ]
         expand_forms_2(ctx, ex2)
     elseif k == :vect
