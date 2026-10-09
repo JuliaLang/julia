@@ -24,21 +24,35 @@ _readstring(f::AbstractString) = isfile(f) ? read(f, String) : error(repr(f), ":
 
 """
     Parser()
+    Parser{dicttype}()
 
 Constructor for a TOML `Parser`.  Note that in most cases one does not need to
 explicitly create a `Parser` but instead one directly uses
 [`TOML.parsefile`](@ref) or [`TOML.parse`](@ref).  Using an explicit parser
 will however reuse some internal data structures which can be beneficial for
 performance if a larger number of small files are parsed.
+
+The type parameter `dicttype` can be used to make the parser return tables of
+a dictionary type other than `Dict{String, Any}`, for example an
+`OrderedDict{String, Any}` to preserve the order of the keys in the file.
+
+!!! compat "Julia 1.14"
+    The `dicttype` type parameter requires Julia 1.14 or later.
 """
-struct Parser
-    _p::Internals.Parser{Dates}
+struct Parser{D <: AbstractDict{String, Any}}
+    _p::Internals.Parser{Dates, D}
 end
 
+const TOMLDict = Dict{String, Any}
+
 # Dates-enabled constructors
-Parser() = Parser(Internals.Parser{Dates}())
-Parser(io::IO) = Parser(Internals.Parser{Dates}(io))
-Parser(str::String; filepath=nothing) = Parser(Internals.Parser{Dates}(str; filepath))
+Parser{D}() where {D<:AbstractDict{String, Any}} = Parser(Internals.Parser{Dates, D}())
+Parser{D}(io::IO) where {D<:AbstractDict{String, Any}} = Parser(Internals.Parser{Dates, D}(io))
+Parser{D}(str::String; filepath=nothing) where {D<:AbstractDict{String, Any}} =
+    Parser(Internals.Parser{Dates, D}(str; filepath))
+Parser() = Parser{TOMLDict}()
+Parser(io::IO) = Parser{TOMLDict}(io)
+Parser(str::String; filepath=nothing) = Parser{TOMLDict}(str; filepath)
 
 """
     Comments()
@@ -73,11 +87,17 @@ printed at the top of it.
 const Comments = Internals.Comments
 
 """
-    parsefile(f::AbstractString; comments=nothing)
+    parsefile(f::AbstractString; dicttype=Dict{String, Any}, comments=nothing)
     parsefile(p::Parser, f::AbstractString; comments=nothing)
 
 Parse file `f` and return the resulting table (dictionary). Throw a
-[`ParserError`](@ref) upon failure.
+[`ParserError`](@ref) upon failure. The keyword argument `dicttype` can be
+used to return tables of a dictionary type other than `Dict{String, Any}`,
+for example an `OrderedDict{String, Any}` to preserve the order of the keys
+in the file.
+
+!!! compat "Julia 1.14"
+    The `dicttype` keyword argument requires Julia 1.14 or later.
 
 If a [`TOML.Comments`](@ref) object is passed via the `comments` keyword
 argument, it is emptied and the comments of the document are captured into it.
@@ -87,17 +107,23 @@ argument, it is emptied and the comments of the document are captured into it.
 
 See also [`TOML.tryparsefile`](@ref).
 """
-parsefile(f::AbstractString; comments::Union{Comments, Nothing}=nothing) =
-    Internals.parse(Internals.Parser{Dates}(_readstring(f); filepath=abspath(f), comments))
+parsefile(f::AbstractString; dicttype::Type{D}=TOMLDict, comments::Union{Comments, Nothing}=nothing) where {D<:AbstractDict{String, Any}} =
+    Internals.parse(Internals.Parser{Dates, D}(_readstring(f); filepath=abspath(f), comments))
 parsefile(p::Parser, f::AbstractString; comments::Union{Comments, Nothing}=nothing) =
     Internals.parse(Internals.reinit!(p._p, _readstring(f); filepath=abspath(f), comments))
 
 """
-    tryparsefile(f::AbstractString; comments=nothing)
+    tryparsefile(f::AbstractString; dicttype=Dict{String, Any}, comments=nothing)
     tryparsefile(p::Parser, f::AbstractString; comments=nothing)
 
 Parse file `f` and return the resulting table (dictionary). Return a
-[`ParserError`](@ref) upon failure.
+[`ParserError`](@ref) upon failure. The keyword argument `dicttype` can be
+used to return tables of a dictionary type other than `Dict{String, Any}`,
+for example an `OrderedDict{String, Any}` to preserve the order of the keys
+in the file.
+
+!!! compat "Julia 1.14"
+    The `dicttype` keyword argument requires Julia 1.14 or later.
 
 If a [`TOML.Comments`](@ref) object is passed via the `comments` keyword
 argument, it is emptied and the comments of the document are captured into it.
@@ -107,17 +133,23 @@ argument, it is emptied and the comments of the document are captured into it.
 
 See also [`TOML.parsefile`](@ref).
 """
-tryparsefile(f::AbstractString; comments::Union{Comments, Nothing}=nothing) =
-    Internals.tryparse(Internals.Parser{Dates}(_readstring(f); filepath=abspath(f), comments))
+tryparsefile(f::AbstractString; dicttype::Type{D}=TOMLDict, comments::Union{Comments, Nothing}=nothing) where {D<:AbstractDict{String, Any}} =
+    Internals.tryparse(Internals.Parser{Dates, D}(_readstring(f); filepath=abspath(f), comments))
 tryparsefile(p::Parser, f::AbstractString; comments::Union{Comments, Nothing}=nothing) =
     Internals.tryparse(Internals.reinit!(p._p, _readstring(f); filepath=abspath(f), comments))
 
 """
-    parse(x::Union{AbstractString, IO}; comments=nothing)
+    parse(x::Union{AbstractString, IO}; dicttype=Dict{String, Any}, comments=nothing)
     parse(p::Parser, x::Union{AbstractString, IO}; comments=nothing)
 
 Parse the string or stream `x`, and return the resulting table (dictionary).
-Throw a [`ParserError`](@ref) upon failure.
+Throw a [`ParserError`](@ref) upon failure. The keyword argument `dicttype`
+can be used to return tables of a dictionary type other than
+`Dict{String, Any}`, for example an `OrderedDict{String, Any}` to preserve
+the order of the keys in the input.
+
+!!! compat "Julia 1.14"
+    The `dicttype` keyword argument requires Julia 1.14 or later.
 
 If a [`TOML.Comments`](@ref) object is passed via the `comments` keyword
 argument, it is emptied and the comments of the document are captured into it.
@@ -128,19 +160,26 @@ argument, it is emptied and the comments of the document are captured into it.
 See also [`TOML.tryparse`](@ref).
 """
 parse(p::Parser) = Internals.parse(p._p)
-parse(str::AbstractString; comments::Union{Comments, Nothing}=nothing) =
-    Internals.parse(Internals.Parser{Dates}(String(str); comments))
+parse(str::AbstractString; dicttype::Type{D}=TOMLDict, comments::Union{Comments, Nothing}=nothing) where {D<:AbstractDict{String, Any}} =
+    Internals.parse(Internals.Parser{Dates, D}(String(str); comments))
 parse(p::Parser, str::AbstractString; comments::Union{Comments, Nothing}=nothing) =
     Internals.parse(Internals.reinit!(p._p, String(str); comments))
-parse(io::IO; comments::Union{Comments, Nothing}=nothing) = parse(read(io, String); comments)
+parse(io::IO; dicttype::Type{D}=TOMLDict, comments::Union{Comments, Nothing}=nothing) where {D<:AbstractDict{String, Any}} =
+    parse(read(io, String); dicttype, comments)
 parse(p::Parser, io::IO; comments::Union{Comments, Nothing}=nothing) = parse(p, read(io, String); comments)
 
 """
-    tryparse(x::Union{AbstractString, IO}; comments=nothing)
+    tryparse(x::Union{AbstractString, IO}; dicttype=Dict{String, Any}, comments=nothing)
     tryparse(p::Parser, x::Union{AbstractString, IO}; comments=nothing)
 
 Parse the string or stream `x`, and return the resulting table (dictionary).
-Return a [`ParserError`](@ref) upon failure.
+Return a [`ParserError`](@ref) upon failure. The keyword argument `dicttype`
+can be used to return tables of a dictionary type other than
+`Dict{String, Any}`, for example an `OrderedDict{String, Any}` to preserve
+the order of the keys in the input.
+
+!!! compat "Julia 1.14"
+    The `dicttype` keyword argument requires Julia 1.14 or later.
 
 If a [`TOML.Comments`](@ref) object is passed via the `comments` keyword
 argument, it is emptied and the comments of the document are captured into it.
@@ -151,11 +190,12 @@ argument, it is emptied and the comments of the document are captured into it.
 See also [`TOML.parse`](@ref).
 """
 tryparse(p::Parser) = Internals.tryparse(p._p)
-tryparse(str::AbstractString; comments::Union{Comments, Nothing}=nothing) =
-    Internals.tryparse(Internals.Parser{Dates}(String(str); comments))
+tryparse(str::AbstractString; dicttype::Type{D}=TOMLDict, comments::Union{Comments, Nothing}=nothing) where {D<:AbstractDict{String, Any}} =
+    Internals.tryparse(Internals.Parser{Dates, D}(String(str); comments))
 tryparse(p::Parser, str::AbstractString; comments::Union{Comments, Nothing}=nothing) =
     Internals.tryparse(Internals.reinit!(p._p, String(str); comments))
-tryparse(io::IO; comments::Union{Comments, Nothing}=nothing) = tryparse(read(io, String); comments)
+tryparse(io::IO; dicttype::Type{D}=TOMLDict, comments::Union{Comments, Nothing}=nothing) where {D<:AbstractDict{String, Any}} =
+    tryparse(read(io, String); dicttype, comments)
 tryparse(p::Parser, io::IO; comments::Union{Comments, Nothing}=nothing) = tryparse(p, read(io, String); comments)
 
 """
@@ -201,9 +241,9 @@ public Parser, parsefile, tryparsefile, parse, tryparse, ParserError, print, Com
 
 # These methods are private Base interfaces, but we do our best to support them over
 # the TOML stdlib types anyway to minimize downstream breakage.
-Base.TOMLCache(p::Parser) = Base.TOMLCache(p._p, Dict{String, Base.CachedTOMLDict}())
-Base.TOMLCache(p::Parser, d::Base.CachedTOMLDict) = Base.TOMLCache(p._p, d)
-Base.TOMLCache(p::Parser, d::Dict{String, Dict{String, Any}}) = Base.TOMLCache(p._p, d)
+Base.TOMLCache(p::Parser{TOMLDict}) = Base.TOMLCache(p._p, Dict{String, Base.CachedTOMLDict}())
+Base.TOMLCache(p::Parser{TOMLDict}, d::Base.CachedTOMLDict) = Base.TOMLCache(p._p, d)
+Base.TOMLCache(p::Parser{TOMLDict}, d::Dict{String, Dict{String, Any}}) = Base.TOMLCache(p._p, d)
 
 Internals.reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing,
                   comments::Union{Comments, Nothing}=nothing) =

@@ -51,3 +51,80 @@ using TOML: ParserError
     @test_throws ErrorException TOML.tryparsefile(homedir())
     @test_throws ErrorException TOML.tryparsefile(p, homedir())
 end
+
+# Minimal insertion-ordered dict to test the `dicttype` keyword argument
+# without depending on OrderedCollections
+struct OrderedTestDict <: AbstractDict{String, Any}
+    keys::Vector{String}
+    vals::Vector{Any}
+end
+OrderedTestDict() = OrderedTestDict(String[], Any[])
+function Base.setindex!(d::OrderedTestDict, v, k)
+    i = findfirst(==(k), d.keys)
+    if i === nothing
+        push!(d.keys, k); push!(d.vals, v)
+    else
+        d.vals[i] = v
+    end
+    return d
+end
+function Base.get(d::OrderedTestDict, k, default)
+    i = findfirst(==(k), d.keys)
+    return i === nothing ? default : d.vals[i]
+end
+function Base.get!(f::Union{Function, Type}, d::OrderedTestDict, k)
+    i = findfirst(==(k), d.keys)
+    i === nothing || return d.vals[i]
+    return d[k] = f()
+end
+Base.haskey(d::OrderedTestDict, k) = findfirst(==(k), d.keys) !== nothing
+Base.length(d::OrderedTestDict) = length(d.keys)
+Base.iterate(d::OrderedTestDict, i=1) = i > length(d.keys) ? nothing : (d.keys[i] => d.vals[i], i + 1)
+
+@testset "dicttype" begin
+    str = """
+    zebra = 1
+    alpha = 2
+
+    [server]
+    port = 8080
+    host = "localhost"
+
+    [[fruits]]
+    name = "apple"
+    color = "red"
+
+    [inline]
+    t = {z = 1, a = 2}
+    """
+    for d in (TOML.parse(str; dicttype=OrderedTestDict),
+              TOML.parse(IOBuffer(str); dicttype=OrderedTestDict),
+              TOML.tryparse(str; dicttype=OrderedTestDict),
+              TOML.parse(TOML.Parser{OrderedTestDict}(str)),
+              TOML.parse(TOML.Parser{OrderedTestDict}(), str),
+              TOML.parse(TOML.Parser{OrderedTestDict}(IOBuffer(str))))
+        @test d isa OrderedTestDict
+        @test collect(keys(d)) == ["zebra", "alpha", "server", "fruits", "inline"]
+        @test d["server"] isa OrderedTestDict
+        @test collect(keys(d["server"])) == ["port", "host"]
+        @test d["fruits"][1] isa OrderedTestDict
+        @test collect(keys(d["fruits"][1])) == ["name", "color"]
+        @test d["inline"]["t"] isa OrderedTestDict
+        @test collect(keys(d["inline"]["t"])) == ["z", "a"]
+    end
+    mktemp() do path, io
+        write(io, str); close(io)
+        @test TOML.parsefile(path; dicttype=OrderedTestDict) isa OrderedTestDict
+        @test TOML.tryparsefile(path; dicttype=OrderedTestDict) isa OrderedTestDict
+    end
+    err = TOML.tryparse("a = 1\na = 2"; dicttype=OrderedTestDict)
+    @test err isa ParserError
+    @test err.table isa OrderedTestDict
+    # parser reuse keeps the dict type
+    p = TOML.Parser{OrderedTestDict}()
+    @test TOML.parse(p, "a = 1") isa OrderedTestDict
+    @test TOML.parse(p, "b = 2") isa OrderedTestDict
+    @inferred TOML.parse(p, str)
+    # `@inferred` types keyword values with `typeof`, so check the `Type{D}` kwarg method directly
+    @test Base.infer_return_type(Core.kwcall, (NamedTuple{(:dicttype,), Tuple{Type{OrderedTestDict}}}, typeof(TOML.parse), String)) === OrderedTestDict
+end
