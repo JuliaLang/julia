@@ -3144,8 +3144,10 @@ static void gc_mark_roots(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
     gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_backedge_log, "backedge_log");
     gc_heap_snapshot_record_gc_roots((jl_value_t*)_jl_debug_method_invalidation, "debug_method_invalidation");
     gc_try_claim_and_push(mq, jl_method_contributors, NULL);
+    gc_try_claim_and_push(mq, jl_method_contributor_methods, NULL);
     gc_try_claim_and_push(mq, jl_activation_certs, NULL);
     gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_method_contributors, "method_contributors");
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_method_contributor_methods, "method_contributor_methods");
     gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_activation_certs, "activation_certs");
     // constants
     gc_try_claim_and_push(mq, jl_emptytuple_type, NULL);
