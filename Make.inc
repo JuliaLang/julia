@@ -25,6 +25,10 @@ JULIA_COVERAGE_IMAGES ?= 0
 # expanded because Make.user is read below.
 JULIA_COVERAGE_IMAGE_FLAGS = $(if $(filter 1,$(JULIA_COVERAGE_IMAGES)),--code-coverage=all)
 
+# Set to 1 to also bundle stdlib pkgimages for `--check-bounds=yes` (e.g. for
+# nightlies, where caching them in a user depot is not effective).
+JULIA_CHECK_BOUNDS_PKGIMAGES ?= 0
+
 # Set FORCE_ASSERTIONS to 1 to enable assertions in the C and C++ portions
 # of the Julia code base. You may also want to set LLVM_ASSERTIONS to 1,
 # which will enable assertions in LLVM.

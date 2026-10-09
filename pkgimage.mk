@@ -19,6 +19,11 @@ release: $(BUILDDIR)/stdlib/release.image
 debug: $(BUILDDIR)/stdlib/debug.image
 all: release debug
 
+STDLIB_PKGIMAGE_CONFIGS := ``=>Base.CacheFlags(debug_level=2, opt_level=3)
+ifeq ($(JULIA_CHECK_BOUNDS_PKGIMAGES),1)
+STDLIB_PKGIMAGE_CONFIGS := $(STDLIB_PKGIMAGE_CONFIGS), ``=>Base.CacheFlags(check_bounds=1, debug_level=2, opt_level=3)
+endif
+
 $(DEPOTDIR)/compiled:
 	mkdir -p $@
 
@@ -28,7 +33,7 @@ print-depot-path:
 # The precompile workers inherit the coverage configuration through `Base.CacheFlags`.
 $(BUILDDIR)/stdlib/%.image: $(JULIAHOME)/stdlib/Project.toml $(JULIAHOME)/stdlib/Manifest.toml $(INDEPENDENT_STDLIBS_SRCS) $(DEPOTDIR)/compiled
 	@$(call PRINT_JULIA, JULIA_CPU_TARGET="sysimage" $(call spawn,$(JULIA_EXECUTABLE)) $(JULIA_COVERAGE_IMAGE_FLAGS) --startup-file=no -e \
-		'Base.Precompilation.precompilepkgs(configs=[``=>Base.CacheFlags(debug_level=2, opt_level=3), ``=>Base.CacheFlags(check_bounds=1, debug_level=2, opt_level=3)]; strict=true)')
+		'Base.Precompilation.precompilepkgs(configs=[$(STDLIB_PKGIMAGE_CONFIGS)]; strict=true)')
 	touch $@
 
 $(BUILDDIR)/stdlib/release.image: $(build_private_libdir)/sys.$(SHLIB_EXT)
