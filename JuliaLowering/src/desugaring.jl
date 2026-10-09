@@ -617,17 +617,17 @@ end
 
 #-------------------------------------------------------------------------------
 # Expansion of array indexing
-function _arg_to_temp(ctx, stmts, ex)
+function _arg_to_temp(ctx, stmts, ex, in_params)
     k = head(ex)
     if is_effect_free(ex)
         ex
     elseif k == :...
-        @ast ctx ex [k _arg_to_temp(ctx, stmts, ex[1])]
-    elseif k == :kw
-        @ast ctx ex [:kw ex[1] _arg_to_temp(ctx, stmts, ex[2])]
+        @ast ctx ex [k _arg_to_temp(ctx, stmts, ex[1], in_params)]
+    elseif k == :kw || (k == :(=) && in_params)
+        @ast ctx ex [k ex[1] _arg_to_temp(ctx, stmts, ex[2], in_params)]
     elseif k == :parameters
         mapchildren(ex) do e
-            _arg_to_temp(ctx, stmts, e)
+            _arg_to_temp(ctx, stmts, e, true)
         end
     else
         emit_assign_tmp(stmts, ctx, ex)
@@ -642,19 +642,14 @@ end
 # Any assignments are added to `stmts` and a result expression returned which
 # may be used in further desugaring.
 function remove_argument_side_effects(ctx, stmts, ex)
-    if is_identifier_like(ex) || head(ex) === :value
+    if is_effect_free(ex)
         ex
     else
         k = head(ex)
         if k == :let
             emit_assign_tmp(stmts, ctx, ex)
         else
-            args = SyntaxList()
-            for e in children(ex)
-                push!(args, _arg_to_temp(ctx, stmts, e))
-            end
-            # TODO: Copy attributes?
-            @ast ctx ex [k args...]
+            mapchildren(e->_arg_to_temp(ctx, stmts, e, false), ex)
         end
     end
 end
@@ -1778,21 +1773,25 @@ end
 #-------------------------------------------------------------------------------
 # Call expansion
 
-function expand_kw_call(ctx, srcref, farg, args, kws)
-    @ast ctx srcref [:block
-        func := farg
-        kw_container := expand_named_tuple(ctx, srcref, kws;
+function expand_kw_call(ctx, st)
+    stmts = Syntax[]
+    st = remove_argument_side_effects(ctx, stmts, st)
+    args = copy(st[2:end])
+    kws = remove_kw_args!(ctx, args)
+    @ast ctx st [:block
+        stmts...
+        kw_container := expand_named_tuple(ctx, st, kws;
                                            field_name="keyword argument",
                                            element_name="keyword argument")
         if all(head(kw) == :... for kw in kws)
             # In this case need to check kws nonempty at runtime
             [:if
                 [:call "isempty"::top kw_container]
-                [:call func args...]
-                [:call "kwcall"::core kw_container func args...]
+                [:call st[1] args...]
+                [:call "kwcall"::core kw_container st[1] args...]
             ]
         else
-            [:call "kwcall"::core kw_container func args...]
+            [:call "kwcall"::core kw_container st[1] args...]
         end
     ]
 end
@@ -1975,7 +1974,6 @@ end
 function remove_kw_args!(ctx, args::Vector{SyntaxTree})
     kws = nothing
     j = 0
-    num_parameter_blocks = 0
     for i in 1:length(args)
         arg = args[i]
         k = head(arg)
@@ -1985,10 +1983,6 @@ function remove_kw_args!(ctx, args::Vector{SyntaxTree})
             end
             push!(kws, arg)
         elseif k == :parameters
-            num_parameter_blocks += 1
-            if num_parameter_blocks > 1
-                throw(LoweringError(arg, "Cannot have more than one group of keyword arguments separated with `;`"))
-            end
             if numchildren(arg) == 0
                 continue # ignore empty parameters (issue #18845)
             end
@@ -2007,6 +2001,14 @@ function remove_kw_args!(ctx, args::Vector{SyntaxTree})
     return kws
 end
 
+function has_kwargs(args)
+    for a in args
+        head(a) === :kw && return true
+        head(a) === :parameters && numchildren(a) > 0 && return true
+    end
+    false
+end
+
 function expand_call(ctx, ex)
     farg = ex[1]
     if head(farg) === :identifier && syntax_name(farg) === "ccall"
@@ -2015,9 +2017,8 @@ function expand_call(ctx, ex)
         return expand_cglobal(ctx, ex)
     end
     args = copy(ex[2:end])
-    kws = remove_kw_args!(ctx, args)
-    if !isnothing(kws)
-        return expand_forms_2(ctx, expand_kw_call(ctx, ex, farg, args, kws))
+    if has_kwargs(args)
+        return expand_forms_2(ctx, expand_kw_call(ctx, ex))
     end
     if any(head(arg) == :... for arg in args)
         # Splatting, eg, `f(a, xs..., b)`
