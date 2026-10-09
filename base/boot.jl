@@ -605,6 +605,8 @@ end
 struct TrimFailure <: Exception
     TrimFailure() = new()
 end
+# `Libdl.LazyLibraryCallback`, defined here to be visible to the compiler
+abstract type LazyLibraryCallback end
 
 String(s::String) = s  # no constructor yet
 
