@@ -150,17 +150,24 @@ ifeq ($(OS),WINNT)
 # the loader forwards, or libjulia-internal would resolve its own calls through
 # them. Build it from the linker's export definition with those left out, rather
 # than editing the import library afterwards: not every linker writes one that
-# objcopy can rewrite.
+# objcopy can rewrite. Every link inside the build tree searches
+# $(build_private_libdir) before $(build_libdir), so it picks up the filtered
+# library, while embedders get an unfiltered one from $(build_libdir).
 # 1: the shared library being linked
 define implib_from_def
 	$(CPP_STDOUT) -P -I$(JULIAHOME)/src $(SRCDIR)/list_strip_symbols.h > $(BUILDDIR)/$(notdir $1).strip && \
 	awk 'NR == FNR { for (i = 1; i <= NF; i++) omit[$$i] = 1; next } !($$1 in omit)' $(BUILDDIR)/$(notdir $1).strip $(BUILDDIR)/$(notdir $1).def > $(BUILDDIR)/$(notdir $1).stripped.def && \
-	$(DLLTOOL) -m $(DLLTOOL_MACHINE) -D $(notdir $1) -d $(BUILDDIR)/$(notdir $1).stripped.def -l $(build_libdir)/$(notdir $1).a
+	$(DLLTOOL) -m $(DLLTOOL_MACHINE) -D $(notdir $1) -d $(BUILDDIR)/$(notdir $1).stripped.def -l $(build_private_libdir)/$(notdir $1).a && \
+	$(DLLTOOL) -m $(DLLTOOL_MACHINE) -D $(notdir $1) -d $(BUILDDIR)/$(notdir $1).def -l $(build_libdir)/$(notdir $1).a
 endef
 DEF_FLAGS = --output-def $(BUILDDIR)/$(notdir $1).def
+IMPLIB_DIRS = $(build_private_libdir)
+else
+IMPLIB_DIRS =
 endif
+$(foreach dir,$(IMPLIB_DIRS),$(eval $(call dir_target,$(dir))))
 
-$(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_OBJS) $(SRCDIR)/list_strip_symbols.h $(BUILDDIR)/julia.expmap | $(build_shlibdir) $(build_libdir)
+$(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_OBJS) $(SRCDIR)/list_strip_symbols.h $(BUILDDIR)/julia.expmap | $(build_shlibdir) $(build_libdir) $(IMPLIB_DIRS)
 	@$(call PRINT_LINK, $(call link-dll,$@, \
 		$(call DEF_FLAGS,$@) $(JLDFLAGS), \
 		$(LIB_OBJS) $(LOADER_LDFLAGS), \
@@ -172,7 +179,7 @@ ifeq ($(OS), WINNT)
 	@$(call PRINT_ANALYZE, $(call implib_from_def,$@))
 endif
 
-$(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_DOBJS) $(SRCDIR)/list_strip_symbols.h $(BUILDDIR)/julia.expmap | $(build_shlibdir) $(build_libdir)
+$(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_DOBJS) $(SRCDIR)/list_strip_symbols.h $(BUILDDIR)/julia.expmap | $(build_shlibdir) $(build_libdir) $(IMPLIB_DIRS)
 	@$(call PRINT_LINK, $(call link-dll,$@, \
 		$(call DEF_FLAGS,$@) $(JLDFLAGS), \
 		$(LIB_DOBJS) $(LOADER_LDFLAGS), \
