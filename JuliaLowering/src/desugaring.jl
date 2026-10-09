@@ -4608,7 +4608,12 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             throw(LoweringError(ex, "More than one argument to return"))
         end
     else
-        mapchildren(e->expand_forms_2(ctx,e), ex)
+        n = numchildren(ex)
+        cs = Vector{Syntax}(undef, n)
+        for i in 1:n
+            cs[i] = expand_forms_2(ctx, ex[i])
+        end
+        @mknode(ex; children=cs)
     end
 end
 
