@@ -155,6 +155,27 @@ function materialize_inference_edges(source)
             i += 1
         end
     end
+    # A flattened proof certifies its CI with an identity `invoke` edge (`m.sig`, see
+    # `add_inference_proof!`). Where the same target is also a dispatch edge here, that
+    # edge already fails whenever the identity edge would (`m` being replaced), so drop
+    # the pair.
+    i = 1
+    while i <= length(edges)
+        edge = edges[i]
+        if edge isa Int
+            i += 2 + abs(edge)
+        elseif edge isa Union{Method,MethodInstance,CodeInstance,Core.Binding,PossiblyAmbiguous}
+            i += 1
+        else
+            target = edges[i + 1]
+            if target isa Union{MethodInstance,CodeInstance} && haskey(standalone, target) &&
+                    edge === ((target isa CodeInstance ? get_ci_mi(target) : target).def::Method).sig
+                deleteat!(edges, i:i+1)
+            else
+                i += 2
+            end
+        end
+    end
     return Core.svec(edges...)
 end
 
