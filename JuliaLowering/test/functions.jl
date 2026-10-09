@@ -1562,8 +1562,9 @@ end
 
 @testset "anonymous static parameters" begin
     # `where _` declares a static parameter which can never be referenced
-    @test JL.include_string(test_mod, "f_anon_sp(x) where _ = x; f_anon_sp(42)") == 42
-    @test JL.include_string(
+    @test_warn r"declares type variable _" @test JL.include_string(
+        test_mod, "f_anon_sp(x) where _ = x; f_anon_sp(42)") == 42
+    @test_warn r"declares type variable _" @test JL.include_string(
         test_mod, "f_anon_sp2(x::T) where {T, _} = (x, T); f_anon_sp2(1.5)") == (1.5, Float64)
     @test_throws LoweringError jl_eval(
         test_mod, "f_anon_sp3(x) where {_, _} = x"; edition=JL_OLD_EDITION)
