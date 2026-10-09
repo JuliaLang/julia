@@ -292,6 +292,7 @@ static htable_t bits_replace;
 // queued Strings, keyed by content (idset uses egal), so equal Strings are serialized once
 static jl_genericmemory_t *serialized_strings_list;
 static jl_genericmemory_t *serialized_strings_keyset;
+static size_t serialized_strings_max;
 
 
 typedef struct {
@@ -1099,7 +1100,7 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
         jl_value_t *str = jl_idset_get(serialized_strings_list, serialized_strings_keyset, v);
         if (str == NULL) {
             ssize_t idx;
-            serialized_strings_list = jl_idset_put_key(serialized_strings_list, v, &idx);
+            serialized_strings_list = jl_idset_put_key(serialized_strings_list, v, &serialized_strings_max, &idx);
             serialized_strings_keyset = jl_idset_put_idx(serialized_strings_list, serialized_strings_keyset, idx);
         }
         else if (str != v) {
@@ -2886,6 +2887,7 @@ static void jl_strip_all_docmeta(jl_array_t *mod_array) JL_CANSAFEPOINT
 
 jl_genericmemory_t *jl_global_roots_list;
 jl_genericmemory_t *jl_global_roots_keyset;
+static size_t jl_global_roots_max; // slot just past the last key of jl_global_roots_list
 jl_mutex_t global_roots_lock;
 
 jl_mutex_t precompile_field_replace_lock;
@@ -3001,7 +3003,7 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val, int insert)
     }
     else if (insert) {
         ssize_t idx;
-        jl_global_roots_list = jl_idset_put_key(jl_global_roots_list, val, &idx);
+        jl_global_roots_list = jl_idset_put_key(jl_global_roots_list, val, &jl_global_roots_max, &idx);
         jl_global_roots_keyset = jl_idset_put_idx(jl_global_roots_list, jl_global_roots_keyset, idx);
     }
     else {
@@ -3172,6 +3174,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     htable_new(&serialization_order, 25000);
     serialized_strings_list = jl_alloc_memory_any(0);
     serialized_strings_keyset = jl_alloc_memory_any(0);
+    serialized_strings_max = 0;
     htable_new(&nullptrs, 0);
     arraylist_new(&object_worklist, 0);
     arraylist_new(&deferred_supers, 0);
@@ -3284,11 +3287,12 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         if (worklist == NULL) {
             global_roots_list = jl_alloc_memory_any(0);
             global_roots_keyset = jl_alloc_memory_any(0);
+            size_t global_roots_max = 0;
             for (size_t i = 0; i < jl_global_roots_list->length; i++) {
                 jl_value_t *val = jl_genericmemory_ptr_ref(jl_global_roots_list, i);
                 if (val && ptrhash_get(&serialization_order, val) != HT_NOTFOUND) {
                     ssize_t idx;
-                    global_roots_list = jl_idset_put_key(global_roots_list, val, &idx);
+                    global_roots_list = jl_idset_put_key(global_roots_list, val, &global_roots_max, &idx);
                     global_roots_keyset = jl_idset_put_idx(global_roots_list, global_roots_keyset, idx);
                 }
             }
@@ -4259,6 +4263,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         jl_read_arraylist(s.relocs, &s.fixup_types);
     }
     else {
+        jl_global_roots_max = jl_idset_max(jl_global_roots_list); // needs the relocated keys
         arraylist_new(&s.uniquing_types, 0);
         arraylist_new(&s.uniquing_objs, 0);
         arraylist_new(&s.fixup_types, 0);

@@ -3454,6 +3454,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     int dispatch_bits = METHOD_SIG_LATEST_WHICH | (precompiled_status & METHOD_SIG_NO_LOSERS);
     // Holds the set of all intersecting methods not more specific than this one.
     interferences = (jl_genericmemory_t*)jl_atomic_load_relaxed(&method->interferences);
+    size_t interferences_max = jl_idset_max(interferences);
     if (oldvalue) {
         assert(n > 0);
         if (replaced) {
@@ -3482,12 +3483,13 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                     jl_value_t *k = jl_genericmemory_ptr_ref(m_interferences, i);
                     if (k && !has_key(interferences, (jl_value_t*)k)) {
                         ssize_t idx;
-                        interferences = jl_idset_put_key(interferences, (jl_value_t*)k, &idx);
+                        interferences = jl_idset_put_key(interferences, (jl_value_t*)k, &interferences_max, &idx);
                     }
                 }
             }
             ssize_t idx;
-            m_interferences = jl_idset_put_key(m_interferences, (jl_value_t*)method, &idx);
+            size_t m_max = jl_idset_max(m_interferences);
+            m_interferences = jl_idset_put_key(m_interferences, (jl_value_t*)method, &m_max, &idx);
             jl_gc_write_atomic(m, m->interferences, jl_genericmemory_t, m_interferences, release);
             for (j = 0; j < n; j++) {
                 jl_method_t *m2 = d[j];
@@ -3496,7 +3498,8 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                 if (method_in_interferences(m, m2)) {
                     jl_genericmemory_t *m2_interferences = jl_atomic_load_relaxed(&m2->interferences);
                     ssize_t idx;
-                    m2_interferences = jl_idset_put_key(m2_interferences, (jl_value_t*)method, &idx);
+                    size_t m2_max = jl_idset_max(m2_interferences);
+                    m2_interferences = jl_idset_put_key(m2_interferences, (jl_value_t*)method, &m2_max, &idx);
                     jl_gc_write_atomic(m2, m2->interferences, jl_genericmemory_t, m2_interferences, release);
                 }
             }
@@ -3541,7 +3544,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                     // !morespecific(new, old): add the old method to this interference set
                     ssize_t idx;
                     if (!check_dup_key || !has_key(interferences, (jl_value_t*)m))
-                        interferences = jl_idset_put_key(interferences, (jl_value_t*)m, &idx);
+                        interferences = jl_idset_put_key(interferences, (jl_value_t*)m, &interferences_max, &idx);
                 }
                 if (morespec[j]) {
                     // morespecific(old, new): the old method gained a strict loser
@@ -3562,7 +3565,8 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                     // appears in `d`.
                     jl_genericmemory_t *m_interferences = jl_atomic_load_relaxed(&m->interferences);
                     ssize_t idx;
-                    m_interferences = jl_idset_put_key(m_interferences, (jl_value_t*)method, &idx);
+                    size_t m_max = jl_idset_max(m_interferences);
+                    m_interferences = jl_idset_put_key(m_interferences, (jl_value_t*)method, &m_max, &idx);
                     jl_gc_write_atomic(m, m->interferences, jl_genericmemory_t, m_interferences, release);
                 }
                 if (morespec[j])
