@@ -110,25 +110,26 @@ move_to_node1("ccall")
 # These add worker processes, which only node 1 can do
 move_to_node1("precompile_distributed")
 move_to_node1("SharedArrays")
-move_to_node1("threads")
 move_to_node1("Distributed")
 move_to_node1("gc")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
 
-# These leave packages loaded and methods added to Base, which breaks later tests on the
+# These leave state behind on their worker (`precompile`: packages loaded and methods
+# added to Base, `threads`: exited adopted threads), which breaks later tests on the
 # same worker, so the worker is replaced once they finish
-const recycle_worker_tests = ["precompile"]
+const recycle_worker_tests = ["precompile", "threads"]
 
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
-# Move LinearAlgebra, Pkg and precompile tests to the front, because they take a while,
-# so we might as well get them all started early. JuliaLowering_stdlibs both takes a
-# while and uses a lot of memory at the beginning so try to run it early to keep total
-# memory use flatter.
-for prependme in ["precompile", "LinearAlgebra", "Pkg", "JuliaLowering_stdlibs"]
+# Move LinearAlgebra, Pkg, precompile and threads tests to the front, because they take
+# a while, so we might as well get them all started early. JuliaLowering_stdlibs both
+# takes a while and uses a lot of memory at the beginning so try to run it early to keep
+# total memory use flatter. `threads` goes first so that it gets a fresh worker, which is
+# recycled afterwards (see `recycle_worker_tests`).
+for prependme in ["precompile", "LinearAlgebra", "Pkg", "JuliaLowering_stdlibs", "threads"]
     prependme_test_ids = findall(x->occursin(prependme, x), tests)
     prependme_tests = tests[prependme_test_ids]
     deleteat!(tests, prependme_test_ids)
