@@ -297,14 +297,6 @@ include("threadcall.jl")
 @eval Core const Compiler = $Base.Compiler
 @eval Compiler const fl_parse = $Base.fl_parse
 
-# Compiler frontend
-include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
-JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
-set_syntax_version(Base, VERSION)
-
-include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
-JuliaLowering.activate!(true; freeze_world_age=true)
-
 # code loading
 include("uuid.jl")
 include("pkgid.jl")
@@ -325,6 +317,14 @@ include("deprecated.jl")
 #
 # Some additional basic documentation
 include("docs/basedocs.jl")
+
+# Compiler frontend
+include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
+JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
+set_syntax_version(Base, VERSION)
+
+include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
+JuliaLowering.activate!(true; freeze_world_age=false)
 
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")
@@ -613,11 +613,7 @@ function __init__()
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")
-    if get_bool_env("JULIA_USE_FLISP_PARSER", false) === true
-        JuliaSyntax.enable_in_core!(false)
-    else
-        JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
-    end
+    JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
     if get_bool_env("JULIA_USE_FLISP_LOWERING", true) === true
         JuliaLowering.activate!(false)
     else

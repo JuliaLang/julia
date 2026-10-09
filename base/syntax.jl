@@ -730,7 +730,7 @@ end
 function _c_parseall_expr(code::Core.SimpleVector, filename::String,
                           lineno::Int, mod::Union{Module, Nothing})
     (ptr, len) = code
-    str = String(unsafe_wrap(Array, ptr, len))
+    str = unsafe_string(ptr, len)
     pfm = Meta.parser_for_module(mod)
     ex, offset = Meta._parse_string(str, filename, lineno, 1, :all, Expr, pfm)
     return Core.svec(ex, offset-1)

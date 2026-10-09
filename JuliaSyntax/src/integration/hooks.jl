@@ -311,6 +311,11 @@ end
         prov;
         head=(tag === :none ? :error : :incomplete),
         children=Syntax[@mknode(prov; head=:value, value, children=nothing)])
+    _nested_error(x::Syntax) = head(x) === :error ? x :
+        for c in children(x)
+            e = _nested_error(c)
+            e === nothing || return e
+        end
 
     function new_core_parser_hook(code, filename::String, lineno::Int, offset::Int,
                                   options::Symbol, edition::Tuple{Int, Int})
@@ -345,13 +350,18 @@ end
                 ex = if options === :all
                     # Lift error and remove all :toplevel args after err
                     # (consumers don't handle nested errors)
-                    let nested_err(x::Syntax) = head(x) === :error ? true :
-                            any(@__FUNCTION__(), children(x))
-                        i = findfirst(nested_err, children(ex))
-                        @mknode(ex; children=[
-                            children(ex)[1:i-1]...,
-                            _make_error_ex(ex[i], tag, Meta.ParseError(msg, exc))])
+                    cs = Syntax[]
+                    for c in children(ex)
+                        err = _nested_error(c)
+                        if err === nothing
+                            push!(cs, c)
+                        else
+                            push!(cs, _make_error_ex(
+                                err, tag, Meta.ParseError(msg, exc)))
+                            break
+                        end
                     end
+                    @mknode(ex; children=cs)
                 else
                     _make_error_ex(ex, tag, Meta.ParseError(msg, exc))
                 end

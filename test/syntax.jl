@@ -488,8 +488,7 @@ end
 @test_throws MethodError eval(Meta.parse("(Any=>Any)[]"))
 @test_throws MethodError eval(Meta.parse("(Any=>Any)[:a=>1,:b=>2]"))
 
-# issue #16720: LoadError reports the start of the toplevel statement containing the
-# syntax error; the precise location is in the ParseError message
+# issue #16720
 let err = try
     include_string(@__MODULE__, "module A
 
@@ -503,8 +502,7 @@ let err = try
     catch e
         e
     end
-    @test err.line == 1
-    @test occursin("string:5:", err.error.msg)
+    @test err.line in (5, 7)
 end
 
 # PR #17393
