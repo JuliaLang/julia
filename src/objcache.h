@@ -59,12 +59,25 @@ public:
     // about, returns a short description of that reason (for display in the
     // REPL banner); otherwise returns null.  Forces initialization.
     const char *disabledNotice() JL_CANSAFEPOINT_ENTER_LEAVE;
+    // Removes the entries last used before Cutoff (seconds since the epoch), so
+    // that a saved cache only holds what a job used.  Returns the number of
+    // entries removed, or -1 on error.
+    int64_t prune(int64_t Cutoff) JL_CANSAFEPOINT_ENTER_LEAVE;
+    // Writes a copy of the database without its free pages to Dir/data.mdb.
+    // Returns 0 or an LMDB error code.
+    int compact(const char *Dir) JL_CANSAFEPOINT_ENTER_LEAVE;
+    // The directory holding the database, or null if the cache is disabled.
+    const char *path() JL_CANSAFEPOINT_ENTER_LEAVE;
+    // Replaces the database with Copy when this process exits, unless another
+    // process has the cache open then.
+    void replaceOnExit(const char *Copy) JL_NOTSAFEPOINT;
     void shutdown() JL_NOTSAFEPOINT;
 
     using Hash = std::array<uint8_t, 20>;
 
 protected:
     void writerThread();
+    void replaceDatabase() JL_NOTSAFEPOINT;
     void initDB() JL_CANSAFEPOINT_ENTER_LEAVE;
     bool updateATime(MDBTxn &Txn, const Hash &H, int64_t Time, bool Fresh);
     bool maybeEvictLRU(MDBTxn &Txn, size_t RoomFor);
@@ -74,6 +87,8 @@ private:
     std::atomic<bool> Initialized = false;
     const char *DisabledNotice = nullptr;
     MDB_env *Env = nullptr;
+    std::string Path;
+    std::string Replacement;
     MDB_dbi ObjCacheDbi;
     MDB_dbi ObjMetaDbi;
     size_t PageSize;

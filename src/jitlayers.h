@@ -832,6 +832,18 @@ public:
     int objCacheKVEnabled() JL_CANSAFEPOINT_ENTER_LEAVE {
         return OCache.kvEnabled();
     }
+    int64_t objCachePrune(int64_t Cutoff) JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.prune(Cutoff);
+    }
+    int objCacheCompact(const char *Dir) JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.compact(Dir);
+    }
+    const char *objCachePath() JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.path();
+    }
+    void objCacheReplaceOnExit(const char *Copy) JL_NOTSAFEPOINT {
+        OCache.replaceOnExit(Copy);
+    }
 
     jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {
         return dump_emitted_mi_name_stream;

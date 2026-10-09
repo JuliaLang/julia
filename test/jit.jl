@@ -233,4 +233,71 @@ end
     end
 end
 
+# `--prune-objcache` removes the entries not used recently and shrinks the cache file.
+@testset "object-cache pruning" begin
+    mktempdir() do dir
+        cache = joinpath(dir, "cache")
+        data = joinpath(cache, "data.mdb")
+        julia(args...) = addenv(`$(Base.julia_cmd()) --startup-file=no $args`,
+                                "JULIA_OBJCACHE" => "1", "JULIA_OBJCACHE_PATH" => cache)
+        kv_get = """ccall(:jl_objcache_kv_get, Any, (Cstring, Ptr{UInt8}, Csize_t), "prune-test", "key", 3)"""
+        # a large entry, so that removing it clearly shrinks the file
+        put_script = """
+            value = fill(0x2a, 4 << 20)
+            ccall(:jl_objcache_kv_put, Cint, (Cstring, Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+                  "prune-test", "key", 3, value, length(value))
+            # the write is queued, so wait until it is stored
+            for _ in 1:600
+                $kv_get === nothing || break
+                sleep(0.1)
+            end
+            print($kv_get !== nothing)
+        """
+        has_entry() = read(julia("-e", "print($kv_get !== nothing)"), String) == "true"
+        compact_dirs() = filter(startswith("compact."), readdir(cache))
+
+        if read(julia("-e", put_script), String) != "true"
+            @test_skip false # the cache is disabled here
+            return
+        end
+        full_size = filesize(data)
+
+        # nothing is older than an hour, so only the file is compacted
+        @test startswith(read(julia("--prune-objcache=1h"), String), "Removed 0 entries")
+        @test has_entry()
+        @test isempty(compact_dirs())
+
+        # entries cannot age during a test, so remove them all with a cutoff in the future
+        prune_all = "print(ccall(:jl_objcache_prune, Int64, (Int64,), floor(Int64, time()) + 10^6))"
+        @test parse(Int, read(julia("-e", prune_all), String)) > 0
+        @test !has_entry()
+        # removing entries alone does not shrink the file
+        @test filesize(data) >= full_size
+
+        @test occursin("shrinks", read(julia("--prune-objcache"), String))
+        @test filesize(data) < full_size ÷ 2
+        @test isempty(compact_dirs())
+        # the replaced database still works
+        @test read(julia("-e", put_script), String) == "true"
+
+        # a process that has the cache open keeps the file from being replaced
+        holder = open(julia("-e", "ccall(:jl_objcache_kv_enabled, Cint, ()); print(\"ready\"); readline()"), "r+")
+        try
+            @test readuntil(holder, "ready") == ""
+            err = IOBuffer()
+            @test success(pipeline(julia("--prune-objcache"); stdout=devnull, stderr=err))
+            @test occursin("in use by another process", String(take!(err)))
+            @test has_entry()
+            @test isempty(compact_dirs())
+        finally
+            println(holder)
+            wait(holder)
+        end
+    end
+
+    @test occursin("disabled", read(addenv(`$(Base.julia_cmd()) --startup-file=no --prune-objcache`,
+                                           "JULIA_OBJCACHE" => "0"), String))
+    @test !success(pipeline(`$(Base.julia_cmd()) --startup-file=no --prune-objcache=7x`; stderr=devnull))
+end
+
 sleep(5)  # Avoids problems where we don't respond to Distributed.jl fast enough

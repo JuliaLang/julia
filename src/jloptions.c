@@ -34,6 +34,32 @@ JL_DLLEXPORT const char *jl_get_default_sysimg_path(void)
     return &system_image_path[1];
 }
 
+// Parses an age such as `90m`. A number without a unit is in days.
+static int64_t parse_age_option(const char *optarg, const char *option_name) JL_NOTSAFEPOINT
+{
+    char *end;
+    double value = strtod(optarg, &end);
+    double unit = 0;
+    switch (*end) {
+        case '\0':
+        case 'd':
+            unit = 24 * 60 * 60;
+            break;
+        case 'h':
+            unit = 60 * 60;
+            break;
+        case 'm':
+            unit = 60;
+            break;
+        case 's':
+            unit = 1;
+            break;
+    }
+    if (end == optarg || unit == 0 || (*end && end[1]) || !(value >= 0 && value * unit < 1e18))
+        jl_errorf("julia: invalid argument to %s (%s)", option_name, optarg);
+    return (int64_t)(value * unit);
+}
+
 /* This function is also used by gc-stock.c to parse the
  * JULIA_HEAP_SIZE_HINT environment variable. */
 uint64_t parse_heap_size_option(const char *optarg, const char *option_name, int allow_pct)
@@ -167,6 +193,7 @@ JL_DLLEXPORT void jl_init_options(void) JL_NOTSAFEPOINT
                         0, // target_sanitize_memory
                         0, // target_sanitize_thread
                         0, // target_sanitize_address
+                        -1, // prune_objcache
     };
     jl_options_initialized = 1;
 }
@@ -312,6 +339,10 @@ static const char opts[]  =
     "                                               number of bytes, optionally in units of: B,\n"
     "                                               K (kibibytes), M (mebibytes), G (gibibytes),\n"
     "                                               T (tebibytes), or % (percentage of physical memory).\n\n"
+    " --prune-objcache[=<age>[<unit>]]              Remove the native code cache entries not used within\n"
+    "                                               the given age (default 7d), shrink the cache file,\n"
+    "                                               and exit. The age may be given in units of s, m, h,\n"
+    "                                               or d (the default unit).\n\n"
 ;
 
 static const char opts_hidden[] =
@@ -443,6 +474,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_experimental_features,
            opt_compress_sysimage,
            opt_target_sanitize,
+           opt_prune_objcache,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:P:";
     static const struct option longopts[] = {
@@ -518,6 +550,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "compress-sysimage", required_argument, 0, opt_compress_sysimage },
         { "trace-eval",       optional_argument, 0, opt_trace_eval },
         { "target-sanitize", required_argument, 0, opt_target_sanitize },
+        { "prune-objcache",  optional_argument, 0, opt_prune_objcache },
         { 0, 0, 0, 0 }
     };
 
@@ -1042,6 +1075,9 @@ restart_switch:
             break;
         case opt_strip_ir:
             jl_options.strip_ir = 1;
+            break;
+        case opt_prune_objcache:
+            jl_options.prune_objcache = optarg ? parse_age_option(optarg, "--prune-objcache") : 7 * 24 * 60 * 60;
             break;
         case opt_heap_size_hint:
             if (optarg != NULL)

@@ -123,6 +123,25 @@ JL_DLLEXPORT int jl_objcache_kv_enabled_fallback(void)
     return 0;
 }
 
+JL_DLLEXPORT int64_t jl_objcache_prune_fallback(int64_t cutoff)
+{
+    return 0;
+}
+
+JL_DLLEXPORT const char *jl_objcache_compact_fallback(const char *dir)
+{
+    return "the native code cache is not available";
+}
+
+JL_DLLEXPORT const char *jl_objcache_path_fallback(void)
+{
+    return NULL;
+}
+
+JL_DLLEXPORT void jl_objcache_replace_on_exit_fallback(const char *copy)
+{
+}
+
 JL_DLLEXPORT void jl_jit_register_ci_fallback(jl_code_instance_t *ci)
 {
 }

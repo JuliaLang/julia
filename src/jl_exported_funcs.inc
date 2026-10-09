@@ -550,6 +550,10 @@
     YY(jl_objcache_kv_get) \
     YY(jl_objcache_kv_put) \
     YY(jl_objcache_kv_enabled) \
+    YY(jl_objcache_prune) \
+    YY(jl_objcache_compact) \
+    YY(jl_objcache_path) \
+    YY(jl_objcache_replace_on_exit) \
     YY(jl_create_native) \
     YY(jl_dump_compiles) \
     YY(jl_dump_emitted_mi_name) \

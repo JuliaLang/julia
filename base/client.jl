@@ -271,6 +271,31 @@ function incomplete_tag(ex::Expr)
 end
 incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
 
+# Remove the native code cache entries not used within `age` seconds, and have a copy of the
+# database without its free space replace it when this process exits.
+function prune_objcache(age::Int64)
+    dir = ccall(:jl_objcache_path, Cstring, ())
+    if dir == C_NULL
+        println("The native code cache is disabled, so there is nothing to prune.")
+        return
+    end
+    dir = unsafe_string(dir)
+    # waiting for the database's write lock and copying it can take a while, so let GC run
+    removed = @ccall gc_safe=true jl_objcache_prune((floor(Int64, time()) - age)::Int64)::Int64
+    removed < 0 && error("could not prune the native code cache in ", dir)
+    tmp = mktempdir(dir; prefix="compact.", cleanup=false)
+    err = @ccall gc_safe=true jl_objcache_compact(tmp::Cstring)::Cstring
+    if err != C_NULL
+        rm(tmp; recursive=true, force=true)
+        error("could not compact the native code cache in ", dir, ": ", unsafe_string(err))
+    end
+    compacted = joinpath(tmp, "data.mdb")
+    ccall(:jl_objcache_replace_on_exit, Cvoid, (Cstring,), compacted)
+    println("Removed ", removed, " entries from the native code cache in ", dir, ". Its file ",
+            "shrinks from ", format_bytes(filesize(joinpath(dir, "data.mdb"))), " to ",
+            format_bytes(filesize(compacted)), " when this process exits.")
+end
+
 function exec_options(opts)
     startup               = (opts.startupfile != 2)
     global have_color     = colored_text(opts)
@@ -288,6 +313,11 @@ function exec_options(opts)
             ENV["JULIA_TEST_VERBOSE"] = "true" # Set JULIA_TEST_VERBOSE for this session
             break
         end
+    end
+
+    if opts.prune_objcache >= 0
+        prune_objcache(opts.prune_objcache)
+        return false
     end
 
     # pre-process command line argument list
