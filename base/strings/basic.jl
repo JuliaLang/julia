@@ -803,6 +803,12 @@ write(io::IO, s::CodeUnits) = write(io, s.s)
 cconvert(::Type{Ptr{T}},    s::CodeUnits{T}) where {T} = cconvert(Ptr{T}, s.s)
 cconvert(::Type{Ptr{Int8}}, s::CodeUnits{UInt8}) = cconvert(Ptr{Int8}, s.s)
 
+# CodeUnits is currently <: DenseVector but is not in general `isdense`.
+isdense(::Type{<:CodeUnits}) = false
+# CodeUnits{UInt8, String} is an exception
+isunsafeloadable(::Type{CodeUnits{UInt8, String}}) = true
+isdense(::Type{CodeUnits{UInt8, String}}) = true
+
 similar(::Type{<:CodeUnits{T}}, dims::Dims) where {T} = similar(Array{T}, dims)
 
 """
