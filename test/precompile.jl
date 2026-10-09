@@ -4662,6 +4662,159 @@ precompile_test_harness("Ambiguities and package-image edge validation") do load
     end
 end
 
+@testset "a new build does not replace the cache file of a loaded package" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        dep_uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+        top_uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+        for (dirname, version) in (("DepOld", "0.1.0"), ("DepNew", "0.2.0"))
+            path = joinpath(dir, "dev", dirname)
+            mkpath(joinpath(path, "src"))
+            write(joinpath(path, "Project.toml"), "name = \"Dep\"\nuuid = \"$dep_uuid\"\nversion = \"$version\"\n")
+            write(joinpath(path, "src", "Dep.jl"), "module Dep\nconst v = \"$version\"\nend\n")
+        end
+        top_path = joinpath(dir, "dev", "Top")
+        mkpath(joinpath(top_path, "src"))
+        write(joinpath(top_path, "Project.toml"),
+              "name = \"Top\"\nuuid = \"$top_uuid\"\nversion = \"0.1.0\"\n\n[deps]\nDep = \"$dep_uuid\"\n")
+        write(joinpath(top_path, "src", "Top.jl"), "module Top\nusing Dep\nend\n")
+        project_path = joinpath(dir, "project")
+        mkpath(project_path)
+        write(joinpath(project_path, "Project.toml"), "[deps]\nDep = \"$dep_uuid\"\nTop = \"$top_uuid\"\n")
+        manifest(dirname, version) = """
+            manifest_format = "2.0"
+
+            [[deps.Dep]]
+            path = "../dev/$dirname/"
+            uuid = "$dep_uuid"
+            version = "$version"
+
+            [[deps.Top]]
+            deps = ["Dep"]
+            path = "../dev/Top/"
+            uuid = "$top_uuid"
+            version = "0.1.0"
+            """
+        manifest_file = joinpath(project_path, "Manifest.toml")
+        write(manifest_file, manifest("DepOld", "0.1.0"))
+        new_manifest_file = joinpath(dir, "NewManifest.toml")
+        write(new_manifest_file, manifest("DepNew", "0.2.0"))
+        run_script(script) = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$project_path -e $script`,
+                                    "JULIA_DEPOT_PATH" => depot)
+        compiled = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)")
+        cachefiles(name) = filter(endswith(".ji"), readdir(joinpath(compiled, name)))
+
+        # The manifest moves the loaded Dep to another version, as an update in the REPL
+        # does, and both builds use the same file name.
+        @test success(run_script("""
+            using Test
+            dep = Base.PkgId(Base.UUID("$dep_uuid"), "Dep")
+            top = Base.PkgId(Base.UUID("$top_uuid"), "Top")
+            using Dep
+            loaded_file = Base.pkgorigins[dep].cachepath
+            cp($(repr(new_manifest_file)), $(repr(manifest_file)); force=true)
+            # the manifest may change within the cache's timestamp resolution, so drop its entry
+            @lock Base.require_lock delete!(Base.TOML_CACHE.d, $(repr(manifest_file)))
+            new_file, _ = Base.compilecache(dep)
+            moved_file = Base.pkgorigins[dep].cachepath
+            @test moved_file != loaded_file
+            @test first(Base.parse_cache_buildid(moved_file)) == Base.module_build_id(Dep)
+            @test first(Base.parse_cache_buildid(new_file)) != Base.module_build_id(Dep)
+            env_top, _ = Base.compilecache(top, Base.locate_package_load_spec(top), devnull, devnull, false)
+            # Top is built against the loaded Dep, which its worker must still find, and that
+            # build must not replace the one for the environment
+            session_top, _ = Base.compilecache(top)
+            @test session_top != env_top
+            @test isfile(env_top)
+            """))
+        @test length(cachefiles("Dep")) == 2
+        @test length(cachefiles("Top")) == 2
+        @test success(run_script("exit(Base.isprecompiled(Base.PkgId(Base.UUID(\"$top_uuid\"), \"Top\")) ? 0 : 1)"))
+
+        old_manifest_file = joinpath(dir, "OldManifest.toml")
+        write(old_manifest_file, manifest("DepOld", "0.1.0"))
+        switch_manifest(file) = """
+            cp($(repr(file)), $(repr(manifest_file)); force=true)
+            @lock Base.require_lock delete!(Base.TOML_CACHE.d, $(repr(manifest_file)))
+            """
+
+        # If the loaded file cannot be moved aside, it stays and the new build gets another name
+        @test success(run_script("""
+            using Test
+            dep = Base.PkgId(Base.UUID("$dep_uuid"), "Dep")
+            using Dep
+            loaded_file = Base.pkgorigins[dep].cachepath
+            @eval Base.Filesystem function rename(src::String, dst::String)
+                isfile(src) && samefile(src, \$loaded_file) && throw(Base.IOError("rename refused for the test", -1))
+                invoke(rename, Tuple{AbstractString,AbstractString}, src, dst)
+            end
+            $(switch_manifest(old_manifest_file))
+            new_file, _ = Base.compilecache(dep)
+            @test new_file != loaded_file
+            @test Base.pkgorigins[dep].cachepath == loaded_file
+            @test first(Base.parse_cache_buildid(loaded_file)) == Base.module_build_id(Dep)
+            """))
+
+        # Where file locks do not work, the newest two extra files of a slot are kept, as other
+        # running sessions may still use them
+        for next_manifest_file in (new_manifest_file, old_manifest_file, new_manifest_file, old_manifest_file)
+            @test success(run_script("""
+                @eval Base.Filesystem trylockfile(f::File; shared::Bool=false) = throw(SystemError("trylockfile", Libc.ENOLCK))
+                dep = Base.PkgId(Base.UUID("$dep_uuid"), "Dep")
+                using Dep
+                $(switch_manifest(next_manifest_file))
+                Base.compilecache(dep)
+                """))
+        end
+        @test length(cachefiles("Dep")) == 3
+    end end
+end
+
+@testset "a build that another running session loaded stays until it exits" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        dep_uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+        dep_path = joinpath(dir, "dev", "Dep")
+        mkpath(joinpath(dep_path, "src"))
+        write(joinpath(dep_path, "Project.toml"), "name = \"Dep\"\nuuid = \"$dep_uuid\"\nversion = \"0.1.0\"\n")
+        write(joinpath(dep_path, "src", "Dep.jl"), "module Dep\nend\n")
+        project_path = joinpath(dir, "project")
+        mkpath(project_path)
+        write(joinpath(project_path, "Project.toml"), "[deps]\nDep = \"$dep_uuid\"\n")
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.Dep]]
+            path = "../dev/Dep/"
+            uuid = "$dep_uuid"
+            version = "0.1.0"
+            """)
+        julia(script, env::Pair...) = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$project_path -e $script`,
+                                             "JULIA_DEPOT_PATH" => depot, env...)
+        compiled = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Dep")
+        builds() = [first(Base.parse_cache_buildid(joinpath(compiled, f))) for f in readdir(compiled) if endswith(f, ".ji")]
+        rebuild = "Base.compilecache(Base.PkgId(Base.UUID(\"$dep_uuid\"), \"Dep\"))"
+
+        session = open(pipeline(julia("using Dep; println(Base.module_build_id(Dep)); readline()"); stderr=devnull), "r+")
+        local loaded_build
+        try
+            loaded_build = parse(UInt128, readline(session))
+            # Other processes build Dep under the name the session loaded it from, then evict
+            # with the directory full
+            @test success(julia(rebuild))
+            @test loaded_build in builds()
+            @test success(julia(rebuild, "JULIA_MAX_NUM_PRECOMPILE_FILES" => "1"))
+            @test loaded_build in builds()
+        finally
+            println(session)
+            wait(session)
+        end
+        @test success(session)
+        # Once the session exits, the next build removes its file
+        @test success(julia(rebuild))
+        @test !(loaded_build in builds())
+        @test length(builds()) == 1
+    end end
+end
+
 finish_precompile_test!()
 if original_num_precompile_tasks === nothing
     delete!(ENV, "JULIA_NUM_PRECOMPILE_TASKS")

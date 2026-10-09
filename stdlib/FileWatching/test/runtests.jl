@@ -19,6 +19,11 @@ using Base.Filesystem: StatStruct
 n = 20
 intvls = [2, .2, .1, .005, .00001]
 pipe_fds = fill((Base.INVALID_OS_HANDLE, Base.INVALID_OS_HANDLE), n)
+# Earlier tests on this worker may leave fds open on purpose, such as locks on loaded cache files.
+fd_base = Sys.iswindows() ? 0 : let fd = ccall(:dup, Cint, (Cint,), 0)
+    ccall(:close, Cint, (Cint,), fd)
+    Int(fd)
+end
 
 for i in 1:n
     if Sys.iswindows() || i > n ÷ 2
@@ -27,7 +32,7 @@ for i in 1:n
         uv_error("pipe", ccall(:uv_pipe, Cint, (Ptr{NTuple{2, Base.OS_HANDLE}}, Cint, Cint), Ref(pipe_fds, i), 0, 0))
     end
     Ctype = Sys.iswindows() ? Ptr{Cvoid} : Cint
-    FDmax = Sys.iswindows() ? typemax(Int32) : (n + 60 + (isdefined(Main, :Revise) * 30)) # expectations on reasonable values
+    FDmax = Sys.iswindows() ? typemax(Int32) : (fd_base + 2n + 20 + (isdefined(Main, :Revise) * 30)) # expectations on reasonable values
     fd_in_limits =
         0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax &&
         0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
