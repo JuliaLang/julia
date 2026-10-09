@@ -10000,6 +10000,7 @@ static jl_llvm_functions_t
         jl_sym_t *s = slot_symbol(ctx, i);
         jl_varinfo_t &vi = ctx.slots[i];
         jl_cgval_t theArg;
+        bool dbg_declared = false;
         if (i == 0 && ctx.is_opaque_closure) {
             // If this is an opaque closure, implicitly load the env and switch
             // the world age. The specTypes value is wrong for this field, so
@@ -10061,11 +10062,12 @@ static jl_llvm_functions_t
                         addr.push_back(llvm::dwarf::DW_OP_deref);
                         addr.push_back(llvm::dwarf::DW_OP_plus_uconst);
                         addr.push_back((i - 1) * sizeof(void*));
-                        if ((Metadata*)vi.dinfo->getType() != debugcache.jl_pvalue_dillvmt)
+                        if (!di_type_is_pvalue(debugcache, vi.dinfo->getType()))
                             addr.push_back(llvm::dwarf::DW_OP_deref);
                         dbuilder.insertDeclare(pargArray, vi.dinfo, dbuilder.createExpression(addr),
                                         topdebugloc,
                                         ctx.builder.GetInsertBlock());
+                        dbg_declared = true;
                     }
                 }
             }
@@ -10075,8 +10077,13 @@ static jl_llvm_functions_t
             assert(vi.value.V == nullptr && vi.inline_roots == nullptr && "unexpected variable slot created for argument");
             // keep track of original (possibly boxed) value to avoid re-boxing or moving
             vi.value = theArg;
-            if (debug_enabled && vi.dinfo && theArg.V) {
-                if (!theArg.inline_roots.empty() || theArg.ispointer()) {
+            if (debug_enabled && vi.dinfo && theArg.V && !dbg_declared) {
+                // a box is the value of a jl_value_t* variable, but the
+                // address of one whose debug type describes the object
+                bool byaddr = theArg.isboxed
+                    ? !di_type_is_pvalue(debugcache, vi.dinfo->getType())
+                    : !theArg.inline_roots.empty() || theArg.ispointer();
+                if (byaddr) {
                     dbuilder.insertDeclare(theArg.V, vi.dinfo, dbuilder.createExpression(),
                                             topdebugloc, ctx.builder.GetInsertBlock());
                 }
