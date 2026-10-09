@@ -9248,42 +9248,67 @@ jl_svec_t *jl_outer_unionall_vars(jl_value_t *u)
 // pointwise unions. Note that this may in general be wider than `Union{a,b}`.
 // If `a` and `b` are not (non va-)tuples of equal length (or unions or unionalls
 // of such), return NULL.
+// open the outer binders of a closed `UnionAll` as variables (the body is
+// then in variable form, with no dangling references)
+static jl_value_t *open_unionall_vars(jl_value_t *t, jl_svec_t **vars) JL_CANSAFEPOINT
+{
+    *vars = jl_outer_unionall_vars(t);
+    jl_value_t *body = t;
+    JL_GC_PUSH1(&body);
+    for (size_t i = 0; i < jl_svec_len(*vars); i++)
+        body = jl_rename_tvarref(((jl_unionall_t*)body)->body, 1, jl_svecref(*vars, i));
+    JL_GC_POP();
+    return body;
+}
+
+// `a` and `b` are closed, or in variable form (a nested `UnionAll` member
+// has no dangling references)
 static jl_value_t *switch_union_tuple(jl_value_t *a, jl_value_t *b) JL_CANSAFEPOINT
 {
-    if (jl_is_unionall(a)) {
-        jl_unionall_t *ua = (jl_unionall_t*)a;
-        jl_value_t *ans = NULL;
-        if (jl_is_unionall(b)) {
-            jl_unionall_t *ub = (jl_unionall_t*)b;
-            if (ub->lb == ua->lb && ub->ub == ua->ub) {
-                // aligned binders: the bodies' references to them already
-                // agree positionally, so recurse raw and rebuild the node
-                ans = switch_union_tuple(ua->body, ub->body);
-                if (ans != NULL) {
-                    JL_GC_PUSH1(&ans);
-                    ans = jl_new_unionall_raw(ua->name, ua->lb, ua->ub, ans);
-                    JL_GC_POP();
-                }
-                return ans;
+    if (jl_is_unionall(a) && jl_is_unionall(b)) {
+        jl_unionall_t *ua = (jl_unionall_t*)a, *ub = (jl_unionall_t*)b;
+        if (ua->name == ub->name &&
+            (ua->lb == ub->lb || jl_egal(ua->lb, ub->lb)) && (ua->ub == ub->ub || jl_egal(ua->ub, ub->ub))) {
+            // aligned binders (the union-state branches of one binder, as a
+            // rule: same name and bounds): opened with one shared variable,
+            // so the result keeps a single binder
+            jl_tvar_t *v = NULL;
+            jl_value_t *ba = NULL, *bb = NULL, *ans = NULL;
+            JL_GC_PUSH4(&v, &ba, &bb, &ans);
+            v = jl_new_typevar(ua->name, ua->lb, ua->ub);
+            ba = jl_rename_tvarref(ua->body, 1, (jl_value_t*)v);
+            bb = jl_rename_tvarref(ub->body, 1, (jl_value_t*)v);
+            ans = switch_union_tuple(ba, bb);
+            if (ans != NULL)
+                ans = jl_type_unionall(v, ans);
+            JL_GC_POP();
+            return ans;
+        }
+    }
+    if (jl_is_unionall(a) || jl_is_unionall(b)) {
+        // the binders of the two sides are opened as variables and the
+        // bodies combined in variable form: two terms' references cannot be
+        // combined raw (each side's are relative to its own binders), and the
+        // result is re-wrapped with every variable, outer side first
+        jl_svec_t *va = NULL, *vb = NULL;
+        jl_value_t *ba = a, *bb = b, *ans = NULL;
+        JL_GC_PUSH5(&va, &vb, &ba, &bb, &ans);
+        if (jl_is_unionall(a))
+            ba = open_unionall_vars(a, &va);
+        if (jl_is_unionall(b))
+            bb = open_unionall_vars(b, &vb);
+        ans = switch_union_tuple(ba, bb);
+        if (ans != NULL) {
+            if (vb != NULL) {
+                for (size_t i = jl_svec_len(vb); i > 0; i--)
+                    ans = jl_type_unionall((jl_tvar_t*)jl_svecref(vb, i - 1), ans);
+            }
+            if (va != NULL) {
+                for (size_t i = jl_svec_len(va); i > 0; i--)
+                    ans = jl_type_unionall((jl_tvar_t*)jl_svecref(va, i - 1), ans);
             }
         }
-        // sole binder: `b` contains no references to it
-        ans = switch_union_tuple(ua->body, b);
-        if (ans != NULL) {
-            JL_GC_PUSH1(&ans);
-            ans = jl_new_unionall_raw(ua->name, ua->lb, ua->ub, ans);
-            JL_GC_POP();
-        }
-        return ans;
-    }
-    if (jl_is_unionall(b)) {
-        jl_unionall_t *ub = (jl_unionall_t*)b;
-        jl_value_t *ans = switch_union_tuple(a, ub->body);
-        if (ans != NULL) {
-            JL_GC_PUSH1(&ans);
-            ans = jl_new_unionall_raw(ub->name, ub->lb, ub->ub, ans);
-            JL_GC_POP();
-        }
+        JL_GC_POP();
         return ans;
     }
     if (jl_is_uniontype(a)) {
@@ -9414,15 +9439,22 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         // even if `intersect` produced one
         if (jl_is_tuple_type(jl_unwrap_unionall(a)) && jl_is_tuple_type(jl_unwrap_unionall(b)) &&
             !jl_is_datatype(jl_unwrap_unionall(*ans))) {
-            jl_value_t *ans_unwrapped = jl_unwrap_unionall(*ans);
-            JL_GC_PUSH1(&ans_unwrapped);
-            if (jl_is_uniontype(ans_unwrapped)) {
-                ans_unwrapped = switch_union_tuple(((jl_uniontype_t*)ans_unwrapped)->a, ((jl_uniontype_t*)ans_unwrapped)->b);
-                if (ans_unwrapped != NULL) {
-                    *ans = jl_rewrap_unionall_(ans_unwrapped, *ans);
+            if (jl_is_uniontype(jl_unwrap_unionall(*ans))) {
+                // the switch is made under the outer binders, opened as
+                // variables (the members then carry no dangling references)
+                jl_svec_t *vars = NULL;
+                jl_value_t *body = NULL, *sw = NULL;
+                JL_GC_PUSH3(&vars, &body, &sw);
+                body = open_unionall_vars(*ans, &vars);
+                assert(jl_is_uniontype(body));
+                sw = switch_union_tuple(((jl_uniontype_t*)body)->a, ((jl_uniontype_t*)body)->b);
+                if (sw != NULL) {
+                    for (size_t i = jl_svec_len(vars); i > 0; i--)
+                        sw = jl_type_unionall((jl_tvar_t*)jl_svecref(vars, i - 1), sw);
+                    *ans = sw;
                 }
+                JL_GC_POP();
             }
-            JL_GC_POP();
             if (!jl_is_datatype(jl_unwrap_unionall(*ans))) {
                 // Bail: caller can't handle a non-datatype here. The env computed
                 // by `intersect` is meaningless after this assignment, but the
