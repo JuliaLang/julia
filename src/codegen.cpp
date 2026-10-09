@@ -251,6 +251,52 @@ void jl_dump_emitted_mi_name_impl(void *s)
     **jl_ExecutionEngine->get_dump_emitted_mi_name_stream() = (ios_t*)s;
 }
 
+// Source paths recorded in the system image refer to the build tree: Base files are
+// relative to its `base` directory, stdlibs are absolute paths on the build machine.
+// Base registers prefix rewrites (from, to) that map them onto the installed sources,
+// so that the debug info of JIT-compiled code points debuggers at files that exist.
+static std::mutex source_path_lock;
+static SmallVector<std::pair<std::string, std::string>, 0> source_path_map;
+static StringMap<std::string> resolved_source_paths;
+
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_set_debuginfo_source_paths_impl(jl_value_t *map)
+{
+    std::lock_guard<std::mutex> guard(source_path_lock);
+    source_path_map.clear();
+    resolved_source_paths.clear();
+    size_t n = jl_svec_len(map);
+    for (size_t i = 0; i + 1 < n; i += 2)
+        source_path_map.emplace_back(jl_string_data(jl_svecref(map, i)),
+                                     jl_string_data(jl_svecref(map, i + 1)));
+}
+
+// Apply the first rewrite whose prefix matches and whose result exists. A relative
+// prefix only applies to relative paths, so the empty prefix acts as a search
+// directory for them, just like `Base.find_source_file`.
+static std::string resolve_source_path(StringRef file) JL_NOTSAFEPOINT
+{
+    std::lock_guard<std::mutex> guard(source_path_lock);
+    auto it = resolved_source_paths.find(file);
+    if (it != resolved_source_paths.end())
+        return it->second;
+    std::string resolved = file.str();
+    bool isabs = sys::path::is_absolute(file);
+    for (auto &[from, to] : source_path_map) {
+        if (sys::path::is_absolute(from) != isabs || !file.starts_with(from))
+            continue;
+        SmallString<256> path(to);
+        sys::path::append(path, file.substr(from.size()));
+        sys::path::remove_dots(path, true);
+        if (sys::fs::exists(path)) {
+            resolved = std::string(path);
+            break;
+        }
+    }
+    resolved_source_paths[file] = resolved;
+    return resolved;
+}
+
 extern "C" {
 
 #include "builtin_proto.h"
@@ -9295,6 +9341,20 @@ static jl_datatype_t *compute_va_type(jl_value_t *sig, size_t nreq) JL_CANSAFEPO
     return (jl_datatype_t*)typ;
 }
 
+// Code that is JIT-compiled can refer to the installed sources by absolute path.
+// Images keep the recorded paths, as they may be relocated or used on another machine.
+// Only Base and Core record paths relative to `base`; a relative name in user code
+// (e.g. from `include_string`) must not be resolved to an unrelated Base file.
+static DIFile *get_difile(jl_codectx_t &ctx, DIBuilder &dbuilder, StringRef file, bool is_user_code)
+{
+    if (!ctx.emission_context.imaging_mode && (!is_user_code || sys::path::is_absolute(file))) {
+        std::string path = resolve_source_path(file);
+        if (sys::path::is_absolute(path))
+            return dbuilder.createFile(sys::path::filename(path), sys::path::parent_path(path));
+    }
+    return dbuilder.createFile(file, ".");
+}
+
 // Compile to LLVM IR, using a specialized signature if applicable.
 static jl_llvm_functions_t
     emit_function(
@@ -9656,6 +9716,12 @@ static jl_llvm_functions_t
 
     ctx.f = f;
 
+    auto in_user_mod = [] (jl_module_t *mod) {
+        return (!jl_is_submodule(mod, jl_base_module) &&
+                !jl_is_submodule(mod, jl_core_module));
+    };
+    bool mod_is_user_mod = in_user_mod(ctx.module);
+
     // Step 4b. determine debug info signature and other type info for locals
     DICompileUnit::DebugEmissionKind emissionKind = (DICompileUnit::DebugEmissionKind) ctx.params->debug_info_kind;
     DICompileUnit::DebugNameTableKind tableKind;
@@ -9668,7 +9734,7 @@ static jl_llvm_functions_t
     DISubprogram *SP = NULL;
     DebugLoc noDbg, topdebugloc;
     if (debug_enabled) {
-        topfile = dbuilder.createFile(ctx.file, ".");
+        topfile = get_difile(ctx, dbuilder, ctx.file, mod_is_user_mod);
         DISubroutineType *subrty;
         if (ctx.emission_context.params->debug_info_level <= 1)
             subrty = debugcache.jl_di_func_null_sig;
@@ -10139,15 +10205,10 @@ static jl_llvm_functions_t
     // step 10. Compute properties for each statements
     //     This needs to be computed by iterating in the IR order
     //     instead of control flow order.
-    auto in_user_mod = [] (jl_module_t *mod) {
-        return (!jl_is_submodule(mod, jl_base_module) &&
-                !jl_is_submodule(mod, jl_core_module));
-    };
     auto in_tracked_path = [] (StringRef file) {
         // Symbol names and literals are NUL-terminated.
         return jl_path_is_tracked(file.data());
     };
-    bool mod_is_user_mod = in_user_mod(ctx.module);
     bool mod_is_tracked = in_tracked_path(ctx.file);
     // Treat an unknown-module frame with an absolute path as user code. This
     // preserves user macro coverage but can misclassify absolute sysimage paths.
@@ -10241,7 +10302,7 @@ static jl_llvm_functions_t
                             DebugLoc inl_loc = new_lineinfo.empty() ? DebugLoc(DILocation::get(ctx.builder.getContext(), 0, 0, SP, NULL)) : new_lineinfo.back().loc;
                             DISubprogram *&inl_SP = ctx.emission_context.inlined_subprograms[{fname, info.file}];
                             if (inl_SP == NULL) {
-                                DIFile *difile = dbuilder.createFile(info.file, ".");
+                                DIFile *difile = get_difile(ctx, dbuilder, info.file, info.is_user_code);
                                 inl_SP = dbuilder.createFunction(difile
                                                              ,std::string(fname) + ";" // Name
                                                              ,fname            // LinkageName
