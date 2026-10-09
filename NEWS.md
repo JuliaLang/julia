@@ -22,6 +22,9 @@ Build system changes
 New library functions
 ---------------------
 
+* `bitsizeof(x)` returns the declared width in bits of a primitive type, or of the primitive type
+  of `x`, excluding the padding that `sizeof` includes. It throws for any other type or value ([#61359]).
+
 New library features
 --------------------
 
