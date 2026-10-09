@@ -60,3 +60,13 @@ else
 $(eval $(call bb-install,framehopunwind,FRAMEHOPUNWIND,false))
 
 endif # USE_BINARYBUILDER_FRAMEHOPUNWIND
+
+ifneq (,$(findstring $(OS),Linux FreeBSD))
+# The library links to libgcc_s; have it find the copy Julia ships next to it. Patch only
+# once, since rewriting the file can crash processes that have it loaded.
+FRAMEHOPUNWIND_LIB := $(build_shlibdir)/libframehopunwind.$(SHLIB_EXT)
+install-framehopunwind: post-install-framehopunwind
+post-install-framehopunwind: $(build_prefix)/manifest/framehopunwind $(PATCHELF_MANIFEST)
+	[ "$$($(PATCHELF) --print-rpath $(FRAMEHOPUNWIND_LIB))" = '$$ORIGIN' ] || \
+		$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN' $(FRAMEHOPUNWIND_LIB)
+endif
