@@ -492,7 +492,6 @@ void jl_timing_block_task_enter(jl_task_t *ct, jl_ptls_t ptls, jl_timing_block_t
 #ifdef USE_TRACY
     TracyCFiberEnter(ct->name);
 #elif defined(USE_NVTX)
-    // nvtxDomainRangePushEx(jl_timing_nvtx_task_domain, &ct->nvtx_attrs);
     task_payload_t p_val = {ct->nvtx_task_id};
     nvtxPayloadRangePush(jl_timing_nvtx_task_domain, &ct->nvtx_attrs, nvtx_task_schema_id, &p_val, sizeof(p_val));
 #else
@@ -746,7 +745,7 @@ void jl_timing_task_init(jl_task_t *t)
     nvtx_attrs.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
 
 
-    nvtxStringHandle_t nvtx_message = nvtxDomainRegisterStringA(jl_timing_nvtx_task_domain, task_name); // Here we set the task name however we can...
+    nvtxStringHandle_t nvtx_message = nvtxDomainRegisterStringA(jl_timing_nvtx_task_domain, task_name);
     nvtx_attrs.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
     nvtx_attrs.message.registered = nvtx_message;
 
@@ -764,7 +763,7 @@ void jl_timing_root_task_init(jl_task_t *t) {
     nvtx_attrs.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
 
 
-    nvtxStringHandle_t nvtx_message = nvtxDomainRegisterStringA(jl_timing_nvtx_task_domain, root_task_name); // Here we set the task name however we can...
+    nvtxStringHandle_t nvtx_message = nvtxDomainRegisterStringA(jl_timing_nvtx_task_domain, root_task_name); 
     nvtx_attrs.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
     nvtx_attrs.message.registered = nvtx_message;
     t->nvtx_attrs = nvtx_attrs;
