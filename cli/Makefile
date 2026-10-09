@@ -167,7 +167,7 @@ $(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_OBJS) $(SRCDIR)/li
 		$(CC) $(LOADER_CFLAGS) -shared $(SHIPFLAGS) $(RPATH_LIB), \
 		$(LIB_OBJS) $(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT)) $(call LTO_OBJECT_PATH,$(BUILDDIR)/$(notdir $@))))
 	@$(INSTALL_NAME_CMD)libjulia.$(JL_MAJOR_SHLIB_EXT) $@
-	@$(DSYMUTIL) $@
+	@$(call dsymutil,$@)
 ifeq ($(OS), WINNT)
 	@$(call PRINT_ANALYZE, $(call implib_from_def,$@))
 endif
@@ -179,7 +179,7 @@ $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_DOBJS) $(SRC
 		$(CC) $(LOADER_CFLAGS) -shared $(DEBUGFLAGS) $(RPATH_LIB), \
 		$(LIB_DOBJS) $(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia-debug.$(JL_MAJOR_SHLIB_EXT)) $(call LTO_OBJECT_PATH,$(BUILDDIR)/$(notdir $@))))
 	@$(INSTALL_NAME_CMD)libjulia-debug.$(JL_MAJOR_SHLIB_EXT) $@
-	@$(DSYMUTIL) $@
+	@$(call dsymutil,$@)
 ifeq ($(OS), WINNT)
 	@$(call PRINT_ANALYZE, $(call implib_from_def,$@))
 endif
