@@ -28,9 +28,7 @@ $(FRAMEHOPUNWIND_BUILDDIR)/build-compiled: $(FRAMEHOPUNWIND_BUILDDIR)/source-ext
 		echo "       Install one via https://rustup.rs, set CARGO in Make.user, or use" >&2; \
 		echo "       USE_BINARYBUILDER_FRAMEHOPUNWIND=1 for the prebuilt artifact." >&2; \
 		exit 1; }
-	+cd $(dir $<) && \
-		$(CARGO) build --release --locked --offline 2>/dev/null || \
-		$(CARGO) build --release --locked
+	+cd $(dir $<) && $(CARGO) build --release --locked
 	echo 1 > $@
 
 define FRAMEHOPUNWIND_INSTALL
