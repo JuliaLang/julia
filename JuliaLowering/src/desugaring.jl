@@ -1073,7 +1073,7 @@ function expand_splat(ctx, ex, topfunc, args)
     result = @ast ctx ex [:call
         "_apply_iterate"::core
         "iterate"::top
-        topfunc
+        setmeta(topfunc, :is_called, true)
         wrapped_args...
     ]
 
@@ -1781,6 +1781,7 @@ function expand_kw_call(ctx, st)
     stmts = Syntax[]
     st = remove_argument_side_effects(ctx, stmts, st)
     args = copy(st[2:end])
+    func = setmeta(st[1], :is_called, true)
     kws = remove_kw_args!(ctx, args)
     @ast ctx st [:block
         stmts...
@@ -1791,11 +1792,11 @@ function expand_kw_call(ctx, st)
             # In this case need to check kws nonempty at runtime
             [:if
                 [:call "isempty"::top kw_container]
-                [:call st[1] args...]
-                [:call "kwcall"::core kw_container st[1] args...]
+                [:call func args...]
+                [:call "kwcall"::core kw_container func args...]
             ]
         else
-            [:call "kwcall"::core kw_container st[1] args...]
+            [:call "kwcall"::core kw_container func args...]
         end
     ]
 end
