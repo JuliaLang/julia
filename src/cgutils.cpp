@@ -293,8 +293,12 @@ static unsigned julia_primitive_di_encoding(jl_value_t *jt)
     if (jt == (jl_value_t*)jl_float16_type || jt == (jl_value_t*)jl_float32_type ||
         jt == (jl_value_t*)jl_float64_type)
         return llvm::dwarf::DW_ATE_float;
-    if (jl_subtype(jt, (jl_value_t*)jl_signed_type))
-        return llvm::dwarf::DW_ATE_signed;
+    // walk the supertypes instead of calling jl_subtype, which may not run
+    // here; jl_signed_type is still NULL while boot.jl is being compiled
+    for (jl_datatype_t *dt = (jl_datatype_t*)jt; dt && dt != jl_any_type; dt = dt->super) {
+        if (dt == jl_signed_type)
+            return llvm::dwarf::DW_ATE_signed;
+    }
     return llvm::dwarf::DW_ATE_unsigned;
 }
 
