@@ -1714,10 +1714,9 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
 #ifdef JL_USE_FRAMEHOP
     // Also register with framehop (the backtrace unwinder). [start_ip, end_ip) is the code
     // range already computed above; the .eh_frame bytes are copied internally, so Julia may
-    // free its buffer after deregistration.
-    jl_profile_atomic([&]() JL_NOTSAFEPOINT {
-        fh_register_jit(Addr, Size, (uint64_t)start_ip, (uint64_t)end_ip);
-    });
+    // free its buffer after deregistration. framehop's readers take no locks, so this needs
+    // neither the profile lock nor blocked signals.
+    fh_register_jit(Addr, Size, (uint64_t)start_ip, (uint64_t)end_ip);
 #endif
 }
 
@@ -1731,9 +1730,7 @@ void deregister_eh_frames(uint8_t *Addr, size_t Size)
     // data structures).
 #ifdef JL_USE_FRAMEHOP
     // framehop keys JIT modules by .eh_frame address, so Addr is enough to deregister.
-    jl_profile_atomic([&]() JL_NOTSAFEPOINT {
-        fh_deregister_jit_eh_frame(Addr);
-    });
+    fh_deregister_jit_eh_frame(Addr);
 #endif
 }
 
