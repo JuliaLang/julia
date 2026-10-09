@@ -3099,6 +3099,36 @@ end
 let e = only(intersection_env(Tuple{Real}, Tuple{T} where T >: Int)[2])
     @test e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]
 end
+# A var bound only inside a right-side union arm is not pinned for every call when
+# an instance of the left side may match another arm, e.g. `Nothing` matches
+# `Union{Nothing,S}` leaving `S` unbound (#63514)
+for (lhs, rhs) in ((Tuple{Any}, Tuple{Union{Nothing,S}} where S),
+                   (Tuple{Real}, Tuple{Union{Int,S}} where S),
+                   (Tuple{Any,Any}, Tuple{Union{Nothing,S},Any} where S),
+                   (Tuple{Any}, Tuple{Union{Nothing,Ref{S},S}} where S),
+                   # `(1, nothing)` matches the closed arm
+                   (Tuple{Tuple{Int,Any}}, Tuple{Union{Tuple{Int,Nothing},Tuple{S,Any}}} where S),
+                   # the instances of `DataType` include the `Type{Int}` key
+                   (Tuple{DataType}, Tuple{Union{Type{Int},S}} where S))
+    e = only(intersection_env(lhs, rhs)[2])
+    @test e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]
+end
+# but it is when the other arms cannot match an instance
+for (lhs, rhs) in ((Tuple{Real}, Tuple{Union{Nothing,S}} where S),
+                   (Tuple{Number}, Tuple{Union{Missing,Nothing,S}} where S),
+                   (Tuple{Ref}, Tuple{Union{Nothing,Ref{S}}} where S),
+                   # instances of `Integer` are never type objects
+                   (Tuple{Integer}, Tuple{Union{Type{S},S}} where S))
+    e = only(intersection_env(lhs, rhs)[2])
+    @test e isa Core.SimpleVector && e[1] isa TypeVar && e[2]
+end
+# a closed arm rejects every instance that carries the rejecting type itself
+@test intersection_env(Tuple{Any,Int}, Tuple{Any,Union{Nothing,S}} where S)[2] === Core.svec(Int)
+@test intersection_env(Tuple{Any,Vector{Any}}, Tuple{Any,Vector{Union{Nothing,S}}} where S)[2] === Core.svec(Any)
+# a dispatch tuple is its own only instance, so its env stays exact
+@test intersection_env(Tuple{Vector{Any},Any}, Tuple{Vector{S},Union{Nothing,S}} where S)[2] === Core.svec(Any)
+@test intersection_env(Tuple{Tuple{Int,DataType}}, Tuple{Union{Tuple{Int,Type{Int}},Tuple{S,Any}}} where S)[2] === Core.svec(Int)
+@test intersection_env(Tuple{Core.TypeEgal{Float64}}, Tuple{Union{Type{Int},Type{S}}} where S)[2] === Core.svec(Float64)
 # A fixed tuple prefix before a free vararg length guarantees a matching
 # right-side tuple element exists, but range and maybe-empty tuple tails do not.
 let rhs = Tuple{typeof(intersection_env), Type{<:Tuple{Vararg{E}}}} where E

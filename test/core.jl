@@ -9224,6 +9224,22 @@ end
 f_value_typevar_with_lowerbound(x::T) where {T>:Int} = T
 @test_throws UndefVarError(:T, :static_parameter) f_value_typevar_with_lowerbound(1.0)
 
+# A static parameter bound only through one arm of a `Union` must be treated as
+# possibly undefined when called with an abstractly-inferred argument (#63514)
+f63514(x::Union{Nothing,S}) where {S} = @isdefined(S) ? S : false
+g63514(r) = f63514(r[])
+@test g63514(Ref{Any}(nothing)) === false
+@test g63514(Ref{Any}(1)) === Int
+@test g63514(Ref{Real}(1.0)) === Float64
+# nor bound to the value found for the abstract argument type: the call behaves as
+# when dispatched on the argument's concrete type
+t63514(x::Union{Type{Int},S}) where {S} = @isdefined(S) ? S : false
+@test (r -> t63514(r[]))(Ref{DataType}(Int)) === t63514(Int) === false
+@test (r -> t63514(r[]))(Ref{DataType}(Float64)) === DataType
+u63514(x::Union{Tuple{Int,Nothing},Tuple{S,Any}}) where {S} = @isdefined(S) ? S : false
+@test (r -> u63514(r[]))(Ref{Tuple{Int,Any}}((1, nothing))) === u63514((1, nothing)) === false
+@test (r -> u63514(r[]))(Ref{Tuple{Int,Any}}((1, 2.0))) === u63514((1, 2.0)) === Int
+
 # Static parameters constrained indirectly through other static-parameter bounds
 # are defined.
 f1_sparam_defined_62099(t::Type{E}) where E = @isdefined(E)
