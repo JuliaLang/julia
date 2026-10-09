@@ -1276,8 +1276,10 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
     int sig, critical, profile;
     jl_sigsetset(&sset);
 #ifdef JL_USE_FRAMEHOP
-    // Pre-fault framehop's TLS off the suspend window; the first access can allocate.
+    // Pre-fault framehop's TLS, and the current-task TLS that jl_active_task_stack reads,
+    // off the suspend window; the first access can allocate.
     fh_thread_register();
+    (void)jl_get_current_task();
 #endif
 #if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
     siginfo_t info;

@@ -239,12 +239,8 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
     if (r < 0)
         return 0;
     bt_cursor_t cursor;
-    if (!jl_unw_init(&cursor, &context, 0))
+    if (maxsize == 0 || !jl_unw_init(&cursor, &context, 0))
         return 0;
-    if (maxsize == 0) {
-        jl_unw_fini(&cursor);
-        return 0;
-    }
     jl_gcframe_t *pgcstack = jl_pgcstack;
     size_t bt_size = 0;
     jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, skip + 1, &pgcstack, 0);
@@ -850,26 +846,6 @@ static void jl_unw_fh_context(fh_context *c, bt_context_t *context) JL_NOTSAFEPO
 #endif
 }
 
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context, int from_signal_handler)
-{
-    // framehop initializes the cursor from the exact interrupted register snapshot, so the
-    // top frame is handled correctly whether or not it came from a signal handler.
-    (void)from_signal_handler;
-    fh_context c;
-    jl_unw_fh_context(&c, context);
-    return fh_cursor_init(cursor, &c) == 0;
-}
-
-static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp)
-{
-    (void)from_signal_handler; // framehop reports the current frame, then advances
-    uint64_t i = 0, s = 0;
-    int r = fh_step(cursor, &i, &s);
-    *ip = (uintptr_t)i;
-    *sp = (uintptr_t)s;
-    return r > 0;
-}
-
 // The stack of `target_task`, or of the task running on `target_ptls`, if `sp` is on it.
 // framehop then reads only that range. Otherwise (0, 0), and framehop picks a range itself.
 static void jl_unw_target_bounds(jl_ptls_t target_ptls, jl_task_t *target_task, uintptr_t sp,
@@ -889,19 +865,48 @@ static void jl_unw_target_bounds(jl_ptls_t target_ptls, jl_task_t *target_task, 
     }
 }
 
+static int jl_unw_init_target(bt_cursor_t *cursor, bt_context_t *context,
+                              jl_ptls_t target_ptls, jl_task_t *target_task) JL_NOTSAFEPOINT
+{
+    fh_context c;
+    jl_unw_fh_context(&c, context);
+    // fh_context.r[1] is the captured sp on both supported arches.
+    uint64_t lo, hi;
+    jl_unw_target_bounds(target_ptls, target_task, (uintptr_t)c.r[1], &lo, &hi);
+    return fh_cursor_init_bounds(cursor, &c, lo, hi) == 0;
+}
+
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context, int from_signal_handler)
+{
+    // framehop initializes the cursor from the exact interrupted register snapshot, so the
+    // top frame is handled correctly whether or not it came from a signal handler.
+    (void)from_signal_handler;
+    // A walk of the calling thread, bounded by its current task's stack. The root task runs
+    // on the thread's own stack, whose bounds framehop already has from fh_thread_register.
+    jl_task_t *ct = jl_get_current_task();
+    if (ct != NULL && ct == ct->ptls->root_task)
+        ct = NULL;
+    return jl_unw_init_target(cursor, context, NULL, ct);
+}
+
+static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp)
+{
+    (void)from_signal_handler; // framehop reports the current frame, then advances
+    uint64_t i = 0, s = 0;
+    int r = fh_step(cursor, &i, &s);
+    *ip = (uintptr_t)i;
+    *sp = (uintptr_t)s;
+    return r > 0;
+}
+
 NOINLINE size_t rec_backtrace_ctx_target(jl_bt_element_t *bt_data, size_t maxsize,
                                          bt_context_t *context, jl_gcframe_t *pgcstack,
                                          jl_ptls_t target_ptls, jl_task_t *target_task) JL_NOTSAFEPOINT
 {
     if (maxsize == 0)
         return 0;
-    fh_context c;
-    jl_unw_fh_context(&c, context);
-    // fh_context.r[1] is the captured sp on both supported arches.
-    uint64_t lo = 0, hi = 0;
-    jl_unw_target_bounds(target_ptls, target_task, (uintptr_t)c.r[1], &lo, &hi);
     bt_cursor_t cursor;
-    if (fh_cursor_init_bounds(&cursor, &c, lo, hi) != 0)
+    if (!jl_unw_init_target(&cursor, context, target_ptls, target_task))
         return 0;
     size_t bt_size = 0;
     jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1);

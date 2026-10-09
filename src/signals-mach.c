@@ -76,8 +76,10 @@ void *mach_segv_listener(void *arg)
 {
     (void)arg;
 #ifdef JL_USE_FRAMEHOP
-    // Pre-fault framehop's TLS now; the first access from a thread can allocate.
+    // Pre-fault framehop's TLS, and the current-task TLS that jl_active_task_stack reads,
+    // now; the first access from a thread can allocate.
     fh_thread_register();
+    (void)jl_get_current_task();
 #endif
     int ret = mach_msg_server(mach_exc_server, 2048, segv_port, MACH_MSG_TIMEOUT_NONE);
     mach_error("mach_msg_server" XSTR(: __FILE__:__LINE__:), ret);
@@ -1069,8 +1071,10 @@ void *mach_profile_listener(void *arg)
     mach_profiler_thread = mach_thread_self();
 #endif
 #ifdef JL_USE_FRAMEHOP
-    // Pre-fault framehop's TLS off the suspend window; the first access can allocate.
+    // Pre-fault framehop's TLS, and the current-task TLS that jl_active_task_stack reads,
+    // off the suspend window; the first access can allocate.
     fh_thread_register();
+    (void)jl_get_current_task();
 #endif
     mig_reply_error_t *bufRequest = (mig_reply_error_t*)malloc_s(max_size);
     while (1) {
