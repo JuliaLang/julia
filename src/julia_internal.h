@@ -1450,9 +1450,13 @@ void jl_gc_safe_enter_from_nonmutator(jl_ptls_t ptls) JL_CANSAFEPOINT_LEAVE;
 // Query if this object is perm-allocated in an image.
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
 size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
+size_t jl_n_linkage_blobs(void) JL_NOTSAFEPOINT;
 // method-table contributor tracking and edge replay (gf.c, staticdata.c)
 extern JL_DLLEXPORT jl_genericmemory_t *jl_method_contributors JL_GLOBALLY_ROOTED;
 extern jl_mutex_t jl_method_contributors_lock;
+void jl_method_table_activate_with_cert(jl_typemap_entry_t *newentry, jl_svec_t *cert) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_get_activation_cert(jl_method_t *method) JL_NOTSAFEPOINT;
+extern JL_DLLEXPORT jl_genericmemory_t *jl_activation_certs JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT void jl_set_loading_closure_blobs(size_t *bits, size_t nblobs) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_edge_sig_replayable(jl_value_t *sig) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_set_loading_closure_from_depmods(jl_array_t *depmods, jl_array_t *anchors) JL_NOTSAFEPOINT;
@@ -2022,6 +2026,8 @@ struct JL_GC_TRACKED_TYPE typemap_intersection_env {
     int emptiness_only; // if set, `ti` and `env` are not materialized (`ti` is only a
                         // nonempty/bottom placeholder); the callback may consume just
                         // the match verdict and `issubty`
+    int (*entry_filter)(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure) JL_NOTSAFEPOINT;
+                        // if set, entries for which this returns 0 are skipped before any intersection
 };
 int jl_typemap_intersection_visitor(jl_typemap_t *a, int offs, struct typemap_intersection_env *closure) JL_CANSAFEPOINT;
 void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure);
