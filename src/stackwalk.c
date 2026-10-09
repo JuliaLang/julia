@@ -850,25 +850,39 @@ static void jl_unw_fh_context(fh_context *c, bt_context_t *context) JL_NOTSAFEPO
 // ending at the frame that started the runtime, below callers such as `main`.
 uintptr_t jl_unw_thread0_stack_hi;
 
-// The stack of `target_task`, or of the task running on `target_ptls`, if `sp` is on it.
-// framehop then reads only that range. Otherwise (0, 0), and framehop picks a range itself.
+// The ranges framehop may read for a walk from `sp`, as two [lo, hi) pairs. If `sp` is on
+// the stack of `target_task`, or of the task running on `target_ptls`, that stack. If it is
+// on that thread's signal stack, the signal stack, then the task's stack for the code the
+// signal interrupted. framehop picks a range itself when the first pair is (0, 0).
 static void jl_unw_target_bounds(jl_ptls_t target_ptls, jl_task_t *target_task, uintptr_t sp,
-                                 uint64_t *lo, uint64_t *hi) JL_NOTSAFEPOINT
+                                 uint64_t bounds[4]) JL_NOTSAFEPOINT
 {
-    *lo = 0;
-    *hi = 0;
+    memset(bounds, 0, 4 * sizeof(uint64_t));
     if (target_task == NULL && target_ptls != NULL)
         target_task = jl_atomic_load_relaxed(&target_ptls->current_task);
     if (target_task == NULL)
         return;
     char *active_start, *active_end, *total_start, *total_end;
     jl_active_task_stack(target_task, &active_start, &active_end, &total_start, &total_end);
-    if ((uintptr_t)total_start <= sp && sp < (uintptr_t)total_end) {
-        *lo = (uintptr_t)total_start;
-        *hi = (uintptr_t)total_end;
-        if (target_task == jl_atomic_load_relaxed(&jl_all_tls_states)[0]->root_task &&
-            jl_unw_thread0_stack_hi > *hi)
-            *hi = jl_unw_thread0_stack_hi;
+    uintptr_t lo = (uintptr_t)total_start, hi = (uintptr_t)total_end;
+    if (hi != 0 && target_task == jl_atomic_load_relaxed(&jl_all_tls_states)[0]->root_task &&
+        jl_unw_thread0_stack_hi > hi)
+        hi = jl_unw_thread0_stack_hi;
+    if (lo <= sp && sp < hi) {
+        bounds[0] = lo;
+        bounds[1] = hi;
+        return;
+    }
+    jl_ptls_t ptls = target_ptls != NULL ? target_ptls : target_task->ptls;
+    if (ptls == NULL || ptls->signal_stack == NULL)
+        return;
+    uintptr_t sig_lo = (uintptr_t)ptls->signal_stack;
+    uintptr_t sig_hi = sig_lo + ptls->signal_stack_size;
+    if (sig_lo <= sp && sp < sig_hi) {
+        bounds[0] = sig_lo;
+        bounds[1] = sig_hi;
+        bounds[2] = lo;
+        bounds[3] = hi;
     }
 }
 
@@ -878,9 +892,9 @@ static int jl_unw_init_target(bt_cursor_t *cursor, bt_context_t *context,
     fh_context c;
     jl_unw_fh_context(&c, context);
     // fh_context.r[1] is the captured sp on both supported arches.
-    uint64_t lo, hi;
-    jl_unw_target_bounds(target_ptls, target_task, (uintptr_t)c.r[1], &lo, &hi);
-    return fh_cursor_init_bounds(cursor, &c, lo, hi) == 0;
+    uint64_t bounds[4];
+    jl_unw_target_bounds(target_ptls, target_task, (uintptr_t)c.r[1], bounds);
+    return fh_cursor_init_bounds2(cursor, &c, bounds[0], bounds[1], bounds[2], bounds[3]) == 0;
 }
 
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context, int from_signal_handler)
