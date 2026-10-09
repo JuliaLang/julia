@@ -5119,7 +5119,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                     : get_llvm_atomic_order(order);
             bool maybenull = true;
             if (!isboxed && !isunion && elsz == 0) {
-                assert(jl_is_datatype(ety) && jl_is_datatype_singleton((jl_datatype_t*)ety));
+                assert(jl_is_datatype(normalize_typeofbottom_layout_alias(ety)) &&
+                       jl_is_datatype_singleton((jl_datatype_t*)normalize_typeofbottom_layout_alias(ety)));
                 *ret = ghostValue(ctx, ety);
                 if (isStrongerThanMonotonic(Order))
                     ctx.builder.CreateFence(Order);
