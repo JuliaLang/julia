@@ -217,7 +217,7 @@ julia> String(b)
 function base64decode(s)
     b = IOBuffer(s)
     try
-        return read(Base64DecodePipe(b))
+        return read(Base64DecodePipe{typeof(b)}(b))
     finally
         close(b)
     end

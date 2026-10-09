@@ -206,7 +206,7 @@ See also [`base64decode`](@ref).
 """
 function base64encode(f::Function, args...; context=nothing)
     s = IOBuffer()
-    b = Base64EncodePipe(s)
+    b = Base64EncodePipe{typeof(s)}(s)
     if context === nothing
         f(b, args...)
     else

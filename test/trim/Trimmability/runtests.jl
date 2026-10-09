@@ -29,4 +29,6 @@ outdir = ARGS[1]
     # TODO(#62912): SuiteSparse libraries cannot be loaded under --trim yet
     # @test lines[19] == "sparse solves: -1.0 -1.0 -1.0"
     # @test lines[20] == "sparse factorizations: 0.666667 0.666667 -1.0"
+    @test lines[19] == "base64 encoded: YXJnMQ=="
+    @test lines[20] == "base64 decoded: arg1"
 end

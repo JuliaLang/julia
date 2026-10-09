@@ -4,6 +4,7 @@ module Trimmability
 using Sockets
 using SparseArrays
 using LinearAlgebra
+using Base64
 
 world::String = "world!"
 const str = OncePerProcess{String}() do
@@ -320,6 +321,11 @@ function @main(args::Vector{String})::Cint
     end
 
     Base.donotdelete(reshape([1,2,3],:,1,1))
+
+    # Exercise both Base64 directions with runtime input.
+    encoded = base64encode(isempty(args) ? "" : args[1])
+    println(Core.stdout, "base64 encoded: ", encoded)
+    println(Core.stdout, "base64 decoded: ", String(base64decode(encoded)))
 
     return 0
 end
