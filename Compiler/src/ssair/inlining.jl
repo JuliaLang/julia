@@ -771,11 +771,16 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
     return new_argtypes
 end
 
-function has_typeegal_slot(@nospecialize(atype))
-    for p in (atype::DataType).parameters
-        p isa Core.TypeEgal && return true
+# Whether the compileable signature `new_atype` only widened `TypeEgal` slots of `atype`
+function only_typeegal_widened(@nospecialize(atype), @nospecialize(new_atype))
+    (atype isa DataType && new_atype isa DataType) || return false
+    ps, nps = atype.parameters, new_atype.parameters
+    length(ps) == length(nps) || return false
+    for i in 1:length(ps)
+        p = ps[i]
+        p === nps[i] || p isa Core.TypeEgal || return false
     end
-    return false
+    return true
 end
 
 function compileable_specialization(code::Union{MethodInstance,CodeInstance}, effects::Effects,
@@ -783,10 +788,12 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
     mi = code isa CodeInstance ? get_ci_mi(code) : code
     mi_invoke = mi
     method, atype, sparams = mi.def::Method, mi.specTypes, mi.sparam_vals
+    typeegal_only = false
     if OptimizationParams(state.interp).compilesig_invokes
         new_atype = get_compileable_sig(method, atype, sparams)
         new_atype === nothing && return nothing
         if atype !== new_atype
+            typeegal_only = only_typeegal_widened(atype, new_atype)
             (_, sparams) = typeintersect_env(new_atype, method.sig)
             mi_invoke = specialize_method(method, new_atype, sparams)
             mi_invoke === nothing && return nothing
@@ -807,7 +814,8 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
     # A normalized compileable signature can have a less precise ABI for TypeEgal
     # arguments, forcing boxed argument passing for non-recursive invokes, so a
     # directly supplied inferred edge for the actual call signature wins there.
-    keep_direct_edge = code isa CodeInstance && mi !== mi_invoke && has_typeegal_slot(atype)
+    # Only do so when nothing else was widened, to keep honoring `@nospecialize`.
+    keep_direct_edge = code isa CodeInstance && typeegal_only
     if !keep_direct_edge
         cached = get(code_cache(state), mi_invoke, nothing)
         if cached isa CodeInstance
