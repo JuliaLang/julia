@@ -253,7 +253,8 @@ static const char opts[]  =
     // error and warning options
     " --depwarn={yes|no*|error}                     Enable or disable syntax and method deprecation\n"
     "                                               warnings (`error` turns warnings into errors)\n"
-    " --warn-overwrite={yes|no*}                    Enable or disable method overwrite warnings\n"
+    " --warn-overwrite={yes|no*}                    Enable or disable method overwrite and constant\n"
+    "                                               redefinition warnings\n"
     " --warn-scope={yes*|no}                        Enable or disable warning for ambiguous top-level\n"
     "                                               scope\n\n"
 

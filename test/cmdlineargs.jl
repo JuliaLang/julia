@@ -1767,6 +1767,12 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     end
 end
 
+let exename = `$(Base.julia_cmd()) --startup-file=no`, code = "const x58670 = 1; const x58670 = 2"
+    @test readchomperrors(`$exename -e $code`) == (true, "", "")
+    @test readchomperrors(`$exename --warn-overwrite=yes -e $code`) ==
+        (true, "", "WARNING: redefinition of constant Main.x58670.")
+end
+
 # issue #6310
 let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test writereadpipeline("2+2", exename) == ("4\n", true)

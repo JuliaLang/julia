@@ -676,6 +676,9 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
                 new_bpart = bpart;
                 break;
             }
+            if (old && jl_options.warn_overwrite == JL_OPTIONS_WARN_OVERWRITE_ON)
+                jl_printf(JL_STDERR, "WARNING: redefinition of constant %s.%s.\n",
+                          jl_symbol_name(mod->name), jl_symbol_name(var));
         } else if (jl_bkind_is_some_explicit_import(kind)) {
             jl_errorf("cannot declare %s.%s constant; it was already declared as an import",
                       jl_symbol_name(mod->name), jl_symbol_name(var));
