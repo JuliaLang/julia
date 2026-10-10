@@ -45,11 +45,7 @@ inline const Stmt *getStmtForDiagnostics(const ExplodedNode *N)
 
 // clang 23 collapsed LocationContext into StackFrame; getParent() returns the
 // enclosing frame in either case, but the type name differs.
-#if LLVM_VERSION_MAJOR >= 23
 typedef clang::StackFrame jl_stack_frame_t;
-#else
-typedef clang::LocationContext jl_stack_frame_t;
-#endif
 
 inline unsigned getStackFrameHeight(const jl_stack_frame_t *stack)
 {
@@ -367,11 +363,7 @@ public:
   void checkASTDecl(const Decl *D, AnalysisManager &Mgr, BugReporter &BR) const;
   void checkDerivingExpr(const Expr *Result, const Expr *Parent,
                          CheckerContext &C) const;
-#if LLVM_VERSION_MAJOR >= 22
   void checkBind(SVal Loc, SVal Val, const Stmt *S, bool AtDeclInit, CheckerContext &) const;
-#else
-  void checkBind(SVal Loc, SVal Val, const Stmt *S, CheckerContext &) const;
-#endif
   void checkLocation(SVal Loc, bool IsLoad, const Stmt *S,
                      CheckerContext &) const;
 

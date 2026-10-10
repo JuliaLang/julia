@@ -14,26 +14,15 @@
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/ExecutionEngine/Orc/CompileUtils.h>
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
-#if JL_LLVM_VERSION < 220000
-#include <llvm/ExecutionEngine/Orc/DebugObjectManagerPlugin.h>
-#endif
-#if JL_LLVM_VERSION >= 210000
 #  include <llvm/ExecutionEngine/Orc/SelfExecutorProcessControl.h>
-#endif
 #include <llvm/ExecutionEngine/Orc/TargetProcess/JITLoaderGDB.h>
-#if JL_LLVM_VERSION >= 200000
 #include <llvm/ExecutionEngine/Orc/AbsoluteSymbols.h>
 #include <llvm/ExecutionEngine/Orc/EHFrameRegistrationPlugin.h>
-#endif
-#if JL_LLVM_VERSION >= 180000
 #include <llvm/ExecutionEngine/Orc/Debugging/DebugInfoSupport.h>
 #include <llvm/ExecutionEngine/Orc/Debugging/PerfSupportPlugin.h>
 #include <llvm/ExecutionEngine/Orc/TargetProcess/JITLoaderPerf.h>
-#endif
-#if JL_LLVM_VERSION >= 190000
 #include <llvm/ExecutionEngine/Orc/Debugging/VTuneSupportPlugin.h>
 #include <llvm/ExecutionEngine/Orc/TargetProcess/JITLoaderVTune.h>
-#endif
 #include <llvm/ExecutionEngine/Orc/ExecutorProcessControl.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/DynamicLibrary.h>
@@ -46,10 +35,8 @@
 #include <llvm/Bitcode/BitcodeWriter.h>
 
 #include <llvm/ExecutionEngine/JITLink/JITLink.h>
-#if JL_LLVM_VERSION >= 210000
 #include <llvm/ExecutionEngine/JITLink/EHFrameSupport.h>
 #include <llvm/ExecutionEngine/Orc/Shared/WrapperFunctionUtils.h>
-#endif
 #include <llvm/ExecutionEngine/Orc/ObjectFileInterface.h>
 #include <llvm/ExecutionEngine/Orc/DebugUtils.h>
 #include <llvm/Object/ELFObjectFile.h>
@@ -71,11 +58,7 @@ using namespace llvm;
 #include "processor.h"
 #include "julia-task-dispatcher.h"
 
-#if JL_LLVM_VERSION >= 180000
 # include <llvm/ExecutionEngine/Orc/Debugging/DebuggerSupportPlugin.h>
-#else
-# include <llvm/ExecutionEngine/Orc/DebuggerSupportPlugin.h>
-#endif
 # include <llvm/ExecutionEngine/JITLink/EHFrameSupport.h>
 # include <llvm/ExecutionEngine/JITLink/JITLinkMemoryManager.h>
 # include <llvm/ExecutionEngine/Orc/MapperJITLinkMemoryManager.h>
@@ -620,7 +603,6 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
     return jl_an_empty_string;
 }
 
-#if JL_LLVM_VERSION >= 180000
 CodeGenOptLevel CodeGenOptLevelFor(int optlevel)
 {
 #ifdef DISABLE_OPT
@@ -632,19 +614,6 @@ CodeGenOptLevel CodeGenOptLevelFor(int optlevel)
         CodeGenOptLevel::Aggressive;
 #endif
 }
-#else
-CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
-{
-#ifdef DISABLE_OPT
-    return CodeGenOpt::None;
-#else
-    return optlevel == 0 ? CodeGenOpt::None :
-        optlevel == 1 ? CodeGenOpt::Less :
-        optlevel == 2 ? CodeGenOpt::Default :
-        CodeGenOpt::Aggressive;
-#endif
-}
-#endif
 
 static auto countBasicBlocks(const Function &F) JL_NOTSAFEPOINT
 {
@@ -748,9 +717,8 @@ void JLDebuginfoPlugin::registerWithGDB(orc::ExecutionSession &ES, JITObjectInfo
             GDBRegistrar, R, /*AutoRegisterCode*/true);
     if (!Register) {
         // reportError runs an unknown callback, which cannot be annotated as
-        // safe here (but is), and takes its Error by value (see
-        // JL_SA_BROKEN_PARAM_DTORS)
-#if !defined(__clang_gcanalyzer__) && !defined(JL_SA_BROKEN_PARAM_DTORS)
+        // safe here (but is)
+#ifndef __clang_gcanalyzer__
         ES.reportError(Register.takeError());
 #endif
         return;
@@ -760,8 +728,8 @@ void JLDebuginfoPlugin::registerWithGDB(orc::ExecutionSession &ES, JITObjectInfo
     // llvm_orc_registerJITLoaderGDBAllocAction, which only appends to the GDB
     // JIT descriptor list and never runs Julia code.
     // (reportError also runs an unknown callback, which cannot be annotated as
-    // safe here, and takes its Error by value)
-#if !defined(__clang_gcanalyzer__) && !defined(JL_SA_BROKEN_PARAM_DTORS)
+    // safe here)
+#ifndef __clang_gcanalyzer__
     if (auto Err = Register->runWithSPSRetErrorMerged()) {
         ES.reportError(std::move(Err));
         return;
@@ -1120,9 +1088,8 @@ public:
                                                     ES.getSymbolStringPool());
         if (!G) {
             // reportError runs an unknown callback, which cannot be annotated
-            // as safe here (but is), and takes its Error by value (see
-            // JL_SA_BROKEN_PARAM_DTORS)
-#if !defined(__clang_gcanalyzer__) && !defined(JL_SA_BROKEN_PARAM_DTORS)
+            // as safe here (but is)
+#ifndef __clang_gcanalyzer__
             ES.reportError(G.takeError());
 #endif
             R->failMaterialization();
@@ -1206,10 +1173,7 @@ public:
                     JIT, OL,
                     Out.finish(std::move(Ctx), std::move(Mod),
                                *R->getExecutionSession().getSymbolStringPool()))))) {
-            // reportError takes its Error by value (see JL_SA_BROKEN_PARAM_DTORS)
-#ifndef JL_SA_BROKEN_PARAM_DTORS
             R->getExecutionSession().reportError(std::move(Err));
-#endif
             R->failMaterialization();
         }
     }
@@ -1238,18 +1202,6 @@ static Error deregisterEHFrames(orc::ExecutorAddrRange EHFrameSection) {
     return Error::success();
 }
 }
-#if JL_LLVM_VERSION < 210000
-class JLEHFrameRegistrar final : public jitlink::EHFrameRegistrar {
-public:
-    Error registerEHFrames(orc::ExecutorAddrRange EHFrameSection) override {
-        return JLEHFrames::registerEHFrames(EHFrameSection);
-    }
-
-    Error deregisterEHFrames(orc::ExecutorAddrRange EHFrameSection) override {
-        return JLEHFrames::deregisterEHFrames(EHFrameSection);
-    }
-};
-#else
 namespace JLEHFrames {
     static auto
     registerEHFrameSectionAllocAction(const char *ArgData, size_t ArgSize) {
@@ -1267,7 +1219,6 @@ namespace JLEHFrames {
             .release();
     }
 }
-#endif
 #endif
 
 // A simple forwarding class, since OrcJIT v2 needs a unique_ptr, while we have a shared_ptr
@@ -1367,13 +1318,6 @@ namespace {
 #endif
         if (TheTriple.isAArch64())
             codemodel = CodeModel::Small;
-#if JL_LLVM_VERSION < 200000
-        else if (TheTriple.isRISCV()) {
-            // RISC-V only supports large code model from LLVM 20
-            // https://github.com/llvm/llvm-project/pull/70308
-            codemodel = CodeModel::Medium;
-        }
-#endif
         // Generate simpler code for JIT
         Reloc::Model relocmodel = Reloc::Static;
         if (TheTriple.isRISCV()) {
@@ -1383,11 +1327,7 @@ namespace {
         }
         auto optlevel = CodeGenOptLevelFor(jl_options.opt_level);
         auto TM = TheTarget->createTargetMachine(
-#if JL_LLVM_VERSION < 210000
-                TheTriple.getTriple(),
-#else
                 TheTriple,
-#endif
                 TheCPU, FeaturesStr,
                 options,
                 relocmodel,
@@ -1930,17 +1870,6 @@ JuliaOJIT::JuliaOJIT()
     OptimizeLayer(ES, JITPointersLayer, IRTransformRef(*Optimizers)),
     DebuginfoPlugin(std::make_shared<JLDebuginfoPlugin>())
 {
-#if JL_LLVM_VERSION < 210000
-# if defined(LLVM_SHLIB)
-    // When dynamically linking against LLVM, use our custom EH frame registration code
-    // also used with RTDyld to inform both our and the libc copy of libunwind.
-    auto ehRegistrar = std::make_unique<JLEHFrameRegistrar>();
-# else
-    auto ehRegistrar = std::make_unique<jitlink::InProcessEHFrameRegistrar>();
-# endif
-    ObjectLayer.addPlugin(std::make_unique<EHFrameRegistrationPlugin>(
-        ES, std::move(ehRegistrar)));
-#else
     // LLVM 21+ removed EHFrameRegistrar. Use our own plugin for custom registration
     // when dynamically linking, plus the built-in plugin for standard registration.
 # if defined(LLVM_SHLIB)
@@ -1950,7 +1879,6 @@ JuliaOJIT::JuliaOJIT()
 # else
     ObjectLayer.addPlugin(cantFail(EHFrameRegistrationPlugin::Create(ES)));
 # endif
-#endif
 
     ObjectLayer.addPlugin(DebuginfoPlugin);
     ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(&jit_bytes_size));
@@ -2317,10 +2245,6 @@ void JuliaOJIT::enableJITDebuggingSupport()
     orc::SymbolMap GDBFunctions;
     auto registerJITLoaderGDBAllocAction = addAbsoluteToMap(GDBFunctions,llvm_orc_registerJITLoaderGDBAllocAction);
     (void)registerJITLoaderGDBAllocAction;
-#if JL_LLVM_VERSION < 220000
-    auto registerJITLoaderGDBWrapper = addAbsoluteToMap(GDBFunctions,llvm_orc_registerJITLoaderGDBWrapper);
-    (void)registerJITLoaderGDBWrapper;
-#endif
     cantFail(JD.define(orc::absoluteSymbols(GDBFunctions)));
     if (TM->getTargetTriple().isOSBinFormatMachO()) {
         auto RegisterSym = cantFail(
@@ -2330,10 +2254,6 @@ void JuliaOJIT::enableJITDebuggingSupport()
     }
 #ifndef _COMPILER_ASAN_ENABLED_ // TODO: Fix duplicated sections spam #51794
     else if (TM->getTargetTriple().isOSBinFormatELF()) {
-#if JL_LLVM_VERSION < 220000
-        //EPCDebugObjectRegistrar doesn't take a JITDylib, so we have to directly provide the call address
-        ObjectLayer.addPlugin(std::make_unique<orc::DebugObjectManagerPlugin>(ES, std::make_unique<orc::EPCDebugObjectRegistrar>(ES, registerJITLoaderGDBWrapper)));
-#else
         // LLVM 22 replaced DebugObjectManagerPlugin with ELFDebugObjectPlugin,
         // which emits the debug object into a JIT allocation of its own and then
         // blocks the linker thread until that allocation is finalized. Blocking
@@ -2342,14 +2262,12 @@ void JuliaOJIT::enableJITDebuggingSupport()
         // register the copy of the object that JLDebuginfoPlugin already keeps
         // instead. See JLDebuginfoPlugin::registerWithGDB.
         DebuginfoPlugin->enableGDBRegistration(registerJITLoaderGDBAllocAction);
-#endif
     }
 #endif
 }
 
 void JuliaOJIT::enableIntelJITEventListener()
 {
-#if JL_LLVM_VERSION >= 190000
     if (TM->getTargetTriple().isOSBinFormatELF()) {
         orc::SymbolMap VTuneFunctions;
         auto RegisterImplAddr = addAbsoluteToMap(VTuneFunctions,llvm_orc_registerVTuneImpl);
@@ -2362,7 +2280,6 @@ void JuliaOJIT::enableIntelJITEventListener()
         ObjectLayer.addPlugin(std::make_unique<VTuneSupportPlugin>(
             ES.getExecutorProcessControl(), RegisterImplAddr, UnregisterImplAddr, EmitDebugInfo));
     }
-#endif
 }
 
 void JuliaOJIT::enableOProfileJITEventListener()
@@ -2372,7 +2289,6 @@ void JuliaOJIT::enableOProfileJITEventListener()
 
 void JuliaOJIT::enablePerfJITEventListener()
 {
-#if JL_LLVM_VERSION >= 180000
     if (TM->getTargetTriple().isOSBinFormatELF()) {
         orc::SymbolMap PerfFunctions;
         auto StartAddr = addAbsoluteToMap(PerfFunctions,llvm_orc_registerJITLoaderPerfStart);
@@ -2386,7 +2302,6 @@ void JuliaOJIT::enablePerfJITEventListener()
         ObjectLayer.addPlugin(std::make_unique<PerfSupportPlugin>(
             ES.getExecutorProcessControl(), StartAddr, EndAddr, ImplAddr, EmitDebugInfo, EmitUnwindInfo));
     }
-#endif
 }
 
 const DataLayout& JuliaOJIT::getDataLayout() const
@@ -2799,11 +2714,7 @@ std::unique_ptr<TargetMachine> JuliaOJIT::cloneTargetMachine() const
 {
     auto NewTM = std::unique_ptr<TargetMachine>(getTarget()
         .createTargetMachine(
-#if JL_LLVM_VERSION < 210000
-            getTargetTriple().str(),
-#else
             getTargetTriple(),
-#endif
             getTargetCPU(),
             getTargetFeatureString(),
             getTargetOptions(),
@@ -2846,11 +2757,7 @@ static void decorate_module(Module &M) {
 #define ASM_USES_ELF // use ELF or COFF syntax based on FORCE_ELF
         StringRef inline_asm(
     ".section"
-#if JL_LLVM_VERSION >= 180000
         " .ltext,\"ax\",@progbits\n"
-#else
-        " .text\n"
-#endif
     ".globl __julia_personality\n"
     "\n"
 #ifdef ASM_USES_ELF
@@ -2872,11 +2779,7 @@ static void decorate_module(Module &M) {
     "  .byte 1;\n"    // first instruction
     "  .byte 0x50;\n" // push RBP
     "  .int __catchjmp - "
-#if JL_LLVM_VERSION >= 180000
     ".ltext;\n" // Section-relative offset (if using COFF and JITLink, this can be relative to __ImageBase instead, though then we could possibly use pdata/xdata directly then)
-#else
-    ".text;\n"
-#endif
     ".size __UnwindData, 12\n"
     "\n"
 #ifdef ASM_USES_ELF

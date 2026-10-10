@@ -180,11 +180,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
             adoptFunc->copyMetadata(pgcstack_getter, 0);
         }
         adopt->setCalledFunction(adoptFunc);
-#if JL_LLVM_VERSION >= 200000
         adopt->insertBefore(slowTerm->getIterator());
-#else
-        adopt->insertBefore(slowTerm);
-#endif
         phi->addIncoming(adopt, slowTerm->getParent());
         // emit fast branch code
         builder.SetInsertPoint(fastTerm->getParent());
@@ -195,11 +191,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         phi->addIncoming(pgcstack, fastTerm->getParent());
         // emit pre-return cleanup
         if (CountTrackedPointers(pgcstack->getParent()->getParent()->getReturnType()).count == 0) {
-#if JL_LLVM_VERSION >= 200000
             auto last_gc_state = PHINode::Create(Type::getInt8Ty(pgcstack->getContext()), 2, "", phi->getIterator());
-#else
-            auto last_gc_state = PHINode::Create(Type::getInt8Ty(pgcstack->getContext()), 2, "", phi);
-#endif
             // if we called jl_adopt_thread, we must end this cfunction back in the safe-state
             last_gc_state->addIncoming(ConstantInt::get(Type::getInt8Ty(M->getContext()), JL_GC_STATE_SAFE), slowTerm->getParent());
             last_gc_state->addIncoming(prior, fastTerm->getParent());
@@ -242,11 +234,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
             builder.SetInsertPoint(pgcstack);
             auto phi = builder.CreatePHI(T_pppjlvalue, 2, "pgcstack");
             pgcstack->replaceAllUsesWith(phi);
-#if JL_LLVM_VERSION >= 200000
             pgcstack->moveBefore(slowTerm->getIterator());
-#else
-            pgcstack->moveBefore(slowTerm);
-#endif
             // refresh the basic block in the builder
             builder.SetInsertPoint(pgcstack);
             auto getter = builder.CreateLoad(T_pgcstack_getter, pgcstack_func_slot);
