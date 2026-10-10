@@ -1834,7 +1834,8 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
             jl_datatype_t *uw = typ->name == x->name ? y : typ; // substitution occurs here
             jl_value_t *wrapper = uw->name->wrapper;
             jl_datatype_t *w = (jl_datatype_t*)jl_unwrap_unionall(wrapper);
-            jl_svec_t *sv = jl_alloc_svec_uninit(jl_svec_len(uw->parameters));
+            // zero-initialized, since sv is rooted while the remaining parameters are computed
+            jl_svec_t *sv = jl_alloc_svec(jl_svec_len(uw->parameters));
             JL_GC_PUSH1(&sv);
             jl_value_t **vals = jl_svec_data(sv);
             // no JL_GC_PUSHARGS(vals, ...) since GC is already aware of sv
@@ -1845,7 +1846,8 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
                 vals[i_firstnewparam] = firstnewparam;
             }
             for (size_t i = i_firstnewparam+1; i < nparams; i++) { // insert the remaining parameters
-                vals[i] = jl_substitute_datatype(jl_svecref(typ->parameters, i), x, y);
+                // the recursive call can GC, so sv is no longer fresh and this needs a write barrier
+                jl_svecset(sv, i, jl_substitute_datatype(jl_svecref(typ->parameters, i), x, y));
             }
             if (jl_is_tuple_type(wrapper)) {
                 // special case for tuples, since the wrapper (Tuple) does not have as

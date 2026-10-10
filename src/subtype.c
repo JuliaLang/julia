@@ -151,9 +151,21 @@ typedef struct jl_ivarbinding_t {
     jl_tvar_t **var;
     jl_value_t **lb;
     jl_value_t **ub;
+    // GC object holding the slots above (the `iparams` svec, or `newvar` for
+    // its lb/ub), or NULL if they live on the stack. See `set_ivar_slot`.
+    jl_value_t *owner;
     jl_varbinding_t *root;
     struct jl_ivarbinding_t *next;
 } jl_ivarbinding_t;
+
+// Store `val` through one of `b`'s slots. The owner of those slots may have
+// aged since it was allocated, so the store needs a write barrier.
+static void set_ivar_slot(jl_ivarbinding_t *b, void *slot, jl_value_t *val) JL_NOTSAFEPOINT
+{
+    if (b->owner)
+        jl_gc_wb(b->owner, slot, val);
+    *(jl_value_t**)slot = val;
+}
 
 // subtype algorithm state
 typedef struct JL_GC_TRACKED_TYPE jl_stenv_t {
@@ -413,13 +425,24 @@ typedef enum {
                           // parameters, Vararg length)
 } jl_param_pos_t;
 
+// Store `val` into a slot of a saved environment. When the environment is
+// large enough that its roots live in a heap svec (`sv` non-NULL), that svec
+// may have aged since `alloc_env`, so the store needs a write barrier.
+static void set_env_root(jl_svec_t *sv, jl_value_t **slot, jl_value_t *val) JL_NOTSAFEPOINT
+{
+    if (sv)
+        jl_gc_wb(sv, slot, val);
+    *slot = val;
+}
+
 static void re_save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
 {
     jl_value_t **roots = NULL;
+    jl_svec_t *sv = NULL;
     int nroots = 0;
     if (root) {
         if (se->gcframe.nroots == JL_GC_ENCODE_PUSHARGS(1)) {
-            jl_svec_t *sv = (jl_svec_t*)se->roots[0];
+            sv = (jl_svec_t*)se->roots[0];
             assert(jl_is_svec(sv));
             roots = jl_svec_data(sv);
             nroots = jl_svec_len(sv);
@@ -433,9 +456,9 @@ static void re_save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
     int i = 0, j = 0;
     while (v != NULL) {
         if (root) {
-            roots[i++] = v->lb;
-            roots[i++] = v->ub;
-            roots[i++] = (jl_value_t*)v->innervars;
+            set_env_root(sv, &roots[i++], v->lb);
+            set_env_root(sv, &roots[i++], v->ub);
+            set_env_root(sv, &roots[i++], (jl_value_t*)v->innervars);
         }
         se->buf[j++] = v->occurs_inv;
         se->buf[j++] = v->occurs_cov;
@@ -4786,6 +4809,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             inew->var = (jl_tvar_t **)&iparams[niparams++]; *inew->var = ivar;
             inew->lb = &iparams[niparams++]; *inew->lb = ivar->lb;
             inew->ub = &iparams[niparams++]; *inew->ub = ivar->ub;
+            inew->owner = (jl_value_t*)p;
             inew->root = vb;
             inew->next = allvars;
             allvars = inew;
@@ -4796,6 +4820,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         inew->var = &btemp->var;
         inew->lb = &btemp->lb;
         inew->ub = &btemp->ub;
+        inew->owner = NULL;
         inew->root = btemp;
         inew->next = allvars;
         allvars = inew;
@@ -4806,6 +4831,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 inew->var = (jl_tvar_t **)&iparams[niparams++]; *inew->var = ivar;
                 inew->lb = &iparams[niparams++]; *inew->lb = ivar->lb;
                 inew->ub = &iparams[niparams++]; *inew->ub = ivar->ub;
+                inew->owner = (jl_value_t*)p;
                 inew->root = btemp;
                 inew->next = allvars;
                 allvars = inew;
@@ -4833,14 +4859,14 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             }
             if (varval) {
                 JL_TRY {
-                    *btemp->lb = jl_substitute_var(ilb, vb->var, varval);
+                    set_ivar_slot(btemp, btemp->lb, jl_substitute_var(ilb, vb->var, varval));
                 }
                 JL_CATCH {
                     res = jl_bottom_type;
                 }
             }
             else if (ilb == (jl_value_t*)vb->var) {
-                *btemp->lb = vb->lb;
+                set_ivar_slot(btemp, btemp->lb, vb->lb);
             }
             else {
                 innerflag |= 1;
@@ -4849,7 +4875,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         if (jl_has_typevar(iub, vb->var)) {
             assert(btemp->root->var == ivar || bdepth0 == vb->depth0);
             if (vb->ub == (jl_value_t*)ivar) {
-                *btemp->ub = omit_bad_union(iub, vb->var);
+                set_ivar_slot(btemp, btemp->ub, omit_bad_union(iub, vb->var));
                 if (*btemp->ub == jl_bottom_type && *btemp->ub != *btemp->lb) {
                     JL_GC_POP();
                     JL_GC_POP();
@@ -4861,14 +4887,14 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 if (iub == NULL)
                     res = jl_bottom_type;
                 else
-                    *btemp->ub = iub;
+                    set_ivar_slot(btemp, btemp->ub, iub);
             }
             else if (iub == (jl_value_t*)vb->var) {
                 // TODO: this loses some constraints, such as in this test, where we replace T4<:S3 (e.g. T4==S3 since T4 only appears covariantly once) with T4<:Any
                 // a = Tuple{Float64,T3,T4} where T4 where T3
                 // b = Tuple{S2,Tuple{S3},S3} where S2 where S3
                 // Tuple{Float64, T3, T4} where {S3, T3<:Tuple{S3}, T4<:S3}
-                *btemp->ub = vb->ub;
+                set_ivar_slot(btemp, btemp->ub, vb->ub);
             }
             else {
                 innerflag |= 2;
@@ -4880,9 +4906,9 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 has_typevar_via_flatten_env(vb->lb, ivar, allvars, checked) ||
                 has_typevar_via_flatten_env(vb->ub, ivar, allvars, checked)) {
                 if (innerflag & 1)
-                    *btemp->lb = jl_new_struct(jl_unionall_type, vb->var, ilb);
+                    set_ivar_slot(btemp, btemp->lb, jl_new_struct(jl_unionall_type, vb->var, ilb));
                 if (innerflag & 2)
-                    *btemp->ub = jl_new_struct(jl_unionall_type, vb->var, iub);
+                    set_ivar_slot(btemp, btemp->ub, jl_new_struct(jl_unionall_type, vb->var, iub));
             }
             else {
                 assert(btemp->root != vb);
@@ -4890,9 +4916,9 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 // move the `where T` outside `where S` instead of putting it here. issue #21243.
                 if (newvar != vb->var) {
                     if (innerflag & 1)
-                        *btemp->lb = jl_substitute_var(ilb, vb->var, (jl_value_t*)newvar);
+                        set_ivar_slot(btemp, btemp->lb, jl_substitute_var(ilb, vb->var, (jl_value_t*)newvar));
                     if (innerflag & 2)
-                        *btemp->ub = jl_substitute_var(iub, vb->var, (jl_value_t*)newvar);
+                        set_ivar_slot(btemp, btemp->ub, jl_substitute_var(iub, vb->var, (jl_value_t*)newvar));
                 }
                 if (!wrapped)
                     pwrap = pbtemp;
@@ -4910,7 +4936,8 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         jl_ivarbinding_t *inew = (jl_ivarbinding_t *)alloca(sizeof(jl_ivarbinding_t));
         inew->var = &newvar;
         inew->lb = &newvar->lb;
-        inew->ub = &newvar->ub;;
+        inew->ub = &newvar->ub;
+        inew->owner = (jl_value_t*)newvar;
         inew->root = wrap->root;
         inew->next = wrap;
         if (pwrap != NULL)
@@ -4975,9 +5002,9 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 ilb = *btemp2->lb;
                 iub = *btemp2->ub;
                 if (jl_has_typevar(ilb, ivar))
-                    *btemp2->lb = jl_substitute_var(ilb, ivar, nivar);
+                    set_ivar_slot(btemp2, btemp2->lb, jl_substitute_var(ilb, ivar, nivar));
                 if (jl_has_typevar(iub, ivar))
-                    *btemp2->ub = jl_substitute_var(iub, ivar, nivar);
+                    set_ivar_slot(btemp2, btemp2->ub, jl_substitute_var(iub, ivar, nivar));
             }
             if (!wrapped && !varval) {
                 // newvar also needs bounds substitution.
@@ -4986,7 +5013,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 if (jl_has_typevar(vb->ub, ivar))
                     vb->ub = jl_substitute_var(vb->ub, ivar, nivar);
             }
-            *btemp1->var = (jl_tvar_t *)nivar;
+            set_ivar_slot(btemp1, btemp1->var, (jl_value_t*)nivar);
         }
     }
 
@@ -6076,6 +6103,7 @@ static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int co
     }
     jl_value_t **merged = NULL;
     jl_value_t **saved = NULL;
+    jl_svec_t *msv = NULL;
     int nroots = 0;
     assert(se->gcframe.nroots == me->gcframe.nroots);
     if (se->gcframe.nroots == JL_GC_ENCODE_PUSHARGS(1)) {
@@ -6083,10 +6111,10 @@ static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int co
         assert(jl_is_svec(sv));
         saved = jl_svec_data(sv);
         nroots = jl_svec_len(sv);
-        sv = (jl_svec_t*)me->roots[0];
-        assert(jl_is_svec(sv));
-        merged = jl_svec_data(sv);
-        assert(nroots == jl_svec_len(sv));
+        msv = (jl_svec_t*)me->roots[0];
+        assert(jl_is_svec(msv));
+        merged = jl_svec_data(msv);
+        assert(nroots == jl_svec_len(msv));
     }
     else {
         saved = se->roots;
@@ -6105,14 +6133,14 @@ static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int co
         JL_GC_PROMISE_ROOTED(b1); // clang-sagc doesn't know this came from our GC frame
         b2 = v->lb;
         JL_GC_PROMISE_ROOTED(b2); // clang-sagc doesn't know the fields of this are stack GC roots
-        merged[n] = (b1 == b0 || b2 == b0) ? b0 : simple_meet(b1, b2, 0);
+        set_env_root(msv, &merged[n], (b1 == b0 || b2 == b0) ? b0 : simple_meet(b1, b2, 0));
         // merge `ub`
         b0 = saved[n+1];
         b1 = merged[n+1];
         JL_GC_PROMISE_ROOTED(b1); // clang-sagc doesn't know this came from our GC frame
         b2 = v->ub;
         JL_GC_PROMISE_ROOTED(b2); // clang-sagc doesn't know the fields of this are stack GC roots
-        merged[n+1] = (b1 == b0 || b2 == b0) ? b0 : simple_join(b1, b2);
+        set_env_root(msv, &merged[n+1], (b1 == b0 || b2 == b0) ? b0 : simple_join(b1, b2));
         // merge `innervars`
         b1 = merged[n+2];
         JL_GC_PROMISE_ROOTED(b1); // clang-sagc doesn't know this came from our GC frame
@@ -6122,7 +6150,7 @@ static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int co
             if (b1)
                 jl_array_ptr_1d_append((jl_array_t*)b1, (jl_array_t*)b2);
             else
-                merged[n+2] = b2;
+                set_env_root(msv, &merged[n+2], b2);
         }
         // merge occurs_inv/cov/cov_diag by max (never decrease)
         if (v->occurs_inv > me->buf[m])

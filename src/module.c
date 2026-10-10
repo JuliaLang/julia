@@ -1978,7 +1978,8 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
         if (resolution.should_be_reexported) {
             new_bpart->kind |= PARTITION_FLAG_IMPLICITLY_EXPORTED;
         }
-        jl_gc_write_fresh(new_bpart, new_bpart->restriction, jl_value_t, resolution.binding_or_const);
+        // resolving the import can allocate, so new_bpart is no longer fresh
+        jl_gc_write(new_bpart, new_bpart->restriction, jl_value_t, resolution.binding_or_const);
         assert(resolution.min_world <= new_world && resolution.max_world == ~(size_t)0);
         if (new_bpart->kind == old_bpart->kind && new_bpart->restriction == old_bpart->restriction) {
             JL_GC_POP();
@@ -1990,7 +1991,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
         jl_gc_write_fresh(new_bpart, new_bpart->restriction, jl_value_t, restriction_val);
     }
     jl_atomic_store_release(&old_bpart->max_world, new_world-1);
-    jl_gc_write_atomic_fresh(new_bpart, new_bpart->next, jl_binding_partition_t, old_bpart, relaxed);
+    jl_gc_write_atomic(new_bpart, new_bpart->next, jl_binding_partition_t, old_bpart, relaxed);
 
     if ((jl_bpart_is_exported(old_bpart->kind) || jl_bpart_is_exported(kind)) && jl_require_world != ~(size_t)0) {
         jl_atomic_store_release(&b->globalref->mod->export_set_changed_since_require_world, 1);
