@@ -223,7 +223,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
     has_new_macro = hasmethod(macfunc, Tuple{typeof(mctx), typeof.(raw_args)...}; world=macro_world)
 
     if has_new_macro
-        macro_args = [mctx, raw_args...]
+        macro_args = Any[mctx, raw_args...]
         macro_mi = lookup_method_instance(macfunc, macro_args, macro_world)
         expanded = try
             _invoke_in_world(ctx.world, macfunc, macro_args...)

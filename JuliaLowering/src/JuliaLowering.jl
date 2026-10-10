@@ -37,6 +37,8 @@ const TypeEqOf = isdefinedglobal(Core, :TypeEqOf) ? "TypeEqOf" : "Typeof"
 const SyntaxTree = Syntax
 const IdTag = Int
 SyntaxList(rest::SyntaxTree...) = SyntaxTree[rest...]
+# Type of `ex[i:j]`
+const SyntaxView = SubArray{SyntaxTree, 1, Vector{SyntaxTree}, Tuple{UnitRange{Int}}, true}
 
 _include("ast.jl")
 _include("bindings.jl")
