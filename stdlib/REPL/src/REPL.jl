@@ -53,12 +53,8 @@ export
 
 public TerminalMenus
 
-import Base:
-    AbstractDisplay,
-    display,
-    show,
-    AnyDict,
-    ==
+import Base: AbstractDisplay, display, show, AnyDict, ==,
+    Syntax, syntax_to_expr, expr_to_syntax, syntax_name, head, children, @mknode
 
 _displaysize(io::IO) = displaysize(io)::Tuple{Int,Int}
 
@@ -176,13 +172,21 @@ mutable struct REPLBackend
     response_channel::Channel{Any}
     "flag indicating the state of this backend"
     in_eval::Bool
-    "transformation functions to apply before evaluating expressions"
+    "functions (Syntax->Syntax) to apply before evaluating expressions"
+    syntax_transforms::Vector{Any}
+    """
+    functions to apply before evaluating expressions.  Note that this degrades
+    provenance (functions are expected to accept and produce Expr with Any
+    leaves); use syntax_transforms instead.
+    """
     ast_transforms::Vector{Any}
     "current backend task"
     backend_task::Task
 
-    REPLBackend(repl_channel, response_channel, in_eval, ast_transforms=copy(repl_ast_transforms)) =
-        new(repl_channel, response_channel, in_eval, ast_transforms)
+    REPLBackend(repl_channel, response_channel, in_eval,
+                ast_transforms=copy(repl_ast_transforms),
+                syntax_transforms=copy(repl_syntax_transforms)) =
+        new(repl_channel, response_channel, in_eval, syntax_transforms, ast_transforms)
 end
 REPLBackend() = REPLBackend(Channel(1), Channel(1), false)
 
@@ -202,6 +206,20 @@ function destroy(ref::REPLBackendRef, state::Task)
     close(ref.response_channel)
 end
 
+function _softscope(s::Syntax)
+    h = head(s)
+    if h === :toplevel
+        @mknode(s; children=map(_softscope, children(s)))
+    elseif h in (:module, :error, :incomplete, :thunk)
+        s
+    else
+        @mknode(s; head=:block, children=Syntax[
+            @mknode(s; head=:softscope, children=Syntax[expr_to_syntax(true, s)]), s])
+    end
+end
+
+# the Syntax method should suffice, but ecosystem uses REPL.softscope, so keep
+# the old method around.
 """
     softscope(ex)
 
@@ -209,23 +227,8 @@ Return a modified version of the parsed expression `ex` that uses
 the REPL's "soft" scoping rules for global syntax blocks.
 """
 function softscope(@nospecialize ex)
-    if ex isa Expr
-        h = ex.head
-        if h === :toplevel
-            ex′ = Expr(h)
-            map!(softscope, resize!(ex′.args, length(ex.args)), ex.args)
-            return ex′
-        elseif h in (:meta, :import, :using, :export, :module, :error, :incomplete, :thunk)
-            return ex
-        elseif h === :global && all(x->isa(x, Symbol), ex.args)
-            return ex
-        else
-            return Expr(:block, Expr(:softscope, true), ex)
-        end
-    end
-    return ex
+    syntax_to_expr(_softscope(expr_to_syntax(ex)))
 end
-
 # Temporary alias until Documenter updates
 const softscope! = softscope
 
@@ -245,11 +248,8 @@ end
 
 retrieve_modules(::Module, ::Any) = (nothing,)
 function retrieve_modules(current_module::Module, mod_name::Symbol)
-    mod = try
-        getproperty(current_module, mod_name)
-    catch
-        return (nothing,)
-    end
+    mod = isdefinedglobal(current_module, mod_name) ?
+        getproperty(current_module, mod_name) : nothing
     return (mod isa Module ? mod : nothing,)
 end
 retrieve_modules(current_module::Module, mod_name::QuoteNode) = retrieve_modules(current_module, mod_name.value)
@@ -343,7 +343,7 @@ function collect_qualified_access_warnings(current_mod, ast)
 end
 
 function warn_on_non_owning_accesses(current_mod, ast)
-    warnings = collect_qualified_access_warnings(current_mod, ast)
+    warnings = collect_qualified_access_warnings(current_mod, syntax_to_expr(ast))
     for (; outer_mod, mod, owner, name_being_accessed) in warnings
         print_qualified_access_warning(mod, owner, name_being_accessed)
     end
@@ -351,7 +351,9 @@ function warn_on_non_owning_accesses(current_mod, ast)
 end
 warn_on_non_owning_accesses(ast) = warn_on_non_owning_accesses(Base.active_module(), ast)
 
-const repl_ast_transforms = Any[softscope, warn_on_non_owning_accesses] # defaults for new REPL backends
+# defaults for new REPL backends
+const repl_ast_transforms = Any[]
+const repl_syntax_transforms = Any[_softscope, warn_on_non_owning_accesses]
 
 # Allows an external package to add hooks into the code loading.
 # The hook should take a Vector{Symbol} of package names and
@@ -359,25 +361,21 @@ const repl_ast_transforms = Any[softscope, warn_on_non_owning_accesses] # defaul
 # to e.g. install packages on demand
 const install_packages_hooks = Any[]
 
-# N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
-# We need to do this for both the actual eval and macroexpand, since the latter can cause custom macro
-# code to run (and error).
-__repl_entry_lower_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Cint}) =
-    Core._lower(ast, mod, unsafe_string(toplevel_file[]), Int(toplevel_line[]))[1]
-__repl_entry_eval_expanded_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Cint}) =
-    ccall(:jl_toplevel_eval_flex, Any, (Any, Any, Cint, Cint, Ptr{Ptr{UInt8}}, Ptr{Cint}), mod, ast, 1, 1, toplevel_file, toplevel_line)
+# N.B.: Any functions starting with __repl_entry cut off backtraces when
+# printing in the REPL.
+__repl_entry_eval(mod, s) = invokelatest(Core.eval, mod, s)
 
-function toplevel_eval_with_hooks(mod::Module, @nospecialize(ast), toplevel_file=Ref{Ptr{UInt8}}(Base.unsafe_convert(Ptr{UInt8}, :REPL)), toplevel_line=Ref{Cint}(1))
-    if !isexpr(ast, :toplevel)
-        ast = invokelatest(__repl_entry_lower_with_loc, mod, ast, toplevel_file, toplevel_line)
-        check_for_missing_packages_and_run_hooks(mod, ast)
-        return invokelatest(__repl_entry_eval_expanded_with_loc, mod, ast, toplevel_file, toplevel_line)
+function toplevel_eval_with_hooks(mod::Module, s::Syntax)
+    if !(head(s) === :toplevel)
+        check_for_missing_packages_and_run_hooks(mod, s)
+        __repl_entry_eval(mod, s)
+    else
+        value = nothing
+        for c in children(s)
+            value = toplevel_eval_with_hooks(mod, c)
+        end
+        value
     end
-    local value=nothing
-    for i = 1:length(ast.args)
-        value = toplevel_eval_with_hooks(mod, ast.args[i], toplevel_file, toplevel_line)
-    end
-    return value
 end
 
 function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
@@ -392,8 +390,19 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 put!(backend.response_channel, Pair{Any, Bool}(lasterr, true); cancel=nothing)
             else
                 backend.in_eval = true
-                for xf in backend.ast_transforms
-                    ast = Base.invokelatest(xf, ast)
+                if !(ast isa Syntax)
+                    # should only be reachable by external packages
+                    ast = expr_to_syntax(ast)
+                end
+                if !isempty(backend.ast_transforms)
+                    expr = syntax_to_expr(ast)
+                    for xf in backend.ast_transforms
+                        expr = Base.invokelatest(xf, expr)
+                    end
+                    ast = expr_to_syntax(expr, Base.first_linenode(ast), ast.context)
+                end
+                for xf in backend.syntax_transforms
+                    ast = Base.invokelatest(xf, ast)::Syntax
                 end
                 value = toplevel_eval_with_hooks(mod, ast)
                 backend.in_eval = false
@@ -413,8 +422,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
     nothing
 end
 
-function check_for_missing_packages_and_run_hooks(mod::Module, ast)
-    isa(ast, Expr) || return
+function check_for_missing_packages_and_run_hooks(mod::Module, ast::Syntax)
     mods = modules_to_be_loaded(ast)
     isempty(mods) && return
     missing_mods = filter(m -> isnothing(Base.identify_package(String(m))), mods)
@@ -429,45 +437,37 @@ function check_for_missing_packages_and_run_hooks(mod::Module, ast)
     Base.invokelatest(Base.Precompilation.precompile_for_loading, mod, mods)
 end
 
-function _modules_to_be_loaded!(ast::Expr, mods::Vector{Symbol})
-    function add!(ctx)
-        if ctx.head == :as
-            ctx = ctx.args[1]
+function _modules_to_be_loaded!(s::Syntax, mods::Vector{Symbol})
+    function add!(ctx::Syntax)
+        if head(ctx) == :as
+            ctx = ctx[1]
         end
-        if ctx.args[1] != :. # don't include local import `import .Foo`
-            push!(mods, ctx.args[1])
-        end
-    end
-    ast.head === :quote && return mods # don't search if it's not going to be run during this eval
-    if ast.head == :call
-        if length(ast.args) == 5 && ast.args[1] === GlobalRef(Base, :_eval_import)
-            ctx = ast.args[4]
-            if ctx isa QuoteNode # i.e. `Foo: bar`
-                ctx = ctx.value
-            else
-                ctx = ast.args[5].value
-            end
-            add!(ctx)
-        elseif length(ast.args) == 3 && ast.args[1] == GlobalRef(Base, :_eval_using)
-            add!(ast.args[3].value)
+        # exclude "using .foo" (. . foo), include "using foo.x" (. foo x)
+        if length(children(ctx)) > 0 && head(ctx[1]) === :identifier &&
+                syntax_name(ctx[1]) != "."
+            push!(mods, syntax_to_expr(ctx[1])::Symbol)
         end
     end
-    if ast.head !== :thunk
-        for arg in ast.args
-            if isexpr(arg, (:block, :if))
-                _modules_to_be_loaded!(arg, mods)
+    h = head(s)
+    if h in (:module, :error, :incomplete, :thunk, :quote, :syntaxquote, :macrocall,
+             :function)
+        return mods
+    elseif h in (:import, :using)
+        for c in children(s)
+            length(children(c)) > 0 && if head(c) === :(:)
+                add!(c[1])
+            elseif length(children(c)) > 0
+                add!(c)
             end
         end
     else
-        code = ast.args[1]
-        for arg in code.code
-            isa(arg, Expr) || continue
-            _modules_to_be_loaded!(arg, mods)
+        for c in children(s)
+            _modules_to_be_loaded!(c, mods)
         end
     end
 end
 
-function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
+function modules_to_be_loaded(ast::Syntax, mods::Vector{Symbol} = Symbol[])
     _modules_to_be_loaded!(ast, mods)
     filter!(mod::Symbol -> !in(mod, (:Base, :Main, :Core)), mods) # Exclude special non-package modules
     return unique(mods)
@@ -853,7 +853,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
                     end
                 end
                 ast = parse_repl_input_line(line, repl)
-                (isa(ast,Expr) && ast.head === :incomplete) || break
+                (isa(ast, Syntax) && head(ast) === :incomplete) || break
             end
             if !isempty(line)
                 response = eval_on_backend(ast, backend)
@@ -1245,12 +1245,12 @@ function parse_repl_input_line(line::String, repl; kwargs...)
     # in that case, but let's just be consistent on the off chance that the active module tries
     # to `include(Main, ...)` or similar.
     @Base.ScopedValues.with Base.MainInclude.main_parser=>Base.parser_for_active_project() Base.parse_input_line(line;
-        mod=Base.active_module(repl), kwargs...)
+        mod=Base.active_module(repl), type=Syntax, kwargs...)
 end
 
 function return_callback(s)
     ast = parse_repl_input_line(takestring!(copy(LineEdit.buffer(s))), s; depwarn=false)
-    return !(isa(ast, Expr) && ast.head === :incomplete)
+    return !(isa(ast, Syntax) && head(ast) === :incomplete)
 end
 
 find_hist_file() = get(ENV, "JULIA_HISTORY",
@@ -1467,8 +1467,9 @@ function setup_interface(
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to helpmode function
-        on_done = respond(line::String->helpmode(outstream(repl), line, Base.active_module(repl)),
-                          repl, julia_prompt, pass_empty=true, suppress_on_semicolon=false))
+        on_done = respond(line::String->expr_to_syntax(
+            helpmode(outstream(repl), line, Base.active_module(repl))),
+           repl, julia_prompt, pass_empty=true, suppress_on_semicolon=false))
 
 
     # Set up shell mode
@@ -1486,7 +1487,7 @@ function setup_interface(
             if Meta.isexpr(cmd_ex, :tuple)
                 cmd_ex = :(Base.cmd_gen($cmd_ex))
             end
-            Expr(:call, :(Base.repl_cmd), cmd_ex, outstream(repl))
+            expr_to_syntax(Expr(:call, :(Base.repl_cmd), cmd_ex, outstream(repl)))
         end,
         sticky = true)
 
@@ -1498,7 +1499,7 @@ function setup_interface(
         (repl.envcolors ? Base.input_color : repl.input_color) : "",
         repl = repl,
         complete = LineEdit.EmptyCompletionProvider(),
-        on_done = respond(line->nothing, repl, julia_prompt),
+        on_done = respond(line->expr_to_syntax(nothing), repl, julia_prompt),
         on_enter = function (s::MIState)
                 # This is hit when the user tries to execute a command before the real Pkg mode has been
                 # switched to. Ok to do this even if Pkg is loading on the other task because of the loading lock.

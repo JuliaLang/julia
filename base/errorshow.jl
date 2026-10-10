@@ -1117,6 +1117,7 @@ function print_module_path_file(io, modul, file, line, col = 0;
     # filename, separator, line (`?` if unknown), column if available
     printstyled(io, basename(file), ":", line >= 0 ? line : "?"; color = :light_black, underline = true)
     col != 0 && printstyled(io, ":", col; color = :light_black, underline = true)
+    nothing
 end
 
 #=
