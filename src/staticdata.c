@@ -2655,19 +2655,30 @@ static void jl_prune_idset(_Atomic(jl_svec_t*) *pkeys, _Atomic(jl_genericmemory_
     for (i = 0; i < keys_list.len; i++) {
         jl_binding_t *ref = (jl_binding_t*)keys_list.items[i];
         jl_svecset(keys2, i, ref);
-        jl_smallintset_insert(&keyset2, parent, key_hash, i, (jl_value_t*)keys2);
+        // a set without an index (none of its keys has a hash) stays without one
+        if (keyset != (jl_genericmemory_t*)jl_an_empty_memory_any)
+            jl_smallintset_insert(&keyset2, parent, key_hash, i, (jl_value_t*)keys2);
     }
+    arraylist_free(&keys_list);
+    // The replacements take over the old objects' serialization slots, so that
+    // the pruned keys are not serialized. The shared empty singletons (everything
+    // was pruned, or the set has no index) keep their own entries, though:
+    // registering them at another slot would move every other reference to them.
     void *idx = ptrhash_get(&serialization_order, keys);
     assert(idx != HT_NOTFOUND && idx != (void*)(uintptr_t)-1);
     assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == keys);
-    ptrhash_put(&serialization_order, keys2, idx);
+    if (keys2 != jl_emptysvec)
+        ptrhash_put(&serialization_order, keys2, idx);
     serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = keys2;
 
-    idx = ptrhash_get(&serialization_order, keyset);
-    assert(idx != HT_NOTFOUND && idx != (void*)(uintptr_t)-1);
-    assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == keyset);
-    ptrhash_put(&serialization_order, jl_atomic_load_relaxed(&keyset2), idx);
-    serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = jl_atomic_load_relaxed(&keyset2);
+    if (keyset != (jl_genericmemory_t*)jl_an_empty_memory_any) {
+        idx = ptrhash_get(&serialization_order, keyset);
+        assert(idx != HT_NOTFOUND && idx != (void*)(uintptr_t)-1);
+        assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == keyset);
+        if (jl_atomic_load_relaxed(&keyset2) != (jl_genericmemory_t*)jl_an_empty_memory_any)
+            ptrhash_put(&serialization_order, jl_atomic_load_relaxed(&keyset2), idx);
+        serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = jl_atomic_load_relaxed(&keyset2);
+    }
     jl_gc_write_atomic(parent, *pkeys, jl_svec_t, keys2, relaxed);
     jl_gc_write_atomic(parent, *pkeyset, jl_genericmemory_t, jl_atomic_load_relaxed(&keyset2), relaxed);
 }
