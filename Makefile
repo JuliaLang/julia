@@ -262,8 +262,10 @@ JL_PRIVATE_EXES := 7z
 JL_PRIVATE_TOOLS :=
 ifeq ($(JULIA_BUILD_MODE),release)
 JL_PRIVATE_LIBS-0 += libjulia-internal libjulia-codegen
+JL_STATIC_RUNTIME := libjulia-internal.a
 else ifeq ($(JULIA_BUILD_MODE),debug)
 JL_PRIVATE_LIBS-0 += libjulia-internal-debug libjulia-codegen-debug
+JL_STATIC_RUNTIME := libjulia-internal-debug.a
 endif
 # BSD-3-Clause
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libamd libcamd libccolamd libcolamd libsuitesparseconfig
@@ -478,13 +480,13 @@ endif
 	# that `-ljulia-internal` finds, so linkers keep preferring that library.
 ifeq ($(JULIA_BUILD_MODE),release)
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
-ifeq ($(OS),WINNT)
-	$(INSTALL_F) $(build_libdir)/libjulia-internal.a $(DESTDIR)$(libdir)
-else
-	$(INSTALL_F) $(build_libdir)/libjulia-internal.a $(DESTDIR)$(private_libdir)
-endif
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
+endif
+ifeq ($(OS),WINNT)
+	$(INSTALL_F) $(build_libdir)/$(JL_STATIC_RUNTIME) $(DESTDIR)$(libdir)
+else
+	$(INSTALL_F) $(build_libdir)/$(JL_STATIC_RUNTIME) $(DESTDIR)$(private_libdir)
 endif
 
 	# Copy in all .jl sources as well

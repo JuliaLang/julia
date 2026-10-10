@@ -174,9 +174,9 @@ Multi-threading changes
 Build system changes
 --------------------
 
-* Release builds now install `libjulia-internal.a`, a static build of the runtime without the JIT,
-  so that tools such as JuliaC.jl can link it with a trimmed system image into one executable
-  ([#63618]).
+* Builds now install `libjulia-internal.a` (`libjulia-internal-debug.a` for debug builds), a static
+  build of the runtime without the JIT, so that tools such as JuliaC.jl can link it with a trimmed
+  system image into one executable ([#63618]).
 
 New library functions
 ---------------------
