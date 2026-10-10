@@ -3,7 +3,8 @@ name = "mmtk-julia"
 version = "0.32.0"
 authors = ["Eduardo Souza <ledusou@gmail.com>", "Yi Lin <qinsoon@gmail.com>"]
 build = "build.rs"
-edition = "2018"
+edition = "2024"
+rust-version = "1.92.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -28,12 +29,13 @@ dashmap = "6.2.1"
 # - change branch
 # - change repo name
 # But other changes including adding/removing whitespaces in commented lines may break the CI
-mmtk = { git = "https://github.com/mmtk/mmtk-core.git", rev = "91bca960a2df99530180cb9078cd952fe6fa3d64" }
+mmtk = { git = "https://github.com/wks/mmtk-core.git", rev = "722252c8546503a5e55dede6e13d7540daac99e1" }
 # Uncomment the following to build locally
 # mmtk = { path = "../repos/mmtk-core" }
 log = {version = "0.4", features = ["max_level_trace", "release_max_level_off"] }
-enum-map = ">=2.1"
-atomic = "0.4.6"
+# enum-map 3.1.0 requires higher MSRV.  enum-map 3.0.0 was yanked.
+enum-map = "=2.7.3"
+atomic = "0.6.1"
 chrono = "*"
 thread-id = "*"
 memoffset = "*"

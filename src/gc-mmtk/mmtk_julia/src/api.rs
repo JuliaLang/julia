@@ -1,27 +1,27 @@
 // All functions here are extern function. There is no point for marking them as unsafe.
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
-use crate::util::PreserveErrno;
-use crate::JuliaVM;
 use crate::JULIA_HEADER_SIZE;
+use crate::JuliaVM;
 use crate::MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 use crate::SINGLETON;
+use crate::util::PreserveErrno;
 use crate::{BUILDER, MUTATORS, USER_TRIGGERED_GC};
 
 use libc::c_char;
 use log::*;
+use mmtk::AllocationSemantics;
+use mmtk::Mutator;
 use mmtk::memory_manager;
 use mmtk::scheduler::GCWorker;
 use mmtk::util::alloc::AllocationOptions;
 use mmtk::util::api_util::NullableObjectReference;
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::{Address, ObjectReference, OpaquePointer};
-use mmtk::AllocationSemantics;
-use mmtk::Mutator;
 use std::ffi::CStr;
 use std::sync::atomic::AtomicIsize;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_gc_init(
     min_heap_size: usize,
     max_heap_size: usize,
@@ -36,7 +36,7 @@ pub extern "C" fn mmtk_gc_init(
     };
 
     // We don't need the env var, as we will overwrite the plan with the defined feature.
-    std::env::remove_var("MMTK_PLAN");
+    unsafe { std::env::remove_var("MMTK_PLAN") };
 
     {
         let mut builder = BUILDER.lock().unwrap();
@@ -109,7 +109,10 @@ pub extern "C" fn mmtk_gc_init(
 
         // Set concurrent GC threads
         if n_concurrent_gcthreads > 0 {
-            let success = builder.options.concurrent_threads.set(n_concurrent_gcthreads);
+            let success = builder
+                .options
+                .concurrent_threads
+                .set(n_concurrent_gcthreads);
             assert!(
                 success,
                 "Failed to set concurrent GC threads to {}",
@@ -156,7 +159,7 @@ pub extern "C" fn mmtk_gc_init(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_bind_mutator(tls: VMMutatorThread, tid: usize) -> *mut Mutator<JuliaVM> {
     let mutator_box = memory_manager::bind_mutator(&SINGLETON, tls);
 
@@ -166,7 +169,7 @@ pub extern "C" fn mmtk_bind_mutator(tls: VMMutatorThread, tid: usize) -> *mut Mu
     res
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_post_bind_mutator(
     mutator: *mut Mutator<JuliaVM>,
     original_box_mutator: *mut Mutator<JuliaVM>,
@@ -178,7 +181,7 @@ pub extern "C" fn mmtk_post_bind_mutator(
     );
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_destroy_mutator(mutator: *mut Mutator<JuliaVM>) {
     // destroy the mutator with MMTk.
     memory_manager::destroy_mutator(unsafe { &mut *mutator });
@@ -194,7 +197,7 @@ pub extern "C" fn mmtk_destroy_mutator(mutator: *mut Mutator<JuliaVM>) {
     mutators.remove(&key);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_notify_task_resume(
     mutator: *mut Mutator<JuliaVM>,
     task: *const crate::julia_types::_jl_task_t,
@@ -219,7 +222,7 @@ pub extern "C" fn mmtk_notify_task_resume(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_alloc(
     mutator: *mut Mutator<JuliaVM>,
     size: usize,
@@ -243,7 +246,7 @@ pub extern "C" fn mmtk_alloc(
 ///
 /// This is used for allocation sites that cannot block for a GC, such as Julia's permanent
 /// (immortal) allocation, which is annotated `JL_NOTSAFEPOINT`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_alloc_with_options(
     mutator: *mut Mutator<JuliaVM>,
     size: usize,
@@ -271,7 +274,7 @@ pub extern "C" fn mmtk_alloc_with_options(
     )
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_alloc_large(
     mutator: *mut Mutator<JuliaVM>,
     size: usize,
@@ -288,7 +291,7 @@ pub extern "C" fn mmtk_alloc_large(
     )
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_post_alloc(
     mutator: *mut Mutator<JuliaVM>,
     refer: ObjectReference,
@@ -299,17 +302,17 @@ pub extern "C" fn mmtk_post_alloc(
     memory_manager::post_alloc::<JuliaVM>(unsafe { &mut *mutator }, refer, bytes, semantics)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_will_never_move(object: ObjectReference) -> bool {
     !object.is_movable()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_is_moving() -> bool {
     SINGLETON.get_plan().constraints().moves_objects
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_get_plan_name() -> *const c_char {
     static PLAN_NAME: std::sync::OnceLock<std::ffi::CString> = std::sync::OnceLock::new();
     PLAN_NAME
@@ -320,43 +323,43 @@ pub extern "C" fn mmtk_get_plan_name() -> *const c_char {
         .as_ptr()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_start_worker(tls: VMWorkerThread, worker: *mut GCWorker<JuliaVM>) {
     let worker = unsafe { Box::from_raw(worker) };
     memory_manager::start_worker::<JuliaVM>(&SINGLETON, tls, worker)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_initialize_collection(tls: VMThread) {
     memory_manager::initialize_collection(&SINGLETON, tls);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_used_bytes() -> usize {
     memory_manager::used_bytes(&SINGLETON)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_free_bytes() -> usize {
     memory_manager::free_bytes(&SINGLETON)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_total_bytes() -> usize {
     memory_manager::total_bytes(&SINGLETON)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_is_live_object(object: ObjectReference) -> bool {
     object.is_live()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_is_mapped_address(address: Address) -> bool {
     address.is_mapped()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_handle_user_collection_request(tls: VMMutatorThread, collection: u8) {
     let _errno = PreserveErrno::new();
     AtomicIsize::fetch_add(&USER_TRIGGERED_GC, 1, Ordering::SeqCst);
@@ -394,7 +397,7 @@ pub const MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH: i32 = 2;
 
 use mmtk::GcStatus;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_disable_collection() -> i32 {
     assert!(SINGLETON.get_gc_status() != GcStatus::Uninitialized);
     match memory_manager::disable_collection(&SINGLETON) {
@@ -414,13 +417,13 @@ pub extern "C" fn mmtk_disable_collection() -> i32 {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_enable_collection() -> i32 {
     assert!(SINGLETON.get_gc_status() != GcStatus::Uninitialized);
     memory_manager::enable_collection(&SINGLETON) as i32
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_is_collection_enabled() -> i32 {
     assert!(SINGLETON.get_gc_status() != GcStatus::Uninitialized);
     memory_manager::is_collection_enabled(&SINGLETON) as i32
@@ -430,19 +433,19 @@ pub extern "C" fn mmtk_is_collection_enabled() -> i32 {
 /// pass the returned value to `mmtk_wait_for_new_gc_epoch()` if that attempt fails with
 /// `MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH`, so a notification that arrives in between is
 /// not missed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_gc_epoch() -> u64 {
     let arc = crate::GC_EPOCH_COND.clone();
     let (lock, _cvar) = &*arc;
-    let epoch = *lock.lock().unwrap();
-    epoch
+
+    *lock.lock().unwrap()
 }
 
 /// Block until the GC epoch has advanced at least once since `last_seen_epoch` (as previously
 /// obtained from `mmtk_gc_epoch()`). The epoch advances once per completed stop-the-world pause,
 /// which covers both the case of waiting for an active pause to finish, and the pause that ends a
 /// concurrent GC's background-work phase. Returns immediately if the epoch has already moved on.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_wait_for_new_gc_epoch(last_seen_epoch: u64) {
     let (lock, cvar) = &*crate::GC_EPOCH_COND.clone();
     let guard = lock.lock().unwrap();
@@ -451,33 +454,33 @@ pub extern "C" fn mmtk_wait_for_new_gc_epoch(last_seen_epoch: u64) {
         .unwrap();
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_add_weak_candidate(reff: ObjectReference) {
     let _errno = PreserveErrno::new();
     memory_manager::add_weak_candidate(&SINGLETON, reff)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_add_soft_candidate(reff: ObjectReference) {
     memory_manager::add_soft_candidate(&SINGLETON, reff)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_add_phantom_candidate(reff: ObjectReference) {
     memory_manager::add_phantom_candidate(&SINGLETON, reff)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_harness_begin(tls: VMMutatorThread) {
     memory_manager::harness_begin(&SINGLETON, tls)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_harness_end(_tls: OpaquePointer) {
     memory_manager::harness_end(&SINGLETON)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_process(name: *const c_char, value: *const c_char) -> bool {
     let name_str: &CStr = unsafe { CStr::from_ptr(name) };
     let value_str: &CStr = unsafe { CStr::from_ptr(value) };
@@ -489,37 +492,37 @@ pub extern "C" fn mmtk_process(name: *const c_char, value: *const c_char) -> boo
     )
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_starting_heap_address() -> Address {
     memory_manager::starting_heap_address()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_last_heap_address() -> Address {
     memory_manager::last_heap_address()
 }
 
 // Accessed from C to count the bytes we allocated with jl_gc_counted_malloc etc.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static JULIA_MALLOC_BYTES: AtomicUsize = AtomicUsize::new(0);
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_gc_poll(tls: VMMutatorThread) {
     let _errno = PreserveErrno::new();
     memory_manager::gc_poll(&SINGLETON, tls);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_runtime_panic() {
     panic!("Panicking at runtime!")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_unreachable() {
     unreachable!()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(mutable_transmutes)]
 pub extern "C" fn mmtk_set_vm_space(start: Address, size: usize) {
     let mmtk: &mmtk::MMTK<JuliaVM> = &SINGLETON;
@@ -530,7 +533,7 @@ pub extern "C" fn mmtk_set_vm_space(start: Address, size: usize) {
     set_side_log_bit_for_region(start, size);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_memory_region_copy(
     mutator: *mut Mutator<JuliaVM>,
     src_obj: ObjectReference,
@@ -554,7 +557,7 @@ pub extern "C" fn mmtk_memory_region_copy(
     memory_manager::memory_region_copy(mutator, src, dst);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(unused_variables)] // Args are only used for sticky immix.
 pub extern "C" fn mmtk_immortal_region_post_alloc(start: Address, size: usize) {
     #[cfg(feature = "stickyimmix")]
@@ -571,7 +574,7 @@ fn set_side_log_bit_for_region(start: Address, size: usize) {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_object_reference_write_pre(
     mutator: *mut Mutator<JuliaVM>,
     src: ObjectReference,
@@ -587,7 +590,7 @@ pub extern "C" fn mmtk_object_reference_write_pre(
     )
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_object_reference_write_post(
     mutator: *mut Mutator<JuliaVM>,
     src: ObjectReference,
@@ -603,7 +606,7 @@ pub extern "C" fn mmtk_object_reference_write_post(
     )
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_gc_wb_finalizer_queue(
     mutator: &'static mut Mutator<JuliaVM>,
     queue: *const libc::c_void,
@@ -612,7 +615,7 @@ pub extern "C" fn mmtk_gc_wb_finalizer_queue(
     crate::julia_finalizer::wb_finalizer_queue(mutator, queue);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_object_reference_write_slow(
     mutator: &'static mut Mutator<JuliaVM>,
     src: ObjectReference,
@@ -627,12 +630,12 @@ pub extern "C" fn mmtk_object_reference_write_slow(
     );
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_object_is_managed_by_mmtk(addr: usize) -> bool {
     crate::api::mmtk_is_mapped_address(unsafe { Address::from_usize(addr) })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_start_spawned_worker_thread(
     tls: VMWorkerThread,
     ctx: *mut GCWorker<JuliaVM>,
@@ -648,7 +651,7 @@ pub fn store_obj_size(obj: ObjectReference, size: usize) {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_store_obj_size_c(obj: ObjectReference, size: usize) {
     let addr_size = obj.to_raw_address() - 16;
     unsafe {
@@ -656,7 +659,7 @@ pub extern "C" fn mmtk_store_obj_size_c(obj: ObjectReference, size: usize) {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_get_obj_size(obj: ObjectReference) -> usize {
     unsafe {
         let addr_size = obj.to_raw_address() - 2 * JULIA_HEADER_SIZE;
@@ -665,7 +668,7 @@ pub extern "C" fn mmtk_get_obj_size(obj: ObjectReference) -> usize {
 }
 
 #[cfg(all(feature = "object_pinning", not(feature = "non_moving")))]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_pin_object(object: ObjectReference) -> bool {
     // We may in the future replace this with a check for the immix space (bound check), which should be much cheaper.
     if mmtk_object_is_managed_by_mmtk(object.to_raw_address().as_usize()) {
@@ -677,7 +680,7 @@ pub extern "C" fn mmtk_pin_object(object: ObjectReference) -> bool {
 }
 
 #[cfg(all(feature = "object_pinning", not(feature = "non_moving")))]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_unpin_object(object: ObjectReference) -> bool {
     if mmtk_object_is_managed_by_mmtk(object.to_raw_address().as_usize()) {
         memory_manager::unpin_object(object)
@@ -688,7 +691,7 @@ pub extern "C" fn mmtk_unpin_object(object: ObjectReference) -> bool {
 }
 
 #[cfg(all(feature = "object_pinning", not(feature = "non_moving")))]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_is_pinned(object: ObjectReference) -> bool {
     if mmtk_object_is_managed_by_mmtk(object.to_raw_address().as_usize()) {
         memory_manager::is_pinned(object)
@@ -700,24 +703,24 @@ pub extern "C" fn mmtk_is_pinned(object: ObjectReference) -> bool {
 
 // If the `non-moving` feature is selected, pinning/unpinning is a noop and simply returns false
 #[cfg(all(feature = "object_pinning", feature = "non_moving"))]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_pin_object(_object: ObjectReference) -> bool {
     false
 }
 
 #[cfg(all(feature = "object_pinning", feature = "non_moving"))]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_unpin_object(_object: ObjectReference) -> bool {
     false
 }
 
 #[cfg(all(feature = "object_pinning", feature = "non_moving"))]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_is_pinned(_object: ObjectReference) -> bool {
     false
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_set_concurrent_marking_enabled(enabled: bool) {
     #[cfg(feature = "concurrentimmix")]
     {
@@ -737,7 +740,7 @@ pub extern "C" fn mmtk_set_concurrent_marking_enabled(enabled: bool) {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn get_mmtk_version() -> *const c_char {
     crate::build_info::MMTK_JULIA_FULL_VERSION_STRING
         .as_c_str()

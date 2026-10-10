@@ -1,17 +1,17 @@
 use crate::SINGLETON;
+use crate::{JuliaVM, USER_TRIGGERED_GC};
 use crate::{
     jl_gc_mmtk_block_for_gc_enter, jl_gc_mmtk_block_for_gc_leave,
     jl_gc_mmtk_defer_alloc_if_disabled, jl_gc_mmtk_resume_the_world,
     jl_gc_mmtk_run_pending_finalizers, jl_gc_mmtk_stop_the_world, jl_gc_safe_enter,
     jl_gc_safe_leave, jl_gc_update_stats, jl_hrtime, jl_throw_out_of_memory_error,
 };
-use crate::{JuliaVM, USER_TRIGGERED_GC};
 use log::{info, trace};
+use mmtk::Mutator;
 use mmtk::util::alloc::AllocationError;
 use mmtk::util::heap::GCTriggerPolicy;
 use mmtk::util::opaque_pointer::*;
 use mmtk::vm::{Collection, GCThreadContext};
-use mmtk::Mutator;
 #[cfg(feature = "concurrentimmix")]
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicIsize, AtomicU64, Ordering};
@@ -54,7 +54,11 @@ impl Collection<JuliaVM> for VMCollection {
         const JL_GC_INCREMENTAL: i32 = 2;
         let collection: i32 = if let Some(gen_plan) = SINGLETON.get_plan().generational() {
             // For generational plans, we can easily map to Julia's enum.
-            if gen_plan.is_current_gc_nursery() { JL_GC_INCREMENTAL } else { JL_GC_FULL }
+            if gen_plan.is_current_gc_nursery() {
+                JL_GC_INCREMENTAL
+            } else {
+                JL_GC_FULL
+            }
         } else if let Some(concurrent_plan) = SINGLETON.get_plan().concurrent() {
             // For concurrent plans, we do a very rough mapping now.
             match concurrent_plan.current_pause().map(|pause| pause as u8) {
@@ -176,8 +180,8 @@ impl Collection<JuliaVM> for VMCollection {
         let _ = std::thread::Builder::new()
             .name("MMTk Worker".to_string())
             .spawn(move || {
-                use mmtk::util::opaque_pointer::*;
                 use mmtk::util::Address;
+                use mmtk::util::opaque_pointer::*;
 
                 // Remember this GC thread
                 register_gc_thread();
@@ -216,7 +220,7 @@ impl Collection<JuliaVM> for VMCollection {
 
 pub fn is_current_gc_nursery() -> bool {
     match crate::SINGLETON.get_plan().generational() {
-        Some(gen) => gen.is_current_gc_nursery(),
+        Some(gen_plan) => gen_plan.is_current_gc_nursery(),
         None => false,
     }
 }

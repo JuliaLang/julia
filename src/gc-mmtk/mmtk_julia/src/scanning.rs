@@ -1,25 +1,25 @@
-use crate::slots::JuliaVMSlot;
 use crate::SINGLETON;
+use crate::slots::JuliaVMSlot;
+use mmtk::MMTK;
+use mmtk::Mutator;
+use mmtk::MutatorContext;
 use mmtk::memory_manager;
 use mmtk::scheduler::*;
-use mmtk::util::opaque_pointer::*;
 use mmtk::util::ObjectReference;
-use mmtk::vm::slot::Slot;
+use mmtk::util::opaque_pointer::*;
 use mmtk::vm::ObjectTracerContext;
 use mmtk::vm::RootsWorkFactory;
 use mmtk::vm::Scanning;
 use mmtk::vm::SlotVisitor;
 use mmtk::vm::VMBinding;
-use mmtk::Mutator;
-use mmtk::MutatorContext;
-use mmtk::MMTK;
+use mmtk::vm::slot::Slot;
 
+use crate::JuliaVM;
 use crate::jl_gc_mmtk_sweep_malloced_memory;
 use crate::jl_gc_scan_vm_specific_roots;
 use crate::jl_gc_sweep_stack_pools_and_mtarraylist_buffers;
 #[cfg(feature = "concurrentimmix")]
 use crate::julia_types::_jl_task_t;
-use crate::JuliaVM;
 #[cfg(feature = "concurrentimmix")]
 use dashmap::DashMap;
 #[cfg(feature = "concurrentimmix")]
