@@ -1,12 +1,12 @@
 use log::{info, trace};
+use mmtk::MMTK;
 use mmtk::plan::Plan;
 use mmtk::util::constants::BYTES_IN_PAGE;
 use mmtk::util::conversions;
 use mmtk::util::heap::{GCTriggerPolicy, SpaceStats};
-use mmtk::util::os::{OSMemory, OS};
-use mmtk::MMTK;
+use mmtk::util::os::{OS, OSMemory};
 
-use crate::{jl_gc_get_hard_heap_limit, jl_gc_get_max_memory, jl_hrtime, JuliaVM};
+use crate::{JuliaVM, jl_gc_get_hard_heap_limit, jl_gc_get_max_memory, jl_hrtime};
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
@@ -87,9 +87,10 @@ impl JuliaGCTrigger {
 
     fn maybe_force_full_heap(&self, mmtk: &'static MMTK<JuliaVM>) {
         if let Some(gen_plan) = mmtk.get_plan().generational()
-            && (self.next_sweep_full.load(Ordering::Relaxed) || GC_ALWAYS_SWEEP_FULL) {
-                gen_plan.force_full_heap_collection();
-            }
+            && (self.next_sweep_full.load(Ordering::Relaxed) || GC_ALWAYS_SWEEP_FULL)
+        {
+            gen_plan.force_full_heap_collection();
+        }
     }
 }
 
@@ -144,9 +145,7 @@ impl GCTriggerPolicy<JuliaVM> for JuliaGCTrigger {
 
         let alloc_diff = self.before_free_heap_size.load(Ordering::Relaxed)
             - self.old_heap_size.load(Ordering::Relaxed);
-        let freed_diff = self
-            .before_free_heap_size
-            .load(Ordering::Relaxed) - heap_size;
+        let freed_diff = self.before_free_heap_size.load(Ordering::Relaxed) - heap_size;
         self.old_heap_size.store(heap_size, Ordering::Relaxed);
 
         let gc_auto = !mmtk.is_user_triggered_collection();
