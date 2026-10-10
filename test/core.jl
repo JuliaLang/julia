@@ -9304,6 +9304,26 @@ let v = Vector{Type{Union{}}}()
     @test u[1] === 3 && u[2] === Union{}
 end
 
+# Runtime (non-inlined) access to a Type{Union{}} member of an isbits-union
+# Memory, and egal/hash of a struct with such a field (#63683)
+struct S63683
+    x::Union{Int,Type{Union{}}}
+end
+let m = Union{Int,Type{Union{}}}[3, Union{}]
+    get = Base.inferencebarrier(Core.memoryrefget)
+    swap = Base.inferencebarrier(Core.memoryrefswap!)
+    @test get(Core.memoryrefnew(m.ref, 1, false), :not_atomic, false) === 3
+    @test get(Core.memoryrefnew(m.ref, 2, false), :not_atomic, false) === Union{}
+    @test swap(Core.memoryrefnew(m.ref, 2, false), 4, :not_atomic, false) === Union{}
+    @test swap(Core.memoryrefnew(m.ref, 2, false), Union{}, :not_atomic, false) === 4
+    @test m[2] === Union{}
+    egal = Base.inferencebarrier(===)
+    a, b, c = Base.inferencebarrier(S63683(Union{})), Base.inferencebarrier(S63683(Union{})), Base.inferencebarrier(S63683(1))
+    @test egal(a, b)
+    @test !egal(a, c)
+    @test objectid(a) == objectid(b)
+end
+
 # Pinned static-parameter uncertainty markers (`==`-only bindings) must be
 # defined and read as their `==`-representative in every runtime consumer
 # (compiled sparam loads, the inlined `_compute_sparams` path, generated
