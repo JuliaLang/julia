@@ -2411,7 +2411,7 @@ end
 # Expansion of function definitions
 
 # (where (where x a b) c d) -> (x, [c d a b])
-function flatten_wheres(ex)
+function flatten_wheres(ex::SyntaxTree)
     tvs = SyntaxList()
     while head(ex) === :where
         append!(tvs, ex[2:end])
@@ -3514,7 +3514,8 @@ end
 # this case either.
 #
 #     (t::Type{X{A,B}})() = new()
-function rewrite_ctor(ctx, ex, tname, global_tname, struct_typevars, field_types)
+function rewrite_ctor(ctx, ex, tname, global_tname, struct_typevars::Vector{SyntaxTree},
+                      field_types::Vector{SyntaxTree})
     is_leaf(ex) && return ex
     @stm ex begin
         [:inert _] -> ex
@@ -3540,8 +3541,9 @@ end
 #
 # This function should do as much as `new-call`, but does not use curlyargs
 # or ctor_sparams, so may be missing something.
-function _rewrite_ctor_new_calls(ctx, ex0, global_struct_name, ctor_sparams,
-                                       struct_typevars, ctor_self, field_types)
+function _rewrite_ctor_new_calls(ctx, ex0, global_struct_name, ctor_sparams::Vector{SyntaxTree},
+                                 struct_typevars::Vector{SyntaxTree}, ctor_self,
+                                 field_types::Vector{SyntaxTree})
     if is_leaf(ex0)
         return ex0
     elseif !_is_new_call(ex0)
@@ -3712,18 +3714,18 @@ function _replace_type_constructors(ctx, ex)
 end
 
 struct TypeGroupEntry
-    sdef            # struct definition syntax node
-    docs            # nothing or :doc node
-    typevar_names   # typevar names for this struct
-    typevar_stmts   # typevar creation statements
-    field_names     # field name syntax nodes
-    field_types     # field type expressions
-    field_attrs     # field attribute expressions
-    supertype       # supertype expression
+    sdef::SyntaxTree                  # struct definition syntax node
+    docs::Union{Nothing, SyntaxTree}  # nothing or :doc node
+    typevar_names::Vector{SyntaxTree} # typevar names for this struct
+    typevar_stmts::Vector{SyntaxTree} # typevar creation statements
+    field_names::Vector{SyntaxTree}   # field name syntax nodes
+    field_types::Vector{SyntaxTree}   # field type expressions
+    field_attrs::Vector{SyntaxTree}   # field attribute expressions
+    supertype::SyntaxTree             # supertype expression
     is_mutable::Bool
     min_initialized::Int
-    inner_defs      # inner constructor definitions
-    field_docs      # field documentation
+    inner_defs::Vector{SyntaxTree}    # inner constructor definitions
+    field_docs::Vector{SyntaxTree}    # field documentation
 end
 
 function expand_typegroup_def(ctx, ex)
