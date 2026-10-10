@@ -267,10 +267,8 @@ end
 function _gen_args_from_syms(ctx, src, args, sc)
     out = SyntaxList()
     for a in args
-        id = newleaf(src, :identifier, string(a))
-        id = est_to_dst_ident(SyntaxCompatContext(), id) # support placeholders
-        id = @mknode(id; context=sc)
-        push!(out, id)
+        push!(out, @mknode(;head=:identifier, value=string(a::Symbol),
+                           context=sc, source=src))
     end
     out
 end
@@ -317,19 +315,14 @@ function _lower_generated_code(g::GeneratedFunctionStub, source::Method,
     @jl_assert base_layer(sc).mod == __module__ ex0
     ex0 = fill_context(ex0, sc)
     ctx1 = MacroExpansionContext(ex0, world, true)
-    ex1 = expand_forms_1(ctx1, ex0)
-    # Desugaring
-    ctx2, ex2 = expand_forms_2(ex1, world)
-
-    # Wrap expansion in a non-toplevel lambda and run scope resolution
-    ex2 = @ast ctx2 ex0 [:generated_lambda
-        [:block _gen_args_from_syms(ctx2, ex1, g.argnames, sc)...]
-        [:block _gen_args_from_syms(ctx2, ex1, g.spnames, sc)...]
-        ex2
+    ex0 = @ast _ ex0 [:generated_lambda
+        [:block _gen_args_from_syms(ctx1, ex0, g.argnames, sc)...]
+        [:block _gen_args_from_syms(ctx1, ex0, g.spnames, sc)...]
+        ex0
     ]
+    ex1 = expand_forms_1(ctx1, ex0)
+    ctx2, ex2 = expand_forms_2(ex1, world)
     ctx3, ex3 = resolve_scopes(ctx2, ex2)
-
-    # Rest of lowering
     ctx4, ex4 = convert_closures(ctx3, ex3)
     _ctx5, ex5 = linearize_ir(ctx4, ex4)
     ci = to_lowered_expr(ex5)

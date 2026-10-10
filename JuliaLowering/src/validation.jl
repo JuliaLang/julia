@@ -273,6 +273,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [:isdefined [:identifier]] -> pass()
     [:isdefined [:static_parameter [:value]]] -> pass()
     [:lambda _...] -> vst1_raw_lambda(vcx, st)
+    [:generated_lambda _...] -> vst1_generated_lambda(vcx, st)
     [:var"with-static-parameters" lam sps...] ->
         vst1_raw_lambda(vcx, lam) & all(vst1_ident, vcx, sps; lhs=true)
     [:softscope _] -> pass()
@@ -1082,6 +1083,14 @@ vst1_raw_lambda(vcx, st) = @stm st begin
     _ -> @fail(st, "expected `lambda`")
 end
 
+vst1_generated_lambda(vcx, st) = @stm st begin
+    [:generated_lambda [:block args...] [:block sps...] body] ->
+        all(vst1_ident, vcx, args; lhs=true) &
+        all(vst1_ident, vcx, sps; lhs=true) &
+        vst1(vcx, body)
+    _ -> @fail(st, "malformed `generated_lambda`")
+end
+
 #-------------------------------------------------------------------------------
 # Pre-macro-expansion (st0) is mostly a subset of st1, except with `macrocall`
 # and `quote`.
@@ -1195,6 +1204,7 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [:inert _] -> pass()
     [:syntaxinert _] -> pass()
     [:lambda _...] -> vst2_lam(vcx, st)
+    [:generated_lambda _...] -> vst2_lam(vcx, st)
     # Declare a zero-method generic function with global `name` or creates a
     # closure object and assigns it to the local `name`.
     [:function_decl x] -> vst2_ident(vcx, x)
@@ -1304,6 +1314,10 @@ vst2_lam(vcx, st) = @stm st begin
         all(vst2_ident_lhs, vcx, sps) &
         vst2(vcx, body) &
         vst2(vcx, rett)
+    [:generated_lambda [:block args...] [:block sps...] body] ->
+        all(vst2_ident_lhs, vcx, args) &
+        all(vst2_ident_lhs, vcx, sps) &
+        vst2(vcx, body)
     _ -> @fail(st, "malformed lambda")
 end
 

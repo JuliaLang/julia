@@ -1169,7 +1169,7 @@ end
 ]
 #---------------------
 LoweringError:
- at line 1: invalid syntax: unknown form `generated_lambda` or number of arguments 3
+ at line 1: Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension
 
 Expression:
-  (generated_lambda (block) (block) (-> (tuple) (block)))
+  (call JuliaLowering.eval_closure_type Main.TestMod :#11#12 (call core.svec) (call core.svec) (call core.svec))
