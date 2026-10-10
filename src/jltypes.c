@@ -110,6 +110,15 @@ void jl_init_tvarref_cache(void)
     }
 }
 
+// the permanent reference of a small depth (no allocation)
+jl_value_t *jl_small_tvarref(size_t depth) JL_NOTSAFEPOINT
+{
+    assert(depth >= 1 && depth <= N_SMALL_TVARREFS);
+    jl_tvarref_t *r = small_tvarrefs[depth - 1];
+    assert(r != NULL);
+    return (jl_value_t*)r;
+}
+
 JL_DLLEXPORT jl_value_t *jl_new_tvarref(size_t depth)
 {
     if (depth == 0 || (ssize_t)depth < 0)

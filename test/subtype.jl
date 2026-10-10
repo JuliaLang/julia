@@ -3666,3 +3666,21 @@ let a = Tuple{T, T} where T<:Number,
     @test typejoin(a, a) === a
     @test typejoin(Tuple{T, Int} where T<:Signed, Tuple{UInt8, Int}) === Tuple{Integer, Int}
 end
+
+# fixing a bound-vararg length during specificity must also fix the references
+# to that binder from the declared bounds of the binders inside it; the body
+# alone left them dangling, and the comparison looped on them
+abstract type SpecDict{S,T} end
+abstract type SpecTensorDict{S,T} <: SpecDict{S,T} end
+abstract type SpecFlatTensorDict{N,S,T} <: SpecTensorDict{S,T} end
+struct SpecSArray{Sz<:Tuple,T,NN,L} end
+let A = Tuple{typeof(similar), SpecFlatTensorDict{N}, Type{T}, Vararg{Int,N}} where {N,S,T<:SpecSArray{Tuple{N},S,1,N}},
+    B1 = Tuple{typeof(similar), SpecTensorDict, Type{T}, Int} where T,
+    B2 = Tuple{typeof(similar), SpecDict{S,T}, Type{S}, Int} where {S,T},
+    B3 = Tuple{typeof(similar), SpecTensorDict, Any, Int},
+    B4 = Tuple{typeof(similar), SpecTensorDict, Type{T}, Vararg{Int}} where T
+    for B in (B1, B2, B3, B4)
+        @test Base.morespecific(A, B)
+        @test !Base.morespecific(B, A)
+    end
+end

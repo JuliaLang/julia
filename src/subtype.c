@@ -5567,7 +5567,7 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     e->resframe = NULL;
     e->roots = NULL;
     e->finalvars = NULL;
-    e->ref1 = jl_new_tvarref(1); // (a permanent object)
+    e->ref1 = jl_small_tvarref(1); // (a permanent object)
     e->arena = NULL; // the entry points provide one
     e->opened = NULL; // n.b. the caller must root this slot before any opening
     e->envsz = envsz;
@@ -9849,7 +9849,11 @@ static int eq_msp(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, 
             a = jl_rewrap_unionall_one(a, env->u);
         for (jl_specenv_t *env = benv; env != NULL; env = env->prev)
             b = jl_rewrap_unionall_one(b, env->u);
-        int ret = eq_msp(a, b, a0, b0, NULL, NULL);
+        // references the chains do not cover (a detached fragment) cannot be
+        // closed: there is no binder to compare them under, so the operands
+        // are not provably equal (recursing would loop on the same operands)
+        int ret = (jl_has_dangling_tvarrefs(a) || jl_has_dangling_tvarrefs(b)) ? 0 :
+            eq_msp(a, b, a0, b0, NULL, NULL);
         JL_GC_POP();
         return ret;
     }
@@ -9960,7 +9964,9 @@ static int sub_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, jl_specenv_t *x
             x = jl_rewrap_unionall_one(x, env->u);
         for (jl_specenv_t *env = yenv; env != NULL; env = env->prev)
             y = jl_rewrap_unionall_one(y, env->u);
-        int ret = sub_msp(x, y, y0, NULL, NULL);
+        // detached references (see `eq_msp`): not provably a subtype
+        int ret = (jl_has_dangling_tvarrefs(x) || jl_has_dangling_tvarrefs(y)) ? 0 :
+            sub_msp(x, y, y0, NULL, NULL);
         JL_GC_POP();
         return ret;
     }
@@ -10137,7 +10143,8 @@ static int args_morespecific_fix1(jl_value_t *a, jl_value_t *b, jl_value_t *a0, 
     jl_value_t *num = jl_unwrap_vararg_num(jl_unwrap_unionall(jl_tparam(a, n-1)));
     jl_datatype_t *new_a = NULL;
     jl_value_t *boxlen = jl_box_long(taillen);
-    JL_GC_PUSH2(&new_a, &boxlen);
+    jl_svec_t *newnodes = NULL; // replacement chain nodes with fixed bounds
+    JL_GC_PUSH3(&new_a, &boxlen, &newnodes);
     jl_specenv_t *new_aenv = aenv;
     int changed = 0;
     if (jl_is_tvarref(num)) {
@@ -10161,9 +10168,34 @@ static int args_morespecific_fix1(jl_value_t *a, jl_value_t *b, jl_value_t *a0, 
                 else {
                     jl_specenv_t *copies = (jl_specenv_t*)alloca(nprefix * sizeof(jl_specenv_t));
                     jl_specenv_t *src = aenv;
-                    for (size_t i = 0; i < nprefix; i++, src = src->prev) {
+                    for (size_t i = 0; i < nprefix && changed; i++, src = src->prev) {
                         copies[i] = *src;
                         copies[i].prev = (i + 1 < nprefix) ? &copies[i + 1] : tail;
+                        // the dropped binder may also be referenced from the
+                        // declared bounds of the binders inside it (at depth
+                        // `d - (i+1)` there, the bounds sitting outside their
+                        // own binder): fix those references too, or they would
+                        // dangle under the shortened chain
+                        size_t db = d - (i + 1);
+                        jl_value_t *lb = NULL, *ub = NULL;
+                        JL_GC_PUSH2(&lb, &ub);
+                        lb = jl_substitute_tvarref_nothrow(src->u->lb, db, boxlen);
+                        if (lb != NULL)
+                            ub = jl_substitute_tvarref_nothrow(src->u->ub, db, boxlen);
+                        if (lb == NULL || ub == NULL) {
+                            JL_GC_POP();
+                            changed = 0;
+                            break;
+                        }
+                        if (lb != src->u->lb || ub != src->u->ub) {
+                            if (newnodes == NULL)
+                                newnodes = jl_alloc_svec(nprefix);
+                            // only the name and bounds of a chain node are read
+                            jl_value_t *nu = jl_new_unionall_raw(src->u->name, lb, ub, src->u->body);
+                            jl_svecset(newnodes, i, nu);
+                            copies[i].u = (jl_unionall_t*)nu;
+                        }
+                        JL_GC_POP();
                     }
                     new_aenv = &copies[0];
                 }
