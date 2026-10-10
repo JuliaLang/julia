@@ -1288,6 +1288,24 @@ function find_all_in_cache_path(pkg::PkgId, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT
     end
 end
 
+# Mark a cache file as recently used, for the ordering above and for the eviction
+# in `compilecache`. Only files in the directory `compilecache` writes to are
+# touched: other depots may be shared, read-only, or part of a signed app bundle
+# where even a failed write attempt makes macOS warn the user. For the same
+# reason, the depot bundled with Julia is never touched, even when it comes first.
+# The bundled depot is matched exactly: juliaup installs it inside the user depot.
+function touch_cachefile(pkg::PkgId, path::String)
+    isempty(DEPOT_PATH) && return
+    startswith(path, joinpath(compilecache_dir(pkg), "")) || return
+    startswith(path, joinpath(dirname(dirname(Sys.STDLIB)), "compiled", "")) && return
+    try
+        touch(path)
+    catch
+        # the file might still be read-only, which is fine
+    end
+    return
+end
+
 ocachefile_from_cachefile(cachefile) = string(chopsuffix(cachefile, ".ji"), ".", Libc.Libdl.dlext)
 cachefile_from_ocachefile(cachefile) = string(chopsuffix(cachefile, ".$(Libc.Libdl.dlext)"), ".ji")
 
@@ -1942,12 +1960,7 @@ function compilecache_freshest_path(pkg::PkgId;
                 @goto check_next_path
                 @label check_next_dep
             end
-            try
-                # update timestamp of precompilation file so that it is the first to be tried by code loading
-                touch(path_to_try)
-            catch
-                # file might be read-only and then we fail to update timestamp, which is fine
-            end
+            touch_cachefile(pkg, path_to_try)
             return path_to_try
             @label check_next_path
         end
@@ -2179,13 +2192,7 @@ end
                     stalecheck && register_root_module(M)
                     return M
                 end
-                if stalecheck
-                    try
-                        touch(path_to_try) # update timestamp of precompilation file
-                    catch
-                        # file might be read-only and then we fail to update timestamp, which is fine
-                    end
-                end
+                stalecheck && touch_cachefile(pkg, path_to_try)
                 # finish loading module graph into staledeps
                 # n.b. this runs __init__ methods too early, so it is very unwise to have those, as they may see inconsistent loading state, causing them to fail unpredictably here
                 for i in eachindex(staledeps)
