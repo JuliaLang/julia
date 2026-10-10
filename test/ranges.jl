@@ -1910,6 +1910,30 @@ end
     @test_throws BoundsError (false:true)[3]
 end
 
+@testset "indexing ranges with unsigned indices (#63679)" begin
+    for r in Any[-5:3, 3:-2:-9, Int8(9):Int8(-1):Int8(1), UInt(9):-1:UInt(1), Int128(-5):Int128(3), big(-5):big(2):big(13),
+                 -2.0:0.5:2.0, StepRangeLen(9, -1, 9), LinRange(9.0, 1.0, 9)],
+        T in (UInt8, UInt64)
+        for (si, s) in ((2:4, T(2):T(4)), (4:3, T(4):T(3)), (2:2:6, T(2):T(2):T(6)), (6:-2:2, T(6):-2:T(2)))
+            @test r[s] == collect(r)[si]
+            @test typeof(r[s]) == typeof(r[si])
+        end
+        @test [r[T(i)] for i in eachindex(r)] == collect(r)
+    end
+    @test (Int8(-100):Int8(3):Int8(100))[Int8(1):Int8(50):Int8(60)] == [-100, 50]
+    @test (Int128(1):Int128(10)^30)[UInt(2)^63 + 1] == Int128(2)^63 + 1
+    @test collect(range(1.0, 9.0; length=UInt(9))[UInt(3):UInt(2):UInt(7)]) == [3.0, 5.0, 7.0]
+    @test collect(StepRangeLen{Int,Int,Int,UInt8}(0, 1, 200, 64)) == -63:136
+    @test collect(StepRangeLen{Int,Int,Int,UInt8}(0, 1, 200, 150)[1:3]) == -149:-147
+    R = StepRangeLen{Int128,Int128,Int128,UInt}
+    @test R(Int128(0), Int128(1), UInt(2)^63 + 5)[UInt(2)^63 + 1] == Int128(2)^63
+    @test collect(R(Int128(0), Int128(1), UInt(2)^63 + 5, UInt(2)^63 + 5)[1:3]) == -Int128(2)^63 .- (4:-1:2)
+    @test_throws InexactError (Int8(-128):Int8(127))[1:0]
+    r = Date(2000, 1, 10):Day(-1):Date(2000, 1, 1)
+    @test r[UInt(2)] == Date(2000, 1, 9)
+    @test r[UInt(2):UInt(4)] == r[2:4]
+end
+
 module NonStandardIntegerRangeTest
 
 using Test
