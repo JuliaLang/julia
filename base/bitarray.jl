@@ -301,12 +301,12 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
     nc8 = (nc >>> 3) << 3
     if nc8 > 0
         ind8 = 1
-        P8 = Ptr{UInt64}(pointer(C, ind)) # unaligned i64 pointer
+        ref = C.ref
         @inbounds for _ = 1:nc8
             c = UInt64(0)
             for j = 0:7
-                # unaligned load
-                c |= (pack8bools(unsafe_load(P8, ind8)) << (j<<3))
+                word = Core.unsafe_memoryrefload(ref, UInt64, ind - 1 + (ind8 - 1) * sizeof(UInt64), true)
+                c |= (pack8bools(word) << (j<<3))
                 ind8 += 1
             end
             Bc[bind] = c
