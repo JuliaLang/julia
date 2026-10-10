@@ -9449,3 +9449,37 @@ let A = Issue61347.A, S2 = Issue61347.S2
     @test isdefined(lazy, :super)
     @test getfield(lazy, :super) === supertype(lazy)
 end
+
+# Byte accesses support unaligned, cross-element loads and stores.
+@testset "MemoryRef byte access" begin
+    for value in (UInt32(0x12345678), 1.25 + 2.5im, ntuple(i -> UInt64(i), 256))
+        T = typeof(value)
+        bytes = fill!(Memory{UInt8}(undef, sizeof(T) + 2), 0xff)
+        ref = memoryref(bytes)
+        @test Core.unsafe_memoryrefstore!(ref, value, 1, true) === value
+        @test bytes[1] == bytes[end] == 0xff
+        expected = reinterpret(NTuple{sizeof(T),UInt8}, value)
+        @test Tuple(bytes[2:end-1]) === expected
+        @test Core.unsafe_memoryrefload(ref, T, 1, true) === value
+        shifted = memoryref(bytes, 2)
+        @test Core.unsafe_memoryrefload(shifted, T, 0, true) === value
+    end
+    bytes = fill!(Memory{UInt8}(undef, 8), 0x00)
+    bytes[1] = 0xff
+    ref = memoryref(bytes)
+    @test Core.unsafe_memoryrefload(memoryref(bytes, 2), UInt8, -1, true) === 0xff
+    @test Core.unsafe_memoryrefload(ref, Nothing, 0, true) === nothing
+    @test Core.unsafe_memoryrefstore!(ref, nothing, 0, true) === nothing
+    @test_throws BoundsError Core.unsafe_memoryrefload(ref, UInt32, 6, true)
+    @test_throws BoundsError Core.unsafe_memoryrefstore!(memoryref(bytes, 2), 0x00, typemax(Int), true)
+    @test_throws ErrorException Core.unsafe_memoryrefload(ref, String, 0, true)
+    @test_throws ErrorException Core.unsafe_memoryrefload(ref, Union{UInt8,UInt16}, 0, true)
+    @test_throws ErrorException Core.unsafe_memoryrefstore!(ref, "value", 0, true)
+    @test_throws TypeError Core.unsafe_memoryrefload(bytes, UInt8, 0, true)
+    @test_throws TypeError Core.unsafe_memoryrefstore!(ref, 0x00, 0.0, true)
+    for mem in (Memory{Any}(undef, 1), Memory{Union{UInt8,UInt16}}(undef, 1),
+                Memory{Nothing}(undef, 1), AtomicMemory{UInt8}(undef, 1))
+        @test_throws ErrorException Core.unsafe_memoryrefload(memoryref(mem), UInt8, 0, true)
+        @test_throws ErrorException Core.unsafe_memoryrefstore!(memoryref(mem), 0x00, 0, true)
+    end
+end

@@ -5050,6 +5050,64 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
     }
 
+    else if ((f == BUILTIN(unsafe_memoryrefload) || f == BUILTIN(unsafe_memoryrefstore)) && nargs == 4) {
+        const jl_cgval_t &ref = argv[1];
+        jl_value_t *rty = jl_unwrap_unionall(ref.typ);
+        if (!jl_is_genericmemoryref_type(rty) || !jl_is_concrete_type(rty) ||
+            jl_tparam0(rty) != (jl_value_t*)jl_not_atomic_sym || !jl_isbits(jl_tparam1(rty)))
+            return false;
+        jl_value_t *addrspace = jl_tparam2(rty);
+        if (!jl_is_addrspacecore(addrspace) || jl_unbox_uint8(addrspace) != 0)
+            return false;
+        jl_datatype_t *mty = (jl_datatype_t*)jl_field_type_concrete((jl_datatype_t*)rty, 1);
+        const jl_datatype_layout_t *layout = mty->layout;
+        if (layout->size == 0)
+            return false;
+        bool isget = f == BUILTIN(unsafe_memoryrefload);
+        jl_value_t *ety = isget ? argv[2].constant : argv[2].typ;
+        if (!ety || !jl_isbits(ety))
+            return false;
+        emit_typecheck(ctx, argv[3], (jl_value_t*)jl_long_type,
+                       isget ? "unsafe_memoryrefload" : "unsafe_memoryrefstore!");
+        emit_typecheck(ctx, argv[4], (jl_value_t*)jl_bool_type,
+                       isget ? "unsafe_memoryrefload" : "unsafe_memoryrefstore!");
+        Value *offset = emit_unbox(ctx, ctx.types().T_size, argv[3]);
+        Value *ptr = emit_memoryref_ptr(ctx, ref, layout);
+        if (memoryref_bounds_check_enabled(ctx, argv[4].constant)) {
+            Value *mem = emit_memoryref_mem(ctx, ref, layout);
+            Value *base = emit_genericmemoryptr(ctx, mem, layout, 0);
+            Value *data = CreateSimplifiedExtractValue(ctx, emit_memoryref_FCA(ctx, ref, layout), 0);
+            Value *pos = ctx.builder.CreateSub(ctx.builder.CreatePtrToInt(data, ctx.types().T_size),
+                                              ctx.builder.CreatePtrToInt(base, ctx.types().T_size));
+            Value *len = ctx.builder.CreateNUWMul(emit_genericmemorylen(ctx, mem, ref.typ),
+                                                ConstantInt::get(ctx.types().T_size, layout->size));
+            Value *size = ConstantInt::get(ctx.types().T_size, jl_datatype_size(ety));
+            Value *start = ctx.builder.CreateAdd(pos, offset);
+            Value *valid = ctx.builder.CreateAnd(ctx.builder.CreateICmpULE(pos, len),
+                ctx.builder.CreateAnd(ctx.builder.CreateICmpULE(size, len),
+                                      ctx.builder.CreateICmpULE(start, ctx.builder.CreateSub(len, size))));
+            BasicBlock *failBB = BasicBlock::Create(ctx.builder.getContext(), "oob", ctx.f);
+            BasicBlock *endBB = BasicBlock::Create(ctx.builder.getContext(), "byteaccess", ctx.f);
+            ctx.builder.CreateCondBr(valid, endBB, failBB);
+            ctx.builder.SetInsertPoint(failBB);
+            ctx.builder.CreateCall(prepare_call(jlboundserror_func),
+                { mark_callee_rooted(ctx, boxed(ctx, ref)), offset });
+            ctx.builder.CreateUnreachable();
+            ctx.builder.SetInsertPoint(endBB);
+        }
+        ptr = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptr, offset);
+        if (isget) {
+            *ret = typed_load(ctx, ptr, nullptr, ety, memorybuf_aliasinfo(ctx, layout), nullptr,
+                              false, AtomicOrdering::NotAtomic, false, 1);
+        }
+        else {
+            *ret = typed_store(ctx, ptr, argv[2], jl_cgval_t(), ety, memorybuf_aliasinfo(ctx, layout),
+                               nullptr, nullptr, false, AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic,
+                               1, nullptr, StoreKind::Set, false, nullptr, "unsafe_memoryrefstore!", nullptr, nullptr);
+        }
+        return true;
+    }
+
     else if ((f == BUILTIN(memoryrefget) || f == BUILTIN(const_memoryrefget)) && nargs == 3) {
         // only const_memoryrefget loads may carry the current aliasscope (see Base.Experimental.Const)
         bool isconstload = f == BUILTIN(const_memoryrefget);
