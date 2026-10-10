@@ -608,7 +608,8 @@ end
     epoch = Date(Date(1) - Day(1))
     dmax = epoch + Day(typemax(fieldtype(Day, :value)))
     dmin = epoch + Day(typemin(fieldtype(Day, :value)))
-    @test_throws OverflowError StepRange(dmin, Day(1), dmax)
+    @test last(StepRange(dmin, Day(1), dmax)) == dmax
+    @test_throws OverflowError Base.checked_length(StepRange(dmin, Day(1), dmax))
 end
 
 end  # RangesTest module

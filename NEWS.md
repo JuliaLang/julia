@@ -338,6 +338,11 @@ Standard library changes
 * The `year`, `month`, `day`, and related accessors are faster and return correct results for every
   `Date`. The month and day are now always an `Int64`, as documented. Before, they had the type of
   the day count, for example `BigInt` for a `Timestamp` with a package-defined period.
+* Ranges of `Date`, `DateTime`, and `Timestamp` with a fixed step such as `Day` or `Hour` now behave
+  like the corresponding integer ranges: they no longer throw an `OverflowError` when their endpoints
+  are far apart, `length` wraps around if the element count does not fit in an `Int64`, and
+  `Base.checked_length` throws an `OverflowError` instead. The length of ranges with `Month`,
+  `Quarter`, or `Year` steps is now computed exactly.
 
 #### InteractiveUtils
 
