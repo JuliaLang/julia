@@ -878,6 +878,22 @@ julia> div.(-5:5, 3)'
 1×11 adjoint(::Vector{Int64}) with eltype Int64:
  -1  -1  -1  0  0  0  0  0  1  1  1
 ```
+
+!!! note "Mixed signed and unsigned integers"
+    When one argument is a signed and the other an unsigned fixed-size integer (such as
+    `Int8` and `UInt64`), the result has the signedness of `x` and the bit width of the
+    wider argument. This can differ from `promote_type(typeof(x), typeof(y))`. If `x` is
+    unsigned and `y` is negative, the result is unsigned, so a negative quotient wraps
+    around modulo `2^n`, where `n` is the bit width of the result. The same applies to
+    [`fld`](@ref), [`cld`](@ref) and the quotient returned by [`divrem`](@ref).
+
+    ```jldoctest
+    julia> div(Int8(-7), UInt8(2)) # an Int8, although promote_type(Int8, UInt8) == UInt8
+    -3
+
+    julia> div(UInt8(7), Int8(-2)) # the quotient -3 wraps around to 256 - 3
+    0xfd
+    ```
 """
 div
 const ÷ = div
