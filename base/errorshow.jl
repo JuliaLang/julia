@@ -1233,7 +1233,8 @@ function _backtrace_simplify_include_frames!(trace)
         frame::StackFrame, _ = trace[i]
         mod = parentmodule(frame)
         if mod === Base && frame.func === :IncludeInto ||
-           mod === Core && frame.func === :EvalInto
+           mod === Core && frame.func === :EvalInto ||
+           mod === Base && frame.func === :fl_toplevel_eval
             kept_frames[i] = false
         elseif first_ignored === nothing
             if mod === Base && frame.func === :_include
@@ -1700,3 +1701,28 @@ function show(io::IO, ::MIME"text/plain", stack::ExceptionStack)
     show_exception_stack(io, stack)
 end
 show(io::IO, stack::ExceptionStack) = show(io, MIME("text/plain"), stack)
+
+# detect the reason which caused an :incomplete expression
+# from the error message
+# NOTE: the error messages are defined in src/julia-parser.scm
+incomplete_tag(ex) = :none
+function incomplete_tag(ex::Expr)
+    if ex.head !== :incomplete
+        return :none
+    elseif isempty(ex.args)
+        return :other
+    else
+        a = ex.args[1]
+        if a isa String
+            occursin("string", a) && return :string
+            occursin("comment", a) && return :comment
+            occursin("requires end", a) && return :block
+            occursin("\"`\"", a) && return :cmd
+            occursin("character", a) && return :char
+            return :other
+        else
+            return incomplete_tag(a)::Symbol
+        end
+    end
+end
+incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)

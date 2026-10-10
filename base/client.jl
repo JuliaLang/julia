@@ -115,7 +115,7 @@ function is_driver_machinery(frame)
     frame.from_c && return false
     mod = parentmodule(frame)
     (mod === Base || mod === Core || mod === nothing) || return false
-    return frame.func in (:eval, :include_string, :_include, :include)
+    return frame.func in (:eval, :include_string, :_include, :include, :fl_toplevel_eval)
 end
 
 function scrub_repl_backtrace(bt)
@@ -155,7 +155,6 @@ end
 display_error(er, bt=nothing) = display_error(stderr, er, bt)
 
 # N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
-__repl_entry_client_lower(mod::Module, @nospecialize(ast)) = Meta.lower(mod, ast)
 __repl_entry_client_eval(mod::Module, @nospecialize(ast)) = Core.eval(mod, ast)
 
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
@@ -180,7 +179,6 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                     sigint_close_episode!()
                 end
             else
-                ast = __repl_entry_client_lower(Main, ast)
                 value = __repl_entry_client_eval(Main, ast)
                 setglobal!(Base.MainInclude, :ans, value)
                 if !(value === nothing) && show_value
@@ -213,63 +211,36 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     nothing
 end
 
-function _parse_input_line_core(s::String, filename::String, mod::Union{Module, Nothing})
-    ex = Meta.parseall(s; filename, _parse=invokelatest(Meta.parser_for_module, mod))
-    if ex isa Expr && ex.head === :toplevel
-        if isempty(ex.args)
-            return nothing
-        end
-        last = ex.args[end]
-        if last isa Expr && (last.head === :error || last.head === :incomplete)
+function _parse_input_line_core(s::String, filename::String, mod::Union{Module, Nothing}, type)
+    ex = Meta.parseall(s; filename, mod, type)
+    if ex isa Syntax && head(ex) === :toplevel && numchildren(ex) > 0
+        last = ex[end]
+        if (head(last) === :error || head(last) === :incomplete)
             # if a parse error happens in the middle of a multi-line input
             # return only the error, so that none of the input is evaluated.
+            return last
+        end
+    elseif ex isa Expr && ex.head === :toplevel && length(ex.args) > 0
+        last = ex.args[end]
+        if last isa Expr && (last.head === :error || last.head === :incomplete)
             return last
         end
     end
     return ex
 end
 
-function parse_input_line(s::String; filename::String="none", depwarn=true, mod::Union{Module, Nothing}=nothing)
+function parse_input_line(s::String; filename::String="none", depwarn=true, mod::Union{Module, Nothing}=nothing, type=Expr)
     # For now, assume all parser warnings are depwarns
     ex = if depwarn
-        _parse_input_line_core(s, filename, mod)
+        _parse_input_line_core(s, filename, mod, type)
     else
         with_logger(NullLogger()) do
-            _parse_input_line_core(s, filename, mod)
+            _parse_input_line_core(s, filename, mod, type)
         end
     end
     return ex
 end
 parse_input_line(s::AbstractString; kwargs...) = parse_input_line(String(s); kwargs...)
-
-# detect the reason which caused an :incomplete expression
-# from the error message
-# NOTE: the error messages are defined in src/julia-parser.scm
-function fl_incomplete_tag(msg::AbstractString)
-    occursin("string", msg) && return :string
-    occursin("comment", msg) && return :comment
-    occursin("requires end", msg) && return :block
-    occursin("\"`\"", msg) && return :cmd
-    occursin("character", msg) && return :char
-    return :other
-end
-
-incomplete_tag(ex) = :none
-function incomplete_tag(ex::Expr)
-    if ex.head !== :incomplete
-        return :none
-    elseif isempty(ex.args)
-        return :other
-    else
-        a = ex.args[1]
-        if a isa String
-            return fl_incomplete_tag(a)::Symbol
-        else
-            return incomplete_tag(a)::Symbol
-        end
-    end
-end
-incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
 
 function exec_options(opts)
     startup               = (opts.startupfile != 2)
@@ -477,11 +448,11 @@ function run_fallback_repl(interactive::Bool)
     let input = stdin
         if isa(input, File) || isa(input, IOStream)
             # for files, we can slurp in the whole thing at once
-            ex = parse_input_line(read(input, String); mod=Main)
-            if Meta.isexpr(ex, :toplevel)
+            ex = parse_input_line(read(input, String); mod=Main, type=Syntax)
+            if head(ex) === :toplevel
                 # if we get back a list of statements, eval them sequentially
                 # as if we had parsed them sequentially
-                for stmt in ex.args
+                for stmt in children(ex)
                     eval_user_input(stderr, stmt, true)
                 end
             else
@@ -499,8 +470,8 @@ function run_fallback_repl(interactive::Bool)
                     ex = nothing
                     while !eof(input)
                         line *= readline(input, keep=true)
-                        ex = parse_input_line(line; mod=Main)
-                        if !(isa(ex, Expr) && ex.head === :incomplete)
+                        ex = parse_input_line(line; mod=Main, type=Syntax)
+                        if !(isa(ex, Syntax) && head(ex) === :incomplete)
                             break
                         end
                     end
@@ -669,6 +640,15 @@ function cancel_session_work!()
     return true
 end
 
+function init_frontend()
+    JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
+    if get_bool_env("JULIA_USE_FLISP_LOWERING", true) === true
+        JuliaLowering.activate!(false)
+    else
+        JuliaLowering.activate!(true; freeze_world_age=true)
+    end
+end
+
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
@@ -733,6 +713,7 @@ function _start()
             e isa IOError || rethrow()
         end
     end
+    generating_output(false) && init_frontend()
     return ret
 end
 

@@ -226,5 +226,3 @@ end
 function untokenize(token::Token, text::Vector{UInt8})
     text[token.range]
 end
-
-@deprecate parse parsestmt

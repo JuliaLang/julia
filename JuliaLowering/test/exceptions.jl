@@ -555,7 +555,7 @@ end
 end
 
     @testset "valid uses of @goto" for run in (JuliaLowering.include_string,
-                                               Base.include_string)
+                                               fl_eval)
         # no finally block
         @test run(test_mod, """let v = []
             try

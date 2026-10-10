@@ -1232,12 +1232,11 @@ end
 #    Core._parse(text, filename, lineno, offset, options, edition)
 #
 # Parse Julia code from the buffer `text`, starting at `offset` and attributing
-# it to `filename`. `text` may be a `String` or `svec(ptr::Ptr{UInt8},
-# len::Int)` for a raw unmanaged buffer. `options` should be one of `:atom`,
-# `:statement` or `:all`, indicating how much the parser will consume.
+# it to `filename`. `options` should be one of `:atom`, `:statement` or `:all`,
+# indicating how much the parser will consume.
 #
-# `_parse` must return an `svec` containing an `Expr` and the new offset as an
-# `Int`.
+# Return (ast, offset) containing an `Expr` (or `Syntax` on newer versions) and
+# the new offset as an `Int`.
 _parse = nothing
 
 #    Core._lower(code, module, filename="none", linenum=0, world=0xfff..., warn=false)
@@ -1246,9 +1245,11 @@ _parse = nothing
 # the lowered code, and `xs` is possible additional information from
 # JuliaLowering (TBD).
 _lower = nothing
+_toplevel_eval = nothing
 
 _setparser!(parser) = setglobal!(Core, :_parse, parser)
 _setlowerer!(lowerer) = setglobal!(Core, :_lower, lowerer)
+_set_toplevel_eval!(f) = setglobal!(Core, :_toplevel_eval, f)
 
 # support for deprecated uses of builtin functions
 _apply(x...) = _apply_iterate(Main.Base.iterate, x...)

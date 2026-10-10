@@ -30,10 +30,13 @@ let os = ccall(:jl_get_UNAME, Any, ())
     end
 end
 
+# meta.jl uses this to convert parse results
+function syntax_to_expr end
+
 # metaprogramming
 include("meta.jl")
 using .Meta
-using .Meta: is_id_char, parser_for_module
+using .Meta: is_id_char
 
 # Strings
 include("multimedia.jl")
@@ -290,6 +293,10 @@ include("initdefs.jl")
 # worker threads
 include("threadcall.jl")
 
+# Compatibility with when Compiler was in Core
+@eval Core const Compiler = $Base.Compiler
+@eval Compiler const fl_parse = $Base.fl_parse
+
 # code loading
 include("uuid.jl")
 include("pkgid.jl")
@@ -310,6 +317,14 @@ include("deprecated.jl")
 #
 # Some additional basic documentation
 include("docs/basedocs.jl")
+
+# Compiler frontend
+include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
+JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
+set_syntax_version(Base, VERSION)
+
+include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
+JuliaLowering.activate!(false; freeze_world_age=false)
 
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")
@@ -337,20 +352,6 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 @noinline include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
 (this::IncludeInto)(fname::AbstractString) = include(identity, this.m, fname)
 (this::IncludeInto)(mapexpr::Function, fname::AbstractString) = include(mapexpr, this.m, fname)
-
-# Compatibility with when Compiler was in Core
-@eval Core const Compiler = $Base.Compiler
-@eval Compiler const fl_parse = $Base.fl_parse
-
-# Compiler frontend
-Core.println("JuliaSyntax/src/JuliaSyntax.jl")
-include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
-JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
-
-Core.println("JuliaLowering/src/JuliaLowering.jl")
-include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
-
-set_syntax_version(Base, VERSION)
 
 end_base_include = time_ns()
 
@@ -612,17 +613,8 @@ function __init__()
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")
-    if get_bool_env("JULIA_USE_FLISP_PARSER", false) === true
-        JuliaSyntax.enable_in_core!(false)
-    else
-        JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
-    end
-
-    if get_bool_env("JULIA_USE_FLISP_LOWERING", true) === false
-        JuliaLowering.activate!()
-    end
-
     CoreLogging.global_logger(CoreLogging.ConsoleLogger())
+    init_frontend()
     nothing
 end
 
