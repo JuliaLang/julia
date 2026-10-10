@@ -599,11 +599,27 @@ end
     @test c isa Int
 end
 
+# Legacy integer types support wrapping negation through ordinary unary minus.
+struct LegacyInt128 <: Signed
+    value::Int128
+end
+Base.:-(x::LegacyInt128) = LegacyInt128(-x.value)
+Base.:<(x::LegacyInt128, y::Int) = x.value < y
+Base.:<=(x::Clong, y::LegacyInt128) = x <= y.value
+Base.:<=(x::LegacyInt128, y::Clong) = x.value <= y
+Base.ndigits(x::LegacyInt128; base::Integer=10, pad::Integer=1) = ndigits(x.value; base, pad)
+Base.unsigned(x::LegacyInt128) = unsigned(x.value)
+Base.rem(x::LegacyInt128, ::Type{T}) where {T<:Integer} = rem(x.value, T)
+
 @testset "generic conversion from Integer" begin
     x = rand(Int128)
     @test BigInt(x) % Int128 === x
     y = rand(UInt128)
     @test BigInt(y) % UInt128 === y
+    for value in (Int128(typemin(Clong)) - 1, typemin(Int128))
+        @test -%(LegacyInt128(value)) === -LegacyInt128(value)
+        @test BigInt(LegacyInt128(value)) == BigInt(value)
+    end
 end
 
 @testset "conversion from typemin(T)" begin
