@@ -815,3 +815,23 @@ let
     @test_throws MethodError Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTCplxF64())
     @test Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTOtherC()) === 2
 end
+
+# a keyword method whose function argument is a Vararg still invalidates callers
+# that were compiled against no matching keyword method
+kwvararg_f(x) = 1
+kwvararg_caller() = kwvararg_f(; x=1)
+@test_throws MethodError kwvararg_caller()
+Core.kwcall(::NamedTuple{(:x,)}, ::typeof(kwvararg_f)...) = 2
+@test kwvararg_caller() === 2
+
+# a method on a kind still invalidates callers that were compiled against no
+# matching constructor
+abstract type KindCalleeT end
+struct KindCalleeArg end
+kindcallee_caller() = KindCalleeT(KindCalleeArg(), KindCalleeArg())
+@test_throws MethodError kindcallee_caller()
+(::DataType)(::KindCalleeArg, ::KindCalleeArg) = 2
+@test kindcallee_caller() === 2
+# every type now has this constructor method, so remove it before later test files look at their methods
+Base.delete_method(which(KindCalleeT, Tuple{KindCalleeArg, KindCalleeArg}))
+@test_throws MethodError kindcallee_caller()
