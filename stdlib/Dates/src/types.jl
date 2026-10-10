@@ -733,10 +733,10 @@ Base.zero(::Type{Timestamp{P}}) where {P} = P(0)
 Base.zero(::T) where T <: TimeType = zero(T)::Period
 
 
-Base.typemax(::Union{DateTime, Type{DateTime}}) = DateTime(146138512, 12, 31, 23, 59, 59)
-Base.typemin(::Union{DateTime, Type{DateTime}}) = DateTime(-146138511, 1, 1, 0, 0, 0)
-Base.typemax(::Union{Date, Type{Date}}) = Date(252522163911149, 12, 31)
-Base.typemin(::Union{Date, Type{Date}}) = Date(-252522163911150, 1, 1)
+Base.typemax(::Union{DateTime, Type{DateTime}}) = DateTime(UTM(typemax(Int64)))
+Base.typemin(::Union{DateTime, Type{DateTime}}) = DateTime(UTM(typemin(Int64)))
+Base.typemax(::Union{Date, Type{Date}}) = Date(UTD(typemax(Int64)))
+Base.typemin(::Union{Date, Type{Date}}) = Date(UTD(typemin(Int64)))
 Base.typemax(::Union{Time, Type{Time}}) = Time(23, 59, 59, 999, 999, 999)
 Base.typemin(::Union{Time, Type{Time}}) = Time(0)
 Base.typemax(::Type{Timestamp}) = typemax(Timestamp{Nanosecond})
