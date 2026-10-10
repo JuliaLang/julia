@@ -1238,6 +1238,16 @@ struct P62001{T,N} end
 const P62001Int4 = P62001{Int,4}
 @test only(Base.return_types(generated_type_sparam62001, Tuple{Core.TypeEgal{P62001Int4}})) === Val{Int}
 
+# A static parameter occurring invariantly in the declared bound of a
+# `Type{<:...}` argument's own binder is pinned by egality, so it folds.
+struct TypeSubBoundSparam{E,T} end
+sparam_from_type_sub_bound(::Type{<:TypeSubBoundSparam{E,T}}) where {E,T} = T
+@test only(Base.return_types(sparam_from_type_sub_bound, (Type{TypeSubBoundSparam{Float32,Vector{Float32}}},))) === Core.TypeEgal{Vector{Float32}}
+sparams_from_type_sub_bounds(::Type{<:TypeSubBoundSparam{E1,T1}}, ::Type{<:TypeSubBoundSparam{E2,T2}}) where {E1,T1,E2,T2} = (T1, T2)
+@test only(Base.return_types(sparams_from_type_sub_bounds, (Type{TypeSubBoundSparam{Float32,Vector{Float32}}}, Type{TypeSubBoundSparam{Int,Vector{Int}}}))) === Tuple{DataType,DataType}
+sparam_from_abstractarray_sub_bound(::Type{<:AbstractArray{T,N}}) where {T,N} = (T, N)
+@test only(Base.return_types(sparam_from_abstractarray_sub_bound, (Type{Vector{Float32}},))) === Tuple{DataType,Int}
+
 # Invariant datatype parameters preserve the exact runtime spelling of the
 # `Type{Union{}}`/`Core.TypeofBottom` alias family when forming static params.
 struct TypeofBottomParam62001{S} end

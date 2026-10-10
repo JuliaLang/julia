@@ -1147,6 +1147,15 @@ end
 
 # does the (raw) declared upper bound of the sig's binder `k` mention the
 # sig's binder `i` invariantly? (the bound sits under binders `1..k-1`)
+# `sigarg` carries `nsj` binders of its own; does the declared upper bound of
+# the one that a reference of depth `dj` (from its innermost body) resolves to
+# mention, invariantly, the sparam binder seen at depth `d` from outside
+# `sigarg`? (the bounds sit outside their own binder, so from there the sparam
+# binder is `dj - 1` levels closer than from the body)
+function arg_binder_bound_mentions_invariantly(@nospecialize(sigarg), nsj::Int, dj::Int, d::Int)
+    return has_invariant_ref_occurrence(nth_binder(sigarg, nsj - dj + 1).ub, d + nsj - dj)
+end
+
 function binder_bound_mentions_invariantly(@nospecialize(sig), k::Int, i::Int)
     k > i || return false
     return has_invariant_ref_occurrence(nth_binder(sig, k).ub, k - i)
@@ -1184,6 +1193,10 @@ function sparam_definitely_egal_from_spec(i::Int, nvals::Int, sig::UnionAll,
             if 1 <= k <= nvals && binder_bound_mentions_invariantly(sig, k, i)
                 return true
             end
+            # the argument's own binder (`x::(X where X<:Wrapper{vᵢ})`)
+            if dj <= nsj && arg_binder_bound_mentions_invariantly(sigarg, nsj, dj, d)
+                return true
+            end
         end
         if has_invariant_ref_occurrence(sigarg, d)
             return true
@@ -1199,6 +1212,11 @@ function sparam_definitely_egal_from_spec(i::Int, nvals::Int, sig::UnionAll,
                 end
                 k = nvals + nsj - dj + 1
                 if 1 <= k <= nvals && binder_bound_mentions_invariantly(sig, k, i)
+                    return true
+                end
+                # `x::Type{<:Wrapper{vᵢ}}`: the `Type` parameter is the
+                # argument's own binder, whose declared bound pins `vᵢ`
+                if dj <= nsj && arg_binder_bound_mentions_invariantly(sigarg, nsj, dj, d)
                     return true
                 end
             end
