@@ -33,8 +33,9 @@ mmtk = { git = "https://github.com/wks/mmtk-core.git", rev = "722252c8546503a5e5
 # Uncomment the following to build locally
 # mmtk = { path = "../repos/mmtk-core" }
 log = {version = "0.4", features = ["max_level_trace", "release_max_level_off"] }
-enum-map = ">=2.1"
-atomic = "0.4.6"
+# enum-map 3.1.0 requires higher MSRV.  enum-map 3.0.0 was yanked.
+enum-map = "=2.7.3"
+atomic = "0.6.1"
 chrono = "*"
 thread-id = "*"
 memoffset = "*"
