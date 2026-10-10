@@ -9,7 +9,13 @@ import ..RefValue, ..DenseUTF8String
 # include($BUILDROOT/base/pcre_h.jl)
 include(string(Base.BUILDROOT, "pcre_h.jl"))
 
-const PCRE_LIB = "libpcre2-8"
+if Sys.iswindows()
+    const PCRE_LIB = "libpcre2-8-0.dll"
+elseif Sys.isapple()
+    const PCRE_LIB = "@rpath/libpcre2-8.0.dylib"
+else
+    const PCRE_LIB = "libpcre2-8.so.0"
+end
 
 function create_match_context()
     JIT_STACK_START_SIZE = 32768
