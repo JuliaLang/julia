@@ -8,6 +8,7 @@ using ..Compiler: _findsup, store_backedges, JLOptions, get_world_counter,
 using .Core: CodeInstance, MethodInstance
 
 const CI_FLAGS_NATIVE_CACHE_VALID = 0b1000
+const CI_FLAGS_BACKEDGES_LOGGED = 0b100000 # the image's backedge log already holds this CodeInstance's backedges
 const WORLD_AGE_REVALIDATION_SENTINEL::UInt = 1
 const _jl_debug_method_invalidation = RefValue{Union{Nothing,Vector{Any}}}(nothing)
 debug_method_invalidation(onoff::Bool) =
@@ -65,11 +66,15 @@ struct VerifyMethodWorkspace
     lookups::IdDict{Any,VerifyMethodLookup}
     backedge_scratch::IdSet{Any}
 
-    function VerifyMethodWorkspace()
+    # The image has a backedge log that is applied in bulk after verification.
+    # CodeInstances not covered by the log still register their backedges one by one.
+    prelinked::Bool
+
+    function VerifyMethodWorkspace(prelinked::Bool=false)
         new(VerifyMethodInitialState[], VerifyMethodWorkState[], VerifyMethodResultState[],
             CodeInstance[], IdDict{CodeInstance,Int}(),
             Any[], Method[], RefValue{UInt}(1), RefValue{UInt}(typemax(UInt)), RefValue{Int32}(0),
-            IdDict{Any,VerifyMethodLookup}(), IdSet{Any}())
+            IdDict{Any,VerifyMethodLookup}(), IdSet{Any}(), prelinked)
     end
 end
 
@@ -111,22 +116,39 @@ end
 
 # Restore backedges to external targets
 # `internal_methods` = [caller1, ...], the list of worklist-owned code instances internally
-function insert_backedges(internal_methods::Vector{Any})
+function insert_backedges(internal_methods::Vector{Any}, backedge_log::Union{Vector{Any}, Nothing})
     # determine which CodeInstance objects are still valid in our image
     # to enable any applicable new codes
     backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
     scan_new_methods!(internal_methods, get_world_counter(), backedges_only)
-    scan_new_code!(internal_methods, VerifyMethodWorkspace())
+    workspace = VerifyMethodWorkspace(backedge_log !== nothing)
+    # Verify all roots, then register backedges, then promote. A method defined after
+    # registration invalidates the callers, so the promotion does nothing. A method defined
+    # before registration leaves them unpromoted, valid only up to their validation world.
+    worlds = scan_new_code!(internal_methods, workspace)
+    if backedge_log !== nothing
+        # Register the recorded backedges of every caller that verified at the current world.
+        ccall(:jl_apply_backedge_log, Cvoid, (Any,), backedge_log)
+    end
+    for i = 1:length(internal_methods)
+        codeinst = internal_methods[i]
+        codeinst isa CodeInstance || continue
+        # If the world has not moved since validation, this extends validity to the latest world,
+        # for the root and its dependencies, under the world counter lock. From then on the
+        # ordinary backedge mechanism keeps them valid.
+        @ccall jl_promote_ci_to_current(codeinst::Any, worlds[i]::UInt)::Cvoid
+    end
     nothing
 end
 
 function scan_new_code!(internal_methods::Vector{Any}, workspace::VerifyMethodWorkspace)
+    worlds = Vector{UInt}(undef, length(internal_methods))
     lookup_world = get_world_counter()
     for i = 1:length(internal_methods)
         codeinst = internal_methods[i]
-        codeinst isa CodeInstance || continue
-        # codeinst.owner === nothing || continue
         validation_world = get_world_counter()
+        worlds[i] = validation_world
+        codeinst isa CodeInstance || continue
         if validation_world != lookup_world
             # a method was added or deleted since the memoized lookups were made (an open-ended
             # `max_world` in them is no longer trustworthy)
@@ -134,11 +156,8 @@ function scan_new_code!(internal_methods::Vector{Any}, workspace::VerifyMethodWo
             lookup_world = validation_world
         end
         verify_method_graph(codeinst, validation_world, workspace)
-        # After validation, under the world_counter_lock, set max_world to typemax(UInt) for all dependencies
-        # (recursively). From that point onward the ordinary backedge mechanism is responsible for maintaining
-        # validity.
-        @ccall jl_promote_ci_to_current(codeinst::Any, validation_world::UInt)::Cvoid
     end
+    return worlds
 end
 
 function verify_method_graph(codeinst::CodeInstance, validation_world::UInt, workspace::VerifyMethodWorkspace)
@@ -391,7 +410,9 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         end
                     end
                     @atomic :monotonic child.max_world = result.result_maxworld
-                    if result.result_maxworld == validation_world && validation_world == get_world_counter() && isdefined(child, :edges)
+                    if result.result_maxworld == validation_world && validation_world == get_world_counter() &&
+                       (!workspace.prelinked || child.flags & CI_FLAGS_BACKEDGES_LOGGED == 0) && isdefined(child, :edges)
+                        # The image's backedge log covers only some CodeInstances; register the rest here.
                         store_backedges(child, child.edges, workspace.backedge_scratch)
                     end
                     @assert workspace.visiting[child] == length(workspace.stack) + 1 "internal error maintaining workspace"
@@ -871,7 +892,7 @@ function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UIn
 end
 
 # Wrapper to call insert_backedges in typeinf_world for external calls
-function insert_backedges_typeinf(internal_methods::Vector{Any})
-    args = Any[insert_backedges, internal_methods]
+function insert_backedges_typeinf(internal_methods::Vector{Any}, backedge_log::Union{Vector{Any}, Nothing})
+    args = Any[insert_backedges, internal_methods, backedge_log]
     return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Any}, Cint), args, length(args))
 end
