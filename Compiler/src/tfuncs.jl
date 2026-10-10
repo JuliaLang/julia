@@ -1634,7 +1634,7 @@ end
         return Any
     end
     # fieldtype only accepts Types
-    if isa(s0, Const) && !(isa(s0.val, DataType) || isa(s0.val, UnionAll) || isa(s0.val, Union))
+    if isa(s0, Const) && !(isa(s0.val, DataType) || isa(s0.val, UnionAll) || isa(s0.val, Union) || isa(s0.val, Core.TypeEgal))
         return Bottom
     end
     if (s0 isa Type && s0 == Type{Union{}}) || isa(s0, Conditional)
@@ -1679,6 +1679,8 @@ end
         end
         return Any
     end
+    # the sole instance of `TypeEgal{T}` is `T`, a value whose type is a canonical tag
+    isTypeEgal(u) && return _fieldtype_tfunc(𝕃, typeof(type_parameter(u)), name, true, true)
     isType(u) && return Bottom # type objects have no fields
     u isa DataType || return Any
     if isabstracttype(u)
