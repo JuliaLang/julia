@@ -111,6 +111,7 @@ uverrorname(err::Int32) = unsafe_string(ccall(:uv_err_name, Cstring, (Int32,), e
 
 uv_error(prefix::Symbol, c::Integer) = uv_error(string(prefix), c)
 uv_error(prefix::AbstractString, c::Integer) = c < 0 ? _uv_error(prefix, c) : nothing
+uv_error(prefix::AbstractString, c::Bool) = error("uv_error: Bool argument is a mistake, pass the raw error code instead")
 _uv_error(prefix::AbstractString, c::Integer) = throw(_UVError(prefix, c))
 
 ## event loop ##
