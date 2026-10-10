@@ -58,6 +58,13 @@ static jl_mutex_t jl_timing_ittapi_events_lock;
 
 #ifdef USE_NVTX
 static nvtxDomainHandle_t jl_timing_nvtx_domain;
+static nvtxDomainHandle_t jl_timing_nvtx_task_domain;
+uint64_t nvtx_task_schema_id;
+NVTX_DEFINE_STRUCT_WITH_SCHEMA(task_payload_t, "task_exec",
+    NVTX_PAYLOAD_ENTRIES(
+        (uint32_t, task_id, TYPE_UINT32, "task_id")
+    )
+)
 #endif
 
 #ifdef USE_TIMING_COUNTS
@@ -152,9 +159,11 @@ void jl_init_timing(void)
 
 #ifdef USE_NVTX
     jl_timing_nvtx_domain = nvtxDomainCreateA("julia");
+    jl_timing_nvtx_task_domain = nvtxDomainCreateA("julia tasks");
     for (int i = 0; i < JL_TIMING_SUBSYSTEM_LAST; i++) {
         nvtxDomainNameCategoryA(jl_timing_nvtx_domain, i + 1, jl_timing_subsystems[i]);
     }
+    nvtx_task_schema_id = NVTX_PAYLOAD_SCHEMA_REGISTER(jl_timing_nvtx_task_domain, task_payload_t);
 #endif
 
     int i __attribute__((unused)) = 0;
@@ -482,6 +491,9 @@ void jl_timing_block_task_enter(jl_task_t *ct, jl_ptls_t ptls, jl_timing_block_t
 
 #ifdef USE_TRACY
     TracyCFiberEnter(ct->name);
+#elif defined(USE_NVTX)
+    task_payload_t p_val = {ct->nvtx_task_id};
+    nvtxPayloadRangePush(jl_timing_nvtx_task_domain, &ct->nvtx_attrs, nvtx_task_schema_id, &p_val, sizeof(p_val));
 #else
     (void)ct;
 #endif
@@ -503,6 +515,10 @@ jl_timing_block_t *jl_timing_block_task_exit(jl_task_t *ct, jl_ptls_t ptls)
 
     //TracyCFiberLeave;
 #endif
+#ifdef USE_NVTX
+    nvtxDomainRangePop(jl_timing_nvtx_task_domain);
+#endif
+
     (void)ct;
 
     jl_timing_block_t *blk = ptls->timing_stack;
@@ -695,6 +711,63 @@ void jl_timing_task_init(jl_task_t *t)
 
     t->name = fiber_name;
 #endif
+#ifdef USE_NVTX
+    jl_value_t *start_type = jl_typeof(t->start);
+    const char *start_name = "";
+    if (jl_is_datatype(start_type))
+        start_name = jl_symbol_name(((jl_datatype_t *) start_type)->name->name);
+
+    static uint32_t task_id = 1;
+    // XXX: NVTX uses this as a handle internally and requires that this
+    // string live forever, so this allocation is intentionally leaked.
+    char *task_name;
+
+    // We try to get the method instance to get module and file name
+    JL_GC_PUSH1(&t);
+    jl_method_instance_t *mi = jl_apply_lookup(&t->start, 1, jl_get_world_counter());
+    JL_GC_POP();
+    if (mi != NULL && jl_is_method(mi->def.value)) {
+        const char *filename = gnu_basename(jl_symbol_name(mi->def.method->file));
+        const char *module_name = jl_symbol_name(mi->def.method->module->name);
+
+        // Message " (:0000000 in )\0" with 16 chars
+        size_t task_name_len = strlen(start_name) + strlen(filename) + strlen(module_name) + 16;
+        task_name = (char *)malloc(task_name_len);
+        snprintf(task_name, task_name_len, "%s (%s:%d in %s)", start_name, filename, mi->def.method->line, module_name);
+
+    } else {
+        task_name = (char * ) malloc(strlen(start_name) + 1);
+        strcpy(task_name, start_name);
+    }
+
+    nvtxEventAttributes_t nvtx_attrs = {0};
+    nvtx_attrs.version = NVTX_VERSION;
+    nvtx_attrs.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+
+
+    nvtxStringHandle_t nvtx_message = nvtxDomainRegisterStringA(jl_timing_nvtx_task_domain, task_name);
+    nvtx_attrs.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
+    nvtx_attrs.message.registered = nvtx_message;
+
+    t->nvtx_attrs = nvtx_attrs;
+    t->nvtx_task_id = task_id++;
+#endif
+}
+
+void jl_timing_root_task_init(jl_task_t *t) {
+#ifdef USE_NVTX
+    static char *root_task_name = "Root";
+    nvtxEventAttributes_t nvtx_attrs = {0};
+    nvtx_attrs.version = NVTX_VERSION;
+    nvtx_attrs.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+
+
+    nvtxStringHandle_t nvtx_message = nvtxDomainRegisterStringA(jl_timing_nvtx_task_domain, root_task_name);
+    nvtx_attrs.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
+    nvtx_attrs.message.registered = nvtx_message;
+    t->nvtx_attrs = nvtx_attrs;
+#endif
+
 }
 
 JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled)
