@@ -2,35 +2,54 @@
 
 # Convert # of Rata Die days to proleptic Gregorian calendar y,m,d,w
 # Reference: https://www.researchgate.net/profile/Peter-Baum/publication/316558298_Date_Algorithms/links/5f90c3f992851c14bcdb0da6/Date-Algorithms.pdf
-function yearmonthday(days)
-    z = days + 306; h = 100z - 25; a = fld(h, 3652425); b = a - fld(a, 4)
-    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
-    d = c - div(153m - 457, 5); return m > 12 ? (y + 1, m - 12, d) : (y, m, d)
+const DAYS_PER_400Y = 146097
+# Days from March 1 to January 1. Years start in March, so the leap day is their last day.
+const DAYS_MAR_TO_JAN = 306
+# For day `r` in 0:DAYS_PER_400Y-1 of a 400-year cycle, return the year within the cycle,
+# the month from 3 (March) to 14 (February of the next year), and the day of month. All
+# operands stay small and non-negative.
+@inline function cycleday2yearmonthday(r::Integer)
+    Base.hastypemax(typeof(r)) && typemax(r) < DAYS_PER_400Y - 1 &&
+        throw(ArgumentError("$(typeof(r)) cannot hold a day of the 400-year cycle"))
+    z = r % UInt64 + DAYS_MAR_TO_JAN  # day count with 1 = March 1 of year 0
+    h = 100z - 25                     # 100(z - 1/4), fixed point in hundredths of a day
+    a = h ÷ 3652425                   # whole Gregorian centuries (36524.25 days each)
+    b = a - a ÷ 4                     # century leap days the Gregorian calendar skips
+    y = (100b + h) ÷ 36525            # March-based year, counting z + b in Julian years
+    c = b + z - 365y - y ÷ 4          # day of that year, 1 = March 1
+    m = (5c + 456) ÷ 153              # month, 3 (March) to 14 (February)
+    d = c - (153m - 457) ÷ 5          # day of month
+    return y % Int64, m % Int64, d % Int64
 end
-function year(days)
-   z = days + 306; h = 100z - 25; a = fld(h, 3652425); b = a - fld(a, 4)
-   y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
-   return m > 12 ? y + 1 : y
+function yearmonthday(days::Integer)
+    q, r = fldmod(days, DAYS_PER_400Y)
+    y, m, d = cycleday2yearmonthday(r)
+    y += 400q
+    return m > 12 ? (y + 1, m - 12, d) : (y, m, d)
 end
-function yearmonth(days)
-    z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4)
-    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
+function year(days::Integer)
+    q, r = fldmod(days, DAYS_PER_400Y)
+    y, m, _ = cycleday2yearmonthday(r)
+    y += 400q
+    return m > 12 ? y + 1 : y
+end
+function yearmonth(days::Integer)
+    q, r = fldmod(days, DAYS_PER_400Y)
+    y, m, _ = cycleday2yearmonthday(r)
+    y += 400q
     return m > 12 ? (y + 1, m - 12) : (y, m)
 end
-function month(days)
-    z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4)
-    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
+function month(days::Integer)
+    _, m, _ = cycleday2yearmonthday(mod(days, DAYS_PER_400Y))
     return m > 12 ? m - 12 : m
 end
-function monthday(days)
-    z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4)
-    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
-    d = c - div(153m - 457, 5); return m > 12 ? (m - 12, d) : (m, d)
+function monthday(days::Integer)
+    _, m, d = cycleday2yearmonthday(mod(days, DAYS_PER_400Y))
+    return m > 12 ? (m - 12, d) : (m, d)
 end
-function day(days)
-    z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4)
-    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
-    return c - div(153m - 457, 5)
+function day(days::Integer)
+    _, _, d = cycleday2yearmonthday(mod(days, DAYS_PER_400Y))
+    return d
 end
 
 # ISO year utils
