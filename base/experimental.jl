@@ -535,7 +535,6 @@ macro make_all_arithmetic_checked()
         Base.:(+)(x::Base.Int, y::Base.Int)                    = Base.Checked.checked_add(x, y)
         Base.:(+)(x::T, y::T) where {T<:Base.BitInteger}       = Base.Checked.checked_add(x, y)
         Base.:(*)(x::T, y::T) where {T<:Base.BitInteger}       = Base.Checked.checked_mul(x, y)
-        Base.:(-)(x::Base.AbstractChar, y::Base.AbstractChar)  = Base.Int(x) - Base.Int(y)
     end)
 end
 
