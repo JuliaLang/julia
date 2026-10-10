@@ -1400,6 +1400,24 @@ function sort_cachefile_candidates!(paths::Vector{String}, pkgimages::Vector{Boo
     return paths
 end
 
+# Mark a cache file as recently used, for the ordering above and for the eviction
+# in `compilecache`. Only files in the directory `compilecache` writes to are
+# touched: other depots may be shared, read-only, or part of a signed app bundle
+# where even a failed write attempt makes macOS warn the user. For the same
+# reason, the depot bundled with Julia is never touched, even when it comes first.
+# The bundled depot is matched exactly: juliaup installs it inside the user depot.
+function touch_cachefile(pkg::PkgId, path::String)
+    isempty(DEPOT_PATH) && return
+    startswith(path, joinpath(compilecache_dir(pkg), "")) || return
+    startswith(path, joinpath(dirname(dirname(Sys.STDLIB)), "compiled", "")) && return
+    try
+        touch(path)
+    catch
+        # the file might still be read-only, which is fine
+    end
+    return
+end
+
 function sorted_cachefile_candidates_in_depot(pkg::PkgId, depot::String)
     return sort_cachefile_candidates!(cachefile_candidates_in_depot(pkg, depot)...)
 end
@@ -2132,14 +2150,7 @@ function compilecache_freshest_path(pkg::PkgId;
             # Record the result so dependents don't check this file again.
             stale_cache[(pkg, id_build, sourcespec, path_to_try, ignore_loaded, flags)::StaleCacheKey] = false
             # The first candidate tried is already the one code loading prefers.
-            if tried > 1
-                try
-                    # update timestamp of precompilation file so that it is the first to be tried by code loading
-                    touch(path_to_try)
-                catch
-                    # file might be read-only and then we fail to update timestamp, which is fine
-                end
-            end
+            tried > 1 && touch_cachefile(pkg, path_to_try)
             return path_to_try
         end
     end
@@ -2377,13 +2388,7 @@ end
                     return M
                 end
                 !trusted && checksums_invalid(path_to_try, ocachefile, newbuild_id, reasons) && continue next_path
-                if stalecheck && tried > 1
-                    try
-                        touch(path_to_try) # update timestamp of precompilation file
-                    catch
-                        # file might be read-only and then we fail to update timestamp, which is fine
-                    end
-                end
+                stalecheck && tried > 1 && touch_cachefile(pkg, path_to_try)
                 # finish loading module graph into staledeps
                 # n.b. this runs __init__ methods too early, so it is very unwise to have those, as they may see inconsistent loading state, causing them to fail unpredictably here
                 for i in eachindex(staledeps)
