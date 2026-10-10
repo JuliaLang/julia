@@ -174,6 +174,9 @@ Multi-threading changes
 Build system changes
 --------------------
 
+* Stdlib package images for `--check-bounds=yes` are no longer bundled by default, since `Pkg.test`
+  no longer forces bounds checking. Build with `JULIA_CHECK_BOUNDS_PKGIMAGES=1` to bundle them.
+
 New library functions
 ---------------------
 

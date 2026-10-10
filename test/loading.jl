@@ -2275,32 +2275,34 @@ end
 end
 
 @testset "require_stdlib loading duplication" begin
+    # Run with default bounds checking so that the bundled stdlib pkgimages are usable;
+    # the ones for `--check-bounds=yes` are not bundled by default.
     depot_path = mkdepottempdir()
-    oldBase64 = nothing
-    try
-        push!(empty!(DEPOT_PATH), depot_path)
-        Base64_key = Base.PkgId(Base.UUID("2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"), "Base64")
-        oldBase64 = Base.unreference_module(Base64_key)
-        cc = Base.compilecache(Base64_key)
-        sourcespec = Base.locate_package_load_spec(Base64_key)
-        @test Base.stale_cachefile(Base64_key, UInt128(0), sourcespec, cc[1]) !== true
-        empty!(DEPOT_PATH)
-        Base.require_stdlib(Base64_key)
-        push!(DEPOT_PATH, depot_path)
-        append!(DEPOT_PATH, original_depot_path)
-        oldloaded = @lock(Base.require_lock, length(get(Base.loaded_precompiles, Base64_key, Module[])))
-        Base.require(Base64_key)
-        @test @lock(Base.require_lock, length(get(Base.loaded_precompiles, Base64_key, Module[]))) == oldloaded
-        Base.unreference_module(Base64_key)
-        empty!(DEPOT_PATH)
-        push!(DEPOT_PATH, depot_path)
-        Base.require(Base64_key)
-        @test @lock(Base.require_lock, length(get(Base.loaded_precompiles, Base64_key, Module[]))) == oldloaded + 1
-        Base.unreference_module(Base64_key)
-    finally
-        oldBase64 === nothing || Base.register_root_module(oldBase64)
-        copy!(DEPOT_PATH, original_depot_path)
-    end
+    script = """
+    using Test
+    depot_path = $(repr(depot_path))
+    original_depot_path = copy(DEPOT_PATH)
+    push!(empty!(DEPOT_PATH), depot_path)
+    Base64_key = Base.PkgId(Base.UUID("2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"), "Base64")
+    Base.unreference_module(Base64_key)
+    cc = Base.compilecache(Base64_key)
+    sourcespec = Base.locate_package_load_spec(Base64_key)
+    @test Base.stale_cachefile(Base64_key, UInt128(0), sourcespec, cc[1]) !== true
+    empty!(DEPOT_PATH)
+    Base.require_stdlib(Base64_key)
+    push!(DEPOT_PATH, depot_path)
+    append!(DEPOT_PATH, original_depot_path)
+    oldloaded = @lock(Base.require_lock, length(get(Base.loaded_precompiles, Base64_key, Module[])))
+    Base.require(Base64_key)
+    @test @lock(Base.require_lock, length(get(Base.loaded_precompiles, Base64_key, Module[]))) == oldloaded
+    Base.unreference_module(Base64_key)
+    empty!(DEPOT_PATH)
+    push!(DEPOT_PATH, depot_path)
+    Base.require(Base64_key)
+    @test @lock(Base.require_lock, length(get(Base.loaded_precompiles, Base64_key, Module[]))) == oldloaded + 1
+    """
+    cmd = `$(Base.julia_cmd()) --check-bounds=auto --startup-file=no -e $script`
+    @test success(pipeline(cmd; stdout, stderr))
 end
 
 # Test `import Package as M`
@@ -2391,7 +2393,8 @@ end
     tmpdir = mktempdir()
     try
         script = "Base.require_stdlib(Base.PkgId(Base.UUID(\"2a0f44e3-6c83-55bd-87e4-b1978d98bd5f\"), \"Base64\")); println(\"SUCCESS\")"
-        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`, "JULIA_DEPOT_PATH" => tmpdir, "JULIA_DEBUG" => "loading")
+        # `--check-bounds=yes` stdlib pkgimages are not bundled by default
+        cmd = addenv(`$(Base.julia_cmd()) --check-bounds=auto --startup-file=no -e $script`, "JULIA_DEPOT_PATH" => tmpdir, "JULIA_DEBUG" => "loading")
         out = PipeBuffer()
         run(pipeline(cmd, stdout=out, stderr=out))
         output = read(out, String)
