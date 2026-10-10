@@ -35,7 +35,7 @@ const OFFSET_OF_INLINED_SPACE_IN_MODULE: usize =
     offset_of!(jl_module_t, usings) + offset_of!(arraylist_t, _space);
 
 #[allow(improper_ctypes)]
-extern "C" {
+unsafe extern "C" {
     pub static jl_simplevector_type: *const jl_datatype_t;
     pub static jl_genericmemory_typename: *mut jl_typename_t;
     pub static jl_genericmemoryref_typename: *mut jl_typename_t;
