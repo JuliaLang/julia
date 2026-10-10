@@ -5433,7 +5433,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 else {
                     Value *index = ctx.builder.CreateCall(prepare_call(jlfieldindex_func),
                             {emit_typeof(ctx, obj, false, false), boxed(ctx, fld), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0)});
-                    Value *cond = ctx.builder.CreateICmpNE(index, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), -1));
+                    Value *cond = ctx.builder.CreateICmpNE(index, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), -1, true));
                     emit_hasnofield_error_ifnot(ctx, cond, utt, fld);
                     Value *idx2 = ctx.builder.CreateAdd(ctx.builder.CreateIntCast(index, ctx.types().T_size, false), ConstantInt::get(ctx.types().T_size, 1)); // getfield_unknown is 1 based
                     if (emit_getfield_unknownidx(ctx, ret, obj, idx2, utt, jl_false, order))
@@ -6964,7 +6964,7 @@ static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, const jl_cg
             return;
         Value *tindex = rval_info.TIndex;
         if (!vi.boxroot)
-            tindex = ctx.builder.CreateAnd(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER));
+            tindex = ctx.builder.CreateAnd(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), (uint8_t)~UNION_BOX_MARKER));
         ctx.builder.CreateStore(tindex, vi.pTIndex, vi.isVolatile);
     }
 
@@ -6989,7 +6989,7 @@ static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, const jl_cg
         Value *skip = nullptr;
         if (allow_mismatch) {
             if (vi.pTIndex)
-                skip = ctx.builder.CreateIsNull(ctx.builder.CreateAnd(rval_info.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER)));
+                skip = ctx.builder.CreateIsNull(ctx.builder.CreateAnd(rval_info.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), (uint8_t)~UNION_BOX_MARKER)));
             else {
                 jl_datatype_t *dt = is_typeofbottom_typealias(vi.value.typ) ?
                     jl_typeofbottom_type : (jl_datatype_t*)vi.value.typ;
@@ -10766,7 +10766,11 @@ static jl_llvm_functions_t
                    FromBB->getName() + "." + PhiBB->getName() + "_crit_edge", FromBB->getParent(), FromBB->getNextNode()); // insert after existing block
                 terminator->replaceSuccessorWith(PhiBB, NewBB);
                 DebugLoc Loc = terminator->getDebugLoc();
+#if JL_LLVM_VERSION >= 230000
+                terminator = UncondBrInst::Create(PhiBB);
+#else
                 terminator = BranchInst::Create(PhiBB);
+#endif
                 terminator->setDebugLoc(Loc);
                 ctx.builder.SetInsertPoint(NewBB);
             }
@@ -10860,7 +10864,7 @@ static jl_llvm_functions_t
                     }
                 }
                 else {
-                    Value *tindex = ctx.builder.CreateAnd(RTindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER));
+                    Value *tindex = ctx.builder.CreateAnd(RTindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), (uint8_t)~UNION_BOX_MARKER));
                     if (!VN)
                         RTindex = tindex; // strip UNION_BOX_MARKER
                     if (dest && (!VN || !val.isboxed)) {
@@ -11518,6 +11522,14 @@ extern "C" void jl_init_llvm(void)
         cl::ProvidePositionalOption(clopt, "64", 1);
 #endif
     }
+
+#if JL_LLVM_VERSION >= 230000
+    // LLVM 23 enabled at-point dereferenceability (llvm/llvm-project#204795).
+    // Keep the previous behavior until LLVM can account for Julia's GC lifetimes.
+    clopt = llvmopts.lookup("use-dereferenceable-at-point-semantics");
+    if (clopt && clopt->getNumOccurrences() == 0)
+        cl::ProvidePositionalOption(clopt, "0", 1);
+#endif
 
     clopt = llvmopts.lookup("time-passes");
     if (clopt && clopt->getNumOccurrences() > 0)

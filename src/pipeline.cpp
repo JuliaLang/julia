@@ -438,6 +438,33 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
     MPM.addPass(AfterEarlyOptimizationMarkerPass());
 }
 
+namespace {
+// IRCE, followed by the SimplifyCFG + InstCombine cleanup its output needs, but only if it
+// changed the function. IRCE runs after that same cleanup of the rotated and unswitched
+// loops: it clones each loop it transforms into a pre-, main and post-loop and feeds the main
+// loop's header phis through new merge phis, so redundancies InstCombine would otherwise fold
+// (e.g. a loop carrying both `i` and `i + 1` in separate phis) must be folded before cloning.
+// Functions IRCE leaves alone see the same passes as without it.
+struct IRCEWithCleanupPass : OptionalPassInfoMixin<IRCEWithCleanupPass> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT {
+        PassInstrumentation PI = AM.getResult<PassInstrumentationAnalysis>(F);
+        IRCEPass IRCE;
+        if (!PI.runBeforePass<Function>(IRCE, F))
+            return PreservedAnalyses::all();
+        PreservedAnalyses PA = IRCE.run(F, AM);
+        PI.runAfterPass<Function>(IRCE, F, PA);
+        if (PA.areAllPreserved())
+            return PA;
+        AM.invalidate(F, PA);
+        FunctionPassManager Cleanup;
+        Cleanup.addPass(SimplifyCFGPass(basicSimplifyCFGOptions()));
+        Cleanup.addPass(InstCombinePass());
+        PA.intersect(Cleanup.run(F, AM));
+        return PA;
+    }
+};
+} // namespace
+
 static void buildLoopOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *PB, OptimizationLevel O, const OptimizationOptions &options) JL_NOTSAFEPOINT {
     FPM.addPass(BeforeLoopOptimizationMarkerPass());
     if (options.enable_loop_optimizations) {
@@ -462,8 +489,6 @@ static void buildLoopOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *PB
             //We don't know if the loop callbacks support MSSA
             FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA = */true));
         }
-        if (getSpeedupLevel(O) >= 2)
-            FPM.addPass(IRCEPass());
         {
             LoopPassManager LPM;
             LPM.addPass(BeforeLoopSimplificationMarkerPass());
@@ -480,6 +505,10 @@ static void buildLoopOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *PB
             LPM.addPass(AfterLoopSimplificationMarkerPass());
             FPM.addPass(SimplifyCFGPass(basicSimplifyCFGOptions()));
             FPM.addPass(InstCombinePass());
+            // Must come before IndVarSimplify, whose LFTR can turn the latch into an
+            // equality test IRCE does not handle.
+            if (getSpeedupLevel(O) >= 2)
+                FPM.addPass(IRCEWithCleanupPass());
             //We don't know if the loop end callbacks support MSSA
             FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA = */false));
         }
@@ -558,6 +587,9 @@ static void buildVectorPipeline(FunctionPassManager &FPM, PassBuilder *PB, Optim
         FPM.addPass(EarlyCSEPass());
         FPM.addPass(CorrelatedValuePropagationPass());
         FPM.addPass(InstCombinePass());
+        // CVP can fold branch conditions here (e.g. bounds checks made redundant by the loop
+        // passes); fold those branches and hoist the code they guarded before SLP looks at it.
+        FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
         FPM.addPass(SLPVectorizerPass());
         FPM.addPass(VectorCombinePass());
         invokeVectorizerCallbacks(FPM, PB, O);
