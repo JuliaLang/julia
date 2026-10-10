@@ -702,17 +702,17 @@ pub unsafe fn mmtk_jl_bt_entry_size(bt_entry: *mut jl_bt_element_t) -> usize { u
     }
 }}
 
-pub unsafe fn mmtk_jl_bt_num_jlvals(bt_entry: *mut jl_bt_element_t) -> usize { unsafe {
-    debug_assert!(!mmtk_jl_bt_is_native(bt_entry));
+pub unsafe fn mmtk_jl_bt_num_jlvals(bt_entry: *mut jl_bt_element_t) -> usize {
+    debug_assert!(!unsafe {mmtk_jl_bt_is_native(bt_entry) });
     let entry = unsafe { (*bt_entry.add(1)).__bindgen_anon_1.uintptr };
     entry & 0x7
-}}
+}
 
-pub unsafe fn mmtk_jl_bt_num_uintvals(bt_entry: *mut jl_bt_element_t) -> usize { unsafe {
-    debug_assert!(!mmtk_jl_bt_is_native(bt_entry));
+pub unsafe fn mmtk_jl_bt_num_uintvals(bt_entry: *mut jl_bt_element_t) -> usize {
+    debug_assert!(!unsafe {mmtk_jl_bt_is_native(bt_entry)});
     let entry = unsafe { (*bt_entry.add(1)).__bindgen_anon_1.uintptr };
     (entry >> 3) & 0x7
-}}
+}
 
 pub unsafe fn mmtk_jl_bt_entry_jlvalue(
     bt_entry: *mut jl_bt_element_t,
