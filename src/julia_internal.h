@@ -1370,7 +1370,8 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
 // Type predicate for TypeApp (inline: called per type node on hot type-query paths)
 STATIC_INLINE int jl_is_typeapp(jl_value_t *v) JL_NOTSAFEPOINT
 {
-    return jl_typeapp_type != NULL && jl_typeis(v, jl_typeapp_type);
+    // TypeApp has no small type tag, so its tag is the type pointer itself
+    return jl_typetagis(v, jl_typeapp_type) && jl_typeapp_type != NULL;
 }
 void jl_init_tasks(void) JL_GC_DISABLED JL_NOTSAFEPOINT;
 void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo) JL_NOTSAFEPOINT;
