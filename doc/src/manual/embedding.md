@@ -145,8 +145,9 @@ Now the build command is simply `make`.
 If the `JULIA_DIR` environment variable hasn't been setup, add it using the System panel before
 starting Visual Studio. The `bin` folder under JULIA_DIR should be on the system PATH.
 
-We start by opening Visual Studio and creating a new Console Application project. Open the
-'stdafx.h' header file, and add the following lines at the end:
+We start by opening Visual Studio and creating a new Console Application project. Open the main
+source file of the project (for example, `MyApp.cpp`), and add the following line at the top,
+before any other code:
 
 ```c
 #include <julia.h>
@@ -177,12 +178,21 @@ The next step is to set up the project to find the Julia include files and the l
 know whether the Julia installation is 32- or 64-bit. Remove any platform configuration that doesn't correspond
 to the Julia installation before proceeding.
 
-Using the project Properties dialog, go to `C/C++` | `General` and add `$(JULIA_DIR)\include\julia\` to the
-Additional Include Directories property. Then, go to the `Linker` | `General` section and add `$(JULIA_DIR)\lib`
-to the Additional Library Directories property. Finally, under `Linker` | `Input`, add `libjulia.dll.a;libopenlibm.dll.a;`
+In the project Properties dialog, select `All Configurations` under **Configuration** and the
+platform that matches the Julia installation, so that the settings apply to both the `Debug` and
+`Release` builds. Go to `C/C++` | `General` and add `$(JULIA_DIR)\include\julia\` to the Additional
+Include Directories property. Then, go to the `Linker` | `General` section and add
+`$(JULIA_DIR)\lib;$(JULIA_DIR)\lib\julia` to the Additional Library Directories property:
+`libjulia.dll.a` is located in the first directory, `libopenlibm.dll.a` in the second one.
+Finally, under `Linker` | `Input`, add `libjulia.dll.a;libopenlibm.dll.a;`
 to the list of libraries.
 
 At this point, the project should build and run.
+
+!!! compat "Visual Studio compatibility"
+    The Julia headers can be included from Visual Studio starting with Julia 1.13. With older
+    versions, MSVC rejects the `__attribute__` keywords used in the headers; as a workaround,
+    `#define __attribute__(x)` can be defined before including `julia.h`.
 
 ## Converting Types
 
