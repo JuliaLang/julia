@@ -2040,6 +2040,13 @@ JuliaOJIT::JuliaOJIT()
         { mangle("__truncsfhf2"),   { mangle("julia__gnu_f2h_ieee"),  JITSymbolFlags::Exported } },
         { mangle("__truncdfhf2"),   { mangle("julia__truncdfhf2"),    JITSymbolFlags::Exported } },
 #endif
+#ifdef __SIZEOF_INT128__
+        // Unlike the routines above, these use the hard-float half ABI on x86_64 Darwin too
+        { mangle("__floattihf"),    { mangle("julia__floattihf"),     JITSymbolFlags::Exported } },
+        { mangle("__floatuntihf"),  { mangle("julia__floatuntihf"),   JITSymbolFlags::Exported } },
+        { mangle("__fixhfti"),      { mangle("julia__fixhfti"),       JITSymbolFlags::Exported } },
+        { mangle("__fixunshfti"),   { mangle("julia__fixunshfti"),    JITSymbolFlags::Exported } },
+#endif
         // BFloat16 conversion routines
         { mangle("__truncsfbf2"),   { mangle("julia__truncsfbf2"),    JITSymbolFlags::Exported } },
         { mangle("__truncdfbf2"),   { mangle("julia__truncdfbf2"),    JITSymbolFlags::Exported } },
