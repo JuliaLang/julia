@@ -310,11 +310,11 @@ struct jl_codegen_call_target_t {
     // neither = unused
 };
 
-// reification of a call to jl_jit_abi_convert, so that it isn't necessary to parse the Modules to recover this info
-struct cfunc_decl_t {
-    jl_abi_t abi;
-    llvm::GlobalVariable *cfuncdata;
-};
+// The caller ABI of a DispatchTrampoline's `fptr`.
+inline jl_abi_t jl_trampoline_abi(jl_dispatch_trampoline_t *tr) JL_NOTSAFEPOINT
+{
+    return {tr->sigt, tr->rt, tr->specsig != 0, (jl_abi_kind_t)tr->kind};
+}
 
 std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx,
                                               const DataLayout &DL, const Triple &triple,
@@ -406,7 +406,12 @@ public:
     DenseMap<jl_code_instance_t *, jl_llvm_functions_t> ci_funcs;
     SmallVector<std::pair<jl_code_instance_t *, GlobalVariable *>, 0> external_fns;
 
-    SmallVector<cfunc_decl_t,0> cfuncs;
+    // Trampolines for reified @cfunction/@ccallable constructions.
+    SmallVector<jl_dispatch_trampoline_t*,0> cfuncs;
+    // Materialized ABIAdapters and their emitted functions, retained for serialization.
+    SmallVector<std::pair<jl_abi_adapter_t*, Function*>, 0> adapter_funcs;
+    // AOT-resolved trampoline targets retained for serialization.
+    DenseMap<jl_dispatch_trampoline_t*, jl_value_t*> trampoline_invokees;
     std::map<void*, GlobalVariable*> global_targets;
     // Module-local coverage counter globals, keyed by their runtime slots.
     DenseMap<_Atomic(uint64_t) *, GlobalVariable*> coverage_counters;
@@ -535,13 +540,6 @@ static inline Constant *literal_static_pointer_val(const void *p, Type *T) JL_NO
 static const inline char *name_from_method_instance(jl_method_instance_t *li) JL_NOTSAFEPOINT
 {
     return jl_is_method(li->def.method) ? jl_symbol_name(li->def.method->name) : "top-level scope";
-}
-
-static inline jl_value_t *get_ci_abi(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
-{
-    if (jl_typeof(ci->def) == (jl_value_t*)jl_abioverride_type)
-        return ((jl_abi_override_t*)ci->def)->abi;
-    return jl_get_ci_mi(ci)->specTypes;
 }
 
 template <size_t offset = 0>
