@@ -434,8 +434,8 @@ pub extern "C" fn mmtk_is_collection_enabled() -> i32 {
 pub extern "C" fn mmtk_gc_epoch() -> u64 {
     let arc = crate::GC_EPOCH_COND.clone();
     let (lock, _cvar) = &*arc;
-    let epoch = *lock.lock().unwrap();
-    epoch
+    
+    *lock.lock().unwrap()
 }
 
 /// Block until the GC epoch has advanced at least once since `last_seen_epoch` (as previously

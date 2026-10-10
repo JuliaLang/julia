@@ -41,6 +41,12 @@ pub struct JuliaGCTrigger {
     heap_size_after_last_full_gc: AtomicUsize,
 }
 
+impl Default for JuliaGCTrigger {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl JuliaGCTrigger {
     pub fn new() -> Self {
         let max_memory = unsafe { jl_gc_get_max_memory() };
@@ -80,11 +86,10 @@ impl JuliaGCTrigger {
     }
 
     fn maybe_force_full_heap(&self, mmtk: &'static MMTK<JuliaVM>) {
-        if let Some(gen_plan) = mmtk.get_plan().generational() {
-            if self.next_sweep_full.load(Ordering::Relaxed) || GC_ALWAYS_SWEEP_FULL {
+        if let Some(gen_plan) = mmtk.get_plan().generational()
+            && (self.next_sweep_full.load(Ordering::Relaxed) || GC_ALWAYS_SWEEP_FULL) {
                 gen_plan.force_full_heap_collection();
             }
-        }
     }
 }
 
