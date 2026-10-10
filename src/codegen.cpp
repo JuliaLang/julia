@@ -10066,8 +10066,11 @@ static jl_llvm_functions_t
         bool error = L.linkInModule(std::move(Mod));
         assert(!error && "linking llvmcall modules failed");
         (void)error;
+        // local definitions may be gone (the linker drops those that nothing
+        // references) or unnamed, and those are internal already
         for (auto FN: Exports)
-            jl_Module->getFunction(FN)->setLinkage(GlobalVariable::InternalLinkage);
+            if (Function *F = jl_Module->getFunction(FN))
+                F->setLinkage(GlobalVariable::InternalLinkage);
     }
 
     JL_GC_POP();
