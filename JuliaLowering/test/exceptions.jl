@@ -348,6 +348,43 @@ begin
 end
 """) == (1,2)
 
+# Issue #63696: early returns in try with finally correctly execute finally and return values
+@test JuliaLowering.include_string(test_mod, """
+begin
+    history = []
+    function f_63696(x)
+        try
+            x == 1 && return 10
+            x == 2 && return 20
+            return 30
+        finally
+            push!(history, x)
+        end
+    end
+    res = (f_63696(1), f_63696(2), f_63696(3))
+    (res, history)
+end
+""") == ((10, 20, 30), [1, 2, 3])
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    fin_called = false
+    caught = false
+    try
+        try
+            error("err")
+            return 1
+        finally
+            fin_called = true
+        end
+    catch
+        caught = true
+    end
+    (fin_called, caught)
+end
+""") == (true, true)
+
+
 @testset "continue/break and finally" for maybe_catch in ("", "catch _", "catch _\nelse")
     # continue in try -> finally block -> loop-cont
     @test JuliaLowering.include_string(test_mod, """

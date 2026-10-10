@@ -228,22 +228,19 @@ function emit_leave_handler(ctx::LinearIRContext, srcref, dest_tokens)
     end
 end
 
-# Enter the current finally block, either through the landing pad (on_exit ==
-# :rethrow) or via a jump (on_exit ∈ (:return, :break)).
+# Enter the current finally block via a jump (on_exit ∈ (:return, :break)).
 #
 # An integer tag is created to identify the current code path and select the
 # on_exit action to be taken at finally handler exit.
 function enter_finally_block(ctx, srcref, on_exit, value)
-    @jl_assert on_exit ∈ (:rethrow, :break, :return) srcref
+    @jl_assert on_exit ∈ (:break, :return) srcref
     handler = last(ctx.finally_handlers)
     push!(handler.exit_actions, (on_exit, value))
     tag = length(handler.exit_actions)
     emit(ctx, @ast ctx srcref [:(=) handler.tagvar tag::value])
-    if on_exit != :rethrow
-        emit_pop_exception(ctx, srcref, handler.target.catch_token_stack)
-        emit_leave_handler(ctx, srcref, handler.target.handler_token_stack[1:end-1])
-        emit(ctx, @ast ctx srcref [:goto handler.target.label])
-    end
+    emit_pop_exception(ctx, srcref, handler.target.catch_token_stack)
+    emit_leave_handler(ctx, srcref, handler.target.handler_token_stack[1:end-1])
+    emit(ctx, @ast ctx srcref [:goto handler.target.label])
     tag
 end
 
@@ -537,14 +534,18 @@ end
 # 2. `continue` needs to call `h()` then jump to the start of the while loop
 # 3. `break` needs to call `h()` then jump to the exit of the while loop
 # 4. If an exception occurs in `f(x)` or `g(x)`, we need to call `h()` before
-#    falling back into the while loop.
+#    rethrowing.
 #
-# To deal with these we create a `finally_tag` variable to dynamically track
-# which action to take after the finally block exits. Before jumping to the
-# block we set this variable to a unique integer tag identifying the incoming
-# code path. At the exit of the user's code (`h()` in this case) we perform the
-# jump appropriate to the `break`, `continue` or `return` as necessary based on
-# the tag.
+# To avoid making normal return values live into the exception handler
+# (which causes PhiC / Upsilon node blowup, #63696), the exception path
+# emits a dedicated copy of the finally body followed by `rethrow`.
+#
+# For the remaining normal exit paths (break, continue, return), we create a
+# `finally_tag` variable to dynamically track which action to take after the
+# finally block exits. Before jumping to the block we set this variable to a
+# unique integer tag identifying the incoming code path. At the exit of the
+# user's code (`h()` in this case) we perform the jump appropriate to the `break`,
+# `continue` or `return` as necessary based on the tag.
 function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     (try_block, catch_block, else_block, finally_block, catch_label, scope) = @stm ex begin
          [:trycatchelse t c] -> (t, c, nothing, nothing, make_label(ctx, c), nothing)
@@ -618,14 +619,22 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     emit(ctx, catch_label) # <- Exceptional control flow enters here
     if has_finally_block
         @assert @isdefined(finally_handler) "compiler hint"
-        # Attribute the postfix and prefix to the finally block as a whole.
         srcref = finally_block
-        enter_finally_block(ctx, srcref, :rethrow, nothing)
-        emit(ctx, end_label) # <- Non-exceptional control flow enters here
         pop!(ctx.finally_handlers)
+        # Exception path: compile a separate copy of the finally body, then rethrow.
+        # This keeps return values on normal exit paths from being live into the
+        # exception handler (avoiding PhiC / Upsilon node blowup, #63696).
+        push!(ctx.catch_token_stack, handler_token)
+        compile(ctx, finally_block, false, false)
+        emit(ctx, @ast ctx srcref [:call "rethrow"::top])
+        emit(ctx, @ast ctx srcref [:return nothing_(ctx, srcref)])
+        pop!(ctx.catch_token_stack)
+
+        # Non-exceptional control flow enters here
+        emit(ctx, end_label)
         compile(ctx, finally_block, false, false)
         # Finally block postfix: Emit a branch for every code path which enters
-        # the block to dynamically decide which return/break/rethrow exit action to take
+        # the block to dynamically decide which return/break exit action to take
         for (tag, (on_exit, value)) in Iterators.reverse(enumerate(finally_handler.exit_actions))
             next_action_label = !in_tail_pos || tag != 1 || on_exit != :return ?
                 make_label(ctx, srcref) : nothing
@@ -644,8 +653,6 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
                 emit_return(ctx, value)
             elseif on_exit === :break
                 emit_break(ctx, value)
-            elseif on_exit === :rethrow
-                emit(ctx, @ast ctx srcref [:call "rethrow"::top])
             else
                 @jl_assert false finally_block
             end
