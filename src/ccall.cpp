@@ -202,7 +202,7 @@ static Value *runtime_sym_lookup(
             libname = ConstantExpr::getIntToPtr(ConstantInt::get(emission_context.DL.getIntPtrType(irbuilder.getContext()), (uintptr_t)symarg.f_lib), getPointerTy(irbuilder.getContext()));
         Value *nameval = stringConstPtr(emission_context, irbuilder, symarg.f_name);
         auto lookup = irbuilder.CreateCall(prepare_call_in(jl_builderModule(irbuilder), jldlsym_func),
-                    { libname, nameval, libptrgv });
+                    { libname, nameval, generic_global_ptr(libptrgv) });
         llvmf = lookup;
         setName(emission_context, llvmf, symarg.f_name + StringRef(".found"));
     }
