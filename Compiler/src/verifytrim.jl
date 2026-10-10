@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import ..Compiler: verify_typeinf_trim, NativeInterpreter, argtypes_to_type, compileable_specialization_for_call,
-    threads_deferred_call_type, is_threads_call_def
+    threads_deferred_call_type, is_threads_call_def, foreign_library_type, _libdl_dlopen
 
 using ..Compiler:
      # operators
@@ -415,10 +415,10 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
             end
 
             error = "unresolved cfunction"
-        elseif isexpr(stmt, :foreigncall)
-            foreigncall = stmt.args[1]
-            if isexpr(foreigncall, :tuple, 1)
-                foreigncall = foreigncall.args[1]
+        elseif isexpr(stmt, :foreigncall) || isexpr(stmt, :foreignglobal)
+            spec = stmt.args[1]
+            if isexpr(stmt, :foreigncall) && isexpr(spec, :tuple, 1)
+                foreigncall = spec.args[1]
                 if foreigncall isa String
                     foreigncall = QuoteNode(Symbol(foreigncall))
                 end
@@ -429,6 +429,21 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                 else
                     error = "disallowed ccall with non-constant name and no library"
                 end
+            end
+            if isempty(error)
+                # the runtime `dlopen(lib)` on first use is dispatched in this caller's world
+                library_type = foreign_library_type(spec, codeinfo, sptypes)
+                library_type === nothing && continue # no runtime `dlopen()` invocation
+                dlopen_fn = _libdl_dlopen()
+                if dlopen_fn !== nothing
+                    atype = Tuple{typeof(dlopen_fn), library_type}
+                    mi = compileable_specialization_for_call(interp, atype)
+                    if mi !== nothing
+                        ci = get(caches, mi, nothing)
+                        ci isa CodeInstance && continue
+                    end
+                end
+                error = "unresolved dlopen for ccall / cglobal"
             end
         elseif isexpr(stmt, :new_opaque_closure)
             error = "unresolved opaque closure"
