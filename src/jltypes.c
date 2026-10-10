@@ -397,7 +397,8 @@ int jl_type_mappable_to_c(jl_value_t *ty)
             jl_is_layout_opaque(((jl_datatype_t*)ty)->layout)))
         return 1; // as boxed
     if (jl_is_structtype(ty))
-        return jl_has_fixed_layout((jl_datatype_t*)ty) && ((jl_datatype_t*)ty)->name->atomicfields == NULL;
+        return jl_has_fixed_layout((jl_datatype_t*)ty) && ((jl_datatype_t*)ty)->name->atomicfields == NULL &&
+               !(((jl_datatype_t*)ty)->layout != NULL && ((jl_datatype_t*)ty)->layout->ntaggedptrs > 0);
     if (jl_is_primitivetype(ty))
         return 1; // as isbits
     if (ty == (jl_value_t*)jl_any_type || ty == (jl_value_t*)jl_bottom_type || jl_is_abstract_ref_type(ty))
@@ -421,7 +422,7 @@ JL_DLLEXPORT int jl_get_size(jl_value_t *val, size_t *pnt)
 
 // --- type union ---
 
-int jl_count_union_components(jl_value_t *v)
+int jl_count_union_components(jl_value_t *v) JL_NOTSAFEPOINT
 {
     size_t c = 0;
     while (jl_is_uniontype(v)) {
