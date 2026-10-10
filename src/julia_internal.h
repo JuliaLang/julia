@@ -2196,6 +2196,7 @@ jl_value_t *simple_union(jl_value_t *a, jl_value_t *b) JL_CANSAFEPOINT;
 jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi) JL_CANSAFEPOINT;
 int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion) JL_CANSAFEPOINT;
 void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_path_is_tracked_by(const char *path, const char *tracked) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_coverage_enabled_for(jl_module_t *m, const char *filename) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_coverage_visit_line(const char *filename, size_t len, int line) JL_CANSAFEPOINT;
@@ -2226,6 +2227,9 @@ int jl_register_image_coverage(const void *table, int is_sysimg) JL_NOTSAFEPOINT
 JL_DLLEXPORT int jl_codeinst_coverage_compatible(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_image_coverage_config(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_match_cache_coverage(uint8_t requested, uint8_t actual) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint8_t jl_sysimage_coverage_config(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_coverage_plain_image_accepted(uint64_t hi, uint64_t lo);
+JL_DLLEXPORT void jl_coverage_accept_plain_image(uint64_t hi, uint64_t lo);
 JL_DLLEXPORT _Atomic(uint64_t) *jl_malloc_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
 JL_DLLEXPORT NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
 JL_DLLEXPORT NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;

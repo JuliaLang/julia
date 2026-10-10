@@ -4638,6 +4638,9 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         topmod->build_id.hi = checksum;
         assert(jl_is_module(topmod));
         meta->top_mod = topmod;
+        // plain images accepted for path coverage have no code from the tracked path
+        if (!meta->coverage_compatible)
+            meta->coverage_compatible = jl_coverage_plain_image_accepted(checksum, topmod->build_id.lo);
     }
     eyt_tree_add_range(&image_tree,
         (uintptr_t)image_base,
@@ -4685,15 +4688,22 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_
         // Syntax version mismatch is not fatal to load
         if (!jl_match_cache_flags_current(read_uint8(f)))
             return jl_get_exceptionf(jl_errorexception_type, "Pkgimage flags mismatch");
-        if (!jl_match_cache_coverage(jl_image_coverage_config(), read_uint8(f)))
-            return jl_get_exceptionf(jl_errorexception_type, "Pkgimage coverage instrumentation mismatch");
+        int coverage_ok = jl_match_cache_coverage(jl_image_coverage_config(), read_uint8(f));
 
         (void)read_uint8(f); // syntax_version
 
-        // skip past the worklist
+        // skip past the worklist, reading the package's build id to validate coverage
         size_t len;
-        while ((len = read_int32(f)))
-            ios_skip(f, len + 3 * sizeof(uint64_t));
+        int first = 1;
+        while ((len = read_int32(f))) {
+            ios_skip(f, len + 2 * sizeof(uint64_t));
+            uint64_t build_id_lo = read_uint64(f);
+            if (first && !coverage_ok)
+                coverage_ok = jl_coverage_plain_image_accepted(*checksum, build_id_lo);
+            first = 0;
+        }
+        if (!coverage_ok)
+            return jl_get_exceptionf(jl_errorexception_type, "Pkgimage coverage instrumentation mismatch");
         // skip past the dependency list
         size_t deplen = read_uint64(f);
         ios_skip(f, deplen - sizeof(uint64_t));

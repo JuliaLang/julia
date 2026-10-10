@@ -1935,7 +1935,13 @@ struct CacheFlags
     # coverage instrumentation of the image (jl_image_coverage_config):
     # 0 none, 1 hit counters, 2 execution counters
     coverage::Int
+    # Not part of the image's identity: the tracked path of a requested `@path`
+    # coverage, for which plain images without code from that path are usable.
+    # This lets a driver judge caches for a process collecting a different scope.
+    coverage_path::Union{Nothing,String}
 end
+CacheFlags(use_pkgimages, debug_level, check_bounds, inline, opt_level, coverage) =
+    CacheFlags(use_pkgimages, debug_level, check_bounds, inline, opt_level, coverage, nothing)
 function CacheFlags(f::UInt8, coverage::Integer=0)
     use_pkgimages = Bool(f & 1)
     debug_level = Int((f >> 1) & 3)
@@ -1945,22 +1951,34 @@ function CacheFlags(f::UInt8, coverage::Integer=0)
     CacheFlags(use_pkgimages, debug_level, check_bounds, inline, opt_level, Int(coverage))
 end
 CacheFlags(f::Int) = CacheFlags(UInt8(f))
-function CacheFlags(cf::CacheFlags=CacheFlags(ccall(:jl_cache_flags, UInt8, ()), ccall(:jl_image_coverage_config, UInt8, ()));
+function CacheFlags(cf::CacheFlags=CacheFlags(ccall(:jl_cache_flags, UInt8, ()), ccall(:jl_image_coverage_config, UInt8, ()), current_coverage_path());
             use_pkgimages::Union{Nothing,Bool}=nothing,
             debug_level::Union{Nothing,Int}=nothing,
             check_bounds::Union{Nothing,Int}=nothing,
             inline::Union{Nothing,Bool}=nothing,
             opt_level::Union{Nothing,Int}=nothing,
-            coverage::Union{Nothing,Int}=nothing
+            coverage::Union{Nothing,Int}=nothing,
+            coverage_path::Union{Nothing,String}=cf.coverage_path
         )
+    coverage = coverage === nothing ? cf.coverage : coverage
     return CacheFlags(
         use_pkgimages === nothing ? cf.use_pkgimages : use_pkgimages,
         debug_level === nothing ? cf.debug_level : debug_level,
         check_bounds === nothing ? cf.check_bounds : check_bounds,
         inline === nothing ? cf.inline : inline,
         opt_level === nothing ? cf.opt_level : opt_level,
-        coverage === nothing ? cf.coverage : coverage
+        coverage,
+        coverage == 0 ? nothing : coverage_path
     )
+end
+CacheFlags(f::UInt8, coverage::Integer, coverage_path::Union{Nothing,String}) =
+    CacheFlags(CacheFlags(f, coverage); coverage_path)
+
+# The tracked path if this process collects `@path` coverage with instrumented images.
+function current_coverage_path()
+    opts = JLOptions()
+    opts.code_coverage == 3 && opts.malloc_log == 0 || return nothing
+    return unsafe_string(opts.tracked_path)
 end
 # reflecting jloptions.c defaults
 const DefaultCacheFlags = CacheFlags(use_pkgimages=true, debug_level=isdebugbuild() ? 2 : 1, check_bounds=0, inline=true, opt_level=2, coverage=0)
@@ -1982,20 +2000,79 @@ function translate_cache_flags(cacheflags::CacheFlags, defaultflags::CacheFlags)
     cacheflags.check_bounds     != defaultflags.check_bounds    && push!(opts, ("--check-bounds=auto", "--check-bounds=yes", "--check-bounds=no")[cacheflags.check_bounds + 1])
     cacheflags.inline           != defaultflags.inline          && push!(opts, cacheflags.inline ? "--inline=yes" : "--inline=no")
     cacheflags.opt_level        != defaultflags.opt_level       && push!(opts, "-O$(cacheflags.opt_level)")
-    cacheflags.coverage         != defaultflags.coverage        && append!(opts, coverage_cache_options(cacheflags))
+    (cacheflags.coverage != defaultflags.coverage ||
+     cacheflags.coverage_path != defaultflags.coverage_path) && append!(opts, coverage_cache_options(cacheflags))
     return opts
 end
 
-# Image instrumentation is independent of the collecting process's scope.
+# Image instrumentation is independent of the collecting process's scope, but a
+# tracked path is kept so that workers accept the same plain dependency images.
 function coverage_cache_options(cf::CacheFlags)
     cf.coverage == 0 && return ["--code-coverage=none"]
     mode = cf.coverage == 2 ? "count" : "hit"
-    return ["--code-coverage=user", "--code-coverage-mode=" * mode]
+    scope = cf.coverage_path === nothing ? "user" : "@" * cf.coverage_path
+    return ["--code-coverage=" * scope, "--code-coverage-mode=" * mode]
 end
 
 # Whether a cache with instrumentation `actual` serves `requested`.
 function match_cache_coverage(requested::CacheFlags, actual::CacheFlags)
     return @ccall(jl_match_cache_coverage(UInt8(requested.coverage)::UInt8, UInt8(actual.coverage)::UInt8)::Cint) != 0
+end
+
+# Path coverage can use a plain cache whose own sources, dependencies (pinned by build
+# id and checked the same way), and system image sources are all untracked. Source
+# locations naming other files, e.g. through `include_string`, are not checked.
+# With an instrumented system image, plain images may have been built against
+# instrumented dependencies, so their dependency build ids prove nothing.
+function can_use_plain_coverage_cache(requested::CacheFlags, actual::CacheFlags)
+    tracked = requested.coverage_path
+    return requested.coverage != 0 && actual.coverage == 0 && tracked !== nothing &&
+           @ccall(jl_sysimage_coverage_config()::UInt8) == 0 &&
+           !tracked_path_overlaps_sysimage(tracked)
+end
+
+# Whether this process collects coverage for `requested`, so that the runtime may
+# load the plain caches accepted for it.
+is_current_coverage_request(requested::CacheFlags) =
+    requested.coverage_path !== nothing && requested.coverage_path == current_coverage_path() &&
+    requested.coverage == @ccall(jl_image_coverage_config()::UInt8)
+
+# The runtime only loads plain caches that were accepted for path coverage.
+accept_plain_coverage_cache(build_id::UInt128) =
+    @ccall jl_coverage_accept_plain_image(((build_id >> 64) % UInt64)::UInt64, (build_id % UInt64)::UInt64)::Cvoid
+plain_coverage_cache_accepted(build_id::UInt128) =
+    @ccall(jl_coverage_plain_image_accepted(((build_id >> 64) % UInt64)::UInt64, (build_id % UInt64)::UInt64)::Cint) != 0
+
+# Whether `path` lies under `tracked`, as coverage selects files.
+path_is_tracked(path::String, tracked::String) =
+    @ccall(jl_path_is_tracked_by(path::Cstring, tracked::Cstring)::Cint) != 0
+
+# The sources of the system image, whose code package images can inline: Base and
+# the Compiler name their files relative to the installed sources, other modules as
+# they were included. `nothing` if some package did not record its files.
+const sysimage_sources = OncePerProcess{Union{Nothing,Tuple{Vector{String},Vector{String}}}}() do
+    datadir = abspath(Sys.BINDIR, DATAROOTDIR, "julia")
+    dirs = String[]
+    for dir in (joinpath(datadir, "base"), joinpath(datadir, "Compiler"))
+        push!(dirs, dir)
+        ispath(dir) && push!(dirs, realpath(dir))
+    end
+    files = unique!(String[file for (_, file) in _included_files])
+    included = Set(files)
+    for pkg in _sysimage_modules
+        pkg.uuid === nothing && continue # Base, Core and Main
+        origin = get(pkgorigins, pkg, nothing)
+        (origin === nothing || origin.path ∉ included) && return nothing
+    end
+    return dirs, files
+end
+
+function tracked_path_overlaps_sysimage(tracked::String)
+    sources = sysimage_sources()
+    sources === nothing && return true
+    dirs, files = sources
+    return any(dir -> path_is_tracked(dir, tracked) || path_is_tracked(tracked, dir), dirs) ||
+           any(file -> path_is_tracked(file, tracked), files)
 end
 
 function show(io::IO, cf::CacheFlags)
@@ -2012,6 +2089,11 @@ function show(io::IO, cf::CacheFlags)
     print(io, cf.opt_level)
     print(io, ", coverage=")
     print(io, cf.coverage)
+    # explicit, as evaluating the output would otherwise take the current process's path
+    if cf.coverage != 0
+        print(io, ", coverage_path=")
+        show(io, cf.coverage_path)
+    end
     print(io, ")")
 end
 
@@ -2029,7 +2111,11 @@ function Base.parse(::Type{CacheFlags}, s::AbstractString)
     inline = get(params, :inline, nothing)
     opt_level = get(params, :opt_level, nothing)
     coverage = get(params, :coverage, nothing)
-    return CacheFlags(; use_pkgimages, debug_level, check_bounds, inline, opt_level, coverage)
+    # unlike the other flags, a missing path is not taken from the current process
+    coverage_path = get(params, :coverage_path, nothing)
+    coverage_path === :nothing && (coverage_path = nothing)
+    coverage_path isa Union{Nothing,String} || throw(ArgumentError("Malformed CacheFlags string"))
+    return CacheFlags(; use_pkgimages, debug_level, check_bounds, inline, opt_level, coverage, coverage_path)
 end
 
 struct ImageTarget
@@ -4797,8 +4883,10 @@ end
         # one should be cheap.
         header_start = position(io)
         actual_flags = CacheFlags(read(io, UInt8), read(io, UInt8))
+        coverage_mismatch = !match_cache_coverage(requested_flags, actual_flags)
+        current_request = coverage_mismatch && is_current_coverage_request(requested_flags)
         if @ccall(jl_match_cache_flags(_cacheflag_to_uint8(requested_flags)::UInt8, _cacheflag_to_uint8(actual_flags)::UInt8)::UInt8) == 0 ||
-           !match_cache_coverage(requested_flags, actual_flags)
+           (coverage_mismatch && !can_use_plain_coverage_cache(requested_flags, actual_flags))
             @debug """
             Rejecting cache file $cachefile for $modkey since the flags are mismatched
               requested flags: $(requested_flags) [$(_cacheflag_to_uint8(requested_flags))]
@@ -4811,6 +4899,16 @@ end
         modules, (includes, _, requires), required_modules, srctextpos, prefs_blob, clone_targets, _, syntax_version = parse_cache_header(io, cachefile)
         if isempty(modules)
             return true # ignore empty file
+        end
+        if coverage_mismatch
+            for inc in includes
+                # an unresolved `@depot` path cannot be checked
+                if startswith(inc.filename, "@depot") || path_is_tracked(inc.filename, requested_flags.coverage_path::String)
+                    @debug "Rejecting cache file $cachefile for $modkey since it lacks coverage counters for $(inc.filename)"
+                    record_reason(reasons, :flags_mismatch)
+                    return true
+                end
+            end
         end
         if stalecheck && syntax_version != cache_edition(modspec.julia_edition)
             @debug "Rejecting cache file $cachefile for $modkey since it was parsed for a different Julia syntax version"
@@ -4904,6 +5002,20 @@ end
             depmods[i] = (spec, req_key, req_build_id)
         end
 
+        # dependencies that are already loaded must be plain caches accepted the same
+        # way, which only this process's own coverage request has recorded
+        if coverage_mismatch
+            for i in 1:ndeps
+                req_key, req_build_id = required_modules[i]
+                if depmods[i] isa Module && !in_sysimage(req_key) &&
+                   !(current_request && plain_coverage_cache_accepted(req_build_id))
+                    @debug "Rejecting cache file $cachefile for $modkey since dependency $req_key may lack coverage counters"
+                    record_reason(reasons, :flags_mismatch)
+                    return true
+                end
+            end
+        end
+
         # check if this file is going to provide one of our concrete dependencies
         # or if it provides a version that conflicts with our concrete dependencies
         # or neither. This is not skipped for a trusted (driver-validated) file:
@@ -4960,6 +5072,7 @@ end
             return true
         end
 
+        coverage_mismatch && current_request && accept_plain_coverage_cache(id_build)
         return depmods, ocachefile, id_build # fresh cachefile
     finally
         close(io)
