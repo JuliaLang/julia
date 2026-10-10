@@ -43,6 +43,12 @@ function _isself(ft::DataType)
     name = ftname.singletonname
     ftname.name === name && return false
     mod = parentmodule(ft)
+    bpart = lookup_binding_partition(tls_world_age(), GlobalRef(mod, name))
+    if binding_kind(bpart) == PARTITION_KIND_BACKDATED_CONST
+        # Read the constant directly, since `getglobal` would warn about (or with
+        # `--depwarn=error`, refuse) accessing it from a world prior to its definition
+        return ft === typeof(partition_restriction(bpart))
+    end
     return isdefinedglobal(mod, name) && ft === typeof(getglobal(mod, name))
 end
 

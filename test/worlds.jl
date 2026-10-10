@@ -595,6 +595,13 @@ else
     @test !Base.invoke_in_world(before_backdate_age, isdefinedglobal, @__MODULE__, :FooBackdated)
 end
 
+# Showing a function from a world prior to its definition should use its backdated
+# binding without warning or erroring
+before_backdate_age = Base.tls_world_age()
+function f_backdated end
+@test Base.invoke_in_world(before_backdate_age, repr, MIME"text/plain"(), f_backdated) ==
+    "f_backdated (generic function with 0 methods)"
+
 # Test that ambiguous binding intersect the using'd binding's world ranges
 module AmbigWorldTest
     using Test
