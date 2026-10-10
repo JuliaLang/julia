@@ -2219,31 +2219,73 @@ static unsigned get_env_threads(const char *name)
     return requested;
 }
 
-static unsigned compute_image_thread_count() {
-    if (jl_is_timing_passes) // LLVM isn't thread safe when timing the passes https://github.com/llvm/llvm-project/issues/44417
-        return 1;
-
-#ifdef _P32
-    // We need to be very careful about using too much memory on 32 bit.
-    return 1;
+[[maybe_unused]] static uint64_t get_available_address_space()
+{
+#if defined(_OS_WINDOWS_)
+    MEMORYSTATUSEX mstat;
+    mstat.dwLength = sizeof(mstat);
+    if (GlobalMemoryStatusEx(&mstat))
+        return mstat.ullAvailVirtual;
+#elif defined(_OS_LINUX_)
+    // Unfortunately this is the only real way of doing this on Linux.  The
+    // kernel always puts the stack at the top of the user-mappable address
+    // space, possible moving it down a little for ASLR.
+    FILE *f = fopen("/proc/self/maps", "r");
+    if (!f)
+        return 0;
+    uint64_t start, end, mapped = 0, avail = 0;
+    char *line = NULL;
+    size_t cap = 0;
+    while (getline(&line, &cap, f) != -1) {
+        if (sscanf(line, "%" SCNx64 "-%" SCNx64, &start, &end) != 2)
+            continue;
+        mapped += end - start;
+        if (StringRef(line).rtrim().ends_with(" [stack]")) {
+            avail = end - mapped;
+            break;
+        }
+    }
+    free(line);
+    fclose(f);
+    return avail;
 #endif
+    return 0;
+}
+
+static unsigned compute_image_thread_count()
+{
+    if (jl_is_timing_passes) // LLVM isn't thread safe when timing the passes
+                             // https://github.com/llvm/llvm-project/issues/44417
+        return 1;
 
     // environment variable override.
     // this controls how many threads we request from the jobserver (if it is enabled)
     // but the question of whether to enable it or not is decided upstream
-    if (unsigned requested = get_env_threads("JULIA_IMAGE_THREADS")) {
-        LLVM_DEBUG(dbgs() << "Overriding threads to " << requested << " due to JULIA_IMAGE_THREADS\n");
-        return requested;
+    unsigned threads = get_env_threads("JULIA_IMAGE_THREADS");
+    if (threads) {
+        LLVM_DEBUG(dbgs() << "Overriding threads to " << threads
+                          << " due to JULIA_IMAGE_THREADS\n");
+    }
+    else {
+        threads = jl_effective_threads();
+
+        // more defaults
+        unsigned requested = get_env_threads("JULIA_CPU_THREADS");
+        if (requested && requested < threads) {
+            LLVM_DEBUG(dbgs() << "Overriding threads to " << requested << " due to JULIA_CPU_THREADS\n");
+            threads = requested;
+        }
     }
 
-    unsigned threads = jl_effective_threads();
-
-    // more defaults
-    unsigned requested = get_env_threads("JULIA_CPU_THREADS");
-    if (requested && requested < threads) {
-        LLVM_DEBUG(dbgs() << "Overriding threads to " << requested << " due to JULIA_CPU_THREADS\n");
-        threads = requested;
-    }
+#ifdef _P32
+    // We need to be very careful about using too much memory on 32 bit, even
+    // when JULIA_IMAGE_THREADS asks for more (CI sets it to the core count).
+    // Heuristic derived from experiments: we can use up to 8 threads, provided
+    // we have 1 GiB of address space plus 64 MiB for each thread.
+    uint64_t avail = get_available_address_space();
+    uint64_t fit = avail > (1ull << 30) ? (avail - (1ull << 30)) / (64ull << 20) : 0;
+    threads = std::max(1u, (unsigned)std::min<uint64_t>({threads, 8, fit}));
+#endif
 
     return threads;
 }
