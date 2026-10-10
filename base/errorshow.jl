@@ -1545,6 +1545,8 @@ end
 Experimental.register_error_hint(fielderror_dict_hint_handler, FieldError)
 
 function fielderror_listfields_hint_handler(io, exc)
+    # e.g. `fieldtype(Integer, :a)`: abstract types have no definite fields to list
+    fieldcount_noerror(exc.type) === nothing && return
     fields = fieldnames(exc.type)
     if isempty(fields)
         print(io, "; $(exc.type.name.wrapper) has no fields at all.")
