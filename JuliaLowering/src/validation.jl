@@ -712,8 +712,6 @@ vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
         vst1_calldecl_dot_name(vcx, st)
     [:curly t tvs...] ->
         vst1_calldecl_name(vcx, t) & all(vst1, vcx, tvs)
-    [:value] ->
-        pass() # GlobalRef works. Function? Type?
     ([:(::) _...], when=!vcx.toplevel) ->
         @fail(st, "adding methods to callable type only allowed at top level")
     [:(::) t] -> vst1(vcx, t)
