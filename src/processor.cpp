@@ -891,7 +891,13 @@ static inline SysimgMatch match_sysimg_targets(S &&sysimg, T &&target, F &&max_v
             rejection_reasons.push_back("Rejecting this target due to use of runtime-disabled features\n");
             continue;
         }
-        if (imgt.name == target.name) {
+        // Prefer the image target whose name matches the runtime target, since it was
+        // tuned for exactly this CPU. A runtime target named "generic" however means
+        // the host CPU was not recognized (not that it is a baseline CPU): its features
+        // are still detected from the hardware, so it must be matched on features only.
+        // Otherwise an image with a "generic" baseline target (e.g. the official sysimage)
+        // would hand the baseline clone to an unknown host that supports much more.
+        if (imgt.name == target.name && target.name != "generic") {
             if (!match_name) {
                 match_name = true;
                 match.vreg_size = 0;
