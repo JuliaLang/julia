@@ -6714,6 +6714,23 @@ static int try_subtype_in_env_universal(jl_value_t *x, jl_varbinding_t *xframe, 
     return issub;
 }
 
+// does `t` mention a type variable that no live binding stands for (an inner
+// variable, or a popped binding's variable)? Such a variable is rigid, but a
+// subtype query treats a free variable leniently, so it cannot decide a meet
+// that involves one (the meet is then computed by intersection)
+static int has_free_nonenv_typevars(jl_value_t *t, jl_stenv_t *e) JL_CANSAFEPOINT
+{
+    if (!jl_has_free_typevars(t))
+        return 0;
+    jl_array_t *vs = jl_find_free_typevars(t);
+    JL_GC_PUSH1(&vs);
+    int found = 0;
+    for (size_t i = 0; i < jl_array_nrows(vs) && !found; i++)
+        found = lookup(e, (jl_tvar_t*)jl_array_ptr_ref(vs, i)) == NULL;
+    JL_GC_POP();
+    return found;
+}
+
 static int subtype_in_env_existential_frames(jl_value_t *x, jl_varbinding_t *xframe, jl_value_t *y, jl_varbinding_t *yframe,
                                              jl_stenv_t *e) JL_CANSAFEPOINT
 {
@@ -6895,8 +6912,10 @@ static jl_value_t *intersect_var(jl_value_t *b, jl_varbinding_t *bb, int innerva
             // (a type is checked as a fresh query, with its variables free
             // and so rigid; a located `a` is checked in the environment with
             // every binding universal, the positional analogue)
-            if (araw ? try_subtype_in_env_universal(a, aframe, binding_ub(e, bb), NULL, e)
-                     : jl_subtype(a, binding_ub(e, bb))) {
+            jl_value_t *bb_ub0 = binding_ub(e, bb);
+            if (!has_free_nonenv_typevars(a, e) && !has_free_nonenv_typevars(bb_ub0, e) &&
+                try_subtype_in_env_universal(a, aframe, bb_ub0, NULL, e)) {
+                // `a` lies in the bound for every choice of the bindings
                 ub = a;
                 ubframe = aframe;
             }

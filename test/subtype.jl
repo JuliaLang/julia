@@ -3684,3 +3684,15 @@ let A = Tuple{typeof(similar), SpecFlatTensorDict{N}, Type{T}, Vararg{Int,N}} wh
         @test !Base.morespecific(B, A)
     end
 end
+
+# a binder of one argument hoisted into an outer variable's bound (#21243)
+# must stay the same variable across the re-intersection passes: the meet of
+# the pinned bound `Ref{T}` with the next pass's occurrence is computed by
+# intersection (a subtype shortcut treats the hoisted `T` leniently)
+let a = Tuple{Any, Pair{Ref{T},Int} where T<:Number},
+    b = Tuple{V, Pair{V,Int}} where V
+    @test typeintersect(a, b) == (Tuple{Ref{T}, Pair{Ref{T},Int}} where T<:Number)
+    r = ccall(:jl_type_intersection_with_env, Any, (Any, Any), a, b)
+    @test r[1] == (Tuple{Ref{T}, Pair{Ref{T},Int}} where T<:Number)
+    @test r[2][1][1] isa DataType && r[2][1][1].name === Ref.body.name && r[2][1][2] === true
+end
