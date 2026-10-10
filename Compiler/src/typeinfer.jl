@@ -2006,6 +2006,28 @@ end
 
 is_threads_call_def(@nospecialize def) = def isa Method && is_base_threads_method(def, :_threads_call)
 
+function _libdl_dlopen()
+    dlopen_ptr = unsafe_load(cglobal(:jl_libdl_dlopen_func, Ptr{Cvoid}))
+    dlopen_ptr == C_NULL && return nothing # Libdl was never loaded
+    dlopen_fn = unsafe_load(cglobal(:jl_libdl_dlopen_func, Any))
+    return dlopen_fn
+end
+
+# Returns the type of library that a foreigncall / foreignglobal spec (aka foreignsymbol)
+# makes the runtime `dlopen(lib)` on first use, or `nothing` if no such call is made
+function foreign_library_type(@nospecialize(spec), ci::CodeInfo, sptypes::Vector{VarState})
+    if isexpr(spec, :tuple) && length(spec.args) >= 2
+        lib = spec.args[2]
+    elseif spec isa Tuple && length(spec) >= 2
+        lib = spec[2]
+    else # either using a function pointer or an invalid foreigncall - no dlopen applies
+        return nothing
+    end
+    library_type = argextype_widened(lib, ci, sptypes)
+    library_type <: Union{Symbol,String} && return nothing # resolved natively by the runtime
+    return library_type
+end
+
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
 function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vector{VarState};
                          invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
@@ -2047,6 +2069,17 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
             if atype !== nothing
                 mi = compileable_specialization_for_call(invokelatest_queue.interp, atype)
                 mi === nothing || push!(invokelatest_queue, mi)
+            end
+        end
+        if enqueue_unprepared_invokes && (isexpr(stmt, :foreigncall) || isexpr(stmt, :foreignglobal))
+            # Enqueue (in this world) for `--trim`, but not otherwise since
+            # this callback is relatively unlikely to run in any given world
+            library_type = foreign_library_type(stmt.args[1], ci, sptypes)
+            dlopen_fn = library_type === nothing ? nothing : _libdl_dlopen()
+            if dlopen_fn !== nothing
+                atype = Tuple{typeof(dlopen_fn), library_type}
+                mi = compileable_specialization_for_call(workqueue.interp, atype)
+                mi === nothing || push!(workqueue, mi)
             end
         end
 
