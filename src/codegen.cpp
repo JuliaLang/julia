@@ -2510,6 +2510,15 @@ static Value *emit_ptrgep(jl_codectx_t &ctx, Value *base, Value *byte_offset, co
 
 // --- convenience functions for tagging llvm values with julia types ---
 
+// Globals are created in the datalayout's globals address space, which isn't 0 on targets
+// like AMDGPU and SPIR-V. Loads and stores can use such a global directly, but where its
+// address is used as a generic pointer (a call argument, a select operand, an initializer)
+// it has to be cast first.
+static Constant *generic_global_ptr(Constant *GV)
+{
+    return ConstantExpr::getPointerBitCastOrAddrSpaceCast(GV, getPointerTy(GV->getContext()));
+}
+
 static GlobalVariable *get_pointer_to_constant(jl_codegen_output_t &emission_context, Constant *val, Align align, const Twine &name, Module &M)
 {
     GlobalVariable *&gv = emission_context.mergedConstants[val];
@@ -8345,8 +8354,8 @@ static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_
                     Vnull,
                     Vnull,
                     Vnull,
-                    literal_pointer_val_slot(ctx.emission_context, declrt),
-                    literal_pointer_val_slot(ctx.emission_context, sigt),
+                    generic_global_ptr(literal_pointer_val_slot(ctx.emission_context, declrt)),
+                    generic_global_ptr(literal_pointer_val_slot(ctx.emission_context, sigt)),
                     literal_static_pointer_val((void*)flags, T_ptr)}));
         Value *last_world_p = ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_size, cfuncdata, 1);
         LoadInst *last_world_v = ctx.builder.CreateAlignedLoad(T_size, last_world_p, ctx.types().alignof_ptr);
@@ -8358,7 +8367,7 @@ static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_
         Value *age_not_ok = ctx.builder.CreateICmpNE(last_world_v, world_v);
         Value *target = emit_guarded_test(ctx, age_not_ok, callee, [&] () {
                 Function *getcaller = prepare_call(jlgetabiconverter_func);
-                CallInst *cw = ctx.builder.CreateCall(getcaller, {get_current_task(ctx), cfuncdata});
+                CallInst *cw = ctx.builder.CreateCall(getcaller, {get_current_task(ctx), generic_global_ptr(cfuncdata)});
                 cw->setAttributes(getcaller->getAttributes());
                 return cw;
             });
@@ -8869,13 +8878,13 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             JL_GC_POP();
         }
         Type *T_htable = ArrayType::get(ctx.types().T_size, sizeof(htable_t) / sizeof(void*));
-        Value *cache = new GlobalVariable(*jl_Module, T_htable, false,
+        GlobalVariable *cache = new GlobalVariable(*jl_Module, T_htable, false,
                                GlobalVariable::PrivateLinkage,
                                ConstantAggregateZero::get(T_htable));
         F = ctx.builder.CreateCall(prepare_call(jlgetcfunctiontrampoline_func), {
                  fobj,
                  literal_pointer_val(ctx, output_type),
-                 cache,
+                 generic_global_ptr(cache),
                  literal_pointer_val(ctx, (jl_value_t*)fill),
                  F,
                  closure_types ? literal_pointer_val(ctx, (jl_value_t*)unionall_env) : Constant::getNullValue(ctx.types().T_pjlvalue),
