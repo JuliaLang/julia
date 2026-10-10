@@ -29,9 +29,9 @@ JL_DLLEXPORT char *jl_genericmemory_typetagdata(jl_genericmemory_t *m) JL_NOTSAF
 // ONLY USE FROM CODEGEN. It only partially initializes the mem
 JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory_unchecked(jl_ptls_t ptls, size_t nbytes, jl_datatype_t *mtype)
 {
-    size_t tot = nbytes + LLT_ALIGN(sizeof(jl_genericmemory_t),JL_SMALL_BYTE_ALIGNMENT);
-
-    int pooled = tot <= GC_MAX_SZCLASS;
+    // N.B. LateLowerGCFrame expands `julia.gc_alloc_memory` into the pooled case inline
+    int pooled = jl_genericmemory_data_inline(nbytes);
+    size_t tot = nbytes + JL_GENERICMEMORY_INLINE_DATA_OFFSET;
     char *data;
     jl_genericmemory_t *m;
     if (!pooled) {
@@ -40,8 +40,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory_unchecked(jl_ptls_t ptls
     }
     m = (jl_genericmemory_t*)jl_gc_alloc(ptls, tot, mtype);
     if (pooled) {
-        // N.B. if this offset changes, also update emit_const_len_memorynew in cgutils.cpp
-        data = (char*)m + JL_SMALL_BYTE_ALIGNMENT;
+        data = (char*)m + JL_GENERICMEMORY_INLINE_DATA_OFFSET;
     }
     else {
         int isaligned = 1; // jl_gc_managed_malloc is always aligned

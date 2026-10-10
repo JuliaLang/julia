@@ -223,7 +223,12 @@ void Optimizer::optimizeAll()
         auto item = worklist.pop_back_val();
         auto orig = item.first;
         size_t sz = item.second;
+        bool is_memory = orig->getCalledOperand() == pass.alloc_memory_func;
         checkInst(orig);
+        // The data of a Memory is reached through the pointer in its header, which escape
+        // analysis does not follow, so it has to keep its layout once that pointer is loaded.
+        if (is_memory && use_info.hasload)
+            use_info.addrescaped = true;
         if (use_info.escaped) {
             REMARK([&]() {
                 std::string str;
@@ -382,6 +387,8 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
     auto call = dyn_cast<CallInst>(I);
     if (!call)
         return -1;
+    if (auto sz = pass.getInlineMemorySize(call))
+        return *sz;
     if (call->getCalledOperand() != pass.alloc_obj_func)
         return -1;
     assert(call->arg_size() == 3);
@@ -750,6 +757,18 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
     if (sz != 0 && !has_ref) { // TODO: fix has_ref case too
         IRBuilder<> builder(orig_inst);
         initializeAlloca(builder, buff, allockind);
+    }
+    if (orig_inst->getCalledOperand() == pass.alloc_memory_func) {
+        // Initialize the header like the allocation would have. The data, if it needed
+        // zeroing, was cleared above.
+        assert(!has_ref && (allockind & AllocFnKind::Uninitialized) == AllocFnKind::Unknown);
+        IRBuilder<> builder(orig_inst);
+        auto T_int8 = builder.getInt8Ty();
+        auto length_field = builder.CreateConstInBoundsGEP1_64(T_int8, buff, offsetof(jl_genericmemory_t, length));
+        builder.CreateAlignedStore(orig_inst->getArgOperand(3), length_field, Align(sizeof(void*)));
+        auto ptr_field = builder.CreateConstInBoundsGEP1_64(T_int8, buff, offsetof(jl_genericmemory_t, ptr));
+        auto data = builder.CreateConstInBoundsGEP1_64(T_int8, buff, JL_GENERICMEMORY_INLINE_DATA_OFFSET);
+        builder.CreateAlignedStore(data, ptr_field, Align(sizeof(void*)));
     }
     Instruction *new_inst = cast<Instruction>(ptr);
     new_inst->copyMetadata(*orig_inst);
@@ -1353,7 +1372,7 @@ cleanup:
 bool AllocOpt::doInitialization(Module &M)
 {
     initAll(M);
-    if (!alloc_obj_func)
+    if (!alloc_obj_func && !alloc_memory_func)
         return false;
 
     DL = &M.getDataLayout();
@@ -1374,8 +1393,8 @@ bool AllocOpt::doInitialization(Module &M)
 
 bool AllocOpt::runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT)
 {
-    if (!alloc_obj_func) {
-        LLVM_DEBUG(dbgs() << "AllocOpt: no alloc_obj function found, skipping pass\n");
+    if (!alloc_obj_func && !alloc_memory_func) {
+        LLVM_DEBUG(dbgs() << "AllocOpt: no allocation function found, skipping pass\n");
         return false;
     }
     Optimizer optimizer(F, *this, std::move(GetDT));

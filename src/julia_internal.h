@@ -678,6 +678,14 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_align8(unsigned sz) JL_NOTSAFE
 #define GC_MAX_SZCLASS (2032-sizeof(void*))
 static_assert(ARRAY_CACHE_ALIGN_THRESHOLD > GC_MAX_SZCLASS, "");
 
+// A GenericMemory whose data fits a GC pool together with its header is allocated as a single
+// object, with the data at this offset. Larger ones get their data from `jl_gc_managed_malloc`.
+#define JL_GENERICMEMORY_INLINE_DATA_OFFSET LLT_ALIGN(sizeof(jl_genericmemory_t), JL_SMALL_BYTE_ALIGNMENT)
+STATIC_INLINE int jl_genericmemory_data_inline(size_t nbytes) JL_NOTSAFEPOINT
+{
+    return nbytes <= GC_MAX_SZCLASS - JL_GENERICMEMORY_INLINE_DATA_OFFSET;
+}
+
 /* Programming style note: When using jl_gc_alloc, do not JL_GC_PUSH it into a
  * gc frame, until it has been fully initialized. An uninitialized value in a
  * gc frame can crash upon encountering the first safepoint. By delaying use of

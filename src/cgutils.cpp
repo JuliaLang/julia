@@ -4922,34 +4922,26 @@ static Value *emit_defer_signal(jl_codectx_t &ctx)
     return emit_ptrgep(ctx, ptls, offsetof(jl_tls_states_t, defer_signal));
 }
 
-// Emit allocation for variable-length GenericMemory
-// If zeroinit_nbytes is non-null, adds a zeroinit_indirect bundle to zero that many bytes
-// via the data pointer (at offset 8 in the memory header)
-static auto *emit_genericmemory_unchecked(jl_codectx_t &ctx, Value *cg_nbytes, Value *cg_typ,
-                                          Value *zeroinit_nbytes = nullptr)
+// Emit allocation for a GenericMemory with `nbytes` of data and `nel` elements
+static Value *emit_genericmemory_alloc(jl_codectx_t &ctx, jl_datatype_t *typ, Value *nbytes, Value *nel) JL_CANSAFEPOINT
 {
-    auto ptls = get_current_ptls(ctx);
-    auto call = prepare_call(jl_alloc_genericmemory_unchecked_func);
-
-    // Build operand bundle for zeroinit if needed
-    SmallVector<OperandBundleDef, 1> bundles;
-    if (zeroinit_nbytes) {
-        SmallVector<Value*, 2> bundle_args;
-        bundle_args.push_back(ConstantInt::get(ctx.types().T_size, offsetof(jl_genericmemory_t, ptr)));
-        bundle_args.push_back(zeroinit_nbytes);
-        bundles.push_back(OperandBundleDef("julia.gc_alloc_zeroinit_indirect", bundle_args));
-    }
-
-    auto *alloc = ctx.builder.CreateCall(call, { ptls, cg_nbytes, cg_typ }, bundles);
-    alloc->setAttributes(call->getAttributes());
+    Function *F = prepare_call(jl_alloc_memory_func);
+    Value *zeroinit = ConstantInt::getBool(ctx.builder.getContext(), typ->zeroinit);
+    Value *cg_typ = literal_pointer_val(ctx, (jl_value_t*)typ);
+    auto *alloc = ctx.builder.CreateCall(F, {get_current_task(ctx), nbytes, maybe_decay_untracked(ctx, cg_typ), nel, zeroinit});
+    alloc->setAttributes(F->getAttributes());
     alloc->addRetAttr(Attribute::getWithAlignment(alloc->getContext(), Align(JL_HEAP_ALIGNMENT)));
-    call->addRetAttr(Attribute::getWithDereferenceableBytes(call->getContext(), sizeof(jl_genericmemory_t)));
+    size_t deref = sizeof(jl_genericmemory_t);
+    if (auto cnbytes = dyn_cast<ConstantInt>(nbytes)) {
+        if (jl_genericmemory_data_inline(cnbytes->getZExtValue()))
+            deref = JL_GENERICMEMORY_INLINE_DATA_OFFSET + cnbytes->getZExtValue();
+    }
+    alloc->addRetAttr(Attribute::getWithDereferenceableBytes(alloc->getContext(), deref));
     return alloc;
 }
 
-// Set up the length field for a GenericMemory allocation
-// Note: zeroing of the data region is now handled via the zeroinit_indirect bundle
-// on the allocation call, processed by late-gc-lowering
+// Set up the length field for a GenericMemory allocation. `julia.gc_alloc_memory` already
+// initializes it, but this store carries TBAA information that helps optimization.
 static void emit_memory_stores(jl_codectx_t &ctx, jl_datatype_t *typ, Value* alloc, Value* nel)
 {
     auto arg_typename = [&]() JL_NOTSAFEPOINT {
@@ -4964,7 +4956,6 @@ static void emit_memory_stores(jl_codectx_t &ctx, jl_datatype_t *typ, Value* all
         return "Memory{" + type_str + "}[]";
     };
     setName(ctx.emission_context, alloc, arg_typename);
-    // set length (jl_alloc_genericmemory_unchecked_func doesn't have it)
     Value *decay_alloc = decay_derived(ctx, alloc);
     Value *len_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 0);
     auto len_store = ctx.builder.CreateAlignedStore(nel, len_field, Align(sizeof(void*)));
@@ -4984,7 +4975,6 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
     size_t elsz = layout->size;
     int isboxed = layout->flags.arrayelem_isboxed;
     int isunion = layout->flags.arrayelem_isunion;
-    int zi = ((jl_datatype_t*)typ)->zeroinit;
     if (isboxed)
         elsz = sizeof(void*);
     size_t nbytes;
@@ -5000,36 +4990,19 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
         emit_error(ctx, prepare_call(jlargumenterror_func), "invalid GenericMemory size: the number of elements is either negative or too large for system address width");
 
     auto T_size = ctx.types().T_size;
-    auto cg_typ = literal_pointer_val(ctx, (jl_value_t*) typ);
-    auto cg_nbytes = ConstantInt::get(T_size, nbytes);
     auto cg_nel = ConstantInt::get(T_size, nel);
-    size_t tot = nbytes + LLT_ALIGN(sizeof(jl_genericmemory_t),JL_SMALL_BYTE_ALIGNMENT);
-    // if allocation fits within GC pools
-    int pooled = tot <= GC_MAX_SZCLASS;
-    Value *alloc, *decay_alloc, *memory_ptr;
-    jl_aliasinfo_t aliasinfo;
-    if (pooled) {
-        // For pooled allocations with boxed/union elements, pass zeroinit region info
-        // so late-gc-lowering can emit the memset unconditionally after allocation
-        std::optional<AllocZeroinitRegion> zeroinit_region;
-        if (zi) {
-            // Data starts at JL_SMALL_BYTE_ALIGNMENT offset (must match jl_alloc_genericmemory_unchecked)
-            zeroinit_region = AllocZeroinitRegion(JL_SMALL_BYTE_ALIGNMENT, nbytes);
-        }
-        alloc = emit_allocobj(ctx, tot, cg_typ, false, JL_SMALL_BYTE_ALIGNMENT, {}, zeroinit_region);
-        decay_alloc = decay_derived(ctx, alloc);
-        memory_ptr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
+    Value *alloc = emit_genericmemory_alloc(ctx, typ, ConstantInt::get(T_size, nbytes), cg_nel);
+    if (jl_genericmemory_data_inline(nbytes)) {
+        // like the length, the data pointer is initialized by the allocation,
+        // but storing it here lets LLVM forward it before the allocation is lowered
+        Value *memory_ptr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_derived(ctx, alloc), 1);
         setName(ctx.emission_context, memory_ptr, "memory_ptr");
         auto objref = emit_pointer_from_objref(ctx, alloc);
-        Value *memory_data = emit_ptrgep(ctx, objref, JL_SMALL_BYTE_ALIGNMENT);
-        auto *store = ctx.builder.CreateAlignedStore(memory_data, memory_ptr, Align(sizeof(void*)));
-        aliasinfo = ctx.alias().memoryptr;
-        aliasinfo.decorateInst(store);
+        Value *memory_data = emit_ptrgep(ctx, objref, JL_GENERICMEMORY_INLINE_DATA_OFFSET);
         setName(ctx.emission_context, memory_data, "memory_data");
-    } else { // just use the dynamic length version since the malloc will be slow anyway
-        // For non-pooled, pass zeroinit size via the indirect bundle
-        Value *zeroinit_nbytes = zi ? cg_nbytes : nullptr;
-        alloc = emit_genericmemory_unchecked(ctx, cg_nbytes, cg_typ, zeroinit_nbytes);
+        auto *store = ctx.builder.CreateAlignedStore(memory_data, memory_ptr, Align(sizeof(void*)));
+        auto aliasinfo = ctx.alias().memoryptr;
+        aliasinfo.decorateInst(store);
     }
     emit_memory_stores(ctx, typ, alloc, cg_nel);
     return mark_julia_type(ctx, alloc, true, typ);
@@ -5047,7 +5020,6 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     size_t elsz = layout->size;
     int isboxed = layout->flags.arrayelem_isboxed;
     int isunion = layout->flags.arrayelem_isunion;
-    int zi = ((jl_datatype_t*)typ)->zeroinit;
     if (isboxed)
         elsz = sizeof(void*);
 
@@ -5068,7 +5040,6 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     nonemptymemBB->insertInto(ctx.f);
     ctx.builder.SetInsertPoint(nonemptymemBB);
 
-    auto cg_typ = literal_pointer_val(ctx, (jl_value_t*) typ);
     auto cg_elsz = ConstantInt::get(T_size, elsz);
 
 #if JL_LLVM_VERSION >= 200000
@@ -5099,11 +5070,7 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     overflow = ctx.builder.CreateOr(overflow, tobignel);
     Value *notoverflow = ctx.builder.CreateNot(overflow);
     error_unless(ctx, prepare_call(jlargumenterror_func), notoverflow, "invalid GenericMemory size: the number of elements is either negative or too large for system address width");
-    // actually allocate the memory
-
-    // Pass zeroinit size via the indirect bundle if needed
-    Value *zeroinit_nbytes = zi ? nbytes : nullptr;
-    Value *alloc = emit_genericmemory_unchecked(ctx, nbytes, cg_typ, zeroinit_nbytes);
+    Value *alloc = emit_genericmemory_alloc(ctx, typ, nbytes, nel_unboxed);
     emit_memory_stores(ctx, typ, alloc, nel_unboxed);
     ctx.builder.CreateBr(retvalBB);
     nonemptymemBB = ctx.builder.GetInsertBlock();

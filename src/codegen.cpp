@@ -1191,13 +1191,16 @@ static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
             {});
     },
 };
-static const auto jl_alloc_genericmemory_unchecked_func = new JuliaFunction<TypeFnContextAndSizeT>{
-    XSTR(jl_alloc_genericmemory_unchecked),
+// Allocates a GenericMemory with `nbytes` of data and `length` elements, with its data
+// zeroed if the last argument is true. LateLowerGCFrame expands it into either a single
+// object with inline data or a call to `jl_alloc_genericmemory_unchecked`.
+static const auto jl_alloc_memory_func = new JuliaFunction<TypeFnContextAndSizeT>{
+    "julia.gc_alloc_memory",
     [](LLVMContext &C, Type *T_size) {
         auto T_pjlvalue = getPointerTy(C);
         auto T_prjlvalue = PointerType::get(C, AddressSpace::Tracked);
         return FunctionType::get(T_prjlvalue,
-                {T_pjlvalue, T_size, T_pjlvalue}, false);
+                {T_pjlvalue, T_size, T_prjlvalue, T_size, getInt1Ty(C)}, false);
     },
     [](LLVMContext &C) {
         auto FnAttrs = AttrBuilder(C);
@@ -11306,8 +11309,9 @@ static void init_jit_functions(void)
     add_named_global(jltypeassert_func, &jl_typeassert);
     add_named_global(jlapplytype_func, &jl_instantiate_type_in_env);
     add_named_global(jl_object_id__func, &jl_object_id_);
-    add_named_global(jl_alloc_genericmemory_unchecked_func, &jl_alloc_genericmemory_unchecked);
+    add_named_global(XSTR(jl_alloc_genericmemory_unchecked), &jl_alloc_genericmemory_unchecked);
     add_named_global(jl_alloc_obj_func, (void*)NULL);
+    add_named_global(jl_alloc_memory_func, (void*)NULL);
     add_named_global(jl_newbits_func, (void*)jl_new_bits);
     add_named_global(jl_typeof_func, (void*)NULL);
     add_named_global(jl_field_write_barrier_p11_func, (void*)NULL);

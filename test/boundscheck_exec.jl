@@ -351,6 +351,48 @@ if bc_opt == bc_default
     no_alias_prove5() = no_alias_prove(5)
     no_alias_prove5()
     @test (@allocated no_alias_prove5()) == 0
+    # the length of these results is only known to be constant after LLVM optimization
+    function copy_small()
+        a = [1.0, 2.0, 3.0]
+        b = copy(a)
+        b[2] = 5.0
+        return a[2] + b[2]
+    end
+    function add_small()
+        a = [1, 2, 3]
+        b = a + a
+        return b[1] + b[2] + b[3]
+    end
+    function column_small()
+        A = reshape([1.0:9.0;], 3, 3)
+        c = A[:, 2]
+        return c[1] + c[2] + c[3]
+    end
+    @test copy_small() === 7.0
+    @test (@allocated copy_small()) == 0
+    @test add_small() === 12
+    @test (@allocated add_small()) == 0
+    @test column_small() === 15.0
+    @test (@allocated column_small()) == 0
+    # if they escape, they are still valid heap objects
+    escaping_copies() = (copy([1.0, 2.0]), copy(Union{Int,Nothing}[1, nothing]), copy(Any[1, "x"]))
+    copies = escaping_copies()
+    GC.gc(true)
+    @test copies[1] == [1.0, 2.0]
+    @test isequal(copies[2], [1, nothing])
+    @test isequal(copies[3], [1, "x"])
+    # including when their data is too large to be allocated inline
+    large_copies() = (copy(collect(1.0:300.0)), copy(Any[1:300;]))
+    copies = large_copies()
+    GC.gc(true)
+    @test copies[1] == 1.0:300.0
+    @test copies[2] == 1:300
+    # fresh Memory has its references cleared, on either side of the largest inline size
+    fresh_memories(ns) = [Memory{Any}(undef, n) for n in ns]
+    mems = fresh_memories(240:520)
+    GC.gc(true)
+    @test map(length, mems) == 240:520
+    @test all(m -> !any(i -> isassigned(m, i), eachindex(m)), mems)
 end
 
 @testset "automatic boundscheck elision for iteration on some important types" begin
