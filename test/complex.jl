@@ -139,6 +139,11 @@ end
     @test isequal(complex(true,false) * true, complex(true,false) * complex(true,false))
 end
 
+@testset "wrapping arithmetic" begin
+    @test complex(typemax(Int), 1) +% 1 == complex(typemin(Int), 1)
+    @test -%(complex(typemin(Int), 1)) == complex(typemin(Int), -1)
+end
+
 @testset "basic math functions" begin
     # We compare to BigFloat instead of hard-coding
     # values, assuming that BigFloat has an independent and independently
