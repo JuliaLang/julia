@@ -184,6 +184,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             # if we can record all of the backedges in the global reverse-cache,
             # we can now widen our applicability in the global cache too
             unique_backedges = store_backedges(ci, edges)
+            generating_output(true) && record_uninformative_callees!(ci, caller, edges)
         end
         ipo_effects = encode_effects(result.ipo_effects)
         time_now = _time_ns()
@@ -980,6 +981,61 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector, scratch::Uni
         add_backedge!(caller, invokesig, item)
     end
     return unique
+end
+
+struct UninformativeCallee
+    caller::CodeInstance
+    callee::CodeInstance
+    next::Union{Nothing,UninformativeCallee}
+end
+
+mutable struct UninformativeCallees
+    @atomic list::Union{Nothing,UninformativeCallee}
+end
+
+# Callers and the code inferred behind their call sites that record no edges. Kept while
+# writing a package image, so that the image can still include that code.
+const uninformative_callees = UninformativeCallees(nothing)
+
+function record_uninformative_callees!(caller::CodeInstance, sv::InferenceState, edges::SimpleVector)
+    # Only a call that taught inference nothing, or a call wrapping other calls, can hide it.
+    hidden = false
+    for info in sv.stmt_info
+        if !(info isa NoCallInfo || info isa MethodMatchInfo || info isa UnionSplitInfo ||
+             info isa GlobalAccessInfo)
+            hidden = true
+            break
+        end
+    end
+    hidden || return nothing
+    all_edges = Any[RecordUninformativeEdges()]
+    for i in 1:length(sv.stmt_info)
+        add_edges!(all_edges, sv.stmt_info[i])
+    end
+    length(all_edges) == 1 && return nothing
+    known = IdSet{Any}()
+    for edge in edges
+        push!(known, edge)
+    end
+    for i in 2:length(all_edges)
+        callee = all_edges[i]
+        (callee isa CodeInstance && !(callee in known)) || continue
+        push!(known, callee)
+        modifyfield!(uninformative_callees, :list, push_uninformative_callee, (caller, callee), :sequentially_consistent)
+    end
+    return nothing
+end
+push_uninformative_callee(list::Union{Nothing,UninformativeCallee}, pair::Tuple{CodeInstance,CodeInstance}) =
+    UninformativeCallee(pair[1], pair[2], list)
+
+function uninformative_callee_map()
+    map = IdDict{CodeInstance,Vector{CodeInstance}}()
+    node = @atomic uninformative_callees.list
+    while node !== nothing
+        push!(get!(() -> CodeInstance[], map, node.caller), node.callee)
+        node = node.next
+    end
+    return map
 end
 
 function compute_edges!(sv::InferenceState)
@@ -2292,7 +2348,10 @@ const TRIM_NO = 0x0
 const TRIM_SAFE = 0x1
 const TRIM_UNSAFE = 0x2
 const TRIM_UNSAFE_WARN = 0x3
-function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8, external_linkage::Bool)
+# Callees reached only through uninformative call sites are also pushed to the optional roots
+# vector, because no serialized edge leads to them.
+function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8, external_linkage::Bool,
+                              image_roots::Union{Nothing,Vector{Any}}=nothing)
     # During `--trim`, infer against an isolated cache namespace. The owner is re-stamped
     # back to `nothing` at serialization time (see `src/staticdata.c`).
     cache_owner = trim_mode == TRIM_NO ? nothing : :trim
@@ -2341,6 +2400,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
     # first (worlds are processed newest-first).
     cis = Any[]
     seen = IdSet{CodeInstance}()
+    uninformative_only = IdSet{CodeInstance}()
     for i = 1:length(codeinfos)
         item = codeinfos[i]
         if item isa CodeInstance && !(item in seen)
@@ -2360,6 +2420,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
     # Skip under `--trim` where inferred-but-not-compiled entries are not useful
     # at runtime without a Compiler / JIT.
     if trim_mode == TRIM_NO
+        uninformative = uninformative_callee_map()
         i = 1
         while i <= length(cis)
             ci = cis[i]::CodeInstance
@@ -2372,6 +2433,13 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
                         push!(seen, edge)
                         push!(cis, edge)
                     end
+                end
+            end
+            for callee in get(uninformative, ci, ())
+                if !(callee in seen)
+                    push!(seen, callee)
+                    push!(cis, callee)
+                    push!(uninformative_only, callee)
                 end
             end
             i += 1
@@ -2387,6 +2455,11 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
         mi = get_ci_mi(ci)
         return !iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, ci)) ||
             ccall(:jl_get_ci_equiv, Any, (Any, UInt), ci, 0x0)::CodeInstance !== ci
+    end
+    if image_roots !== nothing
+        for ci in cis
+            ci in uninformative_only && push!(image_roots, ci)
+        end
     end
 
     return Core.svec(codeinfos, cis)
