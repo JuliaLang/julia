@@ -1002,7 +1002,10 @@ julia> [0 1; 2 3] .|> (x -> x^2) |> sum
 |>(x, f) = f(x)
 
 _stable_typeof(x) = typeof(x)
-_stable_typeof(::Type{T}) where {T} = @isdefined(T) && !Core.has_free_typevars(T) ? Type{T} : DataType
+# a detached fragment of a `UnionAll` body (e.g. from `unwrap_unionall`) carries
+# dangling binder references instead of free TypeVars; it has no `Type{T}` either
+_stable_typeof(::Type{T}) where {T} =
+    @isdefined(T) && !Core.has_free_typevars(T) && !Core.has_dangling_tvarrefs(T) ? Type{T} : DataType
 
 """
     f = Returns(value)
