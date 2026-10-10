@@ -2,15 +2,15 @@
 
 @testset "AnnotatedString" begin
     str = Base.AnnotatedString("some string")
-    @test str == Base.AnnotatedString(str.string, Base.RegionAnnotation[])
     @test length(str) == 11
     @test ncodeunits(str) == 11
     @test codeunits(str) == codeunits("some string")
     @test codeunit(str) == UInt8
     @test codeunit(str, 1) == codeunit("some string", 1)
     @test firstindex(str) == firstindex("some string")
-    @test convert(Base.AnnotatedString, str) === str
-    @test eltype(str) == Base.AnnotatedChar{eltype(str.string)}
+    @test eltype(str) == Base.AnnotatedChar{eltype(str.string), Any}
+    @test eltype(Base.AnnotatedString{String}) == Base.AnnotatedChar{Char}
+    @test collect(Base.AnnotatedString("ab", [(1:1, :x, 1)])) isa Vector{Base.AnnotatedChar{Char, Int}}
     @test first(str) == Base.AnnotatedChar(first(str.string), Pair{Symbol, Any}[])
     @test str[1:4] isa SubString{typeof(str)}
     @test str[1:4] == Base.AnnotatedString("some")
@@ -46,8 +46,6 @@
     @test str != Base.AnnotatedString("some string", [(1:1, :thing, 0x01), (1:11, :all, 0x03), (6:6, :other, 0x02)])
     @test str != Base.AnnotatedString("some string", [(1:4, :thing, 0x11), (1:11, :all, 0x13), (6:11, :other, 0x12)])
     @test str != Base.AnnotatedString("some thingg", [(1:4, :thing, 0x01), (1:11, :all, 0x03), (6:11, :other, 0x02)])
-    @test Base.AnnotatedString([Base.AnnotatedChar('a', [(:a, 1)]), Base.AnnotatedChar('b', [(:b, 2)])]) ==
-        Base.AnnotatedString("ab", [(1:1, :a, 1), (2:2, :b, 2)])
     let allstrings =
         ['a', Base.AnnotatedChar('a'), Base.AnnotatedChar('a', [(:aaa, 0x04)]),
          "a string", Base.AnnotatedString("a string"),
@@ -64,11 +62,48 @@
             end
         end
     end
+    # Values of different types are kept as they are, under the union of their types
+    valued(v) = Base.AnnotatedString("x", [(1:1, :n, v)])
+    mixed = Base.annotatedstring(valued(1), valued(2.5))
+    @test mixed isa Base.AnnotatedString{String, Union{Int, Float64}}
+    @test Base.annotations(mixed) == [(region = 1:1, label = :n, value = 1), (region = 2:2, label = :n, value = 2.5)]
+    @test valued(true) * valued(1) isa Base.AnnotatedString{String, Union{Bool, Int}}
+    @test Base.annotatedstring(valued(1), "y", valued('c'), valued("s")) isa Base.AnnotatedString{String, Union{Int, Char, String}}
+    @test Base.annotatedstring(valued(1), valued('c'), valued("s"), valued(1.0)) isa Base.AnnotatedString{String, Any}
+    @test join([valued(1), valued(2)], valued('c')) isa Base.AnnotatedString{String, Union{Int, Char}}
+    @test join([valued(1), valued(2.5)], valued('c')) isa Base.AnnotatedString{String, Any} # The eltype no longer says
+    @test replace(valued(1), "x" => valued(2.5)) isa Base.AnnotatedString{String, Union{Int, Float64}}
+    # The value type is settled at compile time, also from an eltype that only may be annotated
+    @test (@inferred Base.annotatedstring("y", valued(1))) isa Base.AnnotatedString{String, Int}
+    @test (@inferred String join(AbstractString["y", valued(1)])) isa Base.AnnotatedString{String, Any}
+    @test (@inferred String join(Union{Missing, Base.AnnotatedString{String, Int}}[valued(1), valued(2)])) isa Base.AnnotatedString{String, Int}
+    @test join(split(Base.AnnotatedString("ab cd", [(1:2, :a, :x)]))) == Base.AnnotatedString("abcd", [(1:2, :a, :x)])
+    # An empty iterator, whose eltype is `Union{}`, joins to a plain `String`
+    @test join(()) === ""
+    @test join(x for x in ()) === ""
+    let sub = Base.AnnotatedString(SubString("abcd", 1, 3), [(1:1, :n, 1)]) # Typed as `repeat` of the wrapped string
+        @test repeat(sub, 0) == Base.AnnotatedString("")
+        @test (@inferred repeat(sub, 1)) == sub
+        @test repeat(sub, 1) isa Base.AnnotatedString{String, Int}
+        @test repeat(sub, 1) !== sub # A copy, as an annotated string is mutable
+    end
+    @test uppercase(Base.AnnotatedString(SubString("abcd", 1, 3), [(1:1, :n, 1)])) isa Base.AnnotatedString{String, Int}
+    @test (@inferred join(split(valued(1) * " " * valued(2)))) isa Base.AnnotatedString{String, Int}
+    # A value outside the value type is refused with a clear error
+    @test_throws ArgumentError Base.annotate!(valued(1), 1:1, :m, "s")
+    @test_throws ArgumentError Base.annotate!(Base.AnnotatedIOBuffer{Int}(), 1:1, :m, "s")
+    @test_throws ArgumentError Base.annotate!(Base.AnnotatedChar('c', [(:m, 1)]), :m, "s")
+    # Annotating with `nothing` removes the label, even where the value type admits `nothing`
+    let s = Base.AnnotatedString{String, Any}("abc")
+        Base.annotate!(s, 1:3, :face, :red)
+        Base.annotate!(s, 1:3, :face, nothing)
+        @test isempty(Base.annotations(s))
+    end
     # @test collect(Base.eachstyle(str)) ==
     #     [("some", [:thing, 0x01, :all, 0x03]),
     #     (" string", [:all, 0x03, :other, 0x02])]
     @test chopprefix(sprint(show, str), "Base.") ==
-        "AnnotatedString{String}(\"some string\", [(1:4, :thing, 0x01), (6:11, :other, 0x02), (1:11, :all, 0x03)])"
+        "AnnotatedString{String, Any}(\"some string\", [(1:4, :thing, 0x01), (6:11, :other, 0x02), (1:11, :all, 0x03)])"
     @test eval(Meta.parse(repr(str))) == str
     @test sprint(show, MIME("text/plain"), str) == "\"some string\""
 
@@ -92,9 +127,6 @@ end
 
 @testset "AnnotatedChar" begin
     chr = Base.AnnotatedChar('c')
-    @test Base.AnnotatedChar(UInt32('c')) == chr
-    @test convert(Base.AnnotatedChar, chr) === chr
-    @test chr == Base.AnnotatedChar(chr.char, Pair{Symbol, Any}[])
     @test uppercase(chr) == Base.AnnotatedChar('C')
     @test titlecase(chr) == Base.AnnotatedChar('C')
     @test lowercase(Base.AnnotatedChar('C')) == chr
@@ -107,6 +139,46 @@ end
     chr = Base.annotate!(Base.AnnotatedChar('m'), :attr, "h0m1")
     @test chr == Base.AnnotatedChar('m', [(:attr, "h0m1")])
     @test Base.annotate!(chr, :attr, "m1m2") == Base.AnnotatedChar('m', [(:attr, "h0m1"), (:attr, "m1m2")])
+end
+
+@testset "Construction" begin
+    # Strings and chars follow the same rules; char annotations just lack a region
+    for (Annotated, plain, Ann, region) in ((Base.AnnotatedString, "ab", Base.RegionAnnotation, (1:1,)),
+                                            (Base.AnnotatedChar, 'a', Base.Annotation, ()))
+        Plain, Abstract = typeof(plain), supertype(typeof(plain))
+        tuples = [(region..., :x, 1)]
+        ints = Ann{Int}[Ann{Int}(only(tuples))]
+        for T in (Annotated, Annotated{Plain}, Annotated{Abstract}, Annotated{Plain, Int}, Annotated{Abstract, Int}),
+            annots in (ints, tuples)
+            @test T(plain, annots) isa T
+            @test T(plain, annots) isa Annotated{<:Any, Int}
+        end
+        @test Annotated{Abstract, Int}(plain) isa Annotated{Abstract, Int}
+        @test Annotated{Plain}(plain, [(region..., :x, 1), (region..., :y, 'c')]) isa Annotated{Plain, Any}
+        @test Annotated(plain, ints).annotations === ints
+        @test Annotated{Plain, Int}(plain, ints).annotations === ints
+        @test Annotated{Plain, Any}(plain, ints).annotations !== ints
+        annotated = Annotated(plain, ints)
+        for copied in (Annotated(annotated), typeof(annotated)(annotated), Annotated{Plain, Any}(annotated))
+            @test copied == annotated
+            @test copied.annotations !== annotated.annotations
+        end
+        @test typeof(Annotated(annotated)) == typeof(annotated)
+        @test convert(Annotated, annotated) === annotated
+        @test convert(typeof(annotated), annotated) === annotated
+        # Adding annotations widens the value type, as `vcat` does
+        for added in ([(region..., :y, :s)], Ann{Symbol}[Ann{Symbol}((region..., :y, :s))])
+            @test Annotated(annotated, added) isa Annotated{Plain, Union{Int, Symbol}}
+        end
+    end
+    @test Base.AnnotatedString("ab") == Base.AnnotatedString("ab", Base.RegionAnnotation[])
+    @test Base.AnnotatedChar(UInt32('c')) == Base.AnnotatedChar('c') == Base.AnnotatedChar('c', Pair{Symbol, Any}[])
+    @test Base.AnnotatedString([Base.AnnotatedChar('a', [(:a, 1)]), Base.AnnotatedChar('b', [(:b, 2)])]) ==
+        Base.AnnotatedString("ab", [(1:1, :a, 1), (2:2, :b, 2)])
+    @test (@inferred Base.AnnotatedString(Base.AnnotatedString("x", [(1:1, :n, 1)]), [(1:1, :m, 2)])) isa Base.AnnotatedString{String, Int}
+    @test (@inferred Base.AnnotatedChar(Base.AnnotatedChar('x', [(:n, 1)]), [(:m, 2)])) isa Base.AnnotatedChar{Char, Int}
+    @test Base.AnnotatedChar(Base.AnnotatedChar('m', [(:attr, "h0m1")]), [(label = :attr, value = "m2m3")]) ==
+        Base.AnnotatedChar('m', [(:attr, "h0m1"), (:attr, "m2m3")])
 end
 
 @testset "Styling preservation" begin
@@ -177,12 +249,17 @@ end
 
 @testset "AnnotatedIOBuffer" begin
     aio = Base.AnnotatedIOBuffer()
-    vec2ann(v::Vector{<:Tuple}) = collect(Base.RegionAnnotation, v)
+    vec2ann(v::Vector{Tuple{UnitRange{Int}, Symbol, V}}) where {V} = collect(Base.RegionAnnotation{V}, v)
     # Append-only writing
     @test write(aio, Base.AnnotatedString("hello", [(1:5, :tag, 1)])) == 5
     @test write(aio, ' ') == 1
     @test write(aio, Base.AnnotatedString("world", [(1:5, :tag, 2)])) == 5
     @test Base.annotations(aio) == vec2ann([(1:5, :tag, 1), (7:11, :tag, 2)])
+    # Printing through a context keeps the annotations
+    ctxaio = Base.AnnotatedIOBuffer()
+    print(IOContext(ctxaio, :color => true), Base.AnnotatedString("hi", [(1:2, :tag, 3)]))
+    print(IOContext(ctxaio), Base.AnnotatedChar('!', [(:tag, 4)]))
+    @test Base.annotations(ctxaio) == vec2ann([(1:2, :tag, 3), (3:3, :tag, 4)])
     # Check `annotate!`, including region sorting
     @test truncate(aio, 0).io.size == 0
     @test write(aio, "hello world") == ncodeunits("hello world")
@@ -260,6 +337,30 @@ end
         @test read(seekstart(aio2), Base.AnnotatedString) ==
             Base.AnnotatedString("ab", [(1:1, :b, 1), (2:2, :a, 1), (2:2, :b, 1)])
     end
+    let aio2 = Base.AnnotatedIOBuffer() # Equal but distinct values are not merged
+        write(aio2, Base.AnnotatedString("a", [(1:1, :x, [1])]))
+        write(aio2, Base.AnnotatedString("b", [(1:1, :x, [1])]))
+        @test length(Base.annotations(aio2)) == 2
+    end
+    let ints = Base.AnnotatedIOBuffer{Int}() # Between value types
+        write(ints, Base.AnnotatedString("ab", [(1:1, :x, 1)]))
+        anys = Base.AnnotatedIOBuffer()
+        write(anys, seekstart(ints))
+        @test Base.annotations(anys) == vec2ann([(1:1, :x, 1)])
+        @test read(seekstart(anys), Base.AnnotatedString{String, Int}) isa Base.AnnotatedString{String, Int}
+        write(anys, Base.AnnotatedString("c", [(1:1, :y, "c")]))
+        @test_throws MethodError read(seekstart(anys), Base.AnnotatedString{String, Int})
+    end
+    let ints = Base.AnnotatedIOBuffer{Int}() # Chars are read with the buffer's value type, or a given one
+        write(ints, Base.AnnotatedString("ab", [(1:1, :x, 1)]))
+        @test read(seekstart(ints), Base.AnnotatedChar) isa Base.AnnotatedChar{Char, Int}
+        @test read(seekstart(ints), Base.AnnotatedChar{Char, Any}) == Base.AnnotatedChar{Char, Any}('a', [(:x, 1)])
+    end
+    let nested = Base.AnnotatedString(SubString("hello", 1, 3), [(1:1, :x, 1)]) # Over a `SubString`
+        aio2 = Base.AnnotatedIOBuffer()
+        @test write(aio2, nested[1:2]) == 2
+        @test read(seekstart(aio2), Base.AnnotatedString) == Base.AnnotatedString("he", [(1:1, :x, 1)])
+    end
     # Working through an IOContext
     aio = Base.AnnotatedIOBuffer()
     wrapio = IOContext(aio)
@@ -270,7 +371,13 @@ end
     # show-ing an AnnotatedIOBuffer
     aio = Base.AnnotatedIOBuffer()
     write(aio, Base.AnnotatedString("hello", [(1:5, :tag, 1)]))
-    @test sprint(show, aio) == "Base.AnnotatedIOBuffer(5 bytes, 1 annotation)"
+    @test chopprefix(sprint(show, aio), "Base.") == "AnnotatedIOBuffer(5 bytes, 1 annotation)"
+    # A value that doesn't fit the destination throws before any text is written
+    let src = Base.AnnotatedIOBuffer(), dest = Base.AnnotatedIOBuffer{Int}()
+        write(src, Base.AnnotatedString("ab", [(1:1, :x, "s")]))
+        @test_throws MethodError write(dest, seekstart(src))
+        @test position(dest) == 0
+    end
 end
 
 @testset "Eachregion" begin
@@ -319,6 +426,26 @@ end
     @test annregions("𝟏x", [(1:4, :face, :red)]) ==
         [("𝟏", [(:face, :red)]),
          ("x", [])]
+    # Annotations and subregions that start within a character
+    let str = Base.AnnotatedString("aébc", [(3:3, :face, :red)])
+        regions = collect(Base.eachregion(str)) # Read after the iterator has moved on
+        @test [(s, Tuple.(a)) for (s, a) in regions] == [("a", []), ("é", [(:face, :red)]), ("bc", [])]
+        @test [s for (s, _) in Base.eachregion(str, 3:5)] == ["é", "bc"]
+    end
+    # A subregion starting within a character, whose regions read the same during iteration and after
+    let str = Base.AnnotatedString("aébcdef", [(1:8, :a, 1), (3:5, :b, 2), (5:5, :c, 3), (2:2, :d, 4)])
+        @test [(String(s), Tuple.(a)) for (s, a) in Base.eachregion(str, 3:5)] ==
+            [(String(s), Tuple.(a)) for (s, a) in collect(Base.eachregion(str, 3:5))]
+    end
+    # A string backed by a substring, whose regions are substrings of the same parent
+    @test length(collect(Base.eachregion(Base.AnnotatedString(SubString("xab", 2:3), [(1:1, :a, 1)])))) == 2
+    # Changing a string while its regions are read is unsupported, but memory safe
+    let str = Base.AnnotatedString("abcdef", [(1:2, :a, 1), (3:4, :a, 2), (5:6, :a, 3)])
+        @test count(_ -> (Base.annotate!(str, 1:6, :b, 9); true), Base.eachregion(str)) == 3
+        regions = collect(Base.eachregion(str))
+        empty!(str.annotations)
+        @test_throws BoundsError collect(last(regions)[2])
+    end
 end
 
 @testset "Replacement" begin
@@ -824,5 +951,140 @@ end
             green_annots = filter(a -> a.value == :green, Base.annotations(result3))
             @test all(a -> first(a.region) >= pos + 1, green_annots)
         end
+
+        @testset "Typed buffers" begin
+            wide = Base.AnnotatedString{String, Any}("Q", [(1:1, :n, 1)])
+            anybuf = Base.AnnotatedIOBuffer()
+            replace(anybuf, astr("apple", (1:5, :red)), "p" => wide)
+            typedbuf = Base.AnnotatedIOBuffer{Union{Symbol, Int}}()
+            replace(typedbuf, astr("apple", (1:5, :red)), "p" => wide)
+            @test read(seekstart(typedbuf), Base.AnnotatedString) == read(seekstart(anybuf), Base.AnnotatedString)
+            @test_throws MethodError replace(Base.AnnotatedIOBuffer{Symbol}(), astr("apple", (1:5, :red)), "p" => wide)
+        end
     end
+end
+
+# A package with its own annotation value type and a style to display it.
+module MarkedAnnotations
+    import Base.AnnotatedDisplay: AbstractAnnotationStyle, AnnotationStyle, awrite
+    struct Mark end
+    struct Mark2 end # A second value type displayed the same way
+    struct Tag end   # A value type of another package, with its own style
+    struct Note end  # As `Tag`, but with no agreed style against `Mark`
+    struct Hilite end # Whose style writes HTML for whole strings only
+    struct Gloss end # Whose rule against `Mark` is written in the orientation its unions don't present
+    struct MarkStyle <: AbstractAnnotationStyle end
+    struct TagStyle <: AbstractAnnotationStyle end
+    struct NoteStyle <: AbstractAnnotationStyle end
+    struct HiliteStyle <: AbstractAnnotationStyle end
+    struct GlossStyle <: AbstractAnnotationStyle end
+    AnnotationStyle(::Type{Mark}) = MarkStyle()
+    AnnotationStyle(::Type{Mark2}) = MarkStyle()
+    AnnotationStyle(::Type{Tag}) = TagStyle()
+    AnnotationStyle(::Type{Note}) = NoteStyle()
+    AnnotationStyle(::Type{Hilite}) = HiliteStyle()
+    AnnotationStyle(::Type{Gloss}) = GlossStyle()
+    AnnotationStyle(a::MarkStyle, ::TagStyle) = a
+    AnnotationStyle(a::MarkStyle, ::GlossStyle) = a
+    function awrite(textwriter::F, ::MarkStyle, io::IO, s) where {F}
+        buf = IOBuffer()
+        for (str, annots) in Base.eachregion(s)
+            isempty(annots) || write(buf, "<")
+            textwriter(buf, str)
+            isempty(annots) || write(buf, ">")
+        end
+        write(io, take!(buf))
+    end
+    awrite(::MarkStyle, io::IO, ::MIME"text/html", s) = sum(Base.eachregion(s)) do (str, annots)
+        if isempty(annots) write(io, str) else write(io, "<mark>") + write(io, str) + write(io, "</mark>") end
+    end
+    awrite(::HiliteStyle, io::IO, ::MIME"text/html", s::Base.AnnotatedString) = write(io, "<mark>", String(s), "</mark>")
+end
+
+@testset "AnnotationStyle" begin
+    (; Mark, MarkStyle) = MarkedAnnotations
+    AnnotationStyle, NoStyle = Base.AnnotatedDisplay.AnnotationStyle, Base.AnnotatedDisplay.NoStyle
+    @test AnnotationStyle(String) === NoStyle()
+    @test AnnotationStyle(Mark) === MarkStyle()
+    @test AnnotationStyle(Union{Mark, String}) === MarkStyle()
+    @test AnnotationStyle(Union{String, Int, Mark}) === MarkStyle()
+    @test AnnotationStyle(Union{String, Int}) === NoStyle()
+    @test Base.AnnotatedDisplay.promotestyle(MarkStyle(), NoStyle()) === Base.AnnotatedDisplay.promotestyle(NoStyle(), MarkStyle()) === MarkStyle()
+    # Types sharing a style combine; styles that differ have no answer until one is given
+    @test AnnotationStyle(Union{Mark, MarkedAnnotations.Mark2}) === MarkStyle()
+    @test_throws ArgumentError AnnotationStyle(Union{Mark, MarkedAnnotations.Note})
+    @test AnnotationStyle(Union{Mark, MarkedAnnotations.Tag}) === MarkStyle() # By `MarkedAnnotations`
+    @test Base.AnnotatedDisplay.promotestyle(MarkedAnnotations.TagStyle(), MarkStyle()) === MarkStyle() # The rule, in the other orientation
+    # A rule found only in its other orientation settles a union in compiled code, at compile time
+    glossmark() = AnnotationStyle(Union{MarkedAnnotations.Gloss, Mark})
+    @test glossmark() === MarkStyle()
+    @test Base.infer_return_type(glossmark, ()) === MarkStyle
+    marked(V) = Base.AnnotatedString{String, V}("x", [(1:1, :m, Mark())])
+    @test sprint(print, marked(Mark)) == "<x>"
+    @test sprint(print, marked(Union{Mark, Int})) == "<x>"
+    @test sprint(print, marked(Any)) == "<x>" # The style is found from the values
+    @test sprint(print, Base.AnnotatedString{String, Any}("xy", [(1:1, :t, MarkedAnnotations.Tag()), (2:2, :m, Mark())])) == "<x><y>"
+    @test sprint(print, Base.AnnotatedString{String, Int}("x", [(1:1, :n, 1)])) == "x"
+    @test sprint(print, Base.AnnotatedString{String, Any}("x", [(1:1, :n, 1)])) == "x"
+    # HTML is available exactly when the style provides it, as for a plain `String`
+    unstyled = Base.AnnotatedString{String, Int}("a<b", [(1:1, :n, 1)])
+    @test !showable(MIME("text/html"), unstyled) && !showable(MIME("text/html"), unstyled[1])
+    @test_throws MethodError sprint(show, MIME("text/html"), unstyled)
+    @test !showable(MIME("text/html"), Base.AnnotatedString("a<b"))
+    @test !showable(MIME("text/html"), Base.AnnotatedString{String, Any}("a", [(1:1, :n, 1)]))
+    @test showable(MIME("text/html"), marked(Any)) && showable(MIME("text/html"), marked(Any)[1])
+    @test showable(MIME("text/html"), marked(Mark)) && showable(MIME("text/html"), marked(Mark)[1])
+    @test sprint(show, MIME("text/html"), marked(Mark)) == sprint(show, MIME("text/html"), marked(Mark)[1]) == "<mark>x</mark>"
+    let hilited = Base.AnnotatedString("x", [(1:1, :h, MarkedAnnotations.Hilite())])
+        @test showable(MIME("text/html"), hilited) && showable(MIME("text/html"), hilited[1])
+        @test !showable(MIME("text/html"), SubString(hilited, 1:1))
+    end
+    # Regions consumed as they are yielded carry the same annotations as regions held
+    nested = Base.AnnotatedString("abcdef", [(1:6, :a, Mark()), (2:5, :b, Mark()), (3:4, :c, Mark())])
+    streamed = [(String(str), collect(annots)) for (str, annots) in Base.eachregion(nested)]
+    @test streamed == [(String(str), collect(annots)) for (str, annots) in collect(Base.eachregion(nested))]
+    @test map(last, streamed) == [[(label = :a, value = Mark())], [(label = :a, value = Mark()), (label = :b, value = Mark())],
+                                  [(label = :a, value = Mark()), (label = :b, value = Mark()), (label = :c, value = Mark())],
+                                  [(label = :a, value = Mark()), (label = :b, value = Mark())], [(label = :a, value = Mark())]]
+    # Escaping keeps the annotations on their (longer) text
+    @test sprint(escape_string, Base.AnnotatedString{String, Mark}("a\nb", [(1:1, :m, Mark()), (3:3, :m, Mark())])) == "<a>\\n<b>"
+    escaped(s; wrap = identity) = (buf = Base.AnnotatedIOBuffer(); escape_string(wrap(buf), s); read(seekstart(buf), Base.AnnotatedString))
+    @test escaped(Base.AnnotatedString("a\nb\tc", [(1:1, :x, 1), (3:3, :y, 2), (2:5, :z, 3)])) == Base.AnnotatedString("a\\nb\\tc", [(1:1, :x, 1), (4:4, :y, 2), (2:7, :z, 3)])
+    @test escaped(SubString(Base.AnnotatedString("a\nbc", [(1:3, :x, 1)]), 2, 4)) == Base.AnnotatedString("\\nbc", [(1:3, :x, 1)])
+    @test escaped(Base.AnnotatedString("x\ty", [(2:2, :t, 1)]); wrap = io -> IOContext(io, :color => true)) == Base.AnnotatedString("x\\ty", [(2:3, :t, 1)])
+    let buf = Base.AnnotatedIOBuffer{Float64}() # Values are converted to the buffer's value type, as by `write`
+        escape_string(buf, Base.AnnotatedString("ab", [(1:1, :x, 1)]))
+        @test Base.annotations(buf) == [(region = 1:1, label = :x, value = 1.0)]
+    end
+    # The style of a known value type is resolved at compile time
+    folded(V) = only(code_typed(Base.AnnotatedDisplay.style, (Base.AnnotatedString{String, V},)))[1].code
+    @test folded(Mark) == Any[Core.ReturnNode(MarkStyle())]
+    @test folded(Union{Mark, Int}) == Any[Core.ReturnNode(MarkStyle())]
+    # Defining a style, or a writer for one, must not invalidate code compiled for strings of
+    # unknown value type. Checked in a fresh process, where only Base's methods exist as when a
+    # package is first loaded; here the loaded packages' methods would make inference give up
+    # for that reason alone.
+    guard = """
+    import Base.AnnotatedDisplay: AbstractAnnotationStyle, AnnotationStyle, awrite
+    struct Late end
+    struct LateStyle <: AbstractAnnotationStyle end
+    struct Sink <: IO end
+    Base.write(::Sink, ::UInt8) = 1
+    Base.unsafe_write(::Sink, ::Ptr{UInt8}, n::UInt) = Int(n)
+    # A new IO type and an unusual string type, so the print chain is compiled here rather than
+    # taken from the sysimage; `v[1]` is inferred with the value type unbound.
+    unknown_valtype(v::Vector{Base.AnnotatedString{SubString{String}}}) = print(Sink(), v[1])
+    unknown_html(v::Vector{Base.AnnotatedString{SubString{String}}}) = show(Sink(), MIME("text/html"), v[1])
+    strings = Base.AnnotatedString{SubString{String}}[Base.AnnotatedString{SubString{String}, Int}(SubString("x"))]
+    unknown_valtype(strings)
+    try unknown_html(strings) catch end # compiled, then correctly a `MethodError` without a style
+    log = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+    AnnotationStyle(::Type{Late}) = LateStyle()
+    awrite(textwriter, ::LateStyle, io::IO, s::Base.AnnotatedString) = 0
+    awrite(::LateStyle, io::IO, ::MIME"text/html", s::Base.AnnotatedString) = 0
+    ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
+    print(join(unique(x.def.name for x in log if x isa Core.MethodInstance), ' '))
+    """
+    invalidated = split(read(`$(Base.julia_cmd()) --startup-file=no -e $guard`, String))
+    @test invalidated ⊆ ["AnnotationStyle", "awrite"]
 end

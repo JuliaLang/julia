@@ -1,5 +1,6 @@
 # Verify the trimmed `Trimmability` executable exercises a range of constructs
 using Test
+using StyledStrings
 
 outdir = ARGS[1]
 
@@ -30,4 +31,7 @@ outdir = ARGS[1]
     # TODO(#62912): SuiteSparse libraries cannot be loaded under --trim yet
     # @test lines[20] == "sparse solves: -1.0 -1.0 -1.0"
     # @test lines[21] == "sparse factorizations: 0.666667 0.666667 -1.0"
+    sample = styled"{bold:bold} {(fg=red, underline=(blue, curly)):mixed} {(height=1.2):big} {link={https://julialang.org}:link}"
+    @test lines[end-1] == "styled ansi: " * sprint(print, sample; context = :color => true)
+    @test lines[end] == "styled html: " * sprint(show, MIME("text/html"), sample)
 end

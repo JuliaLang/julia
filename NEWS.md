@@ -200,6 +200,16 @@ New library functions
 New library features
 --------------------
 
+* `AnnotatedString` and `AnnotatedChar` take a second type parameter, the type of their annotation
+  values, and `AnnotatedIOBuffer` takes it as its only parameter. The constructors infer it from
+  the annotations they are given. Constructing one from an annotated string or char with further
+  annotations, `*`, `annotatedstring` and `replace` widen it to a `Union` of up to three types
+  before `Any`, while `annotate!` refuses a value of another type. The value type selects how a
+  string is displayed: StyledStrings styles strings with `Face` values. A type written without
+  the value type, such as `Vector{AnnotatedString{String}}`, no longer names a concrete type. The
+  internal `Annotation` and `RegionAnnotation` aliases take the value type as a parameter too,
+  and `eachregion` is lazy: each region's annotations are read from the string as they are used.
+  `escape_string` into an `AnnotatedIOBuffer` keeps the annotations ([#60527]).
 * `IOContext` supports a new boolean `hexunsigned` option that allows for printing unsigned integers in
   decimal instead of hexadecimal ([#60267]).
 * `lazy"..."` strings now support a flag `lazy"..."c` that adds `compact` and `limit` flags to the
@@ -251,6 +261,12 @@ Standard library changes
 
 #### JuliaSyntaxHighlighting
 
+* Highlighting annotates with `Face`s rather than `Symbol` face names, from a palette in the
+  `julia` namespace, so the faces are still customised as `julia_keyword` and so on. Other
+  packages can use them as `face"JuliaSyntaxHighlighting.keyword"`, or after
+  `@usepalette JuliaSyntaxHighlighting`. `highlight!` needs a string whose value type can hold a
+  `Face` ([#60527]).
+
 #### LinearAlgebra
 
 #### Markdown
@@ -262,6 +278,8 @@ Standard library changes
 * Many, many bug fixes and minor tweaks; overall behavior is now much closer to CommonMark ([#59977], [#60502]).
 * Table columns whose delimiter cell has no `:` (such as `---`) are now left-aligned, as on
   GitHub, instead of right-aligned.
+* Markdown's faces form a palette, so they are customised in `faces.toml` under `[Markdown]`
+  rather than `[markdown]` ([#60527]).
 
 ### Mmap
 
@@ -294,6 +312,18 @@ Standard library changes
 * `close(::SharedArray)` eagerly releases the shared-memory mappings referenced through the
   array on all processes, e.g. so the file backing a file-backed `SharedArray` can be deleted
   immediately ([#62488]).
+
+#### StyledStrings
+
+* Named faces are `Face` objects rather than `Symbol`s. `face"name"` looks a face up, and packages
+  define theirs in module-scoped palettes with `@defpalette` and `@registerpalette`, which also hold
+  light and dark variants. `@usepalette` brings other modules' palettes into scope, as `using` does
+  names, and a palette evaluated again, as by Revise, redefines its faces in place. Face names are
+  resolved when a string is built, and in a module with a palette, `styled"..."` and `face"..."`
+  reject an unknown name when they are expanded. `styled"..."` strings carry `Face`s as their value
+  type and are displayed statically, and `remapfaces` substitutes the faces of a string. A
+  `faces.toml` value of `"inherit"` resets an attribute to what the face inherits. Annotations whose
+  values are `Symbol`s naming faces are no longer styled ([#60527]).
 
 #### Test
 * Pressing `^C` twice at an empty `julia>` prompt now cancels all still-running

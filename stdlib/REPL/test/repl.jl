@@ -2057,13 +2057,23 @@ end
 end
 
 # Test syntax highlighting in REPL input
+# Imported outside the testset as `face"..."` resolves the module at lowering time.
+using StyledStrings, JuliaSyntaxHighlighting
 @testset "Syntax highlighting" begin
-    using StyledStrings
     using REPL.StylingPasses
+    # Each pass's annotations are merged once
+    let passes = [Base.AnnotatedString("ab", [(1:1, :face, 1)]), Base.AnnotatedString("ab", [(2:2, :face, 2)])]
+        @test length(Base.annotations(StylingPasses.merge_annotations(passes))) == 2
+    end
+    # The passes' strings hold faces, for the static display path
+    @test StylingPasses.apply_styling_passes("f(x)",
+        StylingPasses.StylingPass[StylingPasses.SyntaxHighlightPass(), StylingPasses.RegionHighlightPass(),
+                                  StylingPasses.EnclosingParenHighlightPass()],
+        StylingPasses.StylingContext(3, 1, 2)) isa Base.AnnotatedString{String, StyledStrings.Face}
 
     # Use withfaces to ensure consistent face definitions regardless of user config
-    StyledStrings.withfaces(:julia_keyword => StyledStrings.Face(foreground=:red),
-                            :julia_number => StyledStrings.Face(foreground=:blue)) do
+    StyledStrings.withfaces(StyledStrings.face"JuliaSyntaxHighlighting.keyword" => StyledStrings.Face(foreground=StyledStrings.face"red"),
+                            StyledStrings.face"JuliaSyntaxHighlighting.number" => StyledStrings.Face(foreground=StyledStrings.face"blue")) do
 
         # Test that julia_prompt has syntax highlighting passes
         fake_repl(options = REPL.Options(confirm_exit=false, style_input=true, auto_insert_closing_bracket=false)) do stdin_write, stdout_read, repl

@@ -4,6 +4,7 @@ module Trimmability
 using Sockets
 using SparseArrays
 using LinearAlgebra
+using StyledStrings
 
 world::String = "world!"
 const str = OncePerProcess{String}() do
@@ -172,6 +173,15 @@ end
 # keeps in a merged union: each `print` must still resolve statically.
 @noinline interpolate_many(r, x, s, c) = "got $(r) vs $(first(r)) with $(x) and $(s) and $(c)"
 
+# Styled output, both as ANSI escapes and as HTML. Faces with a height, underline colour and
+# link exercise the comparisons between successive faces.
+const styled_sample = styled"{bold:bold} {(fg=red, underline=(blue, curly)):mixed} {(height=1.2):big} {link={https://julialang.org}:link}"
+
+function _test_styled()
+    println(Core.stdout, "styled ansi: ", sprint(print, styled_sample; context = :color => true))
+    println(Core.stdout, "styled html: ", sprint(show, MIME("text/html"), styled_sample))
+end
+
 function _test_sparse_constructors()
     A = sparse([1, 2, 3], [1, 2, 3], [1.0, 2.0, 3.0])
     B = spdiagm(0 => ones(3), 1 => ones(2))
@@ -321,6 +331,7 @@ function @main(args::Vector{String})::Cint
     # TODO(#62912): SuiteSparse libraries cannot be loaded under --trim yet
     # _test_sparse_solves()
     # _test_sparse_factorizations()
+    _test_styled()
 
     try
         sock = connect("localhost", 4900)
