@@ -281,6 +281,8 @@ Standard library changes
 * A `using`/`import` statement that loads several packages, such as `using A, B, C`, now precompiles
   all of them (and the extensions they make loadable) in a single parallel session, rather than one
   session per package ([#63185]).
+* When listing completions for a module-qualified name such as `Base.Iterators.<TAB><TAB>`, public
+  names are now shown first and non-public names after them, dimmed and in their own columns ([#22969]).
 
 #### Sockets
 
