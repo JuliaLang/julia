@@ -252,6 +252,14 @@ let
 end
 """) == (3,4,5)
 
+# Opaque closure lambda from a macro expansion
+@test JuliaLowering.include_string(test_mod, """
+let
+    oc = Base.Experimental.@opaque(@noinline x->2x)
+    oc(3)
+end
+""") == 6
+
 # Opaque closure inside a closure can capture the enclosing closure's captures
 @test JuliaLowering.include_string(test_mod, """
 let y = [1]

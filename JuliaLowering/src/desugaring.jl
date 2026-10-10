@@ -414,7 +414,7 @@ function _destructure(ctx, assignment_srcref, stmts, lhs, rhs, is_const)
 end
 
 # Expands cases of property destructuring
-function expand_property_destruct(ctx, ex)
+function expand_property_destruct(ctx, ex, is_const)
     @jl_assert numchildren(ex) == 2 ex
     lhs = ex[1]
     @jl_assert head(lhs) == :tuple ex
@@ -430,14 +430,15 @@ function expand_property_destruct(ctx, ex)
         propname = head(prop) == :identifier                           ? prop    :
                    head(prop) == :(::) && head(prop[1]) == :identifier ? prop[1] :
                    throw(LoweringError(prop, "invalid assignment location"))
-        push!(stmts, expand_forms_2(ctx, @ast ctx rhs1 [:(=)
+        asgn = @ast ctx rhs1 [:(=)
             prop
             [:call
                 "getproperty"::top
                 rhs1
                 propname=>:symbol
             ]
-        ]))
+        ]
+        push!(stmts, expand_forms_2(ctx, is_const ? @ast(ctx, ex, [:const asgn]) : asgn))
     end
     push!(stmts, @ast ctx rhs1 [:removable rhs1])
     @mknode(;source=ex, context=ex.context, head=:block, children=stmts)
@@ -460,7 +461,8 @@ function expand_tuple_destruct(ctx, ex, is_const)
 
     if head(rhs) == :tuple
         num_splat = sum(head(rh) == :... for rh in children(rhs); init=0)
-        if num_splat == 0 && (numchildren(lhs) - num_slurp) > numchildren(rhs)
+        if num_splat == 0 && !has_parameters(rhs) &&
+                (numchildren(lhs) - num_slurp) > numchildren(rhs)
             throw(LoweringError(ex, "More variables on left hand side than right hand in tuple assignment"))
         end
 
@@ -617,17 +619,17 @@ end
 
 #-------------------------------------------------------------------------------
 # Expansion of array indexing
-function _arg_to_temp(ctx, stmts, ex)
+function _arg_to_temp(ctx, stmts, ex, in_params)
     k = head(ex)
     if is_effect_free(ex)
         ex
     elseif k == :...
-        @ast ctx ex [k _arg_to_temp(ctx, stmts, ex[1])]
-    elseif k == :kw
-        @ast ctx ex [:kw ex[1] _arg_to_temp(ctx, stmts, ex[2])]
+        @ast ctx ex [k _arg_to_temp(ctx, stmts, ex[1], in_params)]
+    elseif k == :kw || (k == :(=) && in_params)
+        @ast ctx ex [k ex[1] _arg_to_temp(ctx, stmts, ex[2], in_params)]
     elseif k == :parameters
         mapchildren(ex) do e
-            _arg_to_temp(ctx, stmts, e)
+            _arg_to_temp(ctx, stmts, e, true)
         end
     else
         emit_assign_tmp(stmts, ctx, ex)
@@ -642,19 +644,14 @@ end
 # Any assignments are added to `stmts` and a result expression returned which
 # may be used in further desugaring.
 function remove_argument_side_effects(ctx, stmts, ex)
-    if is_identifier_like(ex) || head(ex) === :value
+    if is_effect_free(ex)
         ex
     else
         k = head(ex)
         if k == :let
             emit_assign_tmp(stmts, ctx, ex)
         else
-            args = SyntaxList()
-            for e in children(ex)
-                push!(args, _arg_to_temp(ctx, stmts, e))
-            end
-            # TODO: Copy attributes?
-            @ast ctx ex [k args...]
+            mapchildren(e->_arg_to_temp(ctx, stmts, e, false), ex)
         end
     end
 end
@@ -904,7 +901,7 @@ end
 function expand_generator(ctx, ex)
     @jl_assert numchildren(ex) >= 2 ex
     body = ex[1]
-    check_no_return(body)
+    (!is_flisp_compat(ex) || numchildren(ex) == 2) && check_no_return(body)
     if numchildren(ex) > 2
         outervar_assignments = SyntaxList()
         for iterspecs in ex[2:end-1]
@@ -1076,7 +1073,7 @@ function expand_splat(ctx, ex, topfunc, args)
     result = @ast ctx ex [:call
         "_apply_iterate"::core
         "iterate"::top
-        topfunc
+        setmeta(topfunc, :is_called, true)
         wrapped_args...
     ]
 
@@ -1106,6 +1103,7 @@ function expand_vcat(ctx, ex)
     check_no_assignment(children(ex))
     had_row = false
     had_row_splat = false
+    had_other_splat = false
     is_typed = head(ex) == :typed_vcat
     eltype   = is_typed ? ex[1]     : nothing
     elements = is_typed ? ex[2:end] : ex[1:end]
@@ -1114,9 +1112,12 @@ function expand_vcat(ctx, ex)
         if k == :row
             had_row = true
             had_row_splat = had_row_splat || any(head(e1) == :... for e1 in children(e))
+        elseif k == :...
+            had_other_splat = true
         end
     end
-    if had_row_splat
+    # With rows, a splat outside a row is a row by itself, eg `t...` in `[t...; 3 4]`
+    if had_row_splat || (had_row && had_other_splat)
         # In case there is splatting inside `hvcat`, collect each row as a
         # separate tuple and pass those to `hvcat_rows` instead (ref #38844)
         rows = SyntaxList()
@@ -1372,7 +1373,7 @@ function expand_assignment(ctx, ex, is_const=false)
             ex_i = ex_i[2]
         end
         # In const a = b = c, only a is const
-        is_const && (stmts[1] = @mknode(stmts[1]; head=:constdecl))
+        is_const && (stmts[1] = @ast ctx stmts[1] [:const stmts[1]])
 
         out = @ast ctx ex [:block assign_rr reverse!(stmts)... [:removable rr]]
         expand_forms_2(ctx, out)
@@ -1413,7 +1414,7 @@ function expand_assignment(ctx, ex, is_const=false)
         ]
     elseif kl == :tuple
         if has_parameters(lhs)
-            expand_property_destruct(ctx, ex)
+            expand_property_destruct(ctx, ex, is_const)
         else
             expand_tuple_destruct(ctx, ex, is_const)
         end
@@ -1515,20 +1516,18 @@ function expand_update_operator(ctx, ex)
         end
     end
 
+    call = _expand_literal_pow(@ast ctx ex [(dotted ? :dotcall : :call)
+        op
+        if isnothing(declT)
+            lhs
+        else
+            [:(::)(decl_lhs) lhs declT]
+        end
+        rhs
+    ])
     @ast ctx ex [:block
         stmts...
-        [(dotted ? :.= : :(=))
-            lhs
-            [(dotted ? :dotcall : :call)
-                op
-                if isnothing(declT)
-                    lhs
-                else
-                    [:(::)(decl_lhs) lhs declT]
-                end
-                rhs
-            ]
-        ]
+        [(dotted ? :.= : :(=)) lhs call]
     ]
 end
 
@@ -1778,10 +1777,15 @@ end
 #-------------------------------------------------------------------------------
 # Call expansion
 
-function expand_kw_call(ctx, srcref, farg, args, kws)
-    @ast ctx srcref [:block
-        func := farg
-        kw_container := expand_named_tuple(ctx, srcref, kws;
+function expand_kw_call(ctx, st)
+    stmts = Syntax[]
+    st = remove_argument_side_effects(ctx, stmts, st)
+    args = copy(st[2:end])
+    func = setmeta(st[1], :is_called, true)
+    kws = remove_kw_args!(ctx, args)
+    @ast ctx st [:block
+        stmts...
+        kw_container := expand_named_tuple(ctx, st, kws;
                                            field_name="keyword argument",
                                            element_name="keyword argument")
         if all(head(kw) == :... for kw in kws)
@@ -1975,7 +1979,6 @@ end
 function remove_kw_args!(ctx, args::Vector{SyntaxTree})
     kws = nothing
     j = 0
-    num_parameter_blocks = 0
     for i in 1:length(args)
         arg = args[i]
         k = head(arg)
@@ -1985,10 +1988,6 @@ function remove_kw_args!(ctx, args::Vector{SyntaxTree})
             end
             push!(kws, arg)
         elseif k == :parameters
-            num_parameter_blocks += 1
-            if num_parameter_blocks > 1
-                throw(LoweringError(arg, "Cannot have more than one group of keyword arguments separated with `;`"))
-            end
             if numchildren(arg) == 0
                 continue # ignore empty parameters (issue #18845)
             end
@@ -2007,6 +2006,14 @@ function remove_kw_args!(ctx, args::Vector{SyntaxTree})
     return kws
 end
 
+function has_kwargs(args)
+    for a in args
+        head(a) === :kw && return true
+        head(a) === :parameters && numchildren(a) > 0 && return true
+    end
+    false
+end
+
 function expand_call(ctx, ex)
     farg = ex[1]
     if head(farg) === :identifier && syntax_name(farg) === "ccall"
@@ -2015,9 +2022,8 @@ function expand_call(ctx, ex)
         return expand_cglobal(ctx, ex)
     end
     args = copy(ex[2:end])
-    kws = remove_kw_args!(ctx, args)
-    if !isnothing(kws)
-        return expand_forms_2(ctx, expand_kw_call(ctx, ex, farg, args, kws))
+    if has_kwargs(args)
+        return expand_forms_2(ctx, expand_kw_call(ctx, ex))
     end
     if any(head(arg) == :... for arg in args)
         # Splatting, eg, `f(a, xs..., b)`
@@ -2247,7 +2253,7 @@ function expand_try(ctx, ex)
             [:scope_block(catch_) [:neutral_scope]
                 if head(exc_var) != :placeholder
                     [:block
-                        [:(=)(exc_var) exc_var [:call current_exception::value]]
+                        [:(=)(exc_var) exc_var [:the_exception]]
                         catch_block
                     ]
                 else
@@ -2400,7 +2406,7 @@ function expand_const_decl(ctx, ex)
         # remnant from the days when const-ness was a flag that could be set on
         # any global.  It creates a binding with kind PARTITION_KIND_UNDEF_CONST.
         # TODO: deprecate and delete this "feature"
-        [:identifier] -> @ast ctx ex [:constdecl ex[1]]
+        [:identifier] -> @ast ctx ex [:block [:constdecl ex[1]] "nothing"::core]
     end
 end
 
@@ -2993,7 +2999,7 @@ fix_argname(ctx, arg, used) = @stm arg begin
     [:identifier] -> arg
     # Lowering should be able to use placeholder args as rvalues internally,
     # e.g. for kw method dispatch.
-    ([:placeholder], when=used) -> newsym(ctx, arg, "#arg#")
+    ([:placeholder], when=used) -> newsym(ctx, arg, ERASE_SLOTNAME_PREFIX)
     ([:placeholder], when=!used) -> arg
 end
 
@@ -3006,7 +3012,7 @@ end
 expand_function_arg(ctx, arg, used) = @stm arg begin
     [:(::) x t] ->
         @ast ctx arg [:(::) fix_argname(ctx, x, used) t]
-    [:(::) t] -> let aname = newsym(ctx, arg, "#arg#"; unused=true)
+    [:(::) t] -> let aname = newsym(ctx, arg, ERASE_SLOTNAME_PREFIX; unused=true)
         @ast ctx arg [:(::) fix_argname(ctx, aname, used) t]
     end
     [:kw x v] ->
@@ -3065,9 +3071,10 @@ end
 
 expand_opaque_closure(ctx, ex) = @stm ex begin
     [:opaque_closure argt rt_lb rt_ub allow_partial lam] -> begin
-        @jl_assert head(lam[1]) === :tuple ex
-        check_no_parameters(ex, lam[1])
-        raw_args = append!(SyntaxList(), children(lam[1]))
+        sig, wheres = flatten_wheres(lam[1])
+        @jl_assert head(sig) === :tuple ex
+        check_no_parameters(ex, sig)
+        raw_args = append!(SyntaxList(), children(sig))
         arg_stmts = lower_destructuring_args!(ctx, raw_args)
 
         arg_names = SyntaxList(newsym(ctx, lam[1], "#self#"))
@@ -3725,7 +3732,7 @@ end
 
 function expand_typegroup_def(ctx, ex)
     @jl_assert numchildren(ex) == 1 ex
-    body = flatten_blocks(ex[1])
+    body = ex[1]
     if head(body) != :block
         throw(LoweringError(body, "expected block for `typegroup` body"))
     end
@@ -3739,18 +3746,12 @@ function expand_typegroup_def(ctx, ex)
     struct_mod_prev = nothing
 
     for child in children(body)
-        if head(child) == :struct
-            sdef = child
-            docs = nothing
-        elseif head(child) == :doc
-            @jl_assert numchildren(child) == 2 child
-            sdef = child[2]
-            if head(sdef) != :struct
-                throw(LoweringError(sdef, "`typegroup` only supports `struct` definitions"))
-            end
-            docs = child
-        else
-            throw(LoweringError(child, "`typegroup` only supports `struct` definitions"))
+        (sdef, docs) = @stm child begin
+            [:struct _...] -> (child, nothing)
+            ([:block [:if [:value] [:(=) _ s]] docs... _],
+             when=head(s) === :struct) ->
+                 (s, nothing) # TODO drop for now
+            _ -> throw(LoweringError(child, "`typegroup` only supports `struct` definitions"))
         end
 
         @jl_assert numchildren(sdef) == 3 sdef
@@ -4519,18 +4520,22 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == :curly
         expand_forms_2(ctx, expand_curly(ctx, ex))
     elseif k == :toplevel
+        tmp = ssavar(ctx, ex)
         # Temporary: It would make more sense to return this unchanged once
         # toplevel iteration over SyntaxTree exists, but for now, a call to
         # `eval` lets JuliaLowering retain provenance and hygiene here.
+        # (alternatively, insert eval in flisp too, simplifying the interpreter)
         ex2 = @ast ctx ex [:block
             [:assert "toplevel_only"::symbol [:syntaxinert ex]]
-            [:call
+            [:(=) tmp [:call
              eval::value
                 # a macro expanding to toplevel does not change the eval module,
                 # but does change the name resolution module
                 ctx.layer.mod::value
                 [:syntaxinert ex]
-            ]
+            ]]
+            (::latestworld)
+            tmp
         ]
         expand_forms_2(ctx, ex2)
     elseif k == :vect
@@ -4603,7 +4608,12 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             throw(LoweringError(ex, "More than one argument to return"))
         end
     else
-        mapchildren(e->expand_forms_2(ctx,e), ex)
+        n = numchildren(ex)
+        cs = Vector{Syntax}(undef, n)
+        for i in 1:n
+            cs[i] = expand_forms_2(ctx, ex[i])
+        end
+        @mknode(ex; children=cs)
     end
 end
 

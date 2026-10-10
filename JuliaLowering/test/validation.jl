@@ -149,6 +149,8 @@ end
 @test vst1_ok(:(Mod.cglobal))
 @test vst1_ok(:(Mod._ = 1))
 
+@test !vst1_ok(:(local cglobal::Int))
+
 @testset "underscores that should probably not be valid" begin
     @test vst1_ok(:(Mod._))
     @test vst1_ok(:(function f(x::_); x; end))
@@ -184,4 +186,11 @@ end
     # not an import path
     @test !vst1_ok(Expr(:import, Expr(:call, :f)))
     @test !vst1_ok(Expr(:import, 42))
+end
+
+@testset "toplevel" begin
+    @test !vst1_ok(Expr(:function, Expr(:tuple), Expr(:block, Expr(:toplevel))))
+    @test !vst1_ok(Expr(:->, Expr(:tuple), Expr(:block, Expr(:toplevel))))
+    @test !vst1_ok(Expr(:(=), Expr(:call, :f), Expr(:block, Expr(:toplevel))))
+    @test vst1_ok(Expr(:let, Expr(:block), Expr(:block, Expr(:toplevel))))
 end

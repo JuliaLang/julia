@@ -269,6 +269,17 @@ end
     @testset "bulk parsed code, no linenodes" begin
         test_each_in_path(roundtrip_eq, JL_DIR)
     end
+
+    @testset "SSAValue, SlotNumber" begin
+        @test_throws "should not occur in an AST" jl_lower(
+            test_mod, Expr(:block, Core.SSAValue(1)))
+        @test_throws "should not occur in an AST" jl_lower(
+            test_mod, Expr(:block, Core.SlotNumber(1)))
+        @test jl_eval(test_mod, Expr(:block, QuoteNode(Core.SSAValue(1)))) ==
+            fl_eval(test_mod, Expr(:block, QuoteNode(Core.SSAValue(1))))
+        @test jl_eval(test_mod, Expr(:block, QuoteNode(Core.SlotNumber(1)))) ==
+            fl_eval(test_mod, Expr(:block, QuoteNode(Core.SlotNumber(1))))
+    end
 end
 
 # taken from JuliaSyntax expr.jl
@@ -676,7 +687,11 @@ end
 
     let ex = parsestmt(SyntaxTree, "let q = p; q ^= 2; q end")
         @test fl_eval(pow_mod, ex) == (:literal, 2)
-        @test_broken jl_eval(pow_mod, ex; edition=JL_OLD_EDITION) == (:literal, 2)
+        @test jl_eval(pow_mod, ex; edition=JL_OLD_EDITION) == (:literal, 2)
+    end
+    let ex = parsestmt(SyntaxTree, "let q = Any[p]; q .^= 2; q end")
+        @test fl_eval(pow_mod, ex) == [(:literal, 2)]
+        @test jl_eval(pow_mod, ex; edition=JL_OLD_EDITION) == [(:literal, 2)]
     end
 end
 

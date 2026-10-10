@@ -518,17 +518,17 @@ end
                            Expr(:(=), Expr(:(::), sym1, :Symbol),
                                 Expr(:(=), Expr(:(::), sym2, :Symbol),
                                      Expr(:(=), Expr(:(::), sym3, :Symbol), :(gensym())))))
-        @test_broken jl_eval(test_mod, ex; edition=JL_NEW_EDITION) isa Symbol
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) isa Symbol
         Core.@latestworld
 
-        @test_broken Base.binding_kind(test_mod, sym1) == Base.PARTITION_KIND_CONST
-        @test_broken Base.binding_kind(test_mod, sym2) == Base.PARTITION_KIND_GLOBAL
-        @test_broken Base.binding_kind(test_mod, sym3) == Base.PARTITION_KIND_GLOBAL
+        @test Base.binding_kind(test_mod, sym1) == Base.PARTITION_KIND_CONST
+        @test Base.binding_kind(test_mod, sym2) == Base.PARTITION_KIND_GLOBAL
+        @test Base.binding_kind(test_mod, sym3) == Base.PARTITION_KIND_GLOBAL
         # also broken in flisp (sym1 has type Any, others are Symbol)
         @test_broken Core.get_binding_type(test_mod, sym1) == Symbol
-        @test_broken Core.get_binding_type(test_mod, sym2) == Symbol
-        @test_broken Core.get_binding_type(test_mod, sym3) == Symbol
-        @test_broken getproperty(test_mod, sym1) ==
+        @test Core.get_binding_type(test_mod, sym2) == Symbol
+        @test Core.get_binding_type(test_mod, sym3) == Symbol
+        @test getproperty(test_mod, sym1) ==
             getproperty(test_mod, sym2) ==
             getproperty(test_mod, sym3)
     end
@@ -592,8 +592,8 @@ end
         Core.@latestworld
 
         @test Base.binding_kind(test_mod, sym1) == Base.PARTITION_KIND_CONST
-        @test_broken Base.binding_kind(test_mod, sym2) == Base.PARTITION_KIND_CONST
-        @test_broken Base.binding_kind(test_mod, sym3) == Base.PARTITION_KIND_CONST
+        @test Base.binding_kind(test_mod, sym2) == Base.PARTITION_KIND_CONST
+        @test Base.binding_kind(test_mod, sym3) == Base.PARTITION_KIND_CONST
         @test getproperty(test_mod, sym1) == 1
         @test getproperty(test_mod, sym2) == 2
         @test getproperty(test_mod, sym3) == 3

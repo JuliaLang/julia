@@ -467,6 +467,13 @@ end
     @test only(methods(test_mod.f_slotflags)).called == 0b0100
     @test only(methods(test_mod.f_slotflags_broadcast)).called == 0b0001
     @test only(methods(test_mod.f_slotflags_broadcast_kw)).called == 0b0001
+
+    JuliaLowering.include_string(test_mod, """
+    f45162(f) = f(x=1)
+    f45162_2(f) = f([]...)
+    """)
+    @test first(methods(test_mod.f45162)).called != 0
+    @test first(methods(test_mod.f45162_2)).called != 0
 end
 
 @testset "nospecialize" begin

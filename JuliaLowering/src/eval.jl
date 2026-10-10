@@ -533,15 +533,8 @@ function to_code_info(ex::SyntaxTree)
     slotflags = Vector{UInt8}(undef, length(slots))
     for (i, slot) in enumerate(slots)
         name = slot.name
-        # TODO: Do we actually want unique names here? The C code in
-        # `jl_new_code_info_from_ir` has logic to simplify gensym'd names and
-        # use the empty string for compiler-generated bindings.
-        if name !== UNUSED
-            ni = get(slot_rename_inds, name, 0)
-            slot_rename_inds[name] = ni + 1
-            if ni > 0
-                name = "$name@$ni"
-            end
+        if name !== UNUSED && startswith(name, ERASE_SLOTNAME_PREFIX)
+            name = ""
         end
         sname = Symbol(name)
         slotnames[i] = sname
@@ -689,6 +682,8 @@ function _to_lowered_expr(ex::SyntaxTree)
         @jl_assert (arg1 isa QuoteNode) ex
         args[1] = arg1.value
         Expr(:meta, args...)
+    elseif k == :throw_undef_if_not
+        Expr(k, Symbol(syntax_name(ex[1])), _to_lowered_expr(ex[2]))
     elseif k == :foreignsymbol
         # foreignsymbol wraps the first argument of a foreigncall /
         # foreignglobal when it should not be lowered (and should mostly be
@@ -736,6 +731,7 @@ function _to_lowered_expr(ex::SyntaxTree)
             k == :aliasscope ||
             k == :popaliasscope ||
             k == :new_opaque_closure ||
+            k == :the_exception ||
             throw(LoweringError(ex, "Unknown syntax form $k"))
         ret = Expr(k)
         for e in children(ex)
