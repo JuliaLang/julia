@@ -368,6 +368,27 @@ function Base.show(io::IO, llp::LazyLibraryPath)
     end
 end
 
+"""
+    LazyLibraryCallback
+
+Abstract supertype for `on_load_callback`s of a [`LazyLibrary`](@ref) that are usable
+under `--trim`. Subtypes must be concrete and callable with no arguments:
+
+```julia
+struct MyLibOnLoad <: Libdl.LazyLibraryCallback end
+(::MyLibOnLoad)() = @ccall mylib.mylib_init()::Cvoid
+
+const mylib = LazyLibrary("libmylib"; on_load_callback = MyLibOnLoad())
+```
+
+Such Methods will be compiled unconditionally under `--trim`, even if the
+type is never instantiated or called.
+
+!!! compat "Julia 1.14"
+    `LazyLibraryCallback` was added in Julia 1.14.
+"""
+const LazyLibraryCallback = Core.LazyLibraryCallback
+
 # Small helper struct to initialize a LazyLibrary with its initial set of dependencies
 struct InitialDependencies{T}
     dependencies::Vector{T}
@@ -392,7 +413,8 @@ This is a thread-safe mechanism for on-demand library initialization.
   as it is not expected that `ccall()` should result in large amounts of Julia code being run.
   You may call `ccall()` from within the `on_load_callback` but only for the current library
   and its dependencies, and user should not call `wait()` on any tasks within the on load
-  callback as they may deadlock).
+  callback as they may deadlock). To be usable under `--trim`, this must be a
+  [`LazyLibraryCallback`](@ref Libdl.LazyLibraryCallback).
 
 The dlopen operation is thread-safe: only one thread loads the library, acquired after the
 release store of the reference to each dependency from loading of each dependency. Other
@@ -454,6 +476,10 @@ mutable struct LazyLibrary
     end
 end
 
+# overrides for JuliaC under `--trim`
+@noinline _invoke_on_load_callback(@nospecialize(cb)) = cb()
+@noinline _lazy_library_path_string(@nospecialize(path)) = string(path)
+
 # Only print the path and avoid printing all the dependencies
 function Base.show(io::IO, ll::LazyLibrary)
     print(io, "LazyLibrary(")
@@ -502,12 +528,12 @@ function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
                 end
 
                 # Load our library
-                handle = dlopen(string(ll.path), flags; kwargs...)
+                handle = dlopen(_lazy_library_path_string(ll.path), flags; kwargs...)
                 @atomic :release ll.handle = handle
 
                 # Only the thread that loaded the library calls the `on_load_callback()`.
                 if ll.on_load_callback !== nothing
-                    ll.on_load_callback()
+                    _invoke_on_load_callback(ll.on_load_callback)
                 end
             else
                 # Another thread loaded the library while we were waiting

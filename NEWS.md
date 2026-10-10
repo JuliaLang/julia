@@ -251,6 +251,12 @@ Standard library changes
 
 #### JuliaSyntaxHighlighting
 
+#### Libdl
+
+* `Libdl.LazyLibrary` is not compatible with `--trim`.
+* A new abstract type `Libdl.LazyLibraryCallback` has been added to provide
+  an automatic compilation hint for LazyLibrary on-load callbacks under trim.
+
 #### LinearAlgebra
 
 #### Markdown
