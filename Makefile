@@ -434,6 +434,21 @@ endif
 	for exe in $(JL_PRIVATE_TOOLS) ; do \
 		$(INSTALL_M) $(build_depsbindir)/$$exe $(DESTDIR)$(private_libexecdir) || exit 1; \
 	done
+ifneq (,$(and $(COMPRESS_DEBUG_SECTIONS),$(findstring $(OS),Linux FreeBSD)))
+	# Compress the debug sections of bundled libraries (e.g. libstdc++ and libgfortran),
+	# which ship them uncompressed. The system image is left out, as it is in nearly every
+	# backtrace and symbolizing it decompresses all of its debug info. Skipped if objcopy
+	# can't compress, like the ELF Tool Chain one in FreeBSD 13's base system.
+	if $(OBJCOPY) --help 2>&1 | grep -q -e --compress-debug-sections; then \
+		for lib in $(DESTDIR)$(private_libdir)/*.$(SHLIB_EXT)*; do \
+			case "$${lib##*/}" in sys.$(SHLIB_EXT)|sys-debug.$(SHLIB_EXT)) continue ;; esac; \
+			[ ! -L "$$lib" ] && [ "$$(head -c 4 "$$lib" | tail -c 3)" = ELF ] || continue; \
+			$(OBJCOPY) --compress-debug-sections=$(COMPRESS_DEBUG_SECTIONS) "$$lib" || exit 1; \
+		done; \
+	else \
+		echo "$(OBJCOPY) can't compress debug sections; not compressing bundled libraries"; \
+	fi
+endif
 
 	# Copy public headers
 	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
