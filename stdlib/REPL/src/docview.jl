@@ -9,7 +9,7 @@ using Base.Docs: catdoc, modules, DocStr, Binding, MultiDoc, keywords, isfield, 
 
 import Base.Docs: doc, formatdoc, parsedoc, apropos
 
-using Base: with_output_color, mapany, isdeprecated, isexported
+using Base: with_output_color, mapany, isdeprecated, isexported, fuzzyscore
 
 using InteractiveUtils: subtypes
 
@@ -728,60 +728,7 @@ bestmatch(needle, haystack) =
     longer(matchinds(needle, haystack, acronym = true),
            matchinds(needle, haystack))
 
-# Optimal string distance: Counts the minimum number of insertions, deletions,
-# transpositions or substitutions to go from one string to the other.
-function string_distance(a::AbstractString, lena::Integer, b::AbstractString, lenb::Integer)
-    if lena > lenb
-        a, b = b, a
-        lena, lenb = lenb, lena
-    end
-    start = 0
-    for (achar, bchar) in zip(a, b)
-        if achar == bchar
-            start += 1
-        else
-            break
-        end
-    end
-    start == lena && return lenb - start
-    vzero = collect(1:(lenb - start))
-    vone = similar(vzero)
-    prev_a, prev_b = first(a), first(b)
-    current = 0
-    for (i, ai) in enumerate(a)
-        i > start || (prev_a = ai; continue)
-        left = i - start - 1
-        current = i - start
-        transition_next = 0
-        for (j, bj) in enumerate(b)
-            j > start || (prev_b = bj; continue)
-            # No need to look beyond window of lower right diagonal
-            above = current
-            this_transition = transition_next
-            transition_next = vone[j - start]
-            vone[j - start] = current = left
-            left = vzero[j - start]
-            if ai != bj
-                # Minimum between substitution, deletion and insertion
-                current = min(current + 1, above + 1, left + 1)
-                if i > start + 1 && j > start + 1 && ai == prev_b && prev_a == bj
-                    current = min(current, (this_transition += 1))
-                end
-            end
-            vzero[j - start] = current
-            prev_b = bj
-        end
-        prev_a = ai
-    end
-    current
-end
-
-function fuzzyscore(needle::AbstractString, haystack::AbstractString)
-    lena, lenb = length(needle), length(haystack)
-    1 - (string_distance(needle, lena, haystack, lenb) / max(lena, lenb))
-end
-
-function fuzzyscore(needle::AbstractString, haystack::AccessibleBinding)
+function Base.fuzzyscore(needle::AbstractString, haystack::AccessibleBinding)
     score = fuzzyscore(needle, haystack.name)
     haystack.source === nothing && return score
     # Apply a "penalty" of half an edit if the comparator binding is public but not

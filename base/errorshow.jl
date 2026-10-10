@@ -257,6 +257,67 @@ function show_convert_error(io::IO, ex::MethodError, arg_types_param)
     end
 end
 
+is_keyword_slurp(name::Symbol) = endswith(String(name), "...")
+
+"""
+    declared_keywords(f) -> Vector{Symbol}
+
+Every named keyword argument that some method of `f` declares. A slurped `kwargs...`
+is not a name and is excluded; see `accepts_any_keyword`.
+"""
+function declared_keywords(@nospecialize(f))
+    return unique([name for m in methods(f) for name in kwarg_decl(m) if !is_keyword_slurp(name)])
+end
+
+"""
+    accepts_any_keyword(f) -> Bool
+
+Whether some method of `f` slurps keyword arguments (`kwargs...`).
+"""
+function accepts_any_keyword(@nospecialize(f))
+    return any(is_keyword_slurp, name for m in methods(f) for name in kwarg_decl(m))
+end
+
+"""
+    closest_name(given::Symbol, accepted::AbstractVector{Symbol})
+
+The name in `accepted` closest to `given`, or `nothing` when none resembles it
+closely enough to be worth offering. `given` itself is never the answer.
+"""
+function closest_name(given::Symbol, accepted::AbstractVector{Symbol})
+    score(name::Symbol) = fuzzyscore(String(given), String(name))
+    close = [name for name in accepted if name !== given && score(name) >= 0.5]
+    if isempty(close)
+        return nothing
+    end
+    return argmax(score, close)
+end
+
+"""
+    show_keyword_suggestions(io::IO, f, kwargs)
+
+Offer a correction for each given keyword name that no method of `f` accepts but
+that closely resembles a name some method does.
+"""
+function show_keyword_suggestions(io::IO, @nospecialize(f), kwargs)
+    # A method slurping keywords accepts every name, so nothing is misspelled.
+    if accepts_any_keyword(f)
+        return nothing
+    end
+    accepted = declared_keywords(f)
+    for (given, _) in kwargs
+        if given in accepted
+            continue
+        end
+        suggestion = closest_name(given, accepted)
+        if suggestion !== nothing
+            print(io, "\nSuggestion: unsupported keyword argument `", given,
+                  "`; did you mean `", suggestion, "`?")
+        end
+    end
+    return nothing
+end
+
 function showerror(io::IO, ex::MethodError)
     @nospecialize io
     # ex.args is a tuple type if it was thrown from `invoke` and is
@@ -380,6 +441,9 @@ function showerror(io::IO, ex::MethodError)
         print(io, "\nThe type `$f` exists, but no method is defined for this combination of argument types when trying to construct it.")
     else
         print(io, "\nThe object of type `$(typeof(f))` exists, but no method is defined for this combination of argument types when trying to treat it as a callable object.")
+    end
+    if !isempty(kwargs)
+        show_keyword_suggestions(io, f, kwargs)
     end
     if !is_arg_types
         # Check for row vectors used where a column vector is intended.
@@ -1599,6 +1663,7 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
                     printed_too_new = true
                 else
                     print(io, "\nSuggestion: check for spelling errors or missing imports.")
+                    show_name_suggestion(io, var, scope)
                 end
             elseif kind === PARTITION_KIND_GLOBAL || kind === PARTITION_KIND_UNDEF_CONST || kind == PARTITION_KIND_DECLARED
                 print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
@@ -1637,6 +1702,33 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
         end
 
         warned || _UndefVarError_warnfor(io, [Core, Main], var)
+    end
+    return nothing
+end
+
+"""
+    visible_names(scope::Module) -> Vector{Symbol}
+
+Every name code in `scope` can write unqualified: the module's own bindings
+together with what `Base` and `Core` export. Compiler-generated names are left
+out, since no one can have meant to type one.
+"""
+function visible_names(scope::Module)
+    inherited = scope in (Base, Core) ? Symbol[] : vcat(names(Base), names(Core))
+    reachable = vcat(names(scope; all = true, imported = true), inherited)
+    return unique(name for name in reachable if !startswith(String(name), "#"))
+end
+
+"""
+    show_name_suggestion(io::IO, var::Symbol, scope::Module)
+
+Offer the name reachable from `scope` that `var` most closely resembles, when one
+resembles it closely enough to be worth offering.
+"""
+function show_name_suggestion(io::IO, var::Symbol, scope::Module)
+    suggestion = closest_name(var, visible_names(scope))
+    if suggestion !== nothing
+        print(io, " Did you mean `", suggestion, "`?")
     end
     return nothing
 end

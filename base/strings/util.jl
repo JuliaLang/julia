@@ -1366,3 +1366,74 @@ function Base.rest(s::AbstractString, st...)
     end
     return takestring!(io)
 end
+
+"""
+    string_distance(a::AbstractString, lena::Integer, b::AbstractString, lenb::Integer)
+
+Optimal string alignment distance: the fewest insertions, deletions,
+transpositions or substitutions that turn one string into the other.
+"""
+function string_distance(a::AbstractString, lena::Integer, b::AbstractString, lenb::Integer)
+    if lena > lenb
+        a, b = b, a
+        lena, lenb = lenb, lena
+    end
+    start = 0
+    for (achar, bchar) in zip(a, b)
+        if achar == bchar
+            start += 1
+        else
+            break
+        end
+    end
+    if start == lena
+        return lenb - start
+    end
+    vzero = collect(1:(lenb - start))
+    vone = similar(vzero)
+    prev_a, prev_b = first(a), first(b)
+    current = 0
+    for (i, ai) in enumerate(a)
+        if i <= start
+            prev_a = ai
+            continue
+        end
+        left = i - start - 1
+        current = i - start
+        transition_next = 0
+        for (j, bj) in enumerate(b)
+            if j <= start
+                prev_b = bj
+                continue
+            end
+            # No need to look beyond window of lower right diagonal
+            above = current
+            this_transition = transition_next
+            transition_next = vone[j - start]
+            vone[j - start] = current = left
+            left = vzero[j - start]
+            if ai != bj
+                # Minimum between substitution, deletion and insertion
+                current = min(current + 1, above + 1, left + 1)
+                if i > start + 1 && j > start + 1 && ai == prev_b && prev_a == bj
+                    current = min(current, (this_transition += 1))
+                end
+            end
+            vzero[j - start] = current
+            prev_b = bj
+        end
+        prev_a = ai
+    end
+    return current
+end
+
+"""
+    fuzzyscore(needle::AbstractString, haystack::AbstractString)
+
+How closely `haystack` matches `needle`, from 0 for unrelated strings to 1 for
+equal ones.
+"""
+function fuzzyscore(needle::AbstractString, haystack::AbstractString)
+    lena, lenb = length(needle), length(haystack)
+    return 1 - (string_distance(needle, lena, haystack, lenb) / max(lena, lenb))
+end
