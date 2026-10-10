@@ -1325,12 +1325,19 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bi
             free_path = NULL;
         }
     }
+
+    // absrealpath also copies the string, which is important because the
+    // strings in `jl_options` are owned by libuv since we called
+    // `uv_setup_args`.  When emitting a native image, we need to use some of
+    // these after shutting down libuv.
     if (jl_options.outputo)
         jl_options.outputo = absrealpath(jl_options.outputo, 0);
     if (jl_options.outputji)
         jl_options.outputji = absrealpath(jl_options.outputji, 0);
     if (jl_options.outputbc)
         jl_options.outputbc = absrealpath(jl_options.outputbc, 0);
+    if (jl_options.outputunoptbc)
+        jl_options.outputunoptbc = absrealpath(jl_options.outputunoptbc, 0);
     if (jl_options.outputasm)
         jl_options.outputasm = absrealpath(jl_options.outputasm, 0);
     if (jl_options.machine_file)

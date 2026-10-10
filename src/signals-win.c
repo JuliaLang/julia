@@ -524,6 +524,8 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
         // etc.
         default: sig = SIGTERM; break;
     }
+    if (jl_atomic_load_relaxed(&jl_heap_released))
+        jl_raise(sig);
     if (!jl_ignore_sigint()) {
         if (jl_sigint_get_policy() == JL_SIGINT_EXIT)
             jl_exit(128 + sig); // 128 + SIGINT

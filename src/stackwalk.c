@@ -996,6 +996,11 @@ void jl_fprint_bt_entry_codeloc(ios_t *s, jl_bt_element_t *bt_entry) JL_NOTSAFEP
     if (jl_bt_is_native(bt_entry)) {
         jl_fprint_native_codeloc(s, bt_entry[0].uintptr);
     }
+    else if (jl_bt_entry_tag(bt_entry) == JL_BT_INTERP_FRAME_TAG && jl_atomic_load_relaxed(&jl_heap_released)) {
+        // We need this fallback so ctrl-c still produces a reasonable backtrace
+        // when we're generating native code and have torn down the Julia heap.
+        jl_safe_fprintf(s, "interpreted code (no longer available)\n");
+    }
     else if (jl_bt_entry_tag(bt_entry) == JL_BT_INTERP_FRAME_TAG) {
         size_t ip = jl_bt_entry_header(bt_entry); // zero-indexed
         jl_value_t *code = jl_bt_entry_jlvalue(bt_entry, 0);
