@@ -271,16 +271,16 @@ attributes #2 = { inaccessiblemem_or_argmemonly }
 
 ; COM: simplifycfg should have killed this block
 ; BEFOREOPTIMIZATION: L17.L41_crit_edge:                                ; preds = %L17
-; BEFOREOPTIMIZATION-NEXT: br label %L41, !dbg !53
+; BEFOREOPTIMIZATION-NEXT: br label %L41, !dbg !{{[0-9]+}}
 
 ; BEFOREEARLYSIMPLIFICATION: L17.L41_crit_edge:                          ; preds = %L17
-; BEFOREEARLYSIMPLIFICATION-NEXT: br label %L41, !dbg !53
+; BEFOREEARLYSIMPLIFICATION-NEXT: br label %L41, !dbg !{{[0-9]+}}
 
 ; AFTEREARLYSIMPLIFICATION-NOT: L17.L41_crit_edge:                           ; preds = %L17
-; AFTEREARLYSIMPLIFICATION-NOT: br label %L41, !dbg !53
+; AFTEREARLYSIMPLIFICATION-NOT: br label %L41, !dbg !{{[0-9]+}}
 
 ; BEFOREEARLYOPTIMIZATION-NOT: L17.L41_crit_edge:                           ; preds = %L17
-; BEFOREEARLYOPTIMIZATION-NOT: br label %L41, !dbg !53
+; BEFOREEARLYOPTIMIZATION-NOT: br label %L41, !dbg !{{[0-9]+}}
 
 
 ; COM: InstSimplify/InstCombine should kill this zext-trunc pair

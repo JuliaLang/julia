@@ -130,4 +130,4 @@ top:
 !0 = distinct !{!0, !"julia.simdloop"}
 !1 = distinct !{!1, !"julia.simdloop", !"julia.ivdep"}
 !2 = distinct !{!2, !"julia.simdloop", !"julia.ivdep", !3}
-!3 = !{!"llvm.loop.vectorize.disable", i1 0}
+!3 = !{!"llvm.loop.vectorize.enable"}
