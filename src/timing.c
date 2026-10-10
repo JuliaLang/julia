@@ -736,7 +736,7 @@ void jl_timing_task_init(jl_task_t *t)
         snprintf(task_name, task_name_len, "%s (%s:%d in %s)", start_name, filename, mi->def.method->line, module_name);
 
     } else {
-        task_name = (char * ) malloc(strlen(start_name));
+        task_name = (char * ) malloc(strlen(start_name) + 1);
         strcpy(task_name, start_name);
     }
 
@@ -756,8 +756,7 @@ void jl_timing_task_init(jl_task_t *t)
 
 void jl_timing_root_task_init(jl_task_t *t) {
 #ifdef USE_NVTX
-    char *root_task_name = (char *) malloc(5 * sizeof(char));
-    strcpy(root_task_name, "Root");
+    static char *root_task_name = "Root";
     nvtxEventAttributes_t nvtx_attrs = {0};
     nvtx_attrs.version = NVTX_VERSION;
     nvtx_attrs.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
