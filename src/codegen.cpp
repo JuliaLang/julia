@@ -11219,8 +11219,11 @@ void emit_llvmcall_modules(jl_codegen_output_t &out)
             bool error = L.linkInModule(std::move(Mod));
             assert(!error && "linking llvmcall modules failed");
             (void)error;
+            // local definitions may be gone (the linker drops those that nothing
+            // references) or unnamed, and those are internal already
             for (auto FN : Exports)
-                M.getFunction(FN)->setLinkage(GlobalVariable::InternalLinkage);
+                if (Function *F = M.getFunction(FN))
+                    F->setLinkage(GlobalVariable::InternalLinkage);
         }
     }
 }
