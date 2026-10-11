@@ -4175,6 +4175,8 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 {
+    if (p != NULL)
+        sz = memory_block_usable_size(p, 0);
     free(p);
     jl_task_t *ct = jl_get_current_task();
     if (ct != NULL)

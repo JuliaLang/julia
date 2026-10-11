@@ -675,6 +675,8 @@ JL_DLLEXPORT void *jl_gmp_counted_malloc(size_t sz)
 
 JL_DLLEXPORT void *jl_gmp_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
 {
+    if (p != NULL)
+        old = memory_block_usable_size(p, 0);
     jl_task_t *ct = jl_get_current_task();
     if (ct == NULL || ct->ptls == NULL)
         return jl_gc_counted_realloc_with_old_size(p, old, sz);
