@@ -5288,7 +5288,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             vb.constraintkind = 2;
         else if (cov_count(&vb) && vb.occurs < 2 && noinv)
             vb.constraintkind = 1;
-        int reintersection = constraint1 != vb.constraintkind || vb.concrete;
+        int reintersection = constraint1 != vb.constraintkind || vb.concrete || (vb.occurs_inv == 1 && vb.occurs > 1);
         if (reintersection) {
             if (constraint1 == 1) {
                 vb.lb = vb.var->lb;
