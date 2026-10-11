@@ -447,12 +447,29 @@ end
 @propagate_inbounds function _zip_iterate_all(is, ss)
     d, ds = _zip_isdone(is, ss)
     d && return nothing
-    xs1 = _zip_iterate_unknown(is, ss, ds)
-    xs1 === nothing && return nothing
-    xs = _zip_iterate_rest(is, ss, xs1)
+    if _zip_all_missing(ds)
+        # Fast path: the two-pass version below is ~2x slower for e.g. zip(1:n, 1:n, 1:n)
+        xs = _zip_iterate_in_order(is, ss)
+    else
+        xs1 = _zip_iterate_unknown(is, ss, ds)
+        xs1 === nothing && return nothing
+        xs = _zip_iterate_rest(is, ss, xs1)
+    end
     xs === nothing && return nothing
     return (Base.map(first, xs), Base.map(last, xs))
 end
+
+_zip_all_missing(ds::Tuple) = ds[1] === missing && _zip_all_missing(tail(ds))
+_zip_all_missing(::Tuple{}) = true
+
+@propagate_inbounds function _zip_iterate_in_order(is::Tuple, ss::Tuple)
+    x = iterate(is[1], ss[1]...)
+    x === nothing && return nothing
+    y = _zip_iterate_in_order(tail(is), tail(ss))
+    y === nothing && return nothing
+    return (x, y...)
+end
+_zip_iterate_in_order(::Tuple{}, ::Tuple{}) = ()
 
 struct _ZipSkip end
 
