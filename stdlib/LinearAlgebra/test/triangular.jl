@@ -1082,4 +1082,17 @@ end
     end
 end
 
+@testset "issue #1749: ldiv! with lazy adjoint/transpose parent" begin
+    M = ComplexF64[1 2+3im 1im; 4-1im 5 2-im; 3+im 2im 7]
+    b = ComplexF64[1, 2, 3]
+    B = ComplexF64[1 4; 2 5; 3 6]
+    for P in (transpose(M'), adjoint(transpose(M)), transpose(M), M')
+        for W in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
+            A = W(P)
+            @test A \ b ≈ Matrix(A) \ b ≈ lu(Matrix(A)) \ b
+            @test A \ B ≈ Matrix(A) \ B ≈ lu(Matrix(A)) \ B
+        end
+    end
+end
+
 end # module TestTriangular
