@@ -1394,7 +1394,7 @@ function generic_trimatdiv!(C::AbstractVecOrMat, uploc, isunitc, ::Function, xA:
                 for i in 2:m
                     C[i,k] = oA \ B[i,k] - _ustrip(conj(A[i,1])) * C1
                 end
-                for j in 1:m
+                for j in 2:m
                     Cj = C[j,k]
                     for i in j+1:m
                         C[i,k] -= _ustrip(conj(A[i,j])) * Cj
