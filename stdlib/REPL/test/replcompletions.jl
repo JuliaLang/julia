@@ -1711,6 +1711,21 @@ test_dict_completion("CompletionFoo.test_customdict")
 test_dict_completion("test_repl_comp_dict")
 test_dict_completion("test_repl_comp_customdict")
 
+# Key completion for non-`AbstractDict` types with a `haskey` method
+struct ThrowingKeys end
+Base.haskey(::ThrowingKeys, k) = false
+Base.keys(::ThrowingKeys) = (error("bad key") for _ in 1:1)
+test_repl_comp_throwingkeys = ThrowingKeys()
+test_repl_comp_namedtuple = (abc = 1, abd = 2)
+test_repl_comp_regexmatch = match(r"(?<year>\d+)-(?<month>\d+)", "2026-10")
+
+@testset "key completion via haskey" begin
+    @test test_complete("test_repl_comp_namedtuple[:ab")[1] == [":abc", ":abd"]
+    @test test_complete("test_repl_comp_regexmatch[\"m")[1] == ["\"month\"]"]
+    @test !("1" in test_complete("CompletionFoo.test_y_array[")[1])
+    @test test_complete("test_repl_comp_throwingkeys[")[1] isa Vector{String}
+end
+
 @testset "dict_identifier_key" begin
     # Issue #23004: this should not throw:
     let s = "test_dict_ℂ[\\"

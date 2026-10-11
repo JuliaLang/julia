@@ -467,7 +467,7 @@ shell> /[TAB]
 .dockerinit bin/         dev/         home/        lib64/       mnt/         proc/        run/         srv/         tmp/         var/
 ```
 
-Dictionary keys can also be tab completed:
+Keys of dictionaries, and of any other type with a `haskey` method, can also be tab completed:
 
 ```julia-repl
 julia> foo = Dict("qwer1"=>1, "qwer2"=>2, "asdf"=>3)
