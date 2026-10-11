@@ -41,16 +41,22 @@ impl Slot for JuliaVMSlot {
             JuliaVMSlot::Offset(e) => e.slot_address(),
         }
     }
+}
 
-    /// An offset slot's referent is `contents - offset`, where the offset was measured when the
-    /// slot was created. For `jl_array_t` that offset is `ref_.ptr_or_offset - ref_.mem`, which
-    /// changes whenever the array's `ref_` is reassigned, so the pair only agree at the instant
-    /// the slot is made. A zero offset carries no such captured state.
-    fn is_derived(&self) -> bool {
-        match self {
-            JuliaVMSlot::Simple(_) => false,
-            JuliaVMSlot::Offset(e) => e.offset() != 0,
-        }
+/// Whether `slot` is *derived*: its referent is `contents - offset`, recoverable only with the
+/// offset captured when the slot was made.
+///
+/// For `jl_array_t` that offset is `ref_.ptr_or_offset - ref_.mem`, which changes whenever the
+/// array's `ref_` is reassigned, so the pair only agree at the instant the slot is made. A zero
+/// offset carries no such captured state.
+///
+/// Keeping derived slots out of a barrier is the binding's job -- see
+/// [`crate::julia_scanning::process_offset_slot`], which declines to report one during a
+/// barrier walk. This predicate is for the binding's own passes over already-built slots.
+pub fn slot_is_derived(slot: &JuliaVMSlot) -> bool {
+    match slot {
+        JuliaVMSlot::Simple(_) => false,
+        JuliaVMSlot::Offset(e) => e.offset() != 0,
     }
 }
 

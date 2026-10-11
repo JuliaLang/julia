@@ -768,6 +768,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "sysinfo",
+ "yoke-derive",
 ]
 
 [[package]]

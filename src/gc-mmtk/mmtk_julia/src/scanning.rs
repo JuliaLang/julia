@@ -192,7 +192,7 @@ pub(crate) fn gather_mutator_roots(
     let mut root_scan_task = |task: *const _jl_task_t, task_is_root: bool| {
         if !task.is_null() {
             unsafe {
-                crate::julia_scanning::mmtk_scan_gcstack(task, &mut slot_buffer);
+                crate::julia_scanning::mmtk_scan_gcstack(task, &mut slot_buffer, true);
             }
             // Mark tasks scanned directly in this STW pause. Without this, a later concurrent
             // scan would find no record for it and trip the "not bound to a mutator" assert
@@ -422,7 +422,7 @@ impl GCStackSnapshots {
     fn capture_snapshot(&self, task: *const _jl_task_t) -> Arc<[ObjectReference]> {
         let mut snapshot_roots = StackRootBuffer { buffer: vec![] };
         unsafe {
-            crate::julia_scanning::mmtk_scan_gcstack(task, &mut snapshot_roots);
+            crate::julia_scanning::mmtk_scan_gcstack(task, &mut snapshot_roots, true);
         }
         log::info!(
             "Took snapshot of stack roots for task {:?}, num roots = {}",

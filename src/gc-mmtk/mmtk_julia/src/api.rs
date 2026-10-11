@@ -662,6 +662,9 @@ pub extern "C" fn mmtk_object_reference_write_slow(
     #[cfg(feature = "lxr_base")]
     {
         let _ = target;
+        // Tell `scan_julia_object` that the walk this kicks off is a barrier walk, not a
+        // root scan or a trace. See `crate::object_barrier`.
+        let _guard = crate::object_barrier::Guard::new();
         mutator.barrier().object_probable_write(src);
         return;
     }
@@ -685,6 +688,7 @@ pub extern "C" fn mmtk_object_reference_write_field_slow(
 ) {
     use mmtk::MutatorContext;
     if slot.is_zero() {
+        let _guard = crate::object_barrier::Guard::new();
         mutator.barrier().object_probable_write(src);
         return;
     }

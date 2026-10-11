@@ -62,6 +62,11 @@ concurrentimmix = ["mmtk/immix_smaller_block", "mmtk/set_unlog_bits_vm_space", "
 # Uses LXR's own per-field barrier: codegen passes the written field's address
 # (MMTK_FIELD_BARRIER), so there is no need for the object-granularity fallback.
 #
+# Slots with no field unlog bit are kept out of the barrier on this side, not in mmtk-core:
+# scanning a task walks its GC shadow stack, and scanning an `unsafe_wrap`ped `GenericMemory`
+# walks foreign memory, so `object_probable_write`'s field walk would otherwise be handed
+# slots it cannot index metadata for. See `crate::object_barrier`.
+#
 # Concurrent marking is on. It is the reason to want LXR here at all, so it is not
 # something to leave switched off for convenience.
 #

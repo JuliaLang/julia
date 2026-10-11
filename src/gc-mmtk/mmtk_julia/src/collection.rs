@@ -301,7 +301,7 @@ impl Collection<JuliaVM> for VMCollection {
     /// that advances the epoch -- never runs for it. A thread parked in
     /// `mmtk_wait_for_new_gc_epoch()` after a failed `mmtk_disable_collection()` would wait
     /// forever; the sysimage writer's `jl_gc_enable(0)` is one such thread.
-    fn concurrent_work_finished() {
+    fn concurrent_work_finished_no_pause() {
         let (lock, cvar) = &*crate::GC_EPOCH_COND.clone();
         let mut epoch = lock.lock().unwrap();
         *epoch = epoch.wrapping_add(1);
@@ -381,7 +381,7 @@ fn recheck_live_closure_after_sweep() {
 ///
 /// The expected count of an object is the number of counted incoming edges: fields of live
 /// objects that hold it, excluding derived slots (which alias another field and are deliberately
-/// not counted, see `Slot::is_derived`) and excluding fields of objects the plan does not
+/// not counted, see `crate::slots::slot_is_derived`) and excluding fields of objects the plan does not
 /// reference-count.
 ///
 /// Only an **undercount** is a soundness bug -- it is what lets a live object be reclaimed. An
@@ -405,7 +405,7 @@ fn audit_reference_counts(lxr: &mmtk::plan::lxr::LXR<JuliaVM>, snapshot: &[(usiz
         }
         let o = unsafe { mmtk::util::ObjectReference::from_raw_address_unchecked(mmtk::util::Address::from_usize(addr)) };
         o.iterate_fields::<JuliaVM, _>(mmtk::util::VMThread::UNINITIALIZED, |s| {
-            if s.is_derived() {
+            if crate::slots::slot_is_derived(&s) {
                 return;
             }
             if let Some(t) = s.load() {
@@ -629,7 +629,7 @@ fn verify_rc_covers_live_closure() {
                     obj_unlogged,
                     s.to_address(),
                     field_unlog,
-                    mmtk::vm::slot::Slot::is_derived(&s),
+                    crate::slots::slot_is_derived(&s),
                     lxr.is_marked(t),
                 );
             });

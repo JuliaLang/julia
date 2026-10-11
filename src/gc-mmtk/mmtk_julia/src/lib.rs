@@ -30,6 +30,56 @@ pub mod util;
 
 pub mod julia_finalizer;
 pub mod julia_scanning;
+
+/// Whether this thread is currently inside `object_probable_write`'s field walk.
+///
+/// MMTk's `scan_object` has one signature for three different questions -- what are this
+/// object's roots, what does it reference, and what did a barrier just invalidate -- and
+/// only the binding knows which one is being asked, because only the binding calls
+/// `object_probable_write`. A task's GC shadow stack is the case where the answers differ:
+/// root scanning must report those slots, and a barrier must not (see
+/// `scan_julia_object`'s task branch for why).
+///
+/// Set around the two calls into `object_probable_write` in `api.rs`. The walk is
+/// synchronous and stays on this thread, so a thread-local is enough and needs no
+/// synchronisation.
+pub mod object_barrier {
+    use std::cell::Cell;
+
+    thread_local! {
+        static IN_WALK: Cell<bool> = const { Cell::new(false) };
+    }
+
+    /// True while [`Guard`] is alive on this thread.
+    #[inline(always)]
+    pub fn in_walk() -> bool {
+        IN_WALK.with(|f| f.get())
+    }
+
+    /// Marks its scope as an `object_probable_write` field walk. Restores the previous value
+    /// on drop rather than clearing, so nesting cannot leave the flag stuck off.
+    pub struct Guard(bool);
+
+    impl Guard {
+        #[inline(always)]
+        pub fn new() -> Self {
+            Guard(IN_WALK.with(|f| f.replace(true)))
+        }
+    }
+
+    impl Default for Guard {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl Drop for Guard {
+        #[inline(always)]
+        fn drop(&mut self) {
+            IN_WALK.with(|f| f.set(self.0));
+        }
+    }
+}
 #[allow(non_camel_case_types)]
 #[allow(improper_ctypes_definitions)]
 #[allow(non_upper_case_globals)]
