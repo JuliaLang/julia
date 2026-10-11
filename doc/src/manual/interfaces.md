@@ -25,6 +25,8 @@ Please note that you should always define at least one of `Base.IteratorSize(Ite
 | [`Base.IteratorEltype(IterType)`](@ref) | If default is not appropriate                                               | `Base.HasEltype()` | Either `Base.EltypeUnknown()` or `Base.HasEltype()` as appropriate |
 | [`eltype(IterType)`](@ref)              | If default is not appropriate                                               | `Any`              | The type of the first entry of the tuple returned by `iterate()` |
 | [`Base.isdone(iter, [state])`](@ref)    | **Must** be defined if iterator is stateful                                 | `missing`          | Fast-path hint for iterator completion. If not defined for a stateful iterator then functions that check for done-ness, like `isempty()` and `zip()`, may mutate the iterator and cause buggy behaviour! |
+| [`Base.rest(iter, [state])`](@ref)      | If a more efficient tail iterator or slice can be provided                  | generic iterator   | An iterator or collection representing the remaining elements after `state`, used by `...` destructuring (`(a, b, c...) = x`) |
+| [`Base.split_rest(iter, n, [state])`](@ref) | If a more efficient prefix/suffix split can be provided                 | generic iterator   | A tuple of `(head, tail)` where `head` contains all remaining elements except the last `n` elements, used by middle-rest destructuring (`(m, n..., p, q) = c`) |
 
 Sequential iteration is implemented by the [`iterate`](@ref) function. Instead
 of mutating objects as they are iterated over, Julia iterators may keep track
