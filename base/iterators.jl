@@ -448,7 +448,6 @@ end
     d, ds = _zip_isdone(is, ss)
     d && return nothing
     if _zip_all_missing(ds)
-        # Fast path: the two-pass version below is ~2x slower for e.g. zip(1:n, 1:n, 1:n)
         xs = _zip_iterate_in_order(is, ss)
     else
         xs1 = _zip_iterate_unknown(is, ss, ds)
