@@ -1104,6 +1104,12 @@ end
     @test last(enumerate(Iterators.flatten((1,2,3)))) == (3,3)
 end
 
+@testset "enumerate with custom start" begin
+    @test collect(enumerate("ab"; from=0)) == [(0, 'a'), (1, 'b')]
+    @test collect(Iterators.reverse(enumerate("ab"; from=0))) == [(1, 'b'), (0, 'a')]
+    @test last(enumerate("ab"; from=0)) == (1, 'b')
+end
+
 @testset "isempty and isdone for Generators" begin
     itr = eachline(IOBuffer("foo\n"))
     gen = (x for x in itr)

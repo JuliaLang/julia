@@ -196,6 +196,7 @@ New library functions
   `mod`, keyed by `(including_module, absolute_path)`. The table is stored inside the package
   image, so it survives precompilation; revision tools (e.g. Revise) use it to re-apply the
   original transform when an `include(mapexpr, …)`-ed file is edited.
+* `Base.enumerate(itr; from=1)` now accepts an optional starting point for the numeration.
 
 New library features
 --------------------
