@@ -26,9 +26,10 @@ outdir = ARGS[1]
     @test lines[16] == "sparse vectors: 40.0 2 6.0 10.0"
     @test lines[17] == "threads: 4160 204"
     @test lines[18] == "custom_library_ccall: $(VERSION.major)"
+    @test lines[19] == "lazy_library_ccall: $(VERSION.major) 1"
     # TODO(#62912): SuiteSparse libraries cannot be loaded under --trim yet
-    # @test lines[19] == "sparse reductions: 10.0 5.0 6.0 5.477225575051661"
-    # @test lines[20] == "sparse nested reductions: 7.0 5.0 100.0"
-    # @test lines[21] == "sparse solves: -1.0 -1.0 -1.0"
-    # @test lines[22] == "sparse factorizations: 0.666667 0.666667 -1.0"
+    # @test lines[20] == "sparse reductions: 10.0 5.0 6.0 5.477225575051661"
+    # @test lines[21] == "sparse nested reductions: 7.0 5.0 100.0"
+    # @test lines[22] == "sparse solves: -1.0 -1.0 -1.0"
+    # @test lines[23] == "sparse factorizations: 0.666667 0.666667 -1.0"
 end

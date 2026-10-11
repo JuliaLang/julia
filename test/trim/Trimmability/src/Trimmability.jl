@@ -116,6 +116,18 @@ function user_library_ccall()
     println(Core.stdout, ccall((:jl_ver_major, custom_lib), Cint, ()))
 end
 
+# Test that a `LazyLibrary` runs its `LazyLibraryCallback` once, on first use in a `ccall`.
+# `libjulia` is already loaded, so this picks up the existing handle.
+const on_load_count = Base.RefValue{Int}(0)
+struct CountOnLoad <: Base.Libc.Libdl.LazyLibraryCallback end
+(::CountOnLoad)() = (on_load_count[] += 1; nothing)
+const counted_lib = Base.Libc.Libdl.LazyLibrary("libjulia"; on_load_callback = CountOnLoad())
+function lazy_library_ccall()
+    major = ccall((:jl_ver_major, counted_lib), Cint, ())
+    ccall((:jl_ver_major, counted_lib), Cint, ())
+    println(Core.stdout, "lazy_library_ccall: ", major, " ", on_load_count[])
+end
+
 function _test_cat()
     # hcat
     _cat1a = hcat(randn(3), rand(3), randn(3))
@@ -345,6 +357,7 @@ function @main(args::Vector{String})::Cint
     end
 
     user_library_ccall() # prints as a side effect
+    lazy_library_ccall()
 
     Base.donotdelete(reshape([1,2,3],:,1,1))
 
