@@ -421,9 +421,8 @@ function notify(c::GenericCondition, @nospecialize(arg), all, error)
         # interrupted task resumes via whatever its claimer scheduled and
         # will find its entry already unlinked).
         t = @atomic :monotonic w.task
-        if !(t isa Task && claim_wait(t, w))
-            continue
-        end
+        t isa Task || continue
+        claim_wait(t, w) || continue
         schedule(t, arg, error=error)
         cnt += 1
         all || break

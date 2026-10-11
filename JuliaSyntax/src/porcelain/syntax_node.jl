@@ -343,5 +343,3 @@ function build_tree(::Type{SyntaxNode}, stream::ParseStream;
         return SyntaxNode(source, cursor, keep_parens=keep_parens)
     end
 end
-
-@deprecate haschildren(x) !is_leaf(x) false

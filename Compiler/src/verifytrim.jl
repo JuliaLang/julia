@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import ..Compiler: verify_typeinf_trim, NativeInterpreter, argtypes_to_type, compileable_specialization_for_call
+import ..Compiler: verify_typeinf_trim, NativeInterpreter, argtypes_to_type, compileable_specialization_for_call,
+    threads_deferred_call_type, is_threads_call_def, foreign_library_type, _libdl_dlopen
 
 using ..Compiler:
      # operators
@@ -290,6 +291,8 @@ end
 
 function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance, codeinfo::CodeInfo, inspected::IdSet{CodeInstance}, caches::IdDict{MethodInstance,CodeInstance}, parents::ParentMap, errors::ErrorList)
     mi = get_ci_mi(codeinst)
+    # The dynamic call of a `@threads` loop body is checked where the loop starts instead.
+    is_threads_call_def(mi.def) && return
     sptypes = sptypes_from_meth_instance(mi)
     src = codeinfo.code
     for i = 1:length(src)
@@ -300,6 +303,14 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
         if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
             error = "unresolved invoke"
             edge = stmt.args[1]
+            atype = isexpr(stmt, :invoke) ? threads_deferred_call_type(stmt, codeinfo, sptypes) : nothing
+            if atype !== nothing
+                mi = compileable_specialization_for_call(interp, atype)
+                ci = mi === nothing ? nothing : get(caches, mi, nothing)
+                if !(ci isa CodeInstance)
+                    push!(errors, false => CallMissing(codeinst, codeinfo, sptypes, i, "unresolved `Threads.@threads` loop body"))
+                end
+            end
             if edge isa CodeInstance
                 haskey(parents, edge) || (parents[edge] = (codeinst, i))
                 edge in inspected && continue
@@ -404,10 +415,10 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
             end
 
             error = "unresolved cfunction"
-        elseif isexpr(stmt, :foreigncall)
-            foreigncall = stmt.args[1]
-            if isexpr(foreigncall, :tuple, 1)
-                foreigncall = foreigncall.args[1]
+        elseif isexpr(stmt, :foreigncall) || isexpr(stmt, :foreignglobal)
+            spec = stmt.args[1]
+            if isexpr(stmt, :foreigncall) && isexpr(spec, :tuple, 1)
+                foreigncall = spec.args[1]
                 if foreigncall isa String
                     foreigncall = QuoteNode(Symbol(foreigncall))
                 end
@@ -418,6 +429,21 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                 else
                     error = "disallowed ccall with non-constant name and no library"
                 end
+            end
+            if isempty(error)
+                # the runtime `dlopen(lib)` on first use is dispatched in this caller's world
+                library_type = foreign_library_type(spec, codeinfo, sptypes)
+                library_type === nothing && continue # no runtime `dlopen()` invocation
+                dlopen_fn = _libdl_dlopen()
+                if dlopen_fn !== nothing
+                    atype = Tuple{typeof(dlopen_fn), library_type}
+                    mi = compileable_specialization_for_call(interp, atype)
+                    if mi !== nothing
+                        ci = get(caches, mi, nothing)
+                        ci isa CodeInstance && continue
+                    end
+                end
+                error = "unresolved dlopen for ccall / cglobal"
             end
         elseif isexpr(stmt, :new_opaque_closure)
             error = "unresolved opaque closure"

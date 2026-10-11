@@ -104,6 +104,9 @@ vals = Any[
     OffsetArray([1 3; 2 4], -2, 2),
     OffsetArray(1:4, 0),
     OffsetArray([1 3; 2 4], 0, 0),
+    # issue #63659
+    Base.IdentityUnitRange(2:20),
+    OffsetArray(1:20, typemax(Int) - 20),
     'a':'e', ['a', 'b', 'c', 'd', 'e'],
     # check that hash is still consistent with heterogeneous arrays for which - is defined
     # for some pairs and not others

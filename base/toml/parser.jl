@@ -930,7 +930,7 @@ function parse_array(l::Parser{Dates})::Err{Vector} where Dates
         (Dates !== nothing && ((T === Dates.Date) || (T === Dates.Time) || (T === Dates.DateTime)))
         # do nothing, leave as Vector{Any}
         new = array
-    else @assert false "unexpected type" end
+    else error("unexpected type") end
     push!(l.static_arrays, new)
     return new
 end
@@ -1249,7 +1249,7 @@ function parse_datetime(l)
     return try_return_datetime(l, year, month, day, h, m, s, ms)
 end
 
-function try_return_datetime(p::Parser{Dates}, year, month, day, h, m, s, ms) where Dates
+function try_return_datetime(::Parser{Dates}, year, month, day, h, m, s, ms) where Dates
     if Dates !== nothing
         try
             return Dates.DateTime(year, month, day, h, m, s, ms)
@@ -1262,7 +1262,7 @@ function try_return_datetime(p::Parser{Dates}, year, month, day, h, m, s, ms) wh
     end
 end
 
-function try_return_date(p::Parser{Dates}, year, month, day) where Dates
+function try_return_date(::Parser{Dates}, year, month, day) where Dates
     if Dates !== nothing
         try
             return Dates.Date(year, month, day)
@@ -1286,7 +1286,7 @@ function parse_local_time(l::Parser)
     return try_return_time(l, h, m, s, ms)
 end
 
-function try_return_time(p::Parser{Dates}, h, m, s, ms) where Dates
+function try_return_time(::Parser{Dates}, h, m, s, ms) where Dates
     if Dates !== nothing
         try
             return Dates.Time(h, m, s, ms)

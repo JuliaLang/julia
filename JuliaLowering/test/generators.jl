@@ -62,6 +62,19 @@ end
 @test JuliaLowering.include_string(test_mod, """
 collect((z=y; y=100; z) for y in 1:3 for x in 1:2)
 """) == [1, 1, 2, 2, 3, 3]
+@test JuliaLowering.include_string(test_mod, """
+collect((z=y; y=100; z) for y in 1:3 if y > 0 for x in 1:2)
+""") == [1, 1, 2, 2, 3, 3]
+
+# Filtered outer iteration with a non-call filter condition
+@test JuliaLowering.include_string(test_mod, """
+[x for j in [[1,2],[3]] if true for x in j]
+""") == [1, 2, 3]
+@test JuliaLowering.include_string(test_mod, """
+let flag = true
+    [x for j in [[1,2],[3]] if flag for x in j]
+end
+""") == [1, 2, 3]
 
 # Simple typed comprehension lowered to for loops
 @test JuliaLowering.include_string(test_mod, """
@@ -153,12 +166,12 @@ end
 
 @testset "compat: comprehension with non-generator arg" begin
     let ex = Expr(:comprehension, :i, Expr(:(=), :i, Expr(:call, :(:), 1, 3)))
-        @test jl_eval(test_mod, ex) == fl_eval(test_mod, ex)
+        @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == fl_eval(test_mod, ex)
     end
 end
 
 @testset "(AI) correct types" begin
-    local jeval(str) = jl_eval(test_mod, parsestmt(SyntaxTree, str))
+    local jeval(str) = jl_eval(test_mod, parsestmt(SyntaxTree, str); edition=JL_NEW_EDITION)
     local feval(str) = fl_eval(test_mod, parsestmt(Expr, str))
     local same_type(str) = jeval(str) == feval(str)
     let s = "[(a,b) for (a,b) in [[1,2],[3,4]]]"
@@ -208,7 +221,7 @@ end
 end
 
 @testset "placeholders" begin
-    local jeval(str) = jl_eval(test_mod, parsestmt(SyntaxTree, str))
+    local jeval(str) = jl_eval(test_mod, parsestmt(SyntaxTree, str); edition=JL_NEW_EDITION)
     local feval(str) = fl_eval(test_mod, parsestmt(Expr, str))
 
     @test jeval("""
@@ -246,8 +259,8 @@ end
 
 @testset "generators: `[_ for _ in rhs]`, `[f(_) for _ in rhs]` compat (#18621)" begin
     local test_mod = @newmod()
-    local jeval(str) = jl_eval(test_mod, parsestmt(SyntaxTree, str); expr_compat_mode=true)
-    local jnew(str)  = jl_eval(test_mod, parsestmt(SyntaxTree, str))
+    local jeval(str) = jl_eval(test_mod, parsestmt(SyntaxTree, str); edition=JL_OLD_EDITION)
+    local jnew(str)  = jl_eval(test_mod, parsestmt(SyntaxTree, str); edition=JL_NEW_EDITION)
     local feval(str) = fl_eval(test_mod, parsestmt(Expr, str))
     JuliaLowering.include_string(test_mod, "f(x) = x; f(x, y) = x; g(x) = x")
 
@@ -296,10 +309,10 @@ end
     ex = Expr(:comprehension,
               Expr(:call, GlobalRef(Base, :Generator), :(i -> 2i), :(1:3)))
     @test fl_eval(test_mod, ex) == [2,4,6]
-    @test jl_eval(test_mod, ex) == [2,4,6]
+    @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == [2,4,6]
 
     ex = Expr(:typed_comprehension, Int,
               Expr(:call, GlobalRef(Base, :Generator), :(i -> 2i), :(1:3)))
     @test fl_eval(test_mod, ex) == Int[2,4,6]
-    @test jl_eval(test_mod, ex) == Int[2,4,6]
+    @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == Int[2,4,6]
 end

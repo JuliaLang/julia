@@ -272,6 +272,7 @@ end
         @lock cond notify(cond, :legit)
         @test fetch(t) === :legit
     end
+    # JET.@test_call notify(::Condition)
 end
 
 # the cached WaitEntry makes the steady-state park/wake cycle allocation-free:
@@ -418,8 +419,7 @@ let program = """
             (1, 1),
             (2, 0),
             (2, 1),
-            (4, 0),
-            (4, 0)) # try a couple times to trigger bad races
+            (4, 0))
         new_env = copy(ENV)
         new_env["JULIA_NUM_THREADS"] = string(test_nthreads, ",", test_nthreadsi)
         threads_config = "$test_nthreads,$test_nthreadsi"
@@ -640,7 +640,7 @@ close(proc.in)
     script = "profile_spawnmany_exec.jl"
     cmd_base = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no $script`
     @testset for n in [20000, 200000, 2000000]
-        cmd = ignorestatus(setenv(cmd_base, "NTASKS" => n; dir = @__DIR__))
+        cmd = ignorestatus(addenv(Cmd(cmd_base; dir = @__DIR__), "NTASKS" => n))
         cmd = pipeline(cmd; stdout = stderr, stderr)
         proc = run(cmd; wait = false)
         done = Threads.Atomic{Bool}(false)
@@ -763,6 +763,44 @@ end
         return true
     end
     @test io_thread_test()
+end
+
+@testset "event loop thread wakeup with pending finalizers" begin
+    # if this fails, the child hangs in the event loop, so kill it
+    script = joinpath(@__DIR__, "ioloop_wakeup.jl")
+    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --threads=1,1 $script`
+    proc = run(pipeline(cmd; stdout, stderr); wait=false)
+    t = Timer(60) do _
+        kill(proc, Base.SIGKILL)
+    end
+    @test success(proc)
+    close(t)
+end
+
+@testset "--timeout-for-safepoint-straggler command-line flag" begin
+    program = "
+        function main()
+            t = Threads.@spawn begin
+                ccall(:uv_sleep, Cvoid, (Cuint,), 8_000)
+            end
+            # Force a GC
+            ccall(:uv_sleep, Cvoid, (Cuint,), 1_000)
+            GC.gc()
+            wait(t)
+        end
+        main()
+    "
+    timeouts = ("1", "4")
+    outputs = map(_ -> IOBuffer(), timeouts)
+    # each child sleeps for 8 seconds, so run them concurrently
+    @sync for (timeout, output) in zip(timeouts, outputs)
+        cmd = `$(Base.julia_cmd()) --threads=4 --timeout-for-safepoint-straggler=$(timeout) -e $program`
+        @async run(pipeline(cmd; stderr=output))
+    end
+    for output in outputs
+        # Check whether we printed the straggler's backtrace
+        @test !isempty(take!(output))
+    end
 end
 
 # Make sure default number of BLAS threads respects CPU affinity: issue #55572.

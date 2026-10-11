@@ -1255,7 +1255,7 @@ JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *work_ctx,
 
 #ifndef _OS_WINDOWS_
 #if defined(__APPLE__)
-int uv___stream_fd(uv_stream_t *handle);
+extern int uv___stream_fd(uv_stream_t *handle);
 #define uv__stream_fd(handle) (uv___stream_fd((uv_stream_t*)(handle)))
 #else
 #define uv__stream_fd(handle) ((handle)->io_watcher.fd)

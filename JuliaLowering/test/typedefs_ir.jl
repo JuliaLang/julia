@@ -370,7 +370,7 @@ end
 23  (call core.declare_const TestMod :X %₂₂)
 24  latestworld
 25  TestMod.X
-26  SourceLocation::1:1
+26  SourceLocation:1
 27  (call top._defaultctors %₂₅ %₂₆)
 28  latestworld
 29  (return core.nothing)
@@ -409,7 +409,7 @@ end
 26  (call core.apply_type core.Type %₂₅)
 27  (call core.svec %₂₆)
 28  (call core.svec)
-29  SourceLocation::2:5
+29  SourceLocation:2
 30  (call core.svec %₂₇ %₂₈ %₂₉)
 31  (call core.define_method TestMod core.nothing %₃₀
     --- code_info
@@ -454,7 +454,7 @@ end
 24  (call core.declare_const TestMod :X %₂₃)
 25  latestworld
 26  TestMod.X
-27  SourceLocation::1:1
+27  SourceLocation:1
 28  (call top._defaultctors %₂₆ %₂₇)
 29  latestworld
 30  (return core.nothing)
@@ -496,7 +496,7 @@ end
 30  (call core.declare_const TestMod :X %₂₉)
 31  latestworld
 32  TestMod.X
-33  SourceLocation::1:1
+33  SourceLocation:1
 34  (call top._defaultctors %₃₂ %₃₃)
 35  latestworld
 36  (return core.nothing)
@@ -534,7 +534,7 @@ end
 23  (call core.declare_const TestMod :X %₂₂)
 24  latestworld
 25  TestMod.X
-26  SourceLocation::1:1
+26  SourceLocation:1
 27  (call top._defaultctors %₂₅ %₂₆)
 28  latestworld
 29  (return core.nothing)
@@ -578,7 +578,7 @@ end
 25  (call core.declare_const TestMod :X %₂₄)
 26  latestworld
 27  TestMod.X
-28  SourceLocation:none:1:0
+28  SourceLocation:1
 29  (call top._defaultctors %₂₇ %₂₈)
 30  latestworld
 31  (= slot₁/val core.nothing)
@@ -588,7 +588,7 @@ end
 35  (call Pair{Symbol, Any} :b "field b docs")
 36  (call Dict{Symbol, Any} %₃₄ %₃₅)
 37  (call Pair :fields %₃₆)
-38  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod %₃₇)
+38  (call Dict{Symbol, Any} :path => "" :linenumber => 1 :module => TestMod %₃₇)
 39  (call Base.Docs.docstr %₃₃ %₃₈)
 40  TestMod.Union
 41  (call core.apply_type %₄₀)
@@ -632,7 +632,7 @@ end
 26  (call core.declare_const TestMod :X %₂₅)
 27  latestworld
 28  TestMod.X
-29  SourceLocation::1:1
+29  SourceLocation:1
 30  (call top._defaultctors %₂₈ %₂₉)
 31  latestworld
 32  (return core.nothing)
@@ -679,7 +679,7 @@ end
 33  (call core.declare_const TestMod :X %₃₂)
 34  latestworld
 35  TestMod.X
-36  SourceLocation::1:1
+36  SourceLocation:1
 37  (call top._defaultctors %₃₅ %₃₆)
 38  latestworld
 39  (return core.nothing)
@@ -732,7 +732,7 @@ end
 32  TestMod.#f#f##0
 33  (call core.svec %₃₂)
 34  (call core.svec)
-35  SourceLocation::3:5
+35  SourceLocation:3
 36  (call core.svec %₃₃ %₃₄ %₃₅)
 37  (call core.define_method TestMod core.nothing %₃₆
     --- code_info
@@ -746,7 +746,7 @@ end
 41  (call core.apply_type core.Type %₄₀)
 42  (call core.svec %₄₁)
 43  (call core.svec)
-44  SourceLocation::4:5
+44  SourceLocation:4
 45  (call core.svec %₄₂ %₄₃ %₄₄)
 46  --- code_info
     slots: [slot₁/#ctor-self#(!read)]
@@ -761,7 +761,7 @@ end
 52  (call core.apply_type core.Type %₅₁)
 53  (call core.svec %₅₂ core.Any)
 54  (call core.svec)
-55  SourceLocation::5:5
+55  SourceLocation:5
 56  (call core.svec %₅₃ %₅₄ %₅₅)
 57  (call core.define_method TestMod core.nothing %₅₆
     --- code_info
@@ -774,7 +774,7 @@ end
 60  (call core.apply_type core.Type %₅₉)
 61  (call core.svec %₆₀ core.Any core.Any)
 62  (call core.svec)
-63  SourceLocation::6:5
+63  SourceLocation:6
 64  (call core.svec %₆₁ %₆₂ %₆₃)
 65  (call core.define_method TestMod core.nothing %₆₄
     --- code_info
@@ -796,7 +796,7 @@ end
 68  (call core.apply_type core.Type %₆₇)
 69  (call core.svec %₆₈ core.Any core.Any core.Any)
 70  (call core.svec)
-71  SourceLocation::10:5
+71  SourceLocation:10
 72  (call core.svec %₆₉ %₇₀ %₇₁)
 73  (call core.define_method TestMod core.nothing %₇₂
     --- code_info
@@ -851,7 +851,7 @@ end
 33  (call core.apply_type core.Type %₃₂)
 34  (call core.svec %₃₃)
 35  (call core.svec)
-36  SourceLocation::3:5
+36  SourceLocation:3
 37  (call core.svec %₃₄ %₃₅ %₃₆)
 38  (call core.define_method TestMod core.nothing %₃₇
     --- code_info
@@ -867,7 +867,7 @@ end
 44  (call core.apply_type core.Type %₄₃)
 45  (call core.svec %₄₄)
 46  (call core.svec %₄₀ %₄₁)
-47  SourceLocation::4:5
+47  SourceLocation:4
 48  (call core.svec %₄₅ %₄₆ %₄₇)
 49  (call core.define_method TestMod core.nothing %₄₈
     --- code_info
@@ -886,7 +886,7 @@ end
 58  TestMod.#f#f##1
 59  (call core.svec %₅₈)
 60  (call core.svec)
-61  SourceLocation::5:5
+61  SourceLocation:5
 62  (call core.svec %₅₉ %₆₀ %₆₁)
 63  (call core.define_method TestMod core.nothing %₆₂
     --- code_info
@@ -938,7 +938,7 @@ end
 26  (call core.apply_type core.Type %₂₅)
 27  (call core.svec %₂₆ core.Any)
 28  (call core.svec)
-29  SourceLocation::4:5
+29  SourceLocation:4
 30  (call core.svec %₂₇ %₂₈ %₂₉)
 31  (call core.define_method TestMod core.nothing %₃₀
     --- code_info
@@ -992,7 +992,7 @@ end
 32  (call core.apply_type core.Type %₃₁)
 33  (call core.svec %₃₂ core.Any)
 34  (call core.svec %₂₉)
-35  SourceLocation::4:5
+35  SourceLocation:4
 36  (call core.svec %₃₃ %₃₄ %₃₅)
 37  (call core.define_method TestMod core.nothing %₃₆
     --- code_info
@@ -1126,7 +1126,7 @@ A{<:Real}() = A(1)
 6   (call core.TypeEqOf %₅)
 7   (call core.svec %₆)
 8   (call core.svec)
-9   SourceLocation::1:1
+9   SourceLocation:1
 10  (call core.svec %₇ %₈ %₉)
 11  (call core.define_method TestMod core.nothing %₁₀
     --- code_info
@@ -1180,7 +1180,7 @@ end
 29  (call core.apply_type core.Type %₂₈)
 30  (call core.svec %₂₉ core.Any)
 31  (call core.svec)
-32  SourceLocation::3:5
+32  SourceLocation:3
 33  (call core.svec %₃₀ %₃₁ %₃₂)
 34  (call core.define_method TestMod core.nothing %₃₃
     --- code_info
@@ -1261,10 +1261,10 @@ end
 45  (call core.declare_const TestMod :B %₄₄)
 46  latestworld
 47  TestMod.A
-48  SourceLocation::2:5
+48  SourceLocation:2
 49  (call top._defaultctors %₄₇ %₄₈)
 50  TestMod.B
-51  SourceLocation::5:5
+51  SourceLocation:5
 52  (call top._defaultctors %₅₀ %₅₁)
 53  latestworld
 54  (return core.nothing)
@@ -1333,10 +1333,10 @@ end
 51  (call core.declare_const TestMod :B %₅₀)
 52  latestworld
 53  TestMod.A
-54  SourceLocation::2:5
+54  SourceLocation:2
 55  (call top._defaultctors %₅₃ %₅₄)
 56  TestMod.B
-57  SourceLocation::5:5
+57  SourceLocation:5
 58  (call top._defaultctors %₅₆ %₅₇)
 59  latestworld
 60  (return core.nothing)

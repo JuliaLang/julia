@@ -450,6 +450,7 @@ let c = (a=1, b=2),
 end
 
 @test_throws ErrorException NamedTuple{(), Union{}}
+@test typeintersect(NamedTuple{(),T} where T<:Tuple{Any}, NamedTuple{(),T} where T<:Tuple{}) === Union{}
 for NT in (NamedTuple{(:a, :b), Union{}}, NamedTuple{(:a, :b), T} where T<:Union{})
     @test fieldtype(NT, 1) == Union{}
     @test fieldtype(NT, :b) == Union{}

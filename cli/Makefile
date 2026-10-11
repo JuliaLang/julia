@@ -5,7 +5,7 @@ include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/llvm-ver.make
 
 
-HEADERS := $(addprefix $(SRCDIR)/,jl_exports.h loader.h dl-cache.h) $(addprefix $(JULIAHOME)/src/,julia_fasttls.h jloptions.h support/platform.h support/dirpath.h jl_exported_data.inc jl_exported_funcs.inc)
+HEADERS := $(addprefix $(SRCDIR)/,jl_exports.h loader.h dl-cache.h) $(addprefix $(JULIAHOME)/src/,julia_fasttls.h jloptions.h support/platform.h support/dirpath.h jl_exported_data.inc jl_exported_data_defs.inc jl_exported_funcs.inc)
 
 LOADER_CFLAGS = $(JCFLAGS) -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir) -ffreestanding
 LOADER_LIBPATHS = -L$(build_shlibdir) -L$(build_libdir)
@@ -167,7 +167,7 @@ $(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_OBJS) $(SRCDIR)/li
 		$(CC) $(LOADER_CFLAGS) -shared $(SHIPFLAGS) $(RPATH_LIB), \
 		$(LIB_OBJS) $(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT)) $(call LTO_OBJECT_PATH,$(BUILDDIR)/$(notdir $@))))
 	@$(INSTALL_NAME_CMD)libjulia.$(JL_MAJOR_SHLIB_EXT) $@
-	@$(DSYMUTIL) $@
+	@$(call dsymutil,$@)
 ifeq ($(OS), WINNT)
 	@$(call PRINT_ANALYZE, $(call implib_from_def,$@))
 endif
@@ -179,7 +179,7 @@ $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_DOBJS) $(SRC
 		$(CC) $(LOADER_CFLAGS) -shared $(DEBUGFLAGS) $(RPATH_LIB), \
 		$(LIB_DOBJS) $(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia-debug.$(JL_MAJOR_SHLIB_EXT)) $(call LTO_OBJECT_PATH,$(BUILDDIR)/$(notdir $@))))
 	@$(INSTALL_NAME_CMD)libjulia-debug.$(JL_MAJOR_SHLIB_EXT) $@
-	@$(DSYMUTIL) $@
+	@$(call dsymutil,$@)
 ifeq ($(OS), WINNT)
 	@$(call PRINT_ANALYZE, $(call implib_from_def,$@))
 endif

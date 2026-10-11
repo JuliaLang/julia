@@ -341,9 +341,31 @@ function delayed_delete_dll(path)
     rename(path, temp_path) # do not call mv which could recursively call rm(path)
 end
 
+# The absolute path with symlinks resolved in the parts that exist. With `keep_link`, a final
+# symlink is kept, for operations that act on the link rather than its target. `..` is left
+# for the filesystem to resolve, since after a symlink it does not undo the previous part.
+function _resolved_path(path::AbstractString, keep_link::Bool)
+    isabspath(path) || (path = joinpath(pwd(), path))
+    if ispath(path)
+        keep_link && islink(path) || return realpath(path)
+        return joinpath(realpath(dirname(path)), basename(path))
+    end
+    parent = dirname(path)
+    parent == path && return path
+    return normpath(joinpath(_resolved_path(parent, false), basename(path)))
+end
+
+_is_within(inner::AbstractString, outer::AbstractString) =
+    inner == outer || startswith(inner, joinpath(outer, ""))
+
 # The following use Unix command line facilities
 function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::AbstractString;
-                                                          force::Bool=false)
+                               force::Bool=false, follow_symlinks::Bool=false)
+    src_path = _resolved_path(src, !follow_symlinks)
+    dst_path = _resolved_path(dst, true)
+    if isdir(src) && (follow_symlinks || !islink(src)) && dst_path != src_path && _is_within(dst_path, src_path)
+        throw(ArgumentError("'$dst' is inside '$src'; a directory cannot be moved or copied into itself."))
+    end
     if ispath(dst)
         if force
             # Check for issue when: (src == dst) or when one is a link to the other
@@ -356,6 +378,9 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
                                            "`src` refers to: $(abs_src)\n  ",
                                            "`dst` refers to: $(abs_dst)\n")))
             end
+            if _is_within(src_path, dst_path)
+                throw(ArgumentError("'$dst' contains '$src', so it cannot be removed before $(txt)."))
+            end
             rm(dst; recursive=true, force=true)
         else
             throw(ArgumentError(string("'$dst' exists. `force=true` ",
@@ -367,15 +392,24 @@ end
 function cptree(src::String, dst::String; force::Bool=false,
                                           follow_symlinks::Bool=false)
     isdir(src) || throw(ArgumentError("'$src' is not a directory. Use `cp(src, dst)`"))
-    checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
+    checkfor_mv_cp_cptree(src, dst, "copying"; force=force, follow_symlinks=true)
+    _cptree(src, dst, follow_symlinks)
+end
+
+# Nested directories need no checks: they cannot overlap once `src` and `dst` do not, and each
+# nested destination is new. A followed symlink can lead anywhere, so it is checked again.
+function _cptree(src::String, dst::String, follow_symlinks::Bool)
     mkdir(dst)
     for name in readdir(src)
         srcname = joinpath(src, name)
         if !follow_symlinks && islink(srcname)
             symlink(readlink(srcname), joinpath(dst, name))
         elseif isdir(srcname)
-            cptree(srcname, joinpath(dst, name); force=force,
-                                                 follow_symlinks=follow_symlinks)
+            if islink(srcname)
+                cptree(srcname, joinpath(dst, name); follow_symlinks)
+            else
+                _cptree(srcname, joinpath(dst, name), follow_symlinks)
+            end
         else
             sendfile(srcname, joinpath(dst, name))
         end
@@ -411,7 +445,7 @@ from those of the source file(s), similar to the Unix `cp -p` command.
 """
 function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
                                                       follow_symlinks::Bool=false)
-    checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
+    checkfor_mv_cp_cptree(src, dst, "copying"; force, follow_symlinks)
     if !follow_symlinks && islink(src)
         symlink(readlink(src), dst)
     elseif isdir(src)

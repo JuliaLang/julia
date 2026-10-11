@@ -922,6 +922,7 @@ ensure_indexable(I::Tuple{}) = ()
 # In simple cases, we know that we don't need to use axes(A). Optimize those
 # until Julia gets smart enough to elide the call on its own:
 @inline to_indices(A, I::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = to_indices(A, (), I)
+_drop_zerodim(I::Tuple{CartesianIndex{0}, Vararg}) = (@inline; _drop_zerodim(tail(I)))
 # But some index types require more context spanning multiple indices
 # CartesianIndex is unfolded outside the inner to_indices for better inference
 @inline function to_indices(A, inds, I::Tuple{CartesianIndex{N}, Vararg}) where N
@@ -2088,14 +2089,15 @@ function hash_shaped(A, h0::UInt, eltype_hint=())
     elseif len < 32768
         # separate accumulator streams, unrolled
         @nexprs 8 i -> p_i::UInt = h
+        off = firstindex(A) - 1
         n  = 1
         limit = len - 7
         while n <= limit
-            @nexprs 8 i -> p_i = union_split(hash, A[n + i - 1], eltype_hint, p_i)
+            @nexprs 8 i -> p_i = union_split(hash, A[off + n + i - 1], eltype_hint, p_i)
             n += 8
         end
         while n <= len
-            p_1 = union_split(hash, A[n], eltype_hint, p_1)
+            p_1 = union_split(hash, A[off + n], eltype_hint, p_1)
             n += 1
         end
         # fold all streams back together

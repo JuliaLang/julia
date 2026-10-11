@@ -3277,6 +3277,35 @@ let X = Tuple{Vector{M62174{D,F,V,A}} where {D,F,V<:P62174{D},A<:P62174{F}}},
     @test p[4].ub.parameters[1] === p[2]
 end
 
+# Static-parameter values must not contain method variables left unresolved by dependent bounds.
+struct DependentSparams57427{N, Tup}
+    DependentSparams57427{N, Tup}() where {N, Tuple{Vararg{Nothing, N}} <: Tup <: Tuple{Vararg{Nothing, N}}} = new{N, Tup}()
+end
+@noinline dependent_sparams(::T, ::Ref{S}) where {T,S>:T} = (T, S)
+@noinline dependent_sparams_leaf(::Union{Nothing,S}, ::Ref{T}) where {T,S>:Type{T}} = S
+@noinline dependent_sparams_open(::Type{T}, ::Type{S}) where {T,S>:T} = (T, S)
+@inline dependent_sparams_unpinned(::T, ::Ref{U}) where {T,S>:T,U>:Vector{S}} = S
+dependent_sparams_unpinned_caller(r) = dependent_sparams_unpinned(1, r)
+@generated dependent_sparams_gen(::Vector{S}, ::T) where {T,S>:Vector{T}} = Base.has_free_typevars(T)
+Base.@nospecializeinfer dependent_sparams_gen_caller(@nospecialize(x::Type)) = dependent_sparams_gen(Vector{Vector}(), x)
+@testset "dependent static parameters" begin
+    @test dependent_sparams(1, Ref{Integer}(1)) === (Int, Integer)
+    @test DependentSparams57427{0, Tuple{}}() isa DependentSparams57427{0, Tuple{}}
+    @test_throws UndefVarError dependent_sparams_leaf(nothing, Ref(1))
+    let open = Union{Int, TypeVar(:X)}
+        @test dependent_sparams_open(Int, open) === (Int, open)
+    end
+    @test_throws UndefVarError dependent_sparams_unpinned_caller(Ref{Vector}())
+    _, env = intersection_env(Tuple{Vector{Vector}, Number}, Tuple{Vector{S}, T} where {T, S>:Vector{T}})
+    @test env[1] !== Number
+    Base.code_typed_by_type(Tuple{typeof(dependent_sparams_gen), Vector{Vector}, Type{P}} where P)
+    @test !dependent_sparams_gen_caller(Int)
+    _, env = intersection_env(Tuple{Integer,Vector{Integer}}, Tuple{T,S} where {T,S>:Vector{T}})
+    @test env[2] !== Vector{Integer}
+    _, env = intersection_env(Tuple{Integer,Vector{Integer}}, Tuple{T,S} where {T<:Integer,S>:Vector{T}})
+    @test env[2] !== Vector{Integer}
+end
+
 # Hoisted union-split of a `∀` variable's upper bound: a left-side `where` var
 # with trivial lower bound, a union upper bound, and only covariant occurrences
 # in the body distributes over the arms of its bound.

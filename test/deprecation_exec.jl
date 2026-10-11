@@ -349,6 +349,32 @@ module DeprecatedReexportTest
     @test !Base.isdeprecated(Consumer, :DepC)
 end
 
+# Deprecating a binding that an importer reaches through more than one `using` (directly and
+# through a reexport) re-resolves the importer once per path in the same invalidation (#63493).
+module DeprecatedMultiPathTest
+    using Test
+    module Leaf; export w; global w = 2; end
+    module Mid; using ..Leaf; export w; end
+    module User; using ..Leaf, ..Mid; readw() = w; end
+    @test (@test_nowarn User.readw()) === 2
+    Base.deprecate(Leaf, :w)
+    @test Base.isdeprecated(User, :w)
+    @test (@test_warn "w is deprecated" Base.invokelatest(User.readw)) === 2
+    Base.deprecate(Leaf, :w, 0)
+    @test !Base.isdeprecated(User, :w)
+    @test (@test_nowarn Base.invokelatest(User.readw)) === 2
+
+    # Same, with the importer's `using` of the leaf preceding the reexporter's.
+    module Leaf2; export w; global w = 2; end
+    module Mid2 end
+    module User2; using ..Leaf2, ..Mid2; readw() = w; end
+    @eval Mid2 (using ..Leaf2; export w)
+    @test (@test_nowarn User2.readw()) === 2
+    Base.deprecate(Leaf2, :w)
+    @test Base.isdeprecated(User2, :w)
+    @test (@test_warn "w is deprecated" Base.invokelatest(User2.readw)) === 2
+end
+
 # Defining a new binding over a deprecated implicit import must not warn: binding
 # resolution in a method definition (or a new `const`/`global`) exists precisely to create
 # a fresh binding when the name was not explicitly imported, and the fresh binding is not
@@ -432,4 +458,52 @@ module DeprecatedShadowTest
     @test_warn "importing deprecated binding" eval(ex)
     @test (@test_nowarn Consumer.getdep()) === Src._newc
     @test !Base.isdeprecated(Consumer, :OldC)
+end
+
+# Deprecating an importing partition, not the leaf.
+module DeprecatedImporterTest
+    using Test
+    module Src
+        export dg
+        global dg::Int = 1
+        global de::Int = 2
+    end
+    using .Src
+    import .Src: de
+    getdg() = dg
+    getde() = de
+    @test (@test_nowarn getdg()) === 1
+    @test (@test_nowarn getde()) === 2
+
+    # Each `Base.deprecate` is its own top-level statement, so that it sees the partition
+    # the previous one created, rather than the one from the world a block started in,
+    # due to the bug being fixed in #63468.
+    getci(f) = first(methods(f)).specializations.cache
+    ci = getci(getdg)
+    Base.deprecate(@__MODULE__, :dg)
+    @test ci.max_world != typemax(UInt)
+    @test (@test_warn "dg is deprecated" Base.invokelatest(getdg)) === 1
+    @test !Base.isdeprecated(Src, :dg)
+    ci = getci(getdg)
+    Base.deprecate(@__MODULE__, :dg, 0)
+    @test ci.max_world != typemax(UInt)
+    @test (@test_nowarn Base.invokelatest(getdg)) === 1
+
+    ci = getci(getde)
+    Base.deprecate(@__MODULE__, :de)
+    @test ci.max_world != typemax(UInt)
+    @test (@test_warn "de is deprecated" Base.invokelatest(getde)) === 2
+    ci = getci(getde)
+    Base.deprecate(@__MODULE__, :de, 0)
+    @test ci.max_world != typemax(UInt)
+    @test (@test_nowarn Base.invokelatest(getde)) === 2
+    # Deprecating the leaf behind an explicit import does not warn at the use site (the import
+    # site did), while behind an implicit import it does.
+    Base.deprecate(Src, :de)
+    @test (@test_nowarn Base.invokelatest(getde)) === 2
+    Base.deprecate(Src, :de, 0)
+    Base.deprecate(Src, :dg)
+    @test (@test_warn "dg is deprecated" Base.invokelatest(getdg)) === 1
+    Base.deprecate(Src, :dg, 0)
+    @test (@test_nowarn Base.invokelatest(getdg)) === 1
 end

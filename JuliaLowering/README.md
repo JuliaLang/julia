@@ -73,13 +73,13 @@ JuliaLowering uses a new type for syntax (`SyntaxTree`), which is similar to the
 existing `Expr`, but:
 1. Every node is of the same type.  With `expr::Expr`, you may have
    `expr.args[1]::Symbol` with `string(expr.args[1]) === "foo"`.  In
-   JuliaLowering, the equivalent would be `kind(syntax[1]) === K"Identifier"`
+   JuliaLowering, the equivalent would be `head(syntax[1]) === :identifier`
    with `syntax_name(syntax[1]) === "foo"`.
 2. For code provenance reasons, it contains a reference to the syntax it was
    lowered from.  This forms a linked list back to either a LineNumberNode (if
    this was converted from an Expr) or a JuliaSyntax structure containing source
    text information.  This information does not affect lowering.
-3. For macro hygiene, syntax versioning, and code provenance reasons, it
+3. For macro hygiene, language evolution, and code provenance reasons, it
    contains a reference to a "syntax context", which is internal to lowering and
    unique per macro expansion and top-level thunk.
 
@@ -185,19 +185,19 @@ flisp given the same input.
 
 Macro compatibility is less simple to implement, but the same "old code
 continues to work" guarantee applies.
-- The syntax version of the `macro ... end` definition determines which of the
-  two signatures it has.  Lowering with flisp, all syntax has version
-  `JL_OLD_SYNTAX_VERSION` and the `Expr` signature.
+- The edition of the `macro ... end` definition determines which of the two
+  signatures it has.  Lowering with flisp, all syntax has edition
+  `JL_OLD_EDITION` and the `Expr` signature.
 - A macro author can choose to implement their macro with the new signature, the
   old signature, or both (but is responsible for both being equivalent if so).
-  Adding a new macro to a project running with the old syntax version would look
+  Adding a new macro to a project running with the old edition would look
   something like this:
   ```julia
   macro m(x)
       # x::Expr
       esc(x.args[1])
   end
-  @syntax_version some_version_number macro m(x)
+  @edition some_edition macro m(x)
       # x::SyntaxTree
       x[1]
   end
@@ -205,7 +205,7 @@ continues to work" guarantee applies.
 - If no macro with the new signature exists, JuliaLowering converts all macro
   arguments to `Expr`/`Symbol`/etc. syntax, expands the old macro, and converts
   the expansion back to `SyntaxTree` with degraded provenance and all syntax
-  with version `JL_OLD_SYNTAX_VERSION`.
+  with edition `JL_OLD_EDITION`.
 
 JuliaLowering should guarantee that replacing an `Expr` macro with an equivalent
 `SyntaxTree` one (with or without deleting the old macro) doesn't break existing

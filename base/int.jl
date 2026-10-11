@@ -821,8 +821,10 @@ promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 """
     typemin(T)
+    typemin(::T)
 
-The lowest value representable by the given (real) numeric DataType `T`.
+The lowest value representable by the given (real) numeric type `T`.
+The argument can alternatively be an instance of `T`.
 
 See also: [`floatmin`](@ref), [`maxintfloat`](@ref), [`typemax`](@ref), [`eps`](@ref).
 
@@ -851,8 +853,10 @@ function typemin end
 
 """
     typemax(T)
+    typemax(::T)
 
-The highest value representable by the given (real) numeric `DataType`.
+The highest value representable by the given (real) numeric type `T`.
+The argument can alternatively be an instance of `T`.
 
 See also: [`floatmax`](@ref), [`maxintfloat`](@ref), [`typemin`](@ref), [`eps`](@ref).
 

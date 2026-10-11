@@ -297,6 +297,26 @@ let code = """
     @test occursin("InterpreterIP in top-level CodeInfo for Main.A", bt_str)
 end
 
+# Interpreted method and generated function frames show their method
+module InterpFrames
+Base.Experimental.@compiler_options compile=min infer=false
+foo() = error("Expected")
+@generated gen(x) = :(error("Expected"))
+end
+# the method's own frame is outermost (a generated body comes as a macro expansion)
+function interp_frame(f)
+    bt = try f() catch; catch_backtrace() end
+    return last(lookup(bt[findfirst(ip -> ip isa Base.InterpreterIP, bt)]))
+end
+let sf = interp_frame(InterpFrames.foo)
+    @test sprint(show, sf) == "foo() at backtrace.jl:$(only(methods(InterpFrames.foo)).line)"
+    @test parentmodule(sf) === InterpFrames
+end
+let sf = interp_frame(() -> InterpFrames.gen(1))
+    @test sprint(show, sf) == "gen(x::$Int) at backtrace.jl:$(only(methods(InterpFrames.gen)).line)"
+    @test parentmodule(sf) === InterpFrames
+end
+
 """
     _reformat_sp(bt_data...) -> sp::Vector{Ptr{Cvoid}}
 

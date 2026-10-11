@@ -1270,35 +1270,38 @@ end
    end
 end
 
-# Test TerminalProperties and DA1 parsing
+# Test TerminalProperties and private CSI (`\e[?`) parsing
 @testset "TerminalProperties" begin
-    @testset "receive_da1!" begin
-        # Typical DA1 response body (after \e[? already consumed): "64;1;2;6;22c"
+    # Feed `input` (after `\e[?` has been consumed) to a fresh set of properties.
+    function receive_csi(input; awaiting = false)
         props = LineEdit.TerminalProperties()
-        io = IOBuffer("64;1;2;6;22c")
-        LineEdit.receive_da1!(props, io)
-        @test props.da1 == [64, 1, 2, 6, 22]
-
-        # Single parameter
-        props2 = LineEdit.TerminalProperties()
-        io = IOBuffer("1c")
-        LineEdit.receive_da1!(props2, io)
-        @test props2.da1 == [1]
+        props.awaiting_colors = awaiting
+        term = FakeTerminal(IOBuffer(input), IOBuffer(), IOBuffer())
+        LineEdit.receive_private_csi!(props, term)
+        props, term
     end
 
-    @testset "receive_da1! with ^C bail-out" begin
-        props = LineEdit.TerminalProperties()
-        io = IOBuffer("64;1\x03")
-        LineEdit.receive_da1!(props, io)
-        @test props.da1 == [64, 1]
+    @testset "DA1 responses" begin
+        @test receive_csi("64;1;2;6;22c")[1].da1 == [64, 1, 2, 6, 22]
+        @test receive_csi("1c")[1].da1 == [1]
+        # An empty response is still a response, but a truncated one is not.
+        @test receive_csi("c")[1].da1 == Int[]
+        @test receive_csi("64;1\x03")[1].da1 === nothing
+        @test receive_csi("64;1")[1].da1 === nothing
     end
 
-    @testset "receive_da1! with empty response" begin
-        # Empty response should store empty vector, not remain nothing
-        props = LineEdit.TerminalProperties()
-        io = IOBuffer("c")
-        LineEdit.receive_da1!(props, io)
-        @test props.da1 == Int[]
+    @testset "palette update notifications" begin
+        props, term = receive_csi("997;1nabc")
+        @test props.awaiting_colors
+        @test read(term.in_stream, String) == "abc"
+        @test startswith(String(take!(term.out_stream)), "\e]4;0;?\e\\")
+        # Not while a query is already being answered, nor for other reports (here DECRPM).
+        for (input, awaiting) in (("997;2n", true), ("2031;1\$yabc", false))
+            props, term = receive_csi(input; awaiting)
+            @test isempty(take!(term.out_stream))
+            @test props.da1 === nothing
+        end
+        @test read(term.in_stream, String) == "abc"
     end
 
     @testset "TerminalProperties default initialization" begin

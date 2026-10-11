@@ -1261,7 +1261,7 @@
 
 (define (expand-let e (hard? #t))
   (let ((ex    (caddr e))
-        (binds (let-binds e))
+        (binds (filter (lambda (x) (not (linenum? x))) (let-binds e)))
         (hs    (if hard? '((hardscope)) '())))
     (expand-forms
      (if
@@ -1318,7 +1318,6 @@
                                           (= ,(cadar binds) ,tmp)
                                           ,blk)))))))
                (else (error "invalid let syntax"))))
-             ((linenum? (car binds)) (loop (cdr binds) blk))
              (else (error "invalid let syntax")))))))))
 
 (define (valid-macro-def-name? e)
@@ -2466,11 +2465,9 @@
              (cons (length a) (get-dims anext is-row-first (1- d)))))))
   (define (is-balanced s)
     ; determine whether there are exactly the same number of elements along each axis
-    (= 0 (sum (map (lambda (x y)
-                     (sum (map (lambda (z)
-                                 (- z y))
-                               x)))
-                   (cdr s) (map car (cdr s))))))
+    (every (lambda (x)
+             (every (lambda (z) (= z (car x))) x))
+           (cdr s)))
   (define (hasrows-flatten a)
     ; (car <result>) stores if a row was observed
     (foldl (lambda (x y)
@@ -5028,7 +5025,10 @@ f(x) = yt(x)
                                       (get arg-map lhs lhs)
                                       lhs)))
                         (if (and value rhs)
-                            (let ((rr (if (or (atom? rhs) (ssavalue? rhs) (eq? (car rhs) 'null))
+                            ;; static parameters become expressions when slots are numbered
+                            (let ((rr (if (if (atom? rhs)
+                                              (not (memq rhs (lam:sp lam)))
+                                              (or (ssavalue? rhs) (eq? (car rhs) 'null)))
                                           rhs (make-ssavalue))))
                               (if (not (eq? rr rhs))
                                   (emit `(= ,rr ,rhs)))
@@ -5640,7 +5640,7 @@ f(x) = yt(x)
                           ;; that should not be counted as belonging to the previous marked location,
                           ;; for example `return` after a not-executed `if` arm in tail position.
                           (set! nowhere #t))
-                         ((and (= current-line 0) (length= e 2) (pair? linetable))
+                         ((and (= current-line 0) (length= e 2) (pair? locstack))
                           ;; (line n) after push_loc just updates the line for the new file
                           (begin (set-lineno! (car linetable) (cadr e))
                                  (set! current-line (cadr e))))

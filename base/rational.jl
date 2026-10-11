@@ -92,6 +92,11 @@ ERROR: MethodError: no method matching //(::Float64, ::Int64)
 
 function //(x::Rational, y::Integer)
     xn, yn = divgcd(promote(x.num, y)...)
+    # If x is infinite, the denominator below is zero and cannot carry the
+    # sign of y, so apply that sign to the numerator instead.
+    if iszero(x.den) && signbit(yn)
+        xn = checked_neg(xn)
+    end
     checked_den(xn, checked_mul(x.den, yn))
 end
 function //(x::Integer,  y::Rational)
@@ -101,6 +106,10 @@ end
 function //(x::Rational, y::Rational)
     xn,yn = divgcd(promote(x.num, y.num)...)
     xd,yd = divgcd(promote(x.den, y.den)...)
+    # See the comment in `//(::Rational, ::Integer)`.
+    if iszero(xd) && signbit(yn)
+        xn = checked_neg(xn)
+    end
     checked_den(checked_mul(xn, yd), checked_mul(xd, yn))
 end
 

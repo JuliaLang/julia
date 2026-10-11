@@ -12,7 +12,7 @@
 8   TestMod.#1#2
 9   (call core.svec %₈ core.Any)
 10  (call core.svec)
-11  SourceLocation::1:2
+11  SourceLocation:1
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -41,7 +41,7 @@
 8   TestMod.#3#4
 9   (call core.svec %₈ core.Any)
 10  (call core.svec)
-11  SourceLocation::1:2
+11  SourceLocation:1
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -80,7 +80,7 @@
 8   TestMod.#5#6
 9   (call core.svec %₈ core.Any)
 10  (call core.svec)
-11  SourceLocation::1:2
+11  SourceLocation:1
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -108,7 +108,7 @@
 24  TestMod.#7#8
 25  (call core.svec %₂₄ core.Any)
 26  (call core.svec)
-27  SourceLocation::1:29
+27  SourceLocation:1
 28  (call core.svec %₂₅ %₂₆ %₂₇)
 29  (call core.define_method TestMod core.nothing %₂₈
     --- code_info
@@ -145,7 +145,7 @@
 8   TestMod.#9#10
 9   (call core.svec %₈ core.Any)
 10  (call core.svec)
-11  SourceLocation::1:2
+11  SourceLocation:1
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -180,7 +180,7 @@ LoweringError:
 8   TestMod.#11#12
 9   (call core.svec %₈ core.Any)
 10  (call core.svec)
-11  SourceLocation::1:2
+11  SourceLocation:1
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -218,7 +218,7 @@ LoweringError:
 8   TestMod.#13#14
 9   (call core.svec %₈ core.Any)
 10  (call core.svec)
-11  SourceLocation::1:4
+11  SourceLocation:1
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -259,7 +259,7 @@ LoweringError:
 13  TestMod.#17#18
 14  (call core.svec %₁₃ core.Any)
 15  (call core.svec)
-16  SourceLocation::1:2
+16  SourceLocation:1
 17  (call core.svec %₁₄ %₁₅ %₁₆)
 18  (call core.define_method TestMod core.nothing %₁₇
     --- code_info
@@ -272,7 +272,7 @@ LoweringError:
 20  TestMod.#15#16
 21  (call core.svec %₂₀ core.Any)
 22  (call core.svec)
-23  SourceLocation::1:2
+23  SourceLocation:1
 24  (call core.svec %₂₁ %₂₂ %₂₃)
 25  (call core.define_method TestMod core.nothing %₂₄
     --- code_info

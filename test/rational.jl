@@ -181,6 +181,21 @@ using Base.MathConstants
     @test_throws DivideError -1//0 + 1//0
     @test Int128(1)//0 + 1//0 isa Rational{Int128}
     @test 1//0 + Int128(1)//0 isa Rational{Int128}
+
+    # inf division by a negative number flips the sign (#63456)
+    @test (-1//0) // -1 === 1//0
+    @test (1//0) // -1 === -1//0
+    @test (1//0) // -3 === -1//0
+    @test (-1//0) // 2 === -1//0
+    @test (-1//0) / -1 === 1//0
+    @test (-1//0) // (-1//1) === 1//0
+    @test (1//0) // (-2//3) === -1//0
+    @test (1//0) / (-2//3) === -1//0
+    @test (-1//0) // (5//7) === -1//0
+    @test (1//0) // typemin(Int) === -1//0
+    @test typemin(Rational{Int8}) // Int8(-1) === typemax(Rational{Int8})
+    @test big(1)//0 // -1 == -1//0
+    @test (0x1//0x0) // 0x2 === 0x1//0x0
 end
 
 @testset "Rational methods" begin

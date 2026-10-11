@@ -903,6 +903,26 @@ end
 
 timesofar("unary arithmetic")
 
+# Check that same-size BitArray broadcasts of ops with a chunk-level equivalent take the chunked path.
+@testset "chunked broadcast bit operations" begin
+    b1 = bitrand(130)
+    b2 = bitrand(130)
+    dest = similar(b1)
+    chunked(f, args...) = Base.Broadcast.ischunkedbroadcast(dest,
+        convert(Base.Broadcast.Broadcasted{Nothing},
+            Base.Broadcast.instantiate(Base.Broadcast.broadcasted(f, args...))))
+
+    for f in (!, ~, identity)
+        @test chunked(f, b1)
+    end
+    for f in (&, |, xor, nand, nor, *, min, max, ==, !=, <, <=, >, >=)
+        @test chunked(f, b1, b2)
+    end
+    @test chunked(nand, b1, Base.Broadcast.broadcasted(!, b2))
+    @test (dest .= b1 .== (==).(true)) == falses(130)
+    @test (dest .= b1 .!= (!=).(true)) == trues(130)
+end
+
 @testset "Binary arithmetic operators" begin
     @testset "Matrix{Bool}/Matrix{Bool}" begin
         b1 = bitrand(n1, n2)

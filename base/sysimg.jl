@@ -157,4 +157,5 @@ Base.TOML.reinit!(Base.TOML_CACHE.p, "")
     BINDIR = ""
     STDLIB = ""
 end
+Base.Compiler.set_typeinf_world!()
 end

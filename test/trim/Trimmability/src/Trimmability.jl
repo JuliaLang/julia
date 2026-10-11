@@ -104,6 +104,18 @@ end
     return (fin_total[], total)
 end
 
+# Test that `dlopen(...)` for user-provided library types in `ccall` / `cglobal` works
+struct CustomLib end
+const custom_lib = CustomLib()
+function Base.Libc.Libdl.dlopen(::CustomLib)
+    print(Core.stdout, "custom_library_ccall: ")
+    return ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Ptr{UInt8}, UInt32, Cint),
+                 "libjulia", Base.Libc.Libdl.RTLD_LAZY, Cint(0))
+end
+function user_library_ccall()
+    println(Core.stdout, ccall((:jl_ver_major, custom_lib), Cint, ()))
+end
+
 function _test_cat()
     # hcat
     _cat1a = hcat(randn(3), rand(3), randn(3))
@@ -259,6 +271,18 @@ function _test_sparse_factorizations()
     println(Core.stdout, "sparse factorizations: ", cholsolve, " ", ldltsolve, " ", qrsolve)
 end
 
+function _test_threads()
+    v = zeros(Int, 64)
+    Threads.@threads for i in eachindex(v)
+        v[i] = 2i
+    end
+    w = zeros(Int, 8)
+    Threads.@threads :static for i in eachindex(w)
+        w[i] = i^2
+    end
+    println(Core.stdout, "threads: ", sum(v), " ", sum(w))
+end
+
 function @main(args::Vector{String})::Cint
     println(Core.stdout, str())
     println(Core.stdout, PROGRAM_FILE)
@@ -303,9 +327,10 @@ function @main(args::Vector{String})::Cint
     _test_sparse_structure()
     _test_sparse_broadcast()
     _test_sparse_vectors()
-    _test_sparse_reductions()
-    _test_sparse_nested_reductions()
+    _test_threads()
     # TODO(#62912): SuiteSparse libraries cannot be loaded under --trim yet
+    # _test_sparse_reductions()
+    # _test_sparse_nested_reductions()
     # _test_sparse_solves()
     # _test_sparse_factorizations()
 
@@ -318,6 +343,8 @@ function @main(args::Vector{String})::Cint
         end
     catch
     end
+
+    user_library_ccall() # prints as a side effect
 
     Base.donotdelete(reshape([1,2,3],:,1,1))
 

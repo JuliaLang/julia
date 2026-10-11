@@ -58,7 +58,7 @@ struct SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
         ad = unsigned(abs(d))
         t = signedmin + signbit(d)
         anc = t - one(UT) - rem(t, ad)   # absolute value of nc
-        p = sizeof(d)*8 - 1
+        p = Core.bitsizeof(d) - 1
         q1, r1 = divrem(signedmin, anc)
         q2, r2 = divrem(signedmin, ad)
         while true
@@ -82,7 +82,7 @@ struct SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
         end
 
         m = flipsign((q2 +% one(UT)) % T, d)  # resulting magic number
-        s = p - sizeof(d)*8                  # resulting shift
+        s = p - Core.bitsizeof(d)            # resulting shift
         new(d, m, d > 0 && m < 0 ? Int8(1) : d < 0 && m > 0 ? Int8(-1) : Int8(0), UInt8(s))
     end
 end
@@ -97,12 +97,12 @@ struct UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
     function UnsignedMultiplicativeInverse{T}(d::T) where T<:Unsigned
         d == 0 && throw(ArgumentError("cannot compute magic for d == $d"))
         add = false
-        signedmin = one(d) << (sizeof(d)*8-1)
+        signedmin = one(d) << (Core.bitsizeof(d)-1)
         signedmax = signedmin - one(T)
         allones = (zero(d) -% one(T)) % T
 
         nc = allones - rem(convert(T, allones - d), d)
-        p = 8*sizeof(d) - 1
+        p = Core.bitsizeof(d) - 1
         q1, r1 = divrem(signedmin, nc)
         q2, r2 = divrem(signedmax, d)
         while true
@@ -124,10 +124,10 @@ struct UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
                 r2 = r2 +% r2 +% one(T)
             end
             delta = d -% one(T) -% r2
-            (p < sizeof(d)*16 && (q1 < delta || (q1 == delta && r1 == 0))) || break
+            (p < 2*Core.bitsizeof(d) && (q1 < delta || (q1 == delta && r1 == 0))) || break
         end
         m = q2 +% one(T)             # resulting magic number
-        s = p - sizeof(d)*8 - add    # resulting shift
+        s = p - Core.bitsizeof(d) - add    # resulting shift
         new(d, m, add, s % UInt8)
     end
 end

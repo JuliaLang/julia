@@ -1,7 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
+environment_id = "7833cd88-3157-4f6b-8610-d241c0f49ffe"  # generated
 julia_version = "1.14.0-DEV"
-manifest_format = "2.1"
+manifest_format = "2.2"
 project_hash = "23b8253b8eadb7ba5d7489bb56f38819b7150654"
 
 [[deps.ObjectFile]]

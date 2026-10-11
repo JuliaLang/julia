@@ -690,6 +690,10 @@ struct PartialTask
     PartialTask(@nospecialize(fetch_type)) = new(fetch_type)
 end
 
+struct PossiblyAmbiguous
+    PossiblyAmbiguous() = new()
+end
+
 eval(Core, quote
     GotoNode(label::Int) = $(Expr(:new, :GotoNode, :label))
     NewvarNode(slot::SlotNumber) = $(Expr(:new, :NewvarNode, :slot))
@@ -1025,16 +1029,14 @@ eval(Core, :((NT::Type{NamedTuple{names,T}})(args::T) where {names, T <: Tuple} 
 
 # constructors for built-in types
 
-import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int
+import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int,
+    slt_int, xor_int
 
 function is_top_bit_set(x)
     @inline
-    eq_int(trunc_int(UInt8, lshr_int(x, sub_int(shl_int(sizeof(x), 3), 1))), trunc_int(UInt8, 1))
-end
-
-function is_top_bit_set(x::Union{Int8,UInt8})
-    @inline
-    eq_int(lshr_int(x, 7), trunc_int(typeof(x), 1))
+    # the top bit is set iff x is negative as a signed number; Core has no
+    # `zero`, and `xor_int(x, x)` is a zero of any width
+    slt_int(x, xor_int(x, x))
 end
 
 # n.b. This function exists for CUDA to overload to configure error behavior (see #48097)
@@ -1043,8 +1045,8 @@ throw_inexacterror(func::Symbol, to, val) = throw(InexactError(func, to, val))
 function check_sign_bit(::Type{To}, x) where {To}
     @inline
     # the top bit is the sign bit of x but "sign bit" sounds better in stacktraces
-    # n.b. if x is signed, then sizeof(x) === sizeof(To), otherwise sizeof(x) >= sizeof(To)
-    is_top_bit_set(x) && throw_inexacterror(sizeof(x) === sizeof(To) ? :convert : :trunc, To, x)
+    # n.b. if x is signed, then bitsizeof(x) === bitsizeof(To), otherwise bitsizeof(x) >= bitsizeof(To)
+    is_top_bit_set(x) && throw_inexacterror(bitsizeof(x) === bitsizeof(To) ? :convert : :trunc, To, x)
     x
 end
 
@@ -1227,15 +1229,14 @@ end
 # Bindings for the julia frontend.  The internal jl_parse and jl_lower will call
 # Core._parse and Core._lower respectively (if they are not `nothing`.)
 
-#    Core._parse(text, filename, lineno, offset, options, version)
+#    Core._parse(text, filename, lineno, offset, options, edition)
 #
 # Parse Julia code from the buffer `text`, starting at `offset` and attributing
-# it to `filename`. `text` may be a `String` or `svec(ptr::Ptr{UInt8},
-# len::Int)` for a raw unmanaged buffer. `options` should be one of `:atom`,
-# `:statement` or `:all`, indicating how much the parser will consume.
+# it to `filename`. `options` should be one of `:atom`, `:statement` or `:all`,
+# indicating how much the parser will consume.
 #
-# `_parse` must return an `svec` containing an `Expr` and the new offset as an
-# `Int`.
+# Return (ast, offset) containing an `Expr` (or `Syntax` on newer versions) and
+# the new offset as an `Int`.
 _parse = nothing
 
 #    Core._lower(code, module, filename="none", linenum=0, world=0xfff..., warn=false)
@@ -1244,9 +1245,11 @@ _parse = nothing
 # the lowered code, and `xs` is possible additional information from
 # JuliaLowering (TBD).
 _lower = nothing
+_toplevel_eval = nothing
 
 _setparser!(parser) = setglobal!(Core, :_parse, parser)
 _setlowerer!(lowerer) = setglobal!(Core, :_lower, lowerer)
+_set_toplevel_eval!(f) = setglobal!(Core, :_toplevel_eval, f)
 
 # support for deprecated uses of builtin functions
 _apply(x...) = _apply_iterate(Main.Base.iterate, x...)
@@ -1318,6 +1321,10 @@ typename(union::UnionAll) = typename(union.body)
 (!==)(@nospecialize(a), @nospecialize(b)) = Intrinsics.not_int(a === b)
 
 include(Core, "optimized_generics.jl")
+
+const OLDEST_EDITION = (1, 13)
+const VERSION_EDITION =
+    (Int(ccall(:jl_ver_major, Int32, ())), Int(ccall(:jl_ver_minor, Int32, ())))
 
 # Used only by the magic @VERSION macro
 struct MacroSource

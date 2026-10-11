@@ -942,11 +942,11 @@ cldmod1(x, y) = (cld(x, y), mod1(x, y))
 """
     fldmod1(x, y)
 
-Legacy spelling of `cldmod1(x, y)` for integers.
+Legacy spelling of `cldmod1(x, y)` for integers of the same type.
 
 See also [`cldmod1`](@ref).
 """
-fldmod1(x, y) = cldmod1(x, y)
+fldmod1(x, y) = (fld1(x, y), mod1(x, y))
 
 """
     widen(x)
@@ -1342,6 +1342,8 @@ i.e. given a function returns a new function that takes one argument and splats
 it into the original function. This is useful as an adaptor to pass a
 multi-argument function in a context that expects a single argument, but passes
 a tuple as that single argument.
+
+See also [`unsplat`](@ref).
 
 # Examples
 ```jldoctest

@@ -903,11 +903,13 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
         else
             # Here `eps(Tf(typemin(Ti))) > 1`, so the only value which can be truncated to
             # `Tf(typemin(Ti)` is itself. Similarly, `Tf(typemax(Ti))` is inexact and will
-            # be rounded up. This assumes that `Tf(typemin(Ti)) > -Inf`, which is true for
-            # these types, but not for `Float16` or larger integer types.
+            # be rounded up. For `Float16` and larger integer types, `Tf(typemin(Ti))` is
+            # `-Inf`, so the lower bound is made strict to exclude it.
+            lo = Tf(typemin(Ti))
+            lo_cmp = lo === Tf(-Inf) ? :(<) : :(<=)
             @eval begin
                 function round(::Type{$Ti},x::$Tf,::RoundingMode{:ToZero})
-                    if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
+                    if $lo_cmp($lo, x) && x < $(Tf(typemax(Ti)))
                         return unsafe_trunc($Ti,x)
                     else
                         throw(InexactError(:round, $Ti, x, RoundToZero))
@@ -991,9 +993,10 @@ end
 
 """
     floatmin(T = Float64)
+    floatmin(::T)
 
 Return the smallest positive normal number representable by the floating-point
-type `T`.
+type `T`.  The argument can alternatively be an instance of `T`.
 
 See also: [`typemin`](@ref), [`maxintfloat`](@ref), [`floatmax`](@ref), [`eps`](@ref).
 
@@ -1002,7 +1005,7 @@ See also: [`typemin`](@ref), [`maxintfloat`](@ref), [`floatmax`](@ref), [`eps`](
 julia> floatmin(Float16)
 Float16(6.104e-5)
 
-julia> floatmin(Float32)
+julia> floatmin(1.0f0) # a Float32 instance
 1.1754944f-38
 
 julia> floatmin()
@@ -1013,8 +1016,10 @@ floatmin(x::T) where {T<:AbstractFloat} = floatmin(T)
 
 """
     floatmax(T = Float64)
+    floatmax(::T)
 
 Return the largest finite number representable by the floating-point type `T`.
+The argument can alternatively be an instance of `T`.
 
 See also: [`typemax`](@ref), [`maxintfloat`](@ref), [`floatmin`](@ref), [`eps`](@ref).
 
@@ -1023,7 +1028,7 @@ See also: [`typemax`](@ref), [`maxintfloat`](@ref), [`floatmin`](@ref), [`eps`](
 julia> floatmax(Float16)
 Float16(6.55e4)
 
-julia> floatmax(Float32)
+julia> floatmax(1.0f0) # a Float32 instance
 3.4028235f38
 
 julia> floatmax()
