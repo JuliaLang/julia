@@ -2270,6 +2270,27 @@ precompile_test_harness("No backedge precompile") do load_path
     end
 end
 
+precompile_test_harness("Method roots without spare capacity") do load_path
+    write(joinpath(load_path, "TrimmedRoots.jl"),
+          """
+          module TrimmedRoots
+          struct S{N} end
+          @noinline h(@nospecialize x) = x
+          g(::S{N}) where {N} = h(S{N})
+          for N in 1:9
+              precompile(g, (S{N},))
+          end
+          end
+          """)
+    Base.compilecache(Base.PkgId("TrimmedRoots"))
+    @eval using TrimmedRoots
+    invokelatest() do
+        m = only(methods(TrimmedRoots.g))
+        @test !isempty(m.roots)
+        @test length(m.roots) == length(m.roots.ref.mem)
+    end
+end
+
 precompile_test_harness("Pre-compile Core methods") do load_path
     # Core methods should support pre-compilation as external CI's like anything else
     # https://github.com/JuliaLang/julia/issues/58497
