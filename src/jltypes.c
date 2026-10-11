@@ -1976,6 +1976,8 @@ static unsigned type_hash(jl_value_t *kj, int *failed) JL_NOTSAFEPOINT
         return hasha + hashb;
     }
     else if (jl_is_typeeq(uw)) {
+        if (jl_is_typeofbottom_param(uw))
+            return jl_typeofbottom_type->hash;
         return typeeq_hash(jl_typeeq_T(uw), failed);
     }
     else if (jl_is_typeegal(uw)) {
