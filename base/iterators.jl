@@ -441,38 +441,40 @@ end
 
 # This first queries isdone from every iterator. If any gives true, it immediately returns
 # nothing. It then iterates all those where isdone returned missing, afterwards all those
-# it returned false, again terminating immediately if any iterator is exhausted. Finally,
-# the results are interleaved appropriately.
+# it returned false, again terminating immediately if any iterator is exhausted.
+# Passes are selected by value, so an isdone inferred as Union{Bool,Missing}
+# (e.g. Take of a range) stays type-stable.
 @propagate_inbounds function _zip_iterate_all(is, ss)
     d, ds = _zip_isdone(is, ss)
     d && return nothing
-    xs1 = _zip_iterate_some(is, ss, ds, missing)
+    xs1 = _zip_iterate_unknown(is, ss, ds)
     xs1 === nothing && return nothing
-    xs2 = _zip_iterate_some(is, ss, ds, false)
-    xs2 === nothing && return nothing
-    return _zip_iterate_interleave(xs1, xs2, ds)
+    xs = _zip_iterate_rest(is, ss, xs1)
+    xs === nothing && return nothing
+    return (Base.map(first, xs), Base.map(last, xs))
 end
 
-@propagate_inbounds function _zip_iterate_some(is::Tuple, ss::Tuple, ds::Tuple{T,Vararg{Any}}, f::T) where T
-    x = iterate(is[1], ss[1]...)
+struct _ZipSkip end
+
+# Returns a nested (x, rest) list: splatting a tuple whose element types are
+# Unions lowers to Core._apply_iterate, which allocates.
+@propagate_inbounds function _zip_iterate_unknown(is::Tuple, ss::Tuple, ds::Tuple)
+    x = ds[1] === missing ? iterate(is[1], ss[1]...) : _ZipSkip()
     x === nothing && return nothing
-    y = _zip_iterate_some(tail(is), tail(ss), tail(ds), f)
+    y = _zip_iterate_unknown(tail(is), tail(ss), tail(ds))
+    y === nothing && return nothing
+    return (x, y)
+end
+_zip_iterate_unknown(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
+
+@propagate_inbounds function _zip_iterate_rest(is::Tuple, ss::Tuple, xs::Tuple)
+    x = xs[1] isa _ZipSkip ? iterate(is[1], ss[1]...) : xs[1]
+    x === nothing && return nothing
+    y = _zip_iterate_rest(tail(is), tail(ss), xs[2])
     y === nothing && return nothing
     return (x, y...)
 end
-@propagate_inbounds _zip_iterate_some(is::Tuple, ss::Tuple, ds::Tuple{Any,Vararg{Any}}, f) =
-    _zip_iterate_some(tail(is), tail(ss), tail(ds), f)
-_zip_iterate_some(::Tuple{}, ::Tuple{}, ::Tuple{}, ::Any) = ()
-
-function _zip_iterate_interleave(xs1::Tuple, xs2::Tuple, ds::Tuple)
-    t = _zip_iterate_interleave(tail(xs1), xs2, tail(ds))
-    ((xs1[1][1], t[1]...), (xs1[1][2], t[2]...))
-end
-function _zip_iterate_interleave(xs1::Tuple, xs2::Tuple, ds::Tuple{Bool,Vararg{Any}})
-    t = _zip_iterate_interleave(xs1, tail(xs2), tail(ds))
-    ((xs2[1][1], t[1]...), (xs2[1][2], t[2]...))
-end
-_zip_iterate_interleave(::Tuple{}, ::Tuple{}, ::Tuple{}) = ((), ())
+_zip_iterate_rest(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
 
 function _zip_isdone(is::Tuple, ss::Tuple)
     d = isdone(is[1], ss[1]...)
@@ -803,7 +805,7 @@ take_iteratorsize(::SizeUnknown) = SizeUnknown()
 IteratorSize(::Type{Take{I}}) where {I} = take_iteratorsize(IteratorSize(I))
 length(t::Take) = _min_length(t.xs, 1:t.n, IteratorSize(t.xs), HasLength())
 isdone(t::Take) = isdone(t.xs)
-isdone(t::Take, state) = (state[1] <= 0) | isdone(t.xs, tail(state))
+isdone(t::Take, state) = (state[1] <= 0) | isdone(t.xs, tail(state)...)
 
 @propagate_inbounds function iterate(it::Take, state=(it.n,))
     n, rest = state[1], tail(state)
