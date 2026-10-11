@@ -1404,7 +1404,7 @@ static jl_value_t *widen_Type_if_concrete(jl_value_t *t JL_PROPAGATES_ROOT, jl_s
     return t;
 }
 
-static int try_subtype_in_env(jl_value_t *a, jl_value_t *b, jl_stenv_t *e) JL_CANSAFEPOINT;
+static int try_subtype_in_env_existential(jl_value_t *a, jl_value_t *b, jl_stenv_t *e) JL_CANSAFEPOINT;
 
 // Map Type{X} to kind type (DataType, UnionAll, Union, TypeofBottom) over union
 // only if the widened kind satisfies `bound` , otherwise leave unchanged
@@ -1418,7 +1418,7 @@ static jl_value_t *widen_Type_to_union(jl_value_t *t, jl_value_t *bound, jl_sten
         // the result may then under-represent members of other tags, as
         // intersection always could for diagonal variables.
         jl_value_t *w = jl_typeof(jl_some_Type_T(t));
-        if (!try_subtype_in_env(w, bound, e))
+        if (!try_subtype_in_env_existential(w, bound, e))
             return t;
         return w;
     }
@@ -4352,13 +4352,15 @@ static int try_subtype_by_bounds(jl_value_t *a, jl_value_t *b, jl_stenv_t *e)
     return obviously_in_union(a, blb);
 }
 
-static int try_subtype_in_env(jl_value_t *a, jl_value_t *b, jl_stenv_t *e)
+static int subtype_in_env_existential(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAFEPOINT;
+
+static int try_subtype_in_env_existential(jl_value_t *a, jl_value_t *b, jl_stenv_t *e) JL_CANSAFEPOINT
 {
     if (try_subtype_by_bounds(a, b, e))
         return 1;
     jl_savedenv_t se;
     save_env(e, &se, 1);
-    int ret = subtype_in_env(a, b, e);
+    int ret = subtype_in_env_existential(a, b, e);
     restore_env(e, &se, 1);
     free_env(&se);
     return ret;
