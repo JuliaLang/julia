@@ -1720,10 +1720,12 @@ test_repl_comp_namedtuple = (abc = 1, abd = 2)
 test_repl_comp_regexmatch = match(r"(?<year>\d+)-(?<month>\d+)", "2026-10")
 
 @testset "key completion via haskey" begin
-    @test test_complete("test_repl_comp_namedtuple[:ab")[1] == [":abc", ":abd"]
-    @test test_complete("test_repl_comp_regexmatch[\"m")[1] == ["\"month\"]"]
-    @test !("1" in test_complete("CompletionFoo.test_y_array[")[1])
-    @test test_complete("test_repl_comp_throwingkeys[")[1] isa Vector{String}
+    @test test_complete_context("test_repl_comp_namedtuple[:ab")[1] == [":abc", ":abd"]
+    @test test_complete_context("test_repl_comp_regexmatch[\"m")[1] == ["\"month\"]"]
+    for x in ([1, 2], "ab", (1, 2), 1:2)
+        @test isempty(REPLCompletions.find_dict_matches(x, ""))
+    end
+    @test isempty(REPLCompletions.find_dict_matches(test_repl_comp_throwingkeys, ""))
 end
 
 @testset "dict_identifier_key" begin
