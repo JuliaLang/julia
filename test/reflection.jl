@@ -1181,6 +1181,22 @@ end
 @test  hasmethod(f31353, Tuple{Any, Array{D}} where D<:Dict)
 @test !hasmethod(f31353, Tuple{Any, Array{D}} where D<:AbstractDict)
 
+# `hasmethod` with several argument types folds to a constant
+module HasmethodFoldable
+using Test
+struct C end
+k(::C) = 1
+for sig in (Tuple{C, Int}, Tuple{C, Int, Float64}, Tuple{C, Vararg{Int}}, Tuple{C, T} where T)
+    f = @eval () -> hasmethod(k, $sig)
+    @test Core.Compiler.is_foldable(Base.infer_effects(f, ()))
+    @test only(code_typed(f, ())).first.code == Any[Core.ReturnNode(false)]
+end
+g() = hasmethod(k, Tuple{C, Int})
+@test !g()
+k(::C, ::Int) = 2
+@test g()
+end
+
 # issue #26267
 module M26267
 import Test
