@@ -56,13 +56,16 @@ newleaf(prov::SyntaxTree, k::Symbol) =
     @mknode(;source=prov, context=prov.context, head=k)
 
 # TODO: redundant, `map` should be fine
-function mapsyntax(f, exs::AbstractVector{SyntaxTree})
+function mapsyntax(f, exs::SyntaxView)
     out = SyntaxList()
     for ex in exs
         push!(out, f(ex))
     end
     out
 end
+# Funnel vectors through the view method so recursive callers (`est_to_dst`,
+# ...) don't get `exs` widened to an abstract `SubArray`
+mapsyntax(f, exs::Vector{SyntaxTree}) = mapsyntax(f, view(exs, 1:length(exs)))
 
 function mapindex(sl::Vector{SyntaxTree}, i::Int)
     out = SyntaxList()
@@ -226,7 +229,7 @@ function _expand_ast_tree(ctx, srcref, tree, jl_line::QuoteNode)
     elseif Meta.isexpr(tree, :macrocall)
         tree
     elseif tree isa Expr
-        Expr(tree.head, map(a->_expand_ast_tree(ctx, srcref, a, jl_line), tree.args)...)
+        Expr(tree.head, Any[_expand_ast_tree(ctx, srcref, a, jl_line) for a in tree.args]...)
     else
         tree
     end

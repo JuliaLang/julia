@@ -143,7 +143,7 @@ function _replace_captured_locals(@nospecialize(e), locals)
             isa_lowering_ast_node(v) ? QuoteNode(v) : v
         else
             # could possibly limit to foreigncall
-            Expr(e.head, map(a->_replace_captured_locals(a, locals), e.args)...)
+            Expr(e.head, Any[_replace_captured_locals(a, locals) for a in e.args]...)
         end
     elseif e isa QuoteNode
         QuoteNode(_replace_captured_locals(e.value, locals))
@@ -429,10 +429,9 @@ function is_defined_and_owned_global(mod, name, world::UInt=Base.get_world_count
     return _invoke_in_world(world, Base.binding_kind, mod, name) === Base.PARTITION_KIND_GLOBAL
 end
 
-function lookup_method_instance(func, args, world::Integer)
-    allargs = Vector{Any}(undef, length(args) + 1)
-    allargs[1] = func
-    allargs[2:end] = args
+function lookup_method_instance(@nospecialize(func), args::Vector{Any}, world::Integer)
+    allargs = Any[func]
+    append!(allargs, args)
     mi = @ccall jl_method_lookup(allargs::Ptr{Any}, length(allargs)::Csize_t,
                                  world::Csize_t)::Ptr{Cvoid}
     return mi == C_NULL ? nothing : unsafe_pointer_to_objref(mi)
