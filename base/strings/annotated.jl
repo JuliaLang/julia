@@ -302,7 +302,10 @@ julia> annotatedstring(AnnotatedString("annotated", [(1:9, :label, 1)]), ", and 
 """
 function annotatedstring(xs...)
     isempty(xs) && return AnnotatedString("")
-    size = mapreduce(_str_sizehint, +, xs)
+    size = 0 # Summed in a loop, as `mapreduce` would compile a fold for each combination of argument types
+    for x in xs
+        size += _str_sizehint(x)
+    end
     buf = IOBuffer(sizehint=size)
     s = IOContext(buf, :color => true)
     V = annot_promote_valtype(xs...)
