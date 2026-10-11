@@ -909,8 +909,9 @@ function _backtrace_find_and_remove_cycles(t)
 
     while t_curr ≤ length(t)
         t_this = t_curr
-        (last_frame, n) = t[t_curr]
-        current_hash = hash(t[t_curr])
+        entry = t[t_curr]::Tuple{StackFrame,Int}
+        (last_frame, n) = entry
+        current_hash = hash(entry)
         positions = get(recorded_positions, current_hash,  Int[])
 
         t_curr += 1
@@ -926,7 +927,7 @@ function _backtrace_find_and_remove_cycles(t)
             # walk trace at current and previous matching positions until matching stops
             t_curr_end = t_curr
             t_prev_end = t_prev
-            while t_curr_end < length(t) && t[t_curr_end] == t[t_prev_end]
+            while t_curr_end < length(t) && t[t_curr_end]::Tuple{StackFrame,Int} == t[t_prev_end]::Tuple{StackFrame,Int}
                 t_curr_end += 1
                 t_prev_end += 1
             end
@@ -1001,7 +1002,7 @@ function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeat
     current_cycles = NTuple{4, Int}[] # adding a value to track amount to advance frame_counter when cycle is closed
 
     for i in eachindex(trace)
-        (frame, n) = trace[i]
+        (frame, n) = trace[i]::Tuple{StackFrame,Int}
 
         ncycle_starts = 0
         while repeated_cycles[1][1] == i
@@ -1159,7 +1160,7 @@ function show_backtrace(io::IO, t::Vector; prefix = nothing)
     end
     isempty(filtered) && return
 
-    nframes = sum(last(x) for x ∈ filtered)
+    nframes = sum(last(x::Tuple{StackFrame,Int}) for x ∈ filtered)
 
     # don't show a single top-level frame with no location info
     if nframes == 1 && StackTraces.is_top_level_frame(filtered[1][1])
@@ -1174,7 +1175,7 @@ function show_backtrace(io::IO, t::Vector; prefix = nothing)
         filtered, repeated_cycles, max_nested_cycles = _backtrace_find_and_remove_cycles(filtered)
     else
         repeated_cycles = NTuple{3, Int}[]
-        max_nested_cycles = any(x -> last(x) > 1, filtered) ? 1 : 0
+        max_nested_cycles = any(x -> last(x::Tuple{StackFrame,Int}) > 1, filtered) ? 1 : 0
     end
 
     # Allow external code to edit information in the frames (e.g. line numbers with Revise)

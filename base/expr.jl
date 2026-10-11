@@ -1865,8 +1865,10 @@ function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool, loc::L
         end
         error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.")
     end
-    ci.isva = isva
-    code = ci.code
+    # `getfield`/`setfield!`: the `CodeInfo` property methods in deprecated.jl would
+    # invalidate this code, which early-defined generators run in their old world
+    setfield!(ci, :isva, isva)
+    code = getfield(ci, :code)
     bindings = IdSet{Core.Binding}()
     for i = 1:length(code)
         stmt = code[i]
@@ -1875,7 +1877,7 @@ function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool, loc::L
         end
     end
     if !isempty(bindings)
-        ci.edges = Core.svec(bindings...)
+        setfield!(ci, :edges, Core.svec(bindings...))
     end
     return ci
 end
