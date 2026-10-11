@@ -453,6 +453,34 @@ end
 @test f33590(true, (3,)) == (3,)
 @test f33590(false, (3,)) == (4,)
 
+# ifelse on two values of the same isbits union, with a wider result type.
+# Assigning y in a closure keeps its inferred type wider than its value's.
+function ifelse_union_narrow(c, v)
+    y::Union{Int,Float64,Nothing} = nothing
+    (() -> y = v[1])()
+    return Core.ifelse(c, v[2], y)
+end
+function ifelse_union_any(c, v)
+    y = nothing
+    (() -> y = v[1])()
+    return Core.ifelse(c, v[2], y)
+end
+function ifelse_union_large(c, v)
+    y::Union{eltype(v),Nothing} = nothing
+    (() -> y = v[1])()
+    return ifelse(c, v[2], y)
+end
+let v = Union{Int,Float64}[1, 2.5]
+    @test ifelse_union_narrow(true, v) === 2.5
+    @test ifelse_union_narrow(false, v) === 1
+    @test ifelse_union_any(true, v) === 2.5
+    @test ifelse_union_any(false, v) === 1
+end
+let v = Union{Int8,Int16,Int32,Int64,Float64}[Int8(1), 2.5]
+    @test ifelse_union_large(true, v) === 2.5
+    @test ifelse_union_large(false, v) === Int8(1)
+end
+
 # issue 29864
 const c29864 = VecElement{Union{Int,Nothing}}(2)
 @noinline f29864() = c29864
@@ -590,6 +618,23 @@ end
         return cond
     end
     @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f4, Tuple{Bool}, true, false, false))
+
+    # unions of ghosts have nothing to preserve, from a PhiNode or a return value (#63482)
+    function f5(cond)
+        val = cond ? nothing : missing
+        GC.@preserve val begin end
+        return cond
+    end
+    @test f5(true)
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f5, Tuple{Bool}, true, false, false))
+    @noinline f6_ghosts(cond) = cond ? nothing : missing
+    function f6(cond)
+        val = f6_ghosts(cond)
+        GC.@preserve val begin end
+        return cond
+    end
+    @test f6(true)
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f6, Tuple{Bool}, true, false, false))
 end
 
 # issue #32843

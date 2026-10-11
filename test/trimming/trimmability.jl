@@ -185,6 +185,18 @@ end
 
 end
 
+function _test_threads()
+    v = zeros(Int, 64)
+    Threads.@threads for i in eachindex(v)
+        v[i] = 2i
+    end
+    w = zeros(Int, 8)
+    Threads.@threads :static for i in eachindex(w)
+        w[i] = i^2
+    end
+    println(Core.stdout, "threads: ", sum(v), " ", sum(w))
+end
+
 function @main(args::Vector{String})::Cint
     println(Core.stdout, str())
     println(Core.stdout, PROGRAM_FILE)
@@ -226,6 +238,8 @@ function @main(args::Vector{String})::Cint
     println(Core.stdout, interpolate_many(1:3, 2.5, :sym, 'c'))
 
     println(Core.stdout, "initialized: ", MinInitDep.initialized[])
+
+    _test_threads()
 
     try
         sock = connect("localhost", 4900)

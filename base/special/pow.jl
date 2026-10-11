@@ -61,6 +61,7 @@ end
     if use_power_by_squaring(n64)
         return pow_body(x, n64)
     else
+        isnan(x) && return x
         s = ifelse(signbit(x) && isodd(n), -1.0, 1.0)
         x = abs(x)
         y = float(n64)
@@ -138,5 +139,6 @@ end
         n >>>= 1
     end
     err = muladd(y, xnlo, x*ynlo)
-    return ifelse(isfinite(x) & isfinite(err), muladd(x, y, err), x*y)
+    # x*y when err is zero, to keep the sign of a zero result
+    return ifelse(isfinite(x) & isfinite(err) & !iszero(err), muladd(x, y, err), x*y)
 end

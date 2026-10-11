@@ -1451,3 +1451,12 @@ argument version, or a `promote_type(T,S)` in the two argument version.
 """
 atand(y)    = rad2deg.(atan(y))
 atand(y, x) = rad2deg.(atan(y,x))
+
+# Float16 has too little precision for the degree conversions, so compute in Float32
+for f in (:sind, :cosd, :tand)
+    @eval $f(x::Float16) = isinf(x) ? throw(DomainError(x, $("`$f(x)` is only defined for finite `x`."))) : Float16($f(Float32(x)))
+end
+for f in (:asind, :acosd, :asecd, :acscd, :acotd, :atand)
+    @eval $f(x::Float16) = Float16($f(Float32(x)))
+end
+atand(y::Float16, x::Float16) = Float16(atand(Float32(y), Float32(x)))

@@ -46,6 +46,11 @@ end
     @test Printf.@sprintf("%#.1a", 3.14) == "0x1.9p+1"
     @test Printf.@sprintf("%#.2a", 3.14) == "0x1.92p+1"
     @test Printf.@sprintf("%.6a", 1.5) == "0x1.800000p+0"
+    # the precision must not overflow the scaling for narrow types
+    for prec in 0:15, x in (1.5, -3.14, 0x1.ffcp15, 0x1p-24, 0x1.ffcp-15)
+        @test Printf.@sprintf("%.*a", prec, Float16(x)) == Printf.@sprintf("%.*a", prec, Float64(Float16(x)))
+        @test Printf.@sprintf("%.*a", prec, Float32(x)) == Printf.@sprintf("%.*a", prec, Float64(Float32(x)))
+    end
 
 end
 
@@ -152,6 +157,10 @@ end
     @test Printf.@sprintf("%-8.1f", 1.234) == "1.2     "
     @test Printf.@sprintf("%08.1f", -1.234) == "-00001.2"
     @test Printf.@sprintf("%09.1f", -1.234) == "-000001.2"
+    # the zeros go after the sign of -0.0 too
+    @test Printf.@sprintf("%08.2f", -0.0) == "-0000.00"
+    @test Printf.@sprintf("%011.2e", -0.0) == "-000.00e+00"
+    @test Printf.@sprintf("%012.2a", -0.0) == "-0x000.00p+0"
     @test Printf.@sprintf("%09.1f", 1.234) == "0000001.2"
     @test Printf.@sprintf("%+09.1f", 1.234) == "+000001.2"
     @test Printf.@sprintf("% 09.1f", 1.234) == " 000001.2"

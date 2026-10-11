@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.13.1-DEV"
+julia_version = "1.13.2-DEV"
 manifest_format = "2.1"
-project_hash = "84f495a1bf065c95f732a48af36dd0cd2cefb9d5"
+project_hash = "80724ca50a865793488679eeb6f3c79a84a438e3"
 
 [[deps.Compiler]]
 path = "../.."

@@ -906,11 +906,13 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
         else
             # Here `eps(Tf(typemin(Ti))) > 1`, so the only value which can be truncated to
             # `Tf(typemin(Ti)` is itself. Similarly, `Tf(typemax(Ti))` is inexact and will
-            # be rounded up. This assumes that `Tf(typemin(Ti)) > -Inf`, which is true for
-            # these types, but not for `Float16` or larger integer types.
+            # be rounded up. For `Float16` and larger integer types, `Tf(typemin(Ti))` is
+            # `-Inf`, so the lower bound is made strict to exclude it.
+            lo = Tf(typemin(Ti))
+            lo_cmp = lo === Tf(-Inf) ? :(<) : :(<=)
             @eval begin
                 function round(::Type{$Ti},x::$Tf,::RoundingMode{:ToZero})
-                    if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
+                    if $lo_cmp($lo, x) && x < $(Tf(typemax(Ti)))
                         return unsafe_trunc($Ti,x)
                     else
                         throw(InexactError(:round, $Ti, x, RoundToZero))

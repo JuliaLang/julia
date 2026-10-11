@@ -227,6 +227,12 @@ end
             @test ldexp(floatmin(T)/3, 11) == T(ldexp(big(floatmin(T)/3), 11))
             @test ldexp(floatmin(T)/11, -10) == T(ldexp(big(floatmin(T)/11), -10))
             @test ldexp(-floatmin(T)/11, -10) == T(ldexp(big(-floatmin(T)/11), -10))
+            # results between nextfloat(zero(T))/2 and nextfloat(zero(T)) round up (ties to even)
+            p = -exponent(nextfloat(zero(T)))
+            @test ldexp(T(0.75), -p) === nextfloat(zero(T))
+            @test ldexp(-nextfloat(T(1)), -p-1) === -nextfloat(zero(T))
+            @test ldexp(T(1), -p-1) === zero(T)
+            @test ldexp(prevfloat(T(1)), -p-1) === zero(T)
         end
     end
 end
@@ -333,6 +339,13 @@ end
             @test isequal(cscd(T(90)), one(T))
             @test isequal(sech(log(one(T))), one(T))
             @test isequal(csch(zero(T)), T(Inf))
+            # cosh and sinh overflow before sech and csch underflow
+            let x = T == Float16 ? T(12) : T == Float32 ? T(90) : T(711)
+                @test sech(x) == csch(x) == T(2exp(-big(x)))
+                @test sech(-x) == -csch(-x) == sech(x)
+                @test issubnormal(sech(x))
+            end
+            @test sech(T(Inf)) === csch(T(Inf)) === -csch(-T(Inf)) === zero(T)
             @test zero(T)^y === zero(T)
             @test zero(T)^zero(T) === one(T)
             @test zero(T)^(-y) === T(Inf)
@@ -529,6 +542,22 @@ end
     end
     @test deg2rad(180 + 60im) ≈ pi + (pi/3)*im
     @test rad2deg(pi + (pi/3)*im) ≈ 180 + 60im
+end
+
+@testset "Float16 degree-based trig functions" begin
+    # computed in Float32, so within a hair of half an ulp (a few results double round)
+    ulps(r, ref) = Float64(abs(big(Float64(r)) - ref) / Float64(eps(max(Float16(abs(ref)), floatmin(Float16)))))
+    xs = filter(isfinite, reinterpret.(Float16, 0x0000:0xffff))
+    for f in (sind, cosd, tand, atand, acotd), x in xs[1:97:end]
+        @test ulps(f(x), f(big(Float64(x)))) <= 0.501
+    end
+    for f in (asind, acosd), x in filter(x -> abs(x) <= 1, xs)[1:37:end]
+        @test ulps(f(x), f(big(Float64(x)))) <= 0.501
+    end
+    @test sind(Float16(30)) === cosd(Float16(60)) === Float16(0.5)
+    @test asind(Float16(1)) === acosd(Float16(0)) === Float16(90)
+    @test atand(Float16(1)) === atand(Float16(2), Float16(2)) === Float16(45)
+    @test_throws DomainError(Inf16, "`sind(x)` is only defined for finite `x`.") sind(Inf16)
 end
 
 # ensure zeros are signed the same
@@ -1545,6 +1574,25 @@ end
         @test func(1.6341681540852291e308, -2., floatmax(Float64)) == -1.4706431733081426e308 # case where inv(a)*c*a == Inf
         @test func(-2., 1.6341681540852291e308, floatmax(Float64)) == -1.4706431733081426e308 # case where inv(b)*c*b == Inf
         @test func(-1.9369631f13, 2.1513551f-7, -1.7354427f-24) == -4.1670958f6
+        # a*b+c rounds (in Float64) to exactly halfway between two Float32 subnormals
+        @test func(reinterpret(Float32, 0x97000800), reinterpret(Float32, 0x1cfff001), reinterpret(Float32, 0x00010002)) === reinterpret(Float32, 0x00010001)
+        # abhi+c is exactly halfway between two Float64 values and ablo decides the rounding
+        @test func(reinterpret(Float64, 0x3ca0000000000001), reinterpret(Float64, 0x3feffffffffffffe), reinterpret(Float64, 0x3ff0000000000001)) === reinterpret(Float64, 0x3ff0000000000001)
+        @test func(-floatmin(Float64), nextfloat(0.0), nextfloat(0.0)) === nextfloat(0.0)
+        # tiny normal b makes the fma-free two_mul inexact
+        @test func(reinterpret(Float64, 0xfee492df2d70dce5), reinterpret(Float64, 0x801ad51356e60077), reinterpret(Float64, 0xbf1140536185456e)) === 1.669822474902846e-21
+        # a*b is just above nextfloat(0.0)/2, or just below the midpoint of floatmin and its predecessor
+        @test func(0x1.0000002p-538, 0x1.ffffffc000001p-538, 0.0) === nextfloat(0.0)
+        @test func(0x1.0000001p-511, 0x1.ffffffdffffffp-512, 0.0) === prevfloat(floatmin(Float64))
+        # a*b is exactly halfway between two Float64 values, and a tiny c breaks the tie
+        @test func(0x1.8p-999, 0x1.0000000000001p1000, -nextfloat(0.0)) === 0x1.8000000000001p1
+        @test func(0x1.ffffffcp511, 0x1.0000002p512, -nextfloat(0.0)) === floatmax(Float64)
+        # a*b+c rounded to Float32 is exactly halfway between two Float16 values
+        @test func(Float16(-336.0), Float16(-37.25), Float16(0.0003653)) === Float16(1.252e4)
+        for _ in 1:2^18
+            a, b, c = reinterpret.(Float16, rand(UInt16, 3))
+            @test isequal(func(a, b, c), Float16(big(a) * big(b) + big(c))) || (a,b,c)
+        end
     end
 end
 
@@ -1563,6 +1611,15 @@ end
                 else
                     @test got == expected || T.((x,y))
                 end
+            end
+        end
+        # integer powers, including those too large for power by squaring
+        for x in (0.0, -0.0, 1.0, -1.0, Inf, -Inf, NaN), n in (3, 5, 7, -3, -5, 2^15, 2^15+1, -2^15, -(2^15+1))
+            got, expected = T(x)^n, T(big(x)^n)
+            if isnan(expected)
+                @test isnan_type(T, got)
+            else
+                @test got === expected
             end
         end
         for _ in 1:2^16
