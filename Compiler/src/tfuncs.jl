@@ -1835,15 +1835,14 @@ function typeeq_apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     return TypeEq
 end
 
-# like `TypeEq`, but only closed type values are valid parameters
+# like `TypeEq`, but only type values (open or closed) are valid parameters
 function typeegal_apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any})
     length(argtypes) == 2 || return false
     ai = widenslotwrapper(widenconditional(argtypes[2]))
     if isa(ai, Const)
-        v = ai.val
-        return isa(v, Type) && !has_free_typevars(v)
+        return isa(ai.val, Type)
     end
-    # for a non-constant parameter we cannot rule out non-types or free typevars
+    # for a non-constant parameter we cannot rule out non-types
     return false
 end
 
@@ -1852,7 +1851,7 @@ function typeegal_apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     ai = widenslotwrapper(argtypes[2])
     if isa(ai, Const)
         v = ai.val
-        (isa(v, Type) && !has_free_typevars(v)) || return Bottom
+        isa(v, Type) || return Bottom
         return Const(Core.apply_type(Core.TypeEgal, v))
     end
     return Core.TypeEgal

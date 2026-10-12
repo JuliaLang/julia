@@ -6493,7 +6493,7 @@ end
 applysparam62001(::Type{Vector{T}}) where T = Vector{T}
 let v = Base.unwrap_unionall(Vector)
     @test applysparam62001(v) === v
-    @test only(Base.return_types(applysparam62001, (Type{v},))) == Type{v}
+    @test only(Base.return_types(applysparam62001, (Type{v},))) == Core.TypeEgal{v}
 end
 # Identityless TypeVar values as type parameters widen to the top kind forms.
 applytypevar62001(tv::TypeVar) = Vector{tv}
@@ -6501,7 +6501,8 @@ applytypevar62001b(tv::TypeVar) = isa(Vector{tv}, Type{Vector{_A}} where _A)
 applytypevar62001c(tv::TypeVar) = Vararg{tv}
 let x = TypeVar(:x)
     @test applytypevar62001(x).parameters[1] === x
-    @test applytypevar62001b(x) === false
+    # `isa` of an open type answers what dispatch on its `TypeEgal` key would
+    @test applytypevar62001b(x) === true
     @test applytypevar62001c(x) isa Core.TypeofVararg
     @test only(Base.return_types(applytypevar62001, (TypeVar,))) == Type
     @test only(Base.return_types(applytypevar62001c, (TypeVar,))) == Core.TypeofVararg
