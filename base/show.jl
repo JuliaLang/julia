@@ -609,6 +609,7 @@ print(io::IO, f::Core.IntrinsicFunction) = print(io, nameof(f))
 show(io::IO, ::MIME"text/plain", ::Core.TypeofBottom) = print(io, "Union{}")
 
 function print_without_params(@nospecialize(x))
+    x === Type && return true # its body is the `TypeEq` kind, not a DataType
     b = unwrap_unionall(x)
     return isa(b, DataType) && b.name.wrapper === x
 end
@@ -623,24 +624,31 @@ function io_has_tvar_name(io::IOContext, name::Symbol, @nospecialize(x))
 end
 io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
-modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
-function modulesof!(s::Set{Module}, x::TypeEq)
+# `seen` guards against typevars with cyclic bounds (e.g. from intersection
+# results), which would otherwise recurse forever through `x.ub`
+function modulesof!(s::Set{Module}, x::TypeVar, seen::IdSet{TypeVar}=IdSet{TypeVar}())
+    x in seen && return s
+    push!(seen, x)
+    modulesof!(s, x.ub, seen)
+end
+modulesof!(s::Set{Module}, x::Core.TypeVarRef, seen::IdSet{TypeVar}=IdSet{TypeVar}()) = s # detached reference: no module
+function modulesof!(s::Set{Module}, x::TypeEq, seen::IdSet{TypeVar}=IdSet{TypeVar}())
     p = type_parameter(x)
     # the parameter may be a non-type value, e.g. `Type{1}` (#62897)
-    p isa Union{Core.AnyType,TypeVar} ? modulesof!(s, p) : s
+    p isa Union{Core.AnyType,TypeVar,Core.TypeVarRef} ? modulesof!(s, p, seen) : s
 end
-modulesof!(s::Set{Module}, x::Core.TypeEgal) = modulesof!(s, type_parameter(x))
-function modulesof!(s::Set{Module}, x::Type)
+modulesof!(s::Set{Module}, x::Core.TypeEgal, seen::IdSet{TypeVar}=IdSet{TypeVar}()) = modulesof!(s, type_parameter(x), seen)
+function modulesof!(s::Set{Module}, x::Type, seen::IdSet{TypeVar}=IdSet{TypeVar}())
     x = unwrap_unionall(x)
     if x isa DataType
         push!(s, parentmodule(x))
     elseif x isa TypeEq
-        modulesof!(s, x)
+        modulesof!(s, x, seen)
     elseif x isa Core.TypeEgal
-        modulesof!(s, x)
+        modulesof!(s, x, seen)
     elseif x isa Union
-        modulesof!(s, x.a)
-        modulesof!(s, x.b)
+        modulesof!(s, x.a, seen)
+        modulesof!(s, x.b, seen)
     end
     s
 end
@@ -1092,7 +1100,11 @@ function _show_type(io::IO, @nospecialize(x::Type))
         show_typeegal(io, x)
         return
     elseif print_without_params(x)
-        show_type_name(io, (unwrap_unionall(x)::DataType).name)
+        if x === Type
+            print(io, "Type") # `Core.Type`, whose body is the `TypeEq` kind
+        else
+            show_type_name(io, (unwrap_unionall(x)::DataType).name)
+        end
         return
     elseif get(io, :compact, true)::Bool && show_typealias(io, x)
         return
@@ -1118,7 +1130,7 @@ function _show_type(io::IO, @nospecialize(x::Type))
     wheres = TypeVar[]
     let io = IOContext(io)
         while x isa UnionAll
-            var = x.var
+            var, xbody = unionall_open(x)
             if var.name === :_ || io_has_tvar_name(io, var.name, x)
                 counter = 1
                 while true
@@ -1131,7 +1143,7 @@ function _show_type(io::IO, @nospecialize(x::Type))
                     counter += 1
                 end
             else
-                x = x.body
+                x = xbody
             end
             push!(wheres, var)
             io = IOContext(io, :unionall_env => var)
@@ -2656,9 +2668,9 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
     io = IOContext(buf, out)
     env_io = io
     while isa(sig, UnionAll)
-        push!(tv, sig.var)
-        env_io = IOContext(env_io, :unionall_env => sig.var)
-        sig = sig.body
+        v, sig = unionall_open(sig)
+        push!(tv, v)
+        env_io = IOContext(env_io, :unionall_env => v)
     end
     n = 1
     sig = (sig::DataType).parameters
@@ -2863,10 +2875,12 @@ function show(io::IO, tv::TypeVar)
     # Otherwise, the lower bound should be printed if it is not `Bottom`
     # and the upper bound should be printed if it is not `Any`.
     in_env = (:unionall_env => tv) in io
-    function show_bound(io::IO, @nospecialize(b)) # b::Union{Core.AnyType,TypeVar}
+    function show_bound(io::IO, @nospecialize(b)) # b::Union{Core.AnyType,TypeVar,Core.TypeVarRef}
         parens = isa(b,UnionAll) && !print_without_params(b)
         parens && print(io, "(")
-        b isa TypeVar ? show(io, b) : show(io, b::Core.AnyType)
+        # a bound of a binder nested in a positionally opened body may be a
+        # bare reference to one of the opened binders
+        b isa Union{TypeVar,Core.TypeVarRef} ? show(io, b) : show(io, b::Core.AnyType)
         parens && print(io, ")")
         nothing
     end

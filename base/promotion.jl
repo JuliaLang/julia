@@ -38,10 +38,31 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     @_foldable_meta
     @_nothrow_meta
     @_nospecializeinfer_meta
+    # A detached fragment -- an operand with dangling positional references
+    # relative to itself (e.g. a `u.inner` body) -- cannot be joined
+    # structurally with anything else: references from unrelated binder chains
+    # would conflate. Identity and subtyping still relate a fragment to types
+    # containing it.
+    if a !== b && (Core.has_dangling_tvarrefs(a) || Core.has_dangling_tvarrefs(b))
+        isa(a, Type) && isa(b, Type) || return Any
+        a <: b && return b
+        b <: a && return a
+        return Any
+    end
+    return _typejoin(a, b)
+end
+
+function _typejoin(@nospecialize(a), @nospecialize(b))
+    @_foldable_meta
+    @_nothrow_meta
+    @_nospecializeinfer_meta
     if isa(a, TypeVar)
         return typejoin(a.ub, b)
     elseif isa(b, TypeVar)
         return typejoin(a, b.ub)
+    elseif isa(a, Core.TypeVarRef) || isa(b, Core.TypeVarRef)
+        # a bound occurrence whose binder is not part of the walked term
+        return Any
     elseif a === b
         return a
     elseif !isa(a, Type) || !isa(b, Type)
