@@ -708,7 +708,8 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // During typegroup resolution, isconcretetype may be temporarily 0, but we should
         // still compute the layout if the type doesn't actually have free type vars.
         // jl_has_fixed_layout may return 0 due to conservative checks on Tuple fields.
-        if (!st->isconcretetype && !jl_has_fixed_layout(st) && jl_has_free_typevars((jl_value_t*)st)) {
+        if (!st->isconcretetype && !jl_has_fixed_layout(st) &&
+            (jl_has_free_typevars((jl_value_t*)st) || st->hasescapingrefs)) {
             assert(st == w); // otherwise caller should not have requested this layout
             return;
         }
@@ -1639,6 +1640,7 @@ JL_DLLEXPORT jl_value_t *jl_box_uint8(uint8_t x)
 
 void jl_init_box_caches(void)
 {
+    jl_init_tvarref_cache();
     int64_t i;
     for (i = 0; i < NBOX_C; i++) {
         boxed_int32_cache[i]  = jl_permbox32(jl_int32_type, jl_int32_tag, i-NBOX_C/2);

@@ -77,6 +77,15 @@ Language changes
   (e.g. `Type{Int} <: Union{DataType,UnionAll}` holds). `isa` and dispatch of type *values* are
   unaffected, and a method on `Type{Int}` remains more specific than one on `DataType`
   ([#33136], [#62141]).
+* `UnionAll` types expose a positional (de Bruijn style) view of their binder in addition to
+  the stored `var`/`body` fields: `u.name`, `u.lb` and `u.ub` are the binder's name and bounds,
+  and `u.inner` is the wrapped type with the binder's occurrences replaced by `Core.TypeVarRef`
+  indices (`TypeVarRef(1)` is the innermost opened binder). The matching four-argument
+  constructor `UnionAll(name, lb, ub, inner)` re-closes such a body, and
+  `Core.has_dangling_tvarrefs(x)` tells whether `x` is a detached fragment (contains references
+  whose binder is not part of `x`). `TypeVarRef` is exported from `Core` and `Base`. Such
+  fragments have no `Type{T}` form (`Base._stable_typeof` and `Core.Typeof` fall back to the
+  kind) and compare by structure ([#62272]).
 
 * `Core.sizeof` of a `primitive type` now rounds its value bytes up to a multiple of its
   alignment rather than only up to a whole byte, so it always equals `Base.elsize(Array{T})`

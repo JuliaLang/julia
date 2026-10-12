@@ -1384,7 +1384,8 @@ static jl_value_t *widen_pinned_Type(jl_value_t *t JL_PROPAGATES_ROOT, jl_stenv_
         jl_value_t *T = jl_typeeq_T(t);
         if (T == jl_bottom_type)
             return (jl_value_t*)jl_typeofbottom_type;
-        if (jl_has_free_typevars(T) && !typeeq_vars_bound_in_env(T, e, wenv))
+        if ((jl_has_free_typevars(T) && !typeeq_vars_bound_in_env(T, e, wenv)) ||
+            jl_has_dangling_tvarrefs(T))
             return jl_typeof(T);
     }
     return NULL;
@@ -2818,10 +2819,13 @@ static int typeeq_vars_bound_in_env(jl_value_t *t, jl_stenv_t *e, typeeq_varctx_
 }
 
 // is `t` an internal single-object dispatch key: an open type whose free
-// typevars are all dangling in this query (see `typeeq_vars_bound_in_env`)?
+// typevars are all dangling in this query (see `typeeq_vars_bound_in_env`),
+// or a detached fragment (a positionally opened body, whose bound-variable
+// references never resolve to a binder of the query)?
 static int typeeq_is_dangling_key(jl_value_t *t, jl_stenv_t *e, typeeq_varctx_t *wenv) JL_NOTSAFEPOINT
 {
-    return jl_has_free_typevars(t) && !typeeq_vars_bound_in_env(t, e, wenv);
+    return (jl_has_free_typevars(t) && !typeeq_vars_bound_in_env(t, e, wenv)) ||
+           jl_has_dangling_tvarrefs(t);
 }
 
 static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param)

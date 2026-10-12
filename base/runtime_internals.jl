@@ -883,7 +883,7 @@ function isprimitivetype(@nospecialize t)
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
-    return (t.flags & 0x0080) == 0x0080
+    return (t.flags & 0x00000080) == 0x00000080
 end
 
 """
@@ -910,7 +910,7 @@ julia> isbitstype(Complex)
 false
 ```
 """
-isbitstype(@nospecialize t) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0008) == 0x0008)
+isbitstype(@nospecialize t) = (@_total_meta; isa(t, DataType) && (t.flags & 0x00000008) == 0x00000008)
 
 """
     isbits(x)
@@ -983,9 +983,9 @@ julia> isdispatchtuple(Tuple{Type})
 false
 ```
 """
-isdispatchtuple(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0004) == 0x0004)
+isdispatchtuple(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x00000004) == 0x00000004)
 
-datatype_ismutationfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0100) == 0x0100)
+datatype_ismutationfree(dt::DataType) = (@_total_meta; (dt.flags & 0x00000100) == 0x00000100)
 
 """
     Base.ismutationfree(T)
@@ -1010,7 +1010,7 @@ function ismutationfree(@nospecialize(t))
     return false
 end
 
-datatype_isidentityfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0200) == 0x0200)
+datatype_isidentityfree(dt::DataType) = (@_total_meta; (dt.flags & 0x00000200) == 0x00000200)
 
 """
     Base.isidentityfree(T)
@@ -1154,7 +1154,7 @@ julia> isconcretetype(Tuple{T} where T<:Int)
 false
 ```
 """
-isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0002) == 0x0002)
+isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x00000002) == 0x00000002)
 
 """
     isabstracttype(T)
@@ -1531,7 +1531,7 @@ function to_tuple_type(@nospecialize(t))
             if isa(p, Core.TypeofVararg)
                 p = unwrapva(p)
             end
-            if !(isa(p, Core.AnyType) || isa(p, TypeVar))
+            if !(isa(p, Core.AnyType) || isa(p, TypeVar) || isa(p, Core.TypeVarRef))
                 error("argument tuple type must contain only types")
             end
         end
@@ -1564,22 +1564,44 @@ end
 Determine whether `t` is a Type for which one or more of its parameters is `Union{}`.
 """
 function has_bottom_parameter(@nospecialize(t::Core.AnyType))
+    return _has_bottom_parameter(t, nothing)
+end
+# `env` is the chain of enclosing binders, innermost first: `(ub, outer_env)`.
+# A binder's bound is accounted per occurrence (resolving a positional
+# reference through the chain), not once at the binder: a `Union` arm is
+# bottom-tainted only if the occurrence sits in that arm, preserving the
+# per-arm `&` semantics below.
+function _has_bottom_parameter(@nospecialize(t), env::Union{Nothing, Tuple{Any, Any}})
     t === Bottom && return true
     ty = typeof(t)
     if ty === DataType
         for p in getfield(t, :parameters)
-            has_bottom_parameter(p) && return true
+            _has_bottom_parameter(p, env) && return true
         end
     elseif ty === TypeEq || ty === Core.TypeEgal
-        return has_bottom_parameter(type_parameter(t))
+        return _has_bottom_parameter(type_parameter(t), env)
     elseif ty === UnionAll
-        return has_bottom_parameter(unwrap_unionall(t))
+        u = t::UnionAll
+        return _has_bottom_parameter(unwrap_unionall_one(u), (u.ub, env))
     elseif ty === Union
-        return has_bottom_parameter(getfield(t, :a)) & has_bottom_parameter(getfield(t, :b))
+        return _has_bottom_parameter(getfield(t, :a), env) & _has_bottom_parameter(getfield(t, :b), env)
+    elseif ty === Core.TypeVarRef
+        d = getfield(t, :depth)
+        while d !== 1
+            env === nothing && return false # dangling fragment: binder unknown
+            env = (env::Tuple{Any, Any})[2]
+            d -= 1
+        end
+        env === nothing && return false
+        env = env::Tuple{Any, Any}
+        # the binder's bound lives outside its own scope
+        return _has_bottom_parameter(env[1], env[2])
+    elseif ty === TypeVar
+        return _has_bottom_parameter(getfield(t, :ub), env)
     end
     return false
 end
-has_bottom_parameter(t::TypeVar) = has_bottom_parameter(t.ub)
+has_bottom_parameter(t::TypeVar) = _has_bottom_parameter(t.ub, nothing)
 has_bottom_parameter(::Any) = false
 
 function find_free_typevars(@nospecialize(t))
@@ -1670,6 +1692,8 @@ propertynames(x) = fieldnames(typeof(x))
 propertynames(m::Module) = names(m)
 propertynames(x, private::Bool) = propertynames(x) # ignore private flag by default
 propertynames(x::Array) = () # hide the fields from tab completion to discourage calling `x.size` instead of `size(x)`, even though they are equivalent
+# the stored two-field layout and the positional view (see `getproperty(::UnionAll, ::Symbol)`)
+propertynames(u::UnionAll, private::Bool=false) = (:var, :body, :name, :lb, :ub, :inner)
 
 """
     hasproperty(x, s::Symbol)
@@ -1922,7 +1946,9 @@ function subst_trivial_bounds(@nospecialize(atype))
         return atype
     end
     v = atype.var
-    if isconcretetype(v.ub) || v.lb === v.ub
+    # a bound that references an outer binder cannot be substituted in this
+    # frame; keep the binder in that (rare) case
+    if (isconcretetype(v.ub) || v.lb === v.ub) && !has_dangling_typevarrefs(v.ub)
         subst = try
             atype{v.ub}
         catch
@@ -1986,7 +2012,12 @@ function specialize_method(match::Core.MethodMatch; kwargs...)
     return specialize_method(match.method, match.spec_types, match.sparams; kwargs...)
 end
 
-hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Bottom
+function hasintersect(@nospecialize(a), @nospecialize(b))
+    # the intersection lattice cannot take detached fragments (their binders,
+    # and so their bounds, live elsewhere); conservatively report overlap
+    (has_dangling_typevarrefs(a) || has_dangling_typevarrefs(b)) && return true
+    return typeintersect(a, b) !== Bottom
+end
 
 ###########
 # scoping #

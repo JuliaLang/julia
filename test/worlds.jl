@@ -815,3 +815,20 @@ let
     @test_throws MethodError Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTCplxF64())
     @test Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTOtherC()) === 2
 end
+# the typename facts scan must account for a bound-variable reference at the
+# scanned slot by walking the binder's declared bound: inserting a
+# constructor-style method with a bounded `Type` argument has to invalidate
+# missing-match backedges keyed under the bound's typename
+abstract type AbsCtor65 end
+struct ConcCtor65 <: AbsCtor65 end
+callctor65(x) = AbsCtor65(x)
+@test_throws MethodError callctor65(1)
+(::Type{T})(x) where {T<:AbsCtor65} = ConcCtor65()
+@test callctor65(1) === ConcCtor65()
+# a dependent bound resolves through the parent binder chain
+abstract type AbsCtor66{T} end
+struct ConcCtor66 <: AbsCtor66{Int} end
+callctor66(x) = AbsCtor66{Int}(x)
+@test_throws MethodError callctor66(1)
+(::Type{T})(x::S) where {S, T<:AbsCtor66{S}} = ConcCtor66()
+@test callctor66(1) === ConcCtor66()

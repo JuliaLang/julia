@@ -136,6 +136,33 @@ end
 
 so it is seldom necessary to construct a `TypeVar` manually (indeed, this is to be avoided).
 
+### The positional view
+
+Besides the stored `var`/`body` pair, a `UnionAll` exposes its binder positionally, in the
+style of de Bruijn indices: `u.name`, `u.lb` and `u.ub` are the binder's name and bounds, and
+`u.inner` is the wrapped type with every occurrence of the binder replaced by a
+`Core.TypeVarRef` leaf. `TypeVarRef(n)` denotes the binder of the `n`-th enclosing positionally
+opened `UnionAll`, counting outward from the reference; opening nested binders outside-in
+(`Array.inner.inner`) therefore yields `Array{TypeVarRef(2), TypeVarRef(1)}`:
+
+```jldoctest
+julia> Array.inner.inner
+Array{TypeVarRef(2), TypeVarRef(1)}
+
+julia> Array.inner.name, Array.inner.ub
+(:N, Any)
+```
+
+Such a body is a *detached fragment*: its references point to binders that are not part of
+the fragment itself (`Core.has_dangling_tvarrefs` reports this; `Core.has_free_typevars` does
+not see them). Fragments are compared structurally and have no `Type{T}` form, so dispatch
+keys them by egality (`Core.TypeEgal`) while `Core.Typeof` falls back to the kind. The
+four-argument constructor `UnionAll(name, lb, ub, inner)` re-closes a fragment over a new
+binder, substituting a `TypeVar` for `TypeVarRef(1)`, and `Base.rewrap_unionall` re-closes a
+fragment derived from a `where` chain over that chain's binders. The stored representation
+is unchanged: the binders of a nested `UnionAll` inside a fragment keep their `TypeVar`, so a
+reference never resolves to one of the fragment's own binders.
+
 ## Free variables
 
 The concept of a *free* type variable is extremely important in the type system. We say that a

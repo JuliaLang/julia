@@ -1283,6 +1283,11 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, jl_unwrap_unionall(((jl_typename_t*)v)->wrapper), depth, ctx);
         n += jl_printf(out, ")");
     }
+    else if (vt == jl_tvarref_type) {
+        // a bound-variable occurrence of a detached fragment (its binder was
+        // opened positionally, so there is no name to show)
+        n += jl_printf(out, "TypeVarRef(%" PRIuPTR ")", (uintptr_t)jl_tvarref_depth(v));
+    }
     else if (vt == jl_tvar_type) {
         // show type-var bounds only if they aren't going to be printed by UnionAll later
         jl_tvar_t *var = (jl_tvar_t*)v;

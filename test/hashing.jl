@@ -297,10 +297,13 @@ end
 
 struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
 @test AUnionParam.body.hash == 0
+# the positional body is a closed, cacheable (and so hashable) fragment
+@test AUnionParam.inner.hash != 0
 @test Base._jl_type_cache_hash(Type{AUnionParam}) != 0
 @test Base._jl_type_cache_hash(Type{AUnionParam{<:Union{Float32,Float64}}}) == 0
 @test Type{AUnionParam{<:Union{Nothing,Float32,Float64}}} === Type{AUnionParam}
 @test Base._jl_type_cache_hash(Type{AUnionParam.body}) == 0
+@test Base._jl_type_cache_hash(Type{AUnionParam.inner}) != 0
 @test Base._jl_type_cache_hash(Type{Base.Broadcast.Broadcasted}) != 0
 
 

@@ -99,6 +99,19 @@ function getproperty(T::DataType, s::Symbol)
     s === :super && return supertype(T)
     return getfield(T, s)
 end
+# The positional view of a `UnionAll`: `u.name`, `u.lb` and `u.ub` are the
+# binder's fields and `u.inner` is the wrapped type with the binder's
+# occurrences replaced by `Core.TypeVarRef(1)` (references the body already
+# carried, to binders opened further out, move one level up). `u.inner` is
+# computed on every access (no cache); `u.var`/`u.body` are the stored fields.
+function getproperty(u::UnionAll, s::Symbol)
+    @inline
+    s === :inner && return unionall_inner(u)
+    s === :name && return unionall_name(u)
+    s === :lb && return unionall_lb(u)
+    s === :ub && return unionall_ub(u)
+    return getfield(u, s)
+end
 supertype(T::UnionAll) = (@_foldable_meta; UnionAll(T.var, supertype(T.body)))
 
 ## generic comparison ##
@@ -998,7 +1011,10 @@ julia> [0 1; 2 3] .|> (x -> x^2) |> sum
 |>(x, f) = f(x)
 
 _stable_typeof(x) = typeof(x)
-_stable_typeof(::Type{T}) where {T} = @isdefined(T) && !Core.has_free_typevars(T) ? Type{T} : DataType
+# a detached fragment of a `UnionAll` body (e.g. from `u.inner`) carries
+# dangling binder references instead of free TypeVars; it has no `Type{T}` either
+_stable_typeof(::Type{T}) where {T} =
+    @isdefined(T) && !Core.has_free_typevars(T) && !Core.has_dangling_tvarrefs(T) ? Type{T} : DataType
 
 """
     f = Returns(value)

@@ -1011,6 +1011,18 @@ JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_
 jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val) JL_CANSAFEPOINT;
 jl_value_t *jl_substitute_var_nothrow(jl_value_t *t, jl_tvar_t *var, jl_value_t *val, int nothrow) JL_CANSAFEPOINT;
 jl_unionall_t *jl_rename_unionall(jl_unionall_t *u) JL_CANSAFEPOINT;
+// substitute the dangling TypeVarRef with depth `idx` in `t` by `val`; the
+// references above it shift down one level (their binder count decreased)
+jl_value_t *jl_substitute_tvarref(jl_value_t *t, size_t idx, jl_value_t *val) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_substitute_tvarref_nothrow(jl_value_t *t, size_t idx, jl_value_t *val) JL_CANSAFEPOINT;
+jl_value_t *jl_small_tvarref(size_t depth) JL_NOTSAFEPOINT;
+// shift every dangling TypeVarRef in `t` by `inc` (negative: the dropped
+// levels must not occur in `t`)
+JL_DLLEXPORT jl_value_t *jl_shift_dangling_refs(jl_value_t *t, ssize_t inc) JL_CANSAFEPOINT;
+// re-close the binder of `u` over `t`, which is derived from `u->body` (the
+// binder as the TypeVar `u->var`) or from `jl_unionall_inner(u)` (the binder
+// as `TypeVarRef(1)`); normalizes like `jl_type_unionall`
+JL_DLLEXPORT jl_value_t *jl_rewrap_unionall_one(jl_value_t *t, jl_unionall_t *u) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_unwrap_unionall(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u) JL_CANSAFEPOINT;
@@ -1377,6 +1389,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi) JL_
 void jl_init_serializer(void) JL_CANSAFEPOINT;
 void jl_init_uv(void) JL_NOTSAFEPOINT;
 void jl_init_box_caches(void) JL_NOTSAFEPOINT;
+void jl_init_tvarref_cache(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_init_options(void) JL_NOTSAFEPOINT;
 
 void jl_set_base_ctx(char *__stk);
