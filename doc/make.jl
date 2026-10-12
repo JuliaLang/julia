@@ -69,6 +69,33 @@ cd(joinpath(buildrootdoc, "src")) do
     end
 end
 
+# Link the JuliaSyntax docs in, the same way we do for stdlibs.
+const JULIASYNTAX_DOCS = [
+    "index",
+    "howto",
+    "reference",
+    "api",
+    "design",
+]
+cd(joinpath(buildrootdoc, "src")) do
+    Base.rm("juliasyntax"; recursive=true, force=true)
+    mkdir("juliasyntax")
+    for name in JULIASYNTAX_DOCS
+        sourcefile = joinpath(@__DIR__, "..", "JuliaSyntax", "docs", "src", "$name.md")
+        targetfile = joinpath("juliasyntax", "$name.md")
+        if Sys.iswindows()
+            cp_q(sourcefile, targetfile)
+        else
+            symlink_q(sourcefile, targetfile)
+        end
+    end
+end
+
+# The JuliaSyntax docs refer to the module as `JuliaSyntax`, and to a few of its
+# names unqualified; here it is reached as `Base.JuliaSyntax`.
+const JuliaSyntax = Base.JuliaSyntax
+using Base.JuliaSyntax: kind, GreenNode
+
 # Because we have standard libraries that are hosted outside of the julia repo,
 # but their docs are included in the manual, we need to populate the remotes argument
 # of makedocs(), to make sure that Documenter knows how to resolve the directories
@@ -447,6 +474,13 @@ DevDocs = [
         "devdocs/builtins.md",
         "devdocs/precompile_hang.md",
         "devdocs/compiler_changes.md",
+    ],
+    "JuliaSyntax" => [
+        "juliasyntax/index.md",
+        "juliasyntax/howto.md",
+        "juliasyntax/reference.md",
+        "juliasyntax/api.md",
+        "juliasyntax/design.md",
     ],
     "Developing/debugging Julia's C code" => [
         "devdocs/backtraces.md",
