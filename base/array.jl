@@ -846,7 +846,8 @@ function collect(itr::Generator)
         # The typeassert gives inference a helping hand on the element type and dimensionality
         # (work-around for #28382)
         et′ = et <: Type ? Type : et
-        RT = dest isa AbstractArray ? AbstractArray{<:et′, ndims(dest)} : Any
+        RT = !(dest isa AbstractArray) ? Any :
+             isconcretetype(et′) ? AbstractArray{et′, ndims(dest)} : AbstractArray{<:et′, ndims(dest)}
         collect_to_with_first!(dest, v1, itr, st)::RT
     end
 end
@@ -866,7 +867,8 @@ function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
     # The typeassert gives inference a helping hand on the element type and dimensionality
     # (work-around for #28382)
     et′ = et <: Type ? Type : et
-    RT = dest isa AbstractArray ? AbstractArray{<:et′, ndims(dest)} : Any
+    RT = !(dest isa AbstractArray) ? Any :
+         isconcretetype(et′) ? AbstractArray{et′, ndims(dest)} : AbstractArray{<:et′, ndims(dest)}
     collect_to_with_first!(dest, v1, itr, st)::RT
 end
 

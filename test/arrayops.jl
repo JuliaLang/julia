@@ -2734,6 +2734,10 @@ end
 # issue #14482
 @inferred map(Int8, Int[0])
 
+# map with a constructor over an abstract eltype infers a concrete array type
+@test @inferred(map(Float64, Any[1, 2.0])) == [1.0, 2.0]
+@test @inferred(collect(Iterators.map(Float64, Any[1, 2.0]))) == [1.0, 2.0]
+
 # make sure @inbounds isn't used too much
 mutable struct OOB_Callable{T}; a::T; end
 (f::OOB_Callable)(i::Int) = f.a[i]
