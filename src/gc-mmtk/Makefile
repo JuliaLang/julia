@@ -31,6 +31,8 @@ endif
 
 ifeq ($(MMTK_MOVING), 0)
 MMTK_JULIA_CARGO_FEATURES := $(MMTK_JULIA_CARGO_FEATURES),non_moving
+else
+MMTK_JULIA_CARGO_FEATURES := $(MMTK_JULIA_CARGO_FEATURES),moving
 endif
 
 ifeq ($(MMTK_BUILD_MODE),release)
