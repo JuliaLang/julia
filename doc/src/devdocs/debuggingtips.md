@@ -132,6 +132,42 @@ If you are debugging a segfault with threaded code, you can set a breakpoint on 
 (`sigdie_handler` should also work on Linux and BSD) in order to only catch the actual segfault
 rather than the GC synchronization points.
 
+## Finding Julia's source files
+
+The debug info of Julia code refers to Julia's own sources (`base`, the compiler, the
+standard libraries, ...) by their path under the `share/julia` directory. Code that is
+compiled at run time refers to the sources of the running Julia. The system image and
+package images refer to the `share/julia` directory of the build tree that the system
+image was built in, so gdb finds those sources directly when debugging a source build.
+
+An installed Julia, such as an official binary or the result of `make install`, has its
+sources elsewhere. On Linux and FreeBSD, its system image contains a gdb script that maps
+the build tree's `share/julia` to the installed one (this requires gdb 7.10 or newer, built
+with Python support). gdb only runs scripts from
+locations you trust, and otherwise prints a warning that auto-loading "has been
+declined". To trust the installation, add the following to `~/.config/gdb/gdbinit`:
+
+```
+add-auto-load-safe-path /path/to/julia
+```
+
+To set up the mapping by hand instead, for example in lldb or with a gdb that lacks Python
+support, look up both directories:
+
+```
+$ julia -e 'println(normpath(Sys.BUILD_STDLIB_PATH, "..", ".."))'
+/cache/build/builder-amdci4-8/julialang/julia-ci/usr/share/julia/
+$ julia -e 'println(abspath(Sys.BINDIR, Base.DATAROOTDIR, "julia"))'
+/opt/julia-1.14.0/share/julia
+```
+
+and pass them to the debugger, without a trailing slash and quoted if they contain spaces:
+
+```
+(gdb) set substitute-path "/cache/build/builder-amdci4-8/julialang/julia-ci/usr/share/julia" "/opt/julia-1.14.0/share/julia"
+(lldb) settings set target.source-map "/cache/build/builder-amdci4-8/julialang/julia-ci/usr/share/julia" "/opt/julia-1.14.0/share/julia"
+```
+
 ## Debugging during Julia's build process (bootstrap)
 
 Errors that occur during `make` need special handling. Julia is built in two stages, constructing
