@@ -537,6 +537,62 @@ end
     @test length(v.ref.mem) == 5
 end
 
+@testset "growat!" begin
+    v = [1, 2, 3, 4, 5]
+    for i = 1:6, delta = 0:3
+        vc = copy(v)
+        @test growat!(vc, i, delta) === vc
+        @test length(vc) == length(v) + delta
+        @test vc[1:i-1] == v[1:i-1]
+        @test vc[i+delta:end] == v[i:end]
+    end
+    @test length(growat!(Int[], 1, 2)) == 2
+    # new elements of a non-isbits eltype are #undef, whichever side of `a` has spare capacity
+    for i = 1:6, delta = 1:3, first in (false, true)
+        vc = sizehint!(Any[1:5;], 20; first)
+        growat!(vc, i, delta)
+        @test !any(j -> isassigned(vc, j), i:i+delta-1)
+        @test vc[[1:i-1; i+delta:end]] == 1:5
+        @test deleteat!(vc, i:i+delta-1) == 1:5
+    end
+    # errors are thrown before `a` is modified
+    vc = copy(v)
+    @test_throws BoundsError growat!(vc, 0, 1)
+    @test_throws BoundsError growat!(vc, 7, 1)
+    @test_throws ArgumentError growat!(vc, 1, -1)
+    @test_throws ArgumentError growat!(vc, 3, -1)
+    @test_throws ArgumentError growat!(vc, 6, -1)
+    @test vc == v
+end
+
+@testset "insert!(::Vector, ::AbstractUnitRange, items)" begin
+    v = [1, 2, 3, 4, 5]
+    for i = 1:6, n = 0:3
+        vc = copy(v)
+        r = i:i+n-1
+        items = collect(10:10+n-1)
+        @test insert!(vc, r, items) === vc
+        @test vc == [v[1:(i-1)]; items; v[i:end]]
+        @test vc[r] == items
+    end
+    @test insert!(copy(v), Base.OneTo(2), [10, 20]) == [10, 20, 1, 2, 3, 4, 5]
+    @test insert!(Int[], 1:2, [10, 20]) == [10, 20]
+    # non-array iterables
+    @test insert!(copy(v), 2:3, (10, 20)) == [1, 10, 20, 2, 3, 4, 5]
+    @test insert!(copy(v), 2:3, (i for i in 7:8)) == [1, 7, 8, 2, 3, 4, 5]
+    # element conversion
+    @test insert!(copy(v), 2:3, [7., 8.]) == [1, 7, 8, 2, 3, 4, 5]
+    @test insert!(Any[1, 2], 2:3, ["x", :y]) == Any[1, "x", :y, 2]
+    @test insert!(["a", "b"], 2:3, ["x", "y"]) == ["a", "x", "y", "b"]
+    # errors are thrown before `a` is modified
+    vc = copy(v)
+    @test_throws DimensionMismatch insert!(vc, 2:3, [1])
+    @test_throws BoundsError insert!(vc, 0:1, [1, 2])
+    @test_throws BoundsError insert!(vc, 7:8, [1, 2])
+    @test_throws BoundsError insert!(vc, 7:6, Int[])
+    @test vc == v
+end
+
 @testset "popat!(::Vector, i, [default])" begin
     a = [1, 2, 3, 4]
     @test_throws BoundsError popat!(a, 0)

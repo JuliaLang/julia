@@ -303,6 +303,7 @@ Base.deleteat!
 Base.keepat!
 Base.splice!
 Base.resize!
+Base.growat!
 Base.append!
 Base.prepend!
 ```

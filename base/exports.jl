@@ -547,6 +547,7 @@ export
 
 # dequeues
     append!,
+    growat!,
     insert!,
     pop!,
     popat!,
