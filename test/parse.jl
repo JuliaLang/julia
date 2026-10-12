@@ -320,8 +320,8 @@ end
     # plain decimal digits take a fast path; anything else falls back to the full grammar
     for (s, x) in (("7", 7), ("-7", -7), ("+7", 7), ("-", nothing), ("+", nothing), ("-0", 0),
                    ("07", 7), ("-07", -7), ("0x7", 7), ("1 ", 1), ("1x", nothing), ("1x1", nothing),
-                   ("--1", nothing), ("-+1", nothing), ("9223372036854775807", typemax(Int)),
-                   ("-9223372036854775808", typemin(Int)), ("9223372036854775808", nothing))
+                   ("--1", nothing), ("-+1", nothing), (string(typemax(Int)), typemax(Int)),
+                   (string(typemin(Int)), typemin(Int)), (string(big(typemax(Int)) + 1), nothing))
         @test tryparse(Int, s) === x
         @test tryparse(Int, SubString(" $s ", 2, ncodeunits(s) + 1)) === x
     end
