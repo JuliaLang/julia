@@ -466,8 +466,12 @@ static void buildLoopOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *PB
             //We don't know if the loop callbacks support MSSA
             FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA = */true));
         }
-        if (getSpeedupLevel(O) >= 2)
+        if (getSpeedupLevel(O) >= 2) {
+            // Fully unroll small constant-trip loops before IRCE splits them into
+            // pre/main/post loops with unknown trip counts (#62798)
+            FPM.addPass(createFunctionToLoopPassAdaptor(LoopFullUnrollPass()));
             FPM.addPass(IRCEPass());
+        }
         {
             LoopPassManager LPM;
             LPM.addPass(BeforeLoopSimplificationMarkerPass());
