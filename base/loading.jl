@@ -1501,7 +1501,10 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         Compiler.@zone "CC: INSERT_BACKEDGES" begin
             ReinferUtils.insert_backedges_typeinf(internal_methods)
         end
-        restored = register_restored_modules(sv, pkg, path)
+        # collect the `__init__` reports to print after this package's timing is taken, so
+        # that any compilation for the printing isn't attributed to this package
+        init_reports = timing_imports ? Tuple{Module, Int, UInt64, UInt64, UInt64}[] : nothing
+        restored = register_restored_modules(sv, pkg, path; init_reports)
 
         for M in restored
             M = M::Module
@@ -1510,6 +1513,9 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
                 if timing_imports
                     elapsed_time = time_ns() -% t_before
                     comp_time, recomp_time = map(-%, cumulative_compile_time_ns(), t_comp_before)
+                    for report in init_reports
+                        print_time_imports_report_init(report...)
+                    end
                     print_time_imports_report(M, elapsed_time, comp_time, recomp_time)
                 end
                 return M
@@ -1589,7 +1595,7 @@ function extension_parent_name(M::Module)
     return nothing
 end
 
-function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
+function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String; init_reports=nothing)
     # This function is also used by PkgCacheInspector.jl
     assert_havelock(require_lock)
     restored = sv[1]::Vector{Any}
@@ -1613,7 +1619,7 @@ function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
         unlock(require_lock) # temporarily _unlock_ during these callbacks
         try
             for (i, mod) in pairs(inits)
-                run_module_init(mod, i)
+                run_module_init(mod, i, init_reports)
             end
         finally
             lock(require_lock)
@@ -1622,8 +1628,9 @@ function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
     return restored
 end
 
-function run_module_init(mod::Module, i::Int=1)
-    # `i` informs ordering for the `@time_imports` report formatting
+function run_module_init(mod::Module, i::Int=1, init_reports=nothing)
+    # `i` informs ordering for the `@time_imports` report formatting.
+    # If `init_reports` is given, the report is pushed to it instead of printed.
     if TIMING_IMPORTS[] == 0
         ccall(:jl_init_restored_module, Cvoid, (Any,), mod)
     elseif isdefined(mod, :__init__)
@@ -1637,7 +1644,12 @@ function run_module_init(mod::Module, i::Int=1)
         cumulative_compile_timing(false);
         comp_time, recomp_time = map(-%, cumulative_compile_time_ns(), compile_elapsedtimes)
 
-        print_time_imports_report_init(mod, i, elapsed_time, comp_time, recomp_time)
+        report = (mod, i, elapsed_time, comp_time, recomp_time)
+        if init_reports === nothing
+            print_time_imports_report_init(report...)
+        else
+            push!(init_reports, report)
+        end
     end
 end
 
