@@ -38,6 +38,10 @@ let exe_suffix = splitext(Base.julia_exename())[2]
     @test Base.VersionNumber(lines[2]) ≥ v"1.5.7"
     @test filesize(basic_jll_exe) < filesize(unsafe_string(Base.JLOptions().image_file))/10
 
+    # Test that empty `Memory{Any}` objects survive pruning a keyset-less specializations table
+    unindexed_exe = joinpath(bindir, "unindexed_specializations" * exe_suffix)
+    @test readlines(`$unindexed_exe`) == ["2 0", "2 true false"]
+
     # Test that the shared library can be used in a C application
     capplication_exe = joinpath(bindir, "capplication" * exe_suffix)
     lines = split(readchomp(`$capplication_exe`), "\n")
