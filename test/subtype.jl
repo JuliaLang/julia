@@ -3051,7 +3051,7 @@ end
 @testintersect(
     Tuple{X,X,Ref{U}} where {U,X<:U},
     Tuple{Union{Type{Int},Type{Vector}}, Type{Int8}, Ref{DataType}},
-    Tuple{Type{Int64}, Type{Int8}, Ref{DataType}}
+    Tuple{Type{Int}, Type{Int8}, Ref{DataType}}
 )
 # JETLS#509 — inference hang with Union-bounded parametric types
 # subtype_ccheck leaked right-side Union choices into the shared
