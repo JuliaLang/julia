@@ -85,7 +85,7 @@ Base.CANCEL_REQUEST_ABANDON_ALL
 ```@docs
 Base.AbstractChannel
 Base.Channel
-Base.Channel(::Function)
+Base.Channel{T}(::Function)
 Base.put!(::Channel, ::Any)
 Base.take!(::Channel)
 Base.isfull(::Channel)
