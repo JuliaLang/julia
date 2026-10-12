@@ -3215,6 +3215,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("DataType", (jl_value_t*)jl_datatype_type);
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
     add_builtin("TypeVarRef", (jl_value_t*)jl_tvarref_type);
+    add_builtin("SubtypeBinding", (jl_value_t*)jl_varbinding_type);
+    add_builtin("LocatedTerm", (jl_value_t*)jl_lterm_type);
     add_builtin("UnionAll", (jl_value_t*)jl_unionall_type);
     add_builtin("Union", (jl_value_t*)jl_uniontype_type);
     add_builtin("Intersect", (jl_value_t*)jl_intersect_type);

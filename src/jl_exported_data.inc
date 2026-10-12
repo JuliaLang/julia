@@ -131,6 +131,8 @@
     XX(tuple_typename, jl_typename_t*) \
     XX(tvar_type, jl_datatype_t*) \
     XX(tvarref_type, jl_datatype_t*) \
+    XX(varbinding_type, jl_datatype_t*) \
+    XX(lterm_type, jl_datatype_t*) \
     XX(typeerror_type, jl_datatype_t*) \
     XX(typeeq_type, jl_datatype_t*) \
     XX(typeegal_type, jl_datatype_t*) \

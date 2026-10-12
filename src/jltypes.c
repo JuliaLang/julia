@@ -4831,6 +4831,39 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_false = jl_permbox8(jl_bool_type, jl_bool_tag, 0);
     jl_true  = jl_permbox8(jl_bool_type, jl_bool_tag, 1);
 
+    // GC-managed state of the subtyping algorithm (subtype.c): an entry of a
+    // query's binder environment and a cell of a bound's located-term list.
+    // The layouts mirror `jl_varbinding_t` and `jl_lterm_t` (pointer fields
+    // first; subtype.c checks the sizes).
+    jl_varbinding_type = jl_new_datatype(jl_symbol("SubtypeBinding"), core, jl_any_type, jl_emptysvec,
+                                         jl_perm_symsvec(32,
+                                             "var", "u", "lbs", "ubs", "final_var", "innervars",
+                                             "prev", "frame_prev", "other_t",
+                                             "live", "popped", "referenced", "final_pending",
+                                             "existential", "occurs_inv", "pinned", "occurs_cov",
+                                             "cov_diag", "concrete", "max_offset", "constraintkind",
+                                             "intvalued", "limited", "intersected", "widened_to_kind",
+                                             "lb_certainty", "lb_required", "lb_spell",
+                                             "tainted_inner", "body_occurs_inv", "in_ccheck",
+                                             "depth0"),
+                                         jl_svec(32,
+                                             jl_any_type, jl_any_type, jl_any_type, jl_any_type,
+                                             jl_any_type, jl_any_type, jl_any_type, jl_any_type,
+                                             jl_any_type,
+                                             jl_uint8_type, jl_uint8_type, jl_uint8_type, jl_uint8_type,
+                                             jl_uint8_type, jl_uint8_type, jl_uint8_type, jl_uint8_type,
+                                             jl_uint8_type, jl_uint8_type, jl_uint8_type, jl_uint8_type,
+                                             jl_uint8_type, jl_uint8_type, jl_uint8_type, jl_uint8_type,
+                                             jl_uint8_type, jl_uint8_type, jl_uint8_type,
+                                             jl_uint8_type, jl_uint8_type, jl_uint8_type,
+                                             jl_int32_type),
+                                         jl_emptysvec, 0, 1, 9);
+    jl_lterm_type = jl_new_datatype(jl_symbol("LocatedTerm"), core, jl_any_type, jl_emptysvec,
+                                    jl_perm_symsvec(5, "t", "frame", "next", "cached", "detached"),
+                                    jl_svec(5, jl_any_type, jl_any_type, jl_any_type, jl_any_type,
+                                            jl_uint8_type),
+                                    jl_emptysvec, 0, 1, 4);
+
     jl_abstractstring_type = jl_new_abstracttype((jl_value_t*)jl_symbol("AbstractString"), core, jl_any_type, jl_emptysvec);
     jl_string_type = jl_new_datatype(jl_symbol("String"), core, jl_abstractstring_type, jl_emptysvec,
                                      jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 1, 0);
