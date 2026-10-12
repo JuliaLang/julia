@@ -142,7 +142,7 @@ JL_DLLEXPORT void jl_dump_emitted_mi_name_fallback(void *s)
 {
 }
 
-JL_DLLEXPORT void jl_set_debuginfo_source_paths_fallback(jl_value_t *map)
+JL_DLLEXPORT void jl_set_debuginfo_source_paths_fallback(jl_value_t *map, jl_value_t *root, jl_value_t *image_root)
 {
 }
 

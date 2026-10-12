@@ -7,8 +7,11 @@ if Threads.maxthreadid() != 1
     @warn "Running this file with multiple Julia threads may lead to a build error" Threads.maxthreadid()
 end
 
-if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
 Sys.__init_build()
+# no `__init__` runs while building the system image, and its code is emitted at exit
+Base.init_debuginfo_source_paths()
+
+if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
 if !isdefined(Base, :uv_eventloop)
     Base.reinit_stdio()
 end

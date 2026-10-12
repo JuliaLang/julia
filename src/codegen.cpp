@@ -254,13 +254,17 @@ void jl_dump_emitted_mi_name_impl(void *s)
 // Source paths recorded in the system image refer to the build tree: Base files are
 // relative to its `base` directory, stdlibs are absolute paths on the build machine.
 // Base registers prefix rewrites (from, to) that map them onto the installed sources,
-// so that the debug info of JIT-compiled code points debuggers at files that exist.
+// so that debug info points debuggers at files that exist. Images are installed
+// elsewhere after they are written, so they refer to those sources by their path under
+// `image_root` instead of `root`: the root the system image was built with, which every
+// image then shares, and which the installed system image tells gdb how to map.
 static std::mutex source_path_lock;
 static SmallVector<std::pair<std::string, std::string>, 0> source_path_map;
+static std::string source_root, image_source_root;
 static StringMap<std::string> resolved_source_paths;
 
 extern "C" JL_DLLEXPORT_CODEGEN
-void jl_set_debuginfo_source_paths_impl(jl_value_t *map)
+void jl_set_debuginfo_source_paths_impl(jl_value_t *map, jl_value_t *root, jl_value_t *image_root)
 {
     std::lock_guard<std::mutex> guard(source_path_lock);
     source_path_map.clear();
@@ -269,31 +273,42 @@ void jl_set_debuginfo_source_paths_impl(jl_value_t *map)
     for (size_t i = 0; i + 1 < n; i += 2)
         source_path_map.emplace_back(jl_string_data(jl_svecref(map, i)),
                                      jl_string_data(jl_svecref(map, i + 1)));
+    source_root = jl_string_data(root);
+    image_source_root = jl_string_data(image_root);
 }
 
 // Apply the first rewrite whose prefix matches and whose result exists. A relative
 // prefix only applies to relative paths, so the empty prefix acts as a search
 // directory for them, just like `Base.find_source_file`.
-static std::string resolve_source_path(StringRef file) JL_NOTSAFEPOINT
+static std::string resolve_source_path(StringRef file, bool imaging) JL_NOTSAFEPOINT
 {
     std::lock_guard<std::mutex> guard(source_path_lock);
     auto it = resolved_source_paths.find(file);
-    if (it != resolved_source_paths.end())
-        return it->second;
-    std::string resolved = file.str();
-    bool isabs = sys::path::is_absolute(file);
-    for (auto &[from, to] : source_path_map) {
-        if (sys::path::is_absolute(from) != isabs || !file.starts_with(from))
-            continue;
-        SmallString<256> path(to);
-        sys::path::append(path, file.substr(from.size()));
-        sys::path::remove_dots(path, true);
-        if (sys::fs::exists(path)) {
-            resolved = std::string(path);
-            break;
-        }
+    std::string resolved;
+    if (it != resolved_source_paths.end()) {
+        resolved = it->second;
     }
-    resolved_source_paths[file] = resolved;
+    else {
+        resolved = file.str();
+        bool isabs = sys::path::is_absolute(file);
+        for (auto &[from, to] : source_path_map) {
+            if (sys::path::is_absolute(from) != isabs || !file.starts_with(from))
+                continue;
+            SmallString<256> path(to);
+            sys::path::append(path, file.substr(from.size()));
+            sys::path::remove_dots(path, true);
+            if (sys::fs::exists(path)) {
+                resolved = std::string(path);
+                break;
+            }
+        }
+        resolved_source_paths[file] = resolved;
+    }
+    if (imaging && !source_root.empty() && StringRef(resolved).starts_with(source_root)) {
+        StringRef rest = StringRef(resolved).drop_front(source_root.size());
+        if (rest.empty() || sys::path::is_separator(rest.front()))
+            return image_source_root + rest.str();
+    }
     return resolved;
 }
 
@@ -9350,14 +9365,12 @@ static jl_datatype_t *compute_va_type(jl_value_t *sig, size_t nreq) JL_CANSAFEPO
     return (jl_datatype_t*)typ;
 }
 
-// Code that is JIT-compiled can refer to the installed sources by absolute path.
-// Images keep the recorded paths, as they may be relocated or used on another machine.
 // Only Base and Core record paths relative to `base`; a relative name in user code
 // (e.g. from `include_string`) must not be resolved to an unrelated Base file.
 static DIFile *get_difile(jl_codectx_t &ctx, DIBuilder &dbuilder, StringRef file, bool is_user_code)
 {
-    if (!ctx.emission_context.imaging_mode && (!is_user_code || sys::path::is_absolute(file))) {
-        std::string path = resolve_source_path(file);
+    if (!is_user_code || sys::path::is_absolute(file)) {
+        std::string path = resolve_source_path(file, ctx.emission_context.imaging_mode);
         if (sys::path::is_absolute(path))
             return dbuilder.createFile(sys::path::filename(path), sys::path::parent_path(path));
     }

@@ -1350,17 +1350,21 @@ function find_source_file(path::AbstractString)
 end
 
 # Let codegen map the source paths recorded in the system image (see `find_source_file`
-# and `fixup_stdlib_path`) onto the installed sources, so that the debug info of
-# JIT-compiled code refers to files that exist on this machine.
+# and `fixup_stdlib_path`) onto the installed sources, so that debug info refers to files
+# that exist. JIT-compiled code uses their actual location. Images use their location
+# under the `share/julia` the system image was built with, so that all images agree on
+# one root, which the installed system image maps for gdb (see `contrib/debug_gdb_scripts.jl`).
 function init_debuginfo_source_paths()
-    share = joinpath(abspath(Sys.BINDIR, DATAROOTDIR, "julia"), "")
-    paths = String[]
+    root = abspath(Sys.BINDIR, DATAROOTDIR, "julia")
+    share = joinpath(root, "")
     build_share = joinpath(normpath(Sys.BUILD_STDLIB_PATH, "..", ".."), "")
+    paths = String[]
     build_share == share || push!(paths, build_share, share)
     # the Compiler is included relative to `base` in the build tree
     isempty(DATAROOT) || push!(paths, DATAROOT * "julia/", share)
     push!(paths, "", joinpath(share, "base"))
-    ccall(:jl_set_debuginfo_source_paths, Cvoid, (Any,), Core.svec(paths...))
+    ccall(:jl_set_debuginfo_source_paths, Cvoid, (Any, Any, Any),
+          Core.svec(paths...), root, dirname(build_share))
 end
 
 function cache_file_entry(pkg::PkgId)
