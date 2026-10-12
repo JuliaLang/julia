@@ -54,8 +54,7 @@ mutable struct Syntax
     # TODO: this is almost never populated and semantically irrelevant after
     # parsing
     const syntax_flags::UInt16
-    function Syntax(head, children, value, source, context, jl_source, meta, mod, syntax_flags)
-        @nospecialize
+    function Syntax(head, children, @nospecialize(value), source, context, jl_source, meta, mod, syntax_flags)
         new(head, children, value, source, context, jl_source, meta, mod, syntax_flags)
     end
 end
