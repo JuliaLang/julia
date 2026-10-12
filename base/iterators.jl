@@ -403,8 +403,9 @@ function _zip_lengths_finite_equal(is)
     if IteratorSize(i) isa Union{IsInfinite, SizeUnknown}
         return (false, nothing)
     else
+        m = length(i)
         b, n = _zip_lengths_finite_equal(tail(is))
-        return (b && (n === nothing || n == length(i)), length(i))
+        return (b && (n === nothing || n == m), m)
     end
 end
 _zip_lengths_finite_equal(is::Tuple{}) = (true, nothing)
