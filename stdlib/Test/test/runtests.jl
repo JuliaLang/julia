@@ -1118,7 +1118,7 @@ uninferable_small_union(i) = (1, nothing)[i]
 let T = Core.TypeVar(:T)
     f_free_typevar_result() = Rational{T}
     err = @test_throws ErrorException @inferred(f_free_typevar_result())
-    @test occursin("return type Type{Rational{T}} does not match inferred return type", err.value.msg)
+    @test occursin("return type Core.TypeEgal{Rational{T}} does not match inferred return type", err.value.msg)
 end
 
 # Ensure @inferred only evaluates the arguments once

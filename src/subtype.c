@@ -2765,9 +2765,9 @@ static int union_has_kind_component(jl_value_t *y) JL_NOTSAFEPOINT
 
 // Does `t` contain a typevar with a binding in the environment `e` (i.e. one
 // introduced by a `where` enclosing this query)? A `Type{T}` parameter whose
-// free typevars are all dangling instead is an internal dispatch key for one
-// specific (open) type object -- `jl_inst_arg_tuple_type` keys type values
-// this way when free typevars preclude a `TypeEgal` slot -- and is matched
+// free typevars are all dangling instead is a dispatch key for one specific
+// (open) type object (`jl_inst_arg_tuple_type` keys type values by egality
+// these days, but such a key can still be spelled directly) and is matched
 // like that value: pinned to its type tag, `==`-compared as a `Type` (the same
 // hybrid `typekeyvalue_eq` uses). Method signatures always bind their vars, so
 // they still get the sound `==`-class semantics.
@@ -4118,47 +4118,49 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
     if (jl_is_type(x)) {
         if (t == (jl_value_t*)jl_type_type)
             return 1;
-        if (!jl_has_free_typevars(x)) {
-            if (jl_is_concrete_type(t))
-                return 0;
-            if (jl_is_typeeq(t))
-                return jl_types_equal(x, jl_typeeq_T(t));
-            if (jl_is_typeegal(t))
-                return jl_egal(x, jl_typeegal_T(t));
-            jl_value_t *t2 = jl_unwrap_unionall(t);
-            if (jl_is_typeeq(t2)) {
-                jl_value_t *tp = jl_typeeq_T(t2);
-                if (jl_is_typevar(tp)) {
-                    if (((jl_tvar_t*)tp)->lb == jl_bottom_type) {
-                        while (jl_is_typevar(tp))
-                            tp = ((jl_tvar_t*)tp)->ub;
-                        if (!jl_has_free_typevars(tp))
-                            return jl_subtype(x, tp);
-                    }
-                    else if (((jl_tvar_t*)tp)->ub == (jl_value_t*)jl_any_type) {
-                        while (jl_is_typevar(tp))
-                            tp = ((jl_tvar_t*)tp)->lb;
-                        if (!jl_has_free_typevars(tp))
-                            return jl_subtype(tp, x);
-                    }
+        // a type value (open or closed) is an instance of `TypeEgal{x}` (its
+        // `Core.Typeof`), of `Type{B}` iff it equals `B`, and otherwise of
+        // whatever `TypeEgal{x}` is a subtype of, the same question dispatch
+        // answers for its `jl_inst_arg_tuple_type` key
+        if (jl_is_concrete_type(t))
+            return 0;
+        if (jl_is_typeeq(t))
+            return jl_types_equal(x, jl_typeeq_T(t));
+        if (jl_is_typeegal(t))
+            return jl_egal(x, jl_typeegal_T(t));
+        jl_value_t *t2 = jl_unwrap_unionall(t);
+        if (jl_is_typeeq(t2)) {
+            jl_value_t *tp = jl_typeeq_T(t2);
+            if (jl_is_typevar(tp)) {
+                if (((jl_tvar_t*)tp)->lb == jl_bottom_type) {
+                    while (jl_is_typevar(tp))
+                        tp = ((jl_tvar_t*)tp)->ub;
+                    if (!jl_has_free_typevars(tp))
+                        return jl_subtype(x, tp);
+                }
+                else if (((jl_tvar_t*)tp)->ub == (jl_value_t*)jl_any_type) {
+                    while (jl_is_typevar(tp))
+                        tp = ((jl_tvar_t*)tp)->lb;
+                    if (!jl_has_free_typevars(tp))
+                        return jl_subtype(tp, x);
                 }
             }
-            else if (jl_is_datatype(t2)) {
-                return jl_subtype(jl_typeof(x), t);
-            }
-            if (jl_subtype(jl_typeof(x), t))
-                return 1;
-            if (jl_has_intersect_type_not_kind(t2)) {
-                // wrap as the egality kind: `TypeEgal{x} <: Type{B}` also holds
-                // whenever `x == B`, so this covers both wrapper kinds in `t`
-                jl_value_t *wrapped = jl_wrap_TypeEgal(x);  // TODO jb/subtype avoid jl_wrap_TypeEgal
-                JL_GC_PUSH1(&wrapped);
-                int ans = jl_subtype(wrapped, t);
-                JL_GC_POP();
-                return ans;
-            }
-            return 0;
         }
+        else if (jl_is_datatype(t2)) {
+            return jl_subtype(jl_typeof(x), t);
+        }
+        if (jl_subtype(jl_typeof(x), t))
+            return 1;
+        if (jl_has_intersect_type_not_kind(t2)) {
+            // wrap as the egality kind: `TypeEgal{x} <: Type{B}` also holds
+            // whenever `x == B`, so this covers both wrapper kinds in `t`
+            jl_value_t *wrapped = jl_wrap_TypeEgal(x);  // TODO jb/subtype avoid jl_wrap_TypeEgal
+            JL_GC_PUSH1(&wrapped);
+            int ans = jl_subtype(wrapped, t);
+            JL_GC_POP();
+            return ans;
+        }
+        return 0;
     }
     if (jl_is_concrete_type(t))
         return 0;

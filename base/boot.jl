@@ -300,7 +300,7 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       (f::typeof(Typeof))(x) = begin
           $(_expr(:meta,:nospecialize,:x))
           if isa(x,Type)
-              has_free_typevars(x) ? Type{x} : TypeEgal{x}
+              TypeEgal{x}
           else
               typeof(x)
           end

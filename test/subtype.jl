@@ -3394,8 +3394,25 @@ _typeegal_id(::Type{T}) where {T} = T
     @test !(Type{Int} <: TE{Int})
     @test Union{} <: TE{Int}
     @test Base.iskindtype(TE)
-    # free typevars are disallowed inside `TypeEgal`, but closed parameters are fine
-    @test_throws TypeError TE{TypeVar(:T)}
+    # a `TypeEgal` parameter may have free typevars (it is the `Core.Typeof` of
+    # every type value), but a binder may not reach into it: the parameter is an
+    # egality key, not a pattern
+    let T = TypeVar(:T)
+        @test_throws TypeError TE{T} # a `TypeVar` is not a type
+        @test Core.Typeof(T) === TypeVar
+        @test Core.Typeof(Vector{T}) === TE{Vector{T}}
+        @test isa(Vector{T}, TE{Vector{T}})
+        @test !isa(Vector{TypeVar(:T)}, TE{Vector{T}})
+        @test Base.has_free_typevars(TE{Vector{T}})
+        @test_throws ErrorException UnionAll(T, TE{Vector{T}})
+        @test_throws ErrorException UnionAll(T, Tuple{T, TE{Vector{T}}})
+        @test_throws ErrorException UnionAll(T, Type{TE{Vector{T}}})
+        @test_throws ErrorException UnionAll(T, Union{Int, TE{Vector{T}}})
+        @test_throws ErrorException UnionAll(T, Tuple{Vararg{TE{Vector{T}}}})
+        @test_throws ErrorException UnionAll(T, Ref{S} where S<:TE{Vector{T}})
+        # a binder over a different variable is fine
+        @test isa(UnionAll(T, Tuple{T, TE{Vector{TypeVar(:S)}}}), UnionAll)
+    end
     @test isa(TE{Vector{S} where S}, TE)
     @test isa(Vector{S} where S, TE{Vector{S} where S})
     # intersection keeps the more-specific `TypeEgal`; wrappers are freshly

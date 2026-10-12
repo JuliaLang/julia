@@ -954,6 +954,20 @@ jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
 
 // unionall types -------------------------------------------------------------
 
+// does `v` occur inside a `TypeEgal` parameter of `t`?
+static int typevar_in_typeegal_visit(jl_value_t *t, int pos, jl_typeenv_t *binders, void *v) JL_NOTSAFEPOINT
+{
+    if (t == (jl_value_t*)v)
+        return (pos & JL_WALK_TYPEEGAL) != 0;
+    if (jl_is_unionall(t) && ((jl_unionall_t*)t)->var == (jl_tvar_t*)v)
+        return -1; // shadowed
+    if (jl_is_datatype(t) && !((jl_datatype_t*)t)->hasfreetypevars)
+        return -1;
+    return 0;
+}
+
+JL_TYPE_WALKER(typevar_in_typeegal, typevar_in_typeegal_visit)
+
 JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
 {
     if (jl_is_vararg(body)) {
@@ -986,6 +1000,11 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
     }
     if (!jl_is_type(body) && !jl_is_typevar(body) && !jl_is_typeapp(body))
         jl_type_error("UnionAll", (jl_value_t*)jl_type_type, body);
+    // `TypeEgal{T}` is an egality key: its parameter is a value compared by
+    // `===`, never a pattern, so a binder may not reach into it
+    if (typevar_in_typeegal(body, 0, NULL, v))
+        jl_errorf("UnionAll: type variable `%s` occurs inside a `TypeEgal` parameter, which cannot bind a variable",
+                  jl_symbol_name(v->name));
     // normalize `T where T<:S` => S
     if (body == (jl_value_t*)v)
         return v->ub;
@@ -1045,13 +1064,10 @@ static int typekeyvalue_eq(jl_datatype_t *tt, jl_value_t *key1, jl_value_t **key
         jl_value_t *kj = j == 0 ? key1 : key[j - 1];
         jl_value_t *tj = jl_svecref(tt->parameters, j);
         if (leaf && jl_is_typeeq(tj)) {
-            // a closed `Type{T}` key can only belong to a by-type constructed tuple,
-            // which must not capture (`==`-equal but non-egal) argument values (#61323)
-            jl_value_t *tp0 = jl_typeeq_T(tj);
-            if (!jl_has_free_typevars(tp0))
-                return 0;
-            if (!(kj == tp0 || (jl_typeof(tp0) == jl_typeof(kj) && jl_types_equal(tp0, kj))))
-                return 0;
+            // a `Type{T}` key can only belong to a by-type constructed tuple,
+            // which must not capture (`==`-equal but non-egal) argument values
+            // (#61323); `jl_inst_arg_tuple_type` always keys type values by egality
+            return 0;
         }
         else if (leaf && jl_is_typeegal(tj)) {
             // `TypeEgal{T}` matches the argument value by egality (`===`)
@@ -1491,9 +1507,7 @@ static jl_value_t *apply_type_(jl_value_t *tc, jl_value_t **params, size_t n, jl
     if (tc == (jl_value_t*)jl_typeegal_type) {
         if (n != 1)
             jl_errorf("wrong number of parameters for type `TypeEgal`: expected 1, got %zu", n);
-        if (!jl_is_type(params[0]) || jl_has_free_typevars(params[0]))
-            jl_type_error_rt("TypeEgal", "parameter", (jl_value_t*)jl_type_type, params[0]);
-        return jl_wrap_TypeEgal(params[0]);
+        return jl_wrap_TypeEgal(params[0]); // checks that the parameter is a type
     }
     size_t i;
     if (n > 1) {
@@ -2040,7 +2054,7 @@ static unsigned typekeyvalue_hash(jl_typename_t *tn, jl_value_t *key1, jl_value_
             if (kj == jl_bottom_type)
                 hj = ((jl_datatype_t*)jl_typeofbottom_type)->hash;
             else
-                hj = jl_has_free_typevars(kj) ? typeeq_hash(kj, &failed) : typeegal_hash(kj, &failed);
+                hj = typeegal_hash(kj, &failed);
             if (failed)
                 return 0;
         }
@@ -2805,21 +2819,14 @@ jl_tupletype_t *jl_inst_arg_tuple_type(jl_value_t *arg1, jl_value_t **args, size
         for (i = 0; i < nargs; i++) {
             jl_value_t *ai = (i == 0 ? arg1 : args[i - 1]);
             if (leaf && jl_is_type(ai)) {
-                if (jl_has_free_typevars(ai)) {
-                    // if `ai` has free type vars this will not be a valid
-                    // (concrete) type.
-                    // TODO: it would be really nice to only dispatch and cache
-                    // those as `jl_typeof(ai)`, but that will require some
-                    // redesign of the caching logic.
-                    // free typevars are disallowed inside `TypeEgal`; fall back to the
-                    // equality key `Type{ai}`, which still binds static parameters (#61242)
-                    ai = (jl_value_t*)jl_wrap_Type(ai);
-                }
-                else {
-                    // key the dispatch cache on the type value by egality, so `==`-equal
-                    // but non-egal type objects get distinct entries (#61323)
-                    ai = jl_wrap_TypeEgal(ai);
-                }
+                // key the dispatch cache on the type value by egality, so `==`-equal
+                // but non-egal type objects get distinct entries (#61323). If `ai`
+                // has free type vars this will not be a valid (concrete) type, but
+                // the key still binds static parameters (#61242).
+                // TODO: it would be really nice to only dispatch and cache
+                // those as `jl_typeof(ai)`, but that will require some
+                // redesign of the caching logic.
+                ai = jl_wrap_TypeEgal(ai);
             }
             else {
                 ai = jl_typeof(ai);
@@ -3186,9 +3193,12 @@ jl_typeeq_t *jl_wrap_Type(jl_value_t *t)
 
 jl_value_t *jl_wrap_TypeEgal(jl_value_t *t)
 {
-    // `TypeEgal` pins a type value by egality; non-type parameters and free
-    // typevars are not valid.
-    if (!jl_is_type(t) || jl_has_free_typevars(t))
+    // `TypeEgal` pins a type value by egality; non-type parameters are not
+    // valid. A parameter may have free typevars (`Core.Typeof` of any type
+    // value is its `TypeEgal`); what it may not do is bind one of them later:
+    // `jl_type_unionall` refuses to close a binder over a `TypeEgal` parameter,
+    // so an egality key is always a closed value to the type system.
+    if (!jl_is_type(t))
         jl_type_error_rt("TypeEgal", "parameter", (jl_value_t*)jl_type_type, t);
     // `typeof(Union{})` already denotes exactly the single-instance set `{Union{}}`
     // (the bottom object is unique), so normalize to it

@@ -2085,9 +2085,7 @@ JL_CALLABLE(jl_f_apply_type)
     else if (args[0] == (jl_value_t*)jl_typeegal_type) {
         JL_NARGS(apply_type, 2, 2);
         jl_value_t *pi = args[1];
-        if (!jl_is_type(pi) || jl_has_free_typevars(pi))
-            jl_type_error_rt("TypeEgal", "parameter", (jl_value_t*)jl_type_type, pi);
-        return jl_wrap_TypeEgal(pi);
+        return jl_wrap_TypeEgal(pi); // checks that `pi` is a type
     }
     else if (jl_is_vararg(args[0])) {
         jl_vararg_t *vm = (jl_vararg_t*)args[0];
