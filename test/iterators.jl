@@ -1054,7 +1054,9 @@ end
     iterator_types = (  # each element here takes an iterator type as first parameter
         Base.Generator,
         Iterators.Reverse,
-        Iterators.Enumerate,
+        let Zip = Iterators.Zip, Count = Iterators.Count  # formerly `Iterators.Enumerate`
+            Zip{Tuple{Count{Int, Int}, T}} where {T}
+        end,
         Iterators.Filter{F, I} where {I, F},
         Iterators.Accumulate{F, I} where {I, F},
         Iterators.Rest,

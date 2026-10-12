@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Iterators: Enumerate
+const Enumerate = let Zip = Base.Iterators.Zip,
+                      Count = Base.Iterators.Count
+    Zip{Tuple{Count{Int, Int}, T}} where {T}
+end
 
 """
     asyncmap(f, c...; ntasks=0, batch_size=nothing)

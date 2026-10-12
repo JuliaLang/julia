@@ -163,10 +163,6 @@ iterate(r::Reverse{<:Union{Tuple, NamedTuple}}, i::Int = length(r.itr)) = i < 1 
 
 # enumerate
 
-struct Enumerate{I}
-    itr::I
-end
-
 """
     enumerate(iter)
 
@@ -204,33 +200,7 @@ i = 4, val = v, StringIndexError("naïve", 4)
 i = 5, val = e, str[i] = 'v'
 ```
 """
-enumerate(iter) = Enumerate(iter)
-
-length(e::Enumerate) = length(e.itr)
-size(e::Enumerate) = size(e.itr)
-@propagate_inbounds function iterate(e::Enumerate, state=(1,))
-    i, rest = state[1], tail(state)
-    n = iterate(e.itr, rest...)
-    n === nothing && return n
-    (i, n[1]), (i+1, n[2])
-end
-last(e::Enumerate) = (length(e.itr), last(e.itr))
-
-eltype(::Type{Enumerate{I}}) where {I} = TupleOrBottom(Int, eltype(I))
-
-IteratorSize(::Type{Enumerate{I}}) where {I} = IteratorSize(I)
-IteratorEltype(::Type{Enumerate{I}}) where {I} = IteratorEltype(I)
-
-@inline function iterate(r::Reverse{<:Enumerate})
-    ri = reverse(r.itr.itr)
-    iterate(r, (length(ri), ri))
-end
-@inline function iterate(r::Reverse{<:Enumerate}, state)
-    i, ri, rest = state[1], state[2], tail(tail(state))
-    n = iterate(ri, rest...)
-    n === nothing && return n
-    (i, n[1]), (i-1, ri, n[2])
-end
+enumerate(iter) = zip(countfrom(), iter)
 
 """
     pairs(IndexLinear(), A)
@@ -519,6 +489,10 @@ zip_iteratoreltype(a, tail...) = and_iteratoreltype(a, zip_iteratoreltype(tail..
 last(z::Zip) = nth(z, length(z))
 
 function reverse(z::Zip)
+    is = z.is
+    if predicate_reverse_zip_count(is)
+        return reverse_zip_count(is)
+    end
     if !first(_zip_lengths_finite_equal(z.is))
         throw(ArgumentError("Cannot reverse zipped iterators of unknown, infinite, or unequal lengths"))
     end
@@ -772,6 +746,49 @@ eltype(::Type{<:Count{T}}) where {T} = T
 iterate(it::Count, state=it.start) = (state, state + it.step)
 
 IteratorSize(::Type{<:Count}) = IsInfinite()
+
+# Zip with Count
+
+# Predicate that returns `true` iff, after filtering out all members of type
+# `Count{Int, Int}`, `t` contains exactly one member, which has an
+# `IteratorSize` of type `Union{HasLength,HasShape}`.
+function predicate_reverse_zip_count(t::Tuple)
+    function f(x)
+        x isa Count{Int, Int}
+    end
+    s = Base.filter(!f, t)
+    (s isa Tuple{Any}) && (IteratorSize(only(s)) isa Union{HasLength,HasShape})
+end
+
+# Among the members of `t`, return the first member with `IteratorSize` of
+# type `Union{HasLength,HasShape}`. Throw when there is no such member.
+function first_length(t::Tuple)
+    i = t[1]
+    if IteratorSize(i) isa Union{HasLength,HasShape}
+        length(i)
+    else
+        first_length(tail(t))
+    end
+end
+
+# Reverse `x` with respect to `len`.
+function reverse_count(x::Count{Int,Int}, len::Int)
+    start = Base.Checked.checked_add(x.start, Base.Checked.checked_mul(x.step, len - 1))
+    step = Base.Checked.checked_neg(x.step)
+    countfrom(start, step)
+end
+
+function reverse_zip_count(t::Tuple)
+    len = Int(first_length(t))::Int
+    function f(x)
+        if IteratorSize(x) isa Union{HasLength,HasShape}
+            reverse(x)
+        else
+            reverse_count(x, len)
+        end
+    end
+    zip(Base.map(f, t)...)
+end
 
 # Take -- iterate through the first n elements
 
