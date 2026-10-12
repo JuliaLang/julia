@@ -2183,6 +2183,20 @@ let src = code_typed1((Vector{Float32},)) do v
         (x.args[1]::Core.CodeInstance).def.specTypes == Tuple{Type{NoSpecializeCtor}, Any, Int}
     end == 1
 end
+# unless that would make the caller box an inline-stored immutable argument
+struct NoSpecializeCtorWrap
+    v::Vector{Float32}
+    i::Int
+end
+let src = code_typed1((NoSpecializeCtorWrap,)) do w
+        NoSpecializeCtor(w, 1)
+    end
+    @test count(src.code) do @nospecialize x
+        Meta.isexpr(x, :invoke) &&
+        (x.args[1]::Core.CodeInstance).def.specTypes ==
+            Tuple{Core.TypeEgal{NoSpecializeCtor}, NoSpecializeCtorWrap, Int}
+    end == 1
+end
 
 # Test that irinterp can make use of constant results even if they're big
 # Check that pure functions with non-inlineable results still get deleted

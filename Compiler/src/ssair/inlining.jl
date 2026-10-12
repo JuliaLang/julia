@@ -771,17 +771,33 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
     return new_argtypes
 end
 
-# Whether the compileable signature `new_atype` only widened `TypeEgal` slots of `atype`
-function only_typeegal_widened(@nospecialize(atype), @nospecialize(new_atype))
+# Whether passing a value of type `T` as `Any` makes the caller heap-allocate a box for it
+needs_call_site_box(@nospecialize T) =
+    isconcretetype(T) && !ismutabletype(T) && !isprimitivetype(T) && !issingletontype(T)
+
+# Whether a call with a `TypeEgal` slot (e.g. a constructor call) should keep the directly
+# inferred `CodeInstance` instead of the one for its compileable signature `new_atype`:
+# either only `TypeEgal` slots were widened, or widening would make every call site
+# allocate a box for an inline-stored immutable argument.
+function keep_typeegal_abi(@nospecialize(atype), @nospecialize(new_atype))
     atype isa DataType || return false
     new_atype isa DataType || return false
     ps, nps = atype.parameters, new_atype.parameters
-    length(ps) == length(nps) || return false
+    any(@nospecialize(p)->p isa Core.TypeEgal, ps) || return false
+    n = length(nps)
+    va = n > 0 && isvarargtype(nps[n])
+    typeegal_only = length(ps) == n
     for i in 1:length(ps)
         p = ps[i]
-        p === nps[i] || p isa Core.TypeEgal || return false
+        if i < n || (i == n && !va)
+            (p === nps[i] || p isa Core.TypeEgal) && continue
+        elseif !va
+            return false
+        end
+        needs_call_site_box(p) && return true
+        typeegal_only = false
     end
-    return true
+    return typeegal_only
 end
 
 function compileable_specialization(code::Union{MethodInstance,CodeInstance}, effects::Effects,
@@ -789,12 +805,12 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
     mi = code isa CodeInstance ? get_ci_mi(code) : code
     mi_invoke = mi
     method, atype, sparams = mi.def::Method, mi.specTypes, mi.sparam_vals
-    typeegal_only = false
+    keep_direct_edge = false
     if OptimizationParams(state.interp).compilesig_invokes
         new_atype = get_compileable_sig(method, atype, sparams)
         new_atype === nothing && return nothing
         if atype !== new_atype
-            typeegal_only = only_typeegal_widened(atype, new_atype)
+            keep_direct_edge = code isa CodeInstance && keep_typeegal_abi(atype, new_atype)
             (_, sparams) = typeintersect_env(new_atype, method.sig)
             mi_invoke = specialize_method(method, new_atype, sparams)
             mi_invoke === nothing && return nothing
@@ -814,9 +830,8 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
     # TODO: can this code be gotten directly from inference sometimes?
     # A normalized compileable signature can have a less precise ABI for TypeEgal
     # arguments, forcing boxed argument passing for non-recursive invokes, so a
-    # directly supplied inferred edge for the actual call signature wins there.
-    # Only do so when nothing else was widened, to keep honoring `@nospecialize`.
-    keep_direct_edge = code isa CodeInstance && typeegal_only
+    # directly supplied inferred edge for the actual call signature wins there
+    # (see `keep_typeegal_abi`).
     if !keep_direct_edge
         cached = get(code_cache(state), mi_invoke, nothing)
         if cached isa CodeInstance
