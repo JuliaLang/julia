@@ -4858,9 +4858,9 @@ void jl_init_types(void) JL_GC_DISABLED
                                              jl_int32_type, jl_int32_type),
                                          jl_emptysvec, 0, 1, 8);
     jl_lterm_type = jl_new_datatype(jl_symbol("LocatedTerm"), core, jl_any_type, jl_emptysvec,
-                                    jl_perm_symsvec(5, "t", "next", "cached", "frame", "detached"),
-                                    jl_svec(5, jl_any_type, jl_any_type, jl_any_type, jl_ulong_type,
-                                            jl_uint8_type),
+                                    jl_perm_symsvec(6, "t", "next", "cached", "frame", "detached", "cached_gen"),
+                                    jl_svec(6, jl_any_type, jl_any_type, jl_any_type, jl_ulong_type,
+                                            jl_uint8_type, jl_uint32_type),
                                     jl_emptysvec, 0, 1, 3);
 
     jl_abstractstring_type = jl_new_abstracttype((jl_value_t*)jl_symbol("AbstractString"), core, jl_any_type, jl_emptysvec);
