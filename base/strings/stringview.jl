@@ -5,10 +5,18 @@ const DenseStringViewAndSub = Union{DenseStringView, SubString{<:DenseStringView
 const DenseUTF8String = Union{DenseStringViewAndSub, StringAndSub}
 const UTF8String = Union{StringAndSub, StringViewAndSub}
 
+# Byte vectors whose `pointer` is known to point to CPU memory. Being a `DenseVector` is not
+# enough, e.g. GPU arrays are dense but their `pointer` is a device pointer (#63361).
+# TODO: replace with a trait or abstract type for CPU-accessible arrays once one exists.
+const CPUByteVector = Union{Vector{UInt8}, Memory{UInt8}, CodeUnits{UInt8, <:StringAndSub}}
+const CPUStringView = StringView{<:Union{CPUByteVector, <:FastContiguousSubArray{UInt8, 1, <:CPUByteVector}}}
+const CPUStringViewAndSub = Union{CPUStringView, SubString{<:CPUStringView}}
+
 StringView(v::AbstractVector{UInt8}) = StringView{typeof(v)}(v)
 Vector{UInt8}(s::StringViewAndSub) = Vector{UInt8}(codeunits(s))
 Array{UInt8}(s::StringViewAndSub) = Vector{UInt8}(s)
 String(s::StringViewAndSub) = String(copyto!(StringVector(ncodeunits(s)), codeunits(s)))
+String(s::CPUStringViewAndSub) = GC.@preserve s unsafe_string(pointer(s), ncodeunits(s))
 copy(s::StringView) = StringView(copy(s.data))
 
 function Symbol(s::DenseStringViewAndSub)
