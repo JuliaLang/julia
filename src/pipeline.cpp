@@ -606,7 +606,7 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
             FunctionPassManager FPM;
             if (getSpeedupLevel(O) >= 2) {
                 FPM.addPass(DSEPass());
-                FPM.addPass(GVNPass());
+                FPM.addPass(EarlyCSEPass(/*UseMemorySSA=*/true));
                 FPM.addPass(SCCPPass());
                 FPM.addPass(DCEPass());
             }
@@ -635,9 +635,6 @@ static void buildCleanupPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimi
         {
             FunctionPassManager FPM;
             JULIA_PASS(FPM.addPass(DemoteFloat16Pass()));
-            if (getSpeedupLevel(O) >= 2) {
-                FPM.addPass(EarlyCSEPass(/*UseMemorySSA=*/true));
-            }
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
     }
