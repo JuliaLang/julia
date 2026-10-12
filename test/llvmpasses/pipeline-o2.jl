@@ -223,6 +223,24 @@ function memset_like(mem)
     end
 end
 
+# COM: `===` on boxed values calls `jl_egal__unboxed`, which only reads memory, so a
+# COM: loop-invariant comparison is hoisted and the loop vectorizes
+
+# ALL-LABEL: @julia_sum_if_egal
+# ALL: call i32 @jl_egal__unboxed
+# ALL: vector.body
+# ALL-NOT: call i32 @jl_egal__unboxed
+# ALL: ret i64
+function sum_if_egal(v, @nospecialize(a), @nospecialize(b))
+    s = 0
+    for i in eachindex(v)
+        if a === b
+            s += v[i]
+        end
+    end
+    s
+end
+
 emit(iterate_read, Vector{Int64})
 emit(iterate_write, Vector{Int64}, Vector{Int64})
 emit(iterate_write!, Vector{Int64})
@@ -250,3 +268,5 @@ emit(loopedlength, Vector{Int64})
 
 emit(memset_like, Vector{Float64})
 emit(memset_like, Memory{Float64})
+
+emit(sum_if_egal, Vector{Int64}, Any, Any)
