@@ -2061,7 +2061,6 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
 JL_DLLEXPORT int jl_egal__unboxed(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, uintptr_t dtag) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uintptr_t jl_type_hash(jl_value_t *v) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uintptr_t jl_type_cache_hash(jl_value_t *v) JL_NOTSAFEPOINT;
 
 STATIC_INLINE int jl_egal__unboxed_(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, uintptr_t dtag) JL_NOTSAFEPOINT
 {
