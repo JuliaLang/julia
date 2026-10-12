@@ -535,6 +535,25 @@ end
     insert!(v, 1, 10)
     @test v == [10]
     @test length(v.ref.mem) == 5
+
+    # test that moving data within the same memory doesn't leave stale references behind (issue #63739)
+    nassigned(v) = count(i -> isassigned(v.ref.mem, i), eachindex(v.ref.mem))
+    v = Any[]
+    for r in 1:20
+        for i in 1:48
+            push!(v, Ref(r))
+        end
+        @test nassigned(v) == length(v)
+        for i in 1:48
+            popfirst!(v)
+        end
+        @test nassigned(v) == 0
+    end
+    v = resize!(Any[1:100;], 10)
+    pushfirst!(v, 0)
+    @test length(v.ref.mem) == 100
+    @test v == 0:10
+    @test nassigned(v) == 11
 end
 
 @testset "popat!(::Vector, i, [default])" begin
