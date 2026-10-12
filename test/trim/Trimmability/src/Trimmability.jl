@@ -339,12 +339,11 @@ function @main(args::Vector{String})::Cint
     _test_sparse_structure()
     _test_sparse_broadcast()
     _test_sparse_vectors()
+    _test_sparse_reductions()
+    _test_sparse_nested_reductions()
+    _test_sparse_solves()
+    _test_sparse_factorizations()
     _test_threads()
-    # TODO(#62912): SuiteSparse libraries cannot be loaded under --trim yet
-    # _test_sparse_reductions()
-    # _test_sparse_nested_reductions()
-    # _test_sparse_solves()
-    # _test_sparse_factorizations()
 
     try
         sock = connect("localhost", 4900)
