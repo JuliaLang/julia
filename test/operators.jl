@@ -303,6 +303,8 @@ end
     @test cld(0.4, 0.9) == cld(nextfloat(0.4), 0.9) == 1.0
 end
 
+struct Fix12Param{T} end
+fix12param(::Fix12Param{T}) where {T} = T
 @testset "Fix12" begin
     x = 9
     y = 7.0
@@ -310,6 +312,15 @@ end
     fy = Base.Fix2(/, y)
     @test fx(y) == x / y
     @test fy(x) == x / y
+
+    # a detached UnionAll body (dangling binder references, no free TypeVars)
+    # has no `Type{T}` and is stored under its `typeof`
+    raw = Base.unwrap_unionall(only(methods(fix12param)).sig).parameters[2]
+    @test Core.has_dangling_tvarrefs(raw)
+    @test Base._stable_typeof(raw) === DataType
+    @test Base.Fix2(==, raw)(raw)
+    @test raw in (Int, raw)
+    @test Returns(raw)() === raw
 end
 
 @testset "curried comparisons" begin

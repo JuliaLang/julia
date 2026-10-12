@@ -706,14 +706,28 @@ end
 function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, t.name)
     serialize(s, t.names)
-    primary = unwrap_unionall(t.wrapper)
+    # open the wrapper's binders so the serialized primary references free
+    # TypeVar objects (which is what `jl_new_datatype` expects when the type
+    # is reconstructed) rather than de Bruijn bound-variable references
+    vars = TypeVar[]
+    primary = t.wrapper
+    while primary isa UnionAll
+        v, primary = Base.unionall_open(primary)
+        push!(vars, v)
+    end
+    primary = primary::DataType
     serialize(s, primary.super)
-    serialize(s, primary.parameters)
-    serialize(s, primary.types)
+    serialize(s, Core.svec(vars...))
+    # field types may not have been computed yet on the freshly-opened body
+    # (and are not computable for abstract/incomplete types, where they are
+    # an empty list)
+    ftypes = isdefined(primary, :types) ? primary.types :
+             isabstracttype(primary) ? Core.svec() : Base.datatype_fieldtypes(primary)
+    serialize(s, ftypes)
     serialize(s, Base.issingletontype(primary))
     serialize(s, t.flags & 0x1 == 0x1) # .abstract
     serialize(s, t.flags & 0x2 == 0x2) # .mutable
-    serialize(s, Int32(length(primary.types) - t.n_uninitialized))
+    serialize(s, Int32(length(ftypes) - t.n_uninitialized))
     serialize(s, t.max_methods)
     ms = Base.matches_to_methods(Base._methods_by_ftype(Tuple{t.wrapper, Vararg}, -1, Base.get_world_counter()), t, nothing).ms
     if t.singletonname !== t.name || !isempty(ms)
@@ -834,18 +848,43 @@ function serialize(s::AbstractSerializer, u::UnionAll)
     writetag(s.io, UNIONALL_TAG)
     n = 0; t = u
     while isa(t, UnionAll)
-        t = t.body
+        t = t.inner
         n += 1
     end
-    if isa(t, DataType) && t === unwrap_unionall(t.name.wrapper)
-        write(s.io, UInt8(1))
-        write(s.io, Int16(n))
-        serialize(s, t)
-    else
-        write(s.io, UInt8(0))
-        serialize(s, u.var)
-        serialize(s, u.body)
+    if isa(t, DataType)
+        # if `u` is the canonical wrapper chain itself (or a suffix of it,
+        # obtained by peeling the wrapper), ship just the primary body and the
+        # depth, and re-derive the chain on the other side. The identity test
+        # is essential: custom chains over the primary body (renamed or
+        # re-bounded binders — egality is structural and name-sensitive) must
+        # take the general path below or their binders would be lost.
+        w = t.name.wrapper
+        k = 0
+        while isa(w, UnionAll)
+            w = w.inner
+            k += 1
+        end
+        if k >= n
+            w = t.name.wrapper
+            while k > n
+                w = (w::UnionAll).inner
+                k -= 1
+            end
+            if u === w
+                write(s.io, UInt8(1))
+                write(s.io, Int16(n))
+                serialize(s, t)
+                return
+            end
+        end
     end
+    write(s.io, UInt8(0))
+    # ship the binder as a free TypeVar plus the opened body; the
+    # deserializer's `UnionAll(var, body)` re-binds it
+    v, body = Base.unionall_open(u)
+    serialize(s, v)
+    serialize(s, body)
+    nothing
 end
 
 serialize(s::AbstractSerializer, @nospecialize(x)) = serialize_any(s, x)
@@ -1146,7 +1185,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_dict(s, t)
     end
     t = desertag(b)::DataType
-    if ismutabletype(t) && length(t.types) > 0  # manual specialization of fieldcount
+    if ismutabletype(t) && length(Base.datatype_fieldtypes(t)) > 0  # manual specialization of fieldcount
         slot = s.counter; s.counter += 1
         push!(s.pending_refs, slot)
     end
@@ -1791,13 +1830,13 @@ function deserialize(s::AbstractSerializer, ::Type{UnionAll})
         w = t.name.wrapper
         k = 0
         while isa(w, UnionAll)
-            w = w.body
+            w = w.inner
             k += 1
         end
         w = t.name.wrapper
         k -= n
         while k > 0
-            w = w.body
+            w = w.inner
             k -= 1
         end
         return w
@@ -1844,7 +1883,9 @@ end
 
 # default DataType deserializer
 function deserialize(s::AbstractSerializer, t::DataType)
-    nf = length(t.types)
+    # n.b. `datatype_fieldtypes` computes deferred field types on demand
+    # (a self-referential definition's fragments materialize lazily)
+    nf = length(Base.datatype_fieldtypes(t))
     if isprimitivetype(t)
         return read(s.io, t)
     elseif ismutabletype(t)
