@@ -141,6 +141,9 @@ bool FinalLowerGC::shouldRunFinalGC()
     should_run |= (object_write_barrier_func && !object_write_barrier_func->use_empty());
     should_run |= (field_write_barrier_p11_func && !field_write_barrier_p11_func->use_empty());
     should_run |= (field_write_barrier_p13_func && !field_write_barrier_p13_func->use_empty());
+#ifdef WITH_GC_REGION_BARRIER
+    should_run |= (region_write_barrier_func && !region_write_barrier_func->use_empty());
+#endif
     return should_run;
 }
 
