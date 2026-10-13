@@ -610,6 +610,238 @@ void jl_gc_region_close_window(jl_task_t *ct) JL_NOTSAFEPOINT
     jl_gc_region_install_task(ct->ptls, 0);
 }
 
+// --- reset ---------------------------------------------------------------------------
+
+// The root scan shared with the debug entries below; the caller stopped the
+// world.
+static int64_t region_root_scan(jl_ptls_t ptls, jl_thread_heap_t *heap, int n) JL_CANSAFEPOINT;
+static int64_t region_root_scan_global(jl_ptls_t ptls, int n);
+
+// Whether a child of region n is live on any heap; the other threads are
+// stopped or parked, so the masks are read without a fence.
+static int region_child_live_on_any_heap(jl_ptls_t *all, int nthreads, int n) JL_NOTSAFEPOINT
+{
+    for (int t_i = 0; t_i < nthreads; t_i++) {
+        jl_ptls_t ptls2 = all[t_i];
+        if (ptls2 != NULL && ((ptls2->gc_tls.heap.region_haschild_mask >> n) & 1))
+            return 1;
+    }
+    return 0;
+}
+
+// The finalizer phase of a reset runs Julia code, before the free and never
+// with the world stopped. A finalizer can register a finalizer on another
+// object of the region, so the phase repeats until the list stays empty;
+// the bound turns an endless registration into EFINALIZERS.
+#define REGION_FINALIZER_ROUNDS 64
+static int region_reset_finalizers(jl_task_t *ct, jl_thread_heap_t *heap, int n) JL_CANSAFEPOINT
+{
+    if (heap->regions[n] == NULL)
+        return 0;
+    for (int round = 0; round < REGION_FINALIZER_ROUNDS; round++) {
+        if (heap->regions[n]->finalizers.len == 0)
+            return 0;
+        arraylist_t run;
+        region_take_list(&run, &heap->regions[n]->finalizers);
+        region_run_finalizer_list(ct, &run);
+    }
+    return heap->regions[n]->finalizers.len == 0 ? 0 : JL_GC_REGION_EFINALIZERS;
+}
+
+// The free: no Julia code runs here, so the caller may hold the world
+// stopped through it. The malloc'd data is freed, the cursors are cleared,
+// and the page chain is parked on the fresh list in O(1).
+static uint64_t region_reset_heap(jl_thread_heap_t *heap, int n)
+{
+    jl_gc_region_state_t *rs = heap->regions[n];
+    if (rs == NULL)
+        return 0;
+    assert(rs->finalizers.len == 0);
+    region_free_malloced(&rs->mallocarrays, 0);
+    for (int i = 0; i < JL_GC_N_MAX_POOLS; i++) {
+        rs->pools[i].freelist = NULL;
+        rs->pools[i].newpages = NULL;
+    }
+    uint64_t pages = (uint64_t)rs->n_pages + rs->n_fresh;
+    jl_gc_pagemeta_t *head = rs->pages;
+    if (head != NULL) {
+        rs->pages_tail->region_next = rs->fresh_pages;
+        rs->fresh_pages = head;
+        rs->pages = NULL;
+        rs->pages_tail = NULL;
+        rs->n_fresh += rs->n_pages;
+        rs->n_pages = 0;
+    }
+    region_mark_empty(heap, n);         // the parent may now be resettable
+    return pages;
+}
+
+// The body of both reset entries. The phases are ordered so that each one
+// sees the result of the one before:
+//
+// 1. The preconditions.
+// 2. The finalizers of the region, which run Julia code. A finalizer can
+//    store one of its own objects into an older region, which quarantines
+//    this region, so nothing may be freed before they have all run.
+// 3. The quarantine, read again. A reset that freed after step 2 condemned
+//    the region would leave the published reference dangling.
+// 4. The child test on every heap and the quarantine once more, the root
+//    check and the free, in one stop-the-world pause: the other heaps are
+//    readable only there, and a child live on any of them holds legal
+//    references into this instance. The barrier sees the heap and not the
+//    stack, so the root check is the only thing that stands between a live
+//    local and a freed object. `checked` is 0 for the unsafe
+//    entry, which frees with no pause and no scan.
+static uint64_t region_reset_body(int n, int checked) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    jl_thread_heap_t *heap = &ptls->gc_tls.heap;
+    if (!region_valid(n))
+        return (uint64_t)JL_GC_REGION_EINVAL;
+    if (n == heap->current_region || heap->finalizer_depth != 0)
+        return (uint64_t)JL_GC_REGION_EBUSY;
+    if (heap->regions[n] == NULL)
+        return 0;
+    if (__unlikely(jl_gc_region_quarantined(n)))
+        return (uint64_t)JL_GC_REGION_EQUARANTINED;
+    // A live descendant may hold a legal reference into this region.
+    if (__unlikely((heap->region_haschild_mask >> n) & 1))
+        return (uint64_t)JL_GC_REGION_ECHILD;
+
+    // The finalizers run Julia code: not under a lock the caller holds and
+    // not while the caller inhibits finalizers, the states in which the
+    // stock collector defers them. A reset refuses there instead.
+    if (heap->regions[n]->finalizers.len != 0 &&
+        (ptls->locks.len != 0 || ptls->finalizers_inhibited != 0))
+        return (uint64_t)JL_GC_REGION_EBUSY;
+    int pending = region_reset_finalizers(ct, heap, n);
+    if (__unlikely(pending != 0))
+        return (uint64_t)pending;
+    if (__unlikely(jl_gc_region_quarantined(n)))
+        return (uint64_t)JL_GC_REGION_EQUARANTINED;
+
+    if (!checked)
+        return region_reset_heap(heap, n);
+
+    // Several threads reset their own leaves at once, so a lost safepoint is
+    // common: wait for the winner and try again, up to a bound.
+    int8_t old_state;
+    uint32_t saved_disable;
+    if (region_stop_the_world(ct, ptls, 1024, &old_state, &saved_disable) != 0)
+        return (uint64_t)JL_GC_REGION_ERACE;
+
+    uint64_t result;
+    if (__unlikely(region_child_live_on_any_heap(gc_all_tls_states, gc_n_threads, n))) {
+        // A child live on another heap holds legal references into this
+        // instance too; the other heaps are readable only now.
+        result = (uint64_t)JL_GC_REGION_ECHILD;
+    }
+    else if (__unlikely(jl_gc_region_quarantined(n))) {
+        // An escape on another thread since the test before the pause.
+        result = (uint64_t)JL_GC_REGION_EQUARANTINED;
+    }
+    else {
+        int64_t roots = region_root_scan(ptls, heap, n);
+        if (roots != 0) {
+            jl_safe_printf("REGION-RESET refused: %lld live references into region %d\n",
+                           (long long)roots, n);
+            result = (uint64_t)JL_GC_REGION_EROOT;
+        }
+        else {
+            // No finalizer is left, so the pause holds through the free.
+            result = region_reset_heap(heap, n);
+        }
+    }
+
+    region_resume_the_world(ct, ptls, old_state, saved_disable);
+    return result;
+}
+
+// Reset region n on the calling thread's heap: run its finalizers, check
+// that no execution root references into it, free the malloc'd data, park
+// the pages. Returns the pages the region held, 0 for a region never used,
+// or a refusal code cast to uint64_t (EINVAL, EBUSY, EQUARANTINED, ECHILD,
+// ERACE, EROOT).
+JL_DLLEXPORT uint64_t jl_gc_region_reset(int n) JL_CANSAFEPOINT
+{
+    return region_reset_body(n, 1);
+}
+
+// The reset without the root check: a reference from a stack slot, a
+// register or a parked task then points into freed memory, and the next
+// collection reports CORPSE and aborts.
+JL_DLLEXPORT uint64_t jl_gc_region_unsafe_reset(int n) JL_CANSAFEPOINT
+{
+    return region_reset_body(n, 0);
+}
+
+// Reset a region several threads filled, a trunk, as one act on every heap
+// with the world stopped: trunk objects on different heaps may reference
+// each other. Pending finalizers return EFINALIZERS, because nothing can run
+// them with the world stopped; the root check runs on every instance.
+// Returns the pages reclaimed, or a refusal code cast to uint64_t.
+JL_DLLEXPORT uint64_t jl_gc_region_reset_global(int n) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    if (!region_valid(n))
+        return (uint64_t)JL_GC_REGION_EINVAL;
+    if (ptls->gc_tls.heap.current_region != 0 ||
+        jl_atomic_load_relaxed(&region_windows_open) != 0)
+        return (uint64_t)JL_GC_REGION_EBUSY;
+    if (__unlikely(jl_gc_region_quarantined(n)))
+        return (uint64_t)JL_GC_REGION_EQUARANTINED;
+
+    int8_t old_state;
+    uint32_t saved_disable;
+    if (region_stop_the_world(ct, ptls, 1, &old_state, &saved_disable) != 0)
+        return (uint64_t)JL_GC_REGION_ERACE;
+
+    // The preconditions on every heap first, so that nothing is freed when
+    // one heap refuses.
+    uint64_t result = 0;
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL)
+            continue;
+        jl_thread_heap_t *heap = &ptls2->gc_tls.heap;
+        if (heap->finalizer_depth != 0) {
+            result = (uint64_t)JL_GC_REGION_EBUSY;
+            break;
+        }
+        if ((heap->region_haschild_mask >> n) & 1) {
+            result = (uint64_t)JL_GC_REGION_ECHILD;
+            break;
+        }
+        if (heap->regions[n] != NULL && heap->regions[n]->finalizers.len != 0) {
+            result = (uint64_t)JL_GC_REGION_EFINALIZERS;
+            break;
+        }
+    }
+    if (result == 0 && __unlikely(jl_gc_region_quarantined(n)))
+        result = (uint64_t)JL_GC_REGION_EQUARANTINED;   // an escape since the test before the pause
+    if (result == 0) {
+        // The root check over every instance.
+        int64_t roots = region_root_scan_global(ptls, n);
+        if (roots != 0) {
+            jl_safe_printf("REGION-RESET refused: %lld live references into region %d\n",
+                           (long long)roots, n);
+            result = (uint64_t)JL_GC_REGION_EROOT;
+        }
+    }
+    if (result == 0) {
+        for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+            jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+            if (ptls2 != NULL)
+                result += region_reset_heap(&ptls2->gc_tls.heap, n);
+        }
+    }
+
+    region_resume_the_world(ct, ptls, old_state, saved_disable);
+    return result;
+}
+
 #ifdef __cplusplus
 }
 #endif
