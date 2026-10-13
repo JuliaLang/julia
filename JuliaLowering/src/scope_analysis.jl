@@ -523,13 +523,19 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
                 ]
             ]
         ])
-        for sid in ctx.scope_stack
-            for id in sort!(collect(values(ctx.scopes[sid].vars)))
+        seen = Set{String}()
+        for sid in Iterators.reverse(ctx.scope_stack)
+            for (nk, id) in sort!(collect(ctx.scopes[sid].vars); by=last)
                 binfo = get_binding(ctx, id)
+                # skip hygienic locals of macro expansions (TODO: would it be
+                # more useful to return this layer's locals instead of the base
+                # layer's?)
                 if binfo.kind == :global || binfo.is_internal ||
-                    binfo.kind == :typevar
+                    binfo.kind == :typevar || nk.layer.escaped !== nothing ||
+                    binfo.name in seen
                     continue
                 end
+                push!(seen, binfo.name)
                 binding = binding_ex(ctx, id)
                 push!(stmts, @ast ctx ex [:if
                     [:isdefined binding]
