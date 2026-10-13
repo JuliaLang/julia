@@ -156,6 +156,15 @@ end
 7   (return %₅)
 
 ########################################
+# Error: dots on unionall rhs (flisp fallthrough)
+b{c} = d...
+#---------------------
+LoweringError:
+b{c} = d...
+#      └──┘ ── unexpected `...`
+splatting can only be done into a `call`, `tuple`, `curly`, or array-like expression
+
+########################################
 # Error: Invalid lhs in `=`
 a.(b) = rhs
 #---------------------
