@@ -347,17 +347,13 @@ private:
     StringMap<unsigned> counter;
 };
 
-// One record per ccall/cglobal usage site, collected during codegen so the
-// AOT pipeline can emit a used-foreign-symbol manifest. Strings point into
-// interned/AST-owned storage that outlives codegen; `lib_id` is the
-// `AbstractLibrary` identity (a `LibraryID`) frozen at the call site (NULL when
-// the target is not an AbstractLibrary or declares none).
-struct jl_used_foreign_symbol_t {
-    const char *func;          // symbol name, NULL if dynamic
-    const char *lib;           // static library string or sentinel, NULL if dynamic
-    jl_value_t *lib_id;        // dlid() frozen at definition time, or NULL
-    bool is_cglobal;           // cglobal site rather than ccall
-    bool native_linked;        // bound via a direct external symbol reference
+// A ccall/cglobal call, for the foreign symbol record
+struct jl_foreign_symbol_site_t {
+    const char *f_name;        // symbol name, NULL if dynamic
+    const char *f_lib;         // library name or JL_*_LIBNAME sentinel, NULL if neither
+    jl_value_t *lib_id;        // the library's `LibraryID`, NULL if it declares none
+    bool is_cglobal;           // cglobal rather than ccall
+    bool native;               // linked natively rather than looked up lazily
 };
 
 struct jl_linker_info_t {
@@ -419,7 +415,7 @@ public:
     DenseMap<jl_code_instance_t *, jl_llvm_functions_t> ci_funcs;
     SmallVector<std::pair<jl_code_instance_t *, GlobalVariable *>, 0> external_fns;
 
-    SmallVector<jl_used_foreign_symbol_t,0> used_foreign_symbols;
+    SmallVector<jl_foreign_symbol_site_t,0> foreign_symbol_sites;
     SmallVector<cfunc_decl_t,0> cfuncs;
     std::map<void*, GlobalVariable*> global_targets;
     // Module-local coverage counter globals, keyed by their runtime slots.

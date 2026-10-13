@@ -927,48 +927,45 @@ static void aot_link_output(jl_codegen_output_t &out) JL_CANSAFEPOINT
     }
 }
 
-// The library a foreign site refers to, as (package UUID text, library name):
-// both set for a library identified at the call site, only the name for the
-// runtime's own libraries and static library strings, neither for a symbol
-// looked up across the process (RTLD_DEFAULT).
-static std::pair<std::string, std::string> used_foreign_library(const jl_used_foreign_symbol_t &dep)
+// Library reported for a ccall/cglobal call, as (package UUID text, library name):
+// both if the library has a `LibraryID`, only the name for a library string or one
+// of the runtime's own libraries, neither otherwise.
+static std::pair<std::string, std::string> foreign_symbol_library(const jl_foreign_symbol_site_t &site)
 {
-    if (dep.lib_id != nullptr) {
+    if (site.lib_id != nullptr) {
         // `Core.LibraryID`: `pkg` is a little-endian `UInt128`, `name` a `String`
-        const uint64_t *pkg_words = (const uint64_t *)jl_data_ptr(dep.lib_id);
+        const uint64_t *pkg_words = (const uint64_t *)jl_data_ptr(site.lib_id);
         jl_uuid_t pkg;
         pkg.lo = pkg_words[0];
         pkg.hi = pkg_words[1];
-        jl_value_t *name = jl_get_nth_field_noalloc(dep.lib_id, 1);
+        jl_value_t *name = jl_get_nth_field_noalloc(site.lib_id, 1);
         char uuid[JL_UUID_STRING_LEN + 1];
         jl_uuid_to_string(&pkg, uuid);
         return {uuid, std::string(jl_string_data(name), jl_string_len(name))};
     }
-    if (dep.lib == nullptr)
+    // a symbol of the executable is looked up across the process, like one with no library
+    if (site.f_lib == nullptr || site.f_lib == JL_EXE_LIBNAME)
         return {"", ""};
-    if ((intptr_t)dep.lib == (intptr_t)JL_LIBJULIA_DL_LIBNAME)
+    if (site.f_lib == JL_LIBJULIA_DL_LIBNAME)
         return {"", "libjulia"};
-    if ((intptr_t)dep.lib == (intptr_t)JL_LIBJULIA_INTERNAL_DL_LIBNAME)
+    if (site.f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME)
         return {"", "libjulia-internal"};
-    return {"", dep.lib};
+    return {"", site.f_lib};
 }
 
-// Write a JSON manifest of every ccall/cglobal usage site, grouped by library.
-// Each library record carries `package_uuid` if it is identified and `library`
-// if it has a name (`null` for symbols looked up across the process). Each
-// symbol entry records the kind of site and whether it was bound by a direct
-// external symbol reference (`native`) or left to runtime lookup (`lazy`).
-static void aot_export_used_foreign_symbols(jl_codegen_output_t &out, const char *path)
+// Write the foreign symbol record: every ccall/cglobal call as JSON, grouped by
+// library. Each library entry has a `package_uuid` if the library has a
+// `LibraryID`, and a `library` name or `null`. Each symbol entry has a `kind`
+// (`ccall` or `cglobal`) and a `linkage` (`native` or `lazy`).
+static void aot_write_foreign_symbol_record(jl_codegen_output_t &out, const char *path)
 {
-    std::map<std::pair<std::string, std::string>, SmallVector<const jl_used_foreign_symbol_t *, 0>> by_lib;
-    for (const auto &dep : out.used_foreign_symbols)
-        by_lib[used_foreign_library(dep)].push_back(&dep);
+    std::map<std::pair<std::string, std::string>, SmallVector<const jl_foreign_symbol_site_t *, 0>> by_lib;
+    for (const auto &site : out.foreign_symbol_sites)
+        by_lib[foreign_symbol_library(site)].push_back(&site);
 
     ios_t f;
-    if (ios_file(&f, path, 1, 1, 1, 1) == NULL) {
-        jl_safe_printf("WARNING: could not open used-foreign-symbols export path %s\n", path);
-        return;
-    }
+    if (ios_file(&f, path, 1, 1, 1, 1) == NULL)
+        jl_errorf("cannot open foreign symbol record \"%s\" for writing", path);
     auto json_string = [&f](const std::string &s) { jl_print_str_escape_json(&f, s.data(), s.size()); };
     ios_printf(&f, "{\n  \"libraries\": [\n");
     bool first_lib = true;
@@ -987,13 +984,12 @@ static void aot_export_used_foreign_symbols(jl_codegen_output_t &out, const char
             json_string(library);
         ios_printf(&f, ",\n");
         ios_printf(&f, "      \"symbols\": [\n");
-        // One entry per distinct (symbol, kind, linkage); a symbol referenced
-        // from many call sites is a single dependency.
+        // one entry per distinct (symbol, kind, linkage)
         std::set<std::tuple<std::string, bool, bool>> seen;
         bool first_sym = true;
-        for (auto *dep : sites) {
-            auto sym = std::make_tuple(std::string(dep->func ? dep->func : "<dynamic>"),
-                                       dep->is_cglobal, dep->native_linked);
+        for (auto *site : sites) {
+            auto sym = std::make_tuple(std::string(site->f_name ? site->f_name : "<dynamic>"),
+                                       site->is_cglobal, site->native);
             if (!seen.insert(sym).second)
                 continue;
             if (!first_sym)
@@ -1002,8 +998,8 @@ static void aot_export_used_foreign_symbols(jl_codegen_output_t &out, const char
             ios_printf(&f, "        {\"symbol\": ");
             json_string(std::get<0>(sym));
             ios_printf(&f, ", \"kind\": \"%s\", \"linkage\": \"%s\"}",
-                       dep->is_cglobal ? "cglobal" : "ccall",
-                       dep->native_linked ? "native" : "lazy");
+                       site->is_cglobal ? "cglobal" : "ccall",
+                       site->native ? "native" : "lazy");
         }
         ios_printf(&f, "\n      ]\n    }");
     }
@@ -1083,8 +1079,8 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     emit_always_inline(out,
                        [&ci_infos](jl_code_instance_t *ci) { return ci_infos.lookup(ci); });
     emit_llvmcall_modules(out);
-    if (const char *used_foreign_symbols_path = jl_get_export_foreign_symbol_usage())
-        aot_export_used_foreign_symbols(out, used_foreign_symbols_path);
+    if (const char *record_path = jl_get_foreign_symbol_record_path())
+        aot_write_foreign_symbol_record(out, record_path);
     // finally, make sure all referenced methods get fixed up, particularly if the user declined to compile them
     aot_link_output(out);
     // including generating cfunction thunks
