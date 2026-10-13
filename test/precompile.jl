@@ -2547,6 +2547,27 @@ precompile_test_harness("llvmcall validation") do load_path
     end
 end
 
+precompile_test_harness("inlined frames of code compiled after loading") do load_path
+    write(joinpath(load_path, "InlinedFrames.jl"),
+        """
+        module InlinedFrames
+        @noinline inner() = backtrace()
+        @inline middle() = inner()
+        @noinline outer() = middle()
+        outer()
+        end
+        """)
+    # Without native code in the cache, `outer` is compiled from re-inferred source
+    testcode = """
+        insert!(LOAD_PATH, 1, $(repr(load_path)))
+        insert!(DEPOT_PATH, 1, $(repr(load_path)))
+        using InlinedFrames
+        st = stacktrace(InlinedFrames.outer())
+        any(fr -> fr.func === :middle && fr.inlined && basename(String(fr.file)) == "InlinedFrames.jl", st)
+    """
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no --pkgimages=no -E $(testcode)`) == "true"
+end
+
 precompile_test_harness("BindingReplaceDisallow") do load_path
     write(joinpath(load_path, "BindingReplaceDisallow.jl"),
         """

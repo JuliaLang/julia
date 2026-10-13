@@ -583,6 +583,21 @@ JL_DLLEXPORT jl_value_t *jl_call_in_typeinf_world(jl_value_t **args, int nargs) 
     return ret;
 }
 
+JL_DLLEXPORT void jl_ci_replace_nulldebuginfo(jl_code_instance_t *ci, jl_debuginfo_t *di)
+{
+    static jl_debuginfo_t *nulldebuginfo = NULL;
+    if (nulldebuginfo == NULL) {
+        nulldebuginfo = (jl_debuginfo_t*)jl_get_global(jl_core_module, jl_symbol("NullDebugInfo"));
+        if (nulldebuginfo == NULL)
+            return;
+    }
+    jl_debuginfo_t *debuginfo = jl_atomic_load_relaxed(&ci->debuginfo);
+    if (di == NULL || debuginfo != nulldebuginfo || di == nulldebuginfo)
+        return;
+    jl_gc_wb(ci, (void*)&ci->debuginfo, di);
+    jl_atomic_cmpswap_release(&ci->debuginfo, &debuginfo, di);
+}
+
 JL_DLLEXPORT jl_code_instance_t *jl_get_method_uninferred(
         jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_value_t *rettype,
         size_t min_world, size_t max_world, jl_debuginfo_t *di, jl_svec_t *edges)
