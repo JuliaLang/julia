@@ -212,7 +212,7 @@ function lookup(ip::Base.InterpreterIP)
         # uninferred CodeInstances have no `debuginfo`
         codeinfo = code.inferred::CodeInfo
         def = code.def isa Core.ABIOverride ? code.def.def : code.def
-        @assert def isa MethodInstance "unexpected $(typeof(def))"
+        @assert def isa MethodInstance lazy"unexpected $(typeof(def))"
         meth = def.def
         func = meth isa Method ? meth.name : top_level_scope_sym
         linfo = def
