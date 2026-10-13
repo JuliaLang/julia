@@ -757,8 +757,9 @@ function predicate_reverse_zip_count(t::Tuple)
     (s isa Tuple{Any}) && (IteratorSize(only(s)) isa Union{HasLength,HasShape})
 end
 
-# Among the members of `t`, return the first member with `IteratorSize` of
-# type `Union{HasLength,HasShape}`. Throw when there is no such member.
+# Among the members of `t`, return the `length` of the first member whose
+# `IteratorSize` is of type `Union{HasLength,HasShape}`. Throw when there
+# is no such member.
 function first_length(t::Tuple)
     i = t[1]
     if IteratorSize(i) isa Union{HasLength,HasShape}
