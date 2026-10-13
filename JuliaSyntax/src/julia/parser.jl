@@ -66,7 +66,7 @@ end
 
 # Convenient wrappers for ParseStream
 
-function Base.peek(ps::ParseState, n=1; skip_newlines=nothing)
+function peek(ps::ParseState, n=1; skip_newlines=nothing)
     skip_nl = isnothing(skip_newlines) ? ps.whitespace_newline : skip_newlines
     peek(ps.stream, n; skip_newlines=skip_nl)
 end
@@ -114,7 +114,7 @@ function steal_token_bytes!(ps::ParseState, args...)
     steal_token_bytes!(ps.stream, args...)
 end
 
-function Base.position(ps::ParseState, args...)
+function position(ps::ParseState, args...)
     position(ps.stream, args...)
 end
 
