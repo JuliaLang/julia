@@ -1316,6 +1316,22 @@ function f_bad_nospecialize(;@nospecialize(x)::T); end
 #                            └──────────────┘ ── expected identifier
 
 ########################################
+# Error: nospecialize wrapping function is invalid
+@nospecialize function f_bad_nospecialize(); end
+#---------------------
+LoweringError:
+@nospecialize function f_bad_nospecialize(); end
+#             └────────────────────────────────┘ ── expected identifier
+
+########################################
+# Error: nospecialize wrapping non-arg assignment is invalid
+@nospecialize x = 1
+#---------------------
+LoweringError:
+@nospecialize x = 1
+#            └────┘ ── expected identifier
+
+########################################
 # Function return without arguments
 function f()
     return

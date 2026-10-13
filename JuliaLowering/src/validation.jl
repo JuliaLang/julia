@@ -261,7 +261,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [:syntaxinert _] -> pass()
     [:core [:identifier]] -> pass()
     [:top [:identifier]] -> pass()
-    [:meta _...] -> pass() # TODO
+    [:meta _...] -> vst1_non_arg_meta(vcx, st)
     [:toplevel xs...] -> vcx.toplevel ? pass() : # validated when we lower it
         @fail(st, "`toplevel` can't be used inside a function")
     [:opaque_closure argt lb ub bool lam] ->
@@ -1096,6 +1096,18 @@ vst1_generated_lambda(vcx, st) = @stm st begin
         all(vst1_ident_lhs, vcx, sps) &
         vst1(with(vcx; return_ok=true, toplevel=false, in_gscope=false), body)
     _ -> @fail(st, "malformed `generated_lambda`")
+end
+
+vst1_non_arg_meta(vcx, st) = @stm st begin
+    [:meta [:identifier]] -> pass()
+    [:meta [:identifier] xs...] -> let m = syntax_name(st[1])
+        if m === "nospecialize" || m === "specialize"
+            all(vst1_ident_lhs, vcx, xs)
+        else
+            pass() # TODO
+        end
+    end
+    [:meta _...] -> pass() # TODO
 end
 
 #-------------------------------------------------------------------------------
