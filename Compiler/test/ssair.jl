@@ -734,20 +734,53 @@ end
         return x
     end
     let
-        # At least some statements should have been found to be statically unreachable and wrapped in Const(...)::Union{}
+        # At least some statements should have been found to be statically unreachable
         unopt = code_typed1(f_with_maybe_nonbool_cond, (Int, Bool); optimize=false)
-        @test any(j -> isa(unopt.code[j], Core.Const) && unopt.ssavaluetypes[j] == Union{}, 1:length(unopt.code))
+        @test any(j -> unopt.ssavaluetypes[j] === Union{}, 1:length(unopt.code))
 
         # Any GotoIfNot destinations after IRCode conversion should not be statically unreachable
         ircode = first(only(Base.code_ircode(f_with_maybe_nonbool_cond, (Int, Bool); optimize_until="CC: CONVERT")))
         for i = 1:length(ircode.stmts)
             expr = ircode.stmts[i][:stmt]
             if isa(expr, GotoIfNot)
-                # If this statement is Core.Const(...)::Union{}, that means this code was not reached
-                @test !(isa(ircode.stmts[i+1][:stmt], Core.Const) && (unopt.ssavaluetypes[i+1] === Union{}))
-                @test !(isa(ircode.stmts[expr.dest][:stmt], Core.Const) && (unopt.ssavaluetypes[expr.dest] === Union{}))
+                # GotoIfNot branch destinations should not be unreachable
+                @test !(unopt.ssavaluetypes[i+1] === Union{})
+                @test !(unopt.ssavaluetypes[expr.dest] === Union{})
             end
         end
+    end
+end
+
+@testset "statically unreachable statements are deleted" begin
+    # Statements after a must-throw call should not survive into the optimized IR
+    @noinline throw_unreachable_test() = error("x")
+    function f_dead_after_throw(a::Int)
+        y = 1
+        if a > 0
+            throw_unreachable_test()
+            y = "str"
+            println(y)
+        end
+        return y
+    end
+    let src = code_typed1(f_dead_after_throw, (Int,))
+        for i = 1:length(src.code)
+            if src.ssavaluetypes[i] === Union{} && !isa(src.code[i], ReturnNode)
+                @test src.code[i+1] === ReturnNode()
+            end
+        end
+    end
+
+    # Unreachable try/catch regions (here in a toplevel thunk, where `x` is a global)
+    # should not confuse the optimizer's exception handler analysis
+    let thk = Meta.lower(@__MODULE__, :(try; x = error(); try; return x; finally; end; catch; end)).args[1]::Core.CodeInfo
+        mi = ccall(:jl_method_instance_for_thunk, Ref{Core.MethodInstance}, (Any, Any), thk, @__MODULE__)
+        interp = Compiler.NativeInterpreter()
+        frame = Compiler.InferenceState(Compiler.InferenceResult(mi), copy(thk), :no, interp)
+        Compiler.typeinf(interp, frame)
+        opt = Compiler.OptimizationState(frame, interp)
+        ir = Compiler.run_passes_ipo_safe(opt.src, opt)
+        @test ir isa Compiler.IRCode
     end
 end
 
