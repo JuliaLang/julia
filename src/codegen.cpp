@@ -483,6 +483,7 @@ struct jl_noaliascache_t {
         MDNode *mutconstdata = nullptr;   // The `const` fields of a mutable jl_value_t
         MDNode *immutdata = nullptr;      // The payload of an immutable jl_value_t
         MDNode *memorybuf = nullptr;      // The element data of a jl_genericmemory_t
+        MDNode *arrayhdr = nullptr;       // The fields of a jl_array_t (ref and size)
 
         jl_regions_t() = default;
 
@@ -495,6 +496,7 @@ struct jl_noaliascache_t {
             this->mutconstdata = mbuilder.createAliasScope("jnoalias_mutconstdata", domain);
             this->immutdata = mbuilder.createAliasScope("jnoalias_immutdata", domain);
             this->memorybuf = mbuilder.createAliasScope("jnoalias_memorybuf", domain);
+            this->arrayhdr = mbuilder.createAliasScope("jnoalias_arrayhdr", domain);
         }
     } regions;
 
@@ -1794,8 +1796,8 @@ struct jl_aliasinfo_t {
         unknown   = 0,
         // GC-frame is leaked globally after final-gc-lowering pass.
         gcframe   = 1 << 0,
-        // The assignable fields of a heap-allocated jl_value_t, notably including
-        // `Array`'s header: the memory a generic `setfield!` writes.
+        // The assignable fields of a heap-allocated jl_value_t: the memory a generic
+        // `setfield!` writes (except for `Array`'s header, see `arrayhdr`).
         mutdata   = 1 << 1,
         // The `const` fields of a mutable jl_value_t, including the `GenericMemory`
         // header and `DataType`'s fields. A `setfield!` can never reach these, so
@@ -1810,13 +1812,20 @@ struct jl_aliasinfo_t {
         // value too, but the slot holding it is not: `setindex!` overwrites it in
         // place, so unlike `immutdata` this cannot be rooted through.
         memorybuf = 1 << 4,
+        // The fields of a jl_array_t (`ref` and `size`). Only `setfield!` on an `Array`
+        // (and its construction) writes them, and those stores are tagged with this
+        // region too; in particular a raw `Ptr` cannot legally reach them, so this
+        // region is deliberately not part of `anydata`. This lets the header loads of an
+        // `Array` be hoisted out of loops that store through raw pointers
+        // (e.g. `unsafe_store!`, StrideArraysCore's `PtrArray`).
+        arrayhdr = 1 << 5,
         // Any field of a mutable jl_value_t.
         mutfields = mutdata | mutconstdata,
         // Any field of any jl_value_t.
         data      = mutfields | immutdata,
         // Everything a raw `Ptr` may legally read from our alias regions.
         anydata   = data | memorybuf,
-        LLVM_MARK_AS_BITMASK_ENUM(memorybuf)
+        LLVM_MARK_AS_BITMASK_ENUM(arrayhdr)
     };
 
     MDNode *tbaa = nullptr;          // '!tbaa': Struct-path TBAA. TBAA graph forms a tree (indexed by offset).
@@ -2304,10 +2313,11 @@ jl_aliasinfo_t::jl_aliasinfo_t(jl_codectx_t &ctx, Region r, MDNode *tbaa): tbaa(
         { Region::mutconstdata, regions.mutconstdata },
         { Region::immutdata, regions.immutdata },
         { Region::memorybuf, regions.memorybuf },
+        { Region::arrayhdr,  regions.arrayhdr },
     };
     // The regions in the set are added to !alias.scope, all others to !noalias
-    SmallVector<Metadata*,5> scopes;
-    SmallVector<Metadata*,5> noaliases;
+    SmallVector<Metadata*,6> scopes;
+    SmallVector<Metadata*,6> noaliases;
     for (auto const &region: all_scopes) {
         if ((r & region.first) != Region::unknown)
             scopes.push_back(region.second);
@@ -2357,9 +2367,9 @@ void jl_aliascache_t::initialize(jl_codectx_t &ctx)
     mutab = jl_aliasinfo_t(ctx, Region::mutfields, tbaa.tbaa_field);
     immut = jl_aliasinfo_t(ctx, Region::immutdata, tbaa.tbaa_field);
     datatype = jl_aliasinfo_t(ctx, Region::mutconstdata, tbaa.tbaa_datatype);
-    array = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_array);
-    arrayptr = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_arrayptr);
-    arraysize = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_arraysize);
+    array = jl_aliasinfo_t(ctx, Region::arrayhdr, tbaa.tbaa_array);
+    arrayptr = jl_aliasinfo_t(ctx, Region::arrayhdr, tbaa.tbaa_arrayptr);
+    arraysize = jl_aliasinfo_t(ctx, Region::arrayhdr, tbaa.tbaa_arraysize);
     memory = jl_aliasinfo_t(ctx, Region::mutconstdata, tbaa.tbaa_memory);
     memoryptr = jl_aliasinfo_t(ctx, Region::mutconstdata, tbaa.tbaa_memoryptr);
     memorylen = jl_aliasinfo_t(ctx, Region::mutconstdata, tbaa.tbaa_memorylen);
