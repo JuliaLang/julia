@@ -908,6 +908,7 @@ end
                         bar(1)
                     end
                     bar(x) = x
+                    __init__() = nothing
                     end
                     """)
 
@@ -922,7 +923,7 @@ end
                 buf = read(fname)
                 rm(fname)
 
-                @test occursin("ms  Foo3242", String(buf))
+                @test occursin(r"┌ [\d.]+ ms Foo3242\.__init__\(\)[^\n]*\n\s+[\d.]+ ms  Foo3242", String(buf))
 
                 fname = tempname()
                 f = open(fname, "w")
