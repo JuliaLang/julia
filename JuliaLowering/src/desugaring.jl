@@ -3634,7 +3634,10 @@ function _rewrite_ctor_new_calls(ctx, ex0, global_struct_name, ctor_sparams::Vec
             throw(LoweringError(ex[1], "too few type parameters specified in `new`"))
         end
     end
-    new_args = ex[2:end]
+    new_args = mapsyntax(ex[2:end]) do e
+        _rewrite_ctor_new_calls(ctx, e, global_struct_name, ctor_sparams,
+                                struct_typevars, ctor_self, field_types)
+    end
     n_splat = sum(head(t) == :... for t in new_args; init=0)
     n_nonsplat = length(new_args) - n_splat
     n_fields = length(field_types)
@@ -3658,7 +3661,7 @@ function _rewrite_ctor_new_calls(ctx, ex0, global_struct_name, ctor_sparams::Vec
             [:new
                 struct_type
                 [_new_call_convert_arg(ctx, struct_type, type, i, name)
-                 for (i, (name,type)) in enumerate(zip(ex[2:end], field_types))]...
+                 for (i, (name,type)) in enumerate(zip(new_args, field_types))]...
             ]
         ]
     else
@@ -3670,14 +3673,14 @@ function _rewrite_ctor_new_calls(ctx, ex0, global_struct_name, ctor_sparams::Vec
                     struct_type
                     # Note: `jl_new_structt` ensures length of this tuple is
                     # exactly the number of fields.
-                    [:call "tuple"::core ex[2:end]...]
+                    [:call "tuple"::core new_args...]
                 ]
             ]
         else
             # `new` with splatted args which are symbolically not `Core.Any`
             # (might be `Any` at runtime but we can't know that here.)
             @ast ctx ex [:block
-                args := [:call "tuple"::core ex[2:end]...]
+                args := [:call "tuple"::core new_args...]
                 n_args := [:call "nfields"::core args]
                 [:if
                     [:call "ult_int"::top n_args n_fields::value]
@@ -3701,13 +3704,14 @@ end
 
 function _constructor_min_initialized(ex::SyntaxTree)
     if _is_new_call(ex)
-        if any(head(e) == :... for e in ex[2:end])
+        n = if any(head(e) == :... for e in ex[2:end])
             # Lowering ensures new with splats always inits all fields
             # or in the case of splatnew this is enforced by the runtime.
             typemax(Int)
         else
             numchildren(ex) - 1
         end
+        min(n, minimum(_constructor_min_initialized, ex[2:end], init=typemax(Int)))
     elseif !is_leaf(ex)
         minimum((_constructor_min_initialized(e) for e in children(ex)), init=typemax(Int))
     else
