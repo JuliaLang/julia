@@ -5,6 +5,7 @@
 #include "julia_internal.h"
 #include "options.h"
 #include "stdio.h"
+#include <stdatomic.h>
 
 #if defined(USE_TRACY) || defined(USE_ITTAPI) || defined(USE_NVTX) || defined(USE_APPLE_OSLOG)
 #define DISABLE_FREQUENT_EVENTS
@@ -717,7 +718,9 @@ void jl_timing_task_init(jl_task_t *t)
     if (jl_is_datatype(start_type))
         start_name = jl_symbol_name(((jl_datatype_t *) start_type)->name->name);
 
-    static uint32_t task_id = 1;
+    static _Atomic uint32_t task_id = 1;
+    uint32_t prev_id;
+
     // XXX: NVTX uses this as a handle internally and requires that this
     // string live forever, so this allocation is intentionally leaked.
     char *task_name;
@@ -750,7 +753,8 @@ void jl_timing_task_init(jl_task_t *t)
     nvtx_attrs.message.registered = nvtx_message;
 
     t->nvtx_attrs = nvtx_attrs;
-    t->nvtx_task_id = task_id++;
+    prev_id = atomic_fetch_add(&task_id, 1);
+    t->nvtx_task_id = prev_id;
 #endif
 }
 
