@@ -724,6 +724,7 @@ void jl_timing_task_init(jl_task_t *t)
     // XXX: NVTX uses this as a handle internally and requires that this
     // string live forever, so this allocation is intentionally leaked.
     char *task_name;
+    jl_sym_t *task_symbol;
 
     // We try to get the method instance to get module and file name
     JL_GC_PUSH1(&t);
@@ -737,18 +738,19 @@ void jl_timing_task_init(jl_task_t *t)
         size_t task_name_len = strlen(start_name) + strlen(filename) + strlen(module_name) + 16;
         task_name = (char *)malloc(task_name_len);
         snprintf(task_name, task_name_len, "%s (%s:%d in %s)", start_name, filename, mi->def.method->line, module_name);
+        task_symbol = jl_symbol(task_name);
 
     } else {
-        task_name = (char * ) malloc(strlen(start_name) + 1);
-        strcpy(task_name, start_name);
+        task_symbol = jl_symbol(start_name);
     }
+    free(task_name);
 
     nvtxEventAttributes_t nvtx_attrs = {0};
     nvtx_attrs.version = NVTX_VERSION;
     nvtx_attrs.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
 
 
-    nvtxStringHandle_t nvtx_message = nvtxDomainRegisterStringA(jl_timing_nvtx_task_domain, task_name);
+    nvtxStringHandle_t nvtx_message = nvtxDomainRegisterStringA(jl_timing_nvtx_task_domain, jl_symbol_name(task_symbol));
     nvtx_attrs.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
     nvtx_attrs.message.registered = nvtx_message;
 
@@ -760,13 +762,13 @@ void jl_timing_task_init(jl_task_t *t)
 
 void jl_timing_root_task_init(jl_task_t *t) {
 #ifdef USE_NVTX
-    static char *root_task_name = "Root";
+    jl_sym_t *root_task_name = jl_symbol("Root");
     nvtxEventAttributes_t nvtx_attrs = {0};
     nvtx_attrs.version = NVTX_VERSION;
     nvtx_attrs.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
 
 
-    nvtxStringHandle_t nvtx_message = nvtxDomainRegisterStringA(jl_timing_nvtx_task_domain, root_task_name);
+    nvtxStringHandle_t nvtx_message = nvtxDomainRegisterStringA(jl_timing_nvtx_task_domain, jl_symbol_name(root_task_name));
     nvtx_attrs.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
     nvtx_attrs.message.registered = nvtx_message;
     t->nvtx_attrs = nvtx_attrs;
