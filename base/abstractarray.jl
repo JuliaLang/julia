@@ -3487,6 +3487,16 @@ function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
     return dest
 end
 
+# `foldl` is unrolled for a `Tuple`, so this does not allocate when its elements have different types
+function map!(f::F, dest::AbstractArray, t::Tuple) where F
+    idxs = eachindex(IndexLinear(), dest)
+    foldl(t; init = first(idxs)) do i, x
+        i <= last(idxs) && (@inbounds dest[i] = f(x))
+        return i + 1
+    end
+    return dest
+end
+
 # map on collections
 map(f, A::AbstractArray) = collect_similar(A, Generator(f,A))
 
@@ -3565,6 +3575,11 @@ end
 Like [`map`](@ref), but stores the result in `destination` rather than a new
 collection. `destination` must be at least as large as the smallest collection.
 
+A `Tuple` can also be used as the collection, as long as it is the only one.
+
+!!! compat "Julia 1.14"
+    Passing a `Tuple` as the collection requires Julia 1.14 or later.
+
 $(_DOCS_ALIASING_WARNING)
 
 See also [`map`](@ref), [`foreach`](@ref), [`zip`](@ref), [`copyto!`](@ref).
@@ -3588,6 +3603,13 @@ julia> map!(+, zeros(Int, 5), 100:999, 1:3)
  105
    0
    0
+
+julia> map!(x -> x * 2, zeros(4), (1, 2.0, 3f0))
+4-element Vector{Float64}:
+ 2.0
+ 4.0
+ 6.0
+ 0.0
 ```
 """
 function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
