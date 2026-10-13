@@ -156,6 +156,10 @@ end
 
 @test !vst1_ok(Expr(:const, Expr(:global, :x)))
 
+# calldecl name should be syntax
+@test !vst1_ok(Expr(:function, Expr(:call, Base.view, :A), Expr(:block)))
+@test !vst1_ok(Expr(:(=), Expr(:call, Base.view, :A, :idx), 2))
+
 @testset "underscores that should probably not be valid" begin
     @test vst1_ok(:(Mod._))
     @test vst1_ok(:(function f(x::_); x; end))

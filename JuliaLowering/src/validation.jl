@@ -717,10 +717,8 @@ vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
         @fail(st, "dotted operator is not a valid function name"))
     [:. _ _] ->
         vst1_calldecl_dot_name(vcx, st)
-    [:curly t tvs...] ->
-        vst1_calldecl_name(vcx, t) & all(vst1, vcx, tvs)
-    [:value] ->
-        pass() # GlobalRef works. Function? Type?
+    [:curly [:value] tvs...] -> all(vst1, vcx, tvs)
+    [:curly t tvs...] -> vst1_calldecl_name(vcx, t) & all(vst1, vcx, tvs)
     ([:(::) _...], when=!vcx.toplevel) ->
         @fail(st, "adding methods to callable type only allowed at top level")
     [:(::) t] -> vst1(vcx, t)
@@ -728,7 +726,6 @@ vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     # TODO: @overlay broken in many cases, should be stricter
     [:overlay mt x] ->
         vst1(vcx, mt) & vst1_calldecl_name(vcx, x)
-
     [:where t tds...] ->
         vst1_calldecl_name(vcx, t) & all(vst1_typevar_decl, vcx, tds)
     _ -> @fail(st, "invalid function name")

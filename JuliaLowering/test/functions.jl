@@ -1611,6 +1611,30 @@ end
         test_mod, "f_anon_sp3(x) where {_, _} = x")
 end
 
+@testset "first arg `curly`" begin
+    @eval test_mod struct first_arg_curly{T, U}; x::T; y::U; end
+
+    @test jl_eval(test_mod, raw"""
+    first_arg_curly{Int, Int}() = first_arg_curly(1, 1)
+    """) === nothing
+    @test test_mod.first_arg_curly{Int, Int}() == test_mod.first_arg_curly(1,1)
+
+    @test jl_eval(test_mod, raw"""
+    @eval ($first_arg_curly{Bool, Bool})() = first_arg_curly(true, true)
+    """) === nothing
+    @test test_mod.first_arg_curly{Bool, Bool}() == test_mod.first_arg_curly(true, true)
+
+    @test jl_eval(test_mod, raw"""
+    first_arg_curly{Int}{String}() = first_arg_curly(1, "foo")
+    """) === nothing
+    @test test_mod.first_arg_curly{Int, String}() == test_mod.first_arg_curly(1,"foo")
+
+    @test jl_eval(test_mod, raw"""
+    @eval ($first_arg_curly{Bool}{String})() = first_arg_curly(true, "foo")
+    """) === nothing
+    @test test_mod.first_arg_curly{Bool, String}() == test_mod.first_arg_curly(true,"foo")
+end
+
 @testset "first arg `where`" begin
     @eval test_mod struct A12238{T} end
     Core.@latestworld
