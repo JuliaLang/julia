@@ -30,6 +30,7 @@ using Base.MathConstants
     # Wrapping rational addition must use modular multiplication for cross-products.
     @test +%(1//2, 1//3) == 5//6
     @test +%(typemax(Int)//1, 1//1) == typemin(Int)//1
+    @test -%(typemin(Int)//1) == typemin(Int)//1
     @test_throws OverflowError (1//2)^63
     @test inv((1+typemin(Int))//typemax(Int)) == -1
     @test_throws OverflowError inv(typemin(Int)//typemax(Int))

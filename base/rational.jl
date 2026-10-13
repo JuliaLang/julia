@@ -409,6 +409,8 @@ function -(x::Rational{T}) where T<:Unsigned
     x
 end
 
+-%(x::Rational) = unsafe_rational(-%(x.num), x.den)
+
 function +(x::Rational, y::Rational)
     xp, _ = promote(x, y)::NTuple{2,Rational}
     if isinf(x) && x == y
