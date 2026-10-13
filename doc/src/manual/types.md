@@ -308,8 +308,8 @@ its value in the first `cld(N, 8)` bytes. Its alignment is that of the smallest 
 `_BitInt(N)`. Wider types can differ: x86-64 aligns `_BitInt(128)` to 8 bytes, but
 `primitive type T 128 end`, like `UInt128` and C's `unsigned __int128`, to 16; so `_BitInt(136)`
 takes 24 bytes where a 136-bit primitive type takes 32. Bits past the declared width are padding
-and take no part in comparison or hashing. Use `Core.bitsizeof(T)` to query the declared logical
-width — for `primitive type T 24 end`, `Core.bitsizeof(T)` is 24 while `sizeof(T)` is 4.
+and take no part in comparison or hashing. Use [`bitsizeof(T)`](@ref bitsizeof) to query the declared logical
+width — for `primitive type T 24 end`, `bitsizeof(T)` is 24 while `sizeof(T)` is 4.
 
 Non-byte primitive widths are accepted, but remain an expert-only feature. They are more likely to
 expose compiler, runtime, or ABI bugs than the standard built-in primitive widths, and arrays store
