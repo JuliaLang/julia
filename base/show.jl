@@ -2402,7 +2402,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         else
             # first show the line number argument as a comment
             if isa(args[2], LineNumberNode) || is_expr(args[2], :line)
-                print(io, args[2], ' ')
+                a2 = args[2]
+                a2 isa LineNumberNode ? print(io, a2, ' ') : print(io, a2::Expr, ' ')
             end
             # Use the functional syntax unless specifically designated with
             # prec=-1 and hide the line number argument from the argument list
