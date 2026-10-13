@@ -940,7 +940,7 @@ function project_get_edition(d::Dict)
     sv = nothing
     ds = get(d, "syntax", nothing)
     if ds !== nothing
-        sv = VersionNumber(get(ds, "julia_version", nothing))
+        sv = VersionNumber(get(ds, "julia_version", nothing))::VersionNumber
     end
     # If not found, default to minimum(compat["julia"])
     if sv === nothing
@@ -948,7 +948,7 @@ function project_get_edition(d::Dict)
         if cs !== nothing
             jv = get(cs, "julia", nothing)
             if jv !== nothing
-                sv = VersionNumber(minimum(semver_spec(jv)).t...)
+                sv = VersionNumber(minimum(semver_spec(jv)).t...)::VersionNumber
             end
         end
     end
