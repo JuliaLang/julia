@@ -133,9 +133,68 @@ static void region_resume_the_world(jl_task_t *ct, jl_ptls_t ptls, int8_t old_st
 // replaces it by the all-root tree and applies the edge.
 static uint8_t region_parent[JL_GC_MAX_REGIONS];
 static _Atomic(uint64_t) region_uptree[JL_GC_MAX_REGIONS];
+static int region_tree_declared = 0;
 
+// Rebuild every uptree from region_parent[]; a parent has a lower number
+// than its child, so one pass in index order suffices.
+static void region_tree_rebuild(void)
+{
+    for (int r = 0; r < JL_GC_MAX_REGIONS; r++) {
+        uint64_t up = (uint64_t)1 << r;
+        if (r != 0)
+            up |= jl_atomic_load_relaxed(&region_uptree[region_parent[r]]);
+        jl_atomic_store_relaxed(&region_uptree[r], up);
+    }
+}
 
+// Declare the parent of `child` (parent < child). Returns EBUSY while any
+// window is open and ECHILD while any region is live on any heap: the tree
+// is declared before the regions are used.
+JL_DLLEXPORT int jl_gc_region_declare_parent(int child, int parent) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    if (!region_valid(child) || parent < 0 || parent >= child)
+        return JL_GC_REGION_EINVAL;
+    if (jl_atomic_load_relaxed(&region_windows_open) != 0)
+        return JL_GC_REGION_EBUSY;
 
+    // The test and the rebuild run in one stop-the-world pause: the uptree
+    // words change one at a time.
+    int8_t old_state;
+    uint32_t saved_disable;
+    if (region_stop_the_world(ct, ptls, 1024, &old_state, &saved_disable) != 0)
+        return JL_GC_REGION_ERACE;
+
+    int result = 0;
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 != NULL && ptls2->gc_tls.heap.region_live_mask != 0) {
+            result = JL_GC_REGION_ECHILD;
+            break;
+        }
+    }
+    if (result == 0) {
+        if (!region_tree_declared) {
+            for (int r = 0; r < JL_GC_MAX_REGIONS; r++)
+                region_parent[r] = 0;
+            region_tree_declared = 1;
+        }
+        region_parent[child] = (uint8_t)parent;
+        region_tree_rebuild();
+    }
+
+    region_resume_the_world(ct, ptls, old_state, saved_disable);
+    return result;
+}
+
+// The declared parent of `child`; 0 for a child of the root or a bad number.
+JL_DLLEXPORT int jl_gc_region_parent_of(int child) JL_NOTSAFEPOINT
+{
+    if (!region_valid(child))
+        return 0;
+    return region_parent[child];
+}
 
 // The pages of region n on the calling heap.
 JL_DLLEXPORT int jl_gc_region_pages(int n) JL_NOTSAFEPOINT
