@@ -587,6 +587,8 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
                 s->(head(s) === :identifier ? @mknode(s; head=:symbol) : s),
                 syms)...
            ]
+        [:throw_undef_if_not [:identifier] cond] ->
+            @ast _ st [:throw_undef_if_not @mknode(st[1]; head=:symbol) rec(ctx, cond)]
         [:boundscheck x] -> @mknode(st; children=SyntaxList())
         [:inbounds [:identifier]] -> @mknode(st; head=:inbounds_pop, children=SyntaxList())
         [:core x] -> newleaf(st, :core, syntax_name(x))

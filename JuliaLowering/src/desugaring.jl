@@ -414,7 +414,7 @@ function _destructure(ctx, assignment_srcref, stmts, lhs, rhs, is_const)
 end
 
 # Expands cases of property destructuring
-function expand_property_destruct(ctx, ex)
+function expand_property_destruct(ctx, ex, is_const)
     @jl_assert numchildren(ex) == 2 ex
     lhs = ex[1]
     @jl_assert head(lhs) == :tuple ex
@@ -430,14 +430,15 @@ function expand_property_destruct(ctx, ex)
         propname = head(prop) == :identifier                           ? prop    :
                    head(prop) == :(::) && head(prop[1]) == :identifier ? prop[1] :
                    throw(LoweringError(prop, "invalid assignment location"))
-        push!(stmts, expand_forms_2(ctx, @ast ctx rhs1 [:(=)
+        asgn = @ast ctx rhs1 [:(=)
             prop
             [:call
                 "getproperty"::top
                 rhs1
                 propname=>:symbol
             ]
-        ]))
+        ]
+        push!(stmts, expand_forms_2(ctx, is_const ? @ast(ctx, ex, [:const asgn]) : asgn))
     end
     push!(stmts, @ast ctx rhs1 [:removable rhs1])
     @mknode(;source=ex, context=ex.context, head=:block, children=stmts)
@@ -460,7 +461,8 @@ function expand_tuple_destruct(ctx, ex, is_const)
 
     if head(rhs) == :tuple
         num_splat = sum(head(rh) == :... for rh in children(rhs); init=0)
-        if num_splat == 0 && (numchildren(lhs) - num_slurp) > numchildren(rhs)
+        if num_splat == 0 && !has_parameters(rhs) &&
+                (numchildren(lhs) - num_slurp) > numchildren(rhs)
             throw(LoweringError(ex, "More variables on left hand side than right hand in tuple assignment"))
         end
 
@@ -897,7 +899,7 @@ end
 function expand_generator(ctx, ex)
     @jl_assert numchildren(ex) >= 2 ex
     body = ex[1]
-    check_no_return(body)
+    (!is_flisp_compat(ex) || numchildren(ex) == 2) && check_no_return(ex)
     if numchildren(ex) > 2
         outervar_assignments = SyntaxList()
         for iterspecs in ex[2:end-1]
@@ -1102,6 +1104,7 @@ function expand_vcat(ctx, ex)
     check_no_assignment(children(ex))
     had_row = false
     had_row_splat = false
+    had_other_splat = false
     is_typed = head(ex) == :typed_vcat
     eltype   = is_typed ? ex[1]     : nothing
     elements = is_typed ? ex[2:end] : ex[1:end]
@@ -1110,9 +1113,12 @@ function expand_vcat(ctx, ex)
         if k == :row
             had_row = true
             had_row_splat = had_row_splat || any(head(e1) == :... for e1 in children(e))
+        elseif k == :...
+            had_other_splat = true
         end
     end
-    if had_row_splat
+    # With rows, a splat outside a row is a row by itself, eg `t...` in `[t...; 3 4]`
+    if had_row_splat || (had_row && had_other_splat)
         # In case there is splatting inside `hvcat`, collect each row as a
         # separate tuple and pass those to `hvcat_rows` instead (ref #38844)
         rows = SyntaxList()
@@ -1368,7 +1374,7 @@ function expand_assignment(ctx, ex, is_const=false)
             ex_i = ex_i[2]
         end
         # In const a = b = c, only a is const
-        is_const && (stmts[1] = @mknode(stmts[1]; head=:constdecl))
+        is_const && (stmts[1] = @ast ctx stmts[1] [:const stmts[1]])
 
         out = @ast ctx ex [:block assign_rr reverse!(stmts)... [:removable rr]]
         expand_forms_2(ctx, out)
@@ -1409,7 +1415,7 @@ function expand_assignment(ctx, ex, is_const=false)
         ]
     elseif kl == :tuple
         if has_parameters(lhs)
-            expand_property_destruct(ctx, ex)
+            expand_property_destruct(ctx, ex, is_const)
         else
             expand_tuple_destruct(ctx, ex, is_const)
         end
@@ -1511,20 +1517,18 @@ function expand_update_operator(ctx, ex)
         end
     end
 
+    call = _expand_literal_pow(@ast ctx ex [(dotted ? :dotcall : :call)
+        op
+        if isnothing(declT)
+            lhs
+        else
+            [:(::)(decl_lhs) lhs declT]
+        end
+        rhs
+    ])
     @ast ctx ex [:block
         stmts...
-        [(dotted ? :.= : :(=))
-            lhs
-            [(dotted ? :dotcall : :call)
-                op
-                if isnothing(declT)
-                    lhs
-                else
-                    [:(::)(decl_lhs) lhs declT]
-                end
-                rhs
-            ]
-        ]
+        [(dotted ? :.= : :(=)) lhs call]
     ]
 end
 
@@ -2250,7 +2254,7 @@ function expand_try(ctx, ex)
             [:scope_block(catch_) [:neutral_scope]
                 if head(exc_var) != :placeholder
                     [:block
-                        [:(=)(exc_var) exc_var [:call current_exception::value]]
+                        [:(=)(exc_var) exc_var [:the_exception]]
                         catch_block
                     ]
                 else
@@ -2403,7 +2407,7 @@ function expand_const_decl(ctx, ex)
         # remnant from the days when const-ness was a flag that could be set on
         # any global.  It creates a binding with kind PARTITION_KIND_UNDEF_CONST.
         # TODO: deprecate and delete this "feature"
-        [:identifier] -> @ast ctx ex [:constdecl ex[1]]
+        [:identifier] -> @ast ctx ex [:block [:constdecl ex[1]] "nothing"::core]
     end
 end
 
@@ -3068,9 +3072,10 @@ end
 
 expand_opaque_closure(ctx, ex) = @stm ex begin
     [:opaque_closure argt rt_lb rt_ub allow_partial lam] -> begin
-        @jl_assert head(lam[1]) === :tuple ex
-        check_no_parameters(ex, lam[1])
-        raw_args = append!(SyntaxList(), children(lam[1]))
+        sig, wheres = flatten_wheres(lam[1])
+        @jl_assert head(sig) === :tuple ex
+        check_no_parameters(ex, sig)
+        raw_args = append!(SyntaxList(), children(sig))
         arg_stmts = lower_destructuring_args!(ctx, raw_args)
 
         arg_names = SyntaxList(newsym(ctx, lam[1], "#self#"))
@@ -3089,8 +3094,13 @@ expand_opaque_closure(ctx, ex) = @stm ex begin
             push!(arg_names, a2[1])
         end
 
-        out_argt = head(argt) !== :nothing ? argt :
-            @ast ctx lam[1] [:curly "Tuple"::core inner_arg_types...]
+        if head(argt) !== :nothing && !isempty(wheres)
+            throw(LoweringError(lam[1], "opaque closure with an argument type cannot have `where` parameters"))
+        end
+        # flisp compat: with `where`, this is a UnionAll the runtime rejects
+        out_argt = head(argt) !== :nothing ? argt : isempty(wheres) ?
+            @ast(ctx, lam[1], [:curly "Tuple"::core inner_arg_types...]) :
+            @ast(ctx, lam[1], [:where [:curly "Tuple"::core inner_arg_types...] wheres...])
         out_rt_lb = head(rt_lb) !== :nothing ? rt_lb :
             @ast ctx lam[1] [:curly "Union"::core]
         out_rt_ub = head(rt_ub) !== :nothing ? rt_ub :

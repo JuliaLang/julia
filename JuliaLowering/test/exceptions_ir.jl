@@ -49,7 +49,7 @@ end
 #---------------------
 1   (enter label₁₄)
 2   (enter label₇)
-3   (leave %₁ %₂)
+3   (leave %₂ %₁)
 4   (return 10)
 5   (leave %₂)
 6   (goto label₁₁)
@@ -361,10 +361,11 @@ end
 2   TestMod.a
 3   (leave %₁)
 4   (return %₂)
-5   (= slot₁/exc (call JuliaLowering.current_exception))
-6   TestMod.b
-7   (pop_exception %₁)
-8   (return %₆)
+5   (the_exception)
+6   (= slot₁/exc %₅)
+7   TestMod.b
+8   (pop_exception %₁)
+9   (return %₇)
 
 ########################################
 # Error: unmatched goto from try

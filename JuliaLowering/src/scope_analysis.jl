@@ -846,7 +846,7 @@ function analyze_variables!(ctx, ex)
         if head(ex[1]) != :bindingid || get_binding(ctx, ex[1]).kind !== :local
             analyze_variables!(ctx, ex[1])
         end
-    elseif k == :constdecl
+    elseif k == :constdecl && numchildren(ex) == 2
         if head(ex[1]) !== :placeholder
             b = get_binding(ctx, ex[1])
             b.is_const = true

@@ -687,7 +687,11 @@ end
 
     let ex = parsestmt(SyntaxTree, "let q = p; q ^= 2; q end")
         @test fl_eval(pow_mod, ex) == (:literal, 2)
-        @test_broken jl_eval(pow_mod, ex; edition=JL_OLD_EDITION) == (:literal, 2)
+        @test jl_eval(pow_mod, ex; edition=JL_OLD_EDITION) == (:literal, 2)
+    end
+    let ex = parsestmt(SyntaxTree, "let q = Any[p]; q .^= 2; q end")
+        @test fl_eval(pow_mod, ex) == [(:literal, 2)]
+        @test jl_eval(pow_mod, ex; edition=JL_OLD_EDITION) == [(:literal, 2)]
     end
 end
 

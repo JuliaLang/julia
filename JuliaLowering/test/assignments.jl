@@ -364,13 +364,10 @@ end
     @test_throws LoweringError JuliaLowering.include_string(test_mod, """
     const chain_arr[1] = b = 1
     """)
-
-    # FIXME: flisp accepts non-identifier first lhss in const chains; these
-    # currently throw an internal lowering error
-    @test_broken JuliaLowering.include_string(test_mod, """
+    @test JuliaLowering.include_string(test_mod, """
     const (chain_ca, chain_cb) = chain_cc = (1, 2)
     """) == (1, 2)
-    @test_broken JuliaLowering.include_string(test_mod, """
+    @test JuliaLowering.include_string(test_mod, """
     const chain_ct::Int = chain_ctb = 1.0
     """) == 1.0
 end # assignment chaining

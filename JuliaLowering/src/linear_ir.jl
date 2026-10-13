@@ -208,7 +208,7 @@ function compile_leave_handler(ctx, srcref, src_tokens, dest_tokens)
     jump_ok = n == 0 || (n <= length(src_tokens) && syntax_id(dest_tokens[n]) == syntax_id(src_tokens[n]))
     jump_ok || throw(LoweringError(srcref, "Attempt to jump into try block"))
     if n < length(src_tokens)
-        @ast ctx srcref [:leave src_tokens[n+1:end]...]
+        @ast ctx srcref [:leave reverse(src_tokens[n+1:end])...]
     else
         nothing
     end
@@ -289,7 +289,7 @@ function emit_return(ctx, srcref, ex)
     if !isempty(ctx.finally_handlers)
         enter_finally_block(ctx, srcref, :return, x)
     else
-        emit(ctx, @ast ctx srcref [:leave ctx.handler_token_stack...])
+        emit(ctx, @ast ctx srcref [:leave reverse(ctx.handler_token_stack)...])
         _actually_return(ctx, x)
     end
     return nothing
@@ -486,7 +486,7 @@ end
 #   (leave tok)
 #     pop exception handler back to the state of the `tok` from the associated
 #     `enter`. Multiple tokens can be supplied to pop multiple handlers using
-#     `(leave tok1 tok2 ...)`.
+#     `(leave tok2 tok1 ...)`, innermost to outermost.
 #
 #   (pop_exception tok) - pop exception stack back to state of associated enter
 #
@@ -708,7 +708,8 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         @jl_assert !needs_value (ex,"TOMBSTONE encountered in value position")
         nothing
     elseif k == :call || k == :new || k == :splatnew || k == :foreigncall ||
-            k == :foreignglobal || k == :new_opaque_closure || k == :cfunction
+            k == :foreignglobal || k == :new_opaque_closure || k == :cfunction ||
+            k == :throw_undef_if_not
         callex = @mknode(ex; head=k, children=compile_args(ctx, children(ex)))
         if in_tail_pos
             emit_return(ctx, ex, callex)
@@ -1018,7 +1019,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
         end
     elseif k == :isdefined || k == :captured_local ||
-        k == :throw_undef_if_not || k == :boundscheck
+        k == :boundscheck || k == :the_exception
         if in_tail_pos
             emit_return(ctx, ex)
         elseif needs_value

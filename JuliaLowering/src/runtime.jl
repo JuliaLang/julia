@@ -27,12 +27,6 @@ const _lowering_world = Ref{UInt}(0)
     return invokelatest(f, args...)
 end
 
-# Return the current exception. In JuliaLowering we use this rather than the
-# special form `:the_exception` to reduce the number of special forms.
-Base.@assume_effects :removable function current_exception()
-    @ccall jl_current_exception(current_task()::Any)::Any
-end
-
 function __interpolate_expr(@nospecialize(ex), depth, @nospecialize(vals::Tuple), val_i)
     if ex isa QuoteNode
         out = __interpolate_expr(Expr(:inert, ex.value), depth, vals, val_i)

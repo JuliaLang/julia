@@ -252,6 +252,22 @@ let
 end
 """) == (3,4,5)
 
+# Opaque closure lambda from a macro expansion
+@test JuliaLowering.include_string(test_mod, """
+let
+    oc = Base.Experimental.@opaque(@noinline x->2x)
+    oc(3)
+end
+""") == 6
+
+# `where` makes the argument type a UnionAll, rejected at runtime as in flisp
+@test_throws "must be a tuple type" JuliaLowering.include_string(test_mod, """
+Base.Experimental.@opaque ((x::T,y::T) where {T}) -> 123
+""")
+@test_throws LoweringError JuliaLowering.include_string(test_mod, """
+Base.Experimental.@opaque Tuple{Int}->_ ((x,) where {T}) -> 123
+""")
+
 # Opaque closure inside a closure can capture the enclosing closure's captures
 @test JuliaLowering.include_string(test_mod, """
 let y = [1]
