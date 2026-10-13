@@ -2201,27 +2201,18 @@ endif # VERBOSE
 print-%:
 	@printf "%s\n" $(call shell_escape,$*)=$(call shell_escape,$(subst $(newline),\n,$($*)))
 
-# DO NOT MERGE: build with BUILD_PATH_PREFIX_MAP on CI. The source prefix must
-# be %-encoded (the Windows drive colon) and must use the native Windows path
-# spelling: MSYS make's JULIAHOME is the /c/... POSIX form, which never matches
-# the C:... paths julia and gcc see.
-ifeq ($(OS), WINNT)
-BUILD_PATH_PREFIX_MAP_SRC := $(subst \,/,$(shell echo $(call cygpath_w,$(JULIAHOME))))
-else
-BUILD_PATH_PREFIX_MAP_SRC := $(JULIAHOME)
-endif
-export BUILD_PATH_PREFIX_MAP := /julia=$(subst :,%.,$(subst =,%+,$(subst %,%\#,$(BUILD_PATH_PREFIX_MAP_SRC))))
-# MSYS2 path-converts env values that look like POSIX paths when spawning native
-# binaries, which would corrupt the value; exempt it
-export MSYS2_ENV_CONV_EXCL := BUILD_PATH_PREFIX_MAP
-
-# Also apply BUILD_PATH_PREFIX_MAP to C/C++ debug info and __FILE__, so native
+# Apply BUILD_PATH_PREFIX_MAP to C/C++ debug info and __FILE__, so native
 # frames use the same mapped paths as the runtime. Each dst=src pair in the map
-# becomes -ffile-prefix-map=src=dst. (This sits at the end of Make.inc so a map
-# constructed within this file, e.g. via cygpath_w, is visible; the JCFLAGS
-# variables are recursively expanded, so the late += still lands everywhere.)
+# becomes -ffile-prefix-map=src=dst. The JCFLAGS variables are recursively
+# expanded, so the late += still lands everywhere.
 ifneq ($(BUILD_PATH_PREFIX_MAP),)
-BUILD_PATH_PREFIX_MAP_FLAGS := $(shell printf '%s' '$(BUILD_PATH_PREFIX_MAP)' | awk 'BEGIN { RS=":" } { i = index($$0, "="); if (i == 0) next; dst = substr($$0, 1, i-1); src = substr($$0, i+1); gsub(/%\./, ":", dst); gsub(/%\+/, "=", dst); gsub(/%\#/, "%", dst); gsub(/%\./, ":", src); gsub(/%\+/, "=", src); gsub(/%\#/, "%", src); printf " -ffile-prefix-map=%s=%s", src, dst }')
+export BUILD_PATH_PREFIX_MAP
+ifeq ($(OS), WINNT)
+ifeq ($(findstring BUILD_PATH_PREFIX_MAP,$(MSYS2_ENV_CONV_EXCL)),)
+export MSYS2_ENV_CONV_EXCL := $(if $(MSYS2_ENV_CONV_EXCL),$(MSYS2_ENV_CONV_EXCL);)BUILD_PATH_PREFIX_MAP
+endif
+endif
+BUILD_PATH_PREFIX_MAP_FLAGS := $(shell printf '%s' $(call shell_escape,$(BUILD_PATH_PREFIX_MAP)) | awk 'BEGIN { RS=":"; q=sprintf("%c", 39) } { i = index($$0, "="); if (i == 0) next; dst = substr($$0, 1, i-1); src = substr($$0, i+1); gsub(/%\./, ":", dst); gsub(/%\+/, "=", dst); gsub(/%\#/, "%", dst); gsub(/%\./, ":", src); gsub(/%\+/, "=", src); gsub(/%\#/, "%", src); arg = "-ffile-prefix-map=" src "=" dst; printf " %s", q; for (j=1; j<=length(arg); j++) { c=substr(arg,j,1); if (c == q) printf "%s\\%s%s", q, q, q; else printf "%s", c } printf "%s", q }')
 JCFLAGS_COMMON += $(BUILD_PATH_PREFIX_MAP_FLAGS)
 JCXXFLAGS_COMMON += $(BUILD_PATH_PREFIX_MAP_FLAGS)
 endif

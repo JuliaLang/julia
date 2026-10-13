@@ -113,9 +113,10 @@ $$(build_private_libdir)/basecompiler$1-o.a $$(build_private_libdir)/basecompile
 		$$(call spawn, $3) $2 -C "$$(JULIA_CPU_TARGET)" $$(HEAPLIM) --output-$$* $$(call cygpath_w,$$@).tmp $$(JULIA_COVERAGE_IMAGE_FLAGS) \
 		--startup-file=no --warn-overwrite=yes --depwarn=error -g$$(BOOTSTRAP_DEBUG_LEVEL) Base_compiler.jl --buildroot $$(RELBUILDROOT) --dataroot $$(RELDATADIR))
 	@mv $$@.tmp $$@
-$$(build_private_libdir)/sysbase$1.ji: $$(build_private_libdir)/basecompiler$1.$$(SHLIB_EXT) $$(JULIAHOME)/VERSION $$(BASE_SRCS) $$(STDLIB_SRCS)
+$$(build_private_libdir)/sysbase$1.ji: $$(build_private_libdir)/basecompiler$1.$$(SHLIB_EXT) $$(JULIAHOME)/VERSION $$(BASE_SRCS) $$(STDLIB_SRCS) $$(if $$(wildcard $$(BUILDROOT)/base/sysimg$1.sources),,FORCE_BASE_CACHE_SOURCES)
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
 	if ! JULIA_BINDIR=$$(call cygpath_w,$$(build_bindir)) \
+	     JULIA_BASE_CACHE_SOURCES=$$(call cygpath_w,$$(BUILDROOT)/base/sysimg$1.sources) \
 	     WINEPATH="$$(call cygpath_w,$$(build_bindir));$$$$WINEPATH" \
 		 JULIA_NUM_THREADS=1 \
 			$$(call spawn, $$(JULIA_EXECUTABLE)) -g1 $2 -C "$$(JULIA_CPU_TARGET)" $$(HEAPLIM) --output-ji $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
@@ -128,9 +129,10 @@ $$(build_private_libdir)/sysbase$1.ji: $$(build_private_libdir)/basecompiler$1.$
 endef
 
 define sysimg_builder
-$$(build_private_libdir)/sysbase$1-o.a $$(build_private_libdir)/sysbase$1-bc.a : $$(build_private_libdir)/sysbase$1-%.a : $$(build_private_libdir)/basecompiler$1.$$(SHLIB_EXT) $$(JULIAHOME)/VERSION $$(BASE_SRCS) $$(STDLIB_SRCS)
+$$(build_private_libdir)/sysbase$1-o.a $$(build_private_libdir)/sysbase$1-bc.a : $$(build_private_libdir)/sysbase$1-%.a : $$(build_private_libdir)/basecompiler$1.$$(SHLIB_EXT) $$(JULIAHOME)/VERSION $$(BASE_SRCS) $$(STDLIB_SRCS) $$(if $$(wildcard $$(BUILDROOT)/base/sysimg$1.sources),,FORCE_BASE_CACHE_SOURCES)
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
 	if ! JULIA_BINDIR=$$(call cygpath_w,$$(build_bindir)) \
+	     JULIA_BASE_CACHE_SOURCES=$$(call cygpath_w,$$(BUILDROOT)/base/sysimg$1.sources) \
 	     WINEPATH="$$(call cygpath_w,$$(build_bindir));$$$$WINEPATH" \
 		 JULIA_NUM_THREADS=1 \
 			$$(call spawn, $$(JULIA_EXECUTABLE)) -g1 $2 -C "$$(JULIA_CPU_TARGET)" $$(HEAPLIM) --output-$$* $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
@@ -163,3 +165,6 @@ $(eval $(call base_builder,,-O1,$(JULIA_EXECUTABLE_release)))
 $(eval $(call base_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
 $(eval $(call sysimg_builder,,-O3,$(JULIA_EXECUTABLE_release)))
 $(eval $(call sysimg_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
+
+.PHONY: FORCE_BASE_CACHE_SOURCES
+FORCE_BASE_CACHE_SOURCES:

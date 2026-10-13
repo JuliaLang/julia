@@ -159,10 +159,10 @@ static char *prefix_map_apply(prefix_map_pair_t *pairs, size_t npairs,
     return NULL;
 }
 
-static void prefix_map_init(void) JL_NOTSAFEPOINT
+static uv_once_t prefix_map_once = UV_ONCE_INIT;
+
+static void prefix_map_read_env(void) JL_NOTSAFEPOINT
 {
-    if (prefix_map_state != PREFIX_MAP_UNPARSED)
-        return;
     // uv_os_getenv reads the wide environment on Windows and converts to WTF-8,
     // matching the encoding of the paths being mapped
     size_t size = 256;
@@ -180,6 +180,11 @@ static void prefix_map_init(void) JL_NOTSAFEPOINT
     prefix_map_state = prefix_map_parse(spec, &prefix_map_pairs, &prefix_map_npairs) ?
         PREFIX_MAP_ACTIVE : PREFIX_MAP_MALFORMED;
     free(spec);
+}
+
+static void prefix_map_init(void) JL_NOTSAFEPOINT
+{
+    uv_once(&prefix_map_once, prefix_map_read_env);
 }
 
 // error on a malformed map instead of silently writing unmapped output; called
@@ -221,7 +226,7 @@ static jl_sym_t *jl_maybe_map_build_path_sym(jl_sym_t *s) JL_NOTSAFEPOINT
     return r;
 }
 
-jl_value_t *jl_maybe_map_build_path_jlstr(jl_value_t *str) JL_CANSAFEPOINT
+static jl_value_t *jl_maybe_map_build_path_jlstr(jl_value_t *str) JL_CANSAFEPOINT
 {
     size_t len = jl_string_len(str);
     const char *data = jl_string_data(str);
@@ -235,53 +240,6 @@ jl_value_t *jl_maybe_map_build_path_jlstr(jl_value_t *str) JL_CANSAFEPOINT
     jl_value_t *r = jl_pchar_to_string(mapped, outlen);
     free(mapped);
     return r;
-}
-
-// remap path symbols, strings, and LineNumberNode files inside an AST literal;
-// returns NULL when nothing changed. Allocates without rooting, so the GC must
-// be disabled.
-static jl_value_t *maybe_map_build_path_in_ast(jl_value_t *v, int depth) JL_CANSAFEPOINT JL_GC_DISABLED
-{
-    if (v == NULL || depth > 100)
-        return NULL;
-    if (jl_is_symbol(v)) {
-        jl_sym_t *mapped = jl_maybe_map_build_path_sym((jl_sym_t*)v);
-        return mapped == (jl_sym_t*)v ? NULL : (jl_value_t*)mapped;
-    }
-    if (jl_is_string(v)) {
-        jl_value_t *mapped = jl_maybe_map_build_path_jlstr(v);
-        return mapped == v ? NULL : mapped;
-    }
-    if (jl_is_linenode(v)) {
-        jl_value_t *file = maybe_map_build_path_in_ast(jl_linenode_file(v), depth + 1);
-        if (file == NULL)
-            return NULL;
-        return jl_new_struct(jl_linenumbernode_type, jl_box_long(jl_linenode_line(v)), file);
-    }
-    if (jl_is_quotenode(v)) {
-        jl_value_t *val = maybe_map_build_path_in_ast(jl_quotenode_value(v), depth + 1);
-        if (val == NULL)
-            return NULL;
-        return jl_new_struct(jl_quotenode_type, val);
-    }
-    if (jl_is_expr(v)) {
-        jl_expr_t *e = (jl_expr_t*)v;
-        size_t i, n = jl_expr_nargs(e);
-        jl_expr_t *ne = NULL;
-        for (i = 0; i < n; i++) {
-            jl_value_t *mapped = maybe_map_build_path_in_ast(jl_exprarg(e, i), depth + 1);
-            if (mapped) {
-                if (ne == NULL) {
-                    ne = jl_exprn(e->head, n);
-                    for (size_t j = 0; j < n; j++)
-                        jl_exprargset(ne, j, jl_exprarg(e, j));
-                }
-                jl_exprargset(ne, i, mapped);
-            }
-        }
-        return (jl_value_t*)ne;
-    }
-    return NULL;
 }
 
 JL_DLLEXPORT jl_value_t *jl_map_build_path(jl_value_t *str) JL_CANSAFEPOINT
@@ -1117,7 +1075,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
         JL_TYPECHK(write_dependency_list, array_any, (jl_value_t*)udeps);
     }
 
-    replace_depot_func = jl_get_global_value(jl_base_module, jl_symbol("replace_depot_path"), ct->world_age);
+    replace_depot_func = jl_get_global_value(jl_base_module, jl_symbol("replace_cache_path"), ct->world_age);
     normalize_depots_func = jl_eval_global_var(jl_base_module, jl_symbol("normalize_depots_for_relocation"), ct->world_age);
 
     depots = jl_apply(&normalize_depots_func, 1);
@@ -1138,14 +1096,14 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
         deppath = jl_fieldref_noalloc(deptuple, 1);
 
         if (replace_depot_func) {
-            jl_value_t *replace_depot_args[3];
+            jl_value_t *replace_depot_args[4];
             replace_depot_args[0] = replace_depot_func;
             replace_depot_args[1] = deppath;
             replace_depot_args[2] = depots;
-            deppath = (jl_value_t*)jl_apply(replace_depot_args, 3);
+            replace_depot_args[3] = jl_fieldref_noalloc(jl_array_ptr_ref(udeps, 0), 1);
+            deppath = (jl_value_t*)jl_apply(replace_depot_args, 4);
             JL_TYPECHK(write_dependency_list, string, deppath);
         }
-        deppath = jl_maybe_map_build_path_jlstr(deppath);
 
         size_t slen = jl_string_len(deppath);
         write_int32(s, slen);

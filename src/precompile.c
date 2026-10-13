@@ -46,7 +46,7 @@ static void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) JL_CA
         size_t last_age = ct->world_age;
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         JL_GC_PUSH5(&deptuple, &depots, &replace_depot_func, &normalize_depots_func, &depalias);
-        replace_depot_func = jl_eval_global_var(jl_base_module, jl_symbol("replace_depot_path"), jl_current_task->world_age);
+        replace_depot_func = jl_eval_global_var(jl_base_module, jl_symbol("replace_cache_path"), jl_current_task->world_age);
         normalize_depots_func = jl_eval_global_var(jl_base_module, jl_symbol("normalize_depots_for_relocation"), jl_current_task->world_age);
         depots = jl_apply(&normalize_depots_func, 1);
         jl_datatype_t *deptuple_p[5] = {jl_module_type, jl_string_type, jl_uint64_type, jl_uint32_type, jl_float64_type};
@@ -71,12 +71,12 @@ static void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) JL_CA
                     continue;
                 }
 
-                jl_value_t *replace_depot_args[3];
+                jl_value_t *replace_depot_args[4];
                 replace_depot_args[0] = replace_depot_func;
                 replace_depot_args[1] = abspath;
                 replace_depot_args[2] = depots;
-                depalias = (jl_value_t*)jl_apply(replace_depot_args, 3);
-                depalias = jl_maybe_map_build_path_jlstr(depalias);
+                replace_depot_args[3] = jl_fieldref_noalloc(jl_array_ptr_ref(udeps, 0), 1);
+                depalias = (jl_value_t*)jl_apply(replace_depot_args, 4);
 
                 size_t slen = jl_string_len(depalias);
                 write_int32(f, slen);

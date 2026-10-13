@@ -692,24 +692,6 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             }
         }
     }
-    // remap quoted-AST literals in method roots. Substituting the slots in place
-    // keeps root indices valid for compressed IR. Roots survive strip-metadata,
-    // so map them regardless, but respect a NULL replacement from strip-ir.
-    if (prefix_map_state == PREFIX_MAP_ACTIVE && jl_is_method(v)) {
-        jl_method_t *m = (jl_method_t*)v;
-        jl_array_t *mroots = (jl_array_t*)get_replaceable_field((jl_value_t**)&m->roots, 0);
-        if (mroots) {
-            jl_value_t **roots = jl_array_data(mroots, jl_value_t*);
-            for (size_t i = 0, n = jl_array_nrows(mroots); i < n; i++) {
-                jl_value_t *mapped = maybe_map_build_path_in_ast(roots[i], 0);
-                if (mapped) {
-                    record_field_change(&roots[i], mapped);
-                    jl_queue_for_serialization(s, mapped);
-                }
-            }
-        }
-    }
-
     if (!recursive)
         goto done_fields;
 
@@ -963,13 +945,6 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                                 while (rle_iter_increment(&rootiter, nroots, rletable, nblocks2)) {
                                     if (rootiter.key == s->worklist_key) {
                                         jl_value_t *newroot = jl_array_ptr_ref(def->roots, rootiter.i);
-                                        // in-image methods never reach the roots remap in
-                                        // jl_insert_into_serialization_queue, so map here
-                                        if (prefix_map_state == PREFIX_MAP_ACTIVE) {
-                                            jl_value_t *mapped = maybe_map_build_path_in_ast(newroot, 0);
-                                            if (mapped)
-                                                newroot = mapped;
-                                        }
                                         jl_queue_for_serialization(s, newroot);
                                         jl_array_ptr_set(newroots, k++, newroot);
                                     }
@@ -3231,20 +3206,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         jl_get_llvm_gv_inits(native_functions, &num_gvars, NULL);
         arraylist_grow(&gvars, num_gvars);
         jl_get_llvm_gv_inits(native_functions, &num_gvars, gvars.items);
-        // native code references its literals through these gvar slots, bypassing
-        // the method roots hook above, so remap them here too — except plain String
-        // literals (`@__DIR__`/`@__FILE__` results), which code uses for runtime file
-        // access (e.g. Documenter locating its assets) and have no reverse mapping
-        if (prefix_map_state == PREFIX_MAP_ACTIVE) {
-            for (size_t gi = 0; gi < num_gvars; gi++) {
-                jl_value_t *v = (jl_value_t*)gvars.items[gi];
-                if (jl_is_string(v))
-                    continue;
-                jl_value_t *mapped = maybe_map_build_path_in_ast(v, 0);
-                if (mapped)
-                    gvars.items[gi] = mapped;
-            }
-        }
         jl_get_llvm_external_fns(native_functions, &num_external_fns, NULL);
         arraylist_grow(&external_fns, num_external_fns);
         jl_get_llvm_external_fns(native_functions, &num_external_fns,

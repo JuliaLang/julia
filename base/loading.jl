@@ -2210,7 +2210,8 @@ function isrelocatable(pkg::PkgId)
         isvalid_cache_header(io) === nothing && throw(ArgumentError("Incompatible header in cache file $path."))
         _, (includes, includes_srcfiles, _), _... = _parse_cache_header(io, path)
         for inc in includes
-            !startswith(inc.filename, "@depot") && return false
+            (startswith(inc.filename, string("@depot", Filesystem.pathsep())) ||
+             startswith(inc.filename, string("@source", Filesystem.pathsep()))) || return false
             if inc ∉ includes_srcfiles
                 # its an include_dependency
                 track_content = inc.mtime == -1.0
@@ -3544,7 +3545,7 @@ function include_package_for_output(pkg::PkgId, input::String, edition::Tuple{In
         for multidoc in values(Docs.meta(mod))
             for docstr in values(multidoc.docs)
                 path = get(docstr.data, :path, nothing)
-                path isa String && (docstr.data[:path] = ccall(:jl_map_build_path, Any, (Any,), path)::String)
+                path isa String && (docstr.data[:path] = map_build_path(path))
             end
         end
     end
@@ -4036,6 +4037,25 @@ function replace_depot_path(path::AbstractString, depots::Vector{String}=normali
     return path
 end
 
+# Cache identities must remain resolvable even when mapped source locations are virtual.
+# The first dependency is the package entry point, including for dependencies evaluated in Main.
+function replace_cache_path(path::String, depots::Vector{String}, source::String)
+    (isempty(path) || startswith(path, '\0')) && return path
+    depotpath = replace_depot_path(path, depots)
+    depotpath == path || return depotpath
+    map_build_path(path) == path && return path
+    relative = relpath(path, dirname(source))
+    # relpath returns an absolute path for different Windows drives.
+    isabspath(relative) && return path
+    return string("@source", Filesystem.pathsep(), relative)
+end
+
+function restore_source_path(path::AbstractString, source::Union{Nothing,String})
+    tag = string("@source", Filesystem.pathsep())
+    (source === nothing || !startswith(path, tag)) && return path
+    return normpath(dirname(source), SubString(path, ncodeunits(tag) + 1))
+end
+
 function normalize_depots_for_relocation()
     depots = String[]
     sizehint!(depots, length(DEPOT_PATH))
@@ -4143,7 +4163,7 @@ function _parse_cache_header(f::IO, cachefile::AbstractString)
     return modules, (includes, srcfiles, requires), required_modules, srctextpos, prefs_blob, clone_targets, flags, syntax_version
 end
 
-function parse_cache_header(f::IO, cachefile::AbstractString)
+function parse_cache_header(f::IO, cachefile::AbstractString, source::Union{Nothing,String}=nothing)
     modules, (includes, srcfiles, requires), required_modules,
         srctextpos, prefs_blob, clone_targets, flags, syntax_version = _parse_cache_header(f, cachefile)
 
@@ -4234,6 +4254,15 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
         end
     end
 
+    if any(inc -> startswith(inc.filename, string("@source", Filesystem.pathsep())), includes)
+        if source === nothing && !isempty(modules)
+            source = locate_package(first(modules).first)
+        end
+        for inc in includes
+            inc.filename = restore_source_path(inc.filename, source)
+        end
+    end
+
     return modules, (includes, includes_srcfiles, requires), required_modules, srctextpos, prefs_blob, clone_targets, flags, syntax_version
 end
 
@@ -4280,16 +4309,19 @@ function read_dependency_src(io::IO, cachefile::AbstractString, filename::Abstra
     _, (includes, _, _), _, srctextpos, _, _, _ = parse_cache_header(io, cachefile)
     srctextpos == 0 && error("no source-text stored in cache file")
     seek(io, srctextpos)
-    return _read_dependency_src(io, filename, includes)
+    source = isempty(includes) ? nothing : first(includes).filename
+    return _read_dependency_src(io, filename, includes, source)
 end
 
-function _read_dependency_src(io::IO, filename::AbstractString, includes::Vector{CacheHeaderIncludes}=CacheHeaderIncludes[])
+function _read_dependency_src(io::IO, filename::AbstractString, includes::Vector{CacheHeaderIncludes}=CacheHeaderIncludes[], source::Union{Nothing,String}=nothing)
     while !eof(io)
         filenamelen = read(io, Int32)
         filenamelen == 0 && break
         depotfn = String(read(io, filenamelen))
         len = read(io, UInt64)
-        fn = if !startswith(depotfn, string("@depot", Filesystem.pathsep()))
+        fn = if startswith(depotfn, string("@source", Filesystem.pathsep()))
+            restore_source_path(depotfn, source)
+        elseif !startswith(depotfn, string("@depot", Filesystem.pathsep()))
             depotfn
         else
             basefn = restore_depot_path(depotfn, "")
@@ -4683,8 +4715,8 @@ end
 function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::String, reasons::Union{Dict{Symbol,Int},Nothing}=nothing)
     for chi in includes
         f, fsize_req, hash_req, ftime_req = chi.filename, chi.fsize, chi.hash, chi.mtime
-        if startswith(f, string("@depot", Filesystem.pathsep()))
-            @debug("Rejecting stale cache file $cachefile because its depot could not be resolved")
+        if startswith(f, string("@depot", Filesystem.pathsep())) || startswith(f, string("@source", Filesystem.pathsep()))
+            @debug("Rejecting stale cache file $cachefile because its source location could not be resolved")
             record_reason(reasons, :unresolved_depot)
             return true
         end
@@ -4834,7 +4866,7 @@ end
             return true
         end
         seek(io, header_start)
-        modules, (includes, _, requires), required_modules, srctextpos, prefs_blob, clone_targets, _, syntax_version = parse_cache_header(io, cachefile)
+        modules, (includes, _, requires), required_modules, srctextpos, prefs_blob, clone_targets, _, syntax_version = parse_cache_header(io, cachefile, modspec.path)
         if isempty(modules)
             return true # ignore empty file
         end

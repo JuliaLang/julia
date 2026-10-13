@@ -152,7 +152,17 @@ end
 
 # Remap the paths in pkgorigins, _included_files, and docstring metadata,
 # which would otherwise bake the build directory into the sysimage.
-let remap = p -> ccall(:jl_map_build_path, Any, (Any,), p)::String
+let remap = Base.map_build_path
+    # Keep original filenames in the build tree for write_base_cache.jl. A prefix
+    # map may have overlapping sources or duplicate targets and is not invertible.
+    sources = get(ENV, "JULIA_BASE_CACHE_SOURCES", nothing)
+    if sources !== nothing
+        open(sources, "w") do io
+            for (_, file) in Base._included_files
+                write(io, remap(file), '\0', file, '\0')
+            end
+        end
+    end
     for origin in values(Base.pkgorigins)
         origin.path === nothing || (origin.path = remap(origin.path))
         origin.cachepath === nothing || (origin.cachepath = remap(origin.cachepath))

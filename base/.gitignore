@@ -9,4 +9,6 @@
 /version_git.jl.phony
 /version_git_dirty
 /userimg.jl
+/sysimg.sources
+/sysimg-debug.sources
 /JuliaSyntax

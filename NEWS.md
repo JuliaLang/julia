@@ -185,12 +185,11 @@ Build system changes
 * Image generation now honors the
   [`BUILD_PATH_PREFIX_MAP`](https://reproducible-builds.org/specs/build-path-prefix-map/)
   environment variable: serialized source locations (method and module files, debug info,
-  native code debug info (DWARF), cache dependency lists, docstring locations, and
-  source-location literals in method bodies — including quoted expressions and
-  `__source__`-derived strings from macros like `@warn`) have their build directory
-  prefix replaced with the given stable prefix. Values a program computes from source
-  paths at parse time and stores in ordinary data (e.g. a global holding `@__FILE__`)
-  are not rewritten ([#32763]).
+  native code debug info (DWARF), docstring locations, and default logging locations)
+  have their build directory prefix replaced with the given stable prefix. Cache
+  dependencies use resolvable depot- or source-relative paths. Program values,
+  including `@__FILE__`, `@__DIR__`, symbols, and quoted expressions, are not rewritten
+  ([#62803]).
 
 New library functions
 ---------------------
@@ -220,7 +219,7 @@ New library features
 
 * `@assert` failure messages no longer include a `#= file:line =#` comment when the asserted
   condition contains a macro call; the location is available from the stacktrace as usual
-  ([#32763]).
+  ([#62803]).
 * `IOContext` supports a new boolean `hexunsigned` option that allows for printing unsigned integers in
   decimal instead of hexadecimal ([#60267]).
 * `lazy"..."` strings now support a flag `lazy"..."c` that adds `compact` and `limit` flags to the
