@@ -95,19 +95,22 @@ end
 #--------------------------------------------------
 # Functions called by closure conversion
 function eval_closure_type(mod::Module, closure_type_name::Symbol,
-                           capt_sp, field_names, field_is_box)
+                           capt_sp, field_names, field_is_box,
+                           field_is_nospec=nothing)
     type_params = Core.TypeVar[]
     field_types = []
     for name in capt_sp
         push!(type_params, Core.TypeVar(name))
     end
-    for (name, isbox) in zip(field_names, field_is_box)
-        if !isbox
+    for (i, (name, isbox)) in enumerate(zip(field_names, field_is_box))
+        if isbox
+            push!(field_types, Core.Box)
+        elseif !isnothing(field_is_nospec) && field_is_nospec[i]
+            push!(field_types, Any)
+        else
             T = Core.TypeVar(Symbol(name, "_type"))
             push!(type_params, T)
             push!(field_types, T)
-        else
-            push!(field_types, Core.Box)
         end
     end
     type = Core._structtype(mod, closure_type_name,
