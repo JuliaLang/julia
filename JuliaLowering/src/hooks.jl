@@ -33,8 +33,6 @@ function _core_lowering_hook(@nospecialize(code), mod::Module, file::String,
         ex = to_lowered_expr(st5)
         return Core.svec(ex, st5, ctx5)
     catch exc
-        @info("JuliaLowering threw given input:", code=code, file=file,
-              line=line, mod=mod, st0=st0, st1=st1)
         if exc isa LoweringError && !exc.internal
             return Core.svec(Expr(:error, sprint(
                 (io,err)->showerror(io,err; show_detail=false), exc)))
