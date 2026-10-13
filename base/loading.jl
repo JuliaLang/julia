@@ -3631,7 +3631,7 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
            -`
     cmd = addenv(cmd, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1,
                  # don't let the worker outlive us if we get killed
-                 "JULIA_EXIT_WITH_PARENT_PID" => getpid())
+                 "JULIA_EXIT_WITH_PARENT_PID" => Int(getpid()))
     # Only request per-package timing reports when explicitly asked for (e.g. by
     # precompilepkgs), so that the marker lines don't leak into normal load logs.
     report_timing && (cmd = addenv(cmd, "JULIA_PRECOMP_REPORT_TIMING" => 1))
