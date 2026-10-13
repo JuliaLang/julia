@@ -330,6 +330,82 @@ extern "C" char *jl_expand_sysimage_keyword(const char *cpu_target)
     return strdup(expand_sysimage_keyword(cpu_target).c_str());
 }
 
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+// LLVM selects vcvtneps2bf16 for f32-to-bf16 conversions despite the
+// instruction unconditionally flushing subnormal inputs. Until LLVM provides
+// a narrower workaround (llvm/llvm-project#221052), disable the feature groups
+// that enable this instruction. This also disables other native x86 BF16
+// operations, and the features that imply them (AVX10), which LLVM would
+// disable anyway; listing them keeps the string's entries equal to what LLVM
+// enables. Keep the feature bits intact because image matching uses them;
+// only these strings control code generation. Explicit negatives are needed
+// because the CPU name otherwise enables the features again.
+static void disable_native_bf16_codegen(std::string &features) JL_NOTSAFEPOINT
+{
+    static const std::vector<const char*> names = []() JL_NOTSAFEPOINT {
+        tp::FeatureBits to_disable{};
+        for (const char *name : {"avx512bf16", "avxneconvert"}) {
+            const tp::FeatureEntry *fe = tp::find_feature(name);
+            assert(fe);
+            tp::feature_set(&to_disable, fe->bit);
+        }
+        const tp::FeatureBits &mask = tp::get_llvm_feature_mask();
+        tp::FeatureBits kept = mask;
+        tp::apply_feature_delta(&kept, tp::FeatureBits{}, to_disable);
+        std::vector<const char*> names;
+        for (uint32_t i = 0; i < tp::num_features; i++) {
+            const auto &feature = tp::feature_table[i];
+            if (tp::feature_test(&mask, feature.bit) && !tp::feature_test(&kept, feature.bit))
+                names.push_back(feature.name);
+        }
+        return names;
+    }();
+    std::string out;
+    size_t pos = 0;
+    do {
+        size_t end = features.find(',', pos);
+        if (end == std::string::npos)
+            end = features.size();
+        std::string tok = features.substr(pos, end - pos);
+        bool skip = tok.size() < 2;
+        for (auto name : names)
+            if (!skip && tok.compare(1, std::string::npos, name) == 0)
+                skip = true;
+        if (!skip) {
+            if (!out.empty())
+                out += ',';
+            out += tok;
+        }
+        pos = end + 1;
+    } while (pos <= features.size());
+    for (auto name : names) {
+        if (!out.empty())
+            out += ',';
+        out += '-';
+        out += name;
+    }
+    features = std::move(out);
+}
+#else
+static void disable_native_bf16_codegen(std::string &) JL_NOTSAFEPOINT {}
+#endif
+
+// Apply Julia's adjustments to the LLVM feature string of a resolved target.
+// Every target whose features reach code generation (the JIT, multiversioning
+// clones, `@cpu_supports` CPU models) goes through this.
+static void finalize_codegen_target(tp::LLVMTargetSpec &spec) JL_NOTSAFEPOINT
+{
+    disable_native_bf16_codegen(spec.cpu_features);
+}
+
+static std::vector<tp::LLVMTargetSpec> resolve_codegen_targets(const std::string &targets) JL_NOTSAFEPOINT
+{
+    auto specs = tp::resolve_targets_for_llvm(targets);
+    for (auto &spec : specs)
+        finalize_codegen_target(spec);
+    return specs;
+}
+
 static void init_jit_targets(const char *cpu_target, bool imaging) JL_NOTSAFEPOINT
 {
 
@@ -343,7 +419,7 @@ static void init_jit_targets(const char *cpu_target, bool imaging) JL_NOTSAFEPOI
     if (target_str.empty())
         jl_error("Invalid target option: empty CPU name");
 
-    auto specs = tp::resolve_targets_for_llvm(target_str);
+    auto specs = resolve_codegen_targets(target_str);
 
     if (specs.empty())
         jl_error("No targets specified");
@@ -429,10 +505,13 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
     // (only FixedVectorType/NEON), so SVE clamping is not needed for ABI
     // correctness. RISC-V V is similar. Revisit if Julia adds scalable vector
     // support.
+    // Features that imply the cleared ones (e.g. avxvnni implies avx2) are
+    // cleared with them; otherwise LLVM would enable the cleared ones again.
     int matched_vreg = match_result.second;
     int host_vreg = tp::max_vector_size(target.en_features);
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_)
     if (matched_vreg != host_vreg) {
+        tp::FeatureBits to_disable{};
         if (matched_vreg < 64) {
             static const char *avx512[] = {
                 "avx512f", "avx512dq", "avx512ifma", "avx512cd",
@@ -442,7 +521,7 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
             };
             for (const char **f = avx512; *f; f++) {
                 const tp::FeatureEntry *fe = tp::find_feature(*f);
-                if (fe) feature_clear(&target.en_features, fe->bit);
+                if (fe) tp::feature_set(&to_disable, fe->bit);
             }
         }
         if (matched_vreg < 32) {
@@ -452,9 +531,10 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
             };
             for (const char **f = avx; *f; f++) {
                 const tp::FeatureEntry *fe = tp::find_feature(*f);
-                if (fe) feature_clear(&target.en_features, fe->bit);
+                if (fe) tp::feature_set(&to_disable, fe->bit);
             }
         }
+        tp::apply_feature_delta(&target.en_features, tp::FeatureBits{}, to_disable);
         for (int w = 0; w < TARGET_FEATURE_WORDS; w++)
             target.dis_features.bits[w] = tp::llvm_feature_mask.bits[w] & ~target.en_features.bits[w];
         target.cpu_features = tp::build_llvm_feature_string(target.en_features, target.dis_features);
@@ -464,6 +544,7 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
     (void)host_vreg;
 #endif
 
+    finalize_codegen_target(target);
     jit_targets.push_back(std::move(target));
     return match_result.first;
 }
@@ -626,52 +707,10 @@ jl_image_t jl_load_pkgimg(jl_image_buf_t image)
     return load_sysimg_target(image, match_pkgimg_target, NULL);
 }
 
-#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
-// LLVM selects vcvtneps2bf16 for f32-to-bf16 conversions despite the
-// instruction unconditionally flushing subnormal inputs. Until LLVM provides
-// a narrower workaround (llvm/llvm-project#221052), disable the feature groups
-// that enable this instruction. This also disables other native x86 BF16
-// operations. Keep the feature bits intact because image matching uses them;
-// only these strings control code generation. Explicit negatives are needed
-// because the CPU name otherwise enables the features again.
-static void disable_native_bf16_codegen(std::string &features) JL_NOTSAFEPOINT
-{
-    static const char *const names[] = {"avx512bf16", "avxneconvert"};
-    std::string out;
-    size_t pos = 0;
-    do {
-        size_t end = features.find(',', pos);
-        if (end == std::string::npos)
-            end = features.size();
-        std::string tok = features.substr(pos, end - pos);
-        bool skip = tok.size() < 2;
-        for (auto name : names)
-            if (!skip && tok.compare(1, std::string::npos, name) == 0)
-                skip = true;
-        if (!skip) {
-            if (!out.empty())
-                out += ',';
-            out += tok;
-        }
-        pos = end + 1;
-    } while (pos <= features.size());
-    for (auto name : names) {
-        if (!out.empty())
-            out += ',';
-        out += '-';
-        out += name;
-    }
-    features = std::move(out);
-}
-#else
-static void disable_native_bf16_codegen(std::string &) JL_NOTSAFEPOINT {}
-#endif
-
 jl_llvm_target_t jl_get_llvm_target(const char *cpu_target, bool imaging)
 {
     init_jit_targets(cpu_target, imaging);
     auto &spec = jit_targets[0];
-    disable_native_bf16_codegen(spec.cpu_features);
     CF_DEBUG("[cpufeatures] jl_get_llvm_target: cpu='%s' features='%s'\n",
              spec.cpu_name.c_str(), spec.cpu_features.c_str());
     return {spec.cpu_name.c_str(), spec.cpu_features.c_str()};
@@ -699,7 +738,7 @@ jl_llvm_target_t jl_get_llvm_disasm_target(void)
 extern "C" jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
 {
     auto target_str = expand_sysimage_keyword(cpu_target);
-    auto specs = tp::resolve_targets_for_llvm(target_str);
+    auto specs = resolve_codegen_targets(target_str);
 
     if (specs.empty())
         jl_error("No targets specified");
@@ -719,7 +758,6 @@ extern "C" jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
         auto &s = specs[i];
         jl_target_spec_t &ele = result.specs[i];
         ele.cpu_name = strdup(s.cpu_name.c_str());
-        disable_native_bf16_codegen(s.cpu_features);
         ele.cpu_features = strdup(s.cpu_features.c_str());
         ele.base = s.base;
         ele.clone_all = (s.flags & tp::TF_CLONE_ALL) != 0;
@@ -752,6 +790,57 @@ extern "C" int jl_test_cpu_feature(jl_cpu_feature_t feature)
     return feature_test(&host_feats, feature);
 }
 
+// Whether `name` is last set to "+" in the LLVM feature string `features`
+static bool feature_string_enables(const std::string &features, const char *name, size_t len) JL_NOTSAFEPOINT
+{
+    bool enabled = false;
+    for (size_t pos = 0; pos < features.size();) {
+        size_t end = features.find(',', pos);
+        if (end == std::string::npos)
+            end = features.size();
+        if (end - pos == len + 1 && features.compare(pos + 1, len, name, len) == 0)
+            enabled = features[pos] == '+';
+        pos = end + 1;
+    }
+    return enabled;
+}
+
+extern "C" JL_DLLEXPORT int jl_cpu_has_features(const char *features)
+{
+    if (jit_targets.empty() || !*features)
+        return 0;
+    const std::string &codegen_features = jit_targets.front().cpu_features;
+    for (const char *name = features;;) {
+        const char *end = strchr(name, ',');
+        size_t len = end ? end - name : strlen(name);
+        if (!feature_string_enables(codegen_features, name, len))
+            return 0;
+        if (!end)
+            return 1;
+        name = end + 1;
+    }
+}
+
+// Hardware features usable outside the kernel, the names `@cpu_supports` accepts
+static bool is_queryable_feature(const tp::FeatureEntry &feature) JL_NOTSAFEPOINT
+{
+    return feature.is_hw && !feature.is_privileged;
+}
+
+extern "C" JL_DLLEXPORT jl_value_t *jl_cpu_codegen_features(void)
+{
+    std::string names;
+    for (uint32_t i = 0; i < tp::num_features; i++) {
+        const auto &feature = tp::feature_table[i];
+        if (!is_queryable_feature(feature))
+            continue;
+        if (!names.empty())
+            names += ',';
+        names += feature.name;
+    }
+    return jl_pchar_to_string(names.data(), names.size());
+}
+
 // ============================================================================
 // Cross-architecture CPU/feature queries
 // ============================================================================
@@ -775,6 +864,35 @@ extern "C" JL_DLLEXPORT int jl_cpufeatures_lookup(const char *cpu_name,
         hw.bits[i] = entry->features.bits[i] & tp::llvm_feature_mask.bits[i];
     memcpy(features_out, &hw, sizeof(tp::FeatureBits));
     return 0;
+}
+
+extern "C" JL_DLLEXPORT jl_value_t *jl_cpu_target_features(const char *cpu_name)
+{
+    if (!tp::find_cpu(cpu_name))
+        return jl_nothing;
+    auto specs = resolve_codegen_targets(cpu_name);
+    if (specs.empty() || (specs[0].flags & tp::TF_UNKNOWN_NAME))
+        return jl_nothing;
+    // Report what a clone for this CPU is compiled with, not its feature bits,
+    // leaving out entries that are not queryable (e.g. aarch64's v8.1a)
+    const std::string &features = specs[0].cpu_features;
+    std::string names;
+    for (size_t pos = 0; pos < features.size();) {
+        size_t end = features.find(',', pos);
+        if (end == std::string::npos)
+            end = features.size();
+        if (features[pos] == '+') {
+            std::string name = features.substr(pos + 1, end - pos - 1);
+            const tp::FeatureEntry *fe = tp::find_feature(name.c_str());
+            if (fe && is_queryable_feature(*fe)) {
+                if (!names.empty())
+                    names += ',';
+                names += name;
+            }
+        }
+        pos = end + 1;
+    }
+    return jl_pchar_to_string(names.data(), names.size());
 }
 
 extern "C" JL_DLLEXPORT void jl_cpufeatures_host(uint8_t *features_out, size_t bufsize)
