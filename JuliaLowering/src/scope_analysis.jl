@@ -890,6 +890,18 @@ function analyze_variables!(ctx, ex)
     nothing
 end
 
+function warn_ambiguous_local(ctx, b)
+    n = b.name
+    loc = first_linenode(b.node_id)
+    msg = string("Assignment to `", n, "` in soft scope is ambiguous ",
+                 "because a global variable by the same name exists: ",
+                 "`", n, "` will be treated as a new local. ",
+                 "Disambiguate by using `local ", n, "` to suppress this warning or ",
+                 "`global ", n, "` to assign to the existing global variable.")
+    @warn msg _module=nothing _file=string(something(loc.file, :none)) _line=loc.line
+    nothing
+end
+
 function resolve_scopes(ctx::ScopeResolutionContext, ex)
     if !(head(ex) in (:lambda, :toplevel_lambda, :generated_lambda))
         # Wrap in a top level thunk if we're not already expanding a lambda.
@@ -909,7 +921,8 @@ metadata about each binding.
 This pass also records the set of binding IDs used locally within the
 enclosing lambda form and information about variables captured by closures.
 """
-@fzone "JL: resolve_scopes" function resolve_scopes(ctx::DesugaringContext, ex;
+@fzone "JL: resolve_scopes" function resolve_scopes(ctx::DesugaringContext, ex,
+                                                    warn::Bool=false;
                                                     soft_scope::Union{Nothing,Bool}=nothing,
                                                     world::UInt=ctx.world)
     enable_soft_scopes = soft_scope !== nothing ? soft_scope : contains_softscope_marker(ex)
@@ -921,6 +934,10 @@ enclosing lambda form and information about variables captured by closures.
                                   enable_soft_scopes,
                                   world)
     ex2 = resolve_scopes(ctx2, ex)
+    warn && !enable_soft_scopes && (Base.JLOptions().warn_scope == 1) &&
+        for b in ctx2.bindings.info
+            b.is_ambiguous_local && warn_ambiguous_local(ctx2, b)
+        end
     ctx3 = VariableAnalysisContext(ctx2.layer, ctx2.bindings,
                                    ctx2.scopes, lambda_bindings(ex2[1]), true,
                                    SyntaxList(), Vector{ClosureKey}(),

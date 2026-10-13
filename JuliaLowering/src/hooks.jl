@@ -7,12 +7,12 @@ Returns an svec with the lowered code (usually expr) as its first element, and
 (until integration is less experimental) whatever we want after it
 """
 function core_lowering_hook(@nospecialize(code), mod::Module, file::String="none",
-                            line::Int=0, world::UInt=typemax(Csize_t), _warn::Bool=false)
-    return invoke_in_lowering_world(_core_lowering_hook, code, mod, file, line, world, _warn)
+                            line::Int=0, world::UInt=typemax(Csize_t), warn::Bool=false)
+    return invoke_in_lowering_world(_core_lowering_hook, code, mod, file, line, world, warn)
 end
 
 function _core_lowering_hook(@nospecialize(code), mod::Module, file::String,
-                             line::Int, world::UInt, _warn::Bool)
+                             line::Int, world::UInt, warn::Bool)
     if !(code isa SyntaxTree || code isa Expr)
         # e.g. LineNumberNode, integer...
         return Core.svec(code)
@@ -27,13 +27,13 @@ function _core_lowering_hook(@nospecialize(code), mod::Module, file::String,
         st0 = rebase_layers(st0, mod)
         st1 = expand_forms_1(st0, world, true)
         ctx2, st2 = expand_forms_2(st1, world)
-        ctx3, st3 = resolve_scopes(ctx2, st2)
+        ctx3, st3 = resolve_scopes(ctx2, st2, warn)
         ctx4, st4 = convert_closures(ctx3, st3)
         ctx5, st5 = linearize_ir(ctx4, st4)
         ex = to_lowered_expr(st5)
         return Core.svec(ex, st5, ctx5)
     catch exc
-        if exc isa LoweringError && !exc.internal
+        if (exc isa LoweringError && !exc.internal) || exc isa MacroExpansionError
             return Core.svec(Expr(:error, sprint(
                 (io,err)->showerror(io,err; show_detail=false), exc)))
         else

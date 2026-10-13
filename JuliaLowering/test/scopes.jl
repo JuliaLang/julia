@@ -162,10 +162,8 @@ end
 # Switch to Core.eval for sanity-checking
 expr_eval(mod, ex) = JuliaLowering.eval(mod, ex)
 
-# TODO: JuliaLowering doesn't do the same amount of "ambiguous local" logging,
-# so eat flisp logging to avoid CI spam
-@test_broken false
-without_logging(f) = Base.CoreLogging.with_logger(f, Base.CoreLogging.NullLogger())
+softscope_ambiguous_local_warning(name) =
+    (:warn, Regex("^Assignment to `$name` in soft scope is ambiguous"))
 
 enable_softscope(e...) = Expr(:block, Expr(:softscope, true), e...)
 wrap_none(e...) = Expr(:block, e...)
@@ -232,15 +230,21 @@ distraction_scope_end === "resolve me!"
         elseif lhs in (:spname, :argname) && decls_s != decls_func
             continue
         else
-            reference_ok = without_logging(() -> fl_eval(fl_mod, ex)) === "resolve me!"
+            reference_ok = @test_logs(fl_eval(fl_mod, ex)) === "resolve me!"
             !reference_ok &&
                 @error("shadow test failed: flisp produced unexpected result; fix that or JL scope tests:\n", ex)
             @test reference_ok
         end
 
-        ok = without_logging(() -> expr_eval(jl_mod, ex)) === "resolve me!"
+        ok = @test_logs(expr_eval(jl_mod, ex)) === "resolve me!"
         !ok && @error("shadow test failed:\n", ex)
         @test ok
+
+        Core.@latestworld
+        for mod in (jl_mod, fl_mod), n in (:gname, :name)
+            isdefined(mod, n) && Base.delete_binding(mod, n)
+        end
+        Core.@latestworld
     end
 
 end
@@ -351,11 +355,16 @@ f_g_shadow_sp_bound(1)
         else
             @assert !isdefined(jl_mod, lhs) && !isdefined(fl_mod, lhs)
             expected = results[lhs_i]
-            reference_ok = without_logging(() -> fl_eval(fl_mod, ex)) === expected
+            # see the `@test_broken`s in "is_ambiguous_local"
+            ambiguous = !soft_mode && decls_s === decls_none && middle_s !== wrap_hard &&
+                assign_s === wrap_neutral
+            warnings = ambiguous && lhs === :name ? (softscope_ambiguous_local_warning(:name),) : ()
+            reference_ok = @test_logs(warnings..., fl_eval(fl_mod, ex)) === expected
             !reference_ok && @error("flisp produced unexpected result; fix that or JL scope tests:\n",
                                    "expected $(expected_s(expected)), got $(expected_s(!expected))\n", ex)
             @test reference_ok
-            ok = without_logging(() -> expr_eval(jl_mod, ex)) === expected
+            ok = @test_logs(warnings..., broken=(ambiguous && lhs === :gname),
+                            expr_eval(jl_mod, ex)) === expected
             !ok && @error("expected $(expected_s(expected)), got $(expected_s(!expected))\n", ex)
             @test ok
         end
@@ -409,12 +418,14 @@ end
 
             if soft_mode
                 ex = enable_softscope(ex)
-                ok = expr_eval(test_mod, ex) === false
+                ok = @test_logs(expr_eval(test_mod, ex)) === false
                 !ok && error("expected assignment to global\n", ex)
                 @test ok
             else
-                # some of these produce warning in flisp
-                ok = expr_eval(test_mod, ex) === true
+                # see the `@test_broken`s in "is_ambiguous_local"
+                explicit = Meta.isexpr(g_assign, :global)
+                warnings = explicit ? () : (softscope_ambiguous_local_warning(:assigned_global),)
+                ok = @test_logs(warnings..., broken=explicit, expr_eval(test_mod, ex)) === true
                 !ok && error("expected assignment to local\n", ex)
                 @test ok
             end

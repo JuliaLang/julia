@@ -147,7 +147,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
     else
         coverage_visit_line(mod, ex)
          ctx2, ex2 = expand_forms_2(ex, world)
-         ctx3, ex3 = resolve_scopes(ctx2, ex2; soft_scope)
+         ctx3, ex3 = resolve_scopes(ctx2, ex2, !is_module_body; soft_scope)
          ctx4, ex4 = convert_closures(ctx3, ex3)
         _ctx5, ex5 = linearize_ir(ctx4, ex4)
         out = to_lowered_expr(ex5)
