@@ -2095,3 +2095,32 @@ end
     local sorter = x->which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(x), Any))
     @test sorter(f).nospecializeinfer == true
 end
+
+@testset "@generated with several macros MWE" for edition in (JL_OLD_EDITION, JL_NEW_EDITION)
+    @test jl_eval(test_mod, """begin
+        @generated function gx_nt(x::NTuple{N}) where N
+            quote
+                s = 0
+                @inbounds begin
+                    Base.Cartesian.@ntuple(\$N, i -> g_i) = x
+                    s += g_1 + g_2
+                end
+                s
+            end
+        end
+        gx_nt((1, 2))
+    end"""; edition) == 3
+    @test jl_eval(test_mod, """begin
+        @generated function gx_nt(x::NTuple{N}) where N
+            quote
+                s = 0
+                @simd for j in 1:1
+                    Base.Cartesian.@ntuple(\$N, i -> g_i) = x
+                    s += g_1 + g_2
+                end
+                s
+            end
+        end
+        gx_nt((1, 2))
+    end"""; edition) == 3
+end

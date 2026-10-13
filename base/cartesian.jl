@@ -379,18 +379,23 @@ end
 lreplace!(@nospecialize(arg), r::LReplace, in_quote_context::Bool, escs::Int) = arg
 
 
+# If a block expression contains one non-linenode arg, extract it
 poplinenum(arg) = arg
 function poplinenum(ex::Expr)
     if ex.head === :block
-        if length(ex.args) == 1
-            return ex.args[1]
-        elseif length(ex.args) == 2 && isa(ex.args[1], LineNumberNode)
-            return ex.args[2]
-        elseif (length(ex.args) == 2 && isa(ex.args[1], Expr) && ex.args[1].head === :line)
-            return ex.args[2]
+        arg_out = nothing
+        for i in 1:length(ex.args)
+            a = ex.args[i]
+            if !(a isa LineNumberNode || a isa Expr && a.head === :line)
+                if arg_out === nothing
+                    arg_out = a
+                else
+                    return ex
+                end
+            end
         end
     end
-    ex
+    return arg_out === nothing ? ex : arg_out
 end
 
 ## Resolve expressions at parsing time ##
