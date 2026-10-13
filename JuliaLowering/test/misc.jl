@@ -1173,6 +1173,10 @@ end
         Expr(:block, Expr(:toplevel, :(1 + 1))))) == 2
 end
 
+# latestworld in value position evaluates to `nothing`
+@test jl_eval(test_mod, Expr(:latestworld)) === nothing
+@test jl_eval(test_mod, "Core.@latestworld") === nothing
+
 @testset "isdefined of a GlobalRef into another module" begin
     JuliaLowering.include_string(test_mod, "module IsdefinedGR; const x = 1; end")
     gr = GlobalRef(test_mod.IsdefinedGR, :x)

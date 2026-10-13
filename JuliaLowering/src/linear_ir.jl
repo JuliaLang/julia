@@ -1073,10 +1073,15 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             emit(ctx, ex)
         end
     elseif k == :latestworld
-        if needs_value
-            throw(LoweringError(ex, "misplaced latestworld"))
-        end
         emit_latestworld(ctx, ex)
+        if needs_value
+            val = @ast ctx ex (::nothing)
+            if in_tail_pos
+                emit_return(ctx, val)
+            else
+                val
+            end
+        end
     elseif k == :latestworld_if_toplevel
         ctx.is_toplevel_thunk && emit_latestworld(ctx, ex)
     elseif k == :unused_only
