@@ -1153,12 +1153,21 @@ let io = IOBuffer()
     @test !occursin("jtbaa_unionselbyte", str)
 end
 
-# JIT-compiled code refers to the installed Base sources in its debug info,
-# while relative file names of user code are left alone
-let ir = replace(sprint(io -> code_llvm(io, sum, Tuple{Vector{Int}}, dump_module=true, raw=true)), "\\5C" => "\\")
-    m = match(r"!DIFile\(filename: \"reduce\.jl\", directory: \"([^\"]*)\"", ir)
-    @test m !== nothing && samefile(joinpath(m[1], "reduce.jl"),
-                                    joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", "reduce.jl"))
+# Debug info keeps the source names as they were recorded, independent of where the
+# sources are installed; `code_llvm` and `code_native` print these names
+let sig = Tuple{Base.Fix2{typeof(==),UInt8}, Vector{UInt8}, Int}
+    ir = sprint(io -> code_llvm(io, findnext, sig; dump_module=true, raw=true))
+    @test occursin("!DIFile(filename: \"strings/search.jl\", directory: \".\")", replace(ir, "\\5C" => "/"))
+    @test occursin(r"@ strings[/\\]search\.jl:\d+", sprint(io -> code_llvm(io, findnext, sig; debuginfo=:source)))
+end
+mktempdir() do dir
+    file = joinpath(dir, "difile_abspath.jl")
+    write(file, "difile_abspath(x) = x + 1")
+    f = Base.include(@__MODULE__, file)
+    ir = replace(sprint(io -> code_llvm(io, f, Tuple{Int}; dump_module=true, raw=true)), "\\5C" => "\\")
+    @test occursin("!DIFile(filename: \"$file\", directory: \".\")", ir)
+    @test occursin("@ $file:1", sprint(io -> code_llvm(io, f, Tuple{Int}; debuginfo=:source)))
+    @test occursin("@ $file:1", sprint(io -> code_native(io, f, Tuple{Int}; debuginfo=:source)))
 end
 let f = include_string(@__MODULE__, "difile_user_code(x) = x + 1", "int.jl")
     ir = sprint(io -> code_llvm(io, f, Tuple{Int}, dump_module=true, raw=true))
