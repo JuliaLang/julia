@@ -2,6 +2,12 @@
 
 import Base.StackTraces: lookup
 
+# Check that glibc's saved stack pointer can be demangled on supported targets.
+if Sys.islinux() && Sys.ARCH in (:i686, :x86_64, :armv7l, :aarch64) &&
+        Base.BinaryPlatforms.libc(Base.BinaryPlatforms.HostPlatform()) == "glibc"
+    @test ccall(:jl_ptr_demangle_available, Cint, ()) == 1
+end
+
 # Test location information for inlined code (ref issues #1334 #12544)
 module test_inline_bt
 using Test

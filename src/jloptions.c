@@ -508,6 +508,7 @@ restart_switch:
                 jl_error("julia: failed to allocate memory");
             break;
         case 't': // threads
+        {
             errno = 0;
             jl_options.nthreadpools = 1;
             long nthreads = -1, nthreadsi = 0;
@@ -548,6 +549,7 @@ restart_switch:
             if (jl_options.nthreadpools == 2)
                 ntpp[1] = (int16_t)nthreadsi;
             jl_options.nthreads_per_pool = ntpp;
+        }
             break;
         case 'p': // procs
             errno = 0;
@@ -847,7 +849,7 @@ restart_switch:
                     case 't':
                         multiplier <<= 40;
                         break;
-                    case '%':
+                    case '%': {
                         if (value > 100)
                             jl_errorf("julia: invalid percentage specified in --heap-size-hint");
                         uint64_t mem = uv_get_total_memory();
@@ -856,6 +858,7 @@ restart_switch:
                             mem = cmem;
                         multiplier = mem/100;
                         break;
+                    }
                     default:
                         jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
                         break;
@@ -872,6 +875,7 @@ restart_switch:
 
             break;
         case opt_gc_threads:
+        {
             errno = 0;
             long nmarkthreads = strtol(optarg, &endptr, 10);
             if (errno != 0 || optarg == endptr || nmarkthreads < 1 || nmarkthreads >= INT16_MAX) {
@@ -886,6 +890,7 @@ restart_switch:
                     jl_errorf("julia: --gcthreads=<n>,<m>; m must be 0 or 1");
                 jl_options.nsweepthreads = (int8_t)nsweepthreads;
             }
+        }
             break;
         case opt_permalloc_pkgimg:
             if (!strcmp(optarg,"yes"))

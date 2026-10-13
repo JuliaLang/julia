@@ -107,10 +107,11 @@ end
 function ld()
     default_args = ``
     @static if Sys.iswindows()
-        # LLD supports mingw style linking
+        # From`x86_64-w64-mingw32-gcc -shared -Wl,--verbose`
         flavor = "gnu"
         m = Sys.ARCH == :x86_64 ? "i386pep" : "i386pe"
-        default_args = `-m $m -Bdynamic --enable-auto-image-base --allow-multiple-definition --disable-auto-import --disable-runtime-pseudo-reloc`
+        entry = Sys.ARCH == :x86_64 ? "DllMainCRTStartup" : "_DllMainCRTStartup"
+        default_args = `-m $m -Bdynamic -e $entry --enable-auto-image-base --allow-multiple-definition --disable-auto-import --disable-runtime-pseudo-reloc`
     elseif Sys.isapple()
         flavor = "darwin"
         arch = Sys.ARCH == :aarch64 ? :arm64 : Sys.ARCH
@@ -134,6 +135,17 @@ else
     "--no-whole-archive"
 end
 
+# Prefer whole_archive to WHOLE_ARCHIVE
+whole_archive(paths::String; is_cc=false) = whole_archive([paths]; is_cc)
+function whole_archive(paths::Vector{String}; is_cc=false)
+    cc_arg(a) = is_cc ? "-Wl,$a" : a
+    if Sys.isapple()
+        Cmd(collect(Iterators.flatmap(p -> (cc_arg("-force_load"), p), paths)))
+    else
+        `$(cc_arg("--whole-archive")) $paths $(cc_arg("--no-whole-archive"))`
+    end
+end
+
 const SHARED = if Sys.isapple()
     "-dylib"
 else
@@ -149,17 +161,50 @@ else
     shlibdir() = libdir()
 end
 
+verbose_linking() = something(Base.get_bool_env("JULIA_VERBOSE_LINKING", false), false)
+
+function _find_static(lib)
+    if isfile(joinpath(private_libdir(), lib))
+        return joinpath(private_libdir(), lib)
+    else
+        return joinpath(libdir(), lib)
+    end
+end
+
 function link_image_cmd(path, out)
     PRIVATE_LIBDIR = "-L$(private_libdir())"
+    LIBDIR = "-L$(libdir())"
     SHLIBDIR = "-L$(shlibdir())"
-    LIBS = is_debug() ? ("-ljulia-debug", "-ljulia-internal-debug") :
-                        ("-ljulia", "-ljulia-internal")
-    @static if Sys.iswindows()
-        LIBS = (LIBS..., "-lopenlibm", "-lssp", "-lgcc_s", "-lgcc", "-lmsvcrt")
+    LIBS = String[]
+    if is_debug()
+        push!(LIBS, "-ljulia-debug")
+        push!(LIBS, "-ljulia-internal-debug")
+    else
+        push!(LIBS, "-ljulia")
+        push!(LIBS, "-ljulia-internal")
     end
+    crtbegin = String[]
+    crtend = String[]
+    @static if Sys.iswindows()
+        # From `x86_64-w64-mingw32-gcc -shared -Wl,--verbose`.
+        append!(LIBS,     String["-lopenlibm"])
+        # libmsvcrt-os.a contains MinGW CRT objects that can refer back to
+        # libmingw32.a/libmingwex.a; keep the selected CRT last.
+        append!(LIBS,     String["-lmingw32", "-lgcc_s", "-lgcc", "-lmoldname", "-lmingwex", "-lmsvcrt-os", "-lmingw32", "-lmingwex", "-lmsvcrt-os", "-lkernel32"])
+        append!(LIBS,     String["-lpthread", "-ladvapi32", "-lshell32", "-luser32"])
+        append!(crtbegin, String[_find_static("dllcrt2.o"), _find_static("crtbegin.o")])
+        append!(crtend,   String[_find_static("crtend.o")])
+        is_debug() && push!(LIBS, "-lssp")
+        append!(LIBS,     String["-lmingwex", "-lmsvcrt-os", "-lmingw32", "-lmingwex", "-lmsvcrt-os"])
+    end
+    # Unlike the upstream change, non-Windows platforms keep release-1.11's
+    # original behavior: link only the julia libraries and let the dynamic
+    # loader resolve the C runtime (macOS via `-undefined dynamic_lookup`).
+    # The bundled CSL build for this release ships static CRT archives for
+    # Windows only.
 
-    V = VERBOSE[] ? "--verbose" : ""
-    `$(ld()) $V $SHARED -o $out $WHOLE_ARCHIVE $path $NO_WHOLE_ARCHIVE $PRIVATE_LIBDIR $SHLIBDIR $LIBS`
+    V = verbose_linking() ? "--verbose" : ""
+    `$(ld()) $V $SHARED -o $out $crtbegin $(whole_archive(path)) $PRIVATE_LIBDIR $LIBDIR $SHLIBDIR $LIBS $crtend`
 end
 
 function link_image(path, out, internal_stderr::IO=stderr, internal_stdout::IO=stdout)

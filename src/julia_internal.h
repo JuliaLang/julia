@@ -32,22 +32,16 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#ifdef _OS_LINUX_
+JL_DLLEXPORT int jl_ptr_demangle_available(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uintptr_t jl_ptr_demangle(uintptr_t p) JL_NOTSAFEPOINT;
+#endif
 #ifdef _COMPILER_ASAN_ENABLED_
 #if defined(__GLIBC__) && defined(_CPU_X86_64_)
-/* TODO: This is terrible - we're reaching deep into glibc internals here.
-   We should probably just switch to our own setjmp/longjmp implementation. */
 #define JB_RSP 6
-static inline uintptr_t demangle_ptr(uintptr_t var)
-{
-    asm ("ror $17, %0\n\t"
-         "xor %%fs:0x30, %0\n\t"
-        : "=r" (var)
-        : "0" (var));
-    return var;
-}
 static inline uintptr_t jmpbuf_sp(jl_jmp_buf *buf)
 {
-    return demangle_ptr((uintptr_t)(*buf)[0].__jmpbuf[JB_RSP]);
+    return jl_ptr_demangle((uintptr_t)(*buf)[0].__jmpbuf[JB_RSP]);
 }
 #else
 #error Need to implement jmpbuf_sp for this architecture
@@ -62,8 +56,14 @@ static inline void asan_unpoison_task_stack(jl_task_t *ct, jl_jmp_buf *buf)
     /* Unpoison everything from the base of the stack allocation to the address
        that we're resetting to. The idea is to remove the poison from the frames
        that we're skipping over, since they won't be unwound. */
-    uintptr_t top = jmpbuf_sp(buf);
     uintptr_t bottom = (uintptr_t)ct->stkbuf;
+    uintptr_t stacktop = bottom + ct->bufsz;
+    uintptr_t top = stacktop;
+    if (jl_ptr_demangle_available()) {
+        top = jmpbuf_sp(buf);
+        if (top < bottom || top > stacktop)
+            top = stacktop;
+    }
     __asan_unpoison_stack_memory(bottom, top - bottom);
 }
 static inline void asan_unpoison_stack_memory(uintptr_t addr, size_t size) {
@@ -1688,8 +1688,8 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 //   are used inside a JL_TRY as being "clobbered" if JL_CATCH is entered. This
 //   warning is spurious if the variable is not modified inside the JL_TRY.
 //   See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65041
-#ifdef _COMPILER_GCC_
 #define JL_DO_PRAGMA(s) _Pragma(#s)
+#ifdef _COMPILER_GCC_
 #define JL_GCC_IGNORE_START(warning) \
     JL_DO_PRAGMA(GCC diagnostic push) \
     JL_DO_PRAGMA(GCC diagnostic ignored warning)
@@ -1699,6 +1699,24 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 #define JL_GCC_IGNORE_START(w)
 #define JL_GCC_IGNORE_STOP
 #endif // _COMPILER_GCC_
+
+#ifdef _COMPILER_CLANG_
+#define JL_CLANG_IGNORE_START(warning) \
+    JL_DO_PRAGMA(clang diagnostic push) \
+    JL_DO_PRAGMA(clang diagnostic ignored warning)
+#define JL_CLANG_IGNORE_STOP \
+    JL_DO_PRAGMA(clang diagnostic pop)
+#else
+#define JL_CLANG_IGNORE_START(w)
+#define JL_CLANG_IGNORE_STOP
+#endif // _COMPILER_CLANG_
+
+#define JL_CC_IGNORE_START(warning) \
+    JL_GCC_IGNORE_START(warning) \
+    JL_CLANG_IGNORE_START(warning)
+#define JL_CC_IGNORE_STOP \
+    JL_GCC_IGNORE_STOP \
+    JL_CLANG_IGNORE_STOP
 
 #ifdef __clang_gcanalyzer__
   // Not a safepoint (so it doesn't free other values), but an artificial use.

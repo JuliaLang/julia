@@ -47,6 +47,18 @@ typedef _locale_t locale_t;
 #define _current_locale() NULL
 #define localtime_r(timep, result) (localtime_s(result, timep) ? NULL : result)
 
+/*
+ * Newer mingw-w64 redirects the _tzname macro to a CRT symbol (__tzname,
+ * i.e. __imp___tzname) that the bundled msvcrt import library does not
+ * export, breaking the link when the host headers are newer than that
+ * library. For non-UCRT targets, restore the classic dllimport _tzname[]
+ * declaration, whose __imp__tzname symbol the bundled library does provide.
+ */
+#if !defined(_UCRT)
+#undef _tzname
+__MINGW_IMPORT char *_tzname[2];
+#endif
+
 __declspec(dllexport) char *
 strptime(const char *buf, const char *fmt, struct tm *tm);
 __declspec(dllexport) char *

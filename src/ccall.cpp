@@ -947,6 +947,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         for (SmallVector<Type *, 0>::iterator it = argtypes.begin();
             it != argtypes.end(); ++it, ++i)
             assert(*it == f->getFunctionType()->getParamType(i));
+        (void)i; // only used by the assert above
     }
 
     // copy module properties that should always match
