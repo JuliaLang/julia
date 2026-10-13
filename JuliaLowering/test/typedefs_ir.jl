@@ -169,20 +169,20 @@ X{S, T=w}
 # Simple abstract type definition
 abstract type A end
 #---------------------
-1   (call core.svec)
-2   (call core._abstracttype TestMod :A %₁)
-3   (= slot₁/A %₂)
-4   (call core._setsuper! %₂ core.Any)
-5   (call core._typebody! slot₁/A)
-6   (call core.declare_global TestMod :A false)
-7   latestworld
+1   (call core.declare_global TestMod :A false)
+2   latestworld
+3   (call core.svec)
+4   (call core._abstracttype TestMod :A %₃)
+5   (= slot₁/A %₄)
+6   (call core._setsuper! %₄ core.Any)
+7   (call core._typebody! slot₁/A)
 8   (call core.isdefinedglobal TestMod :A false)
 9   (gotoifnot %₈ label₁₄)
 10  TestMod.A
-11  (call core._equiv_typedef %₁₀ %₂)
+11  (call core._equiv_typedef %₁₀ %₄)
 12  (gotoifnot %₁₁ label₁₄)
 13  (goto label₁₆)
-14  (call core.declare_const TestMod :A %₂)
+14  (call core.declare_const TestMod :A %₄)
 15  latestworld
 16  (return core.nothing)
 
@@ -190,21 +190,21 @@ abstract type A end
 # Abstract type definition with supertype
 abstract type A <: B end
 #---------------------
-1   (call core.svec)
-2   (call core._abstracttype TestMod :A %₁)
-3   (= slot₁/A %₂)
-4   TestMod.B
-5   (call core._setsuper! %₂ %₄)
-6   (call core._typebody! slot₁/A)
-7   (call core.declare_global TestMod :A false)
-8   latestworld
+1   (call core.declare_global TestMod :A false)
+2   latestworld
+3   (call core.svec)
+4   (call core._abstracttype TestMod :A %₃)
+5   (= slot₁/A %₄)
+6   TestMod.B
+7   (call core._setsuper! %₄ %₆)
+8   (call core._typebody! slot₁/A)
 9   (call core.isdefinedglobal TestMod :A false)
 10  (gotoifnot %₉ label₁₅)
 11  TestMod.A
-12  (call core._equiv_typedef %₁₁ %₂)
+12  (call core._equiv_typedef %₁₁ %₄)
 13  (gotoifnot %₁₂ label₁₅)
 14  (goto label₁₇)
-15  (call core.declare_const TestMod :A %₂)
+15  (call core.declare_const TestMod :A %₄)
 16  latestworld
 17  (return core.nothing)
 
@@ -212,25 +212,25 @@ abstract type A <: B end
 # Abstract type definition with multiple typevars
 abstract type A{X, Y <: X} end
 #---------------------
-1   (= slot₂/X (call core.TypeVar :X))
-2   slot₂/X
-3   (= slot₃/Y (call core.TypeVar :Y %₂))
+1   (call core.declare_global TestMod :A false)
+2   latestworld
+3   (= slot₂/X (call core.TypeVar :X))
 4   slot₂/X
-5   slot₃/Y
-6   (call core.svec %₄ %₅)
-7   (call core._abstracttype TestMod :A %₆)
-8   (= slot₁/A %₇)
-9   (call core._setsuper! %₇ core.Any)
-10  (call core._typebody! slot₁/A)
-11  (call core.declare_global TestMod :A false)
-12  latestworld
+5   (= slot₃/Y (call core.TypeVar :Y %₄))
+6   slot₂/X
+7   slot₃/Y
+8   (call core.svec %₆ %₇)
+9   (call core._abstracttype TestMod :A %₈)
+10  (= slot₁/A %₉)
+11  (call core._setsuper! %₉ core.Any)
+12  (call core._typebody! slot₁/A)
 13  (call core.isdefinedglobal TestMod :A false)
 14  (gotoifnot %₁₃ label₁₉)
 15  TestMod.A
-16  (call core._equiv_typedef %₁₅ %₇)
+16  (call core._equiv_typedef %₁₅ %₉)
 17  (gotoifnot %₁₆ label₁₉)
 18  (goto label₂₁)
-19  (call core.declare_const TestMod :A %₇)
+19  (call core.declare_const TestMod :A %₉)
 20  latestworld
 21  (return core.nothing)
 
@@ -274,20 +274,20 @@ end
 # Simple primitive type definition
 primitive type P 8 end
 #---------------------
-1   (call core.svec)
-2   (call core._primitivetype TestMod :P %₁ 8)
-3   (= slot₁/P %₂)
-4   (call core._setsuper! %₂ core.Any)
-5   (call core._typebody! slot₁/P)
-6   (call core.declare_global TestMod :P false)
-7   latestworld
+1   (call core.declare_global TestMod :P false)
+2   latestworld
+3   (call core.svec)
+4   (call core._primitivetype TestMod :P %₃ 8)
+5   (= slot₁/P %₄)
+6   (call core._setsuper! %₄ core.Any)
+7   (call core._typebody! slot₁/P)
 8   (call core.isdefinedglobal TestMod :P false)
 9   (gotoifnot %₈ label₁₄)
 10  TestMod.P
-11  (call core._equiv_typedef %₁₀ %₂)
+11  (call core._equiv_typedef %₁₀ %₄)
 12  (gotoifnot %₁₁ label₁₄)
 13  (goto label₁₆)
-14  (call core.declare_const TestMod :P %₂)
+14  (call core.declare_const TestMod :P %₄)
 15  latestworld
 16  (return core.nothing)
 
@@ -295,25 +295,25 @@ primitive type P 8 end
 # Complex primitive type definition
 primitive type P{X,Y} <: Z 32 end
 #---------------------
-1   (= slot₂/X (call core.TypeVar :X))
-2   (= slot₃/Y (call core.TypeVar :Y))
-3   slot₂/X
-4   slot₃/Y
-5   (call core.svec %₃ %₄)
-6   (call core._primitivetype TestMod :P %₅ 32)
-7   (= slot₁/P %₆)
-8   TestMod.Z
-9   (call core._setsuper! %₆ %₈)
-10  (call core._typebody! slot₁/P)
-11  (call core.declare_global TestMod :P false)
-12  latestworld
+1   (call core.declare_global TestMod :P false)
+2   latestworld
+3   (= slot₂/X (call core.TypeVar :X))
+4   (= slot₃/Y (call core.TypeVar :Y))
+5   slot₂/X
+6   slot₃/Y
+7   (call core.svec %₅ %₆)
+8   (call core._primitivetype TestMod :P %₇ 32)
+9   (= slot₁/P %₈)
+10  TestMod.Z
+11  (call core._setsuper! %₈ %₁₀)
+12  (call core._typebody! slot₁/P)
 13  (call core.isdefinedglobal TestMod :P false)
 14  (gotoifnot %₁₃ label₁₉)
 15  TestMod.P
-16  (call core._equiv_typedef %₁₅ %₆)
+16  (call core._equiv_typedef %₁₅ %₈)
 17  (gotoifnot %₁₆ label₁₉)
 18  (goto label₂₁)
-19  (call core.declare_const TestMod :P %₆)
+19  (call core.declare_const TestMod :P %₈)
 20  latestworld
 21  (return core.nothing)
 
@@ -321,22 +321,22 @@ primitive type P{X,Y} <: Z 32 end
 # Primitive type definition with computed size (should this be allowed??)
 primitive type P P_nbits() end
 #---------------------
-1   (call core.svec)
-2   TestMod.P_nbits
-3   (call %₂)
-4   (call core._primitivetype TestMod :P %₁ %₃)
-5   (= slot₁/P %₄)
-6   (call core._setsuper! %₄ core.Any)
-7   (call core._typebody! slot₁/P)
-8   (call core.declare_global TestMod :P false)
-9   latestworld
+1   (call core.declare_global TestMod :P false)
+2   latestworld
+3   (call core.svec)
+4   TestMod.P_nbits
+5   (call %₄)
+6   (call core._primitivetype TestMod :P %₃ %₅)
+7   (= slot₁/P %₆)
+8   (call core._setsuper! %₆ core.Any)
+9   (call core._typebody! slot₁/P)
 10  (call core.isdefinedglobal TestMod :P false)
 11  (gotoifnot %₁₀ label₁₆)
 12  TestMod.P
-13  (call core._equiv_typedef %₁₂ %₄)
+13  (call core._equiv_typedef %₁₂ %₆)
 14  (gotoifnot %₁₃ label₁₆)
 15  (goto label₁₈)
-16  (call core.declare_const TestMod :P %₄)
+16  (call core.declare_const TestMod :P %₆)
 17  latestworld
 18  (return core.nothing)
 

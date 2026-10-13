@@ -3299,6 +3299,7 @@ function expand_abstract_or_primitive_type(ctx, ex)
     typevar_names, typevar_stmts = expand_typevars(ctx, type_params)
     newtype_var = ssavar(ctx, ex, "new_type")
     @ast ctx ex [:block
+        [:global name]
         [:scope_block [:hard_scope]
             [:block
                 [:local name]
@@ -3322,7 +3323,6 @@ function expand_abstract_or_primitive_type(ctx, ex)
             ]
         ]
         [:assert "toplevel_only"::symbol [:syntaxinert ex] ]
-        [:global name]
         [:if
             [:&&
                 [:call
