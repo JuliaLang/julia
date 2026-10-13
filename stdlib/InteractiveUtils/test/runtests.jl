@@ -556,10 +556,7 @@ if !is_asserts()
 @eval @noinline Base.@constprop :none f_broken_code() = 0
 let m = which(f_broken_code, ())
    let src = Base.uncompressed_ast(m)
-       src.code = Any[
-           Expr(:meta, :noinline)
-           Core.ReturnNode(Expr(:invalid))
-       ]
+       src.code[end] = Core.ReturnNode(Expr(:invalid))
        m.source = src
    end
 end
@@ -894,7 +891,8 @@ file, ln = functionloc(Core.Compiler.tmeet, Tuple{Int, Float64})
     end
     @test e isa Exception
     s = sprint(showerror, e, bt)
-    m = match(r"(\S*InteractiveUtils[\/\\]src\S*):", s)
+    # the frame may print as `file:line:col`
+    m = match(r"(\S*InteractiveUtils[\/\\]src[^\s:]*):", s)
     @test isfile(expanduser(m.captures[1]))
 end
 

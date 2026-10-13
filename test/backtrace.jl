@@ -308,12 +308,14 @@ function interp_frame(f)
     bt = try f() catch; catch_backtrace() end
     return last(lookup(bt[findfirst(ip -> ip isa Base.InterpreterIP, bt)]))
 end
+# JuliaLowering-lowered frames also print a column (`file:line:col`)
+strip_col(s) = replace(s, r"(:\d+):\d+$" => s"\1")
 let sf = interp_frame(InterpFrames.foo)
-    @test sprint(show, sf) == "foo() at backtrace.jl:$(only(methods(InterpFrames.foo)).line)"
+    @test strip_col(sprint(show, sf)) == "foo() at backtrace.jl:$(only(methods(InterpFrames.foo)).line)"
     @test parentmodule(sf) === InterpFrames
 end
 let sf = interp_frame(() -> InterpFrames.gen(1))
-    @test sprint(show, sf) == "gen(x::$Int) at backtrace.jl:$(only(methods(InterpFrames.gen)).line)"
+    @test strip_col(sprint(show, sf)) == "gen(x::$Int) at backtrace.jl:$(only(methods(InterpFrames.gen)).line)"
     @test parentmodule(sf) === InterpFrames
 end
 
