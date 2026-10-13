@@ -16,7 +16,7 @@
 @inline function load8(buf::AbstractVector{UInt8}, i::Int)
     w = zero(UInt64)
     for k in 7:-1:0
-        w = w << 8 | @inbounds buf[i + k]
+        w = w << 8 | (@inbounds buf[i + k])::UInt8
     end
     return w
 end
@@ -72,7 +72,7 @@ end
 # not a digit.
 function overflowfailure(buf::AbstractVector{UInt8}, i::Int, j::Int, base::Int)
     for k in i:j
-        digitvalue(@inbounds(buf[k]), base) < base || return INVALID
+        digitvalue(@inbounds(buf[k])::UInt8, base) < base || return INVALID
     end
     return OVERFLOW
 end
@@ -99,7 +99,7 @@ const SAFEDIGITS128 = ntuple(b -> b < 2 ? 0 : ndigits(typemax(UInt128); base = b
         end
         if U === UInt64
             while i <= k
-                d = (@inbounds buf[i]) - UInt8('0')
+                d = (@inbounds buf[i])::UInt8 - UInt8('0')
                 d <= 0x09 || return INVALID
                 n = n * U(10) + d
                 i += 1
@@ -108,7 +108,7 @@ const SAFEDIGITS128 = ntuple(b -> b < 2 ? 0 : ndigits(typemax(UInt128); base = b
             # the last digits go in a UInt64, saving 128-bit multiplies
             t, p = zero(UInt64), one(UInt64)
             while i <= k
-                d = (@inbounds buf[i]) - UInt8('0')
+                d = (@inbounds buf[i])::UInt8 - UInt8('0')
                 d <= 0x09 || return INVALID
                 t = t * 10 + d
                 p *= 10
@@ -128,7 +128,7 @@ const SAFEDIGITS128 = ntuple(b -> b < 2 ? 0 : ndigits(typemax(UInt128); base = b
             i += 8
         end
         while i <= k
-            d = digitvalue(@inbounds(buf[i]), 16)
+            d = digitvalue(@inbounds(buf[i])::UInt8, 16)
             d < 0x10 || return INVALID
             n = n << 4 | d
             i += 1
@@ -136,7 +136,7 @@ const SAFEDIGITS128 = ntuple(b -> b < 2 ? 0 : ndigits(typemax(UInt128); base = b
     else
         k = min(j, i + (U === UInt64 ? SAFEDIGITS64 : SAFEDIGITS128)[base] - 1)
         while i <= k
-            d = digitvalue(@inbounds(buf[i]), base)
+            d = digitvalue(@inbounds(buf[i])::UInt8, base)
             d < base || return INVALID
             n = n * (base % U) + d
             i += 1
@@ -144,7 +144,7 @@ const SAFEDIGITS128 = ntuple(b -> b < 2 ? 0 : ndigits(typemax(UInt128); base = b
     end
     # any remaining digits, checking for overflow
     while i <= j
-        d = digitvalue(@inbounds(buf[i]), base)
+        d = digitvalue(@inbounds(buf[i])::UInt8, base)
         d < base || return INVALID
         n, ov_mul = mul_with_overflow(n, base % U)
         n, ov_add = add_with_overflow(n, d % U)
@@ -163,7 +163,7 @@ function parseint(::Type{T}, buf::AbstractVector{UInt8}, i::Int, j::Int,
     i <= j || return INVALID
     n = zero(T)
     for k in i:j
-        d = digitvalue(@inbounds(buf[k]), base)
+        d = digitvalue(@inbounds(buf[k])::UInt8, base)
         d < base || return INVALID
         n, ov_mul = mul_with_overflow(n, T(base))
         n, ov_add = add_with_overflow(n, neg ? -T(d) : T(d))
