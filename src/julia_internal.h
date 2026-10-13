@@ -535,6 +535,8 @@ JL_DLLEXPORT void jl_set_foreign_link_policy(jl_value_t *id, int native) JL_CANS
 JL_DLLEXPORT int jl_get_foreign_link_policy(jl_value_t *id) JL_NOTSAFEPOINT;
 
 #define JL_UUID_STRING_LEN 36
+// Package UUID of `julia`, reported for the libraries of the runtime
+#define JL_RUNTIME_UUID_STRING "1222c4b2-2114-5bfd-aeef-88e4692bbb3e"
 JL_DLLEXPORT void jl_uuid_to_string(const jl_uuid_t *uuid, char *out) JL_NOTSAFEPOINT;
 // Write `s` as a quoted, escaped JSON string
 JL_DLLEXPORT void jl_print_str_escape_json(ios_t *stream, const char *s, size_t len) JL_NOTSAFEPOINT;

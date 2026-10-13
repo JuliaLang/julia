@@ -12,6 +12,8 @@ native_ver_patch_ptr() = cglobal((:jl_ver_patch, LIBJULIA))
 
 # a symbol of the `julia` executable that compiles this, where there is one; never called
 exe_symbol() = ccall(:jl_get_pgcstack_static, Ptr{Cvoid}, ())
+# a library given as a string; never called
+string_library() = ccall((:nativelink_missing, "libnativelink_missing"), Cvoid, ())
 
 ccall(:jl_set_foreign_link_policy, Cvoid, (Any, Cint), dlid(LIBJULIA), true)
 ccall(:jl_set_foreign_symbol_record_path, Cvoid, (Cstring,),
@@ -20,6 +22,6 @@ ccall(:jl_set_foreign_symbol_record_path, Cvoid, (Cstring,),
 function @main(args::Vector{String})::Cint
     println(Core.stdout, "ver patch: ", native_ver_patch())
     println(Core.stdout, "ver patch ptr: ", native_ver_patch_ptr() != C_NULL)
-    length(args) > 100 && exe_symbol()
+    length(args) > 100 && (exe_symbol(); string_library())
     return 0
 end

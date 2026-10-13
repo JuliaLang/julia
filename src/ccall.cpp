@@ -757,8 +757,8 @@ static void record_foreign_symbol(jl_codectx_t &ctx, const native_sym_arg_t &sym
 {
     if (jl_get_foreign_symbol_record_path() == nullptr)
         return;
-    ctx.emission_context.foreign_symbol_sites.push_back(
-        jl_foreign_symbol_site_t{symarg.f_name, symarg.f_lib, symarg.lib_id,
+    ctx.emission_context.foreign_symbols.push_back(
+        jl_foreign_symbol_t{symarg.f_name, symarg.f_lib, symarg.lib_id,
                                  is_cglobal, native});
 }
 

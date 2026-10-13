@@ -25,6 +25,11 @@ outdir = ARGS[1]
     @test occursin("\"package_uuid\": \"6a2ab6db-2a0d-40e1-8b5e-7a9e0d2f4c11\"", json)
     @test occursin("\"library\": \"libjulia\"", json)
     @test !occursin("<libjulia", json)
+    # a library of the runtime has the UUID of `julia`
+    @test occursin("\"package_uuid\": \"1222c4b2-2114-5bfd-aeef-88e4692bbb3e\",\n      \"library\": \"libjulia-internal\"", json)
+    # a library string is not a `LibraryID`
+    @test occursin("\"library_file\": \"libnativelink_missing\"", json)
+    @test !occursin("\"library\": \"libnativelink_missing\"", json)
     @test occursin("{\"symbol\": \"jl_ver_patch\", \"kind\": \"ccall\", \"linkage\": \"native\"}", json)
     @test occursin("{\"symbol\": \"jl_ver_patch\", \"kind\": \"cglobal\", \"linkage\": \"native\"}", json)
     @test occursin("{\"symbol\": \"jl_get_pgcstack_static\", \"kind\": \"ccall\", \"linkage\": \"lazy\"}", json)

@@ -927,41 +927,70 @@ static void aot_link_output(jl_codegen_output_t &out) JL_CANSAFEPOINT
     }
 }
 
-// Library reported for a ccall/cglobal call, as (package UUID text, library name):
-// both if the library has a `LibraryID`, only the name for a library string or one
-// of the runtime's own libraries, neither otherwise.
-static std::pair<std::string, std::string> foreign_symbol_library(const jl_foreign_symbol_site_t &site)
+// Library string of a ccall/cglobal call. Empty if the library is not given as a string.
+static std::string foreign_library_filename(const jl_foreign_symbol_t &sym)
 {
-    if (site.lib_id != nullptr) {
+    // these are sentinels, not strings
+    if (sym.f_lib == nullptr || sym.f_lib == JL_EXE_LIBNAME ||
+            sym.f_lib == JL_LIBJULIA_DL_LIBNAME || sym.f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME)
+        return "";
+    return sym.f_lib;
+}
+
+// `LibraryID` reported for a ccall/cglobal call, as (package UUID text, library name).
+// A library of the runtime has the UUID of `julia`. Empty if there is none.
+static std::pair<std::string, std::string> foreign_library_id(const jl_foreign_symbol_t &sym)
+{
+    if (sym.lib_id != nullptr) {
         // `Core.LibraryID`: `pkg` is a little-endian `UInt128`, `name` a `String`
-        const uint64_t *pkg_words = (const uint64_t *)jl_data_ptr(site.lib_id);
+        const uint64_t *pkg_words = (const uint64_t *)jl_data_ptr(sym.lib_id);
         jl_uuid_t pkg;
         pkg.lo = pkg_words[0];
         pkg.hi = pkg_words[1];
-        jl_value_t *name = jl_get_nth_field_noalloc(site.lib_id, 1);
+        jl_value_t *name = jl_get_nth_field_noalloc(sym.lib_id, 1);
         char uuid[JL_UUID_STRING_LEN + 1];
         jl_uuid_to_string(&pkg, uuid);
         return {uuid, std::string(jl_string_data(name), jl_string_len(name))};
     }
-    // a symbol of the executable is looked up across the process, like one with no library
-    if (site.f_lib == nullptr || site.f_lib == JL_EXE_LIBNAME)
-        return {"", ""};
-    if (site.f_lib == JL_LIBJULIA_DL_LIBNAME)
-        return {"", "libjulia"};
-    if (site.f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME)
-        return {"", "libjulia-internal"};
-    return {"", site.f_lib};
+    if (sym.f_lib == JL_LIBJULIA_DL_LIBNAME)
+        return {JL_RUNTIME_UUID_STRING, "libjulia"};
+    if (sym.f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME)
+        return {JL_RUNTIME_UUID_STRING, "libjulia-internal"};
+    std::string filename = foreign_library_filename(sym);
+    if (filename == "libjulia" || filename == "libjulia-internal")
+        return {JL_RUNTIME_UUID_STRING, filename};
+    return {};
 }
 
+namespace {
+// Library of a ccall/cglobal call in the foreign symbol record
+struct foreign_library_t {
+    std::string package_uuid;
+    std::string library;
+    std::string filename;
+    // calls with the same `LibraryID` are one library, whatever its filename
+    bool operator<(const foreign_library_t &other) const
+    {
+        if (package_uuid != other.package_uuid)
+            return package_uuid < other.package_uuid;
+        if (library != other.library)
+            return library < other.library;
+        return package_uuid.empty() && filename < other.filename;
+    }
+};
+} // namespace
+
 // Write the foreign symbol record: every ccall/cglobal call as JSON, grouped by
-// library. Each library entry has a `package_uuid` if the library has a
-// `LibraryID`, and a `library` name or `null`. Each symbol entry has a `kind`
+// library. A library entry has `package_uuid` and `library` if the library has a
+// `LibraryID`, or else `library_file` if it is a string. A symbol entry has a `kind`
 // (`ccall` or `cglobal`) and a `linkage` (`native` or `lazy`).
 static void aot_write_foreign_symbol_record(jl_codegen_output_t &out, const char *path)
 {
-    std::map<std::pair<std::string, std::string>, SmallVector<const jl_foreign_symbol_site_t *, 0>> by_lib;
-    for (const auto &site : out.foreign_symbol_sites)
-        by_lib[foreign_symbol_library(site)].push_back(&site);
+    std::map<foreign_library_t, SmallVector<const jl_foreign_symbol_t *, 0>> by_lib;
+    for (const auto &sym : out.foreign_symbols) {
+        auto id = foreign_library_id(sym);
+        by_lib[{id.first, id.second, foreign_library_filename(sym)}].push_back(&sym);
+    }
 
     ios_t f;
     if (ios_file(&f, path, 1, 1, 1, 1) == NULL)
@@ -969,37 +998,38 @@ static void aot_write_foreign_symbol_record(jl_codegen_output_t &out, const char
     auto json_string = [&f](const std::string &s) { jl_print_str_escape_json(&f, s.data(), s.size()); };
     ios_printf(&f, "{\n  \"libraries\": [\n");
     bool first_lib = true;
-    for (auto &[lib, sites] : by_lib) {
-        const auto &[package_uuid, library] = lib;
+    for (auto &[lib, syms] : by_lib) {
         if (!first_lib)
             ios_printf(&f, ",\n");
         first_lib = false;
         ios_printf(&f, "    {\n");
-        if (!package_uuid.empty())
-            ios_printf(&f, "      \"package_uuid\": \"%s\",\n", package_uuid.c_str());
-        ios_printf(&f, "      \"library\": ");
-        if (library.empty())
-            ios_printf(&f, "null");
-        else
-            json_string(library);
-        ios_printf(&f, ",\n");
+        if (!lib.package_uuid.empty()) {
+            ios_printf(&f, "      \"package_uuid\": \"%s\",\n      \"library\": ", lib.package_uuid.c_str());
+            json_string(lib.library);
+            ios_printf(&f, ",\n");
+        }
+        else if (!lib.filename.empty()) {
+            ios_printf(&f, "      \"library_file\": ");
+            json_string(lib.filename);
+            ios_printf(&f, ",\n");
+        }
         ios_printf(&f, "      \"symbols\": [\n");
         // one entry per distinct (symbol, kind, linkage)
         std::set<std::tuple<std::string, bool, bool>> seen;
         bool first_sym = true;
-        for (auto *site : sites) {
-            auto sym = std::make_tuple(std::string(site->f_name ? site->f_name : "<dynamic>"),
-                                       site->is_cglobal, site->native);
-            if (!seen.insert(sym).second)
+        for (auto *sym : syms) {
+            auto entry = std::make_tuple(std::string(sym->f_name ? sym->f_name : "<dynamic>"),
+                                       sym->is_cglobal, sym->native);
+            if (!seen.insert(entry).second)
                 continue;
             if (!first_sym)
                 ios_printf(&f, ",\n");
             first_sym = false;
             ios_printf(&f, "        {\"symbol\": ");
-            json_string(std::get<0>(sym));
+            json_string(std::get<0>(entry));
             ios_printf(&f, ", \"kind\": \"%s\", \"linkage\": \"%s\"}",
-                       site->is_cglobal ? "cglobal" : "ccall",
-                       site->native ? "native" : "lazy");
+                       sym->is_cglobal ? "cglobal" : "ccall",
+                       sym->native ? "native" : "lazy");
         }
         ios_printf(&f, "\n      ]\n    }");
     }
