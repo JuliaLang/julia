@@ -612,6 +612,8 @@ function to_code_info(ex::SyntaxTree)
         name = slot.name
         if name !== UNUSED && startswith(name, ERASE_SLOTNAME_PREFIX)
             name = ""
+        elseif i > 1 && startswith(name, "##")
+            name = name[3:end]
         end
         sname = Symbol(name)
         slotnames[i] = sname
