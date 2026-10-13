@@ -1483,6 +1483,35 @@ FORCE_INLINE int jl_type_walk_node(jl_value_t *t, int pos, jl_typeenv_t *binders
     }
 }
 
+// allocate a UnionAll node (no normalization or validation: see `jl_type_unionall`)
+JL_DLLEXPORT jl_value_t *jl_new_unionall(jl_tvar_t *var, jl_value_t *body) JL_CANSAFEPOINT;
+
+// a memoized `UnionAll` fact (`JL_UNIONALL_*` bit pair): 1 or 0 when known, -1 if
+// not computed yet
+STATIC_INLINE int jl_unionall_flag(jl_unionall_t *u, uint32_t known, uint32_t bit) JL_NOTSAFEPOINT
+{
+    uint32_t f = jl_atomic_load_relaxed(&u->flags);
+    return (f & known) ? (f & bit) != 0 : -1;
+}
+
+// record a computed `UnionAll` fact (racing writers store the same value)
+STATIC_INLINE int jl_unionall_set_flag(jl_unionall_t *u, uint32_t known, uint32_t bit, int value) JL_NOTSAFEPOINT
+{
+    jl_atomic_fetch_or_relaxed(&u->flags, known | (value ? bit : 0));
+    return value;
+}
+
+// is `t` known, without walking it, to have no free typevars? (a datatype's
+// flag, or a UnionAll's memo once computed.) A walk looking for occurrences
+// of variables bound outside `t` may skip such a subterm.
+STATIC_INLINE int jl_is_known_closed(jl_value_t *t) JL_NOTSAFEPOINT
+{
+    if (jl_is_datatype(t))
+        return !((jl_datatype_t*)t)->hasfreetypevars;
+    return jl_is_unionall(t) &&
+        jl_unionall_flag((jl_unionall_t*)t, JL_UNIONALL_FREEVARS_KNOWN, JL_UNIONALL_FREEVARS) == 0;
+}
+
 // define `static int name(jl_value_t *t, int pos, jl_typeenv_t *binders, void *ctx)`,
 // the walk with the visitor `visit`; start it as `name(t, 0, NULL, ctx)`
 #define JL_TYPE_WALKER(name, visit) \

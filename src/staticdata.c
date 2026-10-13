@@ -1951,6 +1951,13 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                     jl_atomic_store_relaxed(&newbpart->max_world, 0);
                 }
             }
+            else if (jl_is_unionall(v)) {
+                assert(f == s->s);
+                // hidden field: the memoized facts are structural, so they stay valid
+                write_padding(f, offsetof(jl_unionall_t, flags) - tot);
+                write_uint32(f, jl_atomic_load_relaxed(&((jl_unionall_t*)v)->flags));
+                write_padding(f, sizeof(jl_unionall_t) - offsetof(jl_unionall_t, flags) - sizeof(uint32_t));
+            }
             else if (jl_is_method(v)) {
                 assert(f == s->s);
                 write_padding(f, sizeof(jl_method_t) - tot); // hidden fields
