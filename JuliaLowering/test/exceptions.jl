@@ -461,46 +461,43 @@ end
     """) == [("try", 1)]
     @test isempty(current_exceptions())
 
-    # TODO: commented out to avoid polluting the exception stack; need to port
-    # https://github.com/JuliaLang/julia/pull/55876
+    # error in try -> continue in finally -> loop-cont
+    @test JuliaLowering.include_string(test_mod, """
+    let out = []
+        for x in [1,2,3]
+            try
+                push!(out, ("try", x))
+                error()
+            $maybe_catch
+            finally
+                continue
+                push!(out, ("finally", x))
+            end
+            push!(out, ("bad", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("try", 2), ("try", 3)]
+    @test isempty(current_exceptions())
 
-    # # error in try -> continue in finally -> loop-cont
-    # @test JuliaLowering.include_string(test_mod, """
-    # let out = []
-    #     for x in [1,2,3]
-    #         try
-    #             push!(out, ("try", x))
-    #             error()
-    #         $maybe_catch
-    #         finally
-    #             continue
-    #             push!(out, ("finally", x))
-    #         end
-    #         push!(out, ("bad", x))
-    #     end
-    #     out
-    # end
-    # """) == [("try", 1), ("try", 2), ("try", 3)]
-    # @test isempty(current_exceptions())
-    #
-    # # error in try -> break in finally -> loop-exit
-    # @test JuliaLowering.include_string(test_mod, """
-    # let out = []
-    #     for x in [1,2,3]
-    #         try
-    #             push!(out, ("try", x))
-    #             error()
-    #         $maybe_catch
-    #         finally
-    #             break
-    #             push!(out, ("finally", x))
-    #         end
-    #         push!(out, ("bad", x))
-    #     end
-    #     out
-    # end
-    # """) == [("try", 1)]
-    # @test isempty(current_exceptions())
+    # error in try -> break in finally -> loop-exit
+    @test JuliaLowering.include_string(test_mod, """
+    let out = []
+        for x in [1,2,3]
+            try
+                push!(out, ("try", x))
+                error()
+            $maybe_catch
+            finally
+                break
+                push!(out, ("finally", x))
+            end
+            push!(out, ("bad", x))
+        end
+        out
+    end
+    """) == [("try", 1)]
+    @test isempty(current_exceptions())
 
     # (nested) continue in try -> finally block -> loop-cont
     @test JuliaLowering.include_string(test_mod, """

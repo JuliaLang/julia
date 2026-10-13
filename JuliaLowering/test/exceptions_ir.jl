@@ -165,14 +165,45 @@ end
 3   (= slot₂/returnval_via_finally TestMod.a)
 4   (= slot₁/finally_tag 1)
 5   (leave %₁)
-6   (goto label₈)
-7   (= slot₁/finally_tag 2)
-8   TestMod.b
-9   (call core.=== slot₁/finally_tag 2)
-10  (gotoifnot %₉ label₁₂)
-11  (call top.rethrow)
+6   (goto label₁₁)
+7   TestMod.b
+8   (call top.rethrow)
+9   (pop_exception %₁)
+10  (return core.nothing)
+11  TestMod.b
 12  slot₂/returnval_via_finally
 13  (return %₁₂)
+
+########################################
+# empty finally
+try
+    a
+finally
+end
+#---------------------
+1   (enter label₅)
+2   TestMod.a
+3   (leave %₁)
+4   (return %₂)
+5   (call top.rethrow)
+6   (pop_exception %₁)
+7   (return %₅)
+
+########################################
+# trivial finally
+try
+    a
+finally
+    1
+end
+#---------------------
+1   (enter label₅)
+2   TestMod.a
+3   (leave %₁)
+4   (return %₂)
+5   (call top.rethrow)
+6   (pop_exception %₁)
+7   (return %₅)
 
 ########################################
 # basic try/finally, value position
@@ -190,12 +221,12 @@ end
 4   TestMod.a
 5   (= slot₂/try_result %₄)
 6   (leave %₂)
-7   (goto label₉)
-8   (= slot₃/finally_tag 1)
-9   TestMod.b
-10  (call core.=== slot₃/finally_tag 1)
-11  (gotoifnot %₁₀ label₁₃)
-12  (call top.rethrow)
+7   (goto label₁₂)
+8   TestMod.b
+9   (call top.rethrow)
+10  (pop_exception %₂)
+11  (return core.nothing)
+12  TestMod.b
 13  slot₂/try_result
 14  (= slot₁/z %₁₃)
 15  (return %₁₃)
@@ -215,12 +246,12 @@ end
 2   (= slot₁/finally_tag -1)
 3   TestMod.a
 4   (leave %₁)
-5   (goto label₇)
-6   (= slot₁/finally_tag 1)
-7   TestMod.b
-8   (call core.=== slot₁/finally_tag 1)
-9   (gotoifnot %₈ label₁₁)
-10  (call top.rethrow)
+5   (goto label₁₀)
+6   TestMod.b
+7   (call top.rethrow)
+8   (pop_exception %₁)
+9   (return core.nothing)
+10  TestMod.b
 11  TestMod.z
 12  (return %₁₁)
 
@@ -241,14 +272,14 @@ end
 4   TestMod.a
 5   (= slot₂/finally_tag 1)
 6   (leave %₂)
-7   (goto label₁₁)
+7   (goto label₁₄)
 8   (leave %₂)
-9   (goto label₁₁)
-10  (= slot₂/finally_tag 2)
-11  TestMod.b
-12  (call core.=== slot₂/finally_tag 2)
-13  (gotoifnot %₁₂ label₁₅)
-14  (call top.rethrow)
+9   (goto label₁₄)
+10  TestMod.b
+11  (call top.rethrow)
+12  (pop_exception %₂)
+13  (return core.nothing)
+14  TestMod.b
 15  (call core.=== slot₂/finally_tag 1)
 16  (gotoifnot %₁₅ label₁₈)
 17  (goto label₂₀)
@@ -284,12 +315,12 @@ end
 11  (= slot₃/returnval_via_finally slot₂/try_result)
 12  (= slot₁/finally_tag 1)
 13  (leave %₁)
-14  (goto label₁₆)
-15  (= slot₁/finally_tag 2)
-16  TestMod.c
-17  (call core.=== slot₁/finally_tag 2)
-18  (gotoifnot %₁₇ label₂₀)
-19  (call top.rethrow)
+14  (goto label₁₉)
+15  TestMod.c
+16  (call top.rethrow)
+17  (pop_exception %₁)
+18  (return core.nothing)
+19  TestMod.c
 20  slot₃/returnval_via_finally
 21  (return %₂₀)
 
@@ -308,7 +339,7 @@ finally
     d
 end
 #---------------------
-1   (enter label₃₀)
+1   (enter label₃₂)
 2   (= slot₁/finally_tag -1)
 3   (enter label₁₅)
 4   (= slot₃/finally_tag -1)
@@ -317,37 +348,42 @@ end
 7   (= slot₄/returnval_via_finally TestMod.a)
 8   (= slot₃/finally_tag 1)
 9   (leave %₃)
-10  (goto label₁₆)
+10  (goto label₂₁)
 11  TestMod.b
 12  (= slot₂/try_result %₁₁)
 13  (leave %₃)
-14  (goto label₁₆)
-15  (= slot₃/finally_tag 2)
-16  TestMod.c
-17  (call core.=== slot₃/finally_tag 2)
-18  (gotoifnot %₁₇ label₂₀)
-19  (call top.rethrow)
-20  (call core.=== slot₃/finally_tag 1)
-21  (gotoifnot %₂₀ label₂₆)
-22  (= slot₅/returnval_via_finally slot₄/returnval_via_finally)
-23  (= slot₁/finally_tag 1)
-24  (leave %₁)
-25  (goto label₃₁)
-26  (= slot₆/returnval_via_finally slot₂/try_result)
-27  (= slot₁/finally_tag 2)
-28  (leave %₁)
-29  (goto label₃₁)
-30  (= slot₁/finally_tag 3)
-31  TestMod.d
-32  (call core.=== slot₁/finally_tag 3)
-33  (gotoifnot %₃₂ label₃₅)
-34  (call top.rethrow)
-35  (call core.=== slot₁/finally_tag 2)
-36  (gotoifnot %₃₅ label₃₉)
-37  slot₆/returnval_via_finally
-38  (return %₃₇)
-39  slot₅/returnval_via_finally
+14  (goto label₂₁)
+15  TestMod.c
+16  (call top.rethrow)
+17  (= slot₁/finally_tag 1)
+18  (pop_exception %₃)
+19  (leave %₁)
+20  (goto label₃₆)
+21  TestMod.c
+22  (call core.=== slot₃/finally_tag 1)
+23  (gotoifnot %₂₂ label₂₈)
+24  (= slot₅/returnval_via_finally slot₄/returnval_via_finally)
+25  (= slot₁/finally_tag 2)
+26  (leave %₁)
+27  (goto label₃₆)
+28  (= slot₆/returnval_via_finally slot₂/try_result)
+29  (= slot₁/finally_tag 3)
+30  (leave %₁)
+31  (goto label₃₆)
+32  TestMod.d
+33  (call top.rethrow)
+34  (pop_exception %₁)
+35  (return core.nothing)
+36  TestMod.d
+37  (call core.=== slot₁/finally_tag 3)
+38  (gotoifnot %₃₇ label₄₁)
+39  slot₆/returnval_via_finally
 40  (return %₃₉)
+41  (call core.=== slot₁/finally_tag 2)
+42  (gotoifnot %₄₁ label₄₅)
+43  slot₅/returnval_via_finally
+44  (return %₄₃)
+45  (return core.nothing)
 
 ########################################
 # Access to the exception object

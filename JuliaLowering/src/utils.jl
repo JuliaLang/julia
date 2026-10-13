@@ -274,8 +274,9 @@ function _find_assigned_ssavars!(ctx, ssamap, st)
     (is_leaf(st) || is_quoted(st)) && return
     if head(st) == :(=) && head(st[1]) == :bindingid
         b = get_binding(ctx, st[1])
-        b.is_ssa || return
-        ssamap[b.id] = syntax_id(ssavar(ctx, st[1], b.name))
+        if b.is_ssa
+            ssamap[b.id] = syntax_id(ssavar(ctx, st[1], b.name))
+        end
     end
     foreach(e->_find_assigned_ssavars!(ctx, ssamap, e), children(st))
 end

@@ -228,22 +228,19 @@ function emit_leave_handler(ctx::LinearIRContext, srcref, dest_tokens)
     end
 end
 
-# Enter the current finally block, either through the landing pad (on_exit ==
-# :rethrow) or via a jump (on_exit ∈ (:return, :break)).
+# Enter the current finally block via a jump (on_exit ∈ (:return, :break)).
 #
 # An integer tag is created to identify the current code path and select the
 # on_exit action to be taken at finally handler exit.
 function enter_finally_block(ctx, srcref, on_exit, value)
-    @jl_assert on_exit ∈ (:rethrow, :break, :return) srcref
+    @jl_assert on_exit ∈ (:break, :return) srcref
     handler = last(ctx.finally_handlers)
     push!(handler.exit_actions, (on_exit, value))
     tag = length(handler.exit_actions)
     emit(ctx, @ast ctx srcref [:(=) handler.tagvar tag::value])
-    if on_exit != :rethrow
-        emit_pop_exception(ctx, srcref, handler.target.catch_token_stack)
-        emit_leave_handler(ctx, srcref, handler.target.handler_token_stack[1:end-1])
-        emit(ctx, @ast ctx srcref [:goto handler.target.label])
-    end
+    emit_pop_exception(ctx, srcref, handler.target.catch_token_stack)
+    emit_leave_handler(ctx, srcref, handler.target.handler_token_stack[1:end-1])
+    emit(ctx, @ast ctx srcref [:goto handler.target.label])
     tag
 end
 
@@ -462,6 +459,23 @@ function compile_conditional(ctx, ex, false_label)
     end
 end
 
+function code_trivially_effect_free(ctx, st)
+    h = head(st)
+    if h === :block
+        for c in children(st)
+            code_trivially_effect_free(ctx, c) || return false
+        end
+        true
+    elseif h === :bindingid
+        b = get_binding(ctx, st)
+        b.is_ssa || b.is_always_defined
+    elseif h === :value || h === :nothing
+        true
+    else
+        false
+    end
+end
+
 # Lowering of exception handling must ensure that
 #
 # * Each `enter` is matched with a `leave` on every possible non-exceptional
@@ -506,10 +520,10 @@ end
 # exception-related state restoration which need to happen. Note also that the
 # "handler state restoration" actually includes several pieces of runtime state
 # including GC flags - see `jl_eh_restore_state` in the runtime for that.
+#
 # #### Lowering finally code paths
 #
-# When lowering `finally` blocks we want to emit the user's finally code once
-# but multiple code paths may traverse the finally block. For example, consider
+# There can be multiple ways to enter a finally block.  For example, consider
 # the code
 #
 # ```julia
@@ -532,25 +546,38 @@ end
 # ```
 #
 # In this situation there's four distinct code paths through the finally block:
-# 1. `return f(x)` needs to call `val = f(x)`, leave the `try` block, run `h()` then
-#    return `val`.
+# 1. `return f(x)` needs to call `val = f(x)`, leave the `try` block, run `h()`
+#    then return `val`.
 # 2. `continue` needs to call `h()` then jump to the start of the while loop
 # 3. `break` needs to call `h()` then jump to the exit of the while loop
-# 4. If an exception occurs in `f(x)` or `g(x)`, we need to call `h()` before
-#    falling back into the while loop.
+# 4. If an exception occurs in `f(x)` or `g(x)`, we need to call `h()` and
+#    rethrow
 #
-# To deal with these we create a `finally_tag` variable to dynamically track
-# which action to take after the finally block exits. Before jumping to the
-# block we set this variable to a unique integer tag identifying the incoming
-# code path. At the exit of the user's code (`h()` in this case) we perform the
-# jump appropriate to the `break`, `continue` or `return` as necessary based on
-# the tag.
+# We currently duplicate the finally block to handle exceptional control flow
+# (case 4) since later passes assume that the depth of the exception stack is
+# known statically (see PR #55876)
+#
+# To deal with the remaining cases, we create a `finally_tag` variable to
+# dynamically track which action to take after the finally block exits. Before
+# jumping to the block we set this variable to a unique integer tag identifying
+# the incoming code path. At the exit of the user's code (`h()` in this case) we
+# perform the jump appropriate to the `break`, `continue` or `return` as
+# necessary based on the tag.
 function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     (try_block, catch_block, else_block, finally_block, catch_label, scope) = @stm ex begin
-         [:trycatchelse t c] -> (t, c, nothing, nothing, make_label(ctx, c), nothing)
-         [:trycatchelse t c e] -> (t, c, e, nothing, make_label(ctx, c), nothing)
-         [:tryfinally t f] -> (t, nothing, nothing, f, make_label(ctx, f), nothing)
-         [:tryfinally t f scope] -> (t, nothing, nothing, f, make_label(ctx, f), scope)
+        [:trycatchelse t c] -> (t, c, nothing, nothing, make_label(ctx, c), nothing)
+        [:trycatchelse t c e] -> (t, c, e, nothing, make_label(ctx, c), nothing)
+        [:tryfinally t f scope...] -> begin
+            # if finally is effect free, it can be omitted
+            scope = length(scope) == 0 ? nothing : length(scope) == 1 ? scope[1] :
+                @jl_assert false ex
+            lab = make_label(ctx, f)
+            c = @ast ctx f [:call "rethrow"::top]
+            if code_trivially_effect_free(ctx, f)
+                f = nothing
+            end
+            (t, c, nothing, f, lab, scope)
+        end
      end
 
     has_finally_block = !isnothing(finally_block)
@@ -571,8 +598,6 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     ])
     push!(ctx.handler_token_stack, handler_token)
     if has_finally_block
-        # TODO: Trivial finally block optimization from JuliaLang/julia#52593 (or
-        # support a special form for @with)?
         finally_handler = FinallyHandler(new_local_binding(ctx, finally_block, "finally_tag"),
                                          JumpTarget(end_label, ctx))
         push!(ctx.finally_handlers, finally_handler)
@@ -618,34 +643,35 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     emit(ctx, catch_label) # <- Exceptional control flow enters here
     if has_finally_block
         @assert @isdefined(finally_handler) "compiler hint"
-        # Attribute the postfix and prefix to the finally block as a whole.
-        srcref = finally_block
-        enter_finally_block(ctx, srcref, :rethrow, nothing)
-        emit(ctx, end_label) # <- Non-exceptional control flow enters here
         pop!(ctx.finally_handlers)
+        push!(ctx.catch_token_stack, handler_token)
         compile(ctx, finally_block, false, false)
+        emit(ctx, @ast ctx finally_block [:call "rethrow"::top])
+        emit_return(ctx, nothing_(ctx, ex)) # unreachable
+        pop!(ctx.catch_token_stack)
+        emit(ctx, end_label) # <- Non-exceptional control flow enters here
+        compile(ctx, renumber_assigned_ssavalues(ctx, finally_block), false, false)
         # Finally block postfix: Emit a branch for every code path which enters
-        # the block to dynamically decide which return/break/rethrow exit action to take
-        for (tag, (on_exit, value)) in Iterators.reverse(enumerate(finally_handler.exit_actions))
+        # the block to dynamically decide which return/break exit action to take
+        for (tag, (on_exit, value)) in Iterators.reverse(
+                enumerate(finally_handler.exit_actions))
             next_action_label = !in_tail_pos || tag != 1 || on_exit != :return ?
-                make_label(ctx, srcref) : nothing
+                make_label(ctx, finally_block) : nothing
             if !isnothing(next_action_label)
-                tmp = ssavar(ctx, srcref, "do_finally_action")
-                emit(ctx, @ast ctx srcref [:(=) tmp
+                tmp = ssavar(ctx, finally_block, "do_finally_action")
+                emit(ctx, @ast ctx finally_block [:(=) tmp
                     [:call
                         "==="::core
                         finally_handler.tagvar
                         tag::value
                     ]
                 ])
-                emit(ctx, @ast ctx srcref [:gotoifnot tmp next_action_label])
+                emit(ctx, @ast ctx finally_block [:gotoifnot tmp next_action_label])
             end
             if on_exit === :return
                 emit_return(ctx, value)
             elseif on_exit === :break
                 emit_break(ctx, value)
-            elseif on_exit === :rethrow
-                emit(ctx, @ast ctx srcref [:call "rethrow"::top])
             else
                 @jl_assert false finally_block
             end
