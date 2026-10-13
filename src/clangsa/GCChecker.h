@@ -352,7 +352,9 @@ private:
   bool propagateArgumentRootedness(CheckerContext &C,
                                    ProgramStateRef &State) const;
   SymbolRef getSymbolForResult(const Expr *Result, bool ShouldConjure,
-                               ProgramStateRef &State, CheckerContext &C) const;
+                               ProgramStateRef &State, CheckerContext &C,
+                               bool AllowVoidPointee = false) const;
+  static const Expr *getDataCarrierOwner(const MemberExpr *ME);
 
 public:
   void checkBeginFunction(CheckerContext &Ctx) const;
@@ -366,7 +368,7 @@ public:
   void checkPostStmt(const UnaryOperator *UO, CheckerContext &C) const;
   void checkASTDecl(const Decl *D, AnalysisManager &Mgr, BugReporter &BR) const;
   void checkDerivingExpr(const Expr *Result, const Expr *Parent,
-                         CheckerContext &C) const;
+                         CheckerContext &C, bool IsDataCarrier = false) const;
 #if LLVM_VERSION_MAJOR >= 22
   void checkBind(SVal Loc, SVal Val, const Stmt *S, bool AtDeclInit, CheckerContext &) const;
 #else
