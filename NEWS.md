@@ -181,6 +181,10 @@ Build system changes
 * Builds now install `libjulia-internal.a` (`libjulia-internal-debug.a` for debug builds), a static
   build of the runtime without the JIT, so that tools such as JuliaC.jl can link it with a trimmed
   system image into one executable ([#63618]).
+* The stock garbage collector can be built with GC regions, `WITH_GC_REGIONS=1`: bounded
+  heaps that a program opens a window on, allocates into and frees at once, with an escape
+  barrier that `WITH_GC_REGION_BARRIER=0` builds out. Off by default, and the runtime
+  without the option is unchanged; see the developer documentation on GC regions ([#63038]).
 
 New library functions
 ---------------------
