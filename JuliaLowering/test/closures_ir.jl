@@ -502,34 +502,34 @@ f(x; a=1) do y
     y + 2
 end
 #---------------------
-1   TestMod.f
-2   (call core.tuple :a)
-3   (call core.apply_type core.NamedTuple %₂)
-4   (call core.tuple 1)
-5   (call %₃ %₄)
-6   (call core.svec)
-7   (call core.svec)
-8   (call core.svec)
-9   (call JuliaLowering.eval_closure_type TestMod :#5#6 %₆ %₇ %₈)
-10  latestworld
-11  TestMod.#5#6
-12  (new %₁₁)
-13  TestMod.#5#6
-14  (call core.svec %₁₃ core.Any)
-15  (call core.svec)
-16  SourceLocation:1
-17  (call core.svec %₁₄ %₁₅ %₁₆)
-18  (call core.define_method TestMod core.nothing %₁₇
+1   (call core.svec)
+2   (call core.svec)
+3   (call core.svec)
+4   (call JuliaLowering.eval_closure_type TestMod :#5#6 %₁ %₂ %₃)
+5   latestworld
+6   TestMod.#5#6
+7   (new %₆)
+8   TestMod.#5#6
+9   (call core.svec %₈ core.Any)
+10  (call core.svec)
+11  SourceLocation:1
+12  (call core.svec %₉ %₁₀ %₁₁)
+13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
     slots: [slot₁/#self#(!read) slot₂/y]
     1   TestMod.+
     2   (call %₁ slot₂/y 2)
     3   (return %₂)
-19  latestworld
-20  (= slot₁/#-># %₁₂)
-21  slot₁/#->#
+14  latestworld
+15  (= slot₁/#-># %₇)
+16  slot₁/#->#
+17  (call core.tuple :a)
+18  (call core.apply_type core.NamedTuple %₁₇)
+19  (call core.tuple 1)
+20  (call %₁₈ %₁₉)
+21  TestMod.f
 22  TestMod.x
-23  (call core.kwcall %₅ %₁ %₂₁ %₂₂)
+23  (call core.kwcall %₂₀ %₂₁ %₁₆ %₂₂)
 24  (return %₂₃)
 
 ########################################

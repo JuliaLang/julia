@@ -545,6 +545,19 @@ end
 @test_throws ArgumentError test_mod.S8((1,), ())
 @test_throws ArgumentError test_mod.S8((1,2,3), ())
 
+ex_ssa_double = quote
+    init!(l, args...; kwargs...) = l
+    mutable struct Logger
+        path
+        Logger(args...; kwargs...) = init!(new(), args...; kwargs...)
+    end
+    nameof(typeof(Logger(1; a = 2)))
+end
+let m = @newmod()
+@test jl_eval(m, ex_ssa_double; edition=JL_NEW_EDITION) ==
+    fl_eval(m, ex_ssa_double)
+end
+
 # empty-curly `new{}()`
 @test JuliaLowering.include_string(test_mod, """
 struct S_empty_new

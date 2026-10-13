@@ -87,12 +87,44 @@ let
 end
 """) == (c=3, d=0, a=1, e=5)
 
-@test JuliaLowering.include_string(test_mod, """
+@test jl_eval(test_mod, """
 let
     kws = (;)
     kwtest(; kws..., kws...)
 end
 """) == "non-kw version of kwtest"
+
+@test jl_eval(test_mod, """
+kwtest(;)
+""") == "non-kw version of kwtest"
+
+@test jl_eval(test_mod, """
+kwtest(; Base.identity)
+""") == (identity=Base.identity,)
+
+@test jl_eval(test_mod, """
+kwtest(; :k => 1)
+""") == (k=1,)
+
+@test jl_eval(test_mod, """
+let
+    p = (:b, 2)
+    nt = (c = 3,)
+    kwtest(; :a => 1, p[1] => p[2], nt.c)
+end
+""") == (a=1, b=2, c=3)
+
+# positional and kwargs should always be evaluated left-to-right
+@test jl_eval(test_mod, """
+let
+    log = Int[]
+    f(x) = (push!(log, x); x)
+    g(args...; kws...) = nothing
+    g(f(1), f(2); a = f(3), b = f(4))
+    g(f(5), a = f(6), f(7); b = f(8))
+    log
+end
+""") == 1:8
 
 # literal_pow
 @test JuliaLowering.include_string(test_mod, """
