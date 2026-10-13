@@ -207,9 +207,9 @@ windowserror(p, code::UInt32=Libc.GetLastError(); extrainfo=nothing) = throw(Mai
 
 # return a copy of `ex` without the location metadata of any inner macro calls,
 # which `string` would render as an absolute-path `#= file:line =#` comment
-function _strip_macrocall_linenums(@nospecialize ex)
+function strip_macrocall_linenums(@nospecialize ex)
     isa(ex, Expr) || return ex
-    args = Any[_strip_macrocall_linenums(a) for a in ex.args]
+    args = Any[strip_macrocall_linenums(a) for a in ex.args]
     if ex.head === :macrocall
         for i in eachindex(args)
             isa(args[i], LineNumberNode) && (args[i] = nothing)
@@ -249,10 +249,10 @@ macro assert(ex, msgs...)
         # message is an expression needing evaluating
         msg = :($_assert_tostring($(esc(msg))))
     elseif isdefined(Main, :Base) && isdefined(Main.Base, :string) && applicable(Main.Base.string, msg)
-        msg = Main.Base.string(_strip_macrocall_linenums(msg))
+        msg = Main.Base.string(strip_macrocall_linenums(msg))
     else
         # string() might not be defined during bootstrap
-        msg = :($_assert_tostring($(Expr(:quote, _strip_macrocall_linenums(msg)))))
+        msg = :($_assert_tostring($(Expr(:quote, strip_macrocall_linenums(msg)))))
     end
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end
