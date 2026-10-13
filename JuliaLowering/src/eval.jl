@@ -158,9 +158,9 @@ end
 function coverage_visit_line(mod, st)
     Base.JLOptions().code_coverage == 0 && return
     lno = Base.first_linenode(st)
+    (lno.line > 0 && lno.file isa Symbol) || return
     file = String(lno.file)
-    if lno.line > 0 && ccall(
-            :jl_coverage_enabled_for, Cint, (Any, Cstring), mod, file) != 0
+    if ccall(:jl_coverage_enabled_for, Cint, (Any, Cstring), mod, file) != 0
         ccall(:jl_coverage_visit_line, Cvoid, (Cstring, Csize_t, Cint),
               file, length(file), lno.line)
     end
