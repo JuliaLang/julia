@@ -10,9 +10,6 @@ if VERSION < v"1.4"
         return x[1]
     end
 end
-if VERSION < v"1.5"
-    import Base.peek
-end
 
 @static if VERSION < v"1.8"
     macro callsite_inline(call)
