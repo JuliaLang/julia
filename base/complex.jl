@@ -294,6 +294,12 @@ inv(z::Complex{<:Integer}) = inv(float(z))
 *(z::Complex, w::Complex) = Complex(real(z) * real(w) - imag(z) * imag(w),
                                     real(z) * imag(w) + imag(z) * real(w))
 
+-%(z::Complex) = Complex(-%(real(z)), -%(imag(z)))
++%(z::Complex, w::Complex) = Complex(real(z) +% real(w), imag(z) +% imag(w))
+-%(z::Complex, w::Complex) = Complex(real(z) -% real(w), imag(z) -% imag(w))
+*%(z::Complex, w::Complex) = Complex(real(z) *% real(w) -% imag(z) *% imag(w),
+                                     real(z) *% imag(w) +% imag(z) *% real(w))
+
 _mulsub(a, b, c) = _mulsub(promote(a, b, c)...)
 _mulsub(a::T, b::T, c::T) where {T<:Real} = muladd(a, b, -c)
 muladd(z::Complex, w::Complex, x::Complex) =

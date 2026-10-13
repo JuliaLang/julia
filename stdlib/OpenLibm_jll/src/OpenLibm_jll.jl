@@ -25,6 +25,7 @@ const libopenlibm = LazyLibrary(
     else
         BundledLazyLibraryPath("libopenlibm.so.4")
     end,
+    id = LibraryID(Base.UUID("05823500-19ac-5b8b-9628-191a04bc5112"), "libopenlibm"),
     dependencies = if Sys.iswindows()
         LazyLibrary[libgcc_s]
     else

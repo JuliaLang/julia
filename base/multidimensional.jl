@@ -964,8 +964,16 @@ Fallback to `iterate` by default, but optimized for indices type in `Base`.
 @propagate_inbounds _prechecked_iterate(iter) = iterate(iter)
 @propagate_inbounds _prechecked_iterate(iter, state) = iterate(iter, state)
 
-_prechecked_iterate(iter::AbstractUnitRange, i = first(iter)) = i, convert(eltype(iter), i + step(iter))
-_prechecked_iterate(iter::LinearIndices, i = first(iter)) = i, i + 1
+_prechecked_iterate(iter::AbstractUnitRange) = first(iter), first(iter)
+function _prechecked_iterate(iter::AbstractUnitRange, i)
+    i′ = convert(eltype(iter), i + step(iter))
+    return i′, i′
+end
+_prechecked_iterate(iter::LinearIndices) = first(iter), first(iter)
+function _prechecked_iterate(iter::LinearIndices, i)
+    i′ = i + 1
+    return i′, i′
+end
 _prechecked_iterate(iter::CartesianIndices) = first(iter), first(iter)
 function _prechecked_iterate(iter::CartesianIndices, i::CartesianIndex)
     i′ = IteratorsMD.inc(i.I, iter.indices)

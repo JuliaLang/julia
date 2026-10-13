@@ -1153,6 +1153,18 @@ let io = IOBuffer()
     @test !occursin("jtbaa_unionselbyte", str)
 end
 
+# JIT-compiled code refers to the installed Base sources in its debug info,
+# while relative file names of user code are left alone
+let ir = replace(sprint(io -> code_llvm(io, sum, Tuple{Vector{Int}}, dump_module=true, raw=true)), "\\5C" => "\\")
+    m = match(r"!DIFile\(filename: \"reduce\.jl\", directory: \"([^\"]*)\"", ir)
+    @test m !== nothing && samefile(joinpath(m[1], "reduce.jl"),
+                                    joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", "reduce.jl"))
+end
+let f = include_string(@__MODULE__, "difile_user_code(x) = x + 1", "int.jl")
+    ir = sprint(io -> code_llvm(io, f, Tuple{Int}, dump_module=true, raw=true))
+    @test occursin("!DIFile(filename: \"int.jl\", directory: \".\")", ir)
+end
+
 let io = IOBuffer()
     code_llvm(io, (x, y) -> (@atomic x[1] = y; nothing), (AtomicMemory{Pair{Any,Any}}, Pair{Any,Any},), raw=true, optimize=false)
     str = String(take!(io))

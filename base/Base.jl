@@ -142,11 +142,13 @@ Core.eval(Sys, :(include("osinfo.jl")))
 module Filesystem end # Filesystem is populated in stages during bootstrap
 Core.eval(Filesystem, :(include("path.jl")))
 using .Filesystem
+import Core: UUID
 include("libc.jl") # Libdl (include in libc.jl) is required for regex.jl
 using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 
 # More strings & printing
 include("regex.jl")
+include("parsers/Parsers.jl")
 include("parse.jl")
 include("shell.jl")
 const IRShow = Compiler.IRShow # an alias for compatibility
@@ -595,6 +597,7 @@ function __init__()
     init_depot_path()
     init_load_path()
     init_active_project()
+    init_debuginfo_source_paths()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
     empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
     empty!(checksums_valid)

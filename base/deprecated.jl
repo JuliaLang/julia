@@ -608,6 +608,10 @@ to_power_type(x) = oftype(x*x, x)
 +%(a::T, b::T) where {T} = +(a, b)
 -%(a::T, b::T) where {T} = -(a, b)
 
+*%(a::T, b::T) where {T<:IEEEFloat} = throw(MethodError(*%, (a, b)))
++%(a::T, b::T) where {T<:IEEEFloat} = throw(MethodError(+%, (a, b)))
+-%(a::T, b::T) where {T<:IEEEFloat} = throw(MethodError(-%, (a, b)))
+
 # Revise calls this
 function explicit_manifest_entry_path(args...)
     spec = explicit_manifest_entry_load_spec(args...)
