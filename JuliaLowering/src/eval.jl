@@ -144,10 +144,10 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         return Core.svec(:begin_module, version, newmod_name, notbare, loc)
     elseif k === :thunk && numchildren(ex) == 1
         return Core.svec(:thunk, Expr(:thunk, ex[1].value))
-    elseif (k === :error || k === :incomplete) && numchildren(ex) == 1
-        err = ex[1].value
-        throw(err isa String ? ErrorException(string("syntax: ", err)) : err)
     else
+        if (k === :error || k === :incomplete) && numchildren(ex) == 1
+            ex = _error_to_throw(ex)
+        end
         coverage_visit_line(mod, ex)
          ctx2, ex2 = expand_forms_2(ex, world)
          ctx3, ex3 = resolve_scopes(ctx2, ex2, !is_module_body; soft_scope)
@@ -156,6 +156,15 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         out = to_lowered_expr(ex5)
         return Core.svec((out isa Core.CodeInfo ? :value : :thunk), out)
     end
+end
+
+# We want a "top-level scope" stack frame (see `jl_eval_throw`)
+function _error_to_throw(ex)
+    err = ex[1].value
+    exc = err isa String ? ErrorException(string("syntax: ", err)) : err
+    isa_lowering_ast_node(exc) && throw(exc)
+    @mknode(ex; head=:call, children=Syntax[
+        newleaf(ex, :value, Core.throw), newleaf(ex, :value, exc)])
 end
 
 function coverage_visit_line(mod, st)
