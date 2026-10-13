@@ -752,6 +752,7 @@ end
 # typegroup: basic mutual recursion
 @test jl_eval(test_mod, """
 typegroup
+    "foo"
     struct TG_Node
         edges::Vector{TG_Edge}
     end

@@ -3715,7 +3715,7 @@ end
 
 struct TypeGroupEntry
     sdef::SyntaxTree                  # struct definition syntax node
-    docs::Union{Nothing, SyntaxTree}  # nothing or :doc node
+    docs::Vector{SyntaxTree}          # statements from the `Core.@doc` expansion
     typevar_names::Vector{SyntaxTree} # typevar names for this struct
     typevar_stmts::Vector{SyntaxTree} # typevar creation statements
     field_names::Vector{SyntaxTree}   # field name syntax nodes
@@ -3730,13 +3730,13 @@ end
 
 function expand_typegroup_def(ctx, ex)
     @jl_assert numchildren(ex) == 1 ex
-    body = flatten_blocks(ex[1])
+    body = ex[1]
     if head(body) != :block
         throw(LoweringError(body, "expected block for `typegroup` body"))
     end
 
     # Collect and analyze struct definitions from block children.
-    # A child can be a bare :struct or a :doc wrapping a :struct.
+    # A child can be a bare :struct or the expansion of `Core.@doc` on a :struct.
     entries = TypeGroupEntry[]
     struct_names = SyntaxList()   # local name bindings (splatted into AST)
     global_names = SyntaxList()   # global name bindings (splatted into AST)
@@ -3744,18 +3744,12 @@ function expand_typegroup_def(ctx, ex)
     struct_mod_prev = nothing
 
     for child in children(body)
-        if head(child) == :struct
-            sdef = child
-            docs = nothing
-        elseif head(child) == :doc
-            @jl_assert numchildren(child) == 2 child
-            sdef = child[2]
-            if head(sdef) != :struct
-                throw(LoweringError(sdef, "`typegroup` only supports `struct` definitions"))
-            end
-            docs = child
-        else
-            throw(LoweringError(child, "`typegroup` only supports `struct` definitions"))
+        (sdef, docs) = @stm child begin
+            [:struct _...] -> (child, SyntaxList())
+            ([:block [:if [:value] [:(=) _ s]] docs... _],
+             when=head(s) === :struct) ->
+                 (s, docs)
+            _ -> throw(LoweringError(child, "`typegroup` only supports `struct` definitions"))
         end
 
         @jl_assert numchildren(sdef) == 3 sdef
@@ -3924,11 +3918,11 @@ function expand_typegroup_def(ctx, ex)
     # 2h. Documentation — after constructors and latestworld so types are fully defined
     for i in 1:n
         e = entries[i]
-        if !isnothing(e.docs) || !isempty(e.field_docs)
-            push!(fdef_stmts, @ast ctx e.sdef [:call(isnothing(e.docs) ? e.sdef : e.docs)
+        if !isempty(e.field_docs)
+            push!(fdef_stmts, @ast ctx e.sdef [:call
                 bind_docs!::value
                 struct_names[i]
-                isnothing(e.docs) ? nothing_(ctx, e.sdef) : e.docs[1]
+                nothing_(ctx, e.sdef)
                 ::sourcelocation(e.sdef)
                 [:kw
                     "field_docs"::identifier
@@ -3936,6 +3930,7 @@ function expand_typegroup_def(ctx, ex)
                 ]
             ])
         end
+        append!(fdef_stmts, e.docs)
     end
 
     push!(fdef_stmts, nothing_(ctx, ex))
