@@ -23,13 +23,13 @@ end
 
 # same-file inline
 eval(Expr(:function, Expr(:call, :test_inline_1),
-          Expr(:block, Expr(:line, 99, Symbol("backtrace.jl")),
-                       Expr(:block, Expr(:line, 42),
+          Expr(:block, LineNumberNode(99, Symbol("backtrace.jl")),
+                       Expr(:block, LineNumberNode(42, Symbol("backtrace.jl")),
                                     Expr(:meta, :push_loc, Symbol("backtrace.jl"), :inlfunc),
-                                    Expr(:line, 37),
+                                    LineNumberNode(37, Symbol("backtrace.jl")),
                                     Expr(:call, :throw, "foo"),
                                     Expr(:meta, :pop_loc),
-                                    Expr(:line, 99)))))
+                                    LineNumberNode(99, Symbol("backtrace.jl"))))))
 
 @test functionloc(test_inline_1) == ("backtrace.jl", 99)
 try
@@ -49,12 +49,12 @@ end
 # different-file inline
 const absfilepath = Sys.iswindows() ? "C:\\foo\\bar\\baz.jl" : "/foo/bar/baz.jl"
 eval(Expr(:function, Expr(:call, :test_inline_2),
-          Expr(:block, Expr(:line, 81, Symbol("backtrace.jl")),
+          Expr(:block, LineNumberNode(81, Symbol("backtrace.jl")),
                        Expr(:block, Expr(:meta, :push_loc, Symbol(absfilepath)),
-                                    Expr(:line, 111),
+                                    LineNumberNode(111, Symbol("backtrace.jl")),
                                     Expr(:call, :throw, "foo"),
                                     Expr(:meta, :pop_loc),
-                                    Expr(:line, 99)))))
+                                    LineNumberNode(99, Symbol("backtrace.jl"))))))
 
 @test functionloc(test_inline_2) == ("backtrace.jl", 81)
 try

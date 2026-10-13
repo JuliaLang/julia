@@ -15,7 +15,7 @@ function code_coverage_test()
 end
 
 @eval short_form_func_coverage_test(x) = begin
-    $(Expr(:line, 1234))
+    $(LineNumberNode(1234))
     y() = begin
         x
     end
