@@ -1608,6 +1608,16 @@ static int var_occurs_invariant(jl_value_t *v, jl_tvar_t *var) JL_NOTSAFEPOINT
     return var_occurs_inside(v, var, 1);
 }
 
+// `var_occurs_invariant(u->body, u->var)`, memoized in `u->flags`
+static int unionall_body_occurs_inv(jl_unionall_t *u) JL_NOTSAFEPOINT
+{
+    int r = jl_unionall_flag(u, JL_UNIONALL_OCCURSINV_KNOWN, JL_UNIONALL_OCCURSINV);
+    if (r >= 0)
+        return r;
+    return jl_unionall_set_flag(u, JL_UNIONALL_OCCURSINV_KNOWN, JL_UNIONALL_OCCURSINV,
+                                var_occurs_invariant(u->body, u->var));
+}
+
 static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e) JL_CANSAFEPOINT
 {
     jl_varbinding_t *btemp = e->vars;
@@ -1703,7 +1713,7 @@ static int var_occurs_noncovariant_visit(jl_value_t *t, int pos, jl_typeenv_t *b
     // conservative for internal nodes (TypeApp, Intersect)
     if (jl_is_typeapp(t) || jl_is_intersecttype(t))
         return jl_has_typevar(t, (jl_tvar_t*)var) ? 1 : -1;
-    if (jl_is_datatype(t) && !((jl_datatype_t*)t)->hasfreetypevars)
+    if (jl_is_known_closed(t))
         return -1;
     return 0;
 }
@@ -1803,7 +1813,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     // `unalias_unionall` cannot see it; closed inputs have no such occurrences
     if (!e->closed_inputs && jl_has_typevar(t, u->var))
         u = jl_rename_unionall(u);
-    int body_occurs_inv = var_occurs_invariant(u->body, u->var);
+    int body_occurs_inv = unionall_body_occurs_inv(u);
     vb.var = u->var;
     vb.lb = u->var->lb;
     vb.ub = u->var->ub;
@@ -2784,7 +2794,7 @@ static int typeeq_var_bound_visit(jl_value_t *t, int pos, jl_typeenv_t *binders,
         return lookup_binding(ctx->e, (jl_tvar_t*)t, &inner) != NULL || inner ||
                typeeq_lookup_var(ctx->wenv, (jl_tvar_t*)t) != NULL;
     }
-    if (jl_is_datatype(t) && !((jl_datatype_t*)t)->hasfreetypevars)
+    if (jl_is_known_closed(t))
         return -1;
     return 0;
 }
@@ -4612,7 +4622,7 @@ static int var_occurs_inside_visit(jl_value_t *v, int pos, jl_typeenv_t *binders
         return (pos & (ctx->want_inv ? JL_WALK_INVARIANT : JL_WALK_PARAM)) != 0;
     if (jl_is_unionall(v) && ((jl_unionall_t*)v)->var == ctx->var)
         return -1; // shadowed
-    if (jl_is_datatype(v) && !((jl_datatype_t*)v)->hasfreetypevars)
+    if (jl_is_known_closed(v))
         return -1;
     return 0;
 }
@@ -4659,7 +4669,7 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t) JL_CANSAFEPOINT
                     var = jl_new_typevar(var->name, var->lb, ub);
                     body = jl_substitute_var(body, ((jl_unionall_t *)u)->var, (jl_value_t *)var);
                 }
-                res = jl_new_struct(jl_unionall_type, var, body);
+                res = jl_new_unionall(var, body);
             }
         }
         JL_GC_POP();
@@ -4890,9 +4900,9 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 has_typevar_via_flatten_env(vb->lb, ivar, allvars, checked) ||
                 has_typevar_via_flatten_env(vb->ub, ivar, allvars, checked)) {
                 if (innerflag & 1)
-                    *btemp->lb = jl_new_struct(jl_unionall_type, vb->var, ilb);
+                    *btemp->lb = jl_new_unionall(vb->var, ilb);
                 if (innerflag & 2)
-                    *btemp->ub = jl_new_struct(jl_unionall_type, vb->var, iub);
+                    *btemp->ub = jl_new_unionall(vb->var, iub);
             }
             else {
                 assert(btemp->root != vb);
@@ -5198,7 +5208,7 @@ static int var_occurs_in_inner_ub_visit(jl_value_t *v, int pos, jl_typeenv_t *bi
     // conservative for internal nodes (TypeApp, Intersect)
     if (jl_is_typeapp(v) || jl_is_intersecttype(v))
         return jl_has_typevar(v, (jl_tvar_t*)var) ? 1 : -1;
-    if (jl_is_datatype(v) && !((jl_datatype_t*)v)->hasfreetypevars)
+    if (jl_is_known_closed(v))
         return -1;
     return 0;
 }
@@ -5210,11 +5220,26 @@ static int never_occurs_in_inside_ub(jl_value_t *v, jl_tvar_t *var) JL_NOTSAFEPO
     return !var_occurs_in_inner_ub(v, 0, NULL, var);
 }
 
+// Setting constraintkind=1 for a covariant var is valid when it always occurs
+// covariantly and never in a triangular position (inside an inner binder's
+// upper bound); memoized in `u->flags` for the common covariant context
+static int unionall_always_cov(jl_unionall_t *u, jl_param_pos_t param) JL_NOTSAFEPOINT
+{
+    if (param != PARAM_COVARIANT)
+        return always_occurs_cov(u->body, u->var, param) && never_occurs_in_inside_ub(u->body, u->var);
+    int r = jl_unionall_flag(u, JL_UNIONALL_ALWAYSCOV_KNOWN, JL_UNIONALL_ALWAYSCOV);
+    if (r >= 0)
+        return r;
+    return jl_unionall_set_flag(u, JL_UNIONALL_ALWAYSCOV_KNOWN, JL_UNIONALL_ALWAYSCOV,
+                                always_occurs_cov(u->body, u->var, PARAM_COVARIANT) &&
+                                never_occurs_in_inside_ub(u->body, u->var));
+}
+
 static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param) JL_CANSAFEPOINT
 {
     jl_value_t *res = NULL;
     jl_savedenv_t se;
-    int body_occurs_inv = var_occurs_invariant(u->body, u->var);
+    int body_occurs_inv = unionall_body_occurs_inv(u);
     jl_varbinding_t vb;
     memset(&vb, 0, sizeof(vb));
     vb.var = u->var;
@@ -5227,8 +5252,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     JL_GC_PUSH4(&res, &vb.lb, &vb.ub, &vb.innervars);
     save_env(e, &se, 1);
     int noinv = !body_occurs_inv;
-    // Setting constraintkind=1 for covariant var might be invalid if it also occurs in triangular positions.
-    if (is_leaf_typevar(u->var) && noinv && always_occurs_cov(u->body, u->var, param) && never_occurs_in_inside_ub(u->body, u->var))
+    if (is_leaf_typevar(u->var) && noinv && unionall_always_cov(u, param))
         vb.constraintkind = 1;
     res = intersect_unionall_(t, u, e, R, param, &vb);
     vb.intersected = 1;
@@ -6728,7 +6752,7 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
         JL_GC_PUSH3(&newbody, &newvar, &type);
         if (body == newbody || jl_has_typevar(newbody, var)) {
             if (body != newbody)
-                type = jl_new_struct(jl_unionall_type, var, newbody);
+                type = jl_new_unionall(var, newbody);
             // n.b. we do not widen lb, since that would be the wrong direction
             jl_value_t *ub = var->ub;
             newvar = insert_nondiagonal(ub, troot, widen2ub);
