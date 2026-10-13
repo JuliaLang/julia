@@ -1238,7 +1238,8 @@ static bool try_emit_typed_copy(jl_codectx_t &ctx, Value *dst, const jl_aliasinf
 {
     // A memcpy cannot carry separate source and destination alias metadata.
     // Limit aggregate scalarization to small values commonly carried in registers.
-    constexpr uint64_t max_typed_copy_size = 16;
+    // (64 bytes covers e.g. the `size` of a 5-d Array or an `SVector{8,Float64}`.)
+    constexpr uint64_t max_typed_copy_size = 64;
     if (sz == 0 || is_volatile || sz > max_typed_copy_size || !jl_is_pointerfree(typ))
         return false;
     jl_datatype_t *dt = (jl_datatype_t*)typ;
@@ -1252,10 +1253,10 @@ static bool try_emit_typed_copy(jl_codectx_t &ctx, Value *dst, const jl_aliasinf
     if (chunk_bits < 8)
         return false;
     unsigned nchunks = copy_bits / chunk_bits;
-    if (nchunks > 3)
+    if (nchunks > 8)
         return false;
     Type *T = IntegerType::get(ctx.builder.getContext(), chunk_bits);
-    SmallVector<LoadInst*, 3> loads;
+    SmallVector<LoadInst*, 8> loads;
     uint64_t chunk_size = chunk_bits / 8;
     for (unsigned i = 0; i < nchunks; i++) {
         uint64_t offset = i * chunk_size;
@@ -1371,6 +1372,11 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
     bool isprivatemem = isa<AllocaInst>(src->stripInBoundsOffsets()) || ai_is_private(src_ai);
     bool hasptr = typ->layout->first_ptr >= 0;
     size_t npointers = hasptr ? typ->layout->npointers : 0;
+    // A pointer-free value is copied in one piece: keep the source and destination
+    // alias info separate where possible (a memcpy would merge them).
+    if (npointers == 0 && try_emit_typed_copy(ctx, dst, dst_ai, src, src_ai, x.typ, jl_datatype_size(typ),
+                                              align_dst, align_src, isVolatileStore))
+        return;
     size_t shrunken_size = split_value_size(typ).first;
     size_t off = 0;
     for (size_t i = 0; true; i++) {
@@ -1427,6 +1433,11 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
     std::tie(src, src_ai) = data_pointer_ai(ctx, value_to_pointer(ctx, x));
     bool hasptr = typ->layout->first_ptr >= 0;
     size_t npointers = hasptr ? typ->layout->npointers : 0;
+    // A pointer-free value is copied in one piece: keep the source and destination
+    // alias info separate where possible (a memcpy would merge them).
+    if (npointers == 0 && try_emit_typed_copy(ctx, dst, dst_ai, src, src_ai, x.typ, jl_datatype_size(typ),
+                                              align_dst, align_src, isVolatileStore))
+        return;
     size_t shrunken_size = split_value_size(typ).first;
     size_t off = 0;
     for (size_t i = 0; true; i++) {
