@@ -4756,7 +4756,7 @@ end
 
 function toml_egal(A::AbstractDict, B::AbstractDict)
     isa(A,IdDict) != isa(B,IdDict) && return false
-    length(A) != length(B) && return false
+    length(A)::Int != length(B)::Int && return false
     for pair in A
         !in(pair, B, toml_egal) && return false
     end
