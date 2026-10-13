@@ -753,10 +753,7 @@ IteratorSize(::Type{<:Count}) = IsInfinite()
 # `Count{Int, Int}`, `t` contains exactly one member, which has an
 # `IteratorSize` of type `Union{HasLength,HasShape}`.
 function predicate_reverse_zip_count(t::Tuple)
-    function f(x)
-        x isa Count{Int, Int}
-    end
-    s = Base.filter(!f, t)
+    s = Base.filter(!Base.Fix2(isa, Count{Int, Int}), t)
     (s isa Tuple{Any}) && (IteratorSize(only(s)) isa Union{HasLength,HasShape})
 end
 
