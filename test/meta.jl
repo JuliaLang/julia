@@ -48,7 +48,7 @@ using Base: popmeta!
 macro attach_meta(val, ex)
     esc(_attach_meta(val, ex))
 end
-_attach_meta(val, ex) = Base.pushmeta!(ex, Expr(:test, val))
+_attach_meta(val, ex) = Base.pushmeta!(ex, Symbol(:test, val))
 
 @attach_meta 42 function dummy()
     false
@@ -56,7 +56,7 @@ end
 let ast = only(code_lowered(dummy, Tuple{}))
     body = Expr(:block)
     body.args = ast.code
-    @test popmeta!(body, :test) == (true, [42])
+    @test popmeta!(body, :test42) == (true, [])
     @test popmeta!(body, :nonexistent) == (false, [])
 end
 
@@ -100,11 +100,12 @@ end
 # in the case multiple pushmeta!-based macros are combined
 @attach_meta 40 @attach_meta 41 @attach_meta 42 dummy_multi() = return nothing
 let ast = only(code_lowered(dummy_multi, Tuple{}))
+    @test filter(x -> Meta.isexpr(x, :meta), ast.code) == [Expr(:meta, :test40, :test41, :test42)]
     body = Expr(:block)
     body.args = ast.code
-    @test popmeta!(body, :test) == (true, [40])
-    @test popmeta!(body, :test) == (true, [41])
-    @test popmeta!(body, :test) == (true, [42])
+    @test popmeta!(body, :test40) == (true, [])
+    @test popmeta!(body, :test41) == (true, [])
+    @test popmeta!(body, :test42) == (true, [])
     @test popmeta!(body, :nonexistent) == (false, [])
 end
 
