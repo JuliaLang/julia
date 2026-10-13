@@ -236,6 +236,9 @@ for x in (Float16(1.0), 1.0f0, 1.0)
     show(buf, x)
     show(IOContext(buf, :compact => true), x)
 end
+# `@time_imports` report printing
+Base.print_time_imports_report(Base)
+Base.print_time_imports_report_init(Base)
 throw(InterruptException())
 """
 
