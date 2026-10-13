@@ -580,7 +580,7 @@ function DILineInfoPrinter(debuginfo, def, showtypes::Bool=false)
                     context_depth[] += 1
                     nctx != 1 && printstyled(io, started ? "│" : "┌", color=linecolor)
                 end
-                printstyled(io, " @ ", frame.file, color=linecolor)
+                printstyled(io, " @ ", Base.fixup_stdlib_path(String(frame.file)), color=linecolor)
                 if frame.line != typemax(frame.line) && frame.line != 0
                     printstyled(io, ":", frame.line, color=linecolor)
                 end
@@ -592,7 +592,7 @@ function DILineInfoPrinter(debuginfo, def, showtypes::Bool=false)
                         method_name(frame) === method || break
                         nctx += 1
                         push!(context, frame)
-                        printstyled(io, " @ ", frame.file, ":", frame.line, color=linecolor)
+                        printstyled(io, " @ ", Base.fixup_stdlib_path(String(frame.file)), ":", frame.line, color=linecolor)
                     end
                 end
                 println(io)
