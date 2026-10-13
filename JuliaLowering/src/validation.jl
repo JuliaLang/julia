@@ -1075,7 +1075,7 @@ vst1_splat_or_val(vcx, st) = @stm st begin
 end
 
 vst1_generator(vcx, st) = let
-    vcx = with(vcx; return_ok=false, toplevel=false, in_gscope=false)
+    vcx = with(vcx; return_ok=false, toplevel=false, in_gscope=false, in_loop=false)
     @stm st begin
         [:generator _] -> @fail(st, "`generator` requires >=2 args")
         [:generator val [:filter cond is...]] ->
@@ -1120,12 +1120,24 @@ vst1_non_arg_meta(vcx, st) = @stm st begin
     [:meta [:identifier]] -> pass()
     [:meta [:identifier] xs...] -> let m = syntax_name(st[1])
         if m === "nospecialize" || m === "specialize"
+            # TODO: identifiers are only meaningful directly in a function body
             all(vst1_ident_lhs, vcx, xs)
+        elseif m === "generated"
+            minlen(st, xs, 1) & maxlen(st, xs, 1) & vst1(vcx, xs[1])
         else
-            pass() # TODO
+            all(vst1_non_arg_meta_arg, vcx, xs)
         end
     end
-    [:meta _...] -> pass() # TODO
+    [:meta xs...] -> all(vst1_non_arg_meta_arg, vcx, xs)
+end
+vst1_non_arg_meta_arg(vcx, st) = @stm st begin
+    [:purity _...] -> vst1(vcx, st)
+    # [:optlevel [:value]] -> pass()
+    # [:compile [:value]] -> pass()
+    # [:infer [:value]] -> pass()
+    [:identifier] -> pass()
+    [:value] -> pass()
+    _ -> @fail(st, "unsupported `meta` argument")
 end
 
 #-------------------------------------------------------------------------------

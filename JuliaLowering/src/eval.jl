@@ -687,9 +687,9 @@ function _to_lowered_expr(ex::SyntaxTree)
     elseif k == :meta
         args = Any[_to_lowered_expr(e) for e in children(ex)]
         # Unpack :symbol QuoteNode as `Expr(:meta)` requires an identifier here.
-        arg1 = args[1]
-        @jl_assert (arg1 isa QuoteNode) ex
-        args[1] = arg1.value
+        for i in eachindex(args)
+            args[i] isa QuoteNode && (args[i] = args[i].value)
+        end
         Expr(:meta, args...)
     elseif k == :throw_undef_if_not
         Expr(k, Symbol(syntax_name(ex[1])), _to_lowered_expr(ex[2]))
