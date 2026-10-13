@@ -55,7 +55,7 @@ GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
 }
 
 typedef struct {
-    jl_value_t *gcroot[2];     // GC roots for strings [f_name, f_lib]
+    jl_value_t *gcroot[3];     // GC roots [f_name, f_lib, lib_id]
 
     // Static name resolution (compile-time known)
     const char *f_name;        // static function name
@@ -64,6 +64,7 @@ typedef struct {
     // Dynamic name resolution (simple runtime expressions)
     jl_value_t *f_name_expr;   // expression for function name
     jl_value_t *f_lib_expr;    // expression for library name
+    jl_value_t *lib_id;        // value returned by dlid() at definition time
 
     // Runtime pointer
     Value *jl_ptr;             // callable pointer expression result
@@ -202,7 +203,7 @@ static Value *runtime_sym_lookup(
             libname = ConstantExpr::getIntToPtr(ConstantInt::get(emission_context.DL.getIntPtrType(irbuilder.getContext()), (uintptr_t)symarg.f_lib), getPointerTy(irbuilder.getContext()));
         Value *nameval = stringConstPtr(emission_context, irbuilder, symarg.f_name);
         auto lookup = irbuilder.CreateCall(prepare_call_in(jl_builderModule(irbuilder), jldlsym_func),
-                    { libname, nameval, libptrgv });
+                    { libname, nameval, generic_global_ptr(libptrgv) });
         llvmf = lookup;
         setName(emission_context, llvmf, symarg.f_name + StringRef(".found"));
     }
@@ -655,6 +656,8 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
     out.jl_ptr = nullptr;
     out.gcroot[0] = nullptr;
     out.gcroot[1] = nullptr;
+    out.gcroot[2] = nullptr;
+    out.lib_id = nullptr;
 
     // Check if this is a tuple (normalized by julia-syntax.scm)
     if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_tuple_sym) {
@@ -679,8 +682,8 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
                 }
              }
         }
-        else if (nargs == 2) {
-            // Two element tuple: (func_name, lib_name)
+        else if (nargs == 2 || nargs == 3) {
+            // Three element tuple: (func_name, lib_ref, lib_id)
             jl_value_t *fname_arg = jl_array_ptr_ref(tuple_args, 0);
             jl_value_t *lib_arg = jl_array_ptr_ref(tuple_args, 1);
             out.f_name_expr = fname_arg;
@@ -707,6 +710,11 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
                 else if (jl_is_string(lib_val)) {
                     out.f_lib = jl_string_data(lib_val);
                 }
+            }
+
+            if (nargs == 3) {
+                out.lib_id = jl_array_ptr_ref(tuple_args, 2);
+                out.gcroot[2] = out.lib_id;
             }
         }
     }
@@ -744,7 +752,7 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_tuple_sym) {
         // Name lookup form
         native_sym_arg_t sym = {};
-        JL_GC_PUSH2(&sym.gcroot[0], &sym.gcroot[1]);
+        JL_GC_PUSH3(&sym.gcroot[0], &sym.gcroot[1], &sym.gcroot[2]);
         interpret_foreignsymbol(ctx, sym, arg);
         Value *res = runtime_sym_lookup(ctx, sym, ctx.f);
         JL_GC_POP();
@@ -1189,7 +1197,8 @@ static Value *box_ccall_result(jl_codectx_t &ctx, Value *result, Value *runtime_
 {
     // XXX: need to handle parameterized zero-byte types (singleton)
     const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
-    unsigned nb = DL.getTypeStoreSize(result->getType());
+    result = zext_struct_helper(ctx, result, julia_memory_access_type(result->getType(), rt));
+    unsigned nb = DL.getTypeAllocSize(result->getType());
     unsigned align = sizeof(void*); // Allocations are at least pointer aligned
     jl_aliasinfo_t ai = jl_is_mutable(rt) ? ctx.alias().mutab : ctx.alias().immut;
     Value *strct = emit_allocobj(ctx, nb, runtime_dt, true, align);
@@ -1324,18 +1333,19 @@ std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
             }
             if (jl_is_primitivetype(tti) && t->isIntegerTy()) {
                 // see pull req #978. need to annotate signext/zeroext for
-                // small integer arguments.
+                // small integer arguments. Small means narrower than 32 bits,
+                // as for `_BitInt(N)` in C, although `sizeof` rounds up to 4.
                 jl_datatype_t *bt = (jl_datatype_t*)tti;
-                size_t sz = jl_datatype_size(bt);
-                if (sz < 4) {
+                if (jl_datatype_size(bt) == 4 && ctx->TargetTriple.isRISCV64()) {
+                    // RISC-V sign-extends all 32-bit arguments to XLEN, and clang
+                    // counts any type stored in 4 bytes as 32-bit here.
+                    ab.addAttribute(Attribute::SExt);
+                }
+                else if (jl_datatype_nbits(bt) < 32) {
                     if (jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type))
                         ab.addAttribute(Attribute::SExt);
                     else
                         ab.addAttribute(Attribute::ZExt);
-                }
-                else if (sz == 4 && ctx->TargetTriple.isRISCV64()) {
-                    // RISC-V sign-extends all 32-bit arguments to XLEN.
-                    ab.addAttribute(Attribute::SExt);
                 }
             }
         }
@@ -1560,7 +1570,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     }
     assert(jl_is_symbol(cc_sym));
     native_sym_arg_t symarg = {};
-    JL_GC_PUSH4(&rt, &at, &symarg.gcroot[0], &symarg.gcroot[1]);
+    JL_GC_PUSH5(&rt, &at, &symarg.gcroot[0], &symarg.gcroot[1], &symarg.gcroot[2]);
 
     CallingConv::ID cc = CallingConv::C;
     bool llvmcall = false;
@@ -2414,8 +2424,10 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     else if (sret) {
         jlretboxed = sretboxed;
         if (!jlretboxed) {
-            // something alloca'd above is SSA
-            if (static_rt)
+            // something alloca'd above is SSA. A primitive is reloaded instead,
+            // keeping only its value bits: a C function returning `_BitInt(N)`
+            // leaves the bits above N unspecified.
+            if (static_rt && !jl_is_primitivetype(rt))
                 return mark_julia_slot(result, rt, NULL, ctx.alias().stack);
             ++SRetCCalls;
             result = ctx.builder.CreateLoad(zext_struct_type(sretty), result);

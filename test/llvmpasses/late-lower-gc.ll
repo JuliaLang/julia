@@ -284,6 +284,99 @@ define void @overaligned_gc_padding(<4 x ptr addrspace(10)> %values) {
 
 declare void @aligned_short_root_array(ptr align 64)
 
+; Calls tagged "julia.safepoint" by codegen carry memory effects derived from
+; Julia's inferred effects (add_fn_attrs_for_effects). They can still reach a
+; GC safepoint, so a tracked value live across such a call needs a root
+; whatever the effects claim (JuliaLang/julia#62613), and the effects must be
+; stripped so post-lowering passes see the frame stores as observable.
+
+declare i64 @safepoint_callee(i64)
+declare i64 @safepoint_gcstack_callee({}*** "gcstack", i64)
+declare i64 @readonly_helper(i64) #12
+
+; memory(argmem: read) on the call site.
+define {} addrspace(10)* @root_across_safepoint_argmem(i64 %a) {
+top:
+; CHECK-LABEL: @root_across_safepoint_argmem
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: [[SLOT1:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v, ptr [[SLOT1]]
+; CHECK-NEXT: call i64 @safepoint_callee(i64 %a) [[ATTRS_STRIPPED:#[0-9]+]]
+  %r = call i64 @safepoint_callee(i64 %a) #10
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret {} addrspace(10)* %v
+}
+
+; memory(read) on the call site.
+define {} addrspace(10)* @root_across_safepoint_readonly(i64 %a) {
+top:
+; CHECK-LABEL: @root_across_safepoint_readonly
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: [[SLOT2:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v, ptr [[SLOT2]]
+; CHECK-NEXT: call i64 @safepoint_callee(i64 %a) [[ATTRS_STRIPPED]]
+  %r = call i64 @safepoint_callee(i64 %a) #11
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret {} addrspace(10)* %v
+}
+
+; Indirect call carrying the attributes on the call site.
+define {} addrspace(10)* @root_across_safepoint_indirect(i64 %a, ptr %fp) {
+top:
+; CHECK-LABEL: @root_across_safepoint_indirect
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: [[SLOT3:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v, ptr [[SLOT3]]
+; CHECK-NEXT: call i64 %fp(i64 %a) [[ATTRS_STRIPPED]]
+  %r = call i64 %fp(i64 %a) #10
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret {} addrspace(10)* %v
+}
+
+; The readnone on the gcstack argument must be stripped as well: after this
+; pass the frame link store through pgcstack has to stay visible to the call.
+define {} addrspace(10)* @root_across_safepoint_gcstack(i64 %a) {
+top:
+; CHECK-LABEL: @root_across_safepoint_gcstack
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: [[SLOT4:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v, ptr [[SLOT4]]
+; CHECK-NEXT: call i64 @safepoint_gcstack_callee(ptr "gcstack" %pgcstack, i64 %a) [[ATTRS_STRIPPED]]
+  %r = call i64 @safepoint_gcstack_callee({}*** readnone "gcstack" %pgcstack, i64 %a) #10
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret {} addrspace(10)* %v
+}
+
+; Negative control: a genuinely readonly helper without "julia.safepoint" is
+; not a safepoint and must not force a frame.
+define {} addrspace(10)* @no_root_across_readonly_helper(i64 %a) {
+top:
+; CHECK-LABEL: @no_root_across_readonly_helper
+; CHECK-NOT: @julia.new_gc_frame
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+  %r = call i64 @readonly_helper(i64 %a)
+; CHECK: ret ptr addrspace(10) %v
+  ret {} addrspace(10)* %v
+}
+
+attributes #10 = { nounwind willreturn memory(argmem: read) "julia.safepoint" }
+attributes #11 = { nounwind willreturn memory(read) "julia.safepoint" }
+attributes #12 = { nounwind willreturn memory(argmem: read) }
+; CHECK: attributes [[ATTRS_STRIPPED]] = { nounwind willreturn "julia.safepoint" }
+
 !0 = !{i64 0, i64 23}
 !1 = !{!1}
 !2 = !{!7} ; scope list

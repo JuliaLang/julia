@@ -91,13 +91,13 @@ export_affecting_partition_flags(bpart::Core.BindingPartition) =
 function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core.BindingPartition, new_bpart::Core.BindingPartition, new_max_world::UInt)
     gr = b.globalref
 
-    (_, (ib, ibpart)) = walk_binding_partition(b, invalidated_bpart, new_max_world, false)
-    (_, (nb, nbpart)) = walk_binding_partition(b, new_bpart, new_max_world+1, false)
+    (_, ileaf) = walk_binding_partition(b, invalidated_bpart, new_max_world, false)
+    (_, nleaf) = walk_binding_partition(b, new_bpart, new_max_world+1, false)
 
     # `binding_access_key` captures everything inference/codegen accesses about a binding partition.
     # If this information does not change, we do not need to invalidate any code that inference created
     # because we know that the result will not change.
-    need_to_invalidate_code = binding_access_key(ib, ibpart) !== binding_access_key(nb, nbpart)
+    need_to_invalidate_code = binding_access_key(ileaf) !== binding_access_key(nleaf)
 
     need_to_invalidate_export = export_affecting_partition_flags(invalidated_bpart) !==
                                 export_affecting_partition_flags(new_bpart)
@@ -145,6 +145,12 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
                 latest_bpart = user_binding.partitions
                 latest_bpart.max_world == typemax(UInt) || continue
                 is_some_implicit(binding_kind(latest_bpart)) || continue
+                # A partition starting past `new_max_world` was created during this invalidation:
+                # either this binding was already re-resolved (it reaches `b` through more than one
+                # `using`) and queued then with its partitions on both sides of the change, or a
+                # resolution materialized it just now and nothing compiled depends on it yet. Either
+                # way there is nothing left to do here, and `latest_bpart` is not the old partition.
+                latest_bpart.min_world > new_max_world && continue
                 new_bpart = ccall(:jl_maybe_reresolve_implicit, Any, (Any, Csize_t), user_binding, new_max_world)
                 if need_to_invalidate_code || new_bpart !== latest_bpart
                     push!(queued_bindings, (convert(Core.Binding, user_binding), latest_bpart, new_bpart))

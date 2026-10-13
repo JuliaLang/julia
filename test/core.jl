@@ -442,6 +442,21 @@ end  |> only == Core.TypeEgal{typejoin(Int, UInt, Float64)}
 @test Base.type_parameter(Type{1}) === 1
 @test Base.type_parameter(Type{:sym}) === :sym
 
+# `Type{K}` for a kind `K` holds only `K` itself (and types equal to it), not every
+# instance of `K`, so `isa` must not reduce to a check of `typeof(x)` in a union
+isa_type_datatype(@nospecialize x) = isa(x, Union{Type{DataType}, Int})
+isa_egal_union(@nospecialize x) = isa(x, Union{Core.TypeEgal{Union}, Int})
+isa_type_anytype(@nospecialize x) = isa(x, Union{Type{Core.AnyType}, Int})
+for (f, T, members) in ((isa_type_datatype, Union{Type{DataType}, Int}, (DataType,)),
+                        (isa_egal_union, Union{Core.TypeEgal{Union}, Int}, (Union,)),
+                        (isa_type_anytype, Union{Type{Core.AnyType}, Int}, (Core.AnyType, Type)))
+    for x in (DataType, Union, UnionAll, Core.AnyType, Type, Int, Float64, 1, 1.0)
+        expected = x === 1 || any(m -> x === m, members)
+        @test isa(x, T) === expected
+        @test f(x) === expected
+    end
+end
+
 # `isType` covers both type-object kinds; use split predicates when exactness matters.
 @test Base.isType(Type{Int})
 @test Base.isType(Core.TypeEgal{Int})
@@ -6521,6 +6536,18 @@ mutable struct ANonIsBitsType
     v::Int64
 end
 @test Base.uniontypes(Union{Int64, ANonIsBitsType}) == Base.uniontypes(Union{ANonIsBitsType, Int64})
+# components differing only in value parameters
+@test Union{Val{1}, Val{2}} === Union{Val{2}, Val{1}}
+@test Union{Val{:a}, Val{:b}} === Union{Val{:b}, Val{:a}}
+@test Union{Val{true}, Val{false}} === Union{Val{false}, Val{true}}
+@test Union{Val{1.0}, Val{2.0}} === Union{Val{2.0}, Val{1.0}}
+@test Union{Val{'a'}, Val{'b'}} === Union{Val{'b'}, Val{'a'}}
+@test Union{Val{1}, Val{:a}} === Union{Val{:a}, Val{1}}
+@test Union{Val{1}, Val{:a}, Val{1.0}} === Union{Val{1.0}, Val{:a}, Val{1}}
+@test Base.uniontypes(Union{Val{1}, Val{-1}, Val{256}}) == Any[Val{-1}, Val{1}, Val{256}]
+@test Base.uniontypes(Union{Val{:b}, Val{:a}}) == Any[Val{:a}, Val{:b}]
+@test Base.uniontypes(Union{Val{:a}, Val{1}}) == Any[Val{1}, Val{:a}]
+@test Union{Pair{Val{1}, Val{2}}, Pair{Val{2}, Val{1}}} === Union{Pair{Val{2}, Val{1}}, Pair{Val{1}, Val{2}}}
 
 # issue 18933
 module GlobalDef18933
@@ -8235,6 +8262,8 @@ primitive type P36104 8 end
 const orig_P36104 = P36104
 primitive type P36104 16 end
 @test P36104 !== orig_P36104
+primitive type P36104 12 end # same size as 16 bits
+@test Core.bitsizeof(P36104) == 12
 
 # Malformed invoke
 f_bad_invoke(x::Int) = invoke(x, (Any,), x)
@@ -9191,8 +9220,14 @@ end
 #58434 bitsegal comparison of oddly sized fields
 primitive type ByteString58434 (18 * 8) end
 
-@test Base.datatype_isbitsegal(Tuple{ByteString58434}) == false
+@test Base.datatype_haspadding(Tuple{ByteString58434})
 @test Base.datatype_haspadding(Tuple{ByteString58434}) == !Base.ispacked(Tuple{ByteString58434})
+# padding must not affect egality or hashing
+let mk = t -> reinterpret(ByteString58434, t), x = ntuple(i -> UInt8(i), 18)
+    @test mk(x) === mk(x)
+    @test mk(x) !== mk(ntuple(i -> UInt8(i == 18 ? 0 : i), 18))
+    @test objectid(mk(x)) == objectid(mk(x))
+end
 
 # #60659 - Behavior of using'd ambiguous bindings
 module AmbiguousUsing60659

@@ -23,8 +23,8 @@ function is_incomplete(prompt_state)
 end
 
 function eval_ish(mod::Module, ex::SyntaxTree, do_eval::Bool, do_print_ir::Bool)
-    k = kind(ex)
-    if k == K"toplevel"
+    k = head(ex)
+    if k == :toplevel
         x = nothing
         for e in children(ex)
             x = eval_ish(mod, e, do_eval, do_print_ir)

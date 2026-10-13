@@ -22,8 +22,9 @@ for period in (:Year, :Quarter, :Month, :Week, :Day, :Hour, :Minute, :Second, :M
     # The period type is printed when output, thus it already implies its own typeinfo
     @eval Base.typeinfo_implicit(::Type{$period}) = true
     # Period accessors
-    typs = period in (:Microsecond, :Nanosecond) ? ["Time"] :
-           period in (:Hour, :Minute, :Second, :Millisecond) ? ["Time", "DateTime"] : ["Date", "DateTime"]
+    typs = period in (:Microsecond, :Nanosecond) ? ["Time", "Timestamp"] :
+           period in (:Hour, :Minute, :Second, :Millisecond) ? ["Time", "DateTime", "Timestamp"] :
+           ["Date", "DateTime", "Timestamp"]
     reference = period === :Week ? " For details see [`$accessor_str(::Union{Date, DateTime})`](@ref)." : ""
     for typ_str in typs
         @eval begin

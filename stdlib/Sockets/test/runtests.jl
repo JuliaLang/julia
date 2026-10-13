@@ -669,9 +669,16 @@ end
             map(wait, recvs)
         end
 
+        # Concurrent test runs on one host share its network namespace, so use an
+        # OS-assigned port, as fixed ports would receive each other's datagrams.
+        function create_sockets(addr::IPAddr)
+            a = create_socket(addr, 0)
+            port = getsockname(a)[2]
+            return a, create_socket(addr, port), create_socket(addr, port), port
+        end
+
         # First, test IPv4 broadcast
-        port = 2000
-        a, b, c = [create_socket(ip"0.0.0.0", port) for i in 1:3]
+        a, b, c, port = create_sockets(ip"0.0.0.0")
         try
             # bsd family do not allow broadcasting on loopbacks
             @static if !Sys.isbsd() || Sys.isapple()
@@ -691,13 +698,18 @@ end
         [close(s) for s in [a, b, c]]
 
         # Test ipv6 broadcast groups
-        a, b, c = [create_socket(ip"::", port) for i in 1:3]
+        a, b, c, port = create_sockets(ip"::")
         try
             # Exemplary Interface-local ipv6 multicast group, if we wanted this to actually be routed
             # to other computers, we should use a link-local or larger address scope group
             # bsd family and darwin do not allow broadcasting on loopbacks
             @static if !Sys.isbsd() && !Sys.isapple()
-                group = ip"ff11::6a75:6c69:61"
+                # Group membership is per interface, and Linux delivers a group's
+                # datagrams to every socket bound to the port while any socket on
+                # the host is a member, so a group shared with a concurrent run
+                # would still be received after leaving it. Use a random group ID, in
+                # the range RFC 3307 reserves for host-selected IDs.
+                group = IPv6(UInt128(0xff11) << 112 | rand(UInt128) >> 16 | 0x80000000)
                 join_multicast_group(a, group)
                 join_multicast_group(b, group)
 
@@ -761,16 +773,16 @@ end
 
 @testset "connect!" begin
     # test the method matching connect!(::TCPSocket, ::Sockets.InetAddr{T<:Base.IPAddr})
-    let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
-        srv = listen(addr)
+    let srv = listen(Sockets.InetAddr(ip"127.0.0.1", 0))
+        addr = Sockets.InetAddr(getsockname(srv)...)
         r = @async close(accept(srv))
         close(connect(addr))
         fetch(r)
         close(srv)
     end
 
-    let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
-        srv = listen(addr)
+    let srv = listen(Sockets.InetAddr(ip"127.0.0.1", 0))
+        addr = Sockets.InetAddr(getsockname(srv)...)
         r = @async close(srv)
         @test_throws Base._UVError("accept", Base.UV_ECONNABORTED) accept(srv)
         fetch(r)
@@ -786,8 +798,8 @@ end
 end
 
 @testset "iswritable" begin
-    let addr = Sockets.InetAddr(ip"127.0.0.1", 4445)
-        srv = listen(addr)
+    let srv = listen(Sockets.InetAddr(ip"127.0.0.1", 0))
+        addr = Sockets.InetAddr(getsockname(srv)...)
         let s = Sockets.TCPSocket()
             Sockets.connect!(s, addr)
             @test iswritable(s) broken=Sys.iswindows()
@@ -801,7 +813,8 @@ end
             close(s)
         end
         close(srv)
-        srv = listen(addr)
+        srv = listen(Sockets.InetAddr(ip"127.0.0.1", 0))
+        addr = Sockets.InetAddr(getsockname(srv)...)
         let s = Sockets.connect(addr)
             let c = accept(srv)
                 Base.errormonitor(@async try; write(c, c); finally; close(c); end)
@@ -908,8 +921,8 @@ end
 @static if !Sys.iswindows()
     # Issue #29234
     @testset "TCPSocket stdin" begin
-        let addr = Sockets.InetAddr(ip"127.0.0.1", 4455)
-            srv = listen(addr)
+        let srv = listen(Sockets.InetAddr(ip"127.0.0.1", 0))
+            addr = Sockets.InetAddr(getsockname(srv)...)
             s = connect(addr)
 
             @test success(pipeline(`$(Base.julia_cmd()) --startup-file=no -e "exit()" -i`, stdin=s))

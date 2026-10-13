@@ -282,3 +282,17 @@ dango() = "🍡"
     lines = helplines("dango")
     @test startswith(lines[1], "search: dango TestSuggestPublic.dango dingo")
 end
+
+@testset "readme of a module loaded from a bare file" begin
+    mktempdir() do dir
+        write(joinpath(dir, "BareReadmeMod.jl"), "__precompile__(false); module BareReadmeMod end")
+        write(joinpath(dir, "README.md"), "Bare readme")
+        pushfirst!(LOAD_PATH, dir)
+        try
+            m = Base.require(Base.PkgId("BareReadmeMod"))
+            @test REPL.find_readme(m) == joinpath(dir, "README.md")
+        finally
+            popfirst!(LOAD_PATH)
+        end
+    end
+end

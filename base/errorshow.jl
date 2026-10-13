@@ -834,7 +834,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             println(iob)
 
             m = parentmodule_before_main(method)
-            modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
+            modulecolor = get_stacktrace_color(m)
             print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
             push!(lines, takestring!(buf))
             push!(line_score, -(right_matches * 2 + (length(arg_types_param) < 2 ? 1 : 0)))
@@ -879,6 +879,12 @@ const update_stackframes_callback = Ref{Function}(identity)
 
 const STACKTRACE_MODULECOLORS = Iterators.Stateful(Iterators.cycle([:magenta, :cyan, :green, :yellow]))
 const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
+# Profile's package colors share the same color cycler.
+const STACKTRACE_COLORS_LOCK = ReentrantLock()
+
+function get_stacktrace_color(key, colordict=STACKTRACE_FIXEDCOLORS, colorcycler=STACKTRACE_MODULECOLORS)
+    return @lock STACKTRACE_COLORS_LOCK get!(() -> popfirst!(colorcycler), colordict, key)
+end
 
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
 
@@ -903,8 +909,9 @@ function _backtrace_find_and_remove_cycles(t)
 
     while t_curr ≤ length(t)
         t_this = t_curr
-        (last_frame, n) = t[t_curr]
-        current_hash = hash(t[t_curr])
+        entry = t[t_curr]::Tuple{StackFrame,Int}
+        (last_frame, n) = entry
+        current_hash = hash(entry)
         positions = get(recorded_positions, current_hash,  Int[])
 
         t_curr += 1
@@ -920,7 +927,7 @@ function _backtrace_find_and_remove_cycles(t)
             # walk trace at current and previous matching positions until matching stops
             t_curr_end = t_curr
             t_prev_end = t_prev
-            while t_curr_end < length(t) && t[t_curr_end] == t[t_prev_end]
+            while t_curr_end < length(t) && t[t_curr_end]::Tuple{StackFrame,Int} == t[t_prev_end]::Tuple{StackFrame,Int}
                 t_curr_end += 1
                 t_prev_end += 1
             end
@@ -995,7 +1002,7 @@ function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeat
     current_cycles = NTuple{4, Int}[] # adding a value to track amount to advance frame_counter when cycle is closed
 
     for i in eachindex(trace)
-        (frame, n) = trace[i]
+        (frame, n) = trace[i]::Tuple{StackFrame,Int}
 
         ncycle_starts = 0
         while repeated_cycles[1][1] == i
@@ -1028,7 +1035,7 @@ function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested
     m = Base.parentmodule(frame)
     modulecolor = if m !== nothing
         m = parentmodule_before_main(m)
-        get!(() -> popfirst!(modulecolorcycler), modulecolordict, m)
+        get_stacktrace_color(m, modulecolordict, modulecolorcycler)
     else
         :default
     end
@@ -1048,12 +1055,13 @@ parentmodule_before_main(x) = parentmodule_before_main(parentmodule(x))
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
 function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested_cycles::Int, nactive_cycles::Int, ncycle_starts::Int, modulecolor; prefix = nothing)
-    file, line = string(frame.file), frame.line
+    file = string(frame.file)
+    fl = StackTraces.frame_location(frame)
 
     # Used by the REPL to make it possible to open
     # the location of a stackframe/method in the editor.
     if haskey(io, :last_shown_line_infos)
-        push!(io[:last_shown_line_infos], (string(frame.file), frame.line))
+        push!(io[:last_shown_line_infos], (string(frame.file), fl.line))
     end
 
     inlined = getfield(frame, :inlined)
@@ -1081,13 +1089,16 @@ function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested
     printstyled(io, "│" ^ nactive_cycles; color = :light_black)
 
     # @ Module path / file : line
-    print_module_path_file(io, modul, file, line; modulecolor, digit_align_width = digit_align_width - 1)
+    print_module_path_file(
+        io, modul, file, fl.line, fl.col;
+        modulecolor, digit_align_width = digit_align_width - 1)
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
 end
 
-function print_module_path_file(io, modul, file, line; modulecolor = :light_black, digit_align_width = 0)
+function print_module_path_file(io, modul, file, line, col = 0;
+                                modulecolor = :light_black, digit_align_width = 0)
     printstyled(io, " " ^ digit_align_width * "@", color = :light_black)
 
     # module
@@ -1104,8 +1115,10 @@ function print_module_path_file(io, modul, file, line; modulecolor = :light_blac
     dir = dirname(file)
     !isempty(dir) && printstyled(io, dir, Filesystem.path_separator, color = :light_black)
 
-    # filename, separator, line
-    printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
+    # filename, separator, line (`?` if unknown), column if available
+    printstyled(io, basename(file), ":", line >= 0 ? line : "?"; color = :light_black, underline = true)
+    col != 0 && printstyled(io, ":", col; color = :light_black, underline = true)
+    nothing
 end
 
 #=
@@ -1147,7 +1160,7 @@ function show_backtrace(io::IO, t::Vector; prefix = nothing)
     end
     isempty(filtered) && return
 
-    nframes = sum(last(x) for x ∈ filtered)
+    nframes = sum(last(x::Tuple{StackFrame,Int}) for x ∈ filtered)
 
     # don't show a single top-level frame with no location info
     if nframes == 1 && StackTraces.is_top_level_frame(filtered[1][1])
@@ -1162,7 +1175,7 @@ function show_backtrace(io::IO, t::Vector; prefix = nothing)
         filtered, repeated_cycles, max_nested_cycles = _backtrace_find_and_remove_cycles(filtered)
     else
         repeated_cycles = NTuple{3, Int}[]
-        max_nested_cycles = any(x -> last(x) > 1, filtered) ? 1 : 0
+        max_nested_cycles = any(x -> last(x::Tuple{StackFrame,Int}) > 1, filtered) ? 1 : 0
     end
 
     # Allow external code to edit information in the frames (e.g. line numbers with Revise)
@@ -1177,7 +1190,8 @@ function _backtrace_collapse_and_count_repeated_frames(frames::Vector{StackFrame
     last_frame = StackTraces.UNKNOWN
     tracecount = Any[]
     for frame in frames
-        if frame.file != last_frame.file || frame.line != last_frame.line || frame.func != last_frame.func || frame.linfo !== last_frame.linfo
+        if frame.file != last_frame.file || frame.line != last_frame.line || frame.func != last_frame.func || frame.linfo !== last_frame.linfo ||
+                StackTraces.frame_location(frame).col != StackTraces.frame_location(last_frame).col
             if n > 0
                 push!(tracecount, (last_frame, n))
             end
@@ -1221,7 +1235,8 @@ function _backtrace_simplify_include_frames!(trace)
         frame::StackFrame, _ = trace[i]
         mod = parentmodule(frame)
         if mod === Base && frame.func === :IncludeInto ||
-           mod === Core && frame.func === :EvalInto
+           mod === Core && frame.func === :EvalInto ||
+           mod === Base && frame.func === :fl_toplevel_eval
             kept_frames[i] = false
         elseif first_ignored === nothing
             if mod === Base && frame.func === :_include
@@ -1531,6 +1546,8 @@ end
 Experimental.register_error_hint(fielderror_dict_hint_handler, FieldError)
 
 function fielderror_listfields_hint_handler(io, exc)
+    # e.g. `fieldtype(Integer, :a)`: abstract types have no definite fields to list
+    fieldcount_noerror(exc.type) === nothing && return
     fields = fieldnames(exc.type)
     if isempty(fields)
         print(io, "; $(exc.type.name.wrapper) has no fields at all.")
@@ -1688,3 +1705,28 @@ function show(io::IO, ::MIME"text/plain", stack::ExceptionStack)
     show_exception_stack(io, stack)
 end
 show(io::IO, stack::ExceptionStack) = show(io, MIME("text/plain"), stack)
+
+# detect the reason which caused an :incomplete expression
+# from the error message
+# NOTE: the error messages are defined in src/julia-parser.scm
+incomplete_tag(ex) = :none
+function incomplete_tag(ex::Expr)
+    if ex.head !== :incomplete
+        return :none
+    elseif isempty(ex.args)
+        return :other
+    else
+        a = ex.args[1]
+        if a isa String
+            occursin("string", a) && return :string
+            occursin("comment", a) && return :comment
+            occursin("requires end", a) && return :block
+            occursin("\"`\"", a) && return :cmd
+            occursin("character", a) && return :char
+            return :other
+        else
+            return incomplete_tag(a)::Symbol
+        end
+    end
+end
+incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)

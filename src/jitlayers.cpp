@@ -239,6 +239,7 @@ static std::string make_name_unique(Ts... args) JL_NOTSAFEPOINT
     std::string name;
     raw_string_ostream s{name};
     (s << ... << args);
+    assert(name.empty() || !isDigit(name.back())); // see jl_name_counter_t
     s << global_name_counter.fetch_add(1, memory_order_relaxed);
     return name;
 }
@@ -811,8 +812,9 @@ void JLDebuginfoPlugin::notifyMaterializingWithInfo(
     auto NewObj =
         cantFail(object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef()));
 
+    // n.b. Objects added through the external API have no LinkerInfo.
     SmallVector<std::pair<_Atomic(uint64_t) *, jitlink::Symbol *>, 0> CoverageCounters;
-    if (!LinkerInfo->coverage_counters.empty()) {
+    if (LinkerInfo && !LinkerInfo->coverage_counters.empty()) {
         StringMap<jitlink::Symbol *> DefinedSymbols;
         for (auto *Sym : G.defined_symbols()) {
             if (Sym->hasName())
@@ -1966,10 +1968,10 @@ JuliaOJIT::JuliaOJIT()
     libhandles.insert(jl_exe_handle);
 #ifdef _OS_WINDOWS_
     // Find where compiler symbols (assumed by LLVM) are linked from
-    // by looking for an exported data symbol, or by typical name.
-    // libgcc_s_seh-1 doesn't export any data, so we have to hard-code a name.
+    // by looking for an exported data symbol, or by name.
+    // libgcc_s doesn't export any data, so we use its name from Make.inc.
     // libwinpthreads-1 exports a single symbol: the pthread_key_dest table.
-    libhandles.insert(jl_dlopen("libgcc_s_seh-1.dll", JL_RTLD_NOLOAD));
+    libhandles.insert(jl_dlopen(JL_LIBGCC_NAME, JL_RTLD_NOLOAD));
     libhandles.insert(jl_find_dynamic_library_by_addr((void*)&_pthread_key_dest, /* throw_err */ 1, 0));
     // Add system C libraries explicitly too.
     // Unlike posix, these aren't automatically handled by recursive search from libjulia-internal.
@@ -2617,7 +2619,12 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
         ++i;
         ++LinkedGlobals;
     }
-    cantFail(JD.define(orc::absoluteSymbols(std::move(GlobalSyms))));
+    // Not cantFail, which only checks in LLVM assertion builds: on a name
+    // collision, code would silently use another global.
+    if (auto Err = JD.define(orc::absoluteSymbols(std::move(GlobalSyms)))) {
+        logAllUnhandledErrors(std::move(Err), errs(), "Failed to define global symbols in JIT: ");
+        abort();
+    }
 
     DebuginfoPlugin->notifyMaterializingWithInfo(MR, G, ObjBuf, std::move(Info));
     return true;
@@ -2710,13 +2717,18 @@ CISymbolPtr *JuliaOJIT::linkCISymbol(jl_code_instance_t *CI)
     SymbolMap Symbols;
     const char *Name = jl_symbol_name(jl_get_ci_mi(CI)->def.method->name);
 
-    auto SpecSym = mangle(Names(jl_symbol_prefix(JL_SYMBOL_SPECPTR_IMG, API), "#", Name));
+    auto SpecSym = mangle(Names(jl_symbol_prefix(JL_SYMBOL_SPECPTR_IMG, API), "#", Name, "#"));
     Symbols[SpecSym] = {ExecutorAddr::fromPtr(SpecPtr), JITSymbolFlags::Exported};
     if (API == JL_INVOKE_SPECSIG) {
-        InvokeSym = mangle(Names(jl_symbol_prefix(JL_SYMBOL_INVOKE_IMG, API), "#", Name));
+        InvokeSym = mangle(Names(jl_symbol_prefix(JL_SYMBOL_INVOKE_IMG, API), "#", Name, "#"));
         Symbols[InvokeSym] = {ExecutorAddr::fromPtr(Invoke), JITSymbolFlags::Exported};
     }
-    cantFail(JD.define(orc::absoluteSymbols(Symbols)));
+    // Not cantFail, which only checks in LLVM assertion builds: on a name
+    // collision, calls would silently be linked to another method.
+    if (auto Err = JD.define(orc::absoluteSymbols(Symbols))) {
+        logAllUnhandledErrors(std::move(Err), errs(), "Failed to define image function symbols in JIT: ");
+        abort();
+    }
 
     auto &CISym = CISymbols[CI] = {API, InvokeSym, SpecSym};
     return &CISym;

@@ -2466,6 +2466,11 @@ end
     @test all(x -> (m=mod1(x,3); 0<m<=3), -5:+5)
     @test all(x -> x == (cld(x,3)-1)*3 + mod1(x,3), -5:+5)
     @test all(x -> cldmod1(x,3) == (cld(x,3), mod1(x,3)), -5:+5)
+    # the legacy names promote mixed arguments first, unlike `cld`
+    @test fld1(0x05, -3) === -1
+    @test fldmod1(0x05, -3) === (-1, -1)
+    @test fld1(0x05, 3) === 2
+    @test_throws InexactError fld1(UInt(5), -3)
 end
 #Issue #5570
 @test map(x -> Int(mod1(UInt(x),UInt(5))), 0:15) == [5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5]

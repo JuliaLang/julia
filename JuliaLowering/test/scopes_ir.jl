@@ -77,7 +77,7 @@ end
 8   TestMod.#f#f##0
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::1:4
+11  SourceLocation:1
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
@@ -89,7 +89,7 @@ end
 16  (return core.nothing)
 
 ########################################
-# Error: Invalid `let` var with K"::"
+# Error: Invalid `let` var with :(::)
 let f[]::T = rhs
 end
 #---------------------
@@ -146,7 +146,7 @@ end
 5   (call core.TypeEqOf %₄)
 6   (call core.svec %₅ core.Any)
 7   (call core.svec)
-8   SourceLocation::3:5
+8   SourceLocation:3
 9   (call core.svec %₆ %₇ %₈)
 10  (call core.define_method TestMod TestMod.f %₉
     --- code_info
@@ -200,7 +200,7 @@ end
 5   (call core.TypeEqOf %₄)
 6   (call core.svec %₅ %₃)
 7   (call core.svec %₃)
-8   SourceLocation::1:1
+8   SourceLocation:1
 9   (call core.svec %₆ %₇ %₈)
 10  (call core.define_method TestMod TestMod.f %₉
     --- code_info
@@ -419,7 +419,7 @@ end
 9   (call core.TypeEqOf %₈)
 10  (call core.svec %₉ core.Any)
 11  (call core.svec)
-12  SourceLocation::2:11
+12  SourceLocation:2
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- code_info
     slots: [slot₁/#self#(!read) slot₂/y]
@@ -439,7 +439,7 @@ end
 24  (call core.TypeEqOf %₂₃)
 25  (call core.svec %₂₄)
 26  (call core.svec)
-27  SourceLocation::3:11
+27  SourceLocation:3
 28  (call core.svec %₂₅ %₂₆ %₂₇)
 29  --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
@@ -475,7 +475,7 @@ end
 9   (call core.TypeEqOf %₈)
 10  (call core.svec %₉)
 11  (call core.svec)
-12  SourceLocation::2:11
+12  SourceLocation:2
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]

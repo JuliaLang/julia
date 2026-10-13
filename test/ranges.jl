@@ -1695,6 +1695,17 @@ end
     @test r[1] == Float16(0.1094)
     @test r[end] == Float16(0.9697)
 end
+@testset "Float16 ranges start at their start value" begin
+    a, st, b = Float16(-0.31), Float16(0.18), Float16(2.932)
+    @test first(a:st:b) === a
+    @test first(range(a, step=st, length=10)) === a
+    @test first(StepRangeLen{Float16}(a:st:b)) === a
+    for i in -999:7:999, j in 1:13:300
+        a, st = Float16(i / 100), Float16(j / 100)
+        @test first(a:st:Float16(a + 5st)) === a
+        @test first(range(a, step=st, length=5)) === a
+    end
+end
 
 # issue #20382
 let r = @inferred((:)(big(1.0),big(2.0),big(5.0)))

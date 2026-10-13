@@ -46,10 +46,16 @@ end
 
 # ignore_linenums=false is good for checking, but too noisy to use much
 function expr_equal_forgiving(e1, e2; ignore_linenums=true)
-    if e1 isa QuoteNode && e2 isa QuoteNode
+    typeof(e1) == typeof(e2) || return false
+    if e1 isa QuoteNode
         return expr_equal_forgiving(e1.value, e2.value; ignore_linenums)
+    elseif e1 isa LineNumberNode && !ignore_linenums
+        e1.file === nothing && (e1 = LineNumberNode(e1.line, :var""))
+        e2.file === nothing && (e2 = LineNumberNode(e2.line, :var""))
+    elseif e1 isa Core.MacroSource
+        return true # todo: remove this case
     end
-    !(e1 isa Expr && e2 isa Expr) && return e1 == e2
+    !(e1 isa Expr) && return e1 == e2
     if ignore_linenums
         e1, e2 = let e1b = Expr(e1.head), e2b = Expr(e2.head)
             e1b.args = filter(x->!(x isa LineNumberNode), e1.args)
@@ -100,11 +106,11 @@ end
     ]
 
     # TODO: `@ast_` escaping is broken
-    unused = JuliaSyntax.parsestmt(JuliaSyntax.SyntaxTree, "foo")
+    unused = JuliaSyntax.parsestmt(SyntaxTree, "foo")
     local st_wrappers = Function[
-        x->(@ast _ unused (x::K"Value"))
-        x->(@ast _ unused [K"inert" x::K"Value"])
-        x->(@ast _ unused [K"function" x::K"Value"])
+        x->(@ast _ unused (x::value))
+        x->(@ast _ unused [:inert x::value])
+        x->(@ast _ unused [:function x::value])
     ]
 
     @testset "every basic case" begin
@@ -122,14 +128,14 @@ end
     end
 
     @testset "special cases: Value implicitly quotes AST nodes" begin
-        @test JL.est_to_expr(@ast_ :foo::K"Value") ==
-            JL.est_to_expr(@ast_ [K"inert" "foo"::K"Identifier"]) ==
+        @test JL.est_to_expr(@ast_ :foo::value) ==
+            JL.est_to_expr(@ast_ [:inert "foo"::identifier]) ==
             QuoteNode(:foo)
-        @test JL.est_to_expr(@ast_ Expr(:call, 1)::K"Value") ==
-            JL.est_to_expr(@ast_ [K"inert" [K"call" 1::K"Value"]]) ==
+        @test JL.est_to_expr(@ast_ Expr(:call, 1)::value) ==
+            JL.est_to_expr(@ast_ [:inert [:call 1::value]]) ==
             QuoteNode(Expr(:call, 1))
-        @test JL.est_to_expr(@ast_ QuoteNode(Expr(:call, 1))::K"Value") ==
-            JL.est_to_expr(@ast_ [K"inert" [K"inert" [K"call" 1::K"Value"]]]) ==
+        @test JL.est_to_expr(@ast_ QuoteNode(Expr(:call, 1))::value) ==
+            JL.est_to_expr(@ast_ [:inert [:inert [:call 1::value]]]) ==
             QuoteNode(QuoteNode(Expr(:call, 1)))
     end
 
@@ -183,16 +189,16 @@ end
         st = JuliaLowering.expr_to_est(ex, LineNumberNode(1))
 
         # sanity: ensure we're testing the tree we expect
-        @test st ≈ @ast_ [K"block"
-            [K"try"
-                [K"block"
-                    "maybe"::K"Identifier"
-                    "lots"::K"Identifier"
-                    "of"::K"Identifier"
-                    "lines"::K"Identifier"
+        @test st ≈ @ast_ [:block
+            [:try
+                [:block
+                    "maybe"::identifier
+                    "lots"::identifier
+                    "of"::identifier
+                    "lines"::identifier
                 ]
-                "exc"::K"Identifier"
-                [K"block" "y"::K"Identifier"]
+                "exc"::identifier
+                [:block "y"::identifier]
             ]
         ]
 
@@ -214,10 +220,10 @@ end
                       Expr(:call, :f),
                       :body))
         )
-        @test st_shortfunc ≈ @ast_ [K"block"
-            [K"="
-                [K"call" "f"::K"Identifier"]
-                "body"::K"Identifier"
+        @test st_shortfunc ≈ @ast_ [:block
+            [:(=)
+                [:call "f"::identifier]
+                "body"::identifier
             ]
         ]
         @test let lnn = st_shortfunc[1][1].source; lnn isa LineNumberNode && lnn.line === 11; end
@@ -231,10 +237,10 @@ end
                            LineNumberNode(22),
                            :body)))
         )
-        @test st_shortfunc_2 ≈ @ast_ [K"block"
-            [K"="
-                [K"call" "f"::K"Identifier"]
-                [K"block" "body"::K"Identifier"]
+        @test st_shortfunc_2 ≈ @ast_ [:block
+            [:(=)
+                [:call "f"::identifier]
+                [:block "body"::identifier]
             ]
         ]
         @test let lnn = st_shortfunc_2[1][1].source; lnn isa LineNumberNode && lnn.line === 22; end
@@ -493,7 +499,9 @@ test_toplevel_programs = [
                 a,b,c
             end
             """
-            @test JL.est_to_expr(JS.parsestmt(SyntaxTree, s)) == JS.parsestmt(Expr, s)
+            @test expr_equal_forgiving(
+                JL.est_to_expr(JS.parsestmt(SyntaxTree, s)),
+                JS.parsestmt(Expr, s); ignore_linenums=false)
         end
         @testset "linenodes equal in `for`" begin
             s = """
@@ -501,30 +509,32 @@ test_toplevel_programs = [
                 a,b,c
             end
             """
-            @test JL.est_to_expr(JS.parsestmt(SyntaxTree, s)) == JS.parsestmt(Expr, s)
+            @test expr_equal_forgiving(
+                JL.est_to_expr(JS.parsestmt(SyntaxTree, s)),
+                JS.parsestmt(Expr, s); ignore_linenums=false)
         end
     end
 
     # empty let block linenumbernode is accepted by lowering
     fl_eval(test_mod, Expr(:let, Expr(:block, LineNumberNode(1)), Expr(:block, 1))) == 1
-    jl_eval(test_mod, Expr(:let, Expr(:block, LineNumberNode(1)), Expr(:block, 1))) == 1
+    jl_eval(test_mod, Expr(:let, Expr(:block, LineNumberNode(1)), Expr(:block, 1)); edition=JL_NEW_EDITION) == 1
 end
 
 @testset "non-ASCII operator handling" begin
     # regression test for invalid string index
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     @noinline (x = 0xF; x ⊻= 1; x)
-    """; expr_compat_mode=true) == 0xE
+    """; edition=JL_OLD_EDITION) == 0xE
 end
 
 @testset "Expr(:ssavalue) conversion" begin
-    # Expr(:ssavalue, N) should be converted to [K"ssavalue" N::K"Value"]
+    # Expr(:ssavalue, N) should be converted to [:ssavalue N::value]
     st = JuliaLowering.expr_to_est(Expr(:ssavalue, 0))
-    @test kind(st) === K"ssavalue"
+    @test head(st) === :ssavalue
     @test st[1].value == 0
 
     st = JuliaLowering.expr_to_est(Expr(:ssavalue, 42))
-    @test kind(st) === K"ssavalue"
+    @test head(st) === :ssavalue
     @test st[1].value == 42
 
     # Roundtrip: ssavalue should convert back to Expr(:ssavalue, N)
@@ -541,61 +551,61 @@ end
 end
 
 @testset "expr compat: #self# becomes `thisfunction`" begin
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     (function var_self()
         var"#self#"
     end)()
-    """; expr_compat_mode=true) isa Function
+    """; edition=JL_OLD_EDITION) isa Function
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     (let
         ()->(var"#self#")
     end)()
-    """; expr_compat_mode=true) isa Function
+    """; edition=JL_OLD_EDITION) isa Function
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     var_self_short() = var"#self#"
     var_self_short()
-    """; expr_compat_mode=true) isa Function
+    """; edition=JL_OLD_EDITION) isa Function
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     macro var_self_macro(); var"#self#"; end
     @var_self_macro
-    """; expr_compat_mode=true) isa Function
+    """; edition=JL_OLD_EDITION) isa Function
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     (function var_self_kw(; k=1)
         var"#self#"
     end)()
-    """; expr_compat_mode=true) isa Function
+    """; edition=JL_OLD_EDITION) isa Function
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     (function var_self_quoted()
         :(var"#self#")
     end)()
-    """; expr_compat_mode=true) === Symbol("#self#")
+    """; edition=JL_OLD_EDITION) === Symbol("#self#")
 
-    @test JuliaLowering.include_string(test_mod, raw"""
+    @test jl_eval(test_mod, raw"""
     @isdefined(var"#self#") ? var"#self#" : nothing
-    """; expr_compat_mode=true) == nothing
-    @test JuliaLowering.include_string(test_mod, raw"""
+    """; edition=JL_OLD_EDITION) == nothing
+    @test jl_eval(test_mod, raw"""
     (function var_self_isdefined()
         @isdefined(var"#self#") ? var"#self#" : nothing
     end)()
-    """; expr_compat_mode=true) isa Function
+    """; edition=JL_OLD_EDITION) isa Function
 
     # we don't bother with generators
-    @test_broken JuliaLowering.include_string(test_mod, raw"""
+    @test_broken jl_eval(test_mod, raw"""
     collect(var"#self#" for i in 1:1)[1]
-    """; expr_compat_mode=true) isa Function
+    """; edition=JL_OLD_EDITION) isa Function
 
     # we assume the user doesn't create vars with this name
-    @test_broken JuliaLowering.include_string(test_mod, raw"""
+    @test_broken jl_eval(test_mod, raw"""
     (function var_self_assign()
         var"#self#" = 1
         var"#self#"
     end)()
-    """; expr_compat_mode=true) == 1
+    """; edition=JL_OLD_EDITION) == 1
 end
 
 @testset "scope-block" begin
@@ -604,7 +614,7 @@ end
                     Expr(:block,
                          Expr(:return, 1))))
     @test fl_eval(test_mod, lam) isa Core.CodeInfo
-    @test jl_eval(test_mod, lam) isa Core.CodeInfo
+    @test jl_eval(test_mod, lam; edition=JL_NEW_EDITION) isa Core.CodeInfo
 end
 
 @testset "with-static-parameters" begin
@@ -612,7 +622,7 @@ end
                Expr(:lambda, [Symbol("#self#"), :x],
                     Expr(:block, Expr(:return, :T))), :T)
     @test fl_eval(test_mod, lam) isa Core.CodeInfo
-    @test jl_eval(test_mod, lam) isa Core.CodeInfo
+    @test jl_eval(test_mod, lam; edition=JL_NEW_EDITION) isa Core.CodeInfo
 end
 
 # `x^n` is rewritten to `literal_pow(^, x, Val(n))` if n is an Int
@@ -659,14 +669,14 @@ end
     for (str, expected) in cases
         ex = parsestmt(SyntaxTree, str)
         fl = fl_eval(pow_mod, ex)
-        jl = jl_eval(pow_mod, ex; expr_compat_mode=true)
+        jl = jl_eval(pow_mod, ex; edition=JL_OLD_EDITION)
         @test (str, fl) == (str, expected) context=str
         @test (str, jl) == (str, fl) context=str
     end
 
     let ex = parsestmt(SyntaxTree, "let q = p; q ^= 2; q end")
         @test fl_eval(pow_mod, ex) == (:literal, 2)
-        @test_broken jl_eval(pow_mod, ex; expr_compat_mode=true) == (:literal, 2)
+        @test_broken jl_eval(pow_mod, ex; edition=JL_OLD_EDITION) == (:literal, 2)
     end
 end
 
@@ -692,15 +702,15 @@ end
 
 @testset "validation of macro-expansion-specific forms" begin
     @test_throws LoweringError jl_eval(
-        test_mod, Expr(:escape))
+        test_mod, Expr(:escape); edition=JL_NEW_EDITION)
     @test_throws LoweringError jl_eval(
-        test_mod, Expr(Symbol("hygienic-scope"), Expr(:escape), @__MODULE__))
+        test_mod, Expr(Symbol("hygienic-scope"), Expr(:escape), @__MODULE__); edition=JL_NEW_EDITION)
     @test_throws LoweringError jl_eval(
-        test_mod, Expr(Symbol("hygienic-scope"), Expr(:escape, :x, :y), @__MODULE__))
+        test_mod, Expr(Symbol("hygienic-scope"), Expr(:escape, :x, :y), @__MODULE__); edition=JL_NEW_EDITION)
     @test_throws LoweringError jl_eval(
-        test_mod, Expr(Symbol("hygienic-scope")))
+        test_mod, Expr(Symbol("hygienic-scope")); edition=JL_NEW_EDITION)
     @test_throws LoweringError jl_eval(
-        test_mod, Expr(Symbol("hygienic-scope"), :x))
+        test_mod, Expr(Symbol("hygienic-scope"), :x); edition=JL_NEW_EDITION)
     @test_throws LoweringError jl_eval(
-        test_mod, Expr(Symbol("hygienic-scope"), :x, :y, :z))
+        test_mod, Expr(Symbol("hygienic-scope"), :x, :y, :z); edition=JL_NEW_EDITION)
 end

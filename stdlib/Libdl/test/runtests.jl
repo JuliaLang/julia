@@ -52,6 +52,15 @@ else
     dirname(abspath(Libdl.dlpath("libjulia-internal")))
 end
 
+# libjulia-internal is a shared library here, so it reports its own path
+let p = ccall(:jl_get_libjulia_internal_path, Cstring, ())
+    @test p != C_NULL
+    Sys.iswindows() && Libc.free(p)
+end
+if !Base.DARWIN_FRAMEWORK
+    @test realpath(Base.Libc.Libdl.private_shlibdir()) == realpath(private_libdir)
+end
+
 @test !isempty(Libdl.find_library(["libccalltest"], [private_libdir]))
 @test !isempty(Libdl.find_library("libccalltest", [private_libdir]))
 @test !isempty(Libdl.find_library(:libccalltest, [private_libdir]))
@@ -277,6 +286,12 @@ mktempdir() do dir
 end
 
 ## Tests for LazyLibrary
+# Path piece whose `string()` records that it was resolved, to check that `show` stays lazy
+mutable struct ResolvingPiece
+    resolved::Bool
+end
+Base.string(p::ResolvingPiece) = (p.resolved = true; "dir")
+
 @testset "LazyLibrary" begin
     lclf_path = joinpath(private_libdir, "libccalllazyfoo.$(Libdl.dlext)")
     lclb_path = joinpath(private_libdir, "libccalllazybar.$(Libdl.dlext)")
@@ -350,6 +365,20 @@ end
     libname = LazyLibraryPath(private_libdir, "libccalllazyfoo.$(Libdl.dlext)")
     lazy_name_lazy_lib = LazyLibrary(libname)
     @test dlpath(lazy_name_lazy_lib) == realpath(string(libname))
+
+    # Test that `show` is compact and does not resolve the lazy path
+    @test repr(libccalllazyfoo) == "LazyLibrary($(repr(lclf_path)))"
+    @test repr(libname) == "LazyLibraryPath($(repr(private_libdir)), $(repr("libccalllazyfoo.$(Libdl.dlext)")))"
+    @test repr(lazy_name_lazy_lib) == "LazyLibrary($(repr(libname)))"
+    @test repr(LazyLibrary(BundledLazyLibraryPath("libfoo.$(Libdl.dlext)"))) ==
+        "LazyLibrary($(repr("libfoo.$(Libdl.dlext)")))"
+    let piece = ResolvingPiece(false),
+        lazy_path = LazyLibraryPath(piece, "libfoo.$(Libdl.dlext)")
+        @test repr(lazy_path) == "LazyLibraryPath($(repr(piece)), $(repr("libfoo.$(Libdl.dlext)")))"
+        @test !piece.resolved
+        @test string(lazy_path) == joinpath("dir", "libfoo.$(Libdl.dlext)")
+        @test piece.resolved
+    end
 
     # Test parallel loading doesn't return C_NULL (issue #60378)
     script = """

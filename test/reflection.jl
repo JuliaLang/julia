@@ -954,6 +954,9 @@ end
 @test_throws ArgumentError fieldcount(Real)
 @test_throws ArgumentError fieldcount(AbstractArray)
 @test_throws ArgumentError fieldcount(Tuple{Any,Vararg{Any}})
+# TypeEgal{T} has the single instance `T` (issue #62890)
+@test fieldcount(Core.TypeEgal{Int}) == nfields(Int)
+@test fieldcount(Core.TypeEgal{Type{Int}}) == nfields(Type{Int}) == 1
 
 # Common-field unions are definite only when all alternatives share the field count.
 @test fieldcount(Union{Tuple{Int,Float64},Tuple{Int,Int}}) == 2

@@ -2734,6 +2734,10 @@ end
 # issue #14482
 @inferred map(Int8, Int[0])
 
+# map with a constructor over an abstract eltype infers a concrete array type
+@test @inferred(map(Float64, Any[1, 2.0])) == [1.0, 2.0]
+@test @inferred(collect(Iterators.map(Float64, Any[1, 2.0]))) == [1.0, 2.0]
+
 # make sure @inbounds isn't used too much
 mutable struct OOB_Callable{T}; a::T; end
 (f::OOB_Callable)(i::Int) = f.a[i]
@@ -3306,6 +3310,53 @@ end
     @test setindex!(zeros(2,2), fill(1.0), 1, 1, CI0) == [1.0 0.0; 0.0 0.0]
     @test setindex!(zeros(2,2), fill(1.0), 1, CI0, 1) == [1.0 0.0; 0.0 0.0]
     @test setindex!(zeros(2,2), fill(1.0), CI0, 1, 1) == [1.0 0.0; 0.0 0.0]
+end
+
+@testset "setindex! at mismatched shapes" begin
+    idx_options = (
+        1,
+        1:1,
+        2:2,
+        1:0,
+        1:3,
+        [1,2,3],
+        [1 2 3],
+        [1;2;;;],
+        OffsetArray(1:3, -1),
+    )
+    A = zeros(3, 3, 3)
+    seen = Set{UInt}()
+    for (i, j, k) in Iterators.product(Iterators.repeated(idx_options, 3)...)
+        id = hash(sort([i, j, k]; by=hash))
+        in!(id, seen) && continue
+        for I in ((i, j, k), (k, j, i))
+            # don't test scalar setindex here
+            all(x -> x isa Int, I) && continue
+
+            X = ones((length(i) for i in I if i != 1)...)
+            X_trail = reshape(X, size(X)..., 1)
+            X_prepend = reshape(X, 1, size(X)...)
+            vX = vec(X)
+            cX = reshape(vX, length(vX), 1)
+            oX = OffsetArray(X, (size(X) .- 2*(ndims(X) - 1))...)
+
+            for _X in (X, X_trail, X_prepend, vX, cX, oX)
+                AI = view(A, I...)
+
+                if ((isone(ndims(_X)) || isone(ndims(AI))) && (length(_X) == length(AI))) ||
+                    all(d -> size(_X, d) == size(AI, d), 1:max(ndims(_X), ndims(AI)))
+                    @test any(isone, setindex!(A, _X, I...)) || isempty(_X)
+                    fill!(A, 0)
+                    @test any(isone, setindex!(A, _X, I..., 1)) || isempty(_X)
+                    fill!(A, 0)
+                else
+                    @test_throws DimensionMismatch setindex!(A, _X, I...)
+                    @test_throws DimensionMismatch setindex!(A, _X, I..., 1)
+                    @test_throws DimensionMismatch setindex!(A, _X, I..., :)
+                end
+            end
+        end
+    end
 end
 
 @testset "conditionally-throwing version of `checkbounds` should return `nothing` if it returns" begin

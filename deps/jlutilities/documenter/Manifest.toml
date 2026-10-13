@@ -1,7 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
+environment_id = "2d4683aa-8244-4aff-82aa-a2594565e0f8"  # generated
 julia_version = "1.14.0-DEV"
-manifest_format = "2.1"
+manifest_format = "2.2"
 project_hash = "1e9ffa7d4739f7d125a5e2c66af8747a8effd889"
 
 [[deps.ANSIColoredPrinters]]
@@ -313,7 +314,7 @@ version = "10.5.1+0"
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.5.8+0"
+version = "3.5.9+0"
 
     [deps.OpenSSL_jll.syntax]
     julia_version = "1.6.0"

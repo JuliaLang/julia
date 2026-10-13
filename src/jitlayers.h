@@ -4,6 +4,7 @@
 
 #include "llvm/ADT/SmallSet.h"
 #include <llvm/ADT/MapVector.h>
+#include <llvm/ADT/StringExtras.h>
 #include <llvm/ADT/StringSet.h>
 #include <llvm/Support/AllocatorBase.h>
 
@@ -321,6 +322,9 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx,
 
 typedef std::list<std::tuple<std::string, std::string, unsigned int>> CallFrames;
 
+// Generates names by appending a per-prefix counter to a prefix. Prefixes must
+// not end in a digit, or different prefixes could produce the same name (`f`
+// with 20 and `f2` with 0 both give `f20`).
 class jl_name_counter_t {
 public:
     template<class... Ts>
@@ -329,6 +333,7 @@ public:
         std::string name;
         raw_string_ostream s{name};
         (s << ... << args);
+        assert(name.empty() || !isDigit(name.back()));
         unsigned n = counter[name]++;
         s << n;
         return name;
@@ -412,6 +417,7 @@ public:
     jl_array_t *temporary_roots = nullptr;
     SmallSet<jl_value_t *, 8> temporary_roots_set;
     std::map<jl_datatype_t*, DIType*> ditypes;
+    DenseMap<std::pair<StringRef, StringRef>, DISubprogram*> inlined_subprograms;
     std::map<jl_datatype_t*, Type*> llvmtypes;
     DenseMap<Constant*, GlobalVariable*> mergedConstants;
     // Map from symbol name (in a certain library) to its GV in sysimg and the

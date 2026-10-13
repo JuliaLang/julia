@@ -609,8 +609,8 @@ let a = Core.Intrinsics.trunc_int(UInt24, 3),
     @test f((a, true)) === true
     @test f((a, false)) === false
     @test sizeof(Tuple{UInt24,Bool}) == 8
-    @test sizeof(UInt24) == 3
-    @test sizeof(Union{UInt8,UInt24}) == 3
+    @test sizeof(UInt24) == 4 # 3 value bytes rounded up to the 4-byte alignment
+    @test sizeof(Union{UInt8,UInt24}) == 4
     @test sizeof(Base.RefValue{Union{UInt8,UInt24}}) == 8
 end
 
@@ -655,6 +655,23 @@ end
         return cond
     end
     @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f4, Tuple{Bool}, true, false, false))
+
+    # unions of ghosts have nothing to preserve, from a PhiNode or a return value (#63482)
+    function f5(cond)
+        val = cond ? nothing : missing
+        GC.@preserve val begin end
+        return cond
+    end
+    @test f5(true)
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f5, Tuple{Bool}, true, false, false))
+    @noinline f6_ghosts(cond) = cond ? nothing : missing
+    function f6(cond)
+        val = f6_ghosts(cond)
+        GC.@preserve val begin end
+        return cond
+    end
+    @test f6(true)
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f6, Tuple{Bool}, true, false, false))
 end
 
 # issue #32843
@@ -1134,6 +1151,18 @@ let io = IOBuffer()
     code_llvm(io, findsomething58470, Tuple{Dict{Int64, Wrapper58470}, Vector{Int}}, dump_module=true, raw=true, optimize=false)
     str = String(take!(io))
     @test !occursin("jtbaa_unionselbyte", str)
+end
+
+# JIT-compiled code refers to the installed Base sources in its debug info,
+# while relative file names of user code are left alone
+let ir = replace(sprint(io -> code_llvm(io, sum, Tuple{Vector{Int}}, dump_module=true, raw=true)), "\\5C" => "\\")
+    m = match(r"!DIFile\(filename: \"reduce\.jl\", directory: \"([^\"]*)\"", ir)
+    @test m !== nothing && samefile(joinpath(m[1], "reduce.jl"),
+                                    joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", "reduce.jl"))
+end
+let f = include_string(@__MODULE__, "difile_user_code(x) = x + 1", "int.jl")
+    ir = sprint(io -> code_llvm(io, f, Tuple{Int}, dump_module=true, raw=true))
+    @test occursin("!DIFile(filename: \"int.jl\", directory: \".\")", ir)
 end
 
 let io = IOBuffer()

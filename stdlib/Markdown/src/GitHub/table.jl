@@ -55,7 +55,7 @@ function github_table(stream::IO, md::MD)
             end
         end
         length(rows) <= 1 && return false
-        push!(md, Table(rows, align))
+        push!(md, Table(rows, align::Vector{Symbol}))
         return true
     end
 end
@@ -64,7 +64,7 @@ function html(io::IO, md::Table)
     withtag(io, :table) do
         for (i, row) in enumerate(md.rows)
             withtag(io, :tr) do
-                for (j, c) in enumerate(md.rows[i])
+                for (j, c) in enumerate(row)
                     alignment = md.align[j]
                     alignment = alignment === :l ? "left" : alignment === :r ? "right" : "center"
                      withtag(io, i == 1 ? :th : :td, ("align", alignment)) do
@@ -138,7 +138,7 @@ function rst(io::IO, md::Table)
     end
 end
 
-function term(io::IO, md::Table, columns)
+function term(io::IO, md::Table, _)
     margin_str = " "^margin
     cells = mapmap(x -> annotprint(terminline, x), md.rows)
     padcells!(cells, md.align, len = textwidth)

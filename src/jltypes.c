@@ -501,6 +501,33 @@ STATIC_INLINE int cmp_(int a, int b) JL_NOTSAFEPOINT
     return a < b ? -1 : a > b;
 }
 
+STATIC_INLINE int is_value_param(jl_value_t *p) JL_NOTSAFEPOINT
+{
+    return !jl_is_type(p) && !jl_is_typevar(p) && !jl_is_vararg(p);
+}
+
+static int datatype_name_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT;
+
+// order two value type parameters by their type, then by value; 0 if there is
+// no deterministic order
+static int value_param_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
+{
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(a);
+    if (dt != (jl_datatype_t*)jl_typeof(b))
+        return datatype_name_cmp((jl_value_t*)dt, jl_typeof(b));
+    if (dt == jl_long_type) {
+        // numerically, so e.g. `Val{-1}` prints before `Val{1}`
+        ssize_t x = jl_unbox_long(a), y = jl_unbox_long(b);
+        return x < y ? -1 : x > y;
+    }
+    if (dt == jl_symbol_type)
+        return strcmp(jl_symbol_name((jl_sym_t*)a), jl_symbol_name((jl_sym_t*)b));
+    // padding bytes are undefined, so only padding-free bits values compare by bytes
+    if (dt->isbitstype && !dt->layout->flags.haspadding)
+        return memcmp(a, b, jl_datatype_size(dt));
+    return 0;
+}
+
 // a/b are jl_datatype_t* & not NULL
 static int datatype_name_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
 {
@@ -531,6 +558,11 @@ static int datatype_name_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
         }
         else if (jl_is_unionall(ap) && jl_is_unionall(bp)) {
             cmp = datatype_name_cmp(jl_unwrap_unionall(ap), jl_unwrap_unionall(bp));
+            if (cmp != 0)
+                return cmp;
+        }
+        else if (is_value_param(ap) && is_value_param(bp)) {
+            cmp = value_param_cmp(ap, bp);
             if (cmp != 0)
                 return cmp;
         }
@@ -1944,6 +1976,8 @@ static unsigned type_hash(jl_value_t *kj, int *failed) JL_NOTSAFEPOINT
         return hasha + hashb;
     }
     else if (jl_is_typeeq(uw)) {
+        if (jl_is_typeofbottom_param(uw))
+            return jl_typeofbottom_type->hash;
         return typeeq_hash(jl_typeeq_T(uw), failed);
     }
     else if (jl_is_typeegal(uw)) {
@@ -3548,6 +3582,21 @@ void export_jl_small_typeof(void)
     memcpy(&jl_small_typeof, &ijl_small_typeof, sizeof(jl_small_typeof));
 }
 
+#ifdef JL_LIBRARY_STATIC
+// defined in static_exports.c
+extern const void **const jl_static_exported_data_ptrs[];
+
+void export_jl_sysimg_globals(void)
+{
+    // fill the public copies defined in static_exports.c through the table,
+    // since their names are macros for the internal copies here
+    size_t i = 0;
+#define XX(name, type) *jl_static_exported_data_ptrs[i++] = (const void*)jl_##name;
+    JL_EXPORTED_DATA_POINTERS(XX)
+    JL_CONST_GLOBAL_VARS(XX)
+#undef XX
+}
+#else
 void export_jl_sysimg_globals(void)
 {
     // Use jl_dlsym to reference "jl_"#name from the jl_libjulia_handle instead
@@ -3567,6 +3616,7 @@ void export_jl_sysimg_globals(void)
     JL_CONST_GLOBAL_VARS(YY)
 #undef YY
 }
+#endif
 
 #define XX(name) \
     ijl_small_typeof[(jl_##name##_tag << 4) / sizeof(*ijl_small_typeof)] = jl_##name##_type; \
@@ -4717,11 +4767,15 @@ void post_boot_hooks(void)
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
     jl_abioverride_type = (jl_datatype_t*)core("ABIOverride");
 
+    jl_abstractlibrary_type = (jl_datatype_t*)core("AbstractLibrary");
+    jl_libraryid_type = (jl_datatype_t*)core("LibraryID");
+
     jl_const_type = (jl_datatype_t*)core("Const");
     jl_partial_struct_type = (jl_datatype_t*)core("PartialStruct");
     jl_interconditional_type = (jl_datatype_t*)core("InterConditional");
     jl_partial_opaque_type = (jl_datatype_t*)core("PartialOpaque");
     jl_partial_task_type = (jl_datatype_t*)core("PartialTask");
+    jl_possibly_ambiguous_type = (jl_datatype_t*)core("PossiblyAmbiguous");
     jl_inter_must_alias_type = (jl_datatype_t*)core("InterMustAlias");
 
     export_jl_small_typeof();

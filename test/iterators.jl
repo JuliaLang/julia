@@ -958,6 +958,19 @@ end
     @test length(collect(d)) == 0
 end
 
+@testset "zip with Take" begin
+    @test collect(zip(take(zip(1:3, 1:3), 2), 1:5)) == [((1, 1), 1), ((2, 2), 2)]
+    # isdone(::Take, state) infers as Union{Bool,Missing} here
+    f(z) = (s = 0.0; for (_, b) in z; s += b; end; s)
+    z = zip(1:100, repeated(1.0, 100))
+    f(z)
+    @test @allocated(f(z)) == 0
+    # an exhausted Take must stop zip before a preceding stateful iterator is advanced
+    c = Channel{Int}(5); foreach(i -> put!(c, i), 1:5); close(c)
+    @test collect(zip(c, take(1:10, 2))) == [(1, 1), (2, 2)]
+    @test collect(c) == [3, 4, 5]
+end
+
 @testset "only" begin
     @test only([3]) === 3
     @test_throws ArgumentError only([])

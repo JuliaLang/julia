@@ -1,0 +1,9 @@
+# -*- makefile -*-
+
+## jll artifact
+LIBPICOSAT_JLL_NAME := libpicosat
+
+## source build
+LIBPICOSAT_VER := 965
+LIBPICOSAT_BRANCH=master
+LIBPICOSAT_SHA1=be39918064860d3887b4175a68752539803142b3

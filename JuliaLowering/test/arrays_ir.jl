@@ -256,52 +256,55 @@ LoweringError:
 
 ########################################
 # Error: bad nrow nesting
-@ast_ [K"ncat"
-    3::K"Value"
-    [K"nrow"
-        1::K"Value"
-        [K"nrow"
-            1::K"Integer"
-            1::K"Integer"
+@ast_ [:ncat
+    3::value
+    [:nrow
+        1::value
+        [:nrow
+            1::value
+            1::value
         ]
     ]
 ]
 #---------------------
 LoweringError:
-#= line 1 =# - invalid syntax: unknown form `nrow` or number of arguments 2
+ at line 1: Badly nested rows in `ncat`
+
 Expression:
   (nrow 1 1)
 
 ########################################
 # Error: bad nrow nesting
-@ast_ [K"ncat"
-    3::K"Value"
-    [K"nrow"
-        2::K"Value"
-        [K"row"
-            1::K"Integer"
+@ast_ [:ncat
+    3::value
+    [:nrow
+        2::value
+        [:row
+            1::value
         ]
     ]
 ]
 #---------------------
 LoweringError:
-#= line 1 =# - 2D `nrow` cannot be mixed with `row` in `ncat`
+ at line 1: 2D `nrow` cannot be mixed with `row` in `ncat`
+
 Expression:
   (nrow 2 (row 1))
 
 ########################################
 # Error: bad nrow nesting
-@ast_ [K"ncat"
-    3::K"Value"
-    [K"row"
-        [K"row"
-            1::K"Integer"
+@ast_ [:ncat
+    3::value
+    [:row
+        [:row
+            1::value
         ]
     ]
 ]
 #---------------------
 LoweringError:
-#= line 1 =# - Badly nested rows in `ncat`
+ at line 1: Badly nested rows in `ncat`
+
 Expression:
   (row 1)
 

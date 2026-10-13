@@ -9,7 +9,7 @@
 """
 module Experimental
 
-using Base: Threads, sync_varname, is_function_def
+using Base: Threads, ScopedValues, sync_varname, is_function_def
 using Base: GenericCondition
 using Base.Meta
 
@@ -335,6 +335,9 @@ function register_error_hint(@nospecialize(handler), @nospecialize(exct::Type))
 end
 
 const _hint_handlers = IdDict{Core.TypeName,Vector{Any}}()
+# set while reporting a failed hint handler, so that showing the logged exception
+# stack (which may contain the exception being hinted) cannot re-run the handler
+const _hints_disabled = ScopedValues.ScopedValue(false)
 
 """
     Experimental.show_error_hints(io, ex, args...)
@@ -350,6 +353,7 @@ the handler for that type.
 """
 function show_error_hints(io, ex, args...)
     @nospecialize
+    _hints_disabled[] && return
     ex_supertype = typeof(ex)
     while ex_supertype != Any
         hinters = get(_hint_handlers, Core.typename(ex_supertype), Any[])
@@ -360,7 +364,9 @@ function show_error_hints(io, ex, args...)
                 @invokelatest handler(io, ex, args...)
             catch
                 tn = typeof(handler).name
-                @error "Hint-handler $handler for $(ex_supertype) in $(tn.module) caused an error" exception=current_exceptions()
+                ScopedValues.@with _hints_disabled => true begin
+                    @error "Hint-handler $handler for $(ex_supertype) in $(tn.module) caused an error" exception=current_exceptions()
+                end
             end
         end
         ex_supertype = supertype(ex_supertype)
@@ -511,10 +517,10 @@ without adding them to the global method table.
 :@MethodTable
 
 """
-   Experimental.@make_all_arithmetic_checked()
+    Experimental.@make_all_arithmetic_checked
 
-This macro defines methods that overwrite the base definition of basic arithmetic (+,-,*),
-to use their checked variants instead. Explicitly overflowing arithmetic operators (+%,-%,*%)
+This macro defines methods that overwrite the base definition of basic arithmetic (`+`, `-`, `*`),
+to use their checked variants instead. Explicitly overflowing arithmetic operators (`+%`, `-%`, `*%`)
 are not affected.
 
 !!! warning
@@ -529,7 +535,6 @@ macro make_all_arithmetic_checked()
         Base.:(+)(x::Base.Int, y::Base.Int)                    = Base.Checked.checked_add(x, y)
         Base.:(+)(x::T, y::T) where {T<:Base.BitInteger}       = Base.Checked.checked_add(x, y)
         Base.:(*)(x::T, y::T) where {T<:Base.BitInteger}       = Base.Checked.checked_mul(x, y)
-        Base.:(-)(x::Base.AbstractChar, y::Base.AbstractChar)  = Base.Int(x) - Base.Int(y)
     end)
 end
 
@@ -764,28 +769,13 @@ macro reexport(ex)
     return esc(calls)
 end
 
-struct VersionedLower
-    ver::VersionNumber
-end
-
-function (vp::VersionedLower)(@nospecialize(code), mod::Module,
-                              file="none", line=0, world=typemax(Csize_t), warn=false)
-    if !isdefined(Base, :JuliaLowering)
-        if vp.ver === VERSION
-            return Core._parse
-        end
-        error("JuliaLowering module is required for syntax version $(vp.ver), but it is not loaded.")
-    end
-    Base.JuliaLowering.core_lowering_hook(code, filename, lineno, offset, options; syntax_version=vp.ver)
-end
-
-function Base.set_syntax_version(m::Module, ver::VersionNumber)
-    parser = Base.VersionedParse(ver)
+function Base.set_syntax_version(m::Module, edition::Tuple{Int, Int})
+    parser = Base.VersionedParse(edition)
     Core.declare_const(m, Symbol("#_internal_julia_parse"), parser)
-    #lowerer = VersionedLower(ver)
-    #Core.declare_const(m, :_internal_julia_lower, lowerer)
     nothing
 end
+Base.set_syntax_version(mod, e::VersionNumber) =
+    Base.set_syntax_version(mod, Base.EditionNumber(e))
 
 """
     Base.Experimental.@set_syntax_version ver

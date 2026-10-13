@@ -1298,9 +1298,10 @@ function narrow_valid_worlds!(sv::OptimizationState, world::UInt, valid_worlds::
 end
 
 # Resolve a read of `g` to a leaf `Core.BindingPartition` that fully captures the behavior.
-# Return the leaf partition to use, whether `getglobal` would deprecation-warn for this access,
-# and whether the walk crossed an import (determining the name to use for errors).
-const ResolvedRead = Tuple{Core.BindingPartition,Bool,Bool}
+# Return the leaf partition to use, the leaf binding it belongs to, whether `getglobal` would
+# deprecation-warn for this access, and whether the walk crossed an import (determining the
+# name to use for errors).
+const ResolvedRead = Tuple{Core.BindingPartition,Core.Binding,Bool,Bool}
 
 function reformulate_read(g::GlobalRef, sv::OptimizationState, world::UInt, edges::Vector{Any},
                           cache::IdDict{Core.Binding,Union{ResolvedRead,Nothing}})
@@ -1321,7 +1322,8 @@ function resolve_read(g::GlobalRef, binding::Core.Binding, world::UInt)
     # `GlobalRef` for codegen to embed directly, with no `BindingPartition` and no edge.
     world1_const(g) && return nothing
     partition = lookup_binding_partition(world, binding)
-    leaf_binding, leaf, depwarn = walk_to_leaf_partition_depwarn(binding, partition, world)
+    access = walk_binding_partition(binding, partition, world, false).second
+    leaf_binding, leaf, depwarn = access.binding, access.partition, access.depwarn
     kind = binding_kind(leaf)
     # Freeze only what codegen embeds by value (a real constant) or by slot (a typed global,
     # whose identity `binding_access_key` tracks). A backdated constant is neither: inference
@@ -1335,7 +1337,7 @@ function resolve_read(g::GlobalRef, binding::Core.Binding, world::UInt)
     # `leaf_binding !== binding` means the walk crossed an import, so the leaf no longer names
     # the access the source asked for in UndefVarError. That only matters for a leaf that can
     # actually be undefined (not a constant).
-    return (leaf, depwarn, kind === PARTITION_KIND_GLOBAL && leaf_binding !== binding)
+    return (leaf, leaf_binding, depwarn, kind === PARTITION_KIND_GLOBAL && leaf_binding !== binding)
 end
 
 # The store counterpart of `reformulate_read`.
@@ -1356,9 +1358,9 @@ function reformulate_write(g::GlobalRef, sv::OptimizationState, world::UInt, edg
 end
 
 # Preserve depwarn effect explicitly.
-function emit_depwarn_partition!(ir::IRCode, idx::Int, p::Core.BindingPartition)
+function emit_depwarn_binding!(ir::IRCode, idx::Int, b::Core.Binding)
     insert_node!(ir, idx, NewInstruction(
-        Expr(:call, GlobalRef(Core, :depwarn_partition), QuoteNode(p)), Nothing))
+        Expr(:call, GlobalRef(Core, :depwarn_binding), QuoteNode(b)), Nothing))
     return nothing
 end
 
@@ -1374,8 +1376,8 @@ function _reformulate_globals!(ir::IRCode, opt::OptimizationState)
         if r !== nothing
             rr = reformulate_read(r.first, opt, world, edges, read_cache)
             if rr !== nothing
-                (p, depwarn, imported) = rr
-                depwarn && emit_depwarn_partition!(ir, idx, p)
+                (p, leaf_binding, depwarn, imported) = rr
+                depwarn && emit_depwarn_binding!(ir, idx, leaf_binding)
                 # Decide if simple `p` has the right semantics, or needs the full `getglobal_partition` call to preserve semantics.
                 stmt = (r.second !== QuoteNode(:unordered) || imported) ?
                     Expr(:call, GlobalRef(Core, :getglobal_partition),
@@ -1399,7 +1401,8 @@ function _reformulate_globals!(ir::IRCode, opt::OptimizationState)
         if w !== nothing
             part = reformulate_write(w.g, opt, world, edges, write_cache)
             if part !== nothing
-                (part.kind & PARTITION_FLAG_DEPWARN) != 0 && emit_depwarn_partition!(ir, idx, part)
+                # A store never follows imports, so its binding is the one the source names.
+                (part.kind & PARTITION_FLAG_DEPWARN) != 0 && emit_depwarn_binding!(ir, idx, convert(Core.Binding, w.g))
                 # Decide if simple `p = val` has the right semantics, or needs the full call form to preserve all semantics.
                 stmt = (w.op === :setglobal_partition && w.order === nothing) ?
                     Expr(:(=), part, w.value) : build_global_write_partition_call(part, w)
@@ -1423,7 +1426,7 @@ function _reformulate_globals!(ir::IRCode, opt::OptimizationState)
                     isa(use, GlobalRef) || continue
                     rr = reformulate_read(use, opt, world, edges, read_cache)
                     rr === nothing && continue
-                    (p, depwarn, _) = rr
+                    (p, _, depwarn, _) = rr
                     depwarn && continue # skip optimizing since we don't have a good place to put the depwarn node -- this should end up on a cold branch in codegen anyways
                     if newargs === nothing
                         newargs = copy(target.args)
