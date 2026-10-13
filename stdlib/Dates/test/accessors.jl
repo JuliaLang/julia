@@ -27,6 +27,14 @@ using Test
     @test Dates.yearmonth(1) == (1, 1)
     @test Dates.monthday(1) == (1, 1)
     @test Dates.yearmonthday(730120) == (2000, 1, 1)
+    @test Dates.yearmonthday(typemax(Int64)) == (25252734927766555, 7, 27)
+    @test Dates.yearmonth(typemax(Int64)) == (25252734927766555, 7)
+    @test Dates.monthday(typemax(Int64)) == (7, 27)
+    @test Dates.yearmonthday(typemin(Int64)) == (-25252734927766554, 6, 6)
+    @test Dates.yearmonth(typemin(Int64)) == (-25252734927766554, 6)
+    @test Dates.monthday(typemin(Int64)) == (6, 6)
+    @test Dates.yearmonthday(big(730120)) == (2000, 1, 1)
+    @test_throws ArgumentError Dates.cycleday2yearmonthday(Int8(0))
 end
 @testset "year/month/day" begin
     # year, month, and day return the individual components
@@ -43,6 +51,12 @@ end
     @test Dates.year(730120) == 2000
     @test Dates.month(730120) == 1
     @test Dates.day(730120) == 1
+    @test Dates.year(typemax(Int64)) == 25252734927766555
+    @test Dates.month(typemax(Int64)) == 7
+    @test Dates.day(typemax(Int64)) == 27
+    @test Dates.year(typemin(Int64)) == -25252734927766554
+    @test Dates.month(typemin(Int64)) == 6
+    @test Dates.day(typemin(Int64)) == 6
 end
 @testset "totaldays/yearmonthday over many years" begin
     # Test totaldays and yearmonthday from January 1st of "from" to December 31st of "to"

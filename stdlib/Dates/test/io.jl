@@ -444,7 +444,7 @@ end
     f = "YY"
     @test Dates.format(Dates.Date(1999), f) == "1999"
     @test Dates.format(Dates.Date(9), f) == "09"
-    @test Dates.format(typemax(Dates.Date), f) == "252522163911149"
+    @test Dates.format(typemax(Dates.Date), f) == "25252734927766555"
 end
 
 @testset "TimeZones.jl Issue #19" begin
