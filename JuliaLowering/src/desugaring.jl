@@ -130,6 +130,19 @@ function _relayer_global_if_unhygienic(done::Vector{SyntaxTree}, st::SyntaxTree,
     end
 end
 
+# These don't participate in hygiene (although maybe they should).  Put them at
+# the base layer so we know where to find them, but they could alternatively go
+# on an internal layer if we want these to be usable names.
+loop_cont_label(st) =
+    @mknode(;head=:symboliclabel, source=st,
+            context=escape_layer(st.context, true), value="loop-cont")
+loop_exit_label(st) =
+    @mknode(;head=:symboliclabel, source=st,
+            context=escape_layer(st.context, true), value="loop-exit")
+break_label(id) =
+    @mknode(id; head=:symboliclabel, context=symbolic_label_context(id),
+            children=nothing)
+
 #-------------------------------------------------------------------------------
 # Destructuring
 
@@ -2137,7 +2150,7 @@ function expand_for(ctx, ex)
         body = if i == numchildren(iterspecs)
             # Innermost loop gets the continue label and copied vars
             @ast ctx ex [:symbolicblock
-                "loop-cont"::symboliclabel
+                loop_cont_label(ex)
                 [:let
                      [:block
                          copied_vars...
@@ -2183,9 +2196,7 @@ function expand_for(ctx, ex)
         ]
     end
 
-    @ast ctx ex [:symbolicblock "loop-exit"::symboliclabel
-        loop
-    ]
+    @ast ctx ex [:symbolicblock loop_exit_label(ex) loop]
 end
 
 #-------------------------------------------------------------------------------
@@ -4400,28 +4411,29 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == :break
         @stm ex begin
             [:break] ->
-                @ast ctx ex [:break "loop-exit"::symboliclabel]
+                @ast ctx ex [:break loop_exit_label(ex)]
             [:break [:placeholder]] ->
-                @ast ctx ex [:break "loop-exit"::symboliclabel]
-            [:break [:identifier]] -> begin
-                @ast ctx ex [:break ex[1]=>:symboliclabel]
-            end
+                @ast ctx ex [:break loop_exit_label(ex)]
+            [:break [:identifier]] ->
+                @ast ctx ex [:break break_label(ex[1])]
             [:break [:placeholder] val] ->
-                @ast ctx ex [:break "loop-exit"::symboliclabel
+                @ast ctx ex [:break loop_exit_label(ex)
                              expand_forms_2(ctx, val)]
-            [:break [:identifier] val] -> begin
-                @ast ctx ex [:break ex[1]=>:symboliclabel
+            [:break [:identifier] val] ->
+                @ast ctx ex [:break break_label(ex[1])
                              expand_forms_2(ctx, val)]
-            end
         end
     elseif k == :continue
         @stm ex begin
             [:continue] ->
-                @ast ctx ex [:break "loop-cont"::symboliclabel]
+                @ast ctx ex [:break loop_cont_label(ex)]
             [:continue [:placeholder]] ->
-                @ast ctx ex [:break "loop-cont"::symboliclabel]
+                @ast ctx ex [:break loop_cont_label(ex)]
             [:continue [:identifier]] ->
-                @ast ctx ex [:break string(syntax_name(ex[1]), "#cont")::symboliclabel]
+                let lab = @mknode(ex[1]; head=:symboliclabel,
+                                  value=string(syntax_name(ex[1]), "#cont"))
+                    @ast ctx ex [:break lab]
+                end
         end
     elseif k == :comparison
         expand_forms_2(ctx, expand_compare_chain(ctx, ex))
@@ -4585,10 +4597,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         expand_forms_2(ctx, expand_ncat(ctx, ex))
     elseif k == :while
         @jl_assert numchildren(ex) == 2 ex
-        @ast ctx ex [:symbolicblock "loop-exit"::symboliclabel
+        @ast ctx ex [:symbolicblock loop_exit_label(ex)
             [:_while
                 expand_condition(ctx, ex[1])
-                [:symbolicblock "loop-cont"::symboliclabel
+                [:symbolicblock loop_cont_label(ex)
                     [:scope_block [:neutral_scope]
                          expand_forms_2(ctx, ex[2])
                     ]

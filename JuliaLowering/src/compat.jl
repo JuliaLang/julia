@@ -370,6 +370,20 @@ function dst_raw_lambda(ctx, st, sps)
         est_to_dst(with(ctx; toplevel=false), st[2])]
 end
 
+# Using special forms rather than stripped-hygiene-magic-identifiers would be
+# preferable
+function symbolic_label_context(id)
+    name = syntax_name(id)
+    name === "loop-cont" || name === "loop-exit" ?
+        escape_layer(id.context, true) : id.context
+end
+
+function _dst_symboliclabel(ctx, st)
+    @jl_assert head(st) === :symboliclabel || head(st) === :symbolicgoto st
+    @mknode(st; context=symbolic_label_context(st[1]),
+            value=syntax_name(st[1]), children=nothing)
+end
+
 """
 Convert the Expr-like tree (EST) coming from macro expansion to the tree
 desugaring expects (DST), where some forms have SyntaxNode structure and others
@@ -601,16 +615,10 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
             interpolate_expr::value
             [:inert(st[1]) ex]
         ]
-        [:symbolicgoto lab] ->
-            @mknode(st; value=syntax_name(lab), children=nothing)
-        [:symboliclabel lab] ->
-            @mknode(st; value=syntax_name(lab), children=nothing)
-        [:symbolicblock id body] -> let s = syntax_name(id)
-            if is_writeonly_est_name(s)
-                @ast _ st [:symbolicblock id=>:placeholder rec(ctx, body)]
-            else
-                @ast _ st [:symbolicblock id=>:symboliclabel rec(ctx, body)]
-            end
+        [:symboliclabel [:identifier]] -> _dst_symboliclabel(ctx, st)
+        [:symbolicgoto [:identifier]] -> _dst_symboliclabel(ctx, st)
+        [:symbolicblock id body] -> let l = @ast _ id [:symboliclabel id]
+            @ast _ st [:symbolicblock _dst_symboliclabel(ctx, l) rec(ctx, body)]
         end
         [:var"latestworld-if-toplevel"] -> newleaf(st, :latestworld_if_toplevel)
         [:var"scope-block" cs...] ->

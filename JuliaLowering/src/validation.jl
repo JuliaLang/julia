@@ -179,15 +179,15 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         vst1(vcx, val) : # TODO: checked in desugaring (buggy in flisp)
         @fail(st, "`return` not allowed inside comprehension or generator")
     ([:continue], when=vcx.in_loop) -> pass()
-    ([:continue lab], when=vcx.in_loop) -> vst1_ident(vcx, lab; lhs=true)
+    ([:continue lab], when=vcx.in_loop) -> vst1_jump_label(vcx, lab)
     # An unlabeled break is also allowed inside anonymous `@label` blocks;
     # breaking through a named block is rejected with a precise error during
     # linearization.
     ([:break], when=vcx.in_loop||vcx.in_symblock) -> pass()
     ([:break lab], when=vcx.in_loop||vcx.in_symblock) ->
-        vst1_ident(vcx, lab; lhs=true)
+        vst1_jump_label(vcx, lab)
     ([:break lab x], when=vcx.in_loop||vcx.in_symblock) ->
-        vst1_ident(vcx, lab; lhs=true) & vst1(vcx, x)
+        vst1_jump_label(vcx, lab) & vst1(vcx, x)
     [:for [:block is...] body] ->
         all(vst1_iter, vcx, is) &
         vst1(with(vcx; in_loop=true, in_gscope=false), body)
@@ -265,7 +265,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [:toplevel xs...] -> vcx.toplevel ? pass() : # validated when we lower it
         @fail(st, "`toplevel` can't be used inside a function")
     [:symboliclabel lab] -> vst1_ident(vcx, lab; lhs=true)
-    [:symbolicgoto lab] -> vst1_ident(vcx, lab; lhs=true)
+    [:symbolicgoto lab] -> vst1_ident(vcx, lab)
     [:symbolicblock lab body] ->
         vst1_ident(vcx, lab; lhs=true) & vst1(with(vcx; in_symblock=true), body)
     [:gc_preserve x ids...] -> vst1(vcx, x) & all(vst1_ident, vcx, ids)
@@ -570,6 +570,16 @@ end
 Placeholder kind when we have write-only identifiers"
 function is_writeonly_est_name(s::String)
     (all(==('_'), s) || s == UNUSED) && length(s) > 0
+end
+
+# `break _`, `continue _` are allowed but `break __` isn't
+vst1_jump_label(vcx, st) = @stm st begin
+    [:identifier] -> let s = syntax_name(st)
+        s === "_" ? pass() : is_writeonly_est_name(s) ?
+            @fail(st, "all-underscore identifiers are write-only and their values cannot be used in expressions") :
+            vst1_ident(vcx, st; lhs=true)
+    end
+    _ -> @fail(st, "expected identifier")
 end
 
 vst1_call(vcx, st) = @stm st begin

@@ -69,14 +69,14 @@ mutable struct LinearIRContext <: AbstractLoweringContext
     const lambda_bindings::LambdaBindings
     const argmap::Dict{IdTag, IdTag}
     const rettype_ssa::Base.RefValue{Union{Nothing,SyntaxTree}}
-    const break_targets::Dict{String, JumpTarget}
-    const break_label_stack::Vector{String}  # tracks nesting order of symbolicblock labels
+    const break_targets::Dict{NameKey, JumpTarget}
+    const break_label_stack::Vector{NameKey}  # tracks nesting order of symbolicblock labels
     const handler_token_stack::Vector{SyntaxTree}
     const catch_token_stack::Vector{SyntaxTree}
     const finally_handlers::Vector{FinallyHandler}
-    const symbolic_jump_targets::Dict{String,JumpTarget}
+    const symbolic_jump_targets::Dict{NameKey,JumpTarget}
     const symbolic_jump_origins::Vector{JumpOrigin}
-    const symbolic_block_labels::Set{String}  # labels that are symbolic blocks (not allowed as @goto targets)
+    const symbolic_block_labels::Set{NameKey}  # labels that are symbolic blocks (not allowed as @goto targets)
     const meta::Dict{Symbol, Any}
     const mod::Module
 end
@@ -91,10 +91,10 @@ function LinearIRContext(ctx, is_toplevel_thunk, lambda_bindings)
     LinearIRContext(SyntaxList(), ctx.bindings, Ref(0),
                     is_toplevel_thunk, lambda_bindings, Dict{IdTag,IdTag}(),
                     Ref{Union{Nothing,SyntaxTree}}(nothing),
-                    Dict{String,JumpTarget}(), String[],
+                    Dict{NameKey,JumpTarget}(), NameKey[],
                     SyntaxList(), SyntaxList(),
-                    Vector{FinallyHandler}(), Dict{String,JumpTarget}(),
-                    Vector{JumpOrigin}(), Set{String}(), Dict{Symbol, Any}(), ctx.mod)
+                    Vector{FinallyHandler}(), Dict{NameKey,JumpTarget}(),
+                    Vector{JumpOrigin}(), Set{NameKey}(), Dict{Symbol, Any}(), ctx.mod)
 end
 
 function current_lambda_bindings(ctx::LinearIRContext)
@@ -297,24 +297,24 @@ function emit_return(ctx, ex)
 end
 
 function emit_break(ctx, ex)
-    name = syntax_name(ex[1])
-    target = get(ctx.break_targets, name, nothing)
+    nk = NameKey(ex[1])
+    target = get(ctx.break_targets, nk, nothing)
     if isnothing(target)
-        if name == "loop-exit"
+        if nk.name == "loop-exit"
             throw(LoweringError(ex, "`break` must be used inside a `while`, `for` loop, or `@label` block"))
-        elseif name == "loop-cont"
+        elseif nk.name == "loop-cont"
             throw(LoweringError(ex, "`continue` must be used inside a `while` or `for` loop"))
-        elseif endswith(name, "#cont")
-            label = name[1:end-5]
+        elseif endswith(nk.name, "#cont")
+            label = nk.name[1:end-5]
             throw(LoweringError(ex, "`continue $label` is not inside a `@label $label` loop"))
         else
-            throw(LoweringError(ex, "`break $name` is not inside a `@label $name` block"))
+            throw(LoweringError(ex, "`break $(nk.name)` is not inside a `@label $(nk.name)` block"))
         end
     end
     # If targeting loop-exit, check for intervening named @label blocks
-    if name == "loop-exit"
+    if nk.name == "loop-exit"
         for i in lastindex(ctx.break_label_stack):-1:1
-            lbl = ctx.break_label_stack[i]
+            lbl = ctx.break_label_stack[i].name
             lbl == "loop-exit" && break
             if lbl != "loop-cont" && !contains(lbl, '#')
                 throw(LoweringError(ex,
@@ -323,9 +323,9 @@ function emit_break(ctx, ex)
         end
     end
     # If targeting loop-cont, check for intervening loop-exit (@label block)
-    if name == "loop-cont"
+    if nk.name == "loop-cont"
         for i in lastindex(ctx.break_label_stack):-1:1
-            lbl = ctx.break_label_stack[i]
+            lbl = ctx.break_label_stack[i].name
             lbl == "loop-cont" && break
             if lbl == "loop-exit"
                 throw(LoweringError(ex, "`continue` inside an anonymous `@label` block is not allowed"))
@@ -335,7 +335,7 @@ function emit_break(ctx, ex)
     # Handle valued break (break name val)
     if numchildren(ex) >= 2
         if isnothing(target.result_var)
-            throw(LoweringError(ex, "break with value not allowed for label `$name`"))
+            throw(LoweringError(ex, "break with value not allowed for label `$(nk.name)`"))
         end
         val = compile(ctx, ex[2], true, false)
         emit_assignment(ctx, ex, target.result_var, val)
@@ -802,29 +802,29 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             res
         end
     elseif k == :symbolicblock
-        name = syntax_name(ex[1])
+        nk = NameKey(ex[1])
         # Skip duplicate check for default-scope labels (loop-exit, loop-cont) which allow nesting
-        if name != "loop-exit" && name != "loop-cont"
-            if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
-                throw(LoweringError(ex, "Label `$name` defined multiple times"))
+        if nk.name != "loop-exit" && nk.name != "loop-cont"
+            if haskey(ctx.symbolic_jump_targets, nk) || nk in ctx.symbolic_block_labels
+                throw(LoweringError(ex, "Label `$(nk.name)` defined multiple times"))
             end
-            push!(ctx.symbolic_block_labels, name)
+            push!(ctx.symbolic_block_labels, nk)
         end
         end_label = make_label(ctx, ex)
         need_value = needs_value || in_tail_pos
-        result_var = need_value ? new_local_binding(ctx, ex, "$(name)_result") : nothing
-        outer_target = get(ctx.break_targets, name, nothing)
-        ctx.break_targets[name] = JumpTarget(end_label, ctx, result_var)
-        push!(ctx.break_label_stack, name)
+        result_var = need_value ? new_local_binding(ctx, ex, "$(nk.name)_result") : nothing
+        outer_target = get(ctx.break_targets, nk, nothing)
+        ctx.break_targets[nk] = JumpTarget(end_label, ctx, result_var)
+        push!(ctx.break_label_stack, nk)
         body_val = compile(ctx, ex[2], need_value, false)
         pop!(ctx.break_label_stack)
         if !isnothing(result_var) && !isnothing(body_val)
             emit_assignment(ctx, ex, result_var, body_val)
         end
         if isnothing(outer_target)
-            delete!(ctx.break_targets, name)
+            delete!(ctx.break_targets, nk)
         else
-            ctx.break_targets[name] = outer_target
+            ctx.break_targets[nk] = outer_target
         end
         emit(ctx, end_label)
         # Use isdefined to handle the case where initialization was
@@ -850,11 +850,11 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         nothing
     elseif k == :symboliclabel
         label = emit_label(ctx, ex)
-        name = syntax_name(ex)
-        if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
-            throw(LoweringError(ex, "Label `$name` defined multiple times"))
+        nk = NameKey(ex)
+        if haskey(ctx.symbolic_jump_targets, nk) || nk in ctx.symbolic_block_labels
+            throw(LoweringError(ex, "Label `$(nk.name)` defined multiple times"))
         end
-        push!(ctx.symbolic_jump_targets, name=>JumpTarget(label, ctx))
+        push!(ctx.symbolic_jump_targets, nk=>JumpTarget(label, ctx))
         if in_tail_pos
             emit_return(ctx, ex, nothing_(ctx, ex))
         elseif needs_value
@@ -1148,14 +1148,14 @@ function compile_body(ctx::LinearIRContext, ex)
     # Fix up any symbolic gotos. (We can't do this earlier because the goto
     # might precede the label definition in unstructured control flow.)
     for origin in ctx.symbolic_jump_origins
-        name = syntax_name(origin.goto)
-        target = get(ctx.symbolic_jump_targets, name, nothing)
+        nk = NameKey(origin.goto)
+        target = get(ctx.symbolic_jump_targets, nk, nothing)
         if isnothing(target)
             # Check if it's a symbolic block label
-            if name in ctx.symbolic_block_labels
-                throw(LoweringError(origin.goto, "cannot use @goto to jump to @label block `$name`"))
+            if nk in ctx.symbolic_block_labels
+                throw(LoweringError(origin.goto, "cannot use @goto to jump to @label block `$(nk.name)`"))
             end
-            throw(LoweringError(origin.goto, "label `$name` referenced but not defined"))
+            throw(LoweringError(origin.goto, "label `$(nk.name)` referenced but not defined"))
         end
         i = origin.index
         pop_ex = compile_pop_exception(ctx, origin.goto, origin.catch_token_stack,

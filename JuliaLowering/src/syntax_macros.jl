@@ -35,7 +35,28 @@ end
 #     @ast __context__ __context__.macrocall [:atomic ex]
 # end
 
-# TODO: @label
+function Base.var"@label"(__context__::MacroContext, ex)
+    if head(ex) !== :identifier
+        return @ast __context__ __context__.macrocall [
+            :symbolicblock "loop-exit"::identifier ex]
+    end
+    syntax_name(ex) == "_" &&
+        error("use `@label expr` for anonymous blocks; `@label _` is not allowed")
+    @ast __context__ ex [:symboliclabel ex]
+end
+
+function Base.var"@label"(__context__::MacroContext, name, body)
+    head(name) === :identifier ||
+        throw(MacroExpansionError(name, "expected a label name"))
+    syntax_name(name) == "_" &&
+        error("use `@label expr` for anonymous blocks; `@label _ expr` is not allowed")
+    k = head(body)
+    if k === :for || k === :while
+        cont = @ast __context__ name string(syntax_name(name), "#cont")::identifier
+        body = @ast __context__ body [k body[1] [:symbolicblock cont body[2]]]
+    end
+    @ast __context__ __context__.macrocall [:symbolicblock name body]
+end
 
 function Base.var"@goto"(__context__::MacroContext, ex)
     @jl_assert head(ex) == :identifier ex
