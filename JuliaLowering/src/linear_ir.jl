@@ -734,7 +734,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         @jl_assert !needs_value (ex,"TOMBSTONE encountered in value position")
         nothing
     elseif k == :call || k == :new || k == :splatnew || k == :foreigncall ||
-            k == :foreignglobal || k == :new_opaque_closure || k == :cfunction ||
+            k == :foreignglobal || k == :cfunction ||
             k == :throw_undef_if_not
         callex = @mknode(ex; head=k, children=compile_args(ctx, children(ex)))
         if in_tail_pos
@@ -957,14 +957,27 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             nothing
         end
         out
-    elseif k == :opaque_closure_method
-        @ast ctx ex [:opaque_closure_method
-            ex[1]
-            ex[2]
-            ex[3]
-            ex[4]
-            compile_lambda(ctx, ex[5])
+    elseif k == :new_opaque_closure
+        oc_method = ex[5]
+        ex_out = @ast ctx ex [:new_opaque_closure
+            compile_args(ctx, children(ex)[1:4])...
+            [:opaque_closure_method(oc_method)
+                oc_method[1]
+                oc_method[2]
+                oc_method[3]
+                oc_method[4]
+                compile(ctx, oc_method[5], true, false)
+            ]
+            compile_args(ctx, children(ex)[6:end])...
         ]
+        if in_tail_pos
+            emit_return(ctx, ex, emit_assign_tmp(ctx, ex_out))
+        elseif needs_value
+            ex_out
+        else
+            emit(ctx, ex_out)
+            nothing
+        end
     elseif k === :lambda || k === :generated_lambda || k === :toplevel_lambda
         lam = compile_lambda(ctx, ex)
         if in_tail_pos

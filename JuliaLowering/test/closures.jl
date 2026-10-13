@@ -332,12 +332,6 @@ end
 (x->(y->(z->(Base.Experimental.@opaque ()->(x,y,z)))('z'))('y'))('x')()
 """) == ('x','y','z')
 
-# opaque_closure_method internals
-method_ex = lower_str(test_mod, "Base.Experimental.@opaque x -> 2x").args[1].code[3]
-@test method_ex.head === :opaque_closure_method
-@test method_ex.args[1] === nothing
-@test method_ex.args[4] isa LineNumberNode
-
 # Argument reassigned in outer scope - no Box needed
 @test JuliaLowering.include_string(test_mod, """
 begin

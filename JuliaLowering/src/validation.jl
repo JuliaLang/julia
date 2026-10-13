@@ -264,8 +264,6 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [:meta _...] -> vst1_non_arg_meta(vcx, st)
     [:toplevel xs...] -> vcx.toplevel ? pass() : # validated when we lower it
         @fail(st, "`toplevel` can't be used inside a function")
-    [:opaque_closure argt lb ub bool lam] ->
-        all(vst1, vcx, [argt, lb, ub, bool]) & vst1_lam(vcx, lam)
     [:symboliclabel lab] -> vst1_ident(vcx, lab; lhs=true)
     [:symbolicgoto lab] -> vst1_ident(vcx, lab; lhs=true)
     [:symbolicblock lab body] ->
@@ -326,6 +324,16 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [:the_exception] -> pass()
     # (throw_undef_if_not var_name cond)
     [:throw_undef_if_not [:identifier] cond] -> vst1(vcx, cond)
+    [:opaque_closure argt lb ub bool [:function [:tuple _...] body]] ->
+        all(vst1, vcx, [argt, lb, ub, bool]) & vst1_function(vcx, st[end])
+    [:opaque_closure argt lb ub bool lam] ->
+        all(vst1, vcx, [argt, lb, ub, bool]) & vst1_lam(vcx, lam)
+    # huge mess: pre-lowered OC
+    [:new_opaque_closure argt lb ub bool
+     [:opaque_closure_method _ [:value] [:value] [:value] [:value]] idk...] ->
+         all(vst1, vcx, Syntax[argt, lb, ub, bool]) & all(vst1, vcx, idk) &
+         (st[5][5].value isa Core.CodeInfo ? pass() :
+         @fail(st[5][5], "expected CodeInfo"))
 
     #---------------------------------------------------------------------------
     # Invalid forms for which we want to produce detailed errors
@@ -1223,6 +1231,8 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
         vst2_ident(vcx, id) &
         all(vst2, vcx, children(st)[2:end-1]) &
         vst2_lam(vcx, lam)
+    [:new_opaque_closure argt lb ub bool [:opaque_closure_method _...] idk...] ->
+         all(vst2, vcx, Syntax[argt, lb, ub, bool]) & all(vst2, vcx, idk)
     [:_do_while body cond] -> vst2(vcx, body) & vst2(vcx, cond)
     [:_while cond body] -> vst2(vcx, cond) & vst2(vcx, body)
     [:inert _] -> pass()

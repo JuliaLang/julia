@@ -557,18 +557,8 @@ end
 3   TestMod.T
 4   (call core.apply_type core.Tuple core.Any %₃)
 5   (call core.apply_type core.Union)
-6   --- opaque_closure_method  core.nothing 2 false SourceLocation:2
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/z]
-    1   TestMod.-
-    2   TestMod.+
-    3   TestMod.*
-    4   (call %₃ 2 slot₂/x)
-    5   (call core.getfield slot₁/#self# 1)
-    6   (call %₂ %₄ %₅)
-    7   (call %₁ %₆ slot₃/z)
-    8   (return %₇)
-7   (new_opaque_closure %₄ %₅ core.Any true %₆ slot₁/y)
-8   (return %₇)
+6   (new_opaque_closure %₄ %₅ core.Any true (opaque_closure_method core.nothing 2 false SourceLocation:2 (code_info Slots (block TestMod.- TestMod.+ TestMod.* (call %₃ 2 slot₂/x) (call core.getfield slot₁/#self# 1) (call %₂ %₄ %₅) (call %₁ %₆ slot₃/z) (return %₇)))) slot₁/y)
+7   (return %₆)
 
 ########################################
 # Opaque closure with `...`
@@ -579,12 +569,8 @@ end
 1   (call core.apply_type core.Vararg core.Any)
 2   (call core.apply_type core.Tuple core.Any %₁)
 3   (call core.apply_type core.Union)
-4   --- opaque_closure_method  core.nothing 2 true SourceLocation:2
-    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/ys]
-    1   slot₃/ys
-    2   (return %₁)
-5   (new_opaque_closure %₂ %₃ core.Any true %₄)
-6   (return %₅)
+4   (new_opaque_closure %₂ %₃ core.Any true (opaque_closure_method core.nothing 2 true SourceLocation:2 (code_info Slots (block slot₃/ys (return %₁)))))
+5   (return %₄)
 
 ########################################
 # Error: Opaque closure with default args

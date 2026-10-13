@@ -190,7 +190,7 @@ end
 @test_throws ErrorException (@opaque Tuple{Int}->_ (x,y,z...)->x)
 
 # cannot specify types both on arguments and separately
-@test_throws ErrorException @eval @opaque Tuple{Any}->_ (x::Int)->x
+@test_throws "argument type may not be specified both in the method signature and separately" @eval @opaque Tuple{Any}->_ (x::Int)->x
 
 # Vararg in compiled mode
 mk_va_opaque() = @opaque (x...)->x
