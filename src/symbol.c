@@ -49,21 +49,30 @@ static jl_sym_t *mk_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
     return sym;
 }
 
+// Tree nodes sorted by major key of (int(hash)) and minor key of (str).
+// Returns 0 if `node` is the symbol `str`, < 0 to go left and > 0 to go right.
+intptr_t jl_symtab_cmp(uintptr_t h, const char *str, size_t len, jl_sym_t *node) JL_NOTSAFEPOINT
+{
+    intptr_t x = (intptr_t)(h - node->hash);
+    if (x == 0) {
+        x = strncmp(str, jl_symbol_name(node), len);
+        if (x == 0 && jl_symbol_name(node)[len] != 0)
+            x = 1;
+    }
+    return x;
+}
+
 static jl_sym_t *symtab_lookup(_Atomic(jl_sym_t*) *ptree, const char *str, size_t len, _Atomic(jl_sym_t*) **slot) JL_NOTSAFEPOINT
 {
     jl_sym_t *node = jl_atomic_load_relaxed(ptree); // consume
     uintptr_t h = hash_symbol(str, len);
 
-    // Tree nodes sorted by major key of (int(hash)) and minor key of (str).
     while (node != NULL) {
-        intptr_t x = (intptr_t)(h - node->hash);
+        intptr_t x = jl_symtab_cmp(h, str, len, node);
         if (x == 0) {
-            x = strncmp(str, jl_symbol_name(node), len);
-            if (x == 0 && jl_symbol_name(node)[len] == 0) {
-                if (slot != NULL)
-                    *slot = ptree;
-                return node;
-            }
+            if (slot != NULL)
+                *slot = ptree;
+            return node;
         }
         if (x < 0)
             ptree = &node->left;
@@ -121,6 +130,13 @@ JL_DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, size_t len)
 JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void)
 {
     return jl_atomic_load_relaxed(&symtab);
+}
+
+void jl_set_root_symbol(jl_sym_t *root) JL_NOTSAFEPOINT
+{
+    // Replacing existing symbols would violate pointer identity.
+    assert(jl_atomic_load_relaxed(&symtab) == NULL);
+    jl_atomic_store_release(&symtab, root);
 }
 
 static _Atomic(uint32_t) gs_ctr = 0;  // TODO: per-module?
