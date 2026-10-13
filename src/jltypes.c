@@ -1938,12 +1938,12 @@ static jl_value_t *lookup_type_stack(jl_typestack_t *stack, jl_datatype_t *tt, s
     return NULL;
 }
 
-static unsigned typeeq_hash(jl_value_t *T, int *failed) JL_NOTSAFEPOINT;
+static unsigned typeeq_hash(jl_value_t *T, int nofail) JL_NOTSAFEPOINT;
 static unsigned typeegal_hash(jl_value_t *T) JL_NOTSAFEPOINT;
 
 // stable numbering for types--starts with name->hash, then falls back to objectid
-// sets *failed if the hash value isn't stable (if this param not set on entry)
-static unsigned type_hash(jl_value_t *kj, int *failed) JL_NOTSAFEPOINT
+// returns 0 if (and only if) the hash value isn't stable, unless nofail is set
+static unsigned type_hash(jl_value_t *kj, int nofail) JL_NOTSAFEPOINT
 {
     jl_value_t *uw = jl_is_unionall(kj) ? jl_unwrap_unionall(kj) : kj;
     if (jl_is_datatype(uw)) {
@@ -1954,10 +1954,8 @@ static unsigned type_hash(jl_value_t *kj, int *failed) JL_NOTSAFEPOINT
             // bounds contain a Union, such as `Broadcasted`) can still be hashed
             // structurally, since everything `==` to the wrapper is normalized to the
             // wrapper itself at construction.
-            if (!*failed && dt->name->wrapper != kj) {
-                *failed = 1;
+            if (!nofail && dt->name->wrapper != kj)
                 return 0;
-            }
             // compute a hash now, only for the parent object we are putting in the cache
             hash = typekey_hash(dt->name, jl_svec_data(dt->parameters), jl_svec_len(dt->parameters), 1);
         }
@@ -1965,30 +1963,30 @@ static unsigned type_hash(jl_value_t *kj, int *failed) JL_NOTSAFEPOINT
     }
     else if (jl_is_typevar(uw)) {
         // ignore var and lb, since those might get normalized out in equality testing
-        return type_hash(((jl_tvar_t*)uw)->ub, failed);
+        return type_hash(((jl_tvar_t*)uw)->ub, nofail);
     }
     else if (jl_is_uniontype(uw)) {
-        if (!*failed) {
-            *failed = 1;
+        if (!nofail)
             return 0;
-        }
         // compute a hash now, only for the parent object we are putting in the cache
-        unsigned hasha = type_hash(((jl_uniontype_t*)uw)->a, failed);
-        unsigned hashb = type_hash(((jl_uniontype_t*)uw)->b, failed);
+        unsigned hasha = type_hash(((jl_uniontype_t*)uw)->a, 1);
+        unsigned hashb = type_hash(((jl_uniontype_t*)uw)->b, 1);
         // use an associative mixing function, with well-defined overflow
         // since Union is associative
-        return hasha + hashb;
+        unsigned hash = hasha + hashb;
+        return hash ? hash : 1;
     }
     else if (jl_is_typeeq(uw)) {
         if (jl_is_typeofbottom_param(uw))
             return jl_typeofbottom_type->hash;
-        return typeeq_hash(jl_typeeq_T(uw), failed);
+        return typeeq_hash(jl_typeeq_T(uw), nofail);
     }
     else if (jl_is_typeegal(uw)) {
         return typeegal_hash(jl_typeegal_T(uw));
     }
     else {
-        return jl_object_id(uw);
+        unsigned hash = jl_object_id(uw);
+        return hash ? hash : 1;
     }
 }
 
@@ -2003,39 +2001,32 @@ static int typevar_admits_all(jl_value_t *T) JL_NOTSAFEPOINT
 }
 
 // hash of `TypeEq{T}`, similar to a normal datatype, with three exceptions
-static unsigned typeeq_hash(jl_value_t *T, int *failed) JL_NOTSAFEPOINT
+static unsigned typeeq_hash(jl_value_t *T, int nofail) JL_NOTSAFEPOINT
 {
     // `TypeEq{Union{}}` is hashed as `typeof(Union{})` by the callers, not here
     assert(T != jl_bottom_type);
     // `TypeEq{T} where T == AnyType`
     if (typevar_admits_all(T))
-        return type_hash((jl_value_t*)jl_anytype_type, failed);
+        return type_hash((jl_value_t*)jl_anytype_type, nofail);
 
     // `TypeEq{TypeEq{T}} == TypeEq` (for a free typevar `T`)
     // There is a special case TODO in subtype.c to remove this case.
     if (jl_is_typeeq(T) && typevar_admits_all(jl_typeeq_T(T)))
-        return type_hash((jl_value_t*)jl_typeeq_type, failed);
-    unsigned hash = typekey_hash(jl_type_typename, &T, 1, *failed);
-    if (!hash)
-        *failed = 1;
-    return hash;
+        return type_hash((jl_value_t*)jl_typeeq_type, nofail);
+    return typekey_hash(jl_type_typename, &T, 1, nofail);
 }
 
-// hash of `TypeEgal{T}`. Its keys compare by egality, so it never needs to set the non-structural-hash failure condition.
+// hash of `TypeEgal{T}`. Its keys compare by egality, so it never fails (returns 0) for a non-structural hash.
 static unsigned typeegal_hash(jl_value_t *T) JL_NOTSAFEPOINT
 {
-    int nofail = 1;
-    unsigned hashT = type_hash(T, &nofail);
-    return bitmix(jl_typeegal_type->name->hash, hashT);
+    unsigned hash = bitmix(jl_typeegal_type->name->hash, type_hash(T, 1));
+    return hash ? hash : 1;
 }
 
 // the hash of `v` (may be 0 if its `==` class has no stable hash defined)
 JL_DLLEXPORT uintptr_t jl_type_hash(jl_value_t *v) JL_NOTSAFEPOINT
 {
-    // NOTE: The value of `failed` is purposefully ignored here. The parameter is relevant
-    // for other parts of the internal algorithm but not for exposing to the Julia side.
-    int failed = 0;
-    return type_hash(v, &failed);
+    return type_hash(v, 0);
 }
 
 static unsigned typekey_hash(jl_typename_t *tn, jl_value_t **key, size_t n, int nofail) JL_NOTSAFEPOINT
@@ -2043,7 +2034,6 @@ static unsigned typekey_hash(jl_typename_t *tn, jl_value_t **key, size_t n, int 
     assert(tn != jl_type_typename || n == 0 || key[0] != jl_bottom_type); // `TypeEq{Union{}}` gets returned directly by `jl_wrap_Type`, so the hash isn't relevant to compute here
     size_t j;
     unsigned hash = 3;
-    int failed = nofail;
     for (j = 0; j < n; j++) {
         jl_value_t *p = key[j];
         size_t repeats = 1;
@@ -2055,8 +2045,8 @@ static unsigned typekey_hash(jl_typename_t *tn, jl_value_t **key, size_t n, int 
                 hash = bitmix(0x064eeaab, hash); // 0x064eeaab is just a randomly chosen constant
             p = vm->T ? vm->T : (jl_value_t*)jl_any_type;
         }
-        unsigned hashp = type_hash(p, &failed);
-        if (failed && !nofail)
+        unsigned hashp = type_hash(p, nofail);
+        if (!hashp)
             return 0;
         while (repeats--)
             hash = bitmix(hashp, hash);
@@ -2075,12 +2065,13 @@ static unsigned typekeyvalue_hash(jl_typename_t *tn, jl_value_t *key1, jl_value_
         if (leaf && jl_is_kind(jl_typeof(kj))) {
             // hash to match whichever key `jl_inst_arg_tuple_type` stores
             // (`Union{}` is keyed as `typeof(Union{})`, see `jl_wrap_TypeEgal`)
-            int failed = 0;
             if (kj == jl_bottom_type)
-                hj = ((jl_datatype_t*)jl_typeofbottom_type)->hash;
+                hj = jl_typeofbottom_type->hash;
+            else if (jl_has_free_typevars(kj))
+                hj = typeeq_hash(kj, 0);
             else
-                hj = jl_has_free_typevars(kj) ? typeeq_hash(kj, &failed) : typeegal_hash(kj);
-            if (failed)
+                hj = typeegal_hash(kj);
+            if (!hj)
                 return 0;
         }
         else {
