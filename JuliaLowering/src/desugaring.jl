@@ -2996,7 +2996,7 @@ fix_argname(ctx, arg, used) = @stm arg begin
     [:identifier] -> arg
     # Lowering should be able to use placeholder args as rvalues internally,
     # e.g. for kw method dispatch.
-    ([:placeholder], when=used) -> newsym(ctx, arg, "#arg#")
+    ([:placeholder], when=used) -> newsym(ctx, arg, ERASE_SLOTNAME_PREFIX)
     ([:placeholder], when=!used) -> arg
 end
 
@@ -3009,7 +3009,7 @@ end
 expand_function_arg(ctx, arg, used) = @stm arg begin
     [:(::) x t] ->
         @ast ctx arg [:(::) fix_argname(ctx, x, used) t]
-    [:(::) t] -> let aname = newsym(ctx, arg, "#arg#"; unused=true)
+    [:(::) t] -> let aname = newsym(ctx, arg, ERASE_SLOTNAME_PREFIX; unused=true)
         @ast ctx arg [:(::) fix_argname(ctx, aname, used) t]
     end
     [:kw x v] ->

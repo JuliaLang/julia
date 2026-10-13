@@ -1,6 +1,9 @@
 # Within JL, :placeholder is used for never-read identifiers, but this magic
 # symbol is used in the IR (its write-only properties are enforced in codegen).
 const UNUSED = "#unused#"
+# Method printing does stupid stuff with slot names; ideally move to provenance
+# instead of reverse-engineering flisp slot naming
+const ERASE_SLOTNAME_PREFIX = "#arg#"
 
 TODO(msg::AbstractString) = throw(ErrorException("Lowering TODO: $msg"))
 TODO(ex::SyntaxTree, msg="") = throw(LoweringError(ex, "Lowering TODO: $msg"))
