@@ -950,7 +950,7 @@ static void jl_setup_type_wrapper(jl_typename_t *tn, jl_svec_t *parameters, jl_v
     jl_gc_write(tn, tn->wrapper, jl_value_t, *wrapper);
     int np = jl_svec_len(parameters);
     for (int i = np - 1; i >= 0; i--) {
-        *wrapper = jl_new_struct(jl_unionall_type, jl_svecref(parameters, i), *wrapper);
+        *wrapper = jl_new_unionall((jl_tvar_t*)jl_svecref(parameters, i), *wrapper);
         jl_gc_write(tn, tn->wrapper, jl_value_t, *wrapper);
     }
 }
@@ -1680,6 +1680,18 @@ JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x)
 
 // struct constructors --------------------------------------------------------
 
+// allocate an instance for the generic constructors below
+static jl_value_t *new_struct_alloc(jl_task_t *ct, jl_datatype_t *type, size_t size) JL_CANSAFEPOINT
+{
+    // a `UnionAll` has a flag word past its declared fields
+    if (type == jl_unionall_type) {
+        jl_unionall_t *u = (jl_unionall_t*)jl_gc_alloc(ct->ptls, sizeof(jl_unionall_t), type);
+        jl_atomic_store_relaxed(&u->flags, 0);
+        return (jl_value_t*)u;
+    }
+    return jl_gc_alloc(ct->ptls, size, type);
+}
+
 JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...) JL_ROOTED_VARARGS
 {
     jl_task_t *ct = jl_current_task;
@@ -1691,7 +1703,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...) JL_ROOTED_VARAR
     va_list args;
     size_t i, nf = jl_datatype_nfields(type);
     va_start(args, type);
-    jl_value_t *jv = jl_gc_alloc(ct->ptls, jl_datatype_size(type), type);
+    jl_value_t *jv = new_struct_alloc(ct, type, jl_datatype_size(type));
     if (type->smalltag) // TODO: move to callers?
         jl_set_typetagof(jv, type->smalltag, 0);
     if (nf > 0 && jl_field_offset(type, 0) != 0) {
@@ -1720,7 +1732,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, 
     }
     if (type->instance != NULL)
         return type->instance;
-    jl_value_t *jv = jl_gc_alloc(ct->ptls, jl_datatype_size(type), type);
+    jl_value_t *jv = new_struct_alloc(ct, type, jl_datatype_size(type));
     if (type->smalltag) // TODO: do we need this?
         jl_set_typetagof(jv, type->smalltag, 0);
     if (jl_datatype_nfields(type) > 0) {
@@ -1763,7 +1775,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
         return type->instance;
     }
     size_t size = jl_datatype_size(type);
-    jl_value_t *jv = jl_gc_alloc(ct->ptls, size, type);
+    jl_value_t *jv = new_struct_alloc(ct, type, size);
     if (type->smalltag) // TODO: do we need this?
         jl_set_typetagof(jv, type->smalltag, 0);
     if (nf == 0)
@@ -1799,7 +1811,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
     if (type->instance != NULL)
         return type->instance;
     size_t size = jl_datatype_size(type);
-    jl_value_t *jv = jl_gc_alloc(ct->ptls, size, type);
+    jl_value_t *jv = new_struct_alloc(ct, type, size);
     if (type->smalltag) // TODO: do we need this?
         jl_set_typetagof(jv, type->smalltag, 0);
     if (size > 0)

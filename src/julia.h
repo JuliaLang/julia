@@ -638,7 +638,21 @@ typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_tvar_t *JL_NONNULL var;
     jl_value_t *JL_NONNULL body;
+// hidden fields (not part of the Julia-visible layout, so a UnionAll must be
+// allocated by `jl_new_unionall` or the generic constructors in datatype.c,
+// never from the layout size):
+    // structural facts about this node, memoized on first query (each bit
+    // pair is "known" + value; 0 means nothing computed yet). The facts depend
+    // only on the (immutable) structure, so they may be serialized as found.
+    _Atomic(uint32_t) flags;
 } jl_unionall_t;
+#define JL_UNIONALL_FREEVARS_KNOWN  0x1
+#define JL_UNIONALL_FREEVARS        0x2  // the type has free typevars
+#define JL_UNIONALL_OCCURSINV_KNOWN 0x4
+#define JL_UNIONALL_OCCURSINV       0x8  // the binder occurs in an invariant position of `body`
+#define JL_UNIONALL_ALWAYSCOV_KNOWN 0x10
+#define JL_UNIONALL_ALWAYSCOV       0x20 // the binder has a guaranteed covariant occurrence in `body`
+                                         // (in a covariant context), and none inside an inner binder's upper bound
 
 // represents the "name" part of a DataType, describing the syntactic structure
 // of a type and storing all data common to different instantiations of the type,
