@@ -596,6 +596,7 @@ void jl_gc_debug_init(void) JL_NOTSAFEPOINT;
 // (gc-regions.c).
 void gc_mark_loop_serial(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void gc_queue_execution_roots(jl_gc_markqueue_t *mq, jl_ptls_t ptls2) JL_NOTSAFEPOINT;
+void gc_region_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT;
 #endif
 
 // GC permanent allocation
