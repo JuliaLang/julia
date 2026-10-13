@@ -1712,13 +1712,15 @@ using .Compiler: is_declared_inline, is_declared_noinline
         @test Compiler.is_no_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
     end
     # @nospecialize
+    nospecialized(m::Method, i::Int) = m.nospecialize & (1 << (i-1)) != 0
+    nospecialized(m::Method) = [nospecialized(m, i) for i in 1:m.nargs-1]
     let f(@nospecialize(A::Any); x::Int=1) = 2x
-        @test only(methods(f)).nospecialize == 1
-        @test only(methods(Core.kwcall, (Any, typeof(f), Vararg))).nospecialize == 4
+        @test nospecialized(only(methods(f))) == [true]
+        @test nospecialized(only(methods(Core.kwcall, (Any, typeof(f), Vararg)))) == [false, false, true]
     end
     let f(::Any; x::Int=1) = (@nospecialize; 2x)
-        @test only(methods(f)).nospecialize == -1
-        @test only(methods(Core.kwcall, (Any, typeof(f), Vararg))).nospecialize == -1
+        @test nospecialized(only(methods(f))) == [true]
+        @test nospecialized(only(methods(Core.kwcall, (Any, typeof(f), Vararg)))) == [true, true, true]
     end
     # Base.@assume_effects
     let Base.@assume_effects :notaskstate f(::Any; x::Int=1) = 2x
@@ -1731,8 +1733,8 @@ using .Compiler: is_declared_inline, is_declared_noinline
         @test Compiler.is_aggressive_constprop(only(methods(f)))
         @test is_declared_inline(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
         @test Compiler.is_aggressive_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
-        @test only(methods(f)).nospecialize == -1
-        @test only(methods(Core.kwcall, (Any, typeof(f), Vararg))).nospecialize == -1
+        @test nospecialized(only(methods(f))) == [true]
+        @test nospecialized(only(methods(Core.kwcall, (Any, typeof(f), Vararg)))) == [true, true, true]
         @test Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
         @test Compiler.decode_effects_override(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).purity).notaskstate
     end
