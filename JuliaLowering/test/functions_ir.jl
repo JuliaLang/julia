@@ -968,13 +968,13 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.f %₈
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/destructured#3 slot₄/w(!read) slot₅/iterstate(single_assign) slot₆/y(!read,single_assign) slot₇/z(!read,single_assign)]
-    1   (call top.indexed_iterate slot₃/destructured#3 1)
-    2   (= slot₆/y (call core.getfield %₁ 1))
-    3   (= slot₅/iterstate (call core.getfield %₁ 2))
-    4   slot₅/iterstate
-    5   (call top.indexed_iterate slot₃/destructured#3 2 %₄)
-    6   (= slot₇/z (call core.getfield %₅ 1))
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/#arg#destructured#3 slot₄/w(!read) slot₅/y(!read,single_assign) slot₆/z(!read,single_assign) slot₇/(single_assign)]
+    1   (call top.indexed_iterate slot₃/#arg#destructured#3 1)
+    2   (= slot₅/y (call core.getfield %₁ 1))
+    3   (= slot₇/ (call core.getfield %₁ 2))
+    4   slot₇/
+    5   (call top.indexed_iterate slot₃/#arg#destructured#3 2 %₄)
+    6   (= slot₆/z (call core.getfield %₅ 1))
     7   (return core.nothing)
 10  latestworld
 11  TestMod.f
@@ -1010,8 +1010,8 @@ end
 18  (call core.svec %₁₅ %₁₆ %₁₇)
 19  (call core.define_method TestMod TestMod.f %₁₈
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/destructured#2 slot₃/x(!read,single_assign)]
-    1   (call top.indexed_iterate slot₂/destructured#2 1)
+    slots: [slot₁/#self#(!read) slot₂/#arg#destructured#2 slot₃/x(!read,single_assign)]
+    1   (call top.indexed_iterate slot₂/#arg#destructured#2 1)
     2   (= slot₃/x (call core.getfield %₁ 1))
     3   (return core.nothing)
 20  latestworld
@@ -1231,10 +1231,10 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.f %₈
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/destructured#2 slot₃/destructured#3]
-    1   (call top.indexed_iterate slot₂/destructured#2 1)
+    slots: [slot₁/#self#(!read) slot₂/#arg#destructured#2 slot₃/#arg#destructured#3]
+    1   (call top.indexed_iterate slot₂/#arg#destructured#2 1)
     2   (call core.getfield %₁ 1)
-    3   (call top.indexed_iterate slot₃/destructured#3 1)
+    3   (call top.indexed_iterate slot₃/#arg#destructured#3 1)
     4   (call core.getfield %₃ 1)
     5   (return core.nothing)
 10  latestworld

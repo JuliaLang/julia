@@ -318,7 +318,7 @@ end
 # right hand side is directly indexable.
 function _destructure(ctx, assignment_srcref, stmts, lhs, rhs, is_const)
     n_lhs = numchildren(lhs)
-    iterstate = n_lhs > 0 ? new_local_binding(ctx, rhs, "iterstate") : nothing
+    iterstate = n_lhs > 0 ? newsym(ctx, rhs, "") : nothing
 
     end_stmts = SyntaxList()
     wrap(asgn) = is_const ? (@ast ctx assignment_srcref [:const asgn]) : asgn
@@ -884,7 +884,7 @@ function func_for_generator(ctx, body, iter_value_destructuring)
         @ast ctx body "identity"::top
     elseif !is_identifier_like(iter_value_destructuring)
         # compat: arg::T should convert, not assert, and duplicated arg is OK
-        arg = newsym(ctx, iter_value_destructuring, "#generator#")
+        arg = newsym(ctx, iter_value_destructuring, "")
         @ast ctx body [:->
             [:tuple arg]
             [:block
@@ -998,8 +998,9 @@ function expand_comprehension_to_loops(ctx, ex)
         push!(new_iterspecs, @ast ctx iterspec [:in iterspec[1] iter])
     end
     # Lower to nested for loops
-    idx = new_local_binding(ctx, iterspecs, "idx")
+    idx = newsym(ctx, iterspecs, "")
     @ast ctx ex [:block
+        [:local idx]
         iter_defs...
         full_iter := if length(iters) == 1
             iters[1]
@@ -2111,7 +2112,7 @@ function expand_for(ctx, ex)
         end
 
         iter_ex = iterspec[2]
-        next = new_local_binding(ctx, iterspec, "next")
+        next = newsym(ctx, iterspec, "")
         state = ssavar(ctx, iterspec, "state")
         collection = ssavar(ctx, iter_ex, "collection")
 
@@ -2605,7 +2606,7 @@ function _expr_arg_syms(args)
             # we lose context, so deduplicate names (ignoring #self# to be
             # safe).  HACK: destructured args must match the desugared rhs
             n = syntax_name(a[1])
-            contains(n, "destructured") ? n : n*"#"*string(i)
+            contains(n, ERASE_SLOTNAME_PREFIX*"destructured") ? n : n*"#"*string(i)
         else
             syntax_name(a[1])
         end
@@ -2949,7 +2950,8 @@ end
 # string mangling is necessary until generated functions know about scope layers
 # (hack, see _expr_arg_syms).
 _lower_destructuring_arg(stmts, ctx, i, ex) = @stm ex begin
-    [:tuple _...] -> let arg2 = newsym(ctx, ex, "destructured#" * string(i))
+    [:tuple _...] -> let arg2 = newsym(
+            ctx, ex, ERASE_SLOTNAME_PREFIX*"destructured#" * string(i))
         ldecl = @ast(ctx, ex, [:local [:(=) ex arg2]])
         push!(stmts, setmeta!(ldecl, :is_destructured_arg, true))
         arg2
