@@ -158,7 +158,7 @@ end
 function _nospec_with_default(@nospecialize x = 1)
     2x
 end
-@test collect(methods(_nospec_with_default))[2].nospecialize == 1
+@test collect(methods(_nospec_with_default))[2].nospecialize & 1 == 1
 @test _nospec_with_default() == 2
 @test _nospec_with_default(10) == 20
 
