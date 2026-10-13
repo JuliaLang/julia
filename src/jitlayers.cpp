@@ -610,8 +610,12 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
     // printing via disassembly
     jl_code_instance_t *codeinst = jl_compile_method_internal(mi, world);
     if (codeinst) {
-        uintptr_t fptr = (uintptr_t)jl_atomic_load_acquire(&codeinst->invoke);
-        uintptr_t specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
+        uint8_t specsigflags;
+        jl_callptr_t invoke;
+        void *specptr;
+        jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &specptr, /* waitcompile */ 1);
+        uintptr_t fptr = (uintptr_t)invoke;
+        uintptr_t specfptr = (uintptr_t)specptr;
         if (getwrapper || specfptr == 0)
             specfptr = fptr;
         if (specfptr != 0)
