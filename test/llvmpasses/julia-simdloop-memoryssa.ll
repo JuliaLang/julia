@@ -1,6 +1,6 @@
 ; COM: NewPM-only test, tests that memoryssa is preserved correctly
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='function(loop-mssa(LowerSIMDLoop),print<memoryssa>)' -S -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=CHECK
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='function(loop-mssa(LowerSIMDLoop),print<memoryssa>)' -S -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=CHECK
 
 ; CHECK-LABEL: MemorySSA for function: simd_test
 ; CHECK-LABEL: @simd_test(

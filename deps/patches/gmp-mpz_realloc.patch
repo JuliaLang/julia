@@ -24,7 +24,7 @@
 -      mp = __GMP_REALLOCATE_FUNC_LIMBS (PTR (m), ALLOC (m), new_alloc);
 +      mp_ptr old_mp = PTR (m);
 +      mp_size_t old_alloc = ALLOC (m);
-+      mp_size_t copy_size = ABSIZ (m);
++      mp_size_t copy_size = MIN (ABSIZ (m), MIN (old_alloc, new_alloc));
 +      if (copy_size > new_alloc)
 +	copy_size = new_alloc;
 +      MPN_COPY (mp, old_mp, copy_size);

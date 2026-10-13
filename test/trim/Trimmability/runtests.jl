@@ -6,7 +6,8 @@ outdir = ARGS[1]
 @testset "Trimmability" begin
     exe_suffix = splitext(Base.julia_exename())[2]
     trimmability_exe = joinpath(outdir, "bin", "trimmability" * exe_suffix)
-    lines = readlines(`$trimmability_exe arg1 arg2`)
+    # Disable codegen so that any silent fallback to the JIT fails loudly.
+    lines = readlines(addenv(`$trimmability_exe arg1 arg2`, "JULIA_LOAD_CODEGEN_LIB" => "0"))
     @test lines[1] == "Hello, world!"
     @test lines[2] == trimmability_exe
     @test lines[3] == "arg1"
@@ -15,4 +16,31 @@ outdir = ARGS[1]
     @test parse(Float64, lines[6]) isa Float64
     @test lines[7] == "Version: 1.1.0"
     @test lines[8] == "# preferences: 0"
+    @test lines[9] == "finalizers: 27 32"
+    @test lines[10] == "collected: 0 kept, 10 dropped"
+    @test lines[11] == "got 1:3 vs 1 with 2.5 and sym and c"
+    @test lines[12] == "sparse constructors: 3 5 2 3.0"
+    @test lines[13] == "dense constructors: 6.0 5.0 6.0 2.0"
+    @test lines[14] == "sparse products: 26.0 26.0 4 16"
+    @test lines[15] == "dense products: 26.0 26.0 30.0 100.0"
+    @test lines[16] == "sparse structure: 4 6.0 4 4"
+    @test lines[17] == "dense structure: 38.0 6.0 9.0 3.0"
+    @test lines[18] == "sparse broadcast: 8 19.0 4 16"
+    @test lines[19] == "dense broadcast: 40.0 19.0 4 40.0"
+    @test lines[20] == "sparse vectors: 40.0 2 6.0 10.0"
+    @test lines[21] == "dense vectors: 40.0 2 6.0 0.0"
+    @test lines[22] == "sparse reductions: 10.0 5.0 6.0 5.477225575051661"
+    @test lines[23] == "dense reductions: 10.0 5.0 6.0 5.477225575051661"
+    @test lines[24] == "sparse nested reductions: 7.0 5.0 100.0"
+    @test lines[25] == "dense nested reductions: 7.0 5.0 100.0"
+    @test lines[26] == "sparse solves: -1.0 -1.0 -1.0"
+    @test lines[27] == "dense solves: -1.0 -1.0 -1.0"
+    @test lines[28] == "sparse factorizations: 0.666667 0.666667 -1.0"
+    @test lines[29] == "dense factorizations: 0.666667 0.666667 -1.0"
+    @test lines[30] == "dense decompositions: 6.0 0.666667 4.0"
+    # TODO: needs LinearAlgebra to specialize on `sortby` and on the number of `diagm` pairs
+    # @test lines[31] == "dense eigen: 4.0 3.0 6.0 3.0 5.0"
+    @test lines[31] == "threads: 4160 204"
+    @test lines[32] == "custom_library_ccall: $(VERSION.major)"
+    @test lines[33] == "lazy_library_ccall: $(VERSION.major) 1"
 end

@@ -819,6 +819,10 @@ index_shape() = ()
 @inline index_shape(::Real, rest...) = index_shape(rest...)
 @inline index_shape(A::AbstractArray, rest...) = (axes(A)..., index_shape(rest...)...)
 
+index_sizes() = ()
+@inline index_sizes(::Real, rest...) = index_sizes(rest...)
+@inline index_sizes(A::AbstractArray, rest...) = (size(A)..., index_sizes(rest...)...)
+
 """
     LogicalIndex(mask)
 
@@ -922,6 +926,7 @@ ensure_indexable(I::Tuple{}) = ()
 # In simple cases, we know that we don't need to use axes(A). Optimize those
 # until Julia gets smart enough to elide the call on its own:
 @inline to_indices(A, I::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = to_indices(A, (), I)
+_drop_zerodim(I::Tuple{CartesianIndex{0}, Vararg}) = (@inline; _drop_zerodim(tail(I)))
 # But some index types require more context spanning multiple indices
 # CartesianIndex is unfolded outside the inner to_indices for better inference
 @inline function to_indices(A, inds, I::Tuple{CartesianIndex{N}, Vararg}) where N
@@ -959,8 +964,16 @@ Fallback to `iterate` by default, but optimized for indices type in `Base`.
 @propagate_inbounds _prechecked_iterate(iter) = iterate(iter)
 @propagate_inbounds _prechecked_iterate(iter, state) = iterate(iter, state)
 
-_prechecked_iterate(iter::AbstractUnitRange, i = first(iter)) = i, convert(eltype(iter), i + step(iter))
-_prechecked_iterate(iter::LinearIndices, i = first(iter)) = i, i + 1
+_prechecked_iterate(iter::AbstractUnitRange) = first(iter), first(iter)
+function _prechecked_iterate(iter::AbstractUnitRange, i)
+    i′ = convert(eltype(iter), i + step(iter))
+    return i′, i′
+end
+_prechecked_iterate(iter::LinearIndices) = first(iter), first(iter)
+function _prechecked_iterate(iter::LinearIndices, i)
+    i′ = i + 1
+    return i′, i′
+end
 _prechecked_iterate(iter::CartesianIndices) = first(iter), first(iter)
 function _prechecked_iterate(iter::CartesianIndices, i::CartesianIndex)
     i′ = IteratorsMD.inc(i.I, iter.indices)
@@ -1041,8 +1054,7 @@ function _generate_unsafe_setindex!_body(N::Int)
     quote
         x′ = unalias(A, x)
         @nexprs $N d->(I_d = unalias(A, I[d]))
-        idxlens = @ncall $N index_lengths I
-        @ncall $N setindex_shape_check x′ (d->idxlens[d])
+        setindex_shape_check(x′, @ncall $N index_sizes I)
         X = eachindex(x′)
         Xy = _prechecked_iterate(X)
         @inbounds @nloops $N i d->I_d begin
@@ -1523,7 +1535,7 @@ end
     N = length(I)
     quote
         idxlens = @ncall $N index_lengths I0 d->I[d]
-        @ncall $N setindex_shape_check X idxlens[1] d->idxlens[d+1]
+        setindex_shape_check(X, @ncall $N index_sizes I0 d->I[d])
         isempty(X) && return B
         f0 = indexoffset(I0)+1
         l0 = idxlens[1]
@@ -2088,14 +2100,15 @@ function hash_shaped(A, h0::UInt, eltype_hint=())
     elseif len < 32768
         # separate accumulator streams, unrolled
         @nexprs 8 i -> p_i::UInt = h
+        off = firstindex(A) - 1
         n  = 1
         limit = len - 7
         while n <= limit
-            @nexprs 8 i -> p_i = union_split(hash, A[n + i - 1], eltype_hint, p_i)
+            @nexprs 8 i -> p_i = union_split(hash, A[off + n + i - 1], eltype_hint, p_i)
             n += 8
         end
         while n <= len
-            p_1 = union_split(hash, A[n], eltype_hint, p_1)
+            p_1 = union_split(hash, A[off + n], eltype_hint, p_1)
             n += 1
         end
         # fold all streams back together

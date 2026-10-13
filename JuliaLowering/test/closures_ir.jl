@@ -11,25 +11,26 @@ end
 2   (call core.svec)
 3   (call core.svec :x)
 4   (call core.svec false)
-5   (call JuliaLowering.eval_closure_type TestMod :#f##0 %₂ %₃ %₄)
+5   (call JuliaLowering.eval_closure_type TestMod :#f#f##0 %₂ %₃ %₄)
 6   latestworld
-7   TestMod.#f##0
+7   TestMod.#f#f##0
 8   (call core._typeof_captured_variable slot₂/x)
 9   (call core.apply_type %₇ %₈)
 10  (new %₉ slot₂/x)
-11  (= slot₁/f %₁₀)
-12  TestMod.#f##0
-13  (call core.svec %₁₂ core.Any)
-14  (call core.svec)
-15  SourceLocation::3:5
-16  (call core.svec %₁₃ %₁₄ %₁₅)
-17  --- method core.nothing %₁₆
+11  TestMod.#f#f##0
+12  (call core.svec %₁₁ core.Any)
+13  (call core.svec)
+14  SourceLocation:3
+15  (call core.svec %₁₂ %₁₃ %₁₄)
+16  (call core.define_method TestMod core.nothing %₁₅
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/y]
     1   TestMod.+
     2   (call core.getfield slot₁/#self# :x)
     3   (call %₁ %₂ slot₂/y)
     4   (return %₃)
-18  latestworld
+17  latestworld
+18  (= slot₁/f %₁₀)
 19  slot₁/f
 20  (return %₁₉)
 
@@ -44,9 +45,9 @@ end
 1   (call core.svec)
 2   (call core.svec)
 3   (call core.svec)
-4   (call JuliaLowering.eval_closure_type TestMod :#no_method_f##0 %₁ %₂ %₃)
+4   (call JuliaLowering.eval_closure_type TestMod :#no_method_f#no_method_f##0 %₁ %₂ %₃)
 5   latestworld
-6   TestMod.#no_method_f##0
+6   TestMod.#no_method_f#no_method_f##0
 7   (new %₆)
 8   (= slot₁/no_method_f %₇)
 9   slot₁/no_method_f
@@ -68,24 +69,25 @@ end
 5   (call core.svec)
 6   (call core.svec :x)
 7   (call core.svec true)
-8   (call JuliaLowering.eval_closure_type TestMod :#f##1 %₅ %₆ %₇)
+8   (call JuliaLowering.eval_closure_type TestMod :#f#f##1 %₅ %₆ %₇)
 9   latestworld
-10  TestMod.#f##1
+10  TestMod.#f#f##1
 11  slot₂/x
 12  (new %₁₀ %₁₁)
-13  (= slot₁/f %₁₂)
-14  TestMod.#f##1
-15  (call core.svec %₁₄ core.Any)
-16  (call core.svec)
-17  SourceLocation::3:5
-18  (call core.svec %₁₅ %₁₆ %₁₇)
-19  --- method core.nothing %₁₈
+13  TestMod.#f#f##1
+14  (call core.svec %₁₃ core.Any)
+15  (call core.svec)
+16  SourceLocation:3
+17  (call core.svec %₁₄ %₁₅ %₁₆)
+18  (call core.define_method TestMod core.nothing %₁₇
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/y(!read)]
     1   2
     2   (call core.getfield slot₁/#self# :x)
     3   (call core.setfield! %₂ :contents %₁)
     4   (return %₁)
-20  latestworld
+19  latestworld
+20  (= slot₁/f %₁₂)
 21  slot₁/f
 22  (return %₂₁)
 
@@ -99,19 +101,20 @@ function f(x)
     x
 end
 #---------------------
-1   (method TestMod.f)
+1   (call core.define_method TestMod :f)
 2   latestworld
 3   (call core.svec)
 4   (call core.svec :x)
 5   (call core.svec true)
-6   (call JuliaLowering.eval_closure_type TestMod :#f#g##0 %₃ %₄ %₅)
+6   (call JuliaLowering.eval_closure_type TestMod :#g#f##2 %₃ %₄ %₅)
 7   latestworld
-8   TestMod.#f#g##0
+8   TestMod.#g#f##2
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::2:5
+11  SourceLocation:2
 12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method core.nothing %₁₂
+13  (call core.define_method TestMod core.nothing %₁₂
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   10
     2   (call core.getfield slot₁/#self# :x)
@@ -122,14 +125,15 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆ core.Any)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
-21  --- method TestMod.f %₂₀
+21  (call core.define_method TestMod TestMod.f %₂₀
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(single_assign) slot₃/g(single_assign,called) slot₄/x(!read,maybe_undef) slot₅/x(!read)]
     1   (= slot₅/x slot₂/x)
     2   slot₅/x
     3   (= slot₅/x (call core.Box %₂))
-    4   TestMod.#f#g##0
+    4   TestMod.#g#f##2
     5   slot₅/x
     6   (new %₄ %₅)
     7   (= slot₃/g %₆)
@@ -158,19 +162,20 @@ function foo(x)
     return x
 end
 #---------------------
-1   (method TestMod.foo)
+1   (call core.define_method TestMod :foo)
 2   latestworld
 3   (call core.svec)
 4   (call core.svec :x)
 5   (call core.svec false)
-6   (call JuliaLowering.eval_closure_type TestMod :#foo##->###0 %₃ %₄ %₅)
+6   (call JuliaLowering.eval_closure_type TestMod :#foo##0#foo##1 %₃ %₄ %₅)
 7   latestworld
-8   TestMod.#foo##->###0
+8   TestMod.#foo##0#foo##1
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::4:16
+11  SourceLocation:4
 12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method core.nothing %₁₂
+13  (call core.define_method TestMod core.nothing %₁₂
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   (call core.getfield slot₁/#self# :x)
     2   (return %₁)
@@ -179,9 +184,10 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆ core.Any)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
-21  --- method TestMod.foo %₂₀
+21  (call core.define_method TestMod TestMod.foo %₂₀
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(single_assign) slot₃/#->#(single_assign) slot₄/x(!read)]
     1   (= slot₄/x slot₂/x)
     2   (newvar slot₃/#->#)
@@ -190,7 +196,7 @@ end
     5   (call %₃ %₄)
     6   (gotoifnot %₅ label₁₇)
     7   (= slot₄/x 5)
-    8   TestMod.#foo##->###0
+    8   TestMod.#foo##0#foo##1
     9   slot₄/x
     10  (call core._typeof_captured_variable %₉)
     11  (call core.apply_type %₈ %₁₀)
@@ -214,19 +220,20 @@ function f(x)
     z = x
 end
 #---------------------
-1   (method TestMod.f)
+1   (call core.define_method TestMod :f)
 2   latestworld
 3   (call core.svec)
 4   (call core.svec :x)
 5   (call core.svec false)
-6   (call JuliaLowering.eval_closure_type TestMod :#f#g##1 %₃ %₄ %₅)
+6   (call JuliaLowering.eval_closure_type TestMod :#g#f##3 %₃ %₄ %₅)
 7   latestworld
-8   TestMod.#f#g##1
+8   TestMod.#g#f##3
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::2:5
+11  SourceLocation:2
 12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method core.nothing %₁₂
+13  (call core.define_method TestMod core.nothing %₁₂
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/y(!read,single_assign)]
     1   (call core.getfield slot₁/#self# :x)
     2   (= slot₂/y %₁)
@@ -236,11 +243,12 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆ core.Any)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
-21  --- method TestMod.f %₂₀
+21  (call core.define_method TestMod TestMod.f %₂₀
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x slot₃/g(single_assign) slot₄/z(!read,single_assign)]
-    1   TestMod.#f#g##1
+    1   TestMod.#g#f##3
     2   (call core._typeof_captured_variable slot₂/x)
     3   (call core.apply_type %₁ %₂)
     4   (new %₃ slot₂/x)
@@ -260,21 +268,22 @@ function f(::T) where T
     end
 end
 #---------------------
-1   (method TestMod.f)
+1   (call core.define_method TestMod :f)
 2   latestworld
 3   (call core.TypeVar :T)
 4   (call core.svec :T)
 5   (call core.svec)
 6   (call core.svec)
-7   (call JuliaLowering.eval_closure_type TestMod :#f#g##2 %₄ %₅ %₆)
+7   (call JuliaLowering.eval_closure_type TestMod :#g#f##4 %₄ %₅ %₆)
 8   latestworld
-9   TestMod.#f#g##2
+9   TestMod.#g#f##4
 10  (call core.apply_type %₉ %₃)
 11  (call core.svec %₁₀)
 12  (call core.svec %₃)
-13  SourceLocation::2:5
+13  SourceLocation:2
 14  (call core.svec %₁₁ %₁₂ %₁₃)
-15  --- method core.nothing %₁₄
+15  (call core.define_method TestMod core.nothing %₁₄
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   TestMod.use
     2   static_parameter₁
@@ -285,11 +294,12 @@ end
 18  (call core.TypeEqOf %₁₇)
 19  (call core.svec %₁₈ %₃)
 20  (call core.svec %₃)
-21  SourceLocation::1:1
+21  SourceLocation:1
 22  (call core.svec %₁₉ %₂₀ %₂₁)
-23  --- method TestMod.f %₂₂
+23  (call core.define_method TestMod TestMod.f %₂₂
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/#unused#(!read) slot₃/g(single_assign)]
-    1   TestMod.#f#g##2
+    1   TestMod.#g#f##4
     2   static_parameter₁
     3   (call core.apply_type %₁ %₂)
     4   (new %₃)
@@ -314,19 +324,20 @@ function f(x)
      @isdefined(x)) # always defined local (function arg)
 end
 #---------------------
-1   (method TestMod.f)
+1   (call core.define_method TestMod :f)
 2   latestworld
 3   (call core.svec)
 4   (call core.svec :x :y)
 5   (call core.svec false true)
-6   (call JuliaLowering.eval_closure_type TestMod :#f#g##3 %₃ %₄ %₅)
+6   (call JuliaLowering.eval_closure_type TestMod :#g#f##5 %₃ %₄ %₅)
 7   latestworld
-8   TestMod.#f#g##3
+8   TestMod.#g#f##5
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::2:5
+11  SourceLocation:2
 12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method core.nothing %₁₂
+13  (call core.define_method TestMod core.nothing %₁₂
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/z(single_assign)]
     1   (= slot₂/z 3)
     2   (call core.getfield slot₁/#self# :y)
@@ -339,12 +350,13 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆ core.Any)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
-21  --- method TestMod.f %₂₀
+21  (call core.define_method TestMod TestMod.f %₂₀
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x slot₃/g(single_assign) slot₄/y(single_assign)]
     1   (= slot₄/y (call core.Box))
-    2   TestMod.#f#g##3
+    2   TestMod.#g#f##5
     3   (call core._typeof_captured_variable slot₂/x)
     4   (call core.apply_type %₂ %₃)
     5   slot₄/y
@@ -364,7 +376,7 @@ end
 ########################################
 # Nested captures - here `g` captures `x` because it is needed to initialize
 # the closure `h` which captures both `x` and `y`.
-# [method_filter: #f_nest#g_nest##0]
+# [method_filter: #g_nest#f_nest##0]
 function f_nest(x)
     function g_nest(y)
         function h_nest(z)
@@ -374,7 +386,7 @@ function f_nest(x)
 end
 #---------------------
 slots: [slot₁/#self#(!read) slot₂/y slot₃/h_nest(single_assign)]
-1   TestMod.#f_nest#g_nest#h_nest##0
+1   TestMod.#h_nest#f_nest##1
 2   (call core.getfield slot₁/#self# :x)
 3   (call core._typeof_captured_variable %₂)
 4   (call core._typeof_captured_variable slot₂/y)
@@ -398,13 +410,13 @@ end
 2   1
 3   slot₁/x
 4   (call core.setfield! %₃ :contents %₂)
-5   (method TestMod.f)
+5   (call core.define_method TestMod :f)
 6   latestworld
 7   TestMod.f
 8   (call core.TypeEqOf %₇)
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::3:5
+11  SourceLocation:3
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
@@ -423,7 +435,7 @@ end
 14  slot₁/x
 15  (call core.svec %₁₄)
 16  (call JuliaLowering.replace_captured_locals %₁₃ %₁₅)
-17  --- method TestMod.f %₁₂ %₁₆
+17  (call core.define_method TestMod TestMod.f %₁₂ %₁₆)
 18  latestworld
 19  TestMod.f
 20  (return %₁₉)
@@ -435,22 +447,23 @@ x -> x*x
 1   (call core.svec)
 2   (call core.svec)
 3   (call core.svec)
-4   (call JuliaLowering.eval_closure_type TestMod :##->###0 %₁ %₂ %₃)
+4   (call JuliaLowering.eval_closure_type TestMod :#1#2 %₁ %₂ %₃)
 5   latestworld
-6   TestMod.##->###0
+6   TestMod.#1#2
 7   (new %₆)
-8   (= slot₁/#-># %₇)
-9   TestMod.##->###0
-10  (call core.svec %₉ core.Any)
-11  (call core.svec)
-12  SourceLocation::1:1
-13  (call core.svec %₁₀ %₁₁ %₁₂)
-14  --- method core.nothing %₁₃
+8   TestMod.#1#2
+9   (call core.svec %₈ core.Any)
+10  (call core.svec)
+11  SourceLocation:1
+12  (call core.svec %₉ %₁₀ %₁₁)
+13  (call core.define_method TestMod core.nothing %₁₂
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x]
     1   TestMod.*
     2   (call %₁ slot₂/x slot₂/x)
     3   (return %₂)
-15  latestworld
+14  latestworld
+15  (= slot₁/#-># %₇)
 16  slot₁/#->#
 17  (return %₁₆)
 
@@ -463,22 +476,23 @@ end
 1   (call core.svec)
 2   (call core.svec)
 3   (call core.svec)
-4   (call JuliaLowering.eval_closure_type TestMod :##anon###0 %₁ %₂ %₃)
+4   (call JuliaLowering.eval_closure_type TestMod :#3#4 %₁ %₂ %₃)
 5   latestworld
-6   TestMod.##anon###0
+6   TestMod.#3#4
 7   (new %₆)
-8   (= slot₁/#anon# %₇)
-9   TestMod.##anon###0
-10  (call core.svec %₉ core.Any)
-11  (call core.svec)
-12  SourceLocation::1:1
-13  (call core.svec %₁₀ %₁₁ %₁₂)
-14  --- method core.nothing %₁₃
+8   TestMod.#3#4
+9   (call core.svec %₈ core.Any)
+10  (call core.svec)
+11  SourceLocation:1
+12  (call core.svec %₉ %₁₀ %₁₁)
+13  (call core.define_method TestMod core.nothing %₁₂
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x]
     1   TestMod.*
     2   (call %₁ slot₂/x slot₂/x)
     3   (return %₂)
-15  latestworld
+14  latestworld
+15  (= slot₁/#anon# %₇)
 16  slot₁/#anon#
 17  (return %₁₆)
 
@@ -496,22 +510,23 @@ end
 6   (call core.svec)
 7   (call core.svec)
 8   (call core.svec)
-9   (call JuliaLowering.eval_closure_type TestMod :##->###1 %₆ %₇ %₈)
+9   (call JuliaLowering.eval_closure_type TestMod :#5#6 %₆ %₇ %₈)
 10  latestworld
-11  TestMod.##->###1
+11  TestMod.#5#6
 12  (new %₁₁)
-13  (= slot₁/#-># %₁₂)
-14  TestMod.##->###1
-15  (call core.svec %₁₄ core.Any)
-16  (call core.svec)
-17  SourceLocation::1:10
-18  (call core.svec %₁₅ %₁₆ %₁₇)
-19  --- method core.nothing %₁₈
+13  TestMod.#5#6
+14  (call core.svec %₁₃ core.Any)
+15  (call core.svec)
+16  SourceLocation:1
+17  (call core.svec %₁₄ %₁₅ %₁₆)
+18  (call core.define_method TestMod core.nothing %₁₇
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/y]
     1   TestMod.+
     2   (call %₁ slot₂/y 2)
     3   (return %₂)
-20  latestworld
+19  latestworld
+20  (= slot₁/#-># %₁₂)
 21  slot₁/#->#
 22  TestMod.x
 23  (call core.kwcall %₅ %₁ %₂₁ %₂₂)
@@ -542,7 +557,7 @@ end
 3   TestMod.T
 4   (call core.apply_type core.Tuple core.Any %₃)
 5   (call core.apply_type core.Union)
-6   --- opaque_closure_method  core.nothing 2 false SourceLocation::2:31
+6   --- opaque_closure_method  core.nothing 2 false SourceLocation:2
     slots: [slot₁/#self#(!read) slot₂/x slot₃/z]
     1   TestMod.-
     2   TestMod.+
@@ -564,7 +579,7 @@ end
 1   (call core.apply_type core.Vararg core.Any)
 2   (call core.apply_type core.Tuple core.Any %₁)
 3   (call core.apply_type core.Union)
-4   --- opaque_closure_method  core.nothing 2 true SourceLocation::2:31
+4   --- opaque_closure_method  core.nothing 2 true SourceLocation:2
     slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/ys]
     1   slot₃/ys
     2   (return %₁)
@@ -594,18 +609,18 @@ end
 2   (call core.svec)
 3   (call core.svec :recursive_b)
 4   (call core.svec true)
-5   (call JuliaLowering.eval_closure_type TestMod :#recursive_a##0 %₂ %₃ %₄)
+5   (call JuliaLowering.eval_closure_type TestMod :#recursive_a#recursive_a##0 %₂ %₃ %₄)
 6   latestworld
-7   TestMod.#recursive_a##0
+7   TestMod.#recursive_a#recursive_a##0
 8   slot₂/recursive_b
 9   (new %₇ %₈)
-10  (= slot₁/recursive_a %₉)
-11  TestMod.#recursive_a##0
-12  (call core.svec %₁₁)
-13  (call core.svec)
-14  SourceLocation::2:5
-15  (call core.svec %₁₂ %₁₃ %₁₄)
-16  --- method core.nothing %₁₅
+10  TestMod.#recursive_a#recursive_a##0
+11  (call core.svec %₁₀)
+12  (call core.svec)
+13  SourceLocation:2
+14  (call core.svec %₁₁ %₁₂ %₁₃)
+15  (call core.define_method TestMod core.nothing %₁₄
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/recursive_b(!read,maybe_undef)]
     1   (call core.getfield slot₁/#self# :recursive_b)
     2   (call core.isdefined %₁ :contents)
@@ -616,29 +631,31 @@ end
     7   (call core.getfield %₁ :contents)
     8   (call %₇)
     9   (return %₈)
-17  latestworld
+16  latestworld
+17  (= slot₁/recursive_a %₉)
 18  (call core.svec)
 19  (call core.svec :recursive_a)
 20  (call core.svec false)
-21  (call JuliaLowering.eval_closure_type TestMod :#recursive_b##0 %₁₈ %₁₉ %₂₀)
+21  (call JuliaLowering.eval_closure_type TestMod :#recursive_b#recursive_b##0 %₁₈ %₁₉ %₂₀)
 22  latestworld
-23  TestMod.#recursive_b##0
+23  TestMod.#recursive_b#recursive_b##0
 24  (call core._typeof_captured_variable slot₁/recursive_a)
 25  (call core.apply_type %₂₃ %₂₄)
 26  (new %₂₅ slot₁/recursive_a)
-27  slot₂/recursive_b
-28  (call core.setfield! %₂₇ :contents %₂₆)
-29  TestMod.#recursive_b##0
-30  (call core.svec %₂₉)
-31  (call core.svec)
-32  SourceLocation::5:5
-33  (call core.svec %₃₀ %₃₁ %₃₂)
-34  --- method core.nothing %₃₃
+27  TestMod.#recursive_b#recursive_b##0
+28  (call core.svec %₂₇)
+29  (call core.svec)
+30  SourceLocation:5
+31  (call core.svec %₂₈ %₂₉ %₃₀)
+32  (call core.define_method TestMod core.nothing %₃₁
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   (call core.getfield slot₁/#self# :recursive_a)
     2   (call %₁)
     3   (return %₂)
-35  latestworld
+33  latestworld
+34  slot₂/recursive_b
+35  (call core.setfield! %₃₄ :contents %₂₆)
 36  slot₂/recursive_b
 37  (call core.isdefined %₃₆ :contents)
 38  (gotoifnot %₃₇ label₄₀)
@@ -661,57 +678,60 @@ end
 3   (call core.svec)
 4   (call core.svec :y)
 5   (call core.svec false)
-6   (call JuliaLowering.eval_closure_type TestMod :##kw_body#f_kw_closure#0##0 %₃ %₄ %₅)
+6   (call JuliaLowering.eval_closure_type TestMod :#f_kw_closure#kw_body#7#8 %₃ %₄ %₅)
 7   latestworld
-8   TestMod.##kw_body#f_kw_closure#0##0
+8   TestMod.#f_kw_closure#kw_body#7#8
 9   (call core._typeof_captured_variable slot₁/y)
 10  (call core.apply_type %₈ %₉)
 11  (new %₁₀ slot₁/y)
-12  (= slot₂/#kw_body#f_kw_closure#0 %₁₁)
+12  (= slot₂/#f_kw_closure#kw_body#7 %₁₁)
 13  (call core.svec)
-14  (call core.svec :#kw_body#f_kw_closure#0)
+14  (call core.svec :#f_kw_closure#kw_body#7)
 15  (call core.svec false)
-16  (call JuliaLowering.eval_closure_type TestMod :#f_kw_closure##0 %₁₃ %₁₄ %₁₅)
+16  (call JuliaLowering.eval_closure_type TestMod :#f_kw_closure#f_kw_closure##0 %₁₃ %₁₄ %₁₅)
 17  latestworld
-18  TestMod.#f_kw_closure##0
-19  (call core._typeof_captured_variable slot₂/#kw_body#f_kw_closure#0)
+18  TestMod.#f_kw_closure#f_kw_closure##0
+19  (call core._typeof_captured_variable slot₂/#f_kw_closure#kw_body#7)
 20  (call core.apply_type %₁₈ %₁₉)
-21  (new %₂₀ slot₂/#kw_body#f_kw_closure#0)
-22  (= slot₃/f_kw_closure %₂₁)
-23  TestMod.##kw_body#f_kw_closure#0##0
-24  TestMod.X
-25  TestMod.#f_kw_closure##0
-26  (call core.svec %₂₃ %₂₄ %₂₅)
-27  (call core.svec)
-28  SourceLocation::2:5
-29  (call core.svec %₂₆ %₂₇ %₂₈)
-30  --- method core.nothing %₂₉
-    slots: [slot₁/#kw_body#f_kw_closure#0(!read) slot₂/x slot₃/#self#(!read)]
+21  (new %₂₀ slot₂/#f_kw_closure#kw_body#7)
+22  TestMod.#f_kw_closure#kw_body#7#8
+23  TestMod.X
+24  TestMod.#f_kw_closure#f_kw_closure##0
+25  (call core.svec %₂₂ %₂₃ %₂₄)
+26  (call core.svec)
+27  SourceLocation:2
+28  (call core.svec %₂₅ %₂₆ %₂₇)
+29  (call core.define_method TestMod core.nothing %₂₈
+    --- code_info
+    slots: [slot₁/#f_kw_closure#kw_body#7(!read) slot₂/x slot₃/#self#(!read)]
     1   (meta :nkw 1)
     2   TestMod.+
-    3   (call core.getfield slot₁/#kw_body#f_kw_closure#0 :y)
+    3   (call core.getfield slot₁/#f_kw_closure#kw_body#7 :y)
     4   (call %₂ slot₂/x %₃)
     5   (return %₄)
-31  latestworld
-32  TestMod.#f_kw_closure##0
-33  (call core.svec %₃₂)
-34  (call core.svec)
-35  SourceLocation::2:5
-36  (call core.svec %₃₃ %₃₄ %₃₅)
-37  --- method core.nothing %₃₆
+30  latestworld
+31  TestMod.#f_kw_closure#f_kw_closure##0
+32  (call core.svec %₃₁)
+33  (call core.svec)
+34  SourceLocation:2
+35  (call core.svec %₃₂ %₃₃ %₃₄)
+36  (call core.define_method TestMod core.nothing %₃₅
+    --- code_info
     slots: [slot₁/#self#]
-    1   (call core.getfield slot₁/#self# :#kw_body#f_kw_closure#0)
+    1   (call core.getfield slot₁/#self# :#f_kw_closure#kw_body#7)
     2   TestMod.x_default
     3   (call %₁ %₂ slot₁/#self#)
     4   (return %₃)
-38  latestworld
+37  latestworld
+38  (= slot₃/f_kw_closure %₂₁)
 39  (call core.typeof core.kwcall)
-40  TestMod.#f_kw_closure##0
+40  TestMod.#f_kw_closure#f_kw_closure##0
 41  (call core.svec %₃₉ core.NamedTuple %₄₀)
 42  (call core.svec)
-43  SourceLocation::2:5
+43  SourceLocation:2
 44  (call core.svec %₄₁ %₄₂ %₄₃)
-45  --- method core.nothing %₄₄
+45  (call core.define_method TestMod core.nothing %₄₄
+    --- code_info
     slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/x(!read) slot₅/#kwtmp#]
     1   (newvar slot₄/x)
     2   (newvar slot₅/#kwtmp#)
@@ -737,7 +757,7 @@ end
     22  (gotoifnot %₂₁ label₂₄)
     23  (goto label₂₅)
     24  (call top.kwerr slot₂/kws slot₃/#self#)
-    25  (call core.getfield slot₃/#self# :#kw_body#f_kw_closure#0)
+    25  (call core.getfield slot₃/#self# :#f_kw_closure#kw_body#7)
     26  (call %₂₅ %₁₇ slot₃/#self#)
     27  (return %₂₆)
 46  latestworld
@@ -780,19 +800,20 @@ function f_after_if(cond)
     () -> y
 end
 #---------------------
-1   (method TestMod.f_after_if)
+1   (call core.define_method TestMod :f_after_if)
 2   latestworld
 3   (call core.svec)
 4   (call core.svec :y)
 5   (call core.svec false)
-6   (call JuliaLowering.eval_closure_type TestMod :#f_after_if##->###0 %₃ %₄ %₅)
+6   (call JuliaLowering.eval_closure_type TestMod :#f_after_if##0#f_after_if##1 %₃ %₄ %₅)
 7   latestworld
-8   TestMod.#f_after_if##->###0
+8   TestMod.#f_after_if##0#f_after_if##1
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::6:5
+11  SourceLocation:6
 12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method core.nothing %₁₂
+13  (call core.define_method TestMod core.nothing %₁₂
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   (call core.getfield slot₁/#self# :y)
     2   (return %₁)
@@ -801,16 +822,17 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆ core.Any)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
-21  --- method TestMod.f_after_if %₂₀
+21  (call core.define_method TestMod TestMod.f_after_if %₂₀
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/cond slot₃/#->#(single_assign) slot₄/y(single_assign)]
     1   (newvar slot₃/#->#)
     2   (gotoifnot slot₂/cond label₅)
     3   TestMod.println
     4   (call %₃ "hello")
     5   (= slot₄/y 1)
-    6   TestMod.#f_after_if##->###0
+    6   TestMod.#f_after_if##0#f_after_if##1
     7   (call core._typeof_captured_variable slot₄/y)
     8   (call core.apply_type %₆ %₇)
     9   (new %₈ slot₄/y)
@@ -828,19 +850,20 @@ function f_ternary(x)
     () -> y
 end
 #---------------------
-1   (method TestMod.f_ternary)
+1   (call core.define_method TestMod :f_ternary)
 2   latestworld
 3   (call core.svec)
 4   (call core.svec :y)
 5   (call core.svec false)
-6   (call JuliaLowering.eval_closure_type TestMod :#f_ternary##->###0 %₃ %₄ %₅)
+6   (call JuliaLowering.eval_closure_type TestMod :#f_ternary##0#f_ternary##1 %₃ %₄ %₅)
 7   latestworld
-8   TestMod.#f_ternary##->###0
+8   TestMod.#f_ternary##0#f_ternary##1
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::3:5
+11  SourceLocation:3
 12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method core.nothing %₁₂
+13  (call core.define_method TestMod core.nothing %₁₂
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   (call core.getfield slot₁/#self# :y)
     2   (return %₁)
@@ -849,9 +872,10 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆ core.Any)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
-21  --- method TestMod.f_ternary %₂₀
+21  (call core.define_method TestMod TestMod.f_ternary %₂₀
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x slot₃/#->#(single_assign) slot₄/y(single_assign) slot₅/if_val(!read)]
     1   (newvar slot₃/#->#)
     2   TestMod.>
@@ -863,7 +887,7 @@ end
     8   (= slot₅/if_val 0)
     9   slot₅/if_val
     10  (= slot₄/y %₉)
-    11  TestMod.#f_ternary##->###0
+    11  TestMod.#f_ternary##0#f_ternary##1
     12  (call core._typeof_captured_variable slot₄/y)
     13  (call core.apply_type %₁₁ %₁₂)
     14  (new %₁₃ slot₄/y)
@@ -882,19 +906,20 @@ function f_or_guard(x)
     () -> y
 end
 #---------------------
-1   (method TestMod.f_or_guard)
+1   (call core.define_method TestMod :f_or_guard)
 2   latestworld
 3   (call core.svec)
 4   (call core.svec :y)
 5   (call core.svec false)
-6   (call JuliaLowering.eval_closure_type TestMod :#f_or_guard##->###0 %₃ %₄ %₅)
+6   (call JuliaLowering.eval_closure_type TestMod :#f_or_guard##0#f_or_guard##1 %₃ %₄ %₅)
 7   latestworld
-8   TestMod.#f_or_guard##->###0
+8   TestMod.#f_or_guard##0#f_or_guard##1
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::4:5
+11  SourceLocation:4
 12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method core.nothing %₁₂
+13  (call core.define_method TestMod core.nothing %₁₂
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   (call core.getfield slot₁/#self# :y)
     2   (return %₁)
@@ -903,9 +928,10 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆ core.Any)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
-21  --- method TestMod.f_or_guard %₂₀
+21  (call core.define_method TestMod TestMod.f_or_guard %₂₀
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x slot₃/#->#(single_assign) slot₄/y(single_assign) slot₅/if_val(!read)]
     1   (newvar slot₃/#->#)
     2   TestMod.===
@@ -924,7 +950,7 @@ end
     15  (goto label₁₆)
     16  slot₂/x
     17  (= slot₄/y %₁₆)
-    18  TestMod.#f_or_guard##->###0
+    18  TestMod.#f_or_guard##0#f_or_guard##1
     19  (call core._typeof_captured_variable slot₄/y)
     20  (call core.apply_type %₁₈ %₁₉)
     21  (new %₂₀ slot₄/y)
@@ -942,19 +968,20 @@ function f_arg_reassign(x)
     return ()->x
 end
 #---------------------
-1   (method TestMod.f_arg_reassign)
+1   (call core.define_method TestMod :f_arg_reassign)
 2   latestworld
 3   (call core.svec)
 4   (call core.svec :x)
 5   (call core.svec false)
-6   (call JuliaLowering.eval_closure_type TestMod :#f_arg_reassign##->###0 %₃ %₄ %₅)
+6   (call JuliaLowering.eval_closure_type TestMod :#f_arg_reassign##0#f_arg_reassign##1 %₃ %₄ %₅)
 7   latestworld
-8   TestMod.#f_arg_reassign##->###0
+8   TestMod.#f_arg_reassign##0#f_arg_reassign##1
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::3:12
+11  SourceLocation:3
 12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method core.nothing %₁₂
+13  (call core.define_method TestMod core.nothing %₁₂
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   (call core.getfield slot₁/#self# :x)
     2   (return %₁)
@@ -963,13 +990,14 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆ core.Any)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
-21  --- method TestMod.f_arg_reassign %₂₀
+21  (call core.define_method TestMod TestMod.f_arg_reassign %₂₀
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(single_assign) slot₃/#->#(single_assign) slot₄/x(!read)]
     1   (= slot₄/x slot₂/x)
     2   (= slot₄/x 1)
-    3   TestMod.#f_arg_reassign##->###0
+    3   TestMod.#f_arg_reassign##0#f_arg_reassign##1
     4   slot₄/x
     5   (call core._typeof_captured_variable %₄)
     6   (call core.apply_type %₃ %₅)
@@ -1000,18 +1028,18 @@ end
 7   (call core.svec)
 8   (call core.svec :y)
 9   (call core.svec true)
-10  (call JuliaLowering.eval_closure_type TestMod :##->###2 %₇ %₈ %₉)
+10  (call JuliaLowering.eval_closure_type TestMod :#9#10 %₇ %₈ %₉)
 11  latestworld
-12  TestMod.##->###2
+12  TestMod.#9#10
 13  slot₂/y
 14  (new %₁₂ %₁₃)
-15  (= slot₁/#-># %₁₄)
-16  TestMod.##->###2
-17  (call core.svec %₁₆)
-18  (call core.svec)
-19  SourceLocation::5:5
-20  (call core.svec %₁₇ %₁₈ %₁₉)
-21  --- method core.nothing %₂₀
+15  TestMod.#9#10
+16  (call core.svec %₁₅)
+17  (call core.svec)
+18  SourceLocation:5
+19  (call core.svec %₁₆ %₁₇ %₁₈)
+20  (call core.define_method TestMod core.nothing %₁₉
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/y(!read,maybe_undef)]
     1   (call core.getfield slot₁/#self# :y)
     2   (call core.isdefined %₁ :contents)
@@ -1021,7 +1049,8 @@ end
     6   slot₂/y
     7   (call core.getfield %₁ :contents)
     8   (return %₇)
-22  latestworld
+21  latestworld
+22  (= slot₁/#-># %₁₄)
 23  slot₁/#->#
 24  (return %₂₃)
 
@@ -1033,19 +1062,20 @@ function f_local_no_box()
     ()->x
 end
 #---------------------
-1   (method TestMod.f_local_no_box)
+1   (call core.define_method TestMod :f_local_no_box)
 2   latestworld
 3   (call core.svec)
 4   (call core.svec :x)
 5   (call core.svec false)
-6   (call JuliaLowering.eval_closure_type TestMod :#f_local_no_box##->###0 %₃ %₄ %₅)
+6   (call JuliaLowering.eval_closure_type TestMod :#f_local_no_box##0#f_local_no_box##1 %₃ %₄ %₅)
 7   latestworld
-8   TestMod.#f_local_no_box##->###0
+8   TestMod.#f_local_no_box##0#f_local_no_box##1
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::4:5
+11  SourceLocation:4
 12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method core.nothing %₁₂
+13  (call core.define_method TestMod core.nothing %₁₂
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   (call core.getfield slot₁/#self# :x)
     2   (return %₁)
@@ -1054,12 +1084,13 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
-21  --- method TestMod.f_local_no_box %₂₀
+21  (call core.define_method TestMod TestMod.f_local_no_box %₂₀
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(single_assign) slot₃/#->#(single_assign)]
     1   (= slot₂/x 1)
-    2   TestMod.#f_local_no_box##->###0
+    2   TestMod.#f_local_no_box##0#f_local_no_box##1
     3   (call core._typeof_captured_variable slot₂/x)
     4   (call core.apply_type %₂ %₃)
     5   (new %₄ slot₂/x)
@@ -1078,19 +1109,20 @@ function f_typed_local_no_box()
     ()->x
 end
 #---------------------
-1   (method TestMod.f_typed_local_no_box)
+1   (call core.define_method TestMod :f_typed_local_no_box)
 2   latestworld
 3   (call core.svec)
 4   (call core.svec :x)
 5   (call core.svec false)
-6   (call JuliaLowering.eval_closure_type TestMod :#f_typed_local_no_box##->###0 %₃ %₄ %₅)
+6   (call JuliaLowering.eval_closure_type TestMod :#f_typed_local_no_box##0#f_typed_local_no_box##1 %₃ %₄ %₅)
 7   latestworld
-8   TestMod.#f_typed_local_no_box##->###0
+8   TestMod.#f_typed_local_no_box##0#f_typed_local_no_box##1
 9   (call core.svec %₈)
 10  (call core.svec)
-11  SourceLocation::4:5
+11  SourceLocation:4
 12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method core.nothing %₁₂
+13  (call core.define_method TestMod core.nothing %₁₂
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   (call core.getfield slot₁/#self# :x)
     2   (return %₁)
@@ -1099,9 +1131,10 @@ end
 16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆)
 18  (call core.svec)
-19  SourceLocation::1:1
+19  SourceLocation:1
 20  (call core.svec %₁₇ %₁₈ %₁₉)
-21  --- method TestMod.f_typed_local_no_box %₂₀
+21  (call core.define_method TestMod TestMod.f_typed_local_no_box %₂₀
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(single_assign) slot₃/#->#(single_assign) slot₄/tmp(!read)]
     1   (newvar slot₃/#->#)
     2   1
@@ -1114,7 +1147,7 @@ end
     9   (= slot₄/tmp (call core.typeassert %₈ %₃))
     10  slot₄/tmp
     11  (= slot₂/x %₁₀)
-    12  TestMod.#f_typed_local_no_box##->###0
+    12  TestMod.#f_typed_local_no_box##0#f_typed_local_no_box##1
     13  (call core._typeof_captured_variable slot₂/x)
     14  (call core.apply_type %₁₂ %₁₃)
     15  (new %₁₄ slot₂/x)
@@ -1129,15 +1162,14 @@ end
 # Error: Closure outside any top level context
 # (Should only happen in a user-visible way when lowering code emitted
 #  from a `@generated` function code generator.)
-@ast_ [K"lambda"(is_toplevel_thunk=false, toplevel_pure=false)
-    [K"block"]
-    [K"block"]
-    [K"->" [K"tuple"] [K"block"]]
+@ast_ [:generated_lambda
+    [:block]
+    [:block]
+    [:-> [:tuple] [:block]]
 ]
 #---------------------
 LoweringError:
-#= line 1 =# - Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension
+ at line 1: invalid syntax: unknown form `generated_lambda` or number of arguments 3
+
 Expression:
-  (call JuliaLowering.eval_closure_type Main.TestMod :##->###3 (call core.svec) (call core.svec) (call core.svec))
-Containing expressions:
-  (call JuliaLowering.eval_closure_type Main.TestMod :##->###3 (call core.svec) (call core.svec) (call core.svec))
+  (generated_lambda (block) (block) (-> (tuple) (block)))

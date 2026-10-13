@@ -2,7 +2,7 @@
 
 module Multimedia
 
-import .Base: show, print, convert, repr
+import .Base: show, print, repr
 
 export AbstractDisplay, display, pushdisplay, popdisplay, displayable, redisplay,
     MIME, @MIME_str, istextmime,

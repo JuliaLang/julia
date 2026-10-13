@@ -27,6 +27,7 @@ const libLLVM = LazyLibrary(
     else
         BundledLazyLibraryPath("$(Base.libllvm_name).so")
     end,
+    id = LibraryID(Base.UUID("8f36deef-c2a5-5394-99ed-8e07531fb29a"), "libLLVM"),
     dependencies = if Sys.isapple()
         LazyLibrary[libz, libzstd]
     elseif Sys.isfreebsd()
@@ -45,6 +46,9 @@ function eager_mode()
     dlopen(libLLVM)
 end
 is_available() = true
+
+# JLLWrappers path compatibility accessor
+get_libLLVM_path() = libLLVM_path
 
 function __init__()
     global libLLVM_path = string(libLLVM.path)

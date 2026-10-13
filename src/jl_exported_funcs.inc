@@ -78,8 +78,6 @@
     XX(jl_capture_interp_frame) \
     XX(jl_ceil_llvm) \
     XX(jl_ceil_llvm_withtype) \
-    XX(jl_cglobal) \
-    XX(jl_cglobal_auto) \
     XX(jl_checked_assignment) \
     XX(jl_clear_implicit_imports) \
     XX(jl_close_uv) \
@@ -138,13 +136,18 @@
     XX(jl_gc_add_quiescent) \
     XX(jl_gc_allocobj) \
     XX(jl_gc_alloc_typed) \
+    XX(jl_gc_alloc_typed_reset_safe) \
     XX(jl_gc_big_alloc) \
+    XX(jl_gc_big_alloc_reset_safe) \
     XX(jl_gc_collect) \
     XX(jl_gc_conservative_gc_support_enabled) \
     XX(jl_gc_counted_calloc) \
     XX(jl_gc_counted_free_with_size) \
     XX(jl_gc_counted_malloc) \
     XX(jl_gc_counted_realloc_with_old_size) \
+    XX(jl_gmp_counted_free_with_size) \
+    XX(jl_gmp_counted_malloc) \
+    XX(jl_gmp_counted_realloc_with_old_size) \
     XX(jl_gc_diff_total_bytes) \
     XX(jl_gc_enable) \
     XX(jl_gc_enable_conservative_gc_support) \
@@ -161,12 +164,14 @@
     XX(jl_gc_mark_queue_obj) \
     XX(jl_gc_mark_queue_objarray) \
     XX(jl_gc_max_internal_obj_size) \
+    XX(jl_gc_multi_wb_cold) \
     XX(jl_gc_new_weakref) \
     XX(jl_gc_new_weakref_th) \
     XX(jl_gc_num) \
     XX(jl_gc_small_alloc) \
-    XX(jl_gc_queue_multiroot) \
+    XX(jl_gc_small_alloc_reset_safe) \
     XX(jl_gc_queue_root) \
+    XX(jl_gc_queue_root_reset_safe) \
     XX(jl_gc_safepoint) \
     XX(jl_gc_schedule_foreign_sweepfunc) \
     XX(jl_gc_set_cb_notify_external_alloc) \
@@ -208,6 +213,7 @@
     XX(jl_get_JIT) \
     XX(jl_get_julia_bin) \
     XX(jl_get_julia_bindir) \
+    XX(jl_get_libjulia_internal_path) \
     XX(jl_get_module_compile) \
     XX(jl_get_module_infer) \
     XX(jl_get_module_of_binding) \
@@ -354,16 +360,11 @@
     XX(jl_obvious_subtype) \
     XX(jl_operator_precedence) \
     XX(jl_parse) \
-    XX(jl_parse_all) \
-    XX(jl_parse_input_line) \
     XX(jl_parse_opts) \
-    XX(jl_parse_string) \
     XX(jl_pathname_for_handle) \
     XX(jl_pathname_for_symbol) \
     XX(jl_pchar_to_array) \
     XX(jl_pchar_to_string) \
-    XX(jl_pointerref) \
-    XX(jl_pointerset) \
     XX(jl_pop_handler) \
     XX(jl_pop_handler_noexcept) \
     XX(jl_preload_sysimg) \
@@ -546,9 +547,13 @@
     YY(jl_decorate_llvm_module) \
     YY(jl_jit_total_bytes) \
     YY(jl_objcache_disabled_notice) \
+    YY(jl_objcache_kv_get) \
+    YY(jl_objcache_kv_put) \
+    YY(jl_objcache_kv_enabled) \
     YY(jl_create_native) \
     YY(jl_dump_compiles) \
     YY(jl_dump_emitted_mi_name) \
+    YY(jl_set_debuginfo_source_paths) \
     YY(jl_dump_llvm_opt) \
     YY(jl_dump_fptr_asm) \
     YY(jl_emit_native) \

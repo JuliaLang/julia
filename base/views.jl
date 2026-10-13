@@ -20,7 +20,7 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
     @nospecialize
     used_withex = false
     function escapes(@nospecialize(ex), escs::Int)
-        for i = 1:escs
+        for _ = 1:escs
             ex = esc(ex)
         end
         return ex

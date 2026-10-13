@@ -73,6 +73,55 @@ JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src) JL_
     }
 }
 
+// Expand a foreign symbol 2-tuple `(fname, lib)` to a 3-tuple `(fname, lib, lib_id)` where
+// `lib_id` is computed by evaluating `dlid(lib_ref)` during method definition side effects.
+static void expand_library_id(jl_expr_t *e, jl_module_t *module,
+                              jl_svec_t *sparam_vals,
+                              const char *kind) JL_CANSAFEPOINT
+{
+    jl_value_t *fptr = jl_exprarg(e, 0);
+    if (!(jl_is_expr(fptr) && ((jl_expr_t*)fptr)->head == jl_tuple_sym))
+        return;
+    jl_expr_t *tuple_expr = (jl_expr_t*)fptr;
+    size_t nargs_tuple = jl_expr_nargs(tuple_expr);
+    if (nargs_tuple != 2 || jl_libdl_dlid_func == NULL)
+        return;
+    jl_task_t *ct = jl_current_task;
+    jl_value_t *lib_arg = jl_exprarg(tuple_expr, 1);
+    jl_value_t *lib_val = NULL;
+    jl_value_t *lib_id = NULL;
+    JL_GC_PUSH2(&lib_val, &lib_id);
+    if (jl_is_globalref(lib_arg)) {
+        JL_TRY {
+            lib_val = jl_interpret_toplevel_expr_in(module, lib_arg, NULL, sparam_vals);
+        }
+        JL_CATCH {
+            lib_val = NULL;
+        }
+    }
+    if (lib_val != NULL && jl_isa(lib_val, (jl_value_t*)jl_abstractlibrary_type)) {
+        JL_TRY {
+            lib_id = jl_apply_generic(jl_libdl_dlid_func, &lib_val, 1);
+        }
+        JL_CATCH {
+            if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
+                jl_errorf("could not evaluate dlid() for %s library", kind);
+            else
+                jl_rethrow();
+        }
+        if (lib_id != NULL && lib_id != jl_nothing) {
+            if (!jl_typeis(lib_id, (jl_value_t*)jl_libraryid_type))
+                jl_errorf("dlid() for %s library must return a LibraryID or nothing", kind);
+            jl_expr_t *new_tuple = jl_exprn(jl_tuple_sym, 3);
+            jl_exprargset(new_tuple, 0, jl_exprarg(tuple_expr, 0));
+            jl_exprargset(new_tuple, 1, lib_arg);
+            jl_exprargset(new_tuple, 2, lib_id);
+            jl_exprargset(e, 0, (jl_value_t*)new_tuple);
+        }
+    }
+    JL_GC_POP();
+}
+
 static void normalize_foreignsymbol(jl_expr_t *e, jl_module_t *module, const char *kind) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
@@ -242,6 +291,7 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         JL_NARGSV(ccall method definition, 5); // (target, rt, at, nreq, (cc, effects, gc_safe))
         jl_task_t *ct = jl_current_task;
         normalize_foreignsymbol(e, module, "ccall");
+        expand_library_id(e, module, sparam_vals, "ccall");
         jl_value_t *rt = jl_exprarg(e, 1);
         jl_value_t *at = jl_exprarg(e, 2);
         if (!jl_is_type(rt)) {
@@ -274,17 +324,20 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         jl_value_t *cc = jl_quotenode_value(jl_exprarg(e, 4));
         if (!jl_is_symbol(cc)) {
             JL_TYPECHK(ccall method definition, tuple, cc);
-            if (jl_nfields(cc) != 3) {
-                jl_error("In ccall calling convention, expected two argument tuple or symbol.");
+            if (jl_nfields(cc) < 3 || jl_nfields(cc) > 5) {
+                jl_error("In ccall calling convention, expected a symbol or a "
+                         "(cconv, effects, gc_safe[, cancel_handler[, reset_safe]]) tuple.");
             }
             JL_TYPECHK(ccall method definition, symbol, jl_get_nth_field(cc, 0));
             JL_TYPECHK(ccall method definition, uint16, jl_get_nth_field(cc, 1));
-            JL_TYPECHK(ccall method definition, bool, jl_get_nth_field(cc, 2));
+            for (size_t i = 2; i < (size_t)jl_nfields(cc); i++)
+                JL_TYPECHK(ccall method definition, bool, jl_get_nth_field(cc, i));
         }
     }
     if (e->head == jl_foreignglobal_sym) {
         JL_NARGS(cglobal method definition, 1, 1); // (target)
         normalize_foreignsymbol(e, module, "cglobal");
+        expand_library_id(e, module, sparam_vals, "cglobal");
     }
     if (e->head == jl_call_sym && nargs > 0 &&
             jl_is_globalref(jl_exprarg(e, 0))) {
@@ -878,16 +931,13 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi JL_PROP
                     else if (jl_is_binding(kind)) {
                         jl_add_binding_backedge((jl_binding_t*)kind, (jl_value_t*)ci);
                     }
-                    else if (jl_is_mtable(kind)) {
-                        assert(i < l);
-                        ex = data[i++];
-                        if ((jl_methtable_t*)kind == jl_method_table)
-                            jl_method_table_add_backedge(ex, ci);
-                    }
                     else {
                         assert(i < l);
                         ex = data[i++];
-                        jl_method_instance_add_backedge((jl_method_instance_t*)ex, kind, ci);
+                        if (jl_is_mtable(ex)) // abstract dispatch (`invokesig, mt`)
+                            jl_method_table_add_backedge(kind, ci);
+                        else
+                            jl_method_instance_add_backedge((jl_method_instance_t*)ex, kind, ci);
                     }
                 }
             }
@@ -1059,7 +1109,9 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
         (jl_method_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_t), jl_method_type);
     jl_atomic_store_relaxed(&m->specializations, (jl_value_t*)jl_emptysvec);
     jl_atomic_store_relaxed(&m->speckeyset, (jl_genericmemory_t*)jl_an_empty_memory_any);
-    m->sig = NULL;
+    // `sig` and `name` are inside the min-initialized prefix (ninitialized == 10),
+    // so codegen omits null checks for them; they must never be observable as NULL.
+    m->sig = jl_bottom_type;
     m->slot_syms = NULL;
     m->roots = NULL;
     m->root_blocks = NULL;
@@ -1071,7 +1123,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->debuginfo = NULL;
     jl_atomic_store_relaxed(&m->unspecialized, NULL);
     m->generator = NULL;
-    m->name = NULL;
+    m->name = jl_empty_sym;
     m->file = jl_empty_sym;
     m->line = 0;
     m->called = 0xff;
@@ -1082,7 +1134,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->isva = 0;
     m->nargs = 0;
     jl_atomic_store_relaxed(&m->primary_world, ~(size_t)0);
-    jl_atomic_store_relaxed(&m->dispatch_status, 0);
+    jl_atomic_store_relaxed(&m->dispatch_status, METHOD_SIG_NO_LOSERS);
     jl_atomic_store_relaxed(&m->interferences, (jl_genericmemory_t*)jl_an_empty_memory_any);
     m->is_for_opaque_closure = 0;
     m->nospecializeinfer = 0;
@@ -1368,9 +1420,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
         jl_errorf("cannot add methods to builtin function `%s`", jl_symbol_name(name));
 
     m = jl_new_method_uninit(module);
-    if (external_mt)
-        jl_gc_wb_fresh(m, external_mt);
-    m->external_mt = (jl_value_t*)external_mt;
+    jl_gc_write_fresh(m, m->external_mt, jl_value_t, (jl_value_t*)external_mt);
     m->sig = argtype;
     m->name = name;
     m->isva = isva;

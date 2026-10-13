@@ -177,7 +177,6 @@ function get(val::AbstractScopedValue{T}) where {T}
         v === nothing && return nothing
         return Some{T}(something(v)::T)
     end
-    return nothing
 end
 
 function Base.getindex(val::AbstractScopedValue{T})::T where T
@@ -283,7 +282,7 @@ julia> with(() -> a[] * b[], a=>3, b=>4)
 12
 ```
 """
-function with(f, pair::Pair{<:AbstractScopedValue}, rest::Pair{<:AbstractScopedValue}...)
+@inline function with(f, pair::Pair{<:AbstractScopedValue}, rest::Pair{<:AbstractScopedValue}...)
     @with(pair, rest..., f())
 end
 with(@nospecialize(f)) = f()

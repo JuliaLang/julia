@@ -3,3 +3,6 @@
 /*.dSYM
 /*.obj
 /*.pdb
+/*.lto
+/*.def
+/*.strip

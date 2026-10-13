@@ -464,6 +464,70 @@ julia> [(i, j) for i=1:3 for j=1:i if i+j == 4]
  (3, 1)
 ```
 
+## [Uninitialized arrays](@id uninitialized-arrays)
+
+Constructors like `fill`, `zeros` and `ones` construct arrays filled with a specific value.
+For performance-sensitive cases, one can instead choose construct arrays that are uninitialized.
+This is typically done with [`UndefInitializer`](@ref) and its singleton value [`undef`](@ref).
+
+### Uninitialized isbits data
+When the element type is stored inline in the array, as is the case for bitstypes
+and small unions of bitstypes, the value stored will created from arbitrary bit patterns:
+
+```julia
+julia> A = Vector{Int}(undef, 3)
+3-element Vector{Int64}:
+  0
+  4197964751427265632
+ -7018743849073437062
+```
+
+While the values are created from arbitrary bits, they are just ordinary values;
+specifically, loading them multiple times will always result in the same value.
+
+Beware that the values are constructed circumventing any inner constructors.
+This means that for custom types whose constructors enforce constraints on the values,
+these checks will not be enforced.
+
+For example, in the code below, the `NeverZero` values in `A` might be invalid,
+as `undef` initialization may yield all-zero bits.
+
+```
+struct NeverZero
+    x::UInt
+
+    function NeverZero(x::UInt)
+        if iszero(x)
+            throw(ValueError("NeverZero cannot store a zero"))
+        else
+            new(x)
+        end
+    end
+end
+
+A = Vector{NeverZero}(undef, 10)
+```
+
+!!! compat "Julia 1.11"
+    Prior to Julia 1.11, access to undefined bits types resulted
+    in **undefined behavior.** and could cause miscompilations
+    and invalid behaviour.
+
+### Uninitialized non-isbits data
+When the element type is not stored inline, as is the case when the element type
+is not `isbits`, attempting to access the data will throw an `UndefRefError`:
+
+```jldoctest
+julia> A = Vector{String}(undef, 2)
+2-element Vector{String}:
+ #undef
+ #undef
+
+julia> A[2]
+ERROR: UndefRefError: access to undefined reference
+[...]
+```
+
 ## [Indexing](@id man-array-indexing)
 
 The general syntax for indexing into an n-dimensional array `A` is:
@@ -608,22 +672,30 @@ where each `I_k` may be a scalar integer, an array of integers, or any other
 ranges of the form `a:c` or `a:b:c` to select contiguous or strided
 subsections, and arrays of booleans to select elements at their `true` indices.
 
-If all indices `I_k` are integers, then the value in location `I_1, I_2, ..., I_n` of `A` is
-overwritten with the value of `X`, [`convert`](@ref)ing to the
-[`eltype`](@ref) of `A` if necessary.
+Just as [indexing](@ref man-array-indexing) `A[I_1, I_2, ..., I_n]` returns either a single
+element (if all indices are scalar) or an array (if any index is nonscalar), the indexed
+assignment of `A[I_1, I_2, ..., I_n] = X` assigns either a single value to a single location
+or an array of value(s) to an array of location(s) within the array `A`.
 
+If all indices `I_k` are scalar, then the value in location `I_1, I_2, ..., I_n` of `A` is assigned
+to the value of `X`, [`convert`](@ref)ing to the [`eltype`](@ref) of `A` if necessary. Otherwise
+if any index is nonscalar, the right hand side `X` must be an array with the same number of
+elements as the number of locations selected by the indices and it must have a compatible shape.
+Each value in `X` is assigned into the corresponding location in `A[I_1, I_2, ..., I_n]`, following
+the rules of [linear indexing and omitted/extra indices](@ref man-number-of-indices).
 
-If any index `I_k` is itself an array, then the right hand side `X` must also be an
-array with the same shape as the result of indexing `A[I_1, I_2, ..., I_n]` or a vector with
-the same number of elements. The value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]` of
-`A` is overwritten with the value `X[i_1, i_2, ..., i_n]`, converting if necessary. The
-element-wise assignment operator `.=` may be used to [broadcast](@ref Broadcasting) `X`
-across the selected locations:
+That is, `X` must be the same shape as the result of indexing `A[I_1, I_2, ..., I_n]` or
+either may be a vector. In the simple case where all the supplied indices are vectors and
+the shapes match, each value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]` of
+`A` is overwritten with the value `X[i_1, i_2, ..., i_n]`, converting if necessary. If either
+side is a vector, then the elements are assigned with column-major [linear indexing](@ref man-linear-indexing).
 
-
-```
-A[I_1, I_2, ..., I_n] .= X
-```
+The element-wise assignment operator `.=` may be used to [broadcast](@ref Broadcasting) `X`
+across multiple selected locations with `A[I_1, I_2, ..., I_n] .= X`. In the common case where the
+concatenated axes of the indices matches the axes of `X`, this behaves like the nonscalar
+indexed assignment described above (that is, `=` without the broadcasting `.`). Unlike indexed
+assignment, however, any mismatched axes will be broadcast (in accordance with broadcast's rules)
+and linear indexing is not supported.
 
 Just as in [Indexing](@ref man-array-indexing), the `end` keyword may be used
 to represent the last index of each dimension within the indexing brackets, as
@@ -848,7 +920,7 @@ julia> x[vec(mask)] == x[mask] # we can also index with a single Boolean vector
 true
 ```
 
-### Number of indices
+### [Number of indices](@id man-number-of-indices)
 
 #### Cartesian indexing
 
@@ -857,7 +929,7 @@ index selects the position(s) in its particular dimension. For example, in the t
 array `A = rand(4, 3, 2)`, `A[2, 3, 1]` will select the number in the second row of the third
 column in the first "page" of the array. This is often referred to as _cartesian indexing_.
 
-#### Linear indexing
+#### [Linear indexing](@id man-linear-indexing)
 
 When exactly one index `i` is provided, that index no longer represents a location in a
 particular dimension of the array. Instead, it selects the `i`th element using the

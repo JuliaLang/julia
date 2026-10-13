@@ -9,7 +9,10 @@ ifeq (undefined,$$(flavor $$(word 2,$$(MANIFEST_$1))))
 MANIFEST_$1 := $$(UNINSTALL_$1)
 endif
 UNINST_HOW_$1 := $$(word 2,$$(MANIFEST_$1))
-ifneq ($$(UNINST_HOW_$1),)
+ifeq (,$$(wildcard $$(build_prefix)/manifest/$1))
+uninstall-$1:
+	@echo "skipping uninstall: $1 not installed"
+else ifneq ($$(UNINST_HOW_$1),)
 UNINST_WHO_$1 := $$(firstword $$(MANIFEST_$1))
 UNINST_WHERE_$1 := $$(wordlist 3,99,$$(MANIFEST_$1))
 $$(eval $$(call $$(UNINST_HOW_$1),$1,$$(UNINST_WHO_$1),$$(UNINST_WHERE_$1)))

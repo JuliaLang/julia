@@ -34,7 +34,7 @@ function code_lowered(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); gener
                 code = ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{Cvoid}), m, world, C_NULL)
             else
                 error("Could not expand generator for `@generated` method ", m, ". ",
-                      "This can happen if the provided argument types (", t, ") are ",
+                      "This can happen if the provided argument types (", argtypes, ") are ",
                       "not concrete types, but the `generated` argument is `true`.")
             end
         else
@@ -868,7 +868,7 @@ Return the possible computation effects of the function call specified by `f` an
 julia> f1(x) = x * 2;
 
 julia> Base.infer_effects(f1, (Int,))
-(+c,+e,+n,+t,+s,+m,+i)
+(+c,+e,+re,+n,+t,+s,+m,+u,+o,+r)
 ```
 
 This function will return an `Effects` object with information about the computational
@@ -878,7 +878,7 @@ effects of the function `f1` when called with an `Int` argument.
 julia> f2(x::Int) = x * 2;
 
 julia> Base.infer_effects(f2, (Integer,))
-(+c,+e,!n,+t,+s,+m,+i)
+(+c,+e,+re,!n,+t,+s,+m,+u,+o,+r)
 ```
 
 This case is pretty much the same as with `f1`, but there's a key difference to note. For
@@ -1130,13 +1130,20 @@ function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_c
 end
 
 """
-    fbody = bodyfunction(basemethod::Method)
+    fbody = bodyfunction(basemethod::Method; world::UInt=Base.get_world_counter())
 
 Find the keyword "body function" (the function that contains the body of the method
 as written, called after all missing keyword-arguments have been assigned default values).
 `basemethod` is the method you obtain via [`which`](@ref) or [`methods`](@ref).
+
+The binding of the body function is looked up in the world age given by `world`, which
+defaults to the current world counter.
+
+!!! compat "Julia 1.14"
+    The `world` keyword argument requires Julia 1.14 or later. Before Julia 1.14,
+    the binding was looked up in the world age of the calling task.
 """
-function bodyfunction(basemethod::Method)
+function bodyfunction(basemethod::Method; world::UInt=get_world_counter())
     fmod = parentmodule(basemethod)
     # The lowered code for `basemethod` should look like
     #   %1 = mkw(kwvalues..., #self#, args...)
@@ -1149,7 +1156,7 @@ function bodyfunction(basemethod::Method)
             fsym = callexpr.args[1]
             while true
                 if isa(fsym, Symbol)
-                    return getfield(fmod, fsym)
+                    return invoke_in_world(world, getglobal, fmod, fsym)
                 elseif isa(fsym, GlobalRef)
                     if fsym.mod === Core && fsym.name === :_apply
                         fsym = callexpr.args[2]
@@ -1157,9 +1164,9 @@ function bodyfunction(basemethod::Method)
                         fsym = callexpr.args[3]
                     end
                     if isa(fsym, Symbol)
-                        return getfield(fmod, fsym)::Function
+                        return invoke_in_world(world, getglobal, fmod, fsym)::Function
                     elseif isa(fsym, GlobalRef)
-                        return getfield(fsym.mod, fsym.name)::Function
+                        return invoke_in_world(world, getglobal, fsym.mod, fsym.name)::Function
                     elseif isa(fsym, Core.SSAValue)
                         fsym = ast.code[fsym.id]
                     else
@@ -1224,53 +1231,38 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         min = Ref{UInt}(typemin(UInt))
         max = Ref{UInt}(typemax(UInt))
         has_ambig = Ref{Int32}(0)
-        ms = collect(Core.MethodMatch, _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector)
+        ms = _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector{Any}
         has_ambig[] == 0 && return false
-        if !ambiguous_bottom
-            filter!(ms) do m::Core.MethodMatch
-                return !has_bottom_parameter(m.spec_types)
-            end
-        end
         # if ml-matches reported the existence of an ambiguity over their
         # intersection, see if both m1 and m2 seem to be involved in it
-        # (if one was fully dominated by a different method, we want to will
+        # (if one was fully dominated by a different method, we want to
         # report the other ambiguous pair)
-        have_m1 = have_m2 = false
-        for match in ms
-            m = match.method
-            m === m1 && (have_m1 = true)
-            m === m2 && (have_m2 = true)
+        function involves_both(ms)
+            have_m1 = have_m2 = false
+            for match in ms
+                m = (match::Core.MethodMatch).method
+                m === m1 && (have_m1 = true)
+                m === m2 && (have_m2 = true)
+            end
+            return have_m1 && have_m2
         end
-        if !have_m1 || !have_m2
-            # ml-matches did not need both methods to expose the reported ambiguity
-            return false
-        end
+        nms = length(ms)
         if !ambiguous_bottom
-            # since we're intentionally ignoring certain ambiguities (via the
-            # filter call above), see if we can now declare the intersection fully
-            # covered even though it is partially ambiguous over Union{} as a type
-            # parameter somewhere
-            minmax = nothing
-            for match in ms
-                m = match.method
-                match.fully_covers || continue
-                if minmax === nothing || morespecific(m, minmax)
-                    minmax = m
-                end
+            filter!(ms) do m
+                return !has_bottom_parameter((m::Core.MethodMatch).spec_types)
             end
-            if minmax === nothing || minmax == m1 || minmax == m2
-                return true
+        end
+        # ml-matches did not need both methods to expose the reported ambiguity
+        involves_both(ms) || return false
+        if length(ms) != nms
+            # If we intentionally removed certain ambiguities (via the
+            # filter call above), re-run the runtime's match sort on the
+            # remaining matches and see if the solution is still holding an ambiguity
+            # and m1 and m2 are both still reported in the solution.
+            if ccall(:jl_sort_method_matches, Cint, (Any, Cint), ms, true) == 0
+                return false
             end
-            for match in ms
-                m = match.method
-                m === minmax && continue
-                if !morespecific(minmax, m)
-                    if match.fully_covers || !morespecific(m, minmax)
-                        return true
-                    end
-                end
-            end
-            return false
+            involves_both(ms) || return false
         end
         return true
     end

@@ -89,6 +89,13 @@ impl JuliaGCTrigger {
 }
 
 impl GCTriggerPolicy<JuliaVM> for JuliaGCTrigger {
+    // The following two hooks are called for every pause
+    // fn on_pause_start(&self, _mmtk: &'static MMTK<JuliaVM>)
+    // fn on_pause_end(&self, _mmtk: &'static MMTK<JuliaVM>)
+
+    // on_gc_start/on_gc_end are called for every GC cycle
+    // For concurrent GCs, on_gc_start is called at the beginning of the pause that starts a GC cycle, and on_gc_end is called at the end of the pause that ends a GC cycle.
+    /// Note that this trigger is designed for stop-the-world GCs, and has not been adapted to concurrent GCs.
     fn on_gc_start(&self, mmtk: &'static MMTK<JuliaVM>) {
         self.maybe_force_full_heap(mmtk);
 
@@ -132,7 +139,9 @@ impl GCTriggerPolicy<JuliaVM> for JuliaGCTrigger {
 
         let alloc_diff = self.before_free_heap_size.load(Ordering::Relaxed)
             - self.old_heap_size.load(Ordering::Relaxed);
-        let freed_diff = self.before_free_heap_size.load(Ordering::Relaxed) - heap_size;
+        let freed_diff = self
+            .before_free_heap_size
+            .load(Ordering::Relaxed) - heap_size;
         self.old_heap_size.store(heap_size, Ordering::Relaxed);
 
         let gc_auto = !mmtk.is_user_triggered_collection();

@@ -526,7 +526,7 @@ function _hashed_allunique(C)
     seen = Set{@default_eltype(C)}()
     x = iterate(C)
     if haslength(C) && length(C) > 1000
-        for i in OneTo(1000)
+        for _ in OneTo(1000)
             v, s = something(x)
             in!(v, seen) && return false
             x = iterate(C, s)
@@ -544,6 +544,11 @@ end
 allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
+
+# ncodeunits is O(1) and bounds character count; match StridedArray's short cutoff.
+function allunique(s::AbstractString)
+    ncodeunits(s) < 32 ? _indexed_allunique(s) : _hashed_allunique(s)
+end
 
 function allunique(A::StridedArray)
     if length(A) < 32

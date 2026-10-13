@@ -9,24 +9,24 @@ baremodule Iterators
 import Base: @__MODULE__, parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base:
-    @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexStyle, AbstractVector, Vector,
+    @inline, Pair, Pairs, IndexLinear, AbstractVector, Vector,
     SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
-    @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, IdDict,
+    @propagate_inbounds, @boundscheck, @inbounds, Generator, IdDict,
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
-    (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
-    any, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
-    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
+    :, |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
+    any, eachindex, ntuple, zero, identity, reduce, in, firstindex, lastindex,
+    tail, fieldtypes, min, max, zero, oneunit, promote, promote_shape, LazyString,
     afoldl, mod1, @default_eltype
 using .Core
 using Core: @doc
 
 using Base:
-    cld, fld, resize!, IndexCartesian, Checked
+    cld, resize!, IndexCartesian, Checked
 using .Checked: checked_mul
 
 import Base:
     first, last,
-    isempty, length, size, axes, ndims,
+    length, size, axes, ndims,
     eltype, IteratorSize, IteratorEltype, promote_typejoin,
     haskey, keys, values, pairs,
     getindex, setindex!, get, iterate,
@@ -276,7 +276,7 @@ CartesianIndex(1, 2) d
 CartesianIndex(2, 2) e
 ```
 
-See also [`IndexStyle`](@ref), [`axes`](@ref).
+See also [`Base.IndexStyle`](@ref), [`axes`](@ref).
 """
 pairs(::IndexLinear,    A::AbstractArray) = Pairs(A, LinearIndices(A))
 
@@ -403,8 +403,9 @@ function _zip_lengths_finite_equal(is)
     if IteratorSize(i) isa Union{IsInfinite, SizeUnknown}
         return (false, nothing)
     else
+        m = length(i)
         b, n = _zip_lengths_finite_equal(tail(is))
-        return (b && (n === nothing || n == length(i)), length(i))
+        return (b && (n === nothing || n == m), m)
     end
 end
 _zip_lengths_finite_equal(is::Tuple{}) = (true, nothing)
@@ -441,38 +442,56 @@ end
 
 # This first queries isdone from every iterator. If any gives true, it immediately returns
 # nothing. It then iterates all those where isdone returned missing, afterwards all those
-# it returned false, again terminating immediately if any iterator is exhausted. Finally,
-# the results are interleaved appropriately.
+# it returned false, again terminating immediately if any iterator is exhausted.
+# Passes are selected by value, so an isdone inferred as Union{Bool,Missing}
+# (e.g. Take of a range) stays type-stable.
 @propagate_inbounds function _zip_iterate_all(is, ss)
     d, ds = _zip_isdone(is, ss)
     d && return nothing
-    xs1 = _zip_iterate_some(is, ss, ds, missing)
-    xs1 === nothing && return nothing
-    xs2 = _zip_iterate_some(is, ss, ds, false)
-    xs2 === nothing && return nothing
-    return _zip_iterate_interleave(xs1, xs2, ds)
+    if _zip_all_missing(ds)
+        xs = _zip_iterate_in_order(is, ss)
+    else
+        xs1 = _zip_iterate_unknown(is, ss, ds)
+        xs1 === nothing && return nothing
+        xs = _zip_iterate_rest(is, ss, xs1)
+    end
+    xs === nothing && return nothing
+    return (Base.map(first, xs), Base.map(last, xs))
 end
 
-@propagate_inbounds function _zip_iterate_some(is::Tuple, ss::Tuple, ds::Tuple{T,Vararg{Any}}, f::T) where T
+_zip_all_missing(ds::Tuple) = ds[1] === missing && _zip_all_missing(tail(ds))
+_zip_all_missing(::Tuple{}) = true
+
+@propagate_inbounds function _zip_iterate_in_order(is::Tuple, ss::Tuple)
     x = iterate(is[1], ss[1]...)
     x === nothing && return nothing
-    y = _zip_iterate_some(tail(is), tail(ss), tail(ds), f)
+    y = _zip_iterate_in_order(tail(is), tail(ss))
     y === nothing && return nothing
     return (x, y...)
 end
-@propagate_inbounds _zip_iterate_some(is::Tuple, ss::Tuple, ds::Tuple{Any,Vararg{Any}}, f) =
-    _zip_iterate_some(tail(is), tail(ss), tail(ds), f)
-_zip_iterate_some(::Tuple{}, ::Tuple{}, ::Tuple{}, ::Any) = ()
+_zip_iterate_in_order(::Tuple{}, ::Tuple{}) = ()
 
-function _zip_iterate_interleave(xs1::Tuple, xs2::Tuple, ds::Tuple)
-    t = _zip_iterate_interleave(tail(xs1), xs2, tail(ds))
-    ((xs1[1][1], t[1]...), (xs1[1][2], t[2]...))
+struct _ZipSkip end
+
+# Returns a nested (x, rest) list: splatting a tuple whose element types are
+# Unions lowers to Core._apply_iterate, which allocates.
+@propagate_inbounds function _zip_iterate_unknown(is::Tuple, ss::Tuple, ds::Tuple)
+    x = ds[1] === missing ? iterate(is[1], ss[1]...) : _ZipSkip()
+    x === nothing && return nothing
+    y = _zip_iterate_unknown(tail(is), tail(ss), tail(ds))
+    y === nothing && return nothing
+    return (x, y)
 end
-function _zip_iterate_interleave(xs1::Tuple, xs2::Tuple, ds::Tuple{Bool,Vararg{Any}})
-    t = _zip_iterate_interleave(xs1, tail(xs2), tail(ds))
-    ((xs2[1][1], t[1]...), (xs2[1][2], t[2]...))
+_zip_iterate_unknown(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
+
+@propagate_inbounds function _zip_iterate_rest(is::Tuple, ss::Tuple, xs::Tuple)
+    x = xs[1] isa _ZipSkip ? iterate(is[1], ss[1]...) : xs[1]
+    x === nothing && return nothing
+    y = _zip_iterate_rest(tail(is), tail(ss), xs[2])
+    y === nothing && return nothing
+    return (x, y...)
 end
-_zip_iterate_interleave(::Tuple{}, ::Tuple{}, ::Tuple{}) = ((), ())
+_zip_iterate_rest(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
 
 function _zip_isdone(is::Tuple, ss::Tuple)
     d = isdone(is[1], ss[1]...)
@@ -803,7 +822,7 @@ take_iteratorsize(::SizeUnknown) = SizeUnknown()
 IteratorSize(::Type{Take{I}}) where {I} = take_iteratorsize(IteratorSize(I))
 length(t::Take) = _min_length(t.xs, 1:t.n, IteratorSize(t.xs), HasLength())
 isdone(t::Take) = isdone(t.xs)
-isdone(t::Take, state) = (state[1] <= 0) | isdone(t.xs, tail(state))
+isdone(t::Take, state) = (state[1] <= 0) | isdone(t.xs, tail(state)...)
 
 @propagate_inbounds function iterate(it::Take, state=(it.n,))
     n, rest = state[1], tail(state)
@@ -863,7 +882,7 @@ length(d::Drop) = _diff_length(d.xs, 1:d.n, IteratorSize(d.xs), HasLength())
 
 function iterate(it::Drop)
     y = iterate(it.xs)
-    for i in 1:it.n
+    for _ in 1:it.n
         y === nothing && return y
         y = iterate(it.xs, y[2])
     end
@@ -1288,7 +1307,9 @@ IteratorEltype(::Type{Flatten{Tuple{}}}) = IteratorEltype(Tuple{})
 _flatteneltype(I, ::HasEltype) = IteratorEltype(eltype(I))
 _flatteneltype(I, et) = EltypeUnknown()
 
-flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{Union{}}, slurp...) = HasLength() # length==0
+flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{Union{}}) = HasLength() # length==0
+flatten_iteratorsize(sz::Union{HasShape, HasLength}, ::Type{Union{}}, slurp...) =
+    throw(MethodError(flatten_iteratorsize, (sz, Union{}, slurp...)))
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:NTuple{N,Any}}) where {N} = HasLength()
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Tuple}) = SizeUnknown()
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Number}) = HasLength()
@@ -1300,9 +1321,10 @@ _flatten_iteratorsize(sz, ::HasEltype, ::Type{Tuple{}}) = HasLength()
 
 IteratorSize(::Type{Flatten{I}}) where {I} = _flatten_iteratorsize(IteratorSize(I), IteratorEltype(I), I)
 
-flatten_length(f, T::Type{Union{}}, slurp...) = 0
+flatten_length(f, T::Type{Union{}}) = 0
+flatten_length(f, ::Type{Union{}}, slurp...) = throw(MethodError(flatten_length, (f, Union{}, slurp...)))
 function flatten_length(f, T::Type{<:NTuple{N,Any}}) where {N}
-    return N * length(f.it)
+    return checked_mul(N, length(f.it))
 end
 flatten_length(f, ::Type{<:Number}) = length(f.it)
 flatten_length(f, T) = throw(ArgumentError(
@@ -1355,7 +1377,7 @@ end
 end
 
 reverse(f::Flatten) = Flatten(reverse(itr) for itr in reverse(f.it))
-last(f::Flatten) = last(last(f.it))
+last(f::Flatten) = first(reverse(f))
 
 """
     Iterators.flatmap(f, iterators...)
@@ -1569,7 +1591,7 @@ approx_iter_type(itrT::Type) = _approx_iter_type(itrT, Base._return_type(iterate
 # having to typesplit on Nothing
 function doiterate(itr, valstate::Union{Nothing, Tuple{Any, Any}})
     valstate === nothing && return nothing
-    val, st = valstate
+    _, st = valstate
     return iterate(itr, st)
 end
 function _approx_iter_type(itrT::Type, vstate::Type)
@@ -1705,8 +1727,8 @@ pairs(s::AbstractString) = IterableStatePairs(s)
 """
     nth(itr, n::Integer)
 
-Get the `n`th element of an iterable collection. Throw a `BoundsError`[@ref] if not existing.
-Will advance any `Stateful`[@ref] iterator.
+Get the `n`th element of an iterable collection. Throw a [`BoundsError`](@ref) if not existing.
+Will advance any [`Stateful`](@ref) iterator.
 
 See also: [`first`](@ref), [`last`](@ref)
 

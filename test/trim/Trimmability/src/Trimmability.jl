@@ -3,6 +3,8 @@ module Trimmability
 
 using Sockets
 
+include("linalg.jl")
+
 world::String = "world!"
 const str = OncePerProcess{String}() do
     return "Hello, " * world
@@ -21,10 +23,109 @@ area(c::Circle) = pi*c.radius^2
 sum_areas(v::Vector{Shape}) = sum(area, v)
 
 mutable struct Foo; x::Int; end
+
+# To check that objects embedded in emitted code are retained (kept[] == 0): we did not lose any roots
+const kept = Base.RefValue{Int}(0)
+# To check that some objects died (dropped[] > 0): GC + finalizers fired
+const dropped = Base.RefValue{Int}(0)
+note_kept(x::Foo) = (kept[] += 1; nothing)
+note_dropped(x::Foo) = (dropped[] += 1; nothing)
+
 const storage = Foo[]
 function add_one(x::Cint)::Cint
-    push!(storage, Foo(x))
+    entry = Foo(x)
+    finalizer(note_kept, entry)
+    push!(storage, entry)
     return x + 1
+end
+
+let captured = Foo[]
+    global @noinline function add_one_captured(x::Cint)::Cint
+        entry = Foo(x)
+        finalizer(note_kept, entry)
+        push!(captured, entry)
+        return x + 1
+    end
+end
+
+const box = Base.RefValue{Any}(nothing)
+@noinline function drop_one(x::Cint)
+    entry = Foo(x)
+    finalizer(note_dropped, entry)
+    box[] = entry
+    box[] = nothing
+    return nothing
+end
+
+const fin_total = Base.RefValue{Int}(0)
+const fin_log = Int[]
+
+# Test various forms of fully de-virtualized / partially de-virtualized
+# and inlineable / non-inlineable finalizers
+fin_inline_local(x::Base.RefValue{Int}) = (fin_total[] += x[]; nothing)
+fin_inline_escaping(x::Base.RefValue{Int}) = (fin_total[] += x[]; nothing)
+@noinline fin_call_local(x::Base.RefValue{Int}) = (fin_total[] += x[]; nothing)
+@noinline fin_call_escaping(x::Base.RefValue{Int}) = (fin_total[] += x[]; nothing)
+fin_throws_escaping(x::Base.RefValue{Int}) = (push!(fin_log, x[]); nothing)
+
+@noinline function local_finalizers()
+    a = Base.RefValue{Int}(1)
+    finalizer(fin_inline_local, a)
+    b = Base.RefValue{Int}(2)
+    finalizer(fin_call_local, b)
+    return nothing
+end
+
+const escapee = Base.RefValue{Any}(nothing)
+@noinline function escaping_finalizers()
+    r = Base.RefValue{Int}(8)
+    finalizer(fin_inline_escaping, r)
+    escapee[] = r
+    finalize(r)
+    s = Base.RefValue{Int}(16)
+    finalizer(fin_call_escaping, s)
+    escapee[] = s
+    finalize(s)
+    t = Base.RefValue{Int}(32)
+    finalizer(fin_throws_escaping, t)
+    escapee[] = t
+    finalize(t)
+    escapee[] = nothing
+    return nothing
+end
+
+@noinline function finalizer_check()
+    local_finalizers()
+    escaping_finalizers()
+    total = 0
+    for x in fin_log
+        total += x
+    end
+    return (fin_total[], total)
+end
+
+# Test that `dlopen(...)` for user-provided library types in `ccall` / `cglobal` works
+struct CustomLib end
+const custom_lib = CustomLib()
+function Base.Libc.Libdl.dlopen(::CustomLib)
+    print(Core.stdout, "custom_library_ccall: ")
+    return ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Ptr{UInt8}, UInt32, Cint),
+                 "libjulia", Base.Libc.Libdl.RTLD_LAZY, Cint(0))
+end
+function user_library_ccall()
+    println(Core.stdout, ccall((:jl_ver_major, custom_lib), Cint, ()))
+end
+
+# Test that a `LazyLibrary` runs its `LazyLibraryCallback` once, on first use in a `ccall`.
+# `libjulia` is already loaded, so this picks up the existing handle.
+const on_load_count = Base.RefValue{Int}(0)
+struct CountOnLoad <: Base.Libc.Libdl.LazyLibraryCallback end
+(::CountOnLoad)() = (on_load_count[] += 1; nothing)
+const counted_lib = Base.Libc.Libdl.LazyLibrary("libjulia"; on_load_callback = CountOnLoad())
+function lazy_library_ccall()
+    major = ccall((:jl_ver_major, counted_lib), Cint, ())
+    ccall((:jl_ver_major, counted_lib), Cint, ())
+    println(Core.stdout, "lazy_library_ccall: ", major, " ", on_load_count[])
 end
 
 function _test_cat()
@@ -91,6 +192,22 @@ function _test_cat()
 end
 
 
+# String interpolation whose arguments span more distinct types than inference
+# keeps in a merged union: each `print` must still resolve statically.
+@noinline interpolate_many(r, x, s, c) = "got $(r) vs $(first(r)) with $(x) and $(s) and $(c)"
+
+function _test_threads()
+    v = zeros(Int, 64)
+    Threads.@threads for i in eachindex(v)
+        v[i] = 2i
+    end
+    w = zeros(Int, 8)
+    Threads.@threads :static for i in eachindex(w)
+        w[i] = i^2
+    end
+    println(Core.stdout, "threads: ", sum(v), " ", sum(w))
+end
+
 function @main(args::Vector{String})::Cint
     println(Core.stdout, str())
     println(Core.stdout, PROGRAM_FILE)
@@ -117,8 +234,21 @@ function @main(args::Vector{String})::Cint
     for i = 1:10
         # https://github.com/JuliaLang/julia/issues/60846
         add_one(Cint(i))
+        add_one_captured(Cint(i))
+        drop_one(Cint(i))
         GC.gc()
     end
+    GC.gc(true)
+
+    let (counted, logged) = finalizer_check()
+        println(Core.stdout, "finalizers: ", counted, " ", logged)
+    end
+
+    println(Core.stdout, "collected: ", kept[], " kept, ", dropped[], " dropped")
+
+    println(Core.stdout, interpolate_many(1:3, 2.5, :sym, 'c'))
+    _test_linalg()
+    _test_threads()
 
     try
         sock = connect("localhost", 4900)
@@ -129,6 +259,9 @@ function @main(args::Vector{String})::Cint
         end
     catch
     end
+
+    user_library_ccall() # prints as a side effect
+    lazy_library_ccall()
 
     Base.donotdelete(reshape([1,2,3],:,1,1))
 

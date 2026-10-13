@@ -141,10 +141,6 @@ julia-cli-release julia-cli-debug: julia-cli-% : julia-deps
 julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-src-% $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-% | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-$*
 
-.PHONY: julia-sysimg-JL-release julia-sysimg-JL-debug
-julia-sysimg-JL-release julia-sysimg-JL-debug : julia-sysimg-JL-% : julia-sysimg-% julia-stdlib | $(build_private_libdir)
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-JL-$*
-
 # Useful for cross-bootstrapping
 .PHONY: julia-sysbase-release julia-sysbase-debug
 julia-sysbase-release julia-sysbase-debug : julia-sysbase-% : julia-src-% $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-% | $(build_private_libdir)
@@ -262,8 +258,10 @@ JL_PRIVATE_EXES := 7z
 JL_PRIVATE_TOOLS :=
 ifeq ($(JULIA_BUILD_MODE),release)
 JL_PRIVATE_LIBS-0 += libjulia-internal libjulia-codegen
+JL_STATIC_RUNTIME := libjulia-internal.a
 else ifeq ($(JULIA_BUILD_MODE),debug)
 JL_PRIVATE_LIBS-0 += libjulia-internal-debug libjulia-codegen-debug
+JL_STATIC_RUNTIME := libjulia-internal-debug.a
 endif
 # BSD-3-Clause
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libamd libcamd libccolamd libcolamd libsuitesparseconfig
@@ -274,59 +272,27 @@ ifeq ($(USE_GPL_LIBS), 1)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libcholmod librbio libspqr libumfpack
 endif
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBBLASTRAMPOLINE) += libblastrampoline
-JL_PRIVATE_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
-JL_PRIVATE_LIBS-$(USE_SYSTEM_DSFMT) += libdSFMT
-JL_PRIVATE_LIBS-$(USE_SYSTEM_GMP) += libgmp libgmpxx
-JL_PRIVATE_LIBS-$(USE_SYSTEM_MPFR) += libmpfr
+JL_PRIVATE_LIBS-$(USE_SYSTEM_GMP) += libgmpxx
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSSH2) += libssh2
 JL_PRIVATE_LIBS-$(USE_SYSTEM_NGHTTP2) += libnghttp2
 JL_PRIVATE_LIBS-$(USE_SYSTEM_OPENSSL) += libcrypto libssl
 JL_PRIVATE_LIBS-$(USE_SYSTEM_CURL) += libcurl
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBGIT2) += libgit2
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUV) += libuv
-ifeq ($(OS),WINNT)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += zlib
-else
-JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += libz
-endif
-JL_PRIVATE_LIBS-$(USE_SYSTEM_ZSTD) += libzstd
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBPICOSAT) += libpicosat
 JL_PRIVATE_EXES += zstd$(EXE) zstdmt$(EXE)
-ifeq ($(USE_LLVM_SHLIB),1)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM $(LLVM_SHARED_LIB_NAME)
-endif
 JL_PRIVATE_TOOLS += lld$(EXE) dsymutil$(EXE)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUNWIND) += libunwind
-
-ifeq ($(USE_SYSTEM_LIBM),0)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_OPENLIBM) += libopenlibm
-endif
 
 JL_PRIVATE_LIBS-$(USE_SYSTEM_BLAS) += $(LIBBLASNAME)
 ifneq ($(LIBLAPACKNAME),$(LIBBLASNAME))
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LAPACK) += $(LIBLAPACKNAME)
 endif
 
-JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libgfortran libquadmath libstdc++ libgcc_s libgomp libssp libatomic
 ifeq ($(OS),Darwin)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libc++
 endif
-ifeq ($(OS),WINNT)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libwinpthread
-else
+ifneq ($(OS),WINNT)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libpthread
 endif
-ifeq ($(SANITIZE),1)
-ifeq ($(USECLANG),1)
-JL_PRIVATE_LIBS-0 += libclang_rt.asan-*
-else
-JL_PRIVATE_LIBS-0 += libasan
-endif
-endif
-
-ifeq ($(WITH_TRACY),1)
-JL_PRIVATE_LIBS-0 += libTracyClient
-endif
-
 
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
@@ -336,9 +302,9 @@ endif
 endif
 endif
 
-ifeq (${USE_THIRD_PARTY_GC},mmtk)
-JL_PRIVATE_LIBS-0 += libmmtk_julia
-endif
+# the runtime's libraries, listed in Make.inc
+JL_PRIVATE_LIBS-0 += $(JL_RUNTIME_LIBS-0) $(JL_RUNTIME_CODEGEN_LIBS-0)
+JL_PRIVATE_LIBS-1 += $(JL_RUNTIME_LIBS-1) $(JL_RUNTIME_CODEGEN_LIBS-1)
 
 # Note that we disable MSYS2's path munging here, as otherwise
 # it replaces our `:`-separated list as a `;`-separated one.
@@ -356,7 +322,12 @@ install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index
 
 	$(INSTALL_M) $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE)) $(DESTDIR)$(bindir)/
 ifeq ($(OS),WINNT)
-	$(INSTALL_M) $(wildcard $(build_bindir)/*.dll) $(DESTDIR)$(bindir)/
+# Windows keeps every DLL in `bin`, under its versioned name (`libgmp-10.dll`) if it has one
+	for lib in $(sort $(JL_TARGETS:%=lib%) $(JL_PRIVATE_LIBS-0) $(JL_PRIVATE_LIBS-1)); do \
+		set -- $(build_bindir)/$$lib-[0-9]*.dll; \
+		[ -e "$$1" ] || set -- $(build_bindir)/$$lib.dll; \
+		$(INSTALL_M) "$$@" $(DESTDIR)$(bindir)/ || exit 1; \
+	done
 ifeq ($(JULIA_BUILD_MODE),release)
 	$(INSTALL_M) $(build_libdir)/libjulia.dll.a $(DESTDIR)$(libdir)/
 	$(INSTALL_M) $(build_libdir)/libjulia-internal.dll.a $(DESTDIR)$(libdir)/
@@ -425,12 +396,12 @@ else
 # libjulia in Darwin framework has special location and name
 ifeq ($(JULIA_BUILD_MODE),release)
 	$(INSTALL_M) $(build_libdir)/libjulia.$(SOMAJOR).$(SOMINOR).dylib $(DESTDIR)$(prefix)/$(framework_dylib)
-	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/$(FRAMEWORK_NAME).dSYM $(DESTDIR)$(prefix)/$(framework_dylib)
-	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/sys.dylib.dSYM $(build_private_libdir)/sys.dylib
+	@$(call dsymutil,$(DESTDIR)$(prefix)/$(framework_dylib),$(DESTDIR)$(prefix)/$(framework_resources)/$(FRAMEWORK_NAME).dSYM)
+	@$(call dsymutil,$(build_private_libdir)/sys.dylib,$(DESTDIR)$(prefix)/$(framework_resources)/sys.dylib.dSYM)
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(INSTALL_M) $(build_libdir)/libjulia-debug.$(SOMAJOR).$(SOMINOR).dylib $(DESTDIR)$(prefix)/$(framework_dylib)_debug
-	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/$(FRAMEWORK_NAME)_debug.dSYM $(DESTDIR)$(prefix)/$(framework_dylib)_debug
-	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/sys-debug.dylib.dSYM $(build_private_libdir)/sys-debug.dylib
+	@$(call dsymutil,$(DESTDIR)$(prefix)/$(framework_dylib)_debug,$(DESTDIR)$(prefix)/$(framework_resources)/$(FRAMEWORK_NAME)_debug.dSYM)
+	@$(call dsymutil,$(build_private_libdir)/sys-debug.dylib,$(DESTDIR)$(prefix)/$(framework_resources)/sys-debug.dylib.dSYM)
 endif
 endif
 
@@ -459,7 +430,7 @@ else
 	$(INSTALL_M) $(build_libdir)/crtn.o $(DESTDIR)$(private_libdir)/
 	$(INSTALL_M) $(build_libdir)/crtbeginS.o $(DESTDIR)$(private_libdir)/
 	$(INSTALL_M) $(build_libdir)/crtendS.o $(DESTDIR)$(private_libdir)/
-ifeq ($(OS),Linux)
+ifeq ($(LIBC),glibc)
 	$(INSTALL_M) $(build_libdir)/libc_nonshared.a $(DESTDIR)$(private_libdir)/
 endif
 endif
@@ -470,14 +441,35 @@ endif
 	for exe in $(JL_PRIVATE_TOOLS) ; do \
 		$(INSTALL_M) $(build_depsbindir)/$$exe $(DESTDIR)$(private_libexecdir) || exit 1; \
 	done
+ifneq (,$(and $(filter-out none,$(COMPRESS_DEBUG_SECTIONS)),$(findstring $(OS),Linux FreeBSD)))
+	# Compress the debug sections of bundled libraries (e.g. libstdc++ and libgfortran),
+	# which ship them uncompressed. The system image is left out, as it is in nearly every
+	# backtrace and symbolizing it decompresses all of its debug info. Skipped if objcopy
+	# can't compress, like the ELF Tool Chain one in FreeBSD 13's base system.
+	if $(OBJCOPY) --help 2>&1 | grep -q -e --compress-debug-sections; then \
+		for lib in $(DESTDIR)$(private_libdir)/*.$(SHLIB_EXT)*; do \
+			case "$${lib##*/}" in sys.$(SHLIB_EXT)|sys-debug.$(SHLIB_EXT)) continue ;; esac; \
+			[ ! -L "$$lib" ] && [ "$$(head -c 4 "$$lib" | tail -c 3)" = ELF ] || continue; \
+			$(OBJCOPY) --compress-debug-sections=$(COMPRESS_DEBUG_SECTIONS) "$$lib" || exit 1; \
+		done; \
+	else \
+		echo "$(OBJCOPY) can't compress debug sections; not compressing bundled libraries"; \
+	fi
+endif
 
 	# Copy public headers
 	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
-	# Copy system image
+	# Copy system image and static runtime. The archive goes beside the library
+	# that `-ljulia-internal` finds, so linkers keep preferring that library.
 ifeq ($(JULIA_BUILD_MODE),release)
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
+endif
+ifeq ($(OS),WINNT)
+	$(INSTALL_F) $(build_libdir)/$(JL_STATIC_RUNTIME) $(DESTDIR)$(libdir)
+else
+	$(INSTALL_F) $(build_libdir)/$(JL_STATIC_RUNTIME) $(DESTDIR)$(private_libdir)
 endif
 
 	# Copy in all .jl sources as well
@@ -601,7 +593,7 @@ endif
 
 	# Fix rpaths for dependencies. This should be fixed in BinaryBuilder later.
 ifeq ($(OS), Linux)
-	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN' $(DESTDIR)$(private_shlibdir)/libLLVM.$(SHLIB_EXT)
+	[ -L $(DESTDIR)$(private_shlibdir)/libLLVM.$(SHLIB_EXT) ] || $(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN' $(DESTDIR)$(private_shlibdir)/libLLVM.$(SHLIB_EXT)
 endif
 ifneq ($(LOADER_BUILD_DEP_LIBS),$(LOADER_INSTALL_DEP_LIBS))
 	# Next, overwrite relative path to libjulia-internal in our loader if $$(LOADER_BUILD_DEP_LIBS) != $$(LOADER_INSTALL_DEP_LIBS)
@@ -665,7 +657,7 @@ ifeq ($(OS), Linux)
 	-cp $(build_datarootdir)/julia/cert.pem $(DESTDIR)$(datarootdir)/julia/
 endif
 ifeq ($(OS), WINNT)
-	cd $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
+	cd $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin && rm -f llvm* llc.exe lli.exe opt.exe bugpoint.exe macho-dump.exe
 endif
 	cd $(BUILDROOT) && $(TAR) -zcvf $(JULIA_BINARYDIST_FILENAME).tar.gz julia-$(JULIA_COMMIT)
 

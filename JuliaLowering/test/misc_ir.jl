@@ -32,13 +32,12 @@ x."b"
 
 ########################################
 # Error: Wrong number of children in `.`
-@ast_ [K"." "x"::K"Identifier" "a"::K"Identifier" 3::K"Integer"]
+@ast_ [:. "x"::identifier "a"::identifier 3::value]
 #---------------------
 LoweringError:
-#= line 1 =# - invalid syntax: unknown form `.` or number of arguments 3
+ at line 1: invalid syntax: unknown form `.` or number of arguments 3
+
 Expression:
-  (. x a 3)
-Containing expressions:
   (. x a 3)
 
 ########################################
@@ -178,7 +177,7 @@ LoweringError:
 #---------------------
 LoweringError:
 (; a."b")
-#     ╙ ── expected identifier
+#    └─┘ ── expected identifier
 
 ########################################
 # Error: Named tuple element without valid name
@@ -254,13 +253,12 @@ LoweringError:
 ########################################
 # Error: Test AST which has no source form and thus must have been constructed
 # programmatically (eg, a malformed if)
-@ast_ [K"if"]
+@ast_ [:if]
 #---------------------
 LoweringError:
-#= line 1 =# - expected (if cond body) or (if cond body else)
+ at line 1: expected (if cond body) or (if cond body else)
+
 Expression:
-  (if)
-Containing expressions:
   (if)
 
 ########################################
@@ -270,11 +268,10 @@ let
 end
 #---------------------
 LoweringError:
-#= none:2 =# - unimplemented or unsupported `atomic` declaration
+ at line 2: unimplemented or unsupported `atomic` declaration
+
 Expression:
   (atomic x)
-Containing expressions:
-  (let (block) (block (atomic x)))
 
 ########################################
 # GC.@preserve support
@@ -311,7 +308,7 @@ end
 1   TestMod.f
 2   (call core.tuple %₁)
 3   (call JuliaLowering.interpolate_syntax (syntaxinert (call (syntaxunquote f) x y)) %₂)
-4   (call JuliaSyntax.fill_context %₃ SyntaxContext(#=omitted=#))
+4   (call Base.fill_context %₃ SyntaxContext(#=omitted=#))
 5   (= slot₁/eval_result (call JuliaLowering.eval TestMod %₄))
 6   latestworld
 7   slot₁/eval_result
@@ -325,7 +322,7 @@ end
 2   TestMod.f
 3   (call core.tuple %₂)
 4   (call JuliaLowering.interpolate_syntax (syntaxinert (call (syntaxunquote f) x y)) %₃)
-5   (call JuliaSyntax.fill_context %₄ SyntaxContext(#=omitted=#))
+5   (call Base.fill_context %₄ SyntaxContext(#=omitted=#))
 6   (= slot₁/eval_result (call JuliaLowering.eval %₁ %₅))
 7   latestworld
 8   slot₁/eval_result
@@ -455,7 +452,7 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall foo("blah"::Cstring, "bad")::Int
-#                            └─┘ ── argument needs a type annotation
+#                           └───┘ ── argument needs a type annotation
 
 ########################################
 # Error: @ccall varargs without one fixed argument
@@ -503,7 +500,7 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall gc_safe="hi" foo(x::Int)::Int
-#               └┘ ── gc_safe must be true or false
+#              └──┘ ── gc_safe must be true or false
 
 ########################################
 # Error: unary & syntax
@@ -543,16 +540,17 @@ include("hi.jl")
 # Const function assignment syntax (legacy)
 const f(x::Int)::Int = x+1
 #---------------------
-1   (method TestMod.f)
+1   (call core.define_method TestMod :f)
 2   latestworld
 3   TestMod.f
 4   (call core.TypeEqOf %₃)
 5   TestMod.Int
 6   (call core.svec %₄ %₅)
 7   (call core.svec)
-8   SourceLocation::1:6
+8   SourceLocation:1
 9   (call core.svec %₆ %₇ %₈)
-10  --- method TestMod.f %₉
+10  (call core.define_method TestMod TestMod.f %₉
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x slot₃/tmp(!read)]
     1   TestMod.Int
     2   TestMod.+

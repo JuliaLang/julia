@@ -35,6 +35,8 @@ public
     has_offset_axes,
     require_one_based_indexing,
     memoryindex,
+    unsetindex!,
+    unsetindex_atomic!,
 
 # collections
     IteratorEltype,
@@ -59,6 +61,7 @@ public
     get_extension,
     isambiguous,
     isexpr,
+    isfieldatomic,
     isidentifier,
     issingletontype,
     identify_package,
@@ -86,6 +89,9 @@ public
 # Integer math
     uabs,
     mul_hi,
+
+# Numbers
+    decompose,
 
 # C interface
     cconvert,

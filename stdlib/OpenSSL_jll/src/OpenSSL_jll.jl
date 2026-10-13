@@ -7,6 +7,9 @@ using Base, Libdl, Base.BinaryPlatforms
 
 export libcrypto, libssl
 
+# This package's UUID, as in its Project.toml; names this JLL in each library's identity
+const _pkg_uuid = Base.UUID("458c3c95-2e84-50aa-8efc-19380b2a3a95")
+
 # These get calculated in __init__()
 const PATH = Ref("")
 const PATH_list = String[]
@@ -28,7 +31,8 @@ const libcrypto = LazyLibrary(
         BundledLazyLibraryPath("libcrypto.so.3")
     else
         error("OpenSSL_jll: Library 'libcrypto' is not available for $(Sys.KERNEL)")
-    end
+    end;
+    id = LibraryID(_pkg_uuid, "libcrypto")
 )
 
 libssl_path::String = ""
@@ -46,6 +50,7 @@ const libssl = LazyLibrary(
     else
         error("OpenSSL_jll: Library 'libssl' is not available for $(Sys.KERNEL)")
     end;
+    id = LibraryID(_pkg_uuid, "libssl"),
     dependencies = LazyLibrary[libcrypto]
 )
 
@@ -54,6 +59,10 @@ function eager_mode()
     dlopen(libssl)
 end
 is_available() = true
+
+# JLLWrappers path compatibility accessors
+get_libcrypto_path() = libcrypto_path
+get_libssl_path() = libssl_path
 
 function __init__()
     global libcrypto_path = string(libcrypto.path)

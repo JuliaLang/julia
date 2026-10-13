@@ -800,6 +800,54 @@ end
 end
 @test f_unreachable_phinode_edge2(1, 2) == 2
 
+# Preserve an undefined incoming value when slot2ssa creates a PhiNode (#55388).
+function undef_phinode55388(nextstate, loopcond, valuecond, returncond)
+    nextstate && @goto state3
+    while loopcond
+        ct = valuecond ? [] : nothing
+        if returncond
+            return
+            @label state3
+        end
+        Base.donotdelete(ct)
+    end
+    nothing
+end
+let src = code_typed1(undef_phinode55388, (Bool, Bool, Bool, Bool))
+    @test any(src.code) do stmt
+        isa(stmt, PhiNode) || return false
+        return any(i -> !isassigned(stmt.values, i), eachindex(stmt.edges))
+    end
+end
+@test_throws UndefVarError undef_phinode55388(true, true, true, false)
+@test undef_phinode55388(false, false, false, false) === nothing
+
+# ... and the same for a slot whose definitions live inside an exception region,
+# which reaches the `PhiCNode`/`UpsilonNode` path instead (#55388).
+@noinline maythrow55388(x) = x === nothing ? throw(ArgumentError("nothing")) : x
+function undef_phicnode55388(nextstate, loopcond, valuecond)
+    nextstate && @goto state3
+    while loopcond
+        local ct
+        try
+            ct = maythrow55388(valuecond ? [] : nothing)
+        catch
+            ct = nothing
+        end
+        @label state3
+        Base.donotdelete(ct)
+    end
+    nothing
+end
+let src = code_typed1(undef_phicnode55388, (Bool, Bool, Bool))
+    @test any(src.code) do stmt
+        isa(stmt, PhiNode) || return false
+        return any(i -> !isassigned(stmt.values, i), eachindex(stmt.edges))
+    end
+end
+@test_throws UndefVarError undef_phicnode55388(true, true, true)
+@test undef_phicnode55388(false, false, false) === nothing
+
 global global_error_switch::Bool = true
 function gen_must_throw_phinode_edge(world::UInt, source, _)
     ci = make_codeinfo(Any[
@@ -863,6 +911,24 @@ let cl = Int32[0,0,0,255,0,0,256,0,0,257,0,0]
     @test roundtrip_di(cl, 33, 4) == cl
 end
 
+# Test line comparisons with byte-precise debuginfo.
+let sbt = String(UInt8[
+        1, 0, 0, 0, # byte offset
+        1, 0, 0, 0, # line offset
+        2, 0, 0, 0, # number of locations
+        1, 1,       # byte and span encoding lengths
+        0, 1, 2, 1, # byte spans
+        0, 2,       # line starts
+    ])
+    codelocs = Int32[1, 0, 0, 2, 0, 0]
+    str = ccall(:jl_compress_codelocs,
+                Any, (Int32, Any, Int), Int32(-1), codelocs, 2)::String
+    di = Core.DebugInfo(:foo, sbt, Core.svec(), str)
+    @test !Compiler.changed_lineinfo(di, 1, 1)
+    @test Compiler.changed_lineinfo(di, 2, 1)
+    @test !Compiler._should_instrument(di)
+end
+
 @test_throws ErrorException Base.code_ircode(+, (Float64, Float64); optimize_until = "nonexisting pass name")
 @test_throws ErrorException Base.code_ircode(+, (Float64, Float64); optimize_until = typemax(Int))
 
@@ -901,3 +967,21 @@ end
     (Float32, Float32, Float64),
     (Float32, Float32, Float32),
 ]
+
+# Tests that phi-edge cleanup during compaction terminates when the phi block
+# begins with a `nothing` statement rather than a PhiNode (#62818).
+function f62818(c)
+    r = Ref(false)
+    while true
+        if c !== nothing
+            r[] = true
+        end
+        if r[]
+            continue
+        else
+            break
+        end
+    end
+end
+@test only(Base.return_types(f62818, Tuple{Nothing})) === Nothing
+@test f62818(nothing) === nothing

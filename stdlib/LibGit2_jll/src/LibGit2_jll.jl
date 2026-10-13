@@ -31,6 +31,7 @@ const libgit2 = LazyLibrary(
     else
         error("LibGit2_jll: Library 'libgit2' is not available for $(Sys.KERNEL)")
     end;
+    id = LibraryID(Base.UUID("e37daf67-58a4-590a-8e99-b0245dd2ffc5"), "libgit2"),
     dependencies = if Sys.iswindows()
         if Sys.WORD_SIZE == 32
             LazyLibrary[libssh2, libgcc_s, libpcre2_8, libz]
@@ -55,6 +56,9 @@ function eager_mode()
     dlopen(libgit2)
 end
 is_available() = true
+
+# JLLWrappers path compatibility accessor
+get_libgit2_path() = libgit2_path
 
 function __init__()
     global libgit2_path = string(libgit2.path)

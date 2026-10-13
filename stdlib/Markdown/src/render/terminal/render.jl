@@ -26,7 +26,7 @@ function term(io::IO, md::Paragraph, columns)
     end
 end
 
-function term(io::IO, md::HTMLBlock, columns)
+function term(io::IO, md::HTMLBlock, _)
     for line in md.content[1:end-1]
         println(io, line)
     end
@@ -45,7 +45,9 @@ end
 function term(io::IO, md::Admonition, columns)
     accent = if md.category == "danger"
         :error
-    elseif md.category in ("warning", "info", "note", "tip")
+    elseif md.category in ("info", "note")
+        :info
+    elseif md.category in ("warning", "tip")
         Symbol(md.category)
     elseif md.category == "compat"
         :bright_cyan
@@ -84,7 +86,7 @@ function term(io::IO, md::List, columns, depth::Int = 1)
     dterm(io, md::List, columns, depth) = term(io, md, columns, depth)
 
     function make_list_marker(i::Int)
-        list_marker = if isordered(md)
+        if isordered(md)
             string(lpad(i + md.ordered - 1, ndigits(length(md.items) + md.ordered - 1)), ". ")
         elseif depth == 1
             first(_bullets)
@@ -156,11 +158,14 @@ function term(io::AnnotIO, md::Header{l}, columns) where l
     end
 end
 
-function term(io::IO, md::Code, columns)
+function term(io::IO, md::Code, _)
     code = if md.language == "julia"
-        highlight(md.code)
+        hl = AnnotatedString(md.code)
+        StyledStrings.face!(hl, :markdown_code)
+        highlight!(hl)
     elseif md.language == "julia-repl" || Base.startswith(md.language, "jldoctest")
         hl = AnnotatedString(md.code)
+        StyledStrings.face!(hl, :markdown_code)
         for (; match) in eachmatch(r"(?:^|\n)julia>", hl)
             StyledStrings.face!(match, :markdown_julia_prompt)
             afterprompt = match.offset + ncodeunits(match) + 1
@@ -186,13 +191,13 @@ function term(io::IO, md::Code, columns)
     end
 end
 
-function term(io::IO, tex::LaTeX, columns)
+function term(io::IO, tex::LaTeX, _)
     print(io, ' '^margin, styled"{markdown_latex:$(tex.formula)}")
 end
 
-term(io::IO, br::LineBreak, columns) = nothing # line breaks already printed between subsequent elements
+term(::IO, ::LineBreak, _) = nothing # line breaks already printed between subsequent elements
 
-function term(io::IO, br::HorizontalRule, columns)
+function term(io::IO, ::HorizontalRule, columns)
     print(io, ' '^margin, styled"{markdown_hrule:$('─'^(columns - 2margin))}")
 end
 
@@ -230,7 +235,7 @@ function terminline(io::AnnotIO, md::Strikethrough)
     with_output_annotations(io -> terminline(io, md.text), io, :face => :strikethrough)
 end
 
-function terminline(io::IO, md::LineBreak)
+function terminline(io::IO, ::LineBreak)
     println(io)
 end
 

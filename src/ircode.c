@@ -81,7 +81,7 @@ extern "C" {
 #define MAX_SMALL_INT32 20
 
 
-typedef struct {
+typedef struct JL_GC_TRACKED_TYPE {
     ios_t *s;
     size_t ssaid;
     // method we're compressing for
@@ -321,7 +321,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal)
         write_uint8(s->s, TAG_LONG_SSAVALUE);
         write_uint16(s->s, ((jl_ssavalue_t*)v)->id);
     }
-    else if (jl_typetagis(v, jl_slotnumber_type) && jl_slot_number(v) <= UINT16_MAX && jl_slot_number(v) >= 0) {
+    else if (jl_is_slotnumber(v) && jl_slot_number(v) <= UINT16_MAX && jl_slot_number(v) >= 0) {
         write_uint8(s->s, TAG_SLOTNUMBER);
         write_uint16(s->s, jl_slot_number(v));
     }
@@ -1092,8 +1092,7 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     v = jl_pchar_to_string(s.s->buf, s.s->size);
     ios_close(s.s);
     if (jl_array_nrows(m->roots) == 0) {
-        jl_gc_wb(m, NULL);
-        m->roots = NULL;
+        jl_gc_write(m, m->roots, jl_array_t, NULL);
     }
     JL_UNLOCK(&m->writelock); // Might GC
     JL_GC_POP();
@@ -1175,8 +1174,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
 
     if (metadata) {
         jl_debuginfo_t *new_debuginfo = jl_atomic_load_relaxed(&metadata->debuginfo);
-        jl_gc_wb(code, new_debuginfo);
-        code->debuginfo = new_debuginfo;
+        jl_gc_write(code, code->debuginfo, jl_debuginfo_t, new_debuginfo);
     } else
         jl_gc_write(code, code->debuginfo, jl_debuginfo_t, m->debuginfo);
     assert(code->debuginfo);

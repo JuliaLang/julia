@@ -1,0 +1,4 @@
+# Configuration for the `typos` spell checker (.github/workflows/Typos.yml)
+[default.extend-words]
+# allowlist for typo check
+invokee = "invokee"

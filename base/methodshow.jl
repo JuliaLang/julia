@@ -71,18 +71,18 @@ function arg_decl_parts(m::Method, html=false)
         decls[1] = ("", sprint(show_signature_function, unwrapva(sig.parameters[1]), false, decls[1][1], html,
                                context = show_env))
     else
-        decls = Tuple{String,String}[("", "") for i = 1:length(sig.parameters::SimpleVector)]
+        decls = Tuple{String,String}[("", "") for _ = 1:length(sig.parameters::SimpleVector)]
     end
     return tv, decls, file, line
 end
 
 # NOTE: second argument is deprecated and is no longer used
-function kwarg_decl(m::Method, kwtype = nothing)
+function kwarg_decl(m::Method, kwtype = nothing; world::UInt=get_world_counter())
     if !(m.sig === Tuple || m.sig <: Tuple{Core.Builtin, Vararg}) # OpaqueClosure or Builtin
         kwtype = typeof(Core.kwcall)
         sig_params = (unwrap_unionall(m.sig)::DataType).parameters
         sig = rewrap_unionall(Tuple{kwtype, NamedTuple, sig_params...}, m.sig)
-        kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, get_world_counter())
+        kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, world)
         if kwli === nothing
             # a compiled keyword sorter is specialized on the dispatch (egality)
             # spelling of closed type-valued slots, so retry the lookup with
@@ -101,7 +101,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
             end
             if changed
                 sig = rewrap_unionall(Tuple{new_params...}, m.sig)
-                kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, get_world_counter())
+                kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, world)
             end
         end
         if kwli !== nothing
@@ -303,12 +303,12 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
                     "generic function")
         print(io, " for ", what, " ", namedisplay, " from ")
 
-        col = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, parentmodule_before_main(tn.module))
+        col = get_stacktrace_color(parentmodule_before_main(tn.module))
 
         printstyled(io, tn.module, color=col)
     elseif '#' in sname
         print(io, " for anonymous function ", namedisplay)
-    elseif tn === _TYPE_NAME || iskindtype(tn.wrapper)
+    elseif iskindtype(tn.wrapper)
         print(io, " for type constructor")
     else
         print(io, " for callable object")
@@ -333,7 +333,7 @@ function _modulecolor(method::Method)
         return nothing
     end
     m = parentmodule_before_main(method)
-    return get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
+    return get_stacktrace_color(m)
 end
 
 function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
@@ -345,7 +345,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
         show_method_list_header(io, ms, str -> "\""*str*"\"")
     end
     n = rest = 0
-    local last
+    last = nothing
 
     last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
     last_shown_line_infos === nothing || empty!(last_shown_line_infos)
@@ -372,7 +372,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     end
     if rest > 0
         println(io)
-        if rest == 1
+        if rest == 1 && last isa Method
             show_method(io, last)
         else
             print(io, "... $rest methods not shown")
@@ -441,7 +441,7 @@ function url(m::Method)
 end
 
 function show(io::IO, ::MIME"text/html", m::Method)
-    tv, decls, file, line = arg_decl_parts(m, true)
+    tv, decls, _file, line = arg_decl_parts(m, true)
     sig = unwrap_unionall(m.sig)
     if sig <: Tuple{Core.Builtin, Vararg}
         print(io, m.name, "(...) in ", parentmodule(m))

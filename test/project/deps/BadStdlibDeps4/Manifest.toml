@@ -1,0 +1,30 @@
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.10.0"
+manifest_format = "2.0"
+project_hash = "5f8c1f1c8e0a1d4e9b1e9a1e3b0f6c7d8e9f0a1b"
+
+[[deps.Libdl]]
+uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+
+[[deps.LinearAlgebra]]
+deps = ["Libdl"]
+uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+
+[[deps.Random]]
+uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[[deps.Serialization]]
+uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+
+[[deps.SparseArrays]]
+deps = ["Libdl", "LinearAlgebra", "Random", "Serialization"]
+uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+version = "1.10.0"
+
+# This is intentionally missing the weakdeps and extensions of Statistics,
+# emulating a manifest from a version where it had no SparseArraysExt yet
+[[deps.Statistics]]
+deps = ["LinearAlgebra"]
+uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+version = "1.10.0"

@@ -50,7 +50,7 @@ function _helpmode(io::IO, line::AbstractString, mod::Module=Main, internal_acce
             line = "#"
         end
     end
-    x = Meta.parse(line, raise = false, depwarn = false)
+    x = Meta.parse(line; raise = false, depwarn = false, mod)
     assym = Symbol(line)
     expr =
         if haskey(keywords, assym) || Base.isoperator(assym) || isexpr(x, :error) ||
@@ -392,7 +392,7 @@ function find_readme(m::Module)::Union{String, Nothing}
     isnothing(mpath) && return nothing
     !isfile(mpath) && return nothing # modules in sysimage, where src files are omitted
     path = dirname(mpath)
-    top_path = pkgdir(m)
+    top_path = something(pkgdir(m), path)
     while true
         for entry in readdir(path, DirEntry; sort=true)
             isfile(entry) && (lowercase(basename(entry)) in ["readme.md", "readme"]) || continue
@@ -736,8 +736,8 @@ function string_distance(a::AbstractString, lena::Integer, b::AbstractString, le
         lena, lenb = lenb, lena
     end
     start = 0
-    for (i, j) in zip(a, b)
-        if a == b
+    for (achar, bchar) in zip(a, b)
+        if achar == bchar
             start += 1
         else
             break

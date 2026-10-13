@@ -259,6 +259,8 @@ end
 
         f = findeach(isodd, Dict(1 => 2, 2 => 3, 3 => 4))
         @test only(f) == 2
+
+        @test collect(findeach([true,false,true])) == [1,3]
     end
 end
 
@@ -547,8 +549,16 @@ end
 @test (@inferred length(flatten(1:6))) == 6
 @test collect(flatten(Any[])) == Any[]
 @test collect(flatten(())) == Union{}[]
+@test last(flatten([1:3, 5:4])) == 3
+@test_throws ArgumentError last(flatten([1:0, 5:4]))
+@test_throws ArgumentError last(flatten(UnitRange{Int}[]))
 @test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
 @test_throws ArgumentError length(flatten([[1], [1]]))
+
+# Flattened iterator lengths must not wrap before comprehension allocation.
+overflow_length = Int(typemax(UInt) ÷ 3 + 1)
+overflow_flatten = flatten(Iterators.repeated((1, 2, 3), overflow_length))
+@test_throws OverflowError collect(identity(x) for x in overflow_flatten)
 
 @testset "IteratorSize trait for flatten" begin
     @test (@inferred Base.IteratorSize(Base.Flatten((i for i=1:2) for j=1:1))) == Base.SizeUnknown()
@@ -946,6 +956,19 @@ end
     @test length(collect(Iterators.take(d,3))) == 3
     @test length(collect(d)) == 2
     @test length(collect(d)) == 0
+end
+
+@testset "zip with Take" begin
+    @test collect(zip(take(zip(1:3, 1:3), 2), 1:5)) == [((1, 1), 1), ((2, 2), 2)]
+    # isdone(::Take, state) infers as Union{Bool,Missing} here
+    f(z) = (s = 0.0; for (_, b) in z; s += b; end; s)
+    z = zip(1:100, repeated(1.0, 100))
+    f(z)
+    @test @allocated(f(z)) == 0
+    # an exhausted Take must stop zip before a preceding stateful iterator is advanced
+    c = Channel{Int}(5); foreach(i -> put!(c, i), 1:5); close(c)
+    @test collect(zip(c, take(1:10, 2))) == [(1, 1), (2, 2)]
+    @test collect(c) == [3, 4, 5]
 end
 
 @testset "only" begin

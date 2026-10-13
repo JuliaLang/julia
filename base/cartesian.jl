@@ -48,7 +48,7 @@ function _nloops(N::Int, itersym::Symbol, esc_rng::Bool, rangeexpr::Expr, args::
         throw(ArgumentError("second argument must be an anonymous function expression to compute the range"))
     end
     if !(1 <= length(args) <= 3)
-        throw(ArgumentError("number of arguments must be 1 ≤ length(args) ≤ 3, got $nargs"))
+        throw(ArgumentError("number of arguments must be 1 ≤ length(args) ≤ 3, got $(length(args))"))
     end
     body = args[end]
     ex = Expr(:escape, body)

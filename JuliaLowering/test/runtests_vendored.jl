@@ -1,8 +1,19 @@
 using Pkg
 
+function with_output_on_failure(f)
+    output = IOBuffer()
+    try
+        return f(output)
+    catch
+        seekstart(output)
+        write(stderr, read(output))
+        rethrow()
+    end
+end
+
 let old_active_project = Base.active_project()
     try
-        # test local (dev) copy of JuliaLowering, not yet vendored into Base
+        # test local (dev) copy of JuliaLowering, not the copy vendored into Base
         Base.set_active_project(joinpath(@__DIR__, "..", "Project.toml"))
 
         # `Manifest.toml` is not checked in (see `JuliaLowering/.gitignore`), so
@@ -11,15 +22,17 @@ let old_active_project = Base.active_project()
         # picks up that dev copy without needing a committed manifest. Skip the
         # registry update: the only dependencies are path-based / stdlib, so no
         # network access is required (and tests may run with networking disabled).
-        Pkg.instantiate(; update_registry=false)
+        with_output_on_failure() do output
+            Pkg.instantiate(; update_registry=false, io=output)
+        end
 
         # restore error hints (emptied by `testdefs.jl`) so that errors print as
         # JuliaLowering expects them to
         Base.Experimental.register_error_hint(Base.UndefVarError_hint, UndefVarError)
 
         # n.b.: these must be run in `Main`, so that type-printing is equivalent
-        # when running via Pkg.test() (e.g. "SyntaxGraph" should be printed instead
-        # of "JuliaLowering.SyntaxGraph")
+        # when running via Pkg.test() (e.g. "SomeType" should be printed instead
+        # of "JuliaLowering.SomeType")
         @eval Main using JuliaLowering
         Core.include(Main, joinpath(@__DIR__, "runtests.jl")) # run the actual tests
     finally

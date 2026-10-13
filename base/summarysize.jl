@@ -65,6 +65,20 @@ function summarysize(obj;
             # parent links, enumerated here rather than via the layout
             nf = Int(x.nparents)
             val = _cancel_parent(x, i)
+        elseif isa(x, Core.WaitEntryN)
+            # `task` plus the (strong) owner/next pair of each hidden
+            # trailing wait slot
+            ns = _nslots(x)
+            nf = 1 + 2 * ns
+            if i == 1
+                t = @atomic :monotonic x.task
+                t === nothing || (val = t)
+            else
+                si, k = divrem(i - 2, 2)
+                slot = slots(x)[si + 1]
+                v = k == 0 ? slot.owner : slot.next
+                v === nothing || (val = v)
+            end
         elseif isa(x, GenericMemory)
             T = eltype(x)
             if allocatedinline(T)
@@ -219,6 +233,17 @@ function (ss::SummarySize)(obj::Core.CancellationTokenSource)
         push!(ss.frontier_x, obj)
         push!(ss.frontier_i, 1)
     end
+    return ss.count ? 1 : Core.sizeof(obj)
+end
+
+function (ss::SummarySize)(obj::Core.WaitEntryN)
+    key = pointer_from_objref(obj)
+    haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
+    # Variable-sized: Core.sizeof includes the trailing wait slots, whose
+    # strong owner/next references (invisible to the layout) are traversed
+    # through the iterative frontier alongside `task`.
+    push!(ss.frontier_x, obj)
+    push!(ss.frontier_i, 1)
     return ss.count ? 1 : Core.sizeof(obj)
 end
 

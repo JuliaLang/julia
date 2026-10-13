@@ -24,7 +24,9 @@ for (T, c) in (
         (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :func, :isleafsig, :issimplesig, :va]),
         (Core.TypeMapLevel, []),
         (Core.TypeName, [:name, :module, :names, :wrapper, :hash, :n_uninitialized, :flags]),
-        (DataType, [:name, :super, :parameters, :instance, :hash]),
+        # `super` is filled lazily for instantiations of self-referential
+        # definitions (issue #61347), so it is deliberately non-const (and atomic)
+        (DataType, [:name, :parameters, :instance, :hash]),
         (TypeVar, [:name, :ub, :lb]),
         (Core.Memory, [:length, :ptr]),
         (Core.GenericMemoryRef, [:mem, :ptr_or_offset]),
@@ -45,10 +47,10 @@ for (T, c) in (
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
         (Core.TypeName, [:cache, :linearcache, :Typeofwrapper, :max_args, :cache_entry_count]),
-        (DataType, [:types, :layout]),
+        (DataType, [:super, :types, :layout]),
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
-        (Task, [:_state, :running_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at]),
+        (Task, [:_state, :preempt_request, :running_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at, :waiting_on, :bound_cancel_token]),
         (Core.BindingPartition, [:min_world, :max_world, :next]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
@@ -431,6 +433,29 @@ end  |> only == Core.TypeEgal{typejoin(Int, UInt, Float64)}
 @test typejoin(Core.TypeEgal{Int}, Type{String}) === Type
 @test ccall(:jl_types_struct_equiv, Cint, (Any, Any), Int, Int) == 1
 @test ccall(:jl_types_struct_equiv, Cint, (Any, Any), Int, String) == 0
+
+# issue #62897: `Type{v}` with a non-type parameter is constructible (like 1.13), so the
+# `T` field of `TypeEq` must be declared `Any` — a narrower field type would let inference
+# unsoundly assume the parameter is a type or TypeVar.
+@test fieldtype(Core.TypeEq, :T) === Any
+@test Base.type_parameter(Type{setindex!}) === setindex!
+@test Base.type_parameter(Type{1}) === 1
+@test Base.type_parameter(Type{:sym}) === :sym
+
+# `Type{K}` for a kind `K` holds only `K` itself (and types equal to it), not every
+# instance of `K`, so `isa` must not reduce to a check of `typeof(x)` in a union
+isa_type_datatype(@nospecialize x) = isa(x, Union{Type{DataType}, Int})
+isa_egal_union(@nospecialize x) = isa(x, Union{Core.TypeEgal{Union}, Int})
+isa_type_anytype(@nospecialize x) = isa(x, Union{Type{Core.AnyType}, Int})
+for (f, T, members) in ((isa_type_datatype, Union{Type{DataType}, Int}, (DataType,)),
+                        (isa_egal_union, Union{Core.TypeEgal{Union}, Int}, (Union,)),
+                        (isa_type_anytype, Union{Type{Core.AnyType}, Int}, (Core.AnyType, Type)))
+    for x in (DataType, Union, UnionAll, Core.AnyType, Type, Int, Float64, 1, 1.0)
+        expected = x === 1 || any(m -> x === m, members)
+        @test isa(x, T) === expected
+        @test f(x) === expected
+    end
+end
 
 # `isType` covers both type-object kinds; use split predicates when exactness matters.
 @test Base.isType(Type{Int})
@@ -6511,6 +6536,18 @@ mutable struct ANonIsBitsType
     v::Int64
 end
 @test Base.uniontypes(Union{Int64, ANonIsBitsType}) == Base.uniontypes(Union{ANonIsBitsType, Int64})
+# components differing only in value parameters
+@test Union{Val{1}, Val{2}} === Union{Val{2}, Val{1}}
+@test Union{Val{:a}, Val{:b}} === Union{Val{:b}, Val{:a}}
+@test Union{Val{true}, Val{false}} === Union{Val{false}, Val{true}}
+@test Union{Val{1.0}, Val{2.0}} === Union{Val{2.0}, Val{1.0}}
+@test Union{Val{'a'}, Val{'b'}} === Union{Val{'b'}, Val{'a'}}
+@test Union{Val{1}, Val{:a}} === Union{Val{:a}, Val{1}}
+@test Union{Val{1}, Val{:a}, Val{1.0}} === Union{Val{1.0}, Val{:a}, Val{1}}
+@test Base.uniontypes(Union{Val{1}, Val{-1}, Val{256}}) == Any[Val{-1}, Val{1}, Val{256}]
+@test Base.uniontypes(Union{Val{:b}, Val{:a}}) == Any[Val{:a}, Val{:b}]
+@test Base.uniontypes(Union{Val{:a}, Val{1}}) == Any[Val{1}, Val{:a}]
+@test Union{Pair{Val{1}, Val{2}}, Pair{Val{2}, Val{1}}} === Union{Pair{Val{2}, Val{1}}, Pair{Val{1}, Val{2}}}
 
 # issue 18933
 module GlobalDef18933
@@ -6895,6 +6932,15 @@ for U in unboxedunions
             @test A[1] === initvalue2(F2)
             @test typeof(A[end]) === F2
 
+            A = U[initvalue2(F2) for i = 1:len]
+            resize!(A, 1; first=true)
+            @test length(A) === 1
+            @test A[1] === initvalue2(F2)
+            resize!(A, len; first=true)
+            @test length(A) === len
+            @test A[end] === initvalue2(F2)
+            @test typeof(A[end]) === F2
+
             # deleteat!
             F = Base.uniontypes(U)[2]
             A = U[rand(F(1):F(len)) for i = 1:len]
@@ -6978,6 +7024,23 @@ for U in unboxedunions
             @test A[1] == initvalue2(F2)
             @test A[end] == initvalue2(F2)
         end
+    end
+end
+
+# Vector growth sizes must not wrap and leave logical length larger than backing storage.
+@testset "array growth overflow" begin
+    A = [1, 2]
+    popfirst!(A)
+    @test_throws OverflowError resize!(A, typemax(Int))
+    @test A == [2]
+    @test length(A.ref.mem) == 2
+
+    for (f, A) in ((A -> Base._growbeg!(A, typemax(Int)), [1]),
+                   (A -> Base._growend!(A, typemax(Int)), [1]),
+                   (A -> Base._growat!(A, 2, typemax(Int)), [1, 2]))
+        old = copy(A)
+        @test_throws OverflowError f(A)
+        @test A == old
     end
 end
 
@@ -7083,7 +7146,7 @@ setindex!(A, missing, 2)
 setindex!(A, 0x03, 3)
 setindex!(A, missing, 4)
 setindex!(A, 0x05, 5)
-Base._growat!(A, 1, 1)
+resize!(A, 6; first=true)
 
 @test getindex(A, 1) === missing
 @test getindex(A, 2) === 0x01
@@ -7093,7 +7156,7 @@ Base._growat!(A, 1, 1)
 @test getindex(A, 6) === 0x05
 
 # grow_at_beg 2
-Base._growat!(A, 1, 1)
+resize!(A, 7; first=true)
 @test getindex(A, 1) === missing
 @test getindex(A, 2) === missing
 @test getindex(A, 3) === 0x01
@@ -7114,7 +7177,7 @@ Base._growat!(A, 2, 1)
 @test getindex(A, 8) === 0x05
 
 # grow_at_beg 9
-Base._growat!(A, 1, 1)
+resize!(A, 9; first=true)
 @test getindex(A, 1) === missing
 @test getindex(A, 2) === missing
 @test getindex(A, 3) === missing
@@ -7170,6 +7233,11 @@ Base._growat!(A, 2, 3)
 @test getindex(A, 8) === missing
 @test getindex(A, 9) === missing
 @test getindex(A, 10) === 0x05
+
+resize!(A, 2; first=true)
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === 0x05
+@test length(A) === 2
 
 # grow_at_beg 3
 A = Vector{Union{Missing, UInt8}}(undef, 1048577)
@@ -8020,7 +8088,7 @@ end
 struct B40050 <: Ref{Tuple{B40050}}
 end
 @test string((B40050(),)) == "($B40050(),)"
-@test_broken isbitstype(Tuple{B40050})
+@test isbitstype(Tuple{B40050})
 
 # issue #41654
 struct X41654 <: Ref{X41654}
@@ -8194,6 +8262,8 @@ primitive type P36104 8 end
 const orig_P36104 = P36104
 primitive type P36104 16 end
 @test P36104 !== orig_P36104
+primitive type P36104 12 end # same size as 16 bits
+@test Core.bitsizeof(P36104) == 12
 
 # Malformed invoke
 f_bad_invoke(x::Int) = invoke(x, (Any,), x)
@@ -8505,6 +8575,14 @@ end
     a, b... = x
     @test a == 1
     @test b == Core.svec(2, 3)
+end
+
+# SimpleVector allocation must reject pointer-byte size overflow before its fill loops.
+@testset "svec allocation overflow" begin
+    n = Int(typemax(UInt) ÷ UInt(sizeof(Ptr{Cvoid})) + 1)
+    @test_throws OutOfMemoryError Tuple{Vararg{Nothing,n}}
+    mem = Memory{Nothing}(undef, n)
+    @test_throws OutOfMemoryError Core.svec(mem...)
 end
 
 @testset "setproperty! on modules" begin
@@ -8824,6 +8902,18 @@ end
 @overlay mt cos(x::Float64) = 2
 # parametric function def
 @overlay mt tan(x::T) where {T} = 3
+# block form, including docstrings and other macros
+@overlay mt begin
+    """
+    an overlaid exp
+    """
+    exp(x::Float64) = 4
+
+    @inline log(x::Float64) = 5
+end
+@test_throws ErrorException @macroexpand @overlay mt begin
+    x = 1
+end
 
 end # module OverlayModule
 
@@ -8831,6 +8921,10 @@ let ms = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, nothing, 1, Base.ge
     @test only(ms).method.module === Base.Math
 end
 let ms = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, OverlayModule.mt, 1, Base.get_world_counter())
+    @test only(ms).method.module === OverlayModule
+end
+for f in (exp, log)
+    ms = Base._methods_by_ftype(Tuple{typeof(f), Float64}, OverlayModule.mt, 1, Base.get_world_counter())
     @test only(ms).method.module === OverlayModule
 end
 let ms = Base._methods_by_ftype(Tuple{typeof(sin), Int}, OverlayModule.mt, 1, Base.get_world_counter())
@@ -8958,6 +9052,14 @@ end
 @test_broken (Tuple{Vararg{T}} where T) === Union{Tuple{T, T, Vararg{T}} where T, Tuple{}, Tuple{T} where T}
 
 @test sizeof(Pair{Union{typeof(Union{}),Nothing}, Union{Type{Union{}},Nothing}}(Union{}, Union{})) == 2
+
+# Codegen of a Type{Union{}} isbits-union component.
+typeofbottom_union_constant() =
+    Pair{Union{typeof(Union{}),Nothing}, Union{Type{Union{}},Nothing}}(Union{}, Union{})
+code_llvm(devnull, typeofbottom_union_constant, Tuple{})
+let p = typeofbottom_union_constant()
+    @test p.first === Union{} && p.second === Union{}
+end
 
 # Make sure that Core.Compiler has enough NamedTuple infrastructure
 # to properly give error messages for basic kwargs...
@@ -9118,8 +9220,14 @@ end
 #58434 bitsegal comparison of oddly sized fields
 primitive type ByteString58434 (18 * 8) end
 
-@test Base.datatype_isbitsegal(Tuple{ByteString58434}) == false
-@test Base.datatype_haspadding(Tuple{ByteString58434}) == (length(Base.padding(Tuple{ByteString58434})) > 0)
+@test Base.datatype_haspadding(Tuple{ByteString58434})
+@test Base.datatype_haspadding(Tuple{ByteString58434}) == !Base.ispacked(Tuple{ByteString58434})
+# padding must not affect egality or hashing
+let mk = t -> reinterpret(ByteString58434, t), x = ntuple(i -> UInt8(i), 18)
+    @test mk(x) === mk(x)
+    @test mk(x) !== mk(ntuple(i -> UInt8(i == 18 ? 0 : i), 18))
+    @test objectid(mk(x)) == objectid(mk(x))
+end
 
 # #60659 - Behavior of using'd ambiguous bindings
 module AmbiguousUsing60659
@@ -9241,3 +9349,118 @@ pinned_gci_62001(::Type{<:PinnedSA62001{<:PinnedPL62001}}, ::Type{<:Type{Val{S}}
 # a generated function's generator receives the representative value
 @generated pinned_gg_62001(::Type{<:Type{Val{S}}}) where {S} = QuoteNode(S)
 @test pinned_gg_62001(Type{Val{pinned_schema_62001}}) === pinned_schema_62001
+
+# issue #52533: an unrelated try/catch should not keep values rooted in its PhiC
+# slots for the remainder of the enclosing function
+mutable struct Issue52533 end
+@noinline function issue52533(freed::Ref{Bool}, throw_::Bool)
+    b = nothing
+    try
+        x = Issue52533()
+        finalizer(_ -> (freed[] = true), x)
+        b = x
+        throw_ && Base.inferencebarrier(throw)(ErrorException("52533"))
+        Base.inferencebarrier(identity)(nothing)
+    catch
+        b isa Issue52533 && Base.donotdelete(b)
+    end
+    b = nothing
+    GC.gc(true); GC.gc(true)
+    return freed[]
+end
+@test issue52533(Ref(false), false)  # normal exit from the try region
+@test issue52533(Ref(false), true)   # exit through the catch block
+
+# ... and this holds for a value the try region never touches on the executed
+# path: slot2ssa snapshots each PhiC variable into its slot ahead of the `enter`,
+# so the region pins whatever the variable held on the way in
+@noinline issue52533_never() = Base.inferencebarrier(false)::Bool
+@noinline function issue52533_beside(freed::Ref{Bool})
+    b = Issue52533()
+    finalizer(_ -> (freed[] = true), b)
+    Base.donotdelete(b)
+    try
+        Base.inferencebarrier(identity)(nothing)
+        issue52533_never() && (b = nothing)
+    catch
+        b === nothing || Base.donotdelete(b)
+    end
+    b = nothing
+    GC.gc(true); GC.gc(true)
+    return freed[]
+end
+@test issue52533_beside(Ref(false))
+
+# `jl_new_method_uninit` must satisfy Method's min-initialized invariant:
+# fields in the initialized prefix (e.g. `sig`, `name`) are assumed non-null
+# by codegen, which omits undef checks when loading them.
+let m = ccall(:jl_new_method_uninit, Ref{Method}, (Any,), @__MODULE__)
+    @test m.sig === Union{}
+    @test m.name === Symbol("")
+end
+
+# an array reached through a Union-typed value is tagged `jtbaa_value`, which must
+# still alias the `jtbaa_arrayptr` stores that initialize its header; otherwise DSE
+# deletes them and the reshaped array is left with a null `MemoryRef`
+mkunion_arrayheader(b::Bool) = b ? fill(1.0, 1, 1) : fill(1.0 + 0im, 1, 1)
+sum_reshaped_arrayheader(b::Bool, D::Int) = sum(reshape(mkunion_arrayheader(b)[:, end], D, D))
+@test sum_reshaped_arrayheader(true, 1) === 1.0
+@test sum_reshaped_arrayheader(false, 1) === 1.0 + 0.0im
+
+# jl_array_len must compute the length from the dimensions: an N-d array may be
+# backed by a Memory with excess capacity and/or a nonzero memoryref offset
+# (e.g. from `reshape` of a `sizehint!`ed vector), so reading the Memory length
+# splatted/copied too many elements (and could read out of bounds)
+let f = (x...) -> length(x)
+    v = collect(1.0:9.0)
+    sizehint!(v, 100)
+    m = reshape(v, 3, 3)
+    @test f(m...) == 9
+    @test length(Core.svec(m...)) == 9
+    m2 = ccall(:jl_array_copy, Ref{Matrix{Float64}}, (Any,), m)
+    @test m2 == m
+    @test length(m2.ref.mem) == 9
+    # nonzero memoryref offset
+    w = collect(1:9)
+    sizehint!(w, 1000; first=true)
+    m3 = reshape(w, 3, 3)
+    @test f(m3...) == 9
+    @test ccall(:jl_array_copy, Ref{Matrix{Int}}, (Any,), m3) == m3
+end
+
+# issue #61347 (supertype half): every level of a structurally increasing
+# recursive supertype graph must be correct independently of instantiation
+# order, and deferred (lazily computed) supertypes must present the same
+# field-access semantics to compiled and interpreted code. (The field-type
+# analogue `struct S1{T}; x::S1{A{T}}; end` still hangs on instantiation;
+# a concrete type must publish with its layout, so its fix needs more.)
+module Issue61347
+abstract type A{T} end
+struct S2{T} <: A{S2{A{T}}} end
+end
+let A = Issue61347.A, S2 = Issue61347.S2
+    @test supertype(S2{Int}) === A{S2{A{Int}}}
+    # deep levels materialize lazily, one per demand, and stay correct
+    deep = S2{A{A{Int}}}
+    @test supertype(deep) === A{S2{A{A{A{Int}}}}}
+    # reaching the same interned type by walking or by direct construction
+    # yields the same supertype
+    walked = getfield(supertype(S2{Int}), :parameters)[1]
+    walked = getfield(supertype(walked), :parameters)[1]
+    @test walked === S2{A{A{Int}}}
+    @test supertype(walked) === supertype(deep)
+    @test S2{A{A{A{Int}}}} <: A
+    # compiled and interpreted field access agree on the deferred slot. The
+    # slot can be filled at any moment by unrelated activity, so bracket the
+    # interpreted read with compiled reads and require monotone agreement
+    # (an unfilled slot can only become filled, never the reverse)
+    lazy = getfield(supertype(S2{A{A{A{A{Int}}}}}), :parameters)[1]
+    @noinline compiled_isdef(x::DataType) = isdefined(x, :super)
+    c1 = compiled_isdef(Base.inferencebarrier(lazy))
+    itp = Core.eval(@__MODULE__, :(isdefined($lazy, :super)))
+    c2 = compiled_isdef(Base.inferencebarrier(lazy))
+    @test c1 <= itp <= c2
+    @test supertype(lazy) isa Type # forcing accessor
+    @test isdefined(lazy, :super)
+    @test getfield(lazy, :super) === supertype(lazy)
+end

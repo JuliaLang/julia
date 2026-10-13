@@ -324,6 +324,7 @@ export
     fld1,
     fldmod,
     fldmod1,
+    cldmod1,
     flipsign,
     float,
     tryparse,
@@ -887,6 +888,7 @@ export
     ntuple,
     splat,
     tap,
+    unsplat,
 
 # I/O and events
     close,
@@ -943,6 +945,7 @@ export
     unsafe_read,
     unsafe_write,
     write,
+    writepartial,
 
 # multimedia I/O
     AbstractDisplay,
@@ -1113,6 +1116,7 @@ export
     @gensym,
     @eval,
     @deprecate,
+    @deprecate_binding,
 
     # performance annotations
     @boundscheck,

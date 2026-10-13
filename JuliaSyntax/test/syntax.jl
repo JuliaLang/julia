@@ -1,0 +1,127 @@
+using Base: Syntax, SyntaxContext, ScopeLayer, @mknode, prov, prov_end,
+    provenance, sourceref, macro_prov, macro_prov_end, flattened_provenance,
+    unexpanded_sourceref
+using .JuliaSyntax: children
+
+const DUMMY_CONTEXT = SyntaxContext(@__MODULE__, (0,0))
+
+@testset "Syntax parsing" begin
+    # Errors should fall through
+    @test parsestmt(Syntax, ""; ignore_errors=true) isa Syntax
+    @test parsestmt(Syntax, " "; ignore_errors=true) isa Syntax
+    @test parsestmt(Syntax, "@"; ignore_errors=true) isa Syntax
+    @test parsestmt(Syntax, "@@@"; ignore_errors=true) isa Syntax
+    @test parsestmt(Syntax, "(a b c)"; ignore_errors=true) isa Syntax
+    @test parsestmt(Syntax, "'a b c'"; ignore_errors=true) isa Syntax
+    # Malformed literals become ErrorVal-valued leaves rather than identifiers
+    @test parsestmt(Syntax, "1.e"; ignore_errors=true) isa Syntax
+    @test parsestmt(Syntax, "x = 1._"; ignore_errors=true) isa Syntax
+end
+
+@testset "Syntax compound assignment heads" begin
+    # Must not depend on `show(::Syntax)`, which JuliaLowering defines
+    @test head(parsestmt(Syntax, "x += 1")) === :+=
+    @test head(parsestmt(Syntax, "x .>>>= 1")) === :.>>>=
+    @test parsestmt(Syntax, ":(+=)")[1].value == "+="
+    @test parsestmt(Syntax, ":.>>>=")[1].value == ".>>>="
+end
+
+@testset "Syntax provenance accessors" begin
+    @testset "prov, prov_end, provenance, sourceref" begin
+        # st3 <- st2 <- st1, with st3 referring to source text
+        st3 = @mknode(;head=:value, value=3, context=DUMMY_CONTEXT, source=LineNumberNode(3))
+        st2 = @mknode(st3)
+        st1 = @mknode(st2)
+
+        @test prov(st1) === st2
+        @test prov(prov(st1)) === st3
+        @test prov(prov(prov(st1))) === st3
+
+        @test prov_end(st1) === st3
+        @test prov_end(prov_end(st1)) === st3
+
+        @test sourceref(st1) == LineNumberNode(3)
+        @test sourceref(prov_end(st1)) == LineNumberNode(3)
+
+        @test provenance(st1) == Syntax[st2, st3]
+        @test provenance(prov_end(st1)) == Syntax[]
+    end
+
+    @testset "flattened_provenance" begin
+        ctx_with_unexpanded(u) = SyntaxContext(
+            ScopeLayer(JuliaSyntax, nothing),
+            u,
+            (0, 0),
+            false)
+
+        stm_unused = Syntax(:identifier, nothing, "stm_unused", LineNumberNode(0), DUMMY_CONTEXT)
+
+        stmm1 = Syntax(:identifier, nothing, "stmm1", LineNumberNode(1, :mm), DUMMY_CONTEXT)
+        stmm2 = @mknode(stmm1; value="stmm2")
+        stmm3 = @mknode(stmm2; value="stmm3")
+
+        stm1 = Syntax(:identifier, nothing, "stm1", LineNumberNode(1, :m), DUMMY_CONTEXT)
+        stm2 = @mknode(stm1; value="stm2")
+        stm3 = Syntax(:identifier, nothing, "stm3", stm2, ctx_with_unexpanded(stmm3))
+
+        st1 = Syntax(:identifier, nothing, "st1", LineNumberNode(1),
+                         ctx_with_unexpanded(stm_unused))
+        st2 = Syntax(:identifier, nothing, "st2", st1, ctx_with_unexpanded(stm_unused))
+        st3 = Syntax(:identifier, nothing, "st3", st2, ctx_with_unexpanded(stm3))
+
+        # julia> JL._show_provtree(stdout, st3, "")
+        # st3
+        # ├─ st2
+        # │  ├─ st1
+        # │  │  ├─ @ nothing:1
+        # │  │  └─ stm_unused
+        # │  │     └─ @ nothing:0
+        # │  └─ stm_unused
+        # │     └─ @ nothing:0
+        # └─ stm3
+        #    ├─ stm2
+        #    │  └─ stm1
+        #    │     └─ @ m:1
+        #    └─ stmm3
+        #       └─ stmm2
+        #          └─ stmm1
+        #             └─ @ mm:1
+
+        @test macro_prov(st3) == stm3
+        @test macro_prov(st2) == stm_unused
+        @test macro_prov(st1) == stm_unused
+        @test macro_prov(stm3) == stmm3
+        @test macro_prov(stm2) == nothing
+        @test macro_prov(stm1) == nothing
+        @test macro_prov(stmm3) == nothing
+        @test macro_prov(stmm2) == nothing
+        @test macro_prov(stmm1) == nothing
+        @test macro_prov_end(st3) == stmm3
+        @test macro_prov_end(st2) == stm_unused
+        @test macro_prov_end(st1) == stm_unused
+        @test macro_prov_end(stm3) == stmm3
+        @test macro_prov_end(stm2) == nothing
+        @test macro_prov_end(stm1) == nothing
+        @test macro_prov_end(stmm3) == nothing
+        @test macro_prov_end(stmm2) == nothing
+        @test macro_prov_end(stmm1) == nothing
+        @test unexpanded_sourceref(st3) == LineNumberNode(1, :mm)
+        @test unexpanded_sourceref(st2) == LineNumberNode(0)
+        @test unexpanded_sourceref(st1) == LineNumberNode(0)
+        @test unexpanded_sourceref(stm3) == LineNumberNode(1, :mm)
+        @test unexpanded_sourceref(stm2) == LineNumberNode(1, :m)
+        @test unexpanded_sourceref(stm1) == LineNumberNode(1, :m)
+        @test unexpanded_sourceref(stmm3) == LineNumberNode(1, :mm)
+        @test unexpanded_sourceref(stmm2) == LineNumberNode(1, :mm)
+        @test unexpanded_sourceref(stmm1) == LineNumberNode(1, :mm)
+        @test flattened_provenance(st3) == Syntax[stmm1, stm1, st1]
+        @test flattened_provenance(st2) == Syntax[stm_unused, st1]
+        @test flattened_provenance(st1) == Syntax[stm_unused, st1]
+        @test flattened_provenance(stm3) == Syntax[stmm1, stm1]
+        @test flattened_provenance(stm2) == Syntax[stm1]
+        @test flattened_provenance(stm1) == Syntax[stm1]
+        @test flattened_provenance(stmm3) == Syntax[stmm1]
+        @test flattened_provenance(stmm2) == Syntax[stmm1]
+        @test flattened_provenance(stmm1) == Syntax[stmm1]
+    end
+end

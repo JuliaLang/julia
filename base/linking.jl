@@ -68,14 +68,14 @@ end
 
 PATH() = dirname(lld_path())
 
+# This installation's shared library directories, in search order. On Windows the DLLs are
+# in `Sys.BINDIR`. The two can be the same directory.
+const library_dirs = OncePerProcess{Vector{String}}() do
+    unique!(String[private_libdir(), shlibdir()])
+end
+
 const LIBPATH = OncePerProcess{String}() do
-    if Sys.iswindows()
-        # On windows, the dynamic libraries (.dll) are in Sys.BINDIR ("usr\\bin")
-        LIBPATH_list = [abspath(Sys.BINDIR, Base.LIBDIR, "julia"), Sys.BINDIR]
-    else
-        LIBPATH_list = [abspath(Sys.BINDIR, Base.LIBDIR, "julia"), abspath(Sys.BINDIR, Base.LIBDIR)]
-    end
-    return join(LIBPATH_list, pathsep)
+    join(library_dirs(), pathsep)
 end
 
 function lld(; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true)
@@ -110,6 +110,9 @@ function ld()
         # the pkgimage references are resolvable at link time (catches regressions early
         # instead of deferring to first-call crashes at runtime).
         default_args = `--build-id --eh-frame-hdr --hash-style=gnu --as-needed -z relro -z defs`
+        if !isempty(Base.COMPRESS_PKGIMAGE_DEBUG_SECTIONS)
+            default_args = `$default_args --compress-debug-sections=$(Base.COMPRESS_PKGIMAGE_DEBUG_SECTIONS)`
+        end
     end
 
     `$(lld()) -flavor $flavor $default_args`
@@ -200,7 +203,8 @@ function link_image_cmd(path, out)
     else
         # From `gcc -shared -Wl,--verbose`
         # but without repeated libraries (lld auto-resolves circular library references)
-        libc           = _find_loaded(r"/libc\.so\.\d+$")                       # system libc
+        # musl has no separate libc.so: its dynamic loader is also the C library
+        libc           = _find_loaded(r"/(?:libc|ld-musl-[^/]+)\.so\.\d+$")     # system libc
         ld_linux       = _find_loaded(r"/ld-(?:linux|musl|elf)[^/]*\.so\.\d+$") # system ld
         libc_nonshared = _find_static("libc_nonshared.a")
         append!(LIBS,     String["-lgcc", "--as-needed", "-lgcc_s", "-latomic", "-lopenlibm", "--no-as-needed", libc])
@@ -216,6 +220,136 @@ end
 
 function link_image(path, out, internal_stderr::IO=stderr, internal_stdout::IO=stdout)
     run(link_image_cmd(path, out), Base.DevNull(), internal_stderr, internal_stdout)
+end
+
+
+## Runtime library dependencies ##
+
+# Known components. Others are rejected, so a typo cannot drop libraries from a bundle.
+const COMPONENTS = (:codegen,)
+
+"""
+    Base.Linking.DEFAULT_COMPONENTS
+
+The optional runtime components whose libraries [`runtime_libraries`](@ref) includes by
+default: all of them.
+"""
+const DEFAULT_COMPONENTS = COMPONENTS
+
+# Is `file` a shared library file, or version symlink, of `name` (no extension or version)?
+# A trailing `*` makes `name` a prefix, as for the sanitizer runtime.
+function is_library_file(name::AbstractString, file::AbstractString)
+    if endswith(name, '*')
+        prefix = SubString(name, 1, prevind(name, lastindex(name)))
+        return startswith(file, prefix) && occursin(string('.', Libdl.dlext), file)
+    end
+    parsed = try
+        first(Base.BinaryPlatforms.parse_dl_name_version(file))
+    catch ex
+        ex isa ArgumentError || rethrow()
+        return false # not the name of a shared library file
+    end
+    parsed == name && return true
+    # `libopenblas64_.0.3.33.so` puts the soversion before the extension, as macOS does
+    Sys.isapple() && return false
+    parsed = first(Base.BinaryPlatforms.parse_dl_name_version(parsed * ".dylib", "macos"))
+    return parsed == name
+end
+
+# `readdir` each directory once for all names
+library_listings() = Pair{String,Vector{String}}[dir => readdir(dir; sort=true)
+                                                 for dir in library_dirs() if isdir(dir)]
+
+# Append the files of `name` to `paths`; return whether any were found.
+function library_files!(paths::Vector{String}, name::AbstractString, listings)
+    for (dir, files) in listings
+        found = false
+        for file in files
+            is_library_file(name, file) || continue
+            push!(paths, joinpath(dir, file))
+            found = true
+        end
+        # a library lives in only one of these directories
+        found && return true
+    end
+    return false
+end
+
+"""
+    Base.Linking.library_files(name::AbstractString) -> Vector{String}
+    Base.Linking.library_files(names) -> Vector{String}
+
+Paths of the shared library files, including version symlinks, that this Julia installation
+ships for the unversioned library name `name` (e.g. `"libopenblas64_"`). Names it does not
+ship contribute nothing. System directories are not searched.
+"""
+function library_files(names)
+    listings = library_listings()
+    paths = String[]
+    for name in names
+        library_files!(paths, name, listings)
+    end
+    return unique!(paths)
+end
+library_files(name::AbstractString) = library_files((name,))
+
+function runtime_library_names(optional_components)
+    for component in optional_components
+        component in COMPONENTS || throw(ArgumentError(
+            "unknown optional component $(repr(component)); the optional components are " *
+            join(map(repr, COMPONENTS), ", ")))
+    end
+    debug = isdebugbuild() ? "-debug" : ""
+    # Julia's own libraries are required (a framework's `libjulia` is its `Julia` binary)
+    required = String[]
+    Base.DARWIN_FRAMEWORK || push!(required, "libjulia$debug")
+    push!(required, "libjulia-internal$debug")
+    # The rest come from `JL_RUNTIME_LIBS` in Make.inc and are optional: a build may use a
+    # system copy (`USE_SYSTEM_LIBUV`) or turn off a feature (MMTk, Tracy, sanitizers).
+    optional = copy(Base.RUNTIME_LIBRARY_NAMES)
+    if :codegen in optional_components
+        push!(required, "libjulia-codegen$debug")
+        # LLVM may come from the system or be linked statically
+        append!(optional, Base.CODEGEN_LIBRARY_NAMES)
+    end
+    return required, optional
+end
+
+"""
+    Base.Linking.runtime_libraries(; optional_components = Base.Linking.DEFAULT_COMPONENTS) -> Vector{String}
+
+Paths of the shared library files, including version symlinks, that this Julia installation
+ships and a program embedding the runtime needs. A bundle should keep each at the same path
+relative to `Sys.BINDIR`.
+
+The only optional component is `:codegen` (`libjulia-codegen` and LLVM), which a program that
+never compiles code at run time, such as one built with `--trim`, can leave out.
+
+Only files in this installation are returned, and libraries of standard libraries are not
+included; see [`library_files`](@ref) for those. Throws if the installation lacks a library
+every build ships, such as `libjulia-internal`.
+"""
+function runtime_libraries(; optional_components = DEFAULT_COMPONENTS)
+    required, optional = runtime_library_names(optional_components)
+    return resolve_libraries(required, optional, library_listings())
+end
+
+function resolve_libraries(required, optional, listings)
+    paths = String[]
+    absent = String[]
+    for name in required
+        library_files!(paths, name, listings) || push!(absent, name)
+    end
+    if !isempty(absent)
+        error("this Julia installation does not contain the shared ",
+              length(absent) == 1 ? "library " : "libraries ", join(absent, ", "),
+              ", which every build of Julia ships; looked in ", join(library_dirs(), ", "),
+              ". The installation is incomplete.")
+    end
+    for name in optional
+        library_files!(paths, name, listings)
+    end
+    return unique!(paths)
 end
 
 end # module Linking

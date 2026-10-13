@@ -1,6 +1,7 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame)' -S %s | FileCheck %s
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='function(LateLowerGCFrame)' -S %s | FileCheck %s
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='function(LateLowerGCFrame,FinalLowerGC),verify' -S %s | FileCheck %s --check-prefix=FINAL
 
 @tag = external addrspace(10) global {}, align 16
 
@@ -212,6 +213,169 @@ define swiftcc ptr addrspace(10) @insert_element(ptr swiftself "gcstack" %0) {
   ret ptr addrspace(10) null
 }
 
+; Vectorization may give tracked-pointer allocas a larger alignment than the
+; usual 16-byte GC frame alignment. Preserve it through both lowering passes.
+define void @overaligned_gc_alloca(<8 x ptr addrspace(10)> %values) {
+; CHECK-LABEL: @overaligned_gc_alloca
+; CHECK: %gcframe = call align 64 ptr @julia.new_gc_frame(i32 15)
+; CHECK: %roots = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 6)
+; FINAL-LABEL: @overaligned_gc_alloca
+; FINAL: %gcframe = alloca ptr addrspace(10), i32 17, align 64
+; FINAL: %roots = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 8
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %roots = alloca <8 x ptr addrspace(10)>, align 64
+; CHECK: store <8 x ptr addrspace(10)> %values, ptr %roots, align 64
+; FINAL: store <8 x ptr addrspace(10)> %values, ptr %roots, align 64
+  store <8 x ptr addrspace(10)> %values, ptr %roots, align 64
+  %root4addr = getelementptr ptr addrspace(10), ptr %roots, i64 4
+; CHECK: %root4 = load ptr addrspace(10), ptr %root4addr, align 32
+; FINAL: %root4 = load ptr addrspace(10), ptr %root4addr, align 32
+  %root4 = load ptr addrspace(10), ptr %root4addr, align 32
+  call void @boxed_simple(ptr addrspace(10) %root4, ptr addrspace(10) %root4)
+  ret void
+}
+
+
+; A callee's alignment requirement must remain true after moving the alloca.
+define void @overaligned_gc_call(<8 x ptr addrspace(10)> %values) {
+; CHECK-LABEL: @overaligned_gc_call
+; CHECK: %gcframe = call align 64 ptr @julia.new_gc_frame(i32 14)
+; CHECK: %roots = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 6)
+; CHECK: call void @aligned_root_array(ptr align 64 %roots)
+; FINAL-LABEL: @overaligned_gc_call
+; FINAL: %gcframe = alloca ptr addrspace(10), i32 16, align 64
+; FINAL: %roots = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 8
+; FINAL: call void @aligned_root_array(ptr align 64 %roots)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %roots = alloca <8 x ptr addrspace(10)>, align 64
+  store <8 x ptr addrspace(10)> %values, ptr %roots, align 64
+  call void @aligned_root_array(ptr align 64 %roots)
+  ret void
+}
+
+define void @aligned_root_array(ptr align 64 %roots) {
+  %values = load volatile <8 x ptr addrspace(10)>, ptr %roots, align 64
+  ret void
+}
+
+
+; Padding between moved allocas must be included in the frame's root count.
+define void @overaligned_gc_padding(<4 x ptr addrspace(10)> %values) {
+; CHECK-LABEL: @overaligned_gc_padding
+; CHECK: %gcframe = call align 64 ptr @julia.new_gc_frame(i32 18)
+; CHECK-DAG: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 6)
+; CHECK-DAG: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 14)
+; FINAL-LABEL: @overaligned_gc_padding
+; FINAL: %gcframe = alloca ptr addrspace(10), i32 20, align 64
+; FINAL-DAG: getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 8
+; FINAL-DAG: getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 16
+; FINAL: store <4 x ptr addrspace(10)> %values, ptr %a, align 64
+; FINAL: store <4 x ptr addrspace(10)> %values, ptr %b, align 64
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %a = alloca <4 x ptr addrspace(10)>, align 64
+  %b = alloca <4 x ptr addrspace(10)>, align 64
+  store <4 x ptr addrspace(10)> %values, ptr %a, align 64
+  store <4 x ptr addrspace(10)> %values, ptr %b, align 64
+  call void @aligned_short_root_array(ptr align 64 %a)
+  call void @aligned_short_root_array(ptr align 64 %b)
+  ret void
+}
+
+
+declare void @aligned_short_root_array(ptr align 64)
+
+; Calls tagged "julia.safepoint" by codegen carry memory effects derived from
+; Julia's inferred effects (add_fn_attrs_for_effects). They can still reach a
+; GC safepoint, so a tracked value live across such a call needs a root
+; whatever the effects claim (JuliaLang/julia#62613), and the effects must be
+; stripped so post-lowering passes see the frame stores as observable.
+
+declare i64 @safepoint_callee(i64)
+declare i64 @safepoint_gcstack_callee({}*** "gcstack", i64)
+declare i64 @readonly_helper(i64) #12
+
+; memory(argmem: read) on the call site.
+define {} addrspace(10)* @root_across_safepoint_argmem(i64 %a) {
+top:
+; CHECK-LABEL: @root_across_safepoint_argmem
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: [[SLOT1:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v, ptr [[SLOT1]]
+; CHECK-NEXT: call i64 @safepoint_callee(i64 %a) [[ATTRS_STRIPPED:#[0-9]+]]
+  %r = call i64 @safepoint_callee(i64 %a) #10
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret {} addrspace(10)* %v
+}
+
+; memory(read) on the call site.
+define {} addrspace(10)* @root_across_safepoint_readonly(i64 %a) {
+top:
+; CHECK-LABEL: @root_across_safepoint_readonly
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: [[SLOT2:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v, ptr [[SLOT2]]
+; CHECK-NEXT: call i64 @safepoint_callee(i64 %a) [[ATTRS_STRIPPED]]
+  %r = call i64 @safepoint_callee(i64 %a) #11
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret {} addrspace(10)* %v
+}
+
+; Indirect call carrying the attributes on the call site.
+define {} addrspace(10)* @root_across_safepoint_indirect(i64 %a, ptr %fp) {
+top:
+; CHECK-LABEL: @root_across_safepoint_indirect
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: [[SLOT3:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v, ptr [[SLOT3]]
+; CHECK-NEXT: call i64 %fp(i64 %a) [[ATTRS_STRIPPED]]
+  %r = call i64 %fp(i64 %a) #10
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret {} addrspace(10)* %v
+}
+
+; The readnone on the gcstack argument must be stripped as well: after this
+; pass the frame link store through pgcstack has to stay visible to the call.
+define {} addrspace(10)* @root_across_safepoint_gcstack(i64 %a) {
+top:
+; CHECK-LABEL: @root_across_safepoint_gcstack
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: [[SLOT4:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v, ptr [[SLOT4]]
+; CHECK-NEXT: call i64 @safepoint_gcstack_callee(ptr "gcstack" %pgcstack, i64 %a) [[ATTRS_STRIPPED]]
+  %r = call i64 @safepoint_gcstack_callee({}*** readnone "gcstack" %pgcstack, i64 %a) #10
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret {} addrspace(10)* %v
+}
+
+; Negative control: a genuinely readonly helper without "julia.safepoint" is
+; not a safepoint and must not force a frame.
+define {} addrspace(10)* @no_root_across_readonly_helper(i64 %a) {
+top:
+; CHECK-LABEL: @no_root_across_readonly_helper
+; CHECK-NOT: @julia.new_gc_frame
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+  %r = call i64 @readonly_helper(i64 %a)
+; CHECK: ret ptr addrspace(10) %v
+  ret {} addrspace(10)* %v
+}
+
+attributes #10 = { nounwind willreturn memory(argmem: read) "julia.safepoint" }
+attributes #11 = { nounwind willreturn memory(read) "julia.safepoint" }
+attributes #12 = { nounwind willreturn memory(argmem: read) }
+; CHECK: attributes [[ATTRS_STRIPPED]] = { nounwind willreturn "julia.safepoint" }
 
 !0 = !{i64 0, i64 23}
 !1 = !{!1}

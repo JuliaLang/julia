@@ -177,6 +177,7 @@ function ieee754_representation(
     ret |= exponent_field
     ret <<= significand_bits(F)
     ret |= significand_field
+    return ret
 end
 
 # ±floatmax(T)
@@ -380,7 +381,8 @@ Float64
 """
 float(::Type{T}) where {T<:Number} = typeof(float(zero(T)))
 float(::Type{T}) where {T<:AbstractFloat} = T
-float(::Type{Union{}}, slurp...) = Union{}
+float(::Type{Union{}}) = Union{}
+float(::Type{Union{}}, slurp...) = throw(MethodError(float, (Union{}, slurp...)))
 
 """
     unsafe_trunc(T, x)
@@ -508,7 +510,6 @@ function _to_float(number::U, ep) where {U<:Unsigned}
     lz::signed(U) = unsafe_trunc(S, Core.Intrinsics.ctlz_int(number) - U(exponent_bits(F)))
     number <<= lz
     epint -= lz
-    bits = U(0)
     if epint >= 0
         bits = number & significand_mask(F)
         bits |= ((epint + S(1)) << significand_bits(F)) & exponent_mask(F)
@@ -713,14 +714,18 @@ See also: [`Inf`](@ref), [`iszero`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
 isinf(x::Real) = !isnan(x) & !isfinite(x)
 isinf(x::IEEEFloat) = abs(x) === oftype(x, Inf)
 
-#=
-`decompose(x)`: non-canonical decomposition of rational values as `num*2^pow/den`.
+"""
+    Base.decompose(x::Real) -> (num::Integer, pow::Integer, den::Integer)
 
-The decompose function is the point where rational-valued numeric types that support
-hashing hook into the hashing protocol. `decompose(x)` should return three integer
-values `num, pow, den`, such that the value of `x` is mathematically equal to
+Return three integer values `num, pow, den`, such that the value of `x` is
+mathematically equal to
 
     num*2^pow/den
+
+The decompose function is the point where rational-valued `Real` subtypes that support
+hashing hook into the hashing protocol. It also provides the generic definitions of
+[`isfinite`](@ref) and [`isinf`](@ref) for `Real` subtypes, and it is used to compare
+`AbstractFloat` values against [`Rational`](@ref) values.
 
 The decomposition need not be canonical in the sense that it just needs to be *some*
 way to express `x` in this form, not any particular way – with the restriction that
@@ -732,8 +737,9 @@ Special values:
  - `x` is zero: `num` should be zero and `den` should have the same sign as `x`
  - `x` is infinite: `den` should be zero and `num` should have the same sign as `x`
  - `x` is not a number: `num` and `den` should both be zero
-=#
 
+See also [`hash`](@ref).
+"""
 decompose(x::Integer) = x, 0, 1
 
 function decompose(x::Float16)::NTuple{3,Int}
@@ -744,7 +750,7 @@ function decompose(x::Float16)::NTuple{3,Int}
     e = ((n & 0x7c00) >> 10) % Int
     s |= Int16(e != 0) << 10
     d = ifelse(signbit(x), -1, 1)
-    s, e - 25 + (e == 0), d
+    s%Int, e - 25 + (e == 0), d
 end
 
 function decompose(x::Float32)::NTuple{3,Int}
@@ -755,7 +761,7 @@ function decompose(x::Float32)::NTuple{3,Int}
     e = ((n & 0x7f800000) >> 23) % Int
     s |= Int32(e != 0) << 23
     d = ifelse(signbit(x), -1, 1)
-    s, e - 150 + (e == 0), d
+    s%Int, e - 150 + (e == 0), d
 end
 
 function decompose(x::Float64)::Tuple{Int64, Int, Int}
@@ -897,11 +903,13 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
         else
             # Here `eps(Tf(typemin(Ti))) > 1`, so the only value which can be truncated to
             # `Tf(typemin(Ti)` is itself. Similarly, `Tf(typemax(Ti))` is inexact and will
-            # be rounded up. This assumes that `Tf(typemin(Ti)) > -Inf`, which is true for
-            # these types, but not for `Float16` or larger integer types.
+            # be rounded up. For `Float16` and larger integer types, `Tf(typemin(Ti))` is
+            # `-Inf`, so the lower bound is made strict to exclude it.
+            lo = Tf(typemin(Ti))
+            lo_cmp = lo === Tf(-Inf) ? :(<) : :(<=)
             @eval begin
                 function round(::Type{$Ti},x::$Tf,::RoundingMode{:ToZero})
-                    if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
+                    if $lo_cmp($lo, x) && x < $(Tf(typemax(Ti)))
                         return unsafe_trunc($Ti,x)
                     else
                         throw(InexactError(:round, $Ti, x, RoundToZero))
@@ -985,9 +993,10 @@ end
 
 """
     floatmin(T = Float64)
+    floatmin(::T)
 
 Return the smallest positive normal number representable by the floating-point
-type `T`.
+type `T`.  The argument can alternatively be an instance of `T`.
 
 See also: [`typemin`](@ref), [`maxintfloat`](@ref), [`floatmax`](@ref), [`eps`](@ref).
 
@@ -996,7 +1005,7 @@ See also: [`typemin`](@ref), [`maxintfloat`](@ref), [`floatmax`](@ref), [`eps`](
 julia> floatmin(Float16)
 Float16(6.104e-5)
 
-julia> floatmin(Float32)
+julia> floatmin(1.0f0) # a Float32 instance
 1.1754944f-38
 
 julia> floatmin()
@@ -1007,8 +1016,10 @@ floatmin(x::T) where {T<:AbstractFloat} = floatmin(T)
 
 """
     floatmax(T = Float64)
+    floatmax(::T)
 
 Return the largest finite number representable by the floating-point type `T`.
+The argument can alternatively be an instance of `T`.
 
 See also: [`typemax`](@ref), [`maxintfloat`](@ref), [`floatmin`](@ref), [`eps`](@ref).
 
@@ -1017,7 +1028,7 @@ See also: [`typemax`](@ref), [`maxintfloat`](@ref), [`floatmin`](@ref), [`eps`](
 julia> floatmax(Float16)
 Float16(6.55e4)
 
-julia> floatmax(Float32)
+julia> floatmax(1.0f0) # a Float32 instance
 3.4028235f38
 
 julia> floatmax()

@@ -89,26 +89,29 @@ If set to `true`, record per-method-instance timings within type inference in th
 __set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
 const __measure_typeinf__ = RefValue{Bool}(false)
 
-function result_edges(::AbstractInterpreter, caller::InferenceState)
+function internal_result_edges(caller::InferenceState)
     result = caller.result
     opt = result.src
     if isa(opt, OptimizationState)
-        return Core.svec(opt.inlining.edges...)
+        return opt.inlining.edges
     else
-        return Core.svec(caller.edges...)
+        return caller.edges
     end
 end
 
+result_edges(::AbstractInterpreter, caller::InferenceState) =
+    materialize_inference_edges(internal_result_edges(caller))
+
 function finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
     result = caller.result
-    edges = result_edges(interp, caller)
     valid_worlds = caller.valid_worlds
     min_world, max_world = first(valid_worlds), last(valid_worlds)
     result.valid_worlds = valid_worlds
     caller.src.min_world = min_world
     caller.src.max_world = max_world
-    #@assert max_world <= get_world_counter() || isempty(edges)
     if isdefined(result, :ci)
+        edges = result_edges(interp, caller)
+        #@assert max_world <= get_world_counter() || isempty(edges)
         ci = result.ci
         mi = result.linfo
         result_type = result.result
@@ -118,6 +121,9 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         if isa(result_type, Const)
             rettype_const = result_type.val
             const_flags = const_flag ? 0x3 : 0x2
+        elseif isa(result_type, PartialTask)
+            rettype_const = result_type
+            const_flags = 0x2
         elseif isa(result_type, PartialOpaque)
             rettype_const = result_type
             const_flags = 0x2
@@ -146,8 +152,6 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             if inferred_result !== nothing
                 result.src = inferred_result
                 debuginfo = get_debuginfo(inferred_result)
-                # Inlining may fast-path the global cache via InferenceResult, so store it back here
-                result.src = inferred_result
             else
                 if isa(result.src, OptimizationState)
                     debuginfo = get_debuginfo(ir_to_codeinf!(result.src))
@@ -175,10 +179,11 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         end
         # if we aren't cached, we don't need this edge
         # but our caller might, so let's just make it anyways
+        unique_backedges = false
         if max_world >= validation_world
             # if we can record all of the backedges in the global reverse-cache,
             # we can now widen our applicability in the global cache too
-            store_backedges(ci, edges)
+            unique_backedges = store_backedges(ci, edges)
         end
         ipo_effects = encode_effects(result.ipo_effects)
         time_now = _time_ns()
@@ -188,6 +193,9 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             ci, widenconst(result_type), widenconst(result.exc_result), rettype_const, inferred_result,
             const_flags, min_world, max_world,
             ipo_effects, result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, debuginfo, edges)
+        if unique_backedges
+            @atomic :monotonic ci.flags |= CI_FLAGS_UNIQUE_BACKEDGES
+        end
     elseif caller.cache_mode === CACHE_MODE_LOCAL
         result.src = transform_result_for_local_cache(interp, result)
     end
@@ -199,14 +207,30 @@ function promotecache!(interp::AbstractInterpreter, caller::InferenceState)
     if isdefined(result, :ci)
         ci = result.ci
         mi = result.linfo
-        if is_already_cached(interp, result)
-            # convert to a local cache or insert it now globally
-            engine_reject(interp, ci)
-            caller.cache_mode = CACHE_MODE_LOCAL
+        # Only an early winner kept `ci` out of `opt_cache`, so only that case may
+        # still be demoted here. If a winner appeared during optimization, `ci` may
+        # already occur in optimized IR and must be published even if equivalent.
+        if result.replacement_ci !== nothing
+            equivalent = find_equivalent_cached_ci(
+                interp, ci, result.valid_worlds)
+            if equivalent === nothing
+                # The early winner was sufficient to keep this provisional CI out
+                # of optimizer state, but it cannot represent the completed result's
+                # return ABI. Publish the now-complete CI normally.
+                caller.cache_mode |= CACHE_MODE_GLOBAL
+                caller.cache_mode &= ~CACHE_MODE_LOCAL
+                result.replacement_ci = nothing
+            else
+                result.replacement_ci = equivalent
+            end
         end
         if !iszero(caller.cache_mode & CACHE_MODE_GLOBAL)
             code_cache(interp)[mi] = ci
         end
+        # A globally committed exact CI becomes visible before its reservation is
+        # released and any waiters wake. A publication loser is still filled as a
+        # session-local ephemeral CI before its reservation is released: it may carry
+        # source required by this interpreter even when the global winner does not.
         engine_reject(interp, ci)
         codegen = codegen_cache(interp)
         if codegen !== nothing
@@ -218,7 +242,7 @@ function promotecache!(interp::AbstractInterpreter, caller::InferenceState)
             if isa(uncompressed, CodeInfo)
                 # record that the caller could use this result to generate code when required, if desired, to avoid repeating n^2 work
                 codegen[ci] = uncompressed
-                if bootstrapping_compiler && !(ci.inferred isa MaybeCompressed)
+                if bootstrapping_compiler
                     # This is necessary to get decent bootstrapping performance
                     # when compiling the compiler to inject everything eagerly
                     # where codegen can start finding and using it right away
@@ -230,7 +254,21 @@ function promotecache!(interp::AbstractInterpreter, caller::InferenceState)
         end
     end
     if !iszero(caller.cache_mode & CACHE_MODE_LOCAL)
-        push!(get_inference_cache(interp), result)
+        if result.tombstone
+            # Preserve rejected constant-propagation work as an internal marker. It is
+            # never exposed as a completed call result.
+            result.cache_world = get_inference_world(interp)
+            push!(get_inference_cache(interp), result)
+        elseif result.result !== nothing && result.overridden_by_const === nothing
+            # Local work is reusable only through its explicit dependency proof. Its
+            # provisional CI, if any, is deliberately not allowed to escape as a target.
+            proof = LocalInferenceProof(result.valid_worlds,
+                Core.svec(internal_result_edges(caller)...))
+            local_result = LocalInferenceResult(result, proof, get_inference_world(interp))
+            push!(get_inference_cache(interp), local_result)
+        end
+        # Successful constant propagation is published by `const_prop_call` only after
+        # concrete-evaluation overrides have been finalized.
     end
     nothing
 end
@@ -248,13 +286,17 @@ function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstan
     if max_world >= get_world_counter()
         max_world = typemax(UInt)
     end
+    unique_backedges = false
     if max_world == typemax(UInt)
         # if we can record all of the backedges in the global reverse-cache,
         # we can now widen our applicability in the global cache too
-        store_backedges(ci, edges)
+        unique_backedges = store_backedges(ci, edges)
     end
     ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Float64, Any, Any),
         ci, rettype, exctype, nothing, nothing, const_flags, min_world, max_world, ipo_effects, nothing, 0.0, 0.0, 0.0, di, edges)
+    if unique_backedges
+        @atomic :monotonic ci.flags |= CI_FLAGS_UNIQUE_BACKEDGES
+    end
     code_cache(interp)[mi] = ci
     codegen = codegen_cache(interp)
     if codegen !== nothing
@@ -270,15 +312,17 @@ function finish_nocycle(interp::AbstractInterpreter, frame::InferenceState{I}, t
     opt = frame.result.src
     if opt isa OptimizationState # implies `may_optimize(interp) === true`
         optimize(interp::I, opt::OptimizationState{I}, frame.result)
-        # check the valid_worlds hasn't been narrowed by added :invoke edges
-        valid_worlds = intersect(frame.valid_worlds, compute_recursive_worlds(opt.inlining.edges))
+        # check the valid_worlds hasn't been narrowed by added :invoke edges or resolving a global access
+        valid_worlds = intersect(frame.valid_worlds, world_range(opt.src))
+        valid_worlds = intersect(valid_worlds, compute_recursive_worlds(opt.inlining.edges))
         update_valid_age!(frame, get_inference_world(interp::I), valid_worlds)
     end
     empty!(opt_cache)
     validation_world = get_world_counter()
     finish!(interp::I, frame, validation_world, time_before)
     promotecache!(interp::I, frame)
-    if isdefined(frame.result, :ci)
+    if (!iszero(frame.cache_mode & CACHE_MODE_GLOBAL) &&
+            isdefined(frame.result, :ci))
         # After validation, under the world_counter_lock, set max_world to typemax(UInt) for all dependencies
         # (recursively). From that point onward the ordinary backedge mechanism is responsible for maintaining
         # validity.
@@ -288,6 +332,43 @@ function finish_nocycle(interp::AbstractInterpreter, frame::InferenceState{I}, t
         frames = frame.callstack
         @assert frames[end] === frame
         pop!(frames)
+    end
+    return nothing
+end
+
+function propagate_unpublished_cycle_proof!(
+        frames::Vector{AbsIntState{I}}, cycleid::Int, world::UInt,
+        cycle_valid_worlds::WorldRange
+    ) where {I<:AbstractInterpreter}
+    unpublished = InferenceState{I}[]
+    for frameid = cycleid:length(frames)
+        caller = frames[frameid]::InferenceState
+        if iszero(caller.cache_mode & CACHE_MODE_GLOBAL)
+            push!(unpublished, caller)
+        end
+    end
+    isempty(unpublished) && return nothing
+
+    proof_edges = Any[]
+    for frameid = cycleid:length(frames)
+        append!(proof_edges, internal_result_edges(frames[frameid]::InferenceState))
+    end
+    cycle_proof = LocalInferenceProof(cycle_valid_worlds, Core.svec(proof_edges...))
+    # An unpublished member needs the shared fixed-point proof for later local
+    # reuse. Any caller that directly consumed that member while it was in progress
+    # needs the same proof. Other published SCC members remain connected through
+    # their ordinary CI edges, so copying the union onto every member would only
+    # multiply serialized edge streams by the SCC size.
+    consumers = IdSet{InferenceState{I}}()
+    for callee in unpublished
+        push!(consumers, callee)
+        for (caller, _) in callee.cycle_backedges
+            push!(consumers, caller)
+        end
+    end
+    for caller in consumers
+        add_inference_proof!(internal_result_edges(caller), cycle_proof)
+        update_valid_age!(caller, world, proof_worlds(cycle_proof))
     end
     return nothing
 end
@@ -322,6 +403,7 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState{I}
         opt = caller.result.src
         if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
             optimize(caller.interp::I, opt::OptimizationState{I}, caller.result)
+            cycle_valid_worlds = intersect(cycle_valid_worlds, world_range(opt.src))
             cycle_valid_worlds = intersect(cycle_valid_worlds, compute_recursive_worlds(opt.inlining.edges))
             time_now = _time_ns()
             caller.time_self_ns += (time_now - time_before)
@@ -332,6 +414,13 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState{I}
         caller.time_paused = UInt64(0)
         caller.time_caches = 0.0
     end
+    # Calls to an already in-progress SCC member consume its current facts
+    # immediately and record only a cycle backedge. Usually the member's published
+    # CI later certifies those facts. If any member will not publish its exact CI
+    # (for example, it was demoted in favor of a reentrant cached winner or its
+    # source was tombstoned), preserve the SCC's external dependencies explicitly.
+    # One shared proof for the whole SCC avoids constructing a cyclic proof graph.
+    propagate_unpublished_cycle_proof!(frames, cycleid, world, cycle_valid_worlds)
     empty!(opt_cache)
     cycletop = frames[cycleid]::InferenceState
     time_start = cycletop.time_start
@@ -344,9 +433,6 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState{I}
         caller.time_paused = time_paused
         update_valid_age!(caller, world, cycle_valid_worlds)
         finish!(caller.interp::I, caller, validation_world, time_before)
-        if isdefined(caller.result, :ci)
-            push!(cis, caller.result.ci)
-        end
     end
     if cycletop.parentid != 0
         parent = frames[cycletop.parentid]
@@ -357,6 +443,10 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState{I}
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
         promotecache!(caller.interp::I, caller)
+        if (!iszero(caller.cache_mode & CACHE_MODE_GLOBAL) &&
+                isdefined(caller.result, :ci))
+            push!(cis, caller.result.ci)
+        end
     end
     # After validation, under the world_counter_lock, set max_world to typemax(UInt) for all dependencies
     # (recursively). From that point onward the ordinary backedge mechanism is responsible for maintaining
@@ -663,6 +753,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
     src.rettype = widenconst(ignorelimited(bestguess))
     src.ssaflags = me.ssaflags
     valid_worlds = me.valid_worlds
+    result.valid_worlds = valid_worlds
     min_world, max_world = first(valid_worlds), last(valid_worlds)
     src.min_world = min_world
     src.max_world = max_world
@@ -710,9 +801,13 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
         ci.analysis_results = result.analysis_results
         if !iszero(me.cache_mode & CACHE_MODE_GLOBAL)
             ci = result.ci
-            if is_already_cached(interp, result)
-                # convert to a local cache
-                engine_reject(interp, ci)
+            replacement_ci = find_cached_ci(interp, result)
+            if replacement_ci !== nothing
+                # Make the publication decision before this CI can enter `opt_cache`.
+                # The provisional object remains private to this inference session and
+                # is filled only after optimization, so no published caller can observe
+                # it as an executable edge.
+                result.replacement_ci = replacement_ci
                 me.cache_mode = CACHE_MODE_LOCAL
             else
                 opt_cache[result.linfo] = ci
@@ -722,19 +817,13 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
     nothing
 end
 
-function is_already_cached(interp::AbstractInterpreter, result::InferenceResult)
-    # check if the existing linfo metadata is also sufficient to describe the current inference result
-    # to decide if it is worth caching this right now
-    mi = result.linfo
-    cache = code_cache(interp, result.valid_worlds)
-    if haskey(cache, mi)
-        # n.b.: accurate edge representation might cause the CodeInstance for this to be constructed later
-        cached = cache[mi]
-        ci = cached isa InferenceResult ? cached.ci : cached
-        @assert isdefined(ci, :inferred)
-        return true
-    end
-    return false
+function find_cached_ci(interp::AbstractInterpreter, result::InferenceResult)
+    # Any inferred global CI covering this result is sufficient to defer publication
+    # until the new result's ABI is known. `promotecache!` then keeps an equivalent
+    # result local, or publishes the completed CI normally when no equivalent winner
+    # exists.
+    return find_cached_ci(interp, result.linfo, result.valid_worlds,
+        SOURCE_MODE_NOT_REQUIRED)
 end
 
 # Iterate a series of back-edges that need registering, based on the provided forward edge list.
@@ -749,7 +838,10 @@ function Base.iterate(it::ForwardToBackedgeIterator, i::Int = 1)
     i > length(edges) && return nothing
     while i ≤ length(edges)
         item = edges[i]
-        if item isa Int
+        if item isa PossiblyAmbiguous
+            i += 1
+            continue
+        elseif item isa Int
             i += 2
             continue # ignore the query information if present but process the contents
         elseif isa(item, Method)
@@ -789,33 +881,105 @@ function maybe_add_binding_backedge!(b::Core.Binding, edge::Union{Method, CodeIn
     return nothing
 end
 
-function store_backedges(caller::CodeInstance, edges::SimpleVector)
-    isa(get_ci_mi(caller).def, Method) || return # don't add backedges to toplevel method instance
+# Whether the (invokesig, item) backedge at iterator state `upto` already appeared earlier in
+# `edges`. Used instead of a hash table for short edge lists, which is nearly all of them.
+function backedge_seen_before(edges::SimpleVector, upto::Int, @nospecialize(invokesig), @nospecialize(item))
+    backedges = ForwardToBackedgeIterator(edges)
+    next = iterate(backedges)
+    while next !== nothing
+        (invokesig2, item2), i = next
+        i > upto && return false
+        if item2 === item && invokesig2 == invokesig
+            return true
+        end
+        next = iterate(backedges, i)
+    end
+    return false
+end
+
+# Above this many forward edges, dedup with hash tables instead of rescanning the list.
+const STORE_BACKEDGES_SCAN_LIMIT = 64
+
+# Set on a CodeInstance once its edges are known to give no backedge twice. Package images keep
+# this flag, so loading the code can register its backedges without checking for duplicates again.
+const CI_FLAGS_UNIQUE_BACKEDGES = 0b10000
+
+function add_backedge!(caller::CodeInstance, @nospecialize(invokesig), @nospecialize(item))
+    if item isa Core.Binding
+        maybe_add_binding_backedge!(item, caller)
+    elseif item isa MethodTable
+        ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any), invokesig, caller)
+    else
+        item::MethodInstance
+        ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), item, invokesig, caller)
+    end
+    return nothing
+end
+
+# Returns whether no backedge appeared twice in `edges`.
+# `scratch` lets a caller storing many edge lists in a row reuse one set for the long ones.
+function store_backedges(caller::CodeInstance, edges::SimpleVector, scratch::Union{Nothing,IdSet{Any}}=nothing)
+    isa(get_ci_mi(caller).def, Method) || return false # don't add backedges to toplevel method instance
 
     backedges = ForwardToBackedgeIterator(edges)
-    for (i, (invokesig, item)) in enumerate(backedges)
-        # check for any duplicate edges we've already registered
-        duplicate_found = false
-        for (i′, (invokesig′, item′)) in enumerate(backedges)
-            i == i′ && break
-            if item′ === item && invokesig′ == invokesig
-                duplicate_found = true
-                break
-            end
+    if (@atomic :monotonic caller.flags) & CI_FLAGS_UNIQUE_BACKEDGES != 0 && edges === caller.edges
+        for (invokesig, item) in backedges
+            add_backedge!(caller, invokesig, item)
         end
-
-        if !duplicate_found
-            if item isa Core.Binding
-                maybe_add_binding_backedge!(item, caller)
-            elseif item isa MethodTable
-                ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any), invokesig, caller)
-            else
-                item::MethodInstance
-                ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), item, invokesig, caller)
-            end
-        end
+        return true
     end
-    nothing
+    # Nearly all edge lists are short (a median of three backedges), so a quadratic rescan
+    # avoids allocating any hash table for them. Longer lists key plain dispatch edges in an
+    # `IdSet` and `invoke`/`MethodTable` edges by their signatures: almost every such item is
+    # seen with a single signature, so that is stored bare and only promoted to a vector on
+    # the second one.
+    scan = length(edges) <= STORE_BACKEDGES_SCAN_LIMIT
+    unique = true
+    plain = nothing
+    invoked = nothing
+    next = iterate(backedges)
+    prev_i = 1
+    while next !== nothing
+        (invokesig, item), i = next
+        if scan
+            duplicate = backedge_seen_before(edges, prev_i, invokesig, item)
+        elseif invokesig === nothing
+            if plain === nothing
+                plain = scratch === nothing ? IdSet{Any}() : empty!(scratch)
+            end
+            duplicate = item in plain
+            duplicate || push!(plain, item)
+        else
+            if invoked === nothing
+                invoked = IdDict{Any,Any}()
+            end
+            signatures = get(invoked, item, nothing)
+            if signatures === nothing
+                invoked[item] = invokesig
+                duplicate = false
+            elseif signatures isa Vector{Any}
+                duplicate = false
+                for signature in signatures
+                    if signature == invokesig
+                        duplicate = true
+                        break
+                    end
+                end
+                duplicate || push!(signatures, invokesig)
+            else
+                duplicate = signatures == invokesig
+                duplicate || (invoked[item] = Any[signatures, invokesig])
+            end
+        end
+        prev_i = i
+        next = iterate(backedges, i)
+        if duplicate
+            unique = false
+            continue
+        end
+        add_backedge!(caller, invokesig, item)
+    end
+    return unique
 end
 
 function compute_edges!(sv::InferenceState)
@@ -837,6 +1001,8 @@ function compute_recursive_worlds(edges::Vector{Any})
             wr = WorldRange(edge.min_world, edge.max_world)
             iszero(last(wr.max_world)) && continue # part of the current cycle, not yet valid
             range = intersect(range, wr)
+        elseif edge isa LocalInferenceProof
+            range = intersect(range, edge.valid_worlds)
         end
     end
     return range
@@ -974,17 +1140,12 @@ function poison_callstack!(infstate::InferenceState, topmost::InferenceState)
     nothing
 end
 
-# Walk through `mi`'s upstream call chain, starting at `parent`. If a parent
-# frame matching `mi` is encountered, then there is a cycle in the call graph
-# (i.e. `mi` is a descendant callee of itself). Upon encountering this cycle,
-# we "resolve" it by merging the call chain, which entails updating each intermediary
-# frame's `cycleid` field. Finally, we return `mi`'s pre-existing frame.
-# If no cycles are found, `nothing` is returned instead.
-function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, parent::AbsIntState)
+# Find `mi` in the contiguous inference portion of `parent`'s upstream call chain.
+function find_call_cycle(interp::AbstractInterpreter, mi::MethodInstance, parent::AbsIntState)
     # TODO (#48913) implement a proper recursion handling for irinterp:
     # This works most of the time currently just because the irinterp code doesn't get used much with
     # `@assume_effects`, so it never sees a cycle normally, but that may not be a sustainable solution.
-    parent isa InferenceState || return false
+    parent isa InferenceState || return nothing
     frames = parent.callstack
     uncached = false
     for frameid = reverse(1:length(frames))
@@ -992,24 +1153,33 @@ function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, pa
         isa(frame, InferenceState) || break
         uncached |= !is_cached(frame) # ensure we never add a (globally) uncached frame to a cycle
         if is_same_frame(interp, mi, frame)
-            if uncached
-                # our attempt to speculate into a constant call lead to an undesired self-cycle
-                # that cannot be converged: if necessary, poison our call-stack (up to the discovered duplicate frame)
-                # with the limited flag and abort (set return type to Any) now
-                poison_callstack!(parent, frame)
-                return true
-            end
-            merge_call_chain!(interp, parent, frame)
-            return frame
+            return frame, uncached
         end
     end
-    return false
+    return nothing
+end
+
+# Resolve a cycle by merging its call chain and return `mi`'s pre-existing frame.
+# Return `true` for an unresolvable cycle and `false` when no cycle was found.
+function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, parent::AbsIntState)
+    cycle = find_call_cycle(interp, mi, parent)
+    cycle === nothing && return false
+    frame, uncached = cycle
+    if uncached
+        # our attempt to speculate into a constant call lead to an undesired self-cycle
+        # that cannot be converged: if necessary, poison our call-stack (up to the discovered duplicate frame)
+        # with the limited flag and abort (set return type to Any) now
+        poison_callstack!(parent::InferenceState, frame)
+        return true
+    end
+    merge_call_chain!(interp, parent::InferenceState, frame)
+    return frame
 end
 
 ipo_effects(code::CodeInstance) = decode_effects(code.ipo_purity_bits)
 
 # return cached result of regular inference
-function return_cached_result(interp::AbstractInterpreter, method::Method, codeinst::CodeInstance, @nospecialize(src), caller::AbsIntState, edgecycle::Bool, edgelimited::Bool)
+function return_cached_result(interp::AbstractInterpreter, method::Method, codeinst::CodeInstance, @nospecialize(src), caller::AbsIntState, edgecycle::Bool, edgelimited::Bool, edgerecursed::Bool)
     rt = cached_return_type(codeinst)
     exct = codeinst.exctype
     effects = ipo_effects(codeinst)
@@ -1021,38 +1191,77 @@ function return_cached_result(interp::AbstractInterpreter, method::Method, codei
         inf_result.exc_result = exct
         inf_result.src = src::CodeInfo
         inf_result.ipo_effects = effects
-        inf_result.ci_as_edge = inf_result.ci = codeinst
+        inf_result.ci = codeinst
         inf_result.valid_worlds = valid_worlds
-        push!(get_inference_cache(interp), inf_result)
+        local_result = LocalInferenceResult(inf_result, codeinst, get_inference_world(interp))
+        push!(get_inference_cache(interp), local_result)
     else
-        inf_result = nothing
+        local_result = nothing
     end
     update_valid_age!(caller, get_inference_world(interp), valid_worlds)
     caller.time_caches += reinterpret(Float16, codeinst.time_infer_total)
     caller.time_caches += reinterpret(Float16, codeinst.time_infer_cache_saved)
-    return Future(MethodCallResult(interp, caller, method, rt, exct, effects, codeinst, edgecycle, edgelimited, inf_result))
+    return Future(MethodCallResult(interp, caller, method, rt, exct, effects, codeinst,
+        edgecycle, edgelimited, edgerecursed, local_result))
 end
 
-function return_cached_result(interp::AbstractInterpreter, method::Method, inf_result::InferenceResult, @nospecialize(src), caller::AbsIntState, edgecycle::Bool, edgelimited::Bool)
+function return_cached_result(interp::AbstractInterpreter, method::Method,
+                              local_result::LocalInferenceResult,
+                              codeinst::Union{Nothing,CodeInstance},
+                              caller::AbsIntState, edgecycle::Bool, edgelimited::Bool,
+                              edgerecursed::Bool)
+    inf_result = local_result.result
     rt = inf_result.result
     exct = inf_result.exc_result
-    if src !== nothing
-        inf_result.src = src::CodeInfo
-    end
     effects = inf_result.ipo_effects
-    codeinst = inf_result.ci
-    update_valid_age!(caller, get_inference_world(interp), inf_result.valid_worlds)
-    caller.time_caches += reinterpret(Float16, codeinst.time_infer_total)
-    caller.time_caches += reinterpret(Float16, codeinst.time_infer_cache_saved)
-    return Future(MethodCallResult(interp, caller, method, rt, exct, effects, codeinst, edgecycle, edgelimited, inf_result))
+    world = get_inference_world(interp)
+    update_valid_age!(caller, world, proof_worlds(local_result.proof))
+    if codeinst !== nothing
+        update_valid_age!(caller, world, WorldRange(codeinst.min_world, codeinst.max_world))
+        caller.time_caches += reinterpret(Float16, codeinst.time_infer_total)
+        caller.time_caches += reinterpret(Float16, codeinst.time_infer_cache_saved)
+    end
+    return Future(MethodCallResult(interp, caller, method, rt, exct, effects,
+        codeinst, edgecycle, edgelimited, edgerecursed, local_result))
+end
+
+function lookup_cached_edge(interp::AbstractInterpreter, method::Method,
+                            mi::MethodInstance, caller::AbsIntState, force_inline::Bool,
+                            edgecycle::Bool, edgelimited::Bool, edgerecursed::Bool)
+    local_result = lookup_local_inference_result(interp, mi)
+    codeinst = get(code_cache(interp), mi, nothing)
+    if !(codeinst isa CodeInstance)
+        local_result === nothing && return nothing, nothing
+        return return_cached_result(interp, method, local_result, nothing, caller,
+            edgecycle, edgelimited, edgerecursed), nothing
+    end
+    @assert codeinst.def === mi "MethodInstance for cached edge does not match"
+
+    if local_result !== nothing
+        return return_cached_result(interp, method, local_result, codeinst, caller,
+            edgecycle, edgelimited, edgerecursed), nothing
+    end
+
+    inferred = @atomic :monotonic codeinst.inferred
+    need_inlineable_code = (may_optimize(interp) &&
+        (force_inline || is_inlineable(inferred) || use_const_api(codeinst)))
+    if need_inlineable_code
+        src = ci_get_source(interp, codeinst, inferred)
+        src === nothing && return nothing, codeinst
+        return return_cached_result(interp, method, codeinst, src, caller,
+            edgecycle, edgelimited, edgerecursed), nothing
+    end
+    return return_cached_result(interp, method, codeinst, nothing, caller,
+        edgecycle, edgelimited, edgerecursed), nothing
 end
 
 
 function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method,
                           @nospecialize(rt), @nospecialize(exct), effects::Effects,
                           edge::Union{Nothing,CodeInstance}, edgecycle::Bool, edgelimited::Bool,
-                          call_result::Union{Nothing,InferredCallResult} = nothing)
-    if edge === nothing
+                          edgerecursed::Bool, call_result::Union{Nothing,InferredCallResult} = nothing;
+                          force_edgecycle::Bool = true, needs_mi_edge::Bool = false)
+    if force_edgecycle && edge === nothing && call_result === nothing
         edgecycle = edgelimited = true
     end
 
@@ -1066,7 +1275,7 @@ function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method
         effects = Effects(effects; terminates=true)
     elseif edgecycle
         # Some sort of recursion was detected.
-        if edge !== nothing && !edgelimited && !is_edge_recursed(edge, sv)
+        if (edge !== nothing || call_result isa LocalInferenceResult) && !edgelimited && !edgerecursed
             # no `MethodInstance` cycles -- don't taint :terminate
         else
             # we cannot guarantee that the call will terminate
@@ -1074,114 +1283,121 @@ function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method
         end
     end
 
-    return MethodCallResult(rt, exct, effects, edge, edgecycle, edgelimited, call_result)
+    return MethodCallResult(rt, exct, effects, edge, edgecycle, edgelimited, call_result;
+        needs_mi_edge)
 end
 
-function codeinst_edges_sub(existing_edge::CodeInstance, min_world::UInt, max_world::UInt, edges::SimpleVector)
-    # return if the existing edge has more restrictions than the other arguments (more edges and narrower worlds)
-    if existing_edge.min_world >= min_world &&
-       existing_edge.max_world <= max_world &&
-       existing_edge.edges == edges
-        return true
+function completed_inference_result(interp::AbstractInterpreter, frame::InferenceState)
+    result = frame.result
+    @assert result.result !== nothing
+    @assert !result.tombstone
+    if (!iszero(frame.cache_mode & CACHE_MODE_GLOBAL) && isdefined(result, :ci) &&
+            get(code_cache(interp, result.valid_worlds), result.linfo, nothing) === result.ci)
+        proof = result.ci
+    else
+        cache = get_inference_cache(interp)
+        indices = get_indices(cache, result.linfo)
+        for i in length(indices):-1:1
+            cached = cache.results[indices[i]]
+            if cached isa LocalInferenceResult && cached.result === result
+                return cached
+            end
+        end
+        proof = LocalInferenceProof(result.valid_worlds,
+            Core.svec(internal_result_edges(frame)...))
     end
-    return false
-end
-
-# allocate a dummy `edge::CodeInstance` to be added by `add_edges!`, reusing an existing_edge if possible
-# TODO: fill this in fully correctly (currently IPO info such as effects and return types are lost)
-function codeinst_as_edge(interp::AbstractInterpreter, sv::InferenceState, @nospecialize existing_edge)
-    edges = Core.svec(sv.edges...)
-    min_world, max_world = first(sv.valid_worlds), last(sv.valid_worlds)
-    if max_world >= get_world_counter()
-        max_world = typemax(UInt)
-    end
-    if existing_edge isa CodeInstance && codeinst_edges_sub(existing_edge, min_world, max_world, edges)
-        return existing_edge
-    end
-    mi = sv.linfo
-    ci = CodeInstance(mi, cache_owner(interp), Any, Any, nothing, nothing, zero(Int32),
-        min_world, max_world, zero(UInt32), nothing, nothing, edges)
-    if max_world == typemax(UInt)
-        # if we can record all of the backedges in the global reverse-cache,
-        # we can now widen our applicability in the global cache too
-        # XXX: this should come after we decide this edge is even useful
-        # (e.g. this is the job of jl_promote_ci_to_current)
-        store_backedges(ci, edges)
-    end
-    return ci
+    return LocalInferenceResult(result, proof, get_inference_world(interp))
 end
 
 function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, result::InferenceResult,
                                     method::Method, edge_ci::Union{Nothing,CodeInstance},
-                                    edgecycle::Bool, edgelimited::Bool)
+                                    edgecycle::Bool, edgelimited::Bool, edgerecursed::Bool)
     mresult = Future{MethodCallResult}()
     push!(caller.tasks, function get_infer_result(interp, caller)
         update_valid_age!(caller, get_inference_world(interp), frame.valid_worlds)
         isinferred = is_inferred(frame)
         effects = nothing
         call_result = nothing
-        edge = result.ci
+        edge = edge_ci
         if isinferred
-            if edge_ci isa CodeInstance && codeinst_edges_sub(edge_ci, edge.min_world, edge.max_world, edge.edges)
-                edge = edge_ci # override the edge for tracking invalidation
+            if !result.tombstone
+                call_result = completed_inference_result(interp, frame)
+                update_valid_age!(caller, get_inference_world(interp),
+                    proof_worlds(call_result.proof))
+            else
+                # A limited source can still produce clean return/effect facts. Retain
+                # their dependencies without exposing the tombstoned source as reusable.
+                proof = LocalInferenceProof(result.valid_worlds,
+                    Core.svec(internal_result_edges(frame)...))
+                add_inference_proof!(caller.edges, proof)
+                update_valid_age!(caller, get_inference_world(interp), proof_worlds(proof))
             end
-            result.ci_as_edge = edge # override the edge for tracking purposes
             effects = result.ipo_effects # effects are adjusted already within `finish` for ipo_effects
-            call_result = result
+            if !iszero(frame.cache_mode & CACHE_MODE_GLOBAL) && isdefined(result, :ci)
+                edge = result.ci
+            else
+                cached = get(code_cache(interp), result.linfo, nothing)
+                cached isa CodeInstance && (edge = cached)
+            end
         else
+            # Do not expose this frame's provisional CI. The ordinary Method/MI lookup
+            # edge is sufficient until the cycle resolves, and an existing published
+            # target may still be reused when one was available at scheduling time.
             effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
             add_cycle_backedge!(caller, frame)
         end
+        # Both provisional SCC results and completed tombstones can contribute body
+        # facts without a CI target or reusable local result. Their transitive proof
+        # edges do not replace the dispatch dependency on this MethodInstance.
+        needs_mi_edge = edge === nothing && call_result === nothing
+        if edge !== nothing
+            update_valid_age!(caller, get_inference_world(interp), proof_worlds(edge))
+        end
         bestguess = frame.bestguess
         exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
-        # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
-        # note that this result is cached globally exclusively, so we can use this local result destructively
+        # Propagate newly inferred source to the inliner, allowing efficient inlining
+        # without deserialization.
+        # A missing target here is deliberate; preserve the cycle/limiting decision made
+        # by `abstract_call_method` instead of inferring a new cycle from target absence.
         mresult[] = MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects,
-            edge, edgecycle, edgelimited, call_result)
+            edge, edgecycle, edgelimited, edgerecursed, call_result;
+            force_edgecycle=false, needs_mi_edge)
         return true
     end)
     return mresult
 end
 
 # compute (and cache) an inferred AST and return the current best estimate of the result type
-function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::AbsIntState, edgecycle::Bool, edgelimited::Bool)
+function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::AbsIntState, edgecycle::Bool, edgelimited::Bool, edgerecursed::Bool)
     mi = specialize_method(method, atype, sparams)
     cache_mode = CACHE_MODE_GLOBAL # cache edge targets globally by default
     force_inline = is_stmt_inline(get_curr_ssaflag(caller))
     edge_ci = nothing
-    let code = get(code_cache(interp), mi, nothing)
-        codeinst = code
-        if code isa InferenceResult
-            inferred = code.src
-            codeinst = code.ci
-        elseif code isa CodeInstance # return existing rettype if the code is already inferred
-            inferred = @atomic :monotonic code.inferred
-        else
-            inferred = nothing
+    cached, missing_source_edge = lookup_cached_edge(interp, method, mi, caller,
+        force_inline, edgecycle, edgelimited, edgerecursed)
+    if cached !== nothing
+        return cached
+    elseif missing_source_edge !== nothing
+        # Reuse a sourceless result only when `mi` is already active in this
+        # interpreter's inference cycle; otherwise local inference may recover source.
+        if edgerecursed && find_call_cycle(interp, mi, caller) !== nothing
+            return return_cached_result(interp, method, missing_source_edge, nothing, caller,
+                edgecycle, edgelimited, edgerecursed)
         end
-        if codeinst isa CodeInstance
-            need_inlineable_code = may_optimize(interp) && (force_inline || is_inlineable(inferred) || use_const_api(codeinst))
-            if need_inlineable_code
-                src = ci_get_source(interp, codeinst, inferred)
-                if src === nothing
-                    # Re-infer to get the appropriate source representation
-                    cache_mode = CACHE_MODE_LOCAL
-                    edge_ci = codeinst
-                else # no reinference needed
-                    @assert codeinst.def === mi "MethodInstance for cached edge does not match"
-                    return return_cached_result(interp, method, code, src, caller, edgecycle, edgelimited)
-                end
-            else # no reinference needed
-                @assert codeinst.def === mi "MethodInstance for cached edge does not match"
-                return return_cached_result(interp, method, code, nothing, caller, edgecycle, edgelimited)
-            end
-        end
+        # A globally published executable target exists, but its source was discarded.
+        # Re-infer only the source/facts and certify that local work with a local proof.
+        cache_mode = CACHE_MODE_LOCAL
+        edge_ci = missing_source_edge
     end
     if !InferenceParams(interp).force_enable_inference && ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
         add_remark!(interp, caller, "[typeinf_edge] Inference is disabled for the target module")
-        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
+        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited, edgerecursed))
     end
-    if !is_cached(caller) && frame_parent(caller) === nothing
+    if !edgerecursed && !edgelimited
+        # the callstack walk proved there is no cycle to resolve, as long as
+        # `atype` was not coarsened to an on-stack specialization after that walk
+        frame = false
+    elseif !is_cached(caller) && frame_parent(caller) === nothing
         # this caller exists to return to the user
         # (if we asked resolve_call_cycle!, it might instead detect that there is a cycle that it can't merge)
         frame = false
@@ -1194,43 +1410,27 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             reserve_start = _time_ns() # subtract engine_reserve (thread-synchronization) time from callers to avoid double-counting
             ci_from_engine = engine_reserve(interp, mi)
             caller.time_paused += (_time_ns() - reserve_start)
-            code = get(code_cache(interp), mi, nothing)
-            codeinst = code
-            if code isa InferenceResult
-                inferred = code.src
-                codeinst = code.ci
-            elseif code isa CodeInstance # return existing rettype if the code is already inferred
-                inferred = @atomic :monotonic code.inferred
-            else
-                inferred = nothing
-            end
-            if codeinst isa CodeInstance # return existing rettype if the code is already inferred
+            cached, missing_source_edge = lookup_cached_edge(interp, method, mi, caller,
+                force_inline, edgecycle, edgelimited, edgerecursed)
+            if cached !== nothing
+                engine_reject(interp, ci_from_engine)
+                return cached
+            elseif missing_source_edge !== nothing
                 engine_reject(interp, ci_from_engine)
                 ci_from_engine = nothing
-                need_inlineable_code = may_optimize(interp) && (force_inline || is_inlineable(inferred) || use_const_api(codeinst))
-                if need_inlineable_code
-                    src = ci_get_source(interp, codeinst, inferred)
-                    if src === nothing
-                        cache_mode = CACHE_MODE_LOCAL
-                        edge_ci = codeinst
-                    else
-                        @assert codeinst.def === mi "MethodInstance for cached edge does not match"
-                        return return_cached_result(interp, method, code, src, caller, edgecycle, edgelimited)
-                    end
-                else
-                    @assert codeinst.def === mi "MethodInstance for cached edge does not match"
-                    return return_cached_result(interp, method, code, nothing, caller, edgecycle, edgelimited)
-                end
+                cache_mode = CACHE_MODE_LOCAL
+                edge_ci = missing_source_edge
             end
         else
             ci_from_engine = nothing
         end
         result = InferenceResult(mi, typeinf_lattice(interp))
-        result.ci = if ci_from_engine !== nothing
-                ci_from_engine
-            else
-                ccall(:jl_new_codeinst_uninit, Any, (Any, Any), mi, cache_owner(interp))::CodeInstance
-            end
+        if ci_from_engine !== nothing
+            result.ci = ci_from_engine
+        elseif !iszero(cache_mode & CACHE_MODE_GLOBAL)
+            result.ci = ccall(:jl_new_codeinst_uninit, Any, (Any, Any),
+                mi, cache_owner(interp))::CodeInstance
+        end
         frame = InferenceState(result, cache_mode, interp) # always use the cache for edge targets
         if frame === nothing
             add_remark!(interp, caller, "[typeinf_edge] Failed to retrieve source")
@@ -1238,16 +1438,16 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             if ci_from_engine !== nothing
                 engine_reject(interp, ci_from_engine)
             end
-            return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
+            return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited, edgerecursed))
         end
         assign_parentchild!(frame, caller)
         # the actual inference task for this edge is going to be scheduled within `typeinf_local` via the callstack queue
         # while splitting off the rest of the work for this caller into a separate workq thunk
-        return _schedule_edge_infer_task!(caller, frame, result, method, edge_ci, edgecycle, edgelimited)
+        return _schedule_edge_infer_task!(caller, frame, result, method, edge_ci, edgecycle, edgelimited, edgerecursed)
     elseif frame === true
         # unresolvable cycle
         add_remark!(interp, caller, "[typeinf_edge] Unresolvable cycle")
-        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
+        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited, edgerecursed))
     end
     # return the current knowledge about this cycle
     frame = frame::InferenceState
@@ -1257,7 +1457,14 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
     add_cycle_backedge!(caller, frame)
     result = frame.result
-    return Future(MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects, isdefined(result, :ci) ? result.ci : nothing, edgecycle, edgelimited))
+    edge = get(code_cache(interp), result.linfo, nothing)
+    edge isa CodeInstance || (edge = nothing)
+    if edge !== nothing
+        update_valid_age!(caller, get_inference_world(interp), proof_worlds(edge))
+    end
+    return Future(MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects,
+        edge, edgecycle, edgelimited, edgerecursed;
+        force_edgecycle=false, needs_mi_edge=edge === nothing))
 end
 
 # The `:terminates` effect bit must be conservatively tainted unless recursion cycle has
@@ -1275,6 +1482,8 @@ function cached_return_type(code::CodeInstance)
         undefs, fields = rettype_const
         return PartialStruct(fallback_lattice, rettype, undefs, fields)
     elseif isa(rettype_const, PartialOpaque) && rettype <: Core.OpaqueClosure
+        return rettype_const
+    elseif isa(rettype_const, PartialTask) && rettype <: Task
         return rettype_const
     elseif isa(rettype_const, InterConditional) && rettype !== InterConditional
         return rettype_const
@@ -1376,11 +1585,12 @@ function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_opti
     if run_optimizer
         if result_is_constabi(interp, frame.result)
             rt = frame.result.result::Const
-            src = codeinfo_for_const(interp, frame.linfo, frame.valid_worlds, Core.svec(frame.edges...), rt.val)
+            edges = materialize_inference_edges(frame.edges)
+            src = codeinfo_for_const(interp, frame.linfo, frame.valid_worlds, edges, rt.val)
         else
             opt = OptimizationState(frame, interp)
             optimize(interp, opt, frame.result)
-            src = ir_to_codeinf!(opt, frame, Core.svec(opt.inlining.edges...))
+            src = ir_to_codeinf!(opt, frame, materialize_inference_edges(opt.inlining.edges))
         end
         result.src = frame.src = src
     end
@@ -1482,6 +1692,11 @@ function ci_has_invoke(code::CodeInstance)
     return (@atomic :monotonic code.invoke) !== C_NULL
 end
 
+const CI_FLAGS_FROM_IMAGE = 0b0100
+function ci_from_image(code::CodeInstance)
+    return (@atomic :monotonic code.flags) & CI_FLAGS_FROM_IMAGE != 0
+end
+
 function ci_meets_requirement(interp::AbstractInterpreter, code::CodeInstance, source_mode::UInt8)
     source_mode == SOURCE_MODE_NOT_REQUIRED && return true
     source_mode == SOURCE_MODE_ABI && return ci_has_abi(interp, code)
@@ -1489,31 +1704,160 @@ function ci_meets_requirement(interp::AbstractInterpreter, code::CodeInstance, s
     return false
 end
 
+function ci_worlds_cover(code::CodeInstance, valid_worlds::WorldRange)
+    min_world = @atomic :acquire code.min_world
+    max_world = @atomic :acquire code.max_world
+    return min_world <= first(valid_worlds) && last(valid_worlds) <= max_world
+end
+
+function ci_cache_head(mi::MethodInstance)
+    isdefined(mi, :cache, :acquire) || return nothing
+    return @atomic :acquire mi.cache
+end
+
+function ci_cache_next(code::CodeInstance)
+    isdefined(code, :next, :acquire) || return nothing
+    return @atomic :acquire code.next
+end
+
+function find_cached_ci(interp::AbstractInterpreter, mi::MethodInstance,
+                        valid_worlds::WorldRange, source_mode::UInt8)
+    cache = code_cache(interp, valid_worlds)
+    return find_cached_ci(interp, cache, mi, valid_worlds, source_mode)
+end
+
+function find_cached_ci(interp::AbstractInterpreter, cache, mi::MethodInstance,
+                        valid_worlds::WorldRange, source_mode::UInt8)
+    code = get(cache, mi, nothing)
+    if (code isa CodeInstance &&
+            ci_worlds_cover(code, valid_worlds) &&
+            isdefined(code, :inferred, :acquire) &&
+            ci_meets_requirement(interp, code, source_mode))
+        return code
+    end
+    return nothing
+end
+
+function find_cached_ci(interp::AbstractInterpreter, cache::OverlayCodeCache,
+                        mi::MethodInstance, valid_worlds::WorldRange, source_mode::UInt8)
+    return find_cached_ci(interp, cache.globalcache, mi, valid_worlds, source_mode)
+end
+
+function find_cached_ci(interp::AbstractInterpreter, cache::InternalCodeCache,
+                        mi::MethodInstance, valid_worlds::WorldRange, source_mode::UInt8)
+    # `jl_rettype_inferred` returns the first inferred CI spanning the requested
+    # worlds, without considering whether it carries source or an ABI. Once a
+    # source-less CI is at the head of the native cache, repeatedly looking only at
+    # that entry would publish a new source-capable CI for every ABI/source request.
+    # Walk the native cache chain to find the first entry that satisfies the full
+    # request. Cache wrappers dispatch back to this implementation through their
+    # underlying global cache. A concurrent `jl_mi_cache_insert` may briefly make
+    # the chain circular while moving an existing CI; like the C-side walkers
+    # (e.g. `jl_get_ci_equiv`), keep following `next` until the writer's fixup
+    # store lands.
+    code = ci_cache_head(mi)
+    while code !== nothing
+        if (ci_worlds_cover(code, valid_worlds) &&
+                code.owner === cache.owner &&
+                isdefined(code, :inferred, :acquire) &&
+                ci_meets_requirement(interp, code, source_mode))
+            return code
+        end
+        code = ci_cache_next(code)
+    end
+    return nothing
+end
+
+function ci_is_equivalent_winner(candidate::CodeInstance, ci::CodeInstance,
+                                 valid_worlds::WorldRange)
+    return (candidate !== ci &&
+        ci_worlds_cover(candidate, valid_worlds) &&
+        candidate.def === ci.def &&
+        candidate.owner === ci.owner &&
+        isdefined(candidate, :inferred, :acquire) &&
+        isdefined(candidate, :rettype) &&
+        candidate.rettype === ci.rettype)
+end
+
+function find_equivalent_cached_ci(interp::AbstractInterpreter, cache,
+                                   ci::CodeInstance, valid_worlds::WorldRange)
+    candidate = get(cache, get_ci_mi(ci), nothing)
+    return (candidate isa CodeInstance &&
+        ci_is_equivalent_winner(candidate, ci, valid_worlds)) ? candidate : nothing
+end
+
+function find_equivalent_cached_ci(interp::AbstractInterpreter,
+                                   cache::OverlayCodeCache, ci::CodeInstance,
+                                   valid_worlds::WorldRange)
+    return find_equivalent_cached_ci(
+        interp, cache.globalcache, ci, valid_worlds)
+end
+
+function find_equivalent_cached_ci(::AbstractInterpreter,
+                                   ::InternalCodeCache, ci::CodeInstance,
+                                   valid_worlds::WorldRange)
+    candidate = ci_cache_head(get_ci_mi(ci))
+    while candidate !== nothing
+        ci_is_equivalent_winner(candidate, ci, valid_worlds) && return candidate
+        candidate = ci_cache_next(candidate)
+    end
+    return nothing
+end
+
+function find_equivalent_cached_ci(interp::AbstractInterpreter, ci::CodeInstance,
+                                   valid_worlds::WorldRange)
+    cache = code_cache(interp, valid_worlds)
+    return find_equivalent_cached_ci(interp, cache, ci, valid_worlds)
+end
+
+function find_local_cached_ci(interp::AbstractInterpreter, mi::MethodInstance,
+                              valid_worlds::WorldRange, source_mode::UInt8)
+    cache = get_inference_cache(interp)
+    indices = get_indices(cache, mi)
+    world = get_inference_world(interp)
+    for i in length(indices):-1:1
+        cached = cache.results[indices[i]]
+        cached isa LocalInferenceResult || continue
+        result = cached.result
+        result.overridden_by_const === nothing || continue
+        result.cache_world == world || continue
+        world in proof_worlds(cached.proof) || continue
+        isdefined(result, :ci) || continue
+        code = result.ci
+        if (ci_worlds_cover(code, valid_worlds) &&
+                isdefined(code, :inferred, :acquire) &&
+                ci_meets_requirement(interp, code, source_mode))
+            return code
+        end
+    end
+    return nothing
+end
+
+function find_typeinf_cached_ci(interp::AbstractInterpreter, mi::MethodInstance,
+                                valid_worlds::WorldRange, source_mode::UInt8)
+    code = find_cached_ci(interp, mi, valid_worlds, source_mode)
+    code === nothing || return code
+    return find_local_cached_ci(interp, mi, valid_worlds, source_mode)
+end
+
 # compute (and cache) an inferred AST and return type
 function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
     start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
-    let code = get(code_cache(interp), mi, nothing)
-        code isa InferenceResult && (code = code.ci)
-        if code isa CodeInstance
-            # see if this code already exists in the cache
-            if ci_meets_requirement(interp, code, source_mode)
-                ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
-                return code
-            end
+    valid_worlds = WorldRange(get_inference_world(interp))
+    let code = find_typeinf_cached_ci(interp, mi, valid_worlds, source_mode)
+        if code !== nothing
+            ccall(:jl_typeinf_timing_end, Cvoid, (UInt64, Cint), start_time, 0)
+            return code
         end
     end
     def = mi.def
     ci = engine_reserve(interp, mi)
     # check cache again if it is still new after reserving in the engine
-    let code = get(code_cache(interp), mi, nothing)
-        code isa InferenceResult && (code = code.ci)
-        if code isa CodeInstance
-            # see if this code already exists in the cache
-            if ci_meets_requirement(interp, code, source_mode)
-                engine_reject(interp, ci)
-                ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
-                return code
-            end
+    let code = find_typeinf_cached_ci(interp, mi, valid_worlds, source_mode)
+        if code !== nothing
+            engine_reject(interp, ci)
+            ccall(:jl_typeinf_timing_end, Cvoid, (UInt64, Cint), start_time, 0)
+            return code
         end
     end
     if !InferenceParams(interp).force_enable_inference
@@ -1523,28 +1867,39 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
                 finish!(interp, mi, ci, src)
             else
                 engine_reject(interp, ci)
+                ccall(:jl_typeinf_timing_end, Cvoid, (UInt64, Cint), start_time, 0)
+                return nothing
             end
-            ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+            ccall(:jl_typeinf_timing_end, Cvoid, (UInt64, Cint), start_time, 0)
             return ci
         end
     end
     result = InferenceResult(mi, typeinf_lattice(interp))
-    result.ci = result.ci_as_edge = ci
+    result.ci = ci
     frame = InferenceState(result, #=cache_mode=#:global, interp)
     if frame === nothing
         engine_reject(interp, ci)
-        ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+        ccall(:jl_typeinf_timing_end, Cvoid, (UInt64, Cint), start_time, 0)
         return nothing
     end
     typeinf(interp, frame)
-    ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+    ccall(:jl_typeinf_timing_end, Cvoid, (UInt64, Cint), start_time, 0)
 
-    ci = result.ci # reload from result in case it changed
+    publication_winner = result.replacement_ci
+    ci = if (publication_winner !== nothing &&
+             ci_meets_requirement(interp, publication_winner, source_mode))
+        publication_winner
+    else
+        result.ci
+    end
     codegen = codegen_cache(interp)
     @assert frame.cache_mode != CACHE_MODE_NULL
-    @assert is_result_constabi_eligible(result) || codegen === nothing || haskey(codegen, ci)
-    @assert is_result_constabi_eligible(result) == use_const_api(ci)
     @assert isdefined(ci, :inferred) "interpreter did not fulfill our expectations"
+    @assert codegen === nothing || ci_meets_requirement(interp, ci, source_mode)
+    if ci === result.ci
+        @assert is_result_constabi_eligible(result) || codegen === nothing || haskey(codegen, ci)
+        @assert is_result_constabi_eligible(result) == use_const_api(ci)
+    end
     return ci
 end
 
@@ -1576,8 +1931,12 @@ function compileable_specialization_for_call(interp::AbstractInterpreter, @nospe
     matches = findall(argtype, method_table(interp); limit = 1)
     matches === nothing && return nothing
     length(matches.matches) == 0 && return nothing
-    match = only(matches.matches)
+    return compileable_specialization_for_match(only(matches.matches)::MethodMatch)
+end
 
+# Return the compilable MethodInstance that every call dispatched to `match` will be
+# runtime-dispatched to, if there is exactly one
+function compileable_specialization_for_match(match::MethodMatch)
     compileable_atype = get_compileable_sig(match.method, match.spec_types, match.sparams)
     compileable_atype === nothing && return nothing
     if match.spec_types !== compileable_atype
@@ -1588,6 +1947,19 @@ function compileable_specialization_for_call(interp::AbstractInterpreter, @nospe
     end
 
     return mi
+end
+
+# Find all methods for `T <: ftyp` and return each paired with its unique
+# compileable specialization, if one could be resolved.
+function _compileable_methods(table::MethodTableView, @nospecialize(ftyp))
+    result = findall(Tuple{ftyp}, table)
+    result === nothing && return nothing
+    matches = Pair{Method,Union{Nothing,MethodInstance}}[]
+    for match in result.matches
+        match = match::MethodMatch
+        push!(matches, match.method => compileable_specialization_for_match(match))
+    end
+    return matches
 end
 
 const QueueItems = Union{CodeInstance,MethodInstance,SimpleVector}
@@ -1628,17 +2000,68 @@ function has_valid_abi_sparams(mi::MethodInstance)
     return true
 end
 
+# The runner of a `Threads.@threads` loop is not specialized on the loop body, so its tasks
+# call the body through a dynamic dispatch, which `--trim` cannot follow. So at each call of
+# the runner, where the body type is known, return the signature of that body call for the
+# trim compiler to compile and verify. Return `nothing` for any other invoke.
+function threads_deferred_call_type(stmt::Expr, ci::CodeInfo, sptypes::Vector{VarState})
+    length(stmt.args) == 4 || return nothing
+    edge = stmt.args[1]
+    def = edge isa CodeInstance ? get_ci_mi(edge).def : edge isa MethodInstance ? edge.def : nothing
+    def isa Method || return nothing
+    is_base_threads_method(def, :threading_run) || return nothing
+    ft = argextype(stmt.args[3], ci, sptypes)
+    return argtypes_to_type(Any[ft, Int])
+end
+
+# Identified by name rather than through the `Base.Threads` binding, which does not exist
+# in the world this code is compiled in.
+function is_base_threads_method(def::Method, name::Symbol)
+    m = def.module
+    return def.name === name && nameof(m) === :Threads && parentmodule(m) === Base
+end
+
+is_threads_call_def(@nospecialize def) = def isa Method && is_base_threads_method(def, :_threads_call)
+
+function _libdl_dlopen()
+    dlopen_ptr = unsafe_load(cglobal(:jl_libdl_dlopen_func, Ptr{Cvoid}))
+    dlopen_ptr == C_NULL && return nothing # Libdl was never loaded
+    dlopen_fn = unsafe_load(cglobal(:jl_libdl_dlopen_func, Any))
+    return dlopen_fn
+end
+
+# Returns the type of library that a foreigncall / foreignglobal spec (aka foreignsymbol)
+# makes the runtime `dlopen(lib)` on first use, or `nothing` if no such call is made
+function foreign_library_type(@nospecialize(spec), ci::CodeInfo, sptypes::Vector{VarState})
+    if isexpr(spec, :tuple) && length(spec.args) >= 2
+        lib = spec.args[2]
+    elseif spec isa Tuple && length(spec) >= 2
+        lib = spec[2]
+    else # either using a function pointer or an invalid foreigncall - no dlopen applies
+        return nothing
+    end
+    library_type = argextype_widened(lib, ci, sptypes)
+    library_type <: Union{Symbol,String} && return nothing # resolved natively by the runtime
+    return library_type
+end
+
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
 function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vector{VarState};
                          invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
-                         enqueue_unprepared_invokes::Bool = false)
+                         enqueue_unprepared_invokes::Bool = false,
+                         external_linkage::Bool = false)
     src = ci.code
     for i = 1:length(src)
         stmt = src[i]
         isexpr(stmt, :(=)) && (stmt = stmt.args[2])
         if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
             edge = stmt.args[1]
+            # If this CodeInstance is already compiled in the image, and we can
+            # link to it, we should do that instead of compiling it again.  With
+            # invoke_modify, we need to compile it regardless.
             if edge isa CodeInstance && has_valid_abi_sparams(get_ci_mi(edge)) &&
+                    (isexpr(stmt, :invoke_modify) ||
+                     !(external_linkage && ci_from_image(edge) && ci_has_invoke(edge))) &&
                     (enqueue_unprepared_invokes ||
                      ci_has_invoke(edge) || ci_has_source(workqueue.interp, edge) ||
                      !iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), get_ci_mi(edge), edge)))
@@ -1658,6 +2081,24 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
                 push!(workqueue, edge)
             end
         end
+        if invokelatest_queue !== nothing && isexpr(stmt, :invoke)
+            atype = threads_deferred_call_type(stmt, ci, sptypes)
+            if atype !== nothing
+                mi = compileable_specialization_for_call(invokelatest_queue.interp, atype)
+                mi === nothing || push!(invokelatest_queue, mi)
+            end
+        end
+        if enqueue_unprepared_invokes && (isexpr(stmt, :foreigncall) || isexpr(stmt, :foreignglobal))
+            # Enqueue (in this world) for `--trim`, but not otherwise since
+            # this callback is relatively unlikely to run in any given world
+            library_type = foreign_library_type(stmt.args[1], ci, sptypes)
+            dlopen_fn = library_type === nothing ? nothing : _libdl_dlopen()
+            if dlopen_fn !== nothing
+                atype = Tuple{typeof(dlopen_fn), library_type}
+                mi = compileable_specialization_for_call(workqueue.interp, atype)
+                mi === nothing || push!(workqueue, mi)
+            end
+        end
 
         invokelatest_queue === nothing && continue
         if isexpr(stmt, :call)
@@ -1665,7 +2106,7 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
             !applicable(argextype, farg, ci, sptypes) && continue # TODO: Why is this failing during bootstrap
             ftyp = argextype_widened(farg, ci, sptypes)
 
-            if ftyp === typeof(Core.finalizer) && length(stmt.args) == 3
+            if ftyp === typeof(Core.finalizer) && 3 <= length(stmt.args) <= 5
                 finalizer = argextype(stmt.args[2], ci, sptypes)
                 obj = argextype(stmt.args[3], ci, sptypes)
                 atype = argtypes_to_type(Any[finalizer, obj])
@@ -1705,6 +2146,35 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
         end
     end
 end
+
+"""
+    jit_cache_root!(cache, ci::CodeInstance)
+
+Establish a GC root for `ci` that is adequate for handing it to the JIT.
+
+The JIT retains raw, non-GC-visible pointers to every CodeInstance it emits code
+for (in its symbol table and in the debuginfo address map used for backtraces
+and profiling), for the lifetime of the process. Every CodeInstance passed to
+`jl_add_codeinsts_to_jit` must therefore remain GC-reachable permanently.
+[`add_codeinsts_to_jit!`](@ref) calls this function for each CodeInstance it is
+about to emit that is not already rooted through the native `mi.cache` chain
+(which guarantees the required lifetime on its own); the executable cache that
+holds the CodeInstance is responsible for guaranteeing an equivalent lifetime.
+
+The generic fallback conservatively promotes the CodeInstance to a global root,
+which matches the lifetime of the code emitted for it (JIT code is never
+freed). A custom cache whose entries are process-rooted by other means may
+override this with a no-op.
+"""
+function jit_cache_root!(cache, ci::CodeInstance)
+    ccall(:jl_as_global_root, Any, (Any, Cint), ci, 1)
+    return nothing
+end
+# Entries in the native `mi.cache` chain are already rooted for the lifetime of
+# the process through their MethodInstance.
+jit_cache_root!(::InternalCodeCache, ::CodeInstance) = nothing
+jit_cache_root!(cache::OverlayCodeCache, ci::CodeInstance) =
+    jit_cache_root!(cache.globalcache, ci)
 
 function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UInt8)
     source_mode == SOURCE_MODE_ABI || return ci
@@ -1746,16 +2216,21 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
         sptypes = sptypes_from_meth_instance(mi)
         collectinvokes!(workqueue, src, sptypes)
         if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
-            let cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, 0x0)::CodeInstance
-                if cached === callee
-                    # make sure callee is gc-rooted and cached, as required by jl_add_codeinsts_to_jit
-                    code_cache(workqueue.interp)[mi] = callee
-                else
-                    # use an existing CI from the cache, if there is available one that is compatible
-                    callee === ci && (ci = cached)
-                    callee = cached
-                end
+            valid_worlds = WorldRange(get_inference_world(workqueue.interp))
+            cached = find_equivalent_cached_ci(
+                workqueue.interp, callee, valid_worlds)
+            if cached === nothing
+                # make sure callee is cached, as required by jl_add_codeinsts_to_jit
+                code_cache(workqueue.interp)[mi] = callee
+            else
+                # use an existing CI from the cache, if there is available one that is compatible
+                callee === ci && (ci = cached)
+                callee = cached
             end
+            # `callee` is about to be emitted while absent from the native
+            # `mi.cache` chain; the executable cache it lives in must root it
+            # for the lifetime of the process (see `jit_cache_root!`).
+            jit_cache_root!(code_cache(workqueue.interp), callee)
         end
         push!(codeinsts, callee)
         push!(srcs, src)
@@ -1781,6 +2256,7 @@ end
 function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
     invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
     enqueue_unprepared_invokes::Bool = false,
+    external_linkage::Bool,
 )
     interp = workqueue.interp
     world = get_inference_world(interp)
@@ -1840,16 +2316,16 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             if src isa CodeInfo
                 sptypes = sptypes_from_meth_instance(mi)
                 collectinvokes!(workqueue, src, sptypes; invokelatest_queue,
-                                enqueue_unprepared_invokes)
+                                enqueue_unprepared_invokes, external_linkage)
                 # try to reuse an existing CodeInstance from before to avoid making duplicates in the cache
                 if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
-                    let cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, 0x0)::CodeInstance
-                        if cached === callee
-                            code_cache(interp)[mi] = callee
-                        else
-                            # Use an existing CI from the cache, if there is available one that is compatible
-                            callee = cached
-                        end
+                    cached = find_equivalent_cached_ci(
+                        interp, callee, WorldRange(world))
+                    if cached === nothing
+                        code_cache(interp)[mi] = callee
+                    else
+                        # Use an existing CI from the cache, if there is available one that is compatible
+                        callee = cached
                     end
                 end
                 push!(codeinfos, callee)
@@ -1866,7 +2342,7 @@ const TRIM_NO = 0x0
 const TRIM_SAFE = 0x1
 const TRIM_UNSAFE = 0x2
 const TRIM_UNSAFE_WARN = 0x3
-function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8)
+function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8, external_linkage::Bool)
     # During `--trim`, infer against an isolated cache namespace. The owner is re-stamped
     # back to `nothing` at serialization time (see `src/staticdata.c`).
     cache_owner = trim_mode == TRIM_NO ? nothing : :trim
@@ -1886,14 +2362,14 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
         )
 
         append!(workqueue, methods)
-        compile!(codeinfos, workqueue; invokelatest_queue,
+        compile!(codeinfos, workqueue; invokelatest_queue, external_linkage,
                  enqueue_unprepared_invokes = trim_mode != TRIM_NO)
     end
 
     if invokelatest_queue !== nothing
         # This queue is intentionally aliased, to handle e.g. a `finalizer` calling `Core.finalizer`
         # (it will enqueue into itself and immediately drain)
-        compile!(codeinfos, invokelatest_queue; invokelatest_queue,
+        compile!(codeinfos, invokelatest_queue; invokelatest_queue, external_linkage,
                  enqueue_unprepared_invokes = trim_mode != TRIM_NO)
     end
 

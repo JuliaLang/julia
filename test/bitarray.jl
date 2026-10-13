@@ -158,6 +158,8 @@ timesofar("promotions")
     end
 
     @testset "copyto!" begin
+        # BitArray copy bounds must not wrap their computed end indices.
+        @test_throws BoundsError copyto!(falses(2), Int8(2), trues(2), Int8(2), typemax(Int8))
         let b1 = trues(1)
             @test all(copyto!(b1, []))
         end
@@ -204,6 +206,27 @@ timesofar("promotions")
         @check_bit_operation resize!(b1, v1 ÷ 2) BitVector
         gr(b) = (resize!(b, v1)[(v1÷2):end] .= 1; b)
         @check_bit_operation gr(b1) BitVector
+
+        # Chunk rounding and reshape products must remain valid at the Int limit.
+        @test Base.num_bit_chunks(typemax(Int)) == div(typemax(Int), 64) + 1
+        overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+        @test_throws ArgumentError reshape(trues(2), 3, overflow_dim)
+
+        b1 = bitrand(v1)
+        @test_throws BoundsError resize!(b1, -1; first=true)
+        b2 = copy(b1)
+        @test resize!(b1, v1+100; first=true)[end-v1+1:end] == b2
+        @test resize!(b1, v1+200)[end-100-v1+1:end-100] == b2
+
+        b1 = bitrand(128)
+        b2 = copy(b1)
+        @test resize!(b1, 256; first=true)[end-128+1:end] == b2
+        b2 = copy(b1)
+        @test resize!(b1, 300; first=true)[end-256+1:end] == b2
+        b2 = copy(b1)
+        @test resize!(b1, 340; first=true)[end-300+1:end] == b2
+        b2 = copy(b1)
+        @test resize!(b1, 404; first=true)[end-340+1:end] == b2
     end
 
     @testset "sizeof (issue #7515)" begin
@@ -226,6 +249,10 @@ timesofar("utils")
             @test b1 == b2
         end
     end
+
+    # BitArray constructors must reject dimensions whose product overflows.
+    overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+    @test_throws ArgumentError BitMatrix(undef, 3, overflow_dim)
 
     @testset "constructors from iterables" begin
         for g in ((x%7==3 for x = 1:v1),
@@ -590,6 +617,13 @@ timesofar("constructors")
         @check_bit_operation setindex!(b1, b2, n1-m1+1:n1, t2) BitMatrix
         @check_bit_operation setindex!(b1, b2, k1, t2)         BitMatrix
     end
+
+    @testset "logical setindex! with an empty Cartesian-indexed value" begin
+        b = falses(4)
+        @test_throws DimensionMismatch b[BitVector([1, 1, 1, 0])] = PermutedDimsArray(Array{Bool}(undef, 2, 0), (2, 1))
+        e = falses(1, 2, 1, 0)
+        @test setindex!(e, view(zeros(3, 3, 3), 2:1, 2:2, 2:2), falses(1, 2, 1, 0)) === e
+    end
 end
 
 timesofar("indexing")
@@ -868,6 +902,26 @@ timesofar("dequeue")
 end
 
 timesofar("unary arithmetic")
+
+# Check that same-size BitArray broadcasts of ops with a chunk-level equivalent take the chunked path.
+@testset "chunked broadcast bit operations" begin
+    b1 = bitrand(130)
+    b2 = bitrand(130)
+    dest = similar(b1)
+    chunked(f, args...) = Base.Broadcast.ischunkedbroadcast(dest,
+        convert(Base.Broadcast.Broadcasted{Nothing},
+            Base.Broadcast.instantiate(Base.Broadcast.broadcasted(f, args...))))
+
+    for f in (!, ~, identity)
+        @test chunked(f, b1)
+    end
+    for f in (&, |, xor, nand, nor, *, min, max, ==, !=, <, <=, >, >=)
+        @test chunked(f, b1, b2)
+    end
+    @test chunked(nand, b1, Base.Broadcast.broadcasted(!, b2))
+    @test (dest .= b1 .== (==).(true)) == falses(130)
+    @test (dest .= b1 .!= (!=).(true)) == trues(130)
+end
 
 @testset "Binary arithmetic operators" begin
     @testset "Matrix{Bool}/Matrix{Bool}" begin
@@ -1509,6 +1563,22 @@ timesofar("reductions")
             @test map!(>, b, b1, b2)  == map!((x,y)->x>y, b, b1, b2)  == (b1 .> b2)  == b
             @test map!(!=, b, b1, b2) == map!((x,y)->x!=y, b, b1, b2) == (b1 .!= b2) == b
         end
+    end
+
+    # Constant maps preserve destination bits beyond the input collection.
+    @testset "map! with a longer destination" begin
+        for l in [0, 1, 63, 64, 65, 127, 128, 129]
+            src = bitrand(l)
+            dest = trues(l + 65)
+            @test map!(zero, dest, src) === dest
+            @test dest == vcat(falses(l), trues(65))
+
+            dest = falses(l + 65)
+            @test map!(one, dest, src) === dest
+            @test dest == vcat(trues(l), falses(65))
+        end
+        @test_throws DimensionMismatch map!(zero, falses(1), bitrand(2))
+        @test_throws DimensionMismatch map!(one, falses(1), bitrand(2))
     end
 
     @testset "Issue #17970" begin

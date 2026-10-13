@@ -460,7 +460,6 @@ function Base.union!(ranges::Vector{<:VersionRange})
 
     sort!(ranges, lt = (a, b) -> (isless_ll(a.lower, b.lower) || (a.lower == b.lower && isless_uu(a.upper, b.upper))))
 
-    k0 = 1
     ks = findfirst(!isempty, ranges)
     ks === nothing && return empty!(ranges)
 
@@ -743,3 +742,8 @@ const ver_regs =
     Regex("^((?:≥\\s*)|(?:>=\\s*)|(?:=\\s*)|(?:<\\s*)|(?:=\\s*))v?$version\$") => inequality_interval, # < 0.2 >= 0.5,2
     Regex("^[\\s]*$version[\\s]*?\\s-\\s[\\s]*?$version[\\s]*\$") => hyphen_interval, # 0.7 - 1.3
 ]
+
+# Interaction with language edition: there is at most one edition per minor
+# version, and any version should specify some default edition.
+EditionNumber(v::VersionNumber) = (Int(v.major), Int(v.minor))
+VersionedParse(v::VersionNumber) = VersionedParse(EditionNumber(v))

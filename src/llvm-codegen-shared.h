@@ -95,6 +95,29 @@ namespace JuliaType {
     }
 }
 
+// Shared by codegen and passes that create write barrier declarations.
+static inline llvm::AttributeList getWriteBarrierAttributes(llvm::LLVMContext &C)
+{
+    using namespace llvm;
+    AttrBuilder FnAttrs(C);
+    // The barrier inspects the parent's and children's headers, and it must
+    // stay ordered after the store it guards: a store may not be sunk past
+    // a later safepoint (see add_fn_attrs_for_effects in codegen.cpp), and
+    // reading the slot's memory here pins the store above the barrier.
+    auto effects = MemoryEffects::inaccessibleMemOnly() | MemoryEffects::argMemOnly(ModRefInfo::Ref);
+#ifdef GC_BARRIER_SNAPSHOT
+    // Snapshot barriers read old fields, including out-of-line object storage.
+    effects |= MemoryEffects::readOnly();
+#endif
+    FnAttrs.addMemoryAttr(effects);
+    FnAttrs.addAttribute(Attribute::NoUnwind);
+    FnAttrs.addAttribute(Attribute::NoRecurse);
+    AttrBuilder ParentAttrs(C);
+    ParentAttrs.addAttribute(Attribute::ReadOnly);
+    return AttributeList::get(C, AttributeSet::get(C, FnAttrs), AttributeSet(),
+                             {AttributeSet::get(C, ParentAttrs)});
+}
+
 // return how many Tracked pointers are in T (count > 0),
 // and if there is anything else in T (all == false)
 struct CountTrackedPointers {
@@ -162,6 +185,84 @@ static inline llvm::Instruction *tbaa_decorate(llvm::MDNode *md, llvm::Instructi
         inst->setMetadata(llvm::LLVMContext::MD_invariant_load, llvm::MDNode::get(md->getContext(), {}));
     }
     return inst;
+}
+
+// Whether the tag `TBAA`, or any of its ancestors up to the `jtbaa` root, has a
+// name in `strset`.
+static inline bool isTBAA(llvm::MDNode *TBAA, std::initializer_list<const char*> const strset)
+{
+    if (!TBAA)
+        return false;
+    while (TBAA->getNumOperands() > 1) {
+        TBAA = llvm::cast<llvm::MDNode>(TBAA->getOperand(1).get());
+        auto str = llvm::cast<llvm::MDString>(TBAA->getOperand(0))->getString();
+        for (auto str2 : strset) {
+            if (str == str2) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// The '!alias.scope' domain naming which of codegen's memory regions an access may touch.
+#define JL_REGION_DOMAIN_NAME "jnoalias"
+
+// The regions in whose domain a base object cannot stop referencing a tracked
+// pointer stored in them while the base is live.
+static inline bool isRootedRegionName(llvm::StringRef name)
+{
+    return name == "jnoalias_immutdata" || name == "jnoalias_mutconstdata";
+}
+
+// Whether the object rooting the address `LI` loads from also roots the loaded value
+// -- so that late-gc-lowering may refine the loaded pointer to the load's pointer
+// operand instead of giving it a gc-frame slot of its own.
+//
+// This asks whether the slot is ever overwritten, so that what the base references
+// here is fixed for as long as it lives. The region records that ('!alias.scope'), the
+// access tag ('!tbaa') does not. A load qualifies if its scopes in the
+// region domain are nonempty and all rooted.
+static inline bool isLoadFromRootedRegion(llvm::LoadInst *LI)
+{
+    using namespace llvm;
+    // Constant memory never changes, so the base can never stop referencing what is
+    // stored here, wherever it lives. This is also the only leg that fires on foreign
+    // IR carrying no region metadata.
+    if (LI->getMetadata(LLVMContext::MD_invariant_load))
+        return true;
+    MDNode *scopes = LI->getMetadata(LLVMContext::MD_alias_scope);
+    if (!scopes)
+        return false;
+    bool found = false;
+    for (const MDOperand &op : scopes->operands()) {
+        MDNode *scope = dyn_cast_or_null<MDNode>(op.get());
+        if (!scope)
+            continue;
+        AliasScopeNode snode(scope);
+        const MDNode *domain = snode.getDomain();
+        if (!domain || domain->getNumOperands() < 1)
+            continue;
+        MDString *domain_name = dyn_cast<MDString>(domain->getOperand(0));
+        if (!domain_name || domain_name->getString() != JL_REGION_DOMAIN_NAME)
+            continue;
+        // A scope is named either by its string key in operand 0 ({name, domain})
+        // or, when a self-reference keys it, by a trailing name operand
+        // ({self, domain, name}); AliasScopeNode reads the latter.
+        StringRef name = snode.getName();
+        if (name.empty())
+            if (MDString *key = dyn_cast<MDString>(scope->getOperand(0)))
+                name = key->getString();
+        if (name.empty() || !isRootedRegionName(name))
+            return false; // may reside in a region that can drop the reference
+        found = true;
+    }
+    return found;
+}
+
+static inline bool isConstGV(llvm::GlobalVariable *gv)
+{
+    return gv->isConstant() || gv->getMetadata("julia.constgv");
 }
 
 // Get PTLS through current task.
@@ -249,7 +350,7 @@ static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::T
                 return old_state;
     BasicBlock *passBB = BasicBlock::Create(builder.getContext(), "safepoint", builder.GetInsertBlock()->getParent());
     BasicBlock *exitBB = BasicBlock::Create(builder.getContext(), "after_safepoint", builder.GetInsertBlock()->getParent());
-    builder.CreateCondBr(builder.CreateICmpEQ(old_state, state, "is_new_state"), // Safepoint whenever we do not change the GC state
+    builder.CreateCondBr(builder.CreateICmpNE(old_state, state, "is_new_state"), // Safepoint whenever we change the GC state
                          passBB, exitBB);
     builder.SetInsertPoint(passBB);
     MDNode *tbaa = get_tbaa_const(builder.getContext());

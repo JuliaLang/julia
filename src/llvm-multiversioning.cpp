@@ -606,6 +606,15 @@ Function *CloneCtx::create_trampoline(Function *F, GlobalVariable *slot, bool au
     for (auto &arg : trampoline->args())
         Args.push_back(&arg);
     auto call = irbuilder.CreateCall(F->getFunctionType(), ptr, ArrayRef<Value *>(Args));
+    // the call must use the same calling convention as F to ensure ABI compatibility
+    call->setCallingConv(F->getCallingConv());
+    // likewise its return and argument attributes must match F's, except
+    // `julia.return_roots`: the trampoline has no gc frame of its own, and the
+    // buffer it passes on is already rooted by its caller
+    AttributeList attrs = F->getAttributes().removeFnAttributes(F->getContext());
+    for (unsigned i = 0; i < F->arg_size(); i++)
+        attrs = attrs.removeParamAttribute(F->getContext(), i, "julia.return_roots");
+    call->setAttributes(attrs);
     if (F->isVarArg()) {
         assert(!TT.isARM() && !TT.isPPC() && "musttail not supported on ARM/PPC!");
         call->setTailCallKind(CallInst::TCK_MustTail);

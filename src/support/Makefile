@@ -6,7 +6,7 @@ include $(JULIAHOME)/Make.inc
 JCFLAGS_COMMON += $(CFLAGS) $(JL_CFLAGS)
 JCXXFLAGS_COMMON += $(CXXFLAGS) $(JL_CXXFLAGS)
 JCPPFLAGS_COMMON += $(CPPFLAGS) $(JL_CPPFLAGS)
-JLDFLAGS += $(LDFLAGS) $(JL_LDFLAGS)
+JLDFLAGS += $(LINK_LDFLAGS) $(JL_LDFLAGS)
 
 SRCS := hashing timefuncs ptrhash strhash operators utf8 ios htable bitvector \
 	int2str libsupportinit arraylist strtod rle eytzinger
@@ -25,7 +25,7 @@ OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
 FLAGS_COMMON := $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) -I$(UTF8PROC_INC) -DJL_LIBRARY_EXPORTS_INTERNAL -DUTF8PROC_EXPORTS
-FLAGS_COMMON += -Wall -Wno-strict-aliasing -fvisibility=hidden -Wpointer-arith -Wundef
+FLAGS_COMMON += -Wall -Wno-strict-aliasing $(JL_VISIBILITY_FLAGS) -Wpointer-arith -Wundef
 JCFLAGS_COMMON += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 
 SHIPFLAGS_COMMON += $(FLAGS_COMMON)

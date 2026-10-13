@@ -3,7 +3,6 @@
 
 function vst1_ok(x::Expr)
     est = JuliaLowering.expr_to_est(x)
-    JuliaSyntax.fill_context!(est, JuliaSyntax.SyntaxContext(@__MODULE__, v"1.13"))
     JuliaLowering.valid_st1(est).ok
 end
 
@@ -114,12 +113,16 @@ let
     end
     @testset for h in standalone_heads
         ex = Expr(Symbol(h))
-        @test !Meta.isexpr(:error, Meta.lower(@__MODULE__, ex))
+        @test !Meta.isexpr(fl_lower(@__MODULE__, ex), :error)
         @test vst1_ok(ex)
     end
 end
 
-@test !vst1_ok(Expr(:nothing))
+if JL.DEBUG
+    @test_throws ErrorException vst1_ok(Expr(:nothing))
+else
+    @test !vst1_ok(Expr(:nothing))
+end
 @test vst1_ok(Expr(:block, nothing))
 @test vst1_ok(Expr(:block, GlobalRef(Core, :nothing)))
 

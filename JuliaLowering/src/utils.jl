@@ -1,121 +1,6 @@
-attrsummary(name, _value) = string(name)
-attrsummary(name, value::Number) = "$name=$value"
-attrsummary(name, value::LineNumberNode) = "$name=L$(value.line)"
-attrsummary(name, value::Module) = "$name=$value"
-
-function _value_string(ex)
-    k = kind(ex)
-    str = k == K"Identifier"  ? ex.name_val           :
-          k == K"Placeholder" ? ex.name_val           :
-          k == K"SSAValue"    ? "%"                   :
-          k == K"BindingId"   ? "#"                   :
-          k == K"label"       ? "label"               :
-          k == K"nothing"     ? "core.nothing"        :
-          k == K"core"        ? "core.$(ex.name_val)" :
-          k == K"top"         ? "top.$(ex.name_val)"  :
-          k == K"Symbol"      ? ":$(ex.name_val)" :
-          k == K"globalref"   ? "$(ex.mod).$(ex.name_val)" :
-          k == K"slot"        ? "slot" :
-          k == K"latestworld" ? "latestworld" :
-          k == K"static_parameter" ? "static_parameter" :
-          k == K"symboliclabel" ? "label:$(ex.name_val)" :
-          k == K"symbolicgoto" ? "goto:$(ex.name_val)" :
-          k == K"oldsymbolicgoto" ? "goto:$(ex.name_val)" :
-          k == K"SourceLocation" ?
-              "SourceLocation:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
-              k == K"Value" ?
-              (ex.value isa SourceRef ?
-              "SourceRef:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
-              ex.value isa SyntaxContext ? "SyntaxContext(#=omitted=#)" : repr(ex.value)) :
-            hasattr(ex, :value) ? repr(ex.value) : "::K\"$(untokenize(k))\""
-    id = get(ex, :var_id, nothing)
-    if isnothing(id)
-        id = get(ex, :id, nothing)
-    end
-    if !isnothing(id)
-        idstr = subscript_str(id)
-        str = "$(str)$idstr"
-    end
-    if k == K"slot" || k == K"BindingId"
-        for p in provenance(ex)
-            if kind(p) == K"Identifier"
-                str = "$(str)/$(p.name_val)"
-                break
-            end
-        end
-    end
-    return str
-end
-
-# Within JL, K"Placeholder" is used for never-read identifiers, but this magic
+# Within JL, :placeholder is used for never-read identifiers, but this magic
 # symbol is used in the IR (its write-only properties are enforced in codegen).
 const UNUSED = "#unused#"
-
-function _show_syntax_tree(io, ex, indent, show_kinds, @nospecialize(parent_sc))
-    nodestr = kind(ex) === K"unknown_head" ? ("unknown_head:"*ex.name_val::String) :
-        !is_leaf(ex) ? "[$(untokenize(head(ex)))]" : _value_string(ex)
-
-    treestr = rpad(string(indent, nodestr), 40)
-    if show_kinds && is_leaf(ex)
-        treestr = treestr*" :: "*string(kind(ex))
-    end
-
-    std_attrs = Set([:name_val,:value,:kind,:syntax_flags,:source,:var_id,:context])
-    attrstr = join([attrsummary(n, getproperty(ex, n))
-                    for n in JuliaSyntax.attrnames(ex) if n ∉ std_attrs], ",")
-    print(io, rpad(treestr, 60))
-    print(io, " | ($(ex._id)) ")
-    sc = get(ex, :context, nothing)
-    if hasattr(ex, :context) && sc !== parent_sc
-        print(io, sc)
-        print(io, ",")
-    end
-    print(io, attrstr)
-    println(io)
-
-    if !is_leaf(ex)
-        new_indent = indent*"  "
-        for n in children(ex)
-            _show_syntax_tree(io, n, new_indent, show_kinds, sc)
-        end
-    end
-end
-
-function Base.show(io::IO, ::MIME"text/plain", ex::SyntaxTree, show_kinds=true)
-    anames = join(string.(JuliaSyntax.attrnames(syntax_graph(ex))), ",")
-    println(io, "SyntaxTree with attributes $anames")
-    assert_syntaxtree(ex)
-    _show_syntax_tree(io, ex, "", show_kinds, nothing)
-end
-function _show_syntax_tree_sexpr(io, ex)
-    if is_leaf(ex)
-        if JuliaSyntax.is_error(ex)
-            print(io, "(", untokenize(head(ex)), ")")
-        else
-            print(io, _value_string(ex))
-        end
-    else
-        print(io, "(", untokenize(head(ex)))
-        for n in children(ex)
-            print(io, ' ')
-            _show_syntax_tree_sexpr(io, n)
-        end
-        print(io, ')')
-    end
-end
-
-function Base.show(io::IO, ::MIME"text/x.sexpression", node::SyntaxTree)
-    assert_syntaxtree(node)
-    _show_syntax_tree_sexpr(io, node)
-end
-
-function Base.show(io::IO, node::SyntaxTree)
-    assert_syntaxtree(node)
-    _show_syntax_tree_sexpr(io, node)
-end
-
-#-------------------------------------------------------------------------------
-# Error handling
 
 TODO(msg::AbstractString) = throw(ErrorException("Lowering TODO: $msg"))
 TODO(ex::SyntaxTree, msg="") = throw(LoweringError(ex, "Lowering TODO: $msg"))
@@ -126,37 +11,13 @@ message per tree.  If `!internal`, caused by bad user code in `syntax` (flisp:
 `Expr(:error, msg)`).
 """
 struct LoweringError <: Exception
-    sts::SyntaxList
+    sts::Vector{SyntaxTree}
     msgs::Vector{String}
     internal::Bool
 end
 
-LoweringError(ex::SyntaxTree, msg::String) =
+@noinline LoweringError(ex::SyntaxTree, msg::String) =
     LoweringError(SyntaxList(ex), String[msg], false)
-
-# Returns a set of ancestors within `depth` distance from the nodes in
-# `sts`. Slow, intended for error printing only.  >1 answer will only be
-# produced with a non-tree DAG.
-function _scan_parents(sts::SyntaxList; depth::Int=3)
-    depth <= 0 && return sts
-    g = sts.graph
-    out = SyntaxList(sts.graph)
-    for st in sts
-        n_parents = 0
-        for candidate_id in lastindex(g.edge_ranges):-1:firstindex(g.edge_ranges)
-            candidate = SyntaxTree(g, candidate_id)
-            if st in children(candidate)
-                push!(out, SyntaxTree(g, candidate_id))
-                n_parents += 1
-                # ideally we just want one; don't be spammy if we find many.
-                # iterating in reverse means get chronologically latest results.
-                n_parents >= 3 && break
-            end
-        end
-        n_parents === 0 && push!(out, st)
-    end
-    return _scan_parents(out; depth=depth-1)
-end
 
 function Base.showerror(io::IO, exc::LoweringError; show_detail=true)
     println(io, exc.internal ? "internal lowering bug:" : "LoweringError:")
@@ -164,12 +25,19 @@ function Base.showerror(io::IO, exc::LoweringError; show_detail=true)
         st = exc.sts[i]
         msg = exc.msgs[i]
         src = sourceref(st)
-        highlight(io, src; note=msg)
+        if src isa LineNumberNode
+            l_str = (src.file === nothing || src.file === :var"") ?
+                "line " : "$(src.file):"
+            println(io, " at $(l_str)$(src.line): $msg")
+        else
+            highlight(io, src; note=msg)
+        end
         if exc.internal || src isa LineNumberNode
             print(io, "\nExpression:\n  ")
             show(io, MIME"text/x.sexpression"(), st)
-            parents = _scan_parents(SyntaxList(st))
-            print(io, "\nContaining expressions:")
+            # TODO: no parents available here; need to place them in LoweringError
+            parents = SyntaxList()
+            isempty(parents) || print(io, "\nContaining expressions:")
             for p in parents
                 print(io, "\n  ")
                 show(io, MIME"text/x.sexpression"(), p)
@@ -178,7 +46,7 @@ function Base.showerror(io::IO, exc::LoweringError; show_detail=true)
         i !== lastindex(exc.sts) && print(io, "\n\n")
     end
 
-    if show_detail || exc.internal
+    if (show_detail || exc.internal) && !isempty(exc.sts)
         print(io, "\n\nDetailed provenance:\n  ")
         _show_provtree(io, exc.sts[1], "  ")
     end
@@ -186,7 +54,7 @@ end
 
 function _show_provtree(io::IO, ex::SyntaxTree, indent)
     print(io, ex)
-    if hasattr(ex, :jl_source)
+    if ex.jl_source !== nothing
         printstyled(io, " @$(ex.jl_source)", color=:light_black)
     end
     prov = provenance(ex)
@@ -194,18 +62,15 @@ function _show_provtree(io::IO, ex::SyntaxTree, indent)
     print(io, "\n")
 
     src = ex.source
-    msrc = JuliaSyntax.macro_prov(ex)
+    msrc = macro_prov(ex)
     printstyled(io, string(
         indent, msrc === nothing ? "└─ " : "├─ "); color=:light_black)
-    if src isa NodeId
-        _show_provtree(io, SyntaxTree(ex._graph, src),
-                       string(indent, msrc === nothing ? "   " : "│  "))
+    if src isa SyntaxTree
+        _show_provtree(io, src, string(indent, msrc === nothing ? "   " : "│  "))
     else
         @jl_assert ex.source isa Union{LineNumberNode, SourceRef} ex
-        src = sourceref(ex)
-        fn = filename(src)
-        line, _ = source_location(src)
-        printstyled(io, "@ $fn:$line\n", color=:light_black)
+        lno = first_linenode(ex)
+        printstyled(io, "@ $(lno.file):$(lno.line)\n", color=:light_black)
     end
     if msrc isa SyntaxTree
         printstyled(io, string(indent, "└─ "); color=:light_black)
@@ -220,16 +85,16 @@ function showprov(io::IO, exs::AbstractVector;
         if i > 1
             print(io, "\n\n")
         end
-        k = kind(ex)
+        k = head(ex)
         ex_note = !isnothing(note) ? note :
-            i > 1 && k == K"macrocall"  ? "in macro expansion" :
-            i > 1 && k == K"$"          ? "interpolated here"  :
+            i > 1 && k == :macrocall  ? "in macro expansion" :
+            i > 1 && k == :$          ? "interpolated here"  :
             "in source"
         highlight(io, sr; note=ex_note, highlight_kwargs...)
 
         if include_location
             line, _ = source_location(sr)
-            locstr = "$(filename(sr)):$line"
+            locstr = "$(filename(ex)):$line"
             JuliaSyntax._printstyled(io, "\n# @ $locstr", fgcolor=:light_black)
         end
     end
@@ -246,32 +111,39 @@ function subscript_str(i)
 end
 
 function _deref_ssa(stmts, ex)
-    while kind(ex) == K"SSAValue"
-        ex = stmts[ex.var_id]
+    while head(ex) == :ssavalue
+        ex = stmts[syntax_id(ex)]
     end
     ex
 end
 
-function _find_method_lambda(ex, name)
-    @jl_assert kind(ex) == K"code_info" ex
+function _is_define_method_call(e)
+    head(e) == :call && numchildren(e) >= 1 &&
+        head(e[1]) == :core && syntax_name(e[1]) == "define_method"
+end
+
+function _find_method_lambda(ex0, name)
+    ex = head(ex0) === :thunk ? ex0[1] : ex0
+    @jl_assert head(ex) == :code_info ex
     # Heuristic search through outer thunk for the method in question.
-    stmts = children(ex[1])
+    stmts = children(ex[2])
     for e in stmts
-        if kind(e) == K"method" && numchildren(e) >= 3
-            sig = _deref_ssa(stmts, e[2])
-            @jl_assert kind(sig) == K"call" ex
+        if _is_define_method_call(e) && numchildren(e) == 5
+            # define_method(module, fname, sig, lam)
+            sig = _deref_ssa(stmts, e[4])
+            @jl_assert head(sig) == :call ex
             arg_types = _deref_ssa(stmts, sig[2])
-            @jl_assert kind(arg_types) == K"call" ex
+            @jl_assert head(arg_types) == :call ex
             self_type = _deref_ssa(stmts, arg_types[2])
-            if kind(self_type) == K"globalref" && occursin(name, self_type.name_val)
-                return e[3]
+            if head(self_type) == :globalref && occursin(name, syntax_name(self_type))
+                return e[5]
             end
         end
     end
 end
 
 function print_ir(io::IO, ex, method_filter=nothing)
-    @jl_assert kind(ex) == K"code_info" ex
+    @jl_assert head(ex) == :code_info || head(ex) == :thunk ex
     if !isnothing(method_filter)
         filtered = _find_method_lambda(ex, method_filter)
         if isnothing(filtered)
@@ -284,12 +156,13 @@ function print_ir(io::IO, ex, method_filter=nothing)
 end
 
 # TODO: JuliaLowering-the-module should always print the same way, ignoring parent modules
-function _print_ir(io::IO, ex, indent)
+function _print_ir(io::IO, ex0, indent)
     added_indent = "    "
-    @jl_assert ((kind(ex) == K"lambda" || kind(ex) == K"code_info")
-                && kind(ex[1]) == K"block") ex
-    if !ex.is_toplevel_thunk && kind(ex) == K"code_info"
-        slots = ex.slots
+    (ex, is_toplevel_thunk) = head(ex0) === :thunk ? (ex0[1],true) : (ex0,false)
+    @jl_assert ((head(ex) == :lambda || head(ex) == :code_info)
+                && head(ex[2]) == :block) ex
+    if !is_toplevel_thunk && head(ex) == :code_info
+        slots = ex[1].value
         print(io, indent, "slots: [")
         for (i,slot) in enumerate(slots)
             print(io, "slot$(subscript_str(i))/$(slot.name)")
@@ -308,18 +181,22 @@ function _print_ir(io::IO, ex, indent)
         end
         println(io, "]")
     end
-    stmts = children(ex[1])
+    stmts = children(ex[2])
     for (i, e) in enumerate(stmts)
         lno = rpad(i, 3)
-        if kind(e) == K"method" && numchildren(e) == 3
-            print(io, indent, lno, " --- method ", string(e[1]), " ", string(e[2]))
-            if kind(e[3]) == K"lambda" || kind(e[3]) == K"code_info"
+        if _is_define_method_call(e) && numchildren(e) == 5
+            # define_method(module, fname, sig, lam)
+            print(io, indent, lno, " (call core.define_method ",
+                  string(e[2]), " ", string(e[3]), " ", string(e[4]))
+            if head(e[5]) == :lambda || head(e[5]) == :code_info
                 println(io)
-                _print_ir(io, e[3], indent*added_indent)
+                print(io, indent, "    --- code_info")
+                println(io)
+                _print_ir(io, e[5], indent*added_indent)
             else
-                println(io, " ", string(e[3]))
+                println(io, " ", string(e[5]), ")")
             end
-        elseif kind(e) == K"opaque_closure_method"
+        elseif head(e) == :opaque_closure_method
             @jl_assert numchildren(e) == 5 e
             print(io, indent, lno, " --- opaque_closure_method ")
             for i=1:4
@@ -327,8 +204,8 @@ function _print_ir(io::IO, ex, indent)
             end
             println(io)
             _print_ir(io, e[5], indent*added_indent)
-        elseif kind(e) == K"code_info"
-            println(io, indent, lno, " --- ", e.is_toplevel_thunk ? "thunk" : "code_info")
+        elseif head(e) == :code_info
+            println(io, indent, lno, " --- ", "code_info")
             _print_ir(io, e, indent*added_indent)
         else
             code = string(e)
@@ -353,32 +230,32 @@ else
 end
 
 function _flatten_blocks(st::SyntaxTree)
-    if kind(st) === K"block"
-        out = SyntaxList(st._graph)
+    if head(st) === :block
+        out = SyntaxList()
         for c in children(st)
             append!(out, _flatten_blocks(c))
         end
         # special case: an empty final block has value nothing
-        if (length(children(st)) > 0 && kind(st[end]) === K"block" &&
+        if (length(children(st)) > 0 && head(st[end]) === :block &&
             numchildren(st[end]) == 0)
-            push!(out, @ast st._graph st[end] (::K"nothing"))
+            push!(out, @ast _ st[end] (::nothing))
         end
         return out
     elseif is_quoted(st)
         SyntaxList(st)
     else
-        SyntaxList(mapchildren(flatten_blocks, st._graph, st))
+        SyntaxList(mapchildren(flatten_blocks, st))
     end
 end
 
 # Splat the contents of any block in `st` whose parent is also a block
 function flatten_blocks(st::SyntaxTree)
-    if kind(st) === K"block"
-        mknode(st, _flatten_blocks(st))
+    if head(st) === :block
+        @mknode(st; children=_flatten_blocks(st))
     elseif is_quoted(st)
         st
     else
-        mapchildren(flatten_blocks, st._graph, st)
+        mapchildren(flatten_blocks, st)
     end
 end
 
@@ -392,20 +269,20 @@ function renumber_assigned_ssavalues(ctx, st)
 end
 function _find_assigned_ssavars!(ctx, ssamap, st)
     (is_leaf(st) || is_quoted(st)) && return
-    if kind(st) == K"=" && kind(st[1]) == K"BindingId"
+    if head(st) == :(=) && head(st[1]) == :bindingid
         b = get_binding(ctx, st[1])
         b.is_ssa || return
-        ssamap[b.id] = _binding_id(ssavar(ctx, st[1], b.name))
+        ssamap[b.id] = syntax_id(ssavar(ctx, st[1], b.name))
     end
     foreach(e->_find_assigned_ssavars!(ctx, ssamap, e), children(st))
 end
 function _replace_binding_ids(ctx, ssamap, st)
-    if kind(st) == K"BindingId"
-        id = get(ssamap, _binding_id(st), nothing)
-        isnothing(id) ? st : setattr!(newleaf(ctx, st, K"BindingId"), :var_id, id)
+    if head(st) == :bindingid
+        id = get(ssamap, syntax_id(st), nothing)
+        isnothing(id) ? st : newleaf(st, :bindingid, id)
     elseif is_leaf(st) || is_quoted(st)
         st
     else
-        mapchildren(e->_replace_binding_ids(ctx, ssamap, e), ctx, st)
+        mapchildren(e->_replace_binding_ids(ctx, ssamap, e), st)
     end
 end

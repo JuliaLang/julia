@@ -137,7 +137,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
         skip_ftype = (length(sig) == 0) # doesn't exist...
         skip_ftype = skip_ftype || (
             # ... or, f prints as a user-accessible value...
-            (f isa GlobalRef) &&
+            (f isa GlobalRef || f isa Core.BindingPartition) &&
             # ... and matches the value of the singleton type of the invoked MethodInstance
             (singleton_type(ft) === singleton_type(sig[1]) !== nothing)
         )
@@ -398,6 +398,13 @@ function debuginfo_file1(debuginfo::Union{DebugInfo,DebugInfoStream})
     return :var"<unknown>"
 end
 
+function debuginfo_file(di::Union{DebugInfo,DebugInfoStream})
+    while di.linetable isa DebugInfo
+        di = di.linetable
+    end
+    return debuginfo_file1(di)
+end
+
 # utility function to extract the first line number and file of a block of code
 function debuginfo_firstline(di::DebugInfoStream)
     if di.linetable isa DebugInfo
@@ -410,7 +417,7 @@ function debuginfo_firstline(di::DebugInfoStream)
 end
 function debuginfo_firstline(di::DebugInfo)
     firstline = ccall(:jl_cdi_firstline_all, Int32, (Any,), di)
-    debuginfo_file1(di), firstline
+    debuginfo_file(di), firstline
 end
 
 struct LineInfoNode
@@ -1118,7 +1125,7 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
     finish_show_ir(io, uncompacted_cfg, config)
 end
 
-function effectbits_letter(effects::Effects, name::Symbol, suffix::Char)
+function effectbits_letter(effects::Effects, name::Symbol, suffix::Union{Char, String})
     ft = fieldtype(Effects, name)
     if ft === UInt8
         prefix = getfield(effects, name) === ALWAYS_TRUE ? '+' :
@@ -1149,6 +1156,8 @@ function Base.show(io::IO, e::Effects)
     printstyled(io, effectbits_letter(e, :consistent,  'c'); color=effectbits_color(e, :consistent))
     print(io, ',')
     printstyled(io, effectbits_letter(e, :effect_free, 'e'); color=effectbits_color(e, :effect_free))
+    print(io, ',')
+    printstyled(io, effectbits_letter(e, :reset_safe, "re"); color=effectbits_color(e, :reset_safe))
     print(io, ',')
     printstyled(io, effectbits_letter(e, :nothrow,     'n'); color=effectbits_color(e, :nothrow))
     print(io, ',')

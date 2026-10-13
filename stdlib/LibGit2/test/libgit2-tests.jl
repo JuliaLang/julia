@@ -17,6 +17,18 @@ challenge_prompt(cmd::Cmd, challenges) = basic_challenge_prompt(cmd, challenges)
 const LIBGIT2_MIN_VER = v"1.0.0"
 const LIBGIT2_HELPER_PATH = joinpath(@__DIR__, "libgit2-helpers.jl")
 
+function with_output_on_failure(f)
+    mktemp() do _, child_stderr
+        try
+            return f(child_stderr)
+        catch
+            seekstart(child_stderr)
+            write(stderr, read(child_stderr))
+            rethrow()
+        end
+    end
+end
+
 const KEY_DIR = joinpath(@__DIR__, "keys")
 const HOME = Sys.iswindows() ? "USERPROFILE" : "HOME"  # Environment variable name for home
 const GIT_INSTALLED = try
@@ -3249,7 +3261,9 @@ mktempdir() do dir
 
                     try
                         # The generated certificate is normally invalid
-                        run(cmd)
+                        with_output_on_failure() do child_stderr
+                            run(pipeline(cmd; stderr=child_stderr))
+                        end
                         err = open(errfile, "r") do f
                             deserialize(f)
                         end

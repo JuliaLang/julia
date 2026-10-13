@@ -13,6 +13,11 @@ import Base.MPFR
           BigFloat(BigInt(12)) == BigFloat(BigFloat(12)) == parse(BigFloat,"12") ==
           parse(BigFloat,"12 ") == parse(BigFloat," 12") == parse(BigFloat," 12 ") ==
           BigFloat(Float32(12.)) == BigFloat(12//1) == BigFloat(SubString("12"))
+    # trailing whitespace must not drop the precision and rounding keywords
+    let x = tryparse(BigFloat, "1.1 "; precision=10, rounding=MPFR.MPFRRoundUp)
+        @test precision(x) == 10
+        @test x == big"1.1015625"
+    end
 
     @test typeof(BigFloat(typemax(Int8))) == BigFloat
     @test typeof(BigFloat(typemax(Int16))) == BigFloat
@@ -485,6 +490,16 @@ end
     @test_throws DomainError BigFloat(2.5, precision = -900)
     # issue 15659
     @test (setprecision(53) do; big(1/3); end) < 1//3
+end
+# a throwaway precision type that reaches MPFR's deprecated generic
+# `setprecision(f, ::Type{T}, prec)` fallback
+struct DeprecatedSetprecType end
+const _deprec_setprec = Ref(10)
+Base.precision(::Type{DeprecatedSetprecType}) = _deprec_setprec[]
+Base.setprecision(::Type{DeprecatedSetprecType}, p::Integer) = (_deprec_setprec[] = p)
+@testset "deprecated setprecision(f, ::Type, prec) fallback" begin
+    @test_deprecated setprecision(() -> precision(DeprecatedSetprecType), DeprecatedSetprecType, 5)
+    @test _deprec_setprec[] == 10   # precision was restored afterwards
 end
 @testset "isinteger" begin
     @test !isinteger(BigFloat(1.2))
@@ -1110,3 +1125,5 @@ end
         @test Base.cconvert(Ref{BigFloat}, x) isa Base.MPFR.BigFloatData
     end
 end
+
+@test_throws FieldError BigFloat(1).notfield = 1

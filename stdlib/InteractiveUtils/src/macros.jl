@@ -513,6 +513,101 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
             return expand_ref_begin_end!(ex0, __module__) do ex
                 gen_call(fcn, Any[getindex, ex.args...], where_params, kws; use_signature_tuple)
             end
+        elseif ex0.head === :ncat || ex0.head === :typed_ncat
+            if ex0.head === :ncat
+                f = Base.hvncat
+                args = ex0.args
+            else
+                f = Base.typed_hvncat
+                args = ex0.args[2:end]
+            end
+            d = args[1]
+            args = args[2:end]
+            # This mirrors `expand-ncat` in julia-syntax.scm.
+            # The recursive helpers below call themselves through `@__FUNCTION__` rather than
+            # by name, so that they don't capture themselves and end up boxed.
+            is_row(x) = isa(x, Expr) && (x.head === :row || x.head === :nrow)
+            function extract_elements(x)
+                if isa(x, Expr)
+                    eexargs = x.head === :nrow ? x.args[2:end] :
+                        x.head === :row  ? x.args :
+                        nothing
+                    if eexargs === nothing
+                        return Any[x]
+                    else
+                        return collect(Iterators.flatten((@__FUNCTION__).(eexargs)))
+                    end
+                end
+                return Any[x]
+            end
+            function get_is_row_first(x)
+                if isa(x, Expr)
+                    if x.head === :nrow
+                        x = x.args[2:end]
+                    elseif x.head === :row
+                        return true
+                    end
+                end
+                isa(x, Vector) && return any((@__FUNCTION__).(x))
+                return false
+            end
+            function get_shape(a, is_row_first, d)
+                # Unwrap one level of row/nrow expressions
+                function get_next(x)
+                    is_row(x) || return [x]
+                    x.head === :nrow && d <= x.args[1] + 1 && return x.args[2:end]
+                    x.head === :row && d <= 1 && return x.args
+                    return [x]
+                end
+                # Base cases
+                (d == 0 || (d == 1 && !is_row_first)) && return [[length(a)]]
+                (d == 3 && is_row_first) && return (@__FUNCTION__)(a, is_row_first, 2)
+                # Recursive case: the first entry of each child shape is its number of elements,
+                # and every child shape has the same depth, which depends only on `d`
+                shapes = (@__FUNCTION__).(get_next.(a), is_row_first, d - 1)
+                counts = [s[1][1] for s in shapes]
+                result = [[sum(counts)], counts]
+                for level in 2:length(shapes[1])
+                    push!(result, reduce(vcat, [s[level] for s in shapes]))
+                end
+                return result
+            end
+            function get_dims(a, is_row_first, d)
+                if d < 2 && !is_row(a[1])
+                    [length(a)]
+                elseif d == 1
+                    [(@__FUNCTION__)(a[1].args, is_row_first, 0)[1]; length(a)]
+                elseif d == 3 && is_row_first
+                    (@__FUNCTION__)(a, is_row_first, 2)
+                else
+                    anext = isa(a[1], Expr) && a[1].head === :nrow && d == a[1].args[1] + 1 ?
+                        a[1].args[2:end] :
+                        [a[1]]
+                    [length(a); (@__FUNCTION__)(anext, is_row_first, d - 1)]
+                end
+            end
+            is_row_first = get_is_row_first(args)
+            is_1d = !any(is_row, args)
+            xs = collect(Iterators.flatten(extract_elements.(args)))
+            if is_1d
+                args = [ex0.head === :ncat ? [] : Any[ex0.args[1]]; d; xs]
+                return gen_call(fcn, Any[f, args...], where_params, kws; use_signature_tuple)
+            else
+                if any(x -> isexpr(x, :...), xs)
+                    return Expr(:call, :error, "Splatting ... in an hvncat with multiple dimensions is not supported")
+                end
+                shape = get_shape(args, is_row_first, d)
+                # balanced if every slice along each dimension has the same number of elements
+                is_balanced = all(level -> all(==(first(level)), level), @view(shape[2:end]))
+                dimsshape = if is_balanced
+                    reverse!(get_dims(args, is_row_first, d))
+                else
+                    # lowering lists the levels innermost first
+                    reverse!(map(x -> Expr(:tuple, x...), shape))
+                end
+                args = [ex0.head === :ncat ? [] : Any[ex0.args[1]]; Expr(:tuple, dimsshape...); is_row_first; xs]
+                return gen_call(fcn, Any[f, args...], where_params, kws; use_signature_tuple)
+            end
         else
             for (head, f) in Any[:hcat => Base.hcat,
                                  :(.) => Base.getproperty,

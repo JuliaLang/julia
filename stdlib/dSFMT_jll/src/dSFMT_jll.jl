@@ -22,13 +22,17 @@ const libdSFMT = LazyLibrary(
         BundledLazyLibraryPath("libdSFMT.dylib")
     else
         BundledLazyLibraryPath("libdSFMT.so")
-    end
+    end;
+    id = LibraryID(Base.UUID("05ff407c-b0c1-5878-9df8-858cc2e60c36"), "libdSFMT")
 )
 
 function eager_mode()
     dlopen(libdSFMT)
 end
 is_available() = true
+
+# JLLWrappers path compatibility accessor
+get_libdSFMT_path() = libdSFMT_path
 
 function __init__()
     global libdSFMT_path = string(libdSFMT.path)

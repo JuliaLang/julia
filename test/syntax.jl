@@ -5,7 +5,7 @@
 using Random
 using Base: remove_linenums!
 
-using_JuliaSyntax = parentmodule(Core._parse) != Core.Compiler
+using_JuliaSyntax = parentmodule(Core._parse) != Base
 
 macro test_parseerror(str, msg)
     if using_JuliaSyntax
@@ -192,8 +192,8 @@ macro test999_str(args...); args; end
 # blocks vs. tuples
 @test Meta.parse("()") == Expr(:tuple)
 @test Meta.parse("(;)") == Expr(:tuple, Expr(:parameters))
-@test Meta.parse("(;;)") == Expr(:block)
-@test Meta.parse("(;;;;)") == Expr(:block)
+@test Meta.parse("(;;)") == Expr(:block, LineNumberNode(1,:none))
+@test Meta.parse("(;;;;)") == Expr(:block, LineNumberNode(1,:none))
 @test_parseerror "(,)"
 @test_parseerror "(;,)"
 @test_parseerror "(,;)"
@@ -201,17 +201,17 @@ macro test999_str(args...); args; end
 #@test_parseerror "(1;2,)"
 #@test_parseerror "(1;2,;)"
 #@test_parseerror "(1;2,;3)"
-@test Meta.parse("(x;)") == Expr(:block, :x)
+@test Meta.parse("(x;)") == Expr(:block, LineNumberNode(1,:none), :x)
 @test Meta.parse("(;x)") == Expr(:tuple, Expr(:parameters, :x))
 @test Meta.parse("(;x,)") == Expr(:tuple, Expr(:parameters, :x))
 @test Meta.parse("(x,)") == Expr(:tuple, :x)
 @test Meta.parse("(x,;)") == Expr(:tuple, Expr(:parameters), :x)
-@test Meta.parse("(x;y)") == Expr(:block, :x, LineNumberNode(1,:none), :y)
+@test Meta.parse("(x;y)") == Expr(:block, LineNumberNode(1,:none), :x, LineNumberNode(1,:none), :y)
 @test Meta.parse("(x...;)") == Expr(:tuple, Expr(:parameters), Expr(:(...), :x))
 @test Meta.parse("(;x...)") == Expr(:tuple, Expr(:parameters, Expr(:(...), :x)))
 @test Meta.parse("(x...;y)") == Expr(:tuple, Expr(:parameters, :y), Expr(:(...), :x))
-@test Meta.parse("(x;y...)") == Expr(:block, :x, LineNumberNode(1,:none), Expr(:(...), :y))
-@test Meta.parse("(x=1;y=2)") == Expr(:block, Expr(:(=), :x, 1), LineNumberNode(1,:none), Expr(:(=), :y, 2))
+@test Meta.parse("(x;y...)") == Expr(:block, LineNumberNode(1,:none), :x, LineNumberNode(1,:none), Expr(:(...), :y))
+@test Meta.parse("(x=1;y=2)") == Expr(:block, LineNumberNode(1,:none), Expr(:(=), :x, 1), LineNumberNode(1,:none), Expr(:(=), :y, 2))
 @test Meta.parse("(x,;y)") == Expr(:tuple, Expr(:parameters, :y), :x)
 @test Meta.parse("(x,;y=1)") == Expr(:tuple, Expr(:parameters, Expr(:kw, :y, 1)), :x)
 @test Meta.parse("(x,a;y=1)") == Expr(:tuple, Expr(:parameters, Expr(:kw, :y, 1)), :x, :a)
@@ -582,8 +582,10 @@ end
 let code = Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code
     local src
     for i = length(code):-1:1
-        if Meta.isexpr(code[i], :method)
-            src = code[i].args[3]
+        if Meta.isexpr(code[i], :call) && length(code[i].args) >= 5 &&
+           code[i].args[1] isa GlobalRef && code[i].args[1].name == :define_method &&
+           code[i].args[5] isa Core.CodeInfo
+            src = code[i].args[5]
             break
         end
     end
@@ -803,6 +805,12 @@ let ex = Expr(:toplevel,
     f = Core.eval(@__MODULE__, ex)
     @test only(methods(f)).debuginfo.def isa Symbol
 end
+
+# let with linenumbernode
+@test !Core.eval(@__MODULE__,
+                 Expr(:let, Expr(:block, LineNumberNode(1)),
+                      Expr(:block, :(g = 1),
+                           Expr(:isglobal, :g))))
 
 # Check qualified string macros
 Base.r"regex" == r"regex"
@@ -1093,6 +1101,7 @@ end === (3, String)
 @test Meta.parse("3 +̂′ 4") == Expr(:call, :+̂′, 3, 4)
 @test Meta.parse("3 +⁽¹⁾ 4") == Expr(:call, :+⁽¹⁾, 3, 4)
 @test Meta.parse("3 +₍₀₎ 4") == Expr(:call, :+₍₀₎, 3, 4)
+@test Meta.parse("3 +₝₞₟𝿐 4") == Expr(:call, :+₝₞₟𝿐, 3, 4)
 for bad in ('=', '$', ':', "||", "&&", "->", "<:")
     @test_parseerror "3 $(bad)⁽¹⁾ 4"
 end
@@ -1396,10 +1405,10 @@ end
 # cases where parens are just grouping
 @test Meta.parse("-(x)^2")     == Expr(:call, :-, Expr(:call, :^, :x, 2))
 @test Meta.parse("-(a=1)^2")   == Expr(:call, :-, Expr(:call, :^, Expr(:(=), :a, 1), 2))
-@test Meta.parse("-(x;y)^2")   == Expr(:call, :-, Expr(:call, :^, Expr(:block, :x, LineNumberNode(1,:none), :y), 2))
+@test Meta.parse("-(x;y)^2")   == Expr(:call, :-, Expr(:call, :^, Expr(:block, LineNumberNode(1,:none), :x, LineNumberNode(1,:none), :y), 2))
 @test Meta.parse("-(;)^2")     == Expr(:call, :^, Expr(:call, :-, Expr(:parameters)), 2)
-@test Meta.parse("-(;;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block), 2))
-@test Meta.parse("-(x;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block, :x), 2))
+@test Meta.parse("-(;;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block, LineNumberNode(1,:none)), 2))
+@test Meta.parse("-(x;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block, LineNumberNode(1,:none), :x), 2))
 @test Meta.parse("+((1,2))")   == Expr(:call, :+, Expr(:tuple, 1, 2))
 
 @test_parseerror "1 -+ (a=1, b=2)"  "space before \"(\" not allowed in \"+ (\" at none:1"
@@ -1677,6 +1686,11 @@ function f32620(x::T) where T
     return (T, y)
 end
 @test f32620(0) === (Int, 2)
+
+# Static parameter reads must be separate statements in lowered IR.
+f_sparam_assign(::Val{S}) where {S} = (println(devnull, repr(begin value = S end)); S)
+@test f_sparam_assign(Val(1)) === 1
+@test isempty(Base.Compiler.validate_code(only(code_lowered(f_sparam_assign, (Val{1},)))))
 
 # issue #28044
 code28044(x) = 10x
@@ -2849,10 +2863,10 @@ end
 end
 
 @testset "issue #37393" begin
-    @test remove_linenums!(:(for outer i = 1:3; end)) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), :(;;))
+    @test remove_linenums!(:(for outer i = 1:3; end)) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), Expr(:block))
     i = :i
-    @test remove_linenums!(:(for outer $i = 1:3; end)) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), :(;;))
-    @test remove_linenums!(:(for outer = 1:3; end)) == Expr(:for, Expr(:(=), :outer, :(1:3)), :(;;))
+    @test remove_linenums!(:(for outer $i = 1:3; end)) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), Expr(:block))
+    @test remove_linenums!(:(for outer = 1:3; end)) == Expr(:for, Expr(:(=), :outer, :(1:3)), Expr(:block))
     # TIL that this is possible
     for outer $ i = 1:3
         @test 1 $ 2 in 1:3
@@ -3769,14 +3783,16 @@ end
 end
 
 @testset "public keyword" begin
-    p(str) = Base.remove_linenums!(Meta.parse(str))
+    local test_mod = Module()
+    Base.set_syntax_version(test_mod, v"1.13")
+    p(str) = Base.remove_linenums!(Meta.parse(str; mod=test_mod))
     # tests ported from JuliaSyntax.jl
     @test p("function f(public)\n    public + 3\nend") == Expr(:function, Expr(:call, :f, :public), Expr(:block, Expr(:call, :+, :public, 3)))
     @test p("public A, B") == Expr(:public, :A, :B)
     @test p("if true \n public *= 4 \n end") == Expr(:if, true, Expr(:block, Expr(:*=, :public, 4)))
     @test p("module Mod\n public A, B \n end") == Expr(:module, true, :Mod, Expr(:block, Expr(:public, :A, :B)))
     @test p("module Mod2\n a = 3; b = 6; public a, b\n end") == Expr(:module, true, :Mod2, Expr(:block, Expr(:(=), :a, 3), Expr(:(=), :b, 6), Expr(:public, :a, :b)))
-    @test p("a = 3; b = 6; public a, b") == Expr(:toplevel, Expr(:(=), :a, 3), Expr(:(=), :b, 6), Expr(:public, :a, :b))
+    @test p("a = 3; b = 6; public a, b") == Expr(:toplevel, LineNumberNode(1,:none), Expr(:(=), :a, 3), LineNumberNode(1,:none), Expr(:(=), :b, 6), LineNumberNode(1,:none), Expr(:public, :a, :b))
     @test_throws Meta.ParseError p("begin \n public A, B \n end")
     @test_throws Meta.ParseError p("if true \n public A, B \n end")
     @test_throws Meta.ParseError p("public export=true foo, bar")
@@ -4058,8 +4074,16 @@ end
     code = src.args[1].code
     for i = length(code):-1:1
         expr = code[i]
-        Meta.isexpr(expr, :method) || continue
-        @test isa(expr.args[1], Union{GlobalRef, Symbol})
+        if Meta.isexpr(expr, :call) && length(expr.args) >= 3 &&
+           expr.args[1] isa GlobalRef && expr.args[1].name == :define_method
+            # args[3] should be a QuoteNode wrapping a Symbol, or a GlobalRef
+            name_arg = expr.args[3]
+            if name_arg isa QuoteNode
+                @test isa(name_arg.value, Symbol)
+            else
+                @test isa(name_arg, GlobalRef)
+            end
+        end
     end
 end
 
@@ -4446,12 +4470,27 @@ module DoubleImport
 end
 @test DoubleImport.Random === Test.Random
 
-# Expr(:method) returns the method
+# define_method call returns the method
 let ex = @Meta.lower function return_my_method(); 1; end
     code = ex.args[1].code
-    idx = findfirst(ex->Meta.isexpr(ex, :method) && length(ex.args) > 1, code)
+    idx = findfirst(ex->Meta.isexpr(ex, :call) && length(ex.args) >= 5 &&
+                       ex.args[1] isa GlobalRef && ex.args[1].name == :define_method, code)
     code[end] = Core.ReturnNode(Core.SSAValue(idx))
     @test isa(Core.eval(@__MODULE__, ex), Method)
+end
+
+# Core.define_method validates its internal signature and body representation.
+@test_throws TypeError Core.define_method(@__MODULE__, :invalid_method, nothing, nothing)
+@test_throws ErrorException Core.define_method(@__MODULE__, :invalid_method, Core.svec(), nothing)
+
+# A method defined through a GlobalRef name records the evaluating module,
+# not the GlobalRef's module
+module GlobalRefMethodModule62320
+function no_methods_yet end
+end
+let f = GlobalRefMethodModule62320.no_methods_yet
+    Core.eval(@__MODULE__, Expr(:function, Expr(:call, GlobalRef(GlobalRefMethodModule62320, :no_methods_yet)), nothing))
+    @test only(methods(f)).module === @__MODULE__
 end
 
 # Capturing a @nospecialize argument should result in an Any field in the closure

@@ -156,7 +156,7 @@ function any(f, itr::Tuple)
     _any_tuple(f, false, itr...)
 end
 
-@inline function _any_tuple(f, anymissing, x, rest...)
+@inline function _any_tuple(f, anymissing::Bool, x, rest...)
     v = f(x)
     if ismissing(v)
         anymissing = true
@@ -165,7 +165,7 @@ end
     end
     return _any_tuple(f, anymissing, rest...)
 end
-@inline _any_tuple(f, anymissing) = anymissing ? missing : false
+@inline _any_tuple(_, anymissing::Bool) = anymissing ? missing : false
 
 """
     all(p, itr)::Bool
@@ -242,7 +242,7 @@ function all(f, itr::Tuple)
     _all_tuple(f, false, itr...)
 end
 
-@inline function _all_tuple(f, anymissing, x, rest...)
+@inline function _all_tuple(f, anymissing::Bool, x, rest...)
     v = f(x)
     if ismissing(v)
         anymissing = true
@@ -254,4 +254,4 @@ end
     end
     return _all_tuple(f, anymissing, rest...)
 end
-@inline _all_tuple(f, anymissing) = anymissing ? missing : true
+@inline _all_tuple(_, anymissing::Bool) = anymissing ? missing : true

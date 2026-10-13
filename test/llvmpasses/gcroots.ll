@@ -1,6 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame,FinalLowerGC)' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='function(LateLowerGCFrame,FinalLowerGC)' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
 
 declare void @boxed_simple({} addrspace(10)*, {} addrspace(10)*)
@@ -349,9 +349,9 @@ define {} addrspace(10)* @gv_const() {
 top:
     %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
-    %v10 = load {}*, {}** @gv1, !tbaa !2
+    %v10 = load {}*, {}** @gv1, !tbaa !2, !invariant.load !3
     %v1 = addrspacecast {}* %v10 to {} addrspace(10)*
-    %v2 = load {} addrspace(10)*, {} addrspace(10)** @gv2, !tbaa !2
+    %v2 = load {} addrspace(10)*, {} addrspace(10)** @gv2, !tbaa !2, !invariant.load !3
     call void @jl_safepoint()
     call void @one_arg_boxed({} addrspace(10)* %v1)
     call void @one_arg_boxed({} addrspace(10)* %v2)
@@ -717,7 +717,7 @@ define i8 @masked_arrayptrs() {
 ; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 3
 
 
-; OPAQUE: %arrayptrs = call <2 x ptr addrspace(13)> @llvm.masked.load.v2p13.p11(ptr addrspace(11) %arrayptrptr, i32 16, <2 x i1> <i1 true, i1 false>, <2 x ptr addrspace(13)> zeroinitializer)
+; OPAQUE: %arrayptrs = call <2 x ptr addrspace(13)> @llvm.masked.load.v2p13.p11(ptr addrspace(11) align 16 %arrayptrptr, <2 x i1> <i1 true, i1 false>, <2 x ptr addrspace(13)> zeroinitializer)
 ; OPAQUE: [[GEP0:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 2
 ; OPAQUE: store ptr addrspace(10) %obj1, ptr [[GEP0]]
 ;
@@ -741,7 +741,7 @@ define i8 @gather_arrayptrs() {
 ; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 3
 
 
-; OPAQUE: %arrayptrs = call <2 x ptr addrspace(13)> @llvm.masked.gather.v2p13.v2p11(<2 x ptr addrspace(11)> %arrayptrptrs, i32 16, <2 x i1> <i1 true, i1 false>, <2 x ptr addrspace(13)> zeroinitializer)
+; OPAQUE: %arrayptrs = call <2 x ptr addrspace(13)> @llvm.masked.gather.v2p13.v2p11(<2 x ptr addrspace(11)> align 16 %arrayptrptrs, <2 x i1> <i1 true, i1 false>, <2 x ptr addrspace(13)> zeroinitializer)
 ; OPAQUE: [[GEP0:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 2
 ; OPAQUE: store ptr addrspace(10) %obj1, ptr [[GEP0]]
 ;
@@ -764,7 +764,7 @@ define i8 @gather_arrayptrs_alltrue() {
 ; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 3
 
 
-; OPAQUE: %arrayptrs = call <2 x ptr addrspace(13)> @llvm.masked.gather.v2p13.v2p11(<2 x ptr addrspace(11)> %arrayptrptrs, i32 16, <2 x i1> {{(<i1 true, i1 true>|splat \(i1 true\))}}, <2 x ptr addrspace(13)> zeroinitializer)
+; OPAQUE: %arrayptrs = call <2 x ptr addrspace(13)> @llvm.masked.gather.v2p13.v2p11(<2 x ptr addrspace(11)> align 16 %arrayptrptrs, <2 x i1> {{(<i1 true, i1 true>|splat \(i1 true\))}}, <2 x ptr addrspace(13)> zeroinitializer)
 ; OPAQUE: [[GEP0:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 2
 ; OPAQUE: store ptr addrspace(10) %obj1, ptr [[GEP0]]
 ;
@@ -804,3 +804,4 @@ top:
 !0 = !{!"jtbaa"}
 !1 = !{!"jtbaa_const", !0, i64 0}
 !2 = !{!1, !1, i64 0, i64 1}
+!3 = !{}

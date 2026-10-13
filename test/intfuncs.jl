@@ -525,6 +525,40 @@ primitive type BitString128 128 end
     @test bitstring(bit63(0x4000_0000_0000_0001)) == "1" * repeat("0", 61) * "1"
 end
 
+# A primitive type whose logical width is not a multiple of 8 occupies more
+# bytes than it uses, so the digit counts must come from the width, not from
+# `sizeof`. These types carry just the methods `bin`, `oct` and `hex` call.
+for nbits in (4, 6, 12, 21, 24, 63)
+    T = Symbol(:OddUInt, nbits)
+    # `% UInt8` widens the types narrower than a byte and truncates the rest
+    to_u8 = nbits < 8 ? :(Core.Intrinsics.zext_int(UInt8, x)) :
+                        :(Core.Intrinsics.trunc_int(UInt8, x))
+    @eval begin
+        primitive type $T <: Unsigned $nbits end
+        $T(x::UInt64) = Core.Intrinsics.trunc_int($T, x)
+        Base.UInt64(x::$T) = Core.Intrinsics.zext_int(UInt64, x)
+        Base.rem(x::$T, ::Type{UInt8}) = $to_u8
+        Base.leading_zeros(x::$T) =
+            Int(Core.Intrinsics.zext_int(UInt64, Core.Intrinsics.ctlz_int(x)))
+        Base.top_set_bit(x::$T) = $nbits - leading_zeros(x)
+        Base.:(>>)(x::$T, k::UInt) = Core.Intrinsics.lshr_int(x, k)
+    end
+end
+
+@testset "bin/oct/hex for primitive types of $nbits bits" for nbits in (4, 6, 12, 21, 24, 63)
+    T = getfield(@__MODULE__, Symbol(:OddUInt, nbits))
+    for v in UInt64[0, 1, 7, 8, 1000, 0x1234, UInt64(1) << (nbits - 1), (UInt64(1) << nbits) - 1]
+        v < UInt64(1) << nbits || continue
+        x = T(v)
+        @test UInt64(x) === v
+        # the same value in a wider type prints the same, without padding
+        for base in (2, 8, 16)
+            @test string(x, base = base) == string(v, base = base)
+            @test string(x, base = base, pad = 20) == string(v, base = base, pad = 20)
+        end
+    end
+end
+
 @testset "digits/base" begin
     @test digits(5, base = 3) == [2, 1]
     @test digits(5, pad = 3) == [5, 0, 0]
@@ -692,6 +726,18 @@ end
         @test exponent(big(2)^100 + 1) == 100
         @test exponent(big(-1)) == 0
         @test_throws DomainError exponent(big(0))
+        # multi-limb values on and around limb boundaries, with both signs
+        for k in (1, 63, 64, 65, 127, 128, 200), d in (0, 1)
+            x = big(2)^k + d * (big(2)^k - 1)
+            @test exponent(x) == k
+            @test exponent(-x) == k
+        end
+        # `exponent(::BigInt)` must dispatch to the GMP method, which does not allocate
+        let x = big(2)^100 + 1, y = -x
+            exponent(x); exponent(y) # compile
+            @test @allocated(exponent(x)) == 0
+            @test @allocated(exponent(y)) == 0
+        end
 
         @test Base.top_set_bit(big(0)) == 0
         @test Base.top_set_bit(big(2)^100) == 101
@@ -699,6 +745,9 @@ end
         @test Base.top_set_bit(big(2)^100 + 1) == 101
         @test_throws DomainError Base.top_set_bit(big(-1))
     end
+
+    @test @inferred(exponent(true)) === 0
+    @test_throws DomainError exponent(false)
 end
 
 @testset "issue #4884" begin

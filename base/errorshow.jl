@@ -458,6 +458,7 @@ end
 stacktrace_expand_basepaths()::Bool = Base.get_bool_env("JULIA_STACKTRACE_EXPAND_BASEPATHS", false) === true
 stacktrace_contract_userdir()::Bool = Base.get_bool_env("JULIA_STACKTRACE_CONTRACT_HOMEDIR", true) === true
 stacktrace_linebreaks()::Bool = Base.get_bool_env("JULIA_STACKTRACE_LINEBREAKS", false) === true
+stacktrace_full_loading()::Bool = Base.get_bool_env("JULIA_STACKTRACE_FULL_LOADING", false) === true
 
 # Print `::<sig>` with structural framing (type names, braces) in the default
 # color, matching parameters and their separating commas in gray, and the
@@ -659,7 +660,6 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     # Displays the closest candidates of the given function by looping over the
     # functions methods and counting the number of matching arguments.
     f = ex.f
-    ft = typeof(f)
     lines = String[]
     line_score = Int[]
     # These functions are special cased to only show if first argument is matched.
@@ -815,7 +815,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             if !isempty(kwargs)::Bool
                 unexpected = Symbol[]
                 if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
-                    for (k, v) in kwargs
+                    for (k, _) in kwargs
                         if !(k::Symbol in kwords)
                             push!(unexpected, k::Symbol)
                         end
@@ -834,7 +834,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             println(iob)
 
             m = parentmodule_before_main(method)
-            modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
+            modulecolor = get_stacktrace_color(m)
             print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
             push!(lines, takestring!(buf))
             push!(line_score, -(right_matches * 2 + (length(arg_types_param) < 2 ? 1 : 0)))
@@ -879,6 +879,12 @@ const update_stackframes_callback = Ref{Function}(identity)
 
 const STACKTRACE_MODULECOLORS = Iterators.Stateful(Iterators.cycle([:magenta, :cyan, :green, :yellow]))
 const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
+# Profile's package colors share the same color cycler.
+const STACKTRACE_COLORS_LOCK = ReentrantLock()
+
+function get_stacktrace_color(key, colordict=STACKTRACE_FIXEDCOLORS, colorcycler=STACKTRACE_MODULECOLORS)
+    return @lock STACKTRACE_COLORS_LOCK get!(() -> popfirst!(colorcycler), colordict, key)
+end
 
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
 
@@ -895,12 +901,17 @@ function _backtrace_find_and_remove_cycles(t)
     # Second: length of the cycle as a count in the trace
     # Third:  number of cycle repetitions
 
+    #= For each entry of the trace, where it ended up in `displayed_stackframes`, or 0 if it
+    was collapsed away, so that a cycle can be bracketed from where its turn began. =#
+    displayed_at = zeros(Int, length(t))
+
     t_curr = 1
-    frame_counter = 1
 
     while t_curr ≤ length(t)
-        (last_frame, n) = t[t_curr]
-        current_hash = hash(t[t_curr])
+        t_this = t_curr
+        entry = t[t_curr]::Tuple{StackFrame,Int}
+        (last_frame, n) = entry
+        current_hash = hash(entry)
         positions = get(recorded_positions, current_hash,  Int[])
 
         t_curr += 1
@@ -916,7 +927,7 @@ function _backtrace_find_and_remove_cycles(t)
             # walk trace at current and previous matching positions until matching stops
             t_curr_end = t_curr
             t_prev_end = t_prev
-            while t_curr_end < length(t) && t[t_curr_end] == t[t_prev_end]
+            while t_curr_end < length(t) && t[t_curr_end]::Tuple{StackFrame,Int} == t[t_prev_end]::Tuple{StackFrame,Int}
                 t_curr_end += 1
                 t_prev_end += 1
             end
@@ -924,7 +935,7 @@ function _backtrace_find_and_remove_cycles(t)
             if t_prev_end ≥ t_curr - 1
                 #= At least one cycle repeated =#
                 ncycles = div(t_curr_end - t_prev + 1, t_cycle_length)
-                push!(repeated_cycles, (length(displayed_stackframes) - 1, t_cycle_length, ncycles))
+                push!(repeated_cycles, (displayed_at[t_prev - 1], t_cycle_length, ncycles))
                 t_curr += t_cycle_length * (ncycles - 1) - 1
                 nnested_cycles += 1
             end
@@ -936,6 +947,7 @@ function _backtrace_find_and_remove_cycles(t)
 
         if ncycles == 0
             push!(displayed_stackframes, (last_frame, n))
+            displayed_at[t_this] = length(displayed_stackframes)
         end
     end
     return displayed_stackframes, repeated_cycles, max_nested_cycles
@@ -990,7 +1002,7 @@ function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeat
     current_cycles = NTuple{4, Int}[] # adding a value to track amount to advance frame_counter when cycle is closed
 
     for i in eachindex(trace)
-        (frame, n) = trace[i]
+        (frame, n) = trace[i]::Tuple{StackFrame,Int}
 
         ncycle_starts = 0
         while repeated_cycles[1][1] == i
@@ -1006,7 +1018,7 @@ function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeat
 
         print_stackframe(io, frame_counter, frame, ndigits_max, max_nested_cycles, nactive_cycles, ncycle_starts, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS; prefix)
 
-        frame_counter, nactive_cycles = _backtrace_print_repetition_closings!(io, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max; prefix)
+        frame_counter, _nactive_cycles = _backtrace_print_repetition_closings!(io, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max; prefix)
         frame_counter += 1
 
         if i < length(trace)
@@ -1023,7 +1035,7 @@ function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested
     m = Base.parentmodule(frame)
     modulecolor = if m !== nothing
         m = parentmodule_before_main(m)
-        get!(() -> popfirst!(modulecolorcycler), modulecolordict, m)
+        get_stacktrace_color(m, modulecolordict, modulecolorcycler)
     else
         :default
     end
@@ -1043,12 +1055,13 @@ parentmodule_before_main(x) = parentmodule_before_main(parentmodule(x))
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
 function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested_cycles::Int, nactive_cycles::Int, ncycle_starts::Int, modulecolor; prefix = nothing)
-    file, line = string(frame.file), frame.line
+    file = string(frame.file)
+    fl = StackTraces.frame_location(frame)
 
     # Used by the REPL to make it possible to open
     # the location of a stackframe/method in the editor.
     if haskey(io, :last_shown_line_infos)
-        push!(io[:last_shown_line_infos], (string(frame.file), frame.line))
+        push!(io[:last_shown_line_infos], (string(frame.file), fl.line))
     end
 
     inlined = getfield(frame, :inlined)
@@ -1076,13 +1089,16 @@ function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested
     printstyled(io, "│" ^ nactive_cycles; color = :light_black)
 
     # @ Module path / file : line
-    print_module_path_file(io, modul, file, line; modulecolor, digit_align_width = digit_align_width - 1)
+    print_module_path_file(
+        io, modul, file, fl.line, fl.col;
+        modulecolor, digit_align_width = digit_align_width - 1)
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
 end
 
-function print_module_path_file(io, modul, file, line; modulecolor = :light_black, digit_align_width = 0)
+function print_module_path_file(io, modul, file, line, col = 0;
+                                modulecolor = :light_black, digit_align_width = 0)
     printstyled(io, " " ^ digit_align_width * "@", color = :light_black)
 
     # module
@@ -1099,8 +1115,10 @@ function print_module_path_file(io, modul, file, line; modulecolor = :light_blac
     dir = dirname(file)
     !isempty(dir) && printstyled(io, dir, Filesystem.path_separator, color = :light_black)
 
-    # filename, separator, line
-    printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
+    # filename, separator, line (`?` if unknown), column if available
+    printstyled(io, basename(file), ":", line >= 0 ? line : "?"; color = :light_black, underline = true)
+    col != 0 && printstyled(io, ":", col; color = :light_black, underline = true)
+    nothing
 end
 
 #=
@@ -1113,6 +1131,7 @@ Stacktrace processing pipeline:
 4. `process_backtrace` filters a trace for internal implementation or redundant frames and summarizes repeated single frames:
     - `kwcall` frames removed
     - `include`-related stack frames removed
+    - code loading (`using`/`import`) stack frames collapsed to the frame that entered loading
     - Some frames that have the same location info are merged
     - Repeated frames are removed and summarized with a count
     - Output is an Any[] containing (StackFrame, count) tuple elements and this form is exposed to e.g. Revise
@@ -1141,7 +1160,7 @@ function show_backtrace(io::IO, t::Vector; prefix = nothing)
     end
     isempty(filtered) && return
 
-    nframes = sum(last(x) for x ∈ filtered)
+    nframes = sum(last(x::Tuple{StackFrame,Int}) for x ∈ filtered)
 
     # don't show a single top-level frame with no location info
     if nframes == 1 && StackTraces.is_top_level_frame(filtered[1][1])
@@ -1156,7 +1175,7 @@ function show_backtrace(io::IO, t::Vector; prefix = nothing)
         filtered, repeated_cycles, max_nested_cycles = _backtrace_find_and_remove_cycles(filtered)
     else
         repeated_cycles = NTuple{3, Int}[]
-        max_nested_cycles = any(x -> last(x) > 1, filtered) ? 1 : 0
+        max_nested_cycles = any(x -> last(x::Tuple{StackFrame,Int}) > 1, filtered) ? 1 : 0
     end
 
     # Allow external code to edit information in the frames (e.g. line numbers with Revise)
@@ -1171,7 +1190,8 @@ function _backtrace_collapse_and_count_repeated_frames(frames::Vector{StackFrame
     last_frame = StackTraces.UNKNOWN
     tracecount = Any[]
     for frame in frames
-        if frame.file != last_frame.file || frame.line != last_frame.line || frame.func != last_frame.func || frame.linfo !== last_frame.linfo
+        if frame.file != last_frame.file || frame.line != last_frame.line || frame.func != last_frame.func || frame.linfo !== last_frame.linfo ||
+                StackTraces.frame_location(frame).col != StackTraces.frame_location(last_frame).col
             if n > 0
                 push!(tracecount, (last_frame, n))
             end
@@ -1189,7 +1209,7 @@ end
 
 function _backtrace_remove_kwcall_frames!(trace)
     todelete = findall(trace) do (frame, _)
-        code = frame.linfo
+        code = StackTraces.frame_mi(frame)
         if code isa MethodInstance
             def = code.def
             if def isa Method && def.name !== :kwcall && def.sig <: Tuple{typeof(Core.kwcall),NamedTuple,Any,Vararg}
@@ -1198,7 +1218,7 @@ function _backtrace_remove_kwcall_frames!(trace)
                 # the argument list, since it has the right line number info)
                 return true
             end
-        else
+        else # this branch may not be needed, from before current keyword argument handling
             frame.func === :kwcall && return true
         end
         return false
@@ -1215,7 +1235,8 @@ function _backtrace_simplify_include_frames!(trace)
         frame::StackFrame, _ = trace[i]
         mod = parentmodule(frame)
         if mod === Base && frame.func === :IncludeInto ||
-           mod === Core && frame.func === :EvalInto
+           mod === Core && frame.func === :EvalInto ||
+           mod === Base && frame.func === :fl_toplevel_eval
             kept_frames[i] = false
         elseif first_ignored === nothing
             if mod === Base && frame.func === :_include
@@ -1239,6 +1260,83 @@ function _backtrace_simplify_include_frames!(trace)
     end
     if first_ignored !== nothing
         kept_frames[1:first_ignored] .= false
+    end
+    keepat!(trace, kept_frames)
+end
+
+# Functions making up the code loading machinery. Their frames are an implementation
+# detail of `using`/`import` and are collapsed away by
+# `_backtrace_simplify_loading_frames!` - see #52988.
+const _LOADING_INTERNAL_FUNCS = (
+    :__require, :_require_prelocked, :__require_prelocked, :_require_from_serialized,
+    :_tryrequire_from_serialized, :run_package_callbacks, :run_extension_callbacks,
+    :retry_load_extensions, :eval_import_path, :eval_import_path_all, :_eval_import,
+    :_eval_using)
+
+# The frames a collapsed run is allowed to be represented by. A run without one of
+# these is left alone, so that frames which are only incidentally part of loading
+# (e.g. `invoke_in_world`) are never hidden on their own.
+const _LOADING_ANCHOR_FUNCS = (:require, :require_stdlib, :include_package_for_output)
+
+function _is_loading_frame(frame::StackFrame)
+    mod = parentmodule(frame)
+    # Hack: allow `mod === nothing` as a workaround for inlined functions, as in
+    # `_backtrace_simplify_include_frames!`
+    (mod === Base || mod === nothing) || return false
+    file = basename(string(frame.file))
+    func = frame.func
+    if func === Symbol("macro expansion")
+        # the `@lock require_lock` and `@zone` blocks in `require`/`__require`
+        return file == "loading.jl" || file == "lock.jl"
+    elseif func === :invoke_in_world || func === :invokelatest
+        return file == "essentials.jl"
+    elseif func === :include || func === :_include
+        # `include`ing the package's own source, not a user-level `include`
+        return file == "Base.jl" || file == "loading.jl"
+    end
+    return (file == "loading.jl" || file == "module.jl") &&
+           (func in _LOADING_INTERNAL_FUNCS || func in _LOADING_ANCHOR_FUNCS)
+end
+
+_is_loading_anchor(frame::StackFrame) = frame.func in _LOADING_ANCHOR_FUNCS
+
+# For improved user experience, collapse runs of frames belonging to the code loading
+# machinery down to the single frame that entered it - see #52988. Unlike hiding
+# everything thrown through `require`, this keeps frames for user code that runs
+# during loading (e.g. a package erroring while its source is being run).
+function _backtrace_simplify_loading_frames!(trace)
+    stacktrace_full_loading() && return trace
+    kept_frames = trues(length(trace))
+    i = firstindex(trace)
+    while i <= lastindex(trace)
+        if !_is_loading_frame(trace[i][1]::StackFrame)
+            i += 1
+            continue
+        end
+        # find the extent of this run of loading frames
+        j = i
+        while j < lastindex(trace) && _is_loading_frame(trace[j+1][1]::StackFrame)
+            j += 1
+        end
+        anchor = nothing
+        for k in i:j
+            frame = trace[k][1]::StackFrame
+            if frame.func === :require || frame.func === :require_stdlib
+                anchor = k
+                break
+            elseif frame.func === :include_package_for_output
+                # precompilation runs the package in a worker process, where the whole
+                # run is machinery. Represent it by its innermost frame, which at least
+                # reports the file being run, rather than by the long `input`/`depot_path`
+                # signature of `include_package_for_output` itself.
+                anchor = i
+            end
+        end
+        if anchor !== nothing
+            kept_frames[i:j] .= false
+            kept_frames[anchor] = true
+        end
+        i = j + 1
     end
     keepat!(trace, kept_frames)
 end
@@ -1285,7 +1383,6 @@ function _backtrace_collapse_repeated_locations!(trace)
                 params, last_params = Base.unwrap_unionall(m.sig).parameters::SimpleVector, Base.unwrap_unionall(last_m.sig).parameters::SimpleVector
                 if last_m.nkw != 0
                     pos_sig_params = last_params[(last_m.nkw+2):end]
-                    issame = true
                     if pos_sig_params == params
                         kept_frames[i] = false
                     end
@@ -1316,6 +1413,7 @@ end
 function process_backtrace(tracecount::Vector{Any})
     _backtrace_remove_kwcall_frames!(tracecount)
     _backtrace_simplify_include_frames!(tracecount)
+    _backtrace_simplify_loading_frames!(tracecount)
     _backtrace_collapse_repeated_locations!(tracecount)
     return tracecount
 end
@@ -1448,6 +1546,8 @@ end
 Experimental.register_error_hint(fielderror_dict_hint_handler, FieldError)
 
 function fielderror_listfields_hint_handler(io, exc)
+    # e.g. `fieldtype(Integer, :a)`: abstract types have no definite fields to list
+    fieldcount_noerror(exc.type) === nothing && return
     fields = fieldnames(exc.type)
     if isempty(fields)
         print(io, "; $(exc.type.name.wrapper) has no fields at all.")
@@ -1605,3 +1705,28 @@ function show(io::IO, ::MIME"text/plain", stack::ExceptionStack)
     show_exception_stack(io, stack)
 end
 show(io::IO, stack::ExceptionStack) = show(io, MIME("text/plain"), stack)
+
+# detect the reason which caused an :incomplete expression
+# from the error message
+# NOTE: the error messages are defined in src/julia-parser.scm
+incomplete_tag(ex) = :none
+function incomplete_tag(ex::Expr)
+    if ex.head !== :incomplete
+        return :none
+    elseif isempty(ex.args)
+        return :other
+    else
+        a = ex.args[1]
+        if a isa String
+            occursin("string", a) && return :string
+            occursin("comment", a) && return :comment
+            occursin("requires end", a) && return :block
+            occursin("\"`\"", a) && return :cmd
+            occursin("character", a) && return :char
+            return :other
+        else
+            return incomplete_tag(a)::Symbol
+        end
+    end
+end
+incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)

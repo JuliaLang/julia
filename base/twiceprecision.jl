@@ -405,8 +405,10 @@ function (:)(start::T, step::T, stop::T) where T<:IEEEFloat
             m = maxintfloat(T, Int)
             if den != 0 && abs(start*den) <= m && abs(step*den) <= m &&  # will round succeed?
                     rem(den, start_d) == 0 && rem(den, step_d) == 0      # check lcm overflow
-                start_n = round(Int, start*den)
-                step_n = round(Int, step*den)
+                # scale the rationals exactly: start*den can round to a different
+                # integer when T has little precision (e.g. Float16)
+                start_n *= div(den, start_d)
+                step_n *= div(den, step_d)
                 len = max(0, Int(div(den*stop_n - stop_d*start_n + step_n*stop_d, step_n*stop_d)))
                 # Integer ops could overflow, so check that this makes sense
                 if isbetween(start, start + (len-1)*step, stop + step/2) &&
@@ -455,8 +457,8 @@ function range_start_step_length(a::T, st::T, len::Integer) where T<:IEEEFloat
         m = maxintfloat(T, Int)
         if abs(den*a) <= m && abs(den*st) <= m &&
                 rem(den, start_d) == 0 && rem(den, step_d) == 0
-            start_n = round(Int, den*a)
-            step_n = round(Int, den*st)
+            start_n *= div(den, start_d)
+            step_n *= div(den, step_d)
             return floatrange(T, start_n, step_n, len, den)
         end
     end
@@ -571,8 +573,8 @@ function _convertSRL(::Type{StepRangeLen{T,R,S,L}}, r::AbstractRange{U}) where {
         m = maxintfloat(T, Int)
         if den != 0 && abs(f*den) <= m && abs(s*den) <= m &&
                 rem(den, start_d) == 0 && rem(den, step_d) == 0
-            start_n = round(Int, f*den)
-            step_n = round(Int, s*den)
+            start_n *= div(den, start_d)
+            step_n *= div(den, step_d)
             return floatrange(T, start_n, step_n, L(length(r)), den)
         end
     end
@@ -616,7 +618,7 @@ function sum(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision})
     # Add in contributions of ref
     ref = r.ref * l
     sm_hi, sm_lo = add12(s_hi, ref.hi)
-    add12(sm_hi, sm_lo + ref.lo)[1]
+    add12(sm_hi, sm_lo + s_lo + ref.lo)[1]
 end
 
 # sum(1:n) as a product of two integers
@@ -649,8 +651,8 @@ function range_start_stop_length(start::T, stop::T, len::Integer) where {T<:IEEE
         return steprangelen_hp(T, start, zero(T), 0, len, 1)
     end
     # Attempt to find exact rational approximations
-    start_n, start_d = rat(start)
-    stop_n, stop_d = rat(stop)
+    _, start_d = rat(start)
+    _, stop_d = rat(stop)
     if start_d != 0 && stop_d != 0
         den = lcm_unchecked(start_d, stop_d)
         m = maxintfloat(T, Int)

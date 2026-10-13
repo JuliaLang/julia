@@ -104,6 +104,9 @@ vals = Any[
     OffsetArray([1 3; 2 4], -2, 2),
     OffsetArray(1:4, 0),
     OffsetArray([1 3; 2 4], 0, 0),
+    # issue #63659
+    Base.IdentityUnitRange(2:20),
+    OffsetArray(1:20, typemax(Int) - 20),
     'a':'e', ['a', 'b', 'c', 'd', 'e'],
     # check that hash is still consistent with heterogeneous arrays for which - is defined
     # for some pairs and not others
@@ -349,4 +352,12 @@ end
         hash_generator = Base.hash_bytes(a, UInt64(Base.HASH_SEED), Base.HASH_SECRET)
         @test hash_generator === hash_pointer
     end
+end
+
+@testset "PartialStruct hash consistent with ==" begin
+    ps(t, f) = Core.PartialStruct(t, Any[f...])
+    @test hash(ps(Tuple{Int,Float64}, (Int, Float64))) ==
+          hash(ps(Tuple{Int,Float64}, (Int, Float64)))
+    @test hash(ps(Tuple{Int,Float64}, (Int, Float64))) !=
+          hash(ps(Tuple{Int,Float64}, (Int, Int)))
 end

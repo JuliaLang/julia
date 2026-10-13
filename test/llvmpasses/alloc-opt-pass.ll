@@ -1,6 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='function(AllocOpt)' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='function(AllocOpt)' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
 @tag = external addrspace(10) global {}
 
@@ -470,3 +470,43 @@ attributes #8 = { nounwind willreturn memory(inaccessiblemem: readwrite) }
 !25 = !{!26, !26, i64 0}
 !26 = !{!"jtbaa_mutab", !21, i64 0}
 
+
+; Eliminating a child allocation must preserve the barrier for other written fields.
+declare void @julia.field_write_barrier.p11(ptr addrspace(10), ptr addrspace(11), ptr addrspace(10), ...)
+declare void @julia.object_write_barrier(ptr addrspace(10), ...)
+
+; CHECK-LABEL: @field_barrier_elided_child(
+; CHECK-NOT: call {{.*}}@julia.gc_alloc_obj
+; CHECK: call void {{.*}}@julia.field_write_barrier.p11(ptr addrspace(10) %parent, ptr addrspace(11) %slot, ptr addrspace(10) null, ptr addrspace(11) %slot2, ptr addrspace(10) %child)
+; CHECK-NEXT: store ptr addrspace(10) %child, ptr addrspace(11) %slot2
+; CHECK-NEXT: ret void
+define void @field_barrier_elided_child(ptr %ptls, ptr addrspace(10) %parent, ptr addrspace(10) %child) {
+  %tmp = call ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls, i64 8, ptr addrspace(10) @tag)
+  %slot = addrspacecast ptr addrspace(10) %parent to ptr addrspace(11)
+  %slot2 = getelementptr i8, ptr addrspace(11) %slot, i64 8
+  call void (ptr addrspace(10), ptr addrspace(11), ptr addrspace(10), ...) @julia.field_write_barrier.p11(ptr addrspace(10) %parent, ptr addrspace(11) %slot, ptr addrspace(10) %tmp, ptr addrspace(11) %slot2, ptr addrspace(10) %child)
+  store ptr addrspace(10) %child, ptr addrspace(11) %slot2
+  ret void
+}
+
+; CHECK-LABEL: @object_barrier_elided_child(
+; CHECK-NOT: call {{.*}}@julia.gc_alloc_obj
+; CHECK: call void {{.*}}@julia.object_write_barrier(ptr addrspace(10) %parent, ptr addrspace(10) null, ptr addrspace(10) %child)
+; CHECK-NEXT: store ptr addrspace(10) %child, ptr addrspace(10) %parent
+; CHECK-NEXT: ret void
+define void @object_barrier_elided_child(ptr %ptls, ptr addrspace(10) %parent, ptr addrspace(10) %child) {
+  %tmp = call ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls, i64 8, ptr addrspace(10) @tag)
+  call void (ptr addrspace(10), ...) @julia.object_write_barrier(ptr addrspace(10) %parent, ptr addrspace(10) %tmp, ptr addrspace(10) %child)
+  store ptr addrspace(10) %child, ptr addrspace(10) %parent
+  ret void
+}
+
+; CHECK-LABEL: @field_barrier_elided_parent(
+; CHECK-NEXT: ret void
+define void @field_barrier_elided_parent(ptr %ptls, ptr addrspace(10) %child) {
+  %parent = call ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls, i64 8, ptr addrspace(10) @tag)
+  %slot = addrspacecast ptr addrspace(10) %parent to ptr addrspace(11)
+  call void (ptr addrspace(10), ptr addrspace(11), ptr addrspace(10), ...) @julia.field_write_barrier.p11(ptr addrspace(10) %parent, ptr addrspace(11) %slot, ptr addrspace(10) %child)
+  store ptr addrspace(10) %child, ptr addrspace(11) %slot
+  ret void
+}

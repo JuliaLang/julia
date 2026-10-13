@@ -25,6 +25,7 @@ const libnghttp2 = LazyLibrary(
     else
         BundledLazyLibraryPath("libnghttp2.so.14")
     end,
+    id = LibraryID(Base.UUID("8e850ede-7688-5339-a07c-302acd2aaf8d"), "libnghttp2"),
     dependencies = if Sys.iswindows() && Sys.WORD_SIZE == 32
         LazyLibrary[libgcc_s]
     else
@@ -39,6 +40,9 @@ function eager_mode()
     dlopen(libnghttp2)
 end
 is_available() = true
+
+# JLLWrappers path compatibility accessor
+get_libnghttp2_path() = libnghttp2_path
 
 function __init__()
     global libnghttp2_path = string(libnghttp2.path)

@@ -8,8 +8,7 @@ Module containing the broadcasting implementation.
 module Broadcast
 
 using .Base.Cartesian
-using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin, promote_typejoin_union,
-             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias, negate
+using .Base: OneTo, tail, isoperator, promote_typejoin, promote_typejoin_union, unalias, negate
 import .Base: copy, copyto!, axes
 export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, BroadcastFunction
 
@@ -35,7 +34,8 @@ that you may be able to leverage; see the
 abstract type BroadcastStyle end
 
 struct Unknown <: BroadcastStyle end
-BroadcastStyle(::Type{Union{}}, slurp...) = Unknown()  # ambiguity resolution
+BroadcastStyle(::Type{Union{}}) = Unknown()  # ambiguity resolution
+BroadcastStyle(::Type{Union{}}, slurp...) = throw(MethodError(BroadcastStyle, (Union{}, slurp...)))
 
 """
 `Broadcast.Style{C}()` defines a [`BroadcastStyle`](@ref) signaling through the type
@@ -194,6 +194,8 @@ end
 struct AndAnd end
 const andand = AndAnd()
 broadcasted(::AndAnd, a, b) = broadcasted((a, b) -> a && b, a, b)
+typeof(broadcasted).name.concrete_only = true
+
 function broadcasted(::AndAnd, a, bc::Broadcasted)
     bcf = flatten(bc)
     # Vararg type signature to specialize on args count. This is necessary for performance
@@ -739,6 +741,27 @@ broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
 
 ## Computation of inferred result type, for empty and concretely inferred cases only
+_bc_eltype(bc::Broadcasted, i) = bc.f(_bc_eltypes(bc.args, i)...)
+# Numbers must broadcast as scalars even if they override eltype
+# Tuples may have heterogenous eltypes across indices
+_bc_eltype(x::Number, i) = _broadcast_getindex(x, i)
+_bc_eltype(x::Tuple, i) = _broadcast_getindex(x, i)
+# since this method only exists to be inferred, indexing x is never actually executed. the
+# inference barrier prevents recursion limiting, and ::eltype gives the desired result
+_bc_eltype(x, i) = _broadcast_getindex(Base.inferencebarrier(x), i)::eltype(x)
+
+_bc_eltypes(args::Tuple, i) = (_bc_eltype(args[1], i), _bc_eltypes(tail(args), i)...)
+_bc_eltypes(::Tuple{}, i) = ()
+
+function result_eltype(bc::Broadcasted)
+    argtypes = Iterators.TupleOrBottom(typeof(bc), eltype(eachindex(bc)))
+    argtypes === Union{} && return Union{}
+    rettype = Base._return_type(_bc_eltype, argtypes)
+    return promote_typejoin_union(rettype)
+end
+
+### this machinery is now dead code in Base, but several packages
+### reach into these internals so it's retained for convenience.
 _broadcast_getindex_eltype(bc::Broadcasted) = combine_eltypes(bc.f, bc.args)
 _broadcast_getindex_eltype(A) = eltype(A)  # Tuple, Array, etc.
 
@@ -746,7 +769,6 @@ eltypes(::Tuple{}) = Tuple{}
 eltypes(t::Tuple{Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]))
 eltypes(t::Tuple{Any,Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), _broadcast_getindex_eltype(t[2]))
 eltypes(t::Tuple) = (TT = eltypes(tail(t)); TT === Union{} ? Union{} : Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), TT.parameters...))
-# eltypes(t::Tuple) = Iterators.TupleOrBottom(ntuple(i -> _broadcast_getindex_eltype(t[i]), Val(length(t)))...)
 
 # Inferred eltype of result of broadcast(f, args...)
 function combine_eltypes(f, args::Tuple)
@@ -924,7 +946,7 @@ copy(bc::Broadcasted{<:Union{Nothing,Unknown}}) =
 const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
 
 @inline function copy(bc::Broadcasted)
-    ElType = combine_eltypes(bc.f, bc.args)
+    ElType = result_eltype(bc)
     if Base.isconcretetype(ElType)
         # We can trust it and defer to the simpler `copyto!`
         return copyto!(similar(bc, ElType), bc)
@@ -1015,7 +1037,9 @@ end
     ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
     ndims(dest) == 0 && (dest[] = bc[]; return dest)
     bc′ = preprocess(dest, bc)
-    ax = axes(bc′)
+    # The broadcast axes can have an unsigned eltype, so use the destination's Int axes
+    # to keep the index arithmetic below from wrapping.
+    ax = axes(dest)
     ax1, out = ax[1], CartesianIndices(tail(ax))
     destc, indc = dest.chunks, 0
     bitst, remain = 0, UInt64(0)
@@ -1043,7 +1067,7 @@ end
         end
     end
     @inbounds if bitst != 0
-        destc[indc+=1] = remain
+        destc[indc+1] = remain
     end
     return dest
 end
@@ -1056,22 +1080,34 @@ end
 #   3. There must not be any broadcasting beyond scalar — all array sizes must match
 # We could eventually allow for all broadcasting and other array types, but that
 # requires very careful consideration of all the edge effects.
-const ChunkableOp = Union{typeof(&), typeof(|), typeof(xor), typeof(~), typeof(identity),
-    typeof(!), typeof(*), typeof(==)} # these are convertible to chunkable ops by liftfuncs
-const BroadcastedChunkableOp{Style<:Union{Nothing,BroadcastStyle}, Axes, F<:ChunkableOp, Args<:Tuple} = Broadcasted{Style,Axes,F,Args}
-ischunkedbroadcast(R, bc::BroadcastedChunkableOp) = ischunkedbroadcast(R, bc.args)
+_chunkop(f, args) = nothing
+_chunkop(::Union{typeof(&), typeof(*), typeof(min)}, args) = &
+_chunkop(::Union{typeof(|), typeof(max)}, args) = |
+_chunkop(::typeof(xor), args) = xor
+_chunkop(::typeof(nand), args) = nand
+_chunkop(::typeof(nor), args) = nor
+_chunkop(::Union{typeof(~), typeof(!)}, args) = ~
+_chunkop(::typeof(identity), args) = identity
+_chunkop(::typeof(==), ::Tuple{Any,Any}) = (x, y) -> ~xor(x, y)
+_chunkop(::typeof(!=), ::Tuple{Any,Any}) = xor
+_chunkop(::typeof(<), ::Tuple{Any,Any}) = (x, y) -> ~x & y
+_chunkop(::typeof(<=), ::Tuple{Any,Any}) = (x, y) -> ~x | y
+_chunkop(::typeof(>), ::Tuple{Any,Any}) = (x, y) -> x & ~y
+_chunkop(::typeof(>=), ::Tuple{Any,Any}) = (x, y) -> x | ~y
+
+ischunkedbroadcast(R, bc::Broadcasted) = ischunkedbroadcast(R, bc, _chunkop(bc.f, bc.args))
+ischunkedbroadcast(R, bc::Broadcasted, ::Nothing) = false
+ischunkedbroadcast(R, bc::Broadcasted, f) = ischunkedbroadcast(R, bc.args)
 ischunkedbroadcast(R, args) = false
 ischunkedbroadcast(R, args::Tuple{<:BitArray,Vararg{Any}}) = size(R) == size(args[1]) && ischunkedbroadcast(R, tail(args))
 ischunkedbroadcast(R, args::Tuple{<:Bool,Vararg{Any}}) = ischunkedbroadcast(R, tail(args))
-ischunkedbroadcast(R, args::Tuple{<:BroadcastedChunkableOp,Vararg{Any}}) = ischunkedbroadcast(R, args[1]) && ischunkedbroadcast(R, tail(args))
+ischunkedbroadcast(R, args::Tuple{<:Broadcasted,Vararg{Any}}) = ischunkedbroadcast(R, args[1]) && ischunkedbroadcast(R, tail(args))
 ischunkedbroadcast(R, args::Tuple{}) = true
 
-# Convert compatible functions to chunkable ones. They must also be green-lighted as ChunkableOps
-liftfuncs(bc::Broadcasted{<:Any,<:Any,<:Any}) = Broadcasted(bc.style, bc.f, map(liftfuncs, bc.args), bc.axes)
-liftfuncs(bc::Broadcasted{<:Any,<:Any,typeof(sign)}) = Broadcasted(bc.style, identity, map(liftfuncs, bc.args), bc.axes)
-liftfuncs(bc::Broadcasted{<:Any,<:Any,typeof(!)}) = Broadcasted(bc.style, ~, map(liftfuncs, bc.args), bc.axes)
-liftfuncs(bc::Broadcasted{<:Any,<:Any,typeof(*)}) = Broadcasted(bc.style, &, map(liftfuncs, bc.args), bc.axes)
-liftfuncs(bc::Broadcasted{<:Any,<:Any,typeof(==)}) = Broadcasted(bc.style, (~)∘(xor), map(liftfuncs, bc.args), bc.axes)
+# Convert compatible functions to chunk-level equivalents.
+liftfuncs(bc::Broadcasted{<:Any,<:Any,<:Any}) = liftfuncs(bc, _chunkop(bc.f, bc.args))
+liftfuncs(bc::Broadcasted, ::Nothing) = Broadcasted(bc.style, bc.f, map(liftfuncs, bc.args), bc.axes)
+liftfuncs(bc::Broadcasted, f) = Broadcasted(bc.style, f, map(liftfuncs, bc.args), bc.axes)
 liftfuncs(x) = x
 
 liftchunks(::Tuple{}) = ()
@@ -1293,6 +1329,8 @@ function __dot__(x::Expr)
         Expr(:let, undot(dotargs[1]), dotargs[2])
     elseif x.head === :for # don't add dots to for x=... assignments
         Expr(:for, undot(dotargs[1]), dotargs[2])
+    elseif x.head === :generator || x.head === :filter
+        Expr(x.head, dotargs[1], map(undot, dotargs[2:end])...)
     elseif (x.head === :(=) || x.head === :function || x.head === :macro) &&
            Meta.isexpr(x.args[1], :call) # function or macro definition
         Expr(x.head, x.args[1], dotargs[2])

@@ -4,16 +4,20 @@ module GMP
 
 export BigInt
 
-import .Base: *, *%, +, +%, -, -%, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, nand, nor,
+import .Base: *, *%, +, +%, -, -%, /, <, <<, >>, >>>, <=, ==, >, >=, ^, ~, &, |, xor,
              binomial, cmp, convert, div, divrem, factorial, cld, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod, sum, prod,
              trailing_zeros, trailing_ones, count_ones, count_zeros, tryparse_internal,
-             bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
-             widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             sign, isodd, iseven, digits!, hash, hash_integer, top_set_bit,
+             invmod, _prevpow2, _nextpow2, ndigits0zpb,
+             widen, signed, unsafe_trunc, iszero, isone, big, flipsign, signbit,
+             sign, isodd, iseven, digits!, hash, hash_integer, top_set_bit, exponent,
              ispositive, isnegative, clamp
 
 import Core: Signed, Float16, Float32, Float64
+
+using .Base: IEEEFloat, uinttype, exponent_bias, exponent_max, significand_mask, ieee754_representation
+using .Base.Rounding: rounds_to_nearest, rounds_away_from_zero, tie_breaker_is_to_even,
+    tie_breaker_rounds_away_from_zero
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -114,11 +118,14 @@ function __init__()
             bits_per_limb() != BITS_PER_LIMB ? @error(msg) : @warn(msg)
         end
 
+        # GMP calls may run under a reset region and re-enter the runtime
+        # through these allocation hooks. The hooks unpublish the region
+        # around the allocator.
         ccall((:__gmp_set_memory_functions, libgmp), Cvoid,
               (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}),
-              cglobal(:jl_gc_counted_malloc),
-              cglobal(:jl_gc_counted_realloc_with_old_size),
-              cglobal(:jl_gc_counted_free_with_size))
+              cglobal(:jl_gmp_counted_malloc),
+              cglobal(:jl_gmp_counted_realloc_with_old_size),
+              cglobal(:jl_gmp_counted_free_with_size))
         ZERO.alloc, ZERO.size, ZERO.d = 0, 0, C_NULL
         ONE.alloc, ONE.size, ONE.d = 1, 1, pointer(_ONE)
     catch ex
@@ -167,28 +174,32 @@ for (op, nbits) in (:add => :(BITS_PER_LIMB*(1 + max(abs(a.size), abs(b.size))))
                     :fdiv_r => 0, :tdiv_r => 0, :cdiv_r => 0,
                     :gcd => 0, :lcm => 0, :and => 0, :ior => 0, :xor => 0)
     op! = Symbol(op, :!)
+    fname = Symbol(:__gmpz_, op)
     @eval begin
-        $op!(x::BigInt, a::BigInt, b::BigInt) = (ccall($(gmpz(op)), Cvoid, (mpz_t, mpz_t, mpz_t), x, a, b); x)
+        $op!(x::BigInt, a::BigInt, b::BigInt) =
+            (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.$fname(x::mpz_t, a::mpz_t, b::mpz_t)::Cvoid); x)
         $op(a::BigInt, b::BigInt) = $op!(BigInt(nbits=$nbits), a, b)
         $op!(x::BigInt, b::BigInt) = $op!(x, x, b)
     end
 end
 
 invert!(x::BigInt, a::BigInt, b::BigInt) =
-    ccall((:__gmpz_invert, libgmp), Cint, (mpz_t, mpz_t, mpz_t), x, a, b)
+    (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall libgmp.__gmpz_invert(x::mpz_t, a::mpz_t, b::mpz_t)::Cint)
 invert!(x::BigInt, b::BigInt) = invert!(x, x, b)
 invert(a::BigInt, b::BigInt) = (ret=BigInt(); invert!(ret, a, b); ret)
 
 for op in (:add_ui, :sub_ui, :mul_ui, :mul_2exp, :fdiv_q_2exp, :pow_ui, :bin_ui)
     op! = Symbol(op, :!)
+    fname = Symbol(:__gmpz_, op)
     @eval begin
-        $op!(x::BigInt, a::BigInt, b) = (ccall($(gmpz(op)), Cvoid, (mpz_t, mpz_t, Culong), x, a, b); x)
+        $op!(x::BigInt, a::BigInt, b) =
+            (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.$fname(x::mpz_t, a::mpz_t, b::Culong)::Cvoid); x)
         $op(a::BigInt, b) = $op!(BigInt(), a, b)
         $op!(x::BigInt, b) = $op!(x, x, b)
     end
 end
 
-ui_sub!(x::BigInt, a, b::BigInt) = (ccall((:__gmpz_ui_sub, libgmp), Cvoid, (mpz_t, Culong, mpz_t), x, a, b); x)
+ui_sub!(x::BigInt, a, b::BigInt) = (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.__gmpz_ui_sub(x::mpz_t, a::Culong, b::mpz_t)::Cvoid); x)
 ui_sub(a, b::BigInt) = ui_sub!(BigInt(), a, b)
 
 for op in (:scan1, :scan0)
@@ -197,21 +208,26 @@ for op in (:scan1, :scan0)
     @eval $op(a::BigInt, b) = Int(signed(ccall($(gmpz(op)), Culong, (mpz_t, Culong), a, b)))
 end
 
-mul_si!(x::BigInt, a::BigInt, b) = (ccall((:__gmpz_mul_si, libgmp), Cvoid, (mpz_t, mpz_t, Clong), x, a, b); x)
+mul_si!(x::BigInt, a::BigInt, b) = (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.__gmpz_mul_si(x::mpz_t, a::mpz_t, b::Clong)::Cvoid); x)
 mul_si(a::BigInt, b) = mul_si!(BigInt(), a, b)
 mul_si!(x::BigInt, b) = mul_si!(x, x, b)
 
 for op in (:neg, :com, :sqrt, :set)
     op! = Symbol(op, :!)
+    fname = Symbol(:__gmpz_, op)
     @eval begin
-        $op!(x::BigInt, a::BigInt) = (ccall($(gmpz(op)), Cvoid, (mpz_t, mpz_t), x, a); x)
+        $op!(x::BigInt, a::BigInt) =
+            (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.$fname(x::mpz_t, a::mpz_t)::Cvoid); x)
         $op(a::BigInt) = $op!(BigInt(), a)
     end
     op === :set && continue # MPZ.set!(x) would make no sense
     @eval $op!(x::BigInt) = $op!(x, x)
 end
 
-for (op, T) in ((:fac_ui, Culong), (:set_ui, Culong), (:set_si, Clong), (:set_d, Cdouble))
+fac_ui!(x::BigInt, a) = (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.__gmpz_fac_ui(x::mpz_t, a::Culong)::Cvoid); x)
+fac_ui(a) = fac_ui!(BigInt(), a)
+
+for (op, T) in ((:set_ui, Culong), (:set_si, Clong), (:set_d, Cdouble))
     op! = Symbol(op, :!)
     @eval begin
         $op!(x::BigInt, a) = (ccall($(gmpz(op)), Cvoid, (mpz_t, $T), x, a); x)
@@ -225,18 +241,20 @@ mpn_popcount(d::Ptr{Limb}, s::Integer) = Int(ccall((:__gmpn_popcount, libgmp), C
 mpn_popcount(a::BigInt) = mpn_popcount(a.d, abs(a.size))
 
 function tdiv_qr!(x::BigInt, y::BigInt, a::BigInt, b::BigInt)
-    ccall((:__gmpz_tdiv_qr, libgmp), Cvoid, (mpz_t, mpz_t, mpz_t, mpz_t), x, y, a, b)
+    Base.@cancel_check
+    Base.@assume_effects :reset_safe @ccall libgmp.__gmpz_tdiv_qr(x::mpz_t, y::mpz_t, a::mpz_t, b::mpz_t)::Cvoid
     x, y
 end
 tdiv_qr(a::BigInt, b::BigInt) = tdiv_qr!(BigInt(), BigInt(), a, b)
 
 powm!(x::BigInt, a::BigInt, b::BigInt, c::BigInt) =
-    (ccall((:__gmpz_powm, libgmp), Cvoid, (mpz_t, mpz_t, mpz_t, mpz_t), x, a, b, c); x)
+    (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.__gmpz_powm(x::mpz_t, a::mpz_t, b::mpz_t, c::mpz_t)::Cvoid); x)
 powm(a::BigInt, b::BigInt, c::BigInt) = powm!(BigInt(), a, b, c)
 powm!(x::BigInt, b::BigInt, c::BigInt) = powm!(x, x, b, c)
 
 function gcdext!(x::BigInt, y::BigInt, z::BigInt, a::BigInt, b::BigInt)
-    ccall((:__gmpz_gcdext, libgmp), Cvoid, (mpz_t, mpz_t, mpz_t, mpz_t, mpz_t), x, y, z, a, b)
+    Base.@cancel_check
+    Base.@assume_effects :reset_safe @ccall libgmp.__gmpz_gcdext(x::mpz_t, y::mpz_t, z::mpz_t, a::mpz_t, b::mpz_t)::Cvoid
     x, y, z
 end
 gcdext(a::BigInt, b::BigInt) = gcdext!(BigInt(), BigInt(), BigInt(), a, b)
@@ -249,8 +267,8 @@ cmp_d(a::BigInt, b) = Int(ccall((:__gmpz_cmp_d, libgmp), Cint, (mpz_t, Cdouble),
 mpn_cmp(a::Ptr{Limb}, b::Ptr{Limb}, c) = ccall((:__gmpn_cmp, libgmp), Cint, (Ptr{Limb}, Ptr{Limb}, Clong), a, b, c)
 mpn_cmp(a::BigInt, b::BigInt, c) = mpn_cmp(a.d, b.d, c)
 
-get_str!(x, a, b::BigInt) = (ccall((:__gmpz_get_str,libgmp), Ptr{Cchar}, (Ptr{Cchar}, Cint, mpz_t), x, a, b); x)
-set_str!(x::BigInt, a, b) = Int(ccall((:__gmpz_set_str, libgmp), Cint, (mpz_t, Ptr{UInt8}, Cint), x, a, b))
+get_str!(x, a, b::BigInt) = (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.__gmpz_get_str(x::Ptr{Cchar}, a::Cint, b::mpz_t)::Ptr{Cchar}); x)
+set_str!(x::BigInt, a, b) = Int(begin Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.__gmpz_set_str(x::mpz_t, a::Ptr{UInt8}, b::Cint)::Cint) end)
 get_d(a::BigInt) = ccall((:__gmpz_get_d, libgmp), Cdouble, (mpz_t,), a)
 
 function export!(a::AbstractVector{T}, n::BigInt; order::Integer=-1, nails::Integer=0, endian::Integer=0) where {T<:Base.BitInteger}
@@ -290,7 +308,7 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     # don't make a copy in the common case where we are parsing a whole String
     bstr = startpos == firstindex(s) && endpos == lastindex(s) ? String(s) : String(SubString(s,startpos,endpos))
 
-    sgn, base, i = Base.parseint_preamble(true,Int(base_),bstr,firstindex(bstr),lastindex(bstr))
+    sgn, base, i = Base.parseint_preamble(true,Int(base_),bstr,firstindex(bstr),ncodeunits(bstr))
     if !(2 <= base <= 62)
         raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
         return nothing
@@ -388,88 +406,63 @@ function (::Type{T})(x::BigInt) where T<:Base.BitSigned
     end
 end
 
-
-Float64(n::BigInt, ::RoundingMode{:ToZero}) = MPZ.get_d(n)
-
-function (::Type{T})(n::BigInt, ::RoundingMode{:ToZero}) where T<:Union{Float16,Float32}
-    T(Float64(n,RoundToZero),RoundToZero)
-end
-
-function (::Type{T})(n::BigInt, ::RoundingMode{:Down}) where T<:CdoubleMax
-    x = T(n,RoundToZero)
-    x > n ? prevfloat(x) : x
-end
-function (::Type{T})(n::BigInt, ::RoundingMode{:Up}) where T<:CdoubleMax
-    x = T(n,RoundToZero)
-    x < n ? nextfloat(x) : x
-end
-
-function Float64(x::BigInt, ::RoundingMode{:Nearest})
-    x == 0 && return 0.0
+# Correctly rounded conversion to `T` under any rounding mode. The result is computed
+# directly from the limbs of `x` so that only a single rounding step ever happens.
+function (::Type{T})(x::BigInt, r::RoundingMode) where T<:IEEEFloat
     xsize = abs(x.size)
-    if xsize*BITS_PER_LIMB > 1024
-        z = Inf64
-    elseif xsize == 1
-        z = Float64(unsafe_load(x.d))
-    elseif Limb == UInt32 && xsize == 2
-        z = Float64((unsafe_load(x.d, 2) % UInt64) << BITS_PER_LIMB + unsafe_load(x.d))
-    else
-        y1 = unsafe_load(x.d, xsize) % UInt64
-        n = top_set_bit(y1)
-        # load first 54(1 + 52 bits of fraction + 1 for rounding)
-        y = y1 >> (n - (precision(Float64)+1))
-        if Limb == UInt64
-            y += n > precision(Float64) ? 0 : (unsafe_load(x.d, xsize-1) >> (10+n))
-        else
-            y += (unsafe_load(x.d, xsize-1) % UInt64) >> (n-22)
-            y += n > (precision(Float64) - 32) ? 0 : (unsafe_load(x.d, xsize-2) >> (10+n))
-        end
-        y = (y + 1) >> 1 # round, ties up
-        y &= ~UInt64(trailing_zeros(x) == (n-54 + (xsize-1)*BITS_PER_LIMB)) # fix last bit to round to even
-        d = ((n+1021) % UInt64) << 52
-        z = reinterpret(Float64, d+y)
-        z = ldexp(z, (xsize-1)*BITS_PER_LIMB)
+    xsize == 0 && return zero(T)
+    sb = isnegative(x)
+    top = unsafe_load(x.d, xsize)
+    s = top_set_bit(top)
+    nbits = s + (xsize - 1) * BITS_PER_LIMB # abs(x) is in [2^(nbits-1), 2^nbits)
+    if nbits > exponent_max(T) + 1
+        # abs(x) ≥ 2^(exponent_max(T) + 1), which is beyond the finite range of T
+        overflow = rounds_to_nearest(r)::Bool || rounds_away_from_zero(r, sb)::Bool
+        u = overflow ? ieee754_representation(T, sb, Val(:inf)) : ieee754_representation(T, sb, Val(:omega))
+        return reinterpret(T, u)
     end
-    return flipsign(z, x.size)
-end
-
-function Float32(x::BigInt, ::RoundingMode{:Nearest})
-    x == 0 && return 0f0
-    xsize = abs(x.size)
-    if xsize*BITS_PER_LIMB > 128
-        z = Inf32
-    elseif xsize == 1
-        z = Float32(unsafe_load(x.d))
-    else
-        y1 = unsafe_load(x.d, xsize)
-        n = BITS_PER_LIMB - leading_zeros(y1)
-        # load first 25(1 + 23 bits of fraction + 1 for rounding)
-        y = (y1 >> (n - (precision(Float32)+1))) % UInt32
-        y += (n > precision(Float32) ? 0 : unsafe_load(x.d, xsize-1) >> (BITS_PER_LIMB - (25-n))) % UInt32
-        y = (y + one(UInt32)) >> 1 # round, ties up
-        y &= ~UInt32(trailing_zeros(x) == (n-25 + (xsize-1)*BITS_PER_LIMB)) # fix last bit to round to even
-        d = ((n+125) % UInt32) << 23
-        z = reinterpret(Float32, d+y)
-        z = ldexp(z, (xsize-1)*BITS_PER_LIMB)
+    # Left-align the leading bits of abs(x) in the window m, and track whether any lower
+    # bit is set. The window holds at least precision(T) + 1 bits and at least one limb.
+    W = promote_type(Limb, uinttype(T))
+    wbits = 8 * sizeof(W)
+    m = top % W
+    filled = s
+    i = xsize - 1
+    while i > 0 && filled + BITS_PER_LIMB <= wbits
+        m = m << BITS_PER_LIMB | unsafe_load(x.d, i)
+        filled += BITS_PER_LIMB
+        i -= 1
     end
-    return flipsign(z, x.size)
-end
-
-function Float16(x::BigInt, ::RoundingMode{:Nearest})
-    x == 0 && return Float16(0.0)
-    y1 = unsafe_load(x.d)
-    n = BITS_PER_LIMB - leading_zeros(y1)
-    if n > 16 || abs(x.size) > 1
-        z = Inf16
-    else
-        # load first 12(1 + 10 bits for fraction + 1 for rounding)
-        y = (y1 >> (n - (precision(Float16)+1))) % UInt16
-        y = (y + one(UInt16)) >> 1 # round, ties up
-        y &= ~UInt16(trailing_zeros(x) == (n-12)) # fix last bit to round to even
-        d = ((n+13) % UInt16) << 10
-        z = reinterpret(Float16, d+y)
+    sticky = false
+    if i > 0 && filled < wbits
+        l = unsafe_load(x.d, i)
+        k = wbits - filled
+        m = m << k | l >> (BITS_PER_LIMB - k)
+        sticky = l << k != 0
+        filled = wbits
+        i -= 1
     end
-    return flipsign(z, x.size)
+    while !sticky && i > 0
+        sticky = unsafe_load(x.d, i) != 0
+        i -= 1
+    end
+    m <<= wbits - filled
+    # round the leading precision(T) bits of m, using the bits below them
+    p = precision(T)
+    q = m >> (wbits - p)
+    rest = m << p
+    round_bit = rest >> (wbits - 1) != 0
+    sticky |= rest << 1 != 0
+    incr = if rounds_to_nearest(r)
+        tie_up = tie_breaker_is_to_even(r) ? isodd(q) : tie_breaker_rounds_away_from_zero(r, sb)
+        round_bit & (sticky | tie_up)
+    else
+        rounds_away_from_zero(r, sb)::Bool & (round_bit | sticky)
+    end
+    # a carry out of the significand correctly bumps the exponent, possibly up to infinity
+    signif = q % uinttype(T) & significand_mask(T)
+    u = ieee754_representation(T, sb, nbits - 1 + exponent_bias(T), signif) + incr
+    return reinterpret(T, u)
 end
 
 Float64(n::BigInt) = Float64(n, RoundNearest)
@@ -612,13 +605,15 @@ Number of ones in the binary representation of abs(x).
 """
 count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
-# all uses of _bit_magnitude MUST ensure at callsite that `x` is strictly positive, otherwise it is UB
-_bit_magnitude(x::BigInt) = x.size * sizeof(Limb) << 3 - leading_zeros(GC.@preserve x unsafe_load(x.d, x.size))
+# all uses of _bit_magnitude MUST ensure at callsite that `x` is nonzero, otherwise it is UB
+function _bit_magnitude(x::BigInt)
+    n = abs(x.size)
+    return n * sizeof(Limb) << 3 - leading_zeros(GC.@preserve x unsafe_load(x.d, n))
+end
 
 function exponent(x::BigInt)
     iszero(x) && throw(DomainError(x, "cannot be zero"))
-    ux = abs(x)
-    return _bit_magnitude(ux) - 1
+    return _bit_magnitude(x) - 1
 end
 
 function top_set_bit(x::BigInt)
@@ -873,7 +868,7 @@ if Limb === UInt64 === UInt
     # an optimized version for BigInt of hash_integer (used e.g. for Rational{BigInt}),
     # and of hash
 
-    using .Base: HASH_SECRET, hash_bytes, hash_finalizer
+    using .Base: HASH_SECRET, hash_bytes
 
     # UnsafeLimbView provides a safe iterator interface to BigInt limb data
     struct UnsafeLimbView <: AbstractVector{UInt8}

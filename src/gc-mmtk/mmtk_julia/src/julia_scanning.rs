@@ -16,6 +16,21 @@ use crate::jl_gc_get_stackbase;
 use crate::jl_gc_scan_julia_exc_obj;
 
 const JL_MAX_TAGS: usize = 64; // from vm/julia/src/jl_exports.h
+
+// Frame kinds in the low bits of `jl_gcframe_t.nroots`. Must match the
+// JL_GCFRAME_* defines in julia.h.
+const JL_GCFRAME_DIRECT: usize = 0;
+const JL_GCFRAME_INDIRECT: usize = 1;
+const JL_GCFRAME_INTERP: usize = 2;
+const JL_GCFRAME_FINLIST: usize = 3;
+const JL_GCFRAME_KIND_MASK: usize = 0x3;
+
+// Must match gc_is_tagged_immediate in gc-common.h.
+const TAGGED_IMMEDIATE_MASK: usize = 0x3;
+
+fn is_tagged_immediate(value: Address) -> bool {
+    value.as_usize() & TAGGED_IMMEDIATE_MASK != 0
+}
 const OFFSET_OF_INLINED_SPACE_IN_MODULE: usize =
     offset_of!(jl_module_t, usings) + offset_of!(arraylist_t, _space);
 
@@ -169,6 +184,22 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
 
             let ta = obj.to_ptr::<jl_task_t>();
 
+            #[cfg(feature = "concurrentimmix")]
+            if crate::collection::CONCURRENT_MARKING_ACTIVE.load(Ordering::SeqCst) {
+                // For concurrent marking, prefer a stable snapshot captured before the task runs.
+                // If no snapshot exists, create one while holding the per-task scan lock so
+                // resume-time snapshotting for the same task waits only until the live task scan
+                // finishes. The snapshot itself is then processed outside the lock.
+                if let Some(snapshot) = crate::scanning::GC_STACK_SNAPSHOTS.gc_thread_scan_stack(ta)
+                {
+                    snapshot.iter().for_each(|slot| {
+                        process_slot(closure, Address::from_ptr(slot as *const _))
+                    });
+                }
+            } else {
+                mmtk_scan_gcstack(ta, closure);
+            }
+            #[cfg(not(feature = "concurrentimmix"))]
             mmtk_scan_gcstack(ta, closure);
 
             let layout = (*jl_task_type).layout;
@@ -190,13 +221,29 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
             // (strong) `parent` slot of each entry is traced; `child_head`
             // and the `next`/`pprev` slots are weak references with
             // unlink-on-death semantics (see jl_gc_sweep_weak_processing)
-            // and must not be traced.
+            // and must not be traced. The waiter-list head is a strong
+            // fixed slot.
             let cs = obj.to_ptr::<jl_cancel_source_t>();
+            process_slot(closure, obj + offset_of!(jl_cancel_source_t, waiters_head));
+            process_slot(closure, obj + offset_of!(jl_cancel_source_t, walk_lock));
             let np = (*cs).nparents as usize;
             let mut slot = obj + std::mem::size_of::<jl_cancel_source_t>();
             for _ in 0..np {
                 process_slot(closure, slot);
                 slot = slot + std::mem::size_of::<jl_cancel_parent_link_t>();
+            }
+        } else if vtag_usize == ((jl_small_typeof_tags_jl_wait_entry_tag as usize) << 4) {
+            // Variable-sized wait entry: `nslots` {owner, next, aux} wait
+            // slots follow the fixed fields. `task` and the per-slot
+            // `owner` and `next` are strong references; `aux` is data.
+            let we = obj.to_ptr::<jl_wait_entry_t>();
+            process_slot(closure, obj + offset_of!(jl_wait_entry_t, task));
+            let ns = (*we).nslots as usize;
+            let mut slot = obj + std::mem::size_of::<jl_wait_entry_t>();
+            for _ in 0..ns {
+                process_slot(closure, slot + offset_of!(jl_wait_slot_t, owner));
+                process_slot(closure, slot + offset_of!(jl_wait_slot_t, next));
+                slot = slot + std::mem::size_of::<jl_wait_slot_t>();
             }
         } else if vtag_usize == ((jl_small_typeof_tags_jl_string_tag as usize) << 4)
             && PRINT_OBJ_TYPE
@@ -326,6 +373,17 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
     }
 
     if vt == jl_weakref_type {
+        #[cfg(feature = "concurrentimmix")]
+        if crate::collection::CONCURRENT_MARKING_ACTIVE.load(Ordering::SeqCst) {
+            // Treat weak ref as strong
+            let wr = obj.to_ptr::<jl_weakref_t>();
+            let slot = Address::from_ptr(std::ptr::addr_of!((*wr).value));
+            process_slot(closure, slot);
+            return;
+        } else {
+            return;
+        }
+        #[cfg(not(feature = "concurrentimmix"))]
         return;
     }
 
@@ -389,6 +447,9 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
     ta: *const jl_task_t,
     closure: &mut EV,
 ) {
+    // ConcurrentImmix may call this from the task-resume barrier. Callers must ensure the task
+    // stack is stable before using this path during concurrent marking.
+
     let stkbuf = (*ta).ctx.stkbuf;
     let copy_stack = (*ta).ctx.copy_stack_custom();
 
@@ -420,33 +481,48 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
 
         loop {
             let rts = Address::from_mut_ptr(s).shift::<Address>(2);
+            let frame_kind = nroots.as_usize() & JL_GCFRAME_KIND_MASK;
             let mut i = 0;
             while i < nr {
-                if (nroots.as_usize() & 1) != 0 {
+                if frame_kind == JL_GCFRAME_INDIRECT {
+                    // slots hold addresses of local `jl_value_t *` variables
                     let slot = read_stack(rts.shift::<Address>(i as isize), offset, lb, ub);
                     let real_addr = get_stack_addr(slot, offset, lb, ub);
-                    process_slot(closure, real_addr);
-                } else {
+                    let value = read_stack(slot, offset, lb, ub);
+                    if !is_tagged_immediate(value) {
+                        process_slot(closure, real_addr);
+                    }
+                } else if frame_kind == JL_GCFRAME_FINLIST {
                     let real_addr =
                         get_stack_addr(rts.shift::<Address>(i as isize), offset, lb, ub);
 
                     let slot = read_stack(rts.shift::<Address>(i as isize), offset, lb, ub);
-                    use crate::julia_finalizer::gc_ptr_tag;
+                    use crate::julia_finalizer::{gc_ptr_tag, GC_FIN_CFUNC_TAG, GC_FIN_TAG_MASK};
                     // malloced pointer tagged in jl_gc_add_quiescent
                     // skip both the next element (native function), and the object
-                    if slot & 3usize == 3 {
+                    if slot & GC_FIN_TAG_MASK == GC_FIN_TAG_MASK {
                         i += 2;
                         continue;
                     }
 
                     // pointer is not malloced but function is native, so skip it
-                    if gc_ptr_tag(slot, 1) {
-                        process_offset_slot(closure, real_addr, 1);
+                    if gc_ptr_tag(slot, GC_FIN_CFUNC_TAG) {
+                        process_offset_slot(closure, real_addr, GC_FIN_CFUNC_TAG);
                         i += 2;
                         continue;
                     }
 
                     process_slot(closure, real_addr);
+                } else {
+                    debug_assert!(
+                        frame_kind == JL_GCFRAME_DIRECT || frame_kind == JL_GCFRAME_INTERP
+                    );
+                    let real_addr =
+                        get_stack_addr(rts.shift::<Address>(i as isize), offset, lb, ub);
+                    let value = read_stack(rts.shift::<Address>(i as isize), offset, lb, ub);
+                    if !is_tagged_immediate(value) {
+                        process_slot(closure, real_addr);
+                    }
                 }
 
                 i += 1;

@@ -28,7 +28,7 @@ static const uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
 };
 
-typedef struct _jl_ast_context_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_ast_context_t {
     fl_context_t fl;
     fltype_t *jvtype;
 
@@ -41,8 +41,6 @@ typedef struct _jl_ast_context_t {
     jl_module_t *module; // context module for `current-julia-module-counter`
     struct _jl_ast_context_t *next; // invasive list pointer for getting free contexts
 } jl_ast_context_t;
-
-static jl_ast_context_t jl_ast_main_ctx;
 
 #ifdef __clang_gcanalyzer__
 extern jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
@@ -62,7 +60,7 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
 #ifdef __clang_gcanalyzer__
 // this definition causes bugs in the new gc-analyzer (because it tracks e->args instead of e)
 #undef jl_exprargset
-extern void jl_exprargset(jl_array_t *a, size_t i, jl_value_t *v) JL_NOTSAFEPOINT;
+extern void jl_exprargset(jl_expr_t *ex, size_t i, jl_value_t *v) JL_NOTSAFEPOINT;
 #endif
 
 static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
@@ -132,37 +130,11 @@ static value_t fl_module_unique_name(fl_context_t *fl_ctx, value_t *args, uint32
     return symbol(fl_ctx, buf);
 }
 
-static int jl_is_number(jl_value_t *v)
-{
-    jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
-    for (; t->super != t; t = t->super)
-        if (t == jl_number_type)
-            return 1;
-    return 0;
-}
-
-// Check whether v is a scalar for purposes of inlining fused-broadcast
-// arguments when lowering; should agree with broadcast.jl on what is a
-// scalar.  When in doubt, return false, since this is only an optimization.
-static value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
-{
-    argcount(fl_ctx, "julia-scalar?", nargs, 1);
-    if (fl_isnumber(fl_ctx, args[0]) || fl_isstring(fl_ctx, args[0]))
-        return fl_ctx->T;
-    else if (iscvalue(args[0]) && fl_ctx->jl_sym == cv_type((cvalue_t*)ptr(args[0]))) {
-        jl_value_t *v = *(jl_value_t**)cptr(args[0]);
-        if (jl_is_number(v) || jl_is_string(v))
-            return fl_ctx->T;
-    }
-    return fl_ctx->F;
-}
-
 static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *mod) JL_CANSAFEPOINT;
 
 static const builtinspec_t julia_flisp_ast_ext[] = { // TODO: can we kill these safepoint?
     { "defined-julia-global", fl_defined_julia_global }, // NOLINT(julia-first-decl-annotations)
     { "current-julia-module-counter", fl_module_unique_name }, // NOLINT(julia-first-decl-annotations)
-    { "julia-scalar?", fl_julia_scalar },
     { NULL, NULL }
 };
 
@@ -193,6 +165,7 @@ static void jl_init_ast_ctx(jl_ast_context_t *ctx) JL_NOTSAFEPOINT
 // There should be no GC allocation while holding this lock
 static uv_mutex_t flisp_lock;
 static jl_ast_context_t *jl_ast_ctx_freed = NULL;
+static int flisp_lock_ready = 0;
 
 static jl_ast_context_t *jl_ast_ctx_enter(jl_module_t *m) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
 {
@@ -229,13 +202,14 @@ static void jl_ast_ctx_leave(jl_ast_context_t *ctx)
 }
 
 
+// Only the lock; `jl_ast_ctx_enter` builds a context on first use, so a
+// program that never lowers an expression never loads the flisp image.
 void jl_init_flisp(void)
 {
-    if (jl_ast_ctx_freed)
+    if (flisp_lock_ready)
         return;
+    flisp_lock_ready = 1;
     uv_mutex_init(&flisp_lock);
-    jl_init_ast_ctx(&jl_ast_main_ctx);
-    jl_ast_ctx_leave_(&jl_ast_main_ctx);
 }
 
 void jl_init_common_symbols(void)
@@ -823,21 +797,6 @@ static jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl
     return result;
 }
 
-jl_value_t *jl_call_scm_on_ast_and_loc(const char *funcname, jl_value_t *expr,
-                                       jl_module_t *inmodule, const char *file, int line)
-{
-    jl_ast_context_t *ctx = jl_ast_ctx_enter(inmodule);
-    fl_context_t *fl_ctx = &ctx->fl;
-    value_t arg = julia_to_scm(fl_ctx, expr);
-    value_t e = fl_applyn(fl_ctx, 3, symbol_value(symbol(fl_ctx, funcname)), arg,
-                          symbol(fl_ctx, file), fixnum(line));
-    jl_value_t *result = scm_to_julia(fl_ctx, e, inmodule);
-    JL_GC_PUSH1(&result);
-    jl_ast_ctx_leave(ctx);
-    JL_GC_POP();
-    return result;
-}
-
 // syntax tree accessors
 
 JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
@@ -982,6 +941,7 @@ int jl_isa_ast_node(jl_value_t *e) JL_NOTSAFEPOINT
         || jl_is_phinode(e)
         || jl_is_phicnode(e)
         || jl_is_upsilonnode(e)
+        || jl_is_binding_partition(e)
         || jl_is_expr(e);
 }
 
@@ -1137,24 +1097,24 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
         jl_value_t *result = jl_invoke_julia_macro(e->args, inmodule, &newctx.m, &lineinfo, world, throw_load_error);
         if (!need_esc_node(result))
             return result;
-        jl_value_t *wrap = NULL;
+        jl_expr_t *wrap = NULL;
         JL_GC_PUSH4(&result, &wrap, &newctx.m, &lineinfo);
         // copy and wrap the result in `(hygienic-scope ,result ,newctx)
         if (jl_is_expr(result) && ((jl_expr_t*)result)->head == jl_escape_sym)
             result = jl_exprarg(result, 0);
         else
-            wrap = (jl_value_t*)jl_exprn(jl_hygienicscope_sym, 3);
+            wrap = jl_exprn(jl_hygienicscope_sym, 3);
         result = jl_copy_ast(result);
         if (!onelevel)
             result = jl_expand_macros(result, inmodule, wrap ? &newctx : macroctx, onelevel, world, throw_load_error);
         if (wrap && need_esc_node(result)) {
             jl_exprargset(wrap, 0, result);
-            jl_exprargset(wrap, 1, newctx.m);
+            jl_exprargset(wrap, 1, (jl_value_t*)newctx.m);
             jl_exprargset(wrap, 2, lineinfo);
             if (jl_is_expr(result) && ((jl_expr_t*)result)->head == jl_escape_sym)
                 result = jl_exprarg(result, 0);
             else
-                result = wrap;
+                result = (jl_value_t*)wrap;
         }
         JL_GC_POP();
         return result;
@@ -1259,9 +1219,6 @@ JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
                                   const char *filename, int line, size_t world, bool_t warn)
 {
     jl_value_t *julia_lower = NULL;
-    if (inmodule) {
-        julia_lower = jl_get_global(inmodule, jl_symbol("_internal_julia_lower"));
-    }
     if ((!julia_lower || julia_lower == jl_nothing) && jl_core_module)
         julia_lower = jl_get_global_value(jl_core_module, jl_symbol("_lower"), jl_current_task->world_age);
     if (!julia_lower || julia_lower == jl_nothing) {
@@ -1273,13 +1230,12 @@ JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
     args[1] = expr;
     args[2] = (jl_value_t*)inmodule;
     args[3] = jl_cstr_to_string(filename);
-    args[4] = jl_box_ulong(line);
+    args[4] = jl_box_long(line);
     args[5] = jl_box_ulong(world);
     args[6] = warn ? jl_true : jl_false;
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
-    size_t lowering_world = jl_lowering_world;
-    ct->world_age = lowering_world ? lowering_world : jl_atomic_load_acquire(&jl_world_counter);
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     jl_value_t *result = jl_apply(args, 7);
     ct->world_age = last_age;
     args[0] = result; // root during error check below
@@ -1290,41 +1246,39 @@ JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
     return result;
 }
 
-//------------------------------------------------------------------------------
-// Parsing API and utils for calling parser from runtime
-
-// Internal C entry point to parser
+// currently used during bootstrap, by Core.include, and by jlapi.c.
 // `text` is passed as a pointer to allow raw non-String buffers to be used
 // without copying.
-jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
-                     size_t lineno, size_t offset, jl_value_t *options, jl_module_t *inmodule)
+JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
+                                  jl_module_t *inmodule)
 {
-    jl_value_t *parser = NULL;
-    if (inmodule) {
-        parser = jl_get_global(inmodule, jl_symbol("#_internal_julia_parse"));
+    JL_TYPECHK(parse, module, (jl_value_t*)inmodule)
+    jl_value_t *parse = NULL;
+    int lno = 1;
+    int offset = 0;
+    jl_value_t *options = (jl_value_t *)jl_all_sym;
+    jl_value_t **args;
+    jl_task_t *ct = jl_current_task;
+    JL_GC_PUSHARGS(args, 5);
+    if (jl_base_module) {
+        parse = jl_get_global(jl_base_module, jl_symbol("_c_parseall_expr"));
     }
-    if ((!parser || parser == jl_nothing) && jl_core_module) {
-        parser = jl_get_global(jl_core_module, jl_symbol("_parse"));
-    }
-    if (!parser || parser == jl_nothing) {
+    if (!parse) {
         // In bootstrap, directly call the builtin parser.
-        jl_value_t *result = jl_fl_parse(text, text_len, filename, lineno, offset, options);
+        JL_GC_POP();
+        jl_value_t *result = jl_fl_parse(text, text_len, filename, lno, offset, options);
         return result;
     }
-    jl_value_t **args;
-    JL_GC_PUSHARGS(args, 6);
-    args[0] = parser;
+    args[0] = parse;
     args[1] = (jl_value_t*)jl_alloc_svec(2);
     jl_svecset(args[1], 0, jl_box_uint8pointer((uint8_t*)text));
     jl_svecset(args[1], 1, jl_box_long(text_len));
     args[2] = filename;
-    args[3] = jl_box_long(lineno);
-    args[4] = jl_box_long(offset);
-    args[5] = options;
-    jl_task_t *ct = jl_current_task;
+    args[3] = jl_box_long(lno);
+    args[4] = (jl_value_t*)inmodule;
     size_t last_age = ct->world_age;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-    jl_value_t *result = jl_apply(args, 6);
+    jl_value_t *result = jl_apply(args, 5);
     ct->world_age = last_age;
     args[0] = result; // root during error checks below
     JL_TYPECHK(parse, simplevector, result);
@@ -1334,37 +1288,6 @@ jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
     JL_TYPECHK(parse, long, jl_svecref(result, 1));
     JL_GC_POP();
     return result;
-}
-
-// parse an entire string as a file, reading multiple expressions
-JL_DLLEXPORT jl_value_t *jl_parse_all(const char *text, size_t text_len,
-                                      const char *filename, size_t filename_len, size_t lineno)
-{
-    jl_value_t *fname = jl_pchar_to_string(filename, filename_len);
-    JL_GC_PUSH1(&fname);
-    jl_value_t *p = jl_parse(text, text_len, fname, lineno, 0, (jl_value_t*)jl_all_sym, NULL);
-    JL_GC_POP();
-    return jl_svecref(p, 0);
-}
-
-// this is for parsing one expression out of a string, keeping track of
-// the current position.
-JL_DLLEXPORT jl_value_t *jl_parse_string(const char *text, size_t text_len,
-                                         int offset, int greedy)
-{
-    jl_value_t *fname = jl_cstr_to_string("none");
-    JL_GC_PUSH1(&fname);
-    jl_value_t *result = jl_parse(text, text_len, fname, 1, offset,
-                                  (jl_value_t*)(greedy ? jl_statement_sym : jl_atom_sym), NULL);
-    JL_GC_POP();
-    return result;
-}
-
-// deprecated
-JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *text, size_t text_len,
-                                             const char *filename, size_t filename_len)
-{
-    return jl_parse_all(text, text_len, filename, filename_len, 1);
 }
 
 #ifdef __cplusplus

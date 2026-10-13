@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, Mmap, SharedArrays, Random
+using Test, Distributed, Mmap, SharedArrays, Random, Serialization
 include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testenv.jl"))
 
 @test isempty(Test.detect_closure_boxes(SharedArrays))
@@ -119,7 +119,7 @@ check_pids_all(S)
 filedata = similar(Atrue)
 read!(fn, filedata)
 @test filedata == sdata(S)
-finalize(S)
+close(S)
 
 # Error for write-only files
 @test_throws ArgumentError SharedArray{Int,2}(fn, sz, mode="w")
@@ -134,7 +134,7 @@ S = SharedArray{Int,2}(fn2, sz, init=D->(for i in localindices(D); D[i] = myid()
 filedata2 = similar(Atrue)
 read!(fn2, filedata2)
 @test filedata == filedata2
-finalize(S)
+close(S)
 
 # Appending to a file
 fn3 = tempname()
@@ -146,13 +146,10 @@ filedata = Vector{UInt8}(undef, len)
 read!(fn3, filedata)
 @test all(filedata[1:4] .== 0x01)
 @test all(filedata[5:end] .== 0x02)
-unshare!(S)
-finalize(S)
+close(S)
 @test Base.elsize(S) == Base.elsize(typeof(S)) == Base.elsize(Vector{UInt8})
 S = nothing
 
-# release files so they can be deleted on Windows
-@everywhere GC.gc(true)
 rm(fn); rm(fn2); rm(fn3)
 
 ### Utility functions
@@ -478,6 +475,7 @@ end
 
         # main did not create S, so unshare! must refuse and leave everything untouched
         @test_throws ArgumentError unshare!(S)
+        @test_throws ArgumentError close(S)
         @test procs(S) == [id_me, host]
         @test all(S .== 7)
 
@@ -523,22 +521,90 @@ end
     @testset "finalize drops the parent's own reference without force-invalidating it" begin
         S = SharedArray{Int64}(100, 100)
         segname = S.segname
+        fill!(S, 3)
 
         @static if Sys.islinux()
-            ismapped, _ = shmem_mapped(segname)
-            @test ismapped
+            @test first(shmem_mapped(segname))
         end
 
-        finalize(S)
+        function finalize_and_check_alias()
+            backing = sdata(S)
+            GC.@preserve backing begin
+                finalize(S)
+                @test all(backing .== 3)
+                @static if Sys.islinux()
+                    @test first(shmem_mapped(segname))
+                end
+            end
+        end
+        finalize_and_check_alias()
 
         @static if Sys.islinux()
-            ismapped, _ = shmem_mapped(segname)
-            @test ismapped
-
             GC.gc(); GC.gc()
-            ismapped, _ = shmem_mapped(segname)
-            @test !ismapped
+            @test !first(shmem_mapped(segname))
         end
+    end
+
+    @testset "close eagerly releases all mappings" begin
+        S = SharedArray{Int64}(100, 100)
+        segname = S.segname
+        mapped_pids = procs(S)
+        fill!(S, 11)
+
+        close(S)
+
+        @test isempty(procs(S))
+        @test isempty(sdata(S))
+        @test size(S) == (0, 0)
+        @test repr(S) == "0×0 SharedMatrix{Int64}"
+        @test repr("text/plain", S) == "0×0 SharedMatrix{Int64}"
+        @static if Sys.islinux()
+            for p in mapped_pids
+                @test !remotecall_fetch(s -> first(shmem_mapped(s)), p, segname)
+            end
+        end
+
+        close(S)
+    end
+
+    @testset "closed SharedArrays travel and copy as empty arrays" begin
+        S = SharedArray{Int64}(4)
+        fill!(S, 2)
+        close(S)
+
+        io = IOBuffer()
+        serialize(io, S)
+        seekstart(io)
+        D = deserialize(io)
+        @test D isa SharedVector{Int64}
+        @test size(D) == (0,)
+        @test isempty(procs(D))
+
+        W = remotecall_fetch(identity, id_other, S)
+        @test W isa SharedVector{Int64}
+        @test size(W) == (0,)
+        @test isempty(procs(W))
+
+        C = deepcopy(S)
+        @test size(C) == (0,)
+        @test isempty(procs(C))
+        @test isempty(sdata(C))
+
+        S2 = SharedArray{Int64}(4)
+        close(S2)
+        @test copyto!(S, S2) === S
+
+        E1 = SharedArray{Int64}(0)
+        E2 = SharedArray{Int64}(0)
+        @test copyto!(E1, E2) === E1
+
+        A = SharedArray{Int64}(3)
+        fill!(A, 7)
+        unshare!(A)
+        B = deepcopy(A)
+        @test isempty(procs(B))
+        @test sdata(B) !== sdata(A)
+        @test B == A
     end
 
     @testset "backing array remains valid after the SharedArray wrapper is GC'd" begin

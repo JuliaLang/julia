@@ -54,8 +54,6 @@ export @K_str, kind
     is_infix_op_call,
     is_prefix_op_call,
     is_postfix_op_call,
-    is_dotted,
-    is_decorated,
     numeric_flags,
     has_flags,
     TRIPLE_STRING_FLAG,
@@ -101,8 +99,8 @@ include("julia/literal_parsing.jl")
 include("porcelain/green_node.jl")
 include("porcelain/syntax_node.jl")
 include("integration/expr.jl")
-if VERSION >= v"1.12"
-    include("porcelain/syntax_graph.jl")
+if isdefined(Base, :Syntax)
+    include("porcelain/syntax.jl")
 end
 
 # Hooks to integrate the parser with Base

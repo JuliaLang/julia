@@ -186,10 +186,27 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads);
 // list of another thread
 extern jl_mutex_t finalizers_lock;
 // `ptls->finalizers` and `finalizer_list_marked` might have tagged pointers.
-// If an object pointer has the lowest bit set, the next pointer is an unboxed c function pointer.
-// If an object pointer has the second lowest bit set, the current pointer is a c object pointer.
+// If an object pointer has `GC_FIN_CFUNC_TAG` set, the next pointer is an unboxed c function pointer.
+// If an object pointer has `GC_FIN_COBJ_TAG` set, the current pointer is a c object pointer.
 //   It must be aligned at least 4, and it finalized immediately (at "quiescence").
-// `to_finalize` should not have tagged pointers.
+// `to_finalize` carries the same tags: `sweep_finalizer_list` moves entries over unchanged.
+#define GC_FIN_CFUNC_TAG 1
+#define GC_FIN_COBJ_TAG  2
+#define GC_FIN_TAG_MASK  3
+
+#define JL_GC_ENCODE_PUSHFINLIST(n) ((((size_t)(n)) << 2) | JL_GCFRAME_FINLIST)
+
+// Outside finalizer lists, the GC ignores a value in a GC frame whose two low
+// bits are 01 or 10. Embedders can use these patterns to root their own tagged
+// immediates with JL_GC_PUSH*, as long as such values are never stored in
+// fields the GC scans itself. The pattern 11 is reserved for Julia; such values
+// are currently ignored as well, but embedders must not rely on that. Only
+// 4-byte alignment of objects is needed, so this works on 32-bit platforms too;
+// objects are in fact 16-byte aligned (JL_HEAP_ALIGNMENT).
+STATIC_INLINE int gc_is_tagged_immediate(const void *v) JL_NOTSAFEPOINT
+{
+    return ((uintptr_t)v & 0x3) != 0;
+}
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 

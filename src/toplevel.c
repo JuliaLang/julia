@@ -314,50 +314,51 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
     jl_value_t *global_type = set_type;
     if (strong && !global_type)
         global_type = (jl_value_t*)jl_any_type;
-    while (1) {
-        bpart = jl_get_binding_partition(b, new_world);
-        enum jl_partition_kind kind = jl_binding_kind(bpart);
-        if (kind != PARTITION_KIND_GLOBAL) {
-            if (jl_bkind_is_some_implicit(kind) || kind == PARTITION_KIND_DECLARED) {
-                if (kind == new_kind) {
-                    if (!set_type)
-                        goto done;
-                    goto check_type;
-                }
+    int replaced = 0; // whether a new partition was installed (so the world must be bumped)
+    int update_partition = 0;
+    int update_in_place = 0;
+    bpart = jl_get_binding_partition(b, new_world);
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (kind != PARTITION_KIND_GLOBAL) {
+        if (jl_bkind_is_some_implicit(kind) || kind == PARTITION_KIND_DECLARED) {
+            if (kind != new_kind) {
                 check_safe_newbinding(gm, gs);
-                if (jl_atomic_load_relaxed(&bpart->min_world) == new_world) {
-                    bpart->kind = new_kind | (bpart->kind & PARTITION_MASK_FLAG);
-                    jl_gc_write(bpart, bpart->restriction, jl_value_t, global_type);
-                    continue;
-                } else {
-                    jl_replace_binding_locked(b, bpart, global_type, new_kind, new_world);
-                }
-                break;
-            } else if (set_type) {
-                if (jl_bkind_is_some_constant(kind)) {
-                    jl_errorf("cannot set type for constant %s.%s.",
-                            jl_symbol_name(gm->name), jl_symbol_name(gs));
-                } else {
-                    jl_errorf("cannot set type for imported binding %s.%s.",
-                            jl_symbol_name(gm->name), jl_symbol_name(gs));
-                }
+                update_partition = 1;
+                update_in_place = jl_atomic_load_relaxed(&bpart->min_world) == new_world;
             }
         }
-        if (set_type)
-        {
-check_type: ;
-            jl_value_t *old_ty = bpart->restriction;
-            JL_GC_PROMISE_ROOTED(old_ty);
-            if (!jl_types_equal(set_type, old_ty)) {
-                jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
+        else if (set_type) {
+            if (jl_bkind_is_some_constant(kind)) {
+                jl_errorf("cannot set type for constant %s.%s.",
                         jl_symbol_name(gm->name), jl_symbol_name(gs));
             }
-
+            else {
+                jl_errorf("cannot set type for imported binding %s.%s.",
+                        jl_symbol_name(gm->name), jl_symbol_name(gs));
+            }
         }
-        goto done;
     }
-    jl_atomic_store_release(&jl_world_counter, new_world);
-done:
+    else if (set_type) {
+        jl_value_t *old_ty = bpart->restriction;
+        JL_GC_PROMISE_ROOTED(old_ty);
+        if (!jl_types_equal(set_type, old_ty)) {
+            jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
+                    jl_symbol_name(gm->name), jl_symbol_name(gs));
+        }
+    }
+
+    if (update_partition) {
+        if (update_in_place) {
+            bpart->kind = new_kind | jl_carried_binding_flags(bpart);
+            jl_gc_write(bpart, bpart->restriction, jl_value_t, global_type);
+        }
+        else {
+            jl_replace_binding_locked(b, bpart, global_type, new_kind, new_world);
+            replaced = 1;
+        }
+    }
+    if (replaced)
+        jl_atomic_store_release(&jl_world_counter, new_world);
     JL_UNLOCK(&world_counter_lock);
 }
 
@@ -397,7 +398,7 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
         *has_defs = 1;
         return;
     }
-    else if (head == jl_method_sym || jl_is_toplevel_only_expr(v)) {
+    else if (jl_is_toplevel_only_expr(v)) {
         *has_defs = 1;
     }
     else if (head == jl_cfunction_sym) {
@@ -432,7 +433,7 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
                 *has_ccall = 1;
             }
             // TODO: rely on latestworld instead of function callee detection here (or add it to jl_is_toplevel_only_expr)
-            if (called == BUILTIN(_typebody) || called == BUILTIN(declare_const)) {
+            if (called == BUILTIN(_typebody) || called == BUILTIN(declare_const) || called == BUILTIN(define_method)) {
                 *has_defs = 1;
             }
         }
@@ -504,7 +505,7 @@ static int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
     jl_sym_t *head = ex->head;
     if (head == jl_module_sym || head == jl_export_sym || head == jl_public_sym ||
         head == jl_thunk_sym || head == jl_toplevel_sym || head == jl_error_sym ||
-        head == jl_incomplete_sym || head == jl_method_sym) {
+        head == jl_incomplete_sym) {
         return 0;
     }
     return 1;
@@ -629,6 +630,11 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
             // Not thread safe. For debugging and last resort error messages (jl_fprint_critical_error) only.
             jl_atomic_store_relaxed(&jl_filename, *toplevel_filename);
             jl_atomic_store_relaxed(&jl_lineno, *toplevel_lineno);
+            // Top-level thunks carry no line information.
+            if (jl_options.code_coverage != JL_LOG_NONE && *toplevel_lineno > 0 &&
+                    jl_coverage_enabled_for(m, *toplevel_filename))
+                jl_coverage_visit_line(*toplevel_filename, strlen(*toplevel_filename),
+                                       *toplevel_lineno);
             return jl_nothing;
         }
         return jl_interpret_toplevel_expr_in(m, e, NULL, NULL);
@@ -782,7 +788,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v)
 }
 
 // Check module `m` is open for `eval/include`, or throw an error.
-JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, char *fname) JL_CANSAFEPOINT
+JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, const char *fname) JL_CANSAFEPOINT
 {
     if (jl_current_task->ptls->in_pure_callback)
         jl_errorf("%s cannot be used in a generated function", fname);
@@ -814,6 +820,9 @@ JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, char *fname) JL_CANS
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 {
     jl_check_top_level_effect(m, "eval");
+    jl_value_t *julia_eval =
+        jl_get_global_value(jl_core_module, jl_symbol("_toplevel_eval"),
+                            jl_current_task->world_age);
     jl_value_t *v = NULL;
     int last_lineno = jl_atomic_load_relaxed(&jl_lineno);
     const char *last_filename = jl_atomic_load_relaxed(&jl_filename);
@@ -823,7 +832,17 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     size_t last_age = ct->world_age;
     JL_TRY {
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        v = jl_toplevel_eval(m, ex);
+        if (julia_eval && julia_eval != jl_nothing) {
+            jl_value_t **args;
+            JL_GC_PUSHARGS(args, 3);
+            args[0] = julia_eval;
+            args[1] = (jl_value_t*)m;
+            args[2] = ex;
+            v = jl_apply(args, 3);
+            JL_GC_POP();
+        } else {
+            v = jl_toplevel_eval(m, ex);
+        }
     }
     JL_CATCH {
         jl_atomic_store_relaxed(&jl_lineno, last_lineno);
@@ -857,9 +876,9 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
     JL_GC_PUSH3(&ast, &result, &expression);
 
     ast = jl_svecref(jl_parse(jl_string_data(text), jl_string_len(text),
-                              filename, 1, 0, (jl_value_t*)jl_all_sym, module), 0);
+                              filename, module), 0);
     if (!jl_is_expr(ast) || ((jl_expr_t*)ast)->head != jl_toplevel_sym) {
-        jl_errorf("jl_parse_all() must generate a top level expression");
+        jl_errorf("jl_parse() must generate a top level expression");
     }
 
     jl_task_t *ct = jl_current_task;

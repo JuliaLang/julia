@@ -369,4 +369,10 @@ end
     end
 end
 
+@testset "nonscalar setindex! checks the shape under @inbounds" begin
+    inbounds_setindex!(A, X, I) = (@inbounds A[I] = X; A)
+    @test_throws DimensionMismatch view(zeros(6), 2:5)[1:4] = [1]
+    @test_throws DimensionMismatch inbounds_setindex!(zeros(6), [1.0], 1:4)
+end
+
 end

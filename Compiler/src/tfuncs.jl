@@ -507,6 +507,7 @@ function sizeof_nothrow(@nospecialize(x))
     x = unwrap_unionall(t)
     # instances are variable-sized, so the type itself has no definite size
     x === Core.CancellationTokenSource && return false
+    x === Core.WaitEntryN && return false
     if isconcrete
         if isa(x, DataType) && x.layout != C_NULL
             # there's just a few concrete types with an opaque layout
@@ -1156,7 +1157,9 @@ end
 function _getfield_tfunc_const(@nospecialize(sv), name::Const)
     nv = _getfield_fieldindex(typeof(sv), name)
     nv === nothing && return Bottom
-    if isa(sv, DataType) && nv == DATATYPE_TYPES_FIELDINDEX && isdefined(sv, nv)
+    # `types` and `super` are write-once: non-const (filled lazily), but once
+    # a defined value is observed it can never change, so folding it is sound
+    if isa(sv, DataType) && (nv == DATATYPE_TYPES_FIELDINDEX || nv == DATATYPE_SUPER_FIELDINDEX) && isdefined(sv, nv)
         return Const(getfield(sv, nv))
     end
     if !isa(sv, Module) && isconst(typeof(sv), nv)
@@ -1203,6 +1206,14 @@ end
             end
         end
         s00 = s
+    elseif isa(s00, PartialTask)
+        # N.B.: Do not use `PartialTask.fetch_type` to refine any field load here (e.g.
+        # `:result`). Task fields are mutable, so `fetch_type` is not an invariant of the
+        # current field contents; it is only sound as the *checked* side of the `typeassert`
+        # in `fetch` (via `task_result_type_tfunc`). Refining the load itself would let the
+        # optimizer prove that typeassert and delete it, turning a field mutation into
+        # silent type confusion instead of a runtime `TypeError`.
+        s00 = Task
     end
     return _getfield_tfunc(widenlattice(𝕃), s00, name, setfield)
 end
@@ -1247,10 +1258,14 @@ end
             sv = type_parameter(s)
             if isa(sv, DataType) && isa(name, Const) &&
                _getfield_fieldindex(DataType, name) == DATATYPE_SUPER_FIELDINDEX &&
-               !has_free_typevars(sv.super)
+               # read without forcing: on a deferred instantiation whose slot
+               # is still unset the modeled `getfield` throws, so no precision
+               # is lost by falling through (see issue #61347)
+               isdefined(sv, :super) &&
+               (svsuper = getfield(sv, :super); !has_free_typevars(svsuper))
                 # only `DataType` reps reach `.super` without throwing, and the
                 # `.super`s of `==`-equal `DataType`s are `==`-equal (if not egal)
-                return Type{sv.super}
+                return Type{svsuper}
             end
             if isTypeDataType(sv) && isa(name, Const)
                 nv = _getfield_fieldindex(DataType, name)::Int
@@ -1439,6 +1454,11 @@ end
         maxargs = 6
         op_argi = 4
         v_argi = 5
+    elseif ff === Core.modifyglobal_partition
+        minargs = 4
+        maxargs = 5
+        op_argi = 3
+        v_argi = 4
     elseif ff === Core.memoryrefmodify!
         minargs = 6
         maxargs = 6
@@ -1472,6 +1492,21 @@ end
         GT = abstract_eval_get_binding_type(interp, sv, o, f).rt
         RT = isa(GT, Const) ? Pair{GT.val, GT.val} : Pair
         TF = isa(GT, Const) ? GT.val : Any
+    elseif ff === Core.modifyglobal_partition
+        GT = nothing
+        p = unwrapva(argtypes[2])
+        if isa(p, Const) && isa(p.val, Core.BindingPartition)
+            p = p.val::Core.BindingPartition
+            kind = binding_kind(p)
+            if kind === PARTITION_KIND_GLOBAL
+                restriction = partition_restriction(p)
+                isa(restriction, Type) && (GT = restriction)
+            elseif kind === PARTITION_KIND_DECLARED
+                GT = Any
+            end
+        end
+        RT = GT === nothing ? Pair : Pair{GT, GT}
+        TF = GT === nothing ? Any : GT
     elseif ff === Core.memoryrefmodify!
         o = unwrapva(argtypes[2])
         RT = memoryrefmodify!_tfunc(𝕃ᵢ, o, Any, Any, Symbol, Bool)
@@ -2326,6 +2361,7 @@ end
 end
 
 add_tfunc(Core.memoryrefget, 3, 3, memoryrefget_tfunc, 20)
+add_tfunc(Core.const_memoryrefget, 3, 3, memoryrefget_tfunc, 20)
 add_tfunc(Core.memoryrefset!, 4, 4, memoryrefset!_tfunc, 20)
 add_tfunc(Core.memoryrefunset!, 3, 3, memoryrefunset!_tfunc, 20)
 add_tfunc(Core.memoryrefswap!, 4, 4, memoryrefswap!_tfunc, 20)
@@ -2496,7 +2532,7 @@ function memoryrefop_builtin_common_nothrow(𝕃::AbstractLattice, argtypes::Vec
     if ismemoryset
         # Additionally check element type compatibility
         memoryset_typecheck(𝕃, memtype, argtypes[2]) || return false
-    elseif f === memoryrefget
+    elseif f === memoryrefget || f === const_memoryrefget
         # If we could potentially throw undef ref errors, bail out now.
         array_type_undefable(memtype) && return false
     end
@@ -2552,7 +2588,7 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
         return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === memoryrefunset!
         return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
-    elseif f === memoryrefget
+    elseif f === memoryrefget || f === const_memoryrefget
         return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === memoryref_isassigned
         return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
@@ -2613,6 +2649,9 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
     elseif f === Core._svec_ref
         na == 2 || return false
         return _svec_ref_tfunc(𝕃, argtypes[1], argtypes[2]) isa Const
+    elseif f === Core.task_result_type
+        na == 1 || return false
+        return argtypes[1] ⊑ Task
     end
     return false
 end
@@ -2664,6 +2703,7 @@ const _EFFECT_FREE_BUILTINS = [
     memoryrefnew,
     memoryrefoffset,
     memoryrefget,
+    const_memoryrefget,
     memoryref_isassigned,
     isdefined,
     Core.bitsizeof,
@@ -2675,9 +2715,12 @@ const _EFFECT_FREE_BUILTINS = [
     throw,
     Core.throw_methoderror,
     getglobal,
+    Core.getglobal_partition,
+    Core.isdefinedglobal_partition,
     compilerbarrier,
     Core._svec_len,
     Core._svec_ref,
+    Core.task_result_type,
 ]
 
 const _INACCESSIBLEMEM_BUILTINS = Any[
@@ -2691,6 +2734,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     fieldtype,
     isa,
     nfields,
+    Core.task_result_type,
     throw,
     Core.throw_methoderror,
     tuple,
@@ -2707,6 +2751,7 @@ const _ARGMEM_BUILTINS = Any[
     memoryrefnew,
     memoryrefoffset,
     memoryrefget,
+    const_memoryrefget,
     memoryref_isassigned,
     memoryrefset!,
     memoryrefunset!,
@@ -2877,20 +2922,24 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     # Core._structtype,
     Core._svec_len,
     Core._svec_ref,
+    Core._task,
     # Core._typebody!,
     Core._typevar,
     apply_type,
     compilerbarrier,
     Core.current_scope,
+    Core.depwarn_binding,
     donotdelete,
     Core.finalizer,
     Core.get_binding_type,
+    Core.getglobal_partition,
     Core.ifelse,
     # Core.invoke_in_world,
     # invokelatest,
     Core.memorynew,
     memoryref_isassigned,
     memoryrefget,
+    const_memoryrefget,
     # Core.memoryrefmodify!,
     memoryrefnew,
     memoryrefoffset,
@@ -2912,17 +2961,24 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     isa,
     isdefined,
     # isdefinedglobal,
+    Core.isdefinedglobal_partition,
     modifyfield!,
     # modifyglobal!,
+    # Core.modifyglobal_partition,
     nfields,
     replacefield!,
     # replaceglobal!,
+    Core.replaceglobal_partition,
     setfield!,
     # setfieldonce!,
     # setglobal!,
+    Core.setglobal_partition,
     # setglobalonce!,
+    Core.setglobalonce_partition,
     swapfield!,
     # swapglobal!,
+    Core.swapglobal_partition,
+    Core.task_result_type,
     throw,
     tuple,
     typeassert,
@@ -2958,6 +3014,32 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         2 ≤ length(argtypes) ≤ 3 || return EFFECTS_THROWS
         # Modeled more precisely in abstract_eval_getglobal
         return generic_getglobal_effects
+    elseif f === Core.getglobal_partition
+        length(argtypes) == 3 || return EFFECTS_THROWS
+        partition = argtypes[2]
+        if isa(partition, Const) && isa(partition.val, Core.BindingPartition)
+            p = partition.val::Core.BindingPartition
+            # Same effects as the read this partition encodes, but the explicit memory order
+            # may be invalid or non-atomic, so it is not `nothrow`.
+            return Effects(abstract_eval_partition_load(partition_owner(p), p, false).effects; nothrow=false)
+        end
+        return generic_getglobal_effects
+    elseif f === Core.setglobal_partition
+        return setglobal!_effects
+    elseif f === Core.swapglobal_partition || f === Core.replaceglobal_partition ||
+           f === Core.setglobalonce_partition
+        # These also read the binding, so they are no more `:consistent` than a read is
+        # (matching `abstract_eval_swapglobal!` and friends).
+        return merge_effects(generic_getglobal_effects, setglobal!_effects)
+    elseif f === Core.isdefinedglobal_partition
+        length(argtypes) == 2 || return EFFECTS_THROWS
+        return generic_isdefinedglobal_effects
+    elseif f === Core.depwarn_binding
+        length(argtypes) == 1 || return EFFECTS_THROWS
+        # A deprecation warning is an observable side effect (printing to stderr, and
+        # throwing under `--depwarn=error`), so this call must never be removed as unused.
+        return Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE, effect_free=ALWAYS_FALSE,
+                       nothrow=false, inaccessiblememonly=ALWAYS_FALSE)
     elseif f === Core.get_binding_type
         length(argtypes) == 2 || return EFFECTS_THROWS
         # Modeled more precisely in abstract_eval_get_binding_type
@@ -2980,10 +3062,12 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
             consistent = ALWAYS_FALSE,
             notaskstate = false,
             nothrow)
+    elseif f === Core._task
+        return TASK_BUILTIN_EFFECTS
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
-        elseif f === memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned || f === Core._svec_len || f === Core._svec_ref
+        elseif f === memoryrefget || f === const_memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned || f === Core._svec_len || f === Core._svec_ref
             consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
         elseif f === Core._typevar || f === Core.memorynew
             consistent = CONSISTENT_IF_NOTRETURNED
@@ -3005,7 +3089,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         else
             inaccessiblememonly = ALWAYS_FALSE
         end
-        if f === memoryrefnew || f === memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned
+        if f === memoryrefnew || f === memoryrefget || f === const_memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned
             noub = memoryop_noub(f, argtypes) ? ALWAYS_TRUE : ALWAYS_FALSE
         else
             noub = ALWAYS_TRUE
@@ -3026,7 +3110,7 @@ function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
             return true
         end
         expected_nargs = 3
-    elseif f === memoryrefget || f === memoryref_isassigned || f === memoryrefunset!
+    elseif f === memoryrefget || f === const_memoryrefget || f === memoryref_isassigned || f === memoryrefunset!
         expected_nargs = 3
     else
         @assert f === memoryrefset! "unexpected memoryop is given"
@@ -3323,6 +3407,18 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
         return Union{}
     end
 
+    # The modify operation is an arbitrary user-provided function.
+    f === Intrinsics.atomic_pointermodify && return Any
+
+    if (f === Intrinsics.atomic_fence || f === Intrinsics.atomic_pointerref ||
+        f === Intrinsics.atomic_pointerset || f === Intrinsics.atomic_pointerswap ||
+        f === Intrinsics.atomic_pointerreplace)
+        # Invalid orderings throw `ConcurrencyViolationError`, badly-typed arguments
+        # `TypeError`, and unsupported element types or sizes, or an invalid syncscope,
+        # `ErrorException`.
+        return Union{ConcurrencyViolationError, TypeError, ErrorException}
+    end
+
     # The remaining intrinsics are math/bits/comparison intrinsics.
     # All the non-floating point intrinsics work on primitive values of the same type.
     isshift = f === shl_int || f === lshr_int || f === ashr_int
@@ -3417,6 +3513,8 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         argtypes_vec = Any[af_argtype.parameters...]
         isempty(argtypes_vec) && push!(argtypes_vec, Union{})
         aft = argtypes_vec[1]
+        # e.g. `return_type(Tuple{Vararg{Any}})`: there is no function type to model
+        isvarargtype(aft) && return Future(UNKNOWN)
     end
     # effects are not an issue if we know this statement will get removed, but if it does not get removed,
     # then this could be recursively re-entering inference (via concrete-eval), which will not terminate
@@ -3497,8 +3595,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
 end
 
 # a simplified model of abstract_call_gf_by_type for applicable
-function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
-                             sv::AbsIntState, max_methods::Int)
+function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::AbsIntState)
     length(argtypes) < 2 && return Future(CallMeta(Bottom, ArgumentError, EFFECTS_THROWS, NoCallInfo()))
     isvarargtype(argtypes[2]) && return Future(CallMeta(Bool, ArgumentError, EFFECTS_THROWS, NoCallInfo()))
     argtypes = argtypes[2:end]
@@ -3506,6 +3603,7 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
     if atype === Union{}
         rt = Union{} # accidentally unreachable code
     else
+        max_methods = get_max_methods(interp, max_methods_callee(singleton_type(argtypes[1]), argtypes), sv)
         matches = find_method_matches(interp, argtypes, atype; max_methods)
         info = NoCallInfo()
         if isa(matches, FailedMethodMatch)
@@ -3610,7 +3708,34 @@ add_tfunc(swapglobal!, 3, 4, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
 add_tfunc(modifyglobal!, 4, 5, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
 add_tfunc(replaceglobal!, 4, 6, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
 add_tfunc(setglobalonce!, 3, 5, @nospecs((𝕃::AbstractLattice, args...)->Bool), 3)
+@nospecs function getglobal_partition_tfunc(𝕃::AbstractLattice, gr, partition, order)
+    isa(partition, Const) || return Any
+    p = partition.val
+    isa(p, Core.BindingPartition) || return Any
+    return partition_rt(p)
+end
+add_tfunc(Core.getglobal_partition, 3, 3, getglobal_partition_tfunc, 0)
+# as for `modifyglobal!`, the result is modeled by `abstract_modifyop!` instead
+add_tfunc(Core.modifyglobal_partition, 3, 4, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
+add_tfunc(Core.setglobal_partition, 2, 3, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
+add_tfunc(Core.swapglobal_partition, 2, 3, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
+add_tfunc(Core.replaceglobal_partition, 3, 5, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
+add_tfunc(Core.setglobalonce_partition, 2, 4, @nospecs((𝕃::AbstractLattice, args...)->Bool), 3)
+add_tfunc(Core.isdefinedglobal_partition, 2, 2, @nospecs((𝕃::AbstractLattice, args...)->Bool), 1)
+add_tfunc(Core.depwarn_binding, 1, 1, @nospecs((𝕃::AbstractLattice, args...)->Nothing), 1)
 add_tfunc(Core.get_binding_type, 2, 2, @nospecs((𝕃::AbstractLattice, args...)->Type), 0)
+
+@nospecs function task_result_type_tfunc(𝕃::AbstractLattice, T)
+    hasintersect(widenconst(T), Task) || return Union{}
+    if T isa PartialTask
+        # fetch_type is widened at construction, but re-widen defensively since
+        # PartialTask objects also arrive from cached (serialized) rettype_const
+        # and from external AbstractInterpreters
+        return Const(widenconst(T.fetch_type))
+    end
+    return Type
+end
+add_tfunc(Core.task_result_type, 1, 1, task_result_type_tfunc, 0)
 
 # foreigncall
 # ===========

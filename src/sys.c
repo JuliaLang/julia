@@ -410,15 +410,6 @@ typedef DWORD (WINAPI *GAPC)(WORD);
 #endif
 #endif
 
-// Apple's M1 processor is a big.LITTLE style processor, with 4x "performance"
-// cores, and 4x "efficiency" cores.  Because Julia expects to be able to run
-// things like heavy linear algebra workloads on all cores, it's best for us
-// to only spawn as many threads as there are performance cores.  Once macOS
-// 12 is released, we'll be able to query the multiple "perf levels" of the
-// cores of a CPU (see this PR [0] to pytorch/cpuinfo for an example) but
-// until it's released, we will just recognize the M1 by its CPU family
-// identifier, then subtract how many efficiency cores we know it has.
-
 JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 {
 #if defined(HW_AVAILCPU) && defined(HW_NCPU)
@@ -431,28 +422,6 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
         sysctl(nm, 2, &count, &len, NULL, 0);
         if (count < 1) { count = 1; }
     }
-
-#if defined(__APPLE__) && defined(_CPU_AARCH64_)
-//MacOS 12 added a way to query performance cores
-    char buf[7];
-    len = 7;
-    sysctlbyname("kern.osrelease", buf, &len, NULL, 0);
-    if (buf[0] > 1 && buf[1] > 0){
-        len = 4;
-        sysctlbyname("hw.perflevel0.physicalcpu", &count, &len, NULL, 0);
-    }
-    else {
-        int32_t family = 0;
-        len = 4;
-        sysctlbyname("hw.cpufamily", &family, &len, NULL, 0);
-        if (family >= 1 && count > 1) {
-            if (family == CPUFAMILY_ARM_FIRESTORM_ICESTORM) {
-                // We know the Apple M1 has 4 efficiency cores, so subtract them out.
-                count -= 4;
-            }
-        }
-    }
-#endif
     return count;
 #elif defined(_SC_NPROCESSORS_ONLN)
     long count = sysconf(_SC_NPROCESSORS_ONLN);
@@ -777,6 +746,21 @@ static int dlinfo_helper(struct dl_phdr_info *info, size_t size, void *vdata)
 #endif
 
 // Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
+#ifdef __APPLE__
+// `JL_RTLD_NOLOAD` only asks whether an image is already loaded: nothing is mapped
+// and no initializer runs, so unlike a general `jl_dlopen` this cannot call back
+// into Julia, and may be used from a JL_NOTSAFEPOINT function.
+static void *jl_dlopen_noload(const char *filename) JL_NOTSAFEPOINT
+{
+#if defined(__clang_gcanalyzer__) || defined(__clang_safetyanalysis__)
+    // hidden from the checkers, which only know the general contract of jl_dlopen
+    return NULL;
+#else
+    return jl_dlopen(filename, JL_RTLD_DEFAULT | JL_RTLD_NOLOAD);
+#endif
+}
+#endif
+
 JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle) JL_NOTSAFEPOINT
 {
     if (!handle)
@@ -787,7 +771,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle) JL_NOTSAFEPOINT
     for (int32_t i = _dyld_image_count() - 1; i >= 0 ; i--) {
         // dlopen() each image, check handle.
         const char *image_name = _dyld_get_image_name(i);
-        void *probe_lib = jl_dlopen(image_name, JL_RTLD_DEFAULT | JL_RTLD_NOLOAD);
+        void *probe_lib = jl_dlopen_noload(image_name);
         if (!probe_lib)
             continue;
         jl_dlclose(probe_lib);
@@ -914,6 +898,51 @@ JL_DLLEXPORT const char *jl_pathname_for_symbol(void *symbol) JL_NOTSAFEPOINT
         return NULL;
     return q.is_main_exe ? "" : q.name;
 #endif
+}
+
+// Returns 1 if `symbol` lies within the main executable's image, 0 otherwise
+static int jl_symbol_in_executable(void *symbol) JL_NOTSAFEPOINT
+{
+    if (!symbol)
+        return 0;
+#ifdef _OS_WINDOWS_
+    HMODULE handle;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            (LPCWSTR)symbol, &handle))
+        return 0;
+    // GetModuleHandleW(NULL) is the module used to create the calling process.
+    return handle == GetModuleHandleW(NULL);
+#elif defined(__APPLE__)
+    // dyld guarantees that image index 0 is the main executable.
+    Dl_info info;
+    if (!dladdr(symbol, &info) || !info.dli_fbase)
+        return 0;
+    return info.dli_fbase == (const void *)_dyld_get_image_header(0);
+#elif defined(__GLIBC__)
+    // glibc: the main program's link_map has an empty `l_name`.
+    Dl_info info;
+    struct link_map *map = NULL;
+    if (!dladdr1(symbol, &info, (void **)&map, RTLD_DL_LINKMAP) || map == NULL)
+        return 0;
+    msan_unpoison(&map, sizeof(struct link_map *));
+    msan_unpoison(map, sizeof(struct link_map));
+    msan_unpoison_string(map->l_name);
+    return map->l_name[0] == '\0';
+#else
+    // Other libc: dl_iterate_phdr reports the main program first.
+    struct sym_phdr_query q = { (uintptr_t)symbol, NULL, 0, 0, 0 };
+    dl_iterate_phdr(&sym_phdr_helper, &q);
+    return q.found && q.is_main_exe;
+#endif
+}
+
+// Returns the path of libjulia-internal, or NULL if it is linked into the executable
+JL_DLLEXPORT const char *jl_get_libjulia_internal_path(void) JL_NOTSAFEPOINT
+{
+    static const char dummy = 0;
+    if (jl_symbol_in_executable((void*)&dummy))
+        return NULL;
+    return jl_pathname_for_symbol((void*)&dummy);
 }
 
 #ifdef _OS_WINDOWS_

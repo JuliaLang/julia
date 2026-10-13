@@ -18,11 +18,9 @@ export checked_neg, checked_abs, checked_add, checked_sub, checked_mul,
 
 import Core: Intrinsics
 import .Intrinsics:
-       checked_sadd_int, checked_ssub_int, checked_smul_int, checked_sdiv_int,
-       checked_srem_int,
-       checked_uadd_int, checked_usub_int, checked_umul_int, checked_udiv_int,
-       checked_urem_int
-import Base: no_op_err, @inline, @noinline, checked_length, BitInteger
+       checked_sadd_int, checked_ssub_int, checked_smul_int,
+       checked_uadd_int, checked_usub_int, checked_umul_int
+import Base: no_op_err, @inline, @noinline, checked_length
 
 # define promotion behavior for checked operations
 checked_add(x::Integer, y::Integer) = checked_add(promote(x,y)...)
@@ -131,8 +129,6 @@ end
 checked_abs(x::UnsignedInt) = x
 checked_abs(x::Bool) = x
 
-
-
 """
     Base.add_with_overflow(x, y) -> (r, f)
 
@@ -158,7 +154,6 @@ function add_with_overflow(x::T, y::T) where T<:BrokenUnsignedInt
     x +% y, x > ~y
 end
 end
-
 
 throw_overflowerr_binaryop(op, x, y) = (@noinline;
     throw(OverflowError(LazyString(x, " ", op, " ", y, " overflowed for type ", typeof(x)))))
@@ -198,7 +193,6 @@ checked_add(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) where {T} =
 checked_add(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) where {T} =
     checked_add(checked_add(x1, x2), x3, x4, x5, x6, x7, x8)
 
-
 """
     Base.sub_with_overflow(x, y) -> (r, f)
 
@@ -237,7 +231,6 @@ function checked_sub(x::T, y::T) where T<:Integer
     b && throw_overflowerr_binaryop(:-, x, y)
     z
 end
-
 
 """
     Base.mul_with_overflow(x, y) -> (r, f)

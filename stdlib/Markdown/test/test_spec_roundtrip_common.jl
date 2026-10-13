@@ -5,6 +5,14 @@ using Markdown
 
 @testset "CommonMark spec test suite: roundtrip mode, common flavor" begin
 
+# Spec examples known not to conform. They are still run below, but instead of
+# one `@test_broken` each they push into `now_passing` when they unexpectedly
+# pass, and a single `@test_broken` at the bottom of this file stands in for
+# the whole set. If the `now_passing` test fails, some examples were fixed:
+# rerun regenerate_test_spec.jl and commit the regenerated files.
+known_broken = BitSet([9, 12, 14, 15, 17, 20, 26, 37, 38, 39, 40, 57, 65, 66, 76, 94, 99, 106, 124, 138, 280, 290, 291, 293, 297, 300, 301, 302, 306, 314, 315, 321, 326, 330, 331, 334, 450, 453, 461, 463, 515, 538, 550, 603, 606])
+now_passing = Int[]
+
 
 #
 # Tabs
@@ -67,12 +75,12 @@ using Markdown
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 9
+    # Example 9 (known broken)
     input = " - foo\n   - bar\n\t - baz\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 9)
 
     # Example 10
     input = "#\tFoo\n"
@@ -95,12 +103,12 @@ end
 #
 @testset "Backslash escapes" begin
 
-    # Example 12
+    # Example 12 (known broken)
     input = "\\!\\\"\\#\\\$\\%\\&\\'\\(\\)\\*\\+\\,\\-\\.\\/\\:\\;\\<\\=\\>\\?\\@\\[\\\\\\]\\^\\_\\`\\{\\|\\}\\~\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 12)
 
     # Example 13
     input = "\\\t\\A\\a\\ \\3\\φ\\«\n"
@@ -109,19 +117,19 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 14
+    # Example 14 (known broken)
     input = "\\*not emphasized*\n\\<br/> not a tag\n\\[not a link](/foo)\n\\`not code`\n1\\. not a list\n\\* not a list\n\\# not a heading\n\\[foo]: /url \"not a reference\"\n\\&ouml; not a character entity\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 14)
 
-    # Example 15
+    # Example 15 (known broken)
     input = "\\\\*emphasis*\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 15)
 
     # Example 16
     input = "foo\\\nbar\n"
@@ -130,12 +138,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 17
+    # Example 17 (known broken)
     input = "`` \\[\\` ``\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 17)
 
     # Example 18
     input = "    \\[\\]\n"
@@ -151,12 +159,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 20
+    # Example 20 (known broken)
     input = "<https://example.com?find=\\*>\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 20)
 
     # Example 21
     input = "<a href=\"/bar\\/)\">\n"
@@ -200,12 +208,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 26
+    # Example 26 (known broken)
     input = "&#35; &#1234; &#992; &#0;\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 26)
 
     # Example 27
     input = "&#X22; &#XD06; &#xcab;\n"
@@ -277,33 +285,33 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 37
+    # Example 37 (known broken)
     input = "&#42;foo&#42;\n*foo*\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 37)
 
-    # Example 38
+    # Example 38 (known broken)
     input = "&#42; foo\n\n* foo\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 38)
 
-    # Example 39
+    # Example 39 (known broken)
     input = "foo&#10;&#10;bar\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 39)
 
-    # Example 40
+    # Example 40 (known broken)
     input = "&#9;foo\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 40)
 
     # Example 41
     input = "[a](url &quot;tit&quot;)\n"
@@ -431,12 +439,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 57
+    # Example 57 (known broken)
     input = "- foo\n***\n- bar\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 57)
 
     # Example 58
     input = "Foo\n***\nbar\n"
@@ -494,19 +502,19 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 65
+    # Example 65 (known broken)
     input = "\\## foo\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 65)
 
-    # Example 66
+    # Example 66 (known broken)
     input = "# foo *bar* \\*baz\\*\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 66)
 
     # Example 67
     input = "#                  foo                     \n"
@@ -571,12 +579,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 76
+    # Example 76 (known broken)
     input = "### foo \\###\n## foo #\\##\n# foo \\#\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 76)
 
     # Example 77
     input = "****\n## foo\n****\n"
@@ -704,12 +712,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 94
+    # Example 94 (known broken)
     input = "- Foo\n---\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 94)
 
     # Example 95
     input = "Foo\nBar\n---\n"
@@ -739,12 +747,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 99
+    # Example 99 (known broken)
     input = "- foo\n-----\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 99)
 
     # Example 100
     input = "    foo\n---\n"
@@ -788,12 +796,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 106
+    # Example 106 (known broken)
     input = "Foo\nbar\n\\---\nbaz\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 106)
 
 end
 
@@ -928,12 +936,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 124
+    # Example 124 (known broken)
     input = "````\naaa\n```\n``````\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 124)
 
     # Example 125
     input = "~~~~\naaa\n~~~\n~~~~\n"
@@ -1026,12 +1034,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 138
+    # Example 138 (known broken)
     input = "``` ```\naaa\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 138)
 
     # Example 139
     input = "~~~~~~\naaa\n~~~ ~~\n"
@@ -2062,12 +2070,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 280
+    # Example 280 (known broken)
     input = "-\n\n  foo\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 280)
 
     # Example 281
     input = "- foo\n-\n- bar\n"
@@ -2132,19 +2140,19 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 290
+    # Example 290 (known broken)
     input = "  1.  A paragraph\nwith two lines.\n\n          indented code\n\n      > A block quote.\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 290)
 
-    # Example 291
+    # Example 291 (known broken)
     input = "  1.  A paragraph\n    with two lines.\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 291)
 
     # Example 292
     input = "> 1. > Blockquote\ncontinued here.\n"
@@ -2153,12 +2161,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 293
+    # Example 293 (known broken)
     input = "> 1. > Blockquote\n> continued here.\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 293)
 
     # Example 294
     input = "- foo\n  - bar\n    - baz\n      - boo\n"
@@ -2181,12 +2189,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 297
+    # Example 297 (known broken)
     input = "10) foo\n   - bar\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 297)
 
     # Example 298
     input = "- - foo\n"
@@ -2202,12 +2210,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 300
+    # Example 300 (known broken)
     input = "- # Foo\n- Bar\n  ---\n  baz\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 300)
 
 end
 
@@ -2216,19 +2224,19 @@ end
 #
 @testset "Lists" begin
 
-    # Example 301
+    # Example 301 (known broken)
     input = "- foo\n- bar\n+ baz\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 301)
 
-    # Example 302
+    # Example 302 (known broken)
     input = "1. foo\n2. bar\n3) baz\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 302)
 
     # Example 303
     input = "Foo\n- bar\n- baz\n"
@@ -2251,12 +2259,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 306
+    # Example 306 (known broken)
     input = "- foo\n\n- bar\n\n\n- baz\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 306)
 
     # Example 307
     input = "- foo\n  - bar\n    - baz\n\n\n      bim\n"
@@ -2307,19 +2315,19 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 314
+    # Example 314 (known broken)
     input = "- a\n- b\n\n- c\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 314)
 
-    # Example 315
+    # Example 315 (known broken)
     input = "* a\n*\n\n* c\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 315)
 
     # Example 316
     input = "- a\n- b\n\n  c\n- d\n"
@@ -2356,12 +2364,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 321
+    # Example 321 (known broken)
     input = "- a\n  > b\n  ```\n  c\n  ```\n- d\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 321)
 
     # Example 322
     input = "- a\n"
@@ -2391,12 +2399,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 326
+    # Example 326 (known broken)
     input = "- a\n  - b\n  - c\n\n- d\n  - e\n  - f\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 326)
 
 end
 
@@ -2433,19 +2441,19 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 330
+    # Example 330 (known broken)
     input = "` `` `\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 330)
 
-    # Example 331
+    # Example 331 (known broken)
     input = "`  ``  `\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 331)
 
     # Example 332
     input = "` a`\n"
@@ -2461,12 +2469,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 334
+    # Example 334 (known broken)
     input = "`\u00A0`\n`  `\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 334)
 
     # Example 335
     input = "``\nfoo\nbar  \nbaz\n``\n"
@@ -3280,12 +3288,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 450
+    # Example 450 (known broken)
     input = "foo _*_\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 450)
 
     # Example 451
     input = "foo _____\n"
@@ -3301,12 +3309,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 453
+    # Example 453 (known broken)
     input = "foo __*__\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 453)
 
     # Example 454
     input = "__foo_\n"
@@ -3357,12 +3365,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 461
+    # Example 461 (known broken)
     input = "*_foo_*\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 461)
 
     # Example 462
     input = "__foo__\n"
@@ -3371,12 +3379,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 463
+    # Example 463 (known broken)
     input = "_*foo*_\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 463)
 
     # Example 464
     input = "****foo****\n"
@@ -3742,12 +3750,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 515
+    # Example 515 (known broken)
     input = "[link \\[bar](/uri)\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 515)
 
     # Example 516
     input = "[link *foo **bar** `#`*](/uri)\n"
@@ -3903,12 +3911,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 538
+    # Example 538 (known broken)
     input = "[foo<https://example.com/?search=][ref]>\n\n[ref]: /uri\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 538)
 
     # Example 539
     input = "[foo][BaR]\n\n[bar]: /url \"title\"\n"
@@ -3987,12 +3995,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 550
+    # Example 550 (known broken)
     input = "[bar\\\\]: /uri\n\n[bar\\\\]\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 550)
 
     # Example 551
     input = "[]\n\n[]: /uri\n"
@@ -4372,12 +4380,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 603
+    # Example 603 (known broken)
     input = "<https://example.com/\\[\\>\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 603)
 
     # Example 604
     input = "<foo@bar.example.com>\n"
@@ -4393,12 +4401,12 @@ end
     actual = Markdown.parse(new_input; flavor=:common)
     @test expected == actual
 
-    # Example 606
+    # Example 606 (known broken)
     input = "<foo\\+@bar.example.com>\n"
     expected = Markdown.parse(input; flavor=:common)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:common)
-    @test_broken expected == actual
+    expected == actual && push!(now_passing, 606)
 
     # Example 607
     input = "<>\n"
@@ -4751,5 +4759,8 @@ end
     @test expected == actual
 
 end
+
+@test now_passing == Int[]
+@test_broken isempty(known_broken)
 
 end

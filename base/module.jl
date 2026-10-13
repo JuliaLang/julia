@@ -22,7 +22,6 @@ function eval_import_path(at::Module, from::Union{Module, Nothing}, path::Expr, 
         v
     end
     v = next!()
-    m = nothing
 
     if from !== nothing
         m = from

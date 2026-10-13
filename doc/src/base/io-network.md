@@ -21,6 +21,7 @@ Base.flush
 Base.close
 Base.closewrite
 Base.write
+Base.writepartial
 Base.read
 Base.read!
 Base.readbytes!

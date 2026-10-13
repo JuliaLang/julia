@@ -488,8 +488,8 @@ tofloat(x::Base.IEEEFloat) = x
 tofloat(x::BigFloat) = x
 
 _snprintf(ptr, siz, str, arg) =
-    @ccall "libmpfr".mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
-                                   arg::Ref{BigFloat})::Cint
+    @ccall Base.MPFR.libmpfr.mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
+                                             arg::Ref{BigFloat})::Cint
 
 # Arbitrary constant for a maximum number of bytes we want to output for a BigFloat.
 # 8KiB seems like a reasonable default. Larger BigFloat representations should probably
@@ -596,7 +596,8 @@ function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
                 newpos += 3
             else
                 if prec > -1
-                    s, p = frexp(x)
+                    # scale in Float64, since ldexp(s, 1 + sigbits) can overflow narrower types
+                    s, p = frexp(Float64(x))
                     sigbits = 4 * min(prec, 13)
                     s = 0.25 * round(ldexp(s, 1 + sigbits))
                     # ensure last 2 exponent bits either 01 or 10
@@ -655,7 +656,8 @@ function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
             # right aligned
             n = width - (newpos - pos)
             if zero && isfinite(x)
-                ex = (arg < 0 || (plus | space)) + (T <: Union{Val{'a'}, Val{'A'}} ? 2 : 0)
+                # check the written sign rather than `arg < 0`, which is false for -0.0
+                ex = (buf[pos] == UInt8('-') || (plus | space)) + (T <: Union{Val{'a'}, Val{'A'}} ? 2 : 0)
                 so = pos + ex
                 len = (newpos - pos) - ex
                 copyto!(buf, so + n, buf, so, len)
@@ -872,7 +874,7 @@ end
 function plength(f::Spec{T}, x) where {T <: Chars}
     c = Char(first(x))
     w = textwidth(c)
-    return max(f.width, w) + (ncodeunits(c) - w)
+    return Base.checked_add(max(f.width, w), ncodeunits(c) - w)
 end
 
 plength(f::Spec{Pointer}, x) = max(f.width, 2 * sizeof(x) + 2)
@@ -880,22 +882,22 @@ plength(f::Spec{Pointer}, x) = max(f.width, 2 * sizeof(x) + 2)
 function plength(f::Spec{T}, x) where {T <: Strings}
     str = string(x)
     sw = textwidth(str)
-    p = f.precision == -1 ? (sw + (f.hash ? (x isa Symbol ? 1 : 2) : 0)) : f.precision
-    return max(f.width, p) + (sizeof(str) - sw)
+    p = f.precision == -1 ? Base.checked_add(sw, f.hash ? (x isa Symbol ? 1 : 2) : 0) : f.precision
+    return Base.checked_add(max(f.width, p), sizeof(str) - sw)
 end
 
 function plength(f::Spec{T}, x) where {T <: Ints}
     x2 = toint(x)
     return max(
         f.width,
-        f.precision + ndigits(x2, base=base(T), pad=1) + MAX_FMT_CHARS_WIDTH
+        Base.checked_add(f.precision, ndigits(x2, base=base(T), pad=1), MAX_FMT_CHARS_WIDTH)
     )
 end
 
 plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
-    max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + 0 + MAX_FMT_CHARS_WIDTH)
+    max(f.width, Base.checked_add(Int(f.hash), MAX_INTEGER_PART_WIDTH, MAX_FMT_CHARS_WIDTH))
 plength(f::Spec{T}, x) where {T <: Floats} =
-    max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + f.precision + MAX_FMT_CHARS_WIDTH)
+    max(f.width, Base.checked_add(Int(f.hash), MAX_INTEGER_PART_WIDTH, f.precision, MAX_FMT_CHARS_WIDTH))
 plength(::Spec{PositionCounter}, x) = 0
 
 @inline function computelen(substringranges, formats, args)
@@ -906,13 +908,13 @@ plength(::Spec{PositionCounter}, x) = 0
     Base.@nexprs 16 i -> begin
         if N >= i
             l, argp = plength(formats[i], args, argp)
-            len += l
+            len = Base.checked_add(len, l)
         end
     end
     if N > 16
         for i = 17:length(formats)
             l, argp = plength(formats[i], args, argp)
-            len += l
+            len = Base.checked_add(len, l)
         end
     end
     return len

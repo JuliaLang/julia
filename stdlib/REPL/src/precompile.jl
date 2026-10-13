@@ -90,7 +90,6 @@ function repl_workload()
     f(x) = x03
     f(1,2)
     [][1]
-    Base.Iterators.minimum
     cd("complete_path\t\t$CTRL_C
     \x12?\x7f\e[A\e[B\t history\r
     println("done")

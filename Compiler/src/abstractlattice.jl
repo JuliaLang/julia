@@ -24,13 +24,13 @@ is_valid_lattice_norec(::ConstsLattice, @nospecialize(elem)) = isa(elem, Const) 
 """
     struct PartialsLattice{𝕃<:AbstractLattice} <: AbstractLattice
 
-A lattice extending a base lattice `𝕃` and adjoining `PartialStruct` and `PartialOpaque`.
+A lattice extending a base lattice `𝕃` and adjoining `PartialStruct`, `PartialOpaque`, and `PartialTask`.
 """
 struct PartialsLattice{𝕃<:AbstractLattice} <: AbstractLattice
     parent::𝕃
 end
 widenlattice(𝕃::PartialsLattice) = 𝕃.parent
-is_valid_lattice_norec(::PartialsLattice, @nospecialize(elem)) = isa(elem, PartialStruct) || isa(elem, PartialOpaque)
+is_valid_lattice_norec(::PartialsLattice, @nospecialize(elem)) = isa(elem, PartialStruct) || isa(elem, PartialOpaque) || isa(elem, PartialTask)
 
 """
     struct ConditionalsLattice{𝕃<:AbstractLattice} <: AbstractLattice
@@ -191,6 +191,7 @@ information that would not be available from the type itself.
 @nospecializeinfer function has_nontrivial_extended_info(𝕃::PartialsLattice, @nospecialize t)
     isa(t, PartialStruct) && return true
     isa(t, PartialOpaque) && return true
+    isa(t, PartialTask) && return true
     return has_nontrivial_extended_info(widenlattice(𝕃), t)
 end
 @nospecializeinfer function has_nontrivial_extended_info(𝕃::ConstsLattice, @nospecialize t)
@@ -225,6 +226,7 @@ that should be forwarded along with constant propagation.
         # return false
     end
     isa(t, PartialOpaque) && return true
+    isa(t, PartialTask) && return true
     return is_const_prop_profitable_arg(widenlattice(𝕃), t)
 end
 @nospecializeinfer function is_const_prop_profitable_arg(𝕃::ConstsLattice, @nospecialize t)
@@ -248,6 +250,7 @@ end
 @nospecializeinfer function is_forwardable_argtype(𝕃::PartialsLattice, @nospecialize x)
     isa(x, PartialStruct) && return true
     isa(x, PartialOpaque) && return true
+    isa(x, PartialTask) && return true
     return is_forwardable_argtype(widenlattice(𝕃), x)
 end
 @nospecializeinfer function is_forwardable_argtype(𝕃::ConstsLattice, @nospecialize x)

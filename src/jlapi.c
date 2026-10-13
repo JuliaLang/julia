@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "julia.h"
+#include <libgen.h> // dirname
 #include "options.h"
 #include "julia_assert.h"
 #include "julia_internal.h"
@@ -97,7 +98,8 @@ JL_DLLEXPORT void jl_init_with_image_handle(void *handle) {
     const char *image_path = jl_pathname_for_handle(handle);
     jl_options.image_file = image_path;
 
-    jl_resolve_sysimg_location(JL_IMAGE_JULIA_HOME, NULL);
+    // the image is already loaded, so its path must not be re-interpreted relative to julia_bindir
+    jl_resolve_sysimg_location(JL_IMAGE_IN_MEMORY, NULL);
     jl_image_buf_t sysimage = jl_set_sysimg_so(handle);
 
     jl_init_(sysimage);
@@ -172,12 +174,12 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
 {
     jl_value_t *r;
     jl_task_t *ct = jl_current_task;
+    jl_value_t *ast = NULL;
     JL_TRY {
-        const char filename[] = "none";
-        jl_value_t *ast = jl_parse_all(str, strlen(str),
-                filename, strlen(filename), 1);
-        JL_GC_PUSH1(&ast);
-        r = jl_toplevel_eval_in(jl_main_module, ast);
+        jl_value_t *fname = jl_cstr_to_string("none");
+        JL_GC_PUSH2(&fname, &ast);
+        ast = jl_parse(str, strlen(str), fname, jl_main_module);
+        r = jl_toplevel_eval_in(jl_main_module, jl_svecref(ast, 0));
         JL_GC_POP();
         _jl_exception_clear(ct);
     }
@@ -1095,6 +1097,36 @@ static void rr_detach_teleport(void) JL_NOTSAFEPOINT {
 }
 #endif
 
+// A parent process can request that we terminate when it exits by passing its
+// pid in JULIA_EXIT_WITH_PARENT_PID. This is used for precompilation workers,
+// which would otherwise keep running when their parent is killed abruptly.
+// On Windows, libuv normally puts spawned processes in a job object that
+// already terminates them together with their parent.
+static void exit_with_parent(void) JL_NOTSAFEPOINT
+{
+    const char *env = getenv("JULIA_EXIT_WITH_PARENT_PID");
+    if (env == NULL)
+        return;
+#ifndef _OS_WINDOWS_
+    char *endptr;
+    errno = 0;
+    long parent = strtol(env, &endptr, 10);
+    int valid = errno == 0 && *env != '\0' && *endptr == '\0' && parent > 0 && parent == (pid_t)parent;
+#endif
+    // don't pass the request on to our own children
+    uv_os_unsetenv("JULIA_EXIT_WITH_PARENT_PID");
+#ifndef _OS_WINDOWS_
+    // detaching from rr re-executes us under another parent
+    if (!valid || (jl_options.rr_detach && jl_running_under_rr(0)))
+        return;
+    jl_exit_with_parent((pid_t)parent);
+    // the parent may have exited before we started watching it
+    // (N.B.: Julia is not initialized yet, so there is nothing to clean up)
+    if (getppid() != (pid_t)parent)
+        exit(1);
+#endif
+}
+
 /**
  * @brief Entry point for the Julia REPL (Read-Eval-Print Loop).
  *
@@ -1109,9 +1141,10 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[]) JL_CANSAFEPOINT_ENTE
         while (!TracyCIsConnected) jl_cpu_pause(); // Wait for connection
 #endif
 
-    // no-op on Windows, note that the caller must have already converted
-    // from `wchar_t` to `UTF-8` already if we're running on Windows.
-    uv_setup_args(argc, argv);
+    // Use libuv's copy: setting the process title can overwrite the original
+    // argv storage, including option strings such as the coverage output path.
+    // On Windows the caller must already have converted argv to UTF-8.
+    argv = uv_setup_args(argc, argv);
 
     // No-op on non-windows
     lock_low32();
@@ -1124,6 +1157,8 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[]) JL_CANSAFEPOINT_ENTE
     }
     char **new_argv = argv;
     jl_parse_opts(&argc, (char***)&new_argv);
+
+    exit_with_parent();
 
     // The parent process requested that we detach from the rr session.
     // N.B.: In a perfect world, we would only do this for the portion of
@@ -1252,7 +1287,12 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bi
     if (julia_bindir == NULL) {
         jl_options.julia_bindir = getenv("JULIA_BINDIR");
         if (!jl_options.julia_bindir) {
-#ifdef _OS_WINDOWS_
+#if defined(JL_LIBRARY_STATIC)
+            // no libjulia to locate: use the directory of the executable
+            char *bin = strdup(jl_options.julia_bin);
+            jl_options.julia_bindir = strdup(dirname(bin));
+            free(bin);
+#elif defined(_OS_WINDOWS_)
             jl_options.julia_bindir = strdup(jl_get_libdir());
 #else
             int written = asprintf((char**)&jl_options.julia_bindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", jl_get_libdir(), "bin");

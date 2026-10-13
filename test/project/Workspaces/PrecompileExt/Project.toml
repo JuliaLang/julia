@@ -1,2 +1,2 @@
 [workspace]
-projects = ["FooEnv", "BarEnv"]
+projects = ["FooEnv", "BarEnv", "Nested"]

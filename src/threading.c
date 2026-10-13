@@ -459,9 +459,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
 {
     // `jl_init_threadtls` puts us in a GC unsafe region, so ensure GC isn't running.
     // we can't use a normal safepoint because we don't have signal handlers yet.
-    jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
-    // pass NULL as a special token to indicate we are running on an unmanaged task
-    jl_safepoint_wait_gc(NULL);
+    jl_gc_enable_from_nonmutator(0);
     // this check is coupled with the one in `jl_safepoint_wait_gc`, where we observe if a
     // foreign thread has asked to disable the GC, guaranteeing the order of events.
 
@@ -474,7 +472,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi); // assumes the GC is disabled
     JL_GC_PROMISE_ROOTED(ct);
     uv_random(NULL, NULL, &ct->rngState, sizeof(ct->rngState), 0, NULL);
-    jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
+    jl_gc_enable_from_nonmutator(1);
     jl_init_task_lock(ct);
     return &ct->gcstack;
 }
@@ -489,6 +487,9 @@ JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void) JL_CANSAFEPOINT_E
                             "       (this should not happen, please file a bug report)\n");
             exit(1);
         }
+        // normally done by the libjulia loader, but there is none when the
+        // runtime is linked statically into the image
+        jl_init_options();
         jl_init_with_image_handle(handle);
         return &jl_get_current_task()->gcstack;
     }
@@ -550,9 +551,6 @@ static void jl_delete_thread(void *value)
     ptls->previous_exception = NULL;
     // allow the page root_task is on to be freed
     ptls->root_task = NULL;
-    jl_free_thread_gc_state(ptls);
-    // park in safe-region from here on (this may run GC again)
-    (void)jl_gc_safe_enter(ptls);
     // try to free some state we do not need anymore
 #ifndef _OS_WINDOWS_
     void *signal_stack = ptls->signal_stack;
@@ -600,12 +598,18 @@ static void jl_delete_thread(void *value)
 #elif defined(JL_DISABLE_LIBUNWIND)
     // nothing
 #elif defined(__APPLE__)
-    jl_unlock_profile_wr();
+    if (havelock) jl_unlock_profile_wr();
 #else
     pthread_mutex_unlock(&in_signal_lock);
 #endif
     free(ptls->bt_data);
     small_arraylist_free(&ptls->locks);
+    // Nothing can reach this thread's task now that `current_task` is
+    // cleared, so drop the GC state and park. The park is obligatory: this
+    // ptls remains in `jl_all_tls_states` forever, so the thread must be
+    // left GC-safe or every future stop-the-world would wait on it.
+    jl_free_thread_gc_state(ptls);
+    jl_gc_safe_enter_from_nonmutator(ptls);
 }
 
 //// debugging hack: if we are exiting too fast for error message printing on threads,
@@ -790,20 +794,21 @@ void jl_init_threading(void)
     if (jl_n_markthreads == -1) { // --gcthreads not specified
         if ((cp = getenv(NUM_GC_THREADS_NAME))) { // ENV[NUM_GC_THREADS_NAME] specified
             errno = 0;
-            jl_n_markthreads = (uint64_t)strtol(cp, &endptr, 10) - 1;
-            if (errno != 0 || endptr == cp || nthreads <= 0)
-                jl_n_markthreads = 0;
+            long nmarkthreads = strtol(cp, &endptr, 10);
+            if (errno != 0 || endptr == cp || nmarkthreads < 1 || nmarkthreads >= INT16_MAX)
+                jl_errorf("julia: %s=<n>[,<m>]; n must be an integer >= 1", NUM_GC_THREADS_NAME);
+            jl_n_markthreads = nmarkthreads - 1;
             cp = endptr;
             if (*cp == ',') {
                 cp++;
                 errno = 0;
-                jl_n_sweepthreads = strtol(cp, &endptri, 10);
-                if (errno != 0 || endptri == cp || jl_n_sweepthreads < 0) {
-                    jl_n_sweepthreads = 0;
-                }
+                long nsweepthreads = strtol(cp, &endptri, 10);
+                if (errno != 0 || endptri == cp || *endptri != 0 || nsweepthreads < 0 || nsweepthreads > 1)
+                    jl_errorf("julia: %s=<n>,<m>; m must be 0 or 1", NUM_GC_THREADS_NAME);
+                jl_n_sweepthreads = (int)nsweepthreads;
             }
         }
-        else {
+        else if (strstr(jl_gc_active_impl(), "stock")) {
             // if `--gcthreads` or ENV[NUM_GCTHREADS_NAME] was not specified,
             // set the number of mark threads to the number of compute threads
             // and number of sweep threads to 0
@@ -815,6 +820,8 @@ void jl_init_threading(void)
                 jl_n_markthreads = cpu - 1;
             }
         }
+        // else: leave -1 as a sentinel to non-stock GCs (MMTk)
+        // so that they can do their own default sizing
     }
     // warn the user if they try to run with a number
     // of GC threads which is larger than the number

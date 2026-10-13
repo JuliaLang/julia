@@ -33,7 +33,9 @@ ifneq (,$$(filter $1 1,$$(DEPS_GIT)))
 $2_SRC_DIR := $1
 $2_SRC_FILE := $$(SRCCACHE)/$1.git
 $$($2_SRC_FILE)/HEAD: | $$(SRCCACHE)
-	git clone -q --mirror --branch $$($2_BRANCH) $$($2_GIT_URL) $$(dir $$@)
+	# this repo also backs the worktree the user edits, so it gets the remote-tracking
+	# refs of an ordinary clone, leaving refs/heads/ and `git push` to the user
+	git clone -q --bare -c remote.origin.fetch='+refs/heads/*:refs/remotes/origin/*' $$($2_GIT_URL) $$(dir $$@)
 $5/$1/.git: | $$($2_SRC_FILE)/HEAD
 	# try to update the cache, if that fails, attempt to continue anyways (the ref might already be local)
 	-cd $$($2_SRC_FILE) && git fetch -q $$($2_GIT_URL) $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
@@ -41,7 +43,8 @@ $5/$1/.git: | $$($2_SRC_FILE)/HEAD
 	# build), keep it and proceed as before; otherwise add a worktree sharing the bare
 	# cache's object store instead of making a full local clone
 	-git -C $$($2_SRC_FILE) worktree prune
-	[ -e $5/$1/.git ] || git -C $$($2_SRC_FILE) worktree add --detach $5/$1 $$($2_BRANCH)
+	# the path must be absolute: git -C resolves it against the bare cache, not $$(CURDIR)
+	[ -e $5/$1/.git ] || git -C $$($2_SRC_FILE) worktree add --detach $$(abspath $5/$1) $$($2_BRANCH)
 #ifneq ($3,)
 	touch -c $5/$1/$3 # old target
 #endif
