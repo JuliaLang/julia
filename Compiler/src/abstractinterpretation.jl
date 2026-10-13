@@ -3470,6 +3470,7 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
     𝕃ᵢ = typeinf_lattice(interp)
     argtype = abstract_eval_value(interp, e.args[1], sstate, sv)
     rt, _... = instanceof_tfunc(argtype, true)
+    rt === UnionAll && return RTEffects(Bottom, ErrorException, EFFECTS_THROWS) # see `jl_new_structv`
     ut = unwrap_unionall(rt)
     exct = Union{ErrorException,TypeError}
     if isa(ut, DataType) && !isabstracttype(ut)
@@ -3572,6 +3573,7 @@ function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, sstate::St
     𝕃ᵢ = typeinf_lattice(interp)
     argtype = abstract_eval_value(interp, e.args[1], sstate, sv)
     rt, isexact = instanceof_tfunc(argtype, true)
+    rt === UnionAll && return RTEffects(Bottom, ErrorException, EFFECTS_THROWS) # see `jl_new_structt`
     # `:splatnew` throws on a `UnionAll` or `Union` rep that is only `==` to `rt` (#61323)
     isexact = isexact && widenconst(argtype) <: DataType
     nothrow = false
