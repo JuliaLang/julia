@@ -1282,13 +1282,35 @@ end
 end
 
 
-let S = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [TypeVar(:T), Any], 2),
+let S = ccall(:jl_new_unionall, Any, (Any, Any), TypeVar(:T), Any),
     VS = TypeVar(:T),
-    T = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [VS, VS], 2)
+    T = ccall(:jl_new_unionall, Any, (Any, Any), VS, VS)
     # check (T where T) == (Any where T)
     # these types are not normally valid, but check them just to make sure subtyping is robust
     @test T <: S
     @test S <: T
+end
+
+# `UnionAll` memoizes structural facts in a hidden flag word on first query
+@test fieldnames(UnionAll) === (:var, :body)
+let T = TypeVar(:T), S = TypeVar(:S)
+    closed = Vector{T} where T
+    open = Pair{T, S} where T # `S` is free
+    for _ in 1:2 # the second round reads the memo
+        @test !Base.has_free_typevars(closed)
+        @test Base.has_free_typevars(open)
+        @test !Base.has_free_typevars(Tuple{Int, closed})
+        @test Base.has_free_typevars(Tuple{Int, open})
+        @test !Base.has_free_typevars(UnionAll(S, Tuple{closed, open}))
+        @test Base.has_free_typevars(Tuple{closed, Union{Int, open}})
+        @test !Base.has_typevar(Tuple{closed, open}, T)
+        @test Base.has_typevar(Tuple{closed, open}, S)
+    end
+    # a raw node (not normalized by the constructor) starts with nothing memoized
+    U = ccall(:jl_new_unionall, Any, (Any, Any), S, Pair{S, T})
+    @test Base.has_free_typevars(U)
+    @test Base.has_free_typevars(U)
+    @test !Base.has_free_typevars(UnionAll(T, U))
 end
 
 # issue #20121

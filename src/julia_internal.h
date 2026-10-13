@@ -1372,6 +1372,154 @@ STATIC_INLINE int jl_is_typeapp(jl_value_t *v) JL_NOTSAFEPOINT
 {
     return jl_typeapp_type != NULL && jl_typeis(v, jl_typeapp_type);
 }
+
+// Structural traversal of a type term, shared by the predicates that look for
+// something in a type (free or bound typevars, a typename, an occurrence of a
+// variable in some kind of position, ...). Each predicate is a visitor, called
+// on every node reachable from the root through Union/Intersect components,
+// UnionAll binder bounds (except the trivial `Union{}` and `Any`) and bodies,
+// datatype parameters, `Vararg` element and length, `Type{}`/`TypeEgal{}`
+// parameters and `TypeApp` head and parameter; the bounds of a typevar node
+// are not entered. `pos` says how the node was
+// reached (`JL_WALK_*` flags, accumulated along the path) and `binders` lists
+// the UnionAll vars bound on that path, innermost first. The visitor returns 0
+// to descend into the node, a positive value to stop the walk (which returns
+// it), or a negative value to skip the node's subterms.
+enum jl_type_walk_pos {
+    JL_WALK_PARAM     = 1 << 0, // under a parameter: of a datatype, `Type{}`, `TypeEgal{}` or `TypeApp`, or a `Vararg` element or length
+    JL_WALK_INVARIANT = 1 << 1, // under an invariant parameter: any of those but a Tuple parameter or `Vararg` element
+    JL_WALK_VARARG    = 1 << 2, // under a `Vararg` element type
+    JL_WALK_TYPEEGAL  = 1 << 3, // under a `TypeEgal{}` parameter
+    JL_WALK_UNIONALL  = 1 << 4, // under the bounds or body of a UnionAll met during the walk
+    JL_WALK_UB        = 1 << 5, // under the upper bound of a UnionAll met during the walk
+};
+typedef int (*jl_type_visit_t)(jl_value_t *t, int pos, jl_typeenv_t *binders, void *ctx) JL_NOTSAFEPOINT;
+
+// One node of the walk. `walk` is the specialized walker the node's subterms
+// recurse into: `JL_TYPE_WALKER` passes itself and its visitor as constants,
+// so once this body is inlined there both calls are direct (and the visitor
+// inlined), as fast as a hand-written traversal.
+FORCE_INLINE int jl_type_walk_node(jl_value_t *t, int pos, jl_typeenv_t *binders, void *ctx,
+                                   jl_type_visit_t visit, jl_type_visit_t walk) JL_NOTSAFEPOINT
+{
+    while (1) {
+        int r = visit(t, pos, binders, ctx);
+        if (r != 0)
+            return r > 0 ? r : 0;
+        if (jl_is_datatype(t)) {
+            jl_datatype_t *dt = (jl_datatype_t*)t;
+            size_t i, np = jl_nparams(dt);
+            if (np == 0)
+                return 0;
+            pos |= JL_WALK_PARAM | (jl_is_tuple_type(t) ? 0 : JL_WALK_INVARIANT);
+            for (i = 0; i + 1 < np; i++) {
+                r = walk(jl_tparam(dt, i), pos, binders, ctx);
+                if (r)
+                    return r;
+            }
+            t = jl_tparam(dt, np - 1);
+        }
+        else if (jl_is_typevar(t)) {
+            return 0; // its bounds are not entered
+        }
+        else if (jl_is_uniontype(t) || jl_is_intersecttype(t)) {
+            r = walk(((jl_uniontype_t*)t)->a, pos, binders, ctx);
+            if (r)
+                return r;
+            t = ((jl_uniontype_t*)t)->b;
+        }
+        else if (jl_is_unionall(t)) {
+            jl_unionall_t *ua = (jl_unionall_t*)t;
+            pos |= JL_WALK_UNIONALL;
+            if (ua->var->lb != jl_bottom_type) {
+                r = walk(ua->var->lb, pos, binders, ctx);
+                if (r)
+                    return r;
+            }
+            if (ua->var->ub != (jl_value_t*)jl_any_type) {
+                r = walk(ua->var->ub, pos | JL_WALK_UB, binders, ctx);
+                if (r)
+                    return r;
+            }
+            jl_typeenv_t *inner = (jl_typeenv_t*)alloca(sizeof(jl_typeenv_t));
+            inner->var = ua->var;
+            inner->val = NULL;
+            inner->prev = binders;
+            binders = inner;
+            t = ua->body;
+        }
+        else if (jl_is_vararg(t)) {
+            jl_vararg_t *vm = (jl_vararg_t*)t;
+            if (vm->N) {
+                r = walk(vm->N, pos | JL_WALK_PARAM | JL_WALK_INVARIANT, binders, ctx);
+                if (r)
+                    return r;
+            }
+            if (!vm->T)
+                return 0;
+            pos |= JL_WALK_PARAM | JL_WALK_VARARG;
+            t = vm->T;
+        }
+        else if (jl_is_typeeq(t)) {
+            pos |= JL_WALK_PARAM | JL_WALK_INVARIANT;
+            t = ((jl_typeeq_t*)t)->T;
+        }
+        else if (jl_is_typeegal(t)) {
+            pos |= JL_WALK_PARAM | JL_WALK_INVARIANT | JL_WALK_TYPEEGAL;
+            t = ((jl_typeeq_t*)t)->T;
+        }
+        else if (jl_is_typeapp(t)) {
+            // a deferred application: nothing can be substituted into it, so
+            // treat both parts as invariant parameters
+            jl_typeapp_t *ta = (jl_typeapp_t*)t;
+            pos |= JL_WALK_PARAM | JL_WALK_INVARIANT;
+            r = walk(ta->head, pos, binders, ctx);
+            if (r)
+                return r;
+            t = ta->param;
+        }
+        else {
+            return 0; // a plain parameter value
+        }
+    }
+}
+
+// allocate a UnionAll node (no normalization or validation: see `jl_type_unionall`)
+JL_DLLEXPORT jl_value_t *jl_new_unionall(jl_tvar_t *var, jl_value_t *body) JL_CANSAFEPOINT;
+
+// a memoized `UnionAll` fact (`JL_UNIONALL_*` bit pair): 1 or 0 when known, -1 if
+// not computed yet
+STATIC_INLINE int jl_unionall_flag(jl_unionall_t *u, uint32_t known, uint32_t bit) JL_NOTSAFEPOINT
+{
+    uint32_t f = jl_atomic_load_relaxed(&u->flags);
+    return (f & known) ? (f & bit) != 0 : -1;
+}
+
+// record a computed `UnionAll` fact (racing writers store the same value)
+STATIC_INLINE int jl_unionall_set_flag(jl_unionall_t *u, uint32_t known, uint32_t bit, int value) JL_NOTSAFEPOINT
+{
+    jl_atomic_fetch_or_relaxed(&u->flags, known | (value ? bit : 0));
+    return value;
+}
+
+// is `t` known, without walking it, to have no free typevars? (a datatype's
+// flag, or a UnionAll's memo once computed.) A walk looking for occurrences
+// of variables bound outside `t` may skip such a subterm.
+STATIC_INLINE int jl_is_known_closed(jl_value_t *t) JL_NOTSAFEPOINT
+{
+    if (jl_is_datatype(t))
+        return !((jl_datatype_t*)t)->hasfreetypevars;
+    return jl_is_unionall(t) &&
+        jl_unionall_flag((jl_unionall_t*)t, JL_UNIONALL_FREEVARS_KNOWN, JL_UNIONALL_FREEVARS) == 0;
+}
+
+// define `static int name(jl_value_t *t, int pos, jl_typeenv_t *binders, void *ctx)`,
+// the walk with the visitor `visit`; start it as `name(t, 0, NULL, ctx)`
+#define JL_TYPE_WALKER(name, visit) \
+    static int name(jl_value_t *t, int pos, jl_typeenv_t *binders, void *ctx) JL_NOTSAFEPOINT \
+    { \
+        return jl_type_walk_node(t, pos, binders, ctx, visit, name); \
+    }
 void jl_init_tasks(void) JL_GC_DISABLED JL_NOTSAFEPOINT;
 void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo) JL_NOTSAFEPOINT;
 jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi) JL_CANSAFEPOINT;

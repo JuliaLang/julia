@@ -949,7 +949,7 @@ static void jl_setup_type_wrapper(jl_typename_t *tn, jl_svec_t *parameters, jl_v
     jl_gc_write(tn, tn->wrapper, jl_value_t, *wrapper);
     int np = jl_svec_len(parameters);
     for (int i = np - 1; i >= 0; i--) {
-        *wrapper = jl_new_struct(jl_unionall_type, jl_svecref(parameters, i), *wrapper);
+        *wrapper = jl_new_unionall((jl_tvar_t*)jl_svecref(parameters, i), *wrapper);
         jl_gc_write(tn, tn->wrapper, jl_value_t, *wrapper);
     }
 }
