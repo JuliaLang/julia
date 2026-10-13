@@ -2711,6 +2711,38 @@ let A = W61602{T, 1} where T<:(Union{Missing, S} where S),
     @test !(K <: H)
     @test !(K <: typeintersect(H, F))
 end
+let A = Tuple{Vector{T}, T} where T,
+    B = Tuple{Vector{Ref{T}}, T} where T
+    @test Tuple{Vector{Ref{Any}}, Ref{Any}} <: typeintersect(A, B)
+    @test Tuple{Vector{Ref{Any}}, Ref{Any}} <: typeintersect(B, A)
+end
+let A = Tuple{T1, T2, T1} where {T1, T2>:Int},
+    B = Tuple{Integer, S2, S1} where {S1, S2<:S1}
+    @test Tuple{Int, Real, Int} <: typeintersect(A, B)
+    @test Tuple{Int, Real, Int} <: typeintersect(B, A)
+end
+let A = Tuple{Tuple{T3, T3}, T1, Union{Nothing, T3}} where {T1, T3<:T1},
+    B = Tuple{Tuple{S1, Float64}, S1, Union{Nothing, S1}} where S1
+    @testintersect(A, B, Tuple{Tuple{Float64, Float64}, Float64, Union{Nothing, Float64}})
+end
+let A = Tuple{T2, Val{T2}, T1} where {T1, T2<:T1},
+    B = Tuple{Any, Val{S1}, Union{Nothing, S1}} where S1
+    @test Tuple{Tuple{Real}, Val{Any}, Any} <: typeintersect(A, B)
+    @test Tuple{Tuple{Real}, Val{Any}, Any} <: typeintersect(B, A)
+end
+let A = Tuple{Tuple{T1, T1}, Real, T2} where {T1>:Float64, T2>:Int},
+    B = Tuple{Tuple{S1, S1}, Any, Tuple{S1, S1}} where S1
+    @test !(Tuple{Tuple{Int, Int}, Real, Tuple{Int, Int}} <: typeintersect(A, B))
+end
+let A = Tuple{X, Y, Y} where {X, Y},
+    B = Tuple{S, S2, S} where {S, S2}
+    @test !(Tuple{Float64, Int, Int} <: typeintersect(A, B))
+    @test !(Tuple{Float64, Int, Int} <: typeintersect(B, A))
+end
+let A = Tuple{Tuple{T3, T2}, T3, Tuple{T3, T2}, Tuple{T2, T3}} where {T2, T3<:T2},
+    B = Tuple{Tuple{S1, S1}, Tuple{S3, S1}, S3, S1} where {S1, S3}
+    @testintersect(A, B, Union{})
+end
 
 # try to fool a greedy algorithm that picks X=Int, Y=String here
 @test Tuple{Ref{Union{Int,String}}, Ref{Union{Int,String}}} <: Tuple{Ref{Union{X,Y}}, Ref{X}} where {X,Y}
