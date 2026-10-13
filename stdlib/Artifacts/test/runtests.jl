@@ -194,6 +194,25 @@ end
     end
 end
 
+# Both expansion paths should use the caller's source location for diagnostics.
+@testset "@artifact_str source locations" begin
+    source = LineNumberNode(123, Symbol(@__FILE__))
+    function source_locations!(locations, ex)
+        if ex isa LineNumberNode
+            push!(locations, ex)
+        elseif ex isa Expr
+            foreach(arg -> source_locations!(locations, arg), ex.args)
+        end
+        return locations
+    end
+    for name in ("HelloWorldC", :(string("HelloWorldC"))), platform in (nothing, :(HostPlatform()))
+        ex = Artifacts.var"@artifact_str"(source, @__MODULE__, name, platform)
+        locations = source_locations!(LineNumberNode[], ex)
+        @test !isempty(locations)
+        @test all(==(source), locations)
+    end
+end
+
 @testset "@artifact_str Platform passing" begin
     with_artifacts_directory(artifacts_dir) do
         win64 = Platform("x86_64", "windows")

@@ -593,23 +593,21 @@ end
 
 ### n
 
-@generated function Sampler(RNG::Type{<:AbstractRNG}, t::Tuple, n::Repetition)
-    l = fieldcount(t)
+function Sampler(RNG::Type{<:AbstractRNG}, t::Tuple, n::Repetition)
+    l = length(t)
     if l < typemax(UInt32) && ispow2(l)
-        :(SamplerSimple(t, Sampler(RNG, UInt32, n)))
+        SamplerSimple(t, Sampler(RNG, UInt32, n))
     else
-        :(SamplerSimple(t, Sampler(RNG, Base.OneTo(length(t)), n)))
+        SamplerSimple(t, Sampler(RNG, Base.OneTo(l), n))
     end
 end
 
-@generated function rand(rng::AbstractRNG, sp::SamplerSimple{T}) where T<:Tuple
+function rand(rng::AbstractRNG, sp::SamplerSimple{T}) where T<:Tuple
     l = fieldcount(T)
     if l < typemax(UInt32) && ispow2(l)
-        quote
-            r = rand(rng, sp.data) & ($l-1)
-            @inbounds return sp[][1 + r]
-        end
+        r = rand(rng, sp.data) & (l-1)
+        @inbounds return sp[][1 + r]
     else
-        :(@inbounds return sp[][rand(rng, sp.data)])
+        @inbounds return sp[][rand(rng, sp.data)]
     end
 end

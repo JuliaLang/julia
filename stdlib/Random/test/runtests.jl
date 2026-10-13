@@ -829,6 +829,11 @@ end
         @test rand((x, 2, 3, 4, 5)) ∈ 1:5
         @test rand((x, 2, 3, 4, 6)) ∈ 1:6
     end
+    # Tuple length and sampler choice should remain inferable without generated functions.
+    for rng in (MersenneTwister(42), Xoshiro(42)), t in ((1, 2, 3, 4), (1, 2, 3, 4, 5)), n in (Val(1), Val(Inf))
+        sp = @inferred Sampler(typeof(rng), t, n)
+        @test (@inferred rand(rng, sp)) in t
+    end
 end
 
 @testset "rand(::Type{<:Tuple})" begin
