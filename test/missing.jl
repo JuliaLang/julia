@@ -570,10 +570,10 @@ end
             @test sum(sm) == 0
         end
 
-        # `mapreduce_impl` returns the reduced value itself even for an imprecisely inferred
-        # array, rather than the `Union{Nothing,Some}` result of the `SkipMissing` helper
-        @test Base.infer_return_type((Any, Int)) do A, n
-            Base.mapreduce_impl(x -> x isa Pair, &, A, 1, n)
+        # the `missing` sentinel of the `SkipMissing` pairwise helper must not leak into
+        # the result type, even for an imprecisely inferred array
+        @test Base.infer_return_type((Vector{Any},)) do A
+            mapreduce(x -> x isa Pair, &, skipmissing(A))
         end === Bool
     end
 

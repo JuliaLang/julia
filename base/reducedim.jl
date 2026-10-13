@@ -87,6 +87,7 @@ function check_reducedims(R, A)
 end
 
 reducedim1(R, A) = length(axes1(R)) == 1
+reducedim1(R) = length(axes1(R)) == 1
 
 mapreduce_similar(A, ::Type{T}, dims) where {T} = similar(A, T, dims)
 
@@ -417,11 +418,9 @@ function mapreducedim_rowmajor(f::F, op::OP, A, init, is_inner_dim, inner, outer
     return R
 end
 
-_mapreduce_dim(f, op, nt, R::ReshapedArray, ::Colon) =
-    _mapreduce_dim(f, op, nt, parent(R), :)
-
-_mapreduce_dim(f, op, i::_InitialValue, R::ReshapedArray, ::Colon) =
-    _mapreduce_dim(f, op, i, parent(R), :)
+# Whole-array reductions of a reshape are reductions of the parent in the same linear order
+mapreducedim(f::F, op::OP, R::ReshapedArray, init, ::Colon) where {F, OP} =
+    mapreducedim(f, op, parent(R), init, :)
 
 """
     mapreduce!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted; [init], [update])
