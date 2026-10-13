@@ -1160,7 +1160,7 @@ static const auto jlegalx_func = new JuliaFunction<TypeFnContextAndSizeT>{
         return FunctionType::get(getInt32Ty(C), {T, T, T_size}, false); },
     [](LLVMContext &C) {
         AttrBuilder FnAttrs(C);
-        FnAttrs.addMemoryAttr(MemoryEffects::readOnly());
+        FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleOrArgMemOnly(ModRefInfo::Ref));
         FnAttrs.addAttribute(Attribute::NoUnwind);
         FnAttrs.addAttribute(Attribute::WillReturn);
         return AttributeList::get(C,
