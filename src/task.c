@@ -1106,9 +1106,11 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     t->cached_cancel_entry = jl_nothing;
     t->tls = jl_nothing;
     jl_atomic_store_relaxed(&t->_state, JL_TASK_STATE_RUNNABLE);
+    jl_gc_wb_fresh(t, &t->start, start);
     t->start = start;
     t->invoked = NULL;
     t->result = jl_nothing;
+    jl_gc_wb_fresh(t, &t->donenotify, completion_future);
     t->donenotify = completion_future;
     jl_atomic_store_relaxed(&t->_isexception, 0);
     // Inherit scope from parent task
