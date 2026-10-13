@@ -1167,6 +1167,7 @@ function _growbeg!(a::Vector, delta::Integer)
 end
 
 function _growend_internal!(a::Vector, delta::Int, len::Int)
+    @_terminates_locally_meta
     ref = a.ref
     mem = ref.mem
     memlen = length(mem)
