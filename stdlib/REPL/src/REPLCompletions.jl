@@ -1451,7 +1451,7 @@ function shell_completions(str, pos, hint::Bool=false; escape_backticks::Bool=fa
     # Now look at the last thing we parsed
     isempty(ex.args) && return Completion[], 1:0, false
     # Concatenate every string fragment so dir\file completes correctly.
-    lastarg = all(x -> x isa String, ex.args) ? string(ex.args...) : ex.args[end]
+    lastarg = all(x -> x isa String, ex.args) ? join(Vector{String}(ex.args)) : ex.args[end]
 
     # As Base.shell_parse throws away trailing spaces (unless they are escaped),
     # we need to special case here.
@@ -1466,13 +1466,13 @@ function shell_completions(str, pos, hint::Bool=false; escape_backticks::Bool=fa
         paths, dir, success = complete_path(""; use_envpath=false, cmd_escape=true, escape_backticks, dirsep='/')
         return paths, r, success
     elseif all(@nospecialize(arg) -> arg isa AbstractString, ex.args)
-        path = join(ex.args)
+        path = join(Vector{String}(ex.args))
     elseif Meta.isexpr(get(ex.args, 1, nothing), :call) &&
            (call = ex.args[1]::Expr; call.args[1] === :expanduser) &&
            (tilde_idx = findfirst(a -> a isa String, call.args); tilde_idx !== nothing) &&
            all(@nospecialize(arg) -> arg isa AbstractString, ex.args[2:end])
         tilde_str = call.args[tilde_idx]::String  # "~" or "~alice"
-        rest = join(ex.args[2:end])
+        rest = join(Vector{String}(ex.args[2:end]))
         r = last_arg_start:pos
         if isempty(rest)
             # No path after the tilde: complete usernames.
