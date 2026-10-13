@@ -996,7 +996,7 @@ end
 36  (call core.svec %₃₃ %₃₄ %₃₅)
 37  (call core.define_method TestMod core.nothing %₃₆
     --- code_info
-    slots: [slot₁/#ctor-self# slot₂/xs slot₃/tmp slot₄/tmp]
+    slots: [slot₁/#ctor-self# slot₂/xs slot₃/ slot₄/]
     1   (call core._apply_iterate top.iterate core.tuple slot₂/xs)
     2   (call core.nfields %₁)
     3   (call top.ult_int %₂ 2)
@@ -1009,19 +1009,19 @@ end
     10  (call core.throw %₉)
     11  slot₁/#ctor-self#
     12  (call core.fieldtype %₁₁ 1)
-    13  (= slot₃/tmp (call core.getfield %₁ 1))
-    14  (call core.isa slot₃/tmp %₁₂)
+    13  (= slot₃/ (call core.getfield %₁ 1))
+    14  (call core.isa slot₃/ %₁₂)
     15  (gotoifnot %₁₄ label₁₇)
     16  (goto label₁₈)
-    17  (= slot₃/tmp (call top.convert %₁₂ slot₃/tmp))
-    18  slot₃/tmp
+    17  (= slot₃/ (call top.convert %₁₂ slot₃/))
+    18  slot₃/
     19  (call core.fieldtype %₁₁ 2)
-    20  (= slot₄/tmp (call core.getfield %₁ 2))
-    21  (call core.isa slot₄/tmp %₁₉)
+    20  (= slot₄/ (call core.getfield %₁ 2))
+    21  (call core.isa slot₄/ %₁₉)
     22  (gotoifnot %₂₁ label₂₄)
     23  (goto label₂₅)
-    24  (= slot₄/tmp (call top.convert %₁₉ slot₄/tmp))
-    25  slot₄/tmp
+    24  (= slot₄/ (call top.convert %₁₉ slot₄/))
+    25  slot₄/
     26  (new %₁₁ %₁₈ %₂₅)
     27  (return %₂₆)
 38  latestworld
@@ -1184,7 +1184,7 @@ end
 33  (call core.svec %₃₀ %₃₁ %₃₂)
 34  (call core.define_method TestMod core.nothing %₃₃
     --- code_info
-    slots: [slot₁/#ctor-self#(!read) slot₂/x slot₃/tmp slot₄/T(single_assign)]
+    slots: [slot₁/#ctor-self#(!read) slot₂/x slot₃/ slot₄/T(single_assign)]
     1   TestMod.typeof
     2   (= slot₄/T (call %₁ slot₂/x))
     3   TestMod.ShadowTypeParam
@@ -1192,12 +1192,12 @@ end
     5   (call core.apply_type %₃ %₄)
     6   (call core.fieldtype %₅ 1)
     7   slot₂/x
-    8   (= slot₃/tmp %₇)
-    9   (call core.isa slot₃/tmp %₆)
+    8   (= slot₃/ %₇)
+    9   (call core.isa slot₃/ %₆)
     10  (gotoifnot %₉ label₁₂)
     11  (goto label₁₃)
-    12  (= slot₃/tmp (call top.convert %₆ slot₃/tmp))
-    13  slot₃/tmp
+    12  (= slot₃/ (call top.convert %₆ slot₃/))
+    13  slot₃/
     14  (new %₅ %₁₃)
     15  (return %₁₄)
 35  latestworld

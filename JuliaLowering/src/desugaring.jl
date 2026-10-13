@@ -389,6 +389,7 @@ function _destructure(ctx, assignment_srcref, stmts, lhs, rhs, is_const)
                 push!(end_stmts, expand_forms_2(ctx, wrap(@ast ctx lh [:(=) lh lhs_tmp])))
                 lhs_tmp
             end
+            i != n_lhs && push!(stmts, @ast ctx rhs [:local iterstate])
             push!(stmts,
                 expand_forms_2(ctx,
                     lower_tuple_assignment(ctx,
@@ -1428,12 +1429,22 @@ function expand_assignment(ctx, ex, is_const=false)
         x = lhs[1]
         T = lhs[2]
         res = if is_const
-            expand_forms_2(ctx, @ast ctx ex [:const
-                [:(=)
-                     lhs[1]
-                     head(lhs[1]) === :placeholder ? rhs :
-                        convert_for_type_decl(ctx, ex, rhs, T, true)
-                 ]])
+            out = if head(x) === :placeholder
+                @ast ctx ex [:const [:(=) lhs[1] rhs]]
+            else
+                tmp = newsym(ctx, ex, "")
+                type_tmp = ssavar(ctx, T)
+                @ast ctx ex [:const [:(=) lhs[1] [:block
+                    [:(=) type_tmp T]
+                    [:(=) tmp rhs] [:local tmp] [:always_defined tmp]
+                    [:if [:call "isa"::core tmp type_tmp]
+                        (::nothing)
+                        [:(=) tmp [:call "typeassert"::core
+                            [:call "convert"::top type_tmp tmp]
+                            type_tmp]]]
+                    tmp]]]
+            end
+            expand_forms_2(ctx, out)
         elseif is_identifier_like(x)
             # Identifier in lhs[1] is a variable type declaration, eg
             # x::T = rhs
@@ -2147,6 +2158,7 @@ function expand_for(ctx, ex)
                     lhs_outer_defs...
                 ]
             end
+            [:local(iterspec) next]
             [:(=)(iter_ex) collection iter_ex]
             # First call to iterate is unrolled
             #   next = top.iterate(collection)
@@ -2623,7 +2635,10 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     gen_name = let mangled = reserve_module_binding_i(
         ctx.layer.mod,
         string("#", head(mtable) === :nothing ? "_" : mtable, "@generator"))
-        new_global_binding(ctx, src, mangled, ctx.layer.mod)
+        m1_sc = escape_layer(mtable.context, true)
+        @mknode(newsym(ctx, mtable, mangled);
+                context=SyntaxContext(
+                    m1_sc.layer, m1_sc.unexpanded, m1_sc.edition, true))
     end
 
     sc = src.context
@@ -3418,13 +3433,18 @@ function _new_call_convert_arg(ctx, full_struct_type, field_type, field_index, v
     end
     # kt = head(field_type)
     # TODO: Allow kt == :identifier && kt in static_params to avoid fieldtype call?
+    tmp = newsym(ctx, field_type, "")
+    type_tmp = ssavar(ctx, field_type)
     @ast ctx field_type [:block
-        tmp_type := [:call
+        [:(=) type_tmp [:call
             "fieldtype"::core
             full_struct_type
-            field_index::value
-        ]
-        convert_for_type_decl(ctx, field_type, val, tmp_type, false)
+            field_index::value]]
+        [:(=) tmp val] [:local tmp] [:always_defined tmp]
+        [:if [:call "isa"::core tmp type_tmp]
+            (::nothing)
+            [:(=) tmp [:call "convert"::top type_tmp tmp]]]
+        tmp
     ]
 end
 

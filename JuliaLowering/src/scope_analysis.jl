@@ -15,7 +15,6 @@ struct ScopeInfo
     # should participate in standard scope resolution, but then be associated
     # with the top-level thunk by the end of this pass.
     is_lifted::Bool
-    binding_assignments::Dict{IdTag, SyntaxTree}
     assignments::Dict{NameKey, SyntaxTree}
     # Map from variable names to binding IDs for resolution.  Includes all
     # locals, args, sparams, and explicit globals belonging to this scope.
@@ -48,8 +47,7 @@ function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
     end
     s = ScopeInfo(
         id, parent_id, lambda_id, ex, is_permeable, is_lifted,
-        Dict{IdTag, SyntaxTree}(), Dict{NameKey, SyntaxTree}(),
-        Dict{NameKey,IdTag}(), lambda_bindings)
+        Dict{NameKey, SyntaxTree}(), Dict{NameKey,IdTag}(), lambda_bindings)
     push!(ctx.scopes, s)
     return s
 end
@@ -108,14 +106,7 @@ _var_str(v) = v === :local ? "local variable" :
 # is a no-op, but doing so with an argument or static parameter is an error.  A
 # variable usually can't be two things in one scope, but flisp has quirks.
 function explicit_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
-    if head(ex) === :bindingid
-        bid = syntax_id(ex)
-        b = get_binding(ctx, bid)
-        @jl_assert b.kind === new_k ex
-        @jl_assert b.lambda_id == 0 (ex, "cannot declare a BindingId in multiple scopes")
-        add_lambda_local!(ctx, scope, b)
-        return bid
-    elseif head(ex) === :placeholder
+    if head(ex) === :placeholder
         return nothing
     elseif ex.mod isa Module
         new_k === :global || throw(LoweringError(
@@ -253,31 +244,20 @@ function _find_scope_decls!(ctx, scope, ex)
         explicit_declare_in_scope!(ctx, scope, ex[1], :global)
     elseif k === :function_decl
         k1 = head(ex[1])
-        _record_layer!(ctx, ex[1])
-        if k1 === :bindingid
-            b = get_binding(ctx, ex[1])
-            @jl_assert b.is_ssa || b.kind === :global (
-                ex, "allow local BindingId as function name?")
-            get!(scope.binding_assignments, b.id, ex[1])
-        elseif k1 === :identifier
+        if k1 === :identifier
+            _record_layer!(ctx, ex[1])
             ex[1].mod isa Module && return
             get!(scope.assignments, NameKey(ex[1]), ex[1])
-            get!(ctx.layer_ids, ex[1].context.layer,
-                 length(ctx.layer_ids)+1)
         else
             @jl_assert false (ex, "unknown kind in assignment")
         end
     elseif k === :(=) || k === :constdecl || k === :assign_or_constdecl_if_global
         k1 = head(ex[1])
-        _record_layer!(ctx, ex[1])
-        sc = ex[1].context
-        if k1 === :bindingid
-            b = get_binding(ctx, ex[1])
-            get!(scope.binding_assignments, b.id, ex[1])
-        elseif k1 === :identifier
+        if k1 === :identifier
+            _record_layer!(ctx, ex[1])
             ex[1].mod === nothing &&
                 get!(scope.assignments, NameKey(ex[1]), ex[1])
-        elseif k1 === :placeholder
+        elseif k1 === :placeholder || k1 === :bindingid
             # nothing to declare
         else
             @jl_assert false (ex, "unknown kind in assignment")
@@ -309,7 +289,7 @@ function enter_scope!(ctx, ex)
     # Find explicit decls that may influence assignment assignment resolution
     if head(ex) in (:lambda, :toplevel_lambda, :generated_lambda)
         for c in children(ex[1])
-            @jl_assert head(c) in (:identifier, :bindingid, :placeholder) c
+            @jl_assert head(c) in (:identifier, :placeholder) c
             explicit_declare_in_scope!(ctx, scope, c, :argument)
         end
         for c in children(ex[2])
@@ -333,13 +313,6 @@ function enter_scope!(ctx, ex)
 
     #---------------------------------------------------------------------------
     # Find assignment targets, possibly introducing implicit locals and globals
-    for (bid, _node_id) in sort!(collect(scope.binding_assignments); by=first)
-        # Mutable nameless bindings may be introduced in desugaring.  These
-        # should be capturable, and may be local to the nearest lambda or
-        # global.  Desugaring should ensure these are never used undef.
-        b = get_binding(ctx, bid)
-        b.lambda_id != 0 || add_lambda_local!(ctx, scope, b)
-    end
     for (vk, ex) in sort!(collect(scope.assignments);
                           by=x->let nk=x[1]; (nk.name, ctx.layer_ids[nk.layer]); end)
         @jl_assert ex.mod === nothing ex
