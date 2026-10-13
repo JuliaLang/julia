@@ -315,7 +315,6 @@ function apply_32026_hack(st, orig)
 end
 
 function collect_body_meta(st)
-    argmeta_all = nothing
     argmeta = nothing
     mmetas = nothing
     for c in children(st)
@@ -325,7 +324,8 @@ function collect_body_meta(st)
         if spec in ("specialize", "nospecialize")
             meta = Symbol(spec)
             if numchildren(c) == 1
-                isnothing(argmeta_all) && (argmeta_all = meta)
+                isnothing(mmetas) && (mmetas = SyntaxList())
+                push!(mmetas, @mknode(c[1]; head=:symbol))
             else
                 isnothing(argmeta) && (argmeta = Dict{String, Symbol}())
                 for id in c[2:end]
@@ -346,7 +346,7 @@ function collect_body_meta(st)
             end
         end
     end
-    (isnothing(argmeta_all) ? argmeta : argmeta_all), mmetas
+    argmeta, mmetas
 end
 
 # Absorb `meta` nodes from arguments and the function body into syntax `.meta`
@@ -591,7 +591,8 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
         # Heads not emitted from parsing
         ([:meta s vs...],
          when=(meta=est_syntax_name(s, "");
-               !ctx.toplevel && meta in ("nospecialize", "specialize"))) ->
+               !ctx.toplevel && numchildren(st) > 1 &&
+               meta in ("nospecialize", "specialize"))) ->
              # Should be handled in the function case
              newleaf(st, :nothing)
         ([:meta s gen], when=est_syntax_name(s, "") === "generated") ->

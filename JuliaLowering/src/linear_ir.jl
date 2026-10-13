@@ -1281,6 +1281,7 @@ struct Slot
     name::String
     kind::Symbol
     is_nospecialize::Bool
+    is_specialize::Bool
     is_read::Bool
     is_single_assign::Bool
     is_maybe_undef::Bool
@@ -1321,13 +1322,14 @@ function compile_lambda(outer_ctx, ex)
             # Unused functions arguments like: `_` or `::T`
             push!(slots, Slot(UNUSED, :argument,
                               getmeta(arg, :nospecialize, false)::Bool,
-                              false, false, false, false))
+                              false, false, false, false, false))
         else
             @jl_assert head(arg) == :bindingid ex arg
             id = syntax_id(arg)
             binfo = get_binding(ctx, id)
             @jl_assert binfo.kind == :local || binfo.kind == :argument ex arg
             push!(slots, Slot(binfo.name, :argument, binfo.is_nospecialize,
+                              binfo.is_specialize,
                               binfo.is_read, binfo.is_assigned_once,
                               binfo.is_used_undef, binfo.is_called))
             slot_rewrites[id] = length(slots)
@@ -1338,7 +1340,7 @@ function compile_lambda(outer_ctx, ex)
         if !is_capt
             binfo = get_binding(ctx.bindings, id)
             if binfo.kind == :local
-                push!(slots, Slot(binfo.name, :local, false,
+                push!(slots, Slot(binfo.name, :local, false, false,
                                   binfo.is_read, binfo.is_assigned_once,
                                   binfo.is_used_undef, binfo.is_called))
                 slot_rewrites[id] = length(slots)
@@ -1352,12 +1354,18 @@ function compile_lambda(outer_ctx, ex)
         @jl_assert info.kind == :static_parameter arg
         slot_rewrites[id] = i
     end
-    let ns_slots = SyntaxList()
+    let ns_slots = SyntaxList(), s_slots = SyntaxList()
         for (i, s) in enumerate(slots)
             if s.is_nospecialize
                 s.kind === :argument || throw(LoweringError(
                     ex, "nospecialize on non-argument"))
                 push!(ns_slots, newleaf(lambda_args[i], :slot, i))
+            elseif s.is_specialize
+                s.kind === :argument || throw(LoweringError(
+                    ex, "specialize on non-argument"))
+                if head(lambda_args[i]) !== :placeholder
+                    push!(s_slots, newleaf(lambda_args[i], :slot, i))
+                end
             end
         end
         if !isempty(ns_slots)
@@ -1368,6 +1376,8 @@ function compile_lambda(outer_ctx, ex)
             pushfirst!(ctx.code,
                   @ast ctx lambda_args [:meta "nospecialize"::symbol ns_slots...])
         end
+        isempty(s_slots) || pushfirst!(ctx.code,
+            @ast ctx lambda_args [:meta "specialize"::symbol s_slots...])
     end
     code = renumber_body(ctx, ctx.code, slot_rewrites)
     meta = SyntaxMeta()

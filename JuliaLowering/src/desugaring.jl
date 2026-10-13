@@ -2579,10 +2579,10 @@ end
 # Prepend method metadata and retain it through recursive wrapper generation.
 function prepend_method_metas(ctx, src, body, method_metas)
     isnothing(method_metas) && return body
+    metas = mapsyntax(m->@ast(ctx, m, [:meta m]), method_metas)
     out = @stm body begin
-        [:block stmts...] ->
-            @ast ctx src [:block [:meta method_metas...] stmts...]
-        _ -> @ast ctx src [:block [:meta method_metas...] body]
+        [:block stmts...] -> @ast ctx src [:block metas... stmts...]
+        _ -> @ast ctx src [:block metas... body]
     end
     setmeta(out, :method_metas, method_metas)
 end

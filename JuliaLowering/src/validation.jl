@@ -1121,7 +1121,9 @@ vst1_non_arg_meta(vcx, st) = @stm st begin
     [:meta [:identifier] xs...] -> let m = syntax_name(st[1])
         if m === "nospecialize" || m === "specialize"
             # TODO: identifiers are only meaningful directly in a function body
-            all(vst1_ident_lhs, vcx, xs)
+            all(vst1_ident_lhs, vcx, xs) |
+                (length(xs) == 1 && head(xs[1]) === :tuple ?
+                all(vst1_ident_lhs, vcx, children(xs[1])) : unknown())
         elseif m === "generated"
             minlen(st, xs, 1) & maxlen(st, xs, 1) & vst1(vcx, xs[1])
         else

@@ -224,7 +224,7 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.foo %₈
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/a(nospecialize,!read)]
+    slots: [slot₁/#self#(!read) slot₂/a(!read)]
     1   (meta :nospecialize)
     2   (return core.nothing)
 10  latestworld

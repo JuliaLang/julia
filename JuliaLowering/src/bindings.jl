@@ -16,7 +16,8 @@ mutable struct BindingInfo
     unboxed::Bool # determined by binding_analysis.jl; flisp generally mutates `capt` instead
 
     # flisp: vinfo
-    is_nospecialize::Bool # @nospecialize on this argument (only valid for kind == :argument)
+    is_nospecialize::Bool # Only valid for kind == :argument
+    is_specialize::Bool
     is_read::Bool
     is_called::Bool
     is_assigned::Bool
@@ -51,6 +52,7 @@ function BindingInfo(bindings::Bindings,
                      is_ambiguous_local::Bool = false,
                      unboxed::Bool = false,
                      is_nospecialize::Bool = false,
+                     is_specialize::Bool = false,
                      is_read::Bool = false,
                      is_called::Bool = false,
                      is_assigned::Bool = false,
@@ -61,7 +63,7 @@ function BindingInfo(bindings::Bindings,
     bid = next_binding_id(bindings)
     b = BindingInfo(
         bid, name, kind, node_id, mod, type, lambda_id, is_const, is_ssa,
-        is_internal, is_ambiguous_local, unboxed, is_nospecialize,
+        is_internal, is_ambiguous_local, unboxed, is_nospecialize, is_specialize,
         is_read, is_called, is_assigned, is_assigned_once, is_captured,
         is_always_defined, is_used_undef)
     add_binding(bindings, b)
@@ -82,6 +84,7 @@ function Base.show(io::IO, binfo::BindingInfo)
     binfo.is_ambiguous_local && print(io, ", is_ambiguous_local=true")
     binfo.unboxed            && print(io, ", unboxed=true")
     binfo.is_nospecialize    && print(io, ", is_nospecialize=true")
+    binfo.is_specialize      && print(io, ", is_specialize=true")
     binfo.is_read            && print(io, ", is_read=true")
     binfo.is_called          && print(io, ", is_called=true")
     binfo.is_assigned        && print(io, ", is_assigned=true")

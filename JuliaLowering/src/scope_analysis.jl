@@ -118,7 +118,8 @@ function explicit_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
     if isnothing(old_k)
         if new_k === :argument
             declare_in_scope!(ctx, scope, ex, :argument;
-                              is_nospecialize=getmeta(ex, :nospecialize, false))
+                              is_nospecialize=getmeta(ex, :nospecialize, false),
+                              is_specialize=getmeta(ex, :specialize, false))
         else
             real_k = new_k === :destructured_arg ? :local : new_k
             declare_in_scope!(ctx, scope, ex, real_k)
@@ -138,6 +139,7 @@ end
 
 function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol;
                            is_nospecialize::Bool=false,
+                           is_specialize::Bool=false,
                            is_ambiguous_local::Bool=false)
     nk = NameKey(ex)
     is_internal = ex.context.internal ||
@@ -150,7 +152,8 @@ function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol;
     else
         @jl_assert ex.mod === nothing ex
         bid = _new_binding(ctx.bindings, ex, nk.name, bk;
-                         is_internal, is_nospecialize, is_ambiguous_local).id
+                         is_internal, is_nospecialize, is_specialize,
+                         is_ambiguous_local).id
     end
     if !(ex.mod isa Module)
         scope.vars[nk] = bid

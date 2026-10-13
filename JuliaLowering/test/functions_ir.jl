@@ -2028,9 +2028,9 @@ end
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  (call core.define_method TestMod TestMod.#f_kw_slurp#kw_body#6 %₁₃
     --- code_info
-    slots: [slot₁/#f_kw_slurp#kw_body#6(!read) slot₂/kw1(nospecialize,!read) slot₃/kw2(nospecialize,!read) slot₄/restkw(nospecialize,!read) slot₅/#self#(!read) slot₆/a(nospecialize,!read)]
-    1   (meta :nospecialize slot₂/kw1 slot₃/kw2 slot₄/restkw slot₆/a)
-    2   (meta :nkw 3)
+    slots: [slot₁/#f_kw_slurp#kw_body#6(!read) slot₂/kw1(!read) slot₃/kw2(!read) slot₄/restkw(!read) slot₅/#self#(!read) slot₆/a(!read)]
+    1   (meta :nkw 3)
+    2   (meta :nospecialize)
     3   (return core.nothing)
 15  latestworld
 16  TestMod.f_kw_slurp
@@ -2041,7 +2041,7 @@ end
 21  (call core.svec %₁₈ %₁₉ %₂₀)
 22  (call core.define_method TestMod TestMod.f_kw_slurp %₂₁
     --- code_info
-    slots: [slot₁/#self# slot₂/a(nospecialize)]
+    slots: [slot₁/#self# slot₂/a]
     1   (meta :nospecialize)
     2   TestMod.#f_kw_slurp#kw_body#6
     3   (call core.UndefKeywordError :kw1)
@@ -2060,12 +2060,12 @@ end
 30  (call core.svec %₂₇ %₂₈ %₂₉)
 31  (call core.define_method TestMod TestMod.f_kw_slurp %₃₀
     --- code_info
-    slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/a(nospecialize) slot₅/kw1(!read) slot₆/kw2(!read) slot₇/#kwtmp# slot₈/restkw...(single_assign)]
-    1   (meta :nospecialize slot₄/a)
-    2   (newvar slot₅/kw1)
-    3   (newvar slot₆/kw2)
-    4   (newvar slot₇/#kwtmp#)
-    5   (newvar slot₈/restkw...)
+    slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/a slot₅/kw1(!read) slot₆/kw2(!read) slot₇/#kwtmp# slot₈/restkw...(single_assign)]
+    1   (newvar slot₅/kw1)
+    2   (newvar slot₆/kw2)
+    3   (newvar slot₇/#kwtmp#)
+    4   (newvar slot₈/restkw...)
+    5   (meta :nospecialize)
     6   (call core.isdefined slot₂/kws :kw1)
     7   (gotoifnot %₆ label₁₀)
     8   (= slot₇/#kwtmp# (call core.getfield slot₂/kws :kw1))
