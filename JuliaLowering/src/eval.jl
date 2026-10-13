@@ -134,6 +134,9 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         if head(mname) != :identifier
             throw(LoweringError(mname, "Expected module name"))
         end
+        if head(body) != :block
+            throw(LoweringError(body, "module expression third argument must be a block"))
+        end
         newmod_name = Symbol(syntax_name(mname))
         coverage_visit_line(mod, ex)
         loc = first_linenode(ex)
