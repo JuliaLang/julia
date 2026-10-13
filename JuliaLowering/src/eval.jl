@@ -135,6 +135,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
             throw(LoweringError(mname, "Expected module name"))
         end
         newmod_name = Symbol(syntax_name(mname))
+        coverage_visit_line(mod, ex)
         loc = first_linenode(ex)
         push!(iter.todo, (body, true, 1))
         return Core.svec(:begin_module, version, newmod_name, notbare, loc)
@@ -144,8 +145,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         err = ex[1].value
         throw(err isa String ? ErrorException(string("syntax: ", err)) : err)
     else
-        # TODO: code coverage should visit
-        # `first_linenode(ex)::LineNumberNode`
+        coverage_visit_line(mod, ex)
          ctx2, ex2 = expand_forms_2(ex, world)
          ctx3, ex3 = resolve_scopes(ctx2, ex2; soft_scope)
          ctx4, ex4 = convert_closures(ctx3, ex3)
@@ -155,6 +155,16 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
     end
 end
 
+function coverage_visit_line(mod, st)
+    Base.JLOptions().code_coverage == 0 && return
+    lno = Base.first_linenode(st)
+    file = String(lno.file)
+    if lno.line > 0 && ccall(
+            :jl_coverage_enabled_for, Cint, (Any, Cstring), mod, file) != 0
+        ccall(:jl_coverage_visit_line, Cvoid, (Cstring, Csize_t, Cint),
+              file, length(file), lno.line)
+    end
+end
 
 #-------------------------------------------------------------------------------
 
