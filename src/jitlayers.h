@@ -83,6 +83,8 @@ DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModul
 void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis) JL_NOTSAFEPOINT;
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M) JL_NOTSAFEPOINT;
 DataLayout jl_create_datalayout(TargetMachine &TM) JL_NOTSAFEPOINT;
+void jl_write_data_object(raw_ostream &OS, MemoryBufferRef Ref, const DataLayout &DL,
+                          StringRef Name, ArrayRef<char> Data, Align Alignment);
 
 struct OptimizationOptions {
     bool lower_intrinsics;
