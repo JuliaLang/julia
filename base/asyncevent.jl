@@ -8,7 +8,7 @@
 Create an async condition that wakes up tasks waiting for it
 (by calling [`wait`](@ref) on the object)
 when notified from C by a call to `uv_async_send`.
-Waiting tasks are woken with an error when the object is closed (by [`close`](@ref)).
+Waiting tasks are woken with an [`EOFError`](@ref) when the object is closed (by [`close`](@ref)).
 Use [`isopen`](@ref) to check whether it is still active. A closed condition is inactive and will
 not wake up tasks.
 
@@ -79,8 +79,8 @@ Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on 
 Waiting tasks are woken after an initial delay of at least `delay` seconds, and then repeating after
 at least `interval` seconds again elapse. If `interval` is equal to `0`, the timer is only triggered
 once. When closing (by [`close`](@ref)) either a repeating timer or a one-shot timer before it has
-triggered, waiting tasks are woken with an error. After a one-shot timer triggers, all subsequent calls
-to [`wait`](@ref) return immediately, even if it is closed.
+triggered, waiting tasks are woken with an [`EOFError`](@ref). After a one-shot timer triggers, all
+subsequent calls to [`wait`](@ref) return immediately, even if it is closed.
 Use [`isopen`](@ref) to check whether a timer is still active. An inactive timer will not fire.
 Use `t.timeout` and `t.interval` to read the setup conditions of a `Timer` `t`.
 
