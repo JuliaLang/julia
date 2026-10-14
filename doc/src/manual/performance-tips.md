@@ -1059,7 +1059,7 @@ An example of correct usage of `Val` would be:
 ```julia
 function filter3(A::AbstractArray{T,N}) where {T,N}
     kernel = array3(1, Val(N))
-    filter(A, kernel)
+    imfilter(A, kernel)  # e.g. from ImageFiltering.jl
 end
 ```
 
