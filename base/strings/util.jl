@@ -969,7 +969,11 @@ split(str::AbstractString;
     rsplit(s::AbstractString; limit::Integer=0, keepempty::Bool=false)
     rsplit(s::AbstractString, chars; limit::Integer=0, keepempty::Bool=true)
 
-Similar to [`split`](@ref), but starting from the end of the string.
+Similar to [`split`](@ref), but starting from the end of the string. The splits are found
+from right to left (which matters e.g. when `limit` is given), but the substrings are still
+returned in the order in which they appear in `s`.
+
+See also [`eachrsplit`](@ref), which yields the substrings from right to left.
 
 # Examples
 ```jldoctest
