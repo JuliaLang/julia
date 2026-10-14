@@ -962,11 +962,17 @@ kw"?", kw"?:"
     for
 
 `for` loops repeatedly evaluate a block of statements while
-iterating over a sequence of values.
+iterating over a sequence of values. The sequence can be any iterable object, such as a
+range (`1:3`, or `1:2:9` with a step of 2), an array, a tuple, a string, or a
+[user-defined iterator](@ref man-interface-iteration).
+`for i = x`, `for i in x` and `for i ∈ x` are equivalent.
 
 The iteration variable is always a new variable, even if a variable of the same name
 exists in the enclosing scope.
 Use [`outer`](@ref) to reuse an existing local variable for iteration.
+
+Multiple nested loops can be combined into a single `for` by separating the iteration
+specifications with commas. A `break` inside such a loop exits all of the nested loops.
 
 # Examples
 ```jldoctest
@@ -976,6 +982,21 @@ julia> for i in [1, 4, 0]
 1
 4
 0
+
+julia> for i = 1:2:5
+           println(i)
+       end
+1
+3
+5
+
+julia> for i = 1:2, j = 3:4
+           println((i, j))
+       end
+(1, 3)
+(1, 4)
+(2, 3)
+(2, 4)
 ```
 """
 kw"for"
