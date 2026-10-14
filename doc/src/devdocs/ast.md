@@ -494,6 +494,17 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
     Marks the end of the a loop. Contains metadata that is passed to `LowerSimdLoop` to either mark
     the inner loop of `@simd` expression, or to propagate information to LLVM loop passes.
 
+  * `gc_preserve_begin`
+
+    Part of the implementation of [`GC.@preserve`](@ref). The arguments are values to keep rooted
+    (alive) until the matching `gc_preserve_end`. Yields a token which is consumed by
+    `gc_preserve_end`. See also [Keeping values alive in the absence of uses](@ref).
+
+  * `gc_preserve_end`
+
+    Ends the region started by a `gc_preserve_begin`. `args[1]` is the token from the associated
+    `gc_preserve_begin`.
+
   * `copyast`
 
     Part of the implementation of quasi-quote. The argument is a surface syntax AST that is simply
