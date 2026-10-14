@@ -121,8 +121,7 @@ some degree of enforcement of a type's invariants.
 If any inner constructor method is defined, no default constructor method is provided: it is presumed
 that you have supplied yourself with all the inner constructors you need. The default constructor
 is equivalent to writing your own inner constructor method that takes all of the object's fields
-as parameters (constrained to be of the correct type, if the corresponding field has a type),
-and passes them to `new`, returning the resulting object:
+as parameters and passes them to `new`, returning the resulting object:
 
 ```jldoctest
 julia> struct Foo
@@ -134,8 +133,9 @@ julia> struct Foo
 ```
 
 This declaration has the same effect as the earlier definition of the `Foo` type without an explicit
-inner constructor method. The following two types are equivalent -- one with a default constructor,
-the other with an explicit constructor:
+inner constructor method. Note that `new` converts each argument to the declared type of the
+corresponding field, just like the default constructor does. The following two types behave the
+same way -- one with a default constructor, the other with an explicit constructor:
 
 ```jldoctest
 julia> struct T1
@@ -159,6 +159,11 @@ T1(1)
 julia> T2(1.0)
 T2(1)
 ```
+
+The one difference is that when any field has a declared type, two default constructor methods are
+generated (see [Composite Types](@ref)): `T1(x::Int64)` and `T1(x)`. Thanks to the first one, an outer
+constructor such as `T1(x::Real) = T1(round(Int64, x))` still works for `Int64` arguments, whereas the
+same definition for `T2` would call itself forever on `T2(1)`.
 
 It is good practice to provide as few inner constructor methods as possible: only those
 taking all arguments explicitly and enforcing essential error checking and transformation. Additional
