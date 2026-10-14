@@ -440,7 +440,7 @@ differ from those of the enclosing inner constructor.
 For instance, if a type has two parameters like `MyType{T,S}` but the inner constructor is
 defined as `MyType{T}(...)`, then `new` would only receive `{T}` — not enough to
 determine the concrete type. In such cases you must write `new{T,S}(...)` explicitly.
-We will see an example of this in the [Outer-only constructors](@ref) section below.
+We will see an example of this in the [Disallowing explicit type parameters](@ref) section below.
 
 ## Case Study: Rational
 
@@ -548,14 +548,14 @@ of its arguments are complex integers, it will return an instance of `Complex{<:
 The interested reader should consider perusing the rest of [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl):
 it is short, self-contained, and implements an entire basic Julia type.
 
-## Outer-only constructors
+## Disallowing explicit type parameters
 
 As we have seen, a typical parametric type has inner constructors that are called when type parameters
 are known; e.g. they apply to `Point{Int}` but not to `Point`. Optionally, outer constructors
 that determine type parameters automatically can be added, for example constructing a `Point{Int}`
 from the call `Point(1,2)`. Outer constructors call inner constructors to actually
-make instances. However, in some cases one would rather not provide inner constructors, so
-that specific type parameters cannot be requested manually.
+make instances. However, in some cases one would rather not provide inner constructors that
+take type parameters, so that specific type parameters cannot be requested manually.
 
 For example, say we define a type that stores a vector along with an accurate representation of
 its sum:
@@ -599,7 +599,11 @@ Stacktrace:
 [...]
 ```
 
-This is the case where explicit type parameters on `new` are essential:
+This is still an inner constructor (it is defined inside the `struct` block and calls `new`),
+but since it is defined for the bare `SummedArray` rather than for `SummedArray{T,S}`, calls like
+`SummedArray{Int32,Int32}(...)` are not available.
+
+This is also the case where explicit type parameters on `new` are essential:
 the inner constructor name is bare `SummedArray` with no curly braces,
 so `new` has no type parameters to inherit (see
 [How `new` works in parametric constructors](@ref) above).
