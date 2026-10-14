@@ -1198,7 +1198,6 @@ function _growend_internal!(a::Vector, delta::Int, len::Int)
     newref = @inbounds memoryref(newmem, newoffset)
     unsafe_copyto!(newref, ref, len)
     if newmem === mem
-        # unset the old slots that the copy did not overwrite, so they don't keep stale references
         for j in max(offset, newoffset + len):offset+len-1
             @inbounds unsetindex!(mem, j)
         end
