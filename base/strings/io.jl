@@ -393,10 +393,12 @@ characters are escaped either with their standard C escape codes, `"\\0"` for NU
 unambiguous), unicode code point (`"\\u"` prefix) or hex (`"\\x"` prefix).
 
 The optional `esc` argument specifies any additional characters that should also be
-escaped by a prepending backslash (`\"` is also escaped by default in the first form).
+escaped by a prepending backslash. In the first form, `esc` defaults to `('\"',)`, so
+`\"` is escaped unless `esc` is passed explicitly without it (e.g. `escape_string(str, ())`).
 
 The argument `keep` specifies a collection of characters which are to be kept as
-they are. Notice that `esc` has precedence here.
+they are. Notice that `esc` has precedence here, so adding `\"` to `keep` does not prevent
+it from being escaped by the default `esc` of the first form.
 
 The argument `ascii` can be set to `true` to escape all non-ASCII characters,
 whereas the default `ascii=false` outputs printable Unicode characters as-is.
@@ -422,6 +424,12 @@ julia> escape_string("aaa\\nbbb")
 
 julia> escape_string("aaa\\nbbb"; keep = '\\n')
 "aaa\\nbbb"
+
+julia> escape_string("\\"a\\"")
+"\\\\\\"a\\\\\\""
+
+julia> escape_string("\\"a\\"", ()) # do not escape `"`
+"\\"a\\""
 
 julia> escape_string("\\xfe\\xff") # invalid utf-8
 "\\\\xfe\\\\xff"
