@@ -474,7 +474,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   - Complex numbers are supported, but to get complex results, [you need complex inputs](@ref faq-domain-errors).
   - There are multiple Complex and Rational types, with different component types.
 
-- Modules (namespaces) can be hierarchical. [`import`](@ref) and [`using`](@ref) have a dual role: they load the code and make it available in the namespace. `import` for only the module name is possible (roughly equivalent to `ASDF:LOAD-OP`). Slot names don't need to be exported separately. Global variables can't be assigned to from outside the module (except with `eval(mod, :(var = val))` as an escape hatch).
+- Modules (namespaces) can be hierarchical. [`import`](@ref) and [`using`](@ref) have a dual role: they load the code and make it available in the namespace. `import` for only the module name is possible (roughly equivalent to `ASDF:LOAD-OP`). Slot names don't need to be exported separately. Global variables can only be assigned to from outside the module (e.g. `mod.var = val`) if they already exist in that module (otherwise, `eval(mod, :(var = val))` can be used as an escape hatch).
 
 - Macros start with `@`, and are not as seamlessly integrated into the language as Common Lisp; consequently, macro usage is not as widespread as in the latter. A form of hygiene for [macros](@ref Metaprogramming) is supported by the language. Because of the different surface syntax, there is no equivalent to `COMMON-LISP:&BODY`.
 
