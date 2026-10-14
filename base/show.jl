@@ -392,8 +392,9 @@ the properties of that stream (note that `io` can itself be an `IOContext`).
 The following properties are in common use:
 
  - `:compact`: Boolean specifying that values should be printed more compactly, e.g.
-   that numbers should be printed with fewer digits. This is set when printing array
-   elements. `:compact` output should not contain line breaks.
+   that numbers should be printed with fewer digits. Containers may set this when
+   printing their elements, e.g. when there is little space per element as in
+   multi-column matrices. `:compact` output should not contain line breaks.
  - `:limit`: Boolean specifying that containers should be truncated, e.g. showing `…` in
    place of most elements.
  - `:displaysize`: A `Tuple{Int,Int}` giving the size in rows and columns to use for text
