@@ -1612,6 +1612,28 @@ if Sys.iswindows()
     rm(tmp)
 end
 
+# Completing in the middle of a path also replaces the rest of it if the completion ends with it
+mktempdir() do path
+    touch(joinpath(path, "foobar.txt"))
+    cd(path) do
+        c, r = test_complete_pos("cd(\"foob|.txt\")")
+        @test c == ["foobar.txt\""]
+        @test r == 5:13
+        c, r = test_complete_pos("cd(\"foob|ar.txt")
+        @test c == ["foobar.txt\""]
+        @test r == 5:14
+        c, r = test_complete_pos("cd(\"foob|.tx\")")
+        @test c == ["foobar.txt"]
+        @test r == 5:8
+        c, r = test_complete_pos("`cat foob|.txt -n`")
+        @test c == ["foobar.txt"]
+        @test r == 6:13
+        c, r = map_completion_text(shell_completions("cat foob.txt -n", 8))
+        @test c == ["foobar.txt"]
+        @test r == 5:12
+    end
+end
+
 # issue 51985
 let s = "`\\"
     c,r = test_scomplete(s)
