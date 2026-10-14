@@ -148,6 +148,13 @@ julia> collect(Iterators.reverse(Squares(4)))
   1
 ```
 
+Iterable types also support [destructuring assignment](@ref destructuring-assignment), like
+`a, b = Squares(4)`, which is implemented using `iterate`. When "slurping" the remaining elements,
+as in `a, b... = x` or `a, b..., c = x`, they are collected by [`Base.rest`](@ref) and
+[`Base.split_rest`](@ref), respectively. The generic fallbacks return a lazy iterator and a
+`Vector`, so collection types may want to add methods to these functions, for example to return a
+collection of their own type.
+
 ## Indexing
 
 | Methods to implement | Brief description                |
