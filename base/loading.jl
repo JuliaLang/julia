@@ -940,7 +940,7 @@ function project_get_edition(d::Dict)
     sv = nothing
     ds = get(d, "syntax", nothing)
     if ds !== nothing
-        sv = VersionNumber(get(ds, "julia_version", nothing))
+        sv = VersionNumber(get(ds, "julia_version", nothing))::VersionNumber
     end
     # If not found, default to minimum(compat["julia"])
     if sv === nothing
@@ -948,7 +948,7 @@ function project_get_edition(d::Dict)
         if cs !== nothing
             jv = get(cs, "julia", nothing)
             if jv !== nothing
-                sv = VersionNumber(minimum(semver_spec(jv)).t...)
+                sv = VersionNumber(minimum(semver_spec(jv)).t...)::VersionNumber
             end
         end
     end
@@ -3717,7 +3717,7 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
            -`
     cmd = addenv(cmd, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1,
                  # don't let the worker outlive us if we get killed
-                 "JULIA_EXIT_WITH_PARENT_PID" => getpid())
+                 "JULIA_EXIT_WITH_PARENT_PID" => Int(getpid()))
     # Only request per-package timing reports when explicitly asked for (e.g. by
     # precompilepkgs), so that the marker lines don't leak into normal load logs.
     report_timing && (cmd = addenv(cmd, "JULIA_PRECOMP_REPORT_TIMING" => 1))
@@ -4842,7 +4842,7 @@ end
 
 function toml_egal(A::AbstractDict, B::AbstractDict)
     isa(A,IdDict) != isa(B,IdDict) && return false
-    length(A) != length(B) && return false
+    length(A)::Int != length(B)::Int && return false
     for pair in A
         !in(pair, B, toml_egal) && return false
     end

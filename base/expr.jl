@@ -1244,7 +1244,7 @@ function is_short_function_def(@nospecialize(ex))
     while length(ex.args) >= 1 && isa(ex.args[1], Expr)
         (ex.args[1].head === :call) && return true
         (ex.args[1].head === :where || ex.args[1].head === :(::)) || return false
-        ex = ex.args[1]
+        ex = ex.args[1]::Expr
     end
     return false
 end
