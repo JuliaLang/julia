@@ -555,6 +555,19 @@ julia> "1 + 2 = $(1 + 2)"
 "1 + 2 = 3"
 ```
 
+In particular, indexing, field access, and function calls need parentheses, since otherwise only
+the variable name is interpolated:
+
+```jldoctest
+julia> v = [1, 2, 3];
+
+julia> "v[2] = $v[2]"
+"v[2] = [1, 2, 3][2]"
+
+julia> "v[2] = $(v[2])"
+"v[2] = 2"
+```
+
 Both concatenation and string interpolation call [`string`](@ref) to convert objects into string
 form. However, `string` actually just returns the output of [`print`](@ref), so new types
 should add methods to [`print`](@ref) or [`show`](@ref) instead of `string`.
