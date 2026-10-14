@@ -1369,8 +1369,8 @@ function mode_keymap(julia_prompt::Prompt)
                 end
             end
         else
-            buf = LineEdit.buffer(s)
-            if LineEdit.try_remove_paired_delimiter(buf)
+            if LineEdit.options(LineEdit.state(s)).auto_insert_closing_bracket &&
+                    LineEdit.try_remove_paired_delimiter(s)
                 return LineEdit.refresh_line(s)
             end
             LineEdit.edit_backspace(s)
@@ -1624,14 +1624,10 @@ function setup_interface(
                 end
                 Base.errormonitor(t_replswitch)
             else
-                # Use bracket insertion if enabled, otherwise just insert
-                if repl.options.auto_insert_closing_bracket
-                    buf = LineEdit.buffer(s)
-                    if !eof(buf) && LineEdit.peek(buf, Char) == ']'
-                        LineEdit.edit_move_right(buf)
-                    else
-                        edit_insert(buf, ']')
-                    end
+                # Move over an auto-inserted `]`, otherwise insert
+                buf = LineEdit.buffer(s)
+                if repl.options.auto_insert_closing_bracket && LineEdit.skip_closing_bracket(buf, '[', ']')
+                    LineEdit.edit_move_right(buf)
                     LineEdit.refresh_line(s)
                 else
                     edit_insert(s, ']')

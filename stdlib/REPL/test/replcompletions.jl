@@ -1129,14 +1129,14 @@ let s, c, r
     @test r == 8:10
     @test s[r] == "/tm"
 
-    # Tests path in Julia code and not double-closing "
+    # Tests path in Julia code and not double-closing " (the existing one is replaced)
     # Issue #8047
     s = "@show \"/dev/nul\""
     c,r = completions(s, 15)
     c = map(named_completion, c)
-    @test "/dev/null" in [_c.completion for _c in c]
-    @test r == 8:15
-    @test s[r] == "/dev/nul"
+    @test "/dev/null\"" in [_c.completion for _c in c]
+    @test r == 8:16
+    @test s[r] == "/dev/nul\""
 
     s = "/t"
     c,r = test_scomplete(s)
@@ -1362,6 +1362,11 @@ let current_dir, forbidden
             end
             c, r = test_complete("\"$(escape_string(path))/selfsym")
             @test c == [escape_string(joinpath(path, "selfsymlink")) * "\""]
+            # Directly before an existing closing quote, which gets replaced too
+            s = "f(\"$(escape_string(path))/selfsym|\")"
+            c, r = test_complete_pos(s)
+            @test c == [escape_string(joinpath(path, "selfsymlink")) * "\""]
+            @test r == 4:lastindex(s) - 2
         end
     end
 
@@ -1656,10 +1661,11 @@ function test_dict_completion(dict_name)
     s = "$dict_name[ \"abcd"  # leading whitespace
     c, r = test_complete(s)
     @test c == Any["\"abcd\"]"]
-    s = "$dict_name[Bas]"  # trailing close bracket
+    s = "$dict_name[Bas]"  # trailing close bracket, which is replaced
     c, r = completions(s, lastindex(s) - 1)
     c = map(x -> named_completion(x).completion, c)
-    @test c == Any["Base"]
+    @test c == Any["Base]"]
+    @test r == lastindex(s)-3:lastindex(s)
     s = "$dict_name[:b"
     c, r = test_complete(s)
     @test c == Any[":bar", ":bar2"]
@@ -1705,6 +1711,19 @@ function test_dict_completion(dict_name)
     s = "$dict_name["
     c, r = test_complete(s)
     @test c == sort!(repr.(keys(Main.CompletionFoo.test_dict)))
+    # Closing quote and bracket already present (e.g. auto-inserted) are replaced (#63817)
+    s = "$dict_name[\"abcd|\"]"
+    c, r = test_complete_pos(s)
+    @test c == Any["\"abcd\"]"]
+    @test r == sizeof(dict_name)+2:lastindex(s)-1
+    s = "$dict_name[:bar2|]"
+    c, r = test_complete_pos(s)
+    @test c == Any[":bar2]"]
+    @test r == sizeof(dict_name)+2:lastindex(s)-1
+    s = "$dict_name[\"ab|\"]"
+    c, r = test_complete_pos(s)
+    @test c == Any["\"abc\"", "\"abcd\""]
+    @test r == sizeof(dict_name)+2:sizeof(dict_name)+4
 end
 test_dict_completion("CompletionFoo.test_dict")
 test_dict_completion("CompletionFoo.test_customdict")
