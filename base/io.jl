@@ -670,6 +670,11 @@ false (as it is by default), these trailing newline characters are removed from 
 line before it is returned. When `keep` is true, they are returned as part of the
 line.
 
+At the end of the stream, an empty string is returned. This is indistinguishable from an
+empty line unless `keep` is true; alternatively, check [`eof`](@ref) before reading. When
+reading from a terminal, typing Ctrl-D sets the end-of-file flag of the stream, so subsequent
+calls return an empty string until [`Base.reseteof`](@ref) is called.
+
 Return a `String`.   See also [`copyline`](@ref) to instead write in-place
 to another stream (which can be a preallocated [`IOBuffer`](@ref)).
 
