@@ -241,6 +241,11 @@ Standard library changes
 * `isspace` now returns `true` for U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR),
   so that it matches the Unicode `White_Space` property. This affects functions that default to
   `isspace`, such as `split`, `strip` and `parse`, as well as word splitting in command literals.
+* `parse` and `tryparse` for `Float64`, `Float32` and `Float16` are now written in Julia
+  instead of calling the C library: they are faster and give the same results on every
+  platform. `Float16` is now rounded directly instead of through `Float32`, so input out of
+  its range fails as it does for the other types: `tryparse(Float16, "70000")` returns
+  `nothing` instead of `Inf16`.
 * The `Precompiling` messages printed while loading name packages without their uuid when the
   name is unambiguous in the environment, name extensions by their parent package, and say which
   dependency is already loaded at a different version when that is why a cache was not reused ([#63185]).
