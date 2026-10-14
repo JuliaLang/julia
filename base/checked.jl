@@ -398,7 +398,7 @@ checked_power_by_squaring(x::Bool, p::Integer) = Base.power_by_squaring(x, p)
     Base.checked_length(r)
 
 Calculates `length(r)`, but may check for overflow errors where applicable when
-the result doesn't fit into `Union{Integer(eltype(r)),Int}`.
+the result doesn't fit into the integer type returned by `length(r)`.
 """
 checked_length(r) = length(r) # for most things, length doesn't error
 
