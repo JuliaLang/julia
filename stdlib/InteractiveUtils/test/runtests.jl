@@ -764,6 +764,14 @@ if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
     end
 end
 
+# `Type{T}` is not a dispatch slot, make sure we still disassemble the method rather than
+# the lazy JIT placeholder
+native_type_arg(::Type{T}) where {T} = sizeof(T)
+let output = sprint(io -> code_native(io, native_type_arg, (Type{Int},); dump_module=false))
+    @test occursin("within `native_type_arg`", output)
+    @test !occursin("jl_fptr_wait_for_compiled", output)
+end
+
 @testset "error message" begin
     err = ErrorException("expression is not a function call or symbol")
     @test_throws err @code_lowered ""
