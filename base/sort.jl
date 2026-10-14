@@ -65,6 +65,10 @@ end
 Test whether a collection is in sorted order. The keywords modify what
 order is considered sorted, as described in the [`sort!`](@ref) documentation.
 
+As for `sort!`, `lt` must define a strict weak order, otherwise the result may
+be unexpected: `issorted` only checks that no element is less than the one
+before it. For example, `issorted([1, 1], lt=(<=))` returns `false`.
+
 # Examples
 ```jldoctest
 julia> issorted([1, 2, 3])
