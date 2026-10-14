@@ -22,12 +22,10 @@ function show(io::IO, t::AbstractDict{K,V}) where V where K
     print(io, ')')
 end
 
+# Whether key hashes are stored (and checked before comparing keys); not worth it for small bits types
+_store_hashes(::Type{K}) where {K} = !(isbitstype(K) && sizeof(K) <= 2sizeof(UInt))
+
 # Dict
-
-# These can be changed, to trade off better performance for space
-const global maxallowedprobe = 16
-const global maxprobeshift   = 6
-
 """
     Dict([itr])
 
@@ -63,28 +61,22 @@ Dict{String, Int64} with 2 entries:
 
 """
 mutable struct Dict{K,V} <: AbstractDict{K,V}
-    # Metadata: empty => 0x00, removed => 0x7f, full => 0b1[7 most significant hash bits]
-    slots::Memory{UInt8}
-    keys::Memory{K}
-    vals::Memory{V}
-    ndel::Int
+    slots::Memory{UInt32} # high bits are masked hash, low bits are index (0 if empty), see _getslot
+    hashes::Memory{UInt} # hashes[i] is the hash of entries[i].first, empty unless _store_hashes(K)
+    entries::Memory{Pair{K, V}}
     count::Int
     age::UInt
-    idxfloor::Int  # an index <= the indices of all used slots
-    maxprobe::Int
+    wide::Bool # whether slots holds 64-bit slots, see max_slots32
 
     function Dict{K,V}() where V where K
-        n = 0
-        slots = Memory{UInt8}(undef,n)
-        fill!(slots, 0x0)
-        new(slots, Memory{K}(undef, n), Memory{V}(undef, n), 0, 0, 0, max(1, n), 0)
+        slots = Memory{UInt32}(undef, 0)
+        new(slots, Memory{UInt}(undef, 0), Memory{Pair{K, V}}(undef, 0), 0, 0, false)
     end
-    function Dict{K,V}(d::Dict{K,V}) where V where K
-        new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
-            d.idxfloor, d.maxprobe)
+    function Dict{K, V}(d::Dict{K,V}) where V where K
+        new(copy(d.slots), copy(d.hashes), copy(d.entries), d.count, d.age, d.wide)
     end
-    function Dict{K, V}(slots::Memory{UInt8}, keys::Memory{K}, vals::Memory{V}, ndel::Int, count::Int, age::UInt, idxfloor::Int, maxprobe::Int) where {K, V}
-        new(slots, keys, vals, ndel, count, age, idxfloor, maxprobe)
+    function Dict{K, V}(slots::Memory{UInt32}, hashes::Memory{UInt}, entries::Memory{Pair{K, V}}, count::Int, age::UInt, wide::Bool) where {K, V}
+        new(slots, hashes, entries, count, age, wide)
     end
 end
 function Dict{K,V}(kv) where V where K
@@ -118,87 +110,35 @@ Dict(kv) = dict_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
 
 empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 
-# Gets 7 most significant bits from the hash (hsh), first bit is 1
-_shorthash7(hsh::UInt) = (hsh >> (8sizeof(UInt)-7))%UInt8 | 0x80
+# Tables of up to 2^26 slots store each slot as one UInt32 (leaving at least 6 bits of hash), larger
+# tables as two adjacent UInt32 halves. Slot loops take `wide` as an argument; except in _probe, wide
+# tables (which miss cache anyway) go through an out-of-line call.
+const max_slots32 = 1 << 26
 
-# hashindex (key, sz) - computes optimal position and shorthash7
-#     idx - optimal position in the hash table
-#     sh::UInt8 - short hash (7 highest hash bits)
-function hashindex(key, sz::Integer)
-    sz = Int(sz)::Int
-    hsh = hash(key)::UInt
-    idx = ((hsh % Int) & (sz-1)) + 1
-    return idx, _shorthash7(hsh)
+_nslots(slots::Memory{UInt32}, wide::Bool) = length(slots) >> wide
+_nslots(h::Dict) = _nslots(h.slots, h.wide)
+
+@propagate_inbounds function _gethash(h::Dict{K}, dense_ind) where K
+    return _store_hashes(K) ? h.hashes[dense_ind] : hash(h.entries[dense_ind].first)::UInt
 end
 
-@propagate_inbounds isslotempty(h::Dict, i::Int) = h.slots[i] == 0x00
-@propagate_inbounds isslotfilled(h::Dict, i::Int) = (h.slots[i] & 0x80) != 0
-@propagate_inbounds isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x7f
-
-@constprop :none function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
-    olds = h.slots
-    oldk = h.keys
-    oldv = h.vals
-    sz = length(olds)
-    newsz = _tablesz(newsz)
-    h.age += 1
-    h.idxfloor = 1
-    if h.count == 0
-        # TODO: tryresize
-        h.slots = Memory{UInt8}(undef, newsz)
-        fill!(h.slots, 0x0)
-        h.keys = Memory{K}(undef, newsz)
-        h.vals = Memory{V}(undef, newsz)
-        h.ndel = 0
-        h.maxprobe = 0
-        return h
-    end
-
-    slots = Memory{UInt8}(undef, newsz)
-    fill!(slots, 0x0)
-    keys = Memory{K}(undef, newsz)
-    vals = Memory{V}(undef, newsz)
-    age0 = h.age
-    count = 0
-    maxprobe = 0
-
-    for i = 1:sz
-        @inbounds if (olds[i] & 0x80) != 0
-            k = oldk[i]
-            v = oldv[i]
-            index, _ = hashindex(k, newsz)
-            index0 = index
-            while slots[index] != 0
-                index = (index & (newsz-1)) + 1
-            end
-            probe = (index - index0) & (newsz-1)
-            probe > maxprobe && (maxprobe = probe)
-            slots[index] = olds[i]
-            keys[index] = k
-            vals[index] = v
-            count += 1
-        end
-    end
-
-    @assert h.age == age0 "Multiple concurrent writes to Dict detected!"
-    h.age += 1
-    h.slots = slots
-    h.keys = keys
-    h.vals = vals
-    h.count = count
-    h.ndel = 0
-    h.maxprobe = maxprobe
-    return h
+@propagate_inbounds function _getslot(slots::Memory{UInt32}, sparse_ind, wide::Bool)
+    wide || return UInt64(slots[sparse_ind])
+    return UInt64(slots[2sparse_ind - 1]) | UInt64(slots[2sparse_ind]) << 32
 end
 
-function sizehint!(d::Dict{T}, newsz::Integer; shrink::Bool=true) where T
-    newsz = Int(newsz)::Int
-    oldsz = length(d.slots)
-    # limit new element count to max_values of the key type
-    newsz = min(max(newsz, length(d)), max_values(T)::Int)
-    # need at least 1.5n space to hold n elements
-    newsz = _tablesz(cld(3 * newsz, 2))
-    return (shrink ? newsz == oldsz : newsz <= oldsz) ? d : rehash!(d, newsz)
+@propagate_inbounds function _setslot!(slots::Memory{UInt32}, sparse_ind, wide::Bool, slot::UInt64)
+    if wide
+        slots[2sparse_ind - 1] = slot % UInt32
+        slots[2sparse_ind] = (slot >> 32) % UInt32
+    else
+        slots[sparse_ind] = slot % UInt32
+    end
+    return slot
+end
+
+function slot_encode(hsh::UInt, dense_ind, sz)
+    return ((hsh % UInt64) & ~((sz - 1) % UInt64)) | (dense_ind % UInt64)
 end
 
 """
@@ -220,128 +160,161 @@ Dict{String, Int64}()
 ```
 """
 function empty!(h::Dict{K,V}) where V where K
-    fill!(h.slots, 0x0)
-    sz = length(h.slots)
-    for i in 1:sz
-        unsetindex!(h.keys, i)
-        unsetindex!(h.vals, i)
+    age0 = h.age
+    fill!(h.slots, 0)
+    for i in 1:h.count
+        unsetindex!(h.entries, i)
     end
-    h.ndel = 0
     h.count = 0
-    h.maxprobe = 0
+    @assert h.age == age0 "Multiple concurrent writes to Dict detected!"
     h.age += 1
-    h.idxfloor = max(1, sz)
     return h
 end
 
-# get the index where a key is stored, or -1 if not present
-function ht_keyindex(h::Dict{K,V}, key) where V where K
-    isempty(h) && return -1
-    sz = length(h.keys)
-    iter = 0
-    maxprobe = h.maxprobe
-    maxprobe < sz || throw(h) # This error will never trigger, but is needed for terminates_locally to be valid
-    index, sh = hashindex(key, sz)
-    keys = h.keys
-
-    @assume_effects :terminates_locally :noub @inbounds while true
-        isslotempty(h,index) && return -1
-        if sh == h.slots[index]
-            k = keys[index]
-            if (key ===  k || isequal(key, k))
-                return index
-            end
-        end
-
-        index = (index & (sz-1)) + 1
-        (iter += 1) > maxprobe && return -1
-    end
-    # This line is unreachable
+@constprop :none function rehash!(h::Dict, newsz = _nslots(h))
+    newsz = _tablesz(max(Int(newsz)::Int, 3h.count>>1))
+    return _rehash!(h, newsz, newsz > max_slots32)
 end
 
-# get (index, sh) for the key
-#     index - where a key is stored, or -pos if not present
-#             and the key would be inserted at pos
-#     sh::UInt8 - short hash (7 highest hash bits)
-# This version is for use by setindex! and get!
-function ht_keyindex2_shorthash!(h::Dict{K,V}, key) where V where K
-    sz = length(h.keys)
-    if sz == 0 # if Dict was empty resize and then return location to insert
-        rehash!(h, 4)
-        index, sh = hashindex(key, length(h.keys))
-        return -index, sh
-    end
-    iter = 0
-    maxprobe = h.maxprobe
-    index, sh = hashindex(key, sz)
-    avail = 0
-    keys = h.keys
+# `wide` is an argument so that tests can use the wide layout on small tables
+@constprop :none function _rehash!(h::Dict, newsz::Int, wide::Bool)
+    age0 = h.age
+    slots = Memory{UInt32}(undef, newsz << wide)
+    fill!(slots, 0)
 
-    @inbounds while true
-        if isslotempty(h,index)
-            return (avail < 0 ? avail : -index), sh
+    @inbounds for dense_ind = 1:h.count
+        hsh = _gethash(h, dense_ind)
+        sparse_ind = (hsh & (newsz - 1)) % Int + 1
+        while _getslot(slots, sparse_ind, wide) != 0
+            sparse_ind = (sparse_ind & (newsz - 1)) + 1
         end
-
-        if isslotmissing(h,index)
-            if avail == 0
-                # found an available slot, but need to keep scanning
-                # in case "key" already exists in a later collided slot.
-                avail = -index
-            end
-        elseif h.slots[index] == sh
-            k = keys[index]
-            if key === k || isequal(key, k)
-                return index, sh
-            end
-        end
-
-        index = (index & (sz-1)) + 1
-        iter += 1
-        iter > maxprobe && break
+        _setslot!(slots, sparse_ind, wide, slot_encode(hsh, dense_ind, newsz))
     end
 
-    avail < 0 && return avail, sh
-
-    maxallowed = max(maxallowedprobe, sz>>maxprobeshift)
-    # Check if key is not present, may need to keep searching to find slot
-    @inbounds while iter < maxallowed
-        if !isslotfilled(h,index)
-            h.maxprobe = iter
-            return -index, sh
-        end
-        index = (index & (sz-1)) + 1
-        iter += 1
-    end
-
-    rehash!(h, h.count > 64000 ? sz*2 : sz*4)
-
-    return ht_keyindex2_shorthash!(h, key)
+    @assert h.age == age0 "Multiple concurrent writes to Dict detected!"
+    h.slots = slots
+    h.wide = wide
+    h.age += 1
+    return h
 end
 
-# Only for better backward compatibility. It can be removed in the future.
-ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
+function sizehint!(d::Dict{T}, newsz::Integer; shrink::Bool=true) where T
+    newsz = Int(newsz)::Int
+    oldsz = _nslots(d)
+    count = d.count
+    # limit new element count to max_values of the key type
+    newsz = min(max(newsz, count), max_values(T)::Int)
+    # sizehint entry storage if necessary (no rehash needed)
+    cap = length(d.entries)
+    newcap = if newsz > cap
+         max(newsz, overallocation(cap))
+    elseif shrink && 4newsz < 3cap
+        newsz
+    else
+        cap
+    end
+    newcap != cap && _resize_entries!(d, newcap)
+    # need at least 1.5n space to hold n elements
+    newsz = _tablesz(cld(3 * newsz, 2))
+    # sizehint hash table if necessary (no approx because hash table is power of 2)
+    return (shrink ? newsz == oldsz : newsz <= oldsz) ? d : rehash!(d, newsz)
+end
 
-@propagate_inbounds function _setindex!(h::Dict, v, key, index, sh = _shorthash7(hash(key)))
-    h.ndel -= isslotmissing(h, index)
-    h.slots[index] = sh
-    h.keys[index] = key
-    h.vals[index] = v
+"""
+Returns the sparse_ind that points to dense_ind
+"""
+function _slot_index(h::Dict, dense_ind::Int, hsh::UInt)
+    return h.wide ? _slot_index_wide(h, dense_ind, hsh) : _slot_index(h, dense_ind, hsh, false)
+end
+@noinline _slot_index_wide(h::Dict, dense_ind::Int, hsh::UInt) = _slot_index(h, dense_ind, hsh, true)
+@inline function _slot_index(h::Dict, dense_ind::Int, hsh::UInt, wide::Bool)
+    slots = h.slots
+    sz = _nslots(slots, wide)
+    sparse_ind = (hsh & (sz - 1)) % Int + 1
+    @inbounds @assume_effects :terminates_locally for _ in 1:sz
+        (_getslot(slots, sparse_ind, wide) & (sz - 1)) % Int == dense_ind && return sparse_ind
+        sparse_ind = (sparse_ind & (sz - 1)) + 1
+    end
+    @assert false "Multiple concurrent writes to Dict detected!"
+end
+
+"""
+Returns sparse_ind, dense_ind, found
+"""
+function _probe(h::Dict{K}, query_key, query_hsh::UInt) where K
+    (;slots, hashes, entries, wide) = h
+    # no out-of-line call for wide tables here: it would stop LLVM hoisting the field loads out of
+    # callers' lookup loops
+    sz = _nslots(slots, wide)
+    sz == 0 && return 0, h.count + 1, false
+    # the slot bits above the index bits, which narrow tables only store up to bit 32
+    hashmask = ~((sz - 1) % UInt64) & (wide ? typemax(UInt64) : UInt64(typemax(UInt32)))
+    short_hash = (query_hsh % UInt64) & hashmask
+    sparse_ind = (query_hsh & (sz - 1)) % Int + 1
+
+    @assume_effects :terminates_locally :noub @inbounds for _ in 1:sz
+        slot = _getslot(slots, sparse_ind, wide)
+        iszero(slot) && return sparse_ind, h.count + 1, false
+        if slot & hashmask == short_hash
+            dense_ind = (slot & (sz-1)) % Int
+            if !_store_hashes(K) || hashes[dense_ind] == query_hsh
+                key = entries[dense_ind].first
+                if query_key === key || isequal(query_key, key)
+                    return sparse_ind, dense_ind, true
+                end
+            end
+        end
+
+        sparse_ind = (sparse_ind & (sz-1)) + 1
+    end
+    return sparse_ind, h.count + 1, false # This line is unreachable
+end
+
+"""
+optimization to avoid hashing when only looking up from an empty dict.
+"""
+function _probe_lookup(h::Dict, query_key)
+    isempty(h) && return 0, 0, false
+    return _probe(h, query_key, hash(query_key)::UInt)
+end
+
+# Cold path; kept out of line so it doesn't bloat setindex! (callers ensure newcap >= h.count)
+@noinline function _resize_entries!(h::Dict{K}, newcap::Int) where K
+    if _store_hashes(K)
+        new_hashes = similar(h.hashes, newcap)
+        @inbounds unsafe_copyto!(new_hashes, 1, h.hashes, 1, h.count)
+        h.hashes = new_hashes
+    end
+    new_entries = similar(h.entries, newcap)
+    @inbounds unsafe_copyto!(new_entries, 1, h.entries, 1, h.count)
+    h.entries = new_entries
+    return h
+end
+
+@propagate_inbounds function _setindex!(h::Dict{K}, hsh::UInt, entry::Pair, sparse_ind, dense_ind) where K
+    dense_ind > length(h.entries) && _resize_entries!(h, overallocation(length(h.entries)))
+    _store_hashes(K) && (h.hashes[dense_ind] = hsh)
+    h.entries[dense_ind] = entry
+
+    sz = _nslots(h)
+    if sz == 0
+        sz = 4
+        h.slots = fill!(Memory{UInt32}(undef, sz), 0)
+        h.wide = false
+        sparse_ind = (hsh & (sz - 1)) % Int + 1
+    end
+    _setslot!(h.slots, sparse_ind, h.wide, slot_encode(hsh, dense_ind, sz))
+
     h.count += 1
     h.age += 1
-    if index < h.idxfloor
-        h.idxfloor = index
-    end
-
-    sz = length(h.keys)
     # Rehash now if necessary
-    if (h.count + h.ndel)*3 > sz*2
-        # > 2/3 full (including tombstones)
+    if h.count*3 > sz*2 # > 2/3 full
         rehash!(h, h.count > 64000 ? h.count*2 : max(h.count*4, 4))
     end
     nothing
 end
 
-function setindex!(h::Dict{K,V}, v0, key0) where V where K
+function setindex!(h::Dict{K,V}, v0, key0) where {K, V}
     if key0 isa K
         key = key0
     else
@@ -353,33 +326,31 @@ function setindex!(h::Dict{K,V}, v0, key0) where V where K
     setindex!(h, v0, key)
 end
 
-function setindex!(h::Dict{K,V}, v0, key::K) where V where K
+function setindex!(h::Dict{K,V}, v0, key::K) where {K, V}
     v = v0 isa V ? v0 : convert(V, v0)::V
-    index, sh = ht_keyindex2_shorthash!(h, key)
-
-    if index > 0
+    hsh = hash(key)::UInt
+    sparse_ind, dense_ind, found = _probe(h, key, hsh)
+    entry = Pair{K, V}(key, v)
+    if found
         h.age += 1
-        @inbounds h.keys[index] = key
-        @inbounds h.vals[index] = v
+        @inbounds h.entries[dense_ind] = entry
     else
-        @inbounds _setindex!(h, v, key, -index, sh)
+        @inbounds _setindex!(h, hsh, entry, sparse_ind, dense_ind)
     end
-
     return h
 end
 
 function setindex!(h::Dict{K,Any}, v, key::K) where K
     @nospecialize v
-    index, sh = ht_keyindex2_shorthash!(h, key)
-
-    if index > 0
+    hsh = hash(key)::UInt
+    sparse_ind, dense_ind, found = _probe(h, key, hsh)
+    entry = Pair{K, Any}(key, v)
+    if found
         h.age += 1
-        @inbounds h.keys[index] = key
-        @inbounds h.vals[index] = v
+        @inbounds h.entries[dense_ind] = entry
     else
-        @inbounds _setindex!(h, v, key, -index, sh)
+        @inbounds _setindex!(h, hsh, entry, sparse_ind, dense_ind)
     end
-
     return h
 end
 
@@ -451,10 +422,11 @@ function get!(default::Callable, h::Dict{K,V}, key0) where V where K
     return get!(default, h, key)
 end
 
-function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
-    index, sh = ht_keyindex2_shorthash!(h, key)
+function get!(default::Callable, h::Dict{K,V}, key::K) where {K, V}
+    hsh = hash(key)::UInt
+    sparse_ind, dense_ind, found = _probe(h, key, hsh)
 
-    index > 0 && return h.vals[index]
+    found && return h.entries[dense_ind].second
 
     age0 = h.age
     v = default()
@@ -462,21 +434,21 @@ function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
         v = convert(V, v)::V
     end
     if h.age != age0
-        index, sh = ht_keyindex2_shorthash!(h, key)
+        sparse_ind, dense_ind, found = _probe(h, key, hsh)
     end
-    if index > 0
+    entry = Pair{K, V}(key, v)
+    if found
         h.age += 1
-        @inbounds h.keys[index] = key
-        @inbounds h.vals[index] = v
+        @inbounds h.entries[dense_ind] = entry
     else
-        @inbounds _setindex!(h, v, key, -index, sh)
+        @inbounds _setindex!(h, hsh, entry, sparse_ind, dense_ind)
     end
     return v
 end
 
-function getindex(h::Dict{K,V}, key) where V where K
-    index = ht_keyindex(h, key)
-    return index < 0 ? throw(KeyError(key)) : @assume_effects :noub @inbounds h.vals[index]::V
+function getindex(h::Dict{K,V}, key) where {K, V}
+    sparse_ind, dense_ind, found = _probe_lookup(h, key)
+    return !found ? throw(KeyError(key)) : @assume_effects :noub @inbounds h.entries[dense_ind].second
 end
 
 """
@@ -502,8 +474,8 @@ julia> get(d, "c", 3)
 get(collection, key, default)
 
 function get(h::Dict{K,V}, key, default) where V where K
-    index = ht_keyindex(h, key)
-    @inbounds return (index < 0) ? default : h.vals[index]::V
+    sparse_ind, dense_ind, found = _probe_lookup(h, key)
+    return !found ? default : @inbounds h.entries[dense_ind].second
 end
 
 """
@@ -524,8 +496,8 @@ end
 get(::Callable, collection, key)
 
 function get(default::Callable, h::Dict{K,V}, key) where V where K
-    index = ht_keyindex(h, key)
-    @inbounds return (index < 0) ? default() : h.vals[index]::V
+    sparse_ind, dense_ind, found = _probe_lookup(h, key)
+    return !found ? default() : @inbounds h.entries[dense_ind].second
 end
 
 """
@@ -547,8 +519,8 @@ julia> haskey(D, 'c')
 false
 ```
 """
-haskey(h::Dict, key) = (ht_keyindex(h, key) >= 0)
-in(key, v::KeySet{<:Any, <:Dict}) = (ht_keyindex(v.dict, key) >= 0)
+haskey(h::Dict, key) = (_probe_lookup(h, key)[3])
+in(key, v::KeySet{<:Any, <:Dict}) = (_probe_lookup(v.dict, key)[3])
 
 """
     getkey(collection, key, default)
@@ -570,19 +542,19 @@ julia> getkey(D, 'd', 'a')
 ```
 """
 function getkey(h::Dict{K,V}, key, default) where V where K
-    index = ht_keyindex(h, key)
-    @inbounds return (index<0) ? default : h.keys[index]::K
+    _, dense_ind, found = _probe_lookup(h, key)
+    return !found ? default : @inbounds h.entries[dense_ind].first
 end
 
-function _pop!(h::Dict, index)
-    @inbounds val = h.vals[index]
-    _delete!(h, index)
-    return val
+function _pop!(h::Dict, sparse_ind, dense_ind)
+    entry = @inbounds h.entries[dense_ind]
+    _delete!(h, sparse_ind, dense_ind)
+    return entry
 end
 
 function pop!(h::Dict, key)
-    index = ht_keyindex(h, key)
-    return index > 0 ? _pop!(h, index) : throw(KeyError(key))
+    sparse_ind, dense_ind, found = _probe_lookup(h, key)
+    return found ? _pop!(h, sparse_ind, dense_ind).second : throw(KeyError(key))
 end
 
 """
@@ -610,40 +582,51 @@ julia> pop!(d, "e", 4)
 pop!(collection, key, default)
 
 function pop!(h::Dict, key, default)
-    index = ht_keyindex(h, key)
-    return index > 0 ? _pop!(h, index) : default
+    sparse_ind, dense_ind, found = _probe_lookup(h, key)
+    return found ? _pop!(h, sparse_ind, dense_ind).second : default
 end
 
 function pop!(h::Dict)
     isempty(h) && throw(ArgumentError("dict must be non-empty"))
-    idx = skip_deleted_floor!(h)
-    @inbounds key = h.keys[idx]
-    @inbounds val = h.vals[idx]
-    _delete!(h, idx)
-    key => val
+    dense_ind = h.count
+    p = @inbounds h.entries[dense_ind]
+    sparse_ind = _slot_index(h, dense_ind, @inbounds _gethash(h, dense_ind))
+    _delete!(h, sparse_ind, dense_ind)
+    return p
 end
 
-function _delete!(h::Dict{K,V}, index) where {K,V}
+function _delete!(h::Dict, sparse_ind, dense_ind)
+    return h.wide ? _delete_wide!(h, sparse_ind, dense_ind) : _delete!(h, sparse_ind, dense_ind, false)
+end
+@noinline _delete_wide!(h::Dict, sparse_ind, dense_ind) = _delete!(h, sparse_ind, dense_ind, true)
+@inline function _delete!(h::Dict{K}, sparse_ind, dense_ind, wide::Bool) where K
     @inbounds begin
-    slots = h.slots
-    sz = length(slots)
-    unsetindex!(h.keys, index)
-    unsetindex!(h.vals, index)
-    # if the next slot is empty we don't need a tombstone
-    # and can remove all tombstones that were required by the element we just deleted
-    ndel = 1
-    nextind = (index & (sz-1)) + 1
-    if isslotempty(h, nextind)
-        while true
-            ndel -= 1
-            slots[index] = 0x00
-            index = ((index - 2) & (sz-1)) + 1
-            isslotmissing(h, index) || break
-        end
-    else
-        slots[index] = 0x7f
+    (;slots, hashes, entries) = h
+    sz = _nslots(slots, wide)
+    if h.count != dense_ind
+        # swap last entry with deleted entry to avoid tombstone
+        last_hsh = _gethash(h, h.count)
+        last_sparse = _slot_index(h, h.count, last_hsh, wide)
+        _setslot!(slots, last_sparse, wide, slot_encode(last_hsh, dense_ind, sz))
+        _store_hashes(K) && (hashes[dense_ind] = last_hsh)
+        entries[dense_ind] = entries[h.count]
     end
-    h.ndel += ndel
+    unsetindex!(entries, h.count)
+    mask = sz - 1
+    hole = sparse_ind
+    _setslot!(slots, hole, wide, UInt64(0))
+    @assume_effects :terminates_locally for _ in 1:sz
+        sparse_ind = (sparse_ind & mask) + 1
+        slot = _getslot(slots, sparse_ind, wide)
+        iszero(slot) && break
+        home = (_gethash(h, (slot & mask) % Int) & mask) % Int + 1
+        # move back unless home is in (hole, sparse_ind], comparing cyclic distances behind sparse_ind
+        if ((sparse_ind - home) & mask) >= ((sparse_ind - hole) & mask)
+            _setslot!(slots, hole, wide, slot)
+            _setslot!(slots, sparse_ind, wide, UInt64(0))
+            hole = sparse_ind
+        end
+    end
     h.count -= 1
     h.age += 1
     return h
@@ -674,54 +657,34 @@ Dict{String, Int64} with 1 entry:
 delete!(collection, key)
 
 function delete!(h::Dict, key)
-    index = ht_keyindex(h, key)
-    if index > 0
-        _delete!(h, index)
+    sparse_ind, dense_ind, found = _probe_lookup(h, key)
+    if found
+        _delete!(h, sparse_ind, dense_ind)
     end
     return h
 end
 
-function skip_deleted(h::Dict, i)
-    L = length(h.slots)
-    for i = i:L
-        @inbounds if isslotfilled(h,i)
-            return  i
-        end
-    end
-    return 0
-end
-function skip_deleted_floor!(h::Dict)
-    idx = skip_deleted(h, h.idxfloor)
-    if idx != 0
-        h.idxfloor = idx
-    end
-    idx
+function iterate(h::Dict, i::Int = h.count)
+    1 <= i <= h.count || return nothing
+    return (@inbounds h.entries[i], i-1)
 end
 
-@propagate_inbounds _iterate_dict(t::Dict{K,V}, i) where {K,V} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
-@propagate_inbounds function iterate(t::Dict)
-    _iterate_dict(t, skip_deleted(t, t.idxfloor))
-end
-@propagate_inbounds iterate(t::Dict, i) = _iterate_dict(t, skip_deleted(t, i))
-
-isempty(t::Dict) = (t.count == 0)
-length(t::Dict) = t.count
+isempty(h::Dict) = (h.count == 0)
+length(h::Dict) = h.count
 
 @propagate_inbounds Iterators.only(t::Dict) = Iterators._only(t, first)
 
-@propagate_inbounds function Base.iterate(v::T, i::Int = v.dict.idxfloor) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
-    i == 0 && return nothing
-    i = skip_deleted(v.dict, i)
-    i == 0 && return nothing
-    vals = T <: KeySet ? v.dict.keys : v.dict.vals
-    (@inbounds vals[i], i == typemax(Int) ? 0 : i+1)
+function iterate(v::T, i::Int = v.dict.count) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
+    1 <= i <= v.dict.count || return nothing
+    field = T <: KeySet ? :first : :second
+    @inbounds (getfield(v.dict.entries[i], field), i-1)
 end
 
-function filter!(pred, h::Dict{K,V}) where {K,V}
-    h.count == 0 && return h
-    @inbounds for i=1:length(h.slots)
-        if ((h.slots[i] & 0x80) != 0) && !pred(Pair{K,V}(h.keys[i], h.vals[i]))
-            _delete!(h, i)
+function filter!(pred, h::Dict)
+    @inbounds for dense_ind=h.count:-1:1
+        if !pred(h.entries[dense_ind])
+            sparse_ind = _slot_index(h, dense_ind, _gethash(h, dense_ind))
+            _delete!(h, sparse_ind, dense_ind)
         end
     end
     return h
@@ -733,14 +696,12 @@ function reduce(::typeof(merge), items::Vector{<:Dict})
     return reduce(merge!, items; init=Dict{K,V}())
 end
 
-function map!(f, iter::ValueIterator{<:Dict})
+function map!(f, iter::ValueIterator{<:Dict{K, V}}) where {K, V}
     dict = iter.dict
-    vals = dict.vals
-    # @inbounds is here so that it gets propagated to isslotfilled
-    @inbounds for i = dict.idxfloor:lastindex(vals)
-        if isslotfilled(dict, i)
-            vals[i] = f(vals[i])
-        end
+    entries = dict.entries
+    @inbounds for i = 1:dict.count
+        key, val = entries[i]
+        entries[i] = Pair{K, V}(key, f(val))
     end
     return iter
 end
@@ -748,9 +709,11 @@ end
 function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
     haslength(d2) && sizehint!(d1, length(d1) + length(d2), shrink=false)
     for (k, v) in d2
-        i, sh = ht_keyindex2_shorthash!(d1, k)
-        if i > 0
-            d1.vals[i] = combine(d1.vals[i], v)
+        hsh = hash(k)::UInt
+        sparse_ind, dense_ind, found = _probe(d1, k, hsh)
+        if found
+            key, val = @inbounds d1.entries[dense_ind]
+            @inbounds d1.entries[dense_ind] = Pair{K, V}(key, combine(val, v))
         else
             if !(k isa K)
                 k1 = convert(K, k)::K
@@ -762,7 +725,7 @@ function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
             if !isa(v, V)
                 v = convert(V, v)::V
             end
-            @inbounds _setindex!(d1, v, k, -i, sh)
+            _setindex!(d1, hsh, Pair{K, V}(k, v), sparse_ind, dense_ind)
         end
     end
     return d1

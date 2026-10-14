@@ -50,9 +50,13 @@ Set() = Set{Any}()
 function Set{T}(s::KeySet{T, <:Dict{T}}) where {T}
     d = s.dict
     slots = copy(d.slots)
-    keys = copy(d.keys)
-    vals = similar(d.vals, Nothing)
-    _Set(Dict{T,Nothing}(slots, keys, vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe))
+    entries = Memory{Pair{T, Nothing}}(undef, d.count)
+    for i in 1:d.count
+        entries[i] = Pair{T, Nothing}(d.entries[i].first, nothing)
+    end
+    n = _store_hashes(T) ? d.count : 0
+    hashes = copyto!(Memory{UInt}(undef, n), 1, d.hashes, 1, n)
+    _Set(Dict{T,Nothing}(slots, hashes, entries, d.count, d.age, d.wide))
 end
 
 Set(itr) = _Set(itr, IteratorEltype(itr))
@@ -126,36 +130,25 @@ function in!(x, s::AbstractSet)
     x ∈ s ? true : (push!(s, x); false)
 end
 
-function in!(x, s::Set)
+function in!(x, s::Set{T}) where T
     xT = convert(eltype(s), x)
-    idx, sh = ht_keyindex2_shorthash!(s.dict, xT)
-    idx > 0 && return true
-    _setindex!(s.dict, nothing, xT, -idx, sh)
+    hsh = hash(xT)::UInt
+    sparse_ind, dense_ind, found = _probe(s.dict, xT, hsh)
+    found && return true
+    _setindex!(s.dict, hsh, Pair{T, Nothing}(xT, nothing), sparse_ind, dense_ind)
     return false
 end
 
 push!(s::Set, x) = (s.dict[x] = nothing; s)
 
 function pop!(s::Set, x, default)
-    dict = s.dict
-    index = ht_keyindex(dict, x)
-    if index > 0
-        @inbounds key = dict.keys[index]
-        _delete!(dict, index)
-        return key
-    else
-        return default
-    end
+    sparse_ind, dense_ind, found = _probe_lookup(s.dict, x)
+    return found ? _pop!(s.dict, sparse_ind, dense_ind).first : default
 end
-
 function pop!(s::Set, x)
-    index = ht_keyindex(s.dict, x)
-    index < 1 && throw(KeyError(x))
-    result = @inbounds s.dict.keys[index]
-    _delete!(s.dict, index)
-    result
+    sparse_ind, dense_ind, found = _probe_lookup(s.dict, x)
+    return found ? _pop!(s.dict, sparse_ind, dense_ind).first : throw(KeyError(x))
 end
-
 function pop!(s::Set)
     isempty(s) && throw(ArgumentError("set must be non-empty"))
     return pop!(s.dict)[1]
@@ -173,7 +166,7 @@ sizehint!(s::Set, newsz::Integer; shrink::Bool=true) = (sizehint!(s.dict, newsz;
 empty!(s::Set) = (empty!(s.dict); s)
 rehash!(s::Set) = (rehash!(s.dict); s)
 
-iterate(s::Set, i...)       = iterate(KeySet(s.dict), i...)
+iterate(s::Set, i...) = iterate(KeySet(s.dict), i...)
 
 @propagate_inbounds Iterators.only(s::Set) = Iterators._only(s, first)
 
@@ -983,25 +976,23 @@ function _replace!(new::Callable, t::Dict{K,V}, A::AbstractDict, count::Int) whe
     count == 0 && return t
     c = 0
     news = Pair{K,V}[]
-    i = skip_deleted_floor!(t)
-    @inbounds while i != 0
-        k1, v1 = t.keys[i], t.vals[i]
-        x1 = Pair{K,V}(k1, v1)
+    @inbounds for dense_ind in t.count:-1:1
+        x1 = t.entries[dense_ind]
+        key = x1.first
         x2 = new(x1)
         if x1 !== x2
             k2, v2 = first(x2), last(x2)
-            if isequal(k1, k2)
-                t.keys[i] = k2
-                t.vals[i] = v2
+            if isequal(key, k2)
+                t.entries[dense_ind] = Pair{K, V}(k2, v2)
                 t.age += 1
             else
-                _delete!(t, i)
+                sparse_ind = _slot_index(t, dense_ind, _gethash(t, dense_ind))
+                _delete!(t, sparse_ind, dense_ind)
                 push!(news, x2)
             end
             c += 1
             c == count && break
         end
-        i = i == typemax(Int) ? 0 : skip_deleted(t, i+1)
     end
     for n in news
         push!(t, n)
