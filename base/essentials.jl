@@ -517,6 +517,30 @@ pairs(::Type{NamedTuple}) = Pairs{Symbol, V, Nothing, NT} where {V, NT <: NamedT
 
 Transform an indexable container into a Dictionary-view of the same data.
 Modifying the key-space of the underlying data may invalidate this object.
+
+This is the type returned by [`pairs`](@ref) for arrays, tuples and named tuples,
+and the type of keyword arguments collected with `kwargs...`. Its keys are those
+of the wrapped container and `values(p)` returns the container itself. Entries can
+be read like those of other `AbstractDict`s, and `p[key] = value` writes through to
+the container if it supports `setindex!`, but keys cannot be added or removed.
+Use e.g. `Dict(p)` for an independent mutable copy, or `NamedTuple(kwargs)` to get
+keyword arguments as a `NamedTuple`.
+
+# Examples
+```jldoctest
+julia> f(; kwargs...) = kwargs;
+
+julia> kw = f(a = 1, b = 2)
+pairs(::NamedTuple) with 2 entries:
+  :a => 1
+  :b => 2
+
+julia> kw[:a]
+1
+
+julia> NamedTuple(kw)
+(a = 1, b = 2)
+```
 """
 Pairs
 
