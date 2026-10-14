@@ -60,6 +60,12 @@ mutable struct Syntax
 end
 const SourceAttrType = Union{Syntax,SourceRef,LineNumberNode}
 
+# Passed to the user as an implicit new-macro argument, like __module__ in old
+# macros
+struct MacroContext
+    macrocall::Syntax
+end
+
 # A default context corresponding to no expansion
 function SyntaxContext(mod::Module, edition::Tuple{Int, Int})
     SyntaxContext(ScopeLayer(mod, nothing), nothing, edition, false)
@@ -350,24 +356,36 @@ _with_context(st, sc) =
 
 # Unconditional; tramples existing scope, and includes quoted forms.  Only
 # changes layer where it needs changing.
-function adopt_scope(sc_in::SyntaxContext, st::Syntax, scmap)
+function adopt_scope(sc_in::SyntaxContext, st::Syntax, unexpanded_in, scmap)
     st_sc = st.context
     sc2 = get(scmap, st_sc, nothing)
     if isnothing(sc2)
         sc2 = scmap[st_sc] = st_sc.layer === sc_in.layer ? st_sc :
             SyntaxContext(
-                sc_in.layer, st_sc.unexpanded, st_sc.edition, st_sc.internal)
+                sc_in.layer,
+                # If the layer is foreign, update macro provenance
+                (st_sc.layer === nothing || base_layer(st_sc) !== base_layer(sc_in) ?
+                    unexpanded_in : st_sc.unexpanded),
+                st_sc.edition, st_sc.internal)
     end
     if is_leaf(st) || numchildren(st) == 0
         sc2 === st_sc ? st : _with_context(st, sc2)
     else
-        mapchildren(c->adopt_scope(sc_in, c, scmap),
+        mapchildren(c->adopt_scope(sc_in, c, unexpanded_in, scmap),
                     sc2 === st_sc ? st : _with_context(st, sc2))
     end
 end
-function adopt_scope(reference::Syntax, st::Syntax)
-    adopt_scope(reference.context, st, Dict{SyntaxContext, SyntaxContext}())
-end
+adopt_scope(reference::Syntax, st::Syntax) =
+    adopt_scope(reference.context, st, st.context.unexpanded,
+                Dict{SyntaxContext, SyntaxContext}())
+# MacroContext methods are for use in new-macro bodies.  These extend the
+# provenance tree as JuliaLowering expects.
+adopt_scope(ctx::MacroContext, st::Syntax) =
+    adopt_scope(ctx.macrocall.context, st, ctx.macrocall,
+                Dict{SyntaxContext, SyntaxContext}())
+adopt_scope(ctx::MacroContext, reference::Syntax, st::Syntax) =
+    adopt_scope(reference.context, st, ctx.macrocall,
+                Dict{SyntaxContext, SyntaxContext}())
 
 function fill_context(st::Syntax, sc::SyntaxContext)
     mapchildren(c->fill_context(c, sc),

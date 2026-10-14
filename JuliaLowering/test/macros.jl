@@ -626,7 +626,7 @@ module M
 
     macro set_global_in_parent(ex)
         sym_ex = @legacy_quote_to_syntax quote; sym_introduced_from_M; end
-        e1 = adopt_scope(__context__.macrocall, sym_ex[1])
+        e1 = adopt_scope(__context__, sym_ex[1])
         @legacy_quote_to_syntax quote
             $e1 = $ex
             nothing
