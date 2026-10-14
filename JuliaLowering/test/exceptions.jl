@@ -349,6 +349,23 @@ end
 """) == (1,2)
 
 @testset "continue/break and finally" for maybe_catch in ("", "catch _", "catch _\nelse")
+    # break value should be evaluated before finally
+    @test JuliaLowering.include_string(test_mod, """
+    function f_break_value_finally()
+        x = 1
+        @label blk begin
+            try
+                break blk x
+            $maybe_catch
+            finally
+                x = 2
+            end
+        end
+    end
+    f_break_value_finally()
+    """) == 1
+    @test isempty(current_exceptions())
+
     # continue in try -> finally block -> loop-cont
     @test JuliaLowering.include_string(test_mod, """
     let out = []
