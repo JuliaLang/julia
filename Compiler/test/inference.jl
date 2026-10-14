@@ -399,6 +399,17 @@ end
         @test Compiler.materialize_inference_edges(invoke_root.edges) ==
             Core.svec(atype, ci1)
 
+        # a flattened identity edge is redundant with a dispatch edge to the same target
+        identity_leaf = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(match.method.sig, ci1))
+        @test Compiler.materialize_inference_edges(Core.svec(ci1, identity_leaf)) ==
+            Core.svec(ci1)
+        @test Compiler.materialize_inference_edges(Core.svec(identity_leaf, ci1)) ==
+            Core.svec(ci1)
+        # but a different CodeInstance of the same MethodInstance may carry another proof
+        @test Compiler.materialize_inference_edges(Core.svec(ci2, identity_leaf)) ==
+            Core.svec(ci2, match.method.sig, ci1)
+
         encoded_leaf = Compiler.LocalInferenceProof(
             Compiler.WorldRange(world), Core.svec(1, atype, ci1))
         standalone_leaf = Compiler.LocalInferenceProof(
