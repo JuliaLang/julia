@@ -7,7 +7,9 @@ include $(JULIAHOME)/deps/llvm-ver.make
 
 HEADERS := $(addprefix $(SRCDIR)/,jl_exports.h loader.h dl-cache.h) $(addprefix $(JULIAHOME)/src/,julia_fasttls.h jloptions.h support/platform.h support/dirpath.h jl_exported_data.inc jl_exported_data_defs.inc jl_exported_funcs.inc)
 
-LOADER_CFLAGS = $(JCFLAGS) -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir) -ffreestanding
+# Clang omits unwind tables with -ffreestanding, leaving only .debug_frame, which
+# `make install` may compress (see COMPRESS_DEBUG_SECTIONS).
+LOADER_CFLAGS = $(JCFLAGS) -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir) -ffreestanding -fasynchronous-unwind-tables
 LOADER_LIBPATHS = -L$(build_shlibdir) -L$(build_libdir)
 LOADER_LDFLAGS = $(JLDFLAGS) -ffreestanding $(LOADER_LIBPATHS)
 
