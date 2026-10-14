@@ -876,8 +876,12 @@ julia> @time_imports using CSV
 A macro to execute an expression and show any methods that were compiled (or recompiled in yellow),
 like the julia args `--trace-compile=stderr --trace-compile-timing` but specifically for a call.
 
+The system may look inside the `@trace_compile` expression and compile some of the called
+code before execution of the top-level expression begins. That compilation is not shown.
+To include it, use `@trace_compile @eval ...` as in the example below.
+
 ```julia-repl
-julia> @trace_compile rand(2,2) * rand(2,2)
+julia> @trace_compile @eval rand(2,2) * rand(2,2)
 #=   39.1 ms =# precompile(Tuple{typeof(Base.rand), Int64, Int64})
 #=  102.0 ms =# precompile(Tuple{typeof(Base.:(*)), Array{Float64, 2}, Array{Float64, 2}})
 2×2 Matrix{Float64}:
