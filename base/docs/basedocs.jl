@@ -1765,7 +1765,8 @@ Core.TypeofBottom
 
 `Core.Type` is an abstract type which has all type objects as its instances.
 The only instance of the singleton type `Core.Type{T}` is the object
-`T`.
+`T`. This holds only when `T` is a type: if `T` is some other valid type parameter
+(e.g. a module), `Core.Type{T}` has no instances.
 
 # Examples
 ```jldoctest

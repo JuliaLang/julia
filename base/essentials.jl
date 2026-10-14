@@ -1194,9 +1194,13 @@ end
     Val(c)
 
 Return `Val{c}()`, which contains no run-time data. Types like this can be used to
-pass the information between functions through the value `c`, which must be an `isbits`
-value or a `Symbol`. The intent of this construct is to be able to dispatch on constants
-directly (at compile time) without having to test the value of the constant at run time.
+pass the information between functions through the value `c`, which must be a valid type
+parameter, such as an `isbits` value, a `Symbol`, a type, or a `Module`. The intent of this
+construct is to be able to dispatch on constants directly (at compile time) without having
+to test the value of the constant at run time.
+
+!!! compat "Julia 1.10"
+    Using a `Module` as `c` requires at least Julia 1.10.
 
 # Examples
 ```jldoctest
