@@ -1779,21 +1779,19 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                     # and are likely to combine with the operations around them,
                     # so reduce their cost by half.
                     cost = T_IFUNC_COST[iidx]
-                    if cost == 0 || nargs < 3 || f === Intrinsics.llvmcall
-                        # holds malformed IR, so argextype will crash on it
+                    if cost == 0 || nargs < 2 || f === Intrinsics.llvmcall
+                        # llvmcall holds malformed IR, so argextype will crash on it
                         return cost
                     end
-                    aty2 = widenconditional(argextype(ex.args[2], src, sptypes))
-                    nconst = Int(aty2 isa Const)
-                    for i = 3:nargs
+                    nconst = 0
+                    for i = 2:nargs
                         aty = widenconditional(argextype(ex.args[i], src, sptypes))
-                        if widenconst(aty) != widenconst(aty2)
-                            nconst = 0
-                            break
+                        if !isdispatchelem(widenconst(aty))
+                            return cost
                         end
                         nconst += aty isa Const
                     end
-                    if nconst + 2 >= nargs
+                    if nconst > 0 && nconst + 2 >= nargs
                         cost = (cost - 1) ÷ 2
                     end
                     return cost
