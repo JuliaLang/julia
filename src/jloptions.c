@@ -184,11 +184,11 @@ static const char opts[]  =
     // startup options
     " -P, --project[={<dir>|@temp|@.|@script[<rel>]}]  Set <dir> as the active project/environment.\n"
     "                                               Or, create a temporary environment with `@temp`\n"
-    "                                               The default @. option will search through parent\n"
-    "                                               directories until a Project.toml or JuliaProject.toml\n"
-    "                                               file is found. @script is similar, but searches up\n"
-    "                                               from the programfile or a path relative to\n"
-    "                                               programfile.\n"
+    "                                               If no value is given, @. is used, which searches\n"
+    "                                               through parent directories until a Project.toml or\n"
+    "                                               JuliaProject.toml file is found. @script is similar,\n"
+    "                                               but searches up from the programfile or a path\n"
+    "                                               relative to programfile.\n"
     " -J, --sysimage <file>                         Start up with the given system image file\n"
     " -H, --home <dir>                              Set location of `julia` executable\n"
     " --startup-file={yes*|no}                      Load `JULIA_DEPOT_PATH/config/startup.jl`; \n"
@@ -313,7 +313,8 @@ static const char opts[]  =
     "                                               than the given value. The value may be specified as a\n"
     "                                               number of bytes, optionally in units of: B,\n"
     "                                               K (kibibytes), M (mebibytes), G (gibibytes),\n"
-    "                                               T (tebibytes), or % (percentage of physical memory).\n\n"
+    "                                               T (tebibytes), or % (percentage of physical memory,\n"
+    "                                               or of the cgroup memory limit if lower).\n\n"
 ;
 
 static const char opts_hidden[] =

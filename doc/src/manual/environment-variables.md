@@ -440,7 +440,7 @@ Forces garbage collection if memory usage is higher than the given value. The va
     - M  (mebibytes)
     - G  (gibibytes)
     - T  (tebibytes)
-    - %  (percentage of physical memory)
+    - %  (percentage of physical memory, or of the cgroup memory limit if lower)
 
 For example, `JULIA_HEAP_SIZE_HINT=1G` would provide a 1 GB heap size hint to the garbage collector.
 

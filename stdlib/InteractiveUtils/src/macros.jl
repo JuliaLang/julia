@@ -781,7 +781,11 @@ See also: [`code_lowered`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref
     @code_warntype
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
-[`code_warntype`](@ref) on the resulting expression.
+[`code_warntype`](@ref) on the resulting expression. Use the optional argument `optimize` with
+
+    @code_warntype optimize=true foo(x)
+
+to also apply additional optimizations, such as inlining (the default is `optimize=false`).
 
 See also: [`code_warntype`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_llvm`](@ref), [`@code_native`](@ref).
 """
@@ -872,8 +876,12 @@ julia> @time_imports using CSV
 A macro to execute an expression and show any methods that were compiled (or recompiled in yellow),
 like the julia args `--trace-compile=stderr --trace-compile-timing` but specifically for a call.
 
+The system may look inside the `@trace_compile` expression and compile some of the called
+code before execution of the top-level expression begins. That compilation is not shown.
+To include it, use `@trace_compile @eval ...` as in the example below.
+
 ```julia-repl
-julia> @trace_compile rand(2,2) * rand(2,2)
+julia> @trace_compile @eval rand(2,2) * rand(2,2)
 #=   39.1 ms =# precompile(Tuple{typeof(Base.rand), Int64, Int64})
 #=  102.0 ms =# precompile(Tuple{typeof(Base.:(*)), Array{Float64, 2}, Array{Float64, 2}})
 2×2 Matrix{Float64}:
