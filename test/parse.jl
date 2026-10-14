@@ -262,6 +262,15 @@ end
         s = "9"^(k - 1) * c * "7"^(n - k)
         @test P.parsevalue(T, codeunits(s)) === P.INVALID
     end
+    # the same for hex digits, with bytes just outside each range of digits
+    for n in (8, 16, 17), k in 1:n, c in ('/', ':', '@', 'G', '`', 'g', ' ', '\x7f', '\xff'),
+            T in (Int64, UInt64, Int128)
+        s = "f"^(k - 1) * c * "A"^(n - k)
+        @test P.parsevalue(T, codeunits(s); base = 16) === P.INVALID
+    end
+    @test P.parsevalue(UInt64, codeunits("0123456789aBcDeF"); base = 16) === 0x0123456789abcdef
+    @test P.parsevalue(UInt128, codeunits("FEDCBA9876543210fedcba9876543210"); base = 16) ===
+        0xfedcba9876543210fedcba9876543210
     @test P.parsevalue(Int, view(codeunits("x=-42;"), 3:5)) === -42
     for s in ("", "-", "+", " 1", "1 ", "--1", "0x1")
         @test P.parsevalue(Int, codeunits(s)) === P.INVALID
@@ -308,6 +317,20 @@ end
     @test msg(Int8, "1000x") == "OverflowError: overflow parsing \"1000x\""
     @test msg(Int8, "1000 2") == "OverflowError: overflow parsing \"1000 2\""
     @test msg(Int8, "10x00") == "ArgumentError: invalid base 10 digit 'x' in \"10x00\""
+    # plain decimal digits take a fast path; anything else falls back to the full grammar
+    for (s, x) in (("7", 7), ("-7", -7), ("+7", 7), ("-", nothing), ("+", nothing), ("-0", 0),
+                   ("07", 7), ("-07", -7), ("0x7", 7), ("1 ", 1), ("1x", nothing), ("1x1", nothing),
+                   ("--1", nothing), ("-+1", nothing), (string(typemax(Int)), typemax(Int)),
+                   (string(typemin(Int)), typemin(Int)), (string(big(typemax(Int)) + 1), nothing))
+        @test tryparse(Int, s) === x
+        @test tryparse(Int, SubString(" $s ", 2, ncodeunits(s) + 1)) === x
+    end
+    @test tryparse(UInt8, "+1") === nothing
+    @test tryparse(UInt8, "-1") === nothing
+    @test tryparse(UInt8, "256") === nothing
+    @test msg(Int8, "128") == "OverflowError: overflow parsing \"128\""
+    @test msg(Int8, "1x") == "ArgumentError: invalid base 10 digit 'x' in \"1x\""
+    @test Base.tryparse_internal(Int, "x-7y", 2, 3, 10, true) === -7
 end
 
 # make sure base can be any Integer

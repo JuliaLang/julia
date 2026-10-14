@@ -2,7 +2,8 @@
 
 # Decimal digits are parsed eight at a time: `load8` reads eight bytes as one word,
 # `isdigits8` checks that they are all ASCII digits, and `digits8` converts them to
-# their value with three multiplies instead of eight multiply-adds.
+# their value with three multiplies instead of eight multiply-adds. Hex digits are parsed
+# eight at a time in the same way, with `ishexdigits8` and `hexdigits8`.
 
 # Bytes `i:i+7` of `buf` as a little-endian word, so the first byte is the lowest.
 # Storage with a stable pointer is read with one unaligned load.
@@ -36,6 +37,27 @@ end
             (((w >> 16) & 0x000000ff_000000ff) * 0x00002710_00000001)) >> 32
 end
 
+# Bytes of `w` in `lo:hi`, as their high bits, if every byte of `w` is below 0x80.
+@inline bytesin(w::UInt64, lo::UInt8, hi::UInt8) =
+    (w + (0x80 - lo) * 0x01010101_01010101) & ~(w + (0x7f - hi) * 0x01010101_01010101) &
+        0x80808080_80808080
+
+# Whether every byte of `w` is in '0':'9', 'A':'F' or 'a':'f'; setting bit 5 lowercases letters.
+@inline ishexdigits8(w::UInt64) =
+    (w & 0x80808080_80808080 == 0) &
+        ((bytesin(w, UInt8('0'), UInt8('9')) |
+          bytesin(w | 0x20202020_20202020, UInt8('a'), UInt8('f'))) == 0x80808080_80808080)
+
+# The value of the eight ASCII hex digits in `w`, first digit in the lowest byte. Letters,
+# which have bit 6 set, get 9 added to their low nibble; then adjacent nibbles, bytes and
+# halfwords are combined.
+@inline function hexdigits8(w::UInt64)
+    w = (w & 0x0f0f0f0f_0f0f0f0f) + ((w >> 6) & 0x01010101_01010101) * 9
+    w = ((w << 4) | (w >> 8)) & 0x00ff00ff_00ff00ff
+    w = ((w << 8) | (w >> 16)) & 0x0000ffff_0000ffff
+    return ((w << 16) | (w >> 32)) & 0x00000000_ffffffff
+end
+
 # The value of the code unit `b` as a digit in `base` (at most 62), or `typemax(b)` if it
 # is not one: '0':'9' are 0:9, 'A':'Z' are 10:35, and 'a':'z' are 10:35 up to base 36
 # and 36:61 above it.
@@ -55,6 +77,10 @@ function overflowfailure(buf::AbstractVector{UInt8}, i::Int, j::Int, base::Int)
     return OVERFLOW
 end
 
+# How many digits in each base cannot overflow a UInt64 (UInt128).
+const SAFEDIGITS64 = ntuple(b -> b < 2 ? 0 : ndigits(typemax(UInt64); base = b) - 1, 62)
+const SAFEDIGITS128 = ntuple(b -> b < 2 ? 0 : ndigits(typemax(UInt128); base = b) - 1, 62)
+
 # Parse the digits `buf[i:j]`, without a sign, in `base` (2 to 62) as a `T` that is negated
 # if `neg` (signed `T` only), or return a `ParseFailure`. `i:j` must be in bounds.
 @inline function parseint(::Type{T}, buf::AbstractVector{UInt8}, i::Int, j::Int,
@@ -71,10 +97,48 @@ end
             n = n * U(100_000_000) + digits8(w)
             i += 8
         end
+        if U === UInt64
+            while i <= k
+                d = (@inbounds buf[i]) - UInt8('0')
+                d <= 0x09 || return INVALID
+                n = n * U(10) + d
+                i += 1
+            end
+        else
+            # the last digits go in a UInt64, saving 128-bit multiplies
+            t, p = zero(UInt64), one(UInt64)
+            while i <= k
+                d = (@inbounds buf[i]) - UInt8('0')
+                d <= 0x09 || return INVALID
+                t = t * 10 + d
+                p *= 10
+                i += 1
+            end
+            n = n * U(p) + t
+        end
+    elseif sizeof(T) < 4
+        # 8- and 16-bit types have too few digits for the loops below to pay off
+    elseif base == 16
+        # the first 16 (32) hex digits cannot overflow a UInt64 (UInt128)
+        k = min(j, i + (U === UInt64 ? 15 : 31))
+        while k - i >= 7
+            w = load8(buf, i)
+            ishexdigits8(w) || return INVALID
+            n = n << 32 | hexdigits8(w)
+            i += 8
+        end
         while i <= k
-            d = (@inbounds buf[i]) - UInt8('0')
-            d <= 0x09 || return INVALID
-            n = n * U(10) + d
+            d = digitvalue(@inbounds(buf[i]), 16)
+            d < 0x10 || return INVALID
+            n = n << 4 | d
+            i += 1
+        end
+    else
+        k = min(j, i + (U === UInt64 ? SAFEDIGITS64 : SAFEDIGITS128)[base] - 1)
+        while i <= k
+            d = digitvalue(@inbounds(buf[i]), base)
+            d < base || return INVALID
+            n = n * (base % U) + d
             i += 1
         end
     end
