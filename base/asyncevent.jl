@@ -81,6 +81,8 @@ at least `interval` seconds again elapse. If `interval` is equal to `0`, the tim
 once. When closing (by [`close`](@ref)) either a repeating timer or a one-shot timer before it has
 triggered, waiting tasks are woken with an [`EOFError`](@ref). After a one-shot timer triggers, all
 subsequent calls to [`wait`](@ref) return immediately, even if it is closed.
+`delay` and `interval` have millisecond resolution: they are rounded up to a whole number of
+milliseconds, so the minimum nonzero `interval` is 1 millisecond (`interval = 0.001`).
 Use [`isopen`](@ref) to check whether a timer is still active. An inactive timer will not fire.
 Use `t.timeout` and `t.interval` to read the setup conditions of a `Timer` `t`.
 
@@ -388,7 +390,7 @@ Waiting tasks are woken and the function `callback` is called after an initial d
 seconds, and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the
 callback is only run once. The function `callback` is called with a single argument, the timer
 itself. Stop a timer by calling `close`. The `callback` may still be run one final time, if the timer
-has already expired.
+has already expired. `delay` and `interval` are rounded up to a whole number of milliseconds.
 
 If `spawn` is `true`, the created task will be spawned, meaning that it will be allowed
 to move thread, which avoids the side-effect of forcing the parent task to get stuck to the thread
