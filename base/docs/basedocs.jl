@@ -2173,12 +2173,13 @@ true
 applicable
 
 """
-    invoke(f, argtypes::Type, args...; kwargs...)
+    invoke(f, argtypes::Type{<:Tuple}, args...; kwargs...)
     invoke(f, argtypes::Method, args...; kwargs...)
     invoke(f, argtypes::CodeInstance, args...; kwargs...)
 
 Invoke a method for the given generic function `f` matching the specified types `argtypes` on the
-specified arguments `args` and passing the keyword arguments `kwargs`. The arguments `args` must
+specified arguments `args` and passing the keyword arguments `kwargs`. The argument types are
+given as a tuple type, e.g. `Tuple{Real}` for a single argument. The arguments `args` must
 conform with the specified types in `argtypes`, i.e. conversion is not automatically performed.
 This method allows invoking a method other than the most specific matching method, which is useful
 when the behavior of a more general definition is explicitly needed (often as part of the
