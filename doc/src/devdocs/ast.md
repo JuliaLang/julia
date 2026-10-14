@@ -505,6 +505,16 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
     Ends the region started by a `gc_preserve_begin`. `args[1]` is the token from the associated
     `gc_preserve_begin`.
 
+  * `aliasscope`
+
+    Part of the implementation of `Base.Experimental.@aliasscope`. Has no arguments. Starts a region
+    (ended by the matching `popaliasscope`) in which the compiler may assume that `Const` arrays are
+    not modified through stores within the region. Regions may be nested.
+
+  * `popaliasscope`
+
+    Ends the region started by the innermost `aliasscope`. Has no arguments.
+
   * `copyast`
 
     Part of the implementation of quasi-quote. The argument is a surface syntax AST that is simply
