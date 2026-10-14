@@ -328,16 +328,12 @@ const _login_shells = Base.OncePerProcess{Vector{String}}() do
     end
 end
 
-# pw_shell byte offset in struct passwd — everything before the pw_shell field:
-# Linux:     pw_name, pw_passwd (2 Ptrs), pw_uid, pw_gid (2 Cuints),
-#            pw_gecos, pw_dir (2 Ptrs)
-# macOS/BSD: same as Linux plus pw_change (Clong) and pw_class (Ptr)
-#            between pw_gid and pw_gecos
-const _pw_shell_offset = @static if Sys.islinux()
-    4 * sizeof(Ptr{Cvoid}) + 2 * sizeof(Cuint)
-else
-    5 * sizeof(Ptr{Cvoid}) + 2 * sizeof(Cuint) + sizeof(Clong)
-end
+# pw_uid byte offset in struct passwd: after pw_name and pw_passwd (two pointers),
+# consistent across Linux and macOS/BSD.
+const _pw_uid_offset = 2 * sizeof(Ptr{Cvoid})
+
+# getpwent_r is available on Linux and FreeBSD but not macOS.
+const _getpwent_lock = Base.ReentrantLock()
 
 # Return a sorted, deduplicated list of real local usernames. When all=false
 # (the default), service accounts are excluded by requiring their shell to be
@@ -346,26 +342,60 @@ function list_users(; all::Bool=false)
     seen = Set{String}()
     @static if !Sys.iswindows()
         valid_shells = all ? String[] : _login_shells()
-        ccall(:setpwent, Cvoid, ())
-        try
-            while true
-                ptr = ccall(:getpwent, Ptr{Cvoid}, ())
-                ptr == C_NULL && break
-                name_ptr = unsafe_load(Ptr{Ptr{UInt8}}(ptr))
-                name_ptr == C_NULL && continue
-                name = unsafe_string(name_ptr)
-                if !all
-                    @static Sys.isapple() && startswith(name, '_') && continue
-                    if !isempty(valid_shells)
-                        shell_ptr = unsafe_load(Ptr{Ptr{UInt8}}(ptr + _pw_shell_offset))
-                        shell_ptr == C_NULL && continue
-                        unsafe_string(shell_ptr) in valid_shells || continue
+        @static if Sys.islinux() || Sys.isfreebsd()
+            # Use thread-safe getpwent_r on Linux and FreeBSD.
+            pwd_storage = zeros(UInt8, 256)
+            buflen = 1024
+            str_buf = Vector{UInt8}(undef, buflen)
+            result = Ref{Ptr{Cvoid}}(C_NULL)
+            ccall(:setpwent, Cvoid, ())
+            try
+                while true
+                    ret = ccall(:getpwent_r, Cint,
+                                (Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Ptr{Ptr{Cvoid}}),
+                                pwd_storage, str_buf, Csize_t(buflen), result)
+                    if ret == Base.Libc.ERANGE
+                        buflen *= 2
+                        buflen > 65536 && break
+                        str_buf = Vector{UInt8}(undef, buflen)
+                        continue
                     end
+                    (ret != 0 || result[] == C_NULL) && break
+                    uid = unsafe_load(Ptr{Cuint}(result[] + _pw_uid_offset))
+                    pd = Base.Libc.getpwuid(uid, false)
+                    pd === nothing && continue
+                    if !all && !isempty(valid_shells)
+                        pd.shell in valid_shells || continue
+                    end
+                    push!(seen, pd.username)
                 end
-                push!(seen, name)
+            finally
+                ccall(:endpwent, Cvoid, ())
             end
-        finally
-            ccall(:endpwent, Cvoid, ())
+        else
+            # macOS: getpwent_r is not available, so guard the
+            # entire setpwent/getpwent/endpwent sequence with a lock.
+            @lock _getpwent_lock begin
+                ccall(:setpwent, Cvoid, ())
+                try
+                    while true
+                        ptr = ccall(:getpwent, Ptr{Cvoid}, ())
+                        ptr == C_NULL && break
+                        uid = unsafe_load(Ptr{Cuint}(ptr + _pw_uid_offset))
+                        pd = Base.Libc.getpwuid(uid, false)
+                        pd === nothing && continue
+                        if !all
+                            startswith(pd.username, '_') && continue
+                            if !isempty(valid_shells)
+                                pd.shell in valid_shells || continue
+                            end
+                        end
+                        push!(seen, pd.username)
+                    end
+                finally
+                    ccall(:endpwent, Cvoid, ())
+                end
+            end
         end
     end
     return sort!(collect(seen))
