@@ -1003,6 +1003,11 @@ Read a value written by [`serialize`](@ref). `deserialize` assumes the binary da
 `deserialize` is designed for simplicity and performance, and so does not validate
 the data read. Malformed data can result in process termination. The caller must ensure
 the integrity and correctness of data read from `stream`.
+
+!!! warning
+    `deserialize` is not secure against maliciously constructed data, which can execute
+    arbitrary code when deserialized. Never deserialize data received from an untrusted or
+    unauthenticated source.
 """
 deserialize(s::IO) = deserialize(Serializer(s))
 
