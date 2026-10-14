@@ -277,8 +277,14 @@ function _dump_function(arginfo::ArgInfo, native::Bool, wrapper::Bool,
         src isa Core.CodeInfo || error("failed to infer source for $mi")
         str = _dump_function_llvm(mi, src, wrapper, !raw, dump_module, optimize, debuginfo, llvm_options, params)
     end
-    str = warning * str
+    str = warning * fixup_stdlib_paths(str)
     return str
+end
+
+# Debug info printed by codegen refers to stdlib files by their build-time location
+function fixup_stdlib_paths(str::String)
+    Sys.BUILD_STDLIB_PATH == Sys.STDLIB && return str
+    return replace(str, normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB))
 end
 
 function _dump_function_native_disassembly(mi::Core.MethodInstance, world::UInt,
