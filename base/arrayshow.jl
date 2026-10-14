@@ -135,10 +135,10 @@ function print_matrix_vdots(io::IO, vdots::AbstractString,
     for k = 1:length(A)
         w = A[k][1] + A[k][2]
         if k % M == m
-            l = repeat(" ", max(0, A[k][1]-length(vdots)))
+            l = repeat(" ", max(0, Signed(A[k][1])-length(vdots)))
             r = k == length(A) && !pad_right ?
                 "" :
-                repeat(" ", max(0, w-length(vdots)-length(l)))
+                repeat(" ", max(0, Signed(w)-length(vdots)-length(l)))
             print(io, l, vdots, r)
         else
             (k != length(A) || pad_right) && print(io, repeat(" ", w))
