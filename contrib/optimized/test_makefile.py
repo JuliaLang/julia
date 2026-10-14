@@ -62,6 +62,8 @@ elif args[0] == 'merge':
 elif args[0] == 'fdata':
     assert all('.merged.' not in x and pathlib.Path(x).is_file() for x in args[1:]), args
     print(''.join(pathlib.Path(x).read_text() for x in args[1:]), end='')
+elif args[0] == 'objcopy' and args[1] == '--decompress-debug-sections':
+    pathlib.Path(args[3]).write_text(pathlib.Path(args[2]).read_text())
 elif args[0] == 'bolt':
     if os.getenv('FAIL_BOLT'):
         sys.exit(1)
@@ -79,13 +81,13 @@ class FlowTests(unittest.TestCase):
         shutil.copyfile(SOURCE, self.flow / 'Makefile')
         (self.root / 'helper.py').write_text(HELPER)
         (self.root / 'Makefile').write_text('OS := Linux\nARCH := x86_64\nBINARY := 64\nBUILD_MACHINE := test-triple\nprint-%:\n\t@echo "$*=$($*)"\nconfigure:\n\t@python3 helper.py configure $(O)\n')
-        for name, mode in [('profdata', 'merge'), ('mergefdata', 'fdata'), ('bolt-tool', 'bolt')]:
+        for name, mode in [('profdata', 'merge'), ('mergefdata', 'fdata'), ('bolt-tool', 'bolt'), ('objcopy', 'objcopy')]:
             p = self.root / name
             # profdata already gets 'merge' as the first argument.
             prefix = '' if name == 'profdata' else mode + ' '
             p.write_text('#!/bin/sh\nexec python3 ' + str(self.root / 'helper.py') + ' ' + prefix + '"$@"\n')
             p.chmod(0o755)
-        self.args = ['LLVM_PROFDATA=' + str(self.root / 'profdata'), 'LLVM_MERGEFDATA=' + str(self.root / 'mergefdata'), 'LLVM_BOLT=' + str(self.root / 'bolt-tool')]
+        self.args = ['LLVM_PROFDATA=' + str(self.root / 'profdata'), 'LLVM_MERGEFDATA=' + str(self.root / 'mergefdata'), 'LLVM_BOLT=' + str(self.root / 'bolt-tool'), 'LLVM_OBJCOPY=' + str(self.root / 'objcopy')]
 
     def make(self, *args, ok=True, env=None):
         p = subprocess.run(['make', '--no-print-directory', '-s', '-j4', '-C', str(self.flow), *self.args, *args], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)

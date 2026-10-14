@@ -412,6 +412,9 @@ bolt-merge: bolt-train $(BOLT_PROFRAW_FILES)
 
 # Reuse old text segments to reduce library size, except for libjulia-internal:
 # BOLT does not fully support its computed gotos (llvm/llvm-project#89117).
+# -update-debug-sections cannot handle compressed debug sections
+# (COMPRESS_DEBUG_SECTIONS), so rewrite a decompressed copy; `make install`
+# compresses them again.
 # Preserve mtimes so the rewrite does not trigger dependent builds.
 bolt: bolt-merge
 	@echo "--- BOLT: rewrite the libraries"
@@ -419,7 +422,9 @@ bolt: bolt-merge
 		file=$$(readlink $(STAGE2_BUILD)/usr/lib/$$link); \
 		abs_file=$(STAGE2_BUILD)/usr/lib/$$file; \
 		if [ "$$link" = libjulia-internal.so ]; then extra_args=; else extra_args="--use-old-text $(BOLT_SPLIT_STRATEGY)"; fi; \
-		$(LLVM_BOLT) "$$abs_file.original" -data "$(BOLT_PROFILE_DIR)/$$file-prof.merged.fdata" -o $$abs_file $(BOLT_ARGS) $$extra_args; \
+		$(LLVM_OBJCOPY) --decompress-debug-sections "$$abs_file.original" "$$abs_file.uncompressed"; \
+		$(LLVM_BOLT) "$$abs_file.uncompressed" -data "$(BOLT_PROFILE_DIR)/$$file-prof.merged.fdata" -o $$abs_file $(BOLT_ARGS) $$extra_args; \
+		rm -f "$$abs_file.uncompressed"; \
 		touch -r "$$abs_file.original" $$abs_file; \
 	done
 	touch $@
