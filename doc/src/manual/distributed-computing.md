@@ -113,8 +113,10 @@ julia> fetch(s)
 
 Note that we used `1 .+ fetch(r)` instead of `1 .+ r`. This is because we do not know where the
 code will run, so in general a [`fetch`](@ref) might be required to move `r` to the process
-doing the addition. In this case, [`@spawnat`](@ref) is smart enough to perform the computation
-on the process that owns `r`, so the [`fetch`](@ref) will be a no-op (no work is done).
+doing the addition. `:any` does not take into account where `r` lives (it simply cycles through
+the workers), so in this case the addition runs on process 3 and [`fetch`](@ref) copies the
+matrix from process 2. To avoid moving the data, run the computation on the process that owns
+`r` instead, e.g. `@spawnat 2 1 .+ fetch(r)`.
 
 (It is worth noting that [`@spawnat`](@ref) is not built-in but defined in Julia as a [macro](@ref man-macros).
 It is possible to define your own such constructs.)
