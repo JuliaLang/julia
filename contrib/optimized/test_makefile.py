@@ -67,6 +67,8 @@ elif args[0] == 'bolt':
         sys.exit(1)
     assert pathlib.Path(args[1]).read_text() == 'original'
     pathlib.Path(args[args.index('-o') + 1]).write_text('instrumented' if '--instrument' in args else 'optimized')
+elif args[0] == 'objcopy':
+    assert pathlib.Path(args[-1]).read_text() == 'optimized', args
 '''
 
 class FlowTests(unittest.TestCase):
@@ -79,13 +81,13 @@ class FlowTests(unittest.TestCase):
         shutil.copyfile(SOURCE, self.flow / 'Makefile')
         (self.root / 'helper.py').write_text(HELPER)
         (self.root / 'Makefile').write_text('OS := Linux\nARCH := x86_64\nBINARY := 64\nBUILD_MACHINE := test-triple\nprint-%:\n\t@echo "$*=$($*)"\nconfigure:\n\t@python3 helper.py configure $(O)\n')
-        for name, mode in [('profdata', 'merge'), ('mergefdata', 'fdata'), ('bolt-tool', 'bolt')]:
+        for name, mode in [('profdata', 'merge'), ('mergefdata', 'fdata'), ('bolt-tool', 'bolt'), ('objcopy', 'objcopy')]:
             p = self.root / name
             # profdata already gets 'merge' as the first argument.
             prefix = '' if name == 'profdata' else mode + ' '
             p.write_text('#!/bin/sh\nexec python3 ' + str(self.root / 'helper.py') + ' ' + prefix + '"$@"\n')
             p.chmod(0o755)
-        self.args = ['LLVM_PROFDATA=' + str(self.root / 'profdata'), 'LLVM_MERGEFDATA=' + str(self.root / 'mergefdata'), 'LLVM_BOLT=' + str(self.root / 'bolt-tool')]
+        self.args = ['LLVM_PROFDATA=' + str(self.root / 'profdata'), 'LLVM_MERGEFDATA=' + str(self.root / 'mergefdata'), 'LLVM_BOLT=' + str(self.root / 'bolt-tool'), 'LLVM_OBJCOPY=' + str(self.root / 'objcopy')]
 
     def make(self, *args, ok=True, env=None):
         p = subprocess.run(['make', '--no-print-directory', '-s', '-j4', '-C', str(self.flow), *self.args, *args], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
@@ -259,6 +261,20 @@ class FlowTests(unittest.TestCase):
         self.make('bolt')
         self.assertEqual(merged.read_text(), 'custom\nextra\n')
         self.assertEqual(profile.stat().st_mtime_ns, mtime)
+
+    def check_compress_after_bolt(self, value, compressed):
+        # `make install` leaves BOLT-rewritten libraries alone, so the flow compresses
+        # the rewritten ones itself.
+        self.make('all', 'COMPRESS_DEBUG_SECTIONS=' + value)
+        objcopy = [a for _, a in self.events() if a[0] == 'objcopy']
+        self.assertEqual(len(objcopy), 3 if compressed else 0, objcopy)
+        self.assertTrue(all(a[1] == '--compress-debug-sections=' + value for a in objcopy), objcopy)
+
+    def test_compress_after_bolt(self):
+        self.check_compress_after_bolt('zlib', True)
+
+    def test_no_compress_after_bolt(self):
+        self.check_compress_after_bolt('none', False)
 
     def test_missing_library_fails(self):
         self.make('stage2')

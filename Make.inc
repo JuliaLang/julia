@@ -719,6 +719,7 @@ AS := $(CROSS_COMPILE)as
 LD := $(CROSS_COMPILE)ld
 RANLIB := $(CROSS_COMPILE)ranlib
 OBJCOPY := $(CROSS_COMPILE)objcopy
+READELF := $(CROSS_COMPILE)readelf
 
 CPP_STDOUT := $(CPP) -P
 
@@ -1020,9 +1021,6 @@ COMPRESS_DEBUG_SECTIONS ?= zlib
 ifeq ($(USE_SYSTEM_LLVM)$(USE_SYSTEM_LLD),00)
 COMPRESS_PKGIMAGE_DEBUG_SECTIONS ?= zstd
 endif
-endif
-ifneq ($(COMPRESS_DEBUG_SECTIONS),)
-JLDFLAGS += -Wl,--compress-debug-sections=$(COMPRESS_DEBUG_SECTIONS)
 endif
 
 # ===========================================================================
