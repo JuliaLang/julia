@@ -1116,14 +1116,20 @@ vst1_generated_lambda(vcx, st) = @stm st begin
     _ -> @fail(st, "malformed `generated_lambda`")
 end
 
+# TODO: identifiers are only meaningful directly in a function body
 vst1_non_arg_meta(vcx, st) = @stm st begin
     [:meta [:identifier]] -> pass()
     [:meta [:identifier] xs...] -> let m = syntax_name(st[1])
         if m === "nospecialize" || m === "specialize"
-            # TODO: identifiers are only meaningful directly in a function body
-            all(vst1_ident_lhs, vcx, xs) |
-                (length(xs) == 1 && head(xs[1]) === :tuple ?
-                all(vst1_ident_lhs, vcx, children(xs[1])) : unknown())
+            ok = pass()
+            for x in xs
+                ok &= @stm x begin
+                    [:tuple _...] -> pass() # TODO: disallow or rearrange in compat.jl
+                    [:function _...] -> @fail(x, "`$m` cannot wrap a function definition; apply it to individual arguments, e.g. `function f(@nospecialize(x)); end`")
+                    _ -> vst1_ident(vcx, x)
+                end
+            end
+            ok
         elseif m === "generated"
             minlen(st, xs, 1) & maxlen(st, xs, 1) & vst1(vcx, xs[1])
         else

@@ -1321,7 +1321,7 @@ function f_bad_nospecialize(;@nospecialize(x)::T); end
 #---------------------
 LoweringError:
 @nospecialize function f_bad_nospecialize(); end
-#             └────────────────────────────────┘ ── expected identifier
+#             └────────────────────────────────┘ ── `nospecialize` cannot wrap a function definition; apply it to individual arguments, e.g. `function f(@nospecialize(x)); end`
 
 ########################################
 # Error: nospecialize wrapping non-arg assignment is invalid
