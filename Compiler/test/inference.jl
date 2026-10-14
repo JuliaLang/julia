@@ -3178,19 +3178,99 @@ let 𝕃ᵢ = Compiler.InferenceLattice(Compiler.MustAliasesLattice(Compiler.Bas
 
     @test (MustAlias(2, 0, AliasableField{Any}, 1, Int) ⊑ Int)
     @test !(Int ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Int))
-    @test (Int ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Any))
-    @test (Const(42) ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Int))
+    # for soundness, ⊑ requires both alias and type information to be more narrow
+    @test !(Int ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Any))
+    @test !(Const(42) ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Int))
+    @test (Union{} ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Int))
     @test !(MustAlias(2, 0, AliasableField{Any}, 1, Any) ⊑ Int)
     @test tmerge(MustAlias(2, 0, AliasableField{Any}, 1, Any), Const(nothing)) === Any
     @test tmerge(MustAlias(2, 0, AliasableField{Any}, 1, Int), Const(nothing)) === Union{Int,Nothing}
     @test tmerge(Const(nothing), MustAlias(2, 0, AliasableField{Any}, 1, Any)) === Any
     @test tmerge(Const(nothing), MustAlias(2, 0, AliasableField{Any}, 1, Int)) === Union{Int,Nothing}
+    # merging two aliases of the same field (same slot, slot definition and field) keeps the
+    # alias, with the merged field type
+    let m = tmerge(MustAlias(2, 0, AliasableField{Any}, 1, Int), MustAlias(2, 0, AliasableField{Any}, 1, Nothing))
+        @test m isa MustAlias && m.slot == 2 && m.ssadef == 0 && m.fldidx == 1 && m.fldtyp === Union{Int,Nothing}
+    end
+    # different slot definitions or fields merge as their field types
+    @test tmerge(MustAlias(2, 1, AliasableField{Any}, 1, Int), MustAlias(2, 2, AliasableField{Any}, 1, Nothing)) === Union{Int,Nothing}
+    @test tmerge(MustAlias(2, 0, AliasableFields{Any,Any}, 1, Int), MustAlias(2, 0, AliasableFields{Any,Any}, 2, Nothing)) === Union{Int,Nothing}
+    # so do different container types, since the merged container type has no definite field layout
+    @test tmerge(MustAlias(2, 0, AliasableField{Any}, 1, Int), MustAlias(2, 0, AliasableFields{Any,Any}, 1, Nothing)) === Union{Int,Nothing}
     tmerge(Const(AbstractVector{<:Any}), Const(AbstractVector{T} where {T}))  # issue #56913
     @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Const(Bool)) === Const(true)
     @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Type{Bool}) === Const(true)
     @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Int), Type{Bool}) === Const(false)
     @test ifelse_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Int, Int) === Int
     @test ifelse_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Int), Int, Int) === Union{}
+
+    # `tmeet` with a type narrows the field type and keeps the alias, or gives `Union{}` if
+    # they are disjoint
+    let m = Compiler.tmeet(𝕃ᵢ, MustAlias(2, 0, AliasableField{Any}, 1, Union{Int,String}), Integer)
+        @test m isa MustAlias && m.slot == 2 && m.fldidx == 1 && m.fldtyp === Int
+    end
+    @test Compiler.tmeet(𝕃ᵢ, MustAlias(2, 0, AliasableField{Any}, 1, Int), String) === Union{}
+
+    # a limited field type makes the constructor return that `LimitedAccuracy`, without the alias
+    let causes = Compiler.IdSet{Compiler.InferenceState}()
+        l = MustAlias(2, 0, AliasableField{Any}, 1, Compiler.LimitedAccuracy(Int, causes))
+        @test l isa Compiler.LimitedAccuracy && l.typ === Int
+    end
+
+    # `narrow_mustalias(x, y)` returns the alias `y` with field type `x` if `x ⊑ y.fldtyp`,
+    # otherwise `x` itself
+    let alias = MustAlias(2, 0, AliasableField{Any}, 1, Union{Int,String})
+        narrow(@nospecialize(x), @nospecialize(y) = alias) = Compiler.narrow_mustalias(𝕃ᵢ, x, y)
+        # `Union{}` and slot wrappers are not narrowed
+        for x in Any[Union{}, alias, MustAlias(3, 0, AliasableField{Any}, 1, Int), Conditional(2, 0, Int, String)]
+            @test narrow(x) === x
+        end
+        # a narrowed result keeps the limitation of `x` and of `y`
+        causes = Compiler.IdSet{Compiler.InferenceState}()
+        l = narrow(Compiler.LimitedAccuracy(Int, causes))
+        @test l isa Compiler.LimitedAccuracy && l.typ == MustAlias(2, 0, AliasableField{Any}, 1, Int)
+        l = narrow(Int, Compiler.LimitedAccuracy(alias, causes))
+        @test l isa Compiler.LimitedAccuracy && l.typ == MustAlias(2, 0, AliasableField{Any}, 1, Int)
+        # `x` gets the alias even if it is not ⊑ the field type
+        @test narrow(Nothing) == MustAlias(2, 0, AliasableField{Any}, 1, Nothing)
+    end
+end
+
+# https://github.com/JuliaLang/julia/issues/63677
+struct Box63677
+    a::Union{Int,String}
+end
+pick63677(b, s) = isempty(s) ? b.a : s
+f63677(x, y) = typeof(x) === typeof(y)
+g63677(b, s) = f63677(b.a, pick63677(b, s))
+@test only(code_typed(g63677, (Box63677, String))).first.code[end] != ReturnNode(true) # not folded
+@test !g63677(Box63677(1), "y")
+
+# `conditional_change` on a slot holding a limited alias narrows the field type, and keeps
+# both the alias and the limitation
+let 𝕃ᵢ = Compiler.typeinf_lattice(Compiler.NativeInterpreter())
+    causes = Compiler.IdSet{Compiler.InferenceState}()
+    alias = MustAlias(2, 0, AliasableField{Any}, 1, Any)
+    state = Compiler.VarTable(undef, 3)
+    for i = 1:3
+        state[i] = Compiler.VarState(i == 3 ? Compiler.LimitedAccuracy(alias, causes) : Any, 0, false)
+    end
+    refinement = Compiler.conditional_change(𝕃ᵢ, state, Conditional(3, 0, Int, Any), :then)
+    @test refinement isa Compiler.StateRefinement
+    @test refinement.newtyp isa Compiler.LimitedAccuracy && refinement.newtyp.causes == causes
+    let newtyp = Compiler.ignorelimited(refinement.newtyp)
+        @test newtyp isa MustAlias && newtyp.slot == 2 && newtyp.fldtyp === Int
+    end
+    # a kind type (from `isa(x, DataType)`) narrows an alias slot the same way
+    let typealias = MustAlias(2, 0, AliasableField{Type}, 1, Type)
+        state[3] = Compiler.VarState(typealias, 0, false)
+        refinement = Compiler.conditional_change(𝕃ᵢ, state, Conditional(3, 0, DataType, Type), :then)
+        @test refinement.newtyp == MustAlias(2, 0, AliasableField{Type}, 1, DataType)
+    end
+    # a slot with a limited plain type keeps its limitation when narrowed
+    state[3] = Compiler.VarState(Compiler.LimitedAccuracy(Union{Int,String}, causes), 0, false)
+    refinement = Compiler.conditional_change(𝕃ᵢ, state, Conditional(3, 0, Int, String), :then)
+    @test refinement.newtyp isa Compiler.LimitedAccuracy && refinement.newtyp.typ === Int
 end
 
 maybeget_mustalias_tmerge(x::AliasableField) = x.f
@@ -3327,6 +3407,14 @@ _merge_same_aliases2(a) = (@assert isa(a.f, Nothing); a.f) # ::MustAlias(a, Cons
 @test Base.return_types((Bool,AliasableField,)) do b, a
     return merge_same_aliases(b, a) # ::Union{Int,Nothing}
 end |> only === Union{Nothing,Int}
+_merge_same_aliases3(a) = (@assert isa(a.f, String); a.f) # ::MustAlias(a, Const(:f1), String)
+merge_same_aliases_nonconst(b, a) = b ? _merge_same_aliases1(a) : _merge_same_aliases3(a) # MustAlias(a, Const(:f1), Union{Int,String})
+@test Base.return_types((Bool,AliasableField,)) do b, a
+    if isa(merge_same_aliases_nonconst(b, a), Int)
+        return a.f # ::Int
+    end
+    return 0
+end |> only === Int
 
 # call-site refinement
 isaint(a) = isa(a, Int)

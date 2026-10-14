@@ -589,6 +589,14 @@ end
 @nospecializeinfer function tmerge(𝕃::AnyMustAliasesLattice, @nospecialize(typea), @nospecialize(typeb))
     if is_valid_lattice_norec(𝕃, typea)
         typeb === Union{} && return typea
+        if is_valid_lattice_norec(𝕃, typeb) && is_same_alias(typea, typeb) &&
+                widenconst(typea.vartyp) === widenconst(typeb.vartyp)
+            # alias information is identical so simply preserve it
+            𝕃′ = widenlattice(𝕃)
+            vartyp = tmerge(𝕃′, typea.vartyp, typeb.vartyp)
+            fldtyp = tmerge(𝕃′, typea.fldtyp, typeb.fldtyp)
+            return AnyMustAlias(typea; vartyp, fldtyp)
+        end
         typea = widenmustalias(typea)
     end
     if is_valid_lattice_norec(𝕃, typeb)
