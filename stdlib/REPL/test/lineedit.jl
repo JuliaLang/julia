@@ -1317,6 +1317,27 @@ end
     @test content(s) == "ab()"
     LineEdit.edit_undo!(s)
     @test content(s) == "ab"
+
+    # Enter continues on a new line when the input is only complete thanks to automatically
+    # inserted closing brackets, but not for an input that wasn't typed (e.g. from history)
+    prompt.on_enter = REPL.return_callback
+    for (str, expected) in (("[1, 2\r3]\r", "[1, 2\n3]"), ("f(\r1)\r", "f(\n1)"),
+                            ("x = [\rx\rfor x in 1:2\r]\r", "x = [\nx\nfor x in 1:2\n]"))
+        s = LineEdit.init_state(term, interface)
+        done = false
+        for c in str
+            buf = IOBuffer(string(c))
+            done = LineEdit.match_input(prompt.keymap_dict, s, buf)(s, buf) === :done
+        end
+        @test done
+        @test content(s) == expected
+    end
+    s = LineEdit.init_state(term, interface)
+    LineEdit.replace_line(LineEdit.state(s), "f(x)")
+    charseek(buffer(s), 3)
+    buf = IOBuffer("\r")
+    @test LineEdit.match_input(prompt.keymap_dict, s, buf)(s, buf) === :done
+    @test content(s) == "f(x)"
 end
 
 @testset "Conflicting definitions for keyseq" begin

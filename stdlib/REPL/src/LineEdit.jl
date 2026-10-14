@@ -333,6 +333,8 @@ mutable struct PromptState <: ModeState
     last_newline::Float64 # register when last newline was entered
     # this option is to speed up output
     refresh_wait::Union{Timer,Nothing}
+    # whether a closing bracket or quote was inserted automatically into the current input
+    auto_closed::Bool
 end
 
 struct Modifiers
@@ -1688,6 +1690,7 @@ end
 function replace_line(s::PromptState, l::IOBuffer)
     empty_undo(s)
     s.input_buffer = copy(l)
+    s.auto_closed = false
     deactivate_region(s)
     nothing
 end
@@ -1697,6 +1700,7 @@ function replace_line(s::PromptState, l::Union{String,SubString{String}}, keep_u
     s.input_buffer.ptr = 1
     s.input_buffer.size = 0
     write(s.input_buffer, l)
+    s.auto_closed = false
     deactivate_region(s)
     nothing
 end
@@ -2399,6 +2403,16 @@ function try_remove_paired_delimiter(buf::IOBuffer)
     return false
 end
 
+# Whether the input after the cursor is only closing brackets and quotes (and whitespace),
+# which were likely inserted automatically
+function only_auto_closed_after_cursor(s::MIState)
+    st = state(s)
+    st isa PromptState && st.auto_closed || return false
+    buf = buffer(st)
+    eof(buf) && return false
+    return all(c -> isspace(c) || c in ")]}\"'`", content(buf, position(buf) => buf.size))
+end
+
 function try_remove_paired_delimiter(s::MIState)
     set_action!(s, :edit_backspace)
     push_undo(state(s))
@@ -2458,6 +2472,11 @@ let
         push_undo(state(s))
     end
 
+    function mark_auto_closed!(s::MIState)
+        st = state(s)
+        st isa PromptState && (st.auto_closed = true)
+    end
+
     # Left/right bracket pairs
     bracket_pairs = (('(', ')'), ('{', '}'), ('[', ']'))
     # Characters that are "transparent" for bracket auto-closing
@@ -2475,6 +2494,7 @@ let
             if autoclose
                 edit_insert(buf, right)
                 edit_move_left(buf)
+                mark_auto_closed!(s)
             end
             refresh_line(s)
         end
@@ -2515,6 +2535,7 @@ let
                 edit_insert(buf, quote_char)
                 edit_insert(buf, quote_char)
                 edit_move_left(buf)
+                mark_auto_closed!(s)
             else
                 # Just insert single quote
                 edit_insert(buf, quote_char)
@@ -3168,6 +3189,7 @@ function reset_state(s::PromptState)
         s.input_buffer.ptr = 1
     end
     empty_undo(s)
+    s.auto_closed = false
     deactivate_region(s)
     ias = InputAreaState(0, 0)
     s.ias = ias
@@ -3206,7 +3228,7 @@ run_interface(::Prompt) = nothing
 
 init_state(terminal, prompt::Prompt) =
     PromptState(terminal, prompt, IOBuffer(), :off, nothing, IOBuffer[], 1, InputAreaState(1, 1),
-                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf, nothing)
+                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf, nothing, false)
 
 function init_state(terminal, m::ModalInterface)
     s = MIState(m, Main, m.modes[1], false, IdDict{Any,Any}())

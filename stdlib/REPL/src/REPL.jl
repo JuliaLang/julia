@@ -1249,8 +1249,15 @@ function parse_repl_input_line(line::String, repl; kwargs...)
 end
 
 function return_callback(s)
-    ast = parse_repl_input_line(takestring!(copy(LineEdit.buffer(s))), s; depwarn=false)
-    return !(isa(ast, Syntax) && head(ast) === :incomplete)
+    function incomplete(line)
+        ast = parse_repl_input_line(line, s; depwarn=false)
+        return isa(ast, Syntax) && head(ast) === :incomplete
+    end
+    buf = LineEdit.buffer(s)
+    incomplete(takestring!(copy(buf))) && return false
+    # The input may only be complete thanks to automatically inserted closing brackets after
+    # the cursor, so continue on a new line if it isn't without them (e.g. `[|]`)
+    return !(LineEdit.only_auto_closed_after_cursor(s) && incomplete(LineEdit.before_cursor(buf)))
 end
 
 find_hist_file() = get(ENV, "JULIA_HISTORY",
