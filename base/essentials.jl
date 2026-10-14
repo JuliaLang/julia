@@ -1135,10 +1135,17 @@ getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]..
 unsafe_convert(::Type{Ptr{Any}}, sv::SimpleVector) = convert(Ptr{Any},pointer_from_objref(sv)) + sizeof(Ptr)
 
 """
-    isassigned(array, i)::Bool
+    isassigned(array, i...)::Bool
 
-Test whether the given array has a value associated with index `i`. Return `false`
-if the index is out of bounds, or has an undefined reference.
+Test whether the given array has a value associated with index `i...` (one or more
+integers, or a `CartesianIndex`). Return `false` if the index is out of bounds, or has an
+undefined reference.
+
+The generic fallback for `AbstractArray`s calls `getindex` within a `try`/`catch` block,
+which can be slow. New array types should therefore specialize `isassigned` for the same
+indices as their scalar `getindex` method, i.e. `isassigned(A::MyArray, i::Int)` for
+`IndexLinear()` arrays or `isassigned(A::MyArray{T,N}, I::Vararg{Int,N})` for
+`IndexCartesian()` arrays.
 
 # Examples
 ```jldoctest

@@ -219,6 +219,8 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `IndexStyle(::Type)`                            | `IndexCartesian()`                     | Returns either `IndexLinear()` or `IndexCartesian()`. See the description below.      |
 | `setindex!(A, v, i::Int)`                       |                                        | (if `IndexLinear`) Scalar indexed assignment                                          |
 | `setindex!(A, v, I::Vararg{Int, N})`            |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexed assignment   |
+| `isassigned(A, i::Int)`                         | defined in terms of scalar `getindex`  | (if `IndexLinear`) Test whether index `i` is in bounds and has a value                |
+| `isassigned(A, I::Vararg{Int, N})`              | defined in terms of scalar `getindex`  | (if `IndexCartesian`, where `N = ndims(A)`) Test whether index `I` is in bounds and has a value |
 | `getindex(A, I...)`                             | defined in terms of scalar `getindex`  | [Multidimensional and nonscalar indexing](@ref man-array-indexing)                    |
 | `setindex!(A, X, I...)`                            | defined in terms of scalar `setindex!` | [Multidimensional and nonscalar indexed assignment](@ref man-array-indexing)          |
 | `iterate`                                       | defined in terms of scalar `getindex`  | Iteration                                                                             |
