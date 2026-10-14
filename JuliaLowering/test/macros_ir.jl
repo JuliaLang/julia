@@ -46,7 +46,7 @@ end
 2   latestworld
 3   TestMod.@add_one
 4   (call core.TypeEqOf %₃)
-5   (call core.svec %₄ JuliaLowering.MacroContext core.Any)
+5   (call core.svec %₄ Base.MacroContext core.Any)
 6   (call core.svec)
 7   SourceLocation:1
 8   (call core.svec %₅ %₆ %₇)
@@ -70,7 +70,7 @@ end
 2   latestworld
 3   TestMod.@foo
 4   (call core.TypeEqOf %₃)
-5   (call core.svec %₄ JuliaLowering.MacroContext core.Any)
+5   (call core.svec %₄ Base.MacroContext core.Any)
 6   (call core.svec)
 7   SourceLocation:1
 8   (call core.svec %₅ %₆ %₇)

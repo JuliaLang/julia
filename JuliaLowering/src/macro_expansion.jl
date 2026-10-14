@@ -82,11 +82,6 @@ function expand_syntaxquote(ctx, st)
                  [:syntaxinert st] unquoted...]
 end
 
-# Passed to the user as an implicit macro argument
-struct MacroContext <: AbstractLoweringContext
-    macrocall::SyntaxTree
-end
-
 struct MacroExpansionError <: Exception
     context::Union{Nothing,MacroContext}
     ex::SyntaxTree
@@ -294,9 +289,9 @@ invariant that all layers have the same root after every expansion, so
 
 Implementation notes:
 
-- `escape` can never be resolved to a layer inside a macrocall, since we must
-  expand to know whether (old) more escapes will surround it or (new) the macro
-  moves the escape to another layer.
+- `escape` in an argument of a macrocall cannot be resolved to a layer, since we
+  must expand to know whether (old) more escapes will surround it or (new) the
+  macro moves the escape to another layer.
 
 - `escape` nodes coming in usually have no layer (old expansion).  New
   expansions can't create escapes, but can pass an argument containing `escape`

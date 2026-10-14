@@ -13,6 +13,7 @@ function lower(mod::Module, ex_in::SyntaxTree; soft_scope::Union{Nothing,Bool}=n
 end
 
 function macroexpand(mod::Module, ex_in::SyntaxTree; recursive::Bool=true)
+    # TODO: prevent this from being called in macro bodies
     ex0 = rebase_layers(ex_in, mod)
     expand_forms_1(ex0, Base.get_world_counter(), recursive)
 end

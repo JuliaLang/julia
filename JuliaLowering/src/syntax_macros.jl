@@ -1,12 +1,8 @@
-# Experimental "new macros" mostly for testing.  These should eventually be
+# Experimental "new macros" mostly for testing.  These should soon be
 # deleted and replaced with normal-looking macros lowered by JL.
 #
 # TODO: @inline, @noinline, @inbounds, @simd, @ccall, @assume_effects
 #
-# TODO: Eventually move these to proper `macro` definitions and use
-# `JuliaLowering.include()` or something. Then we'll be in the fun little world
-# of bootstrapping but it shouldn't be too painful :)
-
 # Note that `@ast __context__ __context__.macrocall [:foo ...]` is unhygienic,
 # since `@ast` is meant for internal lowering use (it requires an explicit
 # provenance argument, and then copies any syntax context from the provenance to
@@ -14,6 +10,8 @@
 # provenance of the literal :foo expression in the file instead, and should
 # not copy context (this is not hard to implement, but the provenance requires
 # it and callers to be JL-lowered, which this file currently isn't.)
+
+if Base.generating_output(false)
 
 function Base.var"@nospecialize"(__context__::MacroContext, exs::SyntaxTree...)
     if length(exs) == 0
@@ -306,6 +304,8 @@ function Base.var"@eval"(__context__::MacroContext, mod, ex)
         mod, "`@eval` does not accept keyword arguments"))
     _at_eval_code(__context__, mod, ex)
 end
+
+end # Base.generating_output(false)
 
 #--------------------------------------------------------------------------------
 # The following `@islocal` and `@inert` are macros for special syntax known to
