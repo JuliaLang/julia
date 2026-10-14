@@ -120,7 +120,7 @@ jl_image_t jl_init_processor_sysimg(jl_image_buf_t image, const char *cpu_target
 {
     if (!jit_targets.empty())
         jl_error("JIT targets already initialized");
-    return parse_sysimg(image, sysimg_init_cb, (void *)cpu_target);
+    return parse_sysimg(image, sysimg_init_cb, (void *)cpu_target, true);
 }
 
 jl_image_t jl_init_processor_pkgimg(jl_image_buf_t image)
@@ -129,7 +129,7 @@ jl_image_t jl_init_processor_pkgimg(jl_image_buf_t image)
         jl_error("JIT targets not initialized");
     if (jit_targets.size() > 1)
         jl_error("Expected only one JIT target");
-    return parse_sysimg(image, pkgimg_init_cb, NULL);
+    return parse_sysimg(image, pkgimg_init_cb, NULL, false);
 }
 
 std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(const char *cpu_target, bool imaging, uint32_t &flags)
