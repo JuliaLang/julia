@@ -1350,6 +1350,19 @@ true
 julia> istaskdone(b)
 true
 ```
+
+A task that is blocked in [`wait`](@ref) can be woken with a value, which is then returned
+by `wait` in that task:
+```jldoctest
+julia> t = Task(() -> 2 * wait());
+
+julia> schedule(t); yield(); # `t` starts and blocks in `wait()`
+
+julia> schedule(t, 21);
+
+julia> fetch(t)
+42
+```
 """
 function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
