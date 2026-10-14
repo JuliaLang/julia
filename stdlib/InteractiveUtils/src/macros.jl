@@ -781,7 +781,11 @@ See also: [`code_lowered`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref
     @code_warntype
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
-[`code_warntype`](@ref) on the resulting expression.
+[`code_warntype`](@ref) on the resulting expression. Use the optional argument `optimize` with
+
+    @code_warntype optimize=true foo(x)
+
+to also apply additional optimizations, such as inlining (the default is `optimize=false`).
 
 See also: [`code_warntype`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_llvm`](@ref), [`@code_native`](@ref).
 """
