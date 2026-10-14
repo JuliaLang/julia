@@ -427,6 +427,15 @@ control of the operating system scheduler.
 
 Otherwise, Julia lets the operating system handle thread policy.
 
+### [`JULIA_COPY_STACKS`](@id JULIA_COPY_STACKS)
+
+If set to `1` or `yes`, tasks created without an explicit stack size do not get a stack of their
+own. Instead, they run on the native stack of the thread, which is saved and restored by copying
+on each task switch. This is intended for embedding scenarios where other code requires running
+on the thread's native stack, such as the JVM. It is generally discouraged, since among other
+things each task then stays on the thread it first runs on. Defaults to `0` (or `no`); any other
+value is an error.
+
 ## Garbage Collection
 
 ### [`JULIA_HEAP_SIZE_HINT`](@id JULIA_HEAP_SIZE_HINT)
