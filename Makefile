@@ -466,6 +466,16 @@ ifeq ($(JULIA_BUILD_MODE),release)
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 endif
+ifneq (,$(findstring $(OS),Linux FreeBSD))
+	# Embed a gdb script that maps the source paths in the debug info of images, which
+	# refer to the build tree, to the sources of this installation. It is generated with
+	# the image that the system image's code was emitted from, like in sysimage.mk.
+	$(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no \
+		--sysimage $(call cygpath_w,$(or $(CROSS_BOOTSTRAP_SYSBASE),$(build_private_libdir)/sysbase$(if $(filter debug,$(JULIA_BUILD_MODE)),-debug).$(SHLIB_EXT))) \
+		$(call cygpath_w,$(JULIAHOME)/contrib/debug_gdb_scripts.jl) $(BUILDROOT)/debug_gdb_scripts
+	$(OBJCOPY) --add-section .debug_gdb_scripts=$(BUILDROOT)/debug_gdb_scripts $(DESTDIR)$(private_libdir)/$(notdir $(JULIA_SYSIMG))
+	rm $(BUILDROOT)/debug_gdb_scripts
+endif
 ifeq ($(OS),WINNT)
 	$(INSTALL_F) $(build_libdir)/$(JL_STATIC_RUNTIME) $(DESTDIR)$(libdir)
 else

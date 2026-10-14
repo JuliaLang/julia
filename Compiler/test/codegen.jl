@@ -1160,6 +1160,23 @@ let ir = replace(sprint(io -> code_llvm(io, sum, Tuple{Vector{Int}}, dump_module
     @test m !== nothing && samefile(joinpath(m[1], "reduce.jl"),
                                     joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", "reduce.jl"))
 end
+# Images instead refer to them under the root the system image was built with
+let code = "using InteractiveUtils; code_llvm(sum, Tuple{Vector{Int}}, dump_module=true, raw=true)"
+    ir = read(`$(Base.julia_cmd()) --startup-file=no --image-codegen -e $code`, String)
+    m = match(r"!DIFile\(filename: \"reduce\.jl\", directory: \"([^\"]*)\"", replace(ir, "\\5C" => "\\"))
+    @test m !== nothing && m[1] == joinpath(normpath(Sys.BUILD_STDLIB_PATH, "..", ".."), "base")
+end
+# including the system image itself, as seen in its native frames (e.g. of `include`)
+let files = String[]
+    for ip in backtrace()
+        ip isa Ptr{Cvoid} || continue
+        for frame in ccall(:jl_lookup_code_address, Any, (Ptr{Cvoid}, Cint), ip, false)
+            file = String(frame[2]::Symbol)
+            frame[5] || !endswith(file, ".jl") || push!(files, file)
+        end
+    end
+    @test any(endswith("loading.jl"), files) && all(isabspath, files)
+end
 let f = include_string(@__MODULE__, "difile_user_code(x) = x + 1", "int.jl")
     ir = sprint(io -> code_llvm(io, f, Tuple{Int}, dump_module=true, raw=true))
     @test occursin("!DIFile(filename: \"int.jl\", directory: \".\")", ir)

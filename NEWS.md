@@ -181,6 +181,10 @@ Build system changes
 * Builds now install `libjulia-internal.a` (`libjulia-internal-debug.a` for debug builds), a static
   build of the runtime without the JIT, so that tools such as JuliaC.jl can link it with a trimmed
   system image into one executable ([#63618]).
+* The debug info of the system image and package images refers to Julia's own sources by
+  absolute path, and `make install` embeds a gdb script in the system image (on Linux and
+  FreeBSD) that maps those paths to the installed sources. gdb only runs it when the
+  installation is in its `auto-load safe-path` ([#63779]).
 
 New library functions
 ---------------------
