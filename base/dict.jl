@@ -72,19 +72,20 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
     age::UInt
     idxfloor::Int  # an index <= the indices of all used slots
     maxprobe::Int
+    popcursor::Int
 
     function Dict{K,V}() where V where K
         n = 0
         slots = Memory{UInt8}(undef,n)
         fill!(slots, 0x0)
-        new(slots, Memory{K}(undef, n), Memory{V}(undef, n), 0, 0, 0, max(1, n), 0)
+        new(slots, Memory{K}(undef, n), Memory{V}(undef, n), 0, 0, 0, max(1, n), 0, 1)
     end
     function Dict{K,V}(d::Dict{K,V}) where V where K
         new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
-            d.idxfloor, d.maxprobe)
+            d.idxfloor, d.maxprobe, d.popcursor)
     end
-    function Dict{K, V}(slots::Memory{UInt8}, keys::Memory{K}, vals::Memory{V}, ndel::Int, count::Int, age::UInt, idxfloor::Int, maxprobe::Int) where {K, V}
-        new(slots, keys, vals, ndel, count, age, idxfloor, maxprobe)
+    function Dict{K, V}(slots::Memory{UInt8}, keys::Memory{K}, vals::Memory{V}, ndel::Int, count::Int, age::UInt, idxfloor::Int, maxprobe::Int, popcursor::Int=idxfloor) where {K, V}
+        new(slots, keys, vals, ndel, count, age, idxfloor, maxprobe, popcursor)
     end
 end
 function Dict{K,V}(kv) where V where K
@@ -143,6 +144,7 @@ end
     newsz = _tablesz(newsz)
     h.age += 1
     h.idxfloor = 1
+    h.popcursor = 1
     if h.count == 0
         # TODO: tryresize
         h.slots = Memory{UInt8}(undef, newsz)
@@ -231,6 +233,7 @@ function empty!(h::Dict{K,V}) where V where K
     h.maxprobe = 0
     h.age += 1
     h.idxfloor = max(1, sz)
+    h.popcursor = 1
     return h
 end
 
@@ -616,7 +619,9 @@ end
 
 function pop!(h::Dict)
     isempty(h) && throw(ArgumentError("dict must be non-empty"))
-    idx = skip_deleted_floor!(h)
+    idx = skip_deleted(h, h.popcursor)
+    idx == 0 && (idx = skip_deleted_floor!(h))
+    h.popcursor = idx + 1
     @inbounds key = h.keys[idx]
     @inbounds val = h.vals[idx]
     _delete!(h, idx)
