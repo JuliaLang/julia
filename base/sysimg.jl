@@ -37,6 +37,13 @@ Use [`Base.include`](@ref) to evaluate a file into another module.
     is *syntactic*. I.e. assigning `const myinclude = include` may require
     an explicit `@Core.latestworld` call after `myinclude`.
 
+!!! note
+    `include` always evaluates the file in global scope, even when called inside a function:
+    the included code cannot see or assign the function's local variables, and its new
+    definitions are not visible to the rest of the calling function except via
+    [`invokelatest`](@ref) (see [the world age mechanism](@ref man-world-age)). Thus,
+    `include` should normally only be called at top level.
+
 !!! compat "Julia 1.5"
     Julia 1.5 is required for passing the `mapexpr` argument.
 """
