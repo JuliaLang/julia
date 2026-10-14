@@ -313,7 +313,8 @@ static const char opts[]  =
     "                                               than the given value. The value may be specified as a\n"
     "                                               number of bytes, optionally in units of: B,\n"
     "                                               K (kibibytes), M (mebibytes), G (gibibytes),\n"
-    "                                               T (tebibytes), or % (percentage of physical memory).\n\n"
+    "                                               T (tebibytes), or % (percentage of physical memory,\n"
+    "                                               or of the cgroup memory limit if lower).\n\n"
 ;
 
 static const char opts_hidden[] =
