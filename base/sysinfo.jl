@@ -329,6 +329,9 @@ system image or for understanding what CPU features were enabled during compilat
 
 If the system image was built with the default settings this will return `"native"`.
 
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+
 See also [`JULIA_CPU_TARGET`](@ref).
 """
 function sysimage_target()
