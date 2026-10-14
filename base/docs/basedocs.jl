@@ -1701,6 +1701,9 @@ Variables can also have lower bounds:
 Vector{T} where T>:Int
 Vector{T} where Int<:T<:Real
 ```
+When only one bound is given, the variable being introduced must be on the left-hand side:
+`where Int<:T` does not introduce `T`, but a new variable named `Int` with upper bound `T`.
+
 There is also a concise syntax for nested `where` expressions. For example, this:
 
 ```julia
