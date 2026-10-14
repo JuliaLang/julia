@@ -122,9 +122,10 @@ end
 end
 
 """
-    contains(haystack::AbstractString, needle)
+    contains(haystack::AbstractString, needle::Union{AbstractString,AbstractPattern,AbstractChar})
 
-Return `true` if `haystack` contains `needle`.
+Return `true` if `haystack` contains `needle`. If `needle` is a regular expression, check
+whether `haystack` contains a match.
 This is the same as `occursin(needle, haystack)`, but is provided for consistency with
 `startswith(haystack, needle)` and `endswith(haystack, needle)`.
 
