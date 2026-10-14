@@ -34,7 +34,7 @@ namespace {
 
 // Load sysimg/pkgimg, use the callback for dispatch and perform all relocations
 template<typename F>
-static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, void *ctx)
+static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, void *ctx, bool is_sysimg)
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Processor);
     jl_image_t res{};
@@ -49,7 +49,7 @@ static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, 
     const void *ids = pointers->target_data;
 
     // Set the sysimage CPU target from the stored string
-    if (pointers->cpu_target_string) {
+    if (is_sysimg && pointers->cpu_target_string) {
         jl_set_sysimage_cpu_target(pointers->cpu_target_string);
     }
 
@@ -695,7 +695,7 @@ jl_image_t jl_load_sysimg(jl_image_buf_t image, const char *cpu_target)
 
     if (!jit_targets.empty())
         jl_error("JIT targets already initialized");
-    return load_sysimg_target(image, match_sysimg_target, (void *)cpu_target);
+    return load_sysimg_target(image, match_sysimg_target, (void *)cpu_target, true);
 }
 
 jl_image_t jl_load_pkgimg(jl_image_buf_t image)
@@ -704,7 +704,7 @@ jl_image_t jl_load_pkgimg(jl_image_buf_t image)
         jl_error("JIT targets not initialized");
     if (jit_targets.size() > 1)
         jl_error("Expected only one JIT target");
-    return load_sysimg_target(image, match_pkgimg_target, NULL);
+    return load_sysimg_target(image, match_pkgimg_target, NULL, false);
 }
 
 jl_llvm_target_t jl_get_llvm_target(const char *cpu_target, bool imaging)
