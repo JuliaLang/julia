@@ -1116,6 +1116,34 @@ end
     @propagate_inbounds
 
 Tells the compiler to inline a function while retaining the caller's inbounds context.
+
+An [`@inbounds`](@ref) block only elides the [`@boundscheck`](@ref) blocks of functions that
+are inlined directly into it, i.e. one level of inlining deep. Marking a function with
+`@propagate_inbounds` makes it pass on its caller's inbounds context, so that `@boundscheck`
+blocks in the functions it calls are elided too when it is called from an `@inbounds` block.
+This is useful e.g. for an indexing method that forwards to the indexing of another array.
+
+See also [Propagating inbounds](@ref) in the developer documentation.
+
+# Examples
+```julia-repl
+julia> @inline g(x) = (@boundscheck println("checking bounds"); x);
+
+julia> f1(x) = g(x);
+
+julia> Base.@propagate_inbounds f2(x) = g(x);
+
+julia> h1(x) = @inbounds f1(x);
+
+julia> h2(x) = @inbounds f2(x);
+
+julia> h1(1)
+checking bounds
+1
+
+julia> h2(1)
+1
+```
 """
 macro propagate_inbounds(ex)
     if isa(ex, Expr)
