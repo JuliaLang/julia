@@ -603,6 +603,9 @@ Return a `String` if `delim` is an `AbstractChar` or a string
 or otherwise return a `Vector{typeof(delim)}`.   See also [`copyuntil`](@ref)
 to instead write in-place to another stream (which can be a preallocated [`IOBuffer`](@ref)).
 
+See also [`skipchars`](@ref) to skip characters without returning them; e.g.
+`skipchars(!=('x'), io)` advances `io` to the next `'x'`, which is left unread.
+
 # Examples
 ```jldoctest
 julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
@@ -1635,6 +1638,8 @@ flush(io::IO) = nothing
 Advance the stream `io` such that the next-read character will be the first remaining for
 which `predicate` returns `false`. If the keyword argument `linecomment` is specified, all
 characters from that character until the start of the next line are ignored.
+
+See also [`readuntil`](@ref).
 
 # Examples
 ```jldoctest
