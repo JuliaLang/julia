@@ -1279,6 +1279,9 @@ map(1:10, 11:20) do x, y
     x + y
 end
 ```
+
+Since the `do` block is an anonymous function, `return` inside it returns from that
+function, not from the enclosing one.
 """
 kw"do"
 
