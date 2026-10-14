@@ -3103,7 +3103,7 @@ expand_opaque_closure(ctx, ex) = @stm ex begin
     [:opaque_closure argt rt_lb rt_ub allow_partial lam] -> begin
         sig, wheres = flatten_wheres(lam[1])
         @jl_assert head(sig) === :tuple ex
-        check_no_parameters(ex, sig)
+        check_no_parameters(sig, "opaque closure cannot have optional or keyword arguments")
         raw_args = append!(SyntaxList(), children(sig))
         arg_stmts = lower_destructuring_args!(ctx, raw_args)
 
