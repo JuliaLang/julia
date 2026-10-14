@@ -256,11 +256,13 @@ setrounding(f::Function, ::Type{BigFloat}, r::RoundingMode) =
 
 
 """
-    BigFloat(x::Union{Real, AbstractString} [, rounding::RoundingMode=rounding(BigFloat)]; [precision::Integer=precision(BigFloat)])
+    BigFloat(x::Union{Real, AbstractString} [, rounding::RoundingMode=rounding(BigFloat)];
+             [precision::Integer=precision(BigFloat)])
 
 Create an arbitrary precision floating point number from `x`, with precision
 `precision`. The `rounding` argument specifies the direction in which the result should be
 rounded if the conversion cannot be done exactly. If not provided, these are set by the current global values.
+The default precision is 256 bits unless changed with [`setprecision`](@ref).
 
 `BigFloat(x::Real)` is the same as `convert(BigFloat,x)`, except if `x` itself is already
 `BigFloat`, in which case it will return a value with the precision set to the current
@@ -281,6 +283,9 @@ See also:
 
 # Examples
 ```jldoctest
+julia> precision(BigFloat) # current default precision in bits
+256
+
 julia> BigFloat(2.1) # 2.1 here is a Float64
 2.100000000000000088817841970012523233890533447265625
 
