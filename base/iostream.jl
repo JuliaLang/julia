@@ -302,6 +302,11 @@ Open a file in a mode specified by five boolean keyword arguments:
 The default when no keywords are passed is to open files for reading only.
 Returns a stream for accessing the opened file.
 
+The stream is closed automatically when it is garbage collected, but since it is not known
+when that happens, call [`close`](@ref) explicitly (or use the `open(f, filename)` form,
+which closes the file when `f` returns) to ensure that written data is flushed and the file
+is released.
+
 The `lock` keyword argument controls whether operations will be locked for
 safe multi-threaded access.
 
