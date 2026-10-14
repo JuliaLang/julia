@@ -184,6 +184,15 @@ Build system changes
   build of the runtime without the JIT, so that tools such as JuliaC.jl can link it with a trimmed
   system image into one executable ([#63618]).
 
+* Image generation now honors the
+  [`BUILD_PATH_PREFIX_MAP`](https://reproducible-builds.org/specs/build-path-prefix-map/)
+  environment variable: serialized source locations (method and module files, debug info,
+  native code debug info (DWARF), docstring locations, and default logging locations)
+  have their build directory prefix replaced with the given stable prefix. Cache
+  dependencies use resolvable depot- or source-relative paths. Program values,
+  including `@__FILE__`, `@__DIR__`, symbols, and quoted expressions, are not rewritten
+  ([#62803]).
+
 New library functions
 ---------------------
 
@@ -210,6 +219,9 @@ New library functions
 New library features
 --------------------
 
+* `@assert` failure messages no longer include a `#= file:line =#` comment when the asserted
+  condition contains a macro call; the location is available from the stacktrace as usual
+  ([#62803]).
 * `IOContext` supports a new boolean `hexunsigned` option that allows for printing unsigned integers in
   decimal instead of hexadecimal ([#60267]).
 * `lazy"..."` strings now support a flag `lazy"..."c` that adds `compact` and `limit` flags to the

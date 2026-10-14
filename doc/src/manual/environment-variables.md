@@ -197,6 +197,34 @@ Sets the maximum number of different instances of a single package that are to b
 
 If set to true, linker commands will be displayed during precompilation.
 
+### [`BUILD_PATH_PREFIX_MAP`](@id BUILD_PATH_PREFIX_MAP)
+
+Colon-separated `target=source` path prefix pairs, following the
+[reproducible builds specification](https://reproducible-builds.org/specs/build-path-prefix-map/).
+When set while Julia generates a system or package image, serialized source paths
+starting with `source` have that prefix replaced by `target`, keeping build directories
+out of the produced images. For example:
+
+```
+BUILD_PATH_PREFIX_MAP="julia=$(pwd)"
+```
+
+On Windows, escape drive-letter colons as `%.` (e.g. `julia=C%.\b\julia`).
+
+The rightmost matching pair takes precedence. Encode `%`, `=`, and `:` in either
+prefix as `%#`, `%+`, and `%.`, respectively. Targets beginning with `@` are
+reserved for internal cache aliases.
+
+The map applies to source metadata, including default logging locations. It does
+not change program values such as `@__FILE__`, `@__DIR__`, quoted expressions, or
+an explicit logging `_file` argument. Those values can still contain build paths.
+Where possible, package cache dependencies use depot-relative paths or paths relative
+to the package entry point, so a mapped prefix need not exist on the runtime filesystem.
+Dependencies on a different Windows drive outside the depots retain their original paths.
+
+!!! compat "Julia 1.14"
+    Support for `BUILD_PATH_PREFIX_MAP` requires at least Julia 1.14.
+
 ## Pkg.jl
 
 ### [`JULIA_CI`](@id JULIA_CI)

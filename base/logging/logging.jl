@@ -444,6 +444,7 @@ function process_logmsg_exs(_orig_module, _file, _line, level, message, exs...)
     @nospecialize
     local _group, _id
     _module = _orig_module
+    _file isa String && (_file = Base.map_build_path(_file))
     kwargs = Any[]
     for ex in exs
         if ex isa Expr && ex.head === :(=)

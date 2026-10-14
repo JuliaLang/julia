@@ -23,6 +23,16 @@ let
         @test occursin("1 == 2", ex.msg)
     end
 end
+# a macro call in the condition must not embed its `#= file:line =#` location in the message
+let
+    try
+        @assert @isdefined(never_defined_misc_jl)
+        error("unexpected")
+    catch ex
+        @test isa(ex, AssertionError)
+        @test ex.msg == "@isdefined never_defined_misc_jl"
+    end
+end
 # test @assert message
 let
     try

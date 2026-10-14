@@ -90,7 +90,7 @@ endif
 	@printf "%s\n" "const PRIVATE_LIBDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(private_libdir_rel)))) >> $@
 	@printf "%s\n" "const PRIVATE_LIBEXECDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(private_libexecdir_rel)))) >> $@
 	@printf "%s\n" "const INCLUDEDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(includedir_rel)))) >> $@
-	@printf "%s\n" "const SOURCEDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(shell echo $(call cygpath_w,$(JULIAHOME)))))) >> $@
+	@printf "%s\n" "const SOURCEDIR = map_build_path("$(call shell_escape,$(call julia_escape,$(call normalize_path,$(shell echo $(call cygpath_w,$(JULIAHOME))))))")" >> $@
 ifeq ($(DARWIN_FRAMEWORK), 1)
 	@printf "%s\n" "const DARWIN_FRAMEWORK = true" >> $@
 	@printf "%s\n" "const DARWIN_FRAMEWORK_NAME = \"$(FRAMEWORK_NAME)\"" >> $@
@@ -369,6 +369,7 @@ symlink_system_libraries: $(SYMLINK_SYSTEM_LIBRARIES)
 .PHONY: $(BUILDDIR)/build_h.jl.phony $(BUILDDIR)/version_git.jl.phony clean all symlink_*
 
 clean:
+	-rm -f $(BUILDDIR)/sysimg.sources $(BUILDDIR)/sysimg-debug.sources
 	-rm -f $(BUILDDIR)/pcre_h.jl
 	-rm -f $(BUILDDIR)/errno_h.jl
 	-rm -f $(BUILDDIR)/build_h.jl

@@ -726,18 +726,17 @@ macro artifact_str(name, platform=nothing)
     if platform === nothing
         platform = HostPlatform()
     end
+    # Attribute generated code to the caller without retaining this file in quoted literals.
     if isa(name, AbstractString) && isa(platform, AbstractPlatform)
         # To support slash-indexing, we need to split the artifact name from the path tail:
         artifact_name, artifact_path_tail, hash = artifact_slash_lookup(name, artifact_dict, artifacts_toml, platform)
-        return quote
-            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash), $(platform), Val($(LazyArtifacts)))::String
-        end
+        return Expr(:block, __source__,
+            :(Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash), $(platform), Val($(LazyArtifacts)))::String))
     else
-        return quote
-            local platform = $(esc(platform))
-            local artifact_name, artifact_path_tail, hash = artifact_slash_lookup($(esc(name)), $(artifact_dict), $(artifacts_toml), platform)
-            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), artifact_name, artifact_path_tail, $(artifact_dict), hash, platform, Val($(LazyArtifacts)))::String
-        end
+        return Expr(:block, __source__,
+            :(local platform = $(esc(platform))),
+            :(local artifact_name, artifact_path_tail, hash = artifact_slash_lookup($(esc(name)), $(artifact_dict), $(artifacts_toml), platform)),
+            :(Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), artifact_name, artifact_path_tail, $(artifact_dict), hash, platform, Val($(LazyArtifacts)))::String))
     end
 end
 
