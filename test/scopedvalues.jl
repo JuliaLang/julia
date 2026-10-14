@@ -285,3 +285,7 @@ end
     run_53584() # warmup
     @test (@allocated run_53584()) < 10_000
 end
+
+@testset "ScopedValues docstrings" begin
+    @test isempty(Docs.undocumented_names(Base.ScopedValues))
+end
