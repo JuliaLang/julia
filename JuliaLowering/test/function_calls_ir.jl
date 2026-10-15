@@ -12,31 +12,32 @@ f(x, y)
 # Keyword calls
 f(x; a=1, b=2)
 #---------------------
-1   TestMod.f
-2   (call core.tuple :a :b)
-3   (call core.apply_type core.NamedTuple %₂)
-4   (call core.tuple 1 2)
-5   (call %₃ %₄)
+1   (call core.tuple :a :b)
+2   (call core.apply_type core.NamedTuple %₁)
+3   (call core.tuple 1 2)
+4   (call %₂ %₃)
+5   TestMod.f
 6   TestMod.x
-7   (call core.kwcall %₅ %₁ %₆)
+7   (call core.kwcall %₄ %₅ %₆)
 8   (return %₇)
 
 ########################################
 # Keyword call with only splats for kws
 f(; ks1..., ks2...)
 #---------------------
-1   TestMod.f
-2   (call core.NamedTuple)
-3   TestMod.ks1
-4   (call top.merge %₂ %₃)
-5   TestMod.ks2
-6   (call top.merge %₄ %₅)
-7   (call top.isempty %₆)
-8   (gotoifnot %₇ label₁₁)
-9   (call %₁)
+1   (call core.NamedTuple)
+2   TestMod.ks1
+3   (call top.merge %₁ %₂)
+4   TestMod.ks2
+5   (call top.merge %₃ %₄)
+6   (call top.isempty %₅)
+7   (gotoifnot %₆ label₁₁)
+8   TestMod.f
+9   (call %₈)
 10  (return %₉)
-11  (call core.kwcall %₆ %₁)
-12  (return %₁₁)
+11  TestMod.f
+12  (call core.kwcall %₅ %₁₁)
+13  (return %₁₂)
 
 ########################################
 # Error: Call with repeated keywords
@@ -262,17 +263,16 @@ x.^3
 # Broadcast with keywords
 f.(x, y, z = 1; w = 2)
 #---------------------
-1   top.broadcasted_kwsyntax
-2   (call core.tuple :z :w)
-3   (call core.apply_type core.NamedTuple %₂)
-4   (call core.tuple 1 2)
-5   (call %₃ %₄)
-6   TestMod.f
-7   TestMod.x
-8   TestMod.y
-9   (call core.kwcall %₅ %₁ %₆ %₇ %₈)
-10  (call top.materialize %₉)
-11  (return %₁₀)
+1   (call core.tuple :z :w)
+2   (call core.apply_type core.NamedTuple %₁)
+3   (call core.tuple 1 2)
+4   (call %₂ %₃)
+5   TestMod.f
+6   TestMod.x
+7   TestMod.y
+8   (call core.kwcall %₄ top.broadcasted_kwsyntax %₅ %₆ %₇)
+9   (call top.materialize %₈)
+10  (return %₉)
 
 ########################################
 # Broadcast with unary dot syntax

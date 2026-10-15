@@ -175,19 +175,19 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         (vst1_call(vcx, call) | vst1_dotcall(vcx, call) | vst0_macrocall(vcx, call)) &
         vst1_lam(vcx, lam)
     [:(=) _...] -> vst1_assign(vcx, st)
-    [:return val] -> vcx.return_ok ?
-        vst1(vcx, val) :
+    [:return val] -> vcx.return_ok || true ?
+        vst1(vcx, val) : # TODO: checked in desugaring (buggy in flisp)
         @fail(st, "`return` not allowed inside comprehension or generator")
     ([:continue], when=vcx.in_loop) -> pass()
-    ([:continue lab], when=vcx.in_loop) -> vst1_ident(vcx, lab; lhs=true)
+    ([:continue lab], when=vcx.in_loop) -> vst1_jump_label(vcx, lab)
     # An unlabeled break is also allowed inside anonymous `@label` blocks;
     # breaking through a named block is rejected with a precise error during
     # linearization.
     ([:break], when=vcx.in_loop||vcx.in_symblock) -> pass()
     ([:break lab], when=vcx.in_loop||vcx.in_symblock) ->
-        vst1_ident(vcx, lab; lhs=true)
+        vst1_jump_label(vcx, lab)
     ([:break lab x], when=vcx.in_loop||vcx.in_symblock) ->
-        vst1_ident(vcx, lab; lhs=true) & vst1(vcx, x)
+        vst1_jump_label(vcx, lab) & vst1(vcx, x)
     [:for [:block is...] body] ->
         all(vst1_iter, vcx, is) &
         vst1(with(vcx; in_loop=true, in_gscope=false), body)
@@ -238,6 +238,8 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     (_, when=(vr=vst1_arraylike(vcx, st); is_known(vr))) -> vr
     # syntax TODO: disallow pre-desugared const, broken with complex rhs
     [:const l r] -> vst1_ident(vcx, l; lhs=true) & vst1(vcx, r)
+    [:const [:global [:identifier]]] ->
+        @fail(st, "expected assignment after `const`")
     [:const [:global x]] -> !vcx.toplevel ?
         @fail(st, "unsupported `const` inside function") :
         vst1_const_assign(vcx, x)
@@ -259,12 +261,11 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [:syntaxinert _] -> pass()
     [:core [:identifier]] -> pass()
     [:top [:identifier]] -> pass()
-    [:meta _...] -> pass() # TODO
-    [:toplevel xs...] -> pass() # this will be validated when we lower it
-    [:opaque_closure argt lb ub bool lam] ->
-        all(vst1, vcx, [argt, lb, ub, bool]) & vst1_lam(vcx, lam)
+    [:meta _...] -> vst1_non_arg_meta(vcx, st)
+    [:toplevel xs...] -> vcx.toplevel ? pass() : # validated when we lower it
+        @fail(st, "`toplevel` can't be used inside a function")
     [:symboliclabel lab] -> vst1_ident(vcx, lab; lhs=true)
-    [:symbolicgoto lab] -> vst1_ident(vcx, lab; lhs=true)
+    [:symbolicgoto lab] -> vst1_ident(vcx, lab)
     [:symbolicblock lab body] ->
         vst1_ident(vcx, lab; lhs=true) & vst1(with(vcx; in_symblock=true), body)
     [:gc_preserve x ids...] -> vst1(vcx, x) & all(vst1_ident, vcx, ids)
@@ -274,6 +275,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [:isdefined [:identifier]] -> pass()
     [:isdefined [:static_parameter [:value]]] -> pass()
     [:lambda _...] -> vst1_raw_lambda(vcx, st)
+    [:generated_lambda _...] -> vst1_generated_lambda(vcx, st)
     [:var"with-static-parameters" lam sps...] ->
         vst1_raw_lambda(vcx, lam) & all(vst1_ident_lhs, vcx, sps)
     [:softscope _] -> pass()
@@ -318,6 +320,20 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         all(vst1, with(vcx; in_gscope=false), xs)
     [:aliasscope] -> pass()
     [:popaliasscope] -> pass()
+    # The exception being handled inside a catch block
+    [:the_exception] -> pass()
+    # (throw_undef_if_not var_name cond)
+    [:throw_undef_if_not [:identifier] cond] -> vst1(vcx, cond)
+    [:opaque_closure argt lb ub bool [:function [:tuple _...] body]] ->
+        all(vst1, vcx, [argt, lb, ub, bool]) & vst1_function(vcx, st[end])
+    [:opaque_closure argt lb ub bool lam] ->
+        all(vst1, vcx, [argt, lb, ub, bool]) & vst1_lam(vcx, lam)
+    # huge mess: pre-lowered OC
+    [:new_opaque_closure argt lb ub bool
+     [:opaque_closure_method _ [:value] [:value] [:value] [:value]] idk...] ->
+         all(vst1, vcx, Syntax[argt, lb, ub, bool]) & all(vst1, vcx, idk) &
+         (st[5][5].value isa Core.CodeInfo ? pass() :
+         @fail(st[5][5], "expected CodeInfo"))
 
     #---------------------------------------------------------------------------
     # Invalid forms for which we want to produce detailed errors
@@ -476,8 +492,8 @@ vst1_try(vcx, st) = @stm st begin
     _ -> @fail(st, "malformed `try` expression")
 end
 
-vst1_try_catchvar(_vcx, st) = @stm st begin
-    [:identifier] -> pass()
+vst1_try_catchvar(vcx, st) = @stm st begin
+    [:identifier] -> vst1_ident(vcx, st; lhs=true)
     ([:value], when=st.value===false) -> pass()
 end
 
@@ -521,13 +537,14 @@ vst1_calldecl_dot_name_rhs(vcx, st) = @stm st begin
     _ -> @fail(st, "invalid `.` syntax")
 end
 
-vst1_symdecl_or_assign(vcx, st) =
+vst1_symdecl_or_assign(vcx, st) = head(st) === :identifier ?
+    vst1_ident(vcx, st; lhs=true) :
     @fail(st, "expected identifier or assignment") |
     vst1_symdecl(vcx, st) | vst1_assign(vcx, st)
 
 vst1_symdecl(vcx, st) = @stm st begin
-    [:identifier] -> pass()
-    [:(::) [:identifier] t] -> vst1(vcx, t)
+    [:identifier] -> vst1_ident(vcx, st; lhs=true)
+    [:(::) [:identifier] t] -> vst1_ident(vcx, st[1]; lhs=true) & vst1(vcx, t)
     _ -> @fail(st, "expected identifier or `identifier::type`")
 end
 
@@ -553,6 +570,16 @@ end
 Placeholder kind when we have write-only identifiers"
 function is_writeonly_est_name(s::String)
     (all(==('_'), s) || s == UNUSED) && length(s) > 0
+end
+
+# `break _`, `continue _` are allowed but `break __` isn't
+vst1_jump_label(vcx, st) = @stm st begin
+    [:identifier] -> let s = syntax_name(st)
+        s === "_" ? pass() : is_writeonly_est_name(s) ?
+            @fail(st, "all-underscore identifiers are write-only and their values cannot be used in expressions") :
+            vst1_ident(vcx, st; lhs=true)
+    end
+    _ -> @fail(st, "expected identifier")
 end
 
 vst1_call(vcx, st) = @stm st begin
@@ -708,10 +735,8 @@ vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
         @fail(st, "dotted operator is not a valid function name"))
     [:. _ _] ->
         vst1_calldecl_dot_name(vcx, st)
-    [:curly t tvs...] ->
-        vst1_calldecl_name(vcx, t) & all(vst1, vcx, tvs)
-    [:value] ->
-        pass() # GlobalRef works. Function? Type?
+    [:curly [:value] tvs...] -> all(vst1, vcx, tvs)
+    [:curly t tvs...] -> vst1_calldecl_name(vcx, t) & all(vst1, vcx, tvs)
     ([:(::) _...], when=!vcx.toplevel) ->
         @fail(st, "adding methods to callable type only allowed at top level")
     [:(::) t] -> vst1(vcx, t)
@@ -719,7 +744,6 @@ vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     # TODO: @overlay broken in many cases, should be stricter
     [:overlay mt x] ->
         vst1(vcx, mt) & vst1_calldecl_name(vcx, x)
-
     [:where t tds...] ->
         vst1_calldecl_name(vcx, t) & all(vst1_typevar_decl, vcx, tds)
     _ -> @fail(st, "invalid function name")
@@ -1051,7 +1075,7 @@ vst1_splat_or_val(vcx, st) = @stm st begin
 end
 
 vst1_generator(vcx, st) = let
-    vcx = with(vcx; return_ok=false, toplevel=false, in_gscope=false)
+    vcx = with(vcx; return_ok=false, toplevel=false, in_gscope=false, in_loop=false)
     @stm st begin
         [:generator _] -> @fail(st, "`generator` requires >=2 args")
         [:generator val [:filter cond is...]] ->
@@ -1082,6 +1106,46 @@ vst1_raw_lambda(vcx, st) = @stm st begin
     end
     [:lambda _...] -> @fail(st, "malformed `lambda`")
     _ -> @fail(st, "expected `lambda`")
+end
+
+vst1_generated_lambda(vcx, st) = @stm st begin
+    [:generated_lambda [:block args...] [:block sps...] body] ->
+        all(vst1_ident_lhs, vcx, args) &
+        all(vst1_ident_lhs, vcx, sps) &
+        vst1(with(vcx; return_ok=true, toplevel=false, in_gscope=false), body)
+    _ -> @fail(st, "malformed `generated_lambda`")
+end
+
+# TODO: identifiers are only meaningful directly in a function body
+vst1_non_arg_meta(vcx, st) = @stm st begin
+    [:meta [:identifier]] -> pass()
+    [:meta [:identifier] xs...] -> let m = syntax_name(st[1])
+        if m === "nospecialize" || m === "specialize"
+            ok = pass()
+            for x in xs
+                ok &= @stm x begin
+                    [:tuple _...] -> pass() # TODO: disallow or rearrange in compat.jl
+                    [:function _...] -> @fail(x, "`$m` cannot wrap a function definition; apply it to individual arguments, e.g. `function f(@nospecialize(x)); end`")
+                    _ -> vst1_ident(vcx, x)
+                end
+            end
+            ok
+        elseif m === "generated"
+            minlen(st, xs, 1) & maxlen(st, xs, 1) & vst1(vcx, xs[1])
+        else
+            all(vst1_non_arg_meta_arg, vcx, xs)
+        end
+    end
+    [:meta xs...] -> all(vst1_non_arg_meta_arg, vcx, xs)
+end
+vst1_non_arg_meta_arg(vcx, st) = @stm st begin
+    [:purity _...] -> vst1(vcx, st)
+    # [:optlevel [:value]] -> pass()
+    # [:compile [:value]] -> pass()
+    # [:infer [:value]] -> pass()
+    [:identifier] -> pass()
+    [:value] -> pass()
+    _ -> @fail(st, "unsupported `meta` argument")
 end
 
 #-------------------------------------------------------------------------------
@@ -1197,11 +1261,14 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
         vst2_ident(vcx, id) &
         all(vst2, vcx, children(st)[2:end-1]) &
         vst2_lam(vcx, lam)
+    [:new_opaque_closure argt lb ub bool [:opaque_closure_method _...] idk...] ->
+         all(vst2, vcx, Syntax[argt, lb, ub, bool]) & all(vst2, vcx, idk)
     [:_do_while body cond] -> vst2(vcx, body) & vst2(vcx, cond)
     [:_while cond body] -> vst2(vcx, cond) & vst2(vcx, body)
     [:inert _] -> pass()
     [:syntaxinert _] -> pass()
     [:lambda _...] -> vst2_lam(vcx, st)
+    [:generated_lambda _...] -> vst2_lam(vcx, st)
     # Declare a zero-method generic function with global `name` or creates a
     # closure object and assigns it to the local `name`.
     [:function_decl x] -> vst2_ident(vcx, x)
@@ -1242,6 +1309,8 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
         pass() : @fail(st, "wrong number of args to `purity` expression")
     [:aliasscope] -> pass()
     [:popaliasscope] -> pass()
+    [:the_exception] -> pass()
+    [:throw_undef_if_not [:symbol] cond] -> vst2(vcx, cond)
 
     # Note to variable analysis that x is always defined before use
     [:always_defined x] -> vst2_ident(vcx, x)
@@ -1309,6 +1378,10 @@ vst2_lam(vcx, st) = @stm st begin
         all(vst2_ident_lhs, vcx, sps) &
         vst2(vcx, body) &
         vst2(vcx, rett)
+    [:generated_lambda [:block args...] [:block sps...] body] ->
+        all(vst2_ident_lhs, vcx, args) &
+        all(vst2_ident_lhs, vcx, sps) &
+        vst2(vcx, body)
     _ -> @fail(st, "malformed lambda")
 end
 

@@ -35,7 +35,28 @@ end
 #     @ast __context__ __context__.macrocall [:atomic ex]
 # end
 
-# TODO: @label
+function Base.var"@label"(__context__::MacroContext, ex)
+    if head(ex) !== :identifier
+        return @ast __context__ __context__.macrocall [
+            :symbolicblock "loop-exit"::identifier ex]
+    end
+    syntax_name(ex) == "_" &&
+        error("use `@label expr` for anonymous blocks; `@label _` is not allowed")
+    @ast __context__ ex [:symboliclabel ex]
+end
+
+function Base.var"@label"(__context__::MacroContext, name, body)
+    head(name) === :identifier ||
+        throw(MacroExpansionError(name, "expected a label name"))
+    syntax_name(name) == "_" &&
+        error("use `@label expr` for anonymous blocks; `@label _ expr` is not allowed")
+    k = head(body)
+    if k === :for || k === :while
+        cont = @ast __context__ name string(syntax_name(name), "#cont")::identifier
+        body = @ast __context__ body [k body[1] [:symbolicblock cont body[2]]]
+    end
+    @ast __context__ __context__.macrocall [:symbolicblock name body]
+end
 
 function Base.var"@goto"(__context__::MacroContext, ex)
     @jl_assert head(ex) == :identifier ex
@@ -64,9 +85,17 @@ function Base.var"@generated"(__context__::MacroContext, ex)
         head(ex) === :(=) && is_eventually_call(ex[1]))
         throw(LoweringError(ex, "Expected a function argument to `@generated`"))
     end
-    @ast __context__ __context__.macrocall [:function
+    k = head(ex)
+    # Base's `@generated` copies the body's first statement by accident thinking
+    # it's a line node, but when it's a meta, there are performance
+    # implications...
+    body = ex[2]
+    metas = head(body) === :block ?
+        collect(Iterators.takewhile(c -> head(c) === :meta, children(body))) : ()
+    @ast __context__ __context__.macrocall [k
         ex[1]
         [:block
+            metas...
             [:if [:generated]
                 ex[2]
                 [:block
@@ -236,7 +265,6 @@ function Base.GC.var"@preserve"(__context__::MacroContext, exs...)
 end
 
 function Base.Experimental.var"@opaque"(__context__::MacroContext, ex)
-    @jl_assert head(ex) == :-> ex
     @ast __context__ __context__.macrocall [:opaque_closure
         nothing::value
         nothing::value
@@ -274,6 +302,8 @@ function Base.var"@eval"(__context__::MacroContext, ex)
 end
 
 function Base.var"@eval"(__context__::MacroContext, mod, ex)
+    head(mod) === :parameters && throw(MacroExpansionError(
+        mod, "`@eval` does not accept keyword arguments"))
     _at_eval_code(__context__, mod, ex)
 end
 

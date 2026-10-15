@@ -455,7 +455,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             # Normal isdefined won't work for globals (#56985)
             @ast ctx ex [:call
                 "isdefinedglobal"::core
-                ctx.mod::value
+                binfo.mod::value
                 binfo.name::symbol]
         else
             ex

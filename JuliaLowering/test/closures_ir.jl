@@ -502,34 +502,34 @@ f(x; a=1) do y
     y + 2
 end
 #---------------------
-1   TestMod.f
-2   (call core.tuple :a)
-3   (call core.apply_type core.NamedTuple %₂)
-4   (call core.tuple 1)
-5   (call %₃ %₄)
-6   (call core.svec)
-7   (call core.svec)
-8   (call core.svec)
-9   (call JuliaLowering.eval_closure_type TestMod :#5#6 %₆ %₇ %₈)
-10  latestworld
-11  TestMod.#5#6
-12  (new %₁₁)
-13  TestMod.#5#6
-14  (call core.svec %₁₃ core.Any)
-15  (call core.svec)
-16  SourceLocation:1
-17  (call core.svec %₁₄ %₁₅ %₁₆)
-18  (call core.define_method TestMod core.nothing %₁₇
+1   (call core.svec)
+2   (call core.svec)
+3   (call core.svec)
+4   (call JuliaLowering.eval_closure_type TestMod :#5#6 %₁ %₂ %₃)
+5   latestworld
+6   TestMod.#5#6
+7   (new %₆)
+8   TestMod.#5#6
+9   (call core.svec %₈ core.Any)
+10  (call core.svec)
+11  SourceLocation:1
+12  (call core.svec %₉ %₁₀ %₁₁)
+13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
     slots: [slot₁/#self#(!read) slot₂/y]
     1   TestMod.+
     2   (call %₁ slot₂/y 2)
     3   (return %₂)
-19  latestworld
-20  (= slot₁/#-># %₁₂)
-21  slot₁/#->#
+14  latestworld
+15  (= slot₁/#-># %₇)
+16  slot₁/#->#
+17  (call core.tuple :a)
+18  (call core.apply_type core.NamedTuple %₁₇)
+19  (call core.tuple 1)
+20  (call %₁₈ %₁₉)
+21  TestMod.f
 22  TestMod.x
-23  (call core.kwcall %₅ %₁ %₂₁ %₂₂)
+23  (call core.kwcall %₂₀ %₂₁ %₁₆ %₂₂)
 24  (return %₂₃)
 
 ########################################
@@ -557,18 +557,8 @@ end
 3   TestMod.T
 4   (call core.apply_type core.Tuple core.Any %₃)
 5   (call core.apply_type core.Union)
-6   --- opaque_closure_method  core.nothing 2 false SourceLocation:2
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/z]
-    1   TestMod.-
-    2   TestMod.+
-    3   TestMod.*
-    4   (call %₃ 2 slot₂/x)
-    5   (call core.getfield slot₁/#self# 1)
-    6   (call %₂ %₄ %₅)
-    7   (call %₁ %₆ slot₃/z)
-    8   (return %₇)
-7   (new_opaque_closure %₄ %₅ core.Any true %₆ slot₁/y)
-8   (return %₇)
+6   (new_opaque_closure %₄ %₅ core.Any true (opaque_closure_method core.nothing 2 false SourceLocation:2 (code_info Slots (block TestMod.- TestMod.+ TestMod.* (call %₃ 2 slot₂/x) (call core.getfield slot₁/#self# 1) (call %₂ %₄ %₅) (call %₁ %₆ slot₃/z) (return %₇)))) slot₁/y)
+7   (return %₆)
 
 ########################################
 # Opaque closure with `...`
@@ -579,12 +569,8 @@ end
 1   (call core.apply_type core.Vararg core.Any)
 2   (call core.apply_type core.Tuple core.Any %₁)
 3   (call core.apply_type core.Union)
-4   --- opaque_closure_method  core.nothing 2 true SourceLocation:2
-    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/ys]
-    1   slot₃/ys
-    2   (return %₁)
-5   (new_opaque_closure %₂ %₃ core.Any true %₄)
-6   (return %₅)
+4   (new_opaque_closure %₂ %₃ core.Any true (opaque_closure_method core.nothing 2 true SourceLocation:2 (code_info Slots (block slot₃/ys (return %₁)))))
+5   (return %₄)
 
 ########################################
 # Error: Opaque closure with default args
@@ -1169,7 +1155,7 @@ end
 ]
 #---------------------
 LoweringError:
- at line 1: invalid syntax: unknown form `generated_lambda` or number of arguments 3
+ at line 1: Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension
 
 Expression:
-  (generated_lambda (block) (block) (-> (tuple) (block)))
+  (call JuliaLowering.eval_closure_type Main.TestMod :#11#12 (call core.svec) (call core.svec) (call core.svec))

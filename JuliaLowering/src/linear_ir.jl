@@ -69,14 +69,14 @@ mutable struct LinearIRContext <: AbstractLoweringContext
     const lambda_bindings::LambdaBindings
     const argmap::Dict{IdTag, IdTag}
     const rettype_ssa::Base.RefValue{Union{Nothing,SyntaxTree}}
-    const break_targets::Dict{String, JumpTarget}
-    const break_label_stack::Vector{String}  # tracks nesting order of symbolicblock labels
+    const break_targets::Dict{NameKey, JumpTarget}
+    const break_label_stack::Vector{NameKey}  # tracks nesting order of symbolicblock labels
     const handler_token_stack::Vector{SyntaxTree}
     const catch_token_stack::Vector{SyntaxTree}
     const finally_handlers::Vector{FinallyHandler}
-    const symbolic_jump_targets::Dict{String,JumpTarget}
+    const symbolic_jump_targets::Dict{NameKey,JumpTarget}
     const symbolic_jump_origins::Vector{JumpOrigin}
-    const symbolic_block_labels::Set{String}  # labels that are symbolic blocks (not allowed as @goto targets)
+    const symbolic_block_labels::Set{NameKey}  # labels that are symbolic blocks (not allowed as @goto targets)
     const meta::Dict{Symbol, Any}
     const mod::Module
 end
@@ -91,10 +91,10 @@ function LinearIRContext(ctx, is_toplevel_thunk, lambda_bindings)
     LinearIRContext(SyntaxList(), ctx.bindings, Ref(0),
                     is_toplevel_thunk, lambda_bindings, Dict{IdTag,IdTag}(),
                     Ref{Union{Nothing,SyntaxTree}}(nothing),
-                    Dict{String,JumpTarget}(), String[],
+                    Dict{NameKey,JumpTarget}(), NameKey[],
                     SyntaxList(), SyntaxList(),
-                    Vector{FinallyHandler}(), Dict{String,JumpTarget}(),
-                    Vector{JumpOrigin}(), Set{String}(), Dict{Symbol, Any}(), ctx.mod)
+                    Vector{FinallyHandler}(), Dict{NameKey,JumpTarget}(),
+                    Vector{JumpOrigin}(), Set{NameKey}(), Dict{Symbol, Any}(), ctx.mod)
 end
 
 function current_lambda_bindings(ctx::LinearIRContext)
@@ -208,7 +208,7 @@ function compile_leave_handler(ctx, srcref, src_tokens, dest_tokens)
     jump_ok = n == 0 || (n <= length(src_tokens) && syntax_id(dest_tokens[n]) == syntax_id(src_tokens[n]))
     jump_ok || throw(LoweringError(srcref, "Attempt to jump into try block"))
     if n < length(src_tokens)
-        @ast ctx srcref [:leave src_tokens[n+1:end]...]
+        @ast ctx srcref [:leave reverse(src_tokens[n+1:end])...]
     else
         nothing
     end
@@ -228,22 +228,19 @@ function emit_leave_handler(ctx::LinearIRContext, srcref, dest_tokens)
     end
 end
 
-# Enter the current finally block, either through the landing pad (on_exit ==
-# :rethrow) or via a jump (on_exit ∈ (:return, :break)).
+# Enter the current finally block via a jump (on_exit ∈ (:return, :break)).
 #
 # An integer tag is created to identify the current code path and select the
 # on_exit action to be taken at finally handler exit.
 function enter_finally_block(ctx, srcref, on_exit, value)
-    @jl_assert on_exit ∈ (:rethrow, :break, :return) srcref
+    @jl_assert on_exit ∈ (:break, :return) srcref
     handler = last(ctx.finally_handlers)
     push!(handler.exit_actions, (on_exit, value))
     tag = length(handler.exit_actions)
     emit(ctx, @ast ctx srcref [:(=) handler.tagvar tag::value])
-    if on_exit != :rethrow
-        emit_pop_exception(ctx, srcref, handler.target.catch_token_stack)
-        emit_leave_handler(ctx, srcref, handler.target.handler_token_stack[1:end-1])
-        emit(ctx, @ast ctx srcref [:goto handler.target.label])
-    end
+    emit_pop_exception(ctx, srcref, handler.target.catch_token_stack)
+    emit_leave_handler(ctx, srcref, handler.target.handler_token_stack[1:end-1])
+    emit(ctx, @ast ctx srcref [:goto handler.target.label])
     tag
 end
 
@@ -289,7 +286,7 @@ function emit_return(ctx, srcref, ex)
     if !isempty(ctx.finally_handlers)
         enter_finally_block(ctx, srcref, :return, x)
     else
-        emit(ctx, @ast ctx srcref [:leave ctx.handler_token_stack...])
+        emit(ctx, @ast ctx srcref [:leave reverse(ctx.handler_token_stack)...])
         _actually_return(ctx, x)
     end
     return nothing
@@ -300,24 +297,24 @@ function emit_return(ctx, ex)
 end
 
 function emit_break(ctx, ex)
-    name = syntax_name(ex[1])
-    target = get(ctx.break_targets, name, nothing)
+    nk = NameKey(ex[1])
+    target = get(ctx.break_targets, nk, nothing)
     if isnothing(target)
-        if name == "loop-exit"
+        if nk.name == "loop-exit"
             throw(LoweringError(ex, "`break` must be used inside a `while`, `for` loop, or `@label` block"))
-        elseif name == "loop-cont"
+        elseif nk.name == "loop-cont"
             throw(LoweringError(ex, "`continue` must be used inside a `while` or `for` loop"))
-        elseif endswith(name, "#cont")
-            label = name[1:end-5]
+        elseif endswith(nk.name, "#cont")
+            label = nk.name[1:end-5]
             throw(LoweringError(ex, "`continue $label` is not inside a `@label $label` loop"))
         else
-            throw(LoweringError(ex, "`break $name` is not inside a `@label $name` block"))
+            throw(LoweringError(ex, "`break $(nk.name)` is not inside a `@label $(nk.name)` block"))
         end
     end
     # If targeting loop-exit, check for intervening named @label blocks
-    if name == "loop-exit"
+    if nk.name == "loop-exit"
         for i in lastindex(ctx.break_label_stack):-1:1
-            lbl = ctx.break_label_stack[i]
+            lbl = ctx.break_label_stack[i].name
             lbl == "loop-exit" && break
             if lbl != "loop-cont" && !contains(lbl, '#')
                 throw(LoweringError(ex,
@@ -326,9 +323,9 @@ function emit_break(ctx, ex)
         end
     end
     # If targeting loop-cont, check for intervening loop-exit (@label block)
-    if name == "loop-cont"
+    if nk.name == "loop-cont"
         for i in lastindex(ctx.break_label_stack):-1:1
-            lbl = ctx.break_label_stack[i]
+            lbl = ctx.break_label_stack[i].name
             lbl == "loop-cont" && break
             if lbl == "loop-exit"
                 throw(LoweringError(ex, "`continue` inside an anonymous `@label` block is not allowed"))
@@ -338,14 +335,14 @@ function emit_break(ctx, ex)
     # Handle valued break (break name val)
     if numchildren(ex) >= 2
         if isnothing(target.result_var)
-            throw(LoweringError(ex, "break with value not allowed for label `$name`"))
+            throw(LoweringError(ex, "break with value not allowed for label `$(nk.name)`"))
         end
         val = compile(ctx, ex[2], true, false)
         emit_assignment(ctx, ex, target.result_var, val)
     end
     if (!isempty(ctx.finally_handlers) && length(target.handler_token_stack) <
         length(last(ctx.finally_handlers).target.handler_token_stack))
-        enter_finally_block(ctx, ex, :break, ex)
+        enter_finally_block(ctx, ex, :break, @ast ctx ex [:break ex[1]])
         return
     else
         emit_pop_exception(ctx, ex, target.catch_token_stack)
@@ -462,6 +459,23 @@ function compile_conditional(ctx, ex, false_label)
     end
 end
 
+function code_trivially_effect_free(ctx, st)
+    h = head(st)
+    if h === :block
+        for c in children(st)
+            code_trivially_effect_free(ctx, c) || return false
+        end
+        true
+    elseif h === :bindingid
+        b = get_binding(ctx, st)
+        b.is_ssa || b.is_always_defined
+    elseif h === :value || h === :nothing
+        true
+    else
+        false
+    end
+end
+
 # Lowering of exception handling must ensure that
 #
 # * Each `enter` is matched with a `leave` on every possible non-exceptional
@@ -486,7 +500,7 @@ end
 #   (leave tok)
 #     pop exception handler back to the state of the `tok` from the associated
 #     `enter`. Multiple tokens can be supplied to pop multiple handlers using
-#     `(leave tok1 tok2 ...)`.
+#     `(leave tok2 tok1 ...)`, innermost to outermost.
 #
 #   (pop_exception tok) - pop exception stack back to state of associated enter
 #
@@ -506,10 +520,10 @@ end
 # exception-related state restoration which need to happen. Note also that the
 # "handler state restoration" actually includes several pieces of runtime state
 # including GC flags - see `jl_eh_restore_state` in the runtime for that.
+#
 # #### Lowering finally code paths
 #
-# When lowering `finally` blocks we want to emit the user's finally code once
-# but multiple code paths may traverse the finally block. For example, consider
+# There can be multiple ways to enter a finally block.  For example, consider
 # the code
 #
 # ```julia
@@ -532,25 +546,38 @@ end
 # ```
 #
 # In this situation there's four distinct code paths through the finally block:
-# 1. `return f(x)` needs to call `val = f(x)`, leave the `try` block, run `h()` then
-#    return `val`.
+# 1. `return f(x)` needs to call `val = f(x)`, leave the `try` block, run `h()`
+#    then return `val`.
 # 2. `continue` needs to call `h()` then jump to the start of the while loop
 # 3. `break` needs to call `h()` then jump to the exit of the while loop
-# 4. If an exception occurs in `f(x)` or `g(x)`, we need to call `h()` before
-#    falling back into the while loop.
+# 4. If an exception occurs in `f(x)` or `g(x)`, we need to call `h()` and
+#    rethrow
 #
-# To deal with these we create a `finally_tag` variable to dynamically track
-# which action to take after the finally block exits. Before jumping to the
-# block we set this variable to a unique integer tag identifying the incoming
-# code path. At the exit of the user's code (`h()` in this case) we perform the
-# jump appropriate to the `break`, `continue` or `return` as necessary based on
-# the tag.
+# We currently duplicate the finally block to handle exceptional control flow
+# (case 4) since later passes assume that the depth of the exception stack is
+# known statically (see PR #55876)
+#
+# To deal with the remaining cases, we create a `finally_tag` variable to
+# dynamically track which action to take after the finally block exits. Before
+# jumping to the block we set this variable to a unique integer tag identifying
+# the incoming code path. At the exit of the user's code (`h()` in this case) we
+# perform the jump appropriate to the `break`, `continue` or `return` as
+# necessary based on the tag.
 function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     (try_block, catch_block, else_block, finally_block, catch_label, scope) = @stm ex begin
-         [:trycatchelse t c] -> (t, c, nothing, nothing, make_label(ctx, c), nothing)
-         [:trycatchelse t c e] -> (t, c, e, nothing, make_label(ctx, c), nothing)
-         [:tryfinally t f] -> (t, nothing, nothing, f, make_label(ctx, f), nothing)
-         [:tryfinally t f scope] -> (t, nothing, nothing, f, make_label(ctx, f), scope)
+        [:trycatchelse t c] -> (t, c, nothing, nothing, make_label(ctx, c), nothing)
+        [:trycatchelse t c e] -> (t, c, e, nothing, make_label(ctx, c), nothing)
+        [:tryfinally t f scope...] -> begin
+            # if finally is effect free, it can be omitted
+            scope = length(scope) == 0 ? nothing : length(scope) == 1 ? scope[1] :
+                @jl_assert false ex
+            lab = make_label(ctx, f)
+            c = @ast ctx f [:call "rethrow"::top]
+            if code_trivially_effect_free(ctx, f)
+                f = nothing
+            end
+            (t, c, nothing, f, lab, scope)
+        end
      end
 
     has_finally_block = !isnothing(finally_block)
@@ -571,8 +598,6 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     ])
     push!(ctx.handler_token_stack, handler_token)
     if has_finally_block
-        # TODO: Trivial finally block optimization from JuliaLang/julia#52593 (or
-        # support a special form for @with)?
         finally_handler = FinallyHandler(new_local_binding(ctx, finally_block, "finally_tag"),
                                          JumpTarget(end_label, ctx))
         push!(ctx.finally_handlers, finally_handler)
@@ -618,34 +643,35 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     emit(ctx, catch_label) # <- Exceptional control flow enters here
     if has_finally_block
         @assert @isdefined(finally_handler) "compiler hint"
-        # Attribute the postfix and prefix to the finally block as a whole.
-        srcref = finally_block
-        enter_finally_block(ctx, srcref, :rethrow, nothing)
-        emit(ctx, end_label) # <- Non-exceptional control flow enters here
         pop!(ctx.finally_handlers)
+        push!(ctx.catch_token_stack, handler_token)
         compile(ctx, finally_block, false, false)
+        emit(ctx, @ast ctx finally_block [:call "rethrow"::top])
+        emit_return(ctx, nothing_(ctx, ex)) # unreachable
+        pop!(ctx.catch_token_stack)
+        emit(ctx, end_label) # <- Non-exceptional control flow enters here
+        compile(ctx, renumber_assigned_ssavalues(ctx, finally_block), false, false)
         # Finally block postfix: Emit a branch for every code path which enters
-        # the block to dynamically decide which return/break/rethrow exit action to take
-        for (tag, (on_exit, value)) in Iterators.reverse(enumerate(finally_handler.exit_actions))
+        # the block to dynamically decide which return/break exit action to take
+        for (tag, (on_exit, value)) in Iterators.reverse(
+                enumerate(finally_handler.exit_actions))
             next_action_label = !in_tail_pos || tag != 1 || on_exit != :return ?
-                make_label(ctx, srcref) : nothing
+                make_label(ctx, finally_block) : nothing
             if !isnothing(next_action_label)
-                tmp = ssavar(ctx, srcref, "do_finally_action")
-                emit(ctx, @ast ctx srcref [:(=) tmp
+                tmp = ssavar(ctx, finally_block, "do_finally_action")
+                emit(ctx, @ast ctx finally_block [:(=) tmp
                     [:call
                         "==="::core
                         finally_handler.tagvar
                         tag::value
                     ]
                 ])
-                emit(ctx, @ast ctx srcref [:gotoifnot tmp next_action_label])
+                emit(ctx, @ast ctx finally_block [:gotoifnot tmp next_action_label])
             end
             if on_exit === :return
                 emit_return(ctx, value)
             elseif on_exit === :break
                 emit_break(ctx, value)
-            elseif on_exit === :rethrow
-                emit(ctx, @ast ctx srcref [:call "rethrow"::top])
             else
                 @jl_assert false finally_block
             end
@@ -708,7 +734,8 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         @jl_assert !needs_value (ex,"TOMBSTONE encountered in value position")
         nothing
     elseif k == :call || k == :new || k == :splatnew || k == :foreigncall ||
-            k == :foreignglobal || k == :new_opaque_closure || k == :cfunction
+            k == :foreignglobal || k == :cfunction ||
+            k == :throw_undef_if_not
         callex = @mknode(ex; head=k, children=compile_args(ctx, children(ex)))
         if in_tail_pos
             emit_return(ctx, ex, callex)
@@ -775,29 +802,29 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             res
         end
     elseif k == :symbolicblock
-        name = syntax_name(ex[1])
+        nk = NameKey(ex[1])
         # Skip duplicate check for default-scope labels (loop-exit, loop-cont) which allow nesting
-        if name != "loop-exit" && name != "loop-cont"
-            if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
-                throw(LoweringError(ex, "Label `$name` defined multiple times"))
+        if nk.name != "loop-exit" && nk.name != "loop-cont"
+            if haskey(ctx.symbolic_jump_targets, nk) || nk in ctx.symbolic_block_labels
+                throw(LoweringError(ex, "Label `$(nk.name)` defined multiple times"))
             end
-            push!(ctx.symbolic_block_labels, name)
+            push!(ctx.symbolic_block_labels, nk)
         end
         end_label = make_label(ctx, ex)
         need_value = needs_value || in_tail_pos
-        result_var = need_value ? new_local_binding(ctx, ex, "$(name)_result") : nothing
-        outer_target = get(ctx.break_targets, name, nothing)
-        ctx.break_targets[name] = JumpTarget(end_label, ctx, result_var)
-        push!(ctx.break_label_stack, name)
+        result_var = need_value ? new_local_binding(ctx, ex, "$(nk.name)_result") : nothing
+        outer_target = get(ctx.break_targets, nk, nothing)
+        ctx.break_targets[nk] = JumpTarget(end_label, ctx, result_var)
+        push!(ctx.break_label_stack, nk)
         body_val = compile(ctx, ex[2], need_value, false)
         pop!(ctx.break_label_stack)
         if !isnothing(result_var) && !isnothing(body_val)
             emit_assignment(ctx, ex, result_var, body_val)
         end
         if isnothing(outer_target)
-            delete!(ctx.break_targets, name)
+            delete!(ctx.break_targets, nk)
         else
-            ctx.break_targets[name] = outer_target
+            ctx.break_targets[nk] = outer_target
         end
         emit(ctx, end_label)
         # Use isdefined to handle the case where initialization was
@@ -823,11 +850,11 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         nothing
     elseif k == :symboliclabel
         label = emit_label(ctx, ex)
-        name = syntax_name(ex)
-        if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
-            throw(LoweringError(ex, "Label `$name` defined multiple times"))
+        nk = NameKey(ex)
+        if haskey(ctx.symbolic_jump_targets, nk) || nk in ctx.symbolic_block_labels
+            throw(LoweringError(ex, "Label `$(nk.name)` defined multiple times"))
         end
-        push!(ctx.symbolic_jump_targets, name=>JumpTarget(label, ctx))
+        push!(ctx.symbolic_jump_targets, nk=>JumpTarget(label, ctx))
         if in_tail_pos
             emit_return(ctx, ex, nothing_(ctx, ex))
         elseif needs_value
@@ -930,14 +957,27 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             nothing
         end
         out
-    elseif k == :opaque_closure_method
-        @ast ctx ex [:opaque_closure_method
-            ex[1]
-            ex[2]
-            ex[3]
-            ex[4]
-            compile_lambda(ctx, ex[5])
+    elseif k == :new_opaque_closure
+        oc_method = ex[5]
+        ex_out = @ast ctx ex [:new_opaque_closure
+            compile_args(ctx, children(ex)[1:4])...
+            [:opaque_closure_method(oc_method)
+                oc_method[1]
+                oc_method[2]
+                oc_method[3]
+                oc_method[4]
+                compile(ctx, oc_method[5], true, false)
+            ]
+            compile_args(ctx, children(ex)[6:end])...
         ]
+        if in_tail_pos
+            emit_return(ctx, ex, emit_assign_tmp(ctx, ex_out))
+        elseif needs_value
+            ex_out
+        else
+            emit(ctx, ex_out)
+            nothing
+        end
     elseif k === :lambda || k === :generated_lambda || k === :toplevel_lambda
         lam = compile_lambda(ctx, ex)
         if in_tail_pos
@@ -1018,7 +1058,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
         end
     elseif k == :isdefined || k == :captured_local ||
-        k == :throw_undef_if_not || k == :boundscheck
+        k == :boundscheck || k == :the_exception
         if in_tail_pos
             emit_return(ctx, ex)
         elseif needs_value
@@ -1033,10 +1073,15 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             emit(ctx, ex)
         end
     elseif k == :latestworld
-        if needs_value
-            throw(LoweringError(ex, "misplaced latestworld"))
-        end
         emit_latestworld(ctx, ex)
+        if needs_value
+            val = @ast ctx ex (::nothing)
+            if in_tail_pos
+                emit_return(ctx, val)
+            else
+                val
+            end
+        end
     elseif k == :latestworld_if_toplevel
         ctx.is_toplevel_thunk && emit_latestworld(ctx, ex)
     elseif k == :unused_only
@@ -1108,14 +1153,14 @@ function compile_body(ctx::LinearIRContext, ex)
     # Fix up any symbolic gotos. (We can't do this earlier because the goto
     # might precede the label definition in unstructured control flow.)
     for origin in ctx.symbolic_jump_origins
-        name = syntax_name(origin.goto)
-        target = get(ctx.symbolic_jump_targets, name, nothing)
+        nk = NameKey(origin.goto)
+        target = get(ctx.symbolic_jump_targets, nk, nothing)
         if isnothing(target)
             # Check if it's a symbolic block label
-            if name in ctx.symbolic_block_labels
-                throw(LoweringError(origin.goto, "cannot use @goto to jump to @label block `$name`"))
+            if nk in ctx.symbolic_block_labels
+                throw(LoweringError(origin.goto, "cannot use @goto to jump to @label block `$(nk.name)`"))
             end
-            throw(LoweringError(origin.goto, "label `$name` referenced but not defined"))
+            throw(LoweringError(origin.goto, "label `$(nk.name)` referenced but not defined"))
         end
         i = origin.index
         pop_ex = compile_pop_exception(ctx, origin.goto, origin.catch_token_stack,
@@ -1236,6 +1281,7 @@ struct Slot
     name::String
     kind::Symbol
     is_nospecialize::Bool
+    is_specialize::Bool
     is_read::Bool
     is_single_assign::Bool
     is_maybe_undef::Bool
@@ -1276,13 +1322,14 @@ function compile_lambda(outer_ctx, ex)
             # Unused functions arguments like: `_` or `::T`
             push!(slots, Slot(UNUSED, :argument,
                               getmeta(arg, :nospecialize, false)::Bool,
-                              false, false, false, false))
+                              false, false, false, false, false))
         else
             @jl_assert head(arg) == :bindingid ex arg
             id = syntax_id(arg)
             binfo = get_binding(ctx, id)
             @jl_assert binfo.kind == :local || binfo.kind == :argument ex arg
             push!(slots, Slot(binfo.name, :argument, binfo.is_nospecialize,
+                              binfo.is_specialize,
                               binfo.is_read, binfo.is_assigned_once,
                               binfo.is_used_undef, binfo.is_called))
             slot_rewrites[id] = length(slots)
@@ -1293,7 +1340,7 @@ function compile_lambda(outer_ctx, ex)
         if !is_capt
             binfo = get_binding(ctx.bindings, id)
             if binfo.kind == :local
-                push!(slots, Slot(binfo.name, :local, false,
+                push!(slots, Slot(binfo.name, :local, false, false,
                                   binfo.is_read, binfo.is_assigned_once,
                                   binfo.is_used_undef, binfo.is_called))
                 slot_rewrites[id] = length(slots)
@@ -1307,12 +1354,18 @@ function compile_lambda(outer_ctx, ex)
         @jl_assert info.kind == :static_parameter arg
         slot_rewrites[id] = i
     end
-    let ns_slots = SyntaxList()
+    let ns_slots = SyntaxList(), s_slots = SyntaxList()
         for (i, s) in enumerate(slots)
             if s.is_nospecialize
                 s.kind === :argument || throw(LoweringError(
                     ex, "nospecialize on non-argument"))
                 push!(ns_slots, newleaf(lambda_args[i], :slot, i))
+            elseif s.is_specialize
+                s.kind === :argument || throw(LoweringError(
+                    ex, "specialize on non-argument"))
+                if head(lambda_args[i]) !== :placeholder
+                    push!(s_slots, newleaf(lambda_args[i], :slot, i))
+                end
             end
         end
         if !isempty(ns_slots)
@@ -1323,6 +1376,8 @@ function compile_lambda(outer_ctx, ex)
             pushfirst!(ctx.code,
                   @ast ctx lambda_args [:meta "nospecialize"::symbol ns_slots...])
         end
+        isempty(s_slots) || pushfirst!(ctx.code,
+            @ast ctx lambda_args [:meta "specialize"::symbol s_slots...])
     end
     code = renumber_body(ctx, ctx.code, slot_rewrites)
     meta = SyntaxMeta()

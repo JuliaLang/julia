@@ -315,7 +315,6 @@ function apply_32026_hack(st, orig)
 end
 
 function collect_body_meta(st)
-    argmeta_all = nothing
     argmeta = nothing
     mmetas = nothing
     for c in children(st)
@@ -325,7 +324,8 @@ function collect_body_meta(st)
         if spec in ("specialize", "nospecialize")
             meta = Symbol(spec)
             if numchildren(c) == 1
-                isnothing(argmeta_all) && (argmeta_all = meta)
+                isnothing(mmetas) && (mmetas = SyntaxList())
+                push!(mmetas, @mknode(c[1]; head=:symbol))
             else
                 isnothing(argmeta) && (argmeta = Dict{String, Symbol}())
                 for id in c[2:end]
@@ -346,7 +346,7 @@ function collect_body_meta(st)
             end
         end
     end
-    (isnothing(argmeta_all) ? argmeta : argmeta_all), mmetas
+    argmeta, mmetas
 end
 
 # Absorb `meta` nodes from arguments and the function body into syntax `.meta`
@@ -368,6 +368,20 @@ function dst_raw_lambda(ctx, st, sps)
     argl = map(x->expr_to_est(x::Symbol, st[1]), st[1].value::Vector)
     @ast _ st [:lambda [:block argl...] [:block sps...]
         est_to_dst(with(ctx; toplevel=false), st[2])]
+end
+
+# Using special forms rather than stripped-hygiene-magic-identifiers would be
+# preferable
+function symbolic_label_context(id)
+    name = syntax_name(id)
+    name === "loop-cont" || name === "loop-exit" ?
+        escape_layer(id.context, true) : id.context
+end
+
+function _dst_symboliclabel(ctx, st)
+    @jl_assert head(st) === :symboliclabel || head(st) === :symbolicgoto st
+    @mknode(st; context=symbolic_label_context(st[1]),
+            value=syntax_name(st[1]), children=nothing)
 end
 
 """
@@ -577,7 +591,8 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
         # Heads not emitted from parsing
         ([:meta s vs...],
          when=(meta=est_syntax_name(s, "");
-               !ctx.toplevel && meta in ("nospecialize", "specialize"))) ->
+               !ctx.toplevel && numchildren(st) > 1 &&
+               meta in ("nospecialize", "specialize"))) ->
              # Should be handled in the function case
              newleaf(st, :nothing)
         ([:meta s gen], when=est_syntax_name(s, "") === "generated") ->
@@ -587,6 +602,8 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
                 s->(head(s) === :identifier ? @mknode(s; head=:symbol) : s),
                 syms)...
            ]
+        [:throw_undef_if_not [:identifier] cond] ->
+            @ast _ st [:throw_undef_if_not @mknode(st[1]; head=:symbol) rec(ctx, cond)]
         [:boundscheck x] -> @mknode(st; children=SyntaxList())
         [:inbounds [:identifier]] -> @mknode(st; head=:inbounds_pop, children=SyntaxList())
         [:core x] -> newleaf(st, :core, syntax_name(x))
@@ -599,16 +616,10 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
             interpolate_expr::value
             [:inert(st[1]) ex]
         ]
-        [:symbolicgoto lab] ->
-            @mknode(st; value=syntax_name(lab), children=nothing)
-        [:symboliclabel lab] ->
-            @mknode(st; value=syntax_name(lab), children=nothing)
-        [:symbolicblock id body] -> let s = syntax_name(id)
-            if is_writeonly_est_name(s)
-                @ast _ st [:symbolicblock id=>:placeholder rec(ctx, body)]
-            else
-                @ast _ st [:symbolicblock id=>:symboliclabel rec(ctx, body)]
-            end
+        [:symboliclabel [:identifier]] -> _dst_symboliclabel(ctx, st)
+        [:symbolicgoto [:identifier]] -> _dst_symboliclabel(ctx, st)
+        [:symbolicblock id body] -> let l = @ast _ id [:symboliclabel id]
+            @ast _ st [:symbolicblock _dst_symboliclabel(ctx, l) rec(ctx, body)]
         end
         [:var"latestworld-if-toplevel"] -> newleaf(st, :latestworld_if_toplevel)
         [:var"scope-block" cs...] ->

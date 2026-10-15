@@ -1,6 +1,9 @@
 # Within JL, :placeholder is used for never-read identifiers, but this magic
 # symbol is used in the IR (its write-only properties are enforced in codegen).
 const UNUSED = "#unused#"
+# Method printing does stupid stuff with slot names; ideally move to provenance
+# instead of reverse-engineering flisp slot naming
+const ERASE_SLOTNAME_PREFIX = "#arg#"
 
 TODO(msg::AbstractString) = throw(ErrorException("Lowering TODO: $msg"))
 TODO(ex::SyntaxTree, msg="") = throw(LoweringError(ex, "Lowering TODO: $msg"))
@@ -46,7 +49,7 @@ function Base.showerror(io::IO, exc::LoweringError; show_detail=true)
         i !== lastindex(exc.sts) && print(io, "\n\n")
     end
 
-    if (show_detail || exc.internal) && !isempty(exc.sts)
+    if (exc.internal) && !isempty(exc.sts)
         print(io, "\n\nDetailed provenance:\n  ")
         _show_provtree(io, exc.sts[1], "  ")
     end
@@ -271,8 +274,9 @@ function _find_assigned_ssavars!(ctx, ssamap, st)
     (is_leaf(st) || is_quoted(st)) && return
     if head(st) == :(=) && head(st[1]) == :bindingid
         b = get_binding(ctx, st[1])
-        b.is_ssa || return
-        ssamap[b.id] = syntax_id(ssavar(ctx, st[1], b.name))
+        if b.is_ssa
+            ssamap[b.id] = syntax_id(ssavar(ctx, st[1], b.name))
+        end
     end
     foreach(e->_find_assigned_ssavars!(ctx, ssamap, e), children(st))
 end

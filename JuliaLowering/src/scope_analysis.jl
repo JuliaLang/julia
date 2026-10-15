@@ -15,7 +15,6 @@ struct ScopeInfo
     # should participate in standard scope resolution, but then be associated
     # with the top-level thunk by the end of this pass.
     is_lifted::Bool
-    binding_assignments::Dict{IdTag, SyntaxTree}
     assignments::Dict{NameKey, SyntaxTree}
     # Map from variable names to binding IDs for resolution.  Includes all
     # locals, args, sparams, and explicit globals belonging to this scope.
@@ -48,8 +47,7 @@ function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
     end
     s = ScopeInfo(
         id, parent_id, lambda_id, ex, is_permeable, is_lifted,
-        Dict{IdTag, SyntaxTree}(), Dict{NameKey, SyntaxTree}(),
-        Dict{NameKey,IdTag}(), lambda_bindings)
+        Dict{NameKey, SyntaxTree}(), Dict{NameKey,IdTag}(), lambda_bindings)
     push!(ctx.scopes, s)
     return s
 end
@@ -108,14 +106,7 @@ _var_str(v) = v === :local ? "local variable" :
 # is a no-op, but doing so with an argument or static parameter is an error.  A
 # variable usually can't be two things in one scope, but flisp has quirks.
 function explicit_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
-    if head(ex) === :bindingid
-        bid = syntax_id(ex)
-        b = get_binding(ctx, bid)
-        @jl_assert b.kind === new_k ex
-        @jl_assert b.lambda_id == 0 (ex, "cannot declare a BindingId in multiple scopes")
-        add_lambda_local!(ctx, scope, b)
-        return bid
-    elseif head(ex) === :placeholder
+    if head(ex) === :placeholder
         return nothing
     elseif ex.mod isa Module
         new_k === :global || throw(LoweringError(
@@ -127,7 +118,8 @@ function explicit_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
     if isnothing(old_k)
         if new_k === :argument
             declare_in_scope!(ctx, scope, ex, :argument;
-                              is_nospecialize=getmeta(ex, :nospecialize, false))
+                              is_nospecialize=getmeta(ex, :nospecialize, false),
+                              is_specialize=getmeta(ex, :specialize, false))
         else
             real_k = new_k === :destructured_arg ? :local : new_k
             declare_in_scope!(ctx, scope, ex, real_k)
@@ -147,6 +139,7 @@ end
 
 function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol;
                            is_nospecialize::Bool=false,
+                           is_specialize::Bool=false,
                            is_ambiguous_local::Bool=false)
     nk = NameKey(ex)
     is_internal = ex.context.internal ||
@@ -159,7 +152,8 @@ function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol;
     else
         @jl_assert ex.mod === nothing ex
         bid = _new_binding(ctx.bindings, ex, nk.name, bk;
-                         is_internal, is_nospecialize, is_ambiguous_local).id
+                         is_internal, is_nospecialize, is_specialize,
+                         is_ambiguous_local).id
     end
     if !(ex.mod isa Module)
         scope.vars[nk] = bid
@@ -253,31 +247,20 @@ function _find_scope_decls!(ctx, scope, ex)
         explicit_declare_in_scope!(ctx, scope, ex[1], :global)
     elseif k === :function_decl
         k1 = head(ex[1])
-        _record_layer!(ctx, ex[1])
-        if k1 === :bindingid
-            b = get_binding(ctx, ex[1])
-            @jl_assert b.is_ssa || b.kind === :global (
-                ex, "allow local BindingId as function name?")
-            get!(scope.binding_assignments, b.id, ex[1])
-        elseif k1 === :identifier
+        if k1 === :identifier
+            _record_layer!(ctx, ex[1])
             ex[1].mod isa Module && return
             get!(scope.assignments, NameKey(ex[1]), ex[1])
-            get!(ctx.layer_ids, ex[1].context.layer,
-                 length(ctx.layer_ids)+1)
         else
             @jl_assert false (ex, "unknown kind in assignment")
         end
     elseif k === :(=) || k === :constdecl || k === :assign_or_constdecl_if_global
         k1 = head(ex[1])
-        _record_layer!(ctx, ex[1])
-        sc = ex[1].context
-        if k1 === :bindingid
-            b = get_binding(ctx, ex[1])
-            get!(scope.binding_assignments, b.id, ex[1])
-        elseif k1 === :identifier
+        if k1 === :identifier
+            _record_layer!(ctx, ex[1])
             ex[1].mod === nothing &&
                 get!(scope.assignments, NameKey(ex[1]), ex[1])
-        elseif k1 === :placeholder
+        elseif k1 === :placeholder || k1 === :bindingid
             # nothing to declare
         else
             @jl_assert false (ex, "unknown kind in assignment")
@@ -309,7 +292,7 @@ function enter_scope!(ctx, ex)
     # Find explicit decls that may influence assignment assignment resolution
     if head(ex) in (:lambda, :toplevel_lambda, :generated_lambda)
         for c in children(ex[1])
-            @jl_assert head(c) in (:identifier, :bindingid, :placeholder) c
+            @jl_assert head(c) in (:identifier, :placeholder) c
             explicit_declare_in_scope!(ctx, scope, c, :argument)
         end
         for c in children(ex[2])
@@ -333,13 +316,6 @@ function enter_scope!(ctx, ex)
 
     #---------------------------------------------------------------------------
     # Find assignment targets, possibly introducing implicit locals and globals
-    for (bid, _node_id) in sort!(collect(scope.binding_assignments); by=first)
-        # Mutable nameless bindings may be introduced in desugaring.  These
-        # should be capturable, and may be local to the nearest lambda or
-        # global.  Desugaring should ensure these are never used undef.
-        b = get_binding(ctx, bid)
-        b.lambda_id != 0 || add_lambda_local!(ctx, scope, b)
-    end
     for (vk, ex) in sort!(collect(scope.assignments);
                           by=x->let nk=x[1]; (nk.name, ctx.layer_ids[nk.layer]); end)
         @jl_assert ex.mod === nothing ex
@@ -846,7 +822,7 @@ function analyze_variables!(ctx, ex)
         if head(ex[1]) != :bindingid || get_binding(ctx, ex[1]).kind !== :local
             analyze_variables!(ctx, ex[1])
         end
-    elseif k == :constdecl
+    elseif k == :constdecl && numchildren(ex) == 2
         if head(ex[1]) !== :placeholder
             b = get_binding(ctx, ex[1])
             b.is_const = true
@@ -917,6 +893,18 @@ function analyze_variables!(ctx, ex)
     nothing
 end
 
+function warn_ambiguous_local(ctx, b)
+    n = b.name
+    loc = first_linenode(b.node_id)
+    msg = string("Assignment to `", n, "` in soft scope is ambiguous ",
+                 "because a global variable by the same name exists: ",
+                 "`", n, "` will be treated as a new local. ",
+                 "Disambiguate by using `local ", n, "` to suppress this warning or ",
+                 "`global ", n, "` to assign to the existing global variable.")
+    @warn msg _module=nothing _file=string(something(loc.file, :none)) _line=loc.line
+    nothing
+end
+
 function resolve_scopes(ctx::ScopeResolutionContext, ex)
     if !(head(ex) in (:lambda, :toplevel_lambda, :generated_lambda))
         # Wrap in a top level thunk if we're not already expanding a lambda.
@@ -936,7 +924,8 @@ metadata about each binding.
 This pass also records the set of binding IDs used locally within the
 enclosing lambda form and information about variables captured by closures.
 """
-@fzone "JL: resolve_scopes" function resolve_scopes(ctx::DesugaringContext, ex;
+@fzone "JL: resolve_scopes" function resolve_scopes(ctx::DesugaringContext, ex,
+                                                    warn::Bool=false;
                                                     soft_scope::Union{Nothing,Bool}=nothing,
                                                     world::UInt=ctx.world)
     enable_soft_scopes = soft_scope !== nothing ? soft_scope : contains_softscope_marker(ex)
@@ -948,6 +937,10 @@ enclosing lambda form and information about variables captured by closures.
                                   enable_soft_scopes,
                                   world)
     ex2 = resolve_scopes(ctx2, ex)
+    warn && !enable_soft_scopes && (Base.JLOptions().warn_scope == 1) &&
+        for b in ctx2.bindings.info
+            b.is_ambiguous_local && warn_ambiguous_local(ctx2, b)
+        end
     ctx3 = VariableAnalysisContext(ctx2.layer, ctx2.bindings,
                                    ctx2.scopes, lambda_bindings(ex2[1]), true,
                                    SyntaxList(), Vector{ClosureKey}(),

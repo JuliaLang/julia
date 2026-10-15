@@ -1163,3 +1163,37 @@ end
     @eval test_mod @test KwdefWithEsc_TestModule.Struct(
         ; a='a',c=0,e='e',g=true,j=true,l=true,p='p',s=0) isa KwdefWithEsc_TestModule.Struct
 end
+
+@testset "Expr(:toplevel) inside a block" begin
+    # (latestworld) after toplevel
+    @test JuliaLowering.eval(test_mod, Expr(:block,
+        Expr(:toplevel, :(nested_toplevel_x = 1)), :nested_toplevel_x)) == 1
+    # value of :toplevel is that of the last expression
+    @test JuliaLowering.eval(test_mod, Expr(:let, Expr(:block),
+        Expr(:block, Expr(:toplevel, :(1 + 1))))) == 2
+end
+
+# latestworld in value position evaluates to `nothing`
+@test jl_eval(test_mod, Expr(:latestworld)) === nothing
+@test jl_eval(test_mod, "Core.@latestworld") === nothing
+
+@testset "isdefined of a GlobalRef into another module" begin
+    JuliaLowering.include_string(test_mod, "module IsdefinedGR; const x = 1; end")
+    gr = GlobalRef(test_mod.IsdefinedGR, :x)
+    @test JuliaLowering.eval(test_mod, Expr(:isdefined, gr)) === true
+    @test JuliaLowering.eval(test_mod,
+        Expr(:isdefined, GlobalRef(test_mod.IsdefinedGR, :nope))) === false
+    @test JuliaLowering.eval(test_mod, :(let; f() = $(Expr(:isdefined, gr)); f(); end)) === true
+end
+
+@testset "throw_undef_if_not" begin
+    err = try
+        JuliaLowering.eval(test_mod,
+            :(let; f() = $(Expr(:throw_undef_if_not, :tuin_x, false)); f(); end))
+    catch e
+        e
+    end
+    @test err isa UndefVarError && err.var === :tuin_x
+    @test JuliaLowering.eval(test_mod,
+        :(let; f(c) = ($(Expr(:throw_undef_if_not, :tuin_y, :c)); 1); f(true); end)) == 1
+end

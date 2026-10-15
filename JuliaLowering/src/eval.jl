@@ -135,6 +135,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
             throw(LoweringError(mname, "Expected module name"))
         end
         newmod_name = Symbol(syntax_name(mname))
+        coverage_visit_line(mod, ex)
         loc = first_linenode(ex)
         push!(iter.todo, (body, true, 1))
         return Core.svec(:begin_module, version, newmod_name, notbare, loc)
@@ -144,10 +145,9 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         err = ex[1].value
         throw(err isa String ? ErrorException(string("syntax: ", err)) : err)
     else
-        # TODO: code coverage should visit
-        # `first_linenode(ex)::LineNumberNode`
+        coverage_visit_line(mod, ex)
          ctx2, ex2 = expand_forms_2(ex, world)
-         ctx3, ex3 = resolve_scopes(ctx2, ex2; soft_scope)
+         ctx3, ex3 = resolve_scopes(ctx2, ex2, !is_module_body; soft_scope)
          ctx4, ex4 = convert_closures(ctx3, ex3)
         _ctx5, ex5 = linearize_ir(ctx4, ex4)
         out = to_lowered_expr(ex5)
@@ -155,6 +155,16 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
     end
 end
 
+function coverage_visit_line(mod, st)
+    Base.JLOptions().code_coverage == 0 && return
+    lno = Base.first_linenode(st)
+    (lno.line > 0 && lno.file isa Symbol) || return
+    file = String(lno.file)
+    if ccall(:jl_coverage_enabled_for, Cint, (Any, Cstring), mod, file) != 0
+        ccall(:jl_coverage_visit_line, Cvoid, (Cstring, Csize_t, Cint),
+              file, length(file), lno.line)
+    end
+end
 
 #-------------------------------------------------------------------------------
 
@@ -529,19 +539,11 @@ function to_code_info(ex::SyntaxTree)
     meta = ex.meta
     nargs = sum((s.kind==:argument for s in slots), init=0)
     slotnames = Vector{Symbol}(undef, length(slots))
-    slot_rename_inds = Dict{String,Int}()
     slotflags = Vector{UInt8}(undef, length(slots))
     for (i, slot) in enumerate(slots)
         name = slot.name
-        # TODO: Do we actually want unique names here? The C code in
-        # `jl_new_code_info_from_ir` has logic to simplify gensym'd names and
-        # use the empty string for compiler-generated bindings.
-        if name !== UNUSED
-            ni = get(slot_rename_inds, name, 0)
-            slot_rename_inds[name] = ni + 1
-            if ni > 0
-                name = "$name@$ni"
-            end
+        if name !== UNUSED && startswith(name, ERASE_SLOTNAME_PREFIX)
+            name = ""
         end
         sname = Symbol(name)
         slotnames[i] = sname
@@ -685,10 +687,12 @@ function _to_lowered_expr(ex::SyntaxTree)
     elseif k == :meta
         args = Any[_to_lowered_expr(e) for e in children(ex)]
         # Unpack :symbol QuoteNode as `Expr(:meta)` requires an identifier here.
-        arg1 = args[1]
-        @jl_assert (arg1 isa QuoteNode) ex
-        args[1] = arg1.value
+        for i in eachindex(args)
+            args[i] isa QuoteNode && (args[i] = args[i].value)
+        end
         Expr(:meta, args...)
+    elseif k == :throw_undef_if_not
+        Expr(k, Symbol(syntax_name(ex[1])), _to_lowered_expr(ex[2]))
     elseif k == :foreignsymbol
         # foreignsymbol wraps the first argument of a foreigncall /
         # foreignglobal when it should not be lowered (and should mostly be
@@ -736,6 +740,7 @@ function _to_lowered_expr(ex::SyntaxTree)
             k == :aliasscope ||
             k == :popaliasscope ||
             k == :new_opaque_closure ||
+            k == :the_exception ||
             throw(LoweringError(ex, "Unknown syntax form $k"))
         ret = Expr(k)
         for e in children(ex)

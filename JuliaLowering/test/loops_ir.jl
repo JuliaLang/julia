@@ -73,17 +73,17 @@ for x in xs
 end
 #---------------------
 1   TestMod.xs
-2   (= slot₁/next (call top.iterate %₁))
-3   slot₁/next
+2   (= slot₁/ (call top.iterate %₁))
+3   slot₁/
 4   (call core.=== %₃ core.nothing)
 5   (call top.not_int %₄)
 6   (gotoifnot %₅ label₁₉)
-7   slot₁/next
+7   slot₁/
 8   (= slot₂/x (call core.getfield %₇ 1))
 9   (call core.getfield %₇ 2)
 10  TestMod.body
-11  (= slot₁/next (call top.iterate %₁ %₉))
-12  slot₁/next
+11  (= slot₁/ (call top.iterate %₁ %₉))
+12  slot₁/
 13  (call core.=== %₁₂ core.nothing)
 14  (call top.not_int %₁₃)
 15  (gotoifnot %₁₄ label₁₇)
@@ -107,34 +107,34 @@ for x in xs, y in ys
 end
 #---------------------
 1   TestMod.xs
-2   (= slot₂/next (call top.iterate %₁))
-3   slot₂/next
+2   (= slot₁/ (call top.iterate %₁))
+3   slot₁/
 4   (call core.=== %₃ core.nothing)
 5   (call top.not_int %₄)
 6   (gotoifnot %₅ label₃₆)
-7   slot₂/next
-8   (= slot₃/x (call core.getfield %₇ 1))
+7   slot₁/
+8   (= slot₂/x (call core.getfield %₇ 1))
 9   (call core.getfield %₇ 2)
 10  TestMod.ys
-11  (= slot₁/next (call top.iterate %₁₀))
-12  slot₁/next
+11  (= slot₃/ (call top.iterate %₁₀))
+12  slot₃/
 13  (call core.=== %₁₂ core.nothing)
 14  (call top.not_int %₁₃)
 15  (gotoifnot %₁₄ label₂₈)
-16  slot₃/x
+16  slot₂/x
 17  (= slot₄/x %₁₆)
-18  slot₁/next
+18  slot₃/
 19  (= slot₅/y (call core.getfield %₁₈ 1))
 20  (call core.getfield %₁₈ 2)
 21  (= slot₄/x 10)
-22  (= slot₁/next (call top.iterate %₁₀ %₂₀))
-23  slot₁/next
+22  (= slot₃/ (call top.iterate %₁₀ %₂₀))
+23  slot₃/
 24  (call core.=== %₂₃ core.nothing)
 25  (call top.not_int %₂₄)
 26  (gotoifnot %₂₅ label₂₈)
 27  (goto label₁₆)
-28  (= slot₂/next (call top.iterate %₁ %₉))
-29  slot₂/next
+28  (= slot₁/ (call top.iterate %₁ %₉))
+29  slot₁/
 30  (call core.=== %₂₉ core.nothing)
 31  (call top.not_int %₃₀)
 32  (gotoifnot %₃₁ label₃₄)
