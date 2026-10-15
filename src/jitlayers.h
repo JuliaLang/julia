@@ -347,6 +347,15 @@ private:
     StringMap<unsigned> counter;
 };
 
+// A ccall/cglobal call, for the foreign symbol record
+struct jl_foreign_symbol_t {
+    const char *f_name;        // symbol name, NULL if dynamic
+    const char *f_lib;         // library name or JL_*_LIBNAME sentinel, NULL if neither
+    jl_value_t *lib_id;        // the library's `LibraryID`, NULL if it declares none
+    bool is_cglobal;           // cglobal rather than ccall
+    bool native;               // linked natively rather than looked up lazily
+};
+
 struct jl_linker_info_t {
     DenseMap<jl_code_instance_t *, jl_codeinst_funcs_t<orc::SymbolStringPtr>> ci_funcs;
     // Key on the enum's underlying integer type: LLVM's DenseMapInfo requires
@@ -406,6 +415,7 @@ public:
     DenseMap<jl_code_instance_t *, jl_llvm_functions_t> ci_funcs;
     SmallVector<std::pair<jl_code_instance_t *, GlobalVariable *>, 0> external_fns;
 
+    SmallVector<jl_foreign_symbol_t,0> foreign_symbols;
     SmallVector<cfunc_decl_t,0> cfuncs;
     std::map<void*, GlobalVariable*> global_targets;
     // Module-local coverage counter globals, keyed by their runtime slots.

@@ -22,6 +22,62 @@
 jl_value_t *jl_libdl_dlid_func JL_GLOBALLY_ROOTED;
 jl_value_t *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
 
+// Foreign link policy: whether AOT codegen links `ccall`/`cglobal` calls into a
+// library natively (`true`) or leaves them to the lazy lookup (`false`).
+jl_genericmemory_t *jl_foreign_link_policy JL_GLOBALLY_ROOTED = NULL; // eqtable LibraryID => Bool
+static jl_mutex_t foreign_link_policy_lock;
+
+JL_DLLEXPORT void jl_set_foreign_link_policy(jl_value_t *id, int native)
+{
+    if (!jl_typeis(id, (jl_value_t*)jl_libraryid_type))
+        jl_type_error("jl_set_foreign_link_policy", (jl_value_t*)jl_libraryid_type, id);
+    JL_LOCK(&foreign_link_policy_lock);
+    jl_genericmemory_t *t = jl_foreign_link_policy;
+    if (t == NULL)
+        jl_foreign_link_policy = t = jl_alloc_memory_any(32);
+    jl_foreign_link_policy = jl_eqtable_put(t, id, native ? jl_true : jl_false, NULL);
+    JL_UNLOCK(&foreign_link_policy_lock);
+}
+
+// 1 for native, 0 for lazy, -1 if no policy is set for `id`
+JL_DLLEXPORT int jl_get_foreign_link_policy(jl_value_t *id) JL_NOTSAFEPOINT
+{
+    JL_LOCK_NOGC(&foreign_link_policy_lock);
+    jl_genericmemory_t *t = jl_foreign_link_policy;
+    jl_value_t *policy = t == NULL ? NULL : jl_eqtable_get(t, id, NULL);
+    JL_UNLOCK_NOGC(&foreign_link_policy_lock);
+    return policy == NULL ? -1 : policy == jl_true;
+}
+
+// Write the canonical text of a UUID (lowercase hex, dashed 8-4-4-4-12) to `out`,
+// which must hold JL_UUID_STRING_LEN + 1 bytes.
+JL_DLLEXPORT void jl_uuid_to_string(const jl_uuid_t *uuid, char *out) JL_NOTSAFEPOINT
+{
+    char hex[33];
+    snprintf(hex, sizeof(hex), "%016" PRIx64 "%016" PRIx64, uuid->hi, uuid->lo);
+    size_t pos = 0;
+    for (int i = 0; i < 32; i++) {
+        if (i == 8 || i == 12 || i == 16 || i == 20)
+            out[pos++] = '-';
+        out[pos++] = hex[i];
+    }
+    out[pos] = '\0';
+}
+
+static char *foreign_symbol_record_path = NULL;
+
+JL_DLLEXPORT void jl_set_foreign_symbol_record_path(const char *path) JL_NOTSAFEPOINT
+{
+    if (foreign_symbol_record_path)
+        free(foreign_symbol_record_path);
+    foreign_symbol_record_path = (path && path[0]) ? strdup(path) : NULL;
+}
+
+JL_DLLEXPORT const char *jl_get_foreign_symbol_record_path(void) JL_NOTSAFEPOINT
+{
+    return foreign_symbol_record_path;
+}
+
 // map from user-specified lib names to handles
 static htable_t libMap;
 static jl_mutex_t libmap_lock;
@@ -478,6 +534,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
 void jl_init_runtime_ccall(void)
 {
     JL_MUTEX_INIT(&libmap_lock, "libmap_lock");
+    JL_MUTEX_INIT(&foreign_link_policy_lock, "foreign_link_policy_lock");
     strhash_new(&libMap, 16);
     uv_mutex_init(&trampoline_lock);
 }

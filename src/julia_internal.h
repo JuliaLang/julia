@@ -529,6 +529,22 @@ extern JL_DLLEXPORT jl_value_t *jl_compile_and_emit_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT size_t jl_typeinf_world;
 extern JL_DLLEXPORT jl_value_t *jl_libdl_dlid_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_value_t *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
+
+extern jl_genericmemory_t *jl_foreign_link_policy JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT void jl_set_foreign_link_policy(jl_value_t *id, int native) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_get_foreign_link_policy(jl_value_t *id) JL_NOTSAFEPOINT;
+
+#define JL_UUID_STRING_LEN 36
+// Package UUID of `julia`, reported for the libraries of the runtime
+#define JL_RUNTIME_UUID_STRING "1222c4b2-2114-5bfd-aeef-88e4692bbb3e"
+JL_DLLEXPORT void jl_uuid_to_string(const jl_uuid_t *uuid, char *out) JL_NOTSAFEPOINT;
+// Write `s` as a quoted, escaped JSON string
+JL_DLLEXPORT void jl_print_str_escape_json(ios_t *stream, const char *s, size_t len) JL_NOTSAFEPOINT;
+
+// Where AOT codegen writes the foreign symbol record: the ccall/cglobal calls in
+// the image, as JSON. NULL or empty for none.
+JL_DLLEXPORT void jl_set_foreign_symbol_record_path(const char *path) JL_NOTSAFEPOINT;
+JL_DLLEXPORT const char *jl_get_foreign_symbol_record_path(void) JL_NOTSAFEPOINT;
 extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 
 void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;

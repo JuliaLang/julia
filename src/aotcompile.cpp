@@ -3,6 +3,10 @@
 #include "llvm-version.h"
 #include "platform.h"
 
+#include <map>
+#include <set>
+#include <tuple>
+
 // target support
 #include <llvm/TargetParser/Triple.h>
 #include "llvm/Support/CodeGen.h"
@@ -923,6 +927,116 @@ static void aot_link_output(jl_codegen_output_t &out) JL_CANSAFEPOINT
     }
 }
 
+// Library string of a ccall/cglobal call. Empty if the library is not given as a string.
+static std::string foreign_library_filename(const jl_foreign_symbol_t &sym)
+{
+    // these are sentinels, not strings
+    if (sym.f_lib == nullptr || sym.f_lib == JL_EXE_LIBNAME ||
+            sym.f_lib == JL_LIBJULIA_DL_LIBNAME || sym.f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME)
+        return "";
+    return sym.f_lib;
+}
+
+// `LibraryID` reported for a ccall/cglobal call, as (package UUID text, library name).
+// A library of the runtime has the UUID of `julia`. Empty if there is none.
+static std::pair<std::string, std::string> foreign_library_id(const jl_foreign_symbol_t &sym)
+{
+    if (sym.lib_id != nullptr) {
+        // `Core.LibraryID`: `pkg` is a little-endian `UInt128`, `name` a `String`
+        const uint64_t *pkg_words = (const uint64_t *)jl_data_ptr(sym.lib_id);
+        jl_uuid_t pkg;
+        pkg.lo = pkg_words[0];
+        pkg.hi = pkg_words[1];
+        jl_value_t *name = jl_get_nth_field_noalloc(sym.lib_id, 1);
+        char uuid[JL_UUID_STRING_LEN + 1];
+        jl_uuid_to_string(&pkg, uuid);
+        return {uuid, std::string(jl_string_data(name), jl_string_len(name))};
+    }
+    if (sym.f_lib == JL_LIBJULIA_DL_LIBNAME)
+        return {JL_RUNTIME_UUID_STRING, "libjulia"};
+    if (sym.f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME)
+        return {JL_RUNTIME_UUID_STRING, "libjulia-internal"};
+    std::string filename = foreign_library_filename(sym);
+    if (filename == "libjulia" || filename == "libjulia-internal")
+        return {JL_RUNTIME_UUID_STRING, filename};
+    return {};
+}
+
+namespace {
+// Library of a ccall/cglobal call in the foreign symbol record
+struct foreign_library_t {
+    std::string package_uuid;
+    std::string library;
+    std::string filename;
+    // calls with the same `LibraryID` are one library, whatever its filename
+    bool operator<(const foreign_library_t &other) const
+    {
+        if (package_uuid != other.package_uuid)
+            return package_uuid < other.package_uuid;
+        if (library != other.library)
+            return library < other.library;
+        return package_uuid.empty() && filename < other.filename;
+    }
+};
+} // namespace
+
+// Write the foreign symbol record: every ccall/cglobal call as JSON, grouped by
+// library. A library entry has `package_uuid` and `library` if the library has a
+// `LibraryID`, or else `library_file` if it is a string. A symbol entry has a `kind`
+// (`ccall` or `cglobal`) and a `linkage` (`native` or `lazy`).
+static void aot_write_foreign_symbol_record(jl_codegen_output_t &out, const char *path)
+{
+    std::map<foreign_library_t, SmallVector<const jl_foreign_symbol_t *, 0>> by_lib;
+    for (const auto &sym : out.foreign_symbols) {
+        auto id = foreign_library_id(sym);
+        by_lib[{id.first, id.second, foreign_library_filename(sym)}].push_back(&sym);
+    }
+
+    ios_t f;
+    if (ios_file(&f, path, 1, 1, 1, 1) == NULL)
+        jl_errorf("cannot open foreign symbol record \"%s\" for writing", path);
+    auto json_string = [&f](const std::string &s) { jl_print_str_escape_json(&f, s.data(), s.size()); };
+    ios_printf(&f, "{\n  \"libraries\": [\n");
+    bool first_lib = true;
+    for (auto &[lib, syms] : by_lib) {
+        if (!first_lib)
+            ios_printf(&f, ",\n");
+        first_lib = false;
+        ios_printf(&f, "    {\n");
+        if (!lib.package_uuid.empty()) {
+            ios_printf(&f, "      \"package_uuid\": \"%s\",\n      \"library\": ", lib.package_uuid.c_str());
+            json_string(lib.library);
+            ios_printf(&f, ",\n");
+        }
+        else if (!lib.filename.empty()) {
+            ios_printf(&f, "      \"library_file\": ");
+            json_string(lib.filename);
+            ios_printf(&f, ",\n");
+        }
+        ios_printf(&f, "      \"symbols\": [\n");
+        // one entry per distinct (symbol, kind, linkage)
+        std::set<std::tuple<std::string, bool, bool>> seen;
+        bool first_sym = true;
+        for (auto *sym : syms) {
+            auto entry = std::make_tuple(std::string(sym->f_name ? sym->f_name : "<dynamic>"),
+                                       sym->is_cglobal, sym->native);
+            if (!seen.insert(entry).second)
+                continue;
+            if (!first_sym)
+                ios_printf(&f, ",\n");
+            first_sym = false;
+            ios_printf(&f, "        {\"symbol\": ");
+            json_string(std::get<0>(entry));
+            ios_printf(&f, ", \"kind\": \"%s\", \"linkage\": \"%s\"}",
+                       sym->is_cglobal ? "cglobal" : "ccall",
+                       sym->native ? "native" : "lazy");
+        }
+        ios_printf(&f, "\n      ]\n    }");
+    }
+    ios_printf(&f, "\n  ]\n}\n");
+    ios_close(&f);
+}
+
 static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *codeinfos,
                                       jl_array_t *ci_order, const jl_cgparams_t *cgparams,
                                       int external_linkage) JL_CANSAFEPOINT
@@ -995,6 +1109,8 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     emit_always_inline(out,
                        [&ci_infos](jl_code_instance_t *ci) { return ci_infos.lookup(ci); });
     emit_llvmcall_modules(out);
+    if (const char *record_path = jl_get_foreign_symbol_record_path())
+        aot_write_foreign_symbol_record(out, record_path);
     // finally, make sure all referenced methods get fixed up, particularly if the user declined to compile them
     aot_link_output(out);
     // including generating cfunction thunks
