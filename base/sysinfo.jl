@@ -19,6 +19,7 @@ export BINDIR,
        cpu_info,
        cpu_summary,
        sysimage_target,
+       matched_sysimage_target,
        uptime,
        loadavg,
        free_memory,
@@ -329,10 +330,34 @@ system image or for understanding what CPU features were enabled during compilat
 
 If the system image was built with the default settings this will return `"native"`.
 
-See also [`JULIA_CPU_TARGET`](@ref).
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+
+See also [`Sys.matched_sysimage_target`](@ref), [`JULIA_CPU_TARGET`](@ref).
 """
 function sysimage_target()
     return ccall(:jl_get_sysimage_cpu_target, Ref{String}, ())
+end
+
+"""
+    Sys.matched_sysimage_target()
+
+Return the entry of [`Sys.sysimage_target`](@ref) that was selected for the host CPU
+when the system image was loaded.
+
+If the system image was built with the default settings this will return `"native"`.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+
+See also [`Sys.sysimage_target`](@ref), [`JULIA_CPU_TARGET`](@ref).
+"""
+function matched_sysimage_target()
+    match_idx = let
+        idx = ccall(:jl_get_sysimage_matched_target_index, Int32, ())
+        idx == -1 ? 1 : idx + 1
+    end
+    return String(split(sysimage_target(), ";")[match_idx])
 end
 
 """

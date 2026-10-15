@@ -1669,6 +1669,14 @@ end
         invalid_results = Base.get_bool_env("CI", false) ? ("", "native", "sysimage") : ("", "sysimage",)
         @test !in(v, invalid_results)
     end
+
+    # The clone selected at load time is one of the `;`-separated targets the
+    # system image was built with.
+    let matched = Sys.matched_sysimage_target()
+        @test matched isa String
+        @test !isempty(matched)
+        @test matched in split(Sys.sysimage_target(), ";")
+    end
 end
 
 # Find the path of libjulia (or libjulia-debug, as the case may be)
