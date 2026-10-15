@@ -105,8 +105,9 @@ let code = raw"""
     end
     # requires 1.11 for `public`
     version = v"1.11"
-    trees = isdefined(Base, :Syntax) ? (Expr, SyntaxNode, GreenNode, Base.Syntax) :
-                                       (Expr, SyntaxNode, GreenNode)
+    trees = isdefined(BaseSyntax, :Syntax) ?
+        (Expr, SyntaxNode, GreenNode, BaseSyntax.Syntax) :
+        (Expr, SyntaxNode, GreenNode)
     for T in trees
         parse_all_ways(T, code, version)
     end

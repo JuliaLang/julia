@@ -8,11 +8,13 @@ const _include = Base.IncludeInto(JuliaLowering)
 
 if parentmodule(JuliaLowering) === Base
     using Base.JuliaSyntax
+    const BaseSyntax = Base.BaseSyntax
 else
     using JuliaSyntax
+    using BaseSyntax: BaseSyntax
 end
 
-using Base: ScopeLayer, SyntaxContext, SourceCode, SourceRef, Syntax,
+using .BaseSyntax: ScopeLayer, SyntaxContext, SourceCode, SourceRef, Syntax,
     SourceAttrType, head, flattened_provenance, sourceref, unexpanded_sourceref,
     mapchildren, provenance, JL_NEW_EDITION, JL_OLD_EDITION, DEBUG_LOWERING,
     is_base_layer, base_layer, escape_layer, remove_scope, fill_context,
