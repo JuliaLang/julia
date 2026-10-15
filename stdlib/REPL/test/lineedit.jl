@@ -1023,6 +1023,17 @@ end
     # Check that newlines in completions are handled correctly (issue #45836)
     strings3 = ["abcdef", "123456\nijklmn"]
     @test getcompletion(strings3) == "\033[0B\nabcdef\n123456\nijklmn\n"
+
+    # Internal names come after the public ones, under a header and in their own columns.
+    # Lists without internal names get no header, as checked above.
+    named = [LineEdit.NamedCompletion("b", "b", true), LineEdit.NamedCompletion("a"),
+             LineEdit.NamedCompletion("long_internal", "long_internal", true)]
+    @test getcompletion(named) == "\033[0B\n\ra\n\rInternal:\n\rb\n\rlong_internal\n"
+    named2 = vcat(map(LineEdit.NamedCompletion, strings2),
+                  [LineEdit.NamedCompletion("internal", "internal", true) for _ in strings2])
+    @test getcompletion(named2) ==
+        "\033[0B\n" * "\rfoo\r\e[5Cfoo\n" ^ 3 * "\rInternal:\n" * "\rinternal\r\e[10Cinternal\n" ^ 3
+    @test getcompletion([LineEdit.NamedCompletion("x", "x", true)]) == "\033[0B\n\rInternal:\n\rx\n"
 end
 
 # Test bracket insertion functionality

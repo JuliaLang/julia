@@ -120,6 +120,10 @@ as `public` was introduced as a new keyword in Julia 1.11 while `export` has exi
 1.0. However, this restriction on `public` may be lifted in future releases, so do not use `public`
 as an identifier.
 
+Tools can use these declarations to tell the public API apart from internals. For example,
+[tab completion](@ref "Tab completion") in the REPL lists a module's public names before its other
+names.
+
 ### Standalone `using` and `import`
 
 For interactive use, the most common way of loading a module is `using ModuleName`. This [loads](@ref
