@@ -202,12 +202,12 @@ end
     d = Set(i for i = 1:1000)
     filter!(x -> x < 10, d)
     sizehint!(d, 10)
-    @test length(d.dict.slots) < 100
+    @test Base._nslots(d.dict) < 100
     sizehint!(d, 1000)
     sizehint!(d, 1; shrink = false)
-    @test length(d.dict.slots) >= 1000
+    @test Base._nslots(d.dict) >= 1000
     sizehint!(d, 1; shrink = true)
-    @test length(d.dict.slots) < 1000
+    @test Base._nslots(d.dict) < 1000
 end
 
 @testset "rehash!" begin
@@ -215,14 +215,14 @@ end
     # array element
     s = Set(["a", "b", "c"])
     Base.rehash!(s)
-    k = s.dict.keys
+    e = s.dict.entries
     Base.rehash!(s)
-    @test length(k) == length(s.dict.keys)
-    for i in 1:length(k)
-        if isassigned(k, i)
-            @test k[i] == s.dict.keys[i]
+    @test length(e) == length(s.dict.entries)
+    for i in 1:length(e)
+        if isassigned(e, i)
+            @test e[i] == s.dict.entries[i]
         else
-            @test !isassigned(s.dict.keys, i)
+            @test !isassigned(s.dict.entries, i)
         end
     end
     @test s == Set(["a", "b", "c"])

@@ -475,18 +475,13 @@ rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractArray,<:Sampler}) =
 
 ## random values from Dict
 
-function Sampler(::Type{RNG}, t::Dict, ::Repetition) where RNG<:AbstractRNG
+function Sampler(::Type{RNG}, t::Dict, n::Repetition) where RNG<:AbstractRNG
     isempty(t) && empty_collection_error()
-    # we use Val(Inf) below as rand is called repeatedly internally
-    # even for generating only one random value from t
-    SamplerSimple(t, Sampler(RNG, LinearIndices(t.slots), Val(Inf)))
+    SamplerSimple(t, Sampler(RNG, 1:length(t), n))
 end
 
 function rand(rng::AbstractRNG, sp::SamplerSimple{<:Dict,<:Sampler})
-    while true
-        i = rand(rng, sp.data)
-        Base.isslotfilled(sp[], i) && @inbounds return (sp[].keys[i] => sp[].vals[i])
-    end
+    return sp[].entries[rand(rng, sp.data)]
 end
 
 rand(rng::AbstractRNG, sp::SamplerTrivial{<:Base.KeySet{<:Any,<:Dict}}) =

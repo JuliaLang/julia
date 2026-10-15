@@ -62,18 +62,17 @@ WeakKeyDict(ps::Pair...)                            = WeakKeyDict{Any,Any}(ps)
 
 WeakKeyDict(kv) = Base.dict_with_eltype((K, V) -> WeakKeyDict{K, V}, kv, eltype(kv))
 
-function _cleanup_locked(h::WeakKeyDict)
-    if h.dirty
-        h.dirty = false
-        idx = skip_deleted_floor!(h.ht)
-        while idx != 0
-            if h.ht.keys[idx].value === nothing
-                _delete!(h.ht, idx)
+function _cleanup_locked(wkh::WeakKeyDict)
+    if wkh.dirty
+        wkh.dirty = false
+        h = wkh.ht
+        for dense_ind in h.count:-1:1
+            if h.entries[dense_ind].first.value === nothing
+                _delete!(h, _slot_index(h, dense_ind, _gethash(h, dense_ind)), dense_ind)
             end
-            idx = skip_deleted(h.ht, idx + 1)
         end
     end
-    return h
+    return wkh
 end
 
 sizehint!(d::WeakKeyDict, newsz::Integer; shrink::Bool = true) = @lock d sizehint!(d.ht, newsz; shrink = shrink)

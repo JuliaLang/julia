@@ -1623,12 +1623,12 @@ end
     d = Dict(i => i for i = 1:1000)
     filter!(x -> x.first < 10, d)
     sizehint!(d, 10)
-    @test length(d.slots) < 100
+    @test Base._nslots(d) < 100
     sizehint!(d, 1000)
     sizehint!(d, 1; shrink = false)
-    @test length(d.slots) >= 1000
+    @test Base._nslots(d) >= 1000
     sizehint!(d, 1; shrink = true)
-    @test length(d.slots) < 1000
+    @test Base._nslots(d) < 1000
 end
 
 # getindex is :effect_free and :terminates but not :consistent
@@ -1645,11 +1645,10 @@ struct BadHash
     i::Int
 end
 Base.hash(::BadHash, ::UInt)=UInt(1)
-@testset "maxprobe reset #51595" begin
+@testset "badhash #51595" begin
     d = Dict(BadHash(i)=>nothing for i in 1:20)
     empty!(d)
     sizehint!(d, 0)
-    @test d.maxprobe < length(d.keys)
     d[BadHash(1)]=nothing
     @test !(BadHash(2) in keys(d))
     d = Dict(BadHash(i)=>nothing for i in 1:20)
@@ -1657,7 +1656,6 @@ Base.hash(::BadHash, ::UInt)=UInt(1)
         pop!(d)
     end
     sizehint!(d, 0)
-    @test d.maxprobe < length(d.keys)
     d[BadHash(1)]=nothing
     @test !(BadHash(2) in keys(d))
 end
@@ -1687,5 +1685,58 @@ end
         @test                    valtype(D{<:Any,V}) == V
         @test_throws MethodError valtype(D{K      })
         @test                    valtype(D{K,    V}) == V
+    end
+end
+
+@testset "wide slots" begin
+    # the wide layout is only used above Base.max_slots32 slots, so force it on small tables
+    function check_same(d, ref)
+        @test length(d) == length(ref)
+        @test Dict(collect(d)) == ref
+        @test all(get(d, k, nothing) == v for (k, v) in ref)
+    end
+    @testset "$K keys" for (K, key) in ((Int, identity), (String, string), (BadHash, BadHash))
+        rng = Xoshiro(1)
+        d = Dict{K,Int}(key(i) => i for i in 1:300)
+        ref = copy(d)
+        Base._rehash!(d, 1024, true)
+        @test d.wide
+        check_same(d, ref)
+        # keys come from 1:600, so the table never reaches its load limit of 682 entries and stays wide
+        for op in 1:5000
+            k = key(rand(rng, 1:600))
+            r = rand(rng)
+            if r < 0.4
+                d[k] = op
+                ref[k] = op
+            elseif r < 0.7
+                @test pop!(d, k, -1) == pop!(ref, k, -1)
+            elseif r < 0.75 && !isempty(d)
+                p = pop!(d)
+                @test ref[p.first] == p.second
+                delete!(ref, p.first)
+            else
+                @test get(d, k, -1) == get(ref, k, -1)
+                @test haskey(d, k) == haskey(ref, k)
+            end
+        end
+        @test d.wide
+        check_same(d, ref)
+        filter!(p -> iseven(p.second), d)
+        filter!(p -> iseven(p.second), ref)
+        @test get!(() -> -2, d, key(10_000)) == get!(() -> -2, ref, key(10_000)) == -2
+        @test d.wide
+        check_same(d, ref)
+        c = copy(d)
+        @test c.wide && c == d
+        s = Set(keys(d))
+        @test s.dict.wide && s == Set(keys(ref))
+        # growing past the load limit rehashes to the narrow layout
+        for i in 1001:3000
+            d[key(i)] = i
+            ref[key(i)] = i
+        end
+        @test !d.wide
+        check_same(d, ref)
     end
 end
