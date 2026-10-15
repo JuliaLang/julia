@@ -233,6 +233,10 @@ let vals_expr = :(Any[Vector, (Array{T,1} where T), 1, 2, Union{Int, String}, Un
         @test (a === b) == (objectid(a) == objectid(b))
     end
 end
+let a = (Tuple{Ref{T}, T} where T).body, b = (Tuple{Ref{T}, T} where T).body
+    @test a !== b
+    @test objectid(a) != objectid(b)
+end
 
 # issue #26038
 let p1 = Ptr{Int8}(1), p2 = Ptr{Int32}(1), p3 = Ptr{Int8}(2)
