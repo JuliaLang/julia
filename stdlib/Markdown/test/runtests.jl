@@ -1347,7 +1347,7 @@ using JuliaSyntaxHighlighting # Before the testset, whose `face""` paths are rea
         buf = Base.AnnotatedIOBuffer()
         show(buf, MIME("text/plain"), md)
         str = read(seekstart(buf), Base.AnnotatedString)
-        [(rstrip(String(str[a.region])), a.value) for a in Base.annotations(str) if a.label === :face]
+        [(rstrip(String(str[a.region])), a.value) for a in Base.annotations(str) if a.value isa StyledStrings.Face]
     end
     # Syntax highlighting is conservative, so a lone identifier picks up no
     # highlighting of its own; it must still be faced as code.
@@ -1367,7 +1367,7 @@ using JuliaSyntaxHighlighting # Before the testset, whose `face""` paths are rea
 end
 
 @testset "foreign annotations" begin
-    legacy = Base.AnnotatedString("hi", [(1:2, :face, :red), (1:2, :tag, 1)])
+    legacy = Base.AnnotatedString("hi", [(1:2, :red), (1:2, :tag => 1)])
     @test sprint(show, MIME("text/plain"), Markdown.MD(Markdown.Paragraph(Any["a ", legacy]))) == "  a hi"
     # On its own in a block, as an interpolated value is
     for block in (Markdown.Admonition("note", "", Any[legacy]), Markdown.BlockQuote(Any[legacy]),

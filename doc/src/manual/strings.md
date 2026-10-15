@@ -1242,7 +1242,7 @@ last backslash escapes a quote, since these backslashes appear before a quote.
 
 It is sometimes useful to be able to hold metadata relating to regions of a
 string. An [`AnnotatedString`](@ref Base.AnnotatedString) wraps another string and
-allows for regions of it to be annotated with labelled values (`:label => value`).
+allows for regions of it to be annotated with values, whose types say what they are.
 All generic string operations are applied to the underlying string. However,
 when possible, styling information is preserved. This means you can manipulate a
 [`AnnotatedString`](@ref Base.AnnotatedString) —taking substrings, padding them,
@@ -1250,7 +1250,7 @@ concatenating them with other strings— and the metadata annotations will "come
 along for the ride".
 
 This string type is fundamental to the [StyledStrings stdlib](@ref
-stdlib-styledstrings), which uses `:face`-labelled annotations to hold styling
+stdlib-styledstrings), which annotates with `Face` values to hold styling
 information.
 
 When concatenating a [`AnnotatedString`](@ref Base.AnnotatedString), take care to use
@@ -1259,7 +1259,7 @@ to keep the string annotations.
 
 ```jldoctest
 julia> str = Base.AnnotatedString("hello there",
-               [(1:5, :word, :greeting), (7:11, :label, 1)])
+               [(1:5, :greeting), (7:11, 1)])
 "hello there"
 
 julia> length(str)
@@ -1271,7 +1271,7 @@ julia> lpad(str, 14)
 julia> typeof(lpad(str, 7))
 Base.AnnotatedString{String, Any}
 
-julia> str2 = Base.AnnotatedString(" julia", [(2:6, :face, :magenta)])
+julia> str2 = Base.AnnotatedString(" julia", [(2:6, :magenta)])
 " julia"
 
 julia> Base.annotatedstring(str, str2)

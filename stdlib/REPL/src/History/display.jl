@@ -249,17 +249,17 @@ end
 
 const LIST_MARKERS = if Sys.isapple()
     # '🞇' is not available by default, and '⬤' is oversized, so we must compromise.
-    (selected = AnnotatedChar('⏺', [(:face, face"search_selected")]),
-     hover = AnnotatedChar('⦿', [(:face, face"search_selected")]),
-     unselected = AnnotatedChar('◦', [(:face, face"search_unselected")]),
-     pending = AnnotatedChar('·', [(:face, face"shadow")]))
+    (selected = AnnotatedChar('⏺', [face"search_selected"]),
+     hover = AnnotatedChar('⦿', [face"search_selected"]),
+     unselected = AnnotatedChar('◦', [face"search_unselected"]),
+     pending = AnnotatedChar('·', [face"shadow"]))
 else
     # Linux tends to have pretty fantastic OOTB Unicode support, with fonts
     # like Symbola installed by default, so we can go for the best symbols.
-    (selected = AnnotatedChar('⬤', [(:face, face"search_selected")]),
-     hover = AnnotatedChar('🞇', [(:face, face"search_selected")]),
-     unselected = AnnotatedChar('◦', [(:face, face"search_unselected")]),
-     pending = AnnotatedChar('🞄', [(:face, face"shadow")]))
+    (selected = AnnotatedChar('⬤', [face"search_selected"]),
+     hover = AnnotatedChar('🞇', [face"search_selected"]),
+     unselected = AnnotatedChar('◦', [face"search_unselected"]),
+     pending = AnnotatedChar('🞄', [face"shadow"]))
 end
 
 const NEWLINE_MARKER = S"{shadow:↩ }"
