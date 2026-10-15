@@ -1793,7 +1793,7 @@ end
 
 @testintersect(Tuple{Any,Tuple{Int},Int},
                Tuple{LT,R,I} where LT<:Union{I, R} where R<:Tuple{I} where I<:Integer,
-               Tuple{LT,Tuple{Int},Int} where {I<:Integer, LT<:Union{Tuple{Int}, I}})
+               Tuple{LT,Tuple{Int},Int} where LT<:Union{Integer,Tuple{Integer}})
 
 let U = Tuple{Union{LT, LT1},Union{R, R1},Int} where LT1<:R1 where R1<:Tuple{Int} where LT<:Int where R<:Tuple{Int},
     U2 = Union{Tuple{LT,R,Int} where LT<:Int where R<:Tuple{Int}, Tuple{LT,R,Int} where LT<:R where R<:Tuple{Int}},
@@ -3052,6 +3052,11 @@ end
     Tuple{X,X,Ref{U}} where {U,X<:U},
     Tuple{Union{Type{Int},Type{Vector}}, Type{Int8}, Ref{DataType}},
     Tuple{Type{Int}, Type{Int8}, Ref{DataType}}
+)
+@testintersect(
+    Tuple{T1,Tuple{T3,T3}} where {T1<:Tuple{Any},T3<:T1},
+    Tuple{Tuple{Integer},Any},
+    Tuple{Tuple{Integer},Tuple{T3,T3}} where {T3<:Tuple{Any}}
 )
 # JETLS#509 — inference hang with Union-bounded parametric types
 # subtype_ccheck leaked right-side Union choices into the shared
