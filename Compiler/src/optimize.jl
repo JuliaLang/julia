@@ -1775,11 +1775,11 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 minarg, maxarg, = T_IFUNC[iidx]
                 nargs = length(ex.args)
                 if minarg + 1 <= nargs <= maxarg + 1
-                    # With mostly constant arguments, all Intrinsics tend to become very cheap
+                    # With mostly constant arguments, many Intrinsics tend to become very cheap
                     # and are likely to combine with the operations around them,
                     # so reduce their cost by half.
                     cost = T_IFUNC_COST[iidx]
-                    if cost == 0 || nargs < 2 || f === Intrinsics.llvmcall
+                    if cost == 0 || nargs < 3 || f === Intrinsics.llvmcall
                         # llvmcall holds malformed IR, so argextype will crash on it
                         return cost
                     end
