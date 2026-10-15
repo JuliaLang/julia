@@ -510,6 +510,16 @@ end
 narrow_worlds(result::MethodLookupResult, worlds::WorldRange) =
     MethodLookupResult(result.matches, intersect(result.valid_worlds, worlds), result.ambig)
 
+# Record the trait edges of a lookup by type (`invoke`, `hasmethod`), whose slots the
+# runtime computes itself. Returns `false` if the lookup may depend on a trait value that
+# was not inferred exactly, in which case it must not be folded.
+function add_trait_lookup_edges!(interp::AbstractInterpreter, @nospecialize(sig), sv::AbsIntState)
+    slots = compute_trait_slots(interp, sig, sv.edges)
+    slots === nothing && return true
+    update_valid_age!(sv, get_inference_world(interp), slots[2])
+    return slots[3]
+end
+
 function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(atype), max_methods::Int;
                                     trait_edges::Union{Nothing,Vector{Any}}=nothing)
     slots = compute_trait_slots(interp, atype, trait_edges)
@@ -2678,6 +2688,8 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         matched, valid_worlds = findsup(lookupsig, method_table(interp))
         matched === nothing && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
         update_valid_age!(sv, our_world, valid_worlds)
+        add_trait_lookup_edges!(interp, lookupsig, sv) ||
+            return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
         method = matched.method
     end
     tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector

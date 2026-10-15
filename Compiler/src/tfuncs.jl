@@ -3660,6 +3660,7 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     end
     match, valid_worlds = findsup(types, method_table(interp))
     update_valid_age!(sv, get_inference_world(interp), valid_worlds)
+    add_trait_lookup_edges!(interp, types, sv) || return CallMeta(Bool, Any, Effects(), NoCallInfo())
     if match === nothing
         rt = Const(false)
         vresults = MethodLookupResult(Any[], valid_worlds, true)

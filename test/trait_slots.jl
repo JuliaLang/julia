@@ -529,3 +529,131 @@ residency2_helper(::Type{Vector{Float64}}) = MockGPUBackend()
     @test ck_static(v0) === :device
 end
 
+
+# --- reflection follows the guards ----------------------------------------------
+
+module GuardReflection
+using Base.Experimental: @guarded
+import ..backend, ..MockGPUBackend, ..CPUBackend
+# a wrapper method ambiguous with the guarded fallback
+rf(a::AbstractArray) = :generic
+@guarded rf(a::AbstractArray) where {backend(a)::MockGPUBackend} = :gpu
+rf(a::SubArray) = :view
+# the same, resolved by a tie-breaker
+rg(a::AbstractArray) = :generic
+@guarded rg(a::AbstractArray) where {backend(a)::MockGPUBackend} = :gpu
+rg(a::SubArray) = :view
+@guarded rg(a::SubArray) where {backend(a)::MockGPUBackend} = :gpu_view
+# disjoint guards never apply to the same call
+@guarded rh(a::AbstractArray) where {backend(a)::MockGPUBackend} = :gpu
+@guarded rh(a::AbstractArray) where {backend(a)::CPUBackend} = :cpu
+end
+
+function guardedmethod(f, argtype, bound)
+    return only(m for m in methods(f)
+                if m.sig == Tuple{typeof(f), argtype} &&
+                   (bound === nothing ? m.guards === nothing : (m.guards !== nothing && m.guards[3] === bound)))
+end
+
+@testset "trait slots: isambiguous and detect_ambiguities" begin
+    M = GuardReflection
+    rf_gen = guardedmethod(M.rf, AbstractArray, nothing)
+    rf_gpu = guardedmethod(M.rf, AbstractArray, MockGPUBackend)
+    rf_view = guardedmethod(M.rf, SubArray, nothing)
+    @test !Base.isambiguous(rf_gpu, rf_gen)
+    @test !Base.isambiguous(rf_view, rf_gen)
+    @test Base.isambiguous(rf_gpu, rf_view)
+    @test !Base.isambiguous(guardedmethod(M.rg, AbstractArray, MockGPUBackend), guardedmethod(M.rg, SubArray, nothing))
+    @test !Base.isambiguous(guardedmethod(M.rg, SubArray, MockGPUBackend), guardedmethod(M.rg, AbstractArray, MockGPUBackend))
+    @test !Base.isambiguous(guardedmethod(M.rh, AbstractArray, MockGPUBackend), guardedmethod(M.rh, AbstractArray, CPUBackend))
+    ambs = detect_ambiguities(M)
+    @test length(ambs) == 1
+    @test Set(only(ambs)) == Set((rf_gpu, rf_view))
+end
+
+@testset "trait slots: which, hasmethod and invoke" begin
+    M = GuardReflection
+    g = gpu(x0)
+    gv = view(g, :, 1)
+    # concrete argument types: the trait is evaluated, as for a call
+    @test which(M.rf, Tuple{typeof(g)}) === guardedmethod(M.rf, AbstractArray, MockGPUBackend)
+    @test which(M.rf, Tuple{typeof(x0)}) === guardedmethod(M.rf, AbstractArray, nothing)
+    @test which(M.rg, Tuple{typeof(gv)}) === guardedmethod(M.rg, SubArray, MockGPUBackend)
+    @test_throws ErrorException which(M.rf, Tuple{typeof(gv)})
+    @test hasmethod(M.rh, Tuple{typeof(x0)})
+    # abstract argument types: a guard is not proven over all of them
+    @test which(M.rf, Tuple{AbstractArray}) === guardedmethod(M.rf, AbstractArray, nothing)
+    @test !hasmethod(M.rh, Tuple{AbstractArray})
+    # `invoke` selects among the methods covering the given types, so it reaches
+    # the unguarded method of a wrapper (as a tie-breaker may want to)
+    @test invoke(M.rg, Tuple{SubArray}, gv) === :view
+    @test invoke(M.rf, Tuple{AbstractArray}, g) === :generic
+    @test invoke(M.rf, Tuple{typeof(g)}, g) === :gpu
+    @test invoke(M.rg, guardedmethod(M.rg, SubArray, nothing), gv) === :view
+    # the same when the `invoke` is resolved by inference
+    invoke_self(x) = invoke(M.rf, Tuple{typeof(x)}, x)
+    @test invoke_self(g) === :gpu
+    @test invoke_self(x0) === :generic
+end
+
+# a tie-breaker whose guard covers only part of the ambiguous region does not
+# resolve the ambiguity
+module PartialTieBreaker
+using Base.Experimental: @guarded
+import ..AbstractBackend, ..CPUBackend
+abstract type DeviceBackend <: AbstractBackend end
+struct DeviceA <: DeviceBackend end
+struct DeviceB <: DeviceBackend end
+devkind(::Type) = CPUBackend()
+devkind(::Type{Int}) = DeviceB()
+@guarded pf(x::Number) where {devkind(x)::DeviceBackend} = :device
+pf(x::Int) = :int
+@guarded pf(x::Int) where {devkind(x)::DeviceA} = :int_device_a
+end
+
+@testset "trait slots: a partial tie-breaker leaves the ambiguity" begin
+    M = PartialTieBreaker
+    @test_throws MethodError M.pf(1)
+    ambs = detect_ambiguities(M)
+    @test length(ambs) == 1
+    @test Set(only(ambs)) == Set((guardedmethod(M.pf, Number, M.DeviceBackend), guardedmethod(M.pf, Int, nothing)))
+end
+
+# tie-breakers for each member of a `Union` guard resolve every call, but
+# `isambiguous` does not split the Union and conservatively reports the pair
+module UnionTieBreakers
+using Base.Experimental: @guarded
+import ..CPUBackend
+import ..PartialTieBreaker: DeviceA, DeviceB
+devkind(::Type) = CPUBackend()
+devkind(::Type{Int}) = DeviceB()
+@guarded uf(x::Number) where {devkind(x)::Union{DeviceA,DeviceB}} = :device
+uf(x::Int) = :int
+@guarded uf(x::Int) where {devkind(x)::DeviceA} = :int_a
+@guarded uf(x::Int) where {devkind(x)::DeviceB} = :int_b
+end
+
+@testset "trait slots: tie-breakers per member of a Union guard" begin
+    @test UnionTieBreakers.uf(1) === :int_b
+    @test length(detect_ambiguities(UnionTieBreakers)) == 1
+end
+
+# a lookup folded by inference depends on the trait even when it threw
+throwing_kind(::Type) = error("no kind yet")
+@guarded tk(x::Int) where {throwing_kind(x)::MockGPUBackend} = :gpu
+tk_hasmethod() = hasmethod(tk, Tuple{Int})
+tk_invoke(x::Int) = invoke(tk, Tuple{Int}, x)
+
+@testset "trait slots: lookups before the trait is defined" begin
+    @test !hasmethod(tk, Tuple{Int})
+    @test !tk_hasmethod()
+    @test_throws MethodError tk_invoke(1)
+end
+
+throwing_kind(::Type{Int}) = MockGPUBackend()
+
+@testset "trait slots: lookups after the trait is defined" begin
+    @test hasmethod(tk, Tuple{Int})
+    @test tk_hasmethod()
+    @test tk_invoke(1) === :gpu
+end

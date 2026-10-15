@@ -1169,6 +1169,8 @@ JL_DLLEXPORT int jl_clear_pending_method_guards(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_trait_schema(jl_value_t *ft) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_matching_methods_with_slots(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
                                              size_t world, size_t *min_valid, size_t *max_valid, int *ambig, jl_value_t *slots) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_matching_methods_in_region(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
+                                                       size_t world, size_t *min_valid, size_t *max_valid, int *ambig, jl_svec_t *slots) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_method_morespecific_guarded(jl_method_t *a, jl_method_t *b) JL_CANSAFEPOINT;
 void jl_compute_field_offsets(jl_datatype_t *st) JL_CANSAFEPOINT;
 void jl_check_valid_supertype(jl_value_t *super, const char *type_name) JL_CANSAFEPOINT;
