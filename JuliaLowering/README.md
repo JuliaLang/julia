@@ -243,3 +243,36 @@ happily ever after---what gives?
 
    The `@addone` example above was framed as user error, but also illustrates
    the breakage.
+
+## Using JuliaLowering as a package
+
+JuliaLowering is developed in the JuliaLang/julia repository and is not
+registered, so other projects use it from a git revision of that repository.
+The versions of JuliaSyntax and BaseSyntax that it needs live in the same
+repository and are not registered either. Since Pkg does not follow the
+`[sources]` of a dependency, all three need to be direct dependencies of your
+project, with `[sources]` entries pointing to the same revision:
+
+```toml
+[deps]
+BaseSyntax = "a901ca6a-331f-4dff-b5f6-9ec4ddfd738c"
+JuliaLowering = "f3c80556-a63f-4383-b822-37d64f81a311"
+JuliaSyntax = "70703baa-626e-46a2-a12c-08ffd08c73b4"
+
+[sources]
+BaseSyntax = {url = "https://github.com/JuliaLang/julia", subdir = "BaseSyntax", rev = "<commit>"}
+JuliaLowering = {url = "https://github.com/JuliaLang/julia", subdir = "JuliaLowering", rev = "<commit>"}
+JuliaSyntax = {url = "https://github.com/JuliaLang/julia", subdir = "JuliaSyntax", rev = "<commit>"}
+```
+
+What works depends on the Julia version:
+
+- On Julia 1.12 and 1.13, JuliaLowering can expand macros and lower code (e.g.
+  `JuliaLowering.lower` and `JuliaLowering.to_lowered_expr`), which is enough
+  for tools that analyze code. However, it cannot evaluate the lowered code:
+  `JuliaLowering.eval`, `JuliaLowering.include_string` and
+  `@activate JuliaLowering` need runtime support that these versions lack.
+- On Julia 1.14 and later, BaseSyntax re-exports the definitions in `Base`, so
+  the syntax trees share their types with `Base`. Since those definitions come
+  from the running Julia, pick a revision that is compatible with your Julia
+  version.
