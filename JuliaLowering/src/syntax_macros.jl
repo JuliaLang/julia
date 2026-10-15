@@ -182,7 +182,7 @@ function ccall_macro_parse(ctx, exs)
             (f_expanded, as, r)
         end
         [:call _...] -> throw(MacroExpansionError(
-            ex, "expected a return type annotation `::SomeType`", position=:end))
+            ex, "expected a return type annotation `::SomeType`"))
         _ -> throw(MacroExpansionError(
             ex, "expected call expression with return type"))
     end

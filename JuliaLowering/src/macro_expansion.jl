@@ -86,18 +86,16 @@ struct MacroExpansionError <: Exception
     context::Union{Nothing,MacroContext}
     ex::SyntaxTree
     msg::String
-    "The source position relative to the node - may be `:begin` or `:end` or `:all`"
-    position::Symbol
     "Error that occurred inside the macro function call (`nothing` if no inner exception)"
     err
     MacroExpansionError(
-        context::Union{Nothing,MacroContext}, ex::SyntaxTree, msg::AbstractString, position::Symbol,
+        context::Union{Nothing,MacroContext}, ex::SyntaxTree, msg::AbstractString,
         @nospecialize err = nothing
-    ) = new(context, ex, msg, position, err)
+    ) = new(context, ex, msg, err)
 end
 
-function MacroExpansionError(ex::SyntaxTree, msg::AbstractString; position=:all)
-    MacroExpansionError(nothing, ex, msg, position)
+function MacroExpansionError(ex::SyntaxTree, msg::AbstractString)
+    MacroExpansionError(nothing, ex, msg)
 end
 
 function Base.showerror(io::IO, exc::MacroExpansionError)
@@ -126,11 +124,7 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
     else
         fb = first_byte(src)
         lb = last_byte(src)
-        pos = exc.position
-        byterange = pos == :all     ? (fb:lb)   :
-            pos == :begin   ? (fb:fb-1) :
-            pos == :end     ? (lb+1:lb) :
-            error("Unknown position $pos")
+        byterange = fb:lb
         highlight(io, JuliaSyntax.SourceFile(src.code), byterange, note=exc.msg)
     end
     if !isnothing(exc.err)
@@ -179,7 +173,7 @@ function eval_macro_name(ctx, mctx::MacroContext, st0::SyntaxTree)
             ccall(:jl_toplevel_eval, Any, (Any, Any), mod, expr_form)
         end
     catch err
-        throw(MacroExpansionError(mctx, st, "Macro not found", :all, err))
+        throw(MacroExpansionError(mctx, st, "Macro not found", err))
     end
 end
 
@@ -224,8 +218,8 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
             _invoke_in_world(ctx.world, macfunc, macro_args...)
         catch exc
             newexc = exc isa MacroExpansionError ?
-                MacroExpansionError(mctx, exc.ex, exc.msg, exc.position, exc.err) :
-                MacroExpansionError(mctx, st, "Error expanding macro", :all, exc)
+                MacroExpansionError(mctx, exc.ex, exc.msg, exc.err) :
+                MacroExpansionError(mctx, st, "Error expanding macro", exc)
             rethrow(newexc)
         end
         st_out = if expanded isa SyntaxTree
@@ -256,7 +250,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
             end
             rethrow(LoadError(
                 string(macro_lnn.file), macro_lnn.line,
-                MacroExpansionError(mctx, st, "Error expanding macro", :all, exc)))
+                MacroExpansionError(mctx, st, "Error expanding macro", exc)))
         end
         st_out = expr_to_est(st_out, macro_lnn)
     end
