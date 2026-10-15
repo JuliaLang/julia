@@ -747,4 +747,71 @@ end
     @noinline tan_domain_error(x) = throw_finite_domainerror(:tan, x)
 end
 
+# Annotations with labels, from before the type of a value said what it is (#60527)
+
+# The kind of annotation a label stands for: a type of value, or by default the label itself, as
+# the key of a `Pair{Symbol, Any}`. StyledStrings gives `:face` and `:link` their types.
+labelled_kind(::Val{label}) where {label} = label
+
+# The value a labelled annotation stands for: its own when it is of the label's kind, and otherwise `label => value`
+function labelled_value(label::Symbol, value)
+    kind = labelled_kind(Val(label))
+    if kind isa Type && value isa kind value else Pair{Symbol, Any}(label, value) end
+end
+
+function AnnotatedString{S}(s::S, annots::Vector{<:Union{Tuple{Any, Symbol, Any}, NamedTuple{(:region, :label, :value)}}}) where {S <: AbstractString}
+    isempty(annots) && return AnnotatedString{S, Any}(s) # Such as a `Vector{Union{}}`, which dispatch also puts here
+    depwarn("annotations with a label are deprecated; give `(region, value)`, where the type of the value says what it is", :AnnotatedString)
+    AnnotatedString{S}(s, [(region, labelled_value(Symbol(label), value)) for (region, label, value) in annots])
+end
+
+function AnnotatedChar(c::AbstractChar, annots::Vector{<:Union{Tuple{Symbol, Any}, NamedTuple{(:label, :value)}}})
+    isempty(annots) && return AnnotatedChar(c, Any[])
+    depwarn("annotations with a label are deprecated; give the value, whose type says what it is", :AnnotatedChar)
+    AnnotatedChar(c, [labelled_value(label, value) for (label, value) in annots])
+end
+AnnotatedChar(c::AnnotatedChar, annots::Vector{<:Union{Tuple{Symbol, Any}, NamedTuple{(:label, :value)}}}) =
+    AnnotatedChar(c, AnnotatedChar(c.char, annots).annotations)
+
+function _annotate!(annlist::Vector{<:RegionAnnotation}, region::UnitRange{Int}, label::Symbol, value)
+    if isnothing(value)
+        kind = labelled_kind(Val(label))
+        deleteat!(annlist, findall(annlist) do annot
+            annot.region == region &&
+                if kind isa Type annot.value isa kind else annot.value isa Pair{Symbol} && first(annot.value) === kind end
+        end)
+    else
+        depwarn("`annotate!` with a label is deprecated; annotate with the value, whose type says what it is", :annotate!)
+        _annotate!(annlist, region, labelled_value(label, value))
+    end
+end
+
+"""
+    annotate!(str, [range::UnitRange{Int}], label::Symbol, nothing)
+
+Remove the annotations over exactly `range` of the kind that `label` stands for: `Face`s for
+`:face` and `Link`s for `:link`, with StyledStrings, and otherwise `label => value` pairs. With
+a value other than `nothing`, this labelled form is deprecated, and annotates with the value
+when it is of that kind, or else with `label => value`.
+"""
+annotate!(s::AnnotatedString, range::UnitRange{Int}, label::Symbol, val) =
+    (_annotate!(s.annotations, range, label, val); s)
+
+annotate!(ss::AnnotatedString, label::Symbol, val) =
+    annotate!(ss, firstindex(ss):lastindex(ss), label, val)
+
+annotate!(s::SubString{<:AnnotatedString}, range::UnitRange{Int}, label::Symbol, val) =
+    (annotate!(s.string, s.offset .+ (range), label, val); s)
+
+annotate!(s::SubString{<:AnnotatedString}, label::Symbol, val) =
+    (annotate!(s.string, s.offset .+ (1:s.ncodeunits), label, val); s)
+
+annotate!(io::AnnotatedIOBuffer, range::UnitRange{Int}, label::Symbol, @nospecialize(val::Any)) =
+    (_annotate!(io.annotations, range, label, val); io)
+
+function annotate!(c::AnnotatedChar, label::Symbol, value)
+    depwarn("`annotate!` with a label is deprecated; annotate with the value, whose type says what it is", :annotate!)
+    annotate!(c, labelled_value(label, value))
+end
+
 # END 1.14 deprecations
