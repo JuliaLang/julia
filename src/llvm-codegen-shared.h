@@ -625,5 +625,7 @@ std::optional<bool> always_have_fma(Function&, const Triple &TT) JL_NOTSAFEPOINT
 
 namespace llvm::jitlink {
     class JITLinkMemoryManager;
+    class Section;
 }
 std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() JL_NOTSAFEPOINT;
+void unpoisonLinkGraphBlocks(const jitlink::Section &Sec) JL_NOTSAFEPOINT;
