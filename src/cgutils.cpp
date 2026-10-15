@@ -2182,7 +2182,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
     jl_value_t *intersected_type = type;
     if (x.constant)
         known_isa = jl_isa(x.constant, type);
-    else if (jl_is_not_broken_subtype(x.typ, type) && jl_subtype(x.typ, type)) {
+    else if (jl_subtype(x.typ, type)) {
         known_isa = true;
     } else {
         intersected_type = jl_type_intersection(x.typ, type);

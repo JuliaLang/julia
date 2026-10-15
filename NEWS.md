@@ -100,6 +100,17 @@ Compiler/Runtime improvements
   (e.g. `val = x.field; if !isnothing(val) ... end`) ([#41199], [#47574]).
 * Stack traces now show full method signatures with argument types for inlined frames, matching the display
   of non-inlined frames ([#53925]).
+* The equality kind `Core.TypeEq` has a second parameter: `Core.TypeEq{T, K}` is the set of types `== T`
+  whose type tag is the kind `K` (such as `DataType`), or any tag for `K = Core.AnyType`, with
+  `Core.TypeEq{T, K} <: K`. `Type{T}` is `Core.TypeEq{T, Core.AnyType}`, an abstract class with six
+  refinements that is nominal in `K`: it lies in no kind (`Type{Int} <: DataType` is false) and in no
+  union of kinds (`Type{Int} <: Union{DataType, UnionAll}` is now false too, since the possible tags are
+  no longer inferred from how `T` is spelled), and `Core.TypeEq{Int, DataType}` is the spelling for the
+  `DataType` members. Intersections with kinds narrow to the members of that tag, e.g.
+  `typeintersect(Type{<:Vector}, DataType)` is `Core.TypeEq{T, DataType} where T<:Vector`, and inference uses
+  the kind parameter for `typeof` and `isa` refinements. Every kind is the unbounded wrapper of its own
+  slice, `DataType == (Core.TypeEq{T, DataType} where T)`, which is what makes the kind parameter nominal:
+  a kind in `K` position is a tag, while the same object is the set of types with that tag everywhere else.
 * Stack traces of errors raised while loading code no longer show the internals of the
   code loading machinery, which are collapsed to the single frame that entered loading.
   Frames for user code that runs during loading are unaffected. Set the

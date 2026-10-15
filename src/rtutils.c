@@ -1268,14 +1268,25 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, (jl_value_t*)ua->var, depth->prev, ctx);
     }
     else if (vt == jl_typeeq_type) {
-        n += jl_printf(out, "Type{");
-        n += jl_static_show_x(out, ((jl_typeeq_t*)v)->T, depth, ctx);
-        n += jl_printf(out, "}");
+        jl_value_t *K = ((jl_typeeq_t*)v)->K;
+        if (K == (jl_value_t*)jl_anytype_type || ((jl_typeeq_t*)v)->T == jl_bottom_type) {
+            n += jl_printf(out, "Type{");
+            n += jl_static_show_x(out, ((jl_typeeq_t*)v)->T, depth, ctx);
+            n += jl_printf(out, "}");
+        }
+        else {
+            // qualified so the output stays eval-able, e.g. in `--trace-compile` output
+            n += jl_printf(out, "Core.TypeEq{");
+            n += jl_static_show_x(out, ((jl_typeeq_t*)v)->T, depth, ctx);
+            n += jl_printf(out, ", ");
+            n += jl_static_show_x(out, K, depth, ctx);
+            n += jl_printf(out, "}");
+        }
     }
     else if (vt == jl_typeegal_type) {
         // qualified so the output stays eval-able, e.g. in `--trace-compile` output
         n += jl_printf(out, "Core.TypeEgal{");
-        n += jl_static_show_x(out, ((jl_typeeq_t*)v)->T, depth, ctx);
+        n += jl_static_show_x(out, ((jl_typeegal_t*)v)->T, depth, ctx);
         n += jl_printf(out, "}");
     }
     else if (vt == jl_typename_type) {

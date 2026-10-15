@@ -175,9 +175,17 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
             return 0;
         if (jl_is_typeeq(decl)) {
             jl_value_t *tp0 = jl_typeeq_T(decl);
-            // either query wrapper matches by type equality (egal implies equal)
-            if (jl_is_some_Type(a)) {
-                if (!jl_types_equal(jl_some_Type_T(a), tp0))
+            jl_value_t *K = jl_typeeq_K(decl);
+            // either query wrapper matches by type equality (egal implies
+            // equal), with its kind below the declared kind parameter
+            if (jl_is_typeegal(a)) {
+                jl_value_t *A = jl_typeegal_T(a);
+                if (!jl_kind_le(jl_typeof(A), K) || !jl_types_equal(A, tp0))
+                    return 0;
+            }
+            else if (jl_is_typeeq(a)) {
+                jl_value_t *A = jl_typeeq_T(a);
+                if (!jl_kind_le(jl_typeeq_K(a), K) || !jl_types_equal(A, tp0))
                     return 0;
             }
             else {
@@ -265,6 +273,8 @@ static inline int sig_match_simple(jl_value_t *arg1, jl_value_t **args, size_t n
         }
         if (jl_is_typeeq(decl)) {
             if (!jl_is_type(a))
+                return 0;
+            if (!jl_kind_le(jl_typeof(a), jl_typeeq_K(decl)))
                 return 0;
             jl_value_t *tp0 = jl_typeeq_T(decl);
             if (a != tp0) {
@@ -484,10 +494,9 @@ static int tname_intersection_dt(jl_datatype_t *a, jl_typename_t *bname, unsigne
     if (a == jl_any_type)
         return 1;
     jl_datatype_t *b = (jl_datatype_t*)jl_unwrap_unionall(bname->wrapper);
-    // Additionally, a `TypeEq` meets every kind name (`TypeEq{R} <: Union{DataType, UnionAll, ...}`),
-    // and every kind meets both wrapper names (`TypeEgal{X} <: typeof(X)`, `TypeEq{Vector} intersects UnionAll`).
-    if ((a == jl_typeeq_type && jl_is_kind((jl_value_t*)b)) ||
-        (jl_is_kind((jl_value_t*)a) && (b == jl_typeeq_type || b == jl_typeegal_type)))
+    // Additionally, every kind meets both wrapper names (`TypeEgal{X} <: typeof(X)`,
+    // `TypeEq{Vector,UnionAll} <: UnionAll`).
+    if (jl_is_kind((jl_value_t*)a) && (b == jl_typeeq_type || b == jl_typeegal_type))
         return 1;
     unsigned hb = 1;
     while (b != NULL && b != jl_any_type) {
@@ -544,12 +553,11 @@ static int tname_intersection(jl_value_t *a, jl_typename_t *bname, int8_t tparam
     }
     // a wrapper is not a datatype, so it has no supertype chain of its own: replace it with
     // the kind of its instances, `typeof(X)` for the single instance of a `TypeEgal{X}`, and
-    // `TypeEq` for a `Type{X}`, whose spellings may be of several kinds (which
-    // `tname_intersection_dt` then meets with every kind name)
+    // the kind parameter of a `TypeEq{X,K}` (`AnyType` meets every kind name)
     else if (jl_is_typeegal(a))
         a = jl_typeof(jl_typeegal_T(a));
     else if (jl_is_typeeq(a))
-        a = (jl_value_t*)jl_typeeq_type;
+        return tname_intersection(jl_typeeq_K(a), bname, 0);
     if (jl_is_datatype(a))
         return tname_intersection_dt((jl_datatype_t*)a, bname, jl_supertype_height((jl_datatype_t*)a));
     return 0;

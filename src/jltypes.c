@@ -1149,6 +1149,9 @@ static int typekeyvalue_eq(jl_datatype_t *tt, jl_value_t *key1, jl_value_t **key
                 return 0;
             if (!(kj == tp0 || (jl_typeof(tp0) == jl_typeof(kj) && jl_types_equal(tp0, kj))))
                 return 0;
+            // (a `TypeVar` value is not a type, so it lies in no kind set)
+            if (!jl_is_kind(jl_typeof(kj)) || !jl_kind_le(jl_typeof(kj), jl_typeeq_K(tj)))
+                return 0;
         }
         else if (leaf && jl_is_typeegal(tj)) {
             // `TypeEgal{T}` matches the argument value by egality (`===`)
@@ -1579,11 +1582,15 @@ static jl_value_t *apply_type_(jl_value_t *tc, jl_value_t **params, size_t n, jl
     if (tc == (jl_value_t*)jl_typeeq_type) {
         if (n == 0)
             return (jl_value_t*)jl_type_type;
-        if (n != 1)
-            jl_errorf("too many parameters for type `TypeEq`: expected 1, got %zu", n);
+        if (n > 2)
+            jl_errorf("too many parameters for type `TypeEq`: expected 1 or 2, got %zu", n);
         if (!jl_valid_type_param(params[0]))
             jl_type_error_rt("TypeEq", "parameter", (jl_value_t*)jl_type_type, params[0]);
-        return (jl_value_t*)jl_wrap_Type(params[0]);
+        if (n == 1)
+            return (jl_value_t*)jl_wrap_Type(params[0]);
+        if (!jl_is_kindset(params[1]))
+            jl_type_error_rt("TypeEq", "kind parameter (a kind or `AnyType`)", (jl_value_t*)jl_anytype_type, params[1]);
+        return jl_wrap_TypeEq(params[0], params[1]);
     }
     if (tc == (jl_value_t*)jl_typeegal_type) {
         if (n != 1)
@@ -1897,12 +1904,12 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
     }
     else if (jl_is_some_Type(t)) {
         int egal = jl_is_typeegal(t);
-        jl_typeeq_t *te = (jl_typeeq_t*)t;
+        jl_value_t *T0 = jl_some_Type_T(t);
         jl_value_t *T = NULL;
         JL_GC_PUSH1(&T);
-        T = jl_substitute_datatype(te->T, x, y);
-        if (T != te->T)
-            t = egal ? jl_wrap_TypeEgal(T) : (jl_value_t*)jl_wrap_Type(T);
+        T = jl_substitute_datatype(T0, x, y);
+        if (T != T0)
+            t = egal ? jl_wrap_TypeEgal(T) : jl_wrap_TypeEq(T, jl_typeeq_K(t));
         JL_GC_POP();
     }
     else if jl_is_vararg(t) { // recursively call itself on T
@@ -1942,7 +1949,7 @@ static jl_value_t *lookup_type_stack(jl_typestack_t *stack, jl_datatype_t *tt, s
     return NULL;
 }
 
-static unsigned typeeq_hash(jl_value_t *T, int *failed) JL_NOTSAFEPOINT;
+static unsigned typeeq_hash(jl_value_t *T, jl_value_t *K, int *failed) JL_NOTSAFEPOINT;
 static unsigned typeegal_hash(jl_value_t *T, int *failed) JL_NOTSAFEPOINT;
 
 // stable numbering for types--starts with name->hash, then falls back to objectid
@@ -1982,7 +1989,7 @@ static unsigned type_hash(jl_value_t *kj, int *failed) JL_NOTSAFEPOINT
     else if (jl_is_typeeq(uw)) {
         if (jl_is_typeofbottom_param(uw))
             return jl_typeofbottom_type->hash;
-        return typeeq_hash(jl_typeeq_T(uw), failed);
+        return typeeq_hash(jl_typeeq_T(uw), jl_typeeq_K(uw), failed);
     }
     else if (jl_is_typeegal(uw)) {
         return typeegal_hash(jl_typeegal_T(uw), failed);
@@ -1992,26 +1999,28 @@ static unsigned type_hash(jl_value_t *kj, int *failed) JL_NOTSAFEPOINT
     }
 }
 
-// hash of `Type{T}`. Shared between hashing by type (`type_hash`, e.g. type-cache
+// hash of `TypeEq{T, K}`. Shared between hashing by type (`type_hash`, e.g. type-cache
 // insertion) and by value (`typekeyvalue_hash`, e.g. argument-tuple dispatch
 // caching) so the two cannot diverge.
-static unsigned typeeq_hash(jl_value_t *T, int *failed) JL_NOTSAFEPOINT
+static unsigned typeeq_hash(jl_value_t *T, jl_value_t *K, int *failed) JL_NOTSAFEPOINT
 {
     if (T == jl_bottom_type)
         return jl_typeofbottom_type->hash;
     if (jl_is_typevar(T) && ((jl_tvar_t*)T)->lb == jl_bottom_type &&
             ((jl_tvar_t*)T)->ub == (jl_value_t*)jl_any_type)
-        // the unbounded `Type{T} where T` is `=== Kind`; hash it as such so that
-        // e.g. `Vector{Type}` and `Vector{Kind}` land in the same cache bucket
-        // (they are equal per `typekey_eq`/`jl_types_equal`).
-        return type_hash((jl_value_t*)jl_anytype_type, failed);
-    if (jl_is_typeeq(T)) {
+        // the unbounded `TypeEq{T, K} where T` is `== K` (`=== Kind` for `Type{T}
+        // where T`); hash it as such so that e.g. `Vector{Type}` and `Vector{Kind}`
+        // land in the same cache bucket (they are equal per
+        // `typekey_eq`/`jl_types_equal`).
+        return type_hash(K, failed);
+    if (jl_is_typeeq(T) && jl_kind_le((jl_value_t*)jl_typeeq_type, K)) {
         jl_value_t *innerT = jl_typeeq_T(T);
         if (jl_is_typevar(innerT) && ((jl_tvar_t*)innerT)->lb == jl_bottom_type &&
                 ((jl_tvar_t*)innerT)->ub == (jl_value_t*)jl_any_type)
             // the unbounded `Type{Type{T}} where T` is `== TypeEq` (the kind whose
             // instances are the `Type{X}` types); hash it as `TypeEq` so that the two
-            // equal representations land in the same cache bucket.
+            // equal representations land in the same cache bucket (a harmless
+            // collision for `K = AnyType`).
             return type_hash((jl_value_t*)jl_typeeq_type, failed);
     }
     unsigned hashT;
@@ -2040,7 +2049,10 @@ static unsigned typeeq_hash(jl_value_t *T, int *failed) JL_NOTSAFEPOINT
     else {
         hashT = type_hash(T, failed);
     }
-    return bitmix(~jl_type_typename->hash, hashT);
+    unsigned h = bitmix(~jl_type_typename->hash, hashT);
+    if (K != (jl_value_t*)jl_anytype_type)
+        h = bitmix(h, ((jl_datatype_t*)K)->hash); // a kind datatype, memoized
+    return h;
 }
 
 // like `typeeq_hash`, but with a distinct mixing constant so `TypeEgal{T}`
@@ -2137,7 +2149,7 @@ static unsigned typekeyvalue_hash(jl_typename_t *tn, jl_value_t *key1, jl_value_
             if (kj == jl_bottom_type)
                 hj = ((jl_datatype_t*)jl_typeofbottom_type)->hash;
             else
-                hj = jl_has_free_typevars(kj) ? typeeq_hash(kj, &failed) : typeegal_hash(kj, &failed);
+                hj = jl_has_free_typevars(kj) ? typeeq_hash(kj, (jl_value_t*)jl_anytype_type, &failed) : typeegal_hash(kj, &failed);
             if (failed)
                 return 0;
         }
@@ -2356,7 +2368,7 @@ static jl_value_t *normalize_unionalls(jl_value_t *t) JL_CANSAFEPOINT
         jl_value_t *T = normalize_unionalls(te->T);
         JL_GC_PUSH1(&T);
         if (T != te->T && jl_typeof(T) == jl_typeof(te->T))
-            t = (jl_value_t*)jl_wrap_Type(T);
+            t = jl_wrap_TypeEq(T, te->K);
         JL_GC_POP();
     }
     else if (jl_is_typeegal(t)) {
@@ -3205,13 +3217,13 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
             t = NULL;
         }
         else if (T != te->T) {
-            t = (jl_value_t*)jl_wrap_Type(T);
+            t = jl_wrap_TypeEq(T, te->K);
         }
         JL_GC_POP();
         return t;
     }
     if (jl_is_typeegal(t)) {
-        jl_typeeq_t *te = (jl_typeeq_t*)t;
+        jl_typeegal_t *te = (jl_typeegal_t*)t;
         jl_value_t *T = inst_type_w_(te->T, env, stack, check, nothrow ? 1 : 0, dcache);
         JL_GC_PUSH1(&T);
         if (T == NULL) {
@@ -3328,7 +3340,18 @@ JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_
     return typ;
 }
 
-jl_typeeq_t *jl_wrap_Type(jl_value_t *t)
+// `TypeEq{t, k}`: the types `== t` whose type tag is `k` (any tag for `k =
+// AnyType`), in normalized form so that `==`-equal wrappers are egal. `k` is
+// nominal; the only knowledge derived from `t` is the exact one about the
+// bottom class (`jl_typeeq_bottomable`):
+//  - the bottom class `{Union{}}` has the single tag `TypeofBottom`: when `k`
+//    admits it the result is the canonical `Type{Union{}}` object, stored with
+//    `K = TypeofBottom` (`== TypeofBottom`; the `Typeofwrapper` cache, the
+//    singleton layout rule and `jl_pointer_egal` rely on this one spelling),
+//    and with any other `k` it is the empty set `Union{}`;
+//  - a bottom-bound typevar `t` likewise stores `K = TypeofBottom`;
+//  - `TypeEq{t, TypeofBottom}` for a `t` that cannot be `Union{}` is `Union{}`.
+jl_value_t *jl_wrap_TypeEq(jl_value_t *t, jl_value_t *k)
 {
     if (jl_is_typeeq(t) && jl_typeeq_T(t) == jl_bottom_type)
         t = (jl_value_t*)jl_typeofbottom_type;
@@ -3337,21 +3360,41 @@ jl_typeeq_t *jl_wrap_Type(jl_value_t *t)
             !jl_has_free_typevars(t) && jl_types_equal(t, tw)) {
         t = tw;
     }
-    if (t == jl_bottom_type && jl_typeofbottom_type && jl_typeofbottom_type->name) {
-        jl_value_t *cached = jl_atomic_load_relaxed(&jl_typeofbottom_type->name->Typeofwrapper);
-        if (cached)
-            return (jl_typeeq_t*)cached;
+    if (jl_typeofbottom_type && jl_typeofbottom_type->name) {
+        assert(jl_is_kindset(k));
+        if (jl_typeeq_is_bottom_class(t)) {
+            if (!jl_kind_le((jl_value_t*)jl_typeofbottom_type, k))
+                return jl_bottom_type;
+            k = (jl_value_t*)jl_typeofbottom_type;
+            if (t == jl_bottom_type) {
+                jl_value_t *cached = jl_atomic_load_relaxed(&jl_typeofbottom_type->name->Typeofwrapper);
+                if (cached)
+                    return cached;
+            }
+        }
+        else if (k == (jl_value_t*)jl_typeofbottom_type && !jl_typeeq_bottomable(t)) {
+            return jl_bottom_type;
+        }
+    }
+    else {
+        assert(k == (jl_value_t*)jl_anytype_type); // bootstrapping `Type{T}` itself
     }
     jl_task_t *ct = jl_current_task;
-    JL_GC_PUSH1(&t);
+    JL_GC_PUSH2(&t, &k);
     jl_typeeq_t *te = (jl_typeeq_t*)jl_gc_alloc(ct->ptls, sizeof(jl_typeeq_t), jl_typeeq_type);
     jl_set_typetagof(te, jl_typeeq_tag, 0);
     te->T = t;
+    te->K = k;
     if (t == jl_bottom_type && jl_typeofbottom_type && jl_typeofbottom_type->name) {
         jl_gc_write_atomic(jl_typeofbottom_type->name, jl_typeofbottom_type->name->Typeofwrapper, jl_value_t, (jl_value_t*)te, relaxed);
     }
     JL_GC_POP();
-    return te;
+    return (jl_value_t*)te;
+}
+
+jl_typeeq_t *jl_wrap_Type(jl_value_t *t)
+{
+    return (jl_typeeq_t*)jl_wrap_TypeEq(t, (jl_value_t*)jl_anytype_type);
 }
 
 jl_value_t *jl_wrap_TypeEgal(jl_value_t *t)
@@ -3366,9 +3409,9 @@ jl_value_t *jl_wrap_TypeEgal(jl_value_t *t)
         return (jl_value_t*)jl_typeofbottom_type;
     jl_task_t *ct = jl_current_task;
     JL_GC_PUSH1(&t);
-    jl_value_t *te = jl_gc_alloc(ct->ptls, sizeof(jl_typeeq_t), jl_typeegal_type);
+    jl_value_t *te = jl_gc_alloc(ct->ptls, sizeof(jl_typeegal_t), jl_typeegal_type);
     jl_set_typetagof(te, jl_typeegal_tag, 0);
-    ((jl_typeeq_t*)te)->T = t;
+    ((jl_typeegal_t*)te)->T = t;
     JL_GC_POP();
     return te;
 }
@@ -3821,9 +3864,9 @@ void jl_init_types(void) JL_GC_DISABLED
     // `T` must be declared `Any`: jl_valid_type_param admits non-type values
     // (`Type{1}`), so a narrower field type would be unsound (#62897)
     jl_typeeq_type = jl_new_datatype(jl_symbol("TypeEq"), core, jl_anytype_type, jl_emptysvec,
-                                     jl_perm_symsvec(1, "T"),
-                                     jl_svec(1, jl_any_type),
-                                     jl_emptysvec, 0, 0, 1);
+                                     jl_perm_symsvec(2, "T", "K"),
+                                     jl_svec(2, jl_any_type, jl_anytype_type),
+                                     jl_emptysvec, 0, 0, 2);
     XX(typeeq);
     // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist
     jl_typeeq_type->name->mayinlinealloc = 0;

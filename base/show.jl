@@ -1087,10 +1087,20 @@ end
 # `Type{T}` is the familiar user-facing spelling and is used for all normal
 # (compact) printing. In non-compact contexts (e.g. the REPL's `text/plain`
 # display) the canonical kind name `TypeEq{T}` is shown instead, so that a
-# concrete `Type{T}` renders as `Type{T} (alias for TypeEq{T})`.
+# concrete `Type{T}` renders as `Type{T} (alias for TypeEq{T})`. A wrapper
+# restricted to a kind set `K` other than `AnyType` has no `Type{...}`
+# spelling and always prints as `Core.TypeEq{T, K}`.
 function show_typeeq(io::IO, @nospecialize(x::TypeEq))
-    print(io, get(io, :compact, true)::Bool ? "Type{" : "TypeEq{")
-    show(io, type_parameter(x))
+    K = type_kind(x)
+    if K === Core.AnyType || type_parameter(x) === Union{}
+        print(io, get(io, :compact, true)::Bool ? "Type{" : "TypeEq{")
+        show(io, type_parameter(x))
+    else
+        print(io, "Core.TypeEq{")
+        show(io, type_parameter(x))
+        print(io, ", ")
+        show(io, K)
+    end
     print(io, "}")
 end
 function _show_type(io::IO, @nospecialize(x::Type))

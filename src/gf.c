@@ -1224,7 +1224,7 @@ static void egal_normalize_slot(jl_tupletype_t *tt, size_t i, jl_value_t *decl_i
     if (jl_is_typeegal(elt) && !jl_has_free_typevars(elt) &&
         jl_is_typeeq(decl_i) && !jl_has_free_typevars(decl_i)) {
         if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
-        jl_svecset(*newparams, i, jl_wrap_Type(jl_some_Type_T(elt)));
+        jl_svecset(*newparams, i, jl_wrap_TypeEq(jl_some_Type_T(elt), jl_typeeq_K(decl_i)));
     }
 }
 
@@ -4590,7 +4590,11 @@ static jl_tupletype_t *egal_normalize_hint_types(jl_tupletype_t *types JL_PROPAG
                 jl_svecset(newparams, i, jl_wrap_Type(jl_bottom_type));
             }
             else if (jl_is_typeeq(elt) && !jl_has_free_typevars(elt) &&
-                     jl_typeeq_T(elt) != jl_bottom_type) {
+                     jl_typeeq_T(elt) != jl_bottom_type &&
+                     jl_is_kind(jl_typeof(jl_typeeq_T(elt))) &&
+                     jl_kind_le(jl_typeof(jl_typeeq_T(elt)), jl_typeeq_K(elt))) {
+                // (a kind set excluding the parameter's own tag denotes a slot
+                // the parameter itself does not inhabit; leave it as is)
                 if (!newparams)
                     newparams = jl_svec_copy(types->parameters);
                 jl_svecset(newparams, i, jl_wrap_TypeEgal(jl_typeeq_T(elt)));

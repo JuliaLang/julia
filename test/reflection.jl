@@ -756,7 +756,8 @@ fLargeTable(::Union, ::Union) = "b"
 
 # issue #58479 (updated for #33136: a type value `v` matches `::Type{<:DataType}`
 # only if `v <: DataType`, and a `Type{X}` is no longer a subtype of any single
-# kind -- except wrapper-like classes like `Vector`, whose whole cover is `UnionAll`)
+# kind; the kind parameter is nominal, so `Core.TypeEq{X, K}` is the spelling
+# for the members of one tag, and nothing is inferred from how `X` is spelled)
 fLargeTable(::Type) = "Type"
 fLargeTable(::Type{<:DataType}) = "DataType"
 @test fLargeTable(Type) == "Type"
@@ -771,7 +772,9 @@ fLargeTable(::Type{<:DataType}) = "DataType"
 @test fLargeTable(Type{<:DataType}) == "Type"
 fLargeTable(::Type{<:UnionAll}) = "UnionAll"
 @test fLargeTable(UnionAll) == "UnionAll"
-@test fLargeTable(Type{Vector}) == "UnionAll"
+@test fLargeTable(Type{Vector}) == "Type"
+@test fLargeTable(Core.TypeEq{Vector, UnionAll}) == "UnionAll"
+@test fLargeTable(Core.TypeEq{Int, DataType}) == "DataType"
 @test fLargeTable(Type{Int}) == "Type"
 @test fLargeTable(Type{Type{Union{}}}) == "Type"
 @test fLargeTable(Type{Union{}}) == "Type"
@@ -956,7 +959,7 @@ end
 @test_throws ArgumentError fieldcount(Tuple{Any,Vararg{Any}})
 # TypeEgal{T} has the single instance `T` (issue #62890)
 @test fieldcount(Core.TypeEgal{Int}) == nfields(Int)
-@test fieldcount(Core.TypeEgal{Type{Int}}) == nfields(Type{Int}) == 1
+@test fieldcount(Core.TypeEgal{Type{Int}}) == nfields(Type{Int}) == 2 # `TypeEq{T, K}`
 
 # Common-field unions are definite only when all alternatives share the field count.
 @test fieldcount(Union{Tuple{Int,Float64},Tuple{Int,Int}}) == 2

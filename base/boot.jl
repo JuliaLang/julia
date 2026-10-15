@@ -4,10 +4,20 @@
 
 #abstract type Any <: Any end
 #abstract type AnyType end
+# TypeEq{T, K} is the set of types `U == T` (mutual subtyping) whose type tag
+# `typeof(U)` is the kind `K`, or any tag for `K = AnyType`. `K` is nominal, so
+# `TypeEq{T, K} <: K` and `TypeEq{T, DataType} <: TypeEq{T, AnyType}`, but
+# `Type{T}` is not the union of its six refinements. Every kind is the
+# unbounded wrapper of its own slice, `K == TypeEq{T, K} where T`
+# (generalizing `Type == AnyType`), and for a type `X`
+#     TypeEgal{X} <: TypeEq{X, typeof(X)} <: Type{X} <: AnyType
+# with each step strict, except for the bottom class `X = Union{}`, where
+# all four are one type.
 #struct TypeEq <: AnyType
 #    T
+#    K::AnyType
 #end
-#const Type = TypeEq(T) where T
+#const Type = TypeEq(T, AnyType) where T
 # TypeEgal{T} is the egality-based dual of TypeEq{T}: its only instance is `T`
 # itself (matched by `===`), used internally for dispatch-cache specialization.
 # Free typevars are disallowed inside TypeEgal.

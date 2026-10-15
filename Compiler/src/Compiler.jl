@@ -64,7 +64,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     iskindtype, ismutabletypename, ismutationfree, issingletontype, isvarargtype, isvatuple,
     PARTITION_KIND_CONST, kwerr, lookup_binding_partition, may_invoke_generator, methods, midpoint, moduleroot,
     partition_owner, partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method,
-    structdiff, tls_world_age, type_parameter, unconstrain_vararg_length, unionlen, uniontype_layout,
+    structdiff, tls_world_age, type_kind, type_parameter, unconstrain_vararg_length, unionlen, uniontype_layout,
     uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
     _uncompressed_ir, datatype_min_ninitialized,
     partialstruct_init_undefs, fieldcount_noerror, _eval_import, _eval_using,

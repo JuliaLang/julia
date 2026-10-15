@@ -2198,10 +2198,6 @@ end
         tty_lb = tty_ub # TODO: this would be wrong if !isexact_tty, but instanceof_tfunc doesn't preserve this info
         if !has_free_typevars(tty_lb) && !has_free_typevars(tty_ub)
             thentype = typeintersect(tty, tty_ub)
-            if iskindtype(tty_ub) && thentype !== Bottom
-                # `typeintersect` may be unable narrow down `Type`-type
-                thentype = tty_ub
-            end
             valid_as_lattice(thentype, true) || (thentype = Bottom)
             elsetype = typesubtract(tty, tty_lb, max_union_splitting)
             return ConditionalTypes(thentype, elsetype)

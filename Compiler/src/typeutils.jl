@@ -34,8 +34,6 @@ has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isTy
 # some of these queries, this check can be used to somewhat protect against making incorrect
 # decisions based on incorrect subtyping. Note that this check, itself, is broken for
 # certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
-isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || b <: a)
-
 function argtypes_to_type(argtypes::Vector{Any})
     argtypes = anymap(@nospecialize(a) -> isvarargtype(a) ? a : widenconst(a), argtypes)
     filter!(@nospecialize(x) -> !isvarargtype(x) || valid_as_lattice(unwrapva(x), true), argtypes)
@@ -114,7 +112,7 @@ end
 # and also any contents that are not valid type tags on any objects
 # such that `return <: a` && `Union{return, b} == Union{a, b}`
 function typesubtract(@nospecialize(a), @nospecialize(b), max_union_splitting::Int)
-    if a <: b && isnotbrokensubtype(a, b)
+    if a <: b
         return Bottom
     end
     ua = unwrap_unionall(a)
@@ -140,7 +138,7 @@ function typesubtract(@nospecialize(a), @nospecialize(b), max_union_splitting::I
                     for i = 1:length(notbottom)
                         ap = unwrapva(a.parameters[i])
                         bp = unwrapva(b.parameters[i])
-                        notbottom[i] = !(ap <: bp && isnotbrokensubtype(ap, bp))
+                        notbottom[i] = !(ap <: bp)
                     end
                     let i = findfirst(notbottom)
                         if i !== nothing && findnext(notbottom, i + 1) === nothing

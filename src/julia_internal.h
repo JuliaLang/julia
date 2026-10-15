@@ -1024,7 +1024,15 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_module_t *module,
                                    jl_datatype_t *super, jl_svec_t *parameters) JL_CANSAFEPOINT;
 jl_datatype_t *jl_new_uninitialized_datatype(void) JL_CANSAFEPOINT;
 void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable);
-JL_DLLEXPORT jl_typeeq_t *jl_wrap_Type(jl_value_t *t) JL_CANSAFEPOINT;  // x -> Type{x}
+JL_DLLEXPORT jl_typeeq_t *jl_wrap_Type(jl_value_t *t) JL_CANSAFEPOINT;  // x -> Type{x} (`K = AnyType`)
+JL_DLLEXPORT jl_value_t *jl_wrap_TypeEq(jl_value_t *t, jl_value_t *k) JL_CANSAFEPOINT;  // x, K -> TypeEq{x, K} (normalized)
+// the kind parameter `K` of a `TypeEq{T, K}`: one of the six kind datatypes or
+// `AnyType`, ordered nominally (a flat lattice below `AnyType`)
+int jl_is_kindset(jl_value_t *k) JL_NOTSAFEPOINT;
+int jl_kind_le(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT;
+jl_value_t *jl_kind_meet(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT JL_GLOBALLY_ROOTED;
+int jl_typeeq_is_bottom_class(jl_value_t *T) JL_NOTSAFEPOINT;
+int jl_typeeq_bottomable(jl_value_t *T) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_wrap_TypeEgal(jl_value_t *t) JL_CANSAFEPOINT;  // x -> TypeEgal{x} (egality, no free typevars)
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow) JL_CANSAFEPOINT;
 // Deferred type-cache for typegroup resolution: newly instantiated types that

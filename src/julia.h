@@ -688,10 +688,21 @@ typedef struct JL_GC_TRACKED_TYPE {
     jl_value_t *JL_NONNULL b;
 } jl_intersecttype_t;
 
+// `TypeEq{T, K}` (`Type{T}` when `K === AnyType`): the types `U` with `U == T`
+// (mutual subtyping) whose type tag lies in `K`. `K` is closed and nominal:
+// exactly one of the six kind datatypes, or `AnyType` (never a `Union`;
+// `jl_is_kindset`).
 typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_value_t *JL_NONNULL T;
+    jl_value_t *JL_NONNULL K;
 } jl_typeeq_t;
+
+// `TypeEgal{T}`: the single type object `T` itself (matched by `===`)
+typedef struct JL_GC_TRACKED_TYPE {
+    JL_DATA_TYPE
+    jl_value_t *JL_NONNULL T;
+} jl_typeegal_t;
 
 // in little-endian, isptr is always the first bit, avoiding the need for a branch in computing isptr
 typedef struct {
@@ -2028,13 +2039,21 @@ STATIC_INLINE jl_value_t *jl_typeeq_T(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSA
     return ((jl_typeeq_t*)v)->T;
 }
 
-// `TypeEgal{T}` shares the `jl_typeeq_t` layout, but its sole instance is `T`
-// itself (matched by `===` rather than `==`); used for the dispatch-cache
-// specialization on type values. Free typevars are not permitted inside `T`.
+// the kind set of a `TypeEq{T, K}`: one of the six kind datatypes, or `AnyType`
+STATIC_INLINE jl_value_t *jl_typeeq_K(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    assert(jl_is_typeeq(v));
+    return ((jl_typeeq_t*)v)->K;
+}
+
+// `TypeEgal{T}` shares the leading field of the `jl_typeeq_t` layout, but its sole
+// instance is `T` itself (matched by `===` rather than `==`); used for the
+// dispatch-cache specialization on type values. Free typevars are not permitted
+// inside `T`.
 STATIC_INLINE jl_value_t *jl_typeegal_T(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
     assert(jl_is_typeegal(v));
-    return ((jl_typeeq_t*)v)->T;
+    return ((jl_typeegal_t*)v)->T;
 }
 
 // either type wrapper (the equality `TypeEq`/`Type{T}` or the egality `TypeEgal{T}`)
@@ -2093,7 +2112,6 @@ JL_DLLEXPORT int jl_subtype_env_size(jl_value_t *t) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, int envsz) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_isa(jl_value_t *a, jl_value_t *t) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b) JL_CANSAFEPOINT;
-JL_DLLEXPORT int jl_is_not_broken_subtype(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_has_empty_intersection(jl_value_t *x, jl_value_t *y) JL_CANSAFEPOINT;

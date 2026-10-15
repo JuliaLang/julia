@@ -583,6 +583,9 @@ add_tfunc(Core.bitsizeof, 1, 1, bitsizeof_tfunc, 1)
     xt = widenconst(x)
     x = unwrap_unionall(xt)
     isconstType(x) && return Const(nfields(type_parameter(x)))
+    if isTypeEq(x) && type_kind(x) === DataType
+        x = DataType # every member is a `DataType` object
+    end
     if isa(x, DataType) && !isabstracttype(x)
         if x.name === Tuple.name
             isvatuple(x) && return Int
@@ -839,13 +842,28 @@ function typeof_concrete_vararg(t::DataType)
     return nothing
 end
 
+# the type of `typeof(x)` for a member `x` of a `TypeEq{_, K}`: a tag in the kind set
+function typeof_kind_tfunc(@nospecialize K)
+    K === AnyType && return DataType
+    return Const(K)
+end
+
+# `Core.TypeEq{S, DataType} where S<:t`: the `typeof` of an instance of the abstract
+# (or non-concrete) type `t` is a `DataType` object that is a subtype of `t`
+function typeof_subtype_tfunc(@nospecialize t)
+    S = TypeVar(:S, t)
+    return UnionAll(S, Core.TypeEq{S, DataType})
+end
+
 @nospecs function typeof_tfunc(𝕃::AbstractLattice, t)
     isa(t, Const) && return Const(typeof(t.val))
     t = widenconst(t)
     if isconstType(t)
         return Const(typeof(type_parameter(t)))
     elseif isTypeEq(t)
-        # the value is only `== tp`, so its `typeof` is not pinned down (#61323)
+        # the value is only `== tp`, so its `typeof` is pinned down only to the
+        # kind set (#61323)
+        return typeof_kind_tfunc(type_kind(t))
     elseif isa(t, DataType)
         if isconcretetype(t)
             return Const(t)
@@ -856,7 +874,7 @@ end
                 tt = typeof_concrete_vararg(t)
                 tt === nothing || return tt
             end
-            return Type{<:t}
+            return typeof_subtype_tfunc(t)
         end
     elseif isa(t, Union)
         a = widenconst(_typeof_tfunc(𝕃, t.a))
@@ -871,7 +889,7 @@ end
                     return rewrap_unionall(uu, t)
                 end
             else
-                return rewrap_unionall(Type{u}, t)
+                return rewrap_unionall(Core.TypeEq{u, DataType}, t)
             end
         end
         return rewrap_unionall(widenconst(typeof_tfunc(𝕃, u)), t)
@@ -932,7 +950,7 @@ end
     end
     if !has_free_typevars(t)
         if ⊑(𝕃, v, t)
-            if isexact && isnotbrokensubtype(v, t)
+            if isexact
                 return Const(true)
             end
         else
@@ -944,8 +962,8 @@ end
             v = widenconst(v)
             isdispatchelem(v) && return Const(false)
             if !hasintersect(v, t)
-                # similar to `isnotbrokensubtype` check above, `typeintersect(v, t)`
-                # can't be trusted for kind types so we do an extra check here
+                # `typeintersect(v, t)` can't be trusted for kind types, so do an
+                # extra check here
                 if !iskindtype(v)
                     return Const(false)
                 end
@@ -1101,7 +1119,8 @@ end
     if isa(s, Union)
         return getfield_nothrow(𝕃, rewrap_unionall(s.a, s00), name, boundscheck) &&
                getfield_nothrow(𝕃, rewrap_unionall(s.b, s00), name, boundscheck)
-    elseif isa(s, Core.TypeEgal) && isTypeDataType(type_parameter(s))
+    elseif (isa(s, Core.TypeEgal) && isTypeDataType(type_parameter(s))) ||
+           (isTypeEq(s) && type_kind(s) === DataType)
         s = s0 = DataType
     end
     if isa(s, DataType)
@@ -1276,6 +1295,8 @@ end
                     return Const(sv.name)
                 end
                 s = DataType
+            elseif isTypeEq(s) && type_kind(s) === DataType
+                s = DataType # every member is a `DataType` object
             end
         end
     end
@@ -1792,8 +1813,14 @@ valid_tparam_type(T::Core.TypeEgal) = true
 valid_tparam_type(U::Union) = valid_tparam_type(U.a) && valid_tparam_type(U.b)
 valid_tparam_type(U::UnionAll) = valid_tparam_type(unwrap_unionall(U))
 
+# is `K` a valid kind set parameter of `TypeEq{T, K}`: `AnyType` or one of the
+# six kinds (never a `Union`)?
 function typeeq_apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any})
-    length(argtypes) == 2 || return false
+    (length(argtypes) == 2 || length(argtypes) == 3) || return false
+    if length(argtypes) == 3
+        kt = maybe_singleton_const(widenslotwrapper(widenconditional(argtypes[3])))
+        (isa(kt, Const) && iskindtype(kt.val)) || return false
+    end
     ai = widenslotwrapper(widenconditional(argtypes[2]))
     # a bare `TypeEgal{T}` element pins the argument value like `Const(T)` does
     ai = maybe_singleton_const(ai)
@@ -1809,31 +1836,43 @@ function typeeq_apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any})
 end
 
 function typeeq_apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
-    length(argtypes) == 2 || return Bottom
+    (length(argtypes) == 2 || length(argtypes) == 3) || return Bottom
+    K = AnyType
+    # when only the class is known the result is a `TypeEq`, except that a kind
+    # set admitting no member of the class gives the empty set `Union{}` (tag
+    # `TypeofBottom`): `TypeEq{Int, TypeofBottom}`, `TypeEq{Union{}, DataType}`
+    rt = TypeEq
+    if length(argtypes) == 3
+        kt = maybe_singleton_const(widenslotwrapper(argtypes[3]))
+        isa(kt, Const) || return Union{TypeEq, Core.TypeofBottom}
+        K = kt.val
+        iskindtype(K) || return Bottom
+        K === AnyType || (rt = Union{TypeEq, Core.TypeofBottom})
+    end
     ai = widenslotwrapper(argtypes[2])
     # a bare `TypeEgal{T}` element pins the argument value like `Const(T)` does
     ai = maybe_singleton_const(ai)
     if isa(ai, Const)
         v = ai.val
         (isa(v, Type) || isa(v, TypeVar) || valid_tparam(v)) || return Bottom
-        return Const(apply_type(TypeEq, v))
+        return Const(apply_type(TypeEq, v, K))
     end
     if isTypeEq(ai)
-        # the argument is only `== X`, so the result is only `== Type{X}` (#61323)
-        return Type{ai}
+        # the argument is only `== X`, so the result is only `== TypeEq{X, K}` (#61323)
+        return Type{Core.TypeEq{type_parameter(ai), K}}
     end
     if isa(ai, PartialTypeVar)
-        (ai.lb_certain && ai.ub_certain) || return TypeEq
-        return Type{TypeEq{ai.tv}}
+        (ai.lb_certain && ai.ub_certain) || return rt
+        return Type{Core.TypeEq{ai.tv, K}}
     end
     ai = widenconst(ai)
     if ⊑(𝕃, ai, AnyType) || ⊑(𝕃, ai, TypeVar) || (isa(ai, Type) && valid_tparam_type(ai))
-        return TypeEq
+        return rt
     end
     if isa(ai, Type) && isconcretetype(ai)
         return Bottom
     end
-    return TypeEq
+    return rt
 end
 
 # like `TypeEq`, but only closed type values are valid parameters
