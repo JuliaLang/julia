@@ -3880,6 +3880,25 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image) JL_C
 #endif
 }
 
+// A package image's .ji ends with the crc32c of the rest of the file. Checking it on
+// the buffer we load from saves the loader a separate pass over the file.
+static int jl_image_ji_crc_valid(const char *data, size_t size) JL_CANSAFEPOINT
+{
+    ios_t f;
+    uint32_t flags = 0, checksum = 0;
+    int64_t dataendpos = 0, datastartpos = 0;
+    ios_static_buffer(&f, (char *)data, size);
+    int err = jl_read_verify_header(&f, &flags, &checksum, &dataendpos, &datastartpos);
+    ios_close(&f);
+    // a system image carries no checksum, and a bad header is reported later
+    if (err != 0 || !(flags & JI_FLAG_PKGIMAGE) || size < sizeof(uint32_t))
+        return 1;
+    uint32_t expected;
+    memcpy(&expected, data + size - sizeof(uint32_t), sizeof(uint32_t));
+    return jl_crc32c(0, data, size - sizeof(uint32_t)) == expected;
+}
+
+// Returns 0, with *dest NULL, if the checksum of a package image does not match.
 static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_CANSAFEPOINT
 {
     const char *lib_path = jl_pathname_for_handle(handle);
@@ -3925,6 +3944,17 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_
         CloseHandle(map);
         if (!*dest)
             goto error;
+#elif defined(MADV_HUGEPAGE)
+        // Read the file into anonymous memory backed by huge pages rather than mapping
+        // it: relocation writes to nearly every page, and in a private file mapping
+        // each of those writes takes a copy-on-write fault.
+        *dest = (char *)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (*dest == MAP_FAILED)
+            goto error;
+        madvise(*dest, size, MADV_HUGEPAGE);
+        ios_bufmode(&s, bm_none);
+        if (ios_readall(&s, *dest, size) != size)
+            goto error;
 #else
         *dest = (char *)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, s.fd, 0);
         if (*dest == MAP_FAILED)
@@ -3936,10 +3966,23 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_
         if (*dest == NULL)
             goto error;
         ios_bufmode(&s, bm_none);
-        ios_readall(&s, *dest, size);
+        if (ios_readall(&s, *dest, size) != size)
+            goto error;
     }
 
     ios_close(&s);
+    if (!jl_image_ji_crc_valid(*dest, size)) {
+        if (!use_mmap)
+            free(*dest);
+        else
+#ifdef _OS_WINDOWS_
+            UnmapViewOfFile(*dest);
+#else
+            munmap(*dest, size);
+#endif
+        *dest = NULL;
+        return 0;
+    }
     return size;
 
 error:
@@ -3960,6 +4003,11 @@ JL_DLLEXPORT void jl_image_unpack_split_zstd(void *handle, jl_image_buf_t *image
     size_t comp_size = jl_image_get_split_ji(handle, &comp_data, 0);
     image->is_split = 1;
     jl_image_load_metadata(handle, image);
+    if (comp_data == NULL) {
+        image->data = NULL; // checksum mismatch
+        image->size = 0;
+        return;
+    }
     jl_image_decompress(image, comp_data, comp_size);
     free(comp_data);
 }
@@ -4933,6 +4981,12 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
 {
     void *pkgimg_handle = jl_dlopen_e(fname, JL_RTLD_LAZY);
     jl_image_buf_t buf = get_image_buf(pkgimg_handle, /* is_pkgimage */ 1);
+    if (buf.data == NULL) {
+        // unload it, so that a recompiled image at the same path is not served this handle
+        jl_dlclose(pkgimg_handle);
+        return jl_get_exceptionf(jl_errorexception_type,
+            "Invalid checksum in cache file associated with \"%s\".", fname);
+    }
 
     jl_gc_notify_image_load(buf.data, buf.size);
 
