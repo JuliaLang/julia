@@ -231,7 +231,7 @@ function _getbackref(s::Serializer, id::Int)
 end
 
 _sizehint_cycle!(s::AbstractSerializer, n::Integer) = (sizehint!(s.table, n); nothing)
-_sizehint_cycle!(s::Serializer, n::Integer) = (sizehint!(s.cycle_table, n); nothing)
+_sizehint_cycle!(s::Serializer, n::Integer) = (sizehint!(s.cycle_table, n; shrink=false); nothing)
 
 _sizehint_backref!(s::AbstractSerializer, n::Integer) = (sizehint!(s.table, n); nothing)
 _sizehint_backref!(s::Serializer, n::Integer) = (sizehint!(s.backref_table, n; shrink=false); nothing)

@@ -3,7 +3,7 @@
 environment_id = "3cd148ea-4b4b-4490-8382-bf540a93624d"  # generated
 julia_version = "1.14.0-DEV"
 manifest_format = "2.2"
-project_hash = "f8ffaccb74380e5005d1afcca57f3d4eb3c137bc"
+project_hash = "d138a1e857788d5abf3898dbdcfcc3a55cd46ae9"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -287,7 +287,7 @@ version = "10.48.0+0"
     julia_version = "1.6.0"
 
 [[deps.Pkg]]
-deps = ["ArgTools", "Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "Random", "SHA", "TOML", "Tar", "UUIDs", "Zstd_jll", "p7zip_jll"]
+deps = ["ArgTools", "Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Mmap", "Printf", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "Zstd_jll", "libpicosat_jll", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 version = "1.14.0"
 weakdeps = ["REPL"]
@@ -501,7 +501,7 @@ version = "1.70.0+0"
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-version = "17.8.3+0"
+version = "17.8.4+0"
 
     [deps.p7zip_jll.syntax]
     julia_version = "1.6.0"

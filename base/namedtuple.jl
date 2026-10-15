@@ -135,7 +135,7 @@ end
 
 function NamedTuple{names}(nt::NamedTuple) where {names}
     if @generated
-        idx = Int[ fieldindex(nt, names[n]) for n in 1:length(names) ]
+        idx = Int[ fieldindex(nt, names[n]) for n in 1:length(names::Tuple) ]
         types = Tuple{(fieldtype(nt, idx[n]) for n in 1:length(idx))...}
         Expr(:new, :(NamedTuple{names, $types}), Any[ :(getfield(nt, $(idx[n]))) for n in 1:length(idx) ]...)
     else
@@ -449,7 +449,7 @@ function structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn}, Type{NamedTuple{
     if @generated
         names = diff_names(an, bn)
         isempty(names) && return (;) # just a fast pass
-        idx = Int[ fieldindex(a, names[n]) for n in 1:length(names) ]
+        idx = Int[ fieldindex(a, names[n]) for n in 1:length(names::Tuple) ]
         types = Tuple{Any[ fieldtype(a, idx[n]) for n in 1:length(idx) ]...}
         vals = Any[ :(getfield(a, $(idx[n]))) for n in 1:length(idx) ]
         return :( _new_NamedTuple(NamedTuple{$names,$types}, ($(vals...),)) )

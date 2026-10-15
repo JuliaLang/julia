@@ -37,6 +37,10 @@ const BaseTOMLValue = Union{AbstractVector, AbstractDict, Bool, Integer, Abstrac
 
 is_valid_toml_value(@nospecialize(::Any)) = false
 is_valid_toml_value(@nospecialize(::BaseTOMLValue)) = true
+# Packages (e.g. Dates) extend `is_valid_toml_value`. Call it dynamically, so that doing
+# so does not invalidate the printer, which also runs while loading packages.
+_is_valid_toml_value(@nospecialize(x)) =
+    x isa BaseTOMLValue || (@invokelatest is_valid_toml_value(x))::Bool
 
 ########
 # Keys #
@@ -61,11 +65,11 @@ end
 
 function to_toml_value(@nospecialize(f::Function), value)
     if f === identity
-        error("type `$(typeof(value))` is not a valid TOML type, pass a conversion function to `TOML.print`")
+        error(lazy"type `$(typeof(value))` is not a valid TOML type, pass a conversion function to `TOML.print`")
     end
     toml_value = f(value)
-    if !is_valid_toml_value(toml_value)
-        error("TOML syntax function for type `$(typeof(value))` did not return a valid TOML type but a `$(typeof(toml_value))`")
+    if !_is_valid_toml_value(toml_value)
+        error(lazy"TOML syntax function for type `$(typeof(value))` did not return a valid TOML type but a `$(typeof(toml_value))`")
     end
     return toml_value
 end
@@ -295,7 +299,7 @@ function print_table(f::Function, io::IO, a::AbstractDict,
     # First print non-tabular entries
     for key in akeys
         value = a[key]
-        if !is_valid_toml_value(value)
+        if !_is_valid_toml_value(value)
             value = to_toml_value(f, value)
         end
         if is_tabular(value) && !(value in inline_tables)
@@ -322,7 +326,7 @@ function print_table(f::Function, io::IO, a::AbstractDict,
 
     for key in akeys
         value = a[key]
-        if !is_valid_toml_value(value)
+        if !_is_valid_toml_value(value)
             value = to_toml_value(f, value)
         end
         if is_table(value) && !(value in inline_tables)

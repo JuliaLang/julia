@@ -442,18 +442,24 @@ endif
 		$(INSTALL_M) $(build_depsbindir)/$$exe $(DESTDIR)$(private_libexecdir) || exit 1; \
 	done
 ifneq (,$(and $(filter-out none,$(COMPRESS_DEBUG_SECTIONS)),$(findstring $(OS),Linux FreeBSD)))
-	# Compress the debug sections of bundled libraries (e.g. libstdc++ and libgfortran),
-	# which ship them uncompressed. The system image is left out, as it is in nearly every
-	# backtrace and symbolizing it decompresses all of its debug info. Skipped if objcopy
-	# can't compress, like the ELF Tool Chain one in FreeBSD 13's base system.
+	# Compress the debug sections of Julia's executables and libraries, and of bundled
+	# libraries (e.g. libstdc++ and libgfortran), which ship them uncompressed. This is done
+	# here rather than at link time so that the build tree keeps uncompressed debug info for
+	# tools like BOLT. The system image is left out, as it is in nearly every backtrace and
+	# symbolizing it decompresses all of its debug info. Files without debug info or with
+	# compressed debug info are left alone, as objcopy would only rewrite them, and so are
+	# libraries rewritten by BOLT, whose layout GNU objcopy breaks (contrib/optimized
+	# compresses those itself). Skipped if objcopy can't compress, like the ELF Tool Chain
+	# one in FreeBSD 13's base system.
 	if $(OBJCOPY) --help 2>&1 | grep -q -e --compress-debug-sections; then \
-		for lib in $(DESTDIR)$(private_libdir)/*.$(SHLIB_EXT)*; do \
-			case "$${lib##*/}" in sys.$(SHLIB_EXT)|sys-debug.$(SHLIB_EXT)) continue ;; esac; \
-			[ ! -L "$$lib" ] && [ "$$(head -c 4 "$$lib" | tail -c 3)" = ELF ] || continue; \
-			$(OBJCOPY) --compress-debug-sections=$(COMPRESS_DEBUG_SECTIONS) "$$lib" || exit 1; \
+		for file in $(DESTDIR)$(bindir)/julia* $(DESTDIR)$(libdir)/*.$(SHLIB_EXT)* $(DESTDIR)$(private_libdir)/*.$(SHLIB_EXT)*; do \
+			case "$${file##*/}" in sys.$(SHLIB_EXT)|sys-debug.$(SHLIB_EXT)) continue ;; esac; \
+			[ ! -L "$$file" ] && [ "$$(head -c 4 "$$file" | tail -c 3)" = ELF ] || continue; \
+			$(READELF) -SW "$$file" | awk '/\] \.note\.bolt_info / { b = 1 } /\] \.debug_/ { d = 1; if ($$(NF-3) ~ /C/) c = 1 } END { exit !(d && !c && !b) }' || continue; \
+			$(OBJCOPY) --compress-debug-sections=$(COMPRESS_DEBUG_SECTIONS) "$$file" || exit 1; \
 		done; \
 	else \
-		echo "$(OBJCOPY) can't compress debug sections; not compressing bundled libraries"; \
+		echo "$(OBJCOPY) can't compress debug sections; not compressing them"; \
 	fi
 endif
 

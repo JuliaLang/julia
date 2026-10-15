@@ -3466,7 +3466,6 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     if (oldvalue) {
         assert(n > 0);
         if (replaced) {
-            oldvalue = (jl_value_t*)replaced;
             jl_method_t *m = replaced->func.method;
             invalidated = 1;
             method_overwrite(newentry, m);

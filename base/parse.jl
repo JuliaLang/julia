@@ -125,6 +125,19 @@ end
 # Parse the bytes `i:j` of `s`, which must be in bounds, with the grammar above. Returns the
 # value, or `nothing` (or throws, if `raise`) when the bytes are not a valid `T`.
 @inline function parseint_utf8(::Type{T}, s::UTF8String, i::Int, j::Int, base::Int, raise::Bool) where {T<:Integer}
+    # Decimal digits not starting with '0', after an optional sign, need none of the grammar.
+    if (base == 0 || base == 10) && i <= j
+        c = @inbounds codeunit(s, i)
+        neg = T <: Signed && c == UInt8('-')
+        k = i + (neg | (T <: Signed && c == UInt8('+')))
+        if k <= j && ((@inbounds codeunit(s, k)) - UInt8('1') <= 0x08) &
+                     ((@inbounds codeunit(s, j)) - UInt8('0') <= 0x09)
+            n = Parsers.parseint(T, codeunits(s), k, j, 10, neg)
+            n isa Parsers.ParseFailure || return n
+            raise && throw_parseint_error(T, s, i, j, neg ? -1 : 1, 10, k)
+            return nothing
+        end
+    end
     sgn, b, d = parseint_preamble(T <: Signed, base, s, i, j)
     if sgn != 0 && 2 <= b <= 62 && d != 0
         n = Parsers.parseint(T, codeunits(s), d, skipspace_back(s, d, j), b, sgn < 0)

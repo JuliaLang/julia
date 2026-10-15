@@ -77,6 +77,8 @@ Language changes
   (e.g. `Type{Int} <: Union{DataType,UnionAll}` holds). `isa` and dispatch of type *values* are
   unaffected, and a method on `Type{Int}` remains more specific than one on `DataType`
   ([#33136], [#62141]).
+* `Base.cconvert(Ptr{T}, v)` for a strided `SubArray` `v` now returns an internal wrapper around
+  `cconvert(Ptr{T}, parent(v))` plus a byte offset, instead of returning `v` itself ([#60533]).
 
 * `Core.sizeof` of a `primitive type` now rounds its value bytes up to a multiple of its
   alignment rather than only up to a whole byte, so it always equals `Base.elsize(Array{T})`
@@ -124,7 +126,9 @@ Compiler/Runtime improvements
   instead. The default `hit` mode avoids the load and increment at each instrumentation point ([#62724]).
 * Coverage runs can reuse instrumented package images across processes. The counter mode is part of
   the cache identity; `user`, `all`, and `@path` select the same image variants and filter the counters
-  reported. Count images can also serve hit requests ([#62724]).
+  reported. Count images can also serve hit requests ([#62724]). `@path` also uses the ordinary image of
+  a package when neither it nor its dependencies have source files under the path, so the bundled
+  standard library images are not rebuilt with instrumentation ([#63564]).
 * `--code-coverage=all` no longer invalidates system-image code at startup. To collect coverage from
   that code, build Julia with `JULIA_COVERAGE_IMAGES=1`, which instruments the system image and bundled
   package images in hit mode. `@path` instruments newly compiled and interpreted code like `user`,
@@ -304,6 +308,8 @@ Standard library changes
 * A `using`/`import` statement that loads several packages, such as `using A, B, C`, now precompiles
   all of them (and the extensions they make loadable) in a single parallel session, rather than one
   session per package ([#63185]).
+* When listing completions for a module-qualified name such as `Base.Iterators.<TAB><TAB>`, public
+  names are now shown first, followed by non-public names under an `Internal:` header ([#22969], [#63601]).
 
 #### Sockets
 

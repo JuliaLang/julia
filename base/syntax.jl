@@ -188,7 +188,7 @@ function _assert_syntax_node(st::Syntax)
             st.source isa SourceRef ? (false, Any) :
                 (return (st, "unrecognized leaf $(h)"))
         if needs_val && !(st.value isa valtype)
-            return (st, "needs value ::"*string(valtype))
+            return (st, LazyString("needs value ::", valtype))
         end
     else
         # Note some kinds can show up as non-leaves too (mostly from Expr)

@@ -318,6 +318,8 @@ function generate_precompile_statements()
             """
             module $pkgname
             println("Precompiling $pkgname")
+            # like a package using Preferences.jl, so that writing the preferences into the cache is traced
+            Base.record_compiletime_preference(Base.UUID("$pkguuid"), "unset_preference")
             end
             """)
         write(joinpath(pkgpath, "Project.toml"),
@@ -391,7 +393,8 @@ function generate_precompile_statements()
     n_succeeded = 0
     executed = Set{String}()
     for statement in statements
-        statement = strip(statement)
+        # package precompilation traces put the compile time in a leading `#= ... =#`
+        statement = strip(replace(statement, r"^#=.*?=#" => ""))
         # the hardcoded statements are written as a commented block
         (isempty(statement) || startswith(statement, '#')) && continue
         # Main should be completely clean

@@ -251,50 +251,46 @@ void jl_dump_emitted_mi_name_impl(void *s)
     **jl_ExecutionEngine->get_dump_emitted_mi_name_stream() = (ios_t*)s;
 }
 
-// Source paths recorded in the system image refer to the build tree: Base files are
-// relative to its `base` directory, stdlibs are absolute paths on the build machine.
-// Base registers prefix rewrites (from, to) that map them onto the installed sources,
-// so that the debug info of JIT-compiled code points debuggers at files that exist.
+// Prefix rewrites (from, to) registered by Base, mapping source paths recorded in the
+// build tree onto the installed sources for JIT debug info.
 static std::mutex source_path_lock;
 static SmallVector<std::pair<std::string, std::string>, 0> source_path_map;
-static StringMap<std::string> resolved_source_paths;
 
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_set_debuginfo_source_paths_impl(jl_value_t *map)
 {
     std::lock_guard<std::mutex> guard(source_path_lock);
     source_path_map.clear();
-    resolved_source_paths.clear();
     size_t n = jl_svec_len(map);
     for (size_t i = 0; i + 1 < n; i += 2)
         source_path_map.emplace_back(jl_string_data(jl_svecref(map, i)),
                                      jl_string_data(jl_svecref(map, i + 1)));
 }
 
-// Apply the first rewrite whose prefix matches and whose result exists. A relative
-// prefix only applies to relative paths, so the empty prefix acts as a search
-// directory for them, just like `Base.find_source_file`.
-static std::string resolve_source_path(StringRef file) JL_NOTSAFEPOINT
+// Return (directory, name) for the debug info using the first matching rewrite, without
+// file system access. Prefix and name must both be absolute or both relative. The name
+// keeps the part after a relative prefix, or the whole absolute path, since that is what
+// `code_llvm` and `code_native` print. Unmatched relative names get an empty directory.
+static std::pair<std::string, std::string> resolve_source_path(StringRef file) JL_NOTSAFEPOINT
 {
     std::lock_guard<std::mutex> guard(source_path_lock);
-    auto it = resolved_source_paths.find(file);
-    if (it != resolved_source_paths.end())
-        return it->second;
-    std::string resolved = file.str();
     bool isabs = sys::path::is_absolute(file);
     for (auto &[from, to] : source_path_map) {
         if (sys::path::is_absolute(from) != isabs || !file.starts_with(from))
             continue;
+        StringRef rest = file.substr(from.size());
         SmallString<256> path(to);
-        sys::path::append(path, file.substr(from.size()));
-        sys::path::remove_dots(path, true);
-        if (sys::fs::exists(path)) {
-            resolved = std::string(path);
-            break;
+        if (isabs) {
+            sys::path::append(path, rest);
+            sys::path::remove_dots(path, true);
+            return {sys::path::parent_path(path).str(), std::string(path)};
         }
+        sys::path::remove_dots(path, true);
+        return {path.empty() ? "." : std::string(path), rest.str()};
     }
-    resolved_source_paths[file] = resolved;
-    return resolved;
+    if (isabs)
+        return {sys::path::parent_path(file).str(), file.str()};
+    return {};
 }
 
 extern "C" {
@@ -1902,6 +1898,7 @@ struct jl_aliascache_t {
     jl_aliasinfo_t value;         // jl_value_t of statically unknown type
     jl_aliasinfo_t immut;         // the payload of an immutable jl_value_t
     jl_aliasinfo_t mutab;         // the fields of a mutable jl_value_t
+    jl_aliasinfo_t mutab_nonconst; // the non-constant fields of a mutable jl_value_t
     jl_aliasinfo_t binding;       // jl_binding_t::value
     jl_aliasinfo_t datatype;      // datatype
     jl_aliasinfo_t array;         // jl_array_t header
@@ -2356,6 +2353,7 @@ void jl_aliascache_t::initialize(jl_codectx_t &ctx)
     binding = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_binding);
     value = jl_aliasinfo_t(ctx, Region::data, tbaa.tbaa_value);
     mutab = jl_aliasinfo_t(ctx, Region::mutfields, tbaa.tbaa_field);
+    mutab_nonconst = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_field);
     immut = jl_aliasinfo_t(ctx, Region::immutdata, tbaa.tbaa_field);
     datatype = jl_aliasinfo_t(ctx, Region::mutconstdata, tbaa.tbaa_datatype);
     array = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_array);
@@ -5886,8 +5884,7 @@ isdefined_unknown_idx:
     }
 
     else if (f == BUILTIN(current_scope) && (nargs == 0)) {
-        jl_aliasinfo_t scope_ai = ctx.alias().gcframe;
-        Instruction *v = scope_ai.decorateInst(
+        Instruction *v = ctx.alias().mutab_nonconst.decorateInst(
             ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, get_scope_field(ctx), ctx.types().alignof_ptr));
         *ret = mark_julia_type(ctx, v, /*boxed*/ true, rt);
         return true;
@@ -5980,7 +5977,7 @@ isdefined_unknown_idx:
         Value *src = boxed(ctx, argv[1]);
         Value *bound_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, bound_cancel_token), "bound_cancel_token");
         Value *bound_default_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, bound_cancel_default), "bound_cancel_default");
-        jl_aliasinfo_t ai = ctx.alias().gcframe;
+        jl_aliasinfo_t ai = ctx.alias().mutab_nonconst;
         Value *nothing_val = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_nothing));
         Type *T_int8 = getInt8Ty(ctx.builder.getContext());
 
@@ -7316,14 +7313,14 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
 #else
             // No barrier required: old Tasks are implicitly in the GC remset
 #endif
-            ctx.alias().gcframe.decorateInst(
+            ctx.alias().mutab_nonconst.decorateInst(
                 ctx.builder.CreateAlignedStore(scope_to_restore, scope_ptr, ctx.types().alignof_ptr));
             // This inline restore is the only scope swap not bracketed by the
             // exception-handler save/restore, so it must invalidate the
             // task's cached scoped-default cancellation token itself (see
             // bound_cancel_default in julia_threads.h).
             Value *bcd_ptr = emit_ptrgep(ctx, get_current_task(ctx), offsetof(jl_task_t, bound_cancel_default), "bound_cancel_default");
-            ctx.alias().gcframe.decorateInst(
+            ctx.alias().mutab_nonconst.decorateInst(
                 ctx.builder.CreateAlignedStore(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), bcd_ptr, Align(1)));
         }
     }
@@ -9358,9 +9355,9 @@ static jl_datatype_t *compute_va_type(jl_value_t *sig, size_t nreq) JL_CANSAFEPO
 static DIFile *get_difile(jl_codectx_t &ctx, DIBuilder &dbuilder, StringRef file, bool is_user_code)
 {
     if (!ctx.emission_context.imaging_mode && (!is_user_code || sys::path::is_absolute(file))) {
-        std::string path = resolve_source_path(file);
-        if (sys::path::is_absolute(path))
-            return dbuilder.createFile(sys::path::filename(path), sys::path::parent_path(path));
+        auto [dir, name] = resolve_source_path(file);
+        if (!dir.empty())
+            return dbuilder.createFile(name, dir);
     }
     return dbuilder.createFile(file, ".");
 }
@@ -10741,13 +10738,13 @@ static jl_llvm_functions_t
                 // No barrier required: old Tasks are implicitly in the GC remset
 #endif
                 StoreInst *scope_store = ctx.builder.CreateAlignedStore(scope_boxed, scope_ptr, ctx.types().alignof_ptr);
-                ctx.alias().gcframe.decorateInst(current_scope);
-                ctx.alias().gcframe.decorateInst(scope_store);
+                ctx.alias().mutab_nonconst.decorateInst(current_scope);
+                ctx.alias().mutab_nonconst.decorateInst(scope_store);
                 // Installing a new scope invalidates the task's cached
                 // scoped-default cancellation token (see bound_cancel_default
                 // in julia_threads.h).
                 Value *bcd_ptr = emit_ptrgep(ctx, get_current_task(ctx), offsetof(jl_task_t, bound_cancel_default), "bound_cancel_default");
-                ctx.alias().gcframe.decorateInst(
+                ctx.alias().mutab_nonconst.decorateInst(
                     ctx.builder.CreateAlignedStore(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), bcd_ptr, Align(1)));
                 // GC preserve the current_scope, since it is not rooted in the `jl_handler_t *`,
                 // the newly entered scope is preserved through the current_task.

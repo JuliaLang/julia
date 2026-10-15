@@ -553,14 +553,16 @@ function descend_params(io::IO, @nospecialize(sig), @nospecialize(called))
     end
     sig isa DataType && called isa DataType || return nothing
     sig.name === called.name || return nothing
-    n = length(sig.parameters)
-    n > 0 && n == length(called.parameters) || return nothing
+    sp = (sig::DataType).parameters
+    cp = (called::DataType).parameters
+    n = length(sp)
+    n > 0 && n == length(cp) || return nothing
     sig.name === typename(NamedTuple) && return nothing
-    (any(isvarargtype, sig.parameters) || any(isvarargtype, called.parameters)) && return nothing
+    (any(isvarargtype, sp) || any(isvarargtype, cp)) && return nothing
     sa = make_typealias(sig, io)
     ca = make_typealias(called, io)
     if sa === nothing && ca === nothing
-        return sig.parameters, called.parameters, nothing
+        return sp, cp, nothing
     elseif sa !== nothing && ca !== nothing && sa[1] === ca[1]
         se = sa[2]::SimpleVector
         ce = ca[2]::SimpleVector

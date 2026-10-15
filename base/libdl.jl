@@ -317,7 +317,7 @@ struct LazyLibraryPath
     pieces::Tuple{Vararg{Any}}
     LazyLibraryPath(pieces...) = new(pieces)
 end
-@inline Base.string(llp::LazyLibraryPath) = joinpath(String[string(p) for p in llp.pieces])
+@inline Base.string(llp::LazyLibraryPath) = joinpath(String[string(p)::String for p in llp.pieces])
 Base.cconvert(::Type{Cstring}, llp::LazyLibraryPath) = Base.cconvert(Cstring, string(llp))
 # Define `print` so that we can wrap this in a `LazyString`
 Base.print(io::IO, llp::LazyLibraryPath) = print(io, string(llp))

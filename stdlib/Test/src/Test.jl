@@ -3011,7 +3011,6 @@ struct GenericOrder{T}
 end
 Base.isless(x::GenericOrder, y::GenericOrder) = isless(x.val,y.val)
 
-Base.keys(a::GenericArray) = keys(a.a)
 Base.axes(a::GenericArray) = axes(a.a)
 Base.length(a::GenericArray) = length(a.a)
 Base.size(a::GenericArray) = size(a.a)
