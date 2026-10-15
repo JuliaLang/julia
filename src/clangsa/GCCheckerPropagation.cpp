@@ -1106,9 +1106,11 @@ void GCChecker::checkPostStmt(const CStyleCastExpr *CE,
 SymbolRef GCChecker::getSymbolForResult(const Expr *Result,
                                         bool ShouldConjure,
                                         ProgramStateRef &State,
-                                        CheckerContext &C) const {
+                                        CheckerContext &C,
+                                        bool AllowVoidPointee) const {
   QualType QT = getAtomicValueType(Result->getType());
-  if (!QT->isPointerType() || QT->getPointeeType()->isVoidType())
+  if (!QT->isPointerType() ||
+      (!AllowVoidPointee && QT->getPointeeType()->isVoidType()))
     return nullptr;
   auto ValLoc = State->getSVal(Result, C.getStackFrame()).getAs<Loc>();
   if (!ValLoc) {
@@ -1129,7 +1131,7 @@ SymbolRef GCChecker::getSymbolForResult(const Expr *Result,
 }
 
 void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
-                                  CheckerContext &C) const {
+                                  CheckerContext &C, bool IsDataCarrier) const {
   Parent = Parent->IgnoreParenCasts();
   if (auto UO = dyn_cast<UnaryOperator>(Parent)) {
     if (UO->getOpcode() == UO_AddrOf) {
@@ -1161,7 +1163,10 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
     bool ResultIsArrayList = isJuliaType(
         [](StringRef Name) { return Name.ends_with("arraylist_t"); },
         Result->getType());
-    if (!(ParentIsModule && ResultIsArrayList) && isGCTracked(Parent)) {
+    // A data carrier is not a GC value, but it must keep tracking the
+    // object that owns the storage it points into.
+    if (!IsDataCarrier && !(ParentIsModule && ResultIsArrayList) &&
+        isGCTracked(Parent)) {
       ResultTracked = false;
     }
   }
@@ -1201,7 +1206,8 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
   if (!OldValS && !ParentObjects.isEmpty()) {
     OldValS = aggregateObjectState(State, ParentObjects);
   }
-  SymbolRef NewSym = getSymbolForResult(Result, OldValS.has_value(), State, C);
+  SymbolRef NewSym = getSymbolForResult(Result, OldValS.has_value(), State, C,
+                                        /*AllowVoidPointee=*/IsDataCarrier);
   if (!NewSym) {
     return;
   }
@@ -1336,10 +1342,45 @@ void GCChecker::checkPostStmt(const ArraySubscriptExpr *ASE,
   checkDerivingExpr(ASE, ASE->getLHS(), C);
 }
 
+// The data pointer of an Array (`a->ref.ptr_or_offset`, as read by
+// `jl_array_data`) or of a GenericMemory (`m->ptr`, as read by
+// `jl_genericmemory_ptr_data`) is not a Julia object, but it points into
+// storage that the Array or Memory keeps alive. Return the expression for that
+// owner, so the pointer can be tracked as a carrier derived from it, like
+// `jl_svec_data`.
+const Expr *GCChecker::getDataCarrierOwner(const MemberExpr *ME) {
+  const auto *FD = dyn_cast<FieldDecl>(ME->getMemberDecl());
+  if (!FD)
+    return nullptr;
+  const Expr *Base = ME->getBase()->IgnoreParens();
+  if (!ME->isArrow() && FD->getName() == "ptr_or_offset" &&
+      isGenericMemoryRefType(Base->getType())) {
+    // `a->ref.ptr_or_offset`: the owner is the object that embeds the ref
+    const auto *RefME = dyn_cast<MemberExpr>(Base);
+    if (RefME && RefME->isArrow() &&
+        isGCObjectType(RefME->getBase()->IgnoreParens()->getType()))
+      return RefME->getBase();
+    return nullptr;
+  }
+  if (ME->isArrow() && FD->getName() == "ptr") {
+    QualType BaseType = Base->getType();
+    if (BaseType->isPointerType() &&
+        isJuliaType(
+            [](StringRef Name) { return Name.ends_with("jl_genericmemory_t"); },
+            BaseType->getPointeeType()))
+      return ME->getBase();
+  }
+  return nullptr;
+}
+
 void GCChecker::checkPostStmt(const MemberExpr *ME, CheckerContext &C) const {
   if (isAssignmentLHS(ME, C))
     return;
   clang::Expr *Base = ME->getBase();
+  if (const Expr *Owner = getDataCarrierOwner(ME)) {
+    checkDerivingExpr(ME, Owner, C, /*IsDataCarrier=*/true);
+    return;
+  }
   if (!isGCTracked(ME)) {
     // Keep non-GC carrier fields that are known to expose GC-owned storage.
     bool ParentIsModule = isJuliaType(
@@ -1815,6 +1856,18 @@ void GCChecker::checkBind(SVal LVal, SVal RVal, const clang::Stmt *S,
     if (!LHSParentObjects.isEmpty())
       State = addObjectRegionEdges(State, LHSParentObjects, R);
     State = bindRegionToObjects(State, R, RValObjects, C);
+    if (IsRootingRegion && !RValMayBeFreed) {
+      // A value of unknown provenance (e.g. written by an opaque callee into
+      // a rooted out-parameter) is untracked, which normally means it is
+      // assumed to be kept alive elsewhere. Once it is stored into a GC frame
+      // slot, that slot is the only root we know of, so treat it like a fresh
+      // allocation: it may be freed if it becomes unreachable again.
+      for (GCObject Object : RValObjects) {
+        const LivenessState *ObjectState = State->get<GCObjectStateMap>(Object);
+        if (ObjectState && ObjectState->isUntracked())
+          State = State->set<GCObjectStateMap>(Object, LivenessState::getAllocated());
+      }
+    }
     if (RValMayBeFreed) {
       report_value_error(C, Sym, "Trying to root value which may have been GCed");
       if (IsRootingRegion) {

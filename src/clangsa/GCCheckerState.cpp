@@ -285,8 +285,13 @@ GCChecker::getObjectsForSymbol(const ProgramStateRef &State,
       return Objects;
   }
   if (GCObject Object = dyn_cast<SymbolConjured>(Sym)) {
-    if (!isGCObjectType(getAtomicValueType(Sym->getType())))
-      return emptyObjectSet(State);
+    if (!isGCObjectType(getAtomicValueType(Sym->getType()))) {
+      // A conjured carrier such as the result of `jl_array_ptr_data` is not
+      // an object itself, but its region may be bound to the objects that
+      // own the storage it points into.
+      return getMappedRegionObjects(
+          State->getStateManager().getRegionManager().getSymbolicRegion(Sym));
+    }
     return singletonObjectSet(State, Object);
   }
   if (const MemRegion *Origin = Sym->getOriginRegion()) {
