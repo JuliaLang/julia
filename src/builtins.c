@@ -222,6 +222,9 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
         }
         return 0;
     }
+    if (dtag == jl_tvarref_tag << 4) {
+        return jl_tvarref_depth(a) == jl_tvarref_depth(b);
+    }
     if (dtag == jl_unionall_tag << 4) {
         jl_unionall_t *ua = (jl_unionall_t*)a;
         jl_unionall_t *ub = (jl_unionall_t*)b;
@@ -325,6 +328,8 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
             return compare_fields(a, b, jl_quotenode_type);
         case jl_unionall_tag:
             return egal_types(a, b, NULL, 1);
+        case jl_tvarref_tag:
+            return jl_tvarref_depth(a) == jl_tvarref_depth(b);
         case jl_uniontype_tag:
             return compare_fields(a, b, jl_uniontype_type);
         case jl_typeeq_tag:
@@ -460,6 +465,9 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
         h = bitmix(h, type_object_id_(u->var->ub, env));
         jl_varidx_t e = { u->var, env };
         return bitmix(h, type_object_id_(u->body, &e));
+    }
+    if (tv == jl_tvarref_type) {
+        return inthash(jl_tvarref_depth(v)) ^ 0x171717aabb00cc55;
     }
     if (tv == jl_datatype_type) {
         jl_datatype_t *dtv = (jl_datatype_t*)v;
@@ -619,6 +627,12 @@ JL_CALLABLE(jl_f_has_free_typevars)
 {
     JL_NARGS(has_free_typevars, 1, 1);
     return jl_has_free_typevars(args[0]) ? jl_true : jl_false;
+}
+
+JL_CALLABLE(jl_f_has_dangling_tvarrefs)
+{
+    JL_NARGS(has_dangling_tvarrefs, 1, 1);
+    return jl_has_dangling_tvarrefs(args[0]) ? jl_true : jl_false;
 }
 
 JL_CALLABLE(jl_f_sizeof)
@@ -1420,6 +1434,9 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow) JL_C
         jl_value_t *tt = jl_tparam1(st);
         while (jl_is_typevar(tt))
             tt = ((jl_tvar_t*)tt)->ub;
+        if (jl_is_tvarref(tt))
+            // a detached fragment: the binder's bound is not known here
+            return (jl_value_t*)jl_any_type;
         if (tt == (jl_value_t*)jl_any_type)
             return (jl_value_t*)jl_any_type;
         if (tt == (jl_value_t*)jl_bottom_type)
@@ -2211,9 +2228,12 @@ JL_CALLABLE(jl_f__expr)
 // Typevar constructor for internal use
 JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub)
 {
-    if (lb != jl_bottom_type && !jl_is_type(lb) && !jl_is_typevar(lb))
+    // a bare bound-variable reference is admitted as a bound: the nested
+    // binders of a positionally opened `UnionAll` (`jl_unionall_inner`) keep
+    // their TypeVar, whose bounds then refer to the opened binders by position
+    if (lb != jl_bottom_type && !jl_is_type(lb) && !jl_is_typevar(lb) && !jl_is_tvarref(lb))
         jl_type_error_rt("TypeVar", "lower bound", (jl_value_t *)jl_type_type, lb);
-    if (ub != (jl_value_t *)jl_any_type && !jl_is_type(ub) && !jl_is_typevar(ub))
+    if (ub != (jl_value_t *)jl_any_type && !jl_is_type(ub) && !jl_is_typevar(ub) && !jl_is_tvarref(ub))
         jl_type_error_rt("TypeVar", "upper bound", (jl_value_t *)jl_type_type, ub);
     jl_task_t *ct = jl_current_task;
     jl_tvar_t *tv = (jl_tvar_t *)jl_gc_alloc(ct->ptls, sizeof(jl_tvar_t), jl_tvar_type);
@@ -3055,6 +3075,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("TypeName", (jl_value_t*)jl_typename_type);
     add_builtin("DataType", (jl_value_t*)jl_datatype_type);
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
+    add_builtin("TypeVarRef", (jl_value_t*)jl_tvarref_type);
     add_builtin("UnionAll", (jl_value_t*)jl_unionall_type);
     add_builtin("Union", (jl_value_t*)jl_uniontype_type);
     add_builtin("Intersect", (jl_value_t*)jl_intersect_type);

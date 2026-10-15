@@ -930,7 +930,7 @@ end
 function some_field_requires_inhabited_param(t::DataType, i::Int)
     base = unwrap_unionall(t.name.wrapper)::DataType
     tv = base.parameters[i]
-    tv isa TypeVar || return false
+    tv isa TypeVar || tv isa TypeVarRef || return false
     ftypes = datatype_fieldtypes(base)
     for j in 1:datatype_min_ninitialized(base)
         ftypes[j] === tv && return true
@@ -1148,12 +1148,13 @@ function sptypes_from_unspecialized(@nospecialize sig)
     return sptypes
 end
 
-function sp_at_idx(sig::UnionAll, idx::Int)
-    while idx != 1
-        sig = sig.body::UnionAll
-        idx -= 1
+# the binder of the sig at (1-based, outermost-first) index `k`
+function nth_binder(@nospecialize(sig), k::Int)
+    while k > 1
+        sig = unwrap_unionall_one(sig::UnionAll)
+        k -= 1
     end
-    return sig.var
+    return sig::UnionAll
 end
 
 function va_from_vatuple(@nospecialize(t))

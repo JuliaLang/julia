@@ -240,6 +240,7 @@
     XX(jl_gf_invoke_lookup_worlds) \
     XX(jl_global_event_loop) \
     XX(jl_has_empty_intersection) \
+    XX(jl_has_dangling_tvarrefs) \
     XX(jl_has_free_typevars) \
     XX(jl_has_so_reuseport) \
     XX(jl_has_typevar) \
@@ -351,7 +352,9 @@
     XX(jl_new_struct_uninit) \
     XX(jl_new_task) \
     XX(jl_new_typename_in) \
+    XX(jl_new_tvarref) \
     XX(jl_new_typevar) \
+    XX(jl_new_unionall_type) \
     XX(jl_next_from_addrinfo) \
     XX(jl_normalize_to_compilable_sig) \
     XX(jl_no_exc_handler) \
@@ -469,6 +472,7 @@
     XX(jl_toplevel_eval_in) \
     XX(jl_eval_thunk) \
     XX(jl_try_substrtod) \
+    XX(jl_tvarref_occurs) \
     XX(jl_try_substrtof) \
     XX(jl_tty_set_mode) \
     XX(jl_typeassert) \
@@ -502,6 +506,7 @@
     XX(jl_uncompress_argname_n) \
     XX(jl_uncompress_ir) \
     XX(jl_undefined_var_error) \
+    XX(jl_unionall_inner) \
     XX(jl_unwrap_unionall) \
     XX(jl_has_no_field_error) \
     XX(jl_value_ptr) \

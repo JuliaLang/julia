@@ -632,6 +632,19 @@ typedef struct JL_GC_TRACKED_TYPE {
     jl_value_t *JL_NONNULL ub;   // upper bound
 } jl_tvar_t;
 
+// A bound-variable occurrence in de Bruijn form: refers to the `depth`-th
+// enclosing positional (de Bruijn) binder, 1 = innermost. The stored
+// `jl_unionall_t` below binds its variable by the `var` TypeVar object, so a
+// TypeVarRef inside a stored type never resolves to one of its binders: these
+// leaves only occur in detached fragments obtained by positionally opening a
+// UnionAll (`jl_unionall_inner`, the Julia-level `u.inner`), where the
+// opened binders are counted from the fragment outward and a reference whose
+// binder was not opened is "dangling" (`jl_has_dangling_tvarrefs`).
+typedef struct JL_GC_TRACKED_TYPE {
+    JL_DATA_TYPE
+    size_t depth;
+} jl_tvarref_t;
+
 // UnionAll type (iterated union over all values of a variable in certain bounds)
 // written `body where lb<:var<:ub`
 typedef struct JL_GC_TRACKED_TYPE {
@@ -763,17 +776,18 @@ typedef struct JL_GC_TRACKED_TYPE _jl_datatype_t {
     const jl_datatype_layout_t *layout;
     // memoized properties (set on construction)
     uint32_t hash;
-    uint16_t hasfreetypevars:1; // majority part of isconcrete computation
-    uint16_t isconcretetype:1; // whether this type can have instances
-    uint16_t isdispatchtuple:1; // aka isleaftupletype
-    uint16_t isbitstype:1; // relevant query for C-api and type-parameters
-    uint16_t zeroinit:1; // if one or more fields requires zero-initialization
-    uint16_t has_concrete_subtype:1; // If clear, no value will have this datatype
-    uint16_t maybe_subtype_of_cache:1; // Computational bit for has_concrete_supertype. See description in jltypes.c.
-    uint16_t isprimitivetype:1; // whether this is declared with 'primitive type' keyword (sized, no fields, and immutable)
-    uint16_t ismutationfree:1; // whether any mutable memory is reachable through this type (in the type or via fields)
-    uint16_t isidentityfree:1; // whether this type or any object reachable through its fields has non-content-based identity
-    uint16_t smalltag:6; // whether this type has a small-tag optimization
+    uint32_t hasfreetypevars:1; // majority part of isconcrete computation
+    uint32_t isconcretetype:1; // whether this type can have instances
+    uint32_t isdispatchtuple:1; // aka isleaftupletype
+    uint32_t isbitstype:1; // relevant query for C-api and type-parameters
+    uint32_t zeroinit:1; // if one or more fields requires zero-initialization
+    uint32_t has_concrete_subtype:1; // If clear, no value will have this datatype
+    uint32_t maybe_subtype_of_cache:1; // Computational bit for has_concrete_supertype. See description in jltypes.c.
+    uint32_t isprimitivetype:1; // whether this is declared with 'primitive type' keyword (sized, no fields, and immutable)
+    uint32_t ismutationfree:1; // whether any mutable memory is reachable through this type (in the type or via fields)
+    uint32_t isidentityfree:1; // whether this type or any object reachable through its fields has non-content-based identity
+    uint32_t hasescapingrefs:1; // contains a TypeVarRef (a detached fragment, e.g. the positional body of `Vector`)
+    uint32_t smalltag:6; // whether this type has a small-tag optimization
 } jl_datatype_t;
 
 typedef struct JL_GC_TRACKED_TYPE _jl_vararg_t {
@@ -1157,6 +1171,7 @@ typedef struct JL_GC_TRACKED_TYPE {
     XX(slotnumber) \
     XX(ssavalue) \
     XX(gotonode) \
+    XX(tvarref) \
     /* end of JL_SMALL_TYPEOF */
 enum jl_small_typeof_tags {
     jl_null_tag = 0,
@@ -1819,6 +1834,8 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_typeeq(v)      jl_typetagis(v,jl_typeeq_tag<<4)
 #define jl_is_typeegal(v)    jl_typetagis(v,jl_typeegal_tag<<4)
 #define jl_is_typevar(v)     jl_typetagis(v,jl_tvar_tag<<4)
+#define jl_is_tvarref(v)     jl_typetagis(v,jl_tvarref_tag<<4)
+#define jl_tvarref_depth(v)  (((jl_tvarref_t*)(v))->depth)
 #define jl_is_unionall(v)    jl_typetagis(v,jl_unionall_tag<<4)
 #define jl_is_vararg(v)      jl_typetagis(v,jl_vararg_tag<<4)
 #define jl_is_typename(v)    jl_typetagis(v,jl_typename_type)
@@ -2118,7 +2135,20 @@ JL_DLLEXPORT int jl_isa_compileable_sig(jl_tupletype_t *type, jl_svec_t *sparams
 // type constructors
 JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *inmodule, int abstract, int mutabl) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_new_tvarref(size_t depth) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_new_unionall_type(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub, jl_value_t *body) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_instantiate_unionall(jl_unionall_t *u, jl_value_t *p) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_unionall_inner(jl_unionall_t *u) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_has_dangling_tvarrefs(jl_value_t *v) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_has_refs_above(jl_value_t *v, size_t depth) JL_NOTSAFEPOINT;
+// whether a TypeVarRef of depth `idx` occurs in `t`
+JL_DLLEXPORT int jl_tvarref_occurs(jl_value_t *t, size_t idx) JL_NOTSAFEPOINT;
+// "not structurally ground": free typevars and dangling de Bruijn references
+// both disqualify a type from layout/subtype-based reasoning
+STATIC_INLINE int jl_has_free_or_dangling_typevars(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    return jl_has_free_typevars(v) || jl_has_dangling_tvarrefs(v);
+}
 JL_DLLEXPORT jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_apply_type1(jl_value_t *tc, jl_value_t *p1) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_apply_type2(jl_value_t *tc, jl_value_t *p1, jl_value_t *p2) JL_CANSAFEPOINT;

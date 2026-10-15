@@ -716,7 +716,7 @@ function test_properties()
 
         # equality under renaming
         if isa(T, UnionAll)
-            lb, ub = T.var.lb, T.var.ub
+            lb, ub = T.lb, T.ub
             @test isequal_type(T, (@UnionAll lb<:Y<:ub T{Y}))
         end
 
@@ -2060,7 +2060,7 @@ end
                Tuple{Union, F36869{Int64, Missing}})
 
 # issue #37180
-@test !(typeintersect(Tuple{AbstractArray{T}, VecOrMat{T}} where T, Tuple{Array, Any}).body.parameters[1] isa Union)
+@test !(typeintersect(Tuple{AbstractArray{T}, VecOrMat{T}} where T, Tuple{Array, Any}).inner.parameters[1] isa Union)
 
 # issue #37255
 @test Type{Union{}} == Type{T} where {Union{}<:T<:Union{}}
@@ -2731,7 +2731,7 @@ struct S48695{T, N, H<:AbstractArray{T, N}} <: AbstractArray{T, N} end
 let S = Tuple{Type{S48695{T, 2, T48695{B, 2, C}}} where {T<:(Union{Missing, A} where A), B, C}, T48695{T, 2} where T},
     T = Tuple{Type{S48695{T, N, H}}, H} where {T, N, H<:AbstractArray{T, N}}
     V = typeintersect(S, T)
-    vars_in_unionall(s) = s isa UnionAll ? (s.var, vars_in_unionall(s.body)...) : ()
+    vars_in_unionall(s) = s isa UnionAll ? (((v, b) = Base.unionall_open(s); (v, vars_in_unionall(b)...))) : ()
     @test V != Union{}
     @test allunique(vars_in_unionall(V))
     @test typeintersect(V, T) != Union{}
@@ -2804,7 +2804,8 @@ end
 #issue 53366
 let Y = Tuple{Val{T}, Val{Val{T}}} where T
     A = Val{Val{T}} where T
-    T = TypeVar(:T, UnionAll(A.var, Val{A.var}))
+    Avar, _ = Base.unionall_open(A)
+    T = TypeVar(:T, UnionAll(Avar, Val{Avar}))
     B = UnionAll(T, Val{T})
     X = Tuple{A, B}
     @testintersect(X, Y, !Union{})
@@ -3096,7 +3097,7 @@ end
 # Same issue but with the unused typevar in the middle — exercises the wrong-index
 # case where dropping the inner UnionAll would shift later typevars to the wrong slot.
 @test_warn "declares type variable pad but does not use it" @eval g61634(::Type{TW}, ::AbstractArray{T,N}) where {N, pad, TW<:Real, T} = T
-let sig = methods(g61634)[1].sig, N_var = sig.var
+let sig = methods(g61634)[1].sig, (N_var, _) = Base.unionall_open(sig)
     # Force a rename of `b`'s outer typevar by sharing its identity with `x`,
     # which is what causes `inst_type_w_` to rebuild the body and (without the
     # fix) drop the unused inner UnionAll for `pad`.
@@ -3198,6 +3199,13 @@ end
 @test !(Vector <: Vector.body)
 @test typeintersect(Vector.body, Vector) == Vector.body
 @test typeintersect(Vector.body, Vector{Int}) === Union{}
+# the positional body is a detached fragment: a bound-variable reference, not a
+# free TypeVar, stands in for the binder
+@test Vector.inner != Vector
+@test Vector.inner <: Vector
+@test !(Vector <: Vector.inner)
+@test typeintersect(Vector.inner, Vector) == Vector.inner
+@test typeintersect(Vector.inner, Vector{Int}) === Union{}
 let S = TypeVar(:S, Union{}, Number)
     @test typeintersect(Union{S, String}, Number) === Union{}
     @test typeintersect(Union{S, Int}, Number) === Int
@@ -3210,6 +3218,9 @@ abstract type Wrapper61876{X<:Real} end
 struct Sub61876A{T<:Real} <: Wrapper61876{T} end
 struct Sub61876B{T<:Real} <: Wrapper61876{T} end
 @test !(Sub61876A.body <: Wrapper61876)
+let T = TypeVar(:T, Union{}, Real)
+    @test !(Sub61876A{T} <: Wrapper61876)
+end
 @test typejoin(Sub61876A, Sub61876B) <: Wrapper61876
 
 # issue #61876: typeintersect with an innervar whose bound references the
@@ -3484,6 +3495,13 @@ end
         @test u isa UnionAll
         @test Type{Tuple{Int}} <: Union{DataType,UnionAll}
     end
+    # a bounded typevar slot must stay intersectable with a kind class: the
+    # entry gate treats a bound-variable reference like a typevar (a concrete
+    # `Tuple{DataType}` may well meet `Tuple{T} where T<:Type{Int}` — the
+    # member `Tuple{Int}` lies in both)
+    @test typeintersect(Tuple{T} where T<:Type{Int}, Tuple{DataType}) != Union{}
+    @test typeintersect(Tuple{DataType}, Tuple{T} where T<:Type{Int}) != Union{}
+    @test typeintersect(Tuple{T} where T<:Union{Type{Int},Type{Float64}}, Tuple{DataType}) != Union{}
     # `Union{UnionAll, DataType}` is the smallest kind cover for `Type{Int}`
     @test !(Type{Int} <: DataType)
     @test !(Type{Int} <: UnionAll)
@@ -3623,4 +3641,64 @@ let A = Tuple{Real, Vector{S}} where S<:(Union{Nothing,U} where U<:Tuple{Real,Re
     @test B{Int} <: B
     @test B{Int} <: typeintersect(A, B)
     @test B{Int} <: typeintersect(B, A)
+end
+
+# a detached fragment's dangling reference must not be captured by a binder on
+# the other side of the query
+let raw = Vector.inner,
+    X = Type{raw},
+    S = TypeVar(:S),
+    Y = UnionAll(S, Union{DataType, Ref{S}})
+    @test raw isa X
+    @test raw isa Y
+    @test X <: DataType
+    @test DataType <: Y
+    @test X <: Y
+    @test typeintersect(X, Y) === X
+    f_dangling_key(::Union{DataType, Ref{S2}}) where {S2} = 1
+    @test f_dangling_key(raw) == 1
+    @test hasmethod(f_dangling_key, Tuple{Type{raw}})
+    @test invoke(f_dangling_key, Tuple{Type{raw}}, raw) == 1
+end
+
+# typejoin must return an upper bound when the operands' bodies are
+# structurally identical raw terms under different binder bounds; occurrences
+# join through their own binder's bound
+let a = Tuple{T, T} where T<:Number,
+    b = Tuple{S, S} where S<:AbstractString
+    j = typejoin(a, b)
+    @test a <: j
+    @test b <: j
+    @test typejoin(a, a) === a
+    @test typejoin(Tuple{T, Int} where T<:Signed, Tuple{UInt8, Int}) === Tuple{Integer, Int}
+end
+
+# fixing a bound-vararg length during specificity must also fix the references
+# to that binder from the declared bounds of the binders inside it; the body
+# alone left them dangling, and the comparison looped on them
+abstract type SpecDict{S,T} end
+abstract type SpecTensorDict{S,T} <: SpecDict{S,T} end
+abstract type SpecFlatTensorDict{N,S,T} <: SpecTensorDict{S,T} end
+struct SpecSArray{Sz<:Tuple,T,NN,L} end
+let A = Tuple{typeof(similar), SpecFlatTensorDict{N}, Type{T}, Vararg{Int,N}} where {N,S,T<:SpecSArray{Tuple{N},S,1,N}},
+    B1 = Tuple{typeof(similar), SpecTensorDict, Type{T}, Int} where T,
+    B2 = Tuple{typeof(similar), SpecDict{S,T}, Type{S}, Int} where {S,T},
+    B3 = Tuple{typeof(similar), SpecTensorDict, Any, Int},
+    B4 = Tuple{typeof(similar), SpecTensorDict, Type{T}, Vararg{Int}} where T
+    for B in (B1, B2, B3, B4)
+        @test Base.morespecific(A, B)
+        @test !Base.morespecific(B, A)
+    end
+end
+
+# a binder of one argument hoisted into an outer variable's bound (#21243)
+# must stay the same variable across the re-intersection passes: the meet of
+# the pinned bound `Ref{T}` with the next pass's occurrence is computed by
+# intersection (a subtype shortcut treats the hoisted `T` leniently)
+let a = Tuple{Any, Pair{Ref{T},Int} where T<:Number},
+    b = Tuple{V, Pair{V,Int}} where V
+    @test typeintersect(a, b) == (Tuple{Ref{T}, Pair{Ref{T},Int}} where T<:Number)
+    r = ccall(:jl_type_intersection_with_env, Any, (Any, Any), a, b)
+    @test r[1] == (Tuple{Ref{T}, Pair{Ref{T},Int}} where T<:Number)
+    @test r[2][1][1] isa DataType && r[2][1][1].name === Ref.body.name && r[2][1][2] === true
 end

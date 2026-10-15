@@ -541,20 +541,38 @@ ERROR: ArgumentError: Cannot call tail on an empty tuple.
 tail(x::Tuple) = argtail(x...)
 tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
 
+# NOTE: the type walkers here (and their siblings elsewhere in Base) read
+# UnionAll fields with `getfield`: property syntax would dispatch to
+# `getproperty(::UnionAll, ::Symbol)` (operators.jl), whose positional view
+# (`:inner`, `:name`, `:lb`, `:ub`) is computed, not stored.
+
+# the wrapped type of one binder, as stored: the body in TypeVar form (its
+# positional sibling is `u.inner`, which refers to the binder by position)
+unwrap_unionall_one(u::UnionAll) = (@_foldable_meta; getfield(u, :body))
+
 function unwrap_unionall(@nospecialize(a))
     @_foldable_meta
     while isa(a,UnionAll)
-        a = a.body
+        a = unwrap_unionall_one(a)
     end
     return a
 end
 
+# re-close the binders of `u` over `t`, a term derived from `unwrap_unionall(u)`
+# (TypeVar form) or from the positional `u.inner` chain (`TypeVarRef` form:
+# each binder re-binds the references of depth 1 and shifts the deeper ones)
 function rewrap_unionall(@nospecialize(t), @nospecialize(u))
     @_foldable_meta
-    if !isa(u, UnionAll)
-        return t
-    end
-    return UnionAll(u.var, rewrap_unionall(t, u.body))
+    return ccall(:jl_rewrap_unionall, Any, (Any, Any), t, u)
+end
+
+# re-close exactly one binder (that of `u`) over a body derived from
+# `unwrap_unionall_one(u)` or `u.inner`; normalizes like the `where`
+# constructor (drops a vacuous binder, `T where T<:S` => `S`)
+function rewrap_unionall_one(@nospecialize(t), u::UnionAll)
+    @_foldable_meta
+    t === unwrap_unionall_one(u) && return u
+    return ccall(:jl_rewrap_unionall_one, Any, (Any, Any), t, u)
 end
 
 function rewrap_unionall(t::Core.TypeofVararg, @nospecialize(u))
@@ -564,10 +582,23 @@ function rewrap_unionall(t::Core.TypeofVararg, @nospecialize(u))
         return t
     end
     T = rewrap_unionall(t.T, u)
-    if !isdefined(t, :N) || t.N === u.var
+    if !isdefined(t, :N) || t.N === getfield(u, :var) ||
+       (t.N isa TypeVarRef && (t.N::TypeVarRef).depth == unionall_depth(u))
+        # the length was bound by the outermost enclosing binder
         return Vararg{T}
     end
     return Vararg{T, t.N}
+end
+
+# number of binders in a `where` chain
+function unionall_depth(@nospecialize(u))
+    @_foldable_meta
+    n = 0
+    while u isa UnionAll
+        n += 1
+        u = unwrap_unionall_one(u)
+    end
+    return n
 end
 
 # replace TypeVars in all enclosing UnionAlls with fresh TypeVars
@@ -575,11 +606,26 @@ function rename_unionall(@nospecialize(u))
     if !isa(u, UnionAll)
         return u
     end
-    var = u.var::TypeVar
-    body = UnionAll(var, rename_unionall(u.body))
+    var = getfield(u, :var)::TypeVar
+    body = UnionAll(var, rename_unionall(getfield(u, :body)))
     nv = TypeVar(var.name, var.lb, var.ub)
     return UnionAll(nv, body{nv})
 end
+
+# Open a `where` binder: the binder's TypeVar and the body it occurs in
+# (`(var, body)`). Opening nested binders outside-in keeps every extracted
+# subterm free of dangling references.
+unionall_open(u::UnionAll) = (getfield(u, :var), getfield(u, :body))
+
+# The positional view of a binder (`u.name`, `u.lb`, `u.ub`, `u.inner`; see
+# `getproperty(::UnionAll, ::Symbol)` in operators.jl), as functions for code
+# that resolves property syntax to `getfield` (the Compiler). `unionall_inner`
+# is not cached: the result's datatypes are interned by the type cache, and
+# the walk itself is linear in the body.
+unionall_name(u::UnionAll) = (@_total_meta; getfield(getfield(u, :var), :name))
+unionall_lb(u::UnionAll) = (@_total_meta; getfield(getfield(u, :var), :lb))
+unionall_ub(u::UnionAll) = (@_total_meta; getfield(getfield(u, :var), :ub))
+unionall_inner(u::UnionAll) = ccall(:jl_unionall_inner, Any, (Any,), u)
 
 # remove concrete constraint on diagonal TypeVar if it comes from troot
 function widen_diagonal(@nospecialize(t), troot::UnionAll)
@@ -1286,6 +1332,16 @@ julia> .![true false true]
 length(a::Array{T,1}) where {T} = getfield(getfield(a, :size), 1)
 const C_NULL = bitcast(Ptr{Cvoid}, 0)
 has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Int32, (Any, Any), t, v) !== Int32(0)
+
+# whether a de Bruijn reference of depth `i` occurs in `t` (the positional
+# counterpart of `has_typevar`)
+has_typevarref(@nospecialize(t), i::Int) = ccall(:jl_tvarref_occurs, Int32, (Any, Int), t, i) !== Int32(0)
+
+# whether `t` contains a bound-variable reference whose binder is not part of
+# `t` itself (i.e. `t` is a subterm detached from under its binders, such as
+# `u.inner`); such fragments are invisible to `has_free_typevars`
+has_dangling_typevarrefs(@nospecialize t) =
+    (@_total_meta; ccall(:jl_has_dangling_tvarrefs, Int32, (Any,), t) !== Int32(0))
 
 # Check whether all type parameters are constrained by fields or other constrained tvars.
 # `tvars` must be ordered from outermost to innermost `UnionAll`.

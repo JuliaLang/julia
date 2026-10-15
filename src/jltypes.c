@@ -55,12 +55,164 @@ static int typeenv_has_ne(jl_typeenv_t *env, jl_tvar_t *v) JL_NOTSAFEPOINT
     return 0;
 }
 
+// --- de Bruijn bound-variable references ---
+//
+// The stored `UnionAll` binds its variable by the `jl_tvar_t` object, so a
+// `jl_tvarref_t` inside a type never resolves to one of the type's own
+// binders: references are "dangling" leaves of detached fragments, created by
+// opening binders positionally (`jl_unionall_inner`) and consumed by the
+// positional re-closing operations below. Their depth counts the opened
+// binders outward from the fragment; the stored (TypeVar-form) binders are
+// transparent to that count, so a `UnionAll` nested inside a fragment keeps
+// its `var` and contributes no level.
+
+// interning cache for the small depths that essentially all real types use;
+// entries are permanently allocated during initialization (see
+// `jl_init_tvarref_cache`, run alongside the boxed-integer caches) and the
+// array is read-only afterwards. Pointer identity of TypeVarRefs is never
+// relied upon (egal compares the depth), this only reduces allocation.
+#define N_SMALL_TVARREFS 64
+static jl_tvarref_t *small_tvarrefs[N_SMALL_TVARREFS] JL_GLOBALLY_ROOTED;
+
+void jl_init_tvarref_cache(void)
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    for (size_t depth = 1; depth <= N_SMALL_TVARREFS; depth++) {
+        jl_tvarref_t *r = (jl_tvarref_t*)jl_gc_permobj(ptls, sizeof(jl_tvarref_t), jl_tvarref_type, 0);
+        jl_set_typetagof(r, jl_tvarref_tag, GC_OLD_MARKED);
+        r->depth = depth;
+        small_tvarrefs[depth - 1] = r;
+    }
+}
+
+// the permanent reference of a small depth (no allocation)
+jl_value_t *jl_small_tvarref(size_t depth) JL_NOTSAFEPOINT
+{
+    assert(depth >= 1 && depth <= N_SMALL_TVARREFS);
+    jl_tvarref_t *r = small_tvarrefs[depth - 1];
+    assert(r != NULL);
+    return (jl_value_t*)r;
+}
+
+JL_DLLEXPORT jl_value_t *jl_new_tvarref(size_t depth)
+{
+    if (depth == 0 || (ssize_t)depth < 0)
+        jl_errorf("TypeVarRef depth must be positive");
+    if (depth <= N_SMALL_TVARREFS) {
+        jl_tvarref_t *r = small_tvarrefs[depth - 1];
+        assert(r != NULL);
+        return (jl_value_t*)r;
+    }
+    jl_task_t *ct = jl_current_task;
+    jl_tvarref_t *r = (jl_tvarref_t*)jl_gc_alloc(ct->ptls, sizeof(jl_tvarref_t), jl_tvarref_type);
+    jl_set_typetagof(r, jl_tvarref_tag, 0);
+    r->depth = depth;
+    return (jl_value_t*)r;
+}
+
+// does `t` contain a TypeVarRef of depth above `depth` (`depth == 0`: any)?
+// `idx > 0`: only a reference of exactly that depth counts.
+static int has_tvarref_(jl_value_t *t, size_t depth, size_t idx) JL_NOTSAFEPOINT
+{
+    while (1) {
+        if (jl_is_tvarref(t)) {
+            size_t d = jl_tvarref_depth(t);
+            return idx ? d == idx : d > depth;
+        }
+        if (jl_is_unionall(t)) {
+            // the stored binder is transparent to the positional count; its
+            // bounds (outside its scope) and body are both inspected
+            jl_unionall_t *ua = (jl_unionall_t*)t;
+            if (has_tvarref_(ua->var->lb, depth, idx) || has_tvarref_(ua->var->ub, depth, idx))
+                return 1;
+            t = ua->body;
+        }
+        else if (jl_is_datatype(t)) {
+            if (!((jl_datatype_t*)t)->hasescapingrefs)
+                return 0;
+            size_t i, l = jl_nparams(t);
+            for (i = 0; i < l; i++) {
+                if (has_tvarref_(jl_tparam(t, i), depth, idx))
+                    return 1;
+            }
+            return 0;
+        }
+        else if (jl_is_uniontype(t) || jl_is_intersecttype(t)) {
+            if (has_tvarref_(((jl_uniontype_t*)t)->a, depth, idx))
+                return 1;
+            t = ((jl_uniontype_t*)t)->b;
+        }
+        else if (jl_is_some_Type(t)) {
+            t = jl_some_Type_T(t);
+        }
+        else if (jl_is_typeapp(t)) {
+            jl_typeapp_t *ta = (jl_typeapp_t*)t;
+            if (has_tvarref_(ta->head, depth, idx))
+                return 1;
+            t = ta->param;
+        }
+        else if (jl_is_vararg(t)) {
+            jl_vararg_t *vm = (jl_vararg_t*)t;
+            if (!vm->T)
+                return 0;
+            if (vm->N && has_tvarref_(vm->N, depth, idx))
+                return 1;
+            t = vm->T;
+        }
+        else if (jl_is_typevar(t)) {
+            // a free variable's bounds may carry references of the fragment
+            // it was opened from (a nested binder of `jl_unionall_inner`)
+            jl_tvar_t *tv = (jl_tvar_t*)t;
+            if (tv->lb != jl_bottom_type && has_tvarref_(tv->lb, depth, idx))
+                return 1;
+            t = tv->ub;
+        }
+        else {
+            return 0;
+        }
+    }
+}
+
+JL_DLLEXPORT int jl_tvarref_occurs(jl_value_t *t, size_t idx) JL_NOTSAFEPOINT
+{
+    assert(idx > 0);
+    return has_tvarref_(t, 0, idx);
+}
+
+// whether `t` contains a bound-variable reference whose binder is not part of `t`
+// itself (always false for stored types; true for subterms extracted positionally
+// from under their binders, such as `jl_unionall_inner` bodies)
+JL_DLLEXPORT int jl_has_dangling_tvarrefs(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    return has_tvarref_(v, 0, 0);
+}
+
+// whether `t` contains a bound-variable reference pointing above `depth`
+// positional binders (i.e., not resolvable within a chain of that length)
+JL_DLLEXPORT int jl_has_refs_above(jl_value_t *v, size_t depth) JL_NOTSAFEPOINT
+{
+    return has_tvarref_(v, depth, 0);
+}
+
+// positional entries of a `jl_typeenv_t` chain (`var == NULL`), innermost
+// first, describe how `inst_type_w_` rewrites dangling references: the k-th
+// entry stands for the reference level k and either keeps it (`val == NULL`),
+// substitutes a value for it (`val`: the level disappears, deeper references
+// shift down), or drops it (`jl_tvarref_drop_sentinel`: the level must not
+// occur). An insert entry adds a level in front of the remaining ones
+// (deeper references shift up). Levels beyond the entries are kept.
+static uintptr_t jl_tvarref_sentinel_objs[2];
+#define jl_tvarref_insert_sentinel ((jl_value_t*)&jl_tvarref_sentinel_objs[0])
+#define jl_tvarref_drop_sentinel ((jl_value_t*)&jl_tvarref_sentinel_objs[1])
+
 
 static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_CANSAFEPOINT
 {
     while (1) {
         if (jl_is_typevar(v))
             return !typeenv_has(env, (jl_tvar_t*)v);
+        if (jl_is_tvarref(v))
+            return 1;
         if (jl_is_typeapp(v))
             return 1;
         while (jl_is_unionall(v)) {
@@ -786,7 +938,7 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
         jl_value_t *pi = ts[i];
         // reject the internal `Intersect` meet node (see #61917): it must not
         // be embedded into a user-visible `Union`.
-        if (!(jl_is_type(pi) || jl_is_typevar(pi)))
+        if (!(jl_is_type(pi) || jl_is_typevar(pi) || jl_is_tvarref(pi)))
             jl_type_error("Union", (jl_value_t*)jl_type_type, pi);
     }
     if (n == 1)
@@ -801,8 +953,12 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
     size_t j;
     for (i = 0; i < nt; i++) {
         int has_free = temp[i] != NULL && jl_has_free_typevars(temp[i]);
+        // a member with dangling bound-variable references (a detached
+        // fragment) is opaque to subtyping and is kept as spelled
+        if (temp[i] != NULL && jl_has_dangling_tvarrefs(temp[i]))
+            continue;
         for (j = 0; j < nt; j++) {
-            if (j != i && temp[i] && temp[j]) {
+            if (j != i && temp[i] && temp[j] && !jl_has_dangling_tvarrefs(temp[j])) {
                 int has_free2 = has_free | (jl_has_free_typevars(temp[j]) << 1);
                 if (simple_subtype(temp[i], temp[j], has_free2, 1))
                     temp[i] = NULL;
@@ -1081,7 +1237,7 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
             return (jl_value_t*)jl_wrap_vararg(vm->T, NULL, 1, 0);
         }
     }
-    if (!jl_is_type(body) && !jl_is_typevar(body) && !jl_is_typeapp(body))
+    if (!jl_is_type(body) && !jl_is_typevar(body) && !jl_is_typeapp(body) && !jl_is_tvarref(body))
         jl_type_error("UnionAll", (jl_value_t*)jl_type_type, body);
     // normalize `T where T<:S` => S
     if (body == (jl_value_t*)v)
@@ -1527,7 +1683,10 @@ int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT
 static int within_typevar(jl_value_t *t, jl_value_t *vlb, jl_value_t *vub) JL_CANSAFEPOINT
 {
     jl_value_t *lb = t, *ub = t;
-    if (jl_is_typevar(t) || jl_has_free_typevars(t)) {
+    if (jl_is_typevar(t) || jl_has_free_typevars(t) || jl_has_dangling_tvarrefs(t) ||
+        jl_has_dangling_tvarrefs(vlb) || jl_has_dangling_tvarrefs(vub)) {
+        // a bound-variable reference (in the parameter or in the bound) stands
+        // for a binder that was opened elsewhere: the check cannot be made here
         // TODO: automatically restrict typevars in method definitions based on
         // types they are used in.
         return 1;
@@ -1766,6 +1925,98 @@ jl_value_t *jl_unwrap_unionall(jl_value_t *v)
     return v;
 }
 
+// the positional body of `u`: `u->body` with the occurrences of `u->var`
+// replaced by `TypeVarRef(1)` (the references `u->body` already carried, to
+// binders opened further out, move one level up). The result is not cached;
+// its datatypes are interned by the type cache like any other instantiation.
+JL_DLLEXPORT jl_value_t *jl_unionall_inner(jl_unionall_t *u)
+{
+    jl_typeenv_t insert = { NULL, jl_tvarref_insert_sentinel, NULL };
+    jl_typeenv_t env = { u->var, jl_small_tvarref(1),
+                         jl_has_dangling_tvarrefs(u->body) ? &insert : NULL };
+    // check == 0: a structural rewrite (no bound checks or normalization)
+    return inst_type_w_(u->body, &env, NULL, 0, 0, NULL);
+}
+
+static jl_value_t *substitute_tvarref(jl_value_t *t, size_t idx, jl_value_t *val, int nothrow) JL_CANSAFEPOINT
+{
+    assert(idx > 0);
+    jl_typeenv_t *env = (jl_typeenv_t*)alloca(idx * sizeof(jl_typeenv_t));
+    size_t i;
+    // idx-1 kept levels, then the substituted one
+    for (i = 0; i < idx; i++) {
+        env[i].var = NULL;
+        env[i].val = (i == idx - 1) ? val : NULL;
+        env[i].prev = (i == idx - 1) ? NULL : &env[i + 1];
+    }
+    return inst_type_w_(t, &env[0], NULL, 1, nothrow, NULL);
+}
+
+jl_value_t *jl_substitute_tvarref(jl_value_t *t, size_t idx, jl_value_t *val)
+{
+    return substitute_tvarref(t, idx, val, 0);
+}
+
+// tolerant variant: a `Union` arm that becomes invalid under the substitution
+// is dropped; returns NULL if the substituted term is invalid beyond repair
+JL_DLLEXPORT jl_value_t *jl_substitute_tvarref_nothrow(jl_value_t *t, size_t idx, jl_value_t *val)
+{
+    return substitute_tvarref(t, idx, val, 2);
+}
+
+JL_DLLEXPORT jl_value_t *jl_shift_dangling_refs(jl_value_t *t, ssize_t inc)
+{
+    if (inc == 0 || !jl_has_dangling_tvarrefs(t))
+        return t;
+    size_t n = inc > 0 ? (size_t)inc : (size_t)-inc;
+    jl_value_t *sentinel = inc > 0 ? jl_tvarref_insert_sentinel : jl_tvarref_drop_sentinel;
+    jl_typeenv_t *env = (jl_typeenv_t*)alloca(n * sizeof(jl_typeenv_t));
+    for (size_t i = 0; i < n; i++) {
+        env[i].var = NULL;
+        env[i].val = sentinel;
+        env[i].prev = (i == n - 1) ? NULL : &env[i + 1];
+    }
+    return inst_type_w_(t, &env[0], NULL, 0, 0, NULL);
+}
+
+// `UnionAll(name, lb, ub, body)`: the positional sibling of `UnionAll(var, body)`;
+// `body` refers to the new binder as `TypeVarRef(1)`. The fields are validated
+// and the result normalized like the translating constructor (a vacuous
+// binder is dropped, and `T where T<:S` becomes `S`).
+JL_DLLEXPORT jl_value_t *jl_new_unionall_type(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub, jl_value_t *body)
+{
+    JL_TYPECHK(UnionAll, symbol, (jl_value_t*)name);
+    jl_tvar_t *v = jl_new_typevar(name, lb, ub);
+    JL_GC_PUSH2(&v, &body);
+    if (jl_has_dangling_tvarrefs(body))
+        body = jl_substitute_tvarref(body, 1, (jl_value_t*)v);
+    body = jl_type_unionall(v, body);
+    JL_GC_POP();
+    return body;
+}
+
+// wrap `t` (derived from `u->body`, or from `jl_unionall_inner(u)` with the
+// binder as `TypeVarRef(1)`) in `u`'s binder, applying the same normalizations
+// as jl_type_unionall; the error checks there are unnecessary
+JL_DLLEXPORT jl_value_t *jl_rewrap_unionall_one(jl_value_t *t, jl_unionall_t *u)
+{
+    jl_tvar_t *v = u->var;
+    JL_GC_PUSH1(&t);
+    if (jl_has_dangling_tvarrefs(t))
+        t = jl_substitute_tvarref(t, 1, (jl_value_t*)v);
+    // normalize `T where T<:S` => S
+    if (t == (jl_value_t*)v)
+        t = v->ub;
+    // where var doesn't occur in body just return body
+    else if (jl_has_typevar(t, v))
+        //if (v->lb == v->ub)  // TODO maybe
+        //    t = jl_substitute_var(body, v, v->ub);
+        //else
+        t = jl_new_struct(jl_unionall_type, v, t);
+    JL_GC_POP();
+    return t;
+}
+
 // wrap `t` in the same unionalls that surround `u`
 // where `t` is derived from `u`, so the error checks in jl_type_unionall are unnecessary
 jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u)
@@ -1773,18 +2024,8 @@ jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u)
     if (!jl_is_unionall(u))
         return t;
     t = jl_rewrap_unionall(t, ((jl_unionall_t*)u)->body);
-    jl_tvar_t *v = ((jl_unionall_t*)u)->var;
-    // normalize `T where T<:S` => S
-    if (t == (jl_value_t*)v)
-        return v->ub;
-    // where var doesn't occur in body just return body
-    if (!jl_has_typevar(t, v))
-        return t;
     JL_GC_PUSH1(&t);
-    //if (v->lb == v->ub)  // TODO maybe
-    //    t = jl_substitute_var(body, v, v->ub);
-    //else
-    t = jl_new_struct(jl_unionall_type, v, t);
+    t = jl_rewrap_unionall_one(t, (jl_unionall_t*)u);
     JL_GC_POP();
     return t;
 }
@@ -2154,6 +2395,7 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
 {
     int istuple = (dt->name == jl_tuple_typename);
     dt->hasfreetypevars = 0;
+    dt->hasescapingrefs = 0;
     dt->maybe_subtype_of_cache = 1;
     dt->isconcretetype = !dt->name->abstract;
     dt->isdispatchtuple = istuple;
@@ -2163,6 +2405,12 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
         if (!dt->hasfreetypevars) {
             dt->hasfreetypevars = jl_has_free_typevars(p);
             if (dt->hasfreetypevars)
+                dt->isconcretetype = 0;
+        }
+        if (!dt->hasescapingrefs) {
+            // a detached fragment (a positionally opened body) has no instances
+            dt->hasescapingrefs = jl_has_dangling_tvarrefs(p);
+            if (dt->hasescapingrefs)
                 dt->isconcretetype = 0;
         }
         if (istuple) {
@@ -3013,7 +3261,9 @@ static jl_svec_t *inst_ftypes(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *s
         pi = jl_svecref(p, i);
         JL_TRY {
             pi = inst_type_w_(pi, env, stack, 1, 0, dcache);
-            if (!jl_is_type(pi) && !jl_is_typevar(pi)) {
+            // a bound-variable reference (the field of a positionally opened
+            // body) is kept, like a free variable
+            if (!jl_is_type(pi) && !jl_is_typevar(pi) && !jl_is_tvarref(pi)) {
                 pi = jl_bottom_type;
             }
         }
@@ -3105,6 +3355,36 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
     size_t i;
     if (jl_is_typeapp(t))
         return t;
+    if (jl_is_tvarref(t)) {
+        // a dangling reference: rewrite it through the positional entries of
+        // `env` (see `jl_tvarref_insert_sentinel`). The stored binders crossed
+        // on the way here are transparent to the positional count.
+        size_t d = jl_tvarref_depth(t);
+        size_t in = 0, out = 0; // reference levels consumed / produced so far
+        jl_typeenv_t *e = env;
+        while (e != NULL) {
+            if (e->var == NULL) {
+                if (e->val == jl_tvarref_insert_sentinel) {
+                    out++;
+                }
+                else {
+                    in++;
+                    if (in == d) {
+                        if (e->val == NULL)
+                            return out + 1 == d ? t : jl_new_tvarref(out + 1);
+                        if (e->val == jl_tvarref_drop_sentinel)
+                            jl_error("internal error: dropped bound-variable reference level occurs");
+                        return e->val;
+                    }
+                    if (e->val == NULL)
+                        out++;
+                }
+            }
+            e = e->prev;
+        }
+        size_t nd = d - in + out;
+        return nd == d ? t : jl_new_tvarref(nd);
+    }
     if (jl_is_typevar(t)) {
         jl_typeenv_t *e = env;
         while (e != NULL) {
@@ -3381,7 +3661,7 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow
     JL_GC_PUSH1(&t);
     if (check) {
         if (n) {
-            if (jl_is_typevar(n) || jl_is_uniontype(jl_unwrap_unionall(n))) {
+            if (jl_is_typevar(n) || jl_is_tvarref(n) || jl_is_uniontype(jl_unwrap_unionall(n))) {
                 // TODO: this is disabled due to #39698; it is also inconsistent
                 // with other similar checks, where we usually only check substituted
                 // values and not the bounds of variables.
@@ -3678,7 +3958,7 @@ void jl_init_types(void) JL_GC_DISABLED
             "instance",
             "layout",
             "hash",
-            "flags"); // "hasfreetypevars", "isconcretetype", "isdispatchtuple", "isbitstype", "zeroinit", "has_concrete_subtype", "maybe_subtype_of_cache"
+            "flags"); // "hasfreetypevars", "isconcretetype", "isdispatchtuple", "isbitstype", "zeroinit", "has_concrete_subtype", "maybe_subtype_of_cache", ..., "hasescapingrefs"
     jl_datatype_type->types = jl_svec(8,
             jl_typename_type,
             jl_datatype_type,
@@ -3687,7 +3967,7 @@ void jl_init_types(void) JL_GC_DISABLED
             jl_any_type, // instance
             jl_any_type /*jl_voidpointer_type*/,
             jl_any_type /*jl_int32_type*/,
-            jl_any_type /*jl_uint16_type*/);
+            jl_any_type /*jl_uint32_type*/);
     const static uint32_t datatype_constfields[1] = { 0x00000055 }; // (1<<0)|(1<<2)|(1<<4)|(1<<6)
     const static uint32_t datatype_atomicfields[1] = { 0x0000002a }; // (1<<1)|(1<<3)|(1<<5)
     jl_datatype_type->name->constfields = datatype_constfields;
@@ -3878,6 +4158,26 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_int64_type = jl_new_primitivetype((jl_value_t*)jl_symbol("Int64"), core,
                                          jl_any_type, jl_emptysvec, 64);
     XX(int64);
+
+    // de Bruijn bound-variable occurrences (the leaves of positionally opened
+    // UnionAll bodies, see `jl_unionall_inner`)
+    jl_tvarref_type = jl_new_datatype(jl_symbol("TypeVarRef"), core, jl_any_type, jl_emptysvec,
+                                      jl_perm_symsvec(1, "depth"),
+                                      jl_svec(1, jl_long_type),
+                                      jl_emptysvec, 0, 0, 1);
+    XX(tvarref);
+    const static uint32_t tvarref_constfields[1] = { 0x00000001 };
+    jl_tvarref_type->name->constfields = tvarref_constfields;
+
+    // a TypeVar nested inside a positionally opened body keeps its object but
+    // its bounds may be bare references to the opened binders
+    {
+        jl_value_t *tvar_bound_types[3] = { (jl_value_t*)jl_anytype_type, (jl_value_t*)jl_tvar_type,
+                                            (jl_value_t*)jl_tvarref_type };
+        jl_value_t *kind_typevar_or_ref_type = jl_type_union(tvar_bound_types, 3);
+        jl_svecset(jl_tvar_type->types, 1, kind_typevar_or_ref_type);
+        jl_svecset(jl_tvar_type->types, 2, kind_typevar_or_ref_type);
+    }
     jl_uint32_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt32"), core,
                                           jl_any_type, jl_emptysvec, 32);
     XX(uint32);
@@ -4635,7 +4935,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_uint8pointer_type = (jl_datatype_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_uint8_type);
     jl_svecset(jl_datatype_type->types, 5, jl_voidpointer_type);
     jl_svecset(jl_datatype_type->types, 6, jl_int32_type);
-    jl_svecset(jl_datatype_type->types, 7, jl_uint16_type);
+    jl_svecset(jl_datatype_type->types, 7, jl_uint32_type);
     jl_svecset(jl_typename_type->types, 1, jl_module_type);
     jl_svecset(jl_typename_type->types, 4, jl_voidpointer_type);
     jl_svecset(jl_typename_type->types, 5, jl_voidpointer_type);
