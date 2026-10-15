@@ -8738,6 +8738,15 @@ let spec = only(methods(g47476)).specializations::Core.SimpleVector
     @test all(mi -> mi === nothing || !Base.has_free_typevars(mi.specTypes), spec)
 end
 
+# issue #63844: inferring a caller also infers the call's compilation signature,
+# which leaves `N` undetermined; the call must not dispatch to that MethodInstance
+f63844(::Union{Int, NTuple{N,Int}}...) where {N} = N
+@test f63844(1, 2, 3, 4, 5, 6, (7, 8)) === 2
+caller63844() = f63844(1, 2, 3, 4, 5, 6, (7, 8))
+code_typed(caller63844, ())
+@test f63844(1, 2, 3, 4, 5, 6, (7, 8)) === 2
+@test caller63844() === 2
+
 f48950(::Union{Int,d}, ::Union{c,Nothing}...) where {c,d} = 1
 @test f48950(1, 1, 1) == 1
 

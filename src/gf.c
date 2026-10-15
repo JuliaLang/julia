@@ -1973,6 +1973,16 @@ static jl_method_instance_t *cache_result(
     return newmeth;
 }
 
+// `jl_fptr_sparam` reads static parameters from its CodeInstance's
+// MethodInstance. Sharing code across different static parameters requires
+// a CodeInstance in the call's own MethodInstance.
+static int need_copy_to_mi_cache(jl_svec_t *sparams, jl_method_instance_t *mi2,
+    enum internal_compilation_triggers cause)
+{
+    return cause == TRIGGER_FOREIGN ||
+        !jl_egal((jl_value_t*)sparams, (jl_value_t*)mi2->sparam_vals);
+}
+
 static void recache_method(
         jl_methtable_t *mt, jl_methcache_t *mc, _Atomic(jl_typemap_t*) *cache, jl_value_t *parent JL_PROPAGATES_ROOT,
         jl_tupletype_t *tt, // the original tupletype of the signature
@@ -1983,6 +1993,13 @@ static void recache_method(
         jl_value_t *compilationsig) JL_CANSAFEPOINT
 {
     // caller must hold the parent->writelock, which this releases
+    if (need_copy_to_mi_cache(sparams, newmeth, TRIGGER_NONE)) {
+        // Redirecting this call to `newmeth` would use the wrong static
+        // parameters. Leave it to dispatch to cache a MethodInstance with
+        // the call's parameters.
+        if (mc) JL_UNLOCK(&mc->writelock);
+        return;
+    }
     int8_t offs = mc ? jl_cachearg_offset() : 1;
     // check each cache this might be present in, and update it there
     // TODO: should/how do we check min/max valid on the previous entry before updating to newmeth?
@@ -2015,8 +2032,6 @@ static void recache_method(
 
     // cache it generically too, if valid
     int cache_with_orig = newmeth->cache_with_orig;
-    if (!cache_with_orig && !jl_egal((jl_value_t*)sparams, (jl_value_t*)newmeth->sparam_vals))
-        cache_with_orig = 1;
     if (!cache_with_orig && !jl_subtype(compilationsig, (jl_value_t*)definition->sig))
         // TODO: use (compilationsig = definition->sig; cache_with_orig = jl_is_unionall(definition->sig);) here instead?
         cache_with_orig = 1;
@@ -2166,11 +2181,12 @@ static void promote_cache_method(jl_value_t *F, jl_value_t **args, uint32_t narg
     }
 }
 
-// Like promote_cache_method(TRIGGER_DISPATCH) but takes the type tuple directly.
+// Like promote_cache_method(TRIGGER_DISPATCH) but takes the type tuple and its
+// static parameters directly.
 // Called from the abstract interpreter after inferring a compilation signature,
 // to record in the dispatch/ml_lookup cache that dispatching/lookup of `tt` should use
 // `newmeth` to avoid making unnecessary new types for cache_result.
-JL_DLLEXPORT void jl_recache_method_by_type(jl_value_t *tt,
+JL_DLLEXPORT void jl_recache_method_by_type(jl_value_t *tt, jl_svec_t *sparams,
     jl_method_instance_t *newmeth, jl_value_t *compilationsig, size_t world,
     size_t min_valid, size_t max_valid, size_t current_world) JL_CANSAFEPOINT
 {
@@ -2184,7 +2200,7 @@ JL_DLLEXPORT void jl_recache_method_by_type(jl_value_t *tt,
     JL_LOCK(&mc->writelock);
     recache_method(mt, mc, &mc->cache, (jl_value_t*)mc, (jl_tupletype_t*)tt, definition, world,
         min_valid, max_valid, current_world,
-        newmeth->sparam_vals, newmeth, compilationsig);
+        sparams, newmeth, compilationsig);
 }
 
 JL_DLLEXPORT void jl_promote_cis_to_current(jl_code_instance_t **cis, size_t n, size_t validated_world) JL_CANSAFEPOINT
@@ -4104,13 +4120,6 @@ JL_DLLEXPORT int jl_method_is_macro(jl_method_t *m)
     return jl_symbol_name(m->name)[0] == '@';
 }
 
-static int need_copy_to_mi_cache(jl_method_instance_t *mi, jl_method_instance_t *mi2,
-    enum internal_compilation_triggers cause)
-{
-    return cause == TRIGGER_FOREIGN ||
-        !jl_egal((jl_value_t*)mi->sparam_vals, (jl_value_t*)mi2->sparam_vals);
-}
-
 static jl_code_instance_t *copy_to_mi_cache(jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_code_instance_t *codeinst2) JL_CANSAFEPOINT
 {
     size_t current_world = jl_get_world_counter();
@@ -4183,7 +4192,7 @@ static jl_code_instance_t *copy_to_mi_cache(jl_method_instance_t *mi JL_PROPAGAT
 static jl_value_t *normalize_to_cacheable_sig(jl_method_instance_t *mi JL_PROPAGATES_ROOT) JL_CANSAFEPOINT
 {
     jl_method_instance_t *mi2 = jl_normalize_to_compilable_mi(mi);
-    if (mi != mi2 && need_copy_to_mi_cache(mi, mi2, TRIGGER_NONE)) // rarely true
+    if (mi != mi2 && need_copy_to_mi_cache(mi->sparam_vals, mi2, TRIGGER_NONE)) // rarely true
         mi2 = mi;
     return mi2->specTypes;
 }
@@ -4247,7 +4256,7 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
             if (unspec) {
                 codeinst = jl_atomic_load_relaxed(&unspec->cache);
                 if (codeinst && jl_atomic_load_acquire(&codeinst->invoke) != NULL) {
-                    if (need_copy_to_mi_cache(mi, unspec, cause)) {
+                    if (need_copy_to_mi_cache(mi->sparam_vals, unspec, cause)) {
                         codeinst = copy_to_mi_cache(mi, codeinst);
                         mi2 = mi;
                     }
@@ -4314,7 +4323,7 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
     if (codeinst) {
         mi2 = jl_get_ci_mi(codeinst);
         if (mi2 != mi) {
-            if (need_copy_to_mi_cache(mi, mi2, cause)) {
+            if (need_copy_to_mi_cache(mi->sparam_vals, mi2, cause)) {
                 codeinst = copy_to_mi_cache(mi, codeinst);
                 mi2 = mi;
             }
@@ -4350,7 +4359,7 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
         mi2 = jl_normalize_to_compilable_mi(mi);
         if (mi != mi2) {
             codeinst = jl_compile_method_very_internal(mi2, world, F, args, nargs, cause);
-            if (need_copy_to_mi_cache(mi, mi2, cause)) {
+            if (need_copy_to_mi_cache(mi->sparam_vals, mi2, cause)) {
                 codeinst = copy_to_mi_cache(mi, codeinst);
                 mi2 = mi;
             }
@@ -4382,7 +4391,7 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
                         jl_generate_fptr_for_unspecialized(codeinst);
                     }
                 }
-                if (need_copy_to_mi_cache(mi, unspec, cause)) {
+                if (need_copy_to_mi_cache(mi->sparam_vals, unspec, cause)) {
                     // only these care about the exact specTypes (actually sparam_vals), otherwise we can use it directly
                     codeinst = copy_to_mi_cache(mi, codeinst);
                 }
