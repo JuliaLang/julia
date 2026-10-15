@@ -5570,12 +5570,17 @@ static jl_value_t *intersect_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_sten
         }
         jl_value_t *ii = NULL;
         if (vx && vy) {
+            jl_savedenv_t se;
+            save_env(e, &se, 1);
             ii = intersect_varargs((jl_vararg_t*)xi,
                                    (jl_vararg_t*)yi,
                                    lly - llx, // xi's offset: {A^n...,Vararg{T,N}} ∩ {Vararg{S,M}}
                                             // {(A∩S)^n...,Vararg{T∩S,N}} plus N = M-n
                                    e,
                                    param);
+            if (ii == jl_bottom_type)
+                restore_env(e, &se, 1);
+            free_env(&se);
         }
         else {
             ii = intersect(jl_is_vararg(xi) ? jl_unwrap_vararg(xi) : xi,

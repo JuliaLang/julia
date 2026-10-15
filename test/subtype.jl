@@ -3624,3 +3624,10 @@ let A = Tuple{Real, Vector{S}} where S<:(Union{Nothing,U} where U<:Tuple{Real,Re
     @test B{Int} <: typeintersect(A, B)
     @test B{Int} <: typeintersect(B, A)
 end
+
+@testintersect(Tuple{T, Vararg{Tuple{T, Int}}} where T,
+               Tuple{Any, Vararg{Tuple{String, Float64}}},
+               Tuple{Any})
+@testintersect(Tuple{T, Vararg{Tuple{T, Any, Int}}} where T,
+               Tuple{Any, Vararg{Tuple{Tuple{S}, S, Float64} where S}},
+               Tuple{Any})
