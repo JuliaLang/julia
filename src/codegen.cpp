@@ -251,50 +251,46 @@ void jl_dump_emitted_mi_name_impl(void *s)
     **jl_ExecutionEngine->get_dump_emitted_mi_name_stream() = (ios_t*)s;
 }
 
-// Source paths recorded in the system image refer to the build tree: Base files are
-// relative to its `base` directory, stdlibs are absolute paths on the build machine.
-// Base registers prefix rewrites (from, to) that map them onto the installed sources,
-// so that the debug info of JIT-compiled code points debuggers at files that exist.
+// Prefix rewrites (from, to) registered by Base, mapping source paths recorded in the
+// build tree onto the installed sources for JIT debug info.
 static std::mutex source_path_lock;
 static SmallVector<std::pair<std::string, std::string>, 0> source_path_map;
-static StringMap<std::string> resolved_source_paths;
 
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_set_debuginfo_source_paths_impl(jl_value_t *map)
 {
     std::lock_guard<std::mutex> guard(source_path_lock);
     source_path_map.clear();
-    resolved_source_paths.clear();
     size_t n = jl_svec_len(map);
     for (size_t i = 0; i + 1 < n; i += 2)
         source_path_map.emplace_back(jl_string_data(jl_svecref(map, i)),
                                      jl_string_data(jl_svecref(map, i + 1)));
 }
 
-// Apply the first rewrite whose prefix matches and whose result exists. A relative
-// prefix only applies to relative paths, so the empty prefix acts as a search
-// directory for them, just like `Base.find_source_file`.
-static std::string resolve_source_path(StringRef file) JL_NOTSAFEPOINT
+// Return (directory, name) for the debug info using the first matching rewrite, without
+// file system access. Prefix and name must both be absolute or both relative. The name
+// keeps the part after a relative prefix, or the whole absolute path, since that is what
+// `code_llvm` and `code_native` print. Unmatched relative names get an empty directory.
+static std::pair<std::string, std::string> resolve_source_path(StringRef file) JL_NOTSAFEPOINT
 {
     std::lock_guard<std::mutex> guard(source_path_lock);
-    auto it = resolved_source_paths.find(file);
-    if (it != resolved_source_paths.end())
-        return it->second;
-    std::string resolved = file.str();
     bool isabs = sys::path::is_absolute(file);
     for (auto &[from, to] : source_path_map) {
         if (sys::path::is_absolute(from) != isabs || !file.starts_with(from))
             continue;
+        StringRef rest = file.substr(from.size());
         SmallString<256> path(to);
-        sys::path::append(path, file.substr(from.size()));
-        sys::path::remove_dots(path, true);
-        if (sys::fs::exists(path)) {
-            resolved = std::string(path);
-            break;
+        if (isabs) {
+            sys::path::append(path, rest);
+            sys::path::remove_dots(path, true);
+            return {sys::path::parent_path(path).str(), std::string(path)};
         }
+        sys::path::remove_dots(path, true);
+        return {path.empty() ? "." : std::string(path), rest.str()};
     }
-    resolved_source_paths[file] = resolved;
-    return resolved;
+    if (isabs)
+        return {sys::path::parent_path(file).str(), file.str()};
+    return {};
 }
 
 extern "C" {
@@ -9359,9 +9355,9 @@ static jl_datatype_t *compute_va_type(jl_value_t *sig, size_t nreq) JL_CANSAFEPO
 static DIFile *get_difile(jl_codectx_t &ctx, DIBuilder &dbuilder, StringRef file, bool is_user_code)
 {
     if (!ctx.emission_context.imaging_mode && (!is_user_code || sys::path::is_absolute(file))) {
-        std::string path = resolve_source_path(file);
-        if (sys::path::is_absolute(path))
-            return dbuilder.createFile(sys::path::filename(path), sys::path::parent_path(path));
+        auto [dir, name] = resolve_source_path(file);
+        if (!dir.empty())
+            return dbuilder.createFile(name, dir);
     }
     return dbuilder.createFile(file, ".");
 }
