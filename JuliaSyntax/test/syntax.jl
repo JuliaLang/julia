@@ -1,4 +1,4 @@
-using Base: Syntax, SyntaxContext, ScopeLayer, @mknode, prov, prov_end,
+using .JuliaSyntax.BaseSyntax: Syntax, SyntaxContext, ScopeLayer, @mknode, prov, prov_end,
     provenance, sourceref, macro_prov, macro_prov_end, flattened_provenance,
     unexpanded_sourceref
 using .JuliaSyntax: children

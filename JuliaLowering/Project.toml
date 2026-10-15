@@ -4,12 +4,15 @@ authors = ["Claire Foster <aka.c42f@gmail.com> and contributors"]
 version = "1.0.0-DEV"
 
 [deps]
+BaseSyntax = "a901ca6a-331f-4dff-b5f6-9ec4ddfd738c"
 JuliaSyntax = "70703baa-626e-46a2-a12c-08ffd08c73b4"
 
 [sources]
+BaseSyntax = {path = "../BaseSyntax"}
 JuliaSyntax = {path = "../JuliaSyntax"}
 
 [compat]
+BaseSyntax = "0.1"
 julia = "1"
 
 [extras]

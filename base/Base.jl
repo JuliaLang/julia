@@ -30,9 +30,6 @@ let os = ccall(:jl_get_UNAME, Any, ())
     end
 end
 
-# meta.jl uses this to convert parse results
-function syntax_to_expr end
-
 # metaprogramming
 include("meta.jl")
 using .Meta
@@ -101,7 +98,28 @@ include("some.jl")
 include("dict.jl")
 include("set.jl")
 
-include("syntax.jl")
+# The data structures used by macro-expansion and lowering are defined in
+# `BaseSyntax`, which is shared with the BaseSyntax package so that they can
+# also be loaded on Julia versions that predate them. They are available as
+# `Base.<name>` as well.
+include(strcat(DATAROOT, "julia/BaseSyntax/src/BaseSyntax.jl"))
+for name in unsorted_names(BaseSyntax; all=true)
+    if name === :BaseSyntax || name === :eval || name === :include || codeunit(String(name), 1) == UInt8('#')
+        continue
+    end
+    @eval using .BaseSyntax: $name
+end
+
+# Convenience function for `jl_parse`. Note that bootstrap `include` also goes through
+# `jl_parse`, which uses this as soon as it is defined.
+function _c_parseall_expr(code::Core.SimpleVector, filename::String,
+                          lineno::Int, mod::Union{Module, Nothing})
+    (ptr, len) = code
+    str = unsafe_string(ptr, len)
+    pfm = Meta.parser_for_module(mod)
+    ex, offset = Meta._parse_string(str, filename, lineno, 1, :all, Expr, pfm)
+    return Core.svec(ex, offset-1)
+end
 
 # Dynamic scopes (types only; the ScopedValues API is included much later)
 include("scope.jl")
