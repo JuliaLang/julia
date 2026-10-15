@@ -1786,10 +1786,11 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                     nconst = 0
                     for i = 2:nargs
                         aty = widenconditional(argextype(ex.args[i], src, sptypes))
-                        if !isdispatchelem(widenconst(aty))
+                        aty′ = widenconst(aty)
+                        if !isdispatchelem(aty′)
                             return cost
                         end
-                        nconst += aty isa Const
+                        nconst += aty isa Const && isconcretedispatch(aty′)
                     end
                     if nconst > 0 && nconst + 2 >= nargs
                         cost = (cost - 1) ÷ 2
