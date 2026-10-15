@@ -914,6 +914,10 @@ struct SyntaxGeneratedFunctionStub
     spnames::Core.SimpleVector
 end
 
+# A package copy of `BaseSyntax` leaves this method to the package copy of JuliaLowering,
+# since the copy in `Base` (if any) does not lower syntax trees of the package's types.
+if parentmodule(@__MODULE__) === Base
 function (g::SyntaxGeneratedFunctionStub)(world::UInt, source::Method, @nospecialize args...)
     Base.JuliaLowering.lower_generated_code(g, world, source, args...)
+end
 end

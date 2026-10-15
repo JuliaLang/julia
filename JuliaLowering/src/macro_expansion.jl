@@ -43,7 +43,7 @@ end
 function exprquote_inert(prov, @nospecialize(x))
     if x isa Symbol
         @ast _ prov [:inert String(x)::identifier]
-    elseif x isa LineNumberNode || !Base.isa_ast_node(x)
+    elseif x isa LineNumberNode || !isa_ast_node(x)
         @ast _ prov x::value
     else
         @ast _ prov [:copyast expr_to_est(QuoteNode(x))]

@@ -1,5 +1,5 @@
-using Base: SyntaxContext, Syntax, SourceRef, @mknode, sourceref, SourceCode,
-    first_linenode
+using .BaseSyntax: SyntaxContext, Syntax, SourceRef, @mknode, sourceref,
+    SourceCode, first_linenode
 
 sourcefile(src::SourceRef) = JuliaSyntax.SourceFile(src.code)
 byte_range(src::SourceRef) = Int(src.first_byte):Int(src.last_byte)
@@ -33,15 +33,15 @@ function flags(ex::Syntax)
     ex.syntax_flags
 end
 
-children(ex::Syntax) = Base.children(ex)
-numchildren(ex::Syntax) = Base.numchildren(ex)
-is_leaf(ex::Syntax) = Base.is_leaf(ex)
-head(ex::Syntax) = Base.head(ex)
+children(ex::Syntax) = BaseSyntax.children(ex)
+numchildren(ex::Syntax) = BaseSyntax.numchildren(ex)
+is_leaf(ex::Syntax) = BaseSyntax.is_leaf(ex)
+head(ex::Syntax) = BaseSyntax.head(ex)
 
 # todo: remove
 SyntaxList(rest::Syntax...) = Syntax[rest...]
 
-Base.SourceCode(sf::SourceFile) = SourceCode(
+BaseSyntax.SourceCode(sf::SourceFile) = SourceCode(
     sf.code, sf.byte_offset,
     sf.filename === nothing ? :var"" : Symbol(sf.filename), sf.first_line,
     sf.line_starts)
@@ -106,7 +106,7 @@ function build_tree(::Type{Syntax}, stream::ParseStream;
     return id
 end
 
-function Base.Syntax(src::SourceCode, cursor::RedTreeCursor, context)
+function BaseSyntax.Syntax(src::SourceCode, cursor::RedTreeCursor, context)
     green_id = GC.@preserve src begin
         raw_offset, txtbuf = _unsafe_wrap_substring(src.text)
         offset = raw_offset - src.byte_offset
