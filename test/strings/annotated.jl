@@ -147,6 +147,41 @@ end
     @test readchomp(`$(Base.julia_cmd()) --startup-file=no -e $script`) == "false bγ"
 end
 
+# A package's value type, which it claims a label for
+struct Weight
+    w::Int
+end
+Base.labelled_kind(::Val{:weight}) = Weight
+
+@testset "Labelled annotations" begin
+    # Deleting by label removes the annotations of its kind over exactly the region: a type of value, or a key
+    let s = Base.AnnotatedString{String, Any}("abc", [(1:3, :size => 2), (1:3, Weight(1)), (1:2, :size => 3), (1:3, :font => 4)])
+        Base.annotate!(s, 1:3, :size, nothing)
+        @test Base.annotations(s) == [(region = 1:3, value = Weight(1)), (region = 1:2, value = :size => 3), (region = 1:3, value = :font => 4)]
+        Base.annotate!(s, 1:3, :weight, nothing)
+        @test Base.annotations(s) == [(region = 1:2, value = :size => 3), (region = 1:3, value = :font => 4)]
+    end
+    # Other labelled forms are deprecated: a value of the label's kind is kept, and any other becomes `label => value`
+    @test_deprecated Base.AnnotatedString("ab", [(1:1, :size, 2)])
+    @test_deprecated Base.AnnotatedChar('a', [(:size, 2)])
+    @test_deprecated Base.annotate!(Base.AnnotatedString{String, Any}("ab"), 1:1, :size, 2)
+    @test_deprecated Base.annotate!(Base.AnnotatedChar{Char, Any}('a'), :size, 2)
+    labelled = """
+    struct Weight; w::Int end
+    Base.labelled_kind(::Val{:weight}) = Weight
+    size, w = Pair{Symbol, Any}(:size, 2), Weight(3)
+    s = Base.AnnotatedString("abc", [(1:1, :size, 2), (2:2, :weight, w), (3:3, :weight, 4)])
+    c = Base.AnnotatedChar('a', [(:size, 2), (:weight, w)])
+    print(all((Base.annotations(s) == [(region = 1:1, value = size), (region = 2:2, value = w), (region = 3:3, value = :weight => 4)],
+               Base.annotations(Base.AnnotatedString("a", [(region = 1:1, label = :weight, value = w)])) == [(region = 1:1, value = w)],
+               Base.annotations(c) == [size, w],
+               Base.annotations(Base.AnnotatedChar('a', [(label = :weight, value = w)])) == [w],
+               Base.annotate!(Base.AnnotatedString{String, Any}("ab"), 1:1, :size, 2) == Base.AnnotatedString("ab", [(1:1, size)]),
+               Base.annotate!(Base.AnnotatedChar{Char, Any}('a'), :weight, w) == Base.AnnotatedChar('a', [w]))))
+    """
+    @test read(`$(Base.julia_cmd()) --startup-file=no --depwarn=no -e $labelled`, String) == "true"
+end
+
 @testset "Construction" begin
     # Strings and chars follow the same rules; char annotations just lack a region
     for (Annotated, plain, annotof) in ((Base.AnnotatedString, "ab", v -> (1:1, v)),
