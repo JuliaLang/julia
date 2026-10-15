@@ -9,11 +9,13 @@ const _include = Base.IncludeInto(JuliaLowering)
 
 if parentmodule(JuliaLowering) === Base
     using Base.JuliaSyntax
+    const BaseSyntax = Base.BaseSyntax
 else
     using JuliaSyntax
+    using BaseSyntax: BaseSyntax
 end
 
-using Base: ScopeLayer, SyntaxContext, SourceCode, SourceRef, Syntax, MacroContext,
+using .BaseSyntax: ScopeLayer, SyntaxContext, SourceCode, SourceRef, Syntax, MacroContext,
     SourceAttrType, head, flattened_provenance, sourceref, unexpanded_sourceref,
     mapchildren, provenance, DEBUG_LOWERING,
     is_base_layer, base_layer, escape_layer, remove_scope, fill_context,
@@ -29,14 +31,41 @@ const DEBUG = DEBUG_LOWERING
 # const DEBUG = isdefinedglobal(Base, :DEBUG_LOWERING) ?
 #     Base.DEBUG_LOWERING : true
 
-const JL_NEW_EDITION = Base.EXPERIMENTAL_EDITION # TODO: set this to (1, 15)
-const JL_OLD_EDITION = Base.FLISP_EDITION
+const JL_NEW_EDITION = BaseSyntax.EXPERIMENTAL_EDITION # TODO: set this to (1, 15)
+const JL_OLD_EDITION = BaseSyntax.FLISP_EDITION
 
 # Falls back to `Union{}` so that `loc isa MacroSource` is always false on Julia < 1.14
 # where `Core.MacroSource` is not defined.
 const MacroSource = isdefinedglobal(Core, :MacroSource) ? Core.MacroSource : Union{}
 
 const TypeEqOf = isdefinedglobal(Core, :TypeEqOf) ? "TypeEqOf" : "Typeof"
+
+# `Base.isa_ast_node` is not defined on Julia 1.12
+@static if isdefinedglobal(Base, :isa_ast_node)
+    using Base: isa_ast_node
+else
+    function isa_ast_node(@nospecialize x)
+        return x isa Core.NewvarNode ||
+               x isa Core.CodeInfo ||
+               x isa LineNumberNode ||
+               x isa Core.GotoNode ||
+               x isa Core.GotoIfNot ||
+               x isa Core.EnterNode ||
+               x isa Core.ReturnNode ||
+               x isa Core.SSAValue ||
+               x isa Core.SlotNumber ||
+               x isa Core.Argument ||
+               x isa QuoteNode ||
+               x isa GlobalRef ||
+               x isa Core.BindingPartition ||
+               x isa Symbol ||
+               x isa Core.PiNode ||
+               x isa Core.PhiNode ||
+               x isa Core.PhiCNode ||
+               x isa Core.UpsilonNode ||
+               x isa Expr
+    end
+end
 
 # todo: remove
 const SyntaxTree = Syntax

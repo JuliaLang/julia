@@ -920,7 +920,14 @@ Like `include`, except reads code from the given string rather than from a file.
 """
 function include_string(mapexpr::Function, mod::Module, code::AbstractString,
                         filename::AbstractString)
-    st = Meta.parseall(code; filename, mod, type=Syntax)
+    # `Meta.parseall` returns the `Syntax` of `Base`, which a package copy does not share
+    # where `Base` lacks `BaseSyntax`
+    st = if isdefinedglobal(Base, :BaseSyntax)
+        Meta.parseall(code; filename, mod, type=Syntax)
+    else
+        parseall(SyntaxTree, code; filename, version=VersionNumber(Core.get_edition(mod)),
+                 ignore_warnings=true)
+    end
     @jl_assert head(st) === :toplevel st
     if mapexpr !== identity
         # TODO: Is there any way to support provenance here?

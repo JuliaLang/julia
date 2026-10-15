@@ -257,7 +257,16 @@ function lower_generated_code(g, world, source, @nospecialize args...)
     end
 end
 
-function _lower_generated_code(g::Base.SyntaxGeneratedFunctionStub, source::Method,
+# A package copy of `BaseSyntax` defines its own `SyntaxGeneratedFunctionStub` where `Base`
+# lacks `BaseSyntax`, and leaves its call to this package (see `BaseSyntax/src/syntax.jl`).
+if !isdefinedglobal(Base, :BaseSyntax)
+function (g::BaseSyntax.SyntaxGeneratedFunctionStub)(world::UInt, source::Method,
+                                                     @nospecialize args...)
+    lower_generated_code(g, world, source, args...)
+end
+end
+
+function _lower_generated_code(g::BaseSyntax.SyntaxGeneratedFunctionStub, source::Method,
                                sc::SyntaxContext, __module__::Module,
                                world::UInt, @nospecialize(ex0))
     if ex0 isa Expr
