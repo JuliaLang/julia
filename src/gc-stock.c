@@ -16,6 +16,8 @@ extern "C" {
 
 // System-wide heap statistics
 gc_heapstatus_t gc_heap_stats = {0};
+// Bytes of images loaded after startup, for the heap-target heuristics
+static _Atomic(uint64_t) gc_image_bytes = 0;
 
 // Memory upper bound on 32-bit systems
 const uint64_t max_mem_32bit_systems = 1536 * 1024 * 1024; // 1.5 GiB
@@ -3525,6 +3527,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         double alloc_smooth_factor = 0.95;
         double collect_smooth_factor = 0.5;
         double tuning_factor = 2e4;
+        // Include package images to account for their marking cost.
+        uint64_t img_size = jl_atomic_load_relaxed(&gc_image_bytes);
         uint64_t alloc_mem = jl_gc_smooth(old_alloc_diff, alloc_diff, alloc_smooth_factor);
         uint64_t alloc_time = jl_gc_smooth(old_mut_time, mutator_time, alloc_smooth_factor); // TODO: subtract estimated finalizer time?
         uint64_t gc_mem = jl_gc_smooth(old_freed_diff, freed_diff, collect_smooth_factor);
@@ -3541,7 +3545,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         if (alloc_mem != 0 && alloc_time != 0 && gc_mem != 0 && gc_time != 0) {
             double alloc_rate = (double)alloc_mem/alloc_time;
             double gc_rate = (double)gc_mem/gc_time;
-            target_allocs = sqrt((double)heap_size * alloc_rate / gc_rate) * tuning_factor;
+            target_allocs = sqrt((double)(heap_size + img_size) * alloc_rate / gc_rate) * tuning_factor;
         }
 
         if (thrashing == 0 && thrash_counter >= 3) {
@@ -3559,10 +3563,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         //   target_heap = jl_gc_smooth(jl_atomic_load_relaxed(&gc_heap_stats.heap_target), target_heap, alloc_smooth_factor);
 
         // compute some guardrails values
-        uint64_t min_target_allocs = heap_size / 20; // minimum 5% of current heap
+        uint64_t min_target_allocs = (heap_size + img_size) / 20; // minimum 5% of current heap
         if (min_target_allocs < default_collect_interval / 8) // unless the heap is small
             min_target_allocs = default_collect_interval / 8;
-        uint64_t max_target_allocs = overallocation(before_free_heap_size, heap_size, user_max);
+        uint64_t max_target_allocs = overallocation(before_free_heap_size + img_size, heap_size + img_size, user_max);
         if (max_target_allocs < min_target_allocs)
             max_target_allocs = min_target_allocs;
         // respect max_total_memory first
@@ -4487,12 +4491,16 @@ JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t *o
 
 void jl_gc_notify_image_load(const char* img_data, size_t len)
 {
-    // Do nothing
+    // The sysimage is a fixed baseline the heuristics are tuned against
+    if (jl_is_initialized())
+        jl_atomic_fetch_add_relaxed(&gc_image_bytes, len);
 }
 
 void jl_gc_notify_image_alloc(const char* img_data, size_t len)
 {
-    // Do nothing
+    // Count permanent image copies like mapped images rather than as heap
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -len);
+    jl_gc_notify_image_load(img_data, len);
 }
 
 JL_DLLEXPORT const char* jl_gc_active_impl(void) {
