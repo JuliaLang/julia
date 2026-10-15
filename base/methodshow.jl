@@ -142,6 +142,22 @@ function show_method_params(io::IO, tv)
     end
 end
 
+# trait slots (prototype): print the guards of a guarded method
+function show_method_guards(io::IO, m::Method, decls)
+    guards = m.guards
+    guards === nothing && return
+    print(io, " guarded by {")
+    for i = 1:3:length(guards)
+        i > 1 && print(io, ", ")
+        pos = guards[i]::Int
+        argname = pos + 1 <= length(decls) ? decls[pos+1][1] : ""
+        isempty(argname) && (argname = string("#", pos))
+        print(io, guards[i+1], "(", argname, ")::")
+        show(io, guards[i+2])
+    end
+    print(io, "}")
+end
+
 # In case the line numbers in the source code have changed since the code was compiled,
 # allow packages to set a callback function that corrects them.
 # (Used by Revise and perhaps other packages.)
@@ -272,6 +288,7 @@ function show_method(io::IO, m::Method;
         end
         print(io, ")")
         show_method_params(io, tv)
+        show_method_guards(io, m, decls)
     end
 
     if !print_signature_only
