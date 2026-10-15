@@ -1056,7 +1056,10 @@ end
         ADi += [im 0; 0 im]
     end
 
-    for A in (Aa, Ab, Ac, Ad, Ah, ADi)
+    #At : upper triangular, negative diagonal, issue #1767
+    At = convert(Matrix{elty}, [-1 1; 0 2])
+
+    for A in (Aa, Ab, Ac, Ad, Ah, ADi, At)
         @test A^(1/2) ≈ sqrt(A)
         @test A^(-1/2) ≈ inv(sqrt(A))
         @test A^(3/4) ≈ sqrt(A) * sqrt(sqrt(A))
