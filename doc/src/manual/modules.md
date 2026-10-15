@@ -72,9 +72,9 @@ If a name is qualified, then it is always *accessible*, and in case of a functio
 methods added to it by using the qualified name as the function name.
 
 Within a module, a variable name can be “reserved” without assigning to it by declaring it as
-`global x`. This prevents name conflicts for globals initialized after load time. The syntax
-`M.x = y` does not work to assign a global in another module; global assignment is always
-module-local.
+`global x`. This prevents name conflicts for globals initialized after load time. A global in
+another module can be assigned using its qualified name, as in `M.x = y`, but only if `x` has
+already been declared or assigned in `M`; new globals cannot be created this way.
 
 ### Export lists
 

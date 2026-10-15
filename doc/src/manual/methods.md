@@ -604,7 +604,9 @@ abstract type AbstractArray{T, N} end
 eltype(::Type{<:AbstractArray{T}}) where {T} = T
 ```
 
-using so-called triangular dispatch. Note that `UnionAll` types, for
+using so-called triangular dispatch, where the bound of one type parameter depends on another
+type parameter (the signature above is equivalent to
+`eltype(::Type{A}) where {T, A<:AbstractArray{T}}`). Note that `UnionAll` types, for
 example `eltype(AbstractArray{T} where T <: Integer)`, do not match the
 above method. The implementation of `eltype` in `Base` adds a fallback
 method to `Any` for such cases.

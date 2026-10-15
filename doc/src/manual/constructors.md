@@ -121,8 +121,7 @@ some degree of enforcement of a type's invariants.
 If any inner constructor method is defined, no default constructor method is provided: it is presumed
 that you have supplied yourself with all the inner constructors you need. The default constructor
 is equivalent to writing your own inner constructor method that takes all of the object's fields
-as parameters (constrained to be of the correct type, if the corresponding field has a type),
-and passes them to `new`, returning the resulting object:
+as parameters and passes them to `new`, returning the resulting object:
 
 ```jldoctest
 julia> struct Foo
@@ -134,8 +133,9 @@ julia> struct Foo
 ```
 
 This declaration has the same effect as the earlier definition of the `Foo` type without an explicit
-inner constructor method. The following two types are equivalent -- one with a default constructor,
-the other with an explicit constructor:
+inner constructor method. Note that `new` converts each argument to the declared type of the
+corresponding field, just like the default constructor does. The following two types behave the
+same way -- one with a default constructor, the other with an explicit constructor:
 
 ```jldoctest
 julia> struct T1
@@ -159,6 +159,11 @@ T1(1)
 julia> T2(1.0)
 T2(1)
 ```
+
+The one difference is that when any field has a declared type, two default constructor methods are
+generated (see [Composite Types](@ref)): `T1(x::Int64)` and `T1(x)`. Thanks to the first one, an outer
+constructor such as `T1(x::Real) = T1(round(Int64, x))` still works for `Int64` arguments, whereas the
+same definition for `T2` would call itself forever on `T2(1)`.
 
 It is good practice to provide as few inner constructor methods as possible: only those
 taking all arguments explicitly and enforcing essential error checking and transformation. Additional
@@ -435,7 +440,7 @@ differ from those of the enclosing inner constructor.
 For instance, if a type has two parameters like `MyType{T,S}` but the inner constructor is
 defined as `MyType{T}(...)`, then `new` would only receive `{T}` — not enough to
 determine the concrete type. In such cases you must write `new{T,S}(...)` explicitly.
-We will see an example of this in the [Outer-only constructors](@ref) section below.
+We will see an example of this in the [Disallowing explicit type parameters](@ref) section below.
 
 ## Case Study: Rational
 
@@ -543,14 +548,14 @@ of its arguments are complex integers, it will return an instance of `Complex{<:
 The interested reader should consider perusing the rest of [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl):
 it is short, self-contained, and implements an entire basic Julia type.
 
-## Outer-only constructors
+## Disallowing explicit type parameters
 
 As we have seen, a typical parametric type has inner constructors that are called when type parameters
 are known; e.g. they apply to `Point{Int}` but not to `Point`. Optionally, outer constructors
 that determine type parameters automatically can be added, for example constructing a `Point{Int}`
 from the call `Point(1,2)`. Outer constructors call inner constructors to actually
-make instances. However, in some cases one would rather not provide inner constructors, so
-that specific type parameters cannot be requested manually.
+make instances. However, in some cases one would rather not provide inner constructors that
+take type parameters, so that specific type parameters cannot be requested manually.
 
 For example, say we define a type that stores a vector along with an accurate representation of
 its sum:
@@ -594,7 +599,11 @@ Stacktrace:
 [...]
 ```
 
-This is the case where explicit type parameters on `new` are essential:
+This is still an inner constructor (it is defined inside the `struct` block and calls `new`),
+but since it is defined for the bare `SummedArray` rather than for `SummedArray{T,S}`, calls like
+`SummedArray{Int32,Int32}(...)` are not available.
+
+This is also the case where explicit type parameters on `new` are essential:
 the inner constructor name is bare `SummedArray` with no curly braces,
 so `new` has no type parameters to inherit (see
 [How `new` works in parametric constructors](@ref) above).
