@@ -887,7 +887,10 @@ isreadonly(s) = isreadable(s) && !iswritable(s)
 ## binary I/O ##
 
 write(io::IO, x) = throw(MethodError(write, (io, x)))
-function write(io::IO, x1, xs...; cancel::CancelTokenArg=DEFAULT_CANCEL)
+# `Vararg{Any,N}` makes this method specialize on `xs`. It only forwards `xs` to
+# the keyword method, so without it the writes below are dynamically dispatched,
+# which `--trim` rejects.
+function write(io::IO, x1, xs::Vararg{Any,N}; cancel::CancelTokenArg=DEFAULT_CANCEL) where {N}
     # check for cancellations between each write
     tok = resolve_cancel_token(cancel)
     @cancel_check tok

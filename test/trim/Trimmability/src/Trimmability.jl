@@ -128,6 +128,13 @@ function lazy_library_ccall()
     println(Core.stdout, "lazy_library_ccall: ", major, " ", on_load_count[])
 end
 
+# Test that `write` with several arguments, which takes a keyword, trims
+function vararg_write()
+    io = IOBuffer()
+    write(io, "vararg_write: ", SubString("hello world", 1, 5), '!')
+    println(Core.stdout, String(take!(io)))
+end
+
 function _test_cat()
     # hcat
     _cat1a = hcat(randn(3), rand(3), randn(3))
@@ -262,6 +269,7 @@ function @main(args::Vector{String})::Cint
 
     user_library_ccall() # prints as a side effect
     lazy_library_ccall()
+    vararg_write()
 
     Base.donotdelete(reshape([1,2,3],:,1,1))
 
