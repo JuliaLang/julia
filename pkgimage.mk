@@ -32,14 +32,22 @@ $(DEPOTDIR)/compiled:
 print-depot-path:
 	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e '@show Base.DEPOT_PATH')
 
+# Store the requested configuration in the image stamp and force precompilation
+# when it changes. Empty stamps from older builds also need to be regenerated.
+.PHONY: FORCE
+FORCE:
+pkgimage_config_changed = $(if $(filter $(JULIA_CHECK_BOUNDS_PKGIMAGES),$(shell cat $(1) 2>/dev/null)),,FORCE)
+
 # The precompile workers inherit the coverage configuration through `Base.CacheFlags`.
 $(BUILDDIR)/stdlib/%.image: $(JULIAHOME)/stdlib/Project.toml $(JULIAHOME)/stdlib/Manifest.toml $(INDEPENDENT_STDLIBS_SRCS) $(DEPOTDIR)/compiled
 	@$(call PRINT_JULIA, JULIA_CPU_TARGET="sysimage" $(call spawn,$(JULIA_EXECUTABLE)) $(JULIA_COVERAGE_IMAGE_FLAGS) --startup-file=no -e \
 		'Base.Precompilation.precompilepkgs(configs=[$(STDLIB_PKGIMAGE_CONFIGS)]; strict=true)')
-	touch $@
+	echo '$(JULIA_CHECK_BOUNDS_PKGIMAGES)' > $@
 
-$(BUILDDIR)/stdlib/release.image: $(build_private_libdir)/sys.$(SHLIB_EXT)
-$(BUILDDIR)/stdlib/debug.image: $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
+$(BUILDDIR)/stdlib/release.image: $(build_private_libdir)/sys.$(SHLIB_EXT) \
+    $(call pkgimage_config_changed,$(BUILDDIR)/stdlib/release.image)
+$(BUILDDIR)/stdlib/debug.image: $(build_private_libdir)/sys-debug.$(SHLIB_EXT) \
+    $(call pkgimage_config_changed,$(BUILDDIR)/stdlib/debug.image)
 
 # Keep these caches out of the installed depot so binary-dist and installers
 # contain only the ordinary images. The second depot supplies relocatable
