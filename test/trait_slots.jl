@@ -419,3 +419,113 @@ dtrait(::Type) = CPUBackend()
     @test only(methods(outer2)).guards !== nothing
     @test_throws MethodError outer2(1)
 end
+
+# --- inference ----------------------------------------------------------------------
+
+@testset "trait slots: inference resolves guarded calls" begin
+    x = gpu(x0)
+    # inference resolves the guarded method statically when the slot is known
+    T = typeof(view(x, :, 1))
+    @test Base.return_types(style_static, (Type{T},)) == Any[MockStyle{1}]
+    @test Base.return_types(style_static, (Type{typeof(view(x0, :, 1))},)) == Any[DefaultArrayStyle{1}]
+    @test Base.return_types(add1, (T,)) == Any[MockGPUArray{Float64,1}]
+end
+
+# --- trait dependencies: helpers and precise invalidation ------------------------
+
+# a trait whose value comes from a helper function
+residency_helper(::Type) = CPUBackend()
+residency(::Type{T}) where {T} = residency_helper(T)
+
+rk(a::AbstractArray) = :host
+@guarded rk(a::AbstractArray) where {residency(a)::MockGPUBackend} = :device
+rk_static(a::Matrix{Float64}) = rk(a)
+rk_static(a::Vector{Int}) = rk(a)
+rk_dynamic(a) = rk(Base.inferencebarrier(a))
+
+struct UnrelatedArray <: AbstractArray{Int,1} end
+Base.size(::UnrelatedArray) = (0,)
+
+function codeinstance(f, argtype)
+    mi = only(Base.specializations(which(f, Tuple{argtype})))
+    return mi.cache
+end
+
+@testset "trait slots: before changing the trait's helper" begin
+    @test rk_static(x0) === :host
+    @test rk_dynamic(x0) === :host
+    @test rk_static([1, 2]) === :host
+end
+
+# changes the value of `residency` without touching `residency` itself
+residency_helper(::Type{Matrix{Float64}}) = MockGPUBackend()
+
+@testset "trait slots: after changing the trait's helper" begin
+    @test rk_static(x0) === :device
+    @test rk_dynamic(x0) === :device
+    @test rk_static([1, 2]) === :host
+end
+
+const rk_int_ci = codeinstance(rk_static, Vector{Int})
+
+# a new trait method that cannot change the value for the callers above
+residency(::Type{UnrelatedArray}) = CPUBackend()
+
+@testset "trait slots: a new trait method invalidates only its dependents" begin
+    # compiled code that relied on another value of the trait stays valid
+    @test rk_int_ci.max_world == typemax(UInt)
+    @test rk_static([1, 2]) === :host
+    @test rk_dynamic([1, 2]) === :host
+    @test rk_static(x0) === :device
+end
+
+# a trait that is not inferred: no edge records what its value depends on, so
+# calls stay dynamic
+module UninferredTrait
+import ..CPUBackend
+Base.Experimental.@compiler_options compile=min infer=false
+uninferred_helper(::Type) = CPUBackend()
+uninferred_residency(::Type{T}) where {T} = uninferred_helper(T)
+end
+using .UninferredTrait: uninferred_residency
+
+uk(a::AbstractArray) = :host
+@guarded uk(a::AbstractArray) where {uninferred_residency(a)::MockGPUBackend} = :device
+uk_static(a::Matrix{Float64}) = uk(a)
+uk_dynamic(a) = uk(Base.inferencebarrier(a))
+
+@testset "trait slots: before changing an uninferred trait's helper" begin
+    @test uk_static(x0) === :host
+    @test uk_dynamic(x0) === :host
+end
+
+UninferredTrait.uninferred_helper(::Type{Matrix{Float64}}) = MockGPUBackend()
+
+@testset "trait slots: after changing an uninferred trait's helper" begin
+    @test uk_static(x0) === :device
+    @test uk_dynamic(x0) === :device
+end
+
+# an untracked trait value is not reused for an older world
+const uk_world = Base.get_world_counter()
+UninferredTrait.uninferred_helper(::Type{Vector{Float64}}) = MockGPUBackend()
+
+@testset "trait slots: untracked trait values stay in their world" begin
+    @test uk(v0) === :device
+    @test Base.invoke_in_world(uk_world, uk, v0) === :host
+end
+
+# code inferred in an older world does not carry its trait values forward
+residency2_helper(::Type) = CPUBackend()
+residency2(::Type{T}) where {T} = residency2_helper(T)
+ck(a::AbstractArray) = :host
+@guarded ck(a::AbstractArray) where {residency2(a)::MockGPUBackend} = :device
+ck_static(a::Vector{Float64}) = ck(a)
+const ck_world = Base.get_world_counter()
+residency2_helper(::Type{Vector{Float64}}) = MockGPUBackend()
+
+@testset "trait slots: inference in an older world" begin
+    @test Base.invoke_in_world(ck_world, ck_static, v0) === :host
+    @test ck_static(v0) === :device
+end
+
