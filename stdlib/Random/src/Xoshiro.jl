@@ -191,9 +191,9 @@ advancing the state of the parent's RNG.
 As an upside, the `TaskLocalRNG` is pretty fast, and permits reproducible
 multithreaded simulations (barring race conditions), independent of scheduler
 decisions. As long as the number of threads is not used to make decisions on
-task creation, simulation results are also independent of the number of available
-threads / CPUs. The random stream should not depend on hardware specifics, up to
-endianness and possibly word size.
+task creation (as e.g. [`Threads.@threads`](@ref) does), simulation results are also
+independent of the number of available threads / CPUs. The random stream should not
+depend on hardware specifics, up to endianness and possibly word size.
 
 When seeding `TaskLocalRNG()` with [`seed!`](@ref), the passed seed, if any,
 may be any integer.
