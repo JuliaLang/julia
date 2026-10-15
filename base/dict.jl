@@ -620,12 +620,12 @@ end
         slot = _getslot(slots, sparse_ind, wide)
         iszero(slot) && break
         home = (_gethash(h, (slot & mask) % Int) & mask) % Int + 1
-        # move back unless home is in (hole, sparse_ind], comparing cyclic distances behind sparse_ind
-        if ((sparse_ind - home) & mask) >= ((sparse_ind - hole) & mask)
-            _setslot!(slots, hole, wide, slot)
-            _setslot!(slots, sparse_ind, wide, UInt64(0))
-            hole = sparse_ind
-        end
+        # move back unless home is in (hole, sparse_ind], comparing cyclic distances behind sparse_ind.
+        # Branchless: the hole always holds 0, so both stores are unconditional selects.
+        mv = ((sparse_ind - home) & mask) >= ((sparse_ind - hole) & mask)
+        _setslot!(slots, hole, wide, ifelse(mv, slot, UInt64(0)))
+        _setslot!(slots, sparse_ind, wide, ifelse(mv, UInt64(0), slot))
+        hole = ifelse(mv, sparse_ind, hole)
     end
     h.count -= 1
     h.age += 1
