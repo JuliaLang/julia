@@ -375,7 +375,7 @@ end
                    code=code)
 
             fl_ex, fl_off = _fl_parse_hook(code, filename, lineno, offset, options)
-            fl_ex = Base.expr_to_syntax(fl_ex, LineNumberNode(lineno, filename))
+            fl_ex = BaseSyntax.expr_to_syntax(fl_ex, LineNumberNode(lineno, filename))
             return fl_ex, fl_off
         end
     end

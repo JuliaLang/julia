@@ -11,7 +11,10 @@
 # not copy context (this is not hard to implement, but the provenance requires
 # it and callers to be JL-lowered, which this file currently isn't.)
 
-if Base.generating_output(false)
+# A package copy of JuliaLowering would overwrite these methods of the copy in
+# `Base` if both share `MacroContext`, so it only defines them otherwise.
+if !(Base.generating_output(false) && isdefinedglobal(Base, :JuliaLowering) &&
+        Base.JuliaLowering.MacroContext === MacroContext)
 
 function Base.var"@nospecialize"(__context__::MacroContext, exs::SyntaxTree...)
     if length(exs) == 0
@@ -338,7 +341,7 @@ function Base.var"@inline"(_, st)
     annotate_meta(st, :inline)
 end
 
-end # Base.generating_output(false)
+end # !(Base.generating_output(false) && isdefinedglobal(Base, :JuliaLowering) ||
 
 #--------------------------------------------------------------------------------
 # The following `@islocal` and `@inert` are macros for special syntax known to
