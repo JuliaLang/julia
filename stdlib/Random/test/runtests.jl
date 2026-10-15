@@ -1303,3 +1303,15 @@ end
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Random))
 end
+
+@testset "Issue #63841: scheduler task RNG isolation" begin
+    Random.seed!(1234)
+    r1 = fetch(Threads.@spawn rand())
+
+    Random.seed!(1234)
+    Base._new_sched_task()
+    sleep(0.01)
+    r2 = fetch(Threads.@spawn rand())
+
+    @test r1 == r2
+end
