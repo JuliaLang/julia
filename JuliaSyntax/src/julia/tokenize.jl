@@ -281,7 +281,7 @@ Base.eltype(::Type{<:Lexer}) = RawToken
 
 
 function Base.iterate(l::Lexer)
-    l.token_startpos = position(l)
+    l.token_startpos = _position(l)
 
     t = next_token(l)
     return t, t.kind == K"EndMarker"
@@ -294,7 +294,7 @@ function Base.iterate(l::Lexer, isdone::Any)
 end
 
 function Base.show(io::IO, l::Lexer)
-    print(io, typeof(l), " at position: ", position(l))
+    print(io, typeof(l), " at position: ", _position(l))
 end
 
 """
@@ -333,20 +333,18 @@ Returns the next three characters without changing the lexer's state.
 peekchar3(l::Lexer) = l.chars[2], l.chars[3], l.chars[4]
 
 """
-    position(l::Lexer)
+    _position(l::Lexer)
 
 Returns the current position.
 """
-Base.position(l::Lexer) = l.charspos[1]
+_position(l::Lexer) = l.charspos[1]
 
 """
-    eof(l::Lexer)
+    _eof(l::Lexer)
 
 Determine whether the end of the lexer's underlying buffer has been reached.
 """
-Base.eof(l::Lexer) = eof(l.io)
-
-Base.seek(l::Lexer, pos) = seek(l.io, pos)
+_eof(l::Lexer) = eof(l.io)
 
 """
     start_token!(l::Lexer)
@@ -409,7 +407,7 @@ end
 Returns a `RawToken` of kind `kind` and starts a new `RawToken`.
 """
 function emit(l::Lexer, kind::Kind)
-    tok = RawToken(kind, startpos(l), position(l) - 1, PREC_NONE)
+    tok = RawToken(kind, startpos(l), _position(l) - 1, PREC_NONE)
 
     l.last_token = kind
     return tok
@@ -422,7 +420,7 @@ function emit_operator(l::Lexer, kind::Kind, precedence::PrecedenceLevel, take_s
             kind = K"Operator"
         end
     end
-    tok = RawToken(kind, startpos(l), position(l) - 1, precedence)
+    tok = RawToken(kind, startpos(l), _position(l) - 1, precedence)
 
     l.last_token = kind
     return tok
@@ -457,7 +455,7 @@ function emit_wrapping_operator_or_compound_assign(l::Lexer, kind::Kind, prec::P
 end
 
 function emit_trivia(l::Lexer, kind::Kind)
-    tok = RawToken(kind, startpos(l), position(l) - 1, PREC_NONE)
+    tok = RawToken(kind, startpos(l), _position(l) - 1, PREC_NONE)
     l.last_token = kind
     return tok
 end
@@ -1048,7 +1046,7 @@ function lex_digit(l::Lexer, kind)
         else
             return emit(l, K"ErrorInvalidNumericConstant") # `1e+`
         end
-    elseif position(l) - startpos(l) == 1 && l.chars[1] == '0'
+    elseif _position(l) - startpos(l) == 1 && l.chars[1] == '0'
         kind == K"Integer"
         is_bin_oct_hex_int = false
         if pc == 'x'
