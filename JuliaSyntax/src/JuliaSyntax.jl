@@ -99,7 +99,12 @@ include("julia/literal_parsing.jl")
 include("porcelain/green_node.jl")
 include("porcelain/syntax_node.jl")
 include("integration/expr.jl")
-if isdefined(Base, :Syntax)
+if parentmodule(JuliaSyntax) === Base
+    const BaseSyntax = Base.BaseSyntax
+else
+    using BaseSyntax: BaseSyntax
+end
+if isdefined(BaseSyntax, :Syntax)
     include("porcelain/syntax.jl")
 end
 

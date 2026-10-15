@@ -34,8 +34,8 @@ function est_syntax_name(st, default)
 end
 
 # TODO remove
-const est_to_expr = Base.syntax_to_expr
-const expr_to_est = Base.expr_to_syntax
+const est_to_expr = BaseSyntax.syntax_to_expr
+const expr_to_est = BaseSyntax.expr_to_syntax
 
 #-------------------------------------------------------------------------------
 # EST->DST
