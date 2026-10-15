@@ -583,6 +583,21 @@ JL_DLLEXPORT jl_value_t *jl_call_in_typeinf_world(jl_value_t **args, int nargs) 
     return ret;
 }
 
+JL_DLLEXPORT void jl_ci_replace_nulldebuginfo(jl_code_instance_t *ci, jl_debuginfo_t *di)
+{
+    static jl_debuginfo_t *nulldebuginfo = NULL;
+    if (nulldebuginfo == NULL) {
+        nulldebuginfo = (jl_debuginfo_t*)jl_get_global(jl_core_module, jl_symbol("NullDebugInfo"));
+        if (nulldebuginfo == NULL)
+            return;
+    }
+    jl_debuginfo_t *debuginfo = jl_atomic_load_relaxed(&ci->debuginfo);
+    if (di == NULL || debuginfo != nulldebuginfo || di == nulldebuginfo)
+        return;
+    jl_gc_wb(ci, (void*)&ci->debuginfo, di);
+    jl_atomic_cmpswap_release(&ci->debuginfo, &debuginfo, di);
+}
+
 JL_DLLEXPORT jl_code_instance_t *jl_get_method_uninferred(
         jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_value_t *rettype,
         size_t min_world, size_t max_world, jl_debuginfo_t *di, jl_svec_t *edges)
@@ -1039,13 +1054,6 @@ cleanup:
 jl_value_t *jl_typeinf_func JL_GLOBALLY_ROOTED = NULL;
 jl_value_t *jl_compile_and_emit_func JL_GLOBALLY_ROOTED = NULL;
 JL_DLLEXPORT size_t jl_typeinf_world = 1;
-JL_DLLEXPORT size_t jl_lowering_world = 0;
-
-// Called by `JuliaLowering.activate!` when a lowerer is (un)installed.
-JL_DLLEXPORT void jl_set_lowering_world(size_t world)
-{
-    jl_lowering_world = world;
-}
 
 // Force Compiler (and staticdata serialization) not to throw away Julia IR,
 // even when it is not needed for inlining, etc. - intended for debugging only
@@ -2304,7 +2312,7 @@ static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_in
         closure->shadowed = (jl_value_t*)jl_alloc_vec_any(0);
     // Record every intersecting method so the interference relation is complete.
     jl_array_ptr_1d_push((jl_array_t*)closure->shadowed, (jl_value_t*)oldmethod);
-    typemap_slurp_search(oldentry, &closure->match);
+    typemap_bottom_search(oldentry, &closure->match);
     return 1;
 }
 
@@ -2322,7 +2330,7 @@ static jl_value_t *get_intersect_matches(jl_typemap_t *defs, jl_typemap_entry_t 
             va = NULL;
     }
     // search for all intersecting methods active in the previous world, to determine the changes needed to be made for the next world
-    struct matches_env env = {{get_intersect_visitor, (jl_value_t*)type, va, /* .search_slurp = */ 0,
+    struct matches_env env = {{get_intersect_visitor, (jl_value_t*)type, va, /* .search_bottom = */ 0,
             /* .min_valid = */ world, /* .max_valid = */ world,
             /* .ti = */ NULL, /* .env = */ NULL, /* .issubty = */ 0,
             /* .emptiness_only = */ 1},
@@ -3458,7 +3466,6 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     if (oldvalue) {
         assert(n > 0);
         if (replaced) {
-            oldvalue = (jl_value_t*)replaced;
             jl_method_t *m = replaced->func.method;
             invalidated = 1;
             method_overwrite(newentry, m);
@@ -5342,7 +5349,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     }
     // don't need to consider other similar methods if this ml will always fully intersect with them and dominates all of them
     if (!closure->include_ambiguous || closure->lim != -1)
-        typemap_slurp_search(ml, &closure->match);
+        typemap_bottom_search(ml, &closure->match);
     return 1;
 }
 
@@ -5843,7 +5850,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
             /* vararg type / tparam0 */ va,
 
             /* temporaries */
-            /* .search_slurp = */ 0,
+            /* .search_bottom = */ 0,
 
             /* outputs */
             /* .min_valid = */ *min_valid,

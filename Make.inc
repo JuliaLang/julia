@@ -719,6 +719,7 @@ AS := $(CROSS_COMPILE)as
 LD := $(CROSS_COMPILE)ld
 RANLIB := $(CROSS_COMPILE)ranlib
 OBJCOPY := $(CROSS_COMPILE)objcopy
+READELF := $(CROSS_COMPILE)readelf
 
 CPP_STDOUT := $(CPP) -P
 
@@ -1020,9 +1021,6 @@ COMPRESS_DEBUG_SECTIONS ?= zlib
 ifeq ($(USE_SYSTEM_LLVM)$(USE_SYSTEM_LLD),00)
 COMPRESS_PKGIMAGE_DEBUG_SECTIONS ?= zstd
 endif
-endif
-ifneq ($(COMPRESS_DEBUG_SECTIONS),)
-JLDFLAGS += -Wl,--compress-debug-sections=$(COMPRESS_DEBUG_SECTIONS)
 endif
 
 # ===========================================================================
@@ -1950,16 +1948,20 @@ endif
 ifeq ($(BUILD_OS), WINNT) # MSYS
 spawn = $(1)
 cygpath_w = `cygpath -w $(1)`
+cygpath_m = `cygpath -m $(1)`
 else ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # Cygwin
 spawn = $(1)
 cygpath_w = `cygpath -w $(1)`
+cygpath_m = `cygpath -m $(1)`
 else
 ifeq ($(OS), WINNT) # unix-to-Windows cross-compile
 spawn = $(WINE) $(1)
 cygpath_w = `$(WINE) winepath.exe -w $(1)`
+cygpath_m = $(1)
 else # not Windows
 spawn = $(1)
 cygpath_w = $(1)
+cygpath_m = $(1)
 endif
 endif
 
@@ -2118,10 +2120,11 @@ JL_RUNTIME_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
 JL_RUNTIME_LIBS-$(USE_SYSTEM_DSFMT) += libdSFMT
 JL_RUNTIME_LIBS-$(USE_SYSTEM_GMP) += libgmp
 JL_RUNTIME_LIBS-$(USE_SYSTEM_MPFR) += libmpfr
-JL_RUNTIME_LIBS-$(USE_SYSTEM_LIBUV) += libuv
 JL_RUNTIME_LIBS-$(USE_SYSTEM_ZLIB) += libz
 JL_RUNTIME_LIBS-$(USE_SYSTEM_ZSTD) += libzstd
+ifneq ($(OS),WINNT)
 JL_RUNTIME_LIBS-$(USE_SYSTEM_LIBUNWIND) += libunwind
+endif
 ifeq ($(USE_SYSTEM_LIBM),0)
 JL_RUNTIME_LIBS-$(USE_SYSTEM_OPENLIBM) += libopenlibm
 endif

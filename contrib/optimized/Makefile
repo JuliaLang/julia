@@ -31,12 +31,13 @@ STAGE1_CPU_TARGET ?= generic
 # and a plain `make binary-dist` of the optimized build would then consider
 # build_h.jl stale and rebuild the system image.
 # Preserve command-line variables, but omit flags such as -n from the probe.
-JULIA_BUILD_VARS:=$(shell MAKEFLAGS='-- $(subst ','"'"',$(MAKEOVERRIDES))' $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-OS print-ARCH print-BINARY print-EXE print-BUILD_MACHINE)
+JULIA_BUILD_VARS:=$(shell MAKEFLAGS='-- $(subst ','"'"',$(MAKEOVERRIDES))' $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-OS print-ARCH print-BINARY print-EXE print-BUILD_MACHINE print-COMPRESS_DEBUG_SECTIONS)
 HOST_OS:=$(patsubst OS=%,%,$(filter OS=%,$(JULIA_BUILD_VARS)))
 HOST_ARCH:=$(patsubst ARCH=%,%,$(filter ARCH=%,$(JULIA_BUILD_VARS)))
 HOST_BINARY:=$(patsubst BINARY=%,%,$(filter BINARY=%,$(JULIA_BUILD_VARS)))
 EXE:=$(patsubst EXE=%,%,$(filter EXE=%,$(JULIA_BUILD_VARS)))
 BUILD_MACHINE:=$(patsubst BUILD_MACHINE=%,%,$(filter BUILD_MACHINE=%,$(JULIA_BUILD_VARS)))
+COMPRESS_DEBUG_SECTIONS:=$(patsubst COMPRESS_DEBUG_SECTIONS=%,%,$(filter COMPRESS_DEBUG_SECTIONS=%,$(JULIA_BUILD_VARS)))
 ifeq (,$(HOST_OS))
 $(error Could not determine the build platform: `$(MAKE) -C $(JULIA_ROOT) print-OS` \
         failed. Run it to see why; a XC_HOST without a matching OS is one way.)
@@ -412,7 +413,9 @@ bolt-merge: bolt-train $(BOLT_PROFRAW_FILES)
 
 # Reuse old text segments to reduce library size, except for libjulia-internal:
 # BOLT does not fully support its computed gotos (llvm/llvm-project#89117).
-# Preserve mtimes so the rewrite does not trigger dependent builds.
+# Compress the debug info here, as `make install` leaves BOLT-rewritten libraries
+# alone, and with llvm-objcopy: GNU objcopy breaks the segment layout of BOLT's
+# output. Preserve mtimes so the rewrite does not trigger dependent builds.
 bolt: bolt-merge
 	@echo "--- BOLT: rewrite the libraries"
 	for link in $(SYMLINKS_TO_OPTIMIZE); do \
@@ -420,6 +423,7 @@ bolt: bolt-merge
 		abs_file=$(STAGE2_BUILD)/usr/lib/$$file; \
 		if [ "$$link" = libjulia-internal.so ]; then extra_args=; else extra_args="--use-old-text $(BOLT_SPLIT_STRATEGY)"; fi; \
 		$(LLVM_BOLT) "$$abs_file.original" -data "$(BOLT_PROFILE_DIR)/$$file-prof.merged.fdata" -o $$abs_file $(BOLT_ARGS) $$extra_args; \
+		$(if $(filter-out none,$(COMPRESS_DEBUG_SECTIONS)),$(LLVM_OBJCOPY) --compress-debug-sections=$(COMPRESS_DEBUG_SECTIONS) $$abs_file;) \
 		touch -r "$$abs_file.original" $$abs_file; \
 	done
 	touch $@

@@ -1080,22 +1080,34 @@ end
 #   3. There must not be any broadcasting beyond scalar — all array sizes must match
 # We could eventually allow for all broadcasting and other array types, but that
 # requires very careful consideration of all the edge effects.
-const ChunkableOp = Union{typeof(&), typeof(|), typeof(xor), typeof(~), typeof(identity),
-    typeof(!), typeof(*), typeof(==)} # these are convertible to chunkable ops by liftfuncs
-const BroadcastedChunkableOp{Style<:Union{Nothing,BroadcastStyle}, Axes, F<:ChunkableOp, Args<:Tuple} = Broadcasted{Style,Axes,F,Args}
-ischunkedbroadcast(R, bc::BroadcastedChunkableOp) = ischunkedbroadcast(R, bc.args)
+_chunkop(f, args) = nothing
+_chunkop(::Union{typeof(&), typeof(*), typeof(min)}, args) = &
+_chunkop(::Union{typeof(|), typeof(max)}, args) = |
+_chunkop(::typeof(xor), args) = xor
+_chunkop(::typeof(nand), args) = nand
+_chunkop(::typeof(nor), args) = nor
+_chunkop(::Union{typeof(~), typeof(!)}, args) = ~
+_chunkop(::typeof(identity), args) = identity
+_chunkop(::typeof(==), ::Tuple{Any,Any}) = (x, y) -> ~xor(x, y)
+_chunkop(::typeof(!=), ::Tuple{Any,Any}) = xor
+_chunkop(::typeof(<), ::Tuple{Any,Any}) = (x, y) -> ~x & y
+_chunkop(::typeof(<=), ::Tuple{Any,Any}) = (x, y) -> ~x | y
+_chunkop(::typeof(>), ::Tuple{Any,Any}) = (x, y) -> x & ~y
+_chunkop(::typeof(>=), ::Tuple{Any,Any}) = (x, y) -> x | ~y
+
+ischunkedbroadcast(R, bc::Broadcasted) = ischunkedbroadcast(R, bc, _chunkop(bc.f, bc.args))
+ischunkedbroadcast(R, bc::Broadcasted, ::Nothing) = false
+ischunkedbroadcast(R, bc::Broadcasted, f) = ischunkedbroadcast(R, bc.args)
 ischunkedbroadcast(R, args) = false
 ischunkedbroadcast(R, args::Tuple{<:BitArray,Vararg{Any}}) = size(R) == size(args[1]) && ischunkedbroadcast(R, tail(args))
 ischunkedbroadcast(R, args::Tuple{<:Bool,Vararg{Any}}) = ischunkedbroadcast(R, tail(args))
-ischunkedbroadcast(R, args::Tuple{<:BroadcastedChunkableOp,Vararg{Any}}) = ischunkedbroadcast(R, args[1]) && ischunkedbroadcast(R, tail(args))
+ischunkedbroadcast(R, args::Tuple{<:Broadcasted,Vararg{Any}}) = ischunkedbroadcast(R, args[1]) && ischunkedbroadcast(R, tail(args))
 ischunkedbroadcast(R, args::Tuple{}) = true
 
-# Convert compatible functions to chunkable ones. They must also be green-lighted as ChunkableOps
-liftfuncs(bc::Broadcasted{<:Any,<:Any,<:Any}) = Broadcasted(bc.style, bc.f, map(liftfuncs, bc.args), bc.axes)
-liftfuncs(bc::Broadcasted{<:Any,<:Any,typeof(sign)}) = Broadcasted(bc.style, identity, map(liftfuncs, bc.args), bc.axes)
-liftfuncs(bc::Broadcasted{<:Any,<:Any,typeof(!)}) = Broadcasted(bc.style, ~, map(liftfuncs, bc.args), bc.axes)
-liftfuncs(bc::Broadcasted{<:Any,<:Any,typeof(*)}) = Broadcasted(bc.style, &, map(liftfuncs, bc.args), bc.axes)
-liftfuncs(bc::Broadcasted{<:Any,<:Any,typeof(==)}) = Broadcasted(bc.style, (~)∘(xor), map(liftfuncs, bc.args), bc.axes)
+# Convert compatible functions to chunk-level equivalents.
+liftfuncs(bc::Broadcasted{<:Any,<:Any,<:Any}) = liftfuncs(bc, _chunkop(bc.f, bc.args))
+liftfuncs(bc::Broadcasted, ::Nothing) = Broadcasted(bc.style, bc.f, map(liftfuncs, bc.args), bc.axes)
+liftfuncs(bc::Broadcasted, f) = Broadcasted(bc.style, f, map(liftfuncs, bc.args), bc.axes)
 liftfuncs(x) = x
 
 liftchunks(::Tuple{}) = ()

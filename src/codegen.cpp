@@ -251,6 +251,48 @@ void jl_dump_emitted_mi_name_impl(void *s)
     **jl_ExecutionEngine->get_dump_emitted_mi_name_stream() = (ios_t*)s;
 }
 
+// Prefix rewrites (from, to) registered by Base, mapping source paths recorded in the
+// build tree onto the installed sources for JIT debug info.
+static std::mutex source_path_lock;
+static SmallVector<std::pair<std::string, std::string>, 0> source_path_map;
+
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_set_debuginfo_source_paths_impl(jl_value_t *map)
+{
+    std::lock_guard<std::mutex> guard(source_path_lock);
+    source_path_map.clear();
+    size_t n = jl_svec_len(map);
+    for (size_t i = 0; i + 1 < n; i += 2)
+        source_path_map.emplace_back(jl_string_data(jl_svecref(map, i)),
+                                     jl_string_data(jl_svecref(map, i + 1)));
+}
+
+// Return (directory, name) for the debug info using the first matching rewrite, without
+// file system access. Prefix and name must both be absolute or both relative. The name
+// keeps the part after a relative prefix, or the whole absolute path, since that is what
+// `code_llvm` and `code_native` print. Unmatched relative names get an empty directory.
+static std::pair<std::string, std::string> resolve_source_path(StringRef file) JL_NOTSAFEPOINT
+{
+    std::lock_guard<std::mutex> guard(source_path_lock);
+    bool isabs = sys::path::is_absolute(file);
+    for (auto &[from, to] : source_path_map) {
+        if (sys::path::is_absolute(from) != isabs || !file.starts_with(from))
+            continue;
+        StringRef rest = file.substr(from.size());
+        SmallString<256> path(to);
+        if (isabs) {
+            sys::path::append(path, rest);
+            sys::path::remove_dots(path, true);
+            return {sys::path::parent_path(path).str(), std::string(path)};
+        }
+        sys::path::remove_dots(path, true);
+        return {path.empty() ? "." : std::string(path), rest.str()};
+    }
+    if (isabs)
+        return {sys::path::parent_path(file).str(), file.str()};
+    return {};
+}
+
 extern "C" {
 
 #include "builtin_proto.h"
@@ -1160,8 +1202,9 @@ static const auto jlegalx_func = new JuliaFunction<TypeFnContextAndSizeT>{
         return FunctionType::get(getInt32Ty(C), {T, T, T_size}, false); },
     [](LLVMContext &C) {
         AttrBuilder FnAttrs(C);
-        FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleOrArgMemOnly());
+        FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleOrArgMemOnly(ModRefInfo::Ref));
         FnAttrs.addAttribute(Attribute::NoUnwind);
+        FnAttrs.addAttribute(Attribute::WillReturn);
         return AttributeList::get(C,
                 AttributeSet::get(C, FnAttrs),
                 AttributeSet(),
@@ -1855,6 +1898,7 @@ struct jl_aliascache_t {
     jl_aliasinfo_t value;         // jl_value_t of statically unknown type
     jl_aliasinfo_t immut;         // the payload of an immutable jl_value_t
     jl_aliasinfo_t mutab;         // the fields of a mutable jl_value_t
+    jl_aliasinfo_t mutab_nonconst; // the non-constant fields of a mutable jl_value_t
     jl_aliasinfo_t binding;       // jl_binding_t::value
     jl_aliasinfo_t datatype;      // datatype
     jl_aliasinfo_t array;         // jl_array_t header
@@ -2309,6 +2353,7 @@ void jl_aliascache_t::initialize(jl_codectx_t &ctx)
     binding = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_binding);
     value = jl_aliasinfo_t(ctx, Region::data, tbaa.tbaa_value);
     mutab = jl_aliasinfo_t(ctx, Region::mutfields, tbaa.tbaa_field);
+    mutab_nonconst = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_field);
     immut = jl_aliasinfo_t(ctx, Region::immutdata, tbaa.tbaa_field);
     datatype = jl_aliasinfo_t(ctx, Region::mutconstdata, tbaa.tbaa_datatype);
     array = jl_aliasinfo_t(ctx, Region::mutdata, tbaa.tbaa_array);
@@ -2509,6 +2554,15 @@ static Value *emit_ptrgep(jl_codectx_t &ctx, Value *base, Value *byte_offset, co
 
 
 // --- convenience functions for tagging llvm values with julia types ---
+
+// Globals are created in the datalayout's globals address space, which isn't 0 on targets
+// like AMDGPU and SPIR-V. Loads and stores can use such a global directly, but where its
+// address is used as a generic pointer (a call argument, a select operand, an initializer)
+// it has to be cast first.
+static Constant *generic_global_ptr(Constant *GV)
+{
+    return ConstantExpr::getPointerBitCastOrAddrSpaceCast(GV, getPointerTy(GV->getContext()));
+}
 
 static GlobalVariable *get_pointer_to_constant(jl_codegen_output_t &emission_context, Constant *val, Align align, const Twine &name, Module &M)
 {
@@ -5830,8 +5884,7 @@ isdefined_unknown_idx:
     }
 
     else if (f == BUILTIN(current_scope) && (nargs == 0)) {
-        jl_aliasinfo_t scope_ai = ctx.alias().gcframe;
-        Instruction *v = scope_ai.decorateInst(
+        Instruction *v = ctx.alias().mutab_nonconst.decorateInst(
             ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, get_scope_field(ctx), ctx.types().alignof_ptr));
         *ret = mark_julia_type(ctx, v, /*boxed*/ true, rt);
         return true;
@@ -5924,7 +5977,7 @@ isdefined_unknown_idx:
         Value *src = boxed(ctx, argv[1]);
         Value *bound_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, bound_cancel_token), "bound_cancel_token");
         Value *bound_default_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, bound_cancel_default), "bound_cancel_default");
-        jl_aliasinfo_t ai = ctx.alias().gcframe;
+        jl_aliasinfo_t ai = ctx.alias().mutab_nonconst;
         Value *nothing_val = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_nothing));
         Type *T_int8 = getInt8Ty(ctx.builder.getContext());
 
@@ -7260,14 +7313,14 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
 #else
             // No barrier required: old Tasks are implicitly in the GC remset
 #endif
-            ctx.alias().gcframe.decorateInst(
+            ctx.alias().mutab_nonconst.decorateInst(
                 ctx.builder.CreateAlignedStore(scope_to_restore, scope_ptr, ctx.types().alignof_ptr));
             // This inline restore is the only scope swap not bracketed by the
             // exception-handler save/restore, so it must invalidate the
             // task's cached scoped-default cancellation token itself (see
             // bound_cancel_default in julia_threads.h).
             Value *bcd_ptr = emit_ptrgep(ctx, get_current_task(ctx), offsetof(jl_task_t, bound_cancel_default), "bound_cancel_default");
-            ctx.alias().gcframe.decorateInst(
+            ctx.alias().mutab_nonconst.decorateInst(
                 ctx.builder.CreateAlignedStore(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), bcd_ptr, Align(1)));
         }
     }
@@ -8345,8 +8398,8 @@ static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_
                     Vnull,
                     Vnull,
                     Vnull,
-                    literal_pointer_val_slot(ctx.emission_context, declrt),
-                    literal_pointer_val_slot(ctx.emission_context, sigt),
+                    generic_global_ptr(literal_pointer_val_slot(ctx.emission_context, declrt)),
+                    generic_global_ptr(literal_pointer_val_slot(ctx.emission_context, sigt)),
                     literal_static_pointer_val((void*)flags, T_ptr)}));
         Value *last_world_p = ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_size, cfuncdata, 1);
         LoadInst *last_world_v = ctx.builder.CreateAlignedLoad(T_size, last_world_p, ctx.types().alignof_ptr);
@@ -8358,7 +8411,7 @@ static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_
         Value *age_not_ok = ctx.builder.CreateICmpNE(last_world_v, world_v);
         Value *target = emit_guarded_test(ctx, age_not_ok, callee, [&] () {
                 Function *getcaller = prepare_call(jlgetabiconverter_func);
-                CallInst *cw = ctx.builder.CreateCall(getcaller, {get_current_task(ctx), cfuncdata});
+                CallInst *cw = ctx.builder.CreateCall(getcaller, {get_current_task(ctx), generic_global_ptr(cfuncdata)});
                 cw->setAttributes(getcaller->getAttributes());
                 return cw;
             });
@@ -8869,13 +8922,13 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             JL_GC_POP();
         }
         Type *T_htable = ArrayType::get(ctx.types().T_size, sizeof(htable_t) / sizeof(void*));
-        Value *cache = new GlobalVariable(*jl_Module, T_htable, false,
+        GlobalVariable *cache = new GlobalVariable(*jl_Module, T_htable, false,
                                GlobalVariable::PrivateLinkage,
                                ConstantAggregateZero::get(T_htable));
         F = ctx.builder.CreateCall(prepare_call(jlgetcfunctiontrampoline_func), {
                  fobj,
                  literal_pointer_val(ctx, output_type),
-                 cache,
+                 generic_global_ptr(cache),
                  literal_pointer_val(ctx, (jl_value_t*)fill),
                  F,
                  closure_types ? literal_pointer_val(ctx, (jl_value_t*)unionall_env) : Constant::getNullValue(ctx.types().T_pjlvalue),
@@ -9295,6 +9348,20 @@ static jl_datatype_t *compute_va_type(jl_value_t *sig, size_t nreq) JL_CANSAFEPO
     return (jl_datatype_t*)typ;
 }
 
+// Code that is JIT-compiled can refer to the installed sources by absolute path.
+// Images keep the recorded paths, as they may be relocated or used on another machine.
+// Only Base and Core record paths relative to `base`; a relative name in user code
+// (e.g. from `include_string`) must not be resolved to an unrelated Base file.
+static DIFile *get_difile(jl_codectx_t &ctx, DIBuilder &dbuilder, StringRef file, bool is_user_code)
+{
+    if (!ctx.emission_context.imaging_mode && (!is_user_code || sys::path::is_absolute(file))) {
+        auto [dir, name] = resolve_source_path(file);
+        if (!dir.empty())
+            return dbuilder.createFile(name, dir);
+    }
+    return dbuilder.createFile(file, ".");
+}
+
 // Compile to LLVM IR, using a specialized signature if applicable.
 static jl_llvm_functions_t
     emit_function(
@@ -9656,6 +9723,12 @@ static jl_llvm_functions_t
 
     ctx.f = f;
 
+    auto in_user_mod = [] (jl_module_t *mod) {
+        return (!jl_is_submodule(mod, jl_base_module) &&
+                !jl_is_submodule(mod, jl_core_module));
+    };
+    bool mod_is_user_mod = in_user_mod(ctx.module);
+
     // Step 4b. determine debug info signature and other type info for locals
     DICompileUnit::DebugEmissionKind emissionKind = (DICompileUnit::DebugEmissionKind) ctx.params->debug_info_kind;
     DICompileUnit::DebugNameTableKind tableKind;
@@ -9668,7 +9741,7 @@ static jl_llvm_functions_t
     DISubprogram *SP = NULL;
     DebugLoc noDbg, topdebugloc;
     if (debug_enabled) {
-        topfile = dbuilder.createFile(ctx.file, ".");
+        topfile = get_difile(ctx, dbuilder, ctx.file, mod_is_user_mod);
         DISubroutineType *subrty;
         if (ctx.emission_context.params->debug_info_level <= 1)
             subrty = debugcache.jl_di_func_null_sig;
@@ -10139,15 +10212,10 @@ static jl_llvm_functions_t
     // step 10. Compute properties for each statements
     //     This needs to be computed by iterating in the IR order
     //     instead of control flow order.
-    auto in_user_mod = [] (jl_module_t *mod) {
-        return (!jl_is_submodule(mod, jl_base_module) &&
-                !jl_is_submodule(mod, jl_core_module));
-    };
     auto in_tracked_path = [] (StringRef file) {
         // Symbol names and literals are NUL-terminated.
         return jl_path_is_tracked(file.data());
     };
-    bool mod_is_user_mod = in_user_mod(ctx.module);
     bool mod_is_tracked = in_tracked_path(ctx.file);
     // Treat an unknown-module frame with an absolute path as user code. This
     // preserves user macro coverage but can misclassify absolute sysimage paths.
@@ -10241,7 +10309,7 @@ static jl_llvm_functions_t
                             DebugLoc inl_loc = new_lineinfo.empty() ? DebugLoc(DILocation::get(ctx.builder.getContext(), 0, 0, SP, NULL)) : new_lineinfo.back().loc;
                             DISubprogram *&inl_SP = ctx.emission_context.inlined_subprograms[{fname, info.file}];
                             if (inl_SP == NULL) {
-                                DIFile *difile = dbuilder.createFile(info.file, ".");
+                                DIFile *difile = get_difile(ctx, dbuilder, info.file, info.is_user_code);
                                 inl_SP = dbuilder.createFunction(difile
                                                              ,std::string(fname) + ";" // Name
                                                              ,fname            // LinkageName
@@ -10670,13 +10738,13 @@ static jl_llvm_functions_t
                 // No barrier required: old Tasks are implicitly in the GC remset
 #endif
                 StoreInst *scope_store = ctx.builder.CreateAlignedStore(scope_boxed, scope_ptr, ctx.types().alignof_ptr);
-                ctx.alias().gcframe.decorateInst(current_scope);
-                ctx.alias().gcframe.decorateInst(scope_store);
+                ctx.alias().mutab_nonconst.decorateInst(current_scope);
+                ctx.alias().mutab_nonconst.decorateInst(scope_store);
                 // Installing a new scope invalidates the task's cached
                 // scoped-default cancellation token (see bound_cancel_default
                 // in julia_threads.h).
                 Value *bcd_ptr = emit_ptrgep(ctx, get_current_task(ctx), offsetof(jl_task_t, bound_cancel_default), "bound_cancel_default");
-                ctx.alias().gcframe.decorateInst(
+                ctx.alias().mutab_nonconst.decorateInst(
                     ctx.builder.CreateAlignedStore(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), bcd_ptr, Align(1)));
                 // GC preserve the current_scope, since it is not rooted in the `jl_handler_t *`,
                 // the newly entered scope is preserved through the current_task.
@@ -11111,6 +11179,7 @@ std::optional<jl_llvm_functions_t> jl_emit_codeinst(
         decls = jl_emit_oc_wrapper(out, mi, codeinst->rettype);
     } else {
         //assert(jl_egal((jl_value_t*)jl_atomic_load_relaxed(&codeinst->debuginfo), (jl_value_t*)src->debuginfo) && "trying to generate code for a codeinst for an incompatible src");
+        jl_ci_replace_nulldebuginfo(codeinst, src->debuginfo);
         decls = jl_emit_code(out, mi, src, get_ci_abi(codeinst), codeinst->rettype, codeinst);
     }
     if (!decls)
@@ -11219,8 +11288,11 @@ void emit_llvmcall_modules(jl_codegen_output_t &out)
             bool error = L.linkInModule(std::move(Mod));
             assert(!error && "linking llvmcall modules failed");
             (void)error;
+            // local definitions may be gone (the linker drops those that nothing
+            // references) or unnamed, and those are internal already
             for (auto FN : Exports)
-                M.getFunction(FN)->setLinkage(GlobalVariable::InternalLinkage);
+                if (Function *F = M.getFunction(FN))
+                    F->setLinkage(GlobalVariable::InternalLinkage);
         }
     }
 }

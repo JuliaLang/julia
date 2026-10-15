@@ -965,7 +965,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
                     "nospecializeinfer", "aggressive_constprop", "no_constprop")
                 for c in children(ex)
                     if head(c) === :purity
-                        old = get(ctx.meta, :purity, UInt16(0))
+                        old = get(ctx.meta, :purity, UInt16(0))::UInt16
                         ctx.meta[:purity] = (old | purity_expr_to_flags(c))::UInt16
                     elseif head(c) === :symbol
                         ctx.meta[Symbol(syntax_name(c))] = true

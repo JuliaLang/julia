@@ -16,20 +16,15 @@
     return Base.invoke_in_world(w, f, args...)
 end
 
-# Re-dispatch `f(args...)` at the pinned lowering world (see `jl_lowering_world`)
+# World set with `activate!`, or 0
+const _lowering_world = Ref{UInt}(0)
+
 @inline function invoke_in_lowering_world(f::F, @nospecialize(args...)) where {F}
+    w = _lowering_world[]
     @static if VERSION >= v"1.14.0-DEV.2635"
-        w = unsafe_load(cglobal(:jl_lowering_world, Csize_t))
-        if w == 0
-            # Fallback when the Base lowering hook is not set up
-            w = Base.tls_world_age()
-            # FIXME: as a side effect, enabling the Base lowering hook now affects
-            #        JuliaLowering execution not passing through the hook
-        end
-        return _invoke_in_world(w, f, args...)
-    else
-        f(args...)
+        w == 0 || return _invoke_in_world(w, f, args...)
     end
+    return invokelatest(f, args...)
 end
 
 # Return the current exception. In JuliaLowering we use this rather than the
@@ -66,7 +61,7 @@ function _interpolate_expr(@nospecialize(ex), @nospecialize(values::Tuple))
     __interpolate_expr(ex, 0, values, Ref(0))
 end
 function interpolate_expr(@nospecialize(ex), @nospecialize(values...))
-    return invoke_in_lowering_world(_interpolate_expr, ex, values)
+    return _interpolate_expr(ex, values)
 end
 
 function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
@@ -100,7 +95,7 @@ function _interpolate_syntax(st::SyntaxTree, @nospecialize(vals::Tuple))
     out[1]
 end
 function interpolate_syntax(st::SyntaxTree, @nospecialize(vals...))
-    return invoke_in_lowering_world(_interpolate_syntax, st, vals)
+    return invoke_in_lowering_world(_interpolate_syntax, st, vals)::SyntaxTree
 end
 
 #--------------------------------------------------
@@ -148,7 +143,7 @@ function _replace_captured_locals(@nospecialize(e), locals)
             isa_lowering_ast_node(v) ? QuoteNode(v) : v
         else
             # could possibly limit to foreigncall
-            Expr(e.head, map(a->_replace_captured_locals(a, locals), e.args)...)
+            Expr(e.head, Any[_replace_captured_locals(a, locals) for a in e.args]...)
         end
     elseif e isa QuoteNode
         QuoteNode(_replace_captured_locals(e.value, locals))
@@ -434,10 +429,9 @@ function is_defined_and_owned_global(mod, name, world::UInt=Base.get_world_count
     return _invoke_in_world(world, Base.binding_kind, mod, name) === Base.PARTITION_KIND_GLOBAL
 end
 
-function lookup_method_instance(func, args, world::Integer)
-    allargs = Vector{Any}(undef, length(args) + 1)
-    allargs[1] = func
-    allargs[2:end] = args
+function lookup_method_instance(@nospecialize(func), args::Vector{Any}, world::Integer)
+    allargs = Any[func]
+    append!(allargs, args)
     mi = @ccall jl_method_lookup(allargs::Ptr{Any}, length(allargs)::Csize_t,
                                  world::Csize_t)::Ptr{Cvoid}
     return mi == C_NULL ? nothing : unsafe_pointer_to_objref(mi)

@@ -184,8 +184,7 @@ static Value *stringConstPtr(
     }
     // Doesn't need to be aligned, we shouldn't operate on these like julia objects
     GlobalVariable *gv = get_pointer_to_constant(emission_context, Data, Align(1), "_j_str_" + StringRef(ctxt.data(), ctxt.size()), *M);
-    // AddrSpaceCast in case globals are in non-0 AS
-    return irbuilder.CreateAddrSpaceCast(gv, PointerType::getUnqual(gv->getContext()));
+    return generic_global_ptr(gv);
 }
 
 
@@ -682,9 +681,7 @@ Constant *literal_pointer_val_slot(jl_codegen_output_t &params, jl_value_t *p)
             // some common builtin datatypes have a special pool for accessing them by smalltag id
             Constant *tag = ConstantInt::get(getInt32Ty(M->getContext()), addr->smalltag << 4);
             Constant *smallp = ConstantExpr::getInBoundsGetElementPtr(getInt8Ty(M->getContext()), prepare_global_in(M, jl_small_typeof_var), tag);
-            if (smallp->getType()->getPointerAddressSpace() != 0)
-                smallp = ConstantExpr::getAddrSpaceCast(smallp, getPointerTy(M->getContext()));
-            return smallp;
+            return generic_global_ptr(smallp);
         }
         // DataTypes are prefixed with a +
         return julia_pgv(params, M, "+", addr->name->name, addr->name->module, p);
@@ -1617,10 +1614,10 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
                 Value *cmp = ctx.builder.CreateICmpEQ(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), idx));
                 Constant *ptr;
                 if (justtag && jt->smalltag) {
-                    ptr = get_pointer_to_constant(ctx.emission_context, ConstantInt::get(expr_type, jt->smalltag << 4), Align(sizeof(jl_value_t*)), StringRef("_j_smalltag_") + jl_symbol_name(jt->name->name), *jl_Module);
+                    ptr = generic_global_ptr(get_pointer_to_constant(ctx.emission_context, ConstantInt::get(expr_type, jt->smalltag << 4), Align(sizeof(jl_value_t*)), StringRef("_j_smalltag_") + jl_symbol_name(jt->name->name), *jl_Module));
                 }
                 else {
-                    ptr = ConstantExpr::getBitCast(literal_pointer_val_slot(ctx.emission_context, (jl_value_t*)jt), datatype_or_p->getType());
+                    ptr = generic_global_ptr(literal_pointer_val_slot(ctx.emission_context, (jl_value_t*)jt));
                 }
                 datatype_or_p = ctx.builder.CreateSelect(cmp, ptr, datatype_or_p);
                 setName(ctx.emission_context, datatype_or_p, "typetag_ptr");

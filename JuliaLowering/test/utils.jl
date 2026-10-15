@@ -405,17 +405,42 @@ macro newmod(name="newmod_$(string(__source__))", parentmod=__module__,
          Expr(Symbol("latestworld-if-toplevel")), :mod)
 end
 
+function with_lowering(f, enable::Bool)
+    lowerer = Core._lower
+    toplevel_eval = Core._toplevel_eval
+    world = JuliaLowering._lowering_world[]
+    try
+        JuliaLowering.activate!(enable)
+        f()
+    finally
+        Core._setlowerer!(lowerer)
+        Core._set_toplevel_eval!(toplevel_eval)
+        JuliaLowering._lowering_world[] = world
+    end
+end
+
+with_flisp(f) = with_lowering(f, false)
+
 function fl_macroexpand(mod::Module, x::Expr)
-    ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, mod, true, false, true)
+    with_flisp() do
+        ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, mod, true, false, true)
+    end
 end
 
 function fl_lower(mod::Module, x::Expr)
-    Base.fl_lower(x, mod, @__FILE__, @__LINE__, Base.get_world_counter())[1]
+    with_flisp() do
+        Base.fl_lower(x, mod, @__FILE__, @__LINE__, Base.get_world_counter())[1]
+    end
 end
 
 function fl_eval(mod::Module, x::Expr)
-    Core.eval(mod, fl_lower(mod, x))
+    with_flisp() do
+        Core.eval(mod, x)
+    end
 end
+
+fl_eval(mod::Module, code::AbstractString) =
+    fl_eval(mod, Meta.parseall(code; filename="string", mod))
 
 function _force_syntax(x, mod, edition::Tuple{Int, Int})
     if x isa SyntaxTree

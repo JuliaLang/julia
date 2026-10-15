@@ -66,6 +66,10 @@ New language features
 Language changes
 ----------------
 
+* The implementation of non-scalar indexed assignment (`A[I...] = X`) now matches its
+  documentation, throwing `DimensionMismatch` on incompatible shapes that the previous
+  implementation would permit, and allowing non-1-based axes on the right-hand value (`X`)
+  that would previously have been forbidden ([#59025]).
 * `Type{T} <: S` now holds only if every type `==` to `T` is an instance of `S`, fixing a
   long-standing soundness hole where e.g. `Type{Int} <: DataType` held even though types like
   `Tuple{S} where S<:Int` are `==` (and `isa`) their canonical spelling without being `DataType`s.
@@ -120,7 +124,9 @@ Compiler/Runtime improvements
   instead. The default `hit` mode avoids the load and increment at each instrumentation point ([#62724]).
 * Coverage runs can reuse instrumented package images across processes. The counter mode is part of
   the cache identity; `user`, `all`, and `@path` select the same image variants and filter the counters
-  reported. Count images can also serve hit requests ([#62724]).
+  reported. Count images can also serve hit requests ([#62724]). `@path` also uses the ordinary image of
+  a package when neither it nor its dependencies have source files under the path, so the bundled
+  standard library images are not rebuilt with instrumentation ([#63564]).
 * `--code-coverage=all` no longer invalidates system-image code at startup. To collect coverage from
   that code, build Julia with `JULIA_COVERAGE_IMAGES=1`, which instruments the system image and bundled
   package images in hit mode. `@path` instruments newly compiled and interpreted code like `user`,
@@ -174,6 +180,10 @@ Multi-threading changes
 Build system changes
 --------------------
 
+* Builds now install `libjulia-internal.a` (`libjulia-internal-debug.a` for debug builds), a static
+  build of the runtime without the JIT, so that tools such as JuliaC.jl can link it with a trimmed
+  system image into one executable ([#63618]).
+
 New library functions
 ---------------------
 
@@ -224,6 +234,10 @@ New library features
   fit on a single line, truncated to the display width, instead of showing no data at all ([#62543]).
 * The element type of broadcast expressions now uses regular inference machinery rather than an idiosyncratic
   heuristic. This can help fused or empty broadcasts infer to more precise element types ([#62564]).
+* New public but unexported macro `Base.@cpu_supports arch name...`, an analog of GCC/Clang's
+  `__builtin_cpu_supports`, tests whether code generation for the current target enables the named
+  LLVM target features or CPU model. It is folded to a constant at compile time, separately for each
+  multiversioning clone, so the untaken branch of an `if` on it is removed ([#61793]).
 
 Standard library changes
 ------------------------
@@ -250,6 +264,17 @@ Standard library changes
   and may stop being bundled in a future release ([#59119]).
 
 #### JuliaSyntaxHighlighting
+
+#### Libdl
+
+* `Libdl.LazyLibrary` is not compatible with `--trim`.
+* A new abstract type `Libdl.LazyLibraryCallback` has been added to provide
+  an automatic compilation hint for LazyLibrary on-load callbacks under trim.
+* Library types used with `ccall` / `cglobal` can now subtype `Libdl.AbstractLibrary`
+  to opt-in to `Libdl.dlid` support. This allows libraries to identify themselves
+  at precompilation time by implementing `Libdl.dlid` and providing a `Libdl.LibraryID`.
+  The `LibraryID` is used by `JuliaC.jl` and the runtime to report required libraries
+  and symbols for `--trim` applications and configure linking on a per-library basis.
 
 #### LinearAlgebra
 

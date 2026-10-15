@@ -29,7 +29,7 @@ dashmap = "6.2.1"
 # - change branch
 # - change repo name
 # But other changes including adding/removing whitespaces in commented lines may break the CI
-mmtk = { git = "https://github.com/wks/mmtk-core.git", rev = "722252c8546503a5e55dede6e13d7540daac99e1" }
+mmtk = { git = "https://github.com/wks/mmtk-core.git", rev = "009096b9a962f7a596f624e7900a7638210feaa6" }
 # Uncomment the following to build locally
 # mmtk = { path = "../repos/mmtk-core" }
 log = {version = "0.4", features = ["max_level_trace", "release_max_level_off"] }
@@ -55,4 +55,7 @@ object_pinning = ["mmtk/object_pinning"]
 
 # This feature disables moving
 non_moving = ["mmtk/immix_non_moving", "mmtk/immix_smaller_block"]
+# This feature enables moving. Exactly one of `moving` and `non_moving` must be enabled.
+# Roots that cannot be updated are reported as (transitively) pinned objects.
+moving = ["mmtk/non_moving_root"]
 julia_copy_stack = []

@@ -359,7 +359,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test tempdir() == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@temp", "HOME" => homedir()))[1:lastindex(tempdir())]
 
     # --quiet, --banner
-    let p = "print((Base.JLOptions().quiet, Base.JLOptions().banner))"
+    # without the `-q` that `julia_cmd()` passes on from a quiet parent
+    let p = "print((Base.JLOptions().quiet, Base.JLOptions().banner))",
+        exename = `$(filter(!=("-q"), collect(exename)))`
         @test read(`$exename                   -e $p`, String) == "(0, -1)"
         @test read(`$exename -q                -e $p`, String) == "(1, 0)"
         @test read(`$exename --quiet           -e $p`, String) == "(1, 0)"
@@ -1182,9 +1184,12 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             info = read(joinpath(dir, only(infos())), String)
             @test occursin(r"^SF:.*CovDep\.jl$"m, info)
             rm(joinpath(dir, only(infos())))
-            # count mode needs its own native image
+            # count mode needs its own native image, but the dependency outside the
+            # tracked path can use its plain image (unless the sysimage is instrumented)
             @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=@$pkgdir --code-coverage-mode=count -e $probe`) == "2 1 0 2"
             @test njis() == 3
+            instrumented_sysimage = Base.match_cache_coverage(Base.CacheFlags(coverage=0), Base.CacheFlags(coverage=1))
+            @test ndepjis() == (instrumented_sysimage ? 3 : 2)
             rm(joinpath(dir, only(infos())))
             # `all` uses the same variants; the sysimage is used as built either way
             @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=all -e $probe`) == "1 1 0 2"

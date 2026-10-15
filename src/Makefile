@@ -251,6 +251,7 @@ CG_RELEASE_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia -ljulia-internal
 OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 STATIC_OBJS := $(SRCS:%=$(BUILDDIR)/%.static.o)
+STATIC_DOBJS := $(SRCS:%=$(BUILDDIR)/%.static.dbg.obj)
 
 CODEGEN_OBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.o)
 CODEGEN_DOBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.dbg.obj)
@@ -377,15 +378,19 @@ $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCFLAGS) -c $< -o $@)
 $(BUILDDIR)/%.static.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
+$(BUILDDIR)/%.static.dbg.obj: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCFLAGS) -c $< -o $@)
 $(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) -c $< -o $@)
 $(BUILDDIR)/%.static.o: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -c $< -o $@)
-$(BUILDDIR)/gc-mmtk.o: $(SRCDIR)/gc-mmtk/gc-mmtk.c $(HEADERS) | $(BUILDDIR)
+$(BUILDDIR)/%.static.dbg.obj: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) -c $< -o $@)
+$(BUILDDIR)/gc-mmtk.o $(BUILDDIR)/gc-mmtk.static.o: $(SRCDIR)/gc-mmtk/gc-mmtk.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
-$(BUILDDIR)/gc-mmtk.dbg.obj: $(SRCDIR)/gc-mmtk/gc-mmtk.c $(HEADERS) | $(BUILDDIR)
+$(BUILDDIR)/gc-mmtk.dbg.obj $(BUILDDIR)/gc-mmtk.static.dbg.obj: $(SRCDIR)/gc-mmtk/gc-mmtk.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCFLAGS) -c $< -o $@)
 $(BUILDDIR)/llvm-final-gc-lowering-mmtk.o: $(SRCDIR)/gc-mmtk/llvm-final-gc-lowering-mmtk.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -c $< -o $@)
@@ -491,31 +496,31 @@ $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm flisp/aliase
 	  mv $$TMPFILE $@)
 
 # additional dependency links
-$(BUILDDIR)/codegen-stubs.static.o: $(BUILDDIR)/jl_static_codegen_fallbacks.inc
-$(BUILDDIR)/codegen-stubs.o $(BUILDDIR)/codegen-stubs.dbg.obj $(BUILDDIR)/codegen-stubs.static.o: $(addprefix $(SRCDIR)/,intrinsics.h llvm-julia-passes.inc)
+$(BUILDDIR)/codegen-stubs.static.o $(BUILDDIR)/codegen-stubs.static.dbg.obj: $(BUILDDIR)/jl_static_codegen_fallbacks.inc
+$(BUILDDIR)/codegen-stubs.o $(BUILDDIR)/codegen-stubs.dbg.obj $(BUILDDIR)/codegen-stubs.static.o $(BUILDDIR)/codegen-stubs.static.dbg.obj: $(addprefix $(SRCDIR)/,intrinsics.h llvm-julia-passes.inc)
 $(BUILDDIR)/aotcompile.o $(BUILDDIR)/aotcompile.dbg.obj: $(addprefix $(SRCDIR)/,jitlayers.h llvm-codegen-shared.h objcache.h serialize.h processor.h)
-$(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj $(BUILDDIR)/ast.static.o: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
-$(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj $(BUILDDIR)/builtins.static.o: $(addprefix $(SRCDIR)/,iddict.c idset.c builtin_proto.h intrinsics.h)
+$(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj $(BUILDDIR)/ast.static.o $(BUILDDIR)/ast.static.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
+$(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj $(BUILDDIR)/builtins.static.o $(BUILDDIR)/builtins.static.dbg.obj: $(addprefix $(SRCDIR)/,iddict.c idset.c builtin_proto.h intrinsics.h)
 $(BUILDDIR)/cgmemmgr.o $(BUILDDIR)/cgmemmgr.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,\
 	intrinsics.cpp jitlayers.h intrinsics.h llvm-codegen-shared.h objcache.h cgutils.cpp ccall.cpp abi_*.cpp processor.h builtin_proto.h)
-$(BUILDDIR)/crc32c.o $(BUILDDIR)/crc32c.dbg.obj $(BUILDDIR)/crc32c.static.o: $(SRCDIR)/crc32c-tables.c $(SRCDIR)/processor.h
-$(BUILDDIR)/datatype.o $(BUILDDIR)/datatype.dbg.obj $(BUILDDIR)/datatype.static.o: $(SRCDIR)/support/htable.h $(SRCDIR)/support/htable.inc
+$(BUILDDIR)/crc32c.o $(BUILDDIR)/crc32c.dbg.obj $(BUILDDIR)/crc32c.static.o $(BUILDDIR)/crc32c.static.dbg.obj: $(SRCDIR)/crc32c-tables.c $(SRCDIR)/processor.h
+$(BUILDDIR)/datatype.o $(BUILDDIR)/datatype.dbg.obj $(BUILDDIR)/datatype.static.o $(BUILDDIR)/datatype.static.dbg.obj: $(SRCDIR)/support/htable.h $(SRCDIR)/support/htable.inc
 $(BUILDDIR)/debuginfo.o $(BUILDDIR)/debuginfo.dbg.obj: $(addprefix $(SRCDIR)/,debuginfo.h processor.h jitlayers.h llvm-codegen-shared.h objcache.h debug-registry.h)
 $(BUILDDIR)/disasm.o $(BUILDDIR)/disasm.dbg.obj: $(addprefix $(SRCDIR)/,debuginfo.h processor.h jitlayers.h llvm-codegen-shared.h objcache.h)
-$(BUILDDIR)/gc-debug.o $(BUILDDIR)/gc-debug.dbg.obj $(BUILDDIR)/gc-debug.static.o: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/threading.h
-$(BUILDDIR)/gc-pages.o $(BUILDDIR)/gc-pages.dbg.obj $(BUILDDIR)/gc-pages.static.o: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/threading.h
-$(BUILDDIR)/gc-mmtk.o $(BUILDDIR)/gc-mmtk.dbg.obj $(BUILDDIR)/gc-mmtk.static.o: $(addprefix $(SRCDIR)/,gc-common.h gc-heap-snapshot.h gc-alloc-profiler.h threading.h gc-mmtk/gc-tls-mmtk.h gc-mmtk/gc-wb-mmtk.h)
-$(BUILDDIR)/gc-stacks.o $(BUILDDIR)/gc-stacks.dbg.obj $(BUILDDIR)/gc-stacks.static.o: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/threading.h
-$(BUILDDIR)/gc-stock.o $(BUILDDIR)/gc-stock.dbg.obj $(BUILDDIR)/gc-stock.static.o: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h $(SRCDIR)/gc-page-profiler.h
-$(BUILDDIR)/gc-heap-snapshot.o $(BUILDDIR)/gc-heap-snapshot.dbg.obj $(BUILDDIR)/gc-heap-snapshot.static.o: $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-common.h
-$(BUILDDIR)/gc-alloc-profiler.o $(BUILDDIR)/gc-alloc-profiler.dbg.obj $(BUILDDIR)/gc-alloc-profiler.static.o: $(SRCDIR)/gc-alloc-profiler.h
-$(BUILDDIR)/gc-page-profiler.o $(BUILDDIR)/gc-page-profiler.dbg.obj $(BUILDDIR)/gc-page-profiler.static.o: $(addprefix $(SRCDIR)/,gc-page-profiler.h gc-stock.h gc-common.h threading.h)
-$(BUILDDIR)/init.o $(BUILDDIR)/init.dbg.obj $(BUILDDIR)/init.static.o: $(SRCDIR)/builtin_proto.h $(SRCDIR)/processor.h
-$(BUILDDIR)/interpreter.o $(BUILDDIR)/interpreter.dbg.obj $(BUILDDIR)/interpreter.static.o: $(SRCDIR)/builtin_proto.h
+$(BUILDDIR)/gc-debug.o $(BUILDDIR)/gc-debug.dbg.obj $(BUILDDIR)/gc-debug.static.o $(BUILDDIR)/gc-debug.static.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/threading.h
+$(BUILDDIR)/gc-pages.o $(BUILDDIR)/gc-pages.dbg.obj $(BUILDDIR)/gc-pages.static.o $(BUILDDIR)/gc-pages.static.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/threading.h
+$(BUILDDIR)/gc-mmtk.o $(BUILDDIR)/gc-mmtk.dbg.obj $(BUILDDIR)/gc-mmtk.static.o $(BUILDDIR)/gc-mmtk.static.dbg.obj: $(addprefix $(SRCDIR)/,gc-common.h gc-heap-snapshot.h gc-alloc-profiler.h threading.h gc-mmtk/gc-tls-mmtk.h gc-mmtk/gc-wb-mmtk.h)
+$(BUILDDIR)/gc-stacks.o $(BUILDDIR)/gc-stacks.dbg.obj $(BUILDDIR)/gc-stacks.static.o $(BUILDDIR)/gc-stacks.static.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/threading.h
+$(BUILDDIR)/gc-stock.o $(BUILDDIR)/gc-stock.dbg.obj $(BUILDDIR)/gc-stock.static.o $(BUILDDIR)/gc-stock.static.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h $(SRCDIR)/gc-page-profiler.h
+$(BUILDDIR)/gc-heap-snapshot.o $(BUILDDIR)/gc-heap-snapshot.dbg.obj $(BUILDDIR)/gc-heap-snapshot.static.o $(BUILDDIR)/gc-heap-snapshot.static.dbg.obj: $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-common.h
+$(BUILDDIR)/gc-alloc-profiler.o $(BUILDDIR)/gc-alloc-profiler.dbg.obj $(BUILDDIR)/gc-alloc-profiler.static.o $(BUILDDIR)/gc-alloc-profiler.static.dbg.obj: $(SRCDIR)/gc-alloc-profiler.h
+$(BUILDDIR)/gc-page-profiler.o $(BUILDDIR)/gc-page-profiler.dbg.obj $(BUILDDIR)/gc-page-profiler.static.o $(BUILDDIR)/gc-page-profiler.static.dbg.obj: $(addprefix $(SRCDIR)/,gc-page-profiler.h gc-stock.h gc-common.h threading.h)
+$(BUILDDIR)/init.o $(BUILDDIR)/init.dbg.obj $(BUILDDIR)/init.static.o $(BUILDDIR)/init.static.dbg.obj: $(SRCDIR)/builtin_proto.h $(SRCDIR)/processor.h
+$(BUILDDIR)/interpreter.o $(BUILDDIR)/interpreter.dbg.obj $(BUILDDIR)/interpreter.static.o $(BUILDDIR)/interpreter.static.dbg.obj: $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/jitlayers.o $(BUILDDIR)/jitlayers.dbg.obj: $(addprefix $(SRCDIR)/,jitlayers.h llvm-codegen-shared.h julia-task-dispatcher.h objcache.h processor.h)
-$(BUILDDIR)/jltypes.o $(BUILDDIR)/jltypes.dbg.obj $(BUILDDIR)/jltypes.static.o: $(SRCDIR)/builtin_proto.h
-$(BUILDDIR)/static_exports.static.o: $(SRCDIR)/jl_exported_data_defs.inc $(SRCDIR)/jl_exported_data.inc $(SRCDIR)/jl_exported_funcs.inc
+$(BUILDDIR)/jltypes.o $(BUILDDIR)/jltypes.dbg.obj $(BUILDDIR)/jltypes.static.o $(BUILDDIR)/jltypes.static.dbg.obj: $(SRCDIR)/builtin_proto.h
+$(BUILDDIR)/static_exports.static.o $(BUILDDIR)/static_exports.static.dbg.obj: $(SRCDIR)/jl_exported_data_defs.inc $(SRCDIR)/jl_exported_data.inc $(SRCDIR)/jl_exported_funcs.inc
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvm-codegen-shared.h $(BUILDDIR)/julia_version.h
 $(BUILDDIR)/llvm-alloc-helpers.o $(BUILDDIR)/llvm-alloc-helpers.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/llvm-pass-helpers.h $(SRCDIR)/llvm-alloc-helpers.h
 $(BUILDDIR)/llvm-alloc-opt.o $(BUILDDIR)/llvm-alloc-opt.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/llvm-pass-helpers.h $(SRCDIR)/llvm-alloc-helpers.h
@@ -535,25 +540,25 @@ $(BUILDDIR)/llvm-pass-helpers.o $(BUILDDIR)/llvm-pass-helpers.dbg.obj: $(SRCDIR)
 $(BUILDDIR)/llvm-propagate-addrspaces.o $(BUILDDIR)/llvm-propagate-addrspaces.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/llvm-remove-addrspaces.o $(BUILDDIR)/llvm-remove-addrspaces.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/llvm-ptls.o $(BUILDDIR)/llvm-ptls.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
-$(BUILDDIR)/method.o $(BUILDDIR)/method.dbg.obj $(BUILDDIR)/method.static.o: $(SRCDIR)/builtin_proto.h
-$(BUILDDIR)/null_sysimage.o $(BUILDDIR)/null_sysimage.dbg.obj $(BUILDDIR)/null_sysimage.static.o: $(SRCDIR)/processor.h
-$(BUILDDIR)/precompile.o $(BUILDDIR)/precompile.dbg.obj $(BUILDDIR)/precompile.static.o: $(SRCDIR)/serialize.h
-$(BUILDDIR)/processor.o $(BUILDDIR)/processor.dbg.obj $(BUILDDIR)/processor.static.o: $(SRCDIR)/processor.h
-$(BUILDDIR)/runtime_ccall.o $(BUILDDIR)/runtime_ccall.dbg.obj $(BUILDDIR)/runtime_ccall.static.o: $(SRCDIR)/processor.h
-$(BUILDDIR)/signal-handling.o $(BUILDDIR)/signal-handling.dbg.obj $(BUILDDIR)/signal-handling.static.o: $(addprefix $(SRCDIR)/,signals-*.c)
-$(BUILDDIR)/stackwalk.o $(BUILDDIR)/stackwalk.dbg.obj $(BUILDDIR)/stackwalk.static.o: $(SRCDIR)/gc-common.h $(SRCDIR)/threading.h
-$(BUILDDIR)/staticdata.o $(BUILDDIR)/staticdata.dbg.obj $(BUILDDIR)/staticdata.static.o: $(addprefix $(SRCDIR)/,staticdata_utils.c precompile_utils.c processor.h builtin_proto.h serialize.h)
-$(BUILDDIR)/toplevel.o $(BUILDDIR)/toplevel.dbg.obj $(BUILDDIR)/toplevel.static.o: $(SRCDIR)/builtin_proto.h $(SRCDIR)/intrinsics.h
-$(BUILDDIR)/ircode.o $(BUILDDIR)/ircode.dbg.obj $(BUILDDIR)/ircode.static.o: $(SRCDIR)/serialize.h $(SRCDIR)/common_symbols1.inc $(SRCDIR)/common_symbols2.inc
+$(BUILDDIR)/method.o $(BUILDDIR)/method.dbg.obj $(BUILDDIR)/method.static.o $(BUILDDIR)/method.static.dbg.obj: $(SRCDIR)/builtin_proto.h
+$(BUILDDIR)/null_sysimage.o $(BUILDDIR)/null_sysimage.dbg.obj $(BUILDDIR)/null_sysimage.static.o $(BUILDDIR)/null_sysimage.static.dbg.obj: $(SRCDIR)/processor.h
+$(BUILDDIR)/precompile.o $(BUILDDIR)/precompile.dbg.obj $(BUILDDIR)/precompile.static.o $(BUILDDIR)/precompile.static.dbg.obj: $(SRCDIR)/serialize.h
+$(BUILDDIR)/processor.o $(BUILDDIR)/processor.dbg.obj $(BUILDDIR)/processor.static.o $(BUILDDIR)/processor.static.dbg.obj: $(SRCDIR)/processor.h
+$(BUILDDIR)/runtime_ccall.o $(BUILDDIR)/runtime_ccall.dbg.obj $(BUILDDIR)/runtime_ccall.static.o $(BUILDDIR)/runtime_ccall.static.dbg.obj: $(SRCDIR)/processor.h
+$(BUILDDIR)/signal-handling.o $(BUILDDIR)/signal-handling.dbg.obj $(BUILDDIR)/signal-handling.static.o $(BUILDDIR)/signal-handling.static.dbg.obj: $(addprefix $(SRCDIR)/,signals-*.c)
+$(BUILDDIR)/stackwalk.o $(BUILDDIR)/stackwalk.dbg.obj $(BUILDDIR)/stackwalk.static.o $(BUILDDIR)/stackwalk.static.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/threading.h
+$(BUILDDIR)/staticdata.o $(BUILDDIR)/staticdata.dbg.obj $(BUILDDIR)/staticdata.static.o $(BUILDDIR)/staticdata.static.dbg.obj: $(addprefix $(SRCDIR)/,staticdata_utils.c precompile_utils.c processor.h builtin_proto.h serialize.h)
+$(BUILDDIR)/toplevel.o $(BUILDDIR)/toplevel.dbg.obj $(BUILDDIR)/toplevel.static.o $(BUILDDIR)/toplevel.static.dbg.obj: $(SRCDIR)/builtin_proto.h $(SRCDIR)/intrinsics.h
+$(BUILDDIR)/ircode.o $(BUILDDIR)/ircode.dbg.obj $(BUILDDIR)/ircode.static.o $(BUILDDIR)/ircode.static.dbg.obj: $(SRCDIR)/serialize.h $(SRCDIR)/common_symbols1.inc $(SRCDIR)/common_symbols2.inc
 $(BUILDDIR)/pipeline.o $(BUILDDIR)/pipeline.dbg.obj: $(addprefix $(SRCDIR)/,passes.h jitlayers.h llvm-codegen-shared.h objcache.h llvm-julia-passes.inc)
 $(BUILDDIR)/llvm_api.o $(BUILDDIR)/llvm_api.dbg.obj: $(addprefix $(SRCDIR)/,llvm-julia-passes.inc jitlayers.h llvm-codegen-shared.h objcache.h)
 $(BUILDDIR)/objcache.o $(BUILDDIR)/objcache.dbg.obj: $(SRCDIR)/objcache.h $(SRCDIR)/jitlayers.h $(BUILDDIR)/jl_codegen_hash.inc
 
-$(addprefix $(BUILDDIR)/,threading.o threading.dbg.obj threading.static.o gc-common.o gc-common.dbg.obj gc-common.static.o gc-stock.o gc-stock.dbg.obj gc-stock.static.o init.o init.dbg.obj init.static.o task.o task.dbg.obj task.static.o safepoint.o safepoint.dbg.obj safepoint.static.o scheduler.o scheduler.dbg.obj scheduler.static.o): $(addprefix $(SRCDIR)/,threading.h)
-$(addprefix $(BUILDDIR)/,gc-common.o gc-common.dbg.obj gc-common.static.o): $(SRCDIR)/gc-common.h
-$(addprefix $(BUILDDIR)/,task.o task.dbg.obj task.static.o): $(SRCDIR)/builtin_proto.h
-$(addprefix $(BUILDDIR)/,APInt.o APInt.dbg.obj APInt.static.o runtime_intrinsics.o runtime_intrinsics.dbg.obj runtime_intrinsics.static.o): $(SRCDIR)/APInt-C.h
-$(addprefix $(BUILDDIR)/,runtime_intrinsics.o runtime_intrinsics.dbg.obj runtime_intrinsics.static.o): $(SRCDIR)/processor.h
+$(addprefix $(BUILDDIR)/,threading.o threading.dbg.obj threading.static.o threading.static.dbg.obj gc-common.o gc-common.dbg.obj gc-common.static.o gc-common.static.dbg.obj gc-stock.o gc-stock.dbg.obj gc-stock.static.o gc-stock.static.dbg.obj init.o init.dbg.obj init.static.o init.static.dbg.obj task.o task.dbg.obj task.static.o task.static.dbg.obj safepoint.o safepoint.dbg.obj safepoint.static.o safepoint.static.dbg.obj scheduler.o scheduler.dbg.obj scheduler.static.o scheduler.static.dbg.obj): $(addprefix $(SRCDIR)/,threading.h)
+$(addprefix $(BUILDDIR)/,gc-common.o gc-common.dbg.obj gc-common.static.o gc-common.static.dbg.obj): $(SRCDIR)/gc-common.h
+$(addprefix $(BUILDDIR)/,task.o task.dbg.obj task.static.o task.static.dbg.obj): $(SRCDIR)/builtin_proto.h
+$(addprefix $(BUILDDIR)/,APInt.o APInt.dbg.obj APInt.static.o APInt.static.dbg.obj runtime_intrinsics.o runtime_intrinsics.dbg.obj runtime_intrinsics.static.o runtime_intrinsics.static.dbg.obj): $(SRCDIR)/APInt-C.h
+$(addprefix $(BUILDDIR)/,runtime_intrinsics.o runtime_intrinsics.dbg.obj runtime_intrinsics.static.o runtime_intrinsics.static.dbg.obj): $(SRCDIR)/processor.h
 
 # archive library file rules
 $(BUILDDIR)/support/libsupport.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.S *.inc) $(SRCDIR)/support/*.c
@@ -617,16 +622,23 @@ $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDI
 	$(call dsymutil,$@)
 
 # Fold in the support archives, so consumers only add the sysimage object and
-# the external libraries (libunwind, LLVMSupport, zstd, ...); `-l` system
+# the external libraries (libunwind, zstd, ...); `-l` system
 # libraries are left to the consumer.
 STATIC_LIBS := $(filter %.a,$(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBUTF8PROC) $(LIBTARGET_PARSING))
+STATIC_DEBUG_LIBS := $(filter %.a,$(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV) $(LIBUTF8PROC) $(LIBTARGET_PARSING))
+# $(1): objects, $(2): archives to fold in
+ifeq ($(OS),Darwin)
+static_archive = libtool -static -o $@ $(1) $(2)
+else
+# MSYS does not translate the paths that `ar -M` reads from its script
+static_archive = { echo "CREATE $(call cygpath_m,$@)"; $(foreach o,$(1),echo "ADDMOD $(call cygpath_m,$(o))";) $(foreach l,$(2),echo "ADDLIB $(call cygpath_m,$(l))";) echo "SAVE"; echo "END"; } | $(AR) -M
+endif
 $(build_libdir)/libjulia-internal.a: $(STATIC_OBJS) $(STATIC_LIBS)
 	@rm -rf $@
-ifeq ($(OS),Darwin)
-	@$(call PRINT_LINK, libtool -static -o $@ $(STATIC_OBJS) $(STATIC_LIBS))
-else
-	@$(call PRINT_LINK, { echo "CREATE $@"; $(foreach o,$(STATIC_OBJS),echo "ADDMOD $(o)";) $(foreach l,$(STATIC_LIBS),echo "ADDLIB $(l)";) echo "SAVE"; echo "END"; } | $(AR) -M)
-endif
+	@$(call PRINT_LINK, $(call static_archive,$(STATIC_OBJS),$(STATIC_LIBS)))
+$(build_libdir)/libjulia-internal-debug.a: $(STATIC_DOBJS) $(STATIC_DEBUG_LIBS)
+	@rm -rf $@
+	@$(call PRINT_LINK, $(call static_archive,$(STATIC_DOBJS),$(STATIC_DEBUG_LIBS)))
 
 ifneq ($(OS), WINNT)
 $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT): $(build_shlibdir)/libjulia-internal%.$(JL_MAJOR_SHLIB_EXT): \
@@ -640,8 +652,8 @@ $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(build_sh
 libjulia-internal-release: $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-internal.$(SHLIB_EXT)
 libjulia-internal-debug: $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-internal-debug.$(SHLIB_EXT)
 endif
-libjulia-internal-release: $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT)
-libjulia-internal-debug: $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
+libjulia-internal-release: $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_libdir)/libjulia-internal.a
+libjulia-internal-debug: $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_libdir)/libjulia-internal-debug.a
 libjulia-internal-debug libjulia-internal-release: $(PUBLIC_HEADER_TARGETS)
 
 ifneq ($(USE_SYSTEM_LMDB),1)
@@ -684,7 +696,7 @@ libjulia-codegen-debug libjulia-codegen-release: $(PUBLIC_HEADER_TARGETS)
 # set the exports for the source files based on where they are getting linked
 $(OBJS) $(DOBJS): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL -DBUILDING_UV_SHARED
 $(CODEGEN_OBJS) $(CODEGEN_DOBJS) $(BUILDDIR)/jl_codegen_hash.inc: FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN -DUSING_UV_SHARED
-$(STATIC_OBJS): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL -DJL_LIBRARY_STATIC
+$(STATIC_OBJS) $(STATIC_DOBJS): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL -DJL_LIBRARY_STATIC
 # set the exports for the source files based on where they are getting linked
 $(addprefix clang-sa-,$(SRCS)) \
 $(addprefix clang-sagc-,$(SRCS)) \

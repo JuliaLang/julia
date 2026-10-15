@@ -846,7 +846,8 @@ function collect(itr::Generator)
         # The typeassert gives inference a helping hand on the element type and dimensionality
         # (work-around for #28382)
         et′ = et <: Type ? Type : et
-        RT = dest isa AbstractArray ? AbstractArray{<:et′, ndims(dest)} : Any
+        RT = !(dest isa AbstractArray) ? Any :
+             isconcretetype(et′) ? AbstractArray{et′, ndims(dest)} : AbstractArray{<:et′, ndims(dest)}
         collect_to_with_first!(dest, v1, itr, st)::RT
     end
 end
@@ -866,7 +867,8 @@ function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
     # The typeassert gives inference a helping hand on the element type and dimensionality
     # (work-around for #28382)
     et′ = et <: Type ? Type : et
-    RT = dest isa AbstractArray ? AbstractArray{<:et′, ndims(dest)} : Any
+    RT = !(dest isa AbstractArray) ? Any :
+         isconcretetype(et′) ? AbstractArray{et′, ndims(dest)} : AbstractArray{<:et′, ndims(dest)}
     collect_to_with_first!(dest, v1, itr, st)::RT
 end
 
@@ -1062,13 +1064,12 @@ function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
     @_propagate_inbounds_meta
     setindex_shape_check(X, length(I))
     @boundscheck checkbounds(A, I)
-    require_one_based_indexing(X)
     X′ = unalias(A, X)
     I′ = unalias(A, I)
-    count = 1
-    for i in I′
-        @inbounds A[i] = X′[count]
-        count += 1
+    k = firstindex(I′)
+    for j in eachindex(X′)
+        @inbounds A[I′[k]] = X′[j]
+        k += 1
     end
     return A
 end

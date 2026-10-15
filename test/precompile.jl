@@ -2270,6 +2270,27 @@ precompile_test_harness("No backedge precompile") do load_path
     end
 end
 
+precompile_test_harness("Method roots without spare capacity") do load_path
+    write(joinpath(load_path, "TrimmedRoots.jl"),
+          """
+          module TrimmedRoots
+          struct S{N} end
+          @noinline h(@nospecialize x) = x
+          g(::S{N}) where {N} = h(S{N})
+          for N in 1:9
+              precompile(g, (S{N},))
+          end
+          end
+          """)
+    Base.compilecache(Base.PkgId("TrimmedRoots"))
+    @eval using TrimmedRoots
+    invokelatest() do
+        m = only(methods(TrimmedRoots.g))
+        @test !isempty(m.roots)
+        @test length(m.roots) == length(m.roots.ref.mem)
+    end
+end
+
 precompile_test_harness("Pre-compile Core methods") do load_path
     # Core methods should support pre-compilation as external CI's like anything else
     # https://github.com/JuliaLang/julia/issues/58497
@@ -2524,6 +2545,27 @@ precompile_test_harness("llvmcall validation") do load_path
         @test LLVMCall.do_llvmcall2() == UInt32(0)
         @test first(methods(LLVMCall.do_llvmcall)).specializations.cache.max_world === typemax(UInt)
     end
+end
+
+precompile_test_harness("inlined frames of code compiled after loading") do load_path
+    write(joinpath(load_path, "InlinedFrames.jl"),
+        """
+        module InlinedFrames
+        @noinline inner() = backtrace()
+        @inline middle() = inner()
+        @noinline outer() = middle()
+        outer()
+        end
+        """)
+    # Without native code in the cache, `outer` is compiled from re-inferred source
+    testcode = """
+        insert!(LOAD_PATH, 1, $(repr(load_path)))
+        insert!(DEPOT_PATH, 1, $(repr(load_path)))
+        using InlinedFrames
+        st = stacktrace(InlinedFrames.outer())
+        any(fr -> fr.func === :middle && fr.inlined && basename(String(fr.file)) == "InlinedFrames.jl", st)
+    """
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no --pkgimages=no -E $(testcode)`) == "true"
 end
 
 precompile_test_harness("BindingReplaceDisallow") do load_path
@@ -3660,6 +3702,28 @@ end
         @test !occursin("is loaded at a different version", output)
         output = loading_output(using_depuser; env=stacked)
         @test !occursin("has a different version", output)
+
+        # Outside the REPL the report is brief: a header naming the package and a summary, with
+        # no line per package and no escape codes. `-q` silences it.
+        julia_without_q = `$(filter(!=("-q"), collect(Base.julia_cmd())))`
+        function noninteractive_output(flags)
+            cmd = addenv(`$julia_without_q --startup-file=no --color=no $flags --project=$new_project_path -e "using DepUser"`,
+                         "JULIA_DEPOT_PATH" => depot)
+            out = Pipe()
+            proc = run(pipeline(cmd, stdin=devnull, stdout=out, stderr=out); wait=false)
+            close(out.in)
+            output = read(out, String)
+            @test success(proc)
+            return output
+        end
+        edit_depuser("const EDITED_BRIEF = true")
+        output = noninteractive_output(``)
+        @test startswith(output, "Precompiling DepUser...\n")
+        @test occursin("1 dependency successfully precompiled", output)
+        @test !occursin("✓", output)
+        @test !occursin('\e', output)
+        edit_depuser("const EDITED_QUIET = true")
+        @test isempty(noninteractive_output(`-q`))
 
         # On a tty the explanation offers `c`; canceling must stop the load, not load DepUser
         # from source without a cache. DepUser's precompile sleeps so there is time to cancel.

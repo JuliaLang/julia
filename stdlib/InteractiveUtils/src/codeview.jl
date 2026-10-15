@@ -139,7 +139,7 @@ function print_warntype_mi(io::IO, mi::Core.MethodInstance)
 end
 
 """
-    code_warntype([io::IO], f, types; debuginfo=:default)
+    code_warntype([io::IO], f, types; debuginfo=:default, optimize=false)
 
 Prints lowered and type-inferred ASTs for the methods matching the given generic function
 and type signature to `io` which defaults to `stdout`. The ASTs are annotated in such a way
@@ -154,6 +154,10 @@ Small unions of concrete types are usually not a concern, so these are highlight
 
 Keyword argument `debuginfo` may be one of `:source`, `:none` or `:default`, to specify the verbosity of code comments.
 Unless the user changes `Base.IRShow.default_debuginfo[]`, the value `:default` is equivalent to `:source`.
+
+Keyword argument `optimize` controls whether additional optimizations, such as inlining, are also
+applied (as for [`code_typed`](@ref)). It defaults to `false`, which is usually easier to relate to
+the source code.
 
 See the [`@code_warntype`](@ref man-code-warntype) section in the Performance Tips page of the manual for more information.
 
@@ -273,8 +277,14 @@ function _dump_function(arginfo::ArgInfo, native::Bool, wrapper::Bool,
         src isa Core.CodeInfo || error("failed to infer source for $mi")
         str = _dump_function_llvm(mi, src, wrapper, !raw, dump_module, optimize, debuginfo, llvm_options, params)
     end
-    str = warning * str
+    str = warning * fixup_stdlib_paths(str)
     return str
+end
+
+# Debug info printed by codegen refers to stdlib files by their build-time location
+function fixup_stdlib_paths(str::String)
+    Sys.BUILD_STDLIB_PATH == Sys.STDLIB && return str
+    return replace(str, normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB))
 end
 
 function _dump_function_native_disassembly(mi::Core.MethodInstance, world::UInt,

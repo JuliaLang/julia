@@ -9,7 +9,8 @@ import Base: DL_LOAD_PATH, isdebugbuild
 
 export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL,
     RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW, dlclose, dlopen, dlopen_e, dlsym, dlsym_e,
-    dlpath, find_library, dlext, dllist, LazyLibrary, LazyLibraryPath, BundledLazyLibraryPath
+    dlpath, find_library, dlext, dllist, dlid, AbstractLibrary, LibraryID,
+    LazyLibrary, LazyLibraryPath, BundledLazyLibraryPath
 
 """
     DL_LOAD_PATH
@@ -316,7 +317,7 @@ struct LazyLibraryPath
     pieces::Tuple{Vararg{Any}}
     LazyLibraryPath(pieces...) = new(pieces)
 end
-@inline Base.string(llp::LazyLibraryPath) = joinpath(String[string(p) for p in llp.pieces])
+@inline Base.string(llp::LazyLibraryPath) = joinpath(String[string(p)::String for p in llp.pieces])
 Base.cconvert(::Type{Cstring}, llp::LazyLibraryPath) = Base.cconvert(Cstring, string(llp))
 # Define `print` so that we can wrap this in a `LazyString`
 Base.print(io::IO, llp::LazyLibraryPath) = print(io, string(llp))
@@ -368,6 +369,68 @@ function Base.show(io::IO, llp::LazyLibraryPath)
     end
 end
 
+"""
+    LazyLibraryCallback
+
+Abstract supertype for `on_load_callback`s of a [`LazyLibrary`](@ref) that are usable
+under `--trim`. Subtypes must be concrete and callable with no arguments:
+
+```julia
+struct MyLibOnLoad <: Libdl.LazyLibraryCallback end
+(::MyLibOnLoad)() = @ccall mylib.mylib_init()::Cvoid
+
+const mylib = LazyLibrary("libmylib"; on_load_callback = MyLibOnLoad())
+```
+
+Such Methods will be compiled unconditionally under `--trim`, even if the
+type is never instantiated or called.
+
+!!! compat "Julia 1.14"
+    `LazyLibraryCallback` was added in Julia 1.14.
+"""
+const LazyLibraryCallback = Core.LazyLibraryCallback
+
+import Core: AbstractLibrary, LibraryID
+
+"""
+    LibraryID(pkg::Base.UUID, name::AbstractString)
+
+The stable identity of a library: the UUID of the package that provides it, together
+with the name of the library product within that package. This ID is used by the
+runtime to report `ccall` / `cglobal` usages within an AOT-compiled project and to
+opt-in to native linking.
+
+!!! compat "Julia 1.14"
+    `LibraryID` was added in Julia 1.14.
+"""
+LibraryID
+LibraryID(pkg::Base.UUID, name::AbstractString) = LibraryID(pkg, String(name))
+
+"""
+    AbstractLibrary
+
+Abstract supertype for library handles that carry a stable identity the compiler can
+rely on. Subtypes must implement [`dlid`](@ref).
+
+A subtype promises that the identity is invariant for the life of the handle. `ccall`
+and `cglobal` record it where the library is referenced.
+
+!!! compat "Julia 1.14"
+    `AbstractLibrary` was added in Julia 1.14.
+"""
+AbstractLibrary
+
+"""
+    dlid(lib::AbstractLibrary) -> Union{LibraryID, Nothing}
+
+Return the stable identity declared for `lib` as a [`LibraryID`](@ref), or `nothing`
+if `lib` has no declared identity. See also [`AbstractLibrary`](@ref).
+
+!!! compat "Julia 1.14"
+    `dlid` was added in Julia 1.14.
+"""
+function dlid end
+
 # Small helper struct to initialize a LazyLibrary with its initial set of dependencies
 struct InitialDependencies{T}
     dependencies::Vector{T}
@@ -376,7 +439,8 @@ end
 
 """
     LazyLibrary(name; flags = <default dlopen flags>,
-                dependencies = LazyLibrary[], on_load_callback = nothing)
+                dependencies = LazyLibrary[], on_load_callback = nothing,
+                id = nothing)
 
 Represents a lazily-loaded shared library that delays loading itself and its dependencies
 until first use in a `ccall()`, `@ccall`, `dlopen()`, `dlsym()`, `dlpath()`, or `cglobal()`.
@@ -392,7 +456,11 @@ This is a thread-safe mechanism for on-demand library initialization.
   as it is not expected that `ccall()` should result in large amounts of Julia code being run.
   You may call `ccall()` from within the `on_load_callback` but only for the current library
   and its dependencies, and user should not call `wait()` on any tasks within the on load
-  callback as they may deadlock).
+  callback as they may deadlock). To be usable under `--trim`, this must be a
+  [`LazyLibraryCallback`](@ref Libdl.LazyLibraryCallback).
+- `id`: Optional stable identity for the library, reported by [`dlid`](@ref), given as a
+  [`LibraryID`](@ref) naming the owning package's UUID and the library's name. `nothing`
+  (the default) means the library declares no identity.
 
 The dlopen operation is thread-safe: only one thread loads the library, acquired after the
 release store of the reference to each dependency from loading of each dependency. Other
@@ -401,6 +469,9 @@ calls (there is no dlclose for lazy library and dlclose should not be called on 
 
 !!! compat "Julia 1.11"
     `LazyLibrary` was added in Julia 1.11.
+
+!!! compat "Julia 1.14"
+    The `id` keyword argument was added in Julia 1.14.
 
 See also [`LazyLibraryPath`](@ref), [`BundledLazyLibraryPath`](@ref), [`dlopen`](@ref),
 [`dlsym`](@ref), [`add_dependency!`](@ref).
@@ -421,10 +492,11 @@ For more examples including platform-specific libraries, lazy path construction,
 migration from `__init__()` patterns, see the manual section on
 [Using LazyLibrary for Lazy Loading](@ref man-lazylibrary).
 """
-mutable struct LazyLibrary
+mutable struct LazyLibrary <: AbstractLibrary
     # Name and flags to open with
     const path
     const flags::UInt32
+    const id::Union{LibraryID, Nothing}
 
     # Dependencies that must be loaded before we can load
     #
@@ -440,10 +512,11 @@ mutable struct LazyLibrary
     # Pointer that we eventually fill out upon first `dlopen()`
     @atomic handle::Ptr{Cvoid}
     function LazyLibrary(path; flags = default_rtld_flags, dependencies = LazyLibrary[],
-                         on_load_callback = nothing)
+                         on_load_callback = nothing, id::Union{LibraryID,Nothing} = nothing)
         return new(
             path,
             UInt32(flags),
+            id,
             Base.OncePerProcess{Vector{LazyLibrary}}(
                 InitialDependencies{LazyLibrary}(dependencies)
             ),
@@ -453,6 +526,10 @@ mutable struct LazyLibrary
         )
     end
 end
+
+# overrides for JuliaC under `--trim`
+@noinline _invoke_on_load_callback(@nospecialize(cb)) = cb()
+@noinline _lazy_library_path_string(@nospecialize(path)) = string(path)
 
 # Only print the path and avoid printing all the dependencies
 function Base.show(io::IO, ll::LazyLibrary)
@@ -486,9 +563,11 @@ function add_dependency!(ll::LazyLibrary, dep::LazyLibrary)
     end
 end
 
-# Register `jl_libdl_dlopen_func` so that `ccall()` lowering knows
-# how to call `dlopen()`.
+dlid(ll::LazyLibrary) = ll.id
+
+# Register these so that `ccall()` lowering knows how to call `dlopen()` and `dlid()`.
 Base.unsafe_store!(cglobal(:jl_libdl_dlopen_func, Any), dlopen)
+Base.unsafe_store!(cglobal(:jl_libdl_dlid_func, Any), dlid)
 
 function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
     handle = @atomic :acquire ll.handle
@@ -502,12 +581,12 @@ function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
                 end
 
                 # Load our library
-                handle = dlopen(string(ll.path), flags; kwargs...)
+                handle = dlopen(_lazy_library_path_string(ll.path), flags; kwargs...)
                 @atomic :release ll.handle = handle
 
                 # Only the thread that loaded the library calls the `on_load_callback()`.
                 if ll.on_load_callback !== nothing
-                    ll.on_load_callback()
+                    _invoke_on_load_callback(ll.on_load_callback)
                 end
             else
                 # Another thread loaded the library while we were waiting

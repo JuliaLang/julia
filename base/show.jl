@@ -43,6 +43,12 @@ function _isself(ft::DataType)
     name = ftname.singletonname
     ftname.name === name && return false
     mod = parentmodule(ft)
+    bpart = lookup_binding_partition(tls_world_age(), GlobalRef(mod, name))
+    if binding_kind(bpart) == PARTITION_KIND_BACKDATED_CONST
+        # Read the constant directly, since `getglobal` would warn about (or with
+        # `--depwarn=error`, refuse) accessing it from a world prior to its definition
+        return ft === typeof(partition_restriction(bpart))
+    end
     return isdefinedglobal(mod, name) && ft === typeof(getglobal(mod, name))
 end
 
@@ -2396,7 +2402,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         else
             # first show the line number argument as a comment
             if isa(args[2], LineNumberNode) || is_expr(args[2], :line)
-                print(io, args[2], ' ')
+                a2 = args[2]
+                a2 isa LineNumberNode ? print(io, a2, ' ') : print(io, a2::Expr, ' ')
             end
             # Use the functional syntax unless specifically designated with
             # prec=-1 and hide the line number argument from the argument list
@@ -2464,21 +2471,18 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         if get(io, beginsym, false)
             print(io, '(')
             ind = indent + indent_width
-            for i = eachindex(ex.args)
+            # A `;` with only comments before it would parse as a NamedTuple,
+            # and a block needs at least one semicolon: `(x;)` `(;;)`
+            seen_expr = printed_semi = false
+            for (i, arg) in enumerate(ex.args)
                 if i > 1
-                    # if there was only a comment before the first semicolon, the expression would get parsed as a NamedTuple
-                    if !(i == 2 && ex.args[1] isa LineNumberNode)
-                        print(io, ';')
-                    end
+                    seen_expr && (print(io, ';'); printed_semi = true)
                     print(io, "\n", ' '^ind)
                 end
-                show_unquoted(io, ex.args[i], ind, -1, quote_level)
+                show_unquoted(io, arg, ind, -1, quote_level)
+                seen_expr |= !(arg isa LineNumberNode)
             end
-            if length(ex.args) < 2
-                print(io, isempty(ex.args) ? ";;)" : ";)")
-            else
-                print(io, ')')
-            end
+            print(io, printed_semi ? ")" : seen_expr ? ";)" : ";;)")
         else
             show_block(io, "begin", ex, indent, quote_level)
             print(io, "end")

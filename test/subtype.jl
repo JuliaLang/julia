@@ -825,11 +825,8 @@ function test_intersection()
     @testintersect((@UnionAll T Tuple{T, AbstractArray{T}}), Tuple{Int, Vector{Number}},
                    Tuple{Int, Vector{Number}})
 
-    # TODO: improve this result
-    #@testintersect((@UnionAll S Tuple{S,Vector{S}}), (@UnionAll T<:Real Tuple{T,AbstractVector{T}}),
-    #               (@UnionAll S<:Real Tuple{S,Vector{S}}))
     @testintersect((@UnionAll S Tuple{S,Vector{S}}), (@UnionAll T<:Real Tuple{T,AbstractVector{T}}),
-                   (@UnionAll S<:Real Tuple{Real,Vector{S}}))
+                  (@UnionAll S<:Real Tuple{S,Vector{S}}))
 
     # typevar corresponding to a type it will end up being neither greater than nor
     # less than
@@ -1796,7 +1793,8 @@ end
 
 @testintersect(Tuple{Any,Tuple{Int},Int},
                Tuple{LT,R,I} where LT<:Union{I, R} where R<:Tuple{I} where I<:Integer,
-               Tuple{LT,Tuple{Int},Int} where LT<:Union{Tuple{Int},Int})
+               Tuple{LT,Tuple{Int},Int} where {I<:Integer, LT<:Union{Tuple{Int}, I}})
+
 let U = Tuple{Union{LT, LT1},Union{R, R1},Int} where LT1<:R1 where R1<:Tuple{Int} where LT<:Int where R<:Tuple{Int},
     U2 = Union{Tuple{LT,R,Int} where LT<:Int where R<:Tuple{Int}, Tuple{LT,R,Int} where LT<:R where R<:Tuple{Int}},
     V = Tuple{Union{Tuple{Int},Int},Tuple{Int},Int},
@@ -2784,9 +2782,8 @@ let A = Tuple{Type{T}, T, Val{T}} where T<:Val{<:Val},
 end
 let T = Tuple{Union{Type{T}, Type{S}}, Union{Val{T}, Val{S}}, Union{Val{T}, S}} where T<:Val{A} where A where S<:Val,
     S = Tuple{Type{T}, T, Val{T}} where T<:(Val{S} where S<:Val)
-    # optimal = Union{}?
-    @test typeintersect(T, S) == Tuple{Type{T}, Union{Val{T}, Val{S}}, Val{T}} where {S<:Val, T<:Val}
-    @test typeintersect(S, T) == Tuple{Type{T}, Union{Val{T}, Val{S}}, Val{T}} where {T<:Val, S<:(Union{Val{A}, Val} where A)}
+    @test S{Val{Union{}}} <: typeintersect(T, S)
+    @test S{Val{Union{}}} <: typeintersect(S, T)
 end
 
 #issue #49857
@@ -2956,6 +2953,21 @@ end
     Tuple{Type{Complex{T}} where T, Type{Complex{T}} where T, Type{String}},
     Tuple{Type{Complex{T}}, Type{Complex{T}}, Type{String}} where T
 )
+@testintersect(
+    Tuple{Type{<:Tuple{F,F}}, Type{<:F}} where {F},
+    Tuple{Type{Tuple{Int, T}}, Type{String}} where {T<:Real},
+    Union{}
+)
+@testintersect(
+    Tuple{Int, T, Type{<:Tuple{T}}} where {T},
+    Tuple{Any, Int, Type{Tuple{Nothing}}},
+    Tuple{Int, Int, Type{Tuple{Nothing}}}
+)
+@testintersect(
+    Tuple{Type{T}, Type{<:Tuple{F}}, Type{<:F}} where {T, F<:Union{String, T}},
+    Tuple{Type{Complex{T}} where T, Type{Tuple{Complex{T}}} where T, Type{String}},
+    Tuple{Type{Complex{T}}, Type{Tuple{Complex{T}}}, Type{String}} where T
+)
 
 #issue 58129
 for k in 1:500
@@ -3026,7 +3038,21 @@ let
     @test r <: A
     @test r !== Union{}
 end
-
+@testintersect(
+    Tuple{X,X,Ref{U}} where {U,T<:U,X<:T},
+    Tuple{Union{Type{Int},Type{Vector}}, Union{Type{Int},Type{Vector}}, Ref{Type{Int}}},
+    Tuple{X, X, Ref{Type{Int}}} where {T<:Type{Int}, X<:T}
+)
+@testintersect(
+    Tuple{X,X,Ref{U}} where {U,X<:U},
+    Tuple{Union{Type{Int},Type{Vector}}, Union{Type{Int},Type{Vector}}, Ref{Type{Int}}},
+    Tuple{X, X, Ref{Type{Int}}} where {X<:Type{Int}}
+)
+@testintersect(
+    Tuple{X,X,Ref{U}} where {U,X<:U},
+    Tuple{Union{Type{Int},Type{Vector}}, Type{Int8}, Ref{DataType}},
+    Tuple{Type{Int}, Type{Int8}, Ref{DataType}}
+)
 # JETLS#509 — inference hang with Union-bounded parametric types
 # subtype_ccheck leaked right-side Union choices into the shared
 # Runions statestack, causing exponential state iteration when
@@ -3572,4 +3598,29 @@ end
             @test env[1] !== nothing
         end
     end
+end
+
+# issue #63037
+@testintersect(
+    Matrix{S} where S<:(Union{Missing,U} where U<:Number),
+    Array{Union{Missing,T},N} where {N,T<:Number},
+    Matrix{Union{Missing, T}} where {T<:Number}
+)
+@testintersect(
+    Matrix{S} where S<:(Union{Missing,U} where U<:Number),
+    Array{Union{Missing,T},N} where {N,T<:Union{Number,Nothing}},
+    #TODO: might be improved to `Matrix{Union{Missing, T}} where {T<:Number}`
+    Matrix{Union{Missing, T}} where {T<:Union{Number,Nothing}}
+)
+@testintersect(
+    Tuple{Int, Any, Val{Union{Int8, Int16}}},
+    Tuple{Any, Int, Val{Union{T, Int8}}} where {T>:Union{Int16, Int32}},
+    Union{}
+)
+let A = Tuple{Real, Vector{S}} where S<:(Union{Nothing,U} where U<:Tuple{Real,Real})
+    B = Tuple{T, Vector{Union{Nothing,Tuple{T,T}}}} where T
+    @test B{Int} <: A
+    @test B{Int} <: B
+    @test B{Int} <: typeintersect(A, B)
+    @test B{Int} <: typeintersect(B, A)
 end

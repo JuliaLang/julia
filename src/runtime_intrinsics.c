@@ -663,7 +663,8 @@ jl_value_t *jl_lookup_foreignsymbol(jl_value_t *v)
             jl_error("cglobal function name cannot be empty tuple");
         } else if (nf == 1) {
             v = jl_fieldref(v, 0);
-        } else if (nf == 2) {
+        } else if (nf == 2 || (nf == 3 && jl_typeis(jl_fieldref(v, 2), (jl_value_t*)jl_libraryid_type))) {
+            // the third element is the identity recorded by method.c (see expand_library_id)
             f_lib = jl_fieldref(v, 1);
             v = jl_fieldref(v, 0);
         } else {
@@ -1803,6 +1804,12 @@ JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
         return jl_cpu_has_fma(64);
     else
         return jl_false;
+}
+
+JL_DLLEXPORT jl_value_t *jl_cpu_supports(jl_value_t *feat)
+{
+    JL_TYPECHK(cpu_supports, symbol, feat);
+    return jl_cpu_has_features(jl_symbol_name((jl_sym_t*)feat)) ? jl_true : jl_false;
 }
 
 JL_DLLEXPORT jl_value_t *jl_add_ptr(jl_value_t *ptr, jl_value_t *offset)

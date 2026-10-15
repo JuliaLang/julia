@@ -478,14 +478,18 @@ function _green_to_est(parent::Syntax, parent_i::Int,
     elseif k === :function && n_cs >= 2 &&
         has_flags(st, SHORT_FORM_FUNCTION_FLAG)
         # (function-= callex body) => (= callex (block body))
+        p_k = head(parent)
+        because_params = p_k === :parameters && parent_i >= 1 && kw_in_params
+        because_call = parent_i > 1 && (p_k == :ref ||
+            p_k in (:call, :dotcall) && is_prefix_call(parent))
+        ret_k = because_params || because_call ? :kw : :(=)
         # exception: no block on "x' = y", or if body is already a block
         if head(cs[2]) !== :block && !is_postfix_op_call(cs[1])
             ret_cs = _map_green_to_est(st, cs)
             ret_cs[2] = @mknode(;source=cs[2], context,
                                 head=:block, children=SyntaxList(ret_cs[2]))
-            return @mknode(;source=st, context, head=:(=), children=ret_cs)
+            return @mknode(;source=st, context, head=ret_k, children=ret_cs)
         end
-        ret_k = :(=)
     elseif k === :module
         not_bare = valleaf(!has_flags(st, BARE_MODULE_FLAG))
         insert!(cs, head(cs[1]) === :version ? 2 : 1, not_bare)
@@ -537,7 +541,7 @@ function _green_to_est(parent::Syntax, parent_i::Int,
     elseif k === :importpath
         ret_k = :.
         for i in eachindex(cs)
-            if head(cs[i]) === :inert
+            if head(cs[i]) === :quote
                 inner_cs = preprocessed_green_children(cs[i])
                 length(inner_cs) === 1 && (cs[i] = only(inner_cs))
             end

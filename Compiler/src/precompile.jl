@@ -428,6 +428,16 @@ function compile_and_emit_native(worlds::Vector{UInt},
                 push!(tocompile, mi.def.ccallable)
             end
         end
+
+        # Similar to `__init__()` any (::LazyLibraryCallback)() methods are special and
+        # eagerly compiled under trim, so that they can be invoked dynamically.
+        matches = _compileable_methods(InternalMethodTable(latestworld), Core.LazyLibraryCallback)
+        if matches !== nothing
+            for match in matches
+                mi = match.second
+                mi === nothing || push!(tocompile, mi)
+            end
+        end
     end
 
     # Step 4: Perform type inference on tocompile to create codeinfos

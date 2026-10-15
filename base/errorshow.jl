@@ -553,14 +553,16 @@ function descend_params(io::IO, @nospecialize(sig), @nospecialize(called))
     end
     sig isa DataType && called isa DataType || return nothing
     sig.name === called.name || return nothing
-    n = length(sig.parameters)
-    n > 0 && n == length(called.parameters) || return nothing
+    sp = (sig::DataType).parameters
+    cp = (called::DataType).parameters
+    n = length(sp)
+    n > 0 && n == length(cp) || return nothing
     sig.name === typename(NamedTuple) && return nothing
-    (any(isvarargtype, sig.parameters) || any(isvarargtype, called.parameters)) && return nothing
+    (any(isvarargtype, sp) || any(isvarargtype, cp)) && return nothing
     sa = make_typealias(sig, io)
     ca = make_typealias(called, io)
     if sa === nothing && ca === nothing
-        return sig.parameters, called.parameters, nothing
+        return sp, cp, nothing
     elseif sa !== nothing && ca !== nothing && sa[1] === ca[1]
         se = sa[2]::SimpleVector
         ce = ca[2]::SimpleVector
@@ -909,8 +911,9 @@ function _backtrace_find_and_remove_cycles(t)
 
     while t_curr ≤ length(t)
         t_this = t_curr
-        (last_frame, n) = t[t_curr]
-        current_hash = hash(t[t_curr])
+        entry = t[t_curr]::Tuple{StackFrame,Int}
+        (last_frame, n) = entry
+        current_hash = hash(entry)
         positions = get(recorded_positions, current_hash,  Int[])
 
         t_curr += 1
@@ -926,7 +929,7 @@ function _backtrace_find_and_remove_cycles(t)
             # walk trace at current and previous matching positions until matching stops
             t_curr_end = t_curr
             t_prev_end = t_prev
-            while t_curr_end < length(t) && t[t_curr_end] == t[t_prev_end]
+            while t_curr_end < length(t) && t[t_curr_end]::Tuple{StackFrame,Int} == t[t_prev_end]::Tuple{StackFrame,Int}
                 t_curr_end += 1
                 t_prev_end += 1
             end
@@ -1001,7 +1004,7 @@ function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeat
     current_cycles = NTuple{4, Int}[] # adding a value to track amount to advance frame_counter when cycle is closed
 
     for i in eachindex(trace)
-        (frame, n) = trace[i]
+        (frame, n) = trace[i]::Tuple{StackFrame,Int}
 
         ncycle_starts = 0
         while repeated_cycles[1][1] == i
@@ -1117,6 +1120,7 @@ function print_module_path_file(io, modul, file, line, col = 0;
     # filename, separator, line (`?` if unknown), column if available
     printstyled(io, basename(file), ":", line >= 0 ? line : "?"; color = :light_black, underline = true)
     col != 0 && printstyled(io, ":", col; color = :light_black, underline = true)
+    nothing
 end
 
 #=
@@ -1158,7 +1162,7 @@ function show_backtrace(io::IO, t::Vector; prefix = nothing)
     end
     isempty(filtered) && return
 
-    nframes = sum(last(x) for x ∈ filtered)
+    nframes = sum(last(x::Tuple{StackFrame,Int}) for x ∈ filtered)
 
     # don't show a single top-level frame with no location info
     if nframes == 1 && StackTraces.is_top_level_frame(filtered[1][1])
@@ -1173,7 +1177,7 @@ function show_backtrace(io::IO, t::Vector; prefix = nothing)
         filtered, repeated_cycles, max_nested_cycles = _backtrace_find_and_remove_cycles(filtered)
     else
         repeated_cycles = NTuple{3, Int}[]
-        max_nested_cycles = any(x -> last(x) > 1, filtered) ? 1 : 0
+        max_nested_cycles = any(x -> last(x::Tuple{StackFrame,Int}) > 1, filtered) ? 1 : 0
     end
 
     # Allow external code to edit information in the frames (e.g. line numbers with Revise)
@@ -1233,7 +1237,8 @@ function _backtrace_simplify_include_frames!(trace)
         frame::StackFrame, _ = trace[i]
         mod = parentmodule(frame)
         if mod === Base && frame.func === :IncludeInto ||
-           mod === Core && frame.func === :EvalInto
+           mod === Core && frame.func === :EvalInto ||
+           mod === Base && frame.func === :fl_toplevel_eval
             kept_frames[i] = false
         elseif first_ignored === nothing
             if mod === Base && frame.func === :_include
@@ -1543,6 +1548,8 @@ end
 Experimental.register_error_hint(fielderror_dict_hint_handler, FieldError)
 
 function fielderror_listfields_hint_handler(io, exc)
+    # e.g. `fieldtype(Integer, :a)`: abstract types have no definite fields to list
+    fieldcount_noerror(exc.type) === nothing && return
     fields = fieldnames(exc.type)
     if isempty(fields)
         print(io, "; $(exc.type.name.wrapper) has no fields at all.")
@@ -1700,3 +1707,28 @@ function show(io::IO, ::MIME"text/plain", stack::ExceptionStack)
     show_exception_stack(io, stack)
 end
 show(io::IO, stack::ExceptionStack) = show(io, MIME("text/plain"), stack)
+
+# detect the reason which caused an :incomplete expression
+# from the error message
+# NOTE: the error messages are defined in src/julia-parser.scm
+incomplete_tag(ex) = :none
+function incomplete_tag(ex::Expr)
+    if ex.head !== :incomplete
+        return :none
+    elseif isempty(ex.args)
+        return :other
+    else
+        a = ex.args[1]
+        if a isa String
+            occursin("string", a) && return :string
+            occursin("comment", a) && return :comment
+            occursin("requires end", a) && return :block
+            occursin("\"`\"", a) && return :cmd
+            occursin("character", a) && return :char
+            return :other
+        else
+            return incomplete_tag(a)::Symbol
+        end
+    end
+end
+incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)

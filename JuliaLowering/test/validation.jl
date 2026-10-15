@@ -113,7 +113,7 @@ let
     end
     @testset for h in standalone_heads
         ex = Expr(Symbol(h))
-        @test !Meta.isexpr(:error, Meta.lower(@__MODULE__, ex))
+        @test !Meta.isexpr(fl_lower(@__MODULE__, ex), :error)
         @test vst1_ok(ex)
     end
 end

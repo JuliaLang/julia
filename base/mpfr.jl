@@ -966,14 +966,14 @@ for f in (:sin, :cos, :tan)
         function ($(Symbol(f,:d)))(x::BigFloat)
             isnan(x) && return x
             z = BigFloat()
-            ccall(($(string(:mpfr_,f,:u)), :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, x, 360, rounding_raw(BigFloat))
+            ccall(($(string(:mpfr_,f,:u)), libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, x, 360, rounding_raw(BigFloat))
             isnan(z) && throw(DomainError(x, "NaN result for non-NaN input."))
             return z
         end
         function ($(Symbol(:a,f,:d)))(x::BigFloat)
             isnan(x) && return x
             z = BigFloat()
-            ccall(($(string(:mpfr_a,f,:u)), :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, x, 360, rounding_raw(BigFloat))
+            ccall(($(string(:mpfr_a,f,:u)), libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, x, 360, rounding_raw(BigFloat))
             isnan(z) && throw(DomainError(x, "NaN result for non-NaN input."))
             return z
         end
@@ -981,7 +981,7 @@ for f in (:sin, :cos, :tan)
 end
 function atand(y::BigFloat, x::BigFloat)
     z = BigFloat()
-    ccall((:mpfr_atan2u, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, y, x, 360, rounding_raw(BigFloat))
+    ccall((:mpfr_atan2u, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, y, x, 360, rounding_raw(BigFloat))
     return z
 end
 

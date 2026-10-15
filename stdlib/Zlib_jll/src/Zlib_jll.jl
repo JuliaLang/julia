@@ -23,7 +23,8 @@ const libz = LazyLibrary(
         BundledLazyLibraryPath("libz.so.1")
     else
         error("Zlib_jll: Library 'libz' is not available for $(Sys.KERNEL)")
-    end
+    end;
+    id = LibraryID(Base.UUID("83775a58-1f1d-513f-b197-d71354ab007a"), "libz")
 )
 
 function eager_mode()

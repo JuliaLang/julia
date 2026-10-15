@@ -1153,6 +1153,60 @@ let io = IOBuffer()
     @test !occursin("jtbaa_unionselbyte", str)
 end
 
+# JIT-compiled code refers to the installed Base sources in its debug info,
+# while relative file names of user code are left alone
+let ir = replace(sprint(io -> code_llvm(io, sum, Tuple{Vector{Int}}, dump_module=true, raw=true)), "\\5C" => "\\")
+    m = match(r"!DIFile\(filename: \"reduce\.jl\", directory: \"([^\"]*)\"", ir)
+    @test m !== nothing && samefile(joinpath(m[1], "reduce.jl"),
+                                    joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", "reduce.jl"))
+end
+let f = include_string(@__MODULE__, "difile_user_code(x) = x + 1", "int.jl")
+    ir = sprint(io -> code_llvm(io, f, Tuple{Int}, dump_module=true, raw=true))
+    @test occursin("!DIFile(filename: \"int.jl\", directory: \".\")", ir)
+end
+# ... and keep the recorded file names, which is what `code_llvm` and `code_native` print
+let str = sprint(io -> code_llvm(io, findnext, Tuple{Base.Fix2{typeof(==),UInt8}, Vector{UInt8}, Int}; debuginfo=:source))
+    @test occursin(r"@ strings[/\\]search\.jl:\d+", str)
+end
+let str = sprint(io -> code_llvm(io, Base.Compiler.widenconst, Tuple{Base.Compiler.Const}; debuginfo=:source))
+    @test occursin(r"@ Compiler[/\\]src[/\\]typelattice\.jl:\d+", str)
+end
+mktempdir() do dir
+    file = joinpath(dir, "difile_abspath.jl")
+    write(file, "difile_abspath(x) = x + 1")
+    f = Base.include(@__MODULE__, file)
+    @test occursin("@ $file:1", sprint(io -> code_llvm(io, f, Tuple{Int}; debuginfo=:source)))
+    @test occursin("@ $file:1", sprint(io -> code_native(io, f, Tuple{Int}; debuginfo=:source)))
+end
+# The first matching rewrite applies, whether or not the file exists
+let difiles(f, sig, map) = try
+        ccall(:jl_set_debuginfo_source_paths, Cvoid, (Any,), Core.svec(map...))
+        ir = sprint(io -> code_llvm(io, f, sig; dump_module=true, raw=true))
+        # the IR escapes a backslash as `\\` or `\5C`
+        unescape(s) = replace(s, "\\\\" => "/", "\\5C" => "/", "\\" => "/")
+        Dict(unescape(m[1]) => unescape(m[2])
+             for m in eachmatch(r"!DIFile\(filename: \"([^\"]*)\", directory: \"([^\"]*)\"", ir))
+    finally
+        Base.init_debuginfo_source_paths()
+    end
+    sig = Tuple{Base.Fix2{typeof(==),UInt8}, Vector{UInt8}, Int}
+    d = difiles(findnext, sig, ("strings/", "/nonexistent/strings", "", "/nonexistent/base"))
+    @test endswith(d["search.jl"], "/nonexistent/strings")
+    @test endswith(d["int.jl"], "/nonexistent/base")
+    d = difiles(findnext, sig, ("strings/", "/nonexistent/strings"))
+    @test endswith(d["search.jl"], "/nonexistent/strings")
+    @test d["int.jl"] == "."
+    mktempdir() do dir
+        file = joinpath(dir, "difile_rewrite.jl")
+        write(file, "difile_rewrite(x) = x + 1")
+        f = Base.include(@__MODULE__, file)
+        d = difiles(f, Tuple{Int}, (joinpath(dir, ""), "/nonexistent/abs"))
+        name = only(k for k in keys(d) if endswith(k, "difile_rewrite.jl"))
+        @test endswith(name, "/nonexistent/abs/difile_rewrite.jl")
+        @test endswith(d[name], "/nonexistent/abs")
+    end
+end
+
 let io = IOBuffer()
     code_llvm(io, (x, y) -> (@atomic x[1] = y; nothing), (AtomicMemory{Pair{Any,Any}}, Pair{Any,Any},), raw=true, optimize=false)
     str = String(take!(io))

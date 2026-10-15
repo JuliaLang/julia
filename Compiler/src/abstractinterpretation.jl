@@ -207,6 +207,11 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                 if const_call_result !== nothing
                     this_const_conditional = ignorelimited(const_call_result.rt)
                     this_const_rt = widenwrappedconditional(const_call_result.rt)
+                    narrowed = narrow_mustalias(𝕃ₚ, this_const_rt, this_rt)
+                    if narrowed !== this_const_rt
+                        this_const_rt = narrowed
+                        this_const_conditional = ignorelimited(narrowed)
+                    end
                     const_result = nothing
                     if this_const_rt ⊑ₚ this_rt
                         # As long as the const-prop result we have is not *worse* than
@@ -5081,22 +5086,19 @@ function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt
     if iskindtype(newtyp)
         # this code path corresponds to the special handling for `isa(x, iskindtype)` check
         # implemented within `abstract_call_builtin`
-    elseif ⊑(𝕃ᵢ, ignorelimited(newtyp), ignorelimited(oldtyp))
+    elseif ⊑(𝕃ᵢ, newtyp, widenmustalias(ignorelimited(oldtyp)))
         # approximate test for `typ ∩ oldtyp` being better than `oldtyp`
         # since we probably formed these types with `typesubstract`,
         # the comparison is likely simple
     elseif condt.isdefined && then_or_else === :then && vtype.undef
-         # For `@isdefined slot`, the type may not be a refinement
-         # but the `.undef` information still can be
-         return StateRefinement(condt.slot, oldtyp, #= undef =# false)
+        # For `@isdefined slot`, the type may not be a refinement
+        # but the `.undef` information still can be
+        return StateRefinement(condt.slot, oldtyp, #= undef =# false)
     else
         return nothing
     end
-    if oldtyp isa LimitedAccuracy
-        # typ is better unlimited, but we may still need to compute the tmeet with the limit
-        # "causes" since we ignored those in the comparison
-        newtyp = tmerge(𝕃ᵢ, newtyp, LimitedAccuracy(Bottom, oldtyp.causes))
-    end
+    newtyp = narrow_mustalias(𝕃ᵢ, newtyp, oldtyp) # intersect with mustalias info from `oldtyp`, if possible
+    newtyp = narrow_limited_typ(newtyp, oldtyp)   # intersect with "limited" causes from `oldtyp`
     # if this `Conditional` is from `@isdefined condt.slot`, refine its `undef` information
     newundef = condt.isdefined ? (then_or_else === :else) : vtype.undef
     return StateRefinement(condt.slot, newtyp, newundef)

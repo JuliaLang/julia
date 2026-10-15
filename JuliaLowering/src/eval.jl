@@ -552,7 +552,7 @@ function to_code_info(ex::SyntaxTree)
             slot.is_called        << 6   # SLOT_CALLED        | -
     end
 
-    stmts = map(_to_lowered_expr, children(ex[2]))
+    stmts = Any[_to_lowered_expr(e) for e in children(ex[2])]
     has_image_globalref = any(codeinfo_has_image_globalref, stmts)
     ssaflags = compute_ssaflags(ex[2])
     propagate_inbounds =
@@ -675,7 +675,7 @@ function _to_lowered_expr(ex::SyntaxTree)
     elseif k == :newvar
         Core.NewvarNode(_to_lowered_expr(ex[1]))
     elseif k == :opaque_closure_method
-        args = map(_to_lowered_expr, children(ex))
+        args = Any[_to_lowered_expr(e) for e in children(ex)]
         # opaque_closure_method has special non-evaluated semantics for the
         # `functionloc` line number node so we need to undo a level of quoting
         arg4 = args[4]
@@ -750,7 +750,7 @@ function _foreignsymbol_expr(ex)
     if is_leaf(ex) || head(ex) == :inert
         _to_lowered_expr(ex)
     else
-        Expr(head(ex), map(_foreignsymbol_expr, children(ex))...)
+        Expr(head(ex), Any[_foreignsymbol_expr(e) for e in children(ex)]...)
     end
 end
 
@@ -759,7 +759,7 @@ end
     if !(ex isa SyntaxTree)
         ex = expr_to_est(ex)
     end
-    return invoke_in_lowering_world(_lower_and_eval, mod, ex, soft_scope)
+    return _lower_and_eval(mod, ex, soft_scope)
 end
 
 function _lower_and_eval(mod::Module, st::SyntaxTree,
@@ -772,7 +772,9 @@ function _eval(mod::Module, iter::LoweringIterator; soft_scope::Union{Nothing,Bo
     modules = Module[mod]
     result = nothing
     while true
-        thunk = lower_step(iter, modules[end], Base.get_world_counter(); soft_scope)::Core.SimpleVector
+        thunk = invoke_in_lowering_world(
+            ()->lower_step(iter, modules[end],
+                           Base.get_world_counter(); soft_scope))::Core.SimpleVector
         type = thunk[1]::Symbol
         if type == :done
             break

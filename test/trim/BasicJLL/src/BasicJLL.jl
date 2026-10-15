@@ -2,10 +2,9 @@
 module BasicJLL
 
 using Libdl
-using Zstd_jll # Note this uses the vendored older non-LazyLibrary version of Zstd_jll
+using Zstd_jll # the stdlib Zstd_jll, whose `libzstd` is a `Libdl.LazyLibrary`
 
 # JLL usage at build-time should function as expected
-Zstd_jll.__init__()
 const build_ver = unsafe_string(ccall((:ZSTD_versionString, libzstd), Cstring, ()))
 
 function print_string(fptr::Ptr{Cvoid})
@@ -28,9 +27,10 @@ function @main(args::Vector{String})::Cint
 
     sleep(0.01)
 
-    # Add an indirection via `@cfunction` / 1-arg ccall
+    # Add an indirection via `@cfunction` / 1-arg ccall, with the function
+    # pointer obtained through the `LazyLibrary` `dlsym` path
     cfunc = @cfunction(print_string, Cvoid, (Ptr{Cvoid},))
-    fptr = dlsym(Zstd_jll.libzstd_handle, :ZSTD_versionString)
+    fptr = dlsym(libzstd, :ZSTD_versionString)
     ccall(cfunc, Cvoid, (Ptr{Cvoid},), fptr)
     return 0
 end

@@ -127,7 +127,36 @@ top:
 }
 
 
+; A loop ID left with only the self reference must be distinct: as a uniqued `!{null}`
+; it would be shared with (and corrupt) e.g. the type array of a subroutine type
+; CHECK-LABEL: @simd_debuginfo(
+define void @simd_debuginfo(ptr %a) !dbg !10 {
+top:
+  br label %loop
+loop:
+  %i = phi i64 [0, %top], [%nexti, %loop]
+  %aptr = getelementptr double, ptr %a, i64 %i
+  store double 0.0, ptr %aptr
+  %nexti = add i64 %i, 1
+  %done = icmp sgt i64 %nexti, 500
+; CHECK: br i1 %done, label %loopdone, label %loop, !llvm.loop ![[LOOPID:[0-9]+]]
+  br i1 %done, label %loopdone, label %loop, !llvm.loop !0
+loopdone:
+  ret void
+}
+
+!llvm.dbg.cu = !{!11}
+!llvm.module.flags = !{!14}
+; CHECK: !DISubroutineType(types: ![[TYPES:[0-9]+]])
+; CHECK-DAG: ![[TYPES]] = !{null}
+; CHECK-DAG: ![[LOOPID]] = distinct !{![[LOOPID]]}
 !0 = distinct !{!0, !"julia.simdloop"}
 !1 = distinct !{!1, !"julia.simdloop", !"julia.ivdep"}
 !2 = distinct !{!2, !"julia.simdloop", !"julia.ivdep", !3}
 !3 = !{!"llvm.loop.vectorize.disable", i1 0}
+!10 = distinct !DISubprogram(name: "simd_debuginfo", scope: !12, file: !12, type: !13, spFlags: DISPFlagDefinition, unit: !11)
+!11 = distinct !DICompileUnit(language: DW_LANG_Julia, file: !12, emissionKind: FullDebug)
+!12 = !DIFile(filename: "a.jl", directory: ".")
+!13 = !DISubroutineType(types: !15)
+!14 = !{i32 2, !"Debug Info Version", i32 3}
+!15 = !{null}

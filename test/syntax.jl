@@ -192,8 +192,8 @@ macro test999_str(args...); args; end
 # blocks vs. tuples
 @test Meta.parse("()") == Expr(:tuple)
 @test Meta.parse("(;)") == Expr(:tuple, Expr(:parameters))
-@test Meta.parse("(;;)") == Expr(:block)
-@test Meta.parse("(;;;;)") == Expr(:block)
+@test Meta.parse("(;;)") == Expr(:block, LineNumberNode(1,:none))
+@test Meta.parse("(;;;;)") == Expr(:block, LineNumberNode(1,:none))
 @test_parseerror "(,)"
 @test_parseerror "(;,)"
 @test_parseerror "(,;)"
@@ -201,17 +201,17 @@ macro test999_str(args...); args; end
 #@test_parseerror "(1;2,)"
 #@test_parseerror "(1;2,;)"
 #@test_parseerror "(1;2,;3)"
-@test Meta.parse("(x;)") == Expr(:block, :x)
+@test Meta.parse("(x;)") == Expr(:block, LineNumberNode(1,:none), :x)
 @test Meta.parse("(;x)") == Expr(:tuple, Expr(:parameters, :x))
 @test Meta.parse("(;x,)") == Expr(:tuple, Expr(:parameters, :x))
 @test Meta.parse("(x,)") == Expr(:tuple, :x)
 @test Meta.parse("(x,;)") == Expr(:tuple, Expr(:parameters), :x)
-@test Meta.parse("(x;y)") == Expr(:block, :x, LineNumberNode(1,:none), :y)
+@test Meta.parse("(x;y)") == Expr(:block, LineNumberNode(1,:none), :x, LineNumberNode(1,:none), :y)
 @test Meta.parse("(x...;)") == Expr(:tuple, Expr(:parameters), Expr(:(...), :x))
 @test Meta.parse("(;x...)") == Expr(:tuple, Expr(:parameters, Expr(:(...), :x)))
 @test Meta.parse("(x...;y)") == Expr(:tuple, Expr(:parameters, :y), Expr(:(...), :x))
-@test Meta.parse("(x;y...)") == Expr(:block, :x, LineNumberNode(1,:none), Expr(:(...), :y))
-@test Meta.parse("(x=1;y=2)") == Expr(:block, Expr(:(=), :x, 1), LineNumberNode(1,:none), Expr(:(=), :y, 2))
+@test Meta.parse("(x;y...)") == Expr(:block, LineNumberNode(1,:none), :x, LineNumberNode(1,:none), Expr(:(...), :y))
+@test Meta.parse("(x=1;y=2)") == Expr(:block, LineNumberNode(1,:none), Expr(:(=), :x, 1), LineNumberNode(1,:none), Expr(:(=), :y, 2))
 @test Meta.parse("(x,;y)") == Expr(:tuple, Expr(:parameters, :y), :x)
 @test Meta.parse("(x,;y=1)") == Expr(:tuple, Expr(:parameters, Expr(:kw, :y, 1)), :x)
 @test Meta.parse("(x,a;y=1)") == Expr(:tuple, Expr(:parameters, Expr(:kw, :y, 1)), :x, :a)
@@ -806,6 +806,12 @@ let ex = Expr(:toplevel,
     @test only(methods(f)).debuginfo.def isa Symbol
 end
 
+# let with linenumbernode
+@test !Core.eval(@__MODULE__,
+                 Expr(:let, Expr(:block, LineNumberNode(1)),
+                      Expr(:block, :(g = 1),
+                           Expr(:isglobal, :g))))
+
 # Check qualified string macros
 Base.r"regex" == r"regex"
 
@@ -1399,10 +1405,10 @@ end
 # cases where parens are just grouping
 @test Meta.parse("-(x)^2")     == Expr(:call, :-, Expr(:call, :^, :x, 2))
 @test Meta.parse("-(a=1)^2")   == Expr(:call, :-, Expr(:call, :^, Expr(:(=), :a, 1), 2))
-@test Meta.parse("-(x;y)^2")   == Expr(:call, :-, Expr(:call, :^, Expr(:block, :x, LineNumberNode(1,:none), :y), 2))
+@test Meta.parse("-(x;y)^2")   == Expr(:call, :-, Expr(:call, :^, Expr(:block, LineNumberNode(1,:none), :x, LineNumberNode(1,:none), :y), 2))
 @test Meta.parse("-(;)^2")     == Expr(:call, :^, Expr(:call, :-, Expr(:parameters)), 2)
-@test Meta.parse("-(;;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block), 2))
-@test Meta.parse("-(x;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block, :x), 2))
+@test Meta.parse("-(;;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block, LineNumberNode(1,:none)), 2))
+@test Meta.parse("-(x;;;)^2")  == Expr(:call, :-, Expr(:call, :^, Expr(:block, LineNumberNode(1,:none), :x), 2))
 @test Meta.parse("+((1,2))")   == Expr(:call, :+, Expr(:tuple, 1, 2))
 
 @test_parseerror "1 -+ (a=1, b=2)"  "space before \"(\" not allowed in \"+ (\" at none:1"
@@ -2857,10 +2863,10 @@ end
 end
 
 @testset "issue #37393" begin
-    @test remove_linenums!(:(for outer i = 1:3; end)) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), :(;;))
+    @test remove_linenums!(:(for outer i = 1:3; end)) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), Expr(:block))
     i = :i
-    @test remove_linenums!(:(for outer $i = 1:3; end)) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), :(;;))
-    @test remove_linenums!(:(for outer = 1:3; end)) == Expr(:for, Expr(:(=), :outer, :(1:3)), :(;;))
+    @test remove_linenums!(:(for outer $i = 1:3; end)) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), Expr(:block))
+    @test remove_linenums!(:(for outer = 1:3; end)) == Expr(:for, Expr(:(=), :outer, :(1:3)), Expr(:block))
     # TIL that this is possible
     for outer $ i = 1:3
         @test 1 $ 2 in 1:3
@@ -3786,7 +3792,7 @@ end
     @test p("if true \n public *= 4 \n end") == Expr(:if, true, Expr(:block, Expr(:*=, :public, 4)))
     @test p("module Mod\n public A, B \n end") == Expr(:module, true, :Mod, Expr(:block, Expr(:public, :A, :B)))
     @test p("module Mod2\n a = 3; b = 6; public a, b\n end") == Expr(:module, true, :Mod2, Expr(:block, Expr(:(=), :a, 3), Expr(:(=), :b, 6), Expr(:public, :a, :b)))
-    @test p("a = 3; b = 6; public a, b") == Expr(:toplevel, Expr(:(=), :a, 3), Expr(:(=), :b, 6), Expr(:public, :a, :b))
+    @test p("a = 3; b = 6; public a, b") == Expr(:toplevel, LineNumberNode(1,:none), Expr(:(=), :a, 3), LineNumberNode(1,:none), Expr(:(=), :b, 6), LineNumberNode(1,:none), Expr(:public, :a, :b))
     @test_throws Meta.ParseError p("begin \n public A, B \n end")
     @test_throws Meta.ParseError p("if true \n public A, B \n end")
     @test_throws Meta.ParseError p("public export=true foo, bar")

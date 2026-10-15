@@ -819,6 +819,10 @@ index_shape() = ()
 @inline index_shape(::Real, rest...) = index_shape(rest...)
 @inline index_shape(A::AbstractArray, rest...) = (axes(A)..., index_shape(rest...)...)
 
+index_sizes() = ()
+@inline index_sizes(::Real, rest...) = index_sizes(rest...)
+@inline index_sizes(A::AbstractArray, rest...) = (size(A)..., index_sizes(rest...)...)
+
 """
     LogicalIndex(mask)
 
@@ -960,8 +964,16 @@ Fallback to `iterate` by default, but optimized for indices type in `Base`.
 @propagate_inbounds _prechecked_iterate(iter) = iterate(iter)
 @propagate_inbounds _prechecked_iterate(iter, state) = iterate(iter, state)
 
-_prechecked_iterate(iter::AbstractUnitRange, i = first(iter)) = i, convert(eltype(iter), i + step(iter))
-_prechecked_iterate(iter::LinearIndices, i = first(iter)) = i, i + 1
+_prechecked_iterate(iter::AbstractUnitRange) = first(iter), first(iter)
+function _prechecked_iterate(iter::AbstractUnitRange, i)
+    i′ = convert(eltype(iter), i + step(iter))
+    return i′, i′
+end
+_prechecked_iterate(iter::LinearIndices) = first(iter), first(iter)
+function _prechecked_iterate(iter::LinearIndices, i)
+    i′ = i + 1
+    return i′, i′
+end
 _prechecked_iterate(iter::CartesianIndices) = first(iter), first(iter)
 function _prechecked_iterate(iter::CartesianIndices, i::CartesianIndex)
     i′ = IteratorsMD.inc(i.I, iter.indices)
@@ -1042,8 +1054,7 @@ function _generate_unsafe_setindex!_body(N::Int)
     quote
         x′ = unalias(A, x)
         @nexprs $N d->(I_d = unalias(A, I[d]))
-        idxlens = @ncall $N index_lengths I
-        @ncall $N setindex_shape_check x′ (d->idxlens[d])
+        setindex_shape_check(x′, @ncall $N index_sizes I)
         X = eachindex(x′)
         Xy = _prechecked_iterate(X)
         @inbounds @nloops $N i d->I_d begin
@@ -1524,7 +1535,7 @@ end
     N = length(I)
     quote
         idxlens = @ncall $N index_lengths I0 d->I[d]
-        @ncall $N setindex_shape_check X idxlens[1] d->idxlens[d+1]
+        setindex_shape_check(X, @ncall $N index_sizes I0 d->I[d])
         isempty(X) && return B
         f0 = indexoffset(I0)+1
         l0 = idxlens[1]

@@ -108,17 +108,25 @@ function Base.var"@cfunction"(__context__::MacroContext, callable, return_type, 
 end
 
 function ccall_macro_parse(ctx, exs)
-    gc_safe=false
+    gc_safe = false
+    cancel = nothing
     opts = exs[1:end-1]
     ex = exs[end]
     for opt in opts
         @stm opt begin
-            [:(=) [:identifier] val] -> if syntax_name(opt[1]) != "gc_safe"
-                throw(MacroExpansionError(opt[1], "unknown option name for ccall"))
-            elseif head(val) !== :value || !(val.value isa Bool)
-                throw(MacroExpansionError(val, "gc_safe must be true or false"))
+            [:(=) [:identifier] val] -> if syntax_name(opt[1]) == "gc_safe"
+                if head(val) !== :value || !(val.value isa Bool)
+                    throw(MacroExpansionError(val, "gc_safe must be true or false"))
+                else
+                    gc_safe = val.value
+                end
+            elseif syntax_name(opt[1]) == "cancel_handler"
+                @stm val begin
+                    [:tuple x y] -> cancel = (x, y)
+                    _ -> throw(MacroExpansionError(val, "bad cancel handler"))
+                end
             else
-                gc_safe = val.value
+                throw(MacroExpansionError(opt[1], "unknown option name for ccall"))
             end
             _ -> throw(MacroExpansionError(opt, "bad option to ccall"))
         end
@@ -189,10 +197,11 @@ function ccall_macro_parse(ctx, exs)
         num_required_args = 0 # Non-vararg call
     end
 
-    return func, rettype, types, args, gc_safe, num_required_args
+    return func, rettype, types, args, gc_safe, cancel, num_required_args
 end
 
-function ccall_macro_lower(ctx, ex, convention, func, rettype, types, args, gc_safe, num_required_args)
+function ccall_macro_lower(ctx, ex, convention, func, rettype, types, args, gc_safe, cancel, num_required_args)
+    # TODO deal with cancel
     if convention isa Tuple
         cconv_tuple = (convention..., gc_safe)
     else

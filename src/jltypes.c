@@ -126,6 +126,8 @@ static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_CANSAF
 static int has_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
 {
     while (1) {
+        if (jl_is_datatype(v) && (env == NULL || !((jl_datatype_t*)v)->hasfreetypevars))
+            return ((jl_datatype_t*)v)->hasfreetypevars;
         if (jl_is_typevar(v)) {
             return !typeenv_has(env, (jl_tvar_t*)v);
         }
@@ -269,6 +271,8 @@ JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v)
 int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
 {
     while (1) {
+        if (jl_is_datatype(v) && !((jl_datatype_t*)v)->hasfreetypevars)
+            return 0;
         if (jl_is_typevar(v)) {
             return typeenv_has_ne(env, (jl_tvar_t*)v);
         }
@@ -1976,6 +1980,8 @@ static unsigned type_hash(jl_value_t *kj, int *failed) JL_NOTSAFEPOINT
         return hasha + hashb;
     }
     else if (jl_is_typeeq(uw)) {
+        if (jl_is_typeofbottom_param(uw))
+            return jl_typeofbottom_type->hash;
         return typeeq_hash(jl_typeeq_T(uw), failed);
     }
     else if (jl_is_typeegal(uw)) {
@@ -4764,6 +4770,9 @@ void post_boot_hooks(void)
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
     jl_abioverride_type = (jl_datatype_t*)core("ABIOverride");
+
+    jl_abstractlibrary_type = (jl_datatype_t*)core("AbstractLibrary");
+    jl_libraryid_type = (jl_datatype_t*)core("LibraryID");
 
     jl_const_type = (jl_datatype_t*)core("Const");
     jl_partial_struct_type = (jl_datatype_t*)core("PartialStruct");

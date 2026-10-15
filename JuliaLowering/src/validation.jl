@@ -49,13 +49,17 @@ end
 
 abstract type ValidationContext end
 
-function Base.all(f::T, vcx::ValidationContext, itr; kws...) where {T<:Function}
+# `all` recurses through the validators, so every frame must see the same `itr`
+# type, or recursion limiting widens it to an abstract `SubArray`.
+function Base.all(f::T, vcx::ValidationContext, itr::SyntaxView) where {T<:Function}
     ok = pass()
     for i in itr
-        ok &= f(vcx, i; kws...)
+        ok &= f(vcx, i)
     end
     return ok
 end
+Base.all(f::T, vcx::ValidationContext, itr::Vector{SyntaxTree}) where {T<:Function} =
+    all(f, vcx, view(itr, 1:length(itr)))
 
 #-------------------------------------------------------------------------------
 # Post-macro-expansion (st1)
@@ -271,7 +275,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [:isdefined [:static_parameter [:value]]] -> pass()
     [:lambda _...] -> vst1_raw_lambda(vcx, st)
     [:var"with-static-parameters" lam sps...] ->
-        vst1_raw_lambda(vcx, lam) & all(vst1_ident, vcx, sps; lhs=true)
+        vst1_raw_lambda(vcx, lam) & all(vst1_ident_lhs, vcx, sps)
     [:softscope _] -> pass()
     [:softscope] -> pass()
     [:generated] -> pass()
@@ -374,14 +378,14 @@ vst1_toplevel_only(vcx, st) = @stm st begin
         vst1_typesig(vcx, sig) & vst1(vcx, n)
     [:import [:(:) p1 ps...]] ->
         (vst1_importpath(vcx, p1; dots_ok=true) &
-        all(vst1_importpath, vcx, ps; dots_ok=false))
+        all(vst1_importpath_nodots, vcx, ps))
     [:using  [:(:) p1 ps...]] ->
         (vst1_importpath(vcx, p1; dots_ok=true) &
-        all(vst1_importpath, vcx, ps; dots_ok=false))
+        all(vst1_importpath_nodots, vcx, ps))
     [:import ps...] ->
-        minlen(st, ps, 1) & all(vst1_importpath, vcx, ps; dots_ok=true)
+        minlen(st, ps, 1) & all(vst1_importpath_dots, vcx, ps)
     [:using  ps...] ->
-        minlen(st, ps, 1) & all(vst1_importpath, vcx, ps; dots_ok=true)
+        minlen(st, ps, 1) & all(vst1_importpath_dots, vcx, ps)
     [:public xs...] -> all(vst1_ident, vcx, xs)
     [:export xs...] -> all(vst1_ident, vcx, xs)
     [:latestworld] -> pass()
@@ -413,6 +417,8 @@ end
 # (as (importpath . . . x y z) ident)
 #     (importpath . . . x y z)
 # where y, z may be quoted (syntax TODO: require var"" for odd identifiers?)
+vst1_importpath_dots(vcx, st) = vst1_importpath(vcx, st; dots_ok=true)
+vst1_importpath_nodots(vcx, st) = vst1_importpath(vcx, st; dots_ok=false)
 function vst1_importpath(vcx, st; dots_ok)
     ok = pass()
     path_components = @stm st begin
@@ -531,6 +537,7 @@ vst1_ident(vcx, st; lhs=false) = @stm st begin
     [:identifier] -> _ident_str(vcx, st, syntax_name(st); lhs)
     _ -> @fail(st, "expected identifier")
 end
+vst1_ident_lhs(vcx, st) = vst1_ident(vcx, st; lhs=true)
 function _ident_str(vcx, st, s::String; lhs=false)
     if !lhs && (!vcx.readable_underscore || !is_flisp_compat(st)) &&
         is_writeonly_est_name(s)
@@ -786,7 +793,7 @@ vst1_pparam_simple_tuple(vcx, st) = @stm st begin
     [:identifier] -> pass()
     [:tuple [:parameters _ _...] _ _...] -> @fail(
         st[1], "cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax")
-    [:tuple [:parameters kws...]] -> all(vst1_ident, vcx, kws; lhs=true)
+    [:tuple [:parameters kws...]] -> all(vst1_ident_lhs, vcx, kws)
     [:tuple xs...] ->
         all(vst1_pparam_simple_tuple_or_splat, vcx, xs) &
         (count(head(x)===:... for x in xs) <= 1 ? pass() :
@@ -942,10 +949,13 @@ end
 # - in curly, typevars are checked for structure, but not used.
 # - (local/global (= lhs rhs)) forms should probably reject the same
 #   lhss as const (ref and .)
+vst1_assign_lhs_in_tuple(vcx, st) = vst1_assign_lhs(vcx, st; in_tuple=true)
+vst1_assign_lhs_const_in_tuple(vcx, st) = vst1_assign_lhs(vcx, st; in_const=true, in_tuple=true)
 vst1_assign_lhs(vcx, st; in_const=false, in_tuple=false) = @stm st begin
     [:tuple [:parameters xs...]] -> all(vst1_symdecl, vcx, xs)
     [:tuple xs...] ->
-        all(vst1_assign_lhs, vcx, xs; in_const, in_tuple=true) &
+        (in_const ? all(vst1_assign_lhs_const_in_tuple, vcx, xs) :
+                    all(vst1_assign_lhs_in_tuple, vcx, xs)) &
         (count(head(x)===:... for x in xs) <= 1 ? pass() :
         @fail(st, "multiple `...` in destructuring assignment are ambiguous"))
     # type-annotated tuple segfaults, haha
@@ -1118,7 +1128,12 @@ vst0_quoted(vcx, st; quote_level) = @stm st begin
         vst0_quoted(vcx, x; quote_level=quote_level-1)
     [:quote x] ->
         vst0_quoted(vcx, x; quote_level=quote_level+1)
-    _ -> all(vst0_quoted, vcx, children(st); quote_level)
+    _ -> let ok = pass()
+        for c in children(st)
+            ok &= vst0_quoted(vcx, c; quote_level)
+        end
+        ok
+    end
 end
 
 #-------------------------------------------------------------------------------

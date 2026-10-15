@@ -1261,7 +1261,7 @@
 
 (define (expand-let e (hard? #t))
   (let ((ex    (caddr e))
-        (binds (let-binds e))
+        (binds (filter (lambda (x) (not (linenum? x))) (let-binds e)))
         (hs    (if hard? '((hardscope)) '())))
     (expand-forms
      (if
@@ -1318,7 +1318,6 @@
                                           (= ,(cadar binds) ,tmp)
                                           ,blk)))))))
                (else (error "invalid let syntax"))))
-             ((linenum? (car binds)) (loop (cdr binds) blk))
              (else (error "invalid let syntax")))))))))
 
 (define (valid-macro-def-name? e)
@@ -5641,7 +5640,7 @@ f(x) = yt(x)
                           ;; that should not be counted as belonging to the previous marked location,
                           ;; for example `return` after a not-executed `if` arm in tail position.
                           (set! nowhere #t))
-                         ((and (= current-line 0) (length= e 2) (pair? linetable))
+                         ((and (= current-line 0) (length= e 2) (pair? locstack))
                           ;; (line n) after push_loc just updates the line for the new file
                           (begin (set-lineno! (car linetable) (cadr e))
                                  (set! current-line (cadr e))))

@@ -75,10 +75,14 @@ void PropagateJuliaAddrspacesVisitor::PoisonValues(SmallVectorImpl<Value *> &Wor
     while (!Worklist.empty()) {
         Value *CurrentV = Worklist.back();
         Worklist.pop_back();
+        // Constant data (undef, poison, null, ...) is uniqued per context and
+        // its users span unrelated functions.
+        if (isa<ConstantData>(CurrentV))
+            continue;
         for (Value *User : CurrentV->users()) {
             if (Visited.count(User))
                 continue;
-            Visited.insert(CurrentV);
+            Visited.insert(User);
             Worklist.push_back(User);
         }
     }

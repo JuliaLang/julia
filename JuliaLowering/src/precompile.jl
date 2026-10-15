@@ -18,7 +18,7 @@
         """
     ]
     for thunk in thunks
-        st0 = JuliaSyntax.parseall(SyntaxTree, thunk; filename=@__FILE__)
+        st0 = JuliaSyntax.parseall(SyntaxTree, thunk; filename="precompile.jl")
         lwrst = lower(@__MODULE__, st0[1])
         lwr = to_lowered_expr(lwrst)
         @assert Meta.isexpr(lwr, :thunk) && only(lwr.args) isa Core.CodeInfo
@@ -48,6 +48,6 @@
         _precompile_usemac(3)
         _precompile_genf(1.0)
         """
-        include_string(@__MODULE__, workload, @__FILE__)
+        include_string(@__MODULE__, workload, "precompile.jl")
     end
 end
