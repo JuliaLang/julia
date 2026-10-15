@@ -9,19 +9,19 @@ function annotprint(f::Function, args...)
 end
 
 """
-    with_output_annotations(f::Function, io::AnnotIO, annots::Pair{Symbol, <:Any}...)
+    with_output_annotations(f::Function, io::AnnotIO, values...)
 
-Call `f(io)`, and apply `annots` to the output created by doing so.
+Call `f(io)`, and annotate the output created by doing so with `values`.
 """
-function with_output_annotations(f::Function, io::AnnotIO, annots::Pair{Symbol, <:Any}...)
-    @nospecialize annots
+function with_output_annotations(f::Function, io::AnnotIO, values...)
+    @nospecialize f values
     aio = if io isa AnnotatedIOBuffer io else io.io end
     start = position(aio) + 1
     v = f(io)
     stop = position(aio)
     sortedindex = searchsortedlast(aio.annotations, (region=start:stop,), by=a -> a.region)
-    for (i, annot) in enumerate(annots)
-        insert!(aio.annotations, sortedindex + i, (start:stop, annot...))
+    for (i, value) in enumerate(values)
+        insert!(aio.annotations, sortedindex + i, (start:stop, value))
     end
     return v
 end

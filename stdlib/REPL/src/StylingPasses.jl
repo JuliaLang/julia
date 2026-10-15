@@ -32,7 +32,7 @@ function merge_annotations(annotated_strings::Vector{<:AnnotatedString})
 
     for source in Iterators.drop(annotated_strings, 1)
         for ann in annotations(source)
-            annotate!(result, ann.region, ann.label, ann.value)
+            annotate!(result, ann.region, ann.value)
         end
     end
 
@@ -77,7 +77,7 @@ function (::RegionHighlightPass)(input::String, ::Any, context::StylingContext)
         # Add inverse face to the region
         # Region positions are 1-based byte positions
         region_range = context.region_start:context.region_stop
-        annotate!(result, region_range, :face, Face(inverse=true))
+        annotate!(result, region_range, Face(inverse=true))
     end
 
     return result
@@ -101,8 +101,8 @@ function (pass::EnclosingParenHighlightPass)(input::String, ast, context::Stylin
         paren_pairs = find_enclosing_parens(input, ast, context.cursor_pos)
 
         for (open_pos, close_pos) in paren_pairs
-            annotate!(result, open_pos:open_pos, :face, pass.face)
-            annotate!(result, close_pos:close_pos, :face, pass.face)
+            annotate!(result, open_pos:open_pos, pass.face)
+            annotate!(result, close_pos:close_pos, pass.face)
         end
     catch e
         @error "Error in EnclosingParenHighlightPass" exception=(e, catch_backtrace()) maxlog=1

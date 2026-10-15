@@ -1,4 +1,4 @@
 JULIASYNTAXHIGHLIGHTING_BRANCH = faces-value-parameterisation
-JULIASYNTAXHIGHLIGHTING_SHA1 = 2061af04bfe6a7c333d486a98423b884148a271e
+JULIASYNTAXHIGHLIGHTING_SHA1 = 9ef9da7dbfd008b9d4097676b42e1e2492a2146b
 JULIASYNTAXHIGHLIGHTING_GIT_URL := https://github.com/JuliaLang/JuliaSyntaxHighlighting.jl.git
 JULIASYNTAXHIGHLIGHTING_TAR_URL = https://api.github.com/repos/JuliaLang/JuliaSyntaxHighlighting.jl/tarball/$1

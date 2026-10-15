@@ -29,8 +29,8 @@ copy(io::AnnotatedIOBuffer) = AnnotatedIOBuffer(copy(io.io), copy(io.annotations
 
 annotations(io::AnnotatedIOBuffer) = io.annotations
 
-annotate!(io::AnnotatedIOBuffer, range::UnitRange{Int}, label::Symbol, @nospecialize(val::Any)) =
-    (_annotate!(io.annotations, range, label, val); io)
+annotate!(io::AnnotatedIOBuffer, range::UnitRange{Int}, @nospecialize(val::Any)) =
+    (_annotate!(io.annotations, range, val); io)
 
 function write(io::AnnotatedIOBuffer{V}, astr::Union{AnnotatedString{S}, SubString{<:AnnotatedString{S}}}) where {V, S}
     annots = convert(Vector{RegionAnnotation{V}}, annotations(astr))
@@ -40,8 +40,7 @@ function write(io::AnnotatedIOBuffer{V}, astr::Union{AnnotatedString{S}, SubStri
     write(io.io, unannotate(astr))::Int
 end
 
-write(io::AnnotatedIOBuffer, c::AnnotatedChar) =
-    write(io, AnnotatedString(string(c), [(region=1:ncodeunits(c), a...) for a in c.annotations]))
+write(io::AnnotatedIOBuffer, c::AnnotatedChar) = write(io, annotatedstring(c))
 write(io::AnnotatedIOBuffer, x::AbstractString) = write(io.io, x)::Int
 write(io::AnnotatedIOBuffer, s::Union{SubString{String}, String}) = write(io.io, s)
 write(io::AnnotatedIOBuffer, s::StringViewAndSub) = write(io.io, s)::Int
@@ -82,7 +81,6 @@ function read(io::AnnotatedIOBuffer, ::Type{AnnotatedString{S, V}}) where {S, V}
     start = position(io)
     annots = RegionAnnotation{V}[
         (region = max(1, first(annot.region) - start):last(annot.region)-start,
-         label = annot.label,
          value = annot.value)
         for annot in io.annotations if last(annot.region) > start]
     AnnotatedString{S, V}(read(io.io, S), annots)
@@ -94,7 +92,7 @@ read(io::AnnotatedIOBuffer, ::Type{AnnotatedString}) = read(io, AnnotatedString{
 function read(io::AnnotatedIOBuffer, ::Type{AnnotatedChar{T, V}}) where {T <: AbstractChar, V}
     pos = position(io)
     char = read(io.io, T)
-    annots = Annotation{V}[Annotation{V}((annot.label, annot.value)) for annot in io.annotations if pos+1 in annot.region]
+    annots = V[annot.value for annot in io.annotations if pos+1 in annot.region]
     AnnotatedChar{T, V}(char, annots)
 end
 read(io::AnnotatedIOBuffer{V}, ::Type{AnnotatedChar{T}}) where {T <: AbstractChar, V} = read(io, AnnotatedChar{T, V})
@@ -173,14 +171,12 @@ function _insert_annotations!(annots::Vector{RegionAnnotation{V}}, newannots::Ve
                 annot = newannots[i]
                 first(annot.region) == 1 || continue
                 i <= length(annots) || continue
-                annot.label == last(annots).label || continue
                 annot.value === last(annots).value || continue
                 all(1:i) do runlen
                     new = newannots[begin+runlen-1]
                     old = annots[end-i+runlen]
                     !(last(old.region) != offset ||
                     first(new.region) != 1 ||
-                    old.label != new.label ||
                     old.value !== new.value)
                 end || continue
                 break search i
@@ -193,7 +189,6 @@ function _insert_annotations!(annots::Vector{RegionAnnotation{V}}, newannots::Ve
         old = annots[old_index]
         new = newannots[begin+runindex]
         extannot = (region = first(old.region):last(new.region)+offset,
-                    label = old.label,
                     value = old.value)
         annots[old_index] = extannot
     end
@@ -223,7 +218,6 @@ function _insert_annotations!(annots::Vector{RegionAnnotation{V}}, newannots::Ve
         # What I have done is found that "direct tuple reconstruction"
         # (as below) is several times faster than using `setindex`.
         newannot = (region = start+offset:stop+offset,
-                    label = annot.label,
                     value = annot.value)
         push!(annots, newannot)
     end
@@ -274,13 +268,11 @@ function replace(out::AnnotatedIOBuffer{V}, str::AnnotatedString, pat_f::Pair...
         push!(replacements, thisrep)
         replacement = replacers[ridx]
         _isannotated(replacement) || continue
-        annots = annotations(replacement)
-        annots′ = if eltype(annots) <: Annotation # When it's a char not a string
+        annots′ = if replacement isa AnnotatedChar
             region = 1:newbytes
-            [@NamedTuple{region::UnitRange{Int}, label::Symbol, value::V}((region, label, value))
-             for (; label, value) in annots]
+            [RegionAnnotation{V}((region, value)) for value in annotations(replacement)]
         else
-            convert(Vector{RegionAnnotation{V}}, annots)
+            convert(Vector{RegionAnnotation{V}}, annotations(replacement))
         end
         _insert_annotations!(newannots, annots′, destoff)
     end
@@ -293,7 +285,7 @@ function replace(out::AnnotatedIOBuffer{V}, str::AnnotatedString, pat_f::Pair...
     # This means that the start of `.region`s in
     # `replacements` is monotonically increasing.
     isappending || _clear_annotations_in_region!(out.annotations, first(replacements).offset:position(out))
-    for (; region, label, value) in str.annotations
+    for (; region, value) in str.annotations
         start, stop = first(region), last(region)
         prioridx = searchsortedlast(
             replacements, (region = start:start, offset = 0),
@@ -308,7 +300,7 @@ function replace(out::AnnotatedIOBuffer{V}, str::AnnotatedString, pat_f::Pair...
         elseif postidx - prioridx <= 1 && start > last(priorrep.region) && stop < first(postrep.region)
             # Lies between replacements
             shiftregion = (start + priorrep.offset):(stop + priorrep.offset)
-            shiftann = (region = shiftregion, label, value)
+            shiftann = (region = shiftregion, value)
             push!(out.annotations, shiftann)
         else
             # Split between replacements
@@ -317,7 +309,7 @@ function replace(out::AnnotatedIOBuffer{V}, str::AnnotatedString, pat_f::Pair...
                 gap = max(start, last(prevrep.region)+1):min(stop, first(rep.region)-1)
                 if !isempty(gap)
                     shiftregion = (first(gap) + prevrep.offset):(last(gap) + prevrep.offset)
-                    shiftann = (; region = shiftregion, label, value)
+                    shiftann = (; region = shiftregion, value)
                     push!(out.annotations, shiftann)
                 end
                 prevrep = rep
@@ -361,7 +353,7 @@ the same whatever union of value types holds it.
 """
 module AnnotatedDisplay
 
-using ..Base: IO, IOBuffer, SubString, AnnotatedString, AnnotatedChar, AnnotatedIOBuffer, Annotation
+using ..Base: IO, IOBuffer, SubString, AnnotatedString, AnnotatedChar, AnnotatedIOBuffer
 using ..Base: eachregion, ActiveAnnotations, unannotate, raw_substring, annotations, annotatedstring, uniontypes
 using ..Base: invoke_in_world, tls_world_age, escape_string, annotate!, _clear_annotations_in_region!, RegionAnnotation
 
@@ -575,8 +567,8 @@ function escape_annotated(aio::AnnotatedIOBuffer{V}, _, s, escregion) where {V}
     # Where the escaped text of `region` in `s` lies in `aio`, clipped to `s` and widened to whole characters
     outrange(region) = UnitRange(outs[searchsortedlast(ends, clamp(first(region) - 1, 0, last(ends)))] + 1,
                                  outs[searchsortedfirst(ends, clamp(last(region), 0, last(ends)))])
-    for (; region, label, value) in annots # A substring's annotations may reach beyond it
-        annotate!(aio, outrange(region), label, value)
+    for (; region, value) in annots # A substring's annotations may reach beyond it
+        annotate!(aio, outrange(region), value)
     end
 end
 escape_annotated(_, io, s, escregion) =

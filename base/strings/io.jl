@@ -835,8 +835,8 @@ function AnnotatedString(chars::AbstractVector{C}) where {C<:AbstractChar}
     point = 1
     for c in chars
         if c isa AnnotatedChar
-            for annot in c.annotations
-                push!(annots, (point:point, annot...))
+            for value in c.annotations
+                push!(annots, (point:point, value))
             end
         end
         point += ncodeunits(c)

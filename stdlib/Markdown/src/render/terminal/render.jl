@@ -134,7 +134,7 @@ function term(io::AnnotIO, md::Header{l}, columns) where l
     face = (face"h1", face"h2", face"h3", face"h4", face"h5", face"h6")[l]
     underline = _header_underlines[l]
     pre = ' '^margin
-    line_width = with_output_annotations(io, :face => face) do io
+    line_width = with_output_annotations(io, face) do io
         headline = annotprint(terminline, md.text)
         lines = wraplines(headline, columns - 4margin)
         for (i, line) in enumerate(lines)
@@ -152,7 +152,7 @@ function term(io::AnnotIO, md::Header{l}, columns) where l
     header_width = max(0, line_width)
     if underline != ' ' && header_width > 0
         print(io, '\n', ' '^(margin))
-        with_output_annotations(io -> print(io, underline^header_width), io, :face => face)
+        with_output_annotations(io -> print(io, underline^header_width), io, face)
     end
 end
 
@@ -226,15 +226,15 @@ end
 terminline(io::AnnotIO, md::AnnotatedString) = print(io, replace(holdable(io, md), r"[ \t\n]+" => ' '))
 
 function terminline(io::AnnotIO, md::Bold)
-    with_output_annotations(io -> terminline(io, md.text), io, :face => face"bold")
+    with_output_annotations(io -> terminline(io, md.text), io, face"bold")
 end
 
 function terminline(io::AnnotIO, md::Italic)
-    with_output_annotations(io -> terminline(io, md.text), io, :face => face"italic")
+    with_output_annotations(io -> terminline(io, md.text), io, face"italic")
 end
 
 function terminline(io::AnnotIO, md::Strikethrough)
-    with_output_annotations(io -> terminline(io, md.text), io, :face => face"strikethrough")
+    with_output_annotations(io -> terminline(io, md.text), io, face"strikethrough")
 end
 
 function terminline(io::IO, ::LineBreak)
@@ -251,9 +251,9 @@ end
 
 function terminline(io::AnnotIO, md::Link)
     annots = if occursin(r"^(https?|file)://", md.url)
-        (:face => face"link", :link => StyledStrings.Link(md.url))
+        (face"link", StyledStrings.Link(md.url))
     else
-        (:face => face"link",)
+        (face"link",)
     end
     with_output_annotations(io -> terminline(io, md.text), io, annots...)
 end
