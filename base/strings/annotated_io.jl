@@ -188,38 +188,12 @@ function _insert_annotations!(annots::Vector{RegionAnnotation{V}}, newannots::Ve
         old_index = lastindex(annots) - run + 1 + runindex
         old = annots[old_index]
         new = newannots[begin+runindex]
-        extannot = (region = first(old.region):last(new.region)+offset,
-                    value = old.value)
-        annots[old_index] = extannot
+        annots[old_index] = RegionAnnotation{V}((first(old.region):last(new.region)+offset, old.value))
     end
     for index in run+1:lastindex(newannots)
         annot = newannots[index]
         start, stop = first(annot.region), last(annot.region)
-        # REVIEW: For some reason, construction of `newannot`
-        # can be a significant contributor to the overall runtime
-        # of this function. For instance, executing:
-        #
-        #     replace(AnnotatedIOBuffer(), S"apple",
-        #             'e' => S"{red:x}", 'p' => S"{green:y}")
-        #
-        # results in 3 calls to `_insert_annotations!`. It takes
-        # ~570ns in total, compared to ~200ns if we push `annot`
-        # instead of `newannot`. Commenting out the `_insert_annotations!`
-        # line reduces the runtime to ~170ns, from which we can infer
-        # that constructing `newannot` is somehow responsible for
-        # a ~30ns -> ~400ns (~13x) increase in runtime!!
-        # This also comes with a marginal increase in allocations
-        # (compared to the commented out version) of 2 -> 14 (250b -> 720b).
-        #
-        # This seems quite strange, but I haven't dug into the generated
-        # LLVM or ASM code. If anybody reading this is interested in checking
-        # this out, that would be brilliant 🙏.
-        #
-        # What I have done is found that "direct tuple reconstruction"
-        # (as below) is several times faster than using `setindex`.
-        newannot = (region = start+offset:stop+offset,
-                    value = annot.value)
-        push!(annots, newannot)
+        push!(annots, RegionAnnotation{V}((start+offset:stop+offset, annot.value)))
     end
 end
 
@@ -228,11 +202,8 @@ _insert_annotations!(io::AnnotatedIOBuffer, newannots::Vector{<:RegionAnnotation
 
 # String replacement
 
-# REVIEW: For some reason the `Core.kwcall` indirection seems to cause a
-# substantial slowdown here. If we remove `; count` from the signature
-# and run the sample code above in `_insert_annotations!`, the runtime
-# drops from ~4400ns to ~580ns (~7x faster). I cannot guess why this is.
-function replace(out::AnnotatedIOBuffer{V}, str::AnnotatedString, pat_f::Pair...; count = typemax(Int)) where {V}
+# `Vararg{Pair, N}`, as the keyword body would otherwise not specialise on the pairs it passes on
+function replace(out::AnnotatedIOBuffer{V}, str::AnnotatedString, pat_f::Vararg{Pair, N}; count = typemax(Int)) where {V, N}
     if count == 0 || isempty(pat_f)
         write(out, str)
         return out
@@ -299,18 +270,14 @@ function replace(out::AnnotatedIOBuffer{V}, str::AnnotatedString, pat_f::Pair...
             continue
         elseif postidx - prioridx <= 1 && start > last(priorrep.region) && stop < first(postrep.region)
             # Lies between replacements
-            shiftregion = (start + priorrep.offset):(stop + priorrep.offset)
-            shiftann = (region = shiftregion, value)
-            push!(out.annotations, shiftann)
+            push!(out.annotations, RegionAnnotation{V}(((start + priorrep.offset):(stop + priorrep.offset), value)))
         else
             # Split between replacements
             prevrep = replacements[max(begin, prioridx - 1)]
             for rep in @view replacements[max(begin, prioridx - 1):min(end, postidx + 1)]
                 gap = max(start, last(prevrep.region)+1):min(stop, first(rep.region)-1)
                 if !isempty(gap)
-                    shiftregion = (first(gap) + prevrep.offset):(last(gap) + prevrep.offset)
-                    shiftann = (; region = shiftregion, value)
-                    push!(out.annotations, shiftann)
+                    push!(out.annotations, RegionAnnotation{V}(((first(gap) + prevrep.offset):(last(gap) + prevrep.offset), value)))
                 end
                 prevrep = rep
             end
