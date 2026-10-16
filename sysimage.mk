@@ -151,18 +151,47 @@ $$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(buil
 		 JULIA_PROJECT= \
 		 JULIA_DEPOT_PATH=':' \
 		 JULIA_NUM_THREADS=1 \
-			$$(call spawn, $3) $2 -C "$$(JULIA_CPU_TARGET)" $$(HEAPLIM) --output-$$* $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
+			$$(call spawn, $3) $2 -C "$$(JULIA_CPU_TARGET)" $$(HEAPLIM) --output-$$* $$(call cygpath_w,$$@).tmp $$(if $$(filter o,$$*),$$(split_sysimg_flags_$1)) $$(JULIA_SYSIMG_BUILD_FLAGS) \
 			$(bootstrap_julia_flags) \
 			--startup-file=no --warn-overwrite=yes --depwarn=error --sysimage $$(call cygpath_w,$$<) $$(call cygpath_w,$$(JULIAHOME)/contrib/generate_precompile.jl) $(JULIA_PRECOMPILE); then \
 		echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***'; \
 		false; \
 	fi )
 	@mv $$@.tmp $$@
+	$$(if $$(filter o,$$*),@$$(split_sysimg_finish_$1))
 .SECONDARY: $$(build_private_libdir)/sys$1-o.a $(build_private_libdir)/sys$1-bc.a # request Make to keep these files around
 .SECONDARY: $$(build_private_libdir)/sysbase$1-o.a $(build_private_libdir)/sysbase$1-bc.a # request Make to keep these files around
 endef
+
+# With JULIA_SPLIT_SYSIMG=1, the process writing sys-o.a also writes the heap
+# image to sys.ji, which sys.$(SHLIB_EXT) loads from its own directory at startup.
+# Otherwise the heap image is embedded in sys-o.a, and any stale sys.ji is removed.
+# Either way, rebuild sys-o.a if the sys.ji on disk does not match the setting.
+define split_sysimg_builder
+sysimg_ji_$1 := $$(build_private_libdir)/sys$1.ji
+ifeq ($$(JULIA_SPLIT_SYSIMG),1)
+split_sysimg_flags_$1 := --output-ji $$(call cygpath_w,$$(sysimg_ji_$1)).tmp
+split_sysimg_finish_$1 := mv $$(sysimg_ji_$1).tmp $$(sysimg_ji_$1) && touch $$(sysimg_ji_$1)
+$$(sysimg_ji_$1): $$(build_private_libdir)/sys$1-o.a
+	@test -f $$@
+$$(build_private_libdir)/sys$1.$$(SHLIB_EXT): $$(sysimg_ji_$1)
+ifeq ($$(wildcard $$(sysimg_ji_$1)),)
+$$(build_private_libdir)/sys$1-o.a: FORCE
+endif
+else
+split_sysimg_finish_$1 := rm -f $$(sysimg_ji_$1)
+ifneq ($$(wildcard $$(sysimg_ji_$1)),)
+$$(build_private_libdir)/sys$1-o.a: FORCE
+endif
+endif
+endef
+
+FORCE:
+.PHONY: FORCE
 
 $(eval $(call base_builder,,-O1,$(JULIA_EXECUTABLE_release)))
 $(eval $(call base_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
 $(eval $(call sysimg_builder,,-O3,$(JULIA_EXECUTABLE_release)))
 $(eval $(call sysimg_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
+$(eval $(call split_sysimg_builder,))
+$(eval $(call split_sysimg_builder,-debug))

@@ -196,6 +196,11 @@ Multi-threading changes
 Build system changes
 --------------------
 
+* The system image is now built and shipped as a split image: native code in
+  `lib/julia/sys.{so,dylib,dll}` and the serialized heap in a sibling `lib/julia/sys.ji`, which
+  is loaded from the directory of the shared library and must be kept alongside it. This lets
+  the heap image be mapped at its preferred load address without relocation. Set
+  `JULIA_SPLIT_SYSIMG=0` in `Make.user` to embed the heap in the shared library instead ([#61649]).
 * Builds now install `libjulia-internal.a` (`libjulia-internal-debug.a` for debug builds), a static
   build of the runtime without the JIT, so that tools such as JuliaC.jl can link it with a trimmed
   system image into one executable ([#63618]).

@@ -2,11 +2,14 @@
 
 ## [Building the Julia system image](@id Building-the-Julia-system-image)
 
-Julia ships with a preparsed system image containing the contents of the `Base` module, named
-`sys.ji`. This file is also precompiled into a shared library called `sys.{so,dll,dylib}` on
-as many platforms as possible, so as to give vastly improved startup times. On systems that do
-not ship with a precompiled system image file, one can be generated from the source files shipped
-in Julia's `DATAROOTDIR/julia/base` folder.
+Julia ships with a preparsed system image containing the contents of the `Base` module. It is
+split across two files: a shared library called `sys.{so,dll,dylib}` holding the precompiled native
+code, so as to give vastly improved startup times, and `sys.ji` holding the serialized heap. The
+shared library is what gets passed to `--sysimage`; it loads the heap from the `.ji` file of the
+same name in its own directory, so the two files must always be kept together. Building Julia with
+`JULIA_SPLIT_SYSIMG=0` embeds the heap in the shared library instead. On systems that do not ship
+with a precompiled system image file, one can be generated from the source files shipped in Julia's
+`DATAROOTDIR/julia/base` folder.
 
 This operation is useful for multiple reasons. A user may:
 

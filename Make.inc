@@ -25,6 +25,15 @@ JULIA_COVERAGE_IMAGES ?= 0
 # expanded because Make.user is read below.
 JULIA_COVERAGE_IMAGE_FLAGS = $(if $(filter 1,$(JULIA_COVERAGE_IMAGES)),--code-coverage=all)
 
+# Write the serialized heap of the system image to a separate sys.ji rather
+# than embedding it in sys.$(SHLIB_EXT). A split image is built with a preferred
+# load address, so when the runtime maps sys.ji there its heap needs (almost)
+# no relocation at startup and its pages stay clean and shared between
+# processes. The runtime looks for sys.ji next to the loaded library (with its
+# extension replaced by .ji), so the two files must always be installed together.
+# Set to 0 to embed the heap in the shared library instead.
+JULIA_SPLIT_SYSIMG ?= 1
+
 # Set FORCE_ASSERTIONS to 1 to enable assertions in the C and C++ portions
 # of the Julia code base. You may also want to set LLVM_ASSERTIONS to 1,
 # which will enable assertions in LLVM.
