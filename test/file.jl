@@ -2289,3 +2289,49 @@ end
 end
 
 @test Base.infer_return_type(stat, (String,)) == Base.Filesystem.StatStruct
+
+@testset "trylockfile" begin
+    mktempdir() do dir
+        path = joinpath(dir, "file")
+        write(path, "data")
+        fopen() = Base.Filesystem.open(path, Base.Filesystem.JL_O_RDWR)
+        # whether a lock can be taken from another process
+        other_process_locks() = readchomp(`$(Base.julia_cmd()) --startup-file=no -e '
+            using Base.Filesystem: open, JL_O_RDWR, trylockfile, unlockfile
+            f = open(ARGS[1], JL_O_RDWR)
+            taken = trylockfile(f)
+            # a lock released only by exit can linger on Windows
+            taken && unlockfile(f)
+            print(taken)' $path`) == "true"
+        files = Base.Filesystem.File[]
+        try
+            a = push!(files, fopen())[end]
+            b = push!(files, fopen())[end]
+            c = push!(files, fopen())[end]
+            @test Base.Filesystem.trylockfile(a; shared=true)
+            @test Base.Filesystem.trylockfile(b; shared=true)
+            @test !Base.Filesystem.trylockfile(c)
+            @test !other_process_locks()
+            # the file can still be read and renamed while it is locked
+            @test read(path, String) == "data"
+            mv(path, path * "2")
+            mv(path * "2", path)
+            Base.Filesystem.unlockfile(a)
+            @test !Base.Filesystem.trylockfile(c)
+            Base.Filesystem.unlockfile(b)
+            Base.Filesystem.unlockfile(b) # nothing to release
+            @test Base.Filesystem.trylockfile(c)
+            @test read(path, String) == "data"
+            @test !Base.Filesystem.trylockfile(a; shared=true)
+            @test !other_process_locks()
+            Base.Filesystem.unlockfile(c)
+            @test other_process_locks()
+            # and removed
+            @test Base.Filesystem.trylockfile(c)
+            rm(path)
+        finally
+            foreach(close, files)
+        end
+        @test_throws ArgumentError Base.Filesystem.trylockfile(files[1])
+    end
+end
