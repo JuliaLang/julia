@@ -203,6 +203,7 @@ typedef struct JL_GC_TRACKED_TYPE jl_stenv_t {
                               // UnionAll var can only alias one already in `vars`;
                               // -1 until computed from `inputs` (see `may_capture_free_var`)
     jl_value_t *inputs[2];    // the top-level inputs (rooted by the caller)
+    jl_typeenv_t *intersecting; // (var, type) pairs whose bound intersection is in progress
     // Used to represent the length difference between 2 vararg.
     // intersect(X, Y) ==> X = Y + Loffset
     int Loffset;
@@ -3510,6 +3511,7 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     e->ignore_lb_required = 0;
     e->closed_inputs = 0;
     e->inputs[0] = e->inputs[1] = NULL;
+    e->intersecting = NULL;
     e->Loffset = 0;
     e->Lunions.depth = 0;      e->Runions.depth = 0;
     e->Lunions.more = 0;       e->Runions.more = 0;
@@ -4554,6 +4556,10 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     }
     if (reachable_var(bb->lb, b, e) || reachable_var(bb->ub, b, e))
         return a;
+    for (jl_typeenv_t *f = e->intersecting; f != NULL; f = f->prev) {
+        if (f->var == b && obviously_egal(f->val, a))
+            return a;
+    }
     if (bb->lb == bb->ub && jl_is_typevar(bb->lb))
         return R ? intersect(a, bb->lb, e, param) : intersect(bb->lb, a, e, param);
     if (!jl_is_type(a) && !jl_is_typevar(a))
@@ -4609,7 +4615,10 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         JL_GC_POP();
         return ub;
     }
+    jl_typeenv_t frame = { b, a, e->intersecting };
+    e->intersecting = &frame;
     jl_value_t *ub = R ? intersect_aside(a, bb->ub, e, bb->depth0) : intersect_aside(bb->ub, a, e, bb->depth0);
+    e->intersecting = frame.prev;
     if (ub == jl_bottom_type)
         return jl_bottom_type;
     if (e->triangular && ((e->triangular - 1) != R)) {
