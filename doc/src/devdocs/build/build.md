@@ -463,3 +463,10 @@ Note:
     - if patches don't exist, skip.
     - if patches exist, check if they have been merged into the new version and need to be removed.
         When deleting a patch, remember to modify the corresponding Makefile file (`deps/openlibm.mk`).
+
+### Adding or changing a patch
+
+Prefer patches made from full upstream commits with `git format-patch`, which keeps the commit
+metadata. To check that the dependency still builds from source with the patch applied, run e.g.
+`make -C deps distclean-libssh2` (so the source is re-extracted and the patches re-applied) and then
+`make -C deps USE_BINARYBUILDER_LIBSSH2=0 compile-libssh2`.

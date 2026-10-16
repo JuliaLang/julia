@@ -3,9 +3,9 @@
 # Compare one Buildkite build's job durations against the last N days of Julia CI history.
 #
 # Usage (from the julia repo root):
-#   julia --project=contrib/ci-timing contrib/ci-timing <PR-number>
+#   julia --project=contrib/ci-timing contrib/ci-timing/ci_timing_compare.jl <PR-number>
 #     [--days 7] [--include-failed] [--min-seconds 0]
-#   julia --project=contrib/ci-timing contrib/ci-timing --build julia-pr/853 [...]
+#   julia --project=contrib/ci-timing contrib/ci-timing/ci_timing_compare.jl --build julia-pr/853 [...]
 #
 # Prints a markdown table (one row per job, sorted slowest first) plus a TOTAL row.
 # No Buildkite token needed: job data comes from the build page's public JSON
