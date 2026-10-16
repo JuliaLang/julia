@@ -465,6 +465,72 @@ end
 @test !Base.isTypeEgal(Type{Int})
 @test Base.isTypeEgal(Core.TypeEgal{Int})
 
+# `Core.TypeEq{T, K}`: the kind `K` restricts the type tag of the members, so
+# dispatch on it admits only the type values of those tags
+module TypeEqKindDispatch
+    f(::Core.TypeEq{Int, DataType}) = :int_datatype
+    f(::Core.TypeEq{Tuple{Int}, DataType}) = :tuple_datatype
+    f(::Core.TypeEq{Vector, UnionAll}) = :vector_unionall
+    f(::Core.TypeEq{T, DataType} where T<:AbstractString) = :string_datatype
+    f(::Type{Float64}) = :float
+    f(::Type{Float32}) = :float32
+    f(::Type{Int8}) = :int8
+    f(::Type{Int16}) = :int16
+    f(::Type{Int32}) = :int32
+    f(::String) = :string
+    f(::Int) = :intval
+    f(::Any) = :any
+end
+let f = TypeEqKindDispatch.f
+    @test f(Int) === :int_datatype
+    @test f(Tuple{Int}) === :tuple_datatype
+    @test f(Tuple{S} where S<:Int) === :any  # a `UnionAll` member of `Type{Tuple{Int}}`
+    @test f(Vector) === :vector_unionall
+    @test f(Vector{Int}) === :any
+    @test f(String) === :string_datatype
+    @test f(SubString) === :any
+    @test f(Float64) === :float
+    @test f(1) === :intval
+    @test which(f, Tuple{Core.TypeEgal{Int}}).sig === Tuple{typeof(f), Core.TypeEq{Int, DataType}}
+    @test which(f, Tuple{Core.TypeEq{Int, DataType}}).sig === Tuple{typeof(f), Core.TypeEq{Int, DataType}}
+    @test which(f, Tuple{Core.TypeEq{Int, UnionAll}}).sig === Tuple{typeof(f), Any}
+    @test which(f, Tuple{Type{Int}}).sig === Tuple{typeof(f), Any}
+    @test occursin("Core.TypeEq{Int64, DataType}", sprint(show, methods(f, Tuple{Core.TypeEgal{Int}})))
+    @test length(methods(f, (Type{Int},))) == 2
+    @test length(methods(f, (Core.TypeEq{Int, UnionAll},))) == 1
+    @test Core.Compiler.return_type(f, Tuple{Core.TypeEgal{Int}}) === Symbol
+    @test Core.Compiler.return_type(f, Tuple{Core.TypeEq{Int, DataType}}) === Symbol
+    g(x) = f(Int)
+    @test Base.infer_return_type(g, Tuple{Int}) === Symbol
+end
+# the two spellings of the same class share method specializations and hash alike
+let h(::Type{T}) where T = T
+    @test (Core.TypeEq{T, DataType} where T) == DataType
+    @test hash(Core.TypeEq{T, DataType} where T) == hash(DataType)
+    @test h(Core.TypeEq{T, DataType} where T) == h(DataType)
+    @test Core.TypeEq{Int, DataType} == Core.TypeEq{Int, DataType}
+    @test hash(Core.TypeEq{Int, DataType}) == hash(Core.TypeEq{Int, DataType})
+    @test hash(Core.TypeEq{Int, DataType}) != hash(Type{Int})
+    @test objectid(Core.TypeEq{Int, DataType}) != objectid(Type{Int})
+    @test Vector{Core.TypeEq{Int, DataType}} === Vector{Core.TypeEq{Int, DataType}}
+    @test Vector{Core.TypeEq{Int, DataType}} !== Vector{Type{Int}}
+    @test Vector{Core.TypeEq{T, DataType} where T} === Vector{DataType}
+end
+@test typejoin(Core.TypeEq{Int, DataType}, Core.TypeEq{Int, UnionAll}) === Type{Int}
+@test typejoin(Core.TypeEq{Int, DataType}, Type{Int}) === Type{Int}
+@test typejoin(Core.TypeEq{Int, DataType}, Core.TypeEq{Int8, DataType}) === Type
+@test typejoin(Core.TypeEq{Int, DataType}, DataType) === DataType
+@test typejoin(Core.TypeEgal{Int}, Core.TypeEq{Int, UnionAll}) === Type
+# a type object with free typevars is an instance of its own dangling-var key
+let V = Base.unwrap_unionall(Vector)
+    @test isa(V, Type{V})
+    @test isa(V, Type{Vector{T}} where T)
+    @test isa(V, Core.TypeEq{V, DataType})
+    @test !isa(V, Core.TypeEq{V, UnionAll})
+    @test !isa(V, Type{Vector})
+    @test !isa(Vector, Type{V})
+end
+
 # issue #61915: a method whose function type is `Type{Foo{...} where ...}` must derive its
 # name as `Foo`, not `:Any` (argument_datatypename has to unwrap the wrapped UnionAll).
 struct UA61915{T,N,A<:AbstractArray{T,N}}

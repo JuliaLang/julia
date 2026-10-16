@@ -478,6 +478,58 @@ For example, `Vector{T}` is equivalent to the concrete type `Vector{Int}` only i
 both the upper and lower bounds of `T` equal `Int`.
 We have not yet worked out a complete algorithm for this.
 
+## `Type{T}` and `Core.TypeEq{T, K}`
+
+`Type{T}` is not a `DataType` but an instance of the kind `Core.TypeEq`: the set of all types
+`U` with `U == T`, i.e. `U <: T` and `T <: U`. Several distinct type objects can be `==` to one
+another and carry different type tags, for example the `UnionAll` `Tuple{S} where S<:Int` is
+`==` to the `DataType` `Tuple{Int}`, and `Union{Tuple{Int}, Tuple{String}}` is `==` to
+`Tuple{Union{Int, String}}`. A `Type{T}` therefore lies in no single kind:
+
+```jldoctest
+julia> Type{Int} <: DataType
+false
+
+julia> (Tuple{S} where S<:Int) isa Type{Tuple{Int}}
+true
+
+julia> (Tuple{S} where S<:Int) isa DataType
+false
+```
+
+The full form of the wrapper is `Core.TypeEq{T, K}`, where the second parameter `K` declares the
+type tag of its members: one of the kinds (`DataType`, `UnionAll`, `Union`, `Core.TypeofBottom`,
+`Core.TypeEq`, `Core.TypeEgal`), or `Core.AnyType` for no restriction (this is `Type{T}`). The
+parameter is nominal: `Core.TypeEq{T, K} <: K`, `Core.TypeEq{T, DataType} <: Type{T}`, and `Type{T}` is
+an abstract class with six refinements that is not identified with their union (just as `Core.AnyType`
+is not `Union{DataType, UnionAll, ...}`), so `Type{Int} <: Union{DataType, UnionAll}` is false.
+Intersecting a `Type{T}` with a kind selects the members of that tag:
+
+```jldoctest
+julia> Core.TypeEq{Int, DataType} <: DataType
+true
+
+julia> Core.TypeEq{Int, DataType} <: Type{Int}
+true
+
+julia> Int isa Core.TypeEq{Int, DataType}
+true
+
+julia> Vector isa Core.TypeEq{Vector, DataType}
+false
+
+julia> typeintersect(Type{T} where T<:Integer, DataType)
+Core.TypeEq{T, DataType} where T<:Integer
+```
+
+The kind is declared, never inferred from the spelling of `T`. The only knowledge derived from
+`T` is exact: the runtime keeps the bottom
+object unique, so the class of `Union{}` is `{Union{}}` and `Type{Union{}} == Core.TypeofBottom`.
+The constructor normalizes accordingly: the bottom class is always the one `Type{Union{}}` object
+(stored with `K = Core.TypeofBottom`, so `Type{Union{}} <: Core.TypeofBottom`), and a kind that admits
+no member gives `Union{}` (`Core.TypeEq{Int, Core.TypeofBottom} === Union{}`, `Core.TypeEq{Union{},
+DataType} === Union{}`). `Base.type_parameter` and `Base.type_kind` read the two parameters.
+
 ## Introduction to the internal machinery
 
 Most operations for dealing with types are found in the files `jltypes.c` and `subtype.c`.

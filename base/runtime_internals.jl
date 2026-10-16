@@ -1093,7 +1093,9 @@ isType(@nospecialize t) = isTypeEq(t) || isTypeEgal(t)
 """
     Base.isTypeEq(t)
 
-Determine whether `t` is an equality-keyed `Type{T}`/`TypeEq{T}` kind.
+Determine whether `t` is an equality-keyed `Type{T}`/`Core.TypeEq{T, K}` kind: the
+set of types `U == T` whose type tag lies in the kind set `K` (see
+[`Base.type_kind`](@ref)); `Type{T}` is `TypeEq{T, AnyType}`.
 """
 isTypeEq(@nospecialize t) = isa(t, TypeEq)
 
@@ -1106,6 +1108,26 @@ isTypeEgal(@nospecialize t) = isa(t, Core.TypeEgal)
 
 type_parameter(t::TypeEq) = getfield(t, :T)
 type_parameter(t::Core.TypeEgal) = getfield(t, :T)
+
+"""
+    Base.type_kind(t::Core.TypeEq)
+
+The kind parameter `K` of an equality-keyed `Core.TypeEq{T, K}` kind: the type tag
+its members have, as one of the kinds (`DataType`, `UnionAll`, `Union`,
+`Core.TypeofBottom`, `Core.TypeEq`, `Core.TypeEgal`), or `Core.AnyType` for no
+restriction (the `Type{T}` spelling). `t <: type_kind(t)`, and the parameter is
+nominal: `Core.TypeEq{T, DataType} <: Type{T}`, while `Type{T}` is a subtype of no
+kind and of no `Union` of kinds.
+
+```jldoctest
+julia> Base.type_kind(Type{Int})
+Core.AnyType
+
+julia> Base.type_kind(Core.TypeEq{Int, DataType})
+DataType
+```
+"""
+type_kind(t::TypeEq) = getfield(t, :K)
 
 """
     isconcretetype(T)

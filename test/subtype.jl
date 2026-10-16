@@ -541,9 +541,14 @@ function test_Type()
     @test !issub(Type, TypeVar)
     @test !issub(DataType, @UnionAll T<:Number Type{T})
     # `Type{Int}`'s members include `UnionAll` spellings of `Int`'s `==`-class,
-    # so it is not a subtype of any single kind (#33136)
+    # so it is not a subtype of any single kind (#33136), nor, its kind
+    # parameter being nominal, of a union of kinds; `TypeEq{Int, K}` declares
+    # the kind `K` of its members
     @test !issub(Type{Int}, DataType)
-    @test issub_strict(Type{Int}, Union{DataType,UnionAll})
+    @test !issub(Type{Int}, Union{DataType,UnionAll})
+    @test issub_strict(Union{Core.TypeEq{Int, DataType}, Core.TypeEq{Int, UnionAll}}, Union{DataType,UnionAll})
+    @test issub_strict(Core.TypeEq{Int, DataType}, DataType)
+    @test issub_strict(Core.TypeEq{Int, DataType}, Type{Int})
     @test !issub((@UnionAll T<:Integer Type{T}), DataType)
     @test isequal_type(Type{AbstractArray}, Type{AbstractArray})
     @test !issub(Type{Int}, Type{Integer})
@@ -605,7 +610,8 @@ function test_old()
     @test !(Vector{Float64} <: Vector{Union{Float64,Float32}})
 
     @test !isa(Array,Type{Any})
-    @test Type{Complex} <: UnionAll
+    @test !(Type{Complex} <: UnionAll)
+    @test Core.TypeEq{Complex, UnionAll} <: UnionAll
     @test isa(Complex,Type{Complex})
 
     # `Type` (i.e. `Type{T} where T`) and `AnyType` denote the same set of all
@@ -619,16 +625,23 @@ function test_old()
     @test (Type{T} where T<:Real) <: Core.AnyType
     @test !(Core.AnyType <: (Type{T} where T<:Real))
     # `Type{Type{T}} where T` (unbounded `T`) contains every `Type{X}` value,
-    # so the bare `TypeEq` kind is a subtype of it; the containment is strict,
-    # since it also contains `UnionAll` spellings like `Type{S} where Int<:S<:Int`
-    @test Core.TypeEq <: (Type{Type{T}} where T)
-    @test Core.TypeEq != (Type{Type{T}} where T)
+    # but no kind: the `TypeEq` kind also holds the kind-restricted wrappers
+    # `TypeEq{X, DataType}`, which are `==` to no `Type{X}`, and `Type` (every
+    # type, `== AnyType`) holds more still. Nor does it lie in any kind, since
+    # it contains `UnionAll` spellings like `Type{S} where Int<:S<:Int`
+    @test Type{Type{Int}} <: (Type{Type{T}} where T)
+    @test !(Type <: (Type{Type{T}} where T))
+    @test !(Core.TypeEq <: (Type{Type{T}} where T))
+    @test isa(Type{Int}, Type{Type{T}} where T)
+    @test !isa(Core.TypeEq{Int, DataType}, Type{Type{T}} where T)
     @test !((Type{Type{T}} where T) <: Core.TypeEq)
     @test !(DataType <: (Type{Type{T}} where T))
     # a `Type{X}` never lies in a single kind, even when instantiated: its
     # members include `UnionAll` spellings such as `Ref{S} where Int<:S<:Int`
     @test !((Type{Ref{T}} where T<:Real) <: DataType)
-    @test (Type{Ref{T}} where T<:Real) <: Union{DataType,UnionAll}
+    @test !((Type{Ref{T}} where T<:Real) <: Union{DataType,UnionAll})
+    @test (Union{Core.TypeEq{Ref{T}, DataType}, Core.TypeEq{Ref{T}, UnionAll}} where T<:Real) <: Union{DataType,UnionAll}
+    @test (Core.TypeEq{Ref{T}, DataType} where T<:Real) <: DataType
     @test !((Type{Union{Int,T}} where T<:Real) <: Union)
     @test !(Type{Ptr{Bottom}} <: Type{Ptr})
     @test !(Type{Rational{Int}} <: Type{Rational})
@@ -916,8 +929,9 @@ function test_intersection()
     @testintersect(Type{Any},Type{Complex}, Bottom)
     @testintersect(Type{Any},(@UnionAll T<:Real Type{T}), Bottom)
 
-    @testintersect(Type{Function},Union,Bottom)
-    @testintersect(Type{Int32}, DataType, Type{Int32})
+    @testintersect(Type{Function},Union,Core.TypeEq{Function, Union})
+    @testintersect(Type{Int32}, DataType, Core.TypeEq{Int32, DataType})
+    @testintersect(Core.TypeEq{Int32, UnionAll}, DataType, Bottom)
 
     @testintersect(DataType, Type, !Bottom)
     @testintersect(Union, Type, !Bottom)
@@ -1004,7 +1018,7 @@ function test_intersection()
                    Tuple{T,T} where {T1, T<:Union{UpperTriangular{T1}, UnitUpperTriangular{T1}}})
 
     @testintersect(DataType, Type, DataType)
-    @testintersect(DataType, Type{T} where T<:Integer, Type{T} where T<:Integer)
+    @testintersect(DataType, Type{T} where T<:Integer, Core.TypeEq{T, DataType} where T<:Integer)
     @testintersect(Union{DataType,Int}, Type, DataType)
     @testintersect(Union{DataType,Int}, Type{T} where T, DataType)
     # test typeintersect wrapper as well as _type_intersect
@@ -2233,7 +2247,7 @@ let A = Tuple{UnionAll, Vector{Any}},
     B = Tuple{Type{T}, T} where T<:AbstractArray,
     I = typeintersect(A, B)
     @test !isconcretetype(I)
-    @test I == Tuple{Type{T}, Vector{Any}} where T<:AbstractArray
+    @test I == Tuple{Core.TypeEq{T, UnionAll}, Vector{Any}} where T<:AbstractArray
 end
 
 @testintersect(Tuple{Type{Vector{<:T}}, T} where {T<:Integer},
@@ -2995,14 +3009,17 @@ end
 @test typeintersect(Tuple{Union{DataType, UnionAll, Union}, Type{UnitRange{Int64}}, Type{Int64}},
                     Tuple{Type{T}, Vararg{S, N}} where {N, eT, T<:AbstractArray{eT, N}, S<:Type{<:Any}}) !== Union{}
 @test typeintersect(Tuple{Int64, String}, Tuple{T, T} where T) === Union{}
-@test typeintersect(Tuple{Any, Union{Type{Vector},Type{Int64}}, Type{Int8}},
-                    Tuple{Int64, S, S} where {S}) === Tuple{Int64, Type{Int64}, Type{Int8}}
+let r = typeintersect(Tuple{Any, Union{Type{Vector},Type{Int64}}, Type{Int8}},
+                      Tuple{Int64, S, S} where {S})
+    @test r !== Union{}
+    @test Tuple{Int64, Core.TypeEq{Int64, DataType}, Core.TypeEq{Int8, DataType}} <: r
+end
 @test typeintersect(Tuple{Ref{DataType}, Type{Int64}, Type{Float64}, Union{Int64,String}},
-                    (Tuple{Ref{T}, S, S, Int64} where {S<:T}) where T) === Tuple{Ref{DataType}, Type{Int64}, Type{Float64}, Int64}
+                    (Tuple{Ref{T}, S, S, Int64} where {S<:T}) where T) == Tuple{Ref{DataType}, Core.TypeEq{Int64, DataType}, Core.TypeEq{Float64, DataType}, Int64}
 @test typeintersect(Tuple{Type{Int64}, Type{String}},
                     Tuple{S, S} where S<:Type{<:Number}) === Union{}
 @test typeintersect(Tuple{Type{Vector{T}} where T, Type{Int64}},
-                    Tuple{S, S} where S) === Tuple{Type{Vector{T}} where T, Type{Int64}}
+                    Tuple{S, S} where S) == Tuple{Type{Vector{T}} where T, Core.TypeEq{Int64, DataType}}
 # not a subtype under #33136 (mixed-tag member pairs), but the intersection
 # keeps the tag-homogeneous slices
 @test !(Tuple{Union{Type{Vector{T}} where T, Type{Int64}}, Type{Int8}} <: Tuple{S, S} where S)
@@ -3010,19 +3027,21 @@ end
                     Tuple{S, S} where S) === Tuple{S, S} where S<:Ref{Int64}
 # the diagonal `T` can be `UnionAll` (both slots have `UnionAll`-tagged members
 # under `==`-class semantics), so the `Type{Int64}` component contributes too and
-# the result widens accordingly
+# the result keeps the `UnionAll` slices
 @test typeintersect(Tuple{Union{Type{Val},Type{Int64}}, Type{Vector}},
-                    Tuple{T, T} where T<:Union{UnionAll,Type{<:Number}}) === Tuple{UnionAll, Type{Vector}}
+                    Tuple{T, T} where T<:Union{UnionAll,Type{<:Number}}) ==
+      Tuple{Union{Core.TypeEq{Int64, UnionAll}, Core.TypeEq{Val, UnionAll}}, Core.TypeEq{Vector, UnionAll}}
 @test typeintersect(Tuple{Union{Type{Val}, Type{Int8}}, Union{Type{Val}, Type{Int64}}},
                     NTuple{2,<:Union{Type{<:Val}, DataType}}) == (Tuple{S, S} where S <: Union{Type{Val}, DataType})
 @test typeintersect(Tuple{Union{Type{Val}, Type{Int64}}, DataType},
-                    Tuple{S, S} where S) === Tuple{Type{Int64}, DataType}
+                    Tuple{S, S} where S) == Tuple{Union{Core.TypeEq{Int64, DataType}, Core.TypeEq{Val, DataType}}, DataType}
 
 let
     A = Tuple{Union{Type{Vector}, Type{Int64}}, Union{Type{Matrix}, Type{Float64}}}
     B = (Tuple{S, S} where S)
     r = typeintersect(A, B)
-    @test Tuple{Type{Vector}, Type{Matrix}} <: r
+    @test Tuple{Core.TypeEq{Vector, UnionAll}, Core.TypeEq{Matrix, UnionAll}} <: r
+    @test !(Tuple{Type{Vector}, Type{Matrix}} <: r)
     # `Type{Int64}` and `Type{Float64}` have mixed-tag member pairs (#33136),
     # so that pair no longer lies in a diagonal `S`; the tag-pinned dispatch
     # key for the corresponding call still does
@@ -3034,9 +3053,11 @@ let
     B = (Tuple{S, S, T} where S) where T
     r = typeintersect(A, B)
     # under #33136 the diagonal cannot be preserved in an expressible result
-    # that also stays inside `B`; the result keeps the argument bound instead
+    # that also stays inside `B`; the result keeps the tag-homogeneous slices
+    # of the argument for one witness tag instead
     @test r <: A
     @test r !== Union{}
+    @test Tuple{Core.TypeEq{Int64, DataType}, Core.TypeEq{Int64, DataType}, Type{Matrix}} <: r
 end
 @testintersect(
     Tuple{X,X,Ref{U}} where {U,T<:U,X<:T},
@@ -3051,7 +3072,7 @@ end
 @testintersect(
     Tuple{X,X,Ref{U}} where {U,X<:U},
     Tuple{Union{Type{Int},Type{Vector}}, Type{Int8}, Ref{DataType}},
-    Tuple{Type{Int}, Type{Int8}, Ref{DataType}}
+    Tuple{Union{Core.TypeEq{Int, DataType}, Core.TypeEq{Vector, DataType}}, Core.TypeEq{Int8, DataType}, Ref{DataType}}
 )
 @testintersect(
     Tuple{T1,Tuple{T3,T3}} where {T1<:Tuple{Any},T3<:T1},
@@ -3473,10 +3494,13 @@ end
 # issues #33136 / #62141: `Type{T} <: S` iff every `U == T` satisfies `isa(U, S)`.
 # The members of `Type{T}` straddle several kinds (`Tuple{S} where S<:Int` is a
 # `UnionAll` spelling of `Tuple{Int}`), so a `Type{T}` never lies in a single
-# kind, but does lie in the union of the kinds its class can inhabit.
+# kind; its kind parameter is nominal, so it lies in no union of kinds either.
 @testset "Type{T} vs kinds soundness (#33136, #62141)" begin
-    # the #62141 contradiction: `Type{Union{}} isa Type{Type{Union{}}}` but
-    # `Type{Union{}}` is not a `DataType`, so `Type{Type{Union{}}} <: DataType`
+    # `Type{T}` is `Core.TypeEq{T, AnyType}`: every type `== T` of any tag. A
+    # narrower kind `K` is declared, not inferred from the spelling of `T`
+    TE(@nospecialize(T), @nospecialize(K)) = Core.TypeEq{T, K}
+    # the `==`-class of `Union{}` is `{Union{}}` (the bottom object is unique),
+    # so `Type{Union{}} == TypeofBottom`: a witness that `Type{Union{}} <: DataType`
     # must not hold
     @test Type{Union{}} isa Type{Type{Union{}}}
     @test !(Type{Union{}} isa DataType)
@@ -3487,107 +3511,218 @@ end
         @test !(u isa DataType)
         @test !(Type{Tuple{Int}} <: DataType)
         @test u isa UnionAll
-        @test Type{Tuple{Int}} <: Union{DataType,UnionAll}
+        @test !(Type{Tuple{Int}} <: Union{DataType,UnionAll})
+        @test Union{TE(Tuple{Int}, DataType), TE(Tuple{Int}, UnionAll)} <: Union{DataType,UnionAll}
+        @test !(u isa TE(Tuple{Int}, DataType))
+        @test u isa TE(Tuple{Int}, UnionAll)
+        @test u isa Union{TE(Tuple{Int}, DataType), TE(Tuple{Int}, UnionAll)}
     end
-    # `Union{UnionAll, DataType}` is the smallest kind cover for `Type{Int}`
+    # `Type{Int}` lies in no kind: `TypeEq{Int, K}` is the spelling for the
+    # members of the tag `K`. The kind parameter is nominal, so `Type{Int}` is
+    # an abstract class with six refinements that lies in no union of kinds
+    # either, just as `AnyType` is not the union of the kinds
     @test !(Type{Int} <: DataType)
     @test !(Type{Int} <: UnionAll)
-    @test Type{Int} <: Union{DataType,UnionAll}
+    @test !(Type{Int} <: Union{DataType,UnionAll})
     @test !(Type{Int} <: Union{DataType,Union})
+    @test !(Type{Int} <: Union{DataType,UnionAll,Union,Core.TypeEq,Core.TypeEgal})
+    @test !(Type{Int} <: Union{Core.TypeofBottom,DataType,UnionAll,Union,Core.TypeEq,Core.TypeEgal})
+    @test !(Core.AnyType <: Union{Core.TypeofBottom,DataType,UnionAll,Union,Core.TypeEq,Core.TypeEgal})
+    @test TE(Int, DataType) <: DataType
+    @test TE(Int, DataType) <: Type{Int}
+    @test TE(Int, DataType) <: Union{TE(Int, DataType), TE(Int, UnionAll)}
+    @test Union{TE(Int, DataType), TE(Int, UnionAll)} <: Union{DataType,UnionAll}
+    @test !(Union{TE(Int, DataType), TE(Int, UnionAll)} <: DataType)
+    @test !(Type{Int} <: TE(Int, DataType))
+    @test !(Type{Int} <: Union{TE(Int, DataType), TE(Int, UnionAll)})
+    @test !(TE(Int, DataType) <: TE(Int, UnionAll))
+    @test !(TE(Int, DataType) <: Type{Integer})
+    @test TE(Int, DataType) <: Type{<:Integer}
+    @test TE(Int, DataType) <: (Type{T} where T<:Integer)
+    @test TE(Int, DataType) <: (Core.TypeEq{T, DataType} where T<:Integer)
+    @test !(TE(Int, DataType) <: (Core.TypeEq{T, UnionAll} where T<:Integer))
+    @test isa(Int, TE(Int, DataType))
+    @test !isa(Int, TE(Int, UnionAll))
+    @test isa(Vector, TE(Vector, UnionAll))
+    @test !isa(Vector, TE(Vector, DataType))
+    @test isa(Vector, Core.TypeEq{T, UnionAll} where T<:AbstractArray)
+    @test !isa(Vector, Core.TypeEq{T, DataType} where T<:AbstractArray)
     # a `Type{T'}` union component covers all of `Type{T}` (when `T' == T`) or
     # nothing, and mixes with kind components
     @test Type{Int} <: Union{String,Type{Int}}
     @test Type{Int} <: Union{DataType,Type{Int}}
     @test !(Type{Int} <: Union{DataType,Type{String}})
+    @test TE(Int, UnionAll) <: Union{DataType,TE(Int, UnionAll)}
+    @test Union{TE(Int, DataType), TE(Int, UnionAll)} <: Union{DataType,TE(Int, UnionAll)}
+    @test !(Union{TE(Int, DataType), TE(Int, UnionAll), TE(Int, Union)} <: Union{DataType,TE(Int, UnionAll)})
     # abstract and zero-parameter classes are treated uniformly
     @test !(Type{Integer} <: DataType)
-    @test Type{Integer} <: Union{DataType,UnionAll}
+    @test !(Type{Integer} <: Union{DataType,UnionAll})
+    @test Union{TE(Integer, DataType), TE(Integer, UnionAll)} <: Union{DataType,UnionAll}
     @test !(Type{Any} <: DataType)
-    # tuples with (semantically) union or vararg parameters also have `Union`
-    # spellings: `Tuple{Union{Int,String}} == Union{Tuple{Int},Tuple{String}}`,
-    # `Tuple{Vararg{Int}} == Union{Tuple{}, Tuple{Int,Vararg{Int}}}`
+    # the kind is not inferred from the spelling of `T`: a `Tuple` with a
+    # union parameter has `Union` spellings (`Tuple{Union{Int,String}} ==
+    # Union{Tuple{Int},Tuple{String}}`), and nothing else is assumed either
     @test !(Type{Tuple{Union{Int,String}}} <: Union{DataType,UnionAll})
-    @test Type{Tuple{Union{Int,String}}} <: Union{DataType,UnionAll,Union}
+    @test !(Type{Tuple{Union{Int,String}}} <: Union{DataType,UnionAll,Union})
+    @test Union{Tuple{Int},Tuple{String}} isa TE(Tuple{Union{Int,String}}, Union)
     @test !(Type{Tuple{Vararg{Int}}} <: Union{DataType,UnionAll})
-    @test Type{Tuple{Vararg{Int}}} <: Union{DataType,UnionAll,Union}
-    # unions of non-Tuples have no `DataType` spelling
-    @test Type{Union{Int,String}} <: Union{Union,UnionAll}
+    @test !(Type{Union{Int,String}} <: Union{Union,UnionAll})
     @test !(Type{Union{Int,String}} <: Union)
-    # wrapper-like `UnionAll`s have neither `DataType` nor `Union` spellings
-    @test Type{Vector} <: UnionAll
-    @test Type{Pair} <: UnionAll
+    @test !(Type{Vector} <: UnionAll)
+    @test TE(Vector, UnionAll) <: UnionAll
     @test !(Type{Union{}} <: UnionAll)
-    # instantiated parametric classes have `UnionAll` spellings
-    # (`Vector{S} where Int<:S<:Int`)
     @test !(Type{Vector{Int}} <: DataType)
-    @test Type{Vector{Int}} <: Union{DataType,UnionAll}
     @test !((Type{Vector{T}} where T) <: DataType)
-    @test (Type{Vector{T}} where T) <: Union{DataType,UnionAll}
-    # an unbound var can instantiate to `Union{}` (collapsing a Tuple to the
-    # bottom class) or to a union (splitting it), so the open `Tuple{T}` class
-    # needs `TypeofBottom` and `Union` in its cover as well
+    @test (Core.TypeEq{Vector{T}, DataType} where T) <: DataType
+    # a dispatch key for one open type object (a dangling free typevar) is
+    # pinned to that object's tag, and a kind set excluding the tag leaves
+    # the wrapper empty (vacuously a subtype of every kind)
+    let T = TypeVar(:T)
+        @test Core.TypeEq{Vector{T}, DataType} <: DataType
+        @test !(Core.TypeEq{Vector{T}, DataType} <: UnionAll)
+        @test Core.TypeEq{Vector{T}, UnionAll} <: UnionAll
+        @test Core.TypeEq{Vector{T}, UnionAll} <: DataType
+    end
     @test !((Type{Tuple{T}} where T) <: Union{DataType,UnionAll})
-    @test (Type{Tuple{T}} where T) <: Union{DataType,UnionAll,Union,Core.TypeofBottom}
-    # `Type`-of-`Type` classes are `TypeEq`-kinded plus `UnionAll` spellings
     @test !(Type{Type{Int}} <: Core.TypeEq)
-    @test Type{Type{Int}} <: Union{Core.TypeEq,UnionAll}
-    # ... except `Type` itself, whose class also contains the `AnyType` DataType
+    @test TE(Type{Int}, Core.TypeEq) <: Core.TypeEq
     @test !(Type{Type} <: Union{Core.TypeEq,UnionAll})
-    @test Type{Type} <: Union{Core.TypeEq,UnionAll,DataType}
     # the `Union{}` class stays exempt: the runtime keeps the bottom object
-    # unique, so `Type{Union{}} == TypeofBottom` remains an equality
+    # unique, so `Type{Union{}} == TypeofBottom` remains an equality, and the
+    # class has no member of any other tag
     @test Type{Union{}} == Core.TypeofBottom
     @test Type{Union{}} <: Core.TypeofBottom
     @test Core.TypeofBottom <: Type{Union{}}
     @test Type{Union{}} <: Union{Core.TypeofBottom,UnionAll}
+    @test Base.type_kind(Type{Union{}}) === Core.TypeofBottom
+    @test !(Type{Union{}} <: DataType) # `TypeofBottom` is a kind of its own
     @test !(Type{Core.TypeofBottom} <: DataType)
-    @test Type{Core.TypeofBottom} <: Union{DataType,Core.TypeEq,UnionAll}
+    @test !(Type{Core.TypeofBottom} <: Union{DataType,Core.TypeEq,UnionAll})
     # `TypeEgal{T}` pins its sole member by identity, so it does lie in the
     # single kind `typeof(T)`
     @test Core.TypeEgal{Int} <: DataType
     @test Core.TypeEgal{Vector} <: UnionAll
     @test !(Core.TypeEgal{Int} <: UnionAll)
-    # intersections with kinds are no longer (unsoundly) empty
-    @test typeintersect(Type{Int}, UnionAll) == Type{Int}
-    @test typeintersect(Type{Int}, DataType) == Type{Int}
-    @test typeintersect(Type{Int}, Union) == Union{}
-    @test typeintersect(Type{Vector}, DataType) == Union{}
-    @test typeintersect(Type{Vector}, UnionAll) == Type{Vector}
-    @test typeintersect(Type{Union{Int,String}}, Union) == Type{Union{Int,String}}
-    @test typeintersect(Type{Union{Int,String}}, DataType) == Union{}
+    @test Core.TypeEgal{Int} <: TE(Int, DataType)
+    @test !(Core.TypeEgal{Int} <: TE(Int, UnionAll))
+    @test !(Core.TypeEgal{Vector} <: TE(Vector, DataType))
+    @test Core.TypeEgal{Vector} <: Union{TE(Vector, DataType), TE(Vector, UnionAll)}
+    # constructor normalization: a kind that admits no member gives `Union{}`,
+    # the bottom class is the canonical `Type{Union{}}` (stored with the kind
+    # `TypeofBottom`, its only tag) and a bottom-bound parameter is stored
+    # likewise; nothing else is derived from the spelling of `T`
+    @test TE(Int, Core.TypeofBottom) === Union{}
+    @test TE(Union{}, DataType) === Union{}
+    @test TE(Union{}, Core.TypeofBottom) === Type{Union{}}
+    @test TE(Union{}, Core.AnyType) === Type{Union{}}
+    @test (Type{T} where T<:Union{}) <: Core.TypeofBottom
+    @test (Core.TypeEq{T, DataType} where T<:Union{}) == Union{}
+    @test TE(Int, Core.AnyType) === Type{Int}
+    @test TE(Vector, Core.AnyType) === Type{Vector}
+    @test TE(Vector, DataType) !== Union{} # a possibly empty class is not normalized away
+    @test Base.type_kind(Type{Int}) === Core.AnyType
+    @test Base.type_kind(TE(Int, DataType)) === DataType
+    @test Base.type_parameter(TE(Int, DataType)) === Int
+    @test fieldnames(Core.TypeEq) === (:T, :K)
+    # the kind parameter must be a kind or `AnyType`: no unions, no typevars
+    @test_throws TypeError Core.TypeEq{Int, Integer}
+    @test_throws TypeError Core.TypeEq{Int, Type{Int}}
+    @test_throws TypeError Core.TypeEq{Int, Union{DataType,Int}}
+    @test_throws TypeError Core.TypeEq{Int, Union{DataType,UnionAll}}
+    @test_throws TypeError (Core.TypeEq{Int, T} where T)
+    @test_throws TypeError Core.apply_type(Core.TypeEq, Int, Integer)
+    # an unbounded parameter ranges over all types, so the wrapper is its kind:
+    # every kind is the unbounded wrapper of its own slice (and `AnyType` of
+    # all of them), `K == TypeEq{T, K} where T`
+    @test (Core.TypeEq{T, DataType} where T) == DataType
+    for K in (DataType, UnionAll, Union, Core.TypeEq, Core.TypeEgal, Core.TypeofBottom, Core.AnyType)
+        W = Core.TypeEq{T, K} where T
+        @test W <: K
+        @test K <: W
+        @test W == K
+    end
+    # the chain of a closed class, strict at each step
+    @test Core.TypeEgal{Vector{Int}} <: TE(Vector{Int}, DataType)
+    @test !(TE(Vector{Int}, DataType) <: Core.TypeEgal{Vector{Int}})
+    @test TE(Vector{Int}, DataType) <: Type{Vector{Int}}
+    @test !(Type{Vector{Int}} <: TE(Vector{Int}, DataType))
+    @test Type{Vector{Int}} <: Core.AnyType
+    @test !(Core.AnyType <: Type{Vector{Int}})
+    @test (Union{Core.TypeEq{T, DataType}, Core.TypeEq{T, UnionAll}} where T) == Union{DataType,UnionAll}
+    @test Type == Core.AnyType
+    @test TE(Int, DataType) == TE(Int, DataType)
+    @test TE(Int, DataType) != TE(Int, UnionAll)
+    @test TE(Int, DataType) != Type{Int}
+    @test (Core.TypeEq{T, DataType} where T<:Integer) == (Core.TypeEq{S, DataType} where S<:Integer)
+    @test (Core.TypeEq{T, DataType} where T<:Integer) != (Core.TypeEq{S, UnionAll} where S<:Integer)
+    # intersections with kinds select the members of that tag
+    @test typeintersect(Type{Int}, UnionAll) == TE(Int, UnionAll)
+    @test typeintersect(Type{Int}, DataType) == TE(Int, DataType)
+    @test typeintersect(Type{Int}, Union) == TE(Int, Union)
+    @test typeintersect(Type{Vector}, DataType) == TE(Vector, DataType)
+    @test typeintersect(Type{Vector}, UnionAll) == TE(Vector, UnionAll)
+    @test typeintersect(Type{Union{Int,String}}, Union) == TE(Union{Int,String}, Union)
+    @test typeintersect(Type{Union{Int,String}}, DataType) == TE(Union{Int,String}, DataType)
     @test typeintersect(Type{Int}, Core.AnyType) == Type{Int}
+    @test typeintersect(Type{Int}, Core.TypeofBottom) === Union{}
+    @test typeintersect(Type{Union{}}, Core.TypeofBottom) == Type{Union{}}
+    @test typeintersect(TE(Int, DataType), UnionAll) === Union{}
+    @test typeintersect(Union{TE(Int, DataType), TE(Int, UnionAll)}, UnionAll) == TE(Int, UnionAll)
+    @test typeintersect(TE(Int, DataType), Type{Int}) == TE(Int, DataType)
+    @test typeintersect(TE(Int, DataType), TE(Int, UnionAll)) === Union{}
+    @test typeintersect(TE(Int, DataType), Core.TypeEgal{Int}) == Core.TypeEgal{Int}
+    @test typeintersect(TE(Int, UnionAll), Core.TypeEgal{Int}) === Union{}
+    @test typeintersect(Type{<:Vector}, DataType) == (Core.TypeEq{T, DataType} where T<:Vector)
+    @test typeintersect(DataType, Type{<:Vector}) == (Core.TypeEq{T, DataType} where T<:Vector)
+    @test typeintersect(Type{<:Vector}, Union{DataType,UnionAll}) == Union{Core.TypeEq{T, DataType} where T<:Vector, Core.TypeEq{T, UnionAll} where T<:Vector}
+    @test typeintersect(Type, DataType) === DataType
+    @test typeintersect(Type{<:Vector}, Core.TypeofBottom) == Type{Union{}}
+    let r = typeintersect(Type{<:Vector}, Union{Core.TypeofBottom,DataType})
+        @test r == Union{Type{Union{}}, Core.TypeEq{T, DataType} where T<:Vector}
+        @test Type{Union{}} <: r
+        @test (Core.TypeEq{T, DataType} where T<:Vector) <: r
+        @test !((Core.TypeEq{T, UnionAll} where T<:Vector) <: r)
+    end
+    @test typeintersect(Type{T} where T>:Int, Core.TypeofBottom) === Union{}
+    @test typeintersect(Type{<:Vector}, Core.TypeEgal{Vector}) == Core.TypeEgal{Vector}
     # union construction must not absorb `Type{T}` into a kind
     @test Union{Type{Int},DataType} isa Union
     @test (Union{Type{Vector{T}},DataType} where T) isa UnionAll
     # dispatch: methods on `Type{Int}` still beat methods on kinds
     @test Base.morespecific(Tuple{Type{Int}}, Tuple{DataType})
-    # the equal spellings from the original #33136 report behave alike, also on
-    # queries only the kind cover can answer (a typevar pinned by equal bounds
-    # ranges over one `==`-class)
+    @test Base.morespecific(Tuple{TE(Int, DataType)}, Tuple{DataType})
+    @test Base.morespecific(Tuple{TE(Int, DataType)}, Tuple{Type{Int}})
+    @test !Base.morespecific(Tuple{Type{Int}}, Tuple{TE(Int, DataType)})
+    @test !Base.morespecific(Tuple{DataType}, Tuple{Core.TypeEq{T, DataType} where T}) # equal types
+    @test Base.morespecific(Tuple{DataType}, Tuple{Union{Core.TypeEq{T, DataType}, Core.TypeEq{T, UnionAll}} where T})
+    @test !Base.morespecific(Tuple{UnionAll}, Tuple{Core.TypeEq{T, DataType} where T})
+    # the equal spellings from the original #33136 report behave alike (a
+    # typevar pinned by equal bounds ranges over one `==`-class)
     @test (Type{T} where DataType<:T<:DataType) == Type{DataType}
     @test !((Type{T} where DataType<:T<:DataType) <: DataType)
     @test !(Type{DataType} <: DataType)
-    @test (Type{T} where DataType<:T<:DataType) <: Union{DataType,UnionAll}
-    @test Type{DataType} <: Union{DataType,UnionAll}
-    @test (Type{T} where Int<:T<:Int) <: Union{DataType,UnionAll}
+    @test !((Type{T} where DataType<:T<:DataType) <: Union{DataType,UnionAll})
+    @test (Core.TypeEq{T, DataType} where DataType<:T<:DataType) <: DataType
     @test !((Type{T} where Int<:T<:Int) <: DataType)
     @test typeintersect(Type{T} where Int<:T<:Int, UnionAll) != Union{}
     # bounds that pin only up to `==` (not `===`) denote a single class too
     @test (Type{T} where Tuple{Int}<:T<:(Tuple{S} where S<:Int)) == Type{Tuple{Int}}
     @test !((Type{T} where Tuple{Int}<:T<:(Tuple{S} where S<:Int)) <: DataType)
-    @test (Type{T} where Tuple{Int}<:T<:(Tuple{S} where S<:Int)) <: Union{DataType,UnionAll}
     # a dangling-typevar `Type{v}` is an internal single-object dispatch key,
     # pinned to its type tag
     let T = TypeVar(:T)
         @test Type{Ref{T}} <: DataType
         @test !(Type{Ref{T}} <: UnionAll)
     end
-    # the kind cover also applies over the closed components of a union that
+    # a union of wrappers decomposes per branch against a union that
     # additionally carries typevars
-    @test Tuple{Type{Int}, Ref{Int}} <: (Tuple{Union{DataType,UnionAll,T}, Ref{T}} where T)
+    @test Tuple{Union{TE(Int, DataType), TE(Int, UnionAll)}, Ref{Int}} <: (Tuple{Union{DataType,UnionAll,T}, Ref{T}} where T)
+    @test !(Tuple{Type{Int}, Ref{Int}} <: (Tuple{Union{DataType,UnionAll,T}, Ref{T}} where T))
     # the diagonal rule must not widen a `Type{T}` lower bound to its tag: no
     # concrete type contains all members of `Type{Tuple{Int}}` and `String`
     @test !(Tuple{Type{Tuple{Int}}, DataType} <: (Tuple{T,T} where T))
+    @test Tuple{TE(Tuple{Int}, DataType), DataType} <: (Tuple{T,T} where T)
     @test Tuple{Core.TypeEgal{Int}, Core.TypeEgal{String}} <: (Tuple{T,T} where T)
     let u2 = Tuple{S} where S<:Int  # == Tuple{Int}, but a UnionAll
         K = Tuple{Core.TypeEgal{u2}, Core.TypeEgal{String}}
@@ -3603,6 +3738,15 @@ end
             @test env[1] !== nothing
         end
     end
+    # printing: only the unrestricted wrapper has the `Type{T}` spelling
+    @test sprint(show, Type{Int}) == "Type{Int64}"
+    @test sprint(show, TE(Int, DataType)) == "Core.TypeEq{Int64, DataType}"
+    @test sprint(show, Type{Union{}}) == "Type{Union{}}"
+    @test sprint(show, Core.TypeEq{T, DataType} where T<:Vector) == "Core.TypeEq{T, DataType} where T<:(Vector)"
+    @test eval(Meta.parse(sprint(show, TE(Int, DataType)))) == TE(Int, DataType)
+    @test eval(Meta.parse(sprint(show, Core.TypeEq{T, DataType} where T<:Vector))) == (Core.TypeEq{T, DataType} where T<:Vector)
+    @test sprint(show, TE(Int, DataType); context=:compact=>false) == "Core.TypeEq{Int64, DataType}"
+    @test sprint(show, Type{Int}; context=:compact=>false) == "TypeEq{Int64}"
 end
 
 # issue #63037

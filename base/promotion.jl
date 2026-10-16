@@ -62,6 +62,10 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         a = isTypeEgal(a) ? typeof(type_parameter(a)) : a
         b = isTypeEgal(b) ? typeof(type_parameter(b)) : b
         return typejoin(a, b)
+    elseif isTypeEq(a) && isTypeEq(b) && type_parameter(a) === type_parameter(b)
+        # the same class restricted to two different kinds: the join is the
+        # unrestricted class (the kind parameter is nominal)
+        return Type{type_parameter(a)}
     elseif isTypeEq(a) || isTypeEq(b)
         # At least one operand is a `Type{X}` kind. We have already ruled out
         # `a <: b`, `b <: a`, and any `UnionAll`/`Union`/`TypeVar`. The least supertype
@@ -161,8 +165,6 @@ end
 
 # return an upper-bound on type `a` with type `b` removed
 # such that `return <: a` && `Union{return, b} == Union{a, b}`
-# WARNING: this is wrong for some objects for which subtyping is broken
-#          (Core.Compiler.isnotbrokensubtype), use only simple types for `b`
 function typesplit(@nospecialize(a), @nospecialize(b))
     @_foldable_meta
     @_nospecializeinfer_meta

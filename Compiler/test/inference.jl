@@ -2335,16 +2335,19 @@ end
 let typeof_tfunc(@nospecialize xs...) =
         Compiler.typeof_tfunc(Compiler.fallback_lattice, xs...)
     @test typeof_tfunc(Tuple{Vararg{Int}}) == Type{Tuple{Vararg{Int,N}}} where N
-    @test typeof_tfunc(Tuple{Any}) == Type{<:Tuple{Any}}
+    # `typeof(x)` is always a `DataType` object: the kind `DataType`
+    @test typeof_tfunc(Tuple{Any}) == Core.TypeEq{S, DataType} where S<:Tuple{Any}
     @test typeof_tfunc(Type{Array}) === DataType
     @test typeof_tfunc(Type{<:Array}) === DataType
-    @test typeof_tfunc(Array{Int}) == Type{Array{Int,N}} where N
-    @test typeof_tfunc(AbstractArray{Int}) == Type{<:AbstractArray{Int,N}} where N
-    @test typeof_tfunc(Union{<:T, <:Real} where T<:Complex) == Union{Type{Complex{T}} where T<:Real, Type{<:Real}}
+    @test typeof_tfunc(Core.TypeEq{Array, UnionAll}) === Const(UnionAll)
+    @test typeof_tfunc(Union{Core.TypeEq{Array, DataType}, Core.TypeEq{Array, UnionAll}}) == Union{Core.TypeEgal{DataType}, Core.TypeEgal{UnionAll}}
+    @test typeof_tfunc(Array{Int}) == Core.TypeEq{Array{Int,N}, DataType} where N
+    @test typeof_tfunc(AbstractArray{Int}) == Core.TypeEq{S, DataType} where {N, S<:AbstractArray{Int,N}}
+    @test typeof_tfunc(Union{<:T, <:Real} where T<:Complex) == Union{Core.TypeEq{Complex{T}, DataType} where T<:Real, Core.TypeEq{S, DataType} where S<:Real}
 end
 
 f_typeof_tfunc(x) = typeof(x)
-@test Base.return_types(f_typeof_tfunc, (Union{<:T, Int} where T<:Complex,)) == Any[Union{Core.TypeEgal{Int}, Type{Complex{T}} where T<:Real}]
+@test Base.return_types(f_typeof_tfunc, (Union{<:T, Int} where T<:Complex,)) == Any[Union{Core.TypeEgal{Int}, Core.TypeEq{Complex{T}, DataType} where T<:Real}]
 
 # memoryref_tfunc, memoryrefget_tfunc, memoryrefset!_tfunc, memoryref_isassigned, memoryrefoffset_tfunc
 let memoryref_tfunc(@nospecialize xs...) = Compiler.memoryref_tfunc(Compiler.fallback_lattice, xs...)
@@ -6600,7 +6603,10 @@ applytypevar62001b(tv::TypeVar) = isa(Vector{tv}, Type{Vector{_A}} where _A)
 applytypevar62001c(tv::TypeVar) = Vararg{tv}
 let x = TypeVar(:x)
     @test applytypevar62001(x).parameters[1] === x
-    @test applytypevar62001b(x) === false
+    # `isa` agrees with dispatch on the dangling-var key `Type{Vector{x}}`
+    # (`paramtype62001` above): the open object is an instance
+    @test applytypevar62001b(x) === true
+    @test only(Base.return_types(applytypevar62001b, (TypeVar,))) == Bool
     @test applytypevar62001c(x) isa Core.TypeofVararg
     @test only(Base.return_types(applytypevar62001, (TypeVar,))) == Type
     @test only(Base.return_types(applytypevar62001c, (TypeVar,))) == Core.TypeofVararg
@@ -8491,5 +8497,56 @@ irinterp_scan_d1(t) = irinterp_scan_derivative(irinterp_scan_square, t)
 irinterp_scan_d2(t) = irinterp_scan_derivative(irinterp_scan_d1, t)
 @test Base.infer_return_type(irinterp_scan_d2, (Int,)) === Int
 @test irinterp_scan_d2(2) == 2
+
+# `Core.TypeEq{T, K}`: `typeintersect` narrows a `Type`-type to the members of a kind,
+# and `typeof`/`getfield`/`isa` use the kind
+let h(x::Type{<:Vector}) = x isa DataType ? x : nothing
+    @test Base.infer_return_type(h, (Type{<:Vector},)) == Union{Nothing, Core.TypeEq{T, DataType} where T<:Vector}
+    hname(x::Type{<:Vector}) = x isa DataType ? x.name : nothing
+    @test Base.infer_return_type(hname, (Type{<:Vector},)) == Union{Nothing, Core.TypeName}
+    htypeof(x::Core.TypeEq{Int, DataType}) = typeof(x)
+    @test Base.infer_return_type(htypeof, (Core.TypeEq{Int, DataType},)) === Core.TypeEgal{DataType}
+    htypeof2(x::Union{Core.TypeEq{Int, DataType}, Core.TypeEq{Int, UnionAll}}) = typeof(x)
+    @test Base.infer_return_type(htypeof2, (Union{Core.TypeEq{Int, DataType}, Core.TypeEq{Int, UnionAll}},)) ==
+        Union{Core.TypeEgal{DataType}, Core.TypeEgal{UnionAll}}
+    # `isa` against a kind folds for a kind-pinned wrapper, not for `Type{Int}`
+    let isa_tfunc(@nospecialize xs...) = Compiler.isa_tfunc(Compiler.fallback_lattice, xs...)
+        @test isa_tfunc(Core.TypeEq{Int, DataType}, Core.Const(DataType)) === Core.Const(true)
+        @test isa_tfunc(Core.TypeEq{Int, DataType}, Core.Const(UnionAll)) === Core.Const(false)
+        @test isa_tfunc(Type{Int}, Core.Const(DataType)) === Bool
+    end
+    htypeof3(x::Type{Int}) = typeof(x)
+    @test Base.infer_return_type(htypeof3, (Type{Int},)) === DataType
+    # `typeof` of an abstract-typed value is a `DataType`
+    @test Base.infer_return_type(typeof, (Integer,)) == (Core.TypeEq{S, DataType} where S<:Integer)
+    @test Base.infer_return_type(typeof, (Vector,)) == (Core.TypeEq{Vector{T}, DataType} where T)
+    hnfields(x::Core.TypeEq{Int, DataType}) = nfields(x)
+    @test Base.infer_return_type(hnfields, (Core.TypeEq{Int, DataType},)) === Int
+    @test isa(Compiler.nfields_tfunc(Compiler.fallback_lattice, Core.TypeEq{Int, DataType}), Core.Const)
+    # `Core.apply_type` with the two-argument form
+    happly(::Type{T}) where T = Core.TypeEq{T, DataType}
+    @test Base.infer_return_type(happly, (Type{Int},)) === Type{Core.TypeEq{Int, DataType}}
+    @test Base.infer_return_type(happly, (Type{Union{}},)) === Core.TypeofBottom
+    happly2(x) = Core.TypeEq{x, DataType}
+    @test Base.infer_return_type(happly2, (Core.TypeEgal{Int},)) === Core.TypeEgal{Core.TypeEq{Int, DataType}}
+    @test Base.infer_return_type(happly2, (Type{Int},)) === Type{Core.TypeEq{Int, DataType}}
+    # a kind set admitting no member of the class gives the empty set `Union{}`
+    # (tag `TypeofBottom`), so only the two-argument form is always a `TypeEq`
+    @test Base.infer_return_type(happly2, (DataType,)) === Union{Core.TypeEq, Core.TypeofBottom}
+    @test happly2(Union{}) === Union{}
+    @test Base.infer_return_type(happly2, (String,)) === Union{}
+    happly2b(x) = Core.TypeEq{x}
+    @test Base.infer_return_type(happly2b, (DataType,)) === Core.TypeEq
+    happly2c(k::DataType) = Core.TypeEq{Int, k}
+    @test Base.infer_return_type(happly2c, (DataType,)) === Union{Core.TypeEq, Core.TypeofBottom}
+    @test happly2c(Core.TypeofBottom) === Union{}
+    happly3(x, k) = Core.TypeEq{x, k}
+    @test Base.infer_return_type(happly3, (Core.TypeEgal{Int}, Core.TypeEgal{DataType})) === Core.TypeEgal{Core.TypeEq{Int, DataType}}
+    @test Base.infer_return_type(happly3, (Core.TypeEgal{Int}, Core.TypeEgal{Int})) === Union{}
+    @test Base.infer_return_type(happly3, (Core.TypeEgal{Int}, DataType)) === Union{Core.TypeEq, Core.TypeofBottom}
+    @test happly3(Int, Core.TypeofBottom) === Union{}
+    @test Compiler.apply_type_nothrow(Compiler.fallback_lattice, Any[Core.Const(Core.TypeEq), Core.Const(Int), Core.Const(DataType)], Core.Const(Core.TypeEq{Int, DataType}))
+    @test !Compiler.apply_type_nothrow(Compiler.fallback_lattice, Any[Core.Const(Core.TypeEq), Core.Const(Int), DataType], Core.TypeEq)
+end
 
 end # module inference

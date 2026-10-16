@@ -1365,8 +1365,11 @@ julia> WrapType(Float64) # sharpened constructor, note more precise Type{Float64
 WrapType{Type{Float64}}(Float64)
 ```
 
-This behavior of `Type{Float64}` is an example of an abstract type subtyping a
-concrete type (here `DataType`).
+Note that `Type{Float64}` is not a subtype of `DataType`: it is the set of all types equal to
+`Float64` (in the sense of mutual subtyping), and such types can be written with other type
+tags, for example as a `UnionAll`. `Type{Float64}` is a shorthand for `Core.TypeEq{Float64, Core.AnyType}`;
+the second parameter names the type tag of its members, so `Core.TypeEq{Float64, DataType}`
+is the subset of `Type{Float64}` that lies in `DataType`.
 
 ## Type Aliases
 

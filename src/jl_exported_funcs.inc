@@ -287,7 +287,6 @@
     XX(jl_is_initialized) \
     XX(jl_is_in_pure_context) \
     XX(jl_is_memdebug) \
-    XX(jl_is_not_broken_subtype) \
     XX(jl_is_operator) \
     XX(jl_is_task_started) \
     XX(jl_is_unary_and_binary_operator) \

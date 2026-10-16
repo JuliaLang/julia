@@ -241,10 +241,14 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
         // `==` but not `===`, so their `TypeEgal`s are distinct types. The
         // name-insensitive mode (tvar_names==0) must therefore still compare
         // the parameter by name.
-        return egal_types(((jl_typeeq_t*)a)->T, ((jl_typeeq_t*)b)->T, env, 1);
+        return egal_types(((jl_typeegal_t*)a)->T, ((jl_typeegal_t*)b)->T, env, 1);
     }
-    if (dtag == jl_typeeq_tag << 4)
-        return egal_types(((jl_typeeq_t*)a)->T, ((jl_typeeq_t*)b)->T, env, tvar_names);
+    if (dtag == jl_typeeq_tag << 4) {
+        // `K` is closed (and normalized by the constructor), so name-insensitivity
+        // is moot for it
+        return egal_types(((jl_typeeq_t*)a)->K, ((jl_typeeq_t*)b)->K, env, 0) &&
+               egal_types(((jl_typeeq_t*)a)->T, ((jl_typeeq_t*)b)->T, env, tvar_names);
+    }
     if (dtag == jl_vararg_tag << 4) {
         jl_vararg_t *vma = (jl_vararg_t*)a;
         jl_vararg_t *vmb = (jl_vararg_t*)b;
@@ -449,9 +453,14 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
                              type_object_id_(((jl_uniontype_t*)v)->a, env)),
                       type_object_id_(((jl_uniontype_t*)v)->b, env));
     }
-    if (tv == jl_typeeq_type || tv == jl_typeegal_type) {
+    if (tv == jl_typeeq_type) {
+        return bitmix(bitmix(jl_object_id((jl_value_t*)tv),
+                             type_object_id_(((jl_typeeq_t*)v)->T, env)),
+                      type_object_id_(((jl_typeeq_t*)v)->K, env));
+    }
+    if (tv == jl_typeegal_type) {
         return bitmix(jl_object_id((jl_value_t*)tv),
-                      type_object_id_(((jl_typeeq_t*)v)->T, env));
+                      type_object_id_(((jl_typeegal_t*)v)->T, env));
     }
     if (tv == jl_unionall_type) {
         jl_unionall_t *u = (jl_unionall_t*)v;
@@ -2076,11 +2085,15 @@ JL_CALLABLE(jl_f_apply_type)
         return (jl_value_t*)jl_type_union(&args[1], nargs-1);
     }
     else if (args[0] == (jl_value_t*)jl_typeeq_type) {
-        JL_NARGS(apply_type, 2, 2);
+        JL_NARGS(apply_type, 2, 3);
         jl_value_t *pi = args[1];
         if (!jl_valid_type_param(pi))
             jl_type_error_rt("TypeEq", "parameter", (jl_value_t*)jl_type_type, pi);
-        return (jl_value_t*)jl_wrap_Type(pi);
+        if (nargs == 2)
+            return (jl_value_t*)jl_wrap_Type(pi);
+        if (!jl_is_kindset(args[2]))
+            jl_type_error_rt("TypeEq", "kind parameter (a kind or `AnyType`)", (jl_value_t*)jl_anytype_type, args[2]);
+        return jl_wrap_TypeEq(pi, args[2]);
     }
     else if (args[0] == (jl_value_t*)jl_typeegal_type) {
         JL_NARGS(apply_type, 2, 2);
