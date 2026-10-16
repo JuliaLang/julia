@@ -72,7 +72,7 @@ struct ShellCompletion <: Completion
 end
 
 struct DictCompletion <: Completion
-    dict::AbstractDict
+    dict
     key::String
 end
 
@@ -1016,11 +1016,18 @@ function bslash_completions(string::String, pos::Int, hint::Bool=false)
 end
 
 # This needs to be a separate non-inlined function, see #19441
-@noinline function find_dict_matches(identifier::AbstractDict, partial_key)
+# A `haskey` method marks types indexed by key rather than by position (arrays, strings, tuples).
+@noinline function find_dict_matches(identifier, partial_key)
     matches = String[]
-    for key in keys(identifier)
-        rkey = repr(key)
-        startswith(rkey,partial_key) && push!(matches,rkey)
+    isempty(methods(haskey, Tuple{typeof(identifier), Any})) && return matches
+    try
+        ks = keys(identifier)
+        (Base.haslength(ks) && length(ks)::Int < 1_000_000) || return matches
+        for key in ks
+            rkey = repr(key)
+            startswith(rkey,partial_key) && push!(matches,rkey)
+        end
+    catch
     end
     return matches
 end
@@ -1147,7 +1154,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         cs !== nothing && return cs
     end
 
-    # Complete keys in a Dict:
+    # Complete keys of a key-indexed collection:
     #   my_dict[ TAB
     n, key, closed = find_ref_key(cur_not_ws, pos)
     if n !== nothing
@@ -1386,10 +1393,7 @@ end
 function dict_eval(@nospecialize(e), context_module::Module=Main)
     objt = repl_eval_ex(e.args[1], context_module)
     isa(objt, Core.Const) || return nothing
-    obj = objt.val
-    isa(obj, AbstractDict) || return nothing
-    (Base.haslength(obj) && length(obj)::Int < 1_000_000) || return nothing
-    return obj
+    return objt.val
 end
 
 function method_search(partial::AbstractString, context_module::Module, shift::Bool)
