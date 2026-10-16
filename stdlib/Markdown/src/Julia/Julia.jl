@@ -12,7 +12,7 @@ include("interp.jl")
                html_block, html_block_type7, github_table, setextheader, paragraph,
 
                # Backslash escapes do not work in code blocks, code spans, autolinks, or raw HTML
-               inline_code, autolink, html_inline,
+               inline_code, autolink, httplink, html_inline,
                linebreak, escapes, entity,
                tex, interp,
                en_or_em_dash,
