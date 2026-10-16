@@ -928,6 +928,34 @@ let
     end
 end
 
+@testset "extended capability names" begin
+    int16s(xs...) = collect(reinterpret(UInt8, map(x -> htol(Int16(x)), collect(xs))))
+    # Minimal entry named "x" with no standard capabilities
+    entry = vcat(int16s(0o432, 2, 0, 0, 0, 0), b"x\0")
+    # Two extended string capabilities, `A` and `B`, with values given by `indices`:
+    # the names are stored after the last value that is present, and their
+    # indices are relative to the start of the names.
+    function extended(a, b)
+        values = filter(!isnothing, [a, b])
+        table = vcat(map(v -> vcat(codeunits(v), 0x00), values)..., b"A\0B\0")
+        offsets = cumsum([0; map(v -> ncodeunits(v) + 1, values)])
+        indices = Int[]
+        k = 1
+        for v in (a, b)
+            push!(indices, isnothing(v) ? -1 : offsets[k])
+            isnothing(v) || (k += 1)
+        end
+        ext = vcat(int16s(0, 0, 2, 4, length(table)), int16s(indices..., 0, 2), table)
+        Base.TermInfo(read(IOBuffer(vcat(entry, ext)), Base.TermInfoRaw))
+    end
+    for (a, b) in (("v", "w"), ("v", nothing), (nothing, "w"), (nothing, nothing))
+        ti = extended(a, b)
+        @test ti.extensions == Set([:A, :B])
+        @test get(ti, :A, "") == something(a, "")
+        @test get(ti, :B, "") == something(b, "")
+    end
+end
+
 # A bad terminfo file must not prevent Julia from starting (#63777)
 @testset "malformed terminfo" begin
     # Malformed data should only throw the errors `load_terminfo` handles
@@ -939,7 +967,7 @@ end
     end
     # Offset of the extended header, computed from the main header (`term(5)`)
     name_bytes, flag_bytes, numbers_count, string_count, table_bytes =
-        reinterpret(Int16, xterm_terminfo[3:12])
+        map(ltoh, reinterpret(Int16, xterm_terminfo[3:12]))
     numsize = xterm_terminfo[1:2] == [0x1a, 0x01] ? 2 : 4
     xterm_ext = 12 + name_bytes + flag_bytes
     xterm_ext += xterm_ext % 2
@@ -971,13 +999,38 @@ end
                 @test ti isa Base.TermInfo
                 @test isempty(ti.names)
             end
+            # `TERM` is not necessarily valid UTF-8
+            @test isempty(Base.load_terminfo("\xff").names)
+            # Names that could escape the terminfo directories are rejected
+            @test isnothing(Base.find_terminfo_file(joinpath(dir, "x", "xterm-empty")))
         end
         # The process-wide terminfo (used when printing errors) must also initialize
-        cmd = `$(Base.julia_cmd()) --startup-file=no -e 'Base.current_terminfo(); print(Base.ttyhascolor())'`
+        cmd = `$(Base.julia_cmd()) --startup-file=no -e 'print(isempty(Base.current_terminfo().names), Base.ttyhascolor())'`
         out = withenv("TERMINFO" => dir, "TERMINFO_DIRS" => nothing, "TERM" => "xterm-truncated") do
             read(cmd, String)
         end
-        @test out == "true" # xterm-like terminals get a default `setaf`
+        @test out == "truetrue" # xterm-like terminals get a default `setaf`
+        # Unreadable files and directories (permissions are not enforced for root)
+        if Sys.isunix() && Libc.getuid() != 0
+            cp(joinpath(dir, "x", "xterm-empty"), joinpath(dir, "x", "xterm-unreadable"))
+            chmod(joinpath(dir, "x", "xterm-unreadable"), 0o000)
+            withenv("TERMINFO" => dir, "TERMINFO_DIRS" => nothing) do
+                @test isempty(Base.load_terminfo("xterm-unreadable").names)
+            end
+            # An inaccessible directory is skipped rather than ending the search
+            mkpath(joinpath(dir, "noaccess", "d"))
+            mkpath(joinpath(dir, "db", "d"))
+            write(joinpath(dir, "db", "d", "dumb"), dumb_terminfo)
+            chmod(joinpath(dir, "noaccess"), 0o000)
+            try
+                dirs = string(joinpath(dir, "noaccess"), ':', joinpath(dir, "db"))
+                withenv("TERMINFO" => nothing, "TERMINFO_DIRS" => dirs, "HOME" => dir) do
+                    @test Base.find_terminfo_file("dumb") == joinpath(dir, "db", "d", "dumb")
+                end
+            finally
+                chmod(joinpath(dir, "noaccess"), 0o755) # so `mktempdir` can clean up
+            end
+        end
     end
 end
 

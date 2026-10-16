@@ -136,27 +136,32 @@ function extendedterminfo(data::IO, NumInt::Union{Type{Int16}, Type{Int32}})
     table_indices = map(ltoh, reinterpret(Int16, _terminfo_read_bytes(data, table_count * sizeof(Int16))))
     table_data = _terminfo_read_bytes(data, table_bytes)
     strings = _terminfo_read_strings(table_data, table_indices[1:string_count])
-    table_halfoffset = Int16(get(table_indices, string_count, 0) +
-        ncodeunits(something(get(strings, length(strings), ""), "")) + 1)
-    for index in string_count+1:lastindex(table_indices)
-        table_indices[index] += table_halfoffset
+    # The capability names follow the last string value that is present (some
+    # values may be absent, including the last one), and their indices are
+    # relative to the start of the names.
+    names_offset = 0
+    for (idx, str) in zip(table_indices, strings)
+        isnothing(str) || (names_offset = max(names_offset, idx + ncodeunits(str) + 1))
     end
-    labels = map(_terminfo_read_strings(table_data, table_indices[string_count+1:end])) do label
-        isnothing(label) && throw(ArgumentError("Terminfo extended capability is missing a name"))
-        Symbol(label)
+    label_indices = map(Int, table_indices[string_count+1:end])
+    for i in eachindex(label_indices)
+        label_indices[i] >= 0 ||
+            throw(ArgumentError("Terminfo extended capability is missing a name"))
+        label_indices[i] += names_offset
     end
+    labels = map(Symbol, _terminfo_read_strings(table_data, label_indices))
     Dict{Symbol, Union{Bool, Int, String, Nothing}}(
         zip(labels, Iterators.flatten((flags, numbers, strings))))
 end
 
 """
-    _terminfo_read_strings(table::Vector{UInt8}, indices::Vector{Int16})
+    _terminfo_read_strings(table::Vector{UInt8}, indices::Vector{<:Integer})
 
 From `table`, read a string starting at each position in `indices`. Each string
 must be null-terminated. Should an index be -1 or -2, `nothing` is given instead
 of a string.
 """
-function _terminfo_read_strings(table::Vector{UInt8}, indices::Vector{Int16})
+function _terminfo_read_strings(table::Vector{UInt8}, indices::Vector{<:Integer})
     strings = Vector{Union{Nothing, String}}(undef, length(indices))
     map!(strings, indices) do idx
         if idx >= 0
@@ -257,8 +262,11 @@ Descriptions". A terminfo database is included by default with Julia and is
 taken to be the first entry of `@TERMINFO_DIRS@`.
 """
 function find_terminfo_file(term::String)
-    isempty(term) && return
-    chr, chrcode = string(first(term)), string(Int(first(term)), base=16)
+    # Like ncurses, reject names that could escape the terminfo directories
+    (isempty(term) || '/' in term) && return
+    # The hashed directory name is the hex value of the first byte (`TERM` may not
+    # be valid UTF-8)
+    chr, chrcode = string(first(term)), string(codeunit(term, 1), base=16, pad=2)
     terminfo_dirs = if haskey(ENV, "TERMINFO")
         [ENV["TERMINFO"]]
     elseif isdir(joinpath(homedir(), ".terminfo"))
@@ -273,18 +281,22 @@ function find_terminfo_file(term::String)
     push!(terminfo_dirs, normpath(Sys.BINDIR, DATAROOTDIR, "julia", "terminfo"))
     Sys.isunix() &&
         push!(terminfo_dirs, "/etc/terminfo", "/lib/terminfo", "/usr/share/terminfo")
-    for dir in terminfo_dirs
-        if isfile(joinpath(dir, chr, term))
-            return joinpath(dir, chr, term)
-        elseif isfile(joinpath(dir, chrcode, term))
-            return joinpath(dir, chrcode, term)
-        elseif isfile(joinpath(dir, lowercase(chr), lowercase(term)))
-            # The vendored terminfo database is fully lowercase to avoid issues on
-            # case-sensitive filesystems. On Unix-like systems, terminfo files with
-            # different cases are hard links to one another, so this is still
-            # correct for non-vendored terminfo, just redundant.
-            return joinpath(dir, lowercase(chr), lowercase(term))
+    # The vendored terminfo database is fully lowercase to avoid issues on
+    # case-sensitive filesystems. On Unix-like systems, terminfo files with
+    # different cases are hard links to one another, so the last candidate is
+    # still correct for non-vendored terminfo, just redundant.
+    lchr, lterm = isvalid(term) ? (lowercase(chr), lowercase(term)) : (chr, term)
+    candidates = ((chr, term), (chrcode, term), (lchr, lterm))
+    for dir in terminfo_dirs, (subdir, name) in candidates
+        path = joinpath(dir, subdir, name)
+        # Skip inaccessible paths (e.g. EACCES or ELOOP), as ncurses does
+        found = try
+            isfile(path)
+        catch err
+            err isa IOError || rethrow()
+            false
         end
+        found && return path
     end
     return nothing
 end
@@ -303,7 +315,7 @@ function load_terminfo(term::String)
         isnothing(file) && return TermInfo()
         TermInfo(read(file, TermInfoRaw))
     catch err
-        if err isa ArgumentError || err isa IOError || err isa EOFError
+        if err isa ArgumentError || err isa IOError || err isa EOFError || err isa SystemError
             TermInfo()
         else
             rethrow()
