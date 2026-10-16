@@ -1201,7 +1201,7 @@ static int var_outside(jl_stenv_t *e, jl_tvar_t *x, jl_tvar_t *y)
 
 static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int depth) JL_CANSAFEPOINT;
 
-static int reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e);
+static int reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e) JL_NOTSAFEPOINT;
 
 static int singleton_typevar_subtype(jl_tvar_t *v, jl_value_t *a) JL_NOTSAFEPOINT
 {
@@ -4441,15 +4441,8 @@ static int try_subtype_in_env_nonexistential(jl_value_t *a, jl_value_t *b, jl_st
 
 static void set_bound(jl_value_t **bound, jl_value_t *val, jl_tvar_t *v, jl_stenv_t *e) JL_NOTSAFEPOINT
 {
-    if (in_union(val, (jl_value_t*)v))
+    if (reachable_var(val, v, e))
         return;
-    jl_varbinding_t *btemp = e->vars;
-    while (btemp != NULL) {
-        if ((btemp->lb == (jl_value_t*)v || btemp->ub == (jl_value_t*)v) &&
-            in_union(val, (jl_value_t*)btemp->var))
-            return;
-        btemp = btemp->prev;
-    }
     *bound = val;
 }
 
@@ -4498,7 +4491,7 @@ static int subtype_in_env_nonexistential(jl_value_t *x, jl_value_t *y, jl_stenv_
 }
 
 // See if var y is reachable from x via bounds; used to avoid cycles.
-static int _reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e, jl_typeenv_t *log)
+static int _reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e, jl_typeenv_t *log) JL_NOTSAFEPOINT
 {
     if (in_union(x, (jl_value_t*)y))
         return 1;
@@ -4523,7 +4516,7 @@ static int _reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e, jl_typeenv
     return _reachable_var(ub, y, e, &newlog) || _reachable_var(lb, y, e, &newlog);
 }
 
-static int reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e)
+static int reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e) JL_NOTSAFEPOINT
 {
     return _reachable_var(x, y, e, NULL);
 }
