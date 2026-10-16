@@ -944,8 +944,8 @@ macro m20729()
     return ex
 end
 
-@test_throws ErrorException Core.eval(@__MODULE__, :(@m20729))
-@test_loweringerror(:(@m20729), "undefined reference in AST")
+@test_throws UndefRefError Core.eval(@__MODULE__, :(@m20729))
+@test_throws UndefRefError Meta.lower(@__MODULE__, :(@m20729))
 
 macro err20000()
     return Expr(:error, "oops!")
