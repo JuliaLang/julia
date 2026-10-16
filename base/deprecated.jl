@@ -753,21 +753,22 @@ end
 # the key of a `Pair{Symbol, Any}`. StyledStrings gives `:face` and `:link` their types.
 labelled_kind(::Val{label}) where {label} = label
 
-# The value a labelled annotation stands for: its own when it is of the label's kind, and otherwise `label => value`
+# The value a labelled annotation stands for, which a package can give for its own labels: by
+# default its value when it is of the label's kind, and otherwise `label => value`. Every labelled
+# form but deletion reads its values here.
 function labelled_value(label::Symbol, value)
+    depwarn("annotations with a label are deprecated; give the value alone, whose type says what it is", :labelled_value)
+    labelled_value(Val(label), value)
+end
+function labelled_value(::Val{label}, value) where {label}
     kind = labelled_kind(Val(label))
     if kind isa Type && value isa kind value else Pair{Symbol, Any}(label, value) end
 end
 
-function AnnotatedString{S}(s::S, annots::Vector{<:Union{Tuple{Any, Symbol, Any}, NamedTuple{(:region, :label, :value)}}}) where {S <: AbstractString}
-    isempty(annots) && return AnnotatedString{S, Any}(s) # Such as a `Vector{Union{}}`, which dispatch also puts here
-    depwarn("annotations with a label are deprecated; give `(region, value)`, where the type of the value says what it is", :AnnotatedString)
-    AnnotatedString{S}(s, [(region, labelled_value(Symbol(label), value)) for (region, label, value) in annots])
-end
+# A string reads labelled annotations as it reads each annotation, in `AnnotatedString{S}`
 
 function AnnotatedChar(c::AbstractChar, annots::Vector{<:Union{Tuple{Symbol, Any}, NamedTuple{(:label, :value)}}})
     isempty(annots) && return AnnotatedChar(c, Any[])
-    depwarn("annotations with a label are deprecated; give the value, whose type says what it is", :AnnotatedChar)
     AnnotatedChar(c, [labelled_value(label, value) for (label, value) in annots])
 end
 AnnotatedChar(c::AnnotatedChar, annots::Vector{<:Union{Tuple{Symbol, Any}, NamedTuple{(:label, :value)}}}) =
@@ -781,7 +782,6 @@ function _annotate!(annlist::Vector{<:RegionAnnotation}, region::UnitRange{Int},
                 if kind isa Type annot.value isa kind else annot.value isa Pair{Symbol} && first(annot.value) === kind end
         end)
     else
-        depwarn("`annotate!` with a label is deprecated; annotate with the value, whose type says what it is", :annotate!)
         _annotate!(annlist, region, labelled_value(label, value))
     end
 end
@@ -809,9 +809,6 @@ annotate!(s::SubString{<:AnnotatedString}, label::Symbol, val) =
 annotate!(io::AnnotatedIOBuffer, range::UnitRange{Int}, label::Symbol, @nospecialize(val::Any)) =
     (_annotate!(io.annotations, range, label, val); io)
 
-function annotate!(c::AnnotatedChar, label::Symbol, value)
-    depwarn("`annotate!` with a label is deprecated; annotate with the value, whose type says what it is", :annotate!)
-    annotate!(c, labelled_value(label, value))
-end
+annotate!(c::AnnotatedChar, label::Symbol, value) = annotate!(c, labelled_value(label, value))
 
 # END 1.14 deprecations

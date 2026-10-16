@@ -125,6 +125,12 @@ end
     @test uppercase(chr) == Base.AnnotatedChar('C')
     @test titlecase(chr) == Base.AnnotatedChar('C')
     @test lowercase(Base.AnnotatedChar('C')) == chr
+    # A char in another case has its own annotations
+    for transform in (lowercase, uppercase, titlecase)
+        original = Base.AnnotatedChar('a', [1])
+        Base.annotate!(transform(original), 2)
+        @test Base.annotations(original) == [1]
+    end
     str = Base.AnnotatedString("hmm", [(1:1, "h0h0"),
                                (1:2, "h0m1"),
                                (2:3, "m1m2")])
@@ -166,9 +172,18 @@ Base.labelled_kind(::Val{:weight}) = Weight
     @test_deprecated Base.AnnotatedChar('a', [(:size, 2)])
     @test_deprecated Base.annotate!(Base.AnnotatedString{String, Any}("ab"), 1:1, :size, 2)
     @test_deprecated Base.annotate!(Base.AnnotatedChar{Char, Any}('a'), :size, 2)
+    @test_deprecated Base.AnnotatedString("ab", Any[(1:1, :size, 2), (2:2, 3)]) # In a vector of any values
+    # A string's values that only look labelled are kept as they are, by its chars too
+    let s = Base.AnnotatedString("ab", [(1:1, (:a, 1))])
+        @test s[1] == Base.AnnotatedChar{Char, Tuple{Symbol, Int}}('a', [(:a, 1)])
+        @test collect(s) isa Vector{Base.AnnotatedChar{Char, Tuple{Symbol, Int}}}
+        @test Base.annotations(uppercase(s[1])) == [(:a, 1)]
+    end
+    @test Base.annotations(Base.AnnotatedChar('a', Any[(:weight, Weight(1))])) == [(:weight, Weight(1))] # Among any values, a value
     labelled = """
     struct Weight; w::Int end
     Base.labelled_kind(::Val{:weight}) = Weight
+    Base.labelled_value(::Val{:heavy}, n::Int) = Weight(n) # A package's own upgrade of an old form
     size, w = Pair{Symbol, Any}(:size, 2), Weight(3)
     s = Base.AnnotatedString("abc", [(1:1, :size, 2), (2:2, :weight, w), (3:3, :weight, 4)])
     c = Base.AnnotatedChar('a', [(:size, 2), (:weight, w)])
@@ -177,7 +192,9 @@ Base.labelled_kind(::Val{:weight}) = Weight
                Base.annotations(c) == [size, w],
                Base.annotations(Base.AnnotatedChar('a', [(label = :weight, value = w)])) == [w],
                Base.annotate!(Base.AnnotatedString{String, Any}("ab"), 1:1, :size, 2) == Base.AnnotatedString("ab", [(1:1, size)]),
-               Base.annotate!(Base.AnnotatedChar{Char, Any}('a'), :weight, w) == Base.AnnotatedChar('a', [w]))))
+               Base.annotate!(Base.AnnotatedChar{Char, Any}('a'), :weight, w) == Base.AnnotatedChar('a', [w]),
+               Base.annotations(Base.AnnotatedString("a", [(1:1, :heavy, 5)])) == [(region = 1:1, value = Weight(5))],
+               Base.annotations(Base.AnnotatedString("ab", Any[(1:1, :size, 2), (2:2, 3)])) == [(region = 1:1, value = size), (region = 2:2, value = 3)])))
     """
     @test read(`$(Base.julia_cmd()) --startup-file=no --depwarn=no -e $labelled`, String) == "true"
 end
@@ -215,7 +232,7 @@ end
     @test Base.AnnotatedString("ab") == Base.AnnotatedString("ab", Base.RegionAnnotation[])
     @test Base.AnnotatedChar(UInt32('c')) == Base.AnnotatedChar('c') == Base.AnnotatedChar('c', Any[])
     @test Base.AnnotatedString("ab", [1:1 => 1, (region = 2:2, value = 2)]) == Base.AnnotatedString("ab", [(1:1, 1), (2:2, 2)])
-    @test_throws ArgumentError Base.AnnotatedString("ab", Any[(1:1, :label, 1)]) # Not read as a region and a value
+    @test_throws ArgumentError Base.AnnotatedString("ab", Any[(1:1, 2, 3)]) # Not read as a region and a value
     @test Base.AnnotatedString([Base.AnnotatedChar('a', [1]), Base.AnnotatedChar('b', [2])]) ==
         Base.AnnotatedString("ab", [(1:1, 1), (2:2, 2)])
     @test (@inferred Base.AnnotatedString(Base.AnnotatedString("x", [(1:1, 1)]), [(1:1, 2)])) isa Base.AnnotatedString{String, Int}

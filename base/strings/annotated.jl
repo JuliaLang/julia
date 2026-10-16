@@ -108,6 +108,10 @@ function AnnotatedString{S}(s::S, annots) where {S <: AbstractString}
     valtype(::Vector{RegionAnnotation{V}}) where {V} = V
     valtype(::Vector) = Any
     function annotation(annot)
+        if annot isa Union{Tuple{Any, Symbol, Any}, NamedTuple{(:region, :label, :value)}} # Deprecated
+            region, label, value = annot
+            return (region = UnitRange{Int}(region), value = labelled_value(Symbol(label), value))
+        end
         length(annot) == 2 || throw(ArgumentError(LazyString("an annotation is a region and a value, as `(region, value)`, not ", annot)))
         region, value = annot
         (region = UnitRange{Int}(region), value)
@@ -145,8 +149,10 @@ AnnotatedString(s::AnnotatedString{S, V}, annots::Vector{RegionAnnotation{T}}) w
 
 AnnotatedString(s::AnnotatedString, annots) = AnnotatedString(s, AnnotatedString(s.string, annots).annotations)
 
-AnnotatedChar(c::AnnotatedChar, annots::Vector) =
-    AnnotatedChar(c.char, typed_vcat(annot_promote_valtype(c, AnnotatedChar(c.char, annots)), c.annotations, annots))
+function AnnotatedChar(c::AnnotatedChar{C}, annots::Vector) where {C <: AbstractChar}
+    V = annot_promote_valtype(c, AnnotatedChar(c.char, annots))
+    AnnotatedChar{C, V}(c.char, typed_vcat(V, c.annotations, annots))
+end
 
 AnnotatedChar(c::AnnotatedChar, annots) = AnnotatedChar(c, AnnotatedChar(c.char, annots).annotations)
 
@@ -226,7 +232,8 @@ end
 function getindex(s::AnnotatedString{S, V}, i::Integer) where {S, V}
     @boundscheck checkbounds(s, i)
     @inbounds if isvalid(s, i)
-        AnnotatedChar(s.string[i], V[a.value for a in s.annotations if i in a.region])
+        c = s.string[i]
+        AnnotatedChar{typeof(c), V}(c, V[a.value for a in s.annotations if i in a.region])
     else
         string_index_err(s, i)
     end
