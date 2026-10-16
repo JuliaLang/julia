@@ -2302,6 +2302,131 @@ precompile_test_harness("edge replay: a method on a kind outside the closure") d
     @test out == "true"
 end
 
+precompile_test_harness("activation replay: worklist-owned method tables") do load_path
+    # methods of a method table the package itself defines carry no activation
+    # certificate; they must not break the (method, certificate) pairing of the
+    # image's method list (Revise's "External method tables" test found this)
+    write(joinpath(load_path, "ReplayOverlay.jl"),
+        """
+        module ReplayOverlay
+        Base.Experimental.@MethodTable(method_table)
+        Base.Experimental.@MethodTable(method_table_2)
+        foo() = 1
+        Base.Experimental.@overlay method_table print(x) = "print"
+        Base.Experimental.@overlay method_table show(x) = "show"
+        Base.Experimental.@overlay method_table cos(x) = "cos"
+        Base.Experimental.@overlay method_table_2 foo() = 2
+        bar() = foo()
+        baz() = bar()
+        end
+        """)
+    Base.compilecache(Base.PkgId("ReplayOverlay"))
+    out = edge_replay_test_output(load_path, DEPOT_PATH[1], """
+        using ReplayOverlay
+        nm(sig, mt) = length(Base._methods_by_ftype(sig, mt, -1, Base.get_world_counter()))
+        print(Base.invokelatest(ReplayOverlay.baz), " ", nm(Tuple{typeof(cos), Any}, ReplayOverlay.method_table),
+              " ", nm(Tuple{typeof(ReplayOverlay.foo)}, ReplayOverlay.method_table_2))
+        """)
+    @test out == "1 1 1"
+end
+
+precompile_test_harness("activation replay: certificate validity") do load_path
+    write(joinpath(load_path, "ActReplayDep.jl"),
+        """
+        module ActReplayDep
+        f(::Any) = :old
+        f(::Int) = :blocker
+        h(::Any) = :any
+        end
+        """)
+    # loads another dependency after defining its method, so the worker activated
+    # that method before it could see ActReplayLate's
+    write(joinpath(load_path, "ActReplayLate.jl"),
+        """
+        module ActReplayLate
+        using ActReplayDep
+        ActReplayDep.h(::Integer) = :late
+        callh() = ActReplayDep.h(1)
+        callh()
+        end
+        """)
+    write(joinpath(load_path, "ActReplayPkg.jl"),
+        """
+        module ActReplayPkg
+        using ActReplayDep
+        ActReplayDep.f(::Real) = :new
+        ActReplayDep.h(::Int) = :pkg
+        using ActReplayLate
+        end
+        """)
+    Base.compilecache(Base.PkgId("ActReplayDep"))
+    Base.compilecache(Base.PkgId("ActReplayLate"))
+    Base.compilecache(Base.PkgId("ActReplayPkg"))
+    # a dependency method deleted before loading must not keep shadowing the new one
+    out = edge_replay_test_output(load_path, DEPOT_PATH[1], """
+        using ActReplayDep
+        Base.delete_method(which(ActReplayDep.f, (Int,)))
+        g() = ActReplayDep.f(1)
+        g()
+        using ActReplayPkg
+        print(Base.invokelatest(g))
+        """)
+    @test out == "new"
+    # the late dependency's caller is invalidated by the package's more specific method
+    out = edge_replay_test_output(load_path, DEPOT_PATH[1], """
+        using ActReplayLate
+        ActReplayLate.callh()
+        using ActReplayPkg
+        print(Base.invokelatest(ActReplayLate.callh))
+        """)
+    @test out == "pkg"
+end
+
+precompile_test_harness("activation replay: certificate kept across a later image") do load_path
+    write(joinpath(load_path, "ActKeepDep.jl"),
+        """
+        module ActKeepDep
+        h(::Any) = :any
+        k(::Any, ::Any) = :any
+        end
+        """)
+    write(joinpath(load_path, "ActKeepLate.jl"),
+        """
+        module ActKeepLate
+        using ActKeepDep
+        ActKeepDep.h(::Integer) = :late
+        ActKeepDep.k(::Int, ::Any) = :late
+        callh() = ActKeepDep.h(1)
+        callh()
+        end
+        """)
+    # the worker activates the first two methods before the late dependency is loaded,
+    # so its scan never saw that dependency's methods; the last one sees them
+    write(joinpath(load_path, "ActKeepPkg.jl"),
+        """
+        module ActKeepPkg
+        using ActKeepDep
+        ActKeepDep.h(::Int) = :pkg
+        ActKeepDep.k(::Any, ::Int) = :pkg
+        using ActKeepLate
+        ActKeepDep.h(::Int8) = :pkg8
+        end
+        """)
+    Base.compilecache(Base.PkgId("ActKeepDep"))
+    Base.compilecache(Base.PkgId("ActKeepLate"))
+    Base.compilecache(Base.PkgId("ActKeepPkg"))
+    out = edge_replay_test_output(load_path, DEPOT_PATH[1], """
+        using ActKeepPkg, ActKeepDep, ActKeepLate
+        ambiguous = try
+            ActKeepDep.k(1, 1); false
+        catch err
+            occursin("ambiguous", sprint(showerror, err))
+        end
+        print(ActKeepLate.callh(), " ", ambiguous, " ", ActKeepDep.h(Int8(1)), " ", ActKeepDep.h(big(1)))
+        """)
+    @test out == "pkg true pkg8 late"
+end
+
 precompile_test_harness("edge replay: extension activation") do load_path
     host_uuid = "0f0f2a5c-6c6d-4b1e-9d2a-2e7d5b7a1c01"
     trig_uuid = "9b4b1d2e-7a3f-4c0e-8f6b-5a2c1d3e4f02"
