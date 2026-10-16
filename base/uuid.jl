@@ -5,13 +5,15 @@ Represents a Universally Unique Identifier (UUID).
 Can be built from one `UInt128` (all byte values), two `UInt64`, or four `UInt32`.
 Conversion from a string will check the UUID validity.
 """
-struct UUID
-    value::UInt128
-end
+UUID
+
 UUID(u::UUID) = u
+UUID(value::Integer) = UUID(convert(UInt128, value))
 UUID(u::NTuple{2, UInt64}) = UUID((UInt128(u[1]) << 64) | UInt128(u[2]))
 UUID(u::NTuple{4, UInt32}) = UUID((UInt128(u[1]) << 96) | (UInt128(u[2]) << 64) |
                                   (UInt128(u[3]) << 32) | UInt128(u[4]))
+
+UInt128(u::UUID) = u.value
 
 function convert(::Type{NTuple{2, UInt64}}, uuid::UUID)
     bytes = uuid.value
@@ -28,8 +30,6 @@ function convert(::Type{NTuple{4, UInt32}}, uuid::UUID)
     ll = UInt32(bytes & 0xffffffff)
     return (hh, hl, lh, ll)
 end
-
-UInt128(u::UUID) = u.value
 
 let
     uuid_hash_seed = UInt === UInt64 ? 0xd06fa04f86f11b53 : 0x96a1f36d
