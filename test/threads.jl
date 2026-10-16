@@ -1208,3 +1208,159 @@ let code = """
     @test verdict == "false"
     @test success(p)
 end
+
+# A pool thread that sleeps while a task waits on it switches to its scheduler
+# task first, so that the waiting task's tid is released and any thread can
+# resume it (see jl_task_get_next).
+let code = """
+    function main()
+        started = Threads.Atomic{Bool}(false)
+        c = Channel{Int}(0)
+        t = Threads.@spawn (started[] = true; take!(c))
+        while !started[]; sleep(0.001); end
+        released = false
+        for _ in 1:1000
+            if ccall(:jl_get_task_tid, Int16, (Any,), t) == -1
+                released = true
+                break
+            end
+            sleep(0.002)
+        end
+        put!(c, 7)
+        print(released, " ", fetch(t))
+    end
+    main()
+    """
+    @test read(`$(Base.julia_cmd()) --startup-file=no -t2,1 -e $code`, String) == "true 7"
+end
+
+# The scheduler task is switched to only where its loop switched to a task (or
+# before it has started): it may be blocked elsewhere. Here it blocks while
+# displaying an error, and must not be resumed by a task that finishes on its
+# thread, nor by one that waits there, which must still release its tid.
+let code = """
+    using Base.Threads
+    const phase = Atomic{Int}(0)
+    const cond = Threads.Condition()
+    const href = Ref{Task}()
+    struct ProbeError <: Exception end
+    function Base.showerror(io::IO, ::ProbeError)
+        lock(cond)
+        try
+            phase[] = 1
+            wait(cond)
+            phase[] = 2
+        finally
+            unlock(cond)
+        end
+    end
+    installer = Task() do
+        h = Task(Base.wait_forever)
+        @atomic Base.get_sched_task.xs[threadid()] = h
+        href[] = h
+    end
+    ccall(:jl_set_task_tid, Cint, (Any, Cint), installer, 1)
+    schedule(installer); wait(installer)
+    sleep(0.02)
+    h = href[]
+    schedule(h, ProbeError(); error=true)
+    for _ in 1:500
+        phase[] == 1 && break
+        sleep(0.01)
+    end
+    # a task that finishes on its thread, and one that waits there
+    done = Threads.@spawn nothing
+    wait(done)
+    t = Threads.@spawn Base.wait()
+    sleep(0.2)
+    print(phase[], " ", istaskdone(h), " ", ccall(:jl_get_task_tid, Int16, (Any,), t))
+    flush(stdout)
+    ccall(:_exit, Cvoid, (Cint,), 0)
+    """
+    out = read(pipeline(`$(Base.julia_cmd()) --startup-file=no -t1,1 -e $code`; stderr=devnull), String)
+    @test out == "1 false -1"
+end
+
+# Likewise when it blocks on a lock while dispatching a ^C from its sleep loop:
+# thread 1 holds the lock that the dispatch needs, and stays out of the
+# scheduler (Libc.systemsleep), so that the default thread's scheduler task
+# runs the dispatch.
+Sys.iswindows() || let code = """
+    function main()
+        Base.exit_on_sigint(false)
+        src = Base.CancellationTokenSource()
+        Base.sigint_new_episode!(src)
+        h = fetch(Threads.@spawn Base.get_sched_task())
+        # the default thread sleeps on its scheduler task once a task finished there
+        wait(Threads.@spawn nothing)
+        Libc.systemsleep(0.2)
+        walk = Base._walk_lock(src)
+        lock(walk)
+        ccall(:kill, Cint, (Cint, Cint), getpid(), Base.SIGINT)
+        blocked = false
+        for _ in 1:4000
+            blocked = Base.sigint_pass_lock.locked_by === h && (@atomic h.waiting_on) !== nothing
+            blocked && break
+            Libc.systemsleep(0.005)
+        end
+        w = @atomic h.waiting_on
+        # a task that finishes on that thread, and one that waits there
+        c = Channel{Int}(0)
+        t = Threads.@spawn take!(c)
+        d = Threads.@spawn nothing
+        released = false
+        for _ in 1:4000
+            released = istaskdone(d) && ccall(:jl_get_task_tid, Int16, (Any,), t) == -1
+            released && break
+            Libc.systemsleep(0.005)
+        end
+        undisturbed = (@atomic h.waiting_on) === w && Base.sigint_pass_lock.locked_by === h
+        unlock(walk)
+        Threads.@spawn put!(c, 1)
+        finished = false
+        for _ in 1:4000
+            finished = istaskdone(t) && Base.sigint_pass_lock.locked_by === nothing &&
+                Base.sigint_active_severity(src) !== nothing && !istaskdone(h)
+            finished && break
+            Libc.systemsleep(0.005)
+        end
+        print(blocked, " ", released, " ", undisturbed, " ", finished)
+    end
+    main()
+    flush(stdout)
+    ccall(:_exit, Cvoid, (Cint,), 0)
+    """
+    # a scheduler task resumed early can leave the child stuck
+    p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -t1,1 -e $code`; stderr=devnull))
+    killer = Timer(_ -> kill(p, Base.SIGKILL), 120)
+    out = read(p, String)
+    close(killer)
+    @test out == "true true true true"
+end
+
+# With task metrics on, a scheduler task first started by a thread that sleeps on
+# it is recorded as enqueued before it runs.
+let code = """
+    function main()
+        Base.Experimental.task_metrics(true)
+        hc = Channel{Task}(1); block = Channel{Nothing}(0)
+        # install a fresh scheduler task on the only default thread, then wait
+        # there, so that the thread sleeps on it, starting it
+        waiter = Threads.@spawn :default begin
+            h = Task(Base.wait_forever)
+            @atomic Base.get_sched_task.xs[Threads.threadid()] = h
+            put!(hc, h)
+            take!(block)
+        end
+        h = take!(hc)
+        for _ in 1:1000
+            istaskstarted(h) && break
+            sleep(0.002)
+        end
+        put!(block, nothing); wait(waiter)
+        print(istaskstarted(h), " ", h.metrics_enabled, " ", h.first_enqueued_at != 0)
+    end
+    main()
+    """
+    @test read(`$(Base.julia_cmd()) --startup-file=no -t1,1 -e $code`, String) == "true true true"
+end

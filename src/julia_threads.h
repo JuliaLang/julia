@@ -300,6 +300,10 @@ typedef struct _jl_tls_states_t {
     int8_t search_useful;
     // set while this thread runs jl_task_get_next, which must not switch tasks
     int8_t in_get_next;
+    // set when this thread returned to Base to sleep on its scheduler task
+    // (see jl_task_get_next): that task's next search does not spin before it
+    // sleeps
+    int8_t park_now;
 
     JULIA_DEBUG_SLEEPWAKE(
         uint64_t uv_run_enter;

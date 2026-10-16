@@ -1521,10 +1521,13 @@ function throwto(t::Task, @nospecialize exc)
 end
 
 function wait_forever()
+    ready = sched_task_ready()
+    # it described the scheduler task this one replaces
+    ready[] = false
     while true
         try
             while true
-                wait()
+                _wait_next(ready)
             end
         catch e
             if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue)
@@ -1545,12 +1548,17 @@ function wait_forever()
                     victim = (at_repl_prompt || istaskdone(roottask)) ? nothing : roottask
                 end
                 if victim isa Task
+                    # suspended in this switch, as in the loop's, this task
+                    # may be switched back to
+                    ready[] = true
                     try
                         throwto(victim, e)
                     catch
                         # delivery is best-effort: the victim may have been
                         # rescheduled concurrently, or a second interrupt may arrive
                         # while this task is suspended in the switch
+                    finally
+                        ready[] = false
                     end
                 end
             else
@@ -1567,6 +1575,39 @@ end
 
 const get_sched_task = OncePerThread{Task}() do
     Task(wait_forever)
+end
+
+# Whether this thread's scheduler task is suspended where its loop switched to
+# a task it found (or where it forwarded an interrupt). There, and before it
+# has started, switching to it only continues (or starts) the loop; anywhere
+# else it may be blocked, e.g. reporting an error or dispatching a ^C, and must
+# not be resumed early.
+const sched_task_ready = OncePerThread{RefValue{Bool}}() do
+    RefValue{Bool}(false)
+end
+
+# Switch to this thread's scheduler task, for the thread to sleep on it instead
+# of on the current task. If it is blocked elsewhere, the sleep logic runs on a
+# new task; one that died (wait_forever does not return normally) is replaced.
+function switch_to_sched_task()
+    t = get_sched_task()
+    if istaskdone(t)
+        t = Task(wait_forever)
+        @atomic get_sched_task.xs[Threads.threadid()] = t
+    elseif istaskstarted(t) && !sched_task_ready()[]
+        t = @task wait()
+    end
+    # [task] created -scheduled-unfairly-> wait_time
+    maybe_record_enqueued!(t)
+    set_next_task(t)
+    return try_yieldto(unqueue_current_task)
+end
+
+# The undo for a failed switch to a task that is only ever switched to, so
+# unlike ensure_rescheduled this does not put it on a queue.
+function unqueue_current_task(::Task)
+    list_deletefirst!(workqueue_for(Threads.threadid()), current_task())
+    nothing
 end
 
 function ensure_rescheduled(othertask::Task)
@@ -1624,7 +1665,11 @@ end
 
 checktaskempty = Partr.multiq_check_empty
 
-function wait()
+wait() = _wait_next(nothing)
+
+# `ready`: this thread's `sched_task_ready`, when called by the scheduler
+# task's loop (wait_forever).
+function _wait_next(ready::Union{Nothing,RefValue{Bool}})
     ct = current_task()
     # [task] user_time -yield-or-done-> wait_time
     record_running_time!(ct)
@@ -1643,15 +1688,26 @@ function wait()
         # promptly (#57544). Otherwise run the thread sleep logic in the context of
         # the current task, so that an asynchronously thrown InterruptException
         # is delivered to a task that can observe it, rather than swallowed by
-        # the internal scheduler task (#58689).
-        sched_task = get_sched_task()
-        if ct !== sched_task && ct_done
-            istaskdone(sched_task) && (sched_task = @task wait())
-            return yieldto(sched_task)
+        # the internal scheduler task (#58689). On other threads, if the current
+        # task can run on any thread, the runtime returns nothing instead of
+        # putting the thread to sleep: the thread then sleeps on the scheduler
+        # task, which lets any thread resume the current task (see
+        # jl_task_get_next).
+        if !ct_done
+            task = ccall(:jl_task_get_next, Any, (Any, Any, Any), trypoptask, W, checktaskempty)
         end
-        task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
+        # the current task may be on another thread now (see jl_task_get_next)
+        task === nothing && return switch_to_sched_task()
     end
-    set_next_task(task)
+    set_next_task(task::Task)
+    if ready !== nothing && task !== ct
+        ready[] = true
+        try
+            return try_yieldto(ensure_rescheduled)
+        finally
+            ready[] = false
+        end
+    end
     return try_yieldto(ensure_rescheduled)
 end
 

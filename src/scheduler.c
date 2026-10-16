@@ -75,6 +75,25 @@ static wake_gate_t *gate_of_tid(int16_t tid) JL_NOTSAFEPOINT
     return NULL;
 }
 
+// jl_task_get_next runs on the stack of the task that called wait(), so a
+// thread that sleeps there keeps that task's tid set: once woken, the task can
+// only run on this thread, which must be woken for it even while other threads
+// search. So instead of sleeping, a pool thread returns nothing to Base, which
+// switches to the thread's scheduler task (Base.get_sched_task) to sleep there;
+// the switch releases the task's tid, so that any thread can resume it.
+
+// Whether this thread should sleep on its scheduler task rather than on `ct`.
+static int sleeps_off_task(jl_task_t *ct, jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    // thread 0 sleeps on the waiting task, so that an InterruptException
+    // reaches a task that can observe it (#58689)
+    if (ptls->tid <= 0)
+        return 0;
+    // sticky and copied-stack tasks keep their tid when switched out; the
+    // scheduler task is sticky, so it sleeps on itself
+    return !ct->sticky && !ct->ctx.copy_stack;
+}
+
 // `tid` stopped sleeping.
 static void leave_sleeping(int16_t tid) JL_NOTSAFEPOINT
 {
@@ -814,7 +833,9 @@ static jl_task_t *sleep_thread(jl_task_t *ct, wake_gate_t *gate,
     return task;
 }
 
-JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, jl_value_t *checkempty) JL_CANSAFEPOINT
+// Returns the next task to run, or nothing for Base to sleep on the scheduler
+// task (see sleeps_off_task).
+JL_DLLEXPORT jl_value_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, jl_value_t *checkempty) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     // a nested call would switch tasks when it returns (see jl_switch)
@@ -833,6 +854,11 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
     // pop must wake another thread if work remains; volatile for the JL_CATCH
     volatile int handoff_owed = 0;
     jl_task_t *task = NULL;
+    // the thread switched to the scheduler task to sleep (see sleeps_off_task):
+    // check the queues, then sleep without spinning
+    // (a task that would itself sleep there is not the one switched to)
+    int park_now = ct->ptls->park_now && !sleeps_off_task(ct, ct->ptls);
+    ct->ptls->park_now = 0;
 
     // no task switch and no task abandonment until we return (see jl_switch
     // and task.c)
@@ -855,7 +881,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 handoff_owed = 0;
                 jl_ptls_t ptls = ct->ptls;
                 int is_io_thread = ptls->tid == jl_atomic_load_relaxed(&io_loop_tid);
-                if (!spinning && gate != NULL && !is_io_thread) {
+                if (!spinning && gate != NULL && !is_io_thread && !park_now) {
                     // at most half the pool, or all of it if our last search
                     // found work (we would likely be woken again soon) or if
                     // threads never sleep
@@ -885,14 +911,26 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                         wait_empty))) {
                     if (timed_out)
                         ptls->search_useful = 0;
-                    int held = spinning;
-                    own_slot = 0;
-                    park_start = jl_hrtime();
-                    task = sleep_thread(ct, gate, &spinning, &start_cycles,
-                                        trypoptask, q, checkempty);
-                    // unpooled threads should never spin
-                    assert(!spinning || gate != NULL);
-                    handoff_owed = held && !spinning && gate != NULL;
+                    if (gate != NULL && !is_io_thread && sleeps_off_task(ct, ptls)) {
+                        // sleep on the scheduler task: return nothing as if
+                        // it were found work, which also gives up our searcher
+                        // slot below
+                        ptls->park_now = 1;
+                        own_slot = 0;
+                        park_start = 0;
+                        task = (jl_task_t*)jl_nothing;
+                    }
+                    else {
+                        int held = spinning;
+                        own_slot = 0;
+                        park_start = jl_hrtime();
+                        task = sleep_thread(ct, gate, &spinning, &start_cycles,
+                                            trypoptask, q, checkempty);
+                        park_now = 0;
+                        // unpooled threads should never spin
+                        assert(!spinning || gate != NULL);
+                        handoff_owed = held && !spinning && gate != NULL;
+                    }
                 }
                 else {
                     // maybe check the kernel for new messages too
@@ -943,11 +981,12 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
         jl_rethrow();
     }
     ct->ptls->in_get_next = 0;
-    return task;
+    return (jl_value_t*)task;
 }
 
 void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
+    ptls->park_now = 0;
     int8_t oldstate = jl_atomic_exchange_relaxed(&ptls->sleep_check_state, sleeping_like_the_dead);
     if (oldstate == sleeping)
         leave_sleeping(ptls->tid);
