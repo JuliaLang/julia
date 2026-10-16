@@ -326,6 +326,19 @@ JL_DLLEXPORT void jl_wakeup_thread_from_foreign(int16_t tid) JL_NOTSAFEPOINT
     }
 }
 
+// Called by a thread that is leaving work in the event loop while nobody runs it.
+// It may stay busy for a long time and never reach the check it makes before it
+// sleeps, so wake the event loop thread now.
+void jl_wake_io_loop_thread(void) JL_NOTSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    int16_t tid = jl_atomic_load_relaxed(&io_loop_tid);
+    if (tid == jl_atomic_load_relaxed(&ct->tid))
+        return; // it runs uv_run itself before it sleeps
+    jl_fence(); // [^store_buffering_1]
+    wake_thread(tid);
+}
+
 // Round-robin start hint for jl_wakeup_threadpool, sharded across cache-line-padded
 // stripes so concurrent producers don't contend on a single counter.
 #define POOL_WAKE_HINT_STRIPES 64
@@ -569,6 +582,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                     if (enter_eventloop) {
                         uv_loop_t *loop = jl_global_event_loop();
                         loop->stop_flag = 0;
+                        jl_uv_loop_unwatched = 0;
                         JULIA_DEBUG_SLEEPWAKE( ptls->uv_run_enter = cycleclock() );
                         active = uv_run(loop, UV_RUN_ONCE);
                         JULIA_DEBUG_SLEEPWAKE( ptls->uv_run_leave = cycleclock() );
@@ -584,6 +598,8 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                         active = 1;
                         if (jl_mutex_trylock_nogc(&jl_uv_mutex)) {
                             active = uv_loop_alive(jl_global_event_loop());
+                            // whoever leaves work in the loop from now on wakes the event loop thread
+                            jl_uv_loop_unwatched = !active;
                             jl_mutex_unlock_nogc(&jl_uv_mutex);
                         }
                     }
