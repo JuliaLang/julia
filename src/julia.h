@@ -494,6 +494,11 @@ typedef struct JL_GC_TRACKED_TYPE _jl_method_t {
     // forcing the conclusion to always true.
     _jl_purity_overrides_t purity;
 
+    // (prototype) `nothing`, or a flat svec of (argpos, trait, bound) triples:
+    // the method only applies if the type of `trait(typeof(arg))` is a subtype
+    // of `bound` (see doc/src/devdocs/trait-slots.md)
+    jl_value_t *guards;
+
 // hidden fields:
     jl_mutex_t writelock;
 } jl_method_t;

@@ -71,12 +71,12 @@ applicable methods. `include_ambiguous=true` retains fully ambiguous matches tha
 normally filtered out of the result.
 """
 findall(@nospecialize(sig::Type), table::InternalMethodTable;
-        limit::Int=-1, include_ambiguous::Bool=false) =
-    _findall(sig, nothing, table.world, limit, include_ambiguous)
+        limit::Int=-1, include_ambiguous::Bool=false, slots::Union{Nothing,SimpleVector}=nothing) =
+    _findall(sig, nothing, table.world, limit, include_ambiguous, slots)
 
 function findall(@nospecialize(sig::Type), table::OverlayMethodTable;
-                 limit::Int=-1, include_ambiguous::Bool=false)
-    result = _findall(sig, table.mt, table.world, limit, include_ambiguous)
+                 limit::Int=-1, include_ambiguous::Bool=false, slots::Union{Nothing,SimpleVector}=nothing)
+    result = _findall(sig, table.mt, table.world, limit, include_ambiguous, slots)
     result === nothing && return nothing
     nr = length(result)
     if nr ≥ 1 && result[nr].fully_covers
@@ -84,7 +84,7 @@ function findall(@nospecialize(sig::Type), table::OverlayMethodTable;
         return result
     end
     # fall back to the internal method table
-    fallback_result = _findall(sig, nothing, table.world, limit, include_ambiguous)
+    fallback_result = _findall(sig, nothing, table.world, limit, include_ambiguous, slots)
     fallback_result === nothing && return nothing
     # merge the fallback match results with the internal method table,
     # filtering out base methods that are fully covered by overlay methods
@@ -104,17 +104,28 @@ function findall(@nospecialize(sig::Type), table::OverlayMethodTable;
 end
 
 function _findall(@nospecialize(sig::Type), mt::Union{Nothing,MethodTable}, world::UInt,
-                  limit::Int, include_ambiguous::Bool)
+                  limit::Int, include_ambiguous::Bool, slots::Union{Nothing,SimpleVector}=nothing)
     _min_val = RefValue{UInt}(typemin(UInt))
     _max_val = RefValue{UInt}(typemax(UInt))
     _ambig = RefValue{Int32}(0)
-    ms = _methods_by_ftype(sig, mt, limit, world, include_ambiguous, _min_val, _max_val, _ambig)
+    ms = if slots === nothing
+        _methods_by_ftype(sig, mt, limit, world, include_ambiguous, _min_val, _max_val, _ambig)
+    else
+        # trait slots (prototype): match with the slot types computed for this call site
+        ccall(:jl_matching_methods_with_slots, Any,
+              (Any, Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}, Any),
+              sig, mt, limit, include_ambiguous, world, _min_val, _max_val, _ambig, slots)
+    end
     isa(ms, Vector) || return nothing
     return MethodLookupResult(ms, WorldRange(_min_val[], _max_val[]), _ambig[] != 0)
 end
 
 function findall(@nospecialize(sig::Type), table::CachedMethodTable;
-                 limit::Int=-1, include_ambiguous::Bool=false)
+                 limit::Int=-1, include_ambiguous::Bool=false, slots::Union{Nothing,SimpleVector}=nothing)
+    if slots !== nothing
+        # trait slots (prototype): the cache is keyed on the signature only
+        return findall(sig, table.table; limit, include_ambiguous, slots)
+    end
     if isconcretetype(sig)
         # as for concrete types, we cache result at on the next level
         return findall(sig, table.table; limit, include_ambiguous)

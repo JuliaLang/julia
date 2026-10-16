@@ -1157,6 +1157,18 @@ JL_DLLEXPORT jl_methcache_t *jl_method_get_cache(
 
 JL_DLLEXPORT int jl_pointer_egal(jl_value_t *t);
 JL_DLLEXPORT jl_value_t *jl_nth_slot_type(jl_value_t *sig JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
+// trait slots (prototype)
+extern _Atomic(jl_svec_t*) jl_trait_schemas JL_GLOBALLY_ROOTED;
+extern _Atomic(jl_value_t*) jl_pending_method_guards JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT void jl_set_pending_method_guards(jl_value_t *f, jl_value_t *guards) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_take_pending_method_guards(jl_value_t *ft) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_clear_pending_method_guards(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_get_trait_schema(jl_value_t *ft) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_matching_methods_with_slots(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
+                                             size_t world, size_t *min_valid, size_t *max_valid, int *ambig, jl_value_t *slots) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_matching_methods_in_region(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
+                                                       size_t world, size_t *min_valid, size_t *max_valid, int *ambig, jl_svec_t *slots) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_method_morespecific_guarded(jl_method_t *a, jl_method_t *b) JL_CANSAFEPOINT;
 void jl_compute_field_offsets(jl_datatype_t *st) JL_CANSAFEPOINT;
 void jl_check_valid_supertype(jl_value_t *super, const char *type_name) JL_CANSAFEPOINT;
 void jl_check_field_types(jl_svec_t *ftypes, jl_sym_t *type_name);

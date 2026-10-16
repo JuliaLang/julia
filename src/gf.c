@@ -1205,10 +1205,236 @@ static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams) JL_
     return vm;
 }
 
+// ---- trait slots (prototype) ----------------------------------------------
+//
+// A guarded method has `m->guards`, a flat svec of (argpos, trait, bound)
+// triples: it only applies to a call if `trait` returns, for the type of
+// argument `argpos`, a value of a type that is a subtype of `bound`. The traits
+// a function's guards use form its *slot schema*. Dispatch evaluates them on
+// the argument types and passes the resulting *slot types* to `ml_matches` as
+// a flat svec of (argpos, trait, slot type) triples. See
+// doc/src/devdocs/trait-slots.md.
+//
+// The schemas are kept in `jl_trait_schemas`, a flat svec of (typename, schema)
+// pairs, where a schema is a flat svec of (argpos, trait, min_world) triples and
+// min_world is the world the slot was introduced in. Writers hold
+// world_counter_lock and publish a new svec; readers take no lock, but must root
+// what they load before allocating. (A real implementation would keep the
+// schema on the TypeName.)
+
+_Atomic(jl_svec_t*) jl_trait_schemas JL_GLOBALLY_ROOTED = NULL;
+_Atomic(jl_value_t*) jl_pending_method_guards JL_GLOBALLY_ROOTED = NULL;
+
+static inline int method_has_guards(jl_method_t *m) JL_NOTSAFEPOINT
+{
+    return m->guards != NULL && m->guards != jl_nothing;
+}
+
+static inline int guard_key_eq(jl_value_t *pos1, jl_value_t *tr1, jl_value_t *pos2, jl_value_t *tr2) JL_NOTSAFEPOINT
+{
+    return jl_unbox_long(pos1) == jl_unbox_long(pos2) && jl_egal(tr1, tr2);
+}
+
+// the bound `m` places on slot (pos, tr), `Any` if none
+static jl_value_t *method_guard_bound(jl_method_t *m JL_PROPAGATES_ROOT, jl_value_t *pos, jl_value_t *tr) JL_NOTSAFEPOINT
+{
+    if (!method_has_guards(m))
+        return (jl_value_t*)jl_any_type;
+    jl_svec_t *g = (jl_svec_t*)m->guards;
+    for (size_t i = 0; i < jl_svec_len(g); i += 3) {
+        if (guard_key_eq(jl_svecref(g, i), jl_svecref(g, i + 1), pos, tr))
+            return jl_svecref(g, i + 2);
+    }
+    return (jl_value_t*)jl_any_type;
+}
+
+// whether every slot bound of `a` is a subtype of the corresponding bound of `b`
+static int guards_le(jl_method_t *a, jl_method_t *b) JL_CANSAFEPOINT
+{
+    if (!method_has_guards(b))
+        return 1;
+    jl_svec_t *g = (jl_svec_t*)b->guards;
+    for (size_t i = 0; i < jl_svec_len(g); i += 3) {
+        jl_value_t *ba = method_guard_bound(a, jl_svecref(g, i), jl_svecref(g, i + 1));
+        if (!jl_subtype(ba, jl_svecref(g, i + 2)))
+            return 0;
+    }
+    return 1;
+}
+
+static int guards_equal(jl_method_t *a, jl_method_t *b) JL_CANSAFEPOINT
+{
+    return guards_le(a, b) && guards_le(b, a);
+}
+
+// `a` is more specific than `b` if its signature is more specific than or
+// equal to that of `b` (`jl_type_morespecific`), each of its slot bounds is a
+// subtype of that of `b`, and it is strictly better in one of the two. Methods
+// that are equal in both are ordered by age if `recency` is set, like
+// `jl_method_morespecific` does.
+static int guarded_morespecific(jl_method_t *a, jl_method_t *b, int recency) JL_CANSAFEPOINT
+{
+    int sig_eq = jl_types_equal(a->sig, b->sig);
+    if (!sig_eq && !jl_type_morespecific(a->sig, b->sig))
+        return 0;
+    if (!guards_le(a, b))
+        return 0;
+    if (sig_eq && guards_le(b, a))
+        return recency && jl_atomic_load_relaxed(&a->primary_world) > jl_atomic_load_relaxed(&b->primary_world);
+    return 1;
+}
+
+JL_DLLEXPORT int jl_method_morespecific_guarded(jl_method_t *a, jl_method_t *b) JL_CANSAFEPOINT
+{
+    return guarded_morespecific(a, b, 1);
+}
+
+// the specificity used for the interference sets
+static int method_morespecific_ins(jl_method_t *a, jl_method_t *b) JL_CANSAFEPOINT
+{
+    if (!method_has_guards(a) && !method_has_guards(b))
+        return jl_type_morespecific(a->sig, b->sig);
+    return guarded_morespecific(a, b, 0);
+}
+
+// Check the guards of `m` against the slot types `slots` (NULL: all unknown).
+// Returns 0 if some guard is disjoint from its slot type, 1 if all guards are
+// proven, and 2 if `m` may apply but some guard is not proven.
+static int check_method_guards(jl_method_t *m, jl_svec_t *slots) JL_CANSAFEPOINT
+{
+    jl_svec_t *g = (jl_svec_t*)m->guards;
+    int res = 1;
+    for (size_t i = 0; i < jl_svec_len(g); i += 3) {
+        jl_value_t *pos = jl_svecref(g, i), *tr = jl_svecref(g, i + 1), *bound = jl_svecref(g, i + 2);
+        jl_value_t *S = (jl_value_t*)jl_any_type;
+        for (size_t j = 0; slots && j < jl_svec_len(slots); j += 3) {
+            if (guard_key_eq(jl_svecref(slots, j), jl_svecref(slots, j + 1), pos, tr)) {
+                S = jl_svecref(slots, j + 2);
+                break;
+            }
+        }
+        if (jl_subtype(S, bound))
+            continue;
+        if (jl_has_empty_intersection(S, bound))
+            return 0;
+        res = 2;
+    }
+    return res;
+}
+
+static jl_svec_t *trait_schema_in(jl_svec_t *reg JL_PROPAGATES_ROOT, jl_typename_t *tn) JL_NOTSAFEPOINT
+{
+    for (size_t i = 0; reg != NULL && i < jl_svec_len(reg); i += 2) {
+        if (jl_svecref(reg, i) == (jl_value_t*)tn)
+            return (jl_svec_t*)jl_svecref(reg, i + 1);
+    }
+    return NULL;
+}
+
+// the slot schema of the function with typename `tn`, or NULL (unrooted)
+static jl_svec_t *trait_schema_for(jl_typename_t *tn) JL_NOTSAFEPOINT
+{
+    if (tn == NULL)
+        return NULL;
+    return trait_schema_in(jl_atomic_load_acquire(&jl_trait_schemas), tn);
+}
+
+static int typename_has_trait_slots(jl_value_t *sig) JL_NOTSAFEPOINT
+{
+    return trait_schema_for(jl_nth_argument_datatypename(sig, 1)) != NULL;
+}
+
+// the slot schema of the function of type `ft`, or `nothing`
+JL_DLLEXPORT jl_value_t *jl_get_trait_schema(jl_value_t *ft) JL_NOTSAFEPOINT
+{
+    // for a constructor, `ft` is `Type{T}` and the schema is that of `T`
+    jl_value_t *tn = jl_argument_datatypename(ft);
+    if (tn == jl_nothing)
+        return jl_nothing;
+    jl_svec_t *schema = trait_schema_for((jl_typename_t*)tn);
+    return schema ? (jl_value_t*)schema : jl_nothing;
+}
+
+// The slot type of `trait` for an argument of type `argtype`, in `world`. The
+// trait is called on `argtype`, or on `Type{X}` if the argument is the type `X`
+// (`argtype` is then `Type{X}` or `TypeEgal{X}`).
+static jl_value_t *trait_slot_type(jl_value_t *trait, jl_value_t *argtype, size_t world) JL_CANSAFEPOINT
+{
+    jl_value_t *input = argtype;
+    jl_value_t *v = NULL;
+    JL_GC_PUSH2(&input, &v);
+    if (jl_is_some_Type(input))
+        input = (jl_value_t*)jl_wrap_Type(jl_some_Type_T(input));
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = world;
+    // on error, the enclosing exception handler restores world_age
+    v = jl_apply_generic(trait, &input, 1);
+    ct->world_age = last_age;
+    v = jl_is_type(v) ? (jl_value_t*)jl_wrap_Type(v) : jl_typeof(v);
+    JL_GC_POP();
+    return v;
+}
+
+// whether an argument type determines the value of a trait on it
+static int trait_input_known(jl_value_t *A) JL_NOTSAFEPOINT
+{
+    if (jl_is_vararg(A) || jl_has_free_typevars(A))
+        return 0;
+    return jl_is_some_Type(A) || (jl_is_concrete_type(A) && !jl_is_kind(A));
+}
+
+// The slot types for the signature `tt` in `world`, or NULL if its function has
+// no schema. Slots introduced after `world` are left out. Runs user code, so the
+// caller must not hold a lock.
+//
+// For a call, `tt` is concrete and errors propagate. For a lookup by type
+// (`lookup`: `invoke`, `which`, `hasmethod`), a slot is only evaluated if the
+// argument type determines it, and is unknown (`Any`) otherwise or if the trait
+// throws.
+static jl_svec_t *compute_trait_slots(jl_tupletype_t *tt, size_t world, int lookup) JL_CANSAFEPOINT
+{
+    jl_svec_t *schema = NULL, *slots = NULL;
+    JL_GC_PUSH2(&schema, &slots);
+    schema = trait_schema_for(jl_nth_argument_datatypename((jl_value_t*)tt, 1));
+    if (schema == NULL) {
+        JL_GC_POP();
+        return NULL;
+    }
+    size_t i, k, n = jl_svec_len(schema) / 3, nslots = 0;
+    for (i = 0; i < n; i++)
+        nslots += jl_unbox_ulong(jl_svecref(schema, 3 * i + 2)) <= world;
+    slots = jl_alloc_svec(3 * nslots);
+    jl_value_t *utt = jl_unwrap_unionall((jl_value_t*)tt);
+    for (i = 0, k = 0; i < n; i++) {
+        if (jl_unbox_ulong(jl_svecref(schema, 3 * i + 2)) > world)
+            continue;
+        jl_value_t *pos = jl_svecref(schema, 3 * i), *trait = jl_svecref(schema, 3 * i + 1);
+        jl_svecset(slots, k, pos);
+        jl_svecset(slots, k + 1, trait);
+        jl_svecset(slots, k + 2, (jl_value_t*)jl_any_type);
+        size_t p = jl_unbox_long(pos);
+        jl_value_t *A = p < jl_nparams(utt) ? jl_tparam(utt, p) : NULL;
+        if (A && lookup && trait_input_known(A)) {
+            JL_TRY {
+                jl_svecset(slots, k + 2, trait_slot_type(trait, A, world));
+            }
+            JL_CATCH {
+            }
+        }
+        else if (A && !lookup && !jl_is_vararg(A) && !jl_has_free_typevars(A)) {
+            jl_svecset(slots, k + 2, trait_slot_type(trait, A, world));
+        }
+        k += 3;
+    }
+    JL_GC_POP();
+    return slots;
+}
+
 static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
                               jl_tupletype_t *type, int lim, int include_ambiguous,
                               int intersections, size_t world, int cache_result_recursion,
-                              size_t *min_valid, size_t *max_valid, int *ambig) JL_CANSAFEPOINT;
+                              size_t *min_valid, size_t *max_valid, int *ambig, jl_svec_t *slots, int slot_regions) JL_CANSAFEPOINT;
 
 // Widen an egality-keyed slot `TypeEgal{A}` to `Type{A}` when the method
 // declares the slot as a *concrete* `Type{X}`: there a single `Type{A}`-keyed
@@ -2051,7 +2277,7 @@ static void recache_method(
         size_t min_valid2 = 1;
         size_t max_valid2 = ~(size_t)0;
         // TODO: check if inferences is empty, before doing the filtered lookup
-        matches = ml_matches(mt, mc, (jl_tupletype_t*)compilationsig, MAX_UNSPECIALIZED_CONFLICTS, 1, 1, world, 0, &min_valid2, &max_valid2, NULL);
+        matches = ml_matches(mt, mc, (jl_tupletype_t*)compilationsig, MAX_UNSPECIALIZED_CONFLICTS, 1, 1, world, 0, &min_valid2, &max_valid2, NULL, NULL, 0);
         int guards = 0;
         if (matches == jl_nothing) {
             cache_with_orig = 1;
@@ -2126,7 +2352,7 @@ static void recache_method(
     return;
 }
 
-static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT, jl_methtable_t *mt, size_t world, int cache_result_recursion, size_t *min_valid, size_t *max_valid) JL_CANSAFEPOINT;
+static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT, jl_methtable_t *mt, size_t world, int cache_result_recursion, size_t *min_valid, size_t *max_valid, jl_svec_t *slots, int slot_regions) JL_CANSAFEPOINT;
 
 static void promote_cache_method(jl_value_t *F, jl_value_t **args, uint32_t nargs, size_t world,
     jl_method_instance_t *newmeth, jl_value_t *compilationsig,
@@ -2135,6 +2361,9 @@ static void promote_cache_method(jl_value_t *F, jl_value_t **args, uint32_t narg
     if (F == NULL)
         return;
     if (cause == TRIGGER_DISPATCH) {
+        // trait slots: jl_mt_assoc_by_type caches these exactly, for one world
+        if (typename_has_trait_slots(newmeth->def.method->sig))
+            return;
         jl_tupletype_t *tt = arg_type_tuple(F, args, nargs + 1);
         jl_method_match_t *matc = NULL;
         JL_GC_PUSH2(&tt, &matc);
@@ -2142,7 +2371,7 @@ static void promote_cache_method(jl_value_t *F, jl_value_t **args, uint32_t narg
         size_t current_world = jl_atomic_load_acquire(&jl_world_counter);
         size_t min_valid = 0;
         size_t max_valid = ~(size_t)0;
-        matc = _gf_invoke_lookup((jl_value_t*)tt, mt, world, 0, &min_valid, &max_valid);
+        matc = _gf_invoke_lookup((jl_value_t*)tt, mt, world, 0, &min_valid, &max_valid, NULL, 0);
         jl_method_t *definition = newmeth->def.method;
         if (matc && matc->method == definition) {
             jl_methcache_t *mc = mt->cache;
@@ -2177,6 +2406,8 @@ JL_DLLEXPORT void jl_recache_method_by_type(jl_value_t *tt,
     if (newmeth->cache_with_orig)
         return;
     jl_method_t *definition = newmeth->def.method;
+    if (typename_has_trait_slots(definition->sig))
+        return; // see promote_cache_method
     if (!jl_is_dispatch_tupletype(tt))
         tt = NULL;
     jl_methtable_t *mt = jl_method_table;
@@ -2256,6 +2487,13 @@ static jl_method_instance_t *jl_mt_assoc_by_type(
     assert(tt->isdispatchtuple || tt->hasfreetypevars);
     JL_TIMING(METHOD_LOOKUP_SLOW, METHOD_LOOKUP_SLOW);
     jl_method_match_t *matc = NULL;
+    // trait slots: evaluate the traits before taking the lock, as this runs
+    // user code. The selection then depends on values computed in `world`, so
+    // its cache entry is only valid there.
+    jl_svec_t *slots = NULL;
+    JL_GC_PUSH1(&slots);
+    if (typename_has_trait_slots((jl_value_t*)tt))
+        slots = compute_trait_slots(tt, world, 0);
     JL_LOCK(&mc->writelock);
     jl_method_instance_t *mi = NULL;
     // No need to re-check if no method cache insertion happened since the
@@ -2270,9 +2508,9 @@ static jl_method_instance_t *jl_mt_assoc_by_type(
     }
     if (!mi) {
         size_t current_world = jl_atomic_load_acquire(&jl_world_counter);
-        size_t min_valid = 0;
-        size_t max_valid = ~(size_t)0;
-        matc = _gf_invoke_lookup((jl_value_t*)tt, mt, world, 0, &min_valid, &max_valid);
+        size_t min_valid = slots ? world : 0;
+        size_t max_valid = slots ? world : ~(size_t)0;
+        matc = _gf_invoke_lookup((jl_value_t*)tt, mt, world, 0, &min_valid, &max_valid, slots, 0);
         if (matc) {
             JL_GC_PUSH1(&matc);
             jl_method_t *m = matc->method;
@@ -2280,10 +2518,12 @@ static jl_method_instance_t *jl_mt_assoc_by_type(
             // TODO: get mi from jl_specializations_get_linfo?
             mi = cache_result(mt, mc, &mc->cache, (jl_value_t*)mc, tt, m, world, min_valid, max_valid, current_world, env, tt_known_absent);
             JL_GC_POP();
+            JL_GC_POP();
             return mi;
         }
     }
     JL_UNLOCK(&mc->writelock);
+    JL_GC_POP();
     return mi;
 }
 
@@ -2304,7 +2544,8 @@ static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_in
     assert((jl_atomic_load_relaxed(&oldentry->max_world) == ~(size_t)0));
     // don't need to consider other similar methods if this oldentry will always fully intersect with them and dominates all of them
     if (closure->match.issubty // e.g. jl_subtype(closure->newentry.sig, oldentry->sig)
-        && jl_subtype(oldmethod->sig, (jl_value_t*)closure->newentry->sig)) { // e.g. jl_type_equal(closure->newentry->sig, oldentry->sig)
+        && jl_subtype(oldmethod->sig, (jl_value_t*)closure->newentry->sig) // e.g. jl_type_equal(closure->newentry->sig, oldentry->sig)
+        && guards_equal(oldmethod, closure->newentry->func.method)) { // trait slots: method identity is signature + guards
         if (closure->replaced == NULL || jl_atomic_load_relaxed(&closure->replaced->min_world) < jl_atomic_load_relaxed(&oldentry->min_world))
             closure->replaced = oldentry; // must pick the newest insertion (both are still valid)
     }
@@ -2312,7 +2553,9 @@ static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_in
         closure->shadowed = (jl_value_t*)jl_alloc_vec_any(0);
     // Record every intersecting method so the interference relation is complete.
     jl_array_ptr_1d_push((jl_array_t*)closure->shadowed, (jl_value_t*)oldmethod);
-    typemap_bottom_search(oldentry, &closure->match);
+    // trait slots: a signature does not dominate guarded methods
+    if (!method_has_guards(closure->newentry->func.method) && !typename_has_trait_slots(oldmethod->sig))
+        typemap_bottom_search(oldentry, &closure->match);
     return 1;
 }
 
@@ -2556,6 +2799,8 @@ static int is_replacing(char ambig, jl_value_t *type, jl_method_t *m, jl_method_
         // see if m2 also fully covered this intersection
         if (m == m2 || !(jl_subtype(isect, m2->sig) || (isect2 && jl_subtype(isect2, m2->sig))))
             continue;
+        if (method_has_guards(m2))
+            continue; // trait slots: a guarded method need not cover its signature
         if (morespec[k])
             // not actually shadowing this--m2 will still be better
             return 0;
@@ -2564,7 +2809,7 @@ static int is_replacing(char ambig, jl_value_t *type, jl_method_t *m, jl_method_
         // since m2 was also a previous match over isect,
         // see if m was previously dominant over all m2
         // or if this was already ambiguous before
-        if (ambig && !jl_type_morespecific(m->sig, m2->sig)) {
+        if (ambig && !method_morespecific_ins(m, m2)) {
             // m and m2 were previously ambiguous over the full intersection of mi with type, and will still be ambiguous with addition of type
             return 0;
         }
@@ -3049,6 +3294,8 @@ JL_DLLEXPORT void jl_disable_new_worlds(void) JL_CANSAFEPOINT
     JL_GC_POP();
 }
 
+static void trait_slots_method_deleted(jl_method_t *method, size_t world) JL_CANSAFEPOINT;
+
 JL_DLLEXPORT void jl_method_table_disable(jl_method_t *method) JL_CANSAFEPOINT
 {
     jl_methtable_t *mt = jl_method_get_table(method);
@@ -3065,6 +3312,7 @@ JL_DLLEXPORT void jl_method_table_disable(jl_method_t *method) JL_CANSAFEPOINT
         assert(jl_atomic_load_relaxed(&methodentry->max_world) == ~(size_t)0);
         jl_atomic_store_relaxed(&methodentry->max_world, world);
         jl_method_table_invalidate(method, world, 1);
+        trait_slots_method_deleted(method, world);
         jl_atomic_store_release(&jl_world_counter, world + 1);
     }
     JL_UNLOCK(&world_counter_lock);
@@ -3537,7 +3785,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
             char *morespec = (char*)alloca(n);
             // Compute all morespec values upfront
             for (j = 0; j < n; j++)
-                morespec[j] = (char)jl_type_morespecific(d[j]->sig, type);
+                morespec[j] = (char)method_morespecific_ins(d[j], method);
             // `d` has no duplicates, so a duplicate key can only be one of the
             // entries already present at loop entry (a precompile re-activation);
             // for a freshly defined method the set starts empty and the probe
@@ -3546,7 +3794,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
             for (j = 0; j < n; j++) {
                 jl_method_t *m = d[j];
                 // Compute ambig state: is there an ambiguity between new method and old m?
-                char ambig = !morespec[j] && !jl_type_morespecific(type, m->sig);
+                char ambig = !morespec[j] && !method_morespecific_ins(method, m);
                 if (morespec[j] || ambig) {
                     // !morespecific(new, old): add the old method to this interference set
                     ssize_t idx;
@@ -3682,6 +3930,172 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     JL_GC_POP();
 }
 
+// ---- trait slots (prototype): guards and schemas --------------------------
+
+// Set the guards that the next method `jl_method_def` creates in this task for
+// the function `f` takes. This is how `Base.Experimental.@guarded` passes guards
+// through lowering without new syntax. `@guarded` holds a lock meanwhile;
+// checking the task keeps definitions in other tasks, and checking `f` closures
+// that lowering defines first, from taking the guards.
+JL_DLLEXPORT void jl_set_pending_method_guards(jl_value_t *f, jl_value_t *guards) JL_CANSAFEPOINT
+{
+    if (jl_atomic_load_relaxed(&jl_pending_method_guards) != NULL)
+        jl_error("@guarded: the guards of another definition are still pending");
+    JL_TYPECHK(jl_set_pending_method_guards, simplevector, guards);
+    jl_svec_t *g = (jl_svec_t*)guards;
+    if (jl_svec_len(g) == 0 || jl_svec_len(g) % 3 != 0)
+        jl_error("guards must be a non-empty svec of (argpos, trait, bound) triples");
+    for (size_t i = 0; i < jl_svec_len(g); i += 3) {
+        JL_TYPECHK(jl_set_pending_method_guards, long, jl_svecref(g, i));
+        if (!jl_is_type(jl_svecref(g, i + 2)))
+            jl_type_error("guard bound", (jl_value_t*)jl_type_type, jl_svecref(g, i + 2));
+        for (size_t j = 0; j < i; j += 3) {
+            if (guard_key_eq(jl_svecref(g, j), jl_svecref(g, j + 1), jl_svecref(g, i), jl_svecref(g, i + 1)))
+                jl_error("a method can guard each trait of an argument only once");
+        }
+    }
+    jl_value_t *p = (jl_value_t*)jl_svec(3, f, guards, (jl_value_t*)jl_current_task);
+    jl_atomic_store_release(&jl_pending_method_guards, p);
+}
+
+// Take the pending guards if this task set them for a method of function type `ft`.
+JL_DLLEXPORT jl_value_t *jl_take_pending_method_guards(jl_value_t *ft) JL_NOTSAFEPOINT
+{
+    jl_value_t *p = jl_atomic_load_acquire(&jl_pending_method_guards);
+    if (p == NULL || jl_svecref(p, 2) != (jl_value_t*)jl_current_task)
+        return jl_nothing;
+    // `ft` is `typeof(f)`, or `Type{f}` for a constructor
+    jl_value_t *f = jl_svecref(p, 0);
+    if (jl_is_some_Type(ft) ? jl_some_Type_T(ft) != f : jl_typeof(f) != ft)
+        return jl_nothing;
+    jl_atomic_store_relaxed(&jl_pending_method_guards, NULL);
+    return jl_svecref(p, 1);
+}
+
+// Clear the guards this task set, returning whether they were still pending.
+JL_DLLEXPORT int jl_clear_pending_method_guards(void) JL_NOTSAFEPOINT
+{
+    jl_value_t *p = jl_atomic_load_acquire(&jl_pending_method_guards);
+    if (p == NULL || jl_svecref(p, 2) != (jl_value_t*)jl_current_task)
+        return 0;
+    jl_atomic_store_relaxed(&jl_pending_method_guards, NULL);
+    return 1;
+}
+
+// Add the slots the guards of `method` use to the schema of its function.
+// Caller holds world_counter_lock.
+static void trait_register_guards(jl_method_t *method) JL_CANSAFEPOINT
+{
+    jl_typename_t *tn = jl_nth_argument_datatypename(method->sig, 1);
+    jl_svec_t *g = (jl_svec_t*)method->guards;
+    jl_svec_t *reg = NULL, *schema = NULL, *newschema = NULL, *newreg = NULL;
+    jl_value_t *minworld = NULL;
+    JL_GC_PUSH5(&reg, &schema, &newschema, &newreg, &minworld);
+    reg = jl_atomic_load_relaxed(&jl_trait_schemas);
+    schema = trait_schema_in(reg, tn);
+    size_t nold = schema ? jl_svec_len(schema) : 0, nnew = nold;
+    for (size_t i = 0; i < jl_svec_len(g); i += 3) {
+        int found = 0;
+        for (size_t j = 0; j < nold; j += 3)
+            found |= guard_key_eq(jl_svecref(schema, j), jl_svecref(schema, j + 1), jl_svecref(g, i), jl_svecref(g, i + 1));
+        nnew += found ? 0 : 3;
+    }
+    if (nnew != nold) {
+        minworld = jl_box_ulong(jl_atomic_load_relaxed(&method->primary_world));
+        newschema = jl_alloc_svec(nnew);
+        size_t k = 0;
+        for (; k < nold; k++)
+            jl_svecset(newschema, k, jl_svecref(schema, k));
+        for (size_t i = 0; i < jl_svec_len(g); i += 3) {
+            int found = 0;
+            for (size_t j = 0; j < nold; j += 3)
+                found |= guard_key_eq(jl_svecref(schema, j), jl_svecref(schema, j + 1), jl_svecref(g, i), jl_svecref(g, i + 1));
+            if (!found) {
+                jl_svecset(newschema, k, jl_svecref(g, i));
+                jl_svecset(newschema, k + 1, jl_svecref(g, i + 1));
+                jl_svecset(newschema, k + 2, minworld);
+                k += 3;
+            }
+        }
+        assert(k == nnew);
+        size_t nreg = reg ? jl_svec_len(reg) : 0;
+        newreg = jl_alloc_svec(schema ? nreg : nreg + 2);
+        for (size_t i = 0; i < nreg; i += 2) {
+            jl_svecset(newreg, i, jl_svecref(reg, i));
+            jl_svecset(newreg, i + 1, jl_svecref(reg, i) == (jl_value_t*)tn ? (jl_value_t*)newschema : jl_svecref(reg, i + 1));
+        }
+        if (!schema) {
+            jl_svecset(newreg, nreg, (jl_value_t*)tn);
+            jl_svecset(newreg, nreg + 1, (jl_value_t*)newschema);
+        }
+        jl_atomic_store_release(&jl_trait_schemas, newreg);
+    }
+    JL_GC_POP();
+}
+
+struct trait_collect_env {
+    jl_typename_t *tn;
+    jl_array_t *methods;
+};
+
+static int trait_collect_methods(jl_typemap_entry_t *def, void *closure) JL_CANSAFEPOINT
+{
+    struct trait_collect_env *env = (struct trait_collect_env*)closure;
+    if (jl_atomic_load_relaxed(&def->max_world) != ~(size_t)0)
+        return 1;
+    jl_method_t *m = def->func.method;
+    if (jl_nth_argument_datatypename(m->sig, 1) == env->tn)
+        jl_array_ptr_1d_push(env->methods, (jl_value_t*)m);
+    return 1;
+}
+
+// Invalidate everything that depends on dispatch of the function with typename
+// `tn`: the specializations of its methods (except `except`), its method cache
+// entries, and its missing-method backedges. Coarse: the ordinary insertion
+// invalidation does not take guards into account.
+static void trait_invalidate_function(jl_typename_t *tn, size_t max_world, jl_method_t *except) JL_CANSAFEPOINT
+{
+    struct trait_collect_env env = {tn, NULL};
+    jl_value_t *sig = NULL, *isect = NULL, *isect2 = NULL;
+    jl_svec_t *params = NULL;
+    JL_GC_PUSH5(&env.methods, &sig, &isect, &isect2, &params);
+    env.methods = jl_alloc_vec_any(0);
+    jl_typemap_visitor(jl_atomic_load_relaxed(&jl_method_table->defs), trait_collect_methods, &env);
+    for (size_t i = 0; i < jl_array_nrows(env.methods); i++) {
+        jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(env.methods, i);
+        if (m != except && !m->is_for_opaque_closure)
+            jl_method_table_invalidate(m, max_world, 0);
+    }
+    if (jl_is_datatype(tn->wrapper)) {
+        sig = (jl_value_t*)jl_wrap_vararg((jl_value_t*)jl_any_type, (jl_value_t*)NULL, 1, 0);
+        params = jl_svec2(tn->wrapper, sig);
+        sig = (jl_value_t*)jl_apply_tuple_type(params, 1);
+        jl_methcache_t *mc = jl_method_table->cache;
+        JL_LOCK(&mc->writelock);
+        struct _typename_invalidate_backedge typename_env = {sig, &isect, &isect2, NULL, 0, max_world, 0};
+        invalidate_missing_backedges(&typename_env);
+        JL_UNLOCK(&mc->writelock);
+    }
+    JL_GC_POP();
+}
+
+// Called after `method` was activated, with world_counter_lock held and the
+// world counter still at `max_world`.
+static void trait_slots_method_added(jl_method_t *method, size_t max_world) JL_CANSAFEPOINT
+{
+    if (!method_has_guards(method))
+        return;
+    trait_register_guards(method);
+    trait_invalidate_function(jl_nth_argument_datatypename(method->sig, 1), max_world, method);
+}
+
+// Called after `method` was deleted in `world`, with world_counter_lock held.
+static void trait_slots_method_deleted(jl_method_t *method, size_t world) JL_CANSAFEPOINT
+{
+    if (method_has_guards(method))
+        trait_invalidate_function(jl_nth_argument_datatypename(method->sig, 1), world, NULL);
+}
+
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype)
 {
     jl_typemap_entry_t *newentry = jl_method_table_add(mt, method, simpletype);
@@ -3692,6 +4106,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     size_t world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
     jl_atomic_store_relaxed(&method->primary_world, world);
     jl_method_table_activate(newentry);
+    trait_slots_method_added(method, world - 1);
     jl_atomic_store_release(&jl_world_counter, world);
     JL_UNLOCK(&world_counter_lock);
     JL_GC_POP();
@@ -3784,8 +4199,8 @@ jl_method_instance_t *jl_builtin_method_lookup(jl_value_t *builtin)
 // lim is the max # of methods to return. if there are more, returns jl_nothing.
 // Negative values stand for no limit.
 // Unless lim == -1, remove matches that are unambiguously covered by earlier ones
-JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
-                                             size_t world, size_t *min_valid, size_t *max_valid, int *ambig)
+JL_DLLEXPORT jl_value_t *jl_matching_methods_with_slots(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
+                                             size_t world, size_t *min_valid, size_t *max_valid, int *ambig, jl_value_t *slots) JL_CANSAFEPOINT
 {
     if (ambig != NULL)
         *ambig = 0;
@@ -3797,7 +4212,35 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, jl_value_t *
     if (mt == jl_nothing)
         mt = (jl_value_t*)jl_method_table;
     jl_methcache_t *mc = ((jl_methtable_t*)mt)->cache;
-    return ml_matches((jl_methtable_t*)mt, mc, types, lim, include_ambiguous, 1, world, 1, min_valid, max_valid, ambig);
+    if (slots == jl_nothing)
+        slots = NULL;
+    assert(slots == NULL || jl_is_svec(slots));
+    return ml_matches((jl_methtable_t*)mt, mc, types, lim, include_ambiguous, 1, world, 1, min_valid, max_valid, ambig, (jl_svec_t*)slots, 0);
+}
+
+// Like `jl_matching_methods_with_slots`, but the slot types describe a region:
+// guarded methods whose guards do not hold on all of it are left out. Used by
+// `Base.isambiguous`.
+JL_DLLEXPORT jl_value_t *jl_matching_methods_in_region(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
+                                             size_t world, size_t *min_valid, size_t *max_valid, int *ambig, jl_svec_t *slots) JL_CANSAFEPOINT
+{
+    if (ambig != NULL)
+        *ambig = 0;
+    jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)types);
+    if (!jl_is_tuple_type(unw))
+        return (jl_value_t*)jl_an_empty_vec_any;
+    if (unw == (jl_value_t*)jl_emptytuple_type || jl_tparam0(unw) == jl_bottom_type)
+        return (jl_value_t*)jl_an_empty_vec_any;
+    if (mt == jl_nothing)
+        mt = (jl_value_t*)jl_method_table;
+    jl_methcache_t *mc = ((jl_methtable_t*)mt)->cache;
+    return ml_matches((jl_methtable_t*)mt, mc, types, lim, include_ambiguous, 1, world, 1, min_valid, max_valid, ambig, slots, 1);
+}
+
+JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
+                                             size_t world, size_t *min_valid, size_t *max_valid, int *ambig)
+{
+    return jl_matching_methods_with_slots(types, mt, lim, include_ambiguous, world, min_valid, max_valid, ambig, jl_nothing);
 }
 
 JL_DLLEXPORT jl_method_instance_t *jl_get_unspecialized(jl_method_t *def JL_PROPAGATES_ROOT) JL_CANSAFEPOINT
@@ -5112,7 +5555,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t na
     return mi;
 }
 
-static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT, jl_methtable_t *mt, size_t world, int cache_result_recursion, size_t *min_valid, size_t *max_valid)
+static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT, jl_methtable_t *mt, size_t world, int cache_result_recursion, size_t *min_valid, size_t *max_valid, jl_svec_t *slots, int slot_regions)
 {
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)types);
     if (!jl_is_tuple_type(unw))
@@ -5120,10 +5563,28 @@ static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT
     if (jl_tparam0(unw) == jl_bottom_type)
         return NULL;
     jl_methcache_t *mc = ((jl_methtable_t*)mt)->cache;
-    jl_value_t *matches = ml_matches((jl_methtable_t*)mt, mc, (jl_tupletype_t*)types, 1, 0, 0, world, cache_result_recursion, min_valid, max_valid, NULL);
+    jl_value_t *matches = ml_matches((jl_methtable_t*)mt, mc, (jl_tupletype_t*)types, 1, 0, 0, world, cache_result_recursion, min_valid, max_valid, NULL, slots, slot_regions);
     if (matches == jl_nothing || jl_array_nrows(matches) != 1)
         return NULL;
     jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(matches, 0);
+    return matc;
+}
+
+// Look up the method `invoke(f, types, ...)` calls. For a function with trait
+// slots, a guarded method is a candidate only if its guards hold for all of
+// `types`, as its signature must cover them; slots are evaluated where an
+// argument type determines them. The world range returned does not account for
+// the trait values, which the caller must track itself.
+static jl_method_match_t *gf_invoke_lookup_slots(jl_value_t *types JL_PROPAGATES_ROOT, jl_methtable_t *mt, size_t world, size_t *min_valid, size_t *max_valid) JL_CANSAFEPOINT
+{
+    jl_value_t *unw = jl_unwrap_unionall(types);
+    if (!jl_is_tuple_type(unw) || !typename_has_trait_slots(unw))
+        return _gf_invoke_lookup(types, mt, world, 1, min_valid, max_valid, NULL, 0);
+    jl_svec_t *slots = NULL;
+    JL_GC_PUSH1(&slots);
+    slots = compute_trait_slots((jl_tupletype_t*)types, world, 1);
+    jl_method_match_t *matc = _gf_invoke_lookup(types, mt, world, 1, min_valid, max_valid, slots, 1);
+    JL_GC_POP();
     return matc;
 }
 
@@ -5134,7 +5595,7 @@ JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_value_t *types, jl_value_t *mt, 
     size_t max_valid = ~(size_t)0;
     if (mt == jl_nothing)
         mt = (jl_value_t*)jl_method_table;
-    jl_method_match_t *matc = _gf_invoke_lookup(types, (jl_methtable_t*)mt, world, 1, &min_valid, &max_valid);
+    jl_method_match_t *matc = gf_invoke_lookup_slots(types, (jl_methtable_t*)mt, world, &min_valid, &max_valid);
     if (matc == NULL)
         return jl_nothing;
     return (jl_value_t*)matc->method;
@@ -5145,7 +5606,7 @@ JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup_worlds(jl_value_t *types, jl_value_
 {
     if (mt == jl_nothing)
         mt = (jl_value_t*)jl_method_table;
-    jl_method_match_t *matc = _gf_invoke_lookup(types, (jl_methtable_t*)mt, world, 1, min_world, max_world);
+    jl_method_match_t *matc = gf_invoke_lookup_slots(types, (jl_methtable_t*)mt, world, min_world, max_world);
     if (matc == NULL)
         return jl_nothing;
     return (jl_value_t*)matc;
@@ -5272,9 +5733,13 @@ struct ml_matches_env {
     size_t world;
     int lim;
     int include_ambiguous;
+    int trait_fn; // the function has a slot schema
+    jl_svec_t *slots; // trait slot types, or NULL if unknown
+    int slot_regions; // the slots describe the region queried, not one call
     // results:
     jl_value_t *t; // array of method matches
     jl_method_match_t *matc; // current working method match
+    int unproven_guards; // some guarded match may apply without its guards being proven
 };
 
 static jl_method_match_t *make_method_match(jl_tupletype_t *spec_types, jl_svec_t *sparams, jl_method_t *method, int fully_covers) JL_CANSAFEPOINT
@@ -5320,7 +5785,20 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     if (closure->match.max_valid > max_world)
         closure->match.max_valid = max_world;
     jl_method_t *meth = ml->func.method;
-    int only = jl_atomic_load_relaxed(&meth->interferences)->length == 0;
+    // trait slots: a guarded method whose guards are not proven may apply, but
+    // does not cover its signature. When the slots describe a region rather
+    // than one call, it cannot be selected for or resolve an ambiguity on the
+    // whole region, so it is left out.
+    int guard_state = 1;
+    if (method_has_guards(meth)) {
+        guard_state = check_method_guards(meth, closure->slots);
+        if (guard_state == 0 || (guard_state == 2 && closure->slot_regions))
+            return 1;
+        if (guard_state == 2)
+            closure->unproven_guards = 1;
+    }
+    int issubty = closure->match.issubty && guard_state == 1;
+    int only = guard_state == 1 && jl_atomic_load_relaxed(&meth->interferences)->length == 0;
     if (closure->lim >= 0 && only) {
         if (closure->lim == 0) {
             closure->t = jl_an_empty_vec_any;
@@ -5330,9 +5808,9 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     }
     closure->matc = make_method_match((jl_tupletype_t*)closure->match.ti,
         closure->match.env, meth,
-        closure->match.issubty);
+        issubty);
     size_t len = jl_array_nrows(closure->t);
-    if (closure->match.issubty && only) {
+    if (issubty && only) {
         if (len == 0)
             closure->t = (jl_value_t*)jl_alloc_vec_any(1);
         else if (len > 1)
@@ -5348,7 +5826,8 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
         jl_array_ptr_1d_push((jl_array_t*)closure->t, (jl_value_t*)closure->matc);
     }
     // don't need to consider other similar methods if this ml will always fully intersect with them and dominates all of them
-    if (!closure->include_ambiguous || closure->lim != -1)
+    // (trait slots: a signature does not dominate guarded methods)
+    if (!closure->trait_fn && (!closure->include_ambiguous || closure->lim != -1))
         typemap_bottom_search(ml, &closure->match);
     return 1;
 }
@@ -5821,10 +6300,79 @@ JL_DLLEXPORT int jl_sort_method_matches(jl_array_t *t, int include_ambiguous) JL
 //
 // fully-covers is a Bool indicating whether the queried type is a subtype of
 // the method signature.
+// Sort matches when some guarded method may apply without its guards being
+// proven (trait slots). The interference-based sort assumes a method covers its
+// signature, which such a method does not. Instead, drop the matches that a
+// fully covering match is more specific than, order the rest topologically, and
+// report an ambiguity: the selection is unresolved, so the call stays dynamic.
+static ssize_t sort_guarded_matches(jl_array_t *t, int lim, int *has_ambiguity) JL_CANSAFEPOINT
+{
+    size_t len = jl_array_nrows(t), i, j;
+    char *drop = (char*)calloc(len ? len : 1, 1);
+    char *placed = (char*)calloc(len ? len : 1, 1);
+    for (i = 0; i < len; i++) {
+        jl_method_match_t *mi = (jl_method_match_t*)jl_array_ptr_ref(t, i);
+        for (j = 0; j < len; j++) {
+            if (i == j)
+                continue;
+            jl_method_match_t *mj = (jl_method_match_t*)jl_array_ptr_ref(t, j);
+            if (mj->fully_covers && guarded_morespecific(mj->method, mi->method, 1)) {
+                drop[i] = 1;
+                break;
+            }
+        }
+    }
+    arraylist_t result;
+    arraylist_new(&result, len);
+    size_t nkeep = 0;
+    for (i = 0; i < len; i++)
+        nkeep += !drop[i];
+    while (result.len < nkeep) {
+        size_t pick = len;
+        for (i = 0; i < len && pick == len; i++) {
+            if (drop[i] || placed[i])
+                continue;
+            jl_method_match_t *mi = (jl_method_match_t*)jl_array_ptr_ref(t, i);
+            for (j = 0; j < len; j++) {
+                if (j == i || drop[j] || placed[j])
+                    continue;
+                jl_method_match_t *mj = (jl_method_match_t*)jl_array_ptr_ref(t, j);
+                if (guarded_morespecific(mj->method, mi->method, 1))
+                    break;
+            }
+            if (j == len)
+                pick = i;
+        }
+        if (pick == len) { // cycle: take the first remaining one
+            for (i = 0; i < len; i++) {
+                if (!drop[i] && !placed[i]) {
+                    pick = i;
+                    break;
+                }
+            }
+        }
+        placed[pick] = 1;
+        arraylist_push(&result, jl_array_ptr_ref(t, pick));
+    }
+    free(drop);
+    free(placed);
+    *has_ambiguity = 1;
+    if (lim >= 0 && result.len > (size_t)lim) {
+        arraylist_free(&result);
+        return -1;
+    }
+    memcpy(jl_array_data(t, jl_method_match_t*), result.items, result.len * sizeof(jl_method_match_t*));
+    if (result.len != len)
+        jl_array_del_end(t, len - result.len);
+    len = result.len;
+    arraylist_free(&result);
+    return len;
+}
+
 static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
                               jl_tupletype_t *type, int lim, int include_ambiguous,
                               int intersections, size_t world, int cache_result_recursion,
-                              size_t *min_valid, size_t *max_valid, int *ambig)
+                              size_t *min_valid, size_t *max_valid, int *ambig, jl_svec_t *slots, int slot_regions)
 {
     size_t current_world = jl_atomic_load_acquire(&jl_world_counter);
     if (world > current_world)
@@ -5864,17 +6412,26 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
         world,
         lim,
         include_ambiguous,
+        typename_has_trait_slots((jl_value_t*)unw),
+        slots,
+        slot_regions,
 
         /* outputs */
         /* .t = */ jl_an_empty_vec_any,
 
         /* temporaries */
-        /* .matc = */ NULL
+        /* .matc = */ NULL,
+        /* .unproven_guards = */ 0
     };
     struct jl_typemap_assoc search = {(jl_value_t*)type, world, jl_emptysvec};
     jl_value_t *isect2 = NULL;
     JL_GC_PUSH6(&env.t, &env.matc, &env.match.env, &search.env, &env.match.ti, &isect2);
 
+    // trait slots: the dispatch cache of a function with a schema holds
+    // selections made for slot values computed at run time, so a query with
+    // other (or unknown) slot types must neither use nor fill it
+    if (env.trait_fn)
+        mc = NULL;
     if (mc) {
         // first check the leaf cache if the type might have been put in there
         if (((jl_datatype_t*)unw)->isdispatchtuple) {
@@ -5965,7 +6522,9 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
     // these and apply specificity to determine a list of dispatch-possible call targets
     size_t j, len;
     {
-        ssize_t sorted = sort_method_matches((jl_array_t*)env.t, lim, include_ambiguous, ambig == NULL, &has_ambiguity);
+        ssize_t sorted = env.unproven_guards ?
+            sort_guarded_matches((jl_array_t*)env.t, lim, &has_ambiguity) :
+            sort_method_matches((jl_array_t*)env.t, lim, include_ambiguous, ambig == NULL, &has_ambiguity);
         if (sorted == -1) {
             JL_GC_POP();
             return jl_nothing;

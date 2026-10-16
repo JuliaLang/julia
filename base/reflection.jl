@@ -1183,6 +1183,36 @@ function bodyfunction(basemethod::Method; world::UInt=get_world_counter())
     return nothing
 end
 
+# The bound the guards of `m` place on the trait slot `(pos, trait)`.
+function guard_bound(m::Method, pos, @nospecialize(trait))
+    g = m.guards
+    g === nothing && return Any
+    for i = 1:3:length(g)
+        g[i] == pos && g[i+1] === trait && return g[i+2]
+    end
+    return Any
+end
+
+# The trait slot types on which both `m1` and `m2` apply, as the flat
+# `(argpos, trait, slot type)` svec the method matcher takes: per slot, the
+# intersection of their guards. `nothing` if the function has no guarded
+# methods, `false` if the guards are disjoint.
+function guard_region(m1::Method, m2::Method, world::UInt)
+    ft = (unwrap_unionall(m1.sig)::DataType).parameters[1]
+    schema = ccall(:jl_get_trait_schema, Any, (Any,), ft)
+    schema === nothing && return nothing
+    schema = schema::SimpleVector
+    region = Any[]
+    for i = 1:3:length(schema)
+        schema[i+2]::UInt > world && continue
+        pos, trait = schema[i], schema[i+1]
+        S = typeintersect(guard_bound(m1, pos, trait), guard_bound(m2, pos, trait))
+        S === Bottom && return false
+        push!(region, pos, trait, S)
+    end
+    return Core.svec(region...)
+end
+
 """
     Base.isambiguous(m1, m2; ambiguous_bottom=false)::Bool
 
@@ -1221,6 +1251,8 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
     m1 === m2 && return false
     ti = typeintersect(m1.sig, m2.sig)
     ti === Bottom && return false
+    slots = guard_region(m1, m2, get_world_counter())
+    slots === false && return false
     function inner(ti)
         ti === Bottom && return false
         if !ambiguous_bottom
@@ -1231,7 +1263,13 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         min = Ref{UInt}(typemin(UInt))
         max = Ref{UInt}(typemax(UInt))
         has_ambig = Ref{Int32}(0)
-        ms = _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector{Any}
+        ms = if slots === nothing
+            _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector{Any}
+        else
+            ccall(:jl_matching_methods_in_region, Any,
+                  (Any, Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}, Any),
+                  ti, nothing, -1, true, world, min, max, has_ambig, slots)::Vector{Any}
+        end
         has_ambig[] == 0 && return false
         # if ml-matches reported the existence of an ambiguity over their
         # intersection, see if both m1 and m2 seem to be involved in it
