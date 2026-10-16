@@ -209,7 +209,7 @@ when `abs` is applied to the minimum representable value of a signed
 integer. That is, when `x == typemin(typeof(x))`, `abs(x) == x < 0`,
 not `-x` as might be expected.
 
-See also: [`abs2`](@ref), [`unsigned`](@ref), [`sign`](@ref).
+See also: [`abs2`](@ref), [`unsigned`](@ref), [`sign`](@ref), [`Base.uabs`](@ref), [`Base.Checked.checked_abs`](@ref).
 
 # Examples
 ```jldoctest
