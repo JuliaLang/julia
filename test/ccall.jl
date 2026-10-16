@@ -2397,23 +2397,19 @@ get_zstd_version() = prefix * unsafe_string(ccall((sym, libzstd), Cstring, ()))
 @test startswith(get_zstd_version(), "Zstd")
 end
 
-# `Libdl.AbstractLibrary`, `LibraryID`, and `dlid`
-module TestAbstractLibraryAPI
+# `LibraryID` and `dlid`
+module TestLibraryIdentityAPI
 using Test, Libdl
-using Libdl: AbstractLibrary, LibraryID, LazyLibrary, LazyLibraryPath, dlid
+using Libdl: LibraryID, LazyLibrary, LazyLibraryPath, dlid
 
 const test_pkg = Base.UUID(0x2fa1c7f0c93c48a0b4e2a5f0d6c60001)
 const test_id = LibraryID(test_pkg, "libfoo")
 
-struct IdentityDeclaringLib <: AbstractLibrary end
+struct IdentityDeclaringLib end
 Libdl.dlid(::IdentityDeclaringLib) = test_id
-struct NoIdentityLib <: AbstractLibrary end
-Libdl.dlid(::NoIdentityLib) = nothing
+struct NoIdentityLib end
 
-@testset "AbstractLibrary API" begin
-    @test isabstracttype(AbstractLibrary)
-    @test LazyLibrary <: AbstractLibrary
-
+@testset "library identity API" begin
     # `LibraryID` compares by value (the runtime check uses `===`)
     @test LibraryID(test_pkg, "lib" * "foo") === test_id
     @test LibraryID(test_pkg, "libbar") !== test_id
@@ -2433,13 +2429,15 @@ Libdl.dlid(::NoIdentityLib) = nothing
 
     @test dlid(IdentityDeclaringLib()) === test_id
     @test dlid(NoIdentityLib()) === nothing
+    @test dlid("libfoo") === nothing
+    @test dlid(:libfoo) === nothing
 end
 end
 
 # `ccall`/`cglobal` record `dlid(lib)` where the call is written
-module TestAbstractLibraryIdentity
+module TestLibraryIdentity
 using Test, Libdl
-using Libdl: AbstractLibrary, LibraryID, LazyLibrary, LazyLibraryPath, dlid
+using Libdl: LibraryID, LazyLibrary, LazyLibraryPath, dlid
 
 const libccalltest_path = Libdl.dlpath("libccalltest")
 
@@ -2458,39 +2456,133 @@ end
 @testset "identified library resolves" begin
     p = Ptr{Cvoid}(UInt(0xdeadbeef))
     @test echo_p_named(p) === p
-    # the interpreter sees the recorded identity too
+    # the interpreter resolves the library the same way
     @test InterpretedCGlobal.address() == cglobal((:test_echo_p, named_lib))
 end
 
-# the recorded identity is visible in lowered code as a third tuple element
-struct DeclaringLib <: AbstractLibrary end
-Libdl.dlid(::DeclaringLib) = LibraryID(Base.UUID(0x2fa1c7f0c93c48a0b4e2a5f0d6c60002), "libdeclaring")
+# Inference folds `dlid(lib)` and the optimizer adds the identity to the foreign symbol
+# tuple; method definition and lowering record nothing
+struct DeclaringLib end
+const declaring_id = LibraryID(Base.UUID(0x2fa1c7f0c93c48a0b4e2a5f0d6c60002), "libdeclaring")
+Libdl.dlid(::DeclaringLib) = declaring_id
 const declaring_lib = DeclaringLib()
 
-struct SilentLib <: AbstractLibrary end
+struct SilentLib end
 Libdl.dlid(::SilentLib) = nothing
 const silent_lib = SilentLib()
 
-struct MisdeclaredLib <: AbstractLibrary end
+struct MisdeclaredLib end
 Libdl.dlid(::MisdeclaredLib) = "not an identity"
 const misdeclared_lib = MisdeclaredLib()
 
+# `dlid` has a side effect, so it does not fold
+const unfoldable_count = Ref(0)
+struct UnfoldableLib end
+Libdl.dlid(::UnfoldableLib) = (unfoldable_count[] += 1; declaring_id)
+const unfoldable_lib = UnfoldableLib()
+
+# the identity is redefined below
+struct RedefinedLib end
+const redefined_id = LibraryID(Base.UUID(0x2fa1c7f0c93c48a0b4e2a5f0d6c60004), "libredefined")
+Libdl.dlid(::RedefinedLib) = declaring_id
+const redefined_lib = RedefinedLib()
+
+uses_named() = ccall((:test_echo_p, named_lib), Ptr{Cvoid}, (Ptr{Cvoid},), C_NULL)
 uses_declaring() = ccall((:my_symbol, declaring_lib), Cint, ())
 uses_silent() = ccall((:my_symbol, silent_lib), Cint, ())
+uses_misdeclared() = ccall((:my_symbol, misdeclared_lib), Cint, ())
+uses_unfoldable() = ccall((:my_symbol, unfoldable_lib), Cint, ())
+uses_redefined() = ccall((:my_symbol, redefined_lib), Cint, ())
 uses_string() = ccall((:my_symbol, "libbar"), Cint, ())
+uses_default() = ccall(:my_symbol, Cint, ())
 cglobal_declaring() = cglobal((:my_global, declaring_lib))
+# a typed global: not a constant, but `dlid` folds to `nothing`
+global typed_lib::String = "libbar"
+uses_typed() = ccall((:my_symbol, typed_lib), Cint, ())
+# an untyped global: `dlid` does not fold
+global untyped_lib = declaring_lib
+uses_untyped() = ccall((:my_symbol, untyped_lib), Cint, ())
+# the identity is declared for the type, so it folds for any library of that type
+mutable struct TypeLib end
+Libdl.dlid(::TypeLib) = declaring_id
+global typed_type_lib::TypeLib = TypeLib()
+uses_typed_type() = ccall((:my_symbol, typed_type_lib), Cint, ())
+const const_type_lib = TypeLib()
+uses_const_type() = ccall((:my_symbol, const_type_lib), Cint, ())
+# a typed global of a singleton type has only one value
+global typed_singleton_lib::DeclaringLib = declaring_lib
+uses_typed_singleton() = ccall((:my_symbol, typed_singleton_lib), Cint, ())
+# the library is defined after the method, and imported from another module
+uses_late() = ccall((:my_symbol, late_lib), Cint, ())
+module LateLibraries
+import ..DeclaringLib
+const late_lib = DeclaringLib()
+end
+using .LateLibraries: late_lib
+# the identity of an inlined callee stays with its call
+@inline inlined_callee() = ccall((:my_symbol, declaring_lib), Cint, ())
+inlining_caller() = inlined_callee() + Cint(1)
 
-@testset "identity recorded at the call site" begin
+function foreign_target(f)
+    src = only(code_typed(f, ()))[1]
+    for stmt in src.code
+        if Meta.isexpr(stmt, :foreigncall) || Meta.isexpr(stmt, :foreignglobal)
+            return stmt.args[1]
+        end
+    end
+    error("no ccall or cglobal in ", f)
+end
+
+@testset "identity resolved by inference" begin
+    # lowered code and default inference carry only what was written
     let fptr = only(code_lowered(uses_declaring)).code[1].args[1]
         @test fptr.head === :tuple
-        @test length(fptr.args) == 3
-        @test fptr.args[1] == QuoteNode(:my_symbol)
-        @test fptr.args[2] == GlobalRef(@__MODULE__, :declaring_lib)
-        @test fptr.args[3] === LibraryID(Base.UUID(0x2fa1c7f0c93c48a0b4e2a5f0d6c60002), "libdeclaring")
+        @test fptr.args == Any[QuoteNode(:my_symbol), GlobalRef(@__MODULE__, :declaring_lib)]
     end
-    @test length(only(code_lowered(uses_silent)).code[1].args[1].args) == 2
-    @test length(only(code_lowered(uses_string)).code[1].args[1].args) == 2
-    @test length(only(code_lowered(cglobal_declaring)).code[1].args[1].args) == 3
-    @test_throws ErrorException @eval uses_misdeclared() = ccall((:my_symbol, misdeclared_lib), Cint, ())
+    @test length(only(code_lowered(cglobal_declaring)).code[1].args[1].args) == 2
+
+    for (f, id) in ((uses_named, named_id), (uses_declaring, declaring_id),
+                    (cglobal_declaring, declaring_id), (uses_late, declaring_id),
+                    (inlining_caller, declaring_id), (uses_const_type, declaring_id),
+                    (uses_typed_type, declaring_id), (uses_typed_singleton, declaring_id))
+        target = foreign_target(f)
+        @test length(target.args) == 3
+        @test target.args[3] === id
+    end
+    @test foreign_target(uses_declaring).args[1] == QuoteNode(:my_symbol)
+
+    # no identity: `dlid` folds to `nothing`
+    for f in (uses_silent, uses_string, uses_typed)
+        target = foreign_target(f)
+        @test length(target.args) == 3
+        @test target.args[3] === nothing
+    end
+    # any constant that `dlid` folds to is kept, for the `--trim` verifier to check
+    @test foreign_target(uses_misdeclared).args[3] == "not an identity"
+    # unresolved: `dlid` does not fold
+    for f in (uses_unfoldable, uses_untyped)
+        @test length(foreign_target(f).args) == 2
+    end
+    @test length(foreign_target(uses_default).args) == 1
+    # `dlid` is only inferred, never run
+    @test unfoldable_count[] == 0
+end
+
+@testset "identity invalidates with `dlid`" begin
+    @test foreign_target(uses_redefined).args[3] === declaring_id
+    # the valid CodeInstances of `uses_redefined`, cached by compiling it
+    @test precompile(uses_redefined, ())
+    cis = Core.CodeInstance[]
+    for mi in Base.specializations(only(methods(uses_redefined)))
+        ci = isdefined(mi, :cache) ? mi.cache : nothing
+        while ci !== nothing
+            ci.max_world == typemax(UInt) && push!(cis, ci)
+            ci = isdefined(ci, :next) ? ci.next : nothing
+        end
+    end
+    @test !isempty(cis)
+    @eval Libdl.dlid(::RedefinedLib) = redefined_id
+    @test all(ci -> ci.max_world < typemax(UInt), cis)
+    @test foreign_target(uses_redefined).args[3] === redefined_id
 end
 end

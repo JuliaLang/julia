@@ -710,6 +710,26 @@ end
 # since calling them doesn't normally have edges in contrast
 add_edges_impl(edges::Vector{Any}, info::OpaqueClosureCreateInfo) = add_edges!(edges, info.unspec.info)
 
+"""
+    info::ForeignLibraryInfo <: CallInfo
+
+This info may be constructed for `foreigncall` / `foreignglobal`.
+"""
+struct ForeignLibraryInfo <: CallInfo
+    dlid::CallMeta
+    # dlopen::CallMeta
+    library_type::Any
+end
+add_edges_impl(edges::Vector{Any}, info::ForeignLibraryInfo) = add_edges!(edges, info.dlid.info)
+
+# The `Const` that the `dlid` query in `info` folds to, or `nothing`
+function folded_library_dlid(info::ForeignLibraryInfo)
+    call = info.dlid
+    is_foldable_nothrow(call.effects) || return nothing
+    rt = call.rt
+    return rt isa Const ? rt : nothing
+end
+
 # Stmt infos that are used by external consumers, but not by optimization.
 # These are not produced by default and must be explicitly opted into by
 # the AbstractInterpreter.

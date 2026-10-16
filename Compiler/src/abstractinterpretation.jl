@@ -3892,7 +3892,8 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate:
             # these results to refine reachability of the subsequent foreigncall.
             abstract_eval_value(interp, callee.args[1], sstate, sv)
             if length(callee.args) >= 2
-                abstract_eval_value(interp, callee.args[2], sstate, sv)
+                lib = abstract_eval_value(interp, callee.args[2], sstate, sv)
+                abstract_eval_foreign_library(interp, callee, lib, sstate, sv)
                 #TODO: implement abstract_eval_nonlinearized_foreigncall_name correctly?
                 # lib_effects = abstract_call(interp, ArgInfo(e.args, Any[typeof(Libdl.dlopen), lib]), sstate, sv)::Future
             end
@@ -3927,12 +3928,28 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate:
     return RTEffects(t, Any, effects)
 end
 
+function abstract_eval_foreign_library(interp::AbstractInterpreter, target::Expr, @nospecialize(lib),
+                                       sstate::StatementState, sv::AbsIntState)
+    sv isa InferenceState || return nothing
+    length(target.args) == 2 || return nothing # already resolved
+    dlid = _libdl_dlid()
+    dlid === nothing && return nothing
+    si = StmtInfo(true, sstate.saw_latestworld)
+    dlid_call = abstract_call(interp, ArgInfo(nothing, Any[Const(dlid), lib]), si, sstate.vtypes, sv)::Future
+    Future{Any}(dlid_call, interp, sv) do dlid_call, _, sv
+        sv.stmt_info[sv.currpc] = ForeignLibraryInfo(dlid_call, lib)
+        nothing
+    end
+    return nothing
+end
+
 function abstract_eval_foreignglobal(interp::AbstractInterpreter, e::Expr, sstate::StatementState, sv::AbsIntState)
     arg = e.args[1]
     # Evaluate the arguments to constrain the world for codegen
     if isexpr(arg, :tuple)
-        for elt in arg.args
-            abstract_eval_value(interp, elt, sstate, sv)
+        for (i, elt) in enumerate(arg.args)
+            t = abstract_eval_value(interp, elt, sstate, sv)
+            i == 2 && abstract_eval_foreign_library(interp, arg, t, sstate, sv)
             #TODO: implement abstract_eval_nonlinearized_foreigncall_name correctly?
             #      (see foreigncall implementation above)
         end
