@@ -1692,3 +1692,35 @@ let 𝕃 = Compiler.SimpleInferenceLattice.instance,
     @test !Compiler.is_effect_free(effects)
     Base.deprecate(PartitionEffects, :c, 0)
 end
+
+# reading a `const` field of a mutable object is consistent
+mutable struct ConstFieldEffects
+    const a::Union{String, Nothing}
+    b::Union{String, Nothing}
+    const p::Ptr{Cvoid}
+end
+const const_field_effects = ConstFieldEffects("a", "b", C_NULL)
+@test Compiler.is_consistent(Base.infer_effects(x -> x.a, (ConstFieldEffects,)))
+@test Compiler.is_consistent(Base.infer_effects(x -> x.p, (ConstFieldEffects,)))
+@test !Compiler.is_consistent(Base.infer_effects(x -> x.b, (ConstFieldEffects,)))
+@test Compiler.is_foldable_nothrow(Base.infer_effects(() -> const_field_effects.a, ()))
+@test !Compiler.is_consistent(Base.infer_effects(() -> const_field_effects.b, ()))
+abstract type AbstractConstFieldEffects end
+@test !Compiler.is_consistent(Base.infer_effects(x -> getfield(x, 1), (Any,)))
+@test !Compiler.is_consistent(Base.infer_effects(x -> x.a, (AbstractConstFieldEffects,)))
+# `Memory`'s data pointer is relocated by staticdata.c
+@test !Compiler.is_consistent(Base.infer_effects(x -> getfield(x, :ptr), (Memory{Int},)))
+let 𝕃 = Compiler.SimpleInferenceLattice.instance
+    effects = Compiler.builtin_effects(𝕃, getfield, Any[Memory{Int}, Compiler.Const(:ptr)], Ptr{Cvoid})
+    @test Compiler.is_consistent_if_inaccessiblememonly(effects)
+    @test Compiler.is_inaccessiblemem_or_argmemonly(effects)
+    effects = Compiler.builtin_effects(𝕃, getfield, Any[Core.TypeName, Compiler.Const(:constfields)], Ptr{Cvoid})
+    @test !Compiler.is_consistent(effects)
+    @test Compiler.is_inaccessiblemem_or_argmemonly(effects)
+end
+
+# reading a field that never changes accesses no mutable memory
+@test Compiler.is_inaccessiblememonly(Base.infer_effects(x -> x.a, (ConstFieldEffects,)))
+@test !Compiler.is_inaccessiblememonly(Base.infer_effects(x -> x.b, (ConstFieldEffects,)))
+@test Compiler.is_inaccessiblememonly(Base.infer_effects(x -> getfield(x, 1), (Tuple{Vector{Int}},)))
+@test !Compiler.is_inaccessiblememonly(Base.infer_effects(x -> getfield(x, :ptr), (Memory{Int},)))
