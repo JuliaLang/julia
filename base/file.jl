@@ -1193,6 +1193,10 @@ function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=fa
                 while true
                     n = ccall(:uv_fs_readdir, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
                               C_NULL, req, uvdir, C_NULL)
+                    # Reading a directory that was removed after it was opened can fail with
+                    # ENOENT (e.g. on FreeBSD) rather than reading as empty; treat it as the
+                    # end of the listing, as scandir(3) did.
+                    n == Base.UV_ENOENT && (n = Cint(0))
                     try
                         n < 0 && uv_error("readdir($(repr(dir)))", n)
                         for i in 1:n
