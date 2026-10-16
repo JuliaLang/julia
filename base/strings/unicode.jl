@@ -314,7 +314,8 @@ julia> lowercase('Ö')
 ```
 """
 lowercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) :
-    T(@assume_effects :foldable :nothrow @ccall utf8proc_tolower(c::UInt32)::UInt32)
+    # Keep well-formed overlong encodings as they are, so invalid input never becomes a valid character.
+    isoverlong(c) && !ismalformed(c) ? c : T(@assume_effects :foldable :nothrow @ccall utf8proc_tolower(c::UInt32)::UInt32)
 
 lowercase(c::AnnotatedChar) = AnnotatedChar(lowercase(c.char), annotations(c))
 
@@ -335,7 +336,7 @@ julia> uppercase('ê')
 ```
 """
 uppercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
-    T(@assume_effects :foldable :nothrow @ccall utf8proc_toupper(c::UInt32)::UInt32)
+    isoverlong(c) && !ismalformed(c) ? c : T(@assume_effects :foldable :nothrow @ccall utf8proc_toupper(c::UInt32)::UInt32)
 
 uppercase(c::AnnotatedChar) = AnnotatedChar(uppercase(c.char), annotations(c))
 
@@ -360,7 +361,7 @@ julia> uppercase('ǆ')
 ```
 """
 titlecase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
-    T(@assume_effects :foldable :nothrow @ccall utf8proc_totitle(c::UInt32)::UInt32)
+    isoverlong(c) && !ismalformed(c) ? c : T(@assume_effects :foldable :nothrow @ccall utf8proc_totitle(c::UInt32)::UInt32)
 
 titlecase(c::AnnotatedChar) = AnnotatedChar(titlecase(c.char), annotations(c))
 
