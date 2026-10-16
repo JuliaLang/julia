@@ -75,6 +75,72 @@ static wake_gate_t *gate_of_tid(int16_t tid) JL_NOTSAFEPOINT
     return NULL;
 }
 
+// jl_task_get_next runs on the stack of the task that called wait(), so a
+// thread that parks there keeps that task's tid set: once woken, the task can
+// only run on this thread, which must be woken for it even while other threads
+// search. So a pool thread about to park while hosting a task that can migrate
+// switches to its scheduler task (ptls->park_host, Base.get_sched_task) and
+// parks there instead, which lets any thread resume the task.
+
+// Called by Base with this thread's scheduler task (Base.sched_task_here).
+JL_DLLEXPORT void jl_set_park_host(jl_task_t *t) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    if (ptls->park_host != t) {
+        ptls->park_host = t;
+        ptls->park_host_ready = 0;
+        ptls->park_now = 0;
+    }
+}
+
+// Called by the scheduler task around its switch to a task its loop found.
+JL_DLLEXPORT void jl_set_park_host_ready(int ready) JL_NOTSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    if (ct->ptls->park_host == ct)
+        ct->ptls->park_host_ready = ready != 0;
+}
+
+// Whether switching to this thread's scheduler task `t` only resumes (or
+// starts) its scheduler loop.
+JL_DLLEXPORT int jl_park_host_available(jl_task_t *t) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    if (jl_atomic_load_relaxed(&t->_state) != JL_TASK_STATE_RUNNABLE)
+        return 0;
+    return !t->ctx.started || (ptls->park_host == t && ptls->park_host_ready);
+}
+
+// Called by a finished task switching to the scheduler task: a park request
+// left by an earlier switch no longer applies.
+JL_DLLEXPORT void jl_park_host_reset(void) JL_NOTSAFEPOINT
+{
+    jl_current_task->ptls->park_now = 0;
+}
+
+// The task to park on instead of `ct`, or NULL to park on `ct`.
+static jl_task_t *park_host_for(jl_task_t *ct, jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    // thread 0 parks on the waiting task, so that an InterruptException
+    // reaches a task that can observe it (#58689)
+    if (ptls->tid <= 0)
+        return NULL;
+    // sticky and copied-stack tasks keep their tid when switched out
+    if (ct->sticky || ct->ctx.copy_stack)
+        return NULL;
+    jl_task_t *host = ptls->park_host;
+    if (host == NULL || host == ct ||
+        jl_atomic_load_relaxed(&host->_state) != JL_TASK_STATE_RUNNABLE)
+        return NULL;
+    // only where its scheduler loop switched away, or not started yet
+    if (!ptls->park_host_ready && host->ctx.started)
+        return NULL;
+    int16_t htid = jl_atomic_load_relaxed(&host->tid);
+    if (htid != ptls->tid && htid != -1)
+        return NULL;
+    return host;
+}
+
 // `tid` stopped sleeping.
 static void leave_sleeping(int16_t tid) JL_NOTSAFEPOINT
 {
@@ -833,6 +899,13 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
     // pop must wake another thread if work remains; volatile for the JL_CATCH
     volatile int handoff_owed = 0;
     jl_task_t *task = NULL;
+    // we were switched to so that the thread parks here (see park_host_for):
+    // park without searching
+    int park_now = 0;
+    if (ct->ptls->park_now) {
+        ct->ptls->park_now = 0;
+        park_now = ct->ptls->park_host == ct;
+    }
 
     // no task switch and no task abandonment until we return (see jl_switch
     // and task.c)
@@ -855,7 +928,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 handoff_owed = 0;
                 jl_ptls_t ptls = ct->ptls;
                 int is_io_thread = ptls->tid == jl_atomic_load_relaxed(&io_loop_tid);
-                if (!spinning && gate != NULL && !is_io_thread) {
+                if (!spinning && gate != NULL && !is_io_thread && !park_now) {
                     // at most half the pool, or all of it if our last search
                     // found work (we would likely be woken again soon) or if
                     // threads never sleep
@@ -885,14 +958,28 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                         wait_empty))) {
                     if (timed_out)
                         ptls->search_useful = 0;
-                    int held = spinning;
-                    own_slot = 0;
-                    park_start = jl_hrtime();
-                    task = sleep_thread(ct, gate, &spinning, &start_cycles,
-                                        trypoptask, q, checkempty);
-                    // unpooled threads should never spin
-                    assert(!spinning || gate != NULL);
-                    handoff_owed = held && !spinning && gate != NULL;
+                    jl_task_t *host = gate != NULL && !is_io_thread ?
+                        park_host_for(ct, ptls) : NULL;
+                    if (host != NULL) {
+                        // park on the scheduler task: return it as if found,
+                        // which also gives up our searcher slot below
+                        ptls->park_host_ready = 0;
+                        ptls->park_now = 1;
+                        own_slot = 0;
+                        park_start = 0;
+                        task = host;
+                    }
+                    else {
+                        int held = spinning;
+                        own_slot = 0;
+                        park_start = jl_hrtime();
+                        task = sleep_thread(ct, gate, &spinning, &start_cycles,
+                                            trypoptask, q, checkempty);
+                        park_now = 0;
+                        // unpooled threads should never spin
+                        assert(!spinning || gate != NULL);
+                        handoff_owed = held && !spinning && gate != NULL;
+                    }
                 }
                 else {
                     // maybe check the kernel for new messages too
@@ -948,6 +1035,10 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
 
 void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
+    // the thread will never park again
+    ptls->park_host = NULL;
+    ptls->park_host_ready = 0;
+    ptls->park_now = 0;
     int8_t oldstate = jl_atomic_exchange_relaxed(&ptls->sleep_check_state, sleeping_like_the_dead);
     if (oldstate == sleeping)
         leave_sleeping(ptls->tid);

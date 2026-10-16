@@ -1208,3 +1208,103 @@ let code = """
     @test verdict == "false"
     @test success(p)
 end
+
+# A pool thread that parks while a task waits on it switches to its scheduler
+# task first, so that the waiting task's tid is released and any thread can
+# resume it (see jl_task_get_next).
+let code = """
+    function main()
+        started = Threads.Atomic{Bool}(false)
+        c = Channel{Int}(0)
+        t = Threads.@spawn (started[] = true; take!(c))
+        while !started[]; sleep(0.001); end
+        released = false
+        for _ in 1:1000
+            if ccall(:jl_get_task_tid, Int16, (Any,), t) == -1
+                released = true
+                break
+            end
+            sleep(0.002)
+        end
+        put!(c, 7)
+        print(released, " ", fetch(t))
+    end
+    main()
+    """
+    @test read(`$(Base.julia_cmd()) --startup-file=no -t2,1 -e $code`, String) == "true 7"
+end
+
+# The scheduler task a thread parks on is only switched to where its loop
+# switched away: here it blocks reporting an error, and a waiting task on its
+# thread must park on itself rather than resume it.
+let code = """
+    using Base.Threads
+    const phase = Atomic{Int}(0)
+    const cond = Threads.Condition()
+    const href = Ref{Task}()
+    struct ProbeError <: Exception end
+    function Base.showerror(io::IO, ::ProbeError)
+        lock(cond)
+        try
+            phase[] = 1
+            wait(cond)
+            phase[] = 2
+        finally
+            unlock(cond)
+        end
+    end
+    installer = Task() do
+        h = Task(Base.wait_forever)
+        @atomic Base.get_sched_task.xs[threadid()] = h
+        ccall(:jl_set_park_host, Cvoid, (Any,), h)
+        href[] = h
+    end
+    ccall(:jl_set_task_tid, Cint, (Any, Cint), installer, 1)
+    schedule(installer); wait(installer)
+    sleep(0.02)
+    h = href[]
+    schedule(h, ProbeError(); error=true)
+    for _ in 1:500
+        phase[] == 1 && break
+        sleep(0.01)
+    end
+    # a task that finishes on its thread, and one that waits there
+    done = Threads.@spawn nothing
+    wait(done)
+    t = Threads.@spawn Base.wait()
+    sleep(0.2)
+    print(phase[], " ", istaskdone(h))
+    flush(stdout)
+    ccall(:_exit, Cvoid, (Cint,), 0)
+    """
+    out = read(pipeline(`$(Base.julia_cmd()) --startup-file=no -t1,1 -e $code`; stderr=devnull), String)
+    @test out == "1 false"
+end
+
+# With task metrics on, a scheduler task first started by a thread that parks on
+# it is recorded as enqueued before it runs.
+let code = """
+    function main()
+        Base.Experimental.task_metrics(true)
+        hc = Channel{Task}(1); block = Channel{Nothing}(0)
+        # install a fresh scheduler task on the only default thread, then wait
+        # there, so that the thread parks on it, starting it
+        waiter = Threads.@spawn :default begin
+            h = Task(Base.wait_forever)
+            @atomic Base.get_sched_task.xs[Threads.threadid()] = h
+            ccall(:jl_set_park_host, Cvoid, (Any,), h)
+            put!(hc, h)
+            take!(block)
+        end
+        h = take!(hc)
+        for _ in 1:1000
+            istaskstarted(h) && break
+            sleep(0.002)
+        end
+        put!(block, nothing); wait(waiter)
+        print(istaskstarted(h), " ", h.metrics_enabled, " ", h.first_enqueued_at != 0)
+    end
+    main()
+    """
+    @test read(`$(Base.julia_cmd()) --startup-file=no -t1,1 -e $code`, String) == "true true true"
+end

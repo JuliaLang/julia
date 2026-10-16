@@ -300,6 +300,15 @@ typedef struct _jl_tls_states_t {
     int8_t search_useful;
     // set while this thread runs jl_task_get_next, which must not switch tasks
     int8_t in_get_next;
+    // set when this thread switched to park_host in order to park (see
+    // jl_task_get_next): its next search parks at once
+    int8_t park_now;
+    // set while park_host is suspended in its scheduler loop, where switching
+    // back to it only resumes that loop
+    int8_t park_host_ready;
+    // the scheduler task this thread parks on instead of a waiting task (see
+    // jl_task_get_next); borrowed: Base.get_sched_task keeps it alive
+    struct _jl_task_t *park_host;
 
     JULIA_DEBUG_SLEEPWAKE(
         uint64_t uv_run_enter;

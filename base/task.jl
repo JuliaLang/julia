@@ -1524,7 +1524,7 @@ function wait_forever()
     while true
         try
             while true
-                wait()
+                _wait_next(true)
             end
         catch e
             if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue)
@@ -1567,6 +1567,20 @@ end
 
 const get_sched_task = OncePerThread{Task}() do
     Task(wait_forever)
+end
+
+# This thread's scheduler task, registered with the runtime, which parks the
+# thread on it rather than on a waiting task, so that the waiting task can run
+# on any thread (see jl_task_get_next). One that died (wait_forever does not
+# return normally) is replaced.
+function sched_task_here()
+    t = get_sched_task()
+    if istaskdone(t)
+        t = Task(wait_forever)
+        @atomic get_sched_task.xs[Threads.threadid()] = t
+    end
+    ccall(:jl_set_park_host, Cvoid, (Any,), t)
+    return t
 end
 
 function ensure_rescheduled(othertask::Task)
@@ -1624,7 +1638,12 @@ end
 
 checktaskempty = Partr.multiq_check_empty
 
-function wait()
+wait() = _wait_next(false)
+
+# `scheduler_loop`: called by the scheduler task's loop (wait_forever).
+# Suspended there, and only there, it may be switched back to by a task about
+# to park (see jl_task_get_next); elsewhere it may be blocked on anything.
+function _wait_next(scheduler_loop::Bool)
     ct = current_task()
     # [task] user_time -yield-or-done-> wait_time
     record_running_time!(ct)
@@ -1644,14 +1663,30 @@ function wait()
         # the current task, so that an asynchronously thrown InterruptException
         # is delivered to a task that can observe it, rather than swallowed by
         # the internal scheduler task (#58689).
-        sched_task = get_sched_task()
+        sched_task = sched_task_here()
         if ct !== sched_task && ct_done
-            istaskdone(sched_task) && (sched_task = @task wait())
+            # it may be blocked elsewhere, e.g. reporting an error: then run the
+            # sleep logic on a new task instead
+            if ccall(:jl_park_host_available, Cint, (Any,), sched_task) == 0
+                sched_task = @task wait()
+            end
+            # a request to park left by an earlier switch no longer applies
+            ccall(:jl_park_host_reset, Cvoid, ())
             return yieldto(sched_task)
         end
         task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
+        # the runtime returns the scheduler task for the thread to park on it
+        task === sched_task && maybe_record_enqueued!(task)
     end
     set_next_task(task)
+    if scheduler_loop && task !== ct
+        ccall(:jl_set_park_host_ready, Cvoid, (Cint,), 1)
+        try
+            return try_yieldto(ensure_rescheduled)
+        finally
+            ccall(:jl_set_park_host_ready, Cvoid, (Cint,), 0)
+        end
+    end
     return try_yieldto(ensure_rescheduled)
 end
 
