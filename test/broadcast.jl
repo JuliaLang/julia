@@ -1294,6 +1294,12 @@ end
     @test @inferred(h62564([1.0, -1.0])) == [exp(-1.0), 1.0]
 end
 
+@testset "broadcast eltype of calls with many matching methods" begin
+    @test Float64.(Real[]) isa Vector{Float64}
+    @test @inferred(broadcast(Float64, Real[1, 2.5])) == [1.0, 2.5]
+    @test string.(Real[]) isa Vector{String}
+end
+
 @testset "issue #31890" begin
     struct Interval31890 <: Number
         lo::Float64
