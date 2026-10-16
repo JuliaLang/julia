@@ -718,6 +718,12 @@ end
     @test_throws BoundsError (3:6)[5]
     @test (@inferred (0:2:10)[7:6]) === 12:2:11
     @test_throws BoundsError (0:2:10)[7:7]
+    @test_throws OverflowError (typemin(Int):typemin(Int)+5)[1:0]
+    @test_throws OverflowError (UInt8(0):UInt8(10))[1:0]
+    @test_throws OverflowError (typemin(Int):typemin(Int)+5)[1:1:0]
+    @test_throws OverflowError (UInt(0):UInt(1):UInt(10))[1:0]
+    @test_throws OverflowError (typemax(Int):-1:typemax(Int)-5)[1:0]
+    @test (Date(2000):Day(1):Date(2001))[1:0] === Date(2000):Day(1):Date(1999, 12, 31)
 
     for start in [true], stop in [true, false]
         @test (@inferred (start:stop)[1:0]) === true:false
