@@ -706,6 +706,24 @@ end
     close(io)
 end
 
+# Multi-byte peek respects view offsets and shifted Array storage.
+@testset "dense multi-byte peek" begin
+    value = UInt32(0x12345678)
+    data = [0xaa, reinterpret(NTuple{4,UInt8}, value)..., 0xbb]
+    padded = [0xcc, 0xdd, data..., 0xee]
+    paddedmem = copyto!(Memory{UInt8}(undef, length(padded)), padded)
+    shifted = [0xcc, 0xdd, data...]
+    resize!(shifted, length(data); first=true)
+    for storage in (view(padded, 3:length(padded)-1),
+                    view(paddedmem, 3:length(paddedmem)-1), shifted)
+        io = Base.GenericIOBuffer{typeof(storage)}(
+            storage, true, false, true, false, typemax(Int), false)
+        seek(io, 1)
+        @test peek(io, UInt32) === value
+        @test position(io) == 1
+    end
+end
+
 @testset "bytesavailable devnull" begin
     @test bytesavailable(devnull) == 0
 end
