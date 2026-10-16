@@ -217,7 +217,8 @@ function resolve_name(ctx, ex; exclude_toplevel_globals=false)
             s0 = ctx.scopes[ctx.scope_stack[end]]
             s0.is_lifted && ctx.scopes[sid].lambda_id == s0.lambda_id || continue
         end
-        if !exclude_toplevel_globals || sid !== top_scope(ctx).id || b.kind !== :global
+        if !exclude_toplevel_globals || sid !== top_scope(ctx).id ||
+            b.kind !== :global || head(top_scope(ctx).node_id) !== :toplevel_lambda
             return b
         end
     end
