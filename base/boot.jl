@@ -471,8 +471,6 @@ struct UUID
     UUID(value::UInt128) = new(value)
 end
 
-abstract type AbstractLibrary end
-
 struct LibraryID
     pkg::UUID
     name::String

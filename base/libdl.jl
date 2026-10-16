@@ -9,7 +9,7 @@ import Base: DL_LOAD_PATH, isdebugbuild
 
 export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL,
     RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW, dlclose, dlopen, dlopen_e, dlsym, dlsym_e,
-    dlpath, find_library, dlext, dllist, dlid, AbstractLibrary, LibraryID,
+    dlpath, find_library, dlext, dllist, dlid, LibraryID,
     LazyLibrary, LazyLibraryPath, BundledLazyLibraryPath
 
 """
@@ -390,7 +390,7 @@ type is never instantiated or called.
 """
 const LazyLibraryCallback = Core.LazyLibraryCallback
 
-import Core: AbstractLibrary, LibraryID
+import Core: LibraryID
 
 """
     LibraryID(pkg::Base.UUID, name::AbstractString)
@@ -407,29 +407,21 @@ LibraryID
 LibraryID(pkg::Base.UUID, name::AbstractString) = LibraryID(pkg, String(name))
 
 """
-    AbstractLibrary
+    dlid(lib) -> Union{LibraryID, Nothing}
 
-Abstract supertype for library handles that carry a stable identity the compiler can
-rely on. Subtypes must implement [`dlid`](@ref).
+Return the stable identity declared for the library `lib` as a [`LibraryID`](@ref), or
+`nothing` if `lib` has no declared identity, such as a library name or path. A library
+type declares an identity by adding a method to `dlid`; the identity must not change for
+the life of the library object.
 
-A subtype promises that the identity is invariant for the life of the handle. `ccall`
-and `cglobal` record it where the library is referenced.
-
-!!! compat "Julia 1.14"
-    `AbstractLibrary` was added in Julia 1.14.
-"""
-AbstractLibrary
-
-"""
-    dlid(lib::AbstractLibrary) -> Union{LibraryID, Nothing}
-
-Return the stable identity declared for `lib` as a [`LibraryID`](@ref), or `nothing`
-if `lib` has no declared identity. See also [`AbstractLibrary`](@ref).
+The compiler resolves the identity of the library of each `ccall` and `cglobal` by
+constant-folding `dlid(lib)`. A call whose `dlid` does not fold has no identity, so
+`dlid` should fold for a constant `lib`.
 
 !!! compat "Julia 1.14"
     `dlid` was added in Julia 1.14.
 """
-function dlid end
+dlid(@nospecialize(lib)) = nothing
 
 # Small helper struct to initialize a LazyLibrary with its initial set of dependencies
 struct InitialDependencies{T}
@@ -492,7 +484,7 @@ For more examples including platform-specific libraries, lazy path construction,
 migration from `__init__()` patterns, see the manual section on
 [Using LazyLibrary for Lazy Loading](@ref man-lazylibrary).
 """
-mutable struct LazyLibrary <: AbstractLibrary
+mutable struct LazyLibrary
     # Name and flags to open with
     const path
     const flags::UInt32

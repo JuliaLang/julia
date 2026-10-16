@@ -4708,7 +4708,6 @@ void post_boot_hooks(void)
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
     jl_abioverride_type = (jl_datatype_t*)core("ABIOverride");
 
-    jl_abstractlibrary_type = (jl_datatype_t*)core("AbstractLibrary");
     jl_libraryid_type = (jl_datatype_t*)core("LibraryID");
 
     jl_const_type = (jl_datatype_t*)core("Const");
