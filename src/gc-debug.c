@@ -54,7 +54,8 @@ JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osiz
 }
 
 // mark verification
-#ifdef GC_VERIFY
+// GC_VERIFY
+
 jl_value_t *lostval = NULL;
 static arraylist_t lostval_parents;
 static arraylist_t lostval_parents_done;
@@ -280,13 +281,13 @@ void gc_verify(jl_ptls_t ptls)
     jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
 }
-#endif
 
-#ifdef MEMFENCE
+// MEMFENCE
+
 static uint8_t freelist_map[GC_PAGE_SZ / sizeof(void*) / 8];
 static int freelist_zerod;
 
-static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
+static void gc_verify_tags_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
     // for all pages in use
     int p_n = pg->pool_n;
@@ -326,7 +327,7 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
             freelist_zerod = 0;
         }
         assert(halfpages || next);
-        while (gc_page_data(next) == data) {
+        while (next != NULL && gc_page_data(next) == data) {
             int obj_idx = (((char*)next) - page_begin) / sizeof(void*);
             freelist_map[obj_idx / 8] |= 1 << (obj_idx % 7);
             next = next->next;
@@ -350,7 +351,7 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
     }
 }
 
-static void gc_verify_tags_pagestack(void)
+static void gc_verify_tags_pagestack(void) JL_NOTSAFEPOINT
 {
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
@@ -381,6 +382,7 @@ void gc_verify_tags(void)
                 if (gc_page_data(next) != gc_page_data(last)) {
                     // and verify that the chain looks valid
                     jl_gc_pagemeta_t *pg = page_metadata(next);
+                    (void)pg; // only used by the assertions below
                     assert(pg->osize == p->osize);
                     if (gc_page_data(next) != allocating) {
                         // when not currently allocating on this page, fl_begin_offset should be correct
@@ -397,9 +399,9 @@ void gc_verify_tags(void)
     // or are part of the freelist or are on the allocated half of a page
     gc_verify_tags_pagestack();
 }
-#endif
 
-#ifdef GC_DEBUG_ENV
+// GC_DEBUG_ENV
+
 JL_DLLEXPORT jl_gc_debug_env_t jl_gc_debug_env = {
     0,
     {0, UINT64_MAX, 0, 0, 0, {0, 0, 0}},
@@ -407,14 +409,26 @@ JL_DLLEXPORT jl_gc_debug_env_t jl_gc_debug_env = {
     {0, UINT64_MAX, 0, 0, 0, {0, 0, 0}}
 };
 
+// Use erand48's default recurrence without depending on its availability on Windows.
+static double gc_debug_alloc_random(unsigned short random[3])
+{
+    uint64_t state = (uint64_t)random[0] | ((uint64_t)random[1] << 16) |
+                     ((uint64_t)random[2] << 32);
+    state = (state * UINT64_C(0x5deece66d) + 0xb) & UINT64_C(0xffffffffffff);
+    random[0] = (unsigned short)state;
+    random[1] = (unsigned short)(state >> 16);
+    random[2] = (unsigned short)(state >> 32);
+    return (double)state * 0x1p-48;
+}
+
 static void gc_debug_alloc_setnext(jl_alloc_num_t *num)
 {
     uint64_t interv = num->interv;
     if (num->random[0] && num->interv != 1) {
         // Randomly trigger GC with the same average frequency
         double scale = log(1.0 + 1.0 / (double)(num->interv - 1));
-        double randinterv = floor(fabs(log(erand48(num->random))) / scale) + 1;
-        interv = randinterv >= UINT64_MAX ? UINT64_MAX : (uint64_t)randinterv;
+        double randinterv = floor(fabs(log(gc_debug_alloc_random(num->random))) / scale) + 1;
+        interv = randinterv >= 0x1p64 ? UINT64_MAX : (uint64_t)randinterv;
     }
     uint64_t next = num->num + interv;
     if (!num->interv || next > num->max || interv > next)
@@ -467,6 +481,15 @@ int jl_gc_debug_check_other(void)
 
 void jl_gc_debug_fprint_status(ios_t *s) JL_NOTSAFEPOINT
 {
+    if (!GC_DEBUG_ENV_ENABLED) {
+        // May not be accurate but should be helpful enough
+        uint64_t pool_count = gc_num.poolalloc;
+        uint64_t big_count = gc_num.bigalloc;
+        jl_safe_fprintf(s, "Allocations: %" PRIu64 " "
+                        "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %d\n",
+                        pool_count + big_count, pool_count, big_count, gc_num.pause);
+        return;
+    }
     uint64_t pool_count = jl_gc_debug_env.pool.num;
     uint64_t other_count = jl_gc_debug_env.other.num;
     jl_safe_fprintf(s, "Allocations: %" PRIu64 " "
@@ -476,6 +499,8 @@ void jl_gc_debug_fprint_status(ios_t *s) JL_NOTSAFEPOINT
 
 void jl_gc_debug_fprint_critical_error(ios_t *s) JL_NOTSAFEPOINT
 {
+    if (!GC_DEBUG_ENV_ENABLED)
+        return;
     jl_gc_debug_fprint_status(s);
     if (!jl_gc_debug_env.wait_for_debugger)
         return;
@@ -512,9 +537,9 @@ JL_NO_ASAN static void gc_scrub_range(char *low, char *high)
     low = (char*)((uintptr_t)low & ~(uintptr_t)15);
     for (char **stack_p = ((char**)high) - 1; stack_p > (char**)low; stack_p--) {
         char *p = *stack_p;
-        size_t osize;
+        size_t osize = 0;
         jl_taggedvalue_t *tag = jl_gc_find_taggedvalue_pool(p, &osize);
-        if (osize <= sizeof(jl_taggedvalue_t) || !tag || gc_marked(tag->bits.gc))
+        if (!tag || osize <= sizeof(jl_taggedvalue_t) || gc_marked(tag->bits.gc))
             continue;
         // Never scrub a cancellation source. A dead one is still linked into
         // its parents' child lists (and a dead parent's `child_head` is still
@@ -540,7 +565,7 @@ JL_NO_ASAN static void gc_scrub_range(char *low, char *high)
 
 static void gc_scrub_task(jl_task_t *ta)
 {
-    int16_t tid = ta->tid;
+    int16_t tid = jl_atomic_load_relaxed(&ta->tid);
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_ptls_t ptls2 = NULL;
     if (tid != -1)
@@ -572,29 +597,14 @@ void gc_scrub(void)
         gc_scrub_task((jl_task_t*)jl_gc_debug_tasks.items[i]);
     jl_gc_debug_tasks.len = 0;
 }
-#else
-void jl_gc_debug_fprint_critical_error(ios_t *s)
-{
-}
+// GC_TIME || GC_FINAL_STATS
 
-void jl_gc_debug_fprint_status(ios_t *s)
-{
-    // May not be accurate but should be helpful enough
-    uint64_t pool_count = gc_num.poolalloc;
-    uint64_t big_count = gc_num.bigalloc;
-    jl_safe_fprintf(s, "Allocations: %" PRIu64 " "
-                    "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %d\n",
-                    pool_count + big_count, pool_count, big_count, gc_num.pause);
-}
-#endif
-
-#if defined(GC_TIME) || defined(GC_FINAL_STATS)
-STATIC_INLINE double jl_ns2ms(int64_t t)
+STATIC_INLINE double jl_ns2ms(int64_t t) JL_NOTSAFEPOINT
 {
     return t / (double)1e6;
 }
 
-STATIC_INLINE double jl_ns2s(int64_t t)
+STATIC_INLINE double jl_ns2s(int64_t t) JL_NOTSAFEPOINT
 {
     return t / (double)1e9;
 }
@@ -609,9 +619,9 @@ void gc_settime_postmark_end(void)
 {
     gc_postmark_end = jl_hrtime();
 }
-#endif
 
-#ifdef GC_FINAL_STATS
+// GC_FINAL_STATS
+
 #ifdef _OS_LINUX_
 #include <malloc.h> // for mallinfo
 #endif
@@ -680,6 +690,8 @@ static void gc_stats_pagetable(unsigned *p2, unsigned *p1, unsigned *p0)
 
 void jl_print_gc_stats(JL_STREAM *s)
 {
+    if (!GC_FINAL_STATS_ENABLED)
+        return;
 #ifdef _OS_LINUX_
     malloc_stats();
 #endif
@@ -710,18 +722,14 @@ void jl_print_gc_stats(JL_STREAM *s)
     double gct = gc_num.total_time / 1e9;
     struct mallinfo mi = mallinfo();
     jl_safe_printf("malloc size\t%d MB\n", mi.uordblks / 1024 / 1024);
-    jl_safe_printf("max page alloc\t%ld MB\n", max_pg_count * GC_PAGE_SZ / 1024 / 1024);
+    jl_safe_printf("max page alloc\t%zu MB\n", max_pg_count * GC_PAGE_SZ / 1024 / 1024);
     jl_safe_printf("total freed\t%" PRIuPTR " b\n", total_freed_bytes);
     jl_safe_printf("free rate\t%.1f MB/sec\n", (total_freed_bytes / gct) / 1024 / 1024);
 #endif
 }
-#else
-void jl_print_gc_stats(JL_STREAM *s)
-{
-}
-#endif
 
-#ifdef GC_TIME
+// GC_TIME
+
 static int64_t skipped_pages = 0;
 static int64_t total_pages = 0;
 static int64_t freed_pages = 0;
@@ -817,8 +825,8 @@ void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
     int64_t remset_nptr = 0;
     for (int t_i = 0; t_i < gc_n_threads; t_i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-        last_remset_len += ptls2->gc_tls.heap.last_remset->len;
-        remset_nptr = ptls2->gc_tls.heap.remset_nptr;
+        last_remset_len += ptls2->gc_tls.heap.remset.len;
+        remset_nptr += ptls2->gc_tls.heap.remset_nptr;
     }
     jl_safe_printf("GC mark pause %.2f ms | "
                    "scanned %" PRId64 " kB = %" PRId64 " + %" PRId64 " | "
@@ -892,34 +900,32 @@ void gc_heuristics_summary(
                    thrash_counter, reason,
                    current_heap/1024/1024, target_heap/1024/1024);
 }
-#endif
 
 void jl_gc_debug_init(void)
 {
-#ifdef GC_DEBUG_ENV
-    char *env = getenv("JULIA_GC_WAIT_FOR_DEBUGGER");
-    jl_gc_debug_env.wait_for_debugger = env && strcmp(env, "0") != 0;
-    gc_debug_alloc_init(&jl_gc_debug_env.pool, "POOL");
-    gc_debug_alloc_init(&jl_gc_debug_env.other, "OTHER");
-    gc_debug_alloc_init(&jl_gc_debug_env.print, "PRINT");
-    arraylist_new(&jl_gc_debug_tasks, 0);
-#endif
+    if (GC_DEBUG_ENV_ENABLED) {
+        char *env = getenv("JULIA_GC_WAIT_FOR_DEBUGGER");
+        jl_gc_debug_env.wait_for_debugger = env && strcmp(env, "0") != 0;
+        gc_debug_alloc_init(&jl_gc_debug_env.pool, "POOL");
+        gc_debug_alloc_init(&jl_gc_debug_env.other, "OTHER");
+        gc_debug_alloc_init(&jl_gc_debug_env.print, "PRINT");
+        arraylist_new(&jl_gc_debug_tasks, 0);
+    }
 
-#ifdef GC_VERIFY
-    for (int i = 0; i < 4; i++)
-        arraylist_new(&bits_save[i], 0);
-    arraylist_new(&lostval_parents, 0);
-    arraylist_new(&lostval_parents_done, 0);
-#endif
+    if (GC_VERIFY_ENABLED) {
+        for (int i = 0; i < 4; i++)
+            arraylist_new(&bits_save[i], 0);
+        arraylist_new(&lostval_parents, 0);
+        arraylist_new(&lostval_parents_done, 0);
+    }
 
-#ifdef GC_FINAL_STATS
-    process_t0 = jl_hrtime();
-#endif
+    if (GC_FINAL_STATS_ENABLED)
+        process_t0 = jl_hrtime();
 }
 
 // GC summary stats
 
-#ifdef MEMPROFILE
+// MEMPROFILE
 
 typedef struct _gc_memprofile_stat_t {
     size_t nfree; // for pool only
@@ -1027,8 +1033,8 @@ void gc_stats_big_obj(void)
             v = v->next;
         }
 
-        void **lst = ptls2->gc_tls.heap.mallocarrays.items;
-        for (size_t i = 0, l = ptls2->gc_tls.heap.mallocarrays.len; i < l; i++) {
+        void **lst = ptls2->gc_tls_common.heap.mallocarrays.items;
+        for (size_t i = 0, l = ptls2->gc_tls_common.heap.mallocarrays.len; i < l; i++) {
             jl_genericmemory_t *m = (jl_genericmemory_t*)((uintptr_t)lst[i] & ~(uintptr_t)1);
             uint8_t bits = jl_astaggedvalue(m)->bits.gc;
             if (gc_marked(bits)) {
@@ -1051,7 +1057,6 @@ void gc_stats_big_obj(void)
                    (long long)(stat.nused + stat.nused_old),
                    (long long)(stat.nused + stat.nused_old ? (stat.nused_old * 100) / (stat.nused + stat.nused_old) : 0));
 }
-#endif //MEMPROFILE
 
 // Simple and dumb way to count cells with different gc bits in allocated pages
 // Use as ground truth for debugging memory-leak-like issues.

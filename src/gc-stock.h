@@ -598,23 +598,57 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT;
 NOINLINE void jl_gc_free_page(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT;
 
 // GC debug
-#if defined(GC_TIME) || defined(GC_FINAL_STATS)
+//
+// The helpers below are compiled in every build, so that changes to the GC cannot
+// silently break them: nobody enables them routinely (see `src/options.h` and the
+// `WITH_GC_VERIFY` and `WITH_GC_DEBUG_ENV` make options). Every call is gated by one
+// of the `*_ENABLED` constants instead, so that the compiler drops the calls and the
+// helpers cost nothing while they are disabled.
+#ifdef GC_TIME
+#define GC_TIME_ENABLED 1
+#else
+#define GC_TIME_ENABLED 0
+#endif
+#ifdef GC_FINAL_STATS
+#define GC_FINAL_STATS_ENABLED 1
+#else
+#define GC_FINAL_STATS_ENABLED 0
+#endif
+#ifdef MEMFENCE
+#define MEMFENCE_ENABLED 1
+#else
+#define MEMFENCE_ENABLED 0
+#endif
+#ifdef GC_VERIFY
+#define GC_VERIFY_ENABLED 1
+#else
+#define GC_VERIFY_ENABLED 0
+#endif
+#ifdef GC_ASSERT_PARENT_VALIDITY
+#define GC_ASSERT_PARENT_VALIDITY_ENABLED 1
+#else
+#define GC_ASSERT_PARENT_VALIDITY_ENABLED 0
+#endif
+#ifdef GC_DEBUG_ENV
+#define GC_DEBUG_ENV_ENABLED 1
+#else
+#define GC_DEBUG_ENV_ENABLED 0
+#endif
+#ifdef MEMPROFILE
+#define MEMPROFILE_ENABLED 1
+#else
+#define MEMPROFILE_ENABLED 0
+#endif
+
+// GC_TIME || GC_FINAL_STATS
 void gc_settime_premark_end(void);
 void gc_settime_postmark_end(void);
-#else
-#define gc_settime_premark_end()
-#define gc_settime_postmark_end()
-#endif
 
-#ifdef GC_FINAL_STATS
+// GC_FINAL_STATS
 void gc_final_count_page(size_t pg_cnt);
 void gc_final_pause_end(int64_t t0, int64_t tend);
-#else
-#define gc_final_count_page(pg_cnt)
-#define gc_final_pause_end(t0, tend)
-#endif
 
-#ifdef GC_TIME
+// GC_TIME
 void gc_time_pool_start(void) JL_NOTSAFEPOINT;
 void gc_time_count_page(int freedall, int pg_skpd) JL_NOTSAFEPOINT;
 void gc_time_pool_end(int sweep_full) JL_NOTSAFEPOINT;
@@ -642,55 +676,17 @@ void gc_heuristics_summary(
         uint64_t old_pause_time, uint64_t gc_time,
         int thrash_counter, const char *reason,
         uint64_t current_heap, uint64_t target_heap);
-#else
-#define gc_time_pool_start()
-STATIC_INLINE void gc_time_count_page(int freedall, int pg_skpd) JL_NOTSAFEPOINT
-{
-    (void)freedall;
-    (void)pg_skpd;
-}
-#define gc_time_pool_end(sweep_full) (void)(sweep_full)
-#define gc_time_big_start()
-STATIC_INLINE void gc_time_count_big(int old_bits, int bits) JL_NOTSAFEPOINT
-{
-    (void)old_bits;
-    (void)bits;
-}
-#define gc_time_big_end()
-#define gc_time_mallocd_memory_start()
-STATIC_INLINE void gc_time_count_mallocd_memory(int bits) JL_NOTSAFEPOINT
-{
-    (void)bits;
-}
-#define gc_time_mallocd_memory_end()
-#define gc_time_mark_pause(t0, scanned_bytes, perm_scanned_bytes)
-#define gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,        \
-                            estimate_freed, sweep_full)
-#define  gc_time_summary(sweep_full, start, end, freed, live,           \
-                         interval, pause, ttsp, mark, sweep)
-#define gc_heuristics_summary( \
-        old_alloc_diff, alloc_mem, \
-        old_mut_time, alloc_time, \
-        old_freed_diff, gc_mem, \
-        old_pause_time, gc_time, \
-        thrash_counter, reason, \
-        current_heap, target_heap)
-#endif
 
-#ifdef MEMFENCE
+// MEMFENCE
 void gc_verify_tags(void) JL_NOTSAFEPOINT;
-#else
-static inline void gc_verify_tags(void) JL_NOTSAFEPOINT
-{
-}
-#endif
 
-#ifdef GC_VERIFY
+// GC_VERIFY
 extern jl_value_t *lostval;
+extern int gc_verifying;
 void gc_verify(jl_ptls_t ptls);
 void add_lostval_parent(jl_value_t *parent);
 #define verify_val(v) do {                                              \
-        if (lostval == (jl_value_t*)(v) && (v) != 0) {                  \
+        if (GC_VERIFY_ENABLED && lostval == (jl_value_t*)(v) && (v) != 0) { \
             jl_printf(JL_STDOUT,                                        \
                       "Found lostval %p at %s:%d oftype: ",             \
                       (void*)(lostval), __FILE__, __LINE__);            \
@@ -700,7 +696,8 @@ void add_lostval_parent(jl_value_t *parent);
     } while(0);
 
 #define verify_parent(ty, obj, slot, args...) do {                      \
-        if (gc_ptr_clear_tag(*(void**)(slot), 3) == (void*)lostval &&   \
+        if (GC_VERIFY_ENABLED &&                                        \
+            gc_ptr_clear_tag(*(void**)(slot), 3) == (void*)lostval &&   \
             (jl_value_t*)(obj) != lostval) {                            \
             jl_printf(JL_STDOUT, "Found parent %p %p at %s:%d\n",       \
                       (void*)(ty), (void*)(obj), __FILE__, __LINE__);   \
@@ -716,14 +713,6 @@ void add_lostval_parent(jl_value_t *parent);
 
 #define verify_parent1(ty,obj,slot,arg1) verify_parent(ty,obj,slot,arg1)
 #define verify_parent2(ty,obj,slot,arg1,arg2) verify_parent(ty,obj,slot,arg1,arg2)
-extern int gc_verifying;
-#else
-#define gc_verify(ptls)
-#define verify_val(v)
-#define verify_parent1(ty,obj,slot,arg1) do {} while (0)
-#define verify_parent2(ty,obj,slot,arg1,arg2) do {} while (0)
-#define gc_verifying (0)
-#endif
 
 // Does this (live or dead-this-cycle) cell hold a cancellation source? Such
 // cells take part in the collector's own weak (unlink-on-death) child lists,
@@ -733,36 +722,17 @@ STATIC_INLINE int gc_is_cancel_source(jl_taggedvalue_t *v) JL_NOTSAFEPOINT
     return (v->header & ~(uintptr_t)0xf) == (jl_cancel_source_tag << 4);
 }
 
-#ifdef GC_DEBUG_ENV
+// GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;
+int gc_debug_check_pool(void);
 int jl_gc_debug_check_other(void);
 void jl_gc_debug_print(void);
 void gc_scrub_record_task(jl_task_t *ta) JL_NOTSAFEPOINT;
 void gc_scrub(void);
-#else
-STATIC_INLINE int jl_gc_debug_check_other(void) JL_NOTSAFEPOINT
-{
-    return 0;
-}
-STATIC_INLINE void jl_gc_debug_print(void) JL_NOTSAFEPOINT
-{
-}
-STATIC_INLINE void gc_scrub_record_task(jl_task_t *ta) JL_NOTSAFEPOINT
-{
-    (void)ta;
-}
-STATIC_INLINE void gc_scrub(void) JL_NOTSAFEPOINT
-{
-}
-#endif
 
-#ifdef MEMPROFILE
+// MEMPROFILE
 void gc_stats_all_pool(void);
 void gc_stats_big_obj(void);
-#else
-#define gc_stats_all_pool()
-#define gc_stats_big_obj()
-#endif
 
 #ifdef __cplusplus
 }
