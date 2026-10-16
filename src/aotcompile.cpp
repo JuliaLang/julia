@@ -2598,7 +2598,6 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
         JL_TIMING(NATIVE_AOT, NATIVE_Write);
 
         object::Archive::Kind Kind = getDefaultForHost(TheTriple);
-#define WritingMode SymtabWritingMode::NormalSymtab
 #define WRITE_ARCHIVE(fname, field, prefix, suffix) \
     if (fname) {\
         SmallVector<NewArchiveMember, 0> archive; \
@@ -2615,7 +2614,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
         for (size_t i = 0; i < filenames.size(); i++) { \
             archive.push_back(NewArchiveMember(MemoryBufferRef(buffers[i], filenames[i]))); \
         } \
-        handleAllErrors(writeArchive(fname, archive, WritingMode, Kind, true, false), reportWriterError); \
+        handleAllErrors(writeArchive(fname, archive, SymtabWritingMode::NormalSymtab, Kind, true, false), reportWriterError); \
     }
 
         WRITE_ARCHIVE(unopt_bc_fname, unopt, "_unopt", ".bc");

@@ -881,16 +881,15 @@ static void jl_dump_asm_internal(
     MCTargetOptions Options;
     Options.AsmVerbose = true;
     Options.MCUseDwarfDirectory = MCTargetOptions::EnableDwarfDirectory;
-    const Triple &TripleArg = TheTriple;
     std::unique_ptr<MCAsmInfo> MAI(
-        TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TripleArg), TripleArg, Options));
+        TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TheTriple), TheTriple, Options));
     assert(MAI && "Unable to create target asm info!");
 
-    std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TripleArg));
+    std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TheTriple));
     assert(MRI && "Unable to create target register info!");
 
     std::unique_ptr<llvm::MCSubtargetInfo> STI(
-      TheTarget->createMCSubtargetInfo(TripleArg, cpu, features));
+      TheTarget->createMCSubtargetInfo(TheTriple, cpu, features));
     assert(STI && "Unable to create subtarget info!");
 
     MCContext Ctx(TheTriple, *MAI, *MRI, *STI, &SrcMgr);

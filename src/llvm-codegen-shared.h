@@ -14,8 +14,6 @@
 
 #include "julia.h"
 
-static constexpr std::nullopt_t None = std::nullopt;
-
 enum AddressSpace {
     Generic = 0,
     Tracked = 10,

@@ -50,9 +50,7 @@
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/Scalar/IndVarSimplify.h>
 #include <llvm/Transforms/Scalar/InductiveRangeCheckElimination.h>
-#if JL_LLVM_VERSION >= 180000
 #include <llvm/Transforms/Scalar/InferAlignment.h>
-#endif
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
 #include <llvm/Transforms/Scalar/JumpThreading.h>
 #include <llvm/Transforms/Scalar/LICM.h>
@@ -570,9 +568,7 @@ static void buildVectorPipeline(FunctionPassManager &FPM, PassBuilder *PB, Optim
         FPM.addPass(LoopDistributePass());
         FPM.addPass(InjectTLIMappings());
         FPM.addPass(LoopVectorizePass());
-#if JL_LLVM_VERSION >= 180000
         FPM.addPass(InferAlignmentPass());
-#endif
         FPM.addPass(LoopLoadEliminationPass());
         FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
         FPM.addPass(createFunctionToLoopPassAdaptor(LICMPass(LICMOptions()), /*UseMemorySSA=*/true));
@@ -587,9 +583,7 @@ static void buildVectorPipeline(FunctionPassManager &FPM, PassBuilder *PB, Optim
         invokeVectorizerCallbacks(FPM, PB, O);
         FPM.addPass(LoopUnrollPass(LoopUnrollOptions(getSpeedupLevel(O), /*OnlyWhenForced = */ false, /*ForgetSCEV = */false)));
         FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
-#if JL_LLVM_VERSION >= 180000
         FPM.addPass(InferAlignmentPass());
-#endif
         FPM.addPass(InstSimplifyPass());
         // No TailCallElim: `tail` lets AA assume the callee cannot access caller allocas, but GC frames are reachable through the task
     }
@@ -605,8 +599,6 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
             JULIA_PASS(FPM.addPass(GCInvariantVerifierPass(false)));
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
-        // Needed **before** LateLowerGCFrame on LLVM < 12
-        // due to bug in `CreateAlignmentAssumption`.
         assert(options.remove_ni);
         JULIA_PASS(MPM.addPass(RemoveNIPass()));
         {
@@ -1013,7 +1005,7 @@ void NewPM::run(Module &M) {
     ModuleAnalysisManager MAM;
     SI.registerCallbacks(PIC, &MAM);
     SI.getTimePasses().setOutStream(nulls()); //TODO: figure out a better way of doing this
-    PassBuilder PB(TM.get(), PipelineTuningOptions(), None, &PIC);
+    PassBuilder PB(TM.get(), PipelineTuningOptions(), std::nullopt, &PIC);
     PB.registerLoopAnalyses(LAM);
     PB.registerFunctionAnalyses(FAM);
     PB.registerCGSCCAnalyses(CGAM);
@@ -1140,7 +1132,7 @@ static std::optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJul
         }
         return {{O, options}};
     }
-    return None;
+    return std::nullopt;
 }
 
 bool verifyLLVMIR(const Module &M) JL_NOTSAFEPOINT {

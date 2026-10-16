@@ -194,7 +194,7 @@ repository) and then compiled from source the first time you run
 `make`. The specific version numbers of these libraries that Julia
 uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/julia/blob/master/deps/):
 
-- **[LLVM](https://www.llvm.org)** (15.0 + [patches](https://github.com/JuliaLang/llvm-project/tree/julia-release/15.x)) — compiler infrastructure (see [note below](#llvm)).
+- **[LLVM](https://www.llvm.org)** (23.1 + [patches](https://github.com/JuliaLang/llvm-project/tree/julia-release/23.x)) — compiler infrastructure (see [note below](#llvm)).
 - **[FemtoLisp](https://github.com/JeffBezanson/femtolisp)**            — packaged with Julia source, and used to implement the compiler front-end.
 - **[libuv](https://github.com/JuliaLang/libuv)**  (custom fork) — portable, high-performance event-based I/O library.
 - **[OpenLibm](https://github.com/JuliaLang/openlibm)**             — portable libm library containing elementary math functions.
@@ -236,7 +236,7 @@ USE_BINARYBUILDER_LLVM = 0
 DEPS_GIT = llvm
 # 3. optionally override the origin/branch/commit (defaults live in deps/<name>.version and .mk)
 LLVM_GIT_URL = https://github.com/JuliaLang/llvm-project.git
-LLVM_BRANCH = julia-release/18.x
+LLVM_BRANCH = julia-release/23.x
 LLVM_SHA1 = $(LLVM_BRANCH)   # a branch name, tag, or explicit commit hash
 ```
 
@@ -275,7 +275,7 @@ The most complicated dependency is LLVM, for which we require additional patches
 For packaging Julia with LLVM, we recommend either:
  - bundling a Julia-only LLVM library inside the Julia package, or
  - adding the patches to the LLVM package of the distribution.
-   * A complete list of patches is available on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/18.x` branch.
+   * A complete list of patches is available on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/23.x` branch.
    * The remaining patches are all upstream bug fixes, and have been contributed into upstream LLVM.
 
 Using an unpatched or different version of LLVM will result in errors and/or poor performance.

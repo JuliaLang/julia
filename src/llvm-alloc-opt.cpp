@@ -132,9 +132,9 @@ private:
     ssize_t getGCAllocSize(Instruction *I);
     void pushInstruction(Instruction *I);
 
-    void insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert);
-    // insert llvm.lifetime.* calls for `ptr` with size `sz` based on the use of `orig`.
-    void insertLifetime(Value *ptr, Constant *sz, Instruction *orig);
+    void insertLifetimeEnd(Value *ptr, Instruction *insert);
+    // insert llvm.lifetime.* calls for `ptr` based on the use of `orig`.
+    void insertLifetime(Value *ptr, Instruction *orig);
 
     void checkInst(CallInst *I);
 
@@ -410,7 +410,7 @@ void Optimizer::checkInst(CallInst *I)
     });
 }
 
-void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
+void Optimizer::insertLifetimeEnd(Value *ptr, Instruction *insert)
 {
     BasicBlock::iterator it(insert);
     BasicBlock::iterator begin(insert->getParent()->begin());
@@ -429,15 +429,11 @@ void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
         }
         break;
     }
-    // LLVM 22 dropped the size operand from the lifetime intrinsics.
-    (void)sz;
     CallInst::Create(pass.lifetime_end, {ptr}, "", insert->getIterator());
 }
 
-void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
+void Optimizer::insertLifetime(Value *ptr, Instruction *orig)
 {
-    // LLVM 22 dropped the size operand from the lifetime intrinsics.
-    (void)sz;
     CallInst::Create(pass.lifetime_start, {ptr}, "", orig->getIterator());
     BasicBlock *def_bb = orig->getParent();
     std::set<BasicBlock*> bbs{def_bb};
@@ -571,11 +567,11 @@ void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
             // Otherwise, there could be use that we don't track
             // before hitting the next safepoint.
             if (!DT.dominates(orig, bb)) {
-                insertLifetimeEnd(ptr, sz, &*bb->getFirstInsertionPt());
+                insertLifetimeEnd(ptr, &*bb->getFirstInsertionPt());
                 continue;
             }
             else if (auto insert = getFirstSafepoint(bb)) {
-                insertLifetimeEnd(ptr, sz, insert);
+                insertLifetimeEnd(ptr, insert);
                 continue;
             }
         }
@@ -587,7 +583,7 @@ void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
             for (; it != end; ++it) {
                 auto insert = &*it;
                 if (isSafepoint(insert)) {
-                    insertLifetimeEnd(ptr, sz, insert);
+                    insertLifetimeEnd(ptr, insert);
                     safepoint_found = true;
                     break;
                 }
@@ -714,7 +710,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
         buff->setAlignment(align);
         ptr = cast<Instruction>(buff);
     }
-    insertLifetime(ptr, ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), sz), orig_inst);
+    insertLifetime(ptr, orig_inst);
     if (sz != 0 && !has_ref) { // TODO: fix has_ref case too
         IRBuilder<> builder(orig_inst);
         initializeAlloca(builder, buff, allockind);
@@ -1006,7 +1002,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         slot.slot = prolog_builder.CreateAlloca(allocty);
         slot.slot->setAlignment(align);
         IRBuilder<> builder(orig_inst);
-        insertLifetime(slot.slot, ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), field.size), orig_inst);
+        insertLifetime(slot.slot, orig_inst);
         if (field.hasobjref) {
             // alloca must be promotable for PromoteMemToReg below
             if ((use_info.allockind & AllocFnKind::Uninitialized) == AllocFnKind::Unknown)

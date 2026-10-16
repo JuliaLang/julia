@@ -1318,7 +1318,7 @@ namespace {
             // Let LLVM pick a default suitable for jitting on 32bit
             CodeModel::Large;
 #else
-            None;
+            std::nullopt;
 #endif
         if (TheTriple.isAArch64())
             codemodel = CodeModel::Small;

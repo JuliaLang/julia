@@ -267,10 +267,6 @@ $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patc
 LLVM_PATCH_PREV := $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
-ifeq ($(shell test $(LLVM_VER_MAJ) -lt 19 && echo true),true)
-$(eval $(call LLVM_PATCH,llvm-ittapi-cmake))
-endif
-
 ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zlib
 endif
@@ -282,8 +278,6 @@ endif
 # LLVM's configure checks link against libraries installed by csl.
 $(LLVM_BUILDDIR_withtype)/build-configured: | install-csl
 
-
-# NOTE: LLVM 12 and 13 have their patches applied to JuliaLang/llvm-project
 
 # declare that all patches must be applied before running ./configure
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV)

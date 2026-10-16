@@ -112,11 +112,7 @@ struct STIBuilder {
         key += FS;
         auto &slot = cache[key];
         if (!slot) {
-#if JL_LLVM_VERSION >= 220000
             slot.reset(T->createMCSubtargetInfo(TT, CPU, FS));
-#else
-            slot.reset(T->createMCSubtargetInfo(TT.str(), CPU, FS));
-#endif
         }
         return slot.get();
     }

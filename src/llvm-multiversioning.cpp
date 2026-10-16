@@ -258,7 +258,7 @@ struct TargetSpec {
 static std::optional<SmallVector<TargetSpec, 0>> get_target_specs(Module &M) {
     auto md = M.getModuleFlag("julia.mv.specs");
     if (!md)
-        return None;
+        return std::nullopt;
     auto tup = cast<MDTuple>(md);
     SmallVector<TargetSpec, 0> out(tup->getNumOperands());
     for (unsigned i = 0; i < tup->getNumOperands(); i++) {
