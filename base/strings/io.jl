@@ -314,7 +314,9 @@ IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.stri
 Join any `iterator` into a single string, inserting the given delimiter (if any) between
 adjacent items.  If `last` is given, it will be used instead of `delim` between the last
 two items.  Each item of `iterator` is converted to a string via `print(io::IOBuffer, x)`.
-If `io` is given, the result is written to `io` rather than returned as a `String`.
+If `io` is given, the result is written to `io` rather than returned as a `String` (or as an
+[`AnnotatedString`](@ref Base.AnnotatedString) when needed to preserve annotations of the
+items, `delim` or `last`).
 
 # Examples
 ```jldoctest
@@ -393,10 +395,12 @@ characters are escaped either with their standard C escape codes, `"\\0"` for NU
 unambiguous), unicode code point (`"\\u"` prefix) or hex (`"\\x"` prefix).
 
 The optional `esc` argument specifies any additional characters that should also be
-escaped by a prepending backslash (`\"` is also escaped by default in the first form).
+escaped by a prepending backslash. In the first form, `esc` defaults to `('\"',)`, so
+`\"` is escaped unless `esc` is passed explicitly without it (e.g. `escape_string(str, ())`).
 
 The argument `keep` specifies a collection of characters which are to be kept as
-they are. Notice that `esc` has precedence here.
+they are. Notice that `esc` has precedence here, so adding `\"` to `keep` does not prevent
+it from being escaped by the default `esc` of the first form.
 
 The argument `ascii` can be set to `true` to escape all non-ASCII characters,
 whereas the default `ascii=false` outputs printable Unicode characters as-is.
@@ -422,6 +426,12 @@ julia> escape_string("aaa\\nbbb")
 
 julia> escape_string("aaa\\nbbb"; keep = '\\n')
 "aaa\\nbbb"
+
+julia> escape_string("\\"a\\"")
+"\\\\\\"a\\\\\\""
+
+julia> escape_string("\\"a\\"", ()) # do not escape `"`
+"\\"a\\""
 
 julia> escape_string("\\xfe\\xff") # invalid utf-8
 "\\\\xfe\\\\xff"
