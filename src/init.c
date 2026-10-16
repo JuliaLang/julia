@@ -623,6 +623,11 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
 
     jl_gc_enable(1);
 
+    // Writing a sysimage infers code and later needs it again to emit it. Keep it
+    // until then; it is dropped again before the image is serialized.
+    if (jl_options.outputo && !jl_options.incremental)
+        jl_set_precompile_keep_ir(1);
+
     if ((sysimage.kind != JL_IMAGE_KIND_NONE) &&
             (!jl_generating_output() || jl_options.incremental) && jl_module_init_order) {
         jl_array_t *init_order = jl_module_init_order;
