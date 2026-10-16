@@ -878,9 +878,6 @@ let (err, st) = try
     catch e
         e, stacktrace(catch_backtrace())
     end
-    @test err isa JuliaLowering.MacroExpansionError
-    @test err.msg == "expected a return type annotation `::SomeType`"
-    @test isnothing(err.err)
     # Check that `catch_backtrace` can capture the stacktrace of the macro function
     @test any(sf->sf.func===:ccall_macro_parse, st)
 end

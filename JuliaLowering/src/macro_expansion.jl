@@ -112,12 +112,6 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
               " in module ", syntax_module(ctx.macrocall))
     end
     print(io, ":\n")
-    # TODO: Display niceties:
-    # * Show the full provenance tree somehow, in addition to the primary
-    #   source location we're showing here?
-    # * What if the expression doesn't arise from a source file?
-    # * How to deal with highlighting trivia? Could provide a token kind or
-    #   child position within the raw tree? How to abstract this??
     src = sourceref(exc.ex)
     if src isa LineNumberNode
         highlight(io, src, note=exc.msg)
@@ -173,7 +167,7 @@ function eval_macro_name(ctx, mctx::MacroContext, st0::SyntaxTree)
             ccall(:jl_toplevel_eval, Any, (Any, Any), mod, expr_form)
         end
     catch err
-        throw(MacroExpansionError(mctx, st, "Macro not found", err))
+        rethrow(MacroExpansionError(mctx, st, "Macro not found", err))
     end
 end
 
@@ -217,10 +211,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
         expanded = try
             _invoke_in_world(ctx.world, macfunc, macro_args...)
         catch exc
-            newexc = exc isa MacroExpansionError ?
-                MacroExpansionError(mctx, exc.ex, exc.msg, exc.err) :
-                MacroExpansionError(mctx, st, "Error expanding macro", exc)
-            rethrow(newexc)
+            rethrow(MacroExpansionError(mctx, st, "Error expanding macro", exc))
         end
         st_out = if expanded isa SyntaxTree
             expanded

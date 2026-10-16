@@ -296,6 +296,13 @@ GC.@preserve a b g() begin
 end
 #---------------------
 MacroExpansionError while expanding GC.@preserve in module Main.TestMod:
+┌─────────────────────────
+GC.@preserve a b g() begin
+    body
+end
+#─┘ ── Error expanding macro
+Caused by:
+LoweringError:
 GC.@preserve a b g() begin
 #                └─┘ ── Preserved variable must be a symbol
     body
@@ -309,7 +316,7 @@ end
 2   (call core.tuple %₁)
 3   (call JuliaLowering.interpolate_syntax (syntaxinert (call (syntaxunquote f) x y)) %₂)
 4   (call Base.fill_context %₃ SyntaxContext(#=omitted=#))
-5   (= slot₁/eval_result (call JuliaLowering.eval TestMod %₄))
+5   (= slot₁/eval_result (call Base.JuliaLowering.eval TestMod %₄))
 6   latestworld
 7   slot₁/eval_result
 8   (return %₇)
@@ -323,7 +330,7 @@ end
 3   (call core.tuple %₂)
 4   (call JuliaLowering.interpolate_syntax (syntaxinert (call (syntaxunquote f) x y)) %₃)
 5   (call Base.fill_context %₄ SyntaxContext(#=omitted=#))
-6   (= slot₁/eval_result (call JuliaLowering.eval %₁ %₅))
+6   (= slot₁/eval_result (call Base.JuliaLowering.eval %₁ %₅))
 7   latestworld
 8   slot₁/eval_result
 9   (return %₈)
@@ -366,6 +373,10 @@ JuxtuposeTest.@emit_juxtupose
 @cfunction(f, Int, NotATuple)
 #---------------------
 MacroExpansionError while expanding @cfunction in module Main.TestMod:
+@cfunction(f, Int, NotATuple)
+└───────────────────────────┘ ── Error expanding macro
+Caused by:
+LoweringError:
 @cfunction(f, Int, NotATuple)
 #                  └───────┘ ── @cfunction argument types must be a literal tuple
 
@@ -444,13 +455,21 @@ ccall(:fcntl, Cint, (RawFD, Cint, Cint...), s, F_GETFL)
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall strlen("foo"::Cstring)
-#                            └ ── expected a return type annotation `::SomeType`
+└───────────────────────────┘ ── Error expanding macro
+Caused by:
+LoweringError:
+@ccall strlen("foo"::Cstring)
+#      └────────────────────┘ ── expected a return type annotation `::SomeType`
 
 ########################################
 # Error: No argument type on @ccall
 @ccall foo("blah"::Cstring, "bad")::Int
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
+@ccall foo("blah"::Cstring, "bad")::Int
+└─────────────────────────────────────┘ ── Error expanding macro
+Caused by:
+LoweringError:
 @ccall foo("blah"::Cstring, "bad")::Int
 #                           └───┘ ── argument needs a type annotation
 
@@ -460,6 +479,10 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall foo(; x::Int)::Int
+└───────────────────────┘ ── Error expanding macro
+Caused by:
+LoweringError:
+@ccall foo(; x::Int)::Int
 #          └──────┘ ── C ABI prohibits varargs without one required argument
 
 ########################################
@@ -467,6 +490,10 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall foo(; x::Int; y::Float64)::Int
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
+@ccall foo(; x::Int; y::Float64)::Int
+└───────────────────────────────────┘ ── Error expanding macro
+Caused by:
+LoweringError:
 @ccall foo(; x::Int; y::Float64)::Int
 #          └──────┘ ── C ABI prohibits varargs without one required argument
 
@@ -476,6 +503,10 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall $(:(foo))(1::Cint)::Cint
+└─────────────────────────────┘ ── Error expanding macro
+Caused by:
+LoweringError:
+@ccall $(:(foo))(1::Cint)::Cint
 #      └───────┘ ── interpolated value should be a variable or expression, not a literal name or tuple
 
 ########################################
@@ -483,6 +514,10 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall bad_opt foo(x::Int)::Int
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
+@ccall bad_opt foo(x::Int)::Int
+└─────────────────────────────┘ ── Error expanding macro
+Caused by:
+LoweringError:
 @ccall bad_opt foo(x::Int)::Int
 #      └─────┘ ── bad option to ccall
 
@@ -492,6 +527,10 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall bad_opt=true foo(x::Int)::Int
+└──────────────────────────────────┘ ── Error expanding macro
+Caused by:
+LoweringError:
+@ccall bad_opt=true foo(x::Int)::Int
 #      └─────┘ ── unknown option name for ccall
 
 ########################################
@@ -499,6 +538,10 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall gc_safe="hi" foo(x::Int)::Int
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
+@ccall gc_safe="hi" foo(x::Int)::Int
+└──────────────────────────────────┘ ── Error expanding macro
+Caused by:
+LoweringError:
 @ccall gc_safe="hi" foo(x::Int)::Int
 #              └──┘ ── gc_safe must be true or false
 
