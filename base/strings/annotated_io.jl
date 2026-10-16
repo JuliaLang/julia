@@ -321,7 +321,7 @@ the same whatever union of value types holds it.
 module AnnotatedDisplay
 
 using ..Base: IO, IOBuffer, SubString, AnnotatedString, AnnotatedChar, AnnotatedIOBuffer
-using ..Base: eachregion, ActiveAnnotations, unannotate, raw_substring, annotations, annotatedstring, uniontypes
+using ..Base: eachregion, RegionIterator, unannotate, raw_substring, annotations, annotatedstring, uniontypes
 using ..Base: invoke_in_world, tls_world_age, inferencebarrier, escape_string, annotate!, _clear_annotations_in_region!, RegionAnnotation
 
 public context, reduction, transition
@@ -345,6 +345,10 @@ The state of a region, from those of its annotation `values` of type `T`, the co
 is called for, which it selects with `value isa T`. With none, this is the baseline, where
 display starts and ends. A type without a method is not displayed, and one without a `context`
 can leave out `ctx`.
+
+Every state of a type is of its baseline's type, so that its reduction is type-stable and display
+compiles once for it. A type whose baseline is `nothing` is not displayed, and a state of another
+type displays as the baseline.
 """
 reduction(mime::MIME, ::Type{T}, _, values) where {T} = reduction(mime, T, values)
 reduction(::MIME, ::Type, _) = nothing
@@ -358,7 +362,7 @@ one value type, as `transition` dispatches on the states.
 For `text/html`, a state's fields are its visible properties, a transition opens an element
 within the current one, and a transition to `nothing` closes the element its state opened.
 """
-transition(io::IO, ::MIME, ::Nothing, ::Nothing) = nothing
+function transition end
 
 ## Rendering
 
@@ -381,8 +385,16 @@ Write `x` to `io` as `mime`, with its text written by `writetext(io, str)`.
 function render(writetext::F, mime::MIME, io::IO, s::AnnotatedStr{S, V}) where {F, S, V}
     ctxs = contexts(mime, V)
     isnothing(ctxs) && return invoke_in_world(tls_world_age(), renderheld, writetext, mime, io, s)
-    render(writetext, mime, io, s, annots -> (@inline; reductions(mime, V, ctxs, annots)))
+    # Only the types that display, so one that doesn't adds no rendering compiled for itself
+    D = displayed(V, reductions(mime, V, ctxs, Memory{Union{}}(undef, 0)))
+    D === Union{} && return writetext(io, unannotate(s))
+    dctxs = contexts(mime, D)
+    render(writetext, mime, io, eachregion(s, firstindex(s):lastindex(s), D), annots -> (@inline; reductions(mime, D, dctxs, annots)))
 end
+
+# The members of `V` whose baseline `states` are not `nothing`
+@generated displayed(::Type{V}, ::B) where {V, B <: Tuple} =
+    Union{(T for (T, state) in zip(uniontypes(V), fieldtypes(B)) if state !== Nothing)...}
 
 # Compiled once for whatever types `s` holds, in the latest world. Its interface calls go through
 # barriers, here and in `render`, so a new value type's methods invalidate nothing compiled for it.
@@ -391,22 +403,29 @@ function renderheld(writetext, mime::MIME, io::IO, @nospecialize(s::AnnotatedStr
     # As a `Union`, which is built without compiling anything for the types it holds
     types = uniontypes(Union{Type[typeof(value) for (; value) in annotations(s)]...})
     ctxs = Any[inferencebarrier(context)(mime, T) for T in types]
-    render(writetext, mime, io, s, annots ->
+    # Only the types that display, as for a known union in `render`
+    shown = [!isnothing(inferencebarrier(reduction)(mime, T, ctx, Memory{Union{}}(undef, 0))) for (T, ctx) in zip(types, ctxs)]
+    keepat!(types, shown) # In place, as reassigning variables the closure below captures would box them
+    keepat!(ctxs, shown)
+    render(writetext, mime, io, eachregion(s), annots ->
         Any[inferencebarrier(reduction)(mime, T, ctx, annots) for (T, ctx) in zip(types, ctxs)])
 end
 
 render(writetext::F, mime::MIME, io::IO, c::AnnotatedChar) where {F} =
     render(writetext, mime, io, annotatedstring(c))
 
-function render(writetext, mime::MIME, io::IO, s::AnnotatedStr, statesof)
-    regions = eachregion(s)
-    bases = statesof(ActiveAnnotations(regions, regions.pos)) # Before its first region, the iterator's annotations are none
+function render(writetext, mime::MIME, io::IO, regions::RegionIterator, statesof)
+    bases = statesof(Memory{Union{}}(undef, 0))
     # Through a barrier for types found from the values, as in `renderheld`. Applied in the call, as
     # a closure capturing `inferencebarrier(transition)` is specialised on what it captures.
     transit = if bases isa Tuple transition else (args...) -> inferencebarrier(transition)(args...) end
+    # A state of another type than its baseline's breaks the interface, and displays as the baseline
+    conform(state, base) = if state isa typeof(base) state else base end
     written = change(transit, io, mime, nothing, bases)
     for (str, annots) in regions
-        written = change(transit, io, mime, written, statesof(annots))
+        states = statesof(annots)
+        states = if states isa Tuple map(conform, states, bases) else map!(conform, states, states, bases) end
+        written = change(transit, io, mime, written, states)
         writetext(io, str)
     end
     change(transit, io, mime, written, bases)

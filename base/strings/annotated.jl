@@ -675,33 +675,35 @@ julia> map(collect, eachregion(a))
  ["there", [:italic]]
 ```
 """
-function eachregion(s::AnnotatedString{S, V}, subregion::UnitRange{Int}=firstindex(s):lastindex(s)) where {S, V}
+function eachregion(s::AnnotatedString{S, V}, subregion::UnitRange{Int}=firstindex(s):lastindex(s), ::Type{T}=V) where {S, V, T}
     # Whole characters, so a region's annotations read the same during iteration and after it
     isempty(subregion) || (subregion = thisind(s, first(subregion)):nextind(s, thisind(s, last(subregion))) - 1)
-    RegionIterator{S, V}(s.string, s.annotations, annotation_events(s, subregion),
-                         unsigned(top_set_bit(2 * length(s.annotations) + 1)), subregion)
+    # Only this reads the values as `V`, so the iteration is compiled for `T`
+    annots = if V <: T s.annotations else RegionAnnotation{T}[annot for annot in s.annotations if annot.value isa T] end
+    RegionIterator(s.string, annots, annotation_events(s.string, annots, subregion),
+                   unsigned(top_set_bit(2 * length(annots) + 1)), subregion)
 end
 
-eachregion(s::SubString{AnnotatedString{S, V}}, pos::UnitRange{Int}=firstindex(s):lastindex(s)) where {S, V} =
-    eachregion(s.string, first(pos)+s.offset:last(pos)+s.offset)
+eachregion(s::SubString{AnnotatedString{S, V}}, pos::UnitRange{Int}=firstindex(s):lastindex(s), ::Type{T}=V) where {S, V, T} =
+    eachregion(s.string, first(pos)+s.offset:last(pos)+s.offset, T)
 
 """
-    annotation_events(string::AnnotatedString, subregion::UnitRange{Int})
+    annotation_events(string::AbstractString, annots::Vector{$RegionAnnotation}, subregion::UnitRange{Int})
 
-Find all annotation "change events" that occur within a `subregion` of `string`.
+Find all annotation "change events" of `annots` that occur within a `subregion` of `string`.
 
 Each change event is a `UInt64` packing the position of the event above the index of
 the annotation in question, followed by a bit set when the annotation is being
 activated, so that sorting the events orders them by position. The index and bit take
-the low `top_set_bit(2length(annotations(string)) + 1)` bits, as the region iterator reads them.
+the low `top_set_bit(2length(annots) + 1)` bits, as the region iterator reads them.
 """
-function annotation_events(s::AnnotatedString, subregion::UnitRange{Int})
+function annotation_events(s::AbstractString, annots::Vector{<:RegionAnnotation}, subregion::UnitRange{Int})
     events = UInt64[]
-    sizehint!(events, 2 * length(s.annotations))
-    shift = unsigned(top_set_bit(2 * length(s.annotations) + 1))
+    sizehint!(events, 2 * length(annots))
+    shift = unsigned(top_set_bit(2 * length(annots) + 1))
     leading_zeros(UInt64(ncodeunits(s) + 1)) >= shift || throw(ArgumentError(LazyString(
-        "too many annotations (", length(s.annotations), ") to order the regions of a ", ncodeunits(s), "-byte string")))
-    for (i, (; region)) in enumerate(s.annotations)
+        "too many annotations (", length(annots), ") to order the regions of a ", ncodeunits(s), "-byte string")))
+    for (i, (; region)) in enumerate(annots)
         start, stop = max(first(subregion), first(region)), min(last(subregion), last(region))
         start <= stop || continue # Outside the subregion, or empty
         push!(events, UInt64(thisind(s, start)) << shift | UInt64(i) << 1 | true)

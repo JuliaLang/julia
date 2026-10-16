@@ -514,6 +514,14 @@ end
         @test ints(regions[1][2]) == 1 && ints(regions[2][2]) == 1
         @test (@allocated ints(regions[1][2])) == (@allocated ints(regions[2][2])) == 0
     end
+    # Only the annotations with values of a given type, which alone mark out the regions
+    let str = Base.AnnotatedString{String, Union{Int, Symbol}}("abcd", [(1:3, 1), (2:2, :x), (3:4, 2)])
+        @test [(String(s), collect(a)) for (s, a) in Base.eachregion(str, 1:4, Int)] == [("ab", [1]), ("c", [1, 2]), ("d", [2])]
+        @test all(((_, a),) -> collect(a) isa Vector{Int}, Base.eachregion(str, 1:4, Int))
+        @test [String(s) for (s, _) in Base.eachregion(SubString(str, 2, 4), 1:3, Int)] == ["b", "c", "d"]
+        @test collect(only(Base.eachregion(str, 1:4, Float64))[2]) == Float64[]
+        @test Base.eachregion(str, 1:4, Any).annotations === str.annotations # A wider type reads them in place
+    end
     # Changing a string while its regions are read is unsupported, but memory safe
     let str = Base.AnnotatedString("abcdef", [(1:2, 1), (3:4, 2), (5:6, 3)])
         @test count(_ -> (Base.annotate!(str, 1:6, 9); true), Base.eachregion(str)) == 3
@@ -1077,6 +1085,11 @@ module MarkedAnnotations
     reduction(::MIME"text/plain", ::Type{T}, values) where {T <: Level} = Depth(count(value -> value isa T, values))
     transition(io::IO, ::MIME"text/plain", from::Depth, to::Depth) =
         print(io, "["^max(0, to.n - from.n), "]"^max(0, from.n - to.n))
+    # Types whose states break the interface: with no baseline state, or of another type
+    struct Patchy end
+    reduction(::MIME, ::Type{Patchy}, values) = if any(value -> value isa Patchy, values) Marked(true) end
+    struct Fickle end
+    reduction(::MIME, ::Type{Fickle}, values) = if any(value -> value isa Fickle, values) Tagged("f") else Marked(false) end
 end
 
 @testset "AnnotatedDisplay" begin
@@ -1143,6 +1156,26 @@ end
     none = Memory{Union{Mark, Int}}(undef, 0)
     states = @inferred Base.AnnotatedDisplay.reductions(MIME("text/plain"), Union{Mark, Int}, (nothing, nothing), none)
     @test Set(states) == Set([Marked(false), nothing])
+    # Values that don't display add no rendering of their own: a string displays through the
+    # code compiled for the types that do
+    walk = which(Base.AnnotatedDisplay.render, Tuple{Any, MIME, IO, Base.RegionIterator, Any})
+    marked(Mark); html(marked(Mark))
+    walks() = length(Base.specializations(walk))
+    before = walks()
+    for x in (1, 1.0, :s)
+        mixed = Base.AnnotatedString{String, Union{Mark, typeof(x)}}("xyz", [(1:2, Mark()), (2:3, x)])
+        @test colour(mixed) == colour(Base.AnnotatedString{String, Mark}("xyz", [(1:2, Mark())]))
+        html(mixed)
+    end
+    @test walks() == before
+    @test colour(Base.AnnotatedString{String, Int}("xy", [(1:1, 1)])) == "xy" # Nothing displays
+    # Neither changes the text, whatever the value type holding them
+    (; Patchy, Fickle) = MarkedAnnotations
+    for T in (Patchy, Fickle)
+        broken(V) = Base.AnnotatedString{String, V}("xy", [(1:1, T())])
+        @test colour(broken(T)) == colour(broken(Union{T, Mark})) == colour(broken(Any)) == "xy"
+        @test html(broken(T)) == html(broken(Union{T, Mark})) == html(broken(Any)) == "xy"
+    end
     # An `Any` string is displayed by code compiled once, whatever types it holds, and however many
     D = Base.AnnotatedDisplay
     specialisations() = sum(f -> sum(m -> length(Base.specializations(m)), methods(f)), (D.render, D.renderheld, D.change))
