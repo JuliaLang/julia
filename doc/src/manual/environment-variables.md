@@ -395,6 +395,18 @@ then spinning threads never sleep. Otherwise, `$JULIA_THREAD_SLEEP_THRESHOLD` is
 interpreted as an unsigned 64-bit integer (`uint64_t`) and gives, in
 nanoseconds, the amount of time after which spinning threads should sleep.
 
+### [`JULIA_THREAD_SPIN_YIELD`](@id JULIA_THREAD_SPIN_YIELD)
+
+While an idle thread spins for work (see [`JULIA_THREAD_SLEEP_THRESHOLD`](@ref
+JULIA_THREAD_SLEEP_THRESHOLD)), it gives its CPU back to the operating system every
+`$JULIA_THREAD_SPIN_YIELD` nanoseconds, so that other runnable threads are not delayed
+until the spinning thread goes to sleep. This matters when there are more Julia threads
+than CPUs available. `$JULIA_THREAD_SPIN_YIELD` is interpreted as an unsigned 64-bit
+integer (`uint64_t`). The default is `5000` (5 μs); `0` disables yielding.
+
+!!! compat "Julia 1.14"
+    The environment variable was added in Julia 1.14.
+
 ### [`JULIA_NUM_GC_THREADS`](@id JULIA_NUM_GC_THREADS)
 
 Sets the number of threads used by Garbage Collection. If unspecified is set to the number of worker threads.
