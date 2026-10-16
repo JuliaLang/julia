@@ -930,13 +930,43 @@ end
 
 # A bad terminfo file must not prevent Julia from starting (#63777)
 @testset "malformed terminfo" begin
+    # Malformed data should only throw the errors `load_terminfo` handles
+    malformed_ok(e) = e isa ArgumentError || e isa EOFError
+    function setint16(data, offset, value)
+        data = copy(data)
+        data[offset+1:offset+2] = reinterpret(UInt8, [htol(Int16(value))])
+        data
+    end
+    # Offset of the extended header, computed from the main header (`term(5)`)
+    name_bytes, flag_bytes, numbers_count, string_count, table_bytes =
+        reinterpret(Int16, xterm_terminfo[3:12])
+    numsize = xterm_terminfo[1:2] == [0x1a, 0x01] ? 2 : 4
+    xterm_ext = 12 + name_bytes + flag_bytes
+    xterm_ext += xterm_ext % 2
+    xterm_ext += numsize * numbers_count + 2 * string_count + table_bytes
+    xterm_ext += xterm_ext % 2
+    for data in (xterm_terminfo[1:100],                # truncated within a section
+                 xterm_terminfo[1:xterm_ext + 4],      # truncated extended header
+                 setint16(xterm_terminfo, 2, 0),       # name_bytes too small
+                 setint16(xterm_terminfo, 6, -1),      # negative numbers count
+                 setint16(xterm_terminfo, 10, -32768), # negative table size
+                 setint16(xterm_terminfo, xterm_ext + 4, -5), # negative ext. string count
+                 setint16(xterm_terminfo, xterm_ext + 4, 1000)) # ext. string count > table count
+        @test try
+            Base.TermInfo(read(IOBuffer(data), Base.TermInfoRaw))
+            false
+        catch e
+            malformed_ok(e)
+        end
+    end
     mktempdir() do dir
         mkpath(joinpath(dir, "x"))
         # Valid magic number, truncated header (previously an uncaught `EOFError`)
         write(joinpath(dir, "x", "xterm-truncated"), UInt8[0x1a, 0x01, 0x10])
         write(joinpath(dir, "x", "xterm-empty"), UInt8[])
+        write(joinpath(dir, "x", "xterm-short"), xterm_terminfo[1:100])
         withenv("TERMINFO" => dir, "TERMINFO_DIRS" => nothing) do
-            for term in ("xterm-truncated", "xterm-empty")
+            for term in ("xterm-truncated", "xterm-empty", "xterm-short")
                 ti = Base.load_terminfo(term)
                 @test ti isa Base.TermInfo
                 @test isempty(ti.names)

@@ -68,6 +68,9 @@ end
 
 TermInfo() = TermInfo(String[], Dict{Symbol, Bool}(), Dict{Symbol, Int}(), Dict{Symbol, String}(), nothing, Dict{Symbol, Symbol}())
 
+# Read exactly `nbytes` bytes, throwing an `EOFError` if `data` is too short
+_terminfo_read_bytes(data::IO, nbytes::Integer) = read!(data, Vector{UInt8}(undef, nbytes))
+
 function read(data::IO, ::Type{TermInfoRaw})
     # Parse according to `term(5)`
     # Header
@@ -81,20 +84,22 @@ function read(data::IO, ::Type{TermInfoRaw})
     end
     name_bytes, flag_bytes, numbers_count, string_count, table_bytes =
         @ntuple 5 _->read(data, Int16) |> ltoh
+    name_bytes >= 1 && min(flag_bytes, numbers_count, string_count, table_bytes) >= 0 ||
+        throw(ArgumentError("Terminfo header contains an invalid section size"))
     # Terminal Names
-    term_names = map(String, split(String(read(data, name_bytes - 1)), '|'))
+    term_names = map(String, split(String(_terminfo_read_bytes(data, name_bytes - 1)), '|'))
     0x00 == read(data, UInt8) ||
         throw(ArgumentError("Terminfo data did not contain a null byte after the terminal names section"))
     # Boolean Flags
-    flags = map(==(0x01), read(data, flag_bytes))
+    flags = map(==(0x01), _terminfo_read_bytes(data, flag_bytes))
     if position(data) % 2 != 0
         0x00 == read(data, UInt8) ||
             throw(ArgumentError("Terminfo did not contain a null byte after the flag section, expected to position the start of the numbers section on an even byte"))
     end
     # Numbers, Strings, Table
-    numbers = map(Int ∘ ltoh, reinterpret(NumInt, read(data, numbers_count * sizeof(NumInt))))
-    string_indices = map(ltoh, reinterpret(Int16, read(data, string_count * sizeof(Int16))))
-    strings_table = read(data, table_bytes)
+    numbers = map(Int ∘ ltoh, reinterpret(NumInt, _terminfo_read_bytes(data, numbers_count * sizeof(NumInt))))
+    string_indices = map(ltoh, reinterpret(Int16, _terminfo_read_bytes(data, string_count * sizeof(Int16))))
+    strings_table = _terminfo_read_bytes(data, table_bytes)
     strings = _terminfo_read_strings(strings_table, string_indices)
     TermInfoRaw(term_names, flags, numbers, strings,
                 if !eof(data) extendedterminfo(data, NumInt) end)
@@ -118,22 +123,28 @@ function extendedterminfo(data::IO, NumInt::Union{Type{Int16}, Type{Int32}})
     # Extended header
     flag_bytes, numbers_count, string_count, table_count, table_bytes =
         @ntuple 5 _->read(data, Int16) |> ltoh
+    min(flag_bytes, numbers_count, string_count, table_count, table_bytes) >= 0 &&
+        string_count <= table_count ||
+        throw(ArgumentError("Terminfo extended header contains an invalid section size"))
     # Extended flags/numbers/strings
-    flags = map(==(0x01), read(data, flag_bytes))
+    flags = map(==(0x01), _terminfo_read_bytes(data, flag_bytes))
     if flag_bytes % 2 != 0
         0x00 == read(data, UInt8) ||
             throw(ArgumentError("Terminfo did not contain a null byte after the extended flag section; expected to position the start of the numbers section on an even byte"))
     end
-    numbers = map(Int ∘ ltoh, reinterpret(NumInt, read(data, numbers_count * sizeof(NumInt))))
-    table_indices = map(ltoh, reinterpret(Int16, read(data, table_count * sizeof(Int16))))
-    table_data = read(data, table_bytes)
+    numbers = map(Int ∘ ltoh, reinterpret(NumInt, _terminfo_read_bytes(data, numbers_count * sizeof(NumInt))))
+    table_indices = map(ltoh, reinterpret(Int16, _terminfo_read_bytes(data, table_count * sizeof(Int16))))
+    table_data = _terminfo_read_bytes(data, table_bytes)
     strings = _terminfo_read_strings(table_data, table_indices[1:string_count])
     table_halfoffset = Int16(get(table_indices, string_count, 0) +
         ncodeunits(something(get(strings, length(strings), ""), "")) + 1)
     for index in string_count+1:lastindex(table_indices)
         table_indices[index] += table_halfoffset
     end
-    labels = map(Symbol, _terminfo_read_strings(table_data, table_indices[string_count+1:end]))
+    labels = map(_terminfo_read_strings(table_data, table_indices[string_count+1:end])) do label
+        isnothing(label) && throw(ArgumentError("Terminfo extended capability is missing a name"))
+        Symbol(label)
+    end
     Dict{Symbol, Union{Bool, Int, String, Nothing}}(
         zip(labels, Iterators.flatten((flags, numbers, strings))))
 end
