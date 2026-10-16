@@ -283,17 +283,20 @@ end
 
 Load the `TermInfo` for `term`, falling back on a blank `TermInfo`.
 
-This never throws: it is used to initialize `current_terminfo`, which is needed to
-start the REPL and to print errors, so a missing, unreadable, or malformed terminfo
-file (or any other failure while locating or parsing it) must not be fatal.
+This is used to initialize `current_terminfo`, which is needed to start the REPL
+and to print errors, so an unreadable or malformed terminfo file must not be fatal.
 """
 function load_terminfo(term::String)
     try
         file = find_terminfo_file(term)
         isnothing(file) && return TermInfo()
         TermInfo(read(file, TermInfoRaw))
-    catch
-        TermInfo()
+    catch err
+        if err isa ArgumentError || err isa IOError || err isa EOFError
+            TermInfo()
+        else
+            rethrow()
+        end
     end
 end
 
