@@ -988,6 +988,7 @@ export
     ctime,
     diskstat,
     download,
+    eachentry,
     filemode,
     filesize,
     gperm,
