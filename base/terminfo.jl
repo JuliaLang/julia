@@ -68,6 +68,9 @@ end
 
 TermInfo() = TermInfo(String[], Dict{Symbol, Bool}(), Dict{Symbol, Int}(), Dict{Symbol, String}(), nothing, Dict{Symbol, Symbol}())
 
+# Read exactly `nbytes` bytes, throwing an `EOFError` if `data` is too short
+_terminfo_read_bytes(data::IO, nbytes::Integer) = read!(data, Vector{UInt8}(undef, nbytes))
+
 function read(data::IO, ::Type{TermInfoRaw})
     # Parse according to `term(5)`
     # Header
@@ -81,20 +84,22 @@ function read(data::IO, ::Type{TermInfoRaw})
     end
     name_bytes, flag_bytes, numbers_count, string_count, table_bytes =
         @ntuple 5 _->read(data, Int16) |> ltoh
+    name_bytes >= 1 && min(flag_bytes, numbers_count, string_count, table_bytes) >= 0 ||
+        throw(ArgumentError("Terminfo header contains an invalid section size"))
     # Terminal Names
-    term_names = map(String, split(String(read(data, name_bytes - 1)), '|'))
+    term_names = map(String, split(String(_terminfo_read_bytes(data, name_bytes - 1)), '|'))
     0x00 == read(data, UInt8) ||
         throw(ArgumentError("Terminfo data did not contain a null byte after the terminal names section"))
     # Boolean Flags
-    flags = map(==(0x01), read(data, flag_bytes))
+    flags = map(==(0x01), _terminfo_read_bytes(data, flag_bytes))
     if position(data) % 2 != 0
         0x00 == read(data, UInt8) ||
             throw(ArgumentError("Terminfo did not contain a null byte after the flag section, expected to position the start of the numbers section on an even byte"))
     end
     # Numbers, Strings, Table
-    numbers = map(Int ∘ ltoh, reinterpret(NumInt, read(data, numbers_count * sizeof(NumInt))))
-    string_indices = map(ltoh, reinterpret(Int16, read(data, string_count * sizeof(Int16))))
-    strings_table = read(data, table_bytes)
+    numbers = map(Int ∘ ltoh, reinterpret(NumInt, _terminfo_read_bytes(data, numbers_count * sizeof(NumInt))))
+    string_indices = map(ltoh, reinterpret(Int16, _terminfo_read_bytes(data, string_count * sizeof(Int16))))
+    strings_table = _terminfo_read_bytes(data, table_bytes)
     strings = _terminfo_read_strings(strings_table, string_indices)
     TermInfoRaw(term_names, flags, numbers, strings,
                 if !eof(data) extendedterminfo(data, NumInt) end)
@@ -118,34 +123,45 @@ function extendedterminfo(data::IO, NumInt::Union{Type{Int16}, Type{Int32}})
     # Extended header
     flag_bytes, numbers_count, string_count, table_count, table_bytes =
         @ntuple 5 _->read(data, Int16) |> ltoh
+    min(flag_bytes, numbers_count, string_count, table_count, table_bytes) >= 0 &&
+        string_count <= table_count ||
+        throw(ArgumentError("Terminfo extended header contains an invalid section size"))
     # Extended flags/numbers/strings
-    flags = map(==(0x01), read(data, flag_bytes))
+    flags = map(==(0x01), _terminfo_read_bytes(data, flag_bytes))
     if flag_bytes % 2 != 0
         0x00 == read(data, UInt8) ||
             throw(ArgumentError("Terminfo did not contain a null byte after the extended flag section; expected to position the start of the numbers section on an even byte"))
     end
-    numbers = map(Int ∘ ltoh, reinterpret(NumInt, read(data, numbers_count * sizeof(NumInt))))
-    table_indices = map(ltoh, reinterpret(Int16, read(data, table_count * sizeof(Int16))))
-    table_data = read(data, table_bytes)
+    numbers = map(Int ∘ ltoh, reinterpret(NumInt, _terminfo_read_bytes(data, numbers_count * sizeof(NumInt))))
+    table_indices = map(ltoh, reinterpret(Int16, _terminfo_read_bytes(data, table_count * sizeof(Int16))))
+    table_data = _terminfo_read_bytes(data, table_bytes)
     strings = _terminfo_read_strings(table_data, table_indices[1:string_count])
-    table_halfoffset = Int16(get(table_indices, string_count, 0) +
-        ncodeunits(something(get(strings, length(strings), ""), "")) + 1)
-    for index in string_count+1:lastindex(table_indices)
-        table_indices[index] += table_halfoffset
+    # The capability names follow the last string value that is present (some
+    # values may be absent, including the last one), and their indices are
+    # relative to the start of the names.
+    names_offset = 0
+    for (idx, str) in zip(table_indices, strings)
+        isnothing(str) || (names_offset = max(names_offset, idx + ncodeunits(str) + 1))
     end
-    labels = map(Symbol, _terminfo_read_strings(table_data, table_indices[string_count+1:end]))
+    label_indices = map(Int, table_indices[string_count+1:end])
+    for i in eachindex(label_indices)
+        label_indices[i] >= 0 ||
+            throw(ArgumentError("Terminfo extended capability is missing a name"))
+        label_indices[i] += names_offset
+    end
+    labels = map(Symbol, _terminfo_read_strings(table_data, label_indices))
     Dict{Symbol, Union{Bool, Int, String, Nothing}}(
         zip(labels, Iterators.flatten((flags, numbers, strings))))
 end
 
 """
-    _terminfo_read_strings(table::Vector{UInt8}, indices::Vector{Int16})
+    _terminfo_read_strings(table::Vector{UInt8}, indices::Vector{<:Integer})
 
 From `table`, read a string starting at each position in `indices`. Each string
 must be null-terminated. Should an index be -1 or -2, `nothing` is given instead
 of a string.
 """
-function _terminfo_read_strings(table::Vector{UInt8}, indices::Vector{Int16})
+function _terminfo_read_strings(table::Vector{UInt8}, indices::Vector{<:Integer})
     strings = Vector{Union{Nothing, String}}(undef, length(indices))
     map!(strings, indices) do idx
         if idx >= 0
@@ -246,8 +262,11 @@ Descriptions". A terminfo database is included by default with Julia and is
 taken to be the first entry of `@TERMINFO_DIRS@`.
 """
 function find_terminfo_file(term::String)
-    isempty(term) && return
-    chr, chrcode = string(first(term)), string(Int(first(term)), base=16)
+    # Like ncurses, reject names that could escape the terminfo directories
+    (isempty(term) || '/' in term) && return
+    # The hashed directory name is the hex value of the first byte (`TERM` may not
+    # be valid UTF-8)
+    chr, chrcode = string(first(term)), string(codeunit(term, 1), base=16, pad=2)
     terminfo_dirs = if haskey(ENV, "TERMINFO")
         [ENV["TERMINFO"]]
     elseif isdir(joinpath(homedir(), ".terminfo"))
@@ -262,18 +281,22 @@ function find_terminfo_file(term::String)
     push!(terminfo_dirs, normpath(Sys.BINDIR, DATAROOTDIR, "julia", "terminfo"))
     Sys.isunix() &&
         push!(terminfo_dirs, "/etc/terminfo", "/lib/terminfo", "/usr/share/terminfo")
-    for dir in terminfo_dirs
-        if isfile(joinpath(dir, chr, term))
-            return joinpath(dir, chr, term)
-        elseif isfile(joinpath(dir, chrcode, term))
-            return joinpath(dir, chrcode, term)
-        elseif isfile(joinpath(dir, lowercase(chr), lowercase(term)))
-            # The vendored terminfo database is fully lowercase to avoid issues on
-            # case-sensitive filesystems. On Unix-like systems, terminfo files with
-            # different cases are hard links to one another, so this is still
-            # correct for non-vendored terminfo, just redundant.
-            return joinpath(dir, lowercase(chr), lowercase(term))
+    # The vendored terminfo database is fully lowercase to avoid issues on
+    # case-sensitive filesystems. On Unix-like systems, terminfo files with
+    # different cases are hard links to one another, so the last candidate is
+    # still correct for non-vendored terminfo, just redundant.
+    lchr, lterm = isvalid(term) ? (lowercase(chr), lowercase(term)) : (chr, term)
+    candidates = ((chr, term), (chrcode, term), (lchr, lterm))
+    for dir in terminfo_dirs, (subdir, name) in candidates
+        path = joinpath(dir, subdir, name)
+        # Skip inaccessible paths (e.g. EACCES or ELOOP), as ncurses does
+        found = try
+            isfile(path)
+        catch err
+            err isa IOError || rethrow()
+            false
         end
+        found && return path
     end
     return nothing
 end
@@ -282,14 +305,17 @@ end
     load_terminfo(term::String)
 
 Load the `TermInfo` for `term`, falling back on a blank `TermInfo`.
+
+This is used to initialize `current_terminfo`, which is needed to start the REPL
+and to print errors, so an unreadable or malformed terminfo file must not be fatal.
 """
 function load_terminfo(term::String)
-    file = find_terminfo_file(term)
-    isnothing(file) && return TermInfo()
     try
+        file = find_terminfo_file(term)
+        isnothing(file) && return TermInfo()
         TermInfo(read(file, TermInfoRaw))
     catch err
-        if err isa ArgumentError || err isa IOError
+        if err isa ArgumentError || err isa IOError || err isa EOFError || err isa SystemError
             TermInfo()
         else
             rethrow()
