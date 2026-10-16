@@ -4605,6 +4605,10 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
                     JL_GC_POP();
                     return jl_bottom_type;
                 }
+                if (reachable_var(ub, b, e)) {
+                    JL_GC_POP();
+                    return a;
+                }
             }
             bb->ub = ub;
             if ((jl_is_uniontype(ub) && !jl_is_uniontype(a)) ||
