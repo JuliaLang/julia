@@ -355,7 +355,7 @@ module AnnotatedDisplay
 
 using ..Base: IO, IOBuffer, SubString, AnnotatedString, AnnotatedChar, AnnotatedIOBuffer
 using ..Base: eachregion, ActiveAnnotations, unannotate, raw_substring, annotations, annotatedstring, uniontypes
-using ..Base: invoke_in_world, tls_world_age, escape_string, annotate!, _clear_annotations_in_region!, RegionAnnotation
+using ..Base: invoke_in_world, tls_world_age, inferencebarrier, escape_string, annotate!, _clear_annotations_in_region!, RegionAnnotation
 
 public context, reduction, transition
 
@@ -372,13 +372,14 @@ passed on to each `reduction`.
 context(::MIME, ::Type) = nothing
 
 """
-    reduction(mime::MIME, T::Type[, ctx], annotations) -> state
+    reduction(mime::MIME, T::Type[, ctx], values) -> state
 
-The state of a region with `annotations`, from those whose values have type `T`. With no
-annotations, this is the baseline, where display starts and ends. A type without a method is
-not displayed, and one without a `context` can leave out `ctx`.
+The state of a region, from those of its annotation `values` of type `T`, the concrete type it
+is called for, which it selects with `value isa T`. With none, this is the baseline, where
+display starts and ends. A type without a method is not displayed, and one without a `context`
+can leave out `ctx`.
 """
-reduction(mime::MIME, ::Type{T}, _, annotations) where {T} = reduction(mime, T, annotations)
+reduction(mime::MIME, ::Type{T}, _, values) where {T} = reduction(mime, T, values)
 reduction(::MIME, ::Type, _) = nothing
 
 """
@@ -394,7 +395,9 @@ transition(io::IO, ::MIME, ::Nothing, ::Nothing) = nothing
 
 ## Rendering
 
+# A value type with a member that isn't concrete, as `Any`, has its types found from its values
 @generated function contexts(mime::MIME, ::Type{U}) where {U}
+    all(isconcretetype, uniontypes(U)) || return nothing
     calls = (:(context(mime, $T)) for T in uniontypes(U))
     :(tuple($(calls...)))
 end
@@ -410,20 +413,19 @@ Write `x` to `io` as `mime`, with its text written by `writetext(io, str)`.
 """
 function render(writetext::F, mime::MIME, io::IO, s::AnnotatedStr{S, V}) where {F, S, V}
     ctxs = contexts(mime, V)
+    isnothing(ctxs) && return invoke_in_world(tls_world_age(), renderheld, writetext, mime, io, s)
     render(writetext, mime, io, s, annots -> (@inline; reductions(mime, V, ctxs, annots)))
 end
 
-# Compiled once, dispatching at runtime on whatever types `s` holds, in the latest world so
-# that new display methods do not invalidate compiled callers. Taken in a union's order, the
-# types display as that union would.
-render(writetext::F, mime::MIME, io::IO, s::AnnotatedStr{S, Any}) where {F, S} =
-    invoke_in_world(tls_world_age(), renderheld, writetext, mime, io, s)
-
+# Compiled once for whatever types `s` holds, in the latest world. Its interface calls go through
+# barriers, here and in `render`, so a new value type's methods invalidate nothing compiled for it.
+# Taken in a union's order, the types display as that union would.
 function renderheld(writetext, mime::MIME, io::IO, @nospecialize(s::AnnotatedStr))
-    types = uniontypes(Union{unique(typeof(a.value) for a in annotations(s))...})
-    ctxs = Any[context(mime, T) for T in types]
-    render(writetext, mime, io, s,
-           annots -> Any[reduction(mime, T, ctx, annots) for (T, ctx) in zip(types, ctxs)])
+    # As a `Union`, which is built without compiling anything for the types it holds
+    types = uniontypes(Union{Type[typeof(value) for (; value) in annotations(s)]...})
+    ctxs = Any[inferencebarrier(context)(mime, T) for T in types]
+    render(writetext, mime, io, s, annots ->
+        Any[inferencebarrier(reduction)(mime, T, ctx, annots) for (T, ctx) in zip(types, ctxs)])
 end
 
 render(writetext::F, mime::MIME, io::IO, c::AnnotatedChar) where {F} =
@@ -432,19 +434,22 @@ render(writetext::F, mime::MIME, io::IO, c::AnnotatedChar) where {F} =
 function render(writetext, mime::MIME, io::IO, s::AnnotatedStr, statesof)
     regions = eachregion(s)
     bases = statesof(ActiveAnnotations(regions, regions.pos)) # Before its first region, the iterator's annotations are none
-    written = change(io, mime, nothing, bases)
+    # Through a barrier for types found from the values, as in `renderheld`. Applied in the call, as
+    # a closure capturing `inferencebarrier(transition)` is specialised on what it captures.
+    transit = if bases isa Tuple transition else (args...) -> inferencebarrier(transition)(args...) end
+    written = change(transit, io, mime, nothing, bases)
     for (str, annots) in regions
-        written = change(io, mime, written, statesof(annots))
+        written = change(transit, io, mime, written, statesof(annots))
         writetext(io, str)
     end
-    change(io, mime, written, bases)
+    change(transit, io, mime, written, bases)
 end
 
 ## Plain text: each type's state changes on its own
 
-change(io::IO, ::MIME"text/plain", ::Nothing, bases) = bases
-function change(io::IO, mime::MIME"text/plain", previous, states)
-    foreach((from, to) -> transition(io, mime, from, to), previous, states)
+change(transit, io::IO, ::MIME"text/plain", ::Nothing, bases) = bases
+function change(transit, io::IO, mime::MIME"text/plain", previous, states)
+    foreach((from, to) -> transit(io, mime, from, to), previous, states)
     states
 end
 
@@ -452,20 +457,18 @@ end
 #
 # Each frame holds the states within an open element, from the baselines in, and differs from
 # the frame outside it only in the state of the element's type. An element still fits when each
-# property of each state is the outer frame's or the new state's.
+# property, or field, of each state is the outer frame's or the new state's. A state without
+# fields fits only as a whole.
 
-change(io::IO, ::MIME"text/html", ::Nothing, bases) = [bases]
+change(transit, io::IO, ::MIME"text/html", ::Nothing, bases) = [bases]
 
-function change(io::IO, mime::MIME"text/html", frames, states)
-    # One method, as a local function with two is boxed where the closure below captures it
-    replaced(t, k, v) =
-        if t isa Tuple Base.setindex(t, v, k) else setindex!(copy(t), v, k) end
-    fits(el, parent, to) =
-        all(ntuple(Val(fieldcount(typeof(el)))) do i
-                property = getfield(el, i)
-                property === getfield(parent, i) ||
-                    property === getfield(to, i)
-            end)
+# For a known union, `frames` holds tuples of states. For types found from the values, it holds
+# vectors, and `fits` is dispatched for each type of state, so nothing compiles per combination.
+function change(transit, io::IO, mime::MIME"text/html", frames, states)
+    function fits(el::T, parent::T, to::T) where {T}
+        fieldcount(T) == 0 && return el === parent || el === to
+        all(ntuple(i -> getfield(el, i) === getfield(parent, i) || getfield(el, i) === getfield(to, i), Val(fieldcount(T))))
+    end
     keep = 1
     while keep < length(frames) && all(map(fits, frames[keep + 1], frames[keep], states))
         keep += 1
@@ -473,17 +476,19 @@ function change(io::IO, mime::MIME"text/html", frames, states)
     while length(frames) > keep
         inner = pop!(frames)
         foreach(inner, last(frames)) do within, outside
-            within === outside || transition(io, mime, within, nothing)
+            within === outside || transit(io, mime, within, nothing)
         end
     end
-    # An unrolled `map`, as a loop or a closure out of line would box each state. In reverse, so
-    # a later type's element (a link) encloses an earlier type's (a face).
-    map(reverse(ntuple(identity, length(states))), reverse(states)) do i, to
+    # An unrolled `map` for a tuple, as a loop would box its states. In reverse, so a later type's
+    # element (a link) encloses an earlier type's (a face).
+    indices = if states isa Tuple ntuple(identity, length(states)) else eachindex(states) end
+    map(reverse(indices), reverse(states)) do i, to
         @inline
-        within = last(frames)[i]
+        frame = last(frames)
+        within = frame[i]
         if within !== to
-            transition(io, mime, within, to)
-            push!(frames, replaced(last(frames), i, to))
+            transit(io, mime, within, to)
+            push!(frames, if frame isa Tuple Base.setindex(frame, to, i) else setindex!(copy(frame), to, i) end)
         end
         nothing
     end

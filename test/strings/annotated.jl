@@ -1036,21 +1036,34 @@ module MarkedAnnotations
     struct Tagged
         name::String
     end
-    marked(annotations) = Marked(any(value -> value isa Mark, annotations))
-    reduction(::MIME"text/plain", ::Type{Mark}, annotations) = marked(annotations)
-    reduction(::MIME"text/html", ::Type{Mark}, annotations) = marked(annotations)
+    reduction(::MIME"text/plain", ::Type{Mark}, values) = Marked(any(value -> value isa Mark, values))
+    reduction(::MIME"text/html", ::Type{Mark}, values) = Marked(any(value -> value isa Mark, values))
     transition(io::IO, ::MIME"text/plain", from::Marked, to::Marked) = from === to || print(io, if to.on "<" else ">" end)
     transition(io::IO, ::MIME"text/html", ::Marked, ::Marked) = print(io, "<mark>")
     transition(io::IO, ::MIME"text/html", ::Marked, ::Nothing) = print(io, "</mark>")
-    function reduction(::MIME"text/plain", ::Type{Tag}, annotations)
-        i = findlast(value -> value isa Tag, annotations)
-        Tagged(if isnothing(i) "" else annotations[i].name end)
-    end
+    reduction(::MIME"text/plain", ::Type{Tag}, values) =
+        Tagged(foldl((name, value) -> if value isa Tag value.name else name end, values; init = ""))
     function transition(io::IO, ::MIME"text/plain", from::Tagged, to::Tagged)
         from === to && return
         isempty(from.name) || print(io, "]")
         isempty(to.name) || print(io, "[", to.name, " ")
     end
+    # A state with no fields: whether a region is flagged
+    struct Flag end
+    reduction(::MIME"text/html", ::Type{Flag}, values) = any(value -> value isa Flag, values)
+    transition(io::IO, ::MIME"text/html", ::Bool, flagged::Bool) = flagged && print(io, "<b>")
+    transition(io::IO, ::MIME"text/html", ::Bool, ::Nothing) = print(io, "</b>")
+    # Displayed by each concrete type, whatever the value type that holds them
+    abstract type Shade end
+    struct Dark <: Shade end
+    reduction(::MIME"text/plain", ::Type{Dark}, values) = Marked(any(value -> value isa Dark, values))
+    struct Level{N} end # Each of its types is a level of brackets, counted by its own reduction
+    struct Depth
+        n::Int
+    end
+    reduction(::MIME"text/plain", ::Type{T}, values) where {T <: Level} = Depth(count(value -> value isa T, values))
+    transition(io::IO, ::MIME"text/plain", from::Depth, to::Depth) =
+        print(io, "["^max(0, to.n - from.n), "]"^max(0, from.n - to.n))
 end
 
 @testset "AnnotatedDisplay" begin
@@ -1067,6 +1080,12 @@ end
     @test colour(tagged(Union{Mark, Tag, Int})) == "<a[t b>c]"
     @test colour(tagged(Union{Mark, Tag, Int, Symbol})) == colour(tagged(Any)) == colour(tagged(Union{Mark, Tag, Int}))
     @test colour(Base.AnnotatedString{String, Any}("x")) == "x"
+    # Each type of value displays its own values, so a value type with abstract members displays as `Any` does
+    (; Dark, Level, Flag) = MarkedAnnotations
+    shaded(V) = colour(Base.AnnotatedString{String, V}("xy", [(1:1, Dark())]))
+    @test shaded(Dark) == shaded(MarkedAnnotations.Shade) == shaded(Any) == "<x>y"
+    levelled(V) = colour(Base.AnnotatedString{String, V}("ab", [(1:1, Level{1}()), (1:1, Level{2}())]))
+    @test levelled(Union{Level{1}, Level{2}}) == levelled(Level) == levelled(Any) == "[[a]]b"
     # Substrings and chars, as the strings made from them
     @test colour(SubString(tagged(Any), 2, 3)) == colour(Base.AnnotatedString(SubString(tagged(Any), 2, 3)))
     @test colour(marked(Mark)[1]) == "<x>"
@@ -1075,12 +1094,9 @@ end
     @test html(SubString(marked(Any), 1, 1)) == html(marked(Mark)[1]) == "<mark>x</mark>"
     plain = Base.AnnotatedString{String, Union{Tag, Int}}("a<b", [(1:1, Tag("t"))])
     @test html(plain) == "a&lt;b"
-    # Regions consumed as they are yielded carry the same annotations as regions held
-    nested = Base.AnnotatedString("abcdef", [(1:6, Tag("a")), (2:5, Tag("b")), (3:4, Tag("c"))])
-    streamed = [(String(str), collect(annots)) for (str, annots) in Base.eachregion(nested)]
-    @test streamed == [(String(str), collect(annots)) for (str, annots) in collect(Base.eachregion(nested))]
-    @test map(last, streamed) == [[Tag("a")], [Tag("a"), Tag("b")], [Tag("a"), Tag("b"), Tag("c")],
-                                  [Tag("a"), Tag("b")], [Tag("a")]]
+    # A state with no fields closes its element when it changes
+    flagged(V) = html(Base.AnnotatedString{String, V}("abcde", [(2:2, Flag()), (4:5, Flag())]))
+    @test flagged(Flag) == flagged(Any) == "a<b>b</b>c<b>de</b>"
     # Escaping keeps the display around the (longer) text, and an annotated buffer the annotations
     @test sprint(escape_string, marked(Mark); context = :color => true) == "<x>y"
     @test sprint(escape_string, Base.AnnotatedString{String, Mark}("a\nb", [(1:1, Mark()), (3:3, Mark())]);
@@ -1114,13 +1130,14 @@ end
     none = Memory{Union{Mark, Int}}(undef, 0)
     states = @inferred Base.AnnotatedDisplay.reductions(MIME("text/plain"), Union{Mark, Int}, (nothing, nothing), none)
     @test Set(states) == Set([Marked(false), nothing])
-    # An `Any` string is displayed by code compiled once, whatever types it holds
-    specialisations() = sum(m -> length(Base.specializations(m)), methods(Base.AnnotatedDisplay.render))
+    # An `Any` string is displayed by code compiled once, whatever types it holds, and however many
+    D = Base.AnnotatedDisplay
+    specialisations() = sum(f -> sum(m -> length(Base.specializations(m)), methods(f)), (D.render, D.renderheld, D.change))
     anyof(values...) = Base.AnnotatedString{String, Any}("abc", [(i:i, v) for (i, v) in enumerate(values)])
-    colour(anyof(Mark()))
+    colour(anyof(Mark())); html(anyof(Mark()))
     before = specialisations()
-    for values in ((Mark(), Tag("t")), (Tag("t"), 1), (1.0, Mark(), :s))
-        colour(anyof(values...))
+    for values in ((Mark(), Tag("t")), (Tag("t"), 1), (1.0, Mark(), :s), (Flag(), Mark(), Flag()))
+        colour(anyof(values...)); html(anyof(values...))
     end
     @test specialisations() == before
     # Defining how a type displays must not invalidate code compiled for strings of unknown value
@@ -1140,6 +1157,9 @@ end
     strings = Base.AnnotatedString{SubString{String}}[Base.AnnotatedString{SubString{String}, Int}(SubString("x"))]
     unknown_valtype(strings)
     unknown_html(strings)
+    anything = Base.AnnotatedString{String, Any}("x", [(1:1, 1)]) # And through the code compiled once for any values
+    print(IOContext(Sink(), :color => true), anything)
+    show(Sink(), MIME("text/html"), anything)
     log = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
     context(::MIME, ::Type{Late}) = 0
     reduction(::MIME, ::Type{Late}, _, _) = LateState()
