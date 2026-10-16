@@ -37,7 +37,8 @@ namespace {
 
 struct LowerPTLS {
     LowerPTLS(Module &M, bool imaging_mode = false, bool tls_getters = false)
-        : imaging_mode(imaging_mode), tls_getters(tls_getters), M(&M), TargetTriple(M.getTargetTriple())
+        : imaging_mode(imaging_mode), tls_getters(tls_getters), M(&M), TargetTriple(M.getTargetTriple()),
+          inline_tls(TargetTriple.isOSDarwin() ? TargetTriple.isAArch64() : (bool)jl_tls_elf_support)
     {}
 
     bool run(bool *CFGModified);
@@ -46,6 +47,8 @@ private:
     const bool tls_getters;
     Module *M;
     Triple TargetTriple;
+    // whether `emit_pgcstack_tp` can read the frame-stack slot for this target
+    const bool inline_tls;
     MDNode *tbaa_const{nullptr};
     MDNode *tbaa_gcframe{nullptr};
     FunctionType *FT_pgcstack_getter{nullptr};
@@ -79,7 +82,7 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
         std::string const_asm_str;
         raw_string_ostream(const_asm_str) << (TargetTriple.getArch() == Triple::x86_64 ?
             "movq %fs:0, $0;\naddq $$" : "movl %gs:0, $0;\naddl $$")
-            << jl_tls_offset << ", $0";
+            << jl_tls_pgcstack_offset << ", $0";
         const char *dyn_asm_str = TargetTriple.getArch() == Triple::x86_64 ?
             "movq %fs:0, $0;\naddq $1, $0" :
             "movl %gs:0, $0;\naddl $1, $0";
@@ -106,7 +109,10 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
         // (need to generate one or two `add` with shift) so let llvm emit
         // the add for now.
         const char *asm_str;
-        if (TargetTriple.isAArch64()) {
+        if (TargetTriple.isAArch64() && TargetTriple.isOSDarwin()) {
+            // the slot is in the pthread key array; see `JL_TLS_LOAD_ASM`
+            asm_str = "mrs $0, tpidrro_el0\n\tand $0, $0, #-8";
+        } else if (TargetTriple.isAArch64()) {
             asm_str = "mrs $0, tpidr_el0";
         } else if (TargetTriple.isARM()) {
             asm_str = "mrc p15, 0, $0, c13, c0, 3";
@@ -120,7 +126,7 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
             llvm_unreachable("Cannot emit thread pointer for this architecture.");
         }
         if (!offset)
-            offset = ConstantInt::getSigned(T_size, jl_tls_offset);
+            offset = ConstantInt::getSigned(T_size, jl_tls_pgcstack_offset);
         auto tp = InlineAsm::get(FunctionType::get(PointerType::get(builder.getContext(), 0), false), asm_str, "=r", false);
         tls = builder.CreateCall(tp, {}, "thread_ptr");
         tls = builder.CreateInBoundsGEP(Type::getInt8Ty(builder.getContext()), tls, {offset}, "tls_ppgcstack");
@@ -211,7 +217,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
 
     if (imaging_mode) {
         IRBuilder<> builder(pgcstack);
-        if (jl_tls_elf_support) {
+        if (inline_tls) {
             // if (offset != 0)
             //     pgcstack = tp + offset; // fast
             // else
@@ -269,7 +275,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         }
         set_pgcstack_attrs(pgcstack);
     }
-    else if (!tls_getters && jl_tls_offset != -1) {
+    else if (!tls_getters && jl_tls_pgcstack_offset != 0 && inline_tls) {
         pgcstack->replaceAllUsesWith(emit_pgcstack_tp(nullptr, pgcstack));
         pgcstack->eraseFromParent();
     }
@@ -304,7 +310,7 @@ bool LowerPTLS::run(bool *CFGModified)
             if (imaging_mode) {
                 pgcstack_func_slot = create_hidden_global(T_pgcstack_getter, "jl_pgcstack_func_slot");
                 pgcstack_key_slot = create_hidden_global(T_size, "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)
-                // n.b. not named `jl_tls_offset`, to avoid clashing with the libjulia-internal
+                // n.b. not named `jl_tls_pgcstack_offset`, to avoid clashing with the libjulia
                 // variable of that name when the image is linked statically with the runtime
                 pgcstack_offset = create_hidden_global(T_size, "jl_image_tls_offset");
             }

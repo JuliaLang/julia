@@ -1371,7 +1371,6 @@ void jl_init_uv(void) JL_NOTSAFEPOINT;
 void jl_init_box_caches(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_init_options(void) JL_NOTSAFEPOINT;
 
-extern JL_DLLEXPORT ssize_t jl_tls_offset;
 extern JL_DLLEXPORT const int jl_tls_elf_support;
 void jl_init_threading(void) JL_NOTSAFEPOINT;
 void jl_start_threads(void) JL_CANSAFEPOINT;
@@ -1424,6 +1423,8 @@ void JL_NORETURN jl_abandon_task_cb(void) JL_CANSAFEPOINT;
 void jl_set_pgcstack(jl_gcframe_t **) JL_NOTSAFEPOINT;
 #if defined(_OS_WINDOWS_)
 typedef DWORD jl_pgcstack_key_t;
+#elif defined(_OS_DARWIN_)
+typedef pthread_key_t jl_pgcstack_key_t;
 #else
 typedef jl_gcframe_t ***(*jl_pgcstack_key_t)(void) JL_NOTSAFEPOINT;
 #endif
