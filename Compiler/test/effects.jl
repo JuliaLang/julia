@@ -1692,3 +1692,19 @@ let 𝕃 = Compiler.SimpleInferenceLattice.instance,
     @test !Compiler.is_effect_free(effects)
     Base.deprecate(PartitionEffects, :c, 0)
 end
+
+# reading a `const` field of a mutable object is consistent
+mutable struct ConstFieldEffects
+    const a::Union{String, Nothing}
+    b::Union{String, Nothing}
+    const p::Ptr{Cvoid}
+end
+const const_field_effects = ConstFieldEffects("a", "b", C_NULL)
+@test Compiler.is_consistent(Base.infer_effects(x -> x.a, (ConstFieldEffects,)))
+@test Compiler.is_consistent(Base.infer_effects(x -> x.p, (ConstFieldEffects,)))
+@test !Compiler.is_consistent(Base.infer_effects(x -> x.b, (ConstFieldEffects,)))
+@test Compiler.is_foldable_nothrow(Base.infer_effects(() -> const_field_effects.a, ()))
+@test !Compiler.is_consistent(Base.infer_effects(() -> const_field_effects.b, ()))
+abstract type AbstractConstFieldEffects end
+@test !Compiler.is_consistent(Base.infer_effects(x -> getfield(x, 1), (Any,)))
+@test !Compiler.is_consistent(Base.infer_effects(x -> x.a, (AbstractConstFieldEffects,)))

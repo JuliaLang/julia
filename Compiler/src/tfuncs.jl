@@ -2863,6 +2863,15 @@ function is_relocatable_ptr_field(ty, fld)
     return false
 end
 
+# Whether field `name` of `obj` is immutable (see `Base.isconst`)
+function is_const_field_argtype(@nospecialize(obj), @nospecialize(name))
+    name isa Const || return false
+    objt = widenconst(ignorelimited(obj))
+    (objt isa DataType && !isabstracttype(objt) && objt !== Module) || return false
+    fidx = _getfield_fieldindex(objt, name)
+    return fidx !== nothing && isconst(objt, fidx)
+end
+
 function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
     length(argtypes) < 2 && return EFFECTS_THROWS
     obj = argtypes[1]
@@ -2873,12 +2882,13 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
             inaccessiblememonly=ALWAYS_FALSE,
             noub=ALWAYS_FALSE)
     end
-    # :consistent if the argtype is immutable
+    # :consistent if the argtype is immutable or the field is const
     if is_relocatable_ptr_field(argtypes[1], argtypes[2])
         consistent = ALWAYS_FALSE
+    elseif is_immutable_argtype(obj) || is_mutation_free_argtype(obj) || is_const_field_argtype(obj, argtypes[2])
+        consistent = ALWAYS_TRUE
     else
-        consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
-            ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
+        consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
     end
     noub = ALWAYS_TRUE
     bcheck = getfield_boundscheck(argtypes)
