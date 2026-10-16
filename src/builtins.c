@@ -1381,8 +1381,8 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow) JL_C
         jl_value_t *a = ((jl_uniontype_t*)t)->a;
         jl_value_t *b = ((jl_uniontype_t*)t)->b;
         JL_GC_PUSHARGS(u, 2);
-        u[0] = jl_is_some_Type(a) ? jl_bottom_type : get_fieldtype(a, f, 0);
-        u[1] = jl_is_some_Type(b) ? jl_bottom_type : get_fieldtype(b, f, 0);
+        u[0] = jl_is_typeeq(a) ? jl_bottom_type : get_fieldtype(a, f, 0);
+        u[1] = jl_is_typeeq(b) ? jl_bottom_type : get_fieldtype(b, f, 0);
         if (u[0] == jl_bottom_type && u[1] == jl_bottom_type && dothrow) {
             // error if all types in the union might have
             get_fieldtype(a, f, 1);
@@ -1392,6 +1392,9 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow) JL_C
         JL_GC_POP();
         return r;
     }
+    // the sole instance of `TypeEgal{T}` is `T`, so its fields are those of `typeof(T)`
+    if (jl_is_typeegal(t))
+        return get_fieldtype(jl_typeof(jl_typeegal_T(t)), f, dothrow);
     if (!jl_is_datatype(t)) {
         jl_type_error("fieldtype", (jl_value_t*)jl_datatype_type, t);
     }
