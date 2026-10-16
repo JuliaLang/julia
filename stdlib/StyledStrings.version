@@ -1,4 +1,4 @@
 STYLEDSTRINGS_BRANCH = face-primacy
-STYLEDSTRINGS_SHA1 = 10c37a775558e11159430165edafccbb3fe9478e
+STYLEDSTRINGS_SHA1 = bc6d6a5dfb923fed48e710a6db895b8c967cd6a7
 STYLEDSTRINGS_GIT_URL := https://github.com/JuliaLang/StyledStrings.jl.git
 STYLEDSTRINGS_TAR_URL = https://api.github.com/repos/JuliaLang/StyledStrings.jl/tarball/$1
