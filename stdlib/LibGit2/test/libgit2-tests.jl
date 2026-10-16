@@ -498,6 +498,27 @@ end
         cred = LibGit2.GitCredential("https", "github.com", nothing, nothing)
         @test !LibGit2.ismatch("https://@github.com", cred)
         Base.shred!(cred)
+
+        # A `*` host label matches exactly one label, as in git
+        cred = LibGit2.GitCredential("https", "foo.example.com")
+        @test LibGit2.ismatch("https://*.example.com", cred)
+        @test LibGit2.ismatch("https://*.*.com", cred)
+        @test !LibGit2.ismatch("https://*.example.org", cred)
+        @test !LibGit2.ismatch("https://*.foo.example.com", cred)
+        Base.shred!(cred)
+
+        cred = LibGit2.GitCredential("https", "foo.bar.example.com")
+        @test !LibGit2.ismatch("https://*.example.com", cred)
+        Base.shred!(cred)
+
+        cred = LibGit2.GitCredential("https", "example.com")
+        @test !LibGit2.ismatch("https://*.example.com", cred)
+        Base.shred!(cred)
+
+        # A URL that cannot be parsed matches nothing (#63412)
+        cred = LibGit2.GitCredential("https", "github.com")
+        @test !LibGit2.ismatch("https://my_host", cred)
+        Base.shred!(cred)
     end
 
     @testset "GITHUB_REGEX" begin
@@ -2003,6 +2024,12 @@ mktempdir() do dir
                     [credential "helperselector"]
                         selected = manager-core
                     """)
+                write(fp, """
+                    [credential "https://*.github.com"]
+                        helper = !echo wildcard
+                    [credential "https://my_host"]
+                        helper = !echo unparsable
+                    """)
             end
 
             LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
@@ -2017,8 +2044,13 @@ mktempdir() do dir
                 @test LibGit2.credential_helpers(cfg, github_cred) == expected
                 @test LibGit2.credential_helpers(cfg, mygit_cred) == expected[2:2]
 
+                api_cred = GitCredential("https", "api.github.com")
+                @test LibGit2.credential_helpers(cfg, api_cred) ==
+                    [expected; GitCredentialHelper(`echo wildcard`)]
+
                 Base.shred!(github_cred)
                 Base.shred!(mygit_cred)
+                Base.shred!(api_cred)
             end
         end
 
