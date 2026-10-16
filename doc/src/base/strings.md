@@ -240,3 +240,69 @@ Base.annotations
 Base.annotate!
 Base.unannotate
 ```
+
+### [Displaying annotations](@id base-annotated-display)
+
+How an annotated string looks when it is printed to a terminal or shown as HTML is up to the
+types of its annotation values. A package says how the values of its own types display with
+three functions of [`Base.AnnotatedDisplay`](@ref):
+
+- [`context`](@ref Base.AnnotatedDisplay.context) reads what displaying them needs, once per display;
+- [`reduction`](@ref Base.AnnotatedDisplay.reduction) gives the state of a region from its values of the type;
+- [`transition`](@ref Base.AnnotatedDisplay.transition) writes the change from one state to another.
+
+These rules hold:
+
+- A value's concrete type says how it displays, so a string displays the same whatever value
+  type holds it, `Any` included.
+- `reduction` is called for each concrete type `T` of the values, with all of a region's
+  values, and reads those with `value isa T`. With none, it gives the baseline state, where
+  display starts and ends.
+- Each value type has one type of state, compared with `===`. For HTML, a state's fields are
+  its visible properties.
+- In plain text, `transition` writes the change between two states. In HTML, each transition
+  opens one element within the current one, and a transition to `nothing` closes it.
+- The types display in the order of the value type's union, and in HTML a later type's
+  elements enclose an earlier type's.
+
+For example, a `Tag` that displays in brackets in a terminal, and as a `<mark>` in HTML:
+
+```jldoctest annotated-display
+julia> struct Tag
+           name::String
+       end
+
+julia> struct Tagged # The state: the innermost tag of a region, if it has one
+           name::String
+       end
+
+julia> Base.AnnotatedDisplay.reduction(::MIME, ::Type{Tag}, values) =
+           Tagged(foldl((name, value) -> if value isa Tag value.name else name end, values; init = ""))
+
+julia> function Base.AnnotatedDisplay.transition(io::IO, ::MIME"text/plain", from::Tagged, to::Tagged)
+           from === to && return
+           isempty(from.name) || print(io, ']')
+           isempty(to.name) || print(io, '[', to.name, ' ')
+       end
+
+julia> Base.AnnotatedDisplay.transition(io::IO, ::MIME"text/html", ::Tagged, to::Tagged) =
+           print(io, "<mark title=\"", to.name, "\">")
+
+julia> Base.AnnotatedDisplay.transition(io::IO, ::MIME"text/html", ::Tagged, ::Nothing) =
+           print(io, "</mark>")
+
+julia> s = Base.AnnotatedString("an example", [(4:10, Tag("noun"))]);
+
+julia> print(IOContext(stdout, :color => true), s)
+an [noun example]
+
+julia> show(stdout, MIME("text/html"), s)
+an <mark title="noun">example</mark>
+```
+
+```@docs
+Base.AnnotatedDisplay
+Base.AnnotatedDisplay.context
+Base.AnnotatedDisplay.reduction
+Base.AnnotatedDisplay.transition
+```
