@@ -3656,4 +3656,9 @@ end
         @test Tuple{Int, Int, Tuple{Int, Int}} <: typeintersect(A, B)
         @test Tuple{Int, Int, Tuple{Int, Int}} <: typeintersect(B, A)
     end
+
+    let A = Ref{Tuple{T, T}} where T, B = Ref{Tuple{Union{Nothing, Int}, Union{X, Y}}} where {X, Y}
+        @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(A, B)
+        @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(B, A)
+    end
 end
