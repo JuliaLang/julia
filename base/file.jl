@@ -1173,36 +1173,57 @@ readdir(entry::DirEntry, ::Type{DirEntry}; sort::Bool=true) = readdir(joinpath(e
 readdir(entry::DirEntry; kwargs...) = readdir(joinpath(entry); kwargs...)::Vector{String}
 
 function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=false, sort::Bool=true)
+    entries = return_objects ? DirEntry[] : String[]
+    # Read in chunks through libuv's opendir/readdir cursor rather than uv_fs_scandir,
+    # which on Unix sorts the whole listing in C, even when `sort` is false.
+    dirents = Vector{uv_dirent_t}(undef, 64)
     # Allocate space for uv_fs_t struct
     req = Libc.malloc(_sizeof_uv_fs)
     try
-        err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Cint, Ptr{Cvoid}),
-                    C_NULL, req, dir, 0, C_NULL)
-        err < 0 && uv_error("readdir($(repr(dir)))", err)
-
-        # iterate the listing into entries
-        entries = return_objects ? DirEntry[] : String[]
-        ent = Ref{uv_dirent_t}()
-        while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), req, ent)
-            name = unsafe_string(ent[].name)
-            if return_objects
-                rawtype = ent[].typ
-                push!(entries, DirEntry(dir, name, rawtype))
-            else
-                push!(entries, join ? joinpath(dir, name) : name)
-            end
-        end
-
-        # Clean up the request string
+        err = ccall(:uv_fs_opendir, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
+                    C_NULL, req, dir, C_NULL)
+        uvdir = ccall(:jl_uv_fs_t_ptr, Ptr{Cvoid}, (Ptr{Cvoid},), req)
         uv_fs_req_cleanup(req)
-
-        # sort entries unless opted out
-        sort && sort!(entries)
-
-        return entries
+        err < 0 && uv_error("readdir($(repr(dir)))", err)
+        try
+            GC.@preserve dirents begin
+                # point the public `dirents` and `nentries` fields of the uv_dir_t at our buffer
+                unsafe_store!(Ptr{Ptr{uv_dirent_t}}(uvdir), pointer(dirents))
+                unsafe_store!(Ptr{Csize_t}(uvdir + sizeof(Ptr{Cvoid})), length(dirents))
+                while true
+                    n = ccall(:uv_fs_readdir, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+                              C_NULL, req, uvdir, C_NULL)
+                    try
+                        n < 0 && uv_error("readdir($(repr(dir)))", n)
+                        for i in 1:n
+                            ent = dirents[i]
+                            name = unsafe_string(ent.name)
+                            if return_objects
+                                push!(entries, DirEntry(dir, name, ent.typ))
+                            else
+                                push!(entries, join ? joinpath(dir, name) : name)
+                            end
+                        end
+                    finally
+                        # frees the names read into `dirents`
+                        uv_fs_req_cleanup(req)
+                    end
+                    n == 0 && break
+                end
+            end
+        finally
+            ccall(:uv_fs_closedir, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+                  C_NULL, req, uvdir, C_NULL)
+            uv_fs_req_cleanup(req)
+        end
     finally
         Libc.free(req)
     end
+
+    # sort entries unless opted out
+    sort && sort!(entries)
+
+    return entries
 end
 
 """
