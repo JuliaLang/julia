@@ -2023,6 +2023,12 @@ end
 
 is_threads_call_def(@nospecialize def) = def isa Method && is_base_threads_method(def, :_threads_call)
 
+function _libdl_dlid()
+    dlid_ptr = unsafe_load(cglobal(:jl_libdl_dlid_func, Ptr{Cvoid}))
+    dlid_ptr == C_NULL && return nothing # Libdl was never loaded
+    return unsafe_load(cglobal(:jl_libdl_dlid_func, Any))
+end
+
 function _libdl_dlopen()
     dlopen_ptr = unsafe_load(cglobal(:jl_libdl_dlopen_func, Ptr{Cvoid}))
     dlopen_ptr == C_NULL && return nothing # Libdl was never loaded

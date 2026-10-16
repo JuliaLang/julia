@@ -279,6 +279,10 @@ Standard library changes
 * `Libdl.LazyLibrary` is not compatible with `--trim`.
 * A new abstract type `Libdl.LazyLibraryCallback` has been added to provide
   an automatic compilation hint for LazyLibrary on-load callbacks under trim.
+* Library types used with `ccall` / `cglobal` can now identify themselves to the
+  compiler by implementing `Libdl.dlid` to return a `Libdl.LibraryID`.
+  The `LibraryID` is used by `JuliaC.jl` and the runtime to report required libraries
+  and symbols for `--trim` applications and configure linking on a per-library basis.
 
 #### LinearAlgebra
 

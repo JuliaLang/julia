@@ -29,5 +29,7 @@ Libdl.LazyLibrary
 Libdl.LazyLibraryPath
 Libdl.BundledLazyLibraryPath
 Libdl.LazyLibraryCallback
+Libdl.LibraryID
+Libdl.dlid
 Libdl.add_dependency!
 ```

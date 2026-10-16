@@ -1269,6 +1269,16 @@ function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info::Call
     return nothing
 end
 
+# Add the library identity folded by inference to the foreign symbol tuple
+function resolve_library_id!(stmt::Expr, @nospecialize(info::CallInfo))
+    info isa ForeignLibraryInfo || return nothing
+    id = folded_library_dlid(info)
+    id === nothing && return nothing
+    target = stmt.args[1]::Expr
+    stmt.args[1] = Expr(:tuple, target.args..., quoted(id.val))
+    return nothing
+end
+
 function handle_task_call!(ir::IRCode, idx::Int, stmt::Expr, info::TaskCallInfo, state::InliningState)
     length(stmt.args) == 3 || return nothing
     # Extract the CodeInstance from the inference result if available
@@ -1327,6 +1337,8 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, flag
             inline_splatnew!(ir, idx, stmt, rt, state)
         elseif head === :new_opaque_closure
             narrow_opaque_closure!(ir, stmt, inst[:info], state)
+        elseif head === :foreigncall || head === :foreignglobal
+            resolve_library_id!(stmt, inst[:info])
         elseif head === :invoke
             sig = call_sig(ir, stmt)
             sig === nothing && return nothing

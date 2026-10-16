@@ -21,6 +21,7 @@ artifact_dir::String = ""
 libunwind_path::String = ""
 const libunwind = LazyLibrary(
     BundledLazyLibraryPath("libunwind.so.8"),
+    id = LibraryID(Base.UUID("745a5e78-f969-53e9-954f-d19f2f74f4e3"), "libunwind"),
     dependencies = LazyLibrary[libz]
 )
 
