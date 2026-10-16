@@ -321,8 +321,16 @@ Base.print(io::IO, llp::LazyLibraryPath) = print(io, string(llp))
 # Helper to get `$(private_shlibdir)` at runtime
 struct PrivateShlibdirGetter; end
 const private_shlibdir = Base.OncePerProcess{String}() do
-    libname = ifelse(isdebugbuild(), "libjulia-internal-debug", "libjulia-internal")
-    dirname(dlpath(libname))
+    p = ccall(:jl_get_libjulia_internal_path, Cstring, ())
+    if p == C_NULL
+        # libjulia-internal is linked into the executable, so it cannot tell us
+        # where the private libraries live. Assume the installed layout, which
+        # keeps them in `$(private_shlibdir)` relative to the executable.
+        return Sys.iswindows() ? Sys.BINDIR : abspath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
+    end
+    path = unsafe_string(p)
+    Sys.iswindows() && Libc.free(p)
+    return dirname(path)
 end
 Base.string(::PrivateShlibdirGetter) = private_shlibdir()
 

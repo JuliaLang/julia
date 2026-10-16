@@ -1815,6 +1815,69 @@ mktempdir() do dir
     namepath_dirpath = joinpath(dir, "x", "y", "z", "")
     @test mkpath(namepath_dirpath) == namepath_dirpath
 end
+
+@testset "mv and cp do not destroy the source" begin
+    mktempdir() do dir
+        # a destination that contains the source is not removed
+        pkg = joinpath(dir, "pkg")
+        src = joinpath(pkg, "pkg-1.0")
+        mkpath(joinpath(src, "src"))
+        write(joinpath(src, "src", "a.jl"), "code")
+        @test_throws ArgumentError mv(src, pkg; force=true)
+        @test_throws ArgumentError cp(src, pkg; force=true)
+        @test read(joinpath(src, "src", "a.jl"), String) == "code"
+
+        # a directory is not moved or copied into itself
+        q = joinpath(dir, "q")
+        mkpath(joinpath(q, "sub"))
+        write(joinpath(q, "f"), "f")
+        for dst in (joinpath(q, "sub", "inner"), joinpath(q, "sub")), force in (false, true)
+            @test_throws ArgumentError mv(q, dst; force)
+            @test_throws ArgumentError cp(q, dst; force)
+        end
+        @test !ispath(joinpath(q, "sub", "inner"))
+        @test isdir(joinpath(q, "sub"))
+        @test read(joinpath(q, "f"), String) == "f"
+
+        if !Sys.iswindows()
+            # also through a symlinked path
+            link = joinpath(dir, "qlink")
+            symlink(q, link)
+            @test_throws ArgumentError cp(q, joinpath(link, "sub", "inner"))
+            @test !ispath(joinpath(q, "sub", "inner"))
+
+            # a symlink as the immediate parent of the destination
+            alias = joinpath(dir, "qalias")
+            symlink(q, alias)
+            @test_throws ArgumentError cp(q, joinpath(alias, "new"))
+            @test !ispath(joinpath(q, "new"))
+
+            # `..` after a symlink is resolved by the filesystem, not lexically
+            victim = joinpath(dir, "victim")
+            mkpath(joinpath(victim, "sub"))
+            write(joinpath(victim, "sub", "f"), "keep")
+            symlink(joinpath(victim, "sub"), joinpath(dir, "subalias"))
+            @test_throws ArgumentError cp(joinpath(dir, "subalias", "..", "sub"), victim; force=true)
+            # copying a symlink's target over a directory containing it
+            @test_throws ArgumentError cp(joinpath(dir, "subalias"), victim; force=true, follow_symlinks=true)
+            @test_throws ArgumentError Base.cptree(joinpath(dir, "subalias"), victim; force=true)
+            @test read(joinpath(victim, "sub", "f"), String) == "keep"
+
+            # allowed: removing a symlink to an ancestor leaves the source alone
+            up = joinpath(dir, "up")
+            symlink(dir, up)
+            @test cp(joinpath(q, "f"), up; force=true) == up
+            @test isfile(up) && !islink(up)
+            @test read(joinpath(q, "f"), String) == "f"
+            # allowed: a destination that only looks inside the source before resolving `..`
+            mkpath(joinpath(dir, "elsewhere", "child"))
+            symlink(joinpath(dir, "elsewhere", "child"), joinpath(q, "link"))
+            out = joinpath(q, "link", "..", "out")
+            @test cp(q, out) == out
+            @test isfile(joinpath(dir, "elsewhere", "out", "f"))
+        end
+    end
+end
 @test mkpath("") == ""
 @test mkpath("/") == "/"
 

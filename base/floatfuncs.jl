@@ -278,17 +278,17 @@ significantly more expensive than `x*y+z`. `fma` is used to improve accuracy in 
 algorithms. See [`muladd`](@ref).
 """
 function fma end
-function fma_emulated(a::Float16, b::Float16, c::Float16)
-    Float16(muladd(Float32(a), Float32(b), Float32(c))) #don't use fma if the hardware doesn't have it.
-end
-function fma_emulated(a::Float32, b::Float32, c::Float32)::Float32
-    ab = Float64(a) * b
-    res = ab+c
-    reinterpret(UInt64, res)&0x1fff_ffff!=0x1000_0000 && return res
-    # yes error compensation is necessary. It sucks
-    reslo = abs(c)>abs(ab) ? ab-(res - c) : c-(res - ab)
-    res = iszero(reslo) ? res : (signbit(reslo) ? prevfloat(res) : nextfloat(res))
-    return res
+function fma_emulated(a::T, b::T, c::T) where {T<:Union{Float16, Float32}}
+    W = widen(T)
+    ab = W(a) * b # exact
+    res = ab + c
+    bb = res - ab
+    err = (ab - (res - bb)) + (c - bb) # exact error of ab + c (TwoSum)
+    # Round res to odd, so that rounding it to T (which has at least 2 fewer bits) is correct
+    u = reinterpret(Unsigned, res)
+    adjust = (abs(err) > 0) & iseven(u) # false if err is zero or NaN (from Inf/NaN inputs)
+    u += ifelse(adjust, ifelse(signbit(err) == signbit(res), one(u), -one(u)), zero(u))
+    return T(reinterpret(W, u))
 end
 
 """ Splits a Float64 into a hi bit and a low bit where the high bit has 27 trailing 0s and the low bit has 26 trailing 0s"""
@@ -306,9 +306,23 @@ function twomul(a::Float64, b::Float64)
     return abhi, ablo
 end
 
+# Error of `r = abhi + c` plus `ablo`, rounded to odd. Rounding to odd (rather than
+# nearest) makes `r + fma_correction(...)` round correctly to nearest, since rounding
+# `s` to nearest could land on a tie of `r + s` whose direction depends on the lost bits.
+@inline function fma_correction(abhi::Float64, ablo::Float64, c::Float64, r::Float64)
+    e = (abs(abhi) > abs(c)) ? (abhi-r+c) : (c-r+abhi) # exact
+    s = e + ablo
+    serr = (abs(e) > abs(ablo)) ? (e-s+ablo) : (ablo-s+e) # exact
+    if !iszero(serr) && iseven(reinterpret(UInt64, s))
+        s = nextfloat(s, serr > 0 ? 1 : -1)
+    end
+    return s
+end
+
 function fma_emulated(a::Float64, b::Float64,c::Float64)
     abhi, ablo = @inline twomul(a,b)
-    if !isfinite(abhi+c) || isless(abs(abhi), nextfloat(0x1p-969)) || issubnormal(a) || issubnormal(b)
+    # twomul is only exact if the low parts of a and b (and their product) don't underflow
+    if !isfinite(abhi+c) || isless(abs(abhi), nextfloat(0x1p-969)) || isless(abs(a), 0x1p-969) || isless(abs(b), 0x1p-969)
         aandbfinite = isfinite(a) && isfinite(b)
         if !(isfinite(c) && aandbfinite)
             return aandbfinite ? c : abhi+c
@@ -323,22 +337,22 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
             issubnormal(b) && (b *= 0x1p52)
             a = reinterpret(Float64, (reinterpret(UInt64, a) & ~Base.exponent_mask(Float64)) | Base.exponent_one(Float64))
             b = reinterpret(Float64, (reinterpret(UInt64, b) & ~Base.exponent_mask(Float64)) | Base.exponent_one(Float64))
-            c = c_denorm
+            # If c underflowed when rescaled, it is far below every rounding boundary
+            # of a*b, so only its sign matters (to break ties). Keep it nonzero.
+            c = ldexp(c_denorm, bias) == c ? c_denorm : copysign(floatmin(Float64), c)
             abhi, ablo = twomul(a,b)
             # abhi <= 4 -> isfinite(r)      (α)
             r = abhi+c
             # s ≈ 0                         (β)
-            s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
+            s = fma_correction(abhi, ablo, c, r)
             # α ⩓ β -> isfinite(sumhi)      (γ)
             sumhi = r+s
             # If result is subnormal, ldexp will cause double rounding because subnormals have fewer mantisa bits.
             # As such, we need to check whether round to even would lead to double rounding and manually round sumhi to avoid it.
-            if issubnormal(ldexp(sumhi, bias))
+            # This must be decided before rounding, which can carry the result to 0 or floatmin.
+            # finite: See γ
+            if !iszero(sumhi) && (bits_lost = -bias-Math._exponent_finite_nonzero(sumhi)-1022) > 0
                 sumlo = r-sumhi+s
-                # finite: See γ
-                # non-zero: If sumhi == ±0., then ldexp(sumhi, bias) == ±0,
-                # so we don't take this branch.
-                bits_lost = -bias-Math._exponent_finite_nonzero(sumhi)-1022
                 sumhiInt = reinterpret(UInt64, sumhi)
                 if (bits_lost != 1) ⊻ (sumhiInt&1 == 1)
                     sumhi = nextfloat(sumhi, cmp(sumlo,0))
@@ -350,7 +364,7 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
         # fall through
     end
     r = abhi+c
-    s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
+    s = fma_correction(abhi, ablo, c, r)
     return r+s
 end
 

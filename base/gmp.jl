@@ -389,7 +389,11 @@ function (::Type{T})(x::BigInt) where T<:Base.BitSigned
 end
 
 
-Float64(n::BigInt, ::RoundingMode{:ToZero}) = MPZ.get_d(n)
+function Float64(n::BigInt, ::RoundingMode{:ToZero})
+    x = MPZ.get_d(n)
+    # get_d returns Inf when n is too large, but rounding toward zero never overflows
+    return isinf(x) ? copysign(floatmax(Float64), x) : x
+end
 
 function (::Type{T})(n::BigInt, ::RoundingMode{:ToZero}) where T<:Union{Float16,Float32}
     T(Float64(n,RoundToZero),RoundToZero)

@@ -1009,7 +1009,9 @@ end
     ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
     ndims(dest) == 0 && (dest[] = bc[]; return dest)
     bc′ = preprocess(dest, bc)
-    ax = axes(bc′)
+    # The broadcast axes can have an unsigned eltype, so use the destination's Int axes
+    # to keep the index arithmetic below from wrapping.
+    ax = axes(dest)
     ax1, out = ax[1], CartesianIndices(tail(ax))
     destc, indc = dest.chunks, 0
     bitst, remain = 0, UInt64(0)

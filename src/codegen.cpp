@@ -3414,7 +3414,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
                         return jl_cgval_t();
                 }
                 bool isboxed = true;
-                bool maybe_null = jl_atomic_load_relaxed(&bnd->value) == NULL;
+                bool maybe_null = true;
                 if (possibly_deprecated) {
                     ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
                 }

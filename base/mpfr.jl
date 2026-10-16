@@ -406,7 +406,7 @@ function _opposite_round(r::MPFRRoundingMode)
 end
 
 function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=_precision_with_base_2(BigFloat), rounding::MPFRRoundingMode=rounding_raw(BigFloat))
-    !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s), base = base)
+    !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s); base, precision, rounding)
     z = BigFloat(precision=precision)
     err = ccall((:mpfr_set_str, libmpfr), Int32, (Ref{BigFloat}, Cstring, Int32, MPFRRoundingMode), z, s, base, rounding)
     err == 0 ? z : nothing
