@@ -148,7 +148,7 @@ function init_depot_path()
         # otherwise, populate the depot path with the entries in JULIA_DEPOT_PATH,
         # expanding empty strings to the bundled depot
         pushfirst_default = true
-        for (i, path) in enumerate(eachsplit(str, Sys.iswindows() ? ';' : ':'))
+        for (i, path) in enumerate(eachsplit(str, Filesystem.path_list_separator))
             if isempty(path)
                 append_bundled_depot_path!(DEPOT_PATH)
             else
@@ -261,7 +261,7 @@ end
 function parse_load_path(str::String)
     envs = String[]
     isempty(str) && return envs
-    for env in eachsplit(str, Sys.iswindows() ? ';' : ':')
+    for env in eachsplit(str, Filesystem.path_list_separator)
         if isempty(env)
             for env′ in DEFAULT_LOAD_PATH
                 env′ in envs || push!(envs, env′)

@@ -23,13 +23,15 @@ export
     splitpath
 
 if Sys.isunix()
-    const path_separator    = "/"
+    const path_separator      = "/"
+    const path_list_separator = ':'
     @inline isseparator(c::Char) = c === '/'
     @inline isseparator(c::UInt8) = c === UInt8('/')
 
     splitdrive(path::String) = ("",path)
 elseif Sys.iswindows()
-    const path_separator    = "\\"
+    const path_separator      = "\\"
+    const path_list_separator = ';'
     @inline isseparator(c::Char) = c === '/' || c === '\\'
     @inline isseparator(c::UInt8) = c === UInt8('/') || c === UInt8('\\')
 
