@@ -622,23 +622,25 @@ function (::ComputeTryCatch{Handler})(code::Vector{Any}, bbs::Union{Vector{Basic
             elseif isa(stmt, Expr)
                 head = stmt.head
                 if head === :leave
-                    l = 0
+                    cur_hand = cur_stacks[1]
                     for j = 1:length(stmt.args)
                         arg = stmt.args[j]
                         if arg === nothing
                             continue
                         else
-                            enter_stmt = code[(arg::SSAValue).id]
+                            enter_ssa = arg::SSAValue
+                            enter_stmt = code[enter_ssa.id]
                             if enter_stmt === nothing
                                 continue
                             end
                             @assert isa(enter_stmt, EnterNode) "malformed :leave"
                         end
-                        l += 1
-                    end
-                    cur_hand = cur_stacks[1]
-                    for _ = 1:l
-                        cur_hand = handler_at[get_enter_idx(handlers[cur_hand])][1]
+                        # `:leave` carries the specific `EnterNode` SSA targets being
+                        # left. We need to honor those explicit targets instead of
+                        # blindly popping the current handler stack, because the
+                        # current stack can already be empty along cleanup/finally
+                        # paths even when an outer `:leave` target still remains.
+                        cur_hand = handler_at[enter_ssa.id][1]
                     end
                     cur_stacks = (cur_hand, cur_stacks[2])
                     cur_stacks == (0, 0) && break
