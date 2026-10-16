@@ -1999,12 +1999,33 @@ end
     @test test_read_success(`$exename --timeout-for-safepoint-straggler=$timeout -E "Base.JLOptions().timeout_for_safepoint_straggler_s"`, Int) == timeout
 end
 
+# Reuse the stripped image to check that only reachable symbols are stored in it.
 @testset "--strip-metadata" begin
     mktempdir() do dir
-        @test "" == test_read_success(`$(Base.julia_cmd()) --strip-metadata -t1,0 --output-o $(dir)/sys.o.a -e 0`)
-        if isfile(joinpath(dir, "sys.o.a"))
-            Base.Linking.link_image(joinpath(dir, "sys.o.a"), joinpath(dir, "sys.so"))
-            @test readchomp(`$(Base.julia_cmd()) -t1,0 -J $(dir)/sys.so -E 'hasmethod(sort, (Vector{Int},), (:dims,))'`) == "true"
+        image = joinpath(dir, "sys.so")
+        object = joinpath(dir, "sys.o.a")
+        unused = "unused_image_symbol_$(rand(UInt128))"
+        build = raw"""
+            const image_symbols = [Symbol("retained_image_symbol_", i) for i in 1:256]
+            Symbol(ENV["JULIA_TEST_UNUSED_SYMBOL"])
+            nothing
+        """
+        check = raw"""
+            using Test
+            @noinline in_image(@nospecialize(x)) = ccall(:jl_object_in_image, UInt8, (Any,), x) != 0
+            @test all(in_image, image_symbols)
+            for sym in image_symbols
+                @test Symbol(String(sym)) === sym
+            end
+            @test !in_image(Symbol(ENV["JULIA_TEST_UNUSED_SYMBOL"]))
+        """
+        cmd = `$(Base.julia_cmd()) --strip-metadata -t1,0 --output-o=$object -e $build`
+        @test test_read_success(addenv(cmd, "JULIA_TEST_UNUSED_SYMBOL" => unused)) == ""
+        if isfile(object)
+            Base.Linking.link_image(object, image)
+            @test readchomp(`$(Base.julia_cmd()) -t1,0 -J$image -E 'hasmethod(sort, (Vector{Int},), (:dims,))'`) == "true"
+            cmd = `$(Base.julia_cmd()) --startup-file=no -t1,0 -J$image -e $check`
+            @test test_read_success(addenv(cmd, "JULIA_TEST_UNUSED_SYMBOL" => unused)) == ""
         end
     end
 end

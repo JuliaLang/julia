@@ -174,7 +174,7 @@ static void get_tags(jl_value_t **tags[NUM_TAGS])
     tags[i] = NULL;
 }
 
-// hash of definitions for predefined tagged object
+// Maps symbols to SymbolRef indices (package images) or tree nodes (system images).
 static htable_t symbol_table;
 static uintptr_t nsym_tag;
 // array of definitions for the predefined tagged object types
@@ -304,6 +304,8 @@ static int dedup_by_content(jl_value_t *v, jl_datatype_t *t) JL_NOTSAFEPOINT
 {
     if (t == jl_string_type)
         return 1;
+    if (t == jl_symbol_type) // already unique
+        return 0;
     return !t->name->mutabl && !jl_is_type(v) && !jl_is_vararg(v) && !jl_is_datatype_singleton(t);
 }
 
@@ -429,7 +431,7 @@ static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTS
     if (s->incremental && jl_object_in_image(v))
         return 0;
 
-    if (v == NULL || jl_is_symbol(v) || v == jl_nothing) {
+    if (v == NULL || v == jl_nothing || (s->incremental && jl_is_symbol(v))) {
         return 0;
     }
     else if (jl_typetagis(v, jl_int64_tag << 4)) {
@@ -1247,7 +1249,7 @@ static uintptr_t add_external_linkage(jl_serializer_state *s, jl_value_t *v, jl_
 static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *link_ids) JL_GC_DISABLED JL_CANSAFEPOINT
 {
     assert(v != NULL && "cannot get backref to NULL object");
-    if (jl_is_symbol(v)) {
+    if (s->incremental && jl_is_symbol(v)) {
         void **pidx = ptrhash_bp(&symbol_table, v);
         void *idx = *pidx;
         if (idx == HT_NOTFOUND) {
@@ -1492,6 +1494,48 @@ static void record_external_fns(jl_serializer_state *s, arraylist_t *external_fn
 #endif
 }
 
+typedef struct _jl_image_symbol_t {
+    jl_sym_t *symbol;
+    struct _jl_image_symbol_t *left, *right;
+} jl_image_symbol_t;
+
+// Build a tree of reachable symbols without retaining or modifying the process tree.
+static jl_image_symbol_t *jl_build_image_symbol_tree(void) JL_NOTSAFEPOINT
+{
+    size_t n = 0;
+    for (size_t i = 0; i < serialization_queue.len; i++)
+        n += jl_is_symbol(serialization_queue.items[i]);
+    if (n == 0)
+        return NULL;
+    jl_image_symbol_t *nodes = (jl_image_symbol_t*)calloc_s(n * sizeof(jl_image_symbol_t));
+    n = 0;
+    for (size_t i = 0; i < serialization_queue.len; i++) {
+        jl_value_t *v = (jl_value_t*)serialization_queue.items[i];
+        if (!jl_is_symbol(v))
+            continue;
+        jl_sym_t *sym = (jl_sym_t*)v;
+        jl_image_symbol_t *node = &nodes[n++];
+        node->symbol = sym;
+        ptrhash_put(&symbol_table, sym, node);
+        if (node == nodes)
+            continue;
+        const char *name = jl_symbol_name(sym);
+        size_t len = strlen(name);
+        jl_image_symbol_t *parent = nodes;
+        while (1) {
+            intptr_t cmp = jl_symtab_cmp(sym->hash, name, len, parent->symbol);
+            assert(cmp != 0);
+            jl_image_symbol_t **slot = cmp < 0 ? &parent->left : &parent->right;
+            if (*slot == NULL) {
+                *slot = node;
+                break;
+            }
+            parent = *slot;
+        }
+    }
+    return nodes;
+}
+
 jl_value_t *jl_find_ptr = NULL;
 // The main function for serializing all the items queued in `serialization_order`
 // (They are also stored in `serialization_queue` which is order-preserving, unlike the hash table used
@@ -1513,7 +1557,8 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
         assert((!jl_is_datatype_singleton(t) || t->instance == v) && "detected singleton construction corruption");
         int mutabl = t->name->mutabl;
         ios_t *f = s->s;
-        if (t->smalltag) {
+        // Symbol tree links must remain writable for symbols interned after loading.
+        if (t->smalltag && t != jl_symbol_type) {
             if (t->layout->npointers == 0 || t == jl_string_type) {
                 if (jl_datatype_nfields(t) == 0 || mutabl == 0 || t == jl_string_type) {
                     f = s->const_data;
@@ -1734,6 +1779,16 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
         else if (jl_is_string(v)) {
             ios_write(f, (char*)v, sizeof(void*) + jl_string_len(v));
             write_uint8(f, '\0'); // null-terminated strings for easier C-compatibility
+        }
+        else if (jl_is_symbol(v)) {
+            assert(!s->incremental && f == s->s);
+            jl_sym_t *sym = (jl_sym_t*)v;
+            jl_image_symbol_t *node = (jl_image_symbol_t*)ptrhash_get(&symbol_table, sym);
+            assert(node != HT_NOTFOUND);
+            write_pointerfield(s, node->left ? (jl_value_t*)node->left->symbol : NULL);
+            write_pointerfield(s, node->right ? (jl_value_t*)node->right->symbol : NULL);
+            write_uint(f, sym->hash);
+            ios_write(f, jl_symbol_name(sym), strlen(jl_symbol_name(sym)) + 1);
         }
         else if (jl_is_cancel_source(v)) {
             // Variable-sized. Store parents, reset children (reconstructed on load).
@@ -3385,6 +3440,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         }
     }
 
+    jl_image_symbol_t *image_symbols = s.incremental ? NULL : jl_build_image_symbol_tree();
     uint32_t external_fns_begin = 0;
     { // step 2: build all the sysimg sections
         write_padding(&sysimg, sizeof(uintptr_t));
@@ -3463,6 +3519,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 #undef XX
             jl_write_value(&s, global_roots_list);
             jl_write_value(&s, global_roots_keyset);
+            jl_write_value(&s, image_symbols ? (jl_value_t*)image_symbols->symbol : NULL);
             jl_write_value(&s, s.ptls->root_task->tls);
             write_uint32(f, jl_get_gs_ctr());
             size_t world = jl_atomic_load_acquire(&jl_world_counter);
@@ -3520,6 +3577,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     content_dedup_keyset = NULL;
     htable_free(&nullptrs);
     htable_free(&symbol_table);
+    free(image_symbols);
     htable_free(&fptr_to_id);
     htable_free(&new_methtables);
     nsym_tag = 0;
@@ -4220,6 +4278,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     assert(!ios_eof(f));
     s.s = f;
     uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_new_ext = 0, offset_method_roots_list = 0;
+    jl_sym_t *image_symbols = NULL;
     if (!s.incremental) {
         size_t i;
         for (i = 0; tags[i] != NULL; i++) {
@@ -4242,6 +4301,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         export_jl_sysimg_globals();
         jl_global_roots_list = (jl_genericmemory_t*)jl_read_value(&s);
         jl_global_roots_keyset = (jl_genericmemory_t*)jl_read_value(&s);
+        image_symbols = (jl_sym_t*)jl_read_value(&s);
         jl_gc_write(s.ptls->root_task, s.ptls->root_task->tls, jl_value_t, jl_read_value(&s));
 
         uint32_t gs_ctr = read_uint32(f);
@@ -4315,6 +4375,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     }
     else {
         jl_global_roots_max = jl_idset_max(jl_global_roots_list); // needs the relocated keys
+        // The tree links in the image symbols are valid now that relocations are applied.
+        jl_set_root_symbol(image_symbols);
         arraylist_new(&s.uniquing_types, 0);
         arraylist_new(&s.uniquing_objs, 0);
         arraylist_new(&s.fixup_types, 0);
