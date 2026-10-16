@@ -570,7 +570,7 @@ _unescape_lnn(@nospecialize(e)) =
 # Linenodes usually apply to the following form, but some forms contain the
 # relevant line node as an argument.
 function _get_inner_lnn(e::Expr, default::LineNumberNode)
-    e.head in (:function, :macro, :module, :(=)) || return default
+    e.head in (:function, :macro, :module, :(=), :->) || return default
     length(e.args) >= 2 || return default
     b = e.args[end]
     b isa Expr || return default
