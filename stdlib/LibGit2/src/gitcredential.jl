@@ -61,14 +61,25 @@ Checks if the `git_cred` is valid for the given `url`.
 function ismatch(url::AbstractString, git_cred::GitCredential)
     isempty(url) && return true
 
+    # Like git, ignore configuration URLs which cannot be parsed
     m = match(URL_REGEX, url)
-    m === nothing && error("Unable to parse URL")
+    m === nothing && return false
 
     # Note: missing URL groups match anything
     (m[:scheme] === nothing ? true : m[:scheme] == git_cred.protocol) &&
-    (m[:host] === nothing ? true : m[:host] == git_cred.host) &&
+    (m[:host] === nothing ? true : ismatch_host(m[:host], git_cred.host)) &&
     (m[:path] === nothing ? true : m[:path] == git_cred.path) &&
     (m[:user] === nothing ? true : m[:user] == git_cred.username)
+end
+
+# A `*` label in the pattern matches exactly one label of the host, e.g. `*.example.com`
+# matches `foo.example.com` but not `example.com` or `foo.bar.example.com`.
+ismatch_host(pattern::AbstractString, host::Nothing) = false
+function ismatch_host(pattern::AbstractString, host::AbstractString)
+    pattern_labels = split(pattern, '.')
+    host_labels = split(host, '.')
+    length(pattern_labels) == length(host_labels) &&
+        all(((p, h),) -> p == "*" || p == h, zip(pattern_labels, host_labels))
 end
 
 function isfilled(cred::GitCredential)
