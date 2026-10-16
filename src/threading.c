@@ -93,16 +93,27 @@ JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
 #endif
 
 
+#ifdef JL_TLS_LOAD_ASM
+// `jl_tls_load` kept in order with the stores around it, for checking an
+// offset at startup
+static void *jl_tls_load_ordered(intptr_t offset) JL_NOTSAFEPOINT
+{
+    void *p;
+    __asm__ volatile(JL_TLS_LOAD_ASM : "=&r"(p) : "r"(offset) : "memory");
+    return p;
+}
+#endif
+
 // The tls_states buffer:
 //
 // On platforms that do not use ELF (i.e. where `__thread` is emulated with
-// lower level API) (Windows), we use the platform runtime API to create
+// lower level API) (Windows, macOS), we use the platform runtime API to create
 // TLS variable directly.
 // This is functionally equivalent to using `__thread` but can be
 // more efficient since we can have better control over the creation and
 // initialization of the TLS buffer.
 //
-// On platforms that support native TLS (ELF platforms + Macos) we use a `__thread` variable
+// On ELF platforms we use a `__thread` variable
 // as the fallback in the shared object. For better efficiency, we also
 // create a `__thread` variable in the main executable using a static TLS
 // model.
@@ -201,6 +212,52 @@ JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func_t *f, DWORD k)
     jl_safe_printf("ERROR: Attempt to change TLS address.\n");
 }
 
+#elif defined(_OS_DARWIN_)
+// A `__thread` variable costs a call to `_tlv_get_addr` on every access, in
+// the executable as much as here. A pthread key's slot is one load from the
+// thread register instead.
+static pthread_key_t jl_pgcstack_key;
+
+static __attribute__((constructor)) void jl_init_pgcstack_key(void)
+{
+    if (pthread_key_create(&jl_pgcstack_key, NULL) != 0)
+        abort();
+}
+
+JL_DLLEXPORT jl_gcframe_t **jl_get_pgcstack(void) JL_NOTSAFEPOINT
+{
+    return (jl_gcframe_t**)pthread_getspecific(jl_pgcstack_key);
+}
+
+void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
+{
+    pthread_setspecific(jl_pgcstack_key, (void*)pgcstack);
+}
+
+void jl_pgcstack_getkey(jl_get_pgcstack_func_t *f, jl_pgcstack_key_t *k)
+{
+    // for codegen; sysimage code passes `k`, which `jl_get_pgcstack` ignores
+    *f = jl_get_pgcstack;
+    *k = jl_pgcstack_key;
+}
+
+// `pthread_getspecific(key)` loads slot `key` of an array at the thread
+// register. Publish that slot's offset only if an inline read of it sees what
+// `pthread_setspecific` stored, so that a macOS which keeps keys elsewhere
+// falls back to the call.
+static void jl_check_tls(void) JL_NOTSAFEPOINT
+{
+#ifdef JL_TLS_LOAD_ASM
+    static char probe;
+    intptr_t offset = (intptr_t)(jl_pgcstack_key * sizeof(void*));
+    void *saved = pthread_getspecific(jl_pgcstack_key);
+    pthread_setspecific(jl_pgcstack_key, &probe);
+    void *seen = jl_tls_load_ordered(offset);
+    pthread_setspecific(jl_pgcstack_key, saved);
+    if (seen == &probe)
+        jl_tls_pgcstack_offset = offset;
+#endif
+}
 
 #else
 // We use the faster static version in the main executable to replace
@@ -619,8 +676,6 @@ static void jl_delete_thread(void *value)
 
 jl_mutex_t typecache_lock;
 
-JL_DLLEXPORT ssize_t jl_tls_offset = -1;
-
 #ifdef JL_ELF_TLS_VARIANT
 JL_DLLEXPORT const int jl_tls_elf_support = 1;
 // Optimize TLS access in codegen if the TLS buffer is using a IE or LE model.
@@ -717,7 +772,16 @@ static void jl_check_tls(void) JL_NOTSAFEPOINT
     ssize_t offset = jl_check_tls_bound(tp, k0, data.total_size);
     if (offset == -1)
         return;
-    jl_tls_offset = offset;
+#ifdef JL_TLS_LOAD_ASM
+    // the inline read must find the slot `k0` points to
+    jl_gcframe_t **saved = *k0;
+    *k0 = (jl_gcframe_t**)&saved;
+    void *seen = jl_tls_load_ordered(offset);
+    *k0 = saved;
+    if (seen != (void*)&saved)
+        return;
+#endif
+    jl_tls_pgcstack_offset = offset;
 }
 #else
 // !JL_ELF_TLS_VARIANT
@@ -738,7 +802,7 @@ void jl_init_threading(void)
         uv_mutex_init(&jl_mutex_park[i].mtx);
         uv_cond_init(&jl_mutex_park[i].cond);
     }
-#ifdef JL_ELF_TLS_VARIANT
+#if defined(JL_ELF_TLS_VARIANT) || defined(_OS_DARWIN_)
     jl_check_tls();
 #endif
 

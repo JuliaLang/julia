@@ -221,7 +221,7 @@ static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, 
         jl_pgcstack_getkey((jl_get_pgcstack_func_t*)pgcstack_func_slot, (jl_pgcstack_key_t*)pgcstack_key_slot);
 
         size_t *tls_offset_idx = pointers->ptls->tls_offset;
-        *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
+        *tls_offset_idx = (uintptr_t)jl_tls_pgcstack_offset;
     }
 
     res.jl_small_typeof = pointers->jl_small_typeof;

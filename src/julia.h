@@ -1412,7 +1412,22 @@ STATIC_INLINE size_t jl_array_len(void *a) JL_NOTSAFEPOINT
 }
 
 JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
-#define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
+
+// `jl_get_pgcstack()` without the call where the platform allows it, which
+// `JL_HAVE_INLINE_PGCSTACK` tells embedders.
+#if defined(JL_TLS_LOAD_ASM) && !defined(__clang_gcanalyzer__)
+#define JL_HAVE_INLINE_PGCSTACK 1
+STATIC_INLINE jl_gcframe_t **jl_get_pgcstack_inline(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
+{
+    intptr_t offset = jl_tls_pgcstack_offset;
+    if (__likely(offset != 0))
+        return (jl_gcframe_t**)jl_tls_load(offset);
+    return jl_get_pgcstack();
+}
+#else
+#define jl_get_pgcstack_inline() jl_get_pgcstack()
+#endif
+#define jl_current_task (container_of(jl_get_pgcstack_inline(), jl_task_t, gcstack))
 
 STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 static inline uint32_t jl_ptr_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT;
