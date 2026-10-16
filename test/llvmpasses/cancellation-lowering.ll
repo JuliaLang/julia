@@ -1,6 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='CancellationLowering' -S %s | FileCheck %s
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='CancellationLowering,verify' -S %s | FileCheck %s
 
 ; NOTE: the CHECK lines assume a 64-bit non-Windows host (the jl_reset_ctx_t
 ; field offsets 8/16/24 and the two-argument setjmp form); the llvmpasses
@@ -336,5 +336,24 @@ entry:
   %r = musttail call ptr @julia.pointer_from_objref(ptr addrspace(11) %obj)
   ret ptr %r
 }
+
+; A function that receives its pgcstack as the "gcstack" argument can still call
+; julia.get_pgcstack in its entry block, e.g. after an llvmcall got inlined. The task
+; fields have to be derived from the argument: the call need not dominate the
+; cancellation points.
+define swiftcc i32 @test_gcstack_arg_inlined_getter(ptr nonnull swiftself "gcstack" %pgcstack_arg) {
+entry:
+; CHECK-LABEL: @test_gcstack_arg_inlined_getter
+; CHECK: %current_task = getelementptr i8, ptr %pgcstack_arg
+; CHECK: %reset_ctx_ptr = getelementptr i8, ptr %current_task
+; CHECK: call i32 @{{.*}}setjmp
+; CHECK: %inlined_pgcstack = call ptr @julia.get_pgcstack()
+  %result = call i32 @julia.cancellation_point()
+  %inlined_pgcstack = call ptr @julia.get_pgcstack()
+  call void @use_pgcstack(ptr %inlined_pgcstack)
+  ret i32 %result
+}
+
+declare void @use_pgcstack(ptr)
 
 !0 = !{}
