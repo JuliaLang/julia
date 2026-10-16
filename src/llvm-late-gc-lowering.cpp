@@ -2172,7 +2172,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 CallInst *NewCall = CallInst::Create(FTy, new_callee, ReplacementArgs, "", CI->getIterator());
                 NewCall->setTailCallKind(CI->getTailCallKind());
                 auto callattrs = CI->getAttributes();
-                callattrs = AttributeList::get(CI->getContext(), getFnAttrs(callattrs), getRetAttrs(callattrs), {});
+                callattrs = AttributeList::get(CI->getContext(), callattrs.getFnAttrs(), callattrs.getRetAttrs(), {});
                 if (auto new_callee = CI->getCalledFunction()) // get the parameter attributes from the function target (if possible)
                     callattrs = AttributeList::get(CI->getContext(), {callattrs, new_callee->getAttributes()});
                 NewCall->setAttributes(callattrs);

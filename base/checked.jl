@@ -59,10 +59,6 @@ const UnsignedInt = Union{UInt8,UInt16,UInt32,UInt64,UInt128}
 #     BrokenSignedIntMul
 #     BrokenUnsignedIntMul
 
-# This code runs early during bootstrap, and we can't use Julia's version
-# strings yet
-const llvm_version = Int(ccall(:jl_get_LLVM_VERSION, UInt32, ()))
-
 brokenSignedInt = Union{}
 brokenUnsignedInt = Union{}
 brokenSignedIntMul = Int128

@@ -313,7 +313,7 @@ static GlobalVariable *emit_plt_thunk(
     // NoReturn function can trigger LLVM verifier error when declared as
     // MustTail since other passes might replace the `ret` with
     // `unreachable` (LLVM should probably accept `unreachable`).
-    if (hasFnAttr(attrs, Attribute::NoReturn)) {
+    if (attrs.hasFnAttr(Attribute::NoReturn)) {
         irbuilder.CreateUnreachable();
     }
     else {
@@ -523,7 +523,7 @@ static Value *runtime_apply_type_env(jl_codectx_t &ctx, jl_value_t *ty) JL_CANSA
         emit_ptrgep(ctx, maybe_decay_tracked(ctx, ctx.spvals_ptr), sizeof(jl_svec_t))
     };
     auto call = ctx.builder.CreateCall(prepare_call(jlapplytype_func), ArrayRef<Value*>(args));
-    addRetAttr(call, Attribute::getWithAlignment(ctx.builder.getContext(), Align(16)));
+    call->addRetAttr(Attribute::getWithAlignment(ctx.builder.getContext(), Align(16)));
     return call;
 }
 

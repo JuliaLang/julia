@@ -151,8 +151,8 @@ namespace jl_intrinsics {
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoUnwind);
         target->addFnAttrs(FnAttrs);
-        addRetAttr(target, Attribute::NoAlias);
-        addRetAttr(target, Attribute::NonNull);
+        target->addRetAttr(Attribute::NoAlias);
+        target->addRetAttr(Attribute::NonNull);
         return target;
     }
 
@@ -184,7 +184,7 @@ namespace jl_intrinsics {
                     false),
                 Function::ExternalLinkage,
                 GC_ALLOC_BYTES_NAME);
-            intrinsic->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
+            intrinsic->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, std::nullopt));
             return addGCAllocAttributes(intrinsic);
         });
 
@@ -197,8 +197,8 @@ namespace jl_intrinsics {
                 FunctionType::get(T_pprjlvalue, {Type::getInt32Ty(ctx)}, false),
                 Function::ExternalLinkage,
                 NEW_GC_FRAME_NAME);
-            addRetAttr(intrinsic, Attribute::NoAlias);
-            addRetAttr(intrinsic, Attribute::NonNull);
+            intrinsic->addRetAttr(Attribute::NoAlias);
+            intrinsic->addRetAttr(Attribute::NonNull);
 
             return intrinsic;
         });
@@ -299,7 +299,7 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_BIG_ALLOC_NAME);
-            bigAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
+            bigAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, std::nullopt));
             return addGCAllocAttributes(bigAllocFunc);
         });
 
@@ -315,7 +315,7 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_SMALL_ALLOC_NAME);
-            smallAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, None));
+            smallAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, std::nullopt));
             return addGCAllocAttributes(smallAllocFunc);
         });
 
@@ -349,7 +349,7 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_ALLOC_TYPED_NAME);
-            allocTypedFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
+            allocTypedFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, std::nullopt));
             return addGCAllocAttributes(allocTypedFunc);
         });
 
@@ -364,8 +364,8 @@ namespace jl_well_known {
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoUnwind);
         target->addFnAttrs(FnAttrs);
-        addRetAttr(target, Attribute::NoAlias);
-        addRetAttr(target, Attribute::NonNull);
+        target->addRetAttr(Attribute::NoAlias);
+        target->addRetAttr(Attribute::NonNull);
         return target;
     }
 
@@ -381,7 +381,7 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_BIG_ALLOC_RESET_SAFE_NAME);
-            bigAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
+            bigAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, std::nullopt));
             return addResetSafeGCAllocAttributes(bigAllocFunc);
         });
 
@@ -397,7 +397,7 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_SMALL_ALLOC_RESET_SAFE_NAME);
-            smallAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, None));
+            smallAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, std::nullopt));
             return addResetSafeGCAllocAttributes(smallAllocFunc);
         });
 
@@ -430,7 +430,7 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_ALLOC_TYPED_RESET_SAFE_NAME);
-            allocTypedFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
+            allocTypedFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, std::nullopt));
             return addResetSafeGCAllocAttributes(allocTypedFunc);
         });
 }

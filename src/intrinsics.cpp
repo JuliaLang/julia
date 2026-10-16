@@ -120,11 +120,7 @@ const auto &float_func() {
 extern "C" JL_DLLEXPORT_CODEGEN
 uint32_t jl_get_LLVM_VERSION_impl(void)
 {
-    return 10000 * LLVM_VERSION_MAJOR + 100 * LLVM_VERSION_MINOR
-#ifdef LLVM_VERSION_PATCH
-        + LLVM_VERSION_PATCH
-#endif
-        ;
+    return 10000 * LLVM_VERSION_MAJOR + 100 * LLVM_VERSION_MINOR + LLVM_VERSION_PATCH;
 }
 
 /*
@@ -1856,8 +1852,8 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
         }
     }
     case bswap_int: {
-        FunctionCallee bswapintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::bswap, ArrayRef<Type*>(t)); //TODO: Move to deduction guides
-        return ctx.builder.CreateCall(bswapintr, x);                                                           // when we drop LLVM 15
+        FunctionCallee bswapintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::bswap, ArrayRef<Type*>(t));
+        return ctx.builder.CreateCall(bswapintr, x);
     }
     case ctpop_int: {
         FunctionCallee ctpopintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::ctpop, ArrayRef<Type*>(t));
