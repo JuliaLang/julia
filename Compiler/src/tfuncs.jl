@@ -2923,7 +2923,8 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
         inaccessiblememonly = ALWAYS_FALSE
     elseif is_relocatable_ptr_field(argtypes[1], argtypes[2])
         inaccessiblememonly = INACCESSIBLEMEM_OR_ARGMEMONLY
-    elseif is_mutation_free_argtype(obj)
+    elseif is_immutable_argtype(obj) || is_mutation_free_argtype(obj) || is_const_field_argtype(obj, argtypes[2])
+        # a field that never changes is not mutable memory
         inaccessiblememonly = ALWAYS_TRUE
     else
         inaccessiblememonly = INACCESSIBLEMEM_OR_ARGMEMONLY

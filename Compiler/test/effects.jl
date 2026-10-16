@@ -1719,3 +1719,9 @@ let 𝕃 = Compiler.SimpleInferenceLattice.instance
     @test !Compiler.is_consistent(effects)
     @test Compiler.is_inaccessiblemem_or_argmemonly(effects)
 end
+
+# reading a field that never changes accesses no mutable memory
+@test Compiler.is_inaccessiblememonly(Base.infer_effects(x -> x.a, (ConstFieldEffects,)))
+@test !Compiler.is_inaccessiblememonly(Base.infer_effects(x -> x.b, (ConstFieldEffects,)))
+@test Compiler.is_inaccessiblememonly(Base.infer_effects(x -> getfield(x, 1), (Tuple{Vector{Int}},)))
+@test !Compiler.is_inaccessiblememonly(Base.infer_effects(x -> getfield(x, :ptr), (Memory{Int},)))
