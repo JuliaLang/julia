@@ -2,8 +2,10 @@
 
 ; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='function(AllocOpt)' -S %s | FileCheck %s
 
-; `julia.gc_alloc_memory` with a constant size whose data fits a GC pool is optimized like any
-; other allocation. When moved to the stack, its header is initialized like the allocation would.
+; AllocOpt can remove `julia.gc_alloc_memory` or move it to the stack when its size is a
+; constant that fits a GC pool. On the stack, its length is stored like the allocation would,
+; loads of its data pointer are forwarded when nothing else may write it, and the data pointer
+; is only stored if it may be read.
 
 @tag = external global {}
 
@@ -12,10 +14,12 @@
 ; CHECK: call void @llvm.memset.p0.i64(ptr align 16 %mem, i8 0, i64 40, i1 false)
 ; CHECK: [[LEN:%.*]] = getelementptr inbounds i8, ptr %mem, i64 0
 ; CHECK: store i64 3, ptr [[LEN]]
-; CHECK: [[PTR:%.*]] = getelementptr inbounds i8, ptr %mem, i64 {{4|8}}
 ; CHECK: [[DATA:%.*]] = getelementptr inbounds i8, ptr %mem, i64 16
-; CHECK: store ptr [[DATA]], ptr [[PTR]]
+; CHECK-NOT: store ptr
+; CHECK: [[LOADED:%.*]] = addrspacecast ptr [[DATA]] to ptr addrspace(13)
+; CHECK: getelementptr inbounds i8, ptr addrspace(13) [[LOADED]], i64 8
 ; CHECK-NOT: @julia.gc_alloc_memory
+; CHECK-NOT: @julia.gc_loaded
 ; CHECK: ret double
 define double @stack_memory(double %x) {
 top:
@@ -29,6 +33,111 @@ top:
   %elt = getelementptr inbounds i8, ptr addrspace(13) %loaded, i64 8
   store double %x, ptr addrspace(13) %elt, align 8
   %val = load double, ptr addrspace(13) %elt, align 8
+  ret double %val
+}
+
+; Codegen's store of the data pointer is removed too.
+; CHECK-LABEL: @stack_memory_codegen
+; CHECK: [[DATA:%.*]] = getelementptr inbounds i8, ptr %mem, i64 16
+; CHECK-NOT: store ptr
+; CHECK-NOT: @julia.pointer_from_objref
+; CHECK: store double %x, ptr {{%.*}}
+; CHECK-NOT: store ptr
+; CHECK: ret double
+define double @stack_memory_codegen(double %x) {
+top:
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %task = getelementptr inbounds i8, ptr %pgcstack, i64 -152
+  %mem = call noalias nonnull align 16 ptr addrspace(10) @julia.gc_alloc_memory(ptr %task, i64 24, ptr addrspace(10) addrspacecast (ptr @tag to ptr addrspace(10)), i64 3, i1 false)
+  %mem_derived = addrspacecast ptr addrspace(10) %mem to ptr addrspace(11)
+  %ptr_field = getelementptr inbounds i8, ptr addrspace(11) %mem_derived, i64 8
+  %objref = call ptr @julia.pointer_from_objref(ptr addrspace(11) %mem_derived)
+  %data = getelementptr inbounds i8, ptr %objref, i64 16
+  store ptr %data, ptr addrspace(11) %ptr_field, align 8
+  %elt = getelementptr inbounds i8, ptr %data, i64 8
+  store double %x, ptr %elt, align 8
+  %reload = load ptr, ptr addrspace(11) %ptr_field, align 8
+  %elt2 = getelementptr inbounds i8, ptr %reload, i64 8
+  %val = load double, ptr %elt2, align 8
+  ret double %val
+}
+
+; When something else may read the header, the data pointer is stored.
+; CHECK-LABEL: @stack_memory_header_read
+; CHECK: [[PTR:%.*]] = getelementptr inbounds i8, ptr %mem, i64 {{4|8}}
+; CHECK: store ptr {{%.*}}, ptr [[PTR]]
+; CHECK: call void @use(ptr
+; CHECK: ret
+define void @stack_memory_header_read() {
+top:
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %task = getelementptr inbounds i8, ptr %pgcstack, i64 -152
+  %mem = call noalias nonnull align 16 ptr addrspace(10) @julia.gc_alloc_memory(ptr %task, i64 24, ptr addrspace(10) addrspacecast (ptr @tag to ptr addrspace(10)), i64 3, i1 false)
+  %mem_derived = addrspacecast ptr addrspace(10) %mem to ptr addrspace(11)
+  %objref = call ptr @julia.pointer_from_objref(ptr addrspace(11) %mem_derived)
+  %token = call token (...) @llvm.julia.gc_preserve_begin(ptr addrspace(10) %mem)
+  call void @use(ptr %objref)
+  call void @llvm.julia.gc_preserve_end(token %token)
+  ret void
+}
+
+; Nothing is forwarded when a call may write the field, or a memset of unknown size, or a
+; volatile store.
+; CHECK-LABEL: @stack_memory_clobbered
+; CHECK: store ptr {{%.*}}, ptr
+; CHECK: call void @use(ptr
+; CHECK: [[P:%.*]] = load ptr, ptr
+; CHECK: icmp eq ptr [[P]], null
+define i1 @stack_memory_clobbered() {
+top:
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %task = getelementptr inbounds i8, ptr %pgcstack, i64 -152
+  %mem = call noalias nonnull align 16 ptr addrspace(10) @julia.gc_alloc_memory(ptr %task, i64 24, ptr addrspace(10) addrspacecast (ptr @tag to ptr addrspace(10)), i64 3, i1 false)
+  %mem_derived = addrspacecast ptr addrspace(10) %mem to ptr addrspace(11)
+  %ptr_field = getelementptr inbounds i8, ptr addrspace(11) %mem_derived, i64 8
+  %objref = call ptr @julia.pointer_from_objref(ptr addrspace(11) %mem_derived)
+  %token = call token (...) @llvm.julia.gc_preserve_begin(ptr addrspace(10) %mem)
+  call void @use(ptr %objref)
+  call void @llvm.julia.gc_preserve_end(token %token)
+  %p = load ptr, ptr addrspace(11) %ptr_field, align 8
+  %isnull = icmp eq ptr %p, null
+  ret i1 %isnull
+}
+
+; CHECK-LABEL: @stack_memory_memset_unknown
+; CHECK: store ptr {{%.*}}, ptr
+; CHECK: call void @llvm.memset
+; CHECK: [[P:%.*]] = load ptr, ptr
+; CHECK: icmp eq ptr [[P]], null
+define i1 @stack_memory_memset_unknown(i64 %n) {
+top:
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %task = getelementptr inbounds i8, ptr %pgcstack, i64 -152
+  %mem = call noalias nonnull align 16 ptr addrspace(10) @julia.gc_alloc_memory(ptr %task, i64 24, ptr addrspace(10) addrspacecast (ptr @tag to ptr addrspace(10)), i64 3, i1 false)
+  %mem_derived = addrspacecast ptr addrspace(10) %mem to ptr addrspace(11)
+  %ptr_field = getelementptr inbounds i8, ptr addrspace(11) %mem_derived, i64 8
+  call void @llvm.memset.p11.i64(ptr addrspace(11) %ptr_field, i8 0, i64 %n, i1 false)
+  %p = load ptr, ptr addrspace(11) %ptr_field, align 8
+  %isnull = icmp eq ptr %p, null
+  ret i1 %isnull
+}
+
+; CHECK-LABEL: @stack_memory_volatile
+; CHECK: store volatile ptr
+; CHECK: load ptr, ptr
+; CHECK: ret
+define double @stack_memory_volatile(double %x) {
+top:
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %task = getelementptr inbounds i8, ptr %pgcstack, i64 -152
+  %mem = call noalias nonnull align 16 ptr addrspace(10) @julia.gc_alloc_memory(ptr %task, i64 24, ptr addrspace(10) addrspacecast (ptr @tag to ptr addrspace(10)), i64 3, i1 false)
+  %mem_derived = addrspacecast ptr addrspace(10) %mem to ptr addrspace(11)
+  %ptr_field = getelementptr inbounds i8, ptr addrspace(11) %mem_derived, i64 8
+  %objref = call ptr @julia.pointer_from_objref(ptr addrspace(11) %mem_derived)
+  %data = getelementptr inbounds i8, ptr %objref, i64 16
+  store volatile ptr %data, ptr addrspace(11) %ptr_field, align 8
+  %reload = load ptr, ptr addrspace(11) %ptr_field, align 8
+  %val = load double, ptr %reload, align 8
   ret double %val
 }
 
@@ -59,7 +168,7 @@ exit:
   ret i8 %sel
 }
 
-; Without loads nothing can observe the allocation.
+; An allocation that is only stored to is dead.
 ; CHECK-LABEL: @dead_memory
 ; CHECK-NOT: @julia.gc_alloc_memory
 ; CHECK-NOT: alloca
@@ -74,7 +183,7 @@ top:
   ret void
 }
 
-; Allocations that are not moved to the stack stay as they are, for LateLowerGCFrame to expand.
+; Escaping allocations stay as they are, for LateLowerGCFrame to expand.
 ; CHECK-LABEL: @escaping_memory
 ; CHECK: %mem = call noalias nonnull align 16 ptr addrspace(10) @julia.gc_alloc_memory(ptr %task, i64 24, ptr addrspace(10) addrspacecast (ptr @tag to ptr addrspace(10)), i64 3, i1 false)
 ; CHECK: ret ptr addrspace(10) %mem
@@ -86,7 +195,7 @@ top:
   ret ptr addrspace(10) %mem
 }
 
-; Elements that are GC references would not be rooted on the stack.
+; Elements that are GC references would not be rooted on the stack, so this stays on the heap.
 ; CHECK-LABEL: @pointerful_memory
 ; CHECK: @julia.gc_alloc_memory(ptr %task, i64 24, ptr addrspace(10) addrspacecast (ptr @tag to ptr addrspace(10)), i64 3, i1 true)
 ; CHECK: ret
@@ -104,7 +213,7 @@ top:
   ret ptr addrspace(10) %val
 }
 
-; Data that doesn't fit a GC pool, or of unknown size, is not allocated inline.
+; Allocations that are too large for a GC pool, or of non-constant size, stay on the heap.
 ; CHECK-LABEL: @too_large
 ; CHECK: @julia.gc_alloc_memory(ptr %task, i64 4096,
 ; CHECK: ret
@@ -136,6 +245,11 @@ top:
 }
 
 declare ptr @julia.get_pgcstack()
+declare ptr @julia.pointer_from_objref(ptr addrspace(11)) #1
+declare void @use(ptr)
+declare void @llvm.memset.p11.i64(ptr addrspace(11), i8, i64, i1)
+declare token @llvm.julia.gc_preserve_begin(...)
+declare void @llvm.julia.gc_preserve_end(token)
 declare noalias nonnull ptr addrspace(10) @julia.gc_alloc_memory(ptr, i64, ptr addrspace(10), i64, i1) #0
 declare ptr addrspace(13) @julia.gc_loaded(ptr addrspace(10) nocapture readnone, ptr readnone) #1
 
