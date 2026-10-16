@@ -3641,3 +3641,8 @@ let A = Tuple{Union{Nothing, S2}, Int, Tuple{S1, S1}} where {S1, S2<:S1}, B = Tu
     @test Tuple{Int, Int, Tuple{Int, Int}} <: typeintersect(A, B)
     @test Tuple{Int, Int, Tuple{Int, Int}} <: typeintersect(B, A)
 end
+
+let A = Ref{Tuple{T, T}} where T, B = Ref{Tuple{Union{Nothing, Int}, Union{X, Y}}} where {X, Y}
+    @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(A, B)
+    @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(B, A)
+end

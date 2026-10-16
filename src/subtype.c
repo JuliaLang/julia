@@ -1258,7 +1258,7 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     if (e->intersection) {
         jl_value_t *ub = intersect_aside(a, bb->ub, e, bb->depth0);
         JL_GC_PUSH1(&ub);
-        if (ub != (jl_value_t*)b && (!jl_is_typevar(ub) || !reachable_var(ub, b, e)))
+        if (ub != (jl_value_t*)b && !reachable_var(ub, b, e))
             bb->ub = ub;
         JL_GC_POP();
     }
