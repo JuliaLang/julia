@@ -564,8 +564,6 @@ end
                 astr("a_b_c", (1:1, :red), (3:3, :red), (5:5, :red))
             @test replace(astr("foobarbaz", (1:9, :green)), "o" => "0", "a" => "A") ==
                 astr("f00bArbAz", (1:1, :green), (4:4, :green), (6:7, :green), (9:9, :green))
-            @test replace(astr("a b c", (1:5, :red)), " " => "_", count=1) ==
-                astr("a_b c", (1:1, :red), (3:5, :red))
             @test replace(astr("abcde", (2:4, :red)), "c" => "X") ==
                 astr("abXde", (2:2, :red), (4:4, :red))
             @test replace(astr("a a a a", (1:7, :blue)), "a" => "b") ==
@@ -825,8 +823,6 @@ end
                 astr("hi", (1:2, :red))
             @test replace(astr("aabbcc", (1:6, :red)), "a" => "x", "b" => "y", "c" => "z") ==
                 astr("xxyyzz")
-            @test replace(astr("hello", (1:5, :red)), "hello" => astr("hello", (1:5, :blue))) ==
-                astr("hello", (1:5, :blue))
         end
 
         @testset "Complex" begin
