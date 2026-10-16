@@ -4902,11 +4902,17 @@ jl_value_t *jl_invoke_oc(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_me
     return ret;
 }
 
-STATIC_INLINE int sig_match_fast(jl_value_t *arg1t, jl_value_t **args, jl_value_t **sig, size_t n) JL_NOTSAFEPOINT
+STATIC_INLINE int sig_match_fast(jl_value_t *F, jl_value_t *arg1t, jl_value_t **args, jl_value_t **sig, size_t n) JL_NOTSAFEPOINT
 {
     // NOTE: This function is a huge performance hot spot!!
-    if (arg1t != sig[0])
-        return 0;
+    jl_value_t *decl = sig[0];
+    if (arg1t != decl) {
+        // Type-dispatch signatures (e.g. constructors `Tuple{Type{A}, ...}`) record
+        // the type value itself, not typeof(F), so also compare the value directly.
+        // Types are hash-consed / have stable addresses, so pointer comparison works.
+        if (!jl_is_some_Type(decl) || F != jl_some_Type_T(decl))
+            return 0;
+    }
     size_t i;
     for (i = 1; i < n; i++) {
         jl_value_t *decl = sig[i];
@@ -4914,9 +4920,12 @@ STATIC_INLINE int sig_match_fast(jl_value_t *arg1t, jl_value_t **args, jl_value_
         if (jl_typeof(a) != decl) {
             /*
               we are only matching concrete types here, and those types are
-              hash-consed, so pointer comparison should work.
+              hash-consed, so pointer comparison should work. For arguments
+              that are themselves types (e.g. `f(Int, 1)` => `Tuple{typeof(f),
+              Type{Int}, Int}`), compare the type value instead.
             */
-            return 0;
+            if (!jl_is_some_Type(decl) || a != jl_some_Type_T(decl))
+                return 0;
         }
     }
     return 1;
@@ -4987,7 +4996,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
             i = _i; \
             entry = jl_atomic_load_relaxed(&call_cache[cache_idx[i]]); \
             if (entry && nargs == jl_svec_len(entry->sig->parameters) && \
-                sig_match_fast(FT, args, jl_svec_data(entry->sig->parameters), nargs) && \
+                sig_match_fast(F, FT, args, jl_svec_data(entry->sig->parameters), nargs) && \
                 world >= jl_atomic_load_relaxed(&entry->min_world) && world <= jl_atomic_load_relaxed(&entry->max_world)) { \
                 goto have_entry; \
             } \
@@ -5026,7 +5035,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
                 }
             }
         }
-        if (entry != NULL && entry->isleafsig && entry->simplesig == (void*)jl_nothing && entry->guardsigs == jl_emptysvec) {
+        if (entry != NULL && (entry->isleafsig || entry->issimplesig) && entry->guardsigs == jl_emptysvec) {
             // put the entry into the cache if it's valid for a leafsig lookup,
             // using pick_which to slightly randomize where it ends up
             // (intentionally not atomically synchronized, since we're just using it for randomness)
