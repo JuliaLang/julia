@@ -1975,7 +1975,7 @@ static jl_method_instance_t *cache_result(
 
 // `jl_fptr_sparam` reads static parameters from its CodeInstance's
 // MethodInstance. Sharing code across different static parameters requires
-// a CodeInstance in the call's own MethodInstance.
+// a CodeInstance copied to the call's own MethodInstance.
 static int need_copy_to_mi_cache(jl_svec_t *sparams, jl_method_instance_t *mi2,
     enum internal_compilation_triggers cause)
 {
@@ -1993,13 +1993,7 @@ static void recache_method(
         jl_value_t *compilationsig) JL_CANSAFEPOINT
 {
     // caller must hold the parent->writelock, which this releases
-    if (need_copy_to_mi_cache(sparams, newmeth, TRIGGER_NONE)) {
-        // Redirecting this call to `newmeth` would use the wrong static
-        // parameters. Leave it to dispatch to cache a MethodInstance with
-        // the call's parameters.
-        if (mc) JL_UNLOCK(&mc->writelock);
-        return;
-    }
+    assert(jl_egal((jl_value_t*)sparams, (jl_value_t*)newmeth->sparam_vals));
     int8_t offs = mc ? jl_cachearg_offset() : 1;
     // check each cache this might be present in, and update it there
     // TODO: should/how do we check min/max valid on the previous entry before updating to newmeth?
@@ -2191,6 +2185,11 @@ JL_DLLEXPORT void jl_recache_method_by_type(jl_value_t *tt, jl_svec_t *sparams,
     size_t min_valid, size_t max_valid, size_t current_world) JL_CANSAFEPOINT
 {
     if (newmeth->cache_with_orig)
+        return;
+    if (need_copy_to_mi_cache(sparams, newmeth, TRIGGER_NONE))
+        // The compilation signature left some static parameters undetermined
+        // that `tt` determines, so `newmeth` cannot serve this call. Leave it
+        // to dispatch to cache a MethodInstance with the call's parameters.
         return;
     jl_method_t *definition = newmeth->def.method;
     if (!jl_is_dispatch_tupletype(tt))
@@ -4358,12 +4357,17 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
         // and try to populate some caches
         mi2 = jl_normalize_to_compilable_mi(mi);
         if (mi != mi2) {
-            codeinst = jl_compile_method_very_internal(mi2, world, F, args, nargs, cause);
             if (need_copy_to_mi_cache(mi->sparam_vals, mi2, cause)) {
+                // `mi2`'s code cannot serve this call's sparams, so the inner
+                // call must not promote it for `F`/`args`; the promotion
+                // below records the copy in `mi` instead.
+                codeinst = jl_compile_method_very_internal(mi2, world, NULL, NULL, 0, cause);
                 codeinst = copy_to_mi_cache(mi, codeinst);
                 mi2 = mi;
             }
             else {
+                // the inner call promotes its result for `F`/`args` directly
+                codeinst = jl_compile_method_very_internal(mi2, world, F, args, nargs, cause);
                 jl_typeinf_timing_end(inference_start, is_recompile);
                 return codeinst;
             }
