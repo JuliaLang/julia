@@ -5867,6 +5867,8 @@ static int intersect_var_ccheck_in_env(jl_value_t *xlb, jl_value_t *xub, jl_valu
             restore_env(e, &se, 1);
         }
     }
+    if (ccheck && ((!easy_check1 && jl_has_free_typevars(xlb)) || (!easy_check2 && jl_has_free_typevars(ylb))))
+        restore_env(e, &se, 1);
     free_env(&se);
     return ccheck;
 }

@@ -3636,3 +3636,8 @@ end
 @testintersect(Tuple{T, Vararg{Tuple{T, Any, Int}}} where T,
                Tuple{Any, Vararg{Tuple{Tuple{S}, S, Float64} where S}},
                Tuple{Any})
+
+let A = Tuple{Ref{X}, Ref{Y}} where {Y, X<:Union{Nothing, Y}}, B = Tuple{Ref{X}, Ref{Y}} where {Y, X>:Y}
+    @test Tuple{Ref{Union{Nothing, Int}}, Ref{Int}} <: typeintersect(A, B)
+    @test Tuple{Ref{Union{Nothing, Int}}, Ref{Int}} <: typeintersect(B, A)
+end
