@@ -114,7 +114,8 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     end
     println(io, "  GC: ", unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ())))
     if verbose
-        println(io, "  Sysimage: ", Sys.sysimage_target(), " (", Sys.MACHINE, ")")
+        println(io, "  Base Sysimage: ", Sys.sysimage_target(), " (", Sys.MACHINE, ")")
+        println(io, "  Matched Sysimage: ", Sys.matched_sysimage_target())
     end
     official_release = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org release"
     if Base.GIT_VERSION_INFO.tagged_commit && !official_release
