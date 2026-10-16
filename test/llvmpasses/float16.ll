@@ -202,7 +202,7 @@ top:
 ; CHECK-LABEL: @fast_half_test(
 ; CHECK-NEXT:  top:
 ; CHECK-NEXT:    %2 = fsub fast half %0, %1
-; CHECK-NEXT:    %3 = fcmp fast oeq half %2, 0xH0000
+; CHECK-NEXT:    %3 = fcmp fast oeq half %2, {{0xH0000|0\.000000e\+00}}
 ; CHECK-NEXT:    ret i1 %3
 ;
   %2 = fsub fast half %0, %1
@@ -215,7 +215,7 @@ top:
 ; CHECK-LABEL: @fast_bfloat_test(
 ; CHECK-NEXT:  top:
 ; CHECK-NEXT:    %2 = fsub fast bfloat %0, %1
-; CHECK-NEXT:    %3 = fcmp fast oeq bfloat %2, 0xR0000
+; CHECK-NEXT:    %3 = fcmp fast oeq bfloat %2, {{0xR0000|0\.000000e\+00}}
 ; CHECK-NEXT:    ret i1 %3
 ;
   %2 = fsub fast bfloat %0, %1

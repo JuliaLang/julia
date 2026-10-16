@@ -78,7 +78,7 @@ static bool subtarget_has_features(const MCSubtargetInfo &STI, StringRef feature
     std::string query;
     for (StringRef name : names) {
         // checkFeatures aborts on names missing from the feature table
-        if (!any_of(STI.getAllProcessorFeatures(), [&](const SubtargetFeatureKV &KV) { return KV.Key == name; }))
+        if (!any_of(STI.getAllProcessorFeatures(), [&](const SubtargetFeatureKV &KV) { return KV.key() == name; }))
             return false;
         if (!query.empty())
             query += ',';
