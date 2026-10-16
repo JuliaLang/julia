@@ -928,4 +928,27 @@ let
     end
 end
 
+# A bad terminfo file must not prevent Julia from starting (#63777)
+@testset "malformed terminfo" begin
+    mktempdir() do dir
+        mkpath(joinpath(dir, "x"))
+        # Valid magic number, truncated header (previously an uncaught `EOFError`)
+        write(joinpath(dir, "x", "xterm-truncated"), UInt8[0x1a, 0x01, 0x10])
+        write(joinpath(dir, "x", "xterm-empty"), UInt8[])
+        withenv("TERMINFO" => dir, "TERMINFO_DIRS" => nothing) do
+            for term in ("xterm-truncated", "xterm-empty")
+                ti = Base.load_terminfo(term)
+                @test ti isa Base.TermInfo
+                @test isempty(ti.names)
+            end
+        end
+        # The process-wide terminfo (used when printing errors) must also initialize
+        cmd = `$(Base.julia_cmd()) --startup-file=no -e 'Base.current_terminfo(); print(Base.ttyhascolor())'`
+        out = withenv("TERMINFO" => dir, "TERMINFO_DIRS" => nothing, "TERM" => "xterm-truncated") do
+            read(cmd, String)
+        end
+        @test out == "true" # xterm-like terminals get a default `setaf`
+    end
+end
+
 end
