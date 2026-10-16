@@ -1708,3 +1708,14 @@ const const_field_effects = ConstFieldEffects("a", "b", C_NULL)
 abstract type AbstractConstFieldEffects end
 @test !Compiler.is_consistent(Base.infer_effects(x -> getfield(x, 1), (Any,)))
 @test !Compiler.is_consistent(Base.infer_effects(x -> x.a, (AbstractConstFieldEffects,)))
+# `Memory` and `MemoryRef` data pointers are relocated by staticdata.c
+@test !Compiler.is_consistent(Base.infer_effects(x -> getfield(x, :ptr), (Memory{Int},)))
+@test !Compiler.is_consistent(Base.infer_effects(x -> getfield(x, :ptr_or_offset), (MemoryRef{Int},)))
+let 𝕃 = Compiler.SimpleInferenceLattice.instance
+    effects = Compiler.builtin_effects(𝕃, getfield, Any[Memory{Int}, Compiler.Const(:ptr)], Ptr{Cvoid})
+    @test Compiler.is_consistent_if_inaccessiblememonly(effects)
+    @test Compiler.is_inaccessiblemem_or_argmemonly(effects)
+    effects = Compiler.builtin_effects(𝕃, getfield, Any[Core.TypeName, Compiler.Const(:constfields)], Ptr{Cvoid})
+    @test !Compiler.is_consistent(effects)
+    @test Compiler.is_inaccessiblemem_or_argmemonly(effects)
+end

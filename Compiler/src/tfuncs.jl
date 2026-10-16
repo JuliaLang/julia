@@ -2859,6 +2859,12 @@ function is_relocatable_ptr_field(ty, fld)
     elseif hasintersect(widenconst(ty), DataType) &&
         (Const(:layout) ⊑ fld || Const(fieldindex(DataType, :layout)) ⊑ fld)
         return true
+    elseif hasintersect(widenconst(ty), GenericMemory) &&
+        (Const(:ptr) ⊑ fld || Const(fieldindex(GenericMemory, :ptr)) ⊑ fld)
+        return true
+    elseif hasintersect(widenconst(ty), GenericMemoryRef) &&
+        (Const(:ptr_or_offset) ⊑ fld || Const(fieldindex(GenericMemoryRef, :ptr_or_offset)) ⊑ fld)
+        return true
     end
     return false
 end
@@ -2882,10 +2888,16 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
             inaccessiblememonly=ALWAYS_FALSE,
             noub=ALWAYS_FALSE)
     end
-    # :consistent if the argtype is immutable or the field is const
     if is_relocatable_ptr_field(argtypes[1], argtypes[2])
-        consistent = ALWAYS_FALSE
+        if !ismutabletype(widenconst(obj)) || is_mutation_free_argtype(obj)
+            # access to immutable / mutation-free types is not modelled by `inaccessiblememonly`
+            # so immediately widen these to ALWAYS_FALSE
+            consistent = ALWAYS_FALSE
+        else
+            consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
+        end
     elseif is_immutable_argtype(obj) || is_mutation_free_argtype(obj) || is_const_field_argtype(obj, argtypes[2])
+        # :consistent if the argtype is immutable or the field is const
         consistent = ALWAYS_TRUE
     else
         consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
@@ -2906,9 +2918,11 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
             noub = ALWAYS_FALSE
         end
     end
-    if hasintersect(widenconst(obj), Module) || is_relocatable_ptr_field(argtypes[1], argtypes[2])
+    if hasintersect(widenconst(obj), Module)
         # Modeled more precisely in abstract_eval_getglobal
         inaccessiblememonly = ALWAYS_FALSE
+    elseif is_relocatable_ptr_field(argtypes[1], argtypes[2])
+        inaccessiblememonly = INACCESSIBLEMEM_OR_ARGMEMONLY
     elseif is_mutation_free_argtype(obj)
         inaccessiblememonly = ALWAYS_TRUE
     else
