@@ -758,12 +758,12 @@ const char *plt_asm_x86_64 =
     "jmpq  *${0:a}\n";
 
 const char *plt_asm_riscv64 =
-    "1b: auipc t3, %pcrel_hi(${0})\n"
+    "1:  auipc t3, %pcrel_hi(${0})\n"
     "    ld    t3, %pcrel_lo(1b)(t3)\n"
     "    jalr  t1, t3";
 
 const char *plt_asm_riscv32 =
-    "1b: auipc t3, %pcrel_hi(${0})\n"
+    "1:  auipc t3, %pcrel_hi(${0})\n"
     "    lw    t3, %pcrel_lo(1b)(t3)\n"
     "    jalr  t1, t3";
 

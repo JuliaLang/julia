@@ -378,15 +378,17 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
                     const char *cxxpath = libstdcxxprobe();
                     if (cxxpath) {
                         void *cxx_handle = dlopen(cxxpath, RTLD_LAZY);
-                        (void)cxx_handle;
-                        const char *dlr = dlerror();
-                        if (dlr) {
-                            jl_loader_print_stderr("ERROR: Unable to dlopen(cxxpath) in parent!\n");
-                            jl_loader_print_stderr3("Message: ", dlr, "\n");
-                            exit(1);
+                        if (cxx_handle == NULL) {
+                            const char *dlr = dlerror();
+                            // The probed library turned out not to be loadable
+                            // after all; fall back to our bundled libstdc++.
+                            jl_loader_print_stderr("WARNING: Unable to load probed system libstdc++:\n");
+                            jl_loader_print_stderr3("Message: ", dlr ? dlr : "unknown error", "\n");
+                        }
+                        else {
+                            probe_successful = 1;
                         }
                         free((void *)cxxpath);
-                        probe_successful = 1;
                     }
                 }
                 // If the probe rejected the system libstdc++ (or didn't find one!)

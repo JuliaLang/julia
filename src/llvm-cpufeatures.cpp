@@ -64,6 +64,13 @@ static bool have_fma(StringRef typ, const MCSubtargetInfo &STI, const Triple &TT
             return typ == "f32" || typ == "f64";
         return false;
     }
+    if (TT.isRISCV()) {
+        if (typ == "f32")
+            return STI.checkFeatures("+f");
+        if (typ == "f64")
+            return STI.checkFeatures("+d");
+        return false;
+    }
     return false;
 }
 
