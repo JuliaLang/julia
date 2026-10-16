@@ -629,8 +629,8 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
     auto newCall = CallInst::Create(newF, args, "", call->getIterator());
     newCall->setTailCallKind(call->getTailCallKind());
     auto old_attrs = call->getAttributes();
-    newCall->setAttributes(AttributeList::get(pass.getLLVMContext(), getFnAttrs(old_attrs),
-                                              getRetAttrs(old_attrs), {}));
+    newCall->setAttributes(AttributeList::get(pass.getLLVMContext(), old_attrs.getFnAttrs(),
+                                              old_attrs.getRetAttrs(), {}));
     newCall->setDebugLoc(call->getDebugLoc());
     call->replaceAllUsesWith(newCall);
     call->eraseFromParent();

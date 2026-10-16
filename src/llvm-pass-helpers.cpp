@@ -151,8 +151,8 @@ namespace jl_intrinsics {
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoUnwind);
         target->addFnAttrs(FnAttrs);
-        addRetAttr(target, Attribute::NoAlias);
-        addRetAttr(target, Attribute::NonNull);
+        target->addRetAttr(Attribute::NoAlias);
+        target->addRetAttr(Attribute::NonNull);
         return target;
     }
 
@@ -197,8 +197,8 @@ namespace jl_intrinsics {
                 FunctionType::get(T_pprjlvalue, {Type::getInt32Ty(ctx)}, false),
                 Function::ExternalLinkage,
                 NEW_GC_FRAME_NAME);
-            addRetAttr(intrinsic, Attribute::NoAlias);
-            addRetAttr(intrinsic, Attribute::NonNull);
+            intrinsic->addRetAttr(Attribute::NoAlias);
+            intrinsic->addRetAttr(Attribute::NonNull);
 
             return intrinsic;
         });
@@ -364,8 +364,8 @@ namespace jl_well_known {
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoUnwind);
         target->addFnAttrs(FnAttrs);
-        addRetAttr(target, Attribute::NoAlias);
-        addRetAttr(target, Attribute::NonNull);
+        target->addRetAttr(Attribute::NoAlias);
+        target->addRetAttr(Attribute::NonNull);
         return target;
     }
 

@@ -6282,7 +6282,7 @@ static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty
 {
     Value *theFptr;
     theFptr = jl_Module->getOrInsertFunction(specFunctionObject, ctx.types().T_jlfunc).getCallee();
-    addRetAttr(cast<Function>(theFptr), Attribute::NonNull);
+    cast<Function>(theFptr)->addRetAttr(Attribute::NonNull);
     Value *ret = emit_jlcall(ctx, theFptr, nullptr, argv, nargs, julia_call);
     return update_julia_type(ctx, mark_julia_type(ctx, ret, true, jlretty), inferred_retty);
 }
@@ -8448,7 +8448,7 @@ static Function *gen_cfun_wrapper(
 
         // Move past ReturnValue and parameter return value
         for (;it < AttributeList::AttrIndex::FirstArgIndex + sig.sret; ++it) {
-            if (hasAttributesAtIndex(attributes, it)) {
+            if (attributes.hasAttributesAtIndex(it)) {
                 newAttributes.emplace_back(it, attributes.getAttributes(it));
             }
         }
@@ -8461,16 +8461,16 @@ static Function *gen_cfun_wrapper(
         // Shift forward the rest of the attributes
         if (attributes.getNumAttrSets() > 0) { // without this check the loop range below is invalid
             for(; it != it_end; ++it) {
-                if (hasAttributesAtIndex(attributes, it)) {
+                if (attributes.hasAttributesAtIndex(it)) {
                     newAttributes.emplace_back(it + 1, attributes.getAttributes(it));
                 }
             }
         }
 
         // Remember to add back FunctionIndex
-        if (hasAttributesAtIndex(attributes, AttributeList::AttrIndex::FunctionIndex)) {
+        if (attributes.hasAttributesAtIndex(AttributeList::AttrIndex::FunctionIndex)) {
             newAttributes.emplace_back(AttributeList::AttrIndex::FunctionIndex,
-                                       getFnAttrs(attributes));
+                                       attributes.getFnAttrs());
         }
 
         // Create the new AttributeList
