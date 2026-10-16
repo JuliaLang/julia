@@ -16,6 +16,7 @@
 #endif
 #include "gc-tls-common.h"
 #include "julia_atomics.h"
+#include <stdalign.h>
 #ifndef _OS_WINDOWS_
 #include <pthread.h>
 #endif
