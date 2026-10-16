@@ -1880,10 +1880,8 @@ void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVe
 CallInst *LateLowerGCFrame::EmitGCAllocBytes(IRBuilder<> &builder, CallInst *CI, Value *size, Value *tag)
 {
     auto T_size = CI->getModule()->getDataLayout().getIntPtrType(CI->getContext());
-    // LLVM alignment/bit check is not happy about addrspacecast and refuse
-    // to remove write barrier because of it.
-    // We pretty much only load using `T_size` so try our best to strip
-    // as many cast as possible.
+    // Strip casts that hide from LLVM that the tag is 16-byte aligned, i.e. that its GC
+    // bits are clear.
     tag = tag->stripPointerCastsAndAliases();
     if (auto C = dyn_cast<ConstantExpr>(tag)) {
         if (C->getOpcode() == Instruction::IntToPtr) {
@@ -1891,12 +1889,8 @@ CallInst *LateLowerGCFrame::EmitGCAllocBytes(IRBuilder<> &builder, CallInst *CI,
         }
     }
     else if (auto LI = dyn_cast<LoadInst>(tag)) {
-        // Make sure the load is correctly marked as aligned
-        // since LLVM might have removed them.
-        // We can't do this in general since the load might not be
-        // a type in other branches.
-        // However, it should be safe for us to do this on const globals
-        // which should be the important cases as well.
+        // Restore the alignment of a type loaded from a constant global, which LLVM may have
+        // dropped. Other loads may not produce a type on paths that don't reach here.
         bool task_local = false;
         if (isLoadFromConstGV(LI, task_local) && getLoadValueAlign(LI) < 16) {
             Type *T_int64 = Type::getInt64Ty(LI->getContext());
@@ -1904,25 +1898,17 @@ CallInst *LateLowerGCFrame::EmitGCAllocBytes(IRBuilder<> &builder, CallInst *CI,
             LI->setMetadata(LLVMContext::MD_align, MDNode::get(LI->getContext(), { op }));
         }
     }
-    // As a last resort, if we didn't manage to strip down the tag
-    // for LLVM, emit an alignment assumption.
     auto tag_type = tag->getType();
     if (tag_type->isPointerTy()) {
         auto &DL = CI->getModule()->getDataLayout();
         auto align = tag->getPointerAlignment(DL).value();
         if (align < 16) {
-            // On 5 <= LLVM < 12, it is illegal to call this on
-            // non-integral pointer. This relies on stripping the
-            // non-integralness from datalayout before this pass
             builder.CreateAlignmentAssumption(DL, tag, 16);
         }
     }
 
-    // Create a call to the `julia.gc_alloc_bytes` intrinsic, which is like
-    // `julia.gc_alloc_obj` except it specializes the call based on the constant
-    // size of the object to allocate, to save one indirection, and doesn't set
-    // the type tag. (Note that if the size is not a constant, it will call
-    // gc_alloc_obj, and will redundantly set the tag.)
+    // Unlike `julia.gc_alloc_obj`, `julia.gc_alloc_bytes` lets FinalLowerGC pick the pool for
+    // a constant size, and doesn't set the tag.
     auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
     auto ptls = get_current_ptls_from_task(builder, CI->getArgOperand(0), tbaa_gcframe);
     auto newI = builder.CreateCall(
@@ -1943,14 +1929,10 @@ CallInst *LateLowerGCFrame::EmitGCAllocBytes(IRBuilder<> &builder, CallInst *CI,
     if (auto *MD = CI->getMetadata("julia.reset_region"))
         newI->setMetadata("julia.reset_region", MD);
     newI->takeName(CI);
-    // Now, finally, set the tag. We do this in IR instead of in the C alloc
-    // function, to provide possible optimization opportunities. (I think? TBH
-    // the most recent editor of this code is not entirely clear on why we
-    // prefer to set the tag in the generated code. Providing optimization
-    // opportunities is the most likely reason; the tradeoff is slightly
-    // larger code size and increased compilation time, compiling this
-    // instruction at every allocation site, rather than once in the C alloc
-    // function.)
+    // Setting the tag in IR was meant to let LLVM see that a fresh object has clear GC bits,
+    // and fold away write barriers on it. Since #59559, write barriers load the tag as volatile,
+    // because a safepoint between the allocation and the barrier can age the object (#59547).
+    // Eliding these barriers now requires proving that no safepoint lies in between.
     auto &M = *builder.GetInsertBlock()->getModule();
     StoreInst *store = builder.CreateAlignedStore(
         tag, EmitTagPtr(builder, tag_type, T_size, newI), M.getDataLayout().getPointerABIAlignment(0));
