@@ -3777,6 +3777,20 @@ JL_DLLEXPORT void jl_image_unpack_uncomp(void *handle, jl_image_buf_t *image)
     jl_image_load_metadata(handle, image);
 }
 
+#if defined(_OS_WINDOWS_)
+static char *jl_image_try_alloc_large_pages(size_t size)
+{
+    size_t large_page_size = GetLargePageMinimum();
+    if (large_page_size > 0 && size > 4 * large_page_size) {
+        size_t large_aligned_size = LLT_ALIGN(size, large_page_size);
+        return (char *)VirtualAlloc(NULL, large_aligned_size,
+                                   MEM_COMMIT | MEM_RESERVE | MEM_LARGE_PAGES,
+                                   PAGE_READWRITE);
+    }
+    return NULL;
+}
+#endif
+
 // Allocate a page-aligned buffer of at least `size` bytes, preferring
 // large/huge pages when available.
 static char *jl_image_alloc_pages(size_t size)
@@ -3786,13 +3800,7 @@ static char *jl_image_alloc_pages(size_t size)
     char *data = NULL;
     int fail = 0;
 #if defined(_OS_WINDOWS_)
-    size_t large_page_size = GetLargePageMinimum();
-    if (large_page_size > 0 && size > 4 * large_page_size) {
-        size_t large_aligned_size = LLT_ALIGN(size, large_page_size);
-        data = (char *)VirtualAlloc(NULL, large_aligned_size,
-                                    MEM_COMMIT | MEM_RESERVE | MEM_LARGE_PAGES,
-                                    PAGE_READWRITE);
-    }
+    data = jl_image_try_alloc_large_pages(size);
     if (!data) {
         /* Try small pages if large pages failed. */
         data = (char *)VirtualAlloc(NULL, aligned_size, MEM_COMMIT | MEM_RESERVE,
@@ -3930,20 +3938,34 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_
 
     ios_t s;
     size_t size;
+#ifdef _OS_WINDOWS_
+    int use_large_pages = 0;
+#endif
     if (!ios_file(&s, ji_path, 1, 0, 0, 0))
         goto error;
     size = ios_filesize(&s);
 
     if (use_mmap) {
 #ifdef _OS_WINDOWS_
-        HANDLE hdl = (HANDLE)_get_osfhandle(s.fd);
-        HANDLE map = CreateFileMapping(hdl, NULL, PAGE_WRITECOPY, 0, 0, NULL);
-        if (!map)
-            goto error;
-        *dest = (char *)MapViewOfFile(map, FILE_MAP_COPY, 0, 0, size);
-        CloseHandle(map);
-        if (!*dest)
-            goto error;
+        *dest = jl_image_try_alloc_large_pages(size);
+        if (*dest) {
+            use_large_pages = 1;
+            ios_bufmode(&s, bm_none);
+            if (ios_readall(&s, *dest, size) != size)
+                goto error;
+        }
+        else {
+            // Keep file mapping when large pages are unavailable (e.g. without
+            // SeLockMemoryPrivilege), rather than reading into ordinary pages.
+            HANDLE hdl = (HANDLE)_get_osfhandle(s.fd);
+            HANDLE map = CreateFileMapping(hdl, NULL, PAGE_WRITECOPY, 0, 0, NULL);
+            if (!map)
+                goto error;
+            *dest = (char *)MapViewOfFile(map, FILE_MAP_COPY, 0, 0, size);
+            CloseHandle(map);
+            if (!*dest)
+                goto error;
+        }
 #elif defined(MADV_HUGEPAGE)
         // Read the file into anonymous memory backed by huge pages rather than mapping
         // it: relocation writes to nearly every page, and in a private file mapping
@@ -3974,12 +3996,16 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_
     if (!jl_image_ji_crc_valid(*dest, size)) {
         if (!use_mmap)
             free(*dest);
-        else
+        else {
 #ifdef _OS_WINDOWS_
-            UnmapViewOfFile(*dest);
+            if (use_large_pages)
+                VirtualFree(*dest, 0, MEM_RELEASE);
+            else
+                UnmapViewOfFile(*dest);
 #else
             munmap(*dest, size);
 #endif
+        }
         *dest = NULL;
         return 0;
     }
