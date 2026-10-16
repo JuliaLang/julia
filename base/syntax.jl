@@ -614,7 +614,7 @@ function expr_to_syntax(@nospecialize(e), src::Syntax)
     _expr_to_syntax(e, src.context, src, false)[1]
 end
 function _expr_to_syntax(@nospecialize(e), context::SyntaxContext,
-                      src::SourceAttrType, quoted::Bool)
+                         src::SourceAttrType, quoted::Bool)
     s = if e isa Symbol
         @mknode(;head=:identifier, value=String(e), source=src, context)
     elseif e isa QuoteNode
@@ -678,6 +678,10 @@ end
 # normal linenode rules.  It only applies to `st`, and not transitively to its
 # children.
 function syntax_to_expr(s::Syntax, suppress_linenodes=false)
+    push_lno!(ex::Expr, lno::LineNumberNode, first::Bool=false) =
+        if lno.file !== :var"" || lno.line != 0
+            first ? pushfirst!(ex.args, lno) : push!(ex.args, lno)
+        end
     h = head(s)
     if h === :identifier
         # @assert scope layer is base
@@ -711,25 +715,25 @@ function syntax_to_expr(s::Syntax, suppress_linenodes=false)
         need_lnns = h in (:block, :toplevel) && !suppress_linenodes &&
             !_is_meta_doc_block(s)
         for (i, c) in enumerate(children(s))
-            need_lnns && push!(out.args, first_linenode(c))
+            need_lnns && push_lno!(out, first_linenode(c))
             let suppress_c = i == 1 && (h == :for || h == :let) || i == 2 && h == :do
                 push!(out.args, syntax_to_expr(c, suppress_c))
             end
         end
         # Add extra linenodes to some blocks for better provenance
         if !suppress_linenodes && h === :block && length(out.args) == 0
-            push!(out.args, first_linenode(s))
+            push_lno!(out, first_linenode(s))
         elseif h in (:module, :function, :macro) && length(out.args) > 0
             let b = out.args[end]
-                b isa Expr && b.head === :block && pushfirst!(
-                    b.args, first_linenode(s))
+                b isa Expr && b.head === :block &&
+                    push_lno!(b, first_linenode(s), true)
             end
         elseif length(out.args) == 2 && ((h === :-> && !suppress_linenodes) ||
             (h === :(=) && is_eventually_call(out.args[1])))
             let b = out.args[end]
                 b isa Expr && b.head === :block && !isempty(b.args) &&
                     b.args[1] isa LineNumberNode && first_linenode(s) != b.args[1] &&
-                    pushfirst!(b.args, first_linenode(s))
+                    push_lno!(b, first_linenode(s), true)
             end
         elseif h in (:for, :while) && length(out.args) > 0
             let b = out.args[end]
@@ -737,7 +741,7 @@ function syntax_to_expr(s::Syntax, suppress_linenodes=false)
                     last_lno = sr isa LineNumberNode ? sr :
                         LineNumberNode(source_line(sr.code, sr.last_byte),
                                        filename(s))
-                    push!(b.args, last_lno)
+                    push_lno!(b, last_lno)
                 end
             end
         end
