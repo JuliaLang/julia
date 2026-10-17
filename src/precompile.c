@@ -161,6 +161,14 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
             emit_split ? (comp ? "jl_image_unpack_split_zstd" : "jl_image_unpack_split") :
                          (comp ? "jl_image_unpack_zstd" : "jl_image_unpack_uncomp");
 
+        // Package images reuse code from the native code cache, which has to
+        // be opened on a julia thread before jl_dump_native compiles on others.
+        if (jl_options.outputo && jl_options.incremental) {
+            jl_task_t *ct = jl_current_task;
+            int8_t gc_state = jl_gc_safe_enter(ct->ptls);
+            jl_objcache_kv_enabled();
+            jl_gc_safe_leave(ct->ptls, gc_state);
+        }
         // jl_dump_native will close and free s when appropriate
         // this is a horrible abstraction, but
         // this helps reduce live memory significantly

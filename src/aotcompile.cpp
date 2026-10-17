@@ -16,6 +16,8 @@
 // analysis passes
 #include <llvm/Analysis/Passes.h>
 #include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/DebugInfo.h>
+#include <llvm/IR/DiagnosticInfo.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/AttributeMask.h>
 #include <llvm/IR/PassManager.h>
@@ -44,6 +46,9 @@
 #include <llvm/Support/FormatAdapters.h>
 #include <llvm/Linker/Linker.h>
 #include <llvm/Support/TimeProfiler.h>
+#include <llvm/Support/xxhash.h>
+#include <llvm/ADT/StringSet.h>
+#include <llvm/Support/raw_ostream.h>
 
 using namespace llvm;
 
@@ -142,6 +147,43 @@ struct JobserverClient {
     }
 };
 } // namespace
+
+// Everything besides its bitcode that the object compiled from an image unit
+// depends on, for its key in the object cache (see ObjCache::hashKey, which
+// adds the identity of the compiler).
+static std::string image_unit_config(const TargetMachine &TM) JL_NOTSAFEPOINT
+{
+    std::string config;
+    raw_string_ostream OS(config);
+    auto add = [&OS](StringRef s) JL_NOTSAFEPOINT {
+        uint64_t n = s.size();
+        OS.write((const char*)&n, sizeof(n));
+        OS << s;
+    };
+    auto add_int = [&add](int64_t x) JL_NOTSAFEPOINT {
+        add(StringRef((const char*)&x, sizeof(x)));
+    };
+    add(TM.getTargetTriple().str());
+    add(TM.getTargetCPU());
+    add(TM.getTargetFeatureString());
+    add_int((int)TM.getRelocationModel());
+    add_int((int)TM.getCodeModel());
+    add_int((int)TM.getOptLevel());
+    add_int(jl_options.opt_level);
+    add_int(jl_options.opt_level_min);
+    add_int(jl_options.target_sanitize_memory);
+    add_int(jl_options.target_sanitize_thread);
+    add_int(jl_options.target_sanitize_address);
+    // Multiversioning clones each function for these targets, which come from
+    // the runtime library rather than from codegen.
+    jl_clone_targets_t targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
+    add(StringRef((const char*)targets.data, targets.data_size));
+    jl_free_clone_targets(&targets);
+    const char *llvm_args = getenv("JULIA_LLVM_ARGS");
+    add_int(llvm_args != nullptr);
+    add(llvm_args ? llvm_args : "");
+    return config;
+}
 
 STATISTIC(CreateNativeCalls, "Number of jl_create_native calls made");
 STATISTIC(CreateNativeMethods, "Number of methods compiled for jl_create_native");
@@ -1083,6 +1125,16 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, jl_array_t *ci_order, LLVMOrcTh
         const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
         const Triple &triple = jl_ExecutionEngine->getTargetTriple();
         auto ctx = std::make_unique<LLVMContext>();
+        // The bitcode of a module lists every metadata kind and operand
+        // bundle tag its context knows about, by the order they were first
+        // used in. Registering the ones codegen uses up front keeps that
+        // order the same however the code changes, which the image object
+        // cache needs to find unchanged code.
+        for (const char *kind : {"julia.constgv", "julia.reset_region", "julia.reset_safe"})
+            ctx->getMDKindID(kind);
+        for (const char *tag : {"jl_roots", "julia.gc_alloc_ptr_offsets", "julia.gc_alloc_zeroinit",
+                                "julia.gc_alloc_zeroinit_indirect"})
+            ctx->getOrInsertBundleTag(tag);
         auto M = jl_create_llvm_module("text", *ctx, DL, triple);
         ctx->setDiscardValueNames(true);
         data->TSM = orc::ThreadSafeModule(std::move(M), std::move(ctx));
@@ -1129,11 +1181,16 @@ static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionT
 }
 
 // See src/processor.h for documentation about this table. Corresponds to jl_image_shard_t.
-static GlobalVariable *emit_shard_table(Module &M, Type *T_size, Type *T_psize, unsigned threads) {
+static GlobalVariable *emit_shard_table(Module &M, Type *T_size, Type *T_psize, ArrayRef<std::string> suffixes) {
+    unsigned threads = suffixes.size();
     SmallVector<Constant *, 0> tables(sizeof(jl_image_shard_t) / sizeof(void *) * threads);
     for (unsigned i = 0; i < threads; i++) {
-        auto suffix = "_" + std::to_string(i);
+        StringRef suffix = suffixes[i];
         auto create_gv = [&](StringRef name, bool constant) {
+            // Tables defined in this module are used directly; the rest are
+            // defined by the shard objects.
+            if (auto gv = M.getNamedGlobal((name + suffix).str()))
+                return gv;
             auto gv = new GlobalVariable(M, T_size, constant,
                                          GlobalValue::ExternalLinkage, nullptr, name + suffix);
             gv->setVisibility(GlobalValue::HiddenVisibility);
@@ -1314,6 +1371,8 @@ struct Partition {
     StringMap<unsigned> fvars;
     StringMap<unsigned> gvars;
     size_t weight;
+    // Whether this partition holds code, and so goes through the object cache.
+    bool cacheable = false;
 };
 }  // anonymous namespace
 
@@ -1394,56 +1453,54 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
     return !bad;
 }
 
-// Chop a module up as equally as possible by weight into threads partitions
-static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
-    //Start by stripping fvars and gvars, which helpfully removes their uses as well
-    DenseMap<GlobalValue *, unsigned> fvars, gvars;
-    get_fvars_gvars(M, fvars, gvars);
-
-    // Partition by union-find, since we only have def->use traversal right now
-    struct Partitioner {
-        struct Node {
-            GlobalValue *GV;
-            unsigned parent;
-            unsigned size;
-            size_t weight;
-        };
-        SmallVector<Node, 0> nodes;
-        DenseMap<GlobalValue *, unsigned> node_map;
-        unsigned merged;
-
-        unsigned make(GlobalValue *GV, size_t weight) {
-            unsigned idx = nodes.size();
-            nodes.push_back({GV, idx, 1, weight});
-            node_map[GV] = idx;
-            return idx;
-        }
-
-        unsigned find(unsigned idx) {
-            while (nodes[idx].parent != idx) {
-                nodes[idx].parent = nodes[nodes[idx].parent].parent;
-                idx = nodes[idx].parent;
-            }
-            return idx;
-        }
-
-        unsigned merge(unsigned x, unsigned y) {
-            x = find(x);
-            y = find(y);
-            if (x == y)
-                return x;
-            if (nodes[x].size < nodes[y].size)
-                std::swap(x, y);
-            nodes[y].parent = x;
-            nodes[x].size += nodes[y].size;
-            nodes[x].weight += nodes[y].weight;
-            merged++;
-            return x;
-        }
+namespace {
+// Partition by union-find, since we only have def->use traversal right now
+struct Partitioner {
+    struct Node {
+        GlobalValue *GV;
+        unsigned parent;
+        unsigned size;
+        size_t weight;
     };
+    SmallVector<Node, 0> nodes;
+    DenseMap<GlobalValue *, unsigned> node_map;
+    unsigned merged;
 
-    Partitioner partitioner;
+    unsigned make(GlobalValue *GV, size_t weight) {
+        unsigned idx = nodes.size();
+        nodes.push_back({GV, idx, 1, weight});
+        node_map[GV] = idx;
+        return idx;
+    }
 
+    unsigned find(unsigned idx) {
+        while (nodes[idx].parent != idx) {
+            nodes[idx].parent = nodes[nodes[idx].parent].parent;
+            idx = nodes[idx].parent;
+        }
+        return idx;
+    }
+
+    unsigned merge(unsigned x, unsigned y) {
+        x = find(x);
+        y = find(y);
+        if (x == y)
+            return x;
+        if (nodes[x].size < nodes[y].size)
+            std::swap(x, y);
+        nodes[y].parent = x;
+        nodes[x].size += nodes[y].size;
+        nodes[x].weight += nodes[y].weight;
+        merged++;
+        return x;
+    }
+};
+} // anonymous namespace
+
+// Group the definitions of the module so that globals connected through constant
+// uses end up together.
+static void build_partitioner(Module &M, Partitioner &partitioner)
+{
     for (auto &G : M.global_values()) {
         if (G.isDeclaration())
             continue;
@@ -1482,6 +1539,16 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
             partitioner.merge(i, idx->second);
         }
     }
+}
+
+// Chop a module up as equally as possible by weight into threads partitions
+static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
+    //Start by stripping fvars and gvars, which helpfully removes their uses as well
+    DenseMap<GlobalValue *, unsigned> fvars, gvars;
+    get_fvars_gvars(M, fvars, gvars);
+
+    Partitioner partitioner;
+    build_partitioner(M, partitioner);
 
     SmallVector<Partition, 32> partitions(threads);
     // always get the smallest partition first
@@ -1558,6 +1625,85 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     (void) verified;
 
     return partitions;
+}
+
+// Split a module into units for the object cache. Each unit holds the code of
+// one julia function, given by `methods` as the module and name of the method
+// for the functions of code instances, so that a change to a function only
+// invalidates the cached objects for that function. The other functions are small thunks and share a unit. The globals
+// without code are cheap to compile and are collected into one uncached unit,
+// which is returned first.
+static SmallVector<Partition, 0> partitionUnits(Module &M, const DenseMap<const Function*, std::pair<const void*, const void*>> &methods)
+{
+    DenseMap<GlobalValue *, unsigned> fvars, gvars;
+    get_fvars_gvars(M, fvars, gvars);
+
+    Partitioner partitioner;
+    build_partitioner(M, partitioner);
+
+    // Keep the code for each julia method together: its specializations and
+    // their wrappers come from the same source, so they mostly change
+    // together, and compiling a module has a fixed cost that is large next to
+    // a small function.
+    std::map<std::pair<const void*, const void*>, unsigned> groups;
+    for (unsigned i = 0; i < partitioner.nodes.size(); ++i) {
+        auto F = dyn_cast<Function>(partitioner.nodes[i].GV);
+        if (!F)
+            continue;
+        auto method = methods.find(F);
+        auto it = groups.try_emplace(method == methods.end() ? std::make_pair(nullptr, nullptr) : method->second, i);
+        if (!it.second)
+            partitioner.merge(i, it.first->second);
+    }
+
+    SmallVector<bool, 0> has_code(partitioner.nodes.size());
+    for (unsigned i = 0; i < partitioner.nodes.size(); ++i) {
+        if (isa<Function>(partitioner.nodes[i].GV))
+            has_code[partitioner.find(i)] = true;
+    }
+
+    SmallVector<Partition, 0> units(1);
+    units[0].weight = 0;
+    DenseMap<unsigned, unsigned> root_unit;
+    auto add = [&](Partition &P, GlobalValue *GV) {
+        auto name = GV->getName();
+        P.globals.insert({name, true});
+        if (fvars.count(GV))
+            P.fvars[name] = fvars[GV];
+        if (gvars.count(GV))
+            P.gvars[name] = gvars[GV];
+    };
+    for (unsigned i = 0; i < partitioner.nodes.size(); ++i) {
+        unsigned root = partitioner.find(i);
+        unsigned u = 0;
+        if (has_code[root]) {
+            auto it = root_unit.try_emplace(root, units.size());
+            if (it.second) {
+                units.emplace_back();
+                units.back().weight = partitioner.nodes[root].weight;
+                units.back().cacheable = true;
+            }
+            u = it.first->second;
+        }
+        else {
+            units[0].weight += 1;
+        }
+        add(units[u], partitioner.nodes[i].GV);
+    }
+    // Coverage counters are left out of the grouping. The cache is not used
+    // when they are present, but keep them in the image regardless.
+    for (auto &G : M.globals()) {
+        if (!G.isDeclaration() && isCoverageCounter(G))
+            add(units[0], &G);
+    }
+
+    bool verified = verify_partitioning(units, M, fvars, gvars);
+    if (!verified)
+        llvm_dump(&M);
+    assert(verified && "Partitioning failed to partition globals correctly");
+    (void) verified;
+
+    return units;
 }
 
 namespace {
@@ -1673,11 +1819,8 @@ static void emit_native(Module &M, TargetMachine &TM, SmallVectorImpl<char> &buf
     emitter.run(M);
 }
 
-// Perform the actual optimization and emission of the output files
-static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimers &timers,
-        bool unopt, bool opt, bool obj, bool asm_) {
-    assert((unopt || opt || obj || asm_) && "no output requested");
-    AOTOutputs out;
+static std::unique_ptr<TargetMachine> copy_target_machine(TargetMachine &SourceTM)
+{
     auto TM = std::unique_ptr<TargetMachine>(
         SourceTM.getTarget().createTargetMachine(
             SourceTM.getTargetTriple(),
@@ -1688,6 +1831,41 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
             SourceTM.getCodeModel(),
             SourceTM.getOptLevel()));
     fixupTM(*TM);
+    return TM;
+}
+
+namespace {
+// The target machine and optimizer for compiling image modules. Setting these
+// up costs about as much as compiling a small module, so a thread that
+// compiles many modules keeps one of these, as the JIT does.
+struct OutputCompiler {
+    TargetMachine &SourceTM;
+    std::unique_ptr<TargetMachine> TM;
+    std::unique_ptr<NewPM> optimizer;
+
+    OutputCompiler(TargetMachine &SourceTM) : SourceTM(SourceTM), TM(copy_target_machine(SourceTM)) {}
+
+    NewPM &get_optimizer()
+    {
+        if (!optimizer) {
+            auto options = OptimizationOptions::defaults(true, true);
+            options.sanitize_memory = jl_options.target_sanitize_memory;
+            options.sanitize_thread = jl_options.target_sanitize_thread;
+            options.sanitize_address = jl_options.target_sanitize_address;
+            optimizer = std::make_unique<NewPM>(copy_target_machine(SourceTM),
+                                                getOptLevel(jl_options.opt_level), options);
+        }
+        return *optimizer;
+    }
+};
+} // anonymous namespace
+
+// Perform the actual optimization and emission of the output files
+static AOTOutputs add_output_impl(Module &M, OutputCompiler &compiler, ShardTimers &timers,
+        bool unopt, bool opt, bool obj, bool asm_) {
+    assert((unopt || opt || obj || asm_) && "no output requested");
+    AOTOutputs out;
+    TargetMachine *TM = compiler.TM.get();
     if (unopt) {
         timers.unopt.startTimer();
         emit_bitcode(M, *TM, out.unopt);
@@ -1701,21 +1879,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
     {
         timers.optimize.startTimer();
 
-        auto PMTM = std::unique_ptr<TargetMachine>(
-            SourceTM.getTarget().createTargetMachine(
-                SourceTM.getTargetTriple(),
-                SourceTM.getTargetCPU(),
-                SourceTM.getTargetFeatureString(),
-                SourceTM.Options,
-                SourceTM.getRelocationModel(),
-                SourceTM.getCodeModel(),
-                SourceTM.getOptLevel()));
-        fixupTM(*PMTM);
-        auto options = OptimizationOptions::defaults(true, true);
-        options.sanitize_memory = jl_options.target_sanitize_memory;
-        options.sanitize_thread = jl_options.target_sanitize_thread;
-        options.sanitize_address = jl_options.target_sanitize_address;
-        NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), options};
+        NewPM &optimizer = compiler.get_optimizer();
         {
             TimeTraceScope OptimizeScope("AOT Optimize", M.getModuleIdentifier());
             optimizer.run(M);
@@ -1791,6 +1955,12 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
     }
 
     return out;
+}
+
+static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimers &timers,
+        bool unopt, bool opt, bool obj, bool asm_) {
+    OutputCompiler compiler(SourceTM);
+    return add_output_impl(M, compiler, timers, unopt, opt, obj, asm_);
 }
 
 // serialize module to bitcode
@@ -1958,6 +2128,409 @@ static void construct_vars(Module &M, Partition &partition, StringRef suffix) {
     gidxs_var->setDSOLocal(true);
 }
 
+namespace {
+// Value mapping falls back to this for values it has no mapping for. A global
+// reaching it means the unit refers to something it has no declaration for,
+// which the mapper would otherwise leave pointing into the source module.
+class MissingGlobalCheck : public ValueMaterializer {
+public:
+    bool found = false;
+    Value *materialize(Value *V) override
+    {
+        if (isa<GlobalValue>(V))
+            found = true;
+        return nullptr;
+    }
+};
+
+// Moves the globals of one unit out of a module into a new module of their
+// own, along with declarations for everything they reference. The result
+// matches what materializePreserved leaves for a partition, except that
+// globals the unit does not reference are left out. That keeps the unit's
+// bitcode independent of the rest of the image, which is what lets it be
+// used as an object cache key.
+//
+// Every unit of a module is planned (plan) before any is finished (finish),
+// because finishing moves function bodies out of the source module, and
+// planning copies the bodies that other units may inline.
+class UnitExtractor {
+public:
+    UnitExtractor(Module &Src, const Partition &P) : Src(Src), P(P) {}
+
+    void plan()
+    {
+        SmallVector<StringRef, 0> names;
+        for (auto &Name : P.globals)
+            names.push_back(Name.first());
+        llvm::sort(names);
+        for (StringRef name : names) {
+            GlobalValue *GV = Src.getNamedValue(name);
+            assert(GV && !GV->isDeclaration());
+            add(GV, Kind::Definition);
+        }
+        while (!worklist.empty()) {
+            GlobalValue *GV = worklist.pop_back_val();
+            scan(GV);
+        }
+
+        NewM = std::make_unique<Module>("text", Src.getContext());
+        NewM->setSourceFileName(Src.getSourceFileName());
+        NewM->setDataLayout(Src.getDataLayout());
+        NewM->setTargetTriple(Src.getTargetTriple());
+        NewM->setModuleInlineAsm(Src.getModuleInlineAsm());
+        for (GlobalValue *GV : order)
+            create(*NewM, GV, kinds[GV]);
+        for (GlobalValue *GV : order) {
+            if (kinds[GV] != Kind::Definition || !isa<Function>(GV))
+                fill(GV, kinds[GV]);
+        }
+        if (NamedMDNode *flags = Src.getModuleFlagsMetadata()) {
+            NamedMDNode *NewFlags = NewM->getOrInsertModuleFlagsMetadata();
+            for (MDNode *N : flags->operands())
+                NewFlags->addOperand(MapMetadata(N, VMap, RF_None, nullptr, &missing));
+        }
+    }
+
+    std::unique_ptr<Module> finish()
+    {
+        for (GlobalValue *GV : order) {
+            if (kinds[GV] == Kind::Definition && isa<Function>(GV))
+                fill(GV, kinds[GV]);
+        }
+        if (missing.found)
+            report_fatal_error("image unit refers to a global outside it");
+        // Mapping lists the compile units that instructions refer to, but a
+        // function's subprogram can refer to one that none of its
+        // instructions do. The reader drops all debug info from a module that
+        // leaves one out.
+        DebugInfoFinder finder;
+        finder.processModule(*NewM);
+        if (finder.compile_unit_count()) {
+            NamedMDNode *CUs = NewM->getOrInsertNamedMetadata("llvm.dbg.cu");
+            SmallPtrSet<const MDNode*, 4> listed;
+            for (MDNode *CU : CUs->operands())
+                listed.insert(CU);
+            for (DICompileUnit *CU : finder.compile_units()) {
+                if (listed.insert(CU).second)
+                    CUs->addOperand(CU);
+            }
+        }
+        return std::move(NewM);
+    }
+
+private:
+    enum class Kind {
+        // a global of this unit
+        Definition,
+        // the body of a function from another unit that may be inlined here
+        AvailableExternally,
+        Declaration,
+    };
+    Module &Src;
+    const Partition &P;
+    std::unique_ptr<Module> NewM;
+    SmallVector<GlobalValue*, 0> order;
+    DenseMap<GlobalValue*, Kind> kinds;
+    SmallVector<GlobalValue*, 0> worklist;
+    DenseMap<const Constant*, bool> scanned_constants;
+    SmallPtrSet<const MDNode*, 32> seen_metadata;
+    ValueToValueMapTy VMap;
+    MissingGlobalCheck missing;
+    // Moved code keeps its metadata unless some of it refers to a global,
+    // which then has to be mapped to the declaration in the unit.
+    bool metadata_refers_to_globals = false;
+    // A blockaddress names its function and block, which mapping cannot
+    // follow when the blocks move to another function, so such code is copied.
+    bool has_blockaddress = false;
+
+    void add(GlobalValue *GV, Kind kind)
+    {
+        if (!kinds.try_emplace(GV, kind).second)
+            return;
+        order.push_back(GV);
+        if (kind != Kind::Declaration)
+            worklist.push_back(GV);
+    }
+
+    void reference(GlobalValue *GV)
+    {
+        if (kinds.count(GV))
+            return;
+        Kind kind = Kind::Declaration;
+        if (auto F = dyn_cast<Function>(GV)) {
+            if (!F->isDeclaration() && !canPartition(*F))
+                kind = Kind::AvailableExternally;
+        }
+        add(GV, kind);
+    }
+
+    // Returns whether the constant refers to a global.
+    bool scan_constant(const Constant *C)
+    {
+        if (auto GV = dyn_cast<GlobalValue>(C)) {
+            reference(const_cast<GlobalValue*>(GV));
+            return true;
+        }
+        if (isa<ConstantData>(C))
+            return false;
+        if (isa<BlockAddress>(C))
+            has_blockaddress = true;
+        auto [it, inserted] = scanned_constants.try_emplace(C, false);
+        if (!inserted)
+            return it->second;
+        bool refers = false;
+        for (const Value *Op : C->operands()) {
+            if (auto OpC = dyn_cast<Constant>(Op))
+                refers |= scan_constant(OpC);
+        }
+        scanned_constants[C] = refers;
+        return refers;
+    }
+
+    void scan_metadata(const Metadata *MD)
+    {
+        if (auto VAM = dyn_cast<ValueAsMetadata>(MD)) {
+            if (auto C = dyn_cast<Constant>(VAM->getValue()))
+                metadata_refers_to_globals |= scan_constant(C);
+            return;
+        }
+        auto N = dyn_cast<MDNode>(MD);
+        // Compile units refer to no globals in julia code, and scanning one
+        // would visit everything it lists.
+        if (!N || isa<DICompileUnit>(N) || !seen_metadata.insert(N).second)
+            return;
+        for (const MDOperand &Op : N->operands()) {
+            if (Op)
+                scan_metadata(Op.get());
+        }
+    }
+
+    void scan_value(const Value *V)
+    {
+        if (auto C = dyn_cast<Constant>(V))
+            scan_constant(C);
+        else if (auto MAV = dyn_cast<MetadataAsValue>(V))
+            scan_metadata(MAV->getMetadata());
+    }
+
+    void scan(GlobalValue *GV)
+    {
+        SmallVector<std::pair<unsigned, MDNode*>, 4> MDs;
+        if (auto F = dyn_cast<Function>(GV)) {
+            cantFail(F->materialize());
+            if (F->hasPersonalityFn())
+                scan_constant(F->getPersonalityFn());
+            if (F->hasPrefixData())
+                scan_constant(F->getPrefixData());
+            if (F->hasPrologueData())
+                scan_constant(F->getPrologueData());
+            F->getAllMetadata(MDs);
+            for (auto &MD : MDs)
+                scan_metadata(MD.second);
+            for (const BasicBlock &BB : *F) {
+                for (const Instruction &I : BB) {
+                    for (const Value *Op : I.operands())
+                        scan_value(Op);
+                    MDs.clear();
+                    I.getAllMetadata(MDs);
+                    for (auto &MD : MDs)
+                        scan_metadata(MD.second);
+                    for (const DbgVariableRecord &DVR : filterDbgVars(I.getDbgRecordRange())) {
+                        for (const Value *V : DVR.location_ops())
+                            scan_value(V);
+                    }
+                }
+            }
+        }
+        else if (auto GVar = dyn_cast<GlobalVariable>(GV)) {
+            if (GVar->hasInitializer())
+                scan_constant(GVar->getInitializer());
+            GVar->getAllMetadata(MDs);
+            for (auto &MD : MDs)
+                scan_metadata(MD.second);
+        }
+        else if (auto GA = dyn_cast<GlobalAlias>(GV)) {
+            scan_constant(GA->getAliasee());
+        }
+        else {
+            llvm_unreachable("unexpected global value kind in image");
+        }
+    }
+
+    // Make the declaration or definition shell for a global, matching the
+    // linkage that materializePreserved gives globals outside the partition.
+    void create(Module &NewM, GlobalValue *GV, Kind kind)
+    {
+        bool external_def = kind == Kind::Declaration && !GV->isDeclaration();
+        GlobalValue *New;
+        if (auto GA = dyn_cast<GlobalAlias>(GV)) {
+            if (kind == Kind::Definition) {
+                auto NewGA = GlobalAlias::create(GA->getValueType(), GA->getType()->getPointerAddressSpace(),
+                                                 GA->getLinkage(), GA->getName(), &NewM);
+                NewGA->copyAttributesFrom(GA);
+                New = NewGA;
+            }
+            else if (GA->getValueType()->isFunctionTy()) {
+                New = Function::Create(cast<FunctionType>(GA->getValueType()), GlobalValue::ExternalLinkage,
+                                       GA->getAddressSpace(), GA->getName(), &NewM);
+            }
+            else {
+                New = new GlobalVariable(NewM, GA->getValueType(), false, GlobalValue::ExternalLinkage,
+                                         nullptr, GA->getName(), nullptr, GA->getThreadLocalMode(),
+                                         GA->getType()->getAddressSpace());
+            }
+        }
+        else if (auto F = dyn_cast<Function>(GV)) {
+            Function *NF = Function::Create(F->getFunctionType(), F->getLinkage(), F->getAddressSpace(),
+                                            F->getName(), &NewM);
+            NF->copyAttributesFrom(F);
+            // These refer to values of the source module; they are mapped
+            // once every global exists in the new module.
+            NF->setPersonalityFn(nullptr);
+            NF->setPrefixData(nullptr);
+            NF->setPrologueData(nullptr);
+            if (kind == Kind::AvailableExternally) {
+                NF->setLinkage(GlobalValue::AvailableExternallyLinkage);
+                NF->setVisibility(GlobalValue::HiddenVisibility);
+                NF->setDSOLocal(true);
+            }
+            else if (external_def) {
+                NF->setLinkage(GlobalValue::ExternalLinkage);
+                NF->setVisibility(GlobalValue::HiddenVisibility);
+                NF->setDSOLocal(true);
+            }
+            New = NF;
+        }
+        else {
+            auto GVar = cast<GlobalVariable>(GV);
+            auto NewGVar = new GlobalVariable(NewM, GVar->getValueType(), GVar->isConstant(),
+                                              GVar->getLinkage(), nullptr, GVar->getName(), nullptr,
+                                              GVar->getThreadLocalMode(), GVar->getAddressSpace());
+            NewGVar->copyAttributesFrom(GVar);
+            if (external_def) {
+                NewGVar->setLinkage(GlobalValue::ExternalLinkage);
+                NewGVar->setVisibility(GlobalValue::HiddenVisibility);
+                if (NewGVar->getDLLStorageClass() == GlobalValue::DLLStorageClassTypes::DefaultStorageClass)
+                    NewGVar->setDSOLocal(true);
+            }
+            New = NewGVar;
+        }
+        if (New->getName() != GV->getName())
+            report_fatal_error("name collision while extracting an image unit");
+        VMap[GV] = New;
+    }
+
+    void fill(GlobalValue *GV, Kind kind)
+    {
+        GlobalValue *New = cast<GlobalValue>(VMap[GV]);
+        SmallVector<std::pair<unsigned, MDNode*>, 4> MDs;
+        if (auto F = dyn_cast<Function>(GV)) {
+            Function *NF = cast<Function>(New);
+            if (kind == Kind::Declaration) {
+                if (F->isDeclaration()) {
+                    F->getAllMetadata(MDs);
+                    for (auto &MD : MDs)
+                        NF->addMetadata(MD.first, *MapMetadata(MD.second, VMap, RF_None, nullptr, &missing));
+                }
+                return;
+            }
+            if (kind == Kind::Definition && !has_blockaddress) {
+                // Move the body, then point it at the globals of the unit.
+                NF->splice(NF->end(), F);
+                for (auto [A, NA] : zip(F->args(), NF->args()))
+                    A.replaceAllUsesWith(&NA);
+                F->getAllMetadata(MDs);
+                for (auto &MD : MDs)
+                    NF->addMetadata(MD.first, *MD.second);
+                MetadataPredicate keep = [](const Metadata *) { return true; };
+                RemapFunction(*NF, VMap, RF_IgnoreMissingLocals, nullptr, &missing,
+                              metadata_refers_to_globals ? nullptr : &keep);
+            }
+            else {
+                auto DestI = NF->arg_begin();
+                for (const Argument &J : F->args()) {
+                    DestI->setName(J.getName());
+                    VMap[&J] = &*DestI++;
+                }
+                SmallVector<ReturnInst*, 8> Returns;
+                CloneFunctionInto(NF, F, VMap, CloneFunctionChangeType::DifferentModule, Returns,
+                                  "", nullptr, nullptr, &missing);
+            }
+            if (F->hasPersonalityFn())
+                NF->setPersonalityFn(MapValue(F->getPersonalityFn(), VMap, RF_None, nullptr, &missing));
+            if (F->hasPrefixData())
+                NF->setPrefixData(MapValue(F->getPrefixData(), VMap, RF_None, nullptr, &missing));
+            if (F->hasPrologueData())
+                NF->setPrologueData(MapValue(F->getPrologueData(), VMap, RF_None, nullptr, &missing));
+        }
+        else if (auto GVar = dyn_cast<GlobalVariable>(GV)) {
+            if (kind != Kind::Definition)
+                return;
+            auto NewGVar = cast<GlobalVariable>(New);
+            if (GVar->hasInitializer())
+                NewGVar->setInitializer(MapValue(GVar->getInitializer(), VMap, RF_None, nullptr, &missing));
+            GVar->getAllMetadata(MDs);
+            for (auto &MD : MDs)
+                NewGVar->addMetadata(MD.first, *MapMetadata(MD.second, VMap, RF_None, nullptr, &missing));
+        }
+        else if (auto GA = dyn_cast<GlobalAlias>(GV)) {
+            if (kind == Kind::Definition)
+                cast<GlobalAlias>(New)->setAliasee(MapValue(GA->getAliasee(), VMap, RF_None, nullptr, &missing));
+        }
+    }
+};
+} // anonymous namespace
+
+// Add the tables that the loader reads for a unit, as construct_vars does for
+// a partition. The functions and variables are listed in name order, which
+// does not depend on the rest of the image. Their indices in the image tables
+// are emitted into the metadata module instead, as the unit's object must not
+// depend on them.
+static void construct_unit_vars(Module &M, const Partition &P,
+                                SmallVectorImpl<uint32_t> &fvar_idxs,
+                                SmallVectorImpl<uint32_t> &gvar_idxs)
+{
+    SmallVector<std::pair<StringRef, uint32_t>, 0> fvar_pairs;
+    for (auto &fvar : P.fvars)
+        fvar_pairs.push_back({fvar.first(), fvar.second});
+    llvm::sort(fvar_pairs);
+    SmallVector<GlobalValue*, 0> fvars;
+    for (auto &fvar : fvar_pairs) {
+        auto F = M.getFunction(fvar.first);
+        assert(F && !F->isDeclaration());
+        fvars.push_back(F);
+        fvar_idxs.push_back(fvar.second);
+    }
+    SmallVector<std::pair<StringRef, uint32_t>, 0> gvar_pairs;
+    for (auto &gvar : P.gvars)
+        gvar_pairs.push_back({gvar.first(), gvar.second});
+    llvm::sort(gvar_pairs);
+    SmallVector<Constant*, 0> gvars;
+    for (auto &gvar : gvar_pairs) {
+        auto GV = M.getNamedGlobal(gvar.first);
+        assert(GV && !GV->isDeclaration());
+        gvars.push_back(GV);
+        gvar_idxs.push_back(gvar.second);
+    }
+    auto T_size = M.getDataLayout().getIntPtrType(M.getContext());
+    emit_table(M, fvars, "jl_fvars", PointerType::getUnqual(T_size->getContext()));
+    emit_offset_table(M, T_size, gvars, "jl_gvar", "");
+}
+
+// Give a unit the names that must be unique among the objects of the image.
+static void finalize_unit(Module &M, StringRef suffix)
+{
+    GlobalVariable *offsets = M.getNamedGlobal("jl_gvar_offsets");
+    assert(offsets);
+    offsets->setName("jl_gvar_offsets" + suffix);
+    M.setModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(M.getContext(), suffix));
+    // ld64 needs the file of each compile unit to be unique per object file
+    DIFile *topfile = DIFile::get(M.getContext(), ("julia#" + suffix).str(), ".");
+    if (M.getNamedMetadata("llvm.dbg.cu"))
+        for (auto CU: M.getNamedMetadata("llvm.dbg.cu")->operands())
+            CU->replaceOperandWith(0, topfile);
+}
+
 template<typename CB>
 static inline void schedule_uv_thread(uv_thread_t *worker, CB &&cb)
 {
@@ -1968,6 +2541,109 @@ static inline void schedule_uv_thread(uv_thread_t *worker, CB &&cb)
         (*func)();
         delete func;
     }, func);
+}
+
+static bool image_timings_enabled()
+{
+    bool report_timings = false;
+    if (auto env = getenv("JULIA_IMAGE_TIMINGS")) {
+        char *endptr;
+        unsigned long val = strtoul(env, &endptr, 10);
+        if (endptr != env && !*endptr && val <= 1) {
+            report_timings = val;
+        } else {
+            if (StringRef("true").compare_insensitive(env) == 0)
+                report_timings = true;
+            else if (StringRef("false").compare_insensitive(env) == 0)
+                report_timings = false;
+            else
+                errs() << "WARNING: Invalid value for JULIA_IMAGE_TIMINGS: " << env << "\n";
+        }
+    }
+    return report_timings;
+}
+
+// Run `work(t)` on a pool of up to `workers` threads, where `t` numbers the
+// thread. Each call pulls items to process from `next` until all `nitems` are
+// claimed. Without a jobserver the pool is `workers` threads. With one it is
+// elastic: it starts with the baseline thread plus whatever tokens are free,
+// polls for tokens released by sibling workers while unclaimed items remain,
+// and returns each token as soon as its thread runs out of work.
+template<typename WorkFn>
+static void run_thread_pool(unsigned nitems, unsigned workers, JobserverClient *jobserver,
+                            std::atomic<unsigned> &next, WorkFn work)
+{
+    JL_TIMING(NATIVE_AOT, NATIVE_Opt);
+    std::mutex pool_mutex; // guards held_tokens and live_threads
+    unsigned held_tokens = 0;
+    unsigned live_threads = 0;
+    std::vector<uv_thread_t> worker_threads(workers);
+    unsigned spawned = 0;
+    auto spawn_worker = [&]() {
+        unsigned t = spawned++;
+        schedule_uv_thread(&worker_threads[t], [&, t]() {
+            // Initialize time trace profiler for this thread if enabled
+            if (jl_is_timing_trace)
+                timeTraceProfilerInitialize(jl_timing_trace_granularity, ("aot_thread_" + std::to_string(t)).c_str());
+#ifdef USE_TRACY
+            std::string tracy_thread_name = "AOT thread " + std::to_string(t);
+            TracyCSetThreadName(tracy_thread_name.c_str());
+#endif
+            work(t);
+            // Merge this thread's time trace into the main thread
+            if (jl_is_timing_trace)
+                timeTraceProfilerFinishThread();
+            if (jobserver) {
+                // Out of work: return the surplus token so siblings can scale
+                // into it. The baseline token covers one thread, so keep
+                // held_tokens at live_threads - 1.
+                std::lock_guard<std::mutex> lock(pool_mutex);
+                live_threads--;
+                if (held_tokens > 0 && held_tokens >= live_threads) {
+                    held_tokens--;
+                    jobserver->release(1);
+                }
+            }
+        });
+    };
+
+    unsigned initial_pool = workers;
+    if (jobserver) {
+        // The orchestrator already holds this worker's baseline token (its
+        // main thread only sleeps/polls below); ration the rest from the pool.
+        held_tokens = jobserver->acquire(workers - 1);
+        initial_pool = 1 + held_tokens;
+    }
+    live_threads = initial_pool;
+    while (spawned < initial_pool)
+        spawn_worker();
+
+    // Elastic scale-up: while unclaimed items remain, grow the pool
+    // as sibling precompile workers return tokens to the budget.
+    while (jobserver && spawned < workers) {
+        unsigned claimed = next.load(std::memory_order_relaxed);
+        if (claimed >= nitems)
+            break;
+        unsigned want = std::min(nitems - claimed, workers - spawned);
+        unsigned got = jobserver->acquire(want);
+        if (got) {
+            {
+                std::lock_guard<std::mutex> lock(pool_mutex);
+                held_tokens += got;
+                live_threads += got;
+            }
+            for (unsigned k = 0; k < got; k++)
+                spawn_worker();
+        }
+        else {
+            uv_sleep(100);
+        }
+    }
+
+    // Wait for all of the worker threads to finish
+    for (unsigned t = 0; t < spawned; t++)
+        uv_thread_join(&worker_threads[t]);
+    assert(held_tokens == 0 && "precompile jobserver tokens leaked");
 }
 
 // Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
@@ -2002,21 +2678,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     Timer partition_timer("partition", "Partition module", timer_group);
     Timer serialize_timer("serialize", "Serialize module", timer_group);
     Timer output_timer("output", "Add outputs", timer_group);
-    bool report_timings = false;
-    if (auto env = getenv("JULIA_IMAGE_TIMINGS")) {
-        char *endptr;
-        unsigned long val = strtoul(env, &endptr, 10);
-        if (endptr != env && !*endptr && val <= 1) {
-            report_timings = val;
-        } else {
-            if (StringRef("true").compare_insensitive(env) == 0)
-                report_timings = true;
-            else if (StringRef("false").compare_insensitive(env) == 0)
-                report_timings = false;
-            else
-                errs() << "WARNING: Invalid value for JULIA_IMAGE_TIMINGS: " << env << "\n";
-        }
-    }
+    bool report_timings = image_timings_enabled();
     if (threads == 1) {
         output_timer.startTimer();
         {
@@ -2068,118 +2730,46 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
 
     // Compile the partitions with a pool of worker threads pulling from a
     // shared queue. The partition count fixes the shard layout; the pool size
-    // only controls how many compile concurrently. Without a jobserver the pool
-    // is `workers` threads. With one it is elastic: it starts with the
-    // baseline thread plus whatever tokens are free, polls for tokens released
-    // by sibling workers while unclaimed partitions remain, and returns each
-    // token as soon as its thread runs out of work.
+    // only controls how many compile concurrently.
     {
-        JL_TIMING(NATIVE_AOT, NATIVE_Opt);
         std::atomic<unsigned> next_partition{0};
-        std::mutex pool_mutex; // guards held_tokens and live_threads
-        unsigned held_tokens = 0;
-        unsigned live_threads = 0;
-        std::vector<uv_thread_t> worker_threads(threads);
-        unsigned spawned = 0;
-        auto spawn_worker = [&]() {
-            unsigned t = spawned++;
-            schedule_uv_thread(&worker_threads[t], [&, t]() {
-                // Initialize time trace profiler for this thread if enabled
-                if (jl_is_timing_trace)
-                    timeTraceProfilerInitialize(jl_timing_trace_granularity, ("aot_thread_" + std::to_string(t)).c_str());
-#ifdef USE_TRACY
-                std::string tracy_thread_name = "AOT thread " + std::to_string(t);
-                TracyCSetThreadName(tracy_thread_name.c_str());
-#endif
-                while (true) {
-                    unsigned i = next_partition.fetch_add(1, std::memory_order_relaxed);
-                    if (i >= threads)
-                        break;
-                    LLVMContext ctx;
-                    ctx.setDiscardValueNames(true);
-                    // Lazily deserialize the entire module
-                    timers[i].deserialize.startTimer();
-                    auto EM = getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx);
-                    // Make sure this also fails with only julia, but not LLVM assertions enabled,
-                    // otherwise, the first error we hit is the LLVM module verification failure,
-                    // which will look very confusing, because the module was partially deserialized.
-                    bool deser_succeeded = (bool)EM;
-                    auto M = cantFail(std::move(EM), "Error loading module");
-                    assert(deser_succeeded); (void)deser_succeeded;
-                    timers[i].deserialize.stopTimer();
+        run_thread_pool(threads, workers, jobserver, next_partition, [&](unsigned t) {
+            while (true) {
+                unsigned i = next_partition.fetch_add(1, std::memory_order_relaxed);
+                if (i >= threads)
+                    break;
+                LLVMContext ctx;
+                ctx.setDiscardValueNames(true);
+                // Lazily deserialize the entire module
+                timers[i].deserialize.startTimer();
+                auto EM = getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx);
+                // Make sure this also fails with only julia, but not LLVM assertions enabled,
+                // otherwise, the first error we hit is the LLVM module verification failure,
+                // which will look very confusing, because the module was partially deserialized.
+                bool deser_succeeded = (bool)EM;
+                auto M = cantFail(std::move(EM), "Error loading module");
+                assert(deser_succeeded); (void)deser_succeeded;
+                timers[i].deserialize.stopTimer();
 
-                    timers[i].materialize.startTimer();
-                    materializePreserved(*M, partitions[i]);
-                    timers[i].materialize.stopTimer();
+                timers[i].materialize.startTimer();
+                materializePreserved(*M, partitions[i]);
+                timers[i].materialize.stopTimer();
 
-                    timers[i].construct.startTimer();
-                    std::string suffix = "_" + std::to_string(i);
-                    construct_vars(*M, partitions[i], suffix);
-                    M->setModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(M->getContext(), suffix));
-                    // The DICompileUnit file is not used for anything, but ld64 requires it be a unique string per object file
-                    // or it may skip emitting debug info for that file. Here set it to ./julia#N
-                    DIFile *topfile = DIFile::get(M->getContext(), "julia#" + std::to_string(i), ".");
-                    if (M->getNamedMetadata("llvm.dbg.cu"))
-                        for (auto CU: M->getNamedMetadata("llvm.dbg.cu")->operands())
-                            CU->replaceOperandWith(0, topfile);
-                    timers[i].construct.stopTimer();
+                timers[i].construct.startTimer();
+                std::string suffix = "_" + std::to_string(i);
+                construct_vars(*M, partitions[i], suffix);
+                M->setModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(M->getContext(), suffix));
+                // The DICompileUnit file is not used for anything, but ld64 requires it be a unique string per object file
+                // or it may skip emitting debug info for that file. Here set it to ./julia#N
+                DIFile *topfile = DIFile::get(M->getContext(), "julia#" + std::to_string(i), ".");
+                if (M->getNamedMetadata("llvm.dbg.cu"))
+                    for (auto CU: M->getNamedMetadata("llvm.dbg.cu")->operands())
+                        CU->replaceOperandWith(0, topfile);
+                timers[i].construct.stopTimer();
 
-                    outputs[i] = add_output_impl(*M, TM, timers[i], unopt_out, opt_out, obj_out, asm_out);
-                }
-                // Merge this thread's time trace into the main thread
-                if (jl_is_timing_trace)
-                    timeTraceProfilerFinishThread();
-                if (jobserver) {
-                    // Out of work: return the surplus token so siblings can scale
-                    // into it. The baseline token covers one thread, so keep
-                    // held_tokens at live_threads - 1.
-                    std::lock_guard<std::mutex> lock(pool_mutex);
-                    live_threads--;
-                    if (held_tokens > 0 && held_tokens >= live_threads) {
-                        held_tokens--;
-                        jobserver->release(1);
-                    }
-                }
-            });
-        };
-
-        unsigned initial_pool = workers;
-        if (jobserver) {
-            // The orchestrator already holds this worker's baseline token (its
-            // main thread only sleeps/polls below); ration the rest from the pool.
-            held_tokens = jobserver->acquire(workers - 1);
-            initial_pool = 1 + held_tokens;
-        }
-        live_threads = initial_pool;
-        while (spawned < initial_pool)
-            spawn_worker();
-
-        // Elastic scale-up: while unclaimed partitions remain, grow the pool
-        // as sibling precompile workers return tokens to the budget.
-        while (jobserver && spawned < workers) {
-            unsigned claimed = next_partition.load(std::memory_order_relaxed);
-            if (claimed >= threads)
-                break;
-            unsigned want = std::min(threads - claimed, workers - spawned);
-            unsigned got = jobserver->acquire(want);
-            if (got) {
-                {
-                    std::lock_guard<std::mutex> lock(pool_mutex);
-                    held_tokens += got;
-                    live_threads += got;
-                }
-                for (unsigned k = 0; k < got; k++)
-                    spawn_worker();
+                outputs[i] = add_output_impl(*M, TM, timers[i], unopt_out, opt_out, obj_out, asm_out);
             }
-            else {
-                uv_sleep(100);
-            }
-        }
-
-        // Wait for all of the worker threads to finish
-        for (unsigned t = 0; t < spawned; t++)
-            uv_thread_join(&worker_threads[t]);
-        assert(held_tokens == 0 && "precompile jobserver tokens leaked");
+        });
     }
 
     output_timer.stopTimer();
@@ -2203,6 +2793,161 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
         dbgs() << "]\n";
     }
     return outputs;
+}
+
+namespace {
+// Notes that the bitcode reader dropped invalid debug info, and leaves every
+// diagnostic to the default handling.
+struct InvalidDebugInfoHandler : public DiagnosticHandler {
+    bool found = false;
+    bool handleDiagnostics(const DiagnosticInfo &DI) override
+    {
+        if (DI.getKind() == DK_DebugMetadataInvalid || DI.getKind() == DK_DebugMetadataVersion)
+            found = true;
+        return false;
+    }
+};
+
+struct UnitOutputs {
+    SmallVector<AOTOutputs, 0> outputs;
+    // The suffix of each unit's table names. The metadata module refers to the
+    // tables by these names.
+    SmallVector<std::string, 0> suffixes;
+    // Index in the image's function and variable tables of each entry in a
+    // unit's tables.
+    SmallVector<SmallVector<uint32_t, 0>, 0> fvar_idxs;
+    SmallVector<SmallVector<uint32_t, 0>, 0> gvar_idxs;
+};
+} // anonymous namespace
+
+// Compile the text module as one object per unit (see partitionUnits),
+// taking the objects from the cache where possible. Only object output is
+// supported.
+template<typename ModuleReleasedFunc>
+static UnitOutputs add_output_units(Module &M, TargetMachine &TM, unsigned workers,
+                                    JobserverClient *jobserver, ObjCache &cache,
+                                    const DenseMap<const Function*, std::pair<const void*, const void*>> &methods,
+                                    ModuleReleasedFunc module_released)
+{
+    uint64_t start = jl_hrtime();
+    uint64_t counter = 0;
+    // Partitioning requires all globals to have names.
+    // We use a prefix to avoid name conflicts with user code.
+    for (auto &G : M.global_values()) {
+        if (!G.isDeclaration() && !G.hasName()) {
+            G.setName("jl_ext_" + Twine(counter++));
+        }
+    }
+    auto units = partitionUnits(M, methods);
+    size_t nunits = units.size();
+    UnitOutputs out;
+    out.outputs.resize(nunits);
+    out.suffixes.resize(nunits);
+    out.fvar_idxs.resize(nunits);
+    out.gvar_idxs.resize(nunits);
+    // Write the bitcode of every unit before compiling any, in the context of
+    // the module, since moving code out of it is much cheaper than copying it
+    // into a context per thread.
+    SmallVector<SmallVector<char, 0>, 0> bitcodes(nunits);
+    {
+        SmallVector<std::unique_ptr<UnitExtractor>, 0> extractors;
+        extractors.reserve(nunits);
+        for (auto &P : units) {
+            extractors.push_back(std::make_unique<UnitExtractor>(M, P));
+            extractors.back()->plan();
+        }
+        for (size_t i = 0; i < nunits; i++) {
+            auto UM = extractors[i]->finish();
+            extractors[i].reset();
+            construct_unit_vars(*UM, units[i], out.fvar_idxs[i], out.gvar_idxs[i]);
+            assert(!verifyLLVMIR(*UM));
+            // Leave out the use-list order and the linker symbol table. The
+            // module compiled is the one parsed from these bytes either way.
+            BitcodeWriter writer(bitcodes[i]);
+            writer.writeModule(*UM, /*ShouldPreserveUseListOrder*/false);
+            writer.writeStrtab();
+        }
+    }
+    // Don't need M anymore
+    module_released(M);
+    uint64_t split_end = jl_hrtime();
+
+    std::string config = image_unit_config(TM);
+    std::atomic<unsigned> hits{0}, misses{0};
+    std::atomic<uint64_t> lookup_time{0}, compile_time{0};
+    // Start on the heaviest units, so that one does not finish long after the others.
+    SmallVector<unsigned, 0> schedule(nunits);
+    std::iota(schedule.begin(), schedule.end(), 0);
+    std::stable_sort(schedule.begin(), schedule.end(), [&](unsigned a, unsigned b) {
+        return units[a].weight > units[b].weight;
+    });
+    std::atomic<unsigned> next_unit{0};
+    workers = std::max(1u, std::min<unsigned>(workers, nunits));
+    run_thread_pool(nunits, workers, jobserver, next_unit, [&](unsigned t) {
+        ShardTimers timers;
+        OutputCompiler compiler(TM);
+        while (true) {
+            unsigned next = next_unit.fetch_add(1, std::memory_order_relaxed);
+            if (next >= nunits)
+                break;
+            unsigned i = schedule[next];
+            const Partition &P = units[i];
+            auto &bitcode = bitcodes[i];
+            uint64_t t1 = jl_hrtime();
+            ObjCache::Hash key{};
+            if (P.cacheable) {
+                key = ObjCache::hashKey("julia image unit v1",
+                                        {config, StringRef(bitcode.data(), bitcode.size())});
+                // The cached object defines symbols with this suffix, so it
+                // must be a function of the key alone.
+                out.suffixes[i] = "_" + toHex(key, /*LowerCase*/true);
+                auto obj = cache.lookup(key);
+                lookup_time.fetch_add(jl_hrtime() - t1, std::memory_order_relaxed);
+                if (obj) {
+                    // Copied, as each buffer holds a read transaction open.
+                    out.outputs[i].obj.assign(obj->getBufferStart(), obj->getBufferEnd());
+                    hits.fetch_add(1, std::memory_order_relaxed);
+                    SmallVector<char, 0>().swap(bitcode);
+                    continue;
+                }
+                misses.fetch_add(1, std::memory_order_relaxed);
+            }
+            else {
+                out.suffixes[i] = "_data";
+            }
+            uint64_t t2 = jl_hrtime();
+            // Compile the unit as parsed back from the bitcode that was hashed,
+            // in a context of its own, so that the module compiled depends on
+            // nothing but the key.
+            LLVMContext unit_ctx;
+            unit_ctx.setDiscardValueNames(true);
+            // The reader drops the debug info of a module that has invalid
+            // debug info, with only a warning.
+            auto handler = std::make_unique<InvalidDebugInfoHandler>();
+            bool &invalid_debug_info = handler->found;
+            unit_ctx.setDiagnosticHandler(std::move(handler));
+            auto UM = cantFail(parseBitcodeFile(MemoryBufferRef(StringRef(bitcode.data(), bitcode.size()), "text"), unit_ctx),
+                               "Error loading unit");
+            SmallVector<char, 0>().swap(bitcode);
+            // The reader runs the verifier itself on a module with debug info.
+            if (invalid_debug_info ||
+                (!UM->getModuleFlag("Debug Info Version") && verifyModule(*UM, &errs())))
+                report_fatal_error("invalid image unit");
+            finalize_unit(*UM, out.suffixes[i]);
+            out.outputs[i] = add_output_impl(*UM, compiler, timers, false, false, true, false);
+            compile_time.fetch_add(jl_hrtime() - t2, std::memory_order_relaxed);
+            if (P.cacheable)
+                cache.store(key, StringRef(out.outputs[i].obj.data(), out.outputs[i].obj.size()));
+        }
+    });
+    if (image_timings_enabled()) {
+        dbgs() << formatv("Image object cache: {0} units, {1} hits, {2} misses\n",
+                          nunits, hits.load(std::memory_order_relaxed), misses.load(std::memory_order_relaxed));
+        dbgs() << formatv("  split {0:F3}s, lookup {1:F3}s, compile {2:F3}s (thread time), total {3:F3}s\n",
+                          (split_end - start) / 1e9, lookup_time.load(std::memory_order_relaxed) / 1e9,
+                          compile_time.load(std::memory_order_relaxed) / 1e9, (jl_hrtime() - start) / 1e9);
+    }
+    return out;
 }
 
 constexpr size_t jl_image_max_shard_weight = 250000;
@@ -2259,6 +3004,374 @@ static unsigned compute_image_shard_count(const ModuleInfo &info, unsigned worke
     if (shards > workers)
         shards = std::min<size_t>(alignTo(shards, workers), std::max(shards, max_shards));
     return shards;
+}
+
+// Codegen numbers the globals it makes in the order it makes them, which
+// changes with any change elsewhere in the image, and for some globals from run
+// to run. The object cache keys on the bitcode of each unit, which includes the
+// names of everything the unit references, so the numbers are replaced by keys
+// derived from what each global stands for: the code instance of a function,
+// the julia value of a variable, or else the contents of the global.
+namespace {
+class NameStabilizer {
+public:
+    NameStabilizer(Module &M) : M(M) {}
+
+    void set_value_key(GlobalValue *GV, uint64_t key)
+    {
+        keys[GV] = key;
+    }
+
+    // A function compiled from a code instance, keyed by that code instance.
+    void set_function_key(Function *F, uint64_t key)
+    {
+        keys[F] = key;
+        keyed_functions.push_back(F);
+    }
+
+    // A global for a julia value with no stable key of its own. It is keyed
+    // by where it is first used instead.
+    void set_unknown_value(GlobalValue *GV)
+    {
+        unknown.insert(GV);
+    }
+
+    void run()
+    {
+        for (GlobalValue &G : M.global_values()) {
+            if (should_rename(G))
+                renamed.push_back(&G);
+        }
+        key_by_first_use();
+        // Keys for variables first, so that functions referring to them can
+        // use them, then for functions.
+        for (GlobalValue *G : renamed) {
+            if (isa<GlobalVariable>(G) && !keys.count(G))
+                keys[G] = variable_key(cast<GlobalVariable>(*G));
+        }
+        for (GlobalValue *G : renamed) {
+            if (isa<Function>(G) && !keys.count(G))
+                keys[G] = function_key(cast<Function>(*G));
+        }
+        apply();
+    }
+
+private:
+    Module &M;
+    SmallVector<GlobalValue*, 0> renamed;
+    DenseMap<GlobalValue*, uint64_t> keys;
+    SmallPtrSet<GlobalValue*, 16> unknown;
+    SmallVector<Function*, 0> keyed_functions;
+    DenseMap<Type*, std::string> type_names;
+
+    // The position of the numeric part of a generated name, if it has one.
+    static std::optional<std::pair<size_t, size_t>> number_span(StringRef name)
+    {
+        size_t end = name.size();
+        while (end > 0 && !isDigit(name[end - 1]))
+            end--;
+        if (end == 0)
+            return std::nullopt;
+        size_t start = end;
+        while (start > 0 && isDigit(name[start - 1]))
+            start--;
+        return std::make_pair(start, end);
+    }
+
+    bool should_rename(GlobalValue &G)
+    {
+        if (G.isDeclaration() || !G.hasLocalLinkage() || isCoverageCounter(G) || !G.hasName())
+            return false;
+        return number_span(G.getName()).has_value();
+    }
+
+    static std::string base_name(StringRef name)
+    {
+        auto span = number_span(name);
+        if (!span)
+            return name.str();
+        return (name.take_front(span->first) + name.drop_front(span->second)).str();
+    }
+
+    // Visit the functions of code instances in key order, and key each
+    // unknown value by the first function that uses it and the position of
+    // that use. Values used only by other functions fall back to the ordinary
+    // variable key.
+    void key_by_first_use()
+    {
+        if (unknown.empty())
+            return;
+        SmallVector<Function*, 0> funcs(keyed_functions);
+        llvm::sort(funcs, [&](Function *a, Function *b) {
+            uint64_t ka = keys[a], kb = keys[b];
+            return ka != kb ? ka < kb : a->getName() < b->getName();
+        });
+        for (Function *F : funcs) {
+            uint64_t position = 0;
+            SmallPtrSet<const Constant*, 16> seen;
+            std::function<void(const Constant*)> visit = [&](const Constant *C) {
+                if (auto GV = dyn_cast<GlobalValue>(C)) {
+                    position++;
+                    auto G = const_cast<GlobalValue*>(GV);
+                    if (unknown.count(G) && !keys.count(G)) {
+                        std::string buf;
+                        buf.append((const char*)&keys[F], sizeof(uint64_t));
+                        buf.append((const char*)&position, sizeof(position));
+                        keys[G] = xxh3_64bits(buf);
+                    }
+                    return;
+                }
+                if (!seen.insert(C).second)
+                    return;
+                for (const Value *Op : C->operands()) {
+                    if (auto OpC = dyn_cast<Constant>(Op))
+                        visit(OpC);
+                }
+            };
+            for (const BasicBlock &BB : *F) {
+                for (const Instruction &I : BB) {
+                    for (const Value *Op : I.operands()) {
+                        if (auto C = dyn_cast<Constant>(Op))
+                            visit(C);
+                    }
+                }
+            }
+        }
+    }
+
+    StringRef type_name(Type *T)
+    {
+        auto it = type_names.find(T);
+        if (it != type_names.end())
+            return it->second;
+        std::string str;
+        raw_string_ostream OS(str);
+        T->print(OS);
+        return type_names[T] = std::move(str);
+    }
+
+    void add_reference(std::string &buf, const GlobalValue *G)
+    {
+        auto it = keys.find(const_cast<GlobalValue*>(G));
+        if (it != keys.end()) {
+            buf += "k";
+            buf.append((const char*)&it->second, sizeof(it->second));
+        }
+        else {
+            buf += "n";
+            buf += base_name(G->getName());
+        }
+        buf += '\0';
+    }
+
+    void add_constant(std::string &buf, const Constant *C)
+    {
+        buf += type_name(C->getType());
+        buf += '\0';
+        if (auto G = dyn_cast<GlobalValue>(C)) {
+            add_reference(buf, G);
+        }
+        else if (auto CI = dyn_cast<ConstantInt>(C)) {
+            buf += "i";
+            buf += toString(CI->getValue(), 16, false);
+        }
+        else if (auto CF = dyn_cast<ConstantFP>(C)) {
+            buf += "f";
+            buf += toString(CF->getValueAPF().bitcastToAPInt(), 16, false);
+        }
+        else if (auto CDS = dyn_cast<ConstantDataSequential>(C)) {
+            buf += "d";
+            buf += CDS->getRawDataValues();
+        }
+        else if (auto CE = dyn_cast<ConstantExpr>(C)) {
+            buf += "e";
+            buf += std::to_string(CE->getOpcode());
+            if (auto GEP = dyn_cast<GEPOperator>(CE))
+                buf += type_name(GEP->getSourceElementType());
+        }
+        else {
+            buf += "c";
+            buf += std::to_string(C->getValueID());
+        }
+        buf += '\0';
+        for (const Value *Op : C->operands()) {
+            if (auto OpC = dyn_cast<Constant>(Op))
+                add_constant(buf, OpC);
+        }
+        buf += ')';
+    }
+
+    uint64_t variable_key(const GlobalVariable &GV)
+    {
+        std::string buf = base_name(GV.getName());
+        buf += '\0';
+        buf += type_name(GV.getValueType());
+        buf += GV.isConstant() ? "C" : "V";
+        if (GV.hasInitializer())
+            add_constant(buf, GV.getInitializer());
+        return xxh3_64bits(buf);
+    }
+
+    uint64_t function_key(const Function &F)
+    {
+        std::string buf = base_name(F.getName());
+        buf += '\0';
+        buf += type_name(F.getFunctionType());
+        buf += std::to_string(F.getCallingConv());
+        DenseMap<const Value*, unsigned> local;
+        for (const Argument &A : F.args())
+            local[&A] = local.size();
+        for (const BasicBlock &BB : F) {
+            local[&BB] = local.size();
+            for (const Instruction &I : BB)
+                local[&I] = local.size();
+        }
+        for (const BasicBlock &BB : F) {
+            buf += "B";
+            for (const Instruction &I : BB) {
+                buf += "I";
+                buf += std::to_string(I.getOpcode());
+                buf += type_name(I.getType());
+                if (auto Cmp = dyn_cast<CmpInst>(&I))
+                    buf += std::to_string(Cmp->getPredicate());
+                for (const Value *Op : I.operands()) {
+                    auto it = local.find(Op);
+                    if (it != local.end()) {
+                        buf += "l";
+                        buf += std::to_string(it->second);
+                    }
+                    else if (auto C = dyn_cast<Constant>(Op)) {
+                        add_constant(buf, C);
+                    }
+                    else if (auto IA = dyn_cast<InlineAsm>(Op)) {
+                        buf += IA->getAsmString();
+                        buf += IA->getConstraintString();
+                    }
+                    else {
+                        buf += "?";
+                    }
+                    buf += '\0';
+                }
+            }
+        }
+        return xxh3_64bits(buf);
+    }
+
+    void apply()
+    {
+        // Pick the new names. Keys can collide (two functions with the same
+        // body, say); those take the next free number in module order, which
+        // only costs cache hits.
+        StringSet<> taken;
+        for (GlobalValue &G : M.global_values()) {
+            if (G.hasName())
+                taken.insert(G.getName());
+        }
+        for (GlobalValue *G : renamed)
+            taken.erase(G->getName());
+        SmallVector<std::string, 0> names;
+        names.reserve(renamed.size());
+        for (GlobalValue *G : renamed) {
+            StringRef name = G->getName();
+            auto span = *number_span(name);
+            uint64_t n = keys[G] % 10000000000000000000ull;
+            std::string newname;
+            do {
+                newname = (name.take_front(span.first) + Twine(n) + name.drop_front(span.second)).str();
+                n++;
+            } while (!taken.insert(newname).second);
+            names.push_back(std::move(newname));
+        }
+        for (GlobalValue *G : renamed)
+            G->setName("");
+        for (size_t i = 0; i < renamed.size(); i++) {
+            GlobalValue *G = renamed[i];
+            G->setName(names[i]);
+            assert(G->getName() == names[i]);
+            if (auto F = dyn_cast<Function>(G)) {
+                if (DISubprogram *SP = F->getSubprogram())
+                    SP->replaceLinkageName(MDString::get(M.getContext(), names[i]));
+            }
+        }
+    }
+};
+} // anonymous namespace
+
+static bool is_bits_without_pointers(jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    if (!jl_is_datatype(dt) || !dt->isbitstype || jl_is_cpointer_type((jl_value_t*)dt) ||
+        jl_is_llvmpointer_type((jl_value_t*)dt))
+        return false;
+    for (size_t i = 0; i < jl_datatype_nfields(dt); i++) {
+        if (!is_bits_without_pointers((jl_datatype_t*)jl_field_type_concrete(dt, i)))
+            return false;
+    }
+    return true;
+}
+
+// A hash of how a julia value prints.
+static uint64_t shown_value_key(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
+    ios_t s;
+    ios_mem(&s, 0);
+    if (jl_is_code_instance(v)) {
+        jl_code_instance_t *ci = (jl_code_instance_t*)v;
+        jl_static_show((JL_STREAM*)&s, (jl_value_t*)jl_get_ci_mi(ci));
+        ios_putc('\0', &s);
+        jl_static_show((JL_STREAM*)&s, ci->owner);
+        ios_putc('\0', &s);
+        jl_static_show((JL_STREAM*)&s, ci->rettype);
+    }
+    else {
+        jl_static_show((JL_STREAM*)&s, jl_typeof(v));
+        // A singleton is identified by its type, and some print an address.
+        if (t->instance != v) {
+            ios_putc('\0', &s);
+            jl_static_show((JL_STREAM*)&s, v);
+        }
+    }
+    uint64_t key = xxh3_64bits(ArrayRef<uint8_t>((const uint8_t*)s.buf, (size_t)s.size));
+    ios_close(&s);
+    return key;
+}
+
+// A key for the julia value that an image global refers to, which is the same
+// in every process that builds the image. This is only possible for values
+// whose printed form identifies them; the contents of mutable objects, for
+// instance, can differ from run to run.
+static std::optional<uint64_t> stable_value_key(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
+    if (!(jl_is_type(v) || jl_is_typevar(v) || jl_is_symbol(v) || jl_is_module(v) ||
+          jl_is_string(v) || jl_is_method(v) || jl_is_method_instance(v) ||
+          jl_is_code_instance(v) || jl_is_globalref(v) || jl_is_binding(v) ||
+          (jl_is_datatype(t) && t->instance == v) || is_bits_without_pointers(t)))
+        return std::nullopt;
+    return shown_value_key(v);
+}
+
+static void stabilize_names(Module &M, jl_native_code_desc_t *data)
+{
+    NameStabilizer stabilizer(M);
+    size_t nvalues = data->jl_value_to_llvm.size();
+    assert(data->jl_sysimg_gvars.size() == nvalues + data->jl_external_to_llvm.size());
+    for (size_t i = 0; i < data->jl_sysimg_gvars.size(); i++) {
+        jl_value_t *v = i < nvalues ? (jl_value_t*)data->jl_value_to_llvm[i]
+                                    : (jl_value_t*)data->jl_external_to_llvm[i - nvalues];
+        if (auto key = stable_value_key(v))
+            stabilizer.set_value_key(data->jl_sysimg_gvars[i], *key);
+        else
+            stabilizer.set_unknown_value(data->jl_sysimg_gvars[i]);
+    }
+    for (auto &[ci, ids] : data->jl_fvar_map) {
+        uint64_t key = shown_value_key((jl_value_t*)ci);
+        for (int32_t id : {(int32_t)std::get<0>(ids), (int32_t)std::get<1>(ids)}) {
+            if (id > 0)
+                stabilizer.set_function_key(cast<Function>(data->jl_sysimg_fvars[id - 1]), key);
+        }
+    }
+    stabilizer.run();
 }
 
 jl_emission_params_t default_emission_params = { 1 };
@@ -2319,12 +3432,28 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
     std::string StackProtectorGuard = dataM.getStackProtectorGuard().str();
     unsigned OverrideStackAlignment = dataM.getOverrideStackAlignment();
 
+    // Package images reuse compiled code through the object cache. That only
+    // supports object output, and the coverage counters are referenced by
+    // name from outside the text module, so it is not used with coverage
+    // instrumentation.
+    // The cache was opened before compilation started, if it is in use.
+    ObjCache &image_cache = jl_ExecutionEngine->get_objcache();
+    const char *images_env = getenv("JULIA_OBJCACHE_IMAGES");
+    bool use_cache = !(images_env && !strcmp(images_env, "0")) &&
+                     obj_fname && !bc_fname && !unopt_bc_fname && !asm_fname &&
+                     jl_options.incremental && !jl_options.trim && params->emit_metadata &&
+                     jl_image_coverage_config() == 0 && coverage_entries.empty() &&
+                     image_cache.isEnabled();
+
     auto compile = [&](Module &M, StringRef name, unsigned shards, unsigned workers, JobserverClient *jobserver, auto module_released) {
         return add_output(M, *SourceTM, name, shards, workers, !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname, jobserver, module_released);
     };
 
     SmallVector<AOTOutputs, 16> sysimg_outputs;
     SmallVector<AOTOutputs, 16> data_outputs;
+    SmallVector<std::string, 0> shard_suffixes;
+    SmallVector<SmallVector<uint32_t, 0>, 0> unit_fvar_idxs;
+    SmallVector<SmallVector<uint32_t, 0>, 0> unit_gvar_idxs;
     SmallVector<AOTOutputs, 16> metadata_outputs;
     {
         JL_TIMING(NATIVE_AOT, NATIVE_Sysimg);
@@ -2410,6 +3539,8 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
 
         // add metadata information
         if (imaging_mode) {
+            if (use_cache)
+                stabilize_names(dataM, data);
             multiversioning_preannotate(dataM);
             {
                 DenseSet<GlobalValue *> fvars(data->jl_sysimg_fvars.begin(), data->jl_sysimg_fvars.end());
@@ -2434,7 +3565,8 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
             );
             workers = compute_image_thread_count();
             shards = compute_image_shard_count(module_info, workers);
-            workers = std::min(workers, shards);
+            if (!use_cache)
+                workers = std::min(workers, shards);
             if (jobserver.active() && workers > 1) {
                 // `shards` is the partition count and `workers` the concurrency
                 // ceiling; add_output rations the actual pool size from the
@@ -2478,12 +3610,37 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
 
     };
 
-    {
+    if (use_cache) {
+        // Group the code by the function it belongs to: all its methods are
+        // usually in one place in the source, and fewer, larger units cost
+        // less to compile.
+        DenseMap<const Function*, std::pair<const void*, const void*>> methods;
+        for (auto &[ci, ids] : data->jl_fvar_map) {
+            jl_value_t *def = jl_get_ci_mi(ci)->def.value;
+            std::pair<const void*, const void*> method{def, nullptr};
+            if (jl_is_method(def))
+                method = {((jl_method_t*)def)->module, ((jl_method_t*)def)->name};
+            for (int32_t id : {(int32_t)std::get<0>(ids), (int32_t)std::get<1>(ids)}) {
+                if (id > 0)
+                    methods[cast<Function>(data->jl_sysimg_fvars[id - 1])] = method;
+            }
+        }
+        auto units = add_output_units(dataM, *SourceTM, workers, text_jobserver, image_cache, methods,
+                                      [data](Module &) { delete data; });
+        data_outputs = std::move(units.outputs);
+        shard_suffixes = std::move(units.suffixes);
+        unit_fvar_idxs = std::move(units.fvar_idxs);
+        unit_gvar_idxs = std::move(units.gvar_idxs);
+        shards = data_outputs.size();
+    }
+    else {
         data_outputs = compile(dataM, "text", shards, workers, text_jobserver, [data](Module &) {
             // Delete data when add_output thinks it's done with it
             // Saves memory for use when multithreading
             delete data;
         });
+        for (unsigned i = 0; i < shards; i++)
+            shard_suffixes.push_back("_" + std::to_string(i));
     }
 
     // All imaging tokens were returned to the shared pool as add_output's
@@ -2536,7 +3693,21 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
             auto target_ids = new GlobalVariable(metadataM, value->getType(), true,
                                         GlobalVariable::InternalLinkage,
                                         value, "jl_dispatch_target_ids");
-            auto shard_table = emit_shard_table(metadataM, T_size, T_psize, shards);
+            // The objects from the cache hold no indices into the image
+            // tables, so emit those here.
+            for (size_t i = 0; i < unit_fvar_idxs.size(); i++) {
+                auto emit_idxs = [&](ArrayRef<uint32_t> idxs, StringRef name) {
+                    auto init = ConstantDataArray::get(Context, idxs);
+                    auto gv = new GlobalVariable(metadataM, init->getType(), true,
+                                                 GlobalVariable::ExternalLinkage, init,
+                                                 name + shard_suffixes[i]);
+                    gv->setVisibility(GlobalValue::HiddenVisibility);
+                    gv->setDSOLocal(true);
+                };
+                emit_idxs(unit_fvar_idxs[i], "jl_fvar_idxs");
+                emit_idxs(unit_gvar_idxs[i], "jl_gvar_idxs");
+            }
+            auto shard_table = emit_shard_table(metadataM, T_size, T_psize, shard_suffixes);
             auto ptls = emit_ptls_table(metadataM, T_size, T_ptr);
             auto header = emit_image_header(metadataM, shards, nfvars, ngvars);
             auto AT = ArrayType::get(T_size, sizeof(jl_small_typeof) / sizeof(void*));
