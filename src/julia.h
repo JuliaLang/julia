@@ -2477,7 +2477,6 @@ JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t *newly_inferred) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_finalize_precompile_inferred(int8_t cleanup_keep_ir);
-JL_DLLEXPORT jl_array_t* jl_compute_new_ext(void) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t *ci) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_set_inference_entrance_backtraces(jl_value_t *inference_entrance_backtraces) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_push_inference_entrance_backtraces(jl_value_t *ci) JL_CANSAFEPOINT;

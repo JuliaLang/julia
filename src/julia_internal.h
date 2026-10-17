@@ -1140,8 +1140,6 @@ JL_DLLEXPORT jl_methtable_t *jl_method_table_for(
     jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_methcache_t *jl_method_cache_for(
     jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-jl_methtable_t *jl_kwmethod_table_for(
-    jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 jl_methcache_t *jl_kwmethod_cache_for(
     jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_methtable_t *jl_method_get_table(
