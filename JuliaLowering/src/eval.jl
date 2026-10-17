@@ -842,13 +842,16 @@ function to_compatible_exception(@nospecialize(exc))
     end
 end
 
+__script_entry_eval_thunk(mod::Module, code::Core.CodeInfo) =
+    @ccall jl_eval_thunk(mod::Any, code::Any, #=fast=#1::Cint)::Any
+
 function _eval(mod::Module, iter::LoweringIterator,
                error_compat::Bool, soft_scope::Union{Nothing,Bool})
     modules = Module[mod]
     result = nothing
     while true
         thunk = try
-            invoke_in_lowering_world(
+            __script_exit_invoke_in_lowering_world(
                 ()->lower_step(iter, modules[end],
                                Base.get_world_counter(); soft_scope))::Core.SimpleVector
         catch exc
@@ -872,8 +875,7 @@ function _eval(mod::Module, iter::LoweringIterator,
             if !(Meta.isexpr(code, :thunk, 1) && code.args[1] isa Core.CodeInfo)
                 throw(ErrorException("syntax: expected (thunk x::CodeInfo)"))
             end
-            result = @ccall jl_eval_thunk(
-                modules[end]::Any, code.args[1]::Any, #=fast=#1::Cint)::Any
+            result = __script_entry_eval_thunk(modules[end], code.args[1])
         elseif type == :value
             result = thunk[2]
         end

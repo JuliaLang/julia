@@ -110,6 +110,20 @@ is_driver_entry(frame) = !frame.from_c &&
     (startswith(String(frame.func), "__repl_entry") ||
      startswith(String(frame.func), "__script_entry"))
 
+is_driver_exit(frame) = !frame.from_c && startswith(String(frame.func), "__script_exit")
+
+function remove_driver_spans!(bt::Vector{StackFrame}, unpaired::Bool)
+    while (exit_ind = findlast(is_driver_exit, bt)) !== nothing
+        entry_ind = findprev(is_driver_entry, bt, exit_ind)
+        if entry_ind === nothing
+            unpaired && deleteat!(bt, 1:exit_ind)
+            break
+        end
+        deleteat!(bt, entry_ind:exit_ind)
+    end
+    return bt
+end
+
 # `eval`/`include` machinery a driver entry runs user code through; directly
 # above the cut these frames cannot belong to user code
 function is_driver_machinery(frame)
@@ -122,9 +136,15 @@ end
 function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
         bt = bt isa Vector{StackFrame} ? copy(bt) : stacktrace(bt)
+        remove_driver_spans!(bt, true)
         # remove REPL/driver frames from interactive printing
         eval_ind = findlast(is_driver_entry, bt)
         if eval_ind !== nothing
+            while eval_ind > 1 && bt[eval_ind-1].inlined &&
+                    bt[eval_ind-1].func === Symbol("macro expansion") &&
+                    bt[eval_ind-1].pointer == bt[eval_ind].pointer
+                eval_ind -= 1
+            end
             deleteat!(bt, eval_ind:length(bt))
             while !isempty(bt) && is_driver_machinery(bt[end])
                 pop!(bt)
