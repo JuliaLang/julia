@@ -1791,7 +1791,7 @@ end
     for i=1:10
         @eval begin
             @noinline function g(x)
-                x = @big_expr(1500, x)
+                x = @big_expr(1000, x)
                 if x > 0
                     f(x-1)
                 else
