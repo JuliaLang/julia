@@ -608,6 +608,10 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`trunc(x)`](@ref)    | round `x` towards zero           | `typeof(x)` |
 | [`trunc(T, x)`](@ref) | round `x` towards zero           | `T`         |
 
+By default, `round` rounds ties (values halfway between two integers) to the nearest even integer
+(see [`RoundNearest`](@ref)), so `round(2.5) == 2.0` and `round(3.5) == 4.0`. Use
+`round(x, RoundNearestTiesAway)` to round ties away from zero instead.
+
 ### Division functions
 
 | Function                   | Description                                                                                               |

@@ -144,6 +144,13 @@ This sets the [LLVM Fast-Math flags](https://llvm.org/docs/LangRef.html#fast-mat
 and corresponds to the `-ffast-math` option in clang. See [the notes on performance
 annotations](@ref man-performance-annotations) for more details.
 
+The transformation is purely syntactic: calls to supported functions and operators
+such as `+` or `sin` in `expr` are replaced with calls to their counterparts in
+`Base.FastMath` (e.g. `Base.FastMath.sin_fast`), regardless of what these names
+refer to in the current scope. For arguments without a fast-math implementation,
+these fall back to the `Base` functions (e.g. `Base.sin`), so a different function
+that happens to be named `sin` will not be called.
+
 # Examples
 ```jldoctest
 julia> @fastmath 1+2
@@ -151,6 +158,9 @@ julia> @fastmath 1+2
 
 julia> @fastmath(sin(3))
 0.1411200080598672
+
+julia> @macroexpand @fastmath sin(x) + y
+:(Base.FastMath.add_fast(Base.FastMath.sin_fast(x), y))
 ```
 """
 macro fastmath(expr)

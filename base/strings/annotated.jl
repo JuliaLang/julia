@@ -43,6 +43,9 @@ the combined range.
 See also [`AnnotatedChar`](@ref), [`annotatedstring`](@ref),
 [`annotations`](@ref), and [`annotate!`](@ref).
 
+!!! compat "Julia 1.11"
+    `AnnotatedString` requires at least Julia 1.11.
+
 # Constructors
 
 ```julia
@@ -77,6 +80,9 @@ More specifically, this is a simple wrapper around any other
 
 See also [`AnnotatedString`](@ref), [`annotatedstring`](@ref), `annotations`,
 `annotate!`.
+
+!!! compat "Julia 1.11"
+    `AnnotatedChar` requires at least Julia 1.11.
 
 # Constructors
 
@@ -259,6 +265,9 @@ present (in the form of [`AnnotatedString`](@ref) or [`AnnotatedChar`](@ref) val
 
 See also [`AnnotatedString`](@ref), [`AnnotatedChar`](@ref).
 
+!!! compat "Julia 1.11"
+    `annotatedstring` requires at least Julia 1.11.
+
 ## Examples
 
 ```jldoctest; setup=:(using Base: AnnotatedString, annotatedstring)
@@ -378,6 +387,10 @@ To remove existing `label` annotations, use a value of `nothing`.
 
 The order in which annotations are applied to `str` is semantically meaningful,
 as described in [`AnnotatedString`](@ref).
+
+!!! compat "Julia 1.12"
+    `annotate!` requires at least Julia 1.11. Passing `label` and `value` as separate
+    arguments requires Julia 1.12; Julia 1.11 takes a `label => value` pair instead.
 """
 annotate!(s::AnnotatedString, range::UnitRange{Int}, label::Symbol, @nospecialize(val::Any)) =
     (_annotate!(s.annotations, range, label, val); s)
@@ -414,6 +427,9 @@ In accordance with the semantics documented in [`AnnotatedString`](@ref), the
 order of annotations returned matches the order in which they were applied.
 
 See also [`annotate!`](@ref).
+
+!!! compat "Julia 1.11"
+    `annotations` requires at least Julia 1.11.
 """
 annotations(s::AnnotatedString) = s.annotations
 

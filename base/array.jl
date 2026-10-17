@@ -168,8 +168,8 @@ end
 """
     vect(X...)
 
-Create a [`Vector`](@ref) with element type computed from the `promote_typeof` of the argument,
-containing the argument list.
+Create a [`Vector`](@ref) containing the argument list, with element type given by
+[`promote_type`](@ref) of the argument types, i.e. `promote_type(map(typeof, X)...)`.
 
 # Examples
 ```jldoctest

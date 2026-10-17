@@ -356,6 +356,11 @@ number sequence when running your program multiple times. However, a minor relea
 change due to algorithm updates.) Rationale: guaranteeing that pseudorandom streams never change
 prohibits many algorithmic improvements.
 
+Reproducibility is only guaranteed for the exact same sequence of calls with the same arguments.
+For example, `randn(rng, 100)` may differ from the first 100 elements of `randn(rng, 101)`, or from
+100 consecutive calls to `randn(rng)`, even if `rng` starts in the same state each time, since
+generating many values at once may use a different algorithm depending on the number of values.
+
 If you need to guarantee exact reproducibility of random data, it is advisable to simply *save the
 data* (e.g. as a supplementary attachment in a scientific publication). (You can also, of course,
 specify a particular Julia version and package manifest, especially if you require bit

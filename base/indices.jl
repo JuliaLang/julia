@@ -457,6 +457,11 @@ julia> extrema(b)
 
 Return a `LinearIndices` array with the specified shape or [`axes`](@ref).
 
+When ranges are given, each axis of the result is the axis of the corresponding range,
+not the range itself: e.g. `LinearIndices((0:1, -3:4))` has axes
+`(Base.OneTo(2), Base.OneTo(8))`. To get offset axes, pass ranges that are their own
+axes, such as `Base.IdentityUnitRange` (see the example below).
+
 # Examples
 
 The main purpose of this constructor is intuitive conversion
@@ -471,6 +476,18 @@ julia> linear = LinearIndices((1:3, 1:2))
 
 julia> linear[1,2]
 4
+```
+
+Offset axes:
+
+```jldoctest
+julia> L = LinearIndices(Base.IdentityUnitRange.((0:1, -3:4)));
+
+julia> axes(L)
+(Base.IdentityUnitRange(0:1), Base.IdentityUnitRange(-3:4))
+
+julia> L[0, -3]
+1
 ```
 """
 struct LinearIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{Int,N}
