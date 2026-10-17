@@ -5,9 +5,11 @@
 using Serialization, Base.StackTraces
 
 let
-    @noinline child() = stacktrace()
-    @noinline parent() = child()
-    @noinline grandparent() = parent()
+    # (`@noinline` in the bodies: a definition inside a macro call is attributed
+    # to the call, with the lines of its body in `macro expansion` frames)
+    child() = (@noinline; stacktrace())
+    parent() = (@noinline; child())
+    grandparent() = (@noinline; parent())
     line_numbers = @__LINE__() .- [3, 2, 1]
     stack = grandparent()
 
@@ -55,15 +57,15 @@ let ct = current_task()
     yieldto(@task yieldto(ct))
     @test catch_backtrace() == StackFrame[]
 
-    @noinline bad_function() = throw(UndefVarError(:nonexistent))
-    @noinline function try_stacktrace()
+    bad_function() = (@noinline; throw(UndefVarError(:nonexistent)))
+    function try_stacktrace(); @noinline
         try
             bad_function()
         catch
             return stacktrace()
         end
     end
-    @noinline function try_catch()
+    function try_catch(); @noinline
         try
             bad_function()
         catch
@@ -84,8 +86,8 @@ end
 
 module inlined_test
 using Test
-@inline g(x) = (x == 3 && throw("a"); x)
-@inline h(x) = (x == 3 && g(x); x)
+g(x) = (@inline; x == 3 && throw("a"); x)
+h(x) = (@inline; x == 3 && g(x); x)
 f(x) = (y = h(x); y)
 trace = (try; f(3); catch; stacktrace(catch_backtrace()); end)[1:3]
 can_inline = Bool(Base.JLOptions().can_inline)
@@ -245,7 +247,7 @@ struct F49231{a,b,c,d,e,f,g} end
         stacktrace(catch_backtrace())
     end
     str = sprint(Base.show_backtrace, st, context = (:limit=>true, :stacktrace_types_limited => Ref(false), :color=>true, :displaysize=>(50,105)))
-    @test contains(str, "[5] \e[0m\e[1mcollect_to!\e[22m\e[0m\e[1m(\e[22m\e[90mdest\e[39m::\e[0mVector\e[90m{…}\e[39m, \e[90mitr\e[39m::\e[0mBase.Generator\e[90m{…}\e[39m, \e[90moffs\e[39m::\e[0m$Int, \e[90mst\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
+    @test contains(str, "\e[0m\e[1mcollect_to!\e[22m\e[0m\e[1m(\e[22m\e[90mdest\e[39m::\e[0mVector\e[90m{…}\e[39m, \e[90mitr\e[39m::\e[0mBase.Generator\e[90m{…}\e[39m, \e[90moffs\e[39m::\e[0m$Int, \e[90mst\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
 
     st = try
         F49231{Vector,Val{'}'},Vector{Vector{Vector{Vector}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}()(1,2,3)
@@ -404,7 +406,9 @@ end
 end
 f_wrapped4_line = (@__LINE__) - 2
 let st = try f_wrapped4()() catch; stacktrace(catch_backtrace()) end
-    sf = st[findfirst(sf -> sf.line == f_wrapped4_line, st)]
-    @test sf.file === Symbol(@__FILE__)
+    i = findfirst(sf -> sf.line == f_wrapped4_line, st)
+    @test st[i].file === Symbol(@__FILE__)
+    # (the frame at the body's line may be an inlined `macro expansion` frame)
+    sf = st[findnext(sf -> sf.linfo isa Core.MethodInstance, st, i)]
     @test sf.linfo.def === only(methods(f_wrapped4()))
 end

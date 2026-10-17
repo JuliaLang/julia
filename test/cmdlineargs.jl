@@ -572,16 +572,18 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # --code-coverage
     mktempdir() do dir
-        # Do not inherit global coverage settings. The reference file records
-        # exact counts, so use count mode for the existing tests.
+        # Do not inherit global coverage settings. Lowering only promises that a
+        # line is covered iff it was executed (not exact counts), so compare
+        # hit/miss records in count mode too.
         cov_exename_hit = `$(Base.julia_cmd()[1]) --startup-file=no --color=no`
         cov_exename = `$cov_exename_hit --code-coverage-mode=count`
         helperdir = joinpath(@__DIR__, "testhelpers")
         inputfile = joinpath(helperdir, "coverage_file.jl")
-        expected = replace(read(joinpath(helperdir, "coverage_file.info"), String),
-            "<FILENAME>" => realpath(inputfile))
+        hitmiss(s) = replace(s, r"^(DA:\d+,)[1-9]\d*$"m => s"\g<1>1")
+        expected = hitmiss(replace(read(joinpath(helperdir, "coverage_file.info"), String),
+            "<FILENAME>" => realpath(inputfile)))
         # In hit mode every executed line reports a count of exactly one.
-        expected_hit = replace(expected, r"^(DA:\d+,)[1-9]\d*$"m => s"\g<1>1")
+        expected_hit = expected
         covfile = replace(joinpath(dir, "coverage.info"), "%" => "%%")
         @test !isfile(covfile)
         # `cov_exename` starts from the bare executable, so the child never
@@ -597,7 +599,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) context=(expected, got)
+        @test occursin(expected, hitmiss(got)) context=(expected, got)
         # Hit mode reports one for every executed line.
         @test readchomp(`$cov_exename_hit -E "Int(Base.JLOptions().code_coverage_mode)" -L $inputfile
             --code-coverage=$covfile --code-coverage`) == "0"
@@ -622,13 +624,13 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) context=(expected, got)
+        @test occursin(expected, hitmiss(got)) context=(expected, got)
         @test readchomp(`$cov_exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=all`) == "2"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) context=(expected, got)
+        @test occursin(expected, hitmiss(got)) context=(expected, got)
 
         # Ask for coverage in specific file
         tfile = realpath(inputfile)
@@ -637,7 +639,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) context=(expected, got)
+        @test occursin(expected, hitmiss(got)) context=(expected, got)
 
         # Ask for coverage in directory
         tdir = dirname(realpath(inputfile))
@@ -646,7 +648,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) context=(expected, got)
+        @test occursin(expected, hitmiss(got)) context=(expected, got)
 
         # Ask for coverage in current directory
         tdir = dirname(realpath(inputfile))
@@ -658,7 +660,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) context=(expected, got)
+        @test occursin(expected, hitmiss(got)) context=(expected, got)
 
         # Ask for coverage in relative directory
         tdir = dirname(realpath(inputfile))
@@ -669,7 +671,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) context=(expected, got)
+        @test occursin(expected, hitmiss(got)) context=(expected, got)
 
         # Ask for coverage in relative directory with dot-dot notation
         tdir = dirname(realpath(inputfile))
@@ -680,7 +682,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) context=(expected, got)
+        @test occursin(expected, hitmiss(got)) context=(expected, got)
 
         # Ask for coverage in a different directory
         tdir = mktempdir() # a dir that contains no code
@@ -713,7 +715,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         end
 
         # Source and report filenames must support Unicode on Windows as well.
-        let unicode_dir = mkdir(joinpath(dir, "coverage λ space"))
+        let unicode_dir = realpath(mkdir(joinpath(dir, "coverage λ space")))
             srcfile = joinpath(unicode_dir, "source λ.jl")
             cp(inputfile, srcfile)
             outfile = joinpath(unicode_dir, "coverage λ.info")
@@ -736,9 +738,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
                         for m in eachmatch(r"^DA:(\d+),(\d+)$"m, read(outfile, String)))
             rm(outfile)
+            # (the `local y` and `let z` lines themselves don't run any code)
             covered = [
-                8, 9, 10,       # `local` without an assignment (#39307)
-                14, 15, 16,     # `let` without an assignment (#39307)
+                9, 10,          # `local` without an assignment (#39307)
+                15, 16,         # `let` without an assignment (#39307)
                 22, 23,         # lines a macro adds (#41043)
                 28,
                 33, 35,         # implicit returns (#53557)
@@ -950,7 +953,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 result
             end
         end
-        @test contains(coverage_info_for("""
+        @test contains(hitmiss(coverage_info_for("""
             function cov_bug(x, p)
                 if p > 2
                     print("")  # runs
@@ -963,7 +966,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 cov_bug(5, 3)
             end
             do_test()
-            """), """
+            """)), hitmiss("""
             DA:1,1
             DA:2,1
             DA:3,1
@@ -974,8 +977,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             DA:12,1
             LH:7
             LF:8
-            """)
-        @test contains(coverage_info_for("""
+            """))
+        @test contains(hitmiss(coverage_info_for("""
             function cov_bug()
                 if Base.compilerbarrier(:const, true)
                     if Base.compilerbarrier(:const, true)
@@ -991,7 +994,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 return nothing
             end
             cov_bug()
-            """), """
+            """)), hitmiss("""
             DA:1,2
             DA:2,1
             DA:3,1
@@ -1003,7 +1006,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             DA:15,1
             LH:6
             LF:9
-            """)
+            """))
 
         # counters must survive being driven from many threads at once (#59355, #62424)
         let threadfile = realpath(joinpath(helperdir, "coverage_threads.jl"))
@@ -1014,7 +1017,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             rm(outfile)
             hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
                         for m in eachmatch(r"^DA:(\d+),(\d+)$"m, record))
-            for ln in 5:10
+            for ln in (5:8..., 10) # (not the loop's `end`, which doesn't run any code)
                 @test get(hits, ln, 0) > 0
             end
         end

@@ -226,7 +226,7 @@ end
     │   exception =
     │    DivideError: integer division error
     │    Stacktrace:
-    │      [1] func1()""")
+    │      [1] macro expansion""")
 
 
     @testset "Limiting large data structures" begin

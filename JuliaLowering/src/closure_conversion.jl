@@ -339,6 +339,12 @@ function convert_local_function_decl(ctx, ex)
     sp_syms = mapsyntax(sp->newleaf(sp, :symbol,
                                     get_binding(ctx, syntax_id(sp)).name),
                         capt_sp)
+    field_is_nospec = Bool[
+        !boxed && get_binding(ctx, id).is_nospecialize &&
+            !is_self_captured(ctx, binding_ex(ctx, id))
+        for (id, boxed) in zip(field_orig_bindings, field_is_box)]
+    nospec_arg = !any(field_is_nospec) ? nothing :
+        @ast ctx ex [:call "svec"::core [f::value for f in field_is_nospec]...]
     define_clstruct = type_ex = @ast ctx ex [:call
         eval_closure_type::value
         ctx.mod::value
@@ -346,6 +352,7 @@ function convert_local_function_decl(ctx, ex)
         [:call "svec"::core sp_syms...]
         [:call "svec"::core field_syms...]
         [:call "svec"::core [f::value for f in field_is_box]...]
+        nospec_arg
     ]
     if !ctx.toplevel
         push!(ctx.toplevel_stmts, define_clstruct)
@@ -358,7 +365,7 @@ function convert_local_function_decl(ctx, ex)
         is_self_captured(ctx, sp) ? captured_var_access(ctx, sp) : sp
     end
     init_closure_args = SyntaxList()
-    for (id, boxed) in zip(field_orig_bindings, field_is_box)
+    for (id, boxed, nospec) in zip(field_orig_bindings, field_is_box, field_is_nospec)
         field_val = binding_ex(ctx, id)
         if is_self_captured(ctx, field_val)
             # Access from outer closure if necessary but do not
@@ -366,7 +373,7 @@ function convert_local_function_decl(ctx, ex)
             field_val = captured_var_access(ctx, field_val)
         end
         push!(init_closure_args, field_val)
-        if !boxed
+        if !boxed && !nospec
             push!(type_params, @ast ctx ex [:call
                   "_typeof_captured_variable"::core
                   field_val])

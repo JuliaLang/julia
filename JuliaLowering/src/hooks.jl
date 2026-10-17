@@ -33,11 +33,10 @@ function _core_lowering_hook(@nospecialize(code), mod::Module, file::String,
         ex = to_lowered_expr(st5)
         return Core.svec(ex, st5, ctx5)
     catch exc
-        if (exc isa LoweringError && !exc.internal) || exc isa MacroExpansionError
-            return Core.svec(Expr(:error, sprint(
-                (io,err)->showerror(io,err; show_detail=false), exc)))
+        if exc isa LoweringError && !exc.internal
+            return Core.svec(Expr(:error, sprint(showerror, exc)))
         else
-            rethrow(exc)
+            rethrow(to_compatible_exception(exc))
         end
 
         # TODO: Re-enable flisp fallback once we're done collecting errors
@@ -46,6 +45,13 @@ function _core_lowering_hook(@nospecialize(code), mod::Module, file::String,
         #        code=code, file=file, line=line, mod=mod)
         # return Base.fl_lower(code, mod, file, line, world, warn)
     end
+end
+
+@fzone "JL: eval" function core_eval_hook(mod::Module, @nospecialize(st))
+    if !(st isa SyntaxTree)
+        st = expr_to_est(st)
+    end
+    return _eval(mod, lower_init(st), true, nothing)
 end
 
 const _has_v1_13_hooks = isdefined(Core, :_lower)
@@ -58,7 +64,7 @@ function activate!(enable=true; freeze_world_age=true)
     _lowering_world[] = (enable && freeze_world_age) ? Base.get_world_counter() : UInt(0)
     if enable
         Core._setlowerer!(core_lowering_hook)
-        Core._set_toplevel_eval!(JuliaLowering.eval)
+        Core._set_toplevel_eval!(core_eval_hook)
     else
         Core._setlowerer!(Base.fl_lower)
         Core._set_toplevel_eval!(Base.fl_toplevel_eval)

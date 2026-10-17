@@ -578,7 +578,7 @@ end
 25  (call core.declare_const TestMod :X %₂₄)
 26  latestworld
 27  TestMod.X
-28  SourceLocation:1
+28  SourceLocation:5
 29  (call top._defaultctors %₂₇ %₂₈)
 30  latestworld
 31  (= slot₁/val core.nothing)

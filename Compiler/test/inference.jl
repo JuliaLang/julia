@@ -6960,7 +6960,7 @@ end |> only == Val{true}
 
 # https://github.com/JuliaLang/julia/issues/51310
 @test code_typed() do
-    b{c} = d...
+    b = UnionAll(TypeVar(:c), d...)
 end |> only |> first isa Core.CodeInfo
 
 abstract_call_unionall_vararg(some::Some{Any}) = UnionAll(some.value...)

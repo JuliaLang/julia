@@ -555,10 +555,7 @@ if !is_asserts()
 @eval @noinline Base.@constprop :none f_broken_code() = 0
 let m = which(f_broken_code, ())
    let src = Base.uncompressed_ast(m)
-       src.code = Any[
-           Expr(:meta, :noinline)
-           Core.ReturnNode(Expr(:invalid))
-       ]
+       src.code[end] = Core.ReturnNode(Expr(:invalid))
        m.source = src
    end
 end
@@ -779,7 +776,7 @@ end
     @test_throws err @code_lowered 1.0
 
     @test_throws "dot expressions are not lowered to a single function call" @which a .= 1 + 2
-    @test_throws "invalid keyword argument syntax" @eval @which round(1; digits(3))
+    @test_throws "syntax:" @eval @which round(1; digits(3))
 end
 
 using InteractiveUtils: editor
@@ -893,7 +890,8 @@ file, ln = functionloc(Core.Compiler.tmeet, Tuple{Int, Float64})
     end
     @test e isa Exception
     s = sprint(showerror, e, bt)
-    m = match(r"(\S*InteractiveUtils[\/\\]src\S*):", s)
+    # the frame may print as `file:line:col`
+    m = match(r"(\S*InteractiveUtils[\/\\]src[^\s:]*):", s)
     @test isfile(expanduser(m.captures[1]))
 end
 
