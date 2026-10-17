@@ -62,6 +62,9 @@ ifeq (${USE_THIRD_PARTY_GC},mmtk)
 GC_SRCS += gc-mmtk
 else
 GC_SRCS += gc-stock gc-debug gc-pages gc-page-profiler
+ifeq ($(WITH_GC_REGIONS),1)
+GC_SRCS += gc-regions
+endif
 endif
 
 SRCS := \
@@ -517,7 +520,9 @@ $(BUILDDIR)/gc-debug.o $(BUILDDIR)/gc-debug.dbg.obj $(BUILDDIR)/gc-debug.static.
 $(BUILDDIR)/gc-pages.o $(BUILDDIR)/gc-pages.dbg.obj $(BUILDDIR)/gc-pages.static.o $(BUILDDIR)/gc-pages.static.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/threading.h
 $(BUILDDIR)/gc-mmtk.o $(BUILDDIR)/gc-mmtk.dbg.obj $(BUILDDIR)/gc-mmtk.static.o $(BUILDDIR)/gc-mmtk.static.dbg.obj: $(addprefix $(SRCDIR)/,gc-common.h gc-heap-snapshot.h gc-alloc-profiler.h threading.h gc-mmtk/gc-tls-mmtk.h gc-mmtk/gc-wb-mmtk.h)
 $(BUILDDIR)/gc-stacks.o $(BUILDDIR)/gc-stacks.dbg.obj $(BUILDDIR)/gc-stacks.static.o $(BUILDDIR)/gc-stacks.static.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/threading.h
-$(BUILDDIR)/gc-stock.o $(BUILDDIR)/gc-stock.dbg.obj $(BUILDDIR)/gc-stock.static.o $(BUILDDIR)/gc-stock.static.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h $(SRCDIR)/gc-page-profiler.h
+$(BUILDDIR)/gc-stock.o $(BUILDDIR)/gc-stock.dbg.obj $(BUILDDIR)/gc-stock.static.o $(BUILDDIR)/gc-stock.static.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/gc-regions.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h $(SRCDIR)/gc-page-profiler.h
+$(BUILDDIR)/gc-regions.o $(BUILDDIR)/gc-regions.dbg.obj $(BUILDDIR)/gc-regions.static.o $(BUILDDIR)/gc-regions.static.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/gc-regions.h $(SRCDIR)/threading.h
+$(addprefix $(BUILDDIR)/,task.o task.dbg.obj task.static.o task.static.dbg.obj gf.o gf.dbg.obj gf.static.o gf.static.dbg.obj jltypes.o jltypes.dbg.obj jltypes.static.o jltypes.static.dbg.obj staticdata.o staticdata.dbg.obj staticdata.static.o staticdata.static.dbg.obj array.o array.dbg.obj array.static.o array.static.dbg.obj builtins.o builtins.dbg.obj builtins.static.o builtins.static.dbg.obj module.o module.dbg.obj module.static.o module.static.dbg.obj rtutils.o rtutils.dbg.obj rtutils.static.o rtutils.static.dbg.obj gc-common.o gc-common.dbg.obj gc-common.static.o gc-common.static.dbg.obj): $(SRCDIR)/gc-regions.h
 $(BUILDDIR)/gc-heap-snapshot.o $(BUILDDIR)/gc-heap-snapshot.dbg.obj $(BUILDDIR)/gc-heap-snapshot.static.o $(BUILDDIR)/gc-heap-snapshot.static.dbg.obj: $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-common.h
 $(BUILDDIR)/gc-alloc-profiler.o $(BUILDDIR)/gc-alloc-profiler.dbg.obj $(BUILDDIR)/gc-alloc-profiler.static.o $(BUILDDIR)/gc-alloc-profiler.static.dbg.obj: $(SRCDIR)/gc-alloc-profiler.h
 $(BUILDDIR)/gc-page-profiler.o $(BUILDDIR)/gc-page-profiler.dbg.obj $(BUILDDIR)/gc-page-profiler.static.o $(BUILDDIR)/gc-page-profiler.static.dbg.obj: $(addprefix $(SRCDIR)/,gc-page-profiler.h gc-stock.h gc-common.h threading.h)
@@ -725,7 +730,7 @@ CLANG_TOOLING_CXX_FLAGS = $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(DEBUGFLAGS_CLAN
 # Additional headers from dependency links, categorized by usage, for adding as fake compiler targets.
 # Adding these as compiler inputs doesn't always work (due to missing includes), but if we don't add them, they won't work at all.
 ADDITIONAL_C_HEADERS := builtin_proto.h common_symbols1.inc common_symbols2.inc gc-alloc-profiler.h \
-	gc-common.h gc-heap-snapshot.h gc-page-profiler.h gc-stock.h serialize.h \
+	gc-common.h gc-heap-snapshot.h gc-page-profiler.h gc-regions.h gc-stock.h serialize.h \
 	support/htable.h support/htable.inc
 ADDITIONAL_CXX_HEADERS := debug-registry.h debuginfo.h intrinsics.h jitlayers.h llvm-alloc-helpers.h \
 	llvm-codegen-shared.h llvm-gc-interface-passes.h llvm-julia-passes.inc \

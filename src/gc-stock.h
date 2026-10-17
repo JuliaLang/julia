@@ -140,6 +140,10 @@ typedef struct _jl_gc_pagemeta_t {
     uint16_t fl_begin_offset; // Offset of first free object in this page
     uint16_t fl_end_offset;   // Offset of last free object in this page
     uint16_t thread_n;        // Thread id of the heap that owns this page
+#ifdef WITH_GC_REGIONS
+    uint8_t region_n;         // The GC region that claimed this page, 0 = the default heap
+    struct _jl_gc_pagemeta_t *region_next; // The chain of one region's pages (gc-regions.h)
+#endif
     char *data;               // Pointer to the start of the regions where objects are allocated
 } jl_gc_pagemeta_t;
 
@@ -587,6 +591,13 @@ void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start) JL_
 void gc_collect_neighbors(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void jl_gc_debug_init(void) JL_NOTSAFEPOINT;
+#ifdef WITH_GC_REGIONS
+// What the census and the reset of a region use of the collector
+// (gc-regions.c).
+void gc_mark_loop_serial(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+void gc_queue_execution_roots(jl_gc_markqueue_t *mq, jl_ptls_t ptls2) JL_NOTSAFEPOINT;
+void gc_region_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT;
+#endif
 
 // GC permanent allocation
 extern uv_mutex_t gc_perm_lock;
