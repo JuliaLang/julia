@@ -19,6 +19,9 @@
  * Environment variable knobs:
  *
  * JULIA_OBJCACHE       Set to 0 to disable the objcache.
+ * JULIA_OBJCACHE_IMAGES
+ *                      Set to 0 to build package images without the objcache,
+ *                      while JIT compilation still uses it.
  * JULIA_OBJCACHE_LOG   When set, logs cache hits/misses to the provided path.
  * JULIA_OBJCACHE_PATH  When unset, the cache is stored in the depot, under
  *                      /cache/<Julia version>.  It is useful to set this when
@@ -50,6 +53,17 @@ public:
                       size_t KeyLen) JL_CANSAFEPOINT_ENTER_LEAVE;
     int kvPut(const char *Ns, const uint8_t *Key, size_t KeyLen, const uint8_t *Val,
               size_t ValLen) JL_CANSAFEPOINT_ENTER_LEAVE;
+    // Lookup and storage of objects by a hash that the caller computes over
+    // every input of the compilation, used by package image builds, which key
+    // each unit on its bitcode (see aotcompile.cpp).  hashKey combines the
+    // parts with the identity of the compiler.  lookup and store do nothing
+    // until the cache is initialized (see kvEnabled), and after that may be
+    // called from threads that Julia does not manage.
+    using Hash = std::array<uint8_t, 20>;
+    static Hash hashKey(llvm::StringRef Domain,
+                        llvm::ArrayRef<llvm::StringRef> Parts) JL_NOTSAFEPOINT;
+    std::unique_ptr<llvm::MemoryBuffer> lookup(const Hash &H) JL_NOTSAFEPOINT;
+    void store(const Hash &H, llvm::StringRef Obj) JL_NOTSAFEPOINT;
     // Whether the cache is operational (initializes it if needed).  Lets KV
     // consumers fall back to their own storage when the objcache is disabled
     // (JULIA_OBJCACHE=0, network filesystem, ...).
@@ -66,8 +80,6 @@ public:
     // which must not exist yet. Returns an empty string or a description of the error.
     std::string compact(const char *Dir) JL_CANSAFEPOINT_ENTER_LEAVE;
     void shutdown() JL_NOTSAFEPOINT;
-
-    using Hash = std::array<uint8_t, 20>;
 
 protected:
     void writerThread();
