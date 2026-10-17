@@ -1,4 +1,4 @@
-"""Check loader import filtering with MinGW cross tools; no Windows execution.
+"""Check loader import library generation with MinGW cross tools; no Windows execution.
 
 Run with python3 cli/test_import_library.py. Missing toolchains are skipped.
 """
@@ -23,6 +23,8 @@ class ImportLibraryTests(unittest.TestCase):
             self.skipTest(lld + ' unavailable')
         with tempfile.TemporaryDirectory() as tmp:
             build = Path(tmp)
+            private = build / 'private'
+            private.mkdir()
             (build / 'toy.c').write_text(
                 '__declspec(dllexport) void jl_alloc_array_1d(void) {}\n'
                 '__declspec(dllexport) void jl_codegen_only(void) {}\n'
@@ -44,26 +46,48 @@ class ImportLibraryTests(unittest.TestCase):
             (build / 'Makefile').write_text(
                 f'CPP_STDOUT := {prefix}gcc -E\nJULIAHOME := {ROOT}\n'
                 f'SRCDIR := {ROOT}/cli\nBUILDDIR := {build}\nbuild_libdir := {build}\n'
+                f'build_private_libdir := {private}\n'
                 f'DLLTOOL := {prefix}dlltool\nDLLTOOL_MACHINE := {machine}\n'
                 + macro + '\nall:\n\t$(call implib_from_def,toy.dll)\n')
             subprocess.run(['make', '-s', '-C', tmp], check=True)
-            symbols = subprocess.check_output([prefix + 'nm', str(build / 'toy.dll.a')], text=True)
-            self.assertNotIn('jl_alloc_array_1d', symbols)
-            self.assertIn('jl_codegen_only', symbols)
-            self.assertIn('keep_data', symbols)
+            # The private library, used to link libjulia-internal, must not offer
+            # the runtime entry points that the loader forwards.
+            internal = subprocess.check_output(
+                [prefix + 'nm', str(private / 'toy.dll.a')], text=True)
+            self.assertNotIn('jl_alloc_array_1d', internal)
+            self.assertIn('jl_codegen_only', internal)
+            self.assertIn('keep_data', internal)
+            # The public library must offer every export so embedders can link.
+            public = subprocess.check_output(
+                [prefix + 'nm', str(build / 'toy.dll.a')], text=True)
+            self.assertIn('jl_alloc_array_1d', public)
+            self.assertIn('jl_codegen_only', public)
+            self.assertIn('keep_data', public)
             self.assertIn('jl_alloc_array_1d', (build / 'toy.dll.def').read_text())
-            (build / 'consumer.c').write_text(
+            # libjulia-internal links against the private library and only uses
+            # the exports the loader defines itself.
+            (build / 'internal.c').write_text(
                 '__declspec(dllimport) void jl_codegen_only(void);\n'
                 '__declspec(dllimport) int keep_data;\n'
                 'int main(void) { jl_codegen_only(); return keep_data; }\n')
-            subprocess.run([prefix + 'gcc', str(build / 'consumer.c'),
-                            str(build / 'toy.dll.a'), '-o', str(build / 'consumer.exe')], check=True)
+            subprocess.run([prefix + 'gcc', str(build / 'internal.c'),
+                            str(private / 'toy.dll.a'), '-o', str(build / 'internal.exe')], check=True)
+            # Embedders link against the public library and may call any export.
+            (build / 'embedder.c').write_text(
+                '__declspec(dllimport) void jl_alloc_array_1d(void);\n'
+                '__declspec(dllimport) void jl_codegen_only(void);\n'
+                '__declspec(dllimport) int keep_data;\n'
+                'int main(void) { jl_alloc_array_1d(); jl_codegen_only(); return keep_data; }\n')
+            subprocess.run([prefix + 'gcc', str(build / 'embedder.c'),
+                            str(build / 'toy.dll.a'), '-o', str(build / 'embedder.exe')], check=True)
             # A failed preprocessor must not silently produce an unfiltered library.
             (build / 'toy.dll.a').unlink()
+            (private / 'toy.dll.a').unlink()
             result = subprocess.run(['make', '-s', '-C', tmp, 'CPP_STDOUT=false'],
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             self.assertNotEqual(result.returncode, 0)
             self.assertFalse((build / 'toy.dll.a').exists())
+            self.assertFalse((private / 'toy.dll.a').exists())
 
     def test_i686(self):
         self.check_arch('i686', 'i386')
