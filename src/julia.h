@@ -2282,7 +2282,6 @@ JL_DLLEXPORT jl_genericmemory_t *jl_new_genericmemory(jl_value_t *mtype, jl_valu
 JL_DLLEXPORT jl_genericmemory_t *jl_ptr_to_genericmemory(jl_value_t *mtype, void *data,
                                            size_t nel, int own_buffer) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory(jl_value_t *mtype, size_t nel) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_genericmemory_t *jl_pchar_to_memory(const char *str, size_t len);
 JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory_unchecked(jl_ptls_t ptls, size_t nbytes, jl_datatype_t *mtype) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_genericmemory_to_string(jl_genericmemory_t *m, size_t len) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_genericmemory_t *jl_alloc_memory_any(size_t n) JL_CANSAFEPOINT;
@@ -2303,7 +2302,6 @@ JL_DLLEXPORT int jl_get_module_infer(jl_module_t *m);
 JL_DLLEXPORT void jl_set_module_max_methods(jl_module_t *self, int value);
 JL_DLLEXPORT int jl_get_module_max_methods(jl_module_t *m);
 JL_DLLEXPORT jl_value_t *jl_get_module_usings_backedges(jl_module_t *m);
-JL_DLLEXPORT jl_value_t *jl_get_module_scanned_methods(jl_module_t *m);
 JL_DLLEXPORT jl_value_t *jl_get_module_binding_or_nothing(jl_module_t *m, jl_sym_t *s) JL_CANSAFEPOINT;
 
 // get binding for reading
@@ -2470,7 +2468,6 @@ JL_DLLEXPORT const char *jl_pathname_for_symbol(void *symbol) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void) JL_CANSAFEPOINT_ENTER;
 JL_DLLEXPORT const char *jl_get_libjulia_internal_path(void) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
 JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint32_t jl_create_system_image(void **, jl_array_t *worklist, bool_t emit_split, bool_t compress, ios_t **s, jl_array_t **udeps JL_REQUIRE_ROOTED_SLOT, int64_t *srctextpos, jl_array_t *module_init_order) JL_CANSAFEPOINT;

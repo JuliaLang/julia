@@ -378,8 +378,6 @@ void assign_global_builtins(fl_context_t *fl_ctx, const builtinspec_t *b) JL_NOT
 
 /* builtins */
 value_t fl_hash(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
-value_t cvalue_byte(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
-value_t cvalue_wchar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
 
 void fl_init(fl_context_t *fl_ctx, size_t initial_heapsize) JL_NOTSAFEPOINT;
 int fl_load_system_image(fl_context_t *fl_ctx, value_t ios);
