@@ -112,7 +112,7 @@ static bool runtime_sym_gvs(jl_codectx_t &ctx, const native_sym_arg_t &symarg,
         symMap = &ctx.emission_context.symMapDefault;
     }
     else {
-        std::string name = ctx.emission_context.make_name(("ccalllib_" + llvm::sys::path::filename(f_lib)).str());
+        std::string name = ctx.emission_context.make_name("ccalllib_", llvm::sys::path::filename(f_lib));
         runtime_lib = true;
         auto &libgv = ctx.emission_context.libMapGV[f_lib];
         if (libgv.first == NULL) {
