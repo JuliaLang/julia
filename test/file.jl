@@ -119,6 +119,15 @@ end
         @test sort!(collect(eachentry(sub))) == ["bfile.txt"]
         @test sort!(basename.(collect(eachentry(sub, DirEntry)))) == ["bfile.txt"]
         @test sort!(collect(eachentry(sub; join=true))) == [joinpath(dir, "adir", "bfile.txt")]
+
+        # A symlink to a directory is reported as a link, not as a directory
+        if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+            symlink(joinpath(dir, "adir"), joinpath(dir, "dirlink"))
+            link = only(e for e in eachentry(dir, DirEntry) if basename(e) == "dirlink")
+            @test islink(link)
+            @test isdir(link)
+            @test !isfile(link)
+        end
     end
 end
 
