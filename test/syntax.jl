@@ -3141,7 +3141,7 @@ macro m_underscore_hygiene()
     return :(_ = 1)
 end
 
-@test Meta.@lower(@m_underscore_hygiene()) === 1
+@test Core.eval(@__MODULE__, :(@m_underscore_hygiene())) === 1
 
 macro m_begin_hygiene(a)
     return :($(esc(a))[begin])

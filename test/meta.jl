@@ -203,12 +203,12 @@ let a = 1
     @test !TestExpandModule.@is_in_def_module
     @test @eval TestExpandModule @is_in_def_module
 
-    @test Meta.lower(@__MODULE__, :($a)) === 1
-    @test !Meta.lower(@__MODULE__, :(@is_dollar_expr $a))
-    @test Meta.@lower @is_dollar_expr $a
-    @test Meta.@lower @__MODULE__() @is_dollar_expr $a
-    @test !Meta.@lower TestExpandModule.@is_in_def_module
-    @test Meta.@lower TestExpandModule @is_in_def_module
+    @test Core.eval(@__MODULE__, Meta.lower(@__MODULE__, :($a))) === 1
+    @test !Core.eval(@__MODULE__, Meta.lower(@__MODULE__, :(@is_dollar_expr $a)))
+    @test  Core.eval(@__MODULE__, (Meta.@lower @is_dollar_expr $a))
+    @test  Core.eval(@__MODULE__, (Meta.@lower @__MODULE__() @is_dollar_expr $a))
+    @test !Core.eval(@__MODULE__, Meta.@lower TestExpandModule.@is_in_def_module)
+    @test  Core.eval(@__MODULE__, (Meta.@lower TestExpandModule @is_in_def_module))
 
     @test macroexpand(@__MODULE__, :($a)) === 1
     @test !macroexpand(@__MODULE__, :(@is_dollar_expr $a))
