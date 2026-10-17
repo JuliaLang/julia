@@ -1273,7 +1273,9 @@ function Base.iterate(it::DirEntryIterator{T}, _=nothing) where {T}
     if name === nothing
         err = it.status[]
         close(it)
-        err < 0 && uv_error("eachentry($(repr(it.dir)))", err)
+        # Reading a directory that was removed after it was opened can fail with ENOENT
+        # (e.g. on FreeBSD) rather than reading as empty; treat it as the end of the listing.
+        err < 0 && err != Base.UV_ENOENT && uv_error("eachentry($(repr(it.dir)))", err)
         return nothing
     end
     name = name::String
