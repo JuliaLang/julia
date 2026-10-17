@@ -4037,6 +4037,10 @@ void jl_parallel_gc_threadfun(void *arg)
     }
 }
 
+// When we tear down the heap in jl_gc_release_heap_at_exit, we need to be sure
+// the concurrent sweeper is done madvising before we release memory.
+static uv_mutex_t gc_concurrent_sweep_lock;
+
 // concurrent gc thread function
 void jl_concurrent_gc_threadfun(void *arg)
 {
@@ -4060,7 +4064,9 @@ void jl_concurrent_gc_threadfun(void *arg)
     while (1) {
         assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_CONCURRENT_COLLECTOR_THREAD);
         uv_sem_wait(&gc_sweep_assists_needed);
+        uv_mutex_lock(&gc_concurrent_sweep_lock);
         gc_free_pages();
+        uv_mutex_unlock(&gc_concurrent_sweep_lock);
     }
 }
 
@@ -4074,6 +4080,7 @@ void jl_gc_init(void)
     uv_mutex_init(&page_profile_lock);
     uv_mutex_init(&gc_perm_lock);
     uv_mutex_init(&gc_pages_lock);
+    uv_mutex_init(&gc_concurrent_sweep_lock);
     uv_mutex_init(&gc_threads_lock);
     uv_cond_init(&gc_threads_cond);
     uv_sem_init(&gc_sweep_assists_needed, 0);
@@ -4252,6 +4259,57 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
     // jl_gc_managed_malloc is currently always used for allocating array buffers.
     maybe_record_alloc_to_profile((jl_value_t*)b, sz, (jl_datatype_t*)jl_buff_tag);
     return b;
+}
+
+static void gc_free_bigvals_at_exit(bigval_t *sentinel) JL_NOTSAFEPOINT
+{
+    bigval_t *v = sentinel->next;
+    sentinel->next = NULL;
+    while (v != NULL) {
+        bigval_t *nxt = v->next;
+        jl_free_aligned(v);
+        v = nxt;
+    }
+}
+
+// Free up address space before we enter LLVM. Frees:
+// - Tracked malloc'd memory
+// - Bigvals
+// - All GC pools
+void jl_gc_release_heap_at_exit(void)
+{
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
+    for (int t_i = 0; t_i < nthreads; t_i++) {
+        jl_ptls_t ptls2 = all_tls_states[t_i];
+        if (ptls2 == NULL)
+            continue;
+        small_arraylist_t *mallocarrays = &ptls2->gc_tls_common.heap.mallocarrays;
+        for (size_t i = 0; i < mallocarrays->len; i++) {
+            jl_genericmemory_t *m = (jl_genericmemory_t*)((uintptr_t)mallocarrays->items[i] & ~1);
+            jl_gc_free_memory(m, (uintptr_t)mallocarrays->items[i] & 1);
+        }
+        mallocarrays->len = 0;
+    }
+    for (int t_i = 0; t_i < nthreads; t_i++) {
+        jl_ptls_t ptls2 = all_tls_states[t_i];
+        if (ptls2 != NULL)
+            gc_free_bigvals_at_exit(ptls2->gc_tls.heap.young_generation_of_bigvals);
+    }
+    gc_free_bigvals_at_exit(oldest_generation_of_bigvals);
+    // Wait for the concurrent sweeper to finish returning pages to the OS, and
+    // make any later pass (from a wakeup still pending) a no-op, so it never
+    // madvises a page we unmap.
+    uv_mutex_lock(&gc_concurrent_sweep_lock);
+    jl_atomic_store_relaxed(&global_page_pool_lazily_freed_n, 0);
+    uv_mutex_unlock(&gc_concurrent_sweep_lock);
+    for (size_t i = 0; i < gc_page_blocks.len; i += 2) {
+#ifdef _OS_WINDOWS_
+        VirtualFree(gc_page_blocks.items[i], 0, MEM_RELEASE);
+#else
+        munmap(gc_page_blocks.items[i], (size_t)gc_page_blocks.items[i + 1]);
+#endif
+    }
 }
 
 // Perm gen allocator

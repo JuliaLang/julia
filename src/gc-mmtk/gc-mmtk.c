@@ -249,6 +249,10 @@ void jl_free_thread_gc_state(struct _jl_tls_states_t *ptls) {
     mmtk_destroy_mutator(&ptls->gc_tls.mmtk_mutator);
 }
 
+void jl_gc_release_heap_at_exit(void) {
+    // not implemented: MMTk keeps the heap until the process exits
+}
+
 JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem) {
 #ifdef _P32
     max_mem = max_mem < MAX32HEAP ? max_mem : MAX32HEAP;

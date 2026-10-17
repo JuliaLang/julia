@@ -232,6 +232,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
 
     if (jl_atomic_load_relaxed(&jl_all_tls_states) == NULL)
         return;
+    if (jl_atomic_load_relaxed(&jl_heap_released))
+        return;
 
     jl_task_t *ct = jl_get_current_task();
 
@@ -339,6 +341,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
     }
     if (ct)
         jl_safepoint_suspend_all_threads(ct); // Destroy other threads, so that they don't segfault
+    if (ct && exitcode == 0)
+        ct = jl_write_native_output_at_exit();
     if (ct)
         (void)jl_gc_safe_enter(ct->ptls); // park in gc-safe
 
