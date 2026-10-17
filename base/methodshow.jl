@@ -247,7 +247,8 @@ function show_method(io::IO, m::Method;
         file = "none"
         line = 0
     else
-        print(io, decls[1][2], "(")
+        print(io, decls[1][2])
+        printstyled(io, "(", color=:normal) # issue #63753
 
         # arguments
         for (i,d) in enumerate(decls[2:end])
