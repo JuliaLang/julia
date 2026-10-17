@@ -997,11 +997,6 @@ function mktempdir(fn::Function, parent::AbstractString=tempdir();
     end
 end
 
-struct uv_dirent_t
-    name::Ptr{UInt8}
-    typ::Cint
-end
-
 """
     readdir(dir::AbstractString=pwd();
         join::Bool = false,
@@ -1079,7 +1074,7 @@ julia> readdir(abspath("base"), join=true)
 ```
 """
 readdir(; join::Bool=false, kwargs...) = readdir(join ? pwd() : "."; join, kwargs...)::Vector{String}
-readdir(dir::AbstractString; kwargs...) = _readdir(dir; return_objects=false, kwargs...)::Vector{String}
+readdir(dir::AbstractString; kwargs...) = _readdir(dir, String; kwargs...)::Vector{String}
 
 # this might be better as an Enum but they're not available here
 # UV_DIRENT_T
@@ -1168,42 +1163,21 @@ for entry in readdir(".", DirEntry)
 end
 ```
 """
-readdir(dir::AbstractString, ::Type{DirEntry}; sort::Bool=true) = _readdir(dir; return_objects=true, sort)::Vector{DirEntry}
+readdir(dir::AbstractString, ::Type{DirEntry}; sort::Bool=true) = _readdir(dir, DirEntry; sort)::Vector{DirEntry}
 readdir(::Type{DirEntry}; sort::Bool=true) = readdir(pwd(), DirEntry; sort)::Vector{DirEntry}
 readdir(entry::DirEntry, ::Type{DirEntry}; sort::Bool=true) = readdir(joinpath(entry), DirEntry; sort)::Vector{DirEntry}
 readdir(entry::DirEntry; kwargs...) = readdir(joinpath(entry); kwargs...)::Vector{String}
 
-function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=false, sort::Bool=true)
-    # Allocate space for uv_fs_t struct
-    req = Libc.malloc(_sizeof_uv_fs)
-    try
-        err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Cint, Ptr{Cvoid}),
-                    C_NULL, req, dir, 0, C_NULL)
-        err < 0 && uv_error("readdir($(repr(dir)))", err)
-
-        # iterate the listing into entries
-        entries = return_objects ? DirEntry[] : String[]
-        ent = Ref{uv_dirent_t}()
-        while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), req, ent)
-            name = unsafe_string(ent[].name)
-            if return_objects
-                rawtype = ent[].typ
-                push!(entries, DirEntry(dir, name, rawtype))
-            else
-                push!(entries, join ? joinpath(dir, name) : name)
-            end
-        end
-
-        # Clean up the request string
-        uv_fs_req_cleanup(req)
-
-        # sort entries unless opted out
-        sort && sort!(entries)
-
-        return entries
+function _readdir(dir::AbstractString, ::Type{T}; join::Bool=false, sort::Bool=true) where {T}
+    it = DirEntryIterator{T}(dir, join)
+    entries = try
+        collect(it)
     finally
-        Libc.free(req)
+        close(it)
     end
+    # sort entries unless opted out
+    sort && sort!(entries)
+    return entries
 end
 
 """

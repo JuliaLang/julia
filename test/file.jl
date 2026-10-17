@@ -1823,7 +1823,7 @@ cd(dirwalk) do
     @test files == ["file1", "file2"]
 
     rm(joinpath("sub_dir1"), recursive=true)
-    @test_throws(Base._UVError("readdir($(repr(joinpath(".", "sub_dir1"))))", Base.UV_ENOENT),
+    @test_throws(Base._UVError("eachentry($(repr(joinpath(".", "sub_dir1"))))", Base.UV_ENOENT),
                  take!(chnl_error)) # throws an error because sub_dir1 do not exist
 
     root, dirs, files = take!(chnl_noerror)
@@ -2160,7 +2160,7 @@ end
                 rm(d, recursive=true)
                 @test !ispath(d)
                 @test isempty(readdir())
-                @test_throws Base._UVError("readdir($(repr(d)))", Base.UV_ENOENT) readdir(d)
+                @test_throws Base._UVError("eachentry($(repr(d)))", Base.UV_ENOENT) readdir(d)
                 @test_throws Base._UVError("pwd()", Base.UV_ENOENT) readdir(join=true)
             end
         end
