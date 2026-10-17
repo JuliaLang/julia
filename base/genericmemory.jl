@@ -262,9 +262,8 @@ function copy(a::T) where {T<:Memory}
     @inbounds unsafe_copyto!(newmem, 1, a, 1, length(a))
 end
 
-copyto!(dest::Memory, src::Memory) = copyto!(dest, 1, src, 1, length(src))
 copyto!(dest::Memory, doffs::Integer, src::Memory, soffs::Integer, n::Integer) =
-    _copyto_impl!(dest, doffs, src, soffs, n)
+    _copyto!(dest, doffs, src, soffs, n)
 
 
 ## Constructors ##
