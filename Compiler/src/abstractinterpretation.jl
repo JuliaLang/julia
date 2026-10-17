@@ -348,8 +348,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                                     local sig = match.spec_types
                                     local mi = get_ci_mi(edge)
                                     local vw = matches.valid_worlds
-                                    ccall(:jl_recache_method_by_type, Cvoid, (Any, Any, Any, UInt, UInt, UInt, UInt),
-                                            sig, mi, mi.specTypes, get_inference_world(interp),
+                                    ccall(:jl_recache_method_by_type, Cvoid, (Any, Any, Any, Any, UInt, UInt, UInt, UInt),
+                                            sig, match.sparams, mi, mi.specTypes, get_inference_world(interp),
                                             first(vw), last(vw), current_world)
                                 end
                                 return true
