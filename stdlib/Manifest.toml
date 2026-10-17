@@ -114,7 +114,7 @@ version = "1.11.104+0"
 [[deps.LibUV_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "183b4373-6708-53ba-ad28-60e28bb38547"
-version = "2.0.1+21"
+version = "2.0.1+22"
 
 [[deps.LibUnwind_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl", "Zlib_jll"]
