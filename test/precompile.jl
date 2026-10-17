@@ -2532,6 +2532,55 @@ precompile_test_harness("Test flags") do load_path
     end
 end
 
+precompile_test_harness("Image object cache") do load_path
+    # The cache is only used for package images without coverage instrumentation
+    if Base.JLOptions().use_pkgimages == 1 && Base.JLOptions().code_coverage == 0 &&
+            Base.JLOptions().malloc_log == 0 && ccall(:jl_objcache_kv_enabled, Cint, ()) != 0
+        source(g) = """
+            module ObjectCacheTest
+            f(x) = x + 1
+            h(x) = sum(abs2, x)
+            g(x) = $g
+            precompile(f, (Int,))
+            precompile(h, (Vector{Float64},))
+            precompile(g, (Int,))
+            end
+            """
+        file = joinpath(load_path, "ObjectCacheTest.jl")
+        pkg = Base.PkgId("ObjectCacheTest")
+        cachedir = mktempdir()
+        log = joinpath(cachedir, "log")
+        # build the package image, and count the units found in and missing
+        # from the cache
+        function build()
+            seen = isfile(log) ? countlines(log) : 0
+            withenv("JULIA_OBJCACHE" => nothing, "JULIA_OBJCACHE_IMAGES" => nothing,
+                    "JULIA_OBJCACHE_PATH" => cachedir, "JULIA_OBJCACHE_LOG" => log) do
+                Base.compilecache(pkg, devnull, devnull)
+            end
+            lookups = filter(startswith("keyed-lookup,"), readlines(log)[seen+1:end])
+            return count(endswith(",miss"), lookups), count(contains(",hit,"), lookups)
+        end
+        write(file, source("2x"))
+        misses, hits = build()
+        @test misses > 0 && hits == 0
+        # building the same code again reuses all of it
+        @test build() == (0, misses)
+        # after a change to one method, only that method is compiled again
+        write(file, source("3x"))
+        changed, unchanged = build()
+        @test 0 < changed < misses
+        @test changed + unchanged == misses
+        # and the image made from the cached code runs the new code
+        @test build() == (0, misses)
+        @eval using ObjectCacheTest
+        @test Base.isprecompiled(pkg)
+        @test (@eval ObjectCacheTest.g(2)) == 6
+        @test (@eval ObjectCacheTest.f(2)) == 3
+        @test (@eval ObjectCacheTest.h([1.0, 2.0])) == 5.0
+    end
+end
+
 if Base.get_bool_env("CI", false) && (Sys.ARCH === :x86_64 || Sys.ARCH === :aarch64)
     @testset "Multiversioning" begin # This test isn't the most robust because it relies on being in CI,
         pkg = Base.identify_package("Test")  # but we need better target reflection to make a better one.

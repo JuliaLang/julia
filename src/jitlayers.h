@@ -832,6 +832,9 @@ public:
     jl_locked_stream &get_dump_compiles_stream() JL_NOTSAFEPOINT {
         return dump_compiles_stream;
     }
+    ObjCache &get_objcache() JL_NOTSAFEPOINT {
+        return OCache;
+    }
     jl_locked_stream &get_dump_llvm_opt_stream() JL_NOTSAFEPOINT {
         return dump_llvm_opt_stream;
     }

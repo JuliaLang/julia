@@ -1033,7 +1033,9 @@ void CloneCtx::emit_metadata()
 
     // Store back the information about exported functions.
     emit_table(M, T_size, ArrayRef<Constant*>((Constant* const*)fvars.data(), fvars.size()), "jl_fvar", suffix);
-    M.getGlobalVariable("jl_fvar_idxs")->setName("jl_fvar_idxs" + suffix);
+    // Units built for the object cache keep this table in another module.
+    if (auto fvar_idxs = M.getGlobalVariable("jl_fvar_idxs"))
+        fvar_idxs->setName("jl_fvar_idxs" + suffix);
 
     uint32_t ntargets = specs.size();
 
