@@ -227,16 +227,6 @@ end
 #--------------------------------------------------
 # Runtime support infrastructure for `@generated`
 
-# An alternative to Core.GeneratedFunctionStub which works on SyntaxTree rather
-# than Expr.
-struct GeneratedFunctionStub
-    syntax_context::SyntaxContext
-    gen::Function
-    srcref::Union{LineNumberNode,SourceRef}
-    argnames::Core.SimpleVector
-    spnames::Core.SimpleVector
-end
-
 function _gen_args_from_syms(ctx, src, args, sc)
     out = SyntaxList()
     for a in args
@@ -250,13 +240,7 @@ end
 # expression into a CodeInfo.
 #
 # `args` passed into stub by the Julia runtime are (parent_func, static_params..., arg_types...)
-function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize args...)
-    # Some of the lowering pipeline from lower() and the pass-specific setup is
-    # re-implemented here because generated functions are very much (but not
-    # entirely) like macro expansion.
-    #
-    # TODO: Reduce duplication where possible.
-
+function lower_generated_code(g, world, source, @nospecialize args...)
     __module__ = source.module
     sc = g.syntax_context
 
@@ -274,7 +258,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     end
 end
 
-function _lower_generated_code(g::GeneratedFunctionStub, source::Method,
+function _lower_generated_code(g::Base.SyntaxGeneratedFunctionStub, source::Method,
                                sc::SyntaxContext, __module__::Module,
                                world::UInt, @nospecialize(ex0))
     if ex0 isa Expr
@@ -320,7 +304,6 @@ function _lower_generated_code(g::GeneratedFunctionStub, source::Method,
 
     return ci
 end
-
 
 #-------------------------------------------------------------------------------
 # The following functions are called directly by lowering to inspect Julia's state.

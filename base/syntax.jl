@@ -924,3 +924,19 @@ function Base.show(io::IO, node::Syntax)
     assert_syntax(node)
     _show_syntax_tree_sexpr(io, node)
 end
+
+#-------------------------------------------------------------------------------
+# generated functions produced by JuliaLowering.  TODO: consolidate with
+# GeneratedFunctionStub
+
+struct SyntaxGeneratedFunctionStub
+    syntax_context::SyntaxContext
+    gen::Function
+    srcref::Union{LineNumberNode,SourceRef}
+    argnames::Core.SimpleVector
+    spnames::Core.SimpleVector
+end
+
+function (g::SyntaxGeneratedFunctionStub)(world::UInt, source::Method, @nospecialize args...)
+    Base.JuliaLowering.lower_generated_code(g, world, source, args...)
+end

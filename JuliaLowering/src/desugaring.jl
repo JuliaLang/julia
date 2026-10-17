@@ -2672,7 +2672,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     nongen_mdef = let
         nongen_body = @ast ctx body[2] [:block [:meta "generated"::symbol
             [:new
-                GeneratedFunctionStub::value # Use stub type from JuliaLowering
+                Base.SyntaxGeneratedFunctionStub::value
                 SyntaxContext(ctx.layer.mod, sc.edition)::value
                 gen_name
                 # Truncate provenance to just the source file range, as this
