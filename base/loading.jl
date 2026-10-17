@@ -2483,7 +2483,7 @@ end
                     for modpath_to_try in modpaths
                         modtrusted = modpath_to_try === mpre
                         modstaledeps = stale_cachefile(modkey, modbuild_id, modspec, modpath_to_try;
-                                                       stalecheck = stalecheck && !modtrusted, verify_checksums = !modtrusted)
+                                                       stalecheck = stalecheck && !modtrusted, verify_checksums = !modtrusted, ji_crc = false)
                         if modstaledeps === true
                             continue
                         end
@@ -2499,7 +2499,7 @@ end
                     stalecheck && register_root_module(M)
                     return M
                 end
-                !trusted && checksums_invalid(path_to_try, ocachefile, newbuild_id, reasons) && continue next_path
+                !trusted && checksums_invalid(path_to_try, ocachefile, newbuild_id, reasons; ji_crc = false) && continue next_path
                 stalecheck && tried > 1 && touch_cachefile(pkg, path_to_try)
                 # finish loading module graph into staledeps
                 # n.b. this runs __init__ methods too early, so it is very unwise to have those, as they may see inconsistent loading state, causing them to fail unpredictably here
@@ -4035,8 +4035,10 @@ function checksum_key(io::IOStream, ocachefile::Union{Nothing, String})
     return (file_identity(stat(io)), oid)
 end
 
-function checksums_invalid(io::IOStream, cachefile::String, ocachefile::Union{Nothing, String}, reasons)
-    if !isvalid_file_crc(io)
+# With `ji_crc = false` the .ji checksum of a split package image is left to the loader,
+# which checks it on the buffer it reads (`jl_image_get_split_ji`).
+function checksums_invalid(io::IOStream, cachefile::String, ocachefile::Union{Nothing, String}, reasons; ji_crc::Bool=true)
+    if (ji_crc || ocachefile === nothing) && !isvalid_file_crc(io)
         @debug "Rejecting cache file $cachefile because it has an invalid checksum"
         record_reason(reasons, :checksum_invalid)
         return true
@@ -4051,7 +4053,7 @@ end
 
 # With `unverified`, a file already in the record passes without being read and is added to `unverified`.
 function checksums_invalid(cachefile::String, ocachefile::Union{Nothing, String}, id_build::UInt128, reasons;
-                           unverified::Union{Nothing, Set{String}}=nothing)
+                           unverified::Union{Nothing, Set{String}}=nothing, ji_crc::Bool=true)
     io = try
         open(cachefile, "r")
     catch ex
@@ -4066,7 +4068,7 @@ function checksums_invalid(cachefile::String, ocachefile::Union{Nothing, String}
             @debug "Rejecting cache file $cachefile because it changed while being checked"
             return true
         end
-        unverified === nothing && return checksums_invalid(io, cachefile, ocachefile, reasons)
+        unverified === nothing && return checksums_invalid(io, cachefile, ocachefile, reasons; ji_crc)
         assert_havelock(require_lock)
         key = checksum_key(io, ocachefile)
         if key in checksums_valid
@@ -4886,7 +4888,7 @@ end
 @constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modspec::PkgLoadSpec, cachefile::String;
                                           ignore_loaded::Bool=false, requested_flags::CacheFlags=CacheFlags(),
                                           reasons::Union{Dict{Symbol,Int},Nothing}=nothing, stalecheck::Bool=true,
-                                          verify_checksums::Bool=true)
+                                          verify_checksums::Bool=true, ji_crc::Bool=true)
     # n.b.: this function does nearly all of the file validation, not just those checks related to stale, so the name is potentially unclear
     io = try
         open(cachefile, "r")
@@ -5088,7 +5090,7 @@ end
             end
         end
 
-        if verify_checksums && checksums_invalid(io, cachefile, ocachefile, reasons)
+        if verify_checksums && checksums_invalid(io, cachefile, ocachefile, reasons; ji_crc)
             return true
         end
 

@@ -4909,6 +4909,24 @@ precompile_test_harness("Ambiguities and package-image edge validation") do load
     end
 end
 
+# The loader finds the bad checksum while reading the heap, recompiles, and loads the new cache file.
+precompile_test_harness("corrupt package image heap is recompiled") do load_path
+    write(joinpath(load_path, "CorruptHeap.jl"), "module CorruptHeap\nf(x) = x + 1\nend\n")
+    pkg = Base.PkgId("CorruptHeap")
+    Base.compilecache(pkg)
+    cachefile = only(Base.find_all_in_cache_path(pkg))
+    @test isfile(Base.ocachefile_from_cachefile(cachefile))
+    bytes = read(cachefile)
+    bytes[end ÷ 2] ⊻= 0xff
+    write(cachefile, bytes)
+    script = "using CorruptHeap; CorruptHeap.f(1) == 2 && Base.pkgorigins[Base.PkgId(CorruptHeap)].cachepath !== nothing || exit(1)"
+    pathsep = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                 "JULIA_DEPOT_PATH" => join(DEPOT_PATH, pathsep),
+                 "JULIA_LOAD_PATH" => join([load_path, "@stdlib"], pathsep))
+    @test success(pipeline(cmd; stdout, stderr))
+end
+
 # Loading marks the accepted cache file as recently used, but only in the depot that
 # `compilecache` writes to: other depots may be read-only, shared, or bundled with Julia.
 precompile_test_harness("cache files are only touched in the primary depot") do load_path
