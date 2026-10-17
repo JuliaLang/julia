@@ -1473,6 +1473,9 @@ end
     @test @views mightalias(B[1:2], A[1:2])
     @test @views !mightalias(B[1:end÷2], A[end÷2+1:end])
 
+    C = trues(5,4)
+    @test mightalias(C, reshape(C,10,2))
+
     AA = [[1],[2]]
     @test @views mightalias(AA, AA[:])
     @test @views mightalias(AA[:], AA[:])
