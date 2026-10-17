@@ -65,7 +65,7 @@ function test_callsite(bt, file_ts, file_t)
     # The order will always be <internal functions> -> `@test` -> `@testset`.
     internal = @something(macrocall_location(bt, @__FILE__), return nothing)
     test = internal - 1 + @something(findfirst(ip -> any(frame -> in_file(frame, file_t), StackTraces.lookup(ip)), @view bt[internal:end]), return nothing)
-    testset = test - 1 + @something(macrocall_location(@view(bt[test:end]), file_ts), return nothing)
+    testset = test - 1 + @something(testset_location(@view(bt[test:end]), file_ts), return nothing)
 
     # If stacktrace locations differ, include frames until the `@testset` appears.
     test != testset && return testset
@@ -74,7 +74,7 @@ function test_callsite(bt, file_ts, file_t)
     # or if `@test` occurred in a function that has been inlined in the testset.
     frames = StackTraces.lookup(bt[testset])
     outer_frame = findfirst(frame -> in_file(frame, file_ts) && frame.func == Symbol("macro expansion"), frames)
-    isnothing(outer_frame) && return nothing
+    isnothing(outer_frame) && return testset
     # The `@test` call occurred directly in scope of a `@testset`.
     # The __source__ from `@test` will be printed in the test message upon failure.
     # There is no need to include more frames, but always include at least the internal macrocall location in the stacktrace.
@@ -85,12 +85,21 @@ end
 
 macrocall_location(bt, file) = findfirst(ip -> ip_has_file_and_func(ip, file, (Symbol("macro expansion"),)), bt)
 
+testset_location(bt, file_ts) =
+    @something(macrocall_location(bt, file_ts),
+               findfirst(ip -> any(frame -> in_file(frame, file_ts), StackTraces.lookup(ip)), bt),
+               return nothing)
+
 function scrub_backtrace(bt, file_ts, file_t)
     do_test_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (:do_test, :do_test_throws)), bt)
     if do_test_ind !== nothing && length(bt) > do_test_ind
         bt = bt[do_test_ind + 1:end]
     end
     stop_at = test_location(bt, file_ts, file_t)
+    if isnothing(stop_at)
+        driver = findfirst(ip -> any(Base.is_driver_entry, StackTraces.lookup(ip)), bt)
+        isnothing(driver) || (stop_at = driver - 1)
+    end
     !isnothing(stop_at) && !isempty(bt) && return bt[1:stop_at]
     return bt
 end
