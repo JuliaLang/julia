@@ -1575,6 +1575,11 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     strcpy(unique_string, "Root");
     ct->name = unique_string;
 #endif
+
+#ifdef USE_NVTX
+    jl_timing_root_task_init(ct);
+#endif
+
     ct->ctx.started = 1;
     ct->next = jl_nothing;
     ct->queue = jl_nothing;
