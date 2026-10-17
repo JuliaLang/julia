@@ -8,7 +8,8 @@ Returns an svec with the lowered code (usually expr) as its first element, and
 """
 function core_lowering_hook(@nospecialize(code), mod::Module, file::String="none",
                             line::Int=0, world::UInt=typemax(Csize_t), warn::Bool=false)
-    return invoke_in_lowering_world(_core_lowering_hook, code, mod, file, line, world, warn)
+    return __script_exit_invoke_in_lowering_world(
+        _core_lowering_hook, code, mod, file, line, world, warn)
 end
 
 function _core_lowering_hook(@nospecialize(code), mod::Module, file::String,
@@ -47,7 +48,7 @@ function _core_lowering_hook(@nospecialize(code), mod::Module, file::String,
     end
 end
 
-@fzone "JL: eval" function core_eval_hook(mod::Module, @nospecialize(st))
+@fzone "JL: eval" function __script_exit_eval(mod::Module, @nospecialize(st))
     if !(st isa SyntaxTree)
         st = expr_to_est(st)
     end
@@ -58,7 +59,7 @@ end
 # the only lowerer, this can be replaced with `Core.eval`.
 function at_eval_hook(mod::Module, st::SyntaxTree)
     ccall(:jl_check_top_level_effect, Cvoid, (Any, Cstring), mod, "eval")
-    return core_eval_hook(mod, st)
+    return __script_exit_eval(mod, st)
 end
 
 const _has_v1_13_hooks = isdefined(Core, :_lower)
@@ -71,7 +72,7 @@ function activate!(enable=true; freeze_world_age=true)
     _lowering_world[] = (enable && freeze_world_age) ? Base.get_world_counter() : UInt(0)
     if enable
         Core._setlowerer!(core_lowering_hook)
-        Core._set_toplevel_eval!(core_eval_hook)
+        Core._set_toplevel_eval!(__script_exit_eval)
     else
         Core._setlowerer!(Base.fl_lower)
         Core._set_toplevel_eval!(Base.fl_toplevel_eval)

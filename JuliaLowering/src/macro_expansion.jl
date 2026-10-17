@@ -157,17 +157,20 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
     end
 end
 
+__script_entry_macro(@nospecialize(f), @nospecialize(args...)) = f(args...)
+
 function _eval_dot(world::UInt, ex::SyntaxTree)
     if head(ex) === :. && numchildren(ex) == 2
         lhs = _eval_dot(world, ex[1])
         lhs isa Module || return nothing
         rhs = head(ex[2]) === :inert ? ex[2][1] : ex[2]
         (head(rhs) === :identifier || head(rhs) === :symbol) || return nothing
-        _invoke_in_world(world, getproperty, lhs, Symbol(syntax_name(rhs)))
+        _invoke_in_world(world, __script_entry_macro, getproperty, lhs,
+                         Symbol(syntax_name(rhs)))
     elseif head(ex) === :value
         ex.value
     elseif head(ex) === :identifier
-        _invoke_in_world(world, getproperty,
+        _invoke_in_world(world, __script_entry_macro, getproperty,
                          syntax_module(ex), Symbol(syntax_name(ex)))
     else
         nothing
@@ -239,7 +242,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
         macro_args = Any[mctx, raw_args...]
         macro_mi = lookup_method_instance(macfunc, macro_args, macro_world)
         expanded = try
-            _invoke_in_world(ctx.world, macfunc, macro_args...)
+            _invoke_in_world(ctx.world, __script_entry_macro, macfunc, macro_args...)
         catch exc
             rethrow(MacroExpansionError(mctx, st, "Error expanding macro", exc))
         end
@@ -260,7 +263,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
         end
         macro_mi = lookup_method_instance(macfunc, macro_args, macro_world)
         st_out = try
-            _invoke_in_world(ctx.world, macfunc, macro_args...)
+            _invoke_in_world(ctx.world, __script_entry_macro, macfunc, macro_args...)
         catch exc
             if exc isa MethodError && exc.f === macfunc && !isempty(
                 methods_in_world(macfunc, Tuple{typeof(mctx), Vararg{Any}}, ctx.world, st))
