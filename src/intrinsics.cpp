@@ -690,10 +690,13 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) 
     }
 }
 
-// LLVM lowers integer to bfloat conversions through float, which rounds twice.
-// Round to odd at float precision first so that the final rounding is correct.
+// LLVM lowers integer to half/bfloat conversions through float, which rounds
+// twice. For 128-bit integers it also emits a libcall (e.g. __floattihf) that is
+// not available in the JIT, so the direct cast aborts. Route through float with a
+// round-to-odd step first so that the final rounding is correct. `to` must be a
+// float type narrower than Float32 (half or bfloat).
 // Mirrors `APInt_inttofp` in APInt.c.
-static Value *emit_inttobfloat(jl_codectx_t &ctx, Value *x, Type *to, bool issigned)
+static Value *emit_inttofloat(jl_codectx_t &ctx, Value *x, Type *to, bool issigned)
 {
     IRBuilder<> &B = ctx.builder;
     Type *T_float = getFloatTy(B.getContext());
@@ -808,8 +811,9 @@ static jl_cgval_t generic_cast(
         }
     }
     Value *ans;
-    if ((Op == Instruction::SIToFP || Op == Instruction::UIToFP) && to->getScalarType()->isBFloatTy())
-        ans = emit_inttobfloat(ctx, from, to, Op == Instruction::SIToFP);
+    if ((Op == Instruction::SIToFP || Op == Instruction::UIToFP) &&
+            (to->getScalarType()->isBFloatTy() || to->getScalarType()->isHalfTy()))
+        ans = emit_inttofloat(ctx, from, to, Op == Instruction::SIToFP);
     else
         ans = ctx.builder.CreateCast(Op, from, to);
     if (f == fptosi || f == fptoui)

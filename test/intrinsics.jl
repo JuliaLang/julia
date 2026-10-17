@@ -758,6 +758,16 @@ end
     # unary
     @test_intrinsic Core.Intrinsics.abs_float Float16(-3.3) Float16(3.3)
     @test_intrinsic Core.Intrinsics.neg_float Float16(3.3) Float16(-3.3)
+
+    # #63894: (u|s)itofp to Float16 from a 128-bit integer used to emit a missing
+    # libcall (__floattihf / __floatuntihf) and abort compilation. Check codegen
+    # agrees with the runtime path and is correctly rounded across the range.
+    @test_intrinsic Core.Intrinsics.sitofp Float16 Int128(5) Float16(5.0)
+    @test_intrinsic Core.Intrinsics.sitofp Float16 Int128(2050) Float16(2050.0)
+    @test_intrinsic Core.Intrinsics.sitofp Float16 typemax(Int128) Inf16
+    @test_intrinsic Core.Intrinsics.sitofp Float16 typemin(Int128) -Inf16
+    @test_intrinsic Core.Intrinsics.uitofp Float16 UInt128(5) Float16(5.0)
+    @test_intrinsic Core.Intrinsics.uitofp Float16 typemax(UInt128) Inf16
     # See <https://github.com/JuliaLang/julia/issues/57130>
     @test_intrinsic Core.Intrinsics.fpext Float32 Float16(3.3) 3.3007812f0
     @test_intrinsic Core.Intrinsics.fpext Float64 Float16(3.3) 3.30078125
