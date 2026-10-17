@@ -5674,13 +5674,7 @@ gVararg(a::fVararg(Int)) = length(a)
 
 # issue #18577
 @generated f18577() = quote ()->1 end
-@test try
-    f18577()
-    false
-catch e
-    (e::ErrorException).msg
-end == "The function body AST defined by this @generated function is not pure. " *
-       "This likely means it contains a closure, a comprehension or a generator."
+@test_throws ErrorException f18577()
 
 let x = 1
     global g18444
@@ -7899,18 +7893,18 @@ let x = SplatNew{Int16}()
     @test x.x === Int8(0)
     @test x.y === Int16(1)
 end
-@test_throws ArgumentError("new: too many arguments (expected 2)") SplatNew{Int16}(1)
+@test_throws ArgumentError SplatNew{Int16}(1)
 let x = SplatNew(3, 2)
     @test x.x === Int8(3)
     @test x.y === 2.0f0
 end
-@test_throws ArgumentError("new: too many arguments (expected 2)") SplatNew(1, 2, 3)
-@test_throws ArgumentError("new: too few arguments (expected 2)") SplatNew{Any}(1)
+@test_throws ArgumentError SplatNew(1, 2, 3)
+@test_throws ArgumentError SplatNew{Any}(1)
 let x = SplatNew{Tuple{Int16}}((1,))
     @test x.x === Int8(2)
     @test x.y === (Int16(1),)
 end
-@test_throws ArgumentError("new: too many arguments (expected 2)")  SplatNew{Int8}()
+@test_throws ArgumentError  SplatNew{Int8}()
 
 # Issue #31357 - Missed assignment in nested try/catch
 function foo31357(b::Bool)

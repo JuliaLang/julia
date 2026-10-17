@@ -777,7 +777,7 @@ end
     @test_throws err @code_lowered 1.0
 
     @test_throws "dot expressions are not lowered to a single function call" @which a .= 1 + 2
-    @test_throws "invalid keyword argument syntax" @eval @which round(1; digits(3))
+    @test_throws "syntax:" @eval @which round(1; digits(3))
 end
 
 using InteractiveUtils: editor

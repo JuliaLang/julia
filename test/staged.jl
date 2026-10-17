@@ -321,7 +321,7 @@ end
     end
 end
 
-@test_throws ErrorException("syntax: local variable name \"x\" conflicts with an argument") f30284(1)
+@test_throws "syntax: local variable name `x` conflicts with an existing argument" f30284(1)
 
 # issue #33243
 @generated function f33243()
