@@ -1858,6 +1858,67 @@ static MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
     return MDBuilder(Tag->getContext()).createMutableTBAAAccessTag(Tag);
 }
 
+// A fresh object cannot become old before a safepoint (cf. `jl_gc_wb_fresh`). Remove the write
+// barriers whose parent is a dominating allocation with no safepoint on any path from its most
+// recent execution to the barrier.
+void LateLowerGCFrame::ElideFreshWriteBarriers(Function &F, State &S)
+{
+    SmallPtrSet<Instruction *, 16> Safepoints(S.SafepointNumbering.begin(), S.SafepointNumbering.end());
+    auto IsSafepoint = [&](Instruction &I) {
+        // CleanupIR adds safepoints around GC transitions, even if the call itself isn't one
+        auto *CI = dyn_cast<CallInst>(&I);
+        return Safepoints.contains(&I) || (CI && CI->getOperandBundle("gc-transition"));
+    };
+    auto HasSafepoint = [&](BasicBlock::iterator Begin, BasicBlock::iterator End) {
+        return std::any_of(Begin, End, IsSafepoint);
+    };
+    auto IsFresh = [&](Instruction *Alloc, Instruction *Barrier) {
+        // in unreachable code, dominance doesn't imply that the allocation comes first
+        if (!GetDT().isReachableFromEntry(Barrier->getParent()) || !GetDT().dominates(Alloc, Barrier))
+            return false;
+        BasicBlock *AllocBB = Alloc->getParent();
+        BasicBlock *BarrierBB = Barrier->getParent();
+        if (BarrierBB == AllocBB)
+            return !HasSafepoint(std::next(Alloc->getIterator()), Barrier->getIterator());
+        if (HasSafepoint(BarrierBB->begin(), Barrier->getIterator()))
+            return false;
+        // Walk backwards to the allocation, checking only the instructions after it in its block:
+        // every execution of the allocation creates a new object, which earlier safepoints can't
+        // have aged.
+        SmallPtrSet<BasicBlock *, 8> Visited;
+        SmallVector<BasicBlock *, 8> Worklist(predecessors(BarrierBB));
+        while (!Worklist.empty()) {
+            BasicBlock *BB = Worklist.pop_back_val();
+            if (!Visited.insert(BB).second)
+                continue;
+            if (BB == AllocBB) {
+                if (HasSafepoint(std::next(Alloc->getIterator()), BB->end()))
+                    return false;
+                continue;
+            }
+            if (pred_empty(BB) || HasSafepoint(BB->begin(), BB->end()))
+                return false;
+            append_range(Worklist, predecessors(BB));
+        }
+        return true;
+    };
+    for (BasicBlock &BB : F) {
+        for (Instruction &I : make_early_inc_range(BB)) {
+            auto *CI = dyn_cast<CallInst>(&I);
+            if (!CI || !isWriteBarrierFunc(CI->getCalledOperand()))
+                continue;
+            auto *Parent = dyn_cast<CallInst>(CI->getArgOperand(0)->stripPointerCasts());
+            if (!Parent)
+                continue;
+            auto *Callee = Parent->getCalledOperand();
+            if (Callee != alloc_obj_func && Callee != alloc_memory_func)
+                continue;
+            if (IsFresh(Parent, CI))
+                CI->eraseFromParent();
+        }
+    }
+}
+
 void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVector<CallInst*, 0> &WriteBarriers, bool *CFGModified) {
     for (auto CI : WriteBarriers) {
         auto parent = CI->getArgOperand(0);
@@ -1933,7 +1994,7 @@ CallInst *LateLowerGCFrame::EmitGCAllocBytes(IRBuilder<> &builder, CallInst *CI,
     // Setting the tag in IR was meant to let LLVM see that a fresh object has clear GC bits,
     // and fold away write barriers on it. Since #59559, write barriers load the tag as volatile,
     // because a safepoint between the allocation and the barrier can age the object (#59547).
-    // Eliding these barriers now requires proving that no safepoint lies in between.
+    // `ElideFreshWriteBarriers` removes these barriers when no safepoint intervenes.
     auto &M = *builder.GetInsertBlock()->getModule();
     StoreInst *store = builder.CreateAlignedStore(
         tag, EmitTagPtr(builder, tag_type, T_size, newI), M.getDataLayout().getPointerABIAlignment(0));
@@ -2590,6 +2651,7 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
           }
       }
       State S = LocalScan(F);
+      ElideFreshWriteBarriers(F, S);
       // If there is no safepoint after the first reachable def, then we don't need any roots (even those for allocas)
       if (std::any_of(S.BBStates.begin(), S.BBStates.end(),
                   [&F](auto BBS) {
