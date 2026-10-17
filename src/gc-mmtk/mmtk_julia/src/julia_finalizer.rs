@@ -1,9 +1,9 @@
+use mmtk::Mutator;
 use mmtk::memory_manager;
 use mmtk::util::Address;
 use mmtk::util::ObjectReference;
 use mmtk::vm::ObjectTracer;
 use mmtk::vm::VMBinding;
-use mmtk::Mutator;
 
 use crate::JuliaVM;
 
@@ -86,7 +86,7 @@ impl ArrayListT {
 
     /// ptls->finalizers: new finalizers are registered into this thread local list
     fn thread_local_finalizer_list(mutator: &mut Mutator<JuliaVM>) -> &mut ArrayListT {
-        let list = unsafe { jl_gc_get_thread_finalizer_list(mutator.mutator_tls.0 .0) };
+        let list = unsafe { jl_gc_get_thread_finalizer_list(mutator.mutator_tls.0.0) };
         unsafe { &mut *list.to_mut_ptr() }
     }
     /// to_finalize: objects that are dead are in this list waiting for finalization

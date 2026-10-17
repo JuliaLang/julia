@@ -1,12 +1,12 @@
 use log::{info, trace};
+use mmtk::MMTK;
 use mmtk::plan::Plan;
 use mmtk::util::constants::BYTES_IN_PAGE;
 use mmtk::util::conversions;
 use mmtk::util::heap::{GCTriggerPolicy, SpaceStats};
-use mmtk::util::os::{OSMemory, OS};
-use mmtk::MMTK;
+use mmtk::util::os::{OS, OSMemory};
 
-use crate::{jl_gc_get_hard_heap_limit, jl_gc_get_max_memory, jl_hrtime, JuliaVM};
+use crate::{JuliaVM, jl_gc_get_hard_heap_limit, jl_gc_get_max_memory, jl_hrtime};
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
@@ -39,6 +39,12 @@ pub struct JuliaGCTrigger {
     next_sweep_full: AtomicBool,
     pending_pages: AtomicUsize,
     heap_size_after_last_full_gc: AtomicUsize,
+}
+
+impl Default for JuliaGCTrigger {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl JuliaGCTrigger {
@@ -80,10 +86,10 @@ impl JuliaGCTrigger {
     }
 
     fn maybe_force_full_heap(&self, mmtk: &'static MMTK<JuliaVM>) {
-        if let Some(gen) = mmtk.get_plan().generational() {
-            if self.next_sweep_full.load(Ordering::Relaxed) || GC_ALWAYS_SWEEP_FULL {
-                gen.force_full_heap_collection();
-            }
+        if let Some(gen_plan) = mmtk.get_plan().generational()
+            && (self.next_sweep_full.load(Ordering::Relaxed) || GC_ALWAYS_SWEEP_FULL)
+        {
+            gen_plan.force_full_heap_collection();
         }
     }
 }
@@ -139,9 +145,7 @@ impl GCTriggerPolicy<JuliaVM> for JuliaGCTrigger {
 
         let alloc_diff = self.before_free_heap_size.load(Ordering::Relaxed)
             - self.old_heap_size.load(Ordering::Relaxed);
-        let freed_diff = self
-            .before_free_heap_size
-            .load(Ordering::Relaxed) - heap_size;
+        let freed_diff = self.before_free_heap_size.load(Ordering::Relaxed) - heap_size;
         self.old_heap_size.store(heap_size, Ordering::Relaxed);
 
         let gc_auto = !mmtk.is_user_triggered_collection();
@@ -253,7 +257,7 @@ impl GCTriggerPolicy<JuliaVM> for JuliaGCTrigger {
         let last_collection_full_heap = mmtk
             .get_plan()
             .generational()
-            .is_some_and(|gen| gen.last_collection_full_heap());
+            .is_some_and(|gen_plan| gen_plan.last_collection_full_heap());
         if !mmtk.get_plan().generational().is_some() || last_collection_full_heap {
             self.heap_size_after_last_full_gc
                 .store(heap_size, Ordering::Relaxed);
