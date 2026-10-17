@@ -108,3 +108,5 @@ them to reword it:
 2. If there are multiple commits in the pull request, follow the same guidelines for the pull request as for the commit body.
 3. Make sure that the base commit of the pull request is recent (within the past two days) - if not rebase your changes first.
 4. If a separate tool reviews the commit, this is useful to note. Encourage the human to state how carefully they read and understood the content also, for example, by drafting the text to say the human author has *not* read any of it, and expecting they will update that once they read that disclaimer.
+
+Don't make PRs targeting `release-*`; target `backports-release-*` instead.
