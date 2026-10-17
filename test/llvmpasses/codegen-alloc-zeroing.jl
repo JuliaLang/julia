@@ -104,3 +104,20 @@ end
 # CHECK: julia.gc_alloc_obj
 # CHECK-SAME: [ "julia.gc_alloc_zeroinit"(i64 8, i64 24) ]
 emit(make_svec, Any, Any, Any)
+
+# COM: Test 9: a tagged union word holds a conditional reference, so it needs
+# COM: the same zeroing: storing an immediate boxes it first, and that
+# COM: allocation is a safepoint
+struct TestStructTagged
+    a::Union{Int32, String}   # tagged word at offset 0
+    b::Int64
+end
+
+function make_struct_tagged(x, y)
+    TestStructTagged(x, y)
+end
+
+# CHECK: define {{.*}} @julia_make_struct_tagged
+# CHECK: julia.gc_alloc_obj
+# CHECK-SAME: [ "julia.gc_alloc_ptr_offsets"(i64 0) ]
+emit(make_struct_tagged, Int32, Int64)
