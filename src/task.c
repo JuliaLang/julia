@@ -667,7 +667,7 @@ JL_DLLEXPORT void jl_switch(void) JL_CANSAFEPOINT_ENTER_LEAVE
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     jl_task_t *t = ptls->next_task;
-    if (t == ct && !ptls->in_finalizer && !ptls->in_pure_callback) {
+    if (t == ct && !ptls->in_finalizer && !ptls->in_pure_callback && !ptls->in_get_next) {
         // switching to self is a no-op, but only when a task switch would
         // have been permitted at all: the forbidden-context errors below must
         // not depend on whether the scheduler happened to have another
@@ -680,6 +680,8 @@ JL_DLLEXPORT void jl_switch(void) JL_CANSAFEPOINT_ENTER_LEAVE
         jl_error("task switch not allowed from inside gc finalizer");
     if (ptls->in_pure_callback)
         jl_error("task switch not allowed from inside staged nor pure functions");
+    if (ptls->in_get_next)
+        jl_error("task switch not allowed from inside the scheduler");
     if (t->ctx.started && t->ctx.stkbuf == NULL)
         jl_error("attempt to switch to exited task");
     if (!jl_set_task_tid(t, jl_atomic_load_relaxed(&ct->tid))) // manually yielding to a task
@@ -1807,7 +1809,9 @@ int jl_abandon_try_commit(jl_ptls_t ptls2) JL_NOTSAFEPOINT
     //    (sleep_check_state != not_sleeping): abandonment bypasses the
     //    JL_CATCH in jl_task_get_next that would restore the sleep state
     //    and running count, so the rescue task would re-enter the
-    //    scheduler with sleep bookkeeping still claimed by the victim.
+    //    scheduler with sleep bookkeeping still claimed by the victim;
+    //  - the victim is anywhere in jl_task_get_next (in_get_next): the same
+    //    JL_CATCH releases its searcher count.
     if (ct != t ||
         jl_atomic_load_relaxed(&ptls2->gc_state) != 0 ||
         ptls2->in_task_switch ||
@@ -1816,6 +1820,7 @@ int jl_abandon_try_commit(jl_ptls_t ptls2) JL_NOTSAFEPOINT
         ptls2->finalizers_inhibited != 0 ||
         ptls2->defer_signal != 0 ||
         jl_atomic_load_relaxed(&ptls2->sleep_check_state) != 0 || // 0 == not_sleeping
+        ptls2->in_get_next ||
         jl_atomic_load_relaxed(&jl_uv_mutex.owner) == ct) {
         // Ping before the terminal store: the requester consumes (and may
         // free its handle) the moment a terminal state is visible, so a
