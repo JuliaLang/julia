@@ -113,6 +113,7 @@ is_driver_entry(frame) = !frame.from_c &&
 # above the cut these frames cannot belong to user code
 function is_driver_machinery(frame)
     frame.from_c && return false
+    is_jl_toplevel_eval_frame(frame) && return true
     mod = parentmodule(frame)
     (mod === Base || mod === Core || mod === nothing) || return false
     return frame.func in (:eval, :include_string, :_include, :include, :fl_toplevel_eval)
@@ -124,6 +125,11 @@ function scrub_repl_backtrace(bt)
         # remove REPL/driver frames from interactive printing
         eval_ind = findlast(is_driver_entry, bt)
         if eval_ind !== nothing
+            while eval_ind > 1 && bt[eval_ind-1].inlined &&
+                    bt[eval_ind-1].func === Symbol("macro expansion") &&
+                    bt[eval_ind-1].pointer == bt[eval_ind].pointer
+                eval_ind -= 1
+            end
             deleteat!(bt, eval_ind:length(bt))
             while !isempty(bt) && is_driver_machinery(bt[end])
                 pop!(bt)
@@ -642,7 +648,7 @@ end
 
 function init_frontend()
     JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
-    if get_bool_env("JULIA_USE_FLISP_LOWERING", true) === true
+    if get_bool_env("JULIA_USE_FLISP_LOWERING", false) === true
         JuliaLowering.activate!(false)
     else
         JuliaLowering.activate!(true; freeze_world_age=true)

@@ -1228,6 +1228,12 @@ function _backtrace_remove_kwcall_frames!(trace)
     deleteat!(trace, todelete)
 end
 
+function is_jl_toplevel_eval_frame(frame::StackFrame)
+    parentmodule(frame) === JuliaLowering || return false
+    f = String(frame.func)
+    return f == "core_eval_hook" || f == "_eval" || startswith(f, "#_eval#")
+end
+
 # For improved user experience, filter out frames for include() implementation
 # - see #33065. See also #35371 for extended discussion of internal frames.
 function _backtrace_simplify_include_frames!(trace)
@@ -1238,7 +1244,8 @@ function _backtrace_simplify_include_frames!(trace)
         mod = parentmodule(frame)
         if mod === Base && frame.func === :IncludeInto ||
            mod === Core && frame.func === :EvalInto ||
-           mod === Base && frame.func === :fl_toplevel_eval
+           mod === Base && frame.func === :fl_toplevel_eval ||
+           is_jl_toplevel_eval_frame(frame)
             kept_frames[i] = false
         elseif first_ignored === nothing
             if mod === Base && frame.func === :_include
