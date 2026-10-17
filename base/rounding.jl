@@ -306,7 +306,9 @@ break identities such as `(x-y==0) == (x==y)`.
 
 !!! warning
 
-    This function only affects the current thread.
+    This setting is local to the current task: it only affects the current task, a new task
+    inherits the setting of the task that created it, and the setting is restored whenever
+    the task resumes running, on whichever thread that happens.
 """
 set_zero_subnormals(yes::Bool) = ccall(:jl_set_zero_subnormals,Int32,(Int8,),yes)==0
 
@@ -318,7 +320,7 @@ for IEEE arithmetic, and `true` if they might be converted to zeros.
 
 !!! warning
 
-    This function only affects the current thread.
+    This setting is local to the current task; see [`set_zero_subnormals`](@ref).
 """
 get_zero_subnormals() = ccall(:jl_get_zero_subnormals,Int32,())!=0
 

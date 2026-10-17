@@ -1539,6 +1539,7 @@ namespace {
         }
 
         Expected<std::unique_ptr<MemoryBuffer>> operator()(Module &M) override {
+            jl_fpctrl_default_scope fpctrl_scope;
             JL_TIMING(LLVM_JIT, JIT_Compile);
             size_t PoolIdx;
             if (auto opt_level = M.getModuleFlag("julia.optlevel")) {

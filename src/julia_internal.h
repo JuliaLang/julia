@@ -1370,6 +1370,165 @@ STATIC_INLINE int jl_is_typeapp(jl_value_t *v) JL_NOTSAFEPOINT
     // TypeApp has no small type tag, so its tag is the type pointer itself
     return jl_typetagis(v, jl_typeapp_type) && jl_typeapp_type != NULL;
 }
+// Floating-point control state (rounding mode, exception masks, flush-to-zero,
+// etc.) is saved per task at switch-out and restored at switch-in, so
+// that it behaves as task-local rather than thread-local state, and the
+// runtime switches to the default state while it runs inference, LLVM codegen
+// or finalizers. Only the control bits are preserved, so we can mask off the others.
+// The libc fegetenv/fesetenv routines are avoided for this purpose: they go through the
+// microcoded fnstenv/fldenv instructions on x86 and alone cost about as much as a task
+// switch, whereas accessing the control registers directly costs a few nanoseconds.
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+static inline uint64_t jl_fpctrl_get(void) JL_NOTSAFEPOINT
+{
+    uint32_t mxcsr;
+    uint16_t x87cw;
+    __asm__ volatile ("stmxcsr %0\n\tfnstcw %1" : "=m"(mxcsr), "=m"(x87cw));
+    // bits 0-5 of mxcsr are the exception status flags, so we can mask those off
+    return ((uint64_t)x87cw << 32) | (mxcsr & ~(uint32_t)0x3f);
+}
+static inline void jl_fpctrl_set(uint64_t fpctrl) JL_NOTSAFEPOINT
+{
+    uint32_t mxcsr = (uint32_t)fpctrl;
+    uint16_t x87cw = (uint16_t)(fpctrl >> 32);
+    __asm__ volatile ("ldmxcsr %0\n\tfldcw %1" :: "m"(mxcsr), "m"(x87cw));
+}
+// the architectural reset state: round to nearest, all exceptions masked,
+// no flush-to-zero or denormals-are-zero, x87 extended precision (`fninit`).
+// The Windows C runtime starts threads at 53-bit x87 precision (0x27f)
+// instead; the extended setting is kept here since mingw `long double` is the
+// 80-bit type and expects it.
+#define JL_FPCTRL_DEFAULT (((uint64_t)0x37f << 32) | 0x1f80)
+#elif defined(_CPU_AARCH64_)
+static inline uint64_t jl_fpctrl_get(void) JL_NOTSAFEPOINT
+{
+    uint64_t fpcr;
+    __asm__ volatile ("mrs %0, fpcr" : "=r"(fpcr));
+    return fpcr;
+}
+static inline void jl_fpctrl_set(uint64_t fpcr) JL_NOTSAFEPOINT
+{
+    __asm__ volatile ("msr fpcr, %0" :: "r"(fpcr));
+}
+// the architectural reset state: round to nearest, no traps, no flush-to-zero,
+// no default NaN
+#define JL_FPCTRL_DEFAULT ((uint64_t)0)
+// `mrs fpcr` is 1 cycle while `msr fpcr` is 11 cycles on Apple Firestorm and
+// may flush the pipeline when the value changes on Cortex cores, so a restore
+// compares first
+#define JL_FPCTRL_GUARDED_RESTORE
+#elif defined(_CPU_ARM_)
+// FPSCR: bits 8-26 are control (exception trap enables, Len/Stride, FZ16,
+// RMode, FZ, DN, AHP); bits 0-7 (cumulative exception flags), bit 27 (QC, the
+// cumulative saturation flag) and bits 28-31 (NZCV) are status
+static inline uint64_t jl_fpctrl_get(void) JL_NOTSAFEPOINT
+{
+    uint32_t fpscr;
+    __asm__ volatile ("vmrs %0, fpscr" : "=r"(fpscr));
+    return fpscr & 0x07ffff00u;
+}
+static inline void jl_fpctrl_set(uint64_t fpctrl) JL_NOTSAFEPOINT
+{
+    uint32_t fpscr = (uint32_t)fpctrl;
+    __asm__ volatile ("vmsr fpscr, %0" :: "r"(fpscr));
+}
+// the architectural reset state: round to nearest, no traps, no flush-to-zero
+#define JL_FPCTRL_DEFAULT ((uint64_t)0)
+#elif defined(_CPU_RISCV64_)
+// only the rounding mode (frm) is control state: fflags are status, and the
+// architecture has no exception trap enables
+static inline uint64_t jl_fpctrl_get(void) JL_NOTSAFEPOINT
+{
+    uint64_t frm;
+    __asm__ volatile ("csrr %0, frm" : "=r"(frm));
+    return frm;
+}
+static inline void jl_fpctrl_set(uint64_t frm) JL_NOTSAFEPOINT
+{
+    __asm__ volatile ("csrw frm, %0" :: "r"(frm));
+}
+// round to nearest, ties to even
+#define JL_FPCTRL_DEFAULT ((uint64_t)0)
+#elif defined(_CPU_PPC64_)
+// FPSCR: the low byte holds the binary control bits (RN, NI and the
+// VE/OE/UE/ZE/XE exception enables) and bits 32-34 of the 64-bit register
+// hold DRN, the decimal rounding mode; everything else is status (sticky
+// exception bits and FPRF).
+static inline uint64_t jl_fpctrl_get(void) JL_NOTSAFEPOINT
+{
+    uint64_t fpscr;
+    __asm__ volatile ("mffs %0" : "=f"(fpscr));
+    return fpscr & (0xffull | (0x7ull << 32));
+}
+static inline void jl_fpctrl_set(uint64_t fpscr) JL_NOTSAFEPOINT
+{
+    __asm__ volatile ("mtfsf 255, %0, 1, 0" :: "f"(fpscr));
+}
+// the architectural reset state: round to nearest, no exception enables
+#define JL_FPCTRL_DEFAULT ((uint64_t)0)
+#else
+// generic fallback through the libc environment, which carries the status
+// flags as well and must fit in the task field
+#include <fenv.h>
+static_assert(sizeof(fenv_t) <= sizeof(uint64_t), "fenv_t does not fit in the fpctrl task field; add a port above");
+static inline uint64_t jl_fpctrl_get(void) JL_NOTSAFEPOINT
+{
+    fenv_t env;
+    uint64_t fpctrl = 0;
+    fegetenv(&env);
+    memcpy(&fpctrl, &env, sizeof(env));
+    return fpctrl;
+}
+static inline void jl_fpctrl_set(uint64_t fpctrl) JL_NOTSAFEPOINT
+{
+    fenv_t env;
+    memcpy(&env, &fpctrl, sizeof(env));
+    fesetenv(&env);
+}
+static inline void jl_fpctrl_set_default(void) JL_NOTSAFEPOINT
+{
+    fesetenv(FE_DFL_ENV);
+}
+#endif
+
+#ifdef JL_FPCTRL_DEFAULT
+static inline void jl_fpctrl_set_default(void) JL_NOTSAFEPOINT
+{
+    jl_fpctrl_set(JL_FPCTRL_DEFAULT);
+}
+#endif
+
+// Restore a previously saved control state.
+//
+// Whether to compare with the current state first depends on the relative cost of the read
+// and the write. For example, On x86 it is not guarded: the costs are inverted between
+// Intel and AMD (per uops.info), with `stmxcsr` a 15-cycle microcoded instruction and
+// `ldmxcsr` 1-2 cycles on AMD Zen, versus 1 cycle and 3-6 cycles on Intel, so a guard would
+// cost about 5 ns per switch on Zen to save at most 1-2 ns on Intel, and the write costs
+// the same whether or not the value changes. Architectures where the read is cheap and the
+// write is the expensive one define `JL_FPCTRL_GUARDED_RESTORE` instead.
+static inline void jl_fpctrl_restore(uint64_t fpctrl) JL_NOTSAFEPOINT
+{
+#ifdef JL_FPCTRL_GUARDED_RESTORE
+    if (jl_fpctrl_get() == fpctrl)
+        return;
+#endif
+    jl_fpctrl_set(fpctrl);
+}
+
+// Runtime code that enters Julia internals or LLVM (type inference, codegen and the JIT,
+// finalizers) must run under the default control state. Otherwise an exception unmasked by
+// the user (`feenableexcept`) traps inside the compiler (#63570), a non-default rounding
+// mode changes what inference constant-folds, and LLVM's own floating-point heuristics
+// (e.g. spill weights) see different values. This mirrors the errno handling at the
+// inference and finalizer sites.
+static inline uint64_t jl_fpctrl_enter_default(void) JL_NOTSAFEPOINT
+{
+    uint64_t saved = jl_fpctrl_get();
+    jl_fpctrl_set_default();
+    return saved;
+}
+
 void jl_init_tasks(void) JL_GC_DISABLED JL_NOTSAFEPOINT;
 void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo) JL_NOTSAFEPOINT;
 jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi) JL_CANSAFEPOINT;

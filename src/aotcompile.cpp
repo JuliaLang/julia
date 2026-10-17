@@ -1644,6 +1644,7 @@ static void emit_bitcode(Module &M, TargetMachine &TM, SmallVectorImpl<char> &bu
 
 static void emit_native(Module &M, TargetMachine &TM, SmallVectorImpl<char> &buf, bool asm_)
 {
+    jl_fpctrl_default_scope fpctrl_scope;
     raw_svector_ostream OS(buf);
     legacy::PassManager emitter;
     addTargetPasses(&emitter, TM.getTargetTriple(), TM.getTargetIRAnalysis());

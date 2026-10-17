@@ -2190,6 +2190,9 @@ struct jl_varinfo_t {
 namespace {
 class JL_GC_TRACKED_TYPE jl_codectx_t {
 public:
+    // first member, so that all IR emission runs under the default
+    // floating-point control state
+    jl_fpctrl_default_scope fpctrl_scope;
     IRBuilder<> builder;
     jl_codegen_output_t &emission_context;
     Function *f = NULL;
