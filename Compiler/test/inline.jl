@@ -1999,6 +1999,7 @@ let i::Int, continue_::Bool
     @test findfirst(isinvoke(:func_mul_int), ir.stmts.stmt) === nothing
     @test (i = findfirst(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.stmt)) !== nothing
     lins = Compiler.IRShow.buildLineInfoNode(ir.debuginfo, nothing, i)
+    filter!(lin -> lin.method !== Symbol("macro expansion"), lins)
     @test (continue_ = length(lins) == 2) # :multi_inlining1 -> :func_mul_int
     if continue_
         def1 = lins[1].method
