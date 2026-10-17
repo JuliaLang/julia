@@ -137,6 +137,7 @@ function String(s::SubString{String})
 end
 
 ncodeunits(s::SubString) = s.ncodeunits
+eltype(::Type{SubString{T}}) where {T} = eltype(T) # As iterating yields, such as `AnnotatedChar`s
 codeunit(s::SubString) = codeunit(s.string)::CodeunitType
 length(s::SubString) = length(s.string, s.offset+1, s.offset+s.ncodeunits)
 # nothrow: SubString invariants guarantee 0 ≤ offset and offset+ncodeunits ≤ ncodeunits(string),
@@ -204,6 +205,7 @@ hash(data::SubString{String}, h::UInt) =
     GC.@preserve data hash_bytes(pointer(data), sizeof(data), UInt64(h), HASH_SECRET) % UInt
 
 _isannotated(::SubString{T}) where {T} = _isannotated(T)
+_isannotated(::Type{SubString{T}}) where {T} = _isannotated(T)
 
 string(a::String)            = String(a)
 string(a::SubString{String}) = String(a)

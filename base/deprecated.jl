@@ -747,4 +747,68 @@ end
     @noinline tan_domain_error(x) = throw_finite_domainerror(:tan, x)
 end
 
+# Annotations with labels, from before the type of a value said what it is (#60527)
+
+# The kind of annotation a label stands for: a type of value, or by default the label itself, as
+# the key of a `Pair{Symbol, Any}`. StyledStrings gives `:face` and `:link` their types.
+labelled_kind(::Val{label}) where {label} = label
+
+# The value a labelled annotation stands for, which a package can give for its own labels: by
+# default its value when it is of the label's kind, and otherwise `label => value`. Every labelled
+# form but deletion reads its values here.
+function labelled_value(label::Symbol, value)
+    depwarn("annotations with a label are deprecated; give the value alone, whose type says what it is", :labelled_value)
+    labelled_value(Val(label), value)
+end
+function labelled_value(::Val{label}, value) where {label}
+    kind = labelled_kind(Val(label))
+    if kind isa Type && value isa kind value else Pair{Symbol, Any}(label, value) end
+end
+
+# A string reads labelled annotations as it reads each annotation, in `AnnotatedString{S}`
+
+function AnnotatedChar(c::AbstractChar, annots::Vector{<:Union{Tuple{Symbol, Any}, NamedTuple{(:label, :value)}}})
+    isempty(annots) && return AnnotatedChar(c, Any[])
+    AnnotatedChar(c, [labelled_value(label, value) for (label, value) in annots])
+end
+AnnotatedChar(c::AnnotatedChar, annots::Vector{<:Union{Tuple{Symbol, Any}, NamedTuple{(:label, :value)}}}) =
+    AnnotatedChar(c, AnnotatedChar(c.char, annots).annotations)
+
+function _annotate!(annlist::Vector{<:RegionAnnotation}, region::UnitRange{Int}, label::Symbol, value)
+    if isnothing(value)
+        kind = labelled_kind(Val(label))
+        deleteat!(annlist, findall(annlist) do annot
+            annot.region == region &&
+                if kind isa Type annot.value isa kind else annot.value isa Pair{Symbol} && first(annot.value) === kind end
+        end)
+    else
+        _annotate!(annlist, region, labelled_value(label, value))
+    end
+end
+
+"""
+    annotate!(str, [range::UnitRange{Int}], label::Symbol, nothing)
+
+Remove the annotations over exactly `range` of the kind that `label` stands for: `Face`s for
+`:face` and `Link`s for `:link`, with StyledStrings, and otherwise `label => value` pairs. With
+a value other than `nothing`, this labelled form is deprecated, and annotates with the value
+when it is of that kind, or else with `label => value`.
+"""
+annotate!(s::AnnotatedString, range::UnitRange{Int}, label::Symbol, val) =
+    (_annotate!(s.annotations, range, label, val); s)
+
+annotate!(ss::AnnotatedString, label::Symbol, val) =
+    annotate!(ss, firstindex(ss):lastindex(ss), label, val)
+
+annotate!(s::SubString{<:AnnotatedString}, range::UnitRange{Int}, label::Symbol, val) =
+    (annotate!(s.string, s.offset .+ (range), label, val); s)
+
+annotate!(s::SubString{<:AnnotatedString}, label::Symbol, val) =
+    (annotate!(s.string, s.offset .+ (1:s.ncodeunits), label, val); s)
+
+annotate!(io::AnnotatedIOBuffer, range::UnitRange{Int}, label::Symbol, @nospecialize(val::Any)) =
+    (_annotate!(io.annotations, range, label, val); io)
+
+annotate!(c::AnnotatedChar, label::Symbol, value) = annotate!(c, labelled_value(label, value))
+
 # END 1.14 deprecations

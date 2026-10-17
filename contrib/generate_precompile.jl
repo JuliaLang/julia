@@ -35,7 +35,7 @@ precompile(Tuple{typeof(Base.reseteof), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.Terminals.width), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.Terminals.height), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.write), Base.Terminals.TTYTerminal, Array{UInt8, 1}})
-precompile(Tuple{typeof(Base.isempty), Base.AnnotatedString{String}})
+precompile(Tuple{typeof(Base.isempty), Base.AnnotatedString{String, Any}})
 # The owner-carrying write paths (String/Array) call _unsafe_write_owned
 # directly, so the workload session does not compile the raw-pointer
 # unsafe_write entry points on its own; interactive startup still reaches

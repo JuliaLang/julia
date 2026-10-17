@@ -376,7 +376,7 @@ function savefile(term::Base.Terminals.TTYTerminal, content::AbstractString)
     out = term.out_stream
     nlines = count('\n', content) + 1
     print(out, S"\e[1G\e[2K{grey,bold:history>} {bold,emphasis:save file: }")
-    filename = try
+    filename::String = try
         readline(term.in_stream)
     catch err
         if err isa InterruptException

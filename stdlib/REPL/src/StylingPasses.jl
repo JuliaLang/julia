@@ -1,16 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Each pass takes the input string and returns an AnnotatedString with styling annotations
+# Each pass takes the input string and returns a `StyledString` with styling annotations
 
 module StylingPasses
 
 using StyledStrings
-using StyledStrings: Face
+using StyledStrings: Face, StyledValue
 using JuliaSyntaxHighlighting
 import Base: AnnotatedString, annotate!, annotations, JuliaSyntax
 
 export StylingPass, StylingContext, SyntaxHighlightPass, RegionHighlightPass,
        EnclosingParenHighlightPass, apply_styling_passes, merge_annotations
+
+const StyledString = AnnotatedString{String, StyledValue}
 
 # Context information passed to all styling passes
 struct StylingContext
@@ -24,13 +26,13 @@ StylingContext(cursor_pos::Int) = StylingContext(cursor_pos, 0, 0)
 abstract type StylingPass end
 
 function merge_annotations(annotated_strings::Vector{<:AnnotatedString})
-    isempty(annotated_strings) && return AnnotatedString("")
+    isempty(annotated_strings) && return StyledString("")
 
     result = AnnotatedString(annotated_strings[1])
 
-    for source in annotated_strings
+    for source in Iterators.drop(annotated_strings, 1)
         for ann in annotations(source)
-            annotate!(result, ann.region, ann.label, ann.value)
+            annotate!(result, ann.region, ann.value)
         end
     end
 
@@ -38,12 +40,12 @@ function merge_annotations(annotated_strings::Vector{<:AnnotatedString})
 end
 
 function apply_style(pass::StylingPass, input::String, ast, context::StylingContext)
-    return pass(input, ast, context)::AnnotatedString{String}
+    return pass(input, ast, context)::StyledString
 end
 
 function apply_styling_passes(input::String, passes::Vector{StylingPass}, context::StylingContext)
     if isempty(passes)
-        return AnnotatedString(input)
+        return StyledString(input)
     end
 
     # Parse once and share AST across all passes
@@ -61,7 +63,7 @@ function (::SyntaxHighlightPass)(input::String, ast, ::StylingContext)
         return JuliaSyntaxHighlighting.highlight(input, ast)
     catch e
         @error "Error in SyntaxHighlightPass" exception=(e, catch_backtrace()) maxlog=1
-        return AnnotatedString(input)
+        return StyledString(input)
     end
 end
 
@@ -69,13 +71,13 @@ end
 struct RegionHighlightPass <: StylingPass end
 
 function (::RegionHighlightPass)(input::String, ::Any, context::StylingContext)
-    result = AnnotatedString(input)
+    result = StyledString(input)
 
     if context.region_start > 0 && context.region_stop >= context.region_start
         # Add inverse face to the region
         # Region positions are 1-based byte positions
         region_range = context.region_start:context.region_stop
-        annotate!(result, region_range, :face, Face(inverse=true))
+        annotate!(result, region_range, Face(inverse=true))
     end
 
     return result
@@ -89,7 +91,7 @@ end
 EnclosingParenHighlightPass() = EnclosingParenHighlightPass(Face(weight=:bold, underline=true))
 
 function (pass::EnclosingParenHighlightPass)(input::String, ast, context::StylingContext)
-    result = AnnotatedString(input)
+    result = StyledString(input)
 
     if isempty(input)
         return result
@@ -99,8 +101,8 @@ function (pass::EnclosingParenHighlightPass)(input::String, ast, context::Stylin
         paren_pairs = find_enclosing_parens(input, ast, context.cursor_pos)
 
         for (open_pos, close_pos) in paren_pairs
-            annotate!(result, open_pos:open_pos, :face, pass.face)
-            annotate!(result, close_pos:close_pos, :face, pass.face)
+            annotate!(result, open_pos:open_pos, pass.face)
+            annotate!(result, close_pos:close_pos, pass.face)
         end
     catch e
         @error "Error in EnclosingParenHighlightPass" exception=(e, catch_backtrace()) maxlog=1
