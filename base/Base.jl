@@ -337,7 +337,7 @@ include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
 JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
 
 include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
-JuliaLowering.activate!(false; freeze_world_age=false)
+JuliaLowering.activate!(true; freeze_world_age=false)
 
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")
