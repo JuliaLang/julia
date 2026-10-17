@@ -950,12 +950,11 @@ end
 catch exc
     sprint(showerror, exc)
 end == """
-LoadError: MacroExpansionError while expanding @oldstyle_error in module Main.macro_test:
+MacroExpansionError while expanding @oldstyle_error in module Main.macro_test:
 @oldstyle_error
 └─────────────┘ ── Error expanding macro
 Caused by:
-Some error in old style macro
-in expression starting at string:1"""
+Some error in old style macro"""
 
 # Old-style macros returning non-Expr values
 fl_eval(test_mod, :(
@@ -982,8 +981,8 @@ try
     """)
     @test false
 catch exc
-    @test exc isa LoadError
-    mexc = exc.error.err
+    @test exc isa MacroExpansionError
+    mexc = exc.err
     @test mexc isa MethodError
     @test mexc.args isa Tuple{JuliaLowering.MacroContext, SyntaxTree, SyntaxTree}
 end
@@ -1004,7 +1003,7 @@ end
         sprint(showerror, exc, context=:module=>test_mod)
     end
     @test startswith(err, """
-    LoadError: MacroExpansionError while expanding @sig_mismatch in module Main.macro_test:
+    MacroExpansionError while expanding @sig_mismatch in module Main.macro_test:
     @sig_mismatch(1, 2, 3, 4)
     └───────────────────────┘ ── Error expanding macro
     Caused by:
