@@ -1360,3 +1360,17 @@ end
     ir = get_llvm(f_srettest, Tuple{Float32}, true, true, true)
     @test occursin(r"sret\([^)]+\) align \d+", ir)
 end
+
+# Indexing a SimpleVector is a load, not a call to the `_svec_ref` builtin
+@testset "inline _svec_ref" begin
+    svec_ref_test(v::Core.SimpleVector, i::Int) = v[i]
+    ir = get_llvm(svec_ref_test, Tuple{Core.SimpleVector, Int})
+    @test !occursin("jl_f__svec_ref", ir)
+    @test !occursin("box_int64", ir)
+    v = Core.svec(1, "a", :b)
+    @test svec_ref_test(v, 1) === 1
+    @test svec_ref_test(v, 3) === :b
+    @test_throws BoundsError(v, 0) svec_ref_test(v, 0)
+    @test_throws BoundsError(v, 4) svec_ref_test(v, 4)
+    @test_throws BoundsError(Core.svec(), 1) svec_ref_test(Core.svec(), 1)
+end
