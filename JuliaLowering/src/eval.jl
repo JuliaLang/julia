@@ -802,6 +802,10 @@ function _to_lowered_expr(ex::SyntaxTree)
         for e in children(ex)
             push!(ret.args, _to_lowered_expr(e))
         end
+        # hack: protect the interpreter on 32-bit
+        length(ret.args) > 520000 &&
+            throw(LoweringError(
+                @mknode(ex; children=Syntax[]), "expression too large"))
         return ret
     end
 end
