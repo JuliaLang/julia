@@ -296,9 +296,12 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     # Note that we expand in `tls_world_age()` (see Core.GeneratedFunctionStub)
     world = Base.tls_world_age()
 
-    # Lower the generated code in the lowering world
-    return invoke_in_lowering_world(_lower_generated_code, g, source, sc,
-                                   __module__, world, ex0)
+    return try
+        invoke_in_lowering_world(_lower_generated_code, g, source, sc,
+                                 __module__, world, ex0)
+    catch exc
+        rethrow(to_compatible_exception(exc))
+    end
 end
 
 function _lower_generated_code(g::GeneratedFunctionStub, source::Method,

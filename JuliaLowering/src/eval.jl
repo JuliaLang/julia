@@ -844,22 +844,36 @@ end
     if !(ex isa SyntaxTree)
         ex = expr_to_est(ex)
     end
-    return _lower_and_eval(mod, ex, soft_scope)
+    return _eval(mod, lower_init(ex), false, soft_scope)
 end
 
-function _lower_and_eval(mod::Module, st::SyntaxTree,
-                         soft_scope::Union{Nothing,Bool})
-    iter = lower_init(st)
-    return _eval(mod, iter; soft_scope)
+# TODO: Consumers expect LoadError from macros and ErrorException from lowering,
+# but better printing could be done if we were to change this.
+function to_compatible_exception(@nospecialize(exc))
+    if exc isa LoweringError && !exc.internal
+        ErrorException(string("syntax: ", sprint(showerror, exc)))
+    elseif exc isa MacroExpansionError
+        loc = _macrocall_expr_location(exc.context.macrocall)
+        lnn = loc isa MacroSource ? loc.lno : loc
+        file = lnn.file isa Symbol && lnn.file !== :var"" ? String(lnn.file) : "<macrocall>"
+        LoadError(file, lnn.line, to_compatible_exception(exc.err))
+    else
+        exc
+    end
 end
 
-function _eval(mod::Module, iter::LoweringIterator; soft_scope::Union{Nothing,Bool}=nothing)
+function _eval(mod::Module, iter::LoweringIterator,
+               error_compat::Bool, soft_scope::Union{Nothing,Bool})
     modules = Module[mod]
     result = nothing
     while true
-        thunk = invoke_in_lowering_world(
-            ()->lower_step(iter, modules[end],
-                           Base.get_world_counter(); soft_scope))::Core.SimpleVector
+        thunk = try
+            invoke_in_lowering_world(
+                ()->lower_step(iter, modules[end],
+                               Base.get_world_counter(); soft_scope))::Core.SimpleVector
+        catch exc
+            error_compat ? rethrow(to_compatible_exception(exc)) : rethrow()
+        end
         type = thunk[1]::Symbol
         if type == :done
             break

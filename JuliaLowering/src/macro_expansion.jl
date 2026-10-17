@@ -239,9 +239,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
                 # rather than any old-style macro methods which might exist
                 exc = MethodError(macfunc, (mctx, raw_args...,), ctx.world)
             end
-            rethrow(LoadError(
-                string(macro_lnn.file), macro_lnn.line,
-                MacroExpansionError(mctx, st, "Error expanding macro", exc)))
+            rethrow(MacroExpansionError(mctx, st, "Error expanding macro", exc))
         end
         st_out = expr_to_est(st_out, macro_lnn)
     end
