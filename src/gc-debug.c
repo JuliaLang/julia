@@ -113,13 +113,10 @@ static void gc_clear_mark_page(jl_gc_pagemeta_t *pg, int bits)
 
 static void gc_clear_mark_outer(int bits)
 {
-    for (int i = 0; i < gc_n_threads; i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[i];
-        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->gc_tls.page_metadata_allocd.bottom);
-        while (pg != NULL) {
-            gc_clear_mark_page(pg, bits);
-            pg = pg->next;
-        }
+    gc_page_iterator_t it = {0};
+    jl_gc_pagemeta_t *pg;
+    while ((pg = gc_next_page(&it)) != NULL) {
+        gc_clear_mark_page(pg, bits);
     }
 }
 // set all mark bits to bits
@@ -352,14 +349,10 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
 
 static void gc_verify_tags_pagestack(void)
 {
-    for (int i = 0; i < gc_n_threads; i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[i];
-        jl_gc_page_stack_t *pgstk = &ptls2->gc_tls.page_metadata_allocd;
-        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&pgstk->bottom);
-        while (pg != NULL) {
-            gc_verify_tags_page(pg);
-            pg = pg->next;
-        }
+    gc_page_iterator_t it = {0};
+    jl_gc_pagemeta_t *pg;
+    while ((pg = gc_next_page(&it)) != NULL) {
+        gc_verify_tags_page(pg);
     }
 }
 
@@ -934,49 +927,46 @@ void gc_stats_all_pool(void)
 {
     gc_memprofile_stat_t stat[JL_GC_N_POOLS];
     memset(stat, 0, sizeof(stat));
-    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-        if (ptls2 == NULL) {
-            continue;
-        }
-        jl_gc_page_stack_t *pgstk = &ptls2->gc_tls.page_metadata_allocd;
-        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&pgstk->bottom);
-        while (pg != NULL) {
-            assert(gc_alloc_map_is_set(pg->data));
-            int pool_n = pg->pool_n;
+    gc_page_iterator_t it = {0};
+    jl_gc_pagemeta_t *pg;
+    while ((pg = gc_next_page(&it)) != NULL) {
+        assert(gc_alloc_map_is_set(pg->data));
+        int pool_n = pg->pool_n;
+        char *data = pg->data;
+        // compute the start of the data area in this page
+        jl_taggedvalue_t *v0 = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
+        // compute the limit of valid data in this page
+        char *lim = data + GC_PAGE_SZ - pg->osize;
+        char *lim_newpages = data + GC_PAGE_SZ;
+        // a page waiting to be adopted may still name a thread that has exited
+        jl_ptls_t ptls2 = gc_all_tls_states[pg->thread_n];
+        if (ptls2 != NULL) {
             jl_gc_pool_t *p = &ptls2->gc_tls.heap.norm_pools[pool_n];
-            char *data = pg->data;
-            // compute the start of the data area in this page
-            jl_taggedvalue_t *v0 = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
-            // compute the limit of valid data in this page
-            char *lim = data + GC_PAGE_SZ - pg->osize;
-            char *lim_newpages = data + GC_PAGE_SZ;
             if (gc_page_data((char*)p->newpages - 1) == data) {
                 lim_newpages = (char*)p->newpages;
             }
-            char *v = (char*)v0;
-            gc_memprofile_stat_t *stat_n = &stat[pool_n];
-            while (v <= lim) {
-                uint8_t bits = ((jl_taggedvalue_t*)v)->bits.gc;
-                if (!gc_marked(bits) || (char*)v >= lim_newpages) {
-                    stat_n->nfree++;
+        }
+        char *v = (char*)v0;
+        gc_memprofile_stat_t *stat_n = &stat[pool_n];
+        while (v <= lim) {
+            uint8_t bits = ((jl_taggedvalue_t*)v)->bits.gc;
+            if (!gc_marked(bits) || (char*)v >= lim_newpages) {
+                stat_n->nfree++;
+            }
+            else {
+                if (gc_old(bits)) {
+                    assert(bits == GC_OLD_MARKED);
+                    stat_n->nused_old++;
+                    stat_n->nbytes_used_old += pg->osize;
                 }
                 else {
-                    if (gc_old(bits)) {
-                        assert(bits == GC_OLD_MARKED);
-                        stat_n->nused_old++;
-                        stat_n->nbytes_used_old += pg->osize;
-                    }
-                    else {
-                        stat_n->nused++;
-                        stat_n->nbytes_used += pg->osize;
-                    }
+                    stat_n->nused++;
+                    stat_n->nbytes_used += pg->osize;
                 }
-                v = v + pg->osize;
             }
-            stat_n->npgs++;
-            pg = pg->next;
+            v = v + pg->osize;
         }
+        stat_n->npgs++;
     }
     for (int i = 0; i < JL_GC_N_POOLS; i++) {
         jl_ptls_t ptls = jl_current_task->ptls;
@@ -1079,14 +1069,11 @@ static void gc_count_pool_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 
 static void gc_count_pool_pagetable(void)
 {
-    for (int i = 0; i < gc_n_threads; i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[i];
-        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->gc_tls.page_metadata_allocd.bottom);
-        while (pg != NULL) {
-            if (gc_alloc_map_is_set(pg->data)) {
-                gc_count_pool_page(pg);
-            }
-            pg = pg->next;
+    gc_page_iterator_t it = {0};
+    jl_gc_pagemeta_t *pg;
+    while ((pg = gc_next_page(&it)) != NULL) {
+        if (gc_alloc_map_is_set(pg->data)) {
+            gc_count_pool_page(pg);
         }
     }
 }

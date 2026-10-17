@@ -54,3 +54,17 @@ JL_DLLEXPORT int nsweep_counter()
 {
     return nsweeps;
 }
+
+// Stay in C during GC, and let Julia resolve the stock-GC-only debug helper.
+static void (*count_pool)(void);
+
+static void count_pool_roots(int full)
+{
+    count_pool();
+}
+
+JL_DLLEXPORT void set_count_pool(void (*f)(void))
+{
+    jl_gc_set_cb_root_scanner(count_pool_roots, f != NULL);
+    count_pool = f;
+}

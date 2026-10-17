@@ -598,6 +598,16 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT;
 NOINLINE void jl_gc_free_page(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT;
 
 // GC debug
+// Zero-initialize before use. Requires stopped mutators, stable page lists, and
+// the GC's gc_n_threads/gc_all_tls_states snapshot. Includes unadopted partial
+// pages, but not empty pages in the free pools.
+typedef struct {
+    int stack_idx;
+    jl_gc_pagemeta_t *next;
+} gc_page_iterator_t;
+
+jl_gc_pagemeta_t *gc_next_page(gc_page_iterator_t *it) JL_NOTSAFEPOINT;
+
 #if defined(GC_TIME) || defined(GC_FINAL_STATS)
 void gc_settime_premark_end(void);
 void gc_settime_postmark_end(void);
