@@ -3301,7 +3301,7 @@ end
     @test f() == 1
     ex = Expr(:vcat)
     ex.args = fill!(Vector{Any}(undef, 600000), 1)
-    @test_throws ErrorException("syntax: expression too large") eval(ex)
+    @test_throws "expression too large" eval(ex)
 end
 
 # issue 25678
