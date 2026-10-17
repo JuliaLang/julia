@@ -1045,6 +1045,24 @@ end
     @test _bitcast_trigger(3) === Ptr{Nothing}(0)
 end
 
+@testset "bitcast to/from GC address space (#63896)" begin
+    # bitcast to (or from) a pointer in a special GC address space
+    # (tracked/derived/callee-rooted/loaded, i.e. 10-13) used to emit invalid IR
+    # (an inttoptr into a non-integral address space) and abort compilation. It now
+    # errors gracefully. A round trip back to an integer is used so the special
+    # pointer is never a function return value (returning a bare derived/loaded
+    # pointer is a separate concern).
+    for AS in (10, 11, 12, 13)
+        f = @eval x -> Core.bitcast(UInt, Core.bitcast(Core.LLVMPtr{UInt8,$AS}, x))
+        @test_throws "GC address space" f(UInt(1))
+    end
+    # ordinary address spaces are unaffected
+    for AS in (0, 1, 2, 3)
+        f = @eval x -> Core.bitcast(UInt, Core.bitcast(Core.LLVMPtr{UInt8,$AS}, x))
+        @test f(UInt(42)) === UInt(42)
+    end
+end
+
 # Test unsafe_store! on union values with inline_roots (split representation)
 @testset "pointerset union with inline_roots" begin
     struct PointersetMixedGC

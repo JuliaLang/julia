@@ -585,6 +585,14 @@ static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, ArrayR
     return mark_julia_type(ctx, r, true, (jl_value_t*)jl_any_type);
 }
 
+// The special GC address spaces (tracked/derived/callee-rooted/loaded) hold pointers
+// that must refer to real GC-tracked values; they cannot be produced from or coerced to
+// an integer via inttoptr/ptrtoint.
+static inline bool is_special_gc_addrspace(unsigned as)
+{
+    return AddressSpace::FirstSpecial <= as && as <= AddressSpace::LastSpecial;
+}
+
 // put a bits type tag on some value (despite the name, this doesn't necessarily actually change anything about the value however)
 static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) JL_CANSAFEPOINT
 {
@@ -622,6 +630,20 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) 
     }
     if (jl_datatype_nbits((jl_datatype_t*)v.typ) != nbits) {
         emit_error(ctx, "bitcast: argument bitsize does not match bitsize of target type");
+        return jl_cgval_t();
+    }
+
+    // The special GC address spaces (tracked/derived/callee-rooted/loaded) hold pointers
+    // that must refer to a real GC-tracked value. They cannot be fabricated from, or coerced
+    // to, an integer, so reject such a bitcast gracefully instead of emitting invalid IR
+    // (an inttoptr/ptrtoint into a special space, or a stored "decayed" pointer) that aborts
+    // compilation. See <https://github.com/JuliaLang/julia/issues/63896>.
+    if (llvmt->isPointerTy() && is_special_gc_addrspace(llvmt->getPointerAddressSpace())) {
+        emit_error(ctx, "bitcast: cannot convert to a pointer in a GC address space");
+        return jl_cgval_t();
+    }
+    if (vxt->isPointerTy() && is_special_gc_addrspace(vxt->getPointerAddressSpace())) {
+        emit_error(ctx, "bitcast: cannot convert from a pointer in a GC address space");
         return jl_cgval_t();
     }
 
