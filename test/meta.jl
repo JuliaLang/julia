@@ -259,10 +259,10 @@ ci = code_lowered(g, Tuple{Val{true}})[1]
 
 @testset "inlining with isdefined" begin
     isdefined_slot(x) = @isdefined(x)
-    ci = code_lowered(isdefined_slot, Tuple{Int})[1]
-    @test Meta.partially_inline!(copy(ci.code), [], Tuple{typeof(isdefined_slot), Int},
+    code = Any[Expr(:isdefined, Core.SlotNumber(2)), Core.ReturnNode(Core.SSAValue(1))]
+    @test Meta.partially_inline!(copy(code), [], Tuple{typeof(isdefined_slot), Int},
                                  [], 0, 0, :propagate)[1] == Expr(:isdefined, Core.SlotNumber(2))
-    @test Meta.partially_inline!(copy(ci.code), [isdefined_slot, 1], Tuple{typeof(isdefined_slot), Int},
+    @test Meta.partially_inline!(copy(code), [isdefined_slot, 1], Tuple{typeof(isdefined_slot), Int},
                                  [], 0, 0, :propagate)[1] == true
 
     isdefined_sparam(::T) where {T} = @isdefined(T)
