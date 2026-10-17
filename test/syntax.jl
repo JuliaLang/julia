@@ -18,8 +18,9 @@ macro test_parseerror(str, msg)
     return ex
 end
 
+# `msg` is flisp's diagnostic; JuliaLowering's are tested separately in JuliaLowering
 macro test_loweringerror(ex, msg, opt=nothing)
-    code = :(@test Meta.lower(@__MODULE__, $(esc(ex))) == Expr(:error, $(esc(msg))))
+    code = :(@test Meta.isexpr(Meta.lower(@__MODULE__, $(esc(ex))), :error))
     code.args[2] = __source__
     if opt === :broken
         code.args[1] = :var"@test_broken"
@@ -1167,7 +1168,7 @@ let ex = Meta.parse("maximum(@elapsed sleep(1) for k = 1:10)")
 end
 
 # issue #23173
-@test_throws ErrorException("invalid module path") eval(:(import $(:.)))
+@test_throws ErrorException eval(:(import $(:.)))
 
 # issue #23234
 let
@@ -1244,7 +1245,7 @@ M24289.@m24289
 @test Meta.parse("2e3_\"x\"") == Expr(:call, :*, 2e3, Expr(:macrocall, Symbol("@__str"), LineNumberNode(1, :none), "x"))
 
 # misplaced top-level expressions
-@test_throws ErrorException("syntax: \"\$\" expression outside quote") Core.eval(@__MODULE__, Meta.parse("x->\$x"))
+@test_throws "syntax:" Core.eval(@__MODULE__, Meta.parse("x->\$x"))
 @test_loweringerror(Expr(:$, :x), "\"\$\" expression outside quote")
 @test_loweringerror(:(x->import Foo), "\"import\" expression not at top level")
 @test_loweringerror(:(x->module Foo end), "\"module\" expression not at top level")
@@ -1628,7 +1629,7 @@ end
 @test_throws MethodError f27268()([""])
 @test_throws MethodError f27268_2()([""])
 
-@test_throws ErrorException("syntax: local variable x cannot be used in closure declaration") @eval begin
+@test_throws "syntax:" @eval begin
     function g27268()
         x = 1
         h(::Val{x}) = 1
@@ -2013,8 +2014,8 @@ let f = f30772(1.0), g = f()
     @test_throws MethodError g(1)
 end
 
-@test_throws ErrorException("syntax: malformed \"using\" statement")  eval(Expr(:using, :X))
-@test_throws ErrorException("syntax: malformed \"import\" statement") eval(Expr(:import, :X))
+@test_throws "syntax:" eval(Expr(:using, :X))
+@test_throws "syntax:" eval(Expr(:import, :X))
 
 # eval'ing :const exprs
 eval(Expr(:const, :_var_30877))
@@ -2867,8 +2868,8 @@ end
     i = :i
     @test remove_linenums!(:(for outer $i = 1:3; end)) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), Expr(:block))
     @test remove_linenums!(:(for outer = 1:3; end)) == Expr(:for, Expr(:(=), :outer, :(1:3)), Expr(:block))
-    # TIL that this is possible
-    for outer $ i = 1:3
+    # TIL that this is possible (in flisp, where it defines a local function `$`)
+    @test_throws "syntax:" for outer $ i = 1:3
         @test 1 $ 2 in 1:3
     end
 
@@ -2935,7 +2936,7 @@ end
     @test Meta.isexpr(Meta.@lower(begin a, b..., c... = 1, 2, 3 end), :error)
 
     @test_throws BoundsError begin x, y, z... = 1:1 end
-    @test_throws BoundsError begin x, y, _, z... = 1, 2 end
+    @test_throws "syntax:" @eval begin x, y, _, z... = 1, 2 end
 
     car((a, d...)) = a
     cdr((a, d...)) = d
@@ -3129,8 +3130,8 @@ end
 # flisp conversion for quoted SSAValues
 @test eval(:(x = $(QuoteNode(Core.SSAValue(1))))) == Core.SSAValue(1)
 @test eval(:(x = $(QuoteNode(Core.SlotNumber(1))))) == Core.SlotNumber(1)
-@test_throws ErrorException("syntax: SSAValue objects should not occur in an AST") eval(:(x = $(Core.SSAValue(1))))
-@test_throws ErrorException("syntax: SlotNumber objects should not occur in an AST") eval(:(x = $(Core.SlotNumber(1))))
+@test_throws "objects should not occur in an AST" eval(:(x = $(Core.SSAValue(1))))
+@test_throws "objects should not occur in an AST" eval(:(x = $(Core.SlotNumber(1))))
 
 # juxtaposition of radical symbols (#40094)
 @test Meta.parse("2√3") == Expr(:call, :*, 2, Expr(:call, :√, 3))
@@ -3627,7 +3628,7 @@ demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
     @test z == 5
 
     @test_throws ArgumentError begin x, y..., z = 1:1 end
-    @test_throws BoundsError begin x, y, _..., z = 1, 2 end
+    @test_throws "syntax:" @eval begin x, y, _..., z = 1, 2 end
 
     last((a..., b)) = b
     front((a..., b)) = a
@@ -3773,12 +3774,12 @@ end,quote
 end)
     let exc = try eval(expr); catch exc; exc end
         @test isa(exc, ErrorException)
-        @test startswith(exc.msg, "syntax: invalid \"...\" in non-final positional argument default value")
+        @test startswith(exc.msg, "syntax:")
     end
 end
 
 # Test that bad lowering does not segfault (ref #50518)
-@test_throws ErrorException("syntax: Attempted to use slot marked unused") @eval function funused50518(::Float64)
+@test_throws "syntax:" @eval function funused50518(::Float64)
     $(Symbol("#unused#"))
 end
 
@@ -3991,7 +3992,7 @@ module ImplicitCurlies
         ImplicitCurly4{T} = Ref{T}
     end
     @test !@isdefined(ImplicitCurly4)
-    @test_throws "syntax: `global const` declaration not allowed inside function" Core.eval(@__MODULE__, :(function implicit5()
+    @test_throws "syntax:" Core.eval(@__MODULE__, :(function implicit5()
         global ImplicitCurly5
         ImplicitCurly5{T} = Ref{T}
     end))
@@ -4242,7 +4243,7 @@ begin
 end
 @test f45494() === (0,)
 
-@test_throws "\"esc(...)\" used outside of macro expansion" eval(esc(:(const x=1)))
+@test_throws "syntax:" eval(esc(:(const x=1)))
 
 # Inner function declaration world age
 function create_inner_f_no_methods()
@@ -4339,7 +4340,7 @@ end
 # #57334
 let
     x57334 = Ref(1)
-    @test_throws "syntax: cannot declare \"x57334[]\" `const`" Core.eval(@__MODULE__, :(const x57334[] = 1))
+    @test_throws "syntax:" Core.eval(@__MODULE__, :(const x57334[] = 1))
 end
 
 # #57470
@@ -4347,7 +4348,7 @@ module M57470
 using ..Test
 
 @test_throws(
-    "syntax: `global const` declaration not allowed inside function",
+    "syntax:",
     Core.eval(@__MODULE__, :(function f57470()
                                  const global x57470 = 1
                              end)))
@@ -4389,12 +4390,12 @@ const a57470, f57470(x), T57470{U} = [1, 2, Int]
 @test T57470 === Int
 
 module M57470_sub end
-@test_throws("syntax: cannot declare \"M57470_sub.x\" `const`",
+@test_throws("syntax:",
              Core.eval(@__MODULE__, :(const M57470_sub.x = 1)))
 
 # # `const global` should not trample previously declared `local`
 @test_throws(
-    "syntax: variable \"v57470\" declared both local and global",
+    "syntax:",
     Core.eval(@__MODULE__, :(let
                                  local v57470
                                  const global v57470 = 1
@@ -4667,12 +4668,12 @@ end
     @testset "Error upon misuse" begin
         @gensym B
         @test_throws(
-            "\"@__FUNCTION__\" can only be used inside a function",
+            "syntax:",
             @eval(module $B; @__FUNCTION__; end)
         )
 
         @test_throws(
-            "\"@__FUNCTION__\" not allowed inside comprehension or generator",
+            "syntax:",
             @eval([(@__FUNCTION__) for _ in 1:10])
         )
     end
@@ -4793,5 +4794,5 @@ end
     :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(;b=3))
     :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(1;b=3))
     ]
-    @test_throws "invalid assignment location" Core.eval(@__MODULE__, ex)
+    @test_throws "syntax:" Core.eval(@__MODULE__, ex)
 end
