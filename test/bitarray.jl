@@ -6,6 +6,11 @@ using Random, Test, LinearAlgebra # Ideally, these tests should not depend on Li
 isdefined(Main, :SizedArrays) || @eval Main include("testhelpers/SizedArrays.jl")
 using .Main.SizedArrays
 
+struct ConvertsToBool
+    b::Bool
+end
+Base.convert(::Type{Bool}, x::ConvertsToBool) = x.b
+
 tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(x->tc(x...), [zip(r1,r2)...])
 tc(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) where {N} = true
 tc(r1::SubArray{Bool,N1,BitArray{N2}}, r2::SubArray{Bool,N1,<:Union{BitArray{N2},Array{Bool,N2}}}) where {N1,N2} = true
@@ -623,6 +628,14 @@ timesofar("constructors")
         @test_throws DimensionMismatch b[BitVector([1, 1, 1, 0])] = PermutedDimsArray(Array{Bool}(undef, 2, 0), (2, 1))
         e = falses(1, 2, 1, 0)
         @test setindex!(e, view(zeros(3, 3, 3), 2:1, 2:2, 2:2), falses(1, 2, 1, 0)) === e
+    end
+
+    @testset "stored values convert with convert(Bool, x)" begin
+        x = [ConvertsToBool(true), ConvertsToBool(false)]
+        @test setindex!(falses(3), x, 2:3) == [false, true, false]
+        @test fill!(view(falses(3), 2:3), x[1]) == [true, true]
+        @test (B = falses(2, 2); fill!(view(B, 1:2, 2), x[1]); B) == [false true; false true]
+        @test (b = falses(3); splice!(b, 2:3, Tuple(x)); b) == [false, true, false]
     end
 end
 

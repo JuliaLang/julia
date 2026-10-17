@@ -1440,7 +1440,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
     cind = pos_s
     lastind = pos_d + numbits - 1
     @inbounds while bind ≤ lastind
-        unsafe_bitsetindex!(Bc, Bool(C[cind]), bind)
+        unsafe_bitsetindex!(Bc, convert(Bool, C[cind]), bind)
         bind += 1
         cind += 1
     end
@@ -1576,7 +1576,7 @@ function fill!(V::SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{In
     I0 = V.indices[1]
     l0 = length(I0)
     l0 == 0 && return V
-    fill_chunks!(B.chunks, Bool(x), first(I0), l0)
+    fill_chunks!(B.chunks, convert(Bool, x), first(I0), l0)
     return V
 end
 
@@ -1587,7 +1587,7 @@ fill!(V::SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}, Varar
         I0::AbstractUnitRange{Int}, I::Union{Int,AbstractUnitRange{Int}}...)
     N = length(I)
     quote
-        y = Bool(x)
+        y = convert(Bool, x)
         idxlens = @ncall $N index_lengths I0 d->I[d]
 
         f0 = indexoffset(I0)+1
