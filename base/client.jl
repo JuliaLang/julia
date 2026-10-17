@@ -664,7 +664,7 @@ end
 
 function init_frontend()
     JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
-    if get_bool_env("JULIA_USE_FLISP_LOWERING", true) === true
+    if get_bool_env("JULIA_USE_FLISP_LOWERING", false) === true
         JuliaLowering.activate!(false)
     else
         JuliaLowering.activate!(true; freeze_world_age=true)
