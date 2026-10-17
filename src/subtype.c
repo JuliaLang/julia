@@ -203,6 +203,7 @@ typedef struct JL_GC_TRACKED_TYPE jl_stenv_t {
                               // UnionAll var can only alias one already in `vars`;
                               // -1 until computed from `inputs` (see `may_capture_free_var`)
     jl_value_t *inputs[2];    // the top-level inputs (rooted by the caller)
+    jl_typeenv_t *intersecting; // (var, type) pairs whose bound intersection is in progress
     // Used to represent the length difference between 2 vararg.
     // intersect(X, Y) ==> X = Y + Loffset
     int Loffset;
@@ -1201,7 +1202,7 @@ static int var_outside(jl_stenv_t *e, jl_tvar_t *x, jl_tvar_t *y)
 
 static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int depth) JL_CANSAFEPOINT;
 
-static int reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e);
+static int reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e) JL_NOTSAFEPOINT;
 
 static int singleton_typevar_subtype(jl_tvar_t *v, jl_value_t *a) JL_NOTSAFEPOINT
 {
@@ -1258,7 +1259,7 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     if (e->intersection) {
         jl_value_t *ub = intersect_aside(a, bb->ub, e, bb->depth0);
         JL_GC_PUSH1(&ub);
-        if (ub != (jl_value_t*)b && (!jl_is_typevar(ub) || !reachable_var(ub, b, e)))
+        if (ub != (jl_value_t*)b && !reachable_var(ub, b, e))
             bb->ub = ub;
         JL_GC_POP();
     }
@@ -3510,6 +3511,7 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     e->ignore_lb_required = 0;
     e->closed_inputs = 0;
     e->inputs[0] = e->inputs[1] = NULL;
+    e->intersecting = NULL;
     e->Loffset = 0;
     e->Lunions.depth = 0;      e->Runions.depth = 0;
     e->Lunions.more = 0;       e->Runions.more = 0;
@@ -4441,15 +4443,8 @@ static int try_subtype_in_env_nonexistential(jl_value_t *a, jl_value_t *b, jl_st
 
 static void set_bound(jl_value_t **bound, jl_value_t *val, jl_tvar_t *v, jl_stenv_t *e) JL_NOTSAFEPOINT
 {
-    if (in_union(val, (jl_value_t*)v))
+    if (reachable_var(val, v, e))
         return;
-    jl_varbinding_t *btemp = e->vars;
-    while (btemp != NULL) {
-        if ((btemp->lb == (jl_value_t*)v || btemp->ub == (jl_value_t*)v) &&
-            in_union(val, (jl_value_t*)btemp->var))
-            return;
-        btemp = btemp->prev;
-    }
     *bound = val;
 }
 
@@ -4498,7 +4493,7 @@ static int subtype_in_env_nonexistential(jl_value_t *x, jl_value_t *y, jl_stenv_
 }
 
 // See if var y is reachable from x via bounds; used to avoid cycles.
-static int _reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e, jl_typeenv_t *log)
+static int _reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e, jl_typeenv_t *log) JL_NOTSAFEPOINT
 {
     if (in_union(x, (jl_value_t*)y))
         return 1;
@@ -4523,7 +4518,7 @@ static int _reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e, jl_typeenv
     return _reachable_var(ub, y, e, &newlog) || _reachable_var(lb, y, e, &newlog);
 }
 
-static int reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e)
+static int reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e) JL_NOTSAFEPOINT
 {
     return _reachable_var(x, y, e, NULL);
 }
@@ -4561,6 +4556,10 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     }
     if (reachable_var(bb->lb, b, e) || reachable_var(bb->ub, b, e))
         return a;
+    for (jl_typeenv_t *f = e->intersecting; f != NULL; f = f->prev) {
+        if (f->var == b && obviously_egal(f->val, a))
+            return a;
+    }
     if (bb->lb == bb->ub && jl_is_typevar(bb->lb))
         return R ? intersect(a, bb->lb, e, param) : intersect(bb->lb, a, e, param);
     if (!jl_is_type(a) && !jl_is_typevar(a))
@@ -4616,7 +4615,10 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         JL_GC_POP();
         return ub;
     }
+    jl_typeenv_t frame = { b, a, e->intersecting };
+    e->intersecting = &frame;
     jl_value_t *ub = R ? intersect_aside(a, bb->ub, e, bb->depth0) : intersect_aside(bb->ub, a, e, bb->depth0);
+    e->intersecting = frame.prev;
     if (ub == jl_bottom_type)
         return jl_bottom_type;
     if (e->triangular && ((e->triangular - 1) != R)) {
