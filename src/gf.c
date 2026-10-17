@@ -3688,6 +3688,29 @@ struct invalidate_mt_env {
     jl_array_t *shadowed;
     size_t max_world;
 };
+
+// Whether a new method that shadows the specialization behind a dispatch cache entry can
+// change what that entry returns.
+static int mt_cache_entry_shadowed(jl_typemap_entry_t *oldentry, jl_method_instance_t *mi, jl_value_t *newentry_sig) JL_CANSAFEPOINT
+{
+    if ((jl_value_t*)oldentry->sig != mi->specTypes) {
+        // the entry may point to a widened MethodInstance, in which case it is worthwhile to check if the new method
+        // actually has any meaningful intersection with the old one
+        if (jl_has_empty_intersection((jl_value_t*)oldentry->sig, newentry_sig))
+            return 0;
+    }
+    if (oldentry->guardsigs != jl_emptysvec) {
+        // similarly, if it already matches an existing guardsigs, this is already safe to keep
+        size_t i, l;
+        for (i = 0, l = jl_svec_len(oldentry->guardsigs); i < l; i++) {
+            // see corresponding code in jl_typemap_entry_assoc_exact
+            if (jl_subtype(newentry_sig, jl_svecref(oldentry->guardsigs, i)))
+                return 0;
+        }
+    }
+    return 1;
+}
+
 static int invalidate_mt_cache(jl_typemap_entry_t *oldentry, void *closure0) JL_CANSAFEPOINT
 {
     struct invalidate_mt_env *env = (struct invalidate_mt_env*)closure0;
@@ -3703,22 +3726,8 @@ static int invalidate_mt_cache(jl_typemap_entry_t *oldentry, void *closure0) JL_
                 break;
             }
         }
-        if (intersects && (jl_value_t*)oldentry->sig != mi->specTypes) {
-            // the entry may point to a widened MethodInstance, in which case it is worthwhile to check if the new method
-            // actually has any meaningful intersection with the old one
-            intersects = !jl_has_empty_intersection((jl_value_t*)oldentry->sig, env->newentry_sig);
-        }
-        if (intersects && oldentry->guardsigs != jl_emptysvec) {
-            // similarly, if it already matches an existing guardsigs, this is already safe to keep
-            size_t i, l;
-            for (i = 0, l = jl_svec_len(oldentry->guardsigs); i < l; i++) {
-                // see corresponding code in jl_typemap_entry_assoc_exact
-                if (jl_subtype(env->newentry_sig, jl_svecref(oldentry->guardsigs, i))) {
-                    intersects = 0;
-                    break;
-                }
-            }
-        }
+        if (intersects)
+            intersects = mt_cache_entry_shadowed(oldentry, mi, env->newentry_sig);
         if (intersects) {
             if (_jl_debug_method_invalidation) {
                 jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)mi);
@@ -3731,6 +3740,77 @@ static int invalidate_mt_cache(jl_typemap_entry_t *oldentry, void *closure0) JL_
         }
     }
     return 1;
+}
+
+// End the validity of every entry in the leafcache at `max_world`, and empty it.
+static void invalidate_leafcache(jl_methcache_t *mc, size_t max_world) JL_NOTSAFEPOINT
+{
+    jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
+    size_t i, l = leafcache->length;
+    for (i = 1; i < l; i++) { // entries are dense from slot 1 (slot 0 is the index)
+        jl_value_t *entry = jl_genericmemory_ptr_ref(leafcache, i);
+        if (entry) {
+            while (entry != jl_nothing) {
+                jl_atomic_store_relaxed(&((jl_typemap_entry_t*)entry)->max_world, max_world);
+                entry = (jl_value_t*)jl_atomic_load_relaxed(&((jl_typemap_entry_t*)entry)->next);
+            }
+        }
+    }
+    jl_gc_write_atomic(mc, mc->leafcache, jl_genericmemory_t, (jl_genericmemory_t*)jl_an_empty_memory_any, relaxed);
+}
+
+// The (shadowed MethodInstance, new signature) pairs recorded by methods activated
+// together, with the pairs of each MethodInstance chained for lookup.
+struct invalidate_mt_deferred_env {
+    jl_array_t *pairs;
+    htable_t heads; // MethodInstance => 2 + index of its last pair
+    size_t *prev;   // pair index => 2 + index of the previous pair for the same MethodInstance, or 0
+    size_t max_world;
+};
+
+static int invalidate_mt_cache_deferred(jl_typemap_entry_t *oldentry, void *closure0) JL_CANSAFEPOINT
+{
+    struct invalidate_mt_deferred_env *env = (struct invalidate_mt_deferred_env*)closure0;
+    if (jl_atomic_load_relaxed(&oldentry->max_world) != ~(size_t)0)
+        return 1;
+    jl_method_instance_t *mi = oldentry->func.linfo;
+    void *h = ptrhash_get(&env->heads, mi);
+    if (h == HT_NOTFOUND)
+        return 1;
+    for (size_t k = (size_t)h; k != 0; k = env->prev[k - 2]) {
+        jl_value_t *newentry_sig = jl_array_ptr_ref(env->pairs, 2 * (k - 2) + 1);
+        if (mt_cache_entry_shadowed(oldentry, mi, newentry_sig)) {
+            jl_atomic_store_relaxed(&oldentry->max_world, env->max_world);
+            break;
+        }
+    }
+    return 1;
+}
+
+// Apply the dispatch cache invalidations that methods activated together in one world
+// recorded instead of applying, in a single pass over the cache rather than one per method.
+void jl_method_table_invalidate_deferred(jl_array_t *deferred, size_t max_world) JL_CANSAFEPOINT
+{
+    size_t i, n = jl_array_nrows(deferred) / 2;
+    if (n == 0)
+        return;
+    struct invalidate_mt_deferred_env env;
+    env.pairs = deferred;
+    env.max_world = max_world;
+    env.prev = (size_t*)malloc_s(n * sizeof(size_t));
+    htable_new(&env.heads, n);
+    for (i = 0; i < n; i++) {
+        void **bp = ptrhash_bp(&env.heads, jl_array_ptr_ref(deferred, 2 * i));
+        env.prev[i] = *bp == HT_NOTFOUND ? 0 : (size_t)*bp;
+        *bp = (void*)(i + 2); // offset so that neither 0 nor the not-found marker is a valid index
+    }
+    jl_methcache_t *mc = jl_method_table->cache;
+    JL_LOCK(&mc->writelock);
+    jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), invalidate_mt_cache_deferred, (void*)&env);
+    invalidate_leafcache(mc, max_world);
+    JL_UNLOCK(&mc->writelock);
+    htable_free(&env.heads);
+    free(env.prev);
 }
 
 struct disable_mt_env {
@@ -4249,10 +4329,10 @@ static int check_fully_ambiguous(jl_method_t *m, jl_value_t *ti, jl_array_t *t, 
 
 void jl_method_table_activate(jl_typemap_entry_t *newentry)
 {
-    jl_method_table_activate_with_cert(newentry, NULL);
+    jl_method_table_activate_with_cert(newentry, NULL, NULL);
 }
 
-void jl_method_table_activate_with_cert(jl_typemap_entry_t *newentry, jl_svec_t *cert) JL_CANSAFEPOINT
+void jl_method_table_activate_with_cert(jl_typemap_entry_t *newentry, jl_svec_t *cert, jl_array_t *deferred) JL_CANSAFEPOINT
 {
     JL_TIMING(ADD_METHOD, ADD_METHOD);
     jl_method_t *method = newentry->func.method;
@@ -4661,7 +4741,13 @@ void jl_method_table_activate_with_cert(jl_typemap_entry_t *newentry, jl_svec_t 
                                                          tnrecord, /* foreign_only */ replaying};
     invalidate_missing_backedges(&typename_env);
     invalidated |= typename_env.invalidated;
-    if (oldmi && jl_array_nrows(oldmi)) {
+    if (oldmi && jl_array_nrows(oldmi) && deferred) {
+        for (size_t i = 0, l = jl_array_nrows(oldmi); i < l; i++) {
+            jl_array_ptr_1d_push(deferred, jl_array_ptr_ref(oldmi, i));
+            jl_array_ptr_1d_push(deferred, type);
+        }
+    }
+    else if (oldmi && jl_array_nrows(oldmi)) {
         // drop leafcache and search mc->cache and drop anything that might overlap with the new method
         // this is very cheap, so we don't mind being very conservative at over-approximating this
         struct invalidate_mt_env mt_cache_env;
@@ -4670,18 +4756,7 @@ void jl_method_table_activate_with_cert(jl_typemap_entry_t *newentry, jl_svec_t 
         mt_cache_env.newentry_sig = (jl_value_t*)newentry->sig;
 
         jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), invalidate_mt_cache, (void*)&mt_cache_env);
-        jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
-        size_t i, l = leafcache->length;
-        for (i = 1; i < l; i++) { // entries are dense from slot 1 (slot 0 is the index)
-            jl_value_t *entry = jl_genericmemory_ptr_ref(leafcache, i);
-            if (entry) {
-                while (entry != jl_nothing) {
-                    jl_atomic_store_relaxed(&((jl_typemap_entry_t*)entry)->max_world, max_world);
-                    entry = (jl_value_t*)jl_atomic_load_relaxed(&((jl_typemap_entry_t*)entry)->next);
-                }
-            }
-        }
-        jl_gc_write_atomic(mc, mc->leafcache, jl_genericmemory_t, (jl_genericmemory_t*)jl_an_empty_memory_any, relaxed);
+        invalidate_leafcache(mc, max_world);
     }
     JL_UNLOCK(&mc->writelock);
     if (invalidated && _jl_debug_method_invalidation) {

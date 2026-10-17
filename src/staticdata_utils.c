@@ -1026,6 +1026,10 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
             free(closure_bits);
             return;
         }
+        // These methods all activate in the same world, so their dispatch cache invalidations
+        // can be applied together afterwards. The invalidation log wants them per method.
+        jl_array_t *deferred = _jl_debug_method_invalidation ? NULL : jl_alloc_vec_any(0);
+        JL_GC_PUSH1(&deferred);
         // Images the precompile worker loaded after a method's activation were not
         // seen by its certificate's scan. They are dependencies here, so take them
         // out of the closure while that method activates: their methods and
@@ -1053,11 +1057,14 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
             }
             jl_atomic_store_release(&entry->func.method->primary_world, world);
             //uint64_t t0 = uv_hrtime();
-            jl_method_table_activate_with_cert(entry, cert == jl_nothing ? NULL : (jl_svec_t*)cert);
+            jl_method_table_activate_with_cert(entry, cert == jl_nothing ? NULL : (jl_svec_t*)cert, deferred);
             //jl_printf(JL_STDERR, "%f ", (double)(uv_hrtime() - t0) / 1e6);
             //jl_static_show(JL_STDERR, entry->func.value);
             //jl_printf(JL_STDERR, "\n");
         }
+        if (deferred)
+            jl_method_table_invalidate_deferred(deferred, world - 1);
+        JL_GC_POP();
     }
     stamp_remaining_methods(internal, world);
     jl_set_loading_closure_blobs(NULL, 0);

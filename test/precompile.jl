@@ -4427,6 +4427,68 @@ precompile_test_harness("Type{Union{}} inline field") do dir
     @test (@eval $TypeBottomField.X.t) === Union{}
 end
 
+# A package image activates all its methods in one world, so the dispatch caches they
+# shadow are invalidated together. Each method must still invalidate its own entries.
+precompile_test_harness("dispatch cache entries shadowed by one image") do dir
+    write(joinpath(dir, "ShadowedBase.jl"),
+          """
+          module ShadowedBase
+              f(@nospecialize(x)) = :old
+              g(x) = :old
+              h(x::Integer) = :old
+              # their cache entry for other arguments is guarded against AbstractString
+              j(@nospecialize(x)) = :old
+              j(::AbstractString) = :str
+              k(@nospecialize(x)) = :old
+              k(::AbstractString) = :str
+          end
+          """)
+    write(joinpath(dir, "ShadowingMethods.jl"),
+          """
+          module ShadowingMethods
+              using ShadowedBase
+              ShadowedBase.f(::Int) = :new_int
+              ShadowedBase.f(::Float64) = :new_float
+              ShadowedBase.g(::Signed) = :new_signed
+              ShadowedBase.g(::Int8) = :new_int8
+              ShadowedBase.h(::UInt8) = :new_uint8
+              # the guard covers one of the two new methods; the other must still
+              # invalidate, whichever of them is checked first
+              ShadowedBase.j(::Int) = :new_int
+              ShadowedBase.j(::String) = :new_string
+              ShadowedBase.k(::String) = :new_string
+              ShadowedBase.k(::Int) = :new_int
+          end
+          """)
+    @test Base.compilecache(Base.PkgId("ShadowedBase")) isa Tuple
+    @test Base.compilecache(Base.PkgId("ShadowingMethods")) isa Tuple
+    @eval using ShadowedBase
+    f, g, h, j, k = @eval (ShadowedBase.f, ShadowedBase.g, ShadowedBase.h, ShadowedBase.j, ShadowedBase.k)
+    # fill the dispatch caches
+    args = Any[1, 1.0, "s", Int8(1), Int16(1), 0x1, Int32(1)]
+    for x in args, fn in (f, g, j, k)
+        @test Base.invokelatest(fn, x) === (fn in (j, k) && x isa String ? :str : :old)
+    end
+    @test Base.invokelatest(h, 0x1) === :old
+    @test Base.invokelatest(h, 1) === :old
+    @eval using ShadowingMethods
+    @test Base.invokelatest(f, 1) === :new_int
+    @test Base.invokelatest(f, 1.0) === :new_float
+    @test Base.invokelatest(f, "s") === :old
+    @test Base.invokelatest(g, 1) === :new_signed
+    @test Base.invokelatest(g, Int8(1)) === :new_int8
+    @test Base.invokelatest(g, Int16(1)) === :new_signed
+    @test Base.invokelatest(g, 0x1) === :old
+    @test Base.invokelatest(g, 1.0) === :old
+    @test Base.invokelatest(h, 0x1) === :new_uint8
+    @test Base.invokelatest(h, 1) === :old
+    for fn in (j, k)
+        @test Base.invokelatest(fn, 1) === :new_int
+        @test Base.invokelatest(fn, :s) === :old
+        @test Base.invokelatest(fn, "s") === :new_string
+    end
+end
+
 # Cache rejection reasons and how they are reported when loading triggers precompilation:
 # caches left behind by another version of Julia collapse into one generic message, while
 # actionable reasons (e.g. changed source) are reported by name without version noise.
