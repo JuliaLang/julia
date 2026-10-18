@@ -227,6 +227,11 @@ timesofar("promotions")
         @test resize!(b1, 340; first=true)[end-300+1:end] == b2
         b2 = copy(b1)
         @test resize!(b1, 404; first=true)[end-340+1:end] == b2
+
+        b1 = BitVector(ones(32))
+        b2 = copy(b1)
+        resize!(b1, 63; first=true)
+        @test b1[32:63] == b2
     end
 
     @testset "sizeof (issue #7515)" begin
