@@ -405,3 +405,59 @@ arguments to that `gc_preserve_begin` will be kept live. Note that the
 `gc_preserve_begin` still counts as a regular use of those values, so the
 standard lifetime semantics will ensure that the values will be kept alive
 before entering the preserve region.
+
+### Call-site attributes derived from inferred effects
+
+Codegen translates the callee's inferred effects (`CodeInstance.ipo_purity_bits`)
+into LLVM attributes on specsig call sites, so that LICM, GVN and DSE can use
+what inference already proved. The attributes are only ever added to the call
+site, never to the callee's declaration or definition, and the translation can be
+disabled with `JULIA_LLVM_ARGS=-julia-effects-attrs=0`.
+
+| Julia effect                                                  | LLVM attribute                                        |
+|:--------------------------------------------------------------|:------------------------------------------------------|
+| `:nothrow`                                                    | `nounwind`                                            |
+| `:terminates`                                                 | `mustprogress`                                        |
+| `:nothrow` + `:terminates`                                    | `willreturn`                                          |
+| `:consistent` + `:effect_free`                                | `memory(argmem: read)`                                |
+| `:consistent` + `:effect_free_if_inaccessiblememonly` + `:inaccessiblememonly` | `memory(argmem: read, inaccessiblemem: readwrite)` |
+| `CONSISTENT_IF_NOTRETURNED` instead of `:consistent`          | as above, plus `inaccessiblemem: readwrite`           |
+| `:notaskstate` (with any of the above)                        | `readnone` on the gcstack argument                    |
+
+Out-parameters (`sret`, `return_roots`, and the result buffer of the Union calling
+convention, which carries no `sret` attribute) are written by the callee and add
+`argmem: write`; the remaining pointer parameters of an `:effect_free` callee get
+`readonly`.
+
+`:consistent` is required for any memory claim because Julia's effects have no
+notion of synchronization. An atomic load is `:effect_free`, so a callee that
+spin-waits on `@atomic x.done` looks like any other reader of mutable memory
+(`+e`, `?m`), but LLVM would hoist a readonly call out of the loop and forward
+loads across it, neither of which is legal across an acquire. `:consistent`
+(`ALWAYS_TRUE`) means the result cannot depend on mutable memory, so no atomic
+load can be involved; `CONSISTENT_IF_NOTRETURNED` is fine too, the identity of a
+fresh allocation being the only mutable input. For the same reason writers are
+never described: a release store is `(+c, ?e, ?m)` and must keep every preceding
+store above it. `CONSISTENT_IF_NOTRETURNED` callees additionally get
+`inaccessiblemem: readwrite`: GVN and EarlyCSE merge readonly calls with equal
+arguments, which must not happen for two fresh objects; the extra effect keeps
+load/store forwarding across the call but makes it neither mergeable nor
+hoistable.
+
+Every Julia call is a GC safepoint, and a safepoint reads and writes memory LLVM
+cannot see (GC metadata, the caller's GC frame once it exists, `WeakRef.value`,
+finalizers). The memory attributes above are therefore optimistic, and three
+invariants make that safe:
+
+- Every such call site carries the string attribute `"julia.safepoint"`.
+  `LateLowerGCFrame` treats tagged calls as safepoints regardless of their
+  memory effects, so rooting never depends on the attributes having been
+  stripped first, and it strips the memory attributes (and the gcstack
+  `readnone`) before any post-lowering pass could use them against the
+  now-explicit GC frame stores.
+- The write barrier intrinsics read their argument memory, which pins a store
+  above its own barrier; a store can therefore not be sunk past a later
+  safepoint that unqueues the parent object from the remembered set.
+- `WeakRef.value` loads and finalizer side effects may be reordered across such
+  a call. Both are already permitted at the Julia level for `:effect_free`
+  callees.
