@@ -764,19 +764,20 @@ STATIC_INLINE int is_kind_or_anytype(jl_value_t *t) JL_NOTSAFEPOINT
     return jl_is_kind(t) || t == (jl_value_t*)jl_anytype_type;
 }
 
-// the kind `k` (or `AnyType`) spelled as the wrapper class of its tag,
-// `TypeEq{T0, k} where T0`, built once per process. `T0` is a fresh variable
-// rather than `Type`'s own, which may already be bound (on the other side) in
-// the environment the result is compared in.
-static _Atomic(jl_value_t*) kind_class_wrappers[6] JL_GLOBALLY_ROOTED;
+// the kind `k` (one of the six, or `AnyType`) spelled as the wrapper class of
+// its tag, `TypeEq{T0, k} where T0`, built once per process. `T0` is a fresh
+// variable rather than `Type`'s own, which may already be bound (on the other
+// side) in the environment the result is compared in.
+static _Atomic(jl_value_t*) kind_class_wrappers[7] JL_GLOBALLY_ROOTED;
 static jl_value_t *kind_class_wrapper(jl_value_t *k) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED
 {
     int i = k == (jl_value_t*)jl_anytype_type ? 0 :
             k == (jl_value_t*)jl_datatype_type ? 1 :
             k == (jl_value_t*)jl_uniontype_type ? 2 :
             k == (jl_value_t*)jl_unionall_type ? 3 :
-            k == (jl_value_t*)jl_typeeq_type ? 4 : 5;
-    assert(i != 5 || k == (jl_value_t*)jl_typeegal_type);
+            k == (jl_value_t*)jl_typeeq_type ? 4 :
+            k == (jl_value_t*)jl_typeegal_type ? 5 : 6;
+    assert(i != 6 || k == (jl_value_t*)jl_typeofbottom_type);
     jl_value_t *w = jl_atomic_load_relaxed(&kind_class_wrappers[i]);
     if (w == NULL) {
         jl_tvar_t *T0 = jl_new_typevar(jl_symbol("T"), jl_bottom_type, (jl_value_t*)jl_any_type);
@@ -2606,7 +2607,7 @@ int jl_typeeq_is_bottom_class(jl_value_t *T) JL_NOTSAFEPOINT
 // is `k` a legal kind parameter of a `TypeEq{T, K}`: a kind datatype or `AnyType`
 int jl_is_kindset(jl_value_t *k) JL_NOTSAFEPOINT
 {
-    return k == (jl_value_t*)jl_anytype_type || jl_is_kind(k);
+    return is_kind_or_anytype(k);
 }
 
 // `a <: b` for kind parameters: the lattice is flat, six kinds below `AnyType`

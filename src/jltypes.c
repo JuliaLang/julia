@@ -1149,8 +1149,7 @@ static int typekeyvalue_eq(jl_datatype_t *tt, jl_value_t *key1, jl_value_t **key
                 return 0;
             if (!(kj == tp0 || (jl_typeof(tp0) == jl_typeof(kj) && jl_types_equal(tp0, kj))))
                 return 0;
-            // (a `TypeVar` value is not a type, so it lies in no kind set)
-            if (!jl_is_kind(jl_typeof(kj)) || !jl_kind_le(jl_typeof(kj), jl_typeeq_K(tj)))
+            if (!jl_kind_le(jl_typeof(kj), jl_typeeq_K(tj)))
                 return 0;
         }
         else if (leaf && jl_is_typeegal(tj)) {

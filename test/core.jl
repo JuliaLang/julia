@@ -9530,3 +9530,24 @@ let A = Issue61347.A, S2 = Issue61347.S2
     @test isdefined(lazy, :super)
     @test getfield(lazy, :super) === supertype(lazy)
 end
+
+
+# the compilation signature and the cache matchers read the kind parameter of a
+# `TypeEq{X, K}` slot, never the tag of `X`'s own spelling: the `UnionAll`
+# spellings of `Tuple{Int}` are `Core.TypeEq{Tuple{Int}, UnionAll}` and must not
+# be compiled or matched as a `DataType`
+const kindslot_R = Ref{Any}(nothing)
+@noinline kindslot_g(x::Union{DataType,UnionAll}) = (kindslot_R[] = x isa DataType ? :dt : :ua; nothing)
+kindslot_h(x::Type{Tuple{Int}}) = x isa UnionAll ? kindslot_g(x) : nothing
+kindslot_k(::DataType) = :dt
+kindslot_k(::UnionAll) = :ua
+kindslot_h2(x::Type{Tuple{Int}}) = x isa UnionAll ? kindslot_k(x) : :notua
+let S2 = Tuple{S} where S<:Int # `== Tuple{Int}`, but a `UnionAll`
+    @test S2 == Tuple{Int} && S2 isa UnionAll
+    kindslot_h(Tuple{Int})
+    @test kindslot_R[] === nothing
+    kindslot_h(S2)
+    @test kindslot_R[] === :ua
+    @test kindslot_h2(Tuple{Int}) === :notua
+    @test kindslot_h2(S2) === :ua
+end

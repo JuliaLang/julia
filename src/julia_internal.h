@@ -1031,6 +1031,16 @@ JL_DLLEXPORT jl_value_t *jl_wrap_TypeEq(jl_value_t *t, jl_value_t *k) JL_CANSAFE
 int jl_is_kindset(jl_value_t *k) JL_NOTSAFEPOINT;
 int jl_kind_le(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT;
 jl_value_t *jl_kind_meet(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT JL_GLOBALLY_ROOTED;
+// the one type tag of the members of a `Type`-kind `t`: `typeof(X)` for a
+// `TypeEgal{X}` (its one member), the kind parameter of a `TypeEq{X, K}` with a
+// leaf `K`, and NULL for `K = AnyType`, whose members carry several tags (#33136)
+STATIC_INLINE jl_value_t *jl_some_Type_tag(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    if (jl_is_typeegal(t))
+        return jl_typeof(jl_typeegal_T(t));
+    jl_value_t *K = jl_typeeq_K(t);
+    return K == (jl_value_t*)jl_anytype_type ? NULL : K;
+}
 int jl_typeeq_is_bottom_class(jl_value_t *T) JL_NOTSAFEPOINT;
 int jl_typeeq_bottomable(jl_value_t *T) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_wrap_TypeEgal(jl_value_t *t) JL_CANSAFEPOINT;  // x -> TypeEgal{x} (egality, no free typevars)

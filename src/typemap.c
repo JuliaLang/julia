@@ -135,8 +135,11 @@ static int sig_match_by_type_leaf(jl_value_t **types, jl_tupletype_t *sig, size_
     for (i = 0; i < n; i++) {
         jl_value_t *decl = jl_tparam(sig, i);
         jl_value_t *a = types[i];
-        if (jl_is_some_Type(a)) // decl is not Type, because it wouldn't be leafsig
-            a = jl_typeof(jl_some_Type_T(a));
+        if (jl_is_some_Type(a)) { // decl is not Type, because it wouldn't be leafsig
+            a = jl_some_Type_tag(a); // the one tag of the members
+            if (a == NULL) // a `Type{X}` whose members straddle tags lies in no leaf
+                return 0;
+        }
         if (!jl_types_equal(a, decl))
             return 0;
     }
@@ -206,7 +209,9 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
         else {
             assert(jl_is_concrete_type(decl));
             if (jl_is_some_Type(a)) { // decl is not TypeEq/TypeEgal or AnyType, because it would be caught above, so it must be concrete
-                a = jl_typeof(jl_some_Type_T(a));
+                a = jl_some_Type_tag(a); // the one tag of the members
+                if (a == NULL) // a `Type{X}` whose members straddle tags lies in no concrete type
+                    return 0;
             }
             if (!jl_types_equal(a, decl))
                 return 0;

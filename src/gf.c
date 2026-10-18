@@ -1311,9 +1311,10 @@ static void jl_compilation_sig(
             // if the declared type was not Any or Union{Type, ...},
             // then the match must been with the kind (e.g. UnionAll or DataType)
             // and the result of matching the type signature
-            // needs to be restricted to the concrete type 'kind'
-            jl_value_t *kind = jl_typeof(jl_some_Type_T(elt));
-            if (!jl_has_free_typevars(decl_i) &&
+            // needs to be restricted to the concrete type 'kind' (the one tag
+            // of the members; a `Type{X}` whose members straddle tags has none)
+            jl_value_t *kind = jl_some_Type_tag(elt);
+            if (kind != NULL && !jl_has_free_typevars(decl_i) &&
                     jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
                 // if we can prove the match was against the kind (not a Type)
                 // it's simpler (and thus better) to put that cache instead
@@ -1633,12 +1634,8 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             // then the match must been with kind, such as UnionAll or DataType,
             // and the result of matching the type signature
             // needs to be corrected to the concrete type 'kind' (and not to Type)
-            jl_value_t *kind = jl_typeof(jl_some_Type_T(elt));
-            if (kind == jl_bottom_type) {
-                JL_GC_POP();
-                return 0; // Type{Union{}} gets normalized to typeof(Union{})
-            }
-            if (!jl_has_free_typevars(decl_i) &&
+            jl_value_t *kind = jl_some_Type_tag(elt);
+            if (kind != NULL && !jl_has_free_typevars(decl_i) &&
                     jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
                 JL_GC_POP();
                 return 0; // gets turned into a kind
@@ -1708,7 +1705,7 @@ static int concretesig_equal(jl_value_t *tt, jl_value_t *simplesig) JL_NOTSAFEPO
         jl_value_t *decl = sigs[i];
         jl_value_t *a = types[i];
         if (a != decl && decl != (jl_value_t*)jl_any_type) {
-            if (!(jl_is_some_Type(a) && jl_typeof(jl_some_Type_T(a)) == decl))
+            if (!(jl_is_some_Type(a) && jl_some_Type_tag(a) == decl))
                 return 0;
         }
     }
@@ -1817,10 +1814,11 @@ static jl_value_t *compute_simplett(jl_tupletype_t *cachett) JL_CANSAFEPOINT
         if (jl_is_vararg(elt)) {
         }
         else if (jl_is_some_Type(elt)) {
-            // TODO: if (!jl_is_singleton(elt)) ...
-            jl_value_t *kind = jl_typeof(jl_some_Type_T(elt));
+            // the one tag of the members, or nothing simple for a `Type{X}`
+            // whose members straddle tags
+            jl_value_t *kind = jl_some_Type_tag(elt);
             if (!newparams) newparams = jl_svec_copy(cachett->parameters);
-            jl_svecset(newparams, i, kind);
+            jl_svecset(newparams, i, kind ? kind : (jl_value_t*)jl_any_type);
         }
         else if (!jl_is_concrete_type(elt)) { // for example, jl_function_type or jl_tuple_type
             if (!newparams) newparams = jl_svec_copy(cachett->parameters);

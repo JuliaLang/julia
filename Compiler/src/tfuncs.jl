@@ -2329,14 +2329,11 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
                 params[i] = typeof(type_parameter(x))
             elseif isTypeEq(x)
                 anyinfo = true
-                xparam = type_parameter(x)
-                # an `==`-only type value has no pinned `typeof` (#61323), except
-                # `Type{Union{}}` whose only value is `Union{}`
-                if xparam === Bottom
-                    params[i] = typeof(xparam)
-                else
-                    params[i] = Type
-                end
+                # an `==`-only type value has no pinned `typeof` (#61323): its tag
+                # is known only to the kind parameter (`Type{Union{}}` stores its
+                # one tag, `TypeofBottom`)
+                K = type_kind(x)
+                params[i] = K === AnyType ? Type : K
             elseif iskindtype(x)
                 params[i] = x
             elseif !isvarargtype(x) && hasintersect(x, Type)

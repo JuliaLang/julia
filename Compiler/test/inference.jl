@@ -8545,6 +8545,19 @@ let h(x::Type{<:Vector}) = x isa DataType ? x : nothing
     @test Base.infer_return_type(happly3, (Core.TypeEgal{Int}, Core.TypeEgal{Int})) === Union{}
     @test Base.infer_return_type(happly3, (Core.TypeEgal{Int}, DataType)) === Union{Core.TypeEq, Core.TypeofBottom}
     @test happly3(Int, Core.TypeofBottom) === Union{}
+    # the compilation signature keeps the kind parameter of a `TypeEq{X, K}` slot
+    # rather than the tag of `X`'s own spelling (`Tuple{Int}` is a `DataType`)
+    hcsig(x::Union{DataType,UnionAll}) = x
+    let m = only(methods(hcsig))
+        @test Compiler.get_compileable_sig(m, Tuple{typeof(hcsig), Core.TypeEq{Tuple{Int}, UnionAll}}, Core.svec()) === Tuple{typeof(hcsig), UnionAll}
+        @test Compiler.get_compileable_sig(m, Tuple{typeof(hcsig), Core.TypeEq{Tuple{Int}, DataType}}, Core.svec()) === Tuple{typeof(hcsig), DataType}
+    end
+    # `tuple` of a kind-pinned type value has that kind as its element type
+    htup(x) = (x,)
+    @test Base.infer_return_type(htup, (Core.TypeEq{Int, DataType},)) <: Tuple{DataType}
+    @test Base.infer_return_type(htup, (Core.TypeEq{Int, UnionAll},)) <: Tuple{UnionAll}
+    @test Base.infer_return_type(htup, (Type{Int},)) <: Tuple{Type}
+    @test !(Base.infer_return_type(htup, (Type{Int},)) <: Tuple{DataType})
     @test Compiler.apply_type_nothrow(Compiler.fallback_lattice, Any[Core.Const(Core.TypeEq), Core.Const(Int), Core.Const(DataType)], Core.Const(Core.TypeEq{Int, DataType}))
     @test !Compiler.apply_type_nothrow(Compiler.fallback_lattice, Any[Core.Const(Core.TypeEq), Core.Const(Int), DataType], Core.TypeEq)
 end
