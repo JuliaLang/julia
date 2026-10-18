@@ -1600,15 +1600,27 @@ end
 end
 
 @testset "anonymous static parameters" begin
-    # `where _` declares a static parameter which can never be referenced
-    @test_warn r"declares type variable _" @test JL.include_string(
-        test_mod, "f_anon_sp(x) where _ = x; f_anon_sp(42)") == 42
-    @test_warn r"declares type variable _" @test JL.include_string(
-        test_mod, "f_anon_sp2(x::T) where {T, _} = (x, T); f_anon_sp2(1.5)") == (1.5, Float64)
+    # `where _` declares a static parameter which can never be referenced. In the
+    # old edition, it is mangled into an unused (but nameable) type variable for
+    # flisp compatibility (#60626), so the method definition warns.
+    @test_warn r"declares type variable _" @test jl_eval(
+        test_mod, "f_anon_sp(x) where _ = x; f_anon_sp(42)"; edition=JL_OLD_EDITION) == 42
+    @test_warn r"declares type variable _" @test jl_eval(
+        test_mod, "f_anon_sp2(x::T) where {T, _} = (x, T); f_anon_sp2(1.5)";
+        edition=JL_OLD_EDITION) == (1.5, Float64)
     @test_throws LoweringError jl_eval(
         test_mod, "f_anon_sp3(x) where {_, _} = x"; edition=JL_OLD_EDITION)
-    @test_throws LoweringError JL.include_string(
-        test_mod, "f_anon_sp3(x) where {_, _} = x")
+
+    # In the new edition, `_` static parameters are truly anonymous
+    @test_nowarn @test jl_eval(
+        test_mod, "f_anon_sp_new(x) where _ = x; f_anon_sp_new(42)";
+        edition=JL_NEW_EDITION) == 42
+    @test_nowarn @test jl_eval(
+        test_mod, "f_anon_sp2_new(x::T) where {T, _} = (x, T); f_anon_sp2_new(1.5)";
+        edition=JL_NEW_EDITION) == (1.5, Float64)
+    @test jl_eval(
+        test_mod, "f_anon_sp3_new(x) where {_, _} = x; f_anon_sp3_new(3)";
+        edition=JL_NEW_EDITION) == 3
 end
 
 @testset "first arg `curly`" begin
