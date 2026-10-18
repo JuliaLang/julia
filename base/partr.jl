@@ -181,6 +181,8 @@ function multiq_insert(task::Task, priority::UInt16)
     return true
 end
 
+yield_os_thread() = @static Sys.iswindows() ? ccall(:SwitchToThread, stdcall, Cint, ()) : ccall(:sched_yield, Cint, ())
+
 function multiq_deletemin()
     local rn1::UInt32
     local heap, task
@@ -230,6 +232,9 @@ function multiq_deletemin()
             if task_tid != Int16(-1)
                 ccall(:jl_wakeup_thread, Cint, (Int16,), task_tid)
             end
+            # Keep polling (the owner may release the task without waking
+            # anyone), but give up the CPU in case that thread needs it.
+            yield_os_thread()
             continue
         end
         break
