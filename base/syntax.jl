@@ -472,6 +472,31 @@ function sourceref(st::Syntax)
     src.source::Union{LineNumberNode, SourceRef}
 end
 
+"""
+The macrocall `st` without its arguments, for `SyntaxContext.unexpanded`.
+Provenance only needs the call's location and name; keeping the arguments would
+retain the whole unexpanded input (e.g. an entire module under `@doc`).
+"""
+function macrocall_stub(st::Syntax)
+    cs = st.children
+    stub_cs = cs === nothing || isempty(cs) ? cs : Syntax[_detach_source(cs[1])]
+    Syntax(st.head, stub_cs, st.value, sourceref(st), st.context, st.jl_source,
+           st.meta, st.mod, st.syntax_flags)
+end
+
+# Copy of `st` whose nodes point straight to their textref rather than to the
+# (possibly large) syntax they were transformed from
+function _detach_source(st::Syntax)
+    cs = st.children
+    Syntax(st.head, cs === nothing ? cs : Syntax[_detach_source(c) for c in cs],
+           st.value, sourceref(st), st.context, st.jl_source, st.meta, st.mod,
+           st.syntax_flags)
+end
+
+# Whether `st` is the macrocall that `stub` was made from
+is_stub_of(stub::Syntax, st::Syntax) = stub === st ||
+    (stub.context === st.context && stub.head === st.head && sourceref(stub) === sourceref(st))
+
 "The last macro expansion `st` was involved in, or nothing"
 function macro_prov(st::Syntax)
     msrc = st.context.unexpanded
@@ -516,7 +541,7 @@ end
 function _flattened_provenance(st::Syntax, out)
     msrc = macro_prov(st)
     # macro source === source means `st` is from the `msrc` macro body
-    !isnothing(msrc) && msrc != prov(st) &&
+    !isnothing(msrc) && !is_stub_of(msrc, prov(st)) &&
         _flattened_provenance(msrc, out)
     push!(out, prov_end(st))
     out

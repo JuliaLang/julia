@@ -17,7 +17,7 @@ using Base: ScopeLayer, SyntaxContext, SourceCode, SourceRef, Syntax,
     mapchildren, provenance, JL_NEW_EDITION, JL_OLD_EDITION, DEBUG_LOWERING,
     is_base_layer, base_layer, escape_layer, remove_scope, fill_context,
     syntax_module, edition, adopt_scope, assert_syntax, @mknode, macro_prov,
-    isa_lowering_ast_node, filename, source_line, first_linenode
+    isa_lowering_ast_node, filename, source_line, first_linenode, macrocall_stub
 
 using .JuliaSyntax: children, first_byte, highlight, is_leaf,
     last_byte, numchildren, source_location

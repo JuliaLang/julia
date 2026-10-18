@@ -269,7 +269,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
     # method was defined (may be different from `parentmodule(macfunc)`)
     mod_for_ast = macro_mi !== nothing ? macro_mi.def.module : parentmodule(macfunc)
     sc2 = SyntaxContext(
-        ScopeLayer(mod_for_ast, sc_in.layer), st,
+        ScopeLayer(mod_for_ast, sc_in.layer), macrocall_stub(st),
         (has_new_macro ? JL_NEW_EDITION : JL_OLD_EDITION), false)
     st_out2 = apply_expansion_layer(ctx, st_out, sc2, true, 0, 0)
     st_out3 = !ctx.recursive ? st_out2 : expand_forms_1(ctx, st_out2)
