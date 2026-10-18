@@ -814,9 +814,9 @@ function _resize_int!(B::BitVector, n::Int, first::Bool)
     if k1 > k0
         _growend!(Bc, k1 - k0)
         Bc[end] = UInt64(0)
-        if first
-            copy_chunks!(Bc, 1 + n - n0, Bc, 1, n0)
-        end
+    end
+    if first
+        copy_chunks!(Bc, 1 + n - n0, Bc, 1, n0)
     end
     B.len = n
     return B
