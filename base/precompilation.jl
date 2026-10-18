@@ -2698,7 +2698,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
             end
             if from_loading && single_requested_pkg && occursin(r"\b__precompile__\(\s*false\s*\)", read(sourcespec.path, String))
                 @lock s.print_lock begin
-                    Base.@logmsg s.logcalls "Disabled precompiling $(repr("text/plain", pkg)) since the text `__precompile__(false)` was found in file."
+                    Base.@logmsg s.logcalls "Disabled precompiling $(repr(MIME"text/plain"(), pkg)) since the text `__precompile__(false)` was found in file."
                 end
                 mark_completed_pkgid!(pkg)
                 @lock s.print_lock (s.n_done += 1)
@@ -2821,7 +2821,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                     return nothing
                                 end
                                 s.logcalls === CoreLogging.Debug && @lock s.print_lock begin
-                                    @debug "Precompiling $(repr("text/plain", pkg))"
+                                    @debug "Precompiling $(repr(MIME"text/plain"(), pkg))"
                                 end
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
