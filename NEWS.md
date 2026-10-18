@@ -79,6 +79,10 @@ Language changes
   ([#33136], [#62141]).
 * `Base.cconvert(Ptr{T}, v)` for a strided `SubArray` `v` now returns an internal wrapper around
   `cconvert(Ptr{T}, parent(v))` plus a byte offset, instead of returning `v` itself ([#60533]).
+* The `device`, `inode` and `rdev` fields of `StatStruct` are now `UInt64` rather than `UInt`, and
+  hold the full values reported by the OS. Previously they were truncated to 32 bits, so distinct
+  files could compare as the same file in `samefile`. On 64-bit platforms the field types are
+  unchanged, since `UInt === UInt64`.
 
 * `Core.sizeof` of a `primitive type` now rounds its value bytes up to a multiple of its
   alignment rather than only up to a whole byte, so it always equals `Base.elsize(Array{T})`

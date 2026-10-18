@@ -2260,13 +2260,13 @@ end
 
     @test s.desc isa Union{String, Base.OS_HANDLE}
     @test s.size isa Int64
-    @test s.device isa UInt
-    @test s.inode isa UInt
+    @test s.device isa UInt64
+    @test s.inode isa UInt64
     @test s.mode isa UInt
     @test s.nlink isa Int
     @test s.uid isa UInt
     @test s.gid isa UInt
-    @test s.rdev isa UInt
+    @test s.rdev isa UInt64
     @test s.blksize isa Int64
     @test s.blocks isa Int64
     @test s.mtime isa Float64
@@ -2276,6 +2276,20 @@ end
     @test s === lstat((f,))
     @test s === stat(".", f)
     @test s === lstat(".", f)
+end
+
+@testset "StatStruct keeps 64-bit device, inode and rdev" begin
+    # Fill a `uv_stat_t` by hand, since real inodes above 2^32 are hard to come by in tests.
+    # Its first fields are `uint64_t st_dev, st_mode, st_nlink, st_uid, st_gid, st_rdev, st_ino`.
+    buf = zeros(UInt8, Int(ccall(:jl_sizeof_stat, Int32, ())))
+    fields = reinterpret(UInt64, view(buf, 1:56))
+    fields[1] = 0x0000_0012_3456_789a # st_dev
+    fields[6] = 0x0000_00ab_cdef_0123 # st_rdev
+    fields[7] = 0x0000_0001_0000_0002 # st_ino
+    s = Base.Filesystem.StatStruct("", buf, Int32(0))
+    @test s.device === 0x0000_0012_3456_789a
+    @test s.rdev === 0x0000_00ab_cdef_0123
+    @test s.inode === 0x0000_0001_0000_0002
 end
 
 mutable struct URI50890; f::String; end
