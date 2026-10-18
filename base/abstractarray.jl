@@ -1151,8 +1151,9 @@ non-empty `src` and `length(src) <= length(dest)`.
 
 The second form copies regions. `Rdest` and `Rsrc` are either `UnitRange{Int}` ranges of
 linear indices of equal length, for `copyto!(dest, doffs, src, soffs, n)`, or
-`CartesianIndices` of equal size, for `copyto!(dest, Rdest, src, Rsrc)`. They are
-non-empty.
+`CartesianIndices` of equal size with `ndims(dest)` dimensions, for
+`copyto!(dest, Rdest, src, Rsrc)`; a `src` with fewer dimensions is indexed with trailing
+1s. They are non-empty.
 
 In both forms `src` does not alias `dest`, and bounds were checked unless the caller of
 `copyto!` used `@inbounds`. A method that cannot handle a pair of arrays can call
@@ -2824,8 +2825,7 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
     # copy into final array
     A = cat_similar(as[1], T, ntuple(i -> outdims[i], N))
     # @assert all(==(0), currentdims)
-    outdims .= 0
-    hvncat_fill!(A, currentdims, outdims, d1, d2, as)
+    hvncat_fill!(A, currentdims, d1, d2, as)
     return A
 end
 
@@ -2918,43 +2918,27 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
     # copy into final array
     A = cat_similar(as[1], T, ntuple(i -> outdims[i], nd))
     if !any(iszero, outdims)
-        hvncat_fill!(A, currentdims, blockcounts, d1, d2, as)
+        hvncat_fill!(A, currentdims, d1, d2, as)
     end
     return A
 end
 
-function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int}, d1::Int, d2::Int, as::Tuple) where {T, N}
+function hvncat_fill!(A::AbstractArray{T, N}, offsets::Vector{Int}, d1::Int, d2::Int, as::Tuple) where {T, N}
     N > 1 || throw(ArgumentError("dimensions of the destination array must be at least 2"))
-    length(scratch1) == length(scratch2) == N ||
-        throw(ArgumentError("scratch vectors must have as many elements as the destination array has dimensions"))
+    length(offsets) == N ||
+        throw(ArgumentError("offsets must have as many elements as the destination array has dimensions"))
     0 < d1 < 3 &&
     0 < d2 < 3 &&
     d1 != d2 ||
         throw(ArgumentError("d1 and d2 must be either 1 or 2, exclusive."))
-    outdimsprod = cumprod(size(A))
-    offsets = scratch1
-    inneroffsets = scratch2
     for a ∈ as
-        startindex = CartesianIndex(ntuple(i -> offsets[i] + 1, Val(N)))
         if isa(a, AbstractArray)
             if !isempty(a)
-                if length(a) > 4
-                    endindex = CartesianIndex(ntuple(i -> offsets[i] + cat_size(a, i), Val(N)))
-                    @inbounds A[startindex:endindex] = a
-                else
-                    for ai ∈ a
-                        @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdimsprod, N)
-                        @inbounds A[Ai] = ai
-                        @inbounds for j ∈ 1:N
-                            inneroffsets[j] += 1
-                            inneroffsets[j] < cat_size(a, j) && break
-                            inneroffsets[j] = 0
-                        end
-                    end
-                end
+                Rdest = CartesianIndices(ntuple(i -> first(axes(A, i)) + offsets[i] .+ (0:cat_size(a, i)-1), Val(N)))
+                @inbounds copyto!(A, Rdest, a, CartesianIndices(ntuple(i -> axes(a, i), Val(N))))
             end
         else
-            @inbounds A[startindex] = a
+            @inbounds A[CartesianIndex(ntuple(i -> first(axes(A, i)) + offsets[i], Val(N)))] = a
         end
 
         @inbounds for i ∈ (d1, d2, 3:N...)
@@ -2963,17 +2947,6 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
             offsets[i] = 0
         end
     end
-end
-
-@propagate_inbounds function hvncat_calcindex(offsets::Vector{Int}, inneroffsets::Vector{Int},
-                                                outdimsprod::NTuple{N, Int}, nd::Int) where {N}
-    Ai = inneroffsets[1] + offsets[1] + 1
-    for j ∈ 2:nd
-        increment = inneroffsets[j] + offsets[j]
-        increment *= outdimsprod[j - 1]
-        Ai += increment
-    end
-    Ai
 end
 
 """

@@ -80,6 +80,14 @@ end
         copyto!(A, CartesianIndices((2:3,2)), A, CartesianIndices((2,2)))
         @test A[2:3,:] == [1 4;2 5]
     end
+    @test copyto!(zeros(Int, 3, 3), CartesianIndices((1:3, 2:2)), [1, 2, 3], CartesianIndices((1:3, 1:1))) == [0 1 0; 0 2 0; 0 3 0]
+    @test copyto!(zeros(Int, 2, 5), CartesianIndices((2:2, 1:2:5)), [1 2 3], CartesianIndices((1:1, 1:3))) == [0 0 0 0 0; 1 0 2 0 3]
+    for src in (bitrand(70, 3), bitrand(2, 5), rand(Bool, 70, 3))
+        dest = falses(80, 7)
+        copyto!(dest, CartesianIndices((5:size(src, 1)+4, 2:size(src, 2)+1)), src, CartesianIndices(src))
+        @test dest[5:size(src, 1)+4, 2:size(src, 2)+1] == src
+        @test count(dest) == count(src)
+    end
 end
 
 @testset "shallow and deep copying" begin

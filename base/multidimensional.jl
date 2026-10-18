@@ -1188,7 +1188,7 @@ end
 _indicesmightoverlap(A::Tuple{Any, Vararg{Any}}, B::Tuple{Any, Vararg{Any}}) = true
 
 function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
-                  src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
+                  src::AbstractArray, Rsrc::CartesianIndices{N}) where {T1,N}
     @_propagate_inbounds_meta
     isempty(Rdest) && return dest
     if size(Rdest) != size(Rsrc)
@@ -1204,14 +1204,21 @@ function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
 end
 
 function _copyto_loops!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
-                        src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
+                        src::AbstractArray, Rsrc::CartesianIndices{N}) where {T1,N}
     CRdest = CartesianIndices(Rdest)
     CRsrc = CartesianIndices(Rsrc)
     ΔI = first(CRdest) - first(CRsrc)
     if @generated
         quote
-            @nloops $N i (n->CRsrc.indices[n]) begin
-                @inbounds @nref($N,dest,n->Rdest.indices[n][i_n+ΔI[n]]) = @nref($N,src,n->Rsrc.indices[n][i_n])
+            if length(CRsrc.indices[1]) == 1
+                i_1 = first(CRsrc.indices[1])
+                @nloops $(N-1) j (n->CRsrc.indices[n+1]) begin
+                    @inbounds @nref($N,dest,n->Rdest.indices[n][(n == 1 ? i_1 : j_{n-1})+ΔI[n]]) = @nref($N,src,n->Rsrc.indices[n][n == 1 ? i_1 : j_{n-1}])
+                end
+            else
+                @nloops $N i (n->CRsrc.indices[n]) begin
+                    @inbounds @nref($N,dest,n->Rdest.indices[n][i_n+ΔI[n]]) = @nref($N,src,n->Rsrc.indices[n][i_n])
+                end
             end
         end
     else
@@ -1226,7 +1233,9 @@ end
     copyto!(dest, Rdest::CartesianIndices, src, Rsrc::CartesianIndices) -> dest
 
 Copy the block of `src` in the range of `Rsrc` to the block of `dest`
-in the range of `Rdest`. The sizes of the two regions must match.
+in the range of `Rdest`. The sizes of the two regions must match. `Rsrc` has the
+dimensionality of `dest`; a `src` with fewer dimensions is indexed with trailing `1:1`
+ranges.
 
 # Examples
 ```jldoctest
@@ -1576,6 +1585,36 @@ end
         I0::DI0, I::Union{Int,AbstractUnitRange{Int},Colon}...) where {DI0<:Union{Colon,AbstractUnitRange{Int}}}
     _setindex!(IndexStyle(B), B, X, to_indices(B, (I0, I...))...)
 end
+
+function copyto_unaliased!(::BitArrayCopyToStyle, dest::AbstractArray, Rdest::CartesianIndices{N}, src::AbstractArray, Rsrc::CartesianIndices{N}) where {N}
+    r1d, r1s = Rdest.indices[1], Rsrc.indices[1]
+    if dest isa BitArray && (src isa BitArray || src isa Array{Bool}) && r1d isa AbstractUnitRange && r1s isa AbstractUnitRange
+        n = length(r1d)
+        LD, LS = LinearIndices(dest), LinearIndices(src)
+        for (Id, Is) in zip(CartesianIndices(tail(Rdest.indices)), CartesianIndices(tail(Rsrc.indices)))
+            @inbounds _copy_bit_run!(dest.chunks, LD[first(r1d), Id], src, LS[first(r1s), Is], n)
+        end
+        return dest
+    end
+    return copyto_unaliased!(DefaultCopyToStyle(), dest, Rdest, src, Rsrc)
+end
+
+@inline function _copy_bit_run!(dc::Vector{UInt64}, pd::Int, src::BitArray, ps::Int, n::Int)
+    sc = src.chunks
+    kd0, ld0 = get_chunks_id(pd)
+    kd1, _ = get_chunks_id(pd + n - 1)
+    ks0, ls0 = get_chunks_id(ps)
+    ks1, _ = get_chunks_id(ps + n - 1)
+    if kd0 == kd1 && ks0 == ks1
+        msk = _msk64 >>> (64 - n)
+        @inbounds dc[kd0] = (dc[kd0] & ~(msk << ld0)) | (((sc[ks0] >>> ls0) & msk) << ld0)
+    else
+        copy_chunks!(dc, pd, sc, ps, n)
+    end
+    return nothing
+end
+_copy_bit_run!(dc::Vector{UInt64}, pd::Int, src::Array{Bool}, ps::Int, n::Int) =
+    copy_to_bitarray_chunks!(dc, pd, src, ps, n)
 
 ## fill! contiguous views of BitArrays with a single value
 function fill!(V::SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}}}, x)

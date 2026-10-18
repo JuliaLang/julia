@@ -1528,7 +1528,26 @@ end
 end
 
 using Base: typed_hvncat
+
+struct BlockOnly{T,N} <: AbstractArray{T,N}
+    data::Array{T,N}
+end
+Base.size(a::BlockOnly) = size(a.data)
+Base.getindex(::BlockOnly, ::Int...) = error("elementwise access")
+Base.setindex!(::BlockOnly, _, ::Int...) = error("elementwise access")
+Base.similar(::BlockOnly, ::Type{T}, dims::Dims) where {T} = BlockOnly(Array{T}(undef, dims))
+struct BlockOnlyStyle <: Base.CopyToStyle end
+Base.CopyToStyle(::Type{<:BlockOnly}) = BlockOnlyStyle()
+blockdata(a::BlockOnly) = a.data
+blockdata(a) = a
+Base.copyto_unaliased!(::BlockOnlyStyle, dest, Rdest::CartesianIndices, src, Rsrc::CartesianIndices) =
+    (copyto!(blockdata(dest), Rdest, blockdata(src), Rsrc); dest)
+
 @testset "hvncat" begin
+    let v = BlockOnly([1]), m = BlockOnly([1 2; 3 4])
+        @test blockdata([v v; v v]) == [1 1; 1 1]
+        @test blockdata([m m; m m]) == [1 2 1 2; 3 4 3 4; 1 2 1 2; 3 4 3 4]
+    end
     # Concatenation dimensions must not wrap before allocating and filling the result.
     overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
     overflow_array = reshape(1:overflow_dim, 1, overflow_dim)
