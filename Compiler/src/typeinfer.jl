@@ -178,9 +178,11 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             debuginfo = DebugInfo(mi)
         end
         # if we aren't cached, we don't need this edge
-        # but our caller might, so let's just make it anyways
+        # but our caller might, so let's just make it anyways.
+        # No caller can reach a tombstoned CodeInstance (they copy its edges instead),
+        # and each new caller infers it again, so its backedges would only pile up.
         unique_backedges = false
-        if max_world >= validation_world
+        if max_world >= validation_world && !result.tombstone
             # if we can record all of the backedges in the global reverse-cache,
             # we can now widen our applicability in the global cache too
             unique_backedges = store_backedges(ci, edges)
