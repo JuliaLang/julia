@@ -1,5 +1,24 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+include("testenv.jl")
+
+# Stdlib pkgimages for `--check-bounds=yes` are not bundled by default. Build any missing
+# ones for this process and the workers up front, before loading any stdlib, instead of
+# having every process that loads one wait for it to be built.
+let project = mktempdir(),
+    script = "Base.Precompilation.precompilepkgs(; strict=true)",
+    load_path = "JULIA_LOAD_PATH" => join(["@", "@stdlib"], Sys.iswindows() ? ';' : ':')
+    stdlibs = [name => Base.parsed_toml(joinpath(Sys.STDLIB, name, "Project.toml"))["uuid"]
+               for name in readdir(Sys.STDLIB) if isfile(joinpath(Sys.STDLIB, name, "Project.toml"))]
+    write(joinpath(project, "Project.toml"), "[deps]\n",
+          (string(name, " = \"", uuid, "\"\n") for (name, uuid) in stdlibs)...)
+    # stdlib dependencies are filled in from their own Project.toml
+    write(joinpath(project, "Manifest.toml"), "manifest_format = \"2.0\"\n",
+          (string("\n[[deps.", name, "]]\nuuid = \"", uuid, "\"\n") for (name, uuid) in stdlibs)...)
+    run(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$project -e $script`, load_path))
+    run(addenv(`$test_exename $test_exeflags --project=$project -e $script`, load_path))
+end
+
 using Test
 using Distributed
 using Dates
@@ -9,7 +28,6 @@ using Base: Experimental
 using Base.ScopedValues
 
 include("choosetests.jl")
-include("testenv.jl")
 include("buildkitetestjson.jl")
 
 const longrunning_delay = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_DELAY", "45")) * 60 # minutes

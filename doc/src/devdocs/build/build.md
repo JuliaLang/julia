@@ -326,6 +326,45 @@ Julia uses a custom fork of libuv. It is a small dependency, and can be safely b
 
 As a high-performance numerical language, Julia should be linked to a multi-threaded BLAS and LAPACK, such as OpenBLAS or ATLAS, which will provide much better performance than the reference `libblas` implementations which may be default on some systems.
 
+## Bounds-checked stdlib package images
+
+Normal builds include stdlib package images for the default bounds-checking mode.
+`make checkbounds-pkgimages` additionally creates a
+`julia-*.checkbounds.tar.gz` companion archive for `--check-bounds=yes`, using the
+same system image and CPU targets as the normal build. These additional caches
+are kept outside `usr`, so they are not included by `make binary-dist` or installers.
+Build the normal distribution before the companion archive: `make binary-dist`
+removes existing distribution archives.
+
+Without the companion, stdlibs are precompiled for `--check-bounds=yes` on first use
+and stored in the first depot, like any other package. The companion avoids this.
+It contains `share/julia/compiled`, so it can be used as an additional depot
+without modifying the Julia installation:
+
+```sh
+mkdir -p ~/julia-checkbounds
+tar -xzf julia-VERSION-PLATFORM.checkbounds.tar.gz -C ~/julia-checkbounds
+export JULIA_DEPOT_PATH=":$HOME/julia-checkbounds/share/julia"
+```
+
+The leading `:` (`;` on Windows) keeps the default depots in front of it; they are
+required, as they provide the stdlib sources the companion was built from. If you
+own the installation, for example an extracted tarball or a juliaup-managed version,
+you can instead extract the archive into its root (the directory containing `bin`
+and `share`), which adds files under `share/julia/compiled` without replacing the
+default images. Do not modify installations managed by a system package manager or
+signed application bundles such as `Julia.app`.
+
+Use the archive from the same build and platform, including the build
+variant; a matching major/minor version alone is insufficient. For nightlies,
+select the companion using the installed build's commit rather than downloading
+an independently resolved `latest` archive. Nightlies and releases publish the
+companion alongside the normal tarball, replacing its `.tar.gz` suffix with
+`.checkbounds.tar.gz`.
+
+Local builds can still bundle both configurations by setting
+`JULIA_CHECK_BOUNDS_PKGIMAGES=1` in `Make.user`, for example for coverage testing.
+
 ## Source distributions of releases
 
 Each pre-release and release of Julia has a "full" source distribution and a "light" source
