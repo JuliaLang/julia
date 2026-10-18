@@ -124,6 +124,13 @@ Base.require_one_based_indexing
 Base.has_offset_axes
 ```
 
+For specializing `copyto!` on custom types, see
+```@docs
+Base.CopyToStyle
+Base.DefaultCopyToStyle
+Base.copyto_unaliased!
+```
+
 ## Views (SubArrays and other view types)
 
 A “view” is a data structure that acts like an array (it is a subtype of `AbstractArray`), but the underlying data is actually

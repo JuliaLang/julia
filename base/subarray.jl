@@ -430,6 +430,11 @@ function isassigned(V::FastSubArray{<:Any, 1}, i::Int)
     r
 end
 
+function _unwrap_contiguous(a::FastContiguousSubArray{<:Any,<:Any,P}) where {P}
+    p, offset = _unwrap_contiguous(parent(a)::P)
+    return (p, offset + a.offset1)
+end
+
 IndexStyle(::Type{<:FastSubArray}) = IndexLinear()
 
 # Strides are the distance in memory between adjacent elements in a given dimension

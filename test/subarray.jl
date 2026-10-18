@@ -1252,3 +1252,37 @@ end
         check_strided_get(v)
     end
 end
+
+@testset "copyto! with contiguous views" begin
+    a = collect(1:10)
+    va = view(a, :)
+    b = zeros(Int, 10)
+    vb = view(b, :)
+    @test copyto!(b, va) == a
+    @test copyto!(vb, a) == a
+    fill!(vb, 0);
+    @test copyto!(vb, va) == a
+
+    p = zeros(Int, 20)
+    @test copyto!(view(p, 5:14), 1, a, 1, 10) == a
+    @test p[5:14] == a
+
+    x = collect(1:10)
+    copyto!(view(x, 1:5), view(x, 3:7))
+    @test x == [3, 4, 5, 6, 7, 6, 7, 8, 9, 10]
+    @test_throws BoundsError copyto!(view(zeros(5), :), 1, a, 1, 10)
+
+    bits = BitVector(rand(Bool, 10))
+    @test copyto!(falses(10), view(bits, :)) == bits
+
+    A = reshape([1:20;], 4, 5)
+    @test copyto!(similar(view(A,:,2:4)), view(A,:,2:4)) == view(A,:,2:4)
+
+    parent10 = collect(1:10)
+    vsrc5 = view(parent10, 1:5)
+    @test_throws BoundsError copyto!(zeros(Int, 10), 1, vsrc5, 6, 1)
+    @test_throws BoundsError copyto!(zeros(Int, 10), 1, vsrc5, 1, 6)
+    vdest5 = view(zeros(Int, 10), 1:5)
+    @test_throws BoundsError copyto!(vdest5, 6, 1:10, 1, 1)
+    @test_throws BoundsError copyto!(vdest5, 1, 1:10, 1, 6)
+end

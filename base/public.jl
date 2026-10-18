@@ -32,6 +32,9 @@ public
     release,
 
 # arrays
+    CopyToStyle,
+    DefaultCopyToStyle,
+    copyto_unaliased!,
     has_offset_axes,
     require_one_based_indexing,
     memoryindex,

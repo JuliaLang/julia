@@ -426,47 +426,47 @@ function one(x::BitMatrix)
     return a
 end
 
-function copyto!(dest::BitArray, src::BitArray)
-    length(src) > length(dest) && throw(BoundsError(dest, length(dest)+1))
-    destc = dest.chunks; srcc = src.chunks
-    nc = min(length(destc), length(srcc))
-    nc == 0 && return dest
-    @inbounds begin
-        for i = 1 : nc - 1
-            destc[i] = srcc[i]
-        end
-        if length(src) == length(dest)
-            destc[nc] = srcc[nc]
-        else
-            msk_s = _msk_end(src)
-            msk_d = ~msk_s
-            destc[nc] = (msk_d & destc[nc]) | (msk_s & srcc[nc])
-        end
-    end
-    return dest
-end
-
 function unsafe_copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integer, n::Integer)
     copy_to_bitarray_chunks!(dest.chunks, Int(doffs), src, Int(soffs), Int(n))
     return dest
 end
 
-copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integer, n::Integer) =
-    _copyto_int!(dest, Int(doffs), src, Int(soffs), Int(n))
-function _copyto_int!(dest::BitArray, doffs::Int, src::Union{BitArray,Array}, soffs::Int, n::Int)
-    n == 0 && return dest
-    n < 0 && throw(ArgumentError("Number of elements to copy must be non-negative."))
-    soffs < 1 && throw(BoundsError(src, soffs))
-    doffs < 1 && throw(BoundsError(dest, doffs))
-    n > length(src) - soffs + 1 && throw(BoundsError(src, length(src)+1))
-    n > length(dest) - doffs + 1 && throw(BoundsError(dest, length(dest)+1))
+_is_storage_pair(::BitArray, ::Union{BitArray,Array{Bool}}) = true
+
+function _copyto_storage!(dest::BitArray, doffs::Int, src::Union{BitArray,Array{Bool}}, soffs::Int, n::Int)
+    if src isa BitArray && doffs == 1 && soffs == 1
+        destc = dest.chunks; srcc = src.chunks
+        nc = num_bit_chunks(n)
+        @inbounds begin
+            for i = 1 : nc - 1
+                destc[i] = srcc[i]
+            end
+            msk = _msk_end(n)
+            destc[nc] = (~msk & destc[nc]) | (msk & srcc[nc])
+        end
+        return dest
+    end
     return unsafe_copyto!(dest, doffs, src, soffs, n)
 end
 
-function copyto!(dest::BitArray, src::Array)
-    length(src) > length(dest) && throw(BoundsError(dest, length(dest)+1))
-    length(src) == 0 && return dest
-    return unsafe_copyto!(dest, 1, src, 1, length(src))
+struct BitArrayCopyToStyle <: CopyToStyle end
+CopyToStyle(::Type{<:BitArray}) = BitArrayCopyToStyle()
+
+function copyto_unaliased!(::BitArrayCopyToStyle, dest::AbstractArray, src::AbstractArray)
+    dest isa BitArray || return copyto_unaliased!(DefaultCopyToStyle(), dest, src)
+    if src isa Array{<:Real}
+        copy_to_bitarray_chunks!(dest.chunks, 1, src, 1, length(src))
+        return dest
+    end
+    return _copyto_bitarray!(dest, src)
+end
+
+function copyto_unaliased!(::BitArrayCopyToStyle, dest::AbstractArray, Rdest::UnitRange{Int}, src::AbstractArray, Rsrc::UnitRange{Int})
+    if dest isa BitArray && src isa Array{<:Real}
+        copy_to_bitarray_chunks!(dest.chunks, first(Rdest), src, first(Rsrc), length(Rdest))
+        return dest
+    end
+    return copyto_unaliased!(DefaultCopyToStyle(), dest, Rdest, src, Rsrc)
 end
 
 function reshape(B::BitArray{N}, dims::NTuple{N,Int}) where N
