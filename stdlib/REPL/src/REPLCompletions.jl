@@ -1191,15 +1191,19 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     #  "~/example.txt TAB => "/home/user/example.txt"
     r, closed = find_str(cur)
     if r !== nothing
-        # Cursor directly before the closing quote, which then also gets replaced
-        before_close = closed && pos == last(r)
-        r = intersect(r, 1:pos)
+        rstr, r = r, intersect(r, 1:pos)
         s = do_string_unescape(string[r])
         ret, success = complete_path_string(s, hint; string_escape=true,
                                             dirsep=Sys.iswindows() ? '\\' : '/')
-        if length(ret) == 1 && (!closed || before_close) && close_path_completion(ret[1].path)
-            ret[1] = PathCompletion(ret[1].path * '"')
-            closed && (r = first(r):nextind(string, pos))
+        if length(ret) == 1
+            # Also replace the rest of the string after the cursor if the completion ends with
+            # it, so `"foo|.txt"` completes to `"foobar.txt"` rather than `"foobar.txt.txt"`
+            endswith(ret[1].path, string[nextind(string, pos):last(rstr)]) && (r = first(r):last(rstr))
+            # Close the string, replacing an existing closing quote
+            if last(r) == last(rstr) && close_path_completion(ret[1].path)
+                ret[1] = PathCompletion(ret[1].path * '"')
+                closed && (r = first(r):nextind(string, last(r)))
+            end
         end
         success && return ret, r, success
     end
@@ -1485,6 +1489,11 @@ function shell_completions(str, pos, hint::Bool=false; escape_backticks::Bool=fa
     r = last_arg_start:pos
     use_envpath = length(args.args) < 2
     paths, success = complete_path_string(path, hint; use_envpath, cmd_escape=true, escape_backticks, dirsep='/')
+    if length(paths) == 1
+        # Also replace the rest of the argument after the cursor if the completion ends with it
+        argend = prevind(str, something(findnext(isspace, str, nextind(str, pos)), nextind(str, lastindex(str))))
+        endswith(paths[1].path, str[nextind(str, pos):argend]) && (r = last_arg_start:argend)
+    end
     return paths, r, success
 end
 
