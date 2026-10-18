@@ -27,8 +27,7 @@ const libpicosat = LazyLibrary(
         BundledLazyLibraryPath("libpicosat.dylib")
     else
         BundledLazyLibraryPath("libpicosat.so")
-    end;
-    id = LibraryID(Base.UUID("6b231c3b-13f8-5ced-86ae-8860c7f75d86"), "libpicosat")
+    end
 )
 
 function eager_mode()

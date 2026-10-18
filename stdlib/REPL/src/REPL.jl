@@ -1249,8 +1249,15 @@ function parse_repl_input_line(line::String, repl; kwargs...)
 end
 
 function return_callback(s)
-    ast = parse_repl_input_line(takestring!(copy(LineEdit.buffer(s))), s; depwarn=false)
-    return !(isa(ast, Syntax) && head(ast) === :incomplete)
+    function incomplete(line)
+        ast = parse_repl_input_line(line, s; depwarn=false)
+        return isa(ast, Syntax) && head(ast) === :incomplete
+    end
+    buf = LineEdit.buffer(s)
+    incomplete(takestring!(copy(buf))) && return false
+    # The input may only be complete thanks to automatically inserted closing brackets after
+    # the cursor, so continue on a new line if it isn't without them (e.g. `[|]`)
+    return !(LineEdit.only_auto_closed_after_cursor(s) && incomplete(LineEdit.before_cursor(buf)))
 end
 
 find_hist_file() = get(ENV, "JULIA_HISTORY",
@@ -1369,8 +1376,8 @@ function mode_keymap(julia_prompt::Prompt)
                 end
             end
         else
-            buf = LineEdit.buffer(s)
-            if LineEdit.try_remove_paired_delimiter(buf)
+            if LineEdit.options(LineEdit.state(s)).auto_insert_closing_bracket &&
+                    LineEdit.try_remove_paired_delimiter(s)
                 return LineEdit.refresh_line(s)
             end
             LineEdit.edit_backspace(s)
@@ -1624,14 +1631,10 @@ function setup_interface(
                 end
                 Base.errormonitor(t_replswitch)
             else
-                # Use bracket insertion if enabled, otherwise just insert
-                if repl.options.auto_insert_closing_bracket
-                    buf = LineEdit.buffer(s)
-                    if !eof(buf) && LineEdit.peek(buf, Char) == ']'
-                        LineEdit.edit_move_right(buf)
-                    else
-                        edit_insert(buf, ']')
-                    end
+                # Move over an auto-inserted `]`, otherwise insert
+                buf = LineEdit.buffer(s)
+                if repl.options.auto_insert_closing_bracket && LineEdit.skip_closing_bracket(buf, '[', ']')
+                    LineEdit.edit_move_right(buf)
                     LineEdit.refresh_line(s)
                 else
                     edit_insert(s, ']')

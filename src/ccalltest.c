@@ -1044,6 +1044,16 @@ DLLEXPORT int abi_probe_va_i128_regs = 1;
                 abi_probe.d[4] = d4; abi_probe.d[5] = d5; abi_probe.d[6] = d6;
 #define ABI_S8D ABI_S7D abi_probe.d[7] = d7;
 
+// GCC (13 to at least 16) passes a `_Float16` that it loads directly from a
+// locally bound symbol, under -fPIC, in a floating-point register without
+// NaN-boxing it, which RISC-V CPUs with Zfh then read as NaN
+// (JuliaLang/julia#63880). Hide the buffer's address from it.
+static inline const char *abi_probe_src(void)
+{
+    const char *buf = abi_probe.buf;
+    __asm__("" : "+r"(buf));
+    return buf;
+}
 #define ABI_PROBE(name, T, G, F) \
     DLLEXPORT void test_abi_arg_##name##_##G##_##F(ABI_P##G##I ABI_P##F##D T x, int64_t s1, double s2) { \
         ABI_S##G##I ABI_S##F##D \
@@ -1052,7 +1062,7 @@ DLLEXPORT int abi_probe_va_i128_regs = 1;
         ABI_S##G##I ABI_S##F##D abi_probe.s1 = s1; \
         T r; memcpy(&r, abi_probe.buf, sizeof(r)); return r; } \
     DLLEXPORT void test_abi_cbarg_##name##_##G##_##F(void (*cb)(ABI_P##G##I ABI_P##F##D T, int64_t, double)) { \
-        T x; memcpy(&x, abi_probe.buf, sizeof(x)); cb(ABI_A##G##I ABI_A##F##D x, -77, 3.25); } \
+        T x; memcpy(&x, abi_probe_src(), sizeof(x)); cb(ABI_A##G##I ABI_A##F##D x, -77, 3.25); } \
     DLLEXPORT void test_abi_cbret_##name##_##G##_##F(T (*cb)(ABI_P##G##I ABI_P##F##D int64_t)) { \
         T r = cb(ABI_A##G##I ABI_A##F##D -77); memcpy(abi_probe.buf, &r, sizeof(r)); }
 // Vary the leading arguments to exercise register-pair alignment and spills.

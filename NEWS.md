@@ -186,6 +186,11 @@ Build system changes
   build of the runtime without the JIT, so that tools such as JuliaC.jl can link it with a trimmed
   system image into one executable ([#63618]).
 
+* Stdlib package images for `--check-bounds=yes` are no longer bundled by default, since `Pkg.test`
+  no longer forces bounds checking. Nightlies and releases provide these as a separate download.
+  Build with `make checkbounds-pkgimages` to create a companion archive, or set
+  `JULIA_CHECK_BOUNDS_PKGIMAGES=1` to bundle them ([#60054]).
+
 New library functions
 ---------------------
 
@@ -228,6 +233,8 @@ New library features
   along with the type of the entries in a vector of new `DirEntry` objects to provide more efficient `isfile`
   etc. checks. `readdir(::DirEntry)` accepts a `DirEntry` as input and, like `readdir(::AbstractString)`,
   returns a `Vector{String}` of names. `DirEntry` is exported from `Base` ([#55358]).
+* New public but unexported functions `Base.Filesystem.trylockfile` and `Base.Filesystem.unlockfile`
+  take and release an advisory lock on an open file without waiting ([#63613]).
 * New public but unexported function `Base.unsetindex!` unsets the reference from an array
   or a `MemoryRef` to its value, making it as if it was uninitialized.
 * Calls to `wait` on one-shot `Timer`s that have already triggered no longer throw `EOFError`. Previously
@@ -241,6 +248,10 @@ New library features
   `__builtin_cpu_supports`, tests whether code generation for the current target enables the named
   LLVM target features or CPU model. It is folded to a constant at compile time, separately for each
   multiversioning clone, so the untaken branch of an `if` on it is removed ([#61793]).
+* New function `eachentry(dir)` returns a stateful, single-pass iterator yielding filename `String`s
+  without first materializing the full listing. `eachentry(dir, DirEntry)` yields `DirEntry` objects
+  instead. Useful for very large directories or when iteration may be short-circuited. A do-block form
+  `eachentry(f, dir[, DirEntry])` ensures deterministic resource cleanup ([#62164]).
 
 Standard library changes
 ------------------------
@@ -273,11 +284,6 @@ Standard library changes
 * `Libdl.LazyLibrary` is not compatible with `--trim`.
 * A new abstract type `Libdl.LazyLibraryCallback` has been added to provide
   an automatic compilation hint for LazyLibrary on-load callbacks under trim.
-* Library types used with `ccall` / `cglobal` can now subtype `Libdl.AbstractLibrary`
-  to opt-in to `Libdl.dlid` support. This allows libraries to identify themselves
-  at precompilation time by implementing `Libdl.dlid` and providing a `Libdl.LibraryID`.
-  The `LibraryID` is used by `JuliaC.jl` and the runtime to report required libraries
-  and symbols for `--trim` applications and configure linking on a per-library basis.
 
 #### LinearAlgebra
 

@@ -19,7 +19,6 @@
 #include "support/strhash.h"
 
 // --- library symbol lookup ---
-jl_value_t *jl_libdl_dlid_func JL_GLOBALLY_ROOTED;
 jl_value_t *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
 
 // map from user-specified lib names to handles

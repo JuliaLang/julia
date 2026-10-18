@@ -364,6 +364,8 @@ JL_DLLEXPORT uint32_t jl_crc32c_sw(uint32_t crc, const char *buf, size_t len)
 {
     return jl_crc32c(crc, buf, len);
 }
+// (`julia.h` already maps it to its `ijl_` name)
+#undef jl_crc32c_sw
 #define jl_crc32c_sw jl_crc32c
 #endif
 

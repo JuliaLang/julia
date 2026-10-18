@@ -348,8 +348,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                                     local sig = match.spec_types
                                     local mi = get_ci_mi(edge)
                                     local vw = matches.valid_worlds
-                                    ccall(:jl_recache_method_by_type, Cvoid, (Any, Any, Any, UInt, UInt, UInt, UInt),
-                                            sig, mi, mi.specTypes, get_inference_world(interp),
+                                    ccall(:jl_recache_method_by_type, Cvoid, (Any, Any, Any, Any, UInt, UInt, UInt, UInt),
+                                            sig, match.sparams, mi, mi.specTypes, get_inference_world(interp),
                                             first(vw), last(vw), current_world)
                                 end
                                 return true
@@ -3354,9 +3354,22 @@ function collect_argtypes(interp::AbstractInterpreter, ea::Vector{Any}, sstate::
         if ai === Bottom
             return nothing
         end
-        argtypes[i] = ai
+        argtypes[i] = widen_stale_slotwrapper(ai, sstate.vtypes)
     end
     return argtypes
+end
+
+# A `Conditional` or `MustAlias` whose slot has been reassigned since it was formed no
+# longer describes the slot's current value, so it must not reach the callee, where it
+# would be applied to whichever argument currently reads that slot (see `find_constrained_arg`).
+function widen_stale_slotwrapper(@nospecialize(typ), vtypes::Union{VarTable,Nothing})
+    vtypes === nothing && return typ
+    if isa(typ, Conditional)
+        conditional_valid(typ, vtypes) || return widenconditional(typ)
+    elseif isa(typ, MustAlias)
+        vtypes[typ.slot].ssadef == typ.ssadef || return widenmustalias(typ)
+    end
+    return typ
 end
 
 struct RTEffects
