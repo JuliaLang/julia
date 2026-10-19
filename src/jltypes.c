@@ -2526,8 +2526,9 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         if (lkup != NULL)
             return lkup;
     }
+    jl_datatype_t *ndt = NULL;
+    JL_GC_PUSH2(&p, &ndt);
     // if some normalization might be needed, do that now
-    // it is probably okay to mutate iparams, and we only store globally rooted objects here
     if (check) {
         size_t i;
         for (i = 0; i < ntp; i++) {
@@ -2545,38 +2546,48 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             jl_value_t *tw = extract_wrapper(pi);
             if (tw && tw != pi &&
                     !jl_has_free_typevars(pi) && jl_types_equal(pi, tw)) {
-                if (p)
-                    jl_gc_write(p, iparams[i], jl_value_t, tw);
-                else
-                    iparams[i] = tw;
+                if (p == NULL) {
+                    // Normalize a copy rather than the caller's iparams: those
+                    // may be the only root of values that are still in use,
+                    // such as the env built by inst_datatype_env.
+                    p = jl_alloc_svec_uninit(ntp);
+                    for (size_t k = 0; k < ntp; k++)
+                        jl_gc_write_fresh(p, jl_svec_data(p)[k], jl_value_t, iparams[k]);
+                    iparams = jl_svec_data(p);
+                }
+                jl_gc_write(p, iparams[i], jl_value_t, tw);
             }
         }
     }
     // then check the cache again, if applicable
     if (cacheable) {
         jl_value_t *lkup = (jl_value_t*)lookup_type(tn, iparams, ntp);
-        if (lkup != NULL)
+        if (lkup != NULL) {
+            JL_GC_POP();
             return lkup;
+        }
     }
     jl_value_t *stack_lkup = lookup_type_stack(stack, dt, ntp, iparams);
-    if (stack_lkup)
+    if (stack_lkup) {
+        JL_GC_POP();
         return stack_lkup;
+    }
 
     // check parameters against bounds in type definition
     // for whether this is even valid
     if (check && !istuple) {
         assert(ntp > 0);
-        if (check_datatype_parameters(tn, iparams, ntp, nothrow))
+        if (check_datatype_parameters(tn, iparams, ntp, nothrow)) {
+            JL_GC_POP();
             return NULL;
+        }
     }
     else if (ntp == 0 && jl_emptytuple_type != NULL) {
         // empty tuple type case
         assert(istuple);
+        JL_GC_POP();
         return (jl_value_t*)jl_emptytuple_type;
     }
-
-    jl_datatype_t *ndt = NULL;
-    JL_GC_PUSH2(&p, &ndt);
 
     jl_value_t *last = iparams[ntp - 1];
     if (istuple && ntp > 0 && jl_is_vararg(last)) {
