@@ -141,6 +141,47 @@ timesofar("conversions")
     @test startswith(ex.msg, "promotion of types Bit")
 end
 
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
+# Two distinct array types sharing an abstract supertype, in the spirit of #44821
+abstract type AbstractPromoTestArray{T,N} <: AbstractArray{T,N} end
+struct PromoTestArrayA{T,N} <: AbstractPromoTestArray{T,N}
+    data::Array{T,N}
+end
+struct PromoTestArrayB{T,N} <: AbstractPromoTestArray{T,N}
+    data::Array{T,N}
+end
+Base.size(A::AbstractPromoTestArray) = size(A.data)
+Base.IndexStyle(::Type{<:AbstractPromoTestArray}) = IndexLinear()
+Base.getindex(A::AbstractPromoTestArray, i::Int) = A.data[i]
+
+# The generic AbstractArray promotion of #44096 was reverted in #47893 because it
+# converted arbitrary array types to Array. Make sure the BitArray/Array rule stays
+# restricted to that pair.
+@testset "promotion is restricted to BitArray/Array (#44821, #44939, #45511)" begin
+    # #44821: types with a common abstract supertype join there instead of becoming Array
+    a = PromoTestArrayA(zeros(UInt8, 2, 2))
+    b = PromoTestArrayB(ones(UInt8, 2, 2))
+    @test promote_type(typeof(a), typeof(b)) == AbstractPromoTestArray{UInt8,2}
+    v = [a, b]
+    @test v isa Vector{AbstractPromoTestArray{UInt8,2}}
+    @test v[1] === a && v[2] === b
+    @test_throws ErrorException promote(a, b)
+    # #44939: literals with offset axes are not converted to Array
+    ri = 2:3
+    v = [Base.IdentityUnitRange(ri), OffsetArray(ri, 2)]
+    @test v isa Vector{AbstractVector{Int}}
+    @test axes(v[2], 1) == 3:4
+    # #45511: a BitArray next to a non-Array container keeps both as they are
+    bv = trues(2)
+    for x in (1:2, OffsetArray([true, false], 2), view([1, 2], :), PromoTestArrayA([1, 2]))
+        v = [bv, x]
+        @test v[1] === bv && v[2] === x
+        @test_throws ErrorException promote(bv, x)
+    end
+end
+
 timesofar("promotions")
 
 @testset "utility functions" begin
