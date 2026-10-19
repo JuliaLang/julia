@@ -514,21 +514,14 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     ReleaseSRWLockExclusive(&ctx_rewrite_lock);
 }
 
-// Open libuv watchers per signal; Windows only calls libuv's console handler if ours declines.
-static _Atomic(int) signal_watchers[SIGWINCH + 1];
-
-static int console_event_watched(DWORD wsig)
-{
-    int sig = wsig == CTRL_C_EVENT ? SIGINT :
-              wsig == CTRL_BREAK_EVENT ? SIGBREAK :
-              wsig == CTRL_CLOSE_EVENT ? SIGHUP : 0;
-    return sig != 0 && jl_atomic_load_relaxed(&signal_watchers[sig]) > 0;
-}
-
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
-    if (console_event_watched(wsig))
-        return 0;
+    // libuv reports these console events as the same signals.
+    int watched = wsig == CTRL_C_EVENT ? SIGINT :
+                  wsig == CTRL_BREAK_EVENT ? SIGBREAK :
+                  wsig == CTRL_CLOSE_EVENT ? SIGHUP : 0;
+    if (jl_notify_signal_watchers(watched))
+        return 1;
     int sig;
     //windows signals use different numbers from unix (raise)
     switch(wsig) {
@@ -727,21 +720,36 @@ JL_DLLEXPORT int jl_signal_is_reserved(int sig)
     return !(sig == SIGINT || sig == SIGBREAK || sig == SIGHUP || sig == SIGWINCH);
 }
 
-JL_DLLEXPORT int jl_start_signal_watcher(uv_signal_t *handle, uv_signal_cb cb, int sig)
+// Console resizes come only from libuv, which reports them to its own signal watchers.
+static uv_signal_t *winch_signal;
+
+static void winch_cb(uv_signal_t *handle, int sig)
 {
-    int err = uv_signal_start(handle, cb, sig);
-    if (err == 0)
-        jl_atomic_fetch_add_relaxed(&signal_watchers[sig], 1);
-    return err;
+    jl_notify_signal_watchers(sig);
 }
 
-void jl_close_signal_watcher(uv_signal_t *handle, uv_close_cb cb)
+static int jl_signal_watch_install(int sig)
 {
-    // Drop the count first, as an event passed on with no watcher left makes Windows exit.
-    int sig = handle->signum;
-    if (sig != 0)
-        jl_atomic_fetch_add_relaxed(&signal_watchers[sig], -1);
-    uv_close((uv_handle_t*)handle, cb);
+    if (sig != SIGWINCH)
+        return 0;
+    if (winch_signal == NULL) {
+        // Allocated, because closing all handles at exit frees them.
+        winch_signal = (uv_signal_t*)malloc_s(sizeof(uv_signal_t));
+        int err = uv_signal_init(jl_io_loop, winch_signal);
+        if (err != 0) {
+            free(winch_signal);
+            winch_signal = NULL;
+            return err;
+        }
+        uv_unref((uv_handle_t*)winch_signal);
+    }
+    return uv_signal_start(winch_signal, winch_cb, SIGWINCH);
+}
+
+static void jl_signal_watch_uninstall(int sig)
+{
+    if (sig == SIGWINCH)
+        uv_signal_stop(winch_signal);
 }
 
 JL_DLLEXPORT int jl_sigrtmin(void)

@@ -1178,12 +1178,8 @@ void jl_exit_with_parent(pid_t parent) JL_NOTSAFEPOINT
 #endif
 }
 
-static void sigint_handler(int sig);
-
 #ifdef HAVE_KEVENT
-// Whether the listener gets signals from kqueue, which needs them ignored.
-static _Atomic(int) kqueue_signals = 0;
-
+static void sigint_handler(int sig);
 static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
 {
     if (*sigqueue == -1)
@@ -1323,25 +1319,6 @@ static void do_profile(void) JL_NOTSAFEPOINT
 }
 #endif
 
-// These signals are blocked on every thread, so an installed handler (such as libuv's) runs from here.
-static int forward_to_installed_handler(int sig) JL_NOTSAFEPOINT
-{
-    struct sigaction sa;
-    if (sigaction(sig, NULL, &sa) != 0)
-        return 0;
-    // Our own handlers for these signals take `siginfo_t`, except for SIGINT's.
-    if ((sa.sa_flags & SA_SIGINFO) || sa.sa_handler == SIG_DFL || sa.sa_handler == SIG_IGN ||
-            sa.sa_handler == sigint_handler)
-        return 0;
-    // Block signals as the kernel would, or a nested signal could deadlock on libuv's lock.
-    sigset_t all, old;
-    sigfillset(&all);
-    pthread_sigmask(SIG_SETMASK, &all, &old);
-    sa.sa_handler(sig);
-    pthread_sigmask(SIG_SETMASK, &old, NULL);
-    return 1;
-}
-
 JL_DLLEXPORT int jl_signal_is_reserved(int sig)
 {
     switch (sig) {
@@ -1353,6 +1330,7 @@ JL_DLLEXPORT int jl_signal_is_reserved(int sig)
     case SIGTRAP:
     case SIGSYS:
     case SIGPIPE:
+    case SIGCHLD: // libuv uses it to reap child processes
     case SIGKILL:
     case SIGSTOP:
 #if !defined(HAVE_MACH)
@@ -1374,54 +1352,80 @@ JL_DLLEXPORT int jl_signal_is_reserved(int sig)
     }
 }
 
-// Keeps signal dispositions still while the listener checks them.
-static pthread_mutex_t sigint_disposition_lock = PTHREAD_MUTEX_INITIALIZER;
-
-// libuv resets a signal to the default when its last watcher stops, so put back what we need.
-static void restore_signal_disposition(int sig)
+static int is_sigwait_sig(int sig)
 {
-    struct sigaction sa;
-    if (sigaction(sig, NULL, &sa) != 0 || (sa.sa_flags & SA_SIGINFO) || sa.sa_handler != SIG_DFL)
-        return;
-    if (sig == SIGINT) {
-        if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON) {
-            memset(&sa, 0, sizeof(sa));
-            sigemptyset(&sa.sa_mask);
-            sa.sa_handler = sigint_handler;
-            sigaction(SIGINT, &sa, NULL);
-        }
-        return;
-    }
-#ifdef HAVE_KEVENT
-    // With kqueue, a signal left at the default stays pending, and ignoring it discards it.
-    if (!jl_atomic_load_relaxed(&kqueue_signals))
-        return;
     for (const int *s = sigwait_sigs; *s; s++) {
-        if (*s == sig) {
-            signal(sig, SIG_IGN);
-            return;
-        }
+        if (*s == sig)
+            return 1;
     }
-#endif
+    return 0;
 }
 
-JL_DLLEXPORT int jl_start_signal_watcher(uv_signal_t *handle, uv_signal_cb cb, int sig)
+// What was installed for each watched signal before the handler below.
+static struct sigaction saved_handlers[JL_MAX_WATCHED_SIGNAL + 1];
+
+static void run_saved_handler(int sig, siginfo_t *info, void *context)
 {
-    pthread_mutex_lock(&sigint_disposition_lock);
-    int err = uv_signal_start(handle, cb, sig);
-    pthread_mutex_unlock(&sigint_disposition_lock);
-    return err;
+    struct sigaction *prev = &saved_handlers[sig];
+    if (prev->sa_flags & SA_SIGINFO) {
+        prev->sa_sigaction(sig, info, context);
+        return;
+    }
+    if (prev->sa_handler == SIG_IGN)
+        return;
+    if (prev->sa_handler != SIG_DFL) {
+        prev->sa_handler(sig);
+        return;
+    }
+    switch (sig) {
+    case SIGCONT:
+    case SIGURG:
+    case SIGWINCH:
+        return; // the default is to do nothing
+    }
+    // Take the default action, such as exiting, by raising the signal again without a handler.
+    struct sigaction dfl, ours;
+    memset(&dfl, 0, sizeof(dfl));
+    sigemptyset(&dfl.sa_mask);
+    dfl.sa_handler = SIG_DFL;
+    sigaction(sig, &dfl, &ours);
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, sig);
+    raise(sig);
+    pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
+    // Only reached if the default action stopped the process and it was resumed.
+    pthread_sigmask(SIG_BLOCK, &sset, NULL);
+    sigaction(sig, &ours, NULL);
 }
 
-// Called with the IO lock held, which also covers starting a watcher.
-void jl_close_signal_watcher(uv_signal_t *handle, uv_close_cb cb)
+static void signal_watch_handler(int sig, siginfo_t *info, void *context)
 {
-    int sig = handle->signum;
-    pthread_mutex_lock(&sigint_disposition_lock);
-    uv_close((uv_handle_t*)handle, cb);
-    if (sig != 0)
-        restore_signal_disposition(sig);
-    pthread_mutex_unlock(&sigint_disposition_lock);
+    int last_errno = errno;
+    if (!jl_notify_signal_watchers(sig))
+        run_saved_handler(sig, info, context);
+    errno = last_errno;
+}
+
+// The signal thread already gets the signals it waits for, so only the others need a handler.
+static int jl_signal_watch_install(int sig)
+{
+    if (is_sigwait_sig(sig))
+        return 0;
+    struct sigaction act;
+    memset(&act, 0, sizeof(act));
+    sigemptyset(&act.sa_mask);
+    act.sa_sigaction = signal_watch_handler;
+    act.sa_flags = SA_SIGINFO | SA_RESTART | SA_ONSTACK;
+    if (sigaction(sig, &act, &saved_handlers[sig]) != 0)
+        return -errno;
+    return 0;
+}
+
+static void jl_signal_watch_uninstall(int sig)
+{
+    if (!is_sigwait_sig(sig))
+        sigaction(sig, &saved_handlers[sig], NULL);
 }
 
 // SIGRTMIN and SIGRTMAX can be run-time values, so they cannot be Julia constants.
@@ -1466,21 +1470,21 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             for (const int *sig = sigwait_sigs; *sig; sig++)
                 signal(*sig, SIG_DFL);
         }
-        else {
-            jl_atomic_store_relaxed(&kqueue_signals, 1);
-            if (exit_with_parent_pid)
-                parent_gone = kqueue_parent(sigqueue, &ev);
+        else if (exit_with_parent_pid) {
+            parent_gone = kqueue_parent(sigqueue, &ev);
         }
     }
 #endif
     while (1) {
         sig = 0;
         errno = 0;
+        int parent_exited = 0;
 #ifdef HAVE_KEVENT
         if (parent_gone) {
             // exit as if terminated, as we would on the parent's exit event
             parent_gone = 0;
             sig = SIGTERM;
+            parent_exited = 1;
         }
         else if (sigqueue != -1) {
             int nevents = kevent(sigqueue, NULL, 0, &ev, 1, NULL);
@@ -1490,7 +1494,6 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 perror("signal kevent");
             }
             if (nevents != 1) {
-                jl_atomic_store_relaxed(&kqueue_signals, 0);
                 close(sigqueue);
                 sigqueue = -1;
                 for (const int *sig = sigwait_sigs; *sig; sig++)
@@ -1498,7 +1501,8 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 continue;
             }
             // exit as if terminated when our parent exits
-            sig = ev.filter == EVFILT_PROC ? SIGTERM : ev.ident;
+            parent_exited = ev.filter == EVFILT_PROC;
+            sig = parent_exited ? SIGTERM : ev.ident;
         }
         else
 #endif
@@ -1517,8 +1521,10 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
         // exit as if terminated when our parent exits.
         // Linux also sends this when the thread that spawned us exits, in which case
         // another thread of the parent adopts us and we handle it as a normal SIGUSR1.
-        if (sig == SIGUSR1 && exit_with_parent_pid && getppid() != exit_with_parent_pid)
+        if (sig == SIGUSR1 && exit_with_parent_pid && getppid() != exit_with_parent_pid) {
             sig = SIGTERM;
+            parent_exited = 1;
+        }
 #endif
         profile = 0;
 #ifndef HAVE_MACH
@@ -1531,19 +1537,15 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #endif
 #endif
 #endif
-        pthread_mutex_lock(&sigint_disposition_lock);
-        int forwarded = !profile && forward_to_installed_handler(sig);
-        int ignored = !forwarded && sig == SIGINT && jl_ignore_sigint();
-        pthread_mutex_unlock(&sigint_disposition_lock);
-        if (forwarded)
+        if (sig == SIGINT && jl_ignore_sigint())
+            continue;
+        // Watchers do not see a parent's exit, which must always end this process.
+        if (!profile && !parent_exited && jl_notify_signal_watchers(sig))
             continue;
 
         if (sig == SIGINT) {
-            if (ignored) {
-                continue;
-            }
-            else if (jl_sigint_get_policy() == JL_SIGINT_EXIT ||
-                     !jl_sigint_request_cancellation()) {
+            if (jl_sigint_get_policy() == JL_SIGINT_EXIT ||
+                    !jl_sigint_request_cancellation()) {
                 critical = 1;
             }
             else {

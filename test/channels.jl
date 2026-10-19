@@ -679,6 +679,7 @@ end
 
 @testset "SignalCondition" begin
     @test_throws ArgumentError Base.SignalCondition(Base.SIGKILL)
+    Sys.iswindows() || @test_throws ArgumentError Base.SignalCondition(Base.SIGCHLD)
     @test_throws ArgumentError Base.SignalCondition(0)
     let s = Base.SignalCondition(Base.SIGWINCH)
         @test repr(s) == "SignalCondition(SIGWINCH ($(Base.SIGWINCH)), open)"
@@ -707,7 +708,7 @@ end
         end
     end
     if !Sys.iswindows()
-        # SIGTERM and SIGINT go through the runtime's signal thread, SIGHUP straight to libuv.
+        # SIGTERM and SIGINT go through the runtime's signal thread, SIGHUP through a handler.
         @testset "$name" for (name, sig) in (("SIGTERM", Base.SIGTERM), ("SIGHUP", Base.SIGHUP),
                                              ("SIGINT", Base.SIGINT))
             script = """
@@ -791,6 +792,16 @@ end
                 kill(p, Base.SIGKILL)
                 rm(errfile, force=true)
             end
+        end
+
+        @testset "closing puts back the previous handler" begin
+            script = """
+                ccall(:signal, Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Base.SIGHUP, Ptr{Cvoid}(1)) # SIG_IGN
+                close(Base.SignalCondition(Base.SIGHUP))
+                ccall(:raise, Cint, (Cint,), Base.SIGHUP)
+                println("alive")
+                """
+            @test readchomp(`$(Base.julia_cmd()) --startup-file=no -e $script`) == "alive"
         end
 
         @testset "several conditions on one signal" begin

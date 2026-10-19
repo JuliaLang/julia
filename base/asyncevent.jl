@@ -96,7 +96,6 @@ The signals that have a named constant in `Base` can be watched as follows:
 | `Base.SIGUSR2`  | no         | macOS only | no      | exit                                  |
 | `Base.SIGALRM`  | yes        | yes        | no      | exit                                  |
 | `Base.SIGTERM`  | yes        | yes        | no      | exit                                  |
-| `Base.SIGCHLD`  | yes        | yes        | no      | none                                  |
 | `Base.SIGCONT`  | yes        | yes        | no      | resume if stopped (always happens)    |
 | `Base.SIGWINCH` | yes        | yes        | yes     | none                                  |
 | `Base.SIGINFO`  | no         | yes        | no      | profile peek                          |
@@ -107,8 +106,8 @@ both: Ctrl-C then only notifies the condition, which is a safer place to stop wo
 condition's task cannot run, for example because other code never yields, then on Unix
 Ctrl-\\ (`SIGQUIT`) still stops Julia, unless `SIGQUIT` is also being watched.
 
-The signals Julia itself relies on, such as `SIGSEGV`, `SIGPIPE` and `SIGUSR2` outside
-macOS, cannot be watched, nor can the signals that cannot be caught (`SIGKILL`, `SIGSTOP`).
+The signals Julia itself relies on, such as `SIGSEGV`, `SIGPIPE`, `SIGCHLD` and `SIGUSR2`
+outside macOS, cannot be watched, nor can the signals that cannot be caught (`SIGKILL`, `SIGSTOP`).
 Watching one throws an `ArgumentError`.
 
 On Windows, libuv reports console events as signals: Ctrl+C as `SIGINT`, Ctrl+Break as
@@ -150,26 +149,42 @@ mutable struct SignalCondition
                 ccall(:jl_signal_is_reserved, Cint, (Cint,), signum) != 0
             throw(ArgumentError("signal $signum cannot be watched"))
         end
-        this = new(Libc.malloc(_sizeof_uv_signal), ThreadSynchronizer(), true, false, signum)
+        this = new(Libc.malloc(_sizeof_uv_async), ThreadSynchronizer(), true, false, signum)
         iolock_begin()
         associate_julia_struct(this.handle, this)
-        err = ccall(:uv_signal_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), eventloop(), this)
+        err = ccall(:uv_async_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+            eventloop(), this, @cfunction(uv_asynccb, Cvoid, (Ptr{Cvoid},)))
         if err != 0
             Libc.free(this.handle)
             this.handle = C_NULL
             iolock_end()
-            throw(_UVError("uv_signal_init", err))
+            throw(_UVError("uv_async_init", err))
         end
         finalizer(uvfinalize, this)
-        err = ccall(:jl_start_signal_watcher, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cint),
-            this, @cfunction(uv_signalcb, Cvoid, (Ptr{Cvoid}, Cint)), signum)
+        err = ccall(:jl_signal_watch_start, Cint, (Cint, Cint, Ptr{Cvoid}),
+            signum, true, @cfunction(uv_signalcb, Cvoid, (Ptr{Cvoid},)))
+        err == 0 && push!(get!(Vector{SignalCondition}, SIGNAL_WATCHERS, this.signum), this)
         iolock_end()
         if err != 0
             close(this)
-            throw(_UVError("uv_signal_start", err))
+            throw(_UVError("jl_signal_watch_start", err))
         end
         return this
     end
+end
+
+# The open conditions for each signal, guarded by the IO lock. This also keeps them alive until closed.
+const SIGNAL_WATCHERS = Dict{Cint, Vector{SignalCondition}}()
+
+# Called with the IO lock held; does nothing if `s` is not watching.
+function unwatch_signal(s::SignalCondition)
+    watchers = get(SIGNAL_WATCHERS, s.signum, nothing)
+    watchers === nothing && return
+    i = findfirst(x -> x === s, watchers)
+    i === nothing && return
+    deleteat!(watchers, i)
+    ccall(:jl_signal_watch_stop, Cvoid, (Cint, Cint), s.signum, true)
+    nothing
 end
 
 """
@@ -388,6 +403,7 @@ function close(t::Union{Timer, AsyncCondition, SignalCondition})
     if t.handle != C_NULL
         if t.isopen
             @atomic :release t.isopen = false
+            t isa SignalCondition && unwatch_signal(t)
             ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
         end
         # implement _trywait here without the auto-reset function, just waiting for the final close signal
@@ -427,6 +443,7 @@ function uvfinalize(t::Union{Timer, AsyncCondition, SignalCondition})
             disassociate_julia_struct(t.handle) # not going to call the usual close hooks anymore
             if t.isopen
                 @atomic :release t.isopen = false
+                t isa SignalCondition && unwatch_signal(t)
                 ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle) # this will call Libc.free
             end
             @atomic :monotonic t.handle = C_NULL
@@ -444,6 +461,8 @@ function _uv_hook_close(t::Union{Timer, AsyncCondition, SignalCondition})
     try
         handle = t.handle
         @atomic :release t.isopen = false
+        # Closing every handle at exit gets here without `close`.
+        t isa SignalCondition && unwatch_signal(t)
         @atomic :monotonic t.handle = C_NULL
         Libc.free(handle)
         notify(t.cond, false)
@@ -454,7 +473,7 @@ function _uv_hook_close(t::Union{Timer, AsyncCondition, SignalCondition})
 end
 
 function uv_asynccb(handle::Ptr{Cvoid})
-    async = @handle_as handle AsyncCondition
+    async = @handle_as handle Union{AsyncCondition, SignalCondition}
     lock(async.cond) # acquire barrier
     try
         @atomic :release async.set = true
@@ -465,14 +484,14 @@ function uv_asynccb(handle::Ptr{Cvoid})
     nothing
 end
 
-function uv_signalcb(handle::Ptr{Cvoid}, ::Cint)
-    s = @handle_as handle SignalCondition
-    lock(s.cond)
-    try
-        @atomic :release s.set = true
-        notify(s.cond, true)
-    finally
-        unlock(s.cond)
+# The runtime calls this on the event loop after it sees a watched signal.
+# It notifies the conditions directly. An exit can stop this thread partway through waking a
+# handle, which leaves the handle busy, and closing a busy handle at exit spins forever.
+function uv_signalcb(::Ptr{Cvoid})
+    while (sig = ccall(:jl_signal_take_pending, Cint, ())) != 0
+        for s in get(SIGNAL_WATCHERS, sig, ())
+            isopen(s) && uv_asynccb(s.handle)
+        end
     end
     nothing
 end

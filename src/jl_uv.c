@@ -33,6 +33,7 @@ extern "C" {
 #endif
 
 static uv_async_t signal_async;
+static uv_async_t signal_watch_async;
 static uv_timer_t wait_empty_worker;
 
 static void walk_print_cb(uv_handle_t *h, void *arg)
@@ -118,6 +119,20 @@ void jl_wake_libuv(void)
     uv_async_send(&signal_async);
 }
 
+// Called with the IO lock held. Signal handlers may still use the handle after it is closed at exit.
+void jl_init_signal_watchers(uv_async_cb cb)
+{
+    if (signal_watch_async.type != UV_ASYNC) {
+        uv_async_init(jl_io_loop, &signal_watch_async, cb);
+        uv_unref((uv_handle_t*)&signal_watch_async);
+    }
+}
+
+void jl_wake_signal_watchers(void)
+{
+    uv_async_send(&signal_watch_async);
+}
+
 jl_mutex_t jl_uv_mutex;
 
 void jl_init_uv(void)
@@ -194,7 +209,7 @@ static void jl_uv_closeHandle(uv_handle_t *handle) JL_CANSAFEPOINT
     }
     if (handle == (uv_handle_t*)&wait_empty_worker)
         handle->type = UV_UNKNOWN_HANDLE;
-    else if (handle == (uv_handle_t*)&signal_async)
+    else if (handle == (uv_handle_t*)&signal_async || handle == (uv_handle_t*)&signal_watch_async)
         return;
     else
         free(handle);
@@ -440,9 +455,6 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
             uv_write_t *req = (uv_write_t*)malloc_s(sizeof(uv_write_t));
             req->handle = (uv_stream_t*)handle;
             jl_uv_flush_close_callback(req, 0);
-        }
-        else if (handle->type == UV_SIGNAL) {
-            jl_close_signal_watcher((uv_signal_t*)handle, &jl_uv_closeHandle);
         }
         else {
             uv_close(handle, &jl_uv_closeHandle);
