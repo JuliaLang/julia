@@ -1125,7 +1125,7 @@ function splice!(B::BitVector, r::Union{AbstractUnitRange{Int}, Integer}, ins)
     Bins = BitVector(undef, length(ins))
     i = 1
     for x in ins
-        Bins[i] = convert(Bool, x)
+        Bins[i] = x
         i += 1
     end
     return splice!(B, r, Bins)
