@@ -444,28 +444,17 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
     elseif k == :(=)
         convert_assignment(ctx, ex)
     elseif k == :isdefined
-        # Convert isdefined expr to function for closure converted variables
-        var = ex[1]
-        if head(var) === :static_parameter
+        if head(ex[1]) === :static_parameter
             ex
-        elseif (binfo = get_binding(ctx, var); is_boxed(binfo))
-            access = is_self_captured(ctx, var) ? captured_var_access(ctx, var) : var
-            @ast ctx ex [:call
-                "isdefined"::core
-                access
-                "contents"::symbol
-            ]
-        elseif binfo.is_always_defined || is_self_captured(ctx, var)
-            # Captured but unboxed vars are always defined
-            @ast ctx ex true::value
-        elseif binfo.kind == :global
-            # Normal isdefined won't work for globals (#56985)
-            @ast ctx ex [:call
-                "isdefinedglobal"::core
-                binfo.mod::value
-                binfo.name::symbol]
+        elseif (b = get_binding(ctx, ex[1]); b.kind === :global)
+            @ast ctx ex [:call "isdefinedglobal"::core b.mod::value b.name::symbol]
+        elseif !b.is_captured
+            ex
+        elseif is_boxed(b)
+            access = is_self_captured(ctx, ex[1]) ? captured_var_access(ctx, ex[1]) : ex[1]
+            @ast ctx ex [:call "isdefined"::core access "contents"::symbol]
         else
-            ex
+            @ast ctx ex true::value
         end
     elseif k == :decl
         @jl_assert head(ex[1]) == :bindingid ex
