@@ -1725,3 +1725,14 @@ end
 @test !Compiler.is_inaccessiblememonly(Base.infer_effects(x -> x.b, (ConstFieldEffects,)))
 @test Compiler.is_inaccessiblememonly(Base.infer_effects(x -> getfield(x, 1), (Tuple{Vector{Int}},)))
 @test !Compiler.is_inaccessiblememonly(Base.infer_effects(x -> getfield(x, :ptr), (Memory{Int},)))
+
+# relocated pointer fields are not folded from constant objects
+const relocatable_mem = Memory{Int}(undef, 2)
+const relocatable_refs = (memoryref(relocatable_mem, 1), memoryref(relocatable_mem, 2))
+relocatable_ptr(m) = m.ptr
+@test !fully_eliminated(() -> relocatable_mem.ptr, ())
+@test !fully_eliminated(() -> relocatable_ptr(relocatable_mem), ())
+@test !fully_eliminated(() -> getfield(relocatable_refs[1], :ptr_or_offset), ())
+@test !any(get_code(c -> getfield(c ? relocatable_refs[1] : relocatable_refs[2], :ptr_or_offset), (Bool,))) do x
+    x isa PhiNode && any(v -> v isa Ptr, x.values)
+end
