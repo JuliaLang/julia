@@ -1899,28 +1899,26 @@ void LateLowerGCFrame::ElideFreshWriteBarriers(Function &F, State &S)
         return Safepoints.contains(&I) ||
                (CB && (!isa<CallInst>(CB) || CB->getOperandBundle("gc-transition")));
     };
-    // The fresh allocation after `I`, given the one before it (nullptr for none)
-    auto Transfer = [&](Instruction &I, Instruction *Fresh) -> Instruction * {
-        if (Allocs.contains(&I))
-            return &I;
-        if (IsSafepoint(I))
-            return nullptr;
-        return Fresh;
-    };
-
-    // The state that each reachable block leaves behind, or none if it passes its entry state through
+    // Each reachable block's transfer function. Allocations and safepoints both overwrite the state,
+    // so a block either sets a constant (its last allocation or safepoint, as an instruction or
+    // nullptr) or passes its entry state through (unset).
     ReversePostOrderTraversal<Function *> RPOT(&F);
-    DenseMap<BasicBlock *, std::optional<Instruction *>> Out;
+    DenseMap<BasicBlock *, std::optional<Instruction *>> LastDef;
     for (BasicBlock *BB : RPOT) {
-        std::optional<Instruction *> &BBOut = Out[BB];
+        std::optional<Instruction *> &BBLastDef = LastDef[BB];
         for (Instruction &I : *BB) {
-            if (Allocs.contains(&I) || IsSafepoint(I))
-                BBOut = Transfer(I, nullptr);
+            if (Allocs.contains(&I))
+                BBLastDef = &I;
+            else if (IsSafepoint(I))
+                BBLastDef = nullptr;
         }
     }
 
-    // The fresh allocation on entry to each reachable block. Unset means that no path from the entry
-    // has been propagated yet, so that loops without safepoints keep their entry state.
+    // The fresh allocation on entry to each reachable block, iterated to the greatest fixpoint. Unset
+    // is the top of the lattice and the identity for the meet. In reverse post-order only a back edge
+    // can come from a block not visited yet, so the first pass ignores those edges and later passes
+    // include them in the meet once their states are known. Values only descend (unset, allocation,
+    // nullptr), so each block changes at most twice and no worklist is needed.
     DenseMap<BasicBlock *, std::optional<Instruction *>> In;
     In[&F.getEntryBlock()] = nullptr;
     bool Changed = true;
@@ -1931,10 +1929,10 @@ void LateLowerGCFrame::ElideFreshWriteBarriers(Function &F, State &S)
                 continue;
             std::optional<Instruction *> NewIn;
             for (BasicBlock *Pred : predecessors(BB)) {
-                auto It = Out.find(Pred);
-                if (It == Out.end()) // unreachable
-                    continue;
-                std::optional<Instruction *> PredOut = It->second ? It->second : In.lookup(Pred);
+                // An unreachable predecessor has neither entry, so it is skipped like an unvisited one.
+                std::optional<Instruction *> PredOut = LastDef.lookup(Pred);
+                if (!PredOut)
+                    PredOut = In.lookup(Pred);
                 if (!PredOut)
                     continue;
                 if (!NewIn)
@@ -1957,8 +1955,10 @@ void LateLowerGCFrame::ElideFreshWriteBarriers(Function &F, State &S)
         for (Instruction &I : make_early_inc_range(*BB)) {
             if (Fresh && ParentAlloc(I) == Fresh)
                 I.eraseFromParent();
-            else
-                Fresh = Transfer(I, Fresh);
+            else if (Allocs.contains(&I))
+                Fresh = &I;
+            else if (IsSafepoint(I))
+                Fresh = nullptr;
         }
     }
 }
