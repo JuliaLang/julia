@@ -186,6 +186,11 @@ Build system changes
   build of the runtime without the JIT, so that tools such as JuliaC.jl can link it with a trimmed
   system image into one executable ([#63618]).
 
+* Stdlib package images for `--check-bounds=yes` are no longer bundled by default, since `Pkg.test`
+  no longer forces bounds checking. Nightlies and releases provide these as a separate download.
+  Build with `make checkbounds-pkgimages` to create a companion archive, or set
+  `JULIA_CHECK_BOUNDS_PKGIMAGES=1` to bundle them ([#60054]).
+
 New library functions
 ---------------------
 
@@ -298,6 +303,75 @@ Standard library changes
   system errors in favor of Julia exceptions, addressing several longstanding issues ([#60955]).
 * `Mmap.Anonymous` deprecated in favor of new `Mmap.SharedMemory`, which acts like an IO object abstracting over
   a named or anonymous shared memory segment supporting the `open`/`close` convention ([#60955]).
+
+#### Package Manager
+
+##### Resolver
+
+* Pkg now resolves package versions with an exact SAT-based resolver from
+  [Resolver.jl](https://github.com/JuliaLang/Resolver.jl). It finds the same solutions as the previous resolver
+  where one exists and is typically faster. When the requirements cannot be satisfied it reports each conflict
+  with the chain of compat entries behind it, the project file and line to edit in a workspace, and verified
+  changes that would fix it. The previous resolver can be selected with `JULIA_PKG_RESOLVER=maxsum`
+  ([Pkg.jl#4738](https://github.com/JuliaLang/Pkg.jl/pull/4738), [Pkg.jl#4820](https://github.com/JuliaLang/Pkg.jl/pull/4820)).
+* New `[compat-overrides]` project section. An entry replaces every compat constraint on a package, including
+  those of the packages that depend on it, e.g. to try a new version that a dependency does not allow yet.
+  Only the overrides of the active project (and its workspace) apply ([Pkg.jl#4841](https://github.com/JuliaLang/Pkg.jl/pull/4841)).
+* `[compat]` entries for `[extras]` packages are now honored by `Pkg.update` and `Pkg.instantiate`; previously
+  they were ignored there and made `Pkg.resolve` error ([Pkg.jl#4840](https://github.com/JuliaLang/Pkg.jl/pull/4840)).
+
+##### Working with environments
+
+* `Pkg.add`, `Pkg.update` and `Pkg.resolve` accept `lazy=true` (`--lazy` in the REPL) to update the project and
+  manifest without installing anything new. Run `Pkg.instantiate()` to finish installing ([Pkg.jl#4834](https://github.com/JuliaLang/Pkg.jl/pull/4834)).
+* `pkg> add --from env` and `Pkg.add(from=env)` add the direct dependencies of other environments, given as a
+  shared environment name (`@v1.13`), a project file or a directory. This makes it easy to populate the default
+  environment of a new Julia version from the previous one ([Pkg.jl#4777](https://github.com/JuliaLang/Pkg.jl/pull/4777)).
+* `Pkg.instantiate` accepts `update_on_mismatch=true` (`-u`/`--update_on_mismatch` in the REPL) to fall back to
+  `Pkg.update()` when the manifest does not match the project or was resolved by a different Julia minor
+  version, instead of warning or erroring ([Pkg.jl#4678](https://github.com/JuliaLang/Pkg.jl/pull/4678)).
+* `Pkg.why` now prints a tree rather than every path through the dependency graph, which could run to
+  thousands of lines. The new `forward` keyword (`--forward`/`-f`) prints the paths top-down from the direct
+  dependencies instead ([Pkg.jl#4839](https://github.com/JuliaLang/Pkg.jl/pull/4839)).
+* `Pkg.activate` warns when packages already loaded in the session differ in version or path from what the
+  newly activated environment specifies ([Pkg.jl#4679](https://github.com/JuliaLang/Pkg.jl/pull/4679)).
+* In workspaces, `pkg> test` tab-completes the other workspace projects, `--workspace` completions cover the
+  dependencies of every workspace project, and `Pkg.precompile` accepts the name of any of them ([Pkg.jl#4811](https://github.com/JuliaLang/Pkg.jl/pull/4811)).
+
+##### Project and manifest files
+
+* Comments in `Project.toml` are now preserved when Pkg writes the file ([Pkg.jl#4746](https://github.com/JuliaLang/Pkg.jl/pull/4746)).
+* Manifests now record an `environment_id` (the project `uuid`, or a generated UUID kept from then on) and,
+  when the project has a `name`, an `environment_name`. Julia mixes the id into precompile cache file names
+  ([#63268]). Writing them bumps the manifest format to `"2.2"` ([Pkg.jl#4824](https://github.com/JuliaLang/Pkg.jl/pull/4824)).
+* A project's `syntax.julia_version` is recorded in the manifest ([Pkg.jl#4520](https://github.com/JuliaLang/Pkg.jl/pull/4520)).
+
+##### Precompilation
+
+* Interactive precompilation supports keyboard controls: `d`/`q`/`]` to detach and let it continue in the
+  background, `c` to cancel, `i` for a profile peek, `v` to toggle verbose output and `?`/`h` for help.
+  `pkg> precompile --monitor` reattaches, `--stop` stops gracefully and `--cancel` cancels ([Pkg.jl#4602](https://github.com/JuliaLang/Pkg.jl/pull/4602)).
+* `pkg> precompile` gained `--noskip`, to attempt packages whose dependencies failed to precompile, and
+  `--force`, to recompile packages whose caches are already fresh ([Pkg.jl#4774](https://github.com/JuliaLang/Pkg.jl/pull/4774)).
+
+##### Artifact handling
+
+* Artifact selection hooks (`.pkg/select_artifacts.jl`) can load the dependencies in their package's `[deps]`.
+  Pkg runs them against the resolved manifest after installing dependency artifacts, and caches their results
+  for the session ([Pkg.jl#4747](https://github.com/JuliaLang/Pkg.jl/pull/4747), [Pkg.jl#3167](https://github.com/JuliaLang/Pkg.jl/pull/3167)).
+* During installation Pkg reports when a package has an `Artifacts.toml` but no artifacts match the current
+  platform ([Pkg.jl#4646](https://github.com/JuliaLang/Pkg.jl/pull/4646)).
+
+##### Performance and fixes
+
+* Compressed registries are cached uncompressed on disk and memory-mapped, so the first Pkg operation of a
+  session is much faster (e.g. `Pkg.status()` from ~125 ms to ~19 ms). `JULIA_PKG_REGISTRY_CACHE=false`
+  disables the cache ([Pkg.jl#4797](https://github.com/JuliaLang/Pkg.jl/pull/4797)).
+* `Pkg.test` and `Pkg.build` of an installed (not developed) package no longer fail when it points at sibling
+  packages of its repository by path, as monorepo subpackages do; those dependencies resolve from the
+  registry instead ([Pkg.jl#4861](https://github.com/JuliaLang/Pkg.jl/pull/4861)).
+
+See the [Pkg changelog](https://github.com/JuliaLang/Pkg.jl/blob/master/CHANGELOG.md) for more.
 
 #### Profile
 

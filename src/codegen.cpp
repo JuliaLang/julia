@@ -5577,6 +5577,39 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         return true;
     }
 
+    else if (f == BUILTIN(_svec_ref) && nargs == 2 && argv[1].typ == (jl_value_t*)jl_simplevector_type &&
+             argv[2].typ == (jl_value_t*)jl_long_type) {
+        const jl_cgval_t &obj = argv[1];
+        Value *svec = boxed(ctx, obj);
+        Value *svec_val = decay_derived(ctx, svec);
+        Value *len;
+        if (obj.constant && jl_is_svec(obj.constant))
+            len = ConstantInt::get(ctx.types().T_size, jl_svec_len(obj.constant));
+        else
+            len = ctx.builder.CreateAlignedLoad(ctx.types().T_size, svec_val, Align(ctx.types().sizeof_ptr));
+        Value *idx = emit_unbox(ctx, ctx.types().T_size, argv[2]);
+        // like the builtin, check bounds even with --check-bounds=no
+        Value *im1 = ctx.builder.CreateSub(idx, ConstantInt::get(ctx.types().T_size, 1));
+        Value *ok = ctx.builder.CreateICmpULT(im1, len);
+        BasicBlock *failBB = BasicBlock::Create(ctx.builder.getContext(), "fail", ctx.f);
+        BasicBlock *passBB = BasicBlock::Create(ctx.builder.getContext(), "pass");
+        MDBuilder MDB(ctx.builder.getContext());
+        SmallVector<uint32_t, 2> Weights{2000, 1};
+        ctx.builder.CreateCondBr(ok, passBB, failBB, MDB.createBranchWeights(Weights));
+        ctx.builder.SetInsertPoint(failBB);
+        ctx.builder.CreateCall(prepare_call(jlboundserror_func), { mark_callee_rooted(ctx, svec), idx });
+        ctx.builder.CreateUnreachable();
+        passBB->insertInto(ctx.f);
+        ctx.builder.SetInsertPoint(passBB);
+        Value *data = emit_ptrgep(ctx, svec_val, ctx.types().sizeof_ptr);
+        LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue,
+            ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, data, im1), Align(ctx.types().sizeof_ptr));
+        v->setOrdering(AtomicOrdering::Unordered);
+        setName(ctx.emission_context, v, "svec_ref");
+        *ret = mark_julia_type(ctx, v, true, rt);
+        return true;
+    }
+
     else if (f == BUILTIN(nfields) && nargs == 1) {
         const jl_cgval_t &obj = argv[1];
         if (ctx.vaSlot > 0) {
