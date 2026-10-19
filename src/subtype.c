@@ -6684,6 +6684,7 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
     }
     if (sz == 0 && szb > 0) {
         jl_unionall_t *ub = (jl_unionall_t*)b;
+        i = 0; // the check above may have left i at the first missing slot
         while (jl_is_unionall(ub)) {
             int constrained = constrains_param_static(ub->var, ub->body, 1);
             env[i++] = wrap_tvar_env((jl_value_t*)ub->var, constrained);
