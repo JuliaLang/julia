@@ -530,6 +530,7 @@
     YY(jl_get_llvm_module) \
     YY(jl_get_LLVM_VERSION) \
     YY(jl_dump_native) \
+    YY(jl_free_native) \
     YY(jl_get_llvm_gvs) \
     YY(jl_get_llvm_gv_inits) \
     YY(jl_get_llvm_external_fns) \
