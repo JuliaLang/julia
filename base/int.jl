@@ -77,6 +77,7 @@ signed(::Type{UInt32}) = Int32
 signed(::Type{UInt64}) = Int64
 signed(::Type{UInt128}) = Int128
 signed(::Type{T}) where {T<:Signed} = T
+signed(::Type{Union{}}, slurp...) = throw(MethodError(signed, (Union{}, slurp...)))
 
 ## integer comparisons ##
 
