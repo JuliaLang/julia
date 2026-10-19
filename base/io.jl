@@ -927,8 +927,7 @@ write(s::IO, x::Bool) = write(s, UInt8(x))
 write(to::IO, p::Ptr) = write(to, convert(UInt, p))
 
 function write(s::IO, A::AbstractArray; cancel::CancelTokenArg=DEFAULT_CANCEL)
-    tok = resolve_cancel_token(cancel)
-    @cancel_check tok
+    check_io_cancel(cancel)
     if !isbitstype(eltype(A))
         error("`write` is not supported on non-isbits arrays")
     end
@@ -942,8 +941,7 @@ function write(s::IO, A::AbstractArray; cancel::CancelTokenArg=DEFAULT_CANCEL)
 end
 
 function write(s::IO, A::StridedArray; cancel::CancelTokenArg=DEFAULT_CANCEL)
-    tok = resolve_cancel_token(cancel)
-    @cancel_check tok
+    check_io_cancel(cancel)
     if !isbitstype(eltype(A))
         error("`write` is not supported on non-isbits arrays")
     end
@@ -952,7 +950,7 @@ function write(s::IO, A::StridedArray; cancel::CancelTokenArg=DEFAULT_CANCEL)
     sz::Dims = size(A)
     st::Dims = strides(A)
     msz, mst, n = merge_adjacent_dim(sz, st)
-    mst == 1 || return invoke(write, Tuple{IO, AbstractArray}, s, A)
+    mst == 1 || return invoke(write, Tuple{IO, AbstractArray}, s, A; cancel=nothing)
     n == ndims(A) &&
         return GC.@preserve A unsafe_write(s, pointer(A), elsize(A) * length(A))
     sz′, st′ = tail(sz), tail(st)
@@ -1022,8 +1020,7 @@ read(s::IO, ::Type{Bool}) = (read(s, UInt8) != 0)
 read(s::IO, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(s, UInt))
 
 function read!(s::IO, A::AbstractArray{T}; cancel::CancelTokenArg=DEFAULT_CANCEL) where {T}
-    tok = resolve_cancel_token(cancel)
-    @cancel_check tok
+    check_io_cancel(cancel)
     if isbitstype(T) && _checkcontiguous(Bool, A)
         GC.@preserve A unsafe_read(s, pointer(A), elsize(A) * length(A))
     else
@@ -1063,15 +1060,14 @@ function read!(s::IO, B::BitArray; cancel::CancelTokenArg=DEFAULT_CANCEL)
 end
 
 function read!(s::IO, A::StridedArray{T}; cancel::CancelTokenArg=DEFAULT_CANCEL) where {T}
-    tok = resolve_cancel_token(cancel)
-    @cancel_check tok
+    check_io_cancel(cancel)
     if !isbitstype(T) || _checkcontiguous(Bool, A)
-        return invoke(read!, Tuple{IO, AbstractArray}, s, A)
+        return invoke(read!, Tuple{IO, AbstractArray}, s, A; cancel=nothing)
     end
     sz::Dims = size(A)
     st::Dims = strides(A)
     msz, mst, n = merge_adjacent_dim(sz, st)
-    mst == 1 || return invoke(read!, Tuple{IO, AbstractArray}, s, A)
+    mst == 1 || return invoke(read!, Tuple{IO, AbstractArray}, s, A; cancel=nothing)
     if n == ndims(A)
         GC.@preserve A unsafe_read(s, pointer(A), elsize(A) * length(A))
     else
@@ -1263,7 +1259,7 @@ end
 function readuntil(io::IO, target::AbstractVector{T}; keep::Bool=false,
                    cancel::CancelTokenArg=DEFAULT_CANCEL) where T
     # entry gate only (generic-IO cancel convention)
-    @cancel_check resolve_cancel_token(cancel)
+    check_io_cancel(cancel)
     out = (T === UInt8 ? resize!(StringVector(16), 0) : Vector{T}())
     readuntil_vector!(io, target, keep, out)
     return out
@@ -1271,7 +1267,7 @@ end
 function copyuntil(out::IO, io::IO, target::AbstractVector; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
     # entry gate only, ahead of readuntil_vector!'s generic reads
     # (generic-IO cancel convention)
-    @cancel_check resolve_cancel_token(cancel)
+    check_io_cancel(cancel)
     readuntil_vector!(io, target, keep, out)
     return out
 end

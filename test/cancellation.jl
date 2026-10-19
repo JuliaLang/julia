@@ -1776,6 +1776,58 @@ end
     @test_throws CancellationRequest with(() -> iterate(itr), CANCEL_TOKEN => nothing)
 end
 
+@testset "IO methods check a cancelled token before touching the stream" begin
+    # rejected before any read or write; `cancel = nothing` still runs, also
+    # through the fallbacks that array `read!` and `write` invoke
+    src = CancellationTokenSource()
+    cancel!(src)
+    ctok = CancellationToken(src)
+    reads = Any[
+        (io; kw...) -> eof(io; kw...),
+        (io; kw...) -> readavailable(io; kw...),
+        (io; kw...) -> readuntil(io, 0x0a; kw...),
+        (io; kw...) -> readuntil(io, '\n'; kw...),
+        (io; kw...) -> readuntil(io, b"ne"; kw...),
+        (io; kw...) -> readline(io; kw...),
+        (io; kw...) -> copyuntil(IOBuffer(), io, 0x0a; kw...),
+        (io; kw...) -> copyline(IOBuffer(), io; kw...),
+        (io; kw...) -> read(io, 3; kw...),
+        (io; kw...) -> readbytes!(io, zeros(UInt8, 3); kw...),
+        (io; kw...) -> read!(io, zeros(UInt8, 3); kw...),
+        (io; kw...) -> read!(io, view(zeros(UInt8, 6), 1:2:6); kw...),
+    ]
+    writes = Any[
+        (io; kw...) -> write(io, UInt8[0x01, 0x02]; kw...),
+        (io; kw...) -> write(io, 0x01, 0x02; kw...),
+    ]
+    mktemp() do path, io
+        write(io, "line1\nline2\n")
+        for op in reads
+            seekstart(io)
+            @test_throws CancellationRequest op(io; cancel=ctok)
+            @test_throws CancellationRequest with(() -> op(io), CANCEL_TOKEN => ctok)
+            @test position(io) == 0
+        end
+        for op in writes
+            seekend(io)
+            n = position(io)
+            @test_throws CancellationRequest op(io; cancel=ctok)
+            @test_throws CancellationRequest with(() -> op(io), CANCEL_TOKEN => ctok)
+            @test position(io) == n
+            @test with(() -> op(io; cancel=nothing), CANCEL_TOKEN => ctok) == 2
+        end
+    end
+    mktemp() do path, io
+        write(io, zeros(UInt8, 64))
+        seekstart(io)
+        A = zeros(Float64, 2)
+        B = zeros(Float64, 4)
+        @test with(() -> read!(io, A; cancel=nothing), CANCEL_TOKEN => ctok) === A
+        @test with(() -> read!(io, view(B, 1:2:4); cancel=nothing), CANCEL_TOKEN => ctok) isa SubArray
+        @test with(() -> write(io, view(B, 1:2:4); cancel=nothing), CANCEL_TOKEN => ctok) == 16
+    end
+end
+
 @testset "explicit tokens and shields thread through call chains" begin
     deadsrc = CancellationTokenSource()
     cancel!(deadsrc)
