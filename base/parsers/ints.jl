@@ -172,31 +172,6 @@ function parseint(::Type{T}, buf::AbstractVector{UInt8}, i::Int, j::Int,
     return n
 end
 
-"""
-    Base.Parsers.parsevalue(T, bytes; kw...) -> Union{T, ParseFailure}
-
-Parse all of `bytes`, a one-based `AbstractVector{UInt8}`, as a `T`, or return a
-[`ParseFailure`](@ref Base.Parsers.ParseFailure) instead of throwing. Pass a view, such as
-`view(buf, i:j)`, to parse part of a buffer.
-
-For integer types, the bytes are an optional `-` or `+` (signed types only) followed by
-digits in `base` (keyword, 2 to 62, default 10), with letters for digits above 9 as in
-[`parse`](@ref).
-
-# Examples
-```jldoctest
-julia> Base.Parsers.parsevalue(Int, codeunits("-42"))
--42
-
-julia> Base.Parsers.parsevalue(UInt8, view(codeunits("x=256;"), 3:5))
-Base.Parsers.OVERFLOW
-
-julia> Base.Parsers.parsevalue(Int, UInt8[0x37, 0x66]; base = 16)
-127
-```
-"""
-function parsevalue end
-
 @inline function parsevalue(::Type{T}, bytes::AbstractVector{UInt8};
                             base::Integer = 10) where {T<:Integer}
     require_one_based_indexing(bytes)
