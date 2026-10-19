@@ -1823,7 +1823,13 @@ static jl_typemap_entry_t *mt_find_cache_entry(_Atomic(jl_typemap_t*) *cache JL_
     }
     struct jl_typemap_assoc search = {(jl_value_t*)tt, world, NULL};
     assert(cache);
-    jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(cache), &search, offs, /*subtype*/1);
+    // the lookup can reach a safepoint, and another thread may replace the
+    // cache (via Base.drop_all_caches) when the caller doesn't hold the
+    // method cache's writelock, so keep the root rooted
+    jl_typemap_t *root = jl_atomic_load_relaxed(cache);
+    JL_GC_PUSH1(&root);
+    jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(root, &search, offs, /*subtype*/1);
+    JL_GC_POP();
     return entry;
 }
 
@@ -5023,6 +5029,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
         (callsite >> 16) & (N_CALL_CACHE - 1),
         (callsite >> 24 | callsite << 8) & (N_CALL_CACHE - 1)};
     jl_typemap_entry_t *entry = NULL;
+    jl_method_instance_t *slow_mfunc = NULL;
     int i;
     jl_tupletype_t *tt = NULL;
     int64_t last_alloc = 0;
@@ -5056,12 +5063,20 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
         if (leafcache != (jl_genericmemory_t*)jl_an_empty_memory_any && (cache_entry_count == 0 || cache_entry_count >= 8)) {
             // hashing args is expensive, but so do that only if looking at mc->cache is probably even more expensive
             tt = lookup_arg_type_tuple(F, args, nargs);
-            if (tt != NULL)
+            // lookup_arg_type_tuple can reach a safepoint (via jl_types_equal),
+            // so mc->leafcache may have been replaced and the old one freed
+            if (tt != NULL) {
+                leafcache = jl_atomic_load_relaxed(&mc->leafcache);
                 entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
+            }
         }
         if (entry == NULL) {
-            jl_typemap_t *cache = jl_atomic_load_relaxed(&mc->cache); // XXX: gc root required?
+            // the lookup can reach a safepoint, and another thread may replace
+            // mc->cache (via Base.drop_all_caches), so keep the root rooted
+            jl_typemap_t *cache = jl_atomic_load_relaxed(&mc->cache);
+            JL_GC_PUSH1(&cache);
             entry = jl_typemap_assoc_exact(cache, F, args, nargs, jl_cachearg_offset(), world);
+            JL_GC_POP();
             if (entry == NULL) {
                 last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
                 if (tt == NULL) {
@@ -5084,16 +5099,18 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
             jl_atomic_store_release(&call_cache[cache_idx[which & 3]], entry);
         }
         if (entry && for_call) {
-            // mfunc was found in slow path, so log --trace-dispatch
-            jl_method_instance_t *mfunc = typemap_entry_linfo(entry);
-            record_dispatch_statement_on_first_dispatch(mfunc);
+            // mfunc was found in slow path, so log --trace-dispatch. That can
+            // reach a safepoint, after which `entry` must not be read again
+            // (it may only be held by a cache another thread can drop).
+            slow_mfunc = typemap_entry_linfo(entry);
+            record_dispatch_statement_on_first_dispatch(slow_mfunc);
         }
     }
 
     jl_method_instance_t *mfunc;
     if (entry) {
 have_entry:
-        mfunc = typemap_entry_linfo(entry);
+        mfunc = slow_mfunc ? slow_mfunc : typemap_entry_linfo(entry);
     }
     else {
         assert(tt);
@@ -5149,8 +5166,15 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t na
 {
     assert(nargs > 0 && "expected caller to handle this case");
     jl_methcache_t *mc = jl_method_table->cache;
-    jl_typemap_t *cache = jl_atomic_load_relaxed(&mc->cache); // XXX: gc root for this?
-    jl_typemap_entry_t *entry = jl_typemap_assoc_exact(cache, args[0], &args[1], nargs, jl_cachearg_offset(), world);
+    // the lookup can reach a safepoint, and another thread may replace
+    // mc->cache (via Base.drop_all_caches), so keep the root rooted
+    jl_typemap_entry_t *entry;
+    {
+        jl_typemap_t *cache = jl_atomic_load_relaxed(&mc->cache);
+        JL_GC_PUSH1(&cache);
+        entry = jl_typemap_assoc_exact(cache, args[0], &args[1], nargs, jl_cachearg_offset(), world);
+        JL_GC_POP();
+    }
     if (entry)
         return typemap_entry_linfo(entry);
     jl_tupletype_t *tt = arg_type_tuple(args[0], &args[1], nargs);
@@ -5930,9 +5954,13 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
             jl_typemap_entry_t *entry = lookup_leafcache(leafcache, (jl_value_t*)type, world);
             if (entry) {
                 // leafcache found a match, construct the MethodMatch by computing the effective
-                // types + sparams and the world bounds
+                // types + sparams and the world bounds. Read everything needed from `entry`
+                // before allocating: it may only be held by the leafcache, which another
+                // thread can reset (e.g. when defining a method).
                 jl_method_instance_t *mi = typemap_entry_linfo(entry);
                 jl_method_t *meth = mi->def.method;
+                size_t min_world = jl_atomic_load_relaxed(&entry->min_world);
+                size_t max_world = jl_atomic_load_relaxed(&entry->max_world);
                 if (!jl_is_unionall(meth->sig)) {
                     env.match.env = jl_emptysvec;
                     env.match.ti = unw;
@@ -5949,8 +5977,6 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
                     env.match.env, meth, 1);
                 env.t = (jl_value_t*)jl_alloc_vec_any(1);
                 jl_array_ptr_set(env.t, 0, env.matc);
-                size_t min_world = jl_atomic_load_relaxed(&entry->min_world);
-                size_t max_world = jl_atomic_load_relaxed(&entry->max_world);
                 if (*min_valid < min_world)
                     *min_valid = min_world;
                 if (*max_valid > max_world)
@@ -5962,7 +5988,12 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
 
         // then check the full cache if it seems profitable
         if (((jl_datatype_t*)unw)->isdispatchtuple) {
-            jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(&mc->cache), &search, jl_cachearg_offset(), /*subtype*/1);
+            // the lookup can reach a safepoint, and another thread may replace
+            // mc->cache (via Base.drop_all_caches), so keep the root rooted
+            jl_typemap_t *cache = jl_atomic_load_relaxed(&mc->cache);
+            JL_GC_PUSH1(&cache);
+            jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(cache, &search, jl_cachearg_offset(), /*subtype*/1);
+            JL_GC_POP();
             if (entry && (((jl_datatype_t*)unw)->isdispatchtuple || entry->guardsigs == jl_emptysvec)) {
                 // full cache found a match, construct the MethodMatch by computing the effective
                 // types + sparams and the world bounds
