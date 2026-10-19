@@ -24,7 +24,7 @@ const _lowering_world = Ref{UInt}(0)
     @static if VERSION >= v"1.14.0-DEV.2635"
         w == 0 || return _invoke_in_world(w, f, args...)
     end
-    return invokelatest(f, args...)
+    return Core.invokelatest(f, args...)
 end
 
 function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
