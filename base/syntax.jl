@@ -105,7 +105,7 @@ Base.lastindex(ex::Syntax) = numchildren(ex)
 #-------------------------------------------------------------------------------
 # AST creation utilities
 
-# fallback printing.  TODO: vulnerable to invalidations
+# fallback printing.  `invokelatest` so new `show` methods don't invalidate callers
 function node_string(ex::Syntax, depth=2)
     out = "(head="*string(head(ex))
     for n in sort!(collect(fieldnames(typeof(ex))))
@@ -115,9 +115,9 @@ function node_string(ex::Syntax, depth=2)
                 node_string(val, depth-1)
             elseif isbits(val) || val isa
                 Union{AbstractString, Symbol, Module, LineNumberNode}
-                repr(val)
+                invokelatest(repr, val)::String
             else
-                repr(typeof(val))
+                invokelatest(repr, typeof(val))::String
             end
             out *= ", "*string(n)*"="*val_str
         end
