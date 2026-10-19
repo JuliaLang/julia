@@ -2,6 +2,9 @@ name = "Future"
 uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
 version = "1.11.0"
 
+[syntax]
+julia_version = "1.14"
+
 [deps]
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
