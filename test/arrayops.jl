@@ -1475,6 +1475,10 @@ end
 
     C = trues(5,4)
     @test mightalias(C, reshape(C,10,2))
+    b = BitVector([1, 0, 0, 0])
+    r = reshape(b, 2, 2)
+    b[2:4] .= @view r[1:3]
+    @test b == [1, 1, 0, 0]
 
     AA = [[1],[2]]
     @test @views mightalias(AA, AA[:])
