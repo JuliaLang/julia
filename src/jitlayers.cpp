@@ -201,10 +201,8 @@ static void jl_promote_method_roots(jl_codegen_output_t &out, jl_method_instance
 
 StringRef jl_codegen_output_t::strip_linux(StringRef name)
 {
-    if (TargetTriple.isOSLinux()) {
-        if (name[0] == '@')
-            return name.drop_front();
-    }
+    if (TargetTriple.isOSLinux())
+        name.consume_front("@");
     return name;
 }
 
