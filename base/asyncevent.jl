@@ -73,17 +73,21 @@ end
 ## signal notifications
 
 """
-    SignalCondition(signum::Integer)
+    SignalCondition(signum::Integer; intercept::Bool=false)
 
 Create a condition that wakes up tasks waiting for it (by calling [`wait`](@ref) on the
-object) when the process receives the signal `signum`, for example `Base.SIGTERM` or
-`Base.SIGHUP`. Several deliveries that arrive before a waiting task runs are reported once.
+object) when the process receives the signal `signum`, for example `Base.SIGHUP` or
+`Base.SIGWINCH`. Several deliveries that arrive before a waiting task runs are reported once.
 
-While any `SignalCondition` for `signum` is open, the signal no longer has its usual
-effect: receiving `SIGTERM`, for instance, no longer exits Julia. Closing the last one with
-[`close`](@ref) restores it. A handler therefore usually ends by calling [`exit`](@ref)
-itself once it has shut down cleanly. Some effects happen regardless: a stopped process
-still resumes on `SIGCONT`.
+By default the condition only observes the signal, which still has its usual effect:
+`SIGTERM`, for instance, still exits Julia. Pass `intercept=true` to replace the usual
+effect. While any intercepting condition for `signum` is open, the signal only notifies the
+conditions, and closing the last one with [`close`](@ref) restores the usual effect. Some
+effects happen regardless: a stopped process still resumes on `SIGCONT`.
+
+To clean up when `SIGTERM` stops Julia, prefer [`atexit`](@ref) to intercepting the signal,
+since that exit runs the `atexit` hooks. Intercept it only when the program must decide for
+itself when to stop, and then end the handler with [`exit`](@ref).
 
 The signals that have a named constant in `Base` can be watched as follows:
 
@@ -100,11 +104,11 @@ The signals that have a named constant in `Base` can be watched as follows:
 | `Base.SIGWINCH` | yes        | yes        | yes     | none                                  |
 | `Base.SIGINFO`  | no         | yes        | no      | profile peek                          |
 
-Without a `SignalCondition`, Ctrl-C (`SIGINT`) interrupts running code through task
-cancellation (see [`CancellationToken`](@ref)), or exits a script. Watching `SIGINT` replaces
-both: Ctrl-C then only notifies the condition, which is a safer place to stop work. If the
-condition's task cannot run, for example because other code never yields, then on Unix
-Ctrl-\\ (`SIGQUIT`) still stops Julia, unless `SIGQUIT` is also being watched.
+Ctrl-C (`SIGINT`) interrupts running code through task cancellation (see
+[`CancellationToken`](@ref)), or exits a script. It can be observed but not intercepted, so
+that code relying on cancellation keeps working. If an intercepting condition's task cannot
+run, for example because other code never yields, then on Unix Ctrl-\\ (`SIGQUIT`) still
+stops Julia, unless `SIGQUIT` is also intercepted.
 
 The signals Julia itself relies on, such as `SIGSEGV`, `SIGPIPE`, `SIGCHLD` and `SIGUSR2`
 outside macOS, cannot be watched, nor can the signals that cannot be caught (`SIGKILL`, `SIGSTOP`).
@@ -112,24 +116,24 @@ Watching one throws an `ArgumentError`.
 
 On Windows, libuv reports console events as signals: Ctrl+C as `SIGINT`, Ctrl+Break as
 `SIGBREAK` (21), closing the console as `SIGHUP`, and resizing it as `SIGWINCH`. No other
-signals are available there. While `SIGHUP` is watched, closing the console no longer exits
+signals are available there. While `SIGHUP` is intercepted, closing the console no longer exits
 Julia by itself, so the handler should call [`exit`](@ref); Windows ends the process a few
 seconds after the console closes in any case.
 
 Other signals can be watched by number. For real-time signals use
 `Base.sigrtmin() + n`, like `SIGRTMIN+n` in C (see [`Base.sigrtmin`](@ref)). The numbers of
 the rest, such as `SIGPROF`, differ between platforms; see `signal.h` or `man 7 signal`.
-Watching `SIGTSTP` stops Ctrl-Z from suspending Julia.
+Intercepting `SIGTSTP` stops Ctrl-Z from suspending Julia.
 
 Handling a signal needs the event loop to run, so a task busy in a loop that never yields
 delays it until it does.
 
 # Examples
 ```julia
-term = Base.SignalCondition(Base.SIGTERM)
+term = Base.SignalCondition(Base.SIGTERM; intercept=true)
 Threads.@spawn begin
     wait(term)
-    save_checkpoint()
+    finish_current_job()
     exit(0)
 end
 ```
@@ -143,13 +147,17 @@ mutable struct SignalCondition
     @atomic isopen::Bool
     @atomic set::Bool
     signum::Cint
+    intercept::Bool
 
-    function SignalCondition(signum::Integer)
+    function SignalCondition(signum::Integer; intercept::Bool=false)
         if !(typemin(Cint) <= signum <= typemax(Cint)) ||
                 ccall(:jl_signal_is_reserved, Cint, (Cint,), signum) != 0
             throw(ArgumentError("signal $signum cannot be watched"))
         end
-        this = new(Libc.malloc(_sizeof_uv_async), ThreadSynchronizer(), true, false, signum)
+        if intercept && signum == SIGINT
+            throw(ArgumentError("SIGINT cannot be intercepted, as Ctrl-C goes through task cancellation"))
+        end
+        this = new(Libc.malloc(_sizeof_uv_async), ThreadSynchronizer(), true, false, signum, intercept)
         iolock_begin()
         associate_julia_struct(this.handle, this)
         err = ccall(:uv_async_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
@@ -162,7 +170,7 @@ mutable struct SignalCondition
         end
         finalizer(uvfinalize, this)
         err = ccall(:jl_signal_watch_start, Cint, (Cint, Cint, Ptr{Cvoid}),
-            signum, true, @cfunction(uv_signalcb, Cvoid, (Ptr{Cvoid},)))
+            signum, intercept, @cfunction(uv_signalcb, Cvoid, (Ptr{Cvoid},)))
         err == 0 && push!(get!(Vector{SignalCondition}, SIGNAL_WATCHERS, this.signum), this)
         iolock_end()
         if err != 0
@@ -183,32 +191,33 @@ function unwatch_signal(s::SignalCondition)
     i = findfirst(x -> x === s, watchers)
     i === nothing && return
     deleteat!(watchers, i)
-    ccall(:jl_signal_watch_stop, Cvoid, (Cint, Cint), s.signum, true)
+    ccall(:jl_signal_watch_stop, Cvoid, (Cint, Cint), s.signum, s.intercept)
     nothing
 end
 
 """
-    SignalCondition(callback::Function, signum::Integer)
+    SignalCondition(callback::Function, signum::Integer; intercept::Bool=false)
 
 Create a [`SignalCondition`](@ref) that calls `callback` when the process receives the
-signal `signum`. Several deliveries that arrive before the callback runs are reported once,
+signal `signum`. See there for what `intercept` does. Several deliveries that arrive before the callback runs are reported once,
 so the number of calls is not a count of signals. The `callback` is passed one argument, the
 condition object itself.
 
 # Examples
 ```julia
-Base.SignalCondition(Base.SIGHUP) do _
+Base.SignalCondition(Base.SIGHUP; intercept=true) do _
     reload_config()
 end
 ```
 """
-SignalCondition(cb::Function, signum::Integer) = run_callback_task(cb, SignalCondition(signum))
+SignalCondition(cb::Function, signum::Integer; intercept::Bool=false) =
+    run_callback_task(cb, SignalCondition(signum; intercept))
 
 function show(io::IO, s::SignalCondition)
     state = isopen(s) ? "open" : "closed"
     name = signal_name(s.signum)
     signal = name === nothing ? string(s.signum) : "$name ($(s.signum))"
-    print(io, "SignalCondition($signal, $state)")
+    print(io, "SignalCondition($signal", s.intercept ? ", intercept" : "", ", $state)")
 end
 
 ## timer-based notifications

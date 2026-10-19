@@ -686,12 +686,18 @@ end
         close(s)
         @test repr(s) == "SignalCondition(SIGWINCH ($(Base.SIGWINCH)), closed)"
     end
+    let s = Base.SignalCondition(Base.SIGWINCH; intercept=true)
+        @test repr(s) == "SignalCondition(SIGWINCH ($(Base.SIGWINCH)), intercept, open)"
+        close(s)
+    end
+    @test_throws ArgumentError Base.SignalCondition(Base.SIGINT; intercept=true)
     @test_throws ArgumentError Base.SignalCondition(-1)
     @test_throws ArgumentError Base.SignalCondition(typemax(Int))
     if Sys.islinux()
         @test_throws ArgumentError Base.SignalCondition(32)
         @test_throws ArgumentError Base.SignalCondition(Base.sigrtmax() + 1)
-        s = Base.SignalCondition(Base.sigrtmin() + 1)
+        # Without intercepting, the signal would end this process.
+        s = Base.SignalCondition(Base.sigrtmin() + 1; intercept=true)
         t = @async wait(s)
         kill(getpid(), Base.sigrtmin() + 1)
         @test timedwait(() -> istaskdone(t), 60) === :ok
@@ -702,20 +708,17 @@ end
     if Sys.iswindows()
         @test_throws ArgumentError Base.SignalCondition(Base.SIGTERM)
         for sig in (Base.SIGINT, 21, Base.SIGHUP, Base.SIGWINCH)
-            s = Base.SignalCondition(sig)
+            s = Base.SignalCondition(sig; intercept = sig != Base.SIGINT)
             @test isopen(s)
             close(s)
         end
     end
     if !Sys.iswindows()
-        # SIGTERM and SIGINT go through the runtime's signal thread, SIGHUP through a handler.
-        @testset "$name" for (name, sig) in (("SIGTERM", Base.SIGTERM), ("SIGHUP", Base.SIGHUP),
-                                             ("SIGINT", Base.SIGINT))
+        # SIGTERM goes through the runtime's signal thread, SIGHUP through a handler.
+        @testset "intercepting $name" for (name, sig) in (("SIGTERM", Base.SIGTERM), ("SIGHUP", Base.SIGHUP))
             script = """
-                # A watcher takes precedence over exiting on Ctrl-C.
-                Base.exit_on_sigint(true)
                 n = Ref(0)
-                s = Base.SignalCondition($sig) do _
+                s = Base.SignalCondition($sig; intercept=true) do _
                     n[] += 1
                     println("got ", n[])
                 end
@@ -724,13 +727,46 @@ end
                     sleep(0.01)
                 end
                 close(s)
-                Base.exit_on_sigint(false)
                 sleep(0.1)
                 set = zeros(UInt8, 128)
                 ccall(:sigpending, Cint, (Ptr{UInt8},), set)
+                println("closed, pending: ", ccall(:sigismember, Cint, (Ptr{UInt8}, Cint), set, $sig))
+                sleep(600)
+                """
+            errfile = tempname()
+            p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $script`, stderr=errfile), "r")
+            watchdog = Timer(300) do _
+                kill(p, Base.SIGKILL)
+            end
+            try
+                @test readline(p) == "ready"
+                kill(p, sig)
+                @test readline(p) == "got 1"
+                kill(p, sig)
+                @test readline(p) == "got 2"
+                # A pending signal would skip exit cleanup.
+                @test readline(p) == "closed, pending: 0"
+                # With the condition closed, the signal has its usual effect again.
+                kill(p, sig)
+                wait(p)
+                @test p.termsignal == sig
+            finally
+                close(watchdog)
+                kill(p, Base.SIGKILL)
+                wait(p)
+                p.termsignal == sig || print(stderr, read(errfile, String))
+                rm(errfile, force=true)
+            end
+        end
+
+        @testset "observing $name" for (name, sig) in (("SIGTERM", Base.SIGTERM), ("SIGHUP", Base.SIGHUP),
+                                                       ("SIGINT", Base.SIGINT))
+            script = """
+                Base.exit_on_sigint(false)
+                s = Base.SignalCondition(_ -> Core.println("observed"), $sig)
                 try
-                    # The next signal can arrive before this write finishes.
-                    println("closed, pending: ", ccall(:sigismember, Cint, (Ptr{UInt8}, Cint), set, $sig))
+                    # The interrupt can arrive while this print still waits for its write.
+                    println("ready")
                     sleep(600)
                 catch e
                     # The interrupt cancels the rest of this statement, so avoid cancellation points.
@@ -744,17 +780,10 @@ end
             end
             try
                 @test readline(p) == "ready"
-                kill(p, sig)
-                @test readline(p) == "got 1"
-                kill(p, sig)
-                @test readline(p) == "got 2"
-                # A pending signal would skip exit cleanup; kqueue keeps SIGINT pending on purpose.
-                kqueue = Sys.isapple() || Sys.isopenbsd()
-                @test readline(p) == "closed, pending: $(sig == Base.SIGINT && kqueue ? 1 : 0)"
-                # With the condition closed, the signal has its usual effect again.
+                # Observing leaves the usual effect in place.
                 kill(p, sig)
                 if sig == Base.SIGINT
-                    @test readline(p) == "interrupted"
+                    @test sort!([readline(p), readline(p)]) == ["interrupted", "observed"]
                     wait(p)
                     @test success(p)
                 else
@@ -772,7 +801,7 @@ end
 
         @testset "exit from the callback" begin
             script = """
-                Base.SignalCondition(_ -> exit(3), Base.SIGTERM)
+                Base.SignalCondition(_ -> exit(3), Base.SIGTERM; intercept=true)
                 println("ready")
                 sleep(600)
                 """
