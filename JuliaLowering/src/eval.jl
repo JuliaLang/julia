@@ -175,7 +175,7 @@ function coverage_visit_line(mod, st)
     file = String(lno.file)
     if ccall(:jl_coverage_enabled_for, Cint, (Any, Cstring), mod, file) != 0
         ccall(:jl_coverage_visit_line, Cvoid, (Cstring, Csize_t, Cint),
-              file, length(file), lno.line)
+              file, sizeof(file), lno.line)
     end
 end
 
