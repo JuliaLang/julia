@@ -127,10 +127,13 @@ end
 timesofar("conversions")
 
 @testset "Promotions for size $sz" for (sz, T) in allsizes
-    @test_broken isequal(promote(falses(sz...), zeros(sz...)),
+    @test isequal(promote(falses(sz...), zeros(sz...)),
                  (zeros(sz...), zeros(sz...)))
-    @test_broken isequal(promote(trues(sz...), ones(sz...)),
+    @test isequal(promote(trues(sz...), ones(sz...)),
                  (ones(sz...), ones(sz...)))
+    @test promote_type(BitArray{length(sz)}, Array{Float64,length(sz)}) == Array{Float64,length(sz)}
+    @test promote_type(Array{Bool,length(sz)}, BitArray{length(sz)}) == Array{Bool,length(sz)}
+    @test [falses(sz...), zeros(sz...)] isa Vector{Array{Float64,length(sz)}}
     ae = falses(1, sz...)
     ex = (@test_throws ErrorException promote(ae, ones(sz...))).value
     @test startswith(ex.msg, "promotion of types Bit")

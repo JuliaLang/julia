@@ -568,6 +568,8 @@ BitArray{N}(itr) where N = gen_bitarrayN(BitArray{N}, IteratorSize(itr), itr)
 
 convert(::Type{T}, a::AbstractArray) where {T<:BitArray} = a isa T ? a : T(a)::T
 
+promote_rule(::Type{BitArray{N}}, ::Type{Array{T,N}}) where {T,N} = Array{promote_type(Bool,T),N}
+
 # generic constructor from an iterable without compile-time info
 # (we pass start(itr) explicitly to avoid a type-instability with filters)
 gen_bitarray(isz::IteratorSize, itr) = gen_bitarray_from_itr(itr)
