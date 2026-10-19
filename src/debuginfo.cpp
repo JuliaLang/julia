@@ -1105,7 +1105,14 @@ static object::SectionRef getModuleSectionForAddress(const object::ObjectFile *o
   for (object::SectionRef Sec : obj->sections()) {
       if (!Sec.isText() || Sec.isVirtual())
           continue;
-      if (Address >= Sec.getAddress() && Address < Sec.getAddress() + Sec.getSize())
+      uint64_t Size = Sec.getSize();
+      // A dSYM keeps the section headers but not their contents, and LLVM clamps
+      // the size of a section that extends past the end of the file, so use the
+      // size from the header instead (https://github.com/llvm/llvm-project/pull/197286).
+      if (auto *MO = dyn_cast<const object::MachOObjectFile>(obj))
+          Size = MO->is64Bit() ? MO->getSection64(Sec.getRawDataRefImpl()).size
+                               : MO->getSection(Sec.getRawDataRefImpl()).size;
+      if (Address >= Sec.getAddress() && Address < Sec.getAddress() + Size)
           return Sec;
   }
   return object::SectionRef();
