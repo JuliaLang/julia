@@ -10207,6 +10207,16 @@ static jl_llvm_functions_t
     topinfo.loc = topdebugloc;
     topinfo.edgeid = 0;
     SmallVector<DebugLineTable, 0> prev_lineinfo, new_lineinfo;
+    // Backtraces rebuild inlined frames from the CodeInstance debuginfo, using the
+    // statement index in the DWARF column, so image code (sysimage and pkgimages)
+    // gets only a line table for the outermost frame in release builds, which
+    // saves most of its DWARF. JIT code and assert builds keep the inline scopes
+    // for gdb, perf, and code_llvm/code_native.
+#ifdef JL_NDEBUG
+    const bool inline_scopes = !ctx.emission_context.imaging_mode;
+#else
+    const bool inline_scopes = true;
+#endif
     auto update_lineinfo = [&](size_t outerpc) {
         std::function<bool(jl_debuginfo_t *, jl_value_t *, size_t, size_t, bool)>
             append_lineinfo = [&](jl_debuginfo_t *debuginfo, jl_value_t *func, size_t to,
@@ -10244,7 +10254,19 @@ static jl_llvm_functions_t
                     if (info.file.empty())
                         info.file = "<missing>";
                     info.is_user_code = frame_is_user_code(modu, info.file);
-                    if (debug_enabled) {
+                    if (debug_enabled && !inline_scopes) {
+                        if (new_lineinfo.empty()) {
+                            DIScope *scope = SP;
+                            if (info.file != ctx.file)
+                                scope = dbuilder.createLexicalBlockFile(SP, get_difile(ctx, dbuilder, info.file, info.is_user_code));
+                            unsigned col = outerpc <= UINT16_MAX ? (unsigned)outerpc : 0;
+                            info.loc = DILocation::get(ctx.builder.getContext(), info.line, col, scope, NULL);
+                        }
+                        else {
+                            info.loc = new_lineinfo.front().loc;
+                        }
+                    }
+                    else if (debug_enabled) {
                         StringRef fname = jl_debuginfo_name(func);
                         // Encode outermost (codeinstance) debuginfo PC on
                         // innermost frame's DWARF column.  Note "innermost" is
