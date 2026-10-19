@@ -324,3 +324,61 @@ end
 # This test checks for invalidation of recursive backedges. However, unfortunately, the original failure
 # manifestation was an unreliable segfault or an assertion failure, so we don't have a more compact test.
 @test success(`$(Base.julia_cmd()) -e 'Base.typejoin(x, ::Type) = 0; exit()'`)
+
+# A result with limited accuracy is never cached, and every new caller infers it again.
+# Its CodeInstance must not be registered as a backedge, or each caller adds another one,
+# and invalidating `inner` walks all of them recursively (issue #63933). Here the inner
+# `memo` call is widened against the outer one, which limits the cycle `p` <-> `q` and the
+# self-recursive `r` in between.
+module LimitedResultBackedges
+    struct Box{T}
+        x::T
+    end
+    struct Holder
+        b::Box
+    end
+    @noinline call(f) = f()
+    @noinline memo(f) = call(f)
+    inner(b::Box) = memo(() -> b.x)
+    p(x::Int, h::Holder) = x < 0 ? q(x, h) : 0
+    q(x::Int, h::Holder) = x < -1 ? p(x, h) : inner(h.b)
+    r(x::Int, h::Holder) = x < -1 ? r(x + 1, h) : x < 0 ? inner(h.b) : 0
+    const ncallers = 20
+    for k in 1:ncallers
+        @eval $(Symbol(:pcaller, k))(h::Holder) = memo(() -> p($k, h))
+        @eval $(Symbol(:rcaller, k))(h::Holder) = memo(() -> r($k, h))
+    end
+end
+let M = LimitedResultBackedges
+    for k in 1:M.ncallers, caller in (:pcaller, :rcaller)
+        Base.return_types(getglobal(M, Symbol(caller, k)), (M.Holder,); interp=InvalidationTester())
+    end
+    for callee in (M.p, M.q, M.r)
+        mi = Base.method_instance(callee, (Int, M.Holder))
+        @test !isdefined(mi, :cache)
+        cis = filter(isdefined(mi, :backedges) ? mi.backedges : Any[]) do edge
+            edge isa Core.CodeInstance && edge.owner === InvalidationTesterToken()
+        end
+        @test !isempty(cis)
+        # only cached callers may be registered
+        @test all(cis) do ci
+            mi = Compiler.get_ci_mi(ci)
+            isdefined(mi, :cache) || return false
+            cached = mi.cache
+            while cached !== ci
+                isdefined(cached, :next) || return false
+                cached = cached.next
+            end
+            return true
+        end
+    end
+    callers = [Base.method_instance(getglobal(M, Symbol(caller, k)), (M.Holder,)).cache
+               for k in 1:M.ncallers for caller in (:pcaller, :rcaller)]
+    @test all(ci -> ci.owner === InvalidationTesterToken() && ci.max_world == typemax(UInt), callers)
+    invlog = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+    @eval M inner(b::Box) = memo(() -> b.x + 1)
+    ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
+    @test all(ci -> ci.max_world < typemax(UInt), callers)
+    depths = Int[x for x in invlog if x isa Int32]
+    @test maximum(depths) < M.ncallers
+end
