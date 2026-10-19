@@ -2075,6 +2075,12 @@ end
     @test 0x1p-1022 == floatmin()
     @test 0x1.fffffffffffffp1023 == floatmax()
     @test isinf(nextfloat(0x1.fffffffffffffp1023))
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    for f in (eps, floatmin, floatmax)
+        @test_throws MethodError(f, (Union{},)) f(Union{})
+        @test_throws MethodError(f, (Union{}, 1)) f(Union{}, 1)
+        @test which(f, (Type{Union{}},)).sig == Tuple{typeof(f), Type{Union{}}, Vararg}
+    end
 end
 @testset "issue #1308" begin
     @test string(~UInt128(0), base = 16) == "f"^32
@@ -3363,6 +3369,13 @@ end
                 @test_throws MethodError precision(Union{S,T}, base = 3)
             end
         end
+    end
+
+    @testset "`precision` of `Union{}`" begin
+        # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+        @test_throws MethodError(precision, (Union{},)) precision(Union{})
+        @test_throws MethodError(precision, (Union{},)) precision(Union{}, base = 3)
+        @test which(precision, (Type{Union{}},)).sig == Tuple{typeof(precision), Type{Union{}}, Vararg}
     end
 end
 

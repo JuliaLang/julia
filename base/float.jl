@@ -804,6 +804,7 @@ function _precision(x, base::Integer)
 end
 precision(::Type{T}; base::Integer=2) where {T<:AbstractFloat} = _precision(T, base)
 precision(::T; base::Integer=2) where {T<:AbstractFloat} = precision(T; base)
+precision(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(precision, (Union{}, slurp...)))
 
 
 function _nextfloat(f::IEEEFloat, dneg::Bool, da::Integer)
@@ -992,6 +993,7 @@ function eps(x::T) where T<:IEEEFloat
     # for Inf/NaN values.
     return abs(x - y)
 end
+eps(::Type{Union{}}, slurp...) = throw(MethodError(eps, (Union{}, slurp...)))
 
 """
     floatmin(T = Float64)
@@ -1044,6 +1046,8 @@ floatmax(x::T) where {T<:AbstractFloat} = floatmax(T)
 
 floatmin() = floatmin(Float64)
 floatmax() = floatmax(Float64)
+floatmin(::Type{Union{}}, slurp...) = throw(MethodError(floatmin, (Union{}, slurp...)))
+floatmax(::Type{Union{}}, slurp...) = throw(MethodError(floatmax, (Union{}, slurp...)))
 
 """
     eps(::Type{T}) where T<:AbstractFloat
