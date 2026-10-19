@@ -2518,9 +2518,12 @@ function precompilepkgs_monitor_std(s::PrecompileSession, pkg_config, job::Preco
     thistaskwaiting = false
     while !eof(pipe)
         str = readline(pipe, keep=true)
-        if startswith(str, Base.PRECOMPILE_VERBOSE_TIMING_MARKER)
-            job.verbose_timing = strip(str)
-            continue
+        # the marker may follow package output that lacks a trailing newline
+        i = findfirst(Base.PRECOMPILE_VERBOSE_TIMING_MARKER, str)
+        if i !== nothing
+            job.verbose_timing = strip(SubString(str, first(i)))
+            str = str[1:prevind(str, first(i))]
+            isempty(str) && continue
         end
         if single_requested_pkg && (liveprinting || !isempty(str))
             BG.monitoring && @lock s.print_lock begin

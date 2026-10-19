@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 @testset "integer parsing" begin
     @test parse(Int32,"0", base = 36) === Int32(0)
     @test parse(Int32,"1", base = 36) === Int32(1)
@@ -370,6 +372,139 @@ end
 @test tryparse(Float32, "1.23") === 1.23f0
 @test tryparse(Float16, "1.23") === Float16(1.23)
 
+# Floats are correctly rounded. MPFR is the reference, at a precision where rounding its
+# result again to the type gives the same as rounding the exact value once.
+@testset "float parsing" begin
+    P = Base.Parsers
+    function reference(T, s; precision = 4000)
+        r = BigFloat(s; precision)
+        x = T(r)
+        return isinf(x) ? P.OVERFLOW : iszero(x) && !iszero(r) ? P.UNDERFLOW : x
+    end
+    mismatches(T, inputs; kw...) =
+        [s for s in inputs if P.parsevalue(T, codeunits(s)) !== reference(T, s; kw...)]
+    @test isempty(filter(P.POW5_MIN:P.POW5_MAX) do q
+        # fast_float's table of 128-bit significands of powers of five
+        p = big(5)^abs(q)
+        z = ndigits(p; base = 2)
+        t = q >= 0 ? (z <= 128 ? p << (128 - z) : p >> (z - 128)) :
+            q >= -27 ? div(big(2)^(z + 127), p) + 1 :
+            (c = div(big(2)^(2z + 128), p) + 1; c >> (ndigits(c; base = 2) - 128))
+        P.POW5[q - P.POW5_MIN + 1] != t
+    end)
+    inputs = ["0", "-0", "+0.0", "1", "-1", "1.", ".5", "-.5e1", "1E+5", "0001.5",
+              "0.0000000000000000000000000000015", "9007199254740993", "9007199254740995",
+              "4503599627370496.5", "4503599627370497.5", "16777217", "16777219",
+              "1024.00006103515625", "1024.00018310546875", "2.4703282292062327e-324",
+              "2.4703282292062328e-324", "2.2250738585072011e-308",
+              "1.7976931348623157e308", "1.7976931348623159e308", "3.4028235e38",
+              "3.4028236e38", "7.0e-46", "7.1e-46", "65504", "65519.999", "65520", "2048e4",
+              "2.98023223876953125e-8", "2.98023223876953126e-8", "1.000488281250001",
+              "99999999999999999999", "9999999999999999999.5e300", "1e400", "-1e-400",
+              "1e39", "-1e-46", "1" * "0"^400, "0." * "0"^400 * "1"]
+    rng = Xoshiro(1)
+    # decimals of up to 30 digits, with the point anywhere and exponents up to 360
+    for _ in 1:20_000
+        d = String(rand(rng, '0':'9', rand(rng, 1:30)))
+        k = rand(rng, 0:length(d))
+        s = rand(rng, ("", "-", "+")) * d[1:k] * rand(rng, ("", ".")) * d[k+1:end]
+        if rand(rng, Bool)
+            s *= rand(rng, ("e", "E", "e-", "e+")) * string(rand(rng, 0:360))
+        end
+        push!(inputs, s)
+    end
+    # the shortest representations of random floats
+    for _ in 1:5_000, T in (Float64, Float32, Float16)
+        x = reinterpret(T, rand(rng, Base.uinttype(T)))
+        isfinite(x) && push!(inputs, replace(string(x), 'f' => 'e'))
+    end
+    # hexadecimal floats of up to 24 digits, with the point anywhere
+    hexes = ["0x1p-1074", "0x1p-1075", "0x1.0000000000001p-1075", "0x1.fffffffffffff8p1023",
+             "0x1.fffffffffffff7ffffp1023", "0x1p-150", "0x1.000001p-150", "0x1.ffffffp127",
+             "0x1p-25", "0x1.002p-25", "0x1.ffep15", "-0X1.8P1", "0x1.8", "0x.8", "0x0p99"]
+    for _ in 1:5_000
+        d = String(rand(rng, ['0':'9'; 'a':'f'; 'A':'F'], rand(rng, 1:24)))
+        k = rand(rng, 0:length(d))
+        s = rand(rng, ("", "-")) * "0x" * d[1:k] * rand(rng, ("", ".")) * d[k+1:end]
+        rand(rng, Bool) && (s *= rand(rng, ("p", "p-", "P+")) * string(rand(rng, 0:1100)))
+        push!(hexes, s)
+    end
+    for T in (Float64, Float32, Float16)
+        @test mismatches(T, inputs) == String[]
+        @test mismatches(T, hexes; precision = 200) == String[]
+    end
+    # midpoints between adjacent floats, exactly, one unit away in their last digit, and
+    # with a nonzero digit after more than 800 significant digits
+    for T in (Float64, Float32, Float16)
+        midpoints = String[]
+        xs = abs.(reinterpret.(T, rand(rng, Base.uinttype(T), 300)))
+        for x in [zero(T); floatmax(T); filter(isfinite, xs)]
+            r = Rational{BigInt}(x) + Rational{BigInt}(eps(x)) / 2
+            k = trailing_zeros(denominator(r))
+            n = numerator(r) * big(5)^k
+            push!(midpoints, "$(n)e-$k", "$(n - 1)e-$k", "$(n + 1)e-$k",
+                  "$(n)$("0"^800)1e-$(k + 801)")
+        end
+        @test mismatches(T, midpoints; precision = 8000) == String[]
+    end
+
+    @test P.parsevalue(Float64, codeunits("1e99999999999")) === P.OVERFLOW
+    @test P.parsevalue(Float32, codeunits("-1e-99999999999")) === P.UNDERFLOW
+    @test P.parsevalue(Float64, codeunits("-0e99999999999")) === -0.0
+    @test P.parsevalue(Float16, codeunits("0x1p99999999999")) === P.OVERFLOW
+    @test repr(P.UNDERFLOW) == "Base.Parsers.UNDERFLOW"
+    @test tryparse(Float16, "70000") === nothing
+    @test tryparse(Float16, "1e-10") === nothing
+    for (s, x) in (("inf", Inf), ("-Inf", -Inf), ("+INFINITY", Inf), ("nan", NaN),
+                   ("-NaN", -NaN)), T in (Float64, Float32, Float16)
+        @test P.parsevalue(T, codeunits(s)) === T(x)
+    end
+    # As in glibc, the parentheses in `nan(...)` hold the payload as C reads an unsigned
+    # integer, saturated, or anything else made of letters, digits and '_' for none.
+    for (s, p) in (("nan()", 0), ("nan(123)", 123), ("NaN(0x7B)", 123), ("-nan(017)", 15),
+                   ("nan(abc)", 0), ("nan(1_2)", 0), ("nan(0x)", 0), ("nan(08)", 0),
+                   ("nan(99999999999999999999)", typemax(UInt64))),
+            T in (Float64, Float32, Float16)
+        U = Base.uinttype(T)
+        x = reinterpret(T, reinterpret(U, T(NaN)) |
+                           (p % U & (one(U) << (Base.significand_bits(T) - 1) - one(U))))
+        @test P.parsevalue(T, codeunits(s)) === (startswith(s, '-') ? -x : x)
+    end
+    invalid = ["", "+", "-", ".", "-.", "e5", ".e5", "1e", "1e+", "1e5.5", "1.5x", "1,5",
+               "--1", "+-1", "- 1", " 1", "1 ", "1.5\0", "in", "infinity"[1:7],
+               "infinityy", "nanx", "nan(", "nan(1", "nan(1 2)", "nan(-1)", "nan(1))", "0x",
+               "0x.", "0xp1", "0x1p", "0x1p+", "0xg", "0x1.2.3", "0x1p1.5"]
+    for s in invalid, T in (Float64, Float32, Float16)
+        @test P.parsevalue(T, codeunits(s)) === P.INVALID
+    end
+    # a byte that is not a hexadecimal digit at each position of one and two blocks of eight
+    for n in (8, 16, 17), k in 1:n, c in ('/', ':', '@', 'G', '`', 'g', '\x10', '\x90'),
+            prefix in ("0x", "0x1.")
+        s = prefix * "f"^(k - 1) * c * "a"^(n - k)
+        @test P.parsevalue(Float64, codeunits(s)) === P.INVALID
+    end
+    for s in (" 1.5", "1.5 ", "\t\n1.5\r\n", "\v\f1.5")
+        @test tryparse(Float64, s) === 1.5
+    end
+    @test tryparse(Float64, "1 .5") === nothing
+    for s in ("1.5", "-0.000123456789e-3", "123456789012345678901234567890", "1e400",
+              "0x1.8p3", "nan(7)", "x")
+        x = P.parsevalue(Float64, codeunits(s))
+        bytes = Vector{UInt8}(s)
+        padded = [0x2c; bytes; 0x2c]
+        sub = SubString("<$s>", 2, length(s) + 1)
+        for buf in (bytes, Memory{UInt8}(bytes), view(bytes, 1:1:length(bytes)),
+                    view(padded, 2:length(padded) - 1), codeunits(sub))
+            @test P.parsevalue(Float64, buf) === x
+        end
+        y = x isa P.ParseFailure ? nothing : x
+        for str in (" $s ", GenericString(s), sub, StringView(bytes),
+                    StringView(view(padded, 2:length(padded) - 1)))
+            @test tryparse(Float64, str) === y
+        end
+    end
+end
+
 # parsing complex numbers (#22250)
 @testset "complex parsing" begin
     for sign in ('-','+'), Im in ("i","j","im"), s1 in (""," "), s2 in (""," "), s3 in (""," "), s4 in (""," ")
@@ -412,7 +547,11 @@ end
         @inferred Base.Parsers.ParseFailure Base.Parsers.parsevalue(T, codeunits("12"))
         @test eltype([parse(T, s) for s in AbstractString[]]) == T
     end
-    @inferred parse(Float64, "12")
+    for T in (Float16, Float32, Float64)
+        @inferred parse(T, "12")
+        @inferred Nothing tryparse(T, "12")
+        @inferred Base.Parsers.ParseFailure Base.Parsers.parsevalue(T, codeunits("12"))
+    end
     @inferred parse(Complex{Int}, "12")
     @test eltype([parse(Int, s, base=16) for s in String[]]) == Int
     @test eltype([parse(Float64, s) for s in String[]]) == Float64

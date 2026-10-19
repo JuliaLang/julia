@@ -4976,6 +4976,54 @@ precompile_test_harness("cache files are only touched in the primary depot") do 
     end
 end
 
+# Issue #63945
+@testset "timing marker after output without trailing newline" begin
+    mkdepottempdir() do depot
+        project_path = joinpath(depot, "testenv")
+        pkg_path = joinpath(depot, "dev", "NoNewline")
+        mkpath(project_path)
+        mkpath(joinpath(pkg_path, "src"))
+        pkg_uuid = "d4000000-0000-0000-0000-000000000001"
+        write(joinpath(pkg_path, "Project.toml"), """
+            name = "NoNewline"
+            uuid = "$pkg_uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(pkg_path, "src", "NoNewline.jl"), """
+            module NoNewline
+            print(stderr, "foo")
+            end
+            """)
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            NoNewline = "$pkg_uuid"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.NoNewline]]
+            path = "../dev/NoNewline"
+            uuid = "$pkg_uuid"
+            version = "0.1.0"
+            """)
+
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            Base.set_active_project(project_path)
+            io = IOBuffer()
+            Base.Precompilation.precompilepkgs(; io=IOContext(io, :color => false), fancyprint=false)
+            output = String(take!(io))
+            @test occursin("foo", output)
+            @test !occursin(Base.PRECOMPILE_VERBOSE_TIMING_MARKER, output)
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+    end
+end
+
 finish_precompile_test!()
 if original_num_precompile_tasks === nothing
     delete!(ENV, "JULIA_NUM_PRECOMPILE_TASKS")
