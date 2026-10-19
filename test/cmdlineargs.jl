@@ -207,6 +207,15 @@ end
         @test occursin("Available CPU targets:", v[2])
         @test occursin("Host CPU:", v[2])
     end
+
+    # Test an incompatible `cpu_target` names the missing features
+    if Sys.ARCH === :x86_64
+        let v = readchomperrors(`$(Base.julia_cmd(; cpu_target="native,-sse2")) --startup-file=no -e ''`)
+            @test !v[1]
+            @test occursin("Unable to find compatible target in cached code image. It was compiled for", v[3])
+            @test occursin(r"lacks: [^.]*\bsse2\b", v[3])
+        end
+    end
 end
 
 let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`,
