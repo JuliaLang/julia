@@ -263,7 +263,7 @@ taken to be the first entry of `@TERMINFO_DIRS@`.
 """
 function find_terminfo_file(term::String)
     # Like ncurses, reject names that could escape the terminfo directories
-    (isempty(term) || '/' in term) && return
+    (isempty(term) || any(Filesystem.isseparator, term)) && return
     # The hashed directory name is the hex value of the first byte (`TERM` may not
     # be valid UTF-8)
     chr, chrcode = string(first(term)), string(codeunit(term, 1), base=16, pad=2)
