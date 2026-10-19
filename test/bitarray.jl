@@ -1888,7 +1888,7 @@ end
         @test which(fill!, (typeof(viewvector), Bool)).sig == Tuple{typeof(fill!), SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}}}, Any}
         @test which(fill!, (typeof(viewarray), Bool)).sig == Tuple{typeof(fill!), SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}, Vararg{Union{Int,AbstractUnitRange{Int}}}}}, Any}
         fill!(viewvector, false)
-        fill!(viewarray, false)
+        @test fill!(viewarray, false) === viewarray
         @test all(bitvector[rangein] .== false)
         @test all(bitvector[rangeout] .== true)
         @test all(bitarray[rangein, rangein] .== false)
