@@ -239,6 +239,7 @@ static void jl_noreturn_call_in_state(host_thread_state_t *state, void (*fptr)(v
     state->__rip = (uint64_t)fptr; // "call" the function
     state->__rdi = arg0;
     state->__rsi = arg1;
+    state->__rflags &= ~0x400; // a call starts with the direction flag clear
 #elif defined(_CPU_AARCH64_)
     // push {%pc, %sp}
     sp -= sizeof(void*);
@@ -371,6 +372,7 @@ static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void),
     state->__rsp = sp;
     state->__rip = (uint64_t)fptr;
     state->__rdi = arg0;
+    state->__rflags &= ~0x400; // clear the direction flag; the saved copy keeps it
 #elif defined(_CPU_AARCH64_)
     uintptr_t sp = state->__sp;
     sp = (sp - 256) & ~(uintptr_t)15;

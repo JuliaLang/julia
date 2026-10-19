@@ -1270,6 +1270,29 @@ JL_UNUSED static int valid_longjmp_target(uintptr_t sp, uintptr_t pc) JL_NOTSAFE
 // support shadow stacks, so if those are in use, you might need to use a direct
 // jl_longjmp instead to leave the signal frame instead of relying on simulating
 // it and attempting to return normally.
+// Julia's FP control modes: round to nearest with exceptions masked, keeping
+// flush-to-zero, and the platform's default x87 precision. Code a reset
+// abandons may have switched them for a while (e.g. glibc's software fma).
+#define JL_MXCSR_MODES(x) (((x) & ~0x6000u) | 0x1f80u)
+#ifdef _OS_WINDOWS_
+#define JL_X87CW_DEFAULT 0x027fu
+#else
+#define JL_X87CW_DEFAULT 0x037fu
+#endif
+
+#if (defined(_OS_WINDOWS_) && defined(_CPU_X86_)) || (defined(_OS_FREEBSD_) && defined(_CPU_X86_64_))
+// The same for an FXSAVE area: control word at byte 0, MXCSR at byte 24.
+static void jl_fxsave_reset_modes(uint8_t *fx) JL_NOTSAFEPOINT
+{
+    uint16_t fcw = JL_X87CW_DEFAULT;
+    uint32_t mxcsr;
+    memcpy(&mxcsr, fx + 24, sizeof(mxcsr));
+    mxcsr = JL_MXCSR_MODES(mxcsr);
+    memcpy(fx, &fcw, sizeof(fcw));
+    memcpy(fx + 24, &mxcsr, sizeof(mxcsr));
+}
+#endif
+
 int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOINT
 {
     assert(val != 0); // setjmp's second return must be distinguishable
@@ -1295,6 +1318,9 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     // c->SegGS[0] = _ctx->Frame;
     c->Rax = val;
     c->Rsp += sizeof(void*);
+    c->EFlags &= ~0x400; // clear the direction flag, as at any function boundary
+    c->MxCsr = c->FltSave.MxCsr = JL_MXCSR_MODES(c->FltSave.MxCsr);
+    c->FltSave.ControlWord = JL_X87CW_DEFAULT;
     assert(c->Rsp % 16 == 0);
     return 1;
     #elif defined(_CPU_X86_)
@@ -1308,6 +1334,9 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     // c->FloatSave.ControlWord = _ctx->FpCsr;
     c->Eax = val;
     c->Esp += sizeof(void*);
+    c->EFlags &= ~0x400; // clear the direction flag
+    c->FloatSave.ControlWord = JL_X87CW_DEFAULT;
+    jl_fxsave_reset_modes(c->ExtendedRegisters);
     // Scrub the interrupted x87 state to all-registers-empty (see the
     // linux i686 branch): the resumed code expects the function-boundary
     // FPU state. Both the legacy FNSAVE area and the FXSAVE area (used by
@@ -1346,6 +1375,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->gregs[REG_ESP] = jl_ptr_demangle(mc->gregs[REG_ESP]);
     mc->gregs[REG_EIP] = jl_ptr_demangle(mc->gregs[REG_EIP]);
     mc->gregs[REG_EAX] = val;
+    mc->gregs[REG_EFL] &= ~(greg_t)0x400; // clear the direction flag
     // The simulated longjmp resumes code that expects the i386 ABI's
     // function-boundary FPU state (an empty x87 register stack), but the
     // kernel will restore the *interrupted* state - possibly mid-computation
@@ -1355,6 +1385,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     if (mc->fpregs != NULL) {
         mc->fpregs->sw = 0;               // clear TOP and exception flags
         mc->fpregs->tag = 0xffffffffu;    // all registers empty
+        mc->fpregs->cw = JL_X87CW_DEFAULT;
     }
     return valid_longjmp_target(mc->gregs[REG_ESP], mc->gregs[REG_EIP]);
     #elif defined(_CPU_X86_64_)
@@ -1374,6 +1405,11 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->gregs[REG_RSP] = jl_ptr_demangle(mc->gregs[REG_RSP]);
     mc->gregs[REG_RIP] = jl_ptr_demangle(mc->gregs[REG_RIP]);
     mc->gregs[REG_RAX] = val;
+    mc->gregs[REG_EFL] &= ~(greg_t)0x400; // clear the direction flag, as at any function boundary
+    if (mc->fpregs != NULL) {
+        mc->fpregs->mxcsr = JL_MXCSR_MODES(mc->fpregs->mxcsr);
+        mc->fpregs->cwd = JL_X87CW_DEFAULT;
+    }
     return valid_longjmp_target(mc->gregs[REG_RSP], mc->gregs[REG_RIP]);
     #elif defined(_CPU_ARM_)
     // https://github.com/bminor/glibc/blame/master/sysdeps/arm/__longjmp.S
@@ -1491,6 +1527,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->__rsp = _OS_PTR_UNMUNGE(mc->__rsp);
     mc->__rip = _OS_PTR_UNMUNGE(mc->__rip);
     mc->__rax = val;
+    mc->__rflags &= ~0x400; // clear the direction flag, as at any function boundary
     assert(mc->__rsp % 16 == 0);
     return 1;
     #elif defined(_CPU_AARCH64_)
@@ -1550,6 +1587,9 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->mc_r15 = ((long*)mctx)[7];
     mc->mc_rax = val;
     mc->mc_rsp += sizeof(void*);
+    mc->mc_rflags &= ~0x400; // clear the direction flag, as at any function boundary
+    if (mc->mc_fpformat == _MC_FPFMT_XMM)
+        jl_fxsave_reset_modes((uint8_t*)mc->mc_fpstate);
     assert(mc->mc_rsp % 16 == 0);
     return 1;
     #elif defined(_CPU_AARCH64_)

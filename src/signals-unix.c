@@ -223,6 +223,7 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void) JL_CANS
     ctx->uc_mcontext.gregs[REG_RSP] = rsp; // set stack pointer
     ctx->uc_mcontext.gregs[REG_RDI] = (uintptr_t)&ptls->signal_ctx_pc; // first arg points to signal_ctx
     ctx->uc_mcontext.gregs[REG_RIP] = (uintptr_t)&jl_fake_signal_return; // "call" jl_fake_signal_return
+    ctx->uc_mcontext.gregs[REG_EFL] &= ~(greg_t)0x400; // a call starts with the direction flag clear
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     // Save context in ptls for stack unwinding
@@ -233,6 +234,7 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void) JL_CANS
     ctx->uc_mcontext.mc_rsp = rsp; // set stack pointer
     ctx->uc_mcontext.mc_rdi = (uintptr_t)&ptls->signal_ctx_pc; // first arg points to signal_ctx
     ctx->uc_mcontext.mc_rip = (uintptr_t)&jl_fake_signal_return; // "call" jl_fake_signal_return
+    ctx->uc_mcontext.mc_rflags &= ~0x400; // clear the direction flag
 #elif defined(_OS_LINUX_) && defined(_CPU_X86_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     // Save context in ptls for stack unwinding
@@ -243,6 +245,7 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void) JL_CANS
     ctx->uc_mcontext.gregs[REG_ESP] = rsp; // set stack pointer
     ctx->uc_mcontext.gregs[REG_EAX] = (uintptr_t)&ptls->signal_ctx_pc; // set eax to point to signal_ctx
     ctx->uc_mcontext.gregs[REG_EIP] = (uintptr_t)&jl_fake_signal_return; // "call" jl_fake_signal_return
+    ctx->uc_mcontext.gregs[REG_EFL] &= ~(greg_t)0x400; // clear the direction flag
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     // Save context in ptls for stack unwinding
@@ -253,6 +256,7 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void) JL_CANS
     ctx->uc_mcontext.mc_esp = rsp; // set stack pointer
     ctx->uc_mcontext.mc_eax = (uintptr_t)&ptls->signal_ctx_pc; // set eax to point to signal_ctx
     ctx->uc_mcontext.mc_eip = (uintptr_t)&jl_fake_signal_return; // "call" jl_fake_signal_return
+    ctx->uc_mcontext.mc_eflags &= ~0x400; // clear the direction flag
 #elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
     struct sigcontext *ctx = (struct sigcontext *)_ctx;
     // Save context in ptls for stack unwinding
@@ -263,6 +267,7 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void) JL_CANS
     ctx->sc_rsp = rsp; // set stack pointer
     ctx->sc_rdi = (uintptr_t)&ptls->signal_ctx_pc; // first arg points to signal_ctx
     ctx->sc_rip = (uintptr_t)&jl_fake_signal_return; // "call" jl_fake_signal_return
+    ctx->sc_rflags &= ~0x400; // clear the direction flag
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     // Save context in ptls for stack unwinding
@@ -809,6 +814,18 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
     }
 }
 
+// Whether this signal interrupted the handler for a safepoint fault.
+static int jl_ctx_blocks_segv(void *_ctx) JL_NOTSAFEPOINT
+{
+#if defined(_OS_OPENBSD_)
+    const struct sigcontext *ctx = (const struct sigcontext *)_ctx;
+    return (ctx->sc_mask & (sigmask(SIGSEGV) | sigmask(SIGBUS))) != 0;
+#else
+    const ucontext_t *ctx = (const ucontext_t*)_ctx;
+    return sigismember(&ctx->uc_sigmask, SIGSEGV) || sigismember(&ctx->uc_sigmask, SIGBUS);
+#endif
+}
+
 // request:
 // -1: processing
 //  0: nothing [not from here]
@@ -887,10 +904,13 @@ static void usr2_deliver_reset(jl_task_t *ct, jl_ptls_t ptls, uint8_t reqflags,
             // is consumed at the reset point's own check).
             int reset_code = (reqflags & JL_SIGNAL_REQ_CANCEL) && bound_cancelled ?
                 JL_RESET_CODE_CANCEL : JL_RESET_CODE_PREEMPT;
+            // Not from the safepoint fault handler: the longjmp would leave
+            // SIGSEGV blocked.
             jl_reset_ctx_t *reset_ctx = jl_atomic_load_acquire(&ct->reset_ctx);
             if (reset_ctx != NULL && reset_ctx->sp != 0 &&
                 ((reqflags & JL_SIGNAL_REQ_PREEMPT) || bound_cancelled) &&
-                jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_STATE_UNSAFE) {
+                jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_STATE_UNSAFE &&
+                !jl_ctx_blocks_segv(ctx)) {
                 // Abandon the interrupted register state and longjmp to the
                 // reset point, whose re-executed check observes the
                 // cancellation and throws. Clear reset_ctx before the
@@ -902,6 +922,10 @@ static void usr2_deliver_reset(jl_task_t *ct, jl_ptls_t ptls, uint8_t reqflags,
                 jl_atomic_store_relaxed(&ct->reset_ctx, NULL);
                 ct->gcstack = reset_ctx->gcstack;
                 ct->eh = reset_ctx->eh;
+                // The thread may have left a safepoint without polling again.
+                // Poll after restoring the chain, so a collection never scans
+                // the interrupted one mid-push.
+                jl_gc_safepoint_(ptls);
                 // The frames being abandoned were never unwound by the
                 // sanitizer's longjmp interceptor, so unpoison them
                 // explicitly.
