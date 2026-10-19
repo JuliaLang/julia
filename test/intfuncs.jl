@@ -831,7 +831,7 @@ end
 @testset "concrete-foldability: `hastypemax`" begin
     @test Base.infer_effects(Base.hastypemax, (Type,)) |> Core.Compiler.is_foldable
     @test Base.infer_effects(Base.hastypemax, (DataType,)) |> Core.Compiler.is_foldable
-    for t in (Bool, Int, BigInt)
+    for t in (Bool, Int, BigInt, Union{})
         @test Base.infer_effects(Base.hastypemax, (Type{t},)) |> Core.Compiler.is_foldable
     end
 end
@@ -840,6 +840,7 @@ end
     @test Base.hastypemax(Bool)
     @test Base.hastypemax(Int)
     @test !Base.hastypemax(BigInt)
+    @test !Base.hastypemax(Union{})
 end
 
 @testset "literal power" begin

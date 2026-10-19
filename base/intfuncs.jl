@@ -1217,6 +1217,8 @@ end
 Return `true` if and only if the extrema `typemax(T)` and `typemin(T)` are defined.
 """
 hastypemax(::Type{T}) where {T} = applicable(typemax, T) && applicable(typemin, T)
+hastypemax(::Type{Union{}}) = false
+hastypemax(::Type{Union{}}, slurp...) = throw(MethodError(hastypemax, (Union{}, slurp...)))
 
 """
     digits!(array, n::Integer; base::Integer = 10)

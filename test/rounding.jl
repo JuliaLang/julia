@@ -471,6 +471,16 @@ end
     @test_throws MethodError(round, (Union{}, 1.5, RoundDown)) round(Union{}, 1.5, RoundDown)
 end
 
+@testset "rounding mode of Union{} throws MethodError" begin
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    f = () -> 1
+    @test_throws MethodError(rounding, (Union{},)) rounding(Union{})
+    @test which(rounding, (Type{Union{}},)).sig == Tuple{typeof(rounding), Type{Union{}}, Vararg}
+    @test_throws MethodError(setrounding, (f, Union{}, RoundDown)) setrounding(f, Union{}, RoundDown)
+    @test which(setrounding, (typeof(f), Type{Union{}}, typeof(RoundDown))).sig ==
+          Tuple{typeof(setrounding), Any, Type{Union{}}, Vararg}
+end
+
 @testset "floor(<:AbstractFloat, large_number) (#52355)" begin
     @test floor(Float32, 0xffff_ffff) == prevfloat(2f0^32) <= 0xffff_ffff
     @test trunc(Float16, typemax(UInt128)) == floatmax(Float16)

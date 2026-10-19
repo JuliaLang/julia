@@ -501,6 +501,13 @@ Base.setprecision(::Type{DeprecatedSetprecType}, p::Integer) = (_deprec_setprec[
     @test_deprecated setprecision(() -> precision(DeprecatedSetprecType), DeprecatedSetprecType, 5)
     @test _deprec_setprec[] == 10   # precision was restored afterwards
 end
+@testset "setprecision(f, Union{}, prec) throws MethodError" begin
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    f = () -> 1
+    @test_throws MethodError(setprecision, (f, Union{}, 5)) setprecision(f, Union{}, 5)
+    @test_throws MethodError(setprecision, (f, Union{}, 5)) setprecision(f, Union{}, 5; base = 10)
+    @test which(setprecision, (typeof(f), Type{Union{}}, Int)).sig == Tuple{typeof(setprecision), Any, Type{Union{}}, Vararg}
+end
 @testset "isinteger" begin
     @test !isinteger(BigFloat(1.2))
     @test isinteger(BigFloat(12))
