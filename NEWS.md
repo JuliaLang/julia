@@ -354,7 +354,7 @@ Standard library changes
 * `pkg> precompile` gained `--noskip`, to attempt packages whose dependencies failed to precompile, and
   `--force`, to recompile packages whose caches are already fresh ([Pkg.jl#4774](https://github.com/JuliaLang/Pkg.jl/pull/4774)).
 
-##### Artifacts
+##### Artifact handling
 
 * Artifact selection hooks (`.pkg/select_artifacts.jl`) can load the dependencies in their package's `[deps]`.
   Pkg runs them against the resolved manifest after installing dependency artifacts, and caches their results
