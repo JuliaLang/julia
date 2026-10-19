@@ -372,8 +372,9 @@ $(BUILDDIR)/jl_codegen_hash.inc: $(CODEGEN_SRCS_HASH) $(HEADERS) $(LLVM_CONFIG_A
 	    $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -E -P -MD -MP -MT $@ -MF $@.d.tmp $$f >> $@.i || exit 1; \
 	    cat $@.d.tmp >> $@.d; \
 	done)
-	@$(SHA256SUM) < $@.i | sed -E 's/^([0-9a-f]+).*/#define JL_CODEGEN_SRC_HASH "\1"/g' > $@
-	@rm -f $@.i $@.d.tmp
+	@$(SHA256SUM) < $@.i > $@.sha
+	@sed -E 's/^([0-9a-f]+).*/#define JL_CODEGEN_SRC_HASH "\1"/g' $@.sha > $@
+	@rm -f $@.i $@.d.tmp $@.sha
 -include $(BUILDDIR)/jl_codegen_hash.inc.d
 
 # source file rules
@@ -486,6 +487,9 @@ $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvmcalltest.cpp $(LLV
 
 .PHONY: julia_flisp.boot.inc.phony
 julia_flisp.boot.inc.phony: $(BUILDDIR)/julia_flisp.boot.inc
+
+.PHONY: jl_codegen_hash.inc.phony
+jl_codegen_hash.inc.phony: $(BUILDDIR)/jl_codegen_hash.inc
 
 $(BUILDDIR)/julia_flisp.boot.inc: $(BUILDDIR)/julia_flisp.boot $(FLISP_EXECUTABLE_release)
 	@$(call PRINT_FLISP, TMPFILE=$$(mktemp $(abspath $@.XXXXXX)); \
