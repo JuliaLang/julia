@@ -142,6 +142,7 @@ public
     showarg,
 
 # filesystem operations
+    DirEntryIterator,
     rename,
 
 # promotion
