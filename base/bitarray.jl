@@ -108,6 +108,8 @@ isassigned(B::BitArray, i::Int) = 1 <= i <= length(B)
 
 IndexStyle(::Type{<:BitArray}) = IndexLinear()
 
+dataids(B::BitArray) = dataids(B.chunks)
+
 ## aux functions ##
 
 const _msk64 = ~UInt64(0)
