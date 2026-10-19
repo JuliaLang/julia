@@ -363,6 +363,11 @@ end
             @test (a % T) * b == 1
         end
     end
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    for n in (3, big(3))
+        @test_throws MethodError(invmod, (n, Union{})) invmod(n, Union{})
+        @test which(invmod, (typeof(n), Type{Union{}})).sig == Tuple{typeof(invmod), Any, Type{Union{}}, Vararg}
+    end
 end
 
 @testset "powermod" begin

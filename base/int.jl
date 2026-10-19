@@ -701,6 +701,7 @@ mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
 mod(x, ::Type{Union{}}, slurp...) = throw(MethodError(mod, (x, Union{}, slurp...)))
 
 unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
+unsafe_trunc(::Type{Union{}}, slurp...) = throw(MethodError(unsafe_trunc, (Union{}, slurp...)))
 
 ## integer construction ##
 

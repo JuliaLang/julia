@@ -368,6 +368,7 @@ Inverse (modulo ``2^w``)* by Jeffrey Hurchalla](https://arxiv.org/abs/2204.04342
     The `invmod(n)` and `invmod(n, T)` methods require Julia 1.11 or later.
 """
 invmod(n::Integer, ::Type{T}) where {T<:BitInteger} = invmod(n % T)
+invmod(n, ::Type{Union{}}, slurp...) = throw(MethodError(invmod, (n, Union{}, slurp...)))
 
 function invmod(n::T) where {T<:BitInteger}
     isodd(n) || throw(DomainError(n, "Argument must be odd."))

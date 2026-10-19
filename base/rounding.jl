@@ -487,5 +487,9 @@ round(::Type{T}, x) where T = round(T, x, RoundNearest)
 
 round(::Type{T}, x, r::RoundingMode) where T = _round_convert(T, round(x, r), x, r)
 _round_convert(::Type{T}, x_integer, x, r) where T = convert(T, x_integer)
+trunc(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(trunc, (Union{}, slurp...)))
+floor(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(floor, (Union{}, slurp...)))
+ ceil(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(ceil, (Union{}, slurp...)))
+round(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(round, (Union{}, slurp...)))
 
 round(x::Integer, r::RoundingMode) = x
