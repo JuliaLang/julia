@@ -2833,7 +2833,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, o
     pos_sparams = used_typevars(pargl, sparams)
     prop_metas = getmeta(body, :method_metas, nothing)
 
-    m1_name = let n = head(mtable) === :nothing ? "_" : syntax_name(mtable),
+    m1_name = let n = head(mtable) !== :identifier ? "_" : syntax_name(mtable),
         mangled = string("#", n, "#kw_body#", module_unique_name(ctx.layer.mod))
         # probably not desirable, but fixes eval-into-closed-module
         m1_sc = escape_layer(mtable.context, true)
@@ -2961,16 +2961,23 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, o
                 SyntaxList(arg1, arg2, pargl...), kwcall_body)
         end
     end
-    @ast ctx src [:block
-        [:function_decl m1_name]
-        # hack: define closure type for next decl
-        overlay || head(mtable) === :nothing ? nothing : [:no_method_defs m1_name]
-        overlay || head(mtable) === :nothing ? nothing : [:function_decl mtable]
-        [:method_defs m1_name method_def_sparams(ctx, src, sparams) mdefs1]
-        [:method_defs mtable method_def_sparams(ctx, src, pos_sparams) mdefs2]
-        [:method_defs mtable method_def_sparams(ctx, src, pos_sparams) mdefs3]
-        mtable
-    ]
+    if overlay || head(mtable) === :nothing
+        @ast ctx src [:block
+            [:function_decl m1_name]
+            [:method_defs m1_name method_def_sparams(ctx, src, sparams) mdefs1]
+            [:method_defs (::nothing) method_def_sparams(ctx, src, pos_sparams) mdefs2]
+            [:method_defs (::nothing) method_def_sparams(ctx, src, pos_sparams) mdefs3]
+            (::nothing)]
+    else
+        @ast ctx src [:block
+            [:function_decl m1_name]
+            [:no_method_defs m1_name] # hack: define closure type for next decl
+            [:function_decl mtable]
+            [:method_defs m1_name method_def_sparams(ctx, src, sparams) mdefs1]
+            [:method_defs mtable method_def_sparams(ctx, src, pos_sparams) mdefs2]
+            [:method_defs mtable method_def_sparams(ctx, src, pos_sparams) mdefs3]
+            mtable]
+    end
 end
 
 # string mangling is necessary until generated functions know about scope layers
