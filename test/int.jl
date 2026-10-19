@@ -292,6 +292,19 @@ end
     U in [Base.BitInteger_types..., BigInt]
     @test typeof(rand(U(0):U(127)) % T) === T
 end
+@testset "rem, mod, clamp, typemin, typemax with Union{} throw MethodError" begin
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    for f in (rem, mod, clamp), x in (1, big(1), 'a', 1.0)
+        @test_throws MethodError(f, (x, Union{})) f(x, Union{})
+        @test which(f, (typeof(x), Type{Union{}})).sig == Tuple{typeof(f), Any, Type{Union{}}, Vararg}
+    end
+    @test_throws MethodError(rem, (1, Union{}, RoundDown)) rem(1, Union{}, RoundDown)
+    for f in (typemin, typemax)
+        @test_throws MethodError(f, (Union{},)) f(Union{})
+        @test_throws MethodError(f, (Union{}, 1)) f(Union{}, 1)
+        @test which(f, (Type{Union{}},)).sig == Tuple{typeof(f), Type{Union{}}, Vararg}
+    end
+end
 
 @testset "Signed, Unsigned, signed, unsigned for bitstypes" begin
     for (S,U) in zip(Base.BitSigned_types, Base.BitUnsigned_types)
