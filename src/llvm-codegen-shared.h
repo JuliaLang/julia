@@ -4,6 +4,7 @@
 #include <utility>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/STLFunctionalExtras.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/Module.h>
@@ -544,6 +545,9 @@ void ConstantUses<U>::forward()
 
 
 void multiversioning_preannotate(llvm::Module &M);
+namespace llvm { class TargetMachine; }
+void multiversioning_fold_clones(llvm::Module &M, llvm::TargetMachine &TM,
+        llvm::function_ref<void(llvm::Module &, llvm::SmallVectorImpl<char> &)> emit_object);
 std::optional<bool> always_have_fma(Function&, const Triple &TT) JL_NOTSAFEPOINT;
 
 namespace llvm::jitlink {

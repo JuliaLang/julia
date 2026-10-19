@@ -28,6 +28,15 @@
 #include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/Utils/Cloning.h>
+#include <llvm/IR/DebugInfo.h>
+#include <llvm/MC/MCContext.h>
+#include <llvm/MC/MCDisassembler/MCDisassembler.h>
+#include <llvm/MC/MCInst.h>
+#include <llvm/MC/MCInstrInfo.h>
+#include <llvm/MC/MCSubtargetInfo.h>
+#include <llvm/MC/TargetRegistry.h>
+#include <llvm/Object/ObjectFile.h>
+#include <llvm/Target/TargetMachine.h>
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -44,6 +53,8 @@
 
 #define DEBUG_TYPE "julia_multiversioning"
 #undef DEBUG
+
+STATISTIC(FoldedClones, "Number of partial-target clones replaced by their base version");
 
 using namespace llvm;
 
@@ -403,6 +414,10 @@ static void annotate_module_clones(Module &M) {
             cloneset.clear();
             clones[i].toStringUnsigned(cloneset, 16);
             F.addFnAttr("julia.mv.clones", cloneset);
+            // Its clones may take a different path than its base even with the
+            // same instructions, so multiversioning_fold_clones must keep them
+            if (func_infos[i] & JL_CLONE_CPU)
+                F.addFnAttr("julia.mv.cpu", "");
         }
     }
     if (has_veccall) {
@@ -1213,12 +1228,244 @@ static bool runMultiVersioning(Module &M, bool allow_bad_fvars)
     return true;
 }
 
+
+// Instruction-set extensions a partial clone may use beyond its base (x86 only).
+// Misclassifying an instruction as baseline costs at most performance: a CPU that
+// runs a partial target already runs its base version of every uncloned function.
+enum : unsigned {
+    ISA_AVX2 = 1 << 0, ISA_FMA = 1 << 1, ISA_F16C = 1 << 2, ISA_BMI = 1 << 3,
+    ISA_BMI2 = 1 << 4, ISA_LZCNT = 1 << 5, ISA_MOVBE = 1 << 6, ISA_AVX512 = 1 << 7,
+    ISA_NCATS = 8, ISA_UNKNOWN = 1u << 31,
+};
+static const char *const isa_features[ISA_NCATS] = {
+    "+avx2", "+fma", "+f16c", "+bmi", "+bmi2", "+lzcnt", "+movbe", "+avx512f"};
+
+static unsigned classify_x86_inst(const MCInst &I, ArrayRef<uint8_t> Bytes, const MCInstrInfo &MII)
+{
+    size_t p = 0;
+    while (p < Bytes.size()) {
+        uint8_t b = Bytes[p];
+        if (b == 0x66 || b == 0x67 || b == 0xF2 || b == 0xF3 || b == 0xF0 || b == 0x2E ||
+            b == 0x36 || b == 0x3E || b == 0x26 || b == 0x64 || b == 0x65)
+            p++;
+        else
+            break;
+    }
+    if (p < Bytes.size() && Bytes[p] == 0x62) // EVEX prefix
+        return ISA_AVX512;
+    StringRef N = MII.getName(I.getOpcode());
+    auto any = [&](std::initializer_list<const char*> prefixes) {
+        for (auto pre : prefixes)
+            if (N.starts_with(pre))
+                return true;
+        return false;
+    };
+    if (any({"VFMADD", "VFMSUB", "VFNMADD", "VFNMSUB"}))
+        return ISA_FMA;
+    if (any({"VCVTPH2PS", "VCVTPS2PH"}))
+        return ISA_F16C;
+    if (any({"ANDN", "BEXTR", "BLSI", "BLSMSK", "BLSR", "TZCNT"}))
+        return ISA_BMI;
+    if (any({"BZHI", "MULX", "PDEP", "PEXT", "RORX", "SARX", "SHLX", "SHRX"}))
+        return ISA_BMI2;
+    if (N.starts_with("LZCNT"))
+        return ISA_LZCNT;
+    if (N.starts_with("MOVBE"))
+        return ISA_MOVBE;
+    if (any({"VPBROADCAST", "VBROADCASTI128", "VPERM2I128", "VPERMQ", "VPERMD", "VPERMPS",
+             "VPERMPD", "VINSERTI128", "VEXTRACTI128", "VPGATHER", "VGATHER", "VPMASKMOV",
+             "VPSLLV", "VPSRLV", "VPSRAV", "VPBLENDD"}) ||
+        N == "VBROADCASTSSrr" || N == "VBROADCASTSSYrr" || N == "VBROADCASTSDYrr")
+        return ISA_AVX2;
+    // 256-bit integer ops; the AVX1 exceptions also start with VP
+    if (N.starts_with("VP") && N.contains('Y') &&
+        !any({"VPERMIL", "VPERM2F128", "VPTEST", "VPCLMUL"}))
+        return ISA_AVX2;
+    return 0;
+}
+
+// Map each function symbol in an object file (by IR name) to the extensions its code uses
+static StringMap<unsigned> classify_object(ArrayRef<char> buf, TargetMachine &TM, char global_prefix)
+{
+    StringMap<unsigned> used;
+    auto ObjOrErr = object::ObjectFile::createObjectFile(
+        MemoryBufferRef(StringRef(buf.data(), buf.size()), "mv-trial"));
+    if (!ObjOrErr) {
+        consumeError(ObjOrErr.takeError());
+        return used;
+    }
+    object::ObjectFile &Obj = **ObjOrErr;
+    const Triple &TT = TM.getTargetTriple();
+    const Target &T = TM.getTarget();
+    // Decode with every extension enabled; classification happens per instruction
+    std::unique_ptr<MCSubtargetInfo> STI(T.createMCSubtargetInfo(TT, "",
+        "+avx512f,+avx512bw,+avx512dq,+avx512vl,+avx512cd,+avx2,+fma,+f16c,+bmi,+bmi2,+lzcnt,+movbe"));
+    MCContext Ctx(TT, TM.getMCAsmInfo(), TM.getMCRegisterInfo(), *STI);
+    std::unique_ptr<MCDisassembler> DisAsm(T.createMCDisassembler(*STI, Ctx));
+    if (!DisAsm)
+        return used;
+    const MCInstrInfo &MII = *TM.getMCInstrInfo();
+
+    // Not every format records symbol sizes, so a function extends to the next
+    // symbol in its section (padding between functions decodes as baseline code)
+    struct Sym {
+        uint64_t off;
+        StringRef name;
+        bool func;
+    };
+    DenseMap<uint64_t, SmallVector<Sym, 0>> by_section;
+    for (const object::SymbolRef &S : Obj.symbols()) {
+        Expected<object::SymbolRef::Type> Type = S.getType();
+        Expected<StringRef> Name = S.getName();
+        Expected<object::section_iterator> Sec = S.getSection();
+        Expected<uint64_t> Addr = S.getAddress();
+        if (!Type || !Name || !Sec || !Addr) {
+            consumeError(Type.takeError());
+            consumeError(Name.takeError());
+            consumeError(Sec.takeError());
+            consumeError(Addr.takeError());
+            continue;
+        }
+        if (*Sec == Obj.section_end() || !(*Sec)->isText())
+            continue;
+        by_section[(*Sec)->getIndex()].push_back(
+            {*Addr - (*Sec)->getAddress(), *Name, *Type == object::SymbolRef::ST_Function});
+    }
+    for (const object::SectionRef &Sec : Obj.sections()) {
+        auto syms = by_section.find(Sec.getIndex());
+        if (syms == by_section.end())
+            continue;
+        Expected<StringRef> Contents = Sec.getContents();
+        if (!Contents) {
+            consumeError(Contents.takeError());
+            continue;
+        }
+        auto &list = syms->second;
+        llvm::sort(list, [](const Sym &a, const Sym &b) { return a.off < b.off; });
+        for (size_t i = 0; i < list.size(); i++) {
+            if (!list[i].func)
+                continue;
+            uint64_t start = list[i].off, end = Contents->size();
+            for (size_t j = i + 1; j < list.size(); j++) {
+                if (list[j].off > start) {
+                    end = list[j].off;
+                    break;
+                }
+            }
+            if (start >= end)
+                continue;
+            ArrayRef<uint8_t> Bytes((const uint8_t*)Contents->data() + start, end - start);
+            unsigned mask = 0;
+            for (uint64_t p = 0; p < Bytes.size();) {
+                MCInst I;
+                uint64_t n = 0;
+                if (DisAsm->getInstruction(I, n, Bytes.slice(p), p, nulls()) != MCDisassembler::Success || n == 0) {
+                    mask |= ISA_UNKNOWN;
+                    break;
+                }
+                mask |= classify_x86_inst(I, Bytes.slice(p, n), MII);
+                p += n;
+            }
+            StringRef name = list[i].name;
+            if (global_prefix && name.starts_with(StringRef(&global_prefix, 1)))
+                name = name.drop_front();
+            used[name] = mask;
+        }
+    }
+    return used;
+}
+
 } // anonymous namespace
 
 extern void multiversioning_preannotate(Module &M)
 {
     annotate_module_clones(M);
     M.addModuleFlag(Module::ModFlagBehavior::Error, "julia.mv.enable", 1);
+}
+
+// Replace partial-target clones whose machine code uses nothing their target adds
+// over its base by an alias of the base version. Clones of a partial target are
+// selected before optimization (e.g. every function with a loop), and many end up
+// differing from their base only in scheduling and register allocation. Which
+// instructions a clone uses is only known after codegen, so the clones are first
+// compiled on their own into a throwaway object and disassembled. This runs after
+// optimization, right before the image's object file is emitted.
+void multiversioning_fold_clones(Module &M, TargetMachine &TM,
+        function_ref<void(Module &, SmallVectorImpl<char> &)> emit_object)
+{
+    if (TM.getTargetTriple().getArch() != Triple::x86_64)
+        return;
+    auto maybe_specs = get_target_specs(M);
+    if (!maybe_specs)
+        return;
+    auto &specs = *maybe_specs;
+    SmallVector<std::pair<Function*, Function*>, 0> clones; // clone, base version
+    for (auto &F : M) {
+        if (F.isDeclaration() || !F.hasFnAttribute("julia.mv.clone") || F.hasFnAttribute("julia.mv.cpu"))
+            continue;
+        unsigned t;
+        if (F.getFnAttribute("julia.mv.clone").getValueAsString().getAsInteger(10, t) ||
+            t == 0 || t >= specs.size() || specs[t].clone_all)
+            continue;
+        // The base may pass vectors in other registers
+        if (is_vector(F.getFunctionType()))
+            continue;
+        std::string suffix = "." + std::to_string(t);
+        if (!F.getName().ends_with(suffix))
+            continue;
+        std::string base_name = F.getName().drop_back(suffix.size()).str();
+        if (unsigned base = specs[t].base)
+            base_name += "." + std::to_string(base);
+        Function *B = M.getFunction(base_name);
+        if (B && !B->isDeclaration() && B->getFunctionType() == F.getFunctionType())
+            clones.push_back({&F, B});
+    }
+    if (clones.empty())
+        return;
+
+    SmallPtrSet<const GlobalValue*, 0> trial_defs;
+    for (auto &[F, B] : clones)
+        trial_defs.insert(F);
+    ValueToValueMapTy VMap;
+    auto Trial = CloneModule(M, VMap, [&](const GlobalValue *GV) { return trial_defs.count(GV) != 0; });
+    for (const char *name : {"llvm.used", "llvm.compiler.used", "llvm.global_ctors", "llvm.global_dtors"})
+        if (auto GV = Trial->getNamedGlobal(name))
+            GV->eraseFromParent();
+    for (auto &[F, B] : clones) {
+        auto TF = cast<Function>(VMap[F]);
+        TF->setLinkage(GlobalValue::ExternalLinkage);
+        TF->setVisibility(GlobalValue::DefaultVisibility);
+    }
+    StripDebugInfo(*Trial);
+    SmallVector<char, 0> obj;
+    emit_object(*Trial, obj);
+    Trial.reset();
+    StringMap<unsigned> used = classify_object(obj, TM, M.getDataLayout().getGlobalPrefix());
+
+    for (auto &[F, B] : clones) {
+        auto it = used.find(F->getName());
+        if (it == used.end() || (it->second & ISA_UNKNOWN))
+            continue;
+        auto &STI = TM.getMCSubtargetInfo(B->getFnAttribute("target-cpu").getValueAsString(),
+                                          B->getFnAttribute("target-features").getValueAsString());
+        bool runs_on_base = true;
+        for (unsigned k = 0; k < ISA_NCATS; k++)
+            if ((it->second & (1u << k)) && !STI.checkFeatures(isa_features[k]))
+                runs_on_base = false;
+        if (!runs_on_base)
+            continue;
+        // Other partitions may reference the clone by name, so its symbol stays as an alias
+        F->replaceAllUsesWith(B);
+        std::string name = F->getName().str();
+        auto linkage = F->getLinkage();
+        auto visibility = F->getVisibility();
+        bool dso_local = F->isDSOLocal();
+        F->eraseFromParent();
+        auto GA = GlobalAlias::create(B->getValueType(), B->getAddressSpace(), linkage, name, B, &M);
+        GA->setVisibility(visibility);
+        GA->setDSOLocal(dso_local);
+        ++FoldedClones;
+    }
 }
 
 PreservedAnalyses MultiVersioningPass::run(Module &M, ModuleAnalysisManager &AM)

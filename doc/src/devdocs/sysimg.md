@@ -128,7 +128,11 @@ detection, and serialization.
     and serializes/deserializes target data for system images.
   - `src/llvm-multiversioning.cpp`: clones functions based on target feature diffs.
     Functions with loops or CPU queries are always cloned; SIMD, math, float16, and
-    bfloat16 functions are cloned when the target adds those capabilities.
+    bfloat16 functions are cloned when the target adds those capabilities. On x86-64,
+    after optimization, the clones of each partially cloned target are compiled once
+    on their own and disassembled. A clone whose code uses no instruction its target
+    adds over its base is replaced by the base version
+    (see [`JULIA_IMAGE_FOLD_CLONES`](@ref JULIA_IMAGE_FOLD_CLONES)).
 
 ### Upgrading LLVM
 

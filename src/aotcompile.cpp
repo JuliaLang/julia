@@ -1654,6 +1654,15 @@ static void emit_native(Module &M, TargetMachine &TM, SmallVectorImpl<char> &buf
     emitter.run(M);
 }
 
+// JULIA_IMAGE_FOLD_CLONES=0 keeps every CPU clone (see multiversioning_fold_clones)
+static bool fold_clones_enabled()
+{
+    const char *env = getenv("JULIA_IMAGE_FOLD_CLONES");
+    if (!env)
+        return true;
+    return !(StringRef(env) == "0" || StringRef("false").compare_insensitive(env) == 0);
+}
+
 // Perform the actual optimization and emission of the output files
 static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimers &timers,
         bool unopt, bool opt, bool obj, bool asm_) {
@@ -1748,6 +1757,12 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
                     FunctionType::get(Type::getBFloatTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
             injectCRTAlias(M, "__truncdfbf2", "julia__truncdfbf2",
                     FunctionType::get(Type::getBFloatTy(M.getContext()), { Type::getDoubleTy(M.getContext()) }, false));
+        }
+        if ((obj || asm_) && fold_clones_enabled()) {
+            TimeTraceScope FoldScope("AOT Fold Clones", M.getModuleIdentifier());
+            multiversioning_fold_clones(M, *TM, [&](Module &TrialM, SmallVectorImpl<char> &buf) {
+                emit_native(TrialM, *TM, buf, false);
+            });
         }
         timers.optimize.stopTimer();
     }

@@ -5024,6 +5024,60 @@ end
     end
 end
 
+# Package images for several CPU targets. Partial-target clones that use no
+# instruction their target adds are replaced by their base version, unless
+# JULIA_IMAGE_FOLD_CLONES=0. Both images must load and compute the same results.
+Sys.ARCH === :x86_64 && precompile_test_harness("multiple CPU targets") do load_path
+    write(joinpath(load_path, "MultiTarget.jl"),
+          """
+          module MultiTarget
+          function axpy!(y::Vector{Float64}, a::Float64, x::Vector{Float64})
+              @inbounds @simd for i in eachindex(y, x)
+                  y[i] = muladd(a, x[i], y[i])
+              end
+              return y
+          end
+          function bitsum(v::Vector{UInt64})
+              s = 0
+              for x in v
+                  s += leading_zeros(x) + trailing_zeros(x)
+              end
+              return s
+          end
+          function collatz(n::Int)
+              k = 0
+              while n != 1
+                  n = iseven(n) ? n >> 1 : 3n + 1
+                  k += 1
+              end
+              return k
+          end
+          precompile(axpy!, (Vector{Float64}, Float64, Vector{Float64}))
+          precompile(bitsum, (Vector{UInt64},))
+          precompile(collatz, (Int,))
+          end
+          """)
+    script = """
+        using MultiTarget
+        @assert MultiTarget.axpy!(ones(100), 2.0, collect(1.0:100.0)) == 1 .+ 2 .* (1:100)
+        @assert MultiTarget.bitsum(UInt64[1, 2^40, typemax(UInt64)]) == 63 + 23 + 40
+        @assert MultiTarget.collatz(27) == 111
+        print(Base.isprecompiled(Base.PkgId("MultiTarget")))
+        """
+    pathsep = Sys.iswindows() ? ";" : ":"
+    for fold in ("1", "0")
+        depot = mkdepottempdir()
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                     "JULIA_CPU_TARGET" => "generic;sandybridge,clone_all;haswell,base(1)",
+                     "JULIA_IMAGE_FOLD_CLONES" => fold,
+                     "JULIA_DEPOT_PATH" => depot * pathsep,
+                     "JULIA_LOAD_PATH" => load_path * pathsep)
+        # the first run compiles the image, the second loads it
+        @test readchomp(cmd) == "true"
+        @test readchomp(cmd) == "true"
+    end
+end
+
 finish_precompile_test!()
 if original_num_precompile_tasks === nothing
     delete!(ENV, "JULIA_NUM_PRECOMPILE_TASKS")
