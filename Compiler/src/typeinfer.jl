@@ -112,8 +112,10 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         ci = result.ci
         mi = result.linfo
         # if we aren't cached, we don't need this edge
-        # but our caller might, so let's just make it anyways
-        if last(result.valid_worlds) >= validation_world
+        # but our caller might, so let's just make it anyways.
+        # A tombstoned result is the exception: each new caller infers it again, so its
+        # backedges would pile up. Its callers depend on its edges directly instead.
+        if last(result.valid_worlds) >= validation_world && !result.tombstone
             # if we can record all of the backedges in the global reverse-cache,
             # we can now widen our applicability in the global cache too
             store_backedges(ci, edges)
@@ -286,6 +288,7 @@ function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cyclei
         caller.time_caches = 0.0
     end
     empty!(opt_cache)
+    share_tombstoned_cycle_edges!(frames, cycleid)
     cycletop = frames[cycleid]::InferenceState
     time_start = cycletop.time_start
     validation_world = get_world_counter()
@@ -310,6 +313,32 @@ function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cyclei
     # validity.
     ccall(:jl_promote_cis_to_current, Cvoid, (Ptr{CodeInstance}, Csize_t, UInt), cis, length(cis), validation_world)
     resize!(frames, cycleid - 1)
+    return nothing
+end
+
+# Members of a cycle consume each other's results through `MethodInstance` edges. A
+# tombstoned member has no backedges (see `finish!`), so it and every member that consumed
+# it depend on the edges of the whole cycle directly. Other members reach those through
+# the backedges of the members they consumed.
+function share_tombstoned_cycle_edges!(frames::Vector{AbsIntState}, cycleid::Int)
+    sharers = IdSet{InferenceState}()
+    for frameid = cycleid:length(frames)
+        member = frames[frameid]::InferenceState
+        member.result.tombstone || continue
+        push!(sharers, member)
+        for (consumer, _) in member.cycle_backedges
+            push!(sharers, consumer)
+        end
+    end
+    isempty(sharers) && return nothing
+    cycle_edges = Any[]
+    for frameid = cycleid:length(frames)
+        append_edges!(cycle_edges, (frames[frameid]::InferenceState).edges)
+    end
+    for sharer in sharers
+        # `opt.inlining.edges` is this same vector, so this also reaches optimized members
+        append_edges!(sharer.edges, cycle_edges)
+    end
     return nothing
 end
 
@@ -799,6 +828,45 @@ function compute_edges!(sv::InferenceState)
     nothing
 end
 
+# Number of entries of the edge record starting at `edges[i]`, see `ForwardToBackedgeIterator`
+function edge_record_length(edges, i::Int)
+    item = edges[i]
+    item isa Int && return 2 + abs(item) # nmatches, atype, matches...
+    item isa Union{MethodInstance,CodeInstance,Core.Binding,Method} && return 1
+    return 2 # invokesig or atype, followed by its target or `Core.methodtable`
+end
+
+# Append the edge records of `from` that `edges` does not have yet.
+function append_edges!(edges::Vector{Any}, from)
+    singles = IdSet{Any}()
+    multis = Int[]
+    i = 1
+    while i <= length(edges)
+        n = edge_record_length(edges, i)
+        n == 1 ? push!(singles, edges[i]) : push!(multis, i)
+        i += n
+    end
+    i = 1
+    while i <= length(from)
+        n = edge_record_length(from, i)
+        if n == 1
+            if !(from[i] in singles)
+                push!(singles, from[i])
+                push!(edges, from[i])
+            end
+        elseif !any(multis) do j
+                    edge_record_length(edges, j) == n && all(k -> edges[j+k] === from[i+k], 0:n-1)
+                end
+            push!(multis, length(edges) + 1)
+            for k = 0:n-1
+                push!(edges, from[i+k])
+            end
+        end
+        i += n
+    end
+    return edges
+end
+
 function record_slot_assign!(sv::InferenceState)
     # look at all assignments to slots
     # and union the set of types stored there
@@ -1108,6 +1176,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             push!(caller.tasks, function get_infer_result(interp, caller)
                 update_valid_age!(caller, frame.world.valid_worlds)
                 local isinferred = is_inferred(frame)
+                # a tombstoned callee has no backedges, see `finish!`
+                isinferred && result.tombstone && append_edges!(caller.edges, frame.edges)
                 local edge = isinferred ? edge_ci : nothing
                 local effects = isinferred ? frame.result.ipo_effects : # effects are adjusted already within `finish` for ipo_effects
                     adjust_effects(effects_for_cycle(frame.ipo_effects), method)
