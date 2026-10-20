@@ -38,27 +38,45 @@ end
 
 _crc32c(uuid::UUID, crc::UInt32=0x00000000) = _crc32c(uuid.value, crc)
 
-# The 32 hex digits are read as four words of eight: the first group, the second and third,
-# the fourth and the first four of the last, and the rest of the last.
-function Parsers.parsevalue(::Type{UUID}, bytes::AbstractVector{UInt8})
-    require_one_based_indexing(bytes)
-    length(bytes) == 36 || return Parsers.INVALID
-    @inbounds (bytes[9] == UInt8('-')) & (bytes[14] == UInt8('-')) &
-              (bytes[19] == UInt8('-')) & (bytes[24] == UInt8('-')) || return Parsers.INVALID
-    w1 = Parsers.load8(bytes, 1)
-    w2 = Parsers.load8(bytes, 10) & 0x00000000_ffffffff | Parsers.load8(bytes, 15) << 32
-    w3 = Parsers.load8(bytes, 20) & 0x00000000_ffffffff | Parsers.load8(bytes, 25) << 32
-    w4 = Parsers.load8(bytes, 29)
-    Parsers.ishexdigits8(w1) & Parsers.ishexdigits8(w2) & Parsers.ishexdigits8(w3) &
-        Parsers.ishexdigits8(w4) || return Parsers.INVALID
-    return UUID((Parsers.hexdigits8(w1) << 32 | Parsers.hexdigits8(w2),
-                 Parsers.hexdigits8(w3) << 32 | Parsers.hexdigits8(w4)))
+# The next `n` bytes of the iteration `y` of `units` in a word, the first in the lowest byte,
+# the iteration after them, and whether there were `n`
+@inline function takebytes(units, y, n::Int)
+    w = zero(UInt64)
+    for k in 0:n-1
+        y === nothing && return w, y, false
+        b, state = y
+        w |= UInt64(b) << 8k
+        y = iterate(units, state)
+    end
+    return w, y, true
 end
 
+# The UUID spelled by the 36 bytes that `units` iterates. They are read as eight hex digits,
+# four groups of a dash and four digits, and eight more digits, and the digits are checked
+# and converted eight at a time.
+function parseuuid(units)
+    a, y, ok1 = takebytes(units, iterate(units), 8)
+    b, y, ok2 = takebytes(units, y, 5)
+    c, y, ok3 = takebytes(units, y, 5)
+    d, y, ok4 = takebytes(units, y, 5)
+    e, y, ok5 = takebytes(units, y, 5)
+    f, y, ok6 = takebytes(units, y, 8)
+    # returning before using the words lets the compiler merge the end checks of their bytes
+    ok1 & ok2 & ok3 & ok4 & ok5 & ok6 & (y === nothing) || return Parsers.INVALID
+    dashes = (b & 0xff) | (c & 0xff) << 8 | (d & 0xff) << 16 | (e & 0xff) << 24
+    dashes == UInt8('-') * 0x01010101 || return Parsers.INVALID
+    w2 = b >> 8 | c >> 8 << 32
+    w3 = d >> 8 | e >> 8 << 32
+    Parsers.ishexdigits8(a) & Parsers.ishexdigits8(w2) & Parsers.ishexdigits8(w3) &
+        Parsers.ishexdigits8(f) || return Parsers.INVALID
+    return UUID((Parsers.hexdigits8(a) << 32 | Parsers.hexdigits8(w2),
+                 Parsers.hexdigits8(w3) << 32 | Parsers.hexdigits8(f)))
+end
+
+Parsers.parsevalue(::Type{UUID}, bytes::AbstractVector{UInt8}) = parseuuid(bytes)
+
 function tryparse(::Type{UUID}, s::AbstractString)
-    bytes = codeunits(s)
-    bytes isa AbstractVector{UInt8} || return tryparse(UUID, String(s))
-    u = Parsers.parsevalue(UUID, bytes)
+    u = parseuuid(utf8units(s))
     return u isa UUID ? u : nothing
 end
 

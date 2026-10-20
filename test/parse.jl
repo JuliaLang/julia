@@ -505,6 +505,13 @@ end
     end
 end
 
+# A string whose code units are not bytes
+struct UInt16CodeUnitString <: AbstractString
+    s::String
+end
+Base.codeunit(::UInt16CodeUnitString) = UInt16
+Base.iterate(x::UInt16CodeUnitString, i::Int = 1) = iterate(x.s, i)
+
 @testset "UUID parsing" begin
     P = Base.Parsers
     rng = Xoshiro(2)
@@ -531,6 +538,9 @@ end
         @test tryparse(Base.UUID, t) === nothing
     end
     @test_throws "Malformed UUID string: \"x\"" parse(Base.UUID, "x")
+    # a string whose code units are not bytes is read as UTF-8
+    @test tryparse(Base.UUID, UInt16CodeUnitString(s)) === parse(Base.UUID, s)
+    @test tryparse(Base.UUID, UInt16CodeUnitString("é" * s[3:end])) === nothing
 end
 
 # parsing complex numbers (#22250)
