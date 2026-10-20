@@ -413,8 +413,6 @@ function peek(from::GenericIOBuffer, T::MultiByteBitNumberType)
     return load_from_array(T, from.data, from.ptr)
 end
 
-# This method can use a pointer, since the underlying buffer is dense
-# and memory backed
 function peek(from::GenericIOBuffer{<:MutableDenseArrayType}, T::MultiByteBitNumberType)
     from.readable || _throw_not_readable()
     avail = bytesavailable(from)
@@ -422,11 +420,8 @@ function peek(from::GenericIOBuffer{<:MutableDenseArrayType}, T::MultiByteBitNum
     if nb > avail
         throw(EOFError())
     end
-    GC.@preserve from begin
-        ptr::Ptr{T} = pointer(from.data, from.ptr)
-        x = unsafe_load(ptr)
-    end
-    return x
+    ref, offset = _memoryref_and_byteoffset(from.data)
+    return Core.unsafe_memoryrefload(ref, T, offset + from.ptr - 1, true)
 end
 
 function read(from::GenericIOBuffer, T::MultiByteBitNumberType)
