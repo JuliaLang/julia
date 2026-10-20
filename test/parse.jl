@@ -353,6 +353,41 @@ end
     @test_throws ArgumentError parse(Int, "2", base = 63)
 end
 
+@testset "Bool parsing" begin
+    P = Base.Parsers
+    for (s, x) in (("true", true), ("false", false), ("0", false), ("1", true), ("0001", true),
+                   ("2", P.OVERFLOW), ("10", P.OVERFLOW), ("256", P.OVERFLOW), ("", P.INVALID),
+                   ("True", P.INVALID), ("FALSE", P.INVALID), (" true", P.INVALID),
+                   ("true ", P.INVALID), ("truee", P.INVALID), ("tru", P.INVALID),
+                   ("+1", P.INVALID), ("-0", P.INVALID), ("0x1", P.INVALID))
+        @test P.parsevalue(Bool, codeunits(s)) === x
+        @test P.parsevalue(Bool, view(codeunits("<$s>"), 2:ncodeunits(s) + 1)) === x
+    end
+    @test P.parsevalue(Bool, codeunits("01"); base = 2) === true
+    @test P.parsevalue(Bool, codeunits("a"); base = 16) === P.OVERFLOW
+    @test_throws ArgumentError P.parsevalue(Bool, codeunits("1"); base = 1)
+    # `parse` keeps its grammar around the bytes and its error messages
+    for (s, x) in (("true", true), ("false", false), ("01", true), (" true\n", true),
+                   ("0x1", true), ("0b0", false), ("2", nothing), ("tru", nothing),
+                   ("True", nothing))
+        for str in (s, SubString("<$s>", 2, ncodeunits(s) + 1), GenericString(s),
+                    StringView(codeunits(s)))
+            @test tryparse(Bool, str) === x
+        end
+    end
+    @test parse(Bool, "1"; base = 2) === true
+    @test tryparse(Bool, "1a"; base = 16) === nothing
+    @test_throws "invalid Bool representation: \"tru\"" parse(Bool, "tru")
+    @test_throws "invalid Bool representation: \"2\"" parse(Bool, "2")
+    # DelimitedFiles parses a cell `s[i:j]` of a whole file `s`
+    @test Base.tryparse_internal(Bool, "x,1 ", 3, 4, 0, false) === true
+    @test Base.tryparse_internal(Bool, "x,0x0", 3, 5, 0, false) === false
+    @test Base.tryparse_internal(Bool, "1,x", 3, 3, 0, false) === nothing
+    @test Base.tryparse_internal(Bool, "1,", 3, 2, 0, false) === nothing
+    @test_throws "invalid Bool representation: \"2\"" Base.tryparse_internal(Bool, "x,2", 3, 3,
+                                                                            0, true)
+end
+
 @testset "issue #42616" begin
     @test tryparse(Bool, "") === nothing
     @test tryparse(Bool, " ") === nothing

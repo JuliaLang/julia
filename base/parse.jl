@@ -183,16 +183,23 @@ end
 
 function tryparse_internal(::Type{Bool}, sbuff::AbstractString,
         startpos::Int, endpos::Int, base::Integer, raise::Bool)
-    if isempty(sbuff)
+    # `true`, `false` and digits with nothing around them need none of the grammar below
+    if sbuff isa UTF8String && 1 <= startpos <= endpos
+        x = Parsers.parsevalue(Bool, view(codeunits(sbuff), startpos:endpos);
+                               base = base == 0 ? 10 : base)
+        x isa Bool && return x
+    end
+    if startpos > endpos
         raise && throw(ArgumentError("input string is empty"))
         return nothing
     end
 
-    if isnumeric(sbuff[1])
+    if isdigit(sbuff[startpos])
         intres = tryparse_internal(UInt8, sbuff, startpos, endpos, base, false)
         (intres == 1) && return true
         (intres == 0) && return false
-        raise && throw(ArgumentError("invalid Bool representation: $(repr(sbuff))"))
+        raise && throw(ArgumentError(
+            "invalid Bool representation: $(repr(SubString(sbuff, startpos, endpos)))"))
     end
 
     orig_start = startpos
