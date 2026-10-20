@@ -7683,6 +7683,9 @@ JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b)
 // methods are more specific, iff the methods signatures are type-equal
 JL_DLLEXPORT int jl_method_morespecific(jl_method_t *ma, jl_method_t *mb)
 {
+    // trait slots (prototype)
+    if ((ma->guards && ma->guards != jl_nothing) || (mb->guards && mb->guards != jl_nothing))
+        return jl_method_morespecific_guarded(ma, mb);
     jl_value_t *a = (jl_value_t*)ma->sig;
     jl_value_t *b = (jl_value_t*)mb->sig;
     if (obviously_disjoint(a, b, 1))
