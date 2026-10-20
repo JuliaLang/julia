@@ -268,12 +268,32 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
         }
         if (hv) {
             _Atomic(jl_method_instance_t*) *data = (_Atomic(jl_method_instance_t*)*)jl_svec_data(specializations);
-            for (i = 0; i < cl; i++) {
-                jl_method_instance_t *mi = jl_atomic_load_relaxed(&data[i]);
-                if ((jl_value_t*)mi == jl_nothing)
-                    break;
-                assert(!jl_types_equal(mi->specTypes, type));
+            // Free slots form one contiguous run, even after image compaction.
+            // Skip trailing unhashed entries, then bisect for the first free slot.
+            size_t hi = cl;
+            while (hi > 0 && (jl_value_t*)jl_atomic_load_relaxed(&data[hi - 1]) != jl_nothing)
+                hi--;
+            if (hi == 0) {
+                i = cl; // no free slot
             }
+            else {
+                size_t lo = 0;
+                hi--; // data[hi] is free
+                while (lo < hi) {
+                    size_t mid = lo + (hi - lo) / 2;
+                    if ((jl_value_t*)jl_atomic_load_relaxed(&data[mid]) == jl_nothing)
+                        hi = mid;
+                    else
+                        lo = mid + 1;
+                }
+                i = lo;
+            }
+#ifndef JL_NDEBUG
+            for (size_t j = 0; j < i; j++) {
+                jl_method_instance_t *mi = jl_atomic_load_relaxed(&data[j]);
+                assert((jl_value_t*)mi != jl_nothing && !jl_types_equal(mi->specTypes, type));
+            }
+#endif
             // i points at the place to insert
         }
         if (hv ? (i + 1 >= cl || jl_svecref(specializations, i + 1) != jl_nothing) : (i <= 1 || jl_svecref(specializations, i - 2) != jl_nothing)) {
