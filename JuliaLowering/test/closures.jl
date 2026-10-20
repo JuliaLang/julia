@@ -236,6 +236,18 @@ let
 end
 """)
 
+# An assignment in a skipped term of a nested `&&`/`||` chain does not define a
+# captured variable
+@test JuliaLowering.include_string(test_mod, """
+let c1 = false
+    if (c1 && (x = 1; true)) || (h = () -> x; false)
+        1
+    else
+        2
+    end
+end
+""") == 2
+
 # Opaque closure
 @test JuliaLowering.include_string(test_mod, """
 let y = 1

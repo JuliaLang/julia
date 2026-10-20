@@ -102,6 +102,62 @@ end
 12  (return core.nothing)
 
 ########################################
+# Nested `&&`/`||` chains of mixed kinds compile directly to branches
+begin
+   local a, b, c, d, e
+   if (a && b) || (c && d) || e
+       a
+   end
+end
+#---------------------
+1   (newvar slot₁/a)
+2   (newvar slot₂/b)
+3   (newvar slot₃/c)
+4   (newvar slot₄/d)
+5   (newvar slot₅/e)
+6   slot₁/a
+7   (gotoifnot %₆ label₁₁)
+8   slot₂/b
+9   (gotoifnot %₈ label₁₁)
+10  (goto label₁₈)
+11  slot₃/c
+12  (gotoifnot %₁₁ label₁₆)
+13  slot₄/d
+14  (gotoifnot %₁₃ label₁₆)
+15  (goto label₁₈)
+16  slot₅/e
+17  (gotoifnot %₁₆ label₂₀)
+18  slot₁/a
+19  (return %₁₈)
+20  (return core.nothing)
+
+########################################
+# Non-final terms of a valued `||` are conditions, compiled directly to branches
+begin
+   local a, b, c, d
+   (a && b) || (c && d) || return
+   d
+end
+#---------------------
+1   (newvar slot₁/a)
+2   (newvar slot₂/b)
+3   (newvar slot₃/c)
+4   (newvar slot₄/d)
+5   slot₁/a
+6   (gotoifnot %₅ label₁₀)
+7   slot₂/b
+8   (gotoifnot %₇ label₁₀)
+9   (goto label₁₄)
+10  slot₃/c
+11  (gotoifnot %₁₀ label₁₅)
+12  slot₄/d
+13  (gotoifnot %₁₂ label₁₅)
+14  (goto label₁₆)
+15  (return core.nothing)
+16  slot₄/d
+17  (return %₁₆)
+
+########################################
 # symbolic goto forward jump
 begin
     a
