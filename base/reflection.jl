@@ -88,6 +88,8 @@ function method_instance(@nospecialize(f), @nospecialize(t);
 end
 
 default_debug_info_kind() = unsafe_load(cglobal(:jl_default_debug_info_kind, Cint))
+default_debug_info_inline_scopes() =
+    unsafe_load(cglobal(:jl_default_cgparams, CodegenParams)).debug_info_inline_scopes != 0
 
 # this type mirrors jl_cgparams_t (documented in julia.h)
 struct CodegenParams
@@ -190,13 +192,22 @@ struct CodegenParams
     """
     unique_names::Cint
 
+    """
+    If enabled, retain inlined function scopes in LLVM debug information. Julia's
+    own backtraces only need a line table for the outermost frame, so release
+    builds disable this by default when generating a sysimage or pkgimage. Other
+    consumers of the emitted IR may need these scopes to reconstruct inlined frames.
+    """
+    debug_info_inline_scopes::Cint
+
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames::Bool=true, debug_info_kind::Cint = default_debug_info_kind(),
                    debug_info_level::Cint = Cint(JLOptions().debug_level), safepoint_on_entry::Bool=true,
                    gcstack_arg::Bool=true, use_jlplt::Bool=true, force_emit_all::Bool=false,
                    sanitize_memory::Bool=false, sanitize_thread::Bool=false, sanitize_address::Bool=false,
-                   unique_names::Bool=false)
+                   unique_names::Bool=false,
+                   debug_info_inline_scopes::Bool=default_debug_info_inline_scopes())
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
@@ -204,7 +215,7 @@ struct CodegenParams
             debug_info_level, Cint(safepoint_on_entry),
             Cint(gcstack_arg), Cint(use_jlplt), Cint(force_emit_all),
             Cint(sanitize_memory), Cint(sanitize_thread), Cint(sanitize_address),
-            Cint(unique_names))
+            Cint(unique_names), Cint(debug_info_inline_scopes))
     end
 end
 

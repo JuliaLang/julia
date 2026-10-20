@@ -2997,6 +2997,7 @@ typedef struct {
     int sanitize_address;
 
     int unique_names;   // Emit globally unique names
+    int debug_info_inline_scopes; // Emit inlined scopes, not just a line table
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;

@@ -31,6 +31,34 @@ end
 # are not actually materialized as call instructions.
 strip_debug_calls(ir) = replace(ir, r"call void @llvm\.dbg\.declare.*\n" => "", r"call void @llvm\.dbg\.value.*\n" => "")
 
+# Inline debug scopes follow CodegenParams, which only drops them by default in
+# release builds that generate a sysimage or pkgimage.
+@inline inner_scope(x) = x + 1
+outer_scope(x) = inner_scope(x)
+@testset "Inline debug scopes" begin
+    @test Base.CodegenParams().debug_info_inline_scopes == 1
+    for scopes in (false, true)
+        params = Base.CodegenParams(debug_info_level=Cint(1), debug_info_inline_scopes=scopes)
+        ir = sprint(io -> code_llvm(io, outer_scope, (Int,); raw=true,
+                                   dump_module=true, optimize=false, params))
+        @test occursin("inlinedAt:", ir) == scopes
+    end
+
+    # pkgimage generation
+    mktempdir() do dir
+        write(joinpath(dir, "InlineScopesDefault.jl"), """
+            module InlineScopesDefault
+            const scopes = Base.CodegenParams().debug_info_inline_scopes
+            end
+            """)
+        cmd = `$(Base.julia_cmd()) --startup-file=no --compiled-modules=yes --pkgimages=yes
+               -e 'using InlineScopesDefault; print(InlineScopesDefault.scopes)'`
+        env = ("JULIA_DEPOT_PATH" => dir * (Sys.iswindows() ? ";" : ":"), "JULIA_LOAD_PATH" => dir)
+        asserts = ccall(:jl_is_assertsbuild, Int8, ()) != 0
+        @test readchomp(addenv(cmd, env...)) == string(Int(asserts))
+    end
+end
+
 if !is_debug_build && opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
     @test !occursin(" call ", strip_debug_calls(get_llvm(identity, Tuple{String})))
