@@ -42,8 +42,10 @@ kind_dynamic(a) = kind(Base.inferencebarrier(a))
         @test kind_static(a) === kind_dynamic(a) === :cpu
     end
     @test occursin("guarded by {backend(a)::$GPU}", string(methods(kind)))
-    # inference resolves the call when the slot is known, not when it is unknown
+    # inference resolves the call when the slot is known, not when it is unknown;
+    # `backend(::Type)` does not specialize, so a CPU slot exercises the trait's exact inference
     @test Base.infer_effects(kind_static, (typeof(view(d0, :, 1)),)).nothrow
+    @test Base.infer_effects(kind_static, (Matrix{Float64},)).nothrow
     @test !Base.infer_effects(kind_static, (AbstractMatrix{Float64},)).nothrow
 end
 

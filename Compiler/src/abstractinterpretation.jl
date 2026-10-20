@@ -486,7 +486,6 @@ function trait_slot_type(interp::AbstractInterpreter, @nospecialize(trait), @nos
         return Any, true, all_worlds
     end
     (edges === nothing || !trait_slots_supported(method_table(interp))) && return Any, false, all_worlds
-    # evaluating the trait compiles, and so infers, the call in this world
     v = try
         Core._call_in_world_total(world, trait, A)
     catch
@@ -497,7 +496,10 @@ function trait_slot_type(interp::AbstractInterpreter, @nospecialize(trait), @nos
     (matches isa MethodLookupResult && length(matches) == 1) || return Any, false, all_worlds
     match = matches[1]
     match.fully_covers || return Any, false, all_worlds
-    ci = get(code_cache(interp), specialize_method(match), nothing)
+    # Infer the exact specialization: evaluating the trait compiles the one dispatch
+    # selects, which differs if the trait does not specialize on its argument
+    # (e.g. `trait(::Type) = ...`, see `get_compileable_sig`).
+    ci = typeinf_ext(interp, specialize_method(match), SOURCE_MODE_NOT_REQUIRED)
     ci isa CodeInstance || return Any, false, all_worlds
     S = ci.rettype
     Core.Typeof(v) <: S || return Any, false, all_worlds
