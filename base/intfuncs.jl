@@ -1487,6 +1487,7 @@ function clamp(x, ::Type{T}) where {T<:Integer}
     hi = typemax(T)
     return (x > hi) ? hi : (x < lo) ? lo : convert(T, x)
 end
+clamp(x, ::Type{Union{}}, slurp...) = throw(MethodError(clamp, (x, Union{}, slurp...)))
 
 
 """

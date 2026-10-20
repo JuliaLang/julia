@@ -7984,8 +7984,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Value *theFunc, j
 {
     ++EmittedToJLInvokes;
     jl_codectx_t ctx(out);
-    std::string name;
-    raw_string_ostream(name) << "tojlinvoke" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
+    std::string name = out.make_name("tojlinvoke");
     Function *f = Function::Create(ctx.types().T_jlfunc,
             GlobalVariable::InternalLinkage,
             name, out.get_module());
@@ -8454,8 +8453,7 @@ static Function *gen_cfun_wrapper(
     const char *name = aliasname ? aliasname : "cfunction";
     bool nest = (!ff || unionall_env);
 
-    std::string funcName;
-    raw_string_ostream(funcName) << JL_SYM_CFUNCTION << name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
+    std::string funcName = out.make_name(JL_SYM_CFUNCTION, name);
 
     Module *M = into; // Safe because ctx lock is held by params
     AttributeList attributes = sig.attributes;
@@ -8514,7 +8512,7 @@ static Function *gen_cfun_wrapper(
         functype = sig.functype(M->getContext());
     }
     Function *cw = Function::Create(functype,
-            GlobalVariable::ExternalLinkage,
+            out.imaging_mode ? GlobalVariable::ExternalLinkage : GlobalVariable::InternalLinkage,
             funcName, M);
     jl_init_function(cw, out);
     cw->setAttributes(AttributeList::get(M->getContext(), {attributes, cw->getAttributes()}));
@@ -8736,7 +8734,7 @@ static Function *gen_cfun_wrapper(
         funcName += "make";
         Function *cw_make = Function::Create(
                 FunctionType::get(getPointerTy(ctx.builder.getContext()), { getPointerTy(ctx.builder.getContext()), ctx.types().T_ppjlvalue }, false),
-                GlobalVariable::ExternalLinkage,
+                out.imaging_mode ? GlobalVariable::ExternalLinkage : GlobalVariable::InternalLinkage,
                 funcName, M);
         jl_init_function(cw_make, ctx.emission_context);
         cw_make->getArg(0)->setName("wrapper");
@@ -10240,6 +10238,16 @@ static jl_llvm_functions_t
     topinfo.loc = topdebugloc;
     topinfo.edgeid = 0;
     SmallVector<DebugLineTable, 0> prev_lineinfo, new_lineinfo;
+    // Backtraces rebuild inlined frames from the CodeInstance debuginfo, using the
+    // statement index in the DWARF column, so image code (sysimage and pkgimages)
+    // gets only a line table for the outermost frame in release builds, which
+    // saves most of its DWARF. JIT code and assert builds keep the inline scopes
+    // for gdb, perf, and code_llvm/code_native.
+#ifdef JL_NDEBUG
+    const bool inline_scopes = !ctx.emission_context.imaging_mode;
+#else
+    const bool inline_scopes = true;
+#endif
     auto update_lineinfo = [&](size_t outerpc) {
         std::function<bool(jl_debuginfo_t *, jl_value_t *, size_t, size_t, bool)>
             append_lineinfo = [&](jl_debuginfo_t *debuginfo, jl_value_t *func, size_t to,
@@ -10277,7 +10285,19 @@ static jl_llvm_functions_t
                     if (info.file.empty())
                         info.file = "<missing>";
                     info.is_user_code = frame_is_user_code(modu, info.file);
-                    if (debug_enabled) {
+                    if (debug_enabled && !inline_scopes) {
+                        if (new_lineinfo.empty()) {
+                            DIScope *scope = SP;
+                            if (info.file != ctx.file)
+                                scope = dbuilder.createLexicalBlockFile(SP, get_difile(ctx, dbuilder, info.file, info.is_user_code));
+                            unsigned col = outerpc <= UINT16_MAX ? (unsigned)outerpc : 0;
+                            info.loc = DILocation::get(ctx.builder.getContext(), info.line, col, scope, NULL);
+                        }
+                        else {
+                            info.loc = new_lineinfo.front().loc;
+                        }
+                    }
+                    else if (debug_enabled) {
                         StringRef fname = jl_debuginfo_name(func);
                         // Encode outermost (codeinstance) debuginfo PC on
                         // innermost frame's DWARF column.  Note "innermost" is
@@ -11142,7 +11162,7 @@ static jl_llvm_functions_t jl_emit_oc_wrapper(jl_codegen_output_t &out, jl_metho
         Module *M = &out.get_module();
         jl_codectx_t ctx(out);
         ctx.name = M->getModuleIdentifier().data();
-        std::string funcName = get_function_name(true, false, ctx.name, ctx.emission_context.TargetTriple);
+        std::string funcName = out.make_name(JL_SYMBOL_SPECPTR_DEF, JL_INVOKE_SPECSIG, ctx.name);
         jl_returninfo_t returninfo = get_specsig_function(out, M, NULL, funcName, mi->specTypes, rettype, true);
         Function *gf_thunk = cast<Function>(returninfo.decl.getCallee());
         jl_init_function(gf_thunk, ctx.emission_context);

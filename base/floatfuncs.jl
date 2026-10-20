@@ -45,6 +45,8 @@ it is the minimum of `maxintfloat(T)` and [`typemax(S)`](@ref).
 """
 maxintfloat(::Type{S}, ::Type{T}) where {S<:AbstractFloat, T<:Integer} = min(maxintfloat(S), S(typemax(T)))
 maxintfloat() = maxintfloat(Float64)
+maxintfloat(::Type{Union{}}, slurp...) = throw(MethodError(maxintfloat, (Union{}, slurp...)))
+maxintfloat(x, ::Type{Union{}}, slurp...) = throw(MethodError(maxintfloat, (x, Union{}, slurp...)))
 
 isinteger(x::AbstractFloat) = iszero(x - trunc(x)) # note: x == trunc(x) would be incorrect for x=Inf
 
