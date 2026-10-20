@@ -1125,6 +1125,12 @@ test_properties()
 test_intersection_properties()
 
 
+# a left union must not be counted once per member when deciding if a typevar is diagonal
+@testset "diagonal counting through union bound checks" begin
+    @test Tuple{Tuple{Union{Int, String}}} <: (Tuple{X} where {T, X <: Tuple{Union{Nothing, T}}})
+    @test Tuple{Ref{Union{Int, String}}} <: (Tuple{Ref{X}} where {R, T <: Union{Nothing, R}, X <: T})
+end
+
 let S = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [TypeVar(:T), Any], 2),
     VS = TypeVar(:T),
     T = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [VS, VS], 2)
