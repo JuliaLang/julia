@@ -421,8 +421,17 @@ function check_ptr_indexable(a::ReinterpretArray{T,<:Any,S}) where {T,S}
 end
 check_ptr_indexable(a::ReshapedArray) = check_ptr_indexable(parent(a))
 check_ptr_indexable(a::FastContiguousSubArray) = check_ptr_indexable(parent(a))
-check_ptr_indexable(a::Union{Array, Memory}) = true
+check_ptr_indexable(a::Union{Array{S},Memory{S}}) where {S} = aligned_sizeof(S) > 0
 check_ptr_indexable(a::AbstractArray) = false
+
+_memoryref_and_byteoffset(a::Array) = (a.ref, 0)
+_memoryref_and_byteoffset(a::Memory) = (memoryref(a), 0)
+_memoryref_and_byteoffset(a::Union{ReinterpretArray,ReshapedArray}) = _memoryref_and_byteoffset(parent(a))
+@inline function _memoryref_and_byteoffset(a::FastContiguousSubArray)
+    ref, offset = _memoryref_and_byteoffset(parent(a))
+    offset += (Int(first_index(a)) - Int(firstindex(parent(a)))) * elsize(parent(a))
+    return ref, offset
+end
 
 @propagate_inbounds getindex(a::ReshapedReinterpretArray{T,0}) where {T} = a[firstindex(a)]
 
@@ -458,9 +467,8 @@ end
 @inline function _getindex_ptr(a::ReinterpretArray{T}, inds...) where {T}
     @boundscheck checkbounds(a, inds...)
     li = _to_linear_index(a, inds...)
-    ap = cconvert(Ptr{T}, a)
-    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - firstindex(a))
-    GC.@preserve ap return unsafe_load(p)
+    ref, offset = _memoryref_and_byteoffset(a)
+    return Core.unsafe_memoryrefload(ref, T, offset + elsize(a) * (Int(li) - Int(firstindex(a))), false)
 end
 
 function _is_scalar_reinterpret_applicable(T, S)
@@ -605,11 +613,11 @@ end
 end
 
 @inline function _setindex_ptr!(a::ReinterpretArray{T}, v, inds...) where {T}
+    v = convert(T, v)::T
     @boundscheck checkbounds(a, inds...)
     li = _to_linear_index(a, inds...)
-    ap = cconvert(Ptr{T}, a)
-    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - firstindex(a))
-    GC.@preserve ap unsafe_store!(p, v)
+    ref, offset = _memoryref_and_byteoffset(a)
+    Core.unsafe_memoryrefstore!(ref, v, offset + elsize(a) * (Int(li) - Int(firstindex(a))), false)
     return a
 end
 
