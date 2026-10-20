@@ -278,6 +278,7 @@ void jl_set_gc_and_wait(jl_task_t *ct)
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
+    jl_atomic_fetch_add(&ct->ptls->fault_handling, 1);
     // reading own gc state doesn't need atomic ops since no one else
     // should store to it.
     int8_t state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
@@ -289,6 +290,7 @@ void jl_set_gc_and_wait(jl_task_t *ct)
     jl_gc_notify_task_resume(ct);
     jl_atomic_store_release(&ct->ptls->gc_state, state);
     jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
+    jl_atomic_fetch_add(&ct->ptls->fault_handling, -1);
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
 #endif
@@ -347,6 +349,7 @@ void jl_safepoint_wait_thread_resume(jl_task_t *ct)
     // will observe the change to the safepoint, even though the other thread
     // might have already observed our gc_state.
     // if (!jl_atomic_load_relaxed(&ct->ptls->suspend_count)) return;
+    jl_atomic_fetch_add(&ct->ptls->fault_handling, 1);
     int8_t state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
     jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_WAITING);
     uv_mutex_lock(&ct->ptls->sleep_lock);
@@ -366,6 +369,7 @@ void jl_safepoint_wait_thread_resume(jl_task_t *ct)
     jl_atomic_store_release(&ct->ptls->gc_state, state);
     uv_mutex_unlock(&ct->ptls->sleep_lock);
     jl_gc_notify_task_resume(ct);
+    jl_atomic_fetch_add(&ct->ptls->fault_handling, -1);
 }
 // This takes the sleep lock and puts the thread in GC_SAFE
 void jl_safepoint_take_sleep_lock(jl_ptls_t ptls)

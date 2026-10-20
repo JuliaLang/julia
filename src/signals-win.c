@@ -286,6 +286,87 @@ static void jl_win_call_in_context(CONTEXT *ctx, void (*fptr)(void), uintptr_t a
 #endif
 }
 
+// Redirect the suspended thread to call fptr(arg0, arg1), which must not
+// return, on a fresh frame below its stack.
+static void jl_win_noreturn_call_in_context(CONTEXT *ctx, void (*fptr)(void),
+                                            uintptr_t arg0, uintptr_t arg1)
+{
+#if defined(_CPU_X86_64_)
+    uintptr_t sp = (uintptr_t)ctx->Rsp;
+    sp = (sp - 256) & ~(uintptr_t)15; // skip resume data, realign
+    sp -= 32;                         // the callee's register-home space
+    sp -= sizeof(uintptr_t);          // fake return address slot
+    *(uintptr_t*)sp = 0;
+    ctx->Rsp = (DWORD64)sp;
+    ctx->Rip = (DWORD64)fptr;
+    ctx->Rcx = arg0;
+    ctx->Rdx = arg1;
+#elif defined(_CPU_X86_)
+    uintptr_t sp = (uintptr_t)ctx->Esp;
+    sp = (sp - 64) & ~(uintptr_t)15;
+    sp -= 4 * sizeof(uintptr_t);      // the (cdecl) arguments, keeping alignment
+    ((uintptr_t*)sp)[0] = arg0;
+    ((uintptr_t*)sp)[1] = arg1;
+    sp -= sizeof(uintptr_t);          // fake return address slot
+    *(uintptr_t*)sp = 0;
+    ctx->Esp = (DWORD)sp;
+    ctx->Eip = (DWORD)fptr;
+#endif
+    ctx->EFlags &= ~0x400; // a call starts with the direction flag clear
+    ctx->ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+}
+
+// Where jl_send_reset_signal redirects a thread: reset the FP control modes,
+// poll the safepoint the interrupted code may not have polled again, and jump
+// to the reset point. On x86_64, exception dispatch for a fault in its body
+// stops at this frame.
+static void NOINLINE JL_NORETURN jl_win_reset_landing(jl_reset_ctx_t *reset_ctx, uintptr_t code)
+{
+CFI_NORETURN
+    uint16_t fcw = JL_X87CW_DEFAULT;
+    uint32_t mxcsr;
+    __asm__ volatile("fninit\n\tfldcw %0" : : "m"(fcw));
+    __asm__ volatile("stmxcsr %0" : "=m"(mxcsr));
+    mxcsr = JL_MXCSR_MODES(mxcsr);
+    __asm__ volatile("ldmxcsr %0" : : "m"(mxcsr));
+    jl_gc_safepoint_(jl_current_task->ptls);
+    jl_longjmp(reset_ctx->mctx, (int)code);
+}
+
+// The images exception dispatch runs in around Julia's exception filter.
+static uintptr_t jl_win_dispatch_images[3][2];
+
+static void jl_win_init_dispatch_images(void)
+{
+    const wchar_t *names[3] = {L"ntdll.dll", L"kernel32.dll", L"kernelbase.dll"};
+    for (int i = 0; i < 3; i++) {
+        HMODULE h = GetModuleHandleW(names[i]);
+        if (h == NULL)
+            continue;
+        IMAGE_NT_HEADERS *nt = (IMAGE_NT_HEADERS*)((char*)h + ((IMAGE_DOS_HEADER*)h)->e_lfanew);
+        jl_win_dispatch_images[i][0] = (uintptr_t)h;
+        jl_win_dispatch_images[i][1] = (uintptr_t)h + nt->OptionalHeader.SizeOfImage;
+    }
+}
+
+// Whether the frozen thread is handling a fault or inside exception dispatch,
+// which a redirect must not abandon.
+static int jl_win_in_fault_handling(jl_ptls_t ptls2, CONTEXT *ctx) JL_NOTSAFEPOINT
+{
+    if (jl_atomic_load_relaxed(&ptls2->fault_handling) != 0)
+        return 1;
+#if defined(_CPU_X86_64_)
+    uintptr_t pc = (uintptr_t)ctx->Rip;
+#else
+    uintptr_t pc = (uintptr_t)ctx->Eip;
+#endif
+    for (int i = 0; i < 3; i++) {
+        if (pc >= jl_win_dispatch_images[i][0] && pc < jl_win_dispatch_images[i][1])
+            return 1;
+    }
+    return 0;
+}
+
 static LONG WINAPI jl_win_restore_veh(struct _EXCEPTION_POINTERS *ExceptionInfo)
 {
     if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION &&
@@ -420,6 +501,9 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     reset_ctx = jl_atomic_load_acquire(&ct2->reset_ctx);
     if (reset_ctx == NULL || reset_ctx->sp == 0)
         goto resume;
+    // Nor while the thread waits at a safepoint or is in exception dispatch.
+    if (jl_win_in_fault_handling(ptls2, &ctxThread))
+        goto resume;
     if (reset_code == JL_RESET_CODE_CANCEL) {
         // A preempt shootdown checks no source; the re-executed point
         // observes the setjmp return code and yields.
@@ -437,20 +521,19 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     reset_ctx = jl_atomic_exchange(&ct2->reset_ctx, NULL);
     if (reset_ctx == NULL || reset_ctx->sp == 0)
         goto resume;
-    // Compute and install the redirected thread context first, and rewind
-    // the task's gcstack/eh chains only once the redirect is committed: if
-    // either step fails (e.g. jl_simulate_longjmp is unavailable under
-    // sanitizers), the thread must resume exactly as it was, with its
-    // deeper chains intact and the (unconsumed) region republished.
-    if (!jl_simulate_longjmp(reset_ctx->mctx, &ctxThread, reset_code))
-        goto republish;
-    ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_FLOATING_POINT;
+    // Install the redirect first, and rewind the task's gcstack/eh chains only
+    // once it is committed: if it fails, the thread must resume exactly as it
+    // was, with its deeper chains intact and the region republished.
+    jl_win_noreturn_call_in_context(&ctxThread, (void (*)(void))&jl_win_reset_landing,
+                                    (uintptr_t)reset_ctx, reset_code);
     if (!SetThreadContext(ptls2->system_id, &ctxThread))
         goto republish;
     // Committed: restore the GC-frame chain head and innermost exception
     // handler recorded at establishment - the interrupt may have landed
     // inside a callee whose pushes onto either chain die with the abandoned
-    // stack region.
+    // stack region. A running collection may still scan the old gcstack
+    // chain: the new head is one of its frames, and the frames above stay
+    // intact until the landing's poll returns.
     ct2->gcstack = reset_ctx->gcstack;
     ct2->eh = reset_ctx->eh;
     goto resume;
@@ -487,25 +570,10 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     // callback is what publishes the abandoned task state, so an
     // unredirected victim resumes untouched. On refusal the requester
     // observes the verdict and withdraws.
-    if (jl_abandon_try_commit(ptls2)) {
+    if (jl_abandon_try_commit(ptls2, jl_win_in_fault_handling(ptls2, &ctxThread))) {
         // Redirect the thread to call jl_abandon_task_cb (which never
-        // returns) on a minimal fake frame.
-#if defined(_CPU_X86_64_)
-        uintptr_t sp = (uintptr_t)ctxThread.Rsp;
-        sp = (sp - 256) & ~(uintptr_t)15; // skip resume data, realign
-        sp -= sizeof(uintptr_t); // fake return address slot
-        *(uintptr_t*)sp = 0;
-        ctxThread.Rsp = (DWORD64)sp;
-        ctxThread.Rip = (DWORD64)&jl_abandon_task_cb;
-#elif defined(_CPU_X86_)
-        uintptr_t sp = (uintptr_t)ctxThread.Esp;
-        sp = (sp - 64) & ~(uintptr_t)15;
-        sp -= sizeof(uintptr_t); // fake return address slot
-        *(uintptr_t*)sp = 0;
-        ctxThread.Esp = (DWORD)sp;
-        ctxThread.Eip = (DWORD)&jl_abandon_task_cb;
-#endif
-        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+        // returns).
+        jl_win_noreturn_call_in_context(&ctxThread, (void (*)(void))&jl_abandon_task_cb, 0, 0);
         if (!SetThreadContext(ptls2->system_id, &ctxThread)) {
             // Roll the commit back: nothing observable was published yet
             // (the task state is written by the callback).
@@ -545,7 +613,7 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     return 1;
 }
 
-LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
+static LONG jl_exception_handler_inner(struct _EXCEPTION_POINTERS *ExceptionInfo)
 {
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags != 0)
         return EXCEPTION_CONTINUE_SEARCH;
@@ -703,6 +771,18 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
         jl_raise(SIGSEGV);
     else
         jl_exit(1);
+}
+
+LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
+{
+    jl_task_t *ct = jl_get_current_task();
+    jl_ptls_t ptls = ct == NULL ? NULL : ct->ptls;
+    if (ptls != NULL)
+        jl_atomic_fetch_add(&ptls->fault_handling, 1);
+    LONG ret = jl_exception_handler_inner(ExceptionInfo);
+    if (ptls != NULL)
+        jl_atomic_fetch_add(&ptls->fault_handling, -1);
+    return ret;
 }
 
 JL_DLLEXPORT void jl_install_sigint_handler(void)
@@ -965,6 +1045,7 @@ void jl_install_default_signal_handlers(void)
     }
     SetUnhandledExceptionFilter(jl_exception_handler);
     jl_win_init_cancel_handler_delivery();
+    jl_win_init_dispatch_images();
 }
 
 void jl_install_thread_signal_handler(jl_ptls_t ptls)

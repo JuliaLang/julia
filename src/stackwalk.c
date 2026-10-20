@@ -1270,16 +1270,6 @@ JL_UNUSED static int valid_longjmp_target(uintptr_t sp, uintptr_t pc) JL_NOTSAFE
 // support shadow stacks, so if those are in use, you might need to use a direct
 // jl_longjmp instead to leave the signal frame instead of relying on simulating
 // it and attempting to return normally.
-// Julia's FP control modes: round to nearest with exceptions masked, keeping
-// flush-to-zero, and the platform's default x87 precision. Code a reset
-// abandons may have switched them for a while (e.g. glibc's software fma).
-#define JL_MXCSR_MODES(x) (((x) & ~0x6000u) | 0x1f80u)
-#ifdef _OS_WINDOWS_
-#define JL_X87CW_DEFAULT 0x027fu
-#else
-#define JL_X87CW_DEFAULT 0x037fu
-#endif
-
 #if (defined(_OS_WINDOWS_) && defined(_CPU_X86_)) || (defined(_OS_FREEBSD_) && defined(_CPU_X86_64_))
 // The same for an FXSAVE area: control word at byte 0, MXCSR at byte 24.
 static void jl_fxsave_reset_modes(uint8_t *fx) JL_NOTSAFEPOINT

@@ -636,11 +636,29 @@ static void jl_mach_cancel_handler_trampoline(jl_ptls_t ptls)
     save->fn(save->state, save->sev);
 }
 
+// Where jl_send_reset_signal redirects a thread: poll the safepoint the
+// interrupted code may not have polled again, and jump to the reset point.
+// On aarch64, also reset the FP rounding mode and traps first; on x86_64,
+// longjmp restores the FP modes saved at the reset point.
+static void JL_NORETURN jl_mach_reset_landing(jl_reset_ctx_t *reset_ctx, int code)
+{
+#ifdef _CPU_AARCH64_
+    uint64_t fpcr;
+    __asm__ volatile("mrs %0, fpcr" : "=r"(fpcr));
+    fpcr &= ~(uint64_t)0xc09f00; // round to nearest, traps off
+    __asm__ volatile("msr fpcr, %0" : : "r"(fpcr));
+#endif
+    jl_task_t *ct = jl_current_task;
+    jl_gc_safepoint_(ct->ptls);
+    asan_unpoison_task_stack(ct, &reset_ctx->mctx);
+    jl_longjmp(reset_ctx->mctx, code);
+}
+
 // Suspend-based shootdown delivery (see jl_send_reset_signal in
 // signals-win.c for the shared shape and locking rationale). Rather than
 // simulating the longjmp into a GP-only thread state - which cannot carry
 // the callee-saved SIMD registers the setjmp ABI requires - the frozen
-// thread is redirected to call the real longjmp on its own stack. A
+// thread is redirected to a landing that calls the real longjmp. A
 // foreign-call cancellation handler is delivered by hijacking the frozen
 // thread to run fn(state, sev) via the resumable jl_call_in_state
 // machinery, whose restore-trigger return path restores the complete
@@ -739,8 +757,9 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
         // Reset flavor, additionally gated on the thread running Julia code
         // (gc_state == 0): a thread inside a GC-safe region may be raced by
         // a concurrent stop-the-world, and a redirect back into Julia code
-        // would break that protocol.
-        jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_UNSAFE) {
+        // would break that protocol. Nor while it waits at a safepoint.
+        jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_UNSAFE &&
+        jl_atomic_load_relaxed(&ptls2->fault_handling) == 0) {
         jl_reset_ctx_t *reset_ctx = jl_atomic_load_acquire(&ct2->reset_ctx);
         if (reset_ctx != NULL && reset_ctx->sp != 0 &&
             (reset_code == JL_RESET_CODE_PREEMPT || bound_cancelled)) {
@@ -748,14 +767,15 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
             // may race each other, unlike the Unix in-handler consumer).
             reset_ctx = jl_atomic_exchange(&ct2->reset_ctx, NULL);
             if (reset_ctx != NULL && reset_ctx->sp != 0) {
-                // Redirect the frozen thread to call longjmp on its own
-                // stack (restoring callee-saved GP and SIMD state
-                // natively), and rewind the task's gcstack/eh chains only
-                // once the redirect is committed, so that any failure
-                // resumes the thread exactly as it was, with the
-                // (unconsumed) region republished.
-                jl_noreturn_call_in_state(&state, (void (*)(void))longjmp,
-                                          (uintptr_t)reset_ctx->mctx, reset_code);
+                // Redirect the frozen thread to the landing, and rewind the
+                // task's gcstack/eh chains only once the redirect is
+                // committed, so that any failure resumes the thread exactly
+                // as it was, with the (unconsumed) region republished. A
+                // running collection may still scan the old gcstack chain:
+                // the new head is one of its frames, and the frames above
+                // stay intact until the landing's poll returns.
+                jl_noreturn_call_in_state(&state, (void (*)(void))&jl_mach_reset_landing,
+                                          (uintptr_t)reset_ctx, reset_code);
                 if (thread_set_state(thread, MACH_THREAD_STATE,
                                      (thread_state_t)&state,
                                      MACH_THREAD_STATE_COUNT) == KERN_SUCCESS) {
@@ -815,7 +835,7 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     if (thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count) != KERN_SUCCESS) {
         // cannot redirect; leave the request pending for a retry/withdraw
     }
-    else if (jl_abandon_try_commit(ptls2)) {
+    else if (jl_abandon_try_commit(ptls2, 0)) {
         jl_noreturn_call_in_state(&state, (void (*)(void))&jl_abandon_task_cb, 0, 0);
         if (thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count) != KERN_SUCCESS) {
             // Roll the commit back: nothing observable was published yet

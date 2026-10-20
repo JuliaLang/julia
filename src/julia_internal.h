@@ -1418,7 +1418,7 @@ void jl_safepoint_exclude_gc_begin(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
 void jl_safepoint_exclude_gc_end(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
 void jl_wake_libuv(void) JL_NOTSAFEPOINT;
 void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT;
-int jl_abandon_try_commit(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+int jl_abandon_try_commit(jl_ptls_t ptls, int refuse) JL_NOTSAFEPOINT;
 void JL_NORETURN jl_abandon_task_cb(void) JL_CANSAFEPOINT;
 
 void jl_set_pgcstack(jl_gcframe_t **) JL_NOTSAFEPOINT;
@@ -1431,6 +1431,16 @@ JL_DLLEXPORT void jl_pgcstack_getkey(jl_get_pgcstack_func_t *f, jl_pgcstack_key_
 
 #if !defined(_OS_WINDOWS_) && !defined(__APPLE__) && !defined(JL_DISABLE_LIBUNWIND)
 extern pthread_mutex_t in_signal_lock;
+#endif
+
+// Julia's FP control modes: round to nearest with exceptions masked, keeping
+// flush-to-zero, and the platform's default x87 precision. Code a reset
+// abandons may have switched them for a while (e.g. glibc's software fma).
+#define JL_MXCSR_MODES(x) (((x) & ~0x6000u) | 0x1f80u)
+#ifdef _OS_WINDOWS_
+#define JL_X87CW_DEFAULT 0x027fu
+#else
+#define JL_X87CW_DEFAULT 0x037fu
 #endif
 
 void jl_set_gc_and_wait(jl_task_t *ct) JL_CANSAFEPOINT;
