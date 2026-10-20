@@ -7,12 +7,17 @@ Parsing values from bytes. [`parsevalue`](@ref Base.Parsers.parsevalue) parses a
 all of a byte vector and returns a [`ParseFailure`](@ref Base.Parsers.ParseFailure) instead
 of throwing, for callers that already know where a field starts and ends. [`parse`](@ref)
 and [`tryparse`](@ref) are built on the same code.
+
+!!! compat "Julia 1.15"
+    `Base.Parsers` requires at least Julia 1.15.
 """
 module Parsers
 
 using ..Base: BitInteger, CodeUnits, DenseUTF8String, FastContiguousSubArray, IEEEFloat,
     exponent_bias, exponent_raw_max, require_one_based_indexing, significand_bits, uinttype
 using ..Base.Checked: add_with_overflow, mul_with_overflow
+
+public parsevalue, ParseFailure, INVALID, OVERFLOW, UNDERFLOW
 
 """
     Base.Parsers.ParseFailure
@@ -68,7 +73,11 @@ without surrounding whitespace: an optional sign and a decimal or hexadecimal
 floating-point number, or `inf`, `infinity` or `nan` in any case. A number is rounded to
 the nearest value, ties to even; one too large for the type is `OVERFLOW`, and a nonzero
 one that rounds to zero is `UNDERFLOW`. `nan(n)` puts the unsigned integer `n` (decimal,
-`0x` hexadecimal or `0` octal) in the NaN's payload.
+`0x` hexadecimal or `0` octal) in the NaN's payload. The keyword `decimal` (default `'.'`)
+is the decimal point; it can be any ASCII character other than a letter, digit, `+` or `-`.
+
+!!! compat "Julia 1.15"
+    `parsevalue` requires at least Julia 1.15.
 
 # Examples
 ```jldoctest
@@ -83,6 +92,9 @@ julia> Base.Parsers.parsevalue(Int, UInt8[0x37, 0x66]; base = 16)
 
 julia> Base.Parsers.parsevalue(Float64, codeunits("-1.5e-3"))
 -0.0015
+
+julia> Base.Parsers.parsevalue(Float32, codeunits("3,25"); decimal = ',')
+3.25f0
 ```
 """
 function parsevalue end

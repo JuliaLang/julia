@@ -214,6 +214,10 @@ New library functions
   image, so it survives precompilation; revision tools (e.g. Revise) use it to re-apply the
   original transform when an `include(mapexpr, …)`-ed file is edited.
 * `Sys.matched_sysimage_target()` returns the entry of `Sys.sysimage_target` that was selected for the host CPU when the system image was loaded ([#63762]).
+* The module `Base.Parsers` is now `public` (but not exported). `Base.Parsers.parsevalue(T, bytes)`
+  parses an integer or floating-point value from all of an `AbstractVector{UInt8}` and returns a
+  `Base.Parsers.ParseFailure` instead of throwing; its `decimal` keyword sets the decimal point
+  for floats ([#63969]).
 
 New library features
 --------------------

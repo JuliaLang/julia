@@ -309,11 +309,11 @@ end
 
 # A hexadecimal float, from the digits after its "0x"
 @noinline function parsehex(::Type{T}, buf::AbstractVector{UInt8}, i::Int, j::Int,
-                            neg::Bool) where {T}
+                            neg::Bool, decimal::UInt8) where {T}
     m, k, sticky, l = scanhex(buf, i, j, zero(UInt64), false)
     e = 4 * (l - k)                              # integer digits m had no room for
     nd = l - i
-    if l <= j && (@inbounds buf[l]) == UInt8('.')
+    if l <= j && (@inbounds buf[l]) == decimal
         m, k, sticky, i = scanhex(buf, l + 1, j, m, sticky)
         e -= 4 * (k - l - 1)                     # fraction digits in m
         nd += i - l - 1
@@ -382,9 +382,10 @@ end
     return neg ? -x : x
 end
 
-# Parse the bytes `buf[i:j]` as a `T`, or return a `ParseFailure`. `i:j` must be in bounds.
-@inline function parsefloat(::Type{T}, buf::AbstractVector{UInt8}, i::Int,
-                            j::Int) where {T<:IEEEFloat}
+# Parse the bytes `buf[i:j]` as a `T` with the decimal point `decimal`, or return a
+# `ParseFailure`. `i:j` must be in bounds.
+@inline function parsefloat(::Type{T}, buf::AbstractVector{UInt8}, i::Int, j::Int,
+                            decimal::UInt8) where {T<:IEEEFloat}
     i <= j || return INVALID
     b = @inbounds buf[i]
     neg = b == UInt8('-')
@@ -393,16 +394,16 @@ end
         i <= j || return INVALID
         b = @inbounds buf[i]
     end
-    b - UInt8('0') <= 0x09 || b == UInt8('.') || return parsespecial(T, buf, i, j, neg)
+    b - UInt8('0') <= 0x09 || b == decimal || return parsespecial(T, buf, i, j, neg)
     b == UInt8('0') && i < j && (@inbounds buf[i + 1]) | 0x20 == UInt8('x') &&
-        return parsehex(T, buf, i + 2, j, neg)
+        return parsehex(T, buf, i + 2, j, neg, decimal)
     # significand: w, with nd digits, of which -q follow the decimal point
     first = i
     w, i = scandigits(buf, i, j, zero(UInt64))
     dot = i                                      # the end of the integer digits
     nd = dot - first
     q = 0
-    if i <= j && (@inbounds buf[i]) == UInt8('.')
+    if i <= j && (@inbounds buf[i]) == decimal
         w, i = scandigits(buf, dot + 1, j, w)
         nd += i - dot - 1
         q = dot + 1 - i
@@ -418,7 +419,7 @@ end
     if nd > 19
         # leading zeros are not significant
         k = first
-        while k <= last && (@inbounds buf[k]) in (UInt8('0'), UInt8('.'))
+        while k <= last && (@inbounds buf[k]) in (UInt8('0'), decimal)
             (@inbounds buf[k]) == UInt8('0') && (nd -= 1)
             k += 1
         end
@@ -441,7 +442,16 @@ end
     return fromdecimal(T, w, q, neg)
 end
 
-@inline function parsevalue(::Type{T}, bytes::AbstractVector{UInt8}) where {T<:IEEEFloat}
+@inline function parsevalue(::Type{T}, bytes::AbstractVector{UInt8};
+                            decimal::AbstractChar = '.') where {T<:IEEEFloat}
     require_one_based_indexing(bytes)
-    return parsefloat(T, bytes, 1, length(bytes))
+    # a character outside ASCII is rejected along with the letters, digits and signs, which
+    # could be read as part of the number
+    d = isascii(decimal) ? UInt8(decimal) : UInt8('0')
+    if d - UInt8('0') <= 0x09 || (d | 0x20) - UInt8('a') <= 0x19 || d == UInt8('+') ||
+            d == UInt8('-')
+        throw(ArgumentError(LazyString("invalid decimal: decimal must be an ASCII ",
+            "character other than a letter, digit, `+` or `-`, got ", repr(decimal))))
+    end
+    return parsefloat(T, bytes, 1, length(bytes), d)
 end

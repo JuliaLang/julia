@@ -280,6 +280,7 @@ end
     @test P.parsevalue(UInt8, codeunits("+1")) === P.INVALID
     @test_throws ArgumentError P.parsevalue(Int, codeunits("12"); base = 63)
     @test repr(P.OVERFLOW) == "Base.Parsers.OVERFLOW"
+    @test isempty(Docs.undocumented_names(P))
     # integer types other than the fixed-width ones take a generic method
     generic(T, s, base, neg) = invoke(P.parseint,
         Tuple{Type{<:Integer}, AbstractVector{UInt8}, Int, Int, Int, Bool},
@@ -383,6 +384,9 @@ end
     end
     mismatches(T, inputs; kw...) =
         [s for s in inputs if P.parsevalue(T, codeunits(s)) !== reference(T, s; kw...)]
+    # the inputs that give another result with ',' for the decimal point
+    commamismatches(T, inputs) = [s for s in inputs if P.parsevalue(T, codeunits(s)) !==
+                                  P.parsevalue(T, codeunits(replace(s, '.' => ',')); decimal = ',')]
     @test isempty(filter(P.POW5_MIN:P.POW5_MAX) do q
         # fast_float's table of 128-bit significands of powers of five
         p = big(5)^abs(q)
@@ -432,6 +436,13 @@ end
     for T in (Float64, Float32, Float16)
         @test mismatches(T, inputs) == String[]
         @test mismatches(T, hexes; precision = 200) == String[]
+        @test commamismatches(T, [inputs; hexes]) == String[]
+    end
+    @test P.parsevalue(Float64, codeunits("1.5"); decimal = ',') === P.INVALID
+    @test P.parsevalue(Float64, codeunits("0x1.8p3"); decimal = ',') === P.INVALID
+    @test P.parsevalue(Float64, codeunits("1 5"); decimal = ' ') === 1.5
+    for c in ('e', 'E', 'p', 'x', 'a', '0', '9', '+', '-', 'é', '\u066b')
+        @test_throws ArgumentError P.parsevalue(Float64, codeunits("1"); decimal = c)
     end
     # midpoints between adjacent floats, exactly, one unit away in their last digit, and
     # with a nonzero digit after more than 800 significant digits
@@ -443,9 +454,10 @@ end
             k = trailing_zeros(denominator(r))
             n = numerator(r) * big(5)^k
             push!(midpoints, "$(n)e-$k", "$(n - 1)e-$k", "$(n + 1)e-$k",
-                  "$(n)$("0"^800)1e-$(k + 801)")
+                  "$(n)$("0"^800)1e-$(k + 801)", "0.$(n)e$(ndigits(n) - k)")
         end
         @test mismatches(T, midpoints; precision = 8000) == String[]
+        @test commamismatches(T, midpoints) == String[]
     end
 
     @test P.parsevalue(Float64, codeunits("1e99999999999")) === P.OVERFLOW
@@ -551,6 +563,8 @@ end
         @inferred parse(T, "12")
         @inferred Nothing tryparse(T, "12")
         @inferred Base.Parsers.ParseFailure Base.Parsers.parsevalue(T, codeunits("12"))
+        @inferred Base.Parsers.ParseFailure Base.Parsers.parsevalue(T, codeunits("1,2");
+                                                                     decimal = ',')
     end
     @inferred parse(Complex{Int}, "12")
     @test eltype([parse(Int, s, base=16) for s in String[]]) == Int
