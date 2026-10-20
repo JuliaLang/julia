@@ -505,6 +505,34 @@ end
     end
 end
 
+@testset "UUID parsing" begin
+    P = Base.Parsers
+    rng = Xoshiro(2)
+    for _ in 1:1000
+        u = Base.UUID(rand(rng, UInt128))
+        s = string(u)
+        for str in (s, uppercase(s), SubString("<$s>", 2, 37), GenericString(s),
+                    StringView(codeunits(s)))
+            @test tryparse(Base.UUID, str) === u
+        end
+        @test P.parsevalue(Base.UUID, view(codeunits("<$s>"), 2:37)) === u
+    end
+    s = "0123abcd-4567-89ef-ABCD-0123456789Ef"
+    @test parse(Base.UUID, s) === Base.UUID(0x0123abcd456789efabcd0123456789ef)
+    # each position with a byte just outside the hex digits, a space, a dash or a digit,
+    # except those that leave a valid UUID
+    for k in 1:36, c in ('/', ':', '@', 'G', '`', 'g', '-', ' ', '\x7f', '\xff', '0')
+        (s[k] == '-' ? c == '-' : c == '0') && continue
+        t = s[1:k-1] * c * s[k+1:end]
+        @test P.parsevalue(Base.UUID, codeunits(t)) === P.INVALID
+        @test tryparse(Base.UUID, t) === nothing
+    end
+    for t in ("", s[1:35], s * "0", "{$s}", s[1:8] * s[10:end] * "0")
+        @test tryparse(Base.UUID, t) === nothing
+    end
+    @test_throws "Malformed UUID string: \"x\"" parse(Base.UUID, "x")
+end
+
 # parsing complex numbers (#22250)
 @testset "complex parsing" begin
     for sign in ('-','+'), Im in ("i","j","im"), s1 in (""," "), s2 in (""," "), s3 in (""," "), s4 in (""," ")

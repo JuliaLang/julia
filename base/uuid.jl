@@ -38,43 +38,28 @@ end
 
 _crc32c(uuid::UUID, crc::UInt32=0x00000000) = _crc32c(uuid.value, crc)
 
-let
-@inline function uuid_kernel(s, i, u)
-    d = Parsers.digitvalue(@inbounds(codeunit(s, i)), 16)
-    d >= 16 && return nothing
-    u <<= 4
-    return u | d
+# The 32 hex digits are read as four words of eight: the first group, the second and third,
+# the fourth and the first four of the last, and the rest of the last.
+function Parsers.parsevalue(::Type{UUID}, bytes::AbstractVector{UInt8})
+    require_one_based_indexing(bytes)
+    length(bytes) == 36 || return Parsers.INVALID
+    @inbounds (bytes[9] == UInt8('-')) & (bytes[14] == UInt8('-')) &
+              (bytes[19] == UInt8('-')) & (bytes[24] == UInt8('-')) || return Parsers.INVALID
+    w1 = Parsers.load8(bytes, 1)
+    w2 = Parsers.load8(bytes, 10) & 0x00000000_ffffffff | Parsers.load8(bytes, 15) << 32
+    w3 = Parsers.load8(bytes, 20) & 0x00000000_ffffffff | Parsers.load8(bytes, 25) << 32
+    w4 = Parsers.load8(bytes, 29)
+    Parsers.ishexdigits8(w1) & Parsers.ishexdigits8(w2) & Parsers.ishexdigits8(w3) &
+        Parsers.ishexdigits8(w4) || return Parsers.INVALID
+    return UUID((Parsers.hexdigits8(w1) << 32 | Parsers.hexdigits8(w2),
+                 Parsers.hexdigits8(w3) << 32 | Parsers.hexdigits8(w4)))
 end
 
-function Base.tryparse(::Type{UUID}, s::AbstractString)
-    u = UInt128(0)
-    ncodeunits(s) != 36 && return nothing
-    for i in 1:8
-        u = uuid_kernel(s, i, u)
-        u === nothing && return nothing
-    end
-    @inbounds codeunit(s, 9) == UInt8('-') || return nothing
-    for i in 10:13
-        u = uuid_kernel(s, i, u)
-        u === nothing && return nothing
-    end
-    @inbounds codeunit(s, 14) == UInt8('-') || return nothing
-    for i in 15:18
-        u = uuid_kernel(s, i, u)
-        u === nothing && return nothing
-    end
-    @inbounds codeunit(s, 19) == UInt8('-') || return nothing
-    for i in 20:23
-        u = uuid_kernel(s, i, u)
-        u === nothing && return nothing
-    end
-    @inbounds codeunit(s, 24) == UInt8('-') || return nothing
-    for i in 25:36
-        u = uuid_kernel(s, i, u)
-        u === nothing && return nothing
-    end
-    return Base.UUID(u)
-end
+function tryparse(::Type{UUID}, s::AbstractString)
+    bytes = codeunits(s)
+    bytes isa AbstractVector{UInt8} || return tryparse(UUID, String(s))
+    u = Parsers.parsevalue(UUID, bytes)
+    return u isa UUID ? u : nothing
 end
 
 let
