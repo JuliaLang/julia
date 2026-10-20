@@ -321,14 +321,14 @@ Specify the file or directory containing the certificate authority roots. See [`
 
 ### [`JULIA_SHELL`](@id JULIA_SHELL)
 
-The absolute path of the shell with which Julia should execute external commands
-(via `Base.repl_cmd()`). Defaults to the environment variable `$SHELL`, and
-falls back to `/bin/sh` if `$SHELL` is unset.
+In Julia 1.14 and earlier, and on platforms other than Windows, the absolute path
+of the shell with which Julia executed external commands entered in the REPL's
+shell mode (via `Base.repl_cmd()`). It defaulted to the environment variable
+`$SHELL`, and fell back to `/bin/sh` if `$SHELL` was unset.
 
-!!! note
-
-    On Windows, this environment variable is ignored, and external commands are
-    executed directly.
+!!! compat "Julia 1.15"
+    This environment variable no longer has any effect. External commands are
+    executed directly, on all platforms, as they always were on Windows.
 
 ### [`JULIA_EDITOR`](@id JULIA_EDITOR)
 

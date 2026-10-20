@@ -69,12 +69,6 @@ function repl_cmd(cmd::AbstractCmd, out)
         cd(dir)
         println(out, pwd())
     else
-        if !Sys.iswindows()
-            shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
-            shell_escape_cmd = shell_escape_posixly(cmd)
-            original_cmd = cmd
-            cmd = Cmd(`$shell -c $shell_escape_cmd`, original_cmd.ignorestatus, original_cmd.flags, original_cmd.env, original_cmd.dir, original_cmd.cpus, original_cmd.uid, original_cmd.gid)
-        end
         try
             run(ignorestatus(cmd))
         catch
