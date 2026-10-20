@@ -905,11 +905,13 @@ static void usr2_deliver_reset(jl_task_t *ct, jl_ptls_t ptls, uint8_t reqflags,
             int reset_code = (reqflags & JL_SIGNAL_REQ_CANCEL) && bound_cancelled ?
                 JL_RESET_CODE_CANCEL : JL_RESET_CODE_PREEMPT;
             // Not from the safepoint fault handler: the longjmp would leave
-            // SIGSEGV blocked.
+            // SIGSEGV blocked. Nor while the thread waits at a safepoint,
+            // holding its locks.
             jl_reset_ctx_t *reset_ctx = jl_atomic_load_acquire(&ct->reset_ctx);
             if (reset_ctx != NULL && reset_ctx->sp != 0 &&
                 ((reqflags & JL_SIGNAL_REQ_PREEMPT) || bound_cancelled) &&
                 jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_STATE_UNSAFE &&
+                jl_atomic_load_relaxed(&ptls->fault_handling) == 0 &&
                 !jl_ctx_blocks_segv(ctx)) {
                 // Abandon the interrupted register state and longjmp to the
                 // reset point, whose re-executed check observes the
@@ -959,7 +961,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
         // redirect into the abandon callback (which must not return) to
         // switch to ptls->abandon_to. On refusal the requester observes the
         // verdict and withdraws; the current task continues untouched.
-        if (jl_abandon_try_commit(ptls)) {
+        if (jl_abandon_try_commit(ptls, jl_ctx_blocks_segv(ctx))) {
             jl_call_in_ctx(ptls, jl_abandon_task_cb, sig, ctx);
         }
     }
