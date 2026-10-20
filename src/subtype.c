@@ -418,13 +418,22 @@ typedef enum {
                           // parameters, Vararg length)
 } jl_param_pos_t;
 
+// When sv is non-NULL, we're writing into a heap svec that needs a barrier.
+static void set_env_root(jl_svec_t *sv, jl_value_t **slot, jl_value_t *val) JL_NOTSAFEPOINT
+{
+    if (sv)
+        jl_gc_wb(sv, slot, val);
+    *slot = val;
+}
+
 static void re_save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
 {
     jl_value_t **roots = NULL;
+    jl_svec_t *sv = NULL;
     int nroots = 0;
     if (root) {
         if (se->gcframe.nroots == JL_GC_ENCODE_PUSHARGS(1)) {
-            jl_svec_t *sv = (jl_svec_t*)se->roots[0];
+            sv = (jl_svec_t*)se->roots[0];
             assert(jl_is_svec(sv));
             roots = jl_svec_data(sv);
             nroots = jl_svec_len(sv);
@@ -438,9 +447,9 @@ static void re_save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
     int i = 0, j = 0;
     while (v != NULL) {
         if (root) {
-            roots[i++] = v->lb;
-            roots[i++] = v->ub;
-            roots[i++] = (jl_value_t*)v->innervars;
+            set_env_root(sv, &roots[i++], v->lb);
+            set_env_root(sv, &roots[i++], v->ub);
+            set_env_root(sv, &roots[i++], (jl_value_t*)v->innervars);
         }
         se->buf[j++] = v->occurs;
         se->buf[j++] = v->occurs_inv;
@@ -6292,6 +6301,7 @@ static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int co
     }
     jl_value_t **merged = NULL;
     jl_value_t **saved = NULL;
+    jl_svec_t *msv = NULL;
     int nroots = 0;
     assert(se->gcframe.nroots == me->gcframe.nroots);
     if (se->gcframe.nroots == JL_GC_ENCODE_PUSHARGS(1)) {
@@ -6299,10 +6309,10 @@ static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int co
         assert(jl_is_svec(sv));
         saved = jl_svec_data(sv);
         nroots = jl_svec_len(sv);
-        sv = (jl_svec_t*)me->roots[0];
-        assert(jl_is_svec(sv));
-        merged = jl_svec_data(sv);
-        assert(nroots == jl_svec_len(sv));
+        msv = (jl_svec_t*)me->roots[0];
+        assert(jl_is_svec(msv));
+        merged = jl_svec_data(msv);
+        assert(nroots == jl_svec_len(msv));
     }
     else {
         saved = se->roots;
@@ -6321,14 +6331,14 @@ static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int co
         JL_GC_PROMISE_ROOTED(b1); // clang-sagc doesn't know this came from our GC frame
         b2 = v->lb;
         JL_GC_PROMISE_ROOTED(b2); // clang-sagc doesn't know the fields of this are stack GC roots
-        merged[n] = (b1 == b0 || b2 == b0) ? b0 : simple_meet(b1, b2, 0);
+        set_env_root(msv, &merged[n], (b1 == b0 || b2 == b0) ? b0 : simple_meet(b1, b2, 0));
         // merge `ub`
         b0 = saved[n+1];
         b1 = merged[n+1];
         JL_GC_PROMISE_ROOTED(b1); // clang-sagc doesn't know this came from our GC frame
         b2 = v->ub;
         JL_GC_PROMISE_ROOTED(b2); // clang-sagc doesn't know the fields of this are stack GC roots
-        merged[n+1] = (b1 == b0 || b2 == b0) ? b0 : simple_join(b1, b2);
+        set_env_root(msv, &merged[n+1], (b1 == b0 || b2 == b0) ? b0 : simple_join(b1, b2));
         // merge `innervars`
         b1 = merged[n+2];
         JL_GC_PROMISE_ROOTED(b1); // clang-sagc doesn't know this came from our GC frame
@@ -6338,7 +6348,7 @@ static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int co
             if (b1)
                 jl_array_ptr_1d_append((jl_array_t*)b1, (jl_array_t*)b2);
             else
-                merged[n+2] = b2;
+                set_env_root(msv, &merged[n+2], b2);
         }
         // merge occurs/occurs_inv/occurs_cov/cov_diag by max (never decrease)
         if (v->occurs > me->buf[m])
