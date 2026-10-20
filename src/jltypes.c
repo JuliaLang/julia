@@ -3678,13 +3678,13 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_methtable_type->super = jl_any_type;
     jl_methtable_type->parameters = jl_emptysvec;
     jl_methtable_type->name->n_uninitialized = 0;
-    jl_methtable_type->name->names = jl_perm_symsvec(5, "defs", "cache", "name", "module", "backedges");
-    const static uint32_t methtable_constfields[1] = { 0b01110 };
-    const static uint32_t methtable_atomicfields[1] = { 0b00001 };
+    jl_methtable_type->name->names = jl_perm_symsvec(6, "defs", "cache", "name", "module", "backedges", "contributors");
+    const static uint32_t methtable_constfields[1] = { 0b001110 };
+    const static uint32_t methtable_atomicfields[1] = { 0b100001 };
     jl_methtable_type->name->constfields = methtable_constfields;
     jl_methtable_type->name->atomicfields = methtable_atomicfields;
     jl_precompute_memoized_dt(jl_methtable_type, 1);
-    jl_methtable_type->types = jl_svec(5, jl_any_type, jl_methcache_type, jl_symbol_type, jl_any_type /*jl_module_type*/, jl_any_type);
+    jl_methtable_type->types = jl_svec(6, jl_any_type, jl_methcache_type, jl_symbol_type, jl_any_type /*jl_module_type*/, jl_any_type, jl_any_type);
 
     jl_symbol_type->name = jl_new_typename_in(jl_symbol("Symbol"), core, 0, 1);
     jl_symbol_type->name->wrapper = (jl_value_t*)jl_symbol_type;
@@ -4047,6 +4047,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_table->module = core;
     jl_atomic_store_relaxed(&jl_method_table->cache->leafcache, (jl_genericmemory_t*)jl_an_empty_memory_any);
     jl_method_table->backedges = (jl_genericmemory_t*)jl_an_empty_memory_any;
+    jl_atomic_store_relaxed(&jl_method_table->contributors, (jl_genericmemory_t*)jl_an_empty_memory_any);
     jl_atomic_store_relaxed(&core->bindingkeyset, (jl_genericmemory_t*)jl_an_empty_memory_any);
     // export own name, so "using Foo" makes "Foo" itself visible
     jl_set_initial_const(core, core->name, (jl_value_t*)core, 1);

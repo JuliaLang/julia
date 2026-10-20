@@ -19,6 +19,7 @@ struct VerifyMethodInitialState
     mi::MethodInstance
     def::Method
     callees::Core.SimpleVector
+    image::UInt # linkage blob owning `codeinst`, or typemax(UInt) if it is in no image
 end
 
 struct VerifyMethodWorkState
@@ -77,7 +78,8 @@ end
 function VerifyMethodInitialState(codeinst::CodeInstance)
     mi = get_ci_mi(codeinst)
     def = mi.def::Method
-    VerifyMethodInitialState(codeinst, mi, def, codeinst.edges)
+    image = ccall(:jl_external_blob_index, Csize_t, (Any,), codeinst)
+    VerifyMethodInitialState(codeinst, mi, def, codeinst.edges, image)
 end
 
 function VerifyMethodWorkState(dummy_cause::CodeInstance)
@@ -139,6 +141,14 @@ function scan_new_code!(internal_methods::Vector{Any}, workspace::VerifyMethodWo
         # validity.
         @ccall jl_promote_ci_to_current(codeinst::Any, validation_world::UInt)::Cvoid
     end
+end
+
+# If every method in `mt` that could match `sig` came from `image` or its dependencies,
+# the world from which the match set is the one the image's precompile worker saw, else 0.
+function sig_contributors_world(@nospecialize(sig), mt::Core.MethodTable, image::UInt)
+    _jl_debug_method_invalidation[] === nothing || return UInt(0)
+    image == typemax(UInt) && return UInt(0)
+    return ccall(:jl_sig_contributors_world, Csize_t, (Any, Any, Csize_t), sig, mt, image)
 end
 
 function verify_method_graph(codeinst::CodeInstance, validation_world::UInt, workspace::VerifyMethodWorkspace)
@@ -290,13 +300,13 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
 
                     if edge isa MethodInstance
                         sig = edge.specTypes
-                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, possibly_ambiguous, workspace)
+                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, possibly_ambiguous, workspace, initial.image)
                         j += 1
                     elseif edge isa Int
                         sig = initial.callees[j+1]
                         nmatches = abs(edge)
                         fully_covers = edge > 0
-                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, possibly_ambiguous, workspace)
+                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, possibly_ambiguous, workspace, initial.image)
                         j += 2 + nmatches
                         edge = sig
                     elseif edge isa Core.Binding
@@ -326,7 +336,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         else
                             meth = callee::Method
                         end
-                        min_valid2, max_valid2 = verify_invokesig(edge, meth, world, matches)
+                        min_valid2, max_valid2 = verify_invokesig(edge, meth, world, matches, initial.image)
                         j += 2
                     end
 
@@ -696,7 +706,7 @@ function verify_call_lookup(@nospecialize(sig), lim::Int, world::UInt, workspace
     return result, minworld[], maxworld[], has_ambig[]
 end
 
-function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool, possibly_ambiguous::Bool, workspace::VerifyMethodWorkspace)
+function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool, possibly_ambiguous::Bool, workspace::VerifyMethodWorkspace, image::UInt)
     # verify that these edges intersect with the same methods as before
     matches = workspace.matches
     # Collect the expected methods once: indexing the edges list boxes the index (no inline
@@ -728,6 +738,15 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                     @assert minworld ≤ world "expected method not present in verification world"
                     return minworld, typemax(UInt)
                 end
+            end
+        end
+        # If only the image's dependencies added methods that could match `sig`,
+        # its match set is unchanged since precompilation.
+        let minworld = sig_contributors_world(sig, Core.methodtable, image)
+            if minworld != 0
+                @assert minworld ≤ world "contributor activated after the verification world"
+                promote_mi_to_current(mi, minworld, world)
+                return minworld, typemax(UInt)
             end
         end
         # Try the interference set fast path (used by both n==1, when the O(1) checks above
@@ -833,13 +852,20 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
             copy!(matches, result)
         end
     end
-    if maxworld == typemax(UInt) && mi isa MethodInstance
-        ccall(:jl_promote_mi_to_current, Cvoid, (Any, UInt, UInt), mi, minworld, world)
+    if maxworld == typemax(UInt)
+        promote_mi_to_current(mi, minworld, world)
     end
     return minworld, maxworld
 end
 
-function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt, matches::Vector{Any})
+function promote_mi_to_current(mi::Union{Nothing,MethodInstance}, minworld::UInt, world::UInt)
+    if mi isa MethodInstance
+        ccall(:jl_promote_mi_to_current, Cvoid, (Any, UInt, UInt), mi, minworld, world)
+    end
+    nothing
+end
+
+function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt, matches::Vector{Any}, image::UInt)
     @assert invokesig isa Type "corrupt edges list"
     local minworld::UInt, maxworld::UInt
     empty!(matches)
@@ -853,6 +879,9 @@ function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UIn
         if mt === nothing
             minworld = 1
             maxworld = 0
+        elseif method_is_latest_which(expected) && (minworld = sig_contributors_world(invokesig, mt, image)) != 0
+            @assert minworld ≤ world "contributor activated after the verification world"
+            maxworld = typemax(UInt)
         else
             matched, valid_worlds = _findsup(invokesig, mt, world)
             minworld, maxworld = valid_worlds.min_world, valid_worlds.max_world

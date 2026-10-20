@@ -908,8 +908,15 @@ static void foreach_top_nth_typename(void (*f)(jl_typename_t*, int, void*) JL_CA
 
         if (jl_is_some_Type(current_a)) {
             *facts |= HAVE_TYPE;
-            arraylist_push(&workqueue, jl_some_Type_T(current_a));
-            arraylist_push(&workqueue, (void*)(uintptr_t)-1);
+            if (jl_is_typeofbottom_param(current_a)) {
+                // Type{Union{}} is a subtype of Type{<:T} for every T, and Union{} has
+                // no typename, so key it under Type itself
+                *facts |= EXACTLY_TYPE;
+            }
+            else {
+                arraylist_push(&workqueue, jl_some_Type_T(current_a));
+                arraylist_push(&workqueue, (void*)(uintptr_t)-1);
+            }
         }
         else if (jl_is_datatype(current_a)) {
             if (current_n <= 0) {
@@ -2814,6 +2821,101 @@ JL_DLLEXPORT void jl_method_table_add_backedge(jl_value_t *typ, jl_code_instance
     JL_UNLOCK(&mc->writelock);
 }
 
+// For each top typename, the method table records which linkage blobs added or
+// deleted methods under it this session (-1 for run-time changes). If all of them
+// are dependencies of an image, a signature under those typenames matches the same
+// methods as in that image's precompile worker. The order the blobs loaded in does not
+// matter, because overwriting a method is an error during precompilation.
+// Writers hold the method cache's write lock. Readers take no lock: the table is
+// published with a release store, and a tag vector is replaced, never modified.
+static void contributor_add_tag(jl_methtable_t *mt, jl_typename_t *tn, int32_t tag) JL_CANSAFEPOINT
+{
+    jl_genericmemory_t *contributors = jl_atomic_load_relaxed(&mt->contributors);
+    jl_array_t *tags = (jl_array_t*)jl_eqtable_get(contributors, (jl_value_t*)tn, NULL);
+    size_t l = tags == NULL ? 0 : jl_array_nrows(tags);
+    for (size_t i = 0; i < l; i++)
+        if (jl_array_data(tags, int32_t)[i] == tag)
+            return;
+    jl_array_t *newtags = jl_alloc_array_1d(jl_array_int32_type, l + 1);
+    if (l > 0)
+        memcpy(jl_array_data(newtags, int32_t), jl_array_data(tags, int32_t), l * sizeof(int32_t));
+    jl_array_data(newtags, int32_t)[l] = tag;
+    JL_GC_PUSH1(&newtags);
+    jl_genericmemory_t *newtable = jl_eqtable_put(contributors, (jl_value_t*)tn, (jl_value_t*)newtags, NULL);
+    JL_GC_POP();
+    if (newtable != contributors)
+        jl_gc_write_atomic(mt, mt->contributors, jl_genericmemory_t, newtable, release);
+}
+
+struct _typename_tag_contributor_env {
+    jl_methtable_t *mt;
+    int32_t tag;
+};
+
+static void _typename_tag_contributor(jl_typename_t *tn, int explct, void *env0) JL_CANSAFEPOINT
+{
+    struct _typename_tag_contributor_env *env = (struct _typename_tag_contributor_env*)env0;
+    JL_GC_PROMISE_ROOTED(env->mt);
+    // only explicit typenames, as for backedges
+    if (!explct)
+        return;
+    contributor_add_tag(env->mt, tn, env->tag);
+}
+
+struct _typename_check_contributor_env {
+    jl_methtable_t *mt;
+    size_t image;
+    size_t world; // latest activation world seen so far
+    int clean;
+};
+
+static void _typename_check_contributor(jl_typename_t *tn, int explct, void *env0) JL_NOTSAFEPOINT
+{
+    struct _typename_check_contributor_env *env = (struct _typename_check_contributor_env*)env0;
+    (void)explct;
+    if (!env->clean)
+        return;
+    jl_genericmemory_t *contributors = jl_atomic_load_relaxed(&env->mt->contributors);
+    jl_array_t *tags = (jl_array_t*)jl_eqtable_get(contributors, (jl_value_t*)tn, NULL);
+    if (tags == NULL)
+        return; // only sysimage methods, which are not tagged
+    size_t l = jl_array_nrows(tags);
+    int32_t *d = jl_array_data(tags, int32_t);
+    for (size_t i = 0; i < l; i++) {
+        size_t world = d[i] < 0 ? 0 : jl_linkage_blob_dep_world(env->image, (size_t)d[i]);
+        if (world == 0) {
+            env->clean = 0;
+            return;
+        }
+        if (world > env->world)
+            env->world = world;
+    }
+}
+
+static void contributor_tag_method(jl_methtable_t *mt, jl_method_t *method, int32_t tag) JL_CANSAFEPOINT
+{
+    struct _typename_tag_contributor_env env = {mt, tag};
+    jl_foreach_top_typename_for(_typename_tag_contributor, (jl_value_t*)method->sig, 0, &env);
+}
+
+static int32_t contributor_tag_for(jl_method_t *method) JL_NOTSAFEPOINT
+{
+    return jl_object_in_image((jl_value_t*)method) ? (int32_t)jl_external_blob_index((jl_value_t*)method) : -1;
+}
+
+// If every method under the typenames of `sig` in `mt` came from `image` or its
+// dependencies, the world in which the last of them was activated, else 0.
+// A method added concurrently gets a later world, which bounds the caller's result.
+JL_DLLEXPORT size_t jl_sig_contributors_world(jl_value_t *sig, jl_methtable_t *mt, size_t image) JL_CANSAFEPOINT
+{
+    if (image == (size_t)-1)
+        return 0;
+    // sysimage methods are not tagged and are active from jl_require_world
+    struct _typename_check_contributor_env env = {mt, image, jl_require_world, 1};
+    int decomposed = jl_foreach_top_typename_for(_typename_check_contributor, sig, 1, &env);
+    return decomposed && env.clean ? env.world : 0;
+}
+
 struct _typename_invalidate_backedge {
     jl_value_t *type;
     jl_value_t **isect;
@@ -3115,6 +3217,9 @@ JL_DLLEXPORT void jl_method_table_disable(jl_method_t *method) JL_CANSAFEPOINT
         assert(jl_atomic_load_relaxed(&methodentry->max_world) == ~(size_t)0);
         jl_atomic_store_relaxed(&methodentry->max_world, world);
         jl_method_table_invalidate(method, world, 1);
+        JL_LOCK(&mt->cache->writelock);
+        contributor_tag_method(mt, method, -1);
+        JL_UNLOCK(&mt->cache->writelock);
         jl_atomic_store_release(&jl_world_counter, world + 1);
     }
     JL_UNLOCK(&world_counter_lock);
@@ -3139,6 +3244,7 @@ jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method,
 
     if (mt == jl_method_table)
         update_max_args(method->sig);
+    contributor_tag_method(mt, method, contributor_tag_for(method));
     JL_UNLOCK(&mt->cache->writelock);
     JL_GC_POP();
     return newentry;

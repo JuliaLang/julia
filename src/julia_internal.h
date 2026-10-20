@@ -1438,6 +1438,10 @@ void jl_gc_safe_enter_from_nonmutator(jl_ptls_t ptls) JL_CANSAFEPOINT_LEAVE;
 
 // Query if this object is perm-allocated in an image.
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
+// The linkage blob owning `v`, or -1 if `v` is in no image.
+JL_DLLEXPORT size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_linkage_blob_dep_world(size_t image, size_t blob) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_sig_contributors_world(jl_value_t *sig, jl_methtable_t *mt, size_t image) JL_CANSAFEPOINT;
 // GC configuration baked into generated code; must match between an image and the runtime that loads it.
 JL_DLLEXPORT const char *jl_gc_image_abi(void) JL_NOTSAFEPOINT;
 

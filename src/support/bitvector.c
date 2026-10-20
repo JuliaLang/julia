@@ -20,7 +20,7 @@ extern "C" {
 #endif
 
 uint32_t *bitvector_resize(uint32_t *b, uint64_t oldsz, uint64_t newsz,
-                            int initzero)
+                            int initzero) JL_NOTSAFEPOINT
 {
     uint32_t *p;
     size_t sz = ((newsz+31)>>5) * sizeof(uint32_t);
@@ -33,17 +33,17 @@ uint32_t *bitvector_resize(uint32_t *b, uint64_t oldsz, uint64_t newsz,
     return p;
 }
 
-uint32_t *bitvector_new(uint64_t n, int initzero)
+uint32_t *bitvector_new(uint64_t n, int initzero) JL_NOTSAFEPOINT
 {
     return bitvector_resize(NULL, 0, n, initzero);
 }
 
-size_t bitvector_nwords(uint64_t nbits)
+size_t bitvector_nwords(uint64_t nbits) JL_NOTSAFEPOINT
 {
     return ((nbits+31)>>5);
 }
 
-void bitvector_set(uint32_t *b, uint64_t n, uint32_t c)
+void bitvector_set(uint32_t *b, uint64_t n, uint32_t c) JL_NOTSAFEPOINT
 {
     if (c)
         b[n>>5] |= (1<<(n&31));
@@ -51,7 +51,7 @@ void bitvector_set(uint32_t *b, uint64_t n, uint32_t c)
         b[n>>5] &= ~(1<<(n&31));
 }
 
-uint32_t bitvector_get(uint32_t *b, uint64_t n)
+uint32_t bitvector_get(uint32_t *b, uint64_t n) JL_NOTSAFEPOINT
 {
     return b[n>>5] & (1<<(n&31));
 }

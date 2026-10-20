@@ -2198,6 +2198,226 @@ precompile_test_harness("Issue #48391") do load_path
     @test_throws ErrorException isless(x, x)
 end
 
+# Edges whose possible matches all come from an image's dependencies are trusted
+# at load instead of matched again. Each case runs in a fresh process.
+let exename = `$(Base.julia_cmd()) --startup-file=no`
+    global function trusted_edge_test_output(load_path, depot, body)
+        code = """
+            insert!(LOAD_PATH, 1, $(repr(load_path)))
+            insert!(DEPOT_PATH, 1, $(repr(depot)))
+            $body
+            """
+        return readchomp(`$exename -e $code`)
+    end
+end
+
+precompile_test_harness("trusted edges: load order") do load_path
+    write(joinpath(load_path, "TrustedEdgeDep.jl"),
+        """
+        module TrustedEdgeDep
+        f(x) = :dep
+        end
+        """)
+    # two packages that extend f without knowing about each other
+    write(joinpath(load_path, "TrustedEdgeExtA.jl"),
+        """
+        module TrustedEdgeExtA
+        using TrustedEdgeDep
+        TrustedEdgeDep.f(::Integer) = :a
+        callf() = TrustedEdgeDep.f(1)
+        precompile(callf, ())
+        end
+        """)
+    write(joinpath(load_path, "TrustedEdgeExtB.jl"),
+        """
+        module TrustedEdgeExtB
+        using TrustedEdgeDep
+        TrustedEdgeDep.f(::Signed) = :b
+        callf() = TrustedEdgeDep.f(1)
+        precompile(callf, ())
+        end
+        """)
+    Base.compilecache(Base.PkgId("TrustedEdgeDep"))
+    Base.compilecache(Base.PkgId("TrustedEdgeExtA"))
+    Base.compilecache(Base.PkgId("TrustedEdgeExtB"))
+    depot = DEPOT_PATH[1]
+    # in either load order, B's more specific method wins in A's caller too
+    for order in (("TrustedEdgeExtA", "TrustedEdgeExtB"), ("TrustedEdgeExtB", "TrustedEdgeExtA"))
+        out = trusted_edge_test_output(load_path, depot, """
+            using TrustedEdgeDep, $(order[1]), $(order[2])
+            print(Base.invokelatest(TrustedEdgeExtA.callf), " ", Base.invokelatest(TrustedEdgeExtB.callf), " ",
+                  Base.invokelatest(TrustedEdgeDep.f, 1))
+            """)
+        @test out == "b b b"
+    end
+    # a method defined in the session before the load is seen by A's caller
+    out = trusted_edge_test_output(load_path, depot, """
+        using TrustedEdgeDep
+        TrustedEdgeDep.f(::Int) = :session
+        using TrustedEdgeExtA
+        print(Base.invokelatest(TrustedEdgeExtA.callf), " ", Base.invokelatest(TrustedEdgeDep.f, 1))
+        """)
+    @test out == "session session"
+    # a method deleted in the session still makes edges to f match live
+    out = trusted_edge_test_output(load_path, depot, """
+        using TrustedEdgeDep
+        TrustedEdgeDep.f(::Int) = :session
+        Base.delete_method(which(TrustedEdgeDep.f, (Int,)))
+        using TrustedEdgeExtA
+        print(Base.invokelatest(TrustedEdgeExtA.callf), " ", Base.invokelatest(TrustedEdgeDep.f, 1))
+        """)
+    @test out == "a a"
+    # a trusted edge is valid from the activation of f's newest contributor, ExtA itself
+    out = trusted_edge_test_output(load_path, depot, """
+        using TrustedEdgeDep, TrustedEdgeExtA
+        mi = only(Base.specializations(only(methods(TrustedEdgeExtA.callf))))
+        ci = mi.cache
+        print(ci.min_world == only(methods(TrustedEdgeExtA.callf)).primary_world, " ", ci.max_world == typemax(UInt))
+        """)
+    @test out == "true true"
+    # f's methods come from Dep and ExtA: both are dependencies of ExtA, but not
+    # of Dep, the sysimage, or code in no image
+    out = trusted_edge_test_output(load_path, depot, """
+        using TrustedEdgeDep, TrustedEdgeExtA
+        sig = Tuple{typeof(TrustedEdgeDep.f), Int}
+        in_deps(sig, obj) = Int(0 != ccall(:jl_sig_contributors_world, Csize_t, (Any, Any, Csize_t), sig, Core.methodtable,
+                                     ccall(:jl_external_blob_index, Csize_t, (Any,), obj)))
+        print(in_deps(sig, TrustedEdgeExtA), " ", in_deps(sig, only(methods(TrustedEdgeExtA.callf))), " ",
+              in_deps(sig, TrustedEdgeDep), " ", in_deps(sig, Base), " ", in_deps(sig, Main))
+        # a method on Type{Union{}} can match every constructor call, and nothing else
+        ctor = Tuple{Type{Int}, Int}
+        print(" ", in_deps(ctor, TrustedEdgeExtA))
+        (::Type{Union{}})(::Int) = 0
+        print(" ", in_deps(ctor, TrustedEdgeExtA), " ", in_deps(sig, TrustedEdgeExtA))
+        """)
+    @test out == "1 1 0 0 0 1 0 1"
+end
+
+precompile_test_harness("trusted edges: a method on a kind outside the dependencies") do load_path
+    write(joinpath(load_path, "TrustedEdgeKindDep.jl"),
+        """
+        module TrustedEdgeKindDep
+        abstract type Bar end
+        struct F end
+        (::Type{T})(x::F, y) where {T<:Bar} = :bar
+        end
+        """)
+    write(joinpath(load_path, "TrustedEdgeKindUser.jl"),
+        """
+        module TrustedEdgeKindUser
+        using TrustedEdgeKindDep: Bar, F
+        callbar() = Bar(F(), F())
+        precompile(callbar, ())
+        end
+        """)
+    # a method on DataType can match every constructor call; this one comes from
+    # outside User's dependencies and makes its call ambiguous
+    write(joinpath(load_path, "TrustedEdgeKindPirate.jl"),
+        """
+        module TrustedEdgeKindPirate
+        using TrustedEdgeKindDep: F
+        (::DataType)(x::F, y::F) = :kind
+        end
+        """)
+    for name in ("TrustedEdgeKindDep", "TrustedEdgeKindUser", "TrustedEdgeKindPirate")
+        Base.compilecache(Base.PkgId(name))
+    end
+    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
+        using TrustedEdgeKindPirate
+        using TrustedEdgeKindUser
+        print(try TrustedEdgeKindUser.callbar() catch err; occursin("ambiguous", sprint(showerror, err)) end)
+        """)
+    @test out == "true"
+end
+
+precompile_test_harness("trusted edges: extension activation") do load_path
+    host_uuid = "0f0f2a5c-6c6d-4b1e-9d2a-2e7d5b7a1c01"
+    trig_uuid = "9b4b1d2e-7a3f-4c0e-8f6b-5a2c1d3e4f02"
+    mkpath(joinpath(load_path, "TrustedEdgeHost", "src")); mkpath(joinpath(load_path, "TrustedEdgeHost", "ext"))
+    mkpath(joinpath(load_path, "TrustedEdgeTrig", "src"))
+    write(joinpath(load_path, "Project.toml"),
+        """
+        [deps]
+        TrustedEdgeHost = "$host_uuid"
+        TrustedEdgeTrig = "$trig_uuid"
+        """)
+    write(joinpath(load_path, "Manifest.toml"),
+        """
+        julia_version = "$(VERSION)"
+        manifest_format = "2.0"
+
+        [[deps.TrustedEdgeHost]]
+        path = "TrustedEdgeHost"
+        uuid = "$host_uuid"
+        version = "0.1.0"
+        weakdeps = ["TrustedEdgeTrig"]
+
+            [deps.TrustedEdgeHost.extensions]
+            TrustedEdgeHostExt = "TrustedEdgeTrig"
+
+        [[deps.TrustedEdgeTrig]]
+        path = "TrustedEdgeTrig"
+        uuid = "$trig_uuid"
+        version = "0.1.0"
+        """)
+    write(joinpath(load_path, "TrustedEdgeHost", "Project.toml"),
+        """
+        name = "TrustedEdgeHost"
+        uuid = "$host_uuid"
+        version = "0.1.0"
+
+        [weakdeps]
+        TrustedEdgeTrig = "$trig_uuid"
+
+        [extensions]
+        TrustedEdgeHostExt = "TrustedEdgeTrig"
+        """)
+    write(joinpath(load_path, "TrustedEdgeHost", "src", "TrustedEdgeHost.jl"),
+        """
+        module TrustedEdgeHost
+        h(x) = :host
+        callh() = h(1)
+        precompile(callh, ())
+        end
+        """)
+    write(joinpath(load_path, "TrustedEdgeHost", "ext", "TrustedEdgeHostExt.jl"),
+        """
+        module TrustedEdgeHostExt
+        using TrustedEdgeHost, TrustedEdgeTrig
+        TrustedEdgeHost.h(::Int) = :ext
+        end
+        """)
+    write(joinpath(load_path, "TrustedEdgeTrig", "Project.toml"),
+        """
+        name = "TrustedEdgeTrig"
+        uuid = "$trig_uuid"
+        version = "0.1.0"
+        """)
+    write(joinpath(load_path, "TrustedEdgeTrig", "src", "TrustedEdgeTrig.jl"),
+        """
+        module TrustedEdgeTrig
+        end
+        """)
+    Base.compilecache(Base.PkgId(Base.UUID(host_uuid), "TrustedEdgeHost"))
+    Base.compilecache(Base.PkgId(Base.UUID(trig_uuid), "TrustedEdgeTrig"))
+    depot = DEPOT_PATH[1]
+    # trusted edges still get backedges, so the extension invalidates the caller
+    out = trusted_edge_test_output(load_path, depot, """
+        using TrustedEdgeHost
+        before = Base.invokelatest(TrustedEdgeHost.callh)
+        using TrustedEdgeTrig
+        print(before, " ", Base.invokelatest(TrustedEdgeHost.callh))
+        """)
+    @test out == "host ext"
+    # the extension loads together with the host
+    out = trusted_edge_test_output(load_path, depot, """
+        using TrustedEdgeTrig
+        using TrustedEdgeHost
+        print(Base.invokelatest(TrustedEdgeHost.callh))
+        """)
+    @test out == "ext"
+end
+
 precompile_test_harness("Generator nospecialize") do load_path
     write(joinpath(load_path, "GenNoSpec.jl"),
         """

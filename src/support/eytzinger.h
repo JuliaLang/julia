@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// Thread-safe Eytzinger tree implementation for fast address range lookups.
+// Eytzinger tree for fast address range lookups. Readers take no lock: each
+// write publishes a new immutable snapshot, and readers use the one they loaded.
 // See https://algorithmica.org/en/eytzinger
 
 #ifndef JL_EYTZINGER_H
@@ -8,7 +9,7 @@
 
 #include <uv.h>
 #include "dtypes.h"
-#include "arraylist.h"
+#include "../julia_atomics.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -65,49 +66,71 @@ typedef struct {
     void *data; // caller-defined per-range metadata
 } eyt_range_t;
 
-typedef struct eyt_tree_t {
-    uv_rwlock_t rwlock;
-
-    size_t n; // 2 * n_ranges (tree/idxs have n+1 entries)
-    arraylist_t tree;
-    arraylist_t idxs; // Eytzinger-ordered: void* userdata for start boundaries, EYT_NOTFOUND for end/sentinel
+// One version of the tree, immutable once published. Its arrays live in the
+// same allocation as the header.
+typedef struct {
+    size_t n; // 2 * nranges (tree/idxs have n+1 entries)
     uintptr_t min_addr;
     uintptr_t max_addr;
-
+    uintptr_t *tree; // Eytzinger-ordered encoded boundaries, then a sentinel
+    uintptr_t *idxs; // per tree entry: the range's data for a start boundary, EYT_NOTFOUND for an end or the sentinel
     size_t nranges;
-    eyt_range_t *ranges; // one entry per registered range
+    eyt_range_t *ranges; // one entry per registered range, in insertion order
+} eyt_snapshot_t;
+
+typedef struct eyt_tree_t {
+    _Atomic(eyt_snapshot_t*) snapshot; // the current version
+    uv_mutex_t writelock; // serializes writers
+    // Called with each replaced snapshot. Readers may still be using it, so it
+    // must not be freed before every thread has passed a safepoint. NULL leaks it.
+    void (*retire)(void *snapshot);
 } eyt_tree_t;
 
 // Sentinel value stored in `idxs` for end-boundaries and out-of-range positions.
 #define EYT_NOTFOUND ((void*)1)
 
-JL_DLLEXPORT void eyt_tree_init(eyt_tree_t *t) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void eyt_tree_init(eyt_tree_t *t, void (*retire)(void *snapshot)) JL_NOTSAFEPOINT;
 
 // Add a range covering the object pointers in (start, end] with caller-defined
-// data and rebuild the tree. Thread-safe for concurrent access.
-JL_DLLEXPORT void eyt_tree_add_range(eyt_tree_t *t, uintptr_t start, uintptr_t end, void *data) JL_NOTSAFEPOINT;
+// data, publishing a new snapshot, and return the range's index: ranges are
+// numbered in insertion order. Thread-safe against readers and other writers.
+JL_DLLEXPORT size_t eyt_tree_add_range(eyt_tree_t *t, uintptr_t start, uintptr_t end, void *data) JL_NOTSAFEPOINT;
+
+// Valid only until this thread next passes a safepoint, so never keep it.
+// A relaxed load is enough, as every read through it depends on the loaded address.
+static inline eyt_snapshot_t *_eyt_tree_snapshot(eyt_tree_t *t) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_relaxed(&t->snapshot);
+}
 
 // Returns whether `addr` is inside any registered range (start-exclusive,
 // end-inclusive; see _eyt_addr_query).
-// Thread-safe for concurrent readers and writers.
 static inline int eyt_tree_is_in_range(eyt_tree_t *t, uintptr_t addr) JL_NOTSAFEPOINT
 {
-    uv_rwlock_rdlock(&t->rwlock);
-    size_t idx = _eyt_obj_idx(_eyt_addr_query(addr), (uintptr_t*)t->tree.items, t->n, t->min_addr, t->max_addr);
-    int result = ((uintptr_t)t->tree.items[idx] & 1) == 0;
-    uv_rwlock_rdunlock(&t->rwlock);
-    return result;
+    eyt_snapshot_t *s = _eyt_tree_snapshot(t);
+    size_t idx = _eyt_obj_idx(_eyt_addr_query(addr), s->tree, s->n, s->min_addr, s->max_addr);
+    return (s->tree[idx] & 1) == 0;
 }
 
 // Returns the caller-defined data for the range containing `addr`, or EYT_NOTFOUND.
-// Thread-safe for concurrent readers and writers.
 static inline void *eyt_tree_find_data(eyt_tree_t *t, uintptr_t addr) JL_NOTSAFEPOINT
 {
-    uv_rwlock_rdlock(&t->rwlock);
-    size_t idx = _eyt_obj_idx(_eyt_addr_query(addr), (uintptr_t*)t->tree.items, t->n, t->min_addr, t->max_addr);
-    void *result = t->idxs.items[idx];
-    uv_rwlock_rdunlock(&t->rwlock);
-    return result;
+    eyt_snapshot_t *s = _eyt_tree_snapshot(t);
+    size_t idx = _eyt_obj_idx(_eyt_addr_query(addr), s->tree, s->n, s->min_addr, s->max_addr);
+    return (void*)s->idxs[idx];
+}
+
+// The number of registered ranges.
+static inline size_t eyt_tree_nranges(eyt_tree_t *t) JL_NOTSAFEPOINT
+{
+    return _eyt_tree_snapshot(t)->nranges;
+}
+
+// Returns the caller-defined data of the range with index `i`, or EYT_NOTFOUND.
+static inline void *eyt_tree_range_data(eyt_tree_t *t, size_t i) JL_NOTSAFEPOINT
+{
+    eyt_snapshot_t *s = _eyt_tree_snapshot(t);
+    return i < s->nranges ? s->ranges[i].data : EYT_NOTFOUND;
 }
 
 #ifdef __cplusplus
