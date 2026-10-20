@@ -54,6 +54,13 @@ end
     return _eval(mod, lower_init(st), true, nothing)
 end
 
+# TODO: JL tests expect @eval to run with JL as the active lowerer.  Once it is
+# the only lowerer, this can be replaced with `Core.eval`.
+function at_eval_hook(mod::Module, st::SyntaxTree)
+    ccall(:jl_check_top_level_effect, Cvoid, (Any, Cstring), mod, "eval")
+    return core_eval_hook(mod, st)
+end
+
 const _has_v1_13_hooks = isdefined(Core, :_lower)
 
 function activate!(enable=true; freeze_world_age=true)

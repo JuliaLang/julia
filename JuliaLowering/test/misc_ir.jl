@@ -316,7 +316,7 @@ end
 2   (call core.tuple %₁)
 3   (call JuliaLowering.interpolate_syntax (syntaxinert (call (syntaxunquote f) x y)) %₂)
 4   (call Base.fill_context %₃ SyntaxContext(#=omitted=#))
-5   (= slot₁/eval_result (call Core.eval TestMod %₄))
+5   (= slot₁/eval_result (call Base.JuliaLowering.at_eval_hook TestMod %₄))
 6   latestworld
 7   slot₁/eval_result
 8   (return %₇)
@@ -330,7 +330,7 @@ end
 3   (call core.tuple %₂)
 4   (call JuliaLowering.interpolate_syntax (syntaxinert (call (syntaxunquote f) x y)) %₃)
 5   (call Base.fill_context %₄ SyntaxContext(#=omitted=#))
-6   (= slot₁/eval_result (call Core.eval %₁ %₅))
+6   (= slot₁/eval_result (call Base.JuliaLowering.at_eval_hook %₁ %₅))
 7   latestworld
 8   slot₁/eval_result
 9   (return %₈)

@@ -283,7 +283,7 @@ function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex)
         [:local
             [:(=)
                 val
-                [:call Core.eval::value
+                [:call at_eval_hook::value
                     mod_st
                     [:call fill_context::value q new_sc::value]
                 ]
