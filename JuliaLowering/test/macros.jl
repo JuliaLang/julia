@@ -633,6 +633,11 @@ module M
         end
     end
 
+    macro read_global_in_parent()
+        sym_ex = @legacy_quote_to_syntax quote; sym_introduced_from_M; end
+        adopt_scope(__context__, sym_ex[1])
+    end
+
     macro inner()
         @legacy_quote_to_syntax :(y, z)
     end
@@ -680,6 +685,12 @@ JuliaLowering.include_string(test_mod, """
 M.@set_global_in_parent "bent hygiene!"
 """)
 @test test_mod.sym_introduced_from_M == "bent hygiene!"
+# The adopted identifier comes from M's source text, but its provenance should
+# be consistent with the rest of the expansion
+@test JuliaLowering.include_string(test_mod, """
+f_read_bent_hygiene() = M.@read_global_in_parent
+f_read_bent_hygiene()
+""") == "bent hygiene!"
 
 JuliaLowering.include_string(test_mod, "M.@set_other_global global_in_test_mod 100")
 @test !isdefined(test_mod.M, :global_in_test_mod)

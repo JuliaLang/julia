@@ -1209,3 +1209,30 @@ end
     @test JuliaLowering.include_string(m, "@isdefined not_a_thing_anywhere") === false
     @test JuliaLowering.include_string(m, "f() = @isdefined(Core); f()") === true
 end
+
+@testset "@locals" begin
+    # Inner declarations shadow outer ones, even when undefined
+    @test JuliaLowering.include_string(test_mod, """
+    let x = 1
+        let
+            local x
+            Base.@locals
+        end
+    end
+    """) == Dict{Symbol,Any}()
+
+    # Hygienic locals of a macro expansion are not visible
+    fl_eval(test_mod, raw"""
+    macro with_hidden_local(ex)
+        quote
+            local hidden = 1
+            $(esc(ex))
+        end
+    end
+    """)
+    @test jl_eval(test_mod, """
+    let x = 2
+        @with_hidden_local Base.@locals
+    end
+    """; edition=JL_OLD_EDITION) == Dict{Symbol,Any}(:x => 2)
+end
