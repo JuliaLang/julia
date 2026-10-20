@@ -181,59 +181,51 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     return parseint_utf8(T, str, 1, ncodeunits(str), Int(base), raise)
 end
 
+# The index after `word` at index `i` of `s`, or 0 if `s[i:j]` does not start with it
+@inline function skipword(s::AbstractString, i::Int, j::Int, word::Tuple{Vararg{Char}})
+    for w in word
+        i <= j || return 0
+        c, i = iterate(s, i)::Tuple{AbstractChar, Int}
+        c == w || return 0
+    end
+    return i
+end
+
+# Whether `s[i:j]` is only whitespace
+@inline function allspace(s::AbstractString, i::Int, j::Int)
+    while i <= j
+        c, i = iterate(s, i)::Tuple{AbstractChar, Int}
+        isspace(c) || return false
+    end
+    return true
+end
+
 function tryparse_internal(::Type{Bool}, sbuff::AbstractString,
         startpos::Int, endpos::Int, base::Integer, raise::Bool)
-    # `true`, `false` and digits with nothing around them need none of the grammar below
-    if sbuff isa UTF8String && 1 <= startpos <= endpos
-        x = Parsers.parsevalue(Bool, view(codeunits(sbuff), startpos:endpos);
-                               base = base == 0 ? 10 : base)
-        x isa Bool && return x
-    end
     if startpos > endpos
         raise && throw(ArgumentError("input string is empty"))
         return nothing
     end
-
-    if isdigit(sbuff[startpos])
+    c, i = iterate(sbuff, startpos)::Tuple{AbstractChar, Int}
+    if isdigit(c)
+        i > endpos && c <= '1' && return c == '1'   # a lone `0` or `1`
         intres = tryparse_internal(UInt8, sbuff, startpos, endpos, base, false)
         (intres == 1) && return true
         (intres == 0) && return false
-        raise && throw(ArgumentError(
-            "invalid Bool representation: $(repr(SubString(sbuff, startpos, endpos)))"))
-    end
-
-    orig_start = startpos
-    orig_end   = endpos
-
-    # Ignore leading and trailing whitespace
-    while startpos <= endpos && isspace(sbuff[startpos])
-        startpos = nextind(sbuff, startpos)
-    end
-    while endpos >= startpos && isspace(sbuff[endpos])
-        endpos = prevind(sbuff, endpos)
-    end
-
-    len = endpos - startpos + 1
-    if sbuff isa Union{String, SubString{String}}
-        p = pointer(sbuff) + startpos - 1
-        truestr = "true"
-        falsestr = "false"
-        GC.@preserve sbuff truestr falsestr begin
-            (len == 4) && (0 == memcmp(p, unsafe_convert(Ptr{UInt8}, truestr), 4)) && (return true)
-            (len == 5) && (0 == memcmp(p, unsafe_convert(Ptr{UInt8}, falsestr), 5)) && (return false)
-        end
     else
-        (len == 4) && (SubString(sbuff, startpos:startpos+3) == "true") && (return true)
-        (len == 5) && (SubString(sbuff, startpos:startpos+4) == "false") && (return false)
-    end
-
-    if raise
-        substr = SubString(sbuff, orig_start, orig_end) # show input string in the error to avoid confusion
-        if all(isspace, substr)
-            throw(ArgumentError("input string only contains whitespace"))
-        else
-            throw(ArgumentError("invalid Bool representation: $(repr(substr))"))
+        # `true` or `false`, with whitespace around it
+        while isspace(c) && i <= endpos
+            c, i = iterate(sbuff, i)::Tuple{AbstractChar, Int}
         end
+        i = c == 't' ? skipword(sbuff, i, endpos, ('r', 'u', 'e')) :
+            c == 'f' ? skipword(sbuff, i, endpos, ('a', 'l', 's', 'e')) : 0
+        i > 0 && allspace(sbuff, i, endpos) && return c == 't'
+    end
+    if raise
+        allspace(sbuff, startpos, endpos) &&
+            throw(ArgumentError("input string only contains whitespace"))
+        throw(ArgumentError(
+            "invalid Bool representation: $(repr(SubString(sbuff, startpos, endpos)))"))
     end
     return nothing
 end
