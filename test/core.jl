@@ -9473,3 +9473,22 @@ let A = Issue61347.A, S2 = Issue61347.S2
     @test isdefined(lazy, :super)
     @test getfield(lazy, :super) === supertype(lazy)
 end
+
+# Method tables and dispatch caches keep their entries in insertion-ordered dicts that
+# grow by appending. Every entry must stay reachable as a dict grows through many sizes.
+module OrderedDictGrowth
+    const Ts = [(@eval struct $(Symbol(:T, i)) end; @eval $(Symbol(:T, i))) for i in 1:300]
+    f(x) = 0
+    for (i, T) in enumerate(Ts)
+        @eval f(::$T) = $i
+    end
+    g(x) = typeof(x)
+end
+@testset "dispatch through growing method caches" begin
+    Ts = OrderedDictGrowth.Ts
+    @test all(i -> Base.invokelatest(OrderedDictGrowth.f, Ts[i]()) == i, eachindex(Ts))
+    @test all(i -> Base.invokelatest(OrderedDictGrowth.g, Ts[i]()) === Ts[i], eachindex(Ts))
+    # again, now from the filled caches
+    @test all(i -> Base.invokelatest(OrderedDictGrowth.f, Ts[i]()) == i, eachindex(Ts))
+    @test all(i -> Base.invokelatest(OrderedDictGrowth.g, Ts[i]()) === Ts[i], eachindex(Ts))
+end
