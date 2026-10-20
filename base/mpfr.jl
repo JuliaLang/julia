@@ -1214,6 +1214,7 @@ end
 function setprecision(f::Function, ::Type{BigFloat}, prec::Integer; base::Integer=2)
     Base.ScopedValues.@with(CURRENT_PRECISION => _convert_precision_from_base(prec, base), f())
 end
+setprecision(f, ::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(setprecision, (f, Union{}, slurp...)))
 
 setprecision(f::Function, prec::Integer; base::Integer=2) = setprecision(f, BigFloat, prec; base)
 
