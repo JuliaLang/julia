@@ -542,6 +542,17 @@ void Optimizer::insertLifetime(Value *ptr, Instruction *orig)
             first_dead.push_back(bb->getTerminator());
         }
         else {
+            if (bb == def_bb) {
+                size_t remaining = 0;
+                for (auto use: use_info.uses)
+                    remaining += use->getParent() == bb;
+                for (auto it = orig->getIterator(); remaining && it != bb->end(); ++it) {
+                    if (use_info.uses.count(&*it) && --remaining == 0)
+                        first_dead.push_back(&*std::next(it));
+                }
+                if (remaining == 0)
+                    continue;
+            }
             for (auto it = bb->rbegin(), end = bb->rend(); it != end; ++it) {
                 if (use_info.uses.count(&*it)) {
                     --it;
