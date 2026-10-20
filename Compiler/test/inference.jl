@@ -6262,20 +6262,14 @@ g_concrete_only(x) = f_concrete_only(x)
 @test only(Base.return_types(g_concrete_only, Tuple{Int})) === Int
 @test only(Base.return_types(g_concrete_only, Tuple{Integer})) === Any
 
-# Inference records no backedge at a non-concrete call site where it learned nothing
-# (`Any` result, unknown effects) and the optimizer left the call dynamic, so a later
-# method definition cannot invalidate the caller. The edge is kept where the optimizer
-# commits to the matched method by inlining or `:invoke`, and at concrete call sites.
+# An uninformative call left dynamic has no edge. An inlined, invoked or concretely typed
+# call keeps it.
 @noinline f_uninformative(x) = Base.inferencebarrier(identity)(x)
 @noinline f_uninformative_nsp(@nospecialize x) = Base.inferencebarrier(identity)(x)
 @inline f_uninformative_inl(x) = Base.inferencebarrier(identity)(x)
 g_uninformative(x) = f_uninformative(x)
 g_uninformative_nsp(x) = f_uninformative_nsp(x)
 g_uninformative_inl(x) = f_uninformative_inl(x)
-# Report which kinds of edge to `f` the edge list of `src` holds: a dispatch edge (a
-# standalone target, or one within an encoded lookup) watches which method this call site
-# selects, while an `invoke`-style `(signature, target)` pair only certifies the code of
-# an already selected method. A committed call site needs both.
 function uninformative_edge_kinds(src, f)
     m = only(methods(f))
     dispatch = invoke_style = false
@@ -6285,7 +6279,7 @@ function uninformative_edge_kinds(src, f)
     i = 1
     while i ≤ length(edges)
         e = edges[i]
-        if e isa Int # encoded lookup: `nmatches, atype, matches...`
+        if e isa Int # encoded lookup: count, signature, then matches
             n = abs(e)
             for j = i+2:i+1+n
                 if matches(edges[j])
@@ -6293,7 +6287,7 @@ function uninformative_edge_kinds(src, f)
                 end
             end
             i += 2 + n
-        elseif e isa Type # `(signature, target)` pair
+        elseif e isa Type
             if matches(edges[i+1])
                 invoke_style = true
             end

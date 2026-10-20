@@ -122,15 +122,11 @@ end
 widen_call_result(::AbstractInterpreter, si::StmtInfo, state::CallInferenceState, ::AbsIntState) =
     call_result_unused(si) && !(state.rettype === Bottom)
 
-# Whether inference of a non-concrete call site produced no conclusion worth recording
-# edges for: `Any` return and exception types, effects no better than unknown (so the
-# call can neither be deleted nor folded on their account), and no argument refinements.
 function is_uninformative_call(state::CallInferenceState, applicable::Vector{MethodMatchTarget})
     if !(state.rettype === Any && state.exctype === Any && state.slotrefinements === nothing)
         return false
     end
-    # Known effects flow into this caller's own effects, which its callers may rely on.
-    # The overlay bit alone tells them nothing.
+    # Overlay status cannot enable concrete evaluation when the other effects are unknown.
     if Effects(state.all_effects; nonoverlayed=ALWAYS_TRUE) !== EFFECTS_UNKNOWN
         return false
     end
@@ -388,9 +384,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
         end
 
         if is_uninformative_call(state, applicable)
-            # Inference learned nothing at a non-concrete call site, so there is no
-            # conclusion for a backedge to protect. Leave the edge decision to the
-            # optimizer, which adds one only if it commits to a matched method.
             add_remark!(interp, sv, "Deferring edges of uninformative non-concrete call site to the optimizer")
             retinfo = UninformativeCallInfo(retinfo)
         end

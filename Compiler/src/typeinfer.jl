@@ -995,12 +995,11 @@ mutable struct UninformativeCallees
     @atomic list::Union{Nothing,UninformativeCallee}
 end
 
-# Callers and the code inferred behind their call sites that record no edges. Kept while
-# writing a package image, so that the image can still include that code.
+# (caller, callee) pairs of uninformative calls, so that a package image can include the callee.
 const uninformative_callees = UninformativeCallees(nothing)
 
 function record_uninformative_callees!(caller::CodeInstance, sv::InferenceState, edges::SimpleVector)
-    # Only a call that taught inference nothing, or a call wrapping other calls, can hide it.
+    # These infos cannot hold an uninformative call, so skip the walk if there are no others.
     hidden = false
     for info in sv.stmt_info
         if !(info isa NoCallInfo || info isa MethodMatchInfo || info isa UnionSplitInfo ||
@@ -2400,8 +2399,8 @@ const TRIM_NO = 0x0
 const TRIM_SAFE = 0x1
 const TRIM_UNSAFE = 0x2
 const TRIM_UNSAFE_WARN = 0x3
-# Callees reached only through uninformative call sites are also pushed to the optional roots
-# vector, because no serialized edge leads to them.
+# Callees reached only through uninformative calls also go into the extra roots, because no
+# edge in the image leads to them.
 function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8, external_linkage::Bool,
                               image_roots::Union{Nothing,Vector{Any}}=nothing)
     # During `--trim`, infer against an isolated cache namespace. The owner is re-stamped

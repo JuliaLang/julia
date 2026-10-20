@@ -555,10 +555,7 @@ let M = LimitedResultBackedges
     end
 end
 
-# A call site where inference learned nothing records no edges of its own, but the
-# optimizer may still commit to the matched method, by emitting an `:invoke` for it or by
-# inlining its body. Such a site must record its dispatch dependency, so that a method
-# added later invalidates the caller.
+# A new method must invalidate a caller that invokes or inlines an uninformative call.
 module UninformativeCommit
     global CALLEE = identity
     @noinline uninf_invoke(@nospecialize x) = CALLEE(x)
@@ -583,10 +580,8 @@ let tester_ci(f) = let ci = Base.method_instance(f, (Vector{Any},)).cache
     @test tester_ci(UninformativeCommit.inline_caller).max_world != typemax(UInt)
 end
 
-# A call site that inference found uninformative defers its edges to the optimizer, so
-# other conclusions drawn from the call must still record them. Here the callee is
-# effect-free and terminating though not consistent, which lets its caller catch its
-# exceptions and be deleted as dead code; a new method must invalidate that.
+# A call with an `Any` result but partly known effects keeps its edges. Here those effects
+# let the optimizer delete the call.
 module UninformativeEffects
     flag::Bool = true
     @noinline callee(x) = flag ? x : throw(x)
@@ -607,9 +602,8 @@ let M = UninformativeEffects, interp = InvalidationTester()
     @test ci.max_world != typemax(UInt)
 end
 
-# The `Nothing` branch of this uninformative union split is evaluated concretely and folded
-# into the caller, which commits to the matched method; a more specific method for that
-# branch must invalidate the caller.
+# The `Nothing` split is folded by concrete evaluation, so a new method for it must
+# invalidate the caller.
 module UninformativeFold
     Base.@assume_effects :foldable @noinline callee(x) = Base.inferencebarrier(identity)(1)
     @noinline callee(x::Integer) = Base.inferencebarrier(identity)(x)
@@ -624,8 +618,7 @@ let M = UninformativeFold, interp = InvalidationTester()
     @test ci.max_world != typemax(UInt)
 end
 
-# Folding one split of such a site must not make the caller depend on the other splits,
-# which stay dynamic calls.
+# A new method for the split that stays dynamic must not invalidate the caller.
 module UninformativeFoldOtherSplit
     Base.@assume_effects :foldable @noinline callee(x) = Base.inferencebarrier(identity)(1)
     @noinline callee(x::Integer) = Base.inferencebarrier(identity)(x)
@@ -640,8 +633,7 @@ let M = UninformativeFoldOtherSplit, interp = InvalidationTester()
     @test ci.max_world == typemax(UInt)
 end
 
-# `return_type` observes the inferred result of an uninformative call as a value, so
-# redefining the callee must invalidate the caller.
+# A return type query exposes the inferred result as a value, so it needs the edge.
 module UninformativeReturnType
     @noinline callee(x) = Base.inferencebarrier(identity)(x)
 end

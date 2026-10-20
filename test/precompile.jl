@@ -2182,8 +2182,7 @@ precompile_test_harness("WindowsCacheOverwrite") do load_path
     @test ofile_2 == Base.ocachefile_from_cachefile(ji_2)
 end
 
-# A call site where inference learned nothing records no edge, but the code inferred for
-# its callee must still be kept in the image, without making the caller depend on it.
+# Keep the callee's inferred code in the image even though the dynamic call has no edge.
 precompile_test_harness("uninformative call site image coverage") do load_path
     write(joinpath(load_path, "UninfCoverageDep.jl"),
         """

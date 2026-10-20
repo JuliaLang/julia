@@ -726,8 +726,7 @@ was supposed to analyze.
 struct ReturnTypeCallInfo <: CallInfo
     info::CallInfo
 end
-# A return type query turns the inferred result into a constant, so it needs the edges even
-# of calls that taught inference nothing, however deeply they are nested.
+# The query returns the inferred type as a value, so it also depends on uninformative calls.
 function add_edges_impl(edges::Vector{Any}, info::ReturnTypeCallInfo)
     observed = Any[RecordUninformativeEdges()]
     add_edges!(observed, info.info)
@@ -790,17 +789,15 @@ getedge_impl(info::VirtualMethodMatchInfo, idx::Int) = getedge(info.info, idx)
 """
     info::UninformativeCallInfo <: CallInfo
 
-Wraps the `MethodMatchInfo`/`UnionSplitInfo` of a non-concrete call site at which
-inference learned nothing from the matched methods: `Any` return and exception types,
-no argument refinements, and effects no better than `EFFECTS_UNKNOWN`. Inference records
-no edges for such a site, since there is no conclusion for a backedge to protect. The
-inliner sees through the wrapper and adds edges itself only where it commits to a matched
-method, by inlining it or emitting an `:invoke`; a site left as a dynamic call gets none.
+Wraps the `MethodMatchInfo`/`UnionSplitInfo` of a call from which inference learned nothing:
+`Any` return and exception types, unknown effects, no argument refinements, and at least one
+match that is not a dispatch tuple. Inference records no edges for it. The optimizer adds them
+where it relies on the lookup, and return type queries still collect them.
 """
 struct UninformativeCallInfo <: CallInfo
     info::Union{MethodMatchInfo,UnionSplitInfo}
 end
-# Placed first in an edge list to also collect the edges of uninformative call sites.
+# Marks an edge list that also collects the edges of uninformative calls.
 struct RecordUninformativeEdges end
 function add_edges_impl(edges::Vector{Any}, info::UninformativeCallInfo)
     if !isempty(edges) && edges[1] === RecordUninformativeEdges()

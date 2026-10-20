@@ -859,9 +859,6 @@ function add_inlining_dispatch_edge!(edges::Vector{Any}, mi::MethodInstance,
     return nothing
 end
 
-# Inference records no edges at an uninformative call site, so every commitment the
-# optimizer makes there must certify the lookup itself: an inlined body or an `:invoke`
-# both fix which method this site calls, and a method added later can change that.
 function add_uninformative_dispatch_edge!(edges::Vector{Any}, mi::MethodInstance,
                                           @nospecialize(info::CallInfo))
     if info isa UninformativeCallInfo
@@ -870,8 +867,8 @@ function add_uninformative_dispatch_edge!(edges::Vector{Any}, mi::MethodInstance
     return nothing
 end
 
-# Certify only the splits whose lookup can reach the committed method. The other splits stay
-# dynamic calls, so a method added for them must not invalidate the caller.
+# Only the splits that can reach this method depend on it. The others add their own edges
+# if they are committed too.
 function add_committed_split_edges!(edges::Vector{Any}, mi::MethodInstance, info::UnionSplitInfo)
     found = false
     for split in info.split
@@ -906,9 +903,8 @@ function resolve_todo(mi::MethodInstance, call_result::Union{Nothing,LocalInfere
     end
 
     # The local result's proof justifies its inferred facts and retained source. The
-    # ordinary call edge remains a separate executable target. An uninformative site
-    # consumed no facts, so it needs these edges only if it commits to the result below.
-    # A direct call emitted for it adds its own.
+    # ordinary call edge remains a separate executable target. An uninformative call needs
+    # them only where the optimizer uses the result.
     uninformative = info isa UninformativeCallInfo
     if !uninformative
         add_inlining_edge!(et, target)
@@ -932,8 +928,7 @@ function resolve_todo(mi::MethodInstance, call_result::Union{Nothing,LocalInfere
         item = compileable_specialization(target, effects, et, info, state)
         if uninformative
             if item !== nothing
-                # The direct call relies on the effects inferred here, so record their proof.
-                # Its dispatch edge was added when the call was built.
+                # The `:invoke` uses the inferred effects, so it needs their proof.
                 add_inference_proof!(et.edges, inference_proof(call_result), target)
             end
         end
@@ -1339,8 +1334,7 @@ end
 
 function extract_indirect_invoke(@nospecialize info::CallInfo)
     info isa MethodResultPure && (info = info.info)
-    # Keep the tag on the returned info, so that the direct call emitted for it still
-    # records this site's dispatch dependency.
+    # Return the info still wrapped, so the `:invoke` made from it adds a dispatch edge.
     matchinfo = info isa UninformativeCallInfo ? info.info : info
     matchinfo isa MethodMatchInfo || return nothing
     length(matchinfo.edges) == length(matchinfo.results) == 1 || return nothing
@@ -1546,9 +1540,8 @@ function handle_call!(todo::Vector{Pair{Int,Any}},
     atype = argtypes_to_type(sig.argtypes)
     atype === Union{} && return nothing # accidentally actually unreachable
     if info isa UninformativeCallInfo && handled_all_cases && !fully_covered
-        # Inference recorded no edges for this site, but the union split emitted below
-        # commits to the lookup being exhaustive by raising a `MethodError` past the
-        # last case, so the uncovered part of the signature must be watched.
+        # The split throws a `MethodError` for types it does not cover, so a method added
+        # for them must invalidate the caller.
         add_uncovered_edges!(state.edges, info.info)
     end
     handle_cases!(todo, ir, idx, stmt, atype, cases, handled_all_cases, fully_covered, joint_effects)
@@ -1632,7 +1625,6 @@ function concrete_result_item(result::ConcreteResult,
         return compileable_specialization(target, result.effects, et, info, state)
     end
     @assert result.effects === EFFECTS_TOTAL
-    # folding the result commits to this method as the call's target, like an `:invoke`
     add_uninformative_dispatch_edge!(et.edges,
         target isa CodeInstance ? get_ci_mi(target) : target, info)
     return ConstantCase(quoted(result.result))
