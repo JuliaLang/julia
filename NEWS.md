@@ -19,11 +19,6 @@ Multi-threading changes
 Build system changes
 --------------------
 
-* Stdlib package images for `--check-bounds=yes` are no longer bundled by default, since `Pkg.test`
-  no longer forces bounds checking. Nightlies and releases provide these as a separate download.
-  Build with `make checkbounds-pkgimages` to create a companion archive, or set
-  `JULIA_CHECK_BOUNDS_PKGIMAGES=1` to bundle them ([#60054]).
-
 New library functions
 ---------------------
 
@@ -32,12 +27,6 @@ New library features
 
 Standard library changes
 ------------------------
-
-* `parse` and `tryparse` for `Float64`, `Float32` and `Float16` are now written in Julia
-  instead of calling the C library: they are faster and give the same results on every
-  platform. `Float16` is now rounded directly instead of through `Float32`, so input out of
-  its range fails as it does for the other types: `tryparse(Float16, "70000")` returns
-  `nothing` instead of `Inf16`.
 
 #### JuliaSyntaxHighlighting
 

@@ -185,6 +185,10 @@ Build system changes
 * Builds now install `libjulia-internal.a` (`libjulia-internal-debug.a` for debug builds), a static
   build of the runtime without the JIT, so that tools such as JuliaC.jl can link it with a trimmed
   system image into one executable ([#63618]).
+* Stdlib package images for `--check-bounds=yes` are no longer bundled by default, since `Pkg.test`
+  no longer forces bounds checking. Nightlies and releases provide these as a separate download.
+  Build with `make checkbounds-pkgimages` to create a companion archive, or set
+  `JULIA_CHECK_BOUNDS_PKGIMAGES=1` to bundle them ([#60054]).
 
 New library functions
 ---------------------
@@ -256,6 +260,11 @@ Standard library changes
 * `isspace` now returns `true` for U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR),
   so that it matches the Unicode `White_Space` property. This affects functions that default to
   `isspace`, such as `split`, `strip` and `parse`, as well as word splitting in command literals.
+* `parse` and `tryparse` for `Float64`, `Float32` and `Float16` are now written in Julia
+  instead of calling the C library: they are faster and give the same results on every
+  platform. `Float16` is now rounded directly instead of through `Float32`, so input out of
+  its range fails as it does for the other types: `tryparse(Float16, "70000")` returns
+  `nothing` instead of `Inf16` ([#63808]).
 * The `Precompiling` messages printed while loading name packages without their uuid when the
   name is unambiguous in the environment, name extensions by their parent package, and say which
   dependency is already loaded at a different version when that is why a cache was not reused ([#63185]).
