@@ -154,9 +154,20 @@ typedef struct jl_ivarbinding_t {
     jl_tvar_t **var;
     jl_value_t **lb;
     jl_value_t **ub;
+    // NULL if var/lb/ub point to stack slots.  Otherwise, this is the GC object
+    // through they are rooted, and we need a write barrier when writing to
+    // them.
+    jl_value_t *owner;
     jl_varbinding_t *root;
     struct jl_ivarbinding_t *next;
 } jl_ivarbinding_t;
+
+static void set_ivar_slot(jl_ivarbinding_t *b, void *slot, jl_value_t *val) JL_NOTSAFEPOINT
+{
+    if (b->owner)
+        jl_gc_wb(b->owner, slot, val);
+    *(jl_value_t**)slot = val;
+}
 
 // subtype algorithm state
 typedef struct JL_GC_TRACKED_TYPE jl_stenv_t {
@@ -4942,6 +4953,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             inew->var = (jl_tvar_t **)&iparams[niparams++]; *inew->var = ivar;
             inew->lb = &iparams[niparams++]; *inew->lb = ivar->lb;
             inew->ub = &iparams[niparams++]; *inew->ub = ivar->ub;
+            inew->owner = (jl_value_t*)p;
             inew->root = vb;
             inew->next = allvars;
             allvars = inew;
@@ -4952,6 +4964,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         inew->var = &btemp->var;
         inew->lb = &btemp->lb;
         inew->ub = &btemp->ub;
+        inew->owner = NULL;
         inew->root = btemp;
         inew->next = allvars;
         allvars = inew;
@@ -4962,6 +4975,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 inew->var = (jl_tvar_t **)&iparams[niparams++]; *inew->var = ivar;
                 inew->lb = &iparams[niparams++]; *inew->lb = ivar->lb;
                 inew->ub = &iparams[niparams++]; *inew->ub = ivar->ub;
+                inew->owner = (jl_value_t*)p;
                 inew->root = btemp;
                 inew->next = allvars;
                 allvars = inew;
@@ -4989,14 +5003,14 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             }
             if (varval) {
                 JL_TRY {
-                    *btemp->lb = jl_substitute_var(ilb, vb->var, varval);
+                    set_ivar_slot(btemp, btemp->lb, jl_substitute_var(ilb, vb->var, varval));
                 }
                 JL_CATCH {
                     res = jl_bottom_type;
                 }
             }
             else if (ilb == (jl_value_t*)vb->var) {
-                *btemp->lb = vb->lb;
+                set_ivar_slot(btemp, btemp->lb, vb->lb);
             }
             else {
                 innerflag |= 1;
@@ -5005,7 +5019,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         if (jl_has_typevar(iub, vb->var)) {
             assert(btemp->root->var == ivar || bdepth0 == vb->depth0);
             if (vb->ub == (jl_value_t*)ivar) {
-                *btemp->ub = omit_bad_union(iub, vb->var);
+                set_ivar_slot(btemp, btemp->ub, omit_bad_union(iub, vb->var));
                 if (*btemp->ub == jl_bottom_type && *btemp->ub != *btemp->lb) {
                     JL_GC_POP();
                     JL_GC_POP();
@@ -5017,14 +5031,14 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 if (iub == NULL)
                     res = jl_bottom_type;
                 else
-                    *btemp->ub = iub;
+                    set_ivar_slot(btemp, btemp->ub, iub);
             }
             else if (iub == (jl_value_t*)vb->var) {
                 // TODO: this loses some constraints, such as in this test, where we replace T4<:S3 (e.g. T4==S3 since T4 only appears covariantly once) with T4<:Any
                 // a = Tuple{Float64,T3,T4} where T4 where T3
                 // b = Tuple{S2,Tuple{S3},S3} where S2 where S3
                 // Tuple{Float64, T3, T4} where {S3, T3<:Tuple{S3}, T4<:S3}
-                *btemp->ub = vb->ub;
+                set_ivar_slot(btemp, btemp->ub, vb->ub);
             }
             else {
                 innerflag |= 2;
@@ -5036,9 +5050,9 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 has_typevar_via_flatten_env(vb->lb, ivar, allvars, checked) ||
                 has_typevar_via_flatten_env(vb->ub, ivar, allvars, checked)) {
                 if (innerflag & 1)
-                    *btemp->lb = jl_new_struct(jl_unionall_type, vb->var, ilb);
+                    set_ivar_slot(btemp, btemp->lb, jl_new_struct(jl_unionall_type, vb->var, ilb));
                 if (innerflag & 2)
-                    *btemp->ub = jl_new_struct(jl_unionall_type, vb->var, iub);
+                    set_ivar_slot(btemp, btemp->ub, jl_new_struct(jl_unionall_type, vb->var, iub));
             }
             else {
                 assert(btemp->root != vb);
@@ -5046,9 +5060,9 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 // move the `where T` outside `where S` instead of putting it here. issue #21243.
                 if (newvar != vb->var) {
                     if (innerflag & 1)
-                        *btemp->lb = jl_substitute_var(ilb, vb->var, (jl_value_t*)newvar);
+                        set_ivar_slot(btemp, btemp->lb, jl_substitute_var(ilb, vb->var, (jl_value_t*)newvar));
                     if (innerflag & 2)
-                        *btemp->ub = jl_substitute_var(iub, vb->var, (jl_value_t*)newvar);
+                        set_ivar_slot(btemp, btemp->ub, jl_substitute_var(iub, vb->var, (jl_value_t*)newvar));
                 }
                 if (!wrapped)
                     pwrap = pbtemp;
@@ -5066,7 +5080,8 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         jl_ivarbinding_t *inew = (jl_ivarbinding_t *)alloca(sizeof(jl_ivarbinding_t));
         inew->var = &newvar;
         inew->lb = &newvar->lb;
-        inew->ub = &newvar->ub;;
+        inew->ub = &newvar->ub;
+        inew->owner = (jl_value_t*)newvar;
         inew->root = wrap->root;
         inew->next = wrap;
         if (pwrap != NULL)
@@ -5131,9 +5146,9 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 ilb = *btemp2->lb;
                 iub = *btemp2->ub;
                 if (jl_has_typevar(ilb, ivar))
-                    *btemp2->lb = jl_substitute_var(ilb, ivar, nivar);
+                    set_ivar_slot(btemp2, btemp2->lb, jl_substitute_var(ilb, ivar, nivar));
                 if (jl_has_typevar(iub, ivar))
-                    *btemp2->ub = jl_substitute_var(iub, ivar, nivar);
+                    set_ivar_slot(btemp2, btemp2->ub, jl_substitute_var(iub, ivar, nivar));
             }
             if (!wrapped && !varval) {
                 // newvar also needs bounds substitution.
@@ -5142,7 +5157,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 if (jl_has_typevar(vb->ub, ivar))
                     vb->ub = jl_substitute_var(vb->ub, ivar, nivar);
             }
-            *btemp1->var = (jl_tvar_t *)nivar;
+            set_ivar_slot(btemp1, btemp1->var, (jl_value_t*)nivar);
         }
     }
 
