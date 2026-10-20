@@ -569,6 +569,25 @@ let vals = Any[Int8(-128), Int16(-32768), typemin(Int32), typemax(Int32), typemi
         @test compiled(Core.BFloat16, n) === Base.invokelatest(cvt, Core.BFloat16, n)
     end
 end
+# 128-bit integer <-> Float16 conversions may lower to libcalls (e.g. `__floattihf`)
+@noinline compiled_fptosi_f16(::Type{T}, x) where {T} = Core.Intrinsics.fptosi(T, x)
+@noinline compiled_fptoui_f16(::Type{T}, x) where {T} = Core.Intrinsics.fptoui(T, x)
+for n in Int128[0, 3, 2049, 2051, 65504, 65519, 65520, 65536, typemax(Int128)]
+    @test compiled_sitofp(Float16, n) === Float16(n)
+    @test compiled_sitofp(Float16, -n) === Float16(-n)
+    @test compiled_uitofp(Float16, UInt128(n)) === Float16(UInt128(n))
+end
+@test compiled_sitofp(Float16, typemin(Int128)) === -Inf16
+@test compiled_uitofp(Float16, typemax(UInt128)) === Inf16
+# LLVM miscompiles negative f16 -> i128 on Win64 with avx512fp16 (zero-extends the i64 result):
+# llvm/llvm-project#230703, fix in llvm/llvm-project#230779
+fptosi_f16_i128_broken = Sys.iswindows() && Sys.ARCH === :x86_64 &&
+    occursin("+avx512fp16", ccall(:jl_get_cpu_features, String, ()))
+for x in Float16[0, 0.5, 2.5, 5, 2049, 65504]
+    @test compiled_fptosi_f16(Int128, x) === trunc(Int128, x)
+    @test compiled_fptosi_f16(Int128, -x) === trunc(Int128, -x) broken=(fptosi_f16_i128_broken && x >= 1)
+    @test compiled_fptoui_f16(UInt128, x) === trunc(UInt128, x)
+end
 @static if Sys.ARCH === :x86_64 || Sys.ARCH === :i686
     script = """
         using InteractiveUtils
