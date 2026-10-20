@@ -42,7 +42,7 @@ using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, AnyType, Meth
     TypeEq,
     _apply_iterate, apply_type, compilerbarrier, const_memoryrefget, donotdelete, memoryref_isassigned,
     memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, memoryrefunset!, print, println, show, svec,
-    typename, unsafe_write, write, stdout, stderr
+    typename, unsafe_memoryrefload, unsafe_memoryrefstore!, unsafe_write, write, stdout, stderr
 
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
     PARTITION_KIND_GLOBAL, PARTITION_KIND_UNDEF_CONST, PARTITION_KIND_BACKDATED_CONST, PARTITION_KIND_DECLARED,

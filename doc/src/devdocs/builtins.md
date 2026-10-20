@@ -25,6 +25,8 @@ Core.memoryrefoffset
 Core.memoryrefget
 Core.const_memoryrefget
 Core.memoryrefset!
+Core.unsafe_memoryrefload
+Core.unsafe_memoryrefstore!
 Core.memoryref_isassigned
 Core.memoryrefswap!
 Core.memoryrefmodify!
