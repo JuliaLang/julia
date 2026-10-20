@@ -28,6 +28,10 @@ New library features
 Standard library changes
 ------------------------
 
+#### Dates
+
+#### InteractiveUtils
+
 #### JuliaSyntaxHighlighting
 
 #### Libdl
@@ -44,19 +48,11 @@ Standard library changes
 
 #### REPL
 
-#### Sockets
-
 #### SharedArrays
 
-#### Test
+#### Sockets
 
 #### Test
-
-#### Dates
-
-#### InteractiveUtils
-
-#### Dates
 
 #### TOML
 
