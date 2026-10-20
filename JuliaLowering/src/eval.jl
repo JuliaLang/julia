@@ -784,10 +784,11 @@ function _eval(mod::Module, iter::LoweringIterator; soft_scope::Union{Nothing,Bo
         if type == :done
             break
         elseif type == :begin_module
-            filename = something(thunk[5].file, :var"")
+            loc = thunk[5]::LineNumberNode
+            filename = something(loc.file, :var"")::Symbol
             mod = @ccall jl_begin_new_module(
-                modules[end]::Any, thunk[3]::Symbol, thunk[2]::Any, thunk[4]::Cint,
-                filename::Cstring, thunk[5].line::Cint)::Module
+                modules[end]::Any, thunk[3]::Symbol, thunk[2]::Any, (thunk[4]::Bool)::Cint,
+                filename::Cstring, loc.line::Cint)::Module
             push!(modules, mod)
         elseif type == :end_module
             @ccall jl_end_new_module(modules[end]::Module)::Cvoid

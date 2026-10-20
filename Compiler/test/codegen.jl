@@ -1360,3 +1360,28 @@ end
     ir = get_llvm(f_srettest, Tuple{Float32}, true, true, true)
     @test occursin(r"sret\([^)]+\) align \d+", ir)
 end
+
+# Indexing a SimpleVector is a load, not a call to the `_svec_ref` builtin
+const const_svec_ref = Core.svec(1, "a", :b)
+@testset "inline _svec_ref" begin
+    svec_ref_test(v::Core.SimpleVector, i::Int) = v[i]
+    ir = get_llvm(svec_ref_test, Tuple{Core.SimpleVector, Int})
+    @test !occursin("jl_f__svec_ref", ir)
+    @test !occursin(r"box_int(?:32|64)", ir)
+    v = Core.svec(1, "a", :b)
+    @test svec_ref_test(v, 1) === 1
+    @test svec_ref_test(v, 3) === :b
+    @test_throws BoundsError(v, 0) svec_ref_test(v, 0)
+    @test_throws BoundsError(v, 4) svec_ref_test(v, 4)
+    @test_throws BoundsError(Core.svec(), 1) svec_ref_test(Core.svec(), 1)
+
+    # a constant svec has a constant length
+    const_svec_ref_test(i::Int) = const_svec_ref[i]
+    ir = get_llvm(const_svec_ref_test, Tuple{Int})
+    @test !occursin("jl_f__svec_ref", ir)
+    @test occursin(Regex("icmp ult $Iptr %\\S+, 3\\b"), ir)
+    @test const_svec_ref_test(1) === 1
+    @test const_svec_ref_test(3) === :b
+    @test_throws BoundsError(const_svec_ref, 0) const_svec_ref_test(0)
+    @test_throws BoundsError(const_svec_ref, 4) const_svec_ref_test(4)
+end

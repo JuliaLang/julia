@@ -24,30 +24,34 @@
         @assert Meta.isexpr(lwr, :thunk) && only(lwr.args) isa Core.CodeInfo
     end
 
-    # @static if VERSION >= v"1.14.0-DEV.2635"
-    #     workload = raw"""
-    #     _precompile_kwf(x; y=1, z=2) = x + y + z
-    #
-    #     function _precompile_destr(t)
-    #         (a, b) = t
-    #         a + b
-    #     end
-    #
-    #     macro _precompile_plus1(ex)
-    #         :($(esc(ex)) + 1)
-    #     end
-    #     _precompile_usemac(x) = @_precompile_plus1(x)
-    #
-    #     @generated function _precompile_genf(x)
-    #         :(x + 1)
-    #     end
-    #
-    #     # Fire everything so inference and the generator run during the build.
-    #     _precompile_kwf(1; y = 2)
-    #     _precompile_destr((1, 2))
-    #     _precompile_usemac(3)
-    #     _precompile_genf(1.0)
-    #     """
-    #     include_string(@__MODULE__, workload, "precompile.jl")
-    # end
+    @static if VERSION >= v"1.14.0-DEV.2635"
+        workload = raw"""
+        _precompile_kwf(x; y=1, z=2) = x + y + z
+
+        function _precompile_destr(t)
+            (a, b) = t
+            a + b
+        end
+
+        macro _precompile_plus1(ex)
+            :($(esc(ex)) + 1)
+        end
+        _precompile_usemac(x) = @_precompile_plus1(x)
+
+        @generated function _precompile_genf(x)
+            :(x + 1)
+        end
+
+        # Fire everything so inference and the generator run during the build.
+        _precompile_kwf(1; y = 2)
+        _precompile_destr((1, 2))
+        _precompile_usemac(3)
+        _precompile_genf(1.0)
+        """
+        # Pin the workload to the 1.14 edition, since its macro returns an
+        # `Expr`, which is not allowed in newer editions.
+        st = JuliaSyntax.parseall(SyntaxTree, workload; filename="precompile.jl",
+                                  version=VersionNumber(JL_OLD_EDITION))
+        eval(@__MODULE__, st)
+    end
 end
