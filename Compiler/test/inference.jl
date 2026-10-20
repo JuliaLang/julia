@@ -2439,9 +2439,10 @@ g23024(TT::Tuple{DataType}) = f23024(TT[1], v23024)
 
 @test !Compiler.isconstType(Type{typeof(Union{})}) # could be Core.TypeofBottom or Type{Union{}} at runtime
 @test !isa(Compiler.getfield_tfunc(Compiler.fallback_lattice, Type{Core.TypeofBottom}, Compiler.Const(:name)), Compiler.Const)
-# values of `Type{typeof(Union{})}` include `UnionAll` spellings (#33136), so
-# `supertype(::UnionAll)` is applicable too; the egal-pinned type stays precise
-@test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Any, Type{Core.AnyType}]
+# values of `Type{typeof(Union{})}` include `UnionAll` spellings (#33136) and the
+# `TypeEq` `Type{Union{}}`, so `supertype(::UnionAll)` and `supertype(::TypeEq)` are
+# applicable too; the egal-pinned type stays precise
+@test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Core.TypeEgal{Core.AnyType}, Any, Type{Core.AnyType}]
 @test Base.return_types(supertype, (Core.TypeEgal{typeof(Union{})},)) == Any[Core.TypeEgal{Core.AnyType}]
 
 # issue #23685
@@ -8247,6 +8248,21 @@ function issue55548(a)
 end
 @test Float64 <: Base.infer_return_type(issue55548, (Int,))
 @test issue55548(Int64(0)) === 1.0
+
+# a `Conditional` on a since-reassigned slot must not be forwarded to const-prop as a
+# constraint on the slot's new value
+_stale_cond_pair(a, b) = (a, b)
+stale_cond1(c, n) = (h = (c && n === nothing); n = 1; _stale_cond_pair(n, h)[2] ? 1 : "")
+stale_cond2(n) = (h = n isa Nothing; n = 1; _stale_cond_pair(n, h)[2] ? 1 : "")
+stale_cond3(n) = _stale_cond_pair(n === nothing, (n = 1; n))[1] ? 1 : ""
+@test Base.infer_return_type(stale_cond1, (Bool, Nothing)) == Union{Int, String}
+@test Base.infer_return_type(stale_cond2, (Union{Nothing,Int},)) == Union{Int, String}
+@test Base.infer_return_type(stale_cond3, (Union{Nothing,Int},)) == Union{Int, String}
+@test stale_cond1(true, nothing) === 1
+# nor be applied to the slot's new value by the `Core.ifelse` refinement for builtins
+stale_cond4(n, m) = (h = n isa Int; n = m; Core.ifelse(h, n, 0))
+@test Base.infer_return_type(stale_cond4, (Union{Nothing,Int}, Union{Nothing,Int})) == Union{Nothing, Int}
+@test stale_cond4(1, nothing) === nothing
 
 # issue #60883: conditional propagation through wrapper functions
 mutable struct A60883

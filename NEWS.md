@@ -186,6 +186,11 @@ Build system changes
   build of the runtime without the JIT, so that tools such as JuliaC.jl can link it with a trimmed
   system image into one executable ([#63618]).
 
+* Stdlib package images for `--check-bounds=yes` are no longer bundled by default, since `Pkg.test`
+  no longer forces bounds checking. Nightlies and releases provide these as a separate download.
+  Build with `make checkbounds-pkgimages` to create a companion archive, or set
+  `JULIA_CHECK_BOUNDS_PKGIMAGES=1` to bundle them ([#60054]).
+
 New library functions
 ---------------------
 
@@ -243,6 +248,10 @@ New library features
   `__builtin_cpu_supports`, tests whether code generation for the current target enables the named
   LLVM target features or CPU model. It is folded to a constant at compile time, separately for each
   multiversioning clone, so the untaken branch of an `if` on it is removed ([#61793]).
+* New function `eachentry(dir)` returns a stateful, single-pass iterator yielding filename `String`s
+  without first materializing the full listing. `eachentry(dir, DirEntry)` yields `DirEntry` objects
+  instead. Useful for very large directories or when iteration may be short-circuited. A do-block form
+  `eachentry(f, dir[, DirEntry])` ensures deterministic resource cleanup ([#62164]).
 
 Standard library changes
 ------------------------
@@ -252,6 +261,11 @@ Standard library changes
 * `isspace` now returns `true` for U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR),
   so that it matches the Unicode `White_Space` property. This affects functions that default to
   `isspace`, such as `split`, `strip` and `parse`, as well as word splitting in command literals.
+* `parse` and `tryparse` for `Float64`, `Float32` and `Float16` are now written in Julia
+  instead of calling the C library: they are faster and give the same results on every
+  platform. `Float16` is now rounded directly instead of through `Float32`, so input out of
+  its range fails as it does for the other types: `tryparse(Float16, "70000")` returns
+  `nothing` instead of `Inf16`.
 * The `Precompiling` messages printed while loading name packages without their uuid when the
   name is unambiguous in the environment, name extensions by their parent package, and say which
   dependency is already loaded at a different version when that is why a cache was not reused ([#63185]).
@@ -275,11 +289,6 @@ Standard library changes
 * `Libdl.LazyLibrary` is not compatible with `--trim`.
 * A new abstract type `Libdl.LazyLibraryCallback` has been added to provide
   an automatic compilation hint for LazyLibrary on-load callbacks under trim.
-* Library types used with `ccall` / `cglobal` can now subtype `Libdl.AbstractLibrary`
-  to opt-in to `Libdl.dlid` support. This allows libraries to identify themselves
-  at precompilation time by implementing `Libdl.dlid` and providing a `Libdl.LibraryID`.
-  The `LibraryID` is used by `JuliaC.jl` and the runtime to report required libraries
-  and symbols for `--trim` applications and configure linking on a per-library basis.
 
 #### LinearAlgebra
 

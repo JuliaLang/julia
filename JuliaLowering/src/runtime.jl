@@ -54,7 +54,7 @@ function _interpolate_expr(@nospecialize(ex), @nospecialize(values::Tuple))
     @jl_assert !Meta.isexpr(ex, :$) (expr_to_est(ex), "expand_quote should handle this")
     __interpolate_expr(ex, 0, values, Ref(0))
 end
-function interpolate_expr(@nospecialize(ex), @nospecialize(values...))
+@noinline function interpolate_expr(@nospecialize(ex), @nospecialize(values...))
     return _interpolate_expr(ex, values)
 end
 
@@ -88,7 +88,7 @@ function _interpolate_syntax(st::SyntaxTree, @nospecialize(vals::Tuple))
     @jl_assert numchildren(out) == 1 st
     out[1]
 end
-function interpolate_syntax(st::SyntaxTree, @nospecialize(vals...))
+@noinline function interpolate_syntax(st::SyntaxTree, @nospecialize(vals...))
     return invoke_in_lowering_world(_interpolate_syntax, st, vals)::SyntaxTree
 end
 

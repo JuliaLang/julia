@@ -16,3 +16,5 @@ CODEOWNERS @JuliaLang/github-actions
 /test/gcext/gcext.c @fingolfin
 /src/gc-* @udesou @qinsoon @d-netto
 /stdlib/Markdown @fingolfin
+/JuliaLowering @mlechu
+/base/syntax.jl @mlechu

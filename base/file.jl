@@ -10,6 +10,7 @@ export
     cptree,
     DirEntry,
     diskstat,
+    eachentry,
     hardlink,
     mkdir,
     mkpath,
@@ -1202,6 +1203,150 @@ function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=fa
         return entries
     finally
         Libc.free(req)
+    end
+end
+
+"""
+    DirEntryIterator{T}
+
+A stateful, single-pass iterator over the entries of a directory, yielding
+either filename `String`s or [`DirEntry`](@ref) objects depending on the
+element type `T`. Created by [`eachentry`](@ref).
+
+The underlying directory handle is opened lazily on the first call to
+`iterate` (via `uv_fs_opendir`) and is released when iteration reaches
+end-of-directory, when [`close`](@ref) is called, or by a finalizer.
+Entries are streamed one at a time from the operating system; the full
+listing is never materialized in memory. For deterministic cleanup on
+very large directories, prefer the do-block form of `eachentry`.
+
+A `DirEntryIterator` is single-consumer: do not iterate or close it from
+multiple tasks concurrently. Calling `close` from a finalizer while the
+owning task has finished iterating is safe.
+"""
+mutable struct DirEntryIterator{T}
+    const dir::String
+    # Yield joinpath(dir, name) instead of the bare name (String eltype only)
+    const join::Bool
+    # Opaque uv_dir_t*, C_NULL before opening and after closing. Whoever swaps it to C_NULL closes it.
+    @atomic uvdir::Ptr{Cvoid}
+    const status::RefValue{Cint}
+    closed::Bool
+    function DirEntryIterator{T}(dir::AbstractString, join::Bool=false) where {T}
+        T === String || T === DirEntry || throw(ArgumentError("element type must be String or DirEntry"))
+        finalizer(close, new{T}(String(dir), join, C_NULL, RefValue{Cint}(0), false))
+    end
+end
+
+function _eachentry_open!(it::DirEntryIterator)
+    it.uvdir == C_NULL || return
+    it.closed && throw(ArgumentError("DirEntryIterator has already been consumed"))
+    dir_out = Ref{Ptr{Cvoid}}(C_NULL)
+    err = ccall(:jl_uv_fs_opendir, Cint,
+                (Cstring, Ptr{Ptr{Cvoid}}),
+                it.dir, dir_out)
+    if err < 0
+        it.closed = true
+        uv_error("eachentry($(repr(it.dir)))", err)
+    end
+    @atomic it.uvdir = dir_out[]
+    return
+end
+
+function Base.close(it::DirEntryIterator)
+    # Atomically claim the dir pointer so a concurrent finalizer cannot double-free.
+    uvdir = @atomicswap it.uvdir = C_NULL
+    if uvdir != C_NULL
+        ccall(:jl_uv_fs_closedir, Cint, (Ptr{Cvoid},), uvdir)
+    end
+    it.closed = true
+    return
+end
+
+Base.IteratorSize(::Type{<:DirEntryIterator}) = Base.SizeUnknown()
+Base.eltype(::Type{DirEntryIterator{T}}) where {T} = T
+Base.isdone(it::DirEntryIterator, _=nothing) = it.closed
+
+function Base.iterate(it::DirEntryIterator{T}, _=nothing) where {T}
+    _eachentry_open!(it)
+    name = ccall(:jl_uv_fs_readdir1, Any, (Ptr{Cvoid}, Ptr{Cint}), it.uvdir, it.status)
+    if name === nothing
+        err = it.status[]
+        close(it)
+        err < 0 && uv_error("eachentry($(repr(it.dir)))", err)
+        return nothing
+    end
+    name = name::String
+    value = T === DirEntry ? DirEntry(it.dir, name, it.status[]) :
+            it.join ? joinpath(it.dir, name) : name
+    return value, nothing
+end
+
+"""
+    eachentry(dir::AbstractString=pwd(); join::Bool=false)::DirEntryIterator{String}
+    eachentry(entry::DirEntry; join::Bool=false)::DirEntryIterator{String}
+    eachentry(dir::AbstractString, ::Type{DirEntry})::DirEntryIterator{DirEntry}
+    eachentry(::Type{DirEntry})::DirEntryIterator{DirEntry}
+    eachentry(entry::DirEntry, ::Type{DirEntry})::DirEntryIterator{DirEntry}
+    eachentry(f, dir[, ::Type{DirEntry}]; kwargs...) -> f(::DirEntryIterator)
+
+Return a stateful, single-pass iterator over the contents of the directory `dir`
+(or the current working directory if not given), without first materializing the
+full listing. Useful for very large directories or when iteration may be
+short-circuited (e.g. with `break` or [`Iterators.take`](@ref)).
+
+By default the iterator yields filename `String`s, matching [`readdir`](@ref);
+if `join` is true it yields `joinpath(dir, name)` for each name instead.
+Pass `DirEntry` as the trailing type argument to yield [`DirEntry`](@ref)
+objects, which carry the entry type as cached at scan time so [`isfile`](@ref),
+[`isdir`](@ref), etc. can be checked without further `stat` calls (the full
+path of a `DirEntry` is available via `joinpath(entry)`, so there is no `join`
+keyword for that form, as with `readdir(dir, DirEntry)`).
+
+Unlike [`readdir`](@ref), the entries are returned in filesystem order (not
+sorted) and the iterator can only be traversed once. The do-block form ensures
+the underlying directory handle is released as soon as `f` returns; otherwise
+cleanup happens at end-of-iteration, on [`close`](@ref), or via a finalizer.
+
+See also [`readdir`](@ref), [`DirEntry`](@ref), [`walkdir`](@ref).
+
+!!! compat "Julia 1.14"
+    `eachentry` requires Julia 1.14 or later.
+
+# Examples
+```julia
+# short-circuit a huge directory
+for entry in eachentry("/very/large/dir", DirEntry)
+    isfile(entry) && basename(entry) == "needle.txt" && break
+end
+
+# deterministic cleanup
+eachentry("/very/large/dir") do names
+    for name in names
+        ...
+    end
+end
+```
+"""
+eachentry(dir::AbstractString=pwd(); join::Bool=false) = DirEntryIterator{String}(dir, join)
+eachentry(entry::DirEntry; join::Bool=false) = DirEntryIterator{String}(joinpath(entry), join)
+eachentry(dir::AbstractString, ::Type{DirEntry}) = DirEntryIterator{DirEntry}(dir)
+eachentry(::Type{DirEntry}) = DirEntryIterator{DirEntry}(pwd())
+eachentry(entry::DirEntry, ::Type{DirEntry}) = DirEntryIterator{DirEntry}(joinpath(entry))
+function eachentry(f, dir; join::Bool=false)
+    it = eachentry(dir; join)
+    try
+        return f(it)
+    finally
+        close(it)
+    end
+end
+function eachentry(f, dir, ::Type{DirEntry})
+    it = eachentry(dir, DirEntry)
+    try
+        return f(it)
+    finally
+        close(it)
     end
 end
 

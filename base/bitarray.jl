@@ -107,6 +107,8 @@ isassigned(B::BitArray, i::Int) = 1 <= i <= length(B)
 
 IndexStyle(::Type{<:BitArray}) = IndexLinear()
 
+dataids(B::BitArray) = dataids(B.chunks)
+
 ## aux functions ##
 
 const _msk64 = ~UInt64(0)
@@ -1125,7 +1127,7 @@ function splice!(B::BitVector, r::Union{AbstractUnitRange{Int}, Integer}, ins)
     Bins = BitVector(undef, length(ins))
     i = 1
     for x in ins
-        Bins[i] = Bool(x)
+        Bins[i] = x
         i += 1
     end
     return splice!(B, r, Bins)

@@ -54,7 +54,7 @@ shouldlog(logger::ConsoleLogger, level, _module, group, id) =
 min_enabled_level(logger::ConsoleLogger) = logger.min_level
 
 # Formatting of values in key value pairs
-showvalue(io, msg) = show(io, "text/plain", msg)
+showvalue(io, msg) = show(io, MIME"text/plain"(), msg)
 function showvalue(io, e::Tuple{Exception,Any})
     ex,bt = e
     bt = Base.scrub_repl_backtrace(bt)

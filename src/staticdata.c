@@ -154,7 +154,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    7
+#define NUM_TAGS    6
 
 // An array of special references that need to be restored from the sysimg
 static void get_tags(jl_value_t **tags[NUM_TAGS])
@@ -166,7 +166,6 @@ static void get_tags(jl_value_t **tags[NUM_TAGS])
     INSERT_TAG(jl_module_init_order);
     INSERT_TAG(jl_typeinf_func);
     INSERT_TAG(jl_compile_and_emit_func);
-    INSERT_TAG(jl_libdl_dlid_func);
     INSERT_TAG(jl_libdl_dlopen_func);
     // n.b. must update NUM_TAGS when you add something here
 #undef INSERT_TAG
@@ -1822,8 +1821,8 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                     if (isunion)
                         write_uint8(f, nth);
                 }
-                else if (t->name->mutabl && jl_is_cpointer_type(jl_field_type_concrete(t, i)) && *(intptr_t*)slot != -1) {
-                    // reset Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
+                else if (!jl_field_isconst(t, i) && jl_is_cpointer_type(jl_field_type_concrete(t, i)) && *(intptr_t*)slot != -1) {
+                    // reset non-const Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
                     assert(!jl_field_isptr(t, i));
                     write_pointer(f);
                 }

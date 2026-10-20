@@ -701,6 +701,17 @@ mktempdir() do dir
     # simple command in shell mode still works
     shell_mode_run("$echostr simple > $outstr")
     @test read(outfile, String) == "simple\n"
+    # shell mode preserves a Cmd's env and dir. The redirect is inside the command
+    # because `cmd > file` is a CmdRedirect, which repl_cmd runs without the shell
+    # wrapping under test; `global` is needed as shell_mode_run interpolates via eval.
+    if !Sys.iswindows()
+        global envcmd = Cmd(`$shcmd -c "echo \$HOWLONG > $outstr"`, env=("HOWLONG" => "ever!",))
+        shell_mode_run("\$envcmd")
+        @test read(outfile, String) == "ever!\n"
+        global dircmd = Cmd(`$shcmd -c "pwd > $outstr"`, dir=dir)
+        shell_mode_run("\$dircmd")
+        @test samefile(strip(read(outfile, String)), dir)
+    end
 end
 
 let roundtrip(s) = first(Base.shell_split(Base.shell_escape(s))) == s

@@ -351,7 +351,6 @@ private:
     SmallVector<int, 0> NumberAllBase(State &S, Value *Base);
 
     void NoteOperandUses(State &S, BBState &BBS, Instruction &UI);
-    void MaybeTrackDst(State &S, MemTransferInst *MI);
     bool MaybeTrackStore(State &S, StoreInst *I);
     State LocalScan(Function &F);
     void ComputeLiveness(State &S);
@@ -363,7 +362,6 @@ private:
     void PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAssignedColors, State &S, std::map<Value *, std::pair<int, int>>);
     void CleanupWriteBarriers(Function &F, State *S, const SmallVector<CallInst*, 0> &WriteBarriers, bool *CFGModified);
     bool CleanupIR(Function &F, State *S, bool *CFGModified);
-    void NoteUseChain(State &S, BBState &BBS, User *TheUser);
     SmallVector<int, 1> GetPHIRefinements(PHINode *phi, State &S);
     void FixUpRefinements(ArrayRef<int> PHINumbers, State &S);
     void RefineLiveSet(LargeSparseBitVector &LS, State &S, ArrayRef<int> CalleeRoots);
