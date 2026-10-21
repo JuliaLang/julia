@@ -262,8 +262,8 @@ end
 _eof_nolock(s::IOStream) = ccall(:ios_eof_blocking, Cint, (Ptr{Cvoid},), s.ios) != 0
 function eof(s::IOStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
     # entry check only: IOStream reads block in C and are not
-    # interruptible (likewise for every `check_io_cancel` below)
-    check_io_cancel(cancel)
+    # interruptible (likewise for every `check_cancel_arg` below)
+    check_cancel_arg(cancel)
     @_lock_ios s _eof_nolock(s)
 end
 
@@ -429,7 +429,7 @@ end
 bytesavailable(s::IOStream) = @_lock_ios s ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
 
 function readavailable(s::IOStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
-    check_io_cancel(cancel)
+    check_cancel_arg(cancel)
     lock(s.lock)
     nb = ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
     if nb == 0
@@ -488,7 +488,7 @@ take!(s::IOStream) =
     @_lock_ios s ccall(:jl_take_buffer, Vector{UInt8}, (Ptr{Cvoid},), s.ios)
 
 function readuntil(s::IOStream, delim::UInt8; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
-    check_io_cancel(cancel)
+    check_cancel_arg(cancel)
     @_lock_ios s ccall(:jl_readuntil, Vector{UInt8}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 0, !keep)
 end
 
@@ -497,18 +497,18 @@ function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, !keep)
 end
 function readuntil(s::IOStream, delim::AbstractChar; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
-    tok = check_io_cancel(cancel)
+    tok = check_cancel_arg(cancel)
     return isascii(delim) ? readuntil_string(s, delim % UInt8, keep) :
         takestring!(copyuntil(IOBuffer(sizehint=70), s, delim; keep, cancel=tok))
 end
 
 function readline(s::IOStream; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
-    check_io_cancel(cancel)
+    check_cancel_arg(cancel)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
 end
 
 function copyuntil(out::IOBuffer, s::IOStream, delim::UInt8; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
-    check_io_cancel(cancel)
+    check_cancel_arg(cancel)
     ensureroom(out, 1) # make sure we can read at least 1 byte, for iszero(n) check below
     while true
         d = out.data
@@ -533,7 +533,7 @@ function copyuntil(out::IOBuffer, s::IOStream, delim::UInt8; keep::Bool=false, c
 end
 
 function copyuntil(out::IOStream, s::IOStream, delim::UInt8; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
-    check_io_cancel(cancel)
+    check_cancel_arg(cancel)
     @_lock_ios out @_lock_ios s ccall(:ios_copyuntil, Csize_t,
         (Ptr{Cvoid}, Ptr{Cvoid}, UInt8, Cint), out.ios, s.ios, delim, keep)
     return out
@@ -598,7 +598,7 @@ all stream types support the `all` option.
 """
 function readbytes!(s::IOStream, b::MutableDenseArrayType{UInt8}, nb=length(b); all::Bool=true,
                     cancel::CancelTokenArg=DEFAULT_CANCEL)
-    check_io_cancel(cancel)
+    check_cancel_arg(cancel)
     return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
 end
 
@@ -644,7 +644,7 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 all stream types support the `all` option.
 """
 function read(s::IOStream, nb::Integer; all::Bool=true, cancel::CancelTokenArg=DEFAULT_CANCEL)
-    check_io_cancel(cancel)
+    check_cancel_arg(cancel)
     # When all=false we have to allocate a buffer of the requested size upfront
     # since a single call will be made
     b = Vector{UInt8}(undef, all && nb == typemax(Int) ? 1024 : nb)

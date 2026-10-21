@@ -1008,8 +1008,7 @@ function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false,
 end
 
 function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
-    tok = resolve_cancel_token(cancel)
-    @cancel_check tok
+    tok = check_cancel_arg(cancel)
     # If the data is copied into the middle of the buffer of `out` instead of appended to the end,
     # and !keep, and the line copied ends with \r\n, then the copyuntil (even if keep=false)
     # will overwrite one too many bytes with the new \r byte.

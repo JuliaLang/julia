@@ -1127,10 +1127,3 @@ end
 # Spelled `cancel = precheck_cancel_arg(cancel)` at the top of such APIs.
 @inline precheck_cancel_arg(cancel::CancelTokenArg) =
     cancel isa UseDefaultToken ? cancel : check_cancel_arg(cancel)
-
-# `check_cancel_arg` plus a GC safepoint, for IO methods: unlike `@cancel_check`
-# it opens no reset region, which the next read would close again.
-@inline function check_io_cancel(cancel::CancelTokenArg)
-    GC.safepoint()
-    return check_cancel_arg(cancel)
-end
