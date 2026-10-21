@@ -2379,10 +2379,11 @@ function compute_preds(bbs::Vector{BasicBlock}, result_bbs::Vector{Int}, bb_rena
             continue
         end
         r = bb_rename_pred[pred]
-        (r == -2 || r == -1) && continue
+        r == -2 && continue
         if r == -3
             prepend!(preds, bbs[pred].preds)
         else
+            @assert r > 0
             push!(res, r)
         end
     end
@@ -2583,9 +2584,9 @@ function cfg_simplify!(ir::IRCode)
     # Figure out how predecessors should be renamed
     for i = 1:length(bbs)
         if merged_succ[i] != 0
-            # Block `i` should no longer be a predecessor (before renaming)
-            # because it is being merged with its sole successor
-            bb_rename_pred[i] = -1
+            # Block `i` is merged into its sole successor, so it is no longer a
+            # predecessor. It stays 0 (or -2 if unreachable): compaction takes a
+            # negative value to mean that the block's statements are dropped.
             continue
         end
         pred = i
@@ -2701,7 +2702,7 @@ function cfg_simplify!(ir::IRCode)
                             else
                                 resize!(values, length(values)+1)
                             end
-                        elseif new_edge == -1
+                        elseif new_edge == 0
                             @assert length(phi.edges) == 1
                             if isassigned(phi.values, old_index)
                                 val = process_phinode_value(phi.values, old_index, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
