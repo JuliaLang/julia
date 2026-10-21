@@ -24,7 +24,8 @@ images against them, and rewrites the libraries using that profile.
 | `USE_PGO` | 1 | Build and profile stage 1, then optimize with it |
 | `USE_LTO` | 1 | Build stage 2 with ThinLTO |
 | `LTO_JOBS` | 8 on 32-bit targets, else the linker's default | ThinLTO backend threads per link (Linux only) |
-| `STAGE1_CPU_TARGET` | `generic` | CPU target of the instrumented build |
+| `STAGE0_LLVM_TARGETS` | `host` and the target's | Backends of the stage-0 toolchain when cross-compiling |
+| `STAGE1_CPU_TARGET` | the first of `JULIA_CPU_TARGET` | CPU target of the instrumented build |
 | `STAGE0_BUILD` | `$(CURDIR)/toolchain` | Toolchain build directory |
 | `STAGE1_BUILD` | `$(CURDIR)/pgo-instrumented.build` | Instrumented build directory |
 | `STAGE2_BUILD` | `$(CURDIR)/optimized.build` | Optimized build directory |
@@ -83,6 +84,11 @@ stage supplies Clang's profile runtime to Julia's direct linker invocations.
 The runtime export map is applied through a COFF export definition. A discovery
 link identifies exports from the objects and archive members actually used;
 the final link exports the matching names and explicitly exported symbols.
+
+Cross-compiled Linux builds (`XC_HOST`) work too, e.g. riscv64 on x86-64.
+Stage 0 then builds clang and lld from source with the target's backend, and
+takes the target's profile runtime from BinaryBuilder. Stage 1 must be able to
+run target binaries, e.g. through qemu-user and binfmt_misc.
 
 Windows i686 optimized builds are not supported. Its native BinaryBuilder
 toolchain is 32-bit, making address space a constraint for ThinLTO links of

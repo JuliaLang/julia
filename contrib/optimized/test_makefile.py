@@ -26,9 +26,9 @@ if args[0] == 'configure':
     if p.exists():
         sys.exit('configure called on existing directory')
     (p / 'deps').mkdir(parents=True)
-    recipe = 'all julia-deps julia-src-release julia-symlink julia-libccalltest julia-libccalllazyfoo julia-libccalllazybar julia-libllvmcalltest:\n\t@python3 ' + str(root / 'helper.py') + ' build $@ "$(CFLAGS)" "$(LDFLAGS)" "$(JULIA_CPU_TARGET)" "$(USE_BINARYBUILDER_LLVM)" "$(LD)" "$(WIN_LD_USE_DEF)" "$(WIN_LD_EXTRA_LIBS)" "$(LINK_LDFLAGS)" "$(CXXFLAGS)" "$(CC)" "$(CXX)"\n'
+    recipe = 'all julia-deps julia-src-release julia-symlink julia-libccalltest julia-libccalllazyfoo julia-libccalllazybar julia-libllvmcalltest:\n\t@python3 ' + str(root / 'helper.py') + ' build $@ "$(CFLAGS)" "$(LDFLAGS)" "$(JULIA_CPU_TARGET)" "$(USE_BINARYBUILDER_LLVM)" "$(LD)" "$(WIN_LD_USE_DEF)" "$(WIN_LD_EXTRA_LIBS)" "$(LINK_LDFLAGS)" "$(CXXFLAGS)" "$(CC)" "$(CXX)" "$(HOSTCC)"\n'
     (p / 'Makefile').write_text(recipe)
-    (p / 'deps/Makefile').write_text('%:\n\t@python3 ' + str(root / 'helper.py') + ' install $@ "$(USE_BINARYBUILDER_LLVM)" "$(OS)" "$(USE_BINARYBUILDER_CSL)"\n')
+    (p / 'deps/Makefile').write_text('%:\n\t@python3 ' + str(root / 'helper.py') + ' install $@ "$(USE_BINARYBUILDER_LLVM)" "$(OS)" "$(USE_BINARYBUILDER_CSL)" "$(XC_HOST)" "$(LLVM_TARGETS)" "$(LLVM_ENABLE_PROJECTS)"\n')
 elif args[0] == 'install' and args[3] == 'WINNT':
     stage = pathlib.Path.cwd().parent
     (stage / 'usr/bin').mkdir(parents=True, exist_ok=True)
@@ -37,6 +37,18 @@ elif args[0] == 'install' and args[3] == 'WINNT':
     runtime = stage / 'usr/lib/clang/22/lib/windows'
     runtime.mkdir(parents=True, exist_ok=True)
     (runtime / 'libclang_rt.profile-x86_64.a').write_text('runtime')
+elif args[0] == 'install' and os.getenv('MOCK_CROSS'):
+    stage = pathlib.Path.cwd().parent
+    if stage.name == 'toolchain' and args[1] == 'install-llvm':
+        tools = stage / 'usr/tools'
+        tools.mkdir(parents=True, exist_ok=True)
+        (tools / 'clang').write_text('#!/bin/sh\necho ' + str(stage / 'usr/lib/clang/23') + '\n')
+        (tools / 'clang').chmod(0o755)
+    elif stage.name == 'toolchain-target' and args[1] == 'install-clang':
+        runtime = stage / 'usr/lib/clang/23/lib/linux'
+        runtime.mkdir(parents=True, exist_ok=True)
+        for arch in ['riscv64', 'i386']:
+            (runtime / ('libclang_rt.profile-' + arch + '.a')).write_text('runtime')
 elif args[0] == 'install' and args[1] == 'install-clang' and os.getenv('MOCK_LIBSTDCXX'):
     tools = pathlib.Path.cwd().parent / 'usr/tools'
     tools.mkdir(parents=True, exist_ok=True)
@@ -67,6 +79,8 @@ elif args[0] == 'bolt':
         sys.exit(1)
     assert pathlib.Path(args[1]).read_text() == 'original'
     pathlib.Path(args[args.index('-o') + 1]).write_text('instrumented' if '--instrument' in args else 'optimized')
+elif args[0] == 'objcopy' and '--rename-section' in args:
+    pathlib.Path(args[-1]).write_text('renamed')
 elif args[0] == 'objcopy':
     assert pathlib.Path(args[-1]).read_text() == 'optimized', args
 '''
@@ -175,6 +189,44 @@ class FlowTests(unittest.TestCase):
                 self.assertNotIn('-gline-tables-only', args[2])
                 self.assertIn('-flto=thin', args[2])
                 self.assertIn('-fprofile-use=', args[2])
+
+    def test_cross_compiling_stage0(self):
+        # The downloaded toolchain would run on the target: build one for the
+        # build machine with the target's backend, plus the target's runtime.
+        env = dict(os.environ, MOCK_CROSS='1')
+        for arch, triple, march, backend, runtime_arch, cpu in [
+                ('riscv64', 'riscv64-linux-gnu', 'rv64gc', 'RISCV', 'riscv64', 'generic-rv64,i,m,a,f,d,zicsr,c'),
+                ('i686', 'i686-linux-gnu', 'pentium4', 'X86', 'i386', 'pentium4;sandybridge')]:
+            with self.subTest(arch=arch):
+                for child in self.flow.iterdir():
+                    if child.name != 'Makefile':
+                        shutil.rmtree(child) if child.is_dir() else child.unlink()
+                (self.root / 'events').unlink(missing_ok=True)
+                # CI passes USE_BINARYBUILDER_LLVM=0 to the stages, possibly on the command line.
+                self.make('all', 'OS=Linux', 'XC_HOST=' + triple, 'ARCH=' + arch, 'BUILD_OS=Linux', 'MARCH=' + march,
+                          'USE_BOLT=0', 'USE_BINARYBUILDER_LLVM=0', 'JULIA_CPU_TARGET=' + cpu, env=env)
+                installs = [(d, a) for d, a in self.events() if a[0] == 'install']
+                # The first two run in parallel.
+                self.assertCountEqual([(d, a[1:]) for d, a in installs], [
+                    ('deps', ['install-llvm', '0', 'Linux', '', '', 'host;' + backend, 'clang;lld']),
+                    ('deps', ['install-zstd', '0', 'Linux', '', '', 'host;' + backend, 'clang;lld']),
+                    ('deps', ['install-clang', '1', 'Linux', '', triple, '', '']),
+                ])
+                runtimes = self.flow / 'toolchain/usr/lib/clang/23/lib/linux'
+                self.assertEqual([p.name for p in runtimes.iterdir()], ['libclang_rt.profile-' + runtime_arch + '.a'])
+                self.assertEqual((runtimes / ('libclang_rt.profile-' + runtime_arch + '.a')).read_text(), 'renamed')
+                builds = [a for d, a in self.events() if a[0] == 'build']
+                self.assertTrue(builds)
+                for a in builds:
+                    for compiler in (a[11], a[12]):
+                        self.assertIn(f'--target={triple} -march={march}', compiler)
+                    self.assertEqual(a[13], str(self.flow / 'toolchain/usr/tools/clang'))
+                # Stage 1 builds for the baseline, e.g. with riscv64's floating-point ABI.
+                stage1 = [a for d, a in self.events() if a[0] == 'build' and d == 'pgo-instrumented.build']
+                self.assertTrue(stage1)
+                self.assertTrue(all(a[4] == cpu.split(';')[0] for a in stage1))
+        out = self.make('--eval=review:;@echo "$(STAGE0_LLVM_TARGETS)"', 'review', 'XC_HOST=riscv64-linux-gnu', 'ARCH=riscv64', 'STAGE0_LLVM_TARGETS=X86;RISCV')
+        self.assertEqual(out.strip(), 'X86;RISCV')
 
     def test_bolt_flags_per_architecture(self):
         # cdsplit and the jump table mode are x86-only; BOLT rejects the former
