@@ -203,7 +203,7 @@ for f in [getindex, setindex!]
     @test String(take!(buf)) == ""
 end
 
-PR16155line = @__LINE__() + 2
+PR16155line = @__LINE__() + 1
 mutable struct PR16155
     a::Int64
     b
