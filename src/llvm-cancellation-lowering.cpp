@@ -96,6 +96,30 @@ static bool isImplicitRuntimeCall(CallInst *CI) {
     return Name.starts_with("ijl_") || Name.starts_with("jl_");
 }
 
+// How the unsafe-point walk treats an intrinsic call.
+enum class IntrinsicRule {
+    Span,  // never an unsafe point
+    Store, // unsafe where a store is
+    Call,  // unsafe like any untagged call
+};
+
+// Follows the memory effects LLVM declares. They describe a completed call,
+// but a reset abandons it midway, so a few calls can leave state behind: a
+// backward libc memmove sets the direction flag and glibc's software fma
+// switches the rounding mode (the reset redirect restores both), and
+// __tls_get_addr behind llvm.threadlocal.address can allocate under a lock.
+static IntrinsicRule intrinsicRule(IntrinsicInst *II) {
+    // modeled as writes only to keep them in place
+    if (II->getIntrinsicID() == Intrinsic::prefetch || II->isAssumeLikeIntrinsic())
+        return IntrinsicRule::Span;
+    MemoryEffects ME = II->getMemoryEffects();
+    if (ME.onlyReadsMemory())
+        return IntrinsicRule::Span;
+    if (ME.onlyAccessesArgPointees())
+        return IntrinsicRule::Store;
+    return IntrinsicRule::Call;
+}
+
 namespace {
 
 struct CancellationLowering : public JuliaPassContext {
@@ -528,13 +552,19 @@ bool CancellationLowering::runOnFunction(Function &F) {
                 if (instrumented && LI->isVolatile() && !hasResetSafeMetadata(LI))
                     UnsafePoints.push_back(LI);
             }
-            // Check for calls (but not debug intrinsics, lifetime markers, etc.)
             else if (auto *CI = dyn_cast<CallInst>(&I)) {
-                // Skip debug intrinsics and other harmless intrinsics
-                if (isa<DbgInfoIntrinsic>(CI))
-                    continue;
-                if (CI->isLifetimeStartOrEnd())
-                    continue;
+                // Intrinsics never carry reset_safe metadata; see intrinsicRule.
+                auto *II = dyn_cast<IntrinsicInst>(CI);
+                if (II && II->getIntrinsicID() != Intrinsic::not_intrinsic) {
+                    IntrinsicRule Rule = intrinsicRule(II);
+                    if (Rule == IntrinsicRule::Span)
+                        continue;
+                    if (Rule == IntrinsicRule::Store) {
+                        if (instrumented && !hasResetSafeMetadata(II))
+                            UnsafePoints.push_back(II);
+                        continue;
+                    }
+                }
 
                 // Check for reset_safe metadata (in both walks: an untagged
                 // call in a merely-reset_safe function may invoke code whose
@@ -546,21 +576,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
                 // describes the source statement's IPO contract, not the
                 // runtime frames implementing it).
                 if (!hasResetSafeMetadata(CI) || isImplicitRuntimeCall(CI)) {
-                    // Also skip intrinsic calls that are known safe
                     Function *Callee = CI->getCalledFunction();
-                    if (Callee && Callee->isIntrinsic()) {
-                        Intrinsic::ID ID = Callee->getIntrinsicID();
-                        if (ID == Intrinsic::lifetime_start ||
-                            ID == Intrinsic::lifetime_end ||
-                            ID == Intrinsic::dbg_declare ||
-                            ID == Intrinsic::dbg_value ||
-                            ID == Intrinsic::dbg_label ||
-                            ID == Intrinsic::assume ||
-                            ID == Intrinsic::expect ||
-                            ID == Intrinsic::prefetch) {
-                            continue;
-                        }
-                    }
                     // Skip the setjmp and safepoint calls we just created
                     if (Callee && (Callee->getName() == jl_setjmp_name ||
                                    Callee->getName() == "julia.safepoint"))
@@ -572,6 +588,9 @@ bool CancellationLowering::runOnFunction(Function &F) {
                     // object), and must not invalidate a reset region
                     // published across an adjacent reset-safe foreign call.
                     if (Callee && (Callee == pointer_from_objref_func || Callee == gc_loaded_func))
+                        continue;
+                    // `GC.@preserve` markers; LateLowerGCFrame deletes them
+                    if (Callee && (Callee == gc_preserve_begin_func || Callee == gc_preserve_end_func))
                         continue;
                     // Allocations and write barriers are safe to span:
                     // FinalLowerGC (stock and MMTk) lowers annotated sites
