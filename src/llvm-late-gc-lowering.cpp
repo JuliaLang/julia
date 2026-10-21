@@ -1858,6 +1858,111 @@ static MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
     return MDBuilder(Tag->getContext()).createMutableTBAAAccessTag(Tag);
 }
 
+// A fresh object cannot become old before a safepoint (cf. `jl_gc_wb_fresh`). Remove the write
+// barriers whose parent allocation has run since the last safepoint on every path to them.
+//
+// Allocations are safepoints themselves, so at most one allocation is known fresh at any point. A forward
+// must-analysis tracks it per block: safepoints clear it, an allocation replaces it, and joins keep
+// it only when all reachable predecessors agree.
+void LateLowerGCFrame::ElideFreshWriteBarriers(Function &F, State &S)
+{
+    SmallPtrSet<Instruction *, 16> Safepoints(S.SafepointNumbering.begin(), S.SafepointNumbering.end());
+    auto ParentAlloc = [&](Instruction &I) -> CallInst * {
+        auto *CI = dyn_cast<CallInst>(&I);
+        if (!CI || !isWriteBarrierFunc(CI->getCalledOperand()))
+            return nullptr;
+        auto *Parent = dyn_cast<CallInst>(CI->getArgOperand(0)->stripPointerCasts());
+        if (!Parent || !Safepoints.contains(Parent))
+            return nullptr;
+        auto *Callee = Parent->getCalledOperand();
+        if (Callee != alloc_obj_func && Callee != alloc_memory_func)
+            return nullptr;
+        return Parent;
+    };
+    SmallPtrSet<Instruction *, 8> Allocs;
+    SmallSetVector<BasicBlock *, 8> BarrierBBs;
+    for (BasicBlock &BB : F) {
+        for (Instruction &I : BB) {
+            if (auto *Alloc = ParentAlloc(I)) {
+                Allocs.insert(Alloc);
+                BarrierBBs.insert(&BB);
+            }
+        }
+    }
+    if (Allocs.empty())
+        return;
+
+    auto IsSafepoint = [&](Instruction &I) {
+        // CleanupIR adds safepoints around GC transitions, even if the call itself isn't one.
+        // LocalScan doesn't classify invokes, which Julia doesn't emit.
+        auto *CB = dyn_cast<CallBase>(&I);
+        return Safepoints.contains(&I) ||
+               (CB && (!isa<CallInst>(CB) || CB->getOperandBundle("gc-transition")));
+    };
+    // Each reachable block's transfer function. Allocations and safepoints both overwrite the state,
+    // so a block either sets a constant (its last allocation or safepoint, as an instruction or
+    // nullptr) or passes its entry state through (unset).
+    ReversePostOrderTraversal<Function *> RPOT(&F);
+    DenseMap<BasicBlock *, std::optional<Instruction *>> LastDef;
+    for (BasicBlock *BB : RPOT) {
+        std::optional<Instruction *> &BBLastDef = LastDef[BB];
+        for (Instruction &I : *BB) {
+            if (Allocs.contains(&I))
+                BBLastDef = &I;
+            else if (IsSafepoint(I))
+                BBLastDef = nullptr;
+        }
+    }
+
+    // The fresh allocation on entry to each reachable block, iterated to the greatest fixpoint. Unset
+    // is the top of the lattice and the identity for the meet. In reverse post-order only a back edge
+    // can come from a block not visited yet, so the first pass ignores those edges and later passes
+    // include them in the meet once their states are known. Values only descend (unset, allocation,
+    // nullptr), so each block changes at most twice and no worklist is needed.
+    DenseMap<BasicBlock *, std::optional<Instruction *>> In;
+    In[&F.getEntryBlock()] = nullptr;
+    bool Changed = true;
+    while (Changed) {
+        Changed = false;
+        for (BasicBlock *BB : RPOT) {
+            if (BB == &F.getEntryBlock())
+                continue;
+            std::optional<Instruction *> NewIn;
+            for (BasicBlock *Pred : predecessors(BB)) {
+                // An unreachable predecessor has neither entry, so it is skipped like an unvisited one.
+                std::optional<Instruction *> PredOut = LastDef.lookup(Pred);
+                if (!PredOut)
+                    PredOut = In.lookup(Pred);
+                if (!PredOut)
+                    continue;
+                if (!NewIn)
+                    NewIn = PredOut;
+                else if (*NewIn != *PredOut)
+                    NewIn = nullptr;
+            }
+            if (NewIn != In.lookup(BB)) {
+                In[BB] = NewIn;
+                Changed = true;
+            }
+        }
+    }
+
+    for (BasicBlock *BB : BarrierBBs) {
+        auto It = In.find(BB);
+        if (It == In.end() || !It->second) // unreachable
+            continue;
+        Instruction *Fresh = *It->second;
+        for (Instruction &I : make_early_inc_range(*BB)) {
+            if (Fresh && ParentAlloc(I) == Fresh)
+                I.eraseFromParent();
+            else if (Allocs.contains(&I))
+                Fresh = &I;
+            else if (IsSafepoint(I))
+                Fresh = nullptr;
+        }
+    }
+}
+
 void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVector<CallInst*, 0> &WriteBarriers, bool *CFGModified) {
     for (auto CI : WriteBarriers) {
         auto parent = CI->getArgOperand(0);
@@ -1933,7 +2038,7 @@ CallInst *LateLowerGCFrame::EmitGCAllocBytes(IRBuilder<> &builder, CallInst *CI,
     // Setting the tag in IR was meant to let LLVM see that a fresh object has clear GC bits,
     // and fold away write barriers on it. Since #59559, write barriers load the tag as volatile,
     // because a safepoint between the allocation and the barrier can age the object (#59547).
-    // Eliding these barriers now requires proving that no safepoint lies in between.
+    // Eliding these write barriers is allowed when no safepoint intervenes.
     auto &M = *builder.GetInsertBlock()->getModule();
     StoreInst *store = builder.CreateAlignedStore(
         tag, EmitTagPtr(builder, tag_type, T_size, newI), M.getDataLayout().getPointerABIAlignment(0));
@@ -2590,6 +2695,7 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
           }
       }
       State S = LocalScan(F);
+      ElideFreshWriteBarriers(F, S);
       // If there is no safepoint after the first reachable def, then we don't need any roots (even those for allocas)
       if (std::any_of(S.BBStates.begin(), S.BBStates.end(),
                   [&F](auto BBS) {
