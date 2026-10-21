@@ -714,7 +714,7 @@ static void reset_thread_gc_counts(void) JL_NOTSAFEPOINT
             continue;
         }
         // don't reset `pool_live_bytes` here
-        jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
+        jl_thread_reset_allocd(ptls, -(int64_t)gc_num.interval);
         jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.malloc, 0);
         jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.realloc, 0);
         jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.poolalloc, 0);
@@ -3791,7 +3791,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     jl_ptls_t ptls = ct->ptls;
     if (jl_atomic_load_acquire(&jl_gc_disable_counter)) {
         size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval;
-        jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
+        jl_thread_reset_allocd(ptls, -(int64_t)gc_num.interval);
         static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
         jl_atomic_fetch_add_relaxed((_Atomic(uint64_t)*)&gc_num.deferred_alloc, localbytes);
         return;
@@ -3945,7 +3945,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     small_arraylist_new(&ptls->lazily_freed_mtarraylist_buffers, 0);
 
     memset(&ptls->gc_tls_common.gc_num, 0, sizeof(ptls->gc_tls_common.gc_num));
-    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
+    jl_thread_reset_allocd(ptls, -(int64_t)gc_num.interval);
 }
 
 void jl_free_thread_gc_state(jl_ptls_t ptls)

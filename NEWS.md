@@ -252,6 +252,9 @@ New library features
   without first materializing the full listing. `eachentry(dir, DirEntry)` yields `DirEntry` objects
   instead. Useful for very large directories or when iteration may be short-circuited. A do-block form
   `eachentry(f, dir[, DirEntry])` ensures deterministic resource cleanup ([#62164]).
+* `@timed` returns a new `compile_bytes` field with the bytes allocated during type inference and
+  compilation, which are also included in `bytes`. `@time` and `@timev` print it next to the
+  compilation time.
 
 Standard library changes
 ------------------------

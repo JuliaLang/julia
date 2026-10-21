@@ -389,6 +389,9 @@ end
 @test sprint(Base.time_print, 1e9, 0, 0, 0, 333) == "  1.000000 seconds (333 lock conflicts)"
 @test sprint(Base.time_print, 1e9, 111, 0, 222, 333, 0.25e9) == "  1.000000 seconds (222 allocations: 111 bytes, 333 lock conflicts, 25.00% compilation time)"
 @test sprint(Base.time_print, 1e9, 111, 0.5e9, 222, 333, 0.25e9, 0.175e9) == "  1.000000 seconds (222 allocations: 111 bytes, 50.00% gc time, 333 lock conflicts, 25.00% compilation time: 70% of which was recompilation)"
+@test sprint((io, args...) -> Base.time_print(io, args...; compile_bytes=100), 1e9, 111, 0, 222, 0, 0.25e9) == "  1.000000 seconds (222 allocations: 111 bytes, 25.00% compilation time, 100 bytes allocated in compilation)"
+@test sprint((io, args...) -> Base.time_print(io, args...; compile_bytes=100), 1e9, 111, 0, 222, 0, 0.25e9, 0.175e9) == "  1.000000 seconds (222 allocations: 111 bytes, 25.00% compilation time: 70% of which was recompilation, 100 bytes allocated in compilation)"
+@test sprint((io, args...) -> Base.time_print(io, args...; compile_bytes=100), 1e9, 111, 0, 222) == "  1.000000 seconds (222 allocations: 111 bytes)"
 
 # @showtime
 @test @showtime true
@@ -544,6 +547,49 @@ let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
         @test occursin("% of which was recompilation", out)
     end
 end
+
+# bytes allocated during inference and compilation (#53992)
+let f = gensym("f"), g = gensym("g"), gen = gensym("gen")
+    @eval begin
+        $f(x) = (x, string(x), [x, x])
+        $g(x) = $f(x)[2] * $f(x + 1)[2]
+        # the generator runs during inference, so this collects in the middle of a compile window
+        @generated function $gen(x)
+            GC.gc(false)
+            return :(string(x, [x]))
+        end
+
+        # first call of a fresh function
+        local cold = @timed $f(1)
+        @test cold.compile_bytes > 0
+        @test cold.compile_bytes <= cold.bytes
+
+        local warm = @timed $f(1)
+        @test warm.compile_bytes == 0
+        @test warm.compile_time == 0
+
+        # nested `@timed` and nested inference of a fresh callee each count once
+        local inner
+        local outer = @timed (inner = @timed $g(1.0))
+        @test inner.compile_bytes > 0
+        @test inner.compile_bytes <= inner.bytes
+        @test inner.compile_bytes <= outer.compile_bytes <= outer.bytes
+
+        # a collection during inference does not lose or invent bytes
+        local collected = @timed $gen(1)
+        @test collected.compile_bytes > 0
+        @test collected.compile_bytes <= collected.bytes
+        @test collected.gcstats.pause > 0
+
+        out = @capture_stdout @time $f(2.0)
+        @test occursin(r"% compilation time.*, \d+(\.\d+)? \w+ allocated in compilation\)", out)
+        out = @capture_stdout @time $f(2.0)
+        @test !occursin("allocated in compilation", out)
+        out = @capture_stdout @timev $f(3.0f0)
+        @test occursin(r"compile bytes: +\d+", out)
+    end
+end
+@test Base.cumulative_compile_bytes() isa UInt64
 let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
     @eval begin
         $f(::Real) = 1

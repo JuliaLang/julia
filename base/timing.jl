@@ -120,6 +120,9 @@ function cumulative_compile_time_ns()
     return comp, recomp
 end
 
+# cumulative bytes allocated by the GC during compilation, counted while compile timing is on
+cumulative_compile_bytes() = ccall(:jl_cumulative_compile_bytes, UInt64, ())
+
 function cumulative_compile_timing(b::Bool)
     if b
         ccall(:jl_cumulative_compile_timing_enable, Cvoid, ())
@@ -252,7 +255,7 @@ function format_bytes(bytes; binary=true) # also used by InteractiveUtils
 end
 
 function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_conflicts=0, compile_time=0, recompile_time=0, newline=false;
-                    msg::Union{String,Nothing}=nothing)
+                    msg::Union{String,Nothing}=nothing, compile_bytes=0)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
     str = sprint() do io
         if msg isa String
@@ -297,6 +300,9 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
             # use "<1" to avoid the confusing UX of reporting 0% when it's >0%
             print(io, ": ", perc < 1 ? "<1" : Ryu.writefixed(perc, 0), "% of which was recompilation")
         end
+        if compile_time > 0 && compile_bytes > 0
+            print(io, ", ", format_bytes(compile_bytes), " allocated in compilation")
+        end
         parens && print(io, ")")
         newline && print(io, "\n")
     end
@@ -304,14 +310,15 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
     nothing
 end
 
-function timev_print(elapsedtime, diff::GC_Diff, lock_conflicts, compile_times; msg::Union{String,Nothing}=nothing)
+function timev_print(elapsedtime, diff::GC_Diff, lock_conflicts, compile_times; msg::Union{String,Nothing}=nothing, compile_bytes=0)
     allocs = gc_alloc_count(diff)
     compile_time = first(compile_times)
     recompile_time = last(compile_times)
-    time_print(stdout, elapsedtime, diff.allocd, diff.total_time, allocs, lock_conflicts, compile_time, recompile_time, true; msg)
+    time_print(stdout, elapsedtime, diff.allocd, diff.total_time, allocs, lock_conflicts, compile_time, recompile_time, true; msg, compile_bytes)
     padded_nonzero_print(elapsedtime,       "elapsed time (ns)")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
+    padded_nonzero_print(compile_bytes,     "compile bytes")
     padded_nonzero_print(diff.poolalloc,    "pool allocs")
     padded_nonzero_print(diff.bigalloc,     "non-pool GC allocs")
     padded_nonzero_print(diff.malloc,       "malloc() calls", false)
@@ -402,7 +409,7 @@ macro time(msg, ex)
         local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
         local _msg_str = _msg === nothing ? _msg : string(_msg)
-        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, true; msg=_msg_str)
+        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, true; msg=_msg_str, compile_bytes=ret.compile_bytes)
         ret.value
     end
 end
@@ -475,7 +482,7 @@ macro timev(msg, ex)
         local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
         local _msg_str = _msg === nothing ? _msg : string(_msg)
-        timev_print(ret.time*1e9, ret.gcstats, ret.lock_conflicts, (ret.compile_time*1e9, ret.recompile_time*1e9); msg=_msg_str)
+        timev_print(ret.time*1e9, ret.gcstats, ret.lock_conflicts, (ret.compile_time*1e9, ret.recompile_time*1e9); msg=_msg_str, compile_bytes=ret.compile_bytes)
         ret.value
     end
 end
@@ -688,7 +695,9 @@ end
 A macro to execute an expression, and return the value of the expression, elapsed time in seconds,
 total bytes allocated, garbage collection time, an object with various memory allocation
 counters, compilation time in seconds, and recompilation time in seconds. Any lock conflicts
-where a [`ReentrantLock`](@ref) had to wait are shown as a count.
+where a [`ReentrantLock`](@ref) had to wait are shown as a count. `compile_bytes` is the part
+of `bytes` allocated by type inference and compilation; subtract it from `bytes` to estimate
+the allocations of the expression itself.
 
 In some cases the system will look inside the `@timed` expression and compile some of the
 called code before execution of the top-level expression begins. When that happens, some
@@ -721,6 +730,9 @@ julia> stats.compile_time
 julia> stats.recompile_time
 0.0
 
+julia> stats.compile_bytes
+0
+
 ```
 
 !!! compat "Julia 1.5"
@@ -728,6 +740,9 @@ julia> stats.recompile_time
 
 !!! compat "Julia 1.11"
     The `lock_conflicts`, `compile_time`, and `recompile_time` fields were added in Julia 1.11.
+
+!!! compat "Julia 1.15"
+    The `compile_bytes` field was added in Julia 1.15.
 """
 macro timed(ex)
     quote
@@ -738,10 +753,12 @@ macro timed(ex)
         local elapsedtime = time_ns()
         cumulative_compile_timing(true)
         local compile_elapsedtimes = cumulative_compile_time_ns()
+        local compile_bytes = cumulative_compile_bytes()
         local val = @__tryfinally($(esc(ex)),
             (elapsedtime = time_ns() -% elapsedtime;
             cumulative_compile_timing(false);
             compile_elapsedtimes = map(-%, cumulative_compile_time_ns(), compile_elapsedtimes);
+            compile_bytes = cumulative_compile_bytes() -% compile_bytes;
             lock_conflicts = Threads.LOCK_CONFLICT_COUNT[] - lock_conflicts;
             Threads.lock_profiling(false))
         )
@@ -754,7 +771,8 @@ macro timed(ex)
             gcstats=diff,
             lock_conflicts=lock_conflicts,
             compile_time=compile_elapsedtimes[1]/1e9,
-            recompile_time=compile_elapsedtimes[2]/1e9
+            recompile_time=compile_elapsedtimes[2]/1e9,
+            compile_bytes=compile_bytes % Int64
         )
     end
 end

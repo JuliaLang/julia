@@ -586,6 +586,9 @@ typedef struct JL_GC_TRACKED_TYPE _jl_task_t {
     // reset on region exit. Like reset_ctx, only ever consumed for the
     // thread's *current* task.
     _Atomic(jl_cancel_handler_ctx_t *) cancel_handler_ctx;
+    // thread and its `jl_thread_allocd_monotonic` when the outermost inference timing began
+    int16_t typeinf_start_tid;
+    int64_t typeinf_start_allocd;
 } jl_task_t;
 
 JL_DLLEXPORT void *jl_get_ptls_states(void);
