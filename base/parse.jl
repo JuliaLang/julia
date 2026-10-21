@@ -200,6 +200,11 @@ end
     return true
 end
 
+# Reads the characters of `sbuff[startpos:endpos]` with `iterate`: `true` or `false` with
+# whitespace around it, or an integer that is 0 or 1, read as `parse(UInt8, ...)` reads it
+# when it starts with a digit (so trailing whitespace and, without a `base`, a `0x`, `0o` or
+# `0b` prefix are allowed). `Base.Parsers.parsevalue(Bool, bytes)` gives the same results for
+# the bytes of a string without whitespace or a prefix.
 function tryparse_internal(::Type{Bool}, sbuff::AbstractString,
         startpos::Int, endpos::Int, base::Integer, raise::Bool)
     if startpos > endpos

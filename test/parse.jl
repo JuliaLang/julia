@@ -379,6 +379,14 @@ end
     @test tryparse(Bool, "1a"; base = 16) === nothing
     @test_throws "invalid Bool representation: \"tru\"" parse(Bool, "tru")
     @test_throws "invalid Bool representation: \"2\"" parse(Bool, "2")
+    # `parse` reads characters and `parsevalue` bytes; without whitespace or a prefix they agree
+    chars = ('0', '1', '2', 'a', 'e', 'f', 't', 'x', '+', '١')
+    strs = [[join(cs) for n in 1:3 for cs in Iterators.product(ntuple(_ -> chars, n)...)];
+            ["true", "false"]]
+    @test all(Iterators.product(strs, (2, 10, 16, 36))) do (s, base)
+        x = P.parsevalue(Bool, codeunits(s); base)
+        return (x isa Bool ? x : nothing) === tryparse(Bool, s; base)
+    end
     # DelimitedFiles parses a cell `s[i:j]` of a whole file `s`
     @test Base.tryparse_internal(Bool, "x,1 ", 3, 4, 0, false) === true
     @test Base.tryparse_internal(Bool, "x,0x0", 3, 5, 0, false) === false
