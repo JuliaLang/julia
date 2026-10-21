@@ -388,7 +388,8 @@ function lock(f, l::AbstractLock)
     end
 end
 
-function lock(f, l::ReentrantLock; cancel::CancelTokenArg=DEFAULT_CANCEL)
+# `@inline` keeps an uncontended `lock(f, l)` free of the call into its keyword body.
+@inline function lock(f, l::ReentrantLock; cancel::CancelTokenArg=DEFAULT_CANCEL)
     lock(l; cancel)
     try
         return f()

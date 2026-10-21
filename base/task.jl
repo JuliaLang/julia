@@ -491,8 +491,15 @@ unaffected: cancellation reaches `t` only through its own governing token
 
 Throws a `ConcurrencyViolationError` if `t` is the currently running task, to prevent deadlocks.
 """
-wait(t::Task; throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    wait(t, check_cancel_arg(cancel); throw)
+function wait(t::Task; throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    # An explicit token is checked here, the scoped one only if the wait blocks.
+    cancel = precheck_cancel_arg(cancel)
+    istaskdone(t) || return wait(t, resolve_cancel_token(cancel); throw)
+    if throw && istaskfailed(t)
+        Core.throw(TaskFailedException(t))
+    end
+    nothing
+end
 @noinline function wait(t::Task, tok::MaybeToken; throw=true)
     # Inlining a blocking call buys nothing; this also keeps the inlineable `fetch(::Task)` small.
     _wait(t, tok)
