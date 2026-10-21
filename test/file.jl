@@ -58,6 +58,45 @@ end
     end
 end
 
+@testset "DirEntry(path)" begin
+    @test_throws Base.IOError DirEntry("does/not/exist")
+    @test_throws ArgumentError DirEntry("")
+    @test_throws ArgumentError DirEntry(Sys.iswindows() ? "C:\\" : "/")
+    @test_throws ArgumentError DirEntry(Sys.iswindows() ? "C:\\.." : "/..")
+    mktempdir() do dir
+        f = joinpath(dir, "afile.txt")
+        d = joinpath(dir, "adir")
+        touch(f)
+        mkdir(d)
+        ef = DirEntry(f)
+        @test basename(ef) == "afile.txt"
+        @test dirname(ef) == dir
+        @test joinpath(ef) == f
+        @test isfile(ef) && !isdir(ef) && !islink(ef)
+        @test ef == only(e for e in readdir(dir, DirEntry) if isfile(e))
+        ed = DirEntry(d)
+        @test isdir(ed) && !isfile(ed)
+        @test readdir(ed) == String[]
+        @test DirEntry(d * "/") == DirEntry(d * "//") == ed
+        # `.` and `..` resolve via realpath (tempdir may be behind a symlink, e.g. on macOS)
+        rd = realpath(d)
+        @test DirEntry(joinpath(d, ".")) == DirEntry(joinpath(d, ".", "")) == DirEntry(rd)
+        @test DirEntry(joinpath(d, "..")) == DirEntry(realpath(dir))
+        @test cd(() -> DirEntry("."), d) == DirEntry(rd)
+        if !Sys.iswindows()
+            l = joinpath(dir, "alink")
+            symlink(d, l)
+            el = DirEntry(l)
+            @test islink(el) && isdir(el)
+            @test el.rawtype == Base.Filesystem.UV_DIRENT_LINK
+            @test DirEntry(l * "/") == el
+            # `l/.` and `l/..` refer to the target and its parent, not the link
+            @test DirEntry(joinpath(l, ".")) == DirEntry(rd)
+            @test DirEntry(joinpath(l, "..")) == DirEntry(realpath(dir))
+        end
+    end
+end
+
 # eachentry: lazy single-pass iteration; default String, opt into DirEntry
 @testset "eachentry" begin
     @test_throws Base.IOError iterate(eachentry("does/not/exist"))
@@ -85,6 +124,9 @@ end
         @test Base.IteratorSize(it) === Base.SizeUnknown()
         itD = eachentry(dir, DirEntry)
         @test eltype(itD) === Base.Filesystem.DirEntry
+        @test itD isa Base.DirEntryIterator{DirEntry}
+        @test Base.ispublic(Base, :DirEntryIterator)
+        @test !Base.isexported(Base, :DirEntryIterator)
 
         # Single-pass: once consumed, cannot iterate again
         for _ in it; end

@@ -9,6 +9,7 @@ export
     cp,
     cptree,
     DirEntry,
+    DirEntryIterator,
     diskstat,
     eachentry,
     hardlink,
@@ -1093,13 +1094,21 @@ const UV_DIRENT_CHAR = Cint(6)
 const UV_DIRENT_BLOCK = Cint(7)
 
 """
-    DirEntry
+    DirEntry(path::AbstractString)
 
 A type representing a filesystem entry that contains the name of the entry, the directory, and
 the raw type of the entry. The full path of the entry can be obtained lazily via [`joinpath(entry)`](@ref).
 
 The directory and name components are accessed via [`dirname`](@ref) and [`basename`](@ref),
 respectively, mirroring the behavior of the corresponding string-returning functions.
+
+`DirEntry(path)` constructs an entry for an existing `path` by calling [`lstat`](@ref) on it
+once at construction, so a symlink is recorded as a link rather than as its target.
+A final component of `.` or `..` is first resolved with [`realpath`](@ref),
+which queries the filesystem and follows symlinks.
+An [`IOError`](@ref Base.IOError) is thrown if `path` does not exist,
+and an `ArgumentError` if `path` has no final component (e.g. a root directory
+such as `"/"`, which is not an entry of any directory).
 
 The type of the entry can be checked for by calling [`isfile`](@ref), [`isdir`](@ref),
 [`islink`](@ref), [`isfifo`](@ref), [`issocket`](@ref), [`ischardev`](@ref), and [`isblockdev`](@ref)
@@ -1118,6 +1127,24 @@ struct DirEntry
     dir::String
     name::String
     rawtype::Cint
+end
+function DirEntry(path::AbstractString)
+    dir, name = splitdir(path)
+    # Ignore trailing separators; splitdir strips all of them from `dir`
+    isempty(name) && ((dir, name) = splitdir(dir))
+    # `.` and `..` are not directory entries; resolve them to the directory they refer to
+    (name == "." || name == "..") && ((dir, name) = splitdir(realpath(path)))
+    isempty(name) && throw(ArgumentError("path $(repr(path)) has no final component"))
+    st = lstat(joinpath(dir, name))
+    uv_error("DirEntry($(repr(path)))", st.ioerrno)
+    rawtype = islink(st)     ? UV_DIRENT_LINK   :
+              isfile(st)     ? UV_DIRENT_FILE   :
+              isdir(st)      ? UV_DIRENT_DIR    :
+              isfifo(st)     ? UV_DIRENT_FIFO   :
+              issocket(st)   ? UV_DIRENT_SOCKET :
+              ischardev(st)  ? UV_DIRENT_CHAR   :
+              isblockdev(st) ? UV_DIRENT_BLOCK  : UV_DIRENT_UNKNOWN
+    return DirEntry(dir, name, rawtype)
 end
 basename(obj::DirEntry) = getfield(obj, :name)
 dirname(obj::DirEntry) = getfield(obj, :dir)

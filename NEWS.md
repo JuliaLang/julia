@@ -251,7 +251,8 @@ New library features
 * New function `eachentry(dir)` returns a stateful, single-pass iterator yielding filename `String`s
   without first materializing the full listing. `eachentry(dir, DirEntry)` yields `DirEntry` objects
   instead. Useful for very large directories or when iteration may be short-circuited. A do-block form
-  `eachentry(f, dir[, DirEntry])` ensures deterministic resource cleanup ([#62164]).
+  `eachentry(f, dir[, DirEntry])` ensures deterministic resource cleanup. The iterator type
+  `Base.DirEntryIterator` is public but unexported ([#62164]).
 
 Standard library changes
 ------------------------
