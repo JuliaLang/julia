@@ -474,7 +474,8 @@ function add_ci_debuginfo!(st::SyntaxTree,
             ufile = _di_sourcefile(c)
             upos = _di_pos(c)
             foreign_linenode = false
-            @jl_assert typeof(top_file) == typeof(ufile) c st
+            # false due to trim_provenance (`@eval`, generated-func desugaring)
+            # @jl_assert typeof(top_file) === typeof(ufile) c st
             if ufile isa SourceCode # precise provenance
                 out_1 = Int32(searchsortedfirst(top_spans, upos))
             elseif ufile === top_file

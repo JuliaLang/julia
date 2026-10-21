@@ -285,7 +285,7 @@ function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex)
                 val
                 [:call at_eval_hook::value
                     mod_st
-                    [:call fill_context::value q new_sc::value]
+                    [:call fill_context::value trim_provenance(q, true) new_sc::value]
                 ]
             ]
         ]

@@ -2663,7 +2663,8 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
              mapsyntax(_untyped_arg, sparams)...,
              mapsyntax(_untyped_arg, argl)...)
         @jl_assert head(body[1]) === :syntaxquote body
-        gen_body = est_to_dst(expand_syntaxquote(ctx, body[1][1]))
+        gen_body = est_to_dst(expand_syntaxquote(
+            ctx, trim_provenance(body[1][1], true)))
 
         method_def_expr(ctx, src, gen_name, SyntaxList(), gen_argl, gen_body,
                         @ast(ctx, src, "Any"::core))

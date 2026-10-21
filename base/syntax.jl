@@ -409,6 +409,33 @@ end
 remove_scope(st::Syntax) =
     remove_scope(st, Dict{SyntaxContext, SyntaxContext}())
 
+# premature optimization: If a large piece of parsed code contains macrocalls
+# that embed syntax into IR, size (of the source text, but mostly the green
+# tree) becomes an issue.  Ideally we would store the big stuff in a known place
+# once and refer to it from all lowered code, but for now haphazardly delete
+# information.  Keep sourceref, and sourceref of unexpanded if !trim_unexpanded
+function _trim_provenance(st::Syntax, trim_unexpanded, scmap)
+    st_sc = st.context
+    sc2 = get(scmap, st_sc, nothing)
+    if isnothing(sc2)
+        ux = st_sc.unexpanded === nothing || trim_unexpanded ?
+            nothing : _trim_provenance(st_sc.unexpanded, false, scmap)
+        sc2 = scmap[st_sc] = st_sc.unexpanded === ux ? st_sc :
+            SyntaxContext(st_sc.layer, ux, st_sc.edition, st_sc.internal)
+    end
+    if is_leaf(st) || numchildren(st) == 0
+        source = sourceref(st)
+        sc2 === st_sc && !(source isa Syntax) ? st :
+            @mknode(st; context=sc2, source, jl_source=st.jl_source)
+    else
+        @mknode(st; context=sc2, source=sourceref(st), jl_source=st.jl_source,
+                children=Syntax[_trim_provenance(
+                    c, trim_unexpanded, scmap) for c in children(st)])
+    end
+end
+trim_provenance(st::Syntax, trim_unexpanded) =
+    _trim_provenance(st, trim_unexpanded, Dict{SyntaxContext, SyntaxContext}())
+
 function Base.show(io::IO, ::MIME"text/plain", sl::ScopeLayer)
     color = isnothing(sl.escaped) ? :normal : :cyan
     printstyled(io, "SL("; color)
