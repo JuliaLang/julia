@@ -778,10 +778,10 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
     jl_task_t *ct = jl_get_current_task();
     jl_ptls_t ptls = ct == NULL ? NULL : ct->ptls;
     if (ptls != NULL)
-        jl_atomic_fetch_add(&ptls->fault_handling, 1);
+        jl_fault_handling_add(ptls, 1);
     LONG ret = jl_exception_handler_inner(ExceptionInfo);
     if (ptls != NULL)
-        jl_atomic_fetch_add(&ptls->fault_handling, -1);
+        jl_fault_handling_add(ptls, -1);
     return ret;
 }
 

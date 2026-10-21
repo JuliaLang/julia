@@ -1443,6 +1443,16 @@ extern pthread_mutex_t in_signal_lock;
 #define JL_X87CW_DEFAULT 0x037fu
 #endif
 
+// Only the owning thread changes its `fault_handling` count, and other threads
+// read it only while that thread is frozen, so a plain update kept in program
+// order is enough.
+STATIC_INLINE void jl_fault_handling_add(jl_ptls_t ptls, int8_t n) JL_NOTSAFEPOINT
+{
+    jl_signal_fence();
+    jl_atomic_store_relaxed(&ptls->fault_handling, jl_atomic_load_relaxed(&ptls->fault_handling) + n);
+    jl_signal_fence();
+}
+
 void jl_set_gc_and_wait(jl_task_t *ct) JL_CANSAFEPOINT;
 void jl_gc_safe_enter_from_nonmutator(jl_ptls_t ptls) JL_CANSAFEPOINT_LEAVE;
 
