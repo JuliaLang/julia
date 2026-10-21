@@ -70,6 +70,9 @@ the nearest value, ties to even; one too large for the type is `OVERFLOW`, and a
 one that rounds to zero is `UNDERFLOW`. `nan(n)` puts the unsigned integer `n` (decimal,
 `0x` hexadecimal or `0` octal) in the NaN's payload.
 
+For `UUID`, the bytes are 32 hexadecimal digits in groups of 8, 4, 4, 4 and 12 separated
+by `-`, as [`string`](@ref) writes them, in either case.
+
 # Examples
 ```jldoctest
 julia> Base.Parsers.parsevalue(Int, codeunits("-42"))
