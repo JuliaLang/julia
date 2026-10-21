@@ -954,6 +954,9 @@ end
         @test get(ti, :A, "") == something(a, "")
         @test get(ti, :B, "") == something(b, "")
     end
+    # A name index that overflows once offset past the values is rejected
+    overflow = vcat(entry, int16s(0, 0, 1, 2, 4), int16s(0, typemax(Int16) - 1), b"v\0A\0")
+    @test_throws ArgumentError read(IOBuffer(overflow), Base.TermInfoRaw)
 end
 
 # A bad terminfo file must not prevent Julia from starting (#63777)

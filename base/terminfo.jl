@@ -143,25 +143,24 @@ function extendedterminfo(data::IO, NumInt::Union{Type{Int16}, Type{Int32}})
     for (idx, str) in zip(table_indices, strings)
         isnothing(str) || (names_offset = max(names_offset, idx + ncodeunits(str) + 1))
     end
-    label_indices = map(Int, table_indices[string_count+1:end])
-    for i in eachindex(label_indices)
-        label_indices[i] >= 0 ||
-            throw(ArgumentError("Terminfo extended capability is missing a name"))
-        label_indices[i] += names_offset
+    for index in string_count+1:lastindex(table_indices)
+        0 <= table_indices[index] <= typemax(Int16) - names_offset ||
+            throw(ArgumentError("Terminfo extended capability name index is invalid"))
+        table_indices[index] += names_offset
     end
-    labels = map(Symbol, _terminfo_read_strings(table_data, label_indices))
+    labels = map(Symbol, _terminfo_read_strings(table_data, table_indices[string_count+1:end]))
     Dict{Symbol, Union{Bool, Int, String, Nothing}}(
         zip(labels, Iterators.flatten((flags, numbers, strings))))
 end
 
 """
-    _terminfo_read_strings(table::Vector{UInt8}, indices::Vector{<:Integer})
+    _terminfo_read_strings(table::Vector{UInt8}, indices::Vector{Int16})
 
 From `table`, read a string starting at each position in `indices`. Each string
 must be null-terminated. Should an index be -1 or -2, `nothing` is given instead
 of a string.
 """
-function _terminfo_read_strings(table::Vector{UInt8}, indices::Vector{<:Integer})
+function _terminfo_read_strings(table::Vector{UInt8}, indices::Vector{Int16})
     strings = Vector{Union{Nothing, String}}(undef, length(indices))
     map!(strings, indices) do idx
         if idx >= 0
@@ -252,6 +251,16 @@ function show(io::IO, ::MIME"text/plain", ti::TermInfo)
     print(io, ')')
 end
 
+# Treat paths that cannot be accessed (e.g. EACCES or ELOOP) as absent, as ncurses does
+function _terminfo_stat_check(check::Function, path::String)
+    try
+        check(path)
+    catch err
+        err isa IOError || rethrow()
+        false
+    end
+end
+
 """
     find_terminfo_file(term::String)
 
@@ -264,12 +273,11 @@ taken to be the first entry of `@TERMINFO_DIRS@`.
 function find_terminfo_file(term::String)
     # Like ncurses, reject names that could escape the terminfo directories
     (isempty(term) || any(Filesystem.isseparator, term)) && return
-    # The hashed directory name is the hex value of the first byte (`TERM` may not
-    # be valid UTF-8)
+    # Use the first byte, as `TERM` may not be valid UTF-8
     chr, chrcode = string(first(term)), string(codeunit(term, 1), base=16, pad=2)
     terminfo_dirs = if haskey(ENV, "TERMINFO")
         [ENV["TERMINFO"]]
-    elseif isdir(joinpath(homedir(), ".terminfo"))
+    elseif _terminfo_stat_check(isdir, joinpath(homedir(), ".terminfo"))
         [joinpath(homedir(), ".terminfo")]
     else
         String[]
@@ -289,14 +297,7 @@ function find_terminfo_file(term::String)
     candidates = ((chr, term), (chrcode, term), (lchr, lterm))
     for dir in terminfo_dirs, (subdir, name) in candidates
         path = joinpath(dir, subdir, name)
-        # Skip inaccessible paths (e.g. EACCES or ELOOP), as ncurses does
-        found = try
-            isfile(path)
-        catch err
-            err isa IOError || rethrow()
-            false
-        end
-        found && return path
+        _terminfo_stat_check(isfile, path) && return path
     end
     return nothing
 end
