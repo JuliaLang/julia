@@ -220,6 +220,7 @@ setrounding_raw(::Type{<:Union{Float32,Float64}}, i::Integer) = ccall(:jl_set_fe
 rounding_raw(::Type{<:Union{Float32,Float64}}) = ccall(:jl_get_fenv_rounding, Int32, ())
 
 rounding(::Type{T}) where {T<:Union{Float32,Float64}} = from_fenv(rounding_raw(T))
+rounding(::Type{Union{}}, slurp...) = throw(MethodError(rounding, (Union{}, slurp...)))
 
 """
     setrounding(f::Function, T, mode)
@@ -243,6 +244,7 @@ function setrounding(f::Function, ::Type{T}, rounding::RoundingMode) where T
         setrounding_raw(T,old_rounding_raw)
     end
 end
+setrounding(f, ::Type{Union{}}, slurp...) = throw(MethodError(setrounding, (f, Union{}, slurp...)))
 function setrounding_raw(f::Function, ::Type{T}, rounding) where T
     old_rounding_raw = rounding_raw(T)
     setrounding_raw(T,rounding)
@@ -487,5 +489,9 @@ round(::Type{T}, x) where T = round(T, x, RoundNearest)
 
 round(::Type{T}, x, r::RoundingMode) where T = _round_convert(T, round(x, r), x, r)
 _round_convert(::Type{T}, x_integer, x, r) where T = convert(T, x_integer)
+trunc(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(trunc, (Union{}, slurp...)))
+floor(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(floor, (Union{}, slurp...)))
+ ceil(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(ceil, (Union{}, slurp...)))
+round(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(round, (Union{}, slurp...)))
 
 round(x::Integer, r::RoundingMode) = x

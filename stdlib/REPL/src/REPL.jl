@@ -706,15 +706,15 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
         try
             if val !== nothing && show_value
                 Base.sigatomic_end() # allow display to be interrupted
-                val_to_show = val
+                val_to_show = Ref{Any}(val)
                 val2, iserr = if specialdisplay === nothing
                     # display calls may require being run on the main thread
                     call_on_backend(backend) do
-                        __repl_entry_display(val_to_show)
+                        __repl_entry_display(val_to_show[])
                     end
                 else
                     call_on_backend(backend) do
-                        __repl_entry_display(specialdisplay, val_to_show)
+                        __repl_entry_display(specialdisplay, val_to_show[])
                     end
                 end
                 Base.sigatomic_begin()

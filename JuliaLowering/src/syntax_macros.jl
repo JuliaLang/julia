@@ -1,12 +1,8 @@
-# Experimental "new macros" mostly for testing.  These should eventually be
+# Experimental "new macros" mostly for testing.  These should soon be
 # deleted and replaced with normal-looking macros lowered by JL.
 #
 # TODO: @inline, @noinline, @inbounds, @simd, @ccall, @assume_effects
 #
-# TODO: Eventually move these to proper `macro` definitions and use
-# `JuliaLowering.include()` or something. Then we'll be in the fun little world
-# of bootstrapping but it shouldn't be too painful :)
-
 # Note that `@ast __context__ __context__.macrocall [:foo ...]` is unhygienic,
 # since `@ast` is meant for internal lowering use (it requires an explicit
 # provenance argument, and then copies any syntax context from the provenance to
@@ -14,6 +10,8 @@
 # provenance of the literal :foo expression in the file instead, and should
 # not copy context (this is not hard to implement, but the provenance requires
 # it and callers to be JL-lowered, which this file currently isn't.)
+
+if Base.generating_output(false)
 
 function Base.var"@nospecialize"(__context__::MacroContext, exs::SyntaxTree...)
     if length(exs) == 0
@@ -47,7 +45,7 @@ end
 
 function Base.var"@label"(__context__::MacroContext, name, body)
     head(name) === :identifier ||
-        throw(MacroExpansionError(name, "expected a label name"))
+        throw(LoweringError(name, "expected a label name"))
     syntax_name(name) == "_" &&
         error("use `@label expr` for anonymous blocks; `@label _ expr` is not allowed")
     k = head(body)
@@ -109,7 +107,7 @@ end
 
 function Base.var"@cfunction"(__context__::MacroContext, callable, return_type, arg_types)
     if head(arg_types) != :tuple
-        throw(MacroExpansionError(arg_types, "@cfunction argument types must be a literal tuple"))
+        throw(LoweringError(arg_types, "@cfunction argument types must be a literal tuple"))
     end
     arg_types_svec = @ast __context__ arg_types [:call
         [:core "svec"::identifier]
@@ -145,23 +143,23 @@ function ccall_macro_parse(ctx, exs)
         @stm opt begin
             [:(=) [:identifier] val] -> if syntax_name(opt[1]) == "gc_safe"
                 if head(val) !== :value || !(val.value isa Bool)
-                    throw(MacroExpansionError(val, "gc_safe must be true or false"))
+                    throw(LoweringError(val, "gc_safe must be true or false"))
                 else
                     gc_safe = val.value
                 end
             elseif syntax_name(opt[1]) == "cancel_handler"
                 @stm val begin
                     [:tuple x y] -> cancel = (x, y)
-                    _ -> throw(MacroExpansionError(val, "bad cancel handler"))
+                    _ -> throw(LoweringError(val, "bad cancel handler"))
                 end
             else
-                throw(MacroExpansionError(opt[1], "unknown option name for ccall"))
+                throw(LoweringError(opt[1], "unknown option name for ccall"))
             end
-            _ -> throw(MacroExpansionError(opt, "bad option to ccall"))
+            _ -> throw(LoweringError(opt, "bad option to ccall"))
         end
     end
     if length(opts) >= 2
-        throw(MacroExpansionError(opts[2], "too many options provided to @ccall"))
+        throw(LoweringError(opts[2], "too many options provided to @ccall"))
     end
 
     (func, argts, rettype) = @stm ex begin
@@ -173,19 +171,19 @@ function ccall_macro_parse(ctx, exs)
                 if kx === :tuple || kx === :string ||
                         (kx === :value && (x.value isa Tuple || x.value isa String)) ||
                         kx == :inert && !(head(x[1]) == :value && x[1].value isa Ptr)
-                    throw(MacroExpansionError(
+                    throw(LoweringError(
                         f, "interpolated value should be a variable or expression, not a literal name or tuple"))
                 end
                 x
             end
-            _ -> throw(MacroExpansionError(
+            _ -> throw(LoweringError(
                 f, "@ccall function name must be a symbol, a `.` node (e.g. `libc.printf`) or an interpolated function pointer (with `\$`)"))
         end
             (f_expanded, as, r)
         end
-        [:call _...] -> throw(MacroExpansionError(
-            ex, "expected a return type annotation `::SomeType`", position=:end))
-        _ -> throw(MacroExpansionError(
+        [:call _...] -> throw(LoweringError(
+            ex, "expected a return type annotation `::SomeType`"))
+        _ -> throw(LoweringError(
             ex, "expected call expression with return type"))
     end
 
@@ -203,7 +201,7 @@ function ccall_macro_parse(ctx, exs)
     function pusharg!(at)
         @stm at begin
             [:(::) a t] -> (push!(args, a); push!(types, t))
-            _ -> throw(MacroExpansionError(
+            _ -> throw(LoweringError(
                 at, "argument needs a type annotation"))
         end
     end
@@ -215,7 +213,7 @@ function ccall_macro_parse(ctx, exs)
     if !isnothing(varargs)
         num_required_args = length(args)
         if num_required_args == 0
-            throw(MacroExpansionError(
+            throw(LoweringError(
                 argts[1],
                 "C ABI prohibits varargs without one required argument"))
         end
@@ -258,7 +256,7 @@ function Base.GC.var"@preserve"(__context__::MacroContext, exs...)
     idents = exs[1:end-1]
     for e in idents
         if head(e) != :identifier
-            throw(MacroExpansionError(e, "Preserved variable must be a symbol"))
+            throw(LoweringError(e, "Preserved variable must be a symbol"))
         end
     end
     @ast __context__ __context__.macrocall [:gc_preserve exs[end] exs[1:end-1]...]
@@ -285,7 +283,7 @@ function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex)
         [:local
             [:(=)
                 val
-                [:call JuliaLowering.eval::value
+                [:call at_eval_hook::value
                     mod_st
                     [:call fill_context::value q new_sc::value]
                 ]
@@ -302,10 +300,12 @@ function Base.var"@eval"(__context__::MacroContext, ex)
 end
 
 function Base.var"@eval"(__context__::MacroContext, mod, ex)
-    head(mod) === :parameters && throw(MacroExpansionError(
+    head(mod) === :parameters && throw(LoweringError(
         mod, "`@eval` does not accept keyword arguments"))
     _at_eval_code(__context__, mod, ex)
 end
+
+end # Base.generating_output(false)
 
 #--------------------------------------------------------------------------------
 # The following `@islocal` and `@inert` are macros for special syntax known to

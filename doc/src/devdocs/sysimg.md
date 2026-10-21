@@ -101,13 +101,13 @@ As an example, at the time of this writing, the following string is used in the 
 the official `x86_64` Julia binaries downloadable from julialang.org:
 
 ```
-generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)
+generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1);x86-64-v4,-rdrnd,base(1)
 ```
 
-This creates a system image with three separate targets; one for a generic `x86_64`
+This creates a system image with four separate targets; one for a generic `x86_64`
 processor, one with a `sandybridge` ISA (explicitly excluding `xsaveopt`) that explicitly
-clones all functions, and one targeting the `haswell` ISA, based off of the `sandybridge`
-sysimg version, and also excluding `rdrnd`. When a Julia implementation loads the
+clones all functions, and two targeting the `haswell` and `x86-64-v4` ISAs, based off of
+the `sandybridge` version, both excluding `rdrnd`. When a Julia implementation loads the
 generated sysimg, it will check the host processor for matching CPU capability flags,
 enabling the highest ISA level possible. Note that the base level (`generic`) requires
 the `cx16` instruction, which is disabled in some virtualization software and must be

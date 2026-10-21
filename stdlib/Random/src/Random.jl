@@ -274,6 +274,8 @@ rand!(A::AbstractArray{T}, ::Type{X}=T) where {T,X} = rand!(default_rng(), A, X)
 
 rand!(rng::AbstractRNG, A::AbstractArray{T}, X) where {T}             = rand!(rng, A, Sampler(rng, X))
 rand!(rng::AbstractRNG, A::AbstractArray{T}, ::Type{X}=T) where {T,X} = rand!(rng, A, Sampler(rng, X))
+rand!(     A, ::Type{Union{}}, slurp...) = throw(MethodError(rand!, (A, Union{}, slurp...)))
+rand!(rng, A, ::Type{Union{}}, slurp...) = throw(MethodError(rand!, (rng, A, Union{}, slurp...)))
 
 function rand!(rng::AbstractRNG, A::AbstractArray{T}, sp::Sampler) where T
     for i in eachindex(A)
@@ -299,6 +301,8 @@ rand(                ::Type{X}, dims::Dims) where {X} = rand(default_rng(), X, d
 
 rand(r::AbstractRNG, ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(r, X, Dims((d, dims...)))
 rand(                ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(X, Dims((d, dims...)))
+rand(     ::Type{Union{}}, slurp...) = throw(MethodError(rand, (Union{}, slurp...)))
+rand(rng, ::Type{Union{}}, slurp...) = throw(MethodError(rand, (rng, Union{}, slurp...)))
 
 
 ### UnsafeView

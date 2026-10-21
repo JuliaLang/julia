@@ -76,6 +76,9 @@ one that rounds to zero is `UNDERFLOW`. `nan(n)` puts the unsigned integer `n` (
 `0x` hexadecimal or `0` octal) in the NaN's payload. The keyword `decimal` (default `'.'`)
 is the decimal point; it can be any ASCII character other than a letter, digit, `+` or `-`.
 
+For `UUID`, the bytes are 32 hexadecimal digits in groups of 8, 4, 4, 4 and 12 separated
+by `-`, as [`string`](@ref) writes them, in either case.
+
 !!! compat "Julia 1.15"
     `parsevalue` requires at least Julia 1.15.
 

@@ -13,6 +13,7 @@ function lower(mod::Module, ex_in::SyntaxTree; soft_scope::Union{Nothing,Bool}=n
 end
 
 function macroexpand(mod::Module, ex_in::SyntaxTree; recursive::Bool=true)
+    # TODO: prevent this from being called in macro bodies
     ex0 = rebase_layers(ex_in, mod)
     expand_forms_1(ex0, Base.get_world_counter(), recursive)
 end
@@ -134,6 +135,9 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         if head(mname) != :identifier
             throw(LoweringError(mname, "Expected module name"))
         end
+        if head(body) != :block
+            throw(LoweringError(body, "module expression third argument must be a block"))
+        end
         newmod_name = Symbol(syntax_name(mname))
         coverage_visit_line(mod, ex)
         loc = first_linenode(ex)
@@ -141,10 +145,10 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         return Core.svec(:begin_module, version, newmod_name, notbare, loc)
     elseif k === :thunk && numchildren(ex) == 1
         return Core.svec(:thunk, Expr(:thunk, ex[1].value))
-    elseif (k === :error || k === :incomplete) && numchildren(ex) == 1
-        err = ex[1].value
-        throw(err isa String ? ErrorException(string("syntax: ", err)) : err)
     else
+        if (k === :error || k === :incomplete) && numchildren(ex) == 1
+            ex = _error_to_throw(ex)
+        end
         coverage_visit_line(mod, ex)
          ctx2, ex2 = expand_forms_2(ex, world)
          ctx3, ex3 = resolve_scopes(ctx2, ex2, !is_module_body; soft_scope)
@@ -155,6 +159,15 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
     end
 end
 
+# We want a "top-level scope" stack frame (see `jl_eval_throw`)
+function _error_to_throw(ex)
+    err = ex[1].value
+    exc = err isa String ? ErrorException(string("syntax: ", err)) : err
+    isa_lowering_ast_node(exc) && throw(exc)
+    @mknode(ex; head=:call, children=Syntax[
+        newleaf(ex, :value, Core.throw), newleaf(ex, :value, exc)])
+end
+
 function coverage_visit_line(mod, st)
     Base.JLOptions().code_coverage == 0 && return
     lno = Base.first_linenode(st)
@@ -162,7 +175,7 @@ function coverage_visit_line(mod, st)
     file = String(lno.file)
     if ccall(:jl_coverage_enabled_for, Cint, (Any, Cstring), mod, file) != 0
         ccall(:jl_coverage_visit_line, Cvoid, (Cstring, Csize_t, Cint),
-              file, length(file), lno.line)
+              file, sizeof(file), lno.line)
     end
 end
 
@@ -372,15 +385,12 @@ end
 
 const LINENODE_SPAN_END = Int32(-5)
 
-# Byte-precise `DebugInfo` requires `Core.DebugInfo` to accept a `String` linetable,
-# which is only available on recent Julia.  On older versions (e.g. v1.12) we degrade to
-# line-based `DebugInfo` so that lowering still produces a valid `CodeInfo`, at the cost of
-# byte-precise source attribution.
+# JETLS compat: Core.Debuginfo is not byte-precise before 1.14
 const _has_byte_precise_debuginfo =
     hasmethod(Core.DebugInfo, Tuple{Symbol, String, Core.SimpleVector, String})
 
-function _di_pos(st::SyntaxTree)
-    src = unexpanded_sourceref(st)
+function _di_pos(st::SyntaxTree, expanded=false)
+    src = (expanded ? sourceref : unexpanded_sourceref)(st)
     pos = if src isa SourceRef
         (Int32(first_byte(src)), Int32(last_byte(src)))
     elseif src isa LineNumberNode
@@ -390,90 +400,158 @@ function _di_pos(st::SyntaxTree)
     end
 end
 
-function _di_sourcefile(st)
-    x = unexpanded_sourceref(st)
-    x isa LineNumberNode ? x.file : x.code::SourceCode
+function _di_sourcefile(st, expanded=false)
+    x = (expanded ? sourceref : unexpanded_sourceref)(st)
+    x isa LineNumberNode ? something(x.file, :var"") : x.code::SourceCode
 end
 
-# A single pass over all IR to collect unique byte/line positions and CodeInfos
-function collect_locs!(node_sources, codeinfos, top_sf, st)
+# A single pass over all IR to collect unique byte/line positions and CodeInfos.
+#
+# Macro provenance: The previous LineNumberNode-based system achieved a sane
+# amount of debuginfo by accidentally losing most of it (e.g. different
+# expansions but same provenance file name, or user-deleted line nodes, or lack
+# of macro-def line nodes).  Here, we have the problem that we need to omit some
+# information.  Only keep the pre-expansion provenance, as we always do, as well
+# as the latest-expansion provenance (if any) as a DebugInfo edge.
+function collect_locs(st::Syntax)
+    codeinfos = Syntax[]
+    files = Union{Symbol, SourceCode}[]
+    spansets = Set{Tuple{Int32, Int32}}[]
+    top_file = _di_sourcefile(st)
+    top_spanset = Set{Tuple{Int32, Int32}}()
+    push!(top_spanset, _di_pos(st))
+    _collect_locs!(st, codeinfos, top_file, top_spanset, files, spansets)
+    codeinfos, top_file, top_spanset, files, spansets
+end
+function _collect_locs!(st, codeinfos, top_file, top_spanset, files, spansets)
+    collect1(file, pos) = let i = findfirst(==(file), files)
+        if i === nothing
+            push!(files, file)
+            push!(spansets, let s = Set{Tuple{Int32, Int32}}(); push!(s, pos); end)
+        else
+            push!(spansets[i], pos)
+        end
+    end
     if head(st) === :code_info
         push!(codeinfos, st)
-        # TODO: macro_source is ignored for now
-        get!(node_sources, st, _di_pos(st))
         for c in children(st[2])
-            node_sources[c] =
-                if _di_sourcefile(c) !== top_sf
-                    top_sf isa SourceCode &&
-                        @warn "inconsistent provenance for child" c st
-                    node_sources[st]
-                else
-                    _di_pos(c)
-                end
-            collect_locs!(node_sources, codeinfos, top_sf, c)
+            c_file = _di_sourcefile(c)
+            if c_file === top_file
+                push!(top_spanset, _di_pos(c))
+            else
+                # unexpected when c_file isa sourcecode (likely need further
+                # restriction in apply_expansion_layer or adopt_scope)
+                @jl_assert c_file isa Symbol c
+                collect1(c_file, _di_pos(c))
+            end
+            mfile = _di_sourcefile(c, true)
+            macro_prov(c) === nothing ||
+                collect1(mfile, _di_pos(c, true))
+            _collect_locs!(c, codeinfos, top_file, top_spanset, files, spansets)
         end
     elseif !is_leaf(st)
         # Non-toplevel codeinfo can contain nested codeinfo (opaque closures)
         for c in children(st)
-            collect_locs!(node_sources, codeinfos, top_sf, c)
+            _collect_locs!(c, codeinfos, top_file, top_spanset, files, spansets)
         end
     end
     nothing
 end
 
-function add_ci_debuginfo!(st::SyntaxTree, file::Symbol,
+function add_ci_debuginfo!(st::SyntaxTree,
+                           top_file::Union{SourceCode, Symbol},
                            top_sbt::Union{String, Nothing},
-                           node_sources::Dict{SyntaxTree, Tuple{Int32, Int32}},
-                           spans::Vector{Tuple{Int32, Int32}})
-    @jl_assert head(st) === :code_info st
+                           top_spans::Vector{Tuple{Int32, Int32}},
+                           edge_files::Vector{Union{Symbol, SourceCode}},
+                           edge_spans::Vector{Vector{Tuple{Int32, Int32}}},
+                           edges::Core.SimpleVector)
+    @jl_assert head(st) === :code_info && head(st[2]) === :block st
     locs = let a = sizehint!(Vector{Int32}(), 3*numchildren(st[2]))
+        local out_1 = Int32(0)
         for c in children(st[2])
-            if top_sbt isa String # precise provenance
-                push!(a, Int32(searchsortedfirst(spans, node_sources[c])))
-            else
-                i = searchsortedfirst(spans, node_sources[c])
-                @jl_assert spans[i][2] == LINENODE_SPAN_END (c, "lno with span end?")
-                push!(a, spans[i][1])
+            # Need (top_spans_i, edge_i, edge_spans[edge_i]_i)
+            out_2, out_3 = Int32(0), Int32(0)
+            ufile = _di_sourcefile(c)
+            upos = _di_pos(c)
+            foreign_linenode = false
+            @jl_assert typeof(top_file) == typeof(ufile) c st
+            if ufile isa SourceCode # precise provenance
+                out_1 = Int32(searchsortedfirst(top_spans, upos))
+            elseif ufile === top_file
+                i = searchsortedfirst(top_spans, upos)
+                @jl_assert top_spans[i][2] == LINENODE_SPAN_END (c, "lno with span end?")
+                out_1 = top_spans[i][1]
             end
-            push!(a, Int32(0))
-            push!(a, Int32(0))
+            if ufile !== top_file
+                # this loc must be from Expr translation, so assume this is more
+                # useful than the expanded provenance (which is almost(?)
+                # certainly the same as the unexpanded provenance), and use
+                # out_1 from the previous iteration
+                out_2 = edge_i = findfirst(==(ufile), edge_files)
+                @jl_assert out_2 !== nothing (st, "macro loc not collected?")
+                out_3 = Int32(searchsortedfirst(edge_spans[edge_i], upos))
+            elseif macro_prov(c) !== nothing
+                efile = _di_sourcefile(c, true)
+                epos = _di_pos(c, true)
+                out_2 = edge_i = findfirst(==(efile), edge_files)
+                @jl_assert out_2 !== nothing (st, "macro loc not collected?")
+                out_3 = Int32(searchsortedfirst(edge_spans[edge_i], epos))
+            end
+            push!(a, out_1)
+            push!(a, out_2)
+            push!(a, out_3)
         end
         a
     end
-
+    top_filename = top_file isa SourceCode ? top_file.filename : top_file
     setmeta!(st, :debuginfo, Core.DebugInfo(
-        file, top_sbt, Core.svec(),
-        @ccall(jl_compress_codelocs((-1)::Int32, locs::Any,
-                                    numchildren(st[2])::Csize_t)::String)))
+        # We don't trim edges (this svec is likely to not need it, and small in
+        # the first place.)  We'd also need to re-calculate indices if we did.
+        top_filename, top_sbt, Core.svec(edges...), compress_codelocs(locs)))
+end
+
+function compress_codelocs(locs::Vector{Int32})
+    l = length(locs)
+    @assert mod(l, 3) == 0
+    @ccall(jl_compress_codelocs((-1)::Int32, locs::Any, div(l, 3)::Csize_t)::String)
+end
+
+function mk_edge_debuginfo(file::Union{SourceCode, Symbol}, spans)
+    if file isa SourceCode
+        locs = compress_codelocs(
+            Int32[x for j in eachindex(spans) for x in (j, 0, 0)])
+        Core.DebugInfo(
+            file.filename,
+            compress_sbt(SourceByteTable(file, spans)), Core.svec(), locs)
+    else
+        locs = compress_codelocs(Int32[x for s in spans for x in (s[1], 0, 0)])
+        Core.DebugInfo(file, nothing, Core.svec(), locs)
+    end
 end
 
 # Populate `.debuginfo` on all :code_info in `st`
 function add_debuginfo!(st::SyntaxTree)
     @jl_assert head(st) === :code_info st
-    node_sources = Dict{SyntaxTree, Tuple{Int32, Int32}}()
-    codeinfos = SyntaxList()
-    top_sf = _di_sourcefile(st)
-    collect_locs!(node_sources, codeinfos, top_sf, st)
-    byte_precise = _has_byte_precise_debuginfo && top_sf isa SourceCode
-    if !byte_precise && top_sf isa SourceCode
-        # Without byte-precise support, degrade each byte span to its line number
-        # so the line-based path below emits valid `DebugInfo` (same shape as the
-        # `LineNumberNode` case).
-        for id in collect(keys(node_sources))
-            line = Int32(source_line(top_sf, node_sources[id][1]))
-            node_sources[id] = (line, LINENODE_SPAN_END)
+    codeinfos, top_file, top_spanset, e_files, e_spansets = collect_locs(st)
+    if !_has_byte_precise_debuginfo # lowered code isn't executable
+        for ci in codeinfos
+            setmeta!(ci, :debuginfo, Core.NullDebugInfo)
         end
+        return
     end
-    spans = sort!(unique(values(node_sources)))
-    if byte_precise
-        top_sbt = compress_sbt(SourceByteTable(top_sf, spans))
-        file = Symbol(top_sf.filename)
-    else
-        top_sbt = nothing
-        file = top_sf isa SourceCode ? Symbol(top_sf.filename) : Symbol(top_sf)
+    e_spans = Vector{Tuple{Int32, Int32}}[]
+    e_debuginfos = Core.DebugInfo[]
+    for (file, spanset) in zip(e_files, e_spansets)
+        spans = sort!(collect(spanset))
+        push!(e_spans, spans)
+        push!(e_debuginfos, mk_edge_debuginfo(file, spans))
     end
+    top_spans = sort!(collect(top_spanset))
+    di1 = mk_edge_debuginfo(top_file, top_spans)
     for ci in codeinfos
-        add_ci_debuginfo!(ci, file, top_sbt, node_sources, spans)
+        add_ci_debuginfo!(
+            ci, top_file, di1.linetable, top_spans, e_files, e_spans,
+            Core.svec(e_debuginfos...))
     end
 end
 
@@ -544,6 +622,8 @@ function to_code_info(ex::SyntaxTree)
         name = slot.name
         if name !== UNUSED && startswith(name, ERASE_SLOTNAME_PREFIX)
             name = ""
+        elseif i > 1 && startswith(name, "##")
+            name = name[3:end]
         end
         sname = Symbol(name)
         slotnames[i] = sname
@@ -764,22 +844,36 @@ end
     if !(ex isa SyntaxTree)
         ex = expr_to_est(ex)
     end
-    return _lower_and_eval(mod, ex, soft_scope)
+    return _eval(mod, lower_init(ex), false, soft_scope)
 end
 
-function _lower_and_eval(mod::Module, st::SyntaxTree,
-                         soft_scope::Union{Nothing,Bool})
-    iter = lower_init(st)
-    return _eval(mod, iter; soft_scope)
+# TODO: Consumers expect LoadError from macros and ErrorException from lowering,
+# but better printing could be done if we were to change this.
+function to_compatible_exception(@nospecialize(exc))
+    if exc isa LoweringError && !exc.internal
+        ErrorException(string("syntax: ", sprint(showerror, exc)))
+    elseif exc isa MacroExpansionError
+        loc = _macrocall_expr_location(exc.context.macrocall)
+        lnn = loc isa MacroSource ? loc.lno : loc
+        file = lnn.file isa Symbol && lnn.file !== :var"" ? String(lnn.file) : "<macrocall>"
+        LoadError(file, lnn.line, to_compatible_exception(exc.err))
+    else
+        exc
+    end
 end
 
-function _eval(mod::Module, iter::LoweringIterator; soft_scope::Union{Nothing,Bool}=nothing)
+function _eval(mod::Module, iter::LoweringIterator,
+               error_compat::Bool, soft_scope::Union{Nothing,Bool})
     modules = Module[mod]
     result = nothing
     while true
-        thunk = invoke_in_lowering_world(
-            ()->lower_step(iter, modules[end],
-                           Base.get_world_counter(); soft_scope))::Core.SimpleVector
+        thunk = try
+            invoke_in_lowering_world(
+                ()->lower_step(iter, modules[end],
+                               Base.get_world_counter(); soft_scope))::Core.SimpleVector
+        catch exc
+            error_compat ? rethrow(to_compatible_exception(exc)) : rethrow()
+        end
         type = thunk[1]::Symbol
         if type == :done
             break

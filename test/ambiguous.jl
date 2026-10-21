@@ -542,6 +542,8 @@ end
             (complex, (Union{},), Union{}),
             (real, (Union{},), Union{}),
             (float, (Union{},), Union{}),
+            (Base.hastypemax, (Union{},), false),
+            (isvalid, (Union{}, 0x41), false),
             (IndexStyle, (Union{},), IndexLinear()),
             (Base.BroadcastStyle, (Union{},), Base.Broadcast.Unknown()),
             (Base.OrderStyle, (Union{},), Base.Ordered()),

@@ -859,13 +859,14 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                     (jl_is_string(inferred) && jl_string_len(inferred) > 0 && jl_string_data(inferred)[jl_string_len(inferred) - 1]);
                 int may_discard_trees = !jl_get_type_infer_preserve_ir();
                 int discard = 0;
-                if (may_discard_trees && s->incremental && native_functions &&
-                    jl_options.outputo != NULL && ci->owner == jl_nothing && def->source != NULL &&
+                if (may_discard_trees && native_functions &&
+                    jl_options.outputo != NULL && ci->owner == jl_nothing &&
+                    (def->source != NULL || def->generator != NULL) &&
                     jl_is_code_info(inferred) && jl_ir_inlining_cost(inferred) == UINT16_MAX) {
-                    // Backstop: CodeInstance cached by a task racing the end of
-                    // include phase can escape jl_finalize_precompile_inferred.
-                    // Mirror the def->source guard below so optimized opaque
-                    // closures (whose IR can't be reconstructed) are preserved.
+                    // Drop IR kept only for emitting this image. For a pkgimage this is a
+                    // backstop for a CodeInstance cached by a task racing the end of the
+                    // include phase, which can escape jl_finalize_precompile_inferred.
+                    // Optimized opaque closures keep theirs, since it can't be rebuilt.
                     record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
                 }
                 else if (!is_relocatable) {

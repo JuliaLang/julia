@@ -590,7 +590,10 @@ end
             (0x110000, false)
         )
         @test isvalid(Char, val) == pass
+        # no value has type `Union{}`
+        @test !isvalid(Union{}, val)
     end
+    @test !isvalid(Union{}, 'a')
     for (val, pass) in (
             ("\x00", true),
             ("\x7f", true),

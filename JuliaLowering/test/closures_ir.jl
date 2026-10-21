@@ -581,6 +581,14 @@ Base.Experimental.@opaque (x=1)->2x
 #                          └─┘ ── opaque closure cannot have optional or keyword arguments
 
 ########################################
+# Error: Opaque closure with keyword args
+Base.Experimental.@opaque (x; y=1)->2x
+#---------------------
+LoweringError:
+Base.Experimental.@opaque (x; y=1)->2x
+#                         └──────┘ ── opaque closure cannot have optional or keyword arguments
+
+########################################
 # Mutually recursive closures
 let
     function recursive_a()

@@ -182,6 +182,8 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
                 // Ok, we've reached a leaf - check if it is eligible for lifting
                 if (!CurrentV->getType()->isPtrOrPtrVectorTy() ||
                     isSpecialAS(getValueAddrSpace(CurrentV))) {
+                    if (Visited.count(CurrentV))
+                        return nullptr;
                     // If not, poison all (recursive) users of this value, to prevent
                     // looking at them again in future iterations.
                     Worklist.clear();

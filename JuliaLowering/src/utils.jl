@@ -276,6 +276,9 @@ function _find_assigned_ssavars!(ctx, ssamap, st)
         b = get_binding(ctx, st[1])
         if b.is_ssa
             ssamap[b.id] = syntax_id(ssavar(ctx, st[1], b.name))
+        elseif b.kind == :typevar
+            ssamap[b.id] = _new_binding(
+                ctx.bindings, b.node_id, b.name, :typevar).id
         end
     end
     foreach(e->_find_assigned_ssavars!(ctx, ssamap, e), children(st))

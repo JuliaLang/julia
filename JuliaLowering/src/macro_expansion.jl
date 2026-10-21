@@ -82,27 +82,20 @@ function expand_syntaxquote(ctx, st)
                  [:syntaxinert st] unquoted...]
 end
 
-# Passed to the user as an implicit macro argument
-struct MacroContext <: AbstractLoweringContext
-    macrocall::SyntaxTree
-end
-
 struct MacroExpansionError <: Exception
     context::Union{Nothing,MacroContext}
     ex::SyntaxTree
     msg::String
-    "The source position relative to the node - may be `:begin` or `:end` or `:all`"
-    position::Symbol
     "Error that occurred inside the macro function call (`nothing` if no inner exception)"
     err
     MacroExpansionError(
-        context::Union{Nothing,MacroContext}, ex::SyntaxTree, msg::AbstractString, position::Symbol,
+        context::Union{Nothing,MacroContext}, ex::SyntaxTree, msg::AbstractString,
         @nospecialize err = nothing
-    ) = new(context, ex, msg, position, err)
+    ) = new(context, ex, msg, err)
 end
 
-function MacroExpansionError(ex::SyntaxTree, msg::AbstractString; position=:all)
-    MacroExpansionError(nothing, ex, msg, position)
+function MacroExpansionError(ex::SyntaxTree, msg::AbstractString)
+    MacroExpansionError(nothing, ex, msg)
 end
 
 function Base.showerror(io::IO, exc::MacroExpansionError)
@@ -119,23 +112,13 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
               " in module ", syntax_module(ctx.macrocall))
     end
     print(io, ":\n")
-    # TODO: Display niceties:
-    # * Show the full provenance tree somehow, in addition to the primary
-    #   source location we're showing here?
-    # * What if the expression doesn't arise from a source file?
-    # * How to deal with highlighting trivia? Could provide a token kind or
-    #   child position within the raw tree? How to abstract this??
     src = sourceref(exc.ex)
     if src isa LineNumberNode
         highlight(io, src, note=exc.msg)
     else
         fb = first_byte(src)
         lb = last_byte(src)
-        pos = exc.position
-        byterange = pos == :all     ? (fb:lb)   :
-            pos == :begin   ? (fb:fb-1) :
-            pos == :end     ? (lb+1:lb) :
-            error("Unknown position $pos")
+        byterange = fb:lb
         highlight(io, JuliaSyntax.SourceFile(src.code), byterange, note=exc.msg)
     end
     if !isnothing(exc.err)
@@ -184,7 +167,7 @@ function eval_macro_name(ctx, mctx::MacroContext, st0::SyntaxTree)
             ccall(:jl_toplevel_eval, Any, (Any, Any), mod, expr_form)
         end
     catch err
-        throw(MacroExpansionError(mctx, st, "Macro not found", :all, err))
+        rethrow(MacroExpansionError(mctx, st, "Macro not found", err))
     end
 end
 
@@ -228,10 +211,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
         expanded = try
             _invoke_in_world(ctx.world, macfunc, macro_args...)
         catch exc
-            newexc = exc isa MacroExpansionError ?
-                MacroExpansionError(mctx, exc.ex, exc.msg, exc.position, exc.err) :
-                MacroExpansionError(mctx, st, "Error expanding macro", :all, exc)
-            rethrow(newexc)
+            rethrow(MacroExpansionError(mctx, st, "Error expanding macro", exc))
         end
         st_out = if expanded isa SyntaxTree
             expanded
@@ -259,9 +239,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
                 # rather than any old-style macro methods which might exist
                 exc = MethodError(macfunc, (mctx, raw_args...,), ctx.world)
             end
-            rethrow(LoadError(
-                string(macro_lnn.file), macro_lnn.line,
-                MacroExpansionError(mctx, st, "Error expanding macro", :all, exc)))
+            rethrow(MacroExpansionError(mctx, st, "Error expanding macro", exc))
         end
         st_out = expr_to_est(st_out, macro_lnn)
     end
@@ -294,9 +272,9 @@ invariant that all layers have the same root after every expansion, so
 
 Implementation notes:
 
-- `escape` can never be resolved to a layer inside a macrocall, since we must
-  expand to know whether (old) more escapes will surround it or (new) the macro
-  moves the escape to another layer.
+- `escape` in an argument of a macrocall cannot be resolved to a layer, since we
+  must expand to know whether (old) more escapes will surround it or (new) the
+  macro moves the escape to another layer.
 
 - `escape` nodes coming in usually have no layer (old expansion).  New
   expansions can't create escapes, but can pass an argument containing `escape`

@@ -1197,3 +1197,13 @@ end
     @test JuliaLowering.eval(test_mod,
         :(let; f(c) = ($(Expr(:throw_undef_if_not, :tuin_y, :c)); 1); f(true); end)) == 1
 end
+
+@testset "Expr(:error) throws from a top-level scope frame" begin
+    frames = try
+        JuliaLowering.eval(test_mod, Expr(:error, "foo"))
+    catch e
+        @test e == ErrorException("syntax: foo")
+        stacktrace(catch_backtrace())
+    end
+    @test frames[1].func === Symbol("top-level scope")
+end
