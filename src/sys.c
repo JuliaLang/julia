@@ -210,12 +210,12 @@ JL_DLLEXPORT int32_t jl_fstat(uv_os_fd_t fd, char *statbuf)
     return ret;
 }
 
-JL_DLLEXPORT unsigned int jl_stat_dev(char *statbuf)
+JL_DLLEXPORT uint64_t jl_stat_dev(char *statbuf)
 {
     return ((uv_stat_t*)statbuf)->st_dev;
 }
 
-JL_DLLEXPORT unsigned int jl_stat_ino(char *statbuf)
+JL_DLLEXPORT uint64_t jl_stat_ino(char *statbuf)
 {
     return ((uv_stat_t*)statbuf)->st_ino;
 }
@@ -240,7 +240,7 @@ JL_DLLEXPORT unsigned int jl_stat_gid(char *statbuf)
     return ((uv_stat_t*)statbuf)->st_gid;
 }
 
-JL_DLLEXPORT unsigned int jl_stat_rdev(char *statbuf)
+JL_DLLEXPORT uint64_t jl_stat_rdev(char *statbuf)
 {
     return ((uv_stat_t*)statbuf)->st_rdev;
 }
