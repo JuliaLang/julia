@@ -16,6 +16,7 @@
 #include "julia_internal.h"
 
 #include <algorithm>
+#include <climits>
 #include <vector>
 #include <string>
 
@@ -437,10 +438,55 @@ static void init_jit_targets(const char *cpu_target, bool imaging) JL_NOTSAFEPOI
 // Sysimage / pkgimage target matching
 // ============================================================================
 
+// Name the image's targets and the features that `target` lacks for the
+// closest one, using the same conflict test as `tp::match_targets`.
+static std::string incompatible_target_msg(const std::vector<tp::LLVMTargetSpec> &image_targets,
+                                           const tp::LLVMTargetSpec &target, bool is_sysimg)
+{
+    std::string msg = "Unable to find compatible target in cached code image.";
+    if (image_targets.empty())
+        return msg;
+    std::string names;
+    tp::FeatureBits closest_missing{};
+    unsigned closest_n = UINT_MAX;
+    size_t closest = 0;
+    for (size_t i = 0; i < image_targets.size(); i++) {
+        names += (i == 0 ? "" : ", ") + image_targets[i].cpu_name;
+        tp::FeatureBits missing;
+        tp::feature_and_out(&missing, &image_targets[i].en_features, &target.dis_features);
+        tp::feature_andnot(&missing, &missing, &tp::uarch_feature_mask);
+        unsigned n = tp::feature_popcount(&missing);
+        if (n < closest_n) {
+            closest_n = n;
+            closest = i;
+            closest_missing = missing;
+        }
+    }
+    msg += " It was compiled for " + names + ".";
+    if (closest_n > 0) {
+        // "+avx,+xsave" -> "avx, xsave"
+        std::string features;
+        for (char c : tp::build_feature_string(closest_missing)) {
+            if (c == '+')
+                continue;
+            features += c;
+            if (c == ',')
+                features += ' ';
+        }
+        msg += " The closest, " + image_targets[closest].cpu_name +
+               ", requires features that this CPU (" + target.cpu_name + ") lacks: " +
+               features + ".";
+    }
+    if (is_sysimg)
+        msg += " Please read https://docs.julialang.org/en/v1/devdocs/sysimg/ for more.";
+    return msg;
+}
+
 // Shared: deserialize image targets, match against a resolved target.
 // Returns {target_index, vreg_size} or {UINT32_MAX, 0} on failure.
 static std::pair<uint32_t, int> match_image_targets(
-        const void *id, const tp::LLVMTargetSpec &target, jl_value_t **rejection_reason) JL_CANSAFEPOINT
+        const void *id, const tp::LLVMTargetSpec &target, jl_value_t **rejection_reason,
+        bool is_sysimg) JL_CANSAFEPOINT
 {
     auto image_targets = tp::deserialize_targets((const uint8_t *)id);
     CF_DEBUG("[cpufeatures]   image has %zu target(s)\n", image_targets.size());
@@ -449,7 +495,7 @@ static std::pair<uint32_t, int> match_image_targets(
     if (match.best_idx < 0) {
         CF_DEBUG("[cpufeatures]   NO compatible target found!\n");
         if (rejection_reason) {
-            std::string msg = "Unable to find compatible target in cached code image.";
+            std::string msg = incompatible_target_msg(image_targets, target, is_sysimg);
             *rejection_reason = jl_pchar_to_string(msg.data(), msg.size());
         }
         return {UINT32_MAX, 0};
@@ -495,7 +541,7 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
 #endif
 
     // Match against image targets
-    auto match_result = match_image_targets(id, target, rejection_reason);
+    auto match_result = match_image_targets(id, target, rejection_reason, true);
     if (match_result.first == UINT32_MAX)
         return UINT32_MAX;
 
@@ -557,7 +603,7 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
 static uint32_t match_pkgimg_target(void *ctx, const void *id, jl_value_t **rejection_reason) JL_CANSAFEPOINT
 {
     auto &target = jit_targets.front();
-    auto result = match_image_targets(id, target, rejection_reason);
+    auto result = match_image_targets(id, target, rejection_reason, false);
     return result.first;
 }
 
