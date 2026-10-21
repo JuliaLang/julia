@@ -1877,6 +1877,118 @@ void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVe
     }
 }
 
+// Emit an allocation of `size` bytes with type tag `tag`, to replace the allocation `CI`
+CallInst *LateLowerGCFrame::EmitGCAllocBytes(IRBuilder<> &builder, CallInst *CI, Value *size, Value *tag)
+{
+    auto T_size = CI->getModule()->getDataLayout().getIntPtrType(CI->getContext());
+    // Strip casts that hide from LLVM that the tag is 16-byte aligned, i.e. that its GC
+    // bits are clear.
+    tag = tag->stripPointerCastsAndAliases();
+    if (auto C = dyn_cast<ConstantExpr>(tag)) {
+        if (C->getOpcode() == Instruction::IntToPtr) {
+            tag = C->getOperand(0);
+        }
+    }
+    else if (auto LI = dyn_cast<LoadInst>(tag)) {
+        // Restore the alignment of a type loaded from a constant global, which LLVM may have
+        // dropped. Other loads may not produce a type on paths that don't reach here.
+        bool task_local = false;
+        if (isLoadFromConstGV(LI, task_local) && getLoadValueAlign(LI) < 16) {
+            Type *T_int64 = Type::getInt64Ty(LI->getContext());
+            auto op = ConstantAsMetadata::get(ConstantInt::get(T_int64, 16));
+            LI->setMetadata(LLVMContext::MD_align, MDNode::get(LI->getContext(), { op }));
+        }
+    }
+    auto tag_type = tag->getType();
+    if (tag_type->isPointerTy()) {
+        auto &DL = CI->getModule()->getDataLayout();
+        auto align = tag->getPointerAlignment(DL).value();
+        if (align < 16) {
+            builder.CreateAlignmentAssumption(DL, tag, 16);
+        }
+    }
+
+    // Unlike `julia.gc_alloc_obj`, `julia.gc_alloc_bytes` lets FinalLowerGC pick the pool for
+    // a constant size, and doesn't set the tag.
+    auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
+    auto ptls = get_current_ptls_from_task(builder, CI->getArgOperand(0), tbaa_gcframe);
+    auto newI = builder.CreateCall(
+        allocBytesIntrinsic,
+        {
+            ptls,
+            builder.CreateIntCast(
+                size,
+                allocBytesIntrinsic->getFunctionType()->getParamType(1),
+                false),
+            builder.CreatePtrToInt(tag, T_size),
+        });
+    newI->setAttributes(allocBytesIntrinsic->getAttributes());
+    newI->addDereferenceableRetAttr(CI->getRetDereferenceableBytes());
+    // Preserve CancellationLowering's reset-region annotation:
+    // FinalLowerGC uses it to select the reset-safe allocation
+    // entry points.
+    if (auto *MD = CI->getMetadata("julia.reset_region"))
+        newI->setMetadata("julia.reset_region", MD);
+    newI->takeName(CI);
+    // Setting the tag in IR was meant to let LLVM see that a fresh object has clear GC bits,
+    // and fold away write barriers on it. Since #59559, write barriers load the tag as volatile,
+    // because a safepoint between the allocation and the barrier can age the object (#59547).
+    // Eliding these barriers now requires proving that no safepoint lies in between.
+    auto &M = *builder.GetInsertBlock()->getModule();
+    StoreInst *store = builder.CreateAlignedStore(
+        tag, EmitTagPtr(builder, tag_type, T_size, newI), M.getDataLayout().getPointerABIAlignment(0));
+    store->setOrdering(AtomicOrdering::Unordered);
+    store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
+    return newI;
+}
+
+// Expand `julia.gc_alloc_memory`, initializing the header and, if requested, zeroing the data
+// right after the allocation, so that the GC never sees it partially initialized.
+Value *LateLowerGCFrame::LowerGCAllocMemory(CallInst *CI)
+{
+    assert(CI->arg_size() == 5);
+    IRBuilder<> builder(CI);
+    builder.SetCurrentDebugLocation(CI->getDebugLoc());
+    auto &ctx = CI->getContext();
+    auto T_size = CI->getModule()->getDataLayout().getIntPtrType(ctx);
+    Type *T_int8 = Type::getInt8Ty(ctx);
+    Value *nbytes = CI->getArgOperand(1);
+    Value *tag = CI->getArgOperand(2);
+    Value *length = CI->getArgOperand(3);
+    bool zeroinit = cast<ConstantInt>(CI->getArgOperand(4))->isOne();
+    CallInst *newI;
+    Value *derived;
+    Value *data;
+    if (auto size = getInlineMemorySize(CI)) {
+        newI = EmitGCAllocBytes(builder, CI, ConstantInt::get(T_size, *size), tag);
+        newI->addDereferenceableRetAttr(*size);
+        derived = builder.CreateAddrSpaceCast(newI, PointerType::get(ctx, AddressSpace::Derived));
+        Value *objref = builder.CreateAddrSpaceCast(derived, PointerType::get(ctx, 0));
+        data = builder.CreateConstInBoundsGEP1_64(T_int8, objref, JL_GENERICMEMORY_INLINE_DATA_OFFSET);
+        Value *ptr_field = builder.CreateConstInBoundsGEP1_64(T_int8, derived, offsetof(jl_genericmemory_t, ptr));
+        builder.CreateAlignedStore(data, ptr_field, Align(sizeof(void*)));
+    }
+    else {
+        // the runtime initializes the data pointer, and the owner if the data is malloc'd
+        auto allocFunc = getOrDeclare(jl_well_known::GCAllocGenericMemory);
+        auto ptls = get_current_ptls_from_task(builder, CI->getArgOperand(0), tbaa_gcframe);
+        Value *untracked_tag = builder.CreateAddrSpaceCast(tag, PointerType::get(ctx, 0));
+        newI = builder.CreateCall(allocFunc, {ptls, nbytes, untracked_tag});
+        newI->setAttributes(allocFunc->getAttributes());
+        newI->addRetAttr(Attribute::getWithAlignment(ctx, Align(JL_HEAP_ALIGNMENT)));
+        newI->addDereferenceableRetAttr(sizeof(jl_genericmemory_t));
+        newI->takeName(CI);
+        derived = builder.CreateAddrSpaceCast(newI, PointerType::get(ctx, AddressSpace::Derived));
+        Value *ptr_field = builder.CreateConstInBoundsGEP1_64(T_int8, derived, offsetof(jl_genericmemory_t, ptr));
+        data = builder.CreateAlignedLoad(PointerType::get(ctx, 0), ptr_field, Align(sizeof(void*)));
+    }
+    if (zeroinit && !(isa<ConstantInt>(nbytes) && cast<ConstantInt>(nbytes)->isZero()))
+        builder.CreateMemSet(data, ConstantInt::get(T_int8, 0), nbytes, Align(sizeof(void*)));
+    Value *length_field = builder.CreateConstInBoundsGEP1_64(T_int8, derived, offsetof(jl_genericmemory_t, length));
+    builder.CreateAlignedStore(length, length_field, Align(sizeof(void*)));
+    return newI;
+}
+
 bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
     auto T_int32 = Type::getInt32Ty(F.getContext());
     auto T_size = F.getParent()->getDataLayout().getIntPtrType(F.getContext());
@@ -1982,83 +2094,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 // Initialize an IR builder.
                 IRBuilder<> builder(CI);
                 builder.SetCurrentDebugLocation(CI->getDebugLoc());
-
-                // LLVM alignment/bit check is not happy about addrspacecast and refuse
-                // to remove write barrier because of it.
-                // We pretty much only load using `T_size` so try our best to strip
-                // as many cast as possible.
-                auto tag = CI->getArgOperand(2)->stripPointerCastsAndAliases();
-                if (auto C = dyn_cast<ConstantExpr>(tag)) {
-                    if (C->getOpcode() == Instruction::IntToPtr) {
-                        tag = C->getOperand(0);
-                    }
-                }
-                else if (auto LI = dyn_cast<LoadInst>(tag)) {
-                    // Make sure the load is correctly marked as aligned
-                    // since LLVM might have removed them.
-                    // We can't do this in general since the load might not be
-                    // a type in other branches.
-                    // However, it should be safe for us to do this on const globals
-                    // which should be the important cases as well.
-                    bool task_local = false;
-                    if (isLoadFromConstGV(LI, task_local) && getLoadValueAlign(LI) < 16) {
-                        Type *T_int64 = Type::getInt64Ty(LI->getContext());
-                        auto op = ConstantAsMetadata::get(ConstantInt::get(T_int64, 16));
-                        LI->setMetadata(LLVMContext::MD_align, MDNode::get(LI->getContext(), { op }));
-                    }
-                }
-                // As a last resort, if we didn't manage to strip down the tag
-                // for LLVM, emit an alignment assumption.
-                auto tag_type = tag->getType();
-                if (tag_type->isPointerTy()) {
-                    auto &DL = CI->getModule()->getDataLayout();
-                    auto align = tag->getPointerAlignment(DL).value();
-                    if (align < 16) {
-                        // On 5 <= LLVM < 12, it is illegal to call this on
-                        // non-integral pointer. This relies on stripping the
-                        // non-integralness from datalayout before this pass
-                        builder.CreateAlignmentAssumption(DL, tag, 16);
-                    }
-                }
-
-                // Create a call to the `julia.gc_alloc_bytes` intrinsic, which is like
-                // `julia.gc_alloc_obj` except it specializes the call based on the constant
-                // size of the object to allocate, to save one indirection, and doesn't set
-                // the type tag. (Note that if the size is not a constant, it will call
-                // gc_alloc_obj, and will redundantly set the tag.)
-                auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
-                auto ptls = get_current_ptls_from_task(builder, CI->getArgOperand(0), tbaa_gcframe);
-                auto newI = builder.CreateCall(
-                    allocBytesIntrinsic,
-                    {
-                        ptls,
-                        builder.CreateIntCast(
-                            CI->getArgOperand(1),
-                            allocBytesIntrinsic->getFunctionType()->getParamType(1),
-                            false),
-                        builder.CreatePtrToInt(tag, T_size),
-                    });
-                newI->setAttributes(allocBytesIntrinsic->getAttributes());
-                newI->addDereferenceableRetAttr(CI->getRetDereferenceableBytes());
-                // Preserve CancellationLowering's reset-region annotation:
-                // FinalLowerGC uses it to select the reset-safe allocation
-                // entry points.
-                if (auto *MD = CI->getMetadata("julia.reset_region"))
-                    newI->setMetadata("julia.reset_region", MD);
-                newI->takeName(CI);
-                // Now, finally, set the tag. We do this in IR instead of in the C alloc
-                // function, to provide possible optimization opportunities. (I think? TBH
-                // the most recent editor of this code is not entirely clear on why we
-                // prefer to set the tag in the generated code. Providing optimization
-                // opportunities is the most likely reason; the tradeoff is slightly
-                // larger code size and increased compilation time, compiling this
-                // instruction at every allocation site, rather than once in the C alloc
-                // function.)
-                auto &M = *builder.GetInsertBlock()->getModule();
-                StoreInst *store = builder.CreateAlignedStore(
-                    tag, EmitTagPtr(builder, tag_type, T_size, newI), M.getDataLayout().getPointerABIAlignment(0));
-                store->setOrdering(AtomicOrdering::Unordered);
-                store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
+                auto newI = EmitGCAllocBytes(builder, CI, CI->getArgOperand(1), CI->getArgOperand(2));
 
                 // Zero GC pointer fields if the operand bundle specifies offsets
                 // This ensures GC sees valid pointers even if initialization is delayed
@@ -2113,6 +2149,10 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 CI->replaceAllUsesWith(newI);
 
                 // Update the pointer numbering.
+                UpdatePtrNumbering(CI, newI, S);
+            } else if (alloc_memory_func && callee == alloc_memory_func) {
+                Value *newI = LowerGCAllocMemory(CI);
+                CI->replaceAllUsesWith(newI);
                 UpdatePtrNumbering(CI, newI, S);
             } else if (typeof_func && callee == typeof_func) {
                 assert(CI->arg_size() == 1);
