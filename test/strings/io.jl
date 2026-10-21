@@ -377,4 +377,6 @@ end
     @test Base.return_types(join, (typeof(itr),))[] == String
     @test Base.infer_return_type(join, (Tuple{String,Vararg{String}}, Char)) == String
     @test Base.infer_return_type(join, (Tuple{Vararg{String}}, String, String)) == String
+    @test Base.infer_return_type(join, (Tuple{String, Base.AnnotatedString{String, Int}}, Char)) ==
+        Base.AnnotatedString{String, Int}
 end

@@ -2,13 +2,13 @@
 
 ## AnnotatedIOBuffer
 
-struct AnnotatedIOBuffer <: AbstractPipe
+struct AnnotatedIOBuffer{V} <: AbstractPipe
     io::IOBuffer
-    annotations::Vector{RegionAnnotation}
+    annotations::Vector{RegionAnnotation{V}}
 end
 
-AnnotatedIOBuffer(io::IOBuffer) = AnnotatedIOBuffer(io, Vector{RegionAnnotation}())
-AnnotatedIOBuffer() = AnnotatedIOBuffer(IOBuffer())
+AnnotatedIOBuffer{V}(io::IOBuffer = IOBuffer()) where {V} = AnnotatedIOBuffer(io, Vector{RegionAnnotation{V}}())
+AnnotatedIOBuffer(io::IOBuffer = IOBuffer()) = AnnotatedIOBuffer{Any}(io)
 
 function show(io::IO, aio::AnnotatedIOBuffer)
     show(io, AnnotatedIOBuffer)
@@ -29,39 +29,38 @@ copy(io::AnnotatedIOBuffer) = AnnotatedIOBuffer(copy(io.io), copy(io.annotations
 
 annotations(io::AnnotatedIOBuffer) = io.annotations
 
-annotate!(io::AnnotatedIOBuffer, range::UnitRange{Int}, label::Symbol, @nospecialize(val::Any)) =
-    (_annotate!(io.annotations, range, label, val); io)
+annotate!(io::AnnotatedIOBuffer, range::UnitRange{Int}, @nospecialize(val::Any)) =
+    (_annotate!(io.annotations, range, val); io)
 
-function write(io::AnnotatedIOBuffer, astr::Union{AnnotatedString, SubString{<:AnnotatedString}})
-    astr = AnnotatedString(astr)
+function write(io::AnnotatedIOBuffer{V}, astr::Union{AnnotatedString{S}, SubString{<:AnnotatedString{S}}}) where {V, S}
+    annots = convert(Vector{RegionAnnotation{V}}, annotations(astr))
     offset = position(io.io)
     eof(io) || _clear_annotations_in_region!(io.annotations, offset+1:offset+ncodeunits(astr))
-    _insert_annotations!(io, astr.annotations)
-    write(io.io, String(astr))
+    _insert_annotations!(io, annots)
+    write(io.io, unannotate(astr))::Int
 end
 
-write(io::AnnotatedIOBuffer, c::AnnotatedChar) =
-    write(io, AnnotatedString(string(c), [(region=1:ncodeunits(c), a...) for a in c.annotations]))
+write(io::AnnotatedIOBuffer, c::AnnotatedChar) = write(io, annotatedstring(c))
 write(io::AnnotatedIOBuffer, x::AbstractString) = write(io.io, x)::Int
 write(io::AnnotatedIOBuffer, s::Union{SubString{String}, String}) = write(io.io, s)
 write(io::AnnotatedIOBuffer, s::StringViewAndSub) = write(io.io, s)::Int
 write(io::AnnotatedIOBuffer, b::UInt8) = write(io.io, b)
 
-function write(dest::AnnotatedIOBuffer, src::AnnotatedIOBuffer)
+function write(dest::AnnotatedIOBuffer{V}, src::AnnotatedIOBuffer) where {V}
     destpos = position(dest)
     isappending = eof(dest)
     srcpos = position(src)
+    srcannots = RegionAnnotation{V}[ # Before the text, so a value that doesn't fit leaves `dest` as it was
+        @inline(setindex(annot, max(1 + srcpos, first(annot.region)):last(annot.region), :region))
+        for annot in src.annotations if first(annot.region) >= srcpos]
     nb = write(dest.io, src.io)
     isappending || _clear_annotations_in_region!(dest.annotations, destpos:destpos+nb)
-    srcannots = [@inline(setindex(annot, max(1 + srcpos, first(annot.region)):last(annot.region), :region))
-                 for annot in src.annotations if first(annot.region) >= srcpos]
     _insert_annotations!(dest, srcannots, destpos - srcpos)
     nb
 end
 
-# So that read/writes with `IOContext` (and any similar `AbstractPipe` wrappers)
-# work as expected.
-function write(io::AbstractPipe, s::Union{AnnotatedString, SubString{<:AnnotatedString}})
+# So that read/writes with `IOContext` (and any similar `AbstractPipe` wrappers) work as expected.
+function write(io::AbstractPipe, s::Union{AnnotatedString{S}, SubString{<:AnnotatedString{S}}}) where {S}
     if pipe_writer(io) isa AnnotatedIOBuffer
         write(pipe_writer(io), s)
     else
@@ -78,25 +77,25 @@ function write(io::AbstractPipe, c::AnnotatedChar)
     end::Int
 end
 
-function read(io::AnnotatedIOBuffer, ::Type{AnnotatedString{T}}) where {T <: AbstractString}
+function read(io::AnnotatedIOBuffer, ::Type{AnnotatedString{S, V}}) where {S, V}
     start = position(io)
-    if start == 0
-        AnnotatedString(read(io.io, T), copy(io.annotations))
-    else
-        annots = [@inline(setindex(annot, UnitRange{Int}(max(1, first(annot.region) - start), last(annot.region)-start), :region))
-                  for annot in io.annotations if last(annot.region) > start]
-        AnnotatedString(read(io.io, T), annots)
-    end
+    annots = RegionAnnotation{V}[
+        (region = max(1, first(annot.region) - start):last(annot.region)-start,
+         value = annot.value)
+        for annot in io.annotations if last(annot.region) > start]
+    AnnotatedString{S, V}(read(io.io, S), annots)
 end
+read(io::AnnotatedIOBuffer{V}, ::Type{AnnotatedString{S}}) where {S, V} = read(io, AnnotatedString{S, V})
 read(io::AnnotatedIOBuffer, ::Type{AnnotatedString{AbstractString}}) = read(io, AnnotatedString{String})
 read(io::AnnotatedIOBuffer, ::Type{AnnotatedString}) = read(io, AnnotatedString{String})
 
-function read(io::AnnotatedIOBuffer, ::Type{AnnotatedChar{T}}) where {T <: AbstractChar}
+function read(io::AnnotatedIOBuffer, ::Type{AnnotatedChar{T, V}}) where {T <: AbstractChar, V}
     pos = position(io)
     char = read(io.io, T)
-    annots = [NamedTuple{(:label, :value)}(annot) for annot in io.annotations if pos+1 in annot.region]
-    AnnotatedChar(char, annots)
+    annots = V[annot.value for annot in io.annotations if pos+1 in annot.region]
+    AnnotatedChar{T, V}(char, annots)
 end
+read(io::AnnotatedIOBuffer{V}, ::Type{AnnotatedChar{T}}) where {T <: AbstractChar, V} = read(io, AnnotatedChar{T, V})
 read(io::AnnotatedIOBuffer, ::Type{AnnotatedChar{AbstractChar}}) = read(io, AnnotatedChar{Char})
 read(io::AnnotatedIOBuffer, ::Type{AnnotatedChar}) = read(io, AnnotatedChar{Char})
 
@@ -117,10 +116,10 @@ This operates by removing all elements of `annotations` that are entirely
 contained in `span`, truncating ranges that partially overlap, and splitting
 annotations that subsume `span` to just exist either side of `span`.
 """
-function _clear_annotations_in_region!(annotations::Vector{RegionAnnotation}, span::UnitRange{Int})
+function _clear_annotations_in_region!(annotations::Vector{RegionAnnotation{V}}, span::UnitRange{Int}) where {V}
     # Clear out any overlapping pre-existing annotations.
     filter!(ann -> first(ann.region) < first(span) || last(ann.region) > last(span), annotations)
-    extras = Tuple{Int, RegionAnnotation}[]
+    extras = Tuple{Int, RegionAnnotation{V}}[]
     for i in eachindex(annotations)
         annot = annotations[i]
         region = annot.region
@@ -165,22 +164,20 @@ This is implemented so that one can say write an `AnnotatedString` to an
 `AnnotatedIOBuffer` one character at a time without needlessly producing a
 new annotation for each character.
 """
-function _insert_annotations!(annots::Vector{RegionAnnotation}, newannots::Vector{RegionAnnotation}, offset::Int = 0)
+function _insert_annotations!(annots::Vector{RegionAnnotation{V}}, newannots::Vector{RegionAnnotation{V′}}, offset::Int = 0) where {V, V′ <: V}
     run = @label search begin
         if !isempty(annots) && last(last(annots).region) == offset
             for i in reverse(axes(newannots, 1))
                 annot = newannots[i]
                 first(annot.region) == 1 || continue
                 i <= length(annots) || continue
-                annot.label == last(annots).label || continue
-                annot.value == last(annots).value || continue
+                annot.value === last(annots).value || continue
                 all(1:i) do runlen
                     new = newannots[begin+runlen-1]
                     old = annots[end-i+runlen]
                     !(last(old.region) != offset ||
                     first(new.region) != 1 ||
-                    old.label != new.label ||
-                    old.value != new.value)
+                    old.value !== new.value)
                 end || continue
                 break search i
             end
@@ -191,53 +188,22 @@ function _insert_annotations!(annots::Vector{RegionAnnotation}, newannots::Vecto
         old_index = lastindex(annots) - run + 1 + runindex
         old = annots[old_index]
         new = newannots[begin+runindex]
-        extannot = (region = first(old.region):last(new.region)+offset,
-                    label = old.label,
-                    value = old.value)
-        annots[old_index] = extannot
+        annots[old_index] = RegionAnnotation{V}((first(old.region):last(new.region)+offset, old.value))
     end
     for index in run+1:lastindex(newannots)
         annot = newannots[index]
         start, stop = first(annot.region), last(annot.region)
-        # REVIEW: For some reason, construction of `newannot`
-        # can be a significant contributor to the overall runtime
-        # of this function. For instance, executing:
-        #
-        #     replace(AnnotatedIOBuffer(), S"apple",
-        #             'e' => S"{red:x}", 'p' => S"{green:y}")
-        #
-        # results in 3 calls to `_insert_annotations!`. It takes
-        # ~570ns in total, compared to ~200ns if we push `annot`
-        # instead of `newannot`. Commenting out the `_insert_annotations!`
-        # line reduces the runtime to ~170ns, from which we can infer
-        # that constructing `newannot` is somehow responsible for
-        # a ~30ns -> ~400ns (~13x) increase in runtime!!
-        # This also comes with a marginal increase in allocations
-        # (compared to the commented out version) of 2 -> 14 (250b -> 720b).
-        #
-        # This seems quite strange, but I haven't dug into the generated
-        # LLVM or ASM code. If anybody reading this is interested in checking
-        # this out, that would be brilliant 🙏.
-        #
-        # What I have done is found that "direct tuple reconstruction"
-        # (as below) is several times faster than using `setindex`.
-        newannot = (region = start+offset:stop+offset,
-                    label = annot.label,
-                    value = annot.value)
-        push!(annots, newannot)
+        push!(annots, RegionAnnotation{V}((start+offset:stop+offset, annot.value)))
     end
 end
 
-_insert_annotations!(io::AnnotatedIOBuffer, newannots::Vector{RegionAnnotation}, offset::Int = position(io)) =
+_insert_annotations!(io::AnnotatedIOBuffer, newannots::Vector{<:RegionAnnotation}, offset::Int = position(io)) =
     _insert_annotations!(io.annotations, newannots, offset)
 
 # String replacement
 
-# REVIEW: For some reason the `Core.kwcall` indirection seems to cause a
-# substantial slowdown here. If we remove `; count` from the signature
-# and run the sample code above in `_insert_annotations!`, the runtime
-# drops from ~4400ns to ~580ns (~7x faster). I cannot guess why this is.
-function replace(out::AnnotatedIOBuffer, str::AnnotatedString, pat_f::Pair...; count = typemax(Int))
+# `Vararg{Pair, N}`, as the keyword body would otherwise not specialise on the pairs it passes on
+function replace(out::AnnotatedIOBuffer{V}, str::AnnotatedString, pat_f::Vararg{Pair, N}; count = typemax(Int)) where {V, N}
     if count == 0 || isempty(pat_f)
         write(out, str)
         return out
@@ -273,14 +239,12 @@ function replace(out::AnnotatedIOBuffer, str::AnnotatedString, pat_f::Pair...; c
         push!(replacements, thisrep)
         replacement = replacers[ridx]
         _isannotated(replacement) || continue
-        annots = annotations(replacement)
-        annots′ = if eltype(annots) == Annotation # When it's a char not a string
+        annots′ = if replacement isa AnnotatedChar
             region = 1:newbytes
-            [@NamedTuple{region::UnitRange{Int}, label::Symbol, value}((region, label, value))
-             for (; label, value) in annots]
+            [RegionAnnotation{V}((region, value)) for value in annotations(replacement)]
         else
-            annots
-        end::Vector{RegionAnnotation}
+            convert(Vector{RegionAnnotation{V}}, annotations(replacement))
+        end
         _insert_annotations!(newannots, annots′, destoff)
     end
     push!(replacements, (region = e1:(e1-1), offset = last(replacements).offset))
@@ -292,7 +256,7 @@ function replace(out::AnnotatedIOBuffer, str::AnnotatedString, pat_f::Pair...; c
     # This means that the start of `.region`s in
     # `replacements` is monotonically increasing.
     isappending || _clear_annotations_in_region!(out.annotations, first(replacements).offset:position(out))
-    for (; region, label, value) in str.annotations
+    for (; region, value) in str.annotations
         start, stop = first(region), last(region)
         prioridx = searchsortedlast(
             replacements, (region = start:start, offset = 0),
@@ -306,18 +270,14 @@ function replace(out::AnnotatedIOBuffer, str::AnnotatedString, pat_f::Pair...; c
             continue
         elseif postidx - prioridx <= 1 && start > last(priorrep.region) && stop < first(postrep.region)
             # Lies between replacements
-            shiftregion = (start + priorrep.offset):(stop + priorrep.offset)
-            shiftann = (region = shiftregion, label, value)
-            push!(out.annotations, shiftann)
+            push!(out.annotations, RegionAnnotation{V}(((start + priorrep.offset):(stop + priorrep.offset), value)))
         else
             # Split between replacements
             prevrep = replacements[max(begin, prioridx - 1)]
             for rep in @view replacements[max(begin, prioridx - 1):min(end, postidx + 1)]
                 gap = max(start, last(prevrep.region)+1):min(stop, first(rep.region)-1)
                 if !isempty(gap)
-                    shiftregion = (first(gap) + prevrep.offset):(last(gap) + prevrep.offset)
-                    shiftann = (; region = shiftregion, label, value)
-                    push!(out.annotations, shiftann)
+                    push!(out.annotations, RegionAnnotation{V}(((first(gap) + prevrep.offset):(last(gap) + prevrep.offset), value)))
                 end
                 prevrep = rep
             end
@@ -331,8 +291,11 @@ replace(out::IO, str::AnnotatedString, pat_f::Pair...; count=typemax(Int)) =
     replace(out, str.string, pat_f...; count)
 
 function replace(str::AnnotatedString, pat_f::Pair...; count=typemax(Int))
-    isempty(pat_f) || iszero(count) && return str
-    out = AnnotatedIOBuffer()
+    V = annot_promote_valtype(str, pat_f...)
+    # As read back below, so that the type doesn't depend on `count`
+    (isempty(pat_f) || iszero(count)) &&
+        return AnnotatedString{String, V}(String(str.string), Vector{RegionAnnotation{V}}(str.annotations))
+    out = AnnotatedIOBuffer{V}()
     replace(out, str, pat_f...; count)
     read(seekstart(out), AnnotatedString)
 end
@@ -341,31 +304,205 @@ end
 
 function printstyled end
 
-# NOTE: This is an interim solution to the invalidations caused
-# by the split styled display implementation. This should be
-# replaced by a more robust solution (such as a consolidation of
-# the type and method definitions) in the near future.
+"""
+    AnnotatedDisplay
+
+How annotated strings, substrings, and chars are displayed. A type of annotation value says how
+its annotations look in a MIME type with three functions: `context`, `reduction`, and
+`transition`. Each region of a string has a state for each value type, reduced from the region's
+annotations of that type, and displaying the string writes the transitions between the states
+of its regions. As each type's display depends only on its own annotations, a string displays
+the same whatever union of value types holds it.
+
+!!! warning "Experimental"
+    This interface is experimental and may change or be removed in a future release
+    without deprecation.
+"""
 module AnnotatedDisplay
 
-using ..Base: IO, SubString, AnnotatedString, AnnotatedChar, AnnotatedIOBuffer
-using ..Base: eachregion, invoke_in_world, tls_world_age, unannotate
+using ..Base: IO, IOBuffer, SubString, AnnotatedString, AnnotatedChar, AnnotatedIOBuffer
+using ..Base: eachregion, RegionIterator, unannotate, raw_substring, annotations, annotatedstring, uniontypes
+using ..Base: invoke_in_world, tls_world_age, inferencebarrier, escape_string, annotate!, _clear_annotations_in_region!, RegionAnnotation
 
-# Write
+public context, reduction, transition
 
-# Unstyled fallback for when StyledStrings is not loaded.
-ansi_write(f::Function, io::IO, x::Any) =
-    f(io, x isa AnnotatedChar ? x.char : unannotate(x))
+const AnnotatedStr{S, V} = Union{AnnotatedString{S, V}, SubString{AnnotatedString{S, V}}}
 
-ansi_write_(f::Function, io::IO, @nospecialize(x::Any)) =
-    invoke_in_world(tls_world_age(), ansi_write, f, io, x)
+## The interface, for each MIME type and value type
 
-Base.write(io::IO, s::Union{<:AnnotatedString, SubString{<:AnnotatedString}}) =
-    ansi_write_(write, io, s)::Int
+"""
+    context(mime::MIME, T::Type) -> ctx
 
+What displaying the annotations of value type `T` as `mime` needs to read once per display,
+passed on to each `reduction`.
+"""
+context(::MIME, ::Type) = nothing
+
+"""
+    reduction(mime::MIME, T::Type[, ctx], values) -> state
+
+The state of a region, from those of its annotation `values` of type `T`, the concrete type it
+is called for, which it selects with `value isa T`. With none, this is the baseline, where
+display starts and ends. A type without a method is not displayed, and one without a `context`
+can leave out `ctx`.
+
+Every state of a type is of its baseline's type, so that its reduction is type-stable and display
+compiles once for it. A type whose baseline is `nothing` is not displayed, and a state of another
+type displays as the baseline.
+"""
+reduction(mime::MIME, ::Type{T}, _, values) where {T} = reduction(mime, T, values)
+reduction(::MIME, ::Type, _) = nothing
+
+"""
+    transition(io::IO, mime::MIME, from, to)
+
+Write to `io` the change from the state `from` to the state `to`. Each type of state belongs to
+one value type, as `transition` dispatches on the states.
+
+For `text/html`, a state's fields are its visible properties, a transition opens an element
+within the current one, and a transition to `nothing` closes the element its state opened.
+"""
+function transition end
+
+## Rendering
+
+# A value type with a member that isn't concrete, as `Any`, has its types found from its values
+@generated function contexts(mime::MIME, ::Type{U}) where {U}
+    all(isconcretetype, uniontypes(U)) || return nothing
+    calls = (:(context(mime, $T)) for T in uniontypes(U))
+    :(tuple($(calls...)))
+end
+@generated function reductions(mime::MIME, ::Type{U}, ctxs, annotations) where {U}
+    calls = (:(reduction(mime, $T, ctxs[$i], annotations)) for (i, T) in enumerate(uniontypes(U)))
+    :($(Expr(:meta, :inline)); tuple($(calls...))) # Keeping each region's states off the heap
+end
+
+"""
+    render(writetext, mime::MIME, io::IO, x::Union{AnnotatedStr, AnnotatedChar})
+
+Write `x` to `io` as `mime`, with its text written by `writetext(io, str)`.
+"""
+function render(writetext::F, mime::MIME, io::IO, s::AnnotatedStr{S, V}) where {F, S, V}
+    ctxs = contexts(mime, V)
+    isnothing(ctxs) && return invoke_in_world(tls_world_age(), renderheld, writetext, mime, io, s)
+    # Only the types that display, so one that doesn't adds no rendering compiled for itself
+    D = displayed(V, reductions(mime, V, ctxs, Memory{Union{}}(undef, 0)))
+    D === Union{} && return writetext(io, unannotate(s))
+    dctxs = contexts(mime, D)
+    render(writetext, mime, io, eachregion(s, firstindex(s):lastindex(s), D), annots -> (@inline; reductions(mime, D, dctxs, annots)))
+end
+
+# The members of `V` whose baseline `states` are not `nothing`
+@generated displayed(::Type{V}, ::B) where {V, B <: Tuple} =
+    Union{(T for (T, state) in zip(uniontypes(V), fieldtypes(B)) if state !== Nothing)...}
+
+# Compiled once for whatever types `s` holds, in the latest world. Its interface calls go through
+# barriers, here and in `render`, so a new value type's methods invalidate nothing compiled for it.
+# Taken in a union's order, the types display as that union would.
+function renderheld(writetext, mime::MIME, io::IO, @nospecialize(s::AnnotatedStr))
+    # As a `Union`, which is built without compiling anything for the types it holds
+    types = uniontypes(Union{Type[typeof(value) for (; value) in annotations(s)]...})
+    ctxs = Any[inferencebarrier(context)(mime, T) for T in types]
+    # Only the types that display, as for a known union in `render`
+    shown = [!isnothing(inferencebarrier(reduction)(mime, T, ctx, Memory{Union{}}(undef, 0))) for (T, ctx) in zip(types, ctxs)]
+    keepat!(types, shown) # In place, as reassigning variables the closure below captures would box them
+    keepat!(ctxs, shown)
+    render(writetext, mime, io, eachregion(s), annots ->
+        Any[inferencebarrier(reduction)(mime, T, ctx, annots) for (T, ctx) in zip(types, ctxs)])
+end
+
+render(writetext::F, mime::MIME, io::IO, c::AnnotatedChar) where {F} =
+    render(writetext, mime, io, annotatedstring(c))
+
+function render(writetext, mime::MIME, io::IO, regions::RegionIterator, statesof)
+    bases = statesof(Memory{Union{}}(undef, 0))
+    # Through a barrier for types found from the values, as in `renderheld`. Applied in the call, as
+    # a closure capturing `inferencebarrier(transition)` is specialised on what it captures.
+    transit = if bases isa Tuple transition else (args...) -> inferencebarrier(transition)(args...) end
+    # A state of another type than its baseline's breaks the interface, and displays as the baseline
+    conform(state, base) = if state isa typeof(base) state else base end
+    written = change(transit, io, mime, nothing, bases)
+    for (str, annots) in regions
+        states = statesof(annots)
+        states = if states isa Tuple map(conform, states, bases) else map!(conform, states, states, bases) end
+        written = change(transit, io, mime, written, states)
+        writetext(io, str)
+    end
+    change(transit, io, mime, written, bases)
+end
+
+## Plain text: each type's state changes on its own
+
+change(transit, io::IO, ::MIME"text/plain", ::Nothing, bases) = bases
+function change(transit, io::IO, mime::MIME"text/plain", previous, states)
+    foreach((from, to) -> transit(io, mime, from, to), previous, states)
+    states
+end
+
+## HTML: the types share one stack of nested elements
+#
+# Each frame holds the states within an open element, from the baselines in, and differs from
+# the frame outside it only in the state of the element's type. An element still fits when each
+# property, or field, of each state is the outer frame's or the new state's. A state without
+# fields fits only as a whole.
+
+change(transit, io::IO, ::MIME"text/html", ::Nothing, bases) = [bases]
+
+# For a known union, `frames` holds tuples of states. For types found from the values, it holds
+# vectors, and `fits` is dispatched for each type of state, so nothing compiles per combination.
+function change(transit, io::IO, mime::MIME"text/html", frames, states)
+    function fits(el::T, parent::T, to::T) where {T}
+        fieldcount(T) == 0 && return el === parent || el === to
+        all(ntuple(i -> getfield(el, i) === getfield(parent, i) || getfield(el, i) === getfield(to, i), Val(fieldcount(T))))
+    end
+    keep = 1
+    while keep < length(frames) && all(map(fits, frames[keep + 1], frames[keep], states))
+        keep += 1
+    end
+    while length(frames) > keep
+        inner = pop!(frames)
+        foreach(inner, last(frames)) do within, outside
+            within === outside || transit(io, mime, within, nothing)
+        end
+    end
+    # An unrolled `map` for a tuple, as a loop would box its states. In reverse, so a later type's
+    # element (a link) encloses an earlier type's (a face).
+    indices = if states isa Tuple ntuple(identity, length(states)) else eachindex(states) end
+    map(reverse(indices), reverse(states)) do i, to
+        @inline
+        frame = last(frames)
+        within = frame[i]
+        if within !== to
+            transit(io, mime, within, to)
+            push!(frames, if frame isa Tuple Base.setindex(frame, to, i) else setindex!(copy(frame), to, i) end)
+        end
+        nothing
+    end
+    frames
+end
+
+## Writing, printing, escaping, and showing
+
+# Through a buffer, so that the text and the codes between it reach `io` in one write
+function writestyled(writetext::F, mime::MIME, io::IO, x) where {F}
+    raw = first(Base.unwrapcontext(io)) # Qualified, as `show.jl` defines it after this file
+    buf = if raw isa IOBuffer && !raw.append raw else IOBuffer() end
+    offset = position(buf)
+    render(writetext, mime, buf, x)
+    bytes = position(buf) - offset
+    buf === raw || write(io, seekstart(buf))
+    bytes
+end
+
+isstyled(io::IO, x::Union{AnnotatedStr, AnnotatedChar}) =
+    get(io, :color, false)::Bool && !isempty(if x isa SubString x.string.annotations else x.annotations end)
+
+Base.write(io::IO, s::Union{AnnotatedString{S}, SubString{<:AnnotatedString{S}}}) where {S} =
+    (if isstyled(io, s) writestyled(write, MIME"text/plain"(), io, s) else write(io, unannotate(s)) end)::Int
 Base.write(io::IO, c::AnnotatedChar) =
-    ansi_write_(write, io, c)::Int
+    (if isstyled(io, c) writestyled(write, MIME"text/plain"(), io, c) else write(io, c.char) end)::Int
 
-function Base.write(io::IO, aio::AnnotatedIOBuffer)
+function Base.write(io::IO, aio::AnnotatedIOBuffer{V}) where {V}
     if get(io, :color, false) == true
         # This does introduce an overhead that technically
         # could be avoided, but I'm not sure that it's currently
@@ -373,25 +510,14 @@ function Base.write(io::IO, aio::AnnotatedIOBuffer)
         # writing from an AnnotatedIOBuffer with style.
         # In the meantime, by converting to an `AnnotatedString` we can just
         # reuse all the work done to make that work.
-        ansi_write_(write, io, read(aio, AnnotatedString))::Int
+        write(io, read(aio, AnnotatedString{String, V}))::Int
     else
         write(io, aio.io)
     end
 end
 
-# Print
-
-Base.print(io::IO, s::Union{<:AnnotatedString, SubString{<:AnnotatedString}}) =
-    (ansi_write_(write, io, s); nothing)
-
-Base.print(io::IO, s::AnnotatedChar) =
-    (ansi_write_(write, io, s); nothing)
-
-Base.print(io::AnnotatedIOBuffer, s::Union{<:AnnotatedString, SubString{<:AnnotatedString}}) =
-    (write(io, s); nothing)
-
-Base.print(io::AnnotatedIOBuffer, c::AnnotatedChar) =
-    (write(io, c); nothing)
+# Via `write`, which keeps the annotations when the destination can hold them
+Base.print(io::IO, x::Union{AnnotatedString, SubString{<:AnnotatedString}, AnnotatedChar}) = (write(io, x); nothing)
 
 styled_print(io::AnnotatedIOBuffer, msg::Any, kwargs::Any) = print(io, msg...)
 
@@ -401,27 +527,55 @@ styled_print_(io::AnnotatedIOBuffer, @nospecialize(msg), @nospecialize(kwargs)) 
 Base.printstyled(io::AnnotatedIOBuffer, msg...; kwargs...) =
     styled_print_(io, msg, kwargs)
 
-# Escape
+function Base.escape_string(io::IO, s::AnnotatedStr, esc = ""; keep = (), ascii::Bool=false, fullhex::Bool=false)
+    stop = if s isa SubString s.offset + s.ncodeunits else ncodeunits(s) end
+    # Before a hex digit, a `\0` or non-ASCII character can escape longer, so escape the region with the digit, then drop it
+    function escregion(io, text)
+        str, after = text.string, text.offset + text.ncodeunits
+        next = if after < stop Char(codeunit(str, after + 1)) else '\0' end
+        if isxdigit(next) && (codeunit(str, after) == 0x00 || codeunit(str, after) >= 0x80)
+            escaped = escape_string(raw_substring(str, text.offset + 1, text.ncodeunits + 1), esc; keep, ascii, fullhex)
+            write(io, raw_substring(escaped, 1, ncodeunits(escaped) - 1 - (next in esc)))
+        else
+            escape_string(io, text, esc; keep, ascii, fullhex)
+        end
+        nothing
+    end
+    escape_annotated(first(Base.unwrapcontext(io)), io, s, escregion)
+    nothing
+end
 
-Base.escape_string(io::IO, s::Union{<:AnnotatedString, SubString{<:AnnotatedString}},
-              esc = ""; keep = (), ascii::Bool=false, fullhex::Bool=false) =
-    (ansi_write_((io, s) -> escape_string(io, s, esc; keep, ascii, fullhex), io, s); nothing)
+function escape_annotated(aio::AnnotatedIOBuffer{V}, _, s, escregion) where {V}
+    annots = convert(Vector{RegionAnnotation{V}}, annotations(s)) # As `write` does, before any text is written
+    ends, outs = Int[0], Int[position(aio)] # Where each region ends in `s`, and where its escaped text ends in `aio`
+    isappending = eof(aio)
+    for (text, _) in eachregion(s)
+        escregion(aio, text)
+        push!(ends, last(ends) + ncodeunits(text))
+        push!(outs, position(aio))
+    end
+    isappending || _clear_annotations_in_region!(aio.annotations, first(outs)+1:last(outs))
+    # Where the escaped text of `region` in `s` lies in `aio`, clipped to `s` and widened to whole characters
+    outrange(region) = UnitRange(outs[searchsortedlast(ends, clamp(first(region) - 1, 0, last(ends)))] + 1,
+                                 outs[searchsortedfirst(ends, clamp(last(region), 0, last(ends)))])
+    for (; region, value) in annots # A substring's annotations may reach beyond it
+        annotate!(aio, outrange(region), value)
+    end
+end
+escape_annotated(_, io, s, escregion) =
+    if isstyled(io, s)
+        writestyled(escregion, MIME"text/plain"(), io, s)
+    else
+        escregion(io, SubString(unannotate(s)))
+    end
 
-# Show
+Base.show(io::IO, m::MIME"text/html", x::Union{AnnotatedString, SubString{<:AnnotatedString}, AnnotatedChar}) =
+    (writestyled(escapehtml, m, io, x); nothing)
 
-show_annot(io::IO, ::Any) = nothing
-show_annot(io::IO, ::MIME, ::Any) = nothing
-
-show_annot_(io::IO, @nospecialize(x::Any)) =
-    invoke_in_world(tls_world_age(), show_annot, io, x)::Nothing
-
-show_annot_(io::IO, m::MIME, @nospecialize(x::Any)) =
-    invoke_in_world(tls_world_age(), show_annot, io, m, x)::Nothing
-
-Base.show(io::IO, m::MIME"text/html", s::Union{<:AnnotatedString, SubString{<:AnnotatedString}}) =
-    show_annot_(io, m, s)
-
-Base.show(io::IO, m::MIME"text/html", c::AnnotatedChar) =
-    show_annot_(io, m, c)
+function escapehtml(io::IO, str::AbstractString)
+    for c in str
+        print(io, if c == '&' "&amp;" elseif c == '<' "&lt;" elseif c == '>' "&gt;" else c end)
+    end
+end
 
 end

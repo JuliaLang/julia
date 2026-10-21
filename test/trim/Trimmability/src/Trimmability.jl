@@ -2,6 +2,7 @@
 module Trimmability
 
 using Sockets
+using StyledStrings
 
 include("linalg.jl")
 
@@ -196,6 +197,15 @@ end
 # keeps in a merged union: each `print` must still resolve statically.
 @noinline interpolate_many(r, x, s, c) = "got $(r) vs $(first(r)) with $(x) and $(s) and $(c)"
 
+# Styled output, both as ANSI escapes and as HTML. Faces with a height, underline colour and
+# link exercise the comparisons between successive faces.
+const styled_sample = styled"{bold:bold} {(fg=red, underline=(blue, curly)):mixed} {(height=1.2):big} {link={https://julialang.org}:link}"
+
+function _test_styled()
+    println(Core.stdout, "styled ansi: ", sprint(print, styled_sample; context = :color => true))
+    println(Core.stdout, "styled html: ", sprint(show, MIME("text/html"), styled_sample))
+end
+
 function _test_threads()
     v = zeros(Int, 64)
     Threads.@threads for i in eachindex(v)
@@ -262,6 +272,7 @@ function @main(args::Vector{String})::Cint
 
     user_library_ccall() # prints as a side effect
     lazy_library_ccall()
+    _test_styled() # Last, as the test reads the final two lines
 
     Base.donotdelete(reshape([1,2,3],:,1,1))
 

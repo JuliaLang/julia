@@ -134,8 +134,17 @@ function extendedterminfo(data::IO, NumInt::Union{Type{Int16}, Type{Int32}})
         table_indices[index] += table_halfoffset
     end
     labels = map(Symbol, _terminfo_read_strings(table_data, table_indices[string_count+1:end]))
-    Dict{Symbol, Union{Bool, Int, String, Nothing}}(
-        zip(labels, Iterators.flatten((flags, numbers, strings))))
+    # Each kind of value is inserted separately, so that every insertion has a concrete value type.
+    capabilities = Dict{Symbol, Union{Bool, Int, String, Nothing}}()
+    function setcapabilities!(names, values)
+        for (name, value) in zip(names, values)
+            capabilities[name] = value
+        end
+    end
+    setcapabilities!(labels, flags)
+    setcapabilities!(Iterators.drop(labels, length(flags)), numbers)
+    setcapabilities!(Iterators.drop(labels, length(flags) + length(numbers)), strings)
+    capabilities
 end
 
 """
@@ -257,7 +266,7 @@ function find_terminfo_file(term::String)
     end
     haskey(ENV, "TERMINFO_DIRS") &&
         append!(terminfo_dirs,
-                replace(split(ENV["TERMINFO_DIRS"], ':'),
+                replace(map(String, split(ENV["TERMINFO_DIRS"], ':')),
                         "" => "/usr/share/terminfo"))
     push!(terminfo_dirs, normpath(Sys.BINDIR, DATAROOTDIR, "julia", "terminfo"))
     Sys.isunix() &&
