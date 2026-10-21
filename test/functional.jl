@@ -45,6 +45,25 @@ end
 @test isequal(filter(x->(x>10), [0 1 2 3 2 1 0]), [])
 @test isequal(filter((ss)->length(ss)==3, ["abcd", "efg", "hij", "klmn", "opq"]), ["efg", "hij", "opq"])
 
+# filterfirst returns the first matching element, lazily, and throws if none matches
+@testset "filterfirst" begin
+    @test filterfirst(>(1), [0 1 2 3 2 1 0]) === 2
+    @test filterfirst(iseven, 3:7) === 4
+    @test filterfirst(isuppercase, "hello World") === 'W'
+    @test filterfirst(>(3), (x^2 for x in 1:10)) === 4
+    @test filterfirst(p -> p.second > 1, Dict(:a => 1, :b => 2)) == (:b => 2)
+    @test filterfirst(>(100), Iterators.countfrom(1)) === 101
+    @test filterfirst(isnothing, Any[1, nothing, 2]) === nothing
+    @test @inferred(filterfirst(iseven, [1, 2, 3])) === 2
+
+    @test_throws ArgumentError filterfirst(>(10), [1, 2, 3])
+    @test_throws ArgumentError filterfirst(isodd, Int[])
+
+    calls = Ref(0)
+    @test filterfirst(x -> (calls[] += 1; x > 2), 1:10) === 3
+    @test calls[] == 3
+end
+
 # numbers
 @test size(collect(1)) == size(1)
 
