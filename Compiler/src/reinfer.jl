@@ -742,12 +742,13 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
         end
         # If only the image's dependencies added methods that could match `sig`,
         # its match set is unchanged since precompilation.
-        let minworld = sig_contributors_world(sig, Core.methodtable, image)
-            if minworld != 0
-                @assert minworld ≤ world "contributor activated after the verification world"
-                promote_mi_to_current(mi, minworld, world)
-                return minworld, typemax(UInt)
+        if sig_contributors_world(sig, Core.methodtable, image) != 0
+            minworld = UInt(1)
+            for meth in expected
+                minworld = max(minworld, meth.primary_world)
             end
+            promote_mi_to_current(mi, minworld, world)
+            return minworld, typemax(UInt)
         end
         # Try the interference set fast path (used by both n==1, when the O(1) checks above
         # did not resolve it, and n>1): the result is unchanged as long as no interfering
@@ -879,8 +880,8 @@ function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UIn
         if mt === nothing
             minworld = 1
             maxworld = 0
-        elseif method_is_latest_which(expected) && (minworld = sig_contributors_world(invokesig, mt, image)) != 0
-            @assert minworld ≤ world "contributor activated after the verification world"
+        elseif method_is_latest_which(expected) && sig_contributors_world(invokesig, mt, image) != 0
+            minworld = expected.primary_world
             maxworld = typemax(UInt)
         else
             matched, valid_worlds = _findsup(invokesig, mt, world)

@@ -2267,7 +2267,7 @@ precompile_test_harness("trusted edges: load order") do load_path
         print(Base.invokelatest(TrustedEdgeExtA.callf), " ", Base.invokelatest(TrustedEdgeDep.f, 1))
         """)
     @test out == "a a"
-    # a trusted edge is valid from the activation of f's newest contributor, ExtA itself
+    # a trusted edge is valid from the method it matches, ExtA's
     out = trusted_edge_test_output(load_path, depot, """
         using TrustedEdgeDep, TrustedEdgeExtA
         mi = only(Base.specializations(only(methods(TrustedEdgeExtA.callf))))
@@ -2291,6 +2291,42 @@ precompile_test_harness("trusted edges: load order") do load_path
         print(" ", in_deps(ctor, TrustedEdgeExtA), " ", in_deps(sig, TrustedEdgeExtA))
         """)
     @test out == "1 1 0 0 0 1 0 1"
+end
+
+precompile_test_harness("trusted edges: validity world") do load_path
+    write(joinpath(load_path, "TrustedWorldDep.jl"),
+        """
+        module TrustedWorldDep
+        f(x) = :dep
+        end
+        """)
+    write(joinpath(load_path, "TrustedWorldOther.jl"),
+        """
+        module TrustedWorldOther
+        using TrustedWorldDep
+        TrustedWorldDep.f(::String) = :other
+        end
+        """)
+    write(joinpath(load_path, "TrustedWorldUser.jl"),
+        """
+        module TrustedWorldUser
+        using TrustedWorldDep, TrustedWorldOther
+        callf() = TrustedWorldDep.f(1)
+        precompile(callf, ())
+        end
+        """)
+    for name in ("TrustedWorldDep", "TrustedWorldOther", "TrustedWorldUser")
+        Base.compilecache(Base.PkgId(name))
+    end
+    # code running in Dep's world, like a generator of one of its methods, must
+    # see the trusted caller: Other's later method on f cannot match f(1)
+    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
+        using TrustedWorldUser
+        f = TrustedWorldUser.TrustedWorldDep.f
+        ci = only(Base.specializations(only(methods(TrustedWorldUser.callf)))).cache
+        print(ci.min_world == which(f, (Int,)).primary_world, " ", ci.min_world < which(f, (String,)).primary_world)
+        """)
+    @test out == "true true"
 end
 
 precompile_test_harness("trusted edges: a method on a kind outside the dependencies") do load_path
