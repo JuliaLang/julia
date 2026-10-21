@@ -772,7 +772,7 @@ macro timed(ex)
             lock_conflicts=lock_conflicts,
             compile_time=compile_elapsedtimes[1]/1e9,
             recompile_time=compile_elapsedtimes[2]/1e9,
-            compile_bytes=compile_bytes % Int64
+            compile_bytes=Int64(compile_bytes)
         )
     end
 end
