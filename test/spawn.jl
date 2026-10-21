@@ -702,8 +702,8 @@ mktempdir() do dir
     shell_mode_run("$echostr simple > $outstr")
     @test read(outfile, String) == "simple\n"
     # shell mode preserves a Cmd's env and dir. The redirect is inside the command
-    # because `cmd > file` is a CmdRedirect, which repl_cmd runs without the shell
-    # wrapping under test; `global` is needed as shell_mode_run interpolates via eval.
+    # because `cmd > file` is a CmdRedirect, which repl_cmd has always run directly;
+    # `global` is needed as shell_mode_run interpolates via eval.
     if !Sys.iswindows()
         global envcmd = Cmd(`$shcmd -c "echo \$HOWLONG > $outstr"`, env=("HOWLONG" => "ever!",))
         shell_mode_run("\$envcmd")
@@ -711,6 +711,13 @@ mktempdir() do dir
         global dircmd = Cmd(`$shcmd -c "pwd > $outstr"`, dir=dir)
         shell_mode_run("\$dircmd")
         @test samefile(strip(read(outfile, String)), dir)
+        # simple commands are run directly, with no intervening shell, so a bogus
+        # JULIA_SHELL makes no difference
+        global noshellcmd = `$shcmd -c "echo noshell > $outstr"`
+        withenv("JULIA_SHELL" => "/nonexistent/shell") do
+            shell_mode_run("\$noshellcmd")
+        end
+        @test read(outfile, String) == "noshell\n"
     end
 end
 

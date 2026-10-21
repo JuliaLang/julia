@@ -322,6 +322,12 @@ Standard library changes
   session per package ([#63185]).
 * When listing completions for a module-qualified name such as `Base.Iterators.<TAB><TAB>`, public
   names are now shown first, followed by non-public names under an `Internal:` header ([#22969], [#63601]).
+* Commands entered in the REPL's shell mode are now run directly, rather than through
+  `$SHELL` (or `JULIA_SHELL`) on platforms other than Windows. Because the
+  command's arguments were already escaped before being passed to the shell, this does not
+  change how globs, operators or variable references are handled, but shell builtins such as
+  `export` and `ulimit` are no longer available in shell mode, and `JULIA_SHELL` no longer has
+  any effect ([#51020]).
 
 #### Sockets
 
