@@ -465,7 +465,9 @@ end
         @test length(x:Month(1):(x + Month(3))) == 4
         @test x + P(2) in x:P(1):(x + P(3))
         @test length((typemax(T) - P(3)):P(1):typemax(T)) == 4
-        @test_throws OverflowError length(T(1970):P(1):(T(1970) + P(typemax(Int64))))
+        @test length(T(1970):P(1):(T(1970) + P(typemax(Int64)))) == length(0:1:typemax(Int64))
+        @test_throws OverflowError Base.checked_length(T(1970):P(1):(T(1970) + P(typemax(Int64))))
+        @test length(typemin(T):P(3):typemax(T)) == length(typemin(Int64):3:typemax(Int64))
         @test length(T(1970):P(1):(T(1970) + P(typemax(Int64) - 1))) == typemax(Int64)
         @test typemax(T) + P(1) === typemin(T)
         @test typemin(T) - P(1) === typemax(T)
@@ -649,7 +651,6 @@ Dates.tons(x::TestNanosecond{1.0}) = Dates.value(x) == 1 ? 1.0 : big(Dates.value
         @test_throws ArgumentError floor(origin, P(1))
         @test_throws ArgumentError ceil(origin, P(1))
         @test_throws ArgumentError round(origin, P(1))
-        @test_throws ArgumentError Dates.guess(origin, origin, P(1))
         @test_throws ArgumentError length(origin:P(1):origin)
     end
     for scale in (1, 1//1)
@@ -712,7 +713,7 @@ end
         @test_throws InexactError convert(T, TestNanosecond{1000000000}(n))
     end
     @test Dates.value(T(1970) + Hour(typemax(Int64))) == big(typemax(Int64)) * 3600000000000
-    @test Dates.guess(typemin(T), typemax(T), TestNanosecond{1}(typemax(Int128))) == 2
+    @test length(typemin(T):TestNanosecond{1}(typemax(Int128)):typemax(T)) == 3
     for scale in (1, 1000000000, 2//3, 1//1000)
         P = TestNanosecond{scale}
         U = Timestamp{P}
