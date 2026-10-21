@@ -1498,10 +1498,13 @@ function _is_julia_source(file::AbstractString)
         pseudo-files (`REPL[1]`) and code passed to `-e` (`none`) have no extension. =#
         return endswith(path, ".jl")
     end
-    if startswith(path, abspath(Sys.BINDIR, DATAROOTDIR, "julia"))
+    # the trailing separator keeps `packages2` and `base-extras` from matching
+    sharedir = abspath(Sys.BINDIR, DATAROOTDIR, "julia")
+    julia_dirs = (joinpath(sharedir, "base", ""), joinpath(sharedir, "stdlib", ""), joinpath(sharedir, "Compiler", ""))
+    if any(dir -> startswith(path, dir), julia_dirs)
         return true
     end
-    return any(depot -> startswith(path, joinpath(depot, "packages")), DEPOT_PATH)
+    return any(depot -> startswith(path, joinpath(depot, "packages", "")), DEPOT_PATH)
 end
 
 """

@@ -1902,6 +1902,12 @@ end
     @test !Base._is_julia_source("REPL[1]")
     @test !Base._is_julia_source("none")
     @test !Base._is_julia_source(@__FILE__)
+    # Julia's test suite and a depot living beside its sources are not Julia's own code
+    sharedir = abspath(Sys.BINDIR, Base.DATAROOTDIR, "julia")
+    @test !Base._is_julia_source(joinpath(sharedir, "test", "errorshow.jl"))
+    @test !Base._is_julia_source(joinpath(sharedir, "dev", "Example", "src", "Example.jl"))
+    @test Base._is_julia_source(joinpath(sharedir, "base", "array.jl"))
+    @test !Base._is_julia_source(joinpath(sharedir, "stdlib-extras", "x.jl"))
     for depot in DEPOT_PATH
         @test Base._is_julia_source(joinpath(depot, "packages", "Pkg", "src", "Pkg.jl"))
         # a package checked out for development is the user's own code
