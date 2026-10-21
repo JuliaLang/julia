@@ -1877,6 +1877,15 @@ module UndefVarSuggestions
     thing_one = 1
 end
 
+module UndefVarExporter
+    export exported_thing
+    exported_thing = 1
+end
+
+module UndefVarUsings
+    using ..UndefVarExporter
+end
+
 @testset "undefined variable suggestions" begin
     @test occursin("Did you mean `thing_one`?",
                    sprint(showerror, try UndefVarSuggestions.thing_two catch err; err end))
@@ -1888,4 +1897,8 @@ end
     # names exported by Base need no qualification, so they are offered too
     @test occursin("Did you mean `isnothing`?",
                    sprint(showerror, try UndefVarSuggestions.isnohting catch err; err end))
+
+    # names exported by a `using` module need no qualification either
+    @test occursin("Did you mean `exported_thing`?",
+                   sprint(showerror, try UndefVarUsings.exported_thin catch err; err end))
 end
