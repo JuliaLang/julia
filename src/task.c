@@ -515,6 +515,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt) JL_CANSAFEPOINT
     jl_set_pgcstack(&t->gcstack);
     jl_signal_fence();
     lastt->ptls = NULL;
+    lastt->fpctrl = jl_fpctrl_get();
 #ifdef MIGRATE_TASKS
     ptls->previous_task = lastt;
 #endif
@@ -713,6 +714,7 @@ JL_DLLEXPORT void jl_switch(void) JL_CANSAFEPOINT_ENTER_LEAVE
            0 == ptls->finalizers_inhibited);
     ptls->finalizers_inhibited = finalizers_inhibited;
     jl_timing_block_task_enter(ct, ptls, blk); (void)blk;
+    jl_fpctrl_restore(ct->fpctrl);
 
     sig_atomic_t other_defer_signal = ptls->defer_signal;
     ptls->defer_signal = defer_signal;
@@ -1126,6 +1128,8 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     t->threadpoolid = ct->threadpoolid;
     t->ptls = NULL;
     t->world_age = ct->world_age;
+    // a new task inherits the floating-point control state of its parent
+    t->fpctrl = jl_fpctrl_get();
     t->reentrant_timing = 0;
     t->metrics_enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled) != 0;
     jl_atomic_store_relaxed(&t->first_enqueued_at, 0);
@@ -1244,6 +1248,7 @@ CFI_NORETURN
         assert(jl_atomic_load_relaxed(&ct->last_started_running_at) == 0);
         jl_atomic_store_relaxed(&ct->last_started_running_at, jl_hrtime());
     }
+    jl_fpctrl_restore(ct->fpctrl);
     JL_PROBE_RT_START_TASK(ct);
     jl_timing_block_task_enter(ct, ptls, NULL);
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
@@ -1597,6 +1602,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->sticky = 1;
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task
+    ct->fpctrl = 0;
     ct->reentrant_timing = 0;
     jl_atomic_store_relaxed(&ct->running_time_ns, 0);
     jl_atomic_store_relaxed(&ct->finished_at, 0);

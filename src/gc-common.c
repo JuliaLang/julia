@@ -316,7 +316,7 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
     jl_gc_wb_finalizer_queue(&to_finalize);
     arraylist_new(&to_finalize, 0);
 
-    // Finalizers shouldn't affect either rng or errno state
+    // Finalizers shouldn't affect the rng, errno, or floating-point control state
     uint64_t save_rngState[JL_RNG_SIZE];
     memcpy(&save_rngState[0], &ct->rngState[0], sizeof(save_rngState));
     jl_rng_split(ct->rngState, finalizer_rngState);
@@ -324,6 +324,7 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
+    uint64_t last_fpctrl = jl_fpctrl_enter_default();
 
     // This releases the finalizers lock.
     int8_t was_in_finalizer = ct->ptls->in_finalizer;
@@ -337,6 +338,7 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
     SetLastError(last_error);
 #endif
     errno = last_errno;
+    jl_fpctrl_restore(last_fpctrl);
 }
 
 JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_task_t *ct)

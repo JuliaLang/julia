@@ -801,6 +801,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi JL_PROP
     int last_lineno = jl_atomic_load_relaxed(&jl_lineno);
     int last_in = ct->ptls->in_pure_callback;
     size_t last_age = ct->world_age;
+    uint64_t last_fpctrl = jl_fpctrl_enter_default();
 
     JL_TRY {
         ct->ptls->in_pure_callback = 1;
@@ -897,10 +898,12 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi JL_PROP
         ct->ptls->in_pure_callback = last_in;
         jl_atomic_store_relaxed(&jl_lineno, last_lineno);
         ct->world_age = last_age;
+        jl_fpctrl_restore(last_fpctrl);
     }
     JL_CATCH {
         ct->ptls->in_pure_callback = last_in;
         jl_atomic_store_relaxed(&jl_lineno, last_lineno);
+        jl_fpctrl_restore(last_fpctrl);
         jl_rethrow();
     }
     JL_GC_POP();
