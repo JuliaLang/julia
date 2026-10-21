@@ -6012,6 +6012,14 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
     // all intersecting methods have been collected now. the remaining work is to sort
     // these and apply specificity to determine a list of dispatch-possible call targets
     size_t j, len;
+    size_t max_primary_world = 0;
+    len = jl_array_nrows(env.t);
+    for (j = 0; j < len; j++) {
+        jl_method_t *m = ((jl_method_match_t*)jl_array_ptr_ref(env.t, j))->method;
+        size_t primary_world = jl_atomic_load_relaxed(&m->primary_world);
+        if (max_primary_world < primary_world)
+            max_primary_world = primary_world;
+    }
     {
         ssize_t sorted = sort_method_matches((jl_array_t*)env.t, lim, include_ambiguous, ambig == NULL, &has_ambiguity);
         if (sorted == -1) {
@@ -6020,6 +6028,11 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
         }
         len = (size_t)sorted;
     }
+    // The sort can drop a pair of methods that are ambiguous with each other. In an
+    // older world without one of them, the other would be a match, so the result is
+    // only valid from the newest of all intersecting methods.
+    if (ambig != NULL && has_ambiguity && env.match.min_valid < max_primary_world)
+        env.match.min_valid = max_primary_world;
     for (j = 0; j < len; j++) {
         jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, j);
         jl_method_t *m = matc->method;

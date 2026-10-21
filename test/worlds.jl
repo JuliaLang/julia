@@ -842,3 +842,13 @@ kindcallee_caller() = KindCalleeT(KindCalleeArg(), KindCalleeArg())
 # every type now has this constructor method, so remove it before later test files look at their methods
 Base.delete_method(which(KindCalleeT, Tuple{KindCalleeArg, KindCalleeArg}))
 @test_throws MethodError kindcallee_caller()
+
+# a lookup that drops a pair of ambiguous methods is not valid in an older world
+# that has only one of them
+function ambigpair_f end
+ambigpair_g(x) = ambigpair_f(x, 1)
+ambigpair_f(::Int, ::Signed) = 1
+const wc_ambigpair = get_world_counter()
+ambigpair_f(::Integer, ::Int) = 2
+@test_throws MethodError ambigpair_g(1)
+@test Base.invoke_in_world(wc_ambigpair, ambigpair_g, 1) === 1
