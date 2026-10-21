@@ -695,7 +695,8 @@ jl_value_t *jl_lookup_foreignsymbol(jl_value_t *v)
             jl_error("cglobal function name cannot be empty tuple");
         } else if (nf == 1) {
             v = jl_fieldref(v, 0);
-        } else if (nf == 2) {
+        } else if (nf == 2 || nf == 3) {
+            // the third element is the library identity added by the optimizer
             f_lib = jl_fieldref(v, 1);
             v = jl_fieldref(v, 0);
         } else {

@@ -22,7 +22,8 @@ const libdSFMT = LazyLibrary(
         BundledLazyLibraryPath("libdSFMT.dylib")
     else
         BundledLazyLibraryPath("libdSFMT.so")
-    end
+    end;
+    id = LibraryID(Base.UUID("05ff407c-b0c1-5878-9df8-858cc2e60c36"), "libdSFMT")
 )
 
 function eager_mode()
