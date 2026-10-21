@@ -2833,7 +2833,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, o
     pos_sparams = used_typevars(pargl, sparams)
     prop_metas = getmeta(body, :method_metas, nothing)
 
-    m1_name = let n = head(mtable) === :nothing ? "_" : syntax_name(mtable),
+    m1_name = let n = head(mtable) !== :identifier ? "_" : syntax_name(mtable),
         mangled = string("#", n, "#kw_body#", module_unique_name(ctx.layer.mod))
         # probably not desirable, but fixes eval-into-closed-module
         m1_sc = escape_layer(mtable.context, true)
@@ -2961,16 +2961,23 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, o
                 SyntaxList(arg1, arg2, pargl...), kwcall_body)
         end
     end
-    @ast ctx src [:block
-        [:function_decl m1_name]
-        # hack: define closure type for next decl
-        overlay || head(mtable) === :nothing ? nothing : [:no_method_defs m1_name]
-        overlay || head(mtable) === :nothing ? nothing : [:function_decl mtable]
-        [:method_defs m1_name method_def_sparams(ctx, src, sparams) mdefs1]
-        [:method_defs mtable method_def_sparams(ctx, src, pos_sparams) mdefs2]
-        [:method_defs mtable method_def_sparams(ctx, src, pos_sparams) mdefs3]
-        mtable
-    ]
+    if overlay || head(mtable) === :nothing
+        @ast ctx src [:block
+            [:function_decl m1_name]
+            [:method_defs m1_name method_def_sparams(ctx, src, sparams) mdefs1]
+            [:method_defs (::nothing) method_def_sparams(ctx, src, pos_sparams) mdefs2]
+            [:method_defs (::nothing) method_def_sparams(ctx, src, pos_sparams) mdefs3]
+            (::nothing)]
+    else
+        @ast ctx src [:block
+            [:function_decl m1_name]
+            [:no_method_defs m1_name] # hack: define closure type for next decl
+            [:function_decl mtable]
+            [:method_defs m1_name method_def_sparams(ctx, src, sparams) mdefs1]
+            [:method_defs mtable method_def_sparams(ctx, src, pos_sparams) mdefs2]
+            [:method_defs mtable method_def_sparams(ctx, src, pos_sparams) mdefs3]
+            mtable]
+    end
 end
 
 # string mangling is necessary until generated functions know about scope layers
@@ -3103,7 +3110,7 @@ expand_opaque_closure(ctx, ex) = @stm ex begin
     [:opaque_closure argt rt_lb rt_ub allow_partial lam] -> begin
         sig, wheres = flatten_wheres(lam[1])
         @jl_assert head(sig) === :tuple ex
-        check_no_parameters(ex, sig)
+        check_no_parameters(sig, "opaque closure cannot have optional or keyword arguments")
         raw_args = append!(SyntaxList(), children(sig))
         arg_stmts = lower_destructuring_args!(ctx, raw_args)
 
@@ -3634,7 +3641,10 @@ function _rewrite_ctor_new_calls(ctx, ex0, global_struct_name, ctor_sparams::Vec
             throw(LoweringError(ex[1], "too few type parameters specified in `new`"))
         end
     end
-    new_args = ex[2:end]
+    new_args = mapsyntax(ex[2:end]) do e
+        _rewrite_ctor_new_calls(ctx, e, global_struct_name, ctor_sparams,
+                                struct_typevars, ctor_self, field_types)
+    end
     n_splat = sum(head(t) == :... for t in new_args; init=0)
     n_nonsplat = length(new_args) - n_splat
     n_fields = length(field_types)
@@ -3658,7 +3668,7 @@ function _rewrite_ctor_new_calls(ctx, ex0, global_struct_name, ctor_sparams::Vec
             [:new
                 struct_type
                 [_new_call_convert_arg(ctx, struct_type, type, i, name)
-                 for (i, (name,type)) in enumerate(zip(ex[2:end], field_types))]...
+                 for (i, (name,type)) in enumerate(zip(new_args, field_types))]...
             ]
         ]
     else
@@ -3670,14 +3680,14 @@ function _rewrite_ctor_new_calls(ctx, ex0, global_struct_name, ctor_sparams::Vec
                     struct_type
                     # Note: `jl_new_structt` ensures length of this tuple is
                     # exactly the number of fields.
-                    [:call "tuple"::core ex[2:end]...]
+                    [:call "tuple"::core new_args...]
                 ]
             ]
         else
             # `new` with splatted args which are symbolically not `Core.Any`
             # (might be `Any` at runtime but we can't know that here.)
             @ast ctx ex [:block
-                args := [:call "tuple"::core ex[2:end]...]
+                args := [:call "tuple"::core new_args...]
                 n_args := [:call "nfields"::core args]
                 [:if
                     [:call "ult_int"::top n_args n_fields::value]
@@ -3701,13 +3711,14 @@ end
 
 function _constructor_min_initialized(ex::SyntaxTree)
     if _is_new_call(ex)
-        if any(head(e) == :... for e in ex[2:end])
+        n = if any(head(e) == :... for e in ex[2:end])
             # Lowering ensures new with splats always inits all fields
             # or in the case of splatnew this is enforced by the runtime.
             typemax(Int)
         else
             numchildren(ex) - 1
         end
+        min(n, minimum(_constructor_min_initialized, ex[2:end], init=typemax(Int)))
     elseif !is_leaf(ex)
         minimum((_constructor_min_initialized(e) for e in children(ex)), init=typemax(Int))
     else

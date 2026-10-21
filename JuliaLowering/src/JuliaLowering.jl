@@ -12,7 +12,7 @@ else
     using JuliaSyntax
 end
 
-using Base: ScopeLayer, SyntaxContext, SourceCode, SourceRef, Syntax,
+using Base: ScopeLayer, SyntaxContext, SourceCode, SourceRef, Syntax, MacroContext,
     SourceAttrType, head, flattened_provenance, sourceref, unexpanded_sourceref,
     mapchildren, provenance, JL_NEW_EDITION, JL_OLD_EDITION, DEBUG_LOWERING,
     is_base_layer, base_layer, escape_layer, remove_scope, fill_context,

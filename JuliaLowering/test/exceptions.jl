@@ -566,6 +566,15 @@ end
     end
     """) == [("try", 1), ("finally", 1), ("try2", 1), ("finally2", 1)]
     @test isempty(current_exceptions())
+
+    @test jl_eval(test_mod, """let r = nothing
+        try
+            1
+        finally
+            r = (((x::T) where T) -> 1)
+        end
+        r(2)
+    end""") == 1
 end
 
     @testset "valid uses of @goto" for run in (JuliaLowering.include_string,

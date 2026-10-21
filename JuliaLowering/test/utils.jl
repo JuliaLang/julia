@@ -449,7 +449,7 @@ function _force_syntax(x, mod, edition::Tuple{Int, Int})
         # note macroexpand/lower aren't particularly useful with parseall
         JuliaSyntax.parseall(SyntaxTree, x; version=VersionNumber(edition), ignore_warnings=true)
     elseif x isa Expr
-        JuliaLowering.expr_to_est(x, LineNumberNode(0),
+        JuliaLowering.expr_to_est(x, Base.first_linenode(x),
                                   SyntaxContext(mod, edition))
     else
         error("expected string or AST, got $x")
