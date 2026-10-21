@@ -39,16 +39,21 @@ end
 _crc32c(uuid::UUID, crc::UInt32=0x00000000) = _crc32c(uuid.value, crc)
 
 # The next `n` bytes of the iteration `y` of `units` in a word, the first in the lowest byte,
-# the iteration after them, and whether there were `n`
+# the iteration after them, and whether there were `n`. `y` is `nothing` or the iteration in
+# each of the two returns, so each result has a concrete type that callers can split on.
 @inline function takebytes(units, y, n::Int)
     w = zero(UInt64)
-    for k in 0:n-1
-        y === nothing && return w, y, false
-        b, state = y
-        w |= UInt64(b) << 8k
-        y = iterate(units, state)
+    exact = @label exact begin
+        for k in 0:n-1
+            y === nothing && break exact false
+            b, state = y
+            w |= UInt64(b) << 8k
+            y = iterate(units, state)
+        end
+        true
     end
-    return w, y, true
+    y === nothing && return (; w, y, exact)
+    return (; w, y, exact)
 end
 
 # The UUID spelled by the 36 bytes that `units` iterates. They are read as eight hex digits,
