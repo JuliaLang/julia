@@ -1022,6 +1022,17 @@ function _print_hidden_frames(io::IO, trace, hidden, ndigits_max::Int, max_neste
     end
 end
 
+"""
+    _spend_repeated_numbers(cycle::NTuple{4, T}, n::T)::NTuple{4, T} where {T<:Integer}
+
+`cycle` with the frame numbers that `n - 1` extra repetitions of a single frame inside it
+consume, once per repetition of the cycle, added to its frame-counter advance.
+"""
+function _spend_repeated_numbers(cycle::NTuple{4, T}, n::T)::NTuple{4, T} where {T<:Integer}
+    start, len, repetitions, advance = cycle
+    return (start, len, repetitions, advance + (n - 1) * (repetitions - 1))
+end
+
 function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeated_cycles::Vector{NTuple{3, Int}}, max_nested_cycles::Int; print_linebreaks::Bool, prefix = nothing, kept = nothing)
     println(io)
     prefix === nothing || print(io, prefix)
@@ -1073,6 +1084,8 @@ function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeat
             if hidden
                 # a hidden frame repeating on its own draws no bracket, but still spends its numbers
                 frame_counter += n - 1
+                # and every enclosing cycle repeats those numbers with each of its repetitions
+                current_cycles .= _spend_repeated_numbers.(current_cycles, n)
             else
                 push!(current_cycles, (i, 1, n, n - 1))
                 ncycle_starts += 1

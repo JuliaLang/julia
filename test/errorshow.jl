@@ -1953,4 +1953,15 @@ end
     closing = shown([(1, 2, 5)], kept)
     @test occursin(r"│ +⋮ internal\n ╰", closing)
     @test occursin("[12] u4", closing) && occursin("[12] u4", shown([(1, 2, 5)], nothing))
+
+    # a hidden frame repeating inside a cycle keeps the numbers of the frames after the cycle
+    repeating = Any[entry(:u1, "/user/a.jl"), (Base.StackFrame(:b2, :b_file, 1), 3),
+                    entry(:u3, "/user/a.jl"), entry(:u4, "/user/a.jl")]
+    function shown_repeating(kept)
+        io = IOBuffer()
+        Base.show_processed_backtrace(io, repeating, 99, [(1, 3, 5)], 1; print_linebreaks = false, kept)
+        return String(take!(io))
+    end
+    @test occursin("[26] u4", shown_repeating(nothing))
+    @test occursin("[26] u4", shown_repeating([true, false, true, true]))
 end
