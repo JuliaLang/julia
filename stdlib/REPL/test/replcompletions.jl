@@ -363,7 +363,7 @@ end
 @test_nocompletion("Base.print(\"lol")
 
 # inexistent completion inside a cmd
-@test_nocompletion("run(`lol")
+@test_nocompletion("run(`nonexistent_program_8f3a")
 
 # issue 55856: copy(A').<TAB> errors in the REPL
 let
