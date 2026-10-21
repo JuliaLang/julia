@@ -356,10 +356,10 @@ end
 9   (call core.isdefinedglobal TestMod :X false)
 10  (gotoifnot %₉ label₁₄)
 11  TestMod.X
-12  (= slot₂/if_val %₁₁)
+12  (= slot₂/ %₁₁)
 13  (goto label₁₅)
-14  (= slot₂/if_val core.nothing)
-15  slot₂/if_val
+14  (= slot₂/ core.nothing)
+15  slot₂/
 16  slot₁/X
 17  (call core.svec %₁₆)
 18  (call core.svec %₈)
@@ -392,10 +392,10 @@ end
 9   (call core.isdefinedglobal TestMod :X false)
 10  (gotoifnot %₉ label₁₄)
 11  TestMod.X
-12  (= slot₂/if_val %₁₁)
+12  (= slot₂/ %₁₁)
 13  (goto label₁₅)
-14  (= slot₂/if_val core.nothing)
-15  slot₂/if_val
+14  (= slot₂/ core.nothing)
+15  slot₂/
 16  slot₁/X
 17  (call core.svec %₁₆)
 18  (call core.svec %₈)
@@ -440,10 +440,10 @@ end
 10  (call core.isdefinedglobal TestMod :X false)
 11  (gotoifnot %₁₀ label₁₅)
 12  TestMod.X
-13  (= slot₂/if_val %₁₂)
+13  (= slot₂/ %₁₂)
 14  (goto label₁₆)
-15  (= slot₂/if_val core.nothing)
-16  slot₂/if_val
+15  (= slot₂/ core.nothing)
+16  slot₂/
 17  slot₁/X
 18  (call core.svec %₁₇)
 19  (call core.svec %₉)
@@ -482,10 +482,10 @@ end
 16  (call core.isdefinedglobal TestMod :X false)
 17  (gotoifnot %₁₆ label₂₁)
 18  TestMod.X
-19  (= slot₄/if_val %₁₈)
+19  (= slot₄/ %₁₈)
 20  (goto label₂₂)
-21  (= slot₄/if_val core.nothing)
-22  slot₄/if_val
+21  (= slot₄/ core.nothing)
+22  slot₄/
 23  slot₁/X
 24  (call core.svec %₂₃)
 25  (call core.svec %₁₅)
@@ -520,10 +520,10 @@ end
 9   (call core.isdefinedglobal TestMod :X false)
 10  (gotoifnot %₉ label₁₄)
 11  TestMod.X
-12  (= slot₂/if_val %₁₁)
+12  (= slot₂/ %₁₁)
 13  (goto label₁₅)
-14  (= slot₂/if_val core.nothing)
-15  slot₂/if_val
+14  (= slot₂/ core.nothing)
+15  slot₂/
 16  slot₁/X
 17  (call core.svec %₁₆)
 18  (call core.svec %₈)
@@ -564,10 +564,10 @@ end
 11  (call core.isdefinedglobal TestMod :X false)
 12  (gotoifnot %₁₁ label₁₆)
 13  TestMod.X
-14  (= slot₃/if_val %₁₃)
+14  (= slot₃/ %₁₃)
 15  (goto label₁₇)
-16  (= slot₃/if_val core.nothing)
-17  slot₃/if_val
+16  (= slot₃/ core.nothing)
+17  slot₃/
 18  slot₂/X
 19  (call core.svec %₁₈)
 20  (call core.svec %₁₀)
@@ -618,10 +618,10 @@ end
 12  (call core.isdefinedglobal TestMod :X false)
 13  (gotoifnot %₁₂ label₁₇)
 14  TestMod.X
-15  (= slot₃/if_val %₁₄)
+15  (= slot₃/ %₁₄)
 16  (goto label₁₈)
-17  (= slot₃/if_val core.nothing)
-18  slot₃/if_val
+17  (= slot₃/ core.nothing)
+18  slot₃/
 19  slot₁/X
 20  (call core.svec %₁₉)
 21  (call core.svec %₁₁)
@@ -665,10 +665,10 @@ end
 19  (call core.isdefinedglobal TestMod :X false)
 20  (gotoifnot %₁₉ label₂₄)
 21  TestMod.X
-22  (= slot₄/if_val %₂₁)
+22  (= slot₄/ %₂₁)
 23  (goto label₂₅)
-24  (= slot₄/if_val core.nothing)
-25  slot₄/if_val
+24  (= slot₄/ core.nothing)
+25  slot₄/
 26  slot₁/X
 27  (call core.svec %₂₆)
 28  (call core.svec %₁₈)
@@ -709,10 +709,10 @@ end
 9   (call core.isdefinedglobal TestMod :X false)
 10  (gotoifnot %₉ label₁₄)
 11  TestMod.X
-12  (= slot₃/if_val %₁₁)
+12  (= slot₃/ %₁₁)
 13  (goto label₁₅)
-14  (= slot₃/if_val core.nothing)
-15  slot₃/if_val
+14  (= slot₃/ core.nothing)
+15  slot₃/
 16  slot₁/X
 17  (call core.svec %₁₆)
 18  (call core.svec %₈)
@@ -831,10 +831,10 @@ end
 13  (call core.isdefinedglobal TestMod :X false)
 14  (gotoifnot %₁₃ label₁₈)
 15  TestMod.X
-16  (= slot₅/if_val %₁₅)
+16  (= slot₅/ %₁₅)
 17  (goto label₁₉)
-18  (= slot₅/if_val core.nothing)
-19  slot₅/if_val
+18  (= slot₅/ core.nothing)
+19  slot₅/
 20  slot₁/X
 21  (call core.svec %₂₀)
 22  (call core.svec %₁₂)
@@ -921,10 +921,10 @@ end
 9   (call core.isdefinedglobal TestMod :X false)
 10  (gotoifnot %₉ label₁₄)
 11  TestMod.X
-12  (= slot₂/if_val %₁₁)
+12  (= slot₂/ %₁₁)
 13  (goto label₁₅)
-14  (= slot₂/if_val core.nothing)
-15  slot₂/if_val
+14  (= slot₂/ core.nothing)
+15  slot₂/
 16  slot₁/X
 17  (call core.svec %₁₆)
 18  (call core.svec %₈)
@@ -973,10 +973,10 @@ end
 13  (call core.isdefinedglobal TestMod :X false)
 14  (gotoifnot %₁₃ label₁₈)
 15  TestMod.X
-16  (= slot₃/if_val %₁₅)
+16  (= slot₃/ %₁₅)
 17  (goto label₁₉)
-18  (= slot₃/if_val core.nothing)
-19  slot₃/if_val
+18  (= slot₃/ core.nothing)
+19  slot₃/
 20  slot₁/X
 21  (call core.svec %₂₀)
 22  (call core.svec %₁₂)
@@ -1163,10 +1163,10 @@ end
 12  (call core.isdefinedglobal TestMod :ShadowTypeParam false)
 13  (gotoifnot %₁₂ label₁₇)
 14  TestMod.ShadowTypeParam
-15  (= slot₃/if_val %₁₄)
+15  (= slot₃/ %₁₄)
 16  (goto label₁₈)
-17  (= slot₃/if_val core.nothing)
-18  slot₃/if_val
+17  (= slot₃/ core.nothing)
+18  slot₃/
 19  slot₁/ShadowTypeParam
 20  (call core.svec %₁₉)
 21  (call core.svec %₁₁)
@@ -1235,17 +1235,17 @@ end
 19  (call core.isdefinedglobal TestMod :A false)
 20  (gotoifnot %₁₉ label₂₄)
 21  TestMod.A
-22  (= slot₃/if_val %₂₁)
+22  (= slot₃/ %₂₁)
 23  (goto label₂₅)
-24  (= slot₃/if_val core.nothing)
-25  slot₃/if_val
+24  (= slot₃/ core.nothing)
+25  slot₃/
 26  (call core.isdefinedglobal TestMod :B false)
 27  (gotoifnot %₂₆ label₃₁)
 28  TestMod.B
-29  (= slot₄/if_val %₂₈)
+29  (= slot₄/ %₂₈)
 30  (goto label₃₂)
-31  (= slot₄/if_val core.nothing)
-32  slot₄/if_val
+31  (= slot₄/ core.nothing)
+32  slot₄/
 33  slot₁/A
 34  slot₂/B
 35  (call core.svec %₃₃ %₃₄)
@@ -1307,17 +1307,17 @@ end
 25  (call core.isdefinedglobal TestMod :A false)
 26  (gotoifnot %₂₅ label₃₀)
 27  TestMod.A
-28  (= slot₃/if_val %₂₇)
+28  (= slot₃/ %₂₇)
 29  (goto label₃₁)
-30  (= slot₃/if_val core.nothing)
-31  slot₃/if_val
+30  (= slot₃/ core.nothing)
+31  slot₃/
 32  (call core.isdefinedglobal TestMod :B false)
 33  (gotoifnot %₃₂ label₃₇)
 34  TestMod.B
-35  (= slot₄/if_val %₃₄)
+35  (= slot₄/ %₃₄)
 36  (goto label₃₈)
-37  (= slot₄/if_val core.nothing)
-38  slot₄/if_val
+37  (= slot₄/ core.nothing)
+38  slot₄/
 39  slot₁/A
 40  slot₂/B
 41  (call core.svec %₃₉ %₄₀)

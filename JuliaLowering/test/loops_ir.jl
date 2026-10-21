@@ -88,10 +88,10 @@ end
 14  (call top.not_int %₁₃)
 15  (gotoifnot %₁₄ label₁₇)
 16  (goto label₇)
-17  (= slot₄/if_val core.nothing)
+17  (= slot₄/ core.nothing)
 18  (goto label₂₀)
-19  (= slot₄/if_val core.nothing)
-20  slot₄/if_val
+19  (= slot₄/ core.nothing)
+20  slot₄/
 21  (= slot₃/loop-exit_result %₂₀)
 22  (isdefined slot₃/loop-exit_result)
 23  (gotoifnot %₂₂ label₂₅)
@@ -139,10 +139,10 @@ end
 31  (call top.not_int %₃₀)
 32  (gotoifnot %₃₁ label₃₄)
 33  (goto label₇)
-34  (= slot₇/if_val core.nothing)
+34  (= slot₇/ core.nothing)
 35  (goto label₃₇)
-36  (= slot₇/if_val core.nothing)
-37  slot₇/if_val
+36  (= slot₇/ core.nothing)
+37  slot₇/
 38  (= slot₆/loop-exit_result %₃₇)
 39  (isdefined slot₆/loop-exit_result)
 40  (gotoifnot %₃₉ label₄₂)
