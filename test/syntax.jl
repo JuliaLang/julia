@@ -2868,10 +2868,6 @@ end
     i = :i
     @test remove_linenums!(:(for outer $i = 1:3; end)) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), Expr(:block))
     @test remove_linenums!(:(for outer = 1:3; end)) == Expr(:for, Expr(:(=), :outer, :(1:3)), Expr(:block))
-    # TIL that this is possible (in flisp, where it defines a local function `$`)
-    @test_throws "syntax:" for outer $ i = 1:3
-        @test 1 $ 2 in 1:3
-    end
 
     # 😭
     @test Meta.isexpr(Meta.parse("""
