@@ -31,8 +31,8 @@ end
 # are not actually materialized as call instructions.
 strip_debug_calls(ir) = replace(ir, r"call void @llvm\.dbg\.declare.*\n" => "", r"call void @llvm\.dbg\.value.*\n" => "")
 
-# Inline debug scopes follow CodegenParams, which only drops them by default in
-# release builds that generate a sysimage or pkgimage.
+# Inline debug scopes follow CodegenParams, whose default retains them even
+# when Julia's internal codegen parameters disable them for image generation.
 @inline inner_scope(x) = x + 1
 outer_scope(x) = inner_scope(x)
 @testset "Inline debug scopes" begin
@@ -44,18 +44,29 @@ outer_scope(x) = inner_scope(x)
         @test occursin("inlinedAt:", ir) == scopes
     end
 
-    # pkgimage generation
+    # IR consumers retain inline scopes during precompilation, independently of
+    # Julia's internal parameters for generating the package image.
     mktempdir() do dir
         write(joinpath(dir, "InlineScopesDefault.jl"), """
             module InlineScopesDefault
+            using InteractiveUtils
             const scopes = Base.CodegenParams().debug_info_inline_scopes
+            const internal_scopes = unsafe_load(
+                cglobal(:jl_default_cgparams, Base.CodegenParams)).debug_info_inline_scopes
+            @inline inner_scope(x) = x + 1
+            outer_scope(x) = inner_scope(x)
+            const has_inline_scopes = occursin("inlinedAt:", sprint(io ->
+                code_llvm(io, outer_scope, (Int,); raw=true, dump_module=true, optimize=false,
+                          params=Base.CodegenParams(debug_info_level=Cint(1)))))
             end
             """)
         cmd = `$(Base.julia_cmd()) --startup-file=no --compiled-modules=yes --pkgimages=yes
-               -e 'using InlineScopesDefault; print(InlineScopesDefault.scopes)'`
-        env = ("JULIA_DEPOT_PATH" => dir * (Sys.iswindows() ? ";" : ":"), "JULIA_LOAD_PATH" => dir)
+               -e 'using InlineScopesDefault; print((InlineScopesDefault.scopes,
+                   InlineScopesDefault.internal_scopes, InlineScopesDefault.has_inline_scopes))'`
+        sep = Sys.iswindows() ? ";" : ":"
+        env = ("JULIA_DEPOT_PATH" => dir * sep, "JULIA_LOAD_PATH" => dir * sep * "@stdlib")
         asserts = ccall(:jl_is_assertsbuild, Int8, ()) != 0
-        @test readchomp(addenv(cmd, env...)) == string(Int(asserts))
+        @test readchomp(addenv(cmd, env...)) == string((1, Int(asserts), true))
     end
 end
 

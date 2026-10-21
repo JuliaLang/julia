@@ -88,8 +88,6 @@ function method_instance(@nospecialize(f), @nospecialize(t);
 end
 
 default_debug_info_kind() = unsafe_load(cglobal(:jl_default_debug_info_kind, Cint))
-default_debug_info_inline_scopes() =
-    unsafe_load(cglobal(:jl_default_cgparams, CodegenParams)).debug_info_inline_scopes != 0
 
 # this type mirrors jl_cgparams_t (documented in julia.h)
 struct CodegenParams
@@ -193,10 +191,10 @@ struct CodegenParams
     unique_names::Cint
 
     """
-    If enabled, retain inlined function scopes in LLVM debug information. Julia's
-    own backtraces only need a line table for the outermost frame, so release
-    builds disable this by default when generating a sysimage or pkgimage. Other
-    consumers of the emitted IR may need these scopes to reconstruct inlined frames.
+    If enabled, retain inlined function scopes in LLVM debug information. Enabled
+    by default so consumers of the emitted IR can reconstruct inlined frames.
+    Julia's internal codegen parameters disable this for image generation in release
+    builds, since its own backtraces reconstruct these frames from CodeInstance debuginfo.
     """
     debug_info_inline_scopes::Cint
 
@@ -207,7 +205,7 @@ struct CodegenParams
                    gcstack_arg::Bool=true, use_jlplt::Bool=true, force_emit_all::Bool=false,
                    sanitize_memory::Bool=false, sanitize_thread::Bool=false, sanitize_address::Bool=false,
                    unique_names::Bool=false,
-                   debug_info_inline_scopes::Bool=default_debug_info_inline_scopes())
+                   debug_info_inline_scopes::Bool=true)
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
