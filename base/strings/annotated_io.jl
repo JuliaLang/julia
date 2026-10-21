@@ -349,13 +349,15 @@ function printstyled end
 module AnnotatedDisplay
 
 using ..Base: IO, SubString, AnnotatedString, AnnotatedChar, AnnotatedIOBuffer
-using ..Base: eachregion, invoke_in_world, tls_world_age, unannotate
+using ..Base: eachregion, invoke_in_world, tls_world_age
 
 # Write
 
 # Unstyled fallback for when StyledStrings is not loaded.
 ansi_write(f::Function, io::IO, x::Any) =
-    f(io, x isa AnnotatedChar ? x.char : unannotate(x))
+    f(io, x isa AnnotatedChar ? x.char :
+          x isa SubString ? SubString(x.string.string, x.offset, x.ncodeunits, Val(:noshift)) :
+          x.string)
 
 ansi_write_(f::Function, io::IO, @nospecialize(x::Any)) =
     invoke_in_world(tls_world_age(), ansi_write, f, io, x)
