@@ -13,6 +13,7 @@ function lower(mod::Module, ex_in::SyntaxTree; soft_scope::Union{Nothing,Bool}=n
 end
 
 function macroexpand(mod::Module, ex_in::SyntaxTree; recursive::Bool=true)
+    # TODO: prevent this from being called in macro bodies
     ex0 = rebase_layers(ex_in, mod)
     expand_forms_1(ex0, Base.get_world_counter(), recursive)
 end
@@ -134,6 +135,9 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         if head(mname) != :identifier
             throw(LoweringError(mname, "Expected module name"))
         end
+        if head(body) != :block
+            throw(LoweringError(body, "module expression third argument must be a block"))
+        end
         newmod_name = Symbol(syntax_name(mname))
         coverage_visit_line(mod, ex)
         loc = first_linenode(ex)
@@ -141,10 +145,10 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         return Core.svec(:begin_module, version, newmod_name, notbare, loc)
     elseif k === :thunk && numchildren(ex) == 1
         return Core.svec(:thunk, Expr(:thunk, ex[1].value))
-    elseif (k === :error || k === :incomplete) && numchildren(ex) == 1
-        err = ex[1].value
-        throw(err isa String ? ErrorException(string("syntax: ", err)) : err)
     else
+        if (k === :error || k === :incomplete) && numchildren(ex) == 1
+            ex = _error_to_throw(ex)
+        end
         coverage_visit_line(mod, ex)
          ctx2, ex2 = expand_forms_2(ex, world)
          ctx3, ex3 = resolve_scopes(ctx2, ex2, !is_module_body; soft_scope)
@@ -155,6 +159,15 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
     end
 end
 
+# We want a "top-level scope" stack frame (see `jl_eval_throw`)
+function _error_to_throw(ex)
+    err = ex[1].value
+    exc = err isa String ? ErrorException(string("syntax: ", err)) : err
+    isa_lowering_ast_node(exc) && throw(exc)
+    @mknode(ex; head=:call, children=Syntax[
+        newleaf(ex, :value, Core.throw), newleaf(ex, :value, exc)])
+end
+
 function coverage_visit_line(mod, st)
     Base.JLOptions().code_coverage == 0 && return
     lno = Base.first_linenode(st)
@@ -162,7 +175,7 @@ function coverage_visit_line(mod, st)
     file = String(lno.file)
     if ccall(:jl_coverage_enabled_for, Cint, (Any, Cstring), mod, file) != 0
         ccall(:jl_coverage_visit_line, Cvoid, (Cstring, Csize_t, Cint),
-              file, length(file), lno.line)
+              file, sizeof(file), lno.line)
     end
 end
 
@@ -609,6 +622,8 @@ function to_code_info(ex::SyntaxTree)
         name = slot.name
         if name !== UNUSED && startswith(name, ERASE_SLOTNAME_PREFIX)
             name = ""
+        elseif i > 1 && startswith(name, "##")
+            name = name[3:end]
         end
         sname = Symbol(name)
         slotnames[i] = sname
@@ -829,22 +844,36 @@ end
     if !(ex isa SyntaxTree)
         ex = expr_to_est(ex)
     end
-    return _lower_and_eval(mod, ex, soft_scope)
+    return _eval(mod, lower_init(ex), false, soft_scope)
 end
 
-function _lower_and_eval(mod::Module, st::SyntaxTree,
-                         soft_scope::Union{Nothing,Bool})
-    iter = lower_init(st)
-    return _eval(mod, iter; soft_scope)
+# TODO: Consumers expect LoadError from macros and ErrorException from lowering,
+# but better printing could be done if we were to change this.
+function to_compatible_exception(@nospecialize(exc))
+    if exc isa LoweringError && !exc.internal
+        ErrorException(string("syntax: ", sprint(showerror, exc)))
+    elseif exc isa MacroExpansionError
+        loc = _macrocall_expr_location(exc.context.macrocall)
+        lnn = loc isa MacroSource ? loc.lno : loc
+        file = lnn.file isa Symbol && lnn.file !== :var"" ? String(lnn.file) : "<macrocall>"
+        LoadError(file, lnn.line, to_compatible_exception(exc.err))
+    else
+        exc
+    end
 end
 
-function _eval(mod::Module, iter::LoweringIterator; soft_scope::Union{Nothing,Bool}=nothing)
+function _eval(mod::Module, iter::LoweringIterator,
+               error_compat::Bool, soft_scope::Union{Nothing,Bool})
     modules = Module[mod]
     result = nothing
     while true
-        thunk = invoke_in_lowering_world(
-            ()->lower_step(iter, modules[end],
-                           Base.get_world_counter(); soft_scope))::Core.SimpleVector
+        thunk = try
+            invoke_in_lowering_world(
+                ()->lower_step(iter, modules[end],
+                               Base.get_world_counter(); soft_scope))::Core.SimpleVector
+        catch exc
+            error_compat ? rethrow(to_compatible_exception(exc)) : rethrow()
+        end
         type = thunk[1]::Symbol
         if type == :done
             break

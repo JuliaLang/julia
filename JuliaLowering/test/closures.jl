@@ -67,6 +67,19 @@ begin
 end
 """) == (true, false, (true, true, true, false))
 
+# `@isdefined` before the only assignment of a captured variable
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_isdefined_before_assign()
+        r = @isdefined(x)
+        x = 1
+        g() = x
+        r
+    end
+    f_isdefined_before_assign()
+end
+""") === false
+
 # Mutually recursive closures (closure capturing a closure)
 @test JuliaLowering.include_string(test_mod, """
 let
@@ -579,6 +592,16 @@ end
 @test_throws UndefVarError JuliaLowering.include_string(test_mod, """
 let f(;x::typeof(f)) = x
     f(x=f)
+end
+""") isa Function
+
+# Lambda in the signature of a local function
+@test JuliaLowering.include_string(test_mod, """
+let
+    function f_lambda_in_sig()
+        function g(::Val{x->2x}) end
+    end
+    f_lambda_in_sig()
 end
 """) isa Function
 
