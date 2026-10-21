@@ -25,6 +25,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
+#include "gc-regions.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -406,7 +407,11 @@ static void jl_reserve_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_
     if (s && s->reserved_size >= reserved_size)
         return;
     size_t bufsz = sizeof(jl_excstack_t) + sizeof(uintptr_t)*reserved_size;
+    // The buffer lives as long as the task, so it is allocated in the GC
+    // region of the task, whatever window the throw runs in (gc-regions.h).
+    int lent = jl_gc_region_borrow(jl_gc_region_of((jl_value_t*)ct));
     jl_excstack_t *new_s = (jl_excstack_t*)jl_gc_alloc_buf(ct->ptls, bufsz);
+    jl_gc_region_unborrow(lent);
     new_s->top = 0;
     new_s->reserved_size = reserved_size;
     if (s)

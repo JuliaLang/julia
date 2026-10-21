@@ -50,20 +50,25 @@ function push!(s::IdSet, @nospecialize(x))
     if idx >= 0
         s.list[idx + 1] = x
     else
-        if s.max < length(s.list)
-            idx = s.max
-            @assert !isassigned(s.list, idx + 1) "bucket is already occupied"
-            s.list[idx + 1] = x
-            s.max = idx + 1
-        else
-            newidx = RefValue{Int}(0)
-            newmax = RefValue{Csize_t}(s.max)
-            setfield!(s, :list, ccall(:jl_idset_put_key, Any, (Any, Any, Ptr{Csize_t}, Ptr{Int}), s.list, x, newmax, newidx))
-            idx = newidx[]
-            s.max = Int(newmax[])
+        # The grown key list and the rehashed index table replace the ones
+        # of the set: they are allocated where the set lives (gcregions.jl).
+        with_region_of(s) do
+            local idx  # the block's own, so the closure captures no assigned variable
+            if s.max < length(s.list)
+                idx = s.max
+                @assert !isassigned(s.list, idx + 1) "bucket is already occupied"
+                s.list[idx + 1] = x
+                s.max = idx + 1
+            else
+                newidx = RefValue{Int}(0)
+                newmax = RefValue{Csize_t}(s.max)
+                setfield!(s, :list, ccall(:jl_idset_put_key, Any, (Any, Any, Ptr{Csize_t}, Ptr{Int}), s.list, x, newmax, newidx))
+                idx = newidx[]
+                s.max = Int(newmax[])
+            end
+            @assert s.list[s.max] === x "unexpected object in bucket"
+            setfield!(s, :idxs, ccall(:jl_idset_put_idx, Any, (Any, Any, Int), s.list, s.idxs, idx))
         end
-        @assert s.list[s.max] === x "unexpected object in bucket"
-        setfield!(s, :idxs, ccall(:jl_idset_put_idx, Any, (Any, Any, Int), s.list, s.idxs, idx))
         s.count += 1
     end
     s
