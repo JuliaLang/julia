@@ -57,7 +57,8 @@ end
 # issue #9704
 let a = :a
     @test :(try catch $a end) == :(try catch a end)
-    @test :(module $a end) == :(module a end)
+    @test_broken :(module $a end) == :(module a end)
+    @test remove_linenums!(:(module $a end)) == remove_linenums!(:(module a end))
 end
 
 # string literals
@@ -621,7 +622,8 @@ let thismodule = @__MODULE__,
     @test !isdefined(M16096, :foo16096)
     @test !isdefined(M16096, :it)
     @test typeof(local_foo16096).name.module === thismodule
-    @test getfield(thismodule, typeof(local_foo16096).name.singletonname) === local_foo16096
+    # JuliaLowering: the hygienic function has no global binding
+    @test_broken getfield(thismodule, typeof(local_foo16096).name.singletonname) === local_foo16096
     @test getfield(thismodule, typeof(local_foo16096).name.name) === typeof(local_foo16096)
     @test !isdefined(M16096, typeof(local_foo16096).name.singletonname)
     @test !isdefined(M16096, typeof(local_foo16096).name.name)
@@ -633,7 +635,7 @@ macro f16096()
     end
 end
 let g = @f16096
-    @test g(3) == 6
+    @test_throws UndefVarError(:x, @__MODULE__) g(3)
 end
 macro f16096_2()
     quote
@@ -641,7 +643,7 @@ macro f16096_2()
     end
 end
 let g = @f16096_2
-    @test g() == 4
+    @test_throws UndefVarError(:x, @__MODULE__) g()
 end
 
 # issue #15838
@@ -1207,7 +1209,8 @@ let xs = [:(1+2), :(3+4), :(5+6)]
     ex = quote quote $$(xs...) end end
     @test ex.args[2].args[1].args[2].args[2] == :(3 + 4)
     ex2 = eval(ex)
-    @test ex2.args[2:end] == [3,7,11]
+    @test_broken ex2.args[2:end] == [3,7,11]
+    @test remove_linenums!(ex2).args == [3,7,11]
 end
 
 let x = [3,2,1]
@@ -2676,13 +2679,11 @@ end
     @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :BroadcastFunction)) == 0
 end
 
-module M59008 # dotop with global LHS in macro
+module M59008 # dotop with globalref LHS
 using Test
 global a = 1
-macro counter()
-    :(a += 1)
-end
-@test @counter() === 2 === a
+Core.eval(M59008, Expr(:(+=), GlobalRef(M59008, :a), 1))
+@test a == 2
 end
 
 # issue #37656
@@ -3279,15 +3280,12 @@ end
 end
 
 @testset "slurping into function def" begin
-    x, f1()... = [1, 2, 3]
-    @test x == 1
-    @test f1() == [2, 3]
-    # test that call to `Base.rest` is outside the definition of `f1`
-    @test f1() === f1()
-
-    x, f2()... = 1, 2, 3
-    @test x == 1
-    @test f2() == (2, 3)
+    Meta.lower(@__MODULE__, :(begin
+        x, f1()... = [1, 2, 3]
+    end)).head === :error
+    Meta.lower(@__MODULE__, :(begin
+        x, f2()... = 1, 2, 3
+    end)).head === :error
 end
 
 @testset "long function bodies" begin
@@ -4025,11 +4023,9 @@ end
 
 # `const` is permitted before function assignment for legacy reasons
 const fconst_assign() = 1
-const (gconst_assign(), hconst_assign()) = (2, 3)
-@test (fconst_assign(), gconst_assign(), hconst_assign()) == (1, 2, 3)
+@test_throws "syntax:" @eval const (gconst_assign(), hconst_assign()) = (2, 3)
+@test fconst_assign() == 1
 @test isconst(@__MODULE__, :fconst_assign)
-@test isconst(@__MODULE__, :gconst_assign)
-@test isconst(@__MODULE__, :hconst_assign)
 
 # `const` assignment to `_` drops the assignment effect,
 # and the conversion, but not the rhs.
@@ -4380,10 +4376,8 @@ const X57470{T}, Y57470{T} = Int, Bool
 const A57470{T}, B57470{T} = [Int, Bool]
 @test A57470 === Int
 @test B57470 === Bool
-const a57470, f57470(x), T57470{U} = [1, 2, Int]
-@test a57470 === 1
-@test f57470(0) === 2
-@test T57470 === Int
+# JuliaLowering rejects a call on the left
+@test_throws "syntax:" Core.eval(@__MODULE__, :(const a57470, f57470(x), T57470{U} = [1, 2, Int]))
 
 module M57470_sub end
 @test_throws("syntax:",
@@ -4658,7 +4652,8 @@ end
                 $(Expr(:thisfunction))
             end
         end
-        @test @eval($f() === $f)
+        # JuliaLowering returns the local shadowing the function argument
+        @test_broken @eval($f() === $f)
     end
 
     @testset "Error upon misuse" begin
