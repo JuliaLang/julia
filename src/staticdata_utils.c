@@ -675,25 +675,6 @@ JL_DLLEXPORT uint8_t jl_match_cache_flags_current(uint8_t flags)
     return jl_match_cache_flags(jl_cache_flags(), flags);
 }
 
-// return char* from String field in Base.GIT_VERSION_INFO
-static const char *git_info_string(const char *fld) JL_CANSAFEPOINT
-{
-    static jl_value_t *GIT_VERSION_INFO = NULL;
-    if (!GIT_VERSION_INFO)
-        GIT_VERSION_INFO = jl_get_global(jl_base_module, jl_symbol("GIT_VERSION_INFO"));
-    jl_value_t *f = jl_get_field(GIT_VERSION_INFO, fld);
-    assert(jl_is_string(f));
-    return jl_string_data(f);
-}
-
-static const char *jl_git_commit(void) JL_CANSAFEPOINT
-{
-    static const char *commit = NULL;
-    if (!commit) commit = git_info_string("commit");
-    return commit;
-}
-
-
 // "magic" string and version header of .ji file
 static const int JI_FORMAT_VERSION = 18;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
@@ -720,13 +701,11 @@ static const uint32_t JI_FLAG_SPLIT = 1 << 1;
 
 // The strings an image must have been built with to be loaded by this Julia, separated by `;`
 // and padded with NUL.  Returns 0 if they do not fit.
-static int jl_image_compat(char compat[JI_COMPAT_SIZE], uint32_t flags) JL_CANSAFEPOINT
+static int jl_image_compat(char compat[JI_COMPAT_SIZE]) JL_NOTSAFEPOINT
 {
     memset(compat, 0, JI_COMPAT_SIZE);
-    int n = snprintf(compat, JI_COMPAT_SIZE, "%s;%s;%s;%s%s%s", JL_BUILD_UNAME, JL_BUILD_ARCH,
-                     JULIA_VERSION_STRING, jl_gc_image_abi(),
-                     (flags & JI_FLAG_PKGIMAGE) ? ";" : "",
-                     (flags & JI_FLAG_PKGIMAGE) ? jl_git_commit() : "");
+    int n = snprintf(compat, JI_COMPAT_SIZE, "%s;%s;%s;%s", JL_BUILD_UNAME, JL_BUILD_ARCH,
+                     JULIA_VERSION_STRING, jl_gc_image_abi());
     return n >= 0 && n < JI_COMPAT_SIZE;
 }
 
@@ -735,7 +714,7 @@ static int jl_image_compat(char compat[JI_COMPAT_SIZE], uint32_t flags) JL_CANSA
 static void write_header(ios_t *s, uint64_t preferred_base, uint32_t flags) JL_CANSAFEPOINT
 {
     char compat[JI_COMPAT_SIZE];
-    if (!jl_image_compat(compat, flags))
+    if (!jl_image_compat(compat))
         jl_error("Image compatibility string does not fit in the image header.");
     assert(ios_pos(s) == 0);
     ios_write(s, JI_MAGIC, strlen(JI_MAGIC));
@@ -1047,7 +1026,7 @@ JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint32_t *chec
         return -1;
     memcpy(flags, header + JI_FLAGS_OFFSET, sizeof(*flags));
     char compat[JI_COMPAT_SIZE];
-    if (!jl_image_compat(compat, *flags) ||
+    if (!jl_image_compat(compat) ||
         memcmp(header + JI_COMPAT_OFFSET, compat, JI_COMPAT_SIZE) != 0)
         return -1;
     memcpy(checksum, header + JI_CHECKSUM_OFFSET, sizeof(*checksum));
