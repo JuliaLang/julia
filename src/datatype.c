@@ -250,6 +250,15 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
     flddesc->flags.padding = 0;
     flddesc->npointers = npointers;
     flddesc->first_ptr = first_ptr;
+    uint32_t ptrmap = 0;
+    for (size_t i = 0; i < npointers; i++) {
+        if (pointers[i] >= 32) {
+            ptrmap = 0;
+            break;
+        }
+        ptrmap |= (uint32_t)1 << pointers[i];
+    }
+    flddesc->ptrmap = ptrmap;
 
     // fill out the fields of the new descriptor
     jl_fielddesc8_t *desc8 = (jl_fielddesc8_t *)jl_dt_layout_fields(flddesc);
@@ -1068,11 +1077,13 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     layout->nfields = 0;
     layout->alignment = sizeof(void *);
     layout->npointers = haspointers;
+    layout->first_ptr = -1; // pointer locations are opaque; only markfunc knows them
     layout->flags.haspadding = 1;
     layout->flags.isbitsegal = 0;
     layout->flags.fielddesc_type = JL_FIELDDESC_FOREIGN;
     layout->flags.unused_bits = 0;
     layout->flags.padding = 0;
+    layout->ptrmap = 0;
     layout->flags.arrayelem_isboxed = 0;
     layout->flags.arrayelem_isunion = 0;
     layout->flags.arrayelem_isatomic = 0;
