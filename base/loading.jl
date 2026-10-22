@@ -1414,6 +1414,9 @@ function sort_cachefile_candidates!(paths::Vector{String}, pkgimages::Vector{Boo
     return paths
 end
 
+# Whether `path` is in the depot bundled with Julia, which ships with the sysimage.
+is_bundled_cachefile(path::String) = startswith(path, joinpath(dirname(dirname(Sys.STDLIB)), "compiled", ""))
+
 # Mark a cache file as recently used, for the ordering above and for the eviction
 # in `compilecache`. Only files in the directory `compilecache` writes to are
 # touched: other depots may be shared, read-only, or part of a signed app bundle
@@ -1423,7 +1426,7 @@ end
 function touch_cachefile(pkg::PkgId, path::String)
     isempty(DEPOT_PATH) && return
     startswith(path, joinpath(compilecache_dir(pkg), "")) || return
-    startswith(path, joinpath(dirname(dirname(Sys.STDLIB)), "compiled", "")) && return
+    is_bundled_cachefile(path) && return
     try
         touch(path)
     catch
@@ -2384,11 +2387,10 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
             isfile(ocachepath) || return ArgumentError("Ocachepath $ocachepath is not a file.")
             ocachepath == ocachefile_from_cachefile(path) || return ArgumentError("$ocachepath is not the expected ocachefile")
             # TODO: Check for valid clone_targets?
-            isvalid_pkgimage_crc(io, ocachepath) || return ArgumentError("Invalid checksum in cache file $ocachepath.")
         else
             @assert ocachepath === nothing
         end
-        isvalid_file_crc(io) || return ArgumentError("Invalid checksum in cache file $path.")
+        checksums_invalid(io, path, ocachepath, nothing) && return ArgumentError("Invalid checksum in cache file $path.")
     finally
         close(io)
     end
@@ -4053,6 +4055,9 @@ function checksum_key(io::IOStream, ocachefile::Union{Nothing, String})
 end
 
 function checksums_invalid(io::IOStream, cachefile::String, ocachefile::Union{Nothing, String}, reasons)
+    # Like the sysimage, the caches bundled with it are installed together and not checksummed:
+    # reading them in full costs more than loading them on slow machines.
+    is_bundled_cachefile(cachefile) && return false
     if !isvalid_file_crc(io)
         @debug "Rejecting cache file $cachefile because it has an invalid checksum"
         record_reason(reasons, :checksum_invalid)
