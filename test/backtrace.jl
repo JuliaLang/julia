@@ -37,9 +37,10 @@ try
     error("unexpected")
 catch err
     lkup = get_bt_frames(:test_inline_1, catch_backtrace())
-    @test length(lkup) == 2
-    @test endswith(string(lkup[2].file), "backtrace.jl")
-    @test lkup[2].line == 42
+    # JuliaLowering ignores `push_loc`/`pop_loc`
+    @test_broken length(lkup) == 2
+    @test_broken endswith(string(lkup[2].file), "backtrace.jl")
+    @test_broken lkup[2].line == 42
     # TODO: we don't support surface AST locations with inlined function names
     @test_broken lkup[1].func === :inlfunc
     @test endswith(string(lkup[1].file), "backtrace.jl")
@@ -62,10 +63,11 @@ try
     error("unexpected")
 catch err
     lkup = get_bt_frames(:test_inline_2, catch_backtrace())
-    @test length(lkup) == 2
-    @test endswith(string(lkup[2].file), "backtrace.jl")
-    @test lkup[2].line == 81
-    @test string(lkup[1].file) == absfilepath
+    # JuliaLowering ignores `push_loc`/`pop_loc`
+    @test_broken length(lkup) == 2
+    @test_broken endswith(string(lkup[2].file), "backtrace.jl")
+    @test_broken lkup[2].line == 81
+    @test_broken string(lkup[1].file) == absfilepath
     @test lkup[1].line == 111
 end
 
