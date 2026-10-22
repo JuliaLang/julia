@@ -320,6 +320,12 @@ TOOLCHAIN_FLAGS = $\
 	"LDFLAGS+=$(LINKER_FLAGS) $(LINK_ONLY_FLAGS) $(STAGE_LDFLAGS)" $\
 	$(CROSS_FLAGS) $(PLATFORM_FLAGS)
 
+# Shown as `+opt` after the version in the banner and `versioninfo()` of the optimized
+# build. Pass the same value to any later make in the stage-2 build (e.g. binary-dist),
+# or build_h.jl changes and the system image is rebuilt.
+JULIA_BUILD_VARIANT ?= opt
+STAGE2_FLAGS = "JULIA_BUILD_VARIANT=$(JULIA_BUILD_VARIANT)"
+
 # Profile data worth keeping, as globs relative to the Julia source root; CI
 # archives these so that a build can be reproduced or a regression bisected.
 PROFILE_ARTIFACTS :=
@@ -423,7 +429,7 @@ stage2: stage0
 endif
 stage2: | $(STAGE2_BUILD) stage-path
 	@echo "--- Stage 2: optimized build"
-	$(call STAGE_PATH,$(STAGE2_BUILD)) $(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(BOLT_FLAGS) $(STAGE2_TARGETS)
+	$(call STAGE_PATH,$(STAGE2_BUILD)) $(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(STAGE2_FLAGS) $(BOLT_FLAGS) $(STAGE2_TARGETS)
 	touch $@
 
 # Keep a copy of the libraries as linked, since both the instrumentation and
@@ -457,7 +463,7 @@ bolt-train: bolt-instrument | stage-path
 	@echo "--- BOLT: training build"
 	# Keep $(BOLT_FLAGS) here: anything relinked during this stage must carry
 	# --emit-relocs, or the later BOLT rewrite of it fails.
-	$(call STAGE_PATH,$(STAGE2_BUILD)) $(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(BOLT_FLAGS)
+	$(call STAGE_PATH,$(STAGE2_BUILD)) $(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(STAGE2_FLAGS) $(BOLT_FLAGS)
 	touch $@
 
 bolt-merge: bolt-train $(BOLT_PROFRAW_FILES)
