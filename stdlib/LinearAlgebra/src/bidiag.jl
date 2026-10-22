@@ -65,16 +65,13 @@ julia> Bl = Bidiagonal(dv, ev, :L) # ev is on the first subdiagonal
  ⋅  ⋅  9  4
 ```
 """
-function Bidiagonal(dv::V, ev::V, uplo::Symbol) where {T,V<:AbstractVector{T}}
-    Bidiagonal{T,V}(dv, ev, uplo)
-end
-function Bidiagonal(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
+function Bidiagonal(dv::V, ev::V, uplo::Union{Symbol, AbstractChar}) where {T,V<:AbstractVector{T}}
     Bidiagonal{T,V}(dv, ev, uplo)
 end
 
 #To allow Bidiagonal's where the "dv" is Vector{T} and "ev" Vector{S},
 #where T and S can be promoted
-function Bidiagonal(dv::Vector{T}, ev::Vector{S}, uplo::Symbol) where {T,S}
+function Bidiagonal(dv::Vector{T}, ev::Vector{S}, uplo::Union{Symbol, AbstractChar}) where {T,S}
     TS = promote_type(T,S)
     return Bidiagonal{TS,Vector{TS}}(dv, ev, uplo)
 end
@@ -675,37 +672,37 @@ function _mul!(C::AbstractMatrix, A::Diagonal, B::BiTriSym, _add::MulAddMul = Mu
     C
 end
 
-function *(A::UpperOrUnitUpperTriangular, B::Bidiagonal)
+function mul(A::UpperOrUnitUpperTriangular, B::Bidiagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     C = mul!(similar(A, TS, size(A)), A, B)
     return B.uplo == 'U' ? UpperTriangular(C) : C
 end
 
-function *(A::LowerOrUnitLowerTriangular, B::Bidiagonal)
+function mul(A::LowerOrUnitLowerTriangular, B::Bidiagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     C = mul!(similar(A, TS, size(A)), A, B)
     return B.uplo == 'L' ? LowerTriangular(C) : C
 end
 
-function *(A::Bidiagonal, B::UpperOrUnitUpperTriangular)
+function mul(A::Bidiagonal, B::UpperOrUnitUpperTriangular)
     TS = promote_op(matprod, eltype(A), eltype(B))
     C = mul!(similar(B, TS, size(B)), A, B)
     return A.uplo == 'U' ? UpperTriangular(C) : C
 end
 
-function *(A::Bidiagonal, B::LowerOrUnitLowerTriangular)
+function mul(A::Bidiagonal, B::LowerOrUnitLowerTriangular)
     TS = promote_op(matprod, eltype(A), eltype(B))
     C = mul!(similar(B, TS, size(B)), A, B)
     return A.uplo == 'L' ? LowerTriangular(C) : C
 end
 
-function *(A::Diagonal, B::SymTridiagonal)
+function mul(A::Diagonal, B::SymTridiagonal)
     TS = promote_op(*, eltype(A), eltype(B))
     out = Tridiagonal(similar(A, TS, size(A, 1)-1), similar(A, TS, size(A, 1)), similar(A, TS, size(A, 1)-1))
     mul!(out, A, B)
 end
 
-function *(A::SymTridiagonal, B::Diagonal)
+function mul(A::SymTridiagonal, B::Diagonal)
     TS = promote_op(*, eltype(A), eltype(B))
     out = Tridiagonal(similar(A, TS, size(A, 1)-1), similar(A, TS, size(A, 1)), similar(A, TS, size(A, 1)-1))
     mul!(out, A, B)
@@ -716,7 +713,7 @@ function dot(x::AbstractVector, B::Bidiagonal, y::AbstractVector)
     nx, ny = length(x), length(y)
     (nx == size(B, 1) == ny) || throw(DimensionMismatch())
     if nx ≤ 1
-        nx == 0 && return dot(zero(eltype(x)), zero(eltype(B)), zero(eltype(y)))
+        nx == 0 && return zero(dot(zero(eltype(x)), zero(eltype(B)), zero(eltype(y))))
         return dot(x[1], B.dv[1], y[1])
     end
     ev, dv = B.ev, B.dv

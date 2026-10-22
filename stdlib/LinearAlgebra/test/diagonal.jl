@@ -871,7 +871,9 @@ end
     D = Diagonal(1:4)
     A = OffsetArray(rand(4,4), 2, 2)
     @test_throws ArgumentError D * A
+    @test_throws ArgumentError lmul!(D, A)
     @test_throws ArgumentError A * D
+    @test_throws ArgumentError rmul!(A, D)
     @test_throws ArgumentError mul!(similar(A, size(A)), A, D)
     @test_throws ArgumentError mul!(similar(A, size(A)), D, A)
 end

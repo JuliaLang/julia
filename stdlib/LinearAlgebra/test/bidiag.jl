@@ -481,6 +481,10 @@ Random.seed!(1)
     @test Matrix{ComplexF64}(BD) == BD
 end
 
+@testset "Constructors with Char uplo" begin
+    @test Bidiagonal(Int8[1,2], [1], 'U') == Bidiagonal(Int8[1,2], [1], :U)
+end
+
 # Issue 10742 and similar
 let A = Bidiagonal([1,2,3], [0,0], :U)
     @test istril(A)

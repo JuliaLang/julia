@@ -224,7 +224,7 @@ function dot(x::AbstractVector, S::SymTridiagonal, y::AbstractVector)
     nx, ny = length(x), length(y)
     (nx == size(S, 1) == ny) || throw(DimensionMismatch("dot"))
     if nx ≤ 1
-        nx == 0 && return dot(zero(eltype(x)), zero(eltype(S)), zero(eltype(y)))
+        nx == 0 && return zero(dot(zero(eltype(x)), zero(eltype(S)), zero(eltype(y))))
         return dot(x[1], S.dv[1], y[1])
     end
     dv, ev = S.dv, S.ev
@@ -843,7 +843,7 @@ function dot(x::AbstractVector, A::Tridiagonal, y::AbstractVector)
     nx, ny = length(x), length(y)
     (nx == size(A, 1) == ny) || throw(DimensionMismatch())
     if nx ≤ 1
-        nx == 0 && return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+        nx == 0 && return zero(dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y))))
         return dot(x[1], A.d[1], y[1])
     end
     @inbounds begin

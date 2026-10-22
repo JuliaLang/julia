@@ -876,6 +876,8 @@ end
         @test exp(log(A8)) ≈ A8
         @test typeof(log(A8)) == Matrix{elty}
     end
+
+    @test log([1 2; 0 4]) == log(UpperTriangular(Float64[1 2; 0 4]))
 end
 
 @testset "matrix logarithm is type-inferrable" for elty in (Float32,Float64,ComplexF32,ComplexF64)

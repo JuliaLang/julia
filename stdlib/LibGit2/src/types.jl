@@ -2,7 +2,7 @@
 
 using Base: something
 import Base.@kwdef
-import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE, GIT_CONFIG
+import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE, GIT_CONFIG, GIT_OID_TYPE
 
 const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
@@ -346,6 +346,9 @@ The fields represent:
     @static if LibGit2.VERSION >= v"0.25.0"
         proxy_opts::ProxyOptions       = ProxyOptions()
     end
+    @static if LibGit2.VERSION >= v"1.7.0"
+        depth::Cuint                   = Cuint(Consts.FETCH_DEPTH_FULL)
+    end
     @static if LibGit2.VERSION >= v"1.4.0"
         follow_redirects::Cuint        = Cuint(0)
     end
@@ -439,6 +442,9 @@ The fields represent:
     # options controlling how the diff text is generated
     context_lines::UInt32                    = UInt32(3)
     interhunk_lines::UInt32                  = UInt32(0)
+    @static if LibGit2.VERSION >= v"1.7.0"
+        oid_type::GIT_OID_TYPE               = Consts.OID_DEFAULT
+    end
     id_abbrev::UInt16                        = UInt16(7)
     max_size::Int64                          = Int64(512*1024*1024) #512Mb
     old_prefix::Cstring                      = Cstring(C_NULL)

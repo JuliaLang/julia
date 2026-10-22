@@ -566,6 +566,8 @@ end
 (\)(F::TransposeFactorization{T,<:LU}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
     ldiv(F, B)
 
+const default_peakflops_size = Int === Int32 ? 2048 : 4096
+
 """
     LinearAlgebra.peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
 
@@ -590,7 +592,7 @@ of the problem that is solved on each processor.
     This function requires at least Julia 1.1. In Julia 1.0 it is available from
     the standard library `InteractiveUtils`.
 """
-function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
+function peakflops(n::Integer=default_peakflops_size; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
     t = zeros(Float64, ntrials)
     for i=1:ntrials
         a = ones(eltype,n,n)
