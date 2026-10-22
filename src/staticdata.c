@@ -2288,17 +2288,16 @@ static void jl_read_reloclist(jl_serializer_state *s, jl_array_t *link_ids, uint
 {
     uintptr_t base = (uintptr_t)s->s->buf;
     uintptr_t last_pos = 0;
-    uint8_t *current = (uint8_t *)(s->relocs->buf + s->relocs->bpos);
+    ios_t *relocs = s->relocs;
+    uint8_t *current = (uint8_t *)(relocs->buf + relocs->bpos);
     int link_index = 0;
     while (1) {
         // Read the offset of the next object
         size_t pos_diff = 0;
         size_t cnt = 0;
         while (1) {
-            assert(s->relocs->bpos <= s->relocs->size);
-            assert((char *)current <= (char *)(s->relocs->buf + s->relocs->size));
+            assert((char *)current < (char *)(relocs->buf + relocs->size));
             int8_t c = *current++;
-            s->relocs->bpos += 1;
 
             pos_diff |= ((size_t)c & 0x7F) << (7 * cnt++);
             if ((c >> 7) == 0)
@@ -2316,6 +2315,7 @@ static void jl_read_reloclist(jl_serializer_state *s, jl_array_t *link_ids, uint
             v = (uintptr_t)((jl_datatype_t*)v)->smalltag << 4; // TODO: should we have a representation that supports sweep without a relocation step?
         *pv = v | bits;
     }
+    relocs->bpos = (char *)current - relocs->buf;
     assert(!link_ids || link_index == jl_array_len(link_ids));
 }
 
@@ -2323,16 +2323,15 @@ static void jl_read_memreflist(jl_serializer_state *s)
 {
     uintptr_t base = (uintptr_t)s->s->buf;
     uintptr_t last_pos = 0;
-    uint8_t *current = (uint8_t *)(s->relocs->buf + s->relocs->bpos);
+    ios_t *relocs = s->relocs;
+    uint8_t *current = (uint8_t *)(relocs->buf + relocs->bpos);
     while (1) {
         // Read the offset of the next object
         size_t pos_diff = 0;
         size_t cnt = 0;
         while (1) {
-            assert(s->relocs->bpos <= s->relocs->size);
-            assert((char *)current <= (char *)(s->relocs->buf + s->relocs->size));
+            assert((char *)current < (char *)(relocs->buf + relocs->size));
             int8_t c = *current++;
-            s->relocs->bpos += 1;
 
             pos_diff |= ((size_t)c & 0x7F) << (7 * cnt++);
             if ((c >> 7) == 0)
@@ -2347,6 +2346,7 @@ static void jl_read_memreflist(jl_serializer_state *s)
         size_t offset = (size_t)pv->ptr_or_offset;
         pv->ptr_or_offset = (void*)((char*)pv->mem->ptr + offset);
     }
+    relocs->bpos = (char *)current - relocs->buf;
 }
 
 
