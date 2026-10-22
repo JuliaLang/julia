@@ -425,7 +425,7 @@ function _trim_provenance(st::Syntax, trim_unexpanded, scmap)
     end
     if is_leaf(st) || numchildren(st) == 0
         source = sourceref(st)
-        sc2 === st_sc && !(source isa Syntax) ? st :
+        sc2 === st_sc && !(st.source isa Syntax) ? st :
             @mknode(st; context=sc2, source, jl_source=st.jl_source)
     else
         @mknode(st; context=sc2, source=sourceref(st), jl_source=st.jl_source,
