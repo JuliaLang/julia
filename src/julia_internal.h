@@ -1448,9 +1448,9 @@ void jl_gc_safe_enter_from_nonmutator(jl_ptls_t ptls) JL_CANSAFEPOINT_LEAVE;
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
 // The linkage blob (image) owning `v`, or -1 for an object of no image.
 JL_DLLEXPORT size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
-// The world in which linkage blob `blob` activated its methods if it is a dependency of linkage blob `image`, the sysimage, or `image` itself, else 0.
+// The world in which `blob` activated its methods if it is `image`, the sysimage, or a dependency of `image`, else 0.
 JL_DLLEXPORT size_t jl_linkage_blob_dep_world(size_t image, size_t blob) JL_NOTSAFEPOINT;
-// The world since which every method on the typenames of `sig` in `mt` came from `image` or one of its dependencies, else 0 (gf.c).
+// The world since which every method on the typenames of `sig` in `mt` came from `image` or one of its dependencies, else 0.
 JL_DLLEXPORT size_t jl_sig_contributors_world(jl_value_t *sig, jl_methtable_t *mt, size_t image) JL_CANSAFEPOINT;
 void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array_t *record, size_t image) JL_CANSAFEPOINT;
 // The ext_backinterferences of a method: It is the back direction of `interferences`, computed for external methods during incremental precompile.

@@ -1,10 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// Eytzinger tree for fast address range lookups. Readers take no lock: a
-// writer publishes a new immutable snapshot of the whole tree, and a reader
-// uses the snapshot it loaded. The tree's owner retires a replaced snapshot
-// once no reader can still hold it, so a reader must not pass a safepoint
-// while using one: see _eyt_tree_snapshot.
+// Eytzinger tree for fast address range lookups. Writers publish a new immutable
+// snapshot; readers take no lock and must not pass a safepoint while using one.
 // See https://algorithmica.org/en/eytzinger
 
 #ifndef JL_EYTZINGER_H
@@ -84,10 +81,7 @@ typedef struct {
 typedef struct eyt_tree_t {
     _Atomic(eyt_snapshot_t*) snapshot; // the current version
     uv_mutex_t writelock; // serializes writers
-    // Called under the write lock with the snapshot that a new one replaced.
-    // Readers may still hold it, so the callback must not free it until every
-    // thread has passed a safepoint (jl_gc_add_quiescent does), unless there
-    // are no concurrent readers. NULL leaks it.
+    // frees a replaced snapshot once every thread has passed a safepoint; NULL leaks it
     void (*retire)(void *snapshot);
 } eyt_tree_t;
 
@@ -101,12 +95,7 @@ JL_DLLEXPORT void eyt_tree_init(eyt_tree_t *t, void (*retire)(void *snapshot)) J
 // numbered in insertion order. Thread-safe against readers and other writers.
 JL_DLLEXPORT size_t eyt_tree_add_range(eyt_tree_t *t, uintptr_t start, uintptr_t end, void *data) JL_NOTSAFEPOINT;
 
-// The current snapshot, for the readers below: it is valid only until the
-// thread next passes a safepoint, so a reader uses it within one
-// JL_NOTSAFEPOINT body and never stores or returns it (range data has the
-// caller's lifetime). A relaxed load suffices: every read of the snapshot
-// depends on the loaded address, which orders it after the writer's release
-// store on every target we support.
+// valid only until the thread next passes a safepoint, so never store or return it
 static inline eyt_snapshot_t *_eyt_tree_snapshot(eyt_tree_t *t) JL_NOTSAFEPOINT
 {
     return jl_atomic_load_relaxed(&t->snapshot);
@@ -129,7 +118,6 @@ static inline void *eyt_tree_find_data(eyt_tree_t *t, uintptr_t addr) JL_NOTSAFE
     return (void*)s->idxs[idx];
 }
 
-// The number of registered ranges.
 static inline size_t eyt_tree_nranges(eyt_tree_t *t) JL_NOTSAFEPOINT
 {
     return _eyt_tree_snapshot(t)->nranges;

@@ -2211,10 +2211,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     end
 end
 
-# Method contributors: the method table records, per top typename, which images
-# added or deleted methods under it this session, and each image records its
-# dependencies, so a load can ask whether every method a signature could match
-# came from an image or its dependencies.
+# whether every method a signature can match came from an image or its dependencies
 precompile_test_harness("method contributors") do load_path
     write(joinpath(load_path, "ContribDep.jl"),
         """
@@ -2236,17 +2233,13 @@ precompile_test_harness("method contributors") do load_path
         in_deps(sig, obj) = Int(0 != ccall(:jl_sig_contributors_world, Csize_t, (Any, Any, Csize_t), sig, Core.methodtable,
                                      ccall(:jl_external_blob_index, Csize_t, (Any,), obj)))
         """
-    # an image's dependencies are the images it was loaded against, the sysimage
-    # and itself, and the question is asked for the blob owning an object: the
-    # contributors to ContribDep.f, ContribDep and ContribExt, are among the
-    # dependencies of ContribExt but not of ContribDep, of the sysimage, or of no image
+    # f has methods from ContribDep and ContribExt, which are both dependencies of ContribExt only
     out = trusted_edge_test_output(load_path, depot, in_deps_def * """
         using ContribDep, ContribExt
         sig = Tuple{typeof(ContribDep.f), Int}
         print(in_deps(sig, ContribExt), " ", in_deps(sig, which(ContribDep.f, (Integer,))), " ",
               in_deps(sig, ContribDep), " ", in_deps(sig, Base), " ", in_deps(sig, Main))
-        # a method on Type{Union{}} meets the constructors of every family, so defining one
-        # poisons every constructor signature, but no other
+        # a Type{Union{}} method intersects every constructor, but no other signature
         ctor = Tuple{Type{Int}, Int}
         print(" ", in_deps(ctor, ContribExt))
         (::Type{Union{}})(::Int) = 0
@@ -2267,10 +2260,9 @@ precompile_test_harness("method contributors") do load_path
     @test out == "0"
 end
 
-# Activation replay: a package image replays what its precompile worker found when
-# activating each method against the methods of its dependencies, and scans the
-# method table live only for what that record does not cover. One trio of packages,
-# loaded in several orders.
+# Activation replay: a package image replays what its worker found when activating
+# each method against its dependencies, and scans live only what that record does
+# not cover. One trio of packages, loaded in several orders.
 precompile_test_harness("activation replay") do load_path
     write(joinpath(load_path, "ActReplayDep.jl"),
         """
@@ -2294,9 +2286,8 @@ precompile_test_harness("activation replay") do load_path
         precompile(callg, ())
         end
         """)
-    # the worker activates the methods above `using ActReplayLate` before that image
-    # is loaded, so its methods complete their records as they activate; the method
-    # below finds them in its own scan
+    # defines its methods before loading the late dependency, so the worker activated
+    # them without it, and one after, which sees it
     write(joinpath(load_path, "ActReplayPkg.jl"),
         """
         module ActReplayPkg
@@ -2337,8 +2328,8 @@ precompile_test_harness("activation replay") do load_path
         print(Base.invokelatest(ActReplayLate.callh), " ", ambiguous, " ", ActReplayDep.h(Int8(1)), " ", ActReplayDep.h(big(1)))
         """)
     @test out == "pkg true pkg8 late"
-    # the late dependency's caller of a method missing when it was built is found
-    # through its missing-method backedge, which is always checked live
+    # the late dependency's caller of a then-missing method, reached through its
+    # missing-method backedge
     out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
         using ActReplayLate
         using ActReplayPkg

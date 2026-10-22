@@ -44,7 +44,6 @@ static eyt_snapshot_t *snapshot_alloc(size_t nranges) JL_NOTSAFEPOINT
     return s;
 }
 
-// Rebuild the tree of snapshot `s` from its ranges.
 static void rebuild_tree(eyt_snapshot_t *s) JL_NOTSAFEPOINT
 {
     size_t end = s->n;

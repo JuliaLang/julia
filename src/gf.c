@@ -2349,7 +2349,7 @@ struct matches_env {
     jl_typemap_entry_t *newentry;
     jl_value_t *shadowed;
     jl_typemap_entry_t *replaced;
-    size_t image; // the image whose record is replayed, for intersect_entry_uncovered, or -1
+    size_t image; // the image an entry filter may restrict to, or -1
 };
 
 static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_intersection_env *closure0) JL_CANSAFEPOINT
@@ -2376,18 +2376,16 @@ static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_in
 
 static int method_covered_by_record(jl_method_t *m, size_t image) JL_NOTSAFEPOINT;
 
-// the entries of images the record (ext_backinterferences) does not cover
+// the entries of images outside the dependencies of `image`
 static int intersect_entry_uncovered(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure0) JL_NOTSAFEPOINT
 {
     struct matches_env *closure = container_of(closure0, struct matches_env, match);
     return !method_covered_by_record(ml->func.method, closure->image);
 }
 
-// The methods of `defs` intersecting `newentry` in `world`: the methods `newentry`
-// is activated against, with the one of an equal signature it replaces in
-// `*replaced`. Given the linkage blob `image` of the image whose record is being
-// replayed (not -1), only the methods of images that record does not cover,
-// appended to `shadowed` (or a new array when NULL).
+// the methods intersecting `newentry` in `world`, appended to `shadowed` (or a new
+// array), with the method of equal signature it replaces in `*replaced`; given an
+// `image` (not -1), only the methods of images outside its dependencies
 static jl_value_t *get_intersect_matches(jl_typemap_t *defs, jl_typemap_entry_t *newentry, jl_typemap_entry_t **replaced, size_t world, size_t image, jl_value_t *shadowed) JL_CANSAFEPOINT
 {
     jl_tupletype_t *type = newentry->sig;
@@ -2837,19 +2835,15 @@ JL_DLLEXPORT void jl_method_table_add_backedge(jl_value_t *typ, jl_code_instance
     JL_UNLOCK(&mc->writelock);
 }
 
-// ---- method-table contributor tracking ----
-// `mt->contributors` records, under the same top typenames as the table's backedges, who
-// added or deleted methods there during this session: the linkage blob of the image a
-// method came from, or -1 for a method defined or deleted at run time. While the edges of a
-// package image are verified, a call signature whose typenames have no contributor outside
-// that image's dependencies (the sysimage, the images it was loaded against, and itself)
-// still has the method-match set the image's precompile worker saw, so the worker's verdict
-// holds. That the set of contributors, whatever their order, determines the match set
-// relies on overwriting a method being an error during incremental precompilation, so no
-// two images among an image's dependencies define the same signature. The tags name this
-// process's blobs, so the table is not saved in images. Methods are tagged as they activate
-// and as they are deleted, so writers hold world_counter_lock; readers take no lock, as the
-// table is published with release stores and a tag vector is replaced, never grown in place.
+// ---- method-table contributors ----
+// Per top typename (keyed like the backedges), the linkage blobs that activated or
+// deleted methods under it this session, or -1 for a change made at run time.
+// If all of them are dependencies of an image, a signature on those typenames
+// matches the same methods that image's precompile worker saw. Load order doesn't
+// matter, since overwriting a method is an error during precompilation. The tags
+// name this process's blobs, so the table is not saved in images.
+// Writers hold the world counter lock. Readers take no lock, since a tag vector is
+// replaced, never grown in place.
 
 // add `tag` to the contributors of `tn` in `mt`, unless already present
 static void contributor_add_tag(jl_methtable_t *mt, jl_typename_t *tn, int32_t tag) JL_CANSAFEPOINT
@@ -2917,7 +2911,6 @@ static void _typename_check_contributor(jl_typename_t *tn, int explct, void *env
     }
 }
 
-// record `tag` under every top typename of `method`'s signature in `mt`
 static void contributor_tag_method(jl_methtable_t *mt, jl_method_t *method, int32_t tag) JL_CANSAFEPOINT
 {
     struct _typename_tag_contributor_env env = {mt, tag};
@@ -2936,7 +2929,7 @@ JL_DLLEXPORT size_t jl_sig_contributors_world(jl_value_t *sig, jl_methtable_t *m
 {
     if (image == (size_t)-1)
         return 0;
-    // the sysimage's contributions are not tagged: they are active by jl_require_world
+    // the sysimage's methods are not tagged, and are active from the require world
     struct _typename_check_contributor_env env = {mt, image, jl_require_world, 1};
     int decomposed = jl_foreach_top_typename_for(_typename_check_contributor, sig, 1, &env);
     return decomposed && env.clean ? env.min_world : 0;
@@ -3740,8 +3733,8 @@ static jl_genericmemory_t *activate_against_methods(struct activate_env *env, jl
             }
         }
         if (morespec[j]) {
-            // morespecific(old, new): the old method gained a strict loser (when
-            // replaying, its image was saved without this method, so the bit is stale)
+            // morespecific(old, new): the old method gained a strict loser
+            // (a replayed method's image was saved before this method existed)
             int m_dispatch = jl_atomic_load_relaxed(&m->dispatch_status);
             if (m_dispatch & METHOD_SIG_NO_LOSERS)
                 jl_atomic_store_relaxed(&m->dispatch_status, m_dispatch & ~METHOD_SIG_NO_LOSERS);
@@ -3756,9 +3749,7 @@ static jl_genericmemory_t *activate_against_methods(struct activate_env *env, jl
             // prior world, and the methods of a loaded image activate together in a
             // single world bump, so a same-image method -- the only kind whose
             // serialized interference set could already contain `method` -- never
-            // appears in `d`. A record lists only the methods of other images, whose
-            // sets were saved before this method existed, but a replay still probes:
-            // a duplicate key would persist in the set.
+            // appears in `d`. A replay still probes, as a duplicate key would stay in the set.
             if (j >= nknown || !method_in_interferences(method, m)) {
                 jl_genericmemory_t *m_interferences = jl_atomic_load_relaxed(&m->interferences);
                 ssize_t idx;
@@ -3880,8 +3871,7 @@ void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array
             jl_array_ptr_1d_push((jl_array_t*)oldvalue, (jl_value_t*)m);
         }
         rn = jl_array_nrows(oldvalue);
-        // A method the record saw may have been deleted since. The record would still
-        // count it as a witness, so scan everything instead.
+        // a recorded method was deleted or replaced since, so scan everything
         for (size_t i = 0; i < rn && replaying; i++) {
             jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(oldvalue, i);
             if (!(jl_atomic_load_relaxed(&m->dispatch_status) & METHOD_SIG_LATEST_WHICH))
@@ -3892,13 +3882,9 @@ void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array
             rn = 0;
         }
     }
-    // With a record, we replay what the precompile worker found for the images it
-    // covers, and only scan the methods of uncovered images; the activation then
-    // runs over both together, so the replacement and missing-edge checks see
-    // every intersecting method, as they would from a full scan.
+    // scan only the methods of other images; the checks below still see every intersecting method
     if (replaying && all_covered) {
-        // No method of an uncovered image is under any of this signature's
-        // typenames, so the scan would find nothing. Edge replay relies on the same fact.
+        // no other image has a method on these typenames, so the scan would find nothing
     }
     else {
         oldvalue = get_intersect_matches(jl_atomic_load_relaxed(&mt->defs), newentry, &replaced, max_world, replaying ? image : (size_t)-1, oldvalue);

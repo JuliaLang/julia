@@ -931,9 +931,8 @@ static void jl_add_methods(jl_array_t *external) JL_CANSAFEPOINT
 
 extern _Atomic(int) allow_new_worlds;
 
-// `records` holds, in parallel with `external`, each method's ext_backinterferences
-// (or `nothing`); `image` is the linkage blob of the loading image, whose
-// dependencies those records cover.
+// `records` holds, in parallel with `external`, each method's activation record (or
+// `nothing`); `image` is the linkage blob of the loading image
 static void jl_activate_methods(jl_array_t *external, jl_array_t *records, jl_array_t *internal, size_t world, const char *pkgname, size_t image) JL_CANSAFEPOINT
 {
     size_t i, l = jl_array_nrows(internal);
