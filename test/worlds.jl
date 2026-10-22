@@ -852,3 +852,9 @@ const wc_ambigpair = get_world_counter()
 ambigpair_f(::Integer, ::Int) = 2
 @test_throws MethodError ambigpair_g(1)
 @test Base.invoke_in_world(wc_ambigpair, ambigpair_g, 1) === 1
+# the lookup made for `invoke` does not compute the ambiguity, but must still
+# report the same range for its (empty) answer
+let (match, worlds) = Core.Compiler._findsup(Tuple{typeof(ambigpair_f), Int, Int}, nothing, get_world_counter())
+    @test match === nothing
+    @test worlds.min_world > wc_ambigpair
+end
