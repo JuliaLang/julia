@@ -1896,6 +1896,41 @@ STATIC_INLINE void gc_try_claim_and_push(jl_gc_markqueue_t *mq, void *_obj,
         gc_ptr_queue_push(mq, obj);
 }
 
+// Finish marking an object that holds no references: what gc_mark_outrefs
+// would do with it.
+static NOINLINE void gc_mark_leaf(jl_ptls_t ptls, jl_taggedvalue_t *o, uintptr_t header,
+                                  size_t dtsz) JL_NOTSAFEPOINT
+{
+    if (!o->bits.in_image && !gc_verifying) {
+        uint8_t bits = (gc_old(header) && !mark_reset_age) ? GC_OLD_MARKED : GC_MARKED;
+        gc_setmark(ptls, o, bits, dtsz);
+    }
+}
+
+// gc_try_claim_and_push for the loops scanning an object's fields: an object
+// that holds no references (see `leaf_vtag`) is marked right away instead of
+// being queued only to find nothing to scan.
+FORCE_INLINE void gc_try_claim_and_mark(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_obj,
+                                        uintptr_t *nptr) JL_NOTSAFEPOINT
+{
+    if (_obj == NULL)
+        return;
+    jl_value_t *obj = (jl_value_t *)jl_assume(_obj);
+    jl_taggedvalue_t *o = jl_astaggedvalue(obj);
+    uintptr_t header = o->header;
+    if (!gc_old(header))
+        *nptr |= 1;
+    if (!gc_try_setmark_tag(o, GC_MARKED))
+        return;
+    uintptr_t vtag = header & ~(uintptr_t)0xf;
+    if (vtag == ptls->gc_tls.gc_cache.leaf_vtag)
+        gc_mark_leaf(ptls, o, header, ptls->gc_tls.gc_cache.leaf_dtsz);
+    else if (vtag == jl_string_tag << 4)
+        gc_mark_leaf(ptls, o, header, jl_string_len(obj) + sizeof(size_t) + 1);
+    else
+        gc_ptr_queue_push(mq, obj);
+}
+
 // Mark object with 8bit field descriptors
 STATIC_INLINE jl_value_t *gc_mark_obj8(jl_ptls_t ptls, char *obj8_parent, uint8_t *obj8_begin,
                          uint8_t *obj8_end, uintptr_t nptr) JL_NOTSAFEPOINT
@@ -1912,7 +1947,7 @@ STATIC_INLINE jl_value_t *gc_mark_obj8(jl_ptls_t ptls, char *obj8_parent, uint8_
                             gc_slot_to_fieldidx(obj8_parent, slot, (jl_datatype_t*)jl_typeof(obj8_parent)));
             gc_assert_parent_validity((jl_value_t *)obj8_parent, new_obj);
             if (obj8_begin + 1 != obj8_end) {
-                gc_try_claim_and_push(mq, new_obj, &nptr);
+                gc_try_claim_and_mark(ptls, mq, new_obj, &nptr);
             }
             else {
                 // Unroll marking of last item to avoid pushing
@@ -1944,7 +1979,7 @@ STATIC_INLINE jl_value_t *gc_mark_obj16(jl_ptls_t ptls, char *obj16_parent, uint
                             gc_slot_to_fieldidx(obj16_parent, slot, (jl_datatype_t*)jl_typeof(obj16_parent)));
             gc_assert_parent_validity((jl_value_t *)obj16_parent, new_obj);
             if (obj16_begin + 1 != obj16_end) {
-                gc_try_claim_and_push(mq, new_obj, &nptr);
+                gc_try_claim_and_mark(ptls, mq, new_obj, &nptr);
             }
             else {
                 // Unroll marking of last item to avoid pushing
@@ -1976,7 +2011,7 @@ STATIC_INLINE jl_value_t *gc_mark_obj32(jl_ptls_t ptls, char *obj32_parent, uint
                             gc_slot_to_fieldidx(obj32_parent, slot, (jl_datatype_t*)jl_typeof(obj32_parent)));
             gc_assert_parent_validity((jl_value_t *)obj32_parent, new_obj);
             if (obj32_begin + 1 != obj32_end) {
-                gc_try_claim_and_push(mq, new_obj, &nptr);
+                gc_try_claim_and_mark(ptls, mq, new_obj, &nptr);
             }
             else {
                 // Unroll marking of last item to avoid pushing
@@ -2044,7 +2079,7 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
             verify_parent2("obj array", obj_parent, obj_begin, "elem(%d)",
                         gc_slot_to_arrayidx(obj_parent, obj_begin));
             gc_assert_parent_validity(obj_parent, new_obj);
-            gc_try_claim_and_push(mq, new_obj, &nptr);
+            gc_try_claim_and_mark(ptls, mq, new_obj, &nptr);
             gc_heap_snapshot_record_array_edge(obj_parent, slot);
         }
     }
@@ -2120,7 +2155,7 @@ STATIC_INLINE void gc_mark_memory8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_v
                 verify_parent2("array", ary8_parent, &new_obj, "elem(%d)",
                                gc_slot_to_arrayidx(ary8_parent, ary8_begin));
                 gc_assert_parent_validity(ary8_parent, new_obj);
-                gc_try_claim_and_push(mq, new_obj, &nptr);
+                gc_try_claim_and_mark(ptls, mq, new_obj, &nptr);
                 gc_heap_snapshot_record_array_edge(ary8_parent, slot);
             }
         }
@@ -2197,7 +2232,7 @@ STATIC_INLINE void gc_mark_memory16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl
                 verify_parent2("array", ary16_parent, &new_obj, "elem(%d)",
                                gc_slot_to_arrayidx(ary16_parent, ary16_begin));
                 gc_assert_parent_validity(ary16_parent, new_obj);
-                gc_try_claim_and_push(mq, new_obj, &nptr);
+                gc_try_claim_and_mark(ptls, mq, new_obj, &nptr);
                 gc_heap_snapshot_record_array_edge(ary16_parent, slot);
             }
         }
@@ -2723,8 +2758,13 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             return;
         const jl_datatype_layout_t *layout = vt->layout;
         uint32_t npointers = layout->npointers;
-        if (npointers == 0)
+        if (npointers == 0) {
+            // remember the type, so the next objects of it can be marked
+            // when they are found (see gc_try_claim_and_mark)
+            ptls->gc_tls.gc_cache.leaf_vtag = vtag;
+            ptls->gc_tls.gc_cache.leaf_dtsz = dtsz;
             return;
+        }
         uintptr_t nptr = (npointers << 2 | (bits & GC_OLD));
         assert((layout->nfields > 0 || layout->flags.fielddesc_type == JL_FIELDDESC_FOREIGN) &&
                "opaque types should have been handled specially");
@@ -3351,6 +3391,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
                 mq_dest = &ptls_dest->gc_tls.mark_queue;
             }
             if (ptls2 != NULL) {
+                // forget the type remembered while marking, as a dead type's
+                // address can be reused
+                ptls2->gc_tls.gc_cache.leaf_vtag = 0;
                 // 1.1. mark every thread local root
                 gc_queue_thread_local(mq_dest, ptls2);
                 // 1.2. mark any managed objects in the backtrace buffer
@@ -3927,6 +3970,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     jl_gc_mark_cache_t *gc_cache = &ptls->gc_tls.gc_cache;
     gc_cache->perm_scanned_bytes = 0;
     gc_cache->scanned_bytes = 0;
+    gc_cache->leaf_vtag = 0;
 
     // Initialize GC mark-queue
     jl_gc_markqueue_t *mq = &ptls->gc_tls.mark_queue;

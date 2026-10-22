@@ -45,6 +45,10 @@ typedef struct {
     size_t perm_scanned_bytes;
     // thread local increment of `scanned_bytes`
     size_t scanned_bytes;
+    // the last type marked that holds no references: its tag and size. Cleared
+    // when marking starts, since a dead type's address can be reused.
+    uintptr_t leaf_vtag;
+    size_t leaf_dtsz;
 } jl_gc_mark_cache_t;
 
 typedef struct {
