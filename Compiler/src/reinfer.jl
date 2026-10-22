@@ -687,7 +687,14 @@ end
 # `_methods_by_ftype` for `sig`, memoized in `workspace` unless the debug log is on (the log
 # path mutates the result vector). A cached answer is reused when its validity range covers
 # `world`, since the matches are the same in every world of that range.
+#
+# A dispatch tuple is not memoized: `ml_matches` answers it from the method cache in a
+# few microseconds, less than the memo's own hashing, and such a signature seldom recurs
+# within one image (measured on `using DataFrames, OrdinaryDiffEq`: three fifths of the
+# lookups, a twentieth of the lookup time, and the memo repaid a tenth of what it cost on
+# them). The memo is for the abstract signatures, whose lookups walk the typemap.
 function verify_call_lookup(@nospecialize(sig), lim::Int, world::UInt, workspace::VerifyMethodWorkspace, memoize::Bool)
+    memoize &= !isdispatchtuple(sig)
     if memoize
         cached = get(workspace.lookups, sig, nothing)
         if cached !== nothing && cached.lim == lim
