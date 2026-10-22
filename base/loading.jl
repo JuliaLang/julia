@@ -2357,6 +2357,9 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
             insert_extension_triggers(modkey)
             run_package_callbacks(modkey)
         end
+    elseif loaded isa Module && module_build_id(loaded) === build_id && register_reused_module(loaded)
+        insert_extension_triggers(modkey)
+        run_package_callbacks(modkey)
     end
     if loaded isa Module && PkgId(loaded) == modkey && module_build_id(loaded) === build_id
         return loaded
@@ -2494,6 +2497,11 @@ end
                     @debug "Rejecting cache file $path_to_try because required dependency $modkey with build ID $(UUID(modbuild_id)) is missing from the cache."
                     continue next_path
                 end
+                if stalecheck
+                    for dep in staledeps
+                        dep isa Module && register_reused_module(dep) && push!(newdeps, PkgId(dep))
+                    end
+                end
                 M = maybe_loaded_precompile(pkg, newbuild_id)
                 if isa(M, Module)
                     stalecheck && register_root_module(M)
@@ -2541,6 +2549,7 @@ end
                     insert_extension_triggers(modkey)
                     stalecheck && run_package_callbacks(modkey)
                 end
+                empty!(newdeps)
             end
         end
     end
@@ -3051,6 +3060,14 @@ end
     loaded_modules[key] = m
     end
     nothing
+end
+
+# A public load can reuse a module that was loaded privately, such as a stdlib loaded by the REPL.
+# Register it, so that it counts as loaded and extensions that it triggers can load.
+function register_reused_module(m::Module)
+    maybe_root_module(PkgId(m)) === nothing || return false
+    register_root_module(m)
+    return true
 end
 
 register_root_module(Core)
