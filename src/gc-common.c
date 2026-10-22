@@ -22,6 +22,40 @@ JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void)
     return gc_num.total_time;
 }
 
+JL_DLLEXPORT jl_gc_stats_t jl_gc_stats(void)
+{
+    jl_gc_num_t num = jl_gc_num();
+    jl_gc_stats_t stats;
+    jl_gc_alloc_stats_t *a = &stats.allocs;
+    // `total_allocd` is only updated at the end of a collection
+    a->total_allocd = num.total_allocd + num.deferred_alloc + num.allocd;
+    a->malloc = num.malloc;
+    a->realloc = num.realloc;
+    a->poolalloc = num.poolalloc;
+    a->bigalloc = num.bigalloc;
+    a->freecall = num.freecall;
+    jl_gc_timing_stats_t *t = &stats.timings;
+    t->total_time = num.total_time;
+    t->n_gcs = num.pause;
+    t->n_full_gcs = num.full_sweep;
+    t->max_pause = num.max_pause;
+    t->time_to_safepoint = num.time_to_safepoint;
+    t->max_time_to_safepoint = num.max_time_to_safepoint;
+    t->total_time_to_safepoint = num.total_time_to_safepoint;
+    t->mark_time = num.mark_time;
+    t->total_mark_time = num.total_mark_time;
+    t->sweep_time = num.sweep_time;
+    t->total_sweep_time = num.total_sweep_time;
+    t->stack_pool_sweep_time = num.stack_pool_sweep_time;
+    t->total_stack_pool_sweep_time = num.total_stack_pool_sweep_time;
+    t->total_sweep_page_walk_time = num.total_sweep_page_walk_time;
+    t->total_sweep_madvise_time = num.total_sweep_madvise_time;
+    t->total_sweep_free_mallocd_memory_time = num.total_sweep_free_mallocd_memory_time;
+    t->last_full_sweep = num.last_full_sweep;
+    t->last_incremental_sweep = num.last_incremental_sweep;
+    return stats;
+}
+
 // =========================================================================== //
 // GC Callbacks
 // =========================================================================== //

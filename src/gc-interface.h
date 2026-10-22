@@ -60,7 +60,7 @@ typedef struct {
     // (GC internal) Per-thread allocation quota before triggering a GC
     // NOTE: This field is no longer used by the heuristics in the stock GC
     size_t interval;
-    // Duration of the last GC pause in nanoseconds
+    // Number of GC pauses so far (never reset by the runtime)
     int pause;
     // Number of full GC sweeps completed so far (never reset by the runtime)
     int full_sweep;
@@ -100,6 +100,61 @@ typedef struct {
     // Number of tracked image objects referencing non-image objects
     uint64_t image_remset_size;
 } jl_gc_num_t;
+
+// Allocation statistics. All fields are cumulative since the program started.
+// This struct must be kept in sync with `GCAllocStats` in base/timing.jl
+typedef struct {
+    // Number of bytes allocated
+    uint64_t total_allocd;
+    // Number of `malloc/calloc` calls
+    uint64_t malloc;
+    // Number of `realloc` calls
+    uint64_t realloc;
+    // Number of pool allocations (objects of up to 2032 bytes in the stock GC)
+    uint64_t poolalloc;
+    // Number of allocations of big (non-pool, non-array) objects
+    uint64_t bigalloc;
+    // Number of `free` calls
+    uint64_t freecall;
+} jl_gc_alloc_stats_t;
+
+// Collection statistics. Times are in nanoseconds; `last_*` fields are timestamps
+// and the other fields without a `total_`/`max_`/`n_` prefix refer to the last GC.
+// This struct must be kept in sync with `GCTimingStats` in base/timing.jl
+typedef struct {
+    // Total time spent in garbage collection
+    uint64_t total_time;
+    // Number of collections
+    uint64_t n_gcs;
+    // Number of collections that swept the full heap
+    uint64_t n_full_gcs;
+    // Longest pause
+    uint64_t max_pause;
+    // Time for all threads to reach a safepoint
+    uint64_t time_to_safepoint;
+    uint64_t max_time_to_safepoint;
+    uint64_t total_time_to_safepoint;
+    // Mark and sweep phases
+    uint64_t mark_time;
+    uint64_t total_mark_time;
+    uint64_t sweep_time;
+    uint64_t total_sweep_time;
+    // Parts of the sweep phase
+    uint64_t stack_pool_sweep_time;
+    uint64_t total_stack_pool_sweep_time;
+    uint64_t total_sweep_page_walk_time;
+    uint64_t total_sweep_madvise_time;
+    uint64_t total_sweep_free_mallocd_memory_time;
+    // Timestamps (`jl_hrtime`) of the end of the last full and incremental collection
+    uint64_t last_full_sweep;
+    uint64_t last_incremental_sweep;
+} jl_gc_timing_stats_t;
+
+// This struct must be kept in sync with `GCStats` in base/timing.jl
+typedef struct {
+    jl_gc_alloc_stats_t allocs;
+    jl_gc_timing_stats_t timings;
+} jl_gc_stats_t;
 
 // ========================================================================= //
 // System-wide Initialization
@@ -178,6 +233,9 @@ void jl_gc_notify_task_resume(struct _jl_task_t *task) JL_NOTSAFEPOINT;
 
 // Retrieves Julia's `GC_Num` (structure that stores GC statistics).
 JL_DLLEXPORT jl_gc_num_t jl_gc_num(void);
+// Retrieves a consistent snapshot of the allocation and collection statistics
+// (`Base.gc_stats()`). Implemented on top of `jl_gc_num` for all GC backends.
+JL_DLLEXPORT jl_gc_stats_t jl_gc_stats(void);
 // Returns the difference between the current value of total live bytes now
 // (live bytes at the last collection plus number of bytes allocated since then),
 // compared to the value at the last time this function was called.

@@ -35,7 +35,7 @@ struct GC_Num
     # (GC internal) Per-thread allocation quota before triggering a GC
     # NOTE: This field is no longer used by the heuristics in the stock GC
     interval::Csize_t
-    # Duration of the last GC pause in nanoseconds
+    # Number of GC pauses so far (never reset by the runtime)
     pause::Cint
     # Number of full GC sweeps completed so far (never reset by the runtime)
     full_sweep::Cint
@@ -78,6 +78,57 @@ end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
 
+# Allocation statistics, cumulative since the program started.
+# This type must be kept in sync with `jl_gc_alloc_stats_t` in src/gc-interface.h
+struct GCAllocStats
+    total_allocd::UInt64 # bytes allocated
+    malloc::UInt64       # number of `malloc`/`calloc` calls
+    realloc::UInt64      # number of `realloc` calls
+    poolalloc::UInt64    # number of pool allocations (objects of up to 2032 bytes in the stock GC)
+    bigalloc::UInt64     # number of allocations of big (non-pool, non-array) objects
+    freecall::UInt64     # number of `free` calls
+end
+
+# Collection statistics. Times are in nanoseconds; `last_*` fields are timestamps and the
+# fields without a `total_`/`max_`/`n_` prefix refer to the last collection.
+# This type must be kept in sync with `jl_gc_timing_stats_t` in src/gc-interface.h
+struct GCTimingStats
+    total_time::UInt64 # time spent in garbage collection
+    n_gcs::UInt64      # number of collections
+    n_full_gcs::UInt64 # number of collections that swept the full heap
+    max_pause::UInt64
+    time_to_safepoint::UInt64
+    max_time_to_safepoint::UInt64
+    total_time_to_safepoint::UInt64
+    mark_time::UInt64
+    total_mark_time::UInt64
+    sweep_time::UInt64
+    total_sweep_time::UInt64
+    stack_pool_sweep_time::UInt64
+    total_stack_pool_sweep_time::UInt64
+    total_sweep_page_walk_time::UInt64
+    total_sweep_madvise_time::UInt64
+    total_sweep_free_mallocd_memory_time::UInt64
+    last_full_sweep::UInt64
+    last_incremental_sweep::UInt64
+end
+
+# This type must be kept in sync with `jl_gc_stats_t` in src/gc-interface.h
+struct GCStats
+    allocs::GCAllocStats
+    timings::GCTimingStats
+end
+
+"""
+    Base.gc_stats()
+
+Return a snapshot of the garbage collector's statistics as a `Base.GCStats`, with the
+allocation counters in its `allocs` field and the collection counts and timings in its
+`timings` field. All values are cumulative since the program started, except for the
+fields describing the last collection.
+"""
+gc_stats() = ccall(:jl_gc_stats, GCStats, ())
+
 # This type is to represent differences in the counters, so fields may be negative
 struct GC_Diff
     allocd      ::Int64 # Bytes allocated
@@ -107,6 +158,20 @@ function GC_Diff(new::GC_Num, old::GC_Num)
                    new.total_time   - old.total_time,
                    new.pause        - old.pause,
                    new.full_sweep   - old.full_sweep)
+end
+
+function GC_Diff(new::GCStats, old::GCStats)
+    a, b = new.allocs, old.allocs
+    t, u = new.timings, old.timings
+    return GC_Diff(a.total_allocd % Int64 - b.total_allocd % Int64,
+                   a.malloc       % Int64 - b.malloc       % Int64,
+                   a.realloc      % Int64 - b.realloc      % Int64,
+                   a.poolalloc    % Int64 - b.poolalloc    % Int64,
+                   a.bigalloc     % Int64 - b.bigalloc     % Int64,
+                   a.freecall     % Int64 - b.freecall     % Int64,
+                   t.total_time   % Int64 - u.total_time   % Int64,
+                   t.n_gcs        % Int64 - u.n_gcs        % Int64,
+                   t.n_full_gcs   % Int64 - u.n_full_gcs   % Int64)
 end
 
 function gc_alloc_count(diff::GC_Diff)
@@ -527,9 +592,9 @@ end
 only(methods(allocated)).called = 0xff
 
 @constprop :none function allocations(f, args::Vararg{Any,N}) where {N}
-    stats = Base.gc_num()
+    stats = Base.gc_stats()
     @noinline f(args...)
-    diff = Base.GC_Diff(Base.gc_num(), stats)
+    diff = Base.GC_Diff(Base.gc_stats(), stats)
     return Base.gc_alloc_count(diff)
 end
 only(methods(allocations)).called = 0xff
@@ -582,9 +647,9 @@ function _gen_allocation_measurer(ex, fname::Symbol)
             # are sufficiently different that the compiler can remove allocations here
             # that it cannot remove there, giving inconsistent numbers.
             local b1 = Ref{Int64}(0)
-            local stats = Base.gc_num()
+            local stats = Base.gc_stats()
             $(esc(ex))
-            local diff = Base.GC_Diff(Base.gc_num(), stats)
+            local diff = Base.GC_Diff(Base.gc_stats(), stats)
             gc_bytes(b1)
             Base.gc_alloc_count(diff)
         end
@@ -734,7 +799,7 @@ macro timed(ex)
         Experimental.@force_compile
         Threads.lock_profiling(true)
         local lock_conflicts = Threads.LOCK_CONFLICT_COUNT[]
-        local stats = gc_num()
+        local stats = gc_stats()
         local elapsedtime = time_ns()
         cumulative_compile_timing(true)
         local compile_elapsedtimes = cumulative_compile_time_ns()
@@ -745,7 +810,7 @@ macro timed(ex)
             lock_conflicts = Threads.LOCK_CONFLICT_COUNT[] - lock_conflicts;
             Threads.lock_profiling(false))
         )
-        local diff = GC_Diff(gc_num(), stats)
+        local diff = GC_Diff(gc_stats(), stats)
         (
             value=val,
             time=elapsedtime/1e9,

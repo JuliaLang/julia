@@ -236,6 +236,33 @@ end
     @test FIN_BACKTRACE_FRAMES[] > 0
 end
 
+@testset "Base.gc_stats" begin
+    s0 = Base.gc_stats()
+    v = [Ref(i) for i in 1:10_000]
+    GC.gc(true)
+    s1 = Base.gc_stats()
+    @test s1.allocs.total_allocd >= s0.allocs.total_allocd + sizeof(v)
+    @test s1.allocs.poolalloc > s0.allocs.poolalloc
+    @test s1.timings.n_gcs > s0.timings.n_gcs
+    @test s1.timings.n_full_gcs > s0.timings.n_full_gcs
+    @test s1.timings.total_time > s0.timings.total_time
+    @test s1.timings.max_pause > 0
+    d = Base.GC_Diff(s1, s0)
+    @test d.allocd == s1.allocs.total_allocd - s0.allocs.total_allocd
+    @test d.pause == s1.timings.n_gcs - s0.timings.n_gcs
+    @test d.full_sweep == s1.timings.n_full_gcs - s0.timings.n_full_gcs
+    # agrees with the older `Base.gc_num()`
+    n = Base.gc_num()
+    s = Base.gc_stats()
+    @test s.allocs.total_allocd >= Base.gc_total_bytes(n)
+    @test s.timings.n_gcs >= n.pause
+    @test s.timings.n_full_gcs >= n.full_sweep
+    @test s.timings.total_mark_time >= n.total_mark_time
+    # the documented fields of `@timed`'s `gcstats`
+    @test propertynames(@timed(nothing).gcstats) ==
+        (:allocd, :malloc, :realloc, :poolalloc, :bigalloc, :freecall, :total_time, :pause, :full_sweep)
+end
+
 #FIXME: Issue #57103 disabling tests for MMTk, since
 # they rely on information that is specific to the stock GC.
 @static if Base.USING_STOCK_GC
