@@ -882,12 +882,62 @@ STATIC_INLINE jl_value_t *jl_gc_small_alloc_inner(jl_ptls_t ptls, int offset,
     return jl_valueof(v);
 }
 
-// Instrumented version of jl_gc_small_alloc_inner, called into by LLVM-generated code.
-JL_DLLEXPORT jl_value_t *jl_gc_small_alloc(jl_ptls_t ptls, int offset, int osize, jl_value_t* type)
+// The common case of jl_gc_small_alloc_inner: no collection is due, the
+// allocation profiler is off, and the cell comes from the current page of the
+// free list or of `newpages`. It makes no calls, so that its callers need no
+// stack frame on this path. Returns NULL when the full path must be taken.
+FORCE_INLINE jl_value_t *jl_gc_small_alloc_fast(jl_ptls_t ptls, jl_gc_pool_t *p,
+                                                int osize) JL_CANSAFEPOINT
+{
+#if defined(MEMDEBUG) || defined(GC_DEBUG_ENV)
+    // these debug builds need every allocation to take the full path
+    return NULL;
+#endif
+    if (__unlikely(jl_atomic_load_relaxed(&gc_heap_stats.heap_size) >=
+                       jl_atomic_load_relaxed(&gc_heap_stats.heap_target) ||
+                   jl_atomic_load_relaxed(&g_alloc_profile_enabled)))
+        return NULL;
+    // before reading the pool, which a collection started here would rebuild
+    jl_gc_safepoint_(ptls);
+    jl_taggedvalue_t *v = p->freelist;
+    if (v != NULL) {
+        jl_taggedvalue_t *next = v->next;
+        if (__unlikely(gc_page_data(v) != gc_page_data(next)))
+            return NULL;
+        p->freelist = next;
+    }
+    else {
+        v = p->newpages;
+        char *next = (char*)v + osize;
+        if (__unlikely(v == NULL || gc_page_data((char*)v - 1) + GC_PAGE_SZ < next))
+            return NULL;
+        p->newpages = (jl_taggedvalue_t*)next;
+    }
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd,
+        jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + osize);
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.pool_live_bytes,
+        jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.pool_live_bytes) + osize);
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.poolalloc,
+        jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.poolalloc) + 1);
+    msan_allocated_memory(v, osize);
+    return jl_valueof(v);
+}
+
+static NOINLINE jl_value_t *jl_gc_small_alloc_slow(jl_ptls_t ptls, int offset, int osize,
+                                                   jl_value_t *type) JL_CANSAFEPOINT
 {
     jl_value_t *val = jl_gc_small_alloc_inner(ptls, offset, osize);
     maybe_record_alloc_to_profile(val, osize, (jl_datatype_t*)type);
     return val;
+}
+
+// Instrumented version of jl_gc_small_alloc_inner, called into by LLVM-generated code.
+JL_DLLEXPORT jl_value_t *jl_gc_small_alloc(jl_ptls_t ptls, int offset, int osize, jl_value_t* type)
+{
+    jl_value_t *val = jl_gc_small_alloc_fast(ptls, (jl_gc_pool_t*)((char*)ptls + offset), osize);
+    if (__likely(val != NULL))
+        return val;
+    return jl_gc_small_alloc_slow(ptls, offset, osize, type);
 }
 
 // This wrapper exists only to prevent `jl_gc_small_alloc_inner` from being inlined into
@@ -908,7 +958,9 @@ inline jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
         int osize = jl_gc_sizeclasses[pool_id];
         // We call `jl_gc_small_alloc_noinline` instead of `jl_gc_small_alloc` to avoid double-counting in
         // the Allocations Profiler. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
-        v = jl_gc_small_alloc_noinline(ptls, (char*)p - (char*)ptls, osize);
+        v = jl_gc_small_alloc_fast(ptls, p, osize);
+        if (__unlikely(v == NULL))
+            v = jl_gc_small_alloc_noinline(ptls, (char*)p - (char*)ptls, osize);
     }
     else {
         if (allocsz < sz) // overflow in adding offs, size was "negative"
