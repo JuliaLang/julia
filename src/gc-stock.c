@@ -1507,18 +1507,26 @@ static void gc_free_pages(void) JL_NOTSAFEPOINT
     size_t keep = default_collect_interval / GC_PAGE_SZ;
     size_t n_present = jl_atomic_load_relaxed(&global_page_pool_lazily_freed_n);
     size_t n_to_free = n_present > keep ? n_present - keep : 0;
-    size_t n_freed = 0;
-    while (n_freed < n_to_free) {
-        jl_gc_pagemeta_t *pg = pop_lf_back(&global_page_pool_lazily_freed);
-        if (pg == NULL) {
-            break;
+    // release the pages in batches, so that runs of adjacent pages in a batch
+    // take one call each
+    jl_gc_pagemeta_t *pgs[1024];
+    while (n_to_free > 0) {
+        size_t n = 0;
+        while (n < n_to_free && n < sizeof(pgs) / sizeof(*pgs)) {
+            jl_gc_pagemeta_t *pg = pop_lf_back(&global_page_pool_lazily_freed);
+            if (pg == NULL)
+                break;
+            pgs[n++] = pg;
         }
-        jl_gc_free_page(pg);
-        push_lf_back(&global_page_pool_freed, pg);
-        n_freed++;
-    }
-    if (n_freed != 0) {
-        jl_atomic_fetch_add_relaxed(&global_page_pool_lazily_freed_n, -(ssize_t)n_freed);
+        if (n == 0)
+            break;
+        jl_atomic_fetch_add_relaxed(&global_page_pool_lazily_freed_n, -(ssize_t)n);
+        n_to_free -= n;
+        jl_gc_free_pages(pgs, n);
+        // only publish the pages once they have been released, since with a
+        // concurrent sweeper the allocator may pick them up right away
+        for (size_t i = 0; i < n; i++)
+            push_lf_back(&global_page_pool_freed, pgs[i]);
     }
 }
 

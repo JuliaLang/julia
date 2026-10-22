@@ -595,7 +595,7 @@ extern uv_mutex_t gc_perm_lock;
 extern uv_mutex_t gc_pages_lock;
 void jl_gc_init_page(void) JL_NOTSAFEPOINT;
 NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT;
-NOINLINE void jl_gc_free_page(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT;
+void jl_gc_free_pages(jl_gc_pagemeta_t **pgs, size_t n) JL_NOTSAFEPOINT;
 
 // GC debug
 #if defined(GC_TIME) || defined(GC_FINAL_STATS)

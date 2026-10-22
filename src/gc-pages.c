@@ -182,12 +182,43 @@ exit:
     return meta;
 }
 
+// tell the OS we don't need the memory in [p, p + sz) right now
+static void gc_decommit(void *p, size_t sz) JL_NOTSAFEPOINT
+{
+#ifdef _OS_WINDOWS_
+    VirtualFree(p, sz, MEM_DECOMMIT);
+#elif defined(MADV_FREE)
+    static int supports_madv_free = 1;
+#ifdef _OS_DARWIN_
+    // Pages released with `MADV_FREE` stay in the physical footprint of the process until
+    // the kernel actually reclaims them under memory pressure, so the memory looks as if it
+    // were still in use. `MADV_FREE_REUSABLE` drops them from the footprint right away;
+    // `jl_gc_alloc_page` marks them with `MADV_FREE_REUSE` again when they are reused.
+    if (madvise(p, sz, MADV_FREE_REUSABLE) == 0) {
+        msan_unpoison(p, sz);
+        return;
+    }
+#endif
+    if (supports_madv_free) {
+        if (madvise(p, sz, MADV_FREE) == -1) {
+            assert(errno == EINVAL);
+            supports_madv_free = 0;
+        }
+    }
+    if (!supports_madv_free) {
+        madvise(p, sz, MADV_DONTNEED);
+    }
+#else
+    madvise(p, sz, MADV_DONTNEED);
+#endif
+    msan_unpoison(p, sz);
+}
+
 // return a page to the freemap allocator
-NOINLINE void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
+static void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
     void *p = pg->data;
     gc_alloc_map_set((char*)p, GC_PAGE_FREED);
-    // tell the OS we don't need these pages right now
     size_t decommit_size = GC_PAGE_SZ;
     if (GC_PAGE_SZ < jl_page_size) {
         // ensure so we don't release more memory than intended
@@ -202,35 +233,45 @@ NOINLINE void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
             otherp = (void*)((char*)otherp + GC_PAGE_SZ);
         }
     }
-#ifdef _OS_WINDOWS_
-    VirtualFree(p, decommit_size, MEM_DECOMMIT);
-#elif defined(MADV_FREE)
-    static int supports_madv_free = 1;
-#ifdef _OS_DARWIN_
-    // Pages released with `MADV_FREE` stay in the physical footprint of the process until
-    // the kernel actually reclaims them under memory pressure, so the memory looks as if it
-    // were still in use. `MADV_FREE_REUSABLE` drops them from the footprint right away;
-    // `jl_gc_alloc_page` marks them with `MADV_FREE_REUSE` again when they are reused.
-    if (madvise(p, decommit_size, MADV_FREE_REUSABLE) == 0) {
-        msan_unpoison(p, decommit_size);
-        jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, -decommit_size);
+    gc_decommit(p, decommit_size);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, -decommit_size);
+}
+
+#ifndef _OS_WINDOWS_
+static int gc_page_addr_cmp(const void *a, const void *b) JL_NOTSAFEPOINT
+{
+    uintptr_t x = (uintptr_t)(*(jl_gc_pagemeta_t *const *)a)->data;
+    uintptr_t y = (uintptr_t)(*(jl_gc_pagemeta_t *const *)b)->data;
+    return (x > y) - (x < y);
+}
+#endif
+
+// Return the pages `pgs[0..n)` to the OS. Sorts `pgs` by address so that each
+// run of adjacent pages is released with a single system call.
+void jl_gc_free_pages(jl_gc_pagemeta_t **pgs, size_t n) JL_NOTSAFEPOINT
+{
+#ifndef _OS_WINDOWS_
+    // `VirtualFree` cannot decommit a range that spans separate reservations
+    if (GC_PAGE_SZ >= jl_page_size) {
+        qsort(pgs, n, sizeof(*pgs), gc_page_addr_cmp);
+        size_t i = 0;
+        while (i < n) {
+            char *start = pgs[i]->data;
+            size_t j = i;
+            do {
+                gc_alloc_map_set(pgs[j]->data, GC_PAGE_FREED);
+                j++;
+            } while (j < n && pgs[j]->data == pgs[j - 1]->data + GC_PAGE_SZ);
+            size_t sz = (j - i) * GC_PAGE_SZ;
+            gc_decommit(start, sz);
+            jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, -sz);
+            i = j;
+        }
         return;
     }
 #endif
-    if (supports_madv_free) {
-        if (madvise(p, decommit_size, MADV_FREE) == -1) {
-            assert(errno == EINVAL);
-            supports_madv_free = 0;
-        }
-    }
-    if (!supports_madv_free) {
-        madvise(p, decommit_size, MADV_DONTNEED);
-    }
-#else
-    madvise(p, decommit_size, MADV_DONTNEED);
-#endif
-    msan_unpoison(p, decommit_size);
-    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, -decommit_size);
+    for (size_t i = 0; i < n; i++)
+        jl_gc_free_page(pgs[i]);
 }
 
 #ifdef __cplusplus
