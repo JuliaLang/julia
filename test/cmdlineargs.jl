@@ -742,7 +742,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         end
 
         # Source and report filenames must support Unicode on Windows as well.
-        let unicode_dir = mkdir(joinpath(dir, "coverage λ space"))
+        let unicode_dir = realpath(mkdir(joinpath(dir, "coverage λ space")))
             srcfile = joinpath(unicode_dir, "source λ.jl")
             cp(inputfile, srcfile)
             outfile = joinpath(unicode_dir, "coverage λ.info")
@@ -765,9 +765,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
                         for m in eachmatch(r"^DA:(\d+),(\d+)$"m, read(outfile, String)))
             rm(outfile)
+            # (the `local y` and `let z` lines themselves don't run any code)
             covered = [
-                8, 9, 10,       # `local` without an assignment (#39307)
-                14, 15, 16,     # `let` without an assignment (#39307)
+                9, 10,          # `local` without an assignment (#39307)
+                15, 16,         # `let` without an assignment (#39307)
                 22, 23,         # lines a macro adds (#41043)
                 28,
                 33, 35,         # implicit returns (#53557)
@@ -996,7 +997,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             DA:1,1
             DA:2,1
             DA:3,1
-            DA:5,1
+            DA:5,2
             DA:6,0
             DA:9,2
             DA:10,1
@@ -1022,8 +1023,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             cov_bug()
             """), """
             DA:1,2
-            DA:2,1
-            DA:3,1
+            DA:2,2
+            DA:3,2
             DA:4,1
             DA:5,0
             DA:8,0
@@ -1043,7 +1044,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             rm(outfile)
             hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
                         for m in eachmatch(r"^DA:(\d+),(\d+)$"m, record))
-            for ln in 5:10
+            for ln in (5:8..., 10) # (not the loop's `end`, which doesn't run any code)
                 @test get(hits, ln, 0) > 0
             end
         end
