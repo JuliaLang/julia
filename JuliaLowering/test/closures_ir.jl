@@ -870,16 +870,16 @@ end
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  (call core.define_method TestMod TestMod.f_ternary %₂₀
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/#->#(single_assign) slot₄/y(single_assign) slot₅/if_val(!read)]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/#->#(single_assign) slot₄/y(single_assign) slot₅/(!read)]
     1   (newvar slot₃/#->#)
     2   TestMod.>
     3   (call %₂ slot₂/x 0)
     4   (gotoifnot %₃ label₈)
     5   slot₂/x
-    6   (= slot₅/if_val %₅)
+    6   (= slot₅/ %₅)
     7   (goto label₉)
-    8   (= slot₅/if_val 0)
-    9   slot₅/if_val
+    8   (= slot₅/ 0)
+    9   slot₅/
     10  (= slot₄/y %₉)
     11  TestMod.#f_ternary##0#f_ternary##1
     12  (call core._typeof_captured_variable slot₄/y)
@@ -926,18 +926,18 @@ end
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  (call core.define_method TestMod TestMod.f_or_guard %₂₀
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/#->#(single_assign) slot₄/y(single_assign) slot₅/if_val(!read)]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/#->#(single_assign) slot₄/y(single_assign) slot₅/(!read)]
     1   (newvar slot₃/#->#)
     2   TestMod.===
     3   TestMod.nothing
     4   (call %₂ slot₂/x %₃)
     5   (gotoifnot %₄ label₈)
-    6   (= slot₅/if_val true)
+    6   (= slot₅/ true)
     7   (goto label₁₁)
     8   TestMod.===
     9   TestMod.missing
-    10  (= slot₅/if_val (call %₈ slot₂/x %₉))
-    11  slot₅/if_val
+    10  (= slot₅/ (call %₈ slot₂/x %₉))
+    11  slot₅/
     12  (gotoifnot %₁₁ label₁₆)
     13  TestMod.nothing
     14  (return %₁₃)
