@@ -1229,12 +1229,14 @@ static void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
         if (ptls2 == NULL)
             continue;
         assert(gc_n_threads != 0);
-        // free half of stacks that remain unused since last sweep
-        if (i == jl_atomic_load_relaxed(&gc_stack_free_idx)) {
+        // free half of stacks that remain unused since last sweep (or all
+        // of them, if the thread is not alive yet or has exited)
+        int thread_dead = jl_atomic_load_relaxed(&ptls2->current_task) == NULL;
+        if (thread_dead || i == jl_atomic_load_relaxed(&gc_stack_free_idx)) {
             for (int p = 0; p < JL_N_STACK_POOLS; p++) {
                 small_arraylist_t *al = &ptls2->gc_tls_common.heap.free_stacks[p];
                 size_t n_to_free;
-                if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
+                if (thread_dead) {
                     n_to_free = al->len; // not alive yet or dead, so it does not need these anymore
                 }
                 else if (al->len > MIN_STACK_MAPPINGS_PER_POOL) {
@@ -1249,13 +1251,10 @@ static void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
                     void *stk = small_arraylist_pop(al);
                     free_stack(stk, pool_sizes[p]);
                 }
-                if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
+                if (thread_dead) {
                     small_arraylist_free(al);
                 }
             }
-        }
-        if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
-            small_arraylist_free(ptls2->gc_tls_common.heap.free_stacks);
         }
 
         small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
