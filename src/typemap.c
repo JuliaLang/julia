@@ -894,6 +894,7 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
             int exclude_typeofbottom = 0;
             jl_value_t *typetype = NULL;
             jl_value_t *name = NULL;
+            int name_precise = 0; // `name` is exact: no other bucket, save its supers, can hold a match
             // pre-check: optimized pre-intersection test to see if `ty` could intersect with any Type or Kind
             if (targ != (jl_genericmemory_t*)jl_an_empty_memory_any || tname != (jl_genericmemory_t*)jl_an_empty_memory_any) {
                 int by_identity = 0;
@@ -903,12 +904,33 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                     typetype = jl_unwrap_unionall(ty);
                     typetype = jl_is_some_Type(typetype) ? jl_some_Type_T(typetype) : NULL;
                     name = typetype ? jl_type_extract_name(typetype, 1) : NULL;
-                    if (!typetype)
+                    name_precise = name && jl_type_extract_name_precise(typetype, 1);
+                    if (!typetype) {
                         exclude_typeofbottom = !jl_subtype((jl_value_t*)jl_typeofbottom_type, ty);
-                    else if (jl_is_typevar(typetype))
+                    }
+                    else if (jl_is_typevar(typetype)) {
                         exclude_typeofbottom = has_covariant_var((jl_datatype_t*)ttypes, (jl_tvar_t*)typetype);
-                    else
+                        // A query `Type{T} where lb<:T<:ub` is named by `ub` above, as a method
+                        // would be filed, and a union `ub` gives it no name and so a scan of
+                        // every bucket. A concrete `lb` names it better: `T` must lie above
+                        // `lb`, so a leaf key `Type{X}` demands `X == lb`, a named key `Type{<:X}`
+                        // demands `lb <: X`, and both lie on the super chain the lookup below
+                        // already walks from `name`. The union values of `T` have no name of
+                        // their own and are filed under `Any`, where that chain ends. Nor can
+                        // `T` be `Union{}` with anything beneath it. This holds for the query
+                        // side only: a method so bounded must stay filed by `ub`, or a query
+                        // for a type between the bounds would never reach it.
+                        jl_value_t *lb = ((jl_tvar_t*)typetype)->lb;
+                        if (lb != jl_bottom_type && jl_is_concrete_type(lb) && !jl_has_free_typevars(lb) &&
+                                !jl_is_kind(lb) && !jl_is_some_Type(lb)) {
+                            name = (jl_value_t*)((jl_datatype_t*)lb)->name;
+                            name_precise = 1;
+                            exclude_typeofbottom = 1;
+                        }
+                    }
+                    else {
                         exclude_typeofbottom = !jl_parameter_includes_bottom(typetype);
+                    }
                 }
             }
             // Decide whether to visit the `Type{Union{}}` buckets, before either is
@@ -946,7 +968,7 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                 if (name != (jl_value_t*)jl_typeofbottom_type->name &&
                         (!typetype || jl_has_free_typevars(typetype) || is_cache_leaf(typetype, 1))) { // otherwise cannot contain this particular kind, so don't bother with checking
                     targ = jl_atomic_load_relaxed(&cache->targ); // may be GC'd earlier
-                    if (exclude_typeofbottom && name && jl_type_extract_name_precise(typetype, 1)) {
+                    if (exclude_typeofbottom && name_precise) {
                         // attempt semi-direct lookup of types via their names
                         // consider the type name first
                         jl_value_t *ml = mtcache_hash_lookup(targ, (jl_value_t*)name);
@@ -1027,7 +1049,7 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                         closure->search_bottom = search_bottom;
                     }
                 }
-                if (exclude_typeofbottom && name && jl_type_extract_name_precise(typetype, 1)) {
+                if (exclude_typeofbottom && name_precise) {
                     // semi-direct lookup of types
                     // just consider the type and its direct super types
                     jl_datatype_t *start = (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)name)->wrapper);
