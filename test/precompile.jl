@@ -2404,6 +2404,126 @@ precompile_test_harness("activation replay: record completed against images load
     @test out == "pkg true pkg8 late"
 end
 
+# Verifying an image's edges probes the interference sets of the expected methods
+# for newcomers. A method from the image or one of its dependencies is no newcomer,
+# so it is passed over without a probe; a method from anywhere else is probed.
+precompile_test_harness("edge verification: dependency methods are not probed") do load_path
+    write(joinpath(load_path, "VerifySkipDep.jl"),
+        """
+        module VerifySkipDep
+        abstract type A end
+        abstract type B <: A end
+        struct C <: B end
+        f(x) = :any
+        f(::B) = :b
+        f(::C) = :c
+        end
+        """)
+    # over A this method is covered by f(::B), whose interference set is not empty, so
+    # the probe cannot certify the drop and the edge needs the full lookup
+    write(joinpath(load_path, "VerifySkipOther.jl"),
+        """
+        module VerifySkipOther
+        using VerifySkipDep
+        VerifySkipDep.f(::Union{VerifySkipDep.B, Int}) = :other
+        end
+        """)
+    write(joinpath(load_path, "VerifySkipUser.jl"),
+        """
+        module VerifySkipUser
+        using VerifySkipDep, VerifySkipOther
+        callf() = VerifySkipDep.f(Base.inferencebarrier(VerifySkipDep.C())::VerifySkipDep.A)
+        precompile(callf, ())
+        end
+        """)
+    for name in ("VerifySkipDep", "VerifySkipOther", "VerifySkipUser")
+        Base.compilecache(Base.PkgId(name))
+    end
+    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
+        using VerifySkipUser
+        const RU = Base.Compiler.ReinferUtils
+        Dep = VerifySkipUser.VerifySkipDep
+        sig = Tuple{typeof(Dep.f), Dep.A}
+        ci = only(Base.specializations(only(methods(VerifySkipUser.callf)))).cache
+        edges = ci.edges
+        i = findfirst(e -> e === sig, collect(edges)) + 1
+        # verify the edge as code of `image` would, reporting whether it stays valid and
+        # whether that took the full lookup (which the workspace memoizes)
+        function verify(image)
+            ws = RU.VerifyMethodWorkspace()
+            minw, maxw = RU.verify_call(sig, edges, i, 3, Base.get_world_counter(), true, false, ws, image)
+            return (maxw == typemax(UInt), !isempty(ws.lookups))
+        end
+        blob(obj) = ccall(:jl_external_blob_index, Csize_t, (Any,), obj)
+        print(ci.min_world == which(Dep.f, (Dep.B,)).primary_world, " ", ci.max_world == typemax(UInt))
+        # Other is a dependency of User, but not of Dep or of code in no image
+        print(" ", verify(blob(VerifySkipUser)), " ", verify(blob(Dep)), " ", verify(typemax(UInt)))
+        # a method of this session is probed, and it changes the match set
+        struct D <: Dep.B end
+        Dep.f(::D) = :d
+        print(" ", verify(blob(VerifySkipUser)), " ", Base.invokelatest(VerifySkipUser.callf))
+        """)
+    @test out == "true true (true, false) (true, true) (true, true) (false, true) c"
+end
+
+precompile_test_harness("edge verification: methods outside the dependencies are probed") do load_path
+    write(joinpath(load_path, "VerifyOrderDep.jl"),
+        """
+        module VerifyOrderDep
+        f(x) = :dep
+        end
+        """)
+    # two packages that extend f without knowing about each other
+    write(joinpath(load_path, "VerifyOrderExtA.jl"),
+        """
+        module VerifyOrderExtA
+        using VerifyOrderDep
+        VerifyOrderDep.f(::Integer) = :a
+        callf() = VerifyOrderDep.f(1)
+        precompile(callf, ())
+        end
+        """)
+    write(joinpath(load_path, "VerifyOrderExtB.jl"),
+        """
+        module VerifyOrderExtB
+        using VerifyOrderDep
+        VerifyOrderDep.f(::Signed) = :b
+        callf() = VerifyOrderDep.f(1)
+        precompile(callf, ())
+        end
+        """)
+    for name in ("VerifyOrderDep", "VerifyOrderExtA", "VerifyOrderExtB")
+        Base.compilecache(Base.PkgId(name))
+    end
+    depot = DEPOT_PATH[1]
+    # in either load order, B's more specific method wins in A's caller too
+    for order in (("VerifyOrderExtA", "VerifyOrderExtB"), ("VerifyOrderExtB", "VerifyOrderExtA"))
+        out = trusted_edge_test_output(load_path, depot, """
+            using VerifyOrderDep, $(order[1]), $(order[2])
+            print(Base.invokelatest(VerifyOrderExtA.callf), " ", Base.invokelatest(VerifyOrderExtB.callf), " ",
+                  Base.invokelatest(VerifyOrderDep.f, 1))
+            """)
+        @test out == "b b b"
+    end
+    # a method defined in the session before the load is seen by A's caller
+    out = trusted_edge_test_output(load_path, depot, """
+        using VerifyOrderDep
+        VerifyOrderDep.f(::Int) = :session
+        using VerifyOrderExtA
+        print(Base.invokelatest(VerifyOrderExtA.callf), " ", Base.invokelatest(VerifyOrderDep.f, 1))
+        """)
+    @test out == "session session"
+    # a method deleted in the session still makes edges to f match live
+    out = trusted_edge_test_output(load_path, depot, """
+        using VerifyOrderDep
+        VerifyOrderDep.f(::Int) = :session
+        Base.delete_method(which(VerifyOrderDep.f, (Int,)))
+        using VerifyOrderExtA
+        print(Base.invokelatest(VerifyOrderExtA.callf), " ", Base.invokelatest(VerifyOrderDep.f, 1))
+        """)
+    @test out == "a a"
+end
+
 precompile_test_harness("Generator nospecialize") do load_path
     write(joinpath(load_path, "GenNoSpec.jl"),
         """

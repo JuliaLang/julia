@@ -19,6 +19,7 @@ struct VerifyMethodInitialState
     mi::MethodInstance
     def::Method
     callees::Core.SimpleVector
+    image::UInt # linkage blob owning `codeinst`, or typemax(UInt) if it is in no image
 end
 
 struct VerifyMethodWorkState
@@ -77,7 +78,8 @@ end
 function VerifyMethodInitialState(codeinst::CodeInstance)
     mi = get_ci_mi(codeinst)
     def = mi.def::Method
-    VerifyMethodInitialState(codeinst, mi, def, codeinst.edges)
+    image = ccall(:jl_external_blob_index, Csize_t, (Any,), codeinst)
+    VerifyMethodInitialState(codeinst, mi, def, codeinst.edges, image)
 end
 
 function VerifyMethodWorkState(dummy_cause::CodeInstance)
@@ -290,13 +292,13 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
 
                     if edge isa MethodInstance
                         sig = edge.specTypes
-                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, possibly_ambiguous, workspace)
+                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, possibly_ambiguous, workspace, initial.image)
                         j += 1
                     elseif edge isa Int
                         sig = initial.callees[j+1]
                         nmatches = abs(edge)
                         fully_covers = edge > 0
-                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, possibly_ambiguous, workspace)
+                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, possibly_ambiguous, workspace, initial.image)
                         j += 2 + nmatches
                         edge = sig
                     elseif edge isa Core.Binding
@@ -542,6 +544,17 @@ end
 # must treat a false result as conservatively as an actually deleted method.
 method_is_latest_which(m::Method) = !iszero(m.dispatch_status & METHOD_SIG_LATEST_WHICH)
 
+# Whether `m` was loaded from the image at linkage blob `image`, from one of the images
+# it was precompiled against, or from the sysimage (see jl_linkage_blob_dep_world). The
+# precompile worker of `image` had every such method before it, so each one already
+# had its say in the edges that image records.
+function method_in_image_deps(m::Method, image::UInt)
+    image == typemax(UInt) && return false # code of no image had no worker
+    ccall(:jl_object_in_image, UInt8, (Any,), m) == 0 && return false
+    blob = ccall(:jl_external_blob_index, Csize_t, (Any,), m)
+    return ccall(:jl_linkage_blob_dep_world, Csize_t, (Csize_t, Csize_t), image, blob) != 0
+end
+
 # Max interference-set size for which n==1 uses the interference fast path instead of
 # `ml_matches`: the scan probes every member with `typeintersect`, so above this size the
 # pruned `ml_matches` lookup is cheaper (~8 is the empirical crossover).
@@ -696,7 +709,9 @@ function verify_call_lookup(@nospecialize(sig), lim::Int, world::UInt, workspace
     return result, minworld[], maxworld[], has_ambig[]
 end
 
-function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool, possibly_ambiguous::Bool, workspace::VerifyMethodWorkspace)
+# `image` is the linkage blob owning the code instance whose edge this is, or
+# typemax(UInt) for code of no image (see method_in_image_deps).
+function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool, possibly_ambiguous::Bool, workspace::VerifyMethodWorkspace, image::UInt)
     # verify that these edges intersect with the same methods as before
     matches = workspace.matches
     # Collect the expected methods once: indexing the edges list boxes the index (no inline
@@ -764,6 +779,17 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                     end
                     world < interference_method.primary_world && break # this and later entries are for a future world
                     if !method_in_expecteds(interference_method, expected)
+                        # A method the worker already had is no newcomer. Had it mattered to
+                        # this edge, the worker would have recorded it among the expected
+                        # methods or marked the edge ambiguous, and had it since turned
+                        # relevant only a deletion could have done so, which the check above
+                        # already catches. The edge's validity stays dated from the expected
+                        # methods: a lookup in any world between theirs and this method's
+                        # arrival sees the expected methods alone, which is the recorded
+                        # result with no ambiguity. So it is passed over without a probe,
+                        # which for an image loaded into a fresh session covers almost every
+                        # interfering method there is.
+                        method_in_image_deps(interference_method, image) && continue
                         ti = typeintersect(sig, interference_method.sig)
                         if !(ti === Union{})
                             # An unexpected method intersecting sig can change more than the
