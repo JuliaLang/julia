@@ -3356,9 +3356,7 @@ static int check_dominance_transfer(jl_method_t *D, jl_value_t *ti, jl_method_t 
 // is only reported as covered when `include_ambiguous` is false, so that
 // ambiguity-reporting consumers still see it.
 //
-// The return value certifies whether to drop m from the reported matches: 1 when
-// the removal is silent, 2 when it is visible (`COVER_AMBIGUOUS` under
-// `!include_ambiguous`), for the caller must then date its result from `m`.
+// The return value certifies whether to drop m from the reported matches.
 static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t *t, arraylist_t *visited, jl_method_t *minmaxm, int include_ambiguous, int *has_ambiguity) JL_CANSAFEPOINT
 {
     // Outcome of the cover analysis for one match `m` over its region `ti`, in
@@ -3433,7 +3431,7 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
         // is still dropped when `!include_ambiguous`, but kept as a witness
         // when ambiguity-reporting consumers need to see it.
         *has_ambiguity = 1;
-        return include_ambiguous ? 0 : 2;
+        return !include_ambiguous;
     }
     return status == COVER_CERTIFIED;
 }
@@ -5367,6 +5365,11 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
             closure->match.min_valid = max_world + 1;
         return 1;
     }
+    // Every entry possibly matched here may affect the final answer,
+    // whether directly or through ambiguity. Whether it affects the answer can be tricky to compute,
+    // and unlikely to be profitable to be exact, so just use the range of every method intersected.
+    if (closure->match.min_valid < min_world)
+        closure->match.min_valid = min_world;
     if (closure->match.max_valid > max_world)
         closure->match.max_valid = max_world;
     jl_method_t *meth = ml->func.method;
@@ -5416,10 +5419,8 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
 //  * `lim`: either -1 for unlimited matches, or the maximum length for `result` before returning failure (return -1).
 //  * `include_ambiguous`: whether to filter out fully ambiguous matches from `result`
 //  * `*has_ambiguity`: whether the algorithm does not need to compute if there is an unresolved ambiguity
-//  * `*min_valid`: the first world the result is valid in so far (or NULL to not track it)
 // Outputs:
 //  * `*has_ambiguity`: whether there are any ambiguities that mean the sort order is not exact
-//  * `*min_valid`: raised past every match that was dropped visibly (see `date_from_method`)
 // Stack frame for iterative sort_mlmatches implementation
 enum sort_state {
     STATE_VISITING,            // Initial visit and setup
@@ -5441,22 +5442,11 @@ typedef struct {
     enum sort_state state;
 } sort_stack_frame_t;
 
-// The sorted result is valid no earlier than the world that introduced `m`
-// (or `min_valid` is NULL, and the caller does not track it).
-static void date_from_method(size_t *min_valid, jl_method_t *m)
-{
-    if (min_valid == NULL)
-        return;
-    size_t primary_world = jl_atomic_load_relaxed(&m->primary_world);
-    if (*min_valid < primary_world)
-        *min_valid = primary_world;
-}
-
 // Returns:
 //  * -1: too many matches for lim, other outputs are undefined
 //  *  0: the child(ren) have been added to the output
 //  * 1+: the children are part of this SCC (up to this depth)
-static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, arraylist_t *stack, arraylist_t *result, int lim, int include_ambiguous, jl_method_t *minmaxm, int *has_ambiguity, size_t *min_valid) JL_CANSAFEPOINT
+static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, arraylist_t *stack, arraylist_t *result, int lim, int include_ambiguous, jl_method_t *minmaxm, int *has_ambiguity) JL_CANSAFEPOINT
 {
     // Use arraylist_t for explicit stack of processing frames
     arraylist_t frame_stack;
@@ -5576,24 +5566,11 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
             case STATE_CHECK_COVERS: {
                 // There is some probability that this method is already fully covered
                 // now, and we can delete this vertex now without anyone noticing.
-                // Of the matches removed here, two kinds are to be told apart. One is
-                // dropped silently: its covers took over every role it had in the sort
-                // (`check_dominance_transfer`), and a world that lacks it, so long as
-                // that world keeps the covers, returns the same answer. The other is
-                // dropped visibly, as one of an unordered pair under `!include_ambiguous`,
-                // and for it no such promise holds. In a world that lacks it, its partner
-                // may be selected; claim the result there, and code inferred to throw
-                // runs where the call succeeds. So the result is dated from the world
-                // that introduced it, as it is from each match that remains.
-                int covered = check_interferences_covers(current->m, current->ti, t, visited, minmaxm, include_ambiguous, has_ambiguity);
-                if (covered) {
+               if (check_interferences_covers(current->m, current->ti, t, visited, minmaxm, include_ambiguous, has_ambiguity)) {
                     visited->items[current->idx] = (void*)1;
-                    if (covered == 2)
-                        date_from_method(min_valid, current->m);
                 }
                 else if (check_fully_ambiguous(current->m, current->ti, t, include_ambiguous, has_ambiguity)) {
                     visited->items[current->idx] = (void*)1;
-                    date_from_method(min_valid, current->m);
                 }
 
                 // If there were no cycles hit either, then we can potentially delete all of its edges too.
@@ -5680,10 +5657,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
 // is set, the caller does not need *has_ambiguity computed accurately and it
 // is pessimistically set to 1 without attempting to prove otherwise.
 // Returns the new length of `t`, or -1 if `lim` was exceeded (in which case
-// the contents of `t` are left in an unspecified state). `*min_valid`, when
-// given, is raised to the first world in which the sorted result holds: past
-// every match that remains, and every match that was dropped visibly
-// (`date_from_method`), and on an emptied list past every candidate.
+// the contents of `t` are left in an unspecified state).
 //
 // Dispatch selects a match only when it is morespecific than every other
 // applicable match, so a call is ambiguous whenever no match beats all the
@@ -5695,7 +5669,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
 // and include_ambiguous is set -- dominance alone therefore justifies removing
 // it from the selection answer, while `sort_method_matches` separately keeps
 // enough blockers to witness each ambiguity it reports.
-static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous, int approximate_ambig, int *has_ambiguity_out, size_t *min_valid) JL_CANSAFEPOINT
+static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous, int approximate_ambig, int *has_ambiguity_out) JL_CANSAFEPOINT
 {
     int has_ambiguity = 0;
     size_t i, j, len = jl_array_nrows(t);
@@ -5825,7 +5799,7 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
             has_ambiguity = 1;
         for (i = 0; i < len; i++) {
             assert(visited.items[i] == (void*)0 || visited.items[i] == (void*)1);
-            int child_cycle = sort_mlmatches(t, i, &visited, &stack, &result, lim == -1 || minmax == NULL ? lim : lim - 1, include_ambiguous, minmaxm, &has_ambiguity, min_valid);
+            int child_cycle = sort_mlmatches(t, i, &visited, &stack, &result, lim == -1 || minmax == NULL ? lim : lim - 1, include_ambiguous, minmaxm, &has_ambiguity);
             if (child_cycle == -1) {
                 arraylist_free(&visited);
                 arraylist_free(&stack);
@@ -5845,17 +5819,6 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
         if (minmax) {
             arraylist_push(&result, minmax);
             j++;
-        }
-        // A candidate list the sort emptied is an ambiguity: every drop is a
-        // dominance or an ambiguity, and a chain of dominances must bottom out in
-        // a survivor. Under `approximate_ambig` the sort proves no drop silent, and
-        // so cannot say which of them to date, and the result would be claimed for
-        // every world back to the first candidate. The answer is an error in any
-        // case: date it from every candidate, and the range stays honest for
-        // `jl_gf_invoke_lookup_worlds` as well.
-        if (j == 0) {
-            for (i = 0; i < len; i++)
-                date_from_method(min_valid, ((jl_method_match_t*)jl_array_ptr_ref(t, i))->method);
         }
         // A method is only selected when it is morespecific than every applicable
         // method, so an ambiguity has to be witnessed by at least two reported
@@ -5883,10 +5846,6 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
     assert((len > 0 || len_in == 0 || has_ambiguity) &&
            "dropped every applicable method without recording an ambiguity");
     (void)len_in;
-    // the matches that remain date the result as the visible drops did; the
-    // silent drops alone leave no mark on it
-    for (i = 0; i < len; i++)
-        date_from_method(min_valid, ((jl_method_match_t*)jl_array_ptr_ref(t, i))->method);
     *has_ambiguity_out = has_ambiguity;
     return len;
 }
@@ -5901,7 +5860,7 @@ JL_DLLEXPORT int jl_sort_method_matches(jl_array_t *t, int include_ambiguous) JL
 {
     JL_TYPECHK(sort_method_matches, array_any, (jl_value_t*)t);
     int has_ambiguity = 0;
-    ssize_t sorted = sort_method_matches(t, -1, include_ambiguous, 0, &has_ambiguity, NULL);
+    ssize_t sorted = sort_method_matches(t, -1, include_ambiguous, 0, &has_ambiguity);
     assert(sorted != -1); (void)sorted; // lim == -1 cannot be exceeded
     return has_ambiguity;
 }
@@ -6057,11 +6016,9 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
 
     // all intersecting methods have been collected now. the remaining work is to sort
     // these and apply specificity to determine a list of dispatch-possible call targets
-    // (which also finishes dating the result: method applicability is the same as
-    // typemapentry applicability)
-    size_t len;
+    size_t j, len;
     {
-        ssize_t sorted = sort_method_matches((jl_array_t*)env.t, lim, include_ambiguous, ambig == NULL, &has_ambiguity, &env.match.min_valid);
+        ssize_t sorted = sort_method_matches((jl_array_t*)env.t, lim, include_ambiguous, ambig == NULL, &has_ambiguity);
         if (sorted == -1) {
             JL_GC_POP();
             return jl_nothing;
