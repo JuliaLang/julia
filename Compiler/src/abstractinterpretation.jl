@@ -519,18 +519,24 @@ function from_interconditional(𝕃ᵢ::AbstractLattice, @nospecialize(rt), sv::
         if alias === nothing
             arg = ssa_def_slot(fargs[i], sv)
             if isa(arg, SlotNumber) && widenslotwrapper(argtyp) isa Type
+                # refine the slot itself
                 old = argtyp
                 id = slot_id(arg)
-            elseif argtyp isa MustAlias
+                argalias = nothing
+            elseif argtyp isa MustAlias && slot == 0
+                # refine the field of slot `argtyp.slot` that this argument aliases:
+                # the field is a different object from that slot, so it can't be
+                # intersected with a refinement target on the slot itself
                 old = argtyp.fldtyp
                 id = argtyp.slot
+                argalias = argtyp
             else
                 continue # unlikely to refine
             end
         elseif argtyp isa MustAlias && issubalias(argtyp, alias)
-            arg = nothing
             old = alias.fldtyp
             id = alias.slot
+            argalias = argtyp
         else
             continue
         end
@@ -561,14 +567,10 @@ function from_interconditional(𝕃ᵢ::AbstractLattice, @nospecialize(rt), sv::
             end
             if (slot > 0 || condval !== false) && thentype ⋤ old
                 slot = id
-                if !(arg isa SlotNumber) && argtyp isa MustAlias
-                    alias = argtyp
-                end
+                alias = argalias
             elseif (slot > 0 || condval !== true) && elsetype ⋤ old
                 slot = id
-                if !(arg isa SlotNumber) && argtyp isa MustAlias
-                    alias = argtyp
-                end
+                alias = argalias
             else # reset: no new useful information for this slot
                 slot = 0
                 alias = nothing
