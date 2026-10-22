@@ -1287,13 +1287,16 @@ inline jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
     return v;
 }
 
-// allocation wrappers that track allocation and let collection run
+// allocation wrappers that track allocation and let collection run. These account for
+// the usable size of the block, also in free and realloc, rather than the size passed
+// by the caller (e.g. GMP passes the size it requested).
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_task_t *ct = jl_current_task;
     void *data = malloc(sz);
     if (data != NULL && pgcstack != NULL && ct->world_age) {
+        sz = memory_block_usable_size(data, 0);
         jl_ptls_t ptls = ct->ptls;
         malloc_maybe_collect(ptls, sz);
         jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, sz);
@@ -1307,9 +1310,10 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
     jl_task_t *ct = jl_current_task;
     void *data = calloc(nm, sz);
     if (data != NULL && pgcstack != NULL && ct->world_age) {
+        sz = memory_block_usable_size(data, 0);
         jl_ptls_t ptls = ct->ptls;
-        malloc_maybe_collect(ptls, nm * sz);
-        jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, nm * sz);
+        malloc_maybe_collect(ptls, sz);
+        jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, sz);
     }
     return data;
 }
@@ -1318,6 +1322,7 @@ JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_task_t *ct = jl_current_task;
+    sz = p ? memory_block_usable_size(p, 0) : 0;
     free(p);
     if (pgcstack != NULL && ct->world_age) {
         jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, -sz);
@@ -1328,15 +1333,15 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_task_t *ct = jl_current_task;
-    if (pgcstack && ct->world_age) {
-        jl_ptls_t ptls = ct->ptls;
-        malloc_maybe_collect(ptls, sz);
-        if (sz < old)
-            jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, old - sz);
-        else
-            jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, sz - old);
+    old = p ? memory_block_usable_size(p, 0) : 0;
+    if (pgcstack && ct->world_age)
+        malloc_maybe_collect(ct->ptls, sz);
+    void *data = realloc(p, sz);
+    if (data != NULL && pgcstack && ct->world_age) {
+        sz = memory_block_usable_size(data, 0);
+        jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, sz - old);
     }
-    return realloc(p, sz);
+    return data;
 }
 
 void *jl_gc_perm_alloc_nolock(jl_ptls_t ptls, size_t sz, int zero, unsigned align, unsigned offset) JL_NOTSAFEPOINT
