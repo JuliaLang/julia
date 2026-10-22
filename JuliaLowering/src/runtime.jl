@@ -244,12 +244,11 @@ function lower_generated_code(g, world, source, @nospecialize args...)
     __module__ = source.module
     sc = g.syntax_context
 
-    # Run code generator - this acts like a macro expander
+    # Run code generator - this acts like a macro expander. `jl_code_for_staged`
+    # runs this in the generator's definition world
     ex0 = g.gen(sc, args...)
 
-    # Note that we expand in `tls_world_age()` (see Core.GeneratedFunctionStub)
-    world = Base.tls_world_age()
-
+    # flisp (see Core.GeneratedFunctionStub) uses the latest world for macros
     return try
         __script_exit_invoke_in_lowering_world(
             _lower_generated_code, g, source, sc, __module__, world, ex0)
