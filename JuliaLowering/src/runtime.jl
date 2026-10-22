@@ -7,7 +7,7 @@
 #-------------------------------------------------------------------------------
 # Functions/types used by code emitted from lowering, but not called by it directly
 
-@inline function _invoke_in_world(w::UInt, f::F, @nospecialize(args...)) where {F}
+@inline function _invoke_in_world(w::UInt, @nospecialize(f), @nospecialize(args...))
     if ccall(:jl_is_in_pure_context, Int8, ()) != 0
         # Similar to `Base.invoke_in_world` but also works inside generated-function
         # expansion (see `jl_code_for_staged`)
