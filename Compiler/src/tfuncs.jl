@@ -2853,7 +2853,7 @@ function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
 end
 
-function is_relocatable_ptr_field(ty, fld)
+function is_relocatable_ptr_field(@nospecialize(ty), @nospecialize(fld))
     # Special case: these fields are not mutated, but they are the only native pointer fields
     # that have relocations in staticdata.c, so they can change between processes.
     if hasintersect(widenconst(ty), Core.TypeName) &&
@@ -3274,7 +3274,13 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         # wrong # of args
         return Bottom
     end
-    return tf[3](𝕃ᵢ, argtypes...)
+    tfunc = tf[3]
+    na = length(argtypes)
+    na == 1 && return tfunc(𝕃ᵢ, argtypes[1])
+    na == 2 && return tfunc(𝕃ᵢ, argtypes[1], argtypes[2])
+    na == 3 && return tfunc(𝕃ᵢ, argtypes[1], argtypes[2], argtypes[3])
+    na == 4 && return tfunc(𝕃ᵢ, argtypes[1], argtypes[2], argtypes[3], argtypes[4])
+    return tfunc(𝕃ᵢ, argtypes...)
 end
 
 # Query whether the given intrinsic is nothrow
