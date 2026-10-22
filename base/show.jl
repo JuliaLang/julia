@@ -740,11 +740,38 @@ function _typealias_may_equal(xbody::DataType, @nospecialize(a))
     end
     a isa DataType || return 2
     a.name === xbody.name && return 2
-    while a !== Any
-        a = supertype(a)
-        a.name === xbody.name && return 1
+    return has_nominal_supertype(a, xbody.name) ? 1 : 0
+end
+
+# Whether `alias` can both cover one of the (non-Tuple) union components `xparts` of a type and
+# have all its instances contained in them, judged by typenames, so that unrelated aliases can be
+# skipped before the (possibly expensive) intersection and instantiation
+function typealias_may_subsume(xparts::Vector{DataType}, @nospecialize(alias::Type), contained::Bool)
+    body = unwrap_unionall(alias)
+    any(c -> _typealias_may_contain(c, body), xparts) || return false
+    return !contained || _typealias_may_be_contained(xparts, body)
+end
+
+function _typealias_may_contain(c::DataType, @nospecialize(a))
+    a isa Union && return _typealias_may_contain(c, unwrap_unionall(a.a)) ||
+                          _typealias_may_contain(c, unwrap_unionall(a.b))
+    a isa DataType || return true
+    return has_nominal_supertype(c, a.name)
+end
+
+function _typealias_may_be_contained(xparts::Vector{DataType}, @nospecialize(a))
+    a isa Union && return _typealias_may_be_contained(xparts, unwrap_unionall(a.a)) &&
+                          _typealias_may_be_contained(xparts, unwrap_unionall(a.b))
+    a isa DataType || return true
+    return any(c -> has_nominal_supertype(a, c.name), xparts)
+end
+
+function has_nominal_supertype(t::DataType, name::Core.TypeName)
+    while true
+        t.name === name && return true
+        t === Any && return false
+        t = supertype(t)
     end
-    return 0
 end
 
 function make_typealias(@nospecialize(x::Type), io::Union{IO,Nothing}=nothing)
@@ -975,10 +1002,28 @@ function make_typealiases(@nospecialize(x::Type))
         push!(each, rewrap_unionall(p, x))
     end
     x isa UnionAll && push!(xenv, x)
+    # an alias is only kept if it covers one of the components and is contained in `x`, so if
+    # they are all non-Tuple DataTypes aliases can be skipped by typename
+    xparts = DataType[]
+    contained = true # whether instances of the alias must be contained in `xparts`
+    for p in each
+        if p isa TypeVar
+            contained = false
+            continue
+        end
+        p = unwrap_unionall(p)
+        if p isa DataType && !(p <: Tuple)
+            push!(xparts, p)
+        else
+            xparts = nothing
+            break
+        end
+    end
     for mod in mods
         for name in typealias_candidates(mod)
-            typealias_visible(mod, name) || continue
             alias = getglobal(mod, name)::Type
+            xparts === nothing || typealias_may_subsume(xparts, alias, contained) || continue
+            typealias_visible(mod, name) || continue
             if !(alias <: Tuple)
                 (ti, env) = typeintersect_env(x, unbounded_typealias(alias))
                 ti === Union{} && continue
