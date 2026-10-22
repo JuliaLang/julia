@@ -700,52 +700,99 @@ function reapply_unionall_env(io::Union{IO,Nothing}, @nospecialize(x))
     return x
 end
 
+# Names of the constant types of a module that can be printed as aliases, cached per
+# world (in `TYPEALIAS_CANDIDATES`) since collecting them scans all bindings of the module.
+# Visibility is checked separately since declaring a name `public` does not bump the world.
+function typealias_candidates(mod::Module)
+    world = tls_world_age()
+    cached = get(TYPEALIAS_CANDIDATES, mod, nothing)
+    cached !== nothing && cached.first == world && return cached.second
+    candidates = Symbol[]
+    for name in unsorted_names(mod; all=true, imported=true)
+        startswith(String(name), '#') && continue
+        if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
+            alias = getglobal(mod, name)
+            if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias)
+                push!(candidates, name)
+            end
+        end
+    end
+    TYPEALIAS_CANDIDATES[mod] = world => candidates
+    return candidates
+end
+
+typealias_visible(mod::Module, name::Symbol) = mod === Main || ispublic(mod, name) || isexported(mod, name)
+
+# Instantiating `alias` can only give a type equal to one with the (non-Tuple) body `xbody`
+# if some union member of the alias has the same typename and all others can be absorbed
+# into it, so skip the others before the (possibly expensive) instantiation
+typealias_may_equal(xbody::DataType, @nospecialize(alias::Type)) =
+    _typealias_may_equal(xbody, unwrap_unionall(alias)) == 2
+
+# 0: cannot be a subtype of `xbody`, 1: may be absorbed, 2: same typename (or unknown)
+function _typealias_may_equal(xbody::DataType, @nospecialize(a))
+    if a isa Union
+        l = _typealias_may_equal(xbody, unwrap_unionall(a.a))
+        l == 0 && return 0
+        r = _typealias_may_equal(xbody, unwrap_unionall(a.b))
+        r == 0 && return 0
+        return max(l, r)
+    end
+    a isa DataType || return 2
+    a.name === xbody.name && return 2
+    while a !== Any
+        a = supertype(a)
+        a.name === xbody.name && return 1
+    end
+    return 0
+end
+
 function make_typealias(@nospecialize(x::Type), io::Union{IO,Nothing}=nothing)
     Any === x && return nothing
     x <: Tuple && return nothing
     mods = modulesof!(Set{Module}(), x)
     replace!(mods, Core=>Base)
     properx = reapply_unionall_env(io, x)
+    xbody = unwrap_unionall(x)
     aliases = Tuple{GlobalRef,SimpleVector}[]
     for mod in mods
-        for name in unsorted_names(mod)
-            if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
-                alias = getglobal(mod, name)
-                if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && properx <: alias
-                    if alias isa UnionAll
-                        free_before = find_free_typevars(x)
-                        (_ti, env) = typeintersect_env(x, unbounded_typealias(alias))
-                        # ti === Union{} && continue # impossible, since we already checked that x <: alias
-                        env = env::SimpleVector
-                        # unwrap `svec(tvar, constrained)` env markers down to the TypeVar
-                        env = Core.svec(Any[e isa SimpleVector ? e[1] : e for e in env]...)
-                        # TODO: In some cases (such as the following), the `env` is over-approximated.
-                        #       We'd like to disable `fix_inferred_var_bound` since we'll already do that fix-up here.
-                        #       (or detect and reverse the computation of it here).
-                        #   T = Array{Array{T,1}, 1} where T
-                        #   (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), T, Vector)
-                        #   env[1].ub.var == T.var
-                        applied = try
-                                # this can fail if `x` contains a covariant
-                                # union, and the non-matching branch of the
-                                # union has additional restrictions on the
-                                # bounds of the environment that are not met by
-                                # the instantiation found above
-                                alias{env...}
-                            catch ex
-                                ex isa TypeError || rethrow()
-                                continue
-                            end
-                        applied = rewrap_free_typevars(applied, free_before)
-                        has_other_free_typevars(applied, free_before) && continue
-                        applied == x || continue # it couldn't figure out the parameter matching
-                    elseif alias === x
-                        env = Core.svec()
-                    else
-                        continue # not a complete match
-                    end
-                    push!(aliases, (GlobalRef(mod, name), env))
+        for name in typealias_candidates(mod)
+            alias = getglobal(mod, name)::Type
+            if (!(xbody isa DataType) || typealias_may_equal(xbody, alias)) &&
+                    typealias_visible(mod, name) && properx <: alias
+                if alias isa UnionAll
+                    free_before = find_free_typevars(x)
+                    (_ti, env) = typeintersect_env(x, unbounded_typealias(alias))
+                    # ti === Union{} && continue # impossible, since we already checked that x <: alias
+                    env = env::SimpleVector
+                    # unwrap `svec(tvar, constrained)` env markers down to the TypeVar
+                    env = Core.svec(Any[e isa SimpleVector ? e[1] : e for e in env]...)
+                    # TODO: In some cases (such as the following), the `env` is over-approximated.
+                    #       We'd like to disable `fix_inferred_var_bound` since we'll already do that fix-up here.
+                    #       (or detect and reverse the computation of it here).
+                    #   T = Array{Array{T,1}, 1} where T
+                    #   (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), T, Vector)
+                    #   env[1].ub.var == T.var
+                    applied = try
+                            # this can fail if `x` contains a covariant
+                            # union, and the non-matching branch of the
+                            # union has additional restrictions on the
+                            # bounds of the environment that are not met by
+                            # the instantiation found above
+                            alias{env...}
+                        catch ex
+                            ex isa TypeError || rethrow()
+                            continue
+                        end
+                    applied = rewrap_free_typevars(applied, free_before)
+                    has_other_free_typevars(applied, free_before) && continue
+                    applied == x || continue # it couldn't figure out the parameter matching
+                elseif alias === x
+                    env = Core.svec()
+                else
+                    continue # not a complete match
                 end
+                push!(aliases, (GlobalRef(mod, name), env))
             end
         end
     end
@@ -929,46 +976,45 @@ function make_typealiases(@nospecialize(x::Type))
     end
     x isa UnionAll && push!(xenv, x)
     for mod in mods
-        for name in unsorted_names(mod)
-            if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
-                alias = getglobal(mod, name)
-                if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && !(alias <: Tuple)
-                    (ti, env) = typeintersect_env(x, unbounded_typealias(alias))
-                    ti === Union{} && continue
-                    # make sure this alias wasn't from an unrelated part of the Union
-                    mod2 = modulesof!(Set{Module}(), alias)
-                    mod in mod2 || (mod === Base && Core in mod2) || continue
-                    env = env::SimpleVector
-                    # unwrap `svec(tvar, constrained)` env markers down to the TypeVar
-                    env = Core.svec(Any[e isa SimpleVector ? e[1] : e for e in env]...)
-                    applied = alias
-                    if !isempty(env)
-                        applied = try
-                                # this can fail if `x` contains a covariant
-                                # union, and the non-matching branch of the
-                                # union has additional restrictions on the
-                                # bounds of the environment that are not met by
-                                # the instantiation found above
-                                alias{env...}
-                            catch ex
-                                ex isa TypeError || rethrow()
-                                continue
-                            end
-                    end
-                    ul = unionlen(applied)
-                    for p in xenv
-                        applied = rewrap_unionall(applied, p)
-                    end
-                    applied = rewrap_free_typevars(applied, free_before)
-                    has_other_free_typevars(applied, free_before) && continue
-                    applied <: x || continue # parameter matching didn't make a subtype
-                    print_without_params(x) && (env = Core.svec())
-                    for typ in each # check that the alias also fully subsumes at least component of the input
-                        typ isa TypeVar && continue
-                        if typ <: applied
-                            push!(aliases, Core.svec(GlobalRef(mod, name), env, applied, (ul, -length(env))))
-                            break
+        for name in typealias_candidates(mod)
+            typealias_visible(mod, name) || continue
+            alias = getglobal(mod, name)::Type
+            if !(alias <: Tuple)
+                (ti, env) = typeintersect_env(x, unbounded_typealias(alias))
+                ti === Union{} && continue
+                # make sure this alias wasn't from an unrelated part of the Union
+                mod2 = modulesof!(Set{Module}(), alias)
+                mod in mod2 || (mod === Base && Core in mod2) || continue
+                env = env::SimpleVector
+                # unwrap `svec(tvar, constrained)` env markers down to the TypeVar
+                env = Core.svec(Any[e isa SimpleVector ? e[1] : e for e in env]...)
+                applied = alias
+                if !isempty(env)
+                    applied = try
+                            # this can fail if `x` contains a covariant
+                            # union, and the non-matching branch of the
+                            # union has additional restrictions on the
+                            # bounds of the environment that are not met by
+                            # the instantiation found above
+                            alias{env...}
+                        catch ex
+                            ex isa TypeError || rethrow()
+                            continue
                         end
+                end
+                ul = unionlen(applied)
+                for p in xenv
+                    applied = rewrap_unionall(applied, p)
+                end
+                applied = rewrap_free_typevars(applied, free_before)
+                has_other_free_typevars(applied, free_before) && continue
+                applied <: x || continue # parameter matching didn't make a subtype
+                print_without_params(x) && (env = Core.svec())
+                for typ in each # check that the alias also fully subsumes at least component of the input
+                    typ isa TypeVar && continue
+                    if typ <: applied
+                        push!(aliases, Core.svec(GlobalRef(mod, name), env, applied, (ul, -length(env))))
+                        break
                     end
                 end
             end
