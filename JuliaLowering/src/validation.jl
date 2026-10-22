@@ -1265,6 +1265,7 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [:_while cond body] -> vst2(vcx, cond) & vst2(vcx, body)
     [:inert _] -> pass()
     [:syntaxinert _] -> pass()
+    [:copyast [:inert _]] -> pass()
     [:lambda _...] -> vst2_lam(vcx, st)
     [:generated_lambda _...] -> vst2_lam(vcx, st)
     # Declare a zero-method generic function with global `name` or creates a
