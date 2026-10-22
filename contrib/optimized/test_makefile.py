@@ -28,7 +28,7 @@ if args[0] == 'configure':
     (p / 'deps').mkdir(parents=True)
     recipe = 'all julia-deps julia-src-release julia-symlink julia-libccalltest julia-libccalllazyfoo julia-libccalllazybar julia-libllvmcalltest:\n\t@python3 ' + str(root / 'helper.py') + ' build $@ "$(CFLAGS)" "$(LDFLAGS)" "$(JULIA_CPU_TARGET)" "$(USE_BINARYBUILDER_LLVM)" "$(LD)" "$(WIN_LD_USE_DEF)" "$(WIN_LD_EXTRA_LIBS)" "$(LINK_LDFLAGS)" "$(CXXFLAGS)" "$(CC)" "$(CXX)" "$(HOSTCC)"\n'
     (p / 'Makefile').write_text(recipe)
-    (p / 'deps/Makefile').write_text('%:\n\t@python3 ' + str(root / 'helper.py') + ' install $@ "$(USE_BINARYBUILDER_LLVM)" "$(OS)" "$(USE_BINARYBUILDER_CSL)" "$(XC_HOST)" "$(LLVM_TARGETS)" "$(LLVM_ENABLE_PROJECTS)"\n')
+    (p / 'deps/Makefile').write_text('%:\n\t@python3 ' + str(root / 'helper.py') + ' install $@ "$(USE_BINARYBUILDER_LLVM)" "$(OS)" "$(USE_BINARYBUILDER_CSL)" "$(XC_HOST)" "$(LLVM_TARGETS)" "$(LLVM_ENABLE_PROJECTS)" "$(CLANG_CONFIG_FILE_SYSTEM_DIR)"\n')
 elif args[0] == 'install' and args[3] == 'WINNT':
     stage = pathlib.Path.cwd().parent
     (stage / 'usr/bin').mkdir(parents=True, exist_ok=True)
@@ -194,6 +194,17 @@ class FlowTests(unittest.TestCase):
         # The downloaded toolchain would run on the target: build one for the
         # build machine with the target's backend, plus the target's runtime.
         env = dict(os.environ, MOCK_CROSS='1')
+        # The build machine's GCC, which the stage-0 clang has to use for its
+        # own runtime and for HOSTCC, but not for the target.
+        install = self.root / 'gcc/lib/gcc/x86_64-linux-gnu/15.2.0'
+        install.mkdir(parents=True)
+        (install / 'libgcc.a').write_text('')
+        hostcc = self.root / 'fake-hostcc'
+        hostcc.write_text('#!/bin/sh\ncase "$*" in\n'
+                          '-print-libgcc-file-name) echo ' + str(install / 'libgcc.a') + ' ;;\n'
+                          '-print-sysroot) echo /opt/build-sysroot ;;\nesac\n')
+        hostcc.chmod(0o755)
+        config = self.flow / 'toolchain/clang-config'
         for arch, triple, march, backend, runtime_arch, cpu in [
                 ('riscv64', 'riscv64-linux-gnu', 'rv64gc', 'RISCV', 'riscv64', 'generic-rv64,i,m,a,f,d,zicsr,c'),
                 ('i686', 'i686-linux-gnu', 'pentium4', 'X86', 'i386', 'pentium4;sandybridge')]:
@@ -204,14 +215,17 @@ class FlowTests(unittest.TestCase):
                 (self.root / 'events').unlink(missing_ok=True)
                 # CI passes USE_BINARYBUILDER_LLVM=0 to the stages, possibly on the command line.
                 self.make('all', 'OS=Linux', 'XC_HOST=' + triple, 'ARCH=' + arch, 'BUILD_OS=Linux', 'MARCH=' + march,
-                          'USE_BOLT=0', 'USE_BINARYBUILDER_LLVM=0', 'JULIA_CPU_TARGET=' + cpu, env=env)
+                          'USE_BOLT=0', 'USE_BINARYBUILDER_LLVM=0', 'JULIA_CPU_TARGET=' + cpu, 'HOSTCC=' + str(hostcc), env=env)
                 installs = [(d, a) for d, a in self.events() if a[0] == 'install']
                 # The first two run in parallel.
                 self.assertCountEqual([(d, a[1:]) for d, a in installs], [
-                    ('deps', ['install-llvm', '0', 'Linux', '', '', 'host;' + backend, 'clang;lld']),
-                    ('deps', ['install-zstd', '0', 'Linux', '', '', 'host;' + backend, 'clang;lld']),
-                    ('deps', ['install-clang', '1', 'Linux', '', triple, '', '']),
+                    ('deps', ['install-llvm', '0', 'Linux', '', '', 'host;' + backend, 'clang;lld', str(config)]),
+                    ('deps', ['install-zstd', '0', 'Linux', '', '', 'host;' + backend, 'clang;lld', str(config)]),
+                    ('deps', ['install-clang', '1', 'Linux', '', triple, '', '', '']),
                 ])
+                for mode in ['clang', 'clang++']:
+                    self.assertEqual((config / (mode + '.cfg')).read_text().strip(),
+                                     f'--gcc-install-dir={install} --sysroot=/opt/build-sysroot')
                 runtimes = self.flow / 'toolchain/usr/lib/clang/23/lib/linux'
                 self.assertEqual([p.name for p in runtimes.iterdir()], ['libclang_rt.profile-' + runtime_arch + '.a'])
                 self.assertEqual((runtimes / ('libclang_rt.profile-' + runtime_arch + '.a')).read_text(), 'renamed')
@@ -219,7 +233,7 @@ class FlowTests(unittest.TestCase):
                 self.assertTrue(builds)
                 for a in builds:
                     for compiler in (a[11], a[12]):
-                        self.assertIn(f'--target={triple} -march={march}', compiler)
+                        self.assertIn(f'--no-default-config --target={triple} -march={march}', compiler)
                     self.assertEqual(a[13], str(self.flow / 'toolchain/usr/tools/clang'))
                 # Stage 1 builds for the baseline, e.g. with riscv64's floating-point ABI.
                 stage1 = [a for d, a in self.events() if a[0] == 'build' and d == 'pgo-instrumented.build']
