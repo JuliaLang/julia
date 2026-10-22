@@ -581,9 +581,9 @@ let f = gensym("f"), g = gensym("g"), gen = gensym("gen")
         @test collected.compile_bytes <= collected.bytes
         @test collected.gcstats.pause > 0
 
-        out = @capture_stdout @time $f(2.0)
+        out = @capture_stdout @time $f(0x02)
         @test occursin(r"% compilation time.*, \d+(\.\d+)? \w+ allocated in compilation\)", out)
-        out = @capture_stdout @time $f(2.0)
+        out = @capture_stdout @time $f(0x02)
         @test !occursin("allocated in compilation", out)
         out = @capture_stdout @timev $f(3.0f0)
         @test occursin(r"compile bytes: +\d+", out)
