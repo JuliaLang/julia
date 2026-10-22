@@ -113,6 +113,14 @@ These passes are used to perform transformations on LLVM IR that LLVM will not p
 
 Julia does not have the concept of a program stack as a place to allocate mutable objects. However, allocating objects on the stack reduces GC pressure and is critical for GPU compilation. Thus, `AllocOpt` performs heap to stack conversion of objects that it can prove do not [escape](https://en.wikipedia.org/wiki/Escape_analysis) the current function. It also performs a number of other optimizations on allocations, such as removing allocations that are never used, optimizing typeof calls to freshly allocated objects, and removing stores to allocations that are immediately overwritten. The escape analysis implementation is located in `llvm-alloc-helpers.cpp`. Currently, this pass does not use information from `EscapeAnalysis.jl`, though that may change in the future.
 
+### VersionUnalignedLoads
+
+* Filename: `llvm-version-unaligned-loads.cpp`
+* Class Name: `VersionUnalignedLoadsPass`
+* Opt Name: `function(VersionUnalignedLoads)`
+
+`unsafe_load` cannot assume its pointer is aligned, so it emits loads with alignment 1. On targets without fast misaligned access (for example RISC-V cores without `unaligned-scalar-mem`, which trap on misaligned accesses), the backend splits such a load into byte loads, even when the address turns out to be aligned. For integer and floating-point loads whose alignment could not be proven, this pass emits a check of the address, a naturally aligned load when it succeeds, and the original load otherwise. Nearby loads of the same size in a basic block whose addresses differ by multiples of that size share one check, as long as no call, store, atomic or volatile access separates them. The pass does nothing on targets that report fast misaligned access, as queried per function from `TargetTransformInfo`.
+
 ### PropagateJuliaAddrspaces
 
 * Filename: `llvm-propagate-addrspaces.cpp`

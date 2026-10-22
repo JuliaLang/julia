@@ -636,6 +636,7 @@ static void buildCleanupPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimi
         if (getSpeedupLevel(O) >= 2) {
             FunctionPassManager FPM;
             FPM.addPass(DivRemPairsPass());
+            JULIA_PASS(FPM.addPass(VersionUnalignedLoadsPass()));
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
         invokeOptimizerLastCallbacks(MPM, PB, O);

@@ -18,6 +18,7 @@ FUNCTION_PASS("GCInvariantVerifier", GCInvariantVerifierPass())
 FUNCTION_PASS("FinalLowerGC", FinalLowerGCPass())
 FUNCTION_PASS("CancellationLowering", CancellationLoweringPass())
 FUNCTION_PASS("ExpandAtomicModify", ExpandAtomicModifyPass())
+FUNCTION_PASS("VersionUnalignedLoads", VersionUnalignedLoadsPass())
 #endif
 
 //Loop passes

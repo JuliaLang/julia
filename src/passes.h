@@ -48,6 +48,10 @@ struct ExpandAtomicModifyPass : OptionalPassInfoMixin<ExpandAtomicModifyPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
 };
 
+struct VersionUnalignedLoadsPass : OptionalPassInfoMixin<VersionUnalignedLoadsPass> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
+};
+
 
 // Module Passes
 struct CPUFeaturesPass : RequiredPassInfoMixin<CPUFeaturesPass> {
