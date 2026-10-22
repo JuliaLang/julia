@@ -2292,16 +2292,19 @@ static void jl_read_reloclist(jl_serializer_state *s, jl_array_t *link_ids, uint
     uint8_t *current = (uint8_t *)(relocs->buf + relocs->bpos);
     int link_index = 0;
     while (1) {
-        // Read the offset of the next object
-        size_t pos_diff = 0;
-        size_t cnt = 0;
-        while (1) {
-            assert((char *)current < (char *)(relocs->buf + relocs->size));
-            int8_t c = *current++;
-
-            pos_diff |= ((size_t)c & 0x7F) << (7 * cnt++);
-            if ((c >> 7) == 0)
-                break;
+        // Read the offset of the next object. Most offsets fit in one byte.
+        assert((char *)current < (char *)(relocs->buf + relocs->size));
+        size_t pos_diff = *current++;
+        if (__unlikely(pos_diff & 0x80)) {
+            pos_diff &= 0x7F;
+            size_t cnt = 1;
+            while (1) {
+                assert((char *)current < (char *)(relocs->buf + relocs->size));
+                uint8_t c = *current++;
+                pos_diff |= ((size_t)c & 0x7F) << (7 * cnt++);
+                if ((c & 0x80) == 0)
+                    break;
+            }
         }
         if (pos_diff == 0)
             break;
@@ -2310,7 +2313,15 @@ static void jl_read_reloclist(jl_serializer_state *s, jl_array_t *link_ids, uint
         last_pos = pos;
         uintptr_t *pv = (uintptr_t *)(base + pos);
         uintptr_t v = *pv;
-        v = get_item_for_reloc(s, base, v, link_ids, &link_index);
+        // Most relocations point into this image's own data.
+        if ((v >> RELOC_TAG_OFFSET) == DataRef) {
+            size_t offset = v & (((uintptr_t)1 << RELOC_TAG_OFFSET) - 1);
+            assert(offset <= s->s->size);
+            v = base + offset;
+        }
+        else {
+            v = get_item_for_reloc(s, base, v, link_ids, &link_index);
+        }
         if (bits && v && ((jl_datatype_t*)v)->smalltag)
             v = (uintptr_t)((jl_datatype_t*)v)->smalltag << 4; // TODO: should we have a representation that supports sweep without a relocation step?
         *pv = v | bits;
