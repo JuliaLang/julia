@@ -269,7 +269,22 @@ safepoint() = ccall(:jl_gc_safepoint, Cvoid, ())
 """
     GC.enable_logging(on::Bool)
 
-When turned on, print statistics about each GC to stderr.
+When turned on, print statistics about each GC to stderr, for example
+
+```
+GC #9: full (large promotion rate), pause 10.16 ms (safepoint 0.00, mark 8.71, sweep 1.45)
+  collected 28.40 MiB, heap 116.36 -> 87.93 MiB, target 123.05 MiB
+  pages mapped 128.00 MiB, resident 128.00 MiB, pool page utilization 97.7%
+```
+
+The first line says whether the collection swept the whole heap ("full") or only recently
+allocated objects ("incremental"), why a full collection was done, and how long the
+program was paused. The heap size is the memory the GC accounts for before and after the
+collection, and the target is the heap size at which the next collection is triggered.
+The last line shows the memory mapped for small objects (the pool), how much of it is
+resident, and how much of the pool pages in use is occupied by live objects.
+
+Only the stock GC supports logging.
 """
 function enable_logging(on::Bool=true)
     ccall(:jl_enable_gc_logging, Cvoid, (Cint,), on)

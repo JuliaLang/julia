@@ -207,6 +207,8 @@ static int64_t heap_size_after_last_full_gc = 0;
 int prev_sweep_full = 1;
 int current_sweep_full = 0;
 int next_sweep_full = 0;
+// FULL_SWEEP_REASON_* that set `next_sweep_full` (for GC logging)
+static int next_sweep_full_reason = -1;
 int under_pressure = 0;
 int gc_disable_auto_full_sweep = 0; // when set, automatic full collections are inhibited
 
@@ -3300,25 +3302,88 @@ static uint64_t overallocation(uint64_t old_val, uint64_t val, uint64_t max_val)
     return inc;
 }
 
-static void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect, int64_t live_bytes) JL_NOTSAFEPOINT {
-    if (!gc_logging_enabled) {
+static const char *const full_sweep_reason_names[FULL_SWEEP_NUM_REASONS] = {
+    "always full",           // FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL
+    "forced",                // FULL_SWEEP_REASON_FORCED_FULL_SWEEP
+    "above max memory",      // FULL_SWEEP_REASON_USER_MAX_EXCEEDED
+    "large promotion rate",  // FULL_SWEEP_REASON_LARGE_PROMOTION_RATE
+    "large heap growth",     // FULL_SWEEP_REASON_LARGE_HEAP_GROWTH
+};
+
+// Fraction of the pool pages still in use that is occupied by live objects,
+// from the fragmentation statistics of the last sweep
+static double gc_pool_page_utilization(void) JL_NOTSAFEPOINT
+{
+    double free_bytes = 0, page_bytes = 0;
+    for (int i = 0; i < JL_GC_N_POOLS; i++) {
+        gc_fragmentation_stat_t *stats = &jl_gc_page_fragmentation_stats[i];
+        free_bytes += (double)jl_atomic_load_relaxed(&stats->n_freed_objs) * jl_gc_sizeclasses[i];
+        page_bytes += (double)jl_atomic_load_relaxed(&stats->n_pages_allocd) * GC_PAGE_SZ;
+    }
+    return page_bytes == 0 ? 1.0 : 1.0 - free_bytes / page_bytes;
+}
+
+// The two passes of a recollect are reported as one collection; these hold the
+// first pass until the second one is reported.
+static uint64_t report_recollect_pause = 0;
+static uint64_t report_recollect_mark = 0;
+static uint64_t report_recollect_sweep = 0;
+static uint64_t report_recollect_freed = 0;
+static uint64_t report_recollect_heap_before = 0;
+static int report_recollect_full_reason = -1;
+
+static void _report_gc_finished(jl_gc_collection_t collection, uint64_t pause, uint64_t freed,
+                                int full, int full_reason, int recollect,
+                                uint64_t heap_before) JL_NOTSAFEPOINT
+{
+    if (!gc_logging_enabled)
+        return;
+    uint64_t mark = gc_num.mark_time, sweep = gc_num.sweep_time;
+    if (recollect) {
+        report_recollect_pause = pause;
+        report_recollect_mark = mark;
+        report_recollect_sweep = sweep;
+        report_recollect_freed = freed;
+        report_recollect_heap_before = heap_before;
+        report_recollect_full_reason = full_reason;
         return;
     }
-    jl_safe_printf("\nGC: pause %.2fms. collected %fMB. %s %s\n",
-        pause/1e6, freed/(double)(1<<20),
-        full ? "full" : "incr",
-        recollect ? "recollect" : ""
-    );
-
-    jl_safe_printf("Heap stats: bytes_mapped %.2f MB, bytes_resident %.2f MB,\nheap_size %.2f MB, heap_target %.2f MB, Fragmentation %.3f\n",
-        jl_atomic_load_relaxed(&gc_heap_stats.bytes_mapped)/(double)(1<<20),
-        jl_atomic_load_relaxed(&gc_heap_stats.bytes_resident)/(double)(1<<20),
-        // live_bytes/(double)(1<<20), live bytes tracking is not accurate.
-        jl_atomic_load_relaxed(&gc_heap_stats.heap_size)/(double)(1<<20),
-        jl_atomic_load_relaxed(&gc_heap_stats.heap_target)/(double)(1<<20),
-        (double)live_bytes/(double)jl_atomic_load_relaxed(&gc_heap_stats.heap_size)
-    );
-    // Should fragmentation use bytes_resident instead of heap_size?
+    int passes = 1;
+    if (report_recollect_pause != 0) {
+        passes = 2;
+        pause += report_recollect_pause;
+        mark += report_recollect_mark;
+        sweep += report_recollect_sweep;
+        freed += report_recollect_freed;
+        heap_before = report_recollect_heap_before;
+        // the first pass did the full sweep
+        full = 1;
+        full_reason = report_recollect_full_reason;
+        report_recollect_pause = 0;
+    }
+    const double MiB = 1 << 20;
+    char kind[64];
+    if (!full && collection == JL_GC_FULL)
+        // the previous collection swept the full heap, so this one marked it all
+        snprintf(kind, sizeof(kind), "full mark (forced)");
+    else if (!full)
+        snprintf(kind, sizeof(kind), "incremental");
+    else if (full_reason >= 0 && full_reason < FULL_SWEEP_NUM_REASONS)
+        snprintf(kind, sizeof(kind), "full (%s%s)", full_sweep_reason_names[full_reason],
+                 passes == 2 ? ", 2 passes" : "");
+    else
+        snprintf(kind, sizeof(kind), "full");
+    jl_safe_printf("\nGC #%d: %s, pause %.2f ms (safepoint %.2f, mark %.2f, sweep %.2f)\n",
+                   gc_num.pause + 1, kind, pause / 1e6, gc_num.time_to_safepoint / 1e6,
+                   mark / 1e6, sweep / 1e6);
+    jl_safe_printf("  collected %.2f MiB, heap %.2f -> %.2f MiB, target %.2f MiB\n",
+                   freed / MiB, heap_before / MiB,
+                   jl_atomic_load_relaxed(&gc_heap_stats.heap_size) / MiB,
+                   jl_atomic_load_relaxed(&gc_heap_stats.heap_target) / MiB);
+    jl_safe_printf("  pages mapped %.2f MiB, resident %.2f MiB, pool page utilization %.1f%%\n",
+                   jl_atomic_load_relaxed(&gc_heap_stats.bytes_mapped) / MiB,
+                   jl_atomic_load_relaxed(&gc_heap_stats.bytes_resident) / MiB,
+                   100 * gc_pool_page_utilization());
 }
 
 // Only one thread should be running in this function
@@ -3444,6 +3509,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     // 4. next collection decision
     int remset_nptr = 0;
     int sweep_full = next_sweep_full;
+    int sweep_full_reason = next_sweep_full_reason;
     int recollect = 0;
     assert(gc_n_threads != 0);
     for (int i = 0; i < gc_n_threads; i++) {
@@ -3459,10 +3525,12 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     // we either free some space or get an OOM error.
     if (jl_options.gc_sweep_always_full) {
         sweep_full = 1;
+        sweep_full_reason = FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL;
         gc_record_full_sweep_reason(FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL);
     }
     if (collection == JL_GC_FULL && !prev_sweep_full) {
         sweep_full = 1;
+        sweep_full_reason = FULL_SWEEP_REASON_FORCED_FULL_SWEEP;
         recollect = 1;
         gc_record_full_sweep_reason(FULL_SWEEP_REASON_FORCED_FULL_SWEEP);
     }
@@ -3634,19 +3702,22 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     double last_full_gc_heap_ratio = (double)heap_size/expected_heap_size;
     if (heap_size > user_max) {
         next_sweep_full = 1;
-        gc_record_full_sweep_reason(FULL_SWEEP_REASON_USER_MAX_EXCEEDED);
+        next_sweep_full_reason = FULL_SWEEP_REASON_USER_MAX_EXCEEDED;
     }
     else if (old_ratio > 0.15) {
         next_sweep_full = 1;
-        gc_record_full_sweep_reason(FULL_SWEEP_REASON_LARGE_PROMOTION_RATE);
+        next_sweep_full_reason = FULL_SWEEP_REASON_LARGE_PROMOTION_RATE;
     }
     else if (last_full_gc_heap_ratio > 1) {
         next_sweep_full = 1;
-        gc_record_full_sweep_reason(FULL_SWEEP_REASON_LARGE_HEAP_GROWTH);
+        next_sweep_full_reason = FULL_SWEEP_REASON_LARGE_HEAP_GROWTH;
     }
     else {
         next_sweep_full = 0;
+        next_sweep_full_reason = -1;
     }
+    if (next_sweep_full)
+        gc_record_full_sweep_reason(next_sweep_full_reason);
     if (heap_size > user_max || thrashing)
         under_pressure = 1;
     // sweeping is over
@@ -3701,7 +3772,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     }
 #endif
 
-    _report_gc_finished(pause, gc_num.freed, sweep_full, recollect, live_bytes);
+    _report_gc_finished(collection, pause, gc_num.freed, sweep_full, sweep_full_reason, recollect,
+                        before_free_heap_size);
     uint64_t max_memory = last_live_bytes + gc_num.allocd;
     if (max_memory > gc_num.max_memory) {
         gc_num.max_memory = max_memory;

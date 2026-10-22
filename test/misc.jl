@@ -1504,7 +1504,9 @@ end
                 @test !GC.logging_enabled()
             end
         end
-        @test occursin("GC: pause", read(tmppath, String))
+        log = read(tmppath, String)
+        @test occursin(r"GC #\d+: full \(forced.*\), pause [\d.]+ ms", log)
+        @test occursin(r"collected [\d.]+ MiB, heap [\d.]+ -> [\d.]+ MiB", log)
     end
 end
 end
