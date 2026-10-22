@@ -730,6 +730,12 @@ static unsigned julia_alignment(jl_value_t *jt)
     return alignment;
 }
 
+// Return the alignment of the data pointer of a GenericMemory with this element layout
+static size_t julia_memory_alignment(const jl_datatype_layout_t *layout)
+{
+    return std::min((size_t)layout->alignment, (size_t)JL_HEAP_ALIGNMENT);
+}
+
 // Byte-rounded type for accessing an integer in Julia memory: an odd-bit
 // integer is stored zero-extended to whole bytes. Non-integers pass through.
 static Type *julia_primitive_storage_type(Type *register_type)
@@ -777,10 +783,10 @@ static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool
             Metadata *OP = ConstantAsMetadata::get(ConstantInt::get(getInt64Ty(LI->getContext()), size));
             LI->setMetadata(can_be_null ? LLVMContext::MD_dereferenceable_or_null : LLVMContext::MD_dereferenceable,
                             MDNode::get(LI->getContext(), { OP }));
-            if (align >= 1) {
-                Metadata *OP = ConstantAsMetadata::get(ConstantInt::get(getInt64Ty(LI->getContext()), align));
-                LI->setMetadata(LLVMContext::MD_align, MDNode::get(LI->getContext(), { OP }));
-            }
+        }
+        if (align > 1) {
+            Metadata *OP = ConstantAsMetadata::get(ConstantInt::get(getInt64Ty(LI->getContext()), align));
+            LI->setMetadata(LLVMContext::MD_align, MDNode::get(LI->getContext(), { OP }));
         }
     }
     return LI;
@@ -2628,6 +2634,11 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         LoadInst *load1 = emit_aliased_load(ctx, elty->getStructElementType(1), fld1, Align(alignment),
                                             ai, aliasscope, Order);
         static_assert(offsetof(jl_genericmemoryref_t, ptr_or_offset) == 0, "wrong field order");
+        if (isa<PointerType>(load0->getType())) {
+            auto *mty = (jl_datatype_t*)jl_field_type_concrete((jl_datatype_t*)jltype, 1);
+            // A reference may point past the end, so only assert its data alignment.
+            maybe_mark_load_dereferenceable(load0, true, 0, julia_memory_alignment(mty->layout));
+        }
         maybe_mark_load_dereferenceable(load1, true, sizeof(void*)*2, alignof(void*));
         instr = Constant::getNullValue(elty);
         instr = ctx.builder.CreateInsertValue(instr, load0, 0);
@@ -3273,6 +3284,7 @@ static void emit_atomic_error(jl_codectx_t &ctx, const Twine &msg)
 static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &strct,
                                          unsigned idx, jl_datatype_t *jt,
                                          enum jl_memory_order order, Value **nullcheck=nullptr) JL_CANSAFEPOINT;
+static Value *emit_genericmemoryptr(jl_codectx_t &ctx, Value *mem, const jl_datatype_layout_t *layout, unsigned AS);
 
 static bool field_may_be_null(const jl_cgval_t &strct, jl_datatype_t *stt, size_t idx) JL_CANSAFEPOINT
 {
@@ -3613,6 +3625,10 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         }
     }
     else if (strct.ispointer()) {
+        if (idx == 1 && jl_is_genericmemory_type(jt) && jt->layout) {
+            Value *ptr = emit_genericmemoryptr(ctx, boxed(ctx, strct), jt->layout, 0);
+            return mark_julia_type(ctx, ptr, false, jfty);
+        }
         auto ai = best_field_aliasinfo(ctx, strct, jt, idx, byte_offset);
         Value *staddr = data_pointer(ctx, strct);
         Value *addr = (byte_offset == 0 ? staddr : emit_ptrgep(ctx, staddr, byte_offset));
@@ -3807,7 +3823,7 @@ static Value *emit_genericmemoryptr(jl_codectx_t &ctx, Value *mem, const jl_data
     PointerType *PPT = cast<PointerType>(ctx.types().T_jlgenericmemory->getElementType(1));
     LoadInst *LI = ctx.builder.CreateAlignedLoad(PPT, addr, Align(sizeof(char*)));
     LI->setOrdering(AtomicOrdering::NotAtomic);
-    LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(ctx.builder.getContext(), {}));
+    maybe_mark_load_dereferenceable(LI, false, 0, julia_memory_alignment(layout));
     jl_aliasinfo_t aliasinfo = ctx.alias().memoryptr;
     aliasinfo.decorateInst(LI);
     Value *ptr = LI;
