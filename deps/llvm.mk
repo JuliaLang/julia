@@ -136,6 +136,10 @@ ifneq ($(OS),WINNT)
 LLVM_CMAKE += -DCMAKE_SYSTEM_NAME=$(OS) -DCMAKE_SYSTEM_PROCESSOR=$(ARCH)
 endif
 endif
+# Where clang looks for its default configuration files (clang.cfg etc).
+ifneq ($(CLANG_CONFIG_FILE_SYSTEM_DIR),)
+LLVM_CMAKE += -DCLANG_CONFIG_FILE_SYSTEM_DIR=$(CLANG_CONFIG_FILE_SYSTEM_DIR)
+endif
 ifeq ($(OS), emscripten)
 LLVM_CMAKE += -DCMAKE_TOOLCHAIN_FILE=$(EMSCRIPTEN)/cmake/Modules/Platform/Emscripten.cmake -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_BUILD_TOOLS=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_ENABLE_THREADS=OFF -DLLVM_BUILD_UTILS=OFF
 endif # OS == emscripten
