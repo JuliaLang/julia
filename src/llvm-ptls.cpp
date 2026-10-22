@@ -212,14 +212,15 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
     if (imaging_mode) {
         IRBuilder<> builder(pgcstack);
         if (jl_tls_elf_support) {
-            // if (offset != 0)
+            // if (offset != -1)
             //     pgcstack = tp + offset; // fast
             // else
             //     pgcstack = getter();    // slow
+            // (0 is a valid offset: on RISC-V the executable's TLS block starts at tp.)
             auto offset = builder.CreateLoad(T_size, pgcstack_offset);
             offset->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
             offset->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), {}));
-            auto cmp = builder.CreateICmpNE(offset, Constant::getNullValue(offset->getType()));
+            auto cmp = builder.CreateICmpNE(offset, Constant::getAllOnesValue(offset->getType()));
             MDBuilder MDB(pgcstack->getContext());
             SmallVector<uint32_t, 2> Weights{9, 1};
             TerminatorInst *fastTerm;
