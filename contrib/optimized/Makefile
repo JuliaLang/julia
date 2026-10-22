@@ -204,12 +204,25 @@ STAGE0_POST = find $(STAGE0_BUILD) -name 'libclang_rt.profile-*.a' -exec $(LLVM_
 STAGE1_PLATFORM_FLAGS:=
 # Which C/C++ runtime headers and libraries to build against.
 SYSROOT_FLAGS:=
-# The target, which the regular build passes through CC and CXX as well.
-TARGET_FLAGS:=$(if $(XC_HOST),--target=$(XC_HOST)) $(if $(MARCH),-march=$(MARCH)) $(if $(MCPU),-mcpu=$(MCPU))
+# The target, which the regular build passes through CC and CXX as well. When
+# cross-compiling, the default configuration files below are for the build
+# machine, so skip them.
+TARGET_FLAGS:=$(if $(XC_HOST),--no-default-config --target=$(XC_HOST)) $(if $(MARCH),-march=$(MARCH)) $(if $(MCPU),-mcpu=$(MCPU))
 # When cross-compiling, tools for the build machine get the stage flags too,
 # which only clang accepts.
 ifneq (,$(XC_HOST))
 CROSS_FLAGS:="HOSTCC=$(STAGE0_TOOLS)clang" "HOSTCXX=$(STAGE0_TOOLS)clang++"
+# Those tools, and the stage-0 compiler-rt, need the build machine's GCC
+# installation and sysroot, for the reasons given with SYSROOT_FLAGS below.
+# HOSTCC has to be a plain command, so the stage-0 clang gets them from its
+# default configuration files.
+STAGE0_CONFIG_DIR:=$(STAGE0_BUILD)/clang-config
+BUILD_CC:=$(patsubst HOSTCC=%,%,$(shell MAKEFLAGS='-- $(subst ','"'"',$(MAKEOVERRIDES))' $(MAKE) -s --no-print-directory -C $(JULIA_ROOT) print-HOSTCC))
+ifeq (,$(if $(BUILD_CC),$(shell $(BUILD_CC) -dM -E -x c /dev/null 2>/dev/null | grep __clang__),clang))
+BUILD_GCC_INSTALL_DIR:=$(patsubst %/,%,$(dir $(wildcard $(shell LANG=C $(BUILD_CC) -print-libgcc-file-name 2>/dev/null))))
+BUILD_SYSROOT:=$(shell $(BUILD_CC) -print-sysroot 2>/dev/null)
+endif
+BUILD_SYSROOT_FLAGS:=$(if $(BUILD_GCC_INSTALL_DIR),--gcc-install-dir=$(BUILD_GCC_INSTALL_DIR) $(if $(BUILD_SYSROOT),--sysroot=$(BUILD_SYSROOT)))
 endif
 # How a stage's own shared libraries are made findable by the tools built
 # during it. 1: that stage's build directory.
@@ -342,8 +355,12 @@ else
 # instead, and add the target's profile runtime.
 stage0: | $(STAGE0_BUILD) $(STAGE0_TARGET_BUILD)
 	@echo "--- Stage 0: toolchain"
+	mkdir -p $(STAGE0_CONFIG_DIR)
+	echo '$(BUILD_SYSROOT_FLAGS)' > $(STAGE0_CONFIG_DIR)/clang.cfg
+	echo '$(BUILD_SYSROOT_FLAGS)' > $(STAGE0_CONFIG_DIR)/clang++.cfg
 	$(MAKE) -C $(STAGE0_BUILD)/deps XC_HOST= OS=$(BUILD_OS) ARCH= MARCH= MCPU= \
 		USE_BINARYBUILDER_LLVM=0 BUILD_LLVM_CLANG=1 BUILD_LLD=1 \
+		CLANG_CONFIG_FILE_SYSTEM_DIR=$(STAGE0_CONFIG_DIR) \
 		"LLVM_TARGETS=$(STAGE0_LLVM_TARGETS)" "LLVM_ENABLE_PROJECTS=clang;lld" \
 		install-llvm install-zstd
 	$(MAKE) -C $(STAGE0_TARGET_BUILD)/deps USE_BINARYBUILDER_LLVM=1 install-clang
