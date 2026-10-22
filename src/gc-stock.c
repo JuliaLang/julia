@@ -1499,12 +1499,15 @@ static void gc_sweep_pool_parallel(jl_ptls_t ptls) JL_NOTSAFEPOINT
     jl_atomic_fetch_add(&gc_n_threads_sweeping_pools, -1);
 }
 
-// free all but a `default_collect_interval`-sized warm cache of the pages that
-// were lazily freed (i.e. through `madvise` on Linux)
+// Number of lazily freed pages to keep mapped, set by each sweep for the
+// following call to gc_free_pages (which may run on the concurrent sweep thread)
+static _Atomic(size_t) gc_free_pages_keep;
+
+// free all but a warm cache of the pages that were lazily freed (i.e. through
+// `madvise` on Linux)
 static void gc_free_pages(void) JL_NOTSAFEPOINT
 {
-    // Keep roughly a `default_collect_interval`-sized set of already-mapped pages.
-    size_t keep = default_collect_interval / GC_PAGE_SZ;
+    size_t keep = jl_atomic_load_relaxed(&gc_free_pages_keep);
     size_t n_present = jl_atomic_load_relaxed(&global_page_pool_lazily_freed_n);
     size_t n_to_free = n_present > keep ? n_present - keep : 0;
     size_t n_freed = 0;
@@ -1626,6 +1629,16 @@ static void gc_sweep_pool(void) JL_NOTSAFEPOINT
     }
     uint64_t t_page_walk_end = jl_hrtime();
     gc_num.total_sweep_page_walk_time += t_page_walk_end - t_page_walk_start;
+
+    // Keep the pages the mutator will need before the next collection: one
+    // allocation interval, as set by the last collection (but at least
+    // `default_collect_interval`). Releasing them would only make the mutator
+    // fault them back in.
+    uint64_t interval = default_collect_interval;
+    uint64_t target = jl_atomic_load_relaxed(&gc_heap_stats.heap_target);
+    if (target > old_heap_size && target - old_heap_size > interval)
+        interval = target - old_heap_size;
+    jl_atomic_store_relaxed(&gc_free_pages_keep, interval / GC_PAGE_SZ);
 
 #ifdef _P64 // only enable concurrent sweeping on 64bit
     // wake thread up to sweep concurrently
