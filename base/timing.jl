@@ -54,7 +54,8 @@ struct GC_Num
     sweep_time::Int64
     # Time spent in the last GC marking phase in nanoseconds
     mark_time::Int64
-    # Time spent sweeping stack pools in the last GC in nanoseconds
+    # Time spent in the parallel per-thread sweep (stack pools, malloc'd buffers and big objects)
+    # in the last GC in nanoseconds
     stack_pool_sweep_time::Int64
     # Total time spent in sweeping phase across all GCs in nanoseconds
     total_sweep_time::Int64
@@ -62,11 +63,13 @@ struct GC_Num
     total_sweep_page_walk_time::Int64
     # Total time spent in madvise calls during sweeping phase across all GCs in nanoseconds
     total_sweep_madvise_time::Int64
-    # Total time spent in freeing malloc'd memory during sweeping phase across all GCs in nanoseconds
+    # Total time spent in the serial part of sweeping non-pool memory (foreign objects, the oldest
+    # generation of big objects) across all GCs in nanoseconds
     total_sweep_free_mallocd_memory_time::Int64
     # Total time spent in marking phase across all GCs in nanoseconds
     total_mark_time::Int64
-    # Total time spent sweeping stack pools across all GCs in nanoseconds
+    # Total time spent in the parallel per-thread sweep (stack pools, malloc'd buffers and big
+    # objects) across all GCs in nanoseconds
     total_stack_pool_sweep_time::Int64
     # Timestamp of the last full GC sweep in nanoseconds
     last_full_sweep::Int64
