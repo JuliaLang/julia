@@ -4330,15 +4330,9 @@ end
 # Expand docstring-annotated expressions
 
 function isquotedmacrocall(ex)
-    head(ex) == :call || return false
-    numchildren(ex) == 3 || return false
-    let (f, ex) = (ex[1], ex[3])
-        head(f) == :value || return false
-        head(ex) == :inert || return false
-        f.value === interpolate_expr || return false
-        head(ex[1]) == :macrocall || return false
-        return true
-    end
+    head(ex) == :copyast && numchildren(ex) == 1 || return false
+    head(ex[1]) == :inert && numchildren(ex) == 1 || return false
+    head(ex[1][1]) == :macrocall
 end
 
 function expand_doc(ctx, ex, docex)

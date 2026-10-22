@@ -778,6 +778,7 @@ function _to_lowered_expr(ex::SyntaxTree)
             k == :splatnew ||
             k == :(=) ||
             k == :leave ||
+            k == :copyast ||
             k == :isdefined ||
             k == :loopinfo ||
             k == :thunk ||
