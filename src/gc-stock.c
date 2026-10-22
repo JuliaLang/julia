@@ -303,6 +303,7 @@ STATIC_INLINE void gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
         ptls->gc_tls.gc_cache.scanned_bytes += page->osize;
         if (mark_reset_age) {
             page->has_young = 1;
+            page->has_finalized = 1;
         }
     }
     page->has_marked = 1;
@@ -791,6 +792,7 @@ STATIC_INLINE jl_taggedvalue_t *gc_reset_page(jl_ptls_t ptls2, const jl_gc_pool_
     jl_taggedvalue_t *beg = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
     pg->has_young = 0;
     pg->has_marked = 0;
+    pg->has_finalized = 0;
     jl_atomic_store_relaxed(&pg->has_weak_processing, 0);
     pg->prev_nold = 0;
     pg->nold = 0;
@@ -1057,7 +1059,11 @@ FORCE_INLINE int gc_sweep_page_cells(gc_page_profiler_serializer_t *s, jl_gc_pag
     // unlink writes may target it - and freed by the next sweep).
     assert(!freedall || lim_newpages < data + GC_PAGE_SZ || has_weakproc);
     pg->has_marked = has_marked;
-    pg->has_young = has_young;
+    // cells marked only for finalization are promoted below like any other
+    // marked cell, but will be dead by the next collection: make sure the
+    // next quick sweep visits this page to free them
+    pg->has_young = has_young | pg->has_finalized;
+    pg->has_finalized = 0;
     jl_atomic_store_relaxed(&pg->has_weak_processing, keep_weakproc);
     if (pfl_begin) {
         pg->fl_begin_offset = (char*)pfl_begin - data;
@@ -3408,6 +3414,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         // "Flush" the mark stack before flipping the reset_age bit
         // so that the objects are not incorrectly reset.
         gc_mark_and_steal(ptls);
+        // Objects only reachable from `to_finalize` are dead once their
+        // finalizers run; don't count them as promoted.
+        gc_sync_all_caches(ptls);
+        int64_t scanned_before_to_finalize = scanned_bytes;
         // Conservative marking relies on age to tell allocated objects
         // and freelist entries apart.
         mark_reset_age = !jl_gc_conservative_gc_support_enabled();
@@ -3418,6 +3428,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         gc_mark_finlist(mq, &to_finalize, 0);
         gc_mark_and_steal(ptls);
         mark_reset_age = 0;
+        gc_sync_all_caches(ptls);
+        scanned_bytes = scanned_before_to_finalize;
     }
 
     JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);

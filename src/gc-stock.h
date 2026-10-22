@@ -129,6 +129,11 @@ typedef struct _jl_gc_pagemeta_t {
     // inside the collection (relaxed suffices - the flag-setter's object
     // publication, not the flag, carries the ordering)
     _Atomic(uint8_t) has_weak_processing;
+    // Whether a cell was marked only to run its finalizer (through
+    // `to_finalize`) in this collection. Such cells are garbage once the
+    // finalizer has run, so the next quick sweep must visit the page even
+    // though it then holds no young cells.
+    uint8_t has_finalized;
     // Number of old objects in the page
     uint16_t nold;
     // Number of old objects in the page at the end of the previous full sweep
