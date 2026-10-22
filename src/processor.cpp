@@ -819,6 +819,11 @@ extern "C" jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
         auto &s = specs[i];
         jl_target_spec_t &ele = result.specs[i];
         ele.cpu_name = strdup(s.cpu_name.c_str());
+#if defined(_CPU_RISCV64_)
+        // Image code is linked by lld, which shrinks calls and jumps (`auipc`+`jalr` to
+        // `jal`) when the object marks them relaxable. The JIT keeps its target unchanged.
+        s.cpu_features += ",+relax";
+#endif
         ele.cpu_features = strdup(s.cpu_features.c_str());
         ele.base = s.base;
         ele.clone_all = (s.flags & tp::TF_CLONE_ALL) != 0;
