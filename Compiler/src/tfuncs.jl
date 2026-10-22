@@ -3025,7 +3025,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         return intrinsic_effects(f, argtypes)
     end
 
-    if !(f in _EFFECTS_KNOWN_BUILTINS)
+    if !contains_is(_EFFECTS_KNOWN_BUILTINS, f)
         return Effects()
     end
 
