@@ -2639,7 +2639,17 @@ function require(uuidkey::PkgId)
     end
     return invoke_in_world(world, __require, uuidkey)
 end
-__require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
+function __require(uuidkey::PkgId)
+    @lock require_lock begin
+    set_cache = LOADING_CACHE[] === nothing
+    set_cache && (LOADING_CACHE[] = LoadingCache())
+    try
+        return _require_prelocked(uuidkey)
+    finally
+        set_cache && (LOADING_CACHE[] = nothing)
+    end
+    end
+end
 function _require_prelocked(uuidkey::PkgId, env=nothing)
     assert_havelock(require_lock)
     m = start_loading(uuidkey, UInt128(0), true)
