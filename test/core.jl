@@ -5975,6 +5975,13 @@ end
 # issue #19963
 @test_nowarn ccall(:jl_free, Cvoid, (Ptr{Cvoid},), C_NULL)
 
+# jl_calloc with zero element size must not divide by zero
+@test_nowarn begin
+    local p
+    p = ccall(:jl_calloc, Ptr{Cvoid}, (Csize_t, Csize_t), 4, 0)
+    ccall(:jl_free, Cvoid, (Ptr{Cvoid},), p)
+end
+
 # Wrong string size on 64bits for large string.
 if Sys.WORD_SIZE == 64
     @noinline function test_large_string20360(slot)
