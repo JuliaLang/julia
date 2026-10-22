@@ -333,7 +333,7 @@ macro except_stackframe(expr, err_type)
            @testset let expr=$(repr(expr))
                $(Expr(:macrocall, Symbol("@test"), source_info, :(typeof(err) === $(esc(err_type)))))
            end
-           sprint(show, st[1])
+           replace(sprint(show, st[1]), r"(:\d+):\d+$" => s"\1")
        end
     end
 end
@@ -882,10 +882,13 @@ end
 backtrace()
 
 # issue #28442
-@testset "Long stacktrace printing" begin
+bt28442 = let
     f28442(c) = g28442(c + 1)
     g28442(c) = c > 10000 ? (return backtrace()) : f28442(c+1)
-    bt = f28442(1)
+    f28442(1)
+end
+@testset "Long stacktrace printing" begin
+    bt = bt28442
     io = IOBuffer()
     Base.show_backtrace(io, bt)
     output = split(String(take!(io)), '\n')
@@ -914,11 +917,14 @@ backtrace()
     end
 end
 
-@testset "Long stacktrace printing - nested repeated single frame" begin
+bt28442a = let
     f28442a(n) = n ≤ 0 ? (return backtrace()) : g28442a(n - 1)
     g28442a(n) = 80 > n > 20 ? h28442a(n - 1) : f28442a(n - 1)
     h28442a(n) = n % 10 == 0 ? g28442a(n - 1) : h28442a(n - 1)
-    bt = f28442a(100)
+    f28442a(100)
+end
+@testset "Long stacktrace printing - nested repeated single frame" begin
+    bt = bt28442a
     io = IOBuffer()
     Base.show_backtrace(io, bt)
     output = split(String(take!(io)), '\n')
@@ -958,11 +964,14 @@ end
     end
 end
 
-@testset "Long stacktrace printing - nested cycles" begin
+bt28442b = let
     f28442b(n) = n ≤ 0 ? (return backtrace()) : g28442b(n - 1)
     g28442b(n) = 80 > n > 60 || 40 > n > 20 ? h28442b(n - 1) : f28442b(n - 1)
     h28442b(n) = g28442b(n - 1)
-    bt = f28442b(100)
+    f28442b(100)
+end
+@testset "Long stacktrace printing - nested cycles" begin
+    bt = bt28442b
     io = IOBuffer()
     Base.show_backtrace(io, bt)
     output = split(String(take!(io)), '\n')
@@ -1005,11 +1014,14 @@ end
     end
 end
 
-@testset "Long stacktrace printing - cycle longer than two frames" begin
+bt59999 = let
     f59999(c) = g59999(c + 1)
     g59999(c) = h59999(c + 1)
     h59999(c) = c > 10000 ? (return backtrace()) : f59999(c + 1)
-    bt = f59999(1)
+    f59999(1)
+end
+@testset "Long stacktrace printing - cycle longer than two frames" begin
+    bt = bt59999
     io = IOBuffer()
     Base.show_backtrace(io, bt)
     output = split(String(take!(io)), '\n')
@@ -1062,7 +1074,8 @@ end
     output0 = split(String(take!(io)), '\n')
     function getline(output)
         idx = findfirst(str->occursin("getbt", str), output)
-        return parse(Int, match(r":(\d*)$", output[idx+1]).captures[1])
+        # (the location may end in a column: `file:line:col`)
+        return parse(Int, match(r":(\d+)(?::\d+)?$", output[idx+1]).captures[1])
     end
     @test getline(outputc) == getline(output0) + 2
 end

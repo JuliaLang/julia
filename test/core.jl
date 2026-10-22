@@ -11,6 +11,12 @@ include("testenv.jl")
 
 include("tempdepot.jl")
 
+# JuliaLowering deliberately rejects some syntax that flisp allows
+macro test_lowering_rejects(ex)
+    Expr(:macrocall, Symbol("@test_throws"), __source__, "syntax:",
+         :(Core.eval($__module__, $(QuoteNode(ex)))))
+end
+
 ## tests that `const` field declarations
 
 # sanity tests that our built-in types are marked correctly for const fields
@@ -1070,7 +1076,7 @@ end
 @test a_global_closure_vector[3](10) == 13
 
 # issue #22032
-let a = [], fs = []
+@test_lowering_rejects let a = [], fs = []
     for f() in 1:3
         push!(a, f())
         push!(fs, f)
@@ -1078,14 +1084,14 @@ let a = [], fs = []
     @test a == [1,2,3]
     @test [f() for f in fs] == [1,2,3]
 end
-let t = (22,33)
+@test_lowering_rejects let t = (22,33)
     (g(), x) = t
     @test g() == 22
     @test x == 33
 end
 
 # issue #23091
-let (f(), x) = (1, 2)
+@test_lowering_rejects let (f(), x) = (1, 2)
     @test f() == 1
     @test x == 2
 end
@@ -2792,8 +2798,10 @@ macro m20524(ex)
         end
     end
 end
-@m20524 ((a,(b20524,c)) = (8,(1,5)); (a,b20524,c))
-@test f20524() === (8,1,5)
+# JuliaLowering rejects the unescaped `global`: "unhygienic global name `f20524`
+# conflicts with an existing local variable"
+@test_broken (@eval(@m20524 ((a,(b20524,c)) = (8,(1,5)); (a,b20524,c))); true)
+@test_broken f20524() === (8,1,5)
 @test !@isdefined b20524 # should not assign to a global
 
 # issue #6387
@@ -3176,7 +3184,7 @@ let
 end
 
 # pull request #9534
-@test_throws BoundsError((1, 2), 3) begin; a, b, c = 1, 2; end
+@test_throws "syntax:" @eval begin; a, b, c = 1, 2; end
 let a = []
     @test try; a[]; catch ex; (ex::BoundsError).a === a && ex.i == (); end
     @test_throws BoundsError(a, (1, 2)) a[1, 2]
@@ -3991,7 +3999,7 @@ let
     @test forouter() == 3
 end
 
-@test_throws ErrorException("syntax: no outer local variable declaration exists for \"for outer\"") @eval function f()
+@test_throws "syntax:" @eval function f()
     for outer i = 1:2
     end
 end
@@ -4665,10 +4673,11 @@ macro makefn(f,g)
         $(g)(x) = x+2
     end
 end
-@makefn ff gg
 end
-@test TestMacroGlobalFunction.ff(1) == 2
-@test TestMacroGlobalFunction.gg(1) == 3
+# JuliaLowering rejects the unescaped `global` (see #20524 above)
+@test_broken (@eval(TestMacroGlobalFunction, @makefn(ff, gg)); true)
+@test_broken TestMacroGlobalFunction.ff(1) == 2
+@test_broken TestMacroGlobalFunction.gg(1) == 3
 
 # issue #18672
 macro x18672()
@@ -5098,9 +5107,10 @@ macro m()
         x = 2
     end
 end
-@m
 end
-@test Macro_Yielding_Global_Assignment.x == 2
+# JuliaLowering rejects the unescaped `global` (see #20524 above)
+@test_broken (@eval(Macro_Yielding_Global_Assignment, @m()); true)
+@test_broken Macro_Yielding_Global_Assignment.x == 2
 
 # issue #15718
 function compare_test(x, y)
@@ -6377,7 +6387,6 @@ macro foo(TYP)
     end
 end
 struct Foo end
-@foo Foo
 
 macro foo2()
     quote
@@ -6386,11 +6395,12 @@ macro foo2()
     end
 end
 
-@foo2
-
 end
-@test M22026.foofunction(Int16) === Int16
-@test M22026.foofunction2(3) === 6.0f0
+# JuliaLowering rejects the unescaped `global` (see #20524 above)
+@test_broken (@eval(M22026, @foo(Foo)); true)
+@test_broken (@eval(M22026, @foo2()); true)
+@test_broken M22026.foofunction(Int16) === Int16
+@test_broken M22026.foofunction2(3) === 6.0f0
 
 # tests for isdefined behavior and code generation
 global undefined_variable
