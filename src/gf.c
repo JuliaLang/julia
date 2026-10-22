@@ -6016,7 +6016,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
 
     // all intersecting methods have been collected now. the remaining work is to sort
     // these and apply specificity to determine a list of dispatch-possible call targets
-    size_t j, len;
+    size_t len;
     {
         ssize_t sorted = sort_method_matches((jl_array_t*)env.t, lim, include_ambiguous, ambig == NULL, &has_ambiguity);
         if (sorted == -1) {
