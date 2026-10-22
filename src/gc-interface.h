@@ -60,7 +60,7 @@ typedef struct {
     // (GC internal) Per-thread allocation quota before triggering a GC
     // NOTE: This field is no longer used by the heuristics in the stock GC
     size_t interval;
-    // Duration of the last GC pause in nanoseconds
+    // Number of GC pauses completed so far (never reset by the runtime)
     int pause;
     // Number of full GC sweeps completed so far (never reset by the runtime)
     int full_sweep;
