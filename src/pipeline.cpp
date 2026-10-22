@@ -438,10 +438,14 @@ struct IRCEWithCleanupPass : PassInfoMixin<IRCEWithCleanupPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT {
         PassInstrumentation PI = AM.getResult<PassInstrumentationAnalysis>(F);
         IRCEPass IRCE;
+#ifndef __clang_gcanalyzer__ /* the analyzer cannot prove we have not added instrumentation callbacks with safepoints */
         if (!PI.runBeforePass<Function>(IRCE, F))
             return PreservedAnalyses::all();
+#endif
         PreservedAnalyses PA = IRCE.run(F, AM);
+#ifndef __clang_gcanalyzer__
         PI.runAfterPass<Function>(IRCE, F, PA);
+#endif
         if (PA.areAllPreserved())
             return PA;
         AM.invalidate(F, PA);
