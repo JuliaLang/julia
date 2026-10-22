@@ -190,13 +190,22 @@ struct CodegenParams
     """
     unique_names::Cint
 
+    """
+    If enabled, retain inlined function scopes in LLVM debug information. Enabled
+    by default so consumers of the emitted IR can reconstruct inlined frames.
+    Julia's internal codegen parameters disable this for image generation in release
+    builds, since its own backtraces reconstruct these frames from CodeInstance debuginfo.
+    """
+    debug_info_inline_scopes::Cint
+
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames::Bool=true, debug_info_kind::Cint = default_debug_info_kind(),
                    debug_info_level::Cint = Cint(JLOptions().debug_level), safepoint_on_entry::Bool=true,
                    gcstack_arg::Bool=true, use_jlplt::Bool=true, force_emit_all::Bool=false,
                    sanitize_memory::Bool=false, sanitize_thread::Bool=false, sanitize_address::Bool=false,
-                   unique_names::Bool=false)
+                   unique_names::Bool=false,
+                   debug_info_inline_scopes::Bool=true)
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
@@ -204,7 +213,7 @@ struct CodegenParams
             debug_info_level, Cint(safepoint_on_entry),
             Cint(gcstack_arg), Cint(use_jlplt), Cint(force_emit_all),
             Cint(sanitize_memory), Cint(sanitize_thread), Cint(sanitize_address),
-            Cint(unique_names))
+            Cint(unique_names), Cint(debug_info_inline_scopes))
     end
 end
 
