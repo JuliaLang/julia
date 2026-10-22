@@ -161,6 +161,11 @@ static uint64_t freed_in_runtime = 0;
 // are not reachable from anywhere else.
 static int mark_reset_age = 0;
 
+// Set while several threads mark at once. Otherwise the marking thread is the
+// only one using object headers, page metadata and the mark queues, so it can
+// use plain loads and stores on them.
+static int gc_mark_parallel = 0;
+
 /*
  * The state transition looks like :
  *
@@ -256,6 +261,11 @@ FORCE_INLINE int gc_try_setmark_tag(jl_taggedvalue_t *o, uint8_t mark_mode) JL_N
         tag = tag | mark_mode;
         assert((tag & 0x3) == mark_mode);
     }
+    if (!gc_mark_parallel) {
+        jl_atomic_store_relaxed((_Atomic(uintptr_t)*)&o->header, tag);
+        verify_val(jl_valueof(o));
+        return 1;
+    }
     // XXX: note that marking not only sets the GC bits but also updates the
     // page metadata for pool allocated objects.
     // The second step is **not** idempotent, so we need a compare exchange here
@@ -297,7 +307,10 @@ STATIC_INLINE void gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
     if (mark_mode == GC_OLD_MARKED) {
         ptls->gc_tls.gc_cache.perm_scanned_bytes += page->osize;
         static_assert(sizeof(_Atomic(uint16_t)) == sizeof(page->nold), "");
-        jl_atomic_fetch_add_relaxed((_Atomic(uint16_t)*)&page->nold, 1);
+        if (gc_mark_parallel)
+            jl_atomic_fetch_add_relaxed((_Atomic(uint16_t)*)&page->nold, 1);
+        else
+            page->nold++;
     }
     else {
         ptls->gc_tls.gc_cache.scanned_bytes += page->osize;
@@ -1822,7 +1835,10 @@ STATIC_INLINE void gc_ptr_queue_push(jl_gc_markqueue_t *mq, jl_value_t *obj) JL_
 STATIC_INLINE jl_value_t *gc_ptr_queue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
     jl_value_t *v = NULL;
-    ws_queue_pop(&mq->ptr_queue, &v, sizeof(jl_value_t*));
+    if (gc_mark_parallel)
+        ws_queue_pop(&mq->ptr_queue, &v, sizeof(jl_value_t*));
+    else
+        ws_queue_pop_unshared(&mq->ptr_queue, &v, sizeof(jl_value_t*));
     return v;
 }
 
@@ -1847,7 +1863,10 @@ STATIC_INLINE void gc_chunkqueue_push(jl_gc_markqueue_t *mq, jl_gc_chunk_t *c) J
 STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
     jl_gc_chunk_t c = {.cid = GC_empty_chunk};
-    ws_queue_pop(&mq->chunk_queue, &c, sizeof(jl_gc_chunk_t));
+    if (gc_mark_parallel)
+        ws_queue_pop(&mq->chunk_queue, &c, sizeof(jl_gc_chunk_t));
+    else
+        ws_queue_pop_unshared(&mq->chunk_queue, &c, sizeof(jl_gc_chunk_t));
     return c;
 }
 
@@ -3377,9 +3396,11 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
             gc_mark_and_steal(ptls);
         }
         else {
+            gc_mark_parallel = 1;
             gc_mark_loop(ptls, 1);
         }
         gc_mark_loop_barrier();
+        gc_mark_parallel = 0;
         gc_mark_clean_reclaim_sets();
 
         // 3. check for objects to finalize

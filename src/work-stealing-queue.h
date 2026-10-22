@@ -91,6 +91,21 @@ static inline void ws_queue_pop(ws_queue_t *q, void *dest, int32_t eltsz) JL_NOT
     }
 }
 
+// Pop for an owner that knows no other thread can be stealing from `q`
+static inline void ws_queue_pop_unshared(ws_queue_t *q, void *dest, int32_t eltsz) JL_NOTSAFEPOINT
+{
+    int64_t b = jl_atomic_load_relaxed(&q->bottom) - 1;
+    int64_t t = jl_atomic_load_relaxed(&q->top);
+    if (__likely(t <= b)) {
+        ws_array_t *ary = jl_atomic_load_relaxed(&q->array);
+        memcpy(dest, ary->buffer + (b & ary->mask) * eltsz, eltsz);
+        jl_atomic_store_relaxed(&q->bottom, b);
+    }
+    else {
+        memset(dest, 0, eltsz);
+    }
+}
+
 static inline void ws_queue_steal_from(ws_queue_t *q, void *dest, int32_t eltsz) JL_NOTSAFEPOINT
 {
     int64_t t = jl_atomic_load_acquire(&q->top);
