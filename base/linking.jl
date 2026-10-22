@@ -115,7 +115,10 @@ function ld(; strict_definitions::Bool = false)
         # From `gcc -shared -Wl,--verbose`; `-z defs` added to enforce that all symbols
         # the pkgimage references are resolvable at link time (catches regressions early
         # instead of deferring to first-call crashes at runtime).
-        default_args = `--build-id --eh-frame-hdr --hash-style=gnu --as-needed -z relro -z defs`
+        # `--discard-locals` drops assembler-local `.L` labels, which RISC-V objects carry
+        # in their symbol tables (every `auipc` pair has one) and which profilers would
+        # otherwise report instead of the enclosing function.
+        default_args = `--build-id --eh-frame-hdr --hash-style=gnu --as-needed -z relro -z defs --discard-locals`
         if !isempty(Base.COMPRESS_PKGIMAGE_DEBUG_SECTIONS)
             default_args = `$default_args --compress-debug-sections=$(Base.COMPRESS_PKGIMAGE_DEBUG_SECTIONS)`
         end
