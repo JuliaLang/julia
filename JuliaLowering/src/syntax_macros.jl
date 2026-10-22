@@ -305,6 +305,39 @@ function Base.var"@eval"(__context__::MacroContext, mod, ex)
     _at_eval_code(__context__, mod, ex)
 end
 
+function annotate_meta_fbody(st::Syntax, meta::Symbol)
+    @stm st begin
+        [:block args...] ->
+            @ast _ st [:block [:meta String(meta)::identifier] args...]
+        _ -> @ast _ st [:block [:meta String(meta)::identifier] st]
+    end
+end
+function annotate_meta(st::Syntax, meta::Symbol)
+    st = macroexpand(st)
+    @stm st begin
+        [:function call body] ->
+            @ast _ st [:function call annotate_meta_fbody(body, meta)]
+        ([:(=) call body], when=(head(call) === :call || head(call) === :where)) ->
+            @ast _ st [:(=) call annotate_meta_fbody(body, meta)]
+        [:-> call body] ->
+            @ast _ st [:-> call annotate_meta_fbody(body, meta)]
+        st -> let val = remove_scope(@mknode(
+            st; head=:identifier, value="val", children=nothing))
+            @ast _ st [:block [meta true::value]
+                [:local [:(=) val st]]
+                [meta false::value]
+                val]
+        end
+    end
+end
+
+function Base.var"@noinline"(_, st)
+    annotate_meta(st, :noinline)
+end
+function Base.var"@inline"(_, st)
+    annotate_meta(st, :inline)
+end
+
 end # Base.generating_output(false)
 
 #--------------------------------------------------------------------------------
