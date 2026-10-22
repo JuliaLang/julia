@@ -4199,10 +4199,20 @@ JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
 {
     old = p ? memory_block_usable_size(p, 0) : 0;
-    void *data = realloc(p, sz);
+    // Handle freeing explicitly: realloc(p, 0) may free p and return NULL,
+    // which must not be mistaken for an allocation failure below.
+    int freeing = p != NULL && sz == 0;
+    void *data;
+    if (freeing) {
+        free(p);
+        data = NULL;
+    }
+    else {
+        data = realloc(p, sz);
+    }
     jl_task_t *ct = jl_get_current_task();
-    if (data != NULL && ct != NULL) {
-        sz = memory_block_usable_size(data, 0);
+    if ((data != NULL || freeing) && ct != NULL) {
+        sz = data ? memory_block_usable_size(data, 0) : 0;
         jl_ptls_t ptls = ct->ptls;
         maybe_collect(ptls);
         if (!(sz < old))
