@@ -2836,6 +2836,8 @@
                  ((eq? f 'ccall)
                   (if (not (length> e 4)) (error "too few arguments to ccall"))
                   (let* ((cconv (cadddr e))
+                         ;; match calling conventions by name even when macro hygiene produces a globalref
+                         (cconv (if (and (pair? cconv) (eq? (car cconv) 'globalref)) (caddr cconv) cconv))
                          (have-cconv-expr (and (pair? cconv) (eq? (car cconv) 'cconv)))
                          (have-cconv (or have-cconv-expr
                                          (memq cconv '(cdecl stdcall fastcall thiscall llvmcall))))

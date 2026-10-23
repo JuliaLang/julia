@@ -4795,3 +4795,26 @@ end
     ]
     @test_throws "invalid assignment location" Core.eval(@__MODULE__, ex)
 end
+
+# issue #20392: the calling convention of `ccall` must survive macro hygiene
+macro ccall_cdecl_20392()
+    :(ccall(:jl_get_world_counter, cdecl, UInt, ()))
+end
+macro ccall_llvmcall_20392()
+    :(ccall("llvm.donothing", llvmcall, Cvoid, ()))
+end
+macro ccall_conv_20392(conv)
+    Expr(:call, :ccall, QuoteNode(:jl_get_world_counter), esc(conv), :UInt, Expr(:tuple))
+end
+macro ccall_conv_nested_20392()
+    :(@ccall_conv_20392 cdecl)
+end
+macro cdecl_20392()
+    :cdecl
+end
+@testset "ccall calling convention in macro (#20392)" begin
+    @test @ccall_cdecl_20392() isa UInt
+    @test @ccall_llvmcall_20392() === nothing
+    @test @ccall_conv_nested_20392() isa UInt
+    @test ccall(:jl_get_world_counter, @cdecl_20392(), UInt, ()) isa UInt
+end
