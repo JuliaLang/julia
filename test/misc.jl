@@ -581,11 +581,12 @@ let f = gensym("f"), g = gensym("g"), gen = gensym("gen")
         @test collected.compile_bytes <= collected.bytes
         @test collected.gcstats.pause > 0
 
-        out = @capture_stdout @time $f(0x02)
+        # the barrier keeps inference of the `@capture_stdout` closure from compiling the call early
+        out = @capture_stdout @time $f(Base.inferencebarrier(0x02))
         @test occursin(r"% compilation time.*, \d+(\.\d+)? \w+ allocated in compilation\)", out)
-        out = @capture_stdout @time $f(0x02)
+        out = @capture_stdout @time $f(Base.inferencebarrier(0x02))
         @test !occursin("allocated in compilation", out)
-        out = @capture_stdout @timev $f(3.0f0)
+        out = @capture_stdout @timev $f(Base.inferencebarrier(3.0f0))
         @test occursin(r"compile bytes: +\d+", out)
     end
 end
