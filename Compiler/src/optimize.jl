@@ -1552,7 +1552,16 @@ function convert_to_ircode!(ci::CodeInfo, sv::OptimizationState)
     ssaflags = ci.ssaflags
     for i = 1:length(code)
         expr = code[i]
-        if !(i in sv.unreachable)
+        if i in sv.unreachable
+            # Delete statically unreachable statements (except lexically scoped ones), so
+            # that later passes (e.g. slot def-use and try/catch analysis) do not see them.
+            # Terminators become an explicit `unreachable` marker.
+            if isa(expr, Union{GotoNode, GotoIfNot, ReturnNode, EnterNode})
+                code[i] = ReturnNode()
+            elseif !is_meta_expr(expr)
+                code[i] = nothing
+            end
+        else
             if isa(expr, GotoIfNot)
                 # Replace this live GotoIfNot with:
                 # - no-op if :nothrow and the branch target is unreachable
@@ -1655,9 +1664,8 @@ function convert_to_ircode!(ci::CodeInfo, sv::OptimizationState)
             end
             empty!(sv.cfg.blocks[block].succs)
 
-            if !(idx < length(code) && isa(code[idx + 1], ReturnNode) && !isdefined((code[idx + 1]::ReturnNode), :val))
-                # Any statements from here to the end of the block have been wrapped in Core.Const(...)
-                # by type inference (effectively deleting them). Only task left is to replace the block
+            if !(idx < block_end && isa(code[idx + 1], ReturnNode) && !isdefined((code[idx + 1]::ReturnNode), :val))
+                # Any statements from here to the end of the block are unreachable. Replace the block
                 # terminator with an explicit `unreachable` marker.
 
                 if block_end > idx
