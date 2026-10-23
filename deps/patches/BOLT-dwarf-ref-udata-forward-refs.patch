@@ -1,0 +1,186 @@
+From b456fa09a52a342f6202b0eb3da08bda694eecbb Mon Sep 17 00:00:00 2001
+From: Tim Besard <tim.besard@gmail.com>
+Date: Thu, 24 Sep 2026 10:14:31 +0200
+Subject: [PATCH] [BOLT][DWARF] Fix unit layout with forward DW_FORM_ref_udata
+ references
+
+DIEBuilder::finalizeDIEs() lays out a unit in one depth-first pass and
+sizes a DW_FORM_ref_udata reference from the current offset of the
+referenced DIE. For a forward reference, that is still the placeholder
+set by allocDIE(): the input DIE's offset from the start of the
+section. The value emitted later is the output offset relative to the
+unit. When the ULEB128 encodings of the two differ in length, e.g. for
+a DIE at least 0x80 bytes into .debug_info but less than 0x80
+bytes into its unit, the unit length and all following DIE offsets are
+wrong. llvm-dwarfdump then reports "DWARF unit ... extends past section
+size".
+
+GNU as emits such references in the DWARF 5 units it generates for
+assembly files, e.g. for libgcc's AArch64 outline-atomics helpers
+(lse.S), which are linked into binaries that use outline atomics.
+
+Clone DW_FORM_ref_udata references as DW_FORM_ref4 instead. BOLT
+already pads type references in location expressions to a fixed size
+for the same reason, and the parallel DWARFLinker also emits local
+references as DW_FORM_ref4. Extend the ref_udata test with a second
+unit whose forward reference hits the mismatch.
+
+Assisted-by: Claude Code (Opus 5.5)
+---
+ bolt/lib/Core/DIEBuilder.cpp          |  9 ++-
+ bolt/test/X86/dwarf5-form-ref-udata.s | 86 +++++++++++++++++++++------
+ 2 files changed, 76 insertions(+), 19 deletions(-)
+
+diff --git a/bolt/lib/Core/DIEBuilder.cpp b/bolt/lib/Core/DIEBuilder.cpp
+index fd2b872d66ea..f86a11331fcb 100644
+--- a/bolt/lib/Core/DIEBuilder.cpp
++++ b/bolt/lib/Core/DIEBuilder.cpp
+@@ -701,8 +701,13 @@ void DIEBuilder::cloneDieOffsetReferenceAttribute(
+     return;
+   }
+ 
+-  Die.addValue(getState().DIEAlloc, AttrSpec.Attr, AttrSpec.Form,
+-               DIEEntry(*NewRefDie));
++  // The size of a DW_FORM_ref_udata value depends on the output offset of the
++  // referenced DIE, which for a forward reference is only assigned after this
++  // DIE has been laid out in finalizeDIEs(). Use a fixed-size form instead.
++  const dwarf::Form Form = AttrSpec.Form == dwarf::DW_FORM_ref_udata
++                               ? dwarf::DW_FORM_ref4
++                               : AttrSpec.Form;
++  Die.addValue(getState().DIEAlloc, AttrSpec.Attr, Form, DIEEntry(*NewRefDie));
+ }
+ 
+ void DIEBuilder::cloneStringAttribute(
+diff --git a/bolt/test/X86/dwarf5-form-ref-udata.s b/bolt/test/X86/dwarf5-form-ref-udata.s
+index 0b63a1711423..32be643b59d2 100644
+--- a/bolt/test/X86/dwarf5-form-ref-udata.s
++++ b/bolt/test/X86/dwarf5-form-ref-udata.s
+@@ -2,16 +2,40 @@
+ 
+ # RUN: llvm-mc -dwarf-version=5 -filetype=obj -triple x86_64-unknown-linux %s -o %t.o
+ # RUN: %clang %cflags -dwarf-5 %t.o -o %t.exe -Wl,-q
++# RUN: llvm-dwarfdump --show-form --verbose --debug-info %t.exe | \
++# RUN:   FileCheck %s --check-prefix CHECK-INPUT
+ # RUN: llvm-bolt %t.exe -o %t.bolt --update-debug-sections 2>&1 | \
+ # RUN:   FileCheck %s --check-prefix CHECK-BOLT
+-# RUN: llvm-dwarfdump --show-form --verbose --debug-info %t.bolt | FileCheck %s
++# RUN: llvm-dwarfdump --show-form --verbose --debug-info %t.bolt 2>&1 | \
++# RUN:   FileCheck %s --implicit-check-not=warning:
++# RUN: llvm-dwarfdump --verify %t.bolt | FileCheck %s --check-prefix CHECK-VERIFY
+ 
+-## Verify BOLT preserves DW_FORM_ref_udata (CU-relative ULEB128 DIE reference),
+-## a form GCC may emit instead of DW_FORM_ref4.
++## Verify BOLT handles DW_FORM_ref_udata (CU-relative ULEB128 DIE reference),
++## a form GNU as emits instead of DW_FORM_ref4. BOLT rewrites these
++## references as DW_FORM_ref4: the size of a ULEB128 reference depends on the
++## output offset of the referenced DIE, which is not known yet when a DIE with
++## a forward reference is laid out.
++##
++## Until a DIE is laid out, BOLT keeps its input offset, which is relative to
++## the start of .debug_info. The DIE referenced by the subprogram in the second
++## CU is at least 0x80 bytes into the section, so that offset needs a two-byte
++## ULEB128, while its CU-relative output offset needs only one byte. Sizing the
++## forward reference with the former and emitting the latter used to leave the
++## unit length and all subsequent DIE offsets of the unit off by one.
+ 
+-# CHECK:      DW_TAG_subprogram
+-# CHECK:      DW_AT_type [DW_FORM_ref_udata]
++## Check the input satisfies these conditions.
++# CHECK-INPUT: DW_AT_type [DW_FORM_ref_udata] (cu + 0x{{[0-7]?[0-9a-f]}} => {0x000000{{[89a-f][0-9a-f]}}} "long")
++
++# CHECK:      DW_TAG_compile_unit
++# CHECK:      DW_TAG_variable
++# CHECK:      DW_AT_type [DW_FORM_ref4]
+ # CHECK-SAME: "int"
++# CHECK:      DW_TAG_compile_unit
++# CHECK:      DW_TAG_subprogram
++# CHECK:      DW_AT_type [DW_FORM_ref4]
++# CHECK-SAME: "long"
++
++# CHECK-VERIFY: No errors.
+ 
+ # CHECK-BOLT-NOT: BOLT-WARNING
+ 
+@@ -31,21 +55,30 @@ main:
+ 
+ 	.section	.debug_abbrev,"",@progbits
+ 	.byte	1, 17, 1                # CU, has children
+-	.byte	17, 1                   # DW_AT_low_pc, DW_FORM_addr
+-	.byte	18, 6                   # DW_AT_high_pc, DW_FORM_data4
+-	.byte	16, 23                  # DW_AT_stmt_list, DW_FORM_sec_offset
++	.byte	37, 8                   # DW_AT_producer, DW_FORM_string
++	.byte	3, 8                    # DW_AT_name, DW_FORM_string
+ 	.byte	0, 0
+-	.byte	2, 46, 0                # subprogram, no children
+-	.byte	17, 1                   # DW_AT_low_pc, DW_FORM_addr
+-	.byte	18, 6                   # DW_AT_high_pc, DW_FORM_data4
++	.byte	2, 52, 0                # variable, no children
++	.byte	3, 8                    # DW_AT_name, DW_FORM_string
+ 	.byte	73, 21                  # DW_AT_type, DW_FORM_ref_udata
+ 	.byte	0, 0
+ 	.byte	3, 36, 0                # base_type, no children
+ 	.byte	3, 8                    # DW_AT_name, DW_FORM_string
+ 	.byte	0, 0
++	.byte	4, 17, 1                # CU, has children
++	.byte	17, 1                   # DW_AT_low_pc, DW_FORM_addr
++	.byte	18, 6                   # DW_AT_high_pc, DW_FORM_data4
++	.byte	16, 23                  # DW_AT_stmt_list, DW_FORM_sec_offset
++	.byte	0, 0
++	.byte	5, 46, 0                # subprogram, no children
++	.byte	17, 1                   # DW_AT_low_pc, DW_FORM_addr
++	.byte	18, 6                   # DW_AT_high_pc, DW_FORM_data4
++	.byte	73, 21                  # DW_AT_type, DW_FORM_ref_udata
++	.byte	0, 0
+ 	.byte	0
+ 
+ 	.section	.debug_info,"",@progbits
++## A CU without code, which moves the second CU further into .debug_info.
+ .Lcu_begin0:
+ 	.long	.Ldebug_info_end0-.Ldebug_info_start0
+ .Ldebug_info_start0:
+@@ -54,17 +87,36 @@ main:
+ 	.byte	8                       # Address size
+ 	.long	.debug_abbrev           # Abbrev offset
+ 	.byte	1                       # CU
+-	.quad	.Lfunc_begin0           # DW_AT_low_pc
+-	.long	.Lfunc_end0-.Lfunc_begin0  # DW_AT_high_pc
+-	.long	.Lline_table_start0     # DW_AT_stmt_list
+-	.byte	2                       # subprogram
+-	.quad	.Lfunc_begin0           # DW_AT_low_pc
+-	.long	.Lfunc_end0-.Lfunc_begin0  # DW_AT_high_pc
++	.asciz	"GNU C17 13.2.0 -mtune=generic -march=x86-64 -g -O2" # DW_AT_producer
++	.asciz	"/src/lib/global_data.c" # DW_AT_name
++	.byte	2                       # variable
++	.asciz	"data"                  # DW_AT_name
+ 	.uleb128 .Ltype_int-.Lcu_begin0    # DW_AT_type (DW_FORM_ref_udata)
+ .Ltype_int:
+ 	.byte	3                       # base_type
+ 	.asciz	"int"                   # DW_AT_name
+ 	.byte	0                       # End children of CU
+ .Ldebug_info_end0:
++
++.Lcu_begin1:
++	.long	.Ldebug_info_end1-.Ldebug_info_start1
++.Ldebug_info_start1:
++	.short	5                       # DWARF version
++	.byte	1                       # DW_UT_compile
++	.byte	8                       # Address size
++	.long	.debug_abbrev           # Abbrev offset
++	.byte	4                       # CU
++	.quad	.Lfunc_begin0           # DW_AT_low_pc
++	.long	.Lfunc_end0-.Lfunc_begin0  # DW_AT_high_pc
++	.long	.Lline_table_start0     # DW_AT_stmt_list
++	.byte	5                       # subprogram
++	.quad	.Lfunc_begin0           # DW_AT_low_pc
++	.long	.Lfunc_end0-.Lfunc_begin0  # DW_AT_high_pc
++	.uleb128 .Ltype_long-.Lcu_begin1   # DW_AT_type (DW_FORM_ref_udata)
++.Ltype_long:
++	.byte	3                       # base_type
++	.asciz	"long"                  # DW_AT_name
++	.byte	0                       # End children of CU
++.Ldebug_info_end1:
+ 	.section	.debug_line,"",@progbits
+ .Lline_table_start0:
+-- 
+2.55.0
+

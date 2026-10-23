@@ -1,5 +1,24 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+include("testenv.jl")
+
+# Stdlib pkgimages for `--check-bounds=yes` are not bundled by default. Build any missing
+# ones for this process and the workers up front, before loading any stdlib, instead of
+# having every process that loads one wait for it to be built.
+let project = mktempdir(),
+    script = "Base.Precompilation.precompilepkgs(; strict=true)",
+    load_path = "JULIA_LOAD_PATH" => join(["@", "@stdlib"], Sys.iswindows() ? ';' : ':')
+    stdlibs = [name => Base.parsed_toml(joinpath(Sys.STDLIB, name, "Project.toml"))["uuid"]
+               for name in readdir(Sys.STDLIB) if isfile(joinpath(Sys.STDLIB, name, "Project.toml"))]
+    write(joinpath(project, "Project.toml"), "[deps]\n",
+          (string(name, " = \"", uuid, "\"\n") for (name, uuid) in stdlibs)...)
+    # stdlib dependencies are filled in from their own Project.toml
+    write(joinpath(project, "Manifest.toml"), "manifest_format = \"2.0\"\n",
+          (string("\n[[deps.", name, "]]\nuuid = \"", uuid, "\"\n") for (name, uuid) in stdlibs)...)
+    run(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$project -e $script`, load_path))
+    run(addenv(`$test_exename $test_exeflags --project=$project -e $script`, load_path))
+end
+
 using Test
 using Distributed
 using Dates
@@ -9,7 +28,6 @@ using Base: Experimental
 using Base.ScopedValues
 
 include("choosetests.jl")
-include("testenv.jl")
 include("buildkitetestjson.jl")
 
 const longrunning_delay = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_DELAY", "45")) * 60 # minutes
@@ -43,25 +61,6 @@ Distributed.worker_output_hook[] = (ident, line) -> begin
     # a worker between tests has no test to name, but its id still identifies it
     prefix = @lock worker_prefixes_lock get!(() -> output_prefix("", id), worker_prefixes, id)
     return Base.annotatedstring(prefix, line)
-end
-
-# Run `f()` with its stdout/stderr captured and re-emitted to `io` with `prefix` on every
-# line. Node-1 tests run in this process, so their output does not pass through
-# Distributed's redirection and `worker_output_hook`.
-function with_output_prefix(f, prefix::AbstractString, io::IO, lock::ReentrantLock)
-    pipe = Pipe()
-    Base.link_pipe!(pipe; reader_supports_async=true, writer_supports_async=true)
-    reader = @async while !eof(pipe)
-        line = readline(pipe)
-        @lock lock println(io, prefix, line)
-    end
-    try
-        redirect_stdio(f; stdout=pipe, stderr=pipe)
-    finally
-        close(pipe.in)
-        wait(reader)
-        close(pipe)
-    end
 end
 
 (; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(ARGS)
@@ -125,25 +124,30 @@ function move_to_node1(t)
     nothing
 end
 
-# Base.compilecache only works from node 1, so precompile test is handled specially
 move_to_node1("ccall")
-move_to_node1("precompile")
+# These add worker processes, which only node 1 can do
+move_to_node1("precompile_distributed")
 move_to_node1("SharedArrays")
-move_to_node1("threads")
 move_to_node1("Distributed")
 move_to_node1("gc")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
 
+# These leave state behind on their worker (`precompile`: packages loaded and methods
+# added to Base, `threads`: exited adopted threads), which breaks later tests on the
+# same worker, so the worker is replaced once they finish
+const recycle_worker_tests = ["precompile", "threads"]
+
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
-# Move LinearAlgebra and Pkg tests to the front, because they take a while, so we might
-# as well get them all started early. JuliaLowering_stdlibs both takes a while and
-# uses a lot of memory at the beginning so try to run it early to keep total memory
-# use flatter.
-for prependme in ["LinearAlgebra", "Pkg", "JuliaLowering_stdlibs"]
+# Move LinearAlgebra, Pkg, precompile and threads tests to the front, because they take
+# a while, so we might as well get them all started early. JuliaLowering_stdlibs both
+# takes a while and uses a lot of memory at the beginning so try to run it early to keep
+# total memory use flatter. `threads` goes first so that it gets a fresh worker, which is
+# recycled afterwards (see `recycle_worker_tests`).
+for prependme in ["precompile", "LinearAlgebra", "Pkg", "JuliaLowering_stdlibs", "threads"]
     prependme_test_ids = findall(x->occursin(prependme, x), tests)
     prependme_tests = tests[prependme_test_ids]
     deleteat!(tests, prependme_test_ids)
@@ -207,8 +211,6 @@ cd(@__DIR__) do
     printstyled(lpad(workerheader, name_align - textwidth(testgroupheader) + 1), " | ", color=:white)
     printstyled("Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)\n", color=:white)
     results = []
-    # Node-1 tests run with `stdout` redirected, so the table is printed to the real stdout
-    # to keep it out of that capture (see `with_output_prefix`).
     master_stdout = stdout
     print_lock = stdout isa Base.LibuvStream ? stdout.lock : ReentrantLock()
     if stderr isa Base.LibuvStream
@@ -480,9 +482,10 @@ cd(@__DIR__) do
                             end
                         else
                             print_testworker_stats(test, wrkr, resp)
-                            if resp[end] > max_worker_rss
-                                # the worker has reached the max-rss limit, recycle it
-                                # so future tests start with a smaller working set
+                            if resp[end] > max_worker_rss || test in recycle_worker_tests
+                                # the worker has reached the max-rss limit or holds state
+                                # left behind by the test, recycle it so future tests start
+                                # with a smaller working set and a fresh environment
                                 if n > 1
                                     rmprocs_with_testenv(wrkr, waitfor=rmwait_timeout)
                                     p = addprocs_with_testenv(1)[1]
@@ -490,7 +493,7 @@ cd(@__DIR__) do
                                     if use_revise
                                         Distributed.remotecall_eval(Main, p, revise_init_expr)
                                     end
-                                else # single process testing
+                                elseif resp[end] > max_worker_rss # single process testing
                                     error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
                                 end
                             end
@@ -516,10 +519,8 @@ cd(@__DIR__) do
             running_on[t] = 1
             before = time()
             resp, duration = try
-                    with_output_prefix(output_prefix(t, 1), master_stdout, print_lock) do
-                        r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
-                        r, time() - before
-                    end
+                    r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
+                    r, time() - before
                 catch e
                     isa(e, InterruptException) && rethrow()
                     Any[CapturedException(e, catch_backtrace())], time() - before

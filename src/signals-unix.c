@@ -40,6 +40,9 @@
 #ifdef HAVE_KEVENT
 #include <sys/event.h>
 #endif
+#ifdef _OS_FREEBSD_
+#include <sys/procctl.h>
+#endif
 
 // 8M signal stack, same as default stack size (though we barely use this)
 static const size_t sig_stack_size = 8 * 1024 * 1024;
@@ -467,7 +470,7 @@ int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
 }
 
 #if defined(_OS_LINUX_) && (defined(_CPU_X86_64_) || defined(_CPU_X86_))
-int is_write_fault(void *context) {
+int is_write_fault(void *context, void *addr) {
     ucontext_t *ctx = (ucontext_t*)context;
     return exc_reg_is_write_fault(ctx->uc_mcontext.gregs[REG_ERR]);
 }
@@ -478,7 +481,7 @@ struct linux_aarch64_ctx_header {
 };
 const uint32_t linux_esr_magic = 0x45535201;
 
-int is_write_fault(void *context) {
+int is_write_fault(void *context, void *addr) {
     ucontext_t *ctx = (ucontext_t*)context;
     struct linux_aarch64_ctx_header *extra =
         (struct linux_aarch64_ctx_header *)ctx->uc_mcontext.__reserved;
@@ -492,7 +495,7 @@ int is_write_fault(void *context) {
     return 0;
 }
 #elif defined(_OS_FREEBSD_) && (defined(_CPU_X86_64_) || defined(_CPU_X86_))
-int is_write_fault(void *context) {
+int is_write_fault(void *context, void *addr) {
     ucontext_t *ctx = (ucontext_t*)context;
     return exc_reg_is_write_fault(ctx->uc_mcontext.mc_err);
 }
@@ -500,17 +503,68 @@ int is_write_fault(void *context) {
 // FreeBSD seems not to expose a means of accessing ESR via `ucontext_t` on AArch64.
 // TODO: Is there an alternative approach that can be taken? ESR may become accessible
 // in a future release though.
-int is_write_fault(void *context) {
+int is_write_fault(void *context, void *addr) {
     return 0;
 }
 #elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
-int is_write_fault(void *context) {
+int is_write_fault(void *context, void *addr) {
     struct sigcontext *ctx = (struct sigcontext *)context;
     return exc_reg_is_write_fault(ctx->sc_err);
 }
+#elif defined(_OS_LINUX_) && defined(_CPU_RISCV64_)
+// The riscv64 `mcontext_t` only carries the integer and floating-point register
+// files; the trap cause (`scause`) is not exposed to user space. Instead, classify
+// the instruction that faulted: a write fault can only come from a store, a
+// store-conditional, an atomic memory operation, or a cache-block zero. Loads,
+// reservations and instruction fetches are not writes.
+int is_write_fault(void *context, void *addr) {
+    ucontext_t *ctx = (ucontext_t*)context;
+    const uint16_t *pc = (const uint16_t*)ctx->uc_mcontext.__gregs[REG_PC];
+    // An instruction-fetch fault can point at either halfword. Do not read an
+    // inaccessible PC or interpret non-executable memory as a store instruction.
+    if ((uintptr_t)addr - (uintptr_t)pc < 4)
+        return 0;
+    // Instructions are only guaranteed to be 2-byte aligned when the compressed
+    // extension is in use, so fetch the encoding as halfwords.
+    uint16_t lo = pc[0];
+    if ((lo & 0x3) != 0x3) {
+        // 16-bit compressed encoding: quadrant in bits [1:0], funct3 in bits [15:13].
+        // The store forms are C.FSD/C.SW/C.SD (quadrant 0) and their
+        // stack-pointer-relative counterparts C.FSDSP/C.SWSP/C.SDSP (quadrant 2),
+        // all of which have funct3 >= 5. Zcb adds C.SB/C.SH in quadrant 0 under
+        // funct3 == 4, distinguished from C.LBU/C.LH/C.LHU by bit 11.
+        unsigned quadrant = lo & 0x3;
+        unsigned funct3 = (lo >> 13) & 0x7;
+        if (quadrant == 0x1)
+            return 0;
+        if (funct3 >= 5)
+            return 1;
+        return quadrant == 0x0 && funct3 == 4 && (lo & 0x0800) != 0;
+    }
+    if ((lo & 0x1f) == 0x1f)
+        return 0; // 48-bit or longer encoding; none defined that store
+    uint32_t insn = lo | ((uint32_t)pc[1] << 16);
+    unsigned opcode = insn & 0x7f;
+    switch (opcode) {
+    case 0x23: // STORE: SB/SH/SW/SD
+    case 0x27: // STORE-FP: FSH/FSW/FSD, and the vector stores
+        return 1;
+    case 0x2f: { // AMO: LR is a load, SC and every AMO* write
+        unsigned funct5 = insn >> 27;
+        return funct5 != 0x02; // LR.W/LR.D
+    }
+    case 0x0f: { // MISC-MEM: only CBO.ZERO (funct3 == 2, imm == 4) writes
+        unsigned funct3 = (insn >> 12) & 0x7;
+        unsigned imm = insn >> 20;
+        return funct3 == 2 && imm == 4;
+    }
+    default:
+        return 0;
+    }
+}
 #else
 #pragma message("Implement this query for consistent PROT_NONE handling")
-int is_write_fault(void *context) {
+int is_write_fault(void *context, void *addr) {
     return 0;
 }
 #endif
@@ -535,7 +589,7 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context) JL_
         sigdie_handler(sig, info, context);
         return;
     }
-    if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && jl_addr_is_safepoint((uintptr_t)info->si_addr) && !is_write_fault(context)) {
+    if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && jl_addr_is_safepoint((uintptr_t)info->si_addr) && !is_write_fault(context, info->si_addr)) {
         jl_set_gc_and_wait(ct);
         // (vestigial thread-0 gate from the old sigint force-throw, which
         // is now delivered through the cancellation system instead - see
@@ -566,7 +620,7 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context) JL_
         jl_safe_printf("ERROR: Signal stack overflow, exit\n");
         jl_raise(sig);
     }
-    else if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && is_write_fault(context)) {  // writing to read-only memory (e.g., mmap)
+    else if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && is_write_fault(context, info->si_addr)) {  // writing to read-only memory (e.g., mmap)
         jl_throw_in_ctx(ct, jl_readonlymemory_exception, sig, context);
     }
     else {
@@ -1085,11 +1139,43 @@ const static int sigwait_sigs[] = {
     0
 };
 
+// The process whose exit should terminate ours, if any
+static pid_t exit_with_parent_pid = 0;
+
 static void jl_sigsetset(sigset_t *sset)
 {
     sigemptyset(sset);
     for (const int *sig = sigwait_sigs; *sig; sig++)
         sigaddset(sset, *sig);
+}
+
+// Terminate this process when `parent` exits. This is best-effort: we keep
+// running if the platform does not support it, if setting it up fails, or if
+// Julia does not handle signals. Must be called before any threads are started.
+void jl_exit_with_parent(pid_t parent) JL_NOTSAFEPOINT
+{
+    if (jl_options.handle_signals != JL_OPTIONS_HANDLE_SIGNALS_ON)
+        return;
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+    // have the kernel send SIGUSR1 when our parent exits, and keep it blocked
+    // until the signal listener waits for it
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, SIGUSR1);
+    if (pthread_sigmask(SIG_BLOCK, &sset, NULL) != 0)
+        return;
+#if defined(_OS_LINUX_)
+    if (prctl(PR_SET_PDEATHSIG, SIGUSR1) != 0)
+        return;
+#else
+    int sig = SIGUSR1;
+    if (procctl(P_PID, 0, PROC_PDEATHSIG_CTL, &sig) != 0)
+        return;
+#endif
+    exit_with_parent_pid = parent;
+#elif defined(HAVE_KEVENT)
+    exit_with_parent_pid = parent;
+#endif
 }
 
 #ifdef HAVE_KEVENT
@@ -1109,6 +1195,15 @@ static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
         // Installing SIG_IGN for SIGINT can race with its handler installation.
         signal(sig, sig == SIGINT ? sigint_handler : SIG_IGN);
     }
+}
+
+// Returns whether the parent already exited before we started watching it, in
+// which case registering fails or no exit event will be delivered.
+static int kqueue_parent(int sigqueue, struct kevent *ev)
+{
+    EV_SET(ev, exit_with_parent_pid, EVFILT_PROC, EV_ADD, NOTE_EXIT, 0, NULL);
+    return (kevent(sigqueue, ev, 1, NULL, 0, NULL) != 0 && errno == ESRCH) ||
+           getppid() != exit_with_parent_pid;
 }
 #endif
 
@@ -1234,6 +1329,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #endif
 #ifdef HAVE_KEVENT
     struct kevent ev;
+    int parent_gone = 0;
     int sigqueue = kqueue();
     if (sigqueue == -1) {
         perror("signal kqueue");
@@ -1246,13 +1342,21 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             for (const int *sig = sigwait_sigs; *sig; sig++)
                 signal(*sig, SIG_DFL);
         }
+        else if (exit_with_parent_pid) {
+            parent_gone = kqueue_parent(sigqueue, &ev);
+        }
     }
 #endif
     while (1) {
         sig = 0;
         errno = 0;
 #ifdef HAVE_KEVENT
-        if (sigqueue != -1) {
+        if (parent_gone) {
+            // exit as if terminated, as we would on the parent's exit event
+            parent_gone = 0;
+            sig = SIGTERM;
+        }
+        else if (sigqueue != -1) {
             int nevents = kevent(sigqueue, NULL, 0, &ev, 1, NULL);
             if (nevents == -1) {
                 if (errno == EINTR)
@@ -1266,7 +1370,8 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                     signal(*sig, SIG_DFL);
                 continue;
             }
-            sig = ev.ident;
+            // exit as if terminated when our parent exits
+            sig = ev.filter == EVFILT_PROC ? SIGTERM : ev.ident;
         }
         else
 #endif
@@ -1281,6 +1386,13 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 continue;
             sig = SIGABRT; // this branch can't occur, unless we had stack memory corruption of sset
         }
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+        // exit as if terminated when our parent exits.
+        // Linux also sends this when the thread that spawned us exits, in which case
+        // another thread of the parent adopts us and we handle it as a normal SIGUSR1.
+        if (sig == SIGUSR1 && exit_with_parent_pid && getppid() != exit_with_parent_pid)
+            sig = SIGTERM;
+#endif
         profile = 0;
 #ifndef HAVE_MACH
 #if defined(HAVE_TIMER)
@@ -1297,13 +1409,11 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             if (jl_ignore_sigint()) {
                 continue;
             }
-            else if (exit_on_sigint) {
+            else if (jl_sigint_get_policy() == JL_SIGINT_EXIT ||
+                     !jl_sigint_request_cancellation()) {
                 critical = 1;
             }
             else {
-                // Deliver the press through the cancellation system (see
-                // jl_sigint_request_cancellation).
-                jl_sigint_request_cancellation();
                 continue;
             }
         }
@@ -1622,10 +1732,10 @@ next_thread:;
 // This is a common fallback based on the observation that `mprotect` happens to
 // issue the necessary memory barriers. However, there is no spec that
 // guarantees this behavior. On AArch64, it is known not to work on either
-// Linux or FreeBSD, so we don't use it there. However, we use it as a fallback
-// here for older versions of Linux and FreeBSD on x86 where we know that it
-// happens to work.
-#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_)
+// Linux or FreeBSD, and nothing establishes that it works on RISC-V, so we don't use
+// it there. However, we use it as a fallback here for older versions of Linux and
+// FreeBSD on x86 where we know that it happens to work.
+#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_) && !defined(_CPU_RISCV64_)
 static pthread_mutex_t mprotect_barrier_lock = PTHREAD_MUTEX_INITIALIZER;
 static _Atomic(uint64_t) *mprotect_barrier_page = NULL;
 // Returns 1 on success, 0 on failure (e.g. mlock fails)
@@ -1675,7 +1785,7 @@ static void jl_mprotect_membarrier(void) JL_NOTSAFEPOINT
     assert(result == 0);
     (void)result;
 }
-#endif // !_CPU_AARCH64_ && !_CPU_ARM_
+#endif // !_CPU_AARCH64_ && !_CPU_ARM_ && !_CPU_RISCV64_
 
 // Membarrier implementation selection
 enum membarrier_implementation {
@@ -1722,8 +1832,8 @@ static enum membarrier_implementation jl_init_membarrier(void) JL_NOTSAFEPOINT {
         }
     }
 #endif
-    // The mprotect fallback is known not to work on AArch64, so skip it there
-#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_)
+    // The mprotect fallback is only known to work on x86
+#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_) && !defined(_CPU_RISCV64_)
     if (jl_init_mprotect_membarrier()) {
         jl_atomic_store_relaxed(&membarrier_impl, MEMBARRIER_IMPLEMENTATION_MPROTECT);
         return MEMBARRIER_IMPLEMENTATION_MPROTECT;
@@ -1748,7 +1858,7 @@ JL_DLLEXPORT void jl_membarrier(void) JL_NOTSAFEPOINT {
         break;
     }
 #endif
-#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_)
+#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_) && !defined(_CPU_RISCV64_)
     case MEMBARRIER_IMPLEMENTATION_MPROTECT:
         jl_mprotect_membarrier();
         break;

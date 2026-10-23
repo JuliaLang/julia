@@ -77,6 +77,21 @@ end
     @test exact_match_export ≈ 1.0
 end
 
+@testset "string distance skips a shared prefix" begin
+    distance(a, b) = REPL.string_distance(a, length(a), b, length(b))
+
+    @test distance("kitten", "sitting") == 3
+    @test distance("abc", "acb") == 1
+
+    # a prefix shared by both strings contributes nothing, so skipping it must not
+    # change the distance
+    for (a, b) in (("kitten", "sitting"), ("abc", "acb"), ("αkδψm", "αkδm"), ("", "abc")),
+        prefix in ("x", "prefix_", "αβ")
+
+        @test distance(prefix * a, prefix * b) == distance(a, b)
+    end
+end
+
 @testset "Unicode doc lookup (#41589)" begin
     @test REPL.lookup_doc(:(÷=)) isa Markdown.MD
 end
@@ -266,4 +281,18 @@ dango() = "🍡"
     # Prioritize exported/local names if they exactly match
     lines = helplines("dango")
     @test startswith(lines[1], "search: dango TestSuggestPublic.dango dingo")
+end
+
+@testset "readme of a module loaded from a bare file" begin
+    mktempdir() do dir
+        write(joinpath(dir, "BareReadmeMod.jl"), "__precompile__(false); module BareReadmeMod end")
+        write(joinpath(dir, "README.md"), "Bare readme")
+        pushfirst!(LOAD_PATH, dir)
+        try
+            m = Base.require(Base.PkgId("BareReadmeMod"))
+            @test REPL.find_readme(m) == joinpath(dir, "README.md")
+        finally
+            popfirst!(LOAD_PATH)
+        end
+    end
 end

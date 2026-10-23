@@ -17,6 +17,8 @@ if !@isdefined(testenv_defined)
         push!(test_exeflags.exec, "--check-bounds=yes")
         push!(test_exeflags.exec, "--startup-file=no")
         push!(test_exeflags.exec, "--depwarn=error")
+        # keep reports of precompilation triggered by loading out of the test logs
+        push!(test_exeflags.exec, "-q")
     end
     if haskey(ENV, "JULIA_TEST_EXTRA_EXEFLAGS")
         append!(test_exeflags.exec, Base.shell_split(ENV["JULIA_TEST_EXTRA_EXEFLAGS"]))

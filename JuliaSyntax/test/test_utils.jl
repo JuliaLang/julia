@@ -463,7 +463,14 @@ function _Meta_parse_string(text::AbstractString, filename::AbstractString,
     if index < 1 || index > ncodeunits(text) + 1
         throw(BoundsError(text, index))
     end
-    ex, offset::Int = JuliaSyntax.core_parser_hook(text, filename, lineno, index-1, options)
+    if isdefined(Base, :Syntax)
+        # The hook installed by `enable_in_core!` here returns `Syntax`
+        ex, offset::Int = JuliaSyntax.new_core_parser_hook(
+            text, filename, lineno, index-1, options, JuliaSyntax.VERSION_EDITION)
+        ex isa Base.Syntax && (ex = Base.syntax_to_expr(ex))
+    else
+        ex, offset = JuliaSyntax.core_parser_hook(text, filename, lineno, index-1, options)
+    end
     ex, offset+1
 end
 

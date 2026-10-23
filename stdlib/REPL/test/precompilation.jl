@@ -32,6 +32,7 @@ if !Sys.iswindows()
         readuntil(ptm, "julia>")
         tracecompile_out = read(f, String)
         close(ptm) # close after reading so we don't get precompiles from error shutdown
+        wait(p) # the session exits on the hangup
 
         # given this test checks that startup is snappy, it's best to add workloads to
         # contrib/generate_precompile.jl rather than increase this number. But if that's not
@@ -54,5 +55,28 @@ if !Sys.iswindows()
             @info "REPL: Actual number of precompiles has dropped below expected." n_precompiles expected_precompiles
         end
 
+    end
+
+    @testset "Interactive session exits cleanly when its terminal goes away" begin
+        errf, errio = mktemp()
+        cmd = addenv(`$(Base.julia_cmd()) -q --startup-file=no -i`, Dict("TERM" => ""))
+        pts, ptm = open_fake_pty()
+        p = run(pipeline(cmd; stdin=pts, stdout=pts, stderr=errio); wait=false)
+        Base.close_stdio(pts)
+        close(errio)
+        try
+            readuntil(ptm, "julia>")
+            close(ptm) # hang up the terminal
+            exited = timedwait(() -> process_exited(p), 60) === :ok
+            @test exited
+            if exited
+                @test success(p)
+                # no failed writes to the dead terminal reported on the way out
+                @test !occursin(r"IOError|fatal"i, read(errf, String))
+            end
+        finally
+            process_running(p) && kill(p, Base.SIGKILL)
+            wait(p)
+        end
     end
 end

@@ -337,63 +337,19 @@ static bool isMutexUnlock(StringRef name) {
 }
 
 
+bool GCChecker::hasGCTrackedAnnotation(QualType QT) {
+  // Check all declarations visible in this translation unit: the annotation
+  // may be on a forward declaration or on the definition.
+  return anyDeclInTypeChain(QT, [](const clang::Decl *D) {
+    for (const clang::Decl *R : D->redecls())
+      if (declHasAnnotation(R, "julia_gc_tracked"))
+        return true;
+    return false;
+  });
+}
+
 bool GCChecker::isGCTrackedType(QualType QT) {
-  return isJuliaType(
-             [](StringRef Name) {
-               if (Name.ends_with_insensitive("jl_value_t") ||
-                   Name.ends_with_insensitive("jl_svec_t") ||
-                   Name.ends_with_insensitive("jl_sym_t") ||
-                   Name.ends_with_insensitive("jl_expr_t") ||
-                   Name.ends_with_insensitive("jl_code_info_t") ||
-                   Name.ends_with_insensitive("jl_array_t") ||
-                   Name.ends_with_insensitive("jl_genericmemory_t") ||
-                   Name.ends_with_insensitive("jl_genericmemoryref_t") ||
-                   Name.ends_with_insensitive("jl_method_t") ||
-                   Name.ends_with_insensitive("jl_method_instance_t") ||
-                   Name.ends_with_insensitive("jl_debuginfo_t") ||
-                   Name.ends_with_insensitive("jl_tupletype_t") ||
-                   Name.ends_with_insensitive("jl_datatype_t") ||
-                   Name.ends_with_insensitive("jl_typemap_entry_t") ||
-                   Name.ends_with_insensitive("jl_typemap_level_t") ||
-                   Name.ends_with_insensitive("jl_typename_t") ||
-                   Name.ends_with_insensitive("jl_module_t") ||
-                   Name.ends_with_insensitive("jl_tupletype_t") ||
-                   Name.ends_with_insensitive("jl_gc_tracked_buffer_t") ||
-                   Name.ends_with_insensitive("jl_binding_t") ||
-                   Name.ends_with_insensitive("jl_binding_partition_t") ||
-                   Name.ends_with_insensitive("jl_ordereddict_t") ||
-                   Name.ends_with_insensitive("jl_tvar_t") ||
-                   Name.ends_with_insensitive("jl_typemap_t") ||
-                   Name.ends_with_insensitive("jl_unionall_t") ||
-                   Name.ends_with_insensitive("jl_methtable_t") ||
-                   Name.ends_with_insensitive("jl_methcache_t") ||
-                   Name.ends_with_insensitive("jl_cgval_t") ||
-                   Name.ends_with_insensitive("jl_codectx_t") ||
-                   Name.ends_with_insensitive("jl_code_instance_t") ||
-                   Name.ends_with_insensitive("jl_excstack_t") ||
-                   Name.ends_with_insensitive("jl_task_t") ||
-                   Name.ends_with_insensitive("jl_uniontype_t") ||
-                   Name.ends_with_insensitive("jl_method_match_t") ||
-                   Name.ends_with_insensitive("jl_vararg_t") ||
-                   Name.ends_with_insensitive("jl_opaque_closure_t") ||
-                   Name.ends_with_insensitive("jl_globalref_t") ||
-                   Name.ends_with_insensitive("jl_abi_override_t") ||
-                   Name.ends_with_insensitive("jl_ast_context_t") ||
-                   // Probably not technically true for these, but let's allow it as a root
-                   Name.ends_with_insensitive("jl_ircode_state") ||
-                   Name.ends_with_insensitive("typemap_intersection_env") ||
-                   Name.ends_with_insensitive("interpreter_state") ||
-                   Name.ends_with_insensitive("jl_typeenv_t") ||
-                   Name.ends_with_insensitive("jl_stenv_t") ||
-                   Name.ends_with_insensitive("set_world") ||
-                   Name.ends_with_insensitive("jl_codectx_t") ||
-                   Name.ends_with_insensitive("jl_codegen_params_t") ||
-                   Name.ends_with_insensitive("egal_set")) {
-                 return true;
-               }
-               return false;
-             },
-             QT);
+  return hasGCTrackedAnnotation(QT);
 }
 
 bool GCChecker::isGenericMemoryRefType(QualType QT) {
@@ -537,7 +493,6 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
       if (Decl && declHasAnnotation(Decl, "julia_not_safepoint"))
         notSafepoint = true;
       if (Callee) {
-#if LLVM_VERSION_MAJOR >= 22
         // Clang 22 removed ElaboratedType; a typedef'd type is now a
         // TypedefType directly, with no elaborated wrapper to unpeel.
         if (const TypedefType *TDT =
@@ -545,16 +500,6 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
           if (declHasAnnotation(TDT->getDecl(), "julia_not_safepoint"))
             notSafepoint = true;
         } else if (isa<CXXPseudoDestructorExpr>(Callee)) {
-#else
-        if (const ElaboratedType *ET =
-                dyn_cast<ElaboratedType>(Callee->getType())) {
-          if (const TypedefType *TDT =
-                  dyn_cast<TypedefType>(ET->getNamedType())) {
-            if (declHasAnnotation(TDT->getDecl(), "julia_not_safepoint"))
-              notSafepoint = true;
-          }
-        } else if (isa<CXXPseudoDestructorExpr>(Callee)) {
-#endif
           // A pseudo-destructor is an expression that looks like a member
           // access to a destructor of a scalar type. It has no run-time
           // semantics beyond evaluating the base expression (which would have
@@ -1805,13 +1750,8 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
   return false;
 }
 
-#if LLVM_VERSION_MAJOR >= 22
 void GCChecker::checkBind(SVal LVal, SVal RVal, const clang::Stmt *S,
                           bool /*AtDeclInit*/, CheckerContext &C) const {
-#else
-void GCChecker::checkBind(SVal LVal, SVal RVal, const clang::Stmt *S,
-                          CheckerContext &C) const {
-#endif
   auto State = C.getState();
   const MemRegion *R = LVal.getAsRegion();
   if (!R) {

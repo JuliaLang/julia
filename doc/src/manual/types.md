@@ -300,14 +300,20 @@ The number of bits gives the declared logical width of the primitive type, and t
 new type a name. A primitive type can optionally be declared to be a subtype of some supertype. If a
 supertype is omitted, then the type defaults to having `Any` as its immediate supertype. The
 declaration of [`Bool`](@ref) above therefore means that a boolean value has a logical width of eight
-bits, and has [`Integer`](@ref) as its immediate supertype. Primitive types continue to use
-byte-rounded storage, so `sizeof(T)` rounds their storage size up to a whole number of bytes even
-when their logical width is not a multiple of 8 bits. Use `Core.bitsizeof(T)` to query the declared
-logical width.
+bits, and has [`Integer`](@ref) as its immediate supertype. A primitive type of `N` bits keeps
+its value in the first `cld(N, 8)` bytes. Its alignment is that of the smallest of `Int8`,
+`Int16`, `Int32` and `Int64` that holds those bytes, or that of `Int128` if none does, and
+`sizeof(T)` rounds the value bytes up to a multiple of that alignment; it always equals
+`Base.elsize(Array{T})`. Up to 64 bits this is the layout the platform's C ABI gives
+`_BitInt(N)`. Wider types can differ: x86-64 aligns `_BitInt(128)` to 8 bytes, but
+`primitive type T 128 end`, like `UInt128` and C's `unsigned __int128`, to 16; so `_BitInt(136)`
+takes 24 bytes where a 136-bit primitive type takes 32. Bits past the declared width are padding
+and take no part in comparison or hashing. Use `Core.bitsizeof(T)` to query the declared logical
+width — for `primitive type T 24 end`, `Core.bitsizeof(T)` is 24 while `sizeof(T)` is 4.
 
 Non-byte primitive widths are accepted, but remain an expert-only feature. They are more likely to
-expose compiler, runtime, or ABI bugs than the standard built-in primitive widths, and arrays still
-use byte-rounded element storage rather than packed bit layouts. Therefore, boolean values, although
+expose compiler, runtime, or ABI bugs than the standard built-in primitive widths, and arrays store
+each element in `sizeof(T)` bytes rather than packing bits. Therefore, boolean values, although
 they really need just a single bit, should still use the built-in eight-bit [`Bool`](@ref) unless
 you are deliberately working with these expert-only semantics.
 

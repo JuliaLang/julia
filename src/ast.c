@@ -28,7 +28,7 @@ static const uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
 };
 
-typedef struct _jl_ast_context_t {
+typedef struct JL_GC_TRACKED_TYPE _jl_ast_context_t {
     fl_context_t fl;
     fltype_t *jvtype;
 
@@ -493,7 +493,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             jl_enternode_scope(temp) = NULL;
             jl_enternode_catch_dest(temp) = jl_unbox_long(ex);
             if (n == 2) {
-                jl_enternode_scope(temp) = scm_to_julia(fl_ctx, car_(cdr_(e)), mod);
+                jl_gc_write(temp, jl_enternode_scope(temp), jl_value_t, scm_to_julia(fl_ctx, car_(cdr_(e)), mod));
             }
         }
         else if (sym == jl_newvar_sym) {
@@ -1219,9 +1219,6 @@ JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
                                   const char *filename, int line, size_t world, bool_t warn)
 {
     jl_value_t *julia_lower = NULL;
-    if (inmodule) {
-        julia_lower = jl_get_global(inmodule, jl_symbol("_internal_julia_lower"));
-    }
     if ((!julia_lower || julia_lower == jl_nothing) && jl_core_module)
         julia_lower = jl_get_global_value(jl_core_module, jl_symbol("_lower"), jl_current_task->world_age);
     if (!julia_lower || julia_lower == jl_nothing) {
@@ -1238,8 +1235,7 @@ JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
     args[6] = warn ? jl_true : jl_false;
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
-    size_t lowering_world = jl_lowering_world;
-    ct->world_age = lowering_world ? lowering_world : jl_atomic_load_acquire(&jl_world_counter);
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     jl_value_t *result = jl_apply(args, 7);
     ct->world_age = last_age;
     args[0] = result; // root during error check below
@@ -1250,41 +1246,39 @@ JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
     return result;
 }
 
-//------------------------------------------------------------------------------
-// Parsing API and utils for calling parser from runtime
-
-// Internal C entry point to parser
+// currently used during bootstrap, by Core.include, and by jlapi.c.
 // `text` is passed as a pointer to allow raw non-String buffers to be used
 // without copying.
-jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
-                     size_t lineno, size_t offset, jl_value_t *options, jl_module_t *inmodule)
+JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
+                                  jl_module_t *inmodule)
 {
-    jl_value_t *parser = NULL;
-    if (inmodule) {
-        parser = jl_get_global(inmodule, jl_symbol("#_internal_julia_parse"));
+    JL_TYPECHK(parse, module, (jl_value_t*)inmodule)
+    jl_value_t *parse = NULL;
+    int lno = 1;
+    int offset = 0;
+    jl_value_t *options = (jl_value_t *)jl_all_sym;
+    jl_value_t **args;
+    jl_task_t *ct = jl_current_task;
+    JL_GC_PUSHARGS(args, 5);
+    if (jl_base_module) {
+        parse = jl_get_global(jl_base_module, jl_symbol("_c_parseall_expr"));
     }
-    if ((!parser || parser == jl_nothing) && jl_core_module) {
-        parser = jl_get_global(jl_core_module, jl_symbol("_parse"));
-    }
-    if (!parser || parser == jl_nothing) {
+    if (!parse) {
         // In bootstrap, directly call the builtin parser.
-        jl_value_t *result = jl_fl_parse(text, text_len, filename, lineno, offset, options);
+        JL_GC_POP();
+        jl_value_t *result = jl_fl_parse(text, text_len, filename, lno, offset, options);
         return result;
     }
-    jl_value_t **args;
-    JL_GC_PUSHARGS(args, 6);
-    args[0] = parser;
+    args[0] = parse;
     args[1] = (jl_value_t*)jl_alloc_svec(2);
     jl_svecset(args[1], 0, jl_box_uint8pointer((uint8_t*)text));
     jl_svecset(args[1], 1, jl_box_long(text_len));
     args[2] = filename;
-    args[3] = jl_box_long(lineno);
-    args[4] = jl_box_long(offset);
-    args[5] = options;
-    jl_task_t *ct = jl_current_task;
+    args[3] = jl_box_long(lno);
+    args[4] = (jl_value_t*)inmodule;
     size_t last_age = ct->world_age;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-    jl_value_t *result = jl_apply(args, 6);
+    jl_value_t *result = jl_apply(args, 5);
     ct->world_age = last_age;
     args[0] = result; // root during error checks below
     JL_TYPECHK(parse, simplevector, result);
@@ -1294,17 +1288,6 @@ jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
     JL_TYPECHK(parse, long, jl_svecref(result, 1));
     JL_GC_POP();
     return result;
-}
-
-// parse an entire string as a file, reading multiple expressions
-JL_DLLEXPORT jl_value_t *jl_parse_all(const char *text, size_t text_len,
-                                      const char *filename, size_t filename_len, size_t lineno)
-{
-    jl_value_t *fname = jl_pchar_to_string(filename, filename_len);
-    JL_GC_PUSH1(&fname);
-    jl_value_t *p = jl_parse(text, text_len, fname, lineno, 0, (jl_value_t*)jl_all_sym, NULL);
-    JL_GC_POP();
-    return jl_svecref(p, 0);
 }
 
 #ifdef __cplusplus

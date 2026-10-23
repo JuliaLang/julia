@@ -122,9 +122,10 @@ end
 end
 
 """
-    contains(haystack::AbstractString, needle)
+    contains(haystack::AbstractString, needle::Union{AbstractString,AbstractPattern,AbstractChar})
 
-Return `true` if `haystack` contains `needle`.
+Return `true` if `haystack` contains `needle`. If `needle` is a regular expression, check
+whether `haystack` contains a match.
 This is the same as `occursin(needle, haystack)`, but is provided for consistency with
 `startswith(haystack, needle)` and `endswith(haystack, needle)`.
 
@@ -968,7 +969,11 @@ split(str::AbstractString;
     rsplit(s::AbstractString; limit::Integer=0, keepempty::Bool=false)
     rsplit(s::AbstractString, chars; limit::Integer=0, keepempty::Bool=true)
 
-Similar to [`split`](@ref), but starting from the end of the string.
+Similar to [`split`](@ref), but starting from the end of the string. The splits are found
+from right to left (which matters e.g. when `limit` is given), but the substrings are still
+returned in the order in which they appear in `s`.
+
+See also [`eachrsplit`](@ref), which yields the substrings from right to left.
 
 # Examples
 ```jldoctest

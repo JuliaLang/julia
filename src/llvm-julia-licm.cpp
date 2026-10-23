@@ -59,11 +59,7 @@ static void moveInstructionBefore(Instruction &I, Instruction &Dest,
                                   MemorySSAUpdater &MSSAU,
                                   ScalarEvolution *SE,
                                   MemorySSA::InsertionPlace Place = MemorySSA::BeforeTerminator) {
-#if JL_LLVM_VERSION >= 200000
   I.moveBefore(Dest.getIterator());
-#else
-  I.moveBefore(&Dest);
-#endif
   if (MSSAU.getMemorySSA())
     if (MemoryUseOrDef *OldMemAcc = cast_or_null<MemoryUseOrDef>(
             MSSAU.getMemorySSA()->getMemoryAccess(&I)))
@@ -72,11 +68,12 @@ static void moveInstructionBefore(Instruction &I, Instruction &Dest,
     SE->forgetValue(&I);
 }
 
-static void createNewInstruction(Instruction *New, Instruction *Ref, MemorySSAUpdater &MSSAU) {
+static void createNewInstruction(Instruction *New, Instruction *Ref, MemorySSAUpdater &MSSAU,
+                                 MemorySSA::InsertionPlace Point = MemorySSA::Beginning) {
   if (MSSAU.getMemorySSA() && MSSAU.getMemorySSA()->getMemoryAccess(Ref)) {
     // Create a new MemoryAccess and let MemorySSA set its defining access.
     MemoryAccess *NewMemAcc = MSSAU.createMemoryAccessInBB(
-        New, nullptr, New->getParent(), MemorySSA::Beginning);
+        New, nullptr, New->getParent(), Point);
     if (NewMemAcc) {
       if (auto *MemDef = dyn_cast<MemoryDef>(NewMemAcc))
         MSSAU.insertDef(MemDef, /*RenameUses=*/true);
@@ -140,6 +137,28 @@ struct JuliaLICM : public JuliaPassContext {
                 GetMSSA(GetMSSA),
                 GetSE(GetSE) {}
 
+#if !defined(GC_BARRIER_SNAPSHOT) && !defined(GC_BARRIER_FIELD_PRECISE)
+    // Replace a field barrier with an object barrier in the preheader.
+    CallInst *hoistAsObjectBarrier(CallInst *call, BasicBlock *preheader,
+                                   MemorySSAUpdater &MSSAU)
+    {
+        assert(isFieldWriteBarrier(call->getCalledOperand()));
+        object_write_barrier_func = getOrDeclare(jl_intrinsics::objectWriteBarrier);
+        SmallVector<Value*, 4> args{call->getArgOperand(0)};
+        for (Value *child : writeBarrierChildren(call))
+            args.push_back(child);
+
+        IRBuilder<> builder(preheader->getTerminator());
+        builder.SetCurrentDebugLocation(call->getDebugLoc());
+        auto *replacement = builder.CreateCall(object_write_barrier_func, args);
+        if (auto *MD = call->getMetadata("julia.reset_region"))
+            replacement->setMetadata("julia.reset_region", MD);
+        createNewInstruction(replacement, call, MSSAU, MemorySSA::BeforeTerminator);
+        eraseInstruction(*call, MSSAU);
+        return replacement;
+    }
+#endif
+
     bool runOnLoop(Loop *L, OptimizationRemarkEmitter &ORE)
     {
         // Get the preheader block to move instructions into,
@@ -153,10 +172,10 @@ struct JuliaLICM : public JuliaPassContext {
         // Also require `gc_preserve_begin_func` whereas
         // `gc_preserve_end_func` is optional since the input to
         // `gc_preserve_end_func` must be from `gc_preserve_begin_func`.
-        // We also hoist write barriers here, so we don't exit if write_barrier_func exists
-        if (!gc_preserve_begin_func && !write_barrier_func &&
-            !alloc_obj_func) {
-            LLVM_DEBUG(dbgs() << "No gc_preserve_begin_func or write_barrier_func or alloc_obj_func found, skipping JuliaLICM\n");
+        // We also hoist write barriers here, so we don't exit if a write barrier func exists
+        if (!gc_preserve_begin_func && !object_write_barrier_func && !field_write_barrier_p11_func &&
+            !field_write_barrier_p13_func && !alloc_obj_func) {
+            LLVM_DEBUG(dbgs() << "No gc_preserve_begin_func or write barrier or alloc_obj_func found, skipping JuliaLICM\n");
             return false;
         }
         auto LI = &GetLI();
@@ -246,11 +265,7 @@ struct JuliaLICM : public JuliaPassContext {
                     });
                     for (unsigned i = 1; i < exit_pts.size(); i++) {
                         // Clone exit
-#if JL_LLVM_VERSION >= 200000
                         auto CI = CallInst::Create(call, {}, exit_pts[i]->getIterator());
-#else
-                        auto CI = CallInst::Create(call, {}, exit_pts[i]);
-#endif
                         createNewInstruction(CI, call, MSSAU);
                         LLVM_DEBUG(dbgs() << "Cloned and sunk gc_preserve_end: " << *CI << "\n");
                         REMARK([&](){
@@ -259,27 +274,42 @@ struct JuliaLICM : public JuliaPassContext {
                         });
                     }
                 }
-                else if (callee == write_barrier_func) {
-                    // A barrier that has to observe every overwritten value must fire on
-                    // every iteration, so it can't be hoisted (GC_SNAPSHOT_BARRIER).
-                    // Other plans only mark the parent dirty, where hoisting is safe.
-#ifndef GC_SNAPSHOT_BARRIER
-                    bool valid = true;
-                    for (std::size_t i = 0; i < call->arg_size(); i++) {
-                        if (!makeLoopInvariant(L, call->getArgOperand(i),
-                            changed, preheader->getTerminator(),
-                            MSSAU, SE)) {
-                            valid = false;
-                            LLVM_DEBUG(dbgs() << "Failed to hoist write barrier argument: " << *call->getArgOperand(i) << "\n");
-                            break;
-                        }
-                    }
-                    if (!valid) {
+                else if (isWriteBarrierFunc(callee)) {
+                    // Loop stores keep invariant new values live across safepoints, allowing
+                    // generational barrier hoisting. Snapshotting barriers must be notified
+                    // of the store though, so the hoisted liveness is insufficient (we would
+                    // have to also ensure we do not hoist across any safepoint).
+#ifndef GC_BARRIER_SNAPSHOT
+                    auto make_invariant = [&](Value *value) {
+                        return makeLoopInvariant(L, value, changed,
+                                                 preheader->getTerminator(), MSSAU, SE);
+                    };
+                    // Make the parent and new values available in the preheader,
+                    // hoisting their computations where safe.
+                    if (!make_invariant(call->getArgOperand(0)) ||
+                        !llvm::all_of(writeBarrierChildren(call), make_invariant)) {
                         LLVM_DEBUG(dbgs() << "Failed to hoist write barrier: " << *call << "\n");
                         continue;
                     }
+                    // Retaining a field barrier also requires its slot addresses.
+                    bool slots_invariant = true;
+                    if (isFieldWriteBarrier(callee)) {
+                        for (unsigned i = field_wb_slot_arg; i < call->arg_size(); i += 2)
+                            slots_invariant &= make_invariant(call->getArgOperand(i));
+                    }
+                    if (slots_invariant) {
+                        moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
+                    }
+                    else {
+#ifdef GC_BARRIER_FIELD_PRECISE
+                        // For a field-precise GC, we assume that demotion to an object barrier
+                        // is too imprecise / costly to be worth hoisting.
+                        continue;
+#else
+                        call = hoistAsObjectBarrier(call, preheader, MSSAU);
+#endif
+                    }
                     ++HoistedWriteBarrier;
-                    moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
                     changed = true;
                     REMARK([&](){
                         return OptimizationRemark(DEBUG_TYPE, "Hoist", call)
@@ -305,7 +335,7 @@ struct JuliaLICM : public JuliaPassContext {
                     jl_alloc::AllocUseInfo use_info;
                     jl_alloc::CheckInst::Stack check_stack;
                     jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, *this, DL};
-                    jl_alloc::runEscapeAnalysis(call, required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_set(&L->getBlocksSet()).with_optimization_remark_emitter(&ORE));
+                    jl_alloc::runEscapeAnalysis(call, required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_loop(L).with_optimization_remark_emitter(&ORE));
                     REMARK([&](){
                         std::string suse_info;
                         llvm::raw_string_ostream osuse_info(suse_info);

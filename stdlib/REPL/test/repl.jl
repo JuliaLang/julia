@@ -189,35 +189,41 @@ fake_repl() do stdin_write, stdout_read, repl
 end
 
 
-# Two ^C at an empty prompt sweep the session's in-flight work (the
-# session -> evaluation cancellation-source tree; issue #47839). N.B.: in
-# fake_repl only *displayed results* (and LineEdit's own output) reach
-# `stdout_read` - a `println` from an evaluation goes to the process
-# stdout - so every step communicates through its result value.
+# Pressing ^C twice in a row at an empty prompt cancels every task that earlier
+# REPL inputs started and that is still running (issue #47839, see
+# `Base.cancel_session_work!`). The first press only prints a hint. Any other
+# input in between resets this, so the next ^C counts as a first press again.
+#
+# In fake_repl, `stdout_read` only receives what the REPL itself prints: the
+# echo of the typed input, the prompts, and the displayed results. A `println`
+# in an evaluated expression goes to the process stdout instead. So each step
+# below evaluates an expression and waits for its displayed result. The results
+# are written as concatenations such as `"BG" * "UP"` so that the awaited text
+# occurs only in the result and not in the echo of the input.
 fake_repl() do stdin_write, stdout_read, repl
     repltask = @async REPL.run_repl(repl)
-    # start a runaway background task from an evaluation
+    # start a background task that never finishes on its own
     write(stdin_write, "global bg = @async while true; sleep(0.01); end; \"BG\" * \"UP\"\n")
     readuntil(stdout_read, "BGUP")
     readuntil(stdout_read, "julia> ")
-    # first ^C at the empty prompt arms the sweep
+    # the first ^C at the empty prompt only prints a hint
     write(stdin_write, "\x03")
     readuntil(stdout_read, "press ^C again to cancel all in-flight work")
-    # any other key stands the arm down: this ^C press only re-arms
-    write(stdin_write, "1\n")
-    readuntil(stdout_read, "julia> ")
+    # entering anything else resets that, so this ^C again only prints the hint
+    write(stdin_write, "\"un\" * \"related\"\n")
+    readuntil(stdout_read, "unrelated")
     write(stdin_write, "\x03")
     readuntil(stdout_read, "press ^C again to cancel all in-flight work")
-    # the second press in a row sweeps
+    # a second ^C directly after it cancels the running tasks
     write(stdin_write, "\x03")
     readuntil(stdout_read, "Cancelled all in-flight work.")
-    # the runaway task was cancelled ...
+    # the background task was cancelled ...
     write(stdin_write, "\"done=\" * string(timedwait(() -> istaskdone(bg), 30.0) === :ok)\n")
     readuntil(stdout_read, "done=true")
-    # ... and the session still evaluates (a fresh session epoch)
+    # ... and the REPL still evaluates new input afterwards
     write(stdin_write, "\"still\" * \"-alive\"\n")
     readuntil(stdout_read, "still-alive")
-    write(stdin_write, '\x04') # ^D: exit the REPL loop (not the process)
+    write(stdin_write, '\x04') # ^D exits the REPL loop, not the process
     Base.wait(repltask)
 end
 
@@ -1390,16 +1396,18 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
+parse_syntax(s::AbstractString) = Meta.parse(s; type=Base.Syntax)
+
 # AST transformations (softscope, Revise, OhMyREPL, etc.)
 @testset "AST Transformation" begin
     backend = REPL.REPLBackend()
     errormonitor(@async REPL.start_repl_backend(backend))
-    put!(backend.repl_channel, (:(1+1), false))
+    put!(backend.repl_channel, (parse_syntax("1+1"), false))
     reply = take!(backend.response_channel)
     @test reply == Pair{Any, Bool}(2, false)
     twice(ex) = Expr(:tuple, ex, ex)
     push!(backend.ast_transforms, twice)
-    put!(backend.repl_channel, (:(1+1), false))
+    put!(backend.repl_channel, (parse_syntax("1+1"), false))
     reply = take!(backend.response_channel)
     @test reply == Pair{Any, Bool}((2, 2), false)
     put!(backend.repl_channel, (nothing, -1))
@@ -1411,14 +1419,14 @@ end
 @testset "stray InterruptException in REPL backend" begin
     backend = REPL.REPLBackend()
     errormonitor(@async REPL.start_repl_backend(backend))
-    put!(backend.repl_channel, (:(1+1), false))
+    put!(backend.repl_channel, (parse_syntax("1+1"), false))
     @test take!(backend.response_channel) == Pair{Any, Bool}(2, false)
     # the backend task is now parked in take!(repl_channel); inject the interrupt
     # from a throwaway task, since throwto does not reschedule its caller
     @async Base.throwto(backend.backend_task, InterruptException())
     yield()
     @test !istaskdone(backend.backend_task)
-    put!(backend.repl_channel, (:(1+2), false))
+    put!(backend.repl_channel, (parse_syntax("1+2"), false))
     @test timedwait(() -> isready(backend.response_channel), 60) === :ok
     @test take!(backend.response_channel) == Pair{Any, Bool}(3, false)
     put!(backend.repl_channel, (nothing, -1))
@@ -1475,8 +1483,8 @@ end # JSON54872_public
 
     test_logger = TestLogger()
     with_logger(test_logger) do
-        REPL.warn_on_non_owning_accesses(@__MODULE__, :(JSON54872.tryparse))
-        REPL.warn_on_non_owning_accesses(@__MODULE__, :(JSON54872.tryparse))
+        REPL.warn_on_non_owning_accesses(@__MODULE__, Base.expr_to_syntax(:(JSON54872.tryparse)))
+        REPL.warn_on_non_owning_accesses(@__MODULE__, Base.expr_to_syntax(:(JSON54872.tryparse)))
     end
     # only 1 logging statement emitted thanks to `maxlog` mechanism
     @test length(test_logger.logs) == 1
@@ -1550,12 +1558,12 @@ backend = REPL.REPLBackend()
 frontend_task = @async begin
     try
         @testset "AST Transformations Async" begin
-            put!(backend.repl_channel, (:(1+1), false))
+            put!(backend.repl_channel, (parse_syntax("1+1"), false))
             reply = take!(backend.response_channel)
             @test reply == Pair{Any, Bool}(2, false)
             twice(ex) = Expr(:tuple, ex, ex)
             push!(backend.ast_transforms, twice)
-            put!(backend.repl_channel, (:(1+1), false))
+            put!(backend.repl_channel, (parse_syntax("1+1"), false))
             reply = take!(backend.response_channel)
             @test reply == Pair{Any, Bool}((2, 2), false)
         end
@@ -1575,9 +1583,9 @@ end
 @testset "Install missing packages via hooks" begin
     @testset "Parse AST for packages" begin
         test_find_packages(e) =
-            REPL.modules_to_be_loaded(Meta.lower(@__MODULE__, e))
+            REPL.modules_to_be_loaded(Base.expr_to_syntax(e))
         test_find_packages(s::String) =
-            REPL.modules_to_be_loaded(Meta.lower(@__MODULE__, Meta.parse(s)))
+            REPL.modules_to_be_loaded(parse_syntax(s))
 
         mods = test_find_packages("using Foo")
         @test mods == [:Foo]
@@ -1633,12 +1641,12 @@ end
     end
 end
 
-# Test that the REPL can find `using` statements inside macro expansions
 global packages_requested = Any[]
 old_hooks = copy(REPL.install_packages_hooks)
 empty!(REPL.install_packages_hooks)
 push!(REPL.install_packages_hooks, function(pkgs)
     append!(packages_requested, pkgs)
+    false
 end)
 
 fake_repl() do stdin_write, stdout_read, repl
@@ -1651,7 +1659,8 @@ fake_repl() do stdin_write, stdout_read, repl
         readavailable(stdout_read)
     end
 
-    write(stdin_write, "macro usingfoo(); :(using FooNotFound); end\n")
+    write(stdin_write, "using FooNotFound\n")
+    write(stdin_write, "macro usingfoo(); :(using FooNotFoundInMacro); end\n")
     write(stdin_write, "@usingfoo\n")
     write(stdin_write, "\x4")
     Base.wait(repltask)
@@ -1659,7 +1668,9 @@ fake_repl() do stdin_write, stdout_read, repl
     close(stdout_read)
     Base.wait(read_resp_task)
 end
-@test packages_requested == Any[:FooNotFound]
+@test :FooNotFound in packages_requested
+# `using`/`import` are found before macro expansion, so this is missed
+@test_broken :FooNotFoundInMacro in packages_requested
 empty!(REPL.install_packages_hooks); append!(REPL.install_packages_hooks, old_hooks)
 
 # err should reprint error if deeper than top-level
@@ -1676,7 +1687,9 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "foobar\n")
     readline(stdout_read)
     @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined in `Main`"
-    @test readline(stdout_read) == "" skip = Sys.iswindows() && Sys.WORD_SIZE == 32
+    @test readline(stdout_read) == "Stacktrace:" skip = Sys.iswindows() && Sys.WORD_SIZE == 32
+    @test readline(stdout_read) == " [1] top-level scope" skip = Sys.iswindows() && Sys.WORD_SIZE == 32
+    @test occursin(r"^   @ REPL\[\d+\]:1:?1?$", readline(stdout_read)) skip = Sys.iswindows() && Sys.WORD_SIZE == 32
     readuntil(stdout_read, "julia> ", keep=true)
     # check that top-level error did not change `err`
     write(stdin_write, "err\n")
@@ -1931,10 +1944,11 @@ let io = IOBuffer()
     @test REPL.banner(io) === nothing
     seek(io, 0)
     @test countlines(io) == 9
-    take!(io)
+    @test occursin("Version $(Base.version_with_build_variant())", String(take!(io)))
     @test REPL.banner(io; short=true) === nothing
     seek(io, 0)
     @test countlines(io) == 2
+    @test occursin("Version $(Base.version_with_build_variant())", String(take!(io)))
 end
 
 @testset "Docstrings" begin

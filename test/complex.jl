@@ -24,6 +24,20 @@ for T in (Int64, Float64)
     @test complex(Complex{T}) == Complex{T}
 end
 
+# Invalid bottom-type calls must not contribute a type object to numeric inference.
+@testset "bottom-type numeric conversions" begin
+    @test Base.infer_return_type(complex, (Any, Any)) === Complex
+    @test Base.infer_return_type(real, (Any, Any)) === Union{}
+    @test Base.infer_return_type(float, (Any, Any)) === Union{}
+    for f in (complex, real, float)
+        @test f(Missing) === Missing
+        @test f(Union{Float64, Missing}) === Union{f(Float64), Missing}
+    end
+    for T in (Float32, Float64)
+        @test @inferred(complex(T(1), T(2))) === Complex{T}(1, 2)
+    end
+end
+
 @testset "show for complex" begin
     @test sprint(show, complex(1, 0), context=:compact => true) == "1+0im"
     @test sprint(show, complex(true, true)) == "Complex(true,true)"
@@ -123,6 +137,11 @@ end
     @test isequal(complex(true,false) - true, complex(true,false) - complex(true,false))
     @test isequal(true * complex(true,false), complex(true,false) * complex(true,false))
     @test isequal(complex(true,false) * true, complex(true,false) * complex(true,false))
+end
+
+@testset "wrapping arithmetic" begin
+    @test complex(typemax(Int), 1) +% 1 == complex(typemin(Int), 1)
+    @test -%(complex(typemin(Int), 1)) == complex(typemin(Int), -1)
 end
 
 @testset "basic math functions" begin
@@ -1104,12 +1123,12 @@ end
 
         @test isequal(one(T) / complex(T(Inf),-zero(T)), complex(zero(T), zero(T)))
         @test isequal(one(T) / complex(T(Inf),-one(T)),  complex(zero(T), zero(T)))
-        @test isequal(one(T) / complex(T(Inf),T(-NaN)),  complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(Inf),-T(NaN)),  complex(zero(T), zero(T)))
         @test isequal(one(T) / complex(T(Inf),T(-Inf)),  complex(zero(T), zero(T)))
 
         @test isequal(one(T) / complex(T(-Inf),-zero(T)),complex(-zero(T), zero(T)))
         @test isequal(one(T) / complex(T(-Inf),-one(T)), complex(-zero(T), zero(T)))
-        @test isequal(one(T) / complex(T(-Inf),T(-NaN)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(-Inf),-T(NaN)), complex(-zero(T), zero(T)))
         @test isequal(one(T) / complex(T(-Inf),T(-Inf)), complex(-zero(T), zero(T)))
 
         @test isequal(one(T) / complex(zero(T), T(Inf)), complex(zero(T), -zero(T)))
@@ -1122,11 +1141,11 @@ end
 
         @test isequal(one(T) / complex(-zero(T), T(Inf)), complex(-zero(T), -zero(T)))
         @test isequal(one(T) / complex(-one(T),  T(Inf)), complex(-zero(T), -zero(T)))
-        @test isequal(one(T) / complex(T(-NaN),  T(Inf)), complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(-T(NaN),  T(Inf)), complex(-zero(T), -zero(T)))
 
         @test isequal(one(T) / complex(-zero(T), T(-Inf)), complex(-zero(T), zero(T)))
         @test isequal(one(T) / complex(-one(T),  T(-Inf)), complex(-zero(T), zero(T)))
-        @test isequal(one(T) / complex(T(-NaN),  T(-Inf)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(-T(NaN),  T(-Inf)), complex(-zero(T), zero(T)))
 
         # divide complex by complex Inf
         @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T)))

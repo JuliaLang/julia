@@ -405,6 +405,8 @@ function fieldname(t::DataType, i::Integer)
 end
 
 fieldname(t::UnionAll, i::Integer) = fieldname(unwrap_unionall(t), i)
+fieldname(t::Core.TypeEgal, i::Integer) = fieldname(typeof(type_parameter(t)), i)
+fieldname(::TypeEq, ::Integer) = throw(ArgumentError("type does not have definite field names"))
 fieldname(t::Type{<:Tuple}, i::Integer) =
     i < 1 || i > fieldcount(t) ? throw(BoundsError(t, i)) : Int(i)
 
@@ -433,6 +435,8 @@ julia> fieldnames(Tuple{String,Int})
 fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
                            (_fieldnames(t)...,))::Tuple{Vararg{Symbol}}
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
+fieldnames(t::Core.TypeEgal) = fieldnames(typeof(type_parameter(t)))
+fieldnames(::TypeEq) = throw(ArgumentError("type does not have a definite number of fields"))
 fieldnames(::Core.TypeofBottom) =
     throw(ArgumentError("The empty type does not have field names since it does not have instances."))
 fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
@@ -631,8 +635,8 @@ struct DataTypeLayout
     # arrayelem_isatomic : 1;
     # arrayelem_islocked : 1;
     # isbitsegal : 1;
-    # unused_bits : 3;
-    # padding : 5;
+    # unused_bits : 7;
+    # padding : 1;
 end
 
 function DataTypeLayout(dt::DataType)
@@ -1268,6 +1272,7 @@ julia> structinfo(Base.Filesystem.StatStruct)
 """
 fieldoffset(x::DataType, idx::Integer) = (@_foldable_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
 fieldoffset(x::DataType, name::Symbol) = fieldoffset(x, fieldindex(x, name))
+fieldoffset(x::Core.TypeEgal, idx::Union{Integer,Symbol}) = fieldoffset(typeof(type_parameter(x)), idx)
 
 """
     fieldtype(T, name::Symbol | index::Int)
@@ -1459,11 +1464,17 @@ function fieldcount(@nospecialize t)
     if t === Union{}
         throw(ArgumentError("The empty type does not have a well-defined number of fields since it does not have instances."))
     end
+    if t isa Core.TypeEgal
+        return nfields(type_parameter(t))
+    end
     t = unwrap_unionall(t)
     if t isa Union
         fcount = _fieldcount_noerror(t)
         fcount === nothing && throw(ArgumentError("type does not have a definite number of fields"))
         return fcount
+    end
+    if t isa TypeEq
+        throw(ArgumentError("type does not have a definite number of fields"))
     end
     if !(t isa DataType)
         throw(TypeError(:fieldcount, DataType, t))
@@ -1500,6 +1511,7 @@ julia> fieldtypes(Foo)
 ```
 """
 fieldtypes(@nospecialize T::Type) = (@_foldable_meta; ntupleany(i -> fieldtype(T, i), fieldcount(T)))
+fieldtypes(T::Core.TypeEgal) = fieldtypes(typeof(type_parameter(T)))
 
 # return all instances, for types that can be enumerated
 
@@ -1520,6 +1532,7 @@ julia> instances(Color)
 function instances end
 
 function to_tuple_type(@nospecialize(t))
+    @_terminates_locally_meta
     if isa(t, Tuple) || isa(t, AbstractArray) || isa(t, SimpleVector)
         t = Tuple{t...}
     end

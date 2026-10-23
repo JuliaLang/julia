@@ -90,6 +90,9 @@ public
     uabs,
     mul_hi,
 
+# Numbers
+    decompose,
+
 # C interface
     cconvert,
     unsafe_convert,
@@ -101,6 +104,7 @@ public
 # Macros
     @assume_effects,
     @constprop,
+    @cpu_supports,
     @locals,
     @propagate_inbounds,
     @__doc__,

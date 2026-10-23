@@ -75,8 +75,6 @@ The 10,000 foot view of the whole process is as follows:
 By default, Julia uses [JuliaSyntax.jl](https://github.com/JuliaLang/JuliaSyntax.jl) to produce the
 AST. Historically, it used a small lisp program written in femtolisp, the source-code for which is
 distributed inside Julia in [src/flisp](https://github.com/JuliaLang/julia/tree/master/src/flisp).
-If the `JULIA_USE_FLISP_PARSER` environment variable is set to `1`, the old parser will be used
-instead.
 
 ## [Macro Expansion](@id dev-macro-expansion)
 

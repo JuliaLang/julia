@@ -405,8 +405,10 @@ function (:)(start::T, step::T, stop::T) where T<:IEEEFloat
             m = maxintfloat(T, Int)
             if den != 0 && abs(start*den) <= m && abs(step*den) <= m &&  # will round succeed?
                     rem(den, start_d) == 0 && rem(den, step_d) == 0      # check lcm overflow
-                start_n = round(Int, start*den)
-                step_n = round(Int, step*den)
+                # scale the rationals exactly: start*den can round to a different
+                # integer when T has little precision (e.g. Float16)
+                start_n *= div(den, start_d)
+                step_n *= div(den, step_d)
                 len = max(0, Int(div(den*stop_n - stop_d*start_n + step_n*stop_d, step_n*stop_d)))
                 # Integer ops could overflow, so check that this makes sense
                 if isbetween(start, start + (len-1)*step, stop + step/2) &&
@@ -455,8 +457,8 @@ function range_start_step_length(a::T, st::T, len::Integer) where T<:IEEEFloat
         m = maxintfloat(T, Int)
         if abs(den*a) <= m && abs(den*st) <= m &&
                 rem(den, start_d) == 0 && rem(den, step_d) == 0
-            start_n = round(Int, den*a)
-            step_n = round(Int, den*st)
+            start_n *= div(den, start_d)
+            step_n *= div(den, step_d)
             return floatrange(T, start_n, step_n, len, den)
         end
     end
@@ -571,8 +573,8 @@ function _convertSRL(::Type{StepRangeLen{T,R,S,L}}, r::AbstractRange{U}) where {
         m = maxintfloat(T, Int)
         if den != 0 && abs(f*den) <= m && abs(s*den) <= m &&
                 rem(den, start_d) == 0 && rem(den, step_d) == 0
-            start_n = round(Int, f*den)
-            step_n = round(Int, s*den)
+            start_n *= div(den, start_d)
+            step_n *= div(den, step_d)
             return floatrange(T, start_n, step_n, L(length(r)), den)
         end
     end

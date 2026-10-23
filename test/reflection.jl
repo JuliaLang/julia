@@ -954,6 +954,23 @@ end
 @test_throws ArgumentError fieldcount(Real)
 @test_throws ArgumentError fieldcount(AbstractArray)
 @test_throws ArgumentError fieldcount(Tuple{Any,Vararg{Any}})
+# TypeEgal{T} has the single instance `T` (issue #62890)
+@test fieldcount(Core.TypeEgal{Int}) == nfields(Int)
+@test fieldcount(Core.TypeEgal{Type{Int}}) == nfields(Type{Int}) == 1
+@test fieldnames(Core.TypeEgal{Int}) == fieldnames(DataType)
+@test fieldname(Core.TypeEgal{Int}, 1) === fieldname(DataType, 1)
+@test fieldtypes(Core.TypeEgal{Int}) == fieldtypes(DataType)
+@test supertype(Core.TypeEgal{Int}) === Type{Int}
+@test supertype(Type{Int}) === Core.AnyType
+@test supertype(Type{<:Integer}) === Core.AnyType
+@test fieldtype(Core.TypeEgal{Int}, 1) === fieldtype(Core.TypeEgal{Int}, :name) === fieldtype(DataType, 1)
+@test fieldtype(Union{Core.TypeEgal{Int},Core.TypeEgal{Float64}}, 1) === fieldtype(DataType, 1)
+@test only(Base.return_types(() -> fieldtype(Core.TypeEgal{Int}, :name), ())) === Core.TypeEgal{fieldtype(DataType, 1)}
+@test fieldoffset(Core.TypeEgal{Int}, 2) == fieldoffset(Core.TypeEgal{Int}, :super) == fieldoffset(DataType, 2)
+@test_throws ArgumentError fieldcount(Type{Int})
+@test_throws ArgumentError fieldnames(Type{Int})
+@test_throws ArgumentError fieldname(Type{Int}, 1)
+@test_throws ArgumentError fieldtypes(Type{<:Integer})
 
 # Common-field unions are definite only when all alternatives share the field count.
 @test fieldcount(Union{Tuple{Int,Float64},Tuple{Int,Int}}) == 2
@@ -1178,6 +1195,22 @@ end
 @test  hasmethod(f31353, Tuple{Any, Array{D}} where D<:Dict)
 @test !hasmethod(f31353, Tuple{Any, Array{D}} where D<:AbstractDict)
 
+# `hasmethod` with several argument types folds to a constant
+module HasmethodFoldable
+using Test
+struct C end
+k(::C) = 1
+for sig in (Tuple{C, Int}, Tuple{C, Int, Float64}, Tuple{C, Vararg{Int}}, Tuple{C, T} where T)
+    f = @eval () -> hasmethod(k, $sig)
+    @test Core.Compiler.is_foldable(Base.infer_effects(f, ()))
+    @test only(code_typed(f, ())).first.code == Any[Core.ReturnNode(false)]
+end
+g() = hasmethod(k, Tuple{C, Int})
+@test !g()
+k(::C, ::Int) = 2
+@test g()
+end
+
 # issue #26267
 module M26267
 import Test
@@ -1291,6 +1324,20 @@ end
     @test f !== Core._apply_iterate
     @test f !== Core._apply
     @test occursin("f2#", String(nameof(f)))
+end
+
+module BodyFunctionWorld
+const before = Base.get_world_counter()
+f(x; a=1) = x + a
+end
+
+@testset "bodyfunction world age" begin
+    m = only(methods(BodyFunctionWorld.f))
+    # the body function is found even when the calling task runs in a world age
+    # that predates its definition
+    f = Base.invoke_in_world(BodyFunctionWorld.before, Base.bodyfunction, m)
+    @test occursin("f#", String(nameof(f)))
+    @test Base.bodyfunction(m; world=m.primary_world) === f
 end
 
 

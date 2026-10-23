@@ -265,6 +265,18 @@ sum_multi_good (generic function with 1 method)
 julia> sum_multi_good(1:1_000_000)
 500000500000
 ```
+
+When the return values of the tasks are not needed, the [`@sync`](@ref) macro is a convenient
+alternative to collecting the tasks and waiting on each of them: it waits until all tasks started
+by `Threads.@spawn` lexically inside its block have completed. If any of the tasks throw, the
+exceptions are collected and rethrown as a [`CompositeException`](@ref).
+
+```julia
+@sync for i in eachindex(results)
+    Threads.@spawn results[i] = compute(i)
+end
+```
+
 !!! note
     Buffers should not be managed based on `threadid()` i.e. `buffers = zeros(Threads.nthreads())` because concurrent tasks
     can yield, meaning multiple concurrent tasks may use the same buffer on a given thread, introducing risk of data races.

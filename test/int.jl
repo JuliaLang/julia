@@ -292,6 +292,19 @@ end
     U in [Base.BitInteger_types..., BigInt]
     @test typeof(rand(U(0):U(127)) % T) === T
 end
+@testset "rem, mod, clamp, typemin, typemax with Union{} throw MethodError" begin
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    for f in (rem, mod, clamp), x in (1, big(1), 'a', 1.0)
+        @test_throws MethodError(f, (x, Union{})) f(x, Union{})
+        @test which(f, (typeof(x), Type{Union{}})).sig == Tuple{typeof(f), Any, Type{Union{}}, Vararg}
+    end
+    @test_throws MethodError(rem, (1, Union{}, RoundDown)) rem(1, Union{}, RoundDown)
+    for f in (typemin, typemax)
+        @test_throws MethodError(f, (Union{},)) f(Union{})
+        @test_throws MethodError(f, (Union{}, 1)) f(Union{}, 1)
+        @test which(f, (Type{Union{}},)).sig == Tuple{typeof(f), Type{Union{}}, Vararg}
+    end
+end
 
 @testset "Signed, Unsigned, signed, unsigned for bitstypes" begin
     for (S,U) in zip(Base.BitSigned_types, Base.BitUnsigned_types)
@@ -301,6 +314,12 @@ end
         @test typemax(U) % Unsigned === typemax(U)
         @test -one(S) % Unsigned % Signed === -one(S)
         @test ~one(U) % Signed % Unsigned === ~one(U)
+    end
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    for f in (signed, unsigned)
+        @test_throws MethodError(f, (Union{},)) f(Union{})
+        @test_throws MethodError(f, (Union{}, 1)) f(Union{}, 1)
+        @test which(f, (Type{Union{}},)).sig == Tuple{typeof(f), Type{Union{}}, Vararg}
     end
 end
 
@@ -378,6 +397,19 @@ end
                 end
             end
         end
+    end
+end
+
+# Check both comparison directions at signed and unsigned limits, including equal values.
+@testset "mixed signedness comparisons" begin
+    for S in Base.BitSigned_types,
+        U in Base.BitUnsigned_types,
+        s in (typemin(S), S(-1), S(0), S(1), typemax(S)),
+        u in (U(0), U(1), typemax(U)),
+        op in (==, <, <=)
+
+        @test op(s, u) === op(BigInt(s), BigInt(u))
+        @test op(u, s) === op(BigInt(u), BigInt(s))
     end
 end
 

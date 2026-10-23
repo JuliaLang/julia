@@ -45,7 +45,9 @@ symlink_q(tgt, link) = isfile(link) || symlink(tgt, link)
 cp_q(src, dest) = isfile(dest) || cp(src, dest)
 
 # make links for stdlib package docs, this is needed until #552 in Documenter.jl is finished
+link_stdlib_doc(src, dest) = Sys.iswindows() ? cp_q(src, dest) : symlink_q(src, dest)
 const STDLIB_DOCS = []
+const STDLIB_EXTRA_DOCS = String[]
 const EXT_STDLIB_DOCS = ["Pkg"]
 cd(joinpath(buildrootdoc, "src")) do
     Base.rm("stdlib"; recursive=true, force=true)
@@ -60,12 +62,15 @@ cd(joinpath(buildrootdoc, "src")) do
         if isfile(sourcefile)
             targetfile = joinpath("stdlib", dir * ".md")
             push!(STDLIB_DOCS, (stdlib = Symbol(dir), targetfile = targetfile))
-            if Sys.iswindows()
-                cp_q(sourcefile, targetfile)
-            else
-                symlink_q(sourcefile, targetfile)
-            end
+            link_stdlib_doc(sourcefile, targetfile)
         end
+    end
+    # The solvers need GPL libraries, so their docs are a separate page
+    solverfile = joinpath(STDLIB_DIR, "SparseArrays", "docs", "src", "solvers.md")
+    if Base.USE_GPL_LIBS && isfile(solverfile)
+        targetfile = joinpath("stdlib", "SparseArrays-solvers.md")
+        push!(STDLIB_EXTRA_DOCS, targetfile)
+        link_stdlib_doc(solverfile, targetfile)
     end
 end
 
@@ -239,6 +244,98 @@ function generate_agent_skill_docs()
 end
 AgentSkillDocs = generate_agent_skill_docs()
 
+# Shared machinery for the generated tab-completion tables in
+# `manual/unicode-input.md` and `manual/emoji-input.md`. The LaTeX and emoji
+# tables are each large enough that rendering both on one page takes the
+# generated HTML past Documenter's `size_threshold`, so they live on separate
+# pages and both call into this module.
+module UnicodeTables
+
+import Markdown
+
+const NBSP = '\u00A0'
+
+# Invert the completion tables: map each completed string to every tab
+# completion sequence that produces it.
+function tab_completions(symbols...)
+    completions = Dict{String, Vector{String}}()
+    for each in symbols, (k, v) in each
+        completions[v] = push!(get!(completions, v, String[]), k)
+    end
+    return completions
+end
+
+# `UnicodeData.txt` is downloaded into the build root by `doc/Makefile`, which
+# is not the directory this file lives in for out-of-tree builds.
+unicode_data_file() = joinpath(Main.buildrootdoc, "UnicodeData.txt")
+
+# Parsed once and shared by every page that renders a table.
+const UNICODE_NAMES = Dict{UInt32, String}()
+
+function unicode_data()
+    isempty(UNICODE_NAMES) || return UNICODE_NAMES
+    open(unicode_data_file()) do unidata
+        for line in readlines(unidata)
+            id, name, desc = split(line, ";")[[1, 2, 11]]
+            codepoint = parse(UInt32, "0x$id")
+            UNICODE_NAMES[codepoint] = titlecase(lowercase(
+                name == "" ? desc : desc == "" ? name : "$name / $desc"))
+        end
+    end
+    return UNICODE_NAMES
+end
+
+# Surround combining characters with no-break spaces (i.e '\u00A0'). Follows the same format
+# for how unicode is displayed on the unicode.org website:
+# https://util.unicode.org/UnicodeJsps/character.jsp?a=0300
+function fix_combining_chars(char)
+    cat = Base.Unicode.category_code(char)
+    return cat == 6 || cat == 8 ? "$NBSP$char$NBSP" : "$char"
+end
+
+function table_entries(completions, unicode_dict)
+    entries = Any[Any[
+        ["Code point(s)"],
+        ["Character(s)"],
+        ["Tab completion sequence(s)"],
+        ["Unicode name(s)"],
+    ]]
+    for (chars, inputs) in sort!(collect(completions), by = first)
+        code_points, unicode_names, characters = String[], String[], String[]
+        for char in chars
+            push!(code_points, "U+$(uppercase(string(UInt32(char), base = 16, pad = 5)))")
+            push!(unicode_names, get(unicode_dict, UInt32(char), "(No Unicode name)"))
+            push!(characters, isempty(characters) ? fix_combining_chars(char) : "$char")
+        end
+        inputs_md = []
+        for (i, input) in enumerate(inputs)
+            i > 1 && push!(inputs_md, ", ")
+            push!(inputs_md, Markdown.Code("", input))
+        end
+        push!(entries, [
+            [join(code_points, " + ")],
+            [join(characters)],
+            inputs_md,
+            [join(unicode_names, " + ")],
+        ])
+    end
+    table = Markdown.Table(entries, [:l, :c, :l, :l])
+    # We also need to wrap the Table in a Markdown.MD "document"
+    return Markdown.MD([table])
+end
+
+"""
+    symbol_table(symbols...)
+
+Render the tab completions in `symbols` (dictionaries mapping a completion
+sequence to the string it expands to, such as `REPL.REPLCompletions.latex_symbols`)
+as a Markdown table, annotated with the code points and Unicode names of each
+completed character.
+"""
+symbol_table(symbols...) = table_entries(tab_completions(symbols...), unicode_data())
+
+end # module UnicodeTables
+
 Manual = [
     "manual/getting-started.md",
     "manual/installation.md",
@@ -280,6 +377,7 @@ Manual = [
     "manual/faq.md",
     "manual/noteworthy-differences.md",
     "manual/unicode-input.md",
+    "manual/emoji-input.md",
     "manual/command-line-interface.md",
     "manual/worldage.md",
 ]
@@ -307,12 +405,12 @@ BaseDocs = [
     "base/simd-types.md",
 ]
 
-StdlibDocs = [stdlib.targetfile for stdlib in STDLIB_DOCS]
+StdlibDocs = [[stdlib.targetfile for stdlib in STDLIB_DOCS]; STDLIB_EXTRA_DOCS]
 
 # HACK: get nicer sorting here, even though we don't have the header
 # of the .md files at hand.
 sort!(StdlibDocs, by=function(x)
-    x = replace(x, "stdlib/" => "")
+    x = chopsuffix(replace(x, "stdlib/" => ""), ".md")
     startswith(x, "Libdl") && return lowercase("Dynamic Linker")
     startswith(x, "Test") && return lowercase("Unit Testing")
     return lowercase(x)
@@ -446,6 +544,12 @@ for stdlib in STDLIB_DOCS
 end
 # A few standard libraries need more than just the module itself in the DocTestSetup.
 # This overwrites the existing ones from above though, hence the warn=false.
+DocMeta.setdocmeta!(
+    Dates,
+    :DocTestSetup,
+    maybe_revise(:(using Dates; using Dates: Timestamp));
+    recursive=true, warn=false,
+)
 DocMeta.setdocmeta!(
     SparseArrays,
     :DocTestSetup,

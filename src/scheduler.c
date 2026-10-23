@@ -575,6 +575,18 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                         jl_gc_safepoint();
                     }
                     JL_UV_UNLOCK();
+                    if (enter_eventloop && !active) {
+                        // The unlock may have run finalizers, and those can take the
+                        // iolock (e.g. `uvfinalize`). A thread that armed a handle in
+                        // the meantime and found the iolock held relies on us to get
+                        // the loop serviced, so check again that it is idle, this
+                        // time without running finalizers.
+                        active = 1;
+                        if (jl_mutex_trylock_nogc(&jl_uv_mutex)) {
+                            active = uv_loop_alive(jl_global_event_loop());
+                            jl_mutex_unlock_nogc(&jl_uv_mutex);
+                        }
+                    }
                     // optimization: check again first if we may have work to do.
                     // Otherwise we got a spurious wakeup since some other thread
                     // that just wanted to steal libuv from us. We will just go

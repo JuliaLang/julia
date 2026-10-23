@@ -6,8 +6,9 @@ calling Julia functions from C code. This can be used to integrate Julia code in
 C/C++ project, without the need to rewrite everything in C/C++. Julia has a C API to make
 this possible. As almost all programming languages have some way to call C functions, the
 Julia C API can also be used to build further language bridges (e.g. calling Julia from
-Python, Rust or C#). Even though Rust and C++ can use the C embedding API directly, both
-have packages helping with it, for C++ [Jluna](https://github.com/Clemapfel/jluna) is useful.
+Python, Rust or C#). Even though C++ can use the C embedding API directly, libraries that
+provide a more convenient API, like [Jluna](https://github.com/Clemapfel/jluna), are available.
+For Rust, the [jlrs](https://github.com/Taaitaaiger/jlrs) crate provides bindings to the C API.
 
 ## High-Level Embedding
 
@@ -441,7 +442,7 @@ need to read the reference the store is about to displace:
 
 ```c
 jl_value_t *parent = some_old_value, *child = some_young_value;
-jl_gc_wb(parent, child);
+jl_gc_wb(parent, &((some_specific_type*)parent)->field, child);
 ((some_specific_type*)parent)->field = child;
 ```
 
@@ -457,7 +458,7 @@ Calling `jl_array_ptr_set` is usually much preferred. But direct updates can be 
 jl_array_t *some_array = ...; // e.g. a Vector{Any}
 void **data = jl_array_data(some_array, void*);
 jl_value_t *some_value = ...;
-jl_gc_wb(jl_array_owner(some_array), some_value);
+jl_gc_wb(jl_array_owner(some_array), &data[0], some_value);
 data[0] = some_value;
 ```
 

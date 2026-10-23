@@ -49,7 +49,7 @@ void __cdecl crt_sig_handler(int sig, int num)
     case SIGINT:
         signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler);
         if (!jl_ignore_sigint()) {
-            if (exit_on_sigint)
+            if (jl_sigint_get_policy() == JL_SIGINT_EXIT)
                 jl_exit(130); // 128 + SIGINT
             // This handler runs synchronously on the raising thread. If that
             // is a GC-unsafe Julia mutator, the request path's GC exclusion
@@ -58,14 +58,17 @@ void __cdecl crt_sig_handler(int sig, int num)
             // then holds off any new collection while the sources are
             // touched).
             jl_task_t *ct = jl_get_current_task();
+            int delivered;
             if (ct != NULL && ct->ptls != NULL) {
                 int8_t gc_state = jl_gc_safe_enter(ct->ptls);
-                jl_sigint_request_cancellation();
+                delivered = jl_sigint_request_cancellation();
                 jl_gc_safe_leave(ct->ptls, gc_state);
             }
             else {
-                jl_sigint_request_cancellation();
+                delivered = jl_sigint_request_cancellation();
             }
+            if (!delivered)
+                jl_exit(130); // 128 + SIGINT
         }
         break;
     default: // SIGSEGV, SIGTERM, SIGILL, SIGABRT
@@ -208,7 +211,10 @@ static SRWLOCK ctx_rewrite_lock = SRWLOCK_INIT;
 // before any frame-based SEH search, so the synthetic frame needs no unwind
 // information.)
 
-static void *jl_win_restore_page = NULL;
+// Only the assembly of jl_win_restore_trigger refers to this by name, which
+// LTO cannot see, so keep it external and marked used: otherwise it is
+// internalized away and the stub is left with an undefined reference.
+__attribute__((used)) void *jl_win_restore_page = NULL;
 
 static inline int jl_addr_is_win_restore_trigger(uintptr_t addr)
 {
@@ -519,12 +525,11 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
         default: sig = SIGTERM; break;
     }
     if (!jl_ignore_sigint()) {
-        if (exit_on_sigint)
+        if (jl_sigint_get_policy() == JL_SIGINT_EXIT)
             jl_exit(128 + sig); // 128 + SIGINT
         if (sig == SIGINT) {
-            // Deliver the press through the cancellation system (see
-            // jl_sigint_request_cancellation).
-            jl_sigint_request_cancellation();
+            if (!jl_sigint_request_cancellation())
+                jl_exit(128 + sig);
         }
         else {
             // Close/logoff/shutdown (and Ctrl+Break): a termination
@@ -707,7 +712,6 @@ static TIMECAPS timecaps;
 static HANDLE hBtThread = 0;
 static uv_cond_t bt_data_prof_cond = CONDITION_VARIABLE_INIT;
 
-#ifdef _CPU_X86_64_
 // Callback data structure for profile timeout
 typedef struct {
     _Atomic(int) *abort_ptr;
@@ -725,7 +729,6 @@ static void CALLBACK profile_timeout_cb(PVOID lpParam, BOOLEAN TimerOrWaitFired)
         }
     }
 }
-#endif
 
 static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
 {
@@ -786,6 +789,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
         jl_safe_fprintf(ios_safe_stderr, "failed to create profile watchdog timer queue.\n");
         abort();
     }
+    jl_profile_prefault_tls();
     while (1) {
         DWORD timeout_ms = nsecprof / (GIGA / 1000);
         Sleep(timeout_ms > 0 ? timeout_ms : 1);
@@ -816,7 +820,6 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 }
 
                 // Set up timeout handler for stackwalk
-#ifdef _CPU_X86_64_
                 _Atomic(int) abort_profiling = 0;
                 profile_timeout_data_t timeout_data;
                 timeout_data.abort_ptr = &abort_profiling;
@@ -829,10 +832,16 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                     // Failed to register wait, proceed without timeout protection
                     hTimer = NULL;
                 }
-#endif
 
-                if (!jl_thread_suspend(tid, &c))
+                if (!jl_thread_suspend(tid, &c)) {
+                    // Retire the watchdog with the sample it was armed for:
+                    // left running it fires against a later iteration's
+                    // window and resumes a thread nobody suspended.
+                    jl_set_profile_abort_ptr(NULL);
+                    if (hTimer != NULL)
+                        DeleteTimerQueueTimer(hTimerQueue, hTimer, INVALID_HANDLE_VALUE);
                     continue;
+                }
 
                 jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
                 jl_task_t *t2 = jl_atomic_load_relaxed(&ptls->current_task);
@@ -848,7 +857,6 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                             profile_bt_size_max - profile_bt_size_cur - 1, 0);
                 }
 
-#ifdef _CPU_X86_64_
                 // Clear abort pointer from TLS
                 jl_set_profile_abort_ptr(NULL);
                 if (timeout_data.tid != -1)
@@ -856,9 +864,6 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 // Wait for callback to complete or cancel before continuing
                 if (hTimer != NULL)
                     DeleteTimerQueueTimer(hTimerQueue, hTimer, INVALID_HANDLE_VALUE);
-#else
-                jl_thread_resume(tid);
-#endif
 
                 // META_OFFSET_THREADID store threadid but add 1 as 0 is preserved to indicate end of block
                 profile_bt_data_prof[profile_bt_size_cur++].uintptr = tid + 1;

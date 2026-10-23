@@ -155,7 +155,7 @@ JL_DLLEXPORT void jl_finalize_precompile_inferred(int8_t cleanup_keep_ir)
             continue; // toplevel code retains its inferred IR
         if (mi->def.method->source == NULL)
             continue; // optimized opaque closures can't reconstruct their IR
-        jl_atomic_store_release(&ci->inferred, jl_nothing);
+        jl_gc_write_atomic(ci, ci->inferred, jl_value_t, jl_nothing, release);
     }
 }
 

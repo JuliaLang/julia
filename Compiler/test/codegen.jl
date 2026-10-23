@@ -31,6 +31,45 @@ end
 # are not actually materialized as call instructions.
 strip_debug_calls(ir) = replace(ir, r"call void @llvm\.dbg\.declare.*\n" => "", r"call void @llvm\.dbg\.value.*\n" => "")
 
+# Inline debug scopes follow CodegenParams, whose default retains them even
+# when Julia's internal codegen parameters disable them for image generation.
+@inline inner_scope(x) = x + 1
+outer_scope(x) = inner_scope(x)
+@testset "Inline debug scopes" begin
+    @test Base.CodegenParams().debug_info_inline_scopes == 1
+    for scopes in (false, true)
+        params = Base.CodegenParams(debug_info_level=Cint(1), debug_info_inline_scopes=scopes)
+        ir = sprint(io -> code_llvm(io, outer_scope, (Int,); raw=true,
+                                   dump_module=true, optimize=false, params))
+        @test occursin("inlinedAt:", ir) == scopes
+    end
+
+    # IR consumers retain inline scopes during precompilation, independently of
+    # Julia's internal parameters for generating the package image.
+    mktempdir() do dir
+        write(joinpath(dir, "InlineScopesDefault.jl"), """
+            module InlineScopesDefault
+            using InteractiveUtils
+            const scopes = Base.CodegenParams().debug_info_inline_scopes
+            const internal_scopes = unsafe_load(
+                cglobal(:jl_default_cgparams, Base.CodegenParams)).debug_info_inline_scopes
+            @inline inner_scope(x) = x + 1
+            outer_scope(x) = inner_scope(x)
+            const has_inline_scopes = occursin("inlinedAt:", sprint(io ->
+                code_llvm(io, outer_scope, (Int,); raw=true, dump_module=true, optimize=false,
+                          params=Base.CodegenParams(debug_info_level=Cint(1)))))
+            end
+            """)
+        cmd = `$(Base.julia_cmd()) --startup-file=no --compiled-modules=yes --pkgimages=yes
+               -e 'using InlineScopesDefault; print((InlineScopesDefault.scopes,
+                   InlineScopesDefault.internal_scopes, InlineScopesDefault.has_inline_scopes))'`
+        sep = Sys.iswindows() ? ";" : ":"
+        env = ("JULIA_DEPOT_PATH" => dir * sep, "JULIA_LOAD_PATH" => dir * sep * "@stdlib")
+        asserts = ccall(:jl_is_assertsbuild, Int8, ()) != 0
+        @test readchomp(addenv(cmd, env...)) == string((1, Int(asserts), true))
+    end
+end
+
 if !is_debug_build && opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
     @test !occursin(" call ", strip_debug_calls(get_llvm(identity, Tuple{String})))
@@ -388,6 +427,40 @@ str = String(take!(io))
 @test occursin("aliasscope", str)
 @test occursin("noalias", str)
 
+# Issue #63129: inside `@aliasscope`, only loads of `Const` arrays may be assumed not to
+# alias the stores in the scope. A recurrence carried through a plain array must be exact.
+function fwd63129!(B, a, n)
+    for l in axes(B, 1)
+        @Base.Experimental.aliasscope begin
+            @inbounds for i in 2:n
+                B[l, i] -= a[i] * B[l, i-1]
+            end
+        end
+    end
+    return B
+end
+function acc63129!(output, input, n)
+    for I in CartesianIndices(output)
+        i, j = I.I
+        @Base.Experimental.aliasscope begin
+            for k in j:n
+                output[I] += input[i, k]
+            end
+        end
+    end
+    return output
+end
+let n = 16, B = rand(4, n), a = rand(n)
+    Bref = copy(B)
+    for l in axes(Bref, 1), i in 2:n
+        Bref[l, i] -= a[i] * Bref[l, i-1]
+    end
+    @test fwd63129!(copy(B), a, n) == Bref
+    input = rand(n, n)
+    ref = [sum(@view input[i, j:n]) for i in 1:n, j in 1:n]
+    @test acc63129!(zeros(n, n), input, n) ≈ ref
+end
+
 # Issue #10208 - Unnecessary boxing for calling objectid
 struct FooDictHash{T}
     x::T
@@ -455,6 +528,34 @@ function f33590(b, x)
 end
 @test f33590(true, (3,)) == (3,)
 @test f33590(false, (3,)) == (4,)
+
+# ifelse on two values of the same isbits union, with a wider result type.
+# Assigning y in a closure keeps its inferred type wider than its value's.
+function ifelse_union_narrow(c, v)
+    y::Union{Int,Float64,Nothing} = nothing
+    (() -> y = v[1])()
+    return Core.ifelse(c, v[2], y)
+end
+function ifelse_union_any(c, v)
+    y = nothing
+    (() -> y = v[1])()
+    return Core.ifelse(c, v[2], y)
+end
+function ifelse_union_large(c, v)
+    y::Union{eltype(v),Nothing} = nothing
+    (() -> y = v[1])()
+    return ifelse(c, v[2], y)
+end
+let v = Union{Int,Float64}[1, 2.5]
+    @test ifelse_union_narrow(true, v) === 2.5
+    @test ifelse_union_narrow(false, v) === 1
+    @test ifelse_union_any(true, v) === 2.5
+    @test ifelse_union_any(false, v) === 1
+end
+let v = Union{Int8,Int16,Int32,Int64,Float64}[Int8(1), 2.5]
+    @test ifelse_union_large(true, v) === 2.5
+    @test ifelse_union_large(false, v) === Int8(1)
+end
 
 # issue 29864
 const c29864 = VecElement{Union{Int,Nothing}}(2)
@@ -547,8 +648,8 @@ let a = Core.Intrinsics.trunc_int(UInt24, 3),
     @test f((a, true)) === true
     @test f((a, false)) === false
     @test sizeof(Tuple{UInt24,Bool}) == 8
-    @test sizeof(UInt24) == 3
-    @test sizeof(Union{UInt8,UInt24}) == 3
+    @test sizeof(UInt24) == 4 # 3 value bytes rounded up to the 4-byte alignment
+    @test sizeof(Union{UInt8,UInt24}) == 4
     @test sizeof(Base.RefValue{Union{UInt8,UInt24}}) == 8
 end
 
@@ -593,6 +694,23 @@ end
         return cond
     end
     @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f4, Tuple{Bool}, true, false, false))
+
+    # unions of ghosts have nothing to preserve, from a PhiNode or a return value (#63482)
+    function f5(cond)
+        val = cond ? nothing : missing
+        GC.@preserve val begin end
+        return cond
+    end
+    @test f5(true)
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f5, Tuple{Bool}, true, false, false))
+    @noinline f6_ghosts(cond) = cond ? nothing : missing
+    function f6(cond)
+        val = f6_ghosts(cond)
+        GC.@preserve val begin end
+        return cond
+    end
+    @test f6(true)
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f6, Tuple{Bool}, true, false, false))
 end
 
 # issue #32843
@@ -887,7 +1005,7 @@ let io = IOBuffer()
     code_llvm(io,foo54166, (Vector{Union{Missing,Int}}, Int, Int), dump_module=true, raw=true)
     str = String(take!(io))
     @test !occursin("jtbaa_unionselbyte", str)
-    @test occursin("jtbaa_arrayselbyte", str)
+    @test occursin("jtbaa_memoryselbyte", str)
 end
 
 ex54166 = Union{Missing, Int64}[missing -2; missing -2];
@@ -1074,10 +1192,149 @@ let io = IOBuffer()
     @test !occursin("jtbaa_unionselbyte", str)
 end
 
+# JIT-compiled code refers to the installed Base sources in its debug info,
+# while relative file names of user code are left alone
+let ir = replace(sprint(io -> code_llvm(io, sum, Tuple{Vector{Int}}, dump_module=true, raw=true)), "\\5C" => "\\")
+    m = match(r"!DIFile\(filename: \"reduce\.jl\", directory: \"([^\"]*)\"", ir)
+    @test m !== nothing && samefile(joinpath(m[1], "reduce.jl"),
+                                    joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", "reduce.jl"))
+end
+let f = include_string(@__MODULE__, "difile_user_code(x) = x + 1", "int.jl")
+    ir = sprint(io -> code_llvm(io, f, Tuple{Int}, dump_module=true, raw=true))
+    @test occursin("!DIFile(filename: \"int.jl\", directory: \".\")", ir)
+end
+# ... and keep the recorded file names, which is what `code_llvm` and `code_native` print
+let str = sprint(io -> code_llvm(io, findnext, Tuple{Base.Fix2{typeof(==),UInt8}, Vector{UInt8}, Int}; debuginfo=:source))
+    @test occursin(r"@ strings[/\\]search\.jl:\d+", str)
+end
+let str = sprint(io -> code_llvm(io, Base.Compiler.widenconst, Tuple{Base.Compiler.Const}; debuginfo=:source))
+    @test occursin(r"@ Compiler[/\\]src[/\\]typelattice\.jl:\d+", str)
+end
+mktempdir() do dir
+    file = joinpath(dir, "difile_abspath.jl")
+    write(file, "difile_abspath(x) = x + 1")
+    f = Base.include(@__MODULE__, file)
+    @test occursin("@ $file:1", sprint(io -> code_llvm(io, f, Tuple{Int}; debuginfo=:source)))
+    @test occursin("@ $file:1", sprint(io -> code_native(io, f, Tuple{Int}; debuginfo=:source)))
+end
+# The first matching rewrite applies, whether or not the file exists
+let difiles(f, sig, map) = try
+        ccall(:jl_set_debuginfo_source_paths, Cvoid, (Any,), Core.svec(map...))
+        ir = sprint(io -> code_llvm(io, f, sig; dump_module=true, raw=true))
+        # the IR escapes a backslash as `\\` or `\5C`
+        unescape(s) = replace(s, "\\\\" => "/", "\\5C" => "/", "\\" => "/")
+        Dict(unescape(m[1]) => unescape(m[2])
+             for m in eachmatch(r"!DIFile\(filename: \"([^\"]*)\", directory: \"([^\"]*)\"", ir))
+    finally
+        Base.init_debuginfo_source_paths()
+    end
+    sig = Tuple{Base.Fix2{typeof(==),UInt8}, Vector{UInt8}, Int}
+    d = difiles(findnext, sig, ("strings/", "/nonexistent/strings", "", "/nonexistent/base"))
+    @test endswith(d["search.jl"], "/nonexistent/strings")
+    @test endswith(d["int.jl"], "/nonexistent/base")
+    d = difiles(findnext, sig, ("strings/", "/nonexistent/strings"))
+    @test endswith(d["search.jl"], "/nonexistent/strings")
+    @test d["int.jl"] == "."
+    mktempdir() do dir
+        file = joinpath(dir, "difile_rewrite.jl")
+        write(file, "difile_rewrite(x) = x + 1")
+        f = Base.include(@__MODULE__, file)
+        d = difiles(f, Tuple{Int}, (joinpath(dir, ""), "/nonexistent/abs"))
+        name = only(k for k in keys(d) if endswith(k, "difile_rewrite.jl"))
+        @test endswith(name, "/nonexistent/abs/difile_rewrite.jl")
+        @test endswith(d[name], "/nonexistent/abs")
+    end
+end
+
 let io = IOBuffer()
     code_llvm(io, (x, y) -> (@atomic x[1] = y; nothing), (AtomicMemory{Pair{Any,Any}}, Pair{Any,Any},), raw=true, optimize=false)
     str = String(take!(io))
-    @test occursin("julia.write_barrier", str)
+    @test occursin("julia.field_write_barrier", str)
+end
+
+# No write barrier on an object allocated since the last safepoint
+mutable struct FreshBarrierBox
+    x::Any
+end
+fresh_barrier(y) = (b = FreshBarrierBox(nothing); b.x = y; b)
+aged_barrier(y) = (b = FreshBarrierBox(nothing); GC.safepoint(); b.x = y; b)
+if opt_level > 0
+    @test !occursin("queue_root", get_llvm(fresh_barrier, Tuple{Any}))
+    # MMTk lowers write barriers without `jl_gc_queue_root`
+    @static if Base.USING_STOCK_GC
+        @test occursin("queue_root", get_llvm(aged_barrier, Tuple{Any}))
+    end
+end
+
+# Aggregate barriers identify the stored payload's references, including locked elements.
+struct FieldBarrierElement
+    tag::Int
+    a::Any
+    b::Any
+    c::Any
+end
+unset_field_barrier(r, ::Val{order}) where {order} = Core.memoryrefunset!(r, order, false)
+set_field_barrier(r, x, ::Val{order}) where {order} = (Core.memoryrefset!(r, x, order, false); nothing)
+swap_field_barrier(r, x, ::Val{order}) where {order} = Core.memoryrefswap!(r, x, order, false)
+set_object_field_barrier(r, x) = (r[] = x; nothing)
+
+@testset "aggregate field barriers" begin
+    T = FieldBarrierElement
+    function check_slots(ir, slot_as; clear=false)
+        lines = split(ir, '\n')
+        barriers = filter(line -> occursin("call void", line) && occursin("@julia.field_write_barrier", line), lines)
+        @test length(barriers) == 1
+        isempty(barriers) && return
+        slots = [m.captures[1] for m in eachmatch(r"ptr addrspace\((?:11|13)\) (%[^ ,]+), ptr addrspace\(10\)", only(barriers))]
+        @test length(slots) == 3
+        @test occursin("@julia.field_write_barrier.p$slot_as", only(barriers))
+        if clear
+            @test length(collect(eachmatch(r"ptr addrspace\(10\) null", only(barriers)))) == 3
+        end
+        geps = Dict(m.captures[1] => (m.captures[2], parse(Int, m.captures[3]))
+                    for m in eachmatch(r"(%[^ ,]+) = getelementptr(?: inbounds)? i8, ptr addrspace\((?:11|13)\) (%[^ ,]+), i(?:32|64) ([0-9]+)", ir))
+        payloads = String[]
+        offsets = Int[]
+        for slot in slots
+            @test haskey(geps, slot)
+            haskey(geps, slot) || continue
+            payload, offset = geps[slot]
+            push!(payloads, payload)
+            push!(offsets, offset)
+        end
+        @test offsets == [fieldoffset(T, i) for i in 2:4]
+        @test length(unique(payloads)) == 1
+        if clear && !isempty(payloads)
+            @test any(line -> occursin("store ", line) && occursin("zeroinitializer, ptr addrspace(13) $(first(payloads)),", line), lines)
+        end
+    end
+    for (M, order) in ((Memory{T}, :not_atomic), (AtomicMemory{T}, :sequentially_consistent))
+        R = typeof(GenericMemoryRef(M(undef, 0)))
+        check_slots(get_llvm(unset_field_barrier, Tuple{R,Val{order}}, true, false, false), 13; clear=true)
+        for f in (set_field_barrier, swap_field_barrier)
+            check_slots(get_llvm(f, Tuple{R,T,Val{order}}, true, false, false), 13)
+        end
+    end
+    check_slots(get_llvm(set_object_field_barrier, Tuple{Base.RefValue{T},T}, true, false, false), 11)
+end
+
+# Cancellation-token clears and rebinds must barrier the slot before storing it.
+cancellation_binding_barrier(src) = Core.cancellation_point!(src)
+@testset "cancellation binding barriers" begin
+    ir = get_llvm(cancellation_binding_barrier, Tuple{Union{Nothing,Core.CancellationTokenSource}}, true, false, false)
+    lines = split(ir, '\n')
+    barriers = findall(line -> occursin("call void", line) && occursin("@julia.field_write_barrier.p11", line), lines)
+    @test length(barriers) == 2
+    casts = Dict(m.captures[1] => m.captures[2]
+                 for m in eachmatch(r"(%[^ ,]+) = addrspacecast ptr (%[^ ,]+) to ptr addrspace\(11\)", ir))
+    for i in barriers
+        operands = match(r"@julia.field_write_barrier.p11\(ptr addrspace\(10\) [^,]+, ptr addrspace\(11\) ([^,]+), ptr addrspace\(10\) (.*)\)", lines[i])
+        @test operands !== nothing
+        operands === nothing && continue
+        slot, child = operands.captures
+        destination = haskey(casts, slot) ? "ptr $(casts[slot])" : "ptr addrspace(11) $slot"
+        @test occursin("store atomic ptr addrspace(10) $child, $destination", lines[i + 1])
+    end
 end
 
 # Test phi node codegen for union types with inline roots
@@ -1155,4 +1412,29 @@ end
     @noinline f_srettest(x::Float32) = SretAlignTest(x, x+1, x+2)
     ir = get_llvm(f_srettest, Tuple{Float32}, true, true, true)
     @test occursin(r"sret\([^)]+\) align \d+", ir)
+end
+
+# Indexing a SimpleVector is a load, not a call to the `_svec_ref` builtin
+const const_svec_ref = Core.svec(1, "a", :b)
+@testset "inline _svec_ref" begin
+    svec_ref_test(v::Core.SimpleVector, i::Int) = v[i]
+    ir = get_llvm(svec_ref_test, Tuple{Core.SimpleVector, Int})
+    @test !occursin("jl_f__svec_ref", ir)
+    @test !occursin(r"box_int(?:32|64)", ir)
+    v = Core.svec(1, "a", :b)
+    @test svec_ref_test(v, 1) === 1
+    @test svec_ref_test(v, 3) === :b
+    @test_throws BoundsError(v, 0) svec_ref_test(v, 0)
+    @test_throws BoundsError(v, 4) svec_ref_test(v, 4)
+    @test_throws BoundsError(Core.svec(), 1) svec_ref_test(Core.svec(), 1)
+
+    # a constant svec has a constant length
+    const_svec_ref_test(i::Int) = const_svec_ref[i]
+    ir = get_llvm(const_svec_ref_test, Tuple{Int})
+    @test !occursin("jl_f__svec_ref", ir)
+    @test occursin(Regex("icmp ult $Iptr %\\S+, 3\\b"), ir)
+    @test const_svec_ref_test(1) === 1
+    @test const_svec_ref_test(3) === :b
+    @test_throws BoundsError(const_svec_ref, 0) const_svec_ref_test(0)
+    @test_throws BoundsError(const_svec_ref, 4) const_svec_ref_test(4)
 end

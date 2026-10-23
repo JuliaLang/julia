@@ -379,8 +379,16 @@ end
 
 function front(t::Any32)
     n = length(t) - 1
-    r = ntuple(i -> getfield(t, i), n)
-    return r::Tuple{Vararg{eltype(typeof(t))}}
+    r = ntuple(i -> getfield(t, i), n)::Tuple{Vararg{eltype(typeof(t))}}
+    return r::_front_type(typeof(t))
+end
+
+# Preserve inference without recursively rebuilding the tuple.
+function _front_type(@nospecialize T::Type{<:Tuple})
+    @_foldable_meta
+    (T isa DataType && !isvatuple(T)) || return Tuple
+    params = (T::DataType).parameters
+    return Tuple{params[1:(length(params)::Int - 1)]...}
 end
 
 function map(f, t::Any32)

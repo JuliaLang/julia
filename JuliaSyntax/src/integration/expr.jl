@@ -159,7 +159,7 @@ function fixup_Expr_child(::Type, head::SyntaxHead, @nospecialize(arg), first::B
     elseif k != K"parens" && @isexpr(arg, :., 1) && arg.args[1] isa Tuple
         # This undoes the "Hack" below"
         h, a = arg.args[1]::Tuple{SyntaxHead,Any}
-        arg = ((!was_parens && coalesce_dot && first) ||
+        arg = a isa Symbol && ((!was_parens && coalesce_dot && first) ||
                 is_syntactic_operator(h)) ?
             Symbol(".", a) : Expr(:., a)
     elseif @isexpr(arg, :parameters) && eq_to_kw_in_params
@@ -221,10 +221,10 @@ function version_to_expr(node)
     return VersionNumber(1, nv ÷ 10, nv % 10)
 end
 
+# TODO: no longer extended by JuliaLowering; remove
 _expr_leaf_val(node::SyntaxNode, _...) = node.val
 _expr_leaf_val(cursor::RedTreeCursor, txtbuf::Vector{UInt8}, txtbuf_offset::UInt32) =
     parse_julia_literal(txtbuf, head(cursor), byte_range(cursor) .+ txtbuf_offset)
-# Extended in JuliaLowering to support `node_to_expr(::SyntaxTree, ...)`
 
 # Convert `cursor` (SyntaxNode or RedTreeCursor) to an Expr
 # `source` is a SourceFile, or if node was an Expr originally, a LineNumberNode
@@ -660,7 +660,8 @@ end
         for i = 2:2:length(args)
             arg = args[i]
             if @isexpr(arg, :., 1)
-                args[i] = Symbol(".", arg.args[1])
+                a1 = arg.args[1]
+                a1 isa Symbol && (args[i] = Symbol(".", a1))
             end
         end
     elseif k == K"meta"

@@ -803,6 +803,24 @@ test_globalonce(UndefComplex{Any})
 test_globalonce(UndefComplex{UndefComplex{Any}})
 test_globalonce(Int)
 
+# Test the untyped `global x`, particularly with the compiled versions which use the fallback path.
+module DeclaredGlobalCompiled
+    global declared_rmw
+    setonce(v) = setglobalonce!(@__MODULE__, :declared_rmw, v)
+    modify(v) = modifyglobal!(@__MODULE__, :declared_rmw, +, v)
+    swap(v) = swapglobal!(@__MODULE__, :declared_rmw, v)
+    replace(x, v) = replaceglobal!(@__MODULE__, :declared_rmw, x, v)
+end
+let M = DeclaredGlobalCompiled
+    @test_throws UndefVarError M.modify(1)
+    @test M.setonce(1) === true
+    @test M.setonce(2) === false
+    @test M.modify(1) === Pair{Any,Any}(1, 2)
+    @test M.swap("x") === 2
+    @test M.replace("x", 3) === replaceresult(Any, "x", true)
+    @test getglobal(M, :declared_rmw) === 3
+end
+
 # An untyped `global x` declaration leaves no restriction on the binding partition, so its
 # declared type is `Any`. The read-modify-write builtins must read that as `Any` to form the result type.
 module DeclaredGlobal
@@ -1432,6 +1450,34 @@ mutable struct AtomicAny52575
 end
 replaceany52575!() = (r = AtomicAny52575(1, 2); @atomicreplace r.x 1 => 2)
 @test replaceany52575!() == (old = 1, success = true)
+
+# An atomically loaded field that inlines an immutable with GC pointers stays rooted while
+# the loaded value is passed by reference, even after the field is overwritten.
+# https://github.com/JuliaLang/julia/issues/63320
+mutable struct AtomicRootObj
+    x::Int
+end
+struct AtomicRootWrap
+    obj::AtomicRootObj
+end
+mutable struct AtomicRootBox
+    @atomic wrap::AtomicRootWrap
+end
+const atomic_root_finalized = Ref(false)
+@noinline atomic_root_use(wrap::AtomicRootWrap) = wrap.obj.x
+function atomic_root_check(box::AtomicRootBox)
+    wrap = @atomic box.wrap
+    atomic_root_use(wrap)
+    @atomic box.wrap = AtomicRootWrap(AtomicRootObj(0))
+    GC.gc(); GC.gc()
+    alive = !atomic_root_finalized[]
+    return alive && atomic_root_use(wrap) == 42
+end
+let obj = AtomicRootObj(42)
+    finalizer(_ -> (atomic_root_finalized[] = true), obj)
+    global atomic_root_box = AtomicRootBox(AtomicRootWrap(obj))
+end
+@test atomic_root_check(atomic_root_box)
 
 # Test atomic Float16 operations at all optimization levels (GlobalISel miscompile on AArch64)
 # See https://github.com/JuliaLang/julia/pull/54140#issuecomment-2855794363

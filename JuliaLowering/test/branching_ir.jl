@@ -224,18 +224,19 @@ begin
 end
 #---------------------
 LoweringError:
-#= none:3 =# - Label `foo` defined multiple times
-Expression:
-  label:foo
+begin
+    @label foo
+    @label foo
+#          └─┘ ── Label `foo` defined multiple times
+end
 
 ########################################
 # Error: using value of symbolic label
 x = @label foo
 #---------------------
 LoweringError:
-#= none:1 =# - misplaced label in value position
-Expression:
-  label:foo
+x = @label foo
+#          └─┘ ── misplaced label in value position
 
 ########################################
 # Anonymous labeled block with valued break

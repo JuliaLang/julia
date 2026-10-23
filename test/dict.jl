@@ -1477,6 +1477,23 @@ end
     @test pop!(d, 1, 0) == 0
     @test pop!(d) == (3=>4)
     @test_throws ArgumentError pop!(d)
+
+    # interleaved pop!/insert visits every element and doesn't rescan from the start (#63769)
+    d = Dict(i => i for i in 1:1000)
+    seen = Set{Int}()
+    for i in 1001:3000
+        k, v = pop!(d)
+        @test k == v && !(k in seen)
+        push!(seen, k)
+        d[i] = i
+    end
+    @test length(d) == 1000
+    @test isempty(intersect(seen, keys(d)))
+    @test union(seen, keys(d)) == Set(1:3000)
+    while !isempty(d)
+        pop!(d)
+    end
+    @test_throws ArgumentError pop!(d)
 end
 
 @testset "keys as a set" begin

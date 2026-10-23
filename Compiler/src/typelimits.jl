@@ -589,6 +589,14 @@ end
 @nospecializeinfer function tmerge(𝕃::AnyMustAliasesLattice, @nospecialize(typea), @nospecialize(typeb))
     if is_valid_lattice_norec(𝕃, typea)
         typeb === Union{} && return typea
+        if is_valid_lattice_norec(𝕃, typeb) && is_same_alias(typea, typeb) &&
+                widenconst(typea.vartyp) === widenconst(typeb.vartyp)
+            # alias information is identical so simply preserve it
+            𝕃′ = widenlattice(𝕃)
+            vartyp = tmerge(𝕃′, typea.vartyp, typeb.vartyp)
+            fldtyp = tmerge(𝕃′, typea.fldtyp, typeb.fldtyp)
+            return AnyMustAlias(typea; vartyp, fldtyp)
+        end
         typea = widenmustalias(typea)
     end
     if is_valid_lattice_norec(𝕃, typeb)
@@ -623,6 +631,12 @@ end
         n_initialized_merged = min(n_initialized(typea), n_initialized(typeb))
         anyrefine = n_initialized_merged > fldmin
         for i = 1:nflds
+            if i == nflds && isvatuple(aty)
+                # the trailing `Vararg` element carries no information beyond `aty` itself,
+                # so keep it as is
+                fields[i] = (unwrap_unionall(aty)::DataType).parameters[end]
+                continue # `undefs[i]` stays `nothing`
+            end
             ai = getfield_tfunc(𝕃, typea, Const(i))
             bi = getfield_tfunc(𝕃, typeb, Const(i))
             ft = fieldtype(aty, i)

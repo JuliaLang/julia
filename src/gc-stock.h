@@ -144,6 +144,7 @@ typedef struct _jl_gc_pagemeta_t {
 } jl_gc_pagemeta_t;
 
 extern jl_gc_page_stack_t global_page_pool_lazily_freed;
+extern _Atomic(size_t) global_page_pool_lazily_freed_n;
 extern jl_gc_page_stack_t global_page_pool_clean;
 extern jl_gc_page_stack_t global_page_pool_freed;
 
@@ -662,7 +663,13 @@ STATIC_INLINE void gc_time_count_mallocd_memory(int bits) JL_NOTSAFEPOINT
     (void)bits;
 }
 #define gc_time_mallocd_memory_end()
-#define gc_time_mark_pause(t0, scanned_bytes, perm_scanned_bytes)
+STATIC_INLINE void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
+                                      int64_t perm_scanned_bytes) JL_NOTSAFEPOINT
+{
+    (void)t0;
+    (void)scanned_bytes;
+    (void)perm_scanned_bytes;
+}
 #define gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,        \
                             estimate_freed, sweep_full)
 #define  gc_time_summary(sweep_full, start, end, freed, live,           \
@@ -723,6 +730,14 @@ extern int gc_verifying;
 #define verify_parent2(ty,obj,slot,arg1,arg2) do {} while (0)
 #define gc_verifying (0)
 #endif
+
+// Does this (live or dead-this-cycle) cell hold a cancellation source? Such
+// cells take part in the collector's own weak (unlink-on-death) child lists,
+// so passes that rewrite dead objects in place have to leave them alone.
+STATIC_INLINE int gc_is_cancel_source(jl_taggedvalue_t *v) JL_NOTSAFEPOINT
+{
+    return (v->header & ~(uintptr_t)0xf) == (jl_cancel_source_tag << 4);
+}
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;

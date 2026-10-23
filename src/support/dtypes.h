@@ -13,6 +13,14 @@
 #include <stdio.h>
 #include <math.h> // NAN and INF constants
 
+#if defined(__MINGW32__) && !defined(__cplusplus)
+// mingw-w64's signbit calls __signbit, whose gnu_inline definition in math.h returns 0 or
+// 0x200 on i686, while the out-of-line one in libmingwex returns 0 or 1. GCC 15 can call the
+// latter while assuming the former's return value, miscompiling e.g. `!signbit(x)`.
+#undef signbit
+#define signbit(x) __builtin_signbit(x)
+#endif
+
 #include "platform.h"
 #include "analyzer_annotations.h"
 
@@ -76,7 +84,12 @@ typedef intptr_t ssize_t;
 #  define JL_DLLEXPORT_CODEGEN __declspec(dllexport) JL_VISIBILITY_DEFAULT
 # endif
 #define JL_HIDDEN
-#define JL_DLLIMPORT   __declspec(dllimport) JL_VISIBILITY_DEFAULT
+# ifdef JL_LIBRARY_STATIC
+// static build: everything is linked into one image
+#  define JL_DLLIMPORT JL_VISIBILITY_DEFAULT
+# else
+#  define JL_DLLIMPORT __declspec(dllimport) JL_VISIBILITY_DEFAULT
+# endif
 #else
 #define STDCALL
 #define JL_DLLIMPORT __attribute__ ((visibility("default")))

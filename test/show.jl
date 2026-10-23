@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using LinearAlgebra
+using Test, LinearAlgebra
 
 # For curmod_*
 include("testenv.jl")
@@ -653,7 +653,7 @@ test_repr("let @m(x), y=z; end", true)
 
 @test repr(:(@m x y))    == ":(#= $(@__FILE__):$(@__LINE__) =# @m x y)"
 @test string(:(@m x y))  ==   "#= $(@__FILE__):$(@__LINE__) =# @m x y"
-@test string(:(@m x y;)) == "begin\n    #= $(@__FILE__):$(@__LINE__) =# @m x y\nend"
+@test string(:(@m x y;)) == "begin\n    #= $(@__FILE__):$(@__LINE__) =#\n    #= $(@__FILE__):$(@__LINE__) =# @m x y\nend"
 
 # issue #11436
 @test_repr "1 => 2 => 3"
@@ -1554,6 +1554,15 @@ let m = Memory{StaticShowUInt63}(undef, 1)
     @test occursin("StaticShowUInt63(0x7fffffffffffffff)", shown)
     @test !occursin("StaticShowUInt63(0xffffffffffffffff)", shown)
 end
+# ... and padding bytes: sizeof is 4 for these, with 1 resp. 2 bytes of padding
+primitive type StaticShowUInt24 24 end
+primitive type StaticShowUInt17 17 end
+let m = Memory{StaticShowUInt24}(undef, 1), m17 = Memory{StaticShowUInt17}(undef, 1)
+    GC.@preserve m unsafe_store!(Ptr{UInt32}(pointer(m)), typemax(UInt32))
+    @test occursin("StaticShowUInt24(0xffffff)", static_shown(m))
+    GC.@preserve m17 unsafe_store!(Ptr{UInt32}(pointer(m17)), typemax(UInt32))
+    @test occursin("StaticShowUInt17(0x01ffff)", static_shown(m17))
+end
 
 # PR #22160
 @test static_shown(:aa) == ":aa"
@@ -2252,7 +2261,7 @@ h_line() = f_line()
 @test sprint(Base.show_unquoted, Core.Compiler.Argument(-2)) == "_-2"
 
 
-eval(Meta._parse_string("""function my_fun28173(x)
+eval(Meta.parse("""function my_fun28173(x)
     y = if x == 1
             "HI"
         elseif x == 2
@@ -2270,7 +2279,7 @@ eval(Meta._parse_string("""function my_fun28173(x)
             "three"
         end
     return y
-end""", "a"^80, 1, 1, :statement)[1]) # use parse to control the line numbers
+end""", filename="a"^80))
 let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     @test_throws "must be one of the following" sprint(IRShow.show_ir, src; context = :debuginfo => :_)
     @test !contains(sprint(IRShow.show_ir, src; context = :debuginfo => :source_inline), "a"^80)
@@ -2490,8 +2499,8 @@ end
 @weak_test_repr "a[begin, end, let x=1; (x+1;); end]"
 @test_broken repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
         ":(a[begin, end, let x = 1\n          begin\n              x + 1\n          end\n      end])"
-@test_repr "a[(bla;)]"
-@test_repr "a[(;;)]"
+@weak_test_repr "a[(bla;)]"
+@weak_test_repr "a[(;;)]"
 @weak_test_repr "a[x -> f(x)]"
 
 @testset "Base.Iterators" begin
@@ -2546,6 +2555,78 @@ end
 @test string(Union{AbstractVector, T} where T) == "Union{AbstractVector, T} where T"
 @test string(Union{Array, Memory}) == "Union{Array, Memory}"
 
+# Discard strictly broader aliases, preserving other ambiguities (issue #41034).
+module M41034
+export Dog, Cat, Giraffe, Pair, CatPair, Kitten, Kitty, FloatPair, IntPair
+export IntegerAnimal, NothingPair, TuplePair, Cats, One, Ints
+struct A{T} end
+const Dog = A{String}
+const Cat = A{Int}
+const Giraffe = A{<:Number}
+const IntegerAnimal = A{<:Integer}
+struct B{T,S,U} end
+const Pair{T,S} = B{T,S,Nothing}
+const CatPair{S} = B{Int,S,Nothing}
+const NothingPair{T} = B{T,Nothing,Nothing}
+const TuplePair{T,S} = B{Tuple{T,S},Nothing,Nothing}
+struct C{T} end
+const Kitten = C{Int}
+const Kitty = C{Int}
+const Cats = C{<:Number}
+struct D{T,S} end
+const FloatPair{S} = D{Float64,S}
+const IntPair{T} = D{T,Int}
+struct Indexed{T,N} end
+const One{T} = Indexed{T,1}
+const Ints{N} = Indexed{Int,N}
+end
+
+@testset "Overlapping type aliases" begin
+    prefix = "$(curmod_prefix)M41034."
+    @test string(M41034.Cat) == "$(prefix)Cat"
+    @test replstr(M41034.Cat) == "Cat (alias for $(prefix)A{$Int})"
+    @test string(M41034.Dog) == "$(prefix)Dog"
+    @test string(M41034.Giraffe) == "$(prefix)Giraffe"
+    @test string(M41034.Giraffe{Float64}) == "$(prefix)Giraffe{Float64}"
+    @test string(M41034.A{Int8}) == "$(prefix)IntegerAnimal{Int8}"
+    @test string(M41034.CatPair) == "$(prefix)CatPair"
+    @test string(M41034.CatPair{String}) == "$(prefix)CatPair{String}"
+    @test string(M41034.Pair{Float64,String}) == "$(prefix)Pair{Float64, String}"
+    @test string(M41034.NothingPair{String}) == "$(prefix)NothingPair{String}"
+    @test string(M41034.NothingPair{Tuple{Int,Float64}}) == "$(prefix)TuplePair{$Int, Float64}"
+    @test Base.make_typealias(M41034.B{Int,Nothing,Nothing}) === nothing
+    @test Base.make_typealias(M41034.Kitten) === nothing
+    @test string(M41034.Kitten) == "$(prefix)C{$Int}"
+    @test Base.make_typealias(M41034.D{Float64,Int}) === nothing
+    @test string(M41034.D{Float64,Int}) == "$(prefix)D{Float64, $Int}"
+    @test Base.make_typealias(M41034.Indexed{Int,1}) === nothing
+    @test string(M41034.Indexed{Int,1}) == "$(prefix)Indexed{$Int, 1}"
+end
+
+# JuMP-style aliases fix backend and hook types before fixing the numeric type.
+module M41034JuMP
+export Model, GenericModel, VariableRef, GenericVariableRef
+abstract type AbstractBackend end
+struct Backend <: AbstractBackend end
+struct ConcreteModel{T<:Real,B<:AbstractBackend,H} end
+const GenericModel{T<:Real} = ConcreteModel{T,AbstractBackend,Any}
+const Model = GenericModel{Float64}
+struct VariableRefImpl{T,M<:ConcreteModel{T}} end
+const GenericVariableRef{T<:Real} = VariableRefImpl{T,GenericModel{T}}
+const VariableRef = GenericVariableRef{Float64}
+end
+
+@testset "Nested model and variable aliases" begin
+    prefix = "$(curmod_prefix)M41034JuMP."
+    @test string(M41034JuMP.Model) == "$(prefix)Model"
+    @test string(M41034JuMP.GenericModel) == "$(prefix)GenericModel"
+    @test string(M41034JuMP.GenericModel{BigFloat}) == "$(prefix)GenericModel{BigFloat}"
+    @test string(M41034JuMP.VariableRef) == "$(prefix)VariableRef"
+    @test string(M41034JuMP.GenericVariableRef) == "$(prefix)GenericVariableRef"
+    @test string(M41034JuMP.GenericVariableRef{BigFloat}) == "$(prefix)GenericVariableRef{BigFloat}"
+    @test Base.make_typealias(M41034JuMP.ConcreteModel{Float64,M41034JuMP.Backend,Nothing}) === nothing
+end
+
 # Alias printing should recover the source binder for bounded alias parameters.
 module MBoundedAlias
 export A, B, U
@@ -2570,6 +2651,13 @@ let T = TypeVar(:T, Union{}, Integer), S = TypeVar(:S, Union{}, T)
     @test string(Union{MBoundedAlias2.A{T,S}, MBoundedAlias2.B{T,S}}) ==
         "$(curmod_prefix)MBoundedAlias2.U{T, S} where {T<:Integer, S<:T}"
 end
+
+for T in (Union{Int, Vector{Vector{C}} where C}, Union{Int, Vector{Vector{C}} where C<:Real},
+          Union{Nothing, Matrix{Int}, Vector{Vector{C}} where C},
+          Union{Nothing, Vector{Vector{C}} where C<:D} where D)
+    @test eval(Meta.parse(repr(T))) == T
+end
+@test string(Union{Int64, Vector{Vector{C}} where C}) == "Union{Int64, Vector{Vector{C}} where C}"
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"
@@ -3039,4 +3127,15 @@ end
         @test !contains(str, "\e[33m")
         @test !contains(str, "\e[93m")
     end
+end
+
+# issue #62897: `show` of `Type{v}` with a non-type parameter must not be memory-unsafe
+@testset "show Type{v} with value parameter" begin
+    @test repr(Type{setindex!}) == "Type{setindex!}"
+    @test repr(Type{1}) == "Type{1}"
+    @test repr(Type{:sym}) == "Type{:sym}"
+    @test repr(Type{(1, 2)}) == "Type{(1, 2)}"
+    @test sprint(show, Type{1}; context=:compact => false) == "TypeEq{1}"
+    @test repr("text/plain", Type{setindex!}) == "Type{setindex!}"
+    @test repr("text/plain", Type{1}) == "Type{1}"
 end

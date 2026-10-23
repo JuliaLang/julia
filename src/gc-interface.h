@@ -15,11 +15,11 @@ extern "C" {
 #endif
 
 struct _jl_tls_states_t;
-struct _jl_task_t;
-struct _jl_value_t;
-struct _jl_weakref_t;
-struct _jl_datatype_t;
-struct _jl_genericmemory_t;
+struct JL_GC_TRACKED_TYPE _jl_task_t;
+struct JL_GC_TRACKED_TYPE _jl_value_t;
+struct JL_GC_TRACKED_TYPE _jl_weakref_t;
+struct JL_GC_TRACKED_TYPE _jl_datatype_t;
+struct JL_GC_TRACKED_TYPE _jl_genericmemory_t;
 
 // ========================================================================= //
 // GC Metrics
@@ -60,7 +60,7 @@ typedef struct {
     // (GC internal) Per-thread allocation quota before triggering a GC
     // NOTE: This field is no longer used by the heuristics in the stock GC
     size_t interval;
-    // Duration of the last GC pause in nanoseconds
+    // Number of GC pauses completed so far (never reset by the runtime)
     int pause;
     // Number of full GC sweeps completed so far (never reset by the runtime)
     int full_sweep;
@@ -168,7 +168,8 @@ JL_DLLEXPORT const char* jl_gc_active_impl(void) JL_NOTSAFEPOINT;
 // each GC should implement it but it will most likely not be used by other code in the runtime.
 // It still needs to be annotated with JL_DLLEXPORT since it is called from Rust by MMTk.
 JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT;
-// Notify the GC that a task is resuming execution on a mutator thread.
+// Notify the GC that a task is resuming execution on a mutator thread. From here on the
+// task's stack is mutated without any barriers.
 void jl_gc_notify_task_resume(struct _jl_task_t *task) JL_NOTSAFEPOINT;
 
 // ========================================================================= //
@@ -303,44 +304,50 @@ void jl_gc_notify_image_alloc(const char* img_data, size_t len) JL_NOTSAFEPOINT;
 // Runtime Write-Barriers
 // ========================================================================= //
 
+// Collector barrier requirements, selected by the build:
+//      GC_BARRIER_SNAPSHOT: barriers must observe references before they are overwritten.
+// GC_BARRIER_FIELD_PRECISE: barriers are field-precise, so whole-object barriers are potentially expensive.
+//      GC_BARRIER_ON_TASKS: stores into the current task require a barrier (the collector does
+//                           not implicitly remember tasks).
+
 // Write barrier slow-path. If a generational collector is used,
 // it may enqueue an old object into the remembered set of the calling thread.
 JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOINT;
-// Dedicated slow-path for `jl_gc_wb`. If a generational collector is used,
-// it may enqueue an old object into the remembered set of the calling thread.
-JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
-// In a generational collector is used, this function walks over the fields of the
-// object specified by the second parameter (as defined by the data type in the third
-// parameter). If a field points to a young object, the first parameter is enqueued into the
-// remembered set of the calling thread.
-JL_DLLEXPORT void jl_gc_queue_multiroot(const struct _jl_value_t *root, const void *stored,
-                                        struct _jl_datatype_t *dt) JL_NOTSAFEPOINT;
-// If a generational collector is used, checks whether the function argument points to an
-// old object, and if so, calls the write barrier slow path above. In most cases, this
-// function is used when its caller has verified that there is a young reference in the
-// object that's being passed as an argument to this function.
-STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT;
+// Write barrier function that must be used immediately before writing any number of
+// the pointer fields of a heap-allocated object, when the fields or the values written
+// are not known individually (e.g. a bulk copy into the object). This is a less-precise
+// version of `jl_gc_wb`: It is always correct in place of the barriers below, but it may
+// be more expensive (the collector has to assume that every pointer field of the object
+// changed).
+STATIC_INLINE void jl_gc_wb_object(const void *parent) JL_NOTSAFEPOINT;
 // Write barrier function that must be used immediately before a pointer write to a
 // heap-allocated object. The value being written must point to a heap-allocated
-// object, or be NULL when the field is being cleared.
-STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
+// object, or be NULL when the field is being cleared. `slot` is the address of the field
+// being written and must not be NULL.
+STATIC_INLINE void jl_gc_wb(const void *parent, void *slot, const void *ptr) JL_NOTSAFEPOINT;
+// Variants of jl_gc_wb with the same slot convention and pre-write ordering.
 // Annotates that a write barrier can (possibly) be elided: `parent` was allocated after the
 // last safepoint so it is guaranteed young
-STATIC_INLINE void jl_gc_wb_fresh(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
+STATIC_INLINE void jl_gc_wb_fresh(const void *parent, void *slot, const void *ptr) JL_NOTSAFEPOINT;
 // Annotates that a write barrier can (possibly) be elided: the store writes a field of the
-// current task (parent == jl_current_task), which is handled specially by the GC
-STATIC_INLINE void jl_gc_wb_current_task(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
+// current task (parent == jl_current_task). Only a GC that implicitly remembers tasks may
+// elide it (see GC_BARRIER_ON_TASKS).
+STATIC_INLINE void jl_gc_wb_current_task(const void *parent, void *slot, const void *ptr) JL_NOTSAFEPOINT;
 // Annotates that a write barrier can (possibly) be elided: `ptr` is known to be an old object
-STATIC_INLINE void jl_gc_wb_knownold(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
+STATIC_INLINE void jl_gc_wb_knownold(const void *parent, void *slot, const void *ptr) JL_NOTSAFEPOINT;
 
 
-// Write-barrier function that must be used after copying multiple fields of an object into
-// another. It should be semantically equivalent to triggering multiple write barriers – one
-// per field of the object being copied, but may be special-cased for performance reasons.
-STATIC_INLINE void jl_gc_multi_wb(const void *parent,
+// Write-barrier function that must be used before copying the payload of the boxed
+// immutable `ptr` into `dest`. The object `parent` owns `dest`. `dest` must not be NULL
+// and must have the same layout as `ptr`. For a field that has a lock, `dest` points
+// after the lock, at the first byte of the payload.
+STATIC_INLINE void jl_gc_multi_wb(const void *parent, void *dest,
                                   const struct _jl_value_t *ptr) JL_NOTSAFEPOINT;
 // Write-barrier function that must be used before draining the finalizer queue.
 STATIC_INLINE void jl_gc_wb_finalizer_queue(arraylist_t *queue) JL_NOTSAFEPOINT;
+// Write-barrier function that must be used before storing a reference to module `from` in
+// the `usings` list of module `mod`.
+STATIC_INLINE void jl_gc_wb_module_usings(const void *mod, const void *from) JL_NOTSAFEPOINT;
 
 // The following `jl_gc_*` operations are fused barrier + copy / clear / etc. memory operations,
 // which permits certain barrier / copy fusion and other optimizations.
