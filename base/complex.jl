@@ -56,8 +56,8 @@ widen(::Type{Complex{T}}) where {T} = Complex{widen(T)}
 float(::Type{Complex{T}}) where {T<:AbstractFloat} = Complex{T}
 float(::Type{Complex{T}}) where {T} = Complex{float(T)}
 
-# `Complex` does not exist yet where the other methods are defined, in range.jl.
-_lerp_fraction_type(::Type{Complex{T}}) where {T<:AbstractFloat} = _lerp_fraction_type(T)
+lerpi(j::Integer, d::Integer, a::Complex{T}, b::Complex{T}) where {T<:AbstractFloat} =
+    Complex(lerpi(j, d, real(a), real(b)), lerpi(j, d, imag(a), imag(b)))
 
 """
     real(z)
