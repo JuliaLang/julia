@@ -1056,7 +1056,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, 
             }
             else if (jl_is_uniontype(ty) && jl_uniontype_istagged(ty, NULL, NULL)) {
                 // a tagged union word; access goes through typed loads/stores
-                // keyed on bit 0, never through this slot as a tracked pointer
+                // keyed on its low bits, never through this slot as a tracked pointer
                 latypes.push_back(getInt64Ty(ctxt));
                 isvector = false;
                 isarray = false;

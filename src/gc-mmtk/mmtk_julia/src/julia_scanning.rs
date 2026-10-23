@@ -608,12 +608,13 @@ fn get_stack_addr(addr: Address, offset: isize, lb: u64, ub: u64) -> Address {
 
 #[inline(always)]
 // A tagged union word references an object exactly when it is nonzero with
-// bit 0 clear; immediate values (odd words) and #undef (zero) are skipped.
+// both low bits clear (jl_tagged_word_isptr); immediate values (odd words),
+// the reserved pattern 10 and #undef (zero) are skipped.
 // Slot updates by moving plans store a plain pointer, preserving the encoding.
 #[inline(always)]
 pub fn process_tagged_slot<EV: SlotVisitor<JuliaVMSlot>>(closure: &mut EV, slot: Address) {
     let w = unsafe { slot.load::<usize>() };
-    if w != 0 && (w & 1) == 0 {
+    if w != 0 && (w & 3) == 0 {
         process_slot(closure, slot);
     }
 }

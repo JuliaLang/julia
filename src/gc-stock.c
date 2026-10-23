@@ -2088,7 +2088,7 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
 }
 
 // Mark an array of tagged union words: an element is a reference exactly when
-// its word is nonzero with bit 0 clear; immediates and #undef are skipped
+// jl_tagged_word_isptr holds; immediates and #undef are skipped
 STATIC_INLINE void gc_mark_taggedarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_value_t **obj_begin,
                       jl_value_t **obj_end, uintptr_t nptr) JL_NOTSAFEPOINT
 {
