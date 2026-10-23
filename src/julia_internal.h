@@ -1151,11 +1151,17 @@ JL_DLLEXPORT int jl_pointer_egal(jl_value_t *t);
 JL_DLLEXPORT jl_value_t *jl_nth_slot_type(jl_value_t *sig JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 // trait slots (prototype)
 extern _Atomic(jl_svec_t*) jl_trait_schemas JL_GLOBALLY_ROOTED;
+extern _Atomic(jl_svec_t*) jl_trait_tables JL_GLOBALLY_ROOTED;
+extern _Atomic(jl_svec_t*) jl_trait_overlays JL_GLOBALLY_ROOTED;
 extern _Atomic(jl_value_t*) jl_pending_method_guards JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT void jl_set_pending_method_guards(jl_value_t *f, jl_value_t *guards) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_take_pending_method_guards(jl_value_t *ft) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_clear_pending_method_guards(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_trait_schema(jl_value_t *ft) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_trait_declare(jl_value_t *trait, jl_value_t *top, jl_value_t *dflt, jl_module_t *owner) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_trait_set_entry(jl_value_t *trait, jl_value_t *T, int kind, jl_value_t *value, jl_module_t *mod) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_trait_slots(jl_value_t *tt, size_t world) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_trait_label(jl_value_t *trait, jl_value_t *T, size_t world) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_matching_methods_with_slots(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
                                              size_t world, size_t *min_valid, size_t *max_valid, int *ambig,
                                              jl_value_t *slots, int regions) JL_CANSAFEPOINT;

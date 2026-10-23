@@ -1243,11 +1243,11 @@ static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams) JL_
 // ---- trait slots (prototype) ----------------------------------------------
 //
 // A guarded method has `m->guards`, a flat svec of (argpos, trait, bound)
-// triples: it only applies to a call if `trait` returns, for the type of
-// argument `argpos`, a value of a type that is a subtype of `bound`. The traits
-// a function's guards use form its *slot schema*. Dispatch evaluates them on
-// the argument types and passes the resulting *slot types* to `ml_matches` as
-// a flat svec of (argpos, trait, slot type) triples. See
+// triples: it only applies to a call if the label `trait` gives the type of
+// argument `argpos` is a subtype of `bound`. The traits a function's guards use
+// form its *slot schema*. Dispatch looks them up in the trait tables for the
+// argument types and passes the resulting *slot types* to `ml_matches` as a
+// flat svec of (argpos, trait, slot type) triples. See
 // doc/src/devdocs/trait-slots.md.
 //
 // The schemas are kept in `jl_trait_schemas`, a flat svec of (typename, schema)
@@ -1258,6 +1258,8 @@ static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams) JL_
 // schema on the TypeName.)
 
 _Atomic(jl_svec_t*) jl_trait_schemas JL_GLOBALLY_ROOTED = NULL;
+// a flat svec of (typename, svec of overlay method tables with guarded methods)
+_Atomic(jl_svec_t*) jl_trait_overlays JL_GLOBALLY_ROOTED = NULL;
 _Atomic(jl_value_t*) jl_pending_method_guards JL_GLOBALLY_ROOTED = NULL;
 
 static inline int method_has_guards(jl_method_t *m) JL_NOTSAFEPOINT
@@ -1390,56 +1392,176 @@ JL_DLLEXPORT jl_value_t *jl_get_trait_schema(jl_value_t *ft) JL_NOTSAFEPOINT
     return schema ? (jl_value_t*)schema : jl_nothing;
 }
 
-// The slot type of `trait` for an argument of type `argtype`, in `world`. The
-// trait is called on `argtype`, or on `Type{X}` if the argument is the type `X`
-// (`argtype` is then `Type{X}` or `TypeEgal{X}`).
-static jl_value_t *trait_slot_type(jl_value_t *trait, jl_value_t *argtype, size_t world) JL_CANSAFEPOINT
+// ---- trait tables ----------------------------------------------------------
+//
+// A trait is an object declared with `jl_trait_declare`. Its table is kept in
+// `jl_trait_tables`, a flat svec of (trait, table) pairs, where a table is an
+// svec (top, default, owner, entries) and `entries` a flat svec of (typename,
+// kind, value, module, min_world, max_world) records. A TRAIT_FIXED entry gives
+// a type family the label `value`, a TRAIT_DELEGATE entry the label of its type
+// parameter number `value` (TRAIT_DELEGATE_FIELD if that parameter is the type
+// of a field every instance initializes). A fixed entry on an abstract type family also
+// applies to its subtypes, which may not have entries of their own. Labels are
+// concrete subtypes of the top, which is not concrete. Replacing or deleting an
+// entry ends its world range. Writers hold world_counter_lock and publish new
+// svecs. (A real implementation would keep the table on the trait object.)
+
+_Atomic(jl_svec_t*) jl_trait_tables JL_GLOBALLY_ROOTED = NULL;
+
+enum { TE_TN, TE_KIND, TE_VALUE, TE_MOD, TE_MIN, TE_MAX, TE_N };
+enum { TRAIT_FIXED, TRAIT_DELEGATE, TRAIT_DELEGATE_FIELD };
+
+static jl_svec_t *trait_table_in(jl_svec_t *reg JL_PROPAGATES_ROOT, jl_value_t *trait) JL_NOTSAFEPOINT
 {
-    jl_value_t *input = argtype;
-    jl_value_t *v = NULL;
-    JL_GC_PUSH2(&input, &v);
-    if (jl_is_some_Type(input))
-        input = (jl_value_t*)jl_wrap_Type(jl_some_Type_T(input));
-    jl_task_t *ct = jl_current_task;
-    size_t last_age = ct->world_age;
-    ct->world_age = world;
-    // on error, the enclosing exception handler restores world_age
-    v = jl_apply_generic(trait, &input, 1);
-    ct->world_age = last_age;
-    // `Core.Typeof(v)`: free type variables are not allowed in `TypeEgal`
-    if (jl_is_type(v))
-        v = jl_has_free_typevars(v) ? (jl_value_t*)jl_wrap_Type(v) : jl_wrap_TypeEgal(v);
-    else
-        v = jl_typeof(v);
-    JL_GC_POP();
-    return v;
+    for (size_t i = 0; reg != NULL && i < jl_svec_len(reg); i += 2) {
+        if (jl_svecref(reg, i) == trait)
+            return (jl_svec_t*)jl_svecref(reg, i + 1);
+    }
+    return NULL;
 }
 
-// whether an argument type determines the value of a trait on it
-static int trait_input_known(jl_value_t *A) JL_NOTSAFEPOINT
+// the table of `trait`, or NULL if it is not a declared trait (unrooted)
+static jl_svec_t *trait_table_for(jl_value_t *trait) JL_NOTSAFEPOINT
 {
-    if (jl_is_vararg(A) || jl_has_free_typevars(A))
-        return 0;
-    return jl_is_some_Type(A) || (jl_is_concrete_type(A) && !jl_is_kind(A));
+    return trait_table_in(jl_atomic_load_acquire(&jl_trait_tables), trait);
+}
+
+struct trait_lookup {
+    jl_svec_t *table;
+    size_t world;
+    size_t min_valid, max_valid; // the worlds in which the tables give the same result
+};
+
+// The entry for `tn` in the world of the lookup, as an index into the entries,
+// or -1. Narrows the valid worlds to those in which this is the entry.
+static ssize_t trait_find_entry(struct trait_lookup *L, jl_typename_t *tn) JL_NOTSAFEPOINT
+{
+    jl_svec_t *entries = (jl_svec_t*)jl_svecref(L->table, 3);
+    ssize_t found = -1;
+    for (size_t i = 0; i < jl_svec_len(entries); i += TE_N) {
+        if (jl_svecref(entries, i + TE_TN) != (jl_value_t*)tn)
+            continue;
+        size_t min = jl_unbox_ulong(jl_svecref(entries, i + TE_MIN));
+        size_t max = jl_unbox_ulong(jl_svecref(entries, i + TE_MAX));
+        if (max < L->world) {
+            if (L->min_valid <= max)
+                L->min_valid = max + 1;
+        }
+        else if (min > L->world) {
+            if (L->max_valid >= min)
+                L->max_valid = min - 1;
+        }
+        else {
+            found = i;
+            if (L->min_valid < min)
+                L->min_valid = min;
+            if (L->max_valid > max)
+                L->max_valid = max;
+        }
+    }
+    return found;
+}
+
+static jl_value_t *trait_param_region(struct trait_lookup *L, jl_value_t *P, int inhabited) JL_CANSAFEPOINT;
+
+// The labels of the trait for the values of type `T`: one label if `T` is a
+// dispatch type, otherwise a union of labels or the top. Free type variables
+// range over their bounds. For a type argument `X` (`Type{X}`), the label is
+// that of `X` as a type parameter. The recursion is on parts of `T`, so it
+// terminates.
+static jl_value_t *trait_region(struct trait_lookup *L, jl_value_t *T) JL_CANSAFEPOINT
+{
+    jl_value_t *top = jl_svecref(L->table, 0);
+    if (T == jl_bottom_type)
+        return T;
+    if (jl_is_unionall(T))
+        return trait_region(L, jl_unwrap_unionall(T));
+    if (jl_is_typevar(T))
+        return trait_region(L, ((jl_tvar_t*)T)->ub);
+    jl_value_t *r = NULL;
+    if (jl_is_uniontype(T)) {
+        jl_value_t **rs;
+        JL_GC_PUSHARGS(rs, 2);
+        rs[0] = trait_region(L, ((jl_uniontype_t*)T)->a);
+        rs[1] = trait_region(L, ((jl_uniontype_t*)T)->b);
+        r = jl_type_union(rs, 2);
+        JL_GC_POP();
+    }
+    else if (jl_is_some_Type(T)) {
+        r = trait_param_region(L, jl_some_Type_T(T), 0);
+    }
+    else if (!jl_is_datatype(T) || jl_is_kind(T)) {
+        r = top; // e.g. `DataType`: some type argument
+    }
+    else {
+        jl_datatype_t *dt = (jl_datatype_t*)T;
+        jl_svec_t *entries = (jl_svec_t*)jl_svecref(L->table, 3);
+        for (jl_datatype_t *d = dt; r == NULL && d != jl_any_type; d = d->super) {
+            ssize_t e = trait_find_entry(L, d->name);
+            if (e < 0)
+                continue;
+            jl_value_t *value = jl_svecref(entries, e + TE_VALUE);
+            long kind = jl_unbox_long(jl_svecref(entries, e + TE_KIND));
+            if (kind == TRAIT_FIXED) {
+                r = value;
+            }
+            else {
+                assert(d == dt && "delegations are not inherited");
+                r = trait_param_region(L, jl_tparam(dt, jl_unbox_long(value) - 1), kind == TRAIT_DELEGATE_FIELD);
+            }
+        }
+        if (r == NULL)
+            r = jl_is_abstracttype(dt) ? top : jl_svecref(L->table, 1);
+    }
+    return r;
+}
+
+// whether some instantiation of the free type variables of `P` is `Union{}`
+static int trait_may_be_bottom(jl_value_t *P) JL_NOTSAFEPOINT
+{
+    if (jl_is_typevar(P))
+        return trait_may_be_bottom(((jl_tvar_t*)P)->lb);
+    if (jl_is_uniontype(P))
+        return trait_may_be_bottom(((jl_uniontype_t*)P)->a) && trait_may_be_bottom(((jl_uniontype_t*)P)->b);
+    if (jl_is_unionall(P))
+        return trait_may_be_bottom(((jl_unionall_t*)P)->body);
+    return P == jl_bottom_type;
+}
+
+// The labels of a type parameter `P`. A type has the label all its values
+// share, or the default if they do not share one (as `Union{}` does); a value
+// that is not a type has the default. For free type variables, the labels of
+// all their instantiations. If `inhabited`, `P` is the type of a value, so it
+// is not `Union{}`.
+static jl_value_t *trait_param_region(struct trait_lookup *L, jl_value_t *P, int inhabited) JL_CANSAFEPOINT
+{
+    jl_value_t *top = jl_svecref(L->table, 0), *dflt = jl_svecref(L->table, 1);
+    if (!jl_is_typevar(P) && !jl_is_type(P))
+        return dflt;
+    jl_value_t *r = trait_region(L, P);
+    if (!jl_is_typevar(P) && !jl_has_free_typevars(P))
+        return jl_is_concrete_type(r) ? r : dflt;
+    if (!jl_is_concrete_type(r))
+        return top;
+    if (r == dflt || inhabited || !trait_may_be_bottom(P))
+        return r;
+    jl_value_t *rs[2] = {r, dflt};
+    return jl_type_union(rs, 2);
 }
 
 // The slot types for the signature `tt` in `world`, or NULL if its function has
-// no schema. Slots introduced after `world` are left out. Runs user code, so the
-// caller must not hold a lock.
-//
-// For a call, `tt` is concrete and errors propagate. For a lookup by type
-// (`lookup`: `invoke`, `which`, `hasmethod`), a slot is only evaluated if the
-// argument type determines it, and is unknown (`Any`) otherwise or if the trait
-// throws.
-static jl_svec_t *compute_trait_slots(jl_tupletype_t *tt, size_t world, int lookup) JL_CANSAFEPOINT
+// no schema. Slots introduced after `world` are left out. For a dispatch tuple,
+// each slot type is a label; otherwise it is the region of labels the argument
+// type allows. Narrows [*min_valid, *max_valid] to the worlds in which the
+// tables give the same slot types.
+static jl_svec_t *compute_trait_slots(jl_tupletype_t *tt, size_t world, size_t *min_valid, size_t *max_valid) JL_CANSAFEPOINT
 {
-    jl_svec_t *schema = NULL, *slots = NULL;
-    JL_GC_PUSH2(&schema, &slots);
-    schema = trait_schema_for(jl_nth_argument_datatypename((jl_value_t*)tt, 1));
-    if (schema == NULL) {
-        JL_GC_POP();
+    jl_svec_t *schema = trait_schema_for(jl_nth_argument_datatypename((jl_value_t*)tt, 1));
+    if (schema == NULL)
         return NULL;
-    }
+    jl_svec_t *slots = NULL;
+    struct trait_lookup L = {NULL, world, *min_valid, *max_valid};
+    JL_GC_PUSH3(&schema, &slots, &L.table);
     size_t i, k, n = jl_svec_len(schema) / 3, nslots = 0;
     for (i = 0; i < n; i++)
         nslots += jl_unbox_ulong(jl_svecref(schema, 3 * i + 2)) <= world;
@@ -1449,25 +1571,51 @@ static jl_svec_t *compute_trait_slots(jl_tupletype_t *tt, size_t world, int look
         if (jl_unbox_ulong(jl_svecref(schema, 3 * i + 2)) > world)
             continue;
         jl_value_t *pos = jl_svecref(schema, 3 * i), *trait = jl_svecref(schema, 3 * i + 1);
-        jl_svecset(slots, k, pos);
-        jl_svecset(slots, k + 1, trait);
-        jl_svecset(slots, k + 2, (jl_value_t*)jl_any_type);
+        L.table = trait_table_for(trait);
+        assert(L.table != NULL);
         size_t p = jl_unbox_long(pos);
         jl_value_t *A = p < jl_nparams(utt) ? jl_tparam(utt, p) : NULL;
-        if (A && lookup && trait_input_known(A)) {
-            JL_TRY {
-                jl_svecset(slots, k + 2, trait_slot_type(trait, A, world));
-            }
-            JL_CATCH {
-            }
-        }
-        else if (A && !lookup && !jl_is_vararg(A) && !jl_has_free_typevars(A)) {
-            jl_svecset(slots, k + 2, trait_slot_type(trait, A, world));
-        }
+        jl_svecset(slots, k, pos);
+        jl_svecset(slots, k + 1, trait);
+        jl_svecset(slots, k + 2, A && !jl_is_vararg(A) ? trait_region(&L, A) : jl_svecref(L.table, 0));
         k += 3;
     }
+    *min_valid = L.min_valid;
+    *max_valid = L.max_valid;
     JL_GC_POP();
     return slots;
+}
+
+// `nothing` if the function of `tt` has no slot schema, otherwise
+// `(slots, min_world, max_world)` (see `compute_trait_slots`).
+JL_DLLEXPORT jl_value_t *jl_trait_slots(jl_value_t *tt, size_t world) JL_CANSAFEPOINT
+{
+    size_t min_valid = 0, max_valid = ~(size_t)0;
+    jl_svec_t *slots = NULL;
+    jl_value_t *res = jl_nothing, *lo = NULL, *hi = NULL;
+    JL_GC_PUSH4(&slots, &res, &lo, &hi);
+    if (jl_is_tuple_type(jl_unwrap_unionall(tt)))
+        slots = compute_trait_slots((jl_tupletype_t*)tt, world, &min_valid, &max_valid);
+    if (slots) {
+        lo = jl_box_ulong(min_valid);
+        hi = jl_box_ulong(max_valid);
+        res = (jl_value_t*)jl_svec(3, slots, lo, hi);
+    }
+    JL_GC_POP();
+    return res;
+}
+
+// The label of `trait` for the type `T` (see `trait_param_region`): the top if
+// `T` has free type variables whose values do not share a label.
+JL_DLLEXPORT jl_value_t *jl_trait_label(jl_value_t *trait, jl_value_t *T, size_t world) JL_CANSAFEPOINT
+{
+    struct trait_lookup L = {trait_table_for(trait), world, 0, ~(size_t)0};
+    if (L.table == NULL)
+        jl_error("not a trait declared with `@trait`");
+    JL_GC_PUSH1(&L.table);
+    jl_value_t *r = trait_param_region(&L, T, 0);
+    JL_GC_POP();
+    return r;
 }
 
 static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
@@ -2541,13 +2689,14 @@ static jl_method_instance_t *jl_mt_assoc_by_type(
     assert(tt->isdispatchtuple || tt->hasfreetypevars);
     JL_TIMING(METHOD_LOOKUP_SLOW, METHOD_LOOKUP_SLOW);
     jl_method_match_t *matc = NULL;
-    // trait slots: evaluate the traits before taking the lock, as this runs
-    // user code. The selection then depends on values computed in `world`, so
-    // its cache entry is only valid there.
+    // trait slots: the selection depends on the trait tables in `world`, so
+    // its cache entry is only valid there
     jl_svec_t *slots = NULL;
     JL_GC_PUSH1(&slots);
-    if (typename_has_trait_slots((jl_value_t*)tt))
-        slots = compute_trait_slots(tt, world, 0);
+    if (typename_has_trait_slots((jl_value_t*)tt)) {
+        size_t min_valid = 0, max_valid = ~(size_t)0;
+        slots = compute_trait_slots(tt, world, &min_valid, &max_valid);
+    }
     JL_LOCK(&mc->writelock);
     jl_method_instance_t *mi = NULL;
     // No need to re-check if no method cache insertion happened since the
@@ -4001,6 +4150,8 @@ JL_DLLEXPORT void jl_set_pending_method_guards(jl_value_t *f, jl_value_t *guards
         jl_error("guards must be a non-empty svec of (argpos, trait, bound) triples");
     for (size_t i = 0; i < jl_svec_len(g); i += 3) {
         JL_TYPECHK(jl_set_pending_method_guards, long, jl_svecref(g, i));
+        if (trait_table_for(jl_svecref(g, i + 1)) == NULL)
+            jl_error("guards must use a trait declared with `@trait`");
         if (!jl_is_type(jl_svecref(g, i + 2)))
             jl_type_error("guard bound", (jl_value_t*)jl_type_type, jl_svecref(g, i + 2));
         for (size_t j = 0; j < i; j += 3) {
@@ -4087,6 +4238,54 @@ static void trait_register_guards(jl_method_t *method) JL_CANSAFEPOINT
     JL_GC_POP();
 }
 
+// the overlay method tables with guarded methods of the function `tn`, or NULL
+static jl_svec_t *trait_overlay_tables(jl_typename_t *tn) JL_NOTSAFEPOINT
+{
+    jl_svec_t *reg = jl_atomic_load_acquire(&jl_trait_overlays);
+    for (size_t i = 0; reg != NULL && i < jl_svec_len(reg); i += 2) {
+        if (jl_svecref(reg, i) == (jl_value_t*)tn)
+            return (jl_svec_t*)jl_svecref(reg, i + 1);
+    }
+    return NULL;
+}
+
+// Record the overlay table of the guarded `method`, whose callers must be
+// invalidated when a trait changes. Caller holds world_counter_lock.
+static void trait_register_overlay(jl_method_t *method) JL_CANSAFEPOINT
+{
+    jl_value_t *mt = method->external_mt;
+    if (mt == NULL || mt == (jl_value_t*)jl_method_table)
+        return;
+    jl_typename_t *tn = jl_nth_argument_datatypename(method->sig, 1);
+    jl_svec_t *reg = NULL, *tables = NULL, *newtables = NULL, *newreg = NULL;
+    JL_GC_PUSH4(&reg, &tables, &newtables, &newreg);
+    reg = jl_atomic_load_relaxed(&jl_trait_overlays);
+    tables = trait_overlay_tables(tn);
+    size_t n = tables ? jl_svec_len(tables) : 0;
+    for (size_t i = 0; i < n; i++) {
+        if (jl_svecref(tables, i) == mt) {
+            JL_GC_POP();
+            return;
+        }
+    }
+    newtables = jl_alloc_svec(n + 1);
+    for (size_t i = 0; i < n; i++)
+        jl_svecset(newtables, i, jl_svecref(tables, i));
+    jl_svecset(newtables, n, mt);
+    size_t nreg = reg ? jl_svec_len(reg) : 0;
+    newreg = jl_alloc_svec(tables ? nreg : nreg + 2);
+    for (size_t i = 0; i < nreg; i += 2) {
+        jl_svecset(newreg, i, jl_svecref(reg, i));
+        jl_svecset(newreg, i + 1, jl_svecref(reg, i) == (jl_value_t*)tn ? (jl_value_t*)newtables : jl_svecref(reg, i + 1));
+    }
+    if (!tables) {
+        jl_svecset(newreg, nreg, (jl_value_t*)tn);
+        jl_svecset(newreg, nreg + 1, (jl_value_t*)newtables);
+    }
+    jl_atomic_store_release(&jl_trait_overlays, newreg);
+    JL_GC_POP();
+}
+
 struct trait_collect_env {
     jl_typename_t *tn;
     jl_array_t *methods;
@@ -4110,25 +4309,37 @@ static void trait_invalidate_function(jl_typename_t *tn, size_t max_world) JL_CA
 {
     struct trait_collect_env env = {tn, NULL};
     jl_value_t *sig = NULL, *isect = NULL, *isect2 = NULL;
-    jl_svec_t *params = NULL;
-    JL_GC_PUSH5(&env.methods, &sig, &isect, &isect2, &params);
+    jl_value_t **ts;
+    jl_svec_t *params = NULL, *overlays = NULL;
+    JL_GC_PUSH6(&env.methods, &sig, &isect, &isect2, &params, &overlays);
     env.methods = jl_alloc_vec_any(0);
     jl_typemap_visitor(jl_atomic_load_relaxed(&jl_method_table->defs), trait_collect_methods, &env);
+    overlays = trait_overlay_tables(tn);
+    for (size_t i = 0; overlays && i < jl_svec_len(overlays); i++)
+        jl_typemap_visitor(jl_atomic_load_relaxed(&((jl_methtable_t*)jl_svecref(overlays, i))->defs), trait_collect_methods, &env);
     for (size_t i = 0; i < jl_array_nrows(env.methods); i++) {
         jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(env.methods, i);
         if (jl_atomic_load_relaxed(&m->primary_world) <= max_world && !m->is_for_opaque_closure)
             jl_method_table_invalidate(m, max_world, 0);
     }
-    if (jl_is_datatype(tn->wrapper)) {
-        sig = (jl_value_t*)jl_wrap_vararg((jl_value_t*)jl_any_type, (jl_value_t*)NULL, 1, 0);
-        params = jl_svec2(tn->wrapper, sig);
-        sig = (jl_value_t*)jl_apply_tuple_type(params, 1);
-        jl_methcache_t *mc = jl_method_table->cache;
-        JL_LOCK(&mc->writelock);
-        struct _typename_invalidate_backedge typename_env = {sig, &isect, &isect2, NULL, 0, max_world, 0};
-        invalidate_missing_backedges(&typename_env);
-        JL_UNLOCK(&mc->writelock);
-    }
+    // missing-method backedges of calls to the function, or to the constructor
+    // of the type family
+    JL_GC_PUSHARGS(ts, 2);
+    ts[0] = (jl_value_t*)jl_new_typevar(jl_symbol("T"), jl_bottom_type, tn->wrapper);
+    ts[1] = (jl_value_t*)jl_wrap_Type(ts[0]);
+    ts[1] = jl_type_unionall((jl_tvar_t*)ts[0], ts[1]);
+    ts[0] = tn->wrapper;
+    sig = jl_type_union(ts, 2);
+    JL_GC_POP();
+    isect = (jl_value_t*)jl_wrap_vararg((jl_value_t*)jl_any_type, (jl_value_t*)NULL, 1, 0);
+    params = jl_svec2(sig, isect);
+    isect = NULL;
+    sig = (jl_value_t*)jl_apply_tuple_type(params, 1);
+    jl_methcache_t *mc = jl_method_table->cache;
+    JL_LOCK(&mc->writelock);
+    struct _typename_invalidate_backedge typename_env = {sig, &isect, &isect2, NULL, 0, max_world, 0};
+    invalidate_missing_backedges(&typename_env);
+    JL_UNLOCK(&mc->writelock);
     JL_GC_POP();
 }
 
@@ -4137,8 +4348,10 @@ static void trait_invalidate_function(jl_typename_t *tn, size_t max_world) JL_CA
 // schema can change a selection, guarded or not.
 static void trait_slots_method_added(jl_method_t *method, size_t max_world) JL_CANSAFEPOINT
 {
-    if (method_has_guards(method))
+    if (method_has_guards(method)) {
         trait_register_guards(method);
+        trait_register_overlay(method);
+    }
     if (typename_has_trait_slots(method->sig))
         trait_invalidate_function(jl_nth_argument_datatypename(method->sig, 1), max_world);
 }
@@ -4148,6 +4361,184 @@ static void trait_slots_method_deleted(jl_method_t *method, size_t world) JL_CAN
 {
     if (typename_has_trait_slots(method->sig))
         trait_invalidate_function(jl_nth_argument_datatypename(method->sig, 1), world);
+}
+
+// Declare `trait` with labels below `top` and the label `dflt` for type
+// families without an entry.
+JL_DLLEXPORT void jl_trait_declare(jl_value_t *trait, jl_value_t *top, jl_value_t *dflt, jl_module_t *owner) JL_CANSAFEPOINT
+{
+    if (jl_generating_output())
+        jl_error("traits cannot be declared during precompilation");
+    if (!jl_is_type(top) || jl_is_concrete_type(top))
+        jl_error("the top of a trait must be a type that is not concrete");
+    if (!jl_is_concrete_type(dflt) || !jl_subtype(dflt, top))
+        jl_error("the default label of a trait must be a concrete subtype of its top");
+    jl_svec_t *table = NULL, *reg = NULL, *newreg = NULL;
+    JL_GC_PUSH3(&table, &reg, &newreg);
+    table = jl_svec(4, top, dflt, (jl_value_t*)owner, jl_emptysvec);
+    JL_LOCK(&world_counter_lock);
+    reg = jl_atomic_load_relaxed(&jl_trait_tables);
+    int exists = trait_table_in(reg, trait) != NULL;
+    if (!exists) {
+        size_t n = reg ? jl_svec_len(reg) : 0;
+        newreg = jl_alloc_svec(n + 2);
+        for (size_t i = 0; i < n; i++)
+            jl_svecset(newreg, i, jl_svecref(reg, i));
+        jl_svecset(newreg, n, trait);
+        jl_svecset(newreg, n + 1, (jl_value_t*)table);
+        jl_atomic_store_release(&jl_trait_tables, newreg);
+    }
+    JL_UNLOCK(&world_counter_lock);
+    JL_GC_POP();
+    if (exists)
+        jl_error("trait is already declared");
+}
+
+// the live entry for `tn`, or -1
+static ssize_t trait_live_entry(jl_svec_t *entries, jl_typename_t *tn) JL_NOTSAFEPOINT
+{
+    for (size_t i = 0; i < jl_svec_len(entries); i += TE_N) {
+        if (jl_svecref(entries, i + TE_TN) == (jl_value_t*)tn &&
+            jl_unbox_ulong(jl_svecref(entries, i + TE_MAX)) == ~(size_t)0)
+            return i;
+    }
+    return -1;
+}
+
+// Why `mod` cannot give `tn` the entry (`kind`, `value`, or a deletion if
+// `value` is NULL) in `entries`, or NULL. Caller holds world_counter_lock.
+static const char *trait_entry_error(jl_svec_t *table, jl_typename_t *tn, int kind, jl_value_t *value, jl_module_t *mod) JL_CANSAFEPOINT
+{
+    jl_svec_t *entries = (jl_svec_t*)jl_svecref(table, 3);
+    ssize_t old = trait_live_entry(entries, tn);
+    if (old >= 0 && (jl_module_t*)jl_svecref(entries, old + TE_MOD) != mod)
+        return "the entry was declared by another module";
+    if (value == NULL)
+        return old >= 0 ? NULL : "there is no entry to delete";
+    if (mod != (jl_module_t*)jl_svecref(table, 2) && mod != tn->module)
+        return "only the module of the trait or of the type family can declare an entry";
+    jl_datatype_t *body = (jl_datatype_t*)jl_unwrap_unionall(tn->wrapper);
+    for (jl_datatype_t *d = body->super; d != jl_any_type; d = d->super) {
+        if (trait_live_entry(entries, d->name) >= 0)
+            return "a supertype has an entry, which applies to all its subtypes";
+    }
+    if (kind == TRAIT_FIXED && tn->abstract) {
+        for (size_t i = 0; i < jl_svec_len(entries); i += TE_N) {
+            jl_typename_t *other = (jl_typename_t*)jl_svecref(entries, i + TE_TN);
+            if (other != tn && jl_unbox_ulong(jl_svecref(entries, i + TE_MAX)) == ~(size_t)0 &&
+                jl_subtype(other->wrapper, tn->wrapper))
+                return "a subtype has an entry of its own";
+        }
+    }
+    return NULL;
+}
+
+// Invalidate the callers of every function that guards on `trait`.
+static void trait_invalidate_users(jl_value_t *trait, size_t max_world) JL_CANSAFEPOINT
+{
+    jl_svec_t *reg = jl_atomic_load_relaxed(&jl_trait_schemas);
+    JL_GC_PUSH1(&reg);
+    for (size_t i = 0; reg != NULL && i < jl_svec_len(reg); i += 2) {
+        jl_svec_t *schema = (jl_svec_t*)jl_svecref(reg, i + 1);
+        for (size_t j = 0; j < jl_svec_len(schema); j += 3) {
+            if (jl_svecref(schema, j + 1) == trait) {
+                trait_invalidate_function((jl_typename_t*)jl_svecref(reg, i), max_world);
+                break;
+            }
+        }
+    }
+    JL_GC_POP();
+}
+
+// Give the type family `T` the entry (`kind`, `value`) in the table of `trait`,
+// replacing its previous entry, or delete its entry if `value` is `nothing`.
+// `mod` is the declaring module.
+JL_DLLEXPORT void jl_trait_set_entry(jl_value_t *trait, jl_value_t *T, int kind, jl_value_t *value, jl_module_t *mod) JL_CANSAFEPOINT
+{
+    if (jl_generating_output())
+        jl_error("trait entries cannot be declared during precompilation");
+    jl_svec_t *table = NULL, *entries = NULL, *newentries = NULL, *newtable = NULL, *reg = NULL, *newreg = NULL;
+    jl_value_t *boxed = NULL;
+    JL_GC_PUSH7(&table, &entries, &newentries, &newtable, &reg, &newreg, &boxed);
+    table = trait_table_for(trait);
+    if (table == NULL)
+        jl_error("not a trait declared with `@trait`");
+    jl_value_t *body = jl_unwrap_unionall(T);
+    if (!jl_is_datatype(body) || !jl_types_equal(T, ((jl_datatype_t*)body)->name->wrapper))
+        jl_error("a trait entry must be for a whole type family, such as `SubArray`");
+    jl_typename_t *tn = ((jl_datatype_t*)body)->name;
+    if (tn == jl_type_typename || tn == jl_any_type->name || jl_is_kind(tn->wrapper) ||
+        tn == jl_tuple_typename || tn == jl_namedtuple_typename)
+        jl_errorf("%s cannot have trait entries", jl_symbol_name(tn->name));
+    if (value == jl_nothing) {
+        value = NULL;
+    }
+    else if (kind == TRAIT_FIXED) {
+        if (!jl_is_concrete_type(value) || !jl_subtype(value, jl_svecref(table, 0)))
+            jl_error("a trait label must be a concrete subtype of the top of the trait");
+    }
+    else if (kind == TRAIT_DELEGATE) {
+        if (tn->abstract)
+            jl_error("an abstract type cannot delegate its label");
+        long idx = jl_unbox_long(value);
+        jl_datatype_t *wbody = (jl_datatype_t*)jl_unwrap_unionall(tn->wrapper);
+        if (idx < 1 || (size_t)idx > jl_nparams(wbody))
+            jl_error("delegation to a nonexistent type parameter");
+        jl_svec_t *ftypes = wbody->types;
+        size_t ninit = ftypes ? jl_svec_len(ftypes) - tn->n_uninitialized : 0;
+        for (size_t i = 0; i < ninit; i++) {
+            if (jl_svecref(ftypes, i) == jl_tparam(wbody, idx - 1))
+                kind = TRAIT_DELEGATE_FIELD;
+        }
+    }
+    else {
+        jl_error("invalid trait entry kind");
+    }
+    JL_LOCK(&world_counter_lock);
+    if (!jl_atomic_load_relaxed(&allow_new_worlds)) {
+        JL_UNLOCK(&world_counter_lock);
+        jl_error("Method changes have been disabled via a call to disable_new_worlds.");
+    }
+    reg = jl_atomic_load_relaxed(&jl_trait_tables);
+    table = trait_table_in(reg, trait);
+    const char *err = trait_entry_error(table, tn, kind, value, mod);
+    if (err) {
+        JL_UNLOCK(&world_counter_lock);
+        jl_errorf("trait entry for %s: %s", jl_symbol_name(tn->name), err);
+    }
+    size_t world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
+    entries = (jl_svec_t*)jl_svecref(table, 3);
+    ssize_t old = trait_live_entry(entries, tn);
+    size_t n = jl_svec_len(entries);
+    newentries = jl_alloc_svec(value ? n + TE_N : n);
+    for (size_t i = 0; i < n; i++)
+        jl_svecset(newentries, i, jl_svecref(entries, i));
+    if (old >= 0) {
+        boxed = jl_box_ulong(world - 1);
+        jl_svecset(newentries, old + TE_MAX, boxed);
+    }
+    if (value) {
+        jl_svecset(newentries, n + TE_TN, (jl_value_t*)tn);
+        boxed = jl_box_long(kind);
+        jl_svecset(newentries, n + TE_KIND, boxed);
+        jl_svecset(newentries, n + TE_VALUE, value);
+        jl_svecset(newentries, n + TE_MOD, (jl_value_t*)mod);
+        boxed = jl_box_ulong(world);
+        jl_svecset(newentries, n + TE_MIN, boxed);
+        boxed = jl_box_ulong(~(size_t)0);
+        jl_svecset(newentries, n + TE_MAX, boxed);
+    }
+    newtable = jl_svec(4, jl_svecref(table, 0), jl_svecref(table, 1), jl_svecref(table, 2), (jl_value_t*)newentries);
+    newreg = jl_alloc_svec(jl_svec_len(reg));
+    for (size_t i = 0; i < jl_svec_len(reg); i += 2) {
+        jl_svecset(newreg, i, jl_svecref(reg, i));
+        jl_svecset(newreg, i + 1, jl_svecref(reg, i) == trait ? (jl_value_t*)newtable : jl_svecref(reg, i + 1));
+    }
+    jl_atomic_store_release(&jl_trait_tables, newreg);
+    trait_invalidate_users(trait, world - 1);
+    jl_atomic_store_release(&jl_world_counter, world);
+    JL_UNLOCK(&world_counter_lock);
+    JL_GC_POP();
 }
 
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype)
@@ -5609,9 +6000,7 @@ static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT
 
 // Look up the method `invoke(f, types, ...)` calls. For a function with trait
 // slots, a guarded method is a candidate only if its guards hold for all of
-// `types`, as its signature must cover them; slots are evaluated where an
-// argument type determines them. The world range returned does not account for
-// the trait values, which the caller must track itself.
+// `types`, as its signature must cover them.
 static jl_method_match_t *gf_invoke_lookup_slots(jl_value_t *types JL_PROPAGATES_ROOT, jl_methtable_t *mt, size_t world, size_t *min_valid, size_t *max_valid) JL_CANSAFEPOINT
 {
     jl_value_t *unw = jl_unwrap_unionall(types);
@@ -5619,7 +6008,7 @@ static jl_method_match_t *gf_invoke_lookup_slots(jl_value_t *types JL_PROPAGATES
         return _gf_invoke_lookup(types, mt, world, 1, min_valid, max_valid, NULL, 0);
     jl_svec_t *slots = NULL;
     JL_GC_PUSH1(&slots);
-    slots = compute_trait_slots((jl_tupletype_t*)types, world, 1);
+    slots = compute_trait_slots((jl_tupletype_t*)types, world, min_valid, max_valid);
     jl_method_match_t *matc = _gf_invoke_lookup(types, mt, world, 1, min_valid, max_valid, slots, 1);
     JL_GC_POP();
     return matc;

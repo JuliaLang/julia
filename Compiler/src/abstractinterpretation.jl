@@ -133,7 +133,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     end
     current_world = get_world_counter()
-    matches = find_method_matches(interp, argtypes, atype; max_methods, fargs=arginfo.fargs, trait_edges=sv.edges)
+    matches = find_method_matches(interp, argtypes, atype; max_methods, fargs=arginfo.fargs)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
@@ -378,12 +378,11 @@ end
 function find_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any}, @nospecialize(atype);
                              max_union_splitting::Int = InferenceParams(interp).max_union_splitting,
                              max_methods::Int = InferenceParams(interp).max_methods,
-                             fargs::Union{Nothing,Vector{Any}}=nothing,
-                             trait_edges::Union{Nothing,Vector{Any}}=nothing)
+                             fargs::Union{Nothing,Vector{Any}}=nothing)
     if is_union_split_eligible(typeinf_lattice(interp), argtypes, max_union_splitting; fargs)
-        return find_union_split_method_matches(interp, argtypes, max_methods; fargs, trait_edges)
+        return find_union_split_method_matches(interp, argtypes, max_methods; fargs)
     end
-    return find_simple_method_matches(interp, atype, max_methods; trait_edges)
+    return find_simple_method_matches(interp, atype, max_methods)
 end
 
 # NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` type
@@ -393,8 +392,7 @@ is_union_split_eligible(𝕃::AbstractLattice, argtypes::Vector{Any}, max_union_
 
 function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any},
                                          max_methods::Int;
-                                         fargs::Union{Nothing,Vector{Any}}=nothing,
-                                         trait_edges::Union{Nothing,Vector{Any}}=nothing)
+                                         fargs::Union{Nothing,Vector{Any}}=nothing)
     split_argtypes = switchtupleunion(typeinf_lattice(interp), argtypes; fargs)
     infos = MethodMatchInfo[]
     applicable = MethodMatchTarget[]
@@ -404,7 +402,7 @@ function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::
         arg_n = split_argtypes[i]::Vector{Any}
         sig_n = argtypes_to_type(arg_n)
         sig_n === Bottom && continue
-        thisslots = compute_trait_slots(interp, sig_n, trait_edges)
+        thisslots = compute_trait_slots(interp, sig_n)
         thismatches = thisslots === nothing ?
             findall(sig_n, method_table(interp); limit = max_methods) :
             findall(sig_n, method_table(interp); limit = max_methods, slots = thisslots[1])
@@ -430,105 +428,21 @@ end
 
 # Trait slots (prototype): the slot types of the call signature `atype`, as a flat svec
 # of (argpos, trait, slot type) triples for the slot schema of its function, together
-# with the worlds they are valid in and whether each slot the argument types determine
-# was inferred exactly. `nothing` if the function has no schema.
-#
-# Where an argument type determines a trait's value, the slot type is the return type
-# inferred for the trait call, and `edges` gets an edge for that call, so that the
-# caller is invalidated like for any other call. Otherwise the slot is `Any` (unknown),
-# which keeps the guarded methods applicable but unresolved.
-function compute_trait_slots(interp::AbstractInterpreter, @nospecialize(atype),
-                             edges::Union{Nothing,Vector{Any}})
-    atype = unwrap_unionall(atype)
-    atype isa DataType || return nothing
-    params = atype.parameters
-    isempty(params) && return nothing
-    ft = params[1]
-    isvarargtype(ft) && return nothing
-    schema = ccall(:jl_get_trait_schema, Any, (Any,), ft)
-    schema === nothing && return nothing
-    schema = schema::SimpleVector
-    world = get_inference_world(interp)
-    slots = Any[]
-    worlds = WorldRange(typemin(UInt), typemax(UInt))
-    exact = true
-    for i = 1:3:length(schema)
-        schema[i+2]::UInt > world && continue # slot introduced in a later world
-        pos = schema[i]::Int
-        trait = schema[i+1]
-        S = Any
-        if pos + 1 <= length(params) && !isvarargtype(params[pos+1])
-            S, exactᵢ, worldsᵢ = trait_slot_type(interp, trait, params[pos+1], edges)
-            exact &= exactᵢ
-            worlds = intersect(worlds, worldsᵢ)
-        end
-        push!(slots, pos, trait, S)
-    end
-    return Core.svec(slots...), worlds, exact
-end
-
-# Only the native method table: traits are evaluated natively.
-trait_slots_supported(table::MethodTableView) =
-    table isa InternalMethodTable ||
-    (table isa CachedMethodTable && table.table isa InternalMethodTable)
-
-# The slot type of `trait` for an argument of type `A`, whether it is exact (`Any` is
-# exact if `A` does not determine the value), and the worlds it holds in.
-function trait_slot_type(interp::AbstractInterpreter, @nospecialize(trait), @nospecialize(A),
-                         edges::Union{Nothing,Vector{Any}})
-    world = get_inference_world(interp)
-    all_worlds = WorldRange(typemin(UInt), typemax(UInt))
-    if isType(A)
-        # the argument is the type `X` (`A` may be `TypeEgal{X}`); the trait sees `Type{X}`
-        has_free_typevars(A) && return Any, true, all_worlds
-        A = Type{type_parameter(A)}
-    elseif !(isconcretetype(A) && !(A <: Type))
-        return Any, true, all_worlds
-    end
-    (edges === nothing || !trait_slots_supported(method_table(interp))) && return Any, false, all_worlds
-    v = try
-        Core._call_in_world_total(world, trait, A)
-    catch
-        return Any, false, all_worlds
-    end
-    calltype = Tuple{Core.Typeof(trait), Core.Typeof(A)}
-    matches = findall(calltype, method_table(interp); limit=1)
-    (matches isa MethodLookupResult && length(matches) == 1) || return Any, false, all_worlds
-    match = matches[1]
-    match.fully_covers || return Any, false, all_worlds
-    # Infer the exact specialization: evaluating the trait compiles the one dispatch
-    # selects, which differs if the trait does not specialize on its argument
-    # (e.g. `trait(::Type) = ...`, see `get_compileable_sig`).
-    ci = typeinf_ext(interp, specialize_method(match), SOURCE_MODE_NOT_REQUIRED)
-    ci isa CodeInstance || return Any, false, all_worlds
-    S = ci.rettype
-    Core.Typeof(v) <: S || return Any, false, all_worlds
-    # record the CodeInstance whose return type is used, as the lookup alone may
-    # not cover its dependencies (e.g. for a `@nospecializeinfer` trait)
-    info = MethodMatchInfo(matches, Core.methodtable, calltype, true)
-    info.edges[1] = ci
-    add_edges!(edges, info)
-    # the match holds in its lookup's worlds, its return type in those of the CodeInstance
-    worlds = intersect(matches.valid_worlds, WorldRange(ci.min_world, ci.max_world))
-    return S, S === Core.Typeof(v), worlds
+# with the worlds the trait tables give them in. A slot type is the region of labels
+# its argument type allows (see `jl_trait_slots`). `nothing` if the function has no
+# schema.
+function compute_trait_slots(interp::AbstractInterpreter, @nospecialize(atype))
+    r = ccall(:jl_trait_slots, Any, (Any, UInt), atype, get_inference_world(interp))
+    r === nothing && return nothing
+    r = r::SimpleVector
+    return r[1]::SimpleVector, WorldRange(r[2]::UInt, r[3]::UInt)
 end
 
 narrow_worlds(result::MethodLookupResult, worlds::WorldRange) =
     MethodLookupResult(result.matches, intersect(result.valid_worlds, worlds), result.ambig)
 
-# Record the trait edges of a lookup by type (`invoke`, `hasmethod`), whose slots the
-# runtime computes itself. Returns `false` if the lookup may depend on a trait value that
-# was not inferred exactly, in which case it must not be folded.
-function add_trait_lookup_edges!(interp::AbstractInterpreter, @nospecialize(sig), sv::AbsIntState)
-    slots = compute_trait_slots(interp, sig, sv.edges)
-    slots === nothing && return true
-    update_valid_age!(sv, get_inference_world(interp), slots[2])
-    return slots[3]
-end
-
-function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(atype), max_methods::Int;
-                                    trait_edges::Union{Nothing,Vector{Any}}=nothing)
-    slots = compute_trait_slots(interp, atype, trait_edges)
+function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(atype), max_methods::Int)
+    slots = compute_trait_slots(interp, atype)
     matches = slots === nothing ?
         findall(atype, method_table(interp); limit = max_methods) :
         findall(atype, method_table(interp); limit = max_methods, slots = slots[1])
@@ -2694,8 +2608,6 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         matched, valid_worlds = findsup(lookupsig, method_table(interp))
         matched === nothing && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
         update_valid_age!(sv, our_world, valid_worlds)
-        add_trait_lookup_edges!(interp, lookupsig, sv) ||
-            return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
         method = matched.method
     end
     tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector

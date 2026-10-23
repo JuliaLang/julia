@@ -425,26 +425,114 @@ macro overlay(mt, def)
 end
 
 """
+    Base.Experimental.@trait name::Top = Default
+    Base.Experimental.@trait name(Family) = Label
+    Base.Experimental.@trait name(Family{A, B, P}) = name(P)
+
+Declare a *trait* (prototype of trait slots, see the developer documentation), or an entry
+in its table. A trait gives every type a *label*: a concrete subtype of `Top`. The table
+of the trait determines the label of a type from its type family:
+
+- `@trait name(Family) = Label` gives the types of `Family` the label `Label`. If `Family`
+  is abstract, this also applies to its subtypes, which then cannot have entries.
+- `@trait name(Family{A, B, P}) = name(P)` gives the types of `Family` the label of their
+  parameter `P`. The parameters are named in the order `Family` takes them, and their
+  number may be less than that of `Family`. A type parameter has the label all its
+  values share, or the default otherwise.
+- Types of other families have the label `Default`.
+
+`Family` must be a whole type family, such as `SubArray`: an entry cannot restrict its
+parameters. Only the module that declared the trait or the type family can declare an
+entry, and only the module that declared an entry can replace it or delete it with
+[`Base.Experimental.delete_trait_entry`](@ref). For a type argument `X` of a call, a
+trait gives the label of `X` itself. `name(T)` returns the label of the type `T`.
+
+Methods dispatch on labels with [`Base.Experimental.@guarded`](@ref).
+"""
+macro trait(ex)
+    usage = "@trait expects `name::Top = Default`, `name(Family) = Label` or `name(Family{...}) = name(P)`"
+    isexpr(ex, :(=)) && length(ex.args) == 2 || error(usage)
+    lhs, rhs = ex.args
+    rhs = Meta.unblock(rhs)
+    if isexpr(lhs, :(::)) && length(lhs.args) == 2 && lhs.args[1] isa Symbol
+        name, top = lhs.args
+        return quote
+            const $(esc(name)) = $Trait($(QuoteNode(name)), $__module__)
+            ccall(:jl_trait_declare, Cvoid, (Any, Any, Any, Any), $(esc(name)), $(esc(top)), $(esc(rhs)), $__module__)
+            $(esc(name))
+        end
+    end
+    isexpr(lhs, :call) && length(lhs.args) == 2 || error(usage)
+    trait, family = lhs.args
+    if isexpr(rhs, :call) && length(rhs.args) == 2 && rhs.args[1] == trait
+        param = rhs.args[2]
+        params = isexpr(family, :curly) ? family.args[2:end] : Any[]
+        all(p -> p isa Symbol, params) && count(==(param), params) == 1 ||
+            error("@trait: `$param` must be the name of exactly one parameter of `$family`")
+        k = findfirst(==(param), params)
+        head = family.args[1]
+        return :($set_trait_entry($(esc(trait)), $(esc(head)), TRAIT_DELEGATE,
+                                  $trait_parameter_index($(esc(head)), $(length(params)), $k), $__module__))
+    end
+    return :($set_trait_entry($(esc(trait)), $(esc(family)), TRAIT_FIXED, $(esc(rhs)), $__module__))
+end
+
+"""
+    Base.Experimental.Trait
+
+The type of the traits that [`Base.Experimental.@trait`](@ref) declares.
+"""
+mutable struct Trait
+    const name::Symbol
+    const mod::Module
+end
+
+Base.show(io::IO, t::Trait) = print(io, t.name)
+
+(t::Trait)(@nospecialize(T)) =
+    ccall(:jl_trait_label, Any, (Any, Any, UInt), t, T, Base.tls_world_age())
+
+const TRAIT_FIXED = Cint(0)
+const TRAIT_DELEGATE = Cint(1)
+
+set_trait_entry(t::Trait, @nospecialize(family), kind::Cint, @nospecialize(value), mod::Module) =
+    ccall(:jl_trait_set_entry, Cvoid, (Any, Any, Cint, Any, Any), t, family, kind, value, mod)
+
+"""
+    Base.Experimental.delete_trait_entry(mod::Module, trait, Family)
+
+Delete the entry of `Family` in the table of `trait`, which `mod` declared.
+"""
+delete_trait_entry(mod::Module, t::Trait, @nospecialize(family)) =
+    set_trait_entry(t, family, TRAIT_FIXED, nothing, mod)
+
+# the position, in the type family `F`, of its parameter number `k` of `n`
+function trait_parameter_index(@nospecialize(F), n::Int, k::Int)
+    tvs = Any[TypeVar(Symbol("#", i)) for i = 1:n]
+    body = Base.unwrap_unionall(F{tvs...})
+    i = body isa DataType ? findfirst(p -> p === tvs[k], body.parameters) : nothing
+    i === nothing && error("@trait: `$F` does not take its parameter number $k as a parameter")
+    return i
+end
+
+"""
     Base.Experimental.@guarded function f(args...) where {trait(arg)::Bound, ...}
         ...
     end
 
 Define a *guarded method* (prototype of trait slots, see the developer documentation).
 Each `where` entry of the form `trait(arg)::Bound` is a guard: the method only applies to a
-call if `trait(typeof(arg))` returns a value `v` with `Core.Typeof(v) <: Bound`. If `arg`
-is the static parameter `T` of an argument declared `::Type{T}`, the trait is called on
-`Type{T}` instead. The other `where` entries are ordinary static parameters.
+call if `trait`, declared with [`Base.Experimental.@trait`](@ref), gives `Core.Typeof(arg)`
+a label that is a subtype of `Bound`. For a type argument `X`, that is the label of `X`.
+The other `where` entries are ordinary static parameters.
 
 Method specificity combines the signature and the guards: a method is more specific if
 its signature is at least as specific and each of its guard bounds is a subtype of the
 other's (`Any` if absent), and it is strictly more specific in one of them. Methods that
 differ only in their guards do not replace each other.
 
-Traits may run during inference or on a dynamic dispatch cache miss, even when no guarded
-signature matches.
-A trait must be total and must not have side effects: its result may only depend on its
-argument and the world. `Bound` is evaluated at definition time. Not supported: keyword and
-default arguments, guards on a `Vararg` argument, and precompilation.
+`Bound` is evaluated at definition time. Not supported: keyword and default arguments,
+guards on a `Vararg` argument, and precompilation.
 """
 macro guarded(def)
     inner = Base.unwrap_macrocalls(def)
@@ -523,7 +611,7 @@ function strip_guards!(guards::Vector{Any}, ex)
     return isempty(params) ? body : Expr(:where, body, params...)
 end
 
-# the position of the argument `sym`, or of the argument declared `::Type{sym}`
+# the position of the argument `sym`
 function guard_argpos(args::Vector{Any}, sym)
     for (i, a) in enumerate(args)
         isexpr(a, :macrocall) && (a = a.args[end]) # e.g. `@nospecialize(x)`
@@ -532,11 +620,7 @@ function guard_argpos(args::Vector{Any}, sym)
         isexpr(name, :...) && name.args[1] === sym &&
             error("@guarded: guards on a Vararg argument are not supported")
     end
-    for (i, a) in enumerate(args)
-        isexpr(a, :macrocall) && (a = a.args[end])
-        isexpr(a, :(::)) && a.args[end] == :(Type{$sym}) && return i
-    end
-    error("@guarded: `$sym` is neither an argument nor the parameter of a `::Type{$sym}` argument")
+    error("@guarded: `$sym` is not an argument")
 end
 
 # replace `inner` in `ex`, keeping the macro calls around it (e.g. `@inline`)

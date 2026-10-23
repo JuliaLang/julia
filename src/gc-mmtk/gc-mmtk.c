@@ -718,6 +718,8 @@ JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
     }
     add_node_to_roots_buffer(closure, &buf, &len, _jl_debug_method_invalidation);
     add_node_to_roots_buffer(closure, &buf, &len, jl_atomic_load_relaxed(&jl_trait_schemas));
+    add_node_to_roots_buffer(closure, &buf, &len, jl_atomic_load_relaxed(&jl_trait_tables));
+    add_node_to_roots_buffer(closure, &buf, &len, jl_atomic_load_relaxed(&jl_trait_overlays));
     add_node_to_roots_buffer(closure, &buf, &len, jl_atomic_load_relaxed(&jl_pending_method_guards));
 
     // constants

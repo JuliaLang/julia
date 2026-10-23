@@ -91,7 +91,8 @@ function findall(@nospecialize(sig::Type), table::OverlayMethodTable;
     overlay_matches = result.matches
     filtered = filter(fallback_result.matches) do base_match::MethodMatch
         dominated = any(overlay_matches) do overlay_match::MethodMatch
-            base_match.method.sig <: overlay_match.method.sig
+            base_match.method.sig <: overlay_match.method.sig &&
+                guards_proven(overlay_match.method, slots)
         end
         return !dominated
     end
@@ -101,6 +102,25 @@ function findall(@nospecialize(sig::Type), table::OverlayMethodTable;
             max(result.valid_worlds.min_world, fallback_result.valid_worlds.min_world),
             min(result.valid_worlds.max_world, fallback_result.valid_worlds.max_world)),
         result.ambig | fallback_result.ambig)
+end
+
+# trait slots (prototype): whether the slot types `slots` prove the guards of `m`
+function guards_proven(m::Method, slots::Union{Nothing,SimpleVector})
+    guards = m.guards
+    guards === nothing && return true
+    for i = 1:3:length(guards)
+        S = Any
+        if slots !== nothing
+            for j = 1:3:length(slots)
+                if slots[j] === guards[i] && slots[j+1] === guards[i+1]
+                    S = slots[j+2]
+                    break
+                end
+            end
+        end
+        S <: guards[i+2] || return false
+    end
+    return true
 end
 
 function _findall(@nospecialize(sig::Type), mt::Union{Nothing,MethodTable}, world::UInt,
