@@ -355,7 +355,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
         // the unpublish by any later pass.
         Value *null_ptr0 = ConstantPointerNull::get(cast<PointerType>(PtrTy));
         StoreInst *unpub = Builder.CreateAlignedStore(null_ptr0, reset_ctx_ptr, Align(sizeof(void*)), /*isVolatile*/true);
-        unpub->setOrdering(AtomicOrdering::Release);
+        unpub->setOrdering(AtomicOrdering::Monotonic);
         setResetSafeMetadata(unpub);
         Builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SyncScope::SingleThread);
 
@@ -621,7 +621,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
 
         Value *null_ptr = ConstantPointerNull::get(cast<PointerType>(PtrTy));
         StoreInst *store = Builder.CreateAlignedStore(null_ptr, reset_ctx_ptr, Align(sizeof(void*)), /*isVolatile*/true);
-        store->setOrdering(AtomicOrdering::Release);
+        store->setOrdering(AtomicOrdering::Monotonic);
         setResetSafeMetadata(store);
         Builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SyncScope::SingleThread);
     }
@@ -665,7 +665,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
                 InsertPt = MTC;
             IRBuilder<> Builder(InsertPt);
             StoreInst *store = Builder.CreateAlignedStore(null_ptr, reset_ctx_ptr, Align(sizeof(void*)), /*isVolatile*/true);
-            store->setOrdering(AtomicOrdering::Release);
+            store->setOrdering(AtomicOrdering::Monotonic);
             setResetSafeMetadata(store);
             ++ResetCtxClearsInserted;
         }
