@@ -225,24 +225,8 @@ static inline int jl_addr_is_win_restore_trigger(uintptr_t addr)
 // The return target rigged under the trampoline. An asm stub (rather than a
 // C function) so that no prologue moves Rsp before the faulting read: at the
 // fault, Rsp still points just below the saved CONTEXT.
+// Defined in arch/<arch>/win_restore_trigger.S
 extern void jl_win_restore_trigger(void);
-#if defined(_CPU_X86_64_)
-__asm__(
-    "  .globl jl_win_restore_trigger\n"
-    "jl_win_restore_trigger:\n"
-    "  movq jl_win_restore_page(%rip), %r11\n"
-    "  movq (%r11), %r11\n" // EXCEPTION_ACCESS_VIOLATION here
-    "  ud2\n"               // should never reach here
-);
-#elif defined(_CPU_X86_)
-__asm__(
-    "  .globl _jl_win_restore_trigger\n"
-    "_jl_win_restore_trigger:\n"
-    "  movl _jl_win_restore_page, %eax\n"
-    "  movl (%eax), %eax\n" // EXCEPTION_ACCESS_VIOLATION here
-    "  ud2\n"               // should never reach here
-);
-#endif
 
 // Runs on the interrupted thread with the interrupted CONTEXT saved on the
 // stack below: invoke the registered cancellation handler with its

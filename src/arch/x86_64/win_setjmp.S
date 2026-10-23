@@ -1,5 +1,13 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+// jl_setjmp / jl_longjmp (and ijl_*) for Windows (declared in src/julia.h).
+// They save and restore the callee-saved registers in a jmp_buf, at the
+// offsets of _JUMP_BUFFER (from <setjmp.h>).
+//
+// Coupled to C code in src/stackwalk.c: jl_simulate_longjmp reads a buffer
+// saved here through _JUMP_BUFFER to reconstruct the context that jl_longjmp
+// would resume, so the layout used here must match _JUMP_BUFFER.
+
 /*
  * TODO: save/restore floating point control state
  * and reset avx state
