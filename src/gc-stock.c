@@ -59,9 +59,9 @@ int jl_n_sweepthreads;
 // To indicate whether concurrent sweeping should run
 uv_sem_t gc_sweep_assists_needed;
 
-// Number of threads sweeping stacks
-_Atomic(int) gc_n_threads_sweeping_stacks;
-// counter for sharing work when sweeping stacks
+// Number of threads in the per-thread sweep (stacks, malloc'd buffers, big objects)
+_Atomic(int) gc_n_threads_sweeping_per_thread;
+// counter for sharing work in the per-thread sweep
 _Atomic(int) gc_ptls_sweep_idx;
 // counter for round robin of giving back stack pages to the OS
 _Atomic(int) gc_stack_free_idx;
@@ -684,7 +684,7 @@ static void sweep_list_of_oldest_bigvals(bigval_t *young) JL_NOTSAFEPOINT
 }
 
 // The per-thread young lists were already swept (in parallel) by
-// sweep_stack_pool_loop, unless external free callbacks are registered.
+// sweep_per_thread_loop, unless external free callbacks are registered.
 static void sweep_big(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     if (GC_TIME_ENABLED)
@@ -1217,8 +1217,8 @@ static void gc_sweep_other(jl_ptls_t ptls, int sweep_full) JL_NOTSAFEPOINT
     jl_engine_sweep(gc_all_tls_states);
 }
 
-// wake up all threads to sweep the stacks
-static void gc_sweep_wake_all_stacks(jl_ptls_t ptls) JL_NOTSAFEPOINT
+// wake up all threads for the per-thread sweep
+static void gc_sweep_wake_all_per_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     uv_mutex_lock(&gc_threads_lock);
     int first = gc_first_parallel_collector_thread_id();
@@ -1226,23 +1226,26 @@ static void gc_sweep_wake_all_stacks(jl_ptls_t ptls) JL_NOTSAFEPOINT
     for (int i = first; i <= last; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         gc_check_ptls_of_parallel_collector_thread(ptls2);
-        jl_atomic_fetch_add(&ptls2->gc_tls.gc_stack_sweep_requested, 1);
+        jl_atomic_fetch_add(&ptls2->gc_tls.gc_per_thread_sweep_requested, 1);
     }
     uv_cond_broadcast(&gc_threads_cond);
     uv_mutex_unlock(&gc_threads_lock);
     return;
 }
 
-static void gc_sweep_wait_for_all_stacks(void) JL_NOTSAFEPOINT
+static void gc_sweep_wait_for_all_per_thread(void) JL_NOTSAFEPOINT
 {
-    while ((jl_atomic_load_acquire(&gc_ptls_sweep_idx) >= 0 ) || jl_atomic_load_acquire(&gc_n_threads_sweeping_stacks) != 0) {
+    while ((jl_atomic_load_acquire(&gc_ptls_sweep_idx) >= 0 ) || jl_atomic_load_acquire(&gc_n_threads_sweeping_per_thread) != 0) {
         jl_cpu_pause();
     }
 }
 
 extern const unsigned pool_sizes[];
 
-static void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
+// Sweep the per-thread heaps, one thread's at a time, in parallel with the
+// other collector threads: free the dead malloc'd buffers and big objects and
+// sweep the stack pools.
+static void sweep_per_thread_loop(void) JL_NOTSAFEPOINT
 {
     // Stack sweeping algorithm:
     //    // deallocate stacks if we have too many sitting around unused
@@ -1257,7 +1260,7 @@ static void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
     //                push(free_stacks[sz], stkbuf)
     size_t freed_bytes = 0, nfreed = 0;
     int sweep_big_serially = gc_cblist_notify_external_free != NULL;
-    jl_atomic_fetch_add(&gc_n_threads_sweeping_stacks, 1);
+    jl_atomic_fetch_add(&gc_n_threads_sweeping_per_thread, 1);
     while (1) {
         int i = jl_atomic_fetch_add_relaxed(&gc_ptls_sweep_idx, -1);
         if (i < 0)
@@ -1339,12 +1342,12 @@ static void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
         live_tasks->len -= ndel;
     }
     gc_account_freed_malloced_memory(freed_bytes, nfreed);
-    jl_atomic_fetch_add(&gc_n_threads_sweeping_stacks, -1);
+    jl_atomic_fetch_add(&gc_n_threads_sweeping_per_thread, -1);
 }
 
 JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
-    // initialize ptls index for parallel sweeping of stack pools
+    // initialize ptls index for the parallel per-thread sweep
     assert(gc_n_threads != 0);
     int stack_free_idx = jl_atomic_load_relaxed(&gc_stack_free_idx);
     if (stack_free_idx + 1 == gc_n_threads)
@@ -1353,9 +1356,9 @@ JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls
         jl_atomic_store_relaxed(&gc_stack_free_idx, stack_free_idx + 1);
     jl_atomic_store_release(&gc_ptls_sweep_idx, gc_n_threads - 1); // idx == gc_n_threads = release stacks to the OS so it's serial
     uv_mutex_lock(&live_tasks_lock);
-    gc_sweep_wake_all_stacks(ptls);
-    sweep_stack_pool_loop();
-    gc_sweep_wait_for_all_stacks();
+    gc_sweep_wake_all_per_thread(ptls);
+    sweep_per_thread_loop();
+    gc_sweep_wait_for_all_per_thread();
     sweep_mtarraylist_buffers();
     uv_mutex_unlock(&live_tasks_lock);
 }
@@ -4072,9 +4075,9 @@ STATIC_INLINE int may_sweep(jl_ptls_t ptls) JL_NOTSAFEPOINT
     return (jl_atomic_load(&ptls->gc_tls.gc_sweeps_requested) > 0);
 }
 
-STATIC_INLINE int may_sweep_stack(jl_ptls_t ptls) JL_NOTSAFEPOINT
+STATIC_INLINE int may_sweep_per_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
-    return (jl_atomic_load(&ptls->gc_tls.gc_stack_sweep_requested) > 0);
+    return (jl_atomic_load(&ptls->gc_tls.gc_per_thread_sweep_requested) > 0);
 }
 
 extern _Atomic(int) n_threads_running;
@@ -4100,16 +4103,16 @@ void jl_parallel_gc_threadfun(void *arg)
 
     while (1) {
         uv_mutex_lock(&gc_threads_lock);
-        while (!may_mark() && !may_sweep(ptls) && !may_sweep_stack(ptls)) {
+        while (!may_mark() && !may_sweep(ptls) && !may_sweep_per_thread(ptls)) {
             uv_cond_wait(&gc_threads_cond, &gc_threads_lock);
         }
         uv_mutex_unlock(&gc_threads_lock);
         assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_PARALLEL_COLLECTOR_THREAD);
         gc_mark_loop(ptls, 0);
-        if (may_sweep_stack(ptls)) {
+        if (may_sweep_per_thread(ptls)) {
             assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_PARALLEL_COLLECTOR_THREAD);
-            sweep_stack_pool_loop();
-            jl_atomic_fetch_add(&ptls->gc_tls.gc_stack_sweep_requested, -1);
+            sweep_per_thread_loop();
+            jl_atomic_fetch_add(&ptls->gc_tls.gc_per_thread_sweep_requested, -1);
         }
         if (may_sweep(ptls)) {
             assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_PARALLEL_COLLECTOR_THREAD);
