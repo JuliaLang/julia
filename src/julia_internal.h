@@ -1452,14 +1452,8 @@ JL_DLLEXPORT size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_linkage_blob_dep_world(size_t image, size_t blob) JL_NOTSAFEPOINT;
 // The world since which every method on the typenames of `sig` in `mt` came from `image` or one of its dependencies, else 0 (gf.c).
 JL_DLLEXPORT size_t jl_sig_contributors_world(jl_value_t *sig, jl_methtable_t *mt, size_t image) JL_CANSAFEPOINT;
-// The ext_backinterferences of a method (gf.c, staticdata.c; its `record` for short):
-// the methods of other images whose interference sets contain it, those intersecting
-// it and not more specific than it, as a list of methods. It is the back direction of
-// `interferences`, which the image preserves, restricted to external methods, so the
-// pair gives every intersecting method of those images with its specificity: what
-// the activation found by scanning the method table live, replayed when the method
-// activates again.
 void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array_t *record, size_t image) JL_CANSAFEPOINT;
+// The ext_backinterferences of a method: It is the back direction of `interferences`, computed for external methods during incremental precompile.
 JL_DLLEXPORT jl_value_t *jl_get_ext_backinterferences(jl_method_t *method) JL_NOTSAFEPOINT;
 extern JL_DLLEXPORT jl_genericmemory_t *jl_ext_backinterferences JL_GLOBALLY_ROOTED;
 // GC configuration baked into generated code; must match between an image and the runtime that loads it.

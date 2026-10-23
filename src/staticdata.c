@@ -4945,9 +4945,8 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
                 // PkgCacheInspector.jl). With the single global jl_method_table,
                 // `extext_methods` contains all worklist methods; `internal_methods`
                 // only partially overlaps it and exists only for per-object world-stamp
-                // updates during the fixup walk. `extext_records` holds, in parallel
-                // with `extext_methods`, each method's ext_backinterferences or nothing.
-                restored = (jl_value_t*)jl_svec(7, restored, init_order, internal_methods, extext_methods, method_roots_list, cachesizes_sv, extext_records);
+                // updates during the fixup walk.
+                restored = (jl_value_t*)jl_svec(6, restored, init_order, internal_methods, extext_methods, method_roots_list, cachesizes_sv);
             }
             else {
                 restored = (jl_value_t*)jl_svec(3, restored, init_order, internal_methods);

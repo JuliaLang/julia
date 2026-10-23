@@ -2404,6 +2404,37 @@ precompile_test_harness("activation replay: record completed against images load
     @test out == "pkg true pkg8 late"
 end
 
+precompile_test_harness("activation replay: replacing an uncovered method") do load_path
+    write(joinpath(load_path, "ActReplDep.jl"),
+        """
+        module ActReplDep
+        f(::Any) = :dep
+        end
+        """)
+    write(joinpath(load_path, "ActReplPkg.jl"),
+        """
+        module ActReplPkg
+        using ActReplDep
+        ActReplDep.f(::Int) = :pkg
+        end
+        """)
+    Base.compilecache(Base.PkgId("ActReplDep"))
+    Base.compilecache(Base.PkgId("ActReplPkg"))
+    # a run-time method of the same signature is not covered by the record, so the
+    # package's method replaces it, and the dependency's method, which the record
+    # covers, must still learn of the replacement
+    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
+        using ActReplDep
+        ActReplDep.f(::Int) = :runtime
+        using ActReplPkg
+        mint = which(ActReplDep.f, (Int,))
+        many = which(ActReplDep.f, (Any,))
+        inters = many.interferences
+        print(ActReplDep.f(1), " ", mint.module, " ", any(i -> isassigned(inters, i) && inters[i] === mint, eachindex(inters)))
+        """)
+    @test out == "pkg ActReplPkg true"
+end
+
 precompile_test_harness("Generator nospecialize") do load_path
     write(joinpath(load_path, "GenNoSpec.jl"),
         """
