@@ -1670,7 +1670,6 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
     uintptr_t header = jl_atomic_fetch_and_relaxed((_Atomic(uintptr_t) *)&o->header, ~GC_OLD);
     if (header & GC_OLD) { // write barrier has not been triggered in this object yet
         arraylist_push(&ptls->gc_tls.heap.remset, (jl_value_t*)ptr);
-        ptls->gc_tls.heap.remset_nptr++; // conservative
         // Image objects are analogous to a third "permanent" GC
         // generation, so here we maintain the remset for them.
         if (__unlikely((header & GC_IN_IMAGE) && !(header & GC_IN_IMAGE_REMSET))) {
@@ -1799,12 +1798,11 @@ STATIC_INLINE void gc_assert_parent_validity(jl_value_t *parent, jl_value_t *chi
 }
 
 // Check if `nptr` is tagged for `old + refyoung`,
-// Push the object to the remset and update the `nptr` counter if necessary.
+// Push the object to the remset if necessary.
 STATIC_INLINE void gc_mark_push_remset(jl_ptls_t ptls, jl_value_t *obj,
                                        uintptr_t nptr) JL_NOTSAFEPOINT
 {
     if (__unlikely((nptr & 0x3) == 0x3)) {
-        ptls->gc_tls.heap.remset_nptr += nptr >> 2;
         arraylist_t *remset = &ptls->gc_tls.heap.remset;
         size_t len = remset->len;
         if (__unlikely(len >= remset->max)) {
@@ -3091,7 +3089,6 @@ static void gc_queue_remset(jl_gc_markqueue_t *mq, jl_ptls_t ptls2) JL_NOTSAFEPO
     }
     // Don't forget to clear the remset
     ptls2->gc_tls.heap.remset.len = 0;
-    ptls2->gc_tls.heap.remset_nptr = 0;
 }
 
 static void gc_queue_image_remset(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
@@ -3111,7 +3108,6 @@ static void gc_check_all_remsets_are_empty(void) JL_NOTSAFEPOINT
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         if (ptls2 != NULL) {
             assert(ptls2->gc_tls.heap.remset.len == 0);
-            assert(ptls2->gc_tls.heap.remset_nptr == 0);
         }
     }
 }
@@ -3454,16 +3450,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     promoted_bytes += scanned_bytes;
     scanned_bytes = 0;
     // 4. next collection decision
-    int remset_nptr = 0;
     int sweep_full = next_sweep_full;
     int recollect = 0;
-    assert(gc_n_threads != 0);
-    for (int i = 0; i < gc_n_threads; i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[i];
-        if (ptls2 != NULL)
-            remset_nptr += ptls2->gc_tls.heap.remset_nptr;
-    }
-    (void)remset_nptr; //Use this information for something?
 
 
     // If the live data outgrows the suggested max_total_memory
