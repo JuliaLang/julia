@@ -41,6 +41,9 @@ alias_elements(::Type{MustAlias}) = Any[
     MustAlias(2, 0, FF, 1, Union{Int,Nothing}),
     MustAlias(2, 0, FF, 2, Any),
     MustAlias(3, 0, F, 1, Union{Int,String}),
+    # aliases of different definitions of the same slot
+    MustAlias(2, 1, F, 1, Int),
+    MustAlias(2, 2, F, 1, Union{Int,String}),
 ]
 alias_elements(::Type{InterMustAlias}) = Any[
     InterMustAlias(2, F, 1, Union{Int,String}),
