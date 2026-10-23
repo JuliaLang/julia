@@ -7750,6 +7750,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         }
         SmallVector<Value*, 0> vals;
         for (size_t i = 0; i < nargs; ++i) {
+            // an unboxed pointer-free value has no lifetime to preserve
+            if (!argv[i].Vboxed && jl_is_pointerfree(argv[i].typ))
+                continue;
             vals.append(get_gc_roots_for(ctx, argv[i]));
         }
         Value *token = vals.empty()
