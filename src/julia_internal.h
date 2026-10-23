@@ -1459,10 +1459,9 @@ JL_DLLEXPORT size_t jl_sig_contributors_world(jl_value_t *sig, jl_methtable_t *m
 // pair gives every intersecting method of those images with its specificity: what
 // the activation found by scanning the method table live, replayed when the method
 // activates again.
-void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array_t *record) JL_CANSAFEPOINT;
+void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array_t *record, size_t image) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_ext_backinterferences(jl_method_t *method) JL_NOTSAFEPOINT;
 extern JL_DLLEXPORT jl_genericmemory_t *jl_ext_backinterferences JL_GLOBALLY_ROOTED;
-JL_DLLEXPORT void jl_set_activation_coverage(size_t image) JL_NOTSAFEPOINT;
 // GC configuration baked into generated code; must match between an image and the runtime that loads it.
 JL_DLLEXPORT const char *jl_gc_image_abi(void) JL_NOTSAFEPOINT;
 

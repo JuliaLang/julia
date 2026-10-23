@@ -579,17 +579,24 @@ static jl_array_t *queue_used(jl_array_t *list, jl_query_cache *query_cache)
     return new_used;
 }
 
+// The extext methods being collected, and in parallel their ext_backinterferences
+// (or `nothing`), which name only objects of images and so can be saved.
+struct extext_collection {
+    jl_array_t *methods;
+    jl_array_t *records;
+};
+
 // For every method:
 // - if the method is owned by a worklist module, add it to the list of things to be
 //   verified on reloading
 // - if the method is extext, record that it needs to be reinserted later in the method table
 static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) JL_CANSAFEPOINT
 {
-    jl_array_t *s = (jl_array_t*)closure;
+    struct extext_collection *s = (struct extext_collection*)closure;
     jl_method_t *m = ml->func.method;
     if (!jl_object_in_image((jl_value_t*)m->module)) {
-        jl_array_ptr_1d_push(s, (jl_value_t*)m); // extext
-        jl_array_ptr_1d_push(s, jl_get_ext_backinterferences(m)); // names only objects of images, so it can be saved
+        jl_array_ptr_1d_push(s->methods, (jl_value_t*)m); // extext
+        jl_array_ptr_1d_push(s->records, jl_get_ext_backinterferences(m));
     }
     return 1;
 }
@@ -598,10 +605,10 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) 
 // contents are dropped from the image (see jl_prune_internal_mtable)
 static int jl_collect_methcache_internal(jl_typemap_entry_t *ml, void *closure) JL_CANSAFEPOINT
 {
-    jl_array_t *s = (jl_array_t*)closure;
+    struct extext_collection *s = (struct extext_collection*)closure;
     if (jl_atomic_load_relaxed(&ml->max_world) == ~(size_t)0) {
-        jl_array_ptr_1d_push(s, (jl_value_t*)ml->func.method); // extext
-        jl_array_ptr_1d_push(s, jl_nothing); // no record, but keep the entries in pairs
+        jl_array_ptr_1d_push(s->methods, (jl_value_t*)ml->func.method); // extext
+        jl_array_ptr_1d_push(s->records, jl_nothing); // no record
     }
     return 1;
 }
@@ -621,9 +628,10 @@ static int jl_collect_methtable_from_mod(jl_methtable_t *mt, void *env) JL_CANSA
 // Collect methods of external functions defined by modules in the worklist
 // "extext" = "extending external"
 // Also collect relevant backedges
-static void jl_collect_extext_methods(jl_array_t *s, jl_array_t *mod_array) JL_CANSAFEPOINT
+static void jl_collect_extext_methods(jl_array_t *methods, jl_array_t *records, jl_array_t *mod_array) JL_CANSAFEPOINT
 {
-    jl_foreach_reachable_mtable(jl_collect_methtable_from_mod, mod_array, s);
+    struct extext_collection s = {methods, records};
+    jl_foreach_reachable_mtable(jl_collect_methtable_from_mod, mod_array, &s);
 }
 
 // Headers
@@ -910,7 +918,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
 static void jl_add_methods(jl_array_t *external) JL_CANSAFEPOINT
 {
     size_t i, l = jl_array_nrows(external);
-    for (i = 0; i < l; i += 2) { // (method, ext_backinterferences) pairs
+    for (i = 0; i < l; i++) {
         jl_method_t *meth = (jl_method_t*)jl_array_ptr_ref(external, i);
         assert(jl_is_method(meth));
         assert(!meth->is_for_opaque_closure);
@@ -923,9 +931,10 @@ static void jl_add_methods(jl_array_t *external) JL_CANSAFEPOINT
 
 extern _Atomic(int) allow_new_worlds;
 
-// `image` is the linkage blob of the loading image, whose dependencies its
-// methods' ext_backinterferences records cover.
-static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size_t world, const char *pkgname, size_t image) JL_CANSAFEPOINT
+// `records` holds, in parallel with `external`, each method's ext_backinterferences
+// (or `nothing`); `image` is the linkage blob of the loading image, whose
+// dependencies those records cover.
+static void jl_activate_methods(jl_array_t *external, jl_array_t *records, jl_array_t *internal, size_t world, const char *pkgname, size_t image) JL_CANSAFEPOINT
 {
     size_t i, l = jl_array_nrows(internal);
     for (i = 0; i < l; i++) {
@@ -960,18 +969,17 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
             jl_printf(JL_STDERR, "WARNING: Method changes for %s have been disabled via a call to disable_new_worlds.\n", pkgname);
             return;
         }
-        jl_set_activation_coverage(image);
-        for (i = 0; i < l; i += 2) {
+        assert(jl_array_nrows(records) == l);
+        for (i = 0; i < l; i++) {
             jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
-            jl_value_t *record = jl_array_ptr_ref(external, i + 1);
+            jl_value_t *record = jl_array_ptr_ref(records, i);
             //uint64_t t0 = uv_hrtime();
-            jl_method_table_activate_with_record(entry, record == jl_nothing ? NULL : (jl_array_t*)record);
+            jl_method_table_activate_with_record(entry, record == jl_nothing ? NULL : (jl_array_t*)record, image);
             //jl_printf(JL_STDERR, "%f ", (double)(uv_hrtime() - t0) / 1e6);
             //jl_static_show(JL_STDERR, entry->func.value);
             //jl_printf(JL_STDERR, "\n");
         }
     }
-    jl_set_activation_coverage((size_t)-1);
 }
 
 static int jl_copy_roots(jl_array_t *method_roots_list, uint64_t key) JL_CANSAFEPOINT

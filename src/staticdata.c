@@ -3174,7 +3174,7 @@ static void write_section(ios_t *f, ios_t *sec, size_t align, size_t skip, const
 // In addition to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
 static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                                            jl_array_t *module_init_order, jl_array_t *worklist, jl_array_t *extext_methods,
-                                           jl_array_t *new_ext, jl_query_cache *query_cache) JL_CANSAFEPOINT
+                                           jl_array_t *extext_records, jl_array_t *new_ext, jl_query_cache *query_cache) JL_CANSAFEPOINT
 {
     htable_new(&field_replace, 0);
     htable_new(&bits_replace, 0);
@@ -3379,8 +3379,9 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         }
         // step 1.1: as needed, serialize the data needed for insertion into the running system
         if (extext_methods) {
-            // Queue method extensions
+            // Queue method extensions and their activation records
             jl_queue_for_serialization(&s, extext_methods);
+            jl_queue_for_serialization(&s, extext_records);
             // Queue the new specializations
             jl_queue_for_serialization(&s, new_ext);
         }
@@ -3549,6 +3550,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             }
             jl_write_value(&s, module_init_order);
             jl_write_value(&s, extext_methods);
+            jl_write_value(&s, extext_records);
             jl_write_value(&s, new_ext);
             jl_write_value(&s, s.method_roots_list);
         }
@@ -3648,9 +3650,9 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     ios_t *f = (ios_t*)malloc_s(sizeof(ios_t));
     ios_mem(f, 0);
 
-    jl_array_t *mod_array = NULL, *extext_methods = NULL, *new_ext = NULL, *ext_foreign_cis = NULL;
+    jl_array_t *mod_array = NULL, *extext_methods = NULL, *extext_records = NULL, *new_ext = NULL, *ext_foreign_cis = NULL;
     int64_t datastartpos = 0;
-    JL_GC_PUSH4(&mod_array, &extext_methods, &new_ext, &ext_foreign_cis);
+    JL_GC_PUSH5(&mod_array, &extext_methods, &extext_records, &new_ext, &ext_foreign_cis);
 
     ext_foreign_cis = jl_alloc_vec_any(0);
 
@@ -3706,9 +3708,11 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
         ext_foreign_cis = NULL; // not needed anymore, free it
 
         // Collect method extensions
-        // extext_methods: [method1, record1, ...], worklist-owned "extending external" methods added to functions owned by modules outside the worklist, each paired with its ext_backinterferences (or nothing)
+        // extext_methods: worklist-owned "extending external" methods added to functions owned by modules outside the worklist
+        // extext_records: in parallel, the ext_backinterferences of each (or nothing)
         extext_methods = jl_alloc_vec_any(0);
-        jl_collect_extext_methods(extext_methods, mod_array);
+        extext_records = jl_alloc_vec_any(0);
+        jl_collect_extext_methods(extext_methods, extext_records, mod_array);
 
         if (emit_split) {
             jl_clone_targets_t targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
@@ -3727,7 +3731,7 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     jl_query_cache query_cache;
     init_query_cache(&query_cache);
     jl_finalize_precompile_inferred(worklist != NULL && _native_data != NULL && jl_options.outputo != NULL);
-    jl_save_system_image_to_stream(f, mod_array, module_init_order, worklist, extext_methods, new_ext, &query_cache);
+    jl_save_system_image_to_stream(f, mod_array, module_init_order, worklist, extext_methods, extext_records, new_ext, &query_cache);
     if (_native_data != NULL)
         native_functions = NULL;
     // make sure we don't run any Julia code concurrently before this point
@@ -4215,6 +4219,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                                 /* outputs */    jl_array_t **restored JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **init_order JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **extext_methods JL_REQUIRE_ROOTED_SLOT,
+                                                 jl_array_t **extext_records JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **internal_methods JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **method_roots_list JL_REQUIRE_ROOTED_SLOT,
                                                  pkgcachesizes *cachesizes,
@@ -4289,7 +4294,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
     assert(!ios_eof(f));
     s.s = f;
-    uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_new_ext = 0, offset_method_roots_list = 0;
+    uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_extext_records = 0, offset_new_ext = 0, offset_method_roots_list = 0;
     if (!s.incremental) {
         size_t i;
         for (i = 0; tags[i] != NULL; i++) {
@@ -4324,6 +4329,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         offset_restored = jl_read_offset(&s);
         offset_init_order = jl_read_offset(&s);
         offset_extext_methods = jl_read_offset(&s);
+        offset_extext_records = jl_read_offset(&s);
         offset_new_ext = jl_read_offset(&s);
         offset_method_roots_list = jl_read_offset(&s);
     }
@@ -4350,10 +4356,11 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     }
     uint32_t external_fns_begin = read_uint32(f);
     if (s.incremental) {
-        assert(restored && init_order && extext_methods && internal_methods && method_roots_list);
+        assert(restored && init_order && extext_methods && extext_records && internal_methods && method_roots_list);
         *restored = (jl_array_t*)jl_delayed_reloc(&s, offset_restored);
         *init_order = (jl_array_t*)jl_delayed_reloc(&s, offset_init_order);
         *extext_methods = (jl_array_t*)jl_delayed_reloc(&s, offset_extext_methods);
+        *extext_records = (jl_array_t*)jl_delayed_reloc(&s, offset_extext_records);
         (void)(jl_array_t*)jl_delayed_reloc(&s, offset_new_ext);
         *method_roots_list = (jl_array_t*)jl_delayed_reloc(&s, offset_method_roots_list);
         *internal_methods = jl_alloc_vec_any(0);
@@ -4862,9 +4869,9 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
     needs_permalloc = jl_options.permalloc_pkgimg || needs_permalloc;
 
     jl_value_t *restored = NULL;
-    jl_array_t *init_order = NULL, *extext_methods = NULL, *internal_methods = NULL, *method_roots_list = NULL;
+    jl_array_t *init_order = NULL, *extext_methods = NULL, *extext_records = NULL, *internal_methods = NULL, *method_roots_list = NULL;
     jl_svec_t *cachesizes_sv = NULL;
-    JL_GC_PUSH6(&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &cachesizes_sv);
+    JL_GC_PUSH7(&restored, &init_order, &extext_methods, &extext_records, &internal_methods, &method_roots_list, &cachesizes_sv);
 
     { // make a permanent in-memory copy of f (excluding the header)
         ios_bufmode(f, bm_none);
@@ -4890,7 +4897,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             ios_static_buffer(f, sysimg, len);
             pkgcachesizes cachesizes;
             image_metadata_t *meta = NULL;
-            jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &cachesizes, &meta);
+            jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &extext_records, &internal_methods, &method_roots_list, &cachesizes, &meta);
             JL_SIGATOMIC_END();
 
             // Add roots to methods
@@ -4917,7 +4924,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             if (new_methods)
                 world += 1;
             jl_atomic_store_relaxed(&meta->world, world); // before activation, which asks about this image's dependencies
-            jl_activate_methods(extext_methods, internal_methods, world, pkgname, meta->idx);
+            jl_activate_methods(extext_methods, extext_records, internal_methods, world, pkgname, meta->idx);
             // TODO: inject internal_methods into caches here, so the system can see them immediately as potential candidates (before validation)
             // allow users to start running in this updated world
             if (new_methods)
@@ -4938,8 +4945,9 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
                 // PkgCacheInspector.jl). With the single global jl_method_table,
                 // `extext_methods` contains all worklist methods; `internal_methods`
                 // only partially overlaps it and exists only for per-object world-stamp
-                // updates during the fixup walk.
-                restored = (jl_value_t*)jl_svec(6, restored, init_order, internal_methods, extext_methods, method_roots_list, cachesizes_sv);
+                // updates during the fixup walk. `extext_records` holds, in parallel
+                // with `extext_methods`, each method's ext_backinterferences or nothing.
+                restored = (jl_value_t*)jl_svec(7, restored, init_order, internal_methods, extext_methods, method_roots_list, cachesizes_sv, extext_records);
             }
             else {
                 restored = (jl_value_t*)jl_svec(3, restored, init_order, internal_methods);
@@ -4964,7 +4972,7 @@ static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image) JL_
     ios_t f_payload;
     ios_static_buffer(&f_payload, f->buf + datastartpos, f->size - datastartpos);
     jl_restore_system_image_from_stream_(&f_payload, image, NULL,
-                                         checksum, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+                                         checksum, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(jl_image_buf_t buf, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc) JL_CANSAFEPOINT
