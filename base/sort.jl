@@ -5,7 +5,8 @@ module Sort
 using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing, uinttype, tail,
-    sub_with_overflow, add_with_overflow, BitSigned, BitIntegerType, top_set_bit
+    sub_with_overflow, add_with_overflow, BitIntegerType, top_set_bit,
+    maybe_unsigned, checked_add
 
 import Base:
     sort,
@@ -274,11 +275,12 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrde
     elseif h == 0 || !lt(o, x, l)
         length(a)
     else
-        if !(o isa ReverseOrdering)
-            fld(floor(Integer, x) - f, h) + 1
+        n = if !(o isa ReverseOrdering)
+            fld(maybe_unsigned(floor(Integer, x) - f), maybe_unsigned(h))
         else
-            fld(ceil(Integer, x) - f, h) + 1
+            fld(maybe_unsigned(f - ceil(Integer, x)), maybe_unsigned(zero(h) - h))
         end
+        checked_add(oneunit(keytype(a)), convert(keytype(a), n))
     end
 end
 
@@ -290,11 +292,12 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrd
     elseif h == 0 || lt(o, l, x)
         length(a) + 1
     else
-        if !(o isa ReverseOrdering)
-            cld(ceil(Integer, x) - f, h) + 1
+        n = if !(o isa ReverseOrdering)
+            cld(maybe_unsigned(ceil(Integer, x) - f), maybe_unsigned(h))
         else
-            cld(floor(Integer, x) - f, h) + 1
+            cld(maybe_unsigned(f - floor(Integer, x)), maybe_unsigned(zero(h) - h))
         end
+        checked_add(oneunit(keytype(a)), convert(keytype(a), n))
     end
 end
 
@@ -1440,8 +1443,6 @@ function radix_chunk_size_heuristic(lo::Integer, hi::Integer, bits::Unsigned)
     UInt8(cld(bits, cld(bits, guess)))
 end
 
-maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on BigInt
-maybe_unsigned(x::BitSigned) = unsigned(x)
 function _issorted(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     @boundscheck checkbounds(v, lo:hi)
     @inbounds for i in (lo+1):hi
