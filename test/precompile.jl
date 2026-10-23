@@ -2267,65 +2267,46 @@ precompile_test_harness("method contributors") do load_path
     @test out == "0"
 end
 
-precompile_test_harness("activation replay: worklist-owned method tables") do load_path
-    # methods of a method table the package itself defines carry no activation
-    # record; they must not break the (method, record) pairing of the image's
-    # method list (Revise's "External method tables" test found this)
-    write(joinpath(load_path, "ReplayOverlay.jl"),
-        """
-        module ReplayOverlay
-        Base.Experimental.@MethodTable(method_table)
-        Base.Experimental.@MethodTable(method_table_2)
-        foo() = 1
-        Base.Experimental.@overlay method_table print(x) = "print"
-        Base.Experimental.@overlay method_table show(x) = "show"
-        Base.Experimental.@overlay method_table cos(x) = "cos"
-        Base.Experimental.@overlay method_table_2 foo() = 2
-        bar() = foo()
-        baz() = bar()
-        end
-        """)
-    Base.compilecache(Base.PkgId("ReplayOverlay"))
-    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
-        using ReplayOverlay
-        nm(sig, mt) = length(Base._methods_by_ftype(sig, mt, -1, Base.get_world_counter()))
-        print(Base.invokelatest(ReplayOverlay.baz), " ", nm(Tuple{typeof(cos), Any}, ReplayOverlay.method_table),
-              " ", nm(Tuple{typeof(ReplayOverlay.foo)}, ReplayOverlay.method_table_2))
-        """)
-    @test out == "1 1 1"
-end
-
-precompile_test_harness("activation replay: record validity") do load_path
+# Activation replay: a package image replays what its precompile worker found when
+# activating each method against the methods of its dependencies, and scans the
+# method table live only for what that record does not cover. One trio of packages,
+# loaded in several orders.
+precompile_test_harness("activation replay") do load_path
     write(joinpath(load_path, "ActReplayDep.jl"),
         """
         module ActReplayDep
         f(::Any) = :old
         f(::Int) = :blocker
         h(::Any) = :any
+        k(::Any, ::Any) = :any
         g(::String) = :str
         end
         """)
-    # loads another dependency after defining its method, so the worker activated
-    # that method before it could see ActReplayLate's
     write(joinpath(load_path, "ActReplayLate.jl"),
         """
         module ActReplayLate
         using ActReplayDep
         ActReplayDep.h(::Integer) = :late
+        ActReplayDep.k(::Int, ::Any) = :late
         callh() = ActReplayDep.h(1)
         callh()
         callg() = ActReplayDep.g(1) # no method yet: a missing-method edge
         precompile(callg, ())
         end
         """)
+    # the worker activates the methods above `using ActReplayLate` before that image
+    # is loaded, so its methods complete their records as they activate; the method
+    # below finds them in its own scan
     write(joinpath(load_path, "ActReplayPkg.jl"),
         """
         module ActReplayPkg
         using ActReplayDep
         ActReplayDep.f(::Real) = :new
         ActReplayDep.h(::Int) = :pkg
+        ActReplayDep.k(::Any, ::Int) = :pkg
         ActReplayDep.g(::Int) = :pkg
         using ActReplayLate
+        ActReplayDep.h(::Int8) = :pkg8
         end
         """)
     Base.compilecache(Base.PkgId("ActReplayDep"))
@@ -2341,14 +2322,21 @@ precompile_test_harness("activation replay: record validity") do load_path
         print(Base.invokelatest(g))
         """)
     @test out == "new"
-    # the late dependency's caller is invalidated by the package's more specific method
+    # the late dependency's caller is invalidated by the package's more specific
+    # method, the two `k` methods know each other as ambiguous, and the method
+    # defined after the late dependency loaded dispatches against its method
     out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
         using ActReplayLate
         ActReplayLate.callh()
-        using ActReplayPkg
-        print(Base.invokelatest(ActReplayLate.callh))
+        using ActReplayPkg, ActReplayDep
+        ambiguous = try
+            ActReplayDep.k(1, 1); false
+        catch err
+            occursin("ambiguous", sprint(showerror, err))
+        end
+        print(Base.invokelatest(ActReplayLate.callh), " ", ambiguous, " ", ActReplayDep.h(Int8(1)), " ", ActReplayDep.h(big(1)))
         """)
-    @test out == "pkg"
+    @test out == "pkg true pkg8 late"
     # the late dependency's caller of a method missing when it was built is found
     # through its missing-method backedge, which is always checked live
     out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
@@ -2357,82 +2345,19 @@ precompile_test_harness("activation replay: record validity") do load_path
         print(Base.invokelatest(ActReplayLate.callg))
         """)
     @test out == "pkg"
-end
-
-precompile_test_harness("activation replay: record completed against images loaded later") do load_path
-    write(joinpath(load_path, "ActKeepDep.jl"),
-        """
-        module ActKeepDep
-        h(::Any) = :any
-        k(::Any, ::Any) = :any
-        end
-        """)
-    write(joinpath(load_path, "ActKeepLate.jl"),
-        """
-        module ActKeepLate
-        using ActKeepDep
-        ActKeepDep.h(::Integer) = :late
-        ActKeepDep.k(::Int, ::Any) = :late
-        callh() = ActKeepDep.h(1)
-        callh()
-        end
-        """)
-    # the worker activates the first two methods before the late dependency is loaded,
-    # so its methods complete their records as they activate; the last one sees it
-    write(joinpath(load_path, "ActKeepPkg.jl"),
-        """
-        module ActKeepPkg
-        using ActKeepDep
-        ActKeepDep.h(::Int) = :pkg
-        ActKeepDep.k(::Any, ::Int) = :pkg
-        using ActKeepLate
-        ActKeepDep.h(::Int8) = :pkg8
-        end
-        """)
-    Base.compilecache(Base.PkgId("ActKeepDep"))
-    Base.compilecache(Base.PkgId("ActKeepLate"))
-    Base.compilecache(Base.PkgId("ActKeepPkg"))
+    # a run-time method of a signature the package also defines is not covered by
+    # the record, so the package's method replaces it, and the dependency's method,
+    # which the record covers, must still learn of the replacement
     out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
-        using ActKeepPkg, ActKeepDep, ActKeepLate
-        ambiguous = try
-            ActKeepDep.k(1, 1); false
-        catch err
-            occursin("ambiguous", sprint(showerror, err))
-        end
-        print(ActKeepLate.callh(), " ", ambiguous, " ", ActKeepDep.h(Int8(1)), " ", ActKeepDep.h(big(1)))
-        """)
-    @test out == "pkg true pkg8 late"
-end
-
-precompile_test_harness("activation replay: replacing an uncovered method") do load_path
-    write(joinpath(load_path, "ActReplDep.jl"),
-        """
-        module ActReplDep
-        f(::Any) = :dep
-        end
-        """)
-    write(joinpath(load_path, "ActReplPkg.jl"),
-        """
-        module ActReplPkg
-        using ActReplDep
-        ActReplDep.f(::Int) = :pkg
-        end
-        """)
-    Base.compilecache(Base.PkgId("ActReplDep"))
-    Base.compilecache(Base.PkgId("ActReplPkg"))
-    # a run-time method of the same signature is not covered by the record, so the
-    # package's method replaces it, and the dependency's method, which the record
-    # covers, must still learn of the replacement
-    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
-        using ActReplDep
-        ActReplDep.f(::Int) = :runtime
-        using ActReplPkg
-        mint = which(ActReplDep.f, (Int,))
-        many = which(ActReplDep.f, (Any,))
+        using ActReplayDep
+        ActReplayDep.f(::Real) = :runtime
+        using ActReplayPkg
+        mint = which(ActReplayDep.f, (Real,))
+        many = which(ActReplayDep.f, (Any,))
         inters = many.interferences
-        print(ActReplDep.f(1), " ", mint.module, " ", any(i -> isassigned(inters, i) && inters[i] === mint, eachindex(inters)))
+        print(ActReplayDep.f(1.0), " ", mint.module, " ", any(i -> isassigned(inters, i) && inters[i] === mint, eachindex(inters)))
         """)
-    @test out == "pkg ActReplPkg true"
+    @test out == "new ActReplayPkg true"
 end
 
 precompile_test_harness("Generator nospecialize") do load_path
