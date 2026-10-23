@@ -1766,7 +1766,15 @@ end
 # #6080
 @test_loweringerror(:(ccall(:a, Cvoid, (Cint,), &x)), "invalid syntax &x")
 
-@test_loweringerror(:(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ()))), "ccall/cglobal function name and library expression cannot reference local variables")
+@test_loweringerror(:(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ()))), "ccall/cglobal function name and library expression cannot reference local variable")
+# #38907, #59324
+@test_loweringerror(:(let lib = nothing
+                          () -> (lib = "lib"; ccall((:a, lib), Cvoid, ()))
+                      end), "ccall/cglobal function name and library expression cannot reference local variable")
+@test_loweringerror(:(f(::Type{T}) where {T} = ccall(:a, (T where T), ())), "ccall return type cannot reference local variable")
+@test_loweringerror(:(f(T) = ccall(:a, T, ())), "ccall return type cannot reference local variable")
+@test_loweringerror(:(f(x, T) = ccall(:a, Cvoid, (T,), x)), "ccall argument type cannot reference local variable")
+@test_loweringerror(:(f(x) = ccall(:a, Cvoid, (Ref{<:Any},), x)), "ccall argument type cannot reference local variable")
 
 @test_parseerror "x.'"
 @test_parseerror "0.+1"
