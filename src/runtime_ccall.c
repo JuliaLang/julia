@@ -248,6 +248,16 @@ static void trampoline_deleter(void **f) JL_NOTSAFEPOINT
 
 typedef void *(*init_trampoline_t)(void *tramp, void **nval) JL_NOTSAFEPOINT;
 
+// `ty` still has free type variables after instantiation, so it uses a static parameter with no value
+static void JL_NORETURN cfunction_sparam_error(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals)
+{
+    for (size_t i = 0; jl_is_unionall(env); i++, env = (jl_unionall_t*)env->body) {
+        if (jl_sparam_defined_value(vals[i]) == NULL && jl_has_typevar(ty, env->var))
+            jl_undefined_var_error(env->var->name, (jl_value_t*)jl_static_parameter_sym);
+    }
+    jl_error("cfunction: could not resolve the static parameters of a callback argument type");
+}
+
 // Use of `cache` is not clobbered in JL_TRY
 JL_GCC_IGNORE_START("-Wclobbered")
 JL_DLLEXPORT
@@ -283,12 +293,23 @@ jl_value_t *jl_get_cfunction_trampoline(
 
     // not found, allocate a new one
     size_t n = jl_svec_len(fill);
+    size_t nenv = n > 0 ? jl_subtype_env_size((jl_value_t*)env) : 0;
+    jl_value_t **defvals;
+    JL_GC_PUSHARGS(defvals, nenv);
+    // read pinned markers as their representative, like `jl_sparam_slot_value`
+    for (size_t i = 0; i < nenv; i++) {
+        jl_value_t *v = jl_sparam_defined_value(vals[i]);
+        defvals[i] = v ? v : vals[i];
+    }
     void **nval = (void**)malloc_s(sizeof(void*) * (n + 1));
     nval[0] = (void*)fobj;
     jl_value_t *result;
     JL_TRY {
         for (size_t i = 0; i < n; i++) {
-            jl_value_t *sparam_val = jl_instantiate_type_in_env(jl_svecref(fill, i), env, vals);
+            jl_value_t *fill_type = jl_svecref(fill, i);
+            jl_value_t *sparam_val = jl_instantiate_type_in_env(fill_type, env, defvals);
+            if (jl_has_free_typevars(sparam_val))
+                cfunction_sparam_error(fill_type, env, vals);
             if (sparam_val != (jl_value_t*)jl_any_type)
                 if (!jl_is_concrete_type(sparam_val) || !jl_is_immutable(sparam_val))
                     sparam_val = NULL;
@@ -332,6 +353,7 @@ jl_value_t *jl_get_cfunction_trampoline(
     init_trampoline(tramp, nval);
     ptrhash_put(cache, (void*)fobj, result);
     uv_mutex_unlock(&trampoline_lock);
+    JL_GC_POP();
     return result;
 }
 JL_GCC_IGNORE_STOP

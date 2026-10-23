@@ -9,11 +9,11 @@ literals `md"..."` and `doc"..."`.
 """
 module Markdown
 
-import Base: AnnotatedString, AnnotatedIOBuffer, show, ==, with_output_color, mapany
+import Base: ==, AnnotatedIOBuffer, AnnotatedString, mapany, show
 using Base64: stringmime
 
-using StyledStrings: StyledStrings, Face, addface!, @styled_str, styled
-using JuliaSyntaxHighlighting: highlight, highlight!
+using StyledStrings: @styled_str, Face, StyledStrings, addface!, styled
+using JuliaSyntaxHighlighting: highlight!
 
 # Margin for printing in terminal.
 const margin = 2
@@ -33,7 +33,7 @@ include("render/latex.jl")
 include("render/rst.jl")
 include("render/terminal/render.jl")
 
-export @md_str, @doc_str
+export @doc_str, @md_str
 
 public MD, parse
 

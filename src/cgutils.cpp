@@ -184,8 +184,7 @@ static Value *stringConstPtr(
     }
     // Doesn't need to be aligned, we shouldn't operate on these like julia objects
     GlobalVariable *gv = get_pointer_to_constant(emission_context, Data, Align(1), "_j_str_" + StringRef(ctxt.data(), ctxt.size()), *M);
-    // AddrSpaceCast in case globals are in non-0 AS
-    return irbuilder.CreateAddrSpaceCast(gv, PointerType::getUnqual(gv->getContext()));
+    return generic_global_ptr(gv);
 }
 
 
@@ -583,7 +582,11 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
         return result;
     }
     if (!inlined && x.ispointer()) {
-        assert(x.V);
+        if (x.V == nullptr) {
+            // a union of ghost types has a tag but no data to root
+            assert(x.TIndex);
+            return {};
+        }
         assert(x.V->getType()->getPointerAddressSpace() != AddressSpace::Tracked);
         return {x.V};
     }
@@ -678,9 +681,7 @@ Constant *literal_pointer_val_slot(jl_codegen_output_t &params, jl_value_t *p)
             // some common builtin datatypes have a special pool for accessing them by smalltag id
             Constant *tag = ConstantInt::get(getInt32Ty(M->getContext()), addr->smalltag << 4);
             Constant *smallp = ConstantExpr::getInBoundsGetElementPtr(getInt8Ty(M->getContext()), prepare_global_in(M, jl_small_typeof_var), tag);
-            if (smallp->getType()->getPointerAddressSpace() != 0)
-                smallp = ConstantExpr::getAddrSpaceCast(smallp, getPointerTy(M->getContext()));
-            return smallp;
+            return generic_global_ptr(smallp);
         }
         // DataTypes are prefixed with a +
         return julia_pgv(params, M, "+", addr->name->name, addr->name->module, p);
@@ -729,6 +730,12 @@ static unsigned julia_alignment(jl_value_t *jt)
     return alignment;
 }
 
+// Return the alignment of the data pointer of a GenericMemory with this element layout
+static size_t julia_memory_alignment(const jl_datatype_layout_t *layout)
+{
+    return std::min((size_t)layout->alignment, (size_t)JL_HEAP_ALIGNMENT);
+}
+
 // Byte-rounded type for accessing an integer in Julia memory: an odd-bit
 // integer is stored zero-extended to whole bytes. Non-integers pass through.
 static Type *julia_primitive_storage_type(Type *register_type)
@@ -740,6 +747,17 @@ static Type *julia_primitive_storage_type(Type *register_type)
     if (storage_bits == IT->getBitWidth())
         return register_type;
     return IntegerType::get(IT->getContext(), storage_bits);
+}
+
+// The width `jt` occupies in memory. A primitive type's size is its value bytes
+// rounded up to a multiple of its alignment, so an odd-bit integer is reached with
+// one power-of-two access rather than several.
+static Type *julia_memory_access_type(Type *register_type, jl_value_t *jt)
+{
+    if (jl_is_primitivetype(jt) && register_type->isIntegerTy() &&
+            cast<IntegerType>(register_type)->getBitWidth() == jl_datatype_nbits((jl_datatype_t*)jt))
+        return Type::getIntNTy(register_type->getContext(), 8 * jl_datatype_size(jt));
+    return zext_struct_type(register_type);
 }
 
 static inline void maybe_mark_argument_dereferenceable(AttrBuilder &B, jl_value_t *jt) JL_CANSAFEPOINT
@@ -765,10 +783,10 @@ static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool
             Metadata *OP = ConstantAsMetadata::get(ConstantInt::get(getInt64Ty(LI->getContext()), size));
             LI->setMetadata(can_be_null ? LLVMContext::MD_dereferenceable_or_null : LLVMContext::MD_dereferenceable,
                             MDNode::get(LI->getContext(), { OP }));
-            if (align >= 1) {
-                Metadata *OP = ConstantAsMetadata::get(ConstantInt::get(getInt64Ty(LI->getContext()), align));
-                LI->setMetadata(LLVMContext::MD_align, MDNode::get(LI->getContext(), { OP }));
-            }
+        }
+        if (align > 1) {
+            Metadata *OP = ConstantAsMetadata::get(ConstantInt::get(getInt64Ty(LI->getContext()), align));
+            LI->setMetadata(LLVMContext::MD_align, MDNode::get(LI->getContext(), { OP }));
         }
     }
     return LI;
@@ -1274,13 +1292,8 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
     // part (dst_ai) different alias info, so one claim must cover both; see
     // `jl_aliasinfo_t::merge`.
     auto merged_ai = dst_ai.merge(src_ai);
-#if JL_LLVM_VERSION < 210000
-    ctx.builder.CreateMemCpy(dst, align_dst, src, align_src, sz, is_volatile,
-                             merged_ai.tbaa, merged_ai.tbaa_struct, merged_ai.scope, merged_ai.noalias);
-#else
     ctx.builder.CreateMemCpy(dst, align_dst, src, align_src, sz, is_volatile,
                              merged_ai.toAAMDNodes());
-#endif
 }
 
 template<typename T1>
@@ -1388,7 +1401,7 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
         if (off < shrunken_size) {
             // store an undef pointer here, to make sure nobody looks at this
             dst_ai.decorateInst(ctx.builder.CreateAlignedStore(
-                ctx.builder.getIntN(sizeof(void*) * 8, (uint64_t)-1),
+                ctx.builder.getInt(APInt::getAllOnes(sizeof(void*) * 8)),
                 emit_ptrgep(ctx, dst, ptr),
                 Align(sizeof(void*)),
                 isVolatileStore));
@@ -1439,7 +1452,7 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
         if (off < shrunken_size) {
             // store an undef pointer here, to make sure nobody looks at this
             dst_ai.decorateInst(ctx.builder.CreateAlignedStore(
-                ctx.builder.getIntN(sizeof(void*) * 8, (uint64_t)-1),
+                ctx.builder.getInt(APInt::getAllOnes(sizeof(void*) * 8)),
                 emit_ptrgep(ctx, dst, ptr),
                 Align(sizeof(void*)),
                 isVolatileStore));
@@ -1592,7 +1605,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
     if (p.isboxed)
         return emit_typeof(ctx, p.V, maybenull, justtag, notag(p.typ));
     if (p.TIndex) {
-        Value *tindex = ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER));
+        Value *tindex = ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), (uint8_t)~UNION_BOX_MARKER));
         bool allunboxed = is_uniontype_allunboxed(p.typ);
         Type *expr_type = justtag ? ctx.types().T_size : ctx.types().T_pjlvalue;
         Value *datatype_or_p = Constant::getNullValue(PointerType::getUnqual(expr_type->getContext()));
@@ -1602,10 +1615,10 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
                 Value *cmp = ctx.builder.CreateICmpEQ(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), idx));
                 Constant *ptr;
                 if (justtag && jt->smalltag) {
-                    ptr = get_pointer_to_constant(ctx.emission_context, ConstantInt::get(expr_type, jt->smalltag << 4), Align(sizeof(jl_value_t*)), StringRef("_j_smalltag_") + jl_symbol_name(jt->name->name), *jl_Module);
+                    ptr = generic_global_ptr(get_pointer_to_constant(ctx.emission_context, ConstantInt::get(expr_type, jt->smalltag << 4), Align(sizeof(jl_value_t*)), StringRef("_j_smalltag_") + jl_symbol_name(jt->name->name), *jl_Module));
                 }
                 else {
-                    ptr = ConstantExpr::getBitCast(literal_pointer_val_slot(ctx.emission_context, (jl_value_t*)jt), datatype_or_p->getType());
+                    ptr = generic_global_ptr(literal_pointer_val_slot(ctx.emission_context, (jl_value_t*)jt));
                 }
                 datatype_or_p = ctx.builder.CreateSelect(cmp, ptr, datatype_or_p);
                 setName(ctx.emission_context, datatype_or_p, "typetag_ptr");
@@ -1695,7 +1708,7 @@ static Value *emit_sizeof(jl_codectx_t &ctx, const jl_cgval_t &p)
 {
     if (p.TIndex) {
         Value *tindex = ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x7f));
-        Value *size = ConstantInt::get(getInt32Ty(ctx.builder.getContext()), -1);
+        Value *size = ConstantInt::get(getInt32Ty(ctx.builder.getContext()), -1, true);
         unsigned counter = 0;
         bool allunboxed = for_each_uniontype_small(
                 [&](unsigned idx, jl_datatype_t *jt) {
@@ -1725,7 +1738,7 @@ static Value *emit_sizeof(jl_codectx_t &ctx, const jl_cgval_t &p)
         }
 #ifndef NDEBUG
         // try to catch codegen errors early, before it uses this to memcpy over the entire stack
-        CreateConditionalAbort(ctx.builder, ctx.builder.CreateICmpEQ(size, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), -1)));
+        CreateConditionalAbort(ctx.builder, ctx.builder.CreateICmpEQ(size, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), -1, true)));
 #endif
         return size;
     }
@@ -1739,20 +1752,6 @@ static Value *emit_sizeof(jl_codectx_t &ctx, const jl_cgval_t &p)
     }
 }
 */
-
-static Value *emit_datatype_mutabl(jl_codectx_t &ctx, Value *dt)
-{
-    jl_aliasinfo_t ai = ctx.alias().constant;
-    Value *Ptr = decay_derived(ctx, dt);
-    Value *Idx = ConstantInt::get(ctx.types().T_size, offsetof(jl_datatype_t, name));
-    Value *Nam = ai.decorateInst(
-            ctx.builder.CreateAlignedLoad(getPointerTy(ctx.builder.getContext()), ctx.builder.CreateInBoundsGEP(getPointerTy(ctx.builder.getContext()), Ptr, Idx), Align(sizeof(int8_t*))));
-    Value *Idx2 = ConstantInt::get(ctx.types().T_size, offsetof(jl_typename_t, n_uninitialized) + sizeof(((jl_typename_t*)nullptr)->n_uninitialized));
-    Value *mutabl = ai.decorateInst(
-            ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), Nam, Idx2), Align(1)));
-    mutabl = ctx.builder.CreateLShr(mutabl, 1);
-    return ctx.builder.CreateTrunc(mutabl, getInt1Ty(ctx.builder.getContext()));
-}
 
 static Value *emit_datatype_isprimitivetype(jl_codectx_t &ctx, Value *typ)
 {
@@ -2089,7 +2088,7 @@ static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_data
         unsigned tindex = get_box_tindex(dt, arg.typ);
         if (tindex > 0) {
             // optimize more when we know that this is a split union-type where tindex = 0 is invalid
-            Value *xtindex = ctx.builder.CreateAnd(arg.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER));
+            Value *xtindex = ctx.builder.CreateAnd(arg.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), (uint8_t)~UNION_BOX_MARKER));
             auto isa = ctx.builder.CreateICmpEQ(xtindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), tindex));
             setName(ctx.emission_context, isa, "exactly_isa");
             return isa;
@@ -2323,6 +2322,35 @@ static void emit_typecheck(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *t
         passBB->insertInto(ctx.f);
         ctx.builder.SetInsertPoint(passBB);
     }
+}
+
+// The store-to-global form of `emit_typecheck`, matching where the runtime calls `jl_type_error_global`.
+static void emit_typecheck_global(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *type,
+                                  const Twine &fname, jl_module_t *mod, jl_sym_t *sym) JL_CANSAFEPOINT
+{
+    Value *istype = emit_isa(ctx, x, type, Twine()).first;
+    if (auto *C = dyn_cast<ConstantInt>(istype)) {
+        if (!C->isZero())
+            return;
+        istype = nullptr; // known to fail: the error is unconditional
+    }
+    ++EmittedTypechecks;
+    BasicBlock *passBB = BasicBlock::Create(ctx.builder.getContext(), "pass");
+    if (istype) {
+        BasicBlock *failBB = BasicBlock::Create(ctx.builder.getContext(), "fail", ctx.f);
+        ctx.builder.CreateCondBr(istype, passBB, failBB);
+        ctx.builder.SetInsertPoint(failBB);
+    }
+    Value *msg_val = stringConstPtr(ctx.emission_context, ctx.builder, fname);
+    ctx.builder.CreateCall(prepare_call(jltypeerror_global_func), {
+            msg_val,
+            maybe_decay_untracked(ctx, literal_pointer_val(ctx, (jl_value_t*)mod)),
+            maybe_decay_untracked(ctx, literal_pointer_val(ctx, (jl_value_t*)sym)),
+            maybe_decay_untracked(ctx, literal_pointer_val(ctx, type)),
+            mark_callee_rooted(ctx, boxed(ctx, x))});
+    ctx.builder.CreateUnreachable();
+    passBB->insertInto(ctx.f);
+    ctx.builder.SetInsertPoint(passBB);
 }
 
 static Value *emit_isconcrete(jl_codectx_t &ctx, Value *typ)
@@ -2563,7 +2591,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     if (idx_0based)
         ptr = ctx.builder.CreateInBoundsGEP(elty, ptr, idx_0based);
     unsigned nb = isboxed ? sizeof(void*) : jl_datatype_size(jltype);
-    // note that nb == jl_Module->getDataLayout().getTypeAllocSize(elty) or getTypeStoreSize, depending on whether it is a struct or primitive type
+    // note that nb == jl_Module->getDataLayout().getTypeAllocSize(elty)
     AllocaInst *intcast = NULL;
     if (Order == AtomicOrdering::NotAtomic && !isboxed && !aliasscope && elty->isAggregateType() && !jl_is_genericmemoryref_type(jltype)) {
         // use split_value to do this load
@@ -2575,10 +2603,10 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         return mark_julia_slot(val, jltype, NULL, result_ai, std::move(roots));
     }
     Type *realelty = elty;
-    // The GEP above indexes by the allocation size, but the memory access
-    // itself uses the byte-rounded storage width.
+    // The GEP above indexes by the allocation size; the access itself covers the
+    // whole element, which for a primitive type is wider than its register type.
     if (Order == AtomicOrdering::NotAtomic) {
-        elty = zext_struct_type(elty);
+        elty = julia_memory_access_type(elty, jltype);
     }
     else {
         if (!isboxed && !elty->isIntOrPtrTy()) {
@@ -2606,6 +2634,11 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         LoadInst *load1 = emit_aliased_load(ctx, elty->getStructElementType(1), fld1, Align(alignment),
                                             ai, aliasscope, Order);
         static_assert(offsetof(jl_genericmemoryref_t, ptr_or_offset) == 0, "wrong field order");
+        if (isa<PointerType>(load0->getType())) {
+            auto *mty = (jl_datatype_t*)jl_field_type_concrete((jl_datatype_t*)jltype, 1);
+            // A reference may point past the end, so only assert its data alignment.
+            maybe_mark_load_dereferenceable(load0, true, 0, julia_memory_alignment(mty->layout));
+        }
         maybe_mark_load_dereferenceable(load1, true, sizeof(void*)*2, alignof(void*));
         instr = Constant::getNullValue(elty);
         instr = ctx.builder.CreateInsertValue(instr, load0, 0);
@@ -2623,15 +2656,15 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     if (intcast) {
         ctx.builder.CreateAlignedStore(instr, intcast, Align(alignment));
         instr = nullptr;
-    }
-    if (maybe_null_if_boxed) {
-        if (intcast)
+        // The pointers in `intcast` are stored as an integer, so the slot does not root
+        // them: reload the value with its pointer-exposing type to keep them tracked.
+        if (CountTrackedPointers(intcast->getAllocatedType()).count > 0)
             instr = ctx.builder.CreateAlignedLoad(intcast->getAllocatedType(), intcast, Align(alignment));
+    }
+    if (maybe_null_if_boxed && instr) {
         Value *first_ptr = isboxed ? instr : extract_first_ptr(ctx, instr);
         if (first_ptr)
             null_pointer_check(ctx, first_ptr, nullcheck);
-        if (intcast && !first_ptr)
-            instr = nullptr;
     }
     if (jltype == (jl_value_t*)jl_bool_type) { // "freeze" undef memory to a valid value
         // NOTE: if we zero-initialize arrays, this optimization should become valid
@@ -2673,7 +2706,10 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, 3, julia_call);
             ret = mark_julia_type(ctx, callval, true, jl_any_type);
         }
-        emit_typecheck(ctx, ret, jltype, fname);
+        if (mod && var)
+            emit_typecheck_global(ctx, ret, jltype, fname, mod, var);
+        else
+            emit_typecheck(ctx, ret, jltype, fname);
         ret = update_julia_type(ctx, ret, jltype);
         return ret;
     };
@@ -2694,7 +2730,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         }
     }
     auto store_union = [&](const jl_cgval_t &val, const jl_cgval_t &val_union) JL_CANSAFEPOINT {
-        Value *tindex = ctx.builder.CreateAnd(val_union.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER));
+        Value *tindex = ctx.builder.CreateAnd(val_union.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), (uint8_t)~UNION_BOX_MARKER));
         Value *stindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1));
         ai_tindex.decorateInst(ctx.builder.CreateAlignedStore(stindex, ptindex, Align(1)));
         if (!val.isghost)
@@ -2765,10 +2801,9 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             }
         }
         realelty = elty;
-        // Memory accesses use the byte-rounded storage width; realelty stays
-        // the register width.
+        // Memory accesses cover the whole element; realelty stays the register width.
         if (Order == AtomicOrdering::NotAtomic)
-            elty = zext_struct_type(elty);
+            elty = julia_memory_access_type(elty, jltype);
         else if (isa<IntegerType>(elty)) {
             unsigned nb2 = PowerOf2Ceil(nb);
             unsigned bitwidth = cast<IntegerType>(elty)->getBitWidth();
@@ -2784,7 +2819,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 emit_unbox_store(ctx, rhs, intcast, ctx.alias().stack, MaybeAlign(), intcast->getAlign());
                 r = ctx.builder.CreateLoad(realelty, intcast);
             }
-            else if (aliasscope || Order != AtomicOrdering::NotAtomic || (tracked_pointers && rhs.inline_roots.empty())) {
+            else if (aliasscope || Order != AtomicOrdering::NotAtomic || (tracked_pointers && rhs.inline_roots.empty())
+                     || (realelty != elty && elty->isIntegerTy())) {
                 r = emit_unbox(ctx, realelty, rhs);
             }
             // If r is unset, the value is stored by emit_unbox_store instead,
@@ -3050,7 +3086,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                     if (!tracked_pointers) // oldval is a slot, so put the oldval back
                         ctx.builder.CreateStore(realCompare, intcast);
                 }
-                else if (Order != AtomicOrdering::NotAtomic || (tracked_pointers && rhs.inline_roots.empty())) {
+                else if (Order != AtomicOrdering::NotAtomic || (tracked_pointers && rhs.inline_roots.empty())
+                         || (realelty != elty && elty->isIntegerTy())) {
                     r = emit_unbox(ctx, realelty, rhs);
                 }
                 if (r && realelty != elty)
@@ -3247,6 +3284,7 @@ static void emit_atomic_error(jl_codectx_t &ctx, const Twine &msg)
 static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &strct,
                                          unsigned idx, jl_datatype_t *jt,
                                          enum jl_memory_order order, Value **nullcheck=nullptr) JL_CANSAFEPOINT;
+static Value *emit_genericmemoryptr(jl_codectx_t &ctx, Value *mem, const jl_datatype_layout_t *layout, unsigned AS);
 
 static bool field_may_be_null(const jl_cgval_t &strct, jl_datatype_t *stt, size_t idx) JL_CANSAFEPOINT
 {
@@ -3587,6 +3625,10 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         }
     }
     else if (strct.ispointer()) {
+        if (idx == 1 && jl_is_genericmemory_type(jt) && jt->layout) {
+            Value *ptr = emit_genericmemoryptr(ctx, boxed(ctx, strct), jt->layout, 0);
+            return mark_julia_type(ctx, ptr, false, jfty);
+        }
         auto ai = best_field_aliasinfo(ctx, strct, jt, idx, byte_offset);
         Value *staddr = data_pointer(ctx, strct);
         Value *addr = (byte_offset == 0 ? staddr : emit_ptrgep(ctx, staddr, byte_offset));
@@ -3781,7 +3823,7 @@ static Value *emit_genericmemoryptr(jl_codectx_t &ctx, Value *mem, const jl_data
     PointerType *PPT = cast<PointerType>(ctx.types().T_jlgenericmemory->getElementType(1));
     LoadInst *LI = ctx.builder.CreateAlignedLoad(PPT, addr, Align(sizeof(char*)));
     LI->setOrdering(AtomicOrdering::NotAtomic);
-    LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(ctx.builder.getContext(), {}));
+    maybe_mark_load_dereferenceable(LI, false, 0, julia_memory_alignment(layout));
     jl_aliasinfo_t aliasinfo = ctx.alias().memoryptr;
     aliasinfo.decorateInst(LI);
     Value *ptr = LI;
@@ -3845,8 +3887,12 @@ static jl_value_t *static_constant_instance(const llvm::DataLayout &DL, Constant
     if (ConstantInt *cint = dyn_cast<ConstantInt>(constant)) {
         if (jst == jl_bool_type)
             return cint->isZero() ? jl_false : jl_true;
-        return jl_new_bits(jt,
-            const_cast<uint64_t *>(cint->getValue().getRawData()));
+        // `jl_new_bits` reads all of `sizeof`, which can exceed the words of the APInt
+        const APInt &val = cint->getValue();
+        size_t nb = jl_datatype_size(jst);
+        SmallVector<uint64_t, 4> data(alignTo(nb, sizeof(uint64_t)) / sizeof(uint64_t), 0);
+        memcpy(data.data(), val.getRawData(), std::min<size_t>(nb, val.getNumWords() * sizeof(uint64_t)));
+        return jl_new_bits(jt, data.data());
     }
 
     if (ConstantFP *cfp = dyn_cast<ConstantFP>(constant)) {
@@ -4155,11 +4201,7 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
         ctx.builder.CreateBr(postBB);
     }
     else if (!vinfo.Vboxed) {
-#if JL_LLVM_VERSION >= 200000
         Function *trap_func = Intrinsic::getOrInsertDeclaration(
-#else
-        Function *trap_func = Intrinsic::getDeclaration(
-#endif
                 ctx.f->getParent(),
                 Intrinsic::trap);
         ctx.builder.CreateCall(trap_func);
@@ -4193,27 +4235,11 @@ static Function *mangleIntrinsic(IntrinsicInst *call) //mangling based on replac
     // and compute the new name mangling schema
     SmallVector<Type*, 4> overloadTys;
     {
-#if JL_LLVM_VERSION >= 230000
         bool valid = Intrinsic::isSignatureValid(ID, newfType, overloadTys);
         assert(valid);
         (void)valid;
-#else
-        SmallVector<Intrinsic::IITDescriptor, 8> Table;
-        getIntrinsicInfoTableEntries(ID, Table);
-        ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
-        auto res = Intrinsic::matchIntrinsicSignature(newfType, TableRef, overloadTys);
-        assert(res == Intrinsic::MatchIntrinsicTypes_Match);
-        (void)res;
-        bool matchvararg = !Intrinsic::matchIntrinsicVarArg(newfType->isVarArg(), TableRef);
-        assert(matchvararg);
-        (void)matchvararg;
-#endif
     }
-#if JL_LLVM_VERSION >= 200000
     auto newF = Intrinsic::getOrInsertDeclaration(call->getModule(), ID, overloadTys);
-#else
-    auto newF = Intrinsic::getDeclaration(call->getModule(), ID, overloadTys);
-#endif
     assert(newF->getFunctionType() == newfType);
     newF->setCallingConv(call->getCallingConv());
     return newF;
@@ -4362,11 +4388,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
                 counter);
         ctx.builder.SetInsertPoint(defaultBB);
         if (!skip && allunboxed && (src.V == NULL || isa<AllocaInst>(src.V))) {
-#if JL_LLVM_VERSION >= 200000
             Function *trap_func = Intrinsic::getOrInsertDeclaration(
-#else
-            Function *trap_func = Intrinsic::getDeclaration(
-#endif
                     ctx.f->getParent(),
                     Intrinsic::trap);
             ctx.builder.CreateCall(trap_func);
@@ -4706,7 +4728,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     jl_cgval_t rhs_union = convert_julia_type_to_union(ctx, fval_info, jtype, false);
                     if (rhs_union.typ == jl_bottom_type)
                         return jl_cgval_t();
-                    Value *tindex = ctx.builder.CreateAnd(rhs_union.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER));
+                    Value *tindex = ctx.builder.CreateAnd(rhs_union.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), (uint8_t)~UNION_BOX_MARKER));
                     Value *stindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1));
                     size_t fsz = 0, al = 0;
                     bool isptr = !jl_islayout_inline(jtype, &fsz, &al);
@@ -4884,34 +4906,25 @@ static Value *emit_defer_signal(jl_codectx_t &ctx)
     return emit_ptrgep(ctx, ptls, offsetof(jl_tls_states_t, defer_signal));
 }
 
-// Emit allocation for variable-length GenericMemory
-// If zeroinit_nbytes is non-null, adds a zeroinit_indirect bundle to zero that many bytes
-// via the data pointer (at offset 8 in the memory header)
-static auto *emit_genericmemory_unchecked(jl_codectx_t &ctx, Value *cg_nbytes, Value *cg_typ,
-                                          Value *zeroinit_nbytes = nullptr)
+static Value *emit_genericmemory_alloc(jl_codectx_t &ctx, jl_datatype_t *typ, Value *nbytes, Value *nel) JL_CANSAFEPOINT
 {
-    auto ptls = get_current_ptls(ctx);
-    auto call = prepare_call(jl_alloc_genericmemory_unchecked_func);
-
-    // Build operand bundle for zeroinit if needed
-    SmallVector<OperandBundleDef, 1> bundles;
-    if (zeroinit_nbytes) {
-        SmallVector<Value*, 2> bundle_args;
-        bundle_args.push_back(ConstantInt::get(ctx.types().T_size, offsetof(jl_genericmemory_t, ptr)));
-        bundle_args.push_back(zeroinit_nbytes);
-        bundles.push_back(OperandBundleDef("julia.gc_alloc_zeroinit_indirect", bundle_args));
-    }
-
-    auto *alloc = ctx.builder.CreateCall(call, { ptls, cg_nbytes, cg_typ }, bundles);
-    alloc->setAttributes(call->getAttributes());
+    Function *F = prepare_call(jl_alloc_memory_func);
+    Value *zeroinit = ConstantInt::getBool(ctx.builder.getContext(), typ->zeroinit);
+    Value *cg_typ = literal_pointer_val(ctx, (jl_value_t*)typ);
+    auto *alloc = ctx.builder.CreateCall(F, {get_current_task(ctx), nbytes, maybe_decay_untracked(ctx, cg_typ), nel, zeroinit});
+    alloc->setAttributes(F->getAttributes());
     alloc->addRetAttr(Attribute::getWithAlignment(alloc->getContext(), Align(JL_HEAP_ALIGNMENT)));
-    call->addRetAttr(Attribute::getWithDereferenceableBytes(call->getContext(), sizeof(jl_genericmemory_t)));
+    size_t deref = sizeof(jl_genericmemory_t);
+    if (auto cnbytes = dyn_cast<ConstantInt>(nbytes)) {
+        if (jl_genericmemory_data_inline(cnbytes->getZExtValue()))
+            deref = JL_GENERICMEMORY_INLINE_DATA_OFFSET + cnbytes->getZExtValue();
+    }
+    alloc->addRetAttr(Attribute::getWithDereferenceableBytes(alloc->getContext(), deref));
     return alloc;
 }
 
-// Set up the length field for a GenericMemory allocation
-// Note: zeroing of the data region is now handled via the zeroinit_indirect bundle
-// on the allocation call, processed by late-gc-lowering
+// `julia.gc_alloc_memory` already sets the length; storing it again lets LLVM forward it
+// before the allocation is lowered.
 static void emit_memory_stores(jl_codectx_t &ctx, jl_datatype_t *typ, Value* alloc, Value* nel)
 {
     auto arg_typename = [&]() JL_NOTSAFEPOINT {
@@ -4926,7 +4939,6 @@ static void emit_memory_stores(jl_codectx_t &ctx, jl_datatype_t *typ, Value* all
         return "Memory{" + type_str + "}[]";
     };
     setName(ctx.emission_context, alloc, arg_typename);
-    // set length (jl_alloc_genericmemory_unchecked_func doesn't have it)
     Value *decay_alloc = decay_derived(ctx, alloc);
     Value *len_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 0);
     auto len_store = ctx.builder.CreateAlignedStore(nel, len_field, Align(sizeof(void*)));
@@ -4946,7 +4958,6 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
     size_t elsz = layout->size;
     int isboxed = layout->flags.arrayelem_isboxed;
     int isunion = layout->flags.arrayelem_isunion;
-    int zi = ((jl_datatype_t*)typ)->zeroinit;
     if (isboxed)
         elsz = sizeof(void*);
     size_t nbytes;
@@ -4962,36 +4973,19 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
         emit_error(ctx, prepare_call(jlargumenterror_func), "invalid GenericMemory size: the number of elements is either negative or too large for system address width");
 
     auto T_size = ctx.types().T_size;
-    auto cg_typ = literal_pointer_val(ctx, (jl_value_t*) typ);
-    auto cg_nbytes = ConstantInt::get(T_size, nbytes);
     auto cg_nel = ConstantInt::get(T_size, nel);
-    size_t tot = nbytes + LLT_ALIGN(sizeof(jl_genericmemory_t),JL_SMALL_BYTE_ALIGNMENT);
-    // if allocation fits within GC pools
-    int pooled = tot <= GC_MAX_SZCLASS;
-    Value *alloc, *decay_alloc, *memory_ptr;
-    jl_aliasinfo_t aliasinfo;
-    if (pooled) {
-        // For pooled allocations with boxed/union elements, pass zeroinit region info
-        // so late-gc-lowering can emit the memset unconditionally after allocation
-        std::optional<AllocZeroinitRegion> zeroinit_region;
-        if (zi) {
-            // Data starts at JL_SMALL_BYTE_ALIGNMENT offset (must match jl_alloc_genericmemory_unchecked)
-            zeroinit_region = AllocZeroinitRegion(JL_SMALL_BYTE_ALIGNMENT, nbytes);
-        }
-        alloc = emit_allocobj(ctx, tot, cg_typ, false, JL_SMALL_BYTE_ALIGNMENT, {}, zeroinit_region);
-        decay_alloc = decay_derived(ctx, alloc);
-        memory_ptr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
+    Value *alloc = emit_genericmemory_alloc(ctx, typ, ConstantInt::get(T_size, nbytes), cg_nel);
+    if (jl_genericmemory_data_inline(nbytes)) {
+        // like the length, the data pointer is initialized by the allocation,
+        // but storing it here lets LLVM forward it before the allocation is lowered
+        Value *memory_ptr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_derived(ctx, alloc), 1);
         setName(ctx.emission_context, memory_ptr, "memory_ptr");
         auto objref = emit_pointer_from_objref(ctx, alloc);
-        Value *memory_data = emit_ptrgep(ctx, objref, JL_SMALL_BYTE_ALIGNMENT);
-        auto *store = ctx.builder.CreateAlignedStore(memory_data, memory_ptr, Align(sizeof(void*)));
-        aliasinfo = ctx.alias().memoryptr;
-        aliasinfo.decorateInst(store);
+        Value *memory_data = emit_ptrgep(ctx, objref, JL_GENERICMEMORY_INLINE_DATA_OFFSET);
         setName(ctx.emission_context, memory_data, "memory_data");
-    } else { // just use the dynamic length version since the malloc will be slow anyway
-        // For non-pooled, pass zeroinit size via the indirect bundle
-        Value *zeroinit_nbytes = zi ? cg_nbytes : nullptr;
-        alloc = emit_genericmemory_unchecked(ctx, cg_nbytes, cg_typ, zeroinit_nbytes);
+        auto *store = ctx.builder.CreateAlignedStore(memory_data, memory_ptr, Align(sizeof(void*)));
+        auto aliasinfo = ctx.alias().memoryptr;
+        aliasinfo.decorateInst(store);
     }
     emit_memory_stores(ctx, typ, alloc, cg_nel);
     return mark_julia_type(ctx, alloc, true, typ);
@@ -5009,7 +5003,6 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     size_t elsz = layout->size;
     int isboxed = layout->flags.arrayelem_isboxed;
     int isunion = layout->flags.arrayelem_isunion;
-    int zi = ((jl_datatype_t*)typ)->zeroinit;
     if (isboxed)
         elsz = sizeof(void*);
 
@@ -5030,25 +5023,16 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     nonemptymemBB->insertInto(ctx.f);
     ctx.builder.SetInsertPoint(nonemptymemBB);
 
-    auto cg_typ = literal_pointer_val(ctx, (jl_value_t*) typ);
     auto cg_elsz = ConstantInt::get(T_size, elsz);
 
-#if JL_LLVM_VERSION >= 200000
     FunctionCallee intr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::smul_with_overflow, ArrayRef<Type*>(T_size));
-#else
-    FunctionCallee intr = Intrinsic::getDeclaration(jl_Module, Intrinsic::smul_with_overflow, ArrayRef<Type*>(T_size));
-#endif
     // compute nbytes with possible overflow
     Value *prod_with_overflow = ctx.builder.CreateCall(intr, {nel_unboxed, cg_elsz});
     Value *nbytes = ctx.builder.CreateExtractValue(prod_with_overflow, 0);
     Value *overflow = ctx.builder.CreateExtractValue(prod_with_overflow, 1);
     if (isunion) {
         // if isunion, we need to allocate the union selector bytes as well
-#if JL_LLVM_VERSION >= 200000
         intr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::sadd_with_overflow, ArrayRef<Type*>(T_size));
-#else
-        intr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sadd_with_overflow, ArrayRef<Type*>(T_size));
-#endif
         Value *add_with_overflow = ctx.builder.CreateCall(intr, {nel_unboxed, nbytes});
         nbytes = ctx.builder.CreateExtractValue(add_with_overflow, 0);
         Value *overflow1 = ctx.builder.CreateExtractValue(add_with_overflow, 1);
@@ -5061,11 +5045,7 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     overflow = ctx.builder.CreateOr(overflow, tobignel);
     Value *notoverflow = ctx.builder.CreateNot(overflow);
     error_unless(ctx, prepare_call(jlargumenterror_func), notoverflow, "invalid GenericMemory size: the number of elements is either negative or too large for system address width");
-    // actually allocate the memory
-
-    // Pass zeroinit size via the indirect bundle if needed
-    Value *zeroinit_nbytes = zi ? nbytes : nullptr;
-    Value *alloc = emit_genericmemory_unchecked(ctx, nbytes, cg_typ, zeroinit_nbytes);
+    Value *alloc = emit_genericmemory_alloc(ctx, typ, nbytes, nel_unboxed);
     emit_memory_stores(ctx, typ, alloc, nel_unboxed);
     ctx.builder.CreateBr(retvalBB);
     nonemptymemBB = ctx.builder.GetInsertBlock();
@@ -5223,11 +5203,7 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
         Value *boffset;
 #if 0
         if (bc) {
-#if JL_LLVM_VERSION >= 200000
             auto *MulF = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::smul_with_overflow, offset->getType());
-#else
-            auto *MulF = Intrinsic::getDeclaration(jl_Module, Intrinsic::smul_with_overflow, offset->getType());
-#endif
             CallInst *Mul = ctx.builder.CreateCall(MulF, {offset, elsz});
             boffset = ctx.builder.CreateExtractValue(Mul, 0);
             ovflw = ctx.builder.CreateExtractValue(Mul, 1);

@@ -162,7 +162,7 @@ Notes for various architectures:
 Building Julia requires that the following software be installed:
 
 - **[GNU make](https://www.gnu.org/software/make)**                — building dependencies.
-- **[gcc & g++](https://gcc.gnu.org)** (>= 7.1) or **[Clang](https://clang.llvm.org)** (>= 5.0, >= 9.3 for Apple Clang) — compiling and linking C, C++.
+- **[gcc & g++](https://gcc.gnu.org)** (>= 7.1) or **[Clang](https://clang.llvm.org)** (>= 5.0; Xcode >= 16 on macOS) — compiling and linking C, C++.
   - On Linux with g++, the static version of libstdc++ is also required.  If it is unavailable, set `USE_RT_STATIC_LIBSTDCXX=0` in `Make.user`.
 - **[libatomic](https://gcc.gnu.org)**          — provided by **[gcc]** and needed to support atomic operations.
 - **[python](https://www.python.org/)** (>=2.7)          — needed to build LLVM.
@@ -194,7 +194,7 @@ repository) and then compiled from source the first time you run
 `make`. The specific version numbers of these libraries that Julia
 uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/julia/blob/master/deps/):
 
-- **[LLVM](https://www.llvm.org)** (15.0 + [patches](https://github.com/JuliaLang/llvm-project/tree/julia-release/15.x)) — compiler infrastructure (see [note below](#llvm)).
+- **[LLVM](https://www.llvm.org)** (23.1 + [patches](https://github.com/JuliaLang/llvm-project/tree/julia-release/23.x)) — compiler infrastructure (see [note below](#llvm)).
 - **[FemtoLisp](https://github.com/JeffBezanson/femtolisp)**            — packaged with Julia source, and used to implement the compiler front-end.
 - **[libuv](https://github.com/JuliaLang/libuv)**  (custom fork) — portable, high-performance event-based I/O library.
 - **[OpenLibm](https://github.com/JuliaLang/openlibm)**             — portable libm library containing elementary math functions.
@@ -210,6 +210,7 @@ uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/juli
 - **[curl](https://curl.se)**                 — libcurl provides download and proxy support.
 - **[libssh2](https://www.libssh2.org)**              — library for SSH transport, used by libgit2 for packages with SSH remotes.
 - **[OpenSSL](https://www.openssl.org/)**              — library used for cryptography and transport layer security, used by libgit2 and libssh2.
+- **[PicoSAT](https://github.com/JuliaLang/PicoSAT)**  — SAT solver, used by Julia's package manager to resolve package versions.
 - **[utf8proc](https://julialang.org/utf8proc/)**             — a library for processing UTF-8 encoded Unicode strings.
 - **[LLVM libunwind](https://www.nongnu.org/libunwind)**       — LLVM's fork of [libunwind], a library that determines the call-chain of a program.
 - **[ITTAPI](https://github.com/intel/ittapi)**               — Intel's Instrumentation and Tracing Technology and Just-In-Time API.
@@ -235,7 +236,7 @@ USE_BINARYBUILDER_LLVM = 0
 DEPS_GIT = llvm
 # 3. optionally override the origin/branch/commit (defaults live in deps/<name>.version and .mk)
 LLVM_GIT_URL = https://github.com/JuliaLang/llvm-project.git
-LLVM_BRANCH = julia-release/18.x
+LLVM_BRANCH = julia-release/23.x
 LLVM_SHA1 = $(LLVM_BRANCH)   # a branch name, tag, or explicit commit hash
 ```
 
@@ -274,7 +275,7 @@ The most complicated dependency is LLVM, for which we require additional patches
 For packaging Julia with LLVM, we recommend either:
  - bundling a Julia-only LLVM library inside the Julia package, or
  - adding the patches to the LLVM package of the distribution.
-   * A complete list of patches is available on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/18.x` branch.
+   * A complete list of patches is available on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/23.x` branch.
    * The remaining patches are all upstream bug fixes, and have been contributed into upstream LLVM.
 
 Using an unpatched or different version of LLVM will result in errors and/or poor performance.
@@ -325,6 +326,45 @@ Julia uses a custom fork of libuv. It is a small dependency, and can be safely b
 
 As a high-performance numerical language, Julia should be linked to a multi-threaded BLAS and LAPACK, such as OpenBLAS or ATLAS, which will provide much better performance than the reference `libblas` implementations which may be default on some systems.
 
+## Bounds-checked stdlib package images
+
+Normal builds include stdlib package images for the default bounds-checking mode.
+`make checkbounds-pkgimages` additionally creates a
+`julia-*.checkbounds.tar.gz` companion archive for `--check-bounds=yes`, using the
+same system image and CPU targets as the normal build. These additional caches
+are kept outside `usr`, so they are not included by `make binary-dist` or installers.
+Build the normal distribution before the companion archive: `make binary-dist`
+removes existing distribution archives.
+
+Without the companion, stdlibs are precompiled for `--check-bounds=yes` on first use
+and stored in the first depot, like any other package. The companion avoids this.
+It contains `share/julia/compiled`, so it can be used as an additional depot
+without modifying the Julia installation:
+
+```sh
+mkdir -p ~/julia-checkbounds
+tar -xzf julia-VERSION-PLATFORM.checkbounds.tar.gz -C ~/julia-checkbounds
+export JULIA_DEPOT_PATH=":$HOME/julia-checkbounds/share/julia"
+```
+
+The leading `:` (`;` on Windows) keeps the default depots in front of it; they are
+required, as they provide the stdlib sources the companion was built from. If you
+own the installation, for example an extracted tarball or a juliaup-managed version,
+you can instead extract the archive into its root (the directory containing `bin`
+and `share`), which adds files under `share/julia/compiled` without replacing the
+default images. Do not modify installations managed by a system package manager or
+signed application bundles such as `Julia.app`.
+
+Use the archive from the same build and platform, including the build
+variant; a matching major/minor version alone is insufficient. For nightlies,
+select the companion using the installed build's commit rather than downloading
+an independently resolved `latest` archive. Nightlies and releases publish the
+companion alongside the normal tarball, replacing its `.tar.gz` suffix with
+`.checkbounds.tar.gz`.
+
+Local builds can still bundle both configurations by setting
+`JULIA_CHECK_BOUNDS_PKGIMAGES=1` in `Make.user`, for example for coverage testing.
+
 ## Source distributions of releases
 
 Each pre-release and release of Julia has a "full" source distribution and a "light" source
@@ -357,6 +397,11 @@ LLVM_ASSERTIONS=1
 ```
 
 Please note that assert builds of Julia will be slower than regular (non-assert) builds.
+
+Assert builds also compile the C/C++ runtime with full debug info (variables and types),
+whereas regular release builds only keep line tables. This is controlled by
+`RUNTIME_DEBUG_LEVEL` (1 or 2), which also defaults to 2 when `BOOTSTRAP_DEBUG_LEVEL` is
+set and can be set independently in `Make.user`.
 
 ## Building a debug build of Julia
 

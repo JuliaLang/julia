@@ -78,40 +78,42 @@ function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}
     try f(IOContext(buf, io), args...)
     finally
         str = takestring!(buf)
-        if !iscolor
-            print(io, str)
-        else
-            bold && color === :bold && (color = :nothing)
-            italic && color === :italic && (color = :nothing)
-            underline && color === :underline && (color = :nothing)
-            blink && color === :blink && (color = :nothing)
-            reverse && color === :reverse && (color = :nothing)
-            hidden && color === :hidden && (color = :nothing)
-            enable_ansi  = get(text_colors, color, text_colors[:default]) *
-                               (bold ? text_colors[:bold] : "") *
-                               (italic ? text_colors[:italic] : "") *
-                               (underline ? text_colors[:underline] : "") *
-                               (blink ? text_colors[:blink] : "") *
-                               (reverse ? text_colors[:reverse] : "") *
-                               (hidden ? text_colors[:hidden] : "")
-
-            disable_ansi = (hidden ? disable_text_style[:hidden] : "") *
-                           (reverse ? disable_text_style[:reverse] : "") *
-                           (blink ? disable_text_style[:blink] : "") *
-                           (underline ? disable_text_style[:underline] : "") *
-                           (bold ? disable_text_style[:bold] : "") *
-                           (italic ? disable_text_style[:italic] : "") *
-                               get(disable_text_style, color, text_colors[:default])
-            first = true
-            for line in eachsplit(str, '\n')
-                first || print(buf, '\n')
-                first = false
-                isempty(line) && continue
-                print(buf, enable_ansi, line, disable_ansi)
-            end
-            print(io, takestring!(buf))
-        end
+        iscolor && (str = output_color_string(buf, str, color, bold, italic, underline, blink, reverse, hidden))
+        print(io, str)
     end
+end
+
+function output_color_string(buf::IOBuffer, str::String, @nospecialize(color::Union{Int, Symbol}),
+        bold::Bool, italic::Bool, underline::Bool, blink::Bool, reverse::Bool, hidden::Bool)
+    bold && color === :bold && (color = :nothing)
+    italic && color === :italic && (color = :nothing)
+    underline && color === :underline && (color = :nothing)
+    blink && color === :blink && (color = :nothing)
+    reverse && color === :reverse && (color = :nothing)
+    hidden && color === :hidden && (color = :nothing)
+    enable_ansi  = get(text_colors, color, text_colors[:default]) *
+                       (bold ? text_colors[:bold] : "") *
+                       (italic ? text_colors[:italic] : "") *
+                       (underline ? text_colors[:underline] : "") *
+                       (blink ? text_colors[:blink] : "") *
+                       (reverse ? text_colors[:reverse] : "") *
+                       (hidden ? text_colors[:hidden] : "")
+
+    disable_ansi = (hidden ? disable_text_style[:hidden] : "") *
+                   (reverse ? disable_text_style[:reverse] : "") *
+                   (blink ? disable_text_style[:blink] : "") *
+                   (underline ? disable_text_style[:underline] : "") *
+                   (bold ? disable_text_style[:bold] : "") *
+                   (italic ? disable_text_style[:italic] : "") *
+                       get(disable_text_style, color, text_colors[:default])
+    first = true
+    for line in eachsplit(str, '\n')
+        first || print(buf, '\n')
+        first = false
+        isempty(line) && continue
+        print(buf, enable_ansi, line, disable_ansi)
+    end
+    return takestring!(buf)
 end
 
 """
@@ -239,6 +241,9 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
         push!(addflags, "--color=yes")
     elseif opts.color == 2
         push!(addflags, "--color=no")
+    end
+    if opts.quiet != 0
+        push!(addflags, "-q")
     end
     if opts.startupfile == 2
         push!(addflags, "--startup-file=no")
@@ -597,7 +602,7 @@ macro kwdef(expr)
         if isnothing(defval)
             return fieldname
         else
-            return Expr(:kw, fieldname, esc(defval))
+            return Expr(:kw, fieldname, defval)
         end
     end
 
@@ -606,9 +611,9 @@ macro kwdef(expr)
     if !isempty(parameters)
         T_no_esc = Meta.unescape(T)
         if T_no_esc isa Symbol
-            sig = Expr(:call, esc(T), Expr(:parameters, parameters...))
-            body = Expr(:block, __source__, Expr(:call, esc(T), fieldnames...))
-            kwdefs = Expr(:function, sig, body)
+            sig = Expr(:call, T, Expr(:parameters, parameters...))
+            body = Expr(:block, __source__, Expr(:call, T, fieldnames...))
+            kwdefs = esc(Expr(:function, sig, body))
         elseif isexpr(T_no_esc, :curly)
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
@@ -617,13 +622,13 @@ macro kwdef(expr)
             P = T.args[2:end]
             Q = Any[isexpr(U, :<:) ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
-            body1 = Expr(:block, __source__, Expr(:call, esc(S), fieldnames...))
-            sig1 = Expr(:call, esc(S), Expr(:parameters, parameters...))
+            body1 = Expr(:block, __source__, Expr(:call, S, fieldnames...))
+            sig1 = Expr(:call, S, Expr(:parameters, parameters...))
             def1 = Expr(:function, sig1, body1)
-            body2 = Expr(:block, __source__, Expr(:call, esc(SQ), fieldnames...))
-            sig2 = :($(Expr(:call, esc(SQ), Expr(:parameters, parameters...))) where {$(esc.(P)...)})
+            body2 = Expr(:block, __source__, Expr(:call, SQ, fieldnames...))
+            sig2 = :($(Expr(:call, SQ, Expr(:parameters, parameters...))) where {$(P...)})
             def2 = Expr(:function, sig2, body2)
-            kwdefs = Expr(:block, def1, def2)
+            kwdefs = esc(Expr(:block, def1, def2))
         else
             error("Invalid usage of @kwdef")
         end
@@ -716,7 +721,7 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.EFFECTIVE_CPU_THR
     delete!(ENV2, "JULIA_PROJECT")
     project_flag = propagate_project ? `--project` : ``
     try
-        run(setenv(`$(julia_cmd()) $julia_args $project_flag $(joinpath(Sys.BINDIR,
+        run(setenv(`$(julia_cmd()) -q $julia_args $project_flag $(joinpath(Sys.BINDIR,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
         nothing
     catch

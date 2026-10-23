@@ -1195,6 +1195,15 @@ end
     @test Base.IndexStyle(rand(3, 3), [1; 2; 3]) == IndexLinear()
 end
 
+# The bottom-type fallback must not add IndexLinear to binary style inference.
+@testset "bottom-type IndexStyle inference" begin
+    @test Base.infer_return_type(IndexStyle, (Any, IndexCartesian)) === IndexCartesian
+    @test IndexStyle(IndexLinear(), IndexLinear()) === IndexLinear()
+    @test IndexStyle(IndexLinear(), IndexCartesian()) === IndexCartesian()
+    @test IndexStyle(IndexCartesian(), IndexLinear()) === IndexCartesian()
+    @test IndexStyle(IndexCartesian(), IndexCartesian()) === IndexCartesian()
+end
+
 @testset "promote_shape for Tuples and Dims" begin
     @test promote_shape((2, 1), (2,)) == (2, 1)
     @test_throws DimensionMismatch promote_shape((2, 3), (2,))
@@ -1557,6 +1566,9 @@ using Base: typed_hvncat
         @test_throws DimensionMismatch [v; v;; v; v;;; v; v;; v; v; v]
         # ensure a wrong shape with the right number of elements doesn't pass through
         @test_throws DimensionMismatch [v; v;; v; v;;; v; v; v; v]
+        # ragged lengths whose deviations from the first length cancel out are not balanced
+        @test_throws DimensionMismatch [v; v;; v;; v; v; v]
+        @test_throws DimensionMismatch [v v; v; v v v;;; v v; v; v v v]
 
         @test [v; v;; v; v] == fill(1, ndims(v) == 3 ? (2, 2, 1) : (2,2))
         @test [v; v;; v; v;;;] == fill(1, 2, 2, 1)

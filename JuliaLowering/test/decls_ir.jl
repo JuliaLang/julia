@@ -86,13 +86,13 @@ const xx = 10
 const xx::T = 10
 #---------------------
 1   TestMod.T
-2   (= slot₁/tmp 10)
-3   (call core.isa slot₁/tmp %₁)
+2   (= slot₁/ 10)
+3   (call core.isa slot₁/ %₁)
 4   (gotoifnot %₃ label₆)
 5   (goto label₈)
-6   (call top.convert %₁ slot₁/tmp)
-7   (= slot₁/tmp (call core.typeassert %₆ %₁))
-8   slot₁/tmp
+6   (call top.convert %₁ slot₁/)
+7   (= slot₁/ (call core.typeassert %₆ %₁))
+8   slot₁/
 9   (call core.declare_const TestMod :xx %₈)
 10  latestworld
 11  (return %₈)
@@ -380,7 +380,7 @@ end
 4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any)
 6   (call core.svec)
-7   SourceLocation::1:1
+7   SourceLocation:1
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.f %₈
     --- code_info

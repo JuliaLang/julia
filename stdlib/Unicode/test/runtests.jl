@@ -339,8 +339,14 @@ end
     @test isspace('\r')
     @test isspace('\u85')
     @test isspace('\ua0')
+    @test isspace('\u2028')
+    @test isspace('\u2029')
     @test !isspace('\ufffd')
     @test !isspace('\U10ffff')
+    # the Unicode White_Space property (PropList.txt)
+    @test filter(isspace, '\0':'\U10ffff') ==
+        ['\t':'\r'; ' '; '\u85'; '\ua0'; '\u1680'; '\u2000':'\u200a';
+         '\u2028'; '\u2029'; '\u202f'; '\u205f'; '\u3000']
 end
 
 @testset "grapheme iterators" begin

@@ -15,11 +15,11 @@ extern "C" {
 #endif
 
 struct _jl_tls_states_t;
-struct _jl_task_t;
-struct _jl_value_t;
-struct _jl_weakref_t;
-struct _jl_datatype_t;
-struct _jl_genericmemory_t;
+struct JL_GC_TRACKED_TYPE _jl_task_t;
+struct JL_GC_TRACKED_TYPE _jl_value_t;
+struct JL_GC_TRACKED_TYPE _jl_weakref_t;
+struct JL_GC_TRACKED_TYPE _jl_datatype_t;
+struct JL_GC_TRACKED_TYPE _jl_genericmemory_t;
 
 // ========================================================================= //
 // GC Metrics
@@ -60,7 +60,7 @@ typedef struct {
     // (GC internal) Per-thread allocation quota before triggering a GC
     // NOTE: This field is no longer used by the heuristics in the stock GC
     size_t interval;
-    // Duration of the last GC pause in nanoseconds
+    // Number of GC pauses completed so far (never reset by the runtime)
     int pause;
     // Number of full GC sweeps completed so far (never reset by the runtime)
     int full_sweep;

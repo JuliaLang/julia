@@ -1010,8 +1010,6 @@ end
 function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
     tok = resolve_cancel_token(cancel)
     @cancel_check tok
-    # the resolved token (or explicit shield) governs the inner copyuntil,
-    # which does the actual blocking reads
     # If the data is copied into the middle of the buffer of `out` instead of appended to the end,
     # and !keep, and the line copied ends with \r\n, then the copyuntil (even if keep=false)
     # will overwrite one too many bytes with the new \r byte.
@@ -1019,7 +1017,8 @@ function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false, cancel::CancelT
     # Could perhaps be done better
     if !out.append && out.ptr < out.size + 1
         newbuf = IOBuffer()
-        copyuntil(newbuf, s, 0x0a; keep=true, cancel=tok)
+        cancel === DEFAULT_CANCEL ? copyuntil(newbuf, s, 0x0a; keep=true) :
+                                    copyuntil(newbuf, s, 0x0a; keep=true, cancel=tok)
         v = take!(newbuf)
         # Remove \r\n or \n if present
         if !keep
@@ -1037,7 +1036,8 @@ function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false, cancel::CancelT
     else
         # Else, we can just copy the data directly into the buffer, and then
         # subtract the last one or two bytes depending on `keep`.
-        copyuntil(out, s, 0x0a; keep=true, cancel=tok)
+        cancel === DEFAULT_CANCEL ? copyuntil(out, s, 0x0a; keep=true) :
+                                    copyuntil(out, s, 0x0a; keep=true, cancel=tok)
         line = out.data
         i = out.size
         if keep || i == out.offset_or_compacted || line[i] != 0x0a

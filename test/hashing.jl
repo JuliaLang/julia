@@ -104,6 +104,9 @@ vals = Any[
     OffsetArray([1 3; 2 4], -2, 2),
     OffsetArray(1:4, 0),
     OffsetArray([1 3; 2 4], 0, 0),
+    # issue #63659
+    Base.IdentityUnitRange(2:20),
+    OffsetArray(1:20, typemax(Int) - 20),
     'a':'e', ['a', 'b', 'c', 'd', 'e'],
     # check that hash is still consistent with heterogeneous arrays for which - is defined
     # for some pairs and not others
@@ -294,11 +297,11 @@ end
 
 struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
 @test AUnionParam.body.hash == 0
-@test Base._jl_type_cache_hash(Type{AUnionParam}) != 0
-@test Base._jl_type_cache_hash(Type{AUnionParam{<:Union{Float32,Float64}}}) == 0
+@test Base._jl_type_hash(Type{AUnionParam}) != 0
+@test Base._jl_type_hash(Type{AUnionParam{<:Union{Float32,Float64}}}) == 0
 @test Type{AUnionParam{<:Union{Nothing,Float32,Float64}}} === Type{AUnionParam}
-@test Base._jl_type_cache_hash(Type{AUnionParam.body}) == 0
-@test Base._jl_type_cache_hash(Type{Base.Broadcast.Broadcasted}) != 0
+@test Base._jl_type_hash(Type{AUnionParam.body}) == 0
+@test Base._jl_type_hash(Type{Base.Broadcast.Broadcasted}) != 0
 
 
 @testset "issue 50628" begin

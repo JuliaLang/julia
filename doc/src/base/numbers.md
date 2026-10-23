@@ -88,6 +88,7 @@ Base.Math.significand
 Base.Math.exponent
 Base.Math.frexp
 Base.Math.ldexp
+Base.decompose
 Base.complex(::Complex)
 Base.bswap
 Base.hex2bytes

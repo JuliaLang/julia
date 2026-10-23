@@ -14,8 +14,6 @@
 
 #include "julia.h"
 
-static constexpr std::nullopt_t None = std::nullopt;
-
 enum AddressSpace {
     Generic = 0,
     Tracked = 10,
@@ -100,7 +98,11 @@ static inline llvm::AttributeList getWriteBarrierAttributes(llvm::LLVMContext &C
 {
     using namespace llvm;
     AttrBuilder FnAttrs(C);
-    auto effects = MemoryEffects::inaccessibleMemOnly();
+    // The barrier inspects the parent's and children's headers, and it must
+    // stay ordered after the store it guards: a store may not be sunk past
+    // a later safepoint (see add_fn_attrs_for_effects in codegen.cpp), and
+    // reading the slot's memory here pins the store above the barrier.
+    auto effects = MemoryEffects::inaccessibleMemOnly() | MemoryEffects::argMemOnly(ModRefInfo::Ref);
 #ifdef GC_BARRIER_SNAPSHOT
     // Snapshot barriers read old fields, including out-of-line object storage.
     effects |= MemoryEffects::readOnly();
@@ -384,83 +386,8 @@ static inline llvm::Value *emit_gc_safe_leave(llvm::IRBuilder<> &builder, llvm::
     return emit_gc_state_set(builder, T_size, ptls, state, old_state, final);
 }
 
-// Compatibility shims for LLVM attribute APIs that were renamed in LLVM 14.
-//
-// Once we no longer support LLVM < 14, these can be mechanically removed by
-// translating foo(Bar, …) into Bar->foo(…) resp. Bar.foo(…).
 namespace {
 using namespace llvm;
-
-inline void addFnAttr(CallInst *Target, Attribute::AttrKind Attr)
-{
-    Target->addFnAttr(Attr);
-}
-
-template<class T, class A>
-inline void addRetAttr(T *Target, A Attr)
-{
-    Target->addRetAttr(Attr);
-}
-
-inline void addAttributeAtIndex(Function *F, unsigned Index, Attribute Attr)
-{
-    F->addAttributeAtIndex(Index, Attr);
-}
-
-inline AttributeSet getFnAttrs(const AttributeList &Attrs)
-{
-    return Attrs.getFnAttrs();
-}
-
-inline AttributeSet getRetAttrs(const AttributeList &Attrs)
-{
-    return Attrs.getRetAttrs();
-}
-
-inline bool hasFnAttr(const AttributeList &L, Attribute::AttrKind Kind)
-{
-    return L.hasFnAttr(Kind);
-}
-
-inline AttributeList addAttributeAtIndex(const AttributeList &L, LLVMContext &C,
-                                         unsigned Index, Attribute::AttrKind Kind)
-{
-    return L.addAttributeAtIndex(C, Index, Kind);
-}
-
-inline AttributeList addAttributeAtIndex(const AttributeList &L, LLVMContext &C,
-                                         unsigned Index, Attribute Attr)
-{
-    return L.addAttributeAtIndex(C, Index, Attr);
-}
-
-inline AttributeList addAttributesAtIndex(const AttributeList &L, LLVMContext &C,
-                                          unsigned Index, const AttrBuilder &Builder)
-{
-    return L.addAttributesAtIndex(C, Index, Builder);
-}
-
-inline AttributeList addFnAttribute(const AttributeList &L, LLVMContext &C,
-                                    Attribute::AttrKind Kind)
-{
-    return L.addFnAttribute(C, Kind);
-}
-
-inline AttributeList addRetAttribute(const AttributeList &L, LLVMContext &C,
-                                     Attribute::AttrKind Kind)
-{
-    return L.addRetAttribute(C, Kind);
-}
-
-inline bool hasAttributesAtIndex(const AttributeList &L, unsigned Index)
-{
-    return L.hasAttributesAtIndex(Index);
-}
-
-inline Attribute getAttributeAtIndex(const AttributeList &L, unsigned Index, Attribute::AttrKind Kind)
-{
-    return L.getAttributeAtIndex(Index, Kind);
-}
 
 // Iterate through uses of a particular type.
 // Recursively scan through `ConstantExpr` and `ConstantAggregate` use.

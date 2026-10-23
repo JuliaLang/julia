@@ -67,6 +67,15 @@ end
 """) ≅ [1 2 3;
         4 1 2]
 
+# a splat outside the rows is a row of its own
+@test JuliaLowering.include_string(test_mod, """
+let
+    xs = (1,2)
+    [xs...; 3 4]
+end
+""") ≅ [1 2;
+        3 4]
+
 # typed_vcat
 @test JuliaLowering.include_string(test_mod, """
 Int[1.0; 2.0; 3.0]

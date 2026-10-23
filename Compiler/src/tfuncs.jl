@@ -51,7 +51,7 @@ end
 
 const INT_INF = typemax(Int) # integer infinity
 
-const N_IFUNC = reinterpret(Int32, have_fma) + 1
+const N_IFUNC = reinterpret(Int32, cpu_supports) + 1
 const T_IFUNC = Vector{Tuple{Int, Int, Any}}(undef, N_IFUNC)
 const T_IFUNC_COST = Vector{Int}(undef, N_IFUNC)
 const T_FFUNC_KEY = Vector{Any}()
@@ -336,6 +336,7 @@ end
 add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
 
 add_tfunc(Core.Intrinsics.have_fma, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bool), 1)
+add_tfunc(Core.Intrinsics.cpu_supports, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bool), 1)
 
 # builtin functions
 # =================
@@ -1157,6 +1158,8 @@ end
 function _getfield_tfunc_const(@nospecialize(sv), name::Const)
     nv = _getfield_fieldindex(typeof(sv), name)
     nv === nothing && return Bottom
+    # relocated pointers change between processes, so their value can't be folded
+    is_relocatable_ptr_field(Const(sv), name) && return nothing
     # `types` and `super` are write-once: non-const (filled lazily), but once
     # a defined value is observed it can never change, so folding it is sound
     if isa(sv, DataType) && (nv == DATATYPE_TYPES_FIELDINDEX || nv == DATATYPE_SUPER_FIELDINDEX) && isdefined(sv, nv)
@@ -1634,7 +1637,7 @@ end
         return Any
     end
     # fieldtype only accepts Types
-    if isa(s0, Const) && !(isa(s0.val, DataType) || isa(s0.val, UnionAll) || isa(s0.val, Union))
+    if isa(s0, Const) && !(isa(s0.val, DataType) || isa(s0.val, UnionAll) || isa(s0.val, Union) || isa(s0.val, Core.TypeEgal))
         return Bottom
     end
     if (s0 isa Type && s0 == Type{Union{}}) || isa(s0, Conditional)
@@ -1679,6 +1682,8 @@ end
         end
         return Any
     end
+    # the sole instance of `TypeEgal{T}` is `T`, a value whose type is a canonical tag
+    isTypeEgal(u) && return _fieldtype_tfunc(𝕃, typeof(type_parameter(u)), name, true, true)
     isType(u) && return Bottom # type objects have no fields
     u isa DataType || return Any
     if isabstracttype(u)
@@ -2361,6 +2366,7 @@ end
 end
 
 add_tfunc(Core.memoryrefget, 3, 3, memoryrefget_tfunc, 20)
+add_tfunc(Core.const_memoryrefget, 3, 3, memoryrefget_tfunc, 20)
 add_tfunc(Core.memoryrefset!, 4, 4, memoryrefset!_tfunc, 20)
 add_tfunc(Core.memoryrefunset!, 3, 3, memoryrefunset!_tfunc, 20)
 add_tfunc(Core.memoryrefswap!, 4, 4, memoryrefswap!_tfunc, 20)
@@ -2531,7 +2537,7 @@ function memoryrefop_builtin_common_nothrow(𝕃::AbstractLattice, argtypes::Vec
     if ismemoryset
         # Additionally check element type compatibility
         memoryset_typecheck(𝕃, memtype, argtypes[2]) || return false
-    elseif f === memoryrefget
+    elseif f === memoryrefget || f === const_memoryrefget
         # If we could potentially throw undef ref errors, bail out now.
         array_type_undefable(memtype) && return false
     end
@@ -2587,7 +2593,7 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
         return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === memoryrefunset!
         return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
-    elseif f === memoryrefget
+    elseif f === memoryrefget || f === const_memoryrefget
         return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === memoryref_isassigned
         return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
@@ -2702,6 +2708,7 @@ const _EFFECT_FREE_BUILTINS = [
     memoryrefnew,
     memoryrefoffset,
     memoryrefget,
+    const_memoryrefget,
     memoryref_isassigned,
     isdefined,
     Core.bitsizeof,
@@ -2749,6 +2756,7 @@ const _ARGMEM_BUILTINS = Any[
     memoryrefnew,
     memoryrefoffset,
     memoryrefget,
+    const_memoryrefget,
     memoryref_isassigned,
     memoryrefset!,
     memoryrefunset!,
@@ -2855,8 +2863,23 @@ function is_relocatable_ptr_field(ty, fld)
     elseif hasintersect(widenconst(ty), DataType) &&
         (Const(:layout) ⊑ fld || Const(fieldindex(DataType, :layout)) ⊑ fld)
         return true
+    elseif hasintersect(widenconst(ty), GenericMemory) &&
+        (Const(:ptr) ⊑ fld || Const(fieldindex(GenericMemory, :ptr)) ⊑ fld)
+        return true
+    elseif hasintersect(widenconst(ty), GenericMemoryRef) &&
+        (Const(:ptr_or_offset) ⊑ fld || Const(fieldindex(GenericMemoryRef, :ptr_or_offset)) ⊑ fld)
+        return true
     end
     return false
+end
+
+# Whether field `name` of `obj` is immutable (see `Base.isconst`)
+function is_const_field_argtype(@nospecialize(obj), @nospecialize(name))
+    name isa Const || return false
+    objt = widenconst(ignorelimited(obj))
+    (objt isa DataType && !isabstracttype(objt) && objt !== Module) || return false
+    fidx = _getfield_fieldindex(objt, name)
+    return fidx !== nothing && isconst(objt, fidx)
 end
 
 function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
@@ -2869,12 +2892,19 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
             inaccessiblememonly=ALWAYS_FALSE,
             noub=ALWAYS_FALSE)
     end
-    # :consistent if the argtype is immutable
     if is_relocatable_ptr_field(argtypes[1], argtypes[2])
-        consistent = ALWAYS_FALSE
+        if !ismutabletype(widenconst(obj)) || is_mutation_free_argtype(obj)
+            # access to immutable / mutation-free types is not modelled by `inaccessiblememonly`
+            # so immediately widen these to ALWAYS_FALSE
+            consistent = ALWAYS_FALSE
+        else
+            consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
+        end
+    elseif is_immutable_argtype(obj) || is_mutation_free_argtype(obj) || is_const_field_argtype(obj, argtypes[2])
+        # :consistent if the argtype is immutable or the field is const
+        consistent = ALWAYS_TRUE
     else
-        consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
-            ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
+        consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
     end
     noub = ALWAYS_TRUE
     bcheck = getfield_boundscheck(argtypes)
@@ -2892,10 +2922,13 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
             noub = ALWAYS_FALSE
         end
     end
-    if hasintersect(widenconst(obj), Module) || is_relocatable_ptr_field(argtypes[1], argtypes[2])
+    if hasintersect(widenconst(obj), Module)
         # Modeled more precisely in abstract_eval_getglobal
         inaccessiblememonly = ALWAYS_FALSE
-    elseif is_mutation_free_argtype(obj)
+    elseif is_relocatable_ptr_field(argtypes[1], argtypes[2])
+        inaccessiblememonly = INACCESSIBLEMEM_OR_ARGMEMONLY
+    elseif is_immutable_argtype(obj) || is_mutation_free_argtype(obj) || is_const_field_argtype(obj, argtypes[2])
+        # a field that never changes is not mutable memory
         inaccessiblememonly = ALWAYS_TRUE
     else
         inaccessiblememonly = INACCESSIBLEMEM_OR_ARGMEMONLY
@@ -2925,7 +2958,7 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     apply_type,
     compilerbarrier,
     Core.current_scope,
-    Core.depwarn_partition,
+    Core.depwarn_binding,
     donotdelete,
     Core.finalizer,
     Core.get_binding_type,
@@ -2936,6 +2969,7 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     Core.memorynew,
     memoryref_isassigned,
     memoryrefget,
+    const_memoryrefget,
     # Core.memoryrefmodify!,
     memoryrefnew,
     memoryrefoffset,
@@ -3030,7 +3064,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     elseif f === Core.isdefinedglobal_partition
         length(argtypes) == 2 || return EFFECTS_THROWS
         return generic_isdefinedglobal_effects
-    elseif f === Core.depwarn_partition
+    elseif f === Core.depwarn_binding
         length(argtypes) == 1 || return EFFECTS_THROWS
         # A deprecation warning is an observable side effect (printing to stderr, and
         # throwing under `--depwarn=error`), so this call must never be removed as unused.
@@ -3063,7 +3097,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
-        elseif f === memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned || f === Core._svec_len || f === Core._svec_ref
+        elseif f === memoryrefget || f === const_memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned || f === Core._svec_len || f === Core._svec_ref
             consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
         elseif f === Core._typevar || f === Core.memorynew
             consistent = CONSISTENT_IF_NOTRETURNED
@@ -3085,7 +3119,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         else
             inaccessiblememonly = ALWAYS_FALSE
         end
-        if f === memoryrefnew || f === memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned
+        if f === memoryrefnew || f === memoryrefget || f === const_memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned
             noub = memoryop_noub(f, argtypes) ? ALWAYS_TRUE : ALWAYS_FALSE
         else
             noub = ALWAYS_TRUE
@@ -3106,7 +3140,7 @@ function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
             return true
         end
         expected_nargs = 3
-    elseif f === memoryrefget || f === memoryref_isassigned || f === memoryrefunset!
+    elseif f === memoryrefget || f === const_memoryrefget || f === memoryref_isassigned || f === memoryrefunset!
         expected_nargs = 3
     else
         @assert f === memoryrefset! "unexpected memoryop is given"
@@ -3396,11 +3430,28 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
         return Union{}
     end
 
+    if f === Intrinsics.cpu_supports
+        argtypes[1] ⊑ Symbol || return TypeError
+        return Union{}
+    end
+
     if f === Intrinsics.add_ptr || f === Intrinsics.sub_ptr
         if !(argtypes[1] ⊑ Ptr && argtypes[2] ⊑ UInt)
             return TypeError
         end
         return Union{}
+    end
+
+    # The modify operation is an arbitrary user-provided function.
+    f === Intrinsics.atomic_pointermodify && return Any
+
+    if (f === Intrinsics.atomic_fence || f === Intrinsics.atomic_pointerref ||
+        f === Intrinsics.atomic_pointerset || f === Intrinsics.atomic_pointerswap ||
+        f === Intrinsics.atomic_pointerreplace)
+        # Invalid orderings throw `ConcurrencyViolationError`, badly-typed arguments
+        # `TypeError`, and unsupported element types or sizes, or an invalid syncscope,
+        # `ErrorException`.
+        return Union{ConcurrencyViolationError, TypeError, ErrorException}
     end
 
     # The remaining intrinsics are math/bits/comparison intrinsics.
@@ -3447,6 +3498,7 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction, is_effect_free::Union{Not
             f === Intrinsics.pointerref ||            # this one is volatile
             f === Intrinsics.sqrt_llvm_fast ||        # this one may differ at runtime (by a few ulps)
             f === Intrinsics.have_fma ||              # this one depends on the runtime environment
+            f === Intrinsics.cpu_supports ||          # this one depends on the runtime environment
             f === Intrinsics.cglobal)                 # cglobal lookup answer changes at runtime
 end
 
@@ -3579,8 +3631,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
 end
 
 # a simplified model of abstract_call_gf_by_type for applicable
-function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
-                             sv::AbsIntState, max_methods::Int)
+function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::AbsIntState)
     length(argtypes) < 2 && return Future(CallMeta(Bottom, ArgumentError, EFFECTS_THROWS, NoCallInfo()))
     isvarargtype(argtypes[2]) && return Future(CallMeta(Bool, ArgumentError, EFFECTS_THROWS, NoCallInfo()))
     argtypes = argtypes[2:end]
@@ -3588,6 +3639,7 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
     if atype === Union{}
         rt = Union{} # accidentally unreachable code
     else
+        max_methods = get_max_methods(interp, max_methods_callee(singleton_type(argtypes[1]), argtypes), sv)
         matches = find_method_matches(interp, argtypes, atype; max_methods)
         info = NoCallInfo()
         if isa(matches, FailedMethodMatch)
@@ -3706,7 +3758,7 @@ add_tfunc(Core.swapglobal_partition, 2, 3, @nospecs((𝕃::AbstractLattice, args
 add_tfunc(Core.replaceglobal_partition, 3, 5, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
 add_tfunc(Core.setglobalonce_partition, 2, 4, @nospecs((𝕃::AbstractLattice, args...)->Bool), 3)
 add_tfunc(Core.isdefinedglobal_partition, 2, 2, @nospecs((𝕃::AbstractLattice, args...)->Bool), 1)
-add_tfunc(Core.depwarn_partition, 1, 1, @nospecs((𝕃::AbstractLattice, args...)->Nothing), 1)
+add_tfunc(Core.depwarn_binding, 1, 1, @nospecs((𝕃::AbstractLattice, args...)->Nothing), 1)
 add_tfunc(Core.get_binding_type, 2, 2, @nospecs((𝕃::AbstractLattice, args...)->Type), 0)
 
 @nospecs function task_result_type_tfunc(𝕃::AbstractLattice, T)

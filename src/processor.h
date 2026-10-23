@@ -191,6 +191,15 @@ JL_DLLEXPORT jl_value_t *jl_get_sysimage_cpu_target(void) JL_CANSAFEPOINT;
 // Check if the CPU has native FMA instructions;
 // For debugging only
 JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits);
+// Check if codegen for the JIT target enables every LLVM feature in the
+// comma-separated list `features`
+JL_DLLEXPORT int jl_cpu_has_features(const char *features) JL_NOTSAFEPOINT;
+// Return the LLVM features (comma-separated) of the host architecture that codegen
+// can enable: hardware features that are usable outside the kernel
+JL_DLLEXPORT jl_value_t *jl_cpu_codegen_features(void) JL_CANSAFEPOINT;
+// Return the features listed by jl_cpu_codegen_features (comma-separated) that a
+// clone targeting `cpu_name` is compiled with, or `nothing` if the name is unknown
+JL_DLLEXPORT jl_value_t *jl_cpu_target_features(const char *cpu_name) JL_CANSAFEPOINT;
 // Dump the name and feature set of the host CPU
 JL_DLLEXPORT void jl_dump_host_cpu(void);
 JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char* data) JL_CANSAFEPOINT;
@@ -203,12 +212,13 @@ JL_DLLEXPORT int32_t jl_get_default_nans(void) JL_NOTSAFEPOINT;
 /**
  * System image contents.
  *
- * These symbols are typically dummy values, unless statically linking
- * libjulia-* and the sysimage together (see null_sysimage.c), in which
- * case they allow accessing the local copy of the sysimage.
+ * Defined by the sysimage and only referenced when it is statically linked
+ * with libjulia-internal (JL_LIBRARY_STATIC); see get_image_buf in staticdata.c.
  **/
 typedef void (JL_NOTSAFEPOINT *jl_image_unpack_func_t)(void *handle, jl_image_buf_t *image);
+#ifdef JL_LIBRARY_STATIC
 extern jl_image_unpack_func_t jl_image_unpack;
+#endif
 
 /**
  * CPU name and feature string for LLVM.
@@ -290,6 +300,7 @@ extern "C" JL_DLLEXPORT jl_llvm_target_t jl_get_llvm_target(const char *cpu_targ
 extern "C" JL_DLLEXPORT jl_llvm_target_t jl_get_llvm_disasm_target(void) JL_NOTSAFEPOINT;
 
 extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() JL_CANSAFEPOINT;
+extern "C" JL_DLLEXPORT int32_t jl_get_sysimage_matched_target_index(void)  JL_CANSAFEPOINT;
 extern "C" JL_DLLEXPORT jl_value_t *jl_feature_bits_to_string(const uint8_t *bits, int32_t nwords) JL_CANSAFEPOINT;
 #endif
 

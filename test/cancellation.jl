@@ -326,6 +326,15 @@ end
     @test_throws CancellationRequest Base.@cancel_check(dead)
     @test (Base.@cancel_check(nothing); :ran) === :ran
 
+    # without a source, a cancellation point reports at most a preemption request, so
+    # the slow path neither asserts a source nor throws a request
+    let ct = current_task()
+        @atomic :monotonic ct.preempt_request = 0x01
+        @test (Base.@cancel_check(nothing); :ran) === :ran
+        @test (@atomic :monotonic ct.preempt_request) == 0x00
+    end
+    # JET.@test_call println(::Float64)
+
     # level-triggered: after catching one request, the next point throws again
     with(CANCEL_TOKEN => dead) do
         caught = 0
@@ -1750,6 +1759,21 @@ end
     flush(p; cancel=nothing)
     @test read(p, UInt8; cancel=nothing) == UInt8('o')
     close(p)
+end
+
+@testset "eachline resolves the default token per line" begin
+    src = CancellationTokenSource()
+    cancel!(src)
+    ctok = CancellationToken(src)
+    # made inside a cancelled scope, read outside it
+    itr = with(() -> eachline(IOBuffer("ab\n")), CANCEL_TOKEN => ctok)
+    @test with(() -> iterate(itr), CANCEL_TOKEN => nothing) == ("ab", nothing)
+    # made outside a cancelled scope, read inside it
+    itr = with(() -> eachline(IOBuffer("ab\n")), CANCEL_TOKEN => nothing)
+    @test_throws CancellationRequest with(() -> iterate(itr), CANCEL_TOKEN => ctok)
+    # an explicit token stays with the iterator
+    itr = eachline(IOBuffer("ab\n"); cancel=ctok)
+    @test_throws CancellationRequest with(() -> iterate(itr), CANCEL_TOKEN => nothing)
 end
 
 @testset "explicit tokens and shields thread through call chains" begin

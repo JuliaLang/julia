@@ -51,7 +51,7 @@ end
 4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄)
 6   (call core.svec)
-7   SourceLocation::3:9
+7   SourceLocation:3
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.b %₈
     --- code_info

@@ -255,7 +255,10 @@ function g27079(X)
     r
 end
 
-@test occursin("vector.reduce.add", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
+# rv64gc has no vector registers, so the loop stays scalar there
+if Sys.ARCH !== :riscv64
+    @test occursin("vector.reduce.add", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
+end
 
 # Boundschecking removal of indices with different type, see #40281
 getindex_40281(v, a, b, c) = @inbounds getindex(v, a, b, c)
@@ -351,6 +354,48 @@ if bc_opt == bc_default
     no_alias_prove5() = no_alias_prove(5)
     no_alias_prove5()
     @test (@allocated no_alias_prove5()) == 0
+    # the lengths of these arrays only become constant during LLVM optimization
+    function copy_small()
+        a = [1.0, 2.0, 3.0]
+        b = copy(a)
+        b[2] = 5.0
+        return a[2] + b[2]
+    end
+    function add_small()
+        a = [1, 2, 3]
+        b = a + a
+        return b[1] + b[2] + b[3]
+    end
+    function column_small()
+        A = reshape([1.0:9.0;], 3, 3)
+        c = A[:, 2]
+        return c[1] + c[2] + c[3]
+    end
+    @test copy_small() === 7.0
+    @test (@allocated copy_small()) == 0
+    @test add_small() === 12
+    @test (@allocated add_small()) == 0
+    @test column_small() === 15.0
+    @test (@allocated column_small()) == 0
+    # escaping copies must stay valid across a GC
+    escaping_copies() = (copy([1.0, 2.0]), copy(Union{Int,Nothing}[1, nothing]), copy(Any[1, "x"]))
+    copies = escaping_copies()
+    GC.gc(true)
+    @test copies[1] == [1.0, 2.0]
+    @test isequal(copies[2], [1, nothing])
+    @test isequal(copies[3], [1, "x"])
+    # including when their data is too large to be allocated inline
+    large_copies() = (copy(collect(1.0:300.0)), copy(Any[1:300;]))
+    copies = large_copies()
+    GC.gc(true)
+    @test copies[1] == 1.0:300.0
+    @test copies[2] == 1:300
+    # references in a fresh Memory start out unassigned, with inline data and without
+    fresh_memories(ns) = [Memory{Any}(undef, n) for n in ns]
+    mems = fresh_memories(240:520)
+    GC.gc(true)
+    @test map(length, mems) == 240:520
+    @test all(m -> !any(i -> isassigned(m, i), eachindex(m)), mems)
 end
 
 @testset "automatic boundscheck elision for iteration on some important types" begin
@@ -367,6 +412,12 @@ end
 
         @test !contains(sprint(code_llvm, iterate, (Base.CodeUnits{UInt8,String}, Int)), "unreachable")
     end
+end
+
+@testset "nonscalar setindex! checks the shape under @inbounds" begin
+    inbounds_setindex!(A, X, I) = (@inbounds A[I] = X; A)
+    @test_throws DimensionMismatch view(zeros(6), 2:5)[1:4] = [1]
+    @test_throws DimensionMismatch inbounds_setindex!(zeros(6), [1.0], 1:4)
 end
 
 end

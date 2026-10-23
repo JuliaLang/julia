@@ -36,7 +36,8 @@ static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintpt
     jl_gcframe_t *pgcstack = *ppgcstack;
     while (pgcstack != NULL) {
         jl_gcframe_t *prev = pgcstack->prev;
-        if (pgcstack->nroots & 2) { // tagged frame
+        // only interpreter frames (JL_GC_PUSHFRAME) are preceded by a frame pointer
+        if ((pgcstack->nroots & JL_GCFRAME_KIND_MASK) == JL_GCFRAME_INTERP) {
             uintptr_t frame_fp = ((uintptr_t*)pgcstack)[-1];
             if (frame_fp != 0) { // check that frame was fully initialized
                 if (frame_fp >= sp)
@@ -907,6 +908,8 @@ static void jl_safe_fprint_codeloc(ios_t *s, const char* func_name, const char* 
     }
 }
 
+static void jl_fprint_debugloc(ios_t *s, jl_debuginfo_t *debuginfo, jl_value_t *func, size_t ip, int inlined) JL_NOTSAFEPOINT;
+
 // Print function, file and line containing native instruction pointer `ip` by
 // looking up debug info. Prints multiple such frames when `ip` points to
 // inlined code.
@@ -918,6 +921,26 @@ void jl_fprint_native_codeloc(ios_t *s, uintptr_t ip) JL_NOTSAFEPOINT
     jl_frame_t *frames = NULL;
     int n = jl_getFunctionInfo(&frames, ip, 0, 0);
     int i;
+
+    // Like StackTraces.lookup: when DWARF gives a statement index for the outermost
+    // frame, rebuild the inlined frames from the CodeInstance debuginfo, since image
+    // code may have no DWARF inline scopes.
+    jl_debuginfo_t *di = NULL;
+    jl_frame_t *outer = &frames[n - 1];
+    if (outer->func_name && !outer->fromC && outer->pc > 0 && outer->ci)
+        di = jl_atomic_load_relaxed(&outer->ci->debuginfo);
+    if (di && jl_is_debuginfo(di)) {
+        jl_value_t *def = outer->ci->def;
+        if (jl_is_abioverride(def))
+            def = (jl_value_t*)((jl_abi_override_t*)def)->def;
+        jl_fprint_debugloc(s, di, def, outer->pc, 0);
+        for (i = 0; i < n; i++) {
+            free(frames[i].func_name);
+            free(frames[i].file_name);
+        }
+        free(frames);
+        return;
+    }
 
     for (i = 0; i < n; i++) {
         jl_frame_t frame = frames[i];
@@ -977,7 +1000,7 @@ static void jl_fprint_debugloc(ios_t *s, jl_debuginfo_t *debuginfo, jl_value_t *
     }
     intptr_t ip2 = stmt.loc;
     if (ip2 >= 0 && ip > 0 && jl_is_debuginfo(debuginfo->linetable)) {
-        jl_fprint_debugloc(s, (jl_debuginfo_t*)debuginfo->linetable, func, ip2, 0);
+        jl_fprint_debugloc(s, (jl_debuginfo_t*)debuginfo->linetable, func, ip2, inlined);
     }
     else {
         if (ip2 < 0) // set broken debug info to ignored

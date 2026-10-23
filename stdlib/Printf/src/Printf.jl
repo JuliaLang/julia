@@ -488,8 +488,8 @@ tofloat(x::Base.IEEEFloat) = x
 tofloat(x::BigFloat) = x
 
 _snprintf(ptr, siz, str, arg) =
-    @ccall "libmpfr".mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
-                                   arg::Ref{BigFloat})::Cint
+    @ccall Base.MPFR.libmpfr.mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
+                                             arg::Ref{BigFloat})::Cint
 
 # Arbitrary constant for a maximum number of bytes we want to output for a BigFloat.
 # 8KiB seems like a reasonable default. Larger BigFloat representations should probably
@@ -596,7 +596,8 @@ function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
                 newpos += 3
             else
                 if prec > -1
-                    s, p = frexp(x)
+                    # scale in Float64, since ldexp(s, 1 + sigbits) can overflow narrower types
+                    s, p = frexp(Float64(x))
                     sigbits = 4 * min(prec, 13)
                     s = 0.25 * round(ldexp(s, 1 + sigbits))
                     # ensure last 2 exponent bits either 01 or 10
@@ -655,7 +656,8 @@ function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
             # right aligned
             n = width - (newpos - pos)
             if zero && isfinite(x)
-                ex = (arg < 0 || (plus | space)) + (T <: Union{Val{'a'}, Val{'A'}} ? 2 : 0)
+                # check the written sign rather than `arg < 0`, which is false for -0.0
+                ex = (buf[pos] == UInt8('-') || (plus | space)) + (T <: Union{Val{'a'}, Val{'A'}} ? 2 : 0)
                 so = pos + ex
                 len = (newpos - pos) - ex
                 copyto!(buf, so + n, buf, so, len)

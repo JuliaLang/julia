@@ -82,7 +82,13 @@ LLVM_EXPERIMENTAL_TARGETS :=
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
 LLVM_CPPFLAGS :=
-LLVM_LDFLAGS := "-L$(build_shlibdir)" # hacky way to force zlib to be found when linking against libLLVM and sysroot is set
+# Find our zlib/zstd when linking against libLLVM with a sysroot toolchain: `-L` for
+# lld, `-rpath-link` for GNU ld (which does not search `-L` paths for the dependencies
+# of shared libraries). The latter is ELF-only, as in Make.inc's RPATH.
+LLVM_LDFLAGS := "-L$(build_shlibdir)"
+ifeq (,$(filter $(OS),WINNT emscripten Darwin))
+LLVM_LDFLAGS += "-Wl,-rpath-link,$(build_shlibdir)"
+endif
 LLVM_CMAKE :=
 
 LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
@@ -122,6 +128,17 @@ LLVM_CPPFLAGS += -D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE
 endif # OS == WINNT
 ifneq ($(HOSTCC),$(CC))
 LLVM_CMAKE += -DCROSS_TOOLCHAIN_FLAGS_NATIVE="-DCMAKE_C_COMPILER=$$(which $(HOSTCC));-DCMAKE_CXX_COMPILER=$$(which $(HOSTCXX))"
+endif
+# Build the tools that run during the build, e.g. tablegen, for the build
+# machine. (Windows does this in CMAKE_COMMON.)
+ifneq ($(XC_HOST),)
+ifneq ($(OS),WINNT)
+LLVM_CMAKE += -DCMAKE_SYSTEM_NAME=$(OS) -DCMAKE_SYSTEM_PROCESSOR=$(ARCH)
+endif
+endif
+# Where clang looks for its default configuration files (clang.cfg etc).
+ifneq ($(CLANG_CONFIG_FILE_SYSTEM_DIR),)
+LLVM_CMAKE += -DCLANG_CONFIG_FILE_SYSTEM_DIR=$(CLANG_CONFIG_FILE_SYSTEM_DIR)
 endif
 ifeq ($(OS), emscripten)
 LLVM_CMAKE += -DCMAKE_TOOLCHAIN_FILE=$(EMSCRIPTEN)/cmake/Modules/Platform/Emscripten.cmake -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_BUILD_TOOLS=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_ENABLE_THREADS=OFF -DLLVM_BUILD_UTILS=OFF
@@ -261,10 +278,6 @@ $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patc
 LLVM_PATCH_PREV := $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
-ifeq ($(shell test $(LLVM_VER_MAJ) -lt 19 && echo true),true)
-$(eval $(call LLVM_PATCH,llvm-ittapi-cmake))
-endif
-
 ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zlib
 endif
@@ -276,8 +289,6 @@ endif
 # LLVM's configure checks link against libraries installed by csl.
 $(LLVM_BUILDDIR_withtype)/build-configured: | install-csl
 
-
-# NOTE: LLVM 12 and 13 have their patches applied to JuliaLang/llvm-project
 
 # declare that all patches must be applied before running ./configure
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV)

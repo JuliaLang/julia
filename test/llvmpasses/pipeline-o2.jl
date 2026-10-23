@@ -223,6 +223,39 @@ function memset_like(mem)
     end
 end
 
+# COM: `===` on boxed values calls `jl_egal__unboxed`, which only reads memory, so a
+# COM: loop-invariant comparison is hoisted and the loop vectorizes
+
+# ALL-LABEL: @julia_sum_if_egal
+# ALL: call i32 @jl_egal__unboxed
+# ALL: vector.body
+# ALL-NOT: call i32 @jl_egal__unboxed
+# ALL: ret i64
+function sum_if_egal(v, @nospecialize(a), @nospecialize(b))
+    s = 0
+    for i in eachindex(v)
+        if a === b
+            s += v[i]
+        end
+    end
+    s
+end
+
+# COM: Small constant-trip inner loops must be fully unrolled before IRCE splits them,
+# COM: otherwise LoopIdiomRecognize turns them into a variable-length memcpy (#62798)
+
+# ALL-LABEL: @julia_small_column_copy
+# ALL-NOT: llvm.memcpy
+# ALL: ret void
+function small_column_copy(out, u)
+    for k in axes(out, 2)
+        u_node = (u[1, k], u[2, k], u[3, k], u[4, k], u[5, k])
+        for v in 1:5
+            out[v, k] = u_node[v]
+        end
+    end
+end
+
 emit(iterate_read, Vector{Int64})
 emit(iterate_write, Vector{Int64}, Vector{Int64})
 emit(iterate_write!, Vector{Int64})
@@ -250,3 +283,6 @@ emit(loopedlength, Vector{Int64})
 
 emit(memset_like, Vector{Float64})
 emit(memset_like, Memory{Float64})
+
+emit(sum_if_egal, Vector{Int64}, Any, Any)
+emit(small_column_copy, Matrix{Float64}, Matrix{Float64})

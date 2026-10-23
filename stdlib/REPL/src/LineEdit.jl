@@ -17,6 +17,9 @@ using Base: something
 
 using InteractiveUtils: InteractiveUtils
 
+using Base.JuliaSyntax: @K_str, @KSet_str, kind
+using Base.JuliaSyntax.Tokenize: tokenize
+
 abstract type TextInterface end                # see interface immediately below
 abstract type ModeState end                    # see interface below
 abstract type HistoryProvider end
@@ -41,34 +44,29 @@ mutable struct TerminalProperties
 end
 
 """
-    receive_da1!(props::TerminalProperties, io::IO)
+    receive_private_csi!(props::TerminalProperties, term::TextTerminal)
 
-Read and parse a DA1 (Device Attributes) response from `io`
-(after `\\e[?` has been consumed by the keymap).
-Reads until `c` (DA1 terminator) or `^C` (bail-out), parses the semicolon-separated
-parameters as integers, and stores them in `props.da1`.
+Read a private CSI sequence from `term` (after `\\e[?` has been consumed by the
+keymap) up to its final byte or `^C` (bail-out), and act on it:
+- a DA1 (Device Attributes) response, `\\e[?…c`, has its parameters stored in `props.da1`;
+- a palette update notification, `\\e[?997;<1|2>n`, prompts a [`query_colors`](@ref).
+
+Anything else, or a sequence cut short, is discarded.
 """
-function receive_da1!(props::TerminalProperties, io::IO)
-    buf = IOBuffer()
-    while !eof(io)
-        b = read(io, UInt8)
-        if b == UInt8('c')  # DA1 terminator
-            break
-        elseif b == 0x03  # ^C bail-out
-            break
-        else
-            write(buf, b)
-        end
+function receive_private_csi!(props::TerminalProperties, term::TextTerminal)
+    buf = Base.StringVector(0)
+    final = 0x00
+    while !eof(term)
+        final = read(term, UInt8)
+        (final == 0x03 || final in 0x40:0x7e) && break
+        push!(buf, final)
     end
-    body = String(take!(buf))
-    params = Int[]
-    for part in split(body, ';')
-        n = tryparse(Int, part)
-        if n !== nothing
-            push!(params, n)
-        end
+    body = String(buf)
+    if final == UInt8('c')
+        props.da1 = Int[n for n in tryparse.(Int, split(body, ';')) if !isnothing(n)]
+    elseif final == UInt8('n') && startswith(body, "997;")
+        props.awaiting_colors || query_colors(props, term)
     end
-    props.da1 = params
     return
 end
 
@@ -219,6 +217,27 @@ function query_colors(props::TerminalProperties, term::TextTerminal)
     nothing
 end
 
+"""
+    enter_input_mode(term::TextTerminal)
+
+Turn on:
+- raw mode (no line editing, no echo, no signal generation)
+- bracketed paste mode (so pasted text is not interpreted as commands)
+- palette update notifications (so the terminal can tell us when its palette changes)
+
+Undone by `leave_input_mode`.
+"""
+enter_input_mode(term::UnixTerminal) = raw!(term, true) && write(term.out_stream, "\e[?2004h\e[?2031h")
+enter_input_mode(term::TextTerminal) = raw!(term, true)
+
+"""
+    leave_input_mode(term::TextTerminal)
+
+Undo `enter_input_mode`: turn off raw mode, bracketed paste, and palette update notifications.
+"""
+leave_input_mode(term::UnixTerminal) = raw!(term, false) && write(term.out_stream, "\e[?2004l\e[?2031l")
+leave_input_mode(term::TextTerminal) = raw!(term, false)
+
 # interface for TextInterface
 function Base.getproperty(ti::TextInterface, name::Symbol)
     if name === :hp
@@ -314,6 +333,8 @@ mutable struct PromptState <: ModeState
     last_newline::Float64 # register when last newline was entered
     # this option is to speed up output
     refresh_wait::Union{Timer,Nothing}
+    # whether a closing bracket or quote was inserted automatically into the current input
+    auto_closed::Bool
 end
 
 struct Modifiers
@@ -393,8 +414,10 @@ reset_state(::EmptyHistoryProvider) = nothing
 struct NamedCompletion
     completion::String # what is actually completed, for example "\trianglecdot"
     name::String # what is displayed in lists of possible completions, for example "◬ \trianglecdot"
+    internal::Bool # a non-public name, listed after the public ones
 end
 
+NamedCompletion(completion::String, name::String) = NamedCompletion(completion, name, false)
 NamedCompletion(completion::String) = NamedCompletion(completion, completion)
 
 complete_line(c::EmptyCompletionProvider, s; hint::Bool=false) = NamedCompletion[], "", true
@@ -548,37 +571,55 @@ end
 # does not restrict column length when multiple columns are used.
 const MULTICOLUMN_THRESHOLD = 5
 
-show_completions(s::PromptState, completions::Vector{NamedCompletion}) = show_completions(s, map(x -> x.name, completions))
+function show_completions(s::PromptState, completions::Vector{NamedCompletion})
+    public = String[c.name for c in completions if !c.internal]
+    internal = String[c.name for c in completions if c.internal]
+    show_completions(s, public, internal)
+end
 
 # Show available completions
-function show_completions(s::PromptState, completions::Vector{String})
+function show_completions(s::PromptState, completions::Vector{String}, internal::Vector{String}=String[])
     # skip any lines of input after the cursor
     cmove_down(terminal(s), input_string_newlines_aftercursor(s))
     println(terminal(s))
-    if any(Base.Fix1(occursin, '\n'), completions)
-        foreach(Base.Fix1(println, terminal(s)), completions)
-    else
-        n = length(completions)
-        colmax = 2 + maximum(length, completions; init=1) # n.b. length >= textwidth
-
-        num_cols = min(cld(n, MULTICOLUMN_THRESHOLD),
-                       max(div(width(terminal(s)), colmax), 1))
-
-        entries_per_col = cld(n, num_cols)
-        idx = 0
-        for _ in 1:entries_per_col
-            for col = 0:(num_cols-1)
-                idx += 1
-                idx > n && break
-                cmove_col(terminal(s), colmax*col+1)
-                print(terminal(s), completions[idx])
-            end
-            println(terminal(s))
+    multiline = any(Base.Fix1(occursin, '\n'), completions) || any(Base.Fix1(occursin, '\n'), internal)
+    for group in (completions, internal)
+        isempty(group) && continue
+        if group === internal
+            cmove_col(terminal(s), 1)
+            println(terminal(s), "Internal:")
+        end
+        if multiline
+            foreach(Base.Fix1(println, terminal(s)), group)
+        else
+            # Each group gets its own column layout so that long internal names don't widen
+            # the columns of the public ones
+            show_completion_columns(s, group)
         end
     end
 
     # make space for the prompt
     for i = 1:input_string_newlines(s)
+        println(terminal(s))
+    end
+end
+
+function show_completion_columns(s::PromptState, completions::Vector{String})
+    n = length(completions)
+    colmax = 2 + maximum(length, completions; init=1) # n.b. length >= textwidth
+
+    num_cols = min(cld(n, MULTICOLUMN_THRESHOLD),
+                   max(div(width(terminal(s)), colmax), 1))
+
+    entries_per_col = cld(n, num_cols)
+    idx = 0
+    for _ in 1:entries_per_col
+        for col = 0:(num_cols-1)
+            idx += 1
+            idx > n && break
+            cmove_col(terminal(s), colmax*col+1)
+            print(terminal(s), completions[idx])
+        end
         println(terminal(s))
     end
 end
@@ -1669,6 +1710,7 @@ end
 function replace_line(s::PromptState, l::IOBuffer)
     empty_undo(s)
     s.input_buffer = copy(l)
+    s.auto_closed = false
     deactivate_region(s)
     nothing
 end
@@ -1678,6 +1720,7 @@ function replace_line(s::PromptState, l::Union{String,SubString{String}}, keep_u
     s.input_buffer.ptr = 1
     s.input_buffer.size = 0
     write(s.input_buffer, l)
+    s.auto_closed = false
     deactivate_region(s)
     nothing
 end
@@ -2280,8 +2323,8 @@ const escape_defaults = merge!(
         "\e*" => nothing,
         "\e[*" => nothing,
         "\eO*" => nothing,
-        # Intercept DA1 responses
-        "\e[?" => (s::MIState, o...) -> receive_da1!(s.terminal_properties, terminal(s)),
+        # Intercept DA1 responses and palette update notifications
+        "\e[?" => (s::MIState, o...) -> receive_private_csi!(s.terminal_properties, terminal(s)),
         # Intercept OSC responses
         "\e]" => (s::MIState, o...) -> receive_osc!(s.terminal_properties, terminal(s)),
         # Also ignore extended escape sequences
@@ -2317,6 +2360,36 @@ const escape_defaults = merge!(
     )
 
 
+before_cursor(buf::IOBuffer) = content(buf, 0 => position(buf))
+
+# Does `str` end inside a string, char or command literal, or a comment? Decided by
+# tokenizing `str` followed by a sentinel character and looking at what the sentinel became.
+function in_literal(str::String)
+    k = K"EndMarker"
+    for t in tokenize(str * 'x')
+        kind(t) == K"EndMarker" || (k = kind(t))
+    end
+    return k in KSet"String CmdString Char Comment ErrorEofMultiComment"
+end
+
+# Number of `left` minus `right` brackets in `str`, outside of literals and comments
+function bracket_balance(str::String, left::Char, right::Char)
+    n = 0
+    for t in tokenize(str)
+        kind(t) in KSet"( ) [ ] { }" || continue
+        c = Char(codeunit(str, t.startbyte + 1))
+        n += (c == left) - (c == right)
+    end
+    return n
+end
+
+# Whether typing `right` should move over the `right` after the cursor rather than insert
+# another one. Not if it is in a literal, or needed to close some other `left`.
+function skip_closing_bracket(buf::IOBuffer, left::Char, right::Char)
+    !eof(buf) && peek(buf, Char) == right || return false
+    return !in_literal(before_cursor(buf)) && bracket_balance(content(buf), left, right) <= 0
+end
+
 # Helper function to check and remove paired brackets/quotes
 # Returns true if paired delimiters were removed, false otherwise
 function try_remove_paired_delimiter(buf::IOBuffer)
@@ -2330,13 +2403,41 @@ function try_remove_paired_delimiter(buf::IOBuffer)
         seek(buf, p)
 
         i = findfirst(isequal(left_char), left_brackets)
-        if i !== nothing && peek(buf, Char) == right_brackets[i]
+        i === nothing && return false
+        right_char = right_brackets[i]
+        peek(buf, Char) == right_char || return false
+        # The quote must open an empty literal; the bracket must not be in a literal, and the
+        # closing bracket must not be needed by another opening one
+        paired = if left_char in ('(', '{', '[')
+            !in_literal(before_cursor(buf)) && bracket_balance(content(buf), left_char, right_char) <= 0
+        else
+            in_literal(before_cursor(buf))
+        end
+        if paired
             # Remove both the left and right bracket/quote
             edit_delete(buf)
             edit_backspace(buf)
             return true
         end
     end
+    return false
+end
+
+# Whether the input after the cursor is only closing brackets and quotes (and whitespace),
+# which were likely inserted automatically
+function only_auto_closed_after_cursor(s::MIState)
+    st = state(s)
+    st isa PromptState && st.auto_closed || return false
+    buf = buffer(st)
+    eof(buf) && return false
+    return all(c -> isspace(c) || c in ")]}\"'`", content(buf, position(buf) => buf.size))
+end
+
+function try_remove_paired_delimiter(s::MIState)
+    set_action!(s, :edit_backspace)
+    push_undo(state(s))
+    try_remove_paired_delimiter(buffer(s)) && return true
+    pop_undo(state(s))
     return false
 end
 
@@ -2385,19 +2486,35 @@ let
         return left_ok && right_ok
     end
 
+    # Edits below act on the buffer directly, so record the action and an undo state here
+    function prepare_insert!(s::MIState)
+        set_action!(s, :edit_insert)
+        push_undo(state(s))
+    end
+
+    function mark_auto_closed!(s::MIState)
+        st = state(s)
+        st isa PromptState && (st.auto_closed = true)
+    end
+
     # Left/right bracket pairs
     bracket_pairs = (('(', ')'), ('{', '}'), ('[', ']'))
     # Characters that are "transparent" for bracket auto-closing
     right_brackets_ws = (')', '}', ']', ' ', '\t', '\n', '"', '\'', '`')
 
     for (left, right) in bracket_pairs
-        # Left bracket: insert both and move cursor between them
+        # Left bracket: insert both and move cursor between them, unless in a literal or
+        # the buffer already has an unmatched right bracket
         bracket_insert_keymap[left] = (s::MIState, o...) -> begin
             local buf = buffer(s)
+            local autoclose = (eof(buf) || peek(buf, Char) in right_brackets_ws) &&
+                !in_literal(before_cursor(buf)) && bracket_balance(content(buf), left, right) >= 0
+            prepare_insert!(s)
             edit_insert(buf, left)
-            if eof(buf) || peek(buf, Char) in right_brackets_ws
+            if autoclose
                 edit_insert(buf, right)
                 edit_move_left(buf)
+                mark_auto_closed!(s)
             end
             refresh_line(s)
         end
@@ -2405,9 +2522,10 @@ let
         # Right bracket: skip over if next char matches, otherwise insert
         bracket_insert_keymap[right] = (s::MIState, o...) -> begin
             local buf = buffer(s)
-            if !eof(buf) && peek(buf, Char) == right
+            if skip_closing_bracket(buf, left, right)
                 edit_move_right(buf)
             else
+                prepare_insert!(s)
                 edit_insert(buf, right)
             end
             refresh_line(s)
@@ -2418,9 +2536,18 @@ let
     for quote_char in ('"', '\'', '`')
         bracket_insert_keymap[quote_char] = (s::MIState, o...) -> begin
             local buf = buffer(s)
-            if !eof(buf) && peek(buf, Char) == quote_char
-                # Skip over closing quote
+            local before = before_cursor(buf)
+            local literal = in_literal(before)
+            if !eof(buf) && peek(buf, Char) == quote_char && !(literal && in_literal(before * quote_char))
+                # Skip over closing quote (in a literal only if the typed one would close it,
+                # i.e. is not escaped)
                 edit_move_right(buf)
+                return refresh_line(s)
+            end
+            prepare_insert!(s)
+            if literal
+                # Never pair inside a literal or comment
+                edit_insert(buf, quote_char)
             elseif position(buf) > 0 && should_skip_closing_bracket(peek_char_left(buf), quote_char)
                 # Don't auto-close (e.g., for transpose or triple quotes)
                 edit_insert(buf, quote_char)
@@ -2428,6 +2555,7 @@ let
                 edit_insert(buf, quote_char)
                 edit_insert(buf, quote_char)
                 edit_move_left(buf)
+                mark_auto_closed!(s)
             else
                 # Just insert single quote
                 edit_insert(buf, quote_char)
@@ -2452,9 +2580,7 @@ let
             return
         end
 
-        if try_remove_paired_delimiter(buffer(s))
-            return refresh_line(s)
-        end
+        try_remove_paired_delimiter(s) && return refresh_line(s)
         return edit_backspace(s)
     end
 end
@@ -2968,7 +3094,7 @@ function history_search(mistate::MIState)
         mistate.mode_state[mimode] = init_state(term, mimode)
     end
     pstate = mistate.mode_state[mimode]
-    raw!(term, true)
+    enter_input_mode(term)
     mistate.current_mode = mimode
     activate(mimode, state(mistate, mimode), termbuf, term)
     commit_changes(term, termbuf)
@@ -3083,6 +3209,7 @@ function reset_state(s::PromptState)
         s.input_buffer.ptr = 1
     end
     empty_undo(s)
+    s.auto_closed = false
     deactivate_region(s)
     ias = InputAreaState(0, 0)
     s.ias = ias
@@ -3121,7 +3248,7 @@ run_interface(::Prompt) = nothing
 
 init_state(terminal, prompt::Prompt) =
     PromptState(terminal, prompt, IOBuffer(), :off, nothing, IOBuffer[], 1, InputAreaState(1, 1),
-                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf, nothing)
+                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf, nothing, false)
 
 function init_state(terminal, m::ModalInterface)
     s = MIState(m, Main, m.modes[1], false, IdDict{Any,Any}())
@@ -3242,8 +3369,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
         end
         status ∈ (:ok, :ignore) || break
     end
-    raw!(term, true)
-    enable_bracketed_paste(term)
+    enter_input_mode(term)
     try
         activate(prompt, s, term, term)
         # Notify that prompt is ready for input
@@ -3293,7 +3419,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
     finally
         put!(s.async_channel, Returns(:done))
         wait(t1)
-        raw!(term, false) && disable_bracketed_paste(term)
+        leave_input_mode(term)
     end
     # unreachable
 end
