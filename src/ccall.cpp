@@ -1605,6 +1605,11 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         if (jl_is_long(argi_root))
             continue;
         jl_cgval_t arg_root = emit_expr(ctx, argi_root);
+        // an unboxed pointer-free value holds no GC references and has no storage the
+        // callee could rely on, so preserving where it was loaded from is pointless and
+        // would keep that memory (e.g. a stack slot) from being optimized
+        if (!arg_root.Vboxed && jl_is_pointerfree(arg_root.typ))
+            continue;
         gc_uses.append(get_gc_roots_for(ctx, arg_root));
     }
 
