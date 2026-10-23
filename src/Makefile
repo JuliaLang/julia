@@ -568,10 +568,10 @@ $(addprefix $(BUILDDIR)/,APInt.o APInt.dbg.obj APInt.static.o APInt.static.dbg.o
 $(addprefix $(BUILDDIR)/,runtime_intrinsics.o runtime_intrinsics.dbg.obj runtime_intrinsics.static.o runtime_intrinsics.static.dbg.obj): $(SRCDIR)/processor.h
 
 # archive library file rules
-$(BUILDDIR)/support/libsupport.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.S *.inc) $(SRCDIR)/support/*.c
+$(BUILDDIR)/support/libsupport.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.inc) $(wildcard $(SRCDIR)/arch/*/win_setjmp.S) $(SRCDIR)/support/*.c
 	$(MAKE) -C $(SRCDIR)/support BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
-$(BUILDDIR)/support/libsupport-debug.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.S *.inc) $(SRCDIR)/support/*.c
+$(BUILDDIR)/support/libsupport-debug.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.inc) $(wildcard $(SRCDIR)/arch/*/win_setjmp.S) $(SRCDIR)/support/*.c
 	$(MAKE) -C $(SRCDIR)/support debug BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
 $(FLISP_EXECUTABLE_release): $(BUILDDIR)/flisp/libflisp.a

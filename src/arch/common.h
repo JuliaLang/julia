@@ -1,6 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#include "../../src/support/platform.h"
+#include "../support/platform.h"
 
 // Preprocessor annoyances
 #define CONCAT_(x,y)    x##y

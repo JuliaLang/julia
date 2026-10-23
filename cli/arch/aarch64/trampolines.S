@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#include "common.h"
-#include "../../src/jl_exported_funcs.inc"
+#include "../../../src/arch/common.h"
+#include "../../../src/jl_exported_funcs.inc"
 
 #define XX(name) \
 .global CNAME(name) SEP \

@@ -7,7 +7,7 @@
  */
 
 #define CNAME ijl_setjmp
-#include "ENTRY.amd64.h"
+#include "ENTRY.h"
 .globl jl_setjmp
 jl_setjmp:
     mov    rdx,QWORD PTR [rsp] // rta
@@ -40,7 +40,7 @@ jl_setjmp:
 
 
 #define CNAME ijl_longjmp
-#include "ENTRY.amd64.h"
+#include "ENTRY.h"
 .globl jl_longjmp
 jl_longjmp:
     mov    rax,QWORD PTR [rcx+0]
@@ -75,7 +75,7 @@ jl_longjmp:
 
 
 #define CNAME ijl_swapcontext
-#include "ENTRY.amd64.h"
+#include "ENTRY.h"
 .globl jl_swapcontext
 jl_swapcontext:
     // save stack registers
@@ -116,7 +116,7 @@ jl_swapcontext:
 
 
 #define CNAME ijl_setcontext
-#include "ENTRY.amd64.h"
+#include "ENTRY.h"
 .globl jl_setcontext
 jl_setcontext:
     // restore stack registers
