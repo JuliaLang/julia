@@ -2008,16 +2008,17 @@ end
     @test cell3[] === (Int64(0), Int64(0))
 end
 
-@testset "BigInt/GMP cancellation via reset regions" begin
-    # No explicit cancellation points in the loop body: cancellation reaches
-    # it through the annotated MPZ entry points - either their own
-    # cancellation point, an asynchronous reset landing inside audited
-    # libgmp compute (the reset region stays published across the annotated
-    # call), or the allocation hooks republishing the region on exit.
+@testset "BigInt/GMP cancellation from a caller's cancellation point" begin
+    # The MPZ entry points carry no cancellation points of their own (a
+    # per-call reset region costs more than a small BigInt operation), so the
+    # loop places the point: cancellation lands there, or - when the region
+    # survives into an annotated libgmp call - inside audited libgmp compute,
+    # or when an allocation hook republishes the region on exit.
     function bigmul_loop(nbits)
         b = big(3)^(nbits ÷ 2)
         m = big(10)^(nbits ÷ 8)
         while true
+            Base.@cancel_check
             b = (b * b) % m
         end
     end
@@ -2046,6 +2047,7 @@ end
                     b = big(1)
                     m = big(10)^60
                     while true
+                        Base.@cancel_check
                         b = (b + big(12345))^2 % m
                     end
                 end
@@ -2063,17 +2065,21 @@ end
 
 @testset "cancellation lands inside audited libgmp compute" begin
     # A single long computation-carrying GMP call: the reset region
-    # published by the annotated call's own cancellation point must survive
-    # into the call (the point's binding bookkeeping - a task's first point
+    # published by the caller's cancellation point must survive into the
+    # annotated call (the point's binding bookkeeping - a task's first point
     # under a new source takes the write-barrier path - must come before the
     # region publication), and an asynchronous cancellation unwinds out of
     # the foreign computation promptly instead of waiting for it to finish.
+    # The result is allocated before the point: `BigInt()` registers a
+    # finalizer, an unsafe point that would tear the region.
     if Threads.nthreads(:default) >= 2
         started = Base.Event()
         t, src = cancellable_spawn() do
             notify(started)
+            x = BigInt()
+            Base.@cancel_check
             # ~tens of seconds of uninterrupted libgmp compute if not cancelled
-            Base.GMP.MPZ.fac_ui(UInt(40_000_000))
+            Base.GMP.MPZ.fac_ui!(x, UInt(40_000_000))
         end
         wait(started)
         sleep(1.0) # let it get deep into the fac_ui call
@@ -2732,13 +2738,12 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
 
     # cancelling a BigInt computation never yanks control out of libgmp in
     # an unsafe spot the way the old asynchronous InterruptException
-    # delivery could (corrupting the heap - issue #56545): the loop is
-    # deliberately checkless, so delivery lands on an MPZ entry point's own
-    # cancellation point, inside audited libgmp compute (unwound via the
-    # published reset region), or when an allocation hook republishes the
-    # region on exit - and BigInt arithmetic in the session works correctly
-    # afterwards
-    sendline("println(\"EVAL-6\"); let b = big(3); while true; b = b*b % (big(10)^200); end; end")
+    # delivery could (corrupting the heap - issue #56545): the loop's own
+    # cancellation point is where delivery lands (or inside audited libgmp
+    # compute, unwound via the published reset region, or when an allocation
+    # hook republishes the region on exit) - and BigInt arithmetic in the
+    # session works correctly afterwards
+    sendline("println(\"EVAL-6\"); let b = big(3); while true; Base.@cancel_check; b = b*b % (big(10)^200); end; end")
     expect("EVAL-6")
     sleep(0.5)
     kill(p, Base.SIGINT)
