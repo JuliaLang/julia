@@ -704,7 +704,7 @@ STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT {
 
 JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT
 {
-    if (nm > SSIZE_MAX/sz)
+    if (sz != 0 && nm > SSIZE_MAX/sz)
         return NULL;
     return _unchecked_calloc(nm, sz);
 }

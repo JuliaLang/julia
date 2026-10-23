@@ -285,6 +285,14 @@ LLVMOrcThreadSafeModuleRef jl_get_llvm_module_impl(void *native_code)
         return NULL;
 }
 
+// frees native code that is not dumped, e.g. after taking its module with
+// `jl_get_llvm_module`. this drops the native code's reference to the LLVM context.
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_free_native_impl(void *native_code)
+{
+    delete (jl_native_code_desc_t*)native_code;
+}
+
 extern "C" JL_DLLEXPORT_CODEGEN
 GlobalValue* jl_get_llvm_function_impl(void *native_code, uint32_t idx)
 {

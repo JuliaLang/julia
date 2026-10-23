@@ -1331,10 +1331,8 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
     if (pgcstack && ct->world_age) {
         jl_ptls_t ptls = ct->ptls;
         malloc_maybe_collect(ptls, sz);
-        if (sz < old)
-            jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, old - sz);
-        else
-            jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, sz - old);
+        // wraps around when shrinking, which subtracts `old - sz` as intended
+        jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, sz - old);
     }
     return realloc(p, sz);
 }

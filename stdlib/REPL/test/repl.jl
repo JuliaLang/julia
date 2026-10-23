@@ -1944,10 +1944,11 @@ let io = IOBuffer()
     @test REPL.banner(io) === nothing
     seek(io, 0)
     @test countlines(io) == 9
-    take!(io)
+    @test occursin("Version $(Base.version_with_build_variant())", String(take!(io)))
     @test REPL.banner(io; short=true) === nothing
     seek(io, 0)
     @test countlines(io) == 2
+    @test occursin("Version $(Base.version_with_build_variant())", String(take!(io)))
 end
 
 @testset "Docstrings" begin

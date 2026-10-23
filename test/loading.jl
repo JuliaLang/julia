@@ -2441,6 +2441,44 @@ end
     @test success(pipeline(cmd; stdout, stderr))
 end
 
+@testset "extension triggered by a dependency loaded with require_stdlib" begin
+    # The REPL loads Printf this way (through Dates) before any user code runs.
+    # Loading a package that depends on Printf must still trigger extensions on Printf.
+    depot_path = mkdepottempdir()
+    dir = mktempdir()
+    printf_uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+    for (name, uuid, extra, src) in (
+            ("A", "11111111-1111-1111-1111-111111111111",
+             "[deps]\nPrintf = \"$printf_uuid\"\n",
+             "module A\nusing Printf\nend\n"),
+            ("B", "22222222-2222-2222-2222-222222222222",
+             "[weakdeps]\nPrintf = \"$printf_uuid\"\n[extensions]\nBPrintfExt = \"Printf\"\n",
+             "module B\nend\n"))
+        mkpath(joinpath(dir, name, "src"))
+        write(joinpath(dir, name, "Project.toml"), "name = \"$name\"\nuuid = \"$uuid\"\nversion = \"0.1.0\"\n$extra")
+        write(joinpath(dir, name, "src", "$name.jl"), src)
+    end
+    mkpath(joinpath(dir, "B", "ext"))
+    write(joinpath(dir, "B", "ext", "BPrintfExt.jl"), "module BPrintfExt\nusing B, Printf\nend\n")
+    script = """
+    using Test
+    pushfirst!(LOAD_PATH, $(repr(dir)))
+    Printf_key = Base.PkgId(Base.UUID($(repr(printf_uuid))), "Printf")
+    Printf = Base.require_stdlib(Printf_key)
+    @test !haskey(Base.loaded_modules, Printf_key)
+    using B, A
+    @test get(Base.loaded_modules, Printf_key, nothing) === Printf
+    @test Base.get_extension(B, :BPrintfExt) isa Module
+    """
+    sep = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(`$(Base.julia_cmd()) --check-bounds=auto --startup-file=no -e $script`,
+                 "JULIA_DEPOT_PATH" => depot_path * sep)
+    # The first run loads A right after compiling it, and the second run loads it from the cache.
+    for _ in 1:2
+        @test success(pipeline(cmd; stdout, stderr))
+    end
+end
+
 # Test `import Package as M`
 module M57965
     import Random as R

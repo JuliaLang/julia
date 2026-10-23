@@ -144,6 +144,7 @@ private:
     void removeAlloc(CallInst *orig_inst);
     void moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocFnKind allockind);
     void initializeAlloca(IRBuilder<> &prolog_builder, AllocaInst *buff, AllocFnKind allockind);
+    bool forwardMemoryData(CallInst *orig_inst, Value *data);
     void splitOnStack(CallInst *orig_inst);
     void optimizeTag(CallInst *orig_inst);
 
@@ -223,7 +224,13 @@ void Optimizer::optimizeAll()
         auto item = worklist.pop_back_val();
         auto orig = item.first;
         size_t sz = item.second;
+        bool is_memory = orig->getCalledOperand() == pass.alloc_memory_func;
         checkInst(orig);
+        // Escape analysis does not follow the data pointer of a Memory, so keep the layout of
+        // one that is loaded from. `moveToStack` forwards the data pointer, which lets SROA
+        // split it afterwards.
+        if (is_memory && use_info.hasload)
+            use_info.addrescaped = true;
         if (use_info.escaped) {
             REMARK([&]() {
                 std::string str;
@@ -382,6 +389,8 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
     auto call = dyn_cast<CallInst>(I);
     if (!call)
         return -1;
+    if (auto sz = pass.getInlineMemorySize(call))
+        return *sz;
     if (call->getCalledOperand() != pass.alloc_obj_func)
         return -1;
     assert(call->arg_size() == 3);
@@ -665,6 +674,118 @@ void Optimizer::initializeAlloca(IRBuilder<> &prolog_builder, AllocaInst *buff, 
 
 }
 
+// Forward the loads of the data pointer of the inline Memory `orig_inst` to `data`, and if
+// nothing else may read it, remove the stores of it: a header pointing into the alloca keeps
+// SROA from splitting it. Returns whether the caller still has to store the data pointer.
+// Gives up on anything that may write the field other than a plain store of the inline data
+// address. Accesses through the loaded data pointer aren't followed: reaching the header
+// through it would be out of bounds.
+bool Optimizer::forwardMemoryData(CallInst *orig_inst, Value *data)
+{
+    const DataLayout &DL = *pass.DL;
+    const uint64_t ptr_offset = offsetof(jl_genericmemory_t, ptr);
+    const uint64_t ptr_size = DL.getPointerSize();
+    const uint64_t unknown = UINT64_MAX;
+    auto overlaps = [&] (uint64_t offset, uint64_t size) {
+        if (offset == unknown)
+            return true;
+        if (offset >= ptr_offset + ptr_size)
+            return false;
+        return size == unknown || ptr_offset < offset + size;
+    };
+    SmallVector<LoadInst*, 4> loads;
+    SmallVector<StoreInst*, 4> stores;          // stores to the data pointer field
+    SmallPtrSet<StoreInst*, 4> stored_data;     // stores of the data pointer
+    bool stored_other = false;                  // some other pointer into the object is stored
+    bool may_read = false;
+    SmallVector<std::pair<Instruction*, uint64_t>, 8> worklist{{orig_inst, 0}};
+    while (!worklist.empty()) {
+        auto [inst, offset] = worklist.pop_back_val();
+        for (Use &use: inst->uses()) {
+            auto user = cast<Instruction>(use.getUser());
+            if (auto load = dyn_cast<LoadInst>(user)) {
+                if (offset == ptr_offset && load->getType() == data->getType() && !load->isVolatile())
+                    loads.push_back(load);
+                else if (overlaps(offset, DL.getTypeStoreSize(load->getType())))
+                    may_read = true;
+            }
+            else if (auto store = dyn_cast<StoreInst>(user)) {
+                if (use.getOperandNo() != StoreInst::getPointerOperandIndex()) {
+                    if (offset == JL_GENERICMEMORY_INLINE_DATA_OFFSET)
+                        stored_data.insert(store);
+                    else
+                        stored_other = true;
+                }
+                else if (offset == ptr_offset && store->isSimple() &&
+                         store->getValueOperand()->getType() == data->getType())
+                    stores.push_back(store);
+                else if (overlaps(offset, DL.getTypeStoreSize(store->getValueOperand()->getType())))
+                    return true;
+            }
+            else if (auto gep = dyn_cast<GetElementPtrInst>(user)) {
+                APInt gep_offset(DL.getIndexTypeSizeInBits(gep->getType()), 0);
+                int64_t new_offset = -1;
+                if (offset != unknown && gep->accumulateConstantOffset(DL, gep_offset))
+                    new_offset = (int64_t)offset + gep_offset.getSExtValue();
+                worklist.push_back({gep, new_offset >= 0 ? (uint64_t)new_offset : unknown});
+            }
+            else if (isa<AddrSpaceCastInst>(user) || isa<BitCastInst>(user)) {
+                worklist.push_back({user, offset});
+            }
+            else if (auto call = dyn_cast<CallInst>(user)) {
+                auto callee = call->getCalledOperand();
+                if (callee == pass.pointer_from_objref_func) {
+                    worklist.push_back({call, offset});
+                }
+                else if (callee == pass.gc_loaded_func) {
+                    // The parent operand only roots the object; the result aliases the derived one.
+                    if (use.getOperandNo() == 1)
+                        worklist.push_back({call, offset});
+                }
+                else if (auto MI = dyn_cast<MemIntrinsic>(call)) {
+                    auto len = dyn_cast<ConstantInt>(MI->getLength());
+                    if (overlaps(offset, len ? len->getZExtValue() : unknown)) {
+                        if (use.getOperandNo() == 0)
+                            return true;
+                        may_read = true;
+                    }
+                }
+                else if (!(callee == pass.typeof_func || pass.isWriteBarrierFunc(callee) ||
+                           callee == pass.gc_preserve_begin_func || call->isBundleOperand(&use) ||
+                           call->isLifetimeStartOrEnd())) {
+                    return true;
+                }
+            }
+            else {
+                return true;
+            }
+        }
+    }
+    // Only forward if every store to the field writes the inline data address.
+    for (auto store: stores) {
+        if (!stored_data.contains(store))
+            return true;
+    }
+    for (auto load: loads) {
+        for (auto user: make_early_inc_range(load->users())) {
+            auto call = dyn_cast<CallInst>(user);
+            if (call && call->getCalledOperand() == pass.gc_loaded_func) {
+                // `data` points into the alloca, which needs no root
+                IRBuilder<> builder(call);
+                call->replaceAllUsesWith(builder.CreateAddrSpaceCast(data, call->getType()));
+                call->eraseFromParent();
+            }
+        }
+        load->replaceAllUsesWith(data);
+        load->eraseFromParent();
+    }
+    if (may_read || stored_other || stored_data.size() != stores.size())
+        return true;
+    for (auto store: stores)
+        store->eraseFromParent();
+    return false;
+}
+
 // This function should not erase any safepoint so that the lifetime marker can find and cache
 // all the original safepoints.
 void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocFnKind allockind)
@@ -714,6 +835,19 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
     if (sz != 0 && !has_ref) { // TODO: fix has_ref case too
         IRBuilder<> builder(orig_inst);
         initializeAlloca(builder, buff, allockind);
+    }
+    if (orig_inst->getCalledOperand() == pass.alloc_memory_func) {
+        // Initialize the header like the allocation would have; the data was zeroed above.
+        assert(!has_ref && (allockind & AllocFnKind::Uninitialized) == AllocFnKind::Unknown);
+        IRBuilder<> builder(orig_inst);
+        auto T_int8 = builder.getInt8Ty();
+        auto length_field = builder.CreateConstInBoundsGEP1_64(T_int8, buff, offsetof(jl_genericmemory_t, length));
+        builder.CreateAlignedStore(orig_inst->getArgOperand(3), length_field, Align(sizeof(void*)));
+        auto data = builder.CreateConstInBoundsGEP1_64(T_int8, buff, JL_GENERICMEMORY_INLINE_DATA_OFFSET);
+        if (forwardMemoryData(orig_inst, data)) {
+            auto ptr_field = builder.CreateConstInBoundsGEP1_64(T_int8, buff, offsetof(jl_genericmemory_t, ptr));
+            builder.CreateAlignedStore(data, ptr_field, Align(sizeof(void*)));
+        }
     }
     Instruction *new_inst = cast<Instruction>(ptr);
     new_inst->copyMetadata(*orig_inst);
@@ -1309,7 +1443,7 @@ cleanup:
 bool AllocOpt::doInitialization(Module &M)
 {
     initAll(M);
-    if (!alloc_obj_func)
+    if (!alloc_obj_func && !alloc_memory_func)
         return false;
 
     DL = &M.getDataLayout();
@@ -1322,8 +1456,8 @@ bool AllocOpt::doInitialization(Module &M)
 
 bool AllocOpt::runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT)
 {
-    if (!alloc_obj_func) {
-        LLVM_DEBUG(dbgs() << "AllocOpt: no alloc_obj function found, skipping pass\n");
+    if (!alloc_obj_func && !alloc_memory_func) {
+        LLVM_DEBUG(dbgs() << "AllocOpt: no allocation function found, skipping pass\n");
         return false;
     }
     Optimizer optimizer(F, *this, std::move(GetDT));

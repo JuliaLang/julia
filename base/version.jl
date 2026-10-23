@@ -267,6 +267,21 @@ catch e
     VersionNumber(0)
 end
 
+# `VERSION` with build metadata for builds that behave differently from a regular one,
+# e.g. `v"1.14.0-alpha1+opt"` or `v"1.14.0-alpha1+assert"`. It is only for display (the
+# banner and `versioninfo()`): `VERSION` itself stays the same so comparisons with it work.
+function version_with_build_variant()
+    tags = String[]
+    isempty(BUILD_VARIANT) || push!(tags, BUILD_VARIANT)
+    if isdebugbuild()
+        push!(tags, "debug")
+    elseif ccall(:jl_is_assertsbuild, Int8, ()) != 0
+        push!(tags, "assert")
+    end
+    isempty(tags) && return VERSION
+    return VersionNumber(VERSION.major, VERSION.minor, VERSION.patch, VERSION.prerelease, (VERSION.build..., tags...))
+end
+
 const libllvm_version = if endswith(libllvm_version_string, "jl")
     # strip the "jl" SONAME suffix (JuliaLang/julia#33058)
     # (LLVM does never report a prerelease version anyway)

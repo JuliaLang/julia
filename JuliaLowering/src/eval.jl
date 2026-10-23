@@ -202,39 +202,11 @@ function codeinfo_has_fcall(@nospecialize(e))
     return false
 end
 
-const _CodeInfo_need_ver = v"1.12.0-DEV.512"
-@static if VERSION < _CodeInfo_need_ver
-    function _CodeInfo(args...)
-        error("Constructing a CodeInfo using JuliaLowering currently requires Julia version $_CodeInfo_need_ver or greater")
-    end
-else
-    # debuginfo changed completely as of https://github.com/JuliaLang/julia/pull/52415
-    # nargs / isva was added as of       https://github.com/JuliaLang/julia/pull/54341
-    # field rettype added in             https://github.com/JuliaLang/julia/pull/54655
-    # field has_image_globalref added in https://github.com/JuliaLang/julia/pull/57433
-    # CodeInfo constructor. TODO: Should be in Core
-    let
-        fns = fieldnames(Core.CodeInfo)
-        fts = fieldtypes(Core.CodeInfo)
-        conversions = [:(convert($t, $n)) for (t,n) in zip(fts, fns)]
+let fns = fieldnames(Core.CodeInfo), fts = fieldtypes(Core.CodeInfo),
+    conversions = [:(convert($t, $n)) for (t, n) in zip(fts, fns)]
 
-        expected_fns = (:code, :debuginfo, :ssavaluetypes, :ssaflags, :slotnames, :slotflags, :slottypes, :rettype, :parent, :edges, :min_world, :max_world, :method_for_inference_limit_heuristics, :nargs, :propagate_inbounds, :has_fcall, :has_image_globalref, :nospecializeinfer, :isva, :inlining, :constprop, :purity, :inlining_cost)
-        expected_fts = (Vector{Any}, Core.DebugInfo, Any, Vector{UInt32}, Vector{Symbol}, Vector{UInt8}, Any, Any, Any, Any, UInt, UInt, Any, UInt, Bool, Bool, Bool, Bool, Bool, UInt8, UInt8, UInt16, UInt16)
-        code = if fns != expected_fns || fts != expected_fts
-            :(function _CodeInfo(args...)
-                  error(string(
-                      "JuliaLowering didn't recognize Core.CodeInfo's fields; ",
-                      "it may need updating to match Core.CodeInfo.\n",
-                      "expected field names: $($expected_fns)\n",
-                      "expected field types: $($expected_fts)\n"))
-              end)
-        else
-            :(function _CodeInfo($(fns...))
-                $(Expr(:new, :(Core.CodeInfo), conversions...))
-            end)
-        end
-
-        Core.eval(@__MODULE__, code)
+    @eval function _CodeInfo($(fns...))
+        $(Expr(:new, :(Core.CodeInfo), conversions...))
     end
 end
 

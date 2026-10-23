@@ -8,6 +8,11 @@ include $(JULIAHOME)/deps/llvm-ver.make
 
 TAGGED_RELEASE_BANNER := ""
 
+# Build metadata tag for a build that behaves differently from a regular build of the
+# same source (e.g. `opt` for the PGO/LTO builds of `contrib/optimized`).  It is shown
+# as `+tag` after the version in the banner and in `versioninfo()`.
+JULIA_BUILD_VARIANT :=
+
 # Extended platform tags (`-key+value`) describing this build, appended to the host
 # triplet after the detected compiler ABI tags.  Currently records which sanitizer
 # (if any) this build uses, so that `HostPlatform()` selects matching sanitized artifacts
@@ -82,6 +87,7 @@ endif
 	@printf "%s\n" "const libllvm_name = \"$(LLVM_SHARED_LIB_NAME)\"" >> $@
 	@printf "%s\n" "const VERSION_STRING = \"$(JULIA_VERSION)\"" >> $@
 	@printf "%s\n" "const TAGGED_RELEASE_BANNER = \"$(TAGGED_RELEASE_BANNER)\"" >> $@
+	@printf "%s\n" "const BUILD_VARIANT = \"$(JULIA_BUILD_VARIANT)\"" >> $@
 	@printf "%s\n" "const SYSCONFDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(sysconfdir_rel)))) >> $@
 	@printf "%s\n" "const DATAROOTDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(datarootdir_rel)))) >> $@
 	@printf "%s\n" "const DOCDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(docdir_rel)))) >> $@

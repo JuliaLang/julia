@@ -160,10 +160,10 @@ a < b < c(1) .< d .< e
 7   (gotoifnot %₆ label₁₂)
 8   TestMod.<
 9   TestMod.b
-10  (= slot₁/if_val (call %₈ %₉ %₂))
+10  (= slot₁/ (call %₈ %₉ %₂))
 11  (goto label₁₃)
-12  (= slot₁/if_val false)
-13  slot₁/if_val
+12  (= slot₁/ false)
+13  slot₁/
 14  TestMod.<
 15  TestMod.d
 16  (call top.broadcasted %₁₄ %₂ %₁₅)
@@ -197,10 +197,10 @@ a .< b .< c < d < e
 15  TestMod.<
 16  TestMod.d
 17  TestMod.e
-18  (= slot₁/if_val (call %₁₅ %₁₆ %₁₇))
+18  (= slot₁/ (call %₁₅ %₁₆ %₁₇))
 19  (goto label₂₁)
-20  (= slot₁/if_val false)
-21  slot₁/if_val
+20  (= slot₁/ false)
+21  slot₁/
 22  (call top.broadcasted top.& %₉ %₂₁)
 23  (call top.materialize %₂₂)
 24  (return %₂₃)
@@ -237,10 +237,10 @@ x .+ (a .< b .< c)
 7   (call %₆ 0 2)
 8   (gotoifnot %₇ label₁₂)
 9   TestMod.<
-10  (= slot₁/if_val (call %₉ 2 %₂))
+10  (= slot₁/ (call %₉ 2 %₂))
 11  (goto label₁₃)
-12  (= slot₁/if_val false)
-13  slot₁/if_val
+12  (= slot₁/ false)
+13  slot₁/
 14  TestMod.<
 15  (call top.broadcasted %₁₄ %₂ 4)
 16  (call top.broadcasted top.& %₁₃ %₁₅)

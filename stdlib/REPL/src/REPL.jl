@@ -1928,6 +1928,7 @@ function banner(io::IO = stdout; short = false)
         end
     end
 
+    version = Base.version_with_build_variant()
     commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
 
     if get(io, :color, false)::Bool
@@ -1941,7 +1942,7 @@ function banner(io::IO = stdout; short = false)
 
         if short
             print(io,"""
-              $(d3)o$(tx)  | Version $(VERSION)$(commit_date)
+              $(d3)o$(tx)  | Version $(version)$(commit_date)
              $(d2)o$(tx) $(d4)o$(tx) | $(commit_string)
             """)
         else
@@ -1950,7 +1951,7 @@ function banner(io::IO = stdout; short = false)
               $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
                $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
               $(jl)| | | | | | |/ _` |$(tx)  |
-              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
+              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(version)$(commit_date)
              $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
             $(jl)|__/$(tx)                   |
 
@@ -1959,7 +1960,7 @@ function banner(io::IO = stdout; short = false)
     else
         if short
             print(io,"""
-              o  |  Version $(VERSION)$(commit_date)
+              o  |  Version $(version)$(commit_date)
              o o |  $(commit_string)
             """)
         else
@@ -1969,7 +1970,7 @@ function banner(io::IO = stdout; short = false)
               (_)     | (_) (_)    |
                _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
               | | | | | | |/ _` |  |
-              | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
+              | | |_| | | | (_| |  |  Version $(version)$(commit_date)
              _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
             |__/                   |
 

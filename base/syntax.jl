@@ -589,16 +589,21 @@ _unescape_lnn(@nospecialize(e)) =
 # relevant line node as an argument.
 function _get_inner_lnn(e::Expr, default::LineNumberNode)
     if e.head === :struct || e.head === :macrocall
-        return something(_first_linenode(e), default)
+        something(_first_linenode(e), default)
+    elseif (e.head === :quote || e.head === :inert) &&
+            length(e.args) > 0 && e.args[1] isa Expr
+        something(_first_linenode(e.args[1]), default)
+    elseif e.head in (:function, :macro, :module, :(=), :->)
+        length(e.args) >= 2 || return default
+        b = e.args[end]
+        b isa Expr || return default
+        b.head === :block || return default
+        length(b.args) >= 1 || return default
+        b_lnn = _unescape_lnn(b.args[1])
+        return b_lnn isa LineNumberNode ? b_lnn : default
+    else
+        default
     end
-    e.head in (:function, :macro, :module, :(=), :->) || return default
-    length(e.args) >= 2 || return default
-    b = e.args[end]
-    b isa Expr || return default
-    b.head === :block || return default
-    length(b.args) >= 1 || return default
-    b_lnn = _unescape_lnn(b.args[1])
-    return b_lnn isa LineNumberNode ? b_lnn : default
 end
 
 # List of Expr-AST forms that are always converted to some Syntax form and
@@ -621,7 +626,10 @@ function _expr_to_syntax(@nospecialize(e), context::SyntaxContext,
     s = if e isa Symbol
         @mknode(;head=:identifier, value=String(e), source=src, context)
     elseif e isa QuoteNode
-        cid, _ = _expr_to_syntax(e.value, context, src, true)
+        v = e.value
+        src = src isa LineNumberNode && v isa Expr ?
+            something(first_linenode(v), src) : src
+        cid, _ = _expr_to_syntax(v, context, src, true)
         @mknode(;head=:inert, source=src, children=Syntax[cid], context)
     elseif e isa Expr
         h = e.head

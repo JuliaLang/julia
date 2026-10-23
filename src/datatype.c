@@ -1285,6 +1285,29 @@ JL_DLLEXPORT void jl_atomic_store_bits(char *dst, const jl_value_t *src, int nb)
         abort();
 }
 
+static void atomic_swap_bits_into(jl_value_t *y, char *dst, const jl_value_t *src, int nb) JL_NOTSAFEPOINT
+{
+    // dst must have the required alignment for an atomic of the given size
+    if (nb == 1)
+        *(uint8_t*)y = jl_atomic_exchange((_Atomic(uint8_t)*)dst, *(uint8_t*)src);
+    else if (nb == 2)
+        *(uint16_t*)y = jl_atomic_exchange((_Atomic(uint16_t)*)dst, *(uint16_t*)src);
+    else if (nb <= 4)
+        *(uint32_t*)y = jl_atomic_exchange((_Atomic(uint32_t)*)dst, zext_read32(src, nb));
+#if MAX_POINTERATOMIC_SIZE >= 8
+    else if (nb <= 8)
+        *(uint64_t*)y = jl_atomic_exchange((_Atomic(uint64_t)*)dst, zext_read64(src, nb));
+#endif
+#if MAX_POINTERATOMIC_SIZE >= 16
+    else if (nb <= 12)
+        assign_uint128(y, jl_atomic_exchange((_Atomic(jl_uint128_t)*)dst, zext_read128(src, nb)), 12);
+    else if (nb <= 16)
+        *(jl_uint128_t*)y = jl_atomic_exchange((_Atomic(jl_uint128_t)*)dst, zext_read128(src, nb));
+#endif
+    else
+        abort();
+}
+
 JL_DLLEXPORT jl_value_t *jl_atomic_swap_bits(jl_value_t *dt, char *dst, const jl_value_t *src, int nb)
 {
     // dst must have the required alignment for an atomic of the given size
@@ -1312,24 +1335,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_swap_bits(jl_value_t *dt, char *dst, const jl
     jl_value_t *v = jl_gc_alloc(ct->ptls, jl_datatype_size(bt), bt);
     if (bt->smalltag)
         jl_set_typetagof(v, bt->smalltag, 0);
-    if (nb == 1)
-        *(uint8_t*)v = jl_atomic_exchange((_Atomic(uint8_t)*)dst, *(uint8_t*)src);
-    else if (nb == 2)
-        *(uint16_t*)v = jl_atomic_exchange((_Atomic(uint16_t)*)dst, *(uint16_t*)src);
-    else if (nb <= 4)
-        *(uint32_t*)v = jl_atomic_exchange((_Atomic(uint32_t)*)dst, zext_read32(src, nb));
-#if MAX_POINTERATOMIC_SIZE >= 8
-    else if (nb <= 8)
-        *(uint64_t*)v = jl_atomic_exchange((_Atomic(uint64_t)*)dst, zext_read64(src, nb));
-#endif
-#if MAX_POINTERATOMIC_SIZE >= 16
-    else if (nb <= 12)
-        assign_uint128(v, jl_atomic_exchange((_Atomic(jl_uint128_t)*)dst, zext_read128(src, nb)), 12);
-    else if (nb <= 16)
-        *(jl_uint128_t*)v = jl_atomic_exchange((_Atomic(jl_uint128_t)*)dst, zext_read128(src, nb));
-#endif
-    else
-        abort();
+    atomic_swap_bits_into(v, dst, src, nb);
     return v;
 }
 
@@ -2002,9 +2008,17 @@ inline jl_value_t *swap_bits(jl_value_t *ty, char *v, uint8_t *psel, jl_value_t 
     assert(!isatomic || jl_typeis(rhs, ty));
     jl_value_t *r;
     if (isatomic && !needlock) {
-        if (hasptr)
+        if (hasptr) {
+            jl_task_t *ct = jl_current_task;
+            r = jl_gc_alloc(ct->ptls, fsz, rty);
+            if (((jl_datatype_t*)rty)->smalltag)
+                jl_set_typetagof(r, ((jl_datatype_t*)rty)->smalltag, 0);
             jl_gc_multi_wb(parent, v, rhs); // rhs is immutable
-        r = jl_atomic_swap_bits(rty, v, rhs, fsz);
+            atomic_swap_bits_into(r, v, rhs, fsz);
+        }
+        else {
+            r = jl_atomic_swap_bits(rty, v, rhs, fsz);
+        }
     }
     else {
         if (needlock) {

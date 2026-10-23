@@ -4930,6 +4930,29 @@ precompile_test_harness("Ambiguities and package-image edge validation") do load
     end
 end
 
+# A .ji paired with the .so of another build is rejected without unloading anything
+# needed later, so the package is recompiled to the same path and loaded from it.
+precompile_test_harness("mismatched package image .so is recompiled") do load_path
+    srcfile = joinpath(load_path, "MismatchedSo.jl")
+    write(srcfile, "module MismatchedSo\nf(x) = x + 1\nend\n")
+    pkg = Base.PkgId("MismatchedSo")
+    Base.compilecache(pkg)
+    cachefile = only(Base.find_all_in_cache_path(pkg))
+    ocachefile = Base.ocachefile_from_cachefile(cachefile)
+    oldso = read(ocachefile)
+    write(srcfile, "module MismatchedSo\nf(x) = x + 2\nend\n")
+    Base.compilecache(pkg)
+    @test only(Base.find_all_in_cache_path(pkg)) == cachefile
+    write(ocachefile, oldso)
+    script = "using MismatchedSo; MismatchedSo.f(1) == 3 && Base.pkgorigins[Base.PkgId(MismatchedSo)].cachepath !== nothing || exit(1)"
+    pathsep = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                 "JULIA_DEPOT_PATH" => join(DEPOT_PATH, pathsep),
+                 "JULIA_LOAD_PATH" => join([load_path, "@stdlib"], pathsep))
+    @test success(pipeline(cmd; stdout, stderr))
+    @test read(ocachefile) != oldso
+end
+
 # Loading marks the accepted cache file as recently used, but only in the depot that
 # `compilecache` writes to: other depots may be read-only, shared, or bundled with Julia.
 precompile_test_harness("cache files are only touched in the primary depot") do load_path
