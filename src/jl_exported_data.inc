@@ -172,5 +172,6 @@
     ZZ(jl_options, jl_options_t) \
     ZZ(jl_task_gcstack_offset, int) \
     ZZ(jl_task_ptls_offset, int) \
+    ZZ(jl_tls_pgcstack_offset, intptr_t) \
 
 // end of file
