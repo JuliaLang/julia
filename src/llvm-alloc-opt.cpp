@@ -6,6 +6,7 @@
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
+#include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/SmallSet.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SetVector.h>
@@ -434,13 +435,17 @@ void Optimizer::insertLifetimeEnd(Value *ptr, Instruction *insert)
 
 void Optimizer::insertLifetime(Value *ptr, Instruction *orig)
 {
-    CallInst::Create(pass.lifetime_start, {ptr}, "", orig->getIterator());
     BasicBlock *def_bb = orig->getParent();
-    std::set<BasicBlock*> bbs{def_bb};
     auto &DT = getDomTree();
+    if (!DT.isReachableFromEntry(def_bb))
+        return;
+    CallInst::Create(pass.lifetime_start, {ptr}, "", orig->getIterator());
+    std::set<BasicBlock*> bbs{def_bb};
+    SmallDenseMap<BasicBlock*, unsigned, 4> nuses;
     // Collect all BB where the allocation is live
     for (auto use: use_info.uses) {
         auto bb = use->getParent();
+        ++nuses[bb];
         if (!bbs.insert(bb).second)
             continue;
         if (pred_empty(bb))
@@ -542,24 +547,25 @@ void Optimizer::insertLifetime(Value *ptr, Instruction *orig)
             first_dead.push_back(bb->getTerminator());
         }
         else {
-            if (bb == def_bb) {
-                size_t remaining = 0;
-                for (auto use: use_info.uses)
-                    remaining += use->getParent() == bb;
-                for (auto it = orig->getIterator(); remaining && it != bb->end(); ++it) {
-                    if (use_info.uses.count(&*it) && --remaining == 0)
-                        first_dead.push_back(&*std::next(it));
+            auto remaining = nuses.lookup(bb);
+            Instruction *last = nullptr;
+            auto fwd = bb == def_bb ? std::next(orig->getIterator()) : bb->begin();
+            auto bwd = bb->end();
+            while (remaining) {
+                assert(fwd != bwd);
+                if (use_info.uses.count(&*fwd) && --remaining == 0) {
+                    last = &*fwd;
+                    break;
                 }
-                if (remaining == 0)
-                    continue;
-            }
-            for (auto it = bb->rbegin(), end = bb->rend(); it != end; ++it) {
-                if (use_info.uses.count(&*it)) {
-                    --it;
-                    first_dead.push_back(&*it);
+                ++fwd;
+                --bwd;
+                if (use_info.uses.count(&*bwd)) {
+                    last = &*bwd;
                     break;
                 }
             }
+            if (last)
+                first_dead.push_back(last->getNextNode());
         }
     }
     bbs.clear();
