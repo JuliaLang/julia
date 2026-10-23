@@ -382,6 +382,26 @@ end
     @test repr("text/plain", c[1]) == "'\\xc0\\xa0': [overlong] ASCII/Unicode U+0020 (category Zs: Separator, space)"
     @test codepoint.(c) == [0x20, 0xE000]
     @test isuppercase(c[1]) == isuppercase(c[2]) == false # issue #54343
+
+    # case mapping must not decode an overlong encoding into a valid character
+    for s in ("\xc0\xaf", "\xc0\x80", "\xc1\x81", "\xc1\xa1", "\xe0\x81\x81", "\xf0\x80\x81\x81")
+        ch = s[1]
+        @test Base.isoverlong(ch) && !Base.ismalformed(ch)
+        for f in (uppercase, lowercase, titlecase)
+            @test f(ch) === ch
+            @test f(s) == s
+        end
+        @test uppercasefirst(s * "bc") == s * "bc"
+        @test lowercasefirst(s * "BC") == s * "BC"
+    end
+    @test lowercase("..\xc0\xaf..\xc0\xafetc") == "..\xc0\xaf..\xc0\xafetc"
+    @test uppercase("a\xc1\xa1b") == "A\xc1\xa1B"
+    @test titlecase("a\xc1\x81B") == "A\xc1\x81b"
+    # a character that is both overlong and malformed still throws
+    @test Base.isoverlong('\xc0') && Base.ismalformed('\xc0')
+    for f in (uppercase, lowercase, titlecase)
+        @test_throws Base.InvalidCharError f('\xc0')
+    end
 end
 
 @testset "More fallback tests" begin
