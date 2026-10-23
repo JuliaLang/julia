@@ -3216,11 +3216,12 @@ let 𝕃ᵢ = Compiler.InferenceLattice(Compiler.MustAliasesLattice(Compiler.Bas
     @test ifelse_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Int), Int, Int) === Union{}
 
     # `tmeet` with a type narrows the field type and keeps the alias, or gives `Union{}` if
-    # they are disjoint
+    # they are disjoint, or just the field type if it is already constant
     let m = Compiler.tmeet(𝕃ᵢ, MustAlias(2, 0, AliasableField{Any}, 1, Union{Int,String}), Integer)
         @test m isa MustAlias && m.slot == 2 && m.fldidx == 1 && m.fldtyp === Int
     end
     @test Compiler.tmeet(𝕃ᵢ, MustAlias(2, 0, AliasableField{Any}, 1, Int), String) === Union{}
+    @test Compiler.tmeet(𝕃ᵢ, MustAlias(2, 0, AliasableField{Any}, 1, Union{Int,Nothing}), Nothing) === Nothing
 
     # a limited field type makes the constructor return that `LimitedAccuracy`, without the alias
     let causes = Compiler.IdSet{Compiler.InferenceState}()
@@ -3228,12 +3229,12 @@ let 𝕃ᵢ = Compiler.InferenceLattice(Compiler.MustAliasesLattice(Compiler.Bas
         @test l isa Compiler.LimitedAccuracy && l.typ === Int
     end
 
-    # `narrow_mustalias(x, y)` returns the alias `y` with field type `x` if `x ⊑ y.fldtyp`,
-    # otherwise `x` itself
+    # `narrow_mustalias(x, y)` gives the alias `y` with field type `x`
     let alias = MustAlias(2, 0, AliasableField{Any}, 1, Union{Int,String})
         narrow(@nospecialize(x), @nospecialize(y) = alias) = Compiler.narrow_mustalias(𝕃ᵢ, x, y)
-        # `Union{}` and slot wrappers are not narrowed
-        for x in Any[Union{}, alias, MustAlias(3, 0, AliasableField{Any}, 1, Int), Conditional(2, 0, Int, String)]
+        # `Union{}`, constants and slot wrappers are not narrowed
+        for x in Any[Union{}, Const(1), Nothing,
+                     alias, MustAlias(3, 0, AliasableField{Any}, 1, Int), Conditional(2, 0, Int, String)]
             @test narrow(x) === x
         end
         # a narrowed result keeps the limitation of `x` and of `y`
@@ -3243,7 +3244,7 @@ let 𝕃ᵢ = Compiler.InferenceLattice(Compiler.MustAliasesLattice(Compiler.Bas
         l = narrow(Int, Compiler.LimitedAccuracy(alias, causes))
         @test l isa Compiler.LimitedAccuracy && l.typ == MustAlias(2, 0, AliasableField{Any}, 1, Int)
         # `x` gets the alias even if it is not ⊑ the field type
-        @test narrow(Nothing) == MustAlias(2, 0, AliasableField{Any}, 1, Nothing)
+        @test narrow(Float64) == MustAlias(2, 0, AliasableField{Any}, 1, Float64)
     end
 end
 
@@ -3256,6 +3257,57 @@ f63677(x, y) = typeof(x) === typeof(y)
 g63677(b, s) = f63677(b.a, pick63677(b, s))
 @test only(code_typed(g63677, (Box63677, String))).first.code[end] != ReturnNode(true) # not folded
 @test !g63677(Box63677(1), "y")
+
+# an alias of an earlier definition of a slot must not be merged into an alias of its
+# current definition
+@noinline function stale_alias_join(b1::AliasableField{Union{Int,String}}, b2::AliasableField{Union{Int,String}},
+                                    c1::Bool, c2::Bool)
+    y = b1
+    x = getfield(y, :f)
+    y = b2
+    if c1
+        x = getfield(y, :f)
+    elseif c2
+        x = getfield(y, :f)
+    else
+        Base.donotdelete(x) # `x` still is the field of `b1` here
+    end
+    if (x::Union{Int,String}) isa Int
+        return getfield(y, :f)
+    end
+    return 0
+end
+let T = AliasableField{Union{Int,String}}
+    @test Base.infer_return_type(stale_alias_join, (T, T, Bool, Bool)) == Union{Int,String}
+    @test stale_alias_join(T(1), T("s"), false, false) == "s"
+end
+
+# an alias doesn't hide the value of a field that is known to be constant
+@test Base.infer_return_type((AliasableField{Bool},)) do a
+    x = a.f
+    if x === true
+        return x ? 1 : "unreachable"
+    end
+    return 2
+end === Int
+check_aliased_field(a, v) = (x = a.f; x === v || throw("unexpected"); x)
+@test Base.infer_return_type((AliasableField{Bool},)) do a
+    return check_aliased_field(a, true) ? 1 : "unreachable"
+end === Int
+
+# call-site refinement of a slot holding an alias
+takes_int_only(::Int) = nothing
+@test Base.infer_return_type((AliasableField{Union{Int,String}},)) do a
+    x = a.f
+    takes_int_only(x)
+    return x
+end === Int
+@test Base.infer_return_type((AliasableField{Union{Int,String}},)) do a
+    x = a.f
+    y = x
+    takes_int_only(x)
+    return y
+end === Int
 
 # `conditional_change` on a slot holding a limited alias narrows the field type, and keeps
 # both the alias and the limitation
