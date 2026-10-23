@@ -1056,24 +1056,28 @@ function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeat
 
     #= A frame is preceded by a separator rather than followed by one, so that a run of
     hidden frames can take a frame's place without leaving a separator behind it. =#
-    printed_any = false
-    function print_separator()
+    function print_separator(printed_any::Bool)
         if printed_any
             println(io)
-            print_linebreaks && println(io)
+            if print_linebreaks
+                println(io)
+            end
         end
-        printed_any = true
+        return true
     end
+    printed_any = false
 
-    # the pending run of hidden frames, with the brackets open across it and opening on it
-    run_from = run_to = run_depth = run_starts = 0
-    function flush_hidden()
-        if run_from != 0
-            print_separator()
-            _print_hidden_frames(io, trace, run_from:run_to, ndigits_max, max_nested_cycles, run_depth, run_starts; prefix)
-            run_from = 0
+    # the pending run of hidden frames: its first and last index, the brackets open across it and opening on it
+    function flush_hidden(run::NTuple{4, Int}, printed_any::Bool)
+        run_from, run_to, run_depth, run_starts = run
+        if run_from == 0
+            return printed_any, run
         end
+        print_separator(printed_any)
+        _print_hidden_frames(io, trace, run_from:run_to, ndigits_max, max_nested_cycles, run_depth, run_starts; prefix)
+        return true, (0, 0, 0, 0)
     end
+    hidden_run = (0, 0, 0, 0)
 
     for i in eachindex(trace)
         (frame, n) = trace[i]::Tuple{StackFrame,Int}
@@ -1081,7 +1085,7 @@ function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeat
 
         # a run of hidden frames ends where a cycle opens, so its line sits wholly inside or outside it
         if repeated_cycles[1][1] == i || (n > 1 && !hidden)
-            flush_hidden()
+            printed_any, hidden_run = flush_hidden(hidden_run, printed_any)
         end
         ncycle_starts = 0
         while repeated_cycles[1][1] == i
@@ -1103,24 +1107,25 @@ function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeat
         nactive_cycles = length(current_cycles)
 
         if hidden
-            if run_from == 0
-                run_from, run_depth, run_starts = i, nactive_cycles, ncycle_starts
+            if hidden_run[1] == 0
+                hidden_run = (i, i, nactive_cycles, ncycle_starts)
+            else
+                hidden_run = (hidden_run[1], i, hidden_run[3], hidden_run[4])
             end
-            run_to = i
             # and ends where a cycle closes, so the closing line follows the frames it covers
             if !isempty(current_cycles) && current_cycles[end][1] + current_cycles[end][2] - 1 == i
-                flush_hidden()
+                printed_any, hidden_run = flush_hidden(hidden_run, printed_any)
             end
         else
-            flush_hidden()
-            print_separator()
+            printed_any, hidden_run = flush_hidden(hidden_run, printed_any)
+            printed_any = print_separator(printed_any)
             print_stackframe(io, frame_counter, frame, ndigits_max, max_nested_cycles, nactive_cycles, ncycle_starts, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS; prefix)
         end
 
         frame_counter, _nactive_cycles = _backtrace_print_repetition_closings!(io, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max; prefix)
         frame_counter += 1
     end
-    flush_hidden()
+    flush_hidden(hidden_run, printed_any)
 end
 
 # Print a stack frame where the module color is determined by looking up the parent module in
