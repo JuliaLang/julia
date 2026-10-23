@@ -466,9 +466,11 @@ function add_ci_debuginfo!(st::SyntaxTree,
             elseif macro_prov(c) !== nothing
                 efile = _di_sourcefile(c, true)
                 epos = _di_pos(c, true)
-                out_2 = edge_i = findfirst(==(efile), edge_files)
-                @jl_assert out_2 !== nothing (st, "macro loc not collected?")
-                out_3 = Int32(searchsortedfirst(edge_spans[edge_i], epos))
+                if efile !== ufile || epos !== upos
+                    out_2 = edge_i = findfirst(==(efile), edge_files)
+                    @jl_assert out_2 !== nothing (st, "macro loc not collected?")
+                    out_3 = Int32(searchsortedfirst(edge_spans[edge_i], epos))
+                end
             end
             push!(a, out_1)
             push!(a, out_2)
