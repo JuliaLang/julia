@@ -4274,8 +4274,9 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
             // these roots may seem a bit overkill, but we want to make sure
             // that a!=b implies (a,)!=(b,) even if a and b are unused and
             // therefore could be freed and then the memory for a reused for b
-            gc_uses.append(get_gc_roots_for(ctx, arg1));
-            gc_uses.append(get_gc_roots_for(ctx, arg2));
+            // memcmp reads the storage through pointers that no longer carry the object
+            gc_uses.append(get_gc_roots_for(ctx, arg1, /*storage_used*/true));
+            gc_uses.append(get_gc_roots_for(ctx, arg2, /*storage_used*/true));
             OperandBundleDef OpBundle("jl_roots", gc_uses);
             auto answer = ctx.builder.CreateCall(prepare_call(memcmp_func), {
                         varg1,
@@ -7750,10 +7751,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         }
         SmallVector<Value*, 0> vals;
         for (size_t i = 0; i < nargs; ++i) {
-            // an unboxed pointer-free value has no lifetime to preserve
-            if (!argv[i].Vboxed && jl_is_pointerfree(argv[i].typ))
-                continue;
-            vals.append(get_gc_roots_for(ctx, argv[i]));
+            // nothing reads the preserved values themselves; only their lifetimes matter
+            vals.append(get_gc_roots_for(ctx, argv[i], /*storage_used*/false));
         }
         Value *token = vals.empty()
             ? (Value*)ConstantTokenNone::get(ctx.builder.getContext())
