@@ -3897,6 +3897,7 @@ static size_t jl_image_split_ji_objects_end(ios_t *s, size_t size) JL_CANSAFEPOI
 }
 #endif
 
+// Returns 0, with *dest NULL, if the .ji of a package image was not written with this .so.
 static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_CANSAFEPOINT
 {
     const char *lib_path = jl_pathname_for_handle(handle);
@@ -3928,9 +3929,26 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_
 
     ios_t s;
     size_t size;
+    uint32_t flags = 0, checksum = 0;
+    int64_t dataendpos = 0, datastartpos = 0;
     if (!ios_file(&s, ji_path, 1, 0, 0, 0))
         goto error;
     size = ios_filesize(&s);
+
+    // check that the .ji matches the .so before reading all of it
+    if (jl_read_verify_header(&s, &flags, &checksum, &dataendpos, &datastartpos) == 0) {
+        uint32_t *pchecksum;
+        JL_IMAGE_SYM(handle, jl_system_image_checksum, &pchecksum);
+        if (checksum != *pchecksum) {
+            ios_close(&s);
+            if (!(flags & JI_FLAG_PKGIMAGE))
+                jl_error("Image checksum mismatch: the heap image (.ji) was not "
+                         "compiled for use with this native image.");
+            *dest = NULL;
+            return 0;
+        }
+    }
+    ios_seek(&s, 0);
 
     if (use_mmap) {
 #ifdef _OS_WINDOWS_
@@ -3999,6 +4017,8 @@ JL_DLLEXPORT void jl_image_unpack_split_zstd(void *handle, jl_image_buf_t *image
     size_t comp_size = jl_image_get_split_ji(handle, &comp_data, 0);
     image->is_split = 1;
     jl_image_load_metadata(handle, image);
+    if (comp_data == NULL) // checksum mismatch
+        return;
     jl_image_decompress(image, comp_data, comp_size);
     free(comp_data);
 }
@@ -4972,6 +4992,13 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
 {
     void *pkgimg_handle = jl_dlopen_e(fname, JL_RTLD_LAZY);
     jl_image_buf_t buf = get_image_buf(pkgimg_handle, /* is_pkgimage */ 1);
+    if (buf.data == NULL) {
+        // unload it, so that a recompiled image at the same path is not served this handle
+        jl_dlclose(pkgimg_handle);
+        return jl_get_exceptionf(jl_errorexception_type,
+            "Image checksum mismatch: the heap image (.ji) was not "
+            "compiled for use with \"%s\".", fname);
+    }
 
     jl_gc_notify_image_load(buf.data, buf.size);
 
