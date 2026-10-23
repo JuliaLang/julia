@@ -1866,8 +1866,9 @@ end
 end
 
 module AbbreviatedTraces
-    outer(x) = inner(x)
-    inner(x) = sum([1, 2, 3]; dims = x)
+    # inlined frames print without argument types, which the checks below match on
+    @noinline outer(x) = inner(x)
+    @noinline inner(x) = sum([1, 2, 3]; dims = x)
 end
 
 @testset "abbreviated stacktraces" begin
@@ -1898,8 +1899,9 @@ end
     end
 
     # the frame a run of user code called into names what rejected the call
-    @test occursin("sum(a::Vector{Int64}", abbreviated)
+    @test occursin(r"\[\d+\] sum\b", abbreviated)
     # while the frames below it, which are Base's own business, are gone
+    @test occursin("reduced_indices", full)
     @test !occursin("reduced_indices", abbreviated)
     @test count("\n", abbreviated) < count("\n", full)
 
