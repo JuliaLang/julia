@@ -21,7 +21,7 @@ user must be a member of a special access group to read `path`).
 """
 function GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY_OPEN_DEFAULT))
     ensure_initialized()
-    separator = @static Sys.iswindows() ? ";" : ":"
+    separator = string(Base.Filesystem.path_list_separator)
     repo_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_repository_open_ext, libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Cstring, Cuint, Cstring),
