@@ -234,6 +234,74 @@ let
     @test any(edge -> edge === binding, ci.edges)
 end
 
+# When an SCC with an unpublished member also has a member that will be published, that
+# member carries the SCC-wide proof, and the other consumers depend on its CodeInstance
+# instead of copying the proof.
+module AnchoredCycleProof
+    const FLAG = true
+    callee() = FLAG ? 1 : 2
+    anchor() = 3
+    entry() = 1
+end
+
+let
+    world = Base.get_world_counter()
+    inf_params = Compiler.InferenceParams(; cache_owner=AnchoredCycleProof)
+    interp = Compiler.NativeInterpreter(world; inf_params)
+    binding = convert(Core.Binding, GlobalRef(AnchoredCycleProof, :FLAG))
+
+    outer_mi = Base.method_instance(AnchoredCycleProof.entry, ())
+    outer_result = Compiler.InferenceResult(outer_mi, Compiler.typeinf_lattice(interp))
+    outer_result.ci = Compiler.engine_reserve(interp, outer_mi)
+    outer = Compiler.InferenceState(outer_result, Compiler.CACHE_MODE_GLOBAL, interp)
+
+    child_mi = Base.method_instance(AnchoredCycleProof.callee, ())
+    child_result = Compiler.InferenceResult(child_mi, Compiler.typeinf_lattice(interp))
+    child_result.ci = Compiler.engine_reserve(interp, child_mi)
+    child = Compiler.InferenceState(child_result, Compiler.CACHE_MODE_GLOBAL, interp)
+    Compiler.assign_parentchild!(child, outer)
+
+    anchor_mi = Base.method_instance(AnchoredCycleProof.anchor, ())
+    anchor_result = Compiler.InferenceResult(anchor_mi, Compiler.typeinf_lattice(interp))
+    anchor_result.ci = Compiler.engine_reserve(interp, anchor_mi)
+    anchor = Compiler.InferenceState(anchor_result, Compiler.CACHE_MODE_GLOBAL, interp)
+    Compiler.assign_parentchild!(anchor, child)
+
+    empty!(child.ip)
+    fill!(child.ssavaluetypes, Any)
+    causes = Compiler.IdSet{Compiler.InferenceState}()
+    push!(causes, outer)
+    child.ssavaluetypes[1] = Compiler.LimitedAccuracy(Int, causes)
+    child.bestguess = Core.Const(1)
+    child.exc_bestguess = Union{}
+    child.ipo_effects = Compiler.EFFECTS_TOTAL
+    push!(child.edges, binding)
+    Compiler.finishinfer!(child, interp, child.cycleid,
+        IdDict{Core.MethodInstance,Core.CodeInstance}())
+    @test child.result.tombstone
+    @test iszero(child.cache_mode & Compiler.CACHE_MODE_GLOBAL)
+
+    Compiler.add_cycle_backedge!(outer, child)
+    Compiler.propagate_unpublished_cycle_proof!(
+        child.callstack, 2, world, child.valid_worlds)
+    anchor_proofs = filter(edge -> edge isa Compiler.LocalInferenceProof, anchor.edges)
+    @test length(anchor_proofs) == 1
+    @test any(edge -> edge === binding,
+        Compiler.materialize_inference_edges(only(anchor_proofs).edges))
+    for consumer in (outer, child)
+        @test !any(edge -> edge isa Compiler.LocalInferenceProof, consumer.edges)
+        @test any(edge -> edge === anchor_result.ci, consumer.edges)
+    end
+
+    # No caller can reach the tombstoned CodeInstance, so its edges are not materialized.
+    Compiler.finish!(interp, child, Base.get_world_counter(), time_ns())
+    @test isempty(child_result.ci.edges)
+
+    for ci in (outer_result.ci, child_result.ci, anchor_result.ci)
+        Compiler.engine_reject(interp, ci)
+    end
+end
+
 # Local constant inference keeps its dependency proof separate from the executable target.
 module LocalProofConstpropCache
     const SINK = Ref{Any}()
