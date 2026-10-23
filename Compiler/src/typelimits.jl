@@ -595,7 +595,7 @@ end
             𝕃′ = widenlattice(𝕃)
             vartyp = tmerge(𝕃′, typea.vartyp, typeb.vartyp)
             fldtyp = tmerge(𝕃′, typea.fldtyp, typeb.fldtyp)
-            return AnyMustAlias(typea; vartyp, fldtyp)
+            return update_mustalias(typea; vartyp, fldtyp)
         end
         typea = widenmustalias(typea)
     end
