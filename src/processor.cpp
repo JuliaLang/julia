@@ -393,12 +393,35 @@ static void disable_native_bf16_codegen(std::string &features) JL_NOTSAFEPOINT
 static void disable_native_bf16_codegen(std::string &) JL_NOTSAFEPOINT {}
 #endif
 
+#if defined(_CPU_RISCV64_)
+// Generated code must follow the runtime's float ABI (see
+// `createTargetMachine`). For a target without the extensions it needs, LLVM
+// falls back to the soft-float ABI with only a warning, so always enable them
+// (and `zicsr`, which F implies).
+static void enable_float_abi_features(std::string &features) JL_NOTSAFEPOINT
+{
+#if defined(__riscv_float_abi_double)
+    const char *abi_features = "+zicsr,+f,+d";
+#elif defined(__riscv_float_abi_single)
+    const char *abi_features = "+zicsr,+f";
+#else
+    const char *abi_features = "";
+#endif
+    if (*abi_features && !features.empty())
+        features += ',';
+    features += abi_features;
+}
+#else
+static void enable_float_abi_features(std::string &) JL_NOTSAFEPOINT {}
+#endif
+
 // Apply Julia's adjustments to the LLVM feature string of a resolved target.
 // Every target whose features reach code generation (the JIT, multiversioning
 // clones, `@cpu_supports` CPU models) goes through this.
 static void finalize_codegen_target(tp::LLVMTargetSpec &spec) JL_NOTSAFEPOINT
 {
     disable_native_bf16_codegen(spec.cpu_features);
+    enable_float_abi_features(spec.cpu_features);
 }
 
 static std::vector<tp::LLVMTargetSpec> resolve_codegen_targets(const std::string &targets) JL_NOTSAFEPOINT
