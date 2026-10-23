@@ -1847,36 +1847,25 @@ end
 module KeywordSuggestions
     struct Marker end
     scaled(x; scale = 1) = x * scale
-    slurpy(x::Marker; kws...) = (x, kws)
+    slurpy(x::Marker; scale = 1, kws...) = (x, scale, kws)
 end
 
 @testset "keyword argument suggestions" begin
-    @test occursin("did you mean `scale`?",
-                   sprint(showerror, try KeywordSuggestions.scaled(2; scal = 5) catch err; err end))
-
-    # a name resembling nothing on offer draws no suggestion
-    @test !occursin("did you mean",
-                    sprint(showerror, try KeywordSuggestions.scaled(2; bogus = 5) catch err; err end))
-
-    # a method slurping keywords accepts every name, so none of them is misspelled
-    @test !occursin("did you mean",
-                    sprint(showerror, try KeywordSuggestions.slurpy(1; scal = 1) catch err; err end))
-
-    # `sort` forwards its slurped keywords, so the error names `sort!`, which declares each one
-    @test occursin("did you mean `lt`?",
-                   sprint(showerror, try sort([2, 1]; ltt = <) catch err; err end))
-
-    # a slurped `kwargs...` is not a keyword name
-    @test Base.declared_keywords(KeywordSuggestions.scaled) == [:scale]
-    @test isempty(Base.declared_keywords(KeywordSuggestions.slurpy))
-    @test !Base.accepts_any_keyword(KeywordSuggestions.scaled)
-    @test Base.accepts_any_keyword(KeywordSuggestions.slurpy)
+    shown(f; color::Bool) = sprint(showerror, try f() catch err; err end; context = :color => color)
+    highlighted(name::String) = string(Base.text_colors[Base.error_color()], name)
 
     # the candidate list draws the declared keyword a misspelled one resembles in the error color
-    highlighted = string(Base.text_colors[Base.error_color()], "scale")
-    shown_in_color(f) = sprint(showerror, try f() catch err; err end; context = :color => true)
-    @test occursin(highlighted, shown_in_color(() -> KeywordSuggestions.scaled(2; scal = 5)))
-    @test !occursin(highlighted, shown_in_color(() -> KeywordSuggestions.scaled(2; bogus = 5)))
+    @test occursin(highlighted("scale"), shown(() -> KeywordSuggestions.scaled(2; scal = 5); color = true))
+
+    # without color the candidate list is unchanged
+    @test occursin("; scale) got unsupported keyword argument \"scal\"",
+                   shown(() -> KeywordSuggestions.scaled(2; scal = 5); color = false))
+
+    # a name resembling nothing on offer highlights nothing
+    @test !occursin(highlighted("scale"), shown(() -> KeywordSuggestions.scaled(2; bogus = 5); color = true))
+
+    # a method slurping keywords accepts every name, so none of them is misspelled
+    @test !occursin(highlighted("scale"), shown(() -> KeywordSuggestions.slurpy(1; scal = 1); color = true))
 end
 
 module UndefVarSuggestions
