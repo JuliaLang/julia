@@ -4924,10 +4924,6 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
                 jl_atomic_store_release(&jl_world_counter, world);
             // now permit more methods to be added again
             JL_UNLOCK(&world_counter_lock);
-            // the ext_backinterferences recorded so far saw the method table without this
-            // image: complete them against it (see jl_ext_backinterferences)
-            if (jl_recording_ext_backinterferences())
-                jl_ext_backinterferences_complete(meta->idx);
 
             if (completeinfo) {
                 cachesizes_sv = jl_alloc_svec(7);

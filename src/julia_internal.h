@@ -1463,8 +1463,6 @@ void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array
 JL_DLLEXPORT jl_value_t *jl_get_ext_backinterferences(jl_method_t *method) JL_NOTSAFEPOINT;
 extern JL_DLLEXPORT jl_genericmemory_t *jl_ext_backinterferences JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT void jl_set_activation_coverage(size_t image) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_ext_backinterferences_complete(size_t image) JL_CANSAFEPOINT;
-JL_DLLEXPORT int jl_recording_ext_backinterferences(void) JL_NOTSAFEPOINT;
 // GC configuration baked into generated code; must match between an image and the runtime that loads it.
 JL_DLLEXPORT const char *jl_gc_image_abi(void) JL_NOTSAFEPOINT;
 

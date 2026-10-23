@@ -2378,7 +2378,7 @@ precompile_test_harness("activation replay: record completed against images load
         end
         """)
     # the worker activates the first two methods before the late dependency is loaded,
-    # so their records are completed against it at save; the last one sees it
+    # so its methods complete their records as they activate; the last one sees it
     write(joinpath(load_path, "ActKeepPkg.jl"),
         """
         module ActKeepPkg
