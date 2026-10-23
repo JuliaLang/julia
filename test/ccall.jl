@@ -1699,11 +1699,11 @@ for i in 1:100
 end
 
 # issue #20835
-@test_throws(ErrorException("could not evaluate ccall argument type (it might depend on a local variable)"),
+@test_throws(ErrorException("syntax: ccall argument type cannot reference local variable"),
              eval(:(f20835(x) = ccall(:fn, Cvoid, (Ptr{typeof(x)},), x))))
-@test_throws(UndefVarError(:Something_not_defined_20835, @__MODULE__),
+@test_throws(ErrorException("syntax: ccall argument type cannot reference local variable"),
              eval(:(f20835(x) = ccall(:fn, Something_not_defined_20835, (Ptr{typeof(x)},), x))))
-@test isempty(methods(f20835))
+@test !isdefined(@__MODULE__, :f20835)
 
 @test_throws(ErrorException("ccall method definition: argument 1 type doesn't correspond to a C type"),
              @eval f21104(::Type{T}) where {T} = ccall(:fn, Cvoid, (Some{T},), Some(0)))
