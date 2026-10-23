@@ -1865,4 +1865,11 @@ include("test_spec_html_julia.jl")
 
 @testset "Header accepts any integer level" begin
     @test Markdown.Header("x", Int32(2)) isa Markdown.Header{2}
+    @test Markdown.Header("x", 6) isa Markdown.Header{6}
+    for level in (0, 7, -1, false, Int32(7))
+        @test_throws ArgumentError Markdown.Header("x", level)
+    end
+    @test_throws ArgumentError Markdown.Header{7}("x")
+    @test_throws ArgumentError Markdown.Header{Int32(2)}("x")
+    @test_throws InexactError Markdown.Header("x", big(2)^70)
 end

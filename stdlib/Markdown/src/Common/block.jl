@@ -41,6 +41,11 @@ end
 
 mutable struct Header{level} <: MarkdownElement
     text
+    function Header{level}(text) where {level}
+        level isa Int && 1 <= level <= 6 ||
+            throw(ArgumentError("header level must be an Int from 1 to 6, got $(repr(level))"))
+        return new{level}(text)
+    end
 end
 
 Header(s, level::Integer) = Header{Int(level)}(s)
