@@ -28,18 +28,20 @@ CNAME(jl_fake_signal_return):
     .cfi_undefined %rip
     .cfi_undefined %rsp
     // rdi points to signal_ctx_pc in ptls (followed by signal_ctx_sp, signal_ctx_fptr, signal_ctx_arg)
-    pushq   (%rdi)              // push pc (signal_ctx_pc)
-    pushq   8(%rdi)             // push sp (signal_ctx_sp)
-    // stack layout: [sp, pc] (pc at higher address, like return address after call)
+    pushq   (%rdi)              // push pc (signal_ctx_pc), as the return address
     .cfi_def_cfa %rsp, 8
-    .cfi_offset %rip, 0         // previous %rip at CFA+0 (pc slot at rsp+8)
-    .cfi_offset %rsp, -8        // previous %rsp at CFA-8 (sp slot at rsp+0)
-    pushq   16(%rdi)            // push fptr (signal_ctx_fptr)
-    .cfi_def_cfa %rsp, 16
+    .cfi_offset %rip, -8
+    pushq   %rbp                // frame record {rbp, pc}
+    .cfi_def_cfa_offset 16
+    .cfi_offset %rbp, -16
+    movq    %rsp, %rbp
+    .cfi_def_cfa_register %rbp
+    pushq   8(%rdi)             // push sp (signal_ctx_sp)
+    .cfi_offset %rsp, -24
+    pushq   16(%rdi)            // push fptr (signal_ctx_fptr), leaving the stack aligned
     movq    24(%rdi), %rdi      // restore original rdi from signal_ctx_arg
-    subq    $8, %rsp            // align stack to 16 bytes
-    .cfi_def_cfa %rsp, 24
-    callq   *8(%rsp)            // call fptr
+    cld                         // the interrupted code may have set the direction flag
+    callq   *(%rsp)             // call fptr
     ud2                         // unreachable
     .cfi_endproc
     EXPORT(jl_fake_signal_return)

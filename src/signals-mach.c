@@ -214,6 +214,8 @@ static void jl_noreturn_call_in_state(host_thread_state_t *state, void (*fptr)(v
     *(uintptr_t*)sp = (uintptr_t)&jl_fake_signal_return + 1;
     state->__rsp = sp; // set stack pointer
     state->__rip = (uint64_t)fptr; // "call" the function
+    // the interrupted code may have set the direction flag, which C code expects clear
+    state->__rflags &= ~0x400;
     state->__rdi = arg0;
     state->__rsi = arg1;
 #elif defined(_CPU_AARCH64_)
@@ -329,6 +331,8 @@ static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void),
     *(uintptr_t*)sp = (uintptr_t)&jl_mach_restore_trigger;
     state->__rsp = sp;
     state->__rip = (uint64_t)fptr;
+    // the interrupted code may have set the direction flag, which C code expects clear
+    state->__rflags &= ~0x400;
     state->__rdi = arg0;
 #elif defined(_CPU_AARCH64_)
     uintptr_t sp = state->__sp;

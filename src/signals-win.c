@@ -254,6 +254,8 @@ static void jl_win_call_in_context(CONTEXT *ctx, void (*fptr)(void), uintptr_t a
     ctx->Rsp = sp;
     ctx->Rip = (uintptr_t)fptr;
     ctx->Rcx = arg0;
+    // the interrupted code may have set the direction flag, which C code expects clear
+    ctx->EFlags &= ~0x400;
 #elif defined(_CPU_X86_)
     uintptr_t sp = (uintptr_t)ctx->Esp;
     sp = (sp - sizeof(CONTEXT)) & ~(uintptr_t)15;
@@ -265,6 +267,8 @@ static void jl_win_call_in_context(CONTEXT *ctx, void (*fptr)(void), uintptr_t a
     *(uintptr_t*)sp = (uintptr_t)&jl_win_restore_trigger;
     ctx->Esp = sp;
     ctx->Eip = (uintptr_t)fptr;
+    // the interrupted code may have set the direction flag, which C code expects clear
+    ctx->EFlags &= ~0x400;
 #endif
 }
 

@@ -31,6 +31,7 @@ CNAME(jl_start_fiber_on_stack):
     // Build stack frame
     // Skip local variable save area
     std     2, 0x28(1)          // Save TOC
+    li      0, 0
     // Clear link editor/compiler words
     std     0, 0x20(1)
     std     0, 0x18(1)

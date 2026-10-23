@@ -25,20 +25,22 @@ CNAME(jl_fake_signal_return):
     .cfi_startproc
     .cfi_signal_frame
     // Mark as end of stack until frame is set up
-    .cfi_undefined 1
+    .cfi_undefined %eip
     // eax points to signal_ctx_pc in ptls (followed by signal_ctx_sp, signal_ctx_fptr, signal_ctx_arg)
-    pushl   (%eax)              // push pc (signal_ctx_pc)
-    pushl   4(%eax)             // push sp (signal_ctx_sp)
-    // stack layout: [sp, pc] (pc at higher address, like return address after call)
+    pushl   (%eax)              // push pc (signal_ctx_pc), as the return address
     .cfi_def_cfa %esp, 4
-    .cfi_offset %eip, 0         // previous %eip at CFA+0 (pc slot at esp+4)
-    .cfi_offset %esp, -4        // previous %esp at CFA-4 (sp slot at esp+0)
-    pushl   8(%eax)             // push fptr (signal_ctx_fptr)
-    .cfi_def_cfa %esp, 8
+    .cfi_offset %eip, -4
+    pushl   %ebp                // frame record {ebp, pc}
+    .cfi_def_cfa_offset 8
+    .cfi_offset %ebp, -8
+    movl    %esp, %ebp
+    .cfi_def_cfa_register %ebp
+    pushl   4(%eax)             // push sp (signal_ctx_sp)
+    .cfi_offset %esp, -12
+    pushl   8(%eax)             // push fptr (signal_ctx_fptr), leaving the stack aligned
     movl    12(%eax), %eax      // restore original eax from signal_ctx_arg
-    subl    $4, %esp            // align stack to 16 bytes
-    .cfi_def_cfa %esp, 12
-    calll   *4(%esp)            // call fptr
+    cld                         // the interrupted code may have set the direction flag
+    calll   *(%esp)             // call fptr
     ud2                         // unreachable
     .cfi_endproc
     EXPORT(jl_fake_signal_return)

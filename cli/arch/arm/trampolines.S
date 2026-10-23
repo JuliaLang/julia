@@ -11,8 +11,15 @@
 #include "../../../src/arch/common.h"
 #include "../../../src/jl_exported_funcs.inc"
 
+// ARM code (the pc-relative offsets below assume it); `ldr pc` switches to
+// Thumb state if the target is Thumb code. The function type lets the linker
+// make calls from Thumb code switch to ARM state.
+.syntax unified
+.arm
+
 #define XX(name) \
 .global CNAME(name); \
+DEBUGINFO(name); \
 .cfi_startproc; \
 CNAME(name)##:; \
     ldr ip, CONCAT(.L,CNAMEADDR(name)); \

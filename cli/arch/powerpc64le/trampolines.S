@@ -12,23 +12,35 @@
 #include "../../../src/jl_exported_funcs.inc"
 
 // Notes:
-// bctr: branch to CTR without LR update (tail-call)
-// localentry: On PPC functions have a localentry that assumes r2 contains
-//             the TOC pointer, and a global entry point that sets r2.
-// See 64-Bit ELF V2 ABI Specification: Power Architecture v1.4
+// bctr: branch to CTR without LR update (tail-call), into the target's global
+//       entry point (r12), which sets r2 to the target library's TOC.
+// localentry 1: a single entry point that does not preserve r2, so that the
+//       linker makes even local callers restore their TOC afterwards (a
+//       separate local entry would promise r2 is preserved, and local callers
+//       would not set r12). The slot is therefore addressed relative to the pc
+//       (read with bcl 20,31, which does not disturb return address
+//       prediction), through an offset stored after the code.
+// See 64-Bit ELF V2 ABI Specification: Power Architecture v1.5
 
 #define XX(name) \
 .global CNAME(name); \
 .type CNAME(name)##, @function; \
 .cfi_startproc; \
 CNAME(name)##: ; \
-    addis 2, 12, .TOC.-CNAME(name)##@ha; \
-    addi 2, 2, .TOC.-CNAME(name)##@l; \
-    .localentry CNAME(name)##,.-CNAME(name)##; \
-    addis 12,2,CNAMEADDR(name)##@toc@ha; \
-    ld 12,CNAMEADDR(name)##@toc@l(12); \
+    .localentry CNAME(name)##, 1; \
+    mflr 0; \
+    .cfi_register lr, 0; \
+    bcl 20, 31, 1f; \
+1:  mflr 11; \
+    mtlr 0; \
+    .cfi_restore lr; \
+    ld 12, 2f-1b(11); \
+    add 12, 12, 11; \
+    ld 12, 0(12); \
     mtctr 12; \
     bctr; \
+    .p2align 3; \
+2:  .quad CNAMEADDR(name)-1b; \
 .cfi_endproc; \
 .size CNAME(name)##,.-CNAME(name)##; \
 

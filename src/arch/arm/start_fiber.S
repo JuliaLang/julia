@@ -27,10 +27,10 @@ CNAME(jl_start_fiber_on_stack):
     // r0 = stack_top, r1 = fn
     mov     sp, r0
     mov     lr, #0              // Clear link register (lr)
-    mov     fp, #0              // and frame pointer (fp) to terminate unwinder.
-    bx      r1                  // call `fn` with fake stack frame. While `bx` can change
-                                // the processor mode to thumb, this will never happen
-                                // because all our addresses are word-aligned.
+    mov     r11, #0             // and the frame pointers of both ARM (r11)
+    mov     r7, #0              // and Thumb (r7) code to terminate unwinder.
+    bx      r1                  // call `fn` with fake stack frame, in Thumb state if
+                                // `fn` is Thumb code (the low bit of its address)
     udf     #0                  // abort
     .cfi_endproc
     EXPORT(jl_start_fiber_on_stack)

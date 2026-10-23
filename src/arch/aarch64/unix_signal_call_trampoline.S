@@ -26,14 +26,16 @@ CNAME(jl_fake_signal_return):
     .cfi_startproc
     .cfi_signal_frame
     // Mark as end of stack until frame is set up
-    .cfi_undefined 1
+    .cfi_undefined x30
     // x0 points to signal_ctx_pc in ptls (followed by signal_ctx_sp, signal_ctx_fptr, signal_ctx_arg)
     ldp     x1, x2, [x0]        // load pc (x1) and sp (x2)
-    stp     x2, x1, [sp, #-16]! // push sp and pc (sp at lower addr, pc at higher addr)
-    // stack layout: [sp, pc] (pc at higher address, like return address after call)
-    .cfi_def_cfa sp, 16
-    .cfi_offset lr, -8          // previous lr (pc) at CFA-8 (pc slot at sp+8)
-    .cfi_offset sp, -16         // previous sp at CFA-16 (sp slot at sp+0)
+    stp     x29, x1, [sp, #-32]! // frame record {x29, pc}
+    str     x2, [sp, #16]       // and sp above it
+    mov     x29, sp
+    .cfi_def_cfa x29, 32
+    .cfi_offset x29, -32
+    .cfi_offset lr, -24         // previous lr (pc)
+    .cfi_offset sp, -16
     // This is not quite valid, since the AArch64 DWARF spec lacks the ability to define how to restore the LR register correctly,
     // so normally libunwind implementations on linux detect this function specially and hack around the invalid info:
     // https://github.com/llvm/llvm-project/commit/c82deed6764cbc63966374baf9721331901ca958
