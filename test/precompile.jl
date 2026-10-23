@@ -2435,6 +2435,34 @@ precompile_test_harness("Binding Unique") do load_path
     end
 end
 
+# A WeakRef from a package image must be cleared once its value is dead
+precompile_test_harness("Image WeakRef") do load_path
+    write(joinpath(load_path, "ImageWeakRef.jl"),
+        """
+        module ImageWeakRef
+            mutable struct Box; x::Int; end
+            const W = WeakRef(nothing)
+            const held = Ref{Any}(nothing)
+            @noinline set!() = (W.value = Box(1); nothing)
+            @noinline sethold!() = (W.value = held[] = Box(2); nothing)
+            @noinline cleared() = W.value === nothing
+            @noinline holds() = W.value === held[]
+        end
+        """)
+    @eval using ImageWeakRef
+    invokelatest() do
+        ImageWeakRef.set!()
+        GC.gc(true)
+        @test ImageWeakRef.cleared()
+        ImageWeakRef.sethold!()
+        GC.gc(false); GC.gc(true); GC.gc(false)
+        @test ImageWeakRef.holds()
+        ImageWeakRef.held[] = nothing
+        GC.gc(true); GC.gc(true)
+        @test ImageWeakRef.cleared()
+    end
+end
+
 precompile_test_harness("Detecting importing outside of a package module") do load_path
     io = IOBuffer()
     write(joinpath(load_path, "ImportBeforeMod.jl"),
