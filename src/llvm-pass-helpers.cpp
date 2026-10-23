@@ -291,10 +291,6 @@ namespace jl_well_known {
     static const char *GC_QUEUE_ROOT_NAME = XSTR(jl_gc_queue_root);
     static const char *GC_ALLOC_TYPED_NAME = XSTR(jl_gc_alloc_typed);
     static const char *GC_ALLOC_GENERICMEMORY_NAME = XSTR(jl_alloc_genericmemory_unchecked);
-    static const char *GC_BIG_ALLOC_RESET_SAFE_NAME = XSTR(jl_gc_big_alloc_reset_safe);
-    static const char *GC_SMALL_ALLOC_RESET_SAFE_NAME = XSTR(jl_gc_small_alloc_reset_safe);
-    static const char *GC_QUEUE_ROOT_RESET_SAFE_NAME = XSTR(jl_gc_queue_root_reset_safe);
-    static const char *GC_ALLOC_TYPED_RESET_SAFE_NAME = XSTR(jl_gc_alloc_typed_reset_safe);
 
     using jl_intrinsics::addGCAllocAttributes;
 
@@ -381,84 +377,4 @@ namespace jl_well_known {
             return addGCAllocAttributes(func);
         });
 
-    // Like addGCAllocAttributes, but without the narrowed memory effects:
-    // the reset-safe variants additionally unpublish/republish the current
-    // task's reset context, which is neither argument nor inaccessible
-    // memory.
-    static Function *addResetSafeGCAllocAttributes(Function *target)
-    {
-        auto FnAttrs = AttrBuilder(target->getContext());
-        FnAttrs.addAllocKindAttr(AllocFnKind::Alloc);
-        FnAttrs.addAttribute(Attribute::WillReturn);
-        FnAttrs.addAttribute(Attribute::NoUnwind);
-        target->addFnAttrs(FnAttrs);
-        target->addRetAttr(Attribute::NoAlias);
-        target->addRetAttr(Attribute::NonNull);
-        return target;
-    }
-
-    const WellKnownFunctionDescription GCBigAllocResetSafe(
-        GC_BIG_ALLOC_RESET_SAFE_NAME,
-        [](Type *T_size) {
-            auto &ctx = T_size->getContext();
-            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
-            auto bigAllocFunc = Function::Create(
-                FunctionType::get(
-                    T_prjlvalue,
-                    { PointerType::get(ctx, 0), T_size , T_size},
-                    false),
-                Function::ExternalLinkage,
-                GC_BIG_ALLOC_RESET_SAFE_NAME);
-            bigAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, std::nullopt));
-            return addResetSafeGCAllocAttributes(bigAllocFunc);
-        });
-
-    const WellKnownFunctionDescription GCSmallAllocResetSafe(
-        GC_SMALL_ALLOC_RESET_SAFE_NAME,
-        [](Type *T_size) {
-            auto &ctx = T_size->getContext();
-            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
-            auto smallAllocFunc = Function::Create(
-                FunctionType::get(
-                    T_prjlvalue,
-                    { PointerType::get(ctx, 0), Type::getInt32Ty(ctx), Type::getInt32Ty(ctx), T_size },
-                    false),
-                Function::ExternalLinkage,
-                GC_SMALL_ALLOC_RESET_SAFE_NAME);
-            smallAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, std::nullopt));
-            return addResetSafeGCAllocAttributes(smallAllocFunc);
-        });
-
-    const WellKnownFunctionDescription GCQueueRootResetSafe(
-        GC_QUEUE_ROOT_RESET_SAFE_NAME,
-        [](Type *T_size) {
-            auto &ctx = T_size->getContext();
-            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
-            auto func = Function::Create(
-                FunctionType::get(
-                    Type::getVoidTy(ctx),
-                    { T_prjlvalue },
-                    false),
-                Function::ExternalLinkage,
-                GC_QUEUE_ROOT_RESET_SAFE_NAME);
-            return func;
-        });
-
-    const WellKnownFunctionDescription GCAllocTypedResetSafe(
-        GC_ALLOC_TYPED_RESET_SAFE_NAME,
-        [](Type *T_size) {
-            auto &ctx = T_size->getContext();
-            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
-            auto allocTypedFunc = Function::Create(
-                FunctionType::get(
-                    T_prjlvalue,
-                    { PointerType::get(ctx, 0),
-                        T_size,
-                        T_size }, // type
-                    false),
-                Function::ExternalLinkage,
-                GC_ALLOC_TYPED_RESET_SAFE_NAME);
-            allocTypedFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, std::nullopt));
-            return addResetSafeGCAllocAttributes(allocTypedFunc);
-        });
 }

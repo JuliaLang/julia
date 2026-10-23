@@ -694,7 +694,7 @@ function cancel!(src::CancellationTokenSource,
     # compiled cancellation region are asynchronously reset to their
     # cancellation point, which observes the cancellation and throws.
     # Best-effort: a task the walk misses recovers level-triggered at its
-    # next cancellation point (or reset-safe allocation).
+    # next cancellation point.
     ccall(:jl_shootdown_cancelled_tasks, Cvoid, ())
     return raised
 end

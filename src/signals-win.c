@@ -429,9 +429,8 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     // Consume the reset point (prevents a double reset; unlike on Unix the
     // consumer here is not the victim thread itself, so use an exchange to
     // arbitrate against concurrent senders) and redirect the thread there,
-    // restoring the gcstack and eh recorded at establishment: the interrupt
-    // may have landed inside a reset-safe callee whose pushes onto either
-    // chain die with the abandoned stack region.
+    // restoring the gcstack and eh recorded at establishment (see
+    // jl_reset_ctx_t).
     reset_ctx = jl_atomic_exchange(&ct2->reset_ctx, NULL);
     if (reset_ctx == NULL || reset_ctx->sp == 0)
         goto resume;

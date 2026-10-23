@@ -11,32 +11,28 @@ The output represents the state of different effect properties in the following 
     - `+e` (green): `ALWAYS_TRUE`
     - `-e` (red): `ALWAYS_FALSE`
     - `?e` (yellow): `EFFECT_FREE_IF_INACCESSIBLEMEMONLY`
-3. `reset_safe` (`re`):
-    - `+re` (green): `ALWAYS_TRUE`
-    - `-re` (red): `ALWAYS_FALSE`
-    - `?re` (yellow): `RESET_SAFE_IF_INACCESSIBLEMEMONLY`
-4. `nothrow` (`n`):
+3. `nothrow` (`n`):
     - `+n` (green): `true`
     - `-n` (red): `false`
-5. `terminates` (`t`):
+4. `terminates` (`t`):
     - `+t` (green): `true`
     - `-t` (red): `false`
-6. `notaskstate` (`s`):
+5. `notaskstate` (`s`):
     - `+s` (green): `true`
     - `-s` (red): `false`
-7. `inaccessiblememonly` (`m`):
+6. `inaccessiblememonly` (`m`):
     - `+m` (green): `ALWAYS_TRUE`
     - `-m` (red): `ALWAYS_FALSE`
     - `?m` (yellow): `INACCESSIBLEMEM_OR_ARGMEMONLY`
-8. `noub` (`u`):
+7. `noub` (`u`):
     - `+u` (green): `true`
     - `-u` (red): `false`
     - `?u` (yellow): `NOUB_IF_NOINBOUNDS`
-9. `:nonoverlayed` (`o`):
+8. `:nonoverlayed` (`o`):
     - `+o` (green): `ALWAYS_TRUE`
     - `-o` (red): `ALWAYS_FALSE`
     - `?o` (yellow): `CONSISTENT_OVERLAY`
-10. `:nortcall` (`r`):
+9. `:nortcall` (`r`):
     - `+r` (green): `true`
     - `-r` (red): `false`
 """
@@ -66,15 +62,6 @@ following meanings:
     will not be refined anyway.
   * `EFFECT_FREE_IF_INACCESSIBLEMEMONLY`: the `:effect-free`-ness of this method can later be
     refined to `ALWAYS_TRUE` in a case when `:inaccessiblememonly` is proven.
-- `reset_safe::UInt8`
-  * The execution of this function may be interrupted and reset to an earlier cancellation
-    point at any point in the function. The interpretation is similar to `:effect_free`,
-    but has different guarantees.
-    N.B.: this bit describes the function's IPO contract only. Machinery the runtime
-    inserts implicitly to execute it (allocation, write barriers, runtime library calls)
-    is not covered by the contract and may not be safe to abandon - but this analysis
-    does not need to model that: it is deferred to codegen and the runtime (see
-    `llvm-cancellation-lowering.cpp`).
 - `nothrow::Bool`: this method is guaranteed to not throw an exception.
   If the execution of this method may raise `MethodError`s and similar exceptions, then
   the method is not considered as `:nothrow`.
@@ -132,7 +119,6 @@ $(effects_key_string)
 struct Effects
     consistent::UInt8
     effect_free::UInt8
-    reset_safe::UInt8
     nothrow::Bool
     terminates::Bool
     notaskstate::Bool
@@ -143,7 +129,6 @@ struct Effects
     function Effects(
         consistent::UInt8,
         effect_free::UInt8,
-        reset_safe::UInt8,
         nothrow::Bool,
         terminates::Bool,
         notaskstate::Bool,
@@ -154,7 +139,6 @@ struct Effects
         return new(
             consistent,
             effect_free,
-            reset_safe,
             nothrow,
             terminates,
             notaskstate,
@@ -191,18 +175,14 @@ const NOUB_IF_NOINBOUNDS = 0x01 << 1
 # :nonoverlayed bits
 const CONSISTENT_OVERLAY = 0x01 << 1
 
-# :reset_safe bits
-const RESET_SAFE_IF_INACCESSIBLEMEMONLY = 0x01 << 1
-
-const EFFECTS_TOTAL   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE, true,  true,  true,  ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE, true)
-const EFFECTS_THROWS  = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE, false, true,  true,  ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE, true)
-const EFFECTS_UNKNOWN = Effects(ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_TRUE, false) # unknown mostly, but it's not overlayed at least (e.g. it's not a call)
-const EFFECTS_MINIMAL = Effects(ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, false)
+const EFFECTS_TOTAL   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  true,  true,  true,  ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE, true)
+const EFFECTS_THROWS  = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  false, true,  true,  ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE, true)
+const EFFECTS_UNKNOWN = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_TRUE, false) # unknown mostly, but it's not overlayed at least (e.g. it's not a call)
+const EFFECTS_MINIMAL = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, false)
 
 function Effects(effects::Effects=EFFECTS_MINIMAL;
     consistent::UInt8 = effects.consistent,
     effect_free::UInt8 = effects.effect_free,
-    reset_safe::UInt8 = effects.reset_safe,
     nothrow::Bool = effects.nothrow,
     terminates::Bool = effects.terminates,
     notaskstate::Bool = effects.notaskstate,
@@ -213,7 +193,6 @@ function Effects(effects::Effects=EFFECTS_MINIMAL;
     return Effects(
         consistent,
         effect_free,
-        reset_safe,
         nothrow,
         terminates,
         notaskstate,
@@ -244,14 +223,6 @@ function is_better_effects(new::Effects, old::Effects)
         old.effect_free == ALWAYS_TRUE && return false
         any_improved |= old.effect_free != EFFECT_FREE_IF_INACCESSIBLEMEMONLY
     elseif new.effect_free != old.effect_free
-        return false
-    end
-    if new.reset_safe == ALWAYS_TRUE
-        any_improved |= old.reset_safe != ALWAYS_TRUE
-    elseif new.reset_safe == RESET_SAFE_IF_INACCESSIBLEMEMONLY
-        old.reset_safe == ALWAYS_TRUE && return false
-        any_improved |= old.reset_safe != RESET_SAFE_IF_INACCESSIBLEMEMONLY
-    elseif new.reset_safe != old.reset_safe
         return false
     end
     if new.nothrow
@@ -305,7 +276,6 @@ function merge_effects(old::Effects, new::Effects)
     return Effects(
         merge_effectbits(old.consistent, new.consistent),
         merge_effectbits(old.effect_free, new.effect_free),
-        merge_effectbits(old.reset_safe, new.reset_safe),
         merge_effectbits(old.nothrow, new.nothrow),
         merge_effectbits(old.terminates, new.terminates),
         merge_effectbits(old.notaskstate, new.notaskstate),
@@ -325,7 +295,6 @@ merge_effectbits(old::Bool, new::Bool) = old & new
 
 is_consistent(effects::Effects)          = effects.consistent === ALWAYS_TRUE
 is_effect_free(effects::Effects)         = effects.effect_free === ALWAYS_TRUE
-is_reset_safe(effects::Effects)          = effects.reset_safe === ALWAYS_TRUE
 is_nothrow(effects::Effects)             = effects.nothrow
 is_terminates(effects::Effects)          = effects.terminates
 is_notaskstate(effects::Effects)         = effects.notaskstate
@@ -362,8 +331,6 @@ is_consistent_if_inaccessiblememonly(effects::Effects) = !iszero(effects.consist
 
 is_effect_free_if_inaccessiblememonly(effects::Effects) = !iszero(effects.effect_free & EFFECT_FREE_IF_INACCESSIBLEMEMONLY)
 
-is_reset_safe_if_inaccessiblememonly(effects::Effects) = !iszero(effects.reset_safe & RESET_SAFE_IF_INACCESSIBLEMEMONLY)
-
 is_inaccessiblemem_or_argmemonly(effects::Effects) = effects.inaccessiblememonly === INACCESSIBLEMEM_OR_ARGMEMONLY
 
 is_consistent_overlay(effects::Effects) = effects.nonoverlayed === CONSISTENT_OVERLAY
@@ -378,15 +345,13 @@ function encode_effects(e::Effects)
            ((e.inaccessiblememonly % UInt32) << 8)  |
            ((e.noub                % UInt32) << 10) |
            ((e.nonoverlayed        % UInt32) << 12) |
-           ((e.nortcall            % UInt32) << 14) |
-           ((e.reset_safe          % UInt32) << 15)
+           ((e.nortcall            % UInt32) << 14)
 end
 
 function decode_effects(e::UInt32)
     return Effects(
         UInt8((e >> 0) & 0x07),
         UInt8((e >> 3) & 0x03),
-        UInt8((e >> 15) & 0x03),
         Bool((e >> 5) & 0x01),
         Bool((e >> 6) & 0x01),
         Bool((e >> 7) & 0x01),

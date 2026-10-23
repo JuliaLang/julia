@@ -661,8 +661,8 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     // published - a purely polling victim between cancellation points never
     // has one. Never self-suspend: a thread's own reset region is always
     // cleared here (the ccall reaching this function is itself an unsafe
-    // point), but a protected runtime span (e.g. the GMP allocation hooks)
-    // can reach this sender - through a finalizer running cancel! - with
+    // point), but a foreign call carrying a cancellation handler can reach
+    // this sender - through a callback into Julia running cancel! - with
     // its own handler context still published.
     if (pthread_equal(ptls2->system_id, pthread_self()))
         return;

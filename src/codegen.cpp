@@ -2229,14 +2229,6 @@ public:
     int nargs = 0;
     int nvargs = -1;
     bool is_opaque_closure = false;
-    // Index of the source statement currently being emitted, for ssaflags
-    // lookups (IR_FLAG_RESET_SAFE) by mark_reset_safe, which runs several
-    // call-emission layers below the statement loop where the index is no
-    // longer in scope. Statement-scoped context exactly like the debug
-    // location; it is reset to -1 outside statement emission so calls the
-    // compiler inserts on its own (prologue, phi copies, error paths) can
-    // never be tagged from a stale statement.
-    ssize_t current_stmt_idx = -1;
 
     Value *pgcstack = NULL;
     Instruction *topalloca = NULL;
@@ -2499,39 +2491,6 @@ static Value *emit_ptrgep(jl_codectx_t &ctx, Value *base, size_t byte_offset, co
     auto *gep = ctx.builder.CreateConstInBoundsGEP1_32(getInt8Ty(ctx.builder.getContext()), base, byte_offset);
     setName(ctx.emission_context, gep, Name);
     return gep;
-}
-
-// Check if the current statement has the reset_safe flag set
-static bool current_stmt_is_reset_safe(jl_codectx_t &ctx)
-{
-    if (ctx.current_stmt_idx < 0 || ctx.source == nullptr || ctx.source->ssaflags == nullptr)
-        return false;
-    size_t nstmts = jl_array_dim0(ctx.source->ssaflags);
-    if ((size_t)ctx.current_stmt_idx >= nstmts)
-        return false;
-    uint32_t flag = jl_array_data(ctx.source->ssaflags, uint32_t)[ctx.current_stmt_idx];
-    return (flag & IR_FLAG_RESET_SAFE) != 0;
-}
-
-// Check whether a set of encoded ipo_purity_bits proves the callee's own IPO
-// effects reset-safe. N.B.: kept in sync with Compiler/src/effects.jl
-// (encode_effects); 0 means "no recorded effects" and is treated
-// conservatively.
-static bool effects_ipo_reset_safe(uint32_t effects) JL_NOTSAFEPOINT
-{
-    return effects != 0 &&
-           ((effects >> 3) & 0x03u) == 0u && // is_effect_free
-           ((effects >> 15) & 0x03u) == 0u;  // is_reset_safe
-}
-
-// Mark a call instruction with reset_safe metadata if the current statement has the flag
-static void mark_reset_safe(jl_codectx_t &ctx, CallInst *call)
-{
-    if (call && current_stmt_is_reset_safe(ctx)) {
-        LLVMContext &llvmctx = ctx.builder.getContext();
-        MDNode *md = MDNode::get(llvmctx, {});
-        call->setMetadata("julia.reset_safe", md);
-    }
 }
 
 static Value *emit_ptrgep(jl_codectx_t &ctx, Value *base, Value *byte_offset, const Twine &Name="")
@@ -6025,8 +5984,6 @@ isdefined_unknown_idx:
         ctx.builder.CreateCondBr(same, point_bb, rebind_bb);
 
         ctx.builder.SetInsertPoint(rebind_bb);
-        // N.B.: Do NOT annotate julia.reset_safe here. We want the LLVM pass
-        // to reset any live region before this.
         emit_write_barrier(ctx, ct, bound_ptr, src);
         StoreInst *bind_store = ctx.builder.CreateAlignedStore(src, bound_ptr, ctx.types().alignof_ptr);
         bind_store->setOrdering(AtomicOrdering::Release);
@@ -6040,11 +5997,9 @@ isdefined_unknown_idx:
         // The cancellation point intrinsic (which the CancellationLowering
         // pass expands into the reset region publication) must come after all
         // of the binding bookkeeping above: the rebind path's write barrier
-        // is an ordinary call, so the pass clears the published region before
-        // it. Emitting the intrinsic afterwards keeps the region live from
-        // here through a following reset_safe foreign call; only the state
-        // load below may follow it, so that a longjmp back onto the setjmp
-        // re-reads the now-cancelled state.
+        // and stores are unsafe points, before which the pass clears any
+        // published region. Only the state load below may follow it, so that
+        // a longjmp back onto the setjmp re-reads the now-cancelled state.
         ctx.builder.SetInsertPoint(point_bb);
         Value *marker = ctx.builder.CreateCall(prepare_call(jl_cancellation_point_func));
         ctx.builder.CreateCondBr(is_nothing, merge_bb, loadst_bb);
@@ -6109,10 +6064,6 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, Value *theFptr, Value *theF,
     }
     CallInst *result = ctx.builder.CreateCall(TheTrampoline, theArgs);
     result->setAttributes(TheTrampoline->getAttributes());
-    // N.B.: no julia.reset_safe tag here even for reset_safe statements: the
-    // jlcall trampoline is implicitly-inserted runtime machinery (dispatch,
-    // builtin fallbacks), not covered by the statement's IPO contract, and
-    // CancellationLowering treats it as an unsafe point regardless.
     // TODO: we could add readonly attributes in many cases to the args
     return result;
 }
@@ -6124,7 +6075,7 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction<> *theFptr, Value 
     return emit_jlcall(ctx, prepare_call(theFptr), theF, argv, nargs, trampoline);
 }
 
-static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_closure, jl_value_t *specTypes, jl_value_t *jlretty, jl_returninfo_t &returninfo, ArrayRef<jl_cgval_t> argv, size_t nargs, uint32_t effects = 0) JL_CANSAFEPOINT
+static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_closure, jl_value_t *specTypes, jl_value_t *jlretty, jl_returninfo_t &returninfo, ArrayRef<jl_cgval_t> argv, size_t nargs) JL_CANSAFEPOINT
 {
     ++EmittedSpecfunCalls;
     // emit specialized call site
@@ -6232,14 +6183,6 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
     call->setAttributes(returninfo.attrs);
     if (gcstack_arg && ctx.emission_context.use_swiftcc)
         call->setCallingConv(CallingConv::Swift);
-    // Mark as reset_safe only if the current statement has that flag AND the
-    // invoked code's own IPO effects agree: the statement flag may stem from
-    // a constant-propagation refinement stronger than the generic code being
-    // invoked here, and only callees whose own effects are reset_safe have
-    // their implicit runtime machinery instrumented to participate in a
-    // spanned reset region (see llvm-cancellation-lowering.cpp).
-    if (effects_ipo_reset_safe(effects))
-        mark_reset_safe(ctx, call);
 
     jl_cgval_t retval;
     switch (returninfo.cc) {
@@ -6283,15 +6226,14 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
 }
 
 static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_closure, jl_value_t *specTypes, jl_value_t *jlretty, llvm::Value *callee, StringRef specFunctionObject,
-                                          ArrayRef<jl_cgval_t> argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *nreturn_roots, jl_value_t *inferred_retty,
-                                          uint32_t effects = 0) JL_CANSAFEPOINT
+                                          ArrayRef<jl_cgval_t> argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *nreturn_roots, jl_value_t *inferred_retty) JL_CANSAFEPOINT
 {
     ++EmittedSpecfunCalls;
     // emit specialized call site
     jl_returninfo_t returninfo = get_specsig_function(ctx.emission_context, jl_Module, callee, specFunctionObject, specTypes, jlretty, is_opaque_closure);
     *cc = returninfo.cc;
     *nreturn_roots = returninfo.return_roots;
-    jl_cgval_t retval = emit_call_specfun_other(ctx, is_opaque_closure, specTypes, jlretty, returninfo, argv, nargs, effects);
+    jl_cgval_t retval = emit_call_specfun_other(ctx, is_opaque_closure, specTypes, jlretty, returninfo, argv, nargs);
     // see if inference has a different / better type for the call than the lambda
     return update_julia_type(ctx, retval, inferred_retty);
 }
@@ -6310,8 +6252,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_code_instance_t 
     jl_method_instance_t *mi = jl_get_ci_mi(ci);
     bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
     return emit_call_specfun_other(ctx, is_opaque_closure, get_ci_abi(ci), ci->rettype, NULL,
-        specFunctionObject, argv, nargs, cc, return_roots, inferred_retty,
-        jl_atomic_load_relaxed(&ci->ipo_purity_bits));
+        specFunctionObject, argv, nargs, cc, return_roots, inferred_retty);
 }
 
 static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty, StringRef specFunctionObject,
@@ -9703,15 +9644,6 @@ static jl_llvm_functions_t
         FnAttrs.addAttribute("julia-optimization-level", optLevelStrings[optlevel]);
     }
 
-    // A function whose own IPO effects are reset_safe (the same condition
-    // under which call sites to it may carry the julia.reset_safe tag) can
-    // execute inside a caller's still-published compiled reset region. Mark
-    // it so CancellationLowering instruments its implicitly-inserted runtime
-    // machinery (allocation, write barriers, runtime library calls) to
-    // eagerly drop that region; all other functions need no instrumentation.
-    if (codeinst && effects_ipo_reset_safe(jl_atomic_load_relaxed(&codeinst->ipo_purity_bits)))
-        FnAttrs.addAttribute("julia.ipo_reset_safe");
-
     ctx.f = f;
 
     auto in_user_mod = [] (jl_module_t *mod) {
@@ -10762,11 +10694,7 @@ static jl_llvm_functions_t
             }
         }
         else {
-            // statement-scoped context for mark_reset_safe (see its
-            // declaration); cleared like the debug location below
-            ctx.current_stmt_idx = cursor;
             emit_stmtpos(ctx, stmt, cursor);
-            ctx.current_stmt_idx = -1;
             mallocVisitStmt(nullptr, have_dbg_update);
         }
         find_next_stmt(cursor + 1);

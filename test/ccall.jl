@@ -2014,27 +2014,6 @@ using Base: ccall_macro_parse, ccall_macro_lower
                                  :( foo(x::Cint)::Cvoid )))
     @test optexpr == (:((:foo,)), :Cvoid, Any[:Cint], Any[:x], true, (:h, :s), 0)
 
-    # `Base.@assume_effects :reset_safe @ccall`: the plain call with the
-    # reset_safe flag in the calling-convention tuple - no cancellation
-    # point is implied; the caller places one before the call to establish
-    # the region
-    rscall = macroexpand(@__MODULE__,
-        :(Base.@assume_effects :reset_safe @ccall foo(x::Cint)::Cvoid))
-    @test Meta.isexpr(rscall, :call) && rscall.args[1] === :ccall
-    @test rscall.args[3].args[1] == (:ccall, UInt16(0), false, false, true)
-    # ... composing with other effect settings, which stay in the standard
-    # effects-override slot
-    rscall = macroexpand(@__MODULE__,
-        :(Base.@assume_effects :nothrow :reset_safe @ccall foo(x::Cint)::Cvoid))
-    @test rscall.args[3].args[1] == (:ccall, Base.encode_effects_override(Base.EffectsOverride(nothrow=true)), false, false, true)
-    # ... and with the cancel_handler option
-    rscall = macroexpand(@__MODULE__,
-        :(Base.@assume_effects :reset_safe @ccall cancel_handler=(h, s) foo(x::Cint)::Cvoid))
-    @test rscall.args[3].args[1] == (:ccall, UInt16(0), false, true, true)
-    # :reset_safe is only applicable to @ccall
-    @test_throws ArgumentError macroexpand(@__MODULE__,
-        :(Base.@assume_effects :reset_safe f() = 1))
-
     # the cancel_handler lowering: a plain foreigncall with (fn, state)
     # prepended - the annotation implies no cancellation point of its own
     callx = ccall_macro_lower(:ccall, ccall_macro_parse((:(cancel_handler = (h, s)),

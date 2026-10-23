@@ -9,11 +9,8 @@
 declare i32 @julia.cancellation_point()
 declare ptr @julia.get_pgcstack()
 declare void @some_unsafe_call()
-declare void @some_safe_call()
 declare ptr @julia.gc_alloc_obj(ptr, i64, ptr)
 declare ptr @julia.gc_alloc_memory(ptr, i64, ptr, i64, i1)
-declare ptr @ijl_box_int64(i64)
-declare ptr @ijl_apply_generic(ptr, ptr, i32)
 declare i32 @tail_target(ptr)
 declare ptr @julia.pointer_from_objref(ptr addrspace(11))
 
@@ -90,29 +87,8 @@ entry:
   ret void
 }
 
-; Test that calls with reset_safe metadata don't get reset_ctx = NULL before them
-; but still get reset_ctx = NULL before return
-define void @test_safe_call() {
-entry:
-; CHECK-LABEL: @test_safe_call
-; CHECK: %cancel_ucontext = alloca
-; CHECK: %pgcstack = call ptr @julia.get_pgcstack()
-; CHECK: %current_task = getelementptr i8, ptr %pgcstack
-; CHECK: %reset_ctx_ptr = getelementptr i8, ptr %current_task
-; CHECK: call i32 @{{.*}}setjmp
-; The safe call should NOT have reset_ctx = NULL before it
-; CHECK: call void @some_safe_call(), !julia.reset_safe
-; But reset_ctx = NULL should be before the return
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
-; CHECK-NEXT: ret void
-  %pgcstack = call ptr @julia.get_pgcstack()
-  %result = call i32 @julia.cancellation_point()
-  call void @some_safe_call(), !julia.reset_safe !0
-  ret void
-}
-
-; Test function without cancellation points is unchanged: it is not marked
-; julia.ipo_reset_safe, so no reset region can be open while it runs and no
+; Test function without cancellation points is unchanged: no reset region
+; can be open while it runs (a region never spans a call), so no
 ; instrumentation is needed - even around allocation.
 define ptr @test_no_cancellation_point(i64 %v) {
 entry:
@@ -128,50 +104,18 @@ entry:
   ret ptr %obj
 }
 
-; A function codegen marked julia.ipo_reset_safe (its own IPO effects are
-; reset_safe) may be running inside a caller's reset region kept open across
-; a reset_safe call, so machinery the runtime inserts implicitly - runtime
-; library calls - and any call not itself tagged reset_safe eagerly drops
-; the reset context. Tagged (non-implicit) calls stay spanned. Allocations
-; and write barriers do not drop: sites that may execute with a region
-; published are annotated with julia.reset_region instead, and FinalLowerGC
-; lowers them to reset-safe runtime entry points that unpublish/republish
-; the region themselves. A site on a path where the region was already
-; dropped (here: after the untagged call) is not annotated. No region is
-; established (no setjmp), and the region is NOT cleared at the return: it
-; belongs to the caller.
-define ptr @test_implicit_runtime_drop(i64 %v) "julia.ipo_reset_safe" {
-entry:
-; CHECK-LABEL: @test_implicit_runtime_drop
-; CHECK-NOT: setjmp
-; CHECK: %reset_ctx_ptr = getelementptr i8, ptr %current_task
-; CHECK: %obj = call ptr @julia.gc_alloc_obj({{.*}}), !julia.reset_region
-; CHECK-NEXT: call void @some_safe_call(), !julia.reset_safe
-; CHECK-NEXT: store atomic volatile ptr null, ptr %reset_ctx_ptr release
-; CHECK-NEXT: fence syncscope("singlethread") seq_cst
-; CHECK-NEXT: %box = call ptr @ijl_box_int64(i64 %v)
-; CHECK: %obj2 = call ptr @julia.gc_alloc_obj({{.*}}){{$}}
-; CHECK-NOT: setjmp
-; CHECK-NOT: store
-; CHECK: ret ptr %obj
-  %pgcstack = call ptr @julia.get_pgcstack()
-  %obj = call ptr @julia.gc_alloc_obj(ptr %pgcstack, i64 16, ptr null)
-  call void @some_safe_call(), !julia.reset_safe !0
-  %box = call ptr @ijl_box_int64(i64 %v)
-  %obj2 = call ptr @julia.gc_alloc_obj(ptr %pgcstack, i64 16, ptr null)
-  ret ptr %obj
-}
-
-; In a function with cancellation points of its own, an allocation site
-; between the region's publication and the next drop is annotated (not
-; dropped): FinalLowerGC lowers it to a reset-safe entry point.
+; An allocation is an unsafe point like any other call: the allocator's
+; frames (and a collection's finalizers) must never be abandoned by a reset,
+; so the region is closed before it.
 define ptr @test_alloc_in_region() {
 entry:
 ; CHECK-LABEL: @test_alloc_in_region
 ; CHECK: call i32 @{{.*}}setjmp
 ; CHECK-NEXT: store atomic volatile ptr %cancel_ucontext, ptr %reset_ctx_ptr release
 ; CHECK: cancel_pt_cont:
-; CHECK: %obj = call ptr @julia.gc_alloc_obj({{.*}}), !julia.reset_region
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK-NEXT: fence syncscope("singlethread") seq_cst
+; CHECK-NEXT: %obj = call ptr @julia.gc_alloc_obj({{.*}}){{$}}
 ; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
 ; CHECK-NEXT: ret ptr %obj
   %pgcstack = call ptr @julia.get_pgcstack()
@@ -180,46 +124,27 @@ entry:
   ret ptr %obj
 }
 
-; A Memory allocation is only lowered to a reset-safe entry point if its size is
-; known to fit inline. Otherwise the region is closed before the call to the
-; runtime, even when the allocation is tagged reset_safe.
+; The same for Memory allocations, whether or not the size fits inline.
 define ptr @test_memory_alloc_in_region(i64 %n) {
 entry:
 ; CHECK-LABEL: @test_memory_alloc_in_region
 ; CHECK: call i32 @{{.*}}setjmp
-; CHECK: %small = call ptr @julia.gc_alloc_memory({{.*}}), !julia.reset_region
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK-NEXT: fence syncscope("singlethread") seq_cst
+; CHECK-NEXT: %small = call ptr @julia.gc_alloc_memory({{.*}}){{$}}
 ; CHECK-NEXT: store atomic volatile ptr null, ptr %reset_ctx_ptr release
 ; CHECK-NEXT: fence syncscope("singlethread") seq_cst
-; CHECK-NEXT: %large = call ptr @julia.gc_alloc_memory({{.*}}), !julia.reset_safe
+; CHECK-NEXT: %large = call ptr @julia.gc_alloc_memory({{.*}}){{$}}
   %pgcstack = call ptr @julia.get_pgcstack()
   %result = call i32 @julia.cancellation_point()
   %small = call ptr @julia.gc_alloc_memory(ptr %pgcstack, i64 32, ptr null, i64 4, i1 false)
-  %large = call ptr @julia.gc_alloc_memory(ptr %pgcstack, i64 %n, ptr null, i64 %n, i1 false), !julia.reset_safe !0
+  %large = call ptr @julia.gc_alloc_memory(ptr %pgcstack, i64 %n, ptr null, i64 %n, i1 false)
   ret ptr %small
-}
-
-; Even a reset_safe-tagged call is an unsafe point when it is
-; implicitly-inserted runtime machinery: the tag describes the source
-; statement's IPO contract, not the runtime frames implementing it (e.g. a
-; dynamic dispatch inside a reset_safe statement).
-define void @test_tagged_implicit_still_unsafe(ptr %x) {
-entry:
-; CHECK-LABEL: @test_tagged_implicit_still_unsafe
-; CHECK: call i32 @{{.*}}setjmp
-; CHECK-NEXT: store atomic volatile ptr %cancel_ucontext, ptr %reset_ctx_ptr release
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
-; CHECK-NEXT: fence syncscope("singlethread") seq_cst
-; CHECK-NEXT: %r = call ptr @ijl_apply_generic
-  %pgcstack = call ptr @julia.get_pgcstack()
-  %result = call i32 @julia.cancellation_point()
-  %r = call ptr @ijl_apply_generic(ptr %x, ptr null, i32 0), !julia.reset_safe !0
-  ret void
 }
 
 ; Atomic stores are unsafe points like plain ones: a reset delivered around
 ; e.g. a lock-release store would leave the lock owned forever. Only the
-; pass's own bookkeeping stores (which carry the reset_safe metadata) are
-; exempt.
+; pass's own bookkeeping stores are exempt.
 define void @test_atomic_store_unsafe(ptr %lock) {
 entry:
 ; CHECK-LABEL: @test_atomic_store_unsafe
@@ -296,24 +221,6 @@ entry:
   ret i32 %r
 }
 
-; A reset_safe-tagged musttail call gets no unsafe-point clear, so the
-; return teardown goes in front of the call instead (no fence needed: an
-; early clear only drops a delivery).
-define i32 @test_musttail_safe(ptr %arg) {
-entry:
-; CHECK-LABEL: @test_musttail_safe
-; CHECK: call i32 @{{.*}}setjmp
-; CHECK-NEXT: store atomic volatile ptr %cancel_ucontext, ptr %reset_ctx_ptr release
-; CHECK: cancel_pt_cont:
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
-; CHECK-NEXT: %r = musttail call i32 @tail_target(ptr %arg), !julia.reset_safe
-; CHECK-NEXT: ret i32 %r
-  %pgcstack = call ptr @julia.get_pgcstack()
-  %result = call i32 @julia.cancellation_point()
-  %r = musttail call i32 @tail_target(ptr %arg), !julia.reset_safe !0
-  ret i32 %r
-}
-
 ; Instructions not reachable from any cancellation point can never observe
 ; an open region: no clears are inserted for them (the store and call before
 ; the point below are untouched; only those after it are guarded).
@@ -356,4 +263,3 @@ entry:
   ret ptr %r
 }
 
-!0 = !{}

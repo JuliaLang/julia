@@ -6,26 +6,19 @@
 // 3. A setjmp call on the buffer's mctx field
 // 4. Assignment of the buffer address to task->reset_ctx (atomic release)
 //
-// It also walks the function to find stores/calls without julia.reset_safe
-// metadata and inserts reset_ctx = NULL before them.
-//
-// Additionally, the pass runs on every function codegen marked with the
-// julia.ipo_reset_safe attribute (its own IPO effects are reset_safe - the
-// same condition under which call sites to it may be tagged), even when it
-// contains no cancellation point itself: such a function may execute inside
-// a caller's reset region that was kept open across a reset_safe call.
-// Machinery the runtime inserts implicitly (runtime library calls, dynamic
-// dispatch) is not part of the IPO contract that justified the tag - its
-// frames (malloc, exception setup, the JIT) must never be abandoned by a
-// delivered reset - so every such call (and every call not itself tagged
-// reset_safe) eagerly drops the published reset context; the caller's next
-// cancellation point re-establishes the region (delivery is
-// level-triggered). Allocations and write barriers are the exception: the
-// pass annotates each such site that may execute with a region published
-// (julia.reset_region metadata), and FinalLowerGC lowers those sites to
-// *_reset_safe runtime entry points that unpublish/republish the region
-// themselves, so they need no per-site drop and the region even survives
-// them. Functions that are not reset_safe need no instrumentation: no reset
+// It also walks the function to find the unsafe points reachable from a
+// publication - every store, atomic, volatile load and call that is not the
+// pass's own bookkeeping - and inserts reset_ctx = NULL before each of them,
+// so that a delivered reset can only ever land in code that has done
+// nothing yet: the region a point publishes ends at the first operation
+// whose partial effects could be observed, and nothing but the next
+// cancellation point re-opens one (delivery is level-triggered, so a request
+// that finds no region is recovered at that next point). In particular a
+// region never spans a call. Whatever a call binds to - the callee's body,
+// the lazy symbol lookup or dispatch stub in front of it, a compilation, the
+// allocator and the finalizers a collection runs - is outside the region,
+// so none of it needs to be (or could be) made safe to abandon. Functions
+// without cancellation points of their own are never instrumented, since no
 // region can be open while they run.
 
 #include "llvm-version.h"
@@ -68,34 +61,6 @@ static void setResetSafeMetadata(Instruction *I) {
     I->setMetadata("julia.reset_safe", MDNode::get(I->getContext(), {}));
 }
 
-// Machinery that codegen/the runtime inserts implicitly - calls into the
-// runtime library (boxing, error throws, generic dispatch, exception-stack
-// manipulation, ...) - is not part of the IPO contract that lets inference
-// tag a statement reset_safe, and the runtime-internal frames implementing
-// it (malloc, exception setup, the JIT) must never be abandoned by a
-// delivered reset. Such calls eagerly drop the published reset context in
-// every function, even where the covering source statement was proven
-// reset-safe. (Interrupt-safe insertions - the GC safepoint, pure address
-// computations - are exempted by the callers of this predicate, and
-// allocations/write barriers are handled by the *_reset_safe runtime entry
-// points selected in FinalLowerGC instead.)
-static bool isImplicitRuntimeCall(CallInst *CI) {
-    Function *Callee = CI->getCalledFunction();
-    if (!Callee || Callee->isIntrinsic())
-        return false;
-    StringRef Name = Callee->getName();
-    if (Name.starts_with("julia.call"))
-        return true;
-    // The setjmp calls emitted for exception handlers (and by this pass) are
-    // pure register/buffer saves.
-    if (Name == jl_setjmp_name)
-        return false;
-    // Runtime library helpers. This deliberately over-approximates (it also
-    // matches explicit ccalls into libjulia): dropping the region around a
-    // call that did not need it only delays delivery, never breaks it.
-    return Name.starts_with("ijl_") || Name.starts_with("jl_");
-}
-
 namespace {
 
 struct CancellationLowering : public JuliaPassContext {
@@ -111,17 +76,6 @@ struct CancellationLowering : public JuliaPassContext {
     bool runOnFunction(Function &F);
 
 private:
-    // Allocations that FinalLowerGC lowers to a reset-safe entry point. A Memory allocation
-    // only qualifies if its size is known to fit inline; otherwise it becomes a call to
-    // `jl_alloc_genericmemory_unchecked`, which is not reset-safe.
-    bool isResetSafeAlloc(CallInst *CI) const {
-        Value *Callee = CI->getCalledOperand();
-        return (alloc_obj_func && Callee == alloc_obj_func) || getInlineMemorySize(CI);
-    }
-    bool isRuntimeMemoryAlloc(CallInst *CI) const {
-        return alloc_memory_func && CI->getCalledOperand() == alloc_memory_func && !getInlineMemorySize(CI);
-    }
-
     // Compute reset_ctx_ptr once in entry block
     // If insertAfter is provided, insert after that instruction
     // Otherwise insert at the beginning of the entry block (after allocas)
@@ -220,16 +174,10 @@ bool CancellationLowering::runOnFunction(Function &F) {
         }
     }
 
-    // A function without cancellation points of its own still participates
-    // when codegen marked it julia.ipo_reset_safe: it may run inside a
-    // caller's reset region (kept open across a reset_safe call), so its
-    // implicitly-inserted runtime machinery and untagged calls must eagerly
-    // drop the region. Any other function can never run inside an open
-    // region and needs no instrumentation. (Without access to the task
-    // pointer nothing can be done either - but then the function cannot
-    // contain the operations that need dropping.)
-    bool instrumented = !CancellationPoints.empty();
-    if (!instrumented && (!pgcstack || !F.hasFnAttribute("julia.ipo_reset_safe")))
+    // A function without cancellation points of its own can never run inside
+    // an open region (a region never spans a call) and needs no
+    // instrumentation.
+    if (CancellationPoints.empty())
         return false;
 
     // Sanitizer instrumentation runs AFTER this pass (see addSanitizerPasses
@@ -242,14 +190,10 @@ bool CancellationLowering::runOnFunction(Function &F) {
     // cancellation points to a plain safepoint + status check (delivery
     // degrades to level-triggered polling).
     bool no_publish = F.hasFnAttribute(Attribute::SanitizeThread);
-    if (no_publish && !instrumented)
-        return false;
-
 
     // Compute reset_ctx_ptr once in entry block (dominates all uses)
     // pgcstack_inst is set when pgcstack comes from a call; null when it's an argument
-    if (instrumented)
-        computeResetCtxPtr(F, pgcstack_inst);
+    computeResetCtxPtr(F, pgcstack_inst);
 
     // Lower each cancellation point, remembering each region's publication
     // for the reachability computation below. All points of a function share
@@ -380,11 +324,9 @@ bool CancellationLowering::runOnFunction(Function &F) {
         setResetSafeMetadata(sp_store);
 
         // Record the task's GC-frame chain head and innermost exception
-        // handler at establishment: a delivered reset may interrupt a
-        // reset-safe callee that pushed frames of its own onto either chain,
-        // all of which die with the abandoned stack region, so the delivery
-        // restores both saved values before the longjmp. (pgcstack points
-        // directly at the task's gcstack field.)
+        // handler at establishment, which the delivery restores before the
+        // longjmp (see jl_reset_ctx_t). (pgcstack points directly at the
+        // task's gcstack field.)
         Value *gcstack_val = Builder.CreateAlignedLoad(PtrTy, pgcstack, Align(sizeof(void*)), "saved_gcstack");
         Value *GCStackSlot = Builder.CreateGEP(I8Ty, UContextBuf,
                                                ConstantInt::get(I64Ty, offsetof(jl_reset_ctx_t, gcstack)),
@@ -450,13 +392,10 @@ bool CancellationLowering::runOnFunction(Function &F) {
         return Changed;
 
     // A region can only be open at an instruction reachable from one of the
-    // publications (or anywhere, when the function may inherit an open
-    // region from its caller across a reset_safe call - it carries the
-    // julia.ipo_reset_safe attribute). Instructions outside that set need
-    // neither clears nor teardown nor site annotations.
-    bool inherits_region = F.hasFnAttribute("julia.ipo_reset_safe");
+    // publications. Instructions outside that set need neither clears nor
+    // teardown.
     SmallPtrSet<BasicBlock*, 16> MayBeOpenAtEntry;
-    if (!inherits_region) {
+    {
         SmallVector<BasicBlock*, 8> Worklist;
         for (Instruction *Pub : PointPublishes)
             for (BasicBlock *Succ : successors(Pub->getParent()))
@@ -469,7 +408,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
         }
     }
     auto blockMayOpenAtEntry = [&](BasicBlock *B) {
-        return inherits_region || MayBeOpenAtEntry.count(B);
+        return MayBeOpenAtEntry.count(B) != 0;
     };
     auto isPublishStore = [&](Instruction *I) {
         auto *SI = dyn_cast<StoreInst>(I);
@@ -478,17 +417,13 @@ bool CancellationLowering::runOnFunction(Function &F) {
     };
 
     // Now walk the function to find unsafe points and insert reset_ctx =
-    // NULL before them. In an instrumented function (one with cancellation
-    // points) every store/atomic/call without reset_safe metadata is an
-    // unsafe point; in any other function only implicitly-inserted runtime
-    // machinery is (its explicit operations are covered by the IPO contract
-    // of whatever reset_safe call the region was kept open across).
+    // NULL before them: every store, atomic, volatile load and call that is
+    // not the pass's own bookkeeping (which carries the julia.reset_safe
+    // metadata) is one.
     SmallVector<Instruction*, 16> UnsafePoints;
 
     // We need to skip instructions that are part of our setup (pgcstack, task, reset_ctx_ptr)
-    // since they occur before reset_ctx_ptr is available (for the
-    // non-instrumented walk, reset_ctx_ptr is computed lazily below, right
-    // after the pgcstack instruction - so skip until we pass that instead)
+    // since they occur before reset_ctx_ptr is available
     Instruction *reset_ctx_ptr_inst = dyn_cast_or_null<Instruction>(reset_ctx_ptr);
     Instruction *setup_sentinel = reset_ctx_ptr_inst ? reset_ctx_ptr_inst : pgcstack_inst;
 
@@ -510,25 +445,18 @@ bool CancellationLowering::runOnFunction(Function &F) {
             if (!may_open)
                 continue;
 
-            // Stores, atomics, and volatile loads are unsafe points only in
-            // instrumented functions (those with cancellation points of
-            // their own). In a merely-reset_safe function, its explicit
-            // operations are covered by the IPO contract that let the caller
-            // keep the region open - only calls can smuggle in machinery
-            // that is not.
-            //
             // Check for stores (the reset_ctx stores we just created carry
             // the reset_safe metadata). Atomic stores are unsafe points like
             // plain ones: a reset delivered around e.g. a lock-release store
             // would leave the lock owned forever.
             if (auto *SI = dyn_cast<StoreInst>(&I)) {
-                if (instrumented && !hasResetSafeMetadata(SI))
+                if (!hasResetSafeMetadata(SI))
                     UnsafePoints.push_back(SI);
             }
             // Atomic read-modify-write operations publish state a reset
             // could tear (e.g. a cmpxchg acquiring a user spin lock).
             else if (isa<AtomicCmpXchgInst>(&I) || isa<AtomicRMWInst>(&I)) {
-                if (instrumented && !hasResetSafeMetadata(&I))
+                if (!hasResetSafeMetadata(&I))
                     UnsafePoints.push_back(&I);
             }
             // Volatile loads can have side effects (MMIO, read-to-clear
@@ -536,72 +464,48 @@ bool CancellationLowering::runOnFunction(Function &F) {
             // taken effect would silently abandon it. The pass's own
             // bookkeeping loads are non-volatile and thus exempt.
             else if (auto *LI = dyn_cast<LoadInst>(&I)) {
-                if (instrumented && LI->isVolatile() && !hasResetSafeMetadata(LI))
+                if (LI->isVolatile() && !hasResetSafeMetadata(LI))
                     UnsafePoints.push_back(LI);
             }
-            // Check for calls (but not debug intrinsics, lifetime markers, etc.)
+            // Every call is an unsafe point, whatever its callee claims
+            // about itself: the call may bind to a lazy symbol-lookup or
+            // dispatch stub, compile the callee, allocate, or run
+            // finalizers, none of which can be abandoned by a reset. Only a
+            // few intrinsics that neither observe nor publish any state are
+            // exempt.
             else if (auto *CI = dyn_cast<CallInst>(&I)) {
-                // Skip debug intrinsics and other harmless intrinsics
                 if (isa<DbgInfoIntrinsic>(CI))
                     continue;
                 if (CI->isLifetimeStartOrEnd())
                     continue;
-
-                // Check for reset_safe metadata (in both walks: an untagged
-                // call in a merely-reset_safe function may invoke code whose
-                // own effects are weaker than the statement-level refinement
-                // that proved this function reset_safe, e.g. after constant
-                // propagation - only tagged callees are known to participate
-                // in a spanned region). Even a tagged call is an unsafe point
-                // when it is implicitly-inserted runtime machinery (the tag
-                // describes the source statement's IPO contract, not the
-                // runtime frames implementing it).
-                if (!hasResetSafeMetadata(CI) || isImplicitRuntimeCall(CI) || isRuntimeMemoryAlloc(CI)) {
-                    // Also skip intrinsic calls that are known safe
-                    Function *Callee = CI->getCalledFunction();
-                    if (Callee && Callee->isIntrinsic()) {
-                        Intrinsic::ID ID = Callee->getIntrinsicID();
-                        if (ID == Intrinsic::lifetime_start ||
-                            ID == Intrinsic::lifetime_end ||
-                            ID == Intrinsic::dbg_declare ||
-                            ID == Intrinsic::dbg_value ||
-                            ID == Intrinsic::dbg_label ||
-                            ID == Intrinsic::assume ||
-                            ID == Intrinsic::expect ||
-                            ID == Intrinsic::prefetch) {
-                            continue;
-                        }
+                Function *Callee = CI->getCalledFunction();
+                if (Callee && Callee->isIntrinsic()) {
+                    Intrinsic::ID ID = Callee->getIntrinsicID();
+                    if (ID == Intrinsic::lifetime_start ||
+                        ID == Intrinsic::lifetime_end ||
+                        ID == Intrinsic::dbg_declare ||
+                        ID == Intrinsic::dbg_value ||
+                        ID == Intrinsic::dbg_label ||
+                        ID == Intrinsic::assume ||
+                        ID == Intrinsic::expect ||
+                        ID == Intrinsic::prefetch) {
+                        continue;
                     }
-                    // Skip the setjmp and safepoint calls we just created
-                    if (Callee && (Callee->getName() == jl_setjmp_name ||
-                                   Callee->getName() == "julia.safepoint"))
-                        continue;
-                    // Known-safe julia runtime intrinsics: pure address
-                    // computations that neither observe nor publish state a
-                    // reset could tear. These commonly appear as ccall
-                    // argument-conversion glue (unsafe_convert of a mutable
-                    // object), and must not invalidate a reset region
-                    // published across an adjacent reset-safe foreign call.
-                    if (Callee && (Callee == pointer_from_objref_func || Callee == gc_loaded_func))
-                        continue;
-                    // Allocations and write barriers are safe to span:
-                    // FinalLowerGC (stock and MMTk) lowers annotated sites
-                    // to the *_reset_safe runtime entry points, which
-                    // unpublish the region around the operation and
-                    // republish it on the way out (so the region even
-                    // survives the operation).
-                    if (isResetSafeAlloc(CI) || isWriteBarrierFunc(Callee))
-                        continue;
-                    UnsafePoints.push_back(CI);
                 }
+                // Skip the setjmp and safepoint calls we just created
+                if (Callee && (Callee->getName() == jl_setjmp_name ||
+                               Callee->getName() == "julia.safepoint"))
+                    continue;
+                // Known-safe julia runtime intrinsics: pure address
+                // computations that neither observe nor publish state a
+                // reset could tear (ccall argument-conversion glue, e.g.
+                // unsafe_convert of a mutable object).
+                if (Callee && (Callee == pointer_from_objref_func || Callee == gc_loaded_func))
+                    continue;
+                UnsafePoints.push_back(CI);
             }
         }
     }
-
-    // For the non-instrumented walk, only materialize the task/reset_ctx
-    // address computation once we know there is something to drop.
-    if (!UnsafePoints.empty() && !reset_ctx_ptr)
-        computeResetCtxPtr(F, pgcstack_inst);
 
     // Insert reset_ctx = NULL before each unsafe point. The clear is
     // volatile and separated from the unsafe operation by a single-thread
@@ -609,9 +513,6 @@ bool CancellationLowering::runOnFunction(Function &F) {
     // a delivery observing the still-published region after the operation
     // executed would longjmp over its effects.
     for (Instruction *I : UnsafePoints) {
-        if (!reset_ctx_ptr)
-            continue;
-
         ++ResetCtxClearsInserted;
         Changed = true;
 
@@ -628,10 +529,8 @@ bool CancellationLowering::runOnFunction(Function &F) {
 
     // Insert reset_ctx = NULL before all return instructions
     // This is necessary because the cancel_ucontext buffer is stack-allocated,
-    // and becomes invalid when the function returns. (Only functions that
-    // establish regions of their own need this: a non-instrumented function
-    // returning inside a caller's region must leave it published.)
-    if (instrumented && reset_ctx_ptr) {
+    // and becomes invalid when the function returns.
+    {
         LLVMContext &LLVMCtx = F.getContext();
         Type *PtrTy = PointerType::getUnqual(LLVMCtx);
         Value *null_ptr = ConstantPointerNull::get(cast<PointerType>(PtrTy));
@@ -668,37 +567,6 @@ bool CancellationLowering::runOnFunction(Function &F) {
             store->setOrdering(AtomicOrdering::Release);
             setResetSafeMetadata(store);
             ++ResetCtxClearsInserted;
-        }
-    }
-
-    // Annotate the allocation and write-barrier sites that may execute while
-    // a reset region is published: FinalLowerGC lowers exactly these to the
-    // *_reset_safe runtime entry points, which unpublish/republish the
-    // region themselves (no per-site drop is needed, and the region survives
-    // the operation). Carrying an open region is a per-site property, not a
-    // function-level one, so track the clears and publishes inserted above
-    // through each block: a site escapes annotation only when every path to
-    // it has already cleared the region, or when no publication reaches it
-    // at all. Block entry state comes from the reachability computed above
-    // (everything, for a function that may inherit an open region from its
-    // caller); an unneeded annotation only costs the entry point's (cheap)
-    // region handling.
-    for (auto &BB : F) {
-        bool region_open = blockMayOpenAtEntry(&BB);
-        for (auto &I : BB) {
-            if (auto *SI = dyn_cast<StoreInst>(&I)) {
-                if (reset_ctx_ptr && SI->getPointerOperand() == reset_ctx_ptr)
-                    region_open = !isa<ConstantPointerNull>(SI->getValueOperand());
-            }
-            else if (auto *CI = dyn_cast<CallInst>(&I)) {
-                Function *Callee = CI->getCalledFunction();
-                if (!Callee)
-                    continue;
-                if (region_open && (isResetSafeAlloc(CI) || isWriteBarrierFunc(Callee))) {
-                    CI->setMetadata("julia.reset_region", MDNode::get(F.getContext(), {}));
-                    Changed = true;
-                }
-            }
         }
     }
 

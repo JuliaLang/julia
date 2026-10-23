@@ -105,11 +105,7 @@ void FinalLowerGC::lowerQueueGCRoot(CallInst *target, Function &F)
 {
     ++QueueGCRootCount;
     assert(target->arg_size() == 1);
-    // The site may execute with a reset region published (metadata inherited
-    // from the write barrier CancellationLowering annotated).
-    target->setCalledFunction(target->hasMetadata("julia.reset_region")
-                                  ? queueRootResetSafeFunc
-                                  : queueRootFunc);
+    target->setCalledFunction(queueRootFunc);
 }
 
 void FinalLowerGC::lowerSafepoint(CallInst *target, Function &F)
@@ -161,10 +157,6 @@ bool FinalLowerGC::runOnFunction(Function &F)
     smallAllocFunc = getOrDeclare(jl_well_known::GCSmallAlloc);
     bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
     allocTypedFunc = getOrDeclare(jl_well_known::GCAllocTyped);
-    queueRootResetSafeFunc = getOrDeclare(jl_well_known::GCQueueRootResetSafe);
-    smallAllocResetSafeFunc = getOrDeclare(jl_well_known::GCSmallAllocResetSafe);
-    bigAllocResetSafeFunc = getOrDeclare(jl_well_known::GCBigAllocResetSafe);
-    allocTypedResetSafeFunc = getOrDeclare(jl_well_known::GCAllocTypedResetSafe);
     T_size = F.getParent()->getDataLayout().getIntPtrType(F.getContext());
 
 

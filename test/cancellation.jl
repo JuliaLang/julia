@@ -513,24 +513,21 @@ end
     @test t3.result == CANCEL_REQUEST_ABANDON_EXTERNAL
 end
 
-# An effect-free (hence reset-safe) non-inlined spin: the enclosing compiled
-# cancellation region stays published across the call, so an asynchronous
-# reset can interrupt it even though it performs no checks of its own.
-@noinline function _pure_spin(x::Int)
-    a = x
+# A pure spin in the frame of the cancellation point itself: the compiled
+# region a point publishes ends at the first store or call, so only compute
+# that stays in the establishing frame - loads and arithmetic - can be
+# interrupted by an asynchronous reset. (Calling out to a spin, however
+# effect-free, would close the region before the call.)
+function _reset_victim(started::Threads.Atomic{Bool})
+    Threads.atomic_xchg!(started, true)
+    # The compiled cancellation point establishes the reset region and binds
+    # the scoped source; nothing after it tears the region down.
+    Base.@cancel_check
+    a = 0
     while a >= 0
         a = (a + 1) & typemax(Int)
     end
     return a
-end
-
-function _reset_victim(started::Threads.Atomic{Bool})
-    Threads.atomic_xchg!(started, true)
-    # The compiled cancellation point establishes the reset region and binds
-    # the scoped source; nothing between it and the reset-safe call below
-    # tears the region down.
-    Base.@cancel_check
-    return _pure_spin(0)
 end
 
 @testset "asynchronous reset delivery" begin
@@ -548,67 +545,6 @@ end
         cancel!(src)
         # rely on the test harness watchdog for hangs, like other testsets
         wait(t; throw=false)
-        @test istaskfailed(t)
-        @test t.result isa CancellationRequest
-    end
-end
-
-# An effect-free (hence reset-safe) non-inlined spin that allocates every
-# iteration. Each allocation unpublishes the enclosing region around the
-# allocator (a reset-safe GC entry point) and republishes it afterwards; the
-# republish re-checks the task's bound source, so a cancellation is picked up
-# even though the spin never polls and no signal is ever sent.
-Base.@assume_effects :effect_free @noinline _obs(r::Base.RefValue{Int}) = r[]
-Base.@assume_effects :effect_free @noinline function _alloc_spin(x::Int)
-    a = x
-    while a >= 0
-        a = (_obs(Base.RefValue(a)) + 1) & typemax(Int)
-    end
-    return a
-end
-
-function _alloc_victim(started::Threads.Atomic{Bool})
-    Threads.atomic_xchg!(started, true)
-    Base.@cancel_check
-    return _alloc_spin(0)
-end
-
-# A compiled cancellation point that rebinds the task's bound_cancel_token
-# to an unrelated source, as a finalizer might do while running inside an
-# allocation that has the region temporarily unpublished.
-@noinline _rebind_point(src::CancellationTokenSource) = (Core.cancellation_point!(src); nothing)
-
-@testset "finalizer rebinding does not detach the region's source" begin
-    # Finalizers run synchronously by a collection triggered inside an
-    # allocation may execute nested cancellation points and rebind the
-    # task's bound_cancel_token field. The finalizer machinery brackets that
-    # state (finalizers hijack the task, so it is on them to save/restore
-    # it), so delivery - including the allocator's republish self-check -
-    # never observes the rebinding: cancelling the original source must
-    # still kill the victim, with no signal sent.
-    if Threads.nthreads(:default) >= 2
-        srcB = CancellationTokenSource()  # never cancelled
-        started = Threads.Atomic{Bool}(false)
-        stop = Threads.Atomic{Bool}(false)
-        t, src = cancellable_spawn(() -> _alloc_victim(started))
-        churner = Threads.@spawn begin
-            while !stop[]
-                obj = Ref(0)
-                finalizer(x -> _rebind_point(srcB), obj)
-                obj = nothing
-                GC.gc(false)
-                yield()
-            end
-        end
-        @test timedwait(() -> started[], 30.0) == :ok
-        # raise the state without cancel!'s shootdown walk: the republish
-        # self-check must deliver on its own despite the finalizers'
-        # (bracketed) rebinding
-        Base._raise_state!(src, 0x1)
-        # rely on the test harness watchdog for hangs, like other testsets
-        wait(t; throw=false)
-        stop[] = true
-        wait(churner)
         @test istaskfailed(t)
         @test t.result isa CancellationRequest
     end
@@ -638,41 +574,6 @@ end
     end
 end
 
-@testset "cancel! delivers to allocating regions" begin
-    # An allocating reset region additionally self-recovers: were the
-    # shootdown ever lost, the next allocation's republish re-check would
-    # perform the delivery.
-    if Threads.nthreads(:default) >= 2
-        started = Threads.Atomic{Bool}(false)
-        t, src = cancellable_spawn(() -> _alloc_victim(started))
-        @test timedwait(() -> started[], 30.0) == :ok
-        cancel!(src)
-        # rely on the test harness watchdog for hangs, like other testsets
-        wait(t; throw=false)
-        @test istaskfailed(t)
-        @test t.result isa CancellationRequest
-    end
-end
-
-@testset "reset region republish self-delivery" begin
-    # A cancellation that arrives while an allocation holds the region
-    # unpublished finds no reset context and is dropped by its sender; the
-    # allocator's republish must re-check the bound source and perform the
-    # missed delivery itself, or the wakeup would be lost. This makes an
-    # allocating reset region cancellable without any signal at all - to
-    # isolate that path from cancel!'s automatic shootdown, raise the
-    # source's state directly.
-    if Threads.nthreads(:default) >= 2
-        started = Threads.Atomic{Bool}(false)
-        t, src = cancellable_spawn(() -> _alloc_victim(started))
-        @test timedwait(() -> started[], 30.0) == :ok
-        Base._raise_state!(src, 0x1)
-        # rely on the test harness watchdog for hangs, like other testsets
-        wait(t; throw=false)
-        @test istaskfailed(t)
-        @test t.result isa CancellationRequest
-    end
-end
 ## Request-delivery tests (cancellation of waiting tasks)
 
 # Start `f` as an @async-style (sticky, co-scheduled) task governed by a
@@ -2008,86 +1909,6 @@ end
     @test cell3[] === (Int64(0), Int64(0))
 end
 
-@testset "BigInt/GMP cancellation via reset regions" begin
-    # No explicit cancellation points in the loop body: cancellation reaches
-    # it through the annotated MPZ entry points - either their own
-    # cancellation point, an asynchronous reset landing inside audited
-    # libgmp compute (the reset region stays published across the annotated
-    # call), or the allocation hooks republishing the region on exit.
-    function bigmul_loop(nbits)
-        b = big(3)^(nbits ÷ 2)
-        m = big(10)^(nbits ÷ 8)
-        while true
-            b = (b * b) % m
-        end
-    end
-    if Threads.nthreads(:default) >= 2
-        t, src = cancellable_spawn(() -> bigmul_loop(1_000_000))
-        sleep(1.0) # let it get into the multiply/mod cycle
-        cancel!(src)
-        @test wait_cancelled(t, src)
-        @test istaskfailed(t)
-        @test t.result isa CancellationRequest
-        # the library stays healthy: correct arithmetic after the cancellation
-        @test factorial(big(30)) == prod(big(1):big(30))
-        @test string(big(2)^128) == "340282366920938463463374607431768211456"
-
-        # Allocation-churn storm: small, allocation-dominated BigInt work
-        # hammered by cancellation. Deliveries frequently race the
-        # jl_gmp_counted_* hooks, exercising their unpublish/republish path;
-        # correctness is "no crash, no corruption, clean arithmetic
-        # afterwards".
-        deadline = time() + 8
-        rounds = 0
-        while time() < deadline
-            gsrc = CancellationTokenSource()
-            gt = with(CANCEL_TOKEN => CancellationToken(gsrc)) do
-                Threads.@spawn begin
-                    b = big(1)
-                    m = big(10)^60
-                    while true
-                        b = (b + big(12345))^2 % m
-                    end
-                end
-            end
-            rounds % 3 == 0 || sleep(0.02)
-            cancel!(gsrc)
-            @test wait_cancelled(gt, gsrc)
-            @test istaskfailed(gt)
-            rounds += 1
-        end
-        @test rounds > 0
-        @test factorial(big(20)) == 2432902008176640000
-    end
-end
-
-@testset "cancellation lands inside audited libgmp compute" begin
-    # A single long computation-carrying GMP call: the reset region
-    # published by the annotated call's own cancellation point must survive
-    # into the call (the point's binding bookkeeping - a task's first point
-    # under a new source takes the write-barrier path - must come before the
-    # region publication), and an asynchronous cancellation unwinds out of
-    # the foreign computation promptly instead of waiting for it to finish.
-    if Threads.nthreads(:default) >= 2
-        started = Base.Event()
-        t, src = cancellable_spawn() do
-            notify(started)
-            # ~tens of seconds of uninterrupted libgmp compute if not cancelled
-            Base.GMP.MPZ.fac_ui(UInt(40_000_000))
-        end
-        wait(started)
-        sleep(1.0) # let it get deep into the fac_ui call
-        t0 = time()
-        cancel!(src)
-        @test wait_cancelled(t, src)
-        @test istaskfailed(t)
-        @test t.result isa CancellationRequest
-        @test time() - t0 < 15.0 # cancelled promptly, not at call completion
-        # the library stays healthy afterwards
-        @test factorial(big(25)) == prod(big(1):big(25))
-    end
-end
-
 # BLAS cancellation handler: it executes on the thread blocked in the dgemm,
 # where the library's thread-local cancel token is exactly the one the
 # in-flight operation is bound to. The function pointers are pre-resolved
@@ -2732,13 +2553,11 @@ Sys.isunix() && @testset "^C in the REPL (pty)" begin
 
     # cancelling a BigInt computation never yanks control out of libgmp in
     # an unsafe spot the way the old asynchronous InterruptException
-    # delivery could (corrupting the heap - issue #56545): the loop is
-    # deliberately checkless, so delivery lands on an MPZ entry point's own
-    # cancellation point, inside audited libgmp compute (unwound via the
-    # published reset region), or when an allocation hook republishes the
-    # region on exit - and BigInt arithmetic in the session works correctly
-    # afterwards
-    sendline("println(\"EVAL-6\"); let b = big(3); while true; b = b*b % (big(10)^200); end; end")
+    # delivery could (corrupting the heap - issue #56545): delivery lands at
+    # the loop's own cancellation point, and every libgmp call clears the
+    # reset region before it runs - and BigInt arithmetic in the session
+    # works correctly afterwards
+    sendline("println(\"EVAL-6\"); let b = big(3); while true; Base.@cancel_check; b = b*b % (big(10)^200); end; end")
     expect("EVAL-6")
     sleep(0.5)
     kill(p, Base.SIGINT)

@@ -878,8 +878,7 @@ static void usr2_deliver_reset(jl_task_t *ct, jl_ptls_t ptls, uint8_t reqflags,
         }
         else {
             // Reset flavor, additionally gated on the thread running Julia
-            // code (gc_state == 0): a thread inside a GC-safe region (e.g.
-            // a foreign call reached through a reset-safe callee) may be
+            // code (gc_state == 0): a thread inside a GC-safe region may be
             // raced by a concurrent stop-the-world, and a longjmp back into
             // Julia code would break that protocol.
             // A deliverable cancellation takes precedence over a
@@ -896,9 +895,7 @@ static void usr2_deliver_reset(jl_task_t *ct, jl_ptls_t ptls, uint8_t reqflags,
                 // cancellation and throws. Clear reset_ctx before the
                 // longjmp to prevent a double reset, and restore the
                 // GC-frame chain head and the innermost exception handler
-                // saved at establishment: the interrupt may have landed
-                // inside a reset-safe callee whose pushes onto either chain
-                // die with the abandoned stack region.
+                // saved at establishment (see jl_reset_ctx_t).
                 jl_atomic_store_relaxed(&ct->reset_ctx, NULL);
                 ct->gcstack = reset_ctx->gcstack;
                 ct->eh = reset_ctx->eh;
