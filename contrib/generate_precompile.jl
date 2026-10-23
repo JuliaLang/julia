@@ -441,13 +441,17 @@ let stdout = Ref{IO}(stdout)
     Base.stdout = Core.stdout
     Base.stderr = Core.stderr
 
-    # Print report after sysimage has been saved so all time spent can be captured
+    # Print report after the heap image has been serialized. The native code is
+    # compiled after the heap is released, when no more Julia code can run, so
+    # record the time for sysimage.mk to report that part.
+    timing_file = get(ENV, "JULIA_SYSIMG_TIMING_FILE", nothing)
     pre_output_time = time_ns()
     Base.postoutput() do
         output_time = time_ns() - pre_output_time
         let stdout = stdout[]
-            print(stdout, "Output ────── "); Base.time_print(stdout, output_time); println(stdout)
+            print(stdout, "Serialize ─── "); Base.time_print(stdout, output_time); println(stdout)
         end
+        timing_file === nothing || write(timing_file, string(time()))
         stdout[] = Core.stdout
     end
 end
