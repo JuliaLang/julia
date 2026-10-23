@@ -866,7 +866,22 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             kwords = kwarg_decl(method)
             if !isempty(kwords)
                 print(iob, "; ")
-                join(iob, kwords, ", ")
+                # the declared keyword an unsupported one most resembles is drawn in the error color
+                resembled = if any(is_keyword_slurp, kwords)
+                    Symbol[]
+                else
+                    [closest_name(k::Symbol, kwords) for (k, _) in kwargs if !(k::Symbol in kwords)]
+                end
+                for (i, kword) in enumerate(kwords)
+                    if i > 1
+                        print(iob, ", ")
+                    end
+                    if kword in resembled
+                        printstyled(iob, kword; color = error_color())
+                    else
+                        print(iob, kword)
+                    end
+                end
             end
             print(iob, ")")
             show_method_params(iob0, tv)

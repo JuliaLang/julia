@@ -1871,6 +1871,12 @@ end
     @test isempty(Base.declared_keywords(KeywordSuggestions.slurpy))
     @test !Base.accepts_any_keyword(KeywordSuggestions.scaled)
     @test Base.accepts_any_keyword(KeywordSuggestions.slurpy)
+
+    # the candidate list draws the declared keyword a misspelled one resembles in the error color
+    highlighted = string(Base.text_colors[Base.error_color()], "scale")
+    shown_in_color(f) = sprint(showerror, try f() catch err; err end; context = :color => true)
+    @test occursin(highlighted, shown_in_color(() -> KeywordSuggestions.scaled(2; scal = 5)))
+    @test !occursin(highlighted, shown_in_color(() -> KeywordSuggestions.scaled(2; bogus = 5)))
 end
 
 module UndefVarSuggestions
