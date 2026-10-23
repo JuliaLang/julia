@@ -63,6 +63,7 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
     mt->name = name;
     mt->module = module;
     mt->backedges = (jl_genericmemory_t*)jl_an_empty_memory_any;
+    jl_atomic_store_relaxed(&mt->contributors, (jl_genericmemory_t*)jl_an_empty_memory_any);
     JL_GC_POP();
     return mt;
 }
