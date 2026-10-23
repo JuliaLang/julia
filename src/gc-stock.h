@@ -188,14 +188,39 @@ STATIC_INLINE void push_lf_back(jl_gc_page_stack_t *pool, jl_gc_pagemeta_t *elt)
     }
 }
 
-STATIC_INLINE jl_gc_pagemeta_t *try_pop_lf_back(jl_gc_page_stack_t *pool) JL_NOTSAFEPOINT
+// Push the chain `head`, ..., `tail` (linked through `next`) in one step
+STATIC_INLINE void push_lf_back_chain(jl_gc_page_stack_t *pool, jl_gc_pagemeta_t *head,
+                                      jl_gc_pagemeta_t *tail) JL_NOTSAFEPOINT
+{
+    while (1) {
+        jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->bottom);
+        tail->next = old_back;
+        if (jl_atomic_cmpswap(&pool->bottom, &old_back, head)) {
+            break;
+        }
+        jl_cpu_pause();
+    }
+}
+
+// Pop up to `*n` nodes at once: returns the first one and sets `*n` to the
+// number popped, the rest following through `next`. Only valid while nothing
+// is pushed onto `pool`. The stack then only shrinks, so if its top is still
+// the node we started from, none of the nodes walked has been popped.
+STATIC_INLINE jl_gc_pagemeta_t *try_pop_lf_back_n(jl_gc_page_stack_t *pool, int *n) JL_NOTSAFEPOINT
 {
     for (int i = 0; i < (1 << 10); i++) {
         jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->bottom);
         if (old_back == NULL) {
             return NULL;
         }
-        if (jl_atomic_cmpswap(&pool->bottom, &old_back, old_back->next)) {
+        jl_gc_pagemeta_t *new_back = old_back->next;
+        int k = 1;
+        while (k < *n && new_back != NULL) {
+            new_back = new_back->next;
+            k++;
+        }
+        if (jl_atomic_cmpswap(&pool->bottom, &old_back, new_back)) {
+            *n = k;
             return old_back;
         }
         jl_cpu_pause();
