@@ -1255,9 +1255,12 @@ function return_callback(s)
     end
     buf = LineEdit.buffer(s)
     incomplete(takestring!(copy(buf))) && return false
-    # The input may only be complete thanks to automatically inserted closing brackets after
-    # the cursor, so continue on a new line if it isn't without them (e.g. `[|]`)
-    return !(LineEdit.only_auto_closed_after_cursor(s) && incomplete(LineEdit.before_cursor(buf)))
+    # Behave as if automatically inserted closing brackets after the cursor weren't there,
+    # i.e. continue on a new line if the input is incomplete without them (e.g. `[|]`)
+    n = sizeof(LineEdit.auto_closed_after_cursor(s))
+    n == 0 && return true
+    pos = position(buf)
+    return !incomplete(LineEdit.content(buf, 0 => pos) * LineEdit.content(buf, pos + n => buf.size))
 end
 
 find_hist_file() = get(ENV, "JULIA_HISTORY",

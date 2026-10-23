@@ -1925,6 +1925,21 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "\x15\x04")
     Base.wait(repltask)
 end
+# Hints and Enter with automatically inserted closing brackets
+fake_repl(options=REPL.Options(confirm_exit=false, style_input=false, auto_insert_closing_bracket=true)) do stdin_write, stdout_read, repl
+    repltask = @async REPL.run_repl(repl)
+    write(stdin_write, "f(reada")
+    readuntil(stdout_read, "reada")
+    # the hint is shown before the auto-inserted `)`, after making room for it
+    s1 = readuntil(stdout_read, "vailable")
+    @test contains(s1, "\e[8@")
+    write(stdin_write, "\x15")
+    # the `)` was typed, so moving back over it and pressing Enter runs the input
+    write(stdin_write, "(\"A\" * \"B\")\e[D\r")
+    readuntil(stdout_read, "\"AB\"")
+    write(stdin_write, "\x04")
+    Base.wait(repltask)
+end
 ## hints disabled
 fake_repl(options=REPL.Options(confirm_exit=false,hascolor=true,hint_tab_completes=false,style_input=false,auto_insert_closing_bracket=false)) do stdin_write, stdout_read, repl
     repltask = @async begin
