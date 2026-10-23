@@ -4215,7 +4215,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(33,
+                        jl_perm_symsvec(34,
                             "name",
                             "module",
                             "file",
@@ -4248,8 +4248,9 @@ void jl_init_types(void) JL_GC_DISABLED
                             "did_scan_source",
                             "constprop",
                             "max_varargs",
-                            "purity"),
-                        jl_svec(33,
+                            "purity",
+                            "guards"),
+                        jl_svec(34,
                             jl_symbol_type,
                             jl_module_type,
                             jl_symbol_type,
@@ -4282,7 +4283,8 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_uint8_type,
                             jl_uint8_type,
                             jl_uint8_type,
-                            jl_uint16_type),
+                            jl_uint16_type,
+                            jl_any_type),
                         jl_emptysvec,
                         0, 1, 10);
     //const static uint32_t method_constfields[] = { 0b0, 0b0 }; // (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<6)|(1<<9)|(1<<10)|(1<<17)|(1<<21)|(1<<22)|(1<<23)|(1<<24)|(1<<25)|(1<<26)|(1<<27)|(1<<28)|(1<<29)|(1<<30);

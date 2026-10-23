@@ -1091,6 +1091,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->constprop = 0;
     m->purity.bits = 0;
     m->max_varargs = UINT8_MAX;
+    m->guards = jl_nothing;
     JL_MUTEX_INIT(&m->writelock, "method->writelock");
     return m;
 }
@@ -1377,6 +1378,24 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     m->file = file;
     m->line = line;
     jl_method_set_source(m, f);
+
+    // trait slots (prototype): attach the guards set by `@guarded`
+    jl_value_t *guards = jl_take_pending_method_guards(jl_svecref(atypes, 0));
+    if (guards != jl_nothing) {
+        JL_GC_PUSH1(&guards);
+        if (jl_generating_output())
+            jl_errorf("guarded method %s: precompilation is not supported", jl_symbol_name(name));
+        if (jl_nth_argument_datatypename((jl_value_t*)argtype, 1) == NULL)
+            jl_errorf("guarded method %s: the function type must be known", jl_symbol_name(name));
+        jl_svec_t *g = (jl_svec_t*)guards;
+        for (size_t i = 0; i < jl_svec_len(g); i += 3) {
+            long pos = jl_unbox_long(jl_svecref(g, i));
+            if (pos < 1 || (size_t)pos >= nargs || (isva && (size_t)pos == nargs - 1))
+                jl_errorf("guarded method %s: argument position %ld out of range", jl_symbol_name(name), pos);
+        }
+        jl_gc_write(m, m->guards, jl_value_t, guards);
+        JL_GC_POP();
+    }
 
     jl_method_table_insert(mt, m, NULL);
     if (jl_newmeth_tracer)

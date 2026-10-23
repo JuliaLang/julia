@@ -425,6 +425,125 @@ macro overlay(mt, def)
 end
 
 """
+    Base.Experimental.@guarded function f(args...) where {trait(arg)::Bound, ...}
+        ...
+    end
+
+Define a *guarded method* (prototype of trait slots, see the developer documentation).
+Each `where` entry of the form `trait(arg)::Bound` is a guard: the method only applies to a
+call if `trait(typeof(arg))` returns a value `v` with `Core.Typeof(v) <: Bound`. If `arg`
+is the static parameter `T` of an argument declared `::Type{T}`, the trait is called on
+`Type{T}` instead. The other `where` entries are ordinary static parameters.
+
+Method specificity combines the signature and the guards: a method is more specific if
+its signature is at least as specific and each of its guard bounds is a subtype of the
+other's (`Any` if absent), and it is strictly more specific in one of them. Methods that
+differ only in their guards do not replace each other.
+
+Traits may run during inference or on a dynamic dispatch cache miss, even when no guarded
+signature matches.
+A trait must be total and must not have side effects: its result may only depend on its
+argument and the world. `Bound` is evaluated at definition time. Not supported: keyword and
+default arguments, guards on a `Vararg` argument, and precompilation.
+"""
+macro guarded(def)
+    inner = Base.unwrap_macrocalls(def)
+    is_function_def(inner) || error("@guarded requires a function definition")
+    guardexprs = Any[]
+    sig = strip_guards!(guardexprs, inner.args[1])
+    isempty(guardexprs) && error("@guarded requires a guard `trait(arg)::Bound` in the `where` clause")
+    call = sig
+    while isexpr(call, :where)
+        call = call.args[1]
+    end
+    isexpr(call, :(::)) && (call = call.args[1])
+    isexpr(call, :call) || error("@guarded: could not find the method signature")
+    fname = call.args[1]
+    fname isa Symbol || isexpr(fname, :.) || error("@guarded: the function must be named")
+    args = call.args[2:end]
+    any(a -> isexpr(a, :parameters) || isexpr(a, :kw), args) &&
+        error("@guarded does not support keyword or default arguments")
+    guards = Any[]
+    for g in guardexprs
+        trait, sym = g.args[1].args
+        push!(guards, guard_argpos(args, sym), esc(trait), esc(g.args[2]))
+    end
+    # The guards become pending when the type of the last argument has been evaluated, so
+    # that no other definition can take them: the method is defined right after that.
+    gs = gensym(:guards)
+    call.args[end] = mark_last_argument(call.args[end], :($set_pending_guards($(fname), $gs)))
+    newdef = replace_definition(def, inner, Expr(inner.head, sig, inner.args[2:end]...))
+    # `try` introduces a local scope, so make the definition global explicitly
+    decl = fname isa Symbol ? :(global $fname; function $fname end) : nothing
+    return quote
+        let
+            $(esc(decl))
+            local $(esc(gs)) = Core.svec($(guards...))
+            local taken = false
+            lock($guarded_lock)
+            try
+                $(esc(newdef))
+                taken = ccall(:jl_clear_pending_method_guards, Cint, ()) == 0
+            finally
+                ccall(:jl_clear_pending_method_guards, Cint, ())
+                unlock($guarded_lock)
+            end
+            taken || error("@guarded: the guards were not attached to the method")
+            nothing
+        end
+    end
+end
+
+const guarded_lock = ReentrantLock()
+
+function set_pending_guards(@nospecialize(T), @nospecialize(f), guards::Core.SimpleVector)
+    ccall(:jl_set_pending_method_guards, Cvoid, (Any, Any), f, guards)
+    return T
+end
+
+# wrap the type of argument `a` as `set(T)`
+function mark_last_argument(a, set::Expr)
+    isexpr(a, :macrocall) && return Expr(:macrocall, a.args[1:end-1]..., mark_last_argument(a.args[end], set))
+    isexpr(a, :...) && return Expr(:..., mark_last_argument(a.args[1], set))
+    name, T = isexpr(a, :(::)) ? (length(a.args) == 2 ? a.args : (nothing, a.args[1])) : (a, :Any)
+    T = Expr(set.head, set.args[1], T, set.args[2:end]...)
+    return name === nothing ? Expr(:(::), T) : Expr(:(::), name, T)
+end
+
+# move the guards `trait(arg)::Bound` of (nested) `where` clauses to `guards`
+function strip_guards!(guards::Vector{Any}, ex)
+    isexpr(ex, :where) || return ex
+    body = strip_guards!(guards, ex.args[1])
+    params = Any[]
+    for p in ex.args[2:end]
+        isguard = isexpr(p, :(::)) && length(p.args) == 2 &&
+                  isexpr(p.args[1], :call) && length(p.args[1].args) == 2
+        push!(isguard ? guards : params, p)
+    end
+    return isempty(params) ? body : Expr(:where, body, params...)
+end
+
+# the position of the argument `sym`, or of the argument declared `::Type{sym}`
+function guard_argpos(args::Vector{Any}, sym)
+    for (i, a) in enumerate(args)
+        isexpr(a, :macrocall) && (a = a.args[end]) # e.g. `@nospecialize(x)`
+        name = isexpr(a, :(::)) ? (length(a.args) == 2 ? a.args[1] : nothing) : a
+        name === sym && return i
+        isexpr(name, :...) && name.args[1] === sym &&
+            error("@guarded: guards on a Vararg argument are not supported")
+    end
+    for (i, a) in enumerate(args)
+        isexpr(a, :macrocall) && (a = a.args[end])
+        isexpr(a, :(::)) && a.args[end] == :(Type{$sym}) && return i
+    end
+    error("@guarded: `$sym` is neither an argument nor the parameter of a `::Type{$sym}` argument")
+end
+
+# replace `inner` in `ex`, keeping the macro calls around it (e.g. `@inline`)
+replace_definition(ex, inner, new) = ex === inner ? new :
+    Expr(:macrocall, ex.args[1:end-1]..., replace_definition(ex.args[end], inner, new))
+
+"""
     Base.Experimental.@consistent_overlay mt def
 
 This macro operates almost identically to [`Base.Experimental.@overlay`](@ref), defining a
