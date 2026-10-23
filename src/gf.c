@@ -5365,6 +5365,11 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
             closure->match.min_valid = max_world + 1;
         return 1;
     }
+    // Every entry possibly matched here may affect the final answer,
+    // whether directly or through ambiguity. Whether it affects the answer can be tricky to compute,
+    // and unlikely to be profitable to be exact, so just use the range of every method intersected.
+    if (closure->match.min_valid < min_world)
+        closure->match.min_valid = min_world;
     if (closure->match.max_valid > max_world)
         closure->match.max_valid = max_world;
     jl_method_t *meth = ml->func.method;
@@ -6011,7 +6016,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
 
     // all intersecting methods have been collected now. the remaining work is to sort
     // these and apply specificity to determine a list of dispatch-possible call targets
-    size_t j, len;
+    size_t len;
     {
         ssize_t sorted = sort_method_matches((jl_array_t*)env.t, lim, include_ambiguous, ambig == NULL, &has_ambiguity);
         if (sorted == -1) {
@@ -6019,15 +6024,6 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
             return jl_nothing;
         }
         len = (size_t)sorted;
-    }
-    for (j = 0; j < len; j++) {
-        jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, j);
-        jl_method_t *m = matc->method;
-        // method applicability is the same as typemapentry applicability
-        size_t min_world = jl_atomic_load_relaxed(&m->primary_world);
-        // intersect the env valid range with method lookup's inclusive valid range
-        if (env.match.min_valid < min_world)
-            env.match.min_valid = min_world;
     }
     if (mc && cache_result_recursion && ((jl_datatype_t*)unw)->isdispatchtuple) { // cache_result_recursion prevents lock confusion and unnecessary work
         if (len == 1 && !has_ambiguity) {
