@@ -2557,7 +2557,7 @@ static void promote_cache_method(jl_value_t *F, jl_value_t **args, uint32_t narg
     if (F == NULL)
         return;
     if (cause == TRIGGER_DISPATCH) {
-        // trait slots: jl_mt_assoc_by_type caches these exactly, for one world
+        // trait slots: jl_mt_assoc_by_type caches these exactly
         if (typename_has_trait_slots(newmeth->def.method->sig))
             return;
         jl_tupletype_t *tt = arg_type_tuple(F, args, nargs + 1);
@@ -2689,13 +2689,17 @@ static jl_method_instance_t *jl_mt_assoc_by_type(
     assert(tt->isdispatchtuple || tt->hasfreetypevars);
     JL_TIMING(METHOD_LOOKUP_SLOW, METHOD_LOOKUP_SLOW);
     jl_method_match_t *matc = NULL;
-    // trait slots: the selection depends on the trait tables in `world`, so
-    // its cache entry is only valid there
+    // trait slots: the selection depends on the trait tables, so its cache
+    // entry is limited to the worlds in which they give the same slot types.
+    // Changing an entry invalidates the entry like a method change does, so
+    // the world counter is read before the tables: the entry only stays valid
+    // in later worlds if no change happened since.
     jl_svec_t *slots = NULL;
+    size_t slots_min_valid = 0, slots_max_valid = ~(size_t)0, slots_world = 0;
     JL_GC_PUSH1(&slots);
     if (typename_has_trait_slots((jl_value_t*)tt)) {
-        size_t min_valid = 0, max_valid = ~(size_t)0;
-        slots = compute_trait_slots(tt, world, &min_valid, &max_valid);
+        slots_world = jl_atomic_load_acquire(&jl_world_counter);
+        slots = compute_trait_slots(tt, world, &slots_min_valid, &slots_max_valid);
     }
     JL_LOCK(&mc->writelock);
     jl_method_instance_t *mi = NULL;
@@ -2710,9 +2714,9 @@ static jl_method_instance_t *jl_mt_assoc_by_type(
             mi = typemap_entry_linfo(entry);
     }
     if (!mi) {
-        size_t current_world = jl_atomic_load_acquire(&jl_world_counter);
-        size_t min_valid = slots ? world : 0;
-        size_t max_valid = slots ? world : ~(size_t)0;
+        size_t current_world = slots ? slots_world : jl_atomic_load_acquire(&jl_world_counter);
+        size_t min_valid = slots_min_valid;
+        size_t max_valid = slots_max_valid;
         matc = _gf_invoke_lookup((jl_value_t*)tt, mt, world, 0, &min_valid, &max_valid, slots, 0);
         if (matc) {
             JL_GC_PUSH1(&matc);

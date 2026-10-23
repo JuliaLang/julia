@@ -82,7 +82,8 @@ covering match beats and reports an ambiguity. For a function with a schema, `ml
 neither uses nor fills the dispatch cache.
 
 **Run time.** On a dispatch cache miss, `jl_mt_assoc_by_type` computes the slot types for the
-call. The cache entry is exact and valid in that world only.
+call. The cache entry is exact, and limited to the worlds in which the tables give the same
+slot types.
 
 **Inference.** The slot types of a call signature come from the same lookup, and narrow the
 valid worlds of the match. No edges are needed: changing an entry invalidates the callers of
