@@ -1,2 +1,3 @@
 /test_*
 /libarchtest_other.*
+/plt_stubs.S
