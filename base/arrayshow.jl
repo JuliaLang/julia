@@ -215,7 +215,7 @@ function _print_matrix(io, @nospecialize(X::AbstractVecOrMat), pre, sep, post, h
                 if i != last(rowsA); println(io); end
             end
         else # rows fit down screen but cols don't, so need horizontal ellipsis
-            c = div(screenwidth-length(hdots)::Int+1,2)+1  # what goes to right of ellipsis
+            c = min(div(screenwidth-length(hdots)::Int+1,2)+1, screenwidth-sum(A[1])-length(hdots))  # what goes to right of ellipsis
             Ralign = reverse(alignment(io, X, rowsA, reverse(colsA), c, c, sepsize, ncols)) # alignments for right
             c = screenwidth - sum(map(sum,Ralign)) - (length(Ralign)-1)*sepsize - length(hdots)::Int
             Lalign = alignment(io, X, rowsA, colsA, c, c, sepsize, ncols) # alignments for left of ellipsis
@@ -242,7 +242,7 @@ function _print_matrix(io, @nospecialize(X::AbstractVecOrMat), pre, sep, post, h
                 end
             end
         else # neither rows nor cols fit, so use all 3 kinds of dots
-            c = div(screenwidth-length(hdots)::Int+1,2)+1
+            c = min(div(screenwidth-length(hdots)::Int+1,2)+1, screenwidth-sum(A[1])-length(hdots))
             Ralign = reverse(alignment(io, X, rowsA, reverse(colsA), c, c, sepsize, ncols))
             c = screenwidth - sum(map(sum,Ralign)) - (length(Ralign)-1)*sepsize - length(hdots)::Int
             Lalign = alignment(io, X, rowsA, colsA, c, c, sepsize, ncols)

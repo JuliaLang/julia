@@ -936,6 +936,22 @@ Base.methodloc_callback[] = nothing
     @test replstr(permutedims([Dict(),Dict()])) == "1×2 Matrix{Dict{Any, Any}}:\n Dict()  Dict()"
     @test replstr(permutedims([undef,undef])) == "1×2 Matrix{UndefInitializer}:\n UndefInitializer()  UndefInitializer()"
     @test replstr([zeros(3,0),zeros(2,0)]) == "2-element Vector{Matrix{Float64}}:\n 3×0 Matrix{Float64}\n 2×0 Matrix{Float64}"
+
+    # long elements in column 1
+    a = Matrix(big(1)I, 10, 10)
+    a[1] = big(10)^70
+    @test replstr(a) == """
+10×10 Matrix{BigInt}:
+ 10000000000000000000000000000000000000000000000000000000000000000000000  …  0
+                                                                       0     0
+                                                                       0     0
+                                                                       0     0
+                                                                       0     0
+                                                                       0  …  0
+                                                                       0     0
+                                                                       0     0
+                                                                       0     0
+                                                                       0     1"""
 end
 
 # string show with elision
