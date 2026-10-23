@@ -770,6 +770,29 @@ static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, int param)
     }
 }
 
+static void get_occurs_cov(jl_stenv_t *e, int8_t *buf) JL_NOTSAFEPOINT
+{
+    int i = 0;
+    for (jl_varbinding_t *v = e->vars; v != NULL; v = v->prev)
+        buf[i++] = v->occurs_cov;
+}
+
+static void set_occurs_cov(jl_stenv_t *e, const int8_t *buf) JL_NOTSAFEPOINT
+{
+    int i = 0;
+    for (jl_varbinding_t *v = e->vars; v != NULL; v = v->prev)
+        v->occurs_cov = buf[i++];
+}
+
+static void max_occurs_cov(jl_stenv_t *e, int8_t *buf) JL_NOTSAFEPOINT
+{
+    int i = 0;
+    for (jl_varbinding_t *v = e->vars; v != NULL; v = v->prev, i++) {
+        if (v->occurs_cov > buf[i])
+            buf[i] = v->occurs_cov;
+    }
+}
+
 // is var x's quantifier outside y's in nesting order
 static int var_outside(jl_stenv_t *e, jl_tvar_t *x, jl_tvar_t *y)
 {
@@ -1676,24 +1699,38 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         return sub;
     }
     if (is_existential_typevar(x, e) != is_existential_typevar(y, e)) {
+        int nvars = current_env_length(e);
+        int8_t *cov_entry = (int8_t*)alloca(2 * nvars);
+        int8_t *cov_max = cov_entry + nvars;
+        get_occurs_cov(e, cov_entry);
+        memcpy(cov_max, cov_entry, nvars);
         e->Lunions.used = 0;
         while (1) {
             e->Lunions.more = 0;
             e->Lunions.depth = 0;
+            set_occurs_cov(e, cov_entry);
             sub = subtype(x, y, e, param);
+            max_occurs_cov(e, cov_max);
             if (!sub || !next_union_state(e, 0))
                 break;
         }
+        if (sub)
+            set_occurs_cov(e, cov_max);
         return sub;
     }
     if (limit_slow == -1)
         limit_slow = kindx || kindy;
     jl_savedenv_t se;
     save_env(e, &se, 1);
+    int nvars = current_env_length(e);
+    int8_t *cov_entry = (int8_t*)alloca(2 * nvars);
+    int8_t *cov_max = cov_entry + nvars;
+    get_occurs_cov(e, cov_entry);
     int count, limited = 0, ini_count = 0;
     jl_saved_unionstate_t latestLunions = {0, 0, 0, NULL};
     while (1) {
         count = ini_count;
+        get_occurs_cov(e, cov_max);
         if (ini_count == 0)
             e->Lunions.used = 0;
         else
@@ -1702,7 +1739,9 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
             e->Lunions.more = 0;
             e->Lunions.depth = 0;
             if (count < 4) count++;
+            set_occurs_cov(e, cov_entry);
             sub = subtype(x, y, e, param);
+            max_occurs_cov(e, cov_max);
             if (limit_slow && count == 4)
                 limited = 1;
             if (!sub || !next_union_state(e, 0))
@@ -1711,6 +1750,7 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
                 // re-save env and freeze the ∃decision for previous ∀Union
                 ini_count = count;
                 push_unionstate(&latestLunions, &e->Lunions);
+                set_occurs_cov(e, cov_max);
                 re_save_env(e, &se, 1);
                 e->Runions.more = oldRmore;
             }
@@ -1722,6 +1762,8 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         restore_env(e, &se, 1); // also restore Rdepth here
         e->Runions.more = oldRmore;
     }
+    if (sub)
+        set_occurs_cov(e, cov_max);
     if (!sub)
         assert(e->Runions.more == oldRmore);
     else if (e->Runions.more > oldRmore && (limited || env_unchanged(e, &se)))
