@@ -153,7 +153,7 @@ loopdone:
 !0 = distinct !{!0, !"julia.simdloop"}
 !1 = distinct !{!1, !"julia.simdloop", !"julia.ivdep"}
 !2 = distinct !{!2, !"julia.simdloop", !"julia.ivdep", !3}
-!3 = !{!"llvm.loop.vectorize.disable", i1 0}
+!3 = !{!"llvm.loop.vectorize.enable"}
 !10 = distinct !DISubprogram(name: "simd_debuginfo", scope: !12, file: !12, type: !13, spFlags: DISPFlagDefinition, unit: !11)
 !11 = distinct !DICompileUnit(language: DW_LANG_Julia, file: !12, emissionKind: FullDebug)
 !12 = !DIFile(filename: "a.jl", directory: ".")

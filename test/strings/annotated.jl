@@ -151,6 +151,7 @@ end
                       (6:9, :label, 5)])
     @test join((String(str1), str1), ' ') ==
         Base.AnnotatedString("test test", [(6:9, :label, 5)])
+    @test join(("test", Base.AnnotatedString("case")), ' ') isa Base.AnnotatedString{String}
     @test repeat(str1, 2) == Base.AnnotatedString("testtest", [(1:8, :label, 5)])
     @test repeat(str2, 2) == Base.AnnotatedString("casecase", [(2:3, :label, "oomph"),
                                                        (6:7, :label, "oomph")])

@@ -17,6 +17,9 @@ using Base: something
 
 using InteractiveUtils: InteractiveUtils
 
+using Base.JuliaSyntax: @K_str, @KSet_str, kind
+using Base.JuliaSyntax.Tokenize: tokenize
+
 abstract type TextInterface end                # see interface immediately below
 abstract type ModeState end                    # see interface below
 abstract type HistoryProvider end
@@ -330,6 +333,8 @@ mutable struct PromptState <: ModeState
     last_newline::Float64 # register when last newline was entered
     # this option is to speed up output
     refresh_wait::Union{Timer,Nothing}
+    # whether a closing bracket or quote was inserted automatically into the current input
+    auto_closed::Bool
 end
 
 struct Modifiers
@@ -1705,6 +1710,7 @@ end
 function replace_line(s::PromptState, l::IOBuffer)
     empty_undo(s)
     s.input_buffer = copy(l)
+    s.auto_closed = false
     deactivate_region(s)
     nothing
 end
@@ -1714,6 +1720,7 @@ function replace_line(s::PromptState, l::Union{String,SubString{String}}, keep_u
     s.input_buffer.ptr = 1
     s.input_buffer.size = 0
     write(s.input_buffer, l)
+    s.auto_closed = false
     deactivate_region(s)
     nothing
 end
@@ -2353,6 +2360,36 @@ const escape_defaults = merge!(
     )
 
 
+before_cursor(buf::IOBuffer) = content(buf, 0 => position(buf))
+
+# Does `str` end inside a string, char or command literal, or a comment? Decided by
+# tokenizing `str` followed by a sentinel character and looking at what the sentinel became.
+function in_literal(str::String)
+    k = K"EndMarker"
+    for t in tokenize(str * 'x')
+        kind(t) == K"EndMarker" || (k = kind(t))
+    end
+    return k in KSet"String CmdString Char Comment ErrorEofMultiComment"
+end
+
+# Number of `left` minus `right` brackets in `str`, outside of literals and comments
+function bracket_balance(str::String, left::Char, right::Char)
+    n = 0
+    for t in tokenize(str)
+        kind(t) in KSet"( ) [ ] { }" || continue
+        c = Char(codeunit(str, t.startbyte + 1))
+        n += (c == left) - (c == right)
+    end
+    return n
+end
+
+# Whether typing `right` should move over the `right` after the cursor rather than insert
+# another one. Not if it is in a literal, or needed to close some other `left`.
+function skip_closing_bracket(buf::IOBuffer, left::Char, right::Char)
+    !eof(buf) && peek(buf, Char) == right || return false
+    return !in_literal(before_cursor(buf)) && bracket_balance(content(buf), left, right) <= 0
+end
+
 # Helper function to check and remove paired brackets/quotes
 # Returns true if paired delimiters were removed, false otherwise
 function try_remove_paired_delimiter(buf::IOBuffer)
@@ -2366,13 +2403,41 @@ function try_remove_paired_delimiter(buf::IOBuffer)
         seek(buf, p)
 
         i = findfirst(isequal(left_char), left_brackets)
-        if i !== nothing && peek(buf, Char) == right_brackets[i]
+        i === nothing && return false
+        right_char = right_brackets[i]
+        peek(buf, Char) == right_char || return false
+        # The quote must open an empty literal; the bracket must not be in a literal, and the
+        # closing bracket must not be needed by another opening one
+        paired = if left_char in ('(', '{', '[')
+            !in_literal(before_cursor(buf)) && bracket_balance(content(buf), left_char, right_char) <= 0
+        else
+            in_literal(before_cursor(buf))
+        end
+        if paired
             # Remove both the left and right bracket/quote
             edit_delete(buf)
             edit_backspace(buf)
             return true
         end
     end
+    return false
+end
+
+# Whether the input after the cursor is only closing brackets and quotes (and whitespace),
+# which were likely inserted automatically
+function only_auto_closed_after_cursor(s::MIState)
+    st = state(s)
+    st isa PromptState && st.auto_closed || return false
+    buf = buffer(st)
+    eof(buf) && return false
+    return all(c -> isspace(c) || c in ")]}\"'`", content(buf, position(buf) => buf.size))
+end
+
+function try_remove_paired_delimiter(s::MIState)
+    set_action!(s, :edit_backspace)
+    push_undo(state(s))
+    try_remove_paired_delimiter(buffer(s)) && return true
+    pop_undo(state(s))
     return false
 end
 
@@ -2421,19 +2486,35 @@ let
         return left_ok && right_ok
     end
 
+    # Edits below act on the buffer directly, so record the action and an undo state here
+    function prepare_insert!(s::MIState)
+        set_action!(s, :edit_insert)
+        push_undo(state(s))
+    end
+
+    function mark_auto_closed!(s::MIState)
+        st = state(s)
+        st isa PromptState && (st.auto_closed = true)
+    end
+
     # Left/right bracket pairs
     bracket_pairs = (('(', ')'), ('{', '}'), ('[', ']'))
     # Characters that are "transparent" for bracket auto-closing
     right_brackets_ws = (')', '}', ']', ' ', '\t', '\n', '"', '\'', '`')
 
     for (left, right) in bracket_pairs
-        # Left bracket: insert both and move cursor between them
+        # Left bracket: insert both and move cursor between them, unless in a literal or
+        # the buffer already has an unmatched right bracket
         bracket_insert_keymap[left] = (s::MIState, o...) -> begin
             local buf = buffer(s)
+            local autoclose = (eof(buf) || peek(buf, Char) in right_brackets_ws) &&
+                !in_literal(before_cursor(buf)) && bracket_balance(content(buf), left, right) >= 0
+            prepare_insert!(s)
             edit_insert(buf, left)
-            if eof(buf) || peek(buf, Char) in right_brackets_ws
+            if autoclose
                 edit_insert(buf, right)
                 edit_move_left(buf)
+                mark_auto_closed!(s)
             end
             refresh_line(s)
         end
@@ -2441,9 +2522,10 @@ let
         # Right bracket: skip over if next char matches, otherwise insert
         bracket_insert_keymap[right] = (s::MIState, o...) -> begin
             local buf = buffer(s)
-            if !eof(buf) && peek(buf, Char) == right
+            if skip_closing_bracket(buf, left, right)
                 edit_move_right(buf)
             else
+                prepare_insert!(s)
                 edit_insert(buf, right)
             end
             refresh_line(s)
@@ -2454,9 +2536,18 @@ let
     for quote_char in ('"', '\'', '`')
         bracket_insert_keymap[quote_char] = (s::MIState, o...) -> begin
             local buf = buffer(s)
-            if !eof(buf) && peek(buf, Char) == quote_char
-                # Skip over closing quote
+            local before = before_cursor(buf)
+            local literal = in_literal(before)
+            if !eof(buf) && peek(buf, Char) == quote_char && !(literal && in_literal(before * quote_char))
+                # Skip over closing quote (in a literal only if the typed one would close it,
+                # i.e. is not escaped)
                 edit_move_right(buf)
+                return refresh_line(s)
+            end
+            prepare_insert!(s)
+            if literal
+                # Never pair inside a literal or comment
+                edit_insert(buf, quote_char)
             elseif position(buf) > 0 && should_skip_closing_bracket(peek_char_left(buf), quote_char)
                 # Don't auto-close (e.g., for transpose or triple quotes)
                 edit_insert(buf, quote_char)
@@ -2464,6 +2555,7 @@ let
                 edit_insert(buf, quote_char)
                 edit_insert(buf, quote_char)
                 edit_move_left(buf)
+                mark_auto_closed!(s)
             else
                 # Just insert single quote
                 edit_insert(buf, quote_char)
@@ -2488,9 +2580,7 @@ let
             return
         end
 
-        if try_remove_paired_delimiter(buffer(s))
-            return refresh_line(s)
-        end
+        try_remove_paired_delimiter(s) && return refresh_line(s)
         return edit_backspace(s)
     end
 end
@@ -3119,6 +3209,7 @@ function reset_state(s::PromptState)
         s.input_buffer.ptr = 1
     end
     empty_undo(s)
+    s.auto_closed = false
     deactivate_region(s)
     ias = InputAreaState(0, 0)
     s.ias = ias
@@ -3157,7 +3248,7 @@ run_interface(::Prompt) = nothing
 
 init_state(terminal, prompt::Prompt) =
     PromptState(terminal, prompt, IOBuffer(), :off, nothing, IOBuffer[], 1, InputAreaState(1, 1),
-                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf, nothing)
+                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf, nothing, false)
 
 function init_state(terminal, m::ModalInterface)
     s = MIState(m, Main, m.modes[1], false, IdDict{Any,Any}())

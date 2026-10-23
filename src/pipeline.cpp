@@ -22,11 +22,7 @@
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Passes/PassBuilder.h>
-#if JL_LLVM_VERSION >= 220000
 #  include <llvm/Plugins/PassPlugin.h>
-#else
-#  include <llvm/Passes/PassPlugin.h>
-#endif
 
 // NewPM needs to manually include all the pass headers
 #include <llvm/Transforms/AggressiveInstCombine/AggressiveInstCombine.h>
@@ -54,9 +50,7 @@
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/Scalar/IndVarSimplify.h>
 #include <llvm/Transforms/Scalar/InductiveRangeCheckElimination.h>
-#if JL_LLVM_VERSION >= 180000
 #include <llvm/Transforms/Scalar/InferAlignment.h>
-#endif
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
 #include <llvm/Transforms/Scalar/JumpThreading.h>
 #include <llvm/Transforms/Scalar/LICM.h>
@@ -106,11 +100,7 @@ using namespace llvm;
 
 namespace {
     static unsigned getSpeedupLevel(OptimizationLevel O) JL_NOTSAFEPOINT {
-#if JL_LLVM_VERSION >= 230000
         return static_cast<unsigned>(O);
-#else
-        return O.getSpeedupLevel();
-#endif
     }
 
     //Shamelessly stolen from Clang's approach to sanitizers
@@ -260,11 +250,7 @@ namespace {
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeEarlySimplificationCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
         static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
         if (!PB) return;
-#if JL_LLVM_VERSION >= 200000
         PB->invokePipelineEarlySimplificationEPCallbacks(MPM, O, ThinOrFullLTOPhase::None);
-#else
-        PB->invokePipelineEarlySimplificationEPCallbacks(MPM, O);
-#endif
     }
     template<typename PB_t>
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeCGSCCCallbacks(CGSCCPassManager &CGPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
@@ -276,11 +262,7 @@ namespace {
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeOptimizerEarlyCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
         static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
         if (!PB) return;
-#if JL_LLVM_VERSION >= 200000
         PB->invokeOptimizerEarlyEPCallbacks(MPM, O, ThinOrFullLTOPhase::None);
-#else
-        PB->invokeOptimizerEarlyEPCallbacks(MPM, O);
-#endif
     }
     template<typename PB_t>
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeLateLoopOptimizationCallbacks(LoopPassManager &LPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
@@ -310,11 +292,7 @@ namespace {
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeOptimizerLastCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
         static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
         if (!PB) return;
-#if JL_LLVM_VERSION >= 200000
         PB->invokeOptimizerLastEPCallbacks(MPM, O, ThinOrFullLTOPhase::None);
-#else
-        PB->invokeOptimizerLastEPCallbacks(MPM, O);
-#endif
     }
 
     // Fallbacks
@@ -442,6 +420,33 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
     MPM.addPass(AfterEarlyOptimizationMarkerPass());
 }
 
+namespace {
+// IRCE, followed by the SimplifyCFG + InstCombine cleanup its output needs, but only if it
+// changed the function. IRCE runs after that same cleanup of the rotated and unswitched
+// loops: it clones each loop it transforms into a pre-, main and post-loop and feeds the main
+// loop's header phis through new merge phis, so redundancies InstCombine would otherwise fold
+// (e.g. a loop carrying both `i` and `i + 1` in separate phis) must be folded before cloning.
+// Functions IRCE leaves alone see the same passes as without it.
+struct IRCEWithCleanupPass : OptionalPassInfoMixin<IRCEWithCleanupPass> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT {
+        PassInstrumentation PI = AM.getResult<PassInstrumentationAnalysis>(F);
+        IRCEPass IRCE;
+        if (!PI.runBeforePass<Function>(IRCE, F))
+            return PreservedAnalyses::all();
+        PreservedAnalyses PA = IRCE.run(F, AM);
+        PI.runAfterPass<Function>(IRCE, F, PA);
+        if (PA.areAllPreserved())
+            return PA;
+        AM.invalidate(F, PA);
+        FunctionPassManager Cleanup;
+        Cleanup.addPass(SimplifyCFGPass(basicSimplifyCFGOptions()));
+        Cleanup.addPass(InstCombinePass());
+        PA.intersect(Cleanup.run(F, AM));
+        return PA;
+    }
+};
+} // namespace
+
 static void buildLoopOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *PB, OptimizationLevel O, const OptimizationOptions &options) JL_NOTSAFEPOINT {
     FPM.addPass(BeforeLoopOptimizationMarkerPass());
     if (options.enable_loop_optimizations) {
@@ -470,7 +475,6 @@ static void buildLoopOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *PB
             // Fully unroll small constant-trip loops before IRCE splits them into
             // pre/main/post loops with unknown trip counts (#62798)
             FPM.addPass(createFunctionToLoopPassAdaptor(LoopFullUnrollPass()));
-            FPM.addPass(IRCEPass());
         }
         {
             LoopPassManager LPM;
@@ -488,6 +492,10 @@ static void buildLoopOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *PB
             LPM.addPass(AfterLoopSimplificationMarkerPass());
             FPM.addPass(SimplifyCFGPass(basicSimplifyCFGOptions()));
             FPM.addPass(InstCombinePass());
+            // Must come before IndVarSimplify, whose LFTR can turn the latch into an
+            // equality test IRCE does not handle.
+            if (getSpeedupLevel(O) >= 2)
+                FPM.addPass(IRCEWithCleanupPass());
             //We don't know if the loop end callbacks support MSSA
             FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA = */false));
         }
@@ -560,23 +568,22 @@ static void buildVectorPipeline(FunctionPassManager &FPM, PassBuilder *PB, Optim
         FPM.addPass(LoopDistributePass());
         FPM.addPass(InjectTLIMappings());
         FPM.addPass(LoopVectorizePass());
-#if JL_LLVM_VERSION >= 180000
         FPM.addPass(InferAlignmentPass());
-#endif
         FPM.addPass(LoopLoadEliminationPass());
         FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
         FPM.addPass(createFunctionToLoopPassAdaptor(LICMPass(LICMOptions()), /*UseMemorySSA=*/true));
         FPM.addPass(EarlyCSEPass());
         FPM.addPass(CorrelatedValuePropagationPass());
         FPM.addPass(InstCombinePass());
+        // CVP can fold branch conditions here (e.g. bounds checks made redundant by the loop
+        // passes); fold those branches and hoist the code they guarded before SLP looks at it.
+        FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
         FPM.addPass(SLPVectorizerPass());
         FPM.addPass(VectorCombinePass());
         invokeVectorizerCallbacks(FPM, PB, O);
         FPM.addPass(LoopUnrollPass(LoopUnrollOptions(getSpeedupLevel(O), /*OnlyWhenForced = */ false, /*ForgetSCEV = */false)));
         FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
-#if JL_LLVM_VERSION >= 180000
         FPM.addPass(InferAlignmentPass());
-#endif
         FPM.addPass(InstSimplifyPass());
         // No TailCallElim: `tail` lets AA assume the callee cannot access caller allocas, but GC frames are reachable through the task
     }
@@ -592,8 +599,6 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
             JULIA_PASS(FPM.addPass(GCInvariantVerifierPass(false)));
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
-        // Needed **before** LateLowerGCFrame on LLVM < 12
-        // due to bug in `CreateAlignmentAssumption`.
         assert(options.remove_ni);
         JULIA_PASS(MPM.addPass(RemoveNIPass()));
         {
@@ -616,6 +621,7 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
             }
             FPM.addPass(InstCombinePass());
             FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
+            FPM.addPass(InferAlignmentPass());
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
     }
@@ -854,15 +860,22 @@ AnalysisManagers::AnalysisManagers(PassBuilder &PB) : LAM(), FAM(), CGAM(), MAM(
 
 AnalysisManagers::~AnalysisManagers() = default;
 
-// Helper to unwrap IR from Any to a specific type
+#if JL_LLVM_VERSION >= 240000
+using JLIRUnit = IRUnitRef;
+template <typename IRType>
+static const IRType *unwrapIR(IRUnitRef IR) JL_NOTSAFEPOINT {
+    return dyn_cast<IRType>(IR);
+}
+#else
+using JLIRUnit = Any;
 template <typename IRType>
 static const IRType *unwrapIR(Any IR) JL_NOTSAFEPOINT {
     const IRType *const *IRPtr = llvm::any_cast<const IRType *>(&IR);
     return IRPtr ? *IRPtr : nullptr;
 }
+#endif
 
-// Helper to print IR from Any
-static void printIR(raw_ostream &OS, Any IR) JL_NOTSAFEPOINT {
+static void printIR(raw_ostream &OS, JLIRUnit IR) JL_NOTSAFEPOINT {
     if (const auto *M = unwrapIR<Module>(IR)) {
         M->print(OS, nullptr);
     } else if (const auto *F = unwrapIR<Function>(IR)) {
@@ -914,7 +927,7 @@ void NewPM::run(Module &M) {
     if (should_print) {
         if (print_options.print_before_all || !print_options.print_before.empty()) {
             PIC.registerBeforeNonSkippedPassCallback(
-                [this, &OS, &M, &matchesAny](StringRef PassID, Any IR) {
+                [this, &OS, &M, &matchesAny](StringRef PassID, JLIRUnit IR) {
                     bool should_print_pass = print_options.print_before_all ||
                         matchesAny(PassID, print_options.print_before);
                     if (!should_print_pass)
@@ -951,7 +964,7 @@ void NewPM::run(Module &M) {
 
         if (print_options.print_after_all || !print_options.print_after.empty()) {
             PIC.registerAfterPassCallback(
-                [this, &OS, &M, &matchesAny](StringRef PassID, Any IR, const PreservedAnalyses &) {
+                [this, &OS, &M, &matchesAny](StringRef PassID, JLIRUnit IR, const PreservedAnalyses &) {
                     bool should_print_pass = print_options.print_after_all ||
                         matchesAny(PassID, print_options.print_after);
                     if (!should_print_pass)
@@ -993,7 +1006,7 @@ void NewPM::run(Module &M) {
     ModuleAnalysisManager MAM;
     SI.registerCallbacks(PIC, &MAM);
     SI.getTimePasses().setOutStream(nulls()); //TODO: figure out a better way of doing this
-    PassBuilder PB(TM.get(), PipelineTuningOptions(), None, &PIC);
+    PassBuilder PB(TM.get(), PipelineTuningOptions(), std::nullopt, &PIC);
     PB.registerLoopAnalyses(LAM);
     PB.registerFunctionAnalyses(FAM);
     PB.registerCGSCCAnalyses(CGAM);
@@ -1120,7 +1133,7 @@ static std::optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJul
         }
         return {{O, options}};
     }
-    return None;
+    return std::nullopt;
 }
 
 bool verifyLLVMIR(const Module &M) JL_NOTSAFEPOINT {

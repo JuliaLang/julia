@@ -795,6 +795,14 @@ end
         test_arg_specialized(f, 1)
     end
 
+    # A closure stores a captured nospecialized argument in an `Any` field
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        f_nospecialize_capture(@nospecialize(x)) = () -> x
+        fieldtypes(typeof(f_nospecialize_capture(1)))
+    end
+    """) == (Any,)
+
     # macros already mark all non-internal args nospecialize
     @testset "macro definitions" begin
         @gensym sym
@@ -1600,15 +1608,27 @@ end
 end
 
 @testset "anonymous static parameters" begin
-    # `where _` declares a static parameter which can never be referenced
-    @test_warn r"declares type variable _" @test JL.include_string(
-        test_mod, "f_anon_sp(x) where _ = x; f_anon_sp(42)") == 42
-    @test_warn r"declares type variable _" @test JL.include_string(
-        test_mod, "f_anon_sp2(x::T) where {T, _} = (x, T); f_anon_sp2(1.5)") == (1.5, Float64)
+    # `where _` declares a static parameter which can never be referenced. In the
+    # old edition, it is mangled into an unused (but nameable) type variable for
+    # flisp compatibility (#60626), so the method definition warns.
+    @test_warn r"declares type variable _" @test jl_eval(
+        test_mod, "f_anon_sp(x) where _ = x; f_anon_sp(42)"; edition=JL_OLD_EDITION) == 42
+    @test_warn r"declares type variable _" @test jl_eval(
+        test_mod, "f_anon_sp2(x::T) where {T, _} = (x, T); f_anon_sp2(1.5)";
+        edition=JL_OLD_EDITION) == (1.5, Float64)
     @test_throws LoweringError jl_eval(
         test_mod, "f_anon_sp3(x) where {_, _} = x"; edition=JL_OLD_EDITION)
-    @test_throws LoweringError JL.include_string(
-        test_mod, "f_anon_sp3(x) where {_, _} = x")
+
+    # In the new edition, `_` static parameters are truly anonymous
+    @test_nowarn @test jl_eval(
+        test_mod, "f_anon_sp_new(x) where _ = x; f_anon_sp_new(42)";
+        edition=JL_NEW_EDITION) == 42
+    @test_nowarn @test jl_eval(
+        test_mod, "f_anon_sp2_new(x::T) where {T, _} = (x, T); f_anon_sp2_new(1.5)";
+        edition=JL_NEW_EDITION) == (1.5, Float64)
+    @test jl_eval(
+        test_mod, "f_anon_sp3_new(x) where {_, _} = x; f_anon_sp3_new(3)";
+        edition=JL_NEW_EDITION) == 3
 end
 
 @testset "first arg `curly`" begin
@@ -2242,6 +2262,17 @@ end
             end
             nif_uses_sparam(1, Int)
         end"""; edition) === Int
+    end
+
+    @testset "global assignment in generated body (issue #33243)" begin
+        m = Module()
+        jl_eval(m, """
+        @generated function f33243()
+            :(global x33243 = 2)
+        end
+        """; edition)
+        @test_throws ErrorException jl_eval(m, "f33243()"; edition)
+        @test jl_eval(m, "global x33243::Any; (f33243(), x33243)"; edition) === (2, 2)
     end
 end
 

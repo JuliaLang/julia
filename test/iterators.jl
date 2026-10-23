@@ -847,6 +847,9 @@ end
         @test peek(a) == 3
         @test sum(a) == 7
     end
+    # the second argument of `peek` is a sentinel value here, so `Union{}` is returned like any other value
+    @test peek(Iterators.Stateful(Int[]), Union{}) === Union{}
+    @test peek(Iterators.Stateful([1]), Union{}) === 1
     @test (@inferred eltype(Iterators.Stateful("a"))) == Char
     # Interaction of zip/Stateful
     let a = Iterators.Stateful("a"), b = ""

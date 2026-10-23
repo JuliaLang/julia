@@ -822,3 +822,39 @@ let
     @test_throws MethodError Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTCplxF64())
     @test Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTOtherC()) === 2
 end
+
+# a keyword method whose function argument is a Vararg still invalidates callers
+# that were compiled against no matching keyword method
+kwvararg_f(x) = 1
+kwvararg_caller() = kwvararg_f(; x=1)
+@test_throws MethodError kwvararg_caller()
+Core.kwcall(::NamedTuple{(:x,)}, ::typeof(kwvararg_f)...) = 2
+@test kwvararg_caller() === 2
+
+# a method on a kind still invalidates callers that were compiled against no
+# matching constructor
+abstract type KindCalleeT end
+struct KindCalleeArg end
+kindcallee_caller() = KindCalleeT(KindCalleeArg(), KindCalleeArg())
+@test_throws MethodError kindcallee_caller()
+(::DataType)(::KindCalleeArg, ::KindCalleeArg) = 2
+@test kindcallee_caller() === 2
+# every type now has this constructor method, so remove it before later test files look at their methods
+Base.delete_method(which(KindCalleeT, Tuple{KindCalleeArg, KindCalleeArg}))
+@test_throws MethodError kindcallee_caller()
+
+# a lookup that drops a pair of ambiguous methods is not valid in an older world
+# that has only one of them
+function ambigpair_f end
+ambigpair_g(x) = ambigpair_f(x, 1)
+ambigpair_f(::Int, ::Signed) = 1
+const wc_ambigpair = get_world_counter()
+ambigpair_f(::Integer, ::Int) = 2
+@test_throws MethodError ambigpair_g(1)
+@test Base.invoke_in_world(wc_ambigpair, ambigpair_g, 1) === 1
+# the lookup made for `invoke` does not compute the ambiguity, but must still
+# report the same range for its (empty) answer
+let (match, worlds) = Core.Compiler._findsup(Tuple{typeof(ambigpair_f), Int, Int}, nothing, get_world_counter())
+    @test match === nothing
+    @test worlds.min_world > wc_ambigpair
+end

@@ -142,7 +142,6 @@ Core.eval(Sys, :(include("osinfo.jl")))
 module Filesystem end # Filesystem is populated in stages during bootstrap
 Core.eval(Filesystem, :(include("path.jl")))
 using .Filesystem
-import Core: UUID
 include("libc.jl") # Libdl (include in libc.jl) is required for regex.jl
 using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 
@@ -325,7 +324,7 @@ include("docs/basedocs.jl")
 # Compiler frontend
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
 JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
-set_syntax_version(Base, VERSION)
+set_syntax_version(Base, v"1.14")
 
 include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
 JuliaLowering.activate!(false; freeze_world_age=false)

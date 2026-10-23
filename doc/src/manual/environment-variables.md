@@ -340,6 +340,12 @@ over `$EDITOR`. If none of these environment variables is set, then the editor
 is taken to be `open` on Windows and OS X, or `/etc/alternatives/editor` if it
 exists, or `emacs` otherwise.
 
+The value is split into the command and its arguments like a shell command line (see
+[`Base.shell_split`](@ref)), without invoking a shell. It may therefore include flags, as in
+`emacs -nw`, but spaces and backslashes in a path must be quoted or escaped. For example, the
+Windows path `C:\Vim\vim.exe` must be written as `C:\\Vim\\vim.exe`, `'C:\Vim\vim.exe'` or
+`C:/Vim/vim.exe`.
+
 To use Visual Studio Code on Windows, set `$JULIA_EDITOR` to `code.cmd`.
 
 ## Parallelization

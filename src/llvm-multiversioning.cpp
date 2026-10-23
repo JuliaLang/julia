@@ -258,7 +258,7 @@ struct TargetSpec {
 static std::optional<SmallVector<TargetSpec, 0>> get_target_specs(Module &M) {
     auto md = M.getModuleFlag("julia.mv.specs");
     if (!md)
-        return None;
+        return std::nullopt;
     auto tup = cast<MDTuple>(md);
     SmallVector<TargetSpec, 0> out(tup->getNumOperands());
     for (unsigned i = 0; i < tup->getNumOperands(); i++) {
@@ -887,11 +887,7 @@ std::pair<uint32_t,GlobalVariable*> CloneCtx::get_reloc_slot(Function *F) const
 }
 
 template<typename Stack>
-#if JL_LLVM_VERSION >= 200000
 static Value *rewrite_inst_use(const Stack& stack, Type *T_size, Value *replace, InsertPosition& insert_before)
-#else
-static Value *rewrite_inst_use(const Stack& stack, Type *T_size, Value *replace, Instruction *insert_before)
-#endif
 {
     SmallVector<Constant*, 8> args;
     uint32_t nlevel = stack.size();
@@ -952,17 +948,9 @@ static void replaceUsesWithLoad(Function &F, Type *T_size, I2GV should_replace, 
             GlobalVariable *slot = should_replace(*use_i);
             if (!slot)
                 continue;
-#if JL_LLVM_VERSION >= 200000
             InsertPosition insert_before = use_i->getIterator();
-#else
-            Instruction *insert_before = use_i;
-#endif
             if (auto phi = dyn_cast<PHINode>(use_i))
-#if JL_LLVM_VERSION >= 200000
                 insert_before = phi->getIncomingBlock(*info.use)->getTerminator()->getIterator();
-#else
-                insert_before = phi->getIncomingBlock(*info.use)->getTerminator();
-#endif
             Instruction *ptr = new LoadInst(F.getType(), slot, "", false, insert_before);
             ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
             ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ptr->getContext(), {}));

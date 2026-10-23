@@ -12,6 +12,7 @@ unsigned(::Type{Int32}) = UInt32
 unsigned(::Type{Int64}) = UInt64
 unsigned(::Type{Int128}) = UInt128
 unsigned(::Type{T}) where {T<:Unsigned} = T
+unsigned(::Type{Union{}}, slurp...) = throw(MethodError(unsigned, (Union{}, slurp...)))
 
 abstract type  MultiplicativeInverse{T} <: Number end
 

@@ -229,6 +229,8 @@ Return the absolute value of `x`, possibly returning a different type should the
 operation be susceptible to overflow. This typically arises when `x` is a two's complement
 signed integer, so that `abs(typemin(x)) == typemin(x) < 0`, in which case the result of
 `uabs(x)` will be an unsigned integer of the same size.
+
+See also: [`abs`](@ref), [`Base.Checked.checked_abs`](@ref).
 """
 uabs(x::Integer) = abs(x)
 uabs(x::BitSigned) = unsigned(abs(x))
@@ -802,6 +804,7 @@ function _precision(x, base::Integer)
 end
 precision(::Type{T}; base::Integer=2) where {T<:AbstractFloat} = _precision(T, base)
 precision(::T; base::Integer=2) where {T<:AbstractFloat} = precision(T; base)
+precision(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(precision, (Union{}, slurp...)))
 
 
 function _nextfloat(f::IEEEFloat, dneg::Bool, da::Integer)
@@ -990,6 +993,7 @@ function eps(x::T) where T<:IEEEFloat
     # for Inf/NaN values.
     return abs(x - y)
 end
+eps(::Type{Union{}}, slurp...) = throw(MethodError(eps, (Union{}, slurp...)))
 
 """
     floatmin(T = Float64)
@@ -1042,6 +1046,8 @@ floatmax(x::T) where {T<:AbstractFloat} = floatmax(T)
 
 floatmin() = floatmin(Float64)
 floatmax() = floatmax(Float64)
+floatmin(::Type{Union{}}, slurp...) = throw(MethodError(floatmin, (Union{}, slurp...)))
+floatmax(::Type{Union{}}, slurp...) = throw(MethodError(floatmax, (Union{}, slurp...)))
 
 """
     eps(::Type{T}) where T<:AbstractFloat

@@ -66,7 +66,7 @@ JL_DLLEXPORT void jl_emit_codeinsts_to_jit_fallback(jl_code_instance_t **codeins
         if (jl_is_code_info(inferred))
             continue;
         if (jl_is_svec(src->edges)) {
-            jl_gc_write_atomic(codeinst, codeinst->inferred, jl_value_t, (jl_value_t*)src->edges, release);
+            jl_gc_write_atomic(codeinst, codeinst->edges, jl_svec_t, (jl_svec_t*)src->edges, release);
         }
         jl_gc_write_atomic(codeinst, codeinst->debuginfo, jl_debuginfo_t, src->debuginfo, release);
         jl_gc_write_atomic(codeinst, codeinst->inferred, jl_value_t, (jl_value_t*)src, release);
@@ -161,6 +161,8 @@ JL_DLLEXPORT void jl_get_function_id_fallback(void *native_code, jl_code_instanc
 JL_DLLEXPORT void *jl_get_llvm_function_fallback(void *native_code, uint32_t idx) UNAVAILABLE
 
 JL_DLLEXPORT LLVMOrcThreadSafeModuleRef jl_get_llvm_module_fallback(void *native_code) UNAVAILABLE
+
+JL_DLLEXPORT void jl_free_native_fallback(void *native_code) UNAVAILABLE
 
 JL_DLLEXPORT void *jl_type_to_llvm_fallback(jl_value_t *jt, LLVMContextRef llvmctxt, bool_t *isboxed) UNAVAILABLE
 

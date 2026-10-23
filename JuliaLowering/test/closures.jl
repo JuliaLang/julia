@@ -67,6 +67,19 @@ begin
 end
 """) == (true, false, (true, true, true, false))
 
+# `@isdefined` before the only assignment of a captured variable
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_isdefined_before_assign()
+        r = @isdefined(x)
+        x = 1
+        g() = x
+        r
+    end
+    f_isdefined_before_assign()
+end
+""") === false
+
 # Mutually recursive closures (closure capturing a closure)
 @test JuliaLowering.include_string(test_mod, """
 let
@@ -582,6 +595,16 @@ let f(;x::typeof(f)) = x
 end
 """) isa Function
 
+# Lambda in the signature of a local function
+@test JuliaLowering.include_string(test_mod, """
+let
+    function f_lambda_in_sig()
+        function g(::Val{x->2x}) end
+    end
+    f_lambda_in_sig()
+end
+""") isa Function
+
 # Anonymous function syntax with `function`
 @test JuliaLowering.include_string(test_mod, """
 begin
@@ -1021,8 +1044,9 @@ func_in_own_sp(func_in_own_sp)
     @test test_mod.f_isdefined_sp(1)()
     @test_throws UndefVarError test_mod.f_isdefined_sp(nothing)
 
-    # Closure with an anonymous static parameter of its own plus a captured one
-    @test_warn r"declares type variable _" @test JuliaLowering.include_string(test_mod, """
+    # Closure with an anonymous static parameter of its own plus a captured one.
+    # Only the old edition warns about the unused (mangled) `_` type variable.
+    @test_warn r"declares type variable _" @test jl_eval(test_mod, """
     begin
         function f_anon_sp_closure(x::T) where T
             g(y) where _ = (y, T)
@@ -1030,7 +1054,16 @@ func_in_own_sp(func_in_own_sp)
         end
         f_anon_sp_closure(1)
     end
-    """) == (2, Int)
+    """; edition=JL_OLD_EDITION) == (2, Int)
+    @test_nowarn @test jl_eval(test_mod, """
+    begin
+        function f_anon_sp_closure_new(x::T) where T
+            g(y) where _ = (y, T)
+            g(2)
+        end
+        f_anon_sp_closure_new(1)
+    end
+    """; edition=JL_NEW_EDITION) == (2, Int)
 
     # `let` inside a closure signature referencing a captured static parameter
     @test JuliaLowering.include_string(test_mod, """

@@ -348,8 +348,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                                     local sig = match.spec_types
                                     local mi = get_ci_mi(edge)
                                     local vw = matches.valid_worlds
-                                    ccall(:jl_recache_method_by_type, Cvoid, (Any, Any, Any, UInt, UInt, UInt, UInt),
-                                            sig, mi, mi.specTypes, get_inference_world(interp),
+                                    ccall(:jl_recache_method_by_type, Cvoid, (Any, Any, Any, Any, UInt, UInt, UInt, UInt),
+                                            sig, match.sparams, mi, mi.specTypes, get_inference_world(interp),
                                             first(vw), last(vw), current_world)
                                 end
                                 return true
@@ -519,18 +519,24 @@ function from_interconditional(𝕃ᵢ::AbstractLattice, @nospecialize(rt), sv::
         if alias === nothing
             arg = ssa_def_slot(fargs[i], sv)
             if isa(arg, SlotNumber) && widenslotwrapper(argtyp) isa Type
+                # refine the slot itself
                 old = argtyp
                 id = slot_id(arg)
-            elseif argtyp isa MustAlias
+                argalias = nothing
+            elseif argtyp isa MustAlias && slot == 0
+                # refine the field of slot `argtyp.slot` that this argument aliases:
+                # the field is a different object from that slot, so it can't be
+                # intersected with a refinement target on the slot itself
                 old = argtyp.fldtyp
                 id = argtyp.slot
+                argalias = argtyp
             else
                 continue # unlikely to refine
             end
         elseif argtyp isa MustAlias && issubalias(argtyp, alias)
-            arg = nothing
             old = alias.fldtyp
             id = alias.slot
+            argalias = argtyp
         else
             continue
         end
@@ -561,14 +567,10 @@ function from_interconditional(𝕃ᵢ::AbstractLattice, @nospecialize(rt), sv::
             end
             if (slot > 0 || condval !== false) && thentype ⋤ old
                 slot = id
-                if !(arg isa SlotNumber) && argtyp isa MustAlias
-                    alias = argtyp
-                end
+                alias = argalias
             elseif (slot > 0 || condval !== true) && elsetype ⋤ old
                 slot = id
-                if !(arg isa SlotNumber) && argtyp isa MustAlias
-                    alias = argtyp
-                end
+                alias = argalias
             else # reset: no new useful information for this slot
                 slot = 0
                 alias = nothing
@@ -3354,9 +3356,22 @@ function collect_argtypes(interp::AbstractInterpreter, ea::Vector{Any}, sstate::
         if ai === Bottom
             return nothing
         end
-        argtypes[i] = ai
+        argtypes[i] = widen_stale_slotwrapper(ai, sstate.vtypes)
     end
     return argtypes
+end
+
+# A `Conditional` or `MustAlias` whose slot has been reassigned since it was formed no
+# longer describes the slot's current value, so it must not reach the callee, where it
+# would be applied to whichever argument currently reads that slot (see `find_constrained_arg`).
+function widen_stale_slotwrapper(@nospecialize(typ), vtypes::Union{VarTable,Nothing})
+    vtypes === nothing && return typ
+    if isa(typ, Conditional)
+        conditional_valid(typ, vtypes) || return widenconditional(typ)
+    elseif isa(typ, MustAlias)
+        vtypes[typ.slot].ssadef == typ.ssadef || return widenmustalias(typ)
+    end
+    return typ
 end
 
 struct RTEffects

@@ -64,6 +64,13 @@ static bool have_fma(StringRef typ, const MCSubtargetInfo &STI, const Triple &TT
             return typ == "f32" || typ == "f64";
         return false;
     }
+    if (TT.isRISCV()) {
+        if (typ == "f32")
+            return STI.checkFeatures("+f");
+        if (typ == "f64")
+            return STI.checkFeatures("+d");
+        return false;
+    }
     return false;
 }
 
@@ -78,7 +85,7 @@ static bool subtarget_has_features(const MCSubtargetInfo &STI, StringRef feature
     std::string query;
     for (StringRef name : names) {
         // checkFeatures aborts on names missing from the feature table
-        if (!any_of(STI.getAllProcessorFeatures(), [&](const SubtargetFeatureKV &KV) { return KV.Key == name; }))
+        if (!any_of(STI.getAllProcessorFeatures(), [&](const SubtargetFeatureKV &KV) { return KV.key() == name; }))
             return false;
         if (!query.empty())
             query += ',';
@@ -112,11 +119,7 @@ struct STIBuilder {
         key += FS;
         auto &slot = cache[key];
         if (!slot) {
-#if JL_LLVM_VERSION >= 220000
             slot.reset(T->createMCSubtargetInfo(TT, CPU, FS));
-#else
-            slot.reset(T->createMCSubtargetInfo(TT.str(), CPU, FS));
-#endif
         }
         return slot.get();
     }

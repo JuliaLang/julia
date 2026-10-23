@@ -48,3 +48,6 @@ module A
 end
 """)
 @test Amod.init_order == ["B", "D", "E", "C", "A"]
+
+@test_throws LoweringError JuliaLowering.eval(
+    test_mod, Expr(:module, true, :NonBlockBody, :x))

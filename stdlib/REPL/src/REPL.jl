@@ -706,15 +706,15 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
         try
             if val !== nothing && show_value
                 Base.sigatomic_end() # allow display to be interrupted
-                val_to_show = val
+                val_to_show = Ref{Any}(val)
                 val2, iserr = if specialdisplay === nothing
                     # display calls may require being run on the main thread
                     call_on_backend(backend) do
-                        __repl_entry_display(val_to_show)
+                        __repl_entry_display(val_to_show[])
                     end
                 else
                     call_on_backend(backend) do
-                        __repl_entry_display(specialdisplay, val_to_show)
+                        __repl_entry_display(specialdisplay, val_to_show[])
                     end
                 end
                 Base.sigatomic_begin()
@@ -1249,8 +1249,15 @@ function parse_repl_input_line(line::String, repl; kwargs...)
 end
 
 function return_callback(s)
-    ast = parse_repl_input_line(takestring!(copy(LineEdit.buffer(s))), s; depwarn=false)
-    return !(isa(ast, Syntax) && head(ast) === :incomplete)
+    function incomplete(line)
+        ast = parse_repl_input_line(line, s; depwarn=false)
+        return isa(ast, Syntax) && head(ast) === :incomplete
+    end
+    buf = LineEdit.buffer(s)
+    incomplete(takestring!(copy(buf))) && return false
+    # The input may only be complete thanks to automatically inserted closing brackets after
+    # the cursor, so continue on a new line if it isn't without them (e.g. `[|]`)
+    return !(LineEdit.only_auto_closed_after_cursor(s) && incomplete(LineEdit.before_cursor(buf)))
 end
 
 find_hist_file() = get(ENV, "JULIA_HISTORY",
@@ -1369,8 +1376,8 @@ function mode_keymap(julia_prompt::Prompt)
                 end
             end
         else
-            buf = LineEdit.buffer(s)
-            if LineEdit.try_remove_paired_delimiter(buf)
+            if LineEdit.options(LineEdit.state(s)).auto_insert_closing_bracket &&
+                    LineEdit.try_remove_paired_delimiter(s)
                 return LineEdit.refresh_line(s)
             end
             LineEdit.edit_backspace(s)
@@ -1624,14 +1631,10 @@ function setup_interface(
                 end
                 Base.errormonitor(t_replswitch)
             else
-                # Use bracket insertion if enabled, otherwise just insert
-                if repl.options.auto_insert_closing_bracket
-                    buf = LineEdit.buffer(s)
-                    if !eof(buf) && LineEdit.peek(buf, Char) == ']'
-                        LineEdit.edit_move_right(buf)
-                    else
-                        edit_insert(buf, ']')
-                    end
+                # Move over an auto-inserted `]`, otherwise insert
+                buf = LineEdit.buffer(s)
+                if repl.options.auto_insert_closing_bracket && LineEdit.skip_closing_bracket(buf, '[', ']')
+                    LineEdit.edit_move_right(buf)
                     LineEdit.refresh_line(s)
                 else
                     edit_insert(s, ']')
@@ -1925,6 +1928,7 @@ function banner(io::IO = stdout; short = false)
         end
     end
 
+    version = Base.version_with_build_variant()
     commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
 
     if get(io, :color, false)::Bool
@@ -1938,7 +1942,7 @@ function banner(io::IO = stdout; short = false)
 
         if short
             print(io,"""
-              $(d3)o$(tx)  | Version $(VERSION)$(commit_date)
+              $(d3)o$(tx)  | Version $(version)$(commit_date)
              $(d2)o$(tx) $(d4)o$(tx) | $(commit_string)
             """)
         else
@@ -1947,7 +1951,7 @@ function banner(io::IO = stdout; short = false)
               $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
                $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
               $(jl)| | | | | | |/ _` |$(tx)  |
-              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
+              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(version)$(commit_date)
              $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
             $(jl)|__/$(tx)                   |
 
@@ -1956,7 +1960,7 @@ function banner(io::IO = stdout; short = false)
     else
         if short
             print(io,"""
-              o  |  Version $(VERSION)$(commit_date)
+              o  |  Version $(version)$(commit_date)
              o o |  $(commit_string)
             """)
         else
@@ -1966,7 +1970,7 @@ function banner(io::IO = stdout; short = false)
               (_)     | (_) (_)    |
                _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
               | | | | | | |/ _` |  |
-              | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
+              | | |_| | | | (_| |  |  Version $(version)$(commit_date)
              _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
             |__/                   |
 

@@ -154,6 +154,10 @@ julia-debug julia-release : julia-% : julia-sysimg-% julia-src-% julia-symlink j
 stdlibs-cache-release stdlibs-cache-debug : stdlibs-cache-% : julia-%
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f pkgimage.mk $*
 
+.PHONY: checkbounds-pkgimages
+checkbounds-pkgimages: $(JULIA_BUILD_MODE)
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f pkgimage.mk checkbounds-pkgimages JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
+
 .PHONY: debug release
 debug release : % : julia-% stdlibs-cache-%
 

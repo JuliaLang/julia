@@ -59,10 +59,6 @@ const UnsignedInt = Union{UInt8,UInt16,UInt32,UInt64,UInt128}
 #     BrokenSignedIntMul
 #     BrokenUnsignedIntMul
 
-# This code runs early during bootstrap, and we can't use Julia's version
-# strings yet
-const llvm_version = Int(ccall(:jl_get_LLVM_VERSION, UInt32, ()))
-
 brokenSignedInt = Union{}
 brokenUnsignedInt = Union{}
 brokenSignedIntMul = Int128
@@ -117,6 +113,8 @@ For example, standard two's complement signed integers (e.g. `Int`)
 cannot represent `abs(typemin(Int))`, thus leading to an overflow.
 
 The overflow protection may impose a perceptible performance penalty.
+
+See also: [`abs`](@ref), [`Base.uabs`](@ref).
 """
 function checked_abs end
 

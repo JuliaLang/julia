@@ -663,7 +663,13 @@ STATIC_INLINE void gc_time_count_mallocd_memory(int bits) JL_NOTSAFEPOINT
     (void)bits;
 }
 #define gc_time_mallocd_memory_end()
-#define gc_time_mark_pause(t0, scanned_bytes, perm_scanned_bytes)
+STATIC_INLINE void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
+                                      int64_t perm_scanned_bytes) JL_NOTSAFEPOINT
+{
+    (void)t0;
+    (void)scanned_bytes;
+    (void)perm_scanned_bytes;
+}
 #define gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,        \
                             estimate_freed, sweep_full)
 #define  gc_time_summary(sweep_full, start, end, freed, live,           \

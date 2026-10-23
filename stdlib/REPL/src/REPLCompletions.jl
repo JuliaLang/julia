@@ -1156,10 +1156,19 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         if obj !== nothing
             # Skip leading whitespace inside brackets.
             i = @something findnext(!isspace, string, first(key)) nextind(string, last(key))
-            key = intersect(i:last(key), 1:pos)
+            fullkey, key = key, intersect(i:last(key), 1:pos)
             s = string[key]
             matches = find_dict_matches(obj, s)
-            length(matches) == 1 && !closed && (matches[1] *= ']')
+            if length(matches) == 1
+                if !closed
+                    matches[1] *= ']'
+                elseif endswith(matches[1], rstrip(string[nextind(string, pos):last(fullkey)]))
+                    # Also replace the rest of the key and the `]` (e.g. auto-inserted), so that
+                    # `d["a|"]` completes to `d["ab"]|` rather than `d["ab"|"]`
+                    matches[1] *= ']'
+                    key = first(key):nextind(string, last(fullkey))
+                end
+            end
             if length(matches) > 0
                 ret = Completion[DictCompletion(obj, match) for match in sort!(matches)]
                 return ret, key, true
@@ -1182,12 +1191,19 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     #  "~/example.txt TAB => "/home/user/example.txt"
     r, closed = find_str(cur)
     if r !== nothing
-        r = intersect(r, 1:pos)
+        rstr, r = r, intersect(r, 1:pos)
         s = do_string_unescape(string[r])
         ret, success = complete_path_string(s, hint; string_escape=true,
                                             dirsep=Sys.iswindows() ? '\\' : '/')
-        if length(ret) == 1 && !closed && close_path_completion(ret[1].path)
-            ret[1] = PathCompletion(ret[1].path * '"')
+        if length(ret) == 1
+            # Also replace the rest of the string after the cursor if the completion ends with
+            # it, so `"foo|.txt"` completes to `"foobar.txt"` rather than `"foobar.txt.txt"`
+            endswith(ret[1].path, string[nextind(string, pos):last(rstr)]) && (r = first(r):last(rstr))
+            # Close the string, replacing an existing closing quote
+            if last(r) == last(rstr) && close_path_completion(ret[1].path)
+                ret[1] = PathCompletion(ret[1].path * '"')
+                closed && (r = first(r):nextind(string, last(r)))
+            end
         end
         success && return ret, r, success
     end
@@ -1473,6 +1489,11 @@ function shell_completions(str, pos, hint::Bool=false; escape_backticks::Bool=fa
     r = last_arg_start:pos
     use_envpath = length(args.args) < 2
     paths, success = complete_path_string(path, hint; use_envpath, cmd_escape=true, escape_backticks, dirsep='/')
+    if length(paths) == 1
+        # Also replace the rest of the argument after the cursor if the completion ends with it
+        argend = prevind(str, something(findnext(isspace, str, nextind(str, pos)), nextind(str, lastindex(str))))
+        endswith(paths[1].path, str[nextind(str, pos):argend]) && (r = last_arg_start:argend)
+    end
     return paths, r, success
 end
 
