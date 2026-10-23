@@ -141,7 +141,8 @@ STATIC_INLINE void jl_gc_genericmemory_clear(const jl_value_t *owner JL_UNUSED,
 
 // Barrier for copying the elements of a Memory of tagged union words: queue
 // the destination owner when any copied word references a young object (a word
-// is a reference exactly when it is nonzero with bit 0 clear).
+// is a reference exactly when it is nonzero with both low bits clear, as in
+// jl_tagged_word_isptr, which this public header cannot see).
 STATIC_INLINE void jl_gc_wb_genericmemory_copy_tagged(const jl_value_t *owner, jl_genericmemory_t *src,
                                           char* src_p, size_t n) JL_NOTSAFEPOINT
 {
@@ -155,7 +156,7 @@ STATIC_INLINE void jl_gc_wb_genericmemory_copy_tagged(const jl_value_t *owner, j
         if (jl_astaggedvalue(src_owner)->bits.gc != 3 /* GC_OLD_MARKED */) {
             for (size_t done = 0; done < n; done++) {
                 uintptr_t w = ((uintptr_t*)src_p)[done];
-                if (w != 0 && (w & 1) == 0 &&
+                if (w != 0 && (w & 3) == 0 &&
                     !(jl_astaggedvalue((jl_value_t*)w)->bits.gc & 1 /* GC_MARKED */)) {
                     jl_gc_queue_root(owner);
                     return;

@@ -1046,10 +1046,13 @@ int jl_tagged_member_index(jl_value_t *u, jl_datatype_t *t, unsigned *idx) JL_NO
 // word and can never tear. Payload extraction assumes little-endian, like the
 // rest of the runtime.
 
-// pointer-vs-immediate for a tagged union word; the zero word (#undef) is not a pointer
+// pointer-vs-immediate for a tagged union word, by the rule the GC applies to
+// JL_GC_PUSH roots (gc_is_tagged_immediate): a reference has both low bits
+// clear. Immediates are odd; words ending in 10 are reserved. The zero word
+// (#undef) is not a pointer.
 STATIC_INLINE int jl_tagged_word_isptr(uintptr_t w) JL_NOTSAFEPOINT
 {
-    return w != 0 && (w & 1) == 0;
+    return w != 0 && (w & 3) == 0;
 }
 
 // encode a value of a member type of tagged union `u` into its slot word
@@ -1081,8 +1084,9 @@ STATIC_INLINE uintptr_t jl_tagged_word_encode(jl_value_t *u, jl_value_t *rhs JL_
 // object for a pointer word, a freshly allocated box for an immediate
 STATIC_INLINE jl_value_t *jl_tagged_word_decode(jl_value_t *u, uintptr_t w) JL_CANSAFEPOINT
 {
-    if (!(w & 1))
+    if ((w & 3) == 0)
         return (jl_value_t*)w;
+    assert(w & 1); // words ending in 10 are reserved
     unsigned k = jl_tagged_union_kbits(u);
     jl_datatype_t *t = jl_nth_tagged_member(u, (unsigned)((w & (((uintptr_t)1 << k) - 1)) >> 1));
     assert(t != NULL);

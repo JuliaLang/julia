@@ -384,7 +384,7 @@ end
     m.x = s
     GC.@preserve m s begin
         w = unsafe_load(convert(Ptr{UInt64}, pointer_from_objref(m)))
-        @test w & 1 == 0              # reference, stored untagged
+        @test w & 3 == 0              # reference, stored untagged
         @test w == UInt64(reinterpret(UInt, pointer_from_objref(s)))
     end
 end

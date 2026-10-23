@@ -34,8 +34,9 @@ aligned word, so plain word atomics apply.
 
 ## The encoding
 
-One 8-byte, pointer-aligned word per slot. Tags are odd, so bit 0 alone
-answers pointer-vs-immediate without knowing the union type:
+One 8-byte, pointer-aligned word per slot. A reference has both low bits
+clear and every tag is odd, so the low two bits answer pointer-vs-immediate
+without knowing the union type:
 
 | immediates | k (tag bits) | tags       | payload bits |
 |:----------:|:------------:|:-----------|:------------:|
@@ -45,7 +46,7 @@ answers pointer-vs-immediate without knowing the union type:
 
 * `word == 0` — the slot is `#undef` (fields and fresh `Memory` elements start
   undefined, exactly like boxed union slots did).
-* `word != 0` and bit 0 clear — an untagged `jl_value_t*` to a reference
+* `word != 0` and low two bits clear — an untagged `jl_value_t*` to a reference
   member. Heap objects are at least 8-byte aligned, so a pointer word always
   has its low three bits clear; the member is identified by the pointee's type
   tag.
@@ -56,6 +57,8 @@ answers pointer-vs-immediate without knowing the union type:
       word == (zext(value, 64) << k) | (2i + 1)
 
   with the bits above `k + bitsizeof` zero.
+* low bits `10` — reserved for future immediate encodings; no union
+  produces such a word, and it is never traced.
 
 Values of immediate member types are **always** stored immediate — stores
 canonicalize, so word equality is meaningful for immediates (`===` of two
@@ -63,8 +66,10 @@ slots compares words first and only recurses into `jl_egal` when both are
 references).
 
 The garbage collector and the serializer only ever need the universal
-predicate: *a word is traced/relocated iff it is nonzero with bit 0 clear*
-(`jl_tagged_word_isptr`).
+predicate: *a word is traced/relocated iff it is nonzero with both low bits
+clear* (`jl_tagged_word_isptr`). The GC applies the same rule to values rooted
+with `JL_GC_PUSH*`, so C code may root a raw word read from a tagged slot as
+is.
 
 ## Layout metadata
 

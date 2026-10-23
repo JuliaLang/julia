@@ -482,15 +482,17 @@ JL_DLLEXPORT int jl_stored_inline(jl_value_t *eltype)
 // single 64-bit word:
 //
 //     word == 0                  #undef
-//     word != 0, bit 0 == 0      untagged jl_value_t* (member from heap type tag)
-//     bit 0 == 1                 immediate; the i-th immediate member (0-based,
+//     word != 0, low bits 00     untagged jl_value_t* (member from heap type tag)
+//     low bit 1                  immediate; the i-th immediate member (0-based,
 //                                in union component order) has tag 2*i + 1 and
 //                                word == (zext(value) << k) | tag
+//     low bits 10                reserved
 //
 // with k = 1 for one immediate member, 2 for two, 3 for three or four. Tags
-// are odd so that bit 0 alone answers pointer-vs-immediate without knowing the
-// union type; k is only needed to decode a payload. Heap pointers have their
-// low 3 bits clear, which bounds k by 3. The encoding is documented ABI, see
+// are odd so that the low two bits answer pointer-vs-immediate without knowing
+// the union type, by the same rule the GC applies to JL_GC_PUSH roots; k is
+// only needed to decode a payload. Heap pointers have their low 3 bits clear,
+// which bounds k by 3. The encoding is documented ABI, see
 // doc/src/devdocs/taggedunions.md.
 
 // eligible as an immediate member (nbits bound vs. k is checked by the caller)
