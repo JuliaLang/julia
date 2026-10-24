@@ -48,14 +48,17 @@ class ImportLibraryTests(unittest.TestCase):
                 + macro + '\nall:\n\t$(call implib_from_def,toy.dll)\n')
             subprocess.run(['make', '-s', '-C', tmp], check=True)
             symbols = subprocess.check_output([prefix + 'nm', str(build / 'toy.dll.a')], text=True)
-            self.assertNotIn('jl_alloc_array_1d', symbols)
-            self.assertIn('jl_codegen_only', symbols)
+            # The runtime entry points get no thunk, but keep their import pointer.
+            self.assertNotRegex(symbols, r'(?m) T _?jl_alloc_array_1d$')
+            self.assertRegex(symbols, r'(?m) __imp__?jl_alloc_array_1d$')
+            self.assertRegex(symbols, r'(?m) T _?jl_codegen_only$')
             self.assertIn('keep_data', symbols)
             self.assertIn('jl_alloc_array_1d', (build / 'toy.dll.def').read_text())
             (build / 'consumer.c').write_text(
+                '__declspec(dllimport) void jl_alloc_array_1d(void);\n'
                 '__declspec(dllimport) void jl_codegen_only(void);\n'
                 '__declspec(dllimport) int keep_data;\n'
-                'int main(void) { jl_codegen_only(); return keep_data; }\n')
+                'int main(void) { jl_alloc_array_1d(); jl_codegen_only(); return keep_data; }\n')
             subprocess.run([prefix + 'gcc', str(build / 'consumer.c'),
                             str(build / 'toy.dll.a'), '-o', str(build / 'consumer.exe')], check=True)
             # A failed preprocessor must not silently produce an unfiltered library.
