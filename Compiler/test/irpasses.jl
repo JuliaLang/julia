@@ -97,7 +97,7 @@ Base.setindex!(s::SafeRef, x) = setfield!(s, 1, x)
 mutable struct Mutable53013; x; end
 @testset "#53013: SROA after CFG compaction" begin
     code = Any[
-        Expr(:new, GlobalRef(@__MODULE__, :Mutable53013), Argument(2)),
+        Expr(:new, Mutable53013, Argument(2)),
         GotoIfNot(false, 5),
         Expr(:call, GlobalRef(Base, :getfield), SSAValue(1), QuoteNode(:x)),
         ReturnNode(SSAValue(3)),
