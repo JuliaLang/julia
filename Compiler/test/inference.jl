@@ -6773,6 +6773,70 @@ Base.@constprop :aggressive type_level_recurse2(x...) = type_level_recurse1(x...
 type_level_recurse_entry() = Val{type_level_recurse1(1)}()
 @test Base.infer_return_type(type_level_recurse_entry, (); interp=RecurseInterpreter()) == Val{1}
 
+# A frame reuses the limited results of its callees while it is in progress, rather than
+# inferring a limited callee (and its whole limited subtree) again for each call.
+module LimitedResultReuse
+    c(x, b::Bool) = b ? x : (t((x,), b), t((x,), b))
+    t(x, b::Bool) = c(x, b)
+end
+@newinterp LimitedResultReuseInterp
+function Compiler.finish!(interp::LimitedResultReuseInterp, caller::Compiler.InferenceState,
+                          validation_world::UInt, time_before::UInt64)
+    caller.result.tombstone && push!(interp.meta, caller.linfo)
+    return @invoke Compiler.finish!(interp::Compiler.AbstractInterpreter,
+        caller::Compiler.InferenceState, validation_world::UInt, time_before::UInt64)
+end
+let limited = Core.MethodInstance[]
+    interp = LimitedResultReuseInterp(limited)
+    @test Int <: Base.infer_return_type(LimitedResultReuse.c, (Int, Bool); interp)
+    @test !isempty(limited)
+    @test allunique(limited)
+end
+
+# A reused limited result is available only while the frame that inferred it is in
+# progress, and its new caller retains the dependency proof of the result.
+module LimitedResultReuseProof
+    const FLAG = true
+    callee() = FLAG ? 1 : 2
+    caller() = callee()
+    entry() = caller()
+end
+let
+    interp = Compiler.NativeInterpreter(Base.get_world_counter())
+    function newframe(f)
+        mi = Base.method_instance(f, ())
+        result = Compiler.InferenceResult(mi, Compiler.typeinf_lattice(interp))
+        return Compiler.InferenceState(result, Compiler.CACHE_MODE_GLOBAL, interp)
+    end
+    outer = newframe(LimitedResultReuseProof.entry)
+    inner = newframe(LimitedResultReuseProof.caller)
+    Compiler.assign_parentchild!(inner, outer)
+
+    callee_mi = Base.method_instance(LimitedResultReuseProof.callee, ())
+    result = Compiler.InferenceResult(callee_mi, Compiler.typeinf_lattice(interp))
+    causes = Compiler.IdSet{Compiler.InferenceState}()
+    push!(causes, outer)
+    result.result = Compiler.LimitedAccuracy(Int, causes)
+    result.exc_result = Union{}
+    result.ipo_effects = Compiler.EFFECTS_TOTAL
+    result.valid_worlds = outer.valid_worlds
+    result.tombstone = true
+    binding = convert(Core.Binding, GlobalRef(LimitedResultReuseProof, :FLAG))
+    proof = Compiler.LocalInferenceProof(result.valid_worlds, Core.svec(binding))
+    Compiler.record_limited_result!(outer, result, proof)
+
+    limited = Compiler.lookup_limited_result(interp, callee_mi, inner)
+    @test limited isa Compiler.LimitedInferenceResult && limited.result === result
+    mresult = Compiler.return_cached_result(interp, callee_mi.def, limited, nothing, inner,
+        false, false, false)
+    @test mresult[].rt === result.result
+    @test mresult[].needs_mi_edge
+    @test any(edge -> edge === proof, inner.edges)
+
+    empty!(outer.callstack)
+    @test Compiler.lookup_limited_result(interp, callee_mi, inner) === nothing
+end
+
 # Test that inference doesn't give up if it can potentially refine effects,
 # even if the return type is Any.
 f_no_bail_effects_any(x::Any) = x
