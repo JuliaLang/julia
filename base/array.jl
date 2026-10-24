@@ -296,17 +296,25 @@ copyto!(dest::Memory, doffs::Integer, src::Array, soffs::Integer, n::Integer) =
 copyto!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where {T} =
     (@_propagate_inbounds_meta; _copyto_impl!(dest, doffs, src, soffs, n))
 
-function _copyto_impl!(dest::Union{Array,Memory}, doffs::Integer, src::Union{Array,Memory}, soffs::Integer, n::Integer)
+function _copyto_impl!(dest::AbstractArray, doffs::Integer, src::AbstractArray, soffs::Integer, n::Integer)
     @inline
     n == 0 && return dest
     n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs)
-    @boundscheck n <= length(dest) - doffs + 1 || throw(BoundsError(dest, length(dest) + 1))
+    @boundscheck n <= lastindex(dest) - doffs + 1 || throw(BoundsError(dest, lastindex(dest) + 1))
     @boundscheck checkbounds(src, soffs)
-    @boundscheck n <= length(src) - soffs + 1 || throw(BoundsError(src, length(src) + 1))
+    @boundscheck n <= lastindex(src) - soffs + 1 || throw(BoundsError(src, lastindex(src) + 1))
     doffs = Int(doffs)
     soffs = Int(soffs)
     n = Int(n)
+    _prechecked_copyto!(dest, doffs, src, soffs, n)
+    return dest
+end
+
+_is_storage_pair(::Union{Array,Memory}, ::Union{Array,Memory}) = true
+
+function _copyto_storage!(dest::Union{Array,Memory}, doffs::Int, src::Union{Array,Memory}, soffs::Int, n::Int)
+    @inline
     @inbounds let dest = memoryref(dest isa Array ? getfield(dest, :ref) : dest, doffs),
                   src = memoryref(src isa Array ? getfield(src, :ref) : src, soffs)
         unsafe_copyto!(dest, src, n)
@@ -320,16 +328,16 @@ end
 # It is also mitigated by using a constant string.
 _throw_argerror(s) = (@noinline; throw(ArgumentError(s)))
 
-_copyto2arg!(dest, src) = copyto!(dest, firstindex(dest), src, firstindex(src), length(src))
+_copyto2arg!(dest, src) = (@_propagate_inbounds_meta; copyto!(dest, firstindex(dest), src, firstindex(src), length(src)))
 
-copyto!(dest::Array, src::Array) = _copyto2arg!(dest, src)
-copyto!(dest::Array, src::Memory) = _copyto2arg!(dest, src)
-copyto!(dest::Memory, src::Array) = _copyto2arg!(dest, src)
+copyto!(dest::Array, src::Array) = (@_propagate_inbounds_meta; _copyto2arg!(dest, src))
+copyto!(dest::Array, src::Memory) = (@_propagate_inbounds_meta; _copyto2arg!(dest, src))
+copyto!(dest::Memory, src::Array) = (@_propagate_inbounds_meta; _copyto2arg!(dest, src))
 
 # also to avoid ambiguities in packages
-copyto!(dest::Array{T}, src::Array{T}) where {T} = _copyto2arg!(dest, src)
-copyto!(dest::Array{T}, src::Memory{T}) where {T} = _copyto2arg!(dest, src)
-copyto!(dest::Memory{T}, src::Array{T}) where {T} = _copyto2arg!(dest, src)
+copyto!(dest::Array{T}, src::Array{T}) where {T} = (@_propagate_inbounds_meta; _copyto2arg!(dest, src))
+copyto!(dest::Array{T}, src::Memory{T}) where {T} = (@_propagate_inbounds_meta; _copyto2arg!(dest, src))
+copyto!(dest::Memory{T}, src::Array{T}) where {T} = (@_propagate_inbounds_meta; _copyto2arg!(dest, src))
 
 # N.B: This generic definition in for multidimensional arrays is here instead of
 # `multidimensional.jl` for bootstrapping purposes.
@@ -788,12 +796,14 @@ end
 function _collect_indices(::Tuple{}, A)
     dest = Array{eltype(A),0}(undef)
     isempty(A) && return dest
-    return copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(A), A)
+    _prechecked_copyto!(dest, A)
+    return dest
 end
 function _collect_indices(indsA::Tuple{Vararg{OneTo}}, A)
     dest = Array{eltype(A)}(undef, length.(indsA))
     isempty(A) && return dest
-    return copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(A), A)
+    _prechecked_copyto!(dest, A)
+    return dest
 end
 function _collect_indices(indsA, A)
     B = Array{eltype(A)}(undef, length.(indsA))

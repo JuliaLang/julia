@@ -1070,28 +1070,119 @@ julia> y
 ```
 """
 function copyto!(dest::AbstractArray, src::AbstractArray)
+    @_propagate_inbounds_meta
     isempty(src) && return dest
-    if dest isa BitArray
-        # avoid ambiguities with other copyto!(::AbstractArray, ::SourceArray) methods
-        return _copyto_bitarray!(dest, src)
+    @boundscheck length(src) <= length(dest) || throw(BoundsError(dest, LinearIndices(src)))
+    _prechecked_copyto!(dest, src)
+    return dest
+end
+
+function _prechecked_copyto!(dest::AbstractArray, src::AbstractArray)
+    @_propagate_inbounds_meta
+    if _is_storage_pair(_unwrap_contiguous(dest)[1], _unwrap_contiguous(src)[1])
+        return _copyto2arg!(dest, src)
     end
     src′ = unalias(dest, src)
-    copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(src′), src′)
+    return copyto_unaliased!(_copyto_style(dest, src′), dest, src′)
 end
+
+"""
+    CopyToStyle
+
+Trait for customizing [`copyto!`](@ref) for an array type.
+
+Register a style for your type and implement [`Base.copyto_unaliased!`](@ref) for it:
+
+```julia
+struct MyStyle <: Base.CopyToStyle end
+Base.CopyToStyle(::Type{<:MyArray}) = MyStyle()
+
+function Base.copyto_unaliased!(::MyStyle, dest::AbstractArray, src::AbstractArray)
+    dest isa MyArray || return Base.copyto_unaliased!(Base.DefaultCopyToStyle(), dest, src)
+    # copy into `dest`
+    return dest
+end
+```
+
+Copies of regions go through the five-argument form of `copyto_unaliased!`; define it too
+to specialize them.
+
+For a destination style `d` and source style `s`, the copy uses the style returned by the
+rule `CopyToStyle(d, s)`. Without a rule it returns `nothing`, and the copy uses `s` if `d`
+is `DefaultCopyToStyle()` and `d` otherwise. A style that must handle every copy its arrays
+take part in, for example because their elements can't be accessed one at a time, can claim
+the source side with `Base.CopyToStyle(::Base.CopyToStyle, ::MyStyle) = MyStyle()`.
+
+Base validates the arguments, skips empty copies and unaliases before calling
+`copyto_unaliased!`, so its methods need not. Unaliasing relies on `Base.dataids` being
+correct for every array type involved.
+"""
+abstract type CopyToStyle end
+
+"""
+    DefaultCopyToStyle <: CopyToStyle
+
+The [`Base.CopyToStyle`](@ref) of arrays that don't define their own.
+"""
+struct DefaultCopyToStyle <: CopyToStyle end
+
+CopyToStyle(::Type{<:AbstractArray}) = DefaultCopyToStyle()
+CopyToStyle(::CopyToStyle, ::CopyToStyle) = nothing
+
+function _copyto_style(dest::AbstractArray, src::AbstractArray)
+    d = CopyToStyle(typeof(dest))
+    s = CopyToStyle(typeof(src))
+    style = CopyToStyle(d, s)
+    style === nothing || return style
+    return _fallback_copyto_style(d, s)
+end
+_fallback_copyto_style(d::CopyToStyle, ::CopyToStyle) = d
+_fallback_copyto_style(::DefaultCopyToStyle, s::CopyToStyle) = s
+
+"""
+    copyto_unaliased!(style::CopyToStyle, dest::AbstractArray, src::AbstractArray)
+    copyto_unaliased!(style::CopyToStyle, dest::AbstractArray, Rdest, src::AbstractArray, Rsrc)
+
+The algorithm behind `copyto!` for a [`Base.CopyToStyle`](@ref).
+
+The first form implements `copyto!(dest, src)`: the first `length(src)` elements of `dest`
+in linear order receive the elements of `src` in linear order. It is called with a
+non-empty `src` and `length(src) <= length(dest)`.
+
+The second form copies regions. `Rdest` and `Rsrc` are either `UnitRange{Int}` ranges of
+linear indices of equal length, for `copyto!(dest, doffs, src, soffs, n)`, or
+`CartesianIndices` of equal size with `ndims(dest)` dimensions, for
+`copyto!(dest, Rdest, src, Rsrc)`; a `src` with fewer dimensions is indexed with trailing
+1s. They are non-empty.
+
+In both forms `src` does not alias `dest`, and bounds were checked unless the caller of
+`copyto!` used `@inbounds`. A method that cannot handle a pair of arrays can call
+`copyto_unaliased!(DefaultCopyToStyle(), ...)` with the same arrays, which copies element
+by element.
+"""
+copyto_unaliased!(::CopyToStyle, dest, src) =
+    _copyto_loops!(IndexStyle(dest), dest, IndexStyle(src), src)
+copyto_unaliased!(::CopyToStyle, dest, Rdest, src, Rsrc) =
+    _copyto_loops!(dest, Rdest, src, Rsrc)
 
 function copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+    @_propagate_inbounds_meta
     isempty(src) && return dest
+    @boundscheck length(src) <= length(dest) || throw(BoundsError(dest, LinearIndices(src)))
     src′ = unalias(dest, src)
-    copyto_unaliased!(deststyle, dest, srcstyle, src′)
+    style = _copyto_style(dest, src′)
+    if style isa DefaultCopyToStyle
+        _copyto_loops!(deststyle, dest, srcstyle, src′)
+    else
+        copyto_unaliased!(style, dest, src′)
+    end
+    return dest
 end
 
-function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
-    isempty(src) && return dest
+function _copyto_loops!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
     idf, isf = first(destinds), first(srcinds)
     Δi = idf - isf
-    (checkbounds(Bool, destinds, isf+Δi) & checkbounds(Bool, destinds, last(srcinds)+Δi)) ||
-        throw(BoundsError(dest, srcinds))
     if deststyle isa IndexLinear
         if srcstyle isa IndexLinear
             # Single-index implementation
@@ -1122,34 +1213,47 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
     return dest
 end
 
+function _copyto_loops!(dest::AbstractArray, Rdest::UnitRange{Int}, src::AbstractArray, Rsrc::UnitRange{Int})
+    Δi = first(Rsrc) - first(Rdest)
+    for i in Rdest
+        @inbounds dest[i] = src[i + Δi]
+    end
+    return dest
+end
+
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
+    @_propagate_inbounds_meta
     copyto!(dest, dstart, src, first(LinearIndices(src)), length(src))
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
+    @_propagate_inbounds_meta
     srcinds = LinearIndices(src)
-    checkbounds(Bool, srcinds, sstart) || throw(BoundsError(src, sstart))
+    @boundscheck checkbounds(Bool, srcinds, sstart) || throw(BoundsError(src, sstart))
     copyto!(dest, dstart, src, sstart, last(srcinds)-sstart+1)
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer,
                  src::AbstractArray, sstart::Integer,
                  n::Integer)
-    n == 0 && return dest
-    n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
-        n," elements, but n should be non-negative")))
-    destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    (checkbounds(Bool, destinds, dstart) && n <= last(destinds) - dstart + 1) || throw(BoundsError(dest, dstart))
-    (checkbounds(Bool, srcinds, sstart)  && n <= last(srcinds) - sstart + 1)  || throw(BoundsError(src, sstart))
-    dstart = Int(dstart)
-    sstart = Int(sstart)
-    n = Int(n)
-    src′ = unalias(dest, src)
-    @inbounds for i = 0:n-1
-        dest[dstart+i] = src′[sstart+i]
-    end
-    return dest
+    @_propagate_inbounds_meta
+    _copyto_impl!(dest, dstart, src, sstart, n)
 end
+
+function _prechecked_copyto!(dest::AbstractArray, dstart::Int, src::AbstractArray, sstart::Int, n::Int)
+    @inline
+    dp, doff = _unwrap_contiguous(dest)
+    sp, soff = _unwrap_contiguous(src)
+    if _is_storage_pair(dp, sp)
+        _copyto_storage!(dp, dstart + doff, sp, sstart + soff, n)
+        return dest
+    end
+    src′ = unalias(dest, src)
+    return copyto_unaliased!(_copyto_style(dest, src′), dest, dstart:dstart+n-1, src′, sstart:sstart+n-1)
+end
+
+_unwrap_contiguous(a::AbstractArray) = (a, 0)
+_is_storage_pair(dest, src) = false
 
 function copy(a::AbstractArray)
     @_propagate_inbounds_meta
@@ -2721,8 +2825,7 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
     # copy into final array
     A = cat_similar(as[1], T, ntuple(i -> outdims[i], N))
     # @assert all(==(0), currentdims)
-    outdims .= 0
-    hvncat_fill!(A, currentdims, outdims, d1, d2, as)
+    hvncat_fill!(A, currentdims, d1, d2, as)
     return A
 end
 
@@ -2815,43 +2918,27 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
     # copy into final array
     A = cat_similar(as[1], T, ntuple(i -> outdims[i], nd))
     if !any(iszero, outdims)
-        hvncat_fill!(A, currentdims, blockcounts, d1, d2, as)
+        hvncat_fill!(A, currentdims, d1, d2, as)
     end
     return A
 end
 
-function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int}, d1::Int, d2::Int, as::Tuple) where {T, N}
+function hvncat_fill!(A::AbstractArray{T, N}, offsets::Vector{Int}, d1::Int, d2::Int, as::Tuple) where {T, N}
     N > 1 || throw(ArgumentError("dimensions of the destination array must be at least 2"))
-    length(scratch1) == length(scratch2) == N ||
-        throw(ArgumentError("scratch vectors must have as many elements as the destination array has dimensions"))
+    length(offsets) == N ||
+        throw(ArgumentError("offsets must have as many elements as the destination array has dimensions"))
     0 < d1 < 3 &&
     0 < d2 < 3 &&
     d1 != d2 ||
         throw(ArgumentError("d1 and d2 must be either 1 or 2, exclusive."))
-    outdimsprod = cumprod(size(A))
-    offsets = scratch1
-    inneroffsets = scratch2
     for a ∈ as
-        startindex = CartesianIndex(ntuple(i -> offsets[i] + 1, Val(N)))
         if isa(a, AbstractArray)
             if !isempty(a)
-                if length(a) > 4
-                    endindex = CartesianIndex(ntuple(i -> offsets[i] + cat_size(a, i), Val(N)))
-                    @inbounds A[startindex:endindex] = a
-                else
-                    for ai ∈ a
-                        @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdimsprod, N)
-                        @inbounds A[Ai] = ai
-                        @inbounds for j ∈ 1:N
-                            inneroffsets[j] += 1
-                            inneroffsets[j] < cat_size(a, j) && break
-                            inneroffsets[j] = 0
-                        end
-                    end
-                end
+                Rdest = CartesianIndices(ntuple(i -> first(axes(A, i)) + offsets[i] .+ (0:cat_size(a, i)-1), Val(N)))
+                @inbounds copyto!(A, Rdest, a, CartesianIndices(ntuple(i -> axes(a, i), Val(N))))
             end
         else
-            @inbounds A[startindex] = a
+            @inbounds A[CartesianIndex(ntuple(i -> first(axes(A, i)) + offsets[i], Val(N)))] = a
         end
 
         @inbounds for i ∈ (d1, d2, 3:N...)
@@ -2860,17 +2947,6 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
             offsets[i] = 0
         end
     end
-end
-
-@propagate_inbounds function hvncat_calcindex(offsets::Vector{Int}, inneroffsets::Vector{Int},
-                                                outdimsprod::NTuple{N, Int}, nd::Int) where {N}
-    Ai = inneroffsets[1] + offsets[1] + 1
-    for j ∈ 2:nd
-        increment = inneroffsets[j] + offsets[j]
-        increment *= outdimsprod[j - 1]
-        Ai += increment
-    end
-    Ai
 end
 
 """

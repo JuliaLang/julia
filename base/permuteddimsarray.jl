@@ -290,11 +290,14 @@ function permutedims!(dest, src::AbstractArray, perm)
     return dest
 end
 
-function Base.copyto!(dest::PermutedDimsArray{<:Any,N}, src::AbstractArray{<:Any,N}) where {N}
-    isempty(src) && return dest
-    checkbounds(dest, axes(src)...)
-    src′ = Base.unalias(dest, src)
-    _copy!(dest, src′)
+struct PermutedDimsCopyToStyle <: Base.CopyToStyle end
+Base.CopyToStyle(::Type{<:PermutedDimsArray}) = PermutedDimsCopyToStyle()
+
+function Base.copyto_unaliased!(::PermutedDimsCopyToStyle, dest::AbstractArray, src::AbstractArray)
+    if dest isa PermutedDimsArray && axes(dest) == axes(src)
+        return _copy!(dest, src)
+    end
+    return Base.copyto_unaliased!(Base.DefaultCopyToStyle(), dest, src)
 end
 
 function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
