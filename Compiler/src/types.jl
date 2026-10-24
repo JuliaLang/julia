@@ -211,6 +211,24 @@ end
 
 inference_proof(result::LocalInferenceResult) = result.proof
 
+"""
+    LimitedInferenceResult
+
+A completed [`InferenceResult`](@ref) of a call whose accuracy was limited by the recursion
+heuristic, i.e. a tombstoned one, together with the `proof` of its dependencies. Its facts
+depend on the inference context of the call, so it is never cached. Instead, the calling
+frame keeps it while that frame is being inferred, and calls made in that context reuse it
+instead of inferring it again.
+"""
+struct LimitedInferenceResult
+    result::InferenceResult
+    proof::LocalInferenceProof
+    function LimitedInferenceResult(result::InferenceResult, proof::LocalInferenceProof)
+        @assert result.tombstone "a limited result must be tombstoned"
+        return new(result, proof)
+    end
+end
+
 const InferenceCacheEntry = Union{InferenceResult,LocalInferenceResult}
 function InferenceResult(mi::MethodInstance, 𝕃::AbstractLattice=fallback_lattice)
     argtypes = matching_cache_argtypes(𝕃, mi)
