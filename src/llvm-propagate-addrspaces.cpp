@@ -291,7 +291,7 @@ void PropagateJuliaAddrspacesVisitor::visitMemSetInst(MemSetInst &MI) {
     unsigned AS = MI.getDestAddressSpace();
     if (!isSpecialAS(AS))
         return;
-    Value *Replacement = LiftPointer(MI.getModule(), MI.getRawDest());
+    Value *Replacement = LiftPointer(MI.getModule(), MI.getRawDest(), &MI);
     if (!Replacement)
         return;
     Function *TheFn = Intrinsic::getOrInsertDeclaration(MI.getModule(), Intrinsic::memset,
