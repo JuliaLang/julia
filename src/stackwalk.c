@@ -694,11 +694,17 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context, int from_sign
     _Atomic(int) *abort_ptr;
     if (!profile_abort_window_open(&abort_ptr))
         return 0;
-    uv_mutex_lock(&jl_in_stackwalk);
-    result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
-            &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64,
-            JuliaGetModuleBase64, NULL);
-    uv_mutex_unlock(&jl_in_stackwalk);
+    // Take the profile lock before jl_in_stackwalk, the same order as
+    // jl_unw_stepn; the StackWalk64 callbacks also take it.
+    result = 0;
+    if (jl_trylock_profile()) {
+        uv_mutex_lock(&jl_in_stackwalk);
+        result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
+                &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64,
+                JuliaGetModuleBase64, NULL);
+        uv_mutex_unlock(&jl_in_stackwalk);
+        jl_unlock_profile();
+    }
     if (!profile_abort_window_close(abort_ptr))
         return 0;
 #else
