@@ -122,6 +122,22 @@ end
 widen_call_result(::AbstractInterpreter, si::StmtInfo, state::CallInferenceState, ::AbsIntState) =
     call_result_unused(si) && !(state.rettype === Bottom)
 
+function is_uninformative_call(state::CallInferenceState, applicable::Vector{MethodMatchTarget})
+    if !(state.rettype === Any && state.exctype === Any && state.slotrefinements === nothing)
+        return false
+    end
+    # Overlay status cannot enable concrete evaluation when the other effects are unknown.
+    if Effects(state.all_effects; nonoverlayed=ALWAYS_TRUE) !== EFFECTS_UNKNOWN
+        return false
+    end
+    for i = 1:length(applicable)
+        if !isdispatchtuple(applicable[i].match.spec_types)
+            return true
+        end
+    end
+    return false
+end
+
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(func),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
                                   vtypes::Union{VarTable,Nothing}, sv::AbsIntState, max_methods::Int)
@@ -371,6 +387,10 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             infercalls2(interp, sv) || push!(sv.tasks, infercalls2)
         end
 
+        if is_uninformative_call(state, applicable)
+            add_remark!(interp, sv, "Deferring edges of uninformative non-concrete call site to the optimizer")
+            retinfo = UninformativeCallInfo(retinfo)
+        end
         gfresult[] = CallMeta(state.rettype, state.exctype, state.all_effects, retinfo, state.slotrefinements)
         return true
     end # function infercalls

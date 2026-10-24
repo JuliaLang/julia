@@ -278,20 +278,20 @@ function add_method_match_proofs!(edges::Vector{Any}, info::MethodMatchInfo,
     return nothing
 end
 
-function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Bool=false)
-    if !fully_covering(info)
-        exists = false
-        for i in 2:length(edges)
-            if edges[i] === Core.methodtable && edges[i-1] == info.atype
-                exists = true
-                break
-            end
-        end
-        if !exists
-            push!(edges, info.atype)
-            push!(edges, Core.methodtable)
+function add_uncovered_edges!(edges::Vector{Any}, info::MethodMatchInfo)
+    fully_covering(info) && return nothing
+    for i in 2:length(edges)
+        if edges[i] === Core.methodtable && edges[i-1] == info.atype
+            return nothing
         end
     end
+    push!(edges, info.atype)
+    push!(edges, Core.methodtable)
+    return nothing
+end
+
+function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Bool=false)
+    add_uncovered_edges!(edges, info)
     nmatches = length(info.results)
     possibly_ambiguous = any_ambig(info)
     if nmatches == length(info.edges) == 1 && fully_covering(info)
@@ -407,6 +407,8 @@ add_edges_impl(edges::Vector{Any}, info::UnionSplitInfo) =
     _add_edges_impl(edges, info)
 _add_edges_impl(edges::Vector{Any}, info::UnionSplitInfo, mi_edge::Bool=false) =
     for split in info.split; _add_edges_impl(edges, split, mi_edge); end
+add_uncovered_edges!(edges::Vector{Any}, info::UnionSplitInfo) =
+    for split in info.split; add_uncovered_edges!(edges, split); end
 nsplit_impl(info::UnionSplitInfo) = length(info.split)
 getsplit_impl(info::UnionSplitInfo, idx::Int) = getsplit(info.split[idx], 1)
 function getresult_impl(info::UnionSplitInfo, idx::Int)
@@ -724,7 +726,14 @@ was supposed to analyze.
 struct ReturnTypeCallInfo <: CallInfo
     info::CallInfo
 end
-add_edges_impl(edges::Vector{Any}, info::ReturnTypeCallInfo) = add_edges!(edges, info.info)
+# The query returns the inferred type as a value, so it also depends on uninformative calls.
+function add_edges_impl(edges::Vector{Any}, info::ReturnTypeCallInfo)
+    observed = Any[RecordUninformativeEdges()]
+    add_edges!(observed, info.info)
+    for i = 2:length(observed)
+        push!(edges, observed[i])
+    end
+end
 
 """
     info::FinalizerInfo <: CallInfo
@@ -776,6 +785,30 @@ nsplit_impl(info::VirtualMethodMatchInfo) = nsplit(info.info)
 getsplit_impl(info::VirtualMethodMatchInfo, idx::Int) = getsplit(info.info, idx)
 getresult_impl(info::VirtualMethodMatchInfo, idx::Int) = getresult(info.info, idx)
 getedge_impl(info::VirtualMethodMatchInfo, idx::Int) = getedge(info.info, idx)
+
+"""
+    info::UninformativeCallInfo <: CallInfo
+
+Wraps the `MethodMatchInfo`/`UnionSplitInfo` of a call from which inference learned nothing:
+`Any` return and exception types, unknown effects, no argument refinements, and at least one
+match that is not a dispatch tuple. Inference records no edges for it. The optimizer adds them
+where it relies on the lookup, and return type queries still collect them.
+"""
+struct UninformativeCallInfo <: CallInfo
+    info::Union{MethodMatchInfo,UnionSplitInfo}
+end
+# Marks an edge list that also collects the edges of uninformative calls.
+struct RecordUninformativeEdges end
+function add_edges_impl(edges::Vector{Any}, info::UninformativeCallInfo)
+    if !isempty(edges) && edges[1] === RecordUninformativeEdges()
+        add_edges!(edges, info.info)
+    end
+    nothing
+end
+nsplit_impl(info::UninformativeCallInfo) = nsplit(info.info)
+getsplit_impl(info::UninformativeCallInfo, idx::Int) = getsplit(info.info, idx)
+getresult_impl(info::UninformativeCallInfo, idx::Int) = getresult(info.info, idx)
+getedge_impl(info::UninformativeCallInfo, idx::Int) = getedge(info.info, idx)
 
 """
     info::GlobalAccessInfo <: CallInfo

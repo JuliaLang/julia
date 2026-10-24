@@ -6297,6 +6297,58 @@ g_concrete_only(x) = f_concrete_only(x)
 @test only(Base.return_types(g_concrete_only, Tuple{Int})) === Int
 @test only(Base.return_types(g_concrete_only, Tuple{Integer})) === Any
 
+# An uninformative call left dynamic has no edge. An inlined, invoked or concretely typed
+# call keeps it.
+@noinline f_uninformative(x) = Base.inferencebarrier(identity)(x)
+@noinline f_uninformative_nsp(@nospecialize x) = Base.inferencebarrier(identity)(x)
+@inline f_uninformative_inl(x) = Base.inferencebarrier(identity)(x)
+g_uninformative(x) = f_uninformative(x)
+g_uninformative_nsp(x) = f_uninformative_nsp(x)
+g_uninformative_inl(x) = f_uninformative_inl(x)
+function uninformative_edge_kinds(src, f)
+    m = only(methods(f))
+    dispatch = invoke_style = false
+    edges = src.edges
+    unwrap(@nospecialize e) = e isa Core.CodeInstance ? Compiler.get_ci_mi(e) : e
+    matches(@nospecialize e) = (e = unwrap(e); e === m || (e isa MethodInstance && e.def === m))
+    i = 1
+    while i ≤ length(edges)
+        e = edges[i]
+        if e isa Int # encoded lookup: count, signature, then matches
+            n = abs(e)
+            for j = i+2:i+1+n
+                if matches(edges[j])
+                    dispatch = true
+                end
+            end
+            i += 2 + n
+        elseif e isa Type
+            if matches(edges[i+1])
+                invoke_style = true
+            end
+            i += 2
+        else
+            if matches(e)
+                dispatch = true
+            end
+            i += 1
+        end
+    end
+    return (; dispatch, invoke_style)
+end
+let src = code_typed1(g_uninformative, (Integer,))
+    @test count(iscall((src, f_uninformative)), src.code) == 1
+    @test uninformative_edge_kinds(src, f_uninformative) == (dispatch=false, invoke_style=false)
+    src = code_typed1(g_uninformative, (Int,))
+    @test uninformative_edge_kinds(src, f_uninformative).dispatch
+    src = code_typed1(g_uninformative_nsp, (Integer,))
+    @test count(isinvoke(:f_uninformative_nsp), src.code) == 1
+    @test uninformative_edge_kinds(src, f_uninformative_nsp).dispatch
+    src = code_typed1(g_uninformative_inl, (Integer,))
+    @test count(iscall((src, f_uninformative_inl)), src.code) == 0
+    @test uninformative_edge_kinds(src, f_uninformative_inl).dispatch
+end
+
 # Test that a module-wise `@max_methods` works as expected
 module Test43370
 using Test
