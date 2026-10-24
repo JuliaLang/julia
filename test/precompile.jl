@@ -291,6 +291,13 @@ precompile_test_harness(false) do dir
               precompile(ptrmem_ptr, ())
               precompile(ptrref_ptr, ())
 
+              # a foreign call with another calling convention than C: its stub is
+              # defined in this image, whose callers must use its convention
+              @static if Sys.ARCH in (:i686, :x86_64)
+                  strlen_stdcall(s) = ccall(:strlen, stdcall, Csize_t, (Cstring,), s)
+                  precompile(strlen_stdcall, (String,))
+              end
+
               # create a backedge that includes Type{Union{}}, to ensure lookup can handle that
               call_bottom() = show(stdout, Union{})
               Core.Compiler.return_type(call_bottom, Tuple{})
@@ -394,6 +401,7 @@ precompile_test_harness(false) do dir
         # relocated pointers are not folded at precompile-time
         @test Foo.ptrmem_ptr() === Foo.ptrmem.ptr
         @test Foo.ptrref_ptr() === Foo.ptrref.ptr_or_offset
+        Sys.ARCH in (:i686, :x86_64) && @test Foo.strlen_stdcall("abcd") == 4
 
         @test !isopen(Foo.ch1)
         @test !isopen(Foo.ch2)
