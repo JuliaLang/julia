@@ -142,7 +142,6 @@ end
     `SignalCondition` requires at least Julia 1.14.
 """
 mutable struct SignalCondition
-    @atomic handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
     @atomic isopen::Bool
     @atomic set::Bool
@@ -157,26 +156,13 @@ mutable struct SignalCondition
         if intercept && signum == SIGINT
             throw(ArgumentError("SIGINT cannot be intercepted, as Ctrl-C goes through task cancellation"))
         end
-        this = new(Libc.malloc(_sizeof_uv_async), ThreadSynchronizer(), true, false, signum, intercept)
+        this = new(ThreadSynchronizer(), true, false, signum, intercept)
         iolock_begin()
-        associate_julia_struct(this.handle, this)
-        err = ccall(:uv_async_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
-            eventloop(), this, @cfunction(uv_asynccb, Cvoid, (Ptr{Cvoid},)))
-        if err != 0
-            Libc.free(this.handle)
-            this.handle = C_NULL
-            iolock_end()
-            throw(_UVError("uv_async_init", err))
-        end
-        finalizer(uvfinalize, this)
         err = ccall(:jl_signal_watch_start, Cint, (Cint, Cint, Ptr{Cvoid}),
             signum, intercept, @cfunction(uv_signalcb, Cvoid, (Ptr{Cvoid},)))
         err == 0 && push!(get!(Vector{SignalCondition}, SIGNAL_WATCHERS, this.signum), this)
         iolock_end()
-        if err != 0
-            close(this)
-            throw(_UVError("jl_signal_watch_start", err))
-        end
+        err == 0 || throw(_UVError("jl_signal_watch_start", err))
         return this
     end
 end
@@ -184,15 +170,34 @@ end
 # The open conditions for each signal, guarded by the IO lock. This also keeps them alive until closed.
 const SIGNAL_WATCHERS = Dict{Cint, Vector{SignalCondition}}()
 
-# Called with the IO lock held; does nothing if `s` is not watching.
-function unwatch_signal(s::SignalCondition)
-    watchers = get(SIGNAL_WATCHERS, s.signum, nothing)
-    watchers === nothing && return
-    i = findfirst(x -> x === s, watchers)
-    i === nothing && return
-    deleteat!(watchers, i)
-    ccall(:jl_signal_watch_stop, Cvoid, (Cint, Cint), s.signum, s.intercept)
+function close(s::SignalCondition)
+    iolock_begin()
+    if isopen(s)
+        @atomic :release s.isopen = false
+        watchers = SIGNAL_WATCHERS[s.signum]
+        deleteat!(watchers, findfirst(x -> x === s, watchers)::Int)
+        ccall(:jl_signal_watch_stop, Cvoid, (Cint, Cint), s.signum, s.intercept)
+    end
+    iolock_end()
+    @lock s.cond notify(s.cond, false)
     nothing
+end
+
+function _trywait(s::SignalCondition, tok::MaybeToken)
+    lock(s.cond)
+    locked = true
+    try
+        while !s.set && isopen(s)
+            locked = false
+            wait(s.cond, tok)
+            locked = true
+        end
+        set = s.set
+        @atomic :monotonic s.set = false
+        return set
+    finally
+        locked && unlock(s.cond)
+    end
 end
 
 """
@@ -321,14 +326,13 @@ end
 
 unsafe_convert(::Type{Ptr{Cvoid}}, t::Timer) = t.handle
 unsafe_convert(::Type{Ptr{Cvoid}}, async::AsyncCondition) = async.handle
-unsafe_convert(::Type{Ptr{Cvoid}}, s::SignalCondition) = s.handle
 
 # if this returns true, the object has been signaled
 # if this returns false, the object is closed
 # a cancellation of the governing token is thrown as a CancellationRequest
 _trywait(t::Union{Timer, AsyncCondition, SignalCondition}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
     _trywait(t, resolve_cancel_token(cancel))
-function _trywait(t::Union{Timer, AsyncCondition, SignalCondition}, tok::MaybeToken)
+function _trywait(t::Union{Timer, AsyncCondition}, tok::MaybeToken)
     set = t.set
     if set
         # full barrier now for AsyncCondition
@@ -406,13 +410,12 @@ a new event.
 
 See also [`isopen`](@ref).
 """
-function close(t::Union{Timer, AsyncCondition, SignalCondition})
+function close(t::Union{Timer, AsyncCondition})
     t.handle == C_NULL && !t.isopen && return # short-circuit path, :monotonic
     iolock_begin()
     if t.handle != C_NULL
         if t.isopen
             @atomic :release t.isopen = false
-            t isa SignalCondition && unwatch_signal(t)
             ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
         end
         # implement _trywait here without the auto-reset function, just waiting for the final close signal
@@ -444,7 +447,7 @@ function close(t::Union{Timer, AsyncCondition, SignalCondition})
     nothing
 end
 
-function uvfinalize(t::Union{Timer, AsyncCondition, SignalCondition})
+function uvfinalize(t::Union{Timer, AsyncCondition})
     iolock_begin()
     lock(t.cond)
     try
@@ -452,7 +455,6 @@ function uvfinalize(t::Union{Timer, AsyncCondition, SignalCondition})
             disassociate_julia_struct(t.handle) # not going to call the usual close hooks anymore
             if t.isopen
                 @atomic :release t.isopen = false
-                t isa SignalCondition && unwatch_signal(t)
                 ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle) # this will call Libc.free
             end
             @atomic :monotonic t.handle = C_NULL
@@ -465,13 +467,11 @@ function uvfinalize(t::Union{Timer, AsyncCondition, SignalCondition})
     nothing
 end
 
-function _uv_hook_close(t::Union{Timer, AsyncCondition, SignalCondition})
+function _uv_hook_close(t::Union{Timer, AsyncCondition})
     lock(t.cond)
     try
         handle = t.handle
         @atomic :release t.isopen = false
-        # Closing every handle at exit gets here without `close`.
-        t isa SignalCondition && unwatch_signal(t)
         @atomic :monotonic t.handle = C_NULL
         Libc.free(handle)
         notify(t.cond, false)
@@ -482,7 +482,7 @@ function _uv_hook_close(t::Union{Timer, AsyncCondition, SignalCondition})
 end
 
 function uv_asynccb(handle::Ptr{Cvoid})
-    async = @handle_as handle Union{AsyncCondition, SignalCondition}
+    async = @handle_as handle AsyncCondition
     lock(async.cond) # acquire barrier
     try
         @atomic :release async.set = true
@@ -494,12 +494,13 @@ function uv_asynccb(handle::Ptr{Cvoid})
 end
 
 # The runtime calls this on the event loop after it sees a watched signal.
-# It notifies the conditions directly. An exit can stop this thread partway through waking a
-# handle, which leaves the handle busy, and closing a busy handle at exit spins forever.
 function uv_signalcb(::Ptr{Cvoid})
     while (sig = ccall(:jl_signal_take_pending, Cint, ())) != 0
         for s in get(SIGNAL_WATCHERS, sig, ())
-            isopen(s) && uv_asynccb(s.handle)
+            @lock s.cond begin
+                @atomic :release s.set = true
+                notify(s.cond, true)
+            end
         end
     end
     nothing

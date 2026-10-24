@@ -690,6 +690,18 @@ end
         @test repr(s) == "SignalCondition(SIGWINCH ($(Base.SIGWINCH)), intercept, open)"
         close(s)
     end
+    let s = Base.SignalCondition(Base.SIGWINCH)
+        t = @async try
+            wait(s)
+        catch e
+            e
+        end
+        yield()
+        close(s)
+        @test fetch(t) isa EOFError
+        @test_throws EOFError wait(s)
+        close(s)
+    end
     @test_throws ArgumentError Base.SignalCondition(Base.SIGINT; intercept=true)
     @test_throws ArgumentError Base.SignalCondition(-1)
     @test_throws ArgumentError Base.SignalCondition(typemax(Int))
