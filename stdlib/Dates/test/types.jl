@@ -152,15 +152,19 @@ end
     @test_throws InexactError Dates.Date(1.2f0, 1.f0, 1.f0)
     @test_throws InexactError Dates.Date(3//4, Rational(1), Rational(1)) == test
 
-    # Months, days, hours, minutes, seconds, and milliseconds must be in range
+    # Years, months, days, hours, minutes, seconds, and milliseconds must be in range
     @test_throws ArgumentError Dates.Date(2013, 0, 1)
     @test_throws ArgumentError Dates.Date(2013, 13, 1)
     @test_throws ArgumentError Dates.Date(2013, 1, 0)
     @test_throws ArgumentError Dates.Date(2013, 1, 32)
+    @test_throws ArgumentError Dates.Date(year(typemax(Date))+1, 1, 1)
+    @test_throws ArgumentError Dates.Date(year(typemin(Date))-1, 1, 32)
     @test_throws ArgumentError Dates.DateTime(2013, 0, 1)
     @test_throws ArgumentError Dates.DateTime(2013, 13, 1)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 0)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 32)
+    @test_throws ArgumentError Dates.DateTime(year(typemax(DateTime))+1, 1, 1)
+    @test_throws ArgumentError Dates.DateTime(year(typemin(DateTime))-1, 1, 32)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 1, 25)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 1, -1)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 1, 0, -1)
