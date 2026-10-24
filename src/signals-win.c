@@ -516,6 +516,16 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
 
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
+    // libuv reports these console events as the same signals.
+    int watched = wsig == CTRL_C_EVENT ? SIGINT :
+                  wsig == CTRL_BREAK_EVENT ? SIGBREAK :
+                  wsig == CTRL_CLOSE_EVENT ? SIGHUP : 0;
+    if (jl_notify_signal_watchers(watched)) {
+        // windows ends the process once this returns, so give the watcher time to run
+        if (wsig == CTRL_CLOSE_EVENT)
+            Sleep(INFINITE);
+        return 1;
+    }
     int sig;
     //windows signals use different numbers from unix (raise)
     switch(wsig) {
@@ -706,6 +716,54 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 JL_DLLEXPORT void jl_install_sigint_handler(void)
 {
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
+}
+
+// libuv reports these console events as signals.
+JL_DLLEXPORT int jl_signal_is_reserved(int sig)
+{
+    return !(sig == SIGINT || sig == SIGBREAK || sig == SIGHUP || sig == SIGWINCH);
+}
+
+// Console resizes come only from libuv, which reports them to its own signal watchers.
+static uv_signal_t *winch_signal;
+
+static void winch_cb(uv_signal_t *handle, int sig)
+{
+    jl_notify_signal_watchers(sig);
+}
+
+static int jl_signal_watch_install(int sig)
+{
+    if (sig != SIGWINCH)
+        return 0;
+    if (winch_signal == NULL) {
+        // Allocated, because closing all handles at exit frees them.
+        winch_signal = (uv_signal_t*)malloc_s(sizeof(uv_signal_t));
+        int err = uv_signal_init(jl_io_loop, winch_signal);
+        if (err != 0) {
+            free(winch_signal);
+            winch_signal = NULL;
+            return err;
+        }
+        uv_unref((uv_handle_t*)winch_signal);
+    }
+    return uv_signal_start(winch_signal, winch_cb, SIGWINCH);
+}
+
+static void jl_signal_watch_uninstall(int sig)
+{
+    if (sig == SIGWINCH)
+        uv_signal_stop(winch_signal);
+}
+
+JL_DLLEXPORT int jl_sigrtmin(void)
+{
+    return -1;
+}
+
+JL_DLLEXPORT int jl_sigrtmax(void)
+{
+    return -1;
 }
 
 static TIMECAPS timecaps;
