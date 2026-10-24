@@ -133,7 +133,11 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     end
     current_world = get_world_counter()
-    matches = find_method_matches(interp, argtypes, atype; max_methods, fargs=arginfo.fargs)
+    # Branch on `fargs` so that both keyword calls are statically dispatched.
+    fargs = arginfo.fargs
+    matches = fargs === nothing ?
+        find_method_matches(interp, argtypes, atype; max_methods) :
+        find_method_matches(interp, argtypes, atype; max_methods, fargs)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
@@ -171,7 +175,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
     # split the for loop off into a function, so that we can pause and restart it at will
     function infercalls(interp, sv)
         local napplicable = length(applicable)
-        local multiple_matches = multiple_methods(matches)
+        local multiple_matches = multiple_methods(state.matches)
         while state.inferidx <= napplicable
             (; match, edges, needs_mi_edges, call_results, edge_idx) = applicable[state.inferidx]
             local method = match.method
@@ -327,7 +331,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             inferidx = SafeBox{Int}(1)
             function infercalls2(interp, sv)
                 local napplicable = length(applicable)
-                local multiple_matches = multiple_methods(matches)
+                local multiple_matches = multiple_methods(state.matches)
                 while inferidx[] <= napplicable
                     (; match, call_results, edge_idx) = applicable[inferidx[]]
                     inferidx[] += 1
@@ -347,7 +351,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                                 if edge !== nothing
                                     local sig = match.spec_types
                                     local mi = get_ci_mi(edge)
-                                    local vw = matches.valid_worlds
+                                    local vw = valid_worlds
                                     ccall(:jl_recache_method_by_type, Cvoid, (Any, Any, Any, Any, UInt, UInt, UInt, UInt),
                                             sig, match.sparams, mi, mi.specTypes, get_inference_world(interp),
                                             first(vw), last(vw), current_world)
