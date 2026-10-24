@@ -25,6 +25,10 @@ New library functions
 New library features
 --------------------
 
+* `@timed` returns a new `compile_bytes` field with the bytes allocated during type inference and
+  compilation, which are also included in `bytes`. `@time` and `@timev` print it next to the
+  compilation time.
+
 Standard library changes
 ------------------------
 
