@@ -3490,8 +3490,9 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                 write(f, _crc32c(f))
             end
 
-            # inherit permission from the source file (and make them writable)
-            chmod(tmppath, filemode(path) & 0o777 | 0o200)
+            # inherit permission from the source file, but keep it readable and writable
+            # (`filemode` is 0 if the source has disappeared in the meantime)
+            chmod(tmppath, filemode(path) & 0o777 | 0o600)
 
             # prune the directory with cache files
             if pkg.uuid !== nothing

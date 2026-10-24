@@ -2063,6 +2063,19 @@ precompile_test_harness("Issue #25971") do load_path
     cachefile, _ = Base.compilecache(Base.PkgId("Foo25971"))
     # Check writable
     @test touch(cachefile) == cachefile
+
+    # Issue #57254: the source disappearing during precompilation must not leave
+    # an unreadable cache file behind
+    sourcefile = joinpath(load_path, "Foo57254.jl")
+    write(sourcefile, """
+        module Foo57254
+        ccall(:jl_generating_output, Cint, ()) == 1 && rm(@__FILE__)
+        end
+        """)
+    cachefile, _ = Base.compilecache(Base.PkgId("Foo57254"))
+    @test !isfile(sourcefile)
+    @test filemode(cachefile) & 0o600 == 0o600
+    @test open(Base.isvalid_cache_header, cachefile) !== nothing
 end
 
 precompile_test_harness("Issue #38312") do load_path
