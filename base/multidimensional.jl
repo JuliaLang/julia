@@ -1569,7 +1569,7 @@ function fill!(V::SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{In
 end
 
 fill!(V::SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}, Vararg{Union{Int,AbstractUnitRange{Int}}}}}, x) =
-    _unsafe_fill_indices!(V.parent, x, V.indices...)
+    (_unsafe_fill_indices!(V.parent, x, V.indices...); V)
 
 @generated function _unsafe_fill_indices!(B::BitArray, x,
         I0::AbstractUnitRange{Int}, I::Union{Int,AbstractUnitRange{Int}}...)

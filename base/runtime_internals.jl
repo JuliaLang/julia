@@ -1391,6 +1391,7 @@ julia> instances(Color)
 function instances end
 
 function to_tuple_type(@nospecialize(t))
+    @_terminates_locally_meta
     if isa(t, Tuple) || isa(t, AbstractArray) || isa(t, SimpleVector)
         t = Tuple{t...}
     end
