@@ -1130,9 +1130,8 @@ end
               5.497787143782138f0, 4.216574282663131f8, 4.216574282663131f12)
     for (i, x) in enumerate(vals)
         for op in (prevfloat, nextfloat)
-            Ty = Float32(Base.Math.rem_pio2_kernel(op(vals[i]))[2].hi)
-            By = Float32(rem(big(op(x)), pi/2))
-            @test Ty ≈ By || Ty ≈ By-Float32(pi)/2
+            z, _ = Base.Math.rem_pio16(op(vals[i]))
+            @test Float32(z*big(pi)/16) ≈ Float32(rem(big(op(x)), big(pi)/16, RoundNearest))
         end
     end
 end

@@ -1293,9 +1293,8 @@ Return positive part of the high word of `x` as a `UInt32`.
 include("special/cbrt.jl")
 include("special/exp.jl")
 include("special/hyperbolic.jl")
+include("special/pi_remainders.jl")
 include("special/trig.jl")
-include("special/rem_pio2.jl")
-include("special/rem2pi.jl")
 include("special/log.jl")
 include("special/pow.jl")
 
@@ -1303,7 +1302,8 @@ include("special/pow.jl")
 
 # Float16 definitions
 
-for func in (:sin,:cos,:tan,:asin,:acos,:atan,:cosh,:tanh,:asinh,:acosh,
+# Float16 sin, cos, sincos, and tan have dedicated methods in special/trig.jl
+for func in (:asin,:acos,:atan,:cosh,:tanh,:asinh,:acosh,
              :atanh,:log,:log2,:log10,:log1p)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
@@ -1311,13 +1311,12 @@ for func in (:sin,:cos,:tan,:asin,:acos,:atan,:cosh,:tanh,:asinh,:acosh,
     end
 end
 
-for func in (:exp,:exp2,:exp10,:sinh)
+for func in (:exp,:exp2,:exp10,:sinh,:sin,:cos,:tan)
      @eval $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
 end
 
 
 atan(a::Float16,b::Float16) = Float16(atan(Float32(a),Float32(b)))
-sincos(a::Float16) = Float16.(sincos(Float32(a)))
 
 for f in (:sin, :cos, :tan, :asin, :atan, :acos,
           :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
