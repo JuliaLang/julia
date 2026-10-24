@@ -4336,6 +4336,40 @@ precompile_test_harness("pkgimage type cache dedup") do dir
     end
 end
 
+precompile_test_harness("pkgimage type cache dedup with deferred supertype") do dir
+    # An existing instantiation whose deferred supertype was never computed must
+    # be reused even though the image brings that supertype in as a new type.
+    write(joinpath(dir, "DeferredSuperDep.jl"),
+          """
+          module DeferredSuperDep
+              abstract type A{T} end
+              struct S{T} <: A{S{Tuple{T}}} end
+          end
+          """)
+    write(joinpath(dir, "DeferredSuperUser.jl"),
+          """
+          module DeferredSuperUser
+              using DeferredSuperDep: S
+              # the supertype precedes the type itself in the image
+              const P = Any[supertype(S{Tuple{Tuple{Int}}}), S{Tuple{Tuple{Int}}}]
+          end
+          """)
+    Base.compilecache(Base.PkgId("DeferredSuperDep"))
+    Base.compilecache(Base.PkgId("DeferredSuperUser"))
+    @eval using DeferredSuperDep
+    # creates S{Tuple{Tuple{Int}}} with its supertype deferred
+    T = invokelatest() do
+        DeferredSuperDep.S{Tuple{Int}}
+        DeferredSuperDep.S{Tuple{Tuple{Int}}}
+    end
+    @test !isdefined(T, :super)
+    @eval using DeferredSuperUser
+    invokelatest() do
+        @test DeferredSuperUser.P[2] === T
+        @test DeferredSuperUser.P[1] === supertype(T)
+    end
+end
+
 # Interactive precompile output has to keep its colors: a TTY's implied `:color` must survive
 # the driver's conversion of a raw stream to `IOContext{IO}` (#62970 dropped it). Run a real
 # precompile in a child whose stderr is a pty and look for the color escapes in its output.
