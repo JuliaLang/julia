@@ -560,20 +560,22 @@ static jl_gc_roots_t make_lazy_gc_roots(Value *inline_roots_ptr, size_t npointer
     return jl_gc_roots_t(inline_roots_ptr, npointers, ai);
 }
 
-// inlined bool indicates whether this must return the inlined roots inside x separately, or whether x itself may be used as the root (if x is already isboxed)
-static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_cgval_t &x, bool inlined=false) JL_CANSAFEPOINT
+// storage_used indicates whether the consumer reads x's storage through an untracked pointer (e.g. one
+// stripped by pointer_from_objref), rather than through x's own address or a copy of its contents. Only
+// then is the address of an unboxed pointer-free value worth rooting: such a value holds no GC
+// references, and every tracked load of its contents already keeps whatever it lives in (a stack slot,
+// or after inlining perhaps a caller's object) alive by itself.
+static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_cgval_t &x, bool storage_used) JL_CANSAFEPOINT
 {
     if (x.constant || x.typ == jl_bottom_type)
         return {};
-    if (!inlined && x.Vboxed) // superset of x.isboxed
+    if (x.Vboxed) // superset of x.isboxed
         return {x.Vboxed};
-    assert(!x.isboxed || !inlined);
     if (!x.inline_roots.empty()) {
-        // if (!inlined) { // TODO: implement this filter operation
+        // TODO: implement this filter operation
         //     SmallVector<unsigned,4> perm_offsets;
         //     find_perm_offsets(typ, perm_offsets, 0);
         //     return filter(!in(perm_offsets), x.inline_roots)
-        // }
         // Copy and load roots via get()
         const jl_gc_roots_t &roots_copy = x.inline_roots;
         SmallVector<Value*,0> result(roots_copy.size());
@@ -581,13 +583,15 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
             result[i] = roots_copy.get(ctx, i);
         return result;
     }
-    if (!inlined && x.ispointer()) {
+    if (x.ispointer()) {
         if (x.V == nullptr) {
             // a union of ghost types has a tag but no data to root
             assert(x.TIndex);
             return {};
         }
         assert(x.V->getType()->getPointerAddressSpace() != AddressSpace::Tracked);
+        if (!storage_used && jl_is_pointerfree(x.typ))
+            return {};
         return {x.V};
     }
     else if (jl_is_concrete_immutable(x.typ) && !jl_is_pointerfree(x.typ)) {
