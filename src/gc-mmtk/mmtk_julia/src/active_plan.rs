@@ -1,9 +1,9 @@
 use crate::JuliaVM;
 use crate::MUTATORS;
-use mmtk::util::opaque_pointer::*;
-use mmtk::util::Address;
-use mmtk::vm::ActivePlan;
 use mmtk::Mutator;
+use mmtk::util::Address;
+use mmtk::util::opaque_pointer::*;
+use mmtk::vm::ActivePlan;
 use mmtk::{plan::ObjectQueue, scheduler::GCWorker, util::ObjectReference};
 
 use std::collections::HashMap;
@@ -73,23 +73,25 @@ impl ActivePlan<JuliaVM> for VMActivePlan {
 
 // Expose the mutator iterator so they can be used in C.
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mmtk_new_mutator_iterator() -> *mut JuliaMutatorIterator<'static> {
     let guard = MUTATORS.read().unwrap();
     Box::into_raw(Box::new(JuliaMutatorIterator::new(guard)))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mmtk_get_next_mutator_tls(
     iter: *mut JuliaMutatorIterator<'static>,
 ) -> OpaquePointer {
-    match { iter.as_mut() }.unwrap().next() {
-        Some(m) => m.mutator_tls.0 .0,
-        None => OpaquePointer::from_address(Address::ZERO),
+    unsafe {
+        match { iter.as_mut() }.unwrap().next() {
+            Some(m) => m.mutator_tls.0.0,
+            None => OpaquePointer::from_address(Address::ZERO),
+        }
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mmtk_close_mutator_iterator(iter: *mut JuliaMutatorIterator<'static>) {
     // The boxed pointer will get dropped
     let _to_drop = unsafe { Box::from_raw(iter) };
