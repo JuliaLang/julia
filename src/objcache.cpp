@@ -14,6 +14,15 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 #endif
+#ifdef __APPLE__
+#include <unistd.h>
+// Private libSystem SPI, not declared in the public SDK. Weakly import it so
+// the early sandbox check remains optional if Apple removes the API.
+extern "C" {
+extern int sandbox_check(pid_t pid, const char *operation, int type, ...)
+    __attribute__((weak_import)) JL_NOTSAFEPOINT;
+}
+#endif
 
 namespace endian = llvm::support::endian;
 using endianness = llvm::endianness;
@@ -72,16 +81,25 @@ static FILE *getLogFile()
 
 static FILE *LogFile = getLogFile();
 
-// Linux LMDB uses robust process-shared mutexes to recover locks after an
-// owner dies. QEMU user mode returns ENOSYS for both robust-list syscalls,
-// but glibc still allows creating these mutexes, leaving dead owners' locks
-// unrecoverable. Query the current thread without changing libc's robust list.
-static bool robustMutexesAvailable() JL_NOTSAFEPOINT
+// Check that the lock primitives LMDB's robust lock backend relies on work.
+static bool robustLocksAvailable() JL_NOTSAFEPOINT
 {
-#ifdef __linux__
+#if defined(__linux__)
+    // Linux LMDB uses robust process-shared mutexes to recover locks after an
+    // owner dies. QEMU user mode returns ENOSYS for both robust-list syscalls,
+    // but glibc still allows creating these mutexes, leaving dead owners' locks
+    // unrecoverable. Query the current thread without changing libc's robust list.
     void *head = nullptr;
     size_t len = 0;
     return syscall(SYS_get_robust_list, 0, &head, &len) == 0;
+#elif defined(__APPLE__)
+    // Seatbelt may allow semget to create a set while denying SETALL, semop,
+    // and IPC_RMID. An allocation-based probe would both miss the restriction
+    // and leak the set. Query the policy before LMDB touches the lock file.
+    // The operation takes no filter arguments (SANDBOX_FILTER_NONE = 0).
+    // Only an explicit denial (> 0) disables the cache; if the API is missing
+    // or the query fails (< 0), let LMDB try opening the cache normally.
+    return !sandbox_check || sandbox_check(getpid(), "ipc-sysv-sem", 0) <= 0;
 #else
     return true;
 #endif
@@ -200,8 +218,8 @@ void ObjCache::initDB()
     if (jl_running_under_rr(0))
         goto done;
 
-    if (!robustMutexesAvailable()) {
-        DisabledNotice = "robust mutex support could not be verified";
+    if (!robustLocksAvailable()) {
+        DisabledNotice = "robust lock support could not be verified";
         goto done;
     }
 
@@ -220,9 +238,9 @@ void ObjCache::initDB()
             DisabledNotice = "the cache directory is on a network filesystem";
         else if (Err == MDB_PIDNS_MISMATCH)
             DisabledNotice = "it is in use by a process in a different pid namespace";
-        // EPERM/EACCES: sandboxes (e.g. sandbox-exec on macOS CI) may deny
-        // access to the SysV semaphores LMDB uses on Apple platforms; the
-        // cache cannot work in such environments, so disable it quietly.
+        // EPERM/EACCES: sandboxes may deny access to the SysV semaphores LMDB
+        // uses on Apple platforms (normally caught by robustLocksAvailable);
+        // the cache cannot work in such environments, so disable it quietly.
         else if (Err != ENOENT && Err != EPERM && Err != EACCES)
             checkMDB(Err);
         mdb_env_close(Env);
