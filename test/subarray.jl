@@ -929,6 +929,16 @@ end
     end
 end
 
+@testset "issue #62906: views of views with slices" begin
+    M = reshape(1.0:25.0, 5, 5)
+    r = Base.IdentityUnitRange(2:4)
+    A = view(M, r, :)
+    B = view(A, :, 3)
+
+    @test axes(B) == (r,)
+    @test [B[2], B[3], B[4]] == [12.0, 13.0, 14.0]
+end
+
 @testset "issue #29608; contiguousness" begin
     @test Base.iscontiguous(view(ones(1), 1))
     @test Base.iscontiguous(view(ones(10), 1:10))
