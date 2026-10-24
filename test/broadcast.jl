@@ -1044,6 +1044,48 @@ f(a,b,c,d,e) = @. a = a + 1*(b+c+d+e)
 @allocated f(u,k1,k2,k3,k4)
 @test (@allocated f(u,k1,k2,k3,k4)) == 0
 
+# `broadcast` must specialize on all of its arguments, also when not inlined
+@testset "broadcast specializes on varargs" begin
+    struct Style1282{N} <: Broadcast.AbstractArrayStyle{N} end
+    struct Vec1282 <: AbstractVector{Float64}; data::NTuple{3, Float64}; end
+    struct Row1282 <: AbstractMatrix{Float64}; parent::Vec1282; end
+
+    Base.size(::Vec1282) = (3,)
+    Base.size(::Row1282) = (1, 3)
+    Base.getindex(v::Vec1282, i::Int) = v.data[i]
+    Base.getindex(r::Row1282, i::Int, j::Int) = r.parent[j]
+    Broadcast.BroadcastStyle(::Type{<:Vec1282}) = Style1282{1}()
+    Broadcast.BroadcastStyle(::Type{<:Row1282}) = Style1282{2}()
+    Broadcast.BroadcastStyle(::Style1282{M}, ::Style1282{N}) where {M,N} = Style1282{max(M, N)}()
+    Broadcast.BroadcastStyle(::Style1282{N}, ::Broadcast.DefaultArrayStyle{0}) where {N} = Style1282{N}()
+    @inline Base.copy(bc::Broadcast.Broadcasted{Style1282{2}}) = ntuple(i -> bc[i], 9)
+
+    # JuliaArrays/StaticArrays.jl#1282
+    function static_broadcast_loop(a, x, n)
+        s = 0.0
+        for i in 1:n
+            y = broadcast(*, a*i, x, Row1282(x))
+            s += y[1] + y[9]
+        end
+        return s
+    end
+    x = Vec1282((1.0, 1.0, 1.0))
+    static_broadcast_loop(1e-5, x, 1000)
+    @test (@allocated static_broadcast_loop(1e-5, x, 1000)) == 0
+
+    function mix_scalar_tuple_loop(t, n)
+        s = 0.0
+        for i in 1:n
+            y = broadcast(+, i, t, 1, t, 1, t)
+            s += y[1] + y[10]
+        end
+        return s
+    end
+    t = ntuple(Float64, 10)
+    @test mix_scalar_tuple_loop(t, 2) == 80
+    @test (@allocated mix_scalar_tuple_loop(t, 1000)) == 0
+end
+
 ret =  @macroexpand @.([Int, Number] <: Real)
 @test ret == :([Int, Number] .<: Real)
 

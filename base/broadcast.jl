@@ -834,7 +834,7 @@ julia> string.(("one","two","three","four"), ": ", 1:4)
 
 ```
 """
-broadcast(f::Tf, As...) where {Tf} = materialize(broadcasted(f, As...))
+broadcast(f::Tf, As::Vararg{Any,N}) where {Tf,N} = materialize(broadcasted(f, As...))
 
 # special cases defined for performance
 @inline broadcast(f, x::Number...) = f(x...)
