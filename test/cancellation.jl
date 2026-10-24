@@ -1030,6 +1030,22 @@ end
     @test (@atomic :monotonic w3.task) === nothing
     cancel!(src3)
     @test isempty(registry_entries(src3))
+
+    c4 = Channel{Int}(0)
+    t1, t2 = @async(take!(c4)), @async(take!(c4))
+    ts4 = [t1, t2, t1, t2]
+    wa4 = @async waitall(ts4)
+    @test timedwait(() -> (x = @atomic wa4.waiting_on; x isa Base.WaitEntryN), 10.0) == :ok
+    w4 = (@atomic wa4.waiting_on)::Base.WaitEntryN
+    @test count(i -> Base._slot_owner(w4, i) isa Base.ThreadSynchronizer, 1:Base._nslots(w4)) == 2
+    put!(c4, 0)
+    @test timedwait(10.0) do
+        (@atomic wa4.waiting_on) === w4 &&
+            count(i -> Base._slot_owner(w4, i) isa Base.ThreadSynchronizer, 1:Base._nslots(w4)) == 1
+    end == :ok
+    put!(c4, 0)
+    @test fetch(wa4) == (ts4, Task[])
+    @test count(i -> Base._slot_owner(w4, i) isa Base.ThreadSynchronizer, 1:Base._nslots(w4)) == 0
 end
 
 @testset "level-triggered delivery and shielding" begin
