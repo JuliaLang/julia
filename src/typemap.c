@@ -23,29 +23,81 @@ static int jl_is_any(jl_value_t *t1)
     return t1 == (jl_value_t*)jl_any_type;
 }
 
-static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT, int invariant) JL_NOTSAFEPOINT
+// The typename every type above `lb` is filed under, or on whose supertype chain it is
+// filed: above a datatype, or its wrapper, lie only that chain and unions, which are filed
+// under `Any` where the chain ends. A typevar lies above its own lower bound, and a union
+// above each member, where `Union{}` asks nothing. NULL where no one chain serves: a union
+// of two names, or a kind or `Type{...}`, whose superiors are filed by other rules.
+static jl_value_t *jl_type_extract_lb_name(jl_value_t *lb JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    lb = jl_unwrap_unionall(lb);
+    if (lb == jl_bottom_type)
+        return (jl_value_t*)jl_typeofbottom_type->name;
+    if (jl_is_typevar(lb))
+        return jl_type_extract_lb_name(((jl_tvar_t*)lb)->lb);
+    if (jl_is_uniontype(lb)) {
+        jl_value_t *tn1 = jl_type_extract_lb_name(((jl_uniontype_t*)lb)->a);
+        jl_value_t *tn2 = jl_type_extract_lb_name(((jl_uniontype_t*)lb)->b);
+        if (tn1 == (jl_value_t*)jl_typeofbottom_type->name)
+            return tn2;
+        if (tn2 == (jl_value_t*)jl_typeofbottom_type->name || tn1 == tn2)
+            return tn1;
+        return NULL;
+    }
+    if (jl_is_datatype(lb) && !jl_is_kind(lb) && !jl_is_some_Type(lb))
+        return (jl_value_t*)((jl_datatype_t*)lb)->name;
+    return NULL;
+}
+
+// The typename under which `t1` is filed, or NULL when it has none, with `*precise` set when
+// no bucket but its own and those of its supertype chain can hold a match for it (a NULL name
+// is never precise). `invariant` marks the parameter of a `Type{...}`. `for_lookup` marks a
+// lookup that visits every bucket on that chain, which may name a `Type{T}` from its lower
+// bound; insertion, and the exact lookup that stops at its first bucket, leave it clear.
+static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT, int invariant, int for_lookup, int *precise) JL_NOTSAFEPOINT
 {
     if (jl_is_unionall(t1))
         t1 = jl_unwrap_unionall(t1);
     if (jl_is_vararg(t1)) {
-        return jl_type_extract_name(jl_unwrap_vararg(t1), invariant);
+        return jl_type_extract_name(jl_unwrap_vararg(t1), invariant, for_lookup, precise);
     }
     else if (t1 == jl_bottom_type || (invariant && jl_is_typeofbottom_param(t1))) {
         // file all spellings to Type{Union{}} in the same bucket, then walk to the other type buckets from there
+        *precise = 1; // the `TypeofBottom` name holds every spelling of `Type{typeof(Union{})}`
         return (jl_value_t*)jl_typeofbottom_type->name;
     }
     else if (jl_is_typevar(t1)) {
-        return jl_type_extract_name(((jl_tvar_t*)t1)->ub, 0);
+        jl_tvar_t *tv = (jl_tvar_t*)t1;
+        if (for_lookup && invariant) {
+            // `T` is named from below, by its lower bound, and exactly so, wherever that bound
+            // has a name; `ub` names it from above, and a union there names nothing. Subtyping
+            // ignores `lb` in covariant position, insertion files by `ub`, and so must a lookup
+            // that stops at its first bucket: file by `lb`, and a query between the bounds finds nothing.
+            jl_value_t *name = jl_type_extract_lb_name(tv->lb);
+            if (name != NULL && name != (jl_value_t*)jl_typeofbottom_type->name) {
+                *precise = 1;
+                return name;
+            }
+        }
+        jl_value_t *name = jl_type_extract_name(tv->ub, 0, for_lookup, precise);
+        // as a `Type{T}` parameter, a `T` bounded by a kind or wrapper (whose name folds to
+        // `AnyType`) may also be a `Type{...}`, `TypeEgal{...}` or kind object, which is filed
+        // under its own name rather than an ancestor's
+        if (invariant && name == (jl_value_t*)jl_anytype_type->name)
+            *precise = 0;
+        return name;
     }
     else if (jl_is_some_Type(t1)) {
         // invariantly this is the wrapper's own name; covariantly the key must lie on
         // both the `typeof(arg)` and the wrapper supertype chains, which meet at `AnyType`
+        *precise = 1;
         if (invariant)
             return jl_is_typeeq(t1) ? (jl_value_t*)jl_type_typename : (jl_value_t*)jl_typeegal_type->name;
         return (jl_value_t*)jl_anytype_type->name;
     }
     else if (jl_is_datatype(t1)) {
         jl_datatype_t *dt = (jl_datatype_t*)t1;
+        *precise = invariant || !dt->name->abstract; // covariantly, the subtypes of an abstract type are filed under their own names
         if (jl_is_kind(t1) && !invariant)
             return (jl_value_t*)jl_anytype_type->name;
         // `AnyType == Type`, and every `TypeEq{...}` spelling of it is filed under its
@@ -56,69 +108,28 @@ static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT, int i
     }
     else if (jl_is_uniontype(t1)) {
         jl_uniontype_t *u1 = (jl_uniontype_t*)t1;
-        jl_value_t *tn1 = jl_type_extract_name(u1->a, invariant);
-        jl_value_t *tn2 = jl_type_extract_name(u1->b, invariant);
-        if (tn1 == tn2)
-            return tn1;
+        int precise2;
+        jl_value_t *tn1 = jl_type_extract_name(u1->a, invariant, for_lookup, precise);
+        jl_value_t *tn2 = jl_type_extract_name(u1->b, invariant, for_lookup, &precise2);
         // TODO: if invariant is false, instead find the nearest common ancestor
-        return NULL;
+        if (tn1 != tn2) {
+            *precise = 0;
+            return NULL;
+        }
+        *precise = *precise && precise2;
+        return tn1;
     }
+    *precise = 0;
     return NULL;
-}
-
-// return false if the name extracted above is an over-approximation
-// (such that intersection also needs to consider the subtypes)
-static int jl_type_extract_name_precise(jl_value_t *t1, int invariant)
-{
-    if (jl_is_unionall(t1))
-        t1 = jl_unwrap_unionall(t1);
-    if (jl_is_vararg(t1)) {
-        return jl_type_extract_name_precise(jl_unwrap_vararg(t1), invariant);
-    }
-    else if (invariant && jl_is_typeofbottom_param(t1)) {
-        return 1; // the `TypeofBottom` name holds every spelling of `Type{typeof(Union{})}`
-    }
-    else if (jl_is_typevar(t1)) {
-        jl_value_t *ub = ((jl_tvar_t*)t1)->ub;
-        // as a `Type{T}` parameter, a `T` bounded by a kind or wrapper (whose name
-        // `jl_type_extract_name` folds to `AnyType`) may also be a `Type{...}`, `TypeEgal{...}`
-        // or kind object, which is filed under its own name rather than an ancestor's
-        if (invariant && jl_type_extract_name(ub, 0) == (jl_value_t*)jl_anytype_type->name)
-            return 0;
-        return jl_type_extract_name_precise(ub, 0);
-    }
-    else if (jl_is_some_Type(t1)) {
-        return 1;
-    }
-    else if (t1 == jl_bottom_type || t1 == (jl_value_t*)jl_typeofbottom_type) {
-        return 1;
-    }
-    else if (jl_is_datatype(t1)) {
-        jl_datatype_t *dt = (jl_datatype_t*)t1;
-        if (invariant || !dt->name->abstract)
-            return 1;
-        return 0;
-    }
-    else if (jl_is_uniontype(t1)) {
-        jl_uniontype_t *u1 = (jl_uniontype_t*)t1;
-        if (!jl_type_extract_name_precise(u1->a, invariant))
-            return 0;
-        if (!jl_type_extract_name_precise(u1->b, invariant))
-            return 0;
-        jl_value_t *tn1 = jl_type_extract_name(u1->a, invariant);
-        jl_value_t *tn2 = jl_type_extract_name(u1->b, invariant);
-        if (tn1 == tn2)
-            return 1;
-        return 0;
-    }
-    return 1;
 }
 
 // return whether Type{Union{}} is a subtype of Type{t1} (which may have free typevars)
 static int jl_parameter_includes_bottom(jl_value_t *t1)
 {
-    if (jl_is_typevar(t1) || t1 == jl_bottom_type)
+    if (t1 == jl_bottom_type)
         return 1;
+    else if (jl_is_typevar(t1)) // `Union{}` lies below every upper bound; only the lower bound can forbid it
+        return jl_parameter_includes_bottom(((jl_tvar_t*)t1)->lb);
     else if (jl_is_uniontype(t1)) {
         jl_uniontype_t *u1 = (jl_uniontype_t*)t1;
         return jl_parameter_includes_bottom(u1->a) && jl_parameter_includes_bottom(u1->b);
@@ -620,7 +631,8 @@ static int jl_typemap_intersection_memory_visitor(jl_genericmemory_t *a, jl_valu
             tydt = (jl_datatype_t*)ttype;
         }
         else if (ttype) {
-            ttype = jl_type_extract_name(ttype, tparam & 1);
+            int precise;
+            ttype = jl_type_extract_name(ttype, tparam & 1, 1, &precise);
             tydt = ttype ? (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)ttype)->wrapper) : NULL;
         }
         if (tydt == jl_any_type)
@@ -778,8 +790,8 @@ static jl_value_t *typemap_bottom_calls(struct typemap_intersection_env *closure
         // count, or a parameter of `B{X>:Int}`), there are no such calls, and so any method
         // "covers" them.
         tv = (jl_tvar_t*)jl_typeeq_T(ty);
-        if (tv->lb != jl_bottom_type && !jl_has_free_typevars(tv->lb)) {
-            // `T >: lb` with a closed, non-empty `lb` cannot be `Union{}`: there are no such calls
+        if (!jl_parameter_includes_bottom((jl_value_t*)tv)) {
+            // `T` above a non-empty `lb` cannot be `Union{}`: there are no such calls
             return jl_bottom_type;
         }
         if (!unroll) {
@@ -903,30 +915,13 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                 if (maybe_type && !maybe_kind) { // a kind query keeps the `TypeofBottom` bucket
                     typetype = jl_unwrap_unionall(ty);
                     typetype = jl_is_some_Type(typetype) ? jl_some_Type_T(typetype) : NULL;
-                    name = typetype ? jl_type_extract_name(typetype, 1) : NULL;
-                    name_precise = name && jl_type_extract_name_precise(typetype, 1);
+                    name = typetype ? jl_type_extract_name(typetype, 1, 1, &name_precise) : NULL;
                     if (!typetype) {
                         exclude_typeofbottom = !jl_subtype((jl_value_t*)jl_typeofbottom_type, ty);
                     }
                     else if (jl_is_typevar(typetype)) {
-                        exclude_typeofbottom = has_covariant_var((jl_datatype_t*)ttypes, (jl_tvar_t*)typetype);
-                        // A query `Type{T} where lb<:T<:ub` is named by `ub` above, as a method
-                        // would be filed, and a union `ub` gives it no name and so a scan of
-                        // every bucket. A concrete `lb` names it better: `T` must lie above
-                        // `lb`, so a leaf key `Type{X}` demands `X == lb`, a named key `Type{<:X}`
-                        // demands `lb <: X`, and both lie on the super chain the lookup below
-                        // already walks from `name`. The union values of `T` have no name of
-                        // their own and are filed under `Any`, where that chain ends. Nor can
-                        // `T` be `Union{}` with anything beneath it. This holds for the query
-                        // side only: a method so bounded must stay filed by `ub`, or a query
-                        // for a type between the bounds would never reach it.
-                        jl_value_t *lb = ((jl_tvar_t*)typetype)->lb;
-                        if (lb != jl_bottom_type && jl_is_concrete_type(lb) && !jl_has_free_typevars(lb) &&
-                                !jl_is_kind(lb) && !jl_is_some_Type(lb)) {
-                            name = (jl_value_t*)((jl_datatype_t*)lb)->name;
-                            name_precise = 1;
-                            exclude_typeofbottom = 1;
-                        }
+                        // `T` cannot be `Union{}` if it is also used covariantly, or if anything lies beneath it
+                        exclude_typeofbottom = has_covariant_var((jl_datatype_t*)ttypes, (jl_tvar_t*)typetype) || !jl_parameter_includes_bottom(typetype);
                     }
                     else {
                         exclude_typeofbottom = !jl_parameter_includes_bottom(typetype);
@@ -1009,8 +1004,9 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                     }
                 }
                 else {
-                    jl_value_t *name = jl_type_extract_name(ty, 0);
-                    if (name && jl_type_extract_name_precise(ty, 0)) {
+                    int precise;
+                    jl_value_t *name = jl_type_extract_name(ty, 0, 1, &precise);
+                    if (precise) {
                         // direct lookup of leaf types
                         jl_value_t *ml = mtcache_hash_lookup(cachearg1, name);
                         if (jl_is_genericmemory(ml)) {
@@ -1073,8 +1069,9 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
             }
             jl_genericmemory_t *name1 = jl_atomic_load_relaxed(&cache->name1);
             if (name1 != (jl_genericmemory_t*)jl_an_empty_memory_any) {
-                jl_value_t *name = jl_type_extract_name(ty, 0);
-                if (name && jl_type_extract_name_precise(ty, 0)) {
+                int precise;
+                jl_value_t *name = jl_type_extract_name(ty, 0, 1, &precise);
+                if (precise) {
                     jl_datatype_t *super = (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)name)->wrapper);
                     // direct lookup of concrete types
                     while (1) {
@@ -1293,7 +1290,8 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
             // now look at the optimized TypeName caches
             jl_genericmemory_t *tname = jl_atomic_load_relaxed(&cache->tname);
             if (tname != (jl_genericmemory_t*)jl_an_empty_memory_any) {
-                jl_value_t *a0 = ty && jl_is_some_Type(ty) ? jl_type_extract_name(jl_some_Type_T(ty), 1) : NULL;
+                int precise;
+                jl_value_t *a0 = ty && jl_is_some_Type(ty) ? jl_type_extract_name(jl_some_Type_T(ty), 1, subtype, &precise) : NULL;
                 if (a0) { // TODO: if we start analyzing Union types in jl_type_extract_name, then a0 might be over-approximated here, leading us to miss possible subtypes
                     jl_datatype_t *super = (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)a0)->wrapper);
                     while (super != NULL) {
@@ -1332,7 +1330,8 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
             jl_genericmemory_t *name1 = jl_atomic_load_relaxed(&cache->name1);
             if (name1 != (jl_genericmemory_t*)jl_an_empty_memory_any) {
                 if (ty) {
-                    jl_value_t *a0 = jl_type_extract_name(ty, 0);
+                    int precise;
+                    jl_value_t *a0 = jl_type_extract_name(ty, 0, subtype, &precise);
                     if (a0) { // TODO: if we start analyzing Union types in jl_type_extract_name, then a0 might be over-approximated here, leading us to miss possible subtypes
                         jl_datatype_t *super = (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)a0)->wrapper);
                         while (1) {
@@ -1492,7 +1491,8 @@ jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_v
         }
         jl_genericmemory_t *tname = jl_atomic_load_relaxed(&cache->tname);
         if (jl_is_kind(ty) && tname != (jl_genericmemory_t*)jl_an_empty_memory_any) {
-            jl_value_t *name = jl_type_extract_name(a1, 1);
+            int precise;
+            jl_value_t *name = jl_type_extract_name(a1, 1, 1, &precise);
             if (name) {
                 jl_datatype_t *super = (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)name)->wrapper);
                 while (super != NULL) {
@@ -1734,10 +1734,11 @@ static void jl_typemap_level_insert_(
 
         // try to put in TypeName caches
         jl_value_t *a0;
+        int precise;
         t1 = jl_unwrap_unionall(t1);
         if (jl_is_some_Type(t1)) {
             jl_value_t *tp0 = jl_some_Type_T(t1);
-            a0 = jl_type_extract_name(tp0, 1);
+            a0 = jl_type_extract_name(tp0, 1, 0, &precise);
             jl_datatype_t *super = a0 ? (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)a0)->wrapper) : jl_any_type;
             jl_typename_t *name = super->name;
             jl_typemap_memory_insert_(map, &cache->tname, (jl_value_t*)name, newrec, (jl_value_t*)cache, 1, offs, NULL);
@@ -1750,7 +1751,7 @@ static void jl_typemap_level_insert_(
             jl_typemap_memory_insert_(map, &cache->tname, (jl_value_t*)jl_typeofbottom_type->name, newrec, (jl_value_t*)cache, 1, offs, NULL);
             return;
         }
-        a0 = jl_type_extract_name(t1, 0);
+        a0 = jl_type_extract_name(t1, 0, 0, &precise);
         if (a0 && a0 != (jl_value_t*)jl_any_type->name) {
             jl_typemap_memory_insert_(map, &cache->name1, a0, newrec, (jl_value_t*)cache, 0, offs, NULL);
             return;
