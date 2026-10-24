@@ -2284,7 +2284,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
     }
     std::string Features = jl_ExecutionEngine->getTargetFeatureString().str();
     if (TheTriple.isRISCV())
-        Features += ",+relax"; // must match the function attributes, see jl_get_llvm_clone_targets
+        Features += ",+relax"; // provide the optimization for functions which themselves don't have a target string
     std::unique_ptr<TargetMachine> SourceTM(
         jl_ExecutionEngine->getTarget().createTargetMachine(
             TheTriple,
