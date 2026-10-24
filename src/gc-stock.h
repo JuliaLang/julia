@@ -139,7 +139,8 @@ typedef struct _jl_gc_pagemeta_t {
     uint16_t osize;           // Size of each object in this page
     uint16_t fl_begin_offset; // Offset of first free object in this page
     uint16_t fl_end_offset;   // Offset of last free object in this page
-    uint16_t thread_n;        // Thread id of the heap that owns this page
+    uint16_t thread_n;        // Thread id of the heap that owns this page (the last owner
+                              // while the page waits to be adopted, see `gc_adopt_page`)
     char *data;               // Pointer to the start of the regions where objects are allocated
 } jl_gc_pagemeta_t;
 
@@ -639,6 +640,16 @@ NOINLINE void jl_gc_free_page(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT;
 #else
 #define MEMPROFILE_ENABLED 0
 #endif
+
+// Zero-initialize before use. Requires stopped mutators, stable page lists, and
+// the GC's gc_n_threads/gc_all_tls_states snapshot. Includes unadopted partial
+// pages, but not empty pages in the free pools.
+typedef struct {
+    int stack_idx;
+    jl_gc_pagemeta_t *next;
+} gc_page_iterator_t;
+
+jl_gc_pagemeta_t *gc_next_page(gc_page_iterator_t *it) JL_NOTSAFEPOINT;
 
 // GC_TIME || GC_FINAL_STATS
 void gc_settime_premark_end(void);
