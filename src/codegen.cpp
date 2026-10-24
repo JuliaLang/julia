@@ -1053,6 +1053,11 @@ static const auto jlinvokeoc_func = new JuliaFunction<>{
     get_func2_sig,
     get_func_attrs,
 };
+static const auto jlinvoketarget_func = new JuliaFunction<>{
+    XSTR(jl_invoke_target),
+    get_func2_sig,
+    get_func_attrs,
+};
 static const auto jlopaque_closure_call_func = new JuliaFunction<>{
     XSTR(jl_f_opaque_closure_call),
     get_func_sig,
@@ -6392,7 +6397,10 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                     bool specsig, needsparams;
                     std::tie(specsig, needsparams) = uses_specsig(get_ci_abi(codeinst), mi, codeinst->rettype, ctx.params->prefer_specsig);
                     if (needsparams) {
-                        Value *r = emit_jlcall(ctx, jlinvoke_func, track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)mi)), argv, nargs, julia_call2);
+                        // `jl_invoke` dispatches natively, so a foreign CI must be called through itself
+                        Value *r = codeinst->owner != jl_nothing
+                            ? emit_jlcall(ctx, jlinvoketarget_func, track_pjlvalue(ctx, literal_pointer_val(ctx, ci)), argv, nargs, julia_call2)
+                            : emit_jlcall(ctx, jlinvoke_func, track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)mi)), argv, nargs, julia_call2);
                         result = mark_julia_type(ctx, r, true, rt);
                     }
                     else {
@@ -8001,6 +8009,12 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Value *theFunc, j
     Value *theFarg;
 
     if (theFunc) {
+        theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst);
+    }
+    else if (codeinst->owner != jl_nothing) {
+        // `jl_invoke` would run the native specialization; a foreign CI must be
+        // compiled by its owner, otherwise `jl_invoke_target` errors
+        theFunc = prepare_call(jlinvoketarget_func);
         theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst);
     }
     else {
@@ -11367,6 +11381,7 @@ static void init_jit_functions(void)
     add_named_global(jlapplygeneric_func, &jl_apply_generic);
     add_named_global(jlinvoke_func, &jl_invoke);
     add_named_global(jlinvokemodify_func, &jl_invoke_modify);
+    add_named_global(jlinvoketarget_func, &jl_invoke_target);
     add_named_global(jltopeval_func, &jl_toplevel_eval);
     add_named_global(jlcopyast_func, &jl_copy_ast);
     //add_named_global(jlnsvec_func, &jl_svec);
