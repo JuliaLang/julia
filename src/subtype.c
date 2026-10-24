@@ -4667,6 +4667,10 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
                     JL_GC_POP();
                     return jl_bottom_type;
                 }
+                if (reachable_var(ub, b, e)) {
+                    JL_GC_POP();
+                    return a;
+                }
             }
             bb->ub = ub;
             if ((jl_is_uniontype(ub) && !jl_is_uniontype(a)) ||
@@ -5933,6 +5937,8 @@ static int intersect_var_ccheck_in_env(jl_value_t *xlb, jl_value_t *xub, jl_valu
             restore_env(e, &se, 1);
         }
     }
+    if (ccheck && ((!easy_check1 && jl_has_free_typevars(xlb)) || (!easy_check2 && jl_has_free_typevars(ylb))))
+        restore_env(e, &se, 1);
     free_env(&se);
     return ccheck;
 }
