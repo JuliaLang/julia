@@ -648,7 +648,7 @@ end
 
 hash(data::AbstractString, h::UInt) =
     hash_bytes(utf8units(data), UInt64(h), HASH_SECRET) % UInt
-# String data follows the length field of a 16-byte-aligned object
+# String data follows the length field of a 4-byte-aligned object
 @assume_effects :total hash(data::String, h::UInt) =
     GC.@preserve data hash_bytes(
         pointer(data), sizeof(data), UInt64(h), HASH_SECRET, Val(sizeof(Int))) % UInt
