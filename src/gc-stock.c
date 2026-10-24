@@ -367,21 +367,50 @@ JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref_th(jl_ptls_t ptls, jl_value_t *valu
     return wr;
 }
 
-static void clear_weak_refs(void) JL_NOTSAFEPOINT
+// WeakRefs are kept in two per-thread lists:
+// - `weak_refs` is scanned on every collection.
+// - `old_weak_refs` holds old WeakRefs with an old value (both
+//   `GC_OLD_MARKED`). A quick mark cannot free such a value, so this list is
+//   only scanned on full marks.
+// Storing into an old WeakRef puts it in the remset, from where quick marks
+// pick it up (`remset_weak_refs`) and check it. If the new value is young,
+// the WeakRef stays in the remset until the value is old.
+static arraylist_t remset_weak_refs;
+
+STATIC_INLINE void clear_weak_ref(jl_ptls_t ptls, jl_weakref_t *wr, int remember) JL_NOTSAFEPOINT
+{
+    uint8_t bits = jl_astaggedvalue(wr->value)->bits.gc;
+    if (!gc_marked(bits)) {
+        wr->value = (jl_value_t*)jl_nothing;
+    }
+    else if (remember && bits != GC_OLD_MARKED) {
+        arraylist_push(&ptls->gc_tls.heap.remset, wr);
+        ptls->gc_tls.heap.remset_nptr++;
+    }
+}
+
+static void clear_weak_refs(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     assert(gc_n_threads != 0);
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         if (ptls2 != NULL) {
-            size_t n, l = ptls2->gc_tls_common.heap.weak_refs.len;
-            void **lst = ptls2->gc_tls_common.heap.weak_refs.items;
-            for (n = 0; n < l; n++) {
-                jl_weakref_t *wr = (jl_weakref_t*)lst[n];
-                if (!gc_marked(jl_astaggedvalue(wr->value)->bits.gc))
-                    wr->value = (jl_value_t*)jl_nothing;
+            small_arraylist_t *lst = &ptls2->gc_tls_common.heap.weak_refs;
+            for (size_t n = 0; n < lst->len; n++)
+                clear_weak_ref(ptls2, (jl_weakref_t*)lst->items[n], 0);
+            if (prev_sweep_full) {
+                lst = &ptls2->gc_tls.heap.old_weak_refs;
+                for (size_t n = 0; n < lst->len; n++)
+                    clear_weak_ref(ptls2, (jl_weakref_t*)lst->items[n], 0);
             }
         }
     }
+    // On a full mark these were already scanned via the lists
+    if (!prev_sweep_full) {
+        for (size_t n = 0; n < remset_weak_refs.len; n++)
+            clear_weak_ref(ptls, (jl_weakref_t*)remset_weak_refs.items[n], 1);
+    }
+    remset_weak_refs.len = 0;
 }
 
 // Accelerated weak processing
@@ -470,27 +499,52 @@ static void sweep_weak_processing(void) JL_NOTSAFEPOINT
     big_weak_corpses.len = 0;
 }
 
+STATIC_INLINE int weak_ref_is_old(jl_weakref_t *wr) JL_NOTSAFEPOINT
+{
+    return jl_astaggedvalue(wr)->bits.gc == GC_OLD_MARKED &&
+           jl_astaggedvalue(wr->value)->bits.gc == GC_OLD_MARKED;
+}
+
 static void sweep_weak_refs(void) JL_NOTSAFEPOINT
 {
     assert(gc_n_threads != 0);
+    // Outside of full collections, old WeakRefs stay alive with an old value
+    // (or are in the remset). Otherwise, drop dead ones and move back any that
+    // are no longer old, e.g. after being resurrected by a finalizer.
+    int sweep_old = prev_sweep_full || current_sweep_full;
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         if (ptls2 == NULL) {
             continue;
         }
+        small_arraylist_t *lst = &ptls2->gc_tls_common.heap.weak_refs;
+        small_arraylist_t *old = &ptls2->gc_tls.heap.old_weak_refs;
         size_t n = 0;
-        size_t i = 0;
-        size_t l = ptls2->gc_tls_common.heap.weak_refs.len;
-        void **lst = ptls2->gc_tls_common.heap.weak_refs.items;
+        size_t l = lst->len;
         // filter with preserving order
-        for (i = 0; i < l; i++) {
-            jl_weakref_t *wr = (jl_weakref_t*)lst[i];
-            if (gc_marked(jl_astaggedvalue(wr)->bits.gc)) {
-                lst[n] = wr;
-                n++;
-            }
+        for (size_t j = 0; j < l; j++) {
+            jl_weakref_t *wr = (jl_weakref_t*)lst->items[j];
+            if (!gc_marked(jl_astaggedvalue(wr)->bits.gc))
+                continue;
+            if (weak_ref_is_old(wr))
+                small_arraylist_push(old, wr);
+            else
+                lst->items[n++] = wr;
         }
-        ptls2->gc_tls_common.heap.weak_refs.len = n;
+        lst->len = n;
+        if (sweep_old) {
+            size_t m = 0;
+            for (size_t j = 0; j < old->len; j++) {
+                jl_weakref_t *wr = (jl_weakref_t*)old->items[j];
+                if (!gc_marked(jl_astaggedvalue(wr)->bits.gc))
+                    continue;
+                if (weak_ref_is_old(wr))
+                    old->items[m++] = wr;
+                else
+                    small_arraylist_push(lst, wr);
+            }
+            old->len = m;
+        }
     }
 }
 
@@ -3096,6 +3150,9 @@ static void gc_queue_remset(jl_gc_markqueue_t *mq, jl_ptls_t ptls2) JL_NOTSAFEPO
     for (size_t i = 0; i < len; i++) {
         void *_v = items[i];
         jl_astaggedvalue(_v)->bits.gc = GC_OLD_MARKED;
+        // an old WeakRef that was written to, or whose value is still young
+        if (jl_typeof(_v) == (jl_value_t*)jl_weakref_type)
+            arraylist_push(&remset_weak_refs, _v);
         jl_value_t *v = (jl_value_t *)((uintptr_t)_v | GC_REMSET_PTR_TAG);
         gc_ptr_queue_push(mq, v);
     }
@@ -3407,7 +3464,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         gc_mark_clean_reclaim_sets();
 
         // 3. check for objects to finalize
-        clear_weak_refs();
+        clear_weak_refs(ptls);
         // Record the length of the marked list since we need to
         // mark the object moved to the marked list from the
         // `finalizer_list` by `sweep_finalizer_list`
@@ -3706,6 +3763,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
             jl_thread_heap_t *heap = &ptls2->gc_tls.heap;
             if (common_heap->weak_refs.len == 0)
                 small_arraylist_free(&common_heap->weak_refs);
+            if (heap->old_weak_refs.len == 0)
+                small_arraylist_free(&heap->old_weak_refs);
             if (common_heap->weak_processing_list.len == 0)
                 small_arraylist_free(&common_heap->weak_processing_list);
             if (common_heap->live_tasks.len == 0)
@@ -3952,6 +4011,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     for (int i = 0; i < JL_N_STACK_POOLS; i++)
         small_arraylist_new(&common_heap->free_stacks[i], 0);
     small_arraylist_new(&common_heap->mallocarrays, 0);
+    small_arraylist_new(&heap->old_weak_refs, 0);
     heap->young_generation_of_bigvals = (bigval_t*)calloc_s(sizeof(bigval_t)); // sentinel
     assert(gc_bigval_sentinel_tag != 0); // make sure the sentinel is initialized
     heap->young_generation_of_bigvals->header = gc_bigval_sentinel_tag;
@@ -4126,6 +4186,7 @@ void jl_gc_init(void)
     arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);
     arraylist_new(&big_weak_corpses, 0);
+    arraylist_new(&remset_weak_refs, 0);
     jl_atomic_store_relaxed(&gc_heap_stats.heap_target, default_collect_interval);
     if (jl_options.hard_heap_limit != 0) {
         jl_atomic_store_relaxed(&gc_heap_stats.heap_target, jl_options.hard_heap_limit);
