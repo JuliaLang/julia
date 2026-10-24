@@ -202,8 +202,10 @@ intersect!(s::AbstractSet, itr) =
 """
     setdiff(s, itrs...)
 
-Construct the set of elements in `s` but not in any of the iterables in `itrs`.
-Maintain order with arrays. The result will have the same element type as `s`.
+Construct the set of distinct elements in `s` but not in any of the iterables in `itrs`.
+If `s` is not an `AbstractSet` (e.g. an array), the result is a `Vector` without duplicates
+that maintains the order in which elements first appear in `s`.
+The result will have the same element type as `s`.
 
 See also [`setdiff!`](@ref), [`union`](@ref), [`intersect`](@ref).
 
@@ -217,6 +219,11 @@ julia> setdiff([1,2,3], [3,4,5])
 julia> setdiff([1,2,3], [1.0, 2.0])
 1-element Vector{Int64}:
  3
+
+julia> setdiff([3, 1, 1, 2, 3], [2])
+2-element Vector{Int64}:
+ 3
+ 1
 ```
 """
 setdiff(s::AbstractSet, itrs...) = setdiff!(copymutable(s), itrs...)

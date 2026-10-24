@@ -6,7 +6,7 @@
 Given a function `f` and an iterator `iter`, construct an iterator that yields
 the values of `f` applied to the elements of `iter`.
 The syntax `f(x) for x in iter` is syntax for constructing an instance of this
-type.
+type (see [Generator Expressions](@ref man-generators)).
 
 ```jldoctest
 julia> g = (abs2(x) for x in 1:5);

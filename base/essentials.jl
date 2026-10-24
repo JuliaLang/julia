@@ -517,6 +517,30 @@ pairs(::Type{NamedTuple}) = Pairs{Symbol, V, Nothing, NT} where {V, NT <: NamedT
 
 Transform an indexable container into a Dictionary-view of the same data.
 Modifying the key-space of the underlying data may invalidate this object.
+
+This is the type returned by [`pairs`](@ref) for arrays, tuples and named tuples,
+and the type of keyword arguments collected with `kwargs...`. Its keys are those
+of the wrapped container and `values(p)` returns the container itself. Entries can
+be read like those of other `AbstractDict`s, and `p[key] = value` writes through to
+the container if it supports `setindex!`, but keys cannot be added or removed.
+Use e.g. `Dict(p)` for an independent mutable copy, or `NamedTuple(kwargs)` to get
+keyword arguments as a `NamedTuple`.
+
+# Examples
+```jldoctest
+julia> f(; kwargs...) = kwargs;
+
+julia> kw = f(a = 1, b = 2)
+pairs(::NamedTuple) with 2 entries:
+  :a => 1
+  :b => 2
+
+julia> kw[:a]
+1
+
+julia> NamedTuple(kw)
+(a = 1, b = 2)
+```
 """
 Pairs
 
@@ -1111,10 +1135,17 @@ getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]..
 unsafe_convert(::Type{Ptr{Any}}, sv::SimpleVector) = convert(Ptr{Any},pointer_from_objref(sv)) + sizeof(Ptr)
 
 """
-    isassigned(array, i)::Bool
+    isassigned(array, i...)::Bool
 
-Test whether the given array has a value associated with index `i`. Return `false`
-if the index is out of bounds, or has an undefined reference.
+Test whether the given array has a value associated with index `i...` (one or more
+integers, or a `CartesianIndex`). Return `false` if the index is out of bounds, or has an
+undefined reference.
+
+The generic fallback for `AbstractArray`s calls `getindex` within a `try`/`catch` block,
+which can be slow. New array types should therefore specialize `isassigned` for the same
+indices as their scalar `getindex` method, i.e. `isassigned(A::MyArray, i::Int)` for
+`IndexLinear()` arrays or `isassigned(A::MyArray{T,N}, I::Vararg{Int,N})` for
+`IndexCartesian()` arrays.
 
 # Examples
 ```jldoctest
@@ -1170,9 +1201,13 @@ end
     Val(c)
 
 Return `Val{c}()`, which contains no run-time data. Types like this can be used to
-pass the information between functions through the value `c`, which must be an `isbits`
-value or a `Symbol`. The intent of this construct is to be able to dispatch on constants
-directly (at compile time) without having to test the value of the constant at run time.
+pass the information between functions through the value `c`, which must be a valid type
+parameter, such as an `isbits` value, a `Symbol`, a type, or a `Module`. The intent of this
+construct is to be able to dispatch on constants directly (at compile time) without having
+to test the value of the constant at run time.
+
+!!! compat "Julia 1.10"
+    Using a `Module` as `c` requires at least Julia 1.10.
 
 # Examples
 ```jldoctest

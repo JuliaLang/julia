@@ -148,6 +148,13 @@ julia> collect(Iterators.reverse(Squares(4)))
   1
 ```
 
+Iterable types also support [destructuring assignment](@ref destructuring-assignment), like
+`a, b = Squares(4)`, which is implemented using `iterate`. When "slurping" the remaining elements,
+as in `a, b... = x` or `a, b..., c = x`, they are collected by [`Base.rest`](@ref) and
+[`Base.split_rest`](@ref), respectively. The generic fallbacks return a lazy iterator and a
+`Vector`, so collection types may want to add methods to these functions, for example to return a
+collection of their own type.
+
 ## Indexing
 
 | Methods to implement | Brief description                |
@@ -219,6 +226,8 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `IndexStyle(::Type)`                            | `IndexCartesian()`                     | Returns either `IndexLinear()` or `IndexCartesian()`. See the description below.      |
 | `setindex!(A, v, i::Int)`                       |                                        | (if `IndexLinear`) Scalar indexed assignment                                          |
 | `setindex!(A, v, I::Vararg{Int, N})`            |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexed assignment   |
+| `isassigned(A, i::Int)`                         | defined in terms of scalar `getindex`  | (if `IndexLinear`) Test whether index `i` is in bounds and has a value                |
+| `isassigned(A, I::Vararg{Int, N})`              | defined in terms of scalar `getindex`  | (if `IndexCartesian`, where `N = ndims(A)`) Test whether index `I` is in bounds and has a value |
 | `getindex(A, I...)`                             | defined in terms of scalar `getindex`  | [Multidimensional and nonscalar indexing](@ref man-array-indexing)                    |
 | `setindex!(A, X, I...)`                            | defined in terms of scalar `setindex!` | [Multidimensional and nonscalar indexed assignment](@ref man-array-indexing)          |
 | `iterate`                                       | defined in terms of scalar `getindex`  | Iteration                                                                             |
