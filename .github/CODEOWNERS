@@ -17,4 +17,4 @@ CODEOWNERS @JuliaLang/github-actions
 /src/gc-* @udesou @qinsoon @d-netto
 /stdlib/Markdown @fingolfin
 /JuliaLowering @mlechu
-/base/syntax.jl @mlechu
+/BaseSyntax @mlechu
