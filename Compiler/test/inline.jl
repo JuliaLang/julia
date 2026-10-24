@@ -625,6 +625,27 @@ end
     end
 end
 
+# Nonreturning forwarders inline without pulling exception construction into callers.
+@testset "nonreturning forwarding" begin
+    mod = Module()
+    @eval mod begin
+        fail(x) = throw(ArgumentError(lazy"expected positive, got $x"))
+        @noinline fail(x, y) = throw(ArgumentError(lazy"failure $x $y"))
+        direct_checked(x) = x > 0 ? x : fail(x)
+        pipe_checked(x) = x > 0 ? x : x |> fail
+        @noinline noinline_forward(x) = fail(x)
+        noinline_checked(x) = x > 0 ? x : noinline_forward(x)
+        duplicated(x, y) = fail(x, x)
+        duplicated_checked(x, y) = x > 0 ? x : duplicated(x, y)
+    end
+    direct = get_code(mod.direct_checked, (Int,))
+    @test get_code(mod.pipe_checked, (Int,)) == direct
+    @test count(isinvoke(:fail), direct) == 1
+    @test count(isinvoke(:noinline_forward), get_code(mod.noinline_checked, (Int,))) == 1
+    # Equal argument counts alone do not rule out duplicated inputs.
+    @test count(isinvoke(:duplicated), get_code(mod.duplicated_checked, (Int, Int))) == 1
+end
+
 @noinline fresh_edge_noinlined(a::Integer) = unresolvable(a)
 let src = code_typed1((Integer,)) do x
         @inline fresh_edge_noinlined(x)
