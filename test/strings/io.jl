@@ -378,3 +378,63 @@ end
     @test Base.infer_return_type(join, (Tuple{String,Vararg{String}}, Char)) == String
     @test Base.infer_return_type(join, (Tuple{Vararg{String}}, String, String)) == String
 end
+
+@testset "String(iterable) (#57072)" begin
+    # Basic generator expressions
+    @test String(c for c in "Hello") == "Hello"
+    @test String(c for c in "Julia" if c != 'i') == "Jula"
+    @test String(uppercase(c) for c in "abc") == "ABC"
+
+    # Iterators.map
+    @test String(Iterators.map(c -> c + 1, "Hello, world")) == "Ifmmp-!xpsme"
+    @test String(Iterators.map(identity, "test")) == "test"
+
+    # Iterators.take and Iterators.drop
+    @test String(Iterators.take("Hello, world", 5)) == "Hello"
+    @test String(Iterators.drop("Hello, world", 7)) == "world"
+    @test String(Iterators.take("abc", 0)) == ""
+    @test String(Iterators.drop("abc", 5)) == ""
+
+    # Iterators.filter
+    @test String(Iterators.filter(c -> c != ' ', "hello world")) == "helloworld"
+    @test String(Iterators.filter(c -> false, "hello")) == ""
+
+    # Iterators.flatten
+    @test String(Iterators.flatten(("hello", " ", "world"))) == "hello world"
+    @test String(Iterators.flatten((['a', 'b'], ['c', 'd']))) == "abcd"
+
+    # Empty iterables
+    @test String(()) == ""
+    @test String(c for c in "") == ""
+    @test String(Iterators.take("", 5)) == ""
+
+    # Tuples and sets of chars
+    @test String(('a', 'b', 'c')) == "abc"
+    @test String(Set(['x'])) == "x"
+
+    # Multi-byte Unicode characters
+    @test String(c for c in "ÄÖÜ⻨😊") == "ÄÖÜ⻨😊"
+    @test String(Iterators.map(c -> c == 'Ö' ? 'O' : c, "ÄÖÜ")) == "ÄOÜ"
+    @test String(Iterators.take("ÄÖÜ⻨", 2)) == "ÄÖ"
+    @test String(Iterators.drop("ÄÖÜ⻨", 1)) == "ÖÜ⻨"
+
+    # Infinite iterators should throw MethodError rather than hang
+    @test_throws MethodError String(Iterators.cycle("abc"))
+    @test_throws MethodError String(Iterators.countfrom(1))
+
+    # Non-iterable inputs should throw MethodError
+    @test_throws MethodError String(19)
+    @test_throws MethodError String(3.14)
+
+    # Iterables with elements that cannot convert to Char should throw MethodError
+    @test_throws MethodError String(["a", "b"])
+    @test_throws MethodError String([:a, :b])
+    @test_throws MethodError String([[1], [2]])
+
+    # Custom AbstractChar subtype
+    struct CustomChar57072 <: AbstractChar
+        val::Char
+    end
+    Base.Char(c::CustomChar57072) = c.val
+    @test String(CustomChar57072(c) for c in "hello") == "hello"
+end
