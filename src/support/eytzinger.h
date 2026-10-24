@@ -40,17 +40,16 @@ static inline size_t _eyt_obj_idx(uintptr_t q, uintptr_t *tree, size_t n,
     assert(n % 2 == 0 && "Eytzinger tree not even length!");
     if (q <= min_addr || q > max_addr)
         return n;
-    size_t k = 1;
+    // the answer is the last node the search moved right from
+    size_t k = 1, found = n + 1;
     while (k <= n) {
-        int greater = (q > tree[k - 1]);
-        k <<= 1;
-        k |= greater;
+        size_t greater = q > tree[k - 1];
+        found = greater ? k : found;
+        k = 2 * k + greater;
     }
-    k >>= (__builtin_ctzll(k) + 1);
-    assert(k != 0);
-    assert(k <= n && "Eytzinger tree index out of bounds!");
-    assert(tree[k - 1] < q && "Failed to find lower bound for object!");
-    return k - 1;
+    assert(found <= n && "Eytzinger tree index out of bounds!");
+    assert(tree[found - 1] < q && "Failed to find lower bound for object!");
+    return found - 1;
 }
 
 // Map a 4-byte-aligned address to the query value used to test containment in
