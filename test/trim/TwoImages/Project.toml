@@ -1,0 +1,2 @@
+# Test harness environment; the two packages built by `build.jl` are the
+# sibling projects `TwoImagesA` and `TwoImagesB`.
