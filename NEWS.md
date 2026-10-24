@@ -10,6 +10,12 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
+* A stack trace shown at the REPL prompt now hides the frames of Julia's own code — Base,
+  the stdlibs and installed packages — collapsing each run of them to a line naming the
+  modules they came from. The frames a user wrote are kept, as is the frame each run of
+  them called into. `show(err)` still gives the complete trace, and the
+  `JULIA_STACKTRACE_ABBREVIATED` environment variable decides for every trace when set.
+
 Command-line option changes
 ---------------------------
 
