@@ -993,6 +993,7 @@ jl_tupletype_t *jl_inst_arg_tuple_type(jl_value_t *arg1, jl_value_t **args, size
 jl_tupletype_t *jl_lookup_arg_tuple_type(jl_value_t *arg1 JL_PROPAGATES_ROOT, jl_value_t **args, size_t nargs, int leaf) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype) JL_CANSAFEPOINT;
 void jl_method_table_activate(jl_typemap_entry_t *newentry) JL_CANSAFEPOINT;
+void jl_method_table_invalidate_deferred(jl_array_t *deferred, size_t max_world) JL_CANSAFEPOINT;
 jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype) JL_CANSAFEPOINT;
 jl_method_t *jl_mk_builtin_func(jl_datatype_t *dt, jl_sym_t *name, jl_fptr_args_t fptr) JL_CANSAFEPOINT JL_GC_DISABLED;
 int jl_obviously_unequal(jl_value_t *a, jl_value_t *b);
@@ -1452,7 +1453,7 @@ JL_DLLEXPORT size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_linkage_blob_dep_world(size_t image, size_t blob) JL_NOTSAFEPOINT;
 // The world since which every method on the typenames of `sig` in `mt` came from `image` or one of its dependencies, else 0.
 JL_DLLEXPORT size_t jl_sig_contributors_world(jl_value_t *sig, jl_methtable_t *mt, size_t image) JL_CANSAFEPOINT;
-void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array_t *record, size_t image) JL_CANSAFEPOINT;
+void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array_t *record, size_t image, jl_array_t *deferred) JL_CANSAFEPOINT;
 // The ext_backinterferences of a method: It is the back direction of `interferences`, computed for external methods during incremental precompile.
 JL_DLLEXPORT jl_value_t *jl_get_ext_backinterferences(jl_method_t *method) JL_NOTSAFEPOINT;
 extern JL_DLLEXPORT jl_genericmemory_t *jl_ext_backinterferences JL_GLOBALLY_ROOTED;
