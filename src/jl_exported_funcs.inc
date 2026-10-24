@@ -29,6 +29,7 @@
     XX(jl_array_ptr_1d_append) \
     XX(jl_array_ptr_1d_push) \
     XX(jl_genericmemory_owner) \
+    XX(jl_genericmemory_typetagdata) \
     XX(jl_genericmemoryref) \
     XX(jl_array_rank) \
     XX(jl_array_to_string) \
