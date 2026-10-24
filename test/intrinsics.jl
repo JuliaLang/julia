@@ -569,6 +569,25 @@ let vals = Any[Int8(-128), Int16(-32768), typemin(Int32), typemax(Int32), typemi
         @test compiled(Core.BFloat16, n) === Base.invokelatest(cvt, Core.BFloat16, n)
     end
 end
+# 128-bit integer <-> Float16 conversions may lower to libcalls (e.g. `__floattihf`)
+@noinline compiled_fptosi_f16(::Type{T}, x) where {T} = Core.Intrinsics.fptosi(T, x)
+@noinline compiled_fptoui_f16(::Type{T}, x) where {T} = Core.Intrinsics.fptoui(T, x)
+for n in Int128[0, 3, 2049, 2051, 65504, 65519, 65520, 65536, typemax(Int128)]
+    @test compiled_sitofp(Float16, n) === Float16(n)
+    @test compiled_sitofp(Float16, -n) === Float16(-n)
+    @test compiled_uitofp(Float16, UInt128(n)) === Float16(UInt128(n))
+end
+@test compiled_sitofp(Float16, typemin(Int128)) === -Inf16
+@test compiled_uitofp(Float16, typemax(UInt128)) === Inf16
+# LLVM miscompiles negative f16 -> i128 on Win64 with avx512fp16 (zero-extends the i64 result):
+# llvm/llvm-project#230703, fix in llvm/llvm-project#230779
+fptosi_f16_i128_broken = Sys.iswindows() && Sys.ARCH === :x86_64 &&
+    occursin("+avx512fp16", ccall(:jl_get_cpu_features, String, ()))
+for x in Float16[0, 0.5, 2.5, 5, 2049, 65504]
+    @test compiled_fptosi_f16(Int128, x) === trunc(Int128, x)
+    @test compiled_fptosi_f16(Int128, -x) === trunc(Int128, -x) broken=(fptosi_f16_i128_broken && x >= 1)
+    @test compiled_fptoui_f16(UInt128, x) === trunc(UInt128, x)
+end
 @static if Sys.ARCH === :x86_64 || Sys.ARCH === :i686
     script = """
         using InteractiveUtils
@@ -1078,3 +1097,40 @@ tofloat(x) = Core.Intrinsics.uitofp(Float64, x)
 # https://github.com/JuliaLang/julia/issues/61436
 primitive type UIntN256 <: Unsigned 256 end
 @test tofloat(reinterpret(UIntN256, (zeros(UInt8, 32)...,))) == 0.0
+
+@testset "cpu_supports runtime fallback agrees with constant folding" begin
+    CPUID = Base.BinaryPlatforms.CPUID
+    @noinline runtime_cpu_supports(s::Symbol) = Core.Intrinsics.cpu_supports(s)
+    function check(query::Symbol)
+        folded = @eval () -> Core.Intrinsics.cpu_supports($(QuoteNode(query)))
+        @test Base.invokelatest(folded) === runtime_cpu_supports(query)
+    end
+    for name in CPUID._codegen_feature_names()
+        check(name)
+    end
+    # Feature lists, as the macro emits for CPU models; names of other architectures are skipped
+    for cpu in ("generic", "x86-64-v3", "haswell", "sapphirerapids", "diamondrapids", "cortex-a78", "neoverse-v2")
+        features = CPUID._cpu_model_features(cpu)
+        features === nothing && continue
+        query = Symbol(join(features, ','))
+        check(query)
+        @test runtime_cpu_supports(query) === all(runtime_cpu_supports, features)
+    end
+    # Features Julia deliberately keeps out of codegen always test false
+    @static if Sys.ARCH === :x86_64
+        for name in (:rdrnd, :rdseed, :xsaveopt, :avx512bf16, :avxneconvert, Symbol("avx10.1"), Symbol("avx10.2"))
+            @test name in CPUID._codegen_feature_names()
+            folded = @eval () -> Core.Intrinsics.cpu_supports($(QuoteNode(name)))
+            @test !Base.invokelatest(folded)
+            @test !runtime_cpu_supports(name)
+        end
+    end
+    @test !runtime_cpu_supports(Symbol(""))
+    @test !runtime_cpu_supports(Symbol("sse2,not_a_real_feature"))
+    # Code for any target must use the runtime's hard-float calling convention (lp64d)
+    @static if Sys.ARCH === :riscv64
+        for cpu in ("generic", "generic-rv64")
+            @test :d in CPUID._cpu_model_features(cpu)
+        end
+    end
+end

@@ -43,6 +43,12 @@ function _isself(ft::DataType)
     name = ftname.singletonname
     ftname.name === name && return false
     mod = parentmodule(ft)
+    bpart = lookup_binding_partition(tls_world_age(), GlobalRef(mod, name))
+    if binding_kind(bpart) == PARTITION_KIND_BACKDATED_CONST
+        # Read the constant directly, since `getglobal` would warn about (or with
+        # `--depwarn=error`, refuse) accessing it from a world prior to its definition
+        return ft === typeof(partition_restriction(bpart))
+    end
     return isdefinedglobal(mod, name) && ft === typeof(getglobal(mod, name))
 end
 
@@ -2396,7 +2402,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         else
             # first show the line number argument as a comment
             if isa(args[2], LineNumberNode) || is_expr(args[2], :line)
-                print(io, args[2], ' ')
+                a2 = args[2]
+                a2 isa LineNumberNode ? print(io, a2, ' ') : print(io, a2::Expr, ' ')
             end
             # Use the functional syntax unless specifically designated with
             # prec=-1 and hide the line number argument from the argument list

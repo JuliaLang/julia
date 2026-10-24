@@ -207,6 +207,15 @@ end
         @test occursin("Available CPU targets:", v[2])
         @test occursin("Host CPU:", v[2])
     end
+
+    # Test an incompatible `cpu_target` names the missing features
+    if Sys.ARCH === :x86_64
+        let v = readchomperrors(`$(Base.julia_cmd(; cpu_target="native,-sse2")) --startup-file=no -e ''`)
+            @test !v[1]
+            @test occursin("Unable to find compatible target in cached code image. It was compiled for", v[3])
+            @test occursin(r"lacks: [^.]*\bsse2\b", v[3])
+        end
+    end
 end
 
 let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`,
@@ -287,13 +296,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`,
         @test contains(v[2], r"combiner-store-merge-dependence-limit + = 6")
         @test contains(v[2], r"enable-tail-merge + = 1")
         @test isempty(v[3])
-    end
-    if Base.libllvm_version < v"15" #LLVM over 15 doesn't care for multiple options
-        @testset let v = readchomperrors(addenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -enable-tail-merge=1"))
-            @test !v[1]
-            @test isempty(v[2])
-            @test v[3] == "julia: for the --enable-tail-merge option: may only occur zero or one times!"
-        end
     end
     @testset "time-trace" begin
         mktempdir() do dir
@@ -1184,9 +1186,12 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             info = read(joinpath(dir, only(infos())), String)
             @test occursin(r"^SF:.*CovDep\.jl$"m, info)
             rm(joinpath(dir, only(infos())))
-            # count mode needs its own native image
+            # count mode needs its own native image, but the dependency outside the
+            # tracked path can use its plain image (unless the sysimage is instrumented)
             @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=@$pkgdir --code-coverage-mode=count -e $probe`) == "2 1 0 2"
             @test njis() == 3
+            instrumented_sysimage = Base.match_cache_coverage(Base.CacheFlags(coverage=0), Base.CacheFlags(coverage=1))
+            @test ndepjis() == (instrumented_sysimage ? 3 : 2)
             rm(joinpath(dir, only(infos())))
             # `all` uses the same variants; the sysimage is used as built either way
             @test readchomp(`$pkg_exename --code-coverage=$covfile --code-coverage=all -e $probe`) == "1 1 0 2"
@@ -1612,8 +1617,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # issue #12671, starting from a non-directory
     # rm(dir) fails on windows with Permission denied
-    # and was an upstream bug in llvm <= v3.3
-    if !Sys.iswindows() && Base.libllvm_version > v"3.3"
+    if !Sys.iswindows()
         testdir = mktempdir()
         cd(testdir) do
             rm(testdir)
@@ -1665,6 +1669,14 @@ end
         # Local builds will likely be "native" but CI shouldn't be.
         invalid_results = Base.get_bool_env("CI", false) ? ("", "native", "sysimage") : ("", "sysimage",)
         @test !in(v, invalid_results)
+    end
+
+    # The clone selected at load time is one of the `;`-separated targets the
+    # system image was built with.
+    let matched = Sys.matched_sysimage_target()
+        @test matched isa String
+        @test !isempty(matched)
+        @test matched in split(Sys.sysimage_target(), ";")
     end
 end
 

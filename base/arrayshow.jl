@@ -105,7 +105,7 @@ function print_matrix_row(io::IO,
             a = alignment(io, x)::Tuple{Int,Int}
 
             # First try 3-arg show
-            sx = sprint(show, "text/plain", x, context=io, sizehint=0)
+            sx = sprint(show, MIME"text/plain"(), x, context=io, sizehint=0)
 
             # If the output contains line breaks, try 2-arg show instead.
             if occursin('\n', sx)

@@ -175,7 +175,7 @@ The following is a complete list of command-line switches available when launchi
 |`-v`, `--version`                      |Display version information|
 |`-h`, `--help`                         |Print command-line options (this message)|
 |`--help-hidden`                        |Print uncommon options not shown by `-h`|
-|`-P`, `--project[={<dir>\|@temp\|@.}]` |Set `<dir>` as the active project/environment. Or, create a temporary environment with `@temp`. The default `@.` option will search through parent directories until a `Project.toml` or `JuliaProject.toml` file is found.|
+|`-P`, `--project[={<dir>\|@temp\|@.}]` |Set `<dir>` as the active project/environment. Or, create a temporary environment with `@temp`. If no value is given, `@.` is used, which searches through parent directories until a `Project.toml` or `JuliaProject.toml` file is found.|
 |`-J`, `--sysimage <file>`              |Start up with the given system image file|
 |`-H`, `--home <dir>`                   |Set location of `julia` executable|
 |`--startup-file={yes*\|no}`            |Load `JULIA_DEPOT_PATH/config/startup.jl`; if [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable is unset, load `~/.julia/config/startup.jl`|
@@ -215,7 +215,7 @@ The following is a complete list of command-line switches available when launchi
 |`--track-allocation=@<path>`           |Count bytes but only in files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
 |`--task-metrics={yes\|no*}`             |Enable the collection of per-task metrics|
 |`--bug-report=KIND`                    |Launch a bug report session. It can be used to start a REPL, run a script, or evaluate expressions. It first tries to use BugReporting.jl installed in current environment and falls back to the latest compatible BugReporting.jl if not. For more information, see `--bug-report=help`.|
-|`--heap-size-hint=<size>`              |Forces garbage collection if memory usage is higher than the given value. The value may be specified as a number of bytes, optionally in units of KB, MB, GB, or TB, or as a percentage of physical memory with %. See [Memory Management and Garbage Collection](@ref man-memory-management) for more details.|
+|`--heap-size-hint=<size>`              |Forces garbage collection if memory usage is higher than the given value. The value may be specified as a number of bytes, optionally in units of KB, MB, GB, or TB, or as a percentage of physical memory (or of the cgroup memory limit, if lower) with %. See [Memory Management and Garbage Collection](@ref man-memory-management) for more details.|
 |`--compile={yes*\|no\|all\|min}`       |Enable or disable JIT compiler, or request exhaustive or minimal compilation|
 |`--output-o <name>`                    |Generate an object file (including system image data)|
 |`--output-ji <name>`                   |Generate a system image data file (.ji)|

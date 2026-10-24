@@ -12,6 +12,10 @@ use mmtk::{
 pub enum JuliaVMSlot {
     Simple(SimpleSlot),
     Offset(OffsetSlot),
+    /// A root reported as the object it points to, as the VM cannot (or does not) give us the location
+    /// of the root. MMTk never stores to it, as the build does not move objects.
+    #[cfg(feature = "non_moving")]
+    RootNode(ObjectReference),
 }
 
 unsafe impl Send for JuliaVMSlot {}
@@ -21,6 +25,8 @@ impl Slot for JuliaVMSlot {
         match self {
             JuliaVMSlot::Simple(e) => e.load(),
             JuliaVMSlot::Offset(e) => e.load(),
+            #[cfg(feature = "non_moving")]
+            JuliaVMSlot::RootNode(o) => Some(*o),
         }
     }
 
@@ -28,6 +34,10 @@ impl Slot for JuliaVMSlot {
         match self {
             JuliaVMSlot::Simple(e) => e.store(object),
             JuliaVMSlot::Offset(e) => e.store(object),
+            #[cfg(feature = "non_moving")]
+            JuliaVMSlot::RootNode(o) => {
+                panic!("Root node {} moved to {} in a non-moving build", o, object)
+            }
         }
     }
 }
@@ -37,6 +47,8 @@ impl std::fmt::Debug for JuliaVMSlot {
         match self {
             Self::Simple(e) => write!(f, "{}", e.as_address()),
             Self::Offset(e) => write!(f, "{}+{}", e.slot_address(), e.offset),
+            #[cfg(feature = "non_moving")]
+            Self::RootNode(o) => write!(f, "root node {}", o),
         }
     }
 }
@@ -178,6 +190,51 @@ impl Iterator for JuliaMemorySliceSlotIterator {
 
 const ROOT_WORK_PACKET_SIZE: usize = 4096;
 
+/// Report roots that cannot be updated. The objects in `nodes` must not move.
+pub(crate) fn report_pinning_roots<F: RootsWorkFactory<JuliaVMSlot>>(
+    factory: &mut F,
+    nodes: Vec<ObjectReference>,
+) {
+    #[cfg(feature = "moving")]
+    factory.create_process_pinning_roots_work(nodes);
+    // Nothing moves, so the roots can go through the normal slot path.
+    #[cfg(feature = "non_moving")]
+    factory.create_process_roots_work(nodes.into_iter().map(JuliaVMSlot::RootNode).collect());
+}
+
+/// Report roots that cannot be updated. Neither the objects in `nodes` nor any object reachable
+/// from them may move.
+pub(crate) fn report_tpinning_roots<F: RootsWorkFactory<JuliaVMSlot>>(
+    factory: &mut F,
+    nodes: Vec<ObjectReference>,
+) {
+    #[cfg(feature = "moving")]
+    factory.create_process_tpinning_roots_work(nodes);
+    // Nothing moves, so the roots can go through the normal slot path.
+    #[cfg(feature = "non_moving")]
+    factory.create_process_roots_work(nodes.into_iter().map(JuliaVMSlot::RootNode).collect());
+}
+
+/// A tpinning root slot as held before it is reported. In a `moving` build, it is the object
+/// in the slot, as such roots are reported as objects. Otherwise, it is the slot itself.
+#[cfg(feature = "moving")]
+pub(crate) type TPinningRootSlot = ObjectReference;
+#[cfg(feature = "non_moving")]
+pub(crate) type TPinningRootSlot = JuliaVMSlot;
+
+/// Report root slots that cannot be updated. Neither the objects in `slots` nor any object
+/// reachable from them may move.
+pub(crate) fn report_tpinning_root_slots<F: RootsWorkFactory<JuliaVMSlot>>(
+    factory: &mut F,
+    slots: Vec<TPinningRootSlot>,
+) {
+    #[cfg(feature = "moving")]
+    factory.create_process_tpinning_roots_work(slots);
+    // Nothing moves, so the slots can go through the normal slot path.
+    #[cfg(feature = "non_moving")]
+    factory.create_process_roots_work(slots);
+}
+
 #[repr(C)]
 pub struct RootsWorkBuffer<T: Copy> {
     pub ptr: *mut T,
@@ -261,7 +318,7 @@ impl RootsWorkClosure {
         if !buf.is_null() {
             let buf = unsafe { Vec::<ObjectReference>::from_raw_parts(buf, size, cap) };
             let factory: &mut F = unsafe { &mut *(factory_ptr as *mut F) };
-            factory.create_process_pinning_roots_work(buf);
+            report_pinning_roots(factory, buf);
         }
 
         if renew {
@@ -281,7 +338,7 @@ impl RootsWorkClosure {
         if !buf.is_null() {
             let buf = unsafe { Vec::<ObjectReference>::from_raw_parts(buf, size, cap) };
             let factory: &mut F = unsafe { &mut *(factory_ptr as *mut F) };
-            factory.create_process_tpinning_roots_work(buf);
+            report_tpinning_roots(factory, buf);
         }
 
         if renew {

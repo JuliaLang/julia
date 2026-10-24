@@ -178,9 +178,11 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             debuginfo = DebugInfo(mi)
         end
         # if we aren't cached, we don't need this edge
-        # but our caller might, so let's just make it anyways
+        # but our caller might, so let's just make it anyways.
+        # No caller can reach a tombstoned CodeInstance (they copy its edges instead),
+        # and each new caller infers it again, so its backedges would only pile up.
         unique_backedges = false
-        if max_world >= validation_world
+        if max_world >= validation_world && !result.tombstone
             # if we can record all of the backedges in the global reverse-cache,
             # we can now widen our applicability in the global cache too
             unique_backedges = store_backedges(ci, edges)
@@ -1931,8 +1933,12 @@ function compileable_specialization_for_call(interp::AbstractInterpreter, @nospe
     matches = findall(argtype, method_table(interp); limit = 1)
     matches === nothing && return nothing
     length(matches.matches) == 0 && return nothing
-    match = only(matches.matches)
+    return compileable_specialization_for_match(only(matches.matches)::MethodMatch)
+end
 
+# Return the compilable MethodInstance that every call dispatched to `match` will be
+# runtime-dispatched to, if there is exactly one
+function compileable_specialization_for_match(match::MethodMatch)
     compileable_atype = get_compileable_sig(match.method, match.spec_types, match.sparams)
     compileable_atype === nothing && return nothing
     if match.spec_types !== compileable_atype
@@ -1943,6 +1949,19 @@ function compileable_specialization_for_call(interp::AbstractInterpreter, @nospe
     end
 
     return mi
+end
+
+# Find all methods for `T <: ftyp` and return each paired with its unique
+# compileable specialization, if one could be resolved.
+function _compileable_methods(table::MethodTableView, @nospecialize(ftyp))
+    result = findall(Tuple{ftyp}, table)
+    result === nothing && return nothing
+    matches = Pair{Method,Union{Nothing,MethodInstance}}[]
+    for match in result.matches
+        match = match::MethodMatch
+        push!(matches, match.method => compileable_specialization_for_match(match))
+    end
+    return matches
 end
 
 const QueueItems = Union{CodeInstance,MethodInstance,SimpleVector}

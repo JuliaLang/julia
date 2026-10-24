@@ -351,7 +351,6 @@ private:
     SmallVector<int, 0> NumberAllBase(State &S, Value *Base);
 
     void NoteOperandUses(State &S, BBState &BBS, Instruction &UI);
-    void MaybeTrackDst(State &S, MemTransferInst *MI);
     bool MaybeTrackStore(State &S, StoreInst *I);
     State LocalScan(Function &F);
     void ComputeLiveness(State &S);
@@ -361,9 +360,11 @@ private:
     void PlaceGCFrameStores(State &S, unsigned MinColorRoot, ArrayRef<int> Colors, int PreAssignedColors, Value *GCFrame);
     void PlaceGCFrameReset(State &S, unsigned R, unsigned MinColorRoot, ArrayRef<int> Colors, Value *GCFrame, Instruction *InsertBefore);
     void PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAssignedColors, State &S, std::map<Value *, std::pair<int, int>>);
+    void ElideFreshWriteBarriers(Function &F, State &S);
     void CleanupWriteBarriers(Function &F, State *S, const SmallVector<CallInst*, 0> &WriteBarriers, bool *CFGModified);
     bool CleanupIR(Function &F, State *S, bool *CFGModified);
-    void NoteUseChain(State &S, BBState &BBS, User *TheUser);
+    CallInst *EmitGCAllocBytes(IRBuilder<> &builder, CallInst *CI, Value *size, Value *tag);
+    Value *LowerGCAllocMemory(CallInst *CI);
     SmallVector<int, 1> GetPHIRefinements(PHINode *phi, State &S);
     void FixUpRefinements(ArrayRef<int> PHINumbers, State &S);
     void RefineLiveSet(LargeSparseBitVector &LS, State &S, ArrayRef<int> CalleeRoots);
@@ -433,7 +434,7 @@ private:
 inline Value *EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V)
 {
     assert(T == T_size || isa<PointerType>(T));
-    return builder.CreateInBoundsGEP(T, V, ConstantInt::get(T_size, -1), V->getName() + ".tag_addr");
+    return builder.CreateInBoundsGEP(T, V, ConstantInt::get(T_size, -1, true), V->getName() + ".tag_addr");
 }
 
 inline Value *EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V, llvm::MDNode *tbaa_tag)

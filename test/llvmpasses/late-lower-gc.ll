@@ -208,7 +208,7 @@ define swiftcc ptr addrspace(10) @insert_element(ptr swiftself "gcstack" %0) {
 ; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 10)
   call void null(ptr sret([2 x [5 x ptr addrspace(10)]]) "julia.return_roots"="10" %2, ptr null, ptr addrspace(11) null, ptr null)
   %4 = insertelement <4 x ptr> zeroinitializer, ptr %2, i32 0
-; CHECK: [[gc_slot_addr_:%.*]] = insertelement <4 x ptr> zeroinitializer, ptr [[gc_slot_addr_:%.*]], i32 0
+; CHECK: [[gc_slot_addr_:%.*]] = insertelement <4 x ptr> {{zeroinitializer|splat \(ptr null\)}}, ptr [[gc_slot_addr_:%.*]], i32 0
 ; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
   ret ptr addrspace(10) null
 }
@@ -370,6 +370,33 @@ top:
   %r = call i64 @readonly_helper(i64 %a)
 ; CHECK: ret ptr addrspace(10) %v
   ret {} addrspace(10)* %v
+}
+
+; A vector of untracked pointers can be addrspacecast to tracked:
+; the loop vectorizer can form this from the scalar case.
+define void @vector_literal_cast(ptr %p, ptr %q, i64 %x) {
+top:
+; CHECK-LABEL: @vector_literal_cast
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 3)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %a = load ptr, ptr %p
+  %b = load ptr, ptr %q
+  %va = insertelement <2 x ptr> poison, ptr %a, i64 0
+  %vb = insertelement <2 x ptr> %va, ptr %b, i64 1
+; CHECK: %v = addrspacecast <2 x ptr> %vb to <2 x ptr addrspace(10)>
+  %v = addrspacecast <2 x ptr> %vb to <2 x ptr addrspace(10)>
+; CHECK: extractelement <2 x ptr addrspace(10)> %v, i32 0
+; CHECK-NEXT: store ptr addrspace(10)
+; CHECK: extractelement <2 x ptr addrspace(10)> %v, i32 1
+; CHECK-NEXT: store ptr addrspace(10)
+  %boxed = call {} addrspace(10)* @jl_box_int64(i64 signext %x)
+; CHECK: call void @jl_safepoint()
+  call void @jl_safepoint()
+  %e0 = extractelement <2 x ptr addrspace(10)> %v, i32 0
+  %e1 = extractelement <2 x ptr addrspace(10)> %v, i32 1
+  call void @boxed_simple({} addrspace(10)* %e0, {} addrspace(10)* %e1)
+  call void @boxed_simple({} addrspace(10)* %boxed, {} addrspace(10)* %e1)
+  ret void
 }
 
 attributes #10 = { nounwind willreturn memory(argmem: read) "julia.safepoint" }

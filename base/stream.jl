@@ -99,7 +99,7 @@ end
 
 # Redirectable = Union{IO, FileRedirect, Libc.RawFD} (not exported)
 
-bytesavailable(s::LibuvStream) = bytesavailable(s.buffer)
+bytesavailable(s::LibuvStream) = bytesavailable(s.buffer)::Int
 
 function eof(s::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
     cancel = precheck_cancel_arg(cancel)

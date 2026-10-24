@@ -167,9 +167,7 @@ end
         for i in 1:2, j in 1:2 # unordered test (2 NaNs)
             x = unorded[i], unorded[i]
             y = unorded[j], unorded[j]
-            z = Base._extrema_rf(x, y)
-            @test (z[1] === x[1] || z[1] === y[1]) &&
-                  (z[2] === x[1] || z[2] === y[1])
+            @test Base._extrema_rf(x, y) ≣ x
         end
     end
 end
@@ -2077,6 +2075,12 @@ end
     @test 0x1p-1022 == floatmin()
     @test 0x1.fffffffffffffp1023 == floatmax()
     @test isinf(nextfloat(0x1.fffffffffffffp1023))
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    for f in (eps, floatmin, floatmax)
+        @test_throws MethodError(f, (Union{},)) f(Union{})
+        @test_throws MethodError(f, (Union{}, 1)) f(Union{}, 1)
+        @test which(f, (Type{Union{}},)).sig == Tuple{typeof(f), Type{Union{}}, Vararg}
+    end
 end
 @testset "issue #1308" begin
     @test string(~UInt128(0), base = 16) == "f"^32
@@ -3050,48 +3054,36 @@ end
 @test inv(3//4) === 4//3 === 1 / (3//4) === 1 // (3//4)
 
 # issues #23244 & #23250
-@testset "convert preserves NaN payloads" begin
+@testset "convert of NaN" begin
+    # A NaN must convert to a NaN of the target type. Whether the sign and payload
+    # survive is not specified: neither Julia nor LLVM promises it, and RISC-V hardware
+    # returns the canonical NaN from every conversion (see #56672).
+    isnanof(::Type{T}, x) where {T} = x isa T && isnan(x)
     @testset "smallest NaNs" begin
-        @test convert(Float32,  NaN16) ===  NaN32
-        @test convert(Float32, -NaN16) === -NaN32
-        @test convert(Float64,  NaN16) ===  NaN64
-        @test convert(Float64, -NaN16) === -NaN64
-        @test convert(Float16,  NaN32) ===  NaN16
-        @test convert(Float16, -NaN32) === -NaN16
-        @test convert(Float64,  NaN32) ===  NaN64
-        @test convert(Float64, -NaN32) === -NaN64
-        @test convert(Float32,  NaN64) ===  NaN32
-        @test convert(Float32, -NaN64) === -NaN32
-        @test convert(Float16,  NaN64) ===  NaN16
-        @test convert(Float16, -NaN64) === -NaN16
+        for (F, G) in ((Float32, Float16), (Float64, Float16), (Float16, Float32),
+                       (Float64, Float32), (Float32, Float64), (Float16, Float64))
+            @test isnanof(F, convert(F,  G(NaN)))
+            @test isnanof(F, convert(F, -G(NaN)))
+        end
     end
 
     @testset "largest NaNs" begin
-        @test convert(Float32, reinterpret(Float16, typemax(UInt16))) ===
-              reinterpret(Float32, typemax(UInt32) >> 13 << 13)
-        @test convert(Float64, reinterpret(Float16, typemax(UInt16))) ===
-              reinterpret(Float64, typemax(UInt64) >> 42 << 42)
-        @test convert(Float16, reinterpret(Float32, typemax(UInt32))) ===
-              reinterpret(Float16, typemax(UInt16) >> 00 << 00)
-        @test convert(Float64, reinterpret(Float32, typemax(UInt32))) ===
-              reinterpret(Float64, typemax(UInt64) >> 29 << 29)
-        @test convert(Float32, reinterpret(Float64, typemax(UInt64))) ===
-              reinterpret(Float32, typemax(UInt32) >> 00 << 00)
-        @test convert(Float16, reinterpret(Float64, typemax(UInt64))) ===
-              reinterpret(Float16, typemax(UInt16) >> 00 << 00)
+        @test isnanof(Float32, convert(Float32, reinterpret(Float16, typemax(UInt16))))
+        @test isnanof(Float64, convert(Float64, reinterpret(Float16, typemax(UInt16))))
+        @test isnanof(Float16, convert(Float16, reinterpret(Float32, typemax(UInt32))))
+        @test isnanof(Float64, convert(Float64, reinterpret(Float32, typemax(UInt32))))
+        @test isnanof(Float32, convert(Float32, reinterpret(Float64, typemax(UInt64))))
+        @test isnanof(Float16, convert(Float16, reinterpret(Float64, typemax(UInt64))))
     end
 
     @testset "random NaNs" begin
         nans = AbstractFloat[NaN16, NaN32, NaN64]
         F = [Float16, Float32, Float64]
         U = [UInt16, UInt32, UInt64]
-        sig = [11, 24, 53]
         for i = 1:length(F), j = 1:length(F)
             for _ = 1:100
                 nan = reinterpret(F[i], rand(U[i]) | reinterpret(U[i], nans[i]))
-                z = sig[i] - sig[j]
-                nan′ = i <= j ? nan : reinterpret(F[i], reinterpret(U[i], nan) >> z << z)
-                @test convert(F[i], convert(F[j], nan)) === nan′
+                @test isnanof(F[i], convert(F[i], convert(F[j], nan)))
             end
         end
     end
@@ -3377,6 +3369,13 @@ end
                 @test_throws MethodError precision(Union{S,T}, base = 3)
             end
         end
+    end
+
+    @testset "`precision` of `Union{}`" begin
+        # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+        @test_throws MethodError(precision, (Union{},)) precision(Union{})
+        @test_throws MethodError(precision, (Union{},)) precision(Union{}, base = 3)
+        @test which(precision, (Type{Union{}},)).sig == Tuple{typeof(precision), Type{Union{}}, Vararg}
     end
 end
 

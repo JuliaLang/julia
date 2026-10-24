@@ -28,5 +28,6 @@ Libdl.DL_LOAD_PATH
 Libdl.LazyLibrary
 Libdl.LazyLibraryPath
 Libdl.BundledLazyLibraryPath
+Libdl.LazyLibraryCallback
 Libdl.add_dependency!
 ```

@@ -404,6 +404,8 @@ Base.Sys.free_physical_memory
 Base.Sys.total_physical_memory
 Base.Sys.uptime
 Base.Sys.sysimage_target
+Base.Sys.matched_sysimage_target
+Base.@cpu_supports
 Base.Sys.isjsvm
 Base.Sys.loadavg
 Base.Sys.isexecutable

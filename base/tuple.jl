@@ -387,7 +387,8 @@ end
 function _front_type(@nospecialize T::Type{<:Tuple})
     @_foldable_meta
     (T isa DataType && !isvatuple(T)) || return Tuple
-    return Tuple{T.parameters[1:end-1]...}
+    params = (T::DataType).parameters
+    return Tuple{params[1:(length(params)::Int - 1)]...}
 end
 
 function map(f, t::Any32)

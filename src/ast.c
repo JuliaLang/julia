@@ -493,7 +493,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             jl_enternode_scope(temp) = NULL;
             jl_enternode_catch_dest(temp) = jl_unbox_long(ex);
             if (n == 2) {
-                jl_enternode_scope(temp) = scm_to_julia(fl_ctx, car_(cdr_(e)), mod);
+                jl_gc_write(temp, jl_enternode_scope(temp), jl_value_t, scm_to_julia(fl_ctx, car_(cdr_(e)), mod));
             }
         }
         else if (sym == jl_newvar_sym) {

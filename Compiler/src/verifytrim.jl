@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import ..Compiler: verify_typeinf_trim, NativeInterpreter, argtypes_to_type, compileable_specialization_for_call,
-    threads_deferred_call_type, is_threads_call_def, foreign_library_type, _libdl_dlopen
+    threads_deferred_call_type, is_threads_call_def, foreign_library_type, _libdl_dlopen, _compileable_methods, method_table
 
 using ..Compiler:
      # operators
@@ -289,6 +289,22 @@ function may_dispatch(@nospecialize ftyp)
     end
 end
 
+# `--trim` compiles every on-load callback method, so the dynamic call is covered as long as
+# each method it may dispatch to has a single compileable specialization (and so was compiled).
+# Returns the methods that are not covered, or `nothing` if they cannot be enumerated.
+function _uncompiled_methods(interp::NativeInterpreter, @nospecialize(ftyp), caches::IdDict{MethodInstance,CodeInstance})
+    matches = _compileable_methods(method_table(interp), ftyp)
+    matches === nothing && return nothing
+    uncovered = Method[]
+    for match in matches
+        mi = match.second
+        if mi === nothing || !(get(caches, mi, nothing) isa CodeInstance)
+            push!(uncovered, match.first)
+        end
+    end
+    return uncovered
+end
+
 function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance, codeinfo::CodeInfo, inspected::IdSet{CodeInstance}, caches::IdDict{MethodInstance,CodeInstance}, parents::ParentMap, errors::ErrorList)
     mi = get_ci_mi(codeinst)
     # The dynamic call of a `@threads` loop body is checked where the loop starts instead.
@@ -386,6 +402,17 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                 elseif Core.memoryrefmodify! isa ftyp
                     error = "trim verification not yet implemented for builtin `Core.memoryrefmodify!`"
                 else @assert false "unexpected builtin" end
+            elseif length(stmt.args) == 1 && ftyp <: Core.LazyLibraryCallback
+                # dynamic calls to `(::Core.LazyLibraryCallback)(...)` are eagerly enqueued
+                # by precompile.jl so it's worth checking if we happen to have all relevant
+                # CIs for this abstract call
+                uncompiled = _uncompiled_methods(interp, ftyp, caches)
+                uncompiled !== nothing && isempty(uncompiled) && continue
+                error = "unresolved LazyLibrary on-load callback"
+                if uncompiled !== nothing
+                    shown = Base.join(Base.map(m -> Base.sprint(Base.show, m), uncompiled), ", ")
+                    error = Base.string(error, " (no compiled specialization of ", shown, ")")
+                end
             else
                 error = "unresolved call"
             end

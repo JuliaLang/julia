@@ -147,6 +147,7 @@ using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 
 # More strings & printing
 include("regex.jl")
+include("parsers/Parsers.jl")
 include("parse.jl")
 include("shell.jl")
 const IRShow = Compiler.IRShow # an alias for compatibility
@@ -307,6 +308,8 @@ include("loading.jl")
 # BinaryPlatforms, used by Artifacts.  Needs `Sort`.
 include("binaryplatforms.jl")
 
+using .BinaryPlatforms.CPUID: @cpu_supports
+
 # misc useful functions & macros
 include("timing.jl")
 include("client.jl")
@@ -321,7 +324,7 @@ include("docs/basedocs.jl")
 # Compiler frontend
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
 JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
-set_syntax_version(Base, VERSION)
+set_syntax_version(Base, v"1.14")
 
 include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
 JuliaLowering.activate!(false; freeze_world_age=false)
@@ -595,6 +598,7 @@ function __init__()
     init_depot_path()
     init_load_path()
     init_active_project()
+    init_debuginfo_source_paths()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
     empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
     empty!(checksums_valid)

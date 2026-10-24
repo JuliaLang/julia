@@ -187,3 +187,59 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Int32, Tuple{typeof(trim_ccall_lo
     repr = sprint(verify_print_error, desc, parents, warn)
     @test occursin("unresolved dlopen for ccall / cglobal", repr)
 end
+
+# `LazyLibrary` on-load callbacks are called dynamically, but `--trim` compiles every
+# `LazyLibraryCallback` method, so a call through that abstract type is covered as long as
+# each method has a single compileable specialization.
+using .Compiler: _compileable_methods, InternalMethodTable
+const LazyLibraryCallback = Base.Libc.Libdl.LazyLibraryCallback
+struct TrimOnLoad <: LazyLibraryCallback end
+(::TrimOnLoad)() = nothing
+# keep the invocation a dynamic call regardless of how many callbacks are defined in this
+# session (otherwise inference may union-split it), as for the open-ended set in real code
+module TrimOnLoadCaller
+    Base.Experimental.@max_methods 1
+    global trim_on_load::Core.LazyLibraryCallback
+    trim_invoke_on_load() = ((trim_on_load::Core.LazyLibraryCallback)(); nothing)
+end
+TrimOnLoadCaller.trim_on_load = TrimOnLoad()
+const trim_invoke_on_load = TrimOnLoadCaller.trim_invoke_on_load
+
+# the roots that `--trim` adds for all `LazyLibraryCallback`s
+function trim_on_load_roots()
+    world = Base.get_world_counter()
+    matches = _compileable_methods(InternalMethodTable(world), LazyLibraryCallback)
+    roots = Any[mi for (_, mi) in matches if mi !== nothing]
+    push!(roots, Core.svec(Nothing, Tuple{typeof(trim_invoke_on_load)}))
+    return roots
+end
+
+# errors at the callback invocation in `trim_invoke_on_load` (other roots, such as stdlib
+# callbacks loading their libraries, rely on overrides that `--trim` builds add)
+function trim_on_load_errors(roots)
+    infos = typeinf_ext_toplevel(roots, [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+    errors, parents = get_verify_typeinf_trim(infos)
+    return filter(errors) do (warn, desc)
+        desc isa CallMissing && Compiler.get_ci_mi(desc.codeinst).def.name === :trim_invoke_on_load
+    end
+end
+
+let roots = trim_on_load_roots()
+    @test any(mi -> mi isa Core.MethodInstance && mi.specTypes === Tuple{TrimOnLoad}, roots)
+    @test isempty(trim_on_load_errors(roots))
+end
+
+# dispatch specializes a callback on its type, even with `@nospecialize`, so a callback
+# method for a non-concrete type has no single specialization to compile
+struct ParametricTrimOnLoad{T} <: LazyLibraryCallback end
+(@nospecialize(cb::ParametricTrimOnLoad))() = nothing
+
+let roots = trim_on_load_roots()
+    @test !any(mi -> mi isa Core.MethodInstance && mi.def.sig === Tuple{ParametricTrimOnLoad}, roots)
+    (warn, desc) = only(trim_on_load_errors(roots))
+    @test !warn
+    @test startswith(desc.desc, "unresolved LazyLibrary on-load callback")
+    # names the callback method that has no single specialization
+    @test occursin("ParametricTrimOnLoad", desc.desc)
+    @test !occursin("(::TrimOnLoad)", desc.desc)
+end

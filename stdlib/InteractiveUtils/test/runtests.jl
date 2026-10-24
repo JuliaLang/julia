@@ -253,6 +253,7 @@ end
         versioninfo(buf, verbose=true)
         ver = read(buf, String)
         @test startswith(ver, "Julia Version $VERSION")
+        @test startswith(ver, "Julia Version $(Base.version_with_build_variant())\n")
         @test occursin("Environment:", ver)
 
         let exename = `$(Base.julia_cmd()) --startup-file=no`,
@@ -764,6 +765,14 @@ if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
     end
 end
 
+# `Type{T}` is not a dispatch slot, make sure we still disassemble the method rather than
+# the lazy JIT placeholder
+native_type_arg(::Type{T}) where {T} = sizeof(T)
+let output = sprint(io -> code_native(io, native_type_arg, (Type{Int},); dump_module=false))
+    @test occursin("within `native_type_arg`", output)
+    @test !occursin("jl_fptr_wait_for_compiled", output)
+end
+
 @testset "error message" begin
     err = ErrorException("expression is not a function call or symbol")
     @test_throws err @code_lowered ""
@@ -933,6 +942,7 @@ end
                         bar(1)
                     end
                     bar(x) = x
+                    __init__() = nothing
                     end
                     """)
 
@@ -947,7 +957,7 @@ end
                 buf = read(fname)
                 rm(fname)
 
-                @test occursin("ms  Foo3242", String(buf))
+                @test occursin(r"┌ [\d.]+ ms Foo3242\.__init__\(\)[^\n]*\n\s+[\d.]+ ms  Foo3242", String(buf))
 
                 fname = tempname()
                 f = open(fname, "w")

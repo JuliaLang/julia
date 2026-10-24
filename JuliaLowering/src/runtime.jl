@@ -27,12 +27,6 @@ const _lowering_world = Ref{UInt}(0)
     return invokelatest(f, args...)
 end
 
-# Return the current exception. In JuliaLowering we use this rather than the
-# special form `:the_exception` to reduce the number of special forms.
-Base.@assume_effects :removable function current_exception()
-    @ccall jl_current_exception(current_task()::Any)::Any
-end
-
 function __interpolate_expr(@nospecialize(ex), depth, @nospecialize(vals::Tuple), val_i)
     if ex isa QuoteNode
         out = __interpolate_expr(Expr(:inert, ex.value), depth, vals, val_i)
@@ -60,7 +54,7 @@ function _interpolate_expr(@nospecialize(ex), @nospecialize(values::Tuple))
     @jl_assert !Meta.isexpr(ex, :$) (expr_to_est(ex), "expand_quote should handle this")
     __interpolate_expr(ex, 0, values, Ref(0))
 end
-function interpolate_expr(@nospecialize(ex), @nospecialize(values...))
+@noinline function interpolate_expr(@nospecialize(ex), @nospecialize(values...))
     return _interpolate_expr(ex, values)
 end
 
@@ -94,26 +88,29 @@ function _interpolate_syntax(st::SyntaxTree, @nospecialize(vals::Tuple))
     @jl_assert numchildren(out) == 1 st
     out[1]
 end
-function interpolate_syntax(st::SyntaxTree, @nospecialize(vals...))
+@noinline function interpolate_syntax(st::SyntaxTree, @nospecialize(vals...))
     return invoke_in_lowering_world(_interpolate_syntax, st, vals)::SyntaxTree
 end
 
 #--------------------------------------------------
 # Functions called by closure conversion
 function eval_closure_type(mod::Module, closure_type_name::Symbol,
-                           capt_sp, field_names, field_is_box)
+                           capt_sp, field_names, field_is_box,
+                           field_is_nospec=nothing)
     type_params = Core.TypeVar[]
     field_types = []
     for name in capt_sp
         push!(type_params, Core.TypeVar(name))
     end
-    for (name, isbox) in zip(field_names, field_is_box)
-        if !isbox
+    for (i, (name, isbox)) in enumerate(zip(field_names, field_is_box))
+        if isbox
+            push!(field_types, Core.Box)
+        elseif !isnothing(field_is_nospec) && field_is_nospec[i]
+            push!(field_types, Any)
+        else
             T = Core.TypeVar(Symbol(name, "_type"))
             push!(type_params, T)
             push!(field_types, T)
-        else
-            push!(field_types, Core.Box)
         end
     end
     type = Core._structtype(mod, closure_type_name,
@@ -273,10 +270,8 @@ end
 function _gen_args_from_syms(ctx, src, args, sc)
     out = SyntaxList()
     for a in args
-        id = newleaf(src, :identifier, string(a))
-        id = est_to_dst_ident(SyntaxCompatContext(), id) # support placeholders
-        id = @mknode(id; context=sc)
-        push!(out, id)
+        push!(out, @mknode(;head=:identifier, value=string(a::Symbol),
+                           context=sc, source=src))
     end
     out
 end
@@ -301,9 +296,12 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     # Note that we expand in `tls_world_age()` (see Core.GeneratedFunctionStub)
     world = Base.tls_world_age()
 
-    # Lower the generated code in the lowering world
-    return invoke_in_lowering_world(_lower_generated_code, g, source, sc,
-                                   __module__, world, ex0)
+    return try
+        invoke_in_lowering_world(_lower_generated_code, g, source, sc,
+                                 __module__, world, ex0)
+    catch exc
+        rethrow(to_compatible_exception(exc))
+    end
 end
 
 function _lower_generated_code(g::GeneratedFunctionStub, source::Method,
@@ -323,19 +321,14 @@ function _lower_generated_code(g::GeneratedFunctionStub, source::Method,
     @jl_assert base_layer(sc).mod == __module__ ex0
     ex0 = fill_context(ex0, sc)
     ctx1 = MacroExpansionContext(ex0, world, true)
-    ex1 = expand_forms_1(ctx1, ex0)
-    # Desugaring
-    ctx2, ex2 = expand_forms_2(ex1, world)
-
-    # Wrap expansion in a non-toplevel lambda and run scope resolution
-    ex2 = @ast ctx2 ex0 [:generated_lambda
-        [:block _gen_args_from_syms(ctx2, ex1, g.argnames, sc)...]
-        [:block _gen_args_from_syms(ctx2, ex1, g.spnames, sc)...]
-        ex2
+    ex0 = @ast _ ex0 [:generated_lambda
+        [:block _gen_args_from_syms(ctx1, ex0, g.argnames, sc)...]
+        [:block _gen_args_from_syms(ctx1, ex0, g.spnames, sc)...]
+        ex0
     ]
+    ex1 = expand_forms_1(ctx1, ex0)
+    ctx2, ex2 = expand_forms_2(ex1, world)
     ctx3, ex3 = resolve_scopes(ctx2, ex2)
-
-    # Rest of lowering
     ctx4, ex4 = convert_closures(ctx3, ex3)
     _ctx5, ex5 = linearize_ir(ctx4, ex4)
     ci = to_lowered_expr(ex5)

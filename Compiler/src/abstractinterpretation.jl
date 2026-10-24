@@ -133,7 +133,11 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     end
     current_world = get_world_counter()
-    matches = find_method_matches(interp, argtypes, atype; max_methods, fargs=arginfo.fargs)
+    # Branch on `fargs` so that both keyword calls are statically dispatched.
+    fargs = arginfo.fargs
+    matches = fargs === nothing ?
+        find_method_matches(interp, argtypes, atype; max_methods) :
+        find_method_matches(interp, argtypes, atype; max_methods, fargs)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
@@ -171,7 +175,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
     # split the for loop off into a function, so that we can pause and restart it at will
     function infercalls(interp, sv)
         local napplicable = length(applicable)
-        local multiple_matches = multiple_methods(matches)
+        local multiple_matches = multiple_methods(state.matches)
         while state.inferidx <= napplicable
             (; match, edges, needs_mi_edges, call_results, edge_idx) = applicable[state.inferidx]
             local method = match.method
@@ -207,6 +211,11 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                 if const_call_result !== nothing
                     this_const_conditional = ignorelimited(const_call_result.rt)
                     this_const_rt = widenwrappedconditional(const_call_result.rt)
+                    narrowed = narrow_mustalias(𝕃ₚ, this_const_rt, this_rt)
+                    if narrowed !== this_const_rt
+                        this_const_rt = narrowed
+                        this_const_conditional = ignorelimited(narrowed)
+                    end
                     const_result = nothing
                     if this_const_rt ⊑ₚ this_rt
                         # As long as the const-prop result we have is not *worse* than
@@ -322,7 +331,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             inferidx = SafeBox{Int}(1)
             function infercalls2(interp, sv)
                 local napplicable = length(applicable)
-                local multiple_matches = multiple_methods(matches)
+                local multiple_matches = multiple_methods(state.matches)
                 while inferidx[] <= napplicable
                     (; match, call_results, edge_idx) = applicable[inferidx[]]
                     inferidx[] += 1
@@ -342,9 +351,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                                 if edge !== nothing
                                     local sig = match.spec_types
                                     local mi = get_ci_mi(edge)
-                                    local vw = matches.valid_worlds
-                                    ccall(:jl_recache_method_by_type, Cvoid, (Any, Any, Any, UInt, UInt, UInt, UInt),
-                                            sig, mi, mi.specTypes, get_inference_world(interp),
+                                    local vw = valid_worlds
+                                    ccall(:jl_recache_method_by_type, Cvoid, (Any, Any, Any, Any, UInt, UInt, UInt, UInt),
+                                            sig, match.sparams, mi, mi.specTypes, get_inference_world(interp),
                                             first(vw), last(vw), current_world)
                                 end
                                 return true
@@ -514,18 +523,24 @@ function from_interconditional(𝕃ᵢ::AbstractLattice, @nospecialize(rt), sv::
         if alias === nothing
             arg = ssa_def_slot(fargs[i], sv)
             if isa(arg, SlotNumber) && widenslotwrapper(argtyp) isa Type
+                # refine the slot itself
                 old = argtyp
                 id = slot_id(arg)
-            elseif argtyp isa MustAlias
+                argalias = nothing
+            elseif argtyp isa MustAlias && slot == 0
+                # refine the field of slot `argtyp.slot` that this argument aliases:
+                # the field is a different object from that slot, so it can't be
+                # intersected with a refinement target on the slot itself
                 old = argtyp.fldtyp
                 id = argtyp.slot
+                argalias = argtyp
             else
                 continue # unlikely to refine
             end
         elseif argtyp isa MustAlias && issubalias(argtyp, alias)
-            arg = nothing
             old = alias.fldtyp
             id = alias.slot
+            argalias = argtyp
         else
             continue
         end
@@ -556,14 +571,10 @@ function from_interconditional(𝕃ᵢ::AbstractLattice, @nospecialize(rt), sv::
             end
             if (slot > 0 || condval !== false) && thentype ⋤ old
                 slot = id
-                if !(arg isa SlotNumber) && argtyp isa MustAlias
-                    alias = argtyp
-                end
+                alias = argalias
             elseif (slot > 0 || condval !== true) && elsetype ⋤ old
                 slot = id
-                if !(arg isa SlotNumber) && argtyp isa MustAlias
-                    alias = argtyp
-                end
+                alias = argalias
             else # reset: no new useful information for this slot
                 slot = 0
                 alias = nothing
@@ -3349,9 +3360,22 @@ function collect_argtypes(interp::AbstractInterpreter, ea::Vector{Any}, sstate::
         if ai === Bottom
             return nothing
         end
-        argtypes[i] = ai
+        argtypes[i] = widen_stale_slotwrapper(ai, sstate.vtypes)
     end
     return argtypes
+end
+
+# A `Conditional` or `MustAlias` whose slot has been reassigned since it was formed no
+# longer describes the slot's current value, so it must not reach the callee, where it
+# would be applied to whichever argument currently reads that slot (see `find_constrained_arg`).
+function widen_stale_slotwrapper(@nospecialize(typ), vtypes::Union{VarTable,Nothing})
+    vtypes === nothing && return typ
+    if isa(typ, Conditional)
+        conditional_valid(typ, vtypes) || return widenconditional(typ)
+    elseif isa(typ, MustAlias)
+        vtypes[typ.slot].ssadef == typ.ssadef || return widenmustalias(typ)
+    end
+    return typ
 end
 
 struct RTEffects
@@ -5081,22 +5105,19 @@ function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt
     if iskindtype(newtyp)
         # this code path corresponds to the special handling for `isa(x, iskindtype)` check
         # implemented within `abstract_call_builtin`
-    elseif ⊑(𝕃ᵢ, ignorelimited(newtyp), ignorelimited(oldtyp))
+    elseif ⊑(𝕃ᵢ, newtyp, widenmustalias(ignorelimited(oldtyp)))
         # approximate test for `typ ∩ oldtyp` being better than `oldtyp`
         # since we probably formed these types with `typesubstract`,
         # the comparison is likely simple
     elseif condt.isdefined && then_or_else === :then && vtype.undef
-         # For `@isdefined slot`, the type may not be a refinement
-         # but the `.undef` information still can be
-         return StateRefinement(condt.slot, oldtyp, #= undef =# false)
+        # For `@isdefined slot`, the type may not be a refinement
+        # but the `.undef` information still can be
+        return StateRefinement(condt.slot, oldtyp, #= undef =# false)
     else
         return nothing
     end
-    if oldtyp isa LimitedAccuracy
-        # typ is better unlimited, but we may still need to compute the tmeet with the limit
-        # "causes" since we ignored those in the comparison
-        newtyp = tmerge(𝕃ᵢ, newtyp, LimitedAccuracy(Bottom, oldtyp.causes))
-    end
+    newtyp = narrow_mustalias(𝕃ᵢ, newtyp, oldtyp) # intersect with mustalias info from `oldtyp`, if possible
+    newtyp = narrow_limited_typ(newtyp, oldtyp)   # intersect with "limited" causes from `oldtyp`
     # if this `Conditional` is from `@isdefined condt.slot`, refine its `undef` information
     newundef = condt.isdefined ? (then_or_else === :else) : vtype.undef
     return StateRefinement(condt.slot, newtyp, newundef)

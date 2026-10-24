@@ -133,7 +133,8 @@ extern void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_thre
     TracyCZoneColor(ctx, 0x696969);
 #endif
     assert(gc_n_threads);
-    if (gc_n_threads > 1)
+    int is_mutator = jl_get_pgcstack() != NULL;
+    if (gc_n_threads > 1 || !is_mutator)
         jl_wake_libuv();
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];

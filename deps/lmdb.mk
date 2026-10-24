@@ -18,12 +18,7 @@ LMDB_BUILD_OPTS += CFLAGS='$$(THREADS) $$(OPT) $$(W) $$(XCFLAGS)'
 # Select LMDB's robust lock backend, including SysV semaphores on Apple/BSD.
 LMDB_BUILD_OPTS += CPPFLAGS="-DMDB_USE_ROBUST=1"
 
-$(BUILDDIR)/$(LMDB_SRC_DIR)/mingw-types.patch-applied: $(BUILDDIR)/$(LMDB_SRC_DIR)/source-extracted
-	cd $(BUILDDIR)/$(LMDB_SRC_DIR) && \
-		patch -p1 -f < $(SRCDIR)/patches/0001-Fix-MinGW-Windows-type-errors.patch
-	echo 1 > $@
-
-$(BUILDDIR)/$(LMDB_SRC_DIR)/remote-fs.patch-applied: $(BUILDDIR)/$(LMDB_SRC_DIR)/mingw-types.patch-applied
+$(BUILDDIR)/$(LMDB_SRC_DIR)/remote-fs.patch-applied: $(BUILDDIR)/$(LMDB_SRC_DIR)/source-extracted
 	cd $(BUILDDIR)/$(LMDB_SRC_DIR) && \
 		patch -p1 -f < $(SRCDIR)/patches/0002-Refuse-to-open-environments-on-network-filesystems.patch
 	echo 1 > $@

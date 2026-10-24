@@ -419,7 +419,7 @@ function _green_to_est(parent::Syntax, parent_i::Int,
             elseif head(c) === :finally
                 finally_ = only(inner_cs)
             elseif head(c) === :error
-                return @mknode(c) # give up
+                return @mknode(st; children=cs) # give up
             else
                 @assert false "Illegal subclause in `try`"
             end

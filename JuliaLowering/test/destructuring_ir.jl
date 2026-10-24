@@ -7,9 +7,9 @@ end
 1   TestMod.as
 2   (call top.indexed_iterate %₁ 1)
 3   (= slot₂/x (call core.getfield %₂ 1))
-4   (= slot₁/iterstate (call core.getfield %₂ 2))
+4   (= slot₁/ (call core.getfield %₂ 2))
 5   TestMod.as
-6   slot₁/iterstate
+6   slot₁/
 7   (call top.indexed_iterate %₅ 2 %₆)
 8   (= slot₃/y (call core.getfield %₇ 1))
 9   TestMod.as
@@ -35,9 +35,9 @@ end
 1   TestMod.as
 2   (call top.indexed_iterate %₁ 1)
 3   (= slot₂/x (call core.getfield %₂ 1))
-4   (= slot₁/iterstate (call core.getfield %₂ 2))
+4   (= slot₁/ (call core.getfield %₂ 2))
 5   TestMod.as
-6   slot₁/iterstate
+6   slot₁/
 7   (= slot₃/ys (call top.rest %₅ %₆))
 8   TestMod.as
 9   (return %₈)
@@ -54,8 +54,8 @@ end
 4   (call core.getfield %₂ 2)
 5   (call top.indexed_iterate %₄ 1)
 6   (= slot₃/y (call core.getfield %₅ 1))
-7   (= slot₁/iterstate (call core.getfield %₅ 2))
-8   slot₁/iterstate
+7   (= slot₁/ (call core.getfield %₅ 2))
+8   slot₁/
 9   (call top.indexed_iterate %₄ 2 %₈)
 10  (= slot₄/z (call core.getfield %₉ 1))
 11  TestMod.as
@@ -70,9 +70,9 @@ end
 1   TestMod.as
 2   (call top.indexed_iterate %₁ 1)
 3   (= slot₂/x (call core.getfield %₂ 1))
-4   (= slot₁/iterstate (call core.getfield %₂ 2))
+4   (= slot₁/ (call core.getfield %₂ 2))
 5   TestMod.as
-6   slot₁/iterstate
+6   slot₁/
 7   (call top.split_rest %₅ 1 %₆)
 8   (= slot₃/ys (call core.getfield %₇ 1))
 9   (call core.getfield %₇ 2)
@@ -98,21 +98,21 @@ end
 1   TestMod.as
 2   (call top.indexed_iterate %₁ 1)
 3   (call core.getfield %₂ 1)
-4   (= slot₁/iterstate (call core.getfield %₂ 2))
+4   (= slot₁/ (call core.getfield %₂ 2))
 5   TestMod.as
-6   slot₁/iterstate
+6   slot₁/
 7   (call top.indexed_iterate %₅ 2 %₆)
 8   (call core.getfield %₇ 1)
 9   (call top.indexed_iterate %₃ 1)
 10  (= slot₅/x (call core.getfield %₉ 1))
-11  (= slot₂/iterstate (call core.getfield %₉ 2))
-12  slot₂/iterstate
+11  (= slot₂/ (call core.getfield %₉ 2))
+12  slot₂/
 13  (call top.indexed_iterate %₃ 2 %₁₂)
 14  (= slot₆/y (call core.getfield %₁₃ 1))
 15  (call top.indexed_iterate %₈ 1)
 16  (= slot₇/z (call core.getfield %₁₅ 1))
-17  (= slot₃/iterstate (call core.getfield %₁₅ 2))
-18  slot₃/iterstate
+17  (= slot₃/ (call core.getfield %₁₅ 2))
+18  slot₃/
 19  (call top.indexed_iterate %₈ 2 %₁₈)
 20  (= slot₄/w (call core.getfield %₁₉ 1))
 21  TestMod.as
@@ -127,15 +127,15 @@ end
 1   TestMod.as
 2   (call top.indexed_iterate %₁ 1)
 3   (call core.getfield %₂ 1)
-4   (= slot₁/iterstate (call core.getfield %₂ 2))
+4   (= slot₁/ (call core.getfield %₂ 2))
 5   TestMod.as
-6   slot₁/iterstate
+6   slot₁/
 7   (call top.indexed_iterate %₅ 2 %₆)
 8   (= slot₅/z (call core.getfield %₇ 1))
 9   (call top.indexed_iterate %₃ 1)
 10  (= slot₃/x (call core.getfield %₉ 1))
-11  (= slot₂/iterstate (call core.getfield %₉ 2))
-12  slot₂/iterstate
+11  (= slot₂/ (call core.getfield %₉ 2))
+12  slot₂/
 13  (= slot₄/ys (call top.rest %₃ %₁₂))
 14  TestMod.as
 15  (return %₁₄)
@@ -227,12 +227,12 @@ end
 6   (call core._apply_iterate top.iterate core.tuple %₂ %₃ %₅)
 7   (call top.indexed_iterate %₆ 1)
 8   (= slot₂/x (call core.getfield %₇ 1))
-9   (= slot₁/iterstate (call core.getfield %₇ 2))
-10  slot₁/iterstate
+9   (= slot₁/ (call core.getfield %₇ 2))
+10  slot₁/
 11  (call top.indexed_iterate %₆ 2 %₁₀)
 12  (= slot₃/y (call core.getfield %₁₁ 1))
-13  (= slot₁/iterstate (call core.getfield %₁₁ 2))
-14  slot₁/iterstate
+13  (= slot₁/ (call core.getfield %₁₁ 2))
+14  slot₁/
 15  (call top.indexed_iterate %₆ 3 %₁₄)
 16  (= slot₄/z (call core.getfield %₁₅ 1))
 17  (return %₆)

@@ -77,6 +77,7 @@ signed(::Type{UInt32}) = Int32
 signed(::Type{UInt64}) = Int64
 signed(::Type{UInt128}) = Int128
 signed(::Type{T}) where {T<:Signed} = T
+signed(::Type{Union{}}, slurp...) = throw(MethodError(signed, (Union{}, slurp...)))
 
 ## integer comparisons ##
 
@@ -209,7 +210,7 @@ when `abs` is applied to the minimum representable value of a signed
 integer. That is, when `x == typemin(typeof(x))`, `abs(x) == x < 0`,
 not `-x` as might be expected.
 
-See also: [`abs2`](@ref), [`unsigned`](@ref), [`sign`](@ref).
+See also: [`abs2`](@ref), [`unsigned`](@ref), [`sign`](@ref), [`Base.uabs`](@ref), [`Base.Checked.checked_abs`](@ref).
 
 # Examples
 ```jldoctest
@@ -696,9 +697,12 @@ rem(x::Signed, ::Type{Unsigned}) = x % unsigned(typeof(x))
 rem(x::Unsigned, ::Type{Signed}) = x % signed(typeof(x))
 rem(x::Integer, T::Type{<:Integer}) = convert(T, x)  # `x % T` falls back to `convert`
 rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
+rem(x, ::Type{Union{}}, slurp...) = throw(MethodError(rem, (x, Union{}, slurp...)))
 mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
+mod(x, ::Type{Union{}}, slurp...) = throw(MethodError(mod, (x, Union{}, slurp...)))
 
 unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
+unsafe_trunc(::Type{Union{}}, slurp...) = throw(MethodError(unsafe_trunc, (Union{}, slurp...)))
 
 ## integer construction ##
 
@@ -900,6 +904,8 @@ typemax(::Type{UInt64}) = 0xffffffffffffffff
 @eval typemax(::Type{UInt128}) = $(bitcast(UInt128, convert(Int128, -1)))
 @eval typemin(::Type{Int128} ) = $(convert(Int128, 1) << 127)
 @eval typemax(::Type{Int128} ) = $(bitcast(Int128, typemax(UInt128) >> 1))
+typemin(::Type{Union{}}, slurp...) = throw(MethodError(typemin, (Union{}, slurp...)))
+typemax(::Type{Union{}}, slurp...) = throw(MethodError(typemax, (Union{}, slurp...)))
 
 
 widen(::Type{Int8}) = Int16

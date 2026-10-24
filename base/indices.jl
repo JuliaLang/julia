@@ -203,6 +203,7 @@ function promote_shape(a::Indices, b::Indices)
 end
 
 function throw_setindex_mismatch(X, I)
+    @noinline
     if length(I) == 1
         throw(DimensionMismatch("tried to assign $(length(X)) elements to $(I[1]) destinations"))
     else
@@ -210,72 +211,20 @@ function throw_setindex_mismatch(X, I)
     end
 end
 
-# check for valid sizes in A[I...] = X where X <: AbstractArray
-# we want to allow dimensions that are equal up to permutation, but only
-# for permutations that leave array elements in the same linear order.
-# those are the permutations that preserve the order of the non-singleton
-# dimensions.
-function setindex_shape_check(X::AbstractArray, I::Integer...)
-    @inline
-    li = ndims(X)
-    lj = length(I)
-    i = j = 1
-    while true
-        ii = length(axes(X,i))
-        jj = I[j]
-        if i == li || j == lj
-            while i < li
-                i += 1
-                ii *= length(axes(X,i))
-            end
-            while j < lj
-                j += 1
-                jj *= I[j]
-            end
-            if ii != jj
-                throw_setindex_mismatch(X, I)
-            end
-            return
-        end
-        if ii == jj
-            i += 1
-            j += 1
-        elseif ii == 1
-            i += 1
-        elseif jj == 1
-            j += 1
-        else
-            throw_setindex_mismatch(X, I)
-        end
-    end
-end
-
-setindex_shape_check(X::AbstractArray) =
-    (length(X)==1 || throw_setindex_mismatch(X,()))
-
 setindex_shape_check(X::AbstractArray, i::Integer) =
     (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check(X::AbstractArray{<:Any, 0}, i::Integer...) =
-    (length(X) == prod(i) || throw_setindex_mismatch(X, i))
+_shapes_match(::Tuple{}, ::Tuple{}) = true
+_shapes_match(a::Tuple, ::Tuple{}) = all(isone, a)
+_shapes_match(::Tuple{}, b::Tuple) = all(isone, b)
+_shapes_match(a::Tuple, b::Tuple) = first(a) == first(b) && _shapes_match(tail(a), tail(b))
 
-setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer) =
-    (length(X)==i || throw_setindex_mismatch(X, (i,)))
-
-setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer, j::Integer) =
-    (length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
-
-function setindex_shape_check(X::AbstractArray{<:Any,2}, i::Integer, j::Integer)
-    if length(X) != i*j
-        throw_setindex_mismatch(X, (i,j))
-    end
-    sx1 = length(axes(X,1))
-    if !(i == 1 || i == sx1 || sx1 == 1)
-        throw_setindex_mismatch(X, (i,j))
-    end
+function setindex_shape_check(X::AbstractArray, shape::Tuple{Vararg{Integer}})
+    matches = (ndims(X) == 1 || length(shape) == 1) ? length(X) == prod(shape) : _shapes_match(size(X), shape)
+    matches || throw_setindex_mismatch(X, shape)
 end
 
-setindex_shape_check(::Any...) =
+setindex_shape_check(::Any, ::Tuple) =
     throw(ArgumentError("indexed assignment with a single value to possibly many locations is not supported; perhaps use broadcasting `.=` instead?"))
 
 # convert to a supported index type (array or Int)

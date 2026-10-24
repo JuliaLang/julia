@@ -340,6 +340,7 @@ function rationalize(::Type{T}, x::Integer; kvs...) where {T<:Integer}
     end
     return Rational{T}(x)
 end
+rationalize(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(rationalize, (Union{}, slurp...)))
 
 
 """
@@ -408,6 +409,8 @@ function -(x::Rational{T}) where T<:Unsigned
     x.num != zero(T) && __throw_negate_unsigned()
     x
 end
+
+-%(x::Rational) = unsafe_rational(-%(x.num), x.den)
 
 function +(x::Rational, y::Rational)
     xp, _ = promote(x, y)::NTuple{2,Rational}

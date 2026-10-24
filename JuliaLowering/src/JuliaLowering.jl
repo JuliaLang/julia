@@ -2,6 +2,10 @@
 baremodule JuliaLowering
 
 using Base
+
+# bug with baremodules
+Base.set_syntax_version(JuliaLowering, v"1.14")
+
 # We define a separate _include() for use in this module to avoid mixing method
 # tables with the public `JuliaLowering.include()` API
 const _include = Base.IncludeInto(JuliaLowering)
@@ -12,10 +16,11 @@ else
     using JuliaSyntax
 end
 
-using Base: ScopeLayer, SyntaxContext, SourceCode, SourceRef, Syntax,
+using Base: ScopeLayer, SyntaxContext, SourceCode, SourceRef, Syntax, MacroContext,
     SourceAttrType, head, flattened_provenance, sourceref, unexpanded_sourceref,
     mapchildren, provenance, JL_NEW_EDITION, JL_OLD_EDITION, DEBUG_LOWERING,
     is_base_layer, base_layer, escape_layer, remove_scope, fill_context,
+    trim_provenance,
     syntax_module, edition, adopt_scope, assert_syntax, @mknode, macro_prov,
     isa_lowering_ast_node, filename, source_line, first_linenode
 

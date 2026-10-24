@@ -846,7 +846,8 @@ function collect(itr::Generator)
         # The typeassert gives inference a helping hand on the element type and dimensionality
         # (work-around for #28382)
         et′ = et <: Type ? Type : et
-        RT = dest isa AbstractArray ? AbstractArray{<:et′, ndims(dest)} : Any
+        RT = !(dest isa AbstractArray) ? Any :
+             isconcretetype(et′) ? AbstractArray{et′, ndims(dest)} : AbstractArray{<:et′, ndims(dest)}
         collect_to_with_first!(dest, v1, itr, st)::RT
     end
 end
@@ -866,7 +867,8 @@ function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
     # The typeassert gives inference a helping hand on the element type and dimensionality
     # (work-around for #28382)
     et′ = et <: Type ? Type : et
-    RT = dest isa AbstractArray ? AbstractArray{<:et′, ndims(dest)} : Any
+    RT = !(dest isa AbstractArray) ? Any :
+         isconcretetype(et′) ? AbstractArray{et′, ndims(dest)} : AbstractArray{<:et′, ndims(dest)}
     collect_to_with_first!(dest, v1, itr, st)::RT
 end
 
@@ -1062,13 +1064,12 @@ function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
     @_propagate_inbounds_meta
     setindex_shape_check(X, length(I))
     @boundscheck checkbounds(A, I)
-    require_one_based_indexing(X)
     X′ = unalias(A, X)
     I′ = unalias(A, I)
-    count = 1
-    for i in I′
-        @inbounds A[i] = X′[count]
-        count += 1
+    k = firstindex(I′)
+    for j in eachindex(X′)
+        @inbounds A[I′[k]] = X′[j]
+        k += 1
     end
     return A
 end
@@ -1134,7 +1135,7 @@ function _growbeg_internal!(a::Vector, delta::Int, len::Int)
         newoffset = div(memlen - newlen, 2) + 1
         newmem = mem
         unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
-        for j in offset:newoffset+delta-1
+        for j in offset:min(newoffset + delta, offset + len)-1
             @inbounds unsetindex!(mem, j)
         end
     else
@@ -1168,6 +1169,7 @@ function _growbeg!(a::Vector, delta::Integer)
 end
 
 function _growend_internal!(a::Vector, delta::Int, len::Int)
+    @_terminates_locally_meta
     ref = a.ref
     mem = ref.mem
     memlen = length(mem)
@@ -1195,6 +1197,11 @@ function _growend_internal!(a::Vector, delta::Int, len::Int)
     end
     newref = @inbounds memoryref(newmem, newoffset)
     unsafe_copyto!(newref, ref, len)
+    if newmem === mem
+        for j in max(offset, newoffset + len):offset+len-1
+            @inbounds unsetindex!(mem, j)
+        end
+    end
     if ref !== a.ref
         @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
     end

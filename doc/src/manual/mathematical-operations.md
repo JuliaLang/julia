@@ -366,7 +366,7 @@ are true where the corresponding elements of `A` are between 0 and 1.
 
 Note the evaluation behavior of chained comparisons:
 
-```jldoctest
+```julia-repl
 julia> v(x) = (println(x); x)
 v (generic function with 1 method)
 

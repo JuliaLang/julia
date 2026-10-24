@@ -30,6 +30,7 @@ using Base.MathConstants
     # Wrapping rational addition must use modular multiplication for cross-products.
     @test +%(1//2, 1//3) == 5//6
     @test +%(typemax(Int)//1, 1//1) == typemin(Int)//1
+    @test -%(typemin(Int)//1) == typemin(Int)//1
     @test_throws OverflowError (1//2)^63
     @test inv((1+typemin(Int))//typemax(Int)) == -1
     @test_throws OverflowError inv(typemin(Int)//typemax(Int))
@@ -940,4 +941,13 @@ end
     @test_throws OverflowError rationalize(UInt, -r)
     @test rationalize(BigInt, r) == Rational{BigInt}(r) == r
     @test rationalize(Int64, big(r)) == r
+end
+
+@testset "rationalize(Union{}, x) throws MethodError" begin
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    for x in (1.5, 3//2, 1, pi, 1.5 + 2.5im)
+        @test_throws MethodError(rationalize, (Union{}, x)) rationalize(Union{}, x)
+        @test_throws MethodError(rationalize, (Union{}, x)) rationalize(Union{}, x; tol = 0.1)
+        @test which(rationalize, (Type{Union{}}, typeof(x))).sig == Tuple{typeof(rationalize), Type{Union{}}, Vararg}
+    end
 end

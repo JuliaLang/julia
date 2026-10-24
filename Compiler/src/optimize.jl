@@ -1775,25 +1775,24 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 minarg, maxarg, = T_IFUNC[iidx]
                 nargs = length(ex.args)
                 if minarg + 1 <= nargs <= maxarg + 1
-                    # With mostly constant arguments, all Intrinsics tend to become very cheap
+                    # With mostly constant arguments, many Intrinsics tend to become very cheap
                     # and are likely to combine with the operations around them,
                     # so reduce their cost by half.
                     cost = T_IFUNC_COST[iidx]
                     if cost == 0 || nargs < 3 || f === Intrinsics.llvmcall
-                        # holds malformed IR, so argextype will crash on it
+                        # llvmcall holds malformed IR, so argextype will crash on it
                         return cost
                     end
-                    aty2 = widenconditional(argextype(ex.args[2], src, sptypes))
-                    nconst = Int(aty2 isa Const)
-                    for i = 3:nargs
+                    nconst = 0
+                    for i = 2:nargs
                         aty = widenconditional(argextype(ex.args[i], src, sptypes))
-                        if widenconst(aty) != widenconst(aty2)
-                            nconst = 0
-                            break
+                        aty′ = widenconst(aty)
+                        if !isdispatchelem(aty′)
+                            return cost
                         end
-                        nconst += aty isa Const
+                        nconst += aty isa Const && isconcretedispatch(aty′)
                     end
-                    if nconst + 2 >= nargs
+                    if nconst > 0 && nconst + 2 >= nargs
                         cost = (cost - 1) ÷ 2
                     end
                     return cost

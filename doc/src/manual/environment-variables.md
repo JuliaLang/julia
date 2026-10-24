@@ -340,6 +340,12 @@ over `$EDITOR`. If none of these environment variables is set, then the editor
 is taken to be `open` on Windows and OS X, or `/etc/alternatives/editor` if it
 exists, or `emacs` otherwise.
 
+The value is split into the command and its arguments like a shell command line (see
+[`Base.shell_split`](@ref)), without invoking a shell. It may therefore include flags, as in
+`emacs -nw`, but spaces and backslashes in a path must be quoted or escaped. For example, the
+Windows path `C:\Vim\vim.exe` must be written as `C:\\Vim\\vim.exe`, `'C:\Vim\vim.exe'` or
+`C:/Vim/vim.exe`.
+
 To use Visual Studio Code on Windows, set `$JULIA_EDITOR` to `code.cmd`.
 
 ## Parallelization
@@ -427,6 +433,15 @@ control of the operating system scheduler.
 
 Otherwise, Julia lets the operating system handle thread policy.
 
+### [`JULIA_COPY_STACKS`](@id JULIA_COPY_STACKS)
+
+If set to `1` or `yes`, tasks created without an explicit stack size do not get a stack of their
+own. Instead, they run on the native stack of the thread, which is saved and restored by copying
+on each task switch. This is intended for embedding scenarios where other code requires running
+on the thread's native stack, such as the JVM. It is generally discouraged, since among other
+things each task then stays on the thread it first runs on. Defaults to `0` (or `no`); any other
+value is an error.
+
 ## Garbage Collection
 
 ### [`JULIA_HEAP_SIZE_HINT`](@id JULIA_HEAP_SIZE_HINT)
@@ -440,7 +455,7 @@ Forces garbage collection if memory usage is higher than the given value. The va
     - M  (mebibytes)
     - G  (gibibytes)
     - T  (tebibytes)
-    - %  (percentage of physical memory)
+    - %  (percentage of physical memory, or of the cgroup memory limit if lower)
 
 For example, `JULIA_HEAP_SIZE_HINT=1G` would provide a 1 GB heap size hint to the garbage collector.
 

@@ -703,6 +703,9 @@ end
     @test peek(io) == 0xe3
     @test peek(io, Char) == 'こ'
     @test peek(io, Int32) == -476872221
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    @test_throws MethodError(peek, (io, Union{})) peek(io, Union{})
+    @test which(peek, (typeof(io), Type{Union{}})).sig == Tuple{typeof(peek), IO, Type{Union{}}, Vararg}
     close(io)
 end
 
