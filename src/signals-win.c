@@ -520,8 +520,12 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     int watched = wsig == CTRL_C_EVENT ? SIGINT :
                   wsig == CTRL_BREAK_EVENT ? SIGBREAK :
                   wsig == CTRL_CLOSE_EVENT ? SIGHUP : 0;
-    if (jl_notify_signal_watchers(watched))
+    if (jl_notify_signal_watchers(watched)) {
+        // windows ends the process once this returns, so give the watcher time to run
+        if (wsig == CTRL_CLOSE_EVENT)
+            Sleep(INFINITE);
         return 1;
+    }
     int sig;
     //windows signals use different numbers from unix (raise)
     switch(wsig) {
