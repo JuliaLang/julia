@@ -118,7 +118,38 @@ function dlopen end
 dlopen(s::Symbol, flags::Integer = default_rtld_flags; kwargs...) =
     dlopen(string(s), flags; kwargs...)
 
+# musl never uses a library loaded by absolute path to satisfy another library's
+# DT_NEEDED entry, but it does resolve `$ORIGIN` from the path given to `dlopen`.
+# Loading libraries through a per-process directory of symlinks makes `$ORIGIN` point
+# there, so dependencies resolve to the libraries that were already loaded.
+const musl_libdir = Base.OncePerProcess{String}() do
+    # a `lib` subdirectory also satisfies the common `$ORIGIN/../lib` RPATH
+    mkdir(joinpath(mktempdir(; prefix = "jl_musl_libs_"), "lib"))
+end
+
+function musl_redirect(s::AbstractString)
+    (occursin("musl", Sys.MACHINE) && isabspath(s) && isfile(s)) || return s
+    src = dirname(s)
+    # Julia's own libraries are found through the executable's RPATH
+    startswith(src, normpath(Sys.BINDIR, "..", "lib")) && return s
+    dir = musl_libdir()
+    for f in readdir(src)
+        # `libfoo.so` or `libfoo.so.1.2`; no regex literal, `libdl.jl` is loaded before `regex.jl`
+        i = findlast(".so", f)
+        (i !== nothing && all(c -> c == '.' || isdigit(c), SubString(f, last(i) + 1))) || continue
+        link = joinpath(dir, f)
+        if islink(link)
+            # another library with the same file name was loaded first
+            f == basename(s) && readlink(link) != joinpath(src, f) && return s
+        else
+            symlink(joinpath(src, f), link)
+        end
+    end
+    return joinpath(dir, basename(s))
+end
+
 function dlopen(s::AbstractString, flags::Integer = default_rtld_flags; throw_error::Bool = true)
+    s = musl_redirect(s)
     ret = ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Cstring,UInt32,Cint), s, flags, Cint(throw_error))
     if !throw_error && ret == C_NULL
         return nothing
