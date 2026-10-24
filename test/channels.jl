@@ -835,10 +835,14 @@ end
             end
         end
 
-        @testset "closing puts back the previous handler" begin
+        @testset "an ignored signal stays ignored" begin
             script = """
                 ccall(:signal, Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Base.SIGHUP, Ptr{Cvoid}(1)) # SIG_IGN
-                close(Base.SignalCondition(Base.SIGHUP))
+                s = Base.SignalCondition(Base.SIGHUP)
+                t = @async wait(s)
+                ccall(:raise, Cint, (Cint,), Base.SIGHUP)
+                wait(t)
+                close(s)
                 ccall(:raise, Cint, (Cint,), Base.SIGHUP)
                 println("alive")
                 """

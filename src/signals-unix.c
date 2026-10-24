@@ -1364,19 +1364,12 @@ static int is_sigwait_sig(int sig)
 // What was installed for each watched signal before the handler below.
 static struct sigaction saved_handlers[JL_MAX_WATCHED_SIGNAL + 1];
 
-static void run_saved_handler(int sig, siginfo_t *info, void *context)
+// without an embedder, the previous action is the default or an inherited SIG_IGN
+static void run_saved_handler(int sig)
 {
     struct sigaction *prev = &saved_handlers[sig];
-    if (prev->sa_flags & SA_SIGINFO) {
-        prev->sa_sigaction(sig, info, context);
+    if (!(prev->sa_flags & SA_SIGINFO) && prev->sa_handler == SIG_IGN)
         return;
-    }
-    if (prev->sa_handler == SIG_IGN)
-        return;
-    if (prev->sa_handler != SIG_DFL) {
-        prev->sa_handler(sig);
-        return;
-    }
     switch (sig) {
     case SIGCONT:
     case SIGURG:
@@ -1399,11 +1392,11 @@ static void run_saved_handler(int sig, siginfo_t *info, void *context)
     sigaction(sig, &ours, NULL);
 }
 
-static void signal_watch_handler(int sig, siginfo_t *info, void *context)
+static void signal_watch_handler(int sig)
 {
     int last_errno = errno;
     if (!jl_notify_signal_watchers(sig))
-        run_saved_handler(sig, info, context);
+        run_saved_handler(sig);
     errno = last_errno;
 }
 
@@ -1415,8 +1408,8 @@ static int jl_signal_watch_install(int sig)
     struct sigaction act;
     memset(&act, 0, sizeof(act));
     sigemptyset(&act.sa_mask);
-    act.sa_sigaction = signal_watch_handler;
-    act.sa_flags = SA_SIGINFO | SA_RESTART | SA_ONSTACK;
+    act.sa_handler = signal_watch_handler;
+    act.sa_flags = SA_RESTART | SA_ONSTACK;
     if (sigaction(sig, &act, &saved_handlers[sig]) != 0)
         return -errno;
     return 0;
