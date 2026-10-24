@@ -442,3 +442,6 @@ function iterate(h::WeakValueIdDict{K,V}, snapshot::Union{Nothing,Tuple{Vector{P
     i > length(pairs) && return nothing
     return pairs[i], (pairs, i)
 end
+
+# used by `typealias_candidates` in show.jl
+const TYPEALIAS_CANDIDATES = WeakKeyDict{Module,Pair{UInt,Vector{Symbol}}}()

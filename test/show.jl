@@ -2555,6 +2555,20 @@ end
 @test string(Union{AbstractVector, T} where T) == "Union{AbstractVector, T} where T"
 @test string(Union{Array, Memory}) == "Union{Array, Memory}"
 
+# Declaring an alias `public` does not bump the world, so cached alias candidates must
+# still pick it up
+module MPublicAlias
+struct Box{T} end
+const Alias = Box{Int}
+end
+@testset "Alias declared public after printing" begin
+    @test Base.make_typealias(MPublicAlias.Box{Int}) === nothing
+    Core.eval(MPublicAlias, Expr(:public, :Alias))
+    @test Base.make_typealias(MPublicAlias.Box{Int}) == (GlobalRef(MPublicAlias, :Alias), Core.svec())
+    Base.set_binding_visibility!(MPublicAlias, :Alias, :none)
+    @test Base.make_typealias(MPublicAlias.Box{Int}) === nothing
+end
+
 # Discard strictly broader aliases, preserving other ambiguities (issue #41034).
 module M41034
 export Dog, Cat, Giraffe, Pair, CatPair, Kitten, Kitty, FloatPair, IntPair
