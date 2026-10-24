@@ -12,7 +12,7 @@ const URL_REGEX = r"""
     (?<user>.*?)
     (?:\:(?<password>.*?))?@
 )?
-(?<host>[A-Za-z0-9\-\.]+)
+(?<host>[A-Za-z0-9\-\.*]+)
 (?(<scheme>)
     # Only parse port when not using scp-like syntax
     (?:\:(?<port>\d+))?
