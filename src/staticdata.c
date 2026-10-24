@@ -1653,8 +1653,8 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     if (isunion)
                         write_uint8(f, nth);
                 }
-                else if (t->name->mutabl && jl_is_cpointer_type(jl_field_type_concrete(t, i)) && *(intptr_t*)slot != -1) {
-                    // reset Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
+                else if (!jl_field_isconst(t, i) && jl_is_cpointer_type(jl_field_type_concrete(t, i)) && *(intptr_t*)slot != -1) {
+                    // reset non-const Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
                     assert(!jl_field_isptr(t, i));
                     write_pointer(f);
                 }

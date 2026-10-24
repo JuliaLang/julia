@@ -114,7 +114,7 @@ version = "1.11.104+0"
 [[deps.LibUV_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "183b4373-6708-53ba-ad28-60e28bb38547"
-version = "2.0.1+21"
+version = "2.0.1+22"
 
 [[deps.LibUnwind_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl", "Zlib_jll"]
@@ -174,7 +174,7 @@ version = "3.5.8+0"
 [[deps.PCRE2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "efcefdf7-47ab-520b-bdef-62a2eaa19f15"
-version = "10.46.0+0"
+version = "10.47.0+0"
 
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "Random", "SHA", "TOML", "Tar", "UUIDs", "Zstd_jll", "p7zip_jll"]
