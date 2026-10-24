@@ -1870,6 +1870,6 @@ include("test_spec_html_julia.jl")
         @test_throws ArgumentError Markdown.Header("x", level)
     end
     @test_throws ArgumentError Markdown.Header{7}("x")
-    @test_throws ArgumentError Markdown.Header{Int32(2)}("x")
+    @test_throws ArgumentError Markdown.Header{UInt(2)}("x")
     @test_throws InexactError Markdown.Header("x", big(2)^70)
 end
