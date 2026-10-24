@@ -1,6 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#include "../../src/support/platform.h"
+#include "../support/platform.h"
 
 // Preprocessor annoyances
 #define CONCAT_(x,y)    x##y
@@ -27,12 +27,26 @@
                             .ascii STR(-export:##I(name)); \
                             .ascii " "; \
                             .section .text
+#elif defined(__ELF__) && defined(__arm__)
+// `@` starts a comment on 32-bit ARM
+#define DEBUGINFO(name)     .type CNAME(name),%function
+#define EXPORT(name)        .size CNAME(name), . - CNAME(name)
 #elif defined(__ELF__)
 #define DEBUGINFO(name)     .type CNAME(name),@function
 #define EXPORT(name)        .size CNAME(name), . - CNAME(name)
 #else
 #define DEBUGINFO(name)
 #define EXPORT(name)
+#endif
+
+// Functions that are only called from within the library they are linked into
+// (as C functions are, with -fvisibility=hidden)
+#if defined(__ELF__)
+#define HIDDEN(name)        .hidden CNAME(name)
+#elif defined(__APPLE__)
+#define HIDDEN(name)        .private_extern CNAME(name)
+#else
+#define HIDDEN(name)
 #endif
 
 // Windows 64-bit uses SEH
