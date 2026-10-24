@@ -466,9 +466,11 @@ function add_ci_debuginfo!(st::SyntaxTree,
             elseif macro_prov(c) !== nothing
                 efile = _di_sourcefile(c, true)
                 epos = _di_pos(c, true)
-                out_2 = edge_i = findfirst(==(efile), edge_files)
-                @jl_assert out_2 !== nothing (st, "macro loc not collected?")
-                out_3 = Int32(searchsortedfirst(edge_spans[edge_i], epos))
+                if efile !== ufile || epos !== upos
+                    out_2 = edge_i = findfirst(==(efile), edge_files)
+                    @jl_assert out_2 !== nothing (st, "macro loc not collected?")
+                    out_3 = Int32(searchsortedfirst(edge_spans[edge_i], epos))
+                end
             end
             push!(a, out_1)
             push!(a, out_2)
@@ -778,6 +780,7 @@ function _to_lowered_expr(ex::SyntaxTree)
             k == :splatnew ||
             k == :(=) ||
             k == :leave ||
+            k == :copyast ||
             k == :isdefined ||
             k == :loopinfo ||
             k == :thunk ||
@@ -799,6 +802,10 @@ function _to_lowered_expr(ex::SyntaxTree)
         for e in children(ex)
             push!(ret.args, _to_lowered_expr(e))
         end
+        # hack: protect the interpreter on 32-bit
+        length(ret.args) > 520000 &&
+            throw(LoweringError(
+                @mknode(ex; children=Syntax[]), "expression too large"))
         return ret
     end
 end
@@ -835,13 +842,16 @@ function to_compatible_exception(@nospecialize(exc))
     end
 end
 
+__script_entry_eval_thunk(mod::Module, code::Core.CodeInfo) =
+    @ccall jl_eval_thunk(mod::Any, code::Any, #=fast=#1::Cint)::Any
+
 function _eval(mod::Module, iter::LoweringIterator,
                error_compat::Bool, soft_scope::Union{Nothing,Bool})
     modules = Module[mod]
     result = nothing
     while true
         thunk = try
-            invoke_in_lowering_world(
+            __script_exit_invoke_in_lowering_world(
                 ()->lower_step(iter, modules[end],
                                Base.get_world_counter(); soft_scope))::Core.SimpleVector
         catch exc
@@ -865,8 +875,7 @@ function _eval(mod::Module, iter::LoweringIterator,
             if !(Meta.isexpr(code, :thunk, 1) && code.args[1] isa Core.CodeInfo)
                 throw(ErrorException("syntax: expected (thunk x::CodeInfo)"))
             end
-            result = @ccall jl_eval_thunk(
-                modules[end]::Any, code.args[1]::Any, #=fast=#1::Cint)::Any
+            result = __script_entry_eval_thunk(modules[end], code.args[1])
         elseif type == :value
             result = thunk[2]
         end

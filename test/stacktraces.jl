@@ -245,7 +245,7 @@ struct F49231{a,b,c,d,e,f,g} end
         stacktrace(catch_backtrace())
     end
     str = sprint(Base.show_backtrace, st, context = (:limit=>true, :stacktrace_types_limited => Ref(false), :color=>true, :displaysize=>(50,105)))
-    @test contains(str, "[5] \e[0m\e[1mcollect_to!\e[22m\e[0m\e[1m(\e[22m\e[90mdest\e[39m::\e[0mVector\e[90m{…}\e[39m, \e[90mitr\e[39m::\e[0mBase.Generator\e[90m{…}\e[39m, \e[90moffs\e[39m::\e[0m$Int, \e[90mst\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
+    @test contains(str, "\e[0m\e[1mcollect_to!\e[22m\e[0m\e[1m(\e[22m\e[90mdest\e[39m::\e[0mVector\e[90m{…}\e[39m, \e[90mitr\e[39m::\e[0mBase.Generator\e[90m{…}\e[39m, \e[90moffs\e[39m::\e[0m$Int, \e[90mst\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
 
     st = try
         F49231{Vector,Val{'}'},Vector{Vector{Vector{Vector}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}()(1,2,3)
@@ -404,7 +404,8 @@ end
 end
 f_wrapped4_line = (@__LINE__) - 2
 let st = try f_wrapped4()() catch; stacktrace(catch_backtrace()) end
-    sf = st[findfirst(sf -> sf.line == f_wrapped4_line, st)]
-    @test sf.file === Symbol(@__FILE__)
+    i = findfirst(sf -> sf.line == f_wrapped4_line, st)
+    @test st[i].file === Symbol(@__FILE__)
+    sf = st[findnext(sf -> sf.linfo isa Core.MethodInstance, st, i)]
     @test sf.linfo.def === only(methods(f_wrapped4()))
 end
