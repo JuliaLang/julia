@@ -626,15 +626,21 @@ done:
     return Removed;
 }
 
-int ObjCache::compact(const char *Dir)
+std::string ObjCache::compact(const char *Dir)
 {
     if (!Initialized.load(memory_order_acquire))
         initDB();
     if (!Env)
-        return EINVAL;
+        return "the native code cache is disabled";
     if (std::error_code EC = llvm::sys::fs::create_directories(Dir))
-        return EC.value();
-    return mdb_env_copy2(Env, Dir, MDB_CP_COMPACT);
+        return EC.message();
+    // never replace an existing cache, whatever the platform
+    std::string Path = (llvm::Twine(Dir) + "/data.mdb").str();
+    if (llvm::sys::fs::exists(Path))
+        return Path + " already exists";
+    if (int Err = mdb_env_copy2(Env, Dir, MDB_CP_COMPACT))
+        return mdb_strerror(Err);
+    return {};
 }
 
 void ObjCache::shutdown()

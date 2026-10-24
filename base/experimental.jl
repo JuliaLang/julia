@@ -839,8 +839,9 @@ end
     Base.Experimental.prune_objcache(dir::AbstractString; age::Real=7*24*60*60) -> Int
 
 Remove the entries of the native code cache that were not used within the last `age`
-seconds, then write a copy of the cache without its free space to `dir`. Return the number
-of entries removed, or `nothing` if the cache is disabled.
+seconds, then write a copy of the cache without its free space to `dir`, which must not
+already hold a cache. Return the number of entries removed, or `nothing` if the cache is
+disabled.
 
 The cache file never shrinks by itself. To save a small cache, for example between CI jobs,
 save the copy in `dir`, either directly as a `JULIA_OBJCACHE_PATH` directory or with its

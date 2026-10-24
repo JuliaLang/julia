@@ -2864,8 +2864,9 @@ int64_t jl_objcache_prune_impl(int64_t cutoff) JL_CANSAFEPOINT_ENTER_LEAVE
 extern "C" JL_DLLEXPORT_CODEGEN
 const char *jl_objcache_compact_impl(const char *dir) JL_CANSAFEPOINT_ENTER_LEAVE
 {
-    int err = jl_ExecutionEngine->objCacheCompact(dir);
-    return err ? mdb_strerror(err) : nullptr;
+    static thread_local std::string Err;
+    Err = jl_ExecutionEngine->objCacheCompact(dir);
+    return Err.empty() ? nullptr : Err.c_str();
 }
 
 // API for adding bytes to record being owned by the JIT

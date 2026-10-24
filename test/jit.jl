@@ -280,7 +280,12 @@ end
         @test read(julia("-e", put_script; path=pruned), String) == "true"
 
         # an existing copy is not overwritten
-        @test !success(pipeline(julia("-e", "Base.Experimental.prune_objcache($(repr(pruned)))"); stderr=devnull))
+        out = IOBuffer()
+        cmd = julia("-e", "print(Base.Experimental.prune_objcache($(repr(pruned))))")
+        p = run(pipeline(ignorestatus(cmd); stdout=out, stderr=out))
+        msg = String(take!(out))
+        @test !success(p)
+        @test occursin("already exists", msg)
     end
 
     @test read(addenv(`$(Base.julia_cmd()) --startup-file=no -e "print(Base.Experimental.prune_objcache(mktempdir()))"`,

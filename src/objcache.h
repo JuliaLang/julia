@@ -62,9 +62,9 @@ public:
     // Removes the entries last used before Cutoff (seconds since the epoch).
     // Returns the number of entries removed, or -1 on error.
     int64_t prune(int64_t Cutoff) JL_CANSAFEPOINT_ENTER_LEAVE;
-    // Writes a copy of the database without its free pages to Dir/data.mdb.
-    // Returns 0 or an LMDB error code.
-    int compact(const char *Dir) JL_CANSAFEPOINT_ENTER_LEAVE;
+    // Writes a copy of the database without its free pages to Dir/data.mdb,
+    // which must not exist yet. Returns an empty string or a description of the error.
+    std::string compact(const char *Dir) JL_CANSAFEPOINT_ENTER_LEAVE;
     void shutdown() JL_NOTSAFEPOINT;
 
     using Hash = std::array<uint8_t, 20>;

@@ -822,7 +822,7 @@ public:
     int64_t objCachePrune(int64_t Cutoff) JL_CANSAFEPOINT_ENTER_LEAVE {
         return OCache.prune(Cutoff);
     }
-    int objCacheCompact(const char *Dir) JL_CANSAFEPOINT_ENTER_LEAVE {
+    std::string objCacheCompact(const char *Dir) JL_CANSAFEPOINT_ENTER_LEAVE {
         return OCache.compact(Dir);
     }
 
