@@ -125,6 +125,10 @@
 #define THREAD_SLEEP_THRESHOLD_NAME     "JULIA_THREAD_SLEEP_THRESHOLD"
 #define DEFAULT_THREAD_SLEEP_THRESHOLD  100*1000 // nanoseconds (100us)
 
+// how often a spinning idle thread yields its CPU to the OS (0 = never)
+#define THREAD_SPIN_YIELD_NAME              "JULIA_THREAD_SPIN_YIELD"
+#define DEFAULT_THREAD_SPIN_YIELD_INTERVAL  5*1000 // nanoseconds (5us)
+
 // defaults for # threads
 #define NUM_THREADS_NAME                "JULIA_NUM_THREADS"
 #ifndef JULIA_NUM_THREADS

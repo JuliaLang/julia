@@ -9,6 +9,10 @@
 #include "julia_internal.h"
 #include "threading.h"
 
+#ifndef _OS_WINDOWS_
+#include <sched.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -18,6 +22,13 @@ extern "C" {
 
 // default to DEFAULT_THREAD_SLEEP_THRESHOLD; set via $JULIA_THREAD_SLEEP_THRESHOLD
 uint64_t sleep_threshold;
+// While spinning for work, give the CPU back to the OS every `spin_yield_interval` ns
+// (0 = never; set via $JULIA_THREAD_SPIN_YIELD). Without this, an idle thread that spins
+// for up to `sleep_threshold` keeps runnable threads from running when there are more
+// Julia threads than CPUs available (e.g., `-t N` with the default interactive thread on
+// N cores), which delays sticky tasks such as `@threads :static` chunks by up to
+// `sleep_threshold`.
+uint64_t spin_yield_interval;
 
 // thread should not be sleeping--it might need to do work.
 static const int16_t not_sleeping = 0;
@@ -93,6 +104,10 @@ void jl_init_threadinginfra(void)
         else
             sleep_threshold = (uint64_t)strtol(cp, NULL, 10);
     }
+    spin_yield_interval = DEFAULT_THREAD_SPIN_YIELD_INTERVAL;
+    cp = getenv(THREAD_SPIN_YIELD_NAME);
+    if (cp)
+        spin_yield_interval = (uint64_t)strtol(cp, NULL, 10);
 }
 
 // thread function: used by all mutator threads except the main thread
@@ -162,6 +177,32 @@ JL_DLLEXPORT int jl_running_under_rr(int recheck)
 #endif
 }
 
+
+static inline void jl_yield_cpu_to_os(void) JL_NOTSAFEPOINT
+{
+#ifdef _OS_WINDOWS_
+    SwitchToThread();
+#else
+    sched_yield();
+#endif
+}
+
+//  maybe_yield_cpu() -- while spinning, let the OS run other runnable threads on
+//  this CPU every spin_yield_interval ns
+static void maybe_yield_cpu(uint64_t *last_yield) JL_NOTSAFEPOINT
+{
+    if (spin_yield_interval == 0)
+        return;
+    uint64_t now = jl_hrtime();
+    if (*last_yield == 0) {
+        *last_yield = now;
+        return;
+    }
+    if (now - *last_yield >= spin_yield_interval) {
+        jl_yield_cpu_to_os();
+        *last_yield = jl_hrtime();
+    }
+}
 
 //  sleep_check_after_threshold() -- if sleep_threshold ns have passed, return 1
 static int sleep_check_after_threshold(uint64_t *start_cycles) JL_NOTSAFEPOINT
@@ -481,6 +522,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
 {
     jl_task_t *ct = jl_current_task;
     uint64_t start_cycles = 0;
+    uint64_t last_yield = 0;
 
     while (1) {
         if (jl_atomic_load_relaxed(&jl_sigint_dispatch_pending))
@@ -497,6 +539,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
         }
 
         jl_cpu_pause();
+        maybe_yield_cpu(&last_yield);
         jl_ptls_t ptls = ct->ptls;
         if (sleep_check_after_threshold(&start_cycles) || (ptls->tid == jl_atomic_load_relaxed(&io_loop_tid) && (!jl_atomic_load_relaxed(&_threadedregion) || wait_empty))) {
             // acquire sleep-check lock
