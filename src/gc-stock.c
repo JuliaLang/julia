@@ -4173,8 +4173,11 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
     return data;
 }
 
+// The allocators above account for the usable size of the block, so use that here
+// too instead of the size passed by the caller (e.g. GMP passes the size it requested).
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 {
+    sz = p ? memory_block_usable_size(p, 0) : 0;
     free(p);
     jl_task_t *ct = jl_get_current_task();
     if (ct != NULL)
@@ -4183,6 +4186,7 @@ JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 
 JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
 {
+    old = p ? memory_block_usable_size(p, 0) : 0;
     void *data = realloc(p, sz);
     jl_task_t *ct = jl_get_current_task();
     if (data != NULL && ct != NULL) {

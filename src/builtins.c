@@ -934,11 +934,12 @@ JL_CALLABLE(jl_f__apply_iterate)
             _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + al, extra);
             assert(newargs != NULL); // inform GCChecker that we didn't write a NULL here
             for (j = 0; j < al; j++) {
-                newargs[n++] = jl_svecref(t, j);
-                // GC Note: here we assume that the return value of `jl_svecref`
-                //          will not be young if `arg_heap` becomes old
-                //          since they are allocated before `arg_heap`. Otherwise,
-                //          we need to add write barrier for !onstack
+                jl_value_t *val = jl_svecref(t, j);
+                if (arg_heap)
+                    jl_gc_write(arg_heap, newargs[n], jl_value_t, val);
+                else
+                    newargs[n] = val;
+                n++;
             }
         }
         else if (jl_is_tuple(ai) || jl_is_namedtuple(ai)) {

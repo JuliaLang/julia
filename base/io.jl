@@ -386,6 +386,7 @@ function peek(s::IO, ::Type{T}) where T
         reset(s)
     end
 end
+peek(s::IO, ::Type{Union{}}, slurp...) = throw(MethodError(peek, (s, Union{}, slurp...)))
 
 peek(s) = peek(s, UInt8)::UInt8
 

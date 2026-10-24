@@ -373,6 +373,19 @@ function _join_preserve_annotations(iterator, args...)
     end
 end
 
+# The type of each tuple element is known, so decide by those types directly; this
+# stays precise even when the tuple length is not (e.g. `Tuple{Vararg{String}}`).
+function _join_preserve_annotations(iterator::Tuple, args...)
+    if !any(_isannotated, iterator) && !any(_isannotated, args)
+        sprint(join, iterator, args...)
+    else
+        io = AnnotatedIOBuffer()
+        join(io, iterator, args...)
+        seekstart(io)
+        read(io, AnnotatedString{String})
+    end
+end
+
 join(iterator) = _join_preserve_annotations(iterator)
 join(iterator, delim) = _join_preserve_annotations(iterator, delim)
 join(iterator, delim, last) = _join_preserve_annotations(iterator, delim, last)

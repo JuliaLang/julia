@@ -207,13 +207,14 @@ end
     slots: [slot₁/#self#(!read) slot₂/z]
     1   (call core.apply_type top.Dict core.Symbol core.Any)
     2   (call %₁)
-    3   (gotoifnot true label₅)
-    4   (call top.setindex! %₂ slot₂/z :z)
-    5   (isdefined static_parameter₁)
-    6   (gotoifnot %₅ label₉)
-    7   static_parameter₁
-    8   (call top.setindex! %₂ %₇ :T)
-    9   (return %₂)
+    3   (isdefined slot₂/z)
+    4   (gotoifnot %₃ label₆)
+    5   (call top.setindex! %₂ slot₂/z :z)
+    6   (isdefined static_parameter₁)
+    7   (gotoifnot %₆ label₁₀)
+    8   static_parameter₁
+    9   (call top.setindex! %₂ %₈ :T)
+    10  (return %₂)
 11  latestworld
 12  TestMod.f
 13  (return %₁₂)
@@ -397,9 +398,10 @@ end
 #---------------------
 1   1
 2   (= slot₁/x %₁)
-3   (call core.isdefinedglobal TestMod :y)
-4   (call core.tuple true %₃)
-5   (return %₄)
+3   (isdefined slot₁/x)
+4   (call core.isdefinedglobal TestMod :y)
+5   (call core.tuple %₃ %₄)
+6   (return %₅)
 
 ########################################
 # Global function defined inside let (let over lambda)

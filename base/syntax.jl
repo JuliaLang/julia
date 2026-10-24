@@ -60,6 +60,12 @@ mutable struct Syntax
 end
 const SourceAttrType = Union{Syntax,SourceRef,LineNumberNode}
 
+# Passed to the user as an implicit new-macro argument, like __module__ in old
+# macros
+struct MacroContext
+    macrocall::Syntax
+end
+
 # A default context corresponding to no expansion
 function SyntaxContext(mod::Module, edition::Tuple{Int, Int})
     SyntaxContext(ScopeLayer(mod, nothing), nothing, edition, false)
@@ -105,7 +111,7 @@ Base.lastindex(ex::Syntax) = numchildren(ex)
 #-------------------------------------------------------------------------------
 # AST creation utilities
 
-# fallback printing.  TODO: vulnerable to invalidations
+# fallback printing.  `invokelatest` so new `show` methods don't invalidate callers
 function node_string(ex::Syntax, depth=2)
     out = "(head="*string(head(ex))
     for n in sort!(collect(fieldnames(typeof(ex))))
@@ -115,9 +121,9 @@ function node_string(ex::Syntax, depth=2)
                 node_string(val, depth-1)
             elseif isbits(val) || val isa
                 Union{AbstractString, Symbol, Module, LineNumberNode}
-                repr(val)
+                invokelatest(repr, val)::String
             else
-                repr(typeof(val))
+                invokelatest(repr, typeof(val))::String
             end
             out *= ", "*string(n)*"="*val_str
         end
@@ -350,24 +356,36 @@ _with_context(st, sc) =
 
 # Unconditional; tramples existing scope, and includes quoted forms.  Only
 # changes layer where it needs changing.
-function adopt_scope(sc_in::SyntaxContext, st::Syntax, scmap)
+function adopt_scope(sc_in::SyntaxContext, st::Syntax, unexpanded_in, scmap)
     st_sc = st.context
     sc2 = get(scmap, st_sc, nothing)
     if isnothing(sc2)
         sc2 = scmap[st_sc] = st_sc.layer === sc_in.layer ? st_sc :
             SyntaxContext(
-                sc_in.layer, st_sc.unexpanded, st_sc.edition, st_sc.internal)
+                sc_in.layer,
+                # If the layer is foreign, update macro provenance
+                (st_sc.layer === nothing || base_layer(st_sc) !== base_layer(sc_in) ?
+                    unexpanded_in : st_sc.unexpanded),
+                st_sc.edition, st_sc.internal)
     end
     if is_leaf(st) || numchildren(st) == 0
         sc2 === st_sc ? st : _with_context(st, sc2)
     else
-        mapchildren(c->adopt_scope(sc_in, c, scmap),
+        mapchildren(c->adopt_scope(sc_in, c, unexpanded_in, scmap),
                     sc2 === st_sc ? st : _with_context(st, sc2))
     end
 end
-function adopt_scope(reference::Syntax, st::Syntax)
-    adopt_scope(reference.context, st, Dict{SyntaxContext, SyntaxContext}())
-end
+adopt_scope(reference::Syntax, st::Syntax) =
+    adopt_scope(reference.context, st, st.context.unexpanded,
+                Dict{SyntaxContext, SyntaxContext}())
+# MacroContext methods are for use in new-macro bodies.  These extend the
+# provenance tree as JuliaLowering expects.
+adopt_scope(ctx::MacroContext, st::Syntax) =
+    adopt_scope(ctx.macrocall.context, st, ctx.macrocall,
+                Dict{SyntaxContext, SyntaxContext}())
+adopt_scope(ctx::MacroContext, reference::Syntax, st::Syntax) =
+    adopt_scope(reference.context, st, ctx.macrocall,
+                Dict{SyntaxContext, SyntaxContext}())
 
 function fill_context(st::Syntax, sc::SyntaxContext)
     mapchildren(c->fill_context(c, sc),
@@ -570,14 +588,22 @@ _unescape_lnn(@nospecialize(e)) =
 # Linenodes usually apply to the following form, but some forms contain the
 # relevant line node as an argument.
 function _get_inner_lnn(e::Expr, default::LineNumberNode)
-    e.head in (:function, :macro, :module, :(=)) || return default
-    length(e.args) >= 2 || return default
-    b = e.args[end]
-    b isa Expr || return default
-    b.head === :block || return default
-    length(b.args) >= 1 || return default
-    b_lnn = _unescape_lnn(b.args[1])
-    return b_lnn isa LineNumberNode ? b_lnn : default
+    if e.head === :struct || e.head === :macrocall
+        something(_first_linenode(e), default)
+    elseif (e.head === :quote || e.head === :inert) &&
+            length(e.args) > 0 && e.args[1] isa Expr
+        something(_first_linenode(e.args[1]), default)
+    elseif e.head in (:function, :macro, :module, :(=), :->)
+        length(e.args) >= 2 || return default
+        b = e.args[end]
+        b isa Expr || return default
+        b.head === :block || return default
+        length(b.args) >= 1 || return default
+        b_lnn = _unescape_lnn(b.args[1])
+        return b_lnn isa LineNumberNode ? b_lnn : default
+    else
+        default
+    end
 end
 
 # List of Expr-AST forms that are always converted to some Syntax form and
@@ -596,11 +622,14 @@ function expr_to_syntax(@nospecialize(e), src::Syntax)
     _expr_to_syntax(e, src.context, src, false)[1]
 end
 function _expr_to_syntax(@nospecialize(e), context::SyntaxContext,
-                      src::SourceAttrType, quoted::Bool)
+                         src::SourceAttrType, quoted::Bool)
     s = if e isa Symbol
         @mknode(;head=:identifier, value=String(e), source=src, context)
     elseif e isa QuoteNode
-        cid, _ = _expr_to_syntax(e.value, context, src, true)
+        v = e.value
+        src = src isa LineNumberNode && v isa Expr ?
+            something(first_linenode(v), src) : src
+        cid, _ = _expr_to_syntax(v, context, src, true)
         @mknode(;head=:inert, source=src, children=Syntax[cid], context)
     elseif e isa Expr
         h = e.head
@@ -660,6 +689,10 @@ end
 # normal linenode rules.  It only applies to `st`, and not transitively to its
 # children.
 function syntax_to_expr(s::Syntax, suppress_linenodes=false)
+    push_lno!(ex::Expr, lno::LineNumberNode, first::Bool=false) =
+        if lno.file !== :var"" || lno.line != 0
+            first ? pushfirst!(ex.args, lno) : push!(ex.args, lno)
+        end
     h = head(s)
     if h === :identifier
         # @assert scope layer is base
@@ -693,25 +726,25 @@ function syntax_to_expr(s::Syntax, suppress_linenodes=false)
         need_lnns = h in (:block, :toplevel) && !suppress_linenodes &&
             !_is_meta_doc_block(s)
         for (i, c) in enumerate(children(s))
-            need_lnns && push!(out.args, first_linenode(c))
+            need_lnns && push_lno!(out, first_linenode(c))
             let suppress_c = i == 1 && (h == :for || h == :let) || i == 2 && h == :do
                 push!(out.args, syntax_to_expr(c, suppress_c))
             end
         end
         # Add extra linenodes to some blocks for better provenance
         if !suppress_linenodes && h === :block && length(out.args) == 0
-            push!(out.args, first_linenode(s))
+            push_lno!(out, first_linenode(s))
         elseif h in (:module, :function, :macro) && length(out.args) > 0
             let b = out.args[end]
-                b isa Expr && b.head === :block && pushfirst!(
-                    b.args, first_linenode(s))
+                b isa Expr && b.head === :block &&
+                    push_lno!(b, first_linenode(s), true)
             end
         elseif length(out.args) == 2 && ((h === :-> && !suppress_linenodes) ||
             (h === :(=) && is_eventually_call(out.args[1])))
             let b = out.args[end]
                 b isa Expr && b.head === :block && !isempty(b.args) &&
                     b.args[1] isa LineNumberNode && first_linenode(s) != b.args[1] &&
-                    pushfirst!(b.args, first_linenode(s))
+                    push_lno!(b, first_linenode(s), true)
             end
         elseif h in (:for, :while) && length(out.args) > 0
             let b = out.args[end]
@@ -719,7 +752,7 @@ function syntax_to_expr(s::Syntax, suppress_linenodes=false)
                     last_lno = sr isa LineNumberNode ? sr :
                         LineNumberNode(source_line(sr.code, sr.last_byte),
                                        filename(s))
-                    push!(b.args, last_lno)
+                    push_lno!(b, last_lno)
                 end
             end
         end

@@ -1290,6 +1290,21 @@ end
     @test length(xs) == 3
 end
 
+@testset "Union{} as the type to generate throws MethodError" begin
+    # `Type{Union{}}` dispatches to its own methods, which throw, instead of matching `Type{T}` methods
+    rng = Xoshiro(0)
+    for f in (rand, randn, randexp)
+        for args in ((Union{},), (Union{}, 0), (Union{}, 2, 3), (rng, Union{}), (rng, Union{}, 0))
+            @test_throws MethodError(f, args) f(args...)
+        end
+        @test which(f, (Type{Union{}},)).sig == Tuple{typeof(f), Type{Union{}}, Vararg}
+        @test which(f, (typeof(rng), Type{Union{}})).sig == Tuple{typeof(f), Any, Type{Union{}}, Vararg}
+    end
+    A = Union{}[]
+    @test_throws MethodError(rand!, (A, Union{})) rand!(A, Union{})
+    @test_throws MethodError(rand!, (rng, A, Union{})) rand!(rng, A, Union{})
+end
+
 @testset "Float32 RNG typo" begin
     for T in (Float16, Float32, Float64)
         # Make sure generated numbers are sufficiently diverse

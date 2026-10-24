@@ -367,13 +367,15 @@ endif
 # The preprocessor also writes the list of files it read to $@.d, so the hash is
 # regenerated when any of them changes.
 $(BUILDDIR)/jl_codegen_hash.inc: $(CODEGEN_SRCS_HASH) $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
-	@rm -f $@.i $@.d
-	@$(call PRINT_CC, for f in $(CODEGEN_SRCS_HASH); do \
-	    $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -E -P -MD -MP -MT $@ -MF $@.d.tmp $$f >> $@.i || exit 1; \
-	    cat $@.d.tmp >> $@.d; \
-	done)
-	@$(SHA256SUM) < $@.i | sed -E 's/^([0-9a-f]+).*/#define JL_CODEGEN_SRC_HASH "\1"/g' > $@
-	@rm -f $@.i $@.d.tmp
+	@$(call PRINT_CC, TMPFILE=$$(mktemp $(abspath $@.XXXXXX)); \
+	for f in $(CODEGEN_SRCS_HASH); do \
+	    $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -E -P -MD -MP -MT $@ -MF $$TMPFILE.d.tmp $$f >> $$TMPFILE.i || exit 1; \
+	    cat $$TMPFILE.d.tmp >> $$TMPFILE.d; \
+	done; \
+	$(SHA256SUM) < $$TMPFILE.i | sed -E 's/^([0-9a-f]+).*/#define JL_CODEGEN_SRC_HASH "\1"/g' > $$TMPFILE; \
+	rm -f $$TMPFILE.i $$TMPFILE.d.tmp; \
+	mv $$TMPFILE.d $@.d; \
+	mv $$TMPFILE $@)
 -include $(BUILDDIR)/jl_codegen_hash.inc.d
 
 # source file rules

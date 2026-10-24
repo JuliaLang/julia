@@ -859,13 +859,14 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                     (jl_is_string(inferred) && jl_string_len(inferred) > 0 && jl_string_data(inferred)[jl_string_len(inferred) - 1]);
                 int may_discard_trees = !jl_get_type_infer_preserve_ir();
                 int discard = 0;
-                if (may_discard_trees && s->incremental && native_functions &&
-                    jl_options.outputo != NULL && ci->owner == jl_nothing && def->source != NULL &&
+                if (may_discard_trees && native_functions &&
+                    jl_options.outputo != NULL && ci->owner == jl_nothing &&
+                    (def->source != NULL || def->generator != NULL) &&
                     jl_is_code_info(inferred) && jl_ir_inlining_cost(inferred) == UINT16_MAX) {
-                    // Backstop: CodeInstance cached by a task racing the end of
-                    // include phase can escape jl_finalize_precompile_inferred.
-                    // Mirror the def->source guard below so optimized opaque
-                    // closures (whose IR can't be reconstructed) are preserved.
+                    // Drop IR kept only for emitting this image. For a pkgimage this is a
+                    // backstop for a CodeInstance cached by a task racing the end of the
+                    // include phase, which can escape jl_finalize_precompile_inferred.
+                    // Optimized opaque closures keep theirs, since it can't be rebuilt.
                     record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
                 }
                 else if (!is_relocatable) {
@@ -1821,8 +1822,8 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                     if (isunion)
                         write_uint8(f, nth);
                 }
-                else if (t->name->mutabl && jl_is_cpointer_type(jl_field_type_concrete(t, i)) && *(intptr_t*)slot != -1) {
-                    // reset Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
+                else if (!jl_field_isconst(t, i) && jl_is_cpointer_type(jl_field_type_concrete(t, i)) && *(intptr_t*)slot != -1) {
+                    // reset non-const Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
                     assert(!jl_field_isptr(t, i));
                     write_pointer(f);
                 }
@@ -3879,6 +3880,24 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image) JL_C
 #endif
 }
 
+#if !defined(_OS_WINDOWS_) && defined(MADV_HUGEPAGE)
+// Return the file offset of the end of the object section of a split .ji, or `size`
+// if the header cannot be read.
+static size_t jl_image_split_ji_objects_end(ios_t *s, size_t size) JL_CANSAFEPOINT
+{
+    uint32_t flags, checksum;
+    int64_t datastartpos = 0, dataendpos = 0;
+    if (jl_read_verify_header(s, &flags, &checksum, &dataendpos, &datastartpos) != 0 ||
+        datastartpos <= 0 || (size_t)datastartpos >= size || ios_seek(s, datastartpos) != 0)
+        return size;
+    uint64_t sizeof_sysdata = read_uint64(s);
+    if (sizeof_sysdata >= size - datastartpos - sizeof(uint64_t))
+        return size;
+    return datastartpos + sizeof(uint64_t) + sizeof_sysdata;
+}
+#endif
+
+// Returns 0, with *dest NULL, if the .ji of a package image was not written with this .so.
 static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_CANSAFEPOINT
 {
     const char *lib_path = jl_pathname_for_handle(handle);
@@ -3910,9 +3929,26 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_
 
     ios_t s;
     size_t size;
+    uint32_t flags = 0, checksum = 0;
+    int64_t dataendpos = 0, datastartpos = 0;
     if (!ios_file(&s, ji_path, 1, 0, 0, 0))
         goto error;
     size = ios_filesize(&s);
+
+    // check that the .ji matches the .so before reading all of it
+    if (jl_read_verify_header(&s, &flags, &checksum, &dataendpos, &datastartpos) == 0) {
+        uint32_t *pchecksum;
+        JL_IMAGE_SYM(handle, jl_system_image_checksum, &pchecksum);
+        if (checksum != *pchecksum) {
+            ios_close(&s);
+            if (!(flags & JI_FLAG_PKGIMAGE))
+                jl_error("Image checksum mismatch: the heap image (.ji) was not "
+                         "compiled for use with this native image.");
+            *dest = NULL;
+            return 0;
+        }
+    }
+    ios_seek(&s, 0);
 
     if (use_mmap) {
 #ifdef _OS_WINDOWS_
@@ -3923,6 +3959,27 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_
         *dest = (char *)MapViewOfFile(map, FILE_MAP_COPY, 0, 0, size);
         CloseHandle(map);
         if (!*dest)
+            goto error;
+#elif defined(MADV_HUGEPAGE)
+        // Relocation writes to every page of the object section, and in a private file
+        // mapping each of those writes takes a copy-on-write fault, so read that part
+        // into anonymous memory backed by huge pages. The sections after it are mostly
+        // read-only or never touched, so keep them file-backed.
+        size_t readsize = LLT_ALIGN(jl_image_split_ji_objects_end(&s, size), jl_getpagesize());
+        if (readsize > size)
+            readsize = size;
+        *dest = (char *)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (*dest == MAP_FAILED)
+            goto error;
+        madvise(*dest, readsize, MADV_HUGEPAGE);
+        if (readsize < size &&
+            mmap(*dest + readsize, size - readsize, PROT_READ | PROT_WRITE,
+                 MAP_PRIVATE | MAP_FIXED, s.fd, readsize) == MAP_FAILED)
+            goto error;
+        if (ios_seek(&s, 0) != 0)
+            goto error;
+        ios_bufmode(&s, bm_none);
+        if (ios_readall(&s, *dest, readsize) != readsize)
             goto error;
 #else
         *dest = (char *)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, s.fd, 0);
@@ -3935,7 +3992,8 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_
         if (*dest == NULL)
             goto error;
         ios_bufmode(&s, bm_none);
-        ios_readall(&s, *dest, size);
+        if (ios_readall(&s, *dest, size) != size)
+            goto error;
     }
 
     ios_close(&s);
@@ -3959,6 +4017,8 @@ JL_DLLEXPORT void jl_image_unpack_split_zstd(void *handle, jl_image_buf_t *image
     size_t comp_size = jl_image_get_split_ji(handle, &comp_data, 0);
     image->is_split = 1;
     jl_image_load_metadata(handle, image);
+    if (comp_data == NULL) // checksum mismatch
+        return;
     jl_image_decompress(image, comp_data, comp_size);
     free(comp_data);
 }
@@ -4932,6 +4992,13 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
 {
     void *pkgimg_handle = jl_dlopen_e(fname, JL_RTLD_LAZY);
     jl_image_buf_t buf = get_image_buf(pkgimg_handle, /* is_pkgimage */ 1);
+    if (buf.data == NULL) {
+        // unload it, so that a recompiled image at the same path is not served this handle
+        jl_dlclose(pkgimg_handle);
+        return jl_get_exceptionf(jl_errorexception_type,
+            "Image checksum mismatch: the heap image (.ji) was not "
+            "compiled for use with \"%s\".", fname);
+    }
 
     jl_gc_notify_image_load(buf.data, buf.size);
 

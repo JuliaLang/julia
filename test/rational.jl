@@ -942,3 +942,12 @@ end
     @test rationalize(BigInt, r) == Rational{BigInt}(r) == r
     @test rationalize(Int64, big(r)) == r
 end
+
+@testset "rationalize(Union{}, x) throws MethodError" begin
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    for x in (1.5, 3//2, 1, pi, 1.5 + 2.5im)
+        @test_throws MethodError(rationalize, (Union{}, x)) rationalize(Union{}, x)
+        @test_throws MethodError(rationalize, (Union{}, x)) rationalize(Union{}, x; tol = 0.1)
+        @test which(rationalize, (Type{Union{}}, typeof(x))).sig == Tuple{typeof(rationalize), Type{Union{}}, Vararg}
+    end
+end

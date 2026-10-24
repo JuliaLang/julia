@@ -309,6 +309,38 @@ JL_DLLEXPORT FLOAT16_RET_TYPE julia__truncdfhf2(double param)
     return FLOAT16_RET_FROM_UINT16(res);
 }
 
+#ifdef __SIZEOF_INT128__
+// 128-bit integer <-> Float16 conversions, which libgcc_s does not export on all platforms.
+// Integers of magnitude >= 65520 round to infinity, and smaller ones are exact as Float32,
+// so clamping and converting via Float32 rounds only once.
+JL_DLLEXPORT FLOAT16_RET_TYPE julia__floattihf(__int128 param)
+{
+    int32_t x = param > 65536 ? 65536 : param < -65536 ? -65536 : (int32_t)param;
+    uint16_t res = float_to_half((float)x);
+    return FLOAT16_RET_FROM_UINT16(res);
+}
+
+JL_DLLEXPORT FLOAT16_RET_TYPE julia__floatuntihf(unsigned __int128 param)
+{
+    uint32_t x = param > 65536 ? 65536 : (uint32_t)param;
+    uint16_t res = float_to_half((float)x);
+    return FLOAT16_RET_FROM_UINT16(res);
+}
+
+// Results for NaN, Inf and other out-of-range inputs are unspecified (poison in LLVM)
+JL_DLLEXPORT __int128 julia__fixhfti(FLOAT16_ARG_TYPE param)
+{
+    float x = half_to_float(FLOAT16_ARG_TO_UINT16(param));
+    return x > -65536 && x < 65536 ? (int32_t)x : 0;
+}
+
+JL_DLLEXPORT unsigned __int128 julia__fixunshfti(FLOAT16_ARG_TYPE param)
+{
+    float x = half_to_float(FLOAT16_ARG_TO_UINT16(param));
+    return x > -1 && x < 65536 ? (uint32_t)x : 0;
+}
+#endif
+
 
 // bfloat16 conversion helpers
 

@@ -133,7 +133,11 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     end
     current_world = get_world_counter()
-    matches = find_method_matches(interp, argtypes, atype; max_methods, fargs=arginfo.fargs)
+    # Branch on `fargs` so that both keyword calls are statically dispatched.
+    fargs = arginfo.fargs
+    matches = fargs === nothing ?
+        find_method_matches(interp, argtypes, atype; max_methods) :
+        find_method_matches(interp, argtypes, atype; max_methods, fargs)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
@@ -171,7 +175,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
     # split the for loop off into a function, so that we can pause and restart it at will
     function infercalls(interp, sv)
         local napplicable = length(applicable)
-        local multiple_matches = multiple_methods(matches)
+        local multiple_matches = multiple_methods(state.matches)
         while state.inferidx <= napplicable
             (; match, edges, needs_mi_edges, call_results, edge_idx) = applicable[state.inferidx]
             local method = match.method
@@ -327,7 +331,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             inferidx = SafeBox{Int}(1)
             function infercalls2(interp, sv)
                 local napplicable = length(applicable)
-                local multiple_matches = multiple_methods(matches)
+                local multiple_matches = multiple_methods(state.matches)
                 while inferidx[] <= napplicable
                     (; match, call_results, edge_idx) = applicable[inferidx[]]
                     inferidx[] += 1
@@ -347,7 +351,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                                 if edge !== nothing
                                     local sig = match.spec_types
                                     local mi = get_ci_mi(edge)
-                                    local vw = matches.valid_worlds
+                                    local vw = valid_worlds
                                     ccall(:jl_recache_method_by_type, Cvoid, (Any, Any, Any, Any, UInt, UInt, UInt, UInt),
                                             sig, match.sparams, mi, mi.specTypes, get_inference_world(interp),
                                             first(vw), last(vw), current_world)
@@ -519,18 +523,24 @@ function from_interconditional(𝕃ᵢ::AbstractLattice, @nospecialize(rt), sv::
         if alias === nothing
             arg = ssa_def_slot(fargs[i], sv)
             if isa(arg, SlotNumber) && widenslotwrapper(argtyp) isa Type
+                # refine the slot itself
                 old = argtyp
                 id = slot_id(arg)
-            elseif argtyp isa MustAlias
+                argalias = nothing
+            elseif argtyp isa MustAlias && slot == 0
+                # refine the field of slot `argtyp.slot` that this argument aliases:
+                # the field is a different object from that slot, so it can't be
+                # intersected with a refinement target on the slot itself
                 old = argtyp.fldtyp
                 id = argtyp.slot
+                argalias = argtyp
             else
                 continue # unlikely to refine
             end
         elseif argtyp isa MustAlias && issubalias(argtyp, alias)
-            arg = nothing
             old = alias.fldtyp
             id = alias.slot
+            argalias = argtyp
         else
             continue
         end
@@ -561,14 +571,10 @@ function from_interconditional(𝕃ᵢ::AbstractLattice, @nospecialize(rt), sv::
             end
             if (slot > 0 || condval !== false) && thentype ⋤ old
                 slot = id
-                if !(arg isa SlotNumber) && argtyp isa MustAlias
-                    alias = argtyp
-                end
+                alias = argalias
             elseif (slot > 0 || condval !== true) && elsetype ⋤ old
                 slot = id
-                if !(arg isa SlotNumber) && argtyp isa MustAlias
-                    alias = argtyp
-                end
+                alias = argalias
             else # reset: no new useful information for this slot
                 slot = 0
                 alias = nothing

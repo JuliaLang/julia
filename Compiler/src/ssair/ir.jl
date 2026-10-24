@@ -209,12 +209,7 @@ Core.DebugInfo(di::DebugInfoStream, nstmts::Int) =
         ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), di.firstline, di.codelocs, nstmts)::String)
 
 function getdebugidx(debuginfo::DebugInfo, pc::Int)
-    if debuginfo.linetable isa String
-        # drop provenance for compatibility
-        ((pc <= 0 ? -1 : source_location(debuginfo, pc).line), 0, 0)
-    else
-        ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo, pc)
-    end
+    ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo, pc)
 end
 
 function getdebugidx(debuginfo::DebugInfoStream, pc::Int)

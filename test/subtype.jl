@@ -1279,6 +1279,10 @@ end
     @test Tuple{Tuple{Int, Real}, Real} <: R6
     @test !(Tuple{Tuple{Bool, Real}, Real} <: R6)
     @test Tuple{Tuple{Bool, Bool}, Bool} <: R6
+
+
+    @test Tuple{Tuple{Union{Int, String}}} <: (Tuple{X} where {T, X <: Tuple{Union{Nothing, T}}})
+    @test Tuple{Ref{Union{Int, String}}} <: (Tuple{Ref{X}} where {R, T <: Union{Nothing, R}, X <: T})
 end
 
 
