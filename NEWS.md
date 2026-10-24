@@ -22,6 +22,11 @@ Build system changes
 New library functions
 ---------------------
 
+* The module `Base.Parsers` is now `public` (but not exported). `Base.Parsers.parsevalue(T, bytes)`
+  parses a value of type `T`, such as an integer, a floating-point number or a `UUID`, from all of
+  an `AbstractVector{UInt8}` and returns a `Base.Parsers.ParseFailure` instead of throwing; its
+  `decimal` keyword sets the decimal point for floats ([#63969]).
+
 New library features
 --------------------
 

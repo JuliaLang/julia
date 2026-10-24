@@ -272,7 +272,7 @@ function tryparse_internal(::Type{T}, s::DenseUTF8String, i::Int, j::Int) where 
     while j >= i && isspace_ascii(codeunit(s, j))
         j -= 1
     end
-    x = Parsers.parsefloat(T, codeunits(s), i, j)
+    x = Parsers.parsefloat(T, codeunits(s), i, j, UInt8('.'))
     return x isa Parsers.ParseFailure ? nothing : x
 end
 tryparse(::Type{T}, s::DenseUTF8String) where {T<:IEEEFloat} =
