@@ -177,6 +177,19 @@ for a in vals
 end
 
 @test hash(SubString("--hello--",3,7)) == hash("hello")
+@testset "hashing aligned String data" begin
+    # hash(::String) relies on String data being aligned to sizeof(Int), also in the sysimage
+    for s in (Base.libllvm_version_string, String(rand(UInt8, 100_000)),
+              String(take!(IOBuffer(rand(UInt8, 100)))))
+        @test UInt(pointer(s)) % sizeof(Int) == 0
+    end
+    for n in 0:200
+        s = String(rand(UInt8, n))
+        @test UInt(pointer(s)) % sizeof(Int) == 0
+        # a SubString at an odd offset is hashed with unaligned loads
+        @test hash(s) == hash(SubString("-" * s, 2))
+    end
+end
 @test hash(:(X.x)) == hash(:(X.x))
 @test hash(:(X.x)) != hash(:(X.y))
 
