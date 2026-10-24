@@ -1127,4 +1127,10 @@ primitive type UIntN256 <: Unsigned 256 end
     end
     @test !runtime_cpu_supports(Symbol(""))
     @test !runtime_cpu_supports(Symbol("sse2,not_a_real_feature"))
+    # Code for any target must use the runtime's hard-float calling convention (lp64d)
+    @static if Sys.ARCH === :riscv64
+        for cpu in ("generic", "generic-rv64")
+            @test :d in CPUID._cpu_model_features(cpu)
+        end
+    end
 end
