@@ -1385,9 +1385,12 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bi
         jl_options.machine_file = absrealpath(jl_options.machine_file, 0);
     if (jl_options.output_code_coverage)
         jl_options.output_code_coverage = absformat(jl_options.output_code_coverage);
-    if (jl_options.tracked_path) // `@` with no path tracks the current directory
+    if (jl_options.tracked_path) { // `@` with no path tracks the current directory
+        if (jl_options.tracked_path[0])
+            jl_tracked_path_unresolved = abspathlist(jl_options.tracked_path, 0);
         jl_options.tracked_path = jl_options.tracked_path[0] ? abspathlist(jl_options.tracked_path, 1) :
                                                                absrealpath(jl_options.tracked_path, 0);
+    }
     // symlinks are kept, since these match the paths of source files as they were loaded
     if (jl_options.coverage_exclude)
         jl_options.coverage_exclude = abspathlist(jl_options.coverage_exclude, 0);
