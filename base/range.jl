@@ -988,11 +988,34 @@ function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
     convert(T, (r.ref + u*r.step))
 end
 unsafe_getindex(r::LinRange, i::Integer) = lerpi(i-oneunit(i), r.lendiv, r.start, r.stop)
+_lerp_fraction_type(::Type) = Float64
+_lerp_fraction_type(::Type{T}) where {T<:AbstractFloat} = promote_type(T, Float32)
 
 function lerpi(j::Integer, d::Integer, a::T, b::T) where T
-    t = j/d # ∈ [0,1]
+    F = _lerp_fraction_type(T)
+    t = F(j)/d # ∈ [0,1]
     # compute approximately fma(t, b, -fma(t, a, a))
     return T((1-t)*a + t*b)
+end
+
+"""
+    lerpi(j, d, a::Union{Float16,Float32}, b)
+
+Interpolate in `Float32` with exact endpoints, constant output when `a == b`, and output
+monotonic in `j`, by the construction of C++20 `std::lerp`.
+"""
+function lerpi(j::Integer, d::Integer, a::T, b::T) where T<:Union{Float16,Float32}
+    if j == d
+        return b
+    end
+    A, B = Float32(a), Float32(b)
+    t = Float32(j)/d # ∈ [0,1)
+    if (A <= 0 <= B) | (B <= 0 <= A)
+        return T(t*B + (1-t)*A)
+    end
+    # `B - A` cannot overflow for same-sign endpoints; clamping keeps `x` from passing `B`.
+    x = A + t*(B - A)
+    return T(B > A ? min(x, B) : max(x, B))
 end
 
 # non-scalar indexing
