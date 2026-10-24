@@ -51,6 +51,7 @@ static const size_t OBJCACHE_CAPACITY =
 static constexpr size_t OBJCACHE_EVICT_PAGE_BUDGET = 128;
 static constexpr size_t OBJCACHE_EVICT_ENTRY_BUDGET = 64;
 static constexpr size_t OBJCACHE_EVICT_MAX_ENTRY_PAGES = 8192;
+static constexpr size_t OBJCACHE_PRUNE_ENTRY_BUDGET = 256;
 
 static size_t objectPageEstimate(size_t Bytes, size_t PageSize) JL_NOTSAFEPOINT
 {
@@ -550,6 +551,90 @@ const char *ObjCache::disabledNotice()
     if (!Initialized.load(memory_order_acquire))
         initDB();
     return DisabledNotice;
+}
+
+int64_t ObjCache::prune(int64_t Cutoff)
+{
+    if (!Initialized.load(memory_order_acquire))
+        initDB();
+    if (!Env)
+        return 0;
+
+    // Access times are only refreshed when they are older than the granularity,
+    // so an entry used shortly after Cutoff may still record an earlier time.
+    Cutoff -= OBJCACHE_ATIME_GRANULARITY;
+    if (Cutoff <= 0)
+        return 0;
+
+    int64_t Removed = 0;
+    // Entries that have been hit sort after all entries that have only been
+    // written, so the two ranges are scanned separately.
+    for (int64_t Hit : {(int64_t)0, (int64_t)1 << 62}) {
+        while (true) {
+            MDBTxn Txn{Env};
+            MDB_cursor *MetaCur;
+            if (!Txn.Txn || checkMDB(mdb_cursor_open(Txn.Txn, ObjMetaDbi, &MetaCur))) {
+                Removed = -1;
+                goto done;
+            }
+            auto LowMeta = toMetaKey(Hit, {});
+            MDB_val MetaKey = mdbVal(LowMeta);
+            int Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_SET_RANGE);
+            size_t InTxn = 0;
+            while (Ret == 0 && InTxn < OBJCACHE_PRUNE_ENTRY_BUDGET &&
+                   MetaKey.mv_size == METAKEY_SIZE &&
+                   ((const char *)MetaKey.mv_data)[0] == METAKEY_TAG) {
+                auto [Time, Hash] = fromMetaKey((const char *)MetaKey.mv_data);
+                if (Time >= (Hit | Cutoff))
+                    break;
+                auto ObjKey = toObjKey(Hash);
+                MDB_val Key = mdbVal(ObjKey);
+                int Err = mdb_del(Txn.Txn, ObjCacheDbi, &Key, nullptr);
+                if (Err == 0 || Err == MDB_NOTFOUND) {
+                    Key = mdbVal(ObjKey);
+                    Err = mdb_del(Txn.Txn, ObjMetaDbi, &Key, nullptr);
+                }
+                if (Err == 0 || Err == MDB_NOTFOUND)
+                    Err = mdb_cursor_del(MetaCur, 0);
+                if (Err) {
+                    checkMDB(Err);
+                    Removed = -1;
+                    goto done;
+                }
+                ++InTxn;
+                Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_NEXT);
+            }
+            if (Ret != 0 && Ret != MDB_NOTFOUND) {
+                checkMDB(Ret);
+                Removed = -1;
+                goto done;
+            }
+            if (InTxn == 0)
+                break;
+            if (checkMDB(Txn.commit())) {
+                Removed = -1;
+                goto done;
+            }
+            Removed += InTxn;
+            if (LogFile) {
+                std::unique_lock<std::mutex> Lock{LogMutex};
+                fprintf(LogFile, "prune_batch,%zu\n", InTxn);
+            }
+        }
+    }
+done:
+    return Removed;
+}
+
+int ObjCache::compact(const char *Dir)
+{
+    if (!Initialized.load(memory_order_acquire))
+        initDB();
+    if (!Env)
+        return EINVAL;
+    if (std::error_code EC = llvm::sys::fs::create_directories(Dir))
+        return EC.value();
+    return mdb_env_copy2(Env, Dir, MDB_CP_COMPACT);
 }
 
 void ObjCache::shutdown()
