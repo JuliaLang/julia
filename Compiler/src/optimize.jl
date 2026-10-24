@@ -355,11 +355,37 @@ _topmod(sv::OptimizationState) = _topmod(sv.mod)
 is_stmt_inline(stmt_flag::UInt32) = has_flag(stmt_flag, IR_FLAG_INLINE)
 is_stmt_noinline(stmt_flag::UInt32) = has_flag(stmt_flag, IR_FLAG_NOINLINE)
 
+# `Expr(:new)` throws unless the value of `Targ` is a `DataType`, but a `Type{T}`-typed value
+# may be a `UnionAll` or `Union` rep that is `==` to `T` (#61323). Only a pinned type object
+# is known to be one, or the result of `Core.apply_type` fully applying a constant `UnionAll`
+# type constructor whose body is a non-tuple `DataType`. Other `Core.apply_type` calls may
+# return something else, e.g. `Core.apply_type(Union, T)` returns `T` itself.
+function is_new_type_datatype(@nospecialize(atyp), @nospecialize(Targ),
+                              src::Union{IRCode,IncrementalCompact})
+    isconstType(widenconst(atyp)) && return true
+    isa(Targ, SSAValue) || return false
+    stmt = src[Targ][:stmt]
+    is_known_call(stmt, Core.apply_type, src) || return false
+    length(stmt.args) ≥ 2 || return false
+    tc = argextype(stmt.args[2], src)
+    isa(tc, Const) || return false
+    body = tc.val
+    isa(body, UnionAll) || return false
+    nvars = 0
+    while isa(body, UnionAll)
+        nvars += 1
+        body = body.body
+    end
+    isa(body, DataType) && body.name !== Tuple.name || return false
+    return length(stmt.args) - 2 == nvars
+end
+
 function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src::Union{IRCode,IncrementalCompact}, pattern_match=nothing)
     Targ = args[1]
     atyp = argextype(Targ, src)
     # `Expr(:new)` of unknown type could raise arbitrary TypeError.
     typ, isexact = instanceof_tfunc(atyp, true)
+    is_new_type_datatype(atyp, Targ, src) || return (false, false, false)
     if !isexact
         atyp = unwrap_unionall(widenconst(atyp))
         if isType(atyp) && isTypeDataType(type_parameter(atyp))
