@@ -423,13 +423,14 @@ end
     @test_throws MethodError String(Iterators.countfrom(1))
 
     # Non-iterable inputs should throw MethodError
-    @test_throws MethodError String(19)
-    @test_throws MethodError String(3.14)
+    struct NotIterable57072 end
+    @test_throws MethodError String(NotIterable57072())
 
-    # Iterables with elements that cannot convert to Char should throw MethodError
+    # Iterables with elements that cannot convert to Char
     @test_throws MethodError String(["a", "b"])
     @test_throws MethodError String([:a, :b])
     @test_throws MethodError String([[1], [2]])
+    @test_throws InexactError String([3.14])
 
     # Custom AbstractChar subtype
     struct CustomChar57072 <: AbstractChar
