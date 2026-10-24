@@ -4958,7 +4958,9 @@ end
         if coverage_mismatch
             for inc in includes
                 # an unresolved `@depot` path cannot be checked
-                if startswith(inc.filename, "@depot") || path_is_tracked(inc.filename, requested_flags.coverage_path::String)
+                # the tracked path is a realpath, so resolve symlinks in the included one
+                filename = ispath(inc.filename) ? realpath(inc.filename) : inc.filename
+                if startswith(filename, "@depot") || path_is_tracked(filename, requested_flags.coverage_path::String)
                     @debug "Rejecting cache file $cachefile for $modkey since it lacks coverage counters for $(inc.filename)"
                     record_reason(reasons, :flags_mismatch)
                     return true

@@ -721,6 +721,29 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             rm(outfile)
         end
 
+        # a tracked path given through a symlink matches files loaded through it
+        if !Sys.iswindows()
+            mktempdir() do parent
+                real = realpath(mkdir(joinpath(parent, "Real")))
+                link = joinpath(parent, "Link")
+                symlink(real, link)
+                write(joinpath(real, "linked.jl"), "f(x) = x + 1\nf(1)\n")
+                outfile = joinpath(dir, "linked.info")
+                for (tracked, loaded) in ((link, link), (link, real), (real, real), (real, link))
+                    srcfile = joinpath(loaded, "linked.jl")
+                    run(`$cov_exename --code-coverage=$outfile --code-coverage=@$tracked $srcfile`)
+                    covered = contains(read(outfile, String), "SF:$srcfile")
+                    rm(outfile)
+                    # files are compared unresolved, so a symlink below the tracked realpath is missed
+                    if (tracked, loaded) == (real, link)
+                        @test_broken covered
+                    else
+                        @test covered context=(tracked, loaded)
+                    end
+                end
+            end
+        end
+
         # Source and report filenames must support Unicode on Windows as well.
         let unicode_dir = mkdir(joinpath(dir, "coverage λ space"))
             srcfile = joinpath(unicode_dir, "source λ.jl")
