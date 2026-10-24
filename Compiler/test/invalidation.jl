@@ -523,34 +523,37 @@ end
 
 # A result with limited accuracy is never cached, and every new caller infers it again.
 # Its CodeInstance must not be registered as a backedge, or each caller adds another one.
-# Here the inner `memo` call is widened against the outer one, which limits the cycle
-# `p` <-> `q` in between (issue #63933).
+# Here `grow` reenters `memo` with a longer tuple captured at each level, a recursion that
+# inference limits, so the frames inside it are not cached (issue #63933).
 module LimitedResultBackedges
-    struct Box{T}
-        x::T
-    end
     struct Holder
-        b::Box
+        n::Int
     end
     @noinline call(f) = f()
     @noinline memo(f) = call(f)
-    inner(b::Box) = memo(() -> b.x)
-    p(x::Int, h::Holder) = x < 0 ? q(x, h) : 0
-    q(x::Int, h::Holder) = x < -1 ? p(x, h) : inner(h.b)
-    caller1(h::Holder) = memo(() -> p(1, h))
-    caller2(h::Holder) = memo(() -> p(2, h))
+    p(x::Int, h::Holder, t::Tuple) = x < 0 ? q(x, h, t) : 0
+    q(x::Int, h::Holder, t::Tuple) = x < -1 ? p(x, h, t) : grow(h, t)
+    grow(h::Holder, t::Tuple) = h.n > length(t) ? memo(() -> p(1, h, (t..., 1))) : 0
+    caller1(h::Holder) = p(1, h, ())
+    caller2(h::Holder) = p(2, h, ())
 end
 let M = LimitedResultBackedges
     for caller in (M.caller1, M.caller2)
         Base.return_types(caller, (M.Holder,); interp=InvalidationTester())
     end
-    for callee in (M.p, M.q)
-        mi = Base.method_instance(callee, (Int, M.Holder))
-        @test !isdefined(mi, :cache)
+    uncached = Core.MethodInstance[]
+    for f in (M.memo, M.call, M.p, M.q, M.grow), mi in Base.specializations(only(methods(f)))
+        isdefined(mi, :cache) || push!(uncached, mi)
+    end
+    @test !isempty(uncached)
+    ncis = 0
+    for mi in uncached
+        isdefined(mi, :backedges) || continue
         cis = filter(mi.backedges) do edge
             edge isa Core.CodeInstance && edge.owner === InvalidationTesterToken()
         end
-        @test !isempty(cis)
+        ncis += length(cis)
         @test all(ci -> ci.max_world == typemax(UInt), cis)
     end
+    @test ncis > 0
 end

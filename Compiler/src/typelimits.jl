@@ -6,6 +6,7 @@
 
 const MAX_TYPEUNION_COMPLEXITY = 3
 const MAX_TYPEUNION_LENGTH = 3
+const TYPE_EMBEDS_BUDGET = 1000 # node visits of `type_embeds` per walk of the inference stack
 
 #########################
 # limitation heuristics #
@@ -81,6 +82,59 @@ function is_derived_type_from_any(@nospecialize(t), sources::SimpleVector, minde
         is_derived_type(t, s, mindepth) && return true
     end
     return false
+end
+
+# The tree view of a type: a node's label tells whether two nodes can be coupled in `type_embeds`,
+# and its children are the parameters (or the parts) it is built from. Every value parameter (an
+# `Int`, a `Symbol`, a tuple of values, ...) is a leaf with the same label, so the labels come from a
+# finite set: the type names, plus a few kinds of node.
+function type_node_children(@nospecialize(t))
+    isa(t, DataType) && return t.parameters
+    isa(t, Union) && return svec(t.a, t.b)
+    isa(t, UnionAll) && return svec(t.var, t.body)
+    isa(t, TypeVar) && return svec(t.lb, t.ub)
+    if isvarargtype(t)
+        isdefined(t, :T) || return svec()
+        return isdefined(t, :N) ? svec(t.T, t.N) : svec(t.T)
+    end
+    return svec()
+end
+function type_node_label(@nospecialize(t))
+    isa(t, DataType) && return t.name
+    (isa(t, Union{Union,UnionAll,TypeVar}) || isvarargtype(t)) && return typeof(t)
+    return nothing # a value
+end
+
+# Is `s` homeomorphically embedded in `t`: can `t`'s tree be cut down to `s`'s by deleting nodes
+# (the children of a deleted node take its place, in order)? For example `Tuple{Int}` is embedded
+# in `Tuple{Float64, Int}` and in `Some{Tuple{Int}}`, but `Some{Int}` is not embedded in
+# `Tuple{Int, Int}`. By Kruskal's tree theorem, every infinite sequence of trees with labels from a
+# finite set has an `s` embedded in a later `t`. Returns whether `s` is embedded in `t`, and the
+# budget left; once the budget is spent the answer is `true`, the one that keeps the recursion limit.
+function type_embeds(@nospecialize(s), @nospecialize(t), budget::Int)
+    budget -= 1
+    budget < 0 && return true, budget
+    tc = type_node_children(t)
+    if type_node_label(s) === type_node_label(t)
+        embedded, budget = children_embed(type_node_children(s), tc, budget)
+        embedded && return true, budget
+    end
+    for c in tc
+        embedded, budget = type_embeds(s, c, budget)
+        embedded && return true, budget
+    end
+    return false, budget
+end
+
+# are all of `sc` embedded in `tc`, each in a later child than the one before?
+function children_embed(sc::SimpleVector, tc::SimpleVector, budget::Int)
+    i = 1
+    for c in tc
+        i > length(sc) && break
+        embedded, budget = type_embeds(sc[i], c, budget)
+        embedded && (i += 1)
+    end
+    return i > length(sc), budget
 end
 
 # The goal of this function is to return a type of greater "size" and less "complexity" than

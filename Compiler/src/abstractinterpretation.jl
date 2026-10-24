@@ -688,10 +688,13 @@ function abstract_call_method(interp::AbstractInterpreter,
 
     # Limit argument type tuple growth of functions:
     # look through the parents list to see if there's a call to the same method
-    # and from the same method.
+    # and from the same method, whose signature is embedded in this call's (`type_embeds`):
+    # a call of the same method with unrelated arguments is not a recursion.
     # Returns the topmost occurrence of that repeated edge.
     edgecycle = edgelimited = edgerecursed = false
     topmost = nothing
+    embed_budget = TYPE_EMBEDS_BUDGET
+    nearest = nothing
 
     for sv′ in AbsIntStackUnwind(sv)
         infmi = frame_instance(sv′)
@@ -704,10 +707,16 @@ function abstract_call_method(interp::AbstractInterpreter,
                 break
             end
             topmost === nothing || continue
-            if edge_matches_sv(interp, sv′, method, sig, sparams, hardlimit, sv)
-                topmost = sv′
-                edgecycle = true
+            edge_matches_sv(interp, sv′, method, sig, sparams, hardlimit, sv) || continue
+            nearest === nothing && (nearest = sv′)
+            if !hardlimit
+                # one budget covers the whole walk; once it is spent, the match is the
+                # nearest frame, as without the embedding test
+                embedded, embed_budget = type_embeds(infmi.specTypes, sig, embed_budget)
+                embedded || continue
             end
+            topmost = embed_budget < 0 ? nearest : sv′
+            edgecycle = true
         end
     end
     washardlimit = hardlimit

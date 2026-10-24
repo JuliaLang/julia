@@ -27,6 +27,32 @@ end
 @test Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 100, 0) == Ref
 @test Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 100, 0) == Ref{Complex{T} where T}
 
+# homeomorphic embedding of type trees, the test the recursion limiter uses to tell a call of
+# the same method with unrelated arguments from a recursion
+let embeds(s, t) = Compiler.type_embeds(s, t, Compiler.TYPE_EMBEDS_BUDGET)[1]
+    @test embeds(Tuple{Int}, Tuple{Float64, Int})
+    @test embeds(Tuple{Int}, Some{Tuple{Int}})
+    @test !embeds(Some{Int}, Tuple{Int, Int})
+    @test embeds(Tuple{String, String}, Tuple{String, String, String})
+    @test !embeds(Tuple{String, String, String}, Tuple{String, String})
+    @test embeds(Some{Int}, Some{Some{Int}})
+    @test !embeds(Some{Some{Int}}, Some{Int})
+    @test embeds(Val{3}, Val{4}) # values are one label
+    @test embeds(Val{(1,)}, Val{(1, 1)})
+    @test embeds(Tuple{Int, Vararg{Int}}, Tuple{Int, Vararg{Int}})
+    @test !embeds(Vector{Float64}, Vector{Int})
+    @test Compiler.type_embeds(Some{Int}, Tuple{Int, Int}, 0)[1] # out of budget: taken as embedded
+end
+
+# Two unrelated uses of one method on the inference stack are not a recursion: the `foldl` over
+# a tuple inside `foldl_unrelated_f` is not limited against the `foldl` over a generator at the
+# root, which used to make the result `Any`.
+foldl_unrelated_op1(a, b) = a + b
+foldl_unrelated_op2(a, b) = a + b
+foldl_unrelated_f(x::Float64) = foldl(foldl_unrelated_op2, (x, x + 1.0))
+foldl_unrelated_root(v) = foldl(foldl_unrelated_op1, (foldl_unrelated_f(x) for x in v))
+@test Base.infer_return_type(foldl_unrelated_root, (Vector{Float64},)) === Float64
+
 # Local-cache entries contain reusable source plus a proof, while executable targets
 # remain exclusively in the global CodeInstance cache.
 local_wrapper62338(x::Int) = x + 1
@@ -2711,10 +2737,18 @@ function _generated_stub(gen::Symbol, args::Core.SimpleVector, params::Core.Simp
     return Expr(:meta, :generated, stub)
 end
 
-f24852_kernel1(x, y::Tuple) = x * y[1][1][1]
-f24852_kernel2(x, y::Tuple) = f24852_kernel1(x, (y,))
-f24852_kernel3(x, y::Tuple) = f24852_kernel2(x, (y,))
-f24852_kernel(x, y::Number) = f24852_kernel3(x, (y,))
+# The kernels are instances of one parametric type, so that the chain of calls below looks like
+# a growing recursion to the inference limiter (the kernel's type name repeats and `y` nests),
+# while each kernel is still its own method for `method_for_inference_limit_heuristics`.
+struct F24852Kernel{N} end
+const f24852_kernel1 = F24852Kernel{1}()
+const f24852_kernel2 = F24852Kernel{2}()
+const f24852_kernel3 = F24852Kernel{3}()
+const f24852_kernel = F24852Kernel{0}()
+(::F24852Kernel{1})(x, y::Tuple) = x * y[1][1][1]
+(::F24852Kernel{2})(x, y::Tuple) = f24852_kernel1(x, (y,))
+(::F24852Kernel{3})(x, y::Tuple) = f24852_kernel2(x, (y,))
+(::F24852Kernel{0})(x, y::Number) = f24852_kernel3(x, (y,))
 
 function f24852_kernel_cinfo(world::UInt, source, fsig::Type)
     matches = Base._methods_by_ftype(fsig, -1, world)
@@ -2733,7 +2767,7 @@ function f24852_kernel_cinfo(world::UInt, source, fsig::Type)
     end
     code_info = Base.uncompressed_ir(match.method)
     Meta.partially_inline!(code_info.code, Any[], match.spec_types, Any[match.sparams...], 1, 0, :propagate)
-    if startswith(String(match.method.name), "f24852")
+    if match.method.name === :F24852Kernel
         for a in code_info.code
             if Meta.isexpr(a, :(=))
                 a = a.args[2]
@@ -2764,13 +2798,13 @@ function f24852_gen_cinfo_inflated(world::UInt, source, X, Y, _, f, x, y)
 end
 
 function f24852_gen_expr(X, Y, _, f, x, y) # deparse of f(x::X, y::Y) where {X, Y}
-    if f === typeof(f24852_kernel)
+    if f === F24852Kernel{0}
         f2 = :f24852_kernel3
-    elseif f === typeof(f24852_kernel3)
+    elseif f === F24852Kernel{3}
         f2 = :f24852_kernel2
-    elseif f === typeof(f24852_kernel2)
+    elseif f === F24852Kernel{2}
         f2 = :f24852_kernel1
-    elseif f === typeof(f24852_kernel1)
+    elseif f === F24852Kernel{1}
         return :((x::$X) * (y::$Y)[1][1][1])
     else
         return :(error(repr(f)))
