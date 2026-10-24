@@ -128,6 +128,9 @@ Intercepting `SIGTSTP` stops Ctrl-Z from suspending Julia.
 Handling a signal needs the event loop to run, so a task busy in a loop that never yields
 delays it until it does.
 
+When Julia is started with `--handle-signals=no` it leaves all signals alone, so a condition
+can still be opened but is never notified.
+
 # Examples
 ```julia
 term = Base.SignalCondition(Base.SIGTERM; intercept=true)

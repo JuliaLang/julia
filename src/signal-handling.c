@@ -871,7 +871,9 @@ JL_DLLEXPORT int jl_signal_watch_start(int sig, int intercept, uv_async_cb cb)
     if (jl_signal_is_reserved(sig) || sig > JL_MAX_WATCHED_SIGNAL)
         return UV_EINVAL;
     jl_init_signal_watchers(cb);
-    if (jl_atomic_load_relaxed(&signal_watchers[sig]) == 0) {
+    // with --handle-signals=no, leave signal dispositions alone and never notify watchers
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON &&
+            jl_atomic_load_relaxed(&signal_watchers[sig]) == 0) {
         int err = jl_signal_watch_install(sig);
         if (err != 0)
             return err;
@@ -886,7 +888,8 @@ JL_DLLEXPORT void jl_signal_watch_stop(int sig, int intercept)
 {
     if (intercept)
         jl_atomic_fetch_add_relaxed(&signal_interceptors[sig], -1);
-    if (jl_atomic_fetch_add(&signal_watchers[sig], -1) == 1)
+    if (jl_atomic_fetch_add(&signal_watchers[sig], -1) == 1 &&
+            jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_signal_watch_uninstall(sig);
 }
 

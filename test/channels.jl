@@ -849,6 +849,25 @@ end
             @test readchomp(`$(Base.julia_cmd()) --startup-file=no -e $script`) == "alive"
         end
 
+        @testset "--handle-signals=no" begin
+            # Julia leaves the signal alone, so it still has its default effect.
+            script = """
+                Base.SignalCondition(Base.SIGHUP; intercept=true)
+                ccall(:raise, Cint, (Cint,), Base.SIGHUP)
+                sleep(600)
+                """
+            p = run(pipeline(`$(Base.julia_cmd()) --startup-file=no --handle-signals=no -e $script`), wait=false)
+            watchdog = Timer(300) do _
+                kill(p, Base.SIGKILL)
+            end
+            try
+                wait(p)
+                @test p.termsignal == Base.SIGHUP
+            finally
+                close(watchdog)
+            end
+        end
+
         @testset "several conditions on one signal" begin
             # SIGWINCH does nothing by default, so it is safe to send to this process.
             a = Base.SignalCondition(Base.SIGWINCH)
