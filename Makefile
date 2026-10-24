@@ -212,16 +212,17 @@ release-candidate: release testall
 	@echo 3. Bump VERSION
 	@echo 4. Increase SOMAJOR and SOMINOR if needed.
 	@echo 5. Update SPDX document by running the script contrib/updateSPDX.jl
-	@echo 6. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"		#"` # These comments deal with incompetent syntax highlighting rules
-	@echo 7. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
-	@echo 8. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist with USE_BINARYBUILDER=0
-	@echo 9. Check that 'make && make install && make test' succeed with unpacked tarballs even without Internet access.
-	@echo 10. Follow packaging instructions in doc/src/devdocs/build/distributing.md to create binary packages for all platforms
-	@echo 11. Upload to AWS, update https://julialang.org/downloads and https://status.julialang.org/stable links
-	@echo 12. Update checksums on AWS for tarball and packaged binaries
-	@echo 13. Update versions.json. Wait at least 60 minutes before proceeding to step 14.
-	@echo 14. Push to Juliaup (https://github.com/JuliaLang/juliaup/wiki/Adding-a-Julia-version)
-	@echo 15. Announce on mailing lists
+	@echo 6. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
+	@echo 7. Create tarballs with make light-source-dist and make full-source-dist, with USE_BINARYBUILDER=0 and JULIA_RELEASE_BUILD=1
+	@echo 8. Check that 'make && make install && make test' succeed with unpacked tarballs even without Internet access.
+	@echo 9. Follow packaging instructions in doc/src/devdocs/build/distributing.md to create binary packages for all platforms, with JULIA_RELEASE_BUILD=1
+	@echo 10. Upload to AWS, update https://julialang.org/downloads and https://status.julialang.org/stable links
+	@echo 11. Update checksums on AWS for tarball and packaged binaries
+	@echo 12. Create tag last, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"		#"` # These comments deal with incompetent syntax highlighting rules
+	@echo 13. Replace github release tarball with the tarballs from step 7
+	@echo 14. Update versions.json. Wait at least 60 minutes before proceeding to step 15.
+	@echo 15. Push to Juliaup (https://github.com/JuliaLang/juliaup/wiki/Adding-a-Julia-version)
+	@echo 16. Announce on mailing lists
 	@echo 16. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
 	@echo 17. Move NEWS.md contents to HISTORY.md
 	@echo
