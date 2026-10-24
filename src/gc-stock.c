@@ -2941,6 +2941,9 @@ static size_t gc_count_work_in_queue(jl_ptls_t ptls) JL_NOTSAFEPOINT
 static int gc_should_mark(void) JL_NOTSAFEPOINT
 {
     int should_mark = 0;
+    // reading the other markers' queue indices takes their cache lines away
+    // from them, so back off while there is not enough work to join
+    int backoff = 1;
     uv_mutex_lock(&gc_queue_observer_lock);
     while (1) {
         int n_threads_marking = jl_atomic_load(&gc_n_threads_marking);
@@ -2965,7 +2968,10 @@ static int gc_should_mark(void) JL_NOTSAFEPOINT
             should_mark = 1;
             break;
         }
-        jl_cpu_pause();
+        for (int i = 0; i < backoff; i++)
+            jl_cpu_pause();
+        if (backoff < 64)
+            backoff *= 2;
     }
     uv_mutex_unlock(&gc_queue_observer_lock);
     return should_mark;
