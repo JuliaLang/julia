@@ -645,7 +645,7 @@ static inline llvm::SmallVector<TargetData<n>, 0> &get_cmdline_targets(const cha
 // Load sysimg, use the `callback` for dispatch and perform all relocations
 // for the selected target.
 template<typename F>
-static inline jl_image_t parse_sysimg(jl_image_buf_t image, F &&callback, void *ctx)
+static inline jl_image_t parse_sysimg(jl_image_buf_t image, F &&callback, void *ctx, bool is_sysimg)
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Processor);
     jl_image_t res{};
@@ -657,7 +657,7 @@ static inline jl_image_t parse_sysimg(jl_image_buf_t image, F &&callback, void *
     const void *ids = pointers->target_data;
 
     // Set the sysimage CPU target from the stored string
-    if (pointers->cpu_target_string) {
+    if (is_sysimg && pointers->cpu_target_string) {
         jl_set_sysimage_cpu_target(pointers->cpu_target_string);
     }
 

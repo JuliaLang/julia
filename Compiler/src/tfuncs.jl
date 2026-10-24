@@ -1110,6 +1110,8 @@ end
 function _getfield_tfunc_const(@nospecialize(sv), name::Const)
     nv = _getfield_fieldindex(typeof(sv), name)
     nv === nothing && return Bottom
+    # relocated pointers change between processes, so their value can't be folded
+    is_relocatable_ptr_field(Const(sv), name) && return nothing
     if isa(sv, DataType) && nv == DATATYPE_TYPES_FIELDINDEX && isdefined(sv, nv)
         return Const(getfield(sv, nv))
     end
@@ -2529,6 +2531,35 @@ function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
 end
 
+function is_relocatable_ptr_field(ty, fld)
+    # Special case: these fields are not mutated, but they are the only native pointer fields
+    # that have relocations in staticdata.c, so they can change between processes.
+    if hasintersect(widenconst(ty), Core.TypeName) &&
+        (Const(:constfields) ⊑ fld || Const(fieldindex(Core.TypeName, :constfields)) ⊑ fld ||
+        Const(:atomicfields) ⊑ fld || Const(fieldindex(Core.TypeName, :atomicfields)) ⊑ fld)
+        return true
+    elseif hasintersect(widenconst(ty), DataType) &&
+        (Const(:layout) ⊑ fld || Const(fieldindex(DataType, :layout)) ⊑ fld)
+        return true
+    elseif hasintersect(widenconst(ty), GenericMemory) &&
+        (Const(:ptr) ⊑ fld || Const(fieldindex(GenericMemory, :ptr)) ⊑ fld)
+        return true
+    elseif hasintersect(widenconst(ty), GenericMemoryRef) &&
+        (Const(:ptr_or_offset) ⊑ fld || Const(fieldindex(GenericMemoryRef, :ptr_or_offset)) ⊑ fld)
+        return true
+    end
+    return false
+end
+
+# Whether field `name` of `obj` is immutable (see `Base.isconst`)
+function is_const_field_argtype(@nospecialize(obj), @nospecialize(name))
+    name isa Const || return false
+    objt = widenconst(ignorelimited(obj))
+    (objt isa DataType && !isabstracttype(objt) && objt !== Module) || return false
+    fidx = _getfield_fieldindex(objt, name)
+    return fidx !== nothing && isconst(objt, fidx)
+end
+
 function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
     length(argtypes) < 2 && return EFFECTS_THROWS
     obj = argtypes[1]
@@ -2539,9 +2570,20 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
             inaccessiblememonly=ALWAYS_FALSE,
             noub=ALWAYS_FALSE)
     end
-    # :consistent if the argtype is immutable
-    consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
-        ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
+    if is_relocatable_ptr_field(argtypes[1], argtypes[2])
+        if !ismutabletype(widenconst(obj)) || is_mutation_free_argtype(obj)
+            # access to immutable / mutation-free types is not modelled by `inaccessiblememonly`
+            # so immediately widen these to ALWAYS_FALSE
+            consistent = ALWAYS_FALSE
+        else
+            consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
+        end
+    elseif is_immutable_argtype(obj) || is_mutation_free_argtype(obj) || is_const_field_argtype(obj, argtypes[2])
+        # :consistent if the argtype is immutable or the field is const
+        consistent = ALWAYS_TRUE
+    else
+        consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
+    end
     noub = ALWAYS_TRUE
     bcheck = getfield_boundscheck(argtypes)
     nothrow = getfield_nothrow(𝕃, argtypes, bcheck)
@@ -2561,7 +2603,10 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
     if hasintersect(widenconst(obj), Module)
         # Modeled more precisely in abstract_eval_getglobal
         inaccessiblememonly = ALWAYS_FALSE
-    elseif is_mutation_free_argtype(obj)
+    elseif is_relocatable_ptr_field(argtypes[1], argtypes[2])
+        inaccessiblememonly = INACCESSIBLEMEM_OR_ARGMEMONLY
+    elseif is_immutable_argtype(obj) || is_mutation_free_argtype(obj) || is_const_field_argtype(obj, argtypes[2])
+        # a field that never changes is not mutable memory
         inaccessiblememonly = ALWAYS_TRUE
     else
         inaccessiblememonly = INACCESSIBLEMEM_OR_ARGMEMONLY

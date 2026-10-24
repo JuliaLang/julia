@@ -970,7 +970,7 @@ function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), extyp
                 # Retains the behaviour from pre-v1.11 when `UndefVarError` didn't have `scope`.
                 if isa(extype, UndefVarError) && !isdefined(extype, :scope)
                     success = exc isa UndefVarError && exc.var == extype.var
-                else isa(exc, typeof(extype))
+                elseif isa(exc, typeof(extype))
                     success = isequalexception(exc, extype)
                 end
             else

@@ -2510,6 +2510,41 @@ from_interconditional_check22(::Union{Int,String}, y) = isa(y, Int)
     return 0
 end |> only === Int
 
+# a field alias is a different refinement target from its parent slot (JuliaLang/julia#63981)
+from_interconditional_check31(x::AliasableField, _) = isa(x.f, Int)
+@test Base.infer_return_type((AliasableField{Any},); interp=MustAliasInterpreter()) do x
+    if from_interconditional_check31(x, x.f)
+        return x.f
+    end
+    return nothing
+end === Union{Int,Nothing}
+from_interconditional_check32(_, x::AliasableField) = isa(x.f, Int)
+@test Base.infer_return_type((AliasableField{Any},); interp=MustAliasInterpreter()) do x
+    if from_interconditional_check32(x.f, x)
+        return x.f
+    end
+    return nothing
+end === Union{Int,Nothing}
+issue63981_mk(x) = (; status = x > 0 ? :a : :b, n = x)
+issue63981_f(nt, _) = getfield(nt, :status) === :a
+@test Base.infer_return_type((Int,); interp=MustAliasInterpreter()) do x
+    nt = issue63981_mk(x)
+    return issue63981_f(nt, getfield(nt, :n))
+end === Bool
+
+# refine the aliased field when the argument is a slot holding a `MustAlias` of a field
+# whose type isn't a `Type`
+from_interconditional_check41_mk(c) = (; f = (; s = c ? :a : :b, n = 1))
+from_interconditional_check41(y) = getfield(y, :s) === :a
+@test Base.infer_return_type((Bool,); interp=MustAliasInterpreter()) do c
+    x = from_interconditional_check41_mk(c)
+    y = getfield(x, :f)
+    if from_interconditional_check41(y)
+        return Val(getfield(getfield(x, :f), :s))
+    end
+    return nothing
+end === Union{Val{:a},Nothing}
+
 # prioritize constraints on slot objects
 # https://github.com/aviatesk/JET.jl/issues/509
 struct JET509
@@ -6726,5 +6761,20 @@ irinterp_scan_d1(t) = irinterp_scan_derivative(irinterp_scan_square, t)
 irinterp_scan_d2(t) = irinterp_scan_derivative(irinterp_scan_d1, t)
 @test Base.infer_return_type(irinterp_scan_d2, (Int,)) === Int
 @test irinterp_scan_d2(2) == 2
+
+# perform post const-prop' concrete evaluation when effects are further improved by const-prop'
+@noinline function concrete_eval_eligible_if_false(x::Float64, n::Int, y::Bool)
+    if y # this prevents initial concrete-evaluation
+        println("x = ", x)
+    end
+    s = 0.0
+    Base.@assume_effects :terminates_locally for i = 1:n
+        s += sin(x)
+    end
+    return s
+end
+@test Base.infer_return_type() do
+    Val(concrete_eval_eligible_if_false(42., 5, false) == 5sin(42.))
+end == Val{true}
 
 end # module inference

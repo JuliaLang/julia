@@ -1904,6 +1904,16 @@ module M54082 end
     end
 end
 
+@testset "@test_throws with a thrown non-exception value" begin
+    @test_throws 42 throw(42)
+    let result = @testset NoThrowTestSet begin
+            @test_throws "any message" throw(42)
+        end
+        @test only(result) isa Test.Fail
+        @test only(result).test_type === :test_throws_wrong
+    end
+end
+
 @testset "Set RNG of testset" begin
     rng1 = Xoshiro(0x2e026445595ed28e, 0x07bb81ac4c54926d, 0x83d7d70843e8bad6, 0xdbef927d150af80b, 0xdbf91ddf2534f850)
     rng2 = Xoshiro(0xc380f460355639ee, 0xb39bc754b7d63bbf, 0x1551dbcfb5ed5668, 0x71ab5a18fec21a25, 0x649d0c1be1ca5436)
