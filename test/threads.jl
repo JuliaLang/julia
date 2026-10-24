@@ -789,6 +789,43 @@ end
     close(t)
 end
 
+@testset "event loop thread wakeup with busy workers" begin
+    # A timer or `@threadcall` started on a pool whose threads never sleep must still
+    # get serviced by the event loop thread (#63882).
+    script = """
+    # The ^C listener keeps the event loop alive, so the event loop thread never
+    # sleeps. Close it so the loop can go idle.
+    hooks = filter(f -> hasproperty(f, :listeners) && hasproperty(f, :cond) &&
+                        getproperty(f, :cond) isa Base.AsyncCondition, Base.atexit_hooks)
+    isdefined(Base, :start_sigint_listener) && length(hooks) != 1 && error("^C listener not found")
+    for f in hooks
+        ccall(:jl_set_sigint_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+        close(f.cond)
+    end
+    const done = Threads.Atomic{Bool}(false)
+    # keep the only default thread busy: it yields, but never sleeps
+    spinner = Threads.@spawn :default begin
+        t_end = time_ns() + 30_000_000_000
+        while !done[]
+            time_ns() > t_end && return false
+            yield()
+        end
+        return true
+    end
+    waiter = Threads.@spawn :default begin
+        for _ in 1:3
+            sleep(0.001)
+            @threadcall(:jl_getpagesize, Clong, ())
+        end
+        done[] = true
+    end
+    wait(waiter)
+    fetch(spinner) || exit(1)
+    """
+    cmd = `$(Base.julia_cmd()) --startup-file=no --threads=1,1 -e $script`
+    @test success(pipeline(cmd; stdout, stderr))
+end
+
 @testset "--timeout-for-safepoint-straggler command-line flag" begin
     program = "
         function main()
