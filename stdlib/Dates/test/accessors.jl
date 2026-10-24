@@ -191,6 +191,16 @@ end
         dt = dt + Dates.Day(1)
         dt1 = dt1 + Dates.Day(1)
     end
+    # Tests for dates before day 1 (0001-01-01)
+    dt = Dates.DateTime(0, 12, 20)
+    dt1 = Dates.Date(0, 12, 20)
+    check = (51, 51, 51, 51, 51, 52, 52, 52, 52, 52, 52, 52, 1, 1, 1, 1, 1, 1, 1, 2, 2)
+    for i = 1:21
+        @test Dates.week(dt) == check[i]
+        @test Dates.week(dt1) == check[i]
+        dt = dt + Dates.Day(1)
+        dt1 = dt1 + Dates.Day(1)
+    end
 end
 @testset "ISO year utils" begin
     # Tests from https://www.epochconverter.com/weeks
