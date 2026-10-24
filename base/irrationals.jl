@@ -220,7 +220,10 @@ end
 
 ^(x::AbstractIrrational, y::Integer) = float(x)^y
 
-round(x::Irrational, r::RoundingMode) = round(float(x), r)
+function round(x::Irrational, r::RoundingMode;
+               digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base::Union{Nothing,Integer}=nothing)
+    round(float(x), r; digits, sigdigits, base)
+end
 
 """
     @irrational sym [val] def

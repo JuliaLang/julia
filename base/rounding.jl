@@ -494,4 +494,12 @@ floor(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(floor, (Union{},
  ceil(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(ceil, (Union{}, slurp...)))
 round(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(round, (Union{}, slurp...)))
 
-round(x::Integer, r::RoundingMode) = x
+function round(x::Integer, r::RoundingMode;
+               digits::Union{Nothing,Integer}=nothing,
+               sigdigits::Union{Nothing,Integer}=nothing,
+               base::Union{Nothing,Integer}=nothing)
+    if digits === nothing && sigdigits === nothing
+        return x
+    end
+    return round(float(x), r; digits=digits, sigdigits=sigdigits, base=base)
+end
