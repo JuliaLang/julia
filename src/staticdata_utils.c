@@ -221,10 +221,12 @@ JL_DLLEXPORT void jl_push_inference_entrance_backtraces(jl_value_t* ci)
         return;
     }
     jl_value_t* backtrace = jl_backtrace_from_here(0, 1);
+    JL_GC_PUSH1(&backtrace);
     size_t end = jl_array_nrows(inference_entrance_backtraces);
     jl_array_grow_end(inference_entrance_backtraces, 2);
     jl_array_ptr_set(inference_entrance_backtraces, end, ci);
     jl_array_ptr_set(inference_entrance_backtraces, end + 1, backtrace);
+    JL_GC_POP();
     JL_UNLOCK(&inference_entrance_backtraces_mutex);
 }
 
