@@ -320,6 +320,8 @@ mutable struct InferenceState{I<:AbstractInterpreter}
     pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
     limitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on return
     cycle_backedges::Vector{Tuple{InferenceState{I}, Int}} # call-graph backedges connecting from callee to caller
+    # limited results of callees, reusable for calls made while this frame is in progress
+    limited_results::Union{Nothing,IdDict{MethodInstance,LimitedInferenceResult}}
 
     # IPO tracking of in-process work, shared with all frames given AbstractInterpreter
     callstack::Vector{Union{InferenceState{I},IRInterpretationState{I}}}
@@ -403,6 +405,7 @@ mutable struct InferenceState{I<:AbstractInterpreter}
         pclimitations = IdSet{InferenceState}()
         limitations = IdSet{InferenceState}()
         cycle_backedges = Tuple{InferenceState{I},Int}[]
+        limited_results = nothing
         callstack = Union{InferenceState{I},IRInterpretationState{I}}[]
         tasks = WorkThunk[]
 
@@ -430,7 +433,8 @@ mutable struct InferenceState{I<:AbstractInterpreter}
         this = new(
             mi, valid_worlds, mod, sptypes, slottypes, src, cfg, spec_info,
             currbb, currpc, ip, handler_info, ssavalue_uses, bb_states, bb_saw_latestworld, ssavaluetypes, ssaflags, edges, stmt_info,
-            tasks, pclimitations, limitations, cycle_backedges, callstack, parentid, frameid, cycleid,
+            tasks, pclimitations, limitations, cycle_backedges, limited_results, callstack,
+            parentid, frameid, cycleid,
             result, unreachable, bestguess, exc_bestguess, ipo_effects,
             _time_ns(), 0.0, 0, 0,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
