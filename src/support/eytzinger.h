@@ -40,17 +40,16 @@ static inline size_t _eyt_obj_idx(uintptr_t q, uintptr_t *tree, size_t n,
     assert(n % 2 == 0 && "Eytzinger tree not even length!");
     if (q <= min_addr || q > max_addr)
         return n;
-    size_t k = 1;
+    // the answer is the last node the search moved right from
+    size_t k = 1, found = n + 1;
     while (k <= n) {
-        int greater = (q > tree[k - 1]);
-        k <<= 1;
-        k |= greater;
+        size_t greater = q > tree[k - 1];
+        found = greater ? k : found;
+        k = 2 * k + greater;
     }
-    k >>= (__builtin_ctzll(k) + 1);
-    assert(k != 0);
-    assert(k <= n && "Eytzinger tree index out of bounds!");
-    assert(tree[k - 1] < q && "Failed to find lower bound for object!");
-    return k - 1;
+    assert(found <= n && "Eytzinger tree index out of bounds!");
+    assert(tree[found - 1] < q && "Failed to find lower bound for object!");
+    return found - 1;
 }
 
 // Map a 4-byte-aligned address to the query value used to test containment in
@@ -68,7 +67,7 @@ typedef struct {
 
 // One version of the tree, immutable once published. Its arrays live in the
 // same allocation as the header.
-typedef struct {
+typedef struct eyt_snapshot_t {
     size_t n; // 2 * nranges (tree/idxs have n+1 entries)
     uintptr_t min_addr;
     uintptr_t max_addr;
@@ -95,19 +94,24 @@ JL_DLLEXPORT void eyt_tree_init(eyt_tree_t *t, void (*retire)(void *snapshot)) J
 // numbered in insertion order. Thread-safe against readers and other writers.
 JL_DLLEXPORT size_t eyt_tree_add_range(eyt_tree_t *t, uintptr_t start, uintptr_t end, void *data) JL_NOTSAFEPOINT;
 
-// valid only until the thread next passes a safepoint, so never store or return it
+// valid only until the thread next passes a safepoint
 static inline eyt_snapshot_t *_eyt_tree_snapshot(eyt_tree_t *t) JL_NOTSAFEPOINT
 {
     return jl_atomic_load_relaxed(&t->snapshot);
 }
 
-// Returns whether `addr` is inside any registered range (start-exclusive,
+// Returns whether `addr` is inside any range of `s` (start-exclusive,
 // end-inclusive; see _eyt_addr_query).
-static inline int eyt_tree_is_in_range(eyt_tree_t *t, uintptr_t addr) JL_NOTSAFEPOINT
+static inline int eyt_snapshot_is_in_range(eyt_snapshot_t *s, uintptr_t addr) JL_NOTSAFEPOINT
 {
-    eyt_snapshot_t *s = _eyt_tree_snapshot(t);
     size_t idx = _eyt_obj_idx(_eyt_addr_query(addr), s->tree, s->n, s->min_addr, s->max_addr);
     return (s->tree[idx] & 1) == 0;
+}
+
+// Returns whether `addr` is inside any registered range.
+static inline int eyt_tree_is_in_range(eyt_tree_t *t, uintptr_t addr) JL_NOTSAFEPOINT
+{
+    return eyt_snapshot_is_in_range(_eyt_tree_snapshot(t), addr);
 }
 
 // Returns the caller-defined data for the range containing `addr`, or EYT_NOTFOUND.

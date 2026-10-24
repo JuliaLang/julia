@@ -322,6 +322,11 @@ JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
     return in_image;
 }
 
+eyt_snapshot_t *jl_image_tree_snapshot(void) JL_NOTSAFEPOINT
+{
+    return _eyt_tree_snapshot(&image_tree);
+}
+
 // Map an object to its "owning" top module
 JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT
 {
