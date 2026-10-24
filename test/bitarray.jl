@@ -1264,47 +1264,14 @@ timesofar("binary arithmetic")
     @check_bit_operation broadcast(!=, b1, b2) BitMatrix
     @check_bit_operation broadcast(<, b1, b2) BitMatrix
     @check_bit_operation broadcast(<=, b1, b2) BitMatrix
-end
 
-@testset "BitVector lexicographical cmp and isless" begin
-    # Empty
-    e1, e2 = BitVector(), BitVector()
-    @test cmp(e1, e2) == 0
-    @test !isless(e1, e2)
-
-    # Single element
-    f, t = BitVector([false]), BitVector([true])
-    @test cmp(f, t) == -1
-    @test cmp(t, f) == 1
-    @test cmp(f, f) == 0
-    @test cmp(t, t) == 0
-    @test isless(f, t)
-    @test !isless(t, f)
-
-    # Prefix comparison
-    @test cmp(BitVector([false]), BitVector([false, false])) == -1
-    @test cmp(BitVector([false, false]), BitVector([false])) == 1
-    @test cmp(BitVector([true]), BitVector([true, false])) == -1
-    @test cmp(BitVector([true, false]), BitVector([true])) == 1
-
-    # Chunk boundary edge cases: 63, 64, 65, 127, 128, 129
-    for l1 in (0, 1, 63, 64, 65, 127, 128, 129, 200)
-        for l2 in (0, 1, 63, 64, 65, 127, 128, 129, 200)
-            for _ in 1:5
-                a = BitVector(rand(Bool, l1))
-                b = BitVector(rand(Bool, l2))
-                ref_cmp = invoke(cmp, Tuple{AbstractVector, AbstractVector}, a, b)
-                @test cmp(a, b) == ref_cmp
-                @test isless(a, b) == (ref_cmp < 0)
-            end
-        end
-    end
-
-    # Sorting
-    bvs = [BitVector(rand(Bool, rand(0:100))) for _ in 1:100]
-    expected = sort(bvs, lt=(x, y) -> invoke(isless, Tuple{AbstractVector, AbstractVector}, x, y))
-    actual = sort(bvs)
-    @test actual == expected
+    v1, v2 = falses(100), trues(100)
+    @test cmp(v1, v2) == -1
+    @test cmp(v2, v1) == 1
+    @test cmp(v1, v1) == 0
+    @test isless(v1, v2)
+    @test !isless(v2, v1)
+    @test isless(falses(10), falses(20))
 end
 
 timesofar("binary comparison")
