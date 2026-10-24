@@ -1208,6 +1208,34 @@ function (==)(A::BitArray, B::BitArray)
     return A.chunks == B.chunks
 end
 
+function cmp(A::BitVector, B::BitVector)
+    A === B && return 0
+    n = min(length(A), length(B))
+    n_full = _div64(n)
+    Ac, Bc = A.chunks, B.chunks
+    @inbounds for i in 1:n_full
+        x, y = Ac[i], Bc[i]
+        if x != y
+            d = xor(x, y)
+            lsb = d & -d
+            return ((y & lsb) != 0) ? -1 : 1
+        end
+    end
+    rem = _mod64(n)
+    if !iszero(rem)
+        mask = _msk_end(rem)
+        @inbounds x, y = Ac[n_full + 1] & mask, Bc[n_full + 1] & mask
+        if x != y
+            d = xor(x, y)
+            lsb = d & -d
+            return ((y & lsb) != 0) ? -1 : 1
+        end
+    end
+    return cmp(length(A), length(B))
+end
+
+isless(A::BitVector, B::BitVector) = cmp(A, B) < 0
+
 
 ## Data movement ##
 
