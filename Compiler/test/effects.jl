@@ -280,6 +280,15 @@ end |> Compiler.is_consistent
 @test Base.infer_effects() do
     Maybe{Some{Base.RefValue{Int}}}()
 end |> Compiler.is_consistent
+# the field type of an uninitialized inline field may have no layout
+mutable struct UninitSubArray{T<:Real}
+    a::Int
+    v::SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true}
+    UninitSubArray{T}(a) where {T<:Real} = new{T}(a)
+end
+@test Base.infer_return_type((Any,)) do T
+    UninitSubArray{T}(1)
+end == UninitSubArray
 let f() = Maybe{String}()[]
     @test Base.return_types() do
         f() # this call should be concrete evaluated
@@ -1657,7 +1666,7 @@ let 𝕃 = Compiler.SimpleInferenceLattice.instance,
                      convert(Core.Binding, GlobalRef(PartitionEffects, name)))
     for f in (Core.getglobal_partition, Core.setglobal_partition, Core.swapglobal_partition,
               Core.replaceglobal_partition, Core.setglobalonce_partition,
-              Core.isdefinedglobal_partition, Core.depwarn_partition)
+              Core.isdefinedglobal_partition, Core.depwarn_binding)
         @test f in Compiler._EFFECTS_KNOWN_BUILTINS
     end
 
@@ -1682,4 +1691,48 @@ let 𝕃 = Compiler.SimpleInferenceLattice.instance,
         Any[Const(GlobalRef(PartitionEffects, :c)), Const(part(:c)), Const(:monotonic)], Int)
     @test !Compiler.is_effect_free(effects)
     Base.deprecate(PartitionEffects, :c, 0)
+end
+
+# reading a `const` field of a mutable object is consistent
+mutable struct ConstFieldEffects
+    const a::Union{String, Nothing}
+    b::Union{String, Nothing}
+    const p::Ptr{Cvoid}
+end
+const const_field_effects = ConstFieldEffects("a", "b", C_NULL)
+@test Compiler.is_consistent(Base.infer_effects(x -> x.a, (ConstFieldEffects,)))
+@test Compiler.is_consistent(Base.infer_effects(x -> x.p, (ConstFieldEffects,)))
+@test !Compiler.is_consistent(Base.infer_effects(x -> x.b, (ConstFieldEffects,)))
+@test Compiler.is_foldable_nothrow(Base.infer_effects(() -> const_field_effects.a, ()))
+@test !Compiler.is_consistent(Base.infer_effects(() -> const_field_effects.b, ()))
+abstract type AbstractConstFieldEffects end
+@test !Compiler.is_consistent(Base.infer_effects(x -> getfield(x, 1), (Any,)))
+@test !Compiler.is_consistent(Base.infer_effects(x -> x.a, (AbstractConstFieldEffects,)))
+# `Memory` and `MemoryRef` data pointers are relocated by staticdata.c
+@test !Compiler.is_consistent(Base.infer_effects(x -> getfield(x, :ptr), (Memory{Int},)))
+@test !Compiler.is_consistent(Base.infer_effects(x -> getfield(x, :ptr_or_offset), (MemoryRef{Int},)))
+let 𝕃 = Compiler.SimpleInferenceLattice.instance
+    effects = Compiler.builtin_effects(𝕃, getfield, Any[Memory{Int}, Compiler.Const(:ptr)], Ptr{Cvoid})
+    @test Compiler.is_consistent_if_inaccessiblememonly(effects)
+    @test Compiler.is_inaccessiblemem_or_argmemonly(effects)
+    effects = Compiler.builtin_effects(𝕃, getfield, Any[Core.TypeName, Compiler.Const(:constfields)], Ptr{Cvoid})
+    @test !Compiler.is_consistent(effects)
+    @test Compiler.is_inaccessiblemem_or_argmemonly(effects)
+end
+
+# reading a field that never changes accesses no mutable memory
+@test Compiler.is_inaccessiblememonly(Base.infer_effects(x -> x.a, (ConstFieldEffects,)))
+@test !Compiler.is_inaccessiblememonly(Base.infer_effects(x -> x.b, (ConstFieldEffects,)))
+@test Compiler.is_inaccessiblememonly(Base.infer_effects(x -> getfield(x, 1), (Tuple{Vector{Int}},)))
+@test !Compiler.is_inaccessiblememonly(Base.infer_effects(x -> getfield(x, :ptr), (Memory{Int},)))
+
+# relocated pointer fields are not folded from constant objects
+const relocatable_mem = Memory{Int}(undef, 2)
+const relocatable_refs = (memoryref(relocatable_mem, 1), memoryref(relocatable_mem, 2))
+relocatable_ptr(m) = m.ptr
+@test !fully_eliminated(() -> relocatable_mem.ptr, ())
+@test !fully_eliminated(() -> relocatable_ptr(relocatable_mem), ())
+@test !fully_eliminated(() -> getfield(relocatable_refs[1], :ptr_or_offset), ())
+@test !any(get_code(c -> getfield(c ? relocatable_refs[1] : relocatable_refs[2], :ptr_or_offset), (Bool,))) do x
+    x isa PhiNode && any(v -> v isa Ptr, x.values)
 end

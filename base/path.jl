@@ -893,7 +893,7 @@ is supported (not `~username`).
 
 See also: [`contractuser`](@ref).
 """
-expanduser(path::AbstractString) = expanduser(String(path))
+expanduser(path::AbstractString) = expanduser(String(path)::String)
 
 """
     contractuser(path::AbstractString)::AbstractString

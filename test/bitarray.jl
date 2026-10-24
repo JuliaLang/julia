@@ -6,6 +6,11 @@ using Random, Test, LinearAlgebra # Ideally, these tests should not depend on Li
 isdefined(Main, :SizedArrays) || @eval Main include("testhelpers/SizedArrays.jl")
 using .Main.SizedArrays
 
+struct ConvertsToBool
+    b::Bool
+end
+Base.convert(::Type{Bool}, x::ConvertsToBool) = x.b
+
 tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(x->tc(x...), [zip(r1,r2)...])
 tc(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) where {N} = true
 tc(r1::SubArray{Bool,N1,BitArray{N2}}, r2::SubArray{Bool,N1,<:Union{BitArray{N2},Array{Bool,N2}}}) where {N1,N2} = true
@@ -227,6 +232,11 @@ timesofar("promotions")
         @test resize!(b1, 340; first=true)[end-300+1:end] == b2
         b2 = copy(b1)
         @test resize!(b1, 404; first=true)[end-340+1:end] == b2
+
+        b1 = bitrand(32)
+        b2 = copy(b1)
+        resize!(b1, 63; first=true)
+        @test b1[32:63] == b2
     end
 
     @testset "sizeof (issue #7515)" begin
@@ -617,6 +627,21 @@ timesofar("constructors")
         @check_bit_operation setindex!(b1, b2, n1-m1+1:n1, t2) BitMatrix
         @check_bit_operation setindex!(b1, b2, k1, t2)         BitMatrix
     end
+
+    @testset "logical setindex! with an empty Cartesian-indexed value" begin
+        b = falses(4)
+        @test_throws DimensionMismatch b[BitVector([1, 1, 1, 0])] = PermutedDimsArray(Array{Bool}(undef, 2, 0), (2, 1))
+        e = falses(1, 2, 1, 0)
+        @test setindex!(e, view(zeros(3, 3, 3), 2:1, 2:2, 2:2), falses(1, 2, 1, 0)) === e
+    end
+
+    @testset "stored values convert with convert(Bool, x)" begin
+        x = [ConvertsToBool(true), ConvertsToBool(false)]
+        @test setindex!(falses(3), x, 2:3) == [false, true, false]
+        @test fill!(view(falses(3), 2:3), x[1]) == [true, true]
+        @test (B = falses(2, 2); fill!(view(B, 1:2, 2), x[1]); B) == [false true; false true]
+        @test (b = falses(3); splice!(b, 2:3, Tuple(x)); b) == [false, true, false]
+    end
 end
 
 timesofar("indexing")
@@ -895,6 +920,26 @@ timesofar("dequeue")
 end
 
 timesofar("unary arithmetic")
+
+# Check that same-size BitArray broadcasts of ops with a chunk-level equivalent take the chunked path.
+@testset "chunked broadcast bit operations" begin
+    b1 = bitrand(130)
+    b2 = bitrand(130)
+    dest = similar(b1)
+    chunked(f, args...) = Base.Broadcast.ischunkedbroadcast(dest,
+        convert(Base.Broadcast.Broadcasted{Nothing},
+            Base.Broadcast.instantiate(Base.Broadcast.broadcasted(f, args...))))
+
+    for f in (!, ~, identity)
+        @test chunked(f, b1)
+    end
+    for f in (&, |, xor, nand, nor, *, min, max, ==, !=, <, <=, >, >=)
+        @test chunked(f, b1, b2)
+    end
+    @test chunked(nand, b1, Base.Broadcast.broadcasted(!, b2))
+    @test (dest .= b1 .== (==).(true)) == falses(130)
+    @test (dest .= b1 .!= (!=).(true)) == trues(130)
+end
 
 @testset "Binary arithmetic operators" begin
     @testset "Matrix{Bool}/Matrix{Bool}" begin
@@ -1861,7 +1906,7 @@ end
         @test which(fill!, (typeof(viewvector), Bool)).sig == Tuple{typeof(fill!), SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}}}, Any}
         @test which(fill!, (typeof(viewarray), Bool)).sig == Tuple{typeof(fill!), SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}, Vararg{Union{Int,AbstractUnitRange{Int}}}}}, Any}
         fill!(viewvector, false)
-        fill!(viewarray, false)
+        @test fill!(viewarray, false) === viewarray
         @test all(bitvector[rangein] .== false)
         @test all(bitvector[rangeout] .== true)
         @test all(bitarray[rangein, rangein] .== false)

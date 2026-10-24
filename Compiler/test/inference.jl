@@ -399,6 +399,17 @@ end
         @test Compiler.materialize_inference_edges(invoke_root.edges) ==
             Core.svec(atype, ci1)
 
+        # a flattened identity edge is redundant with a dispatch edge to the same target
+        identity_leaf = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(match.method.sig, ci1))
+        @test Compiler.materialize_inference_edges(Core.svec(ci1, identity_leaf)) ==
+            Core.svec(ci1)
+        @test Compiler.materialize_inference_edges(Core.svec(identity_leaf, ci1)) ==
+            Core.svec(ci1)
+        # but a different CodeInstance of the same MethodInstance may carry another proof
+        @test Compiler.materialize_inference_edges(Core.svec(ci2, identity_leaf)) ==
+            Core.svec(ci2, match.method.sig, ci1)
+
         encoded_leaf = Compiler.LocalInferenceProof(
             Compiler.WorldRange(world), Core.svec(1, atype, ci1))
         standalone_leaf = Compiler.LocalInferenceProof(
@@ -407,6 +418,14 @@ end
             Compiler.WorldRange(world), Core.svec(encoded_leaf, standalone_leaf))
         @test Compiler.materialize_inference_edges(encoded_root.edges) ==
             Core.svec(1, atype, ci1)
+
+        # a possibly-ambiguous group does not replace a later edge to the same target
+        possibly_ambiguous_leaf = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(Core.PossiblyAmbiguous(), 1, atype, ci1))
+        possibly_ambiguous_root = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(possibly_ambiguous_leaf, standalone_leaf))
+        @test Compiler.materialize_inference_edges(possibly_ambiguous_root.edges) ==
+            Core.svec(Core.PossiblyAmbiguous(), 1, atype, ci1, ci1)
 
         regular_inf = Compiler.InferenceResult(mi, Compiler.typeinf_lattice(interp))
         regular_inf.result = Int
@@ -558,6 +577,42 @@ end
         @test Compiler.getedge(Compiler.InvokeCallInfo(ci1, match, nothing, atype), 1) === ci1
         @test Compiler.getedge(Compiler.OpaqueClosureCallInfo(ci2, match, nothing), 1) === ci2
         @test Compiler.getedge(Compiler.VirtualMethodMatchInfo(split), 2) === ci2
+    end
+
+    @testset "possibly-ambiguous edges" begin
+        pa = Core.PossiblyAmbiguous()
+        edges = Any[]
+        Compiler.add_one_edge!(edges, mi, true)
+        Compiler.add_one_edge!(edges, mi, true)
+        @test edges == Any[pa, mi]
+        # an edge that is not possibly ambiguous takes over the record
+        Compiler.add_one_edge!(edges, mi)
+        @test edges == Any[mi]
+        Compiler.add_one_edge!(edges, mi, true)
+        @test edges == Any[mi]
+
+        edges = Any[pa, mi]
+        Compiler.add_one_edge!(edges, ci1, true)
+        @test edges == Any[pa, ci1]
+        Compiler.add_one_edge!(edges, ci1)
+        @test edges == Any[ci1]
+
+        # an inlined call is not possibly ambiguous
+        edges = Any[pa, mi]
+        Compiler.add_inlining_edge!(edges, mi)
+        @test edges == Any[mi]
+        edges = Any[pa, mi]
+        Compiler.add_inlining_edge!(edges, ci1)
+        @test edges == Any[ci1]
+
+        # the same rule holds when inference proofs are flattened
+        proof(edges...) = Compiler.LocalInferenceProof(Compiler.WorldRange(world), Core.svec(edges...))
+        flatten(proofs...) = Compiler.materialize_inference_edges(Core.svec(proofs...))
+        @test flatten(proof(pa, ci1), proof(ci1)) == Core.svec(ci1)
+        @test flatten(proof(ci1), proof(pa, ci1)) == Core.svec(ci1)
+        @test flatten(proof(pa, ci1), proof(pa, ci1)) == Core.svec(pa, ci1)
+        @test flatten(proof(pa, ci1), proof(1, atype, ci1)) == Core.svec(ci1, 1, atype, ci1)
+        @test flatten(proof(1, atype, ci1), proof(pa, ci1)) == Core.svec(1, atype, ci1)
     end
 
     @testset "encoded groups are immutable units" begin
@@ -2384,9 +2439,10 @@ g23024(TT::Tuple{DataType}) = f23024(TT[1], v23024)
 
 @test !Compiler.isconstType(Type{typeof(Union{})}) # could be Core.TypeofBottom or Type{Union{}} at runtime
 @test !isa(Compiler.getfield_tfunc(Compiler.fallback_lattice, Type{Core.TypeofBottom}, Compiler.Const(:name)), Compiler.Const)
-# values of `Type{typeof(Union{})}` include `UnionAll` spellings (#33136), so
-# `supertype(::UnionAll)` is applicable too; the egal-pinned type stays precise
-@test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Any, Type{Core.AnyType}]
+# values of `Type{typeof(Union{})}` include `UnionAll` spellings (#33136) and the
+# `TypeEq` `Type{Union{}}`, so `supertype(::UnionAll)` and `supertype(::TypeEq)` are
+# applicable too; the egal-pinned type stays precise
+@test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Core.TypeEgal{Core.AnyType}, Any, Type{Core.AnyType}]
 @test Base.return_types(supertype, (Core.TypeEgal{typeof(Union{})},)) == Any[Core.TypeEgal{Core.AnyType}]
 
 # issue #23685
@@ -3134,19 +3190,99 @@ let 𝕃ᵢ = Compiler.InferenceLattice(Compiler.MustAliasesLattice(Compiler.Bas
 
     @test (MustAlias(2, 0, AliasableField{Any}, 1, Int) ⊑ Int)
     @test !(Int ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Int))
-    @test (Int ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Any))
-    @test (Const(42) ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Int))
+    # for soundness, ⊑ requires both alias and type information to be more narrow
+    @test !(Int ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Any))
+    @test !(Const(42) ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Int))
+    @test (Union{} ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Int))
     @test !(MustAlias(2, 0, AliasableField{Any}, 1, Any) ⊑ Int)
     @test tmerge(MustAlias(2, 0, AliasableField{Any}, 1, Any), Const(nothing)) === Any
     @test tmerge(MustAlias(2, 0, AliasableField{Any}, 1, Int), Const(nothing)) === Union{Int,Nothing}
     @test tmerge(Const(nothing), MustAlias(2, 0, AliasableField{Any}, 1, Any)) === Any
     @test tmerge(Const(nothing), MustAlias(2, 0, AliasableField{Any}, 1, Int)) === Union{Int,Nothing}
+    # merging two aliases of the same field (same slot, slot definition and field) keeps the
+    # alias, with the merged field type
+    let m = tmerge(MustAlias(2, 0, AliasableField{Any}, 1, Int), MustAlias(2, 0, AliasableField{Any}, 1, Nothing))
+        @test m isa MustAlias && m.slot == 2 && m.ssadef == 0 && m.fldidx == 1 && m.fldtyp === Union{Int,Nothing}
+    end
+    # different slot definitions or fields merge as their field types
+    @test tmerge(MustAlias(2, 1, AliasableField{Any}, 1, Int), MustAlias(2, 2, AliasableField{Any}, 1, Nothing)) === Union{Int,Nothing}
+    @test tmerge(MustAlias(2, 0, AliasableFields{Any,Any}, 1, Int), MustAlias(2, 0, AliasableFields{Any,Any}, 2, Nothing)) === Union{Int,Nothing}
+    # so do different container types, since the merged container type has no definite field layout
+    @test tmerge(MustAlias(2, 0, AliasableField{Any}, 1, Int), MustAlias(2, 0, AliasableFields{Any,Any}, 1, Nothing)) === Union{Int,Nothing}
     tmerge(Const(AbstractVector{<:Any}), Const(AbstractVector{T} where {T}))  # issue #56913
     @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Const(Bool)) === Const(true)
     @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Type{Bool}) === Const(true)
     @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Int), Type{Bool}) === Const(false)
     @test ifelse_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Int, Int) === Int
     @test ifelse_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Int), Int, Int) === Union{}
+
+    # `tmeet` with a type narrows the field type and keeps the alias, or gives `Union{}` if
+    # they are disjoint
+    let m = Compiler.tmeet(𝕃ᵢ, MustAlias(2, 0, AliasableField{Any}, 1, Union{Int,String}), Integer)
+        @test m isa MustAlias && m.slot == 2 && m.fldidx == 1 && m.fldtyp === Int
+    end
+    @test Compiler.tmeet(𝕃ᵢ, MustAlias(2, 0, AliasableField{Any}, 1, Int), String) === Union{}
+
+    # a limited field type makes the constructor return that `LimitedAccuracy`, without the alias
+    let causes = Compiler.IdSet{Compiler.InferenceState}()
+        l = MustAlias(2, 0, AliasableField{Any}, 1, Compiler.LimitedAccuracy(Int, causes))
+        @test l isa Compiler.LimitedAccuracy && l.typ === Int
+    end
+
+    # `narrow_mustalias(x, y)` returns the alias `y` with field type `x` if `x ⊑ y.fldtyp`,
+    # otherwise `x` itself
+    let alias = MustAlias(2, 0, AliasableField{Any}, 1, Union{Int,String})
+        narrow(@nospecialize(x), @nospecialize(y) = alias) = Compiler.narrow_mustalias(𝕃ᵢ, x, y)
+        # `Union{}` and slot wrappers are not narrowed
+        for x in Any[Union{}, alias, MustAlias(3, 0, AliasableField{Any}, 1, Int), Conditional(2, 0, Int, String)]
+            @test narrow(x) === x
+        end
+        # a narrowed result keeps the limitation of `x` and of `y`
+        causes = Compiler.IdSet{Compiler.InferenceState}()
+        l = narrow(Compiler.LimitedAccuracy(Int, causes))
+        @test l isa Compiler.LimitedAccuracy && l.typ == MustAlias(2, 0, AliasableField{Any}, 1, Int)
+        l = narrow(Int, Compiler.LimitedAccuracy(alias, causes))
+        @test l isa Compiler.LimitedAccuracy && l.typ == MustAlias(2, 0, AliasableField{Any}, 1, Int)
+        # `x` gets the alias even if it is not ⊑ the field type
+        @test narrow(Nothing) == MustAlias(2, 0, AliasableField{Any}, 1, Nothing)
+    end
+end
+
+# https://github.com/JuliaLang/julia/issues/63677
+struct Box63677
+    a::Union{Int,String}
+end
+pick63677(b, s) = isempty(s) ? b.a : s
+f63677(x, y) = typeof(x) === typeof(y)
+g63677(b, s) = f63677(b.a, pick63677(b, s))
+@test only(code_typed(g63677, (Box63677, String))).first.code[end] != ReturnNode(true) # not folded
+@test !g63677(Box63677(1), "y")
+
+# `conditional_change` on a slot holding a limited alias narrows the field type, and keeps
+# both the alias and the limitation
+let 𝕃ᵢ = Compiler.typeinf_lattice(Compiler.NativeInterpreter())
+    causes = Compiler.IdSet{Compiler.InferenceState}()
+    alias = MustAlias(2, 0, AliasableField{Any}, 1, Any)
+    state = Compiler.VarTable(undef, 3)
+    for i = 1:3
+        state[i] = Compiler.VarState(i == 3 ? Compiler.LimitedAccuracy(alias, causes) : Any, 0, false)
+    end
+    refinement = Compiler.conditional_change(𝕃ᵢ, state, Conditional(3, 0, Int, Any), :then)
+    @test refinement isa Compiler.StateRefinement
+    @test refinement.newtyp isa Compiler.LimitedAccuracy && refinement.newtyp.causes == causes
+    let newtyp = Compiler.ignorelimited(refinement.newtyp)
+        @test newtyp isa MustAlias && newtyp.slot == 2 && newtyp.fldtyp === Int
+    end
+    # a kind type (from `isa(x, DataType)`) narrows an alias slot the same way
+    let typealias = MustAlias(2, 0, AliasableField{Type}, 1, Type)
+        state[3] = Compiler.VarState(typealias, 0, false)
+        refinement = Compiler.conditional_change(𝕃ᵢ, state, Conditional(3, 0, DataType, Type), :then)
+        @test refinement.newtyp == MustAlias(2, 0, AliasableField{Type}, 1, DataType)
+    end
+    # a slot with a limited plain type keeps its limitation when narrowed
+    state[3] = Compiler.VarState(Compiler.LimitedAccuracy(Union{Int,String}, causes), 0, false)
+    refinement = Compiler.conditional_change(𝕃ᵢ, state, Conditional(3, 0, Int, String), :then)
+    @test refinement.newtyp isa Compiler.LimitedAccuracy && refinement.newtyp.typ === Int
 end
 
 maybeget_mustalias_tmerge(x::AliasableField) = x.f
@@ -3283,6 +3419,14 @@ _merge_same_aliases2(a) = (@assert isa(a.f, Nothing); a.f) # ::MustAlias(a, Cons
 @test Base.return_types((Bool,AliasableField,)) do b, a
     return merge_same_aliases(b, a) # ::Union{Int,Nothing}
 end |> only === Union{Nothing,Int}
+_merge_same_aliases3(a) = (@assert isa(a.f, String); a.f) # ::MustAlias(a, Const(:f1), String)
+merge_same_aliases_nonconst(b, a) = b ? _merge_same_aliases1(a) : _merge_same_aliases3(a) # MustAlias(a, Const(:f1), Union{Int,String})
+@test Base.return_types((Bool,AliasableField,)) do b, a
+    if isa(merge_same_aliases_nonconst(b, a), Int)
+        return a.f # ::Int
+    end
+    return 0
+end |> only === Int
 
 # call-site refinement
 isaint(a) = isa(a, Int)
@@ -3342,6 +3486,41 @@ from_interconditional_check22(::Union{Int,String}, y) = isa(y, Int)
     end
     return 0
 end |> only === Int
+
+# a field alias is a different refinement target from its parent slot (JuliaLang/julia#63981)
+from_interconditional_check31(x::AliasableField, _) = isa(x.f, Int)
+@test Base.infer_return_type((AliasableField{Any},)) do x
+    if from_interconditional_check31(x, x.f)
+        return x.f
+    end
+    return nothing
+end === Union{Int,Nothing}
+from_interconditional_check32(_, x::AliasableField) = isa(x.f, Int)
+@test Base.infer_return_type((AliasableField{Any},)) do x
+    if from_interconditional_check32(x.f, x)
+        return x.f
+    end
+    return nothing
+end === Union{Int,Nothing}
+issue63981_mk(x) = (; status = x > 0 ? :a : :b, n = x)
+issue63981_f(nt, _) = nt.status === :a
+@test Base.infer_return_type((Int,)) do x
+    nt = issue63981_mk(x)
+    return issue63981_f(nt, nt.n)
+end === Bool
+
+# refine the aliased field when the argument is a slot holding a `MustAlias` of a field
+# whose type isn't a `Type`
+from_interconditional_check41_mk(c) = (; f = (; s = c ? :a : :b, n = 1))
+from_interconditional_check41(y) = y.s === :a
+@test Base.infer_return_type((Bool,)) do c
+    x = from_interconditional_check41_mk(c)
+    y = x.f
+    if from_interconditional_check41(y)
+        return Val(x.f.s)
+    end
+    return nothing
+end === Union{Val{:a},Nothing}
 
 # prioritize constraints on slot objects
 # https://github.com/aviatesk/JET.jl/issues/509
@@ -6094,11 +6273,20 @@ end
 
 # Test that a function-wise `@max_methods` works as expected
 Base.Experimental.@max_methods 1 function f_max_methods end
-f_max_methods(x::Int) = 1
-f_max_methods(x::Float64) = 2
+f_max_methods(x::Int; k=1) = 1
+f_max_methods(x::Float64; k=1) = 2
+f_max_methods(x; k=1) = 3
 g_max_methods(x) = f_max_methods(x)
-@test only(Base.return_types(g_max_methods, Tuple{Int})) === Int
-@test only(Base.return_types(g_max_methods, Tuple{Any})) === Any
+@test Base.infer_return_type(g_max_methods, Tuple{Int}) === Int
+@test Base.infer_return_type(g_max_methods, Tuple{Any}) === Any
+@test Base.infer_return_type(x -> f_max_methods(x...), Tuple{Tuple{Int}}) === Int
+@test Base.infer_return_type(x -> f_max_methods(x...), Tuple{Tuple{Any}}) === Any
+@test Base.infer_return_type(x -> f_max_methods(x; k=2), Tuple{Int}) === Int
+@test Base.infer_return_type(x -> f_max_methods(x; k=2), Tuple{Any}) === Any
+@test Base.infer_return_type(x -> applicable(f_max_methods, x) ? 1 : nothing, Tuple{Int}) === Int
+@test Base.infer_return_type(x -> applicable(f_max_methods, x) ? 1 : nothing, Tuple{Any}) === Union{Nothing,Int}
+@test Base.infer_return_type(x -> applicable(f_max_methods, x; k=2) ? 1 : nothing, Tuple{Int}) === Int
+@test Base.infer_return_type(x -> applicable(f_max_methods, x; k=2) ? 1 : nothing, Tuple{Any}) === Union{Nothing,Int}
 
 # Test that `Core.TypeName.concrete_only` makes inference give up at call sites with
 # non-concrete argument types while keeping concrete call sites precise
@@ -7723,6 +7911,19 @@ global invalid_setglobal!_exct_modeling::Int
 @test Base.infer_exception_type((Float64,)) do x
     setglobal!(@__MODULE__, :invalid_setglobal!_exct_modeling, x)
 end == TypeError
+# a store by an unknown name may still reach a typed global that rejects the value
+@test Base.infer_exception_type((Module, Symbol, Float64)) do m, s, x
+    setglobal!(m, s, x)
+end === Union{ErrorException, TypeError}
+@test Base.infer_exception_type((Module, Symbol, Float64)) do m, s, x
+    setglobalonce!(m, s, x)
+end === Union{ErrorException, TypeError}
+@test Base.infer_exception_type((Module, Symbol, Float64)) do m, s, x
+    swapglobal!(m, s, x)
+end === Union{ErrorException, TypeError, UndefVarError}
+@test Base.infer_exception_type((Module, Symbol, Float64)) do m, s, x
+    replaceglobal!(m, s, 1, x)
+end === Union{ErrorException, TypeError, UndefVarError}
 
 # Issue #58257 - Hang in inference during BindingPartition resolution
 module A58257
@@ -8083,6 +8284,21 @@ end
 @test Float64 <: Base.infer_return_type(issue55548, (Int,))
 @test issue55548(Int64(0)) === 1.0
 
+# a `Conditional` on a since-reassigned slot must not be forwarded to const-prop as a
+# constraint on the slot's new value
+_stale_cond_pair(a, b) = (a, b)
+stale_cond1(c, n) = (h = (c && n === nothing); n = 1; _stale_cond_pair(n, h)[2] ? 1 : "")
+stale_cond2(n) = (h = n isa Nothing; n = 1; _stale_cond_pair(n, h)[2] ? 1 : "")
+stale_cond3(n) = _stale_cond_pair(n === nothing, (n = 1; n))[1] ? 1 : ""
+@test Base.infer_return_type(stale_cond1, (Bool, Nothing)) == Union{Int, String}
+@test Base.infer_return_type(stale_cond2, (Union{Nothing,Int},)) == Union{Int, String}
+@test Base.infer_return_type(stale_cond3, (Union{Nothing,Int},)) == Union{Int, String}
+@test stale_cond1(true, nothing) === 1
+# nor be applied to the slot's new value by the `Core.ifelse` refinement for builtins
+stale_cond4(n, m) = (h = n isa Int; n = m; Core.ifelse(h, n, 0))
+@test Base.infer_return_type(stale_cond4, (Union{Nothing,Int}, Union{Nothing,Int})) == Union{Nothing, Int}
+@test stale_cond4(1, nothing) === nothing
+
 # issue #60883: conditional propagation through wrapper functions
 mutable struct A60883
     a::Int
@@ -8162,6 +8378,8 @@ f60252(f, nt::NamedTuple) = NamedTuple{keys(nt)}(f(v) for v in values(nt))
 @inferred f60252(identity, (a=1, b=2))
 f60252_2(t::Tuple) = NamedTuple{(:a, :b), typeof(t)}(t)
 @test Base.infer_return_type(f60252_2, (Tuple{Vararg{Int64}},)) == @NamedTuple{a::Int64, b::Int64}
+f60252_3(::Type{T}) where {T<:Tuple{Any}} = NamedTuple{(), T}(())
+@test Base.infer_return_type(f60252_3, (Type{T} where T<:Tuple{Any},)) === Union{}
 
 # perform post const-prop' concrete evaluation when effects are further improved by const-prop'
 @noinline function concrete_eval_eligible_if_false(x::Float64, n::Int, y::Bool)
@@ -8294,6 +8512,13 @@ invoke_covered(x::Int) = invoke(invoke_narrower_target, Tuple{Integer}, x)
     @test Base.infer_exception_type(invoke_covered, (Int,)) === Union{}
     @test Compiler.is_nothrow(Base.infer_effects(invoke_covered, (Int,)))
     @test fully_eliminated(invoke_covered, (Int,); retval=1)
+end
+
+# JuliaLang/julia#63351: merging vararg-tuple `PartialStruct`s must keep the trailing `Vararg`
+issue63351(c, xs) = c ? (1, :a, xs...) : (2, :a, xs...)
+@testset "tmerge of vararg-tuple `PartialStruct`s" begin
+    @test Base.infer_return_type(issue63351, (Bool, Vector{Any})) == Tuple{Int, Symbol, Vararg{Any}}
+    @test issue63351(true, Any[3]) === (1, :a, 3)
 end
 
 # irinterp must visit every reachable block even when block numbers are not in

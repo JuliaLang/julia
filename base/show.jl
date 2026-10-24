@@ -43,6 +43,12 @@ function _isself(ft::DataType)
     name = ftname.singletonname
     ftname.name === name && return false
     mod = parentmodule(ft)
+    bpart = lookup_binding_partition(tls_world_age(), GlobalRef(mod, name))
+    if binding_kind(bpart) == PARTITION_KIND_BACKDATED_CONST
+        # Read the constant directly, since `getglobal` would warn about (or with
+        # `--depwarn=error`, refuse) accessing it from a world prior to its definition
+        return ft === typeof(partition_restriction(bpart))
+    end
     return isdefinedglobal(mod, name) && ft === typeof(getglobal(mod, name))
 end
 
@@ -624,7 +630,11 @@ end
 io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
 modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
-modulesof!(s::Set{Module}, x::TypeEq) = modulesof!(s, type_parameter(x))
+function modulesof!(s::Set{Module}, x::TypeEq)
+    p = type_parameter(x)
+    # the parameter may be a non-type value, e.g. `Type{1}` (#62897)
+    p isa Union{Core.AnyType,TypeVar} ? modulesof!(s, p) : s
+end
 modulesof!(s::Set{Module}, x::Core.TypeEgal) = modulesof!(s, type_parameter(x))
 function modulesof!(s::Set{Module}, x::Type)
     x = unwrap_unionall(x)
@@ -739,7 +749,19 @@ function make_typealias(@nospecialize(x::Type), io::Union{IO,Nothing}=nothing)
             end
         end
     end
-    if length(aliases) == 1 # TODO: select the type with the "best" (shortest?) environment
+    if length(aliases) > 1
+        # Compare the original aliases, before applying their parameters.
+        # Equivalent or incomparable aliases remain ambiguous.
+        candidates = aliases
+        aliases = filter(candidates) do (name, _)
+            alias = getglobal(name.mod, name.name)
+            !any(candidates) do (other_name, _)
+                other = getglobal(other_name.mod, other_name.name)
+                other <: alias && !(alias <: other)
+            end
+        end
+    end
+    if length(aliases) == 1
         return aliases[1]
     end
 end
@@ -996,7 +1018,7 @@ function show_unionaliases(io::IO, x::Union)
     if first && !tvar && length(aliases) == 1
         alias = aliases[1]
         env = alias[2]::SimpleVector
-        wheres = make_wheres(io, env, x)
+        wheres = make_wheres(io, env, alias[3])
         show_typealias(io, alias[1], env, wheres)
         show_wheres(io, wheres)
     else
@@ -1004,7 +1026,7 @@ function show_unionaliases(io::IO, x::Union)
             print(io, first ? "Union{" : ", ")
             first = false
             env = alias[2]::SimpleVector
-            wheres = make_wheres(io, env, x)
+            wheres = make_wheres(io, env, alias[3])
             show_typealias(io, alias[1], env, wheres)
             show_wheres(io, wheres)
         end
@@ -2380,7 +2402,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         else
             # first show the line number argument as a comment
             if isa(args[2], LineNumberNode) || is_expr(args[2], :line)
-                print(io, args[2], ' ')
+                a2 = args[2]
+                a2 isa LineNumberNode ? print(io, a2, ' ') : print(io, a2::Expr, ' ')
             end
             # Use the functional syntax unless specifically designated with
             # prec=-1 and hide the line number argument from the argument list
@@ -2448,21 +2471,18 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         if get(io, beginsym, false)
             print(io, '(')
             ind = indent + indent_width
-            for i = eachindex(ex.args)
+            # A `;` with only comments before it would parse as a NamedTuple,
+            # and a block needs at least one semicolon: `(x;)` `(;;)`
+            seen_expr = printed_semi = false
+            for (i, arg) in enumerate(ex.args)
                 if i > 1
-                    # if there was only a comment before the first semicolon, the expression would get parsed as a NamedTuple
-                    if !(i == 2 && ex.args[1] isa LineNumberNode)
-                        print(io, ';')
-                    end
+                    seen_expr && (print(io, ';'); printed_semi = true)
                     print(io, "\n", ' '^ind)
                 end
-                show_unquoted(io, ex.args[i], ind, -1, quote_level)
+                show_unquoted(io, arg, ind, -1, quote_level)
+                seen_expr |= !(arg isa LineNumberNode)
             end
-            if length(ex.args) < 2
-                print(io, isempty(ex.args) ? ";;)" : ";)")
-            else
-                print(io, ')')
-            end
+            print(io, printed_semi ? ")" : seen_expr ? ";)" : ";;)")
         else
             show_block(io, "begin", ex, indent, quote_level)
             print(io, "end")

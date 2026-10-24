@@ -664,7 +664,7 @@ pub extern "C" fn mmtk_get_obj_size(obj: ObjectReference) -> usize {
     }
 }
 
-#[cfg(all(feature = "object_pinning", not(feature = "non_moving")))]
+#[cfg(all(feature = "object_pinning", feature = "moving"))]
 #[no_mangle]
 pub extern "C" fn mmtk_pin_object(object: ObjectReference) -> bool {
     // We may in the future replace this with a check for the immix space (bound check), which should be much cheaper.
@@ -676,7 +676,7 @@ pub extern "C" fn mmtk_pin_object(object: ObjectReference) -> bool {
     }
 }
 
-#[cfg(all(feature = "object_pinning", not(feature = "non_moving")))]
+#[cfg(all(feature = "object_pinning", feature = "moving"))]
 #[no_mangle]
 pub extern "C" fn mmtk_unpin_object(object: ObjectReference) -> bool {
     if mmtk_object_is_managed_by_mmtk(object.to_raw_address().as_usize()) {
@@ -687,7 +687,7 @@ pub extern "C" fn mmtk_unpin_object(object: ObjectReference) -> bool {
     }
 }
 
-#[cfg(all(feature = "object_pinning", not(feature = "non_moving")))]
+#[cfg(all(feature = "object_pinning", feature = "moving"))]
 #[no_mangle]
 pub extern "C" fn mmtk_is_pinned(object: ObjectReference) -> bool {
     if mmtk_object_is_managed_by_mmtk(object.to_raw_address().as_usize()) {

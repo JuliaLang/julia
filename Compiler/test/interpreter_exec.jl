@@ -140,30 +140,53 @@ let ci = code_typed(exec_gp_isdef, ())[1][1]
     @test exec_gp_isdef() === true
 end
 
-# A reformulated `modifyglobal!` reaches the interpreter as an `:invoke_modify` node carrying
-# the frozen partition. The interpreter drops the node's code instance and calls the builtin,
-# so the store must still run; a hand-built thunk is always interpreted, so it exercises that.
-global exec_gp_m::Int = 2
-exec_gp_add(a::Int, b::Int) = a + b
-@assert exec_gp_add(1, 2) === 3 # so the method instance below has a cached code instance
-let m = Meta.@lower(1 + 1), add_ci = Base.method_instance(exec_gp_add, (Int, Int)).cache,
-    part = Base.lookup_binding_partition(Base.get_world_counter(),
-                                         convert(Core.Binding, GlobalRef(@__MODULE__, :exec_gp_m)))
+# An `:invoke_modify` node carries the reduce function's code instance (or method instance),
+# which the interpreter hands to the runtime to apply the reduce function through, for every
+# modify builtin; a hand-built thunk is always interpreted, so it exercises that.
+exec_im_op(a::Integer, b::Int) = a + b
+exec_im_op(a::Int, b::Int) = a * b
+exec_im_op(a::Float64, b::Int) = a - b
+const exec_im_target = Base.specialize_method(which(exec_im_op, (Integer, Int)),
+                                              Tuple{typeof(exec_im_op), Int, Int}, Core.svec())
+function exec_im_thunk(f, pre, post=())
+    m = Meta.@lower(1 + 1)
     @assert Meta.isexpr(m, :thunk)
-    @assert add_ci isa Core.CodeInstance
     src = m.args[1]::CodeInfo
     src.code = Any[
-        Expr(:invoke_modify, add_ci, GlobalRef(Core, :modifyglobal_partition),
-             QuoteNode(part), GlobalRef(@__MODULE__, :exec_gp_add), 1),
+        Expr(:invoke_modify, exec_im_target, f, pre..., GlobalRef(@__MODULE__, :exec_im_op), 2, post...),
         ReturnNode(SSAValue(1)),
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = nstmts
     src.ssaflags = fill(zero(UInt32), nstmts)
     src.debuginfo = Core.DebugInfo(:none)
-    @test (@eval $m) === (2 => 3)
-    @test exec_gp_m === 3
+    return m
+end
+mutable struct ExecIMBox
+    x::Int
+    @atomic y::Int
+    z::Any
+end
+global exec_gp_m::Int = 2
+let b = ExecIMBox(3, 3, 3),
+    part = Base.lookup_binding_partition(Base.get_world_counter(),
+                                         convert(Core.Binding, GlobalRef(@__MODULE__, :exec_gp_m)))
+    @test (@eval $(exec_im_thunk(GlobalRef(Core, :modifyglobal_partition), (QuoteNode(part),)))) === (2 => 4)
+    @test exec_gp_m === 4
+    @test (@eval $(exec_im_thunk(GlobalRef(Core, :modifyglobal!), (@__MODULE__, QuoteNode(:exec_gp_m))))) === (4 => 6)
+    @test exec_gp_m === 6
+    @test (@eval $(exec_im_thunk(GlobalRef(Core, :modifyfield!), (b, QuoteNode(:x))))) === (3 => 5)
+    @test (@eval $(exec_im_thunk(GlobalRef(Core, :modifyfield!), (b, QuoteNode(:y)), (QuoteNode(:sequentially_consistent),)))) === (3 => 5)
+    @test (@eval $(exec_im_thunk(GlobalRef(Core, :modifyfield!), (b, QuoteNode(:z))))) === Pair{Any,Any}(3, 5)
+    mem = Memory{Int}(undef, 1)
+    mem[1] = 3
+    @test (@eval $(exec_im_thunk(GlobalRef(Core, :memoryrefmodify!), (memoryref(mem),), (QuoteNode(:not_atomic), false)))) === (3 => 5)
+    r = Ref(3)
+    GC.@preserve r begin
+        p = Base.unsafe_convert(Ptr{Int}, r)
+        @test (@eval $(exec_im_thunk(GlobalRef(Core.Intrinsics, :atomic_pointermodify), (p,), (QuoteNode(:sequentially_consistent),)))) === (3 => 5)
+    end
 end
 # the builtin names its target with a partition, and only that
 @test_throws TypeError Core.modifyglobal_partition(GlobalRef(@__MODULE__, :exec_gp_m), +, 1)
-@test exec_gp_m === 3
+@test exec_gp_m === 6

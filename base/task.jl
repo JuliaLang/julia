@@ -491,8 +491,15 @@ unaffected: cancellation reaches `t` only through its own governing token
 
 Throws a `ConcurrencyViolationError` if `t` is the currently running task, to prevent deadlocks.
 """
-wait(t::Task; throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    wait(t, check_cancel_arg(cancel); throw)
+function wait(t::Task; throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    # An explicit token is checked here, the scoped one only if the wait blocks.
+    cancel = precheck_cancel_arg(cancel)
+    istaskdone(t) || return wait(t, resolve_cancel_token(cancel); throw)
+    if throw && istaskfailed(t)
+        Core.throw(TaskFailedException(t))
+    end
+    nothing
+end
 @noinline function wait(t::Task, tok::MaybeToken; throw=true)
     # Inlining a blocking call buys nothing; this also keeps the inlineable `fetch(::Task)` small.
     _wait(t, tok)
@@ -1350,6 +1357,19 @@ true
 julia> istaskdone(b)
 true
 ```
+
+A task that is blocked in [`wait`](@ref) can be woken with a value, which is then returned
+by `wait` in that task:
+```jldoctest
+julia> t = Task(() -> 2 * wait());
+
+julia> schedule(t); yield(); # `t` starts and blocks in `wait()`
+
+julia> schedule(t, 21);
+
+julia> fetch(t)
+42
+```
 """
 function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
@@ -1565,9 +1585,23 @@ function wait_forever()
     end
 end
 
-const get_sched_task = OncePerThread{Task}() do
-    Task(wait_forever)
+function _new_sched_task()
+    ct = current_task()
+    rngState0 = ct.rngState0
+    rngState1 = ct.rngState1
+    rngState2 = ct.rngState2
+    rngState3 = ct.rngState3
+    rngState4 = ct.rngState4
+    t = Task(wait_forever)
+    ct.rngState0 = rngState0
+    ct.rngState1 = rngState1
+    ct.rngState2 = rngState2
+    ct.rngState3 = rngState3
+    ct.rngState4 = rngState4
+    return t
 end
+
+const get_sched_task = OncePerThread{Task}(_new_sched_task)
 
 function ensure_rescheduled(othertask::Task)
     ct = current_task()
@@ -1644,10 +1678,12 @@ function wait()
         # the current task, so that an asynchronously thrown InterruptException
         # is delivered to a task that can observe it, rather than swallowed by
         # the internal scheduler task (#58689).
-        sched_task = get_sched_task()
-        if ct !== sched_task && ct_done
-            istaskdone(sched_task) && (sched_task = @task wait())
-            return yieldto(sched_task)
+        if ct_done
+            sched_task = get_sched_task()
+            if ct !== sched_task
+                istaskdone(sched_task) && (sched_task = _new_sched_task())
+                return yieldto(sched_task)
+            end
         end
         task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
     end

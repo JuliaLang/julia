@@ -20,8 +20,12 @@
 // For variant 1 JL_ELF_TLS_INIT_SIZE is the size of the thread control block (TCB)
 // For variant 2 JL_ELF_TLS_INIT_SIZE is 0
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
-#  if defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_RISCV64_)
+#  if defined(_CPU_X86_64_) || defined(_CPU_X86_)
 #    define JL_ELF_TLS_VARIANT 2
+#    define JL_ELF_TLS_INIT_SIZE 0
+#  elif defined(_CPU_RISCV64_)
+// The thread pointer points just past the TCB, at the first static TLS block.
+#    define JL_ELF_TLS_VARIANT 1
 #    define JL_ELF_TLS_INIT_SIZE 0
 #  elif defined(_CPU_AARCH64_)
 #    define JL_ELF_TLS_VARIANT 1
@@ -598,7 +602,7 @@ static void jl_delete_thread(void *value)
 #elif defined(JL_DISABLE_LIBUNWIND)
     // nothing
 #elif defined(__APPLE__)
-    jl_unlock_profile_wr();
+    if (havelock) jl_unlock_profile_wr();
 #else
     pthread_mutex_unlock(&in_signal_lock);
 #endif

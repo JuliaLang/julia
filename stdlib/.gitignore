@@ -34,3 +34,6 @@
 /*_jll/StdlibArtifacts.toml
 /*/Manifest.toml
 /*.image
+
+/checkbounds-release
+/checkbounds-debug

@@ -57,9 +57,10 @@ function push!(s::IdSet, @nospecialize(x))
             s.max = idx + 1
         else
             newidx = RefValue{Int}(0)
-            setfield!(s, :list, ccall(:jl_idset_put_key, Any, (Any, Any, Ptr{Int}), s.list, x, newidx))
+            newmax = RefValue{Csize_t}(s.max)
+            setfield!(s, :list, ccall(:jl_idset_put_key, Any, (Any, Any, Ptr{Csize_t}, Ptr{Int}), s.list, x, newmax, newidx))
             idx = newidx[]
-            s.max = idx < 0 ? -idx : idx + 1
+            s.max = Int(newmax[])
         end
         @assert s.list[s.max] === x "unexpected object in bucket"
         setfield!(s, :idxs, ccall(:jl_idset_put_idx, Any, (Any, Any, Int), s.list, s.idxs, idx))

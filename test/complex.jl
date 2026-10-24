@@ -139,6 +139,11 @@ end
     @test isequal(complex(true,false) * true, complex(true,false) * complex(true,false))
 end
 
+@testset "wrapping arithmetic" begin
+    @test complex(typemax(Int), 1) +% 1 == complex(typemin(Int), 1)
+    @test -%(complex(typemin(Int), 1)) == complex(typemin(Int), -1)
+end
+
 @testset "basic math functions" begin
     # We compare to BigFloat instead of hard-coding
     # values, assuming that BigFloat has an independent and independently
@@ -1118,12 +1123,12 @@ end
 
         @test isequal(one(T) / complex(T(Inf),-zero(T)), complex(zero(T), zero(T)))
         @test isequal(one(T) / complex(T(Inf),-one(T)),  complex(zero(T), zero(T)))
-        @test isequal(one(T) / complex(T(Inf),T(-NaN)),  complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(Inf),-T(NaN)),  complex(zero(T), zero(T)))
         @test isequal(one(T) / complex(T(Inf),T(-Inf)),  complex(zero(T), zero(T)))
 
         @test isequal(one(T) / complex(T(-Inf),-zero(T)),complex(-zero(T), zero(T)))
         @test isequal(one(T) / complex(T(-Inf),-one(T)), complex(-zero(T), zero(T)))
-        @test isequal(one(T) / complex(T(-Inf),T(-NaN)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(-Inf),-T(NaN)), complex(-zero(T), zero(T)))
         @test isequal(one(T) / complex(T(-Inf),T(-Inf)), complex(-zero(T), zero(T)))
 
         @test isequal(one(T) / complex(zero(T), T(Inf)), complex(zero(T), -zero(T)))
@@ -1136,11 +1141,11 @@ end
 
         @test isequal(one(T) / complex(-zero(T), T(Inf)), complex(-zero(T), -zero(T)))
         @test isequal(one(T) / complex(-one(T),  T(Inf)), complex(-zero(T), -zero(T)))
-        @test isequal(one(T) / complex(T(-NaN),  T(Inf)), complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(-T(NaN),  T(Inf)), complex(-zero(T), -zero(T)))
 
         @test isequal(one(T) / complex(-zero(T), T(-Inf)), complex(-zero(T), zero(T)))
         @test isequal(one(T) / complex(-one(T),  T(-Inf)), complex(-zero(T), zero(T)))
-        @test isequal(one(T) / complex(T(-NaN),  T(-Inf)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(-T(NaN),  T(-Inf)), complex(-zero(T), zero(T)))
 
         # divide complex by complex Inf
         @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T)))

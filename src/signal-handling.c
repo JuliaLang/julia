@@ -135,8 +135,8 @@ static uintptr_t jl_lock_profile_rd_held(void) JL_NOTSAFEPOINT
 
 void jl_lock_profile(void)
 {
-    int got = jl_trylock_profile();
-    assert(got); (void)got;
+    if (!jl_trylock_profile())
+        abort();
 }
 
 int jl_trylock_profile(void)
@@ -365,10 +365,20 @@ static int jl_ignore_sigint(void)
     return 0;
 }
 
-static int exit_on_sigint = 0;
+// what ^C does
+enum jl_sigint_policy {
+    JL_SIGINT_CANCEL, // cancel the current ^C episode (if any) and notify the listener
+    JL_SIGINT_EXIT,   // terminate the process
+};
+static _Atomic(int) sigint_policy = JL_SIGINT_CANCEL;
 JL_DLLEXPORT void jl_exit_on_sigint(int on)
 {
-    exit_on_sigint = on;
+    jl_atomic_store_relaxed(&sigint_policy, on ? JL_SIGINT_EXIT : JL_SIGINT_CANCEL);
+}
+
+static enum jl_sigint_policy jl_sigint_get_policy(void) JL_NOTSAFEPOINT
+{
+    return (enum jl_sigint_policy)jl_atomic_load_relaxed(&sigint_policy);
 }
 
 static uintptr_t jl_get_pc_from_ctx(const void *_ctx);
@@ -437,6 +447,14 @@ static void jl_check_profile_autostop(void) JL_NOTSAFEPOINT
 // source cancelled and pings this async condition; the Base-side listener
 // task performs the remaining delivery work.
 static _Atomic(uv_async_t *) sigint_cond_loc = NULL;
+
+enum jl_sigint_cond_state {
+    JL_SIGINT_COND_NONE,
+    JL_SIGINT_COND_INSTALLED,
+    JL_SIGINT_COND_REMOVED,
+};
+static _Atomic(int) sigint_cond_state = JL_SIGINT_COND_NONE;
+
 JL_DLLEXPORT void jl_set_sigint_cond(uv_async_t *cond) JL_NOTSAFEPOINT
 {
     // The lock pairs with deliver_sigint_notification: a notification in
@@ -444,6 +462,10 @@ JL_DLLEXPORT void jl_set_sigint_cond(uv_async_t *cond) JL_NOTSAFEPOINT
     // handle. (Lock-free readers only probe for NULL.)
     uv_mutex_lock(&sigint_state_lock);
     jl_atomic_store_relaxed(&sigint_cond_loc, cond);
+    if (cond != NULL)
+        jl_atomic_store_relaxed(&sigint_cond_state, JL_SIGINT_COND_INSTALLED);
+    else if (jl_atomic_load_relaxed(&sigint_cond_state) == JL_SIGINT_COND_INSTALLED)
+        jl_atomic_store_relaxed(&sigint_cond_state, JL_SIGINT_COND_REMOVED);
     uv_mutex_unlock(&sigint_state_lock);
 }
 
@@ -603,9 +625,12 @@ static void jl_cancel_subtree_mark(jl_cancel_source_t *root, uint8_t sev) JL_NOT
 // source cancelled, mark the interrupt as pending, and notify the sigint
 // listener task, which performs the remaining (Julia-side) delivery work.
 // Callable from non-Julia threads; must not allocate GC memory or take
-// Julia-side locks.
-static void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
+// Julia-side locks. Returns 0 if no listener is installed to receive the
+// cancellation.
+static int jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
 {
+    if (jl_atomic_load_relaxed(&sigint_cond_state) == JL_SIGINT_COND_NONE)
+        return 0;
     // Mark the episode source cancelled (SAFE severity) here rather than
     // leaving it to the julia-side listener: the state byte is what every
     // cancellation point and signal-delivery gate reads, so the signal-based
@@ -670,6 +695,7 @@ static void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
     }
     jl_atomic_store_release(&sigint_pending_gen, gen);
     deliver_sigint_notification();
+    return 1;
 }
 
 static void stack_overflow_warning(void)

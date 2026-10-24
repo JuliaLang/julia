@@ -67,6 +67,19 @@ begin
 end
 """) == (true, false, (true, true, true, false))
 
+# `@isdefined` before the only assignment of a captured variable
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_isdefined_before_assign()
+        r = @isdefined(x)
+        x = 1
+        g() = x
+        r
+    end
+    f_isdefined_before_assign()
+end
+""") === false
+
 # Mutually recursive closures (closure capturing a closure)
 @test JuliaLowering.include_string(test_mod, """
 let
@@ -252,6 +265,22 @@ let
 end
 """) == (3,4,5)
 
+# Opaque closure lambda from a macro expansion
+@test JuliaLowering.include_string(test_mod, """
+let
+    oc = Base.Experimental.@opaque(@noinline x->2x)
+    oc(3)
+end
+""") == 6
+
+# `where` makes the argument type a UnionAll, rejected at runtime as in flisp
+@test_throws "must be a tuple type" JuliaLowering.include_string(test_mod, """
+Base.Experimental.@opaque ((x::T,y::T) where {T}) -> 123
+""")
+@test_throws LoweringError JuliaLowering.include_string(test_mod, """
+Base.Experimental.@opaque Tuple{Int}->_ ((x,) where {T}) -> 123
+""")
+
 # Opaque closure inside a closure can capture the enclosing closure's captures
 @test JuliaLowering.include_string(test_mod, """
 let y = [1]
@@ -315,12 +344,6 @@ end
 @test JuliaLowering.include_string(test_mod, """
 (x->(y->(z->(Base.Experimental.@opaque ()->(x,y,z)))('z'))('y'))('x')()
 """) == ('x','y','z')
-
-# opaque_closure_method internals
-method_ex = lower_str(test_mod, "Base.Experimental.@opaque x -> 2x").args[1].code[3]
-@test method_ex.head === :opaque_closure_method
-@test method_ex.args[1] === nothing
-@test method_ex.args[4] isa LineNumberNode
 
 # Argument reassigned in outer scope - no Box needed
 @test JuliaLowering.include_string(test_mod, """
@@ -569,6 +592,16 @@ end
 @test_throws UndefVarError JuliaLowering.include_string(test_mod, """
 let f(;x::typeof(f)) = x
     f(x=f)
+end
+""") isa Function
+
+# Lambda in the signature of a local function
+@test JuliaLowering.include_string(test_mod, """
+let
+    function f_lambda_in_sig()
+        function g(::Val{x->2x}) end
+    end
+    f_lambda_in_sig()
 end
 """) isa Function
 
@@ -1011,8 +1044,9 @@ func_in_own_sp(func_in_own_sp)
     @test test_mod.f_isdefined_sp(1)()
     @test_throws UndefVarError test_mod.f_isdefined_sp(nothing)
 
-    # Closure with an anonymous static parameter of its own plus a captured one
-    @test JuliaLowering.include_string(test_mod, """
+    # Closure with an anonymous static parameter of its own plus a captured one.
+    # Only the old edition warns about the unused (mangled) `_` type variable.
+    @test_warn r"declares type variable _" @test jl_eval(test_mod, """
     begin
         function f_anon_sp_closure(x::T) where T
             g(y) where _ = (y, T)
@@ -1020,7 +1054,16 @@ func_in_own_sp(func_in_own_sp)
         end
         f_anon_sp_closure(1)
     end
-    """) == (2, Int)
+    """; edition=JL_OLD_EDITION) == (2, Int)
+    @test_nowarn @test jl_eval(test_mod, """
+    begin
+        function f_anon_sp_closure_new(x::T) where T
+            g(y) where _ = (y, T)
+            g(2)
+        end
+        f_anon_sp_closure_new(1)
+    end
+    """; edition=JL_NEW_EDITION) == (2, Int)
 
     # `let` inside a closure signature referencing a captured static parameter
     @test JuliaLowering.include_string(test_mod, """
@@ -1557,7 +1600,7 @@ end
         A([2])
     end)
     @test fl_eval(Module(), ex_local_alias) == 1
-    @test jl_eval(Module(), ex_local_alias) == 1
+    @test jl_eval(Module(), ex_local_alias; edition=JL_NEW_EDITION) == 1
 
     ex_alias_semantics = :(let
         A{T} = Vector{T}
@@ -1566,7 +1609,7 @@ end
         (A([2]), r2, A isa Function)
     end)
     @test fl_eval(Module(), ex_alias_semantics) == (1, :MethodError, true)
-    @test jl_eval(Module(), ex_alias_semantics) == (1, :MethodError, true)
+    @test jl_eval(Module(), ex_alias_semantics; edition=JL_NEW_EDITION) == (1, :MethodError, true)
 
     ex_typeof_value_sig = :(let
         f = 2
@@ -1574,7 +1617,7 @@ end
         f(2)
     end)
     @test fl_eval(Module(), ex_typeof_value_sig) == 1
-    @test jl_eval(Module(), ex_typeof_value_sig) == 1
+    @test jl_eval(Module(), ex_typeof_value_sig; edition=JL_NEW_EDITION) == 1
 
     ex_isdefined_sig = :(let
         r = try
@@ -1586,7 +1629,7 @@ end
         r
     end)
     @test fl_eval(Module(), ex_isdefined_sig) == :MethodError
-    @test jl_eval(Module(), ex_isdefined_sig) == :MethodError
+    @test jl_eval(Module(), ex_isdefined_sig; edition=JL_NEW_EDITION) == :MethodError
 
     ex_where_self = :(let
         r = try
@@ -1598,7 +1641,7 @@ end
         r
     end)
     @test fl_eval(Module(), ex_where_self) == :UndefVarError
-    @test jl_eval(Module(), ex_where_self) == :UndefVarError
+    @test jl_eval(Module(), ex_where_self; edition=JL_NEW_EDITION) == :UndefVarError
 
     ex_kwarg_self = :(let
         r = try
@@ -1611,7 +1654,7 @@ end
         r
     end)
     @test fl_eval(Module(), ex_kwarg_self) == :TypeError
-    @test jl_eval(Module(), ex_kwarg_self) == :TypeError
+    @test jl_eval(Module(), ex_kwarg_self; edition=JL_NEW_EDITION) == :TypeError
 
     ex_error_leaves_name = :(let
         A = Vector
@@ -1624,7 +1667,7 @@ end
         (ok, A === Vector, A isa Function)
     end)
     @test fl_eval(Module(), ex_error_leaves_name) == (:ArgumentError, true, false)
-    @test jl_eval(Module(), ex_error_leaves_name) == (:ArgumentError, true, false)
+    @test jl_eval(Module(), ex_error_leaves_name; edition=JL_NEW_EDITION) == (:ArgumentError, true, false)
 
     ex_sig_assigns_capture = :(let
         local y
@@ -1632,7 +1675,7 @@ end
         f(1)
     end)
     @test fl_eval(Module(), ex_sig_assigns_capture) == 3
-    @test jl_eval(Module(), ex_sig_assigns_capture) == 3
+    @test jl_eval(Module(), ex_sig_assigns_capture; edition=JL_NEW_EDITION) == 3
 
     # broken in the same way for both, but shouldn't crash
     ex_undef_inner = :(function f()
@@ -1655,5 +1698,5 @@ end
         g()
     end; f())
     @test fl_eval(Module(), ex_undef_inner_short) == 2
-    @test_broken jl_eval(Module(), ex_undef_inner_short) == 2
+    @test_broken jl_eval(Module(), ex_undef_inner_short; edition=JL_NEW_EDITION) == 2
 end

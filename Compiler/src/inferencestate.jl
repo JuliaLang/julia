@@ -1467,6 +1467,9 @@ function get_max_methods_for_func(@nospecialize(f))
     return nothing
 end
 
+max_methods_callee(@nospecialize(f), argtypes::Vector{Any}) =
+    f === Core.kwcall && length(argtypes) >= 3 ? singleton_type(argtypes[3]) : f
+
 # Whether `f` is marked to only allow inference of call sites with fully concrete
 # argument types. `f === nothing` means the callee value is unknown.
 function is_concrete_only(@nospecialize(f))
@@ -1520,7 +1523,7 @@ function Future{T}(f, immediate::Bool, interp::AbstractInterpreter, sv::AbsIntSt
     if immediate
         return Future{T}(f(interp, sv))
     else
-        @assert applicable(f, interp, sv)
+        @assert Core._hasmethod(Tuple{Core.Typeof(f), typeof(interp), typeof(sv)})
         result = Future{T}()
         push!(sv.tasks, function (interp, sv)
             result[] = f(interp, sv)
@@ -1536,7 +1539,7 @@ function Future{T}(f, prev::Future{S}, interp::AbstractInterpreter, sv::AbsIntSt
     else
         @assert Core._hasmethod(Tuple{Core.Typeof(f), S, typeof(interp), typeof(sv)})
         result = Future{T}()
-        @assert !isa(sv, InferenceState) || interp === sv.interp
+        @assert !isa(sv, InferenceState) || sv.interp::typeof(interp) === interp
         push!(sv.tasks, function (interp, sv)
             result[] = f(later[], interp, sv) # capture just later, instead of all of prev
             return true
@@ -1560,7 +1563,9 @@ function doworkloop(interp::AbstractInterpreter, sv::AbsIntState)
     prevcallstack = length(sv.callstack)
     prev == 0 && return false
     task = pop!(tasks)
-    completed = task(interp, sv)
+    # pass the field (already boxed) rather than `interp`, which may be a concrete
+    # immutable that this dynamic call would box again
+    completed = task(sv.interp, sv)
     tasks = sv.tasks # allow dropping gc root over the previous call
     completed isa Bool || throw(TypeError(:return, "", Bool, task)) # print the task on failure as part of the error message, instead of just "@ workloop:line"
     if !completed

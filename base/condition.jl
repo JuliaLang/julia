@@ -262,6 +262,9 @@ Block the current task until some event occurs.
 * [`Task`](@ref): Wait for a `Task` to finish. See the `Task`-specific docstring of `wait` for
   the exact behavior.
 * [`RawFD`](@ref): Wait for changes on a file descriptor (see the `FileWatching` package).
+* [`Timer`](@ref), [`AsyncCondition`](@ref Base.AsyncCondition): Wait for the timer to trigger or
+  the condition to be notified. Throws an [`EOFError`](@ref) if the object has been closed; see
+  their docstrings for the exact behavior.
 
 If no argument is passed, the task blocks for an undefined period. A task can only be
 restarted by an explicit call to [`schedule`](@ref) or [`yieldto`](@ref).
@@ -421,9 +424,8 @@ function notify(c::GenericCondition, @nospecialize(arg), all, error)
         # interrupted task resumes via whatever its claimer scheduled and
         # will find its entry already unlinked).
         t = @atomic :monotonic w.task
-        if !(t isa Task && claim_wait(t, w))
-            continue
-        end
+        t isa Task || continue
+        claim_wait(t, w) || continue
         schedule(t, arg, error=error)
         cnt += 1
         all || break

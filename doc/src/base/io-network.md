@@ -39,6 +39,7 @@ Base.unmark
 Base.reset(::IO)
 Base.ismarked
 Base.eof
+Base.reseteof
 Base.isreadonly
 Base.iswritable
 Base.isreadable

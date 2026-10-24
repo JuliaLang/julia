@@ -189,7 +189,7 @@ function footnote(stream::IO, block::MD)
         if m === nothing
             return false
         else
-            ref = m.captures[1]
+            ref = something(m.captures[1])
             buffer = IOBuffer()
             write(buffer, readline(stream, keep=true))
             while !eof(stream)
@@ -266,11 +266,12 @@ function admonition(stream::IO, block::MD)
                 if occursin(untitled, line)
                     m = match(untitled, line)::AbstractMatch
                     # When no title is provided we use CATEGORY_NAME, capitalising it.
-                    m.captures[1], uppercasefirst(m.captures[1])
+                    category = something(m.captures[1])
+                    category, uppercasefirst(category)
                 elseif occursin(titled, line)
                     m = match(titled, line)::AbstractMatch
                     # To have a blank TITLE provide an explicit empty string as TITLE.
-                    m.captures[1], m.captures[2]
+                    something(m.captures[1]), something(m.captures[2])
                 else
                     # Admonition header is invalid so we give up parsing here and move
                     # on to the next parser.
@@ -327,10 +328,10 @@ function list(stream::IO, block::MD)
                 -1, Regex("^ {0,3}(\\$(m.captures[1]))( |\$)")
             elseif m.captures[3] == "."
                 # An ordered list with `1. ` style numbering.
-                Base.parse(Int, m.captures[2]), r"^ {0,3}(\d+)\.( |$)"
+                Base.parse(Int, something(m.captures[2])), r"^ {0,3}(\d+)\.( |$)"
             elseif m.captures[3] == ")"
                 # An ordered list with `1) ` style numbering.
-                Base.parse(Int, m.captures[2]), r"^ {0,3}(\d+)\)( |$)"
+                Base.parse(Int, something(m.captures[2])), r"^ {0,3}(\d+)\)( |$)"
             else
                 # Failed to match any list marker. This branch shouldn't actually be needed
                 # since the `NUM_OR_BULLETS` regex should cover this, but we include it
@@ -390,7 +391,7 @@ function horizontalrule(stream::IO, block::MD)
        n = 1
        for char in readeach(stream, Char)
            char == '\n' && break
-           isspace(char) && continue
+           char in whitespace && continue
            char == rule || return false
            n += 1
        end
@@ -507,7 +508,7 @@ function html_block(stream::IO, block::MD)
         if endcond === nothing
             while !eof(stream)
                 line = readline(stream)
-                all(isspace, line) && break
+                all(in(whitespace), line) && break
                 push!(html.content, line)
             end
         else
@@ -536,7 +537,7 @@ function html_block_type7(stream::IO, block::MD)
         seek(stream, pos)
         while !eof(stream)
             line = readline(stream)
-            all(isspace, line) && break
+            all(in(whitespace), line) && break
             push!(html.content, line)
         end
         push!(block, html)

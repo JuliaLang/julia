@@ -1566,6 +1566,9 @@ using Base: typed_hvncat
         @test_throws DimensionMismatch [v; v;; v; v;;; v; v;; v; v; v]
         # ensure a wrong shape with the right number of elements doesn't pass through
         @test_throws DimensionMismatch [v; v;; v; v;;; v; v; v; v]
+        # ragged lengths whose deviations from the first length cancel out are not balanced
+        @test_throws DimensionMismatch [v; v;; v;; v; v; v]
+        @test_throws DimensionMismatch [v v; v; v v v;;; v v; v; v v v]
 
         @test [v; v;; v; v] == fill(1, ndims(v) == 3 ? (2, 2, 1) : (2,2))
         @test [v; v;; v; v;;;] == fill(1, 2, 2, 1)

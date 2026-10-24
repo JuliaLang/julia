@@ -107,6 +107,8 @@ isassigned(B::BitArray, i::Int) = 1 <= i <= length(B)
 
 IndexStyle(::Type{<:BitArray}) = IndexLinear()
 
+dataids(B::BitArray) = dataids(B.chunks)
+
 ## aux functions ##
 
 const _msk64 = ~UInt64(0)
@@ -709,26 +711,26 @@ function _unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
     lc = length(Bc)
     last_chunk_len = _mod64(length(B)-1)+1
 
+    lx = length(X)
+    c = 0
     Xi = first(eachindex(X))
-    lastXi = last(eachindex(X))
     for i = 1:lc
         @inbounds Imsk = Ic[i]
         @inbounds C = Bc[i]
         u = UInt64(1)
         for _ = 1:(i < lc ? 64 : last_chunk_len)
             if Imsk & u != 0
-                Xi > lastXi && throw_setindex_mismatch(X, count(I))
+                c == lx && throw_setindex_mismatch(X, count(I))
                 @inbounds x = convert(Bool, X[Xi])
                 C = ifelse(x, C | u, C & ~u)
                 Xi = nextind(X, Xi)
+                c += 1
             end
             u <<= 1
         end
         @inbounds Bc[i] = C
     end
-    if Xi != nextind(X, lastXi)
-        throw_setindex_mismatch(X, count(I))
-    end
+    c == lx || throw_setindex_mismatch(X, count(I))
     return B
 end
 
@@ -814,9 +816,9 @@ function _resize_int!(B::BitVector, n::Int, first::Bool)
     if k1 > k0
         _growend!(Bc, k1 - k0)
         Bc[end] = UInt64(0)
-        if first
-            copy_chunks!(Bc, 1 + n - n0, Bc, 1, n0)
-        end
+    end
+    if first
+        copy_chunks!(Bc, 1 + n - n0, Bc, 1, n0)
     end
     B.len = n
     return B
@@ -1125,7 +1127,7 @@ function splice!(B::BitVector, r::Union{AbstractUnitRange{Int}, Integer}, ins)
     Bins = BitVector(undef, length(ins))
     i = 1
     for x in ins
-        Bins[i] = Bool(x)
+        Bins[i] = x
         i += 1
     end
     return splice!(B, r, Bins)
