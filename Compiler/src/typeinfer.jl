@@ -2149,6 +2149,41 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
     end
 end
 
+# An `:invoke` whose target is a bare MethodInstance (no CodeInstance was cached for it, e.g.
+# because a recursion limit elsewhere on the inference stack poisoned its frame) would be emitted
+# as a boxed `jl_invoke`. Infer each such target once as a root of its own and point the invoke at
+# the result. A frame inferred as a root is not limited by any frame above it, so its result is
+# cached, while its own callees that were widened against it stay bare. The callers drain the
+# resolved targets after the rest of their batch and do not resolve bare invokes of those, so a
+# widened recursion is re-inferred one step further, not forever.
+function resolve_bare_invokes!(resolved::Vector{CodeInstance}, src::CodeInfo,
+                               interp::AbstractInterpreter, source_mode::UInt8)
+    for stmt in src.code
+        isexpr(stmt, :(=)) && (stmt = stmt.args[2])
+        isexpr(stmt, :invoke) || continue
+        mi = stmt.args[1]
+        mi isa MethodInstance && has_valid_abi_sparams(mi) || continue
+        # compilation disabled, by `--compile=min` or `--compile=no`, or for the method's module by
+        # `@compiler_options compile=min`, leaves the method to the interpreter and its target bare,
+        # as the runtime decides it (`jl_compile_method_internal`)
+        def = mi.def
+        compile = Int(JLOptions().compile_enabled)
+        if def isa Method
+            setting = ccall(:jl_get_module_compile, Cint, (Any,), def.module)
+            if setting == JL_OPTIONS_COMPILE_OFF || setting == JL_OPTIONS_COMPILE_MIN
+                compile = setting
+            end
+        end
+        (compile == JL_OPTIONS_COMPILE_OFF || compile == JL_OPTIONS_COMPILE_MIN) && continue
+        ci = typeinf_ext(interp, mi, source_mode)
+        if ci isa CodeInstance
+            stmt.args[1] = ci
+            push!(resolved, ci)
+        end
+    end
+    return nothing
+end
+
 """
     jit_cache_root!(cache, ci::CodeInstance)
 
@@ -2186,7 +2221,15 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
     workqueue = CompilationQueue(; interp)
     push!(workqueue, ci)
     codeinsts, srcs = Any[], Any[]
-    while !isempty(workqueue)
+    resolve = true
+    resolved = CodeInstance[]
+    while !isempty(workqueue) || !isempty(resolved)
+        if isempty(workqueue)
+            # the targets resolved so far go after the rest of the batch, see `resolve_bare_invokes!`
+            append!(workqueue, resolved)
+            empty!(resolved)
+            resolve = false
+        end
         # ci_has_real_invoke(ci) && return ci # optimization: cease looping if ci happens to get compiled (not just jl_fptr_wait_for_compiled, but fully jl_is_compiled_codeinst)
         callee = pop!(workqueue)
         ci_has_invoke(callee) && continue
@@ -2217,6 +2260,7 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
         mi = get_ci_mi(callee)
         sptypes = sptypes_from_meth_instance(mi)
         collectinvokes!(workqueue, src, sptypes)
+        resolve && resolve_bare_invokes!(resolved, src, workqueue.interp, source_mode)
         if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
             valid_worlds = WorldRange(get_inference_world(workqueue.interp))
             cached = find_equivalent_cached_ci(
@@ -2262,7 +2306,16 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
 )
     interp = workqueue.interp
     world = get_inference_world(interp)
-    while !isempty(workqueue)
+    # under `--trim` the bare targets are enqueued by `collectinvokes!` itself
+    resolve = !enqueue_unprepared_invokes
+    resolved = CodeInstance[]
+    while !isempty(workqueue) || !isempty(resolved)
+        if isempty(workqueue)
+            # the targets resolved so far go after the rest of the batch, see `resolve_bare_invokes!`
+            append!(workqueue, resolved)
+            empty!(resolved)
+            resolve = false
+        end
         item = pop!(workqueue)
         # each item in this list is either a MethodInstance indicating something
         # to compile, or an svec(rettype, sig) describing a C-callable alias to create.
@@ -2319,6 +2372,7 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
                 sptypes = sptypes_from_meth_instance(mi)
                 collectinvokes!(workqueue, src, sptypes; invokelatest_queue,
                                 enqueue_unprepared_invokes, external_linkage)
+                resolve && resolve_bare_invokes!(resolved, src, interp, SOURCE_MODE_GET_SOURCE)
                 # try to reuse an existing CodeInstance from before to avoid making duplicates in the cache
                 if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
                     cached = find_equivalent_cached_ci(

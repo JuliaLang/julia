@@ -1452,3 +1452,65 @@ const const_svec_ref = Core.svec(1, "a", :b)
     @test_throws BoundsError(const_svec_ref, 0) const_svec_ref_test(0)
     @test_throws BoundsError(const_svec_ref, 4) const_svec_ref_test(4)
 end
+
+# A frame that inference limits is not cached, so a caller's `:invoke` of it names a bare
+# MethodInstance. `draw_bareinvoke` is such a frame: the `foldl` over a tuple in
+# `comb_bareinvoke` is matched against the unrelated `foldl` over a generator at the root and
+# limited. The call should still be direct, not a boxed `jl_invoke` that allocates.
+struct Point_bareinvoke
+    x::Float64
+    y::Float64
+end
+add_bareinvoke(a, b) = a + b
+comb_bareinvoke(values, weights) =
+    Point_bareinvoke(values[1].x / foldl(add_bareinvoke, weights), values[1].y)
+struct Lib_bareinvoke
+    vals::Vector{Point_bareinvoke}
+end
+function draw_bareinvoke(w::Lib_bareinvoke, e::Int)
+    vals = w.vals
+    blend, total = first(vals), 0.0
+    for _ in 1:2
+        blend = iszero(total) ? vals[2] : comb_bareinvoke((blend, vals[2]), (total, 1.0 + e))
+        total += 1.0 + e
+    end
+    return blend, total
+end
+@testset "callee of a limited frame is called directly" begin
+    lib = Lib_bareinvoke([Point_bareinvoke(1.0, 2.0), Point_bareinvoke(2.0, 1.0)])
+    call = () -> draw_bareinvoke(lib, 1)[2]
+    foldl(min, (call() for _ in 1:3)) # the root below which `draw_bareinvoke` is limited
+    call()
+    @test (@allocated call()) == 0
+end
+
+# The same shape through the path that compiles code for an image (`compile!`): the `:invoke`
+# of the limited frame must name a CodeInstance there too, or the image calls it through
+# `jl_invoke`. Its own functions, so that the test above cannot have cached them already.
+add_bareinvoke_aot(a, b) = a + b
+comb_bareinvoke_aot(values, weights) =
+    Point_bareinvoke(values[1].x / foldl(add_bareinvoke_aot, weights), values[1].y)
+function draw_bareinvoke_aot(w::Lib_bareinvoke, e::Int)
+    vals = w.vals
+    blend, total = first(vals), 0.0
+    for _ in 1:2
+        blend = iszero(total) ? vals[2] : comb_bareinvoke_aot((blend, vals[2]), (total, 1.0 + e))
+        total += 1.0 + e
+    end
+    return blend, total
+end
+root_bareinvoke_aot(lib::Lib_bareinvoke) = foldl(min, (draw_bareinvoke_aot(lib, 1)[2] for _ in 1:3))
+@testset "callee of a limited frame is invoked through a CodeInstance in an image" begin
+    sig = Tuple{typeof(root_bareinvoke_aot), Lib_bareinvoke}
+    codeinfos = Compiler.typeinf_ext_toplevel(Any[Core.svec(Any, sig)], UInt[Base.get_world_counter()],
+                                             Compiler.TRIM_NO, false)
+    bare = Any[]
+    for item in codeinfos
+        item isa Core.CodeInfo || continue
+        for stmt in item.code
+            Meta.isexpr(stmt, :(=)) && (stmt = stmt.args[2])
+            Meta.isexpr(stmt, :invoke) && stmt.args[1] isa Core.MethodInstance && push!(bare, stmt.args[1])
+        end
+    end
+    @test isempty(bare)
+end
