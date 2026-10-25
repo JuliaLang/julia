@@ -1800,6 +1800,14 @@ end
 
     @test @inferred(2 .* (r .+ 1) .+ 2) == 6:2:14
 
+    # issue #61174
+    @test @inferred(broadcast(muladd, 0.0:8.0, 2.0, 1.0)) === 1.0:2.0:17.0
+    @test @inferred(broadcast(muladd, 2.0, 0.0:8.0, 1.0)) === 1.0:2.0:17.0
+    @test @inferred(broadcast(muladd, 2.0, 1.0, 0.0:8.0)) === 2.0:1.0:10.0
+    @test @inferred(broadcast(muladd, 1:5, 2, 10:14)) === 12:3:24
+    @test @inferred(broadcast(muladd, 2, 1:5, 10:14)) === 12:3:24
+    @test_throws DimensionMismatch muladd.(1:5, 2, 1:6)
+
     # issue #42291
     @test length((1:5) .- 1/7) == 5
     @test length((1:5) .+ -1/7) == 5
