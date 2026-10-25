@@ -683,6 +683,18 @@ x = [j+7 for j in i]
     ) == (1, 4)
 end
 
+@testset "empty reductions over flatten (#64159)" begin
+    @test @inferred(sum(Iterators.flatten([Int[], Int[]]))) === 0
+    @test @inferred(prod(Iterators.flatten([Int[], Int[]]))) === 1
+    @test @inferred(sum(Iterators.flatten(Vector{Float64}[]))) === 0.0
+    @test sum(Iterators.flatten((Int8[], Int8[]))) === 0
+    @test sum(Iterators.flatten((Int[], Float64[]))) === 0
+    @test prod(Iterators.flatten((Int[], Float64[]))) === 1
+    @test sum(Iterators.flatten(Iterators.flatten([[Int[]], [Int[], Int[]]]))) === 0
+    @test reduce(+, Iterators.flatten(x for x in [Int[], Int[]] if true)) === 0
+    @test_throws ArgumentError maximum(Iterators.flatten([Int[], Int[]]))
+end
+
 # make sure we specialize on mapfoldl(::Type, ...)
 @test @inferred(mapfoldl(Int, +, [1, 2, 3]; init=0)) === 6
 
