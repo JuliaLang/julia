@@ -230,9 +230,10 @@ const UV_UDP_PARTIAL = 2
 
 # Indicates if SO_REUSEADDR will be set when binding the handle in uv_udp_bind. This sets
 # the SO_REUSEPORT socket flag on the BSDs and OS X. On other Unix platforms, it sets the
-# SO_REUSEADDR flag. What that means is that multiple threads or processes can bind to the
-# same address without error (provided they all set the flag) but only the last one to bind
-# will receive any traffic, in effect "stealing" the port from the previous listener.
+# SO_REUSEADDR flag. Either way, multiple sockets can bind to the same address without error
+# (provided they all set the flag). Broadcast and multicast traffic reaches all of them, but
+# which one receives unicast traffic is up to the kernel: Linux picks the last to bind, while
+# macOS picks the first for wildcard addresses and the last for specific ones.
 const UV_UDP_REUSEADDR = 4
 
 ##
@@ -255,8 +256,11 @@ end
 Bind `socket` to the given `host:port`. Note that `0.0.0.0` will listen on all devices.
 
 * The `ipv6only` parameter disables dual stack mode. If `ipv6only=true`, only an IPv6 stack is created.
-* If `reuseaddr=true`, multiple threads or processes can bind to the same address without error
-  if they all set `reuseaddr=true`, but only the last to bind will receive any traffic.
+* For a `UDPSocket`, `reuseaddr=true` allows multiple sockets to bind the same address and
+  port, provided they all set it. Broadcast and multicast datagrams are delivered to every one
+  of them, but which socket receives unicast datagrams depends on the platform: on Linux it is
+  the last one to bind, while on macOS a wildcard bind (`0.0.0.0` or `::`) delivers them to
+  the first. Do not rely on `reuseaddr` to take over a port from another listener.
 """
 function bind(sock::Union{TCPServer, UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only = false, reuseaddr = false, kws...)
     if sock.status != StatusInit

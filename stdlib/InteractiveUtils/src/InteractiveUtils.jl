@@ -101,7 +101,7 @@ controlled with boolean keyword arguments:
 See also: [`VERSION`](@ref).
 """
 function versioninfo(io::IO=stdout; verbose::Bool=false)
-    println(io, "Julia Version $VERSION")
+    println(io, "Julia Version $(Base.version_with_build_variant())")
     println(io, "Build Info:")
     if Base.isdebugbuild()
         println(io, "  DEBUG build")

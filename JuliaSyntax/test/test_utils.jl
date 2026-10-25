@@ -44,7 +44,7 @@ using .JuliaSyntax:
 
 if VERSION < v"1.6"
     # Compat stuff which might not be in Base for older versions
-    using JuliaSyntax: isnothing, only, peek
+    using JuliaSyntax: isnothing, only
 end
 
 function toks(str)
@@ -422,9 +422,9 @@ function parse_sexpr(code)
     st = ParseStream(code)
     pos_stack = ParseStreamPosition[]
     while true
-        k = peek(st)
+        k = JuliaSyntax.peek(st)
         if k == K"("
-            push!(pos_stack, position(st))
+            push!(pos_stack, JuliaSyntax.position(st))
             bump(st, TRIVIA_FLAG)
         elseif k == K")"
             if isempty(pos_stack)

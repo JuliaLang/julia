@@ -489,6 +489,7 @@ function lift_leaves(compact::IncrementalCompact, field::Int,
             return nothing
         end
         ismutable(leaf) && return nothing
+        is_relocatable_ptr_field(Const(leaf), Const(field)) && return nothing
         isdefined(leaf, field) || return nothing
         val = getfield(leaf, field)
         is_inlineable_constant(val) || return nothing

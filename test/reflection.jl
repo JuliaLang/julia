@@ -957,6 +957,20 @@ end
 # TypeEgal{T} has the single instance `T` (issue #62890)
 @test fieldcount(Core.TypeEgal{Int}) == nfields(Int)
 @test fieldcount(Core.TypeEgal{Type{Int}}) == nfields(Type{Int}) == 1
+@test fieldnames(Core.TypeEgal{Int}) == fieldnames(DataType)
+@test fieldname(Core.TypeEgal{Int}, 1) === fieldname(DataType, 1)
+@test fieldtypes(Core.TypeEgal{Int}) == fieldtypes(DataType)
+@test supertype(Core.TypeEgal{Int}) === Type{Int}
+@test supertype(Type{Int}) === Core.AnyType
+@test supertype(Type{<:Integer}) === Core.AnyType
+@test fieldtype(Core.TypeEgal{Int}, 1) === fieldtype(Core.TypeEgal{Int}, :name) === fieldtype(DataType, 1)
+@test fieldtype(Union{Core.TypeEgal{Int},Core.TypeEgal{Float64}}, 1) === fieldtype(DataType, 1)
+@test only(Base.return_types(() -> fieldtype(Core.TypeEgal{Int}, :name), ())) === Core.TypeEgal{fieldtype(DataType, 1)}
+@test fieldoffset(Core.TypeEgal{Int}, 2) == fieldoffset(Core.TypeEgal{Int}, :super) == fieldoffset(DataType, 2)
+@test_throws ArgumentError fieldcount(Type{Int})
+@test_throws ArgumentError fieldnames(Type{Int})
+@test_throws ArgumentError fieldname(Type{Int}, 1)
+@test_throws ArgumentError fieldtypes(Type{<:Integer})
 
 # Common-field unions are definite only when all alternatives share the field count.
 @test fieldcount(Union{Tuple{Int,Float64},Tuple{Int,Int}}) == 2

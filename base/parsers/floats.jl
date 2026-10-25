@@ -258,28 +258,6 @@ end
     return packbits(T, m, e)
 end
 
-# Whether every byte of `w` is an ASCII hexadecimal digit. When no byte is above 0x7f,
-# adding 0x80 - lo to each byte sets its high bit if the byte is at least lo, and adding
-# 0x7f - hi sets it if the byte is above hi, without carrying into the next byte. Letters
-# are compared in lowercase, digits as they are.
-@inline function ishexdigits8(w::UInt64)
-    x = w | 0x20202020_20202020
-    digit = (w + 0x50505050_50505050) & ~(w + 0x46464646_46464646)
-    letter = (x + 0x1f1f1f1f_1f1f1f1f) & ~(x + 0x19191919_19191919)
-    return (w & 0x80808080_80808080 == 0) &
-           ((digit | letter) & 0x80808080_80808080 == 0x80808080_80808080)
-end
-
-# The value of the eight hexadecimal digits in `w`, the first in the lowest byte. Each
-# byte's value is its low four bits, plus 9 for a letter, which has bit 6 set. The values
-# are then combined in pairs, pairs of pairs, and halves.
-@inline function hexdigits8(w::UInt64)
-    v = (w & 0x0f0f0f0f_0f0f0f0f) + (w >> 6 & 0x01010101_01010101) * 9
-    v = (v << 4 | v >> 8) & 0x00ff00ff_00ff00ff
-    v = (v << 8 | v >> 16) & 0x0000ffff_0000ffff
-    return (v << 16 | v >> 32) & 0x00000000_ffffffff
-end
-
 # The hexadecimal digits at the start of `buf[i:j]`, shifted into m while it has room for
 # them: the new m, the index after the last digit it took, whether a digit it had no room
 # for is nonzero, and the index after the digits

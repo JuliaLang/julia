@@ -250,6 +250,7 @@ restart:
     }
     l += l / 20; // add 5% for margin of estimation error
     jl_array_t *a = jl_alloc_vec_any(l); // may gc, changing the number of tasks and forcing us to reload everything
+    // `jl_alloc_vec_any` doesn't guarantee the underlying Memory is young.
     nthreads = jl_atomic_load_acquire(&jl_n_threads);
     allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
     size_t j = 0;
@@ -261,7 +262,7 @@ restart:
         if (t != NULL && t->ctx.stkbuf != NULL) {
             if (j == l)
                 goto restart;
-            jl_array_data(a,void*)[j++] = t;
+            jl_array_ptr_set(a, j++, t);
         }
         small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
         size_t n = mtarraylist_length(live_tasks);
@@ -270,7 +271,7 @@ restart:
             if (t->ctx.stkbuf != NULL) {
                 if (j == l)
                     goto restart;
-                jl_array_data(a,void*)[j++] = t;
+                jl_array_ptr_set(a, j++, t);
             }
         }
     }

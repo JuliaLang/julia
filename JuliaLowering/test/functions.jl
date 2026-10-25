@@ -795,6 +795,14 @@ end
         test_arg_specialized(f, 1)
     end
 
+    # A closure stores a captured nospecialized argument in an `Any` field
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        f_nospecialize_capture(@nospecialize(x)) = () -> x
+        fieldtypes(typeof(f_nospecialize_capture(1)))
+    end
+    """) == (Any,)
+
     # macros already mark all non-internal args nospecialize
     @testset "macro definitions" begin
         @gensym sym
@@ -2254,6 +2262,17 @@ end
             end
             nif_uses_sparam(1, Int)
         end"""; edition) === Int
+    end
+
+    @testset "global assignment in generated body (issue #33243)" begin
+        m = Module()
+        jl_eval(m, """
+        @generated function f33243()
+            :(global x33243 = 2)
+        end
+        """; edition)
+        @test_throws ErrorException jl_eval(m, "f33243()"; edition)
+        @test jl_eval(m, "global x33243::Any; (f33243(), x33243)"; edition) === (2, 2)
     end
 end
 

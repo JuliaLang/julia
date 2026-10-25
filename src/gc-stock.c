@@ -1229,12 +1229,14 @@ static void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
         if (ptls2 == NULL)
             continue;
         assert(gc_n_threads != 0);
-        // free half of stacks that remain unused since last sweep
-        if (i == jl_atomic_load_relaxed(&gc_stack_free_idx)) {
+        // free half of stacks that remain unused since last sweep (or all
+        // of them, if the thread is not alive yet or has exited)
+        int thread_dead = jl_atomic_load_relaxed(&ptls2->current_task) == NULL;
+        if (thread_dead || i == jl_atomic_load_relaxed(&gc_stack_free_idx)) {
             for (int p = 0; p < JL_N_STACK_POOLS; p++) {
                 small_arraylist_t *al = &ptls2->gc_tls_common.heap.free_stacks[p];
                 size_t n_to_free;
-                if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
+                if (thread_dead) {
                     n_to_free = al->len; // not alive yet or dead, so it does not need these anymore
                 }
                 else if (al->len > MIN_STACK_MAPPINGS_PER_POOL) {
@@ -1249,13 +1251,10 @@ static void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
                     void *stk = small_arraylist_pop(al);
                     free_stack(stk, pool_sizes[p]);
                 }
-                if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
+                if (thread_dead) {
                     small_arraylist_free(al);
                 }
             }
-        }
-        if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
-            small_arraylist_free(ptls2->gc_tls_common.heap.free_stacks);
         }
 
         small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
@@ -1499,12 +1498,15 @@ static void gc_sweep_pool_parallel(jl_ptls_t ptls) JL_NOTSAFEPOINT
     jl_atomic_fetch_add(&gc_n_threads_sweeping_pools, -1);
 }
 
-// free all but a `default_collect_interval`-sized warm cache of the pages that
-// were lazily freed (i.e. through `madvise` on Linux)
+// Number of lazily freed pages to keep mapped, set by each sweep for the
+// following call to gc_free_pages (which may run on the concurrent sweep thread)
+static _Atomic(size_t) gc_free_pages_keep;
+
+// free all but a warm cache of the pages that were lazily freed (i.e. through
+// `madvise` on Linux)
 static void gc_free_pages(void) JL_NOTSAFEPOINT
 {
-    // Keep roughly a `default_collect_interval`-sized set of already-mapped pages.
-    size_t keep = default_collect_interval / GC_PAGE_SZ;
+    size_t keep = jl_atomic_load_relaxed(&gc_free_pages_keep);
     size_t n_present = jl_atomic_load_relaxed(&global_page_pool_lazily_freed_n);
     size_t n_to_free = n_present > keep ? n_present - keep : 0;
     size_t n_freed = 0;
@@ -1626,6 +1628,16 @@ static void gc_sweep_pool(void) JL_NOTSAFEPOINT
     }
     uint64_t t_page_walk_end = jl_hrtime();
     gc_num.total_sweep_page_walk_time += t_page_walk_end - t_page_walk_start;
+
+    // Keep the pages the mutator will need before the next collection: one
+    // allocation interval, as set by the last collection (but at least
+    // `default_collect_interval`). Releasing them would only make the mutator
+    // fault them back in.
+    uint64_t interval = default_collect_interval;
+    uint64_t target = jl_atomic_load_relaxed(&gc_heap_stats.heap_target);
+    if (target > old_heap_size && target - old_heap_size > interval)
+        interval = target - old_heap_size;
+    jl_atomic_store_relaxed(&gc_free_pages_keep, interval / GC_PAGE_SZ);
 
 #ifdef _P64 // only enable concurrent sweeping on 64bit
     // wake thread up to sweep concurrently
@@ -3141,6 +3153,8 @@ static void gc_mark_roots(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
     }
     gc_try_claim_and_push(mq, _jl_debug_method_invalidation, NULL);
     gc_heap_snapshot_record_gc_roots((jl_value_t*)_jl_debug_method_invalidation, "debug_method_invalidation");
+    gc_try_claim_and_push(mq, jl_ext_backinterferences, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_ext_backinterferences, "ext_backinterferences");
     // constants
     gc_try_claim_and_push(mq, jl_emptytuple_type, NULL);
     gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_emptytuple_type, "emptytuple_type");
@@ -4173,8 +4187,11 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
     return data;
 }
 
+// The allocators above account for the usable size of the block, so use that here
+// too instead of the size passed by the caller (e.g. GMP passes the size it requested).
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 {
+    sz = p ? memory_block_usable_size(p, 0) : 0;
     free(p);
     jl_task_t *ct = jl_get_current_task();
     if (ct != NULL)
@@ -4183,6 +4200,7 @@ JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 
 JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
 {
+    old = p ? memory_block_usable_size(p, 0) : 0;
     void *data = realloc(p, sz);
     jl_task_t *ct = jl_get_current_task();
     if (data != NULL && ct != NULL) {

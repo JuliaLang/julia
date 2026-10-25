@@ -621,6 +621,7 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
             }
             FPM.addPass(InstCombinePass());
             FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
+            FPM.addPass(InferAlignmentPass());
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
     }

@@ -339,6 +339,12 @@ function convert_local_function_decl(ctx, ex)
     sp_syms = mapsyntax(sp->newleaf(sp, :symbol,
                                     get_binding(ctx, syntax_id(sp)).name),
                         capt_sp)
+    field_is_nospec = Bool[
+        !boxed && get_binding(ctx, id).is_nospecialize &&
+            !is_self_captured(ctx, binding_ex(ctx, id))
+        for (id, boxed) in zip(field_orig_bindings, field_is_box)]
+    nospec_arg = !any(field_is_nospec) ? nothing :
+        @ast ctx ex [:call "svec"::core [f::value for f in field_is_nospec]...]
     define_clstruct = type_ex = @ast ctx ex [:call
         eval_closure_type::value
         ctx.mod::value
@@ -346,6 +352,7 @@ function convert_local_function_decl(ctx, ex)
         [:call "svec"::core sp_syms...]
         [:call "svec"::core field_syms...]
         [:call "svec"::core [f::value for f in field_is_box]...]
+        nospec_arg
     ]
     if !ctx.toplevel
         push!(ctx.toplevel_stmts, define_clstruct)
@@ -358,7 +365,7 @@ function convert_local_function_decl(ctx, ex)
         is_self_captured(ctx, sp) ? captured_var_access(ctx, sp) : sp
     end
     init_closure_args = SyntaxList()
-    for (id, boxed) in zip(field_orig_bindings, field_is_box)
+    for (id, boxed, nospec) in zip(field_orig_bindings, field_is_box, field_is_nospec)
         field_val = binding_ex(ctx, id)
         if is_self_captured(ctx, field_val)
             # Access from outer closure if necessary but do not
@@ -366,7 +373,7 @@ function convert_local_function_decl(ctx, ex)
             field_val = captured_var_access(ctx, field_val)
         end
         push!(init_closure_args, field_val)
-        if !boxed
+        if !boxed && !nospec
             push!(type_params, @ast ctx ex [:call
                   "_typeof_captured_variable"::core
                   field_val])
@@ -437,28 +444,17 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
     elseif k == :(=)
         convert_assignment(ctx, ex)
     elseif k == :isdefined
-        # Convert isdefined expr to function for closure converted variables
-        var = ex[1]
-        if head(var) === :static_parameter
+        if head(ex[1]) === :static_parameter
             ex
-        elseif (binfo = get_binding(ctx, var); is_boxed(binfo))
-            access = is_self_captured(ctx, var) ? captured_var_access(ctx, var) : var
-            @ast ctx ex [:call
-                "isdefined"::core
-                access
-                "contents"::symbol
-            ]
-        elseif binfo.is_always_defined || is_self_captured(ctx, var)
-            # Captured but unboxed vars are always defined
-            @ast ctx ex true::value
-        elseif binfo.kind == :global
-            # Normal isdefined won't work for globals (#56985)
-            @ast ctx ex [:call
-                "isdefinedglobal"::core
-                binfo.mod::value
-                binfo.name::symbol]
+        elseif (b = get_binding(ctx, ex[1]); b.kind === :global)
+            @ast ctx ex [:call "isdefinedglobal"::core b.mod::value b.name::symbol]
+        elseif !b.is_captured
+            ex
+        elseif is_boxed(b)
+            access = is_self_captured(ctx, ex[1]) ? captured_var_access(ctx, ex[1]) : ex[1]
+            @ast ctx ex [:call "isdefined"::core access "contents"::symbol]
         else
-            ex
+            @ast ctx ex true::value
         end
     elseif k == :decl
         @jl_assert head(ex[1]) == :bindingid ex

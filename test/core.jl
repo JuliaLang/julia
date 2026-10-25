@@ -42,7 +42,7 @@ for (T, c) in (
         (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :flags, :time_compile]),
         (Core.Method, [:primary_world, :did_scan_source, :dispatch_status, :interferences]),
         (Core.MethodInstance, [:cache, :flags, :dispatch_status, :precompile]),
-        (Core.MethodTable, [:defs]),
+        (Core.MethodTable, [:defs, :contributors]),
         (Core.MethodCache, [:leafcache, :cache, :var""]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
@@ -5975,6 +5975,13 @@ end
 # issue #19963
 @test_nowarn ccall(:jl_free, Cvoid, (Ptr{Cvoid},), C_NULL)
 
+# jl_calloc with zero element size must not divide by zero
+@test_nowarn begin
+    local p
+    p = ccall(:jl_calloc, Ptr{Cvoid}, (Csize_t, Csize_t), 4, 0)
+    ccall(:jl_free, Cvoid, (Ptr{Cvoid},), p)
+end
+
 # Wrong string size on 64bits for large string.
 if Sys.WORD_SIZE == 64
     @noinline function test_large_string20360(slot)
@@ -9472,4 +9479,23 @@ let A = Issue61347.A, S2 = Issue61347.S2
     @test supertype(lazy) isa Type # forcing accessor
     @test isdefined(lazy, :super)
     @test getfield(lazy, :super) === supertype(lazy)
+end
+
+# Method tables and dispatch caches keep their entries in insertion-ordered dicts that
+# grow by appending. Every entry must stay reachable as a dict grows through many sizes.
+module OrderedDictGrowth
+    const Ts = [(@eval struct $(Symbol(:T, i)) end; @eval $(Symbol(:T, i))) for i in 1:300]
+    f(x) = 0
+    for (i, T) in enumerate(Ts)
+        @eval f(::$T) = $i
+    end
+    g(x) = typeof(x)
+end
+@testset "dispatch through growing method caches" begin
+    Ts = OrderedDictGrowth.Ts
+    @test all(i -> Base.invokelatest(OrderedDictGrowth.f, Ts[i]()) == i, eachindex(Ts))
+    @test all(i -> Base.invokelatest(OrderedDictGrowth.g, Ts[i]()) === Ts[i], eachindex(Ts))
+    # again, now from the filled caches
+    @test all(i -> Base.invokelatest(OrderedDictGrowth.f, Ts[i]()) == i, eachindex(Ts))
+    @test all(i -> Base.invokelatest(OrderedDictGrowth.g, Ts[i]()) === Ts[i], eachindex(Ts))
 end

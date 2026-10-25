@@ -285,6 +285,14 @@ LLVMOrcThreadSafeModuleRef jl_get_llvm_module_impl(void *native_code)
         return NULL;
 }
 
+// frees native code that is not dumped, e.g. after taking its module with
+// `jl_get_llvm_module`. this drops the native code's reference to the LLVM context.
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_free_native_impl(void *native_code)
+{
+    delete (jl_native_code_desc_t*)native_code;
+}
+
 extern "C" JL_DLLEXPORT_CODEGEN
 GlobalValue* jl_get_llvm_function_impl(void *native_code, uint32_t idx)
 {
@@ -1152,7 +1160,7 @@ static GlobalVariable *emit_ptls_table(Module &M, Type *T_size, Type *T_ptr) {
     std::array<Constant *, 3> ptls_table{
         new GlobalVariable(M, T_ptr, false, GlobalValue::ExternalLinkage, emit_pgcstack_default_func(M, T_ptr), "jl_pgcstack_func_slot"),
         new GlobalVariable(M, T_size, false, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), "jl_pgcstack_key_slot"),
-        new GlobalVariable(M, T_size, false, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), "jl_image_tls_offset"),
+        new GlobalVariable(M, T_size, false, GlobalValue::ExternalLinkage, Constant::getAllOnesValue(T_size), "jl_image_tls_offset"),
     };
     for (auto &gv : ptls_table) {
         cast<GlobalVariable>(gv)->setVisibility(GlobalValue::HiddenVisibility);

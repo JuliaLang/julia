@@ -2439,9 +2439,10 @@ g23024(TT::Tuple{DataType}) = f23024(TT[1], v23024)
 
 @test !Compiler.isconstType(Type{typeof(Union{})}) # could be Core.TypeofBottom or Type{Union{}} at runtime
 @test !isa(Compiler.getfield_tfunc(Compiler.fallback_lattice, Type{Core.TypeofBottom}, Compiler.Const(:name)), Compiler.Const)
-# values of `Type{typeof(Union{})}` include `UnionAll` spellings (#33136), so
-# `supertype(::UnionAll)` is applicable too; the egal-pinned type stays precise
-@test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Any, Type{Core.AnyType}]
+# values of `Type{typeof(Union{})}` include `UnionAll` spellings (#33136) and the
+# `TypeEq` `Type{Union{}}`, so `supertype(::UnionAll)` and `supertype(::TypeEq)` are
+# applicable too; the egal-pinned type stays precise
+@test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Core.TypeEgal{Core.AnyType}, Any, Type{Core.AnyType}]
 @test Base.return_types(supertype, (Core.TypeEgal{typeof(Union{})},)) == Any[Core.TypeEgal{Core.AnyType}]
 
 # issue #23685
@@ -3485,6 +3486,41 @@ from_interconditional_check22(::Union{Int,String}, y) = isa(y, Int)
     end
     return 0
 end |> only === Int
+
+# a field alias is a different refinement target from its parent slot (JuliaLang/julia#63981)
+from_interconditional_check31(x::AliasableField, _) = isa(x.f, Int)
+@test Base.infer_return_type((AliasableField{Any},)) do x
+    if from_interconditional_check31(x, x.f)
+        return x.f
+    end
+    return nothing
+end === Union{Int,Nothing}
+from_interconditional_check32(_, x::AliasableField) = isa(x.f, Int)
+@test Base.infer_return_type((AliasableField{Any},)) do x
+    if from_interconditional_check32(x.f, x)
+        return x.f
+    end
+    return nothing
+end === Union{Int,Nothing}
+issue63981_mk(x) = (; status = x > 0 ? :a : :b, n = x)
+issue63981_f(nt, _) = nt.status === :a
+@test Base.infer_return_type((Int,)) do x
+    nt = issue63981_mk(x)
+    return issue63981_f(nt, nt.n)
+end === Bool
+
+# refine the aliased field when the argument is a slot holding a `MustAlias` of a field
+# whose type isn't a `Type`
+from_interconditional_check41_mk(c) = (; f = (; s = c ? :a : :b, n = 1))
+from_interconditional_check41(y) = y.s === :a
+@test Base.infer_return_type((Bool,)) do c
+    x = from_interconditional_check41_mk(c)
+    y = x.f
+    if from_interconditional_check41(y)
+        return Val(x.f.s)
+    end
+    return nothing
+end === Union{Val{:a},Nothing}
 
 # prioritize constraints on slot objects
 # https://github.com/aviatesk/JET.jl/issues/509

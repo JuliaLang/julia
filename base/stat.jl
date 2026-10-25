@@ -189,7 +189,9 @@ checkstat(s::StatStruct) = Int(s.ioerrno) in (0, Base.UV_ENOENT, Base.UV_ENOTDIR
 macro stat_call(sym, arg1type, arg)
     return quote
         stat_buf = fill!(Memory{UInt8}(undef, Int(ccall(:jl_sizeof_stat, Int32, ()))), 0x00)
-        r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), stat_buf)
+        # GC-safe, so that a `stat` blocked on a slow or hung filesystem doesn't hold up garbage
+        # collection, and with it every other thread that allocates
+        r = @ccall gc_safe=true $sym($(esc(arg))::$(esc(arg1type)), stat_buf::Ptr{UInt8})::Int32
         return checkstat(StatStruct($(esc(arg)), stat_buf, r))
     end
 end
