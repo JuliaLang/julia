@@ -711,6 +711,20 @@ end
     end
     @test f6(true)
     @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f6, Tuple{Bool}, true, false, false))
+
+    # nor do pointer-free values, whether in a stack slot or passed by reference
+    function f7(r)
+        val = r[]
+        GC.@preserve val begin end
+        return val
+    end
+    @test f7(Ref(1+2im)) == 1+2im
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f7, Tuple{Base.RefValue{Complex{Int}}}, true, false, false))
+    function f8(val)
+        GC.@preserve val begin end
+        return val
+    end
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f8, Tuple{Some{Int}}, true, false, false))
 end
 
 # issue #32843
