@@ -5268,6 +5268,14 @@ end == Int
         end
         return nothing
     end == Union{Nothing, String}
+    @test Base.infer_return_type((Any, Any)) do a, b
+        x = a; y = b
+        x, y = y, x
+        if b isa Int
+            return y
+        end
+        return nothing
+    end == Any
     # typeassert-based refinement should also propagate to aliases
     @test Base.infer_return_type((Any,)) do x
         y = x
