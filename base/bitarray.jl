@@ -1208,6 +1208,15 @@ function (==)(A::BitArray, B::BitArray)
     return A.chunks == B.chunks
 end
 
+function cmp(A::BitVector, B::BitVector)
+    Ac, Bc = A.chunks, B.chunks
+    @inbounds for i in 1:min(length(Ac), length(Bc))
+        d = xor(Ac[i], Bc[i])
+        iszero(d) || return iszero(Bc[i] & d & -d) ? 1 : -1
+    end
+    return cmp(length(A), length(B))
+end
+
 
 ## Data movement ##
 
