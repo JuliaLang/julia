@@ -131,3 +131,58 @@ emit(bar, NTuple{2,Float16})
 # TYPED-SAME: nonnull {} addrspace(10)* @jfptr
 # OPAQUE-SAME: nonnull ptr addrspace(10) @jfptr
 # CHECK-SAME: {
+
+# COM: pointer-free arguments loaded from memory are not GC roots of the call
+fmuladd(x, y, z) = ccall("llvm.fmuladd.f32", llvmcall, Float32, (Float32, Float32, Float32), x, y, z)
+cmuladd(a::Complex{Float32}, b::Complex{Float32}) = fmuladd(real(a), imag(b), imag(a))
+cmuladd_ref(r::Base.RefValue{Complex{Float32}}) = (c = r[]; fmuladd(real(c), imag(c), real(c)))
+clen(a::Vector{UInt8}) = ccall(:strlen, Csize_t, (Ptr{UInt8},), a)
+
+# CHECK: define
+# CHECK-SAME: float @julia_cmuladd
+# CHECK-SAME: {
+# CHECK-NOT: jl_roots
+# CHECK: call float @llvm.fmuladd.f32
+# CHECK-NOT: jl_roots
+# CHECK: ret float
+# CHECK-NOT: define
+# CHECK: }
+emit(cmuladd, Complex{Float32}, Complex{Float32})
+
+# COM: Make sure that we don't miss a function by accident (helps localize errors)
+# CHECK-NOT: {
+# CHECK-NOT: }
+# CHECK: define
+# TYPED-SAME: nonnull {} addrspace(10)* @jfptr
+# OPAQUE-SAME: nonnull ptr addrspace(10) @jfptr
+# CHECK-SAME: {
+
+# CHECK: define
+# CHECK-SAME: float @julia_cmuladd_ref
+# CHECK-SAME: {
+# CHECK-NOT: jl_roots
+# CHECK: call float @llvm.fmuladd.f32
+# CHECK-NOT: jl_roots
+# CHECK: ret float
+# CHECK-NOT: define
+# CHECK: }
+emit(cmuladd_ref, Base.RefValue{Complex{Float32}})
+
+# COM: Make sure that we don't miss a function by accident (helps localize errors)
+# CHECK-NOT: {
+# CHECK-NOT: }
+# CHECK: define
+# TYPED-SAME: nonnull {} addrspace(10)* @jfptr
+# OPAQUE-SAME: nonnull ptr addrspace(10) @jfptr
+# CHECK-SAME: {
+
+# COM: but the memory a pointer argument points into still is
+# CHECK: define
+# CHECK-SAME: @julia_clen
+# CHECK-SAME: {
+# CHECK-NOT: define
+# CHECK: call i{{32|64}} %strlen(
+# CHECK-SAME: "jl_roots"
+# CHECK-NOT: define
+# CHECK: }
+emit(clen, Vector{UInt8})
