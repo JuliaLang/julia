@@ -1114,7 +1114,12 @@ for (fJ, fC) in ((:+, :add), (:-, :sub), (:*, :mul), (://, :div))
 end
 
 function Base.cmp(x::Rational{BigInt}, y::Rational{BigInt})
-    Int(ccall((:__gmpq_cmp, libgmp), Cint, (mpq_t, mpq_t), _MPQ(x), _MPQ(y)))
+    if iszero(x.den) || iszero(y.den)
+        iszero(y.den) || return flipsign(1, x.num)
+        iszero(x.den) || return flipsign(-1, y.num)
+        return cmp(isnegative(y.num), isnegative(x.num))
+    end
+    sign(Int(ccall((:__gmpq_cmp, libgmp), Cint, (mpq_t, mpq_t), _MPQ(x), _MPQ(y))))
 end
 
 end # MPQ module
