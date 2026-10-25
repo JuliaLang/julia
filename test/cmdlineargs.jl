@@ -105,6 +105,26 @@ if Sys.isunix()
         @test occursin("==== Thread ", err_s)
         @test occursin("==== Done", err_s)
     end
+
+    # issue #50743
+    @testset "abort backtrace reaches Julia" begin
+        script = """
+            mutable struct RLimit
+                cur::Int64
+                max::Int64
+            end
+            const RLIMIT_CORE = 4 # from /usr/include/sys/resource.h
+            ccall(:setrlimit, Cint, (Cint, Ref{RLimit}), RLIMIT_CORE, Ref(RLimit(0, 0)))
+            @noinline abort_from_julia() = ccall(:abort, Cvoid, ())
+            abort_from_julia()
+        """
+        exename = `$(Base.julia_cmd()) --startup-file=no --color=no --compile=yes -g1`
+        errp = PipeBuffer()
+        p = run(pipeline(ignorestatus(`$exename -e $script`), stderr=errp))
+        err_s = read(errp, String)
+        @test Base.process_signaled(p) && p.termsignal == 6 # SIGABRT
+        @test occursin("abort_from_julia at none:", err_s)
+    end
 end
 
 @testset "julia_cmd" begin
