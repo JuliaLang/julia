@@ -842,8 +842,26 @@ static Function *emit_pkg_plt_thunk(jl_codegen_output_t &out, jl_code_instance_t
     return F;
 }
 
-static jl_compiled_functions_t::iterator get_ci_equiv_compiled(jl_code_instance_t *ci JL_PROPAGATES_ROOT, jl_compiled_functions_t &compiled_functions) JL_NOTSAFEPOINT
+typedef DenseMap<jl_value_t*, SmallVector<jl_code_instance_t*, 1>> jl_compiled_by_def_t;
+
+static jl_compiled_functions_t::iterator get_ci_equiv_compiled(jl_code_instance_t *ci JL_PROPAGATES_ROOT, jl_compiled_functions_t &compiled_functions, jl_compiled_by_def_t &by_def) JL_NOTSAFEPOINT
 {
+    // Equivalent CodeInstances have egal defs, which for a MethodInstance means the same
+    // one, so look only at those instead of scanning every function being compiled.
+    if (jl_is_method_instance(ci->def)) {
+        if (by_def.empty()) {
+            for (auto &it : compiled_functions)
+                by_def[it.first->def].push_back(it.first);
+        }
+        auto candidates = by_def.find(ci->def);
+        if (candidates != by_def.end()) {
+            for (jl_code_instance_t *codeinst : candidates->second) {
+                if (codeinst != ci && jl_is_ci_equiv(ci, codeinst, 0))
+                    return compiled_functions.find(codeinst);
+            }
+        }
+        return compiled_functions.end();
+    }
     for (auto it = compiled_functions.begin(), E = compiled_functions.end(); it != E; ++it) {
         auto codeinst = it->first;
         if (codeinst != ci && jl_is_ci_equiv(ci, codeinst, 0))
@@ -882,6 +900,7 @@ static jl_code_instance_t *jl_get_ci_equiv_range(jl_code_instance_t *ci JL_PROPA
 // Static version of JuliaOJIT::linkOutput
 static void aot_link_output(jl_codegen_output_t &out) JL_CANSAFEPOINT
 {
+    jl_compiled_by_def_t by_def;
     for (auto &[call, target] : out.call_targets) {
         auto [ci, api] = call;
         assert(api == JL_INVOKE_ARGS || api == JL_INVOKE_SPECSIG);
@@ -892,7 +911,7 @@ static void aot_link_output(jl_codegen_output_t &out) JL_CANSAFEPOINT
         auto it = out.ci_funcs.find(ci);
         // Prefer a equivalent CodeInstance that we are compiling.
         if (it == out.ci_funcs.end()) {
-            auto equiv = get_ci_equiv_compiled(ci, out.ci_funcs);
+            auto equiv = get_ci_equiv_compiled(ci, out.ci_funcs, by_def);
             if (equiv != out.ci_funcs.end())
                 it = equiv;
         }
