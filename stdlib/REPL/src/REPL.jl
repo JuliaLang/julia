@@ -207,7 +207,7 @@ end
 function _softscope(s::Syntax)
     h = head(s)
     if h === :toplevel
-        @mknode(s; children=map(_softscope, children(s)))
+        @mknode(s; children=Syntax[_softscope(c) for c in children(s)])
     elseif h in (:module, :error, :incomplete, :thunk)
         s
     else
