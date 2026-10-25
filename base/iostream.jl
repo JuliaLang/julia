@@ -101,9 +101,9 @@ function flush(s::IOStream)
     systemerror("flush", bad)
 end
 
-iswritable(s::IOStream) = ccall(:ios_get_writable, Cint, (Ptr{Cvoid},), s.ios)!=0
+iswritable(s::IOStream) = isopen(s) && ccall(:ios_get_writable, Cint, (Ptr{Cvoid},), s.ios)!=0
 
-isreadable(s::IOStream) = ccall(:ios_get_readable, Cint, (Ptr{Cvoid},), s.ios)!=0
+isreadable(s::IOStream) = isopen(s) && ccall(:ios_get_readable, Cint, (Ptr{Cvoid},), s.ios)!=0
 
 """
     truncate(file, n)
