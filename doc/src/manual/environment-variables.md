@@ -424,6 +424,13 @@ threads for a single worker and does not affect the total thread limit.
 
 A boolean value that determines if detailed timing information is printed during image compilation. Defaults to 0.
 
+### [`JULIA_IMAGE_FOLD_CLONES`](@id JULIA_IMAGE_FOLD_CLONES)
+
+A boolean value that determines if image compilation for several CPU targets
+drops clones that use no instruction their target adds over its base, which
+makes system and package images smaller. Has no effect when compiling for a
+single target. Defaults to 1.
+
 ### [`JULIA_EXCLUSIVE`](@id JULIA_EXCLUSIVE)
 
 If set to anything besides `0`, then Julia's thread policy is consistent with
