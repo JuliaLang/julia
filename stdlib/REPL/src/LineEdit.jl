@@ -2374,9 +2374,10 @@ before_cursor(buf::IOBuffer) = content(buf, 0 => position(buf))
 
 # Does `str` end inside a string, char or command literal, or a comment? Decided by
 # tokenizing `str` followed by a sentinel character and looking at what the sentinel became.
+# The sentinel must end interpolated identifiers without being consumed as escaped-newline whitespace.
 function in_literal(str::String)
     k = K"EndMarker"
-    for t in tokenize(str * ' ')
+    for t in tokenize(str * ';')
         kind(t) == K"EndMarker" || (k = kind(t))
     end
     return k in KSet"String CmdString Char Comment ErrorEofMultiComment"

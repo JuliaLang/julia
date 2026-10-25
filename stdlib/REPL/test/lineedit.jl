@@ -1300,6 +1300,22 @@ end
         @test position(buffer(s)) == sizeof(str)
     end
 
+    # An escaped newline and its indentation are still inside the string literal.
+    for prefix in ("\"abc\\\n", "\"abc\\\n    ")
+        s = LineEdit.init_state(term, interface)
+        LineEdit.replace_line(LineEdit.state(s), prefix)
+        write_input(s, "\"")
+        @test content(s) == prefix * "\""
+        @test position(buffer(s)) == sizeof(prefix) + 1
+
+        s = LineEdit.init_state(term, interface)
+        LineEdit.replace_line(LineEdit.state(s), prefix * ")\"")
+        seek(buffer(s), sizeof(prefix))
+        write_input(s, ")")
+        @test content(s) == prefix * "))\""
+        @test position(buffer(s)) == sizeof(prefix) + 1
+    end
+
     # Interpolation in a string is code
     s = LineEdit.init_state(term, interface)
     write_input(s, "\"\$(")
