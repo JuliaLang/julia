@@ -948,6 +948,14 @@ generic_map_tests(map, map!)
     # @test_throws BoundsError map!(+, ones(3), ones(2, 2), ones(2, 2))
 end
 
+@testset "#38344" begin
+    @test map!(x -> x * 2, zeros(Int, 3), (1, 2, 3)) == [2, 4, 6]
+    @test map!(x -> x + 1, zeros(Int, 3), (x^2 for x in 1:3)) == [2, 5, 10]
+    @test map!(*, [1, 2], [1, 2], (3, 4)) == [3, 8]
+    @test map!(+, zeros(Int, 2), (10, 20), [1, 2]) == [11, 22]
+    @test map!((x, y, z) -> x + y + z, zeros(Int, 3), [1, 2, 3], (10, 20, 30), 100:102) == [111, 123, 135]
+end
+
 test_UInt_indexing(TestAbstractArray)
 test_13315(TestAbstractArray)
 test_checksquare()

@@ -3487,6 +3487,13 @@ function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
     return dest
 end
 
+function map!(f::F, dest::AbstractArray, A) where F
+    for (i, a) in zip(eachindex(dest), A)
+        @inbounds dest[i] = f(a)
+    end
+    return dest
+end
+
 # map on collections
 map(f, A::AbstractArray) = collect_similar(A, Generator(f,A))
 
@@ -3533,6 +3540,13 @@ function map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) whe
     return dest
 end
 
+function map!(f::F, dest::AbstractArray, A, B) where F
+    for (i, a, b) in zip(eachindex(dest), A, B)
+        @inbounds dest[i] = f(a, b)
+    end
+    return dest
+end
+
 ## N argument
 
 @inline ith_all(i, ::Tuple{}) = ()
@@ -3569,6 +3583,9 @@ $(_DOCS_ALIASING_WARNING)
 
 See also [`map`](@ref), [`foreach`](@ref), [`zip`](@ref), [`copyto!`](@ref).
 
+!!! compat "Julia 1.15"
+    Using non-array iterable collections as source arguments requires Julia 1.15 or later.
+
 # Examples
 ```jldoctest
 julia> a = zeros(3);
@@ -3593,6 +3610,13 @@ julia> map!(+, zeros(Int, 5), 100:999, 1:3)
 function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
     @assert !isempty(As) "should dispatch to map!(f, A)"
     map_n!(f, dest, As)
+end
+
+function map!(f::F, dest::AbstractArray, A, B, Cs...) where {F}
+    for (i, as) in zip(eachindex(dest), zip(A, B, Cs...))
+        @inbounds dest[i] = f(as...)
+    end
+    return dest
 end
 
 """
