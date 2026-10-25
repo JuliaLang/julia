@@ -3489,7 +3489,8 @@ end
 
 function map!(f::F, dest::AbstractArray, A) where F
     for (i, a) in zip(eachindex(dest), A)
-        @inbounds dest[i] = f(a)
+        val = f(a)
+        @inbounds dest[i] = val
     end
     return dest
 end
@@ -3542,7 +3543,8 @@ end
 
 function map!(f::F, dest::AbstractArray, A, B) where F
     for (i, a, b) in zip(eachindex(dest), A, B)
-        @inbounds dest[i] = f(a, b)
+        val = f(a, b)
+        @inbounds dest[i] = val
     end
     return dest
 end
@@ -3614,7 +3616,8 @@ end
 
 function map!(f::F, dest::AbstractArray, A, B, Cs...) where {F}
     for (i, as) in zip(eachindex(dest), zip(A, B, Cs...))
-        @inbounds dest[i] = f(as...)
+        val = f(as...)
+        @inbounds dest[i] = val
     end
     return dest
 end
