@@ -3487,13 +3487,6 @@ function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
     return dest
 end
 
-function map!(f::F, dest::AbstractArray, A) where F
-    for (i, a) in zip(eachindex(dest), A)
-        val = f(a)
-        @inbounds dest[i] = val
-    end
-    return dest
-end
 
 # map on collections
 map(f, A::AbstractArray) = collect_similar(A, Generator(f,A))
@@ -3541,13 +3534,6 @@ function map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) whe
     return dest
 end
 
-function map!(f::F, dest::AbstractArray, A, B) where F
-    for (i, a, b) in zip(eachindex(dest), A, B)
-        val = f(a, b)
-        @inbounds dest[i] = val
-    end
-    return dest
-end
 
 ## N argument
 
@@ -3614,8 +3600,8 @@ function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
     map_n!(f, dest, As)
 end
 
-function map!(f::F, dest::AbstractArray, A, B, Cs...) where {F}
-    for (i, as) in zip(eachindex(dest), zip(A, B, Cs...))
+function map!(f::F, dest::AbstractArray, A, Bs...) where F
+    for (i, as...) in zip(eachindex(dest), A, Bs...)
         val = f(as...)
         @inbounds dest[i] = val
     end
