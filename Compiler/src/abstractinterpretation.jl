@@ -5184,7 +5184,7 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState{I}) where {I
             time_now = _time_ns()
             callee.time_self_ns += (time_now - time_before)
             time_before = time_now
-            finish_nocycle(interp, callee, time_before)
+            time_before = finish_nocycle(interp, callee, time_before)
             callee.frameid == 0 && break
             takenext = length(callstack)
             nextstateid = takenext + 1 - frame.frameid
@@ -5208,7 +5208,7 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState{I}) where {I
                 end
             end
             if no_active_ips_in_cycle
-                finish_cycle(interp, callstack, callee.cycleid, time_before)
+                time_before = finish_cycle(interp, callstack, callee.cycleid, time_before)
             end
             takenext = length(callstack)
             nextstateid = takenext + 1 - frame.frameid

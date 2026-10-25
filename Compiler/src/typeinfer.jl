@@ -190,6 +190,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         ipo_effects = encode_effects(result.ipo_effects)
         time_now = _time_ns()
         time_self_ns = caller.time_self_ns + (time_now - time_before)
+        time_before = time_now
         time_total = (time_now - caller.time_start - caller.time_paused) * 1e-9
         ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Float64, Any, Any),
             ci, widenconst(result_type), widenconst(result.exc_result), rettype_const, inferred_result,
@@ -201,7 +202,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
     elseif caller.cache_mode === CACHE_MODE_LOCAL
         result.src = transform_result_for_local_cache(interp, result)
     end
-    nothing
+    return time_before
 end
 
 function promotecache!(interp::AbstractInterpreter, caller::InferenceState)
@@ -321,7 +322,7 @@ function finish_nocycle(interp::AbstractInterpreter, frame::InferenceState{I}, t
     end
     empty!(opt_cache)
     validation_world = get_world_counter()
-    finish!(interp::I, frame, validation_world, time_before)
+    time_before = finish!(interp::I, frame, validation_world, time_before)
     promotecache!(interp::I, frame)
     if (!iszero(frame.cache_mode & CACHE_MODE_GLOBAL) &&
             isdefined(frame.result, :ci))
@@ -335,7 +336,7 @@ function finish_nocycle(interp::AbstractInterpreter, frame::InferenceState{I}, t
         @assert frames[end] === frame
         pop!(frames)
     end
-    return nothing
+    return time_before
 end
 
 function propagate_unpublished_cycle_proof!(
@@ -434,7 +435,7 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState{I}
         caller.time_caches = time_caches
         caller.time_paused = time_paused
         update_valid_age!(caller, world, cycle_valid_worlds)
-        finish!(caller.interp::I, caller, validation_world, time_before)
+        time_before = finish!(caller.interp::I, caller, validation_world, time_before)
     end
     if cycletop.parentid != 0
         parent = frames[cycletop.parentid]
@@ -455,7 +456,7 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState{I}
     # validity.
     ccall(:jl_promote_cis_to_current, Cvoid, (Ptr{CodeInstance}, Csize_t, UInt), cis, length(cis), validation_world)
     resize!(frames, cycleid - 1)
-    return nothing
+    return time_before
 end
 
 function adjust_cycle_frame!(sv::InferenceState, world::UInt, cycle_valid_worlds::WorldRange, cycle_valid_effects::Effects)
