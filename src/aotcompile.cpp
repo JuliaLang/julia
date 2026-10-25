@@ -378,6 +378,8 @@ static void record_method_roots(egal_set &method_roots, jl_method_instance_t *mi
 
 static void aot_optimize_roots(jl_codegen_params_t &params, egal_set &method_roots, jl_compiled_functions_t &compiled_functions)
 {
+    // old global name -> name of the equivalent global to use instead
+    StringMap<std::string> renames;
     for (size_t i = 0; i < jl_array_dim0(params.temporary_roots); i++) {
         jl_value_t *val = jl_array_ptr_ref(params.temporary_roots, i);
         auto ref = params.global_targets.find((void*)val);
@@ -401,33 +403,46 @@ static void aot_optimize_roots(jl_codegen_params_t &params, egal_set &method_roo
             GlobalVariable *GV = ref->second;
             params.global_targets.erase(ref);
             auto mref = params.global_targets.find((void*)mval);
-            if (mref != params.global_targets.end()) {
-                // replace ref with mref in all Modules
-                std::string OldName(GV->getName());
-                StringRef NewName(mref->second->getName());
-                for (auto &def : compiled_functions) {
-                    orc::ThreadSafeModule &TSM = def.second.TSM;
-                    Module &M = *TSM.getModuleUnlocked();
-                    if (GlobalValue *GV2 = M.getNamedValue(OldName)) {
-                        if (GV2 == GV)
-                            GV = nullptr;
-                        // either replace or rename the old value to use the other equivalent name
-                        if (GlobalValue *GV3 = M.getNamedValue(NewName)) {
-                            GV2->replaceAllUsesWith(GV3);
-                            GV2->eraseFromParent();
-                        }
-                        else {
-                            GV2->setName(NewName);
-                        }
-                    }
-                }
-                assert(GV == nullptr);
+            if (mref != params.global_targets.end())
+                renames[GV->getName()] = mref->second->getName().str();
+            else
+                params.global_targets[(void*)mval] = GV;
+        }
+    }
+    if (renames.empty())
+        return;
+    // Apply the renames in one pass over each module's globals. Looking each
+    // name up in every module is quadratic in the size of large images.
+#ifndef JL_NDEBUG
+    StringSet<> found;
+#endif
+    for (auto &def : compiled_functions) {
+        orc::ThreadSafeModule &TSM = def.second.TSM;
+        Module &M = *TSM.getModuleUnlocked();
+        SmallVector<GlobalVariable*, 0> globals;
+        for (GlobalVariable &GV : M.globals())
+            globals.push_back(&GV);
+        for (GlobalVariable *GV2 : globals) {
+            auto it = renames.find(GV2->getName());
+            if (it == renames.end())
+                continue;
+#ifndef JL_NDEBUG
+            found.insert(it->first());
+#endif
+            StringRef NewName = it->second;
+            for (auto next = renames.find(NewName); next != renames.end(); next = renames.find(NewName))
+                NewName = next->second;
+            // either replace or rename the old value to use the other equivalent name
+            if (GlobalValue *GV3 = M.getNamedValue(NewName)) {
+                GV2->replaceAllUsesWith(GV3);
+                GV2->eraseFromParent();
             }
             else {
-                params.global_targets[(void*)mval] = GV;
+                GV2->setName(NewName);
             }
         }
     }
+    assert(found.size() == renames.size());
 }
 
 static void resolve_workqueue(jl_codegen_params_t &params, egal_set &method_roots, jl_compiled_functions_t &compiled_functions)
