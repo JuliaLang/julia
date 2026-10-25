@@ -1203,7 +1203,9 @@ mutable struct Struct_huge5_ppc64_hva
     v2::V2xF64
 end
 
-if Sys.ARCH === :x86_64
+# SIMD tuples use vector registers in both directions, including the i686
+# register-to-stack transition after three vector arguments.
+if Sys.ARCH === :x86_64 || Sys.ARCH === :i686
     function test_sse(a1::V4xF32, a2::V4xF32, a3::V4xF32, a4::V4xF32)
         ccall((:test_m128, libccalltest), V4xF32, (V4xF32, V4xF32, V4xF32, V4xF32), a1, a2, a3, a4)
     end
@@ -1216,11 +1218,12 @@ if Sys.ARCH === :x86_64
 
     for s in [Float32, Int32]
         T = NTuple{4, VecElement{s}}
+        callback = s === Float32 ? :test_m128_cb : :test_m128i_cb
         @eval function rt_sse(a1::$T, a2::$T, a3::$T, a4::$T)
             return ccall(
-                @cfunction(foo_ams, $T, ($T, $T, $T, $T)),
-                $T, ($T, $T, $T, $T),
-                     a1, a2, a3, a4)
+                ($(QuoteNode(callback)), libccalltest),
+                $T, (Ptr{Cvoid}, $T, $T, $T, $T),
+                @cfunction(foo_ams, $T, ($T, $T, $T, $T)), a1, a2, a3, a4)
         end
 
         a1 = VecReg(ntuple(i -> VecElement(s(1i)), 4))
