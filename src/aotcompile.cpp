@@ -848,7 +848,7 @@ static jl_compiled_functions_t::iterator get_ci_equiv_compiled(jl_code_instance_
 {
     // Equivalent CodeInstances have egal defs, which for a MethodInstance means the same
     // one, so look only at those instead of scanning every function being compiled.
-    if (jl_is_method_instance(ci->def)) {
+    jl_method_instance_t *mi = jl_get_ci_mi(ci);
         if (by_def.empty()) {
             for (auto &it : compiled_functions)
                 by_def[it.first->def].push_back(it.first);
