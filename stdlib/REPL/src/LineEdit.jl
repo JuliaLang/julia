@@ -27,8 +27,6 @@ abstract type CompletionProvider end
 
 export run_interface, Prompt, ModalInterface, transition, reset_state, edit_insert, keymap
 
-@nospecialize # use only declared type signatures
-
 const StringLike = Union{Char,String,SubString{String}}
 
 const ANSI_COLOR_ORDER = (
