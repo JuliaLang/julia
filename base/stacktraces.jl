@@ -239,8 +239,11 @@ trace, `stacktrace` first calls `backtrace`.
 """
 Base.@constprop :none function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Ptr{Cvoid}}}, c_funcs::Bool=false)
     stack = StackTrace()
+    lookups = Dict{eltype(trace),StackTrace}()
     for ip in trace
-        for frame in lookup(ip)
+        frames = get(lookups, ip, nothing)
+        frames === nothing && (frames = lookups[ip] = lookup(ip))
+        for frame in frames
             # Skip frames that come from C calls.
             if c_funcs || !frame.from_c
                 push!(stack, frame)
