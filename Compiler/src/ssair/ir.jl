@@ -1839,7 +1839,7 @@ function may_replace_phi(values::Vector{Any}, phi_bb::BasicBlock, idx::Int)
     # unnecessary when DCE can remove those dead loops entirely, so this is
     # just to be safe.
     v = values[1]
-    before_def = isa(v, OldSSAValue) && idx < v.id
+    before_def = isa(v, OldSSAValue)
     return !before_def
 end
 
