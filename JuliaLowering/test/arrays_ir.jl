@@ -411,11 +411,12 @@ a[i, j; w=1]
 # simple setindex!
 a[i] = x
 #---------------------
-1   TestMod.x
-2   TestMod.a
+1   TestMod.a
+2   TestMod.x
 3   TestMod.i
-4   (call top.setindex! %₂ %₁ %₃)
-5   (return %₁)
+4   (call top.setindex! %₁ %₂ %₃)
+5   TestMod.x
+6   (return %₅)
 
 ########################################
 # simple setindex! with begin
@@ -425,7 +426,8 @@ a[begin] = x
 2   TestMod.x
 3   (call top.firstindex %₁)
 4   (call top.setindex! %₁ %₂ %₃)
-5   (return %₂)
+5   TestMod.x
+6   (return %₅)
 
 ########################################
 # simple setindex! with end
@@ -435,7 +437,8 @@ a[end] = x
 2   TestMod.x
 3   (call top.lastindex %₁)
 4   (call top.setindex! %₁ %₂ %₃)
-5   (return %₂)
+5   TestMod.x
+6   (return %₅)
 
 ########################################
 # multidimensional setindex! with begin
@@ -446,7 +449,8 @@ a[i, begin] = x
 3   TestMod.i
 4   (call top.firstindex %₁ 2)
 5   (call top.setindex! %₁ %₂ %₃ %₄)
-6   (return %₂)
+6   TestMod.x
+7   (return %₆)
 
 ########################################
 # multidimensional setindex! with end
@@ -457,7 +461,8 @@ a[i, end] = x
 3   TestMod.i
 4   (call top.lastindex %₁ 2)
 5   (call top.setindex! %₁ %₂ %₃ %₄)
-6   (return %₂)
+6   TestMod.x
+7   (return %₆)
 
 ########################################
 # multidimensional setindex! with begin/end and splats
@@ -478,7 +483,8 @@ a[is..., end, js..., begin] = x
 13  (call core.tuple %₅)
 14  (call core.tuple %₁₀)
 15  (call core._apply_iterate top.iterate top.setindex! %₁₂ %₂ %₁₃ %₆ %₁₄)
-16  (return %₁₁)
+16  TestMod.x
+17  (return %₁₆)
 
 ########################################
 # setindex! with nontrivial array expression and begin/end
@@ -489,7 +495,8 @@ f()[end] = x
 3   TestMod.x
 4   (call top.lastindex %₂)
 5   (call top.setindex! %₂ %₃ %₄)
-6   (return %₃)
+6   TestMod.x
+7   (return %₆)
 
 ########################################
 # nested refs
@@ -501,13 +508,15 @@ b[a[begin]] = x
 4   (call top.firstindex %₃)
 5   (call top.getindex %₃ %₄)
 6   (call top.setindex! %₁ %₂ %₅)
-7   (return %₂)
+7   TestMod.x
+8   (return %₇)
 
 ########################################
 # empty ref and setindex!
 a[] = rhs
 #---------------------
-1   TestMod.rhs
-2   TestMod.a
-3   (call top.setindex! %₂ %₁)
-4   (return %₁)
+1   TestMod.a
+2   TestMod.rhs
+3   (call top.setindex! %₁ %₂)
+4   TestMod.rhs
+5   (return %₄)

@@ -188,14 +188,12 @@ let
     (x[10], y[20]) = (1,2)
 end
 #---------------------
-1   1
-2   TestMod.x
-3   (call top.setindex! %₂ %₁ 10)
-4   2
-5   TestMod.y
-6   (call top.setindex! %₅ %₄ 20)
-7   (call core.tuple 1 2)
-8   (return %₇)
+1   TestMod.x
+2   (call top.setindex! %₁ 1 10)
+3   TestMod.y
+4   (call top.setindex! %₃ 2 20)
+5   (call core.tuple 1 2)
+6   (return %₅)
 
 ########################################
 # Destructuring with tuple elimination and trailing rhs ...

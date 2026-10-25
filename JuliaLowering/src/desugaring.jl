@@ -760,7 +760,10 @@ function expand_setindex(ctx, ex)
     lhs = ex[1]
     sctx = with_stmts(ctx)
     (arr, idxs) = expand_ref_components(sctx, lhs)
-    rhs = emit_assign_tmp(sctx, ex[2])
+    rhs = ex[2]
+    if !is_identifier_like(rhs) && !(head(rhs) === :value)
+        rhs = emit_assign_tmp(sctx, rhs)
+    end
     @ast ctx ex [:block
         sctx.stmts...
         expand_forms_2(ctx, [:call
