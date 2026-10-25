@@ -1804,9 +1804,10 @@ end
     @test @inferred(broadcast(muladd, 0.0:8.0, 2.0, 1.0)) === 1.0:2.0:17.0
     @test @inferred(broadcast(muladd, 2.0, 0.0:8.0, 1.0)) === 1.0:2.0:17.0
     @test @inferred(broadcast(muladd, 2.0, 1.0, 0.0:8.0)) === 2.0:1.0:10.0
-    @test @inferred(broadcast(muladd, 1:5, 2, 10:14)) === 12:3:24
-    @test @inferred(broadcast(muladd, 2, 1:5, 10:14)) === 12:3:24
-    @test_throws DimensionMismatch muladd.(1:5, 2, 1:6)
+    @test @inferred(broadcast(muladd, 1.0:5.0, 2.0, 10.0:14.0)) === 12.0:3.0:24.0
+    @test @inferred(broadcast(muladd, 2.0, 1.0:5.0, 10.0:14.0)) === 12.0:3.0:24.0
+    @test_throws DimensionMismatch muladd.(1.0:5.0, 2.0, 1.0:6.0)
+    @test sum(muladd.(Int8(100):Int8(110), Int8(1), Int8(0))) == 1155
 
     # issue #42291
     @test length((1:5) .- 1/7) == 5

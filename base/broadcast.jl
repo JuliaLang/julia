@@ -1236,11 +1236,11 @@ broadcasted(::DefaultArrayStyle{1}, ::typeof(\), x::Number, r::AbstractRange) = 
 broadcasted(::DefaultArrayStyle{1}, ::typeof(\), x::Number, r::StepRangeLen) = StepRangeLen(x\r.ref, x\r.step, length(r), r.offset)
 broadcasted(::DefaultArrayStyle{1}, ::typeof(\), x::Number, r::LinRange) = LinRange(x \ r.start, x \ r.stop, r.len)
 
-broadcasted(::DefaultArrayStyle{1}, ::typeof(muladd), r::AbstractRange{T}, x::T, y::T) where {T<:Number} = (r .* x) .+ y
-broadcasted(::DefaultArrayStyle{1}, ::typeof(muladd), x::T, r::AbstractRange{T}, y::T) where {T<:Number} = (x .* r) .+ y
-broadcasted(::DefaultArrayStyle{1}, ::typeof(muladd), x::T, y::T, r::AbstractRange{T}) where {T<:Number} = (x * y) .+ r
-broadcasted(::DefaultArrayStyle{1}, ::typeof(muladd), r1::AbstractRange{T}, x::T, r2::AbstractRange{T}) where {T<:Number} = (r1 .* x) .+ r2
-broadcasted(::DefaultArrayStyle{1}, ::typeof(muladd), x::T, r1::AbstractRange{T}, r2::AbstractRange{T}) where {T<:Number} = (x .* r1) .+ r2
+broadcasted(::DefaultArrayStyle{1}, ::typeof(muladd), r::AbstractRange{T}, x::T, y::T) where {T<:AbstractFloat} = (r .* x) .+ y
+broadcasted(::DefaultArrayStyle{1}, ::typeof(muladd), x::T, r::AbstractRange{T}, y::T) where {T<:AbstractFloat} = (x .* r) .+ y
+broadcasted(::DefaultArrayStyle{1}, ::typeof(muladd), x::T, y::T, r::AbstractRange{T}) where {T<:AbstractFloat} = (x * y) .+ r
+broadcasted(::DefaultArrayStyle{1}, ::typeof(muladd), r1::AbstractRange{T}, x::T, r2::AbstractRange{T}) where {T<:AbstractFloat} = (r1 .* x) .+ r2
+broadcasted(::DefaultArrayStyle{1}, ::typeof(muladd), x::T, r1::AbstractRange{T}, r2::AbstractRange{T}) where {T<:AbstractFloat} = (x .* r1) .+ r2
 
 broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::UnitRange) = big(r.start):big(last(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::StepRange) = big(r.start):big(r.step):big(last(r))
