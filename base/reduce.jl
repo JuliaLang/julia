@@ -358,6 +358,7 @@ reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:BitUnsignedSmall} = one(UI
 reduce_empty(op::BottomRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
 reduce_empty(op::MappingRF, ::Type{T}) where {T} = mapreduce_empty(op.f, op.rf, T)
 reduce_empty(op::FilteringRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
+reduce_empty(op::FlatteningRF, ::Type{T}) where {T} = reduce_empty(op.rf, eltype(T))
 reduce_empty(op::FlipArgs, ::Type{T}) where {T} = reduce_empty(op.f, T)
 
 """
@@ -379,6 +380,7 @@ mapreduce_empty_iter(f::F, op::F2, itr, ItrEltype) where {F,F2} =
     reduce_empty_iter(MappingRF(f, op), itr, ItrEltype)
 
 @inline reduce_empty_iter(op, itr) = reduce_empty_iter(op, itr, IteratorEltype(itr))
+@inline reduce_empty_iter(op::FlatteningRF, itr) = reduce_empty_iter(op.rf, Iterators.flatten(itr))
 @inline reduce_empty_iter(op, itr, ::HasEltype) = reduce_empty(op, eltype(itr))
 # a homogeneous tuple binds the element type as a static parameter, which stays
 # precise for abstract `Tuple{Vararg{T}}` queries where `eltype` of the
