@@ -2319,7 +2319,8 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
             opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
                 # For `(; x=1)` peek_behind skips the parameters TOMBSTONE and
                 # lands before the `(`, e.g. on the call of an enclosing signature
-                _parsed_call = peek_behind_pos(ps).node_index > mark.node_index &&
+                _parsed_call = num_semis == 0 &&
+                               peek_behind_pos(ps).node_index > mark.node_index &&
                                was_eventually_call(ps)
                 _maybe_grouping_parens = !had_commas && !had_splat && num_semis == 0 && num_subexprs == 1
                 # Check if there's a newline between `)` and the next `(` or `.`.
