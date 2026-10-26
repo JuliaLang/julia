@@ -273,7 +273,6 @@ taken to be the first entry of `@TERMINFO_DIRS@`.
 function find_terminfo_file(term::String)
     # Like ncurses, reject names that could escape the terminfo directories
     (isempty(term) || any(Filesystem.isseparator, term)) && return
-    # Use the first byte, as `TERM` may not be valid UTF-8
     chr, chrcode = string(first(term)), string(codeunit(term, 1), base=16, pad=2)
     terminfo_dirs = if haskey(ENV, "TERMINFO")
         [ENV["TERMINFO"]]
