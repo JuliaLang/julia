@@ -969,15 +969,22 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *records, jl_ar
             return;
         }
         assert(jl_array_nrows(records) == l);
+        // These methods all activate in the same world, so their dispatch cache invalidations
+        // can be applied together afterwards. The invalidation log wants them per method.
+        jl_array_t *deferred = _jl_debug_method_invalidation ? NULL : jl_alloc_vec_any(0);
+        JL_GC_PUSH1(&deferred);
         for (i = 0; i < l; i++) {
             jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
             jl_value_t *record = jl_array_ptr_ref(records, i);
             //uint64_t t0 = uv_hrtime();
-            jl_method_table_activate_with_record(entry, record == jl_nothing ? NULL : (jl_array_t*)record, image);
+            jl_method_table_activate_with_record(entry, record == jl_nothing ? NULL : (jl_array_t*)record, image, deferred);
             //jl_printf(JL_STDERR, "%f ", (double)(uv_hrtime() - t0) / 1e6);
             //jl_static_show(JL_STDERR, entry->func.value);
             //jl_printf(JL_STDERR, "\n");
         }
+        if (deferred)
+            jl_method_table_invalidate_deferred(deferred, world - 1);
+        JL_GC_POP();
     }
 }
 

@@ -4332,6 +4332,50 @@ precompile_test_harness("Type{Union{}} inline field") do dir
     @test (@eval $TypeBottomField.X.t) === Union{}
 end
 
+# A package image activates all its methods in one world, so the dispatch cache entries
+# they shadow are invalidated in one pass afterwards. When several of its methods shadow
+# the same specialization, that pass must check each of their signatures.
+precompile_test_harness("dispatch cache entries shadowed by one image") do dir
+    write(joinpath(dir, "ShadowedBase.jl"),
+          """
+          module ShadowedBase
+              # the cache entries for other arguments are guarded against AbstractString
+              j(@nospecialize(x)) = :old
+              j(::AbstractString) = :str
+              k(@nospecialize(x)) = :old
+              k(::AbstractString) = :str
+          end
+          """)
+    write(joinpath(dir, "ShadowingMethods.jl"),
+          """
+          module ShadowingMethods
+              using ShadowedBase
+              # the guard covers one of the two new methods; the other must still
+              # invalidate, whichever of them is checked first
+              ShadowedBase.j(::Int) = :new_int
+              ShadowedBase.j(::String) = :new_string
+              ShadowedBase.k(::String) = :new_string
+              ShadowedBase.k(::Int) = :new_int
+          end
+          """)
+    @test Base.compilecache(Base.PkgId("ShadowedBase")) isa Tuple
+    @test Base.compilecache(Base.PkgId("ShadowingMethods")) isa Tuple
+    @eval using ShadowedBase
+    j, k = @eval (ShadowedBase.j, ShadowedBase.k)
+    # fill the dispatch caches
+    for fn in (j, k)
+        @test Base.invokelatest(fn, 1) === :old
+        @test Base.invokelatest(fn, :s) === :old
+        @test Base.invokelatest(fn, "s") === :str
+    end
+    @eval using ShadowingMethods
+    for fn in (j, k)
+        @test Base.invokelatest(fn, 1) === :new_int
+        @test Base.invokelatest(fn, :s) === :old
+        @test Base.invokelatest(fn, "s") === :new_string
+    end
+end
+
 # Cache rejection reasons and how they are reported when loading triggers precompilation:
 # caches left behind by another version of Julia collapse into one generic message, while
 # actionable reasons (e.g. changed source) are reported by name without version noise.
