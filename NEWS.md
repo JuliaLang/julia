@@ -22,6 +22,8 @@ Build system changes
 New library functions
 ---------------------
 
+* `pkgrevision(m::Module)` returns the git revision a package was added at, as recorded in the manifest, without going through `Pkg.dependencies()` ([#64100]).
+
 New library features
 --------------------
 

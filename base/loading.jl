@@ -676,6 +676,47 @@ function pkgversion(m::Module)
     end
 end
 
+"""
+    pkgrevision(m::Module)
+
+If the module `m` belongs to a package that was added from a git repository at a
+specific revision (e.g. with `Pkg.add(url=..., rev="main")`), return that revision
+as recorded in the manifest of the environment the package was loaded from, at the
+time it was loaded.
+Otherwise return `nothing`.
+
+The revision is returned as it was given when the package was added (a branch, tag
+or commit), not resolved to the commit that is checked out.
+
+!!! compat "Julia 1.15"
+    This function was introduced in Julia 1.15.
+"""
+function pkgrevision(m::Module)
+    @lock require_lock begin
+        pkg = PkgId(moduleroot(m))
+        triggers = get(EXT_PRIMED, pkg, nothing)
+        triggers === nothing || (pkg = triggers[1])
+        pkgorigin = get(pkgorigins, pkg, nothing)
+        pkgorigin === nothing && return nothing
+        return pkgorigin.revision
+    end
+end
+
+function get_pkgrevision_from_env(pkg::PkgId, path::String)
+    pkg.uuid === nothing && return nothing
+    haskey(EXT_PRIMED, pkg) && return nothing
+    specenv = locate_package_env(pkg)
+    specenv === nothing && return nothing
+    spec, env = specenv
+    # The package may have been loaded from a path other than the one the load path gives.
+    spec.path == path || return nothing
+    project_file = env_project_file(env)
+    project_file isa String || return nothing
+    entry = explicit_manifest_entry(project_file, pkg)
+    entry === nothing && return nothing
+    return get(entry, "repo-rev", nothing)::Union{Nothing, String}
+end
+
 ## generic project & manifest API ##
 
 const project_names = ("JuliaProject.toml", "Project.toml")
@@ -1218,23 +1259,31 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
     return nothing
 end
 
+function manifest_deps_entry(d::Dict{String, Any}, pkg::PkgId)::Union{Nothing, Dict{String, Any}}
+    entries = get(d, pkg.name, nothing)::Union{Nothing, Vector{Any}}
+    entries === nothing && return nothing
+    for entry in entries
+        entry = entry::Dict{String, Any}
+        uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
+        uuid !== nothing && UUID(uuid) === pkg.uuid && return entry
+    end
+    return nothing
+end
+
+function explicit_manifest_entry(project_file::String, pkg::PkgId)::Union{Nothing, Dict{String, Any}}
+    manifest_file = project_file_manifest_path(project_file)
+    manifest_file === nothing && return nothing
+    return manifest_deps_entry(get_deps(parsed_toml(manifest_file)), pkg)
+end
+
 # find `uuid` stanza, return the corresponding path
 function explicit_manifest_uuid_load_spec(project_file::String, pkg::PkgId)::Union{Nothing,PkgLoadSpec,Missing}
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # no manifest, skip env
 
     d = get_deps(parsed_toml(manifest_file))
-    entries = get(d, pkg.name, nothing)::Union{Nothing, Vector{Any}}
-    if entries !== nothing
-        for entry in entries
-            entry = entry::Dict{String, Any}
-            uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
-            uuid === nothing && continue
-            if UUID(uuid) === pkg.uuid
-                return explicit_manifest_entry_load_spec(manifest_file, pkg, entry)
-            end
-        end
-    end
+    entry = manifest_deps_entry(d, pkg)
+    entry === nothing || return explicit_manifest_entry_load_spec(manifest_file, pkg, entry)
     # Extensions
     for (name, entries) in d
         entries = entries::Vector{Any}
@@ -3028,8 +3077,9 @@ mutable struct PkgOrigin
     path::Union{String,Nothing}
     cachepath::Union{String,Nothing}
     version::Union{VersionNumber,Nothing}
+    revision::Union{String,Nothing}
 end
-PkgOrigin() = PkgOrigin(nothing, nothing, nothing)
+PkgOrigin() = PkgOrigin(nothing, nothing, nothing, nothing)
 const pkgorigins = Dict{PkgId,PkgOrigin}()
 
 const loaded_modules = Dict{PkgId,Module}() # available to be explicitly loaded
@@ -3131,6 +3181,7 @@ function set_pkgorigin_version_path(pkg::PkgId, path::String)
         pkgorigin.version = get_pkgversion_from_path(joinpath(dirname(path), ".."))
     end
     pkgorigin.path = path
+    pkgorigin.revision = get_pkgrevision_from_env(pkg, path)
     nothing
 end
 

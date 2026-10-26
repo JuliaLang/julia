@@ -860,6 +860,7 @@ export
     parentmodule,
     pathof,
     pkgdir,
+    pkgrevision,
     pkgversion,
     names,
     which,

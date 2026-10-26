@@ -485,6 +485,7 @@ Base.parentmodule
 Base.pathof(::Module)
 Base.pkgdir(::Module)
 Base.pkgversion(::Module)
+Base.pkgrevision(::Module)
 Base.moduleroot
 __module__
 __source__
