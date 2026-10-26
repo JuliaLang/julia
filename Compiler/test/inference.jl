@@ -6777,4 +6777,11 @@ end
     Val(concrete_eval_eligible_if_false(42., 5, false) == 5sin(42.))
 end == Val{true}
 
+# irinterp must keep splats precise after the optimizer turns them into `Core.svec` calls
+const SPLAT_SVEC_NAMES = ntuple(i -> Symbol(:a, i), 33)
+@inline splat_svec_inner(names, vals...) = NamedTuple{names}(vals)
+@inline splat_svec_outer(names, vals::Tuple) = splat_svec_inner(names, vals...)
+splat_svec_caller(vals) = splat_svec_outer(SPLAT_SVEC_NAMES, vals)
+@test Base.infer_return_type(splat_svec_caller, (NTuple{33,Int},)) === NamedTuple{SPLAT_SVEC_NAMES, NTuple{33,Int}}
+
 end # module inference
