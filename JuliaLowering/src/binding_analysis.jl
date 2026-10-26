@@ -335,9 +335,6 @@ function du_visit!(ctx, state::DefUseState, e)
 end
 
 function _analyze_lambda_vars!(ctx::VariableAnalysisContext, ex)
-    # Collect candidate variables: single-assigned. Uncaptured ones still benefit
-    # from `is_always_defined`, which lets linearization use them as call arguments
-    # without copying to an SSA value.
     candidates = Set{IdTag}()
     for (id, from_outer_lambda) in lambda_bindings(ex[1]).locals_capt
         b = get_binding(ctx, id)
