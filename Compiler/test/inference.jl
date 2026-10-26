@@ -5268,6 +5268,46 @@ end == Int
         end
         return nothing
     end == Union{Nothing, String}
+    @test Base.infer_return_type((Any, Any)) do a, b
+        x = a; y = b
+        x, y = y, x
+        if b isa Int
+            return y
+        end
+        return nothing
+    end == Any
+    @test Base.infer_return_type((Any, Any)) do a, b
+        x = a; y = b
+        x, y = y, x
+        typeassert(b, Int)
+        return y
+    end == Any
+    # after the swap, `x` does hold `b` and should still be refined
+    @test Base.infer_return_type((Any, Any)) do a, b
+        x = a; y = b
+        x, y = y, x
+        if b isa Int
+            return x
+        end
+        return nothing
+    end == Union{Nothing, Int}
+    @test Base.infer_return_type((Any, Any, Bool)) do a, b, c
+        x = a
+        y = b
+        y, z = x, (c && (x = 1; true); y)
+        if x isa Int
+            return y
+        end
+        return nothing
+    end == Any
+    @test Base.infer_return_type((Any,)) do a
+        x = y = identity(a)
+        z = x
+        if x isa Int
+            return z
+        end
+        return nothing
+    end == Union{Nothing, Int}
     # typeassert-based refinement should also propagate to aliases
     @test Base.infer_return_type((Any,)) do x
         y = x
