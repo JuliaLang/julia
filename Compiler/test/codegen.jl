@@ -1452,3 +1452,12 @@ const const_svec_ref = Core.svec(1, "a", :b)
     @test_throws BoundsError(const_svec_ref, 0) const_svec_ref_test(0)
     @test_throws BoundsError(const_svec_ref, 4) const_svec_ref_test(4)
 end
+
+# LLVM can merge allocations of arrays whose element types differ in whether they need zeroing
+memory_zeroinit_merge(row, names) = collect(getfield(row, nm) for nm in names)
+@testset "merged Memory allocations" begin
+    row = (a=1, b=4.0, c="7")
+    @test memory_zeroinit_merge(row, (:c, :a, :b)) == ["7", 1, 4.0]
+    @test memory_zeroinit_merge(row, (:a, :b, :c)) == [1, 4.0, "7"]
+    @test memory_zeroinit_merge(row, (:b, :b, :b)) == [4.0, 4.0, 4.0]
+end
