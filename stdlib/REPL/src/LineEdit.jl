@@ -27,8 +27,6 @@ abstract type CompletionProvider end
 
 export run_interface, Prompt, ModalInterface, transition, reset_state, edit_insert, keymap
 
-@nospecialize # use only declared type signatures
-
 const StringLike = Union{Char,String,SubString{String}}
 
 const ANSI_COLOR_ORDER = (
@@ -443,7 +441,7 @@ function beep(s::PromptState, duration::Real=options(s).beep_duration,
             trylock(s.refresh_lock) || return
             try
                 orig_prefix = s.p.prompt_prefix
-                use_current && push!(colors, prompt_string(orig_prefix))
+                use_current && push!(colors, String(prompt_string(orig_prefix))::String)
                 i = 0
                 while s.beeping > 0.0
                     prefix = colors[mod1(i+=1, end)]
@@ -2852,7 +2850,7 @@ end
 function bracketed_paste(s::MIState; tabwidth::Int=options(s).tabwidth)
     options(s).auto_indent_bracketed_paste = true
     ps = state(s, mode(s))::PromptState
-    input = readuntil(ps.terminal, "\e[201~")
+    input = readuntil(ps.terminal, "\e[201~")::String
     input = replace(input, '\r' => '\n')
     if position(buffer(s)) == 0
         indent = Base.indentation(input; tabwidth=tabwidth)[1]

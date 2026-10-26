@@ -85,7 +85,7 @@ function create_prompt(events::Channel{Symbol}, term, prefix::String = "\e[90m",
     # Share the main REPL's terminal_properties so that DA1/OSC responses
     # parsed by the keymap during history search update the same object.
     istate.terminal_properties = terminal_properties
-    pstate = istate.mode_state[prompt]
+    pstate = istate.mode_state[prompt]::REPL.LineEdit.PromptState
     (; term, prompt, istate, pstate)
 end
 
