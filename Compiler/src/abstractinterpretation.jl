@@ -4634,7 +4634,7 @@ function update_bbstate!(
     if bbstate === nothing
         # if a basic block hasn't been analyzed yet,
         # we can update its state a bit more aggressively
-        frame.bb_states[bb] = BBEntryState(copy(vartable), copy(slot_aliases))
+        frame.bb_states[bb] = BBEntryState(widen_stale_slotwrappers!(copy(vartable)), copy(slot_aliases))
         return true
     else
         pc = first(frame.cfg.blocks[bb].stmts)

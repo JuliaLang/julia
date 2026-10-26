@@ -776,10 +776,34 @@ end
 @nospecializeinfer @inline schanged(lattice::AbstractLattice, @nospecialize(n), @nospecialize(o), join_pc::Int) =
     (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !(n.undef <= o.undef && (n.ssadef === o.ssadef || o.ssadef === join_pc) && ⊑(lattice, n.typ, o.typ))))
 
+# A `Conditional` or `MustAlias` held in a slot describes the object that the slot it refers
+# to held at the reaching definition (`ssadef`) the wrapper was formed for. Inside a loop,
+# the same definition (an assignment, or the ϕ-block of a basic block) is executed again and
+# gives the slot the same `ssadef` for a different object, so a wrapper that does not match
+# the current `ssadef` of its slot must be widened before it is carried into a basic block,
+# where it could otherwise appear valid again.
+function widen_stale_varstate(vt::VarState, vtypes::VarTable)
+    typ = ignorelimited(vt.typ)
+    newtyp = widen_stale_slotwrapper(typ, vtypes)
+    newtyp === typ && return vt
+    if vt.typ isa LimitedAccuracy
+        newtyp = LimitedAccuracy(newtyp, vt.typ.causes)
+    end
+    return VarState(newtyp, vt.ssadef, vt.undef)
+end
+
+function widen_stale_slotwrappers!(state::VarTable)
+    for i = 1:length(state)
+        state[i] = widen_stale_varstate(state[i], state)
+    end
+    return state
+end
+
 function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable, join_pc::Int)
     changed = false
     for i = 1:length(state)
-        newtype = changes[i]
+        # drop the wrappers that are already stale at the end of the predecessor
+        newtype = widen_stale_varstate(changes[i], changes)
         oldtype = state[i]
         # In addition to computing the type, the merge here computes the "reaching definition"
         # for a slot. The provided `join_pc` is a "virtual" PC, which corresponds to the ϕ-block
@@ -791,6 +815,9 @@ function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable,
             changed = true
         end
     end
+    # the merge may have made the ϕ-block the reaching definition of a slot,
+    # which leaves the wrappers formed for its previous reaching definition stale
+    changed && widen_stale_slotwrappers!(state)
     return changed
 end
 
@@ -802,10 +829,11 @@ function stoverwrite!(state::VarTable, newstate::VarTable)
 end
 
 function stoverwrite1!(state::VarTable, change::StateUpdate)
-    # Note: We no longer need to invalidate Conditional/MustAlias in other slots
-    # that reference this slot. The ssadef tracking handles this: when a slot is
-    # reassigned, its ssadef changes, and any Conditional/MustAlias referencing
-    # the old ssadef will be detected as stale by conditional_valid().
+    # Conditional/MustAlias in other slots that reference this slot are not invalidated here:
+    # the reassignment changes the ssadef of this slot, so they are detected as stale by
+    # comparing their ssadef with the current one (see `conditional_valid`), and they are
+    # widened before entering a basic block, i.e. before this definition can be executed
+    # again (see `stupdate!`).
     state[slot_id(change.var)] = change.vtype
     return state
 end

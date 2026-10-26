@@ -80,7 +80,8 @@ If zero, then the value comes from an argument.
 If negative, this refers to a "virtual ϕ-block" preceding the given index,
 that would have been inserted as the value of this slot in a truly SSA-form IR.
 If a slot has the same `ssadef` at two different points of execution,
-the slot contents are guaranteed to share identity (`x₀ === x₁`).
+the slot contents are guaranteed to share identity (`x₀ === x₁`), as long as
+the definition is not executed again in between, as it is in each iteration of a loop.
 """
 struct VarState
     typ

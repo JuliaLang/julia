@@ -8447,6 +8447,77 @@ stale_cond4(n, m) = (h = n isa Int; n = m; Core.ifelse(h, n, 0))
 @test Base.infer_return_type(stale_cond4, (Union{Nothing,Int}, Union{Nothing,Int})) == Union{Nothing, Int}
 @test stale_cond4(1, nothing) === nothing
 
+# JuliaLang/julia#64183: a `Conditional` held in a slot must not be revived when the
+# definition of the slot it refers to is executed again in the next iteration of a loop
+struct Issue64183 end
+function issue64183_1(a, b)
+    was_c = false
+    result = false
+    for element in (a, b) # executes the same assignment to `element` in each iteration
+        result = was_c && element isa String
+        was_c = element isa Issue64183
+    end
+    return result ? 1 : nothing
+end
+@test Base.infer_return_type(issue64183_1, (Issue64183, String)) == Union{Nothing,Int}
+@test issue64183_1(Issue64183(), "y") === 1
+function issue64183_2(c::Bool, a, b)
+    was = false
+    result = false
+    i = 0
+    if c
+        s = a
+    else
+        s = a
+    end
+    @label loop # the reaching definition of `s` here is the ϕ-block of this block
+    i += 1
+    result = was && s isa String
+    was = s isa Issue64183
+    if i < 2
+        s = b
+        @goto loop
+    end
+    return result ? 1 : nothing
+end
+@test Base.infer_return_type(issue64183_2, (Bool, Issue64183, String)) == Union{Nothing,Int}
+@test issue64183_2(true, Issue64183(), "y") === 1
+function issue64183_4(c::Bool, a, b)
+    was = false
+    result = false
+    i = 0
+    if c
+        s = a
+    else
+        s = a
+    end
+    @label loop
+    i += 1
+    result = was && s isa String
+    if i < 2
+        # `was` receives the `Conditional` on `s` after `s` is reassigned
+        s, was = b, s isa Issue64183
+        @goto loop
+    end
+    return result ? 1 : nothing
+end
+@test Base.infer_return_type(issue64183_4, (Bool, Issue64183, String)) == Union{Nothing,Int}
+@test issue64183_4(true, Issue64183(), "y") === 1
+struct Issue64183Box
+    x::Union{Issue64183,String}
+end
+function issue64183_3(xs)
+    was_c = false
+    result = false
+    for box in xs
+        result = was_c && box.x isa String
+        was_c = box.x isa Issue64183
+    end
+    return result ? 1 : nothing
+end
+@test Base.infer_return_type(issue64183_3, (Tuple{Issue64183Box,Issue64183Box},)) == Union{Nothing,Int}
+@test issue64183_3((Issue64183Box(Issue64183()), Issue64183Box("y"))) === 1
+
 # issue #60883: conditional propagation through wrapper functions
 mutable struct A60883
     a::Int
