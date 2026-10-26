@@ -2060,7 +2060,7 @@ Value *LateLowerGCFrame::LowerGCAllocMemory(CallInst *CI)
     Value *nbytes = CI->getArgOperand(1);
     Value *tag = CI->getArgOperand(2);
     Value *length = CI->getArgOperand(3);
-    bool zeroinit = cast<ConstantInt>(CI->getArgOperand(4))->isOne();
+    Value *zeroinit = CI->getArgOperand(4);
     CallInst *newI;
     Value *derived;
     Value *data;
@@ -2087,8 +2087,12 @@ Value *LateLowerGCFrame::LowerGCAllocMemory(CallInst *CI)
         Value *ptr_field = builder.CreateConstInBoundsGEP1_64(T_int8, derived, offsetof(jl_genericmemory_t, ptr));
         data = builder.CreateAlignedLoad(PointerType::get(ctx, 0), ptr_field, Align(sizeof(void*)));
     }
-    if (zeroinit && !(isa<ConstantInt>(nbytes) && cast<ConstantInt>(nbytes)->isZero()))
-        builder.CreateMemSet(data, ConstantInt::get(T_int8, 0), nbytes, Align(sizeof(void*)));
+    // LLVM may merge allocations of different types, which makes the zeroing flag a variable.
+    auto czeroinit = dyn_cast<ConstantInt>(zeroinit);
+    if (!(czeroinit && czeroinit->isZero()) && !(isa<ConstantInt>(nbytes) && cast<ConstantInt>(nbytes)->isZero())) {
+        Value *zerobytes = czeroinit ? nbytes : builder.CreateSelect(zeroinit, nbytes, ConstantInt::get(T_size, 0));
+        builder.CreateMemSet(data, ConstantInt::get(T_int8, 0), zerobytes, Align(sizeof(void*)));
+    }
     Value *length_field = builder.CreateConstInBoundsGEP1_64(T_int8, derived, offsetof(jl_genericmemory_t, length));
     builder.CreateAlignedStore(length, length_field, Align(sizeof(void*)));
     return newI;
