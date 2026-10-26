@@ -119,6 +119,12 @@ abstract type Number end
 abstract type Real <: Number end
 ```
 [`Number`](@ref) has no supertype, whereas [`Real`](@ref) is an abstract subtype of `Number`.
+
+!!! note
+    Not all abstract types are declared with `abstract type`. Other non-concrete
+    types, such as `Union{Int, String}`, `Vector` (a `UnionAll`), or `Tuple{Any}`,
+    are also considered abstract, but [`isabstracttype`](@ref) returns `false` for
+    them, since it only checks whether a type was declared with `abstract type`.
 """
 kw"abstract type", kw"abstract"
 
