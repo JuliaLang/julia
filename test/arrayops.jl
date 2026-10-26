@@ -2489,6 +2489,7 @@ end
     @test IndexStyle(selectdim(A, 1, 1)) == IndexStyle(view(A, 1, :, :)) == IndexLinear()
     @test IndexStyle(selectdim(A, 2, 1)) == IndexStyle(view(A, :, 1, :)) == IndexCartesian()
     @test IndexStyle(selectdim(A, 3, 1)) == IndexStyle(view(A, :, :, 1)) == IndexLinear()
+    @test selectdim(A, 2, CartesianIndex(1, 1)) == view(A, :, CartesianIndex(1, 1), :)
 end
 
 # row/column/slice iterator tests
