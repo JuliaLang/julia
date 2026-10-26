@@ -2374,30 +2374,53 @@ before_cursor(buf::IOBuffer) = content(buf, 0 => position(buf))
 
 # Does `str` end inside a string, char or command literal, or a comment? Decided by
 # tokenizing `str` followed by a sentinel character and looking at what the sentinel became.
+# The sentinel must end interpolated identifiers without being consumed as escaped-newline whitespace.
 function in_literal(str::String)
     k = K"EndMarker"
-    for t in tokenize(str * 'x')
+    for t in tokenize(str * ';')
         kind(t) == K"EndMarker" || (k = kind(t))
     end
     return k in KSet"String CmdString Char Comment ErrorEofMultiComment"
 end
 
-# Number of `left` minus `right` brackets in `str`, outside of literals and comments
-function bracket_balance(str::String, left::Char, right::Char)
-    n = 0
+# Number of `left` minus `right` brackets in the code around byte offset `pos` of `str`, which
+# is either the top level or a string interpolation, outside of literals and comments
+function bracket_balance(str::String, left::Char, right::Char, pos::Int)
+    balance = [0]
+    # the code (index into `balance`) and parentheses open in it, or 0 inside a literal
+    stack = [(1, 0)]
+    here = -1
     for t in tokenize(str)
-        kind(t) in KSet"( ) [ ] { }" || continue
-        c = Char(codeunit(str, t.startbyte + 1))
-        n += (c == left) - (c == right)
+        here < 0 && t.startbyte >= pos && (here = first(stack[end]))
+        k = kind(t)
+        code, depth = stack[end]
+        if k in KSet"\" \"\"\" ` ```"
+            code == 0 ? pop!(stack) : push!(stack, (0, 0))
+        elseif code == 0
+            if k == K"("
+                push!(balance, 0)
+                push!(stack, (length(balance), 1))
+            end
+        elseif k in KSet"( ) [ ] { }"
+            c = Char(codeunit(str, t.startbyte + 1))
+            depth += (c == '(') - (c == ')')
+            if code > 1 && depth == 0
+                pop!(stack)
+                continue
+            end
+            stack[end] = (code, depth)
+            balance[code] += (c == left) - (c == right)
+        end
     end
-    return n
+    return here > 0 ? balance[here] : 0
 end
 
 # Whether typing `right` should move over the `right` after the cursor rather than insert
 # another one. Not if it is in a literal, or needed to close some other `left`.
 function skip_closing_bracket(buf::IOBuffer, left::Char, right::Char)
     !eof(buf) && peek(buf, Char) == right || return false
-    return !in_literal(before_cursor(buf)) && bracket_balance(content(buf), left, right) <= 0
+    return !in_literal(before_cursor(buf)) &&
+        bracket_balance(content(buf), left, right, position(buf)) <= 0
 end
 
 # Helper function to check and remove paired brackets/quotes
@@ -2419,7 +2442,8 @@ function try_remove_paired_delimiter(buf::IOBuffer)
         # The quote must open an empty literal; the bracket must not be in a literal, and the
         # closing bracket must not be needed by another opening one
         paired = if left_char in ('(', '{', '[')
-            !in_literal(before_cursor(buf)) && bracket_balance(content(buf), left_char, right_char) <= 0
+            !in_literal(before_cursor(buf)) &&
+                bracket_balance(content(buf), left_char, right_char, position(buf)) <= 0
         else
             in_literal(before_cursor(buf))
         end
@@ -2522,15 +2546,19 @@ let
     # Left/right bracket pairs
     bracket_pairs = (('(', ')'), ('{', '}'), ('[', ']'))
     # Characters that are "transparent" for bracket auto-closing
-    right_brackets_ws = (')', '}', ']', ' ', '\t', '\n', '"', '\'', '`')
+    right_brackets_ws = (')', '}', ']', ' ', '\t', '\n')
 
     for (left, right) in bracket_pairs
         # Left bracket: insert both and move cursor between them, unless in a literal or
-        # the buffer already has an unmatched right bracket
+        # the buffer already has an unmatched right bracket. Before a quote, only when the
+        # quote ends the literal that the bracket interpolates into.
         bracket_insert_keymap[left] = (s::MIState, o...) -> begin
             local buf = buffer(s)
-            local autoclose = (eof(buf) || peek(buf, Char) in right_brackets_ws) &&
-                !in_literal(before_cursor(buf)) && bracket_balance(content(buf), left, right) >= 0
+            local before = before_cursor(buf)
+            local next_char = eof(buf) ? nothing : peek(buf, Char)
+            local autoclose = (next_char === nothing || next_char in right_brackets_ws ||
+                               next_char in ('"', '`') && in_literal(before * left * right)) &&
+                !in_literal(before * left) && bracket_balance(content(buf), left, right, position(buf)) >= 0
             prepare_insert!(s)
             edit_insert(buf, left)
             if autoclose
