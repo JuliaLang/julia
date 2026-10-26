@@ -375,7 +375,7 @@ function _accumulate!(op, B, A, dims::Integer, init::Union{Nothing, Some})
     dims > 0 || throw(ArgumentError("dims must be a positive integer"))
     inds_t = axes(A)
     axes(B) == inds_t || throw(DimensionMismatch("shape of B must match A"))
-    dims > ndims(A) && return copyto!(B, A)
+    dims > ndims(A) && return _accumulaten!(op, B, A, CartesianIndices(inds_t), OneTo(1), CartesianIndices(()), init)
     isempty(inds_t[dims]) && return B
     if dims == 1
         # We can accumulate to a temporary variable, which allows
