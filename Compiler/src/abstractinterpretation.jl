@@ -5051,6 +5051,10 @@ function update_alias_table!(aliases::Vector{Int}, @nospecialize(stmt), code::Ve
     if isa(rhs, SlotNumber)
         rhs_id = slot_id(rhs)
         if readpc != currpc
+            # `lhs` holds the value the slot had when it was read at `readpc`, which is
+            # stale if the slot was reassigned in between (e.g. `x, y = y, x`).
+            # `ssadef` can only order definitions within the current block,
+            # so give up on reads from earlier blocks.
             readpc ≥ bbstart || return
             readpc < currstate[rhs_id].ssadef < currpc && return
         end
