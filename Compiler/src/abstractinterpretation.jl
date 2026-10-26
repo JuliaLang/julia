@@ -1338,10 +1338,10 @@ function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecializ
         # it is almost useless to inline the op when all the same type,
         # but highly worthwhile to inline promote of a constant
         length(argtypes) > 2 || return false
-        t1 = widenconst(argtypes[2])
+        t1 = widenconst_split(argtypes[2])
         for i in 3:length(argtypes)
             at = argtypes[i]
-            ty = isvarargtype(at) ? unwraptv(at) : widenconst(at)
+            ty = isvarargtype(at) ? unwraptv(at) : widenconst_split(at)
             if ty !== t1
                 return true
             end
@@ -3131,7 +3131,9 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         end
     elseif la == 2 && f === Core.typename
         return Future{CallMeta}(call, interp, sv) do call, interp, sv
-            return CallMeta(typename_static(argtypes[2]), Bottom, EFFECTS_TOTAL, MethodResultPure())
+            # wrap `call.info` so that a call that does not fold to a constant can still be
+            # inlined, rather than left as a dynamic dispatch
+            return CallMeta(typename_static(argtypes[2]), Bottom, EFFECTS_TOTAL, MethodResultPure(call.info))
         end
     elseif f === Core._hasmethod
         return Future{CallMeta}(call, interp, sv) do call, interp, sv
@@ -3217,7 +3219,7 @@ function abstract_call_unknown(interp::AbstractInterpreter, @nospecialize(ft),
         return abstract_call_opaque_closure(interp,
             ft, ArgInfo(arginfo.fargs, newargtypes), si, vtypes, sv, #=check=#true)
     end
-    wft = widenconst(ft)
+    wft = widenconst_split(ft)
     if hasintersect(wft, Builtin)
         add_remark!(interp, sv, "Could not identify method table for call")
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
@@ -4554,7 +4556,7 @@ end
 end
 @nospecializeinfer function widenreturn_consts(@nospecialize(rt))
     isa(rt, Const) && return rt
-    return widenconst(rt)
+    return widenconst_split(rt)
 end
 
 @nospecializeinfer function widenreturn(::JLTypeLattice, @nospecialize(rt), ::BestguessInfo)
