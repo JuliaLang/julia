@@ -1291,17 +1291,45 @@ end
 
     # Typing out code gives that code, also when literals contain brackets or quotes
     for str in ("split(s, \"(\")", "c = '('", "c = '['", "f(x, \"a (b\")", "\"a\\\"b\\\"\"",
-                "# don't \"quote", "r\"[a-z]+\"", "x = \"\"\"a\"b\"\"\"", "`echo \"(\"`")
+                "# don't \"quote", "r\"[a-z]+\"", "x = \"\"\"a\"b\"\"\"", "`echo \"(\"`",
+                "println(\"\$x[1]\")", "\"\$f(\$x)\"", "Regex(\"^\$v[a-z]\")",
+                "print(\"\"\"x = \$(f(1))\"\"\")", "f(`a \$(g(1)) b`)")
         s = LineEdit.init_state(term, interface)
         write_input(s, str)
         @test content(s) == str
         @test position(buffer(s)) == sizeof(str)
     end
 
+    # An escaped newline and its indentation are still inside the string literal.
+    for prefix in ("\"abc\\\n", "\"abc\\\n    ")
+        s = LineEdit.init_state(term, interface)
+        LineEdit.replace_line(LineEdit.state(s), prefix)
+        write_input(s, "\"")
+        @test content(s) == prefix * "\""
+        @test position(buffer(s)) == sizeof(prefix) + 1
+
+        s = LineEdit.init_state(term, interface)
+        LineEdit.replace_line(LineEdit.state(s), prefix * ")\"")
+        seek(buffer(s), sizeof(prefix))
+        write_input(s, ")")
+        @test content(s) == prefix * "))\""
+        @test position(buffer(s)) == sizeof(prefix) + 1
+    end
+
     # Interpolation in a string is code
     s = LineEdit.init_state(term, interface)
     write_input(s, "\"\$(")
     @test content(s) == "\"\$()\""
+
+    # Don't pair a bracket in front of a string, char or command literal
+    for str in ("\"a\"", "'a'", "`a`")
+        s = LineEdit.init_state(term, interface)
+        write_input(s, str)
+        charseek(buffer(s), 0)
+        write_input(s, "f(")
+        @test content(s) == "f(" * str
+        @test position(buffer(s)) == 2
+    end
 
     # Don't move over a closing bracket that is needed by another opening one
     s = LineEdit.init_state(term, interface)
@@ -1372,7 +1400,8 @@ end
     for (str, expected) in (("[1, 2\r3]\r", "[1, 2\n3]"), ("f(\r1)\r", "f(\n1)"),
                             ("x = [\rx\rfor x in 1:2\r]\r", "x = [\nx\nfor x in 1:2\n]"),
                             ("([]\r)\r", "([]\n)"), ("([]\e[C\r", "([])"),
-                            ("()\e[D\r", "()"), ("f(x\e[D\r", "f(x)"))
+                            ("()\e[D\r", "()"), ("f(x\e[D\r", "f(x)"),
+                            ("print(\"\"\"\rx = \$(f(1))\r\"\"\")\r", "print(\"\"\"\nx = \$(f(1))\n\"\"\")"))
         s = LineEdit.init_state(term, interface)
         @test type_keys(s, [String(m.match) for m in eachmatch(r"\e\[.|.", str)])
         @test content(s) == expected
