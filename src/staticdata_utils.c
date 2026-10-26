@@ -121,9 +121,11 @@ JL_DLLEXPORT void jl_tag_newly_inferred_disable(void)
 // This gets called as the first step of Base.include_package_for_output
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
 {
-    assert(_newly_inferred == NULL || _newly_inferred == jl_nothing || jl_is_array_any(_newly_inferred));
     if (_newly_inferred == jl_nothing)
         _newly_inferred = NULL;
+    // The runtime also stores MethodInstances here, so a narrower element type is unsafe.
+    if (_newly_inferred != NULL)
+        JL_TYPECHK(jl_set_newly_inferred, array_any, _newly_inferred);
     JL_LOCK(&newly_inferred_mutex);
     newly_inferred = (jl_array_t*) _newly_inferred;
     JL_UNLOCK(&newly_inferred_mutex);
