@@ -930,6 +930,63 @@ Base.set_active_project(saved_active_project)
     end
 end
 
+@testset "pkgrevision" begin
+    mktempdir() do tmp
+        rev_uuid = Base.UUID("6a1b0a7c-3d64-4c64-9a8e-1f0bd2a5a001")
+        path_uuid = Base.UUID("6a1b0a7c-3d64-4c64-9a8e-1f0bd2a5a002")
+        tree_hash = Base.SHA1("0123456789abcdef0123456789abcdef01234567")
+        for (name, uuid, dir) in (
+                ("RevPkg", rev_uuid, joinpath(tmp, "depot", "packages", "RevPkg", Base.version_slug(rev_uuid, tree_hash))),
+                ("PathPkg", path_uuid, joinpath(tmp, "env", "PathPkg")))
+            mkpath(joinpath(dir, "src"))
+            write(joinpath(dir, "Project.toml"), """
+                name = "$name"
+                uuid = "$uuid"
+                version = "0.1.0"
+                """)
+            write(joinpath(dir, "src", "$name.jl"), "__precompile__(false); module $name end")
+        end
+        write(joinpath(tmp, "env", "Project.toml"), """
+            [deps]
+            PathPkg = "$path_uuid"
+            RevPkg = "$rev_uuid"
+            """)
+        write(joinpath(tmp, "env", "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.PathPkg]]
+            path = "PathPkg"
+            uuid = "$path_uuid"
+            version = "0.1.0"
+
+            [[deps.RevPkg]]
+            git-tree-sha1 = "$tree_hash"
+            repo-rev = "main"
+            repo-url = "https://example.com/RevPkg.jl.git"
+            uuid = "$rev_uuid"
+            version = "0.1.0"
+            """)
+        pushfirst!(LOAD_PATH, joinpath(tmp, "env"))
+        pushfirst!(DEPOT_PATH, joinpath(tmp, "depot"))
+        try
+            revpkg = Base.require(Base.PkgId(rev_uuid, "RevPkg"))
+            pathpkg = Base.require(Base.PkgId(path_uuid, "PathPkg"))
+            @test pkgrevision(revpkg) == "main"
+            manifest = joinpath(tmp, "env", "Manifest.toml")
+            write(manifest, replace(read(manifest, String), "repo-rev = \"main\"" => "repo-rev = \"dev\""))
+            @test pkgrevision(revpkg) == "main"
+            Base.pkgorigins[Base.PkgId(rev_uuid, "RevPkg")].revision = "other"
+            @test pkgrevision(revpkg) == "other"
+            @test pkgrevision(pathpkg) === nothing
+            @test pkgrevision(Base) === nothing
+            @test pkgrevision(@__MODULE__) === nothing
+        finally
+            popfirst!(LOAD_PATH)
+            popfirst!(DEPOT_PATH)
+        end
+    end
+end
+
 # issue #28190
 module Foo28190; import Libdl; end
 import .Foo28190.Libdl; import Libdl
