@@ -3035,7 +3035,13 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
                         return var_gt((jl_tvar_t*)y, x, e, param, yy, yinner);
                     }
                 }
-                if (yy) record_var_occurrence(yy, e, param);
+                if (yy) {
+                    record_var_occurrence(yy, e, param);
+                    // An outer existential var below an inner forall var must lie below
+                    // every value of it, so it is bounded by its lower bound.
+                    if (!yr && xx->depth0 < yy->depth0)
+                        return var_lt((jl_tvar_t*)x, yy->lb, e, param, xx, xinner);
+                }
                 return var_lt((jl_tvar_t*)x, y, e, param, xx, xinner);
             }
             else if (yr) {
