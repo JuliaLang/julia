@@ -264,32 +264,20 @@ tryparse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as 
 
 ## string to float functions ##
 
-function tryparse(::Type{Float64}, s::DenseUTF8String)
-    hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
-                          (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s) % UInt)
-    hasvalue ? val : nothing
+# Parse `s[i:j]` as a float, ignoring ASCII whitespace around it
+function tryparse_internal(::Type{T}, s::DenseUTF8String, i::Int, j::Int) where {T<:IEEEFloat}
+    while i <= j && isspace_ascii(codeunit(s, i))
+        i += 1
+    end
+    while j >= i && isspace_ascii(codeunit(s, j))
+        j -= 1
+    end
+    x = Parsers.parsefloat(T, codeunits(s), i, j)
+    return x isa Parsers.ParseFailure ? nothing : x
 end
-function tryparse_internal(::Type{Float64}, s::DenseUTF8String, startpos::Int, endpos::Int)
-    hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
-                          (Ptr{UInt8},Csize_t,Csize_t), s, startpos-1, endpos-startpos+1)
-    hasvalue ? val : nothing
-end
-function tryparse(::Type{Float32}, s::DenseUTF8String)
-    hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
-                          (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s) % UInt)
-    hasvalue ? val : nothing
-end
-function tryparse_internal(::Type{Float32}, s::DenseUTF8String, startpos::Int, endpos::Int)
-    hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
-                          (Ptr{UInt8},Csize_t,Csize_t), s, startpos-1, endpos-startpos+1)
-    hasvalue ? val : nothing
-end
-
-tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s)::String)
-tryparse(::Type{Float16}, s::AbstractString) =
-    convert(Union{Float16, Nothing}, tryparse(Float32, s))
-tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int) =
-    convert(Union{Float16, Nothing}, tryparse_internal(Float32, s, startpos, endpos))
+tryparse(::Type{T}, s::DenseUTF8String) where {T<:IEEEFloat} =
+    tryparse_internal(T, s, 1, ncodeunits(s))
+tryparse(::Type{T}, s::AbstractString) where {T<:IEEEFloat} = tryparse(T, String(s)::String)
 
 ## string to complex functions ##
 

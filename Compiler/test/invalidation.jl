@@ -520,3 +520,37 @@ let RU = Compiler.ReinferUtils
     @test b.partitions.min_world <= Base.get_require_world()
     @test !RU.binding_changed_since_require_world(b, Base.get_world_counter())
 end
+
+# A result with limited accuracy is never cached, and every new caller infers it again.
+# Its CodeInstance must not be registered as a backedge, or each caller adds another one.
+# Here the inner `memo` call is widened against the outer one, which limits the cycle
+# `p` <-> `q` in between (issue #63933).
+module LimitedResultBackedges
+    struct Box{T}
+        x::T
+    end
+    struct Holder
+        b::Box
+    end
+    @noinline call(f) = f()
+    @noinline memo(f) = call(f)
+    inner(b::Box) = memo(() -> b.x)
+    p(x::Int, h::Holder) = x < 0 ? q(x, h) : 0
+    q(x::Int, h::Holder) = x < -1 ? p(x, h) : inner(h.b)
+    caller1(h::Holder) = memo(() -> p(1, h))
+    caller2(h::Holder) = memo(() -> p(2, h))
+end
+let M = LimitedResultBackedges
+    for caller in (M.caller1, M.caller2)
+        Base.return_types(caller, (M.Holder,); interp=InvalidationTester())
+    end
+    for callee in (M.p, M.q)
+        mi = Base.method_instance(callee, (Int, M.Holder))
+        @test !isdefined(mi, :cache)
+        cis = filter(mi.backedges) do edge
+            edge isa Core.CodeInstance && edge.owner === InvalidationTesterToken()
+        end
+        @test !isempty(cis)
+        @test all(ci -> ci.max_world == typemax(UInt), cis)
+    end
+end
