@@ -34,7 +34,7 @@ export
 import Base: isless, show, print, parse, bind, alloc_buf_hook, _uv_hook_close
 
 using Base: LibuvStream, LibuvServer, PipeEndpoint, @handle_as, uv_error, associate_julia_struct, uvfinalize,
-    notify_error, uv_req_data, uv_req_set_data, preserve_handle, unpreserve_handle, _UVError, IOError,
+    notify_error, uv_req_set_data, preserve_handle, unpreserve_handle, _UVError, IOError,
     eventloop, StatusUninit, StatusInit, StatusConnecting, StatusOpen, StatusClosing, StatusClosed, StatusActive,
     preserve_handle, unpreserve_handle, iolock_begin, iolock_end,
     uv_status_string, check_open, OS_HANDLE, RawFD,
@@ -332,7 +332,7 @@ end
 Read a UDP packet from the specified socket, and return the bytes received. This call blocks.
 """
 function recv(sock::UDPSocket; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
-    addr, data = recvfrom(sock; cancel)
+    _, data = recvfrom(sock; cancel)
     return data
 end
 
@@ -396,7 +396,7 @@ function recvfrom(sock::UDPSocket; cancel::Base.CancelTokenArg=Base.DEFAULT_CANC
     end
 end
 
-alloc_buf_hook(sock::UDPSocket, size::UInt) = (Libc.malloc(size), Int(size)) # size is always 64k from libuv
+alloc_buf_hook(::UDPSocket, size::UInt) = (Libc.malloc(size), Int(size)) # size is always 64k from libuv
 
 function uv_recvcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid}, addr::Ptr{Cvoid}, flags::Cuint)
     sock = @handle_as handle UDPSocket
@@ -428,7 +428,7 @@ function uv_recvcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid}, addr::P
                 port = ntoh(ccall(:jl_sockaddr_port4, UInt16, (Ptr{Cvoid},), addr))
             elseif ccall(:jl_sockaddr_is_ip6, Cint, (Ptr{Cvoid},), addr) == 1
                 tmp = Ref{UInt128}(0)
-                scope_id = ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ptr{UInt128}), addr, tmp)
+                ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ptr{UInt128}), addr, tmp)
                 host = IPv6(ntoh(tmp[]))
                 port = ntoh(ccall(:jl_sockaddr_port6, UInt16, (Ptr{Cvoid},), addr))
             end
