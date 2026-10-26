@@ -692,7 +692,7 @@ end
         end
         return v
     end
-    tmeet(widenlattice(lattice), widenconst(v), t)
+    tmeet(widenlattice(lattice), widenconst_split(v), t)
 end
 
 @nospecializeinfer function tmeet(lattice::ConditionalsLattice, @nospecialize(v), @nospecialize(t::AnyType))
@@ -748,6 +748,21 @@ widenconst(t::PartialTask) = Task
 widenconst(::TypeVar) = error("unhandled TypeVar")
 widenconst(::TypeofVararg) = error("unhandled Vararg")
 widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")
+
+"""
+    widenconst_split(x) -> t::Type
+
+`widenconst(x)` for an `x` whose lattice element type is not known statically.
+Checks for the common lattice elements first, so that the call avoids a dynamic dispatch
+in the common case.
+"""
+function widenconst_split(@nospecialize x)
+    isa(x, AnyType) && return x
+    isa(x, Const) && return widenconst(x)
+    isa(x, PartialStruct) && return widenconst(x)
+    isa(x, AnyConditional) && return Bool
+    return widenconst(x)
+end
 
 ####################
 # state management #

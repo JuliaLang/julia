@@ -1096,7 +1096,7 @@ end
         return true
     end
 
-    s0 = widenconst(s00)
+    s0 = widenconst_split(s00)
     s = unwrap_unionall(s0)
     if isa(s, Union)
         return getfield_nothrow(𝕃, rewrap_unionall(s.a, s00), name, boundscheck) &&
@@ -1390,7 +1390,7 @@ end
     return setfield!_nothrow(𝕃, s00, name, v)
 end
 @nospecs function setfield!_nothrow(𝕃::AbstractLattice, s00, name, v)
-    s0 = widenconst(s00)
+    s0 = widenconst_split(s00)
     s = unwrap_unionall(s0)
     if isa(s, Union)
         return setfield!_nothrow(𝕃, rewrap_unionall(s.a, s00), name, v) &&
@@ -2277,14 +2277,14 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
             anyinfo = true
         else
             if !isvarargtype(x)
-                x = widenconst(x)
+                x = widenconst_split(x)
             end
             argtypes[i] = x
         end
         if isa(x, Const)
             params[i] = typeof(x.val)
         else
-            x = isvarargtype(x) ? x : widenconst(x)
+            x = isvarargtype(x) ? x : widenconst_split(x)
             # since there don't exist any values whose runtime type are `Tuple{Type{...}}`,
             # here we should turn such `Type{...}`-parameters to valid parameters, e.g.
             # (::Type{Int},) -> Tuple{DataType} (or PartialStruct for more accuracy)
@@ -2856,17 +2856,18 @@ end
 function is_relocatable_ptr_field(@nospecialize(ty), @nospecialize(fld))
     # Special case: these fields are not mutated, but they are the only native pointer fields
     # that have relocations in staticdata.c, so they can change between processes.
-    if hasintersect(widenconst(ty), Core.TypeName) &&
+    t = widenconst_split(ty)
+    if hasintersect(t, Core.TypeName) &&
         (Const(:constfields) ⊑ fld || Const(fieldindex(Core.TypeName, :constfields)) ⊑ fld ||
         Const(:atomicfields) ⊑ fld || Const(fieldindex(Core.TypeName, :atomicfields)) ⊑ fld)
         return true
-    elseif hasintersect(widenconst(ty), DataType) &&
+    elseif hasintersect(t, DataType) &&
         (Const(:layout) ⊑ fld || Const(fieldindex(DataType, :layout)) ⊑ fld)
         return true
-    elseif hasintersect(widenconst(ty), GenericMemory) &&
+    elseif hasintersect(t, GenericMemory) &&
         (Const(:ptr) ⊑ fld || Const(fieldindex(GenericMemory, :ptr)) ⊑ fld)
         return true
-    elseif hasintersect(widenconst(ty), GenericMemoryRef) &&
+    elseif hasintersect(t, GenericMemoryRef) &&
         (Const(:ptr_or_offset) ⊑ fld || Const(fieldindex(GenericMemoryRef, :ptr_or_offset)) ⊑ fld)
         return true
     end
