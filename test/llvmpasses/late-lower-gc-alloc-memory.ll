@@ -79,6 +79,20 @@ top:
   ret ptr addrspace(10) %mem
 }
 
+; LLVM may merge allocations of different types, which makes the zeroing flag a variable.
+; CHECK-LABEL: @inline_maybe_zeroed
+; CHECK: %mem = call noalias nonnull dereferenceable(48) ptr addrspace(10) @julia.gc_alloc_bytes(ptr %ptls_load, i64 48,
+; CHECK: [[SIZE:%.*]] = select i1 %zeroinit, i64 32, i64 0
+; CHECK: call void @llvm.memset.p0.i64(ptr align {{4|8}} {{%.*}}, i8 0, i64 [[SIZE]], i1 false)
+; CHECK: store i64 4,
+; CHECK: ret ptr addrspace(10) %mem
+define ptr addrspace(10) @inline_maybe_zeroed(ptr %task, ptr addrspace(10) %tag, i1 %zeroinit) {
+top:
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %mem = call noalias nonnull align 16 ptr addrspace(10) @julia.gc_alloc_memory(ptr %task, i64 32, ptr addrspace(10) %tag, i64 4, i1 %zeroinit)
+  ret ptr addrspace(10) %mem
+}
+
 declare ptr @julia.get_pgcstack()
 declare noalias nonnull ptr addrspace(10) @julia.gc_alloc_memory(ptr, i64, ptr addrspace(10), i64, i1) #0
 
