@@ -333,8 +333,9 @@ mutable struct PromptState <: ModeState
     last_newline::Float64 # register when last newline was entered
     # this option is to speed up output
     refresh_wait::Union{Timer,Nothing}
-    # whether a closing bracket or quote was inserted automatically into the current input
-    auto_closed::Bool
+    # closing brackets and quotes that were inserted automatically and that the input
+    # after the cursor still starts with, see `auto_closed_after_cursor`
+    auto_closed::String
 end
 
 struct Modifiers
@@ -667,8 +668,9 @@ function check_show_hint(s::MIState)
         end
     end
 
-    if !options(st).hint_tab_completes || !eof(buffer(st))
-        # only generate hints if enabled and at the end of the line
+    if !options(st).hint_tab_completes || !at_input_end(st)
+        # only generate hints if enabled and at the end of the input (or before closing
+        # brackets which were inserted automatically)
         # TODO: maybe show hints for insertions at other positions
         # Requires making space for them earlier in refresh_multi_line
         lock_clear_hint()
@@ -696,8 +698,9 @@ function check_show_hint(s::MIState)
             lock_clear_hint()
             return
         end
-        # Don't complete for single chars, given e.g. `x` completes to `xor`
-        if reg.second - reg.first > 1 && should_complete
+        # Don't complete for single chars, given e.g. `x` completes to `xor`. The hint is
+        # shown at the cursor, so not for completions that also replace text after it.
+        if reg.second - reg.first > 1 && reg.second == position(st) && should_complete
             singlecompletion = length(completions) == 1
             p = singlecompletion ? completions[1] : common_prefix(completions)
             if singlecompletion || p in completions # i.e. complete `@time` even though `@time_imports` etc. exists
@@ -796,14 +799,24 @@ prompt_string(p::Prompt) = prompt_string(p.prompt)
 prompt_string(s::AbstractString) = s
 prompt_string(f::Function) = Base.invokelatest(f)
 
-function maybe_show_hint(s::PromptState)
+function maybe_show_hint(term::AbstractTerminal, s::PromptState, available_width::Int)
     isa(s.hint, String) || return nothing
     # The hint being "" then nothing is used to first clear a previous hint, then skip printing the hint
     if isempty(s.hint)
         s.hint = nothing
     else
-        Base.printstyled(terminal(s), s.hint, color=:light_black)
-        cmove_left(terminal(s), textwidth(s.hint))
+        hint_width = textwidth(s.hint)
+        after_width = textwidth(content(s, position(s) => bufend(s)))
+        # Inserting characters only shifts the current terminal row. Keep both the hint
+        # and the trailing input on that row, and avoid the terminal's pending-wrap state.
+        if hint_width >= available_width || hint_width + after_width > available_width
+            s.hint = nothing
+            return nothing
+        end
+        # Make room for the hint if there is input after the cursor
+        eof(buffer(s)) || print(term, "\e[", hint_width, "@")
+        Base.printstyled(IOContext(term, :color => hascolor(terminal(s))), s.hint, color=:light_black)
+        cmove_left(term, hint_width)
         s.hint = "" # being "" signals to do one clear line remainder to clear the hint next time the screen is refreshed
     end
     return nothing
@@ -821,9 +834,7 @@ function refresh_multi_line(s::PromptState; kw...)
         # the clear line cannot be printed each time because it would break column movement
         print(terminal(s), "\e[0K")
     end
-    r = refresh_multi_line(terminal(s), s; kw...)
-    maybe_show_hint(s) # now maybe write the hint back to the screen
-    return r
+    return refresh_multi_line(terminal(s), s; kw...)
 end
 refresh_multi_line(s::ModeState; kw...) = refresh_multi_line(terminal(s), s; kw...)
 refresh_multi_line(termbuf::TerminalBuffer, s::ModeState; kw...) = refresh_multi_line(termbuf, terminal(s), s; kw...)
@@ -984,6 +995,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
 
     #columns are 1 based
     cmove_col(termbuf, curs_pos + 1)
+    prompt isa PromptState && maybe_show_hint(termbuf, prompt, cols - curs_pos)
     # Updated cur_row,curs_row
     return InputAreaState(cur_row, curs_row)
 end
@@ -1710,7 +1722,7 @@ end
 function replace_line(s::PromptState, l::IOBuffer)
     empty_undo(s)
     s.input_buffer = copy(l)
-    s.auto_closed = false
+    s.auto_closed = ""
     deactivate_region(s)
     nothing
 end
@@ -1720,7 +1732,7 @@ function replace_line(s::PromptState, l::Union{String,SubString{String}}, keep_u
     s.input_buffer.ptr = 1
     s.input_buffer.size = 0
     write(s.input_buffer, l)
-    s.auto_closed = false
+    s.auto_closed = ""
     deactivate_region(s)
     nothing
 end
@@ -2423,14 +2435,26 @@ function try_remove_paired_delimiter(buf::IOBuffer)
     return false
 end
 
-# Whether the input after the cursor is only closing brackets and quotes (and whitespace),
-# which were likely inserted automatically
-function only_auto_closed_after_cursor(s::MIState)
-    st = state(s)
-    st isa PromptState && st.auto_closed || return false
+# The automatically inserted closing brackets and quotes directly after the cursor which
+# haven't been typed or moved over (which commits them, like typing them would), i.e. the
+# longest suffix of the recorded ones that the input after the cursor starts with
+function auto_closed_after_cursor(st::PromptState)
     buf = buffer(st)
-    eof(buf) && return false
-    return all(c -> isspace(c) || c in ")]}\"'`", content(buf, position(buf) => buf.size))
+    after = content(buf, position(buf) => buf.size)
+    pending = st.auto_closed
+    while !startswith(after, pending)
+        pending = pending[2:end]
+    end
+    return st.auto_closed = pending
+end
+auto_closed_after_cursor(st::ModeState) = ""
+auto_closed_after_cursor(s::MIState) = auto_closed_after_cursor(state(s))
+
+# Whether the cursor is at the end of the input, apart from automatically inserted closing
+# brackets and quotes
+function at_input_end(st::ModeState)
+    buf = buffer(st)
+    return position(buf) + sizeof(auto_closed_after_cursor(st)) == buf.size
 end
 
 function try_remove_paired_delimiter(s::MIState)
@@ -2494,7 +2518,7 @@ let
 
     function mark_auto_closed!(s::MIState)
         st = state(s)
-        st isa PromptState && (st.auto_closed = true)
+        st isa PromptState && (st.auto_closed = peek(buffer(st), Char) * st.auto_closed)
     end
 
     # Left/right bracket pairs
@@ -3209,7 +3233,7 @@ function reset_state(s::PromptState)
         s.input_buffer.ptr = 1
     end
     empty_undo(s)
-    s.auto_closed = false
+    s.auto_closed = ""
     deactivate_region(s)
     ias = InputAreaState(0, 0)
     s.ias = ias
@@ -3248,7 +3272,7 @@ run_interface(::Prompt) = nothing
 
 init_state(terminal, prompt::Prompt) =
     PromptState(terminal, prompt, IOBuffer(), :off, nothing, IOBuffer[], 1, InputAreaState(1, 1),
-                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf, nothing, false)
+                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf, nothing, "")
 
 function init_state(terminal, m::ModalInterface)
     s = MIState(m, Main, m.modes[1], false, IdDict{Any,Any}())
@@ -3401,6 +3425,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
                     status = :done
                 end
                 status !== :ignore && (s.last_action = s.current_action)
+                auto_closed_after_cursor(s)
                 if status === :abort
                     s.aborted = true
                     return buffer(s), false, false
