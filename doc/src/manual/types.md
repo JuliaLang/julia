@@ -172,6 +172,8 @@ that is an integer, without restricting an algorithm to a specific type of integ
 Abstract types are declared using the [`abstract type`](@ref) keyword. The general syntaxes for declaring an
 abstract type are:
 
+In Julia, the term "abstract type" can also refer more broadly to any non-concrete type, including union types. In this section, the term refers specifically to types declared using the abstract type keyword.
+
 ```
 abstract type «name» end
 abstract type «name» <: «supertype» end
