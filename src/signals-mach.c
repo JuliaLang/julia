@@ -447,6 +447,11 @@ kern_return_t catch_mach_exception_raise_state_identity(
         jl_ptls_t _ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
         if (_ptls2 == NULL)
             continue;
+        // Skip exited threads, whose pthread id may have been reused.
+        // No profile lock is needed: the faulting thread is already stopped,
+        // so an id reused during this scan cannot belong to it.
+        if (jl_atomic_load_relaxed(&_ptls2->current_task) == NULL)
+            continue;
         if (pthread_mach_thread_np(_ptls2->system_id) == thread) {
             ptls2 = _ptls2;
             break;

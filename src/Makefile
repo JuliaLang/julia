@@ -154,6 +154,10 @@ PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLI
 LLVM_LDFLAGS := $(shell $(LLVM_CONFIG_HOST) --ldflags)
 LLVM_CXXFLAGS := $(shell $(LLVM_CONFIG_HOST) --cxxflags)
 LLVM_CFLAGS := $(shell $(LLVM_CONFIG_HOST) --cflags)
+ifeq ($(USEGCC),1)
+# GCC 9 warns about enum bitfields in LLVM 23 headers without a warning option.
+LLVM_CXXFLAGS := $(patsubst -I%,-isystem%,$(LLVM_CXXFLAGS))
+endif
 
 ifeq ($(OS)_$(BINARY),WINNT_32)
 LLVM_CXXFLAGS += -I$(SRCDIR)/support/win32-clang-ABI-bug
@@ -168,8 +172,9 @@ ifeq ($(JULIACODEGEN),LLVM)
 ifneq ($(USE_SYSTEM_LLVM),0)
 # USE_SYSTEM_LLVM != 0
 CG_LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs --system-libs)
+# LLVM 24 no longer exports llvm::Any::TypeId; use another LLVM export.
 LLVM_SHLIB_SYMBOL_VERSION := $(shell readelf -W --dyn-syms $(shell $(LLVM_CONFIG_HOST) --libfiles --link-shared | awk '{print $1; exit}') | \
-                               grep _ZN4llvm3Any6TypeId | head -n 1 | sed -ne 's/.*@//p')
+                               sed -ne 's/.* _ZN4llvm[^ @]*@@\([^ ]*\).*/\1/p' | head -n 1)
 CG_LLVMLINK += -lz -lzstd
 
 # HACK: llvm-config doesn't correctly point to shared libs on all platforms
@@ -362,13 +367,15 @@ endif
 # The preprocessor also writes the list of files it read to $@.d, so the hash is
 # regenerated when any of them changes.
 $(BUILDDIR)/jl_codegen_hash.inc: $(CODEGEN_SRCS_HASH) $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
-	@rm -f $@.i $@.d
-	@$(call PRINT_CC, for f in $(CODEGEN_SRCS_HASH); do \
-	    $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -E -P -MD -MP -MT $@ -MF $@.d.tmp $$f >> $@.i || exit 1; \
-	    cat $@.d.tmp >> $@.d; \
-	done)
-	@$(SHA256SUM) < $@.i | sed -E 's/^([0-9a-f]+).*/#define JL_CODEGEN_SRC_HASH "\1"/g' > $@
-	@rm -f $@.i $@.d.tmp
+	@$(call PRINT_CC, TMPFILE=$$(mktemp $(abspath $@.XXXXXX)); \
+	for f in $(CODEGEN_SRCS_HASH); do \
+	    $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -E -P -MD -MP -MT $@ -MF $$TMPFILE.d.tmp $$f >> $$TMPFILE.i || exit 1; \
+	    cat $$TMPFILE.d.tmp >> $$TMPFILE.d; \
+	done; \
+	$(SHA256SUM) < $$TMPFILE.i | sed -E 's/^([0-9a-f]+).*/#define JL_CODEGEN_SRC_HASH "\1"/g' > $$TMPFILE; \
+	rm -f $$TMPFILE.i $$TMPFILE.d.tmp; \
+	mv $$TMPFILE.d $@.d; \
+	mv $$TMPFILE $@)
 -include $(BUILDDIR)/jl_codegen_hash.inc.d
 
 # source file rules
@@ -714,7 +721,8 @@ $(addprefix clang-safety-,$(SRCS) $(CODEGEN_SRCS)): \
 
 # Common flag patterns for all clang tooling (clang-sa, clang-tidy, compile-database)
 CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(LLVM_CFLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG)
-CLANG_TOOLING_CXX_FLAGS = $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(DEBUGFLAGS_CLANG) $(LLVM_CXXFLAGS) $(JCPPFLAGS_CLANG) $(JCXXFLAGS_CLANG)
+# Undo GCC's system includes so the analyzer tracks ownership transfers in LLVM headers.
+CLANG_TOOLING_CXX_FLAGS = $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(DEBUGFLAGS_CLANG) $(patsubst -isystem%,-I%,$(LLVM_CXXFLAGS)) $(JCPPFLAGS_CLANG) $(JCXXFLAGS_CLANG)
 
 # Additional headers from dependency links, categorized by usage, for adding as fake compiler targets.
 # Adding these as compiler inputs doesn't always work (due to missing includes), but if we don't add them, they won't work at all.

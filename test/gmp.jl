@@ -718,6 +718,19 @@ e = Rational{BigInt}(12345678901234567890123456789, 1234567890222222221211111110
         @test Base.GMP.MPQ.cmp(a, a) ==  0
     end
 
+    @testset "cmp sign and infinities (#64179, #64180)" begin
+        @test cmp(big(0)//1, big(2)^200//1) === -1
+        @test cmp(big(2)^200//1, big(0)//1) === 1
+        @test cmp(big(2)^100//3, big(5)//7) === 1
+        @test cmp(big(1)//0, big(1)//2) === 1
+        @test cmp(big(1)//2, big(1)//0) === -1
+        @test cmp(-(big(1)//0), big(-3)//1) === -1
+        vals = (-1//0, -7//2, -1//3, 0//1, 2//5, 9//1, 1//0)
+        for x in vals, y in vals
+            @test cmp(big(x), big(y)) === cmp(x, y)
+        end
+    end
+
     @testset "division errors" begin
         oz = Rational{BigInt}(0, 1)
         zo = Rational{BigInt}(1, 0)
@@ -785,6 +798,24 @@ t = Rational{BigInt}(0, 1)
     @test t == -3//1
 
     @test aa == a && bb == b && cc == c
+
+    @testset "output aliasing an input" begin
+        # an argument may be `z` itself or `inv(z)`, which shares z's BigInts swapped
+        args = ((identity, _ -> big(1)//3), (_ -> big(1)//3, identity), (identity, identity),
+                (inv, _ -> big(3)//5), (_ -> big(3)//5, inv), (identity, inv))
+        for (op!, op) in ((Base.GMP.MPQ.add!, +), (Base.GMP.MPQ.sub!, -),
+                          (Base.GMP.MPQ.mul!, *), (Base.GMP.MPQ.div!, //)), (fx, fy) in args
+            z = big(1)//2
+            x, y = fx(z), fy(z)
+            r = op(Rational{Int}(x), Rational{Int}(y))
+            @test op!(z, x, y) == r
+            @test z == r
+        end
+        z = big(1)//2
+        @test Base.GMP.MPQ.set!(z, inv(z)) == 2
+        @test z == 2
+        @test denominator(z) == 1
+    end
 
     @testset "set" begin
         @test Base.GMP.MPQ.set!(a, b) == b

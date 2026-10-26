@@ -1135,7 +1135,7 @@ function _growbeg_internal!(a::Vector, delta::Int, len::Int)
         newoffset = div(memlen - newlen, 2) + 1
         newmem = mem
         unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
-        for j in offset:newoffset+delta-1
+        for j in offset:min(newoffset + delta, offset + len)-1
             @inbounds unsetindex!(mem, j)
         end
     else
@@ -1169,6 +1169,7 @@ function _growbeg!(a::Vector, delta::Integer)
 end
 
 function _growend_internal!(a::Vector, delta::Int, len::Int)
+    @_terminates_locally_meta
     ref = a.ref
     mem = ref.mem
     memlen = length(mem)
@@ -1196,6 +1197,11 @@ function _growend_internal!(a::Vector, delta::Int, len::Int)
     end
     newref = @inbounds memoryref(newmem, newoffset)
     unsafe_copyto!(newref, ref, len)
+    if newmem === mem
+        for j in max(offset, newoffset + len):offset+len-1
+            @inbounds unsetindex!(mem, j)
+        end
+    end
     if ref !== a.ref
         @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
     end

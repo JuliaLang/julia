@@ -309,6 +309,38 @@ JL_DLLEXPORT FLOAT16_RET_TYPE julia__truncdfhf2(double param)
     return FLOAT16_RET_FROM_UINT16(res);
 }
 
+#ifdef __SIZEOF_INT128__
+// 128-bit integer <-> Float16 conversions, which libgcc_s does not export on all platforms.
+// Integers of magnitude >= 65520 round to infinity, and smaller ones are exact as Float32,
+// so clamping and converting via Float32 rounds only once.
+JL_DLLEXPORT FLOAT16_RET_TYPE julia__floattihf(__int128 param)
+{
+    int32_t x = param > 65536 ? 65536 : param < -65536 ? -65536 : (int32_t)param;
+    uint16_t res = float_to_half((float)x);
+    return FLOAT16_RET_FROM_UINT16(res);
+}
+
+JL_DLLEXPORT FLOAT16_RET_TYPE julia__floatuntihf(unsigned __int128 param)
+{
+    uint32_t x = param > 65536 ? 65536 : (uint32_t)param;
+    uint16_t res = float_to_half((float)x);
+    return FLOAT16_RET_FROM_UINT16(res);
+}
+
+// Results for NaN, Inf and other out-of-range inputs are unspecified (poison in LLVM)
+JL_DLLEXPORT __int128 julia__fixhfti(FLOAT16_ARG_TYPE param)
+{
+    float x = half_to_float(FLOAT16_ARG_TO_UINT16(param));
+    return x > -65536 && x < 65536 ? (int32_t)x : 0;
+}
+
+JL_DLLEXPORT unsigned __int128 julia__fixunshfti(FLOAT16_ARG_TYPE param)
+{
+    float x = half_to_float(FLOAT16_ARG_TO_UINT16(param));
+    return x > -1 && x < 65536 ? (uint32_t)x : 0;
+}
+#endif
+
 
 // bfloat16 conversion helpers
 
@@ -663,8 +695,7 @@ jl_value_t *jl_lookup_foreignsymbol(jl_value_t *v)
             jl_error("cglobal function name cannot be empty tuple");
         } else if (nf == 1) {
             v = jl_fieldref(v, 0);
-        } else if (nf == 2 || (nf == 3 && jl_typeis(jl_fieldref(v, 2), (jl_value_t*)jl_libraryid_type))) {
-            // the third element is the identity recorded by method.c (see expand_library_id)
+        } else if (nf == 2) {
             f_lib = jl_fieldref(v, 1);
             v = jl_fieldref(v, 0);
         } else {
@@ -1797,8 +1828,10 @@ un_fintrinsic(sqrt_float,sqrt_llvm_fast)
 
 JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
 {
-    JL_TYPECHK(have_fma, datatype, typ); // TODO what about float16/bfloat16?
-    if (typ == (jl_value_t*)jl_float32_type)
+    JL_TYPECHK(have_fma, datatype, typ); // TODO what about bfloat16?
+    if (typ == (jl_value_t*)jl_float16_type)
+        return jl_cpu_has_fma(16);
+    else if (typ == (jl_value_t*)jl_float32_type)
         return jl_cpu_has_fma(32);
     else if (typ == (jl_value_t*)jl_float64_type)
         return jl_cpu_has_fma(64);

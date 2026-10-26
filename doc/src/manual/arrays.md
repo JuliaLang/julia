@@ -398,6 +398,30 @@ the result in single precision by writing:
 Float32[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 ```
 
+Ranges in comprehensions can depend on previous ranges by writing multiple `for` keywords:
+
+```jldoctest
+julia> [(i, j) for i=1:3 for j=1:i]
+6-element Vector{Tuple{Int64, Int64}}:
+ (1, 1)
+ (2, 1)
+ (2, 2)
+ (3, 1)
+ (3, 2)
+ (3, 3)
+```
+
+In such cases, the result is always 1-d.
+
+Values can be filtered using the `if` keyword:
+
+```jldoctest
+julia> [(i, j) for i=1:3 for j=1:i if i+j == 4]
+2-element Vector{Tuple{Int64, Int64}}:
+ (2, 2)
+ (3, 1)
+```
+
 ## [Generator Expressions](@id man-generators)
 
 Comprehensions can also be written without the enclosing square brackets, producing an object
@@ -438,31 +462,8 @@ captures the three variables `p`, `q` and `n` from the enclosing scope.
 Captured variables can present performance challenges; see
 [performance tips](@ref man-performance-captured).
 
-
-Ranges in generators and comprehensions can depend on previous ranges by writing multiple `for`
-keywords:
-
-```jldoctest
-julia> [(i, j) for i=1:3 for j=1:i]
-6-element Vector{Tuple{Int64, Int64}}:
- (1, 1)
- (2, 1)
- (2, 2)
- (3, 1)
- (3, 2)
- (3, 3)
-```
-
-In such cases, the result is always 1-d.
-
-Generated values can be filtered using the `if` keyword:
-
-```jldoctest
-julia> [(i, j) for i=1:3 for j=1:i if i+j == 4]
-2-element Vector{Tuple{Int64, Int64}}:
- (2, 2)
- (3, 1)
-```
+As with comprehensions, ranges in generators can depend on previous ranges by writing multiple
+`for` keywords, and values can be filtered using the `if` keyword.
 
 ## [Uninitialized arrays](@id uninitialized-arrays)
 

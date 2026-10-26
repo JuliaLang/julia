@@ -265,7 +265,7 @@ function IndexStyle(::Type{ReinterpretArray{T,N,S,A,true}}) where {T,N,S,A<:Abst
         IndexStyle(A) === IndexLinear() && return IndexSCartesian2{aligned_sizeof(S) ÷ aligned_sizeof(T)}()
         return IndexCartesian()
     end
-    return IndexStyle(A)
+    return IndexStyle(A) === IndexLinear() ? IndexLinear() : IndexCartesian()
 end
 IndexStyle(::IndexSCartesian2{K}, ::IndexSCartesian2{K}) where {K} = IndexSCartesian2{K}()
 

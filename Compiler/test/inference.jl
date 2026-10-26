@@ -2439,9 +2439,10 @@ g23024(TT::Tuple{DataType}) = f23024(TT[1], v23024)
 
 @test !Compiler.isconstType(Type{typeof(Union{})}) # could be Core.TypeofBottom or Type{Union{}} at runtime
 @test !isa(Compiler.getfield_tfunc(Compiler.fallback_lattice, Type{Core.TypeofBottom}, Compiler.Const(:name)), Compiler.Const)
-# values of `Type{typeof(Union{})}` include `UnionAll` spellings (#33136), so
-# `supertype(::UnionAll)` is applicable too; the egal-pinned type stays precise
-@test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Any, Type{Core.AnyType}]
+# values of `Type{typeof(Union{})}` include `UnionAll` spellings (#33136) and the
+# `TypeEq` `Type{Union{}}`, so `supertype(::UnionAll)` and `supertype(::TypeEq)` are
+# applicable too; the egal-pinned type stays precise
+@test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Core.TypeEgal{Core.AnyType}, Any, Type{Core.AnyType}]
 @test Base.return_types(supertype, (Core.TypeEgal{typeof(Union{})},)) == Any[Core.TypeEgal{Core.AnyType}]
 
 # issue #23685
@@ -3485,6 +3486,41 @@ from_interconditional_check22(::Union{Int,String}, y) = isa(y, Int)
     end
     return 0
 end |> only === Int
+
+# a field alias is a different refinement target from its parent slot (JuliaLang/julia#63981)
+from_interconditional_check31(x::AliasableField, _) = isa(x.f, Int)
+@test Base.infer_return_type((AliasableField{Any},)) do x
+    if from_interconditional_check31(x, x.f)
+        return x.f
+    end
+    return nothing
+end === Union{Int,Nothing}
+from_interconditional_check32(_, x::AliasableField) = isa(x.f, Int)
+@test Base.infer_return_type((AliasableField{Any},)) do x
+    if from_interconditional_check32(x.f, x)
+        return x.f
+    end
+    return nothing
+end === Union{Int,Nothing}
+issue63981_mk(x) = (; status = x > 0 ? :a : :b, n = x)
+issue63981_f(nt, _) = nt.status === :a
+@test Base.infer_return_type((Int,)) do x
+    nt = issue63981_mk(x)
+    return issue63981_f(nt, nt.n)
+end === Bool
+
+# refine the aliased field when the argument is a slot holding a `MustAlias` of a field
+# whose type isn't a `Type`
+from_interconditional_check41_mk(c) = (; f = (; s = c ? :a : :b, n = 1))
+from_interconditional_check41(y) = y.s === :a
+@test Base.infer_return_type((Bool,)) do c
+    x = from_interconditional_check41_mk(c)
+    y = x.f
+    if from_interconditional_check41(y)
+        return Val(x.f.s)
+    end
+    return nothing
+end === Union{Val{:a},Nothing}
 
 # prioritize constraints on slot objects
 # https://github.com/aviatesk/JET.jl/issues/509
@@ -5232,6 +5268,46 @@ end == Int
         end
         return nothing
     end == Union{Nothing, String}
+    @test Base.infer_return_type((Any, Any)) do a, b
+        x = a; y = b
+        x, y = y, x
+        if b isa Int
+            return y
+        end
+        return nothing
+    end == Any
+    @test Base.infer_return_type((Any, Any)) do a, b
+        x = a; y = b
+        x, y = y, x
+        typeassert(b, Int)
+        return y
+    end == Any
+    # after the swap, `x` does hold `b` and should still be refined
+    @test Base.infer_return_type((Any, Any)) do a, b
+        x = a; y = b
+        x, y = y, x
+        if b isa Int
+            return x
+        end
+        return nothing
+    end == Union{Nothing, Int}
+    @test Base.infer_return_type((Any, Any, Bool)) do a, b, c
+        x = a
+        y = b
+        y, z = x, (c && (x = 1; true); y)
+        if x isa Int
+            return y
+        end
+        return nothing
+    end == Any
+    @test Base.infer_return_type((Any,)) do a
+        x = y = identity(a)
+        z = x
+        if x isa Int
+            return z
+        end
+        return nothing
+    end == Union{Nothing, Int}
     # typeassert-based refinement should also propagate to aliases
     @test Base.infer_return_type((Any,)) do x
         y = x
@@ -8247,6 +8323,21 @@ function issue55548(a)
 end
 @test Float64 <: Base.infer_return_type(issue55548, (Int,))
 @test issue55548(Int64(0)) === 1.0
+
+# a `Conditional` on a since-reassigned slot must not be forwarded to const-prop as a
+# constraint on the slot's new value
+_stale_cond_pair(a, b) = (a, b)
+stale_cond1(c, n) = (h = (c && n === nothing); n = 1; _stale_cond_pair(n, h)[2] ? 1 : "")
+stale_cond2(n) = (h = n isa Nothing; n = 1; _stale_cond_pair(n, h)[2] ? 1 : "")
+stale_cond3(n) = _stale_cond_pair(n === nothing, (n = 1; n))[1] ? 1 : ""
+@test Base.infer_return_type(stale_cond1, (Bool, Nothing)) == Union{Int, String}
+@test Base.infer_return_type(stale_cond2, (Union{Nothing,Int},)) == Union{Int, String}
+@test Base.infer_return_type(stale_cond3, (Union{Nothing,Int},)) == Union{Int, String}
+@test stale_cond1(true, nothing) === 1
+# nor be applied to the slot's new value by the `Core.ifelse` refinement for builtins
+stale_cond4(n, m) = (h = n isa Int; n = m; Core.ifelse(h, n, 0))
+@test Base.infer_return_type(stale_cond4, (Union{Nothing,Int}, Union{Nothing,Int})) == Union{Nothing, Int}
+@test stale_cond4(1, nothing) === nothing
 
 # issue #60883: conditional propagation through wrapper functions
 mutable struct A60883

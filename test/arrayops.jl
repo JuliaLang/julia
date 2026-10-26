@@ -535,6 +535,25 @@ end
     insert!(v, 1, 10)
     @test v == [10]
     @test length(v.ref.mem) == 5
+
+    # test that moving data within the same memory doesn't leave stale references behind (issue #63739)
+    nassigned(v) = count(i -> isassigned(v.ref.mem, i), eachindex(v.ref.mem))
+    v = Any[]
+    for r in 1:20
+        for i in 1:48
+            push!(v, Ref(r))
+        end
+        @test nassigned(v) == length(v)
+        for i in 1:48
+            popfirst!(v)
+        end
+        @test nassigned(v) == 0
+    end
+    v = resize!(Any[1:100;], 10)
+    pushfirst!(v, 0)
+    @test length(v.ref.mem) == 100
+    @test v == 0:10
+    @test nassigned(v) == 11
 end
 
 @testset "popat!(::Vector, i, [default])" begin
@@ -1453,6 +1472,13 @@ end
     @test @views mightalias(B[:], A[:])
     @test @views mightalias(B[1:2], A[1:2])
     @test @views !mightalias(B[1:end÷2], A[end÷2+1:end])
+
+    C = trues(5,4)
+    @test mightalias(C, reshape(C,10,2))
+    b = BitVector([1, 0, 0, 0])
+    r = reshape(b, 2, 2)
+    b[2:4] .= @view r[1:3]
+    @test b == [1, 1, 0, 0]
 
     AA = [[1],[2]]
     @test @views mightalias(AA, AA[:])
@@ -2463,6 +2489,7 @@ end
     @test IndexStyle(selectdim(A, 1, 1)) == IndexStyle(view(A, 1, :, :)) == IndexLinear()
     @test IndexStyle(selectdim(A, 2, 1)) == IndexStyle(view(A, :, 1, :)) == IndexCartesian()
     @test IndexStyle(selectdim(A, 3, 1)) == IndexStyle(view(A, :, :, 1)) == IndexLinear()
+    @test selectdim(A, 2, CartesianIndex(1, 1)) == view(A, :, CartesianIndex(1, 1), :)
 end
 
 # row/column/slice iterator tests
@@ -2994,6 +3021,10 @@ end
 
     @test accumulate(min, [3 2 1; 3 2 1], dims=2) == [3 2 1; 3 2 1]
     @test accumulate(min, [3 2 1; 3 2 1], dims=2, init=2) == [2 2 1; 2 2 1]
+    @test accumulate(+, [1 2; 3 4], dims=3, init=10) == [11 12; 13 14]
+    @test accumulate(*, ['a' 'b'], dims=3) == ["a" "b"]
+    @test accumulate(+, fill(1), dims=1, init=10) == fill(11)
+    @test accumulate(+, [1, 2], dims=typemax(Int)) == [1, 2]
 
     @test isa(accumulate(+, Int[]), Vector{Int})
     @test isa(accumulate(+, Int[]; init=1.), Vector{Float64})

@@ -15,7 +15,6 @@ struct ScopeInfo
     # should participate in standard scope resolution, but then be associated
     # with the top-level thunk by the end of this pass.
     is_lifted::Bool
-    binding_assignments::Dict{IdTag, SyntaxTree}
     assignments::Dict{NameKey, SyntaxTree}
     # Map from variable names to binding IDs for resolution.  Includes all
     # locals, args, sparams, and explicit globals belonging to this scope.
@@ -48,8 +47,7 @@ function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
     end
     s = ScopeInfo(
         id, parent_id, lambda_id, ex, is_permeable, is_lifted,
-        Dict{IdTag, SyntaxTree}(), Dict{NameKey, SyntaxTree}(),
-        Dict{NameKey,IdTag}(), lambda_bindings)
+        Dict{NameKey, SyntaxTree}(), Dict{NameKey,IdTag}(), lambda_bindings)
     push!(ctx.scopes, s)
     return s
 end
@@ -108,14 +106,7 @@ _var_str(v) = v === :local ? "local variable" :
 # is a no-op, but doing so with an argument or static parameter is an error.  A
 # variable usually can't be two things in one scope, but flisp has quirks.
 function explicit_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
-    if head(ex) === :bindingid
-        bid = syntax_id(ex)
-        b = get_binding(ctx, bid)
-        @jl_assert b.kind === new_k ex
-        @jl_assert b.lambda_id == 0 (ex, "cannot declare a BindingId in multiple scopes")
-        add_lambda_local!(ctx, scope, b)
-        return bid
-    elseif head(ex) === :placeholder
+    if head(ex) === :placeholder
         return nothing
     elseif ex.mod isa Module
         new_k === :global || throw(LoweringError(
@@ -127,7 +118,8 @@ function explicit_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
     if isnothing(old_k)
         if new_k === :argument
             declare_in_scope!(ctx, scope, ex, :argument;
-                              is_nospecialize=getmeta(ex, :nospecialize, false))
+                              is_nospecialize=getmeta(ex, :nospecialize, false),
+                              is_specialize=getmeta(ex, :specialize, false))
         else
             real_k = new_k === :destructured_arg ? :local : new_k
             declare_in_scope!(ctx, scope, ex, real_k)
@@ -147,6 +139,7 @@ end
 
 function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol;
                            is_nospecialize::Bool=false,
+                           is_specialize::Bool=false,
                            is_ambiguous_local::Bool=false)
     nk = NameKey(ex)
     is_internal = ex.context.internal ||
@@ -159,7 +152,8 @@ function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol;
     else
         @jl_assert ex.mod === nothing ex
         bid = _new_binding(ctx.bindings, ex, nk.name, bk;
-                         is_internal, is_nospecialize, is_ambiguous_local).id
+                         is_internal, is_nospecialize, is_specialize,
+                         is_ambiguous_local).id
     end
     if !(ex.mod isa Module)
         scope.vars[nk] = bid
@@ -181,8 +175,13 @@ function add_lambda_local!(ctx, scope::ScopeInfo, b)
     nothing
 end
 
-function ensure_captured!(ctx, scope::ScopeInfo, b)
+function ensure_captured!(
+    ctx, b, scope::ScopeInfo=ctx.scopes[ctx.lambda_bindings.scope_id])
     if b.kind === :global || b.kind === :typevar || b.is_ssa
+        return
+    elseif ctx.lifted && b.lambda_id == top_scope(ctx).id
+        # Not quite correct w.r.t. recursion, but as good as flisp
+        # `function g(::Val{x->2x}) end`
         return
     end
     lam = enclosing_lambda(ctx, scope)
@@ -194,7 +193,7 @@ function ensure_captured!(ctx, scope::ScopeInfo, b)
         @jl_assert !isnothing(s2) (
             binding_ex(ctx, b),
             "tried to capture local before declaration in any parent")
-        ensure_captured!(ctx, s2, b)
+        ensure_captured!(ctx, b, s2)
     end
     nothing
 end
@@ -218,7 +217,8 @@ function resolve_name(ctx, ex; exclude_toplevel_globals=false)
             s0 = ctx.scopes[ctx.scope_stack[end]]
             s0.is_lifted && ctx.scopes[sid].lambda_id == s0.lambda_id || continue
         end
-        if !exclude_toplevel_globals || sid !== top_scope(ctx).id || b.kind !== :global
+        if !exclude_toplevel_globals || sid !== top_scope(ctx).id ||
+            b.kind !== :global || head(top_scope(ctx).node_id) !== :toplevel_lambda
             return b
         end
     end
@@ -253,31 +253,20 @@ function _find_scope_decls!(ctx, scope, ex)
         explicit_declare_in_scope!(ctx, scope, ex[1], :global)
     elseif k === :function_decl
         k1 = head(ex[1])
-        _record_layer!(ctx, ex[1])
-        if k1 === :bindingid
-            b = get_binding(ctx, ex[1])
-            @jl_assert b.is_ssa || b.kind === :global (
-                ex, "allow local BindingId as function name?")
-            get!(scope.binding_assignments, b.id, ex[1])
-        elseif k1 === :identifier
+        if k1 === :identifier
+            _record_layer!(ctx, ex[1])
             ex[1].mod isa Module && return
             get!(scope.assignments, NameKey(ex[1]), ex[1])
-            get!(ctx.layer_ids, ex[1].context.layer,
-                 length(ctx.layer_ids)+1)
         else
             @jl_assert false (ex, "unknown kind in assignment")
         end
     elseif k === :(=) || k === :constdecl || k === :assign_or_constdecl_if_global
         k1 = head(ex[1])
-        _record_layer!(ctx, ex[1])
-        sc = ex[1].context
-        if k1 === :bindingid
-            b = get_binding(ctx, ex[1])
-            get!(scope.binding_assignments, b.id, ex[1])
-        elseif k1 === :identifier
+        if k1 === :identifier
+            _record_layer!(ctx, ex[1])
             ex[1].mod === nothing &&
                 get!(scope.assignments, NameKey(ex[1]), ex[1])
-        elseif k1 === :placeholder
+        elseif k1 === :placeholder || k1 === :bindingid
             # nothing to declare
         else
             @jl_assert false (ex, "unknown kind in assignment")
@@ -309,7 +298,7 @@ function enter_scope!(ctx, ex)
     # Find explicit decls that may influence assignment assignment resolution
     if head(ex) in (:lambda, :toplevel_lambda, :generated_lambda)
         for c in children(ex[1])
-            @jl_assert head(c) in (:identifier, :bindingid, :placeholder) c
+            @jl_assert head(c) in (:identifier, :placeholder) c
             explicit_declare_in_scope!(ctx, scope, c, :argument)
         end
         for c in children(ex[2])
@@ -333,13 +322,6 @@ function enter_scope!(ctx, ex)
 
     #---------------------------------------------------------------------------
     # Find assignment targets, possibly introducing implicit locals and globals
-    for (bid, _node_id) in sort!(collect(scope.binding_assignments); by=first)
-        # Mutable nameless bindings may be introduced in desugaring.  These
-        # should be capturable, and may be local to the nearest lambda or
-        # global.  Desugaring should ensure these are never used undef.
-        b = get_binding(ctx, bid)
-        b.lambda_id != 0 || add_lambda_local!(ctx, scope, b)
-    end
     for (vk, ex) in sort!(collect(scope.assignments);
                           by=x->let nk=x[1]; (nk.name, ctx.layer_ids[nk.layer]); end)
         @jl_assert ex.mod === nothing ex
@@ -547,13 +529,19 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
                 ]
             ]
         ])
-        for sid in ctx.scope_stack
-            for id in sort!(collect(values(ctx.scopes[sid].vars)))
+        seen = Set{String}()
+        for sid in Iterators.reverse(ctx.scope_stack)
+            for (nk, id) in sort!(collect(ctx.scopes[sid].vars); by=last)
                 binfo = get_binding(ctx, id)
+                # skip hygienic locals of macro expansions (TODO: would it be
+                # more useful to return this layer's locals instead of the base
+                # layer's?)
                 if binfo.kind == :global || binfo.is_internal ||
-                    binfo.kind == :typevar
+                    binfo.kind == :typevar || nk.layer.escaped !== nothing ||
+                    binfo.name in seen
                     continue
                 end
+                push!(seen, binfo.name)
                 binding = binding_ex(ctx, id)
                 push!(stmts, @ast ctx ex [:if
                     [:isdefined binding]
@@ -741,7 +729,7 @@ end
 
 # When a closure captures `T` and `T`'s typevar bound references `S`, it must
 # capture `S` too
-function expand_captured_sp_deps!(ctx, cb::ClosureBindings, scope)
+function expand_captured_sp_deps!(ctx, cb::ClosureBindings)
     sps = copy(cb.capt_sp)
     for lb in cb.lambdas, (id, is_capt) in lb.locals_capt
         is_capt && get_binding(ctx, id).kind === :static_parameter && push!(sps, id)
@@ -766,7 +754,7 @@ function expand_captured_sp_deps!(ctx, cb::ClosureBindings, scope)
             dep_sp in sps && continue
             push!(sps, dep_sp)
             push!(cb.capt_sp, dep_sp)
-            ensure_captured!(ctx, scope, get_binding(ctx, dep_sp))
+            ensure_captured!(ctx, get_binding(ctx, dep_sp))
             push!(todo, dep_sp)
         end
     end
@@ -789,11 +777,10 @@ function analyze_variables!(ctx, ex)
         b.is_read = true
         # The type of typed locals is invisible in the previous pass,
         # but is filled in here.
-        scope = ctx.scopes[ctx.lambda_bindings.scope_id]
-        ensure_captured!(ctx, scope, b)
-        # b.kind === :static_parameter && ensure_captured!(ctx, scope, b)
+        ensure_captured!(ctx, b)
         @jl_assert (b.kind === :global || b.kind === :typevar || b.is_ssa ||
-            haskey(ctx.lambda_bindings.locals_capt, b.id)) ex binding_ex(ctx, b.id)
+            haskey(ctx.lambda_bindings.locals_capt, b.id) ||
+            (ctx.lifted && b.lambda_id == top_scope(ctx).id)) ex binding_ex(ctx, b.id)
         if b.kind === :static_parameter && ctx.lifted
             cb = current_closure_bindings(ctx)
             isnothing(cb) || push!(cb.capt_sp, b.id)
@@ -826,8 +813,7 @@ function analyze_variables!(ctx, ex)
         if head(lhs) != :placeholder
             b = get_binding(ctx, lhs)
             add_assign!(b)
-            scope = ctx.scopes[ctx.lambda_bindings.scope_id]
-            ensure_captured!(ctx, scope, b)
+            ensure_captured!(ctx, b)
             if !isnothing(b.type)
                 # Assignments introduce a variable's type later during closure
                 # conversion, but we must model that explicitly here.
@@ -846,7 +832,7 @@ function analyze_variables!(ctx, ex)
         if head(ex[1]) != :bindingid || get_binding(ctx, ex[1]).kind !== :local
             analyze_variables!(ctx, ex[1])
         end
-    elseif k == :constdecl
+    elseif k == :constdecl && numchildren(ex) == 2
         if head(ex[1]) !== :placeholder
             b = get_binding(ctx, ex[1])
             b.is_const = true
@@ -872,13 +858,12 @@ function analyze_variables!(ctx, ex)
         if is_closure
             push!(ctx.closure_key_stack, closure_key(ctx2, ex[1]))
             cb = init_closure_bindings!(ctx2, ex[1])
-            scope = ctx.scopes[ctx2.lambda_bindings.scope_id]
         end
         analyze_variables!(ctx2, ex[2])
         analyze_variables!(ctx2, ex[3])
         if is_closure
             # All captures are known now; close them over typevar-bound deps
-            expand_captured_sp_deps!(ctx, cb, scope)
+            expand_captured_sp_deps!(ctx2, cb)
             pop!(ctx.closure_key_stack)
         end
         pop!(ctx.method_def_stack)
@@ -917,6 +902,18 @@ function analyze_variables!(ctx, ex)
     nothing
 end
 
+function warn_ambiguous_local(ctx, b)
+    n = b.name
+    loc = first_linenode(b.node_id)
+    msg = string("Assignment to `", n, "` in soft scope is ambiguous ",
+                 "because a global variable by the same name exists: ",
+                 "`", n, "` will be treated as a new local. ",
+                 "Disambiguate by using `local ", n, "` to suppress this warning or ",
+                 "`global ", n, "` to assign to the existing global variable.")
+    @warn msg _module=nothing _file=string(something(loc.file, :none)) _line=loc.line
+    nothing
+end
+
 function resolve_scopes(ctx::ScopeResolutionContext, ex)
     if !(head(ex) in (:lambda, :toplevel_lambda, :generated_lambda))
         # Wrap in a top level thunk if we're not already expanding a lambda.
@@ -936,7 +933,8 @@ metadata about each binding.
 This pass also records the set of binding IDs used locally within the
 enclosing lambda form and information about variables captured by closures.
 """
-@fzone "JL: resolve_scopes" function resolve_scopes(ctx::DesugaringContext, ex;
+@fzone "JL: resolve_scopes" function resolve_scopes(ctx::DesugaringContext, ex,
+                                                    warn::Bool=false;
                                                     soft_scope::Union{Nothing,Bool}=nothing,
                                                     world::UInt=ctx.world)
     enable_soft_scopes = soft_scope !== nothing ? soft_scope : contains_softscope_marker(ex)
@@ -948,6 +946,10 @@ enclosing lambda form and information about variables captured by closures.
                                   enable_soft_scopes,
                                   world)
     ex2 = resolve_scopes(ctx2, ex)
+    warn && !enable_soft_scopes && (Base.JLOptions().warn_scope == 1) &&
+        for b in ctx2.bindings.info
+            b.is_ambiguous_local && warn_ambiguous_local(ctx2, b)
+        end
     ctx3 = VariableAnalysisContext(ctx2.layer, ctx2.bindings,
                                    ctx2.scopes, lambda_bindings(ex2[1]), true,
                                    SyntaxList(), Vector{ClosureKey}(),

@@ -893,6 +893,8 @@ end
     c = collect(b)
     @test c[5] == b[5] == 0x00
     @test vec(c) == reinterpret(UInt8, a)
+    r = reinterpret(reshape, Int8, OffsetArray(reinterpret(reshape, UInt8, UInt16[0x0201, 0x0403, 0x0605]), 0, 0))
+    @test map(identity, r) == Int8[1 3 5; 2 4 6]
 end
 
 @testset "BitArray from and into a reshaped reinterpret" begin

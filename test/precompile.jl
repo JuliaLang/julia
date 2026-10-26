@@ -277,6 +277,19 @@ precompile_test_harness(false) do dir
               const layout1 = Ptr{Int8}[Ptr{Int8}(0), Ptr{Int8}(1), Ptr{Int8}(-1)]
               const layout2 = Any[Ptr{Int8}(0), Ptr{Int16}(1), Ptr{Int32}(-1)]
               const layout3 = collect(x.match for x in eachmatch(r"..", "abcdefghijk"))::Vector{SubString{String}}
+              mutable struct PtrFields
+                  const c::Ptr{UInt8}
+                  m::Ptr{UInt8}
+                  const boxed_c::Any
+                  boxed_m::Any
+              end
+              const ptrfields = PtrFields(Ptr{UInt8}(1), Ptr{UInt8}(1), Ptr{UInt8}(1), Ptr{UInt8}(1))
+              const ptrmem = Memory{Int}(undef, 1)
+              ptrmem_ptr() = ptrmem.ptr
+              const ptrref = memoryref(ptrmem, 1)
+              ptrref_ptr() = getfield(ptrref, :ptr_or_offset)
+              precompile(ptrmem_ptr, ())
+              precompile(ptrref_ptr, ())
 
               # create a backedge that includes Type{Union{}}, to ensure lookup can handle that
               call_bottom() = show(stdout, Union{})
@@ -373,6 +386,14 @@ precompile_test_harness(false) do dir
         @test Foo.layout2 == Any[Ptr{Int8}(0), Ptr{Int16}(0), Ptr{Int32}(-1)]
         @test typeof.(Foo.layout2) == [Ptr{Int8}, Ptr{Int16}, Ptr{Int32}]
         @test Foo.layout3 == ["ab", "cd", "ef", "gh", "ij"]
+        # `const` fields keep their pointer value
+        @test Foo.ptrfields.c === Ptr{UInt8}(1)
+        @test Foo.ptrfields.m === Ptr{UInt8}(0)
+        @test Foo.ptrfields.boxed_c === Ptr{UInt8}(1)
+        @test Foo.ptrfields.boxed_m === Ptr{UInt8}(0)
+        # relocated pointers are not folded at precompile-time
+        @test Foo.ptrmem_ptr() === Foo.ptrmem.ptr
+        @test Foo.ptrref_ptr() === Foo.ptrref.ptr_or_offset
 
         @test !isopen(Foo.ch1)
         @test !isopen(Foo.ch2)
@@ -1752,6 +1773,19 @@ precompile_test_harness("Issue #25971") do load_path
     cachefile, _ = Base.compilecache(Base.PkgId("Foo25971"))
     # Check writable
     @test touch(cachefile) == cachefile
+
+    # Issue #57254: the source disappearing during precompilation must not leave
+    # an unreadable cache file behind
+    sourcefile = joinpath(load_path, "Foo57254.jl")
+    write(sourcefile, """
+        module Foo57254
+        ccall(:jl_generating_output, Cint, ()) == 1 && rm(@__FILE__)
+        end
+        """)
+    cachefile, _ = Base.compilecache(Base.PkgId("Foo57254"))
+    @test !isfile(sourcefile)
+    @test filemode(cachefile) & 0o600 == 0o600
+    @test open(Base.isvalid_cache_header, cachefile) !== nothing
 end
 
 precompile_test_harness("Issue #38312") do load_path
@@ -2177,6 +2211,263 @@ precompile_test_harness("Issue #48391") do load_path
     @test_throws ErrorException isless(x, x)
 end
 
+# Scenarios that load package images run in a fresh process, so each load
+# order starts from the images alone.
+let exename = `$(Base.julia_cmd()) --startup-file=no`
+    global function trusted_edge_test_output(load_path, depot, body)
+        code = """
+            insert!(LOAD_PATH, 1, $(repr(load_path)))
+            insert!(DEPOT_PATH, 1, $(repr(depot)))
+            $body
+            """
+        return readchomp(`$exename -e $code`)
+    end
+end
+
+# whether every method a signature can match came from an image or its dependencies
+precompile_test_harness("method contributors") do load_path
+    write(joinpath(load_path, "ContribDep.jl"),
+        """
+        module ContribDep
+        f(x) = :dep
+        end
+        """)
+    write(joinpath(load_path, "ContribExt.jl"),
+        """
+        module ContribExt
+        using ContribDep
+        ContribDep.f(::Integer) = :ext
+        end
+        """)
+    Base.compilecache(Base.PkgId("ContribDep"))
+    Base.compilecache(Base.PkgId("ContribExt"))
+    depot = DEPOT_PATH[1]
+    in_deps_def = """
+        in_deps(sig, obj) = Int(0 != ccall(:jl_sig_contributors_world, Csize_t, (Any, Any, Csize_t), sig, Core.methodtable,
+                                     Base.Compiler.ReinferUtils.external_blob_index(obj)))
+        """
+    # f has methods from ContribDep and ContribExt, which are both dependencies of ContribExt only
+    out = trusted_edge_test_output(load_path, depot, in_deps_def * """
+        using ContribDep, ContribExt
+        sig = Tuple{typeof(ContribDep.f), Int}
+        print(in_deps(sig, ContribExt), " ", in_deps(sig, which(ContribDep.f, (Integer,))), " ",
+              in_deps(sig, ContribDep), " ", in_deps(sig, Base), " ", in_deps(sig, Main))
+        ctor = Tuple{Type{Int}, Int}
+        print(" ", in_deps(ctor, ContribExt))
+        # a method on a kind can match every constructor call, but no other signature
+        struct KindArg end
+        (::DataType)(::KindArg) = 0
+        print(" ", in_deps(ctor, ContribExt), " ", in_deps(sig, ContribExt))
+        # so can a Type{Union{}} method
+        (::Type{Union{}})(::Int) = 0
+        print(" ", in_deps(ctor, ContribExt))
+        # a method defined in the session is from no image
+        ContribDep.f(::Int) = :session
+        print(" ", in_deps(sig, ContribExt))
+        """)
+    @test out == "1 1 0 0 0 1 0 1 0 0"
+    # a deletion in the session leaves no method behind but marks the function
+    out = trusted_edge_test_output(load_path, depot, in_deps_def * """
+        using ContribDep
+        ContribDep.f(::Int) = :session
+        Base.delete_method(which(ContribDep.f, (Int,)))
+        using ContribExt
+        print(in_deps(Tuple{typeof(ContribDep.f), Int}, ContribExt))
+        """)
+    @test out == "0"
+end
+
+# Activation replay: a package image replays what its worker found when activating
+# each method against its dependencies, and scans live only what that record does
+# not cover. One trio of packages, loaded in several orders.
+precompile_test_harness("activation replay") do load_path
+    write(joinpath(load_path, "ActReplayDep.jl"),
+        """
+        module ActReplayDep
+        f(::Any) = :old
+        f(::Int) = :blocker
+        h(::Any) = :any
+        k(::Any, ::Any) = :any
+        g(::String) = :str
+        end
+        """)
+    write(joinpath(load_path, "ActReplayLate.jl"),
+        """
+        module ActReplayLate
+        using ActReplayDep
+        ActReplayDep.h(::Integer) = :late
+        ActReplayDep.k(::Int, ::Any) = :late
+        callh() = ActReplayDep.h(1)
+        callh()
+        callg() = ActReplayDep.g(1) # no method yet: a missing-method edge
+        precompile(callg, ())
+        end
+        """)
+    # defines its methods before loading the late dependency, so the worker activated
+    # them without it, and one after, which sees it
+    write(joinpath(load_path, "ActReplayPkg.jl"),
+        """
+        module ActReplayPkg
+        using ActReplayDep
+        ActReplayDep.f(::Real) = :new
+        ActReplayDep.h(::Int) = :pkg
+        ActReplayDep.k(::Any, ::Int) = :pkg
+        ActReplayDep.g(::Int) = :pkg
+        using ActReplayLate
+        ActReplayDep.h(::Int8) = :pkg8
+        end
+        """)
+    Base.compilecache(Base.PkgId("ActReplayDep"))
+    Base.compilecache(Base.PkgId("ActReplayLate"))
+    Base.compilecache(Base.PkgId("ActReplayPkg"))
+    # a dependency method deleted before loading must not keep shadowing the new one
+    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
+        using ActReplayDep
+        Base.delete_method(which(ActReplayDep.f, (Int,)))
+        g() = ActReplayDep.f(1)
+        g()
+        using ActReplayPkg
+        print(Base.invokelatest(g))
+        """)
+    @test out == "new"
+    # the late dependency's caller is invalidated by the package's more specific
+    # method, the two `k` methods know each other as ambiguous, and the method
+    # defined after the late dependency loaded dispatches against its method
+    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
+        using ActReplayLate
+        ActReplayLate.callh()
+        using ActReplayPkg, ActReplayDep
+        ambiguous = try
+            ActReplayDep.k(1, 1); false
+        catch err
+            occursin("ambiguous", sprint(showerror, err))
+        end
+        print(Base.invokelatest(ActReplayLate.callh), " ", ambiguous, " ", ActReplayDep.h(Int8(1)), " ", ActReplayDep.h(big(1)))
+        """)
+    @test out == "pkg true pkg8 late"
+    # the late dependency's caller of a then-missing method, reached through its
+    # missing-method backedge
+    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
+        using ActReplayLate
+        using ActReplayPkg
+        print(Base.invokelatest(ActReplayLate.callg))
+        """)
+    @test out == "pkg"
+    # a run-time method of a signature the package also defines is not covered by
+    # the record, so the package's method replaces it, and the dependency's method,
+    # which the record covers, must still learn of the replacement
+    out = trusted_edge_test_output(load_path, DEPOT_PATH[1], """
+        using ActReplayDep
+        ActReplayDep.f(::Real) = :runtime
+        using ActReplayPkg
+        mint = which(ActReplayDep.f, (Real,))
+        many = which(ActReplayDep.f, (Any,))
+        inters = many.interferences
+        print(ActReplayDep.f(1.0), " ", mint.module, " ", any(i -> isassigned(inters, i) && inters[i] === mint, eachindex(inters)))
+        """)
+    @test out == "new ActReplayPkg true"
+end
+
+# Verifying an image's edges asks first whether every method under the signature's
+# typenames came from the image or its dependencies: then the worker's verdict stands.
+# Otherwise the interference sets of the expected methods are probed for newcomers,
+# passing over the dependencies' own methods, which the worker already saw.
+precompile_test_harness("edge verification: dependency methods are trusted") do load_path
+    write(joinpath(load_path, "VerifySkipDep.jl"),
+        """
+        module VerifySkipDep
+        abstract type A end
+        abstract type B <: A end
+        struct C <: B end
+        f(x) = :any
+        f(::B) = :b
+        f(::C) = :c
+        k(::Integer) = :int
+        function h end
+        h(::Integer, ::Int) = :dep
+        callh(x) = h(x, 1)
+        end
+        """)
+    # over A this method is covered by f(::B), whose interference set is not empty, so
+    # the probe cannot certify the drop and the edge needs the full lookup
+    write(joinpath(load_path, "VerifySkipOther.jl"),
+        """
+        module VerifySkipOther
+        using VerifySkipDep
+        VerifySkipDep.f(::Union{VerifySkipDep.B, Char}) = :other
+        VerifySkipDep.h(::Int, ::Signed) = :other # ambiguous with Dep's over (Int, Int)
+        end
+        """)
+    # extends f without knowing about the user below
+    write(joinpath(load_path, "VerifySkipExt.jl"),
+        """
+        module VerifySkipExt
+        using VerifySkipDep
+        VerifySkipDep.f(::Int) = :ext
+        end
+        """)
+    write(joinpath(load_path, "VerifySkipUser.jl"),
+        """
+        module VerifySkipUser
+        using VerifySkipDep, VerifySkipOther
+        callf() = VerifySkipDep.f(Base.inferencebarrier(VerifySkipDep.C())::VerifySkipDep.A)
+        calli() = VerifySkipDep.f(1)
+        callk() = VerifySkipDep.k(Base.inferencebarrier(1)::Real) # k's one method does not cover Real
+        precompile(callf, ())
+        precompile(calli, ())
+        precompile(callk, ())
+        precompile(VerifySkipDep.callh, (Int,))
+        end
+        """)
+    for name in ("VerifySkipDep", "VerifySkipOther", "VerifySkipExt", "VerifySkipUser")
+        Base.compilecache(Base.PkgId(name))
+    end
+    depot = DEPOT_PATH[1]
+    out = trusted_edge_test_output(load_path, depot, """
+        using VerifySkipDep
+        # a method of the session is in no image: it poisons the trust in every edge to f and
+        # is probed in the scan, where it intersects f(1) but not f(::A)
+        VerifySkipDep.f(::Int) = :session
+        using VerifySkipUser
+        const RU = Base.Compiler.ReinferUtils
+        Dep = VerifySkipDep
+        cache(f) = only(Base.specializations(only(methods(f)))).cache
+        # verify the edge `sig` of `ci` as code of `image` would, reporting whether it stays
+        # valid and whether that took the full lookup (which the workspace memoizes)
+        function verify(ci, sig, n, fully_covers, image)
+            edges = ci.edges # ..., nmatches::Int, sig, matches...
+            i = findfirst(j -> edges[j] isa Int && edges[j+1] === sig, 1:length(edges)-1) + 2
+            ws = RU.VerifyMethodWorkspace()
+            minw, maxw = RU.verify_call(sig, edges, i, n, Base.get_world_counter(), fully_covers, false, ws, image)
+            return (maxw == typemax(UInt), !isempty(ws.lookups))
+        end
+        blob = RU.external_blob_index
+        cif = cache(VerifySkipUser.callf)
+        sigf = Tuple{typeof(Dep.f), Dep.A}
+        print(cif.min_world == which(Dep.f, (Dep.B,)).primary_world, " ", cif.max_world == typemax(UInt))
+        # Other is a dependency of User, but not of Dep or of code in no image
+        print(" ", verify(cif, sigf, 3, true, blob(VerifySkipUser)), " ", verify(cif, sigf, 3, true, blob(Dep)), " ", verify(cif, sigf, 3, true, typemax(UInt)))
+        # only Dep has methods of k, so User trusts this edge, which no fast path resolves
+        sigk = Tuple{typeof(Dep.k), Real}
+        print(" ", verify(cache(VerifySkipUser.callk), sigk, 1, false, blob(VerifySkipUser)), " ", verify(cache(VerifySkipUser.callk), sigk, 1, false, typemax(UInt)))
+        # a trusted edge without ambiguity is valid from the method it matches
+        print(" ", cache(VerifySkipUser.callk).min_world == which(Dep.k, (Integer,)).primary_world)
+        print(" ", Base.invokelatest(VerifySkipUser.calli))
+        """)
+    @test out == "true true (true, false) (true, true) (true, true) (true, false) (true, true) true session"
+    # Ext's method is in an image that is no dependency of User, so loading User after
+    # it must probe it. The trusted edge of `callh` is ambiguous, so it is valid only from
+    # Other's world: in Dep's world `callh` still calls Dep's method.
+    out = trusted_edge_test_output(load_path, depot, """
+        using VerifySkipDep, VerifySkipExt, VerifySkipUser
+        Dep = VerifySkipDep
+        world = which(Dep.h, (Integer, Int)).primary_world
+        print(Base.invokelatest(VerifySkipUser.calli), " ", Base.invoke_in_world(world, Dep.callh, 1), " ",
+              try Dep.callh(1) catch err; nameof(typeof(err)) end)
+        """)
+    @test out == "ext dep MethodError"
+end
+
 precompile_test_harness("Generator nospecialize") do load_path
     write(joinpath(load_path, "GenNoSpec.jl"),
         """
@@ -2245,9 +2536,9 @@ if Base.get_bool_env("CI", false) && (Sys.ARCH === :x86_64 || Sys.ARCH === :aarc
     @testset "Multiversioning" begin # This test isn't the most robust because it relies on being in CI,
         pkg = Base.identify_package("Test")  # but we need better target reflection to make a better one.
         cachefiles = Base.find_all_in_cache_path(pkg)
-        pkgpath = Base.locate_package(pkg)
+        pkgspec = Base.locate_package_load_spec(pkg)
         idx = findfirst(cachefiles) do cf
-            Base.stale_cachefile(pkgpath, cf) !== true
+            Base.stale_cachefile(pkgspec, cf) !== true
         end
         targets = Base.parse_image_targets(Base.parse_cache_header(cachefiles[idx])[6])
         @test length(targets) > 1
@@ -4041,6 +4332,50 @@ precompile_test_harness("Type{Union{}} inline field") do dir
     @test (@eval $TypeBottomField.X.t) === Union{}
 end
 
+# A package image activates all its methods in one world, so the dispatch cache entries
+# they shadow are invalidated in one pass afterwards. When several of its methods shadow
+# the same specialization, that pass must check each of their signatures.
+precompile_test_harness("dispatch cache entries shadowed by one image") do dir
+    write(joinpath(dir, "ShadowedBase.jl"),
+          """
+          module ShadowedBase
+              # the cache entries for other arguments are guarded against AbstractString
+              j(@nospecialize(x)) = :old
+              j(::AbstractString) = :str
+              k(@nospecialize(x)) = :old
+              k(::AbstractString) = :str
+          end
+          """)
+    write(joinpath(dir, "ShadowingMethods.jl"),
+          """
+          module ShadowingMethods
+              using ShadowedBase
+              # the guard covers one of the two new methods; the other must still
+              # invalidate, whichever of them is checked first
+              ShadowedBase.j(::Int) = :new_int
+              ShadowedBase.j(::String) = :new_string
+              ShadowedBase.k(::String) = :new_string
+              ShadowedBase.k(::Int) = :new_int
+          end
+          """)
+    @test Base.compilecache(Base.PkgId("ShadowedBase")) isa Tuple
+    @test Base.compilecache(Base.PkgId("ShadowingMethods")) isa Tuple
+    @eval using ShadowedBase
+    j, k = @eval (ShadowedBase.j, ShadowedBase.k)
+    # fill the dispatch caches
+    for fn in (j, k)
+        @test Base.invokelatest(fn, 1) === :old
+        @test Base.invokelatest(fn, :s) === :old
+        @test Base.invokelatest(fn, "s") === :str
+    end
+    @eval using ShadowingMethods
+    for fn in (j, k)
+        @test Base.invokelatest(fn, 1) === :new_int
+        @test Base.invokelatest(fn, :s) === :old
+        @test Base.invokelatest(fn, "s") === :new_string
+    end
+end
+
 # Cache rejection reasons and how they are reported when loading triggers precompilation:
 # caches left behind by another version of Julia collapse into one generic message, while
 # actionable reasons (e.g. changed source) are reported by name without version noise.
@@ -4909,6 +5244,29 @@ precompile_test_harness("Ambiguities and package-image edge validation") do load
     end
 end
 
+# A .ji paired with the .so of another build is rejected without unloading anything
+# needed later, so the package is recompiled to the same path and loaded from it.
+precompile_test_harness("mismatched package image .so is recompiled") do load_path
+    srcfile = joinpath(load_path, "MismatchedSo.jl")
+    write(srcfile, "module MismatchedSo\nf(x) = x + 1\nend\n")
+    pkg = Base.PkgId("MismatchedSo")
+    Base.compilecache(pkg)
+    cachefile = only(Base.find_all_in_cache_path(pkg))
+    ocachefile = Base.ocachefile_from_cachefile(cachefile)
+    oldso = read(ocachefile)
+    write(srcfile, "module MismatchedSo\nf(x) = x + 2\nend\n")
+    Base.compilecache(pkg)
+    @test only(Base.find_all_in_cache_path(pkg)) == cachefile
+    write(ocachefile, oldso)
+    script = "using MismatchedSo; MismatchedSo.f(1) == 3 && Base.pkgorigins[Base.PkgId(MismatchedSo)].cachepath !== nothing || exit(1)"
+    pathsep = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                 "JULIA_DEPOT_PATH" => join(DEPOT_PATH, pathsep),
+                 "JULIA_LOAD_PATH" => join([load_path, "@stdlib"], pathsep))
+    @test success(pipeline(cmd; stdout, stderr))
+    @test read(ocachefile) != oldso
+end
+
 # Loading marks the accepted cache file as recently used, but only in the depot that
 # `compilecache` writes to: other depots may be read-only, shared, or bundled with Julia.
 precompile_test_harness("cache files are only touched in the primary depot") do load_path
@@ -4973,6 +5331,54 @@ precompile_test_harness("cache files are only touched in the primary depot") do 
         end
     finally
         popfirst!(DEPOT_PATH)
+    end
+end
+
+# Issue #63945
+@testset "timing marker after output without trailing newline" begin
+    mkdepottempdir() do depot
+        project_path = joinpath(depot, "testenv")
+        pkg_path = joinpath(depot, "dev", "NoNewline")
+        mkpath(project_path)
+        mkpath(joinpath(pkg_path, "src"))
+        pkg_uuid = "d4000000-0000-0000-0000-000000000001"
+        write(joinpath(pkg_path, "Project.toml"), """
+            name = "NoNewline"
+            uuid = "$pkg_uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(pkg_path, "src", "NoNewline.jl"), """
+            module NoNewline
+            print(stderr, "foo")
+            end
+            """)
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            NoNewline = "$pkg_uuid"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.NoNewline]]
+            path = "../dev/NoNewline"
+            uuid = "$pkg_uuid"
+            version = "0.1.0"
+            """)
+
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            Base.set_active_project(project_path)
+            io = IOBuffer()
+            Base.Precompilation.precompilepkgs(; io=IOContext(io, :color => false), fancyprint=false)
+            output = String(take!(io))
+            @test occursin("foo", output)
+            @test !occursin(Base.PRECOMPILE_VERBOSE_TIMING_MARKER, output)
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
     end
 end
 

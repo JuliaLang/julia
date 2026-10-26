@@ -1203,7 +1203,9 @@ mutable struct Struct_huge5_ppc64_hva
     v2::V2xF64
 end
 
-if Sys.ARCH === :x86_64
+# SIMD tuples use vector registers in both directions, including the i686
+# register-to-stack transition after three vector arguments.
+if Sys.ARCH === :x86_64 || Sys.ARCH === :i686
     function test_sse(a1::V4xF32, a2::V4xF32, a3::V4xF32, a4::V4xF32)
         ccall((:test_m128, libccalltest), V4xF32, (V4xF32, V4xF32, V4xF32, V4xF32), a1, a2, a3, a4)
     end
@@ -1216,11 +1218,12 @@ if Sys.ARCH === :x86_64
 
     for s in [Float32, Int32]
         T = NTuple{4, VecElement{s}}
+        callback = s === Float32 ? :test_m128_cb : :test_m128i_cb
         @eval function rt_sse(a1::$T, a2::$T, a3::$T, a4::$T)
             return ccall(
-                @cfunction(foo_ams, $T, ($T, $T, $T, $T)),
-                $T, ($T, $T, $T, $T),
-                     a1, a2, a3, a4)
+                ($(QuoteNode(callback)), libccalltest),
+                $T, (Ptr{Cvoid}, $T, $T, $T, $T),
+                @cfunction(foo_ams, $T, ($T, $T, $T, $T)), a1, a2, a3, a4)
         end
 
         a1 = VecReg(ntuple(i -> VecElement(s(1i)), 4))
@@ -2395,102 +2398,4 @@ const prefix = "Zstd version: "
 const sym = :ZSTD_versionString
 get_zstd_version() = prefix * unsafe_string(ccall((sym, libzstd), Cstring, ()))
 @test startswith(get_zstd_version(), "Zstd")
-end
-
-# `Libdl.AbstractLibrary`, `LibraryID`, and `dlid`
-module TestAbstractLibraryAPI
-using Test, Libdl
-using Libdl: AbstractLibrary, LibraryID, LazyLibrary, LazyLibraryPath, dlid
-
-const test_pkg = Base.UUID(0x2fa1c7f0c93c48a0b4e2a5f0d6c60001)
-const test_id = LibraryID(test_pkg, "libfoo")
-
-struct IdentityDeclaringLib <: AbstractLibrary end
-Libdl.dlid(::IdentityDeclaringLib) = test_id
-struct NoIdentityLib <: AbstractLibrary end
-Libdl.dlid(::NoIdentityLib) = nothing
-
-@testset "AbstractLibrary API" begin
-    @test isabstracttype(AbstractLibrary)
-    @test LazyLibrary <: AbstractLibrary
-
-    # `LibraryID` compares by value (the runtime check uses `===`)
-    @test LibraryID(test_pkg, "lib" * "foo") === test_id
-    @test LibraryID(test_pkg, "libbar") !== test_id
-    @test LibraryID(Base.UUID(UInt128(test_pkg) + 1), "libfoo") !== test_id
-    @test test_id.pkg === test_pkg
-    @test test_id.name == "libfoo"
-
-    # no identity is derived from the path
-    @test dlid(LazyLibrary("libfoo")) === nothing
-    @test dlid(LazyLibrary(LazyLibraryPath("dir", "libfoo.so"))) === nothing
-
-    @test dlid(LazyLibrary("libfoo"; id=test_id)) === test_id
-    @test dlid(LazyLibrary(LazyLibraryPath("dir", "libfoo.so"); id=test_id)) === test_id
-
-    @test LazyLibrary("libfoo"; id=test_id).id === test_id
-    @test LazyLibrary("libfoo").id === nothing
-
-    @test dlid(IdentityDeclaringLib()) === test_id
-    @test dlid(NoIdentityLib()) === nothing
-end
-end
-
-# `ccall`/`cglobal` record `dlid(lib)` where the call is written
-module TestAbstractLibraryIdentity
-using Test, Libdl
-using Libdl: AbstractLibrary, LibraryID, LazyLibrary, LazyLibraryPath, dlid
-
-const libccalltest_path = Libdl.dlpath("libccalltest")
-
-const named_id = LibraryID(Base.UUID(0x2fa1c7f0c93c48a0b4e2a5f0d6c60001), "libccalltest")
-const named_lib = LazyLibrary(LazyLibraryPath(dirname(libccalltest_path),
-                                              basename(libccalltest_path)); id=named_id)
-
-echo_p_named(x) = ccall((:test_echo_p, named_lib), Ptr{Cvoid}, (Ptr{Cvoid},), x)
-
-module InterpretedCGlobal
-import ..named_lib
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
-address() = cglobal((:test_echo_p, named_lib))
-end
-
-@testset "identified library resolves" begin
-    p = Ptr{Cvoid}(UInt(0xdeadbeef))
-    @test echo_p_named(p) === p
-    # the interpreter sees the recorded identity too
-    @test InterpretedCGlobal.address() == cglobal((:test_echo_p, named_lib))
-end
-
-# the recorded identity is visible in lowered code as a third tuple element
-struct DeclaringLib <: AbstractLibrary end
-Libdl.dlid(::DeclaringLib) = LibraryID(Base.UUID(0x2fa1c7f0c93c48a0b4e2a5f0d6c60002), "libdeclaring")
-const declaring_lib = DeclaringLib()
-
-struct SilentLib <: AbstractLibrary end
-Libdl.dlid(::SilentLib) = nothing
-const silent_lib = SilentLib()
-
-struct MisdeclaredLib <: AbstractLibrary end
-Libdl.dlid(::MisdeclaredLib) = "not an identity"
-const misdeclared_lib = MisdeclaredLib()
-
-uses_declaring() = ccall((:my_symbol, declaring_lib), Cint, ())
-uses_silent() = ccall((:my_symbol, silent_lib), Cint, ())
-uses_string() = ccall((:my_symbol, "libbar"), Cint, ())
-cglobal_declaring() = cglobal((:my_global, declaring_lib))
-
-@testset "identity recorded at the call site" begin
-    let fptr = only(code_lowered(uses_declaring)).code[1].args[1]
-        @test fptr.head === :tuple
-        @test length(fptr.args) == 3
-        @test fptr.args[1] == QuoteNode(:my_symbol)
-        @test fptr.args[2] == GlobalRef(@__MODULE__, :declaring_lib)
-        @test fptr.args[3] === LibraryID(Base.UUID(0x2fa1c7f0c93c48a0b4e2a5f0d6c60002), "libdeclaring")
-    end
-    @test length(only(code_lowered(uses_silent)).code[1].args[1].args) == 2
-    @test length(only(code_lowered(uses_string)).code[1].args[1].args) == 2
-    @test length(only(code_lowered(cglobal_declaring)).code[1].args[1].args) == 3
-    @test_throws ErrorException @eval uses_misdeclared() = ccall((:my_symbol, misdeclared_lib), Cint, ())
-end
 end

@@ -45,7 +45,9 @@ symlink_q(tgt, link) = isfile(link) || symlink(tgt, link)
 cp_q(src, dest) = isfile(dest) || cp(src, dest)
 
 # make links for stdlib package docs, this is needed until #552 in Documenter.jl is finished
+link_stdlib_doc(src, dest) = Sys.iswindows() ? cp_q(src, dest) : symlink_q(src, dest)
 const STDLIB_DOCS = []
+const STDLIB_EXTRA_DOCS = String[]
 const EXT_STDLIB_DOCS = ["Pkg"]
 cd(joinpath(buildrootdoc, "src")) do
     Base.rm("stdlib"; recursive=true, force=true)
@@ -60,12 +62,15 @@ cd(joinpath(buildrootdoc, "src")) do
         if isfile(sourcefile)
             targetfile = joinpath("stdlib", dir * ".md")
             push!(STDLIB_DOCS, (stdlib = Symbol(dir), targetfile = targetfile))
-            if Sys.iswindows()
-                cp_q(sourcefile, targetfile)
-            else
-                symlink_q(sourcefile, targetfile)
-            end
+            link_stdlib_doc(sourcefile, targetfile)
         end
+    end
+    # The solvers need GPL libraries, so their docs are a separate page
+    solverfile = joinpath(STDLIB_DIR, "SparseArrays", "docs", "src", "solvers.md")
+    if Base.USE_GPL_LIBS && isfile(solverfile)
+        targetfile = joinpath("stdlib", "SparseArrays-solvers.md")
+        push!(STDLIB_EXTRA_DOCS, targetfile)
+        link_stdlib_doc(solverfile, targetfile)
     end
 end
 
@@ -400,12 +405,12 @@ BaseDocs = [
     "base/simd-types.md",
 ]
 
-StdlibDocs = [stdlib.targetfile for stdlib in STDLIB_DOCS]
+StdlibDocs = [[stdlib.targetfile for stdlib in STDLIB_DOCS]; STDLIB_EXTRA_DOCS]
 
 # HACK: get nicer sorting here, even though we don't have the header
 # of the .md files at hand.
 sort!(StdlibDocs, by=function(x)
-    x = replace(x, "stdlib/" => "")
+    x = chopsuffix(replace(x, "stdlib/" => ""), ".md")
     startswith(x, "Libdl") && return lowercase("Dynamic Linker")
     startswith(x, "Test") && return lowercase("Unit Testing")
     return lowercase(x)

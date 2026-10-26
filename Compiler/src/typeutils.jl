@@ -37,7 +37,7 @@ has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isTy
 isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || b <: a)
 
 function argtypes_to_type(argtypes::Vector{Any})
-    argtypes = anymap(@nospecialize(a) -> isvarargtype(a) ? a : widenconst(a), argtypes)
+    argtypes = anymap(@nospecialize(a) -> isvarargtype(a) ? a : widenconst_split(a), argtypes)
     filter!(@nospecialize(x) -> !isvarargtype(x) || valid_as_lattice(unwrapva(x), true), argtypes)
     all(@nospecialize(x) -> isvarargtype(x) || valid_as_lattice(x, true), argtypes) || return Bottom
     return Tuple{argtypes...}
@@ -300,7 +300,7 @@ function unionsplitcost(𝕃::AbstractLattice, argtypes::Union{SimpleVector,Vect
         end
         ti = argtypes[i]
         if has_extended_unionsplit(𝕃) && !isvarargtype(ti)
-            ti = widenconst(ti)
+            ti = widenconst_split(ti)
         end
         if isa(ti, Union)
             nti = unionlen(ti)
@@ -445,7 +445,7 @@ This query is specifically designed for `adjust_effects`, enabling it to refine 
 graph when the return value type is `is_identity_free_argtype`, ensuring that the allocated
 mutable objects are never returned.
 """
-is_identity_free_argtype(@nospecialize ty) = is_identity_free_type(widenconst(ignorelimited(ty)))
+is_identity_free_argtype(@nospecialize ty) = is_identity_free_type(widenconst_split(ignorelimited(ty)))
 is_identity_free_type(@nospecialize ty) = isidentityfree(ty)
 
 """
@@ -457,7 +457,7 @@ them to prove `:consistent`-cy of `getfield` / `isdefined` calls when applied to
 objects. Otherwise, we need to additionally prove that the non-immutable object is not a
 global object to prove the `:consistent`-cy.
 """
-is_immutable_argtype(@nospecialize argtype) = is_immutable_type(widenconst(ignorelimited(argtype)))
+is_immutable_argtype(@nospecialize argtype) = is_immutable_type(widenconst_split(ignorelimited(argtype)))
 is_immutable_type(@nospecialize ty) = _is_immutable_type(unwrap_unionall(ty))
 function _is_immutable_type(@nospecialize ty)
     if isa(ty, Union)
@@ -478,5 +478,5 @@ and is supposed to improve the analysis accuracy by not tainting the `:inaccessi
 property when there is access to mutation-free global object.
 """
 is_mutation_free_argtype(@nospecialize(argtype)) =
-    is_mutation_free_type(widenconst(ignorelimited(argtype)))
+    is_mutation_free_type(widenconst_split(ignorelimited(argtype)))
 is_mutation_free_type(@nospecialize ty) = ismutationfree(ty)

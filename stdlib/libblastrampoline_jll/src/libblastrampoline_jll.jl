@@ -45,7 +45,6 @@ const libblastrampoline = LazyLibrary(
     else
         BundledLazyLibraryPath("libblastrampoline.so.5")
     end,
-    id = LibraryID(Base.UUID("8e850b90-86db-534c-a0d3-1478176c7d93"), "libblastrampoline"),
     dependencies = LazyLibrary[],
     on_load_callback = LBTOnLoadCallback()
 )

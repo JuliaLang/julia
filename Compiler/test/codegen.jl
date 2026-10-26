@@ -31,6 +31,45 @@ end
 # are not actually materialized as call instructions.
 strip_debug_calls(ir) = replace(ir, r"call void @llvm\.dbg\.declare.*\n" => "", r"call void @llvm\.dbg\.value.*\n" => "")
 
+# Inline debug scopes follow CodegenParams, whose default retains them even
+# when Julia's internal codegen parameters disable them for image generation.
+@inline inner_scope(x) = x + 1
+outer_scope(x) = inner_scope(x)
+@testset "Inline debug scopes" begin
+    @test Base.CodegenParams().debug_info_inline_scopes == 1
+    for scopes in (false, true)
+        params = Base.CodegenParams(debug_info_level=Cint(1), debug_info_inline_scopes=scopes)
+        ir = sprint(io -> code_llvm(io, outer_scope, (Int,); raw=true,
+                                   dump_module=true, optimize=false, params))
+        @test occursin("inlinedAt:", ir) == scopes
+    end
+
+    # IR consumers retain inline scopes during precompilation, independently of
+    # Julia's internal parameters for generating the package image.
+    mktempdir() do dir
+        write(joinpath(dir, "InlineScopesDefault.jl"), """
+            module InlineScopesDefault
+            using InteractiveUtils
+            const scopes = Base.CodegenParams().debug_info_inline_scopes
+            const internal_scopes = unsafe_load(
+                cglobal(:jl_default_cgparams, Base.CodegenParams)).debug_info_inline_scopes
+            @inline inner_scope(x) = x + 1
+            outer_scope(x) = inner_scope(x)
+            const has_inline_scopes = occursin("inlinedAt:", sprint(io ->
+                code_llvm(io, outer_scope, (Int,); raw=true, dump_module=true, optimize=false,
+                          params=Base.CodegenParams(debug_info_level=Cint(1)))))
+            end
+            """)
+        cmd = `$(Base.julia_cmd()) --startup-file=no --compiled-modules=yes --pkgimages=yes
+               -e 'using InlineScopesDefault; print((InlineScopesDefault.scopes,
+                   InlineScopesDefault.internal_scopes, InlineScopesDefault.has_inline_scopes))'`
+        sep = Sys.iswindows() ? ";" : ":"
+        env = ("JULIA_DEPOT_PATH" => dir * sep, "JULIA_LOAD_PATH" => dir * sep * "@stdlib")
+        asserts = ccall(:jl_is_assertsbuild, Int8, ()) != 0
+        @test readchomp(addenv(cmd, env...)) == string((1, Int(asserts), true))
+    end
+end
+
 if !is_debug_build && opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
     @test !occursin(" call ", strip_debug_calls(get_llvm(identity, Tuple{String})))
@@ -672,6 +711,20 @@ end
     end
     @test f6(true)
     @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f6, Tuple{Bool}, true, false, false))
+
+    # nor do pointer-free values, whether in a stack slot or passed by reference
+    function f7(r)
+        val = r[]
+        GC.@preserve val begin end
+        return val
+    end
+    @test f7(Ref(1+2im)) == 1+2im
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f7, Tuple{Base.RefValue{Complex{Int}}}, true, false, false))
+    function f8(val)
+        GC.@preserve val begin end
+        return val
+    end
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f8, Tuple{Some{Int}}, true, false, false))
 end
 
 # issue #32843
@@ -1213,6 +1266,20 @@ let io = IOBuffer()
     @test occursin("julia.field_write_barrier", str)
 end
 
+# No write barrier on an object allocated since the last safepoint
+mutable struct FreshBarrierBox
+    x::Any
+end
+fresh_barrier(y) = (b = FreshBarrierBox(nothing); b.x = y; b)
+aged_barrier(y) = (b = FreshBarrierBox(nothing); GC.safepoint(); b.x = y; b)
+if opt_level > 0
+    @test !occursin("queue_root", get_llvm(fresh_barrier, Tuple{Any}))
+    # MMTk lowers write barriers without `jl_gc_queue_root`
+    @static if Base.USING_STOCK_GC
+        @test occursin("queue_root", get_llvm(aged_barrier, Tuple{Any}))
+    end
+end
+
 # Aggregate barriers identify the stored payload's references, including locked elements.
 struct FieldBarrierElement
     tag::Int
@@ -1359,4 +1426,29 @@ end
     @noinline f_srettest(x::Float32) = SretAlignTest(x, x+1, x+2)
     ir = get_llvm(f_srettest, Tuple{Float32}, true, true, true)
     @test occursin(r"sret\([^)]+\) align \d+", ir)
+end
+
+# Indexing a SimpleVector is a load, not a call to the `_svec_ref` builtin
+const const_svec_ref = Core.svec(1, "a", :b)
+@testset "inline _svec_ref" begin
+    svec_ref_test(v::Core.SimpleVector, i::Int) = v[i]
+    ir = get_llvm(svec_ref_test, Tuple{Core.SimpleVector, Int})
+    @test !occursin("jl_f__svec_ref", ir)
+    @test !occursin(r"box_int(?:32|64)", ir)
+    v = Core.svec(1, "a", :b)
+    @test svec_ref_test(v, 1) === 1
+    @test svec_ref_test(v, 3) === :b
+    @test_throws BoundsError(v, 0) svec_ref_test(v, 0)
+    @test_throws BoundsError(v, 4) svec_ref_test(v, 4)
+    @test_throws BoundsError(Core.svec(), 1) svec_ref_test(Core.svec(), 1)
+
+    # a constant svec has a constant length
+    const_svec_ref_test(i::Int) = const_svec_ref[i]
+    ir = get_llvm(const_svec_ref_test, Tuple{Int})
+    @test !occursin("jl_f__svec_ref", ir)
+    @test occursin(Regex("icmp ult $Iptr %\\S+, 3\\b"), ir)
+    @test const_svec_ref_test(1) === 1
+    @test const_svec_ref_test(3) === :b
+    @test_throws BoundsError(const_svec_ref, 0) const_svec_ref_test(0)
+    @test_throws BoundsError(const_svec_ref, 4) const_svec_ref_test(4)
 end

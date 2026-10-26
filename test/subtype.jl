@@ -1279,6 +1279,10 @@ end
     @test Tuple{Tuple{Int, Real}, Real} <: R6
     @test !(Tuple{Tuple{Bool, Real}, Real} <: R6)
     @test Tuple{Tuple{Bool, Bool}, Bool} <: R6
+
+
+    @test Tuple{Tuple{Union{Int, String}}} <: (Tuple{X} where {T, X <: Tuple{Union{Nothing, T}}})
+    @test Tuple{Ref{Union{Int, String}}} <: (Tuple{Ref{X}} where {R, T <: Union{Nothing, R}, X <: T})
 end
 
 
@@ -1793,7 +1797,7 @@ end
 
 @testintersect(Tuple{Any,Tuple{Int},Int},
                Tuple{LT,R,I} where LT<:Union{I, R} where R<:Tuple{I} where I<:Integer,
-               Tuple{LT,Tuple{Int},Int} where {I<:Integer, LT<:Union{Tuple{Int}, I}})
+               Tuple{LT,Tuple{Int},Int} where LT<:Union{Integer,Tuple{Integer}})
 
 let U = Tuple{Union{LT, LT1},Union{R, R1},Int} where LT1<:R1 where R1<:Tuple{Int} where LT<:Int where R<:Tuple{Int},
     U2 = Union{Tuple{LT,R,Int} where LT<:Int where R<:Tuple{Int}, Tuple{LT,R,Int} where LT<:R where R<:Tuple{Int}},
@@ -3053,6 +3057,11 @@ end
     Tuple{Union{Type{Int},Type{Vector}}, Type{Int8}, Ref{DataType}},
     Tuple{Type{Int}, Type{Int8}, Ref{DataType}}
 )
+@testintersect(
+    Tuple{T1,Tuple{T3,T3}} where {T1<:Tuple{Any},T3<:T1},
+    Tuple{Tuple{Integer},Any},
+    Tuple{Tuple{Integer},Tuple{T3,T3}} where {T3<:Tuple{Any}}
+)
 # JETLS#509 — inference hang with Union-bounded parametric types
 # subtype_ccheck leaked right-side Union choices into the shared
 # Runions statestack, causing exponential state iteration when
@@ -3623,4 +3632,35 @@ let A = Tuple{Real, Vector{S}} where S<:(Union{Nothing,U} where U<:Tuple{Real,Re
     @test B{Int} <: B
     @test B{Int} <: typeintersect(A, B)
     @test B{Int} <: typeintersect(B, A)
+end
+
+@testintersect(Tuple{T, Vararg{Tuple{T, Int}}} where T,
+               Tuple{Any, Vararg{Tuple{String, Float64}}},
+               Tuple{Any})
+@testintersect(Tuple{T, Vararg{Tuple{T, Any, Int}}} where T,
+               Tuple{Any, Vararg{Tuple{Tuple{S}, S, Float64} where S}},
+               Tuple{Any})
+
+let A = Tuple{Ref{X}, Ref{Y}} where {Y, X<:Union{Nothing, Y}}, B = Tuple{Ref{X}, Ref{Y}} where {Y, X>:Y}
+    @test Tuple{Ref{Union{Nothing, Int}}, Ref{Int}} <: typeintersect(A, B)
+    @test Tuple{Ref{Union{Nothing, Int}}, Ref{Int}} <: typeintersect(B, A)
+end
+
+let A = Ref{Tuple{Union{Nothing, T}, T}} where T, B = Ref{Tuple{S, Union{Nothing, S}}} where S
+    @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(A, B)
+    @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(B, A)
+end
+
+@testset "stack overflows in type intersection" begin
+    let A = Tuple{Union{Nothing, S2}, Int, Tuple{S1, S1}} where {S1, S2<:S1}, B = Tuple{T, T, Tuple{T, T}} where T
+        @test Tuple{Int, Int, Tuple{Int, Int}} <: typeintersect(A, B)
+        @test Tuple{Int, Int, Tuple{Int, Int}} <: typeintersect(B, A)
+    end
+
+    let A = Ref{Tuple{T, T}} where T, B = Ref{Tuple{Union{Nothing, Int}, Union{X, Y}}} where {X, Y}
+        @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(A, B)
+        @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(B, A)
+    end
+
+    @testintersect(Tuple{Tuple{T}, T, T} where T, Tuple{S, Tuple{S}, S} where S, Union{})
 end

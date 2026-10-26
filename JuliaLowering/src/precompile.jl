@@ -48,6 +48,10 @@
         _precompile_usemac(3)
         _precompile_genf(1.0)
         """
-        include_string(@__MODULE__, workload, "precompile.jl")
+        # Pin the workload to the 1.14 edition, since its macro returns an
+        # `Expr`, which is not allowed in newer editions.
+        st = JuliaSyntax.parseall(SyntaxTree, workload; filename="precompile.jl",
+                                  version=VersionNumber(JL_OLD_EDITION))
+        eval(@__MODULE__, st)
     end
 end

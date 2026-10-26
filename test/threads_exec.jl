@@ -447,6 +447,19 @@ mutable struct Peterson
             [Atomic{Int}(0), Atomic{Int}(0)],
             [false, false])
 end
+# Busy-wait step that periodically yields the OS thread, so that with fewer cores than
+# threads the spinner does not starve the thread it is waiting for.
+function spin_wait(spins::Int)
+    # Temporary solution before we have gc transition support in codegen.
+    ccall(:jl_gc_safepoint, Cvoid, ())
+    spins += 1
+    if spins >= 1000
+        Libc.systemsleep(0)
+        spins = 0
+    end
+    return spins
+end
+
 function test_fence(p::Peterson, id::Int, n::Int)
     @assert id == mod1(id,2)
     correct = true
@@ -455,10 +468,9 @@ function test_fence(p::Peterson, id::Int, n::Int)
         @atomic p.flag[id][] = 1
         @atomic p.turn[] = otherid
         atomic_fence()
+        spins = 0
         while p.flag[otherid][] != 0 && p.turn[] == otherid
-            # busy wait
-            # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Cvoid, ())
+            spins = spin_wait(spins)
         end
         # critical section
         @atomic p.critical[id][] = 1
@@ -553,11 +565,11 @@ end
 # Test atomic_cas! and atomic_xchg!
 function test_atomic_cas!(var::Atomic{T}, range::StepRange{Int,Int}) where T
     for i in range
+        spins = 0
         while true
             old = atomic_cas!(var, T(i-1), T(i))
             old == T(i-1) && break
-            # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Cvoid, ())
+            spins = spin_wait(spins)
         end
     end
 end

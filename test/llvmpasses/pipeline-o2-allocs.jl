@@ -56,6 +56,16 @@ function nopreserve()
     GC.@preserve ref begin end
 end
 
+# COM: This tests that the Memory of a slice, whose length only becomes constant during
+# COM: optimization, doesn't need an alloca
+# CHECK-LABEL: @julia_slice_sum
+# CHECK-NOT: "Memory{Float64}[]" = alloca
+# CHECK: ret double
+function slice_sum(v)
+    b = v[1:3]
+    b[1] + b[2] + b[3]
+end
+
 # COM: this cordons off the attributes/function declarations from the actual
 # COM: IR that we really want to check
 # CHECK: attributes
@@ -64,3 +74,4 @@ emit(split, Bool)
 emit(loop_alloc, Int64)
 emit(loop_const)
 emit(nopreserve)
+emit(slice_sum, Vector{Float64})

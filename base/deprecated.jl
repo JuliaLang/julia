@@ -641,8 +641,8 @@ end
         depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
         return Core.AnyType.name
     elseif s === :hash
-        depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
-        return reinterpret(Int32, UInt32(_jl_type_cache_hash(x)))
+        depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_hash(x)` instead", :getproperty)
+        return reinterpret(Int32, UInt32(_jl_type_hash(x)))
     end
     return getfield(x, s)
 end
@@ -675,8 +675,8 @@ end
         depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
         return Core.AnyType.name
     elseif s === :hash
-        depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
-        return reinterpret(Int32, UInt32(_jl_type_cache_hash(x)))
+        depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_hash(x)` instead", :getproperty)
+        return reinterpret(Int32, UInt32(_jl_type_hash(x)))
     end
     return getfield(x, s)
 end

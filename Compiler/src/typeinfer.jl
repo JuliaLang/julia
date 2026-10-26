@@ -178,9 +178,11 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             debuginfo = DebugInfo(mi)
         end
         # if we aren't cached, we don't need this edge
-        # but our caller might, so let's just make it anyways
+        # but our caller might, so let's just make it anyways.
+        # No caller can reach a tombstoned CodeInstance (they copy its edges instead),
+        # and each new caller infers it again, so its backedges would only pile up.
         unique_backedges = false
-        if max_world >= validation_world
+        if max_world >= validation_world && !result.tombstone
             # if we can record all of the backedges in the global reverse-cache,
             # we can now widen our applicability in the global cache too
             unique_backedges = store_backedges(ci, edges)
@@ -190,7 +192,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         time_self_ns = caller.time_self_ns + (time_now - time_before)
         time_total = (time_now - caller.time_start - caller.time_paused) * 1e-9
         ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Float64, Any, Any),
-            ci, widenconst(result_type), widenconst(result.exc_result), rettype_const, inferred_result,
+            ci, widenconst_split(result_type), widenconst_split(result.exc_result), rettype_const, inferred_result,
             const_flags, min_world, max_world,
             ipo_effects, result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, debuginfo, edges)
         if unique_backedges
@@ -750,7 +752,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
     ipo_effects = result.ipo_effects = me.ipo_effects = adjust_effects(me)
     result.exc_result = me.exc_bestguess = refine_exception_type(me.exc_bestguess, ipo_effects)
     src = me.src
-    src.rettype = widenconst(ignorelimited(bestguess))
+    src.rettype = widenconst_split(ignorelimited(bestguess))
     src.ssaflags = me.ssaflags
     valid_worlds = me.valid_worlds
     result.valid_worlds = valid_worlds

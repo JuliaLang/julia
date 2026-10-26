@@ -11,7 +11,6 @@
 extern "C" {
 #endif
 
-uint_t nextipow2(uint_t i) JL_NOTSAFEPOINT;
 uint32_t int32hash(uint32_t a) JL_NOTSAFEPOINT;
 uint64_t int64hash(uint64_t key) JL_NOTSAFEPOINT;
 uint32_t int64to32hash(uint64_t key) JL_NOTSAFEPOINT;

@@ -5,15 +5,13 @@ Represents a Universally Unique Identifier (UUID).
 Can be built from one `UInt128` (all byte values), two `UInt64`, or four `UInt32`.
 Conversion from a string will check the UUID validity.
 """
-UUID
-
+struct UUID
+    value::UInt128
+end
 UUID(u::UUID) = u
-UUID(value::Integer) = UUID(convert(UInt128, value))
 UUID(u::NTuple{2, UInt64}) = UUID((UInt128(u[1]) << 64) | UInt128(u[2]))
 UUID(u::NTuple{4, UInt32}) = UUID((UInt128(u[1]) << 96) | (UInt128(u[2]) << 64) |
                                   (UInt128(u[3]) << 32) | UInt128(u[4]))
-
-UInt128(u::UUID) = u.value
 
 function convert(::Type{NTuple{2, UInt64}}, uuid::UUID)
     bytes = uuid.value
@@ -31,6 +29,8 @@ function convert(::Type{NTuple{4, UInt32}}, uuid::UUID)
     return (hh, hl, lh, ll)
 end
 
+UInt128(u::UUID) = u.value
+
 let
     uuid_hash_seed = UInt === UInt64 ? 0xd06fa04f86f11b53 : 0x96a1f36d
     Base.hash(uuid::UUID, h::UInt) = hash(uuid_hash_seed, hash(convert(NTuple{2, UInt64}, uuid), h))
@@ -38,43 +38,51 @@ end
 
 _crc32c(uuid::UUID, crc::UInt32=0x00000000) = _crc32c(uuid.value, crc)
 
-let
-@inline function uuid_kernel(s, i, u)
-    d = Parsers.digitvalue(@inbounds(codeunit(s, i)), 16)
-    d >= 16 && return nothing
-    u <<= 4
-    return u | d
+# The next `n` bytes of the iteration `y` of `units` in a word, the first in the lowest byte,
+# the iteration after them, and whether there were `n`. `y` is `nothing` or the iteration in
+# each of the two returns, so each result has a concrete type that callers can split on.
+@inline function takebytes(units, y, n::Int)
+    w = zero(UInt64)
+    exact = @label exact begin
+        for k in 0:n-1
+            y === nothing && break exact false
+            b, state = y
+            w |= UInt64(b) << 8k
+            y = iterate(units, state)
+        end
+        true
+    end
+    y === nothing && return (; w, y, exact)
+    return (; w, y, exact)
 end
 
-function Base.tryparse(::Type{UUID}, s::AbstractString)
-    u = UInt128(0)
-    ncodeunits(s) != 36 && return nothing
-    for i in 1:8
-        u = uuid_kernel(s, i, u)
-        u === nothing && return nothing
-    end
-    @inbounds codeunit(s, 9) == UInt8('-') || return nothing
-    for i in 10:13
-        u = uuid_kernel(s, i, u)
-        u === nothing && return nothing
-    end
-    @inbounds codeunit(s, 14) == UInt8('-') || return nothing
-    for i in 15:18
-        u = uuid_kernel(s, i, u)
-        u === nothing && return nothing
-    end
-    @inbounds codeunit(s, 19) == UInt8('-') || return nothing
-    for i in 20:23
-        u = uuid_kernel(s, i, u)
-        u === nothing && return nothing
-    end
-    @inbounds codeunit(s, 24) == UInt8('-') || return nothing
-    for i in 25:36
-        u = uuid_kernel(s, i, u)
-        u === nothing && return nothing
-    end
-    return Base.UUID(u)
+# The UUID spelled by the 36 bytes that `units` iterates. They are read as eight hex digits,
+# four groups of a dash and four digits, and eight more digits, and the digits are checked
+# and converted eight at a time.
+function parseuuid(units)
+    a, y, ok1 = takebytes(units, iterate(units), 8)
+    b, y, ok2 = takebytes(units, y, 5)
+    c, y, ok3 = takebytes(units, y, 5)
+    d, y, ok4 = takebytes(units, y, 5)
+    e, y, ok5 = takebytes(units, y, 5)
+    f, y, ok6 = takebytes(units, y, 8)
+    # returning before using the words lets the compiler merge the end checks of their bytes
+    ok1 & ok2 & ok3 & ok4 & ok5 & ok6 & (y === nothing) || return Parsers.INVALID
+    dashes = (b & 0xff) | (c & 0xff) << 8 | (d & 0xff) << 16 | (e & 0xff) << 24
+    dashes == UInt8('-') * 0x01010101 || return Parsers.INVALID
+    w2 = b >> 8 | c >> 8 << 32
+    w3 = d >> 8 | e >> 8 << 32
+    Parsers.ishexdigits8(a) & Parsers.ishexdigits8(w2) & Parsers.ishexdigits8(w3) &
+        Parsers.ishexdigits8(f) || return Parsers.INVALID
+    return UUID((Parsers.hexdigits8(a) << 32 | Parsers.hexdigits8(w2),
+                 Parsers.hexdigits8(w3) << 32 | Parsers.hexdigits8(f)))
 end
+
+Parsers.parsevalue(::Type{UUID}, bytes::AbstractVector{UInt8}) = parseuuid(bytes)
+
+function tryparse(::Type{UUID}, s::AbstractString)
+    u = parseuuid(utf8units(s))
+    return u isa UUID ? u : nothing
 end
 
 let

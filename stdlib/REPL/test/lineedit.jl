@@ -1036,6 +1036,33 @@ end
     @test getcompletion([LineEdit.NamedCompletion("x", "x", true)]) == "\033[0B\n\rInternal:\n\rx\n"
 end
 
+@testset "Hints at the terminal edge" begin
+    # Hints must leave room for trailing brackets and keep the cursor on its original row.
+    for color in (false, true),
+        (prefix, trailing, visible) in ((" "^57, ")", true), (" "^58, ")", false),
+                                        (" "^60, ")", false), (" "^80, ")", true),
+                                        (" "^56, "))", true), (" "^57, "))", false),
+                                        ("界"^29, ")", false), ("e\u0301"^58, ")", false),
+                                        ("x\n" * " "^58, ")", false),
+                                        (" "^58, "", false))
+        output = IOBuffer()
+        term = FakeTerminal(IOBuffer(), output, IOBuffer(), color)
+        s = LineEdit.init_state(term, LineEdit.Prompt("julia> "))
+        input = prefix * "f(reada" * trailing
+        LineEdit.replace_line(s, input)
+        cursor = sizeof(prefix * "f(reada")
+        seek(buffer(s), cursor)
+        s.hint = "vailable"
+        LineEdit.refresh_line(s)
+        rendered = String(take!(output))
+        @test occursin("vailable", rendered) == visible
+        @test occursin("\e[8@", rendered) == (visible && !isempty(trailing))
+        @test occursin(Base.text_colors[:light_black], rendered) == (visible && color)
+        @test content(s) == input
+        @test position(buffer(s)) == cursor
+    end
+end
+
 # Test bracket insertion functionality
 @testset "Bracket insertion" begin
     # Test bracket insertion with a fake REPL that has bracket completion enabled
@@ -1235,14 +1262,15 @@ end
     @test content(s) == " \"\""
     @test position(buffer(s)) == 2
 
-    # Test quote behavior: (|)) + " -> ("")
+    # Test quote behavior: (|) + " -> ("")
     s = LineEdit.init_state(term, interface)
     write_input(s, ")")
     charseek(buffer(s), 0)
     write_input(s, "(")
-    # Buffer is now ()) with cursor at 1
+    # Buffer is now () with cursor at 1 (not paired since there was an unmatched `)`)
+    @test content(s) == "()"
     write_input(s, "\"")
-    @test content(s) == "(\"\"))"
+    @test content(s) == "(\"\")"
     @test position(buffer(s)) == 2
 
     # Test quote behavior: (|bar) + " -> ("bar)
@@ -1253,13 +1281,113 @@ end
     @test content(s) == "(\"bar)"
     @test position(buffer(s)) == 2
 
-    # Test bracket behavior: "|" + ( -> "()"
+    # Brackets are not paired inside literals and comments: "|" + ( -> "(|"
     s = LineEdit.init_state(term, interface)
     write_input(s, "\"\"")
     charseek(buffer(s), 1)
     write_input(s, "(")
-    @test content(s) == "\"()\""
+    @test content(s) == "\"(\""
     @test position(buffer(s)) == 2
+
+    # Typing out code gives that code, also when literals contain brackets or quotes
+    for str in ("split(s, \"(\")", "c = '('", "c = '['", "f(x, \"a (b\")", "\"a\\\"b\\\"\"",
+                "# don't \"quote", "r\"[a-z]+\"", "x = \"\"\"a\"b\"\"\"", "`echo \"(\"`")
+        s = LineEdit.init_state(term, interface)
+        write_input(s, str)
+        @test content(s) == str
+        @test position(buffer(s)) == sizeof(str)
+    end
+
+    # Interpolation in a string is code
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "\"\$(")
+    @test content(s) == "\"\$()\""
+
+    # Don't move over a closing bracket that is needed by another opening one
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "f(g(x")
+    @test content(s) == "f(g(x))"
+    LineEdit.edit_delete(buffer(s))
+    write_input(s, ")")
+    @test content(s) == "f(g(x))"
+    @test position(buffer(s)) == 6
+    write_input(s, ")")
+    @test content(s) == "f(g(x))"
+    @test position(buffer(s)) == 7
+
+    # Don't remove a closing bracket that is needed by another opening one
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "f((a)")
+    @test content(s) == "f((a))"
+    write_input(s, "\b\b")
+    @test content(s) == "f(()"
+    write_input(s, "\b")
+    @test content(s) == "f()"
+    @test position(buffer(s)) == 2
+    write_input(s, "\b")
+    @test content(s) == "f"
+
+    # Quotes: don't remove two adjacent strings' quotes; do move over a closing quote
+    # that isn't escaped
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "\"a\"\"b\"")
+    charseek(buffer(s), 3)
+    write_input(s, "\b")
+    @test content(s) == "\"a\"b\""
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "\"a\\")
+    write_input(s, "\"")
+    @test content(s) == "\"a\\\"\""
+    @test position(buffer(s)) == 4
+    write_input(s, "\"")
+    @test content(s) == "\"a\\\"\""
+    @test position(buffer(s)) == 5
+
+    # Inserting and removing a pair are undo steps of their own
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "ab(\"")
+    @test content(s) == "ab(\"\")"
+    LineEdit.edit_undo!(s)
+    @test content(s) == "ab()"
+    write_input(s, "\b")
+    @test content(s) == "ab"
+    LineEdit.edit_undo!(s)
+    @test content(s) == "ab()"
+    LineEdit.edit_undo!(s)
+    @test content(s) == "ab"
+
+    # Enter continues on a new line when the input is only complete thanks to automatically
+    # inserted closing brackets, but not for an input that wasn't typed (e.g. from history)
+    # Typing or moving over an automatically inserted closing bracket commits it
+    prompt.on_enter = REPL.return_callback
+    function type_keys(s, keys)
+        done = false
+        for k in keys
+            buf = IOBuffer(k)
+            done = LineEdit.match_input(prompt.keymap_dict, s, buf)(s, buf) === :done
+            LineEdit.auto_closed_after_cursor(s) # as the prompt does after each key
+        end
+        return done
+    end
+    for (str, expected) in (("[1, 2\r3]\r", "[1, 2\n3]"), ("f(\r1)\r", "f(\n1)"),
+                            ("x = [\rx\rfor x in 1:2\r]\r", "x = [\nx\nfor x in 1:2\n]"),
+                            ("([]\r)\r", "([]\n)"), ("([]\e[C\r", "([])"),
+                            ("()\e[D\r", "()"), ("f(x\e[D\r", "f(x)"))
+        s = LineEdit.init_state(term, interface)
+        @test type_keys(s, [String(m.match) for m in eachmatch(r"\e\[.|.", str)])
+        @test content(s) == expected
+    end
+    s = LineEdit.init_state(term, interface)
+    type_keys(s, ["f", "(", "x"])
+    @test LineEdit.at_input_end(LineEdit.state(s))
+    type_keys(s, ["\e[D"])
+    @test !LineEdit.at_input_end(LineEdit.state(s))
+    s = LineEdit.init_state(term, interface)
+    LineEdit.replace_line(LineEdit.state(s), "f(x)")
+    charseek(buffer(s), 3)
+    buf = IOBuffer("\r")
+    @test LineEdit.match_input(prompt.keymap_dict, s, buf)(s, buf) === :done
+    @test content(s) == "f(x)"
 end
 
 @testset "Conflicting definitions for keyseq" begin

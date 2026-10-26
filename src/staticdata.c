@@ -123,6 +123,7 @@ Glossary
 #include "valgrind.h"
 #include "julia_assert.h"
 #include "eytzinger.h"
+#include "bitvector.h"
 
 static const size_t WORLD_AGE_REVALIDATION_SENTINEL = 0x1;
 JL_DLLEXPORT size_t jl_require_world = ~(size_t)0;
@@ -154,7 +155,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    7
+#define NUM_TAGS    6
 
 // An array of special references that need to be restored from the sysimg
 static void get_tags(jl_value_t **tags[NUM_TAGS])
@@ -166,7 +167,6 @@ static void get_tags(jl_value_t **tags[NUM_TAGS])
     INSERT_TAG(jl_module_init_order);
     INSERT_TAG(jl_typeinf_func);
     INSERT_TAG(jl_compile_and_emit_func);
-    INSERT_TAG(jl_libdl_dlid_func);
     INSERT_TAG(jl_libdl_dlopen_func);
     // n.b. must update NUM_TAGS when you add something here
 #undef INSERT_TAG
@@ -192,7 +192,7 @@ static arraylist_t object_worklist;  // used to mimic recursion by jl_serialize_
 static arraylist_t deferred_supers;  // deferred datatype super fields, handled by jl_serialize_reachable once the pre-order recursion has unwound
 
 // Track image locations and some associated metadata for all loaded sys / pkgimages.
-// (image_tree.ranges[i].data is an image_metadata_t* for build_ids[i])
+// (the data of range i is an image_metadata_t* for build_ids[i])
 static eyt_tree_t image_tree;
 typedef struct {
     uintptr_t base;          // base address of the image
@@ -200,11 +200,21 @@ typedef struct {
     jl_module_t *top_mod;    // owning top-level module
     size_t idx;              // range index in image_tree (for serialization)
     int coverage_compatible; // counters support the requested coverage mode
+    uint32_t *deps;          // bitvector over blobs 0..idx: the sysimage, the images
+                             // this one was loaded against, and itself
+    _Atomic(size_t) world;   // the world in which the image's methods were activated
+                             // (0 until then)
 } image_metadata_t;
+
+// readers use a snapshot without passing a safepoint, so free it after the next collection
+static void image_tree_retire(void *snapshot) JL_NOTSAFEPOINT
+{
+    jl_gc_add_quiescent(jl_current_task->ptls, (void**)snapshot, free);
+}
 
 void jl_init_staticdata(void)
 {
-    eyt_tree_init(&image_tree);
+    eyt_tree_init(&image_tree, image_tree_retire);
 }
 
 // HT_NOTFOUND is a valid integer ID, so we store the integer ids mangled.
@@ -225,7 +235,7 @@ static htable_t new_methtables;
 // Query if a Julia object is in a permalloc region (due to part of a sys- pkg-image)
 static size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
 {
-    return image_tree.nranges;
+    return eyt_tree_nranges(&image_tree);
 }
 
 static image_metadata_t *external_blob_metadata(jl_value_t *v) JL_NOTSAFEPOINT
@@ -239,6 +249,56 @@ static size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
 {
     image_metadata_t *meta = external_blob_metadata(v);
     return meta ? meta->idx : (size_t)-1;
+}
+
+JL_DLLEXPORT size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    return external_blob_index(v);
+}
+
+// bitvector over blobs 0..idx: the sysimage, `depmods`, and itself.
+// `depmods` already lists every module the precompile worker had loaded.
+static uint32_t *image_deps_new(size_t idx, jl_array_t *depmods) JL_NOTSAFEPOINT
+{
+    uint32_t *deps = (uint32_t*)calloc_s(bitvector_nwords(idx + 1) * sizeof(uint32_t));
+    bitvector_set(deps, 0, 1); // the sysimage
+    for (size_t i = 0, ld = depmods ? jl_array_nrows(depmods) : 0; i < ld; i++) {
+        image_metadata_t *dep = external_blob_metadata(jl_array_ptr_ref(depmods, i));
+        if (dep == NULL || dep->idx >= idx)
+            continue;
+        bitvector_set(deps, dep->idx, 1);
+    }
+    bitvector_set(deps, idx, 1);
+#ifndef NDEBUG
+    // a dependency's own dependencies are among ours
+    for (size_t i = 0, ld = depmods ? jl_array_nrows(depmods) : 0; i < ld; i++) {
+        image_metadata_t *dep = external_blob_metadata(jl_array_ptr_ref(depmods, i));
+        if (dep == NULL || dep->idx >= idx)
+            continue;
+        for (size_t w = 0, nw = bitvector_nwords(dep->idx + 1); w < nw; w++)
+            assert((dep->deps[w] & ~deps[w]) == 0);
+    }
+#endif
+    return deps;
+}
+
+// If linkage blob `blob` is a dependency of linkage blob `image` (or the
+// sysimage, or `image` itself), the world in which the methods of `blob` were
+// activated, else 0. A dependency has been loaded in full, so its world is set.
+JL_DLLEXPORT size_t jl_linkage_blob_dep_world(size_t image, size_t blob) JL_NOTSAFEPOINT
+{
+    if (blob > image)
+        return 0;
+    void *data = eyt_tree_range_data(&image_tree, image);
+    if (data == EYT_NOTFOUND)
+        return 0;
+    image_metadata_t *meta = (image_metadata_t*)data;
+    if (meta->deps == NULL || !bitvector_get(meta->deps, blob))
+        return 0;
+    image_metadata_t *blobmeta = (image_metadata_t*)eyt_tree_range_data(&image_tree, blob);
+    size_t world = jl_atomic_load_relaxed(&blobmeta->world);
+    assert(world != 0);
+    return world;
 }
 
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
@@ -329,7 +389,7 @@ typedef struct {
     // record of build_ids for all external linkages, in order of serialization for the current sysimg/pkgimg
     // conceptually, the base pointer for the jth externally-linked item is determined from
     //     i = findfirst(==(link_ids[j]), build_ids)
-    //     blob_base = ((image_metadata_t*)image_tree.ranges[i].data)->base
+    //     blob_base = ((image_metadata_t*)eyt_tree_range_data(&image_tree, i))->base
     // We need separate lists since they are intermingled at creation but split when written.
     jl_array_t *link_ids_relocs;
     jl_array_t *link_ids_gctags;
@@ -801,6 +861,8 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     }
     if (jl_is_mtable(v)) {
         jl_methtable_t *mt = (jl_methtable_t*)v;
+        // The contributor tags name this process's linkage blobs, so they are not saved
+        record_field_change((jl_value_t**)&mt->contributors, jl_an_empty_memory_any);
         // Any back-edges will be re-validated and added by staticdata.jl, so
         // drop them from the image here
         if (s->incremental || jl_options.trim || jl_options.strip_ir) {
@@ -860,13 +922,14 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                     (jl_is_string(inferred) && jl_string_len(inferred) > 0 && jl_string_data(inferred)[jl_string_len(inferred) - 1]);
                 int may_discard_trees = !jl_get_type_infer_preserve_ir();
                 int discard = 0;
-                if (may_discard_trees && s->incremental && native_functions &&
-                    jl_options.outputo != NULL && ci->owner == jl_nothing && def->source != NULL &&
+                if (may_discard_trees && native_functions &&
+                    jl_options.outputo != NULL && ci->owner == jl_nothing &&
+                    (def->source != NULL || def->generator != NULL) &&
                     jl_is_code_info(inferred) && jl_ir_inlining_cost(inferred) == UINT16_MAX) {
-                    // Backstop: CodeInstance cached by a task racing the end of
-                    // include phase can escape jl_finalize_precompile_inferred.
-                    // Mirror the def->source guard below so optimized opaque
-                    // closures (whose IR can't be reconstructed) are preserved.
+                    // Drop IR kept only for emitting this image. For a pkgimage this is a
+                    // backstop for a CodeInstance cached by a task racing the end of the
+                    // include phase, which can escape jl_finalize_precompile_inferred.
+                    // Optimized opaque closures keep theirs, since it can't be rebuilt.
                     record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
                 }
                 else if (!is_relocatable) {
@@ -1822,8 +1885,8 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                     if (isunion)
                         write_uint8(f, nth);
                 }
-                else if (t->name->mutabl && jl_is_cpointer_type(jl_field_type_concrete(t, i)) && *(intptr_t*)slot != -1) {
-                    // reset Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
+                else if (!jl_field_isconst(t, i) && jl_is_cpointer_type(jl_field_type_concrete(t, i)) && *(intptr_t*)slot != -1) {
+                    // reset non-const Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
                     assert(!jl_field_isptr(t, i));
                     write_pointer(f);
                 }
@@ -2218,8 +2281,8 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
 #endif
         assert(s->buildid_depmods_idxs && depsidx < jl_array_len(s->buildid_depmods_idxs));
         size_t i = jl_array_data(s->buildid_depmods_idxs, uint32_t)[depsidx];
-        assert(i < image_tree.nranges);
-        image_metadata_t *meta = (image_metadata_t*)image_tree.ranges[i].data;
+        image_metadata_t *meta = (image_metadata_t*)eyt_tree_range_data(&image_tree, i);
+        assert((void*)meta != EYT_NOTFOUND);
         return meta->base + offset*SYS_EXTERNAL_LINK_UNIT;
     }
     case ExternalLinkage: {
@@ -2230,8 +2293,8 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         *link_index += 1;
         assert(depsidx < jl_array_len(s->buildid_depmods_idxs));
         size_t i = jl_array_data(s->buildid_depmods_idxs, uint32_t)[depsidx];
-        assert(i < image_tree.nranges);
-        image_metadata_t *meta = (image_metadata_t*)image_tree.ranges[i].data;
+        image_metadata_t *meta = (image_metadata_t*)eyt_tree_range_data(&image_tree, i);
+        assert((void*)meta != EYT_NOTFOUND);
         return meta->base + offset*SYS_EXTERNAL_LINK_UNIT;
     }
     }
@@ -2288,17 +2351,16 @@ static void jl_read_reloclist(jl_serializer_state *s, jl_array_t *link_ids, uint
 {
     uintptr_t base = (uintptr_t)s->s->buf;
     uintptr_t last_pos = 0;
-    uint8_t *current = (uint8_t *)(s->relocs->buf + s->relocs->bpos);
+    ios_t *relocs = s->relocs;
+    uint8_t *current = (uint8_t *)(relocs->buf + relocs->bpos);
     int link_index = 0;
     while (1) {
         // Read the offset of the next object
         size_t pos_diff = 0;
         size_t cnt = 0;
         while (1) {
-            assert(s->relocs->bpos <= s->relocs->size);
-            assert((char *)current <= (char *)(s->relocs->buf + s->relocs->size));
+            assert((char *)current < (char *)(relocs->buf + relocs->size));
             int8_t c = *current++;
-            s->relocs->bpos += 1;
 
             pos_diff |= ((size_t)c & 0x7F) << (7 * cnt++);
             if ((c >> 7) == 0)
@@ -2316,6 +2378,7 @@ static void jl_read_reloclist(jl_serializer_state *s, jl_array_t *link_ids, uint
             v = (uintptr_t)((jl_datatype_t*)v)->smalltag << 4; // TODO: should we have a representation that supports sweep without a relocation step?
         *pv = v | bits;
     }
+    relocs->bpos = (char *)current - relocs->buf;
     assert(!link_ids || link_index == jl_array_len(link_ids));
 }
 
@@ -2323,16 +2386,15 @@ static void jl_read_memreflist(jl_serializer_state *s)
 {
     uintptr_t base = (uintptr_t)s->s->buf;
     uintptr_t last_pos = 0;
-    uint8_t *current = (uint8_t *)(s->relocs->buf + s->relocs->bpos);
+    ios_t *relocs = s->relocs;
+    uint8_t *current = (uint8_t *)(relocs->buf + relocs->bpos);
     while (1) {
         // Read the offset of the next object
         size_t pos_diff = 0;
         size_t cnt = 0;
         while (1) {
-            assert(s->relocs->bpos <= s->relocs->size);
-            assert((char *)current <= (char *)(s->relocs->buf + s->relocs->size));
+            assert((char *)current < (char *)(relocs->buf + relocs->size));
             int8_t c = *current++;
-            s->relocs->bpos += 1;
 
             pos_diff |= ((size_t)c & 0x7F) << (7 * cnt++);
             if ((c >> 7) == 0)
@@ -2347,6 +2409,7 @@ static void jl_read_memreflist(jl_serializer_state *s)
         size_t offset = (size_t)pv->ptr_or_offset;
         pv->ptr_or_offset = (void*)((char*)pv->mem->ptr + offset);
     }
+    relocs->bpos = (char *)current - relocs->buf;
 }
 
 
@@ -3105,7 +3168,7 @@ static void write_section(ios_t *f, ios_t *sec, size_t align, size_t skip, const
 // In addition to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
 static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                                            jl_array_t *module_init_order, jl_array_t *worklist, jl_array_t *extext_methods,
-                                           jl_array_t *new_ext, jl_query_cache *query_cache) JL_CANSAFEPOINT
+                                           jl_array_t *extext_records, jl_array_t *new_ext, jl_query_cache *query_cache) JL_CANSAFEPOINT
 {
     htable_new(&field_replace, 0);
     htable_new(&bits_replace, 0);
@@ -3310,8 +3373,9 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         }
         // step 1.1: as needed, serialize the data needed for insertion into the running system
         if (extext_methods) {
-            // Queue method extensions
+            // Queue method extensions and their activation records
             jl_queue_for_serialization(&s, extext_methods);
+            jl_queue_for_serialization(&s, extext_records);
             // Queue the new specializations
             jl_queue_for_serialization(&s, new_ext);
         }
@@ -3480,6 +3544,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             }
             jl_write_value(&s, module_init_order);
             jl_write_value(&s, extext_methods);
+            jl_write_value(&s, extext_records);
             jl_write_value(&s, new_ext);
             jl_write_value(&s, s.method_roots_list);
         }
@@ -3579,9 +3644,9 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     ios_t *f = (ios_t*)malloc_s(sizeof(ios_t));
     ios_mem(f, 0);
 
-    jl_array_t *mod_array = NULL, *extext_methods = NULL, *new_ext = NULL, *ext_foreign_cis = NULL;
+    jl_array_t *mod_array = NULL, *extext_methods = NULL, *extext_records = NULL, *new_ext = NULL, *ext_foreign_cis = NULL;
     int64_t datastartpos = 0;
-    JL_GC_PUSH4(&mod_array, &extext_methods, &new_ext, &ext_foreign_cis);
+    JL_GC_PUSH5(&mod_array, &extext_methods, &extext_records, &new_ext, &ext_foreign_cis);
 
     ext_foreign_cis = jl_alloc_vec_any(0);
 
@@ -3637,9 +3702,11 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
         ext_foreign_cis = NULL; // not needed anymore, free it
 
         // Collect method extensions
-        // extext_methods: [method1, ...], worklist-owned "extending external" methods added to functions owned by modules outside the worklist
+        // extext_methods: worklist-owned "extending external" methods added to functions owned by modules outside the worklist
+        // extext_records: in parallel, the ext_backinterferences of each (or nothing)
         extext_methods = jl_alloc_vec_any(0);
-        jl_collect_extext_methods(extext_methods, mod_array);
+        extext_records = jl_alloc_vec_any(0);
+        jl_collect_extext_methods(extext_methods, extext_records, mod_array);
 
         if (emit_split) {
             jl_clone_targets_t targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
@@ -3658,7 +3725,7 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     jl_query_cache query_cache;
     init_query_cache(&query_cache);
     jl_finalize_precompile_inferred(worklist != NULL && _native_data != NULL && jl_options.outputo != NULL);
-    jl_save_system_image_to_stream(f, mod_array, module_init_order, worklist, extext_methods, new_ext, &query_cache);
+    jl_save_system_image_to_stream(f, mod_array, module_init_order, worklist, extext_methods, extext_records, new_ext, &query_cache);
     if (_native_data != NULL)
         native_functions = NULL;
     // make sure we don't run any Julia code concurrently before this point
@@ -3880,6 +3947,24 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image) JL_C
 #endif
 }
 
+#if !defined(_OS_WINDOWS_) && defined(MADV_HUGEPAGE)
+// Return the file offset of the end of the object section of a split .ji, or `size`
+// if the header cannot be read.
+static size_t jl_image_split_ji_objects_end(ios_t *s, size_t size) JL_CANSAFEPOINT
+{
+    uint32_t flags, checksum;
+    int64_t datastartpos = 0, dataendpos = 0;
+    if (jl_read_verify_header(s, &flags, &checksum, &dataendpos, &datastartpos) != 0 ||
+        datastartpos <= 0 || (size_t)datastartpos >= size || ios_seek(s, datastartpos) != 0)
+        return size;
+    uint64_t sizeof_sysdata = read_uint64(s);
+    if (sizeof_sysdata >= size - datastartpos - sizeof(uint64_t))
+        return size;
+    return datastartpos + sizeof(uint64_t) + sizeof_sysdata;
+}
+#endif
+
+// Returns 0, with *dest NULL, if the .ji of a package image was not written with this .so.
 static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_CANSAFEPOINT
 {
     const char *lib_path = jl_pathname_for_handle(handle);
@@ -3911,9 +3996,26 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_
 
     ios_t s;
     size_t size;
+    uint32_t flags = 0, checksum = 0;
+    int64_t dataendpos = 0, datastartpos = 0;
     if (!ios_file(&s, ji_path, 1, 0, 0, 0))
         goto error;
     size = ios_filesize(&s);
+
+    // check that the .ji matches the .so before reading all of it
+    if (jl_read_verify_header(&s, &flags, &checksum, &dataendpos, &datastartpos) == 0) {
+        uint32_t *pchecksum;
+        JL_IMAGE_SYM(handle, jl_system_image_checksum, &pchecksum);
+        if (checksum != *pchecksum) {
+            ios_close(&s);
+            if (!(flags & JI_FLAG_PKGIMAGE))
+                jl_error("Image checksum mismatch: the heap image (.ji) was not "
+                         "compiled for use with this native image.");
+            *dest = NULL;
+            return 0;
+        }
+    }
+    ios_seek(&s, 0);
 
     if (use_mmap) {
 #ifdef _OS_WINDOWS_
@@ -3924,6 +4026,27 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_
         *dest = (char *)MapViewOfFile(map, FILE_MAP_COPY, 0, 0, size);
         CloseHandle(map);
         if (!*dest)
+            goto error;
+#elif defined(MADV_HUGEPAGE)
+        // Relocation writes to every page of the object section, and in a private file
+        // mapping each of those writes takes a copy-on-write fault, so read that part
+        // into anonymous memory backed by huge pages. The sections after it are mostly
+        // read-only or never touched, so keep them file-backed.
+        size_t readsize = LLT_ALIGN(jl_image_split_ji_objects_end(&s, size), jl_getpagesize());
+        if (readsize > size)
+            readsize = size;
+        *dest = (char *)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (*dest == MAP_FAILED)
+            goto error;
+        madvise(*dest, readsize, MADV_HUGEPAGE);
+        if (readsize < size &&
+            mmap(*dest + readsize, size - readsize, PROT_READ | PROT_WRITE,
+                 MAP_PRIVATE | MAP_FIXED, s.fd, readsize) == MAP_FAILED)
+            goto error;
+        if (ios_seek(&s, 0) != 0)
+            goto error;
+        ios_bufmode(&s, bm_none);
+        if (ios_readall(&s, *dest, readsize) != readsize)
             goto error;
 #else
         *dest = (char *)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, s.fd, 0);
@@ -3936,7 +4059,8 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_
         if (*dest == NULL)
             goto error;
         ios_bufmode(&s, bm_none);
-        ios_readall(&s, *dest, size);
+        if (ios_readall(&s, *dest, size) != size)
+            goto error;
     }
 
     ios_close(&s);
@@ -3960,6 +4084,8 @@ JL_DLLEXPORT void jl_image_unpack_split_zstd(void *handle, jl_image_buf_t *image
     size_t comp_size = jl_image_get_split_ji(handle, &comp_data, 0);
     image->is_split = 1;
     jl_image_load_metadata(handle, image);
+    if (comp_data == NULL) // checksum mismatch
+        return;
     jl_image_decompress(image, comp_data, comp_size);
     free(comp_data);
 }
@@ -4146,9 +4272,11 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                                 /* outputs */    jl_array_t **restored JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **init_order JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **extext_methods JL_REQUIRE_ROOTED_SLOT,
+                                                 jl_array_t **extext_records JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **internal_methods JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **method_roots_list JL_REQUIRE_ROOTED_SLOT,
-                                                 pkgcachesizes *cachesizes) JL_CANSAFEPOINT JL_GC_DISABLED
+                                                 pkgcachesizes *cachesizes,
+                                                 image_metadata_t **meta_out) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     jl_task_t *ct = jl_current_task;
     int en = jl_gc_enable(0);
@@ -4219,7 +4347,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
     assert(!ios_eof(f));
     s.s = f;
-    uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_new_ext = 0, offset_method_roots_list = 0;
+    uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_extext_records = 0, offset_new_ext = 0, offset_method_roots_list = 0;
     if (!s.incremental) {
         size_t i;
         for (i = 0; tags[i] != NULL; i++) {
@@ -4254,6 +4382,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         offset_restored = jl_read_offset(&s);
         offset_init_order = jl_read_offset(&s);
         offset_extext_methods = jl_read_offset(&s);
+        offset_extext_records = jl_read_offset(&s);
         offset_new_ext = jl_read_offset(&s);
         offset_method_roots_list = jl_read_offset(&s);
     }
@@ -4280,10 +4409,11 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     }
     uint32_t external_fns_begin = read_uint32(f);
     if (s.incremental) {
-        assert(restored && init_order && extext_methods && internal_methods && method_roots_list);
+        assert(restored && init_order && extext_methods && extext_records && internal_methods && method_roots_list);
         *restored = (jl_array_t*)jl_delayed_reloc(&s, offset_restored);
         *init_order = (jl_array_t*)jl_delayed_reloc(&s, offset_init_order);
         *extext_methods = (jl_array_t*)jl_delayed_reloc(&s, offset_extext_methods);
+        *extext_records = (jl_array_t*)jl_delayed_reloc(&s, offset_extext_records);
         (void)(jl_array_t*)jl_delayed_reloc(&s, offset_new_ext);
         *method_roots_list = (jl_array_t*)jl_delayed_reloc(&s, offset_method_roots_list);
         *internal_methods = jl_alloc_vec_any(0);
@@ -4675,7 +4805,12 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     image_metadata_t *meta = (image_metadata_t*)malloc_s(sizeof(image_metadata_t));
     meta->base = (uintptr_t)image_base;
     meta->relocs_base = (void*)relocs_base;
-    meta->idx = n_linkage_blobs();
+    meta->deps = NULL; // until the blob index is known
+    // the sysimage's methods are active by jl_require_world; a package image's
+    // are activated by the caller, which records the world
+    jl_atomic_store_relaxed(&meta->world, restored == NULL ? jl_require_world : 0);
+    if (meta_out)
+        *meta_out = meta;
     // adopt the image's coverage counters
     meta->coverage_compatible = jl_register_image_coverage(image->coverage, !s.incremental);
     if (restored == NULL) {
@@ -4693,13 +4828,15 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         if (!meta->coverage_compatible)
             meta->coverage_compatible = jl_coverage_plain_image_accepted(checksum, topmod->build_id.lo);
     }
-    eyt_tree_add_range(&image_tree,
+    // the tree assigns the index under its lock, as other images may be loading
+    meta->idx = eyt_tree_add_range(&image_tree,
         (uintptr_t)image_base,
         (uintptr_t)image_base + sizeof_sysimg,
         (void*)meta);
+    meta->deps = image_deps_new(meta->idx, depmods);
     jl_timing_counter_inc(JL_TIMING_COUNTER_ImageSize, sizeof_sysimg + sizeof(uintptr_t));
 
-    // jl_printf(JL_STDOUT, "%ld blobs to link against\n", image_tree.nranges);
+    // jl_printf(JL_STDOUT, "%ld blobs to link against\n", n_linkage_blobs());
     jl_gc_enable(en);
 
     if (s.incremental)
@@ -4785,9 +4922,9 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
     needs_permalloc = jl_options.permalloc_pkgimg || needs_permalloc;
 
     jl_value_t *restored = NULL;
-    jl_array_t *init_order = NULL, *extext_methods = NULL, *internal_methods = NULL, *method_roots_list = NULL;
+    jl_array_t *init_order = NULL, *extext_methods = NULL, *extext_records = NULL, *internal_methods = NULL, *method_roots_list = NULL;
     jl_svec_t *cachesizes_sv = NULL;
-    JL_GC_PUSH6(&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &cachesizes_sv);
+    JL_GC_PUSH7(&restored, &init_order, &extext_methods, &extext_records, &internal_methods, &method_roots_list, &cachesizes_sv);
 
     { // make a permanent in-memory copy of f (excluding the header)
         ios_bufmode(f, bm_none);
@@ -4812,7 +4949,8 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
                 ios_close(f);
             ios_static_buffer(f, sysimg, len);
             pkgcachesizes cachesizes;
-            jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &method_roots_list, &cachesizes);
+            image_metadata_t *meta = NULL;
+            jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &extext_records, &internal_methods, &method_roots_list, &cachesizes, &meta);
             JL_SIGATOMIC_END();
 
             // Add roots to methods
@@ -4838,7 +4976,8 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             size_t world = jl_atomic_load_relaxed(&jl_world_counter);
             if (new_methods)
                 world += 1;
-            jl_activate_methods(extext_methods, internal_methods, world, pkgname);
+            jl_atomic_store_relaxed(&meta->world, world); // before activation, which asks about this image's dependencies
+            jl_activate_methods(extext_methods, extext_records, internal_methods, world, pkgname, meta->idx);
             // TODO: inject internal_methods into caches here, so the system can see them immediately as potential candidates (before validation)
             // allow users to start running in this updated world
             if (new_methods)
@@ -4885,7 +5024,7 @@ static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image) JL_
     ios_t f_payload;
     ios_static_buffer(&f_payload, f->buf + datastartpos, f->size - datastartpos);
     jl_restore_system_image_from_stream_(&f_payload, image, NULL,
-                                         checksum, NULL, NULL, NULL, NULL, NULL, NULL);
+                                         checksum, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(jl_image_buf_t buf, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc) JL_CANSAFEPOINT
@@ -4933,6 +5072,13 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
 {
     void *pkgimg_handle = jl_dlopen_e(fname, JL_RTLD_LAZY);
     jl_image_buf_t buf = get_image_buf(pkgimg_handle, /* is_pkgimage */ 1);
+    if (buf.data == NULL) {
+        // unload it, so that a recompiled image at the same path is not served this handle
+        jl_dlclose(pkgimg_handle);
+        return jl_get_exceptionf(jl_errorexception_type,
+            "Image checksum mismatch: the heap image (.ji) was not "
+            "compiled for use with \"%s\".", fname);
+    }
 
     jl_gc_notify_image_load(buf.data, buf.size);
 

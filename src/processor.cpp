@@ -16,6 +16,7 @@
 #include "julia_internal.h"
 
 #include <algorithm>
+#include <climits>
 #include <vector>
 #include <string>
 
@@ -221,7 +222,7 @@ static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, 
         jl_pgcstack_getkey((jl_get_pgcstack_func_t*)pgcstack_func_slot, (jl_pgcstack_key_t*)pgcstack_key_slot);
 
         size_t *tls_offset_idx = pointers->ptls->tls_offset;
-        *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
+        *tls_offset_idx = (uintptr_t)jl_tls_offset;
     }
 
     res.jl_small_typeof = pointers->jl_small_typeof;
@@ -303,6 +304,8 @@ static std::string get_host_feature_string()
 // ============================================================================
 
 static std::vector<tp::LLVMTargetSpec> jit_targets;
+// The sysimage clone selected at load time (unset until a sysimage is loaded).
+static int32_t sysimage_matched_target_index = -1;
 
 // If cpu_target starts with "sysimage", replace it with the target string
 // stored in the loaded sysimage. Otherwise return as-is.
@@ -390,12 +393,35 @@ static void disable_native_bf16_codegen(std::string &features) JL_NOTSAFEPOINT
 static void disable_native_bf16_codegen(std::string &) JL_NOTSAFEPOINT {}
 #endif
 
+#if defined(_CPU_RISCV64_)
+// Generated code must follow the runtime's float ABI (see
+// `createTargetMachine`). For a target without the extensions it needs, LLVM
+// falls back to the soft-float ABI with only a warning, so always enable them
+// (and `zicsr`, which F implies).
+static void enable_float_abi_features(std::string &features) JL_NOTSAFEPOINT
+{
+#if defined(__riscv_float_abi_double)
+    const char *abi_features = "+zicsr,+f,+d";
+#elif defined(__riscv_float_abi_single)
+    const char *abi_features = "+zicsr,+f";
+#else
+    const char *abi_features = "";
+#endif
+    if (*abi_features && !features.empty())
+        features += ',';
+    features += abi_features;
+}
+#else
+static void enable_float_abi_features(std::string &) JL_NOTSAFEPOINT {}
+#endif
+
 // Apply Julia's adjustments to the LLVM feature string of a resolved target.
 // Every target whose features reach code generation (the JIT, multiversioning
 // clones, `@cpu_supports` CPU models) goes through this.
 static void finalize_codegen_target(tp::LLVMTargetSpec &spec) JL_NOTSAFEPOINT
 {
     disable_native_bf16_codegen(spec.cpu_features);
+    enable_float_abi_features(spec.cpu_features);
 }
 
 static std::vector<tp::LLVMTargetSpec> resolve_codegen_targets(const std::string &targets) JL_NOTSAFEPOINT
@@ -435,10 +461,55 @@ static void init_jit_targets(const char *cpu_target, bool imaging) JL_NOTSAFEPOI
 // Sysimage / pkgimage target matching
 // ============================================================================
 
+// Name the image's targets and the features that `target` lacks for the
+// closest one, using the same conflict test as `tp::match_targets`.
+static std::string incompatible_target_msg(const std::vector<tp::LLVMTargetSpec> &image_targets,
+                                           const tp::LLVMTargetSpec &target, bool is_sysimg)
+{
+    std::string msg = "Unable to find compatible target in cached code image.";
+    if (image_targets.empty())
+        return msg;
+    std::string names;
+    tp::FeatureBits closest_missing{};
+    unsigned closest_n = UINT_MAX;
+    size_t closest = 0;
+    for (size_t i = 0; i < image_targets.size(); i++) {
+        names += (i == 0 ? "" : ", ") + image_targets[i].cpu_name;
+        tp::FeatureBits missing;
+        tp::feature_and_out(&missing, &image_targets[i].en_features, &target.dis_features);
+        tp::feature_andnot(&missing, &missing, &tp::uarch_feature_mask);
+        unsigned n = tp::feature_popcount(&missing);
+        if (n < closest_n) {
+            closest_n = n;
+            closest = i;
+            closest_missing = missing;
+        }
+    }
+    msg += " It was compiled for " + names + ".";
+    if (closest_n > 0) {
+        // "+avx,+xsave" -> "avx, xsave"
+        std::string features;
+        for (char c : tp::build_feature_string(closest_missing)) {
+            if (c == '+')
+                continue;
+            features += c;
+            if (c == ',')
+                features += ' ';
+        }
+        msg += " The closest, " + image_targets[closest].cpu_name +
+               ", requires features that this CPU (" + target.cpu_name + ") lacks: " +
+               features + ".";
+    }
+    if (is_sysimg)
+        msg += " Please read https://docs.julialang.org/en/v1/devdocs/sysimg/ for more.";
+    return msg;
+}
+
 // Shared: deserialize image targets, match against a resolved target.
 // Returns {target_index, vreg_size} or {UINT32_MAX, 0} on failure.
 static std::pair<uint32_t, int> match_image_targets(
-        const void *id, const tp::LLVMTargetSpec &target, jl_value_t **rejection_reason) JL_CANSAFEPOINT
+        const void *id, const tp::LLVMTargetSpec &target, jl_value_t **rejection_reason,
+        bool is_sysimg) JL_CANSAFEPOINT
 {
     auto image_targets = tp::deserialize_targets((const uint8_t *)id);
     CF_DEBUG("[cpufeatures]   image has %zu target(s)\n", image_targets.size());
@@ -447,7 +518,7 @@ static std::pair<uint32_t, int> match_image_targets(
     if (match.best_idx < 0) {
         CF_DEBUG("[cpufeatures]   NO compatible target found!\n");
         if (rejection_reason) {
-            std::string msg = "Unable to find compatible target in cached code image.";
+            std::string msg = incompatible_target_msg(image_targets, target, is_sysimg);
             *rejection_reason = jl_pchar_to_string(msg.data(), msg.size());
         }
         return {UINT32_MAX, 0};
@@ -493,9 +564,12 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
 #endif
 
     // Match against image targets
-    auto match_result = match_image_targets(id, target, rejection_reason);
+    auto match_result = match_image_targets(id, target, rejection_reason, true);
     if (match_result.first == UINT32_MAX)
         return UINT32_MAX;
+
+    // Remember which sysimage clone was selected so Base can report it.
+    sysimage_matched_target_index = match_result.first;
 
     // Clamp JIT vector features to match the sysimage target's vector width.
     // On x86, AVX/AVX-512 change how VecElement tuples are passed in registers
@@ -552,7 +626,7 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
 static uint32_t match_pkgimg_target(void *ctx, const void *id, jl_value_t **rejection_reason) JL_CANSAFEPOINT
 {
     auto &target = jit_targets.front();
-    auto result = match_image_targets(id, target, rejection_reason);
+    auto result = match_image_targets(id, target, rejection_reason, false);
     return result.first;
 }
 
@@ -645,6 +719,16 @@ jl_value_t *jl_cpu_has_fma(int bits)
 #elif defined(_CPU_AARCH64_)
     if (bits == 32 || bits == 64)
         return jl_true;
+#elif defined(_CPU_RISCV64_)
+    if (!jit_targets.empty()) {
+        const auto &feats = jit_targets.front().en_features;
+        if (bits == 64 && tp::has_feature(feats, "d"))
+            return jl_true;
+        if (bits == 32 && tp::has_feature(feats, "f"))
+            return jl_true;
+        if (bits == 16 && tp::has_feature(feats, "zfh"))
+            return jl_true;
+    }
 #endif
     return jl_false;
 }
@@ -758,6 +842,11 @@ extern "C" jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
         auto &s = specs[i];
         jl_target_spec_t &ele = result.specs[i];
         ele.cpu_name = strdup(s.cpu_name.c_str());
+#if defined(_CPU_RISCV64_)
+        // Image code is linked by lld, which shrinks calls and jumps (`auipc`+`jalr` to
+        // `jal`) when the object marks them relaxable. The JIT keeps its target unchanged.
+        s.cpu_features += ",+relax";
+#endif
         ele.cpu_features = strdup(s.cpu_features.c_str());
         ele.base = s.base;
         ele.clone_all = (s.flags & tp::TF_CLONE_ALL) != 0;
@@ -1069,6 +1158,10 @@ extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
     uint8_t *out = jl_array_data(arr, uint8_t);
     memcpy(out, data.data(), data.size());
     return arr;
+}
+
+extern "C" JL_DLLEXPORT int32_t jl_get_sysimage_matched_target_index(void) {
+    return sysimage_matched_target_index;
 }
 
 extern "C" JL_DLLEXPORT jl_value_t *jl_get_sysimage_cpu_target(void) {

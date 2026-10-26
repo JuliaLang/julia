@@ -432,14 +432,14 @@ identify_package_env(name::String) = identify_package_env(nothing, name)
 
 function identify_stdlib_project_dep(stdlib::PkgId, depname::String)
     @debug """
-    Stdlib $(repr("text/plain", stdlib)) is trying to load `$depname`
+    Stdlib $(repr(MIME"text/plain"(), stdlib)) is trying to load `$depname`
     which is not listed as a dep in the load path manifests, so resorting to search
     in the stdlib Project.tomls for true deps"""
     stdlib_projfile = locate_project_file(joinpath(Sys.STDLIB, stdlib.name))
     stdlib_projfile === nothing && return nothing
     found = explicit_project_deps_get(stdlib_projfile, depname)
     if found !== nothing
-        @debug "$(repr("text/plain", stdlib)) indeed depends on $depname in project $stdlib_projfile"
+        @debug "$(repr(MIME"text/plain"(), stdlib)) indeed depends on $depname in project $stdlib_projfile"
         pkgid = PkgId(found, depname)
         return pkgid, stdlib_projfile
     end
@@ -1495,11 +1495,11 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         unlock(require_lock) # temporarily _unlock_ during these operations
         sv = try
             if ocachepath !== nothing
-                @debug "Loading object cache file $ocachepath for $(repr("text/plain", pkg))"
+                @debug "Loading object cache file $ocachepath for $(repr(MIME"text/plain"(), pkg))"
                 ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint),
                     ocachepath, depmods, #=completeinfo=#false, pkg.name, ignore_native)
             else
-                @debug "Loading cache file $path for $(repr("text/plain", pkg))"
+                @debug "Loading cache file $path for $(repr(MIME"text/plain"(), pkg))"
                 ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring),
                     path, depmods, #=completeinfo=#false, pkg.name)
             end
@@ -1535,7 +1535,7 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
                 return M
             end
         end
-        return ErrorException("Required dependency $(repr("text/plain", pkg)) failed to load from a cache file.")
+        return ErrorException("Required dependency $(repr(MIME"text/plain"(), pkg)) failed to load from a cache file.")
 
     finally
         timing_imports && cumulative_compile_timing(false)
@@ -2218,7 +2218,7 @@ function compilecache_freshest_path(pkg::PkgId;
         verify_checksums::Bool=true,
         unverified::Union{Nothing,Set{String}}=nothing,
         reasons::Union{Dict{Symbol,Int},Nothing}=nothing)
-    isnothing(sourcespec) && error("Cannot locate source for $(repr("text/plain", pkg))")
+    isnothing(sourcespec) && error("Cannot locate source for $(repr(MIME"text/plain"(), pkg))")
     @lock require_lock begin
     set_cache = LOADING_CACHE[] === nothing
     set_cache && (LOADING_CACHE[] = LoadingCache())
@@ -2347,7 +2347,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
     if loaded === nothing
         try
             modspec = locate_package_load_spec(modkey)
-            isnothing(modspec) && error("Cannot locate source for $(repr("text/plain", modkey))")
+            isnothing(modspec) && error("Cannot locate source for $(repr(MIME"text/plain"(), modkey))")
             set_pkgorigin_version_path(modkey, modspec.path)
             loaded = _require_search_from_serialized(modkey, modspec, build_id, true)
         finally
@@ -2357,6 +2357,9 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
             insert_extension_triggers(modkey)
             run_package_callbacks(modkey)
         end
+    elseif loaded isa Module && module_build_id(loaded) === build_id && register_reused_module(loaded)
+        insert_extension_triggers(modkey)
+        run_package_callbacks(modkey)
     end
     if loaded isa Module && PkgId(loaded) == modkey && module_build_id(loaded) === build_id
         return loaded
@@ -2381,11 +2384,10 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
             isfile(ocachepath) || return ArgumentError("Ocachepath $ocachepath is not a file.")
             ocachepath == ocachefile_from_cachefile(path) || return ArgumentError("$ocachepath is not the expected ocachefile")
             # TODO: Check for valid clone_targets?
-            isvalid_pkgimage_crc(io, ocachepath) || return ArgumentError("Invalid checksum in cache file $ocachepath.")
         else
             @assert ocachepath === nothing
+            isvalid_file_crc(io) || return ArgumentError("Invalid checksum in cache file $path.")
         end
-        isvalid_file_crc(io) || return ArgumentError("Invalid checksum in cache file $path.")
     finally
         close(io)
     end
@@ -2480,12 +2482,20 @@ end
                     mpre = get(preresolved_cachefiles, modkey, nothing)
                     modpaths = lazy_cachefile_candidates(modkey, modspec.path, DEPOT_PATH)
                     mpre !== nothing && (modpaths = Iterators.flatten(((mpre,), modpaths)))
+                    # a private load, such as a stdlib loaded by the REPL, still needs its cache checked against this environment
+                    privatedep = maybe_loaded_precompile(modkey, modbuild_id)
                     for modpath_to_try in modpaths
                         modtrusted = modpath_to_try === mpre
                         modstaledeps = stale_cachefile(modkey, modbuild_id, modspec, modpath_to_try;
-                                                       stalecheck = stalecheck && !modtrusted, verify_checksums = !modtrusted)
+                                                       stalecheck = stalecheck && !modtrusted, verify_checksums = !modtrusted && privatedep === nothing, split_checksums = false)
                         if modstaledeps === true
                             continue
+                        end
+                        if privatedep isa Module
+                            end_loading(modkey, privatedep)
+                            staledeps[i] = privatedep
+                            stalecheck && register_reused_module(privatedep) && push!(newdeps, modkey)
+                            continue next_dep
                         end
                         modstaledeps, modocachepath, _ = modstaledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
                         staledeps[i] = (modspec, modkey, modbuild_id, modpath_to_try, modstaledeps, modocachepath)
@@ -2499,7 +2509,7 @@ end
                     stalecheck && register_root_module(M)
                     return M
                 end
-                !trusted && checksums_invalid(path_to_try, ocachefile, newbuild_id, reasons) && continue next_path
+                !trusted && checksums_invalid(path_to_try, ocachefile, newbuild_id, reasons; split_checksums = false) && continue next_path
                 stalecheck && tried > 1 && touch_cachefile(pkg, path_to_try)
                 # finish loading module graph into staledeps
                 # n.b. this runs __init__ methods too early, so it is very unwise to have those, as they may see inconsistent loading state, causing them to fail unpredictably here
@@ -2541,6 +2551,7 @@ end
                     insert_extension_triggers(modkey)
                     stalecheck && run_package_callbacks(modkey)
                 end
+                empty!(newdeps)
             end
         end
     end
@@ -2561,7 +2572,7 @@ function canstart_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
     if loading === nothing
         loaded = stalecheck ? maybe_root_module(modkey) : nothing
         loaded isa Module && return loaded
-        if build_id != UInt128(0)
+        if !stalecheck && build_id != UInt128(0)
             loaded = maybe_loaded_precompile(modkey, build_id)
             loaded isa Module && return loaded
         end
@@ -2963,7 +2974,17 @@ function require(uuidkey::PkgId)
     end
     return invoke_in_world(world, __require, uuidkey)
 end
-__require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
+function __require(uuidkey::PkgId)
+    @lock require_lock begin
+    set_cache = LOADING_CACHE[] === nothing
+    set_cache && (LOADING_CACHE[] = LoadingCache())
+    try
+        return _require_prelocked(uuidkey)
+    finally
+        set_cache && (LOADING_CACHE[] = nothing)
+    end
+    end
+end
 # Enabled by `include_package_for_output` so the precompile worker can attribute
 # wall-clock time spent loading dependencies from disk. Only outermost (depth==0)
 # calls accumulate to avoid double-counting transitive `require`s.
@@ -3053,6 +3074,14 @@ end
     nothing
 end
 
+# A public load can reuse a module that was loaded privately, such as a stdlib loaded by the REPL.
+# Register it, so that it counts as loaded and extensions that it triggers can load.
+function register_reused_module(m::Module)
+    maybe_root_module(PkgId(m)) === nothing || return false
+    register_root_module(m)
+    return true
+end
+
 register_root_module(Core)
 register_root_module(Base)
 register_root_module(Main)
@@ -3115,7 +3144,7 @@ function __require_prelocked(pkg::PkgId, env)
     specenv = locate_package_env(pkg, env)
     if specenv === nothing
         throw(ArgumentError("""
-            Package $(repr("text/plain", pkg)) is required but does not seem to be installed:
+            Package $(repr(MIME"text/plain"(), pkg)) is required but does not seem to be installed:
              - Run `Pkg.instantiate()` to install all recorded dependencies.
             """))
     end
@@ -3144,7 +3173,7 @@ function __require_prelocked(pkg::PkgId, env)
     for (concrete_pkg, concrete_build_id) in _concrete_dependencies
         if pkg == concrete_pkg
             @warn """Module $(pkg.name) with build ID $((UUID(concrete_build_id))) is missing from the cache.
-                 This may mean $(repr("text/plain", pkg)) does not support precompilation but is imported by a module that does."""
+                 This may mean $(repr(MIME"text/plain"(), pkg)) does not support precompilation but is imported by a module that does."""
             if JLOptions().incremental != 0
                 # during incremental precompilation, this should be fail-fast
                 throw(PrecompilableError())
@@ -3195,7 +3224,7 @@ function __require_prelocked(pkg::PkgId, env)
                             # or an empty set of entries (indicating the precompile should be skipped)
                             if precompiled !== nothing
                                 isempty(precompiled) && return PrecompilableError() # oops, Precompilation forgot to report what this might actually be
-                                local cachefile = precompiled[1]
+                                local cachefile = precompiled[1]::String
                                 local ocachefile = nothing
                                 if JLOptions().use_pkgimages == 1
                                     ocachefile = ocachefile_from_cachefile(cachefile)
@@ -3229,14 +3258,14 @@ function __require_prelocked(pkg::PkgId, env)
                 if precompilableerror(loaded)
                     # Intentionally not logging - __precompile__(false) is not an error
                 else
-                    @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=loaded
+                    @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr(MIME"text/plain"(), pkg))" exception=loaded
                 end
                 # fall-through to loading the file locally if not incremental
             else
                 cachefile, ocachefile = loaded::Tuple{String, Union{Nothing, String}}
                 loaded = _tryrequire_from_serialized(pkg, cachefile, ocachefile)
                 if !isa(loaded, Module)
-                    @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=loaded
+                    @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr(MIME"text/plain"(), pkg))" exception=loaded
                 else
                     return loaded
                 end
@@ -3695,11 +3724,11 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
     # so request the image's instrumentation explicitly (later options win)
     append!(opts, coverage_cache_options(cacheflags))
     if output_o !== nothing
-        @debug "Generating object cache file for $(repr("text/plain", pkg))"
+        @debug "Generating object cache file for $(repr(MIME"text/plain"(), pkg))"
         cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
         push!(opts, "--output-o", output_o)
     else
-        @debug "Generating cache file for $(repr("text/plain", pkg))"
+        @debug "Generating cache file for $(repr(MIME"text/plain"(), pkg))"
         cpu_target = nothing
     end
     push!(opts, "--output-ji", output)
@@ -3802,7 +3831,7 @@ for important notes.
 function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(), loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false)
     @nospecialize internal_stderr internal_stdout
     spec = locate_package_load_spec(pkg)
-    spec === nothing && throw(ArgumentError("$(repr("text/plain", pkg)) not found during precompilation"))
+    spec === nothing && throw(ArgumentError("$(repr(MIME"text/plain"(), pkg)) not found during precompilation"))
     return compilecache(pkg, spec, internal_stderr, internal_stdout; flags, cacheflags, loadable_exts, signal_channel, report_timing)
 end
 
@@ -3905,7 +3934,7 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             # append extra crc to the end of the .ji file:
             open(tmppath, "r+") do f
                 if isvalid_cache_header(f) === nothing
-                    error("Incompatible header for $(repr("text/plain", pkg)) in new cache file $(repr(tmppath)).")
+                    error("Incompatible header for $(repr(MIME"text/plain"(), pkg)) in new cache file $(repr(tmppath)).")
                 end
                 seekend(f)
                 write(f, crc_so)
@@ -3913,8 +3942,9 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
                 write(f, _crc32c(f))
             end
 
-            # inherit permission from the source file (and make them writable)
-            chmod(tmppath, filemode(spec.path) & 0o777 | 0o200)
+            # inherit permission from the source file, but keep it readable and writable
+            # (`filemode` is 0 if the source has disappeared in the meantime)
+            chmod(tmppath, filemode(spec.path) & 0o777 | 0o600)
 
             # prune the directory with cache files
             if pkg.uuid !== nothing
@@ -3967,7 +3997,7 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
     if p.exitcode == 125
         return PrecompilableError()
     else
-        error("Failed to precompile $(repr("text/plain", pkg)) to $(repr(tmppath)) ($(Base.process_status(p))).")
+        error("Failed to precompile $(repr(MIME"text/plain"(), pkg)) to $(repr(tmppath)) ($(Base.process_status(p))).")
     end
 end
 
@@ -4025,7 +4055,7 @@ function isvalid_pkgimage_crc(f::IOStream, ocachefile::String)
 end
 
 # Cache files whose checksums passed in this process; a replaced file gets a new key.
-# Only the precompile driver's freshness scan uses it; loading always checks.
+# Only the precompile driver's freshness scan uses it; loading checks only .ji-only caches.
 const checksums_valid = Set{NTuple{2, NTuple{5, Float64}}}() # protected by require_lock
 
 file_identity(st::StatStruct) = (Float64(st.device), Float64(st.inode), Float64(st.size), st.mtime, st.ctime)
@@ -4035,7 +4065,10 @@ function checksum_key(io::IOStream, ocachefile::Union{Nothing, String})
     return (file_identity(stat(io)), oid)
 end
 
-function checksums_invalid(io::IOStream, cachefile::String, ocachefile::Union{Nothing, String}, reasons)
+# With `split_checksums = false` a package image with a .so is not checksummed: the loader
+# matches the .ji to its .so through the heap checksum embedded in the .so.
+function checksums_invalid(io::IOStream, cachefile::String, ocachefile::Union{Nothing, String}, reasons; split_checksums::Bool=true)
+    split_checksums || ocachefile === nothing || return false
     if !isvalid_file_crc(io)
         @debug "Rejecting cache file $cachefile because it has an invalid checksum"
         record_reason(reasons, :checksum_invalid)
@@ -4051,7 +4084,7 @@ end
 
 # With `unverified`, a file already in the record passes without being read and is added to `unverified`.
 function checksums_invalid(cachefile::String, ocachefile::Union{Nothing, String}, id_build::UInt128, reasons;
-                           unverified::Union{Nothing, Set{String}}=nothing)
+                           unverified::Union{Nothing, Set{String}}=nothing, split_checksums::Bool=true)
     io = try
         open(cachefile, "r")
     catch ex
@@ -4066,7 +4099,7 @@ function checksums_invalid(cachefile::String, ocachefile::Union{Nothing, String}
             @debug "Rejecting cache file $cachefile because it changed while being checked"
             return true
         end
-        unverified === nothing && return checksums_invalid(io, cachefile, ocachefile, reasons)
+        unverified === nothing && return checksums_invalid(io, cachefile, ocachefile, reasons; split_checksums)
         assert_havelock(require_lock)
         key = checksum_key(io, ocachefile)
         if key in checksums_valid
@@ -4641,9 +4674,9 @@ function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=compilec
             pid, hostname, age = @invokelatest parse_pidfile_hook(pidfile)
             verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
             if isempty(hostname) || hostname == gethostname()
-                @logmsg verbosity "Waiting for another process (pid: $pid) to finish precompiling $(repr("text/plain", pkg)). Pidfile: $pidfile"
+                @logmsg verbosity "Waiting for another process (pid: $pid) to finish precompiling $(repr(MIME"text/plain"(), pkg)). Pidfile: $pidfile"
             else
-                @logmsg verbosity "Waiting for another machine (hostname: $hostname, pid: $pid) to finish precompiling $(repr("text/plain", pkg)). Pidfile: $pidfile"
+                @logmsg verbosity "Waiting for another machine (hostname: $hostname, pid: $pid) to finish precompiling $(repr(MIME"text/plain"(), pkg)). Pidfile: $pidfile"
             end
             # wait until the lock is available, but don't actually acquire it
             # returning nothing indicates a process waited for another
@@ -4750,7 +4783,7 @@ function pkg_log_name(pkg::PkgId)
             manifest_file === nothing && continue
             for entry in get(Vector{Any}, get_deps(parsed_toml(manifest_file)), pkg.name)
                 entry_uuid = get(entry::Dict{String, Any}, "uuid", nothing)::Union{String, Nothing}
-                entry_uuid === nothing || UUID(entry_uuid) == uuid || return repr("text/plain", pkg)
+                entry_uuid === nothing || UUID(entry_uuid) == uuid || return repr(MIME"text/plain"(), pkg)
             end
         end
     end
@@ -4886,7 +4919,7 @@ end
 @constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modspec::PkgLoadSpec, cachefile::String;
                                           ignore_loaded::Bool=false, requested_flags::CacheFlags=CacheFlags(),
                                           reasons::Union{Dict{Symbol,Int},Nothing}=nothing, stalecheck::Bool=true,
-                                          verify_checksums::Bool=true)
+                                          verify_checksums::Bool=true, split_checksums::Bool=true)
     # n.b.: this function does nearly all of the file validation, not just those checks related to stale, so the name is potentially unclear
     io = try
         open(cachefile, "r")
@@ -5078,7 +5111,7 @@ end
                 # verify that `require(modkey, name(req_modkey))` ==> `req_modkey`
                 pkg = identify_package(modkey, req_modkey.name)
                 if pkg != req_modkey
-                    @debug "Rejecting cache file $cachefile because uuid mapping for $modkey => $req_modkey has changed, expected $modkey => $(repr("text/plain", pkg))"
+                    @debug "Rejecting cache file $cachefile because uuid mapping for $modkey => $req_modkey has changed, expected $modkey => $(repr(MIME"text/plain"(), pkg))"
                     record_reason(reasons, :dep_identity_changed)
                     return true
                 end
@@ -5088,7 +5121,7 @@ end
             end
         end
 
-        if verify_checksums && checksums_invalid(io, cachefile, ocachefile, reasons)
+        if verify_checksums && checksums_invalid(io, cachefile, ocachefile, reasons; split_checksums)
             return true
         end
 

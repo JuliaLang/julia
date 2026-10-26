@@ -45,16 +45,16 @@
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/#generator# slot₃/iterstate(single_assign) slot₄/x(single_assign) slot₅/y(single_assign)]
-    1   (call top.indexed_iterate slot₂/#generator# 1)
-    2   (= slot₄/x (call core.getfield %₁ 1))
-    3   (= slot₃/iterstate (call core.getfield %₁ 2))
-    4   slot₃/iterstate
-    5   (call top.indexed_iterate slot₂/#generator# 2 %₄)
-    6   (= slot₅/y (call core.getfield %₅ 1))
+    slots: [slot₁/#self#(!read) slot₂/ slot₃/x(single_assign) slot₄/y(single_assign) slot₅/(single_assign)]
+    1   (call top.indexed_iterate slot₂/ 1)
+    2   (= slot₃/x (call core.getfield %₁ 1))
+    3   (= slot₅/ (call core.getfield %₁ 2))
+    4   slot₅/
+    5   (call top.indexed_iterate slot₂/ 2 %₄)
+    6   (= slot₄/y (call core.getfield %₅ 1))
     7   TestMod.+
-    8   slot₄/x
-    9   slot₅/y
+    8   slot₃/x
+    9   slot₄/y
     10  (call %₇ %₈ %₉)
     11  (return %₁₀)
 14  latestworld
@@ -84,15 +84,15 @@
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/#generator# slot₃/iterstate(single_assign) slot₄/x(single_assign) slot₅/y(single_assign)]
-    1   (call top.indexed_iterate slot₂/#generator# 1)
-    2   (= slot₄/x (call core.getfield %₁ 1))
-    3   (= slot₃/iterstate (call core.getfield %₁ 2))
-    4   slot₃/iterstate
-    5   (call top.indexed_iterate slot₂/#generator# 2 %₄)
-    6   (= slot₅/y (call core.getfield %₅ 1))
-    7   slot₄/x
-    8   slot₅/y
+    slots: [slot₁/#self#(!read) slot₂/ slot₃/x(single_assign) slot₄/y(single_assign) slot₅/(single_assign)]
+    1   (call top.indexed_iterate slot₂/ 1)
+    2   (= slot₃/x (call core.getfield %₁ 1))
+    3   (= slot₅/ (call core.getfield %₁ 2))
+    4   slot₅/
+    5   (call top.indexed_iterate slot₂/ 2 %₄)
+    6   (= slot₄/y (call core.getfield %₅ 1))
+    7   slot₃/x
+    8   slot₄/y
     9   (call core.tuple %₇ %₈)
     10  (return %₉)
 14  latestworld
@@ -112,15 +112,15 @@
 28  (call core.svec %₂₅ %₂₆ %₂₇)
 29  (call core.define_method TestMod core.nothing %₂₈
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/#generator# slot₃/iterstate(single_assign) slot₄/x(single_assign) slot₅/y(!read,single_assign)]
-    1   (call top.indexed_iterate slot₂/#generator# 1)
-    2   (= slot₄/x (call core.getfield %₁ 1))
-    3   (= slot₃/iterstate (call core.getfield %₁ 2))
-    4   slot₃/iterstate
-    5   (call top.indexed_iterate slot₂/#generator# 2 %₄)
-    6   (= slot₅/y (call core.getfield %₅ 1))
+    slots: [slot₁/#self#(!read) slot₂/ slot₃/x(single_assign) slot₄/y(!read,single_assign) slot₅/(single_assign)]
+    1   (call top.indexed_iterate slot₂/ 1)
+    2   (= slot₃/x (call core.getfield %₁ 1))
+    3   (= slot₅/ (call core.getfield %₁ 2))
+    4   slot₅/
+    5   (call top.indexed_iterate slot₂/ 2 %₄)
+    6   (= slot₄/y (call core.getfield %₅ 1))
     7   TestMod.f
-    8   slot₄/x
+    8   slot₃/x
     9   (call %₇ %₈)
     10  (return %₉)
 30  latestworld
@@ -184,17 +184,17 @@ LoweringError:
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/#generator# slot₃/iterstate slot₄/x(!read,single_assign) slot₅/y(!read,single_assign)]
-    1   (call top.indexed_iterate slot₂/#generator# 1)
-    2   (= slot₄/x (call core.getfield %₁ 1))
-    3   (= slot₃/iterstate (call core.getfield %₁ 2))
-    4   slot₃/iterstate
-    5   (call top.indexed_iterate slot₂/#generator# 2 %₄)
+    slots: [slot₁/#self#(!read) slot₂/ slot₃/x(!read,single_assign) slot₄/y(!read,single_assign) slot₅/]
+    1   (call top.indexed_iterate slot₂/ 1)
+    2   (= slot₃/x (call core.getfield %₁ 1))
+    3   (= slot₅/ (call core.getfield %₁ 2))
+    4   slot₅/
+    5   (call top.indexed_iterate slot₂/ 2 %₄)
     6   (call core.getfield %₅ 1)
-    7   (= slot₃/iterstate (call core.getfield %₅ 2))
-    8   slot₃/iterstate
-    9   (call top.indexed_iterate slot₂/#generator# 3 %₈)
-    10  (= slot₅/y (call core.getfield %₉ 1))
+    7   (= slot₅/ (call core.getfield %₅ 2))
+    8   slot₅/
+    9   (call top.indexed_iterate slot₂/ 3 %₈)
+    10  (= slot₄/y (call core.getfield %₉ 1))
     11  TestMod.body
     12  (return %₁₁)
 14  latestworld
@@ -315,23 +315,23 @@ T[(x,y) for x in xs, y in ys]
 6   TestMod.T
 7   (call top._array_for %₆ %₃ %₄)
 8   (call top.LinearIndices %₇)
-9   (= slot₁/idx (call top.first %₈))
-10  (= slot₃/next (call top.iterate %₂))
-11  slot₃/next
+9   (= slot₁/ (call top.first %₈))
+10  (= slot₂/ (call top.iterate %₂))
+11  slot₂/
 12  (call core.=== %₁₁ core.nothing)
 13  (call top.not_int %₁₂)
 14  (gotoifnot %₁₃ label₄₉)
-15  slot₃/next
-16  (= slot₄/y (call core.getfield %₁₅ 1))
+15  slot₂/
+16  (= slot₃/y (call core.getfield %₁₅ 1))
 17  (call core.getfield %₁₅ 2)
-18  (= slot₂/next (call top.iterate %₁))
-19  slot₂/next
+18  (= slot₄/ (call top.iterate %₁))
+19  slot₄/
 20  (call core.=== %₁₉ core.nothing)
 21  (call top.not_int %₂₀)
 22  (gotoifnot %₂₁ label₄₃)
-23  slot₄/y
+23  slot₃/y
 24  (= slot₅/y %₂₃)
-25  slot₂/next
+25  slot₄/
 26  (= slot₆/x (call core.getfield %₂₅ 1))
 27  (call core.getfield %₂₅ 2)
 28  slot₆/x
@@ -339,18 +339,18 @@ T[(x,y) for x in xs, y in ys]
 30  (gotoifnot %₅ label₃₃)
 31  (call top.push! %₇ %₂₉)
 32  (goto label₃₅)
-33  slot₁/idx
+33  slot₁/
 34  (call top.setindex! %₇ %₂₉ %₃₃)
-35  slot₁/idx
-36  (= slot₁/idx (call top.add_int %₃₅ 1))
-37  (= slot₂/next (call top.iterate %₁ %₂₇))
-38  slot₂/next
+35  slot₁/
+36  (= slot₁/ (call top.add_int %₃₅ 1))
+37  (= slot₄/ (call top.iterate %₁ %₂₇))
+38  slot₄/
 39  (call core.=== %₃₈ core.nothing)
 40  (call top.not_int %₃₉)
 41  (gotoifnot %₄₀ label₄₃)
 42  (goto label₂₃)
-43  (= slot₃/next (call top.iterate %₂ %₁₇))
-44  slot₃/next
+43  (= slot₂/ (call top.iterate %₂ %₁₇))
+44  slot₂/
 45  (call core.=== %₄₄ core.nothing)
 46  (call top.not_int %₄₅)
 47  (gotoifnot %₄₆ label₄₉)

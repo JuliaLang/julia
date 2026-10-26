@@ -368,6 +368,7 @@ Inverse (modulo ``2^w``)* by Jeffrey Hurchalla](https://arxiv.org/abs/2204.04342
     The `invmod(n)` and `invmod(n, T)` methods require Julia 1.11 or later.
 """
 invmod(n::Integer, ::Type{T}) where {T<:BitInteger} = invmod(n % T)
+invmod(n, ::Type{Union{}}, slurp...) = throw(MethodError(invmod, (n, Union{}, slurp...)))
 
 function invmod(n::T) where {T<:BitInteger}
     isodd(n) || throw(DomainError(n, "Argument must be odd."))
@@ -1216,6 +1217,8 @@ end
 Return `true` if and only if the extrema `typemax(T)` and `typemin(T)` are defined.
 """
 hastypemax(::Type{T}) where {T} = applicable(typemax, T) && applicable(typemin, T)
+hastypemax(::Type{Union{}}) = false
+hastypemax(::Type{Union{}}, slurp...) = throw(MethodError(hastypemax, (Union{}, slurp...)))
 
 """
     digits!(array, n::Integer; base::Integer = 10)
@@ -1487,6 +1490,7 @@ function clamp(x, ::Type{T}) where {T<:Integer}
     hi = typemax(T)
     return (x > hi) ? hi : (x < lo) ? lo : convert(T, x)
 end
+clamp(x, ::Type{Union{}}, slurp...) = throw(MethodError(clamp, (x, Union{}, slurp...)))
 
 
 """

@@ -318,7 +318,7 @@ function du_visit!(ctx, state::DefUseState, e)
     elseif is_leaf(e) || is_quoted(e) ||
         k in (:local, :always_defined, :meta, :inbounds, :boundscheck, :noinline,
               :loopinfo, :decl, :with_static_parameters, :toplevel_butfirst, :global,
-              :globalref, :constdecl, :atomic, :isdefined, :toplevel, :module, :error,
+              :globalref, :constdecl, :atomic, :toplevel, :module, :error,
               :gc_preserve_begin, :gc_preserve_end, :export, :public, :inline)
 
         # Forms that don't interact with locals or affect control flow (likely more than is necessary).

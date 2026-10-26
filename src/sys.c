@@ -106,6 +106,69 @@ JL_DLLEXPORT int32_t jl_nb_available(ios_t *s)
 JL_DLLEXPORT char *jl_uv_fs_t_ptr(uv_fs_t *req) { return (char*)req->ptr; }
 JL_DLLEXPORT char *jl_uv_fs_t_path(uv_fs_t *req) { return (char*)req->path; }
 
+// --- streaming directory iteration ---
+// These wrap libuv's opendir/readdir/closedir so Julia does not depend on the uv_dir_t layout.
+
+JL_DLLEXPORT int jl_uv_fs_opendir(const char *path, uv_dir_t **dir_out) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    uv_fs_t req;
+    JL_SIGATOMIC_BEGIN();
+    int8_t gc_state = jl_gc_safe_enter(ct->ptls);
+    int ret = uv_fs_opendir(unused_uv_loop_arg, &req, path, NULL);
+    jl_gc_safe_leave(ct->ptls, gc_state);
+    *dir_out = ret < 0 ? NULL : (uv_dir_t*)req.ptr;
+    uv_fs_req_cleanup(&req);
+    JL_SIGATOMIC_END();
+    return ret;
+}
+
+// Read one entry and return its name as a String, storing the entry type in *status.
+// Returns nothing at end of directory (*status == 0) or on error (*status is the libuv error code).
+JL_DLLEXPORT jl_value_t *jl_uv_fs_readdir1(uv_dir_t *dir, int *status) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    uv_fs_t req;
+    uv_dirent_t ent = { NULL, UV_DIRENT_UNKNOWN };
+    jl_value_t *name = jl_nothing;
+    dir->dirents = &ent;
+    dir->nentries = 1;
+    JL_SIGATOMIC_BEGIN();
+    int8_t gc_state = jl_gc_safe_enter(ct->ptls);
+    int ret = uv_fs_readdir(unused_uv_loop_arg, &req, dir, NULL);
+    jl_gc_safe_leave(ct->ptls, gc_state);
+    JL_SIGATOMIC_END();
+    JL_GC_PUSH1(&name);
+    if (ret > 0) {
+        // Allocation is not allowed while signals are deferred. If it throws, only this entry's name leaks.
+        name = jl_cstr_to_string(ent.name);
+        *status = ent.type;
+    }
+    else {
+        *status = ret;
+    }
+    JL_SIGATOMIC_BEGIN();
+    uv_fs_req_cleanup(&req);
+    JL_SIGATOMIC_END();
+    JL_GC_POP();
+    dir->dirents = NULL;
+    dir->nentries = 0;
+    return name;
+}
+
+JL_DLLEXPORT int jl_uv_fs_closedir(uv_dir_t *dir) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    uv_fs_t req;
+    JL_SIGATOMIC_BEGIN();
+    int8_t gc_state = jl_gc_safe_enter(ct->ptls);
+    int ret = uv_fs_closedir(unused_uv_loop_arg, &req, dir, NULL);
+    jl_gc_safe_leave(ct->ptls, gc_state);
+    uv_fs_req_cleanup(&req);
+    JL_SIGATOMIC_END();
+    return ret;
+}
+
 // --- stat ---
 JL_DLLEXPORT int jl_sizeof_stat(void) { return sizeof(uv_stat_t); }
 
