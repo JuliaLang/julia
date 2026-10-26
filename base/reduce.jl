@@ -211,6 +211,7 @@ struct FlipArgs{F}
 end
 
 @inline (f::FlipArgs)(x, y) = f.f(y, x)
+@inline (op::BottomRF{<:FlipArgs})(::_InitialValue, x) = reduce_first(op.rf.f, x)
 
 """
     mapfoldr(f, op, itr; [init])
