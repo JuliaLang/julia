@@ -233,4 +233,63 @@ end
     end
 end
 
+# `Base.Experimental.prune_objcache` removes the entries not used recently and writes a
+# smaller copy of the cache.
+@testset "object-cache pruning" begin
+    mktempdir() do dir
+        cache = joinpath(dir, "cache")
+        julia(args...; path=cache) = addenv(`$(Base.julia_cmd()) --startup-file=no $args`,
+                                            "JULIA_OBJCACHE" => "1", "JULIA_OBJCACHE_PATH" => path)
+        kv_get = """ccall(:jl_objcache_kv_get, Any, (Cstring, Ptr{UInt8}, Csize_t), "prune-test", "key", 3)"""
+        # a large entry, so that removing it clearly shrinks the file
+        put_script = """
+            value = fill(0x2a, 4 << 20)
+            ccall(:jl_objcache_kv_put, Cint, (Cstring, Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+                  "prune-test", "key", 3, value, length(value))
+            # the write is queued, so wait until it is stored
+            for _ in 1:600
+                $kv_get === nothing || break
+                sleep(0.1)
+            end
+            print($kv_get !== nothing)
+        """
+        has_entry(path=cache) = read(julia("-e", "print($kv_get !== nothing)"; path), String) == "true"
+        prune(out, age) = read(julia("-e", "print(Base.Experimental.prune_objcache($(repr(out)); age=$age))"), String)
+
+        if read(julia("-e", put_script), String) != "true"
+            @test_skip false # the cache is disabled here
+            return
+        end
+        full_size = filesize(joinpath(cache, "data.mdb"))
+
+        # nothing is older than an hour, so the copy keeps every entry
+        kept = joinpath(dir, "kept")
+        @test prune(kept, 3600) == "0"
+        @test has_entry()
+        @test has_entry(kept)
+
+        # entries cannot age during a test, so remove them all with a cutoff in the future
+        pruned = joinpath(dir, "pruned")
+        @test parse(Int, prune(pruned, -10^6)) > 0
+        @test !has_entry()
+        # removing entries does not shrink the cache itself, only the copy
+        @test filesize(joinpath(cache, "data.mdb")) >= full_size
+        @test filesize(joinpath(pruned, "data.mdb")) < full_size ÷ 2
+        # the copy works as a cache
+        @test !has_entry(pruned)
+        @test read(julia("-e", put_script; path=pruned), String) == "true"
+
+        # an existing copy is not overwritten
+        out = IOBuffer()
+        cmd = julia("-e", "print(Base.Experimental.prune_objcache($(repr(pruned))))")
+        p = run(pipeline(ignorestatus(cmd); stdout=out, stderr=out))
+        msg = String(take!(out))
+        @test !success(p)
+        @test occursin("already exists", msg)
+    end
+
+    @test read(addenv(`$(Base.julia_cmd()) --startup-file=no -e "print(Base.Experimental.prune_objcache(mktempdir()))"`,
+                      "JULIA_OBJCACHE" => "0"), String) == "nothing"
+end
+
 sleep(5)  # Avoids problems where we don't respond to Distributed.jl fast enough
