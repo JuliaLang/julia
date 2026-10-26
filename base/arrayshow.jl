@@ -62,6 +62,7 @@ function alignment(io::IO, @nospecialize(X::AbstractVecOrMat),
         cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer,
         #= `size(X) may not infer, set this in caller =# ncols::Integer=size(X, 2)) where {T,V}
     a = Tuple{T, V}[]
+    width = 0
     for j in cols # need to go down each column one at a time
         l = r = 0
         for i in rows # plumb down and see what largest element sizes are
@@ -74,14 +75,15 @@ function alignment(io::IO, @nospecialize(X::AbstractVecOrMat),
             r = max(r, aij[2]) # right characters
         end
         push!(a, (l, r)) # one tuple per column of X, pruned to screen width
-        if length(a) > 1 && sum(map(sum,a)) + sep*length(a) >= cols_if_complete
-            pop!(a) # remove this latest tuple if we're already beyond screen width
+        width += l + r + sep
+        if length(a) > 1 && width >= cols_if_complete
+            width -= sum(pop!(a)) + sep # remove this latest tuple if we're already beyond screen width
             break
         end
     end
     if 1 < length(a) < ncols
-        while sum(map(sum,a)) + sep*length(a) >= cols_otherwise
-            pop!(a)
+        while width >= cols_otherwise
+            width -= sum(pop!(a)) + sep
         end
     end
     return a
