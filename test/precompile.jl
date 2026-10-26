@@ -5382,6 +5382,12 @@ end
     end
 end
 
+@testset "jl_set_newly_inferred rejects a typed vector" begin
+    @test_throws TypeError ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.CodeInstance[])
+    ccall(:jl_set_newly_inferred, Cvoid, (Any,), Any[])
+    ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
+end
+
 finish_precompile_test!()
 if original_num_precompile_tasks === nothing
     delete!(ENV, "JULIA_NUM_PRECOMPILE_TASKS")
