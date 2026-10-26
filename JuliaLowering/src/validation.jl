@@ -6,50 +6,60 @@ end
 ValidationDiagnostic(st::SyntaxTree, msg, loc) =
     ValidationDiagnostic(SyntaxList(st), String[msg], loc)
 
+struct ValidationUnknown end
+
 """
 The type returned by all `vst` functions.  There are three answers this can
 represent:
-  - valid `(true, nothing)`
-  - known-invalid `(false, [errors...])`
-  - don't know/not my job `(false, nothing)`.
+  - valid `nothing`
+  - known-invalid `[errors...]`
+  - don't know/not my job `ValidationUnknown()`
 """
 struct ValidationResult
-    ok::Bool
-    errors::Union{Nothing, Vector{ValidationDiagnostic}}
+    # Putting this in one field is somewhat of a hack to reduce stack size.
+    data::Union{Nothing, ValidationUnknown, Vector{ValidationDiagnostic}}
 end
 
-pass() = ValidationResult(true, nothing)
-unknown() = ValidationResult(false, nothing)
+is_known(vr::ValidationResult) = !(vr.data isa ValidationUnknown)
+validation_ok(vr::ValidationResult) = vr.data === nothing
+validation_errors(vr::ValidationResult) =
+    vr.data isa Vector{ValidationDiagnostic} ? vr.data : nothing
+pass() = ValidationResult(nothing)
+unknown() = ValidationResult(ValidationUnknown())
 @noinline fail(st::SyntaxTree, msg="invalid syntax", loc=nothing) =
-    ValidationResult(false, [ValidationDiagnostic(
+    ValidationResult([ValidationDiagnostic(
         st, msg, something(loc, LineNumberNode(0)))])
 macro fail(st, msg)
     esc(:($fail($st, $msg, $(QuoteNode(__source__)))))
 end
 
-is_known(vr::ValidationResult) = vr.ok || vr.errors !== nothing
 
-function Base.var"&"(vr1::ValidationResult, vr2::ValidationResult)
-    errors_out = isnothing(vr1.errors) ? vr2.errors :
-        isnothing(vr2.errors) ? vr1.errors :
-        union(vr1.errors, vr2.errors)
-    ValidationResult(vr1.ok & vr2.ok, errors_out)
+@inline function Base.var"&"(vr1::ValidationResult, vr2::ValidationResult)
+    if validation_ok(vr1)
+        vr2
+    elseif validation_ok(vr2)
+        vr1
+    else
+        e1 = validation_errors(vr1)
+        e2 = validation_errors(vr2)
+        ValidationResult(isnothing(e1) ? e2 : isnothing(e2) ? e1 : union(e1, e2))
+    end
 end
 
 # Note that this, unlike `&`, is only a true `|` in the case that at least one
 # argument is `ok` or at most one argument produces errors.  If both sides are
 # `!ok` with errors, use the first argument's errors.
-function Base.var"|"(vr1::ValidationResult, vr2::ValidationResult)
-    vr1.ok && return vr1
-    vr2.ok && return vr2
-    ValidationResult(false, !isnothing(vr1.errors) ? vr1.errors : vr2.errors)
+@inline function Base.var"|"(vr1::ValidationResult, vr2::ValidationResult)
+    (validation_ok(vr1) || validation_ok(vr2)) ? pass() :
+        is_known(vr1) ? vr1 :
+        is_known(vr2) ? vr2 : unknown()
 end
 
 abstract type ValidationContext end
 
 # `allv` recurses through the validators, so every frame must see the same `itr`
 # type, or recursion limiting widens it to an abstract `SubArray`.
-function allv(f::T, vcx::ValidationContext, itr::SyntaxView) where {T<:Function}
+@inline function allv(f::T, vcx::ValidationContext, itr::SyntaxView) where {T<:Function}
     ok = pass()
     for i in itr
         ok &= f(vcx, i)
@@ -363,7 +373,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         if vcx.toplevel
             top_vr
         else
-            !top_vr.ok ? unknown() :
+            !validation_ok(top_vr) ? unknown() :
                 @fail(st, "this syntax is only allowed at top level")
         end
     end | @fail(st, string(
@@ -453,7 +463,8 @@ function vst1_importpath(vcx, st; dots_ok)
             c = c[1]
         end
         # syntax todo: lhs should probably not be true here
-        ok = ok & (vst1_ident(vcx, c).ok ? pass() : vst1_ident(vcx, c; lhs=true))
+        ok = ok & (validation_ok(vst1_ident(vcx, c)) ?
+            pass() : vst1_ident(vcx, c; lhs=true))
         seen_first = true
     end
     return !seen_first ? @fail(st, "expected identifier in `importpath`") : ok
@@ -920,9 +931,9 @@ end
 # after anything that isn't a field.  See #62075.
 function _struct_noassign(vcx, body)
     for st in body
-        if head(st) === :(=) && vst1_struct_field(vcx, st[1]).ok
+        if head(st) === :(=) && validation_ok(vst1_struct_field(vcx, st[1]))
             return @fail(st, "assignment syntax in structure fields is reserved")
-        elseif !vst1_struct_field(vcx, st).ok
+        elseif !validation_ok(vst1_struct_field(vcx, st))
             return pass()
         end
     end
@@ -1158,12 +1169,12 @@ function valid_st0(st::SyntaxTree)
     vr = vst1(with(Validation1Context(), unexpanded=true), st)
     # hack: A macrocall can show up almost anywhere, so filter errors pointing
     # at macrocalls instead of adding cases to every function above.
-    isnothing(vr.errors) && return vr.ok
-    vr2_errors = filter(vr.errors) do err
+    errors = validation_errors(vr)
+    isnothing(errors) && return validation_ok(vr)
+    vr2_errors = filter(errors) do err
         isempty(err.sts) || !(head(err.sts[1]) === :macrocall)
     end
-    vr2 = ValidationResult(isempty(vr2_errors), vr2_errors)
-    return vr2.ok
+    return isempty(vr2_errors)
 end
 
 vst0(_, st) = vst1(with(Validation1Context(), unexpanded=true), st)

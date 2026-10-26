@@ -4675,13 +4675,15 @@ end
     ctx_out = DesugaringContext(sl, Bindings(), Dict{Int, IdTag}(), world)
     vr = valid_st1(ex)
     # surface only one error until we have pretty-printing for multiple
-    if !vr.ok
-        throw(LoweringError(vr.errors[1].sts, vr.errors[1].msgs, false))
+    if !validation_ok(vr)
+        errors = validation_errors(vr)
+        throw(LoweringError(errors[1].sts, errors[1].msgs, false))
     end
     ex_out = expand_forms_2(ctx_out, est_to_dst(ex))
     if DEBUG
         vr = valid_st2(ex_out)
-        !vr.ok && throw(LoweringError(vr.errors[1].sts, vr.errors[1].msgs, true))
+        !validation_ok(vr) && throw(LoweringError(
+            errors[1].sts, errors[1].msgs, true))
     end
     ctx_out, ex_out
 end

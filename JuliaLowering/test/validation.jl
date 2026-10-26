@@ -3,7 +3,7 @@
 
 function vst1_ok(x::Expr)
     est = JuliaLowering.expr_to_est(x)
-    JuliaLowering.valid_st1(est).ok
+    JuliaLowering.validation_ok(JuliaLowering.valid_st1(est))
 end
 
 let
