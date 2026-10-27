@@ -147,6 +147,9 @@ extern jl_gc_page_stack_t global_page_pool_lazily_freed;
 extern _Atomic(size_t) global_page_pool_lazily_freed_n;
 extern jl_gc_page_stack_t global_page_pool_clean;
 extern jl_gc_page_stack_t global_page_pool_freed;
+// A list of (base, size) pairs for each block allocated by
+// `jl_gc_try_alloc_pages_`.  We need this if we decide to tear down the heap.
+extern arraylist_t gc_page_blocks;
 
 /*
  * Simple lock-free stack implementation for `jl_gc_page_stack_t`.
