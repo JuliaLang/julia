@@ -781,6 +781,14 @@ if !Sys.iswindows()
     @test string(cmd_both) == "setgid(setuid(`echo test`, 1001), 1000)"
 end
 
+# Cmd equality and hashing take CPU affinity into account
+let a = setcpuaffinity(`ls`, [1]), b = `ls`
+    @test a != b
+    @test hash(a) != hash(b)
+    @test a == setcpuaffinity(`ls`, [1])
+    @test hash(a) == hash(setcpuaffinity(`ls`, [1]))
+end
+
 # test redaction of sensitive env vars in Cmd display
 @testset "Cmd env display redaction" begin
     cmd = setenv(`echo`, "API_KEY" => "secret123", "PATH" => "/usr/bin",
