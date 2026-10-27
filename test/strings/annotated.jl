@@ -331,6 +331,8 @@ end
     @test annregions("𝟏x", [(1:4, :face, :red)]) ==
         [("𝟏", [(:face, :red)]),
          ("x", [])]
+    # Empty strings have no regions
+    @test isempty(annregions("", Tuple{UnitRange{Int}, Symbol, Any}[]))
 end
 
 @testset "Replacement" begin

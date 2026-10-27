@@ -539,7 +539,7 @@ julia> collect(eachregion(AnnotatedString(
 ```
 """
 function eachregion(s::AnnotatedString, subregion::UnitRange{Int}=firstindex(s):lastindex(s))
-    isempty(s) || isempty(subregion) &&
+    (isempty(s) || isempty(subregion)) &&
         return RegionIterator(s.string, UnitRange{Int}[], Vector{Annotation}[])
     events = annotation_events(s, subregion)
     isempty(events) && return RegionIterator(s.string, [subregion], [Annotation[]])
