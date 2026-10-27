@@ -209,6 +209,9 @@ end
     @test testval("[1.0, 2.0, 3.0]", Float64[1.0, 2.0, 3.0])
     @test testval("[1.0, 2.0, 3]", Any[1.0, 2.0, Int64(3)])
     @test testval("[1.0, 2, \"foo\"]", Any[1.0, Int64(2), "foo"])
+    # Base's parser stores dates in internal structs
+    @test Base.TOML.parse(Base.TOML.Parser{nothing}("a = [1979-05-27, 1979-05-28]"))["a"] ==
+          Any[Base.TOML.Date(1979, 5, 27), Base.TOML.Date(1979, 5, 28)]
 end
 
 @testset "Inline tables - TOML v1.1" begin
