@@ -1983,7 +1983,7 @@ struct JL_GC_TRACKED_TYPE jl_cgval_t {
     Value *V; // may be of type T* or T, or set to NULL if ghost (or if the value has not been initialized yet, for a variable definition)
     // For unions, we may need to keep a reference to the boxed part individually.
     // If this is non-NULL, then, at runtime, we satisfy the invariant that (for the corresponding
-    // runtime values) if `(TIndex | UNION_BOX_MARKER) != 0`, then `Vboxed == V` (by value).
+    // runtime values) if `(TIndex & UNION_BOX_MARKER) != 0`, then `Vboxed == V` (by value).
     // For convenience, we also set this value of isboxed values, in which case
     // it is equal (at compile time) to V.
 
