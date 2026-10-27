@@ -722,9 +722,9 @@ typedef enum {
 typedef struct {
     uint32_t size;
     uint32_t nfields;
-    uint32_t npointers; // number of pointers embedded inside
+    uint32_t npointers; // number of pointers embedded inside, tagged union words included
     int32_t first_ptr; // index of the first pointer (or -1)
-    uint32_t ntaggedptrs; // number of tagged union words embedded inside
+    uint32_t ntaggedptrs; // how many of those pointers are tagged union words, which may hold an immediate
     uint16_t alignment; // strictest alignment over all fields
     struct { // combine these fields into a struct so that we can take addressof them
         uint16_t haspadding : 1; // has internal undefined bytes
@@ -752,11 +752,6 @@ typedef struct {
     //     uint8_t ptr8[npointers];
     //     uint16_t ptr16[npointers];
     //     uint32_t ptr32[npointers];
-    // };
-    // union { // offsets of tagged union words relative to data start in words
-    //     uint8_t tagged8[ntaggedptrs];
-    //     uint16_t tagged16[ntaggedptrs];
-    //     uint32_t tagged32[ntaggedptrs];
     // };
 } jl_datatype_layout_t;
 
@@ -1804,54 +1799,23 @@ static inline uint32_t jl_ptr_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
     }
 }
 
-static inline const char *jl_dt_layout_taggedptrs(const jl_datatype_layout_t *l) JL_NOTSAFEPOINT
-{
-    return jl_dt_layout_ptrs(l) +
-           (l->first_ptr < 0 ? 0 : jl_fielddesc_ptr_size(l->flags.fielddesc_type) * l->npointers);
-}
-
-// whether the i-th field is stored as a tagged union word: its offset appears
-// in the layout's tagged-slot table (callers additionally check that the field
-// type is a Union, since an inline struct field may start with a tagged slot
-// composed at the same offset)
+// whether the i-th field is stored as a tagged union word: a non-pointer field
+// whose word appears in the pointer table (callers additionally check that the
+// field type is a Union, since an inline struct field may start with a pointer
+// at the same offset)
 static inline int jl_field_istagged(jl_datatype_t *st, size_t i) JL_NOTSAFEPOINT
 {
     const jl_datatype_layout_t *ly = st->layout; // NOT jl_datatype_layout(st)
-    uint32_t nt = ly->ntaggedptrs;
-    if (nt == 0 || jl_field_isptr(st, i))
+    if (ly->ntaggedptrs == 0 || jl_field_isptr(st, i))
         return 0;
-    uint32_t offw = jl_field_offset(st, i) / sizeof(void*);
-    const void *tagged = jl_dt_layout_taggedptrs(ly);
-    for (uint32_t j = 0; j < nt; j++) {
-        uint32_t entry;
-        if (ly->flags.fielddesc_type == JL_FIELDDESC_8)
-            entry = ((const uint8_t*)tagged)[j];
-        else if (ly->flags.fielddesc_type == JL_FIELDDESC_16)
-            entry = ((const uint16_t*)tagged)[j];
-        else
-            entry = ((const uint32_t*)tagged)[j];
-        if (entry == offw)
+    uint32_t offs = jl_field_offset(st, i);
+    if (offs % sizeof(void*) != 0)
+        return 0;
+    for (uint32_t j = 0; j < ly->npointers; j++) {
+        if (jl_ptr_offset(st, j) == offs / sizeof(void*))
             return 1;
     }
     return 0;
-}
-
-// offset (in words) of the i-th tagged union word inside an instance
-static inline uint32_t jl_tagged_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
-{
-    const jl_datatype_layout_t *ly = st->layout; // NOT jl_datatype_layout(st)
-    assert(i >= 0 && (size_t)i < ly->ntaggedptrs);
-    const void *tagged = jl_dt_layout_taggedptrs(ly);
-    if (ly->flags.fielddesc_type == JL_FIELDDESC_8) {
-        return ((const uint8_t*)tagged)[i];
-    }
-    else if (ly->flags.fielddesc_type == JL_FIELDDESC_16) {
-        return ((const uint16_t*)tagged)[i];
-    }
-    else {
-        assert(ly->flags.fielddesc_type == JL_FIELDDESC_32);
-        return ((const uint32_t*)tagged)[i];
-    }
 }
 
 static inline int jl_field_isatomic(jl_datatype_t *st, int i) JL_NOTSAFEPOINT

@@ -73,22 +73,29 @@ is.
 
 ## Layout metadata
 
-`jl_datatype_layout_t` carries a third trailing table (after the fielddesc
-table and the pointer-offset table) listing the word offsets of the tagged
-slots of the type, with the count in `ntaggedptrs`; it is composed through
-nested inline structs exactly like the pointer table, and is enumerated with
-`jl_tagged_offset`. The fielddesc entry of a tagged union field reports
-`isptr = 0` and size 8; there is no selector byte. `Memory{U}` uses the
-element kind `arrayelem_istagged` (reported as `3` by
-`Base.datatype_arrayelem`), with element size 8 and no trailing selector
-bytes; memoryrefs are ordinary pointer-based refs.
+A tagged word is an entry of the layout's pointer table, like any other
+reference slot: `npointers` counts it, `first_ptr` may name it, and code that
+only asks whether a type holds references needs no change. Code that
+dereferences pointer-table entries skips any word that fails
+`jl_tagged_word_isptr`; for an unconditional pointer that test is the usual
+NULL check. `ntaggedptrs` counts how many of the `npointers` entries are tagged
+words, so `ntaggedptrs > 0` tells codegen that the type needs runtime handling.
+
+The fielddesc entry of a tagged union field reports `isptr = 0` and size 8;
+there is no selector byte, and `jl_field_istagged` recognizes the field by its
+word appearing in the pointer table. `Memory{U}` uses the element kind
+`arrayelem_istagged` (reported as `3` by `Base.datatype_arrayelem`), with
+element size 8, one pointer per element and no trailing selector bytes;
+memoryrefs are ordinary pointer-based refs.
 
 From Julia, `Base.istaggedunion(U)` reports whether `U` gets this layout, and
-`Base.datatype_ntaggedptrs(T)` counts the tagged words embedded in `T`.
+`Base.datatype_ntaggedptrs(T)` counts the tagged words among
+`Base.datatype_npointers(T)`.
 
-Structs holding tagged words are constrained exactly like structs holding
-pointers: they are never `pointerfree`, never `isbits`, and cannot be inlined
-into contexts that require pointer-free data (such as isbits-union members).
+Since tagged words are pointers in the layout, structs holding them are
+constrained exactly like structs holding references: they are never
+`pointerfree` or `isbits`, and an inline field of such a type is `#undef` when
+its first pointer is the zero word.
 
 ## Notes
 

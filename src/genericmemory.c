@@ -146,7 +146,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_ptr_to_genericmemory(jl_value_t *mtype, void
     int isunion = layout->flags.arrayelem_isunion;
     if (isboxed)
         elsz = sizeof(void*);
-    if (isunion || layout->flags.arrayelem_istagged || layout->ntaggedptrs > 0)
+    if (isunion || layout->ntaggedptrs > 0)
         jl_exceptionf(jl_argumenterror_type,
                       "unsafe_wrap: unspecified layout for union element type");
     if (((uintptr_t)data) & ((align > JL_HEAP_ALIGNMENT ? JL_HEAP_ALIGNMENT : align) - 1))
@@ -241,12 +241,7 @@ JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destda
         srcdata = (char*)src->ptr + elsz*(size_t)srcdata;
         destdata = (char*)dest->ptr + elsz*(size_t)destdata;
     }
-    if (layout->flags.arrayelem_istagged) {
-        jl_value_t *owner = jl_genericmemory_owner(dest);
-        jl_gc_wb_genericmemory_copy_tagged(owner, src, srcdata, n);
-        memmove_refs((_Atomic(void*)*)destdata, (_Atomic(void*)*)srcdata, n);
-    }
-    else if (layout->first_ptr != -1 || layout->ntaggedptrs > 0) {
+    if (layout->first_ptr != -1) {
         jl_value_t *owner = jl_genericmemory_owner(dest);
         jl_gc_genericmemory_copy_ptr(owner, destdata, src, srcdata, n, dt);
     }
@@ -279,7 +274,7 @@ jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t *mem, void *d
         memcpy(new_mem->ptr, (char*)mem->ptr + (size_t)data * elsz, len * elsz);
         memcpy(jl_genericmemory_typetagdata(new_mem), jl_genericmemory_typetagdata(mem) + (size_t)data, len);
     }
-    else if (layout->first_ptr != -1 || layout->ntaggedptrs > 0) {
+    else if (layout->first_ptr != -1) {
         if (data == NULL) {
             assert(len * elsz / sizeof(void*) == 0); // make static analyzer happy
         }
@@ -400,10 +395,6 @@ static int _jl_memoryref_isassigned(jl_genericmemoryref_t m, int isatomic)
     _Atomic(jl_value_t*) *elem = (_Atomic(jl_value_t*)*)m.ptr_or_offset;
     if (layout->flags.arrayelem_isboxed) {
     }
-    else if (layout->flags.arrayelem_istagged) {
-        _Atomic(uintptr_t) *p = (_Atomic(uintptr_t)*)elem;
-        return (isatomic ? jl_atomic_load(p) : jl_atomic_load_relaxed(p)) != 0;
-    }
     else if (layout->first_ptr >= 0) {
         elem = &elem[layout->first_ptr];
     }
@@ -520,7 +511,7 @@ void jl_memoryrefset(jl_genericmemoryref_t m, jl_value_t *rhs JL_ROOTED_BY_ARG(0
         data = (char*)m.mem->ptr + i * layout->size;
     }
     else {
-        hasptr = layout->first_ptr >= 0 || layout->ntaggedptrs > 0; // tagged words are conditional refs
+        hasptr = layout->first_ptr >= 0;
     }
     if (layout->size != 0) {
         assert(data - (char*)m.mem->ptr < layout->size * m.mem->length);

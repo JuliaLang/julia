@@ -52,13 +52,13 @@ istagged(u) = Base.istaggedunion(u)
     @test sizeof(Union{Int32, String}) == 8
     struct TU1; x::Union{Int32, String}; end
     @test Base.datatype_ntaggedptrs(TU1) == 1
-    @test Base.datatype_npointers(TU1) == 0
+    @test Base.datatype_npointers(TU1) == 1      # tagged words are pointers in the layout
     @test !Base.datatype_pointerfree(TU1)
     @test sizeof(TU1) == 8
     @test Base.datatype_arrayelem(Memory{Union{Int32, String}}) == 3
     struct TUNest; a::Int8; b::TU1; c::String; end
     @test Base.datatype_ntaggedptrs(TUNest) == 1
-    @test Base.datatype_npointers(TUNest) == 1
+    @test Base.datatype_npointers(TUNest) == 2
     @test fieldoffset(TUNest, 2) == 8
 end
 
@@ -72,6 +72,15 @@ end
 
 struct STU
     x::Union{UInt63, String}
+end
+
+struct TOnly  # its only reference slot is a tagged word
+    x::Union{Int32, String}
+end
+
+mutable struct HoldsTOnly
+    t::TOnly
+    HoldsTOnly() = new()
 end
 
 @testset "field semantics" begin
@@ -118,6 +127,21 @@ end
     d[STU("xyz" * "w")] = 2
     @test d[STU(UInt63(UInt64(9)))] == 1
     @test d[STU("xyzw")] == 2
+end
+
+@testset "#undef inline field whose only reference is tagged" begin
+    # the tagged word marks the inline value #undef, as the first pointer does
+    # for an inline struct holding references
+    h = HoldsTOnly()
+    isdef(h) = isdefined(h, :t)
+    getf(h) = h.t
+    @test !isdefined(h, :t)
+    @test !isdef(h)
+    @test_throws UndefRefError h.t
+    @test_throws UndefRefError getf(h)
+    h.t = TOnly(Int32(3))
+    @test isdef(h)
+    @test getf(h).x === Int32(3)
 end
 
 @testset "swap/modify/replace/setonce" begin

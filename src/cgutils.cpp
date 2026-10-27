@@ -3596,9 +3596,11 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
     }
     if (type_is_ghost(julia_type_to_llvm(ctx, jfty)))
         return ghostValue(ctx, jfty);
-    if (jl_is_uniontype(jfty) && jl_uniontype_istagged(jfty, NULL, NULL)) {
-        // TODO: direct codegen for tagged union words; decode through the
-        // runtime for now (throws UndefRefError for the zero word)
+    // TODO: direct codegen for tagged union words; decode through the runtime for
+    // now (throws UndefRefError for the zero word). That includes the #undef check
+    // of an inline value whose first pointer is a tagged word, which is an i64 to LLVM.
+    if ((jl_is_uniontype(jfty) && jl_uniontype_istagged(jfty, NULL, NULL)) ||
+        (!jl_field_isptr(jt, idx) && type_has_taggedunion(jfty) && field_may_be_null(strct, jt, idx))) {
         Value *fld = ctx.builder.CreateCall(prepare_call(jlgetnthfieldchecked_func),
                 { boxed(ctx, strct), ConstantInt::get(ctx.types().T_size, idx) });
         return mark_julia_type(ctx, fld, true, jfty);
@@ -4504,10 +4506,6 @@ static SmallVector<uint64_t, 4> get_gc_ptr_offsets(jl_datatype_t *jt)
             uint32_t ptr_offset = jl_ptr_offset(jt, i);
             offsets.push_back(ptr_offset * sizeof(void*));
         }
-        // a tagged union word holds a conditional reference, so it must read as
-        // the zero word (#undef) before the GC can reach the new object
-        for (uint32_t i = 0; i < layout->ntaggedptrs; i++)
-            offsets.push_back(jl_tagged_offset(jt, i) * sizeof(void*));
     }
     return offsets;
 }

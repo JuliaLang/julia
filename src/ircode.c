@@ -203,6 +203,16 @@ static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v) JL_CANS
     }
 }
 
+// In a type holding tagged union words, each pointer slot also carries its raw
+// word when that is an immediate (zero otherwise), since an immediate is not an
+// encodable value. Returns what remains to be encoded as the slot's value.
+static jl_value_t *write_tagged_slot_word(jl_ircode_state *s, jl_value_t *e) JL_NOTSAFEPOINT
+{
+    uintptr_t imm = jl_tagged_word_isptr((uintptr_t)e) ? 0 : (uintptr_t)e;
+    ios_write(s->s, (const char*)&imm, sizeof(imm));
+    return imm ? NULL : e;
+}
+
 static void jl_encode_memory_slice(jl_ircode_state *s, jl_genericmemory_t *mem, size_t offset, size_t len) JL_CANSAFEPOINT
 {
     jl_datatype_t *t = (jl_datatype_t*)jl_typetagof(mem);
@@ -214,10 +224,10 @@ static void jl_encode_memory_slice(jl_ircode_state *s, jl_genericmemory_t *mem, 
             jl_encode_value(s, e);
         }
     }
-    else if (layout->first_ptr >= 0 || layout->ntaggedptrs > 0) {
+    else if (layout->first_ptr >= 0) {
         uint16_t elsz = layout->size;
-        size_t j, np = layout->first_ptr >= 0 ? layout->npointers : 0;
-        size_t nt = layout->ntaggedptrs;
+        size_t j, np = layout->npointers;
+        int tagged = layout->ntaggedptrs > 0;
         const char *data = (const char*)mem->ptr + offset * elsz;
         for (i = 0; i < len; i++) {
             const char *start = data;
@@ -226,22 +236,16 @@ static void jl_encode_memory_slice(jl_ircode_state *s, jl_genericmemory_t *mem, 
                 const jl_value_t *const *fld = &((const jl_value_t *const *)data)[ptr];
                 if ((const char*)fld != start)
                     ios_write(s->s, start, (const char*)fld - start);
-                JL_GC_PROMISE_ROOTED(*fld);
-                jl_encode_value(s, *fld);
+                jl_value_t *e = (jl_value_t*)*fld;
+                if (tagged)
+                    e = write_tagged_slot_word(s, e);
+                JL_GC_PROMISE_ROOTED(e);
+                jl_encode_value(s, e);
                 start = (const char*)&fld[1];
             }
             data += elsz;
             if (data != start)
                 ios_write(s->s, start, data - start);
-            for (j = 0; j < nt; j++) {
-                // the raw bytes above already hold the word; a reference is
-                // additionally encoded as a value (NULL for immediate/#undef,
-                // whose raw bytes round-trip by themselves)
-                uintptr_t w = ((const uintptr_t*)(data - elsz))[jl_tagged_offset(t, j)];
-                jl_value_t *e = jl_tagged_word_isptr(w) ? (jl_value_t*)w : NULL;
-                JL_GC_PROMISE_ROOTED(e);
-                jl_encode_value(s, e);
-            }
         }
     }
     else {
@@ -525,6 +529,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal)
 
         char *data = (char*)jl_data_ptr(v);
         size_t i, j, np = t->layout->npointers;
+        int tagged = t->layout->ntaggedptrs > 0;
         uint32_t nf = t->layout->nfields;
         char *last = data;
         for (i = 0, j = 0; i < nf+1; i++) {
@@ -536,6 +541,8 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal)
                     if (prevptr > last)
                         ios_write(s->s, last, prevptr - last);
                     jl_value_t *e = *(jl_value_t**)prevptr;
+                    if (tagged)
+                        e = write_tagged_slot_word(s, e);
                     JL_GC_PROMISE_ROOTED(e);
                     jl_encode_value(s, e);
                     last = prevptr + sizeof(jl_value_t*);
@@ -552,16 +559,6 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal)
         char *ptr = data + jl_datatype_size(t);
         if (ptr > last)
             ios_write(s->s, last, ptr - last);
-        size_t nt = t->layout->ntaggedptrs;
-        for (i = 0; i < nt; i++) {
-            // the raw bytes above already hold the word; a reference is
-            // additionally encoded as a value (NULL for immediate/#undef,
-            // whose raw bytes round-trip by themselves)
-            uintptr_t w = ((uintptr_t*)data)[jl_tagged_offset(t, i)];
-            jl_value_t *e = jl_tagged_word_isptr(w) ? (jl_value_t*)w : NULL;
-            JL_GC_PROMISE_ROOTED(e);
-            jl_encode_value(s, e);
-        }
     }
     else {
         jl_encode_as_indexed_root(s, v);
@@ -621,12 +618,12 @@ static jl_genericmemory_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t
             jl_gc_write(m, data[i], jl_value_t, jl_decode_value(s));
         }
     }
-    else if (layout->first_ptr >= 0 || layout->ntaggedptrs > 0) {
+    else if (layout->first_ptr >= 0) {
         size_t i, numel = m->length;
         char *data = (char*)m->ptr;
         uint16_t elsz = layout->size;
-        size_t j, np = layout->first_ptr >= 0 ? layout->npointers : 0;
-        size_t nt = layout->ntaggedptrs;
+        size_t j, np = layout->npointers;
+        int tagged = layout->ntaggedptrs > 0;
         for (i = 0; i < numel; i++) {
             char *start = data;
             for (j = 0; j < np; j++) {
@@ -634,20 +631,16 @@ static jl_genericmemory_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t
                 jl_value_t **fld = &((jl_value_t**)data)[ptr];
                 if ((char*)fld != start)
                     ios_readall(s->s, start, (const char*)fld - start);
-                jl_gc_write(m, *fld, jl_value_t, jl_decode_value(s));
+                if (tagged)
+                    ios_readall(s->s, (char*)fld, sizeof(*fld)); // an immediate, or zero
+                jl_value_t *e = jl_decode_value(s);
+                if (e != NULL)
+                    jl_gc_write(m, *fld, jl_value_t, e);
                 start = (char*)&fld[1];
             }
             data += elsz;
             if (data != start)
                 ios_readall(s->s, start, data - start);
-            for (j = 0; j < nt; j++) {
-                // a NULL value means the raw word (immediate or #undef) stands
-                jl_value_t *e = jl_decode_value(s);
-                if (e != NULL) {
-                    jl_value_t **fld = &((jl_value_t**)(data - elsz))[jl_tagged_offset((jl_datatype_t*)mty, j)];
-                    jl_gc_write(m, *fld, jl_value_t, e);
-                }
-            }
         }
     }
     else {
@@ -780,6 +773,7 @@ static jl_value_t *jl_decode_value_any(jl_ircode_state *s) JL_CANSAFEPOINT
         jl_set_typetagof(v, dt->smalltag, 0);
     char *data = (char*)jl_data_ptr(v);
     size_t i, np = dt->layout->npointers;
+    int tagged = dt->layout->ntaggedptrs > 0;
     char *start = data;
     if (np) {
         if (sz > 0)
@@ -790,7 +784,11 @@ static jl_value_t *jl_decode_value_any(jl_ircode_state *s) JL_CANSAFEPOINT
             jl_value_t **fld = &((jl_value_t**)data)[ptr];
             if ((char*)fld != start)
                 ios_readall(s->s, start, (const char*)fld - start);
-            jl_gc_write(v, *fld, jl_value_t, jl_decode_value(s));
+            if (tagged)
+                ios_readall(s->s, (char*)fld, sizeof(*fld)); // an immediate, or zero
+            jl_value_t *e = jl_decode_value(s);
+            if (e != NULL)
+                jl_gc_write(v, *fld, jl_value_t, e);
             start = (char*)&fld[1];
         }
         JL_GC_POP();
@@ -798,20 +796,6 @@ static jl_value_t *jl_decode_value_any(jl_ircode_state *s) JL_CANSAFEPOINT
     data += jl_datatype_size(dt);
     if (data != start)
         ios_readall(s->s, start, data - start);
-    size_t nt = dt->layout->ntaggedptrs;
-    if (nt) {
-        data = (char*)jl_data_ptr(v);
-        JL_GC_PUSH1(&v);
-        for (i = 0; i < nt; i++) {
-            // a NULL value means the raw word (immediate or #undef) stands
-            jl_value_t *e = jl_decode_value(s);
-            if (e != NULL) {
-                jl_value_t **fld = &((jl_value_t**)data)[jl_tagged_offset(dt, i)];
-                jl_gc_write(v, *fld, jl_value_t, e);
-            }
-        }
-        JL_GC_POP();
-    }
     return v;
 }
 

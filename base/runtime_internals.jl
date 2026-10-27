@@ -735,7 +735,8 @@ datatype_npointers(dtl::DataTypeLayout) = dtl.npointers
 """
     Base.datatype_ntaggedptrs(dt::DataType)::Int
 
-Return the number of tagged union words in the layout of a datatype.
+Return how many of the pointers in the layout of a datatype are tagged union words,
+which may hold an immediate value instead of a reference.
 """
 datatype_ntaggedptrs(dt::DataType) = (@_foldable_meta; datatype_ntaggedptrs(DataTypeLayout(dt)))
 datatype_ntaggedptrs(dtl::DataTypeLayout) = dtl.ntaggedptrs
@@ -748,7 +749,7 @@ Can be called on any `isconcretetype`.
 """
 function datatype_pointerfree(dt::DataType)
     @_foldable_meta
-    return datatype_npointers(dt) == 0 && datatype_ntaggedptrs(dt) == 0
+    return datatype_npointers(dt) == 0
 end
 
 """

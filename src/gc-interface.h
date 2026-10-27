@@ -369,12 +369,6 @@ STATIC_INLINE void jl_gc_genericmemory_copy_boxed(const struct _jl_value_t *dest
 STATIC_INLINE void jl_gc_genericmemory_clear(const struct _jl_value_t *owner,
                                           struct _jl_genericmemory_t *m, char *data,
                                           size_t nbytes) JL_NOTSAFEPOINT;
-// Pre-copy barrier for elements of a Memory
-// of tagged union words (an element references an object exactly when its
-// word is nonzero with both low bits clear). Does not perform the copy.
-STATIC_INLINE void jl_gc_wb_genericmemory_copy_tagged(const struct _jl_value_t *owner,
-                                          struct _jl_genericmemory_t *src,
-                                          char* src_p, size_t n) JL_NOTSAFEPOINT;
 #ifdef __cplusplus
 }
 #endif

@@ -151,14 +151,11 @@ static uint32_t _hash_layout_djb2(uintptr_t _layout, void *unused) JL_NOTSAFEPOI
     const char *pointers = jl_dt_layout_ptrs(layout);
     assert(pointers);
     size_t pointers_size = layout->first_ptr < 0 ? 0 : (layout->npointers * jl_fielddesc_ptr_size(layout->flags.fielddesc_type));
-    const char *tagged = jl_dt_layout_taggedptrs(layout);
-    size_t tagged_size = layout->ntaggedptrs * jl_fielddesc_ptr_size(layout->flags.fielddesc_type);
 
     uint_t hash = 5381;
     hash = _hash_djb2(hash, (char *)layout, own_size);
     hash = _hash_djb2(hash, fields, fields_size);
     hash = _hash_djb2(hash, pointers, pointers_size);
-    hash = _hash_djb2(hash, tagged, tagged_size);
     return hash;
 }
 
@@ -178,11 +175,6 @@ static int layout_eq(void *_l1, void *_l2, void *unused) JL_NOTSAFEPOINT
     const char *p2 = jl_dt_layout_ptrs(l2);
     size_t pointers_size = l1->first_ptr < 0 ? 0 : (l1->npointers * jl_fielddesc_ptr_size(l1->flags.fielddesc_type));
     if (memcmp(p1, p2, pointers_size))
-        return 0;
-    const char *t1 = jl_dt_layout_taggedptrs(l1);
-    const char *t2 = jl_dt_layout_taggedptrs(l2);
-    size_t tagged_size = l1->ntaggedptrs * jl_fielddesc_ptr_size(l1->flags.fielddesc_type);
-    if (memcmp(t1, t2, tagged_size))
         return 0;
     return 1;
 }
@@ -206,8 +198,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
                                            int arrayelem,
                                            uint8_t unused_bits,
                                            jl_fielddesc32_t desc[],
-                                           uint32_t pointers[],
-                                           uint32_t taggedptrs[]) JL_NOTSAFEPOINT
+                                           uint32_t pointers[]) JL_NOTSAFEPOINT
 {
     assert(alignment); // should have been verified by caller
 
@@ -224,8 +215,6 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
     }
     if (npointers > 0 && pointers[npointers - 1] > max_offset)
         max_offset = pointers[npointers - 1];
-    if (ntaggedptrs > 0 && taggedptrs[ntaggedptrs - 1] > max_offset)
-        max_offset = taggedptrs[ntaggedptrs - 1];
     jl_fielddesc8_t maxdesc8 = { 0, max_size, max_offset };
     jl_fielddesc16_t maxdesc16 = { 0, max_size, max_offset };
     jl_fielddesc32_t maxdesc32 = { 0, max_size, max_offset };
@@ -243,8 +232,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
     // allocate a new descriptor, on the stack if possible.
     size_t fields_size = nfields * jl_fielddesc_size(fielddesc_type);
     size_t pointers_size = first_ptr < 0 ? 0 : (npointers * jl_fielddesc_ptr_size(fielddesc_type));
-    size_t tagged_size = ntaggedptrs * jl_fielddesc_ptr_size(fielddesc_type);
-    size_t flddesc_sz = sizeof(jl_datatype_layout_t) + fields_size + pointers_size + tagged_size;
+    size_t flddesc_sz = sizeof(jl_datatype_layout_t) + fields_size + pointers_size;
     int should_malloc = flddesc_sz >= jl_page_size;
     jl_datatype_layout_t *mallocmem = (jl_datatype_layout_t *)(should_malloc ? malloc(flddesc_sz) : NULL);
     jl_datatype_layout_t *allocamem = (jl_datatype_layout_t *)(should_malloc ? NULL : alloca(flddesc_sz));
@@ -300,22 +288,6 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
             }
             else {
                 ptrs32[i] = pointers[i];
-            }
-        }
-    }
-    if (ntaggedptrs > 0) {
-        uint8_t *tagged8 = (uint8_t *)jl_dt_layout_taggedptrs(flddesc);
-        uint16_t *tagged16 = (uint16_t *)jl_dt_layout_taggedptrs(flddesc);
-        uint32_t *tagged32 = (uint32_t *)jl_dt_layout_taggedptrs(flddesc);
-        for (size_t i = 0; i < ntaggedptrs; i++) {
-            if (fielddesc_type == JL_FIELDDESC_8) {
-                tagged8[i] = taggedptrs[i];
-            }
-            else if (fielddesc_type == JL_FIELDDESC_16) {
-                tagged16[i] = taggedptrs[i];
-            }
-            else {
-                tagged32[i] = taggedptrs[i];
             }
         }
     }
@@ -415,9 +387,7 @@ int jl_struct_try_layout(jl_datatype_t *dt)
 int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree)
 {
     if (ty->name->mayinlinealloc && jl_struct_try_layout(ty)) {
-        // tagged union words hold conditional references, so they constrain
-        // inlining exactly like unconditional pointers do
-        if (ty->layout->npointers > 0 || ty->layout->ntaggedptrs > 0) {
+        if (ty->layout->npointers > 0) {
             if (pointerfree)
                 return 0;
             if (ty->name->n_uninitialized != 0)
@@ -697,8 +667,6 @@ static void jl_get_genericmemory_layout(jl_datatype_t *st) JL_CANSAFEPOINT
     uint32_t first_ptr = -1;
     uint32_t *pointers = &first_ptr;
     uint32_t ntaggedptrs = 0;
-    uint32_t tagged_zero = 0;
-    uint32_t *taggedptrs = &tagged_zero;
     int needlock = 0;
 
     const jl_datatype_layout_t *el_layout = NULL;
@@ -732,18 +700,7 @@ static void jl_get_genericmemory_layout(jl_datatype_t *st) JL_CANSAFEPOINT
                     }
                 }
             }
-            if (el_layout->ntaggedptrs > 0) {
-                ntaggedptrs = el_layout->ntaggedptrs;
-                if (el_layout->flags.fielddesc_type == JL_FIELDDESC_32 && !needlock) {
-                    taggedptrs = (uint32_t*)jl_dt_layout_taggedptrs(el_layout);
-                }
-                else {
-                    taggedptrs = (uint32_t*)alloca(ntaggedptrs * sizeof(uint32_t));
-                    for (uint32_t j = 0; j < ntaggedptrs; j++) {
-                        taggedptrs[j] = jl_tagged_offset((jl_datatype_t*)eltype, j);
-                    }
-                }
-            }
+            ntaggedptrs = el_layout->ntaggedptrs;
         }
         if (needlock) {
             assert(al <= JL_SMALL_BYTE_ALIGNMENT);
@@ -763,17 +720,15 @@ static void jl_get_genericmemory_layout(jl_datatype_t *st) JL_CANSAFEPOINT
                     pointers[j] += lock_offset_words;
                 }
             }
-            for (uint32_t j = 0; j < ntaggedptrs; j++) {
-                taggedptrs[j] += lock_offset_words;
-            }
         }
     }
     else if (istagged) {
-        // one tagged union word per element
+        // one tagged union word per element, which is its only pointer
         elsz = sizeof(void*);
         al = elsz;
         zi = 1;
-        ntaggedptrs = 1; // taggedptrs[0] == 0
+        first_ptr = 0;
+        ntaggedptrs = 1;
     }
     else {
         elsz = sizeof(void*);
@@ -795,7 +750,7 @@ static void jl_get_genericmemory_layout(jl_datatype_t *st) JL_CANSAFEPOINT
     if (istagged)
         arrayelem |= 16;  // arrayelem_istagged
     assert(!st->layout);
-    st->layout = jl_get_layout(elsz, nfields, npointers, ntaggedptrs, al, haspadding, isbitsegal, arrayelem, 0, NULL, pointers, taggedptrs);
+    st->layout = jl_get_layout(elsz, nfields, npointers, ntaggedptrs, al, haspadding, isbitsegal, arrayelem, 0, NULL, pointers);
     st->zeroinit = zi;
     //st->has_concrete_subtype = 1;
     //st->isbitstype = 0;
@@ -979,6 +934,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                 al = fsz;
                 desc[i].isptr = 0;
                 zeroinit = 1;
+                npointers++;
                 ntagged++;
                 // TODO: bits-comparable when every reference member is pointer-egal
                 isbitsegal = 0;
@@ -1039,12 +995,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             pointers = (uint32_t*)malloc_s(npointers * sizeof(uint32_t));
         else
             pointers = (uint32_t*)alloca(npointers * sizeof(uint32_t));
-        uint32_t *taggedptrs;
-        if (should_malloc && ntagged)
-            taggedptrs = (uint32_t*)malloc_s(ntagged * sizeof(uint32_t));
-        else
-            taggedptrs = (uint32_t*)alloca(ntagged * sizeof(uint32_t));
-        size_t ptr_i = 0, tag_i = 0;
+        size_t ptr_i = 0;
         for (i = 0; i < nfields; i++) {
             jl_value_t *fld = jl_field_type(st, i);
             jl_value_t *layout_fld = normalize_typeofbottom_layout_alias(fld);
@@ -1057,23 +1008,17 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                 for (j = 0; j < fld_layout->npointers; j++) {
                     pointers[ptr_i++] = offset + jl_ptr_offset((jl_datatype_t*)layout_fld, j);
                 }
-                for (j = 0; j < fld_layout->ntaggedptrs; j++) {
-                    taggedptrs[tag_i++] = offset + jl_tagged_offset((jl_datatype_t*)layout_fld, j);
-                }
             }
             else if (jl_uniontype_istagged(fld, NULL, NULL)) {
-                taggedptrs[tag_i++] = offset;
+                pointers[ptr_i++] = offset;
             }
         }
         assert(ptr_i == npointers);
-        assert(tag_i == ntagged);
-        st->layout = jl_get_layout(sz, nfields, npointers, ntagged, alignm, haspadding, isbitsegal, 0, 0, desc, pointers, taggedptrs);
+        st->layout = jl_get_layout(sz, nfields, npointers, ntagged, alignm, haspadding, isbitsegal, 0, 0, desc, pointers);
         if (should_malloc) {
             free(desc);
             if (npointers)
                 free(pointers);
-            if (ntagged)
-                free(taggedptrs);
         }
         st->zeroinit = zeroinit;
     }
@@ -1247,7 +1192,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
     // how C lays out `_BitInt(N)`.
     uint32_t size = LLT_ALIGN(nbytes, alignm);
     uint8_t unused_bits = (uint8_t)(size * 8 - nbits);
-    bt->layout = jl_get_layout(size, 0, 0, 0, alignm, unused_bits != 0, 1, 0, unused_bits, NULL, NULL, NULL);
+    bt->layout = jl_get_layout(size, 0, 0, 0, alignm, unused_bits != 0, 1, 0, unused_bits, NULL, NULL);
     bt->instance = NULL;
     return bt;
 }
@@ -2188,8 +2133,7 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
             hasptr = 0;
         }
         else {
-            hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0 ||
-                     ((jl_datatype_t*)layout_ty)->layout->ntaggedptrs > 0; // tagged words are conditional refs
+            hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0;
         }
         size_t fsz = jl_datatype_size((jl_datatype_t*)rty); // need to shrink-wrap the final copy
         assert(!isatomic || jl_typeis(rhs, ty));
@@ -2221,8 +2165,7 @@ inline jl_value_t *swap_bits(jl_value_t *ty, char *v, uint8_t *psel, jl_value_t 
         hasptr = 0;
     }
     else {
-        hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0 ||
-                     ((jl_datatype_t*)layout_ty)->layout->ntaggedptrs > 0; // tagged words are conditional refs
+        hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0;
     }
     size_t fsz = jl_datatype_size((jl_datatype_t*)rty); // need to shrink-wrap the final copy
     int needlock = (isatomic && fsz > MAX_ATOMIC_SIZE);
@@ -2433,8 +2376,7 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
         hasptr = 0;
     }
     else {
-        hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0 ||
-                     ((jl_datatype_t*)layout_ty)->layout->ntaggedptrs > 0; // tagged words are conditional refs
+        hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0;
     }
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 2);
@@ -2573,8 +2515,7 @@ inline jl_value_t *replace_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value
     }
     else {
         rty = layout_ty;
-        hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0 ||
-                     ((jl_datatype_t*)layout_ty)->layout->ntaggedptrs > 0; // tagged words are conditional refs
+        hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0;
         assert(jl_typeis(rhs, ty));
     }
     int success;
@@ -2744,15 +2685,8 @@ static jl_value_t *get_nth_pointer(jl_value_t *v, size_t i)
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(v);
     const jl_datatype_layout_t *ly = dt->layout;
     uint32_t npointers = ly->npointers;
-    if (i >= npointers) {
-        // tagged union words are enumerated after the unconditional pointers;
-        // a slot currently holding an immediate (or #undef) reads as NULL
-        if (i < (size_t)npointers + ly->ntaggedptrs) {
-            uintptr_t w = ((uintptr_t*)v)[jl_tagged_offset(dt, i - npointers)];
-            return jl_tagged_word_isptr(w) ? (jl_value_t*)w : NULL;
-        }
+    if (i >= npointers)
         jl_bounds_error_int(v, i);
-    }
     if (ly->flags.fielddesc_type == JL_FIELDDESC_FOREIGN) {
         // Foreign types can report that they contain pointers for GC purposes,
         // but they do not expose an inline pointer-offset table to enumerate.
@@ -2768,7 +2702,9 @@ static jl_value_t *get_nth_pointer(jl_value_t *v, size_t i)
         fld = ptrs16[i];
     else
         fld = ptrs32[i];
-    return jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)(&((jl_value_t**)v)[fld]));
+    jl_value_t *ptrf = jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)(&((jl_value_t**)v)[fld]));
+    // a tagged union word holding an immediate reads as NULL, like #undef
+    return jl_tagged_word_isptr((uintptr_t)ptrf) ? ptrf : NULL;
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_nth_pointer(jl_value_t *v, size_t i)

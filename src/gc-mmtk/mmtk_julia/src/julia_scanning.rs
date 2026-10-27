@@ -318,39 +318,6 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
                 process_slot(closure, objary_begin);
                 objary_begin = objary_begin.shift::<Address>(1);
             }
-        } else if (*layout).flags.arrayelem_istagged() != 0 {
-            // one tagged union word per element
-            let length = (*m).length;
-            let mut objary_begin = Address::from_ptr((*m).ptr);
-            let objary_end = objary_begin.shift::<Address>(length as isize);
-            while objary_begin < objary_end {
-                process_tagged_slot(closure, objary_begin);
-                objary_begin = objary_begin.shift::<Address>(1);
-            }
-        } else if (*layout).ntaggedptrs > 0 {
-            // inline struct elements containing tagged union words (and
-            // possibly regular pointer slots)
-            let elsize = (*layout).size as usize / std::mem::size_of::<Address>();
-            let length = (*m).length;
-            let npointers = if (*layout).first_ptr >= 0 {
-                (*layout).npointers
-            } else {
-                0
-            };
-            let mut elem_begin = Address::from_ptr((*m).ptr);
-            let elem_end = elem_begin.shift::<Address>((length * elsize) as isize);
-            while elem_begin < elem_end {
-                for j in 0..npointers as isize {
-                    let offset = match (*layout).fielddesc_type_custom() {
-                        0 => mmtk_jl_dt_layout_ptrs(layout).shift::<u8>(j).load::<u8>() as isize,
-                        1 => mmtk_jl_dt_layout_ptrs(layout).shift::<u16>(j).load::<u16>() as isize,
-                        _ => mmtk_jl_dt_layout_ptrs(layout).shift::<u32>(j).load::<u32>() as isize,
-                    };
-                    process_slot(closure, elem_begin.shift::<Address>(offset));
-                }
-                mmtk_scan_tagged_slots(closure, elem_begin, layout);
-                elem_begin = elem_begin.shift::<Address>(elsize as isize);
-            }
         } else if (*layout).first_ptr >= 0 {
             let npointers = (*layout).npointers;
             let elsize = (*layout).size as usize / std::mem::size_of::<Address>();
@@ -360,7 +327,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
             if npointers == 1 {
                 objary_begin = objary_begin.shift::<Address>((*layout).first_ptr as isize);
                 while objary_begin < objary_end {
-                    process_slot(closure, objary_begin);
+                    process_pointer_table_slot(closure, objary_begin);
                     objary_begin = objary_begin.shift::<Address>(elsize as isize);
                 }
             } else if (*layout).fielddesc_type_custom() == 0 {
@@ -373,7 +340,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
                     while elem_begin < elem_end {
                         let elem_begin_loaded = elem_begin.load::<u8>();
                         let slot = objary_begin.shift::<Address>(elem_begin_loaded as isize);
-                        process_slot(closure, slot);
+                        process_pointer_table_slot(closure, slot);
                         elem_begin = elem_begin.shift::<u8>(1);
                     }
                     elem_begin = obj8_begin;
@@ -387,7 +354,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
                     while obj16_begin < obj16_end {
                         let elem_begin_loaded = obj16_begin.load::<u16>();
                         let slot = objary_begin.shift::<Address>(elem_begin_loaded as isize);
-                        process_slot(closure, slot);
+                        process_pointer_table_slot(closure, slot);
                         obj16_begin = obj16_begin.shift::<u16>(1);
                     }
                     obj16_begin = mmtk_jl_dt_layout_ptrs(layout);
@@ -422,10 +389,6 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
 
     let layout = (*vt).layout;
     let npointers = (*layout).npointers;
-    if (*layout).ntaggedptrs != 0 {
-        debug_assert!((*layout).fielddesc_type_custom() != 3);
-        mmtk_scan_tagged_slots(closure, obj, layout);
-    }
     if npointers != 0 {
         debug_assert!(
             (*layout).nfields > 0 && (*layout).fielddesc_type_custom() != 3,
@@ -438,7 +401,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
             while obj8_begin < obj8_end {
                 let obj8_begin_loaded = obj8_begin.load::<u8>();
                 let slot = obj.shift::<Address>(obj8_begin_loaded as isize);
-                process_slot(closure, slot);
+                process_pointer_table_slot(closure, slot);
                 obj8_begin = obj8_begin.shift::<u8>(1);
             }
         } else if (*layout).fielddesc_type_custom() == 1 {
@@ -448,7 +411,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
             while obj16_begin < obj16_end {
                 let obj16_begin_loaded = obj16_begin.load::<u16>();
                 let slot = obj.shift::<Address>(obj16_begin_loaded as isize);
-                process_slot(closure, slot);
+                process_pointer_table_slot(closure, slot);
                 obj16_begin = obj16_begin.shift::<u16>(1);
             }
         } else if (*layout).fielddesc_type_custom() == 2 {
@@ -458,7 +421,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
             while obj32_begin < obj32_end {
                 let obj32_begin_loaded = obj32_begin.load::<u32>();
                 let slot = obj.shift::<Address>(obj32_begin_loaded as isize);
-                process_slot(closure, slot);
+                process_pointer_table_slot(closure, slot);
                 obj32_begin = obj32_begin.shift::<u32>(1);
             }
         } else {
@@ -606,43 +569,18 @@ fn get_stack_addr(addr: Address, offset: isize, lb: u64, ub: u64) -> Address {
     }
 }
 
+// A pointer-table slot may be a tagged union word, which references an object
+// only when its low two bits are clear (jl_tagged_word_isptr); immediates are
+// skipped. Moving plans store a plain pointer, which keeps the encoding.
 #[inline(always)]
-// A tagged union word references an object exactly when it is nonzero with
-// both low bits clear (jl_tagged_word_isptr); immediate values (odd words),
-// the reserved pattern 10 and #undef (zero) are skipped.
-// Slot updates by moving plans store a plain pointer, preserving the encoding.
-#[inline(always)]
-pub fn process_tagged_slot<EV: SlotVisitor<JuliaVMSlot>>(closure: &mut EV, slot: Address) {
+pub fn process_pointer_table_slot<EV: SlotVisitor<JuliaVMSlot>>(closure: &mut EV, slot: Address) {
     let w = unsafe { slot.load::<usize>() };
-    if w != 0 && (w & 3) == 0 {
+    if w & 3 == 0 {
         process_slot(closure, slot);
     }
 }
 
-// walk the tagged-slot offset table of `layout` for the object (or inline
-// struct element) at `base`
 #[inline(always)]
-pub unsafe fn mmtk_scan_tagged_slots<EV: SlotVisitor<JuliaVMSlot>>(
-    closure: &mut EV,
-    base: Address,
-    layout: *const jl_datatype_layout_t,
-) {
-    let ntagged = (*layout).ntaggedptrs;
-    if ntagged == 0 {
-        return;
-    }
-    let fielddesc_type = (*layout).fielddesc_type_custom();
-    let tagged_begin = mmtk_jl_dt_layout_taggedptrs(layout);
-    for i in 0..ntagged as isize {
-        let offset = match fielddesc_type {
-            0 => tagged_begin.shift::<u8>(i).load::<u8>() as isize,
-            1 => tagged_begin.shift::<u16>(i).load::<u16>() as isize,
-            _ => tagged_begin.shift::<u32>(i).load::<u32>() as isize,
-        };
-        process_tagged_slot(closure, base.shift::<Address>(offset));
-    }
-}
-
 pub fn process_slot<EV: SlotVisitor<JuliaVMSlot>>(closure: &mut EV, slot: Address) {
     let simple_slot = SimpleSlot::from_address(slot);
 
@@ -747,17 +685,6 @@ pub unsafe fn mmtk_jl_svecref(vt: *mut jl_svec_t, i: usize) -> *const jl_datatyp
 pub unsafe fn mmtk_jl_dt_layout_ptrs(l: *const jl_datatype_layout_t) -> Address {
     mmtk_jl_dt_layout_fields(l)
         + (mmtk_jl_fielddesc_size((*l).fielddesc_type_custom()) * (*l).nfields) as usize
-}
-
-#[inline(always)]
-pub unsafe fn mmtk_jl_dt_layout_taggedptrs(l: *const jl_datatype_layout_t) -> Address {
-    let ptr_entry_size = 1usize << (*l).fielddesc_type_custom();
-    mmtk_jl_dt_layout_ptrs(l)
-        + if (*l).first_ptr < 0 {
-            0
-        } else {
-            ptr_entry_size * (*l).npointers as usize
-        }
 }
 
 #[inline(always)]

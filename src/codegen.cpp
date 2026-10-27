@@ -1730,7 +1730,7 @@ static bool jl_is_pointerfree(jl_value_t* t)
     if (!jl_is_concrete_immutable(t))
         return 0;
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)t)->layout;
-    return layout && layout->npointers == 0 && layout->ntaggedptrs == 0;
+    return layout && layout->npointers == 0;
 }
 
 // whether the layout embeds tagged union words (conditional references
