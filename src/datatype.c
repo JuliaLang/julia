@@ -2111,13 +2111,7 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
         int hasptr;
         int isunion = jl_is_uniontype(ty);
         if (isunion && jl_field_istagged(st, i)) {
-            uintptr_t w = jl_tagged_word_encode(ty, rhs);
-            _Atomic(uintptr_t) *slot = (_Atomic(uintptr_t)*)((char*)v + offs);
-            jl_gc_wb(v, slot, jl_tagged_word_isptr(w) ? (jl_value_t*)w : NULL);
-            if (isatomic)
-                jl_atomic_store(slot, w);
-            else
-                jl_atomic_store_release(slot, w);
+            jl_store_tagged_union_word(v, offs, ty, rhs, isatomic);
             return;
         }
         if (isunion) {
