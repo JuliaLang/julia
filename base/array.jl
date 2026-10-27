@@ -3025,7 +3025,7 @@ function filter(f, a::Array{T, N}) where {T, N}
 end
 
 function filter(f, a::AbstractArray)
-    (IndexStyle(a) != IndexLinear()) && return a[map(f, a)::AbstractArray{Bool}]
+    (IndexStyle(a) != IndexLinear()) && return a[map!(x -> f(x)::Bool, similar(a, Bool), a)]
 
     j = 1
     idxs = Vector{Int}(undef, length(a))
