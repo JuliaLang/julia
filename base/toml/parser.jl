@@ -1151,9 +1151,9 @@ for (name, T1, T2, n1, n2) in (("integer", Int64,  Int128,  17,  33),
         len = length(s)
         v = try
             if len ≤ $(n1)
-                Base.parse($(T1), s; base)
+                something(Base.tryparse($(T1), s; base), Base.parse($(T2), s; base))
             elseif $(n1) < len ≤ $(n2)
-                Base.parse($(T2), s; base)
+                something(Base.tryparse($(T2), s; base), Base.parse(BigInt, s; base))
             else
                 Base.parse(BigInt, s; base)
             end
