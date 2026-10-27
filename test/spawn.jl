@@ -682,6 +682,7 @@ mktempdir() do dir
     # simple commands still return Cmd (not wrapped in pipeline)
     @test `$echocmd hello` isa Cmd
     @test Meta.isexpr(Base.shell_parse("echo hello")[1], :tuple)
+    @test_throws "redirect operator without filename" Base.shell_parse("echo a > | cat")
 
     # Shell mode end-to-end tests
     # Use shell-escaped commands and paths so that shell_parse handles
