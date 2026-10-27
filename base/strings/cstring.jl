@@ -94,7 +94,7 @@ function cconvert(::Type{Cwstring}, v::Vector{Cwchar_t})
         v[i] == 0 &&
             throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(v))"))
     end
-    v[end] == 0 ||
+    !isempty(v) && v[end] == 0 ||
         throw(ArgumentError("C string data must be NUL terminated: $(repr(v))"))
     return cconvert(Ptr{Cwchar_t}, v)
 end
