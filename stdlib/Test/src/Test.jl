@@ -2603,9 +2603,7 @@ function is_in_mods(m::Module, recursive::Bool, mods)
 end
 
 """
-    detect_ambiguities(mod1, mod2...; recursive=false,
-                                      ambiguous_bottom=false,
-                                      allowed_undefineds=nothing)
+    detect_ambiguities(mod1, mod2...; recursive=false, ambiguous_bottom=false)
 
 Return a vector of `(Method,Method)` pairs of ambiguous methods
 defined in the specified modules.
@@ -2615,11 +2613,8 @@ Use `recursive=true` to test in all submodules.
 `Union{}` type parameters are included; in most cases you probably
 want to set this to `false`. See [`Base.isambiguous`](@ref).
 
-See [`Test.detect_unbound_args`](@ref) for an explanation of
-`allowed_undefineds`.
-
-!!! compat "Julia 1.8"
-    `allowed_undefineds` requires at least Julia 1.8.
+The keyword argument `allowed_undefineds` is accepted for compatibility
+but ignored; see [`Test.detect_unbound_args`](@ref).
 """
 function detect_ambiguities(mods::Module...;
                             recursive::Bool = false,
@@ -2752,9 +2747,7 @@ See also [`detect_closure_boxes`](@ref) to check specific modules.
 detect_closure_boxes_all_modules() = detect_closure_boxes(Base.loaded_modules_array()...)
 
 """
-    detect_unbound_args(mod1, mod2...; recursive=false,
-                                       ambiguous_bottom=false,
-                                       allowed_undefineds=nothing)
+    detect_unbound_args(mod1, mod2...; recursive=false, ambiguous_bottom=false)
 
 Return a vector of `Method`s which may have unbound type parameters: some
 call matching the method's signature does not pin every static parameter to
@@ -2782,20 +2775,15 @@ Methods are also not reported when none of the possibly-unbound parameters
 is read in the method's lowered body (querying a parameter with
 `@isdefined` does not count as a read, since it cannot throw).
 
-By default, any undefined symbols trigger a warning. This warning can
-be suppressed by supplying a collection of `GlobalRef`s for which
-the warning can be skipped. For example, setting
+The keyword argument `allowed_undefineds` is accepted for compatibility
+but ignored.
 
-```
-allowed_undefineds = Set([GlobalRef(Base, :active_repl),
-                          GlobalRef(Base, :active_repl_backend)])
-```
-
-would suppress warnings about `Base.active_repl` and
-`Base.active_repl_backend`.
-
-!!! compat "Julia 1.8"
-    `allowed_undefineds` requires at least Julia 1.8.
+!!! compat "Julia 1.12"
+    Before Julia 1.12, these functions printed a message for each undefined
+    name found while scanning the given modules, and `allowed_undefineds`
+    (a collection of `GlobalRef`s, added in Julia 1.8) suppressed it for the
+    listed names. Since Julia 1.12 they no longer scan module bindings, so
+    `allowed_undefineds` has no effect.
 
 !!! compat "Julia 1.14"
     `ambiguous_bottom` requires at least Julia 1.14.
