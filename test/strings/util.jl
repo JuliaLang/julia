@@ -750,6 +750,8 @@ end
 
     #non-hex characters
     @test_throws ArgumentError hex2bytes("0123456789abcdefABCDEFGH")
+    @test_throws ArgumentError hex2bytes(SubString("ĀĀ"))
+    @test_throws ArgumentError hex2bytes(SubString("\xff\xff"))
 
     @testset "Issue 23161" begin
         arr = b"0123456789abcdefABCDEF"
