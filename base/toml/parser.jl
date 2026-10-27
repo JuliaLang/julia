@@ -166,9 +166,9 @@ end
 
 function startup(l::Parser)
     # Populate our one character look-ahead
-    c = eat_char(l)
+    eat_char(l)
     # Skip BOM
-    if c === '\ufeff'
+    if peek(l) === '\ufeff'
         l.column -= 1
         eat_char(l)
     end
