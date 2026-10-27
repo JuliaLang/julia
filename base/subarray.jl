@@ -443,12 +443,6 @@ substrides(strds::NTuple{N,Int}, I::Tuple{AbstractRange, Vararg{Any}}) where N =
 substrides(strds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError(
     LazyString("strides is invalid for SubArrays with indices of type ", typeof(I[1]))))
 
-function stride(V::SubArray, d::Integer)
-    d <= ndims(V) && return strides(V)[d]
-    ndims(V) == 0 && return 1
-    return strides(V)[end] * size(V)[end]
-end
-
 compute_stride1(parent::AbstractArray, I::NTuple{N,Any}) where {N} =
     (@inline; compute_stride1(1, fill_to_length(axes(parent), OneTo(1), Val(N)), I))
 compute_stride1(s, inds, I::Tuple{}) = s
