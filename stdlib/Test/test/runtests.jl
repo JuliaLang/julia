@@ -1463,18 +1463,24 @@ erronce() = @error "an error" maxlog=1
     @test length(test_logger.logs) == 2
 
     # Test failures
+    ran = Ref(false)
     fails = @testset NoThrowTestSet "check that @test_logs detects bad input" begin
         @test_logs (Warn,) foo(1)
         @test_logs (Warn,) match_mode=:any @info "foo"
         @test_logs (Debug,) @debug "foo"
         @test_logs (Warn,) error()
+        @test_logs (Info,) match_mode=:exact (ran[] = true; @info "foo")
     end
-    @test length(fails) == 4
+    @test length(fails) == 5
     @test fails[1] isa Test.LogTestFailure
     @test fails[2] isa Test.LogTestFailure
     @test fails[3] isa Test.LogTestFailure
     @test fails[4] isa Test.Error
     @test startswith(fails[4].value, "ErrorException")
+    # an invalid `match_mode` is rejected before the expression is evaluated
+    @test fails[5] isa Test.Error
+    @test startswith(fails[5].value, "ArgumentError")
+    @test !ran[]
 end
 
 @testset "@test_logs broken/skip keywords" begin

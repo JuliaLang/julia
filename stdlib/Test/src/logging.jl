@@ -304,14 +304,16 @@ macro test_logs(exs...)
 end
 
 function match_logs(f, patterns...; match_mode::Symbol=:all, kwargs...)
-    logs,value = collect_test_logs(f; kwargs...)
+    match_mode === :all || match_mode === :any ||
+        throw(ArgumentError("`match_mode` must be `:all` or `:any`, got $(repr(match_mode))"))
+    logs, value = collect_test_logs(f; kwargs...)
     if match_mode === :all
         didmatch = length(logs) == length(patterns) &&
             all(occursin(p, l) for (p,l) in zip(patterns, logs))
-    elseif match_mode === :any
+    else # match_mode === :any
         didmatch = all(any(occursin(p, l) for l in logs) for p in patterns)
     end
-    didmatch,logs,value
+    return didmatch, logs, value
 end
 
 # TODO: Use a version of parse_level from stdlib/Logging, when it exists.
