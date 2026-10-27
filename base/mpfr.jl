@@ -405,6 +405,7 @@ function _opposite_round(r::MPFRRoundingMode)
 end
 
 function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=_precision_with_base_2(BigFloat), rounding::MPFRRoundingMode=rounding_raw(BigFloat))
+    base == 0 || 2 <= base <= 62 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
     !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s); base, precision, rounding)
     Base.containsnul(s) && return nothing
     z = BigFloat(precision=precision)
