@@ -488,13 +488,7 @@ void jl_memoryrefset(jl_genericmemoryref_t m, jl_value_t *rhs JL_ROOTED_BY_ARG(0
     if (layout->flags.arrayelem_istagged) {
         assert(jl_is_uniontype(eltype));
         assert(data - (char*)m.mem->ptr < layout->size * m.mem->length);
-        uintptr_t w = jl_tagged_word_encode(eltype, rhs);
-        _Atomic(uintptr_t) *p = (_Atomic(uintptr_t)*)data;
-        jl_gc_wb(jl_genericmemory_owner(m.mem), p, jl_tagged_word_isptr(w) ? (jl_value_t*)w : NULL);
-        if (isatomic)
-            jl_atomic_store(p, w);
-        else
-            jl_atomic_store_release(p, w);
+        jl_tagged_word_store(jl_genericmemory_owner(m.mem), (_Atomic(uintptr_t)*)data, eltype, rhs, isatomic);
         return;
     }
     if (layout->flags.arrayelem_isunion) {

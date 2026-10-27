@@ -1080,6 +1080,19 @@ STATIC_INLINE uintptr_t jl_tagged_word_encode(jl_value_t *u, jl_value_t *rhs JL_
     return (uintptr_t)((bits << k) | (2 * idx + 1));
 }
 
+// store a value of a member type of tagged union `u` into `slot`, which
+// `parent` owns, without any mutability or type checking
+STATIC_INLINE void jl_tagged_word_store(jl_value_t *parent, _Atomic(uintptr_t) *slot, jl_value_t *u,
+                                        jl_value_t *rhs JL_MAYBE_UNROOTED, int isatomic) JL_NOTSAFEPOINT
+{
+    uintptr_t w = jl_tagged_word_encode(u, rhs);
+    jl_gc_wb(parent, slot, jl_tagged_word_isptr(w) ? (jl_value_t*)w : NULL);
+    if (isatomic)
+        jl_atomic_store(slot, w);
+    else
+        jl_atomic_store_release(slot, w);
+}
+
 // decode a tagged union word: NULL for the zero word (#undef), the stored
 // object for a pointer word, a freshly allocated box for an immediate
 STATIC_INLINE jl_value_t *jl_tagged_word_decode(jl_value_t *u, uintptr_t w) JL_CANSAFEPOINT

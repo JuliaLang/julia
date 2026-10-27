@@ -2111,7 +2111,7 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
         int hasptr;
         int isunion = jl_is_uniontype(ty);
         if (isunion && jl_field_istagged(st, i)) {
-            jl_store_tagged_union_word(v, offs, ty, rhs, isatomic);
+            jl_tagged_word_store(v, (_Atomic(uintptr_t)*)((char*)v + offs), ty, rhs, isatomic);
             return;
         }
         if (isunion) {
@@ -2216,13 +2216,7 @@ inline jl_value_t *swap_bits(jl_value_t *ty, char *v, uint8_t *psel, jl_value_t 
 // `new` initialization and setfield!)
 JL_DLLEXPORT void jl_store_tagged_union_word(jl_value_t *parent, size_t offset, jl_value_t *u, jl_value_t *rhs, int isatomic) JL_NOTSAFEPOINT
 {
-    uintptr_t w = jl_tagged_word_encode(u, rhs);
-    _Atomic(uintptr_t) *slot = (_Atomic(uintptr_t)*)((char*)parent + offset);
-    jl_gc_wb(parent, slot, jl_tagged_word_isptr(w) ? (jl_value_t*)w : NULL);
-    if (isatomic)
-        jl_atomic_store(slot, w);
-    else
-        jl_atomic_store_release(slot, w);
+    jl_tagged_word_store(parent, (_Atomic(uintptr_t)*)((char*)parent + offset), u, rhs, isatomic);
 }
 
 // tagged union slots are a single word, so their swap/modify/replace/setonce
