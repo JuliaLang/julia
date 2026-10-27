@@ -2081,8 +2081,10 @@ struct JL_GC_TRACKED_TYPE jl_cgval_t {
         promotion_point(v.promotion_point),
         promotion_ssa(v.promotion_ssa)
     {
-        if (Vboxed)
+        if (Vboxed) {
             assert(Vboxed->getType() == JuliaType::get_prjlvalue_ty(Vboxed->getContext()));
+            assert(V);
+        }
         // this constructor expects we had a badly or equivalently typed version
         // make sure we aren't discarding the actual type information
         if (v.TIndex) {
@@ -2115,7 +2117,7 @@ struct JL_GC_TRACKED_TYPE jl_cgval_t {
                 allunbox = true;
             }
             assert(v.TIndex || inline_roots.size() == inline_roots_count);
-            if (V == nullptr && constant == nullptr && !isghost && (inline_roots_count == 0 || (!tindex && !justpointers)))
+            if (V == nullptr && constant == nullptr && !isghost && !tindex && (inline_roots_count == 0 || !justpointers))
                 *this = jl_cgval_t(); // no data to populate this value
             else if (inline_roots_count < inline_roots.size())
                 inline_roots.truncate(inline_roots_count); // drop excess roots
@@ -6879,6 +6881,9 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r) J
                     ptr = ctx.builder.CreateSelect(isboxed,
                         decay_derived(ctx, ptr_phi),
                         decay_derived(ctx, phi));
+                }
+                else {
+                    ptr = decay_derived(ctx, ptr_phi);
                 }
             }
             jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, ai, jl_gc_roots_t(ArrayRef(roots)));
