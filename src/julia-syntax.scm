@@ -4102,7 +4102,7 @@ f(x) = yt(x)
         (unused (table))  ;; variables not (yet) used (read from) in the current block
         (live   (table))  ;; variables that have been set in the current block
         (seen   (table))) ;; all variables we've seen assignments to
-    ;; Collect candidate variables: those that are only assigned once. 
+    ;; Collect candidate variables: those that are only assigned once.
     ;; This populates the initial `unused` table.
     (for-each (lambda (v)
                 (if (vinfo:sa v)
