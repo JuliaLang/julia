@@ -227,6 +227,7 @@ Base.isfieldatomic
 
 ```@docs
 Base.sizeof(::Type)
+Core.bitsizeof
 Base.isconcretetype
 Base.isbits
 Base.isbitstype

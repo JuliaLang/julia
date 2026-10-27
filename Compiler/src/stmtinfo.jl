@@ -63,13 +63,18 @@ function record_invoke_edge!(invokes::IdDict{Any,Vector{Any}},
                              @nospecialize(signature), @nospecialize(target))
     signatures = get!(Vector{Any}, invokes, target)
     for previous in signatures
-        previous == signature && return false
+        if isa(previous, Type) && isa(signature, Type)
+            previous == signature && return false
+        elseif previous == signature
+            return false
+        end
     end
     push!(signatures, signature)
     return true
 end
 
-function _materialize_inference_edges!(edges::Vector{Any}, source,
+# `source` is typed so that the recursion on `edge.edges` does not widen it to `Any`
+function _materialize_inference_edges!(edges::Vector{Any}, source::Union{Vector{Any},SimpleVector},
                                        seen_proofs::IdSet{LocalInferenceProof},
                                        standalone::IdDict{Any,Bool},
                                        invokes::IdDict{Any,Vector{Any}})
@@ -131,7 +136,7 @@ function _materialize_inference_edges!(edges::Vector{Any}, source,
     return nothing
 end
 
-function materialize_inference_edges(source)
+function materialize_inference_edges(source::Union{Vector{Any},SimpleVector})
     has_local_proof = false
     for edge in source
         if edge isa LocalInferenceProof

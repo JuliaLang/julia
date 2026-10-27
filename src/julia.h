@@ -1079,6 +1079,7 @@ typedef struct JL_GC_TRACKED_TYPE _jl_methtable_t {
     jl_sym_t *name; // sometimes used for debug printing
     jl_module_t *module; // sometimes used for debug printing
     jl_genericmemory_t *backedges; // IdDict{top typenames, Vector{uncovered (sig => caller::CodeInstance)}}
+    _Atomic(jl_genericmemory_t*) contributors; // IdDict{top typename, Vector{Int32}}: linkage blobs that changed methods under it this session (-1: run time)
 } jl_methtable_t;
 
 typedef struct JL_GC_TRACKED_TYPE {
@@ -2997,6 +2998,7 @@ typedef struct {
     int sanitize_address;
 
     int unique_names;   // Emit globally unique names
+    int debug_info_inline_scopes; // Emit inlined scopes, not just a line table
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;

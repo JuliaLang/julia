@@ -890,7 +890,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
             nothing
         else
-            val = needs_value && new_local_binding(ctx, ex, "if_val")
+            val = needs_value && new_local_binding(ctx, ex, "")
             v1 = compile(ctx, ex[2], needs_value, in_tail_pos)
             if needs_value
                 emit_assignment(ctx, something(v1, ex), val, v1)

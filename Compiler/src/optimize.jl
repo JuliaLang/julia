@@ -333,13 +333,13 @@ end
 function widen_all_consts!(src::CodeInfo)
     ssavaluetypes = src.ssavaluetypes::Vector{Any}
     for i = 1:length(ssavaluetypes)
-        ssavaluetypes[i] = widenconst(ssavaluetypes[i])
+        ssavaluetypes[i] = widenconst_split(ssavaluetypes[i])
     end
 
     for i = 1:length(src.code)
         x = src.code[i]
         if isa(x, PiNode)
-            src.code[i] = PiNode(x.val, widenconst(x.typ))
+            src.code[i] = PiNode(x.val, widenconst_split(x.typ))
         end
     end
 
@@ -562,7 +562,7 @@ end
         src::Union{IRCode,IncrementalCompact,CodeInfo}, sptypes::Vector{VarState})
     isa(x, GlobalRef) && return globalref_rt_widened(x, src)
     isa(x, Core.BindingPartition) && return partition_rt_widened(x)
-    return widenconst(argextype(x, src, sptypes))
+    return widenconst_split(argextype(x, src, sptypes))
 end
 @inline argextype_widened(@nospecialize(x), ir::IRCode) = argextype_widened(x, ir, ir.sptypes)
 @inline argextype_widened(@nospecialize(x), compact::IncrementalCompact) =
@@ -1148,7 +1148,9 @@ function recognize_global_read(@nospecialize(stmt), ir::IRCode)
     if isa(stmt, GlobalRef)
         return Pair{GlobalRef,Any}(stmt, QuoteNode(:unordered))
     end
-    isa(stmt, Expr) && stmt.head === :call || return nothing
+    # separate checks, so that `stmt` is known to be an `Expr` below
+    isa(stmt, Expr) || return nothing
+    stmt.head === :call || return nothing
     na = length(stmt.args)
     (na == 3 || na == 4) || return nothing
     f = _global_call_singleton(stmt.args[1], ir)
@@ -1261,7 +1263,8 @@ end
 # Only an `allow_import === true` query reformulates (it walks imports to the leaf, matching the resolution below).
 # An `allow_import === false` query is left on the runtime path (if not already folded by inference), which is conservatively correct.
 function recognize_global_isdefined(@nospecialize(stmt), ir::IRCode)
-    isa(stmt, Expr) && stmt.head === :call || return nothing
+    isa(stmt, Expr) || return nothing
+    stmt.head === :call || return nothing
     na = length(stmt.args)
     f = _global_call_singleton(stmt.args[1], ir)
     if f === Core.isdefinedglobal && (3 <= na <= 5)
@@ -1786,7 +1789,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                     nconst = 0
                     for i = 2:nargs
                         aty = widenconditional(argextype(ex.args[i], src, sptypes))
-                        aty′ = widenconst(aty)
+                        aty′ = widenconst_split(aty)
                         if !isdispatchelem(aty′)
                             return cost
                         end

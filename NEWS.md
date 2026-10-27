@@ -22,6 +22,8 @@ Build system changes
 New library functions
 ---------------------
 
+* `bitsizeof(x)` returns the declared width in bits of a primitive type, or of the primitive type
+  of `x`, excluding the padding that `sizeof` includes. It throws for any other type or value ([#61359]).
 * The module `Base.Parsers` is now `public` (but not exported). `Base.Parsers.parsevalue(T, bytes)`
   parses a value of type `T`, such as an integer, a floating-point number or a `UUID`, from all of
   an `AbstractVector{UInt8}` and returns a `Base.Parsers.ParseFailure` instead of throwing; its

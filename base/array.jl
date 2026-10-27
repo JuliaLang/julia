@@ -1214,16 +1214,11 @@ function _growend!(a::Vector, delta::Integer)
     delta = Int(delta)
     delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
     ref = a.ref
-    mem = ref.mem
-    memlen = length(mem)
     len = length(a)
-    newlen = checked_add(len, delta)
-    offset = memoryrefoffset(ref)
-    newmemlen = checked_add(offset - 1, newlen)
-    if memlen < newmemlen
+    if length(ref.mem) - (memoryrefoffset(ref) - 1) - len < delta
         @noinline _growend_internal!(a, delta, len)
     end
-    setfield!(a, :size, (newlen,))
+    setfield!(a, :size, (len + delta,))
     return
 end
 

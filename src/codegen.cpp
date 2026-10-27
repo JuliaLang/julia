@@ -4274,8 +4274,9 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
             // these roots may seem a bit overkill, but we want to make sure
             // that a!=b implies (a,)!=(b,) even if a and b are unused and
             // therefore could be freed and then the memory for a reused for b
-            gc_uses.append(get_gc_roots_for(ctx, arg1));
-            gc_uses.append(get_gc_roots_for(ctx, arg2));
+            // memcmp reads the storage through pointers that no longer carry the object
+            gc_uses.append(get_gc_roots_for(ctx, arg1, /*storage_used*/true));
+            gc_uses.append(get_gc_roots_for(ctx, arg2, /*storage_used*/true));
             OperandBundleDef OpBundle("jl_roots", gc_uses);
             auto answer = ctx.builder.CreateCall(prepare_call(memcmp_func), {
                         varg1,
@@ -7750,7 +7751,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         }
         SmallVector<Value*, 0> vals;
         for (size_t i = 0; i < nargs; ++i) {
-            vals.append(get_gc_roots_for(ctx, argv[i]));
+            // nothing reads the preserved values themselves; only their lifetimes matter
+            vals.append(get_gc_roots_for(ctx, argv[i], /*storage_used*/false));
         }
         Value *token = vals.empty()
             ? (Value*)ConstantTokenNone::get(ctx.builder.getContext())
@@ -10242,16 +10244,7 @@ static jl_llvm_functions_t
     topinfo.loc = topdebugloc;
     topinfo.edgeid = 0;
     SmallVector<DebugLineTable, 0> prev_lineinfo, new_lineinfo;
-    // Backtraces rebuild inlined frames from the CodeInstance debuginfo, using the
-    // statement index in the DWARF column, so image code (sysimage and pkgimages)
-    // gets only a line table for the outermost frame in release builds, which
-    // saves most of its DWARF. JIT code and assert builds keep the inline scopes
-    // for gdb, perf, and code_llvm/code_native.
-#ifdef JL_NDEBUG
-    const bool inline_scopes = !ctx.emission_context.imaging_mode;
-#else
-    const bool inline_scopes = true;
-#endif
+    const bool inline_scopes = ctx.params->debug_info_inline_scopes;
     auto update_lineinfo = [&](size_t outerpc) {
         std::function<bool(jl_debuginfo_t *, jl_value_t *, size_t, size_t, bool)>
             append_lineinfo = [&](jl_debuginfo_t *debuginfo, jl_value_t *func, size_t to,
@@ -11527,6 +11520,16 @@ extern "C" void jl_init_llvm(void)
     install_bad_alloc_error_handler(jl_report_llvm_bad_alloc);
     jl_default_debug_info_kind = jl_default_cgparams.debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
     jl_default_cgparams.debug_info_level = (int) jl_options.debug_level;
+    // Backtraces rebuild inlined frames from the CodeInstance debuginfo, using the
+    // statement index in the DWARF column, so image code (sysimage and pkgimages)
+    // only needs a line table for the outermost frame, which saves most of its
+    // DWARF. Other processes and assert builds keep the inline scopes for gdb,
+    // perf, and code_llvm/code_native.
+#ifdef JL_NDEBUG
+    jl_default_cgparams.debug_info_inline_scopes = !jl_generating_output();
+#else
+    jl_default_cgparams.debug_info_inline_scopes = 1;
+#endif
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
     InitializeNativeTargetAsmParser();

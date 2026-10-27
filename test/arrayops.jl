@@ -2489,6 +2489,7 @@ end
     @test IndexStyle(selectdim(A, 1, 1)) == IndexStyle(view(A, 1, :, :)) == IndexLinear()
     @test IndexStyle(selectdim(A, 2, 1)) == IndexStyle(view(A, :, 1, :)) == IndexCartesian()
     @test IndexStyle(selectdim(A, 3, 1)) == IndexStyle(view(A, :, :, 1)) == IndexLinear()
+    @test selectdim(A, 2, CartesianIndex(1, 1)) == view(A, :, CartesianIndex(1, 1), :)
 end
 
 # row/column/slice iterator tests
@@ -3020,6 +3021,10 @@ end
 
     @test accumulate(min, [3 2 1; 3 2 1], dims=2) == [3 2 1; 3 2 1]
     @test accumulate(min, [3 2 1; 3 2 1], dims=2, init=2) == [2 2 1; 2 2 1]
+    @test accumulate(+, [1 2; 3 4], dims=3, init=10) == [11 12; 13 14]
+    @test accumulate(*, ['a' 'b'], dims=3) == ["a" "b"]
+    @test accumulate(+, fill(1), dims=1, init=10) == fill(11)
+    @test accumulate(+, [1, 2], dims=typemax(Int)) == [1, 2]
 
     @test isa(accumulate(+, Int[]), Vector{Int})
     @test isa(accumulate(+, Int[]; init=1.), Vector{Float64})

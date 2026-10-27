@@ -3640,3 +3640,27 @@ end
 @testintersect(Tuple{T, Vararg{Tuple{T, Any, Int}}} where T,
                Tuple{Any, Vararg{Tuple{Tuple{S}, S, Float64} where S}},
                Tuple{Any})
+
+let A = Tuple{Ref{X}, Ref{Y}} where {Y, X<:Union{Nothing, Y}}, B = Tuple{Ref{X}, Ref{Y}} where {Y, X>:Y}
+    @test Tuple{Ref{Union{Nothing, Int}}, Ref{Int}} <: typeintersect(A, B)
+    @test Tuple{Ref{Union{Nothing, Int}}, Ref{Int}} <: typeintersect(B, A)
+end
+
+let A = Ref{Tuple{Union{Nothing, T}, T}} where T, B = Ref{Tuple{S, Union{Nothing, S}}} where S
+    @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(A, B)
+    @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(B, A)
+end
+
+@testset "stack overflows in type intersection" begin
+    let A = Tuple{Union{Nothing, S2}, Int, Tuple{S1, S1}} where {S1, S2<:S1}, B = Tuple{T, T, Tuple{T, T}} where T
+        @test Tuple{Int, Int, Tuple{Int, Int}} <: typeintersect(A, B)
+        @test Tuple{Int, Int, Tuple{Int, Int}} <: typeintersect(B, A)
+    end
+
+    let A = Ref{Tuple{T, T}} where T, B = Ref{Tuple{Union{Nothing, Int}, Union{X, Y}}} where {X, Y}
+        @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(A, B)
+        @test Ref{Tuple{Union{Nothing, Int}, Union{Nothing, Int}}} <: typeintersect(B, A)
+    end
+
+    @testintersect(Tuple{Tuple{T}, T, T} where T, Tuple{S, Tuple{S}, S} where S, Union{})
+end

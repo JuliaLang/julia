@@ -2283,6 +2283,28 @@ let nfields_tfunc(@nospecialize xs...) =
     @test sizeof_tfunc(Type{Ptr}) === Const(sizeof(Ptr))
     @test bitsizeof_tfunc(Type{BitsizeofUInt17}) === Const(17)
     @test bitsizeof_tfunc(DataType) === Int
+    @test bitsizeof_tfunc(Core.TypeEgal{BitsizeofUInt17}) === Const(17)
+    @test bitsizeof_tfunc(BitsizeofUInt17) === Const(17)
+    @test bitsizeof_tfunc(Const(0x01)) === Const(8)
+    @test bitsizeof_tfunc(Const(Pair{Int32,Int16})) === Int
+    @test bitsizeof_tfunc(Core.TypeEgal{Union{Int8,Int16}}) === Int
+    @test bitsizeof_tfunc(Tuple{Int}) === Int
+    bitsizeof_nothrow(@nospecialize xs...) = Compiler.bitsizeof_nothrow(xs...)
+    @test bitsizeof_nothrow(Const(Int))
+    @test bitsizeof_nothrow(Const(1.0))
+    @test bitsizeof_nothrow(Core.TypeEgal{BitsizeofUInt17})
+    @test bitsizeof_nothrow(Union{Int8, Ptr, Core.TypeEgal{Float32}})
+    @test !bitsizeof_nothrow(Type{BitsizeofUInt17})
+    @test !bitsizeof_nothrow(Const(Ptr))
+    @test !bitsizeof_nothrow(Core.TypeEgal{Ptr})
+    @test !bitsizeof_nothrow(Const(Pair{Int32,Int16}))
+    @test !bitsizeof_nothrow(Core.TypeEgal{Tuple{Int}})
+    @test !bitsizeof_nothrow(Core.TypeEgal{Union{Int8,Int16}})
+    @test !bitsizeof_nothrow(Const("abc"))
+    @test !bitsizeof_nothrow(String)
+    @test !bitsizeof_nothrow(Union{Int, String})
+    @test !bitsizeof_nothrow(DataType)
+    @test !bitsizeof_nothrow(Any)
     @test !sizeof_nothrow(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}})
     @test sizeof_nothrow(Union{Ptr, Int, Core.TypeEgal{Ptr{Int8}}, Core.TypeEgal{Int}})
     @test sizeof_nothrow(Const(Ptr))
@@ -3486,6 +3508,41 @@ from_interconditional_check22(::Union{Int,String}, y) = isa(y, Int)
     end
     return 0
 end |> only === Int
+
+# a field alias is a different refinement target from its parent slot (JuliaLang/julia#63981)
+from_interconditional_check31(x::AliasableField, _) = isa(x.f, Int)
+@test Base.infer_return_type((AliasableField{Any},)) do x
+    if from_interconditional_check31(x, x.f)
+        return x.f
+    end
+    return nothing
+end === Union{Int,Nothing}
+from_interconditional_check32(_, x::AliasableField) = isa(x.f, Int)
+@test Base.infer_return_type((AliasableField{Any},)) do x
+    if from_interconditional_check32(x.f, x)
+        return x.f
+    end
+    return nothing
+end === Union{Int,Nothing}
+issue63981_mk(x) = (; status = x > 0 ? :a : :b, n = x)
+issue63981_f(nt, _) = nt.status === :a
+@test Base.infer_return_type((Int,)) do x
+    nt = issue63981_mk(x)
+    return issue63981_f(nt, nt.n)
+end === Bool
+
+# refine the aliased field when the argument is a slot holding a `MustAlias` of a field
+# whose type isn't a `Type`
+from_interconditional_check41_mk(c) = (; f = (; s = c ? :a : :b, n = 1))
+from_interconditional_check41(y) = y.s === :a
+@test Base.infer_return_type((Bool,)) do c
+    x = from_interconditional_check41_mk(c)
+    y = x.f
+    if from_interconditional_check41(y)
+        return Val(x.f.s)
+    end
+    return nothing
+end === Union{Val{:a},Nothing}
 
 # prioritize constraints on slot objects
 # https://github.com/aviatesk/JET.jl/issues/509
@@ -5233,6 +5290,46 @@ end == Int
         end
         return nothing
     end == Union{Nothing, String}
+    @test Base.infer_return_type((Any, Any)) do a, b
+        x = a; y = b
+        x, y = y, x
+        if b isa Int
+            return y
+        end
+        return nothing
+    end == Any
+    @test Base.infer_return_type((Any, Any)) do a, b
+        x = a; y = b
+        x, y = y, x
+        typeassert(b, Int)
+        return y
+    end == Any
+    # after the swap, `x` does hold `b` and should still be refined
+    @test Base.infer_return_type((Any, Any)) do a, b
+        x = a; y = b
+        x, y = y, x
+        if b isa Int
+            return x
+        end
+        return nothing
+    end == Union{Nothing, Int}
+    @test Base.infer_return_type((Any, Any, Bool)) do a, b, c
+        x = a
+        y = b
+        y, z = x, (c && (x = 1; true); y)
+        if x isa Int
+            return y
+        end
+        return nothing
+    end == Any
+    @test Base.infer_return_type((Any,)) do a
+        x = y = identity(a)
+        z = x
+        if x isa Int
+            return z
+        end
+        return nothing
+    end == Union{Nothing, Int}
     # typeassert-based refinement should also propagate to aliases
     @test Base.infer_return_type((Any,)) do x
         y = x
@@ -8507,5 +8604,12 @@ irinterp_scan_d1(t) = irinterp_scan_derivative(irinterp_scan_square, t)
 irinterp_scan_d2(t) = irinterp_scan_derivative(irinterp_scan_d1, t)
 @test Base.infer_return_type(irinterp_scan_d2, (Int,)) === Int
 @test irinterp_scan_d2(2) == 2
+
+# irinterp must keep splats precise after the optimizer turns them into `Core.svec` calls
+const SPLAT_SVEC_NAMES = ntuple(i -> Symbol(:a, i), 33)
+@inline splat_svec_inner(names, vals...) = NamedTuple{names}(vals)
+@inline splat_svec_outer(names, vals::Tuple) = splat_svec_inner(names, vals...)
+splat_svec_caller(vals) = splat_svec_outer(SPLAT_SVEC_NAMES, vals)
+@test Base.infer_return_type(splat_svec_caller, (NTuple{33,Int},)) === NamedTuple{SPLAT_SVEC_NAMES, NTuple{33,Int}}
 
 end # module inference

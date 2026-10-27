@@ -409,6 +409,33 @@ end
 remove_scope(st::Syntax) =
     remove_scope(st, Dict{SyntaxContext, SyntaxContext}())
 
+# premature optimization: If a large piece of parsed code contains macrocalls
+# that embed syntax into IR, size (of the source text, but mostly the green
+# tree) becomes an issue.  Ideally we would store the big stuff in a known place
+# once and refer to it from all lowered code, but for now haphazardly delete
+# information.  Keep sourceref, and sourceref of unexpanded if !trim_unexpanded
+function _trim_provenance(st::Syntax, trim_unexpanded, scmap)
+    st_sc = st.context
+    sc2 = get(scmap, st_sc, nothing)
+    if isnothing(sc2)
+        ux = st_sc.unexpanded === nothing || trim_unexpanded ?
+            nothing : _trim_provenance(st_sc.unexpanded, false, scmap)
+        sc2 = scmap[st_sc] = st_sc.unexpanded === ux ? st_sc :
+            SyntaxContext(st_sc.layer, ux, st_sc.edition, st_sc.internal)
+    end
+    if is_leaf(st) || numchildren(st) == 0
+        source = sourceref(st)
+        sc2 === st_sc && !(st.source isa Syntax) ? st :
+            @mknode(st; context=sc2, source, jl_source=st.jl_source)
+    else
+        @mknode(st; context=sc2, source=sourceref(st), jl_source=st.jl_source,
+                children=Syntax[_trim_provenance(
+                    c, trim_unexpanded, scmap) for c in children(st)])
+    end
+end
+trim_provenance(st::Syntax, trim_unexpanded) =
+    _trim_provenance(st, trim_unexpanded, Dict{SyntaxContext, SyntaxContext}())
+
 function Base.show(io::IO, ::MIME"text/plain", sl::ScopeLayer)
     color = isnothing(sl.escaped) ? :normal : :cyan
     printstyled(io, "SL("; color)
@@ -589,16 +616,21 @@ _unescape_lnn(@nospecialize(e)) =
 # relevant line node as an argument.
 function _get_inner_lnn(e::Expr, default::LineNumberNode)
     if e.head === :struct || e.head === :macrocall
-        return something(_first_linenode(e), default)
+        something(_first_linenode(e), default)
+    elseif (e.head === :quote || e.head === :inert) &&
+            length(e.args) > 0 && e.args[1] isa Expr
+        something(_first_linenode(e.args[1]), default)
+    elseif e.head in (:function, :macro, :module, :(=), :->)
+        length(e.args) >= 2 || return default
+        b = e.args[end]
+        b isa Expr || return default
+        b.head === :block || return default
+        length(b.args) >= 1 || return default
+        b_lnn = _unescape_lnn(b.args[1])
+        return b_lnn isa LineNumberNode ? b_lnn : default
+    else
+        default
     end
-    e.head in (:function, :macro, :module, :(=), :->) || return default
-    length(e.args) >= 2 || return default
-    b = e.args[end]
-    b isa Expr || return default
-    b.head === :block || return default
-    length(b.args) >= 1 || return default
-    b_lnn = _unescape_lnn(b.args[1])
-    return b_lnn isa LineNumberNode ? b_lnn : default
 end
 
 # List of Expr-AST forms that are always converted to some Syntax form and
@@ -621,7 +653,10 @@ function _expr_to_syntax(@nospecialize(e), context::SyntaxContext,
     s = if e isa Symbol
         @mknode(;head=:identifier, value=String(e), source=src, context)
     elseif e isa QuoteNode
-        cid, _ = _expr_to_syntax(e.value, context, src, true)
+        v = e.value
+        src = src isa LineNumberNode && v isa Expr ?
+            something(first_linenode(v), src) : src
+        cid, _ = _expr_to_syntax(v, context, src, true)
         @mknode(;head=:inert, source=src, children=Syntax[cid], context)
     elseif e isa Expr
         h = e.head
