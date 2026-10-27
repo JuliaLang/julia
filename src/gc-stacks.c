@@ -72,6 +72,10 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
         munmap(stk, bufsz);
         return MAP_FAILED;
     }
+#  ifdef MADV_NOHUGEPAGE
+    // with THP enabled=always, the first touch would fault in a whole 2 MiB page
+    madvise(stk, bufsz, MADV_NOHUGEPAGE);
+#  endif
 # endif
 
     jl_atomic_fetch_add_relaxed(&num_stack_mappings, 1);
