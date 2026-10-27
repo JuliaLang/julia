@@ -1369,17 +1369,10 @@ function filter_singleton_types(t)
     end
     out
 end
-@test filter_singleton_types((Val(:b), Val(:a), (:x, :y))) == [Val{:b}, Val{:a}]
-@test collect(Iterators.filter(x -> x isa Val, (Val(:b), Val(:a), (:x, :y)))) == [Val(:b), Val(:a)]
 function narrow_union_with_bits_member(t, i, j, k::Int, c::Bool)
     x = c ? t[i] : t[j]
     y = x isa Tuple ? k : x
     typeof(y)
-end
-let t = (nothing, missing, (:x, :y))
-    @test narrow_union_with_bits_member(t, 1, 1, 5, true) === Nothing
-    @test narrow_union_with_bits_member(t, 2, 2, 5, false) === Missing
-    @test narrow_union_with_bits_member(t, 3, 3, 5, true) === Int
 end
 function narrow_union_in_try_slot(t, i)
     local x
@@ -1390,11 +1383,6 @@ function narrow_union_in_try_slot(t, i)
     end
     y = x isa Val ? x : Val(:c)
     typeof(y)
-end
-let t = (Val(:b), Val(:a), (:x, :y))
-    @test narrow_union_in_try_slot(t, 1) === Val{:b}
-    @test narrow_union_in_try_slot(t, 2) === Val{:a}
-    @test narrow_union_in_try_slot(t, 3) === Val{:c}
 end
 struct NumberSetting
     value::Number
@@ -1426,7 +1414,21 @@ function last_simple_setting(s, key)
     end
     result
 end
-let s = NumberSetting(12345)
+@testset "#64090" begin
+    @test filter_singleton_types((Val(:b), Val(:a), (:x, :y))) == [Val{:b}, Val{:a}]
+    @test collect(Iterators.filter(x -> x isa Val, (Val(:b), Val(:a), (:x, :y)))) == [Val(:b), Val(:a)]
+
+    t = (nothing, missing, (:x, :y))
+    @test narrow_union_with_bits_member(t, 1, 1, 5, true) === Nothing
+    @test narrow_union_with_bits_member(t, 2, 2, 5, false) === Missing
+    @test narrow_union_with_bits_member(t, 3, 3, 5, true) === Int
+
+    t = (Val(:b), Val(:a), (:x, :y))
+    @test narrow_union_in_try_slot(t, 1) === Val{:b}
+    @test narrow_union_in_try_slot(t, 2) === Val{:a}
+    @test narrow_union_in_try_slot(t, 3) === Val{:c}
+
+    s = NumberSetting(12345)
     @test last_int_setting(s, (:value, :pair, :stop)) === 12345
     @test last_int_setting(s, (:none, :stop)) === nothing
     @test last_simple_setting(s, :value) === 12345
