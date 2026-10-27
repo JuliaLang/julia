@@ -1199,6 +1199,8 @@ if isfile(cshcmd)
     end
 end
 
+@test Base.shell_escape_csh() == Base.shell_escape_csh(``) == ""
+
 @testset "shell escaping on Windows" begin
     # Note  argument A can be parsed both as A or "A".
     # We do not test that the parsing satisfies either of these conditions.
@@ -1212,6 +1214,8 @@ end
     @test Base.escape_microsoft_c_args("A") == "A"
 
     @test Base.escape_microsoft_c_args(`A`) == "A"
+
+    @test Base.escape_microsoft_c_args() == Base.escape_microsoft_c_args(``) == ""
 
     # input : hello world
     # output: "hello world"
