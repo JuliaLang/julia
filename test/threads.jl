@@ -424,7 +424,19 @@ let program = """
         new_env["JULIA_NUM_THREADS"] = string(test_nthreads, ",", test_nthreadsi)
         threads_config = "$test_nthreads,$test_nthreadsi"
         with_output_on_failure() do output
-            run(pipeline(setenv(cmd1, new_env); stdout=output, stderr=output))
+            proc = run(pipeline(setenv(cmd1, new_env); stdout=output, stderr=output); wait=false)
+            # a run takes up to ~10 min; stop a hung one early so its task dump gets printed
+            watchdog = Timer(1800) do _
+                kill(proc, Base.SIGQUIT)
+                sleep(30)
+                process_running(proc) && kill(proc, Base.SIGKILL)
+            end
+            try
+                wait(proc)
+            finally
+                close(watchdog)
+            end
+            success(proc) || throw(ProcessFailedException([proc]))
         end
         println("threads_exec.jl with JULIA_NUM_THREADS == $threads_config passed")
         # threads set via env var

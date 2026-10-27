@@ -82,7 +82,11 @@ if !@isdefined(testenv_defined)
             heap_size=round(Int,(Sys.total_memory()/(1024^2)/(X+1)))
             push!(test_exeflags.exec, "--heap-size-hint=$(heap_size)M")
         end
-        procs = addprocs(X; exename=exename, exeflags=test_exeflags, kwargs...)
+        # starting many workers on a loaded machine can exceed the default 60 s
+        timeout = get(ENV, "JULIA_WORKER_TIMEOUT", "300")
+        procs = withenv("JULIA_WORKER_TIMEOUT" => timeout) do
+            addprocs(X; exename=exename, exeflags=test_exeflags, kwargs...)
+        end
         for w in procs
             worker_ospids[w] = remotecall_fetch(getpid, w)
         end
