@@ -820,6 +820,15 @@ end
     @test shuffle(a) == a
 end
 
+struct ZeroWords <: AbstractRNG end
+Random.rng_native_52(::ZeroWords) = UInt64
+Random.rand(::ZeroWords, ::Random.SamplerType{UInt64}) = UInt64(0)
+
+@testset "randsubseq with a zero exponential draw" begin
+    @test randexp(ZeroWords()) == 0.0
+    @test randsubseq(ZeroWords(), [10, 20, 30], 0.1) == [10, 20, 30]
+end
+
 @testset "rand(::Tuple)" begin
     for x in (0x1, 1)
         @test rand((x,)) == 0x1
