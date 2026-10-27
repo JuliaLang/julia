@@ -217,7 +217,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                         this_const_conditional = ignorelimited(narrowed)
                     end
                     const_result = nothing
-                    if this_const_rt ⊑ₚ this_rt
+                    # compare the values only: `narrow_mustalias` above has put the alias of
+                    # `this_rt` on `this_const_rt` where applicable
+                    if this_const_rt ⊑ₚ widenwrappedmustalias(this_rt)
                         # As long as the const-prop result we have is not *worse* than
                         # what we found out on types, we'd like to use it. Even if the
                         # end result is exactly equivalent, it is likely that the IR
@@ -5013,14 +5015,17 @@ function apply_refinement!(
     vtype = currstate[slotid]
     oldtyp = vtype.typ
     ⊏ = strictpartialorder(𝕃ᵢ)
-    if newtyp ⊏ oldtyp
-        refinement = StateRefinement(slotid, newtyp, vtype.undef)
+    # a slot holding a `MustAlias` still aliases the field after the refinement,
+    # so compare with the field type and keep the alias (cf. `conditional_change`)
+    if newtyp ⊏ widenmustalias(ignorelimited(oldtyp))
+        refinement = StateRefinement(slotid, narrow_mustalias(𝕃ᵢ, newtyp, oldtyp), vtype.undef)
         strefine1!(currstate, refinement)
         for i in 1:length(currstate)
             slot_aliases[i] == slotid || continue
             alias_vtype = currstate[i]
-            if newtyp ⊏ alias_vtype.typ
-                strefine1!(currstate, StateRefinement(i, newtyp, alias_vtype.undef))
+            if newtyp ⊏ widenmustalias(ignorelimited(alias_vtype.typ))
+                alias_newtyp = narrow_mustalias(𝕃ᵢ, newtyp, alias_vtype.typ)
+                strefine1!(currstate, StateRefinement(i, alias_newtyp, alias_vtype.undef))
             end
         end
     end
