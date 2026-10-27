@@ -1274,7 +1274,8 @@ function hex2bytes!(dest::AbstractArray{UInt8}, itr)
 end
 
 @inline number_from_hex(c::AbstractChar) = number_from_hex(Char(c)::Char)
-@inline number_from_hex(c::Char) = number_from_hex(UInt8(c))
+@inline number_from_hex(c::Char) =
+    isascii(c) ? number_from_hex(UInt8(c)) : throw(ArgumentError("character is not an ASCII hexadecimal digit"))
 @inline function number_from_hex(c::UInt8)
     UInt8('0') <= c <= UInt8('9') && return c - UInt8('0')
     c |= 0b0100000
