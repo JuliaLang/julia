@@ -992,6 +992,7 @@ end
 # here through the stream's copyuntil) compose; the sentinel keeps the
 # plain call, which any IO's write supports.
 function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    io.readable || _throw_not_readable()
     data = view(io.data, io.ptr:io.size)
     # note: findfirst + copyto! is much faster than a single loop
     #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.
@@ -1056,6 +1057,7 @@ function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false, cancel::CancelT
 end
 
 function _copyline(out::IO, io::GenericIOBuffer; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    io.readable || _throw_not_readable()
     data = view(io.data, io.ptr:io.size)
     # note: findfirst + copyto! is much faster than a single loop
     #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.
