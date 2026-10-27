@@ -2381,7 +2381,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         # handle some special syntaxes
         # `a b c`
         if is_core_macro(args[1], :var"@cmd")
-            print(io, "`", args[3], "`")
+            print(io, "`")
+            escape_raw_string(io, args[3], '`')
+            print(io, "`")
         # 11111111111111111111, 0xfffffffffffffffff, 1111...many digits...
         elseif is_core_macro(args[1], :var"@int128_str") ||
                is_core_macro(args[1], :var"@uint128_str") ||
