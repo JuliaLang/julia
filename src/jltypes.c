@@ -1725,6 +1725,9 @@ jl_datatype_t *jl_apply_cmpswap_type(jl_value_t *ty)
 JL_EXTENSION struct _jl_typestack_t {
     jl_datatype_t *tt;
     struct _jl_typestack_t *prev;
+    // the bottom of a lazy supertype computation (`jl_datatype_compute_super`):
+    // it completes a type that exists, so the levels above it exist too
+    int lazy;
 };
 
 // The instantiation stack of the critical region of `inst_datatype_inner`
@@ -2463,6 +2466,15 @@ static jl_value_t *lookup_deferred_type(jl_deferred_typecache_t *dcache, jl_type
 }
 
 
+// is `stack` inside a lazy supertype computation?
+static int typestack_lazy(jl_typestack_t *stack) JL_NOTSAFEPOINT
+{
+    for (; stack != NULL; stack = stack->prev)
+        if (stack->lazy)
+            return 1;
+    return 0;
+}
+
 // the number of instantiations of `tn` in progress on `stack`, up to `max`
 static int typename_depth_on_stack(jl_typestack_t *stack, jl_typename_t *tn, int max) JL_NOTSAFEPOINT
 {
@@ -3033,6 +3045,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     // the stack, in case one of its field types references it.
     top.tt = (jl_datatype_t*)ndt;
     top.prev = stack;
+    top.lazy = 0;
     stack = &top;
     if (cacheable && !defer) {
         // acquire the write lock now that we know we need a new object
@@ -3127,7 +3140,10 @@ static jl_value_t *inst_datatype_complete(jl_datatype_t *dt, jl_datatype_t *ndt,
     // throw. Another one is instantiated eagerly, so that an invalid level
     // fails at construction, and an unbounded graph is refused at a depth no
     // finite one reaches (each level of a finite one is an application written
-    // in the declaration, found on the stack). The templates of a definition
+    // in the declaration, found on the stack). A lazy supertype computation
+    // skips the refusal: it completes a type that exists (such as one loaded
+    // from an image), whose levels were instantiated once already, and the
+    // depth it reaches them at depends on the stack it continues. The templates of a definition
     // (free typevars) always defer, as the definition is finite only this way,
     // and so does an unchecked copy (`jl_rename_unionall`): it carries the
     // renamed typevar, so no level of it can fail a bounds check.
@@ -3141,7 +3157,8 @@ static jl_value_t *inst_datatype_complete(jl_datatype_t *dt, jl_datatype_t *ndt,
         }
         else if (super_cycle_on_stack(stack->prev, tn, decl)) {
             defer_super = !cacheable || level_decl_total(ndt);
-            if (!defer_super && typename_depth_on_stack(stack->prev, tn, 64) == 64) {
+            if (!defer_super && typename_depth_on_stack(stack->prev, tn, 64) == 64 &&
+                    !typestack_lazy(stack)) {
                 if (nothrow)
                     return NULL;
                 jl_errorf("supertype declaration of %s applies it at structurally increasing parameters "
@@ -3725,9 +3742,7 @@ static jl_svec_t *compute_fieldtypes_(jl_datatype_t *st JL_PROPAGATES_ROOT, void
         env[i].val = jl_svecref(st->parameters, i);
         env[i].prev = i == 0 ? NULL : &env[i - 1];
     }
-    jl_typestack_t top;
-    top.tt = st;
-    top.prev = (jl_typestack_t*)stack;
+    jl_typestack_t top = { st, (jl_typestack_t*)stack, 0 };
     jl_gc_write(st, st->types, jl_svec_t, inst_ftypes(wt->types, &env[n - 1], &top, cacheable, dcache));
     return st->types;
 }
@@ -3762,7 +3777,7 @@ JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROP
     // nested in an instantiation of the current task (through the subtyping
     // of a cache lookup), continue its stack: a type that instantiation is
     // still building is found there instead of being created a second time
-    jl_typestack_t stop = { ndt, typecache_stack_held() };
+    jl_typestack_t stop = { ndt, typecache_stack_held(), 1 };
     jl_value_t *s = inst_declared_super(primarydt, ndt, &stop, 1, 0, NULL);
     // concurrent first queries compute equal values; the compare-and-swap
     // keeps a single winner
@@ -3787,9 +3802,7 @@ JL_DLLEXPORT jl_value_t *jl_datatype_super(jl_datatype_t *dt)
 void jl_reinstantiate_inner_types(jl_datatype_t *t, jl_deferred_typecache_t *dcache) // can throw!
 {
     assert(jl_is_datatype(t));
-    jl_typestack_t top;
-    top.tt = t;
-    top.prev = NULL;
+    jl_typestack_t top = { t, NULL, 0 };
     size_t i, j, n = jl_svec_len(t->parameters);
     jl_array_t *partial = t->name->partial;
     if (partial == NULL)
@@ -3829,9 +3842,7 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t, jl_deferred_typecache_t *dca
             // of ndt references ndt (directly or indirectly), we need ndt on
             // the stack so lookup_type_stack can find it and return the
             // in-progress type instead of recursing infinitely.
-            jl_typestack_t ndt_top;
-            ndt_top.tt = ndt;
-            ndt_top.prev = &top;
+            jl_typestack_t ndt_top = { ndt, &top, 0 };
             jl_gc_write(ndt, ndt->types, jl_svec_t, inst_ftypes(t->types, &env[n - 1], &ndt_top, dcache == NULL, dcache));
             if (ndt->isconcretetype) { // cacheable
                 jl_compute_field_offsets(ndt);
