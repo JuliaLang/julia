@@ -199,7 +199,7 @@ function _ccallable(name::Union{Nothing, String}, rt::Type, sigt::Type)
 end
 
 function expand_ccallable(name, rt, def)
-    if isa(def,Expr) && (def.head === :(=) || def.head === :function)
+    if isa(def,Expr) && (def.head === :(=) || def.head === :function) && isa(def.args[1],Expr)
         sig = def.args[1]
         if sig.head === :(::)
             if rt === nothing
@@ -210,7 +210,7 @@ function expand_ccallable(name, rt, def)
         if rt === nothing
             error("@ccallable requires a return type")
         end
-        if sig.head === :call
+        if isa(sig,Expr) && sig.head === :call
             f = sig.args[1]
             if isa(f,Expr) && f.head === :(::)
                 f = f.args[end]
