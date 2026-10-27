@@ -2862,6 +2862,23 @@ let S = (Union{T, U} where {T<:Int, U<:Int})
     @test fapply61323(S) === 1
     @test call_type_int61323(fapply61323, S) === 1
     @test Base.return_types(fapply61323, (Type{Int},)) == Any[Int]
+    # only `DataType` reps have the fields of `DataType`, while `UnionAll` and `Union`
+    # reps reach the fields of their own types
+    getvar61323(x) = getfield(x, :var)
+    getfield1_61323(x) = getfield(x, 1)
+    @test call_type_int61323(getvar61323, S) isa TypeVar
+    @test call_type_int61323(getfield1_61323, S) isa TypeVar
+    @test Base.infer_return_type(getvar61323, (Type{Int},)) == TypeVar
+    @test Base.infer_return_type(getvar61323, (Core.TypeEgal{Int},)) == Union{}
+    @test TypeVar <: Base.infer_return_type(getfield1_61323, (Type{Int},))
+    @test Union{} != Base.infer_return_type(supertype, (Type{Int},))
+    let 𝕃 = Compiler.fallback_lattice
+        @test Compiler.getfield_tfunc(𝕃, Type{Int}, Compiler.Const(:name)) === Compiler.Const(Int.name)
+        @test Compiler.getfield_tfunc(𝕃, Type{Int}, Compiler.Const(:super)) === Type{Signed}
+        @test Compiler.getfield_tfunc(𝕃, Type{Int}, Compiler.Const(:foo)) === Union{}
+        @test Compiler.getfield_tfunc(𝕃, Type{Int}, Compiler.Const(1.0)) === Union{}
+    end
+    @test Base.infer_return_type(x -> getfield(x, 1.0), (Type{Int},)) == Union{}
 end
 
 # Defined type-valued static parameters should retain egality so DataType

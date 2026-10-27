@@ -1259,8 +1259,7 @@ end
             s = typeof(sv)
         else
             sv = type_parameter(s)
-            if isa(sv, DataType) && isa(name, Const) &&
-               _getfield_fieldindex(DataType, name) == DATATYPE_SUPER_FIELDINDEX &&
+            if isa(sv, DataType) && isa(name, Const) && name.val === :super &&
                # read without forcing: on a deferred instantiation whose slot
                # is still unset the modeled `getfield` throws, so no precision
                # is lost by falling through (see issue #61347)
@@ -1271,13 +1270,20 @@ end
                 return Type{svsuper}
             end
             if isTypeDataType(sv) && isa(name, Const)
-                nv = _getfield_fieldindex(DataType, name)::Int
+                nv = _getfield_fieldindex(DataType, name)
+                # neither a `Symbol` nor an `Int`, so the access throws for any rep
+                nv === nothing && return Bottom
                 if nv == DATATYPE_NAME_FIELDINDEX
                     # N.B. This only works for fields that do not depend on type
                     # parameters (which we do not know here).
-                    return Const(sv.name)
+                    rt = Const(sv.name)
+                else
+                    rt = _getfield_tfunc(𝕃, DataType, name, setfield)
                 end
-                s = DataType
+                # the value may also be a `UnionAll` or `Union` rep that is `==` to `sv`
+                # (#61323), which reaches the fields of its own type instead
+                rt = tmerge(rt, _getfield_tfunc(𝕃, UnionAll, name, setfield))
+                return tmerge(rt, _getfield_tfunc(𝕃, Union, name, setfield))
             end
         end
     end
