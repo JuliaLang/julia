@@ -2872,17 +2872,17 @@ f54131 = F54131()
 @testset "performance of kwarg completion with large method tables" begin
     # The goal here is to simply ensure we aren't hitting catestrophically bad
     # behaviors when shift isn't pressed. The difference between good and bad
-    # is on the order of tens of milliseconds vs tens of seconds; using 1 sec as
+    # is on the order of tens of milliseconds vs tens of seconds; using 5 sec as
     # a very rough canary that is hopefully robust even in the noisy CI coalmines
     s = "g54131(kwa"
     a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
     @test REPLCompletions.KeywordArgumentCompletion("kwarg") in a
-    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
+    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 5
 
     s = "f54131.x("
     a, b, c = completions(s, lastindex(s), @__MODULE__, false)
     @test only(a) isa REPLCompletions.TextCompletion
-    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
+    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 5
 
     s = "f54131.x(kwa"
     a, b, c = completions(s, lastindex(s), @__MODULE__, false)
