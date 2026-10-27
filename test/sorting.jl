@@ -138,6 +138,9 @@ end
         end
     end
     @test_throws ArgumentError partialsortperm!([1,2], [2,3,1], 1:2)
+    # index vector must hold all indices of v, regardless of eltype(k)
+    @test partialsortperm([300:-1:1;], Int8(3)) === 298
+    @test partialsortperm([300:-1:1;], UInt8(1):UInt8(2)) == [300, 299]
 end
 
 # exercise the codepath in searchsorted* methods for ranges that check for zero step range
