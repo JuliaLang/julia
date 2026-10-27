@@ -2117,7 +2117,7 @@ struct JL_GC_TRACKED_TYPE jl_cgval_t {
                 allunbox = true;
             }
             assert(v.TIndex || inline_roots.size() == inline_roots_count);
-            if (V == nullptr && constant == nullptr && !isghost && !tindex && (inline_roots_count == 0 || !justpointers))
+            if (V == nullptr && constant == nullptr && !isghost && !tindex && !justpointers)
                 *this = jl_cgval_t(); // no data to populate this value
             else if (inline_roots_count < inline_roots.size())
                 inline_roots.truncate(inline_roots_count); // drop excess roots
