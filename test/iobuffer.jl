@@ -356,6 +356,12 @@ end
     mark(buf)
     read(buf, UInt16)
     @test takestring!(buf) == "cdef"
+
+    buf = new_unseekable_buffer()
+    write(buf, "abcdef")
+    mark(buf)
+    read(buf, UInt16)
+    @test Base.unsafe_takestring!(buf) == "cdef"
 end
 
 @testset "Read/write readonly IOBuffer" begin

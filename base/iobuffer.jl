@@ -793,6 +793,7 @@ This function is meant to be used when the buffer is only used as a temporary
 string builder, which is discarded after the string is built.
 """
 function unsafe_takestring!(io::IOBuffer)
+    io.mark = -1
     used_span = get_used_span(io)
     nbytes = length(used_span)
     from = first(used_span)
@@ -836,9 +837,6 @@ function takestring!(io::IOBuffer)
     # If the buffer has been used up and needs to be replaced, there are no bytes, and
     # we can return an empty string without interacting with the buffer at all.
     io.reinit && return ""
-    # Like take!, discard the mark so that already-read bytes of a
-    # non-seekable buffer are not included.
-    io.mark = -1
 
     # If the iobuffer is writable, taking will remove the buffer from `io`.
     # So, we reset the iobuffer, and directly unsafe takestring.
