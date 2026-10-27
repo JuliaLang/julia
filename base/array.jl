@@ -1622,7 +1622,7 @@ function sizehint!(a::Vector, sz::Integer; first::Bool=false, shrink::Bool=true)
             return a
         end
         newmem = array_new_memory(mem, sz)
-        if first
+        if first && len != 0
             newref = memoryref(newmem, inc + 1)
         else
             newref = memoryref(newmem)
