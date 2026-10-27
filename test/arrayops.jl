@@ -1715,6 +1715,8 @@ end
     @test_throws BoundsError deleteat!(a, [1,13])
     @test_throws ArgumentError deleteat!(a, [3,2]) # not sorted
     @test_throws BoundsError deleteat!(a, 5:20)
+    @test_throws BoundsError deleteat!(a, 1:typemax(Int))
+    @test_throws BoundsError deleteat!(a, 2:typemax(Int))
     @test_throws BoundsError deleteat!(a, Bool[])
     @test_throws BoundsError deleteat!(a, [true])
     @test_throws BoundsError deleteat!(a, falses(11))

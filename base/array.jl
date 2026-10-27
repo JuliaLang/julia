@@ -1309,7 +1309,7 @@ function _deleteat!(a::Vector, i::Integer, delta::Integer)
     len = length(a)
     0 <= delta || throw(ArgumentError("_deleteat! requires delta >= 0"))
     1 <= i <= len || throw(BoundsError(a, i))
-    i + delta <= len + 1 || throw(BoundsError(a, i + delta - 1))
+    delta <= len + 1 - i || throw(BoundsError(a, i + delta - 1))
     newa = a
     if 2*i + delta <= len
         unsafe_copyto!(newa, 1 + delta, a, 1, i - 1)
