@@ -417,17 +417,7 @@ See also [`annotate!`](@ref).
 """
 annotations(s::AnnotatedString) = s.annotations
 
-function annotations(s::SubString{<:AnnotatedString})
-    substr_range = s.offset+1:s.offset+s.ncodeunits
-    result = RegionAnnotation[]
-    for ann in annotations(s.string, substr_range)
-        # Shift the region to be relative to the substring start
-        shifted_region = first(ann.region)-s.offset:last(ann.region)-s.offset
-        # @inline setindex makes :region const knowable (#60365)
-        push!(result, @inline(setindex(ann, shifted_region, :region)))
-    end
-    return result
-end
+annotations(s::SubString{<:AnnotatedString}) = annotations(s, 1:s.ncodeunits)
 
 function annotations(s::AnnotatedString, pos::UnitRange{<:Integer})
     # TODO optimise
@@ -444,11 +434,18 @@ end
 
 annotations(s::AnnotatedString, pos::Integer) = annotations(s, pos:pos)
 
-annotations(s::SubString{<:AnnotatedString}, pos::Integer) =
-    annotations(s.string, s.offset + pos)
+annotations(s::SubString{<:AnnotatedString}, pos::Integer) = annotations(s, pos:pos)
 
-annotations(s::SubString{<:AnnotatedString}, pos::UnitRange{<:Integer}) =
-    annotations(s.string, first(pos)+s.offset:last(pos)+s.offset)
+function annotations(s::SubString{<:AnnotatedString}, pos::UnitRange{<:Integer})
+    result = RegionAnnotation[]
+    for ann in annotations(s.string, first(pos)+s.offset:last(pos)+s.offset)
+        # Shift the region to be relative to the substring start
+        shifted_region = first(ann.region)-s.offset:last(ann.region)-s.offset
+        # @inline setindex makes :region const knowable (#60365)
+        push!(result, @inline(setindex(ann, shifted_region, :region)))
+    end
+    return result
+end
 
 """
     annotations(chr::AnnotatedChar)::Vector{$Annotation}
