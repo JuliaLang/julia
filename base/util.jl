@@ -372,16 +372,21 @@ function getpass(input::TTY, output::IO, prompt::AbstractString; with_suffix::Bo
         flush(output)
 
         s = SecretBuffer()
-        plen = 0
         while true
             c = _getch()
             if c == 0xff || c == UInt8('\n') || c == UInt8('\r') || c == 0x04
                 break # EOF or return
-            elseif c == 0x00 || c == 0xe0
+            elseif Sys.iswindows() && (c == 0x00 || c == 0xe0)
                 _getch() # ignore function/arrow keys
-            elseif c == UInt8('\b') && plen > 0
-                plen -= 1 # delete last character on backspace
-            elseif !iscntrl(Char(c)) && plen < 128
+            elseif c == UInt8('\b') || c == 0x7f
+                while s.size > 0
+                    b = s.data[s.size]
+                    s.data[s.size] = 0x00
+                    s.size -= 1
+                    !Sys.iswindows() && is_valid_continuation(b) || break
+                end
+                seekend(s)
+            elseif c >= 0x20
                 write(s, c)
             end
         end
