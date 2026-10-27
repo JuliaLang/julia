@@ -2463,14 +2463,16 @@ static jl_value_t *lookup_deferred_type(jl_deferred_typecache_t *dcache, jl_type
 }
 
 
-static int typename_on_stack(jl_typestack_t *stack, jl_typename_t *tn) JL_NOTSAFEPOINT
+// the number of instantiations of `tn` in progress on `stack`, up to `max`
+static int typename_depth_on_stack(jl_typestack_t *stack, jl_typename_t *tn, int max) JL_NOTSAFEPOINT
 {
-    while (stack != NULL) {
+    int depth = 0;
+    while (stack != NULL && depth < max) {
         if (stack->tt && stack->tt->name == tn)
-            return 1;
+            depth++;
         stack = stack->prev;
     }
-    return 0;
+    return depth;
 }
 
 // does `t` (a type or parameter value) mention an application of `tn`? Used to
@@ -2522,7 +2524,7 @@ static int typename_occurs_in(jl_value_t *t, jl_typename_t *tn) JL_NOTSAFEPOINT
 // `struct R{T} <: A{S{Tuple{T}}}`)?
 static int super_cycle_on_stack(jl_typestack_t *stack, jl_typename_t *tn, jl_value_t *decl) JL_NOTSAFEPOINT
 {
-    if (!typename_on_stack(stack, tn))
+    if (!typename_depth_on_stack(stack, tn, 1))
         return 0;
     for (; stack != NULL; stack = stack->prev) {
         if (stack->tt == NULL)
@@ -2533,6 +2535,185 @@ static int super_cycle_on_stack(jl_typestack_t *stack, jl_typename_t *tn, jl_val
             return 0;
     }
     return 0;
+}
+
+// Is a supertype declaration valid for every value of the definition's
+// typevars? Deferring a supertype (see `inst_datatype_complete`) moves the
+// instantiation of a level from the construction of the type to the first
+// demand for its supertype, from inside subtyping. That must not throw, so a
+// supertype is deferred only when its declaration provably cannot fail: every
+// type application in it satisfies the applied wrapper's bounds universally
+// (the argument wrapped in `UnionAll`s over the free typevars, a lower or
+// dependent bound only when trivial), can't be an invalid `Tuple`, `NamedTuple` or
+// `GenericMemory`, and the applied typenames' own declarations hold too
+// (recursively, a typename under consideration taken as valid). This holds for
+// typevars ranging over the types other than `Union{}`, if no recursive
+// application has a value parameter (which makes levels with values), or with
+// `values` over other values too, if no typevar is a `Union` member or a
+// typevar bound. Each deferred level checks what its parameters need
+// (`level_decl_total`). Otherwise the level is instantiated eagerly and an
+// invalid one fails at construction.
+struct decl_stack_t {
+    jl_typename_t *tn;
+    struct decl_stack_t *prev;
+};
+
+static int decl_seen(jl_typename_t *tn, struct decl_stack_t *seen) JL_NOTSAFEPOINT
+{
+    for (; seen != NULL; seen = seen->prev)
+        if (seen->tn == tn)
+            return 1;
+    return 0;
+}
+
+// with `values`, can `t` be a value: is it a typevar of the declaration?
+static int decl_value_var(jl_value_t *t, jl_svec_t *vars, int values) JL_NOTSAFEPOINT
+{
+    if (!values || !jl_is_typevar(t))
+        return 0;
+    for (size_t i = 0; i < jl_svec_len(vars); i++)
+        if (jl_svecref(vars, i) == t)
+            return 1;
+    return 0;
+}
+
+static int decl_total(jl_value_t *t, jl_svec_t *vars, struct decl_stack_t *seen, int values) JL_CANSAFEPOINT;
+
+static int typename_decl_total(jl_typename_t *tn, struct decl_stack_t *seen, int values) JL_CANSAFEPOINT
+{
+    if (decl_seen(tn, seen))
+        return 1;
+    if (tn->wrapper == NULL)
+        return 1; // bootstrap: declared by hand, no bounds
+    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(tn->wrapper);
+    if (dt->super == NULL)
+        return 0; // definition in progress
+    if (dt->super == jl_any_type)
+        return 1;
+    struct decl_stack_t top = { tn, seen };
+    return decl_total((jl_value_t*)dt->super, dt->parameters, &top, values);
+}
+
+// `lb <: arg <: ub` for every value of `vars`
+static int bound_total(jl_value_t *arg, jl_value_t *lb, jl_value_t *ub, jl_svec_t *vars) JL_CANSAFEPOINT
+{
+    if (!jl_is_type(arg) && !jl_is_typevar(arg))
+        return lb == jl_bottom_type && ub == (jl_value_t*)jl_any_type;
+    if (lb != jl_bottom_type && (jl_has_free_typevars(lb) || jl_has_free_typevars(arg) || !jl_subtype(lb, arg)))
+        return 0;
+    if (ub == (jl_value_t*)jl_any_type)
+        return 1;
+    if (jl_has_free_typevars(ub))
+        return 0;
+    jl_value_t *w = arg;
+    JL_GC_PUSH1(&w);
+    for (size_t i = jl_svec_len(vars); i-- > 0; ) {
+        jl_tvar_t *v = (jl_tvar_t*)jl_svecref(vars, i);
+        if (jl_has_typevar(w, v))
+            w = jl_type_unionall(v, w);
+    }
+    int total = !jl_has_free_typevars(w) && jl_subtype(w, ub);
+    JL_GC_POP();
+    return total;
+}
+
+static int decl_total(jl_value_t *t, jl_svec_t *vars, struct decl_stack_t *seen, int values)
+{
+    // a closed term was checked with the declaration, and instantiating a
+    // level returns it as is, so it never makes a new level
+    if (!jl_has_free_typevars(t))
+        return 1;
+    if (jl_is_datatype(t)) {
+        jl_datatype_t *d = (jl_datatype_t*)t;
+        jl_typename_t *dn = d->name;
+        size_t i, np = jl_nparams(d);
+        if (dn == jl_tuple_typename) {
+            for (i = 0; i < np; i++) {
+                jl_value_t *p = jl_tparam(d, i);
+                if (jl_is_vararg(p)) {
+                    jl_value_t *n = jl_unwrap_vararg_num(p);
+                    if (n != NULL && jl_is_typevar(n))
+                        return 0; // must become an integer
+                }
+            }
+        }
+        else if (dn == jl_namedtuple_typename) {
+            // names and field types are validated at instantiation
+            return 0;
+        }
+        else {
+            if (dn == jl_genericmemory_typename || dn == jl_genericmemoryref_typename) {
+                if (!jl_is_symbol(jl_tparam(d, 0)) || !jl_is_addrspace(jl_tparam(d, 2)))
+                    return 0;
+            }
+            // a bound that depends on an earlier parameter (`D{X, Y<:X}`) has free
+            // typevars, which `bound_total` does not prove
+            jl_value_t *w = dn->wrapper;
+            for (i = 0; i < np && jl_is_unionall(w); i++) {
+                jl_tvar_t *v = ((jl_unionall_t*)w)->var;
+                if (!bound_total(jl_tparam(d, i), v->lb, v->ub, vars))
+                    return 0;
+                w = ((jl_unionall_t*)w)->body;
+            }
+            if (!values && decl_seen(dn, seen)) {
+                for (i = 0; i < np; i++) {
+                    jl_value_t *p = jl_tparam(d, i);
+                    if (!jl_is_type(p) && !jl_is_typevar(p))
+                        return 0;
+                }
+            }
+            if (!typename_decl_total(dn, seen, values))
+                return 0;
+        }
+        for (i = 0; i < np; i++) {
+            if (!decl_total(jl_tparam(d, i), vars, seen, values))
+                return 0;
+        }
+        return 1;
+    }
+    if (jl_is_unionall(t)) {
+        jl_unionall_t *u = (jl_unionall_t*)t;
+        if (decl_value_var(u->var->lb, vars, values) || decl_value_var(u->var->ub, vars, values))
+            return 0;
+        return decl_total(u->var->lb, vars, seen, values) && decl_total(u->var->ub, vars, seen, values) &&
+               decl_total(u->body, vars, seen, values);
+    }
+    if (jl_is_uniontype(t)) {
+        jl_uniontype_t *u = (jl_uniontype_t*)t;
+        if (decl_value_var(u->a, vars, values) || decl_value_var(u->b, vars, values))
+            return 0;
+        return decl_total(u->a, vars, seen, values) && decl_total(u->b, vars, seen, values);
+    }
+    if (jl_is_vararg(t)) {
+        jl_vararg_t *vm = (jl_vararg_t*)t;
+        return (vm->T == NULL || decl_total(vm->T, vars, seen, values)) &&
+               (vm->N == NULL || decl_total(vm->N, vars, seen, values));
+    }
+    if (jl_is_typeeq(t))
+        return decl_total(jl_typeeq_T(t), vars, seen, values);
+    if (jl_is_typeegal(t))
+        return decl_total(jl_typeegal_T(t), vars, seen, values);
+    return 1; // typevars and constants
+}
+
+// is the declaration of level `dt` proved for its parameters? Inside a lazy
+// supertype computation a new level passes again: its parameters are built
+// from those of a checked level, so they hold a value only if that one did or
+// a recursive application has one (refused by the proof for types), and
+// `Union{}` only from a literal one (rejected with the definition)
+static int level_decl_total(jl_datatype_t *dt) JL_CANSAFEPOINT
+{
+    int values = 0;
+    size_t i, np = jl_nparams(dt);
+    for (i = 0; i < np; i++) {
+        jl_value_t *p = jl_tparam(dt, i);
+        if (p == jl_bottom_type)
+            return 0;
+        if (!jl_is_type(p))
+            values = 1;
+    }
+    return (!values && typename_decl_total(dt->name, NULL, 0)) ||
+           typename_decl_total(dt->name, NULL, 1);
 }
 
 static jl_value_t *inst_datatype_complete(jl_datatype_t *dt, jl_datatype_t *ndt, jl_typestack_t *stack,
@@ -2859,7 +3040,10 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         JL_LOCK(&typecache_lock); // Might GC
         // lend the stack to the lazy supertype computations nested in this
         // region (`typecache_stack_held`); every exit takes it back, so no
-        // dead frame is ever reachable from the global
+        // dead frame is ever reachable from the global. A type adopted from it
+        // by the lazy supertype of a cached type cannot fail afterwards: that
+        // supertype was valid when the cached type was made (eagerly, or as
+        // `decl_total` proved)
         jl_typestack_t *saved = typecache_stack;
         // a nested region continues the stack it replaces (every instantiation
         // hands over its stack), so lazy supertypes still see the outer types
@@ -2938,9 +3122,34 @@ static jl_value_t *inst_datatype_complete(jl_datatype_t *dt, jl_datatype_t *ndt,
     // so ordinary recursive types are unaffected. Field types stay eager: a
     // concrete type must publish with its layout, and only the supertype
     // declaration can force an infinite graph through abstract levels.
+    // A closed type defers only a declaration that cannot fail (`decl_total`):
+    // the deferred computation runs from inside subtyping, which must not
+    // throw. Another one is instantiated eagerly, so that an invalid level
+    // fails at construction, and an unbounded graph is refused at a depth no
+    // finite one reaches (each level of a finite one is an application written
+    // in the declaration, found on the stack). The templates of a definition
+    // (free typevars) always defer, as the definition is finite only this way,
+    // and so does an unchecked copy (`jl_rename_unionall`): it carries the
+    // renamed typevar, so no level of it can fail a bounds check.
     int in_definition = primarydt->super == NULL;
-    int defer_super = !istuple && !isnamedtuple && !in_definition &&
-        super_cycle_on_stack(stack->prev, tn, (jl_value_t*)primarydt->super);
+    int defer_super = 0;
+    if (!istuple && !isnamedtuple && !in_definition) {
+        jl_value_t *decl = (jl_value_t*)primarydt->super;
+        if (!check) {
+            defer_super = typename_occurs_in(decl, tn) || super_cycle_on_stack(stack->prev, tn, decl);
+            assert(!defer_super || !cacheable);
+        }
+        else if (super_cycle_on_stack(stack->prev, tn, decl)) {
+            defer_super = !cacheable || level_decl_total(ndt);
+            if (!defer_super && typename_depth_on_stack(stack->prev, tn, 64) == 64) {
+                if (nothrow)
+                    return NULL;
+                jl_errorf("supertype declaration of %s applies it at structurally increasing parameters "
+                          "and cannot be shown valid for every parameter, so its supertypes cannot be instantiated",
+                          jl_symbol_name(tn->name));
+            }
+        }
+    }
     if (istuple || isnamedtuple) {
         ndt->super = jl_any_type;
     }

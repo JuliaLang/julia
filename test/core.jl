@@ -9544,6 +9544,48 @@ let F = DeferredSuperLevels.F, A = DeferredSuperLevels.A,
     @test !isdefined(E.body.name, :partial)
 end
 
+# A supertype is deferred only when its declaration is valid for every
+# parameter: the deferred level is instantiated from inside subtyping, which
+# must not throw. A declaration that can fail is instantiated eagerly, so an
+# invalid level fails at construction.
+module DeferredSuperTotal
+abstract type A{X<:Integer} end
+abstract type C{Y, Z} end
+abstract type D{X, Y<:X} end
+abstract type L{X>:Tuple{}, Y} end
+struct Total{T} <: C{A{Int}, Total{Tuple{T}}} end          # `A{Int}` is checked now; `Total`, `C` have no bounds
+struct Dependent{T} <: D{Any, Dependent{Tuple{T}}} end     # valid, but a dependent bound isn't proven
+struct Closed{T} <: C{Tuple{D{Any, Int}, A{<:Signed}}, Closed{Tuple{T}}} end # closed terms are checked now
+struct Partial{T} <: C{A{T}, Partial{Tuple{T}}} end        # `A{Tuple{T}}` is invalid at the next level
+struct Lower{T} <: L{Tuple{Vararg{T}}, Lower{Tuple{T}}} end # valid, but a lower bound isn't proven
+struct Shift{T, U} <: C{Shift{Tuple{U}, T}, Tuple{U}} end   # `T` reaches the `Tuple` one level down
+struct Rank{T, N} <: C{Rank{Tuple{T}, N}, N} end            # a value parameter
+struct VUnion{T, U} <: C{VUnion{Tuple{U}, T}, Union{U, Int}} end # a value reaches the `Union` one level down
+struct VBound{T, U} <: C{VBound{Tuple{U}, T}, Ref{<:U}} end      # ... or the bound
+end
+let Total = DeferredSuperTotal.Total, Dependent = DeferredSuperTotal.Dependent,
+    Closed = DeferredSuperTotal.Closed, Partial = DeferredSuperTotal.Partial, Lower = DeferredSuperTotal.Lower, Shift = DeferredSuperTotal.Shift,
+    Rank = DeferredSuperTotal.Rank, VUnion = DeferredSuperTotal.VUnion, VBound = DeferredSuperTotal.VBound,
+    A = DeferredSuperTotal.A, C = DeferredSuperTotal.C, D = DeferredSuperTotal.D
+    @test supertype(Total{Int}) === C{A{Int}, Total{Tuple{Int}}}
+    @test !isdefined(Base.inferencebarrier(Total{Tuple{Int}}), :super)  # still deferred
+    @test supertype(supertype(Closed{Int}).parameters[2]) === C{Tuple{D{Any, Int}, A{<:Signed}}, Closed{Tuple{Tuple{Int}}}}
+    @test supertype(Total{Tuple{Int}}) === C{A{Int}, Total{Tuple{Tuple{Int}}}}
+    @test_throws TypeError Partial{Int}          # at construction, not from `supertype(Partial{Tuple{Int}})`
+    @test_throws TypeError Partial{String}
+    @test_throws ErrorException Lower{Int}       # eager, and refused rather than instantiated without end
+    @test_throws ErrorException Dependent{Int}
+    @test supertype(Shift{Int, Int}) === C{Shift{Tuple{Int}, Int}, Tuple{Int}}
+    @test !isdefined(Base.inferencebarrier(Shift{Tuple{Int}, Int}), :super)
+    @test supertype(Shift{Tuple{Int}, Int}) === C{Shift{Tuple{Int}, Tuple{Int}}, Tuple{Int}}
+    @test_throws ErrorException Shift{Union{}, Int}  # the level `Shift{Tuple{Int}, Union{}}` is eager
+    @test supertype(Rank{Int, 1}) === C{Rank{Tuple{Int}, 1}, 1}
+    @test !isdefined(Base.inferencebarrier(Rank{Tuple{Int}, 1}), :super)
+    @test supertype(Rank{Tuple{Int}, 1}) === C{Rank{Tuple{Tuple{Int}}, 1}, 1}
+    @test_throws TypeError VUnion{1, Int}        # the level `VUnion{Tuple{Int}, 1}` is eager
+    @test_throws TypeError VBound{1, Int}
+end
+
 # The cycle can run through several declarations, each of which mentions only
 # the next typename.
 module DeferredSuperMutual
