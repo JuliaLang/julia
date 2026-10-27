@@ -844,12 +844,12 @@ sizeof(x) = Core.sizeof(x)
     Core.bitsizeof(T::DataType)
     Core.bitsizeof(obj)
 
-Logical size, in bits, of the canonical binary representation of the given `DataType` `T`, if any.
-Or the logical size, in bits, of object `obj` if it is not a `DataType`.
+Declared width, in bits, of the primitive type `T`, or of the primitive type of `obj` if it is
+not a `DataType`. Any other type or object throws an error.
 
-For primitive types, this may differ from `8*sizeof(T)`: `sizeof` rounds the value bytes up to
-a multiple of the type's alignment (see the manual section on primitive types), and the bits past
-the declared width are padding.
+This may differ from `8*sizeof(T)`: `sizeof` rounds the value bytes up to a multiple of the type's
+alignment (see the manual section on primitive types), and the bits past the declared width are
+padding.
 
 # Examples
 ```jldoctest
@@ -863,6 +863,11 @@ julia> primitive type MyUInt63 <: Unsigned 63 end
 
 julia> Core.bitsizeof(MyUInt63)
 63
+
+julia> Core.bitsizeof(ComplexF32)
+ERROR: Type Complex is not a primitive type and has no bit size.
+Stacktrace:
+[...]
 ```
 """
 Core.bitsizeof

@@ -2283,6 +2283,28 @@ let nfields_tfunc(@nospecialize xs...) =
     @test sizeof_tfunc(Type{Ptr}) === Const(sizeof(Ptr))
     @test bitsizeof_tfunc(Type{BitsizeofUInt17}) === Const(17)
     @test bitsizeof_tfunc(DataType) === Int
+    @test bitsizeof_tfunc(Core.TypeEgal{BitsizeofUInt17}) === Const(17)
+    @test bitsizeof_tfunc(BitsizeofUInt17) === Const(17)
+    @test bitsizeof_tfunc(Const(0x01)) === Const(8)
+    @test bitsizeof_tfunc(Const(Pair{Int32,Int16})) === Int
+    @test bitsizeof_tfunc(Core.TypeEgal{Union{Int8,Int16}}) === Int
+    @test bitsizeof_tfunc(Tuple{Int}) === Int
+    bitsizeof_nothrow(@nospecialize xs...) = Compiler.bitsizeof_nothrow(xs...)
+    @test bitsizeof_nothrow(Const(Int))
+    @test bitsizeof_nothrow(Const(1.0))
+    @test bitsizeof_nothrow(Core.TypeEgal{BitsizeofUInt17})
+    @test bitsizeof_nothrow(Union{Int8, Ptr, Core.TypeEgal{Float32}})
+    @test !bitsizeof_nothrow(Type{BitsizeofUInt17})
+    @test !bitsizeof_nothrow(Const(Ptr))
+    @test !bitsizeof_nothrow(Core.TypeEgal{Ptr})
+    @test !bitsizeof_nothrow(Const(Pair{Int32,Int16}))
+    @test !bitsizeof_nothrow(Core.TypeEgal{Tuple{Int}})
+    @test !bitsizeof_nothrow(Core.TypeEgal{Union{Int8,Int16}})
+    @test !bitsizeof_nothrow(Const("abc"))
+    @test !bitsizeof_nothrow(String)
+    @test !bitsizeof_nothrow(Union{Int, String})
+    @test !bitsizeof_nothrow(DataType)
+    @test !bitsizeof_nothrow(Any)
     @test !sizeof_nothrow(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}})
     @test sizeof_nothrow(Union{Ptr, Int, Core.TypeEgal{Ptr{Int8}}, Core.TypeEgal{Int}})
     @test sizeof_nothrow(Const(Ptr))
