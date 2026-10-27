@@ -634,7 +634,10 @@ cmp(x::Integer, y::BigInt) = -cmp(y, x)
 cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? -1 : sign(MPZ.cmp_d(x, y))
 cmp(x::CdoubleMax, y::BigInt) = -cmp(y, x)
 
-isqrt(x::BigInt) = !isnegative(x) ? MPZ.sqrt(x) : throw(DomainError(x, "`x` cannot be negative."))
+function isqrt(x::BigInt)
+    isnegative(x) && throw(DomainError(x, "isqrt requires a nonnegative integer."))
+    return MPZ.sqrt(x)
+end
 
 ^(x::BigInt, y::Culong) = MPZ.pow_ui(x, y)
 
