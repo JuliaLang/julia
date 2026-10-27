@@ -253,6 +253,7 @@ function split_rest(itr, n::Int, state...)
 end
 _split_rest(itr, n::Int) = _split_rest(collect(itr), n)
 function _check_length_split_rest(len, n)
+    n < 0 && throw(ArgumentError("n cannot be negative: $n"))
     len < n && throw(ArgumentError(
         "The iterator only contains $len elements, but at least $n were requested."
     ))
