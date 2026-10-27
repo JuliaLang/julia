@@ -239,6 +239,15 @@ timesofar("promotions")
         @test b1[32:63] == b2
     end
 
+    @testset "sizehint! with non-Int sizes" begin
+        for sz in (UInt(100), Int32(100), Int8(100))
+            b1 = bitrand(3)
+            b2 = copy(b1)
+            @test sizehint!(b1, sz) === b1
+            @test b1 == b2
+        end
+    end
+
     @testset "sizeof (issue #7515)" begin
         @test sizeof(BitVector(undef, 64)) == 8
         @test sizeof(BitVector(undef, 65)) == 16
