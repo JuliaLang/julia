@@ -1236,11 +1236,17 @@ function hex2bytes end
 
 hex2bytes(s) = hex2bytes!(Vector{UInt8}(undef, length(s)::Int >> 1), s)
 
-# special case - valid bytes are checked in the generic implementation
-function hex2bytes!(dest::AbstractArray{UInt8}, s::String)
-    sizeof(s) != length(s) && throw(ArgumentError("input string must consist of hexadecimal characters only"))
+# Strings with `UInt8` codeunits are decoded via their codeunits, since a non-ASCII
+# character consists only of bytes >= 0x80, which are rejected as hex digits.
+# Otherwise, iterate the characters, computing the O(n) `length` only once.
+function hex_digits(s::AbstractString)
+    codeunit(s) === UInt8 && return (codeunits(s), ncodeunits(s))
+    return (s, length(s))
+end
 
-    hex2bytes!(dest, transcode(UInt8, s))
+function hex2bytes(s::AbstractString)
+    itr, len = hex_digits(s)
+    return hex2bytes_len!(Vector{UInt8}(undef, len >> 1), itr, len)
 end
 
 """
@@ -1257,10 +1263,16 @@ to `dest`. The length of `dest` must be half the length of `itr`.
 
 See also [`hex2bytes`](@ref), [`bytes2hex`](@ref).
 """
-function hex2bytes!(dest::AbstractArray{UInt8}, itr)
-    isodd(length(itr)) && throw(ArgumentError("length of iterable must be even"))
-    @boundscheck 2*length(dest) != length(itr) && throw(ArgumentError("length of output array must be half of the length of input iterable"))
-    iszero(length(itr)) && return dest
+function hex2bytes!(dest::AbstractVector{UInt8}, itr)
+    return hex2bytes_len!(dest, itr, length(itr))
+end
+
+hex2bytes!(dest::AbstractVector{UInt8}, s::AbstractString) = hex2bytes_len!(dest, hex_digits(s)...)
+
+function hex2bytes_len!(dest::AbstractVector{UInt8}, itr, itr_len::Integer)
+    isodd(itr_len) && throw_odd_hex_len(typeof(itr))
+    @boundscheck 2*length(dest) != itr_len && throw_hex_dest_len(typeof(itr))
+    iszero(itr_len) && return dest
 
     next = iterate(itr)
     @inbounds for i in eachindex(dest)
@@ -1274,12 +1286,36 @@ function hex2bytes!(dest::AbstractArray{UInt8}, itr)
 end
 
 @inline number_from_hex(c::AbstractChar) = number_from_hex(Char(c)::Char)
-@inline number_from_hex(c::Char) = number_from_hex(UInt8(c))
+
+@inline function number_from_hex(c::Char)
+    isascii(c) || throw_not_ascii_hexadecimal(c)
+    number_from_hex((reinterpret(UInt32, c) >> 24) % UInt8)
+end
+
 @inline function number_from_hex(c::UInt8)
     UInt8('0') <= c <= UInt8('9') && return c - UInt8('0')
-    c |= 0b0100000
-    UInt8('a') <= c <= UInt8('f') && return c - UInt8('a') + 0x0a
-    throw(ArgumentError("byte is not an ASCII hexadecimal digit"))
+    c1 = c | 0b00100000 # lowercase
+    UInt8('a') <= c1 <= UInt8('f') && return c1 - UInt8('a') + 0x0a
+    throw_not_ascii_hexadecimal(c)
+end
+
+@noinline function throw_not_ascii_hexadecimal(x::Union{Char, UInt8})
+    kind = x isa UInt8 ? "byte" : "character"
+    throw(ArgumentError(kind * " " * repr(x) * " is not an ASCII hexadecimal digit"))
+end
+
+# What the input length counts, for error messages
+function hex_len_unit(T::Type)
+     T <: CodeUnits ? "codeunits" : T <: AbstractString ? "characters" : "elements"
+end
+
+@noinline function throw_odd_hex_len(::Type{T}) where T
+    throw(ArgumentError("input must contain an even number of " * hex_len_unit(T)))
+end
+
+@noinline function throw_hex_dest_len(::Type{T}) where T
+    s = "length of output array must be half the number of " * hex_len_unit(T) * " in the input"
+    throw(ArgumentError(s))
 end
 
 """
