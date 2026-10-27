@@ -9517,6 +9517,48 @@ struct Bar{T}; x::Foo{T, Nothing}; end
 end
 @test fieldtype(LazySuperBound.Bar{LazySuperBound.NewT}, :x) === LazySuperBound.Foo{LazySuperBound.NewT, Nothing}
 
+# A level of a self-referential definition (#61347) is instantiated from a
+# template whose own supertype is deferred. It is a complete type, not part of
+# a definition in progress: its field types are computed with it, and it does
+# not accumulate on the typename's `partial` list.
+module DeferredSuperLevels
+abstract type A{X} end
+struct F{T} <: A{F{Tuple{T}}}
+    x::T
+end
+abstract type G{T} <: A{G{Tuple{T}}} end
+struct E{T} <: A{E{Tuple{T}}} end
+end
+let F = DeferredSuperLevels.F, A = DeferredSuperLevels.A,
+    G = DeferredSuperLevels.G, E = DeferredSuperLevels.E
+    level2 = supertype(F{Tuple{Int}}).parameters[1]
+    @test level2 === F{Tuple{Tuple{Int}}}
+    @test isdefined(level2, :types)
+    @test fieldtype(level2, 1) === Tuple{Tuple{Int}}
+    @test supertype(level2) === A{F{Tuple{Tuple{Tuple{Int}}}}}
+    @test supertype(supertype(G{Int}).parameters[1]) === A{G{Tuple{Tuple{Int}}}}
+    @test supertype(supertype(E{Int}).parameters[1]) === A{E{Tuple{Tuple{Int}}}}
+    # drained when the definition completes, and nothing is added afterwards
+    @test !isdefined(F.body.name, :partial)
+    @test !isdefined(G.body.name, :partial)
+    @test !isdefined(E.body.name, :partial)
+end
+
+# The cycle can run through several declarations, each of which mentions only
+# the next typename.
+module DeferredSuperMutual
+abstract type A{X} end
+typegroup
+struct S{T} <: A{R{Tuple{T}}} end
+struct R{T} <: A{S{Tuple{T}}} end
+end
+end
+let A = DeferredSuperMutual.A, S = DeferredSuperMutual.S, R = DeferredSuperMutual.R
+    @test supertype(S{Int}) === A{R{Tuple{Int}}}
+    @test supertype(R{Tuple{Int}}) === A{S{Tuple{Tuple{Int}}}}
+    @test !isdefined(S.body.name, :partial)
+end
+
 # Method tables and dispatch caches keep their entries in insertion-ordered dicts that
 # grow by appending. Every entry must stay reachable as a dict grows through many sizes.
 module OrderedDictGrowth

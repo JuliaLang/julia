@@ -2516,6 +2516,25 @@ static int typename_occurs_in(jl_value_t *t, jl_typename_t *tn) JL_NOTSAFEPOINT
     return 0;
 }
 
+// Does the supertype declaration `decl` of `tn` close a cycle of declarations
+// on `stack`: is `tn` in progress, and does `decl` mention it or a typename
+// instantiated since (`struct S{T} <: A{R{Tuple{T}}}` with
+// `struct R{T} <: A{S{Tuple{T}}}`)?
+static int super_cycle_on_stack(jl_typestack_t *stack, jl_typename_t *tn, jl_value_t *decl) JL_NOTSAFEPOINT
+{
+    if (!typename_on_stack(stack, tn))
+        return 0;
+    for (; stack != NULL; stack = stack->prev) {
+        if (stack->tt == NULL)
+            continue;
+        if (typename_occurs_in(decl, stack->tt->name))
+            return 1;
+        if (stack->tt->name == tn)
+            return 0;
+    }
+    return 0;
+}
+
 static jl_value_t *inst_datatype_complete(jl_datatype_t *dt, jl_datatype_t *ndt, jl_typestack_t *stack,
                                           jl_typeenv_t *env, int check, int nothrow,
                                           jl_deferred_typecache_t *dcache, int cacheable, int defer) JL_CANSAFEPOINT;
@@ -2863,6 +2882,21 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     return res;
 }
 
+// the supertype declaration of `primarydt`, the definition of `ndt`, at its parameters
+static jl_value_t *inst_declared_super(jl_datatype_t *primarydt, jl_datatype_t *ndt, jl_typestack_t *stack,
+                                       int check, int nothrow, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT
+{
+    size_t nparams = jl_svec_len(primarydt->parameters), pi;
+    jl_typeenv_t *penv = (jl_typeenv_t*)alloca(nparams * sizeof(jl_typeenv_t));
+    for (pi = 0; pi < nparams; pi++) {
+        penv[pi].var = (jl_tvar_t*)jl_svecref(primarydt->parameters, pi);
+        penv[pi].val = jl_svecref(ndt->parameters, pi);
+        penv[pi].prev = pi == 0 ? NULL : &penv[pi - 1];
+    }
+    return inst_type_w_((jl_value_t*)primarydt->super, nparams == 0 ? NULL : &penv[nparams - 1],
+                        stack, check, nothrow, dcache);
+}
+
 // Finish `ndt`, which has its name, parameters and memoized flags and sits on
 // top of `stack`: look the key up once more under `typecache_lock` (it was
 // taken for a cacheable, non-deferred type), then compute the layout, the
@@ -2892,27 +2926,32 @@ static jl_value_t *inst_datatype_complete(jl_datatype_t *dt, jl_datatype_t *ndt,
 
     // A definition whose supertype declaration recursively applies the type
     // being defined at structurally increasing parameters (issue #61347, e.g.
-    // `struct S{T} <: A{S{Tuple{T}}} end`) has an infinite supertype graph:
-    // eagerly instantiating each level's supertype creates the next level.
-    // When another instantiation of this typename is already in flight above
-    // this one (`stack` has `ndt` itself on top) and the supertype template
-    // mentions the typename, defer the supertype and complete it lazily, one
+    // `struct S{T} <: A{S{Tuple{T}}} end`), directly or through other
+    // declarations, has an infinite supertype graph: eagerly instantiating
+    // each level's supertype creates the next level. When another
+    // instantiation of this typename is already in flight above this one
+    // (`stack` has `ndt` itself on top) and the supertype template mentions
+    // the typename or one instantiated since (`super_cycle_on_stack`), defer
+    // the supertype and complete it lazily, one
     // level per demand (`jl_datatype_compute_super`). Same-parameter
     // self-references never get here (`lookup_type_stack` ties that knot),
     // so ordinary recursive types are unaffected. Field types stay eager: a
     // concrete type must publish with its layout, and only the supertype
     // declaration can force an infinite graph through abstract levels.
-    int defer_super = check && !istuple && !isnamedtuple && dt->super != NULL &&
-        typename_on_stack(stack->prev, tn) &&
-        typename_occurs_in((jl_value_t*)primarydt->super, tn);
+    int in_definition = primarydt->super == NULL;
+    int defer_super = !istuple && !isnamedtuple && !in_definition &&
+        super_cycle_on_stack(stack->prev, tn, (jl_value_t*)primarydt->super);
     if (istuple || isnamedtuple) {
         ndt->super = jl_any_type;
     }
     else if (defer_super) {
         // deferred (see above)
     }
-    else if (dt->super) {
-        jl_value_t *super = inst_type_w_((jl_value_t*)dt->super, env, stack, check, nothrow, dcache);
+    else if (!in_definition) {
+        // from the declaration, not from `dt`: it may be a template whose own
+        // supertype is deferred (unset), or was computed while the definition
+        // still held a placeholder
+        jl_value_t *super = inst_declared_super(primarydt, ndt, stack, check, nothrow, dcache);
         if (nothrow && super == NULL)
             return NULL;
         // a nested subtype walk that found `ndt` on the stack may have computed
@@ -2924,7 +2963,10 @@ static jl_value_t *inst_datatype_complete(jl_datatype_t *dt, jl_datatype_t *ndt,
     jl_svec_t *ftypes = dt->types;
     if (ftypes == NULL)
         ftypes = primarydt->types;
-    if (ftypes == NULL || dt->super == NULL) {
+    // `partial` is drained only when the definition completes, so a type made
+    // afterwards never goes there, even from a template whose supertype is
+    // deferred (unset): its supertype and field types are computed lazily
+    if (ftypes == NULL || in_definition) {
         // in the process of creating this type definition:
         // need to instantiate the super and types fields later
         if (tn->partial == NULL) {
@@ -3508,20 +3550,11 @@ JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROP
     jl_datatype_t *primarydt = (jl_datatype_t*)jl_unwrap_unionall(ndt->name->wrapper);
     if (primarydt == ndt || primarydt->super == NULL)
         return NULL; // definition in progress
-    size_t nparams = jl_svec_len(ndt->parameters), pi;
-    jl_typeenv_t *penv = (jl_typeenv_t*)alloca(nparams * sizeof(jl_typeenv_t));
-    for (pi = 0; pi < nparams; pi++) {
-        penv[pi].var = (jl_tvar_t*)jl_svecref(primarydt->parameters, pi);
-        penv[pi].val = jl_svecref(ndt->parameters, pi);
-        penv[pi].prev = pi == 0 ? NULL : &penv[pi - 1];
-    }
     // nested in an instantiation of the current task (through the subtyping
     // of a cache lookup), continue its stack: a type that instantiation is
     // still building is found there instead of being created a second time
     jl_typestack_t stop = { ndt, typecache_stack_held() };
-    jl_value_t *s = inst_type_w_((jl_value_t*)primarydt->super,
-                                 nparams == 0 ? NULL : &penv[nparams - 1],
-                                 &stop, 1, 0, NULL);
+    jl_value_t *s = inst_declared_super(primarydt, ndt, &stop, 1, 0, NULL);
     // concurrent first queries compute equal values; the compare-and-swap
     // keeps a single winner
     super = NULL;
@@ -3569,10 +3602,9 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t, jl_deferred_typecache_t *dca
         if (ndt == NULL)
             continue;
         assert(jl_unwrap_unionall(ndt->name->wrapper) == (jl_value_t*)t);
-        for (i = 0; i < n; i++)
-            env[i].val = jl_svecref(ndt->parameters, i);
-
-        jl_gc_write(ndt, ndt->super, jl_datatype_t, (jl_datatype_t*)inst_type_w_((jl_value_t*)t->super, &env[n - 1], &top, 1, 0, dcache));
+        // a plain write: during a typegroup definition, a lazy computation may
+        // have stored one made from the `Any` placeholder
+        jl_gc_write(ndt, ndt->super, jl_datatype_t, (jl_datatype_t*)inst_declared_super(t, ndt, &top, 1, 0, dcache));
     }
 
     if (t->types != jl_emptysvec) {
@@ -3597,11 +3629,11 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t, jl_deferred_typecache_t *dca
             }
             jl_array_ptr_set(partial, j, NULL);
         }
-        jl_gc_write(t->name, t->name->partial, jl_array_t, NULL);
     }
     else {
         assert(jl_field_names(t) == jl_emptysvec);
     }
+    jl_gc_write(t->name, t->name->partial, jl_array_t, NULL);
 }
 
 // initialization -------------------------------------------------------------
