@@ -264,7 +264,11 @@ end
 
 @eval _split_tuple(t::Tuple, n::Int, i::Int=1) = ($(Expr(:meta, :aggressive_constprop)); (t[i:n], t[n+1:end]))
 
-@eval split_rest(t::Tuple, n::Int, i=1) = ($(Expr(:meta, :aggressive_constprop)); _split_tuple(t, length(t)-n, Int(i)))
+@eval function split_rest(t::Tuple, n::Int, i=1)
+    $(Expr(:meta, :aggressive_constprop))
+    _check_length_split_rest(length(t) - Int(i) + 1, n)
+    return _split_tuple(t, length(t)-n, Int(i))
+end
 
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
