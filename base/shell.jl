@@ -222,7 +222,7 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                         popfirst!(st)
                     end
                     while !isempty(st) && (peek(st)::P)[2] in (' ', '\t')
-                        i = nextind(str, i)
+                        i = nextind(s, i)
                         _ = popfirst!(st)
                     end
                 elseif in_double_quotes
