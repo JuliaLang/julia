@@ -779,6 +779,8 @@ if !Sys.iswindows()
     @test string(cmd_uid) == "setuid(`echo test`, 1001)"
     cmd_both = setuid(setgid(`echo test`, 1000), 1001)
     @test string(cmd_both) == "setgid(setuid(`echo test`, 1001), 1000)"
+    @test string(setuid(setgid(`echo test`, typemax(UInt32)), 0x80000000)) ==
+        "setgid(setuid(`echo test`, 2147483648), 4294967295)"
 end
 
 # Cmd equality and hashing take CPU affinity into account
