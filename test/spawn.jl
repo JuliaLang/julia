@@ -865,6 +865,10 @@ end
         @test !contains(s, "secret123")
         @test contains(s, "PATH=/usr/bin")
     end
+
+    # names starting with a multi-byte character
+    @test repr(setenv(`env`, "é" => "1")) == "setenv(`env`,[\"é=1\"])"
+    @test repr(setenv(`env`, "é" => "1"), context=:show_env=>:keys) == "setenv(`env`,[\"é\"])"
     # JET.@test_call show(::IOBuffer, ::Cmd)
 end
 

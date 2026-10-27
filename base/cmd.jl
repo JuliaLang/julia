@@ -164,7 +164,7 @@ function show_env(io::IO, env::Vector{String})
     print(io, "[")
     for (i, e) in enumerate(env)
         i > 1 && print(io, ", ")
-        eqidx = findnext('=', e, 2)
+        eqidx = isempty(e) ? nothing : findnext('=', e, nextind(e, 1))
         if eqidx === nothing || mode === :all
             show(io, e)
         elseif mode === :keys
