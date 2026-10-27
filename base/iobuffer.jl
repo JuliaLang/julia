@@ -836,13 +836,15 @@ function takestring!(io::IOBuffer)
     # If the buffer has been used up and needs to be replaced, there are no bytes, and
     # we can return an empty string without interacting with the buffer at all.
     io.reinit && return ""
+    # Like take!, discard the mark so that already-read bytes of a
+    # non-seekable buffer are not included.
+    io.mark = -1
 
     # If the iobuffer is writable, taking will remove the buffer from `io`.
     # So, we reset the iobuffer, and directly unsafe takestring.
     return if io.writable
         s = unsafe_takestring!(io)
         io.reinit = true
-        io.mark = -1
         io.ptr = 1
         io.size = 0
         io.offset_or_compacted = 0

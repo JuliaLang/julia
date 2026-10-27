@@ -349,6 +349,13 @@ end
     write(buf, "abcde")
     read(buf, UInt16)
     @test takestring!(buf) == "cde"
+
+    # The mark must not bring back already-read bytes
+    buf = new_unseekable_buffer()
+    write(buf, "abcdef")
+    mark(buf)
+    read(buf, UInt16)
+    @test takestring!(buf) == "cdef"
 end
 
 @testset "Read/write readonly IOBuffer" begin
