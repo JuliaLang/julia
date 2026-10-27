@@ -333,7 +333,7 @@ logfield_contains(a, b) = a == b
 logfield_contains(a, r::Regex) = occursin(r, a)
 logfield_contains(a::Symbol, r::Regex) = occursin(r, String(a))
 logfield_contains(a::LogLevel, b::Symbol) = a == parse_level(b)
-logfield_contains(a, b::Ignored) = true
+logfield_contains(_, ::Ignored) = true
 
 function occursin(pattern::Tuple, r::LogRecord)
     stdfields = (r.level, r.message, r._module, r.group, r.id, r.file, r.line)

@@ -123,8 +123,12 @@ struct Pass <: Result
     value
     source::Union{Nothing,LineNumberNode}
     message_only::Bool
-    function Pass(test_type::Symbol, orig_expr, data, thrown, source::Union{Nothing,LineNumberNode}=nothing, message_only::Bool=false)
-        return new(test_type, orig_expr, data, thrown, source, message_only)
+    function Pass(
+            test_type::Symbol, orig_expr, data, value,
+            source::Union{Nothing,LineNumberNode}=nothing, message_only::Bool=false
+        )
+        @nospecialize orig_expr data value
+        return new(test_type, orig_expr, data, value, source, message_only)
     end
 end
 
@@ -443,9 +447,9 @@ const comparison_prec = Base.operator_precedence(:(==))
 Preprocess test expressions of function calls with trailing keyword arguments
 so that e.g. `@test a ≈ b atol=ε` means `@test ≈(a, b, atol=ε)`.
 """
-test_expr!(m, ex) = ex
+test_expr!(_m, @nospecialize(ex)) = ex
 
-function test_expr!(m, ex, kws...)
+function test_expr!(m, @nospecialize(ex), kws...)
     @label fail begin
         ex isa Expr && ex.head === :call || break fail
         for kw in kws
@@ -1352,10 +1356,10 @@ end
 # Format the expected warning pattern for display
 # For literals (String, Regex), show the value with matching method
 # For expressions (Function, etc.), show the original expression
-_format_warn_msg(expr, s::AbstractString) = repr(s) * " (occursin)"
-_format_warn_msg(expr, s::Regex) = repr(s) * " (occursin)"
-_format_warn_msg(expr, s::Function) = string(_remove_linenums(expr))
-_format_warn_msg(expr, S::Union{AbstractArray,Tuple}) = string(_remove_linenums(expr)) * " (all, occursin)"
+_format_warn_msg(_expr, s::AbstractString) = repr(s) * " (occursin)"
+_format_warn_msg(_expr, s::Regex) = repr(s) * " (occursin)"
+_format_warn_msg(expr, ::Function) = string(_remove_linenums(expr))
+_format_warn_msg(expr, ::Union{AbstractArray,Tuple}) = string(_remove_linenums(expr)) * " (all, occursin)"
 
 _remove_linenums(x) = x
 function _remove_linenums(ex::Expr)
@@ -1453,8 +1457,8 @@ end
 
 # Records nothing, and throws an error immediately whenever a Fail or
 # Error occurs. Takes no action in the event of a Pass or Broken result
-record(ts::FallbackTestSet, t::Union{Pass, Broken}) = t
-function record(ts::FallbackTestSet, t::Union{Fail, Error})
+record(::FallbackTestSet, t::Union{Pass, Broken}) = t
+function record(::FallbackTestSet, t::Union{Fail, Error})
     println(t)
     throw(FallbackTestSetException("There was an error during testing"))
 end
@@ -1874,7 +1878,7 @@ function get_alignment(ts::DefaultTestSet, depth::Int)
     child_widths = map(t->get_alignment(t, depth+1), ts.results)
     return max(ts_width, maximum(child_widths))
 end
-get_alignment(ts, depth::Int) = 0
+get_alignment(@nospecialize(_ts), _depth::Int) = 0
 
 """
     format_duration(::AbstractTestSet)
@@ -2140,7 +2144,7 @@ macro testset(args...)
     if tests.head === :for
         return testset_forloop(args, tests, __source__)
     elseif tests.head === :let
-        return testset_context(args, tests, __source__)
+        return testset_context(args, tests)
     else
         return testset_beginend_call(args, tests, __source__)
     end
@@ -2149,14 +2153,14 @@ end
 trigger_test_failure_break(@nospecialize(err)) =
     ccall(:jl_test_failure_breakpoint, Cvoid, (Any,), err)
 
-is_failfast_error(err::FailFastError) = true
+is_failfast_error(::FailFastError) = true
 is_failfast_error(err::LoadError) = is_failfast_error(err.error) # handle `include` barrier
-is_failfast_error(err) = false
+is_failfast_error(@nospecialize _) = false
 
 """
 Generate the code for an `@testset` with a `let` argument.
 """
-function testset_context(args, ex, source)
+function testset_context(args, ex)
     desc, testsettype, options = parse_testset_args(args[1:end-1])
     if desc !== nothing || testsettype !== nothing
         # Reserve this syntax if we ever want to allow this, but for now,
