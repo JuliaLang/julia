@@ -1551,6 +1551,14 @@ let effects = Base.infer_effects(bitsizeof_int)
     @test Compiler.is_foldable_nothrow(effects)
     @test Compiler.is_inaccessiblememonly(effects)
 end
+bitsizeof_struct() = (Core.bitsizeof(Pair{Int32,Int16}); nothing)
+@test !Compiler.is_nothrow(Base.infer_effects(bitsizeof_struct))
+@test_throws ErrorException bitsizeof_struct()
+# intrinsics on a primitive `UnionAll` such as `Ptr`, which has no `Core.bitsizeof`
+for f in (p -> Core.Intrinsics.bitcast(UInt, p), p -> Core.Intrinsics.trunc_int(UInt8, p),
+          Core.Intrinsics.bswap_int)
+    @test Base.infer_effects(f, (Ptr,)) isa Compiler.Effects
+end
 
 # Core._svec_ref effects modeling (required for external abstract interpreter that doesn't run optimization)
 let effects = Base.infer_effects((Core.SimpleVector,Int); optimize=false) do svec, i
