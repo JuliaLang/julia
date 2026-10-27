@@ -990,6 +990,8 @@ end
 unsafe_getindex(r::LinRange, i::Integer) = lerpi(i-oneunit(i), r.lendiv, r.start, r.stop)
 
 function lerpi(j::Integer, d::Integer, a::T, b::T) where T
+    a == b && return a
+
     t = j/d # ∈ [0,1]
     # compute approximately fma(t, b, -fma(t, a, a))
     return T((1-t)*a + t*b)

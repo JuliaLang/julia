@@ -1124,6 +1124,12 @@ let r = LinRange(1,4,4)
     @test isa(r[1:4], LinRange)
 end
 
+# issue #64272
+let r = LinRange(0.1, 0.1, 6)
+    @test collect(r) == fill(0.1, 6)
+    @test all(==(0.1), r)
+end
+
 @testset "range with 1 or 0 elements (whose step length is NaN)" begin
     @test issorted(range(1, stop=1, length=0))
     @test issorted(range(1, stop=1, length=1))
