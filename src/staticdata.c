@@ -723,13 +723,15 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     jl_queue_for_serialization_(s, (jl_value_t*)t, 1, immediate);
     const jl_datatype_layout_t *layout = t->layout;
 
-    if (s->incremental && jl_is_datatype(v)) {
+    if ((s->incremental || jl_options.trim) && jl_is_datatype(v)) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
         jl_datatype_t *super = dt->super;
         // leave an instantiation's super unset (unless it already points outside
         // the image): `jl_datatype_compute_super` recomputes it on demand, and a
-        // copy of this type in the loading process may have it unset (deferred)
-        if (super != NULL && !jl_object_in_image((jl_value_t*)super) &&
+        // copy of this type in the loading process may have it unset (deferred).
+        // A trimmed image drops it too, so that the supertypes nothing else
+        // reaches are trimmed
+        if (super != NULL && (!s->incremental || !jl_object_in_image((jl_value_t*)super)) &&
                 (jl_value_t*)dt != jl_unwrap_unionall(dt->name->wrapper))
             record_field_change((jl_value_t**)&dt->super, NULL);
     }
@@ -4470,29 +4472,19 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             else {
                 dt = (jl_datatype_t*)obj;
                 arraylist_push(&cleanup_list, (void*)obj);
-                if (must_be_new_dt((jl_value_t*)dt, &new_dt_objs, image_base, sizeof_sysimg))
-                    newdt = NULL;
-                else
-                    newdt = jl_lookup_cache_type_(dt);
-                if (newdt == NULL) {
-                    // make a non-owned copy of obj so we don't accidentally
-                    // assume this is the unique copy later
-                    newdt = jl_new_uninitialized_datatype();
-                    jl_astaggedvalue(newdt)->bits.gc = GC_OLD;
-                    // leave most fields undefined for now, but we may need instance later,
-                    // and we overwrite the name field (field 0) now so preserve it too
-                    if (dt->instance) {
-                        if (dt->instance == jl_nothing)
-                            dt->instance = jl_gc_permobj(ct->ptls, 0, newdt, 0);
-                        newdt->instance = dt->instance;
-                    }
-                    static_assert(offsetof(jl_datatype_t, name) == 0, "");
-                    newdt->name = dt->name;
+                // adopt the cached type with this key if there is one, else a
+                // non-owned copy of obj (so we don't accidentally assume this is
+                // the unique copy later), cached now so that a type instantiated
+                // by a later lookup (through a lazy supertype) finds it. Its
+                // parameters are already unique (they precede it), so it is ready
+                // for the cache and for subtyping; `types` may still reach forward
+                // into the image, so it is published after the loop
+                static_assert(offsetof(jl_datatype_t, name) == 0, "");
+                int isnew;
+                newdt = jl_lookup_or_cache_type_(dt, &isnew);
+                if (isnew)
                     ptrhash_put(&new_dt_objs, (void*)newdt, dt);
-                }
-                else {
-                    assert(newdt->hash == dt->hash);
-                }
+                assert(newdt->hash == dt->hash);
                 obj[0] = (jl_value_t*)newdt;
             }
             newobj = (jl_value_t*)newdt;
@@ -4510,19 +4502,21 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg));
         assert(jl_typetagis(obj, otyp));
     }
-    // now that all the fields of dt are assigned and unique, copy them into
-    // their final newdt memory location: this ensures we do not accidentally
-    // think this pkg image has the singular unique copy of it
+    // now that everything the field types reach is unique, publish them into
+    // their final newdt memory location (unless computed lazily meanwhile:
+    // newdt is already cached, so another thread may be computing them)
     void **table = new_dt_objs.table;
     for (size_t i = 0; i < new_dt_objs.size; i += 2) {
         void *dt = table[i + 1];
         if (dt != HT_NOTFOUND) {
             jl_datatype_t *newdt = (jl_datatype_t*)table[i];
-            jl_typename_t *name = newdt->name;
-            static_assert(offsetof(jl_datatype_t, name) == 0, "");
             assert(*(void**)dt == (void*)newdt);
-            *newdt = *(jl_datatype_t*)dt; // copy the datatype fields (except field 1, which we corrupt above)
-            newdt->name = name;
+            jl_svec_t *types = ((jl_datatype_t*)dt)->types;
+            if (types != NULL) {
+                jl_svec_t *unset = NULL;
+                jl_gc_wb(newdt, (void*)&newdt->types, types);
+                jl_atomic_cmpswap((_Atomic(jl_svec_t*)*)&newdt->types, &unset, types);
+            }
         }
     }
     // we should never see these pointers again, so scramble their memory, so any attempt to look at them crashes
@@ -4537,15 +4531,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         o->bits.in_image = 1;
     }
     arraylist_grow(&cleanup_list, -cleanup_list.len);
-    // finally cache all our new types now
+    // finally cache our own types now
     jl_safepoint_suspend_all_threads(ct); // past this point, it is now not safe to observe the intermediate states on other threads via reflection, so temporarily pause those
-    for (size_t i = 0; i < new_dt_objs.size; i += 2) {
-        void *dt = table[i + 1];
-        if (dt != HT_NOTFOUND) {
-            jl_datatype_t *newdt = (jl_datatype_t*)table[i];
-            jl_cache_type_(newdt);
-        }
-    }
     for (size_t i = 0; i < s.fixup_types.len; i++) {
         uintptr_t item = (uintptr_t)s.fixup_types.items[i];
         jl_value_t *obj = (jl_value_t*)(image_base + item);

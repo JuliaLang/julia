@@ -11,59 +11,6 @@ static void write_float64(ios_t *s, double x) JL_NOTSAFEPOINT
     write_uint64(s, *((uint64_t*)&x));
 }
 
-// Decide if `t` must be new, because its type or one of its parameters is new:
-// it is then not in the cache, so it is not looked up there
-int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeof_sysimg)
-{
-    //if (jl_object_in_image(t))
-    //    return 0; // fast-path for rejection
-    if (ptrhash_has(news, (void*)t) || ptrhash_has(news, (void*)jl_typeof(t)))
-        return 1;
-    if (!(image_base < (char*)t && (char*)t <= image_base + sizeof_sysimg))
-        return 0; // fast-path for rejection
-    if (jl_is_uniontype(t)) {
-        jl_uniontype_t *u = (jl_uniontype_t*)t;
-        return must_be_new_dt(u->a, news, image_base, sizeof_sysimg) ||
-               must_be_new_dt(u->b, news, image_base, sizeof_sysimg);
-    }
-    else if (jl_is_unionall(t)) {
-        jl_unionall_t *ua = (jl_unionall_t*)t;
-        return must_be_new_dt((jl_value_t*)ua->var, news, image_base, sizeof_sysimg) ||
-               must_be_new_dt(ua->body, news, image_base, sizeof_sysimg);
-    }
-    else if (jl_is_typevar(t)) {
-        jl_tvar_t *tv = (jl_tvar_t*)t;
-        return must_be_new_dt(tv->lb, news, image_base, sizeof_sysimg) ||
-               must_be_new_dt(tv->ub, news, image_base, sizeof_sysimg);
-    }
-    else if (jl_is_some_Type(t)) {
-        return must_be_new_dt(jl_some_Type_T(t), news, image_base, sizeof_sysimg);
-    }
-    else if (jl_is_vararg(t)) {
-        jl_vararg_t *tv = (jl_vararg_t*)t;
-        if (tv->T && must_be_new_dt(tv->T, news, image_base, sizeof_sysimg))
-            return 1;
-        if (tv->N && must_be_new_dt(tv->N, news, image_base, sizeof_sysimg))
-            return 1;
-    }
-    else if (jl_is_datatype(t)) {
-        jl_datatype_t *dt = (jl_datatype_t*)t;
-        assert(jl_astaggedvalue(dt->name)->bits.in_image && "type_in_worklist mistake?");
-        // super says nothing here: an existing copy of `t` may have it deferred (unset),
-        // so the serializer left it unset unless it points outside the image
-        assert(dt->super == NULL || !(image_base < (char*)dt->super && (char*)dt->super <= image_base + sizeof_sysimg));
-        jl_svec_t *tt = dt->parameters;
-        size_t i, l = jl_svec_len(tt);
-        for (i = 0; i < l; i++)
-            if (must_be_new_dt(jl_tparam(dt, i), news, image_base, sizeof_sysimg))
-                return 1;
-    }
-    else {
-        return must_be_new_dt(jl_typeof(t), news, image_base, sizeof_sysimg);
-    }
-    return 0;
-}
-
 static uint64_t jl_worklist_key(jl_array_t *worklist) JL_NOTSAFEPOINT
 {
     assert(jl_is_array(worklist));

@@ -1757,6 +1757,55 @@ static jl_typestack_t *typecache_stack_held(void) JL_NOTSAFEPOINT
     return jl_mutex_held(&typecache_lock) ? typecache_stack : NULL;
 }
 
+// For the image loader, which holds `typecache_lock`: return the cached type
+// with the key of the image object `dt` (whose name and parameters are already
+// unique), else a fresh copy of `dt`, cached now and reported through `isnew`.
+// The copy gets the `instance` of `dt` (allocated here if the image left
+// `jl_nothing`) before the lookup, since a type adopting it there may publish
+// it to other threads, which read `super` and the cache without the lock. It
+// carries no `types` except for tuples (the caller
+// publishes them once the image is relocated); `super` is unset
+// in the image and stays so, computed lazily. The lookup compares keys by
+// subtyping, which may compute a lazy supertype that instantiates this very
+// key: the copy stands for it on the instantiation stack meanwhile, so that
+// instantiation adopts the copy instead of creating the type. So does the
+// lookup that `jl_cache_type_` repeats to place it
+jl_datatype_t *jl_lookup_or_cache_type_(jl_datatype_t *dt, int *isnew)
+{
+    assert(jl_mutex_held(&typecache_lock));
+    jl_datatype_t *newdt = jl_new_uninitialized_datatype();
+    JL_GC_PUSH1(&newdt);
+    jl_astaggedvalue(newdt)->bits.gc = GC_OLD;
+    *newdt = *dt;
+    jl_value_t *instance = dt->instance;
+    if (instance == jl_nothing)
+        instance = jl_gc_permobj(jl_current_task->ptls, 0, newdt, 0);
+    newdt->instance = instance;
+    if (dt->name != jl_tuple_typename && dt->name != jl_namedtuple_typename)
+        newdt->types = NULL;
+    jl_typestack_t *saved = typecache_stack;
+    jl_typestack_t top = { newdt, saved, 0 };
+    typecache_stack = &top;
+    jl_datatype_t *lkup = NULL;
+    JL_TRY {
+        lkup = jl_lookup_cache_type_(newdt);
+        if (lkup == NULL) {
+            jl_cache_type_(newdt);
+            lkup = newdt;
+        }
+    }
+    JL_CATCH {
+        typecache_stack = saved;
+        jl_rethrow();
+    }
+    typecache_stack = saved;
+    *isnew = lkup == newdt;
+    if (*isnew)
+        dt->instance = instance;
+    JL_GC_POP();
+    return lkup;
+}
+
 static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t *stack, int check, int nothrow, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT;
 static jl_vararg_t *wrap_vararg_(jl_value_t *t, jl_value_t *n, int check, int nothrow,
                                  jl_typestack_t *stack, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT;
