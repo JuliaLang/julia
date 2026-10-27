@@ -1636,9 +1636,23 @@ function discard_stale_workqueue_task(t::Task)
     nothing
 end
 
+# `isempty` + `popfirst!` is not atomic: other threads may unlink entries
+# (e.g. `deliver_claimed_wake!`), so check and pop under one lock.
+function trypopfirst!(W::IntrusiveLinkedListSynchronized)
+    isempty(W) && return nothing
+    lock(W.lock)
+    try
+        q = waitqueue(W)
+        return isempty(q.list) ? nothing : popfirst!(q)
+    finally
+        unlock(W.lock)
+    end
+end
+
 function trypoptask(W::StickyWorkqueue)
-    while !isempty(W)
-        t = popfirst!(W)
+    while true
+        t = trypopfirst!(W)
+        t === nothing && break
         if t._state !== task_state_runnable
             discard_stale_workqueue_task(t)
             continue
