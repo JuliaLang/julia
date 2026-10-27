@@ -52,6 +52,7 @@ cumsum!(B::AbstractArray{T}, A; dims::Integer) where {T} =
     accumulate!(add_sum, B, A, dims=dims)
 
 function cumsum!(out::AbstractArray, v::AbstractVector; dims::Integer=1)
+    dims > 0 || throw(ArgumentError("dims must be a positive integer"))
     # we dispatch on the possibility of numerical stability issues
     _cumsum!(out, v, dims, ArithmeticStyle(eltype(out)))
 end
