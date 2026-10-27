@@ -54,7 +54,7 @@ function write(dest::AnnotatedIOBuffer, src::AnnotatedIOBuffer)
     nb = write(dest.io, src.io)
     isappending || _clear_annotations_in_region!(dest.annotations, destpos:destpos+nb)
     srcannots = [@inline(setindex(annot, max(1 + srcpos, first(annot.region)):last(annot.region), :region))
-                 for annot in src.annotations if first(annot.region) >= srcpos]
+                 for annot in src.annotations if last(annot.region) > srcpos]
     _insert_annotations!(dest, srcannots, destpos - srcpos)
     nb
 end
