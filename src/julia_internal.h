@@ -1055,6 +1055,12 @@ STATIC_INLINE int jl_tagged_word_isptr(uintptr_t w) JL_NOTSAFEPOINT
     return w != 0 && (w & 3) == 0;
 }
 
+// write barrier for storing tagged union word `w` into `slot` of `parent`
+STATIC_INLINE void jl_gc_wb_tagged(const void *parent, void *slot, uintptr_t w) JL_NOTSAFEPOINT
+{
+    jl_gc_wb(parent, slot, jl_tagged_word_isptr(w) ? (void*)w : NULL);
+}
+
 // encode a value of a member type of tagged union `u` into its slot word
 STATIC_INLINE uintptr_t jl_tagged_word_encode(jl_value_t *u, jl_value_t *rhs JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
@@ -1086,7 +1092,7 @@ STATIC_INLINE void jl_tagged_word_store(jl_value_t *parent, _Atomic(uintptr_t) *
                                         jl_value_t *rhs JL_MAYBE_UNROOTED, int isatomic) JL_NOTSAFEPOINT
 {
     uintptr_t w = jl_tagged_word_encode(u, rhs);
-    jl_gc_wb(parent, slot, jl_tagged_word_isptr(w) ? (jl_value_t*)w : NULL);
+    jl_gc_wb_tagged(parent, slot, w);
     if (isatomic)
         jl_atomic_store(slot, w);
     else
