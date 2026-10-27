@@ -551,6 +551,9 @@ let cmd = ["~", "~/x", "~root", "a~", "~'q"]
     @test string(`$cmd`) == """`'~' '~/x' '~root' a~ "~'q"`"""
     @test eval(Meta.parse(string(`$cmd`))) == `$cmd`
 end
+let cmd = ["\\`", "'\\`", "a\\\\`b"]
+    @test eval(Meta.parse(string(`$cmd`))) == `$cmd`
+end
 let cmd = ["foo=bar", "baz"]
     @test string(`$cmd`) == "`foo=bar baz`"
     @test Base.shell_escape(`$cmd`) == "foo=bar baz"
