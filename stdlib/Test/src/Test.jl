@@ -20,23 +20,21 @@ Environment variables:
 """
 module Test
 
-export @test, @test_throws, @test_broken, @test_skip,
-    @test_warn, @test_nowarn,
-    @test_logs, @test_deprecated
+export @inferred, @test, @test_broken, @test_deprecated, @test_logs, @test_nowarn,
+    @test_skip, @test_throws, @test_warn, @testset
 
-export @testset
-export @inferred
-export detect_ambiguities, detect_unbound_args, detect_closure_boxes, detect_closure_boxes_all_modules
-export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
+export detect_ambiguities, detect_closure_boxes, detect_closure_boxes_all_modules,
+    detect_unbound_args
+export GenericArray, GenericDict, GenericOrder, GenericSet, GenericString
 export TestSetException
-export TestLogger, LogRecord
+export LogRecord, TestLogger
 
 using Random
 using Random: AbstractRNG, default_rng
 using InteractiveUtils: gen_call_with_extracted_types
-using Base: typesplit, remove_linenums!, mapany, quoted
+using Base: mapany, quoted, remove_linenums!, typesplit
 using Serialization: Serialization
-using Base.ScopedValues: LazyScopedValue, ScopedValue, @with
+using Base.ScopedValues: @with, LazyScopedValue, ScopedValue
 
 const global_fail_fast = OncePerProcess{Bool}() do
     return Base.get_bool_env("JULIA_TEST_FAILFAST", false)
