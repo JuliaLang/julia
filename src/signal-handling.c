@@ -847,6 +847,8 @@ JL_DLLEXPORT const char *jl_signal_name(int sig)
 static _Atomic(int) signal_watchers[JL_MAX_WATCHED_SIGNAL + 1];
 static _Atomic(int) signal_interceptors[JL_MAX_WATCHED_SIGNAL + 1];
 static _Atomic(int) signal_pending[JL_MAX_WATCHED_SIGNAL + 1];
+// All open conditions, for every signal; guarded by the IO lock.
+static int signal_watchers_open;
 
 // Safe to call from a signal handler. Returns whether the signal's usual effect should be skipped.
 static int jl_notify_signal_watchers(int sig) JL_NOTSAFEPOINT
@@ -881,6 +883,8 @@ JL_DLLEXPORT int jl_signal_watch_start(int sig, int intercept, uv_async_cb cb)
     if (intercept)
         jl_atomic_fetch_add_relaxed(&signal_interceptors[sig], 1);
     jl_atomic_fetch_add(&signal_watchers[sig], 1);
+    if (signal_watchers_open++ == 0)
+        jl_ref_signal_watchers(1);
     return 0;
 }
 
@@ -891,6 +895,8 @@ JL_DLLEXPORT void jl_signal_watch_stop(int sig, int intercept)
     if (jl_atomic_fetch_add(&signal_watchers[sig], -1) == 1 &&
             jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_signal_watch_uninstall(sig);
+    if (--signal_watchers_open == 0)
+        jl_ref_signal_watchers(0);
 }
 
 // Returns a signal that arrived since it was last returned, or 0 if there is none.
