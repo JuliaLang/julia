@@ -3440,7 +3440,8 @@ end
 function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::StatementState,
                            sv::AbsIntState)
     𝕃ᵢ = typeinf_lattice(interp)
-    rt, _... = instanceof_tfunc(abstract_eval_value(interp, e.args[1], sstate, sv), true)
+    argtype = abstract_eval_value(interp, e.args[1], sstate, sv)
+    rt, _... = instanceof_tfunc(argtype, true)
     ut = unwrap_unionall(rt)
     exct = Union{ErrorException,TypeError}
     if isa(ut, DataType) && !isabstracttype(ut)
@@ -3464,7 +3465,8 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
         # have well-defined field count, and field-level extended lattice elements carry
         # information beyond the declared type.
         if fcount !== nothing
-            nothrow = isconcretedispatch(rt)
+            # `:new` throws on a `UnionAll` or `Union` rep that is only `==` to `rt` (#61323)
+            nothrow = isconcretedispatch(rt) && widenconst(argtype) <: DataType
             @assert nargs ≤ fcount "malformed :new expression" # syntactically enforced by the front-end
             ats = Vector{Any}(undef, nargs)
             local anyrefine = false
@@ -3540,7 +3542,10 @@ end
 function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, sstate::StatementState,
                                 sv::AbsIntState)
     𝕃ᵢ = typeinf_lattice(interp)
-    rt, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], sstate, sv), true)
+    argtype = abstract_eval_value(interp, e.args[1], sstate, sv)
+    rt, isexact = instanceof_tfunc(argtype, true)
+    # `:splatnew` throws on a `UnionAll` or `Union` rep that is only `==` to `rt` (#61323)
+    isexact = isexact && widenconst(argtype) <: DataType
     nothrow = false
     if length(e.args) == 2 && isconcretedispatch(rt) && !ismutabletype(rt)
         at = abstract_eval_value(interp, e.args[2], sstate, sv)
