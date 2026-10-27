@@ -3635,7 +3635,7 @@ demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
     @test z == 5
 
     @test_throws ArgumentError begin x, y..., z = 1:1 end
-    @test_throws BoundsError begin x, y, _..., z = 1, 2 end
+    @test_throws ArgumentError begin x, y, _..., z = 1, 2 end
 
     last((a..., b)) = b
     front((a..., b)) = a
