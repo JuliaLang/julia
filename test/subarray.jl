@@ -365,7 +365,7 @@ end
     @test all(A[5:15:120] .== -1)
     @test @inferred(strides(sA)) == (1,3,15)
     @test stride(sA,3) == 15
-    @test stride(sA,4) == 120
+    @test stride(sA,4) == 136
     test_bounds(sA)
     sA = view(A, 1:3, 1:5, 5)
     sA[1:3,1:5] .= -2
