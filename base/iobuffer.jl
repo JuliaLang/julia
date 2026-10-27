@@ -851,6 +851,7 @@ function takestring!(io::IOBuffer)
         # If the buffer is not writable, taking will NOT remove the buffer,
         # so if we just converted the buffer to a string, garbage collecting
         # the string would free the memory underneath the iobuffer
+        io.mark = -1
         used_span = get_used_span(io)
         mem = StringMemory(length(used_span))
         unsafe_copyto!(mem, 1, io.data, first(used_span), length(used_span))

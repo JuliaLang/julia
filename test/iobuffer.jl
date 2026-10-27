@@ -359,6 +359,13 @@ end
 
     buf = new_unseekable_buffer()
     write(buf, "abcdef")
+    closewrite(buf)
+    mark(buf)
+    read(buf, UInt16)
+    @test takestring!(buf) == "cdef"
+
+    buf = new_unseekable_buffer()
+    write(buf, "abcdef")
     mark(buf)
     read(buf, UInt16)
     @test Base.unsafe_takestring!(buf) == "cdef"
