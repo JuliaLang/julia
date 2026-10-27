@@ -232,6 +232,8 @@ struct F49231{a,b,c,d,e,f,g} end
     str = "F49231{Vector,Val{('}','}')},Vector{Vector{Vector{Vector}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}"
     @test tdl(str, 105) == "F49231{Vector,Val{('}','}')},Vector{Vector{Vector{…}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}"
     @test tdl(str, 85) == "F49231{Vector,Val{…},Vector{…},Tuple{…},Int,Int,Int}"
+    @test tdl("A{'\\\\'}B{C}", 0, maxdepth = 1) == "A{…}B{…}"
+    @test tdl("f(::Val{Symbol(\"\\\\\")}, ::Vector{Vector{Int64}})", 30) == "f(::Val{…}, ::Vector{…})"
 
     # Stacktrace
     a = UInt8(81):UInt8(160)

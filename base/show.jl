@@ -2742,7 +2742,8 @@ function type_depth_limit(str::String, n::Int; maxdepth = nothing)
         end
 
         if c == '\\' && quoted()
-            enter(st_backslash)
+            # a backslash escapes the next character, including another backslash
+            stateis(st_backslash) ? leave(st_backslash) : enter(st_backslash)
         elseif c == '\''
             if stateis(st_backslash) || stateis(st_dquote)
             elseif stateis(st_squote)
