@@ -9481,6 +9481,42 @@ let A = Issue61347.A, S2 = Issue61347.S2
     @test getfield(lazy, :super) === supertype(lazy)
 end
 
+# A lazy supertype can be computed from inside an instantiation, by the
+# subtyping that compares keys in a type cache lookup. When its own
+# instantiation reaches the type being built, it must find it (on the
+# instantiation stack) instead of creating a second copy.
+module LazySuperInProgress
+abstract type A{Y} end
+abstract type Z{W} end
+const U0 = Union{Nothing, Int}  # no stable hash: keys holding it are compared by subtyping
+abstract type R{T} <: A{R{Tuple{T}}} end
+abstract type S{T} <: A{Tuple{T, S{Tuple{T}}, Union{R{Tuple{T}}, Type{Int}}, U0, Z{U0}}} end
+end
+let A = LazySuperInProgress.A, Z = LazySuperInProgress.Z, U0 = LazySuperInProgress.U0,
+    R = LazySuperInProgress.R, S = LazySuperInProgress.S
+    R{Tuple{Tuple{Int}}}      # creates R{Tuple{Tuple{Tuple{Int}}}} with its supertype deferred
+    S{Int}                    # creates X = S{Tuple{Int}} with its supertype deferred
+    X = S{Tuple{Int}}
+    K2 = S{Tuple{Tuple{Tuple{Int}}}}
+    # comparing this key with the supertype key of `S{Tuple{Tuple{Int}}}` walks
+    # the supertype of `X`, which contains `S{Tuple{Tuple{Int}}}` itself
+    A{Tuple{Tuple{Tuple{Int}}, K2, Union{X, Type{Int}}, U0, Z{W}} where W}
+    @test !isdefined(Base.inferencebarrier(X), :super)
+    K = S{Tuple{Tuple{Int}}}
+    @test isdefined(Base.inferencebarrier(X), :super)
+    Ksuper = supertype(X).parameters[1].parameters[2]
+    @test Ksuper == K
+    # `===` compares abstract types structurally, so check the object identity
+    @test pointer_from_objref(Ksuper) == pointer_from_objref(K)
+end
+# the substitution into a dependent bound continues the stack too
+module LazySuperBound
+struct NewT end
+struct Foo{T, S<:Union{Nothing, Val{T}}} end
+struct Bar{T}; x::Foo{T, Nothing}; end
+end
+@test fieldtype(LazySuperBound.Bar{LazySuperBound.NewT}, :x) === LazySuperBound.Foo{LazySuperBound.NewT, Nothing}
+
 # Method tables and dispatch caches keep their entries in insertion-ordered dicts that
 # grow by appending. Every entry must stay reachable as a dict grows through many sizes.
 module OrderedDictGrowth

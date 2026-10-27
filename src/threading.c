@@ -1180,6 +1180,11 @@ int _jl_mutex_trylock(jl_task_t *self, jl_mutex_t *lock) JL_NO_SAFEPOINT_ANALYSI
     return got;
 }
 
+int jl_mutex_held(jl_mutex_t *lock)
+{
+    return jl_mutex_owner(jl_atomic_load_relaxed(&lock->owner)) == jl_current_task;
+}
+
 void _jl_mutex_unlock_nogc(jl_mutex_t *lock) JL_NO_SAFEPOINT_ANALYSIS
 {
 #ifndef __clang_gcanalyzer__

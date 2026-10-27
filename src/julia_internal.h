@@ -188,6 +188,9 @@ extern _Atomic(int) jl_uv_n_waiters;
 // Protected by jl_uv_mutex.
 extern int jl_uv_loop_unwatched;
 
+// whether the current task holds `lock`
+int jl_mutex_held(jl_mutex_t *lock) JL_NOTSAFEPOINT;
+
 // Global data structures for accessing symbols and other globals
 #include "jl_internal_data.inc"
 
