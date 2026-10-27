@@ -420,6 +420,7 @@ reduce_first(::typeof(mul_prod), x::BitSignedSmall)   = Int(x)
 reduce_first(::typeof(mul_prod), x::BitUnsignedSmall) = UInt(x)
 reduce_first(::typeof(vcat), x) = vcat(x)
 reduce_first(::typeof(hcat), x) = hcat(x)
+reduce_first(op::FlipArgs, x) = reduce_first(op.f, x)
 
 """
     Base.mapreduce_first(f, op, x)
