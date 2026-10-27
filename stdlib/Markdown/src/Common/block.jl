@@ -61,7 +61,7 @@ function hashheader(stream::IO, md::MD)
 
         # handle Windows line ends
         if c == '\r'
-            peek(stream, Char) == '\n' && read(stream, Char)
+            !eof(stream) && peek(stream, Char) == '\n' && read(stream, Char)
             c = '\n'
         end
 
