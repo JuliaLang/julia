@@ -49,25 +49,25 @@ getY(t::TextTerminal) = error("Unimplemented")
 pos(t::TextTerminal) = (getX(t), getY(t))
 
 # Relative moves (Absolute position fallbacks)
-cmove_up(t::TextTerminal, n) = cmove(getX(t), max(1, getY(t)-n))
+cmove_up(t::TextTerminal, n) = cmove(t, getX(t), max(1, getY(t)-n))
 cmove_up(t) = cmove_up(t, 1)
 
-cmove_down(t::TextTerminal, n) = cmove(getX(t), max(height(t), getY(t)+n))
+cmove_down(t::TextTerminal, n) = cmove(t, getX(t), min(height(t), getY(t)+n))
 cmove_down(t) = cmove_down(t, 1)
 
-cmove_left(t::TextTerminal, n) = cmove(max(1, getX(t)-n), getY(t))
+cmove_left(t::TextTerminal, n) = cmove(t, max(1, getX(t)-n), getY(t))
 cmove_left(t) = cmove_left(t, 1)
 
-cmove_right(t::TextTerminal, n) = cmove(max(width(t), getX(t)+n), getY(t))
+cmove_right(t::TextTerminal, n) = cmove(t, min(width(t), getX(t)+n), getY(t))
 cmove_right(t) = cmove_right(t, 1)
 
-cmove_line_up(t::TextTerminal, n) = cmove(1, max(1, getY(t)-n))
+cmove_line_up(t::TextTerminal, n) = cmove(t, 1, max(1, getY(t)-n))
 cmove_line_up(t) = cmove_line_up(t, 1)
 
-cmove_line_down(t::TextTerminal, n) = cmove(1, max(height(t), getY(t)+n))
+cmove_line_down(t::TextTerminal, n) = cmove(t, 1, min(height(t), getY(t)+n))
 cmove_line_down(t) = cmove_line_down(t, 1)
 
-cmove_col(t::TextTerminal, c) = cmove(c, getY(t))
+cmove_col(t::TextTerminal, c) = cmove(t, c, getY(t))
 
 # Defaults
 hascolor(::TextTerminal) = false
