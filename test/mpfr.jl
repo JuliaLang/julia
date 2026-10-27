@@ -18,6 +18,8 @@ import Base.MPFR
         @test precision(x) == 10
         @test x == big"1.1015625"
     end
+    # embedded NUL must not throw from the Cstring conversion
+    @test tryparse(BigFloat, "1\0") === nothing
 
     @test typeof(BigFloat(typemax(Int8))) == BigFloat
     @test typeof(BigFloat(typemax(Int16))) == BigFloat
