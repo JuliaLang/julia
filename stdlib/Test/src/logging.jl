@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Logging: Logging, AbstractLogger, LogLevel, Info, with_logger
+using Logging: AbstractLogger, Info, LogLevel, Logging, with_logger
 import Base: occursin
 using Base: @lock
 
