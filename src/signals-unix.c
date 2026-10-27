@@ -1319,6 +1319,127 @@ static void do_profile(void) JL_NOTSAFEPOINT
 }
 #endif
 
+JL_DLLEXPORT int jl_signal_is_reserved(int sig)
+{
+    switch (sig) {
+    case SIGILL:
+    case SIGABRT:
+    case SIGFPE:
+    case SIGSEGV:
+    case SIGBUS:
+    case SIGTRAP:
+    case SIGSYS:
+    case SIGPIPE:
+    case SIGCHLD: // libuv uses it to reap child processes
+    case SIGKILL:
+    case SIGSTOP:
+#if !defined(HAVE_MACH)
+    case SIGUSR2: // thread suspension
+#endif
+        return 1;
+    default:
+#ifdef SIGRTMIN
+        // Signals below SIGRTMIN are kept by the C library or unused.
+        if (sig >= 32 && sig < SIGRTMIN)
+            return 1;
+#endif
+#ifdef SIGRTMAX
+        // FreeBSD's NSIG counts only the old signals, not the real-time ones.
+        return sig <= 0 || sig > SIGRTMAX;
+#else
+        return sig <= 0 || sig >= NSIG;
+#endif
+    }
+}
+
+static int is_sigwait_sig(int sig)
+{
+    for (const int *s = sigwait_sigs; *s; s++) {
+        if (*s == sig)
+            return 1;
+    }
+    return 0;
+}
+
+// What was installed for each watched signal before the handler below.
+static struct sigaction saved_handlers[JL_MAX_WATCHED_SIGNAL + 1];
+
+// without an embedder, the previous action is the default or an inherited SIG_IGN
+static void run_saved_handler(int sig)
+{
+    struct sigaction *prev = &saved_handlers[sig];
+    if (!(prev->sa_flags & SA_SIGINFO) && prev->sa_handler == SIG_IGN)
+        return;
+    switch (sig) {
+    case SIGCONT:
+    case SIGURG:
+    case SIGWINCH:
+        return; // the default is to do nothing
+    }
+    // Take the default action, such as exiting, by raising the signal again without a handler.
+    struct sigaction dfl, ours;
+    memset(&dfl, 0, sizeof(dfl));
+    sigemptyset(&dfl.sa_mask);
+    dfl.sa_handler = SIG_DFL;
+    sigaction(sig, &dfl, &ours);
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, sig);
+    raise(sig);
+    pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
+    // Only reached if the default action stopped the process and it was resumed.
+    pthread_sigmask(SIG_BLOCK, &sset, NULL);
+    sigaction(sig, &ours, NULL);
+}
+
+static void signal_watch_handler(int sig)
+{
+    int last_errno = errno;
+    if (!jl_notify_signal_watchers(sig))
+        run_saved_handler(sig);
+    errno = last_errno;
+}
+
+// The signal thread already gets the signals it waits for, so only the others need a handler.
+static int jl_signal_watch_install(int sig)
+{
+    if (is_sigwait_sig(sig))
+        return 0;
+    struct sigaction act;
+    memset(&act, 0, sizeof(act));
+    sigemptyset(&act.sa_mask);
+    act.sa_handler = signal_watch_handler;
+    act.sa_flags = SA_RESTART | SA_ONSTACK;
+    if (sigaction(sig, &act, &saved_handlers[sig]) != 0)
+        return -errno;
+    return 0;
+}
+
+static void jl_signal_watch_uninstall(int sig)
+{
+    if (!is_sigwait_sig(sig))
+        sigaction(sig, &saved_handlers[sig], NULL);
+}
+
+// SIGRTMIN and SIGRTMAX can be run-time values, so they cannot be Julia constants.
+JL_DLLEXPORT int jl_sigrtmin(void)
+{
+#ifdef SIGRTMIN
+    return SIGRTMIN;
+#else
+    return -1;
+#endif
+}
+
+JL_DLLEXPORT int jl_sigrtmax(void)
+{
+#ifdef SIGRTMAX
+    return SIGRTMAX;
+#else
+    return -1;
+#endif
+}
+
 static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 {
     sigset_t sset;
@@ -1350,11 +1471,13 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
     while (1) {
         sig = 0;
         errno = 0;
+        int parent_exited = 0;
 #ifdef HAVE_KEVENT
         if (parent_gone) {
             // exit as if terminated, as we would on the parent's exit event
             parent_gone = 0;
             sig = SIGTERM;
+            parent_exited = 1;
         }
         else if (sigqueue != -1) {
             int nevents = kevent(sigqueue, NULL, 0, &ev, 1, NULL);
@@ -1371,7 +1494,8 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 continue;
             }
             // exit as if terminated when our parent exits
-            sig = ev.filter == EVFILT_PROC ? SIGTERM : ev.ident;
+            parent_exited = ev.filter == EVFILT_PROC;
+            sig = parent_exited ? SIGTERM : ev.ident;
         }
         else
 #endif
@@ -1390,8 +1514,10 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
         // exit as if terminated when our parent exits.
         // Linux also sends this when the thread that spawned us exits, in which case
         // another thread of the parent adopts us and we handle it as a normal SIGUSR1.
-        if (sig == SIGUSR1 && exit_with_parent_pid && getppid() != exit_with_parent_pid)
+        if (sig == SIGUSR1 && exit_with_parent_pid && getppid() != exit_with_parent_pid) {
             sig = SIGTERM;
+            parent_exited = 1;
+        }
 #endif
         profile = 0;
 #ifndef HAVE_MACH
@@ -1404,13 +1530,15 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #endif
 #endif
 #endif
+        if (sig == SIGINT && jl_ignore_sigint())
+            continue;
+        // Watchers do not see a parent's exit, which must always end this process.
+        if (!profile && !parent_exited && jl_notify_signal_watchers(sig))
+            continue;
 
         if (sig == SIGINT) {
-            if (jl_ignore_sigint()) {
-                continue;
-            }
-            else if (jl_sigint_get_policy() == JL_SIGINT_EXIT ||
-                     !jl_sigint_request_cancellation()) {
+            if (jl_sigint_get_policy() == JL_SIGINT_EXIT ||
+                    !jl_sigint_request_cancellation()) {
                 critical = 1;
             }
             else {

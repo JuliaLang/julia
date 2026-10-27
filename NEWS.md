@@ -254,6 +254,15 @@ New library features
   without first materializing the full listing. `eachentry(dir, DirEntry)` yields `DirEntry` objects
   instead. Useful for very large directories or when iteration may be short-circuited. A do-block form
   `eachentry(f, dir[, DirEntry])` ensures deterministic resource cleanup ([#62164]).
+* New public but unexported type `Base.SignalCondition` lets a program wait for, or run a callback on,
+  signals such as `SIGTERM` and `SIGHUP`. With `intercept=true` it replaces the signal's usual effect
+  while it is open ([#63344]).
+* The signal number constants `Base.SIGHUP`, `Base.SIGTERM` etc. are now public and documented, and
+  `SIGUSR2`, `SIGALRM`, `SIGCHLD`, `SIGCONT` and `SIGWINCH` were added. `Base.sigrtmin()` and
+  `Base.sigrtmax()` give the range of real-time signals where the platform has them ([#63344]).
+* `kill(pid::Integer, signum)` sends a signal to any process by its ID, not only to a `Process`
+  started by Julia ([#63344]).
+* `Base.signal_name(signum)` returns a signal's name, such as `"SIGTERM"` ([#63344]).
 
 Standard library changes
 ------------------------
