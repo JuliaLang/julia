@@ -433,12 +433,18 @@ function transform_result_for_cache(interp::AbstractInterpreter, result::Inferen
     return src
 end
 
-function discard_optimized_result(interp::AbstractInterpreter, _#=::OptimizationState=#, inlining_cost#=::InlineCostType=#)
+function discard_optimized_result(interp::AbstractInterpreter, opt#=::OptimizationState=#, inlining_cost#=::InlineCostType=#)
     may_discard_trees(interp) || return false
     inlining_cost == MAX_INLINE_COST || return false
     precompile_keep_ir(interp) && return false
+    keep_source_for_output(opt.linfo) && return false
     return true
 end
+
+# A cache without native code needs the source of every compileable signature, or
+# loading it means inferring them all again. Caches with native code drop it on save.
+keep_source_for_output(mi::MethodInstance) =
+    ccall(:jl_generating_output, Cint, ()) != 0 && isa_compileable_sig(mi)
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo)
     def = mi.def
@@ -450,7 +456,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance
         # irgen's typeinf_ext can reuse it instead of re-inferring.
         # jl_finalize_precompile_inferred nulls it before save.
         precompile_keep_ir(interp) && return ci
-        return nothing
+        keep_source_for_output(mi) || return nothing
     end
     may_compress(interp) && return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
     return ci
