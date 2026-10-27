@@ -377,10 +377,19 @@ function getpass(input::TTY, output::IO, prompt::AbstractString; with_suffix::Bo
                 break # EOF or return
             elseif c == 0x00 || c == 0xe0
                 _getch() # ignore function/arrow keys
-            elseif c == UInt8('\b') && plen > 0
-                plen -= 1 # delete last character on backspace
+            elseif (c == UInt8('\b') || c == 0x7f) && plen > 0
+                # delete last character (including UTF-8 continuation bytes) on backspace
+                while true
+                    b = s.data[plen]
+                    s.data[plen] = 0x00
+                    plen -= 1
+                    (plen == 0 || b & 0xc0 != 0x80) && break
+                end
+                s.size = plen
+                seek(s, plen)
             elseif !iscntrl(Char(c)) && plen < 128
                 write(s, c)
+                plen += 1
             end
         end
         return seekstart(s)
