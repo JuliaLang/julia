@@ -1231,6 +1231,32 @@ const Workqueue = Workqueues[1] # default work queue is thread 1 // TODO: deprec
 
 workqueue_for(tid::Int) = Workqueues[tid]
 
+const PINNED_TO_W = Ref(true)
+
+function unqueue_pinned!(W::StickyWorkqueue, t::Task)
+    lock(W.lock)
+    try
+        t.queue === W || return false
+        list_deletefirst!(waitqueue(W), t)
+        return true
+    finally
+        unlock(W.lock)
+    end
+end
+
+# Called by jl_switch on the owner thread after it released the pin of `t`
+# (a non-sticky task it switched away from) and found `t` queued: move it from
+# this thread's sticky queue to the multiqueue so other threads can run it.
+function rescue_pinned_task(t::Task)
+    t.sticky && return nothing
+    tp = Threads.threadpool(t)
+    (tp === :foreign || Threads.threadpoolsize(tp) <= 1) && return nothing
+    if unqueue_pinned!(workqueue_for(Threads.threadid()), t)
+        Partr.multiq_insert(t, t.priority)
+        ccall(:jl_wakeup_threadpool, Cvoid, (Int8,), Threads._sym_to_tpid(tp))
+    end
+    return nothing
+end
 function enq_work(t::Task)
     state = t._state
     if state === task_state_abandoned
@@ -1285,6 +1311,23 @@ function enq_work(t::Task)
             ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
             push!(workqueue_for(tid), t)
         else
+            # EXPERIMENT: a task pinned to another thread (parked hosting
+            # its sleep logic) goes to that thread's sticky queue.
+            ptid = Threads.threadid(t)
+            if PINNED_TO_W[] && ptid != 0 && ptid != Threads.threadid()
+                W = workqueue_for(ptid)
+                push!(W, t)
+                # Dekker with the owner releasing the pin in jl_switch: if it
+                # already switched away, it may have missed `t` in W.
+                Threads.atomic_fence()
+                if Threads.threadid(t) != ptid && unqueue_pinned!(W, t)
+                    Partr.multiq_insert(t, t.priority)
+                    ccall(:jl_wakeup_threadpool, Cvoid, (Int8,), Threads._sym_to_tpid(tp))
+                else
+                    ccall(:jl_wakeup_thread, Cint, (Int16,), (ptid - 1) % Int16)
+                end
+                return t
+            end
             # Otherwise, put the task in the multiqueue.
             Partr.multiq_insert(t, t.priority)
             tid = Threads.threadid(t)

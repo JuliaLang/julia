@@ -662,6 +662,30 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt) JL_CANSAFEPOINT
     sanitizer_finish_switch_fiber(&ptls->previous_task->ctx, &lastt->ctx);
 }
 
+// After releasing the pin of `t` (switched away from), check whether an
+// enqueuer put it in this thread's sticky queue meanwhile (see enq_work).
+static void release_task_pin(jl_task_t *t) JL_CANSAFEPOINT
+{
+    jl_atomic_store_release(&t->tid, -1);
+    jl_fence();
+    if (jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)&t->queue) == NULL)
+        return;
+    static _Atomic(jl_value_t *) rescue_f = NULL;
+    jl_value_t *f = jl_atomic_load_relaxed(&rescue_f);
+    if (f == NULL) {
+        f = jl_get_global(jl_base_module, jl_symbol("rescue_pinned_task"));
+        if (f == NULL)
+            return;
+        jl_atomic_store_relaxed(&rescue_f, f);
+    }
+    jl_value_t **args;
+    JL_GC_PUSHARGS(args, 2);
+    args[0] = f;
+    args[1] = (jl_value_t*)t;
+    jl_apply(args, 2);
+    JL_GC_POP();
+}
+
 JL_DLLEXPORT void jl_switch(void) JL_CANSAFEPOINT_ENTER_LEAVE
 {
     jl_task_t *ct = jl_current_task;
@@ -702,7 +726,7 @@ JL_DLLEXPORT void jl_switch(void) JL_CANSAFEPOINT_ENTER_LEAVE
     assert(t != ct);
     assert(jl_atomic_load_relaxed(&t->tid) == ptls->tid);
     if (!t->sticky && !t->ctx.copy_stack)
-        jl_atomic_store_release(&t->tid, -1);
+        release_task_pin(t);
 #else
     assert(ptls == ct->ptls);
 #endif
@@ -1234,7 +1258,7 @@ CFI_NORETURN
     jl_task_t *pt = ptls->previous_task;
     ptls->previous_task = NULL;
     if (!pt->sticky && !pt->ctx.copy_stack)
-        jl_atomic_store_release(&pt->tid, -1);
+        release_task_pin(pt);
 #endif
 
     ct->ctx.started = 1;
