@@ -780,6 +780,11 @@ end
     @test_throws BoundsError OffsetArray([6,7], 2:3)[]
     @test_throws BoundsError OffsetArray([6 7], 2:2, 2:3)[]
     @test_throws BoundsError OffsetArray([], 2:1)[]
+    A = [1 2; 3 4]
+    v = view(A, IdentityUnitRange(2:2), IdentityUnitRange(2:2))
+    @test v[] == 4
+    v[] = 10
+    @test A == [1 2; 3 10]
 end
 
 @testset "IdentityUnitRange indexing" begin
