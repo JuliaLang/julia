@@ -2545,9 +2545,9 @@ function _partialquicksort!(v::AbstractVector, lo::Integer, hi::Integer, a::Part
         end
         j = partition!(v, lo, hi, o)
 
-        if j <= first(a.k)
+        if j <= min(first(a.k), last(a.k))
             lo = j+1
-        elseif j >= last(a.k)
+        elseif j >= max(first(a.k), last(a.k))
             hi = j-1
         else
             # recurse on the smaller chunk

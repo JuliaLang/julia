@@ -323,6 +323,9 @@ end
         @test !issorted(c, by=x->1/x)
         @test !issorted(d, rev=true)
     end
+    let k = 30:-1:10
+        @test sort(a, alg=PartialQuickSort(k))[k] == sort(a)[k]
+    end
 
     @test partialsort([3,6,30,1,9], 2, rev=true) == 9
     @test partialsort([3,6,30,1,9], 2, by=x->1/x) == 9
