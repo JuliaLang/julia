@@ -14,10 +14,11 @@ isconstType(@nospecialize t) = isTypeEgal(t) || (isTypeEq(t) && type_parameter(t
 """
     isTypeDataType(@nospecialize t)::Bool
 
-For a type `t` test whether ∀S s.t. `isa(S, rewrap_unionall(Type{t}, ...))`,
-we have `isa(S, DataType)`. In particular, if a statement is typed as `Type{t}`
+For a type `t` test whether ∀S s.t. `isa(S, rewrap_unionall(Core.TypeEgal{t}, ...))`,
+we have `isa(S, DataType)`. In particular, if a statement is typed as `Core.TypeEgal{t}`
 (potentially wrapped in some `UnionAll`), then we are guaranteed that this statement
-will be a `DataType` at runtime (and not e.g. a `Union` or `UnionAll` typeequal to it).
+will be a `DataType` at runtime. Note that this does not hold for a statement typed as
+`Type{t}`, which may also be a `Union` or `UnionAll` rep that is `==` to `t` (#61323).
 """
 function isTypeDataType(@nospecialize t)
     isType(t) && return false
