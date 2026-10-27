@@ -740,6 +740,11 @@ end
     @test collect(product(1:1, (1, "2"))) == [(1, 1) (1, "2")]
 end
 
+@testset "product of iterators that are all done" begin
+    @test collect(product(Iterators.Stateful([1, 2]))) == [(1,), (2,)]
+    @test collect(product(eachline(IOBuffer("a\nb")))) == [("a",), ("b",)]
+end
+
 @testset "filter empty iterable #16704" begin
     arr = filter(Returns(true), 1:0)
     @test (@inferred length(arr)) == 0
