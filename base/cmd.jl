@@ -209,8 +209,8 @@ function show(io::IO, cmd::Cmd)
     end, ' ')
     print(io, '`')
 
-    print_uid && (print(io, ", "); show(io, Int32(cmd.uid)); print(io, ")"))
-    print_gid && (print(io, ", "); show(io, Int32(cmd.gid)); print(io, ")"))
+    print_uid && (print(io, ", "); show(io, Int(cmd.uid)); print(io, ")"))
+    print_gid && (print(io, ", "); show(io, Int(cmd.gid)); print(io, ")"))
     if print_cpus
         print(io, ", ")
         show(io, collect(Int, something(cmd.cpus)))
