@@ -321,6 +321,16 @@ end
     @test_throws ArgumentError seek(io, 0)
 end
 
+@testset "line reading from a non-readable IOBuffer throws" begin
+    io = IOBuffer(read=false, write=true)
+    write(io, "ab\ncd")
+    seekstart(io)
+    @test_throws ArgumentError readuntil(io, 0x0a)
+    @test_throws ArgumentError readline(io)
+    @test_throws ArgumentError copyline(IOBuffer(), io)
+    @test position(io) == 0
+end
+
 @testset "takestring!" begin
     buf = IOBuffer()
     write(buf, "abcø")
