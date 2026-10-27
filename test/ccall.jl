@@ -2399,3 +2399,9 @@ let f() = ccall((:foo, "libnonexistent"), Cvoid, ())
     @test m !== nothing
     @test occursin(Regex("attributes #$(m[1]) = [^\n]*\"frame-pointer\"=\"all\""), ir)
 end
+
+@testset "@ccallable rejects non-method definitions" begin
+    for ex in (:(function f end), :(f = 1), :(f::Int = 1))
+        @test_throws "expected method definition in @ccallable" Base.expand_ccallable(nothing, :Int, ex)
+    end
+end
