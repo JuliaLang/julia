@@ -1021,11 +1021,11 @@ function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false, cancel::CancelT
         v = take!(newbuf)
         # Remove \r\n or \n if present
         if !keep
-            if length(v) > 1 && last(v) == UInt8('\n')
+            if !isempty(v) && last(v) == UInt8('\n')
                 pop!(v)
-            end
-            if length(v) > 1 && last(v) == UInt8('\r')
-                pop!(v)
+                if !isempty(v) && last(v) == UInt8('\r')
+                    pop!(v)
+                end
             end
         end
         # `tok` is resolved above: the write to `out` runs under it (or its
