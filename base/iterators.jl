@@ -730,7 +730,7 @@ function peel(itr)
 end
 
 @propagate_inbounds iterate(i::Rest, st=i.st) = iterate(i.itr, st)
-isdone(i::Rest, st...) = isdone(i.itr, st...)
+isdone(i::Rest, st=i.st) = isdone(i.itr, st)
 
 eltype(::Type{<:Rest{I}}) where {I} = eltype(I)
 IteratorEltype(::Type{<:Rest{I}}) where {I} = IteratorEltype(I)
