@@ -202,6 +202,15 @@ end
     sizehint!(A, 5)
     @test length(A) == 5
     @test A == [1:5;]
+
+    for n in (0, 10)
+        A = [1:100;]
+        empty!(A)
+        @test sizehint!(A, n; first=true) === A
+        @test isempty(A)
+        pushfirst!(A, 1)
+        @test A == [1]
+    end
 end
 @testset "reshape with colon" begin
     # Reshape with an omitted dimension
