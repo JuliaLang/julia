@@ -38,7 +38,7 @@ or_any(x::Bool, y::Bool) = (x | y)::Bool
 ## foldl && mapfoldl
 
 function mapfoldl_impl(f::F, op::OP, nt, itr) where {F,OP}
-    op′, itr′ = _xfadjoint(BottomRF(op), Generator(f, itr))
+    op′, itr′ = _xfadjoint(_bottomrf(f, op), itr)
     return foldl_impl(op′, nt, itr′)
 end
 
@@ -96,6 +96,9 @@ struct MappingRF{F, T}
 end
 
 @inline (op::MappingRF)(acc, x) = op.rf(acc, op.f(x))
+
+_bottomrf(f::F, op::OP) where {F,OP} = BottomRF(MappingRF(f, op))
+_bottomrf(::typeof(identity), op::OP) where {OP} = BottomRF(op)
 
 """
     FilteringRF(f, rf) -> rf′
@@ -198,7 +201,7 @@ foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 ## foldr & mapfoldr
 
 function mapfoldr_impl(f, op, nt, itr)
-    op′, itr′ = _xfadjoint(BottomRF(FlipArgs(op)), Generator(f, _reverse_iter(itr)))
+    op′, itr′ = _xfadjoint(_bottomrf(f, FlipArgs(op)), _reverse_iter(itr))
     return foldl_impl(op′, nt, itr′)
 end
 
@@ -420,6 +423,7 @@ reduce_first(::typeof(mul_prod), x::BitSignedSmall)   = Int(x)
 reduce_first(::typeof(mul_prod), x::BitUnsignedSmall) = UInt(x)
 reduce_first(::typeof(vcat), x) = vcat(x)
 reduce_first(::typeof(hcat), x) = hcat(x)
+reduce_first(op::MappingRF, x) = mapreduce_first(op.f, op.rf, x)
 reduce_first(op::FlipArgs, x) = reduce_first(op.f, x)
 
 """
