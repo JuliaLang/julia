@@ -176,10 +176,10 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                     !isempty(arg[1]::AbstractString) && all(isdigit, arg[1]::AbstractString)
                 fd = parse(Int, String(arg[1]::AbstractString)::String)
                 empty!(arg)
-                word_has_special = false
-            elseif !isempty(arg)
+            elseif !isempty(arg) || word_has_special
                 append_2to1!(args, arg)
             end
+            word_has_special = false
             if c == '>'
                 append = false
                 if !isempty(st) && (peek(st)::P).second == '>'
