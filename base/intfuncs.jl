@@ -652,7 +652,11 @@ function nextpow(a::Real, x::Real)
     # Special case fast path for x::Integer, a == 2.
     # This is a very common case. Constant prop will make sure that a call site
     # specified as `nextpow(2, x)` will get this special case inlined.
-    a == 2 && isa(x, Integer) && return _nextpow2(x)
+    if a == 2 && isa(x, Integer)
+        r = _nextpow2(x)
+        r >= x || throw(OverflowError("result is beyond the range of type of the argument"))
+        return r
+    end
     a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
     x <= 1 && return one(a)
     n = ceil(Integer,log(a, x))
@@ -661,10 +665,10 @@ function nextpow(a::Real, x::Real)
     hastypemax(typeof(p)) && x > typemax(p) &&
         throw(DomainError(x,"argument is beyond the range of type of the base"))
     p >= x && return p
-    wp = a^n
+    wp = a isa Integer ? checked_pow(a, n) : a^n
     wp > p || throw(OverflowError("result is beyond the range of type of the base"))
     wp >= x && return wp
-    wwp = a^(n+1)
+    wwp = a isa Integer ? checked_pow(a, n+1) : a^(n+1)
     wwp > wp || throw(OverflowError("result is beyond the range of type of the base"))
     return wwp
 end
