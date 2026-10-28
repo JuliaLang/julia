@@ -234,7 +234,7 @@ function parseipv6fields(fields,num_fields)
             continue
         end
         ncodeunits(f) > 4 && throw(ArgumentError("IPv6 field has more than 4 hex digits"))
-        ret |= UInt128(parse(Int, f, base = 16))<<(cf*16)
+        ret |= UInt128(parse(UInt16, f, base = 16))<<(cf*16)
         cf -= 1
     end
     ret
