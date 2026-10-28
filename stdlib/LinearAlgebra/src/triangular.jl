@@ -909,23 +909,19 @@ end
 
 # Eigensystems
 ## Notice that trecv works for quasi-triangular matrices and therefore the lower sub diagonal must be zeroed before calling the subroutine
+# trevc! overwrites its argument, so pass a dense copy, which also has the zeros and the unit
+# diagonal of A, and not the parent of A
 function eigvecs(A::UpperTriangular{<:BlasFloat,<:StridedMatrix})
-    LAPACK.trevc!('R', 'A', BlasInt[], triu!(A.data))
+    LAPACK.trevc!('R', 'A', BlasInt[], Matrix(A))
 end
 function eigvecs(A::UnitUpperTriangular{<:BlasFloat,<:StridedMatrix})
-    for i = 1:size(A, 1)
-        A.data[i,i] = 1
-    end
-    LAPACK.trevc!('R', 'A', BlasInt[], triu!(A.data))
+    LAPACK.trevc!('R', 'A', BlasInt[], Matrix(A))
 end
 function eigvecs(A::LowerTriangular{<:BlasFloat,<:StridedMatrix})
-    LAPACK.trevc!('L', 'A', BlasInt[], copy(tril!(A.data)'))
+    LAPACK.trevc!('L', 'A', BlasInt[], Matrix(A'))
 end
 function eigvecs(A::UnitLowerTriangular{<:BlasFloat,<:StridedMatrix})
-    for i = 1:size(A, 1)
-        A.data[i,i] = 1
-    end
-    LAPACK.trevc!('L', 'A', BlasInt[], copy(tril!(A.data)'))
+    LAPACK.trevc!('L', 'A', BlasInt[], Matrix(A'))
 end
 
 ####################
@@ -1530,11 +1526,7 @@ _inner_type_promotion(op, ::Type{TA}, ::Type{TB}) where {TA,TB} =
 ## The general promotion methods
 function mul(A::AbstractTriangular, B::AbstractTriangular)
     TAB = _init_eltype(*, eltype(A), eltype(B))
-    if TAB <: BlasFloat && A isa UpperOrLowerTriangular
-        lmul!(convert(AbstractArray{TAB}, A), copy_similar(B, TAB))
-    else
-        mul!(similar(B, TAB, size(B)), A, B)
-    end
+    mul!(similar(B, TAB, size(B)), A, B)
 end
 
 for (mat, fun) in ((:AbstractVector, :*), (:AbstractMatrix, :mul))
@@ -1542,51 +1534,31 @@ for (mat, fun) in ((:AbstractVector, :*), (:AbstractMatrix, :mul))
     @eval function $fun(A::AbstractTriangular, B::$mat)
         require_one_based_indexing(B)
         TAB = _init_eltype(*, eltype(A), eltype(B))
-        if TAB <: BlasFloat && A isa UpperOrLowerTriangular
-            lmul!(convert(AbstractArray{TAB}, A), copy_similar(B, TAB))
-        else
-            mul!(similar(B, TAB, size(B)), A, B)
-        end
+        mul!(similar(B, TAB, size(B)), A, B)
     end
     ### Left division with triangle to the left hence rhs cannot be transposed. No quotients.
     @eval function \(A::Union{UnitUpperTriangular,UnitLowerTriangular}, B::$mat)
         require_one_based_indexing(B)
         TAB = _inner_type_promotion(\, eltype(A), eltype(B))
-        if TAB <: BlasFloat
-            ldiv!(convert(AbstractArray{TAB}, A), copy_similar(B, TAB))
-        else
-            ldiv!(similar(B, TAB, size(B)), A, B)
-        end
+        ldiv!(similar(B, TAB, size(B)), A, B)
     end
     ### Left division with triangle to the left hence rhs cannot be transposed. Quotients.
     @eval function \(A::Union{UpperTriangular,LowerTriangular}, B::$mat)
         require_one_based_indexing(B)
         TAB = _init_eltype(\, eltype(A), eltype(B))
-        if TAB <: BlasFloat
-            ldiv!(convert(AbstractArray{TAB}, A), copy_similar(B, TAB))
-        else
-            ldiv!(similar(B, TAB, size(B)), A, B)
-        end
+        ldiv!(similar(B, TAB, size(B)), A, B)
     end
     ### Right division with triangle to the right hence lhs cannot be transposed. No quotients.
     @eval function /(A::$mat, B::Union{UnitUpperTriangular, UnitLowerTriangular})
         require_one_based_indexing(A)
         TAB = _inner_type_promotion(/, eltype(A), eltype(B))
-        if TAB <: BlasFloat
-            rdiv!(copy_similar(A, TAB), convert(AbstractArray{TAB}, B))
-        else
-            _rdiv!(similar(A, TAB, size(A)), A, B)
-        end
+        _rdiv!(similar(A, TAB, size(A)), A, B)
     end
     ### Right division with triangle to the right hence lhs cannot be transposed. Quotients.
     @eval function /(A::$mat, B::Union{UpperTriangular,LowerTriangular})
         require_one_based_indexing(A)
         TAB = _init_eltype(/, eltype(A), eltype(B))
-        if TAB <: BlasFloat
-            rdiv!(copy_similar(A, TAB), convert(AbstractArray{TAB}, B))
-        else
-            _rdiv!(similar(A, TAB, size(A)), A, B)
-        end
+        _rdiv!(similar(A, TAB, size(A)), A, B)
     end
 end
 ### Multiplication with triangle to the right and hence lhs cannot be transposed.
@@ -1594,11 +1566,7 @@ end
 function mul(A::AbstractMatrix, B::AbstractTriangular)
     require_one_based_indexing(A)
     TAB = _init_eltype(*, eltype(A), eltype(B))
-    if TAB <: BlasFloat && B isa UpperOrLowerTriangular
-        rmul!(copy_similar(A, TAB), convert(AbstractArray{TAB}, B))
-    else
-        mul!(similar(A, TAB, size(A)), A, B)
-    end
+    mul!(similar(A, TAB, size(A)), A, B)
 end
 # ambiguity resolution with definitions in matmul.jl
 *(v::AdjointAbsVec, A::AbstractTriangular) = adjoint(adjoint(A) * v.parent)

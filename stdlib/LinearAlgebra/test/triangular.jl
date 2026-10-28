@@ -1069,4 +1069,17 @@ end
     end
 end
 
+@testset "eigvecs and eigen don't overwrite the parent" begin
+    for T in (Float64, ComplexF64), TT in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
+        M = T[1 2 3; 4 5 6; 7 8 10]
+        A = TT(copy(M))
+        V = eigvecs(A)
+        @test parent(A) == M
+        F = eigen(A)
+        @test parent(A) == M
+        @test V ≈ F.vectors
+        @test A * F.vectors ≈ F.vectors * Diagonal(F.values)
+    end
+end
+
 end # module TestTriangular
