@@ -759,6 +759,20 @@ end
     end
 end
 
+mktempdir() do dir
+    project = joinpath(dir, "environments", "scripts", "Project.toml")
+    mkpath(dirname(project))
+    touch(project)
+    old_depot_path = copy(DEPOT_PATH)
+    try
+        empty!(DEPOT_PATH)
+        push!(DEPOT_PATH, dir)
+        @test Base.load_path_expand("@scripts") == project
+    finally
+        copy!(DEPOT_PATH, old_depot_path)
+    end
+end
+
 function _with_empty_load_path(f::Function)
     old_load_path = copy(Base.LOAD_PATH)
     try
