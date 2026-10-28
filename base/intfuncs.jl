@@ -418,7 +418,7 @@ end
         return mul(x, x)
     elseif p < 0
         isone(x) && return copy(x)
-        isone(-x) && return iseven(p) ? one(x) : copy(x)
+        !(x isa Unsigned || (x isa Complex && real(x) isa Unsigned)) && isone(-x) && return iseven(p) ? one(x) : copy(x)
         throw_domerr_powbysq(x, p)
     end
     t = trailing_zeros(p) + 1
