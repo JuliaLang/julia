@@ -752,7 +752,7 @@ function ndigits0znb(x::Integer, b::Integer)
     d = 0
     if x isa Unsigned
         d += (x != 0)::Bool
-        x = -signed(fld(x, -b))
+        x = -signed(fld(x, uabs(b)))
     end
     # precondition: b < -1 && !(typeof(x) <: Unsigned)
     while x != 0
@@ -1252,8 +1252,8 @@ julia> digits!([2, 2, 2, 2, 2, 2], 10, base = 2)
 ```
 """
 function digits!(a::AbstractVector{T}, n::Integer; base::Integer = 10) where T<:Integer
-    2 <= abs(base) || throw(DomainError(base, "base must be ≥ 2 or ≤ -2"))
-    hastypemax(T) && abs(base) - 1 > typemax(T) &&
+    2 <= uabs(base) || throw(DomainError(base, "base must be ≥ 2 or ≤ -2"))
+    hastypemax(T) && uabs(base) - 1 > typemax(T) &&
         throw(ArgumentError(LazyString("type ", T, " too small for base ", base)))
     isempty(a) && return a
 
@@ -1273,11 +1273,11 @@ function digits!(a::AbstractVector{T}, n::Integer; base::Integer = 10) where T<:
         end
     else
         # manually peel one loop iteration for type stability
-        n, d = fldmod(n, -base)
+        n, d = fldmod(n, uabs(base))
         a[firstindex(a)] = d
         n = -signed(n)
         for i in firstindex(a)+1:lastindex(a)
-            n, d = fldmod(n, -base)
+            n, d = fldmod(n, uabs(base))
             a[i] = d
             n = -n
         end
