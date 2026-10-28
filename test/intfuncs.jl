@@ -429,6 +429,10 @@ end
 
     # "result is beyond the range of type of the base"
     @test_throws OverflowError nextpow(Int8(3), 82)
+    @test_throws OverflowError nextpow(2, Int8(65))
+    @test_throws OverflowError nextpow(2, typemax(UInt8))
+    @test_throws OverflowError nextpow(Int8(7), Int8(50))
+    @test_throws OverflowError nextpow(Int8(7), Int8(88))
 end
 
 @testset "ndigits/ndigits0z" begin
