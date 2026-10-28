@@ -2769,6 +2769,12 @@ Base.show(io::IO, ces::⛵) = Base.print(io, '⛵')
 @test Base.alignment(IOContext(IOBuffer(), :color=>true), ColoredLetter()) == (0, 1)
 @test Base.alignment(IOContext(IOBuffer(), :color=>false), ColoredLetter()) == (0, 1)
 
+@test Base.alignment(stdout, Inf) == (3, 0)
+@test Base.alignment(stdout, -Inf) == (4, 0)
+@test Base.alignment(stdout, Inf32) == (5, 0)
+@test Base.alignment(stdout, 1.5f0) == (1, 4)
+@test Base.alignment(stdout, 1.5f10) == (1, 5)
+
 # spacing around dots in Diagonal, etc:
 redminusthree = sprint((io, x) -> printstyled(io, x, color=:red), "-3", context=stdout)
 @test Base.replace_with_centered_mark(redminusthree) == Base.replace_with_centered_mark("-3")
