@@ -564,7 +564,7 @@ big(::Type{<:AbstractFloat}) = BigFloat
 big(x::AbstractFloat) = convert(BigFloat, x)
 
 function Rational{BigInt}(x::AbstractFloat)
-    isnan(x) && return zero(BigInt) // zero(BigInt)
+    isnan(x) && throw(InexactError(:Rational, Rational{BigInt}, x))
     isinf(x) && return copysign(one(BigInt),x) // zero(BigInt)
     iszero(x) && return zero(BigInt) // one(BigInt)
     s = max(precision(x) - exponent(x), 0)
