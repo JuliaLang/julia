@@ -1291,6 +1291,12 @@ end
     @test expected == Markdown.latex(md)
 end
 
+@testset "non-ASCII digits are not list markers" begin
+    for s in ("۱. item", "１. item", "۱) item")
+        @test typeof.(Markdown.parse(s)) == [Markdown.Paragraph]
+    end
+end
+
 @testset "issue 20225, check this can print" begin
     @test typeof(sprint(Markdown.term, Markdown.parse(" "))) == String
 
