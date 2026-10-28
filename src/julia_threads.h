@@ -556,9 +556,13 @@ typedef struct JL_GC_TRACKED_TYPE _jl_task_t {
     // Bit 1-2: 0-3 counter of how many times we've reentered inference
     // Bit 3: 1 if we are writing the image and inference is illegal
     uint8_t reentrant_timing;
-    // 2 bytes of padding on 32-bit, 6 bytes on 64-bit
-    // uint16_t padding2_32;
-    // uint48_t padding2_64;
+    // Direct wake slot while the task runs its scheduler loop: 0 when closed,
+    // tid + 1 when open, and -(tid + 1) after a notifier claims it. The owner
+    // closes the slot before switching, queueing any wake it did not consume.
+    // +/-INT32_MAX temporarily latches an outer wait's wake across nested yield().
+    // +/-(INT32_MAX-1) preserves it while nested blocking waits use the queues.
+    _Atomic(int32_t) scheduler_wait;
+    // Alignment padding for the pointer below.
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
     size_t world_age;

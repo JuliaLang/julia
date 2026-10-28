@@ -1123,6 +1123,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     t->ctx.started = 0;
     t->priority = 0;
     jl_atomic_store_relaxed(&t->tid, -1);
+    jl_atomic_store_relaxed(&t->scheduler_wait, 0);
     t->threadpoolid = ct->threadpoolid;
     t->ptls = NULL;
     t->world_age = ct->world_age;

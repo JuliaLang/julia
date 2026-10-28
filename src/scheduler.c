@@ -72,6 +72,114 @@ JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT
     return 0;
 }
 
+// The slot contains no GC pointers. A successful notification publishes the wake
+// (including the task's result) with release ordering. Closing the slot races
+// with notification on the same atomic word:
+// either the notifier falls back to the run queue, or the owner consumes/queues
+// the accepted wake before it switches. No action is needed when releasing a pin.
+#define TASK_WAIT_PAUSED INT32_MAX
+#define TASK_WAIT_FALLBACK (INT32_MAX - 1)
+
+static int task_wait_suspended(int32_t state) JL_NOTSAFEPOINT
+{
+    return state >= TASK_WAIT_FALLBACK || state <= -TASK_WAIT_FALLBACK;
+}
+
+JL_DLLEXPORT int jl_task_wait_begin(jl_task_t *task) JL_NOTSAFEPOINT
+{
+    assert(task == jl_current_task);
+    if (task->sticky || task->ctx.copy_stack)
+        return 0;
+    int32_t idle = 0;
+    int32_t owner = jl_atomic_load_relaxed(&task->tid) + 1;
+    assert(owner > 0);
+    return jl_atomic_cmpswap(&task->scheduler_wait, &idle, owner);
+}
+
+JL_DLLEXPORT int jl_task_wait_end(jl_task_t *task) JL_NOTSAFEPOINT
+{
+    assert(task == jl_current_task);
+    int32_t state = jl_atomic_load_relaxed(&task->scheduler_wait);
+    if (state == 0)
+        return 0;
+    // A nested yield has its own runnable continuation. Its return must not
+    // consume the outer wait's notification or result.
+    if (task_wait_suspended(state))
+        return 2;
+    return jl_atomic_exchange_acquire(&task->scheduler_wait, 0) < 0;
+}
+
+JL_DLLEXPORT int jl_task_wait_pause(jl_task_t *task) JL_NOTSAFEPOINT
+{
+    assert(task == jl_current_task);
+    int32_t state = jl_atomic_load_relaxed(&task->scheduler_wait);
+    while (state != 0) {
+        if (task_wait_suspended(state))
+            return 2; // already paused by an enclosing yield
+        int32_t paused = state > 0 ? TASK_WAIT_PAUSED : -TASK_WAIT_PAUSED;
+        if (jl_atomic_cmpswap(&task->scheduler_wait, &state, paused))
+            return 1;
+    }
+    return 0;
+}
+
+JL_DLLEXPORT void jl_task_wait_resume(jl_task_t *task) JL_NOTSAFEPOINT
+{
+    assert(task == jl_current_task);
+    int32_t state = jl_atomic_load_relaxed(&task->scheduler_wait);
+    int32_t owner = jl_atomic_load_relaxed(&task->tid) + 1;
+    assert(owner > 0);
+    do {
+        assert(task_wait_suspended(state));
+    } while (!jl_atomic_cmpswap(&task->scheduler_wait, &state, state > 0 ? owner : -owner));
+}
+
+JL_DLLEXPORT int16_t jl_task_wait_state(jl_task_t *task) JL_NOTSAFEPOINT
+{
+    int32_t state = jl_atomic_load_acquire(&task->scheduler_wait);
+    return task_wait_suspended(state) ? 0 : state;
+}
+
+JL_DLLEXPORT int jl_task_wait_is_paused(jl_task_t *task) JL_NOTSAFEPOINT
+{
+    int32_t state = jl_atomic_load_acquire(&task->scheduler_wait);
+    return state == TASK_WAIT_PAUSED || state == -TASK_WAIT_PAUSED;
+}
+
+JL_DLLEXPORT void jl_task_wait_fallback(jl_task_t *task) JL_NOTSAFEPOINT
+{
+    assert(task == jl_current_task);
+    int32_t state = jl_atomic_load_relaxed(&task->scheduler_wait);
+    while (state == TASK_WAIT_PAUSED || state == -TASK_WAIT_PAUSED) {
+        // A nested blocking wait has a separate wake. Preserve the outer claim,
+        // but route subsequent notifications through the queues until yield
+        // restores the outer slot. Do this before publishing a new registration.
+        int32_t fallback = state > 0 ? TASK_WAIT_FALLBACK : -TASK_WAIT_FALLBACK;
+        if (jl_atomic_cmpswap(&task->scheduler_wait, &state, fallback))
+            return;
+    }
+}
+
+JL_DLLEXPORT int16_t jl_try_notify_task(jl_task_t *task, int supersede) JL_NOTSAFEPOINT
+{
+    int32_t owner = jl_atomic_load_relaxed(&task->scheduler_wait);
+    while (owner != 0) {
+        if (owner == TASK_WAIT_FALLBACK || owner == -TASK_WAIT_FALLBACK ||
+            (owner < 0 && !supersede))
+            return 0;
+        // Retry across pause/resume, rather than queueing a second continuation.
+        // An interrupt can supersede an accepted wake. Its unchanged-state RMW
+        // still publishes the replacement payload to the owner's acquire.
+        int32_t notified = owner > 0 ? -owner : owner;
+        if (jl_atomic_cmpswap_release(&task->scheduler_wait, &owner, notified)) {
+            if (owner < 0)
+                return -2; // already notified
+            return owner == TASK_WAIT_PAUSED ? -1 : owner;
+        }
+    }
+    return 0;
+}
+
 JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT
 {
     if (tpid < -1 || tpid >= jl_n_threadpools)

@@ -510,7 +510,10 @@ end
 end
 
 # Publish `w` as `waiter`'s only armed wait registration.
+fallback_task_wait(t::Task) = ccall(:jl_task_wait_fallback, Cvoid, (Any,), t)
+
 function _arm_wait(waiter::Task, w::WaitEntry)
+    waiter === current_task() && fallback_task_wait(waiter)
     armed = @atomicreplace :release :monotonic waiter.waiting_on nothing => w
     armed.success || _wait_registration_error()
     return w

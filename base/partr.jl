@@ -183,7 +183,7 @@ end
 
 yield_os_thread() = @static Sys.iswindows() ? ccall(:SwitchToThread, stdcall, Cint, ()) : ccall(:sched_yield, Cint, ())
 
-function multiq_deletemin()
+function multiq_deletemin(yielding::Bool=false)
     local rn1::UInt32
     local heap, task
 
@@ -232,6 +232,12 @@ function multiq_deletemin()
             if task_tid != Int16(-1)
                 ccall(:jl_wakeup_thread, Cint, (Int16,), task_tid)
             end
+            # A direct wake may have arrived while we were searching the heaps.
+            ct = current_task()
+            Base.task_wait_state(ct) < 0 && return ct
+            # yield() must be able to resume itself if the queued work is pinned
+            # elsewhere. It has not enqueued itself as a fallback heap entry.
+            yielding && return nothing
             # Keep polling (the owner may release the task without waking
             # anyone), but give up the CPU in case that thread needs it.
             yield_os_thread()

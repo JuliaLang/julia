@@ -1243,7 +1243,16 @@ const Workqueue = Workqueues[1] # default work queue is thread 1 // TODO: deprec
 
 workqueue_for(tid::Int) = Workqueues[tid]
 
-function enq_work(t::Task)
+begin_task_wait(t::Task) = ccall(:jl_task_wait_begin, Cint, (Any,), t) != 0
+try_notify_task(t::Task, supersede::Bool=false) = ccall(:jl_try_notify_task, Int16, (Any, Cint), t, supersede)
+task_wait_state(t::Task) = ccall(:jl_task_wait_state, Int16, (Any,), t)
+finish_task_wait(t::Task) = ccall(:jl_task_wait_end, Cint, (Any,), t)
+end_task_wait(t::Task) = finish_task_wait(t) == 1
+pause_task_wait(t::Task) = ccall(:jl_task_wait_pause, Cint, (Any,), t)
+resume_task_wait(t::Task) = ccall(:jl_task_wait_resume, Cvoid, (Any,), t)
+task_wait_paused(t::Task) = ccall(:jl_task_wait_is_paused, Cint, (Any,), t) != 0
+
+function enq_work(t::Task, resuming::Bool=false, supersede::Bool=false)
     state = t._state
     if state === task_state_abandoned
         # A task frozen by forcible abandonment leaves its waitqueue
@@ -1252,9 +1261,21 @@ function enq_work(t::Task)
         # drop it silently.
         return t
     end
-    (state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
-    (@atomic :monotonic t.waiting_on) === nothing ||
+    state === task_state_runnable || error("schedule: Task not runnable")
+    nested = resuming && finish_task_wait(t) == 2
+    (nested || (@atomic :monotonic t.waiting_on) === nothing) ||
         throw(ConcurrencyViolationError("schedule: Task is registered on a wait queue"))
+
+    # A nested yield has a runnable continuation independent of the outer wait.
+    # Notifications latch in its paused slot even if that continuation is queued.
+    if !resuming
+        owner = try_notify_task(t, supersede)
+        if owner != 0
+            owner > 0 && ccall(:jl_wakeup_thread, Cint, (Int16,), owner - Int16(1))
+            return t
+        end
+    end
+    t.queue === nothing || error("schedule: Task not runnable")
 
     # Sticky tasks go into their thread's work queue.
     if t.sticky
@@ -1392,16 +1413,18 @@ function schedule(t::Task, @nospecialize(arg); error=false)
         w = @atomicswap t.waiting_on = nothing
         w isa WaitEntry && try_unlink_claimed!(w)
         q = t.queue
-        q === nothing || list_deletefirst!(q::StickyWorkqueue, t)
+        # A paused wait may have a queued nested-yield continuation. Keep it:
+        # the interrupt latches separately and does not schedule that continuation.
+        q === nothing || task_wait_paused(t) || list_deletefirst!(q::StickyWorkqueue, t)
         setfield!(t, :result, arg)
         setfield!(t, :_isexception, true)
     else
-        t.queue === nothing || Base.error("schedule: Task not runnable")
+        t.queue === nothing || task_wait_paused(t) || Base.error("schedule: Task not runnable")
         setfield!(t, :result, arg)
     end
     # [task] created -scheduled-> wait_time
     maybe_record_enqueued!(t)
-    enq_work(t)
+    enq_work(t, false, error)
     return t
 end
 
@@ -1422,12 +1445,12 @@ function deliver_claimed_wake!(t::Task, w::WaitEntry, @nospecialize(exc))
     # a pending wake somebody enqueued claim-lessly is superseded by the
     # cancellation delivery, like an interrupt overriding a claimed value
     q = t.queue
-    q === nothing || list_deletefirst!(q::StickyWorkqueue, t)
+    q === nothing || task_wait_paused(t) || list_deletefirst!(q::StickyWorkqueue, t)
     t._state === task_state_runnable || return nothing
     setfield!(t, :result, exc)
     setfield!(t, :_isexception, true)
     maybe_record_enqueued!(t)
-    enq_work(t)
+    enq_work(t, false, true)
     return nothing
 end
 
@@ -1439,11 +1462,11 @@ function deliver_claimed_value_wake!(t::Task, w::WaitEntry, @nospecialize(val))
     (@atomic :monotonic t.waiting_on) === nothing || return nothing
     try_unlink_claimed!(w)
     q = t.queue
-    q === nothing || list_deletefirst!(q::StickyWorkqueue, t)
+    q === nothing || task_wait_paused(t) || list_deletefirst!(q::StickyWorkqueue, t)
     t._state === task_state_runnable || return nothing
     setfield!(t, :result, val)
     maybe_record_enqueued!(t)
-    enq_work(t)
+    enq_work(t, false, true)
     return nothing
 end
 
@@ -1456,12 +1479,23 @@ tasks.
 """
 function yield()
     ct = current_task()
-    enq_work(ct)
+    paused = pause_task_wait(ct)
     try
-        wait()
-    catch
-        q = ct.queue; q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
-        rethrow()
+        if ct.sticky || paused != 0
+            enq_work(ct, true)
+        end
+        try
+            if ct.sticky || paused != 0
+                _wait(false, true)
+            else
+                _wait(true)
+            end
+        catch
+            q = ct.queue; q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
+            rethrow()
+        end
+    finally
+        paused == 1 && resume_task_wait(ct)
     end
 end
 
@@ -1485,9 +1519,14 @@ function yield(t::Task, @nospecialize(x=nothing))
     # [task] created -scheduled-> wait_time
     maybe_record_enqueued!(t)
     setfield!(t, :result, x)
-    enq_work(ct)
-    set_next_task(t)
-    return try_yieldto(ensure_rescheduled)
+    paused = pause_task_wait(ct)
+    try
+        enq_work(ct, true)
+        set_next_task(t)
+        return try_yieldto(ensure_rescheduled, false, paused != 0)
+    finally
+        paused == 1 && resume_task_wait(ct)
+    end
 end
 
 """
@@ -1516,8 +1555,16 @@ function yieldto(t::Task, @nospecialize(x=nothing))
     return try_yieldto(identity)
 end
 
-function try_yieldto(undo)
+function try_yieldto(undo, reschedule::Bool=false, preserve_result::Bool=false)
+    local wait_state
     try
+        # Normally wait() has already closed the slot. Also handle a switch
+        # from code run inside the scheduler before the outer wait() returns.
+        ct = current_task()
+        wait_state = finish_task_wait(ct)
+        if (reschedule || wait_state == 1) && ccall(:jl_get_next_task, Ref{Task}, ()) !== ct
+            enq_work(ct, true)
+        end
         ccall(:jl_switch, Cvoid, ())
     catch
         undo(ccall(:jl_get_next_task, Ref{Task}, ()))
@@ -1528,6 +1575,7 @@ function try_yieldto(undo)
     if ct.metrics_enabled
         @atomic :monotonic ct.last_started_running_at = time_ns()
     end
+    preserve_result && wait_state == 2 && return nothing
     if ct._isexception
         exc = ct.result
         setfield!(ct, :result, nothing)
@@ -1648,7 +1696,7 @@ function discard_stale_workqueue_task(t::Task)
     nothing
 end
 
-function trypoptask(W::StickyWorkqueue)
+function trypoptask(W::StickyWorkqueue, yielding::Bool=false)
     while true
         t = trypopfirst!(W)
         t === nothing && break
@@ -1658,8 +1706,10 @@ function trypoptask(W::StickyWorkqueue)
         end
         return t
     end
+    ct = current_task()
+    task_wait_state(ct) < 0 && return ct
     while true
-        t = Partr.multiq_deletemin()
+        t = Partr.multiq_deletemin(yielding)
         t === nothing && return nothing
         if t._state !== task_state_runnable
             discard_stale_workqueue_task(t)
@@ -1669,10 +1719,16 @@ function trypoptask(W::StickyWorkqueue)
     end
 end
 
-checktaskempty = Partr.multiq_check_empty
+checktaskempty() = task_wait_state(current_task()) >= 0 && Partr.multiq_check_empty()
 
-function wait()
+# Code run inside the scheduler can yield and migrate before the next C-loop poll.
+trypoptask(::Nothing) = trypoptask(workqueue_for(Threads.threadid()))
+
+wait() = _wait(false)
+
+function _wait(yielding::Bool, queued_yield::Bool=false)
     ct = current_task()
+    queued_yield || fallback_task_wait(ct)
     # [task] user_time -yield-or-done-> wait_time
     record_running_time!(ct)
     # let GC run
@@ -1683,25 +1739,35 @@ function wait()
 
     # get the next task to run
     W = workqueue_for(Threads.threadid())
-    task = trypoptask(W)
-    if task === nothing
-        # No tasks to run. If the current task is done, switch to the scheduler task
-        # to run the thread sleep logic, so that this task's stack can be freed
-        # promptly (#57544). Otherwise run the thread sleep logic in the context of
-        # the current task, so that an asynchronously thrown InterruptException
-        # is delivered to a task that can observe it, rather than swallowed by
-        # the internal scheduler task (#58689).
-        if ct_done
-            sched_task = get_sched_task()
-            if ct !== sched_task
-                istaskdone(sched_task) && (sched_task = _new_sched_task())
-                return yieldto(sched_task)
-            end
+    notified = false
+    opened = !ct_done && !yielding && begin_task_wait(ct)
+    task = try
+        task = trypoptask(W, yielding)
+        if yielding && task === nothing
+            task = ct
         end
-        task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
+        if task === nothing
+            # Completed tasks use the scheduler task so their stacks can be freed.
+            # Otherwise keep the sleep loop here so interrupts reach this task.
+            if ct_done
+                sched_task = get_sched_task()
+                if ct !== sched_task
+                    istaskdone(sched_task) && (sched_task = _new_sched_task())
+                    return yieldto(sched_task)
+                end
+            end
+            task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, nothing, checktaskempty)
+        end
+        task
+    finally
+        # On an exception the current task is already resuming by unwinding;
+        # consume its notification without leaving another runnable copy.
+        opened && (notified = end_task_wait(ct))
     end
+    # Another task may have been selected just before the notification arrived.
+    # Publish the accepted wake before switching away, in ordinary Julia context.
     set_next_task(task)
-    return try_yieldto(ensure_rescheduled)
+    return try_yieldto(ensure_rescheduled, notified || yielding, queued_yield)
 end
 
 if Sys.iswindows()

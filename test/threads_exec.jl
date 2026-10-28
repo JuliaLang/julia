@@ -112,6 +112,84 @@ function spawn_pinned(f, tid)
     return schedule(t)
 end
 other_default_tid() = first(tid for tid in Threads.threadpooltids(:default) if tid != Threads.threadid())
+# Exercise parked-task wake delivery and the fallback when its owner takes other work.
+if threadpoolsize(:default) > 1
+    @testset "parked-task handoff" begin
+        function spin_until(f)
+            deadline = time_ns() + 10_000_000_000
+            while !f()
+                time_ns() < deadline || error("scheduler wake test timed out")
+                GC.safepoint()
+            end
+        end
+
+        @testset "deliver a value or exception" begin
+            for value in (:wake, ErrorException("parked task wake"))
+                condition = Threads.Condition()
+                waiter = Threads.@spawn try
+                    lock(condition) do
+                        wait(condition)
+                    end
+                catch err
+                    err
+                end
+                spin_until(() -> Base.task_wait_state(waiter) > 0)
+                lock(condition) do
+                    notify(condition, value; error=value isa Exception)
+                end
+                @test fetch(waiter) === value
+                @test Base.task_wait_state(waiter) == 0
+            end
+        end
+
+        @testset "wake after the owner takes other work" begin
+            event = Event()
+            running = Atomic{Bool}(false)
+            release = Atomic{Bool}(false)
+            waiter = Threads.@spawn begin
+                wait(event)
+                :resumed
+            end
+            owner = 0
+            spin_until() do
+                owner = Int(Base.task_wait_state(waiter))
+                owner > 0
+            end
+            blocker = spawn_pinned(owner) do
+                running[] = true
+                spin_until(() -> release[])
+            end
+            try
+                spin_until(() -> running[])
+                notify(event)
+                status = timedwait(() -> istaskdone(waiter), 5)
+                @test status === :ok
+                status === :ok && @test fetch(waiter) === :resumed
+            finally
+                release[] = true
+            end
+            wait(blocker)
+        end
+
+        # Model a yield during scheduler-side work without injecting a real SIGINT.
+        # The yield must leave the pending value for the enclosing wait to consume.
+        @testset "yield preserves a pending wake" begin
+            waiter = Threads.@spawn begin
+                ct = current_task()
+                @test Base.begin_task_wait(ct)
+                try
+                    schedule(ct, :pending_value)
+                    yield()
+                    @test ct.result === :pending_value
+                finally
+                    @test Base.end_task_wait(ct)
+                end
+            end
+            wait(waiter)
+        end
+    end
+end
+
 if threadpoolsize(:default) > 1
     let lk = SpinLock()
         c1 = Base.Event()

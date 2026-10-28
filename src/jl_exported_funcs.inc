@@ -462,6 +462,14 @@
     XX(jl_tagged_gensym) \
     XX(jl_take_buffer) \
     XX(jl_task_get_next) \
+    XX(jl_task_wait_begin) \
+    XX(jl_task_wait_end) \
+    XX(jl_task_wait_fallback) \
+    XX(jl_task_wait_is_paused) \
+    XX(jl_task_wait_pause) \
+    XX(jl_task_wait_resume) \
+    XX(jl_task_wait_state) \
+    XX(jl_try_notify_task) \
     XX(jl_termios_size) \
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
