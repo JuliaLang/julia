@@ -1452,6 +1452,20 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         # mv
         @test_throws Base._UVError("rename($(repr(nonexisting_src)), $(repr(dst)))", Base.UV_ENOENT) mv(nonexisting_src, dst; force=true)
     end
+    mktempdir() do tmpdir
+        src = joinpath(tmpdir, "src")
+        dst = joinpath(tmpdir, "dst")
+        target = joinpath(tmpdir, "missing_target")
+        write(src, "src contents")
+        symlink(target, dst)
+        @test_throws ArgumentError mv(src, dst)
+        @test islink(dst)
+        @test read(src, String) == "src contents"
+        cp(src, dst; force=true)
+        @test !islink(dst)
+        @test read(dst, String) == "src contents"
+        @test !ispath(target)
+    end
 end
 
 # issue #10506 #10434

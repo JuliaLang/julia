@@ -367,7 +367,7 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
     if isdir(src) && (follow_symlinks || !islink(src)) && dst_path != src_path && _is_within(dst_path, src_path)
         throw(ArgumentError("'$dst' is inside '$src'; a directory cannot be moved or copied into itself."))
     end
-    if ispath(dst)
+    if ispath(dst) || islink(dst)
         if force
             # Check for issue when: (src == dst) or when one is a link to the other
             # https://github.com/JuliaLang/julia/pull/11172#issuecomment-100391076
