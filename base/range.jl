@@ -1036,7 +1036,7 @@ function getindex(r::AbstractUnitRange, s::StepRange{T}) where {T<:Integer}
     @boundscheck checkbounds(r, s)
 
     if T === Bool
-        len = Int(last(s))
+        len = count(s)
         return range(first(s) ? first(r) : last(r), step=oneunit(eltype(r)), length=len)
     else
         f = first(r)
