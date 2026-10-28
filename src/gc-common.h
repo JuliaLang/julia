@@ -200,6 +200,17 @@ STATIC_INLINE void jl_free_aligned_wrapper(void *p) JL_NOTSAFEPOINT
 }
 #endif
 
+STATIC_INLINE void jl_gc_init_malloc(void) JL_NOTSAFEPOINT
+{
+#ifdef MIMALLOC_ENABLED
+    // On Linux, mimalloc eagerly commits its arenas and then `madvise(MADV_HUGEPAGE)`s them,
+    // which can triple RSS for multithreaded allocation. Turning this off via `allow_thp=0`
+    // instead would `prctl(PR_SET_THP_DISABLE)` for the whole process and its children.
+    if (getenv("MIMALLOC_ARENA_EAGER_COMMIT") == NULL)
+        mi_option_set(mi_option_arena_eager_commit, 0);
+#endif
+}
+
 #define malloc_cache_align(sz) jl_malloc_aligned_wrapper(sz, JL_CACHE_BYTE_ALIGNMENT)
 #define realloc_cache_align(p, sz, oldsz) jl_realloc_aligned_wrapper(p, sz, oldsz, JL_CACHE_BYTE_ALIGNMENT)
 #define malloc_page_align(sz) jl_malloc_aligned_wrapper(sz, jl_getpagesize())

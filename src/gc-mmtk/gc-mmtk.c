@@ -76,6 +76,7 @@ static small_arraylist_t orphaned_weak_processing_list;
 static uv_mutex_t orphaned_weak_processing_lock;
 
 void jl_gc_init(void) {
+    jl_gc_init_malloc();
     // TODO: use jl_options.heap_size_hint to set MMTk's fixed heap size? (see issue: https://github.com/mmtk/mmtk-julia/issues/167)
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
 
