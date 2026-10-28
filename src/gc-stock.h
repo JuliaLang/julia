@@ -130,7 +130,7 @@ typedef struct _jl_gc_pagemeta_t {
     // publication, not the flag, carries the ordering)
     _Atomic(uint8_t) has_weak_processing;
     // Whether a cell was marked only to run its finalizer (through
-    // `to_finalize`) in this collection. Such cells are garbage once the
+    // `to_finalize`) in this collection. Such cells are usually garbage once the
     // finalizer has run, so the next quick sweep must visit the page even
     // though it then holds no young cells.
     uint8_t has_finalized;
