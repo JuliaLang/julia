@@ -702,6 +702,21 @@ precompile_test_harness(false) do dir
     mkdir(joinpath(dir, "subfolder"))
     @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
 
+    # a hardlink to the entry file, e.g. the identical entry file of another version of
+    # the package, is a different source; a symlink is the same
+    hardlinked_file = joinpath(dir, "hardlinked", "FooBar.jl")
+    mkdir(dirname(hardlinked_file))
+    hardlink(FooBar_file, hardlinked_file)
+    reasons = Dict{Symbol,Int}()
+    @test Base.stale_cachefile(hardlinked_file, joinpath(cachedir, "FooBar.ji"); reasons) === true
+    @test haskey(reasons, :source_path_changed)
+    if !Sys.iswindows()
+        symlinked_file = joinpath(dir, "symlinked", "FooBar.jl")
+        mkdir(dirname(symlinked_file))
+        symlink(FooBar_file, symlinked_file)
+        @test Base.stale_cachefile(symlinked_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
+    end
+
     @eval using FooBar
     fb_uuid = invokelatest(()->Base.module_build_id(FooBar))
     sleep(2); touch(FooBar_file)
