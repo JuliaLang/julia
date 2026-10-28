@@ -2166,7 +2166,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     )
         op, arg1 = head === Symbol("'") ? (head, args[1]) : (args[1], args[2])
         if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1::Symbol)) || (isa(arg1, Real) && signbit(arg1))
-            show_enclosed_list(io, '(', [arg1], ", ", ')', indent, 0)
+            show_enclosed_list(io, '(', [arg1::Union{Expr, Symbol, Real}], ", ", ')', indent, 0)
         else
             show_unquoted(io, arg1, indent, 0, quote_level)
         end
@@ -2362,7 +2362,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     # type annotation (i.e. "::Int")
     elseif head in uni_syms && nargs == 1
         print(io, head)
-        show_unquoted(io, args[1], indent, 0, quote_level)
+        show_list(io, args, "", indent, prec_decl, quote_level)
 
     # var-arg declaration or expansion
     # (i.e. "function f(L...) end" or "f(B...)")
@@ -2552,7 +2552,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             print(io, head)
             a1 = args[1]
             parens = (isa(a1,Expr) && !in(a1.head, (:tuple, :$, :vect, :braces))) ||
-                     (isa(a1,Symbol) && isoperator(a1))
+                     (isa(a1,Symbol) && isoperator(a1)) || (isa(a1,Real) && signbit(a1))
             parens && print(io, "(")
             show_unquoted(io, a1, 0, 0, quote_level)
             parens && print(io, ")")

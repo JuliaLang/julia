@@ -671,6 +671,12 @@ test_repr("let @m(x), y=z; end", true)
 @test_repr "1 => (2 => 3)"
 @test_repr "(1 => 2) => 3"
 
+for s in ("::(-1)", "::(!a)", "::(a + b)", "&(-1)", "\$(-1)",
+          "::(-0.0)", "&(-0.0)", "\$(-0.0)", "::(x::T)",
+          "-(-1)", "-(-0.0)", "(-1)'", "(-0.0)'")
+    @test string(Meta.parse(s)) == s
+end
+
 # pr 12008
 @test_repr "primitive type A B end"
 @test_repr "primitive type B 100 end"
