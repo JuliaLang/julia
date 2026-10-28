@@ -157,6 +157,7 @@
     @test replace(("0" ^ 9) * "1", Regex(("(0)" ^ 9) * "(1)") => s"10th group: \10") == "10th group: 1"
     # capture groups written to an IO that is not an IOBuffer
     @test sprint(io -> replace(IOContext(io), "aβcd", r"(β)(c)?" => s"<\2\g<1>>")) == "a<cβ>d"
+    @test_throws OverflowError replace("ab", r"(a)" => s"[\18446744073709551617]")
 
     # Proper unicode handling
     @test  match(r"∀∀", "∀x∀∀∀").match == "∀∀"
