@@ -1262,6 +1262,24 @@ import Base.PersistentDict
         @test Core.Compiler.is_removable_if_unused(Base.infer_effects(Base.HAMT.init_hamt, (Type{Vector{Any}},Type{Int},Vector{Any},Int)))
         @test Core.Compiler.is_removable_if_unused(Base.infer_effects(Base.HAMT.HAMT{Vector{Any},Int}, (Pair{Vector{Any},Int},)))
     end
+    @testset "updates do not modify earlier versions" begin
+        keys = [Ref(i) for i in 1:300]
+        dict = PersistentDict{Any, Int}()
+        ref = Dict{Any, Int}()
+        versions = [(dict, copy(ref))]
+        for i in 1:3000
+            k = keys[mod1(i * 7919, length(keys))]
+            if i % 3 == 0
+                dict = Base.delete(dict, k)
+                delete!(ref, k)
+            else
+                dict = PersistentDict(dict, k => i)
+                ref[k] = i
+            end
+            push!(versions, (dict, copy(ref)))
+        end
+        @test all(((d, r),) -> Dict{Any, Int}(d) == r, versions)
+    end
     @testset "basics" begin
         dict = PersistentDict{Int, Int}()
         @test_throws KeyError dict[1]
