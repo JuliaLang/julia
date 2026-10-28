@@ -42,4 +42,15 @@ err = tryparse("a = 1\n[[a.b]]")
 @test err isa ParserError
 @test err.type == Internals.ErrKeyAlreadyHasValue
 
+str = """
+[a.b.c]
+x = 1
+
+[a]
+b = 2
+"""
+err = tryparse(str)
+@test err isa ParserError
+@test err.type == Internals.ErrDuplicatedKey
+
 end
