@@ -668,7 +668,7 @@ static void release_task_pin(jl_task_t *t) JL_CANSAFEPOINT
 {
     jl_atomic_store_release(&t->tid, -1);
     jl_fence();
-    if (jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)&t->queue) == NULL)
+    if (jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)&t->queue) == jl_nothing)
         return;
     static _Atomic(jl_value_t *) rescue_f = NULL;
     jl_value_t *f = jl_atomic_load_relaxed(&rescue_f);
