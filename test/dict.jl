@@ -1240,6 +1240,11 @@ end
     @test_throws ArgumentError get!(widgc, nothing, Ref(1))
     @test_throws ArgumentError widgc[[5]] = nothing
 
+    @test_throws ArgumentError widgc[A] = Ref(1.0)
+    @test_throws ArgumentError get!(widgc, B, Ref(1.0))
+    @test widgc[A] === b
+    @test !haskey(widgc, B)
+
     GC.@preserve A B C a b c nothing
 end
 
