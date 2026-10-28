@@ -658,6 +658,8 @@ function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, 
             # tables that were closed by a different [table] section.
             check_def = define_implicit ? true : (i == length(dotted_keys))
             @try check_allowed_add_key(l, d, check_def)
+        else
+            @try check_allowed_add_key(l, d, false)
         end
         if define_implicit && d isa TOMLDict
             push!(l.implicit_tables, d)
