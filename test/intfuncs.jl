@@ -603,6 +603,12 @@ end
                 end
             end
         end
+        @test digits(5, base = typemin(Int)) == [5]
+        @test digits(-5, base = typemin(Int)) == [typemax(Int) - 4, 1]
+        @test digits(Int8(-5), base = typemin(Int8)) == [123, 1]
+        @test digits!(zeros(Int, 3), 0x81, base = typemin(Int8)) == [1, 127, 1]
+        @test digits(0x81, base = typemin(Int8)) == Int8[1, 127, 1]
+        @test digits(Int8, -5, base = typemin(Int8)) == Int8[123, 1]
         @test [string(n, base = b)
                for n = [-10^9, -10^5, -2^20, -2^10, -100, -83, -50, -34, -27, -16, -7, -3, -2, -1,
                         0, 1, 2, 3, 4, 7, 16, 27, 34, 50, 83, 100, 2^10, 2^20, 10^5, 10^9]
