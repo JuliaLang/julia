@@ -2528,6 +2528,10 @@ simple_abstract_caller(x, label) = simple_abstract_target(x, label)
 simple_abstract_inline_caller(x, label) = simple_abstract_inline_target(x, label)
 @noinline simple_abstract_sparam(x::T) where T = T
 simple_abstract_sparam_caller(x) = simple_abstract_sparam(x)
+@noinline simple_abstract_unionall_target(x::Vector{<:Integer}) = length(x)
+simple_abstract_unionall_caller(x) = simple_abstract_unionall_target(x)
+@noinline simple_abstract_unionall_sparam(x::Vector{T}) where T = T
+simple_abstract_unionall_sparam_caller(x) = simple_abstract_unionall_sparam(x)
 
 @testset "simple abstract invokes" begin
     for (typ, expected) in (
@@ -2542,9 +2546,11 @@ simple_abstract_sparam_caller(x) = simple_abstract_sparam(x)
         (Union{Int, String}, false),
         (Tuple{Union{Int, String}}, false),
         (Tuple{Tuple{Union{Int, String}}}, false),
-        (Vector, false),
-        (Tuple{Vector}, false),
-        (AbstractVector{T} where T<:Union{Int, String}, false),
+        (Tuple{Union{T, Int}} where T, false),
+        (Vector, true),
+        (Tuple{Vector}, true),
+        (Tuple{Vector{<:Integer}, Ref}, true),
+        (AbstractVector{T} where T<:Union{Int, String}, true),
     )
         @test Compiler.is_simple_invoke_type(typ) == expected
     end
@@ -2564,6 +2570,13 @@ simple_abstract_sparam_caller(x) = simple_abstract_sparam(x)
         @test !any(isinvoke(:simple_abstract_inline_target), src.code)
         src = code_typed1(simple_abstract_sparam_caller, (Integer,); interp)
         @test !any(isinvoke(:simple_abstract_sparam), src.code)
+        # partially specified argument types are invoked directly as well
+        src = code_typed1(simple_abstract_unionall_caller, (Vector{<:Integer},); interp)
+        @test any(isinvoke(:simple_abstract_unionall_target), src.code) == enabled
+        @test any(iscall((src, simple_abstract_unionall_target)), src.code) == !enabled
+        # ...but not when they leave a static parameter undetermined
+        src = code_typed1(simple_abstract_unionall_sparam_caller, (Vector{<:Integer},); interp)
+        @test !any(isinvoke(:simple_abstract_unionall_sparam), src.code)
     end
     method = only(methods(simple_abstract_target))
     sig = Tuple{typeof(simple_abstract_target), Integer, String}

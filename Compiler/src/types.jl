@@ -455,7 +455,7 @@ Parameters that control optimizer operation.
 ---
 - `opt_params.abstract_invoke::Bool = false`\\
   Allows direct invokes of simple abstract signatures, even when runtime dispatch would
-  specialize further. Unions and nontrivial `UnionAll`s in covariant positions are excluded.
+  specialize further. Unions in covariant positions are excluded.
   The additional eligibility applies to fixed-arity, non-generated methods.
   Enabled for trimmed compilation, where falling back to dynamic dispatch is undesirable.
 ---

@@ -794,14 +794,15 @@ end
 """
     is_simple_invoke_type(t)
 
-Whether `t` has no union or nontrivial `UnionAll` in covariant position. Tuple
-elements are covariant; parameters of other data types are invariant and are
-left unrestricted. Equal-bound variables are substituted before checking.
+Whether `t` has no union in covariant position. Tuple elements are covariant;
+parameters of other data types are invariant and are left unrestricted. A
+`UnionAll` is checked by its body, so partially specified types such as
+`Vector{<:Integer}` are allowed; equal-bound variables are substituted first.
 """
 function is_simple_invoke_type(@nospecialize(t))
     if t isa UnionAll
-        t.var.lb === t.var.ub || return false
-        return is_simple_invoke_type(t{t.var.lb})
+        t.var.lb === t.var.ub && return is_simple_invoke_type(t{t.var.lb})
+        return is_simple_invoke_type(unwrap_unionall(t))
     elseif isType(t)
         return true
     elseif t isa DataType
