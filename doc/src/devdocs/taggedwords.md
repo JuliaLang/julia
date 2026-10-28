@@ -13,8 +13,12 @@ This technique has been in use for decades in other language implementations,
 among them Lisp dialects, Smalltalk, OCaml and Ruby.
 
 The encoding below is a documented ABI. C code that reads and writes fields
-with `jl_get_nth_field` and `jl_set_nth_field` never sees a raw tagged word, so
-only code that accesses the words directly relies on the encoding.
+with `jl_get_nth_field` and `jl_set_nth_field`, or reads `Memory` elements with
+`jl_genericmemoryref`, never sees a raw tagged word, so only code that accesses
+the words directly relies on the encoding. The boxed-element accessors
+`jl_genericmemory_ptr_ref`, `jl_array_ptr_ref` and their `_set` counterparts
+assert `arrayelem_isboxed`, so they do not apply to such `Memory`, as they do
+not apply to isbits union `Memory` either.
 
 ## Which unions qualify
 
@@ -23,8 +27,8 @@ The components of a union type `U` are the types it is made of
 size in bits (`Sys.WORD_SIZE`), each component `T` is of one of two kinds:
 
 * an *immediate component*, if `T` is a primitive type of at most `W - 1` bits
-  (`Core.bitsizeof(T) < W`), such as `Int16` or `Bool`, and on 64-bit
-  platforms also `Int32`, `Char` or `Float32`;
+  (`Core.bitsizeof(T) < W`), such as `Int16` or `Bool` on all platforms, or
+  `Int32` or `Float32` on 64-bit platforms;
 * a *reference component* otherwise: mutable and abstract types, singletons
   such as `Nothing`, immutable structs, and wider primitive types such as
   `Int`.

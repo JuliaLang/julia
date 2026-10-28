@@ -16,7 +16,9 @@ Compiler/Runtime improvements
   a single tagged word: storing or loading the primitive value involves no allocation.
   The encoding is documented ABI (see the devdocs on tagged word Union optimizations);
   such fields were previously stored as a pointer to a boxed value, which C code should
-  not have relied upon ([#62918]).
+  not have relied upon. Elements of such arrays can no longer be accessed with
+  `jl_array_ptr_ref`, `jl_genericmemory_ptr_ref` or their `_set` counterparts; read them
+  with `jl_genericmemoryref` instead ([#62918]).
 
 Command-line option changes
 ---------------------------
