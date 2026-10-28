@@ -202,6 +202,15 @@ end
     sizehint!(A, 5)
     @test length(A) == 5
     @test A == [1:5;]
+
+    for n in (0, 10)
+        A = [1:100;]
+        empty!(A)
+        @test sizehint!(A, n; first=true) === A
+        @test isempty(A)
+        pushfirst!(A, 1)
+        @test A == [1]
+    end
 end
 @testset "reshape with colon" begin
     # Reshape with an omitted dimension
@@ -1715,6 +1724,8 @@ end
     @test_throws BoundsError deleteat!(a, [1,13])
     @test_throws ArgumentError deleteat!(a, [3,2]) # not sorted
     @test_throws BoundsError deleteat!(a, 5:20)
+    @test_throws BoundsError deleteat!(a, 1:typemax(Int))
+    @test_throws BoundsError deleteat!(a, 2:typemax(Int))
     @test_throws BoundsError deleteat!(a, Bool[])
     @test_throws BoundsError deleteat!(a, [true])
     @test_throws BoundsError deleteat!(a, falses(11))
@@ -3518,6 +3529,7 @@ end
     @test_throws DimensionMismatch Base.wrap(Array, mem, (10, 10))
     @test Base.wrap(Array, mem, (5,)) == ones(Int, 5)
     @test Base.wrap(Array, mem, 2) == ones(Int, 2)
+    @test Base.wrap(Array, mem, UInt(2)) == ones(Int, 2)
     @test Base.wrap(Array, memref, 10) == ones(Int, 10)
     @test Base.wrap(Array, memref, (2,2,2)) == ones(Int,2,2,2)
     @test Base.wrap(Array, mem, (5, 2)) == ones(Int, 5, 2)

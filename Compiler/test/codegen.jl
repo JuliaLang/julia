@@ -1361,6 +1361,81 @@ function union_phi_inline_roots(x::Bool)
 end
 @test union_phi_inline_roots(true) === ("Q8", 1)
 
+# issue #64090
+function filter_singleton_types(t)
+    out = Any[]
+    for x in Iterators.filter(x -> x isa Val, t)
+        push!(out, typeof(x))
+    end
+    out
+end
+function narrow_union_with_bits_member(t, i, j, k::Int, c::Bool)
+    x = c ? t[i] : t[j]
+    y = x isa Tuple ? k : x
+    typeof(y)
+end
+function narrow_union_in_try_slot(t, i)
+    local x
+    try
+        x = t[i]
+        error("jump")
+    catch
+    end
+    y = x isa Val ? x : Val(:c)
+    typeof(y)
+end
+struct NumberSetting
+    value::Number
+end
+lookup_setting(s::NumberSetting, key::Symbol) =
+    key === :value ? s.value : key === :none ? nothing : (key, :alias)
+function last_int_setting(s, keys)
+    last = nothing
+    try
+        for key in keys
+            key === :stop && error("stop")
+            v = lookup_setting(s, key)
+            v isa Union{Nothing,Int} || continue
+            last = v
+        end
+    catch
+    end
+    last
+end
+function last_simple_setting(s, key)
+    result = 0
+    try
+        v = lookup_setting(s, key)
+        if v isa Union{Nothing,Int,Tuple{Symbol,Symbol}}
+            result = v
+        end
+        error("jump")
+    catch
+    end
+    result
+end
+@testset "#64090" begin
+    @test filter_singleton_types((Val(:b), Val(:a), (:x, :y))) == [Val{:b}, Val{:a}]
+    @test collect(Iterators.filter(x -> x isa Val, (Val(:b), Val(:a), (:x, :y)))) == [Val(:b), Val(:a)]
+
+    t = (nothing, missing, (:x, :y))
+    @test narrow_union_with_bits_member(t, 1, 1, 5, true) === Nothing
+    @test narrow_union_with_bits_member(t, 2, 2, 5, false) === Missing
+    @test narrow_union_with_bits_member(t, 3, 3, 5, true) === Int
+
+    t = (Val(:b), Val(:a), (:x, :y))
+    @test narrow_union_in_try_slot(t, 1) === Val{:b}
+    @test narrow_union_in_try_slot(t, 2) === Val{:a}
+    @test narrow_union_in_try_slot(t, 3) === Val{:c}
+
+    s = NumberSetting(12345)
+    @test last_int_setting(s, (:value, :pair, :stop)) === 12345
+    @test last_int_setting(s, (:none, :stop)) === nothing
+    @test last_simple_setting(s, :value) === 12345
+    @test last_simple_setting(s, :none) === nothing
+    @test last_simple_setting(s, :pair) === (:pair, :alias)
+end
+
 mutable struct AnyBoxEA val::Any end
 function preserve_any_ea(x)
     b = AnyBoxEA(x)

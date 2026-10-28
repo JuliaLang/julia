@@ -47,6 +47,8 @@ using Base.MathConstants
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
     # issue 26823
     @test_throws InexactError rationalize(Int, NaN)
+    @test_throws InexactError Rational{BigInt}(NaN)
+    @test_throws InexactError Rational(big(NaN))
     # issue 32569
     @test_throws OverflowError 1 // typemin(Int)
     @test_throws ArgumentError 0 // 0

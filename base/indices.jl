@@ -395,7 +395,7 @@ end
 function getindex(S::IdentityUnitRange, i::StepRange{Bool})
     @inline
     @boundscheck checkbounds(S, i)
-    range(first(i) ? first(S) : last(S), length = last(i), step = Int(step(i)))
+    range(first(i) ? first(S) : last(S), length = count(i), step = Int(step(i)))
 end
 # Indexing with offset ranges should preserve the axes of the indices
 # however, this is only really possible in general with OffsetArrays.
@@ -514,7 +514,7 @@ end
 function getindex(iter::LinearIndices, i::AbstractRange{<:Integer})
     @inline
     @boundscheck checkbounds(iter, i)
-    @inbounds isa(iter, LinearIndices{1}) ? iter.indices[1][i] : (first(iter):last(iter))[i]
+    @inbounds isa(iter, LinearIndices{1}) ? axes1(iter.indices[1])[i] : (first(iter):last(iter))[i]
 end
 copy(iter::LinearIndices) = iter
 # More efficient iteration — predominantly for non-vector LinearIndices

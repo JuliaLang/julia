@@ -1,5 +1,13 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+// jl_setjmp / jl_longjmp (and ijl_*) for Windows (declared in src/julia.h).
+// They save and restore the callee-saved registers in a jmp_buf, at the
+// offsets of _JUMP_BUFFER (from <setjmp.h>).
+//
+// Coupled to C code in src/stackwalk.c: jl_simulate_longjmp reads a buffer
+// saved here through _JUMP_BUFFER to reconstruct the context that jl_longjmp
+// would resume, so the layout used here must match _JUMP_BUFFER.
+
 /*
  * TODO: save/restore floating point control state
  * and reset avx state
@@ -7,7 +15,7 @@
  */
 
 #define CNAME ijl_setjmp
-#include "ENTRY.amd64.h"
+#include "ENTRY.h"
 .globl jl_setjmp
 jl_setjmp:
     mov    rdx,QWORD PTR [rsp] // rta
@@ -40,7 +48,7 @@ jl_setjmp:
 
 
 #define CNAME ijl_longjmp
-#include "ENTRY.amd64.h"
+#include "ENTRY.h"
 .globl jl_longjmp
 jl_longjmp:
     mov    rax,QWORD PTR [rcx+0]
@@ -75,7 +83,7 @@ jl_longjmp:
 
 
 #define CNAME ijl_swapcontext
-#include "ENTRY.amd64.h"
+#include "ENTRY.h"
 .globl jl_swapcontext
 jl_swapcontext:
     // save stack registers
@@ -116,7 +124,7 @@ jl_swapcontext:
 
 
 #define CNAME ijl_setcontext
-#include "ENTRY.amd64.h"
+#include "ENTRY.h"
 .globl jl_setcontext
 jl_setcontext:
     // restore stack registers

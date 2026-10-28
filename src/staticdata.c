@@ -152,7 +152,6 @@ static void destroy_query_cache(jl_query_cache *cache) JL_NOTSAFEPOINT
 extern "C" {
 #endif
 
-// TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
 #define NUM_TAGS    6

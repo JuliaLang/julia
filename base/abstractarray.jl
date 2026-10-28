@@ -1412,7 +1412,7 @@ function _getindex(::IndexCartesian, A::AbstractArray{T,N}, I::Vararg{Int, N}) w
     getindex(A, I...)
 end
 _to_subscript_indices(A::AbstractArray, i::Integer) = (@inline; _unsafe_ind2sub(A, i))
-_to_subscript_indices(A::AbstractArray{T,N}) where {T,N} = (@inline; fill_to_length((), 1, Val(N)))
+_to_subscript_indices(A::AbstractArray{T,N}) where {T,N} = (@inline; map(first, axes(A)))
 _to_subscript_indices(A::AbstractArray{T,0}) where {T} = ()
 _to_subscript_indices(A::AbstractArray{T,0}, i::Integer) where {T} = ()
 _to_subscript_indices(A::AbstractArray{T,0}, I::Integer...) where {T} = ()
