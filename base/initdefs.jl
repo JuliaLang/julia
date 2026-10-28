@@ -347,6 +347,10 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         env = replace(env, '#' => VERSION.minor, count=1)
         env = replace(env, '#' => VERSION.patch, count=1)
         name = env[2:end]
+        if isabspath(name) || !isempty(splitdrive(name)[1]) || ".." in splitpath(name)
+            @warn "Named environment $(repr(env)) must not leave the depot's environments directory"
+            return nothing
+        end
         # look for named env in each depot
         for depot in DEPOT_PATH
             path = joinpath(depot, "environments", name)

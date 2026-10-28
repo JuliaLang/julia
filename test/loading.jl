@@ -736,6 +736,29 @@ mktempdir() do dir
     @test success(cmd)
 end
 
+@testset "named environments stay inside the depot" begin
+    mktempdir() do dir
+        depot = joinpath(dir, "depot")
+        old_depot_path = copy(DEPOT_PATH)
+        try
+            empty!(DEPOT_PATH)
+            push!(DEPOT_PATH, depot)
+            for name in ("@../../outside", "@foo/../../outside", "@" * joinpath(dir, "abs"))
+                @test (@test_logs (:warn,) Base.load_path_expand(name)) === nothing
+            end
+            if Sys.iswindows()
+                @test (@test_logs (:warn,) Base.load_path_expand("@D:outside")) === nothing
+            end
+            @test !ispath(joinpath(dir, "outside"))
+            @test !ispath(joinpath(dir, "abs"))
+            @test Base.load_path_expand("@foo/bar") == joinpath(depot, "environments", "foo", "bar", "Project.toml")
+        finally
+            empty!(DEPOT_PATH)
+            append!(DEPOT_PATH, old_depot_path)
+        end
+    end
+end
+
 function _with_empty_load_path(f::Function)
     old_load_path = copy(Base.LOAD_PATH)
     try
