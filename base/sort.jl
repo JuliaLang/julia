@@ -1274,7 +1274,7 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
 
     # We don't need to bounds check target because that is done higher up in the stack
     # However, we cannot assume the target is inbounds.
-    lo < hi || return scratch
+    lo < hi && !isempty(a.target) || return scratch
     ln = hi - lo + 1
 
     # This is simply a precomputed short-circuit to avoid doing scalar math for small inputs.

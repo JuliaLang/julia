@@ -143,6 +143,9 @@ end
         @test partialsort(w, r) == sort(w)[r]
         @test w[partialsortperm(w, r)] == sort(w)[r]
     end
+    for n in (259, 260, 1000)
+        @test partialsort(collect(n:-1:1), 4:3) == Int[]
+    end
     @test_throws ArgumentError partialsortperm!([1,2], [2,3,1], 1:2)
     # index vector must hold all indices of v, regardless of eltype(k)
     @test partialsortperm([300:-1:1;], Int8(3)) === 298
