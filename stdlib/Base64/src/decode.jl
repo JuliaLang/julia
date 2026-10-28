@@ -128,7 +128,10 @@ function Base.readbytes!(pipe::Base64DecodePipe, data::AbstractVector{UInt8}, nb
     return filled
 end
 
-Base.eof(pipe::Base64DecodePipe) = isempty(pipe.rest) && eof(pipe.io)::Bool
+function Base.eof(pipe::Base64DecodePipe)
+    isempty(pipe.rest) && unsafe_read(pipe, convert(Ptr{UInt8}, C_NULL), 0)
+    return isempty(pipe.rest)
+end
 Base.close(pipe::Base64DecodePipe) = nothing
 
 # Decode data from (b1, b2, b3, b4, buffer, input) into (ptr, rest).
