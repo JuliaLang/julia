@@ -1309,7 +1309,7 @@ function _deleteat!(a::Vector, i::Integer, delta::Integer)
     len = length(a)
     0 <= delta || throw(ArgumentError("_deleteat! requires delta >= 0"))
     1 <= i <= len || throw(BoundsError(a, i))
-    i + delta <= len + 1 || throw(BoundsError(a, i + delta - 1))
+    delta <= len + 1 - i || throw(BoundsError(a, i + delta - 1))
     newa = a
     if 2*i + delta <= len
         unsafe_copyto!(newa, 1 + delta, a, 1, i - 1)
@@ -1622,7 +1622,7 @@ function sizehint!(a::Vector, sz::Integer; first::Bool=false, shrink::Bool=true)
             return a
         end
         newmem = array_new_memory(mem, sz)
-        if first
+        if first && len != 0
             newref = memoryref(newmem, inc + 1)
         else
             newref = memoryref(newmem)
@@ -3025,7 +3025,7 @@ function filter(f, a::Array{T, N}) where {T, N}
 end
 
 function filter(f, a::AbstractArray)
-    (IndexStyle(a) != IndexLinear()) && return a[map(f, a)::AbstractArray{Bool}]
+    (IndexStyle(a) != IndexLinear()) && return a[map!(x -> f(x)::Bool, similar(a, Bool), a)]
 
     j = 1
     idxs = Vector{Int}(undef, length(a))
@@ -3264,7 +3264,7 @@ end
 end
 @eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}, l::Integer) where {T}
     dims = (Int(l),)
-    ref = _wrap(memoryref(m), (l,))
+    ref = _wrap(memoryref(m), dims)
     $(Expr(:new, :(Array{T, 1}), :ref, :dims))
 end
 @eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}) where {T}

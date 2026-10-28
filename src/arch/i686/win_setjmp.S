@@ -1,3 +1,11 @@
+// jl_setjmp / jl_longjmp (and ijl_*) for Windows (declared in src/julia.h).
+// They save and restore the callee-saved registers in a jmp_buf, at the
+// offsets of _JUMP_BUFFER (from <setjmp.h>).
+//
+// Coupled to C code in src/stackwalk.c: jl_simulate_longjmp reads a buffer
+// saved here through _JUMP_BUFFER to reconstruct the context that jl_longjmp
+// would resume, so the layout used here must match _JUMP_BUFFER.
+
 /*  $NetBSD: _setjmp.S,v 1.8 2005/10/05 20:18:12 christos Exp $ */
 
 /*-
@@ -57,7 +65,7 @@
  */
 
 #define CNAME ijl_setjmp
-#include "ENTRY.i387.h"
+#include "ENTRY.h"
 .globl _jl_setjmp
 _jl_setjmp:
     mov    eax,DWORD PTR [esp+4] // arg 1
@@ -76,7 +84,7 @@ _jl_setjmp:
 
 
 #define CNAME ijl_longjmp
-#include "ENTRY.i387.h"
+#include "ENTRY.h"
 .globl _jl_longjmp
 _jl_longjmp:
     mov    edx,DWORD PTR [esp+4] // arg 1
@@ -98,7 +106,7 @@ _jl_longjmp:
 
 
 #define CNAME ijl_swapcontext
-#include "ENTRY.i387.h"
+#include "ENTRY.h"
 .globl _jl_swapcontext
 _jl_swapcontext:
     mov    eax,DWORD PTR [esp+4]
@@ -125,7 +133,7 @@ _jl_swapcontext:
 
 
 #define CNAME ijl_setcontext
-#include "ENTRY.i387.h"
+#include "ENTRY.h"
 .globl _jl_setcontext
 _jl_setcontext:
     mov    eax,DWORD PTR [esp+4]
@@ -153,14 +161,14 @@ _jl_setcontext:
 
 
 #define CNAME __readgs
-#include "ENTRY.i387.h"
+#include "ENTRY.h"
     mov eax,gs
     ret
 #include "END.h"
 
 
 #define CNAME __readgsdword
-#include "ENTRY.i387.h"
+#include "ENTRY.h"
     mov eax,DWORD PTR [esp+4]
     mov eax,gs:[eax]
     ret

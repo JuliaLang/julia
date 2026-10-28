@@ -3035,7 +3035,13 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
                         return var_gt((jl_tvar_t*)y, x, e, param, yy, yinner);
                     }
                 }
-                if (yy) record_var_occurrence(yy, e, param);
+                if (yy) {
+                    record_var_occurrence(yy, e, param);
+                    // An outer existential var below an inner forall var must lie below
+                    // every value of it, so it is bounded by its lower bound.
+                    if (!yr && xx->depth0 < yy->depth0)
+                        return var_lt((jl_tvar_t*)x, yy->lb, e, param, xx, xinner);
+                }
                 return var_lt((jl_tvar_t*)x, y, e, param, xx, xinner);
             }
             else if (yr) {
@@ -4255,6 +4261,9 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
     if (t == (jl_value_t*)jl_any_type || jl_typetagis(x,t))
         return 1;
     if (jl_typetagof(x) < (jl_max_tags << 4) && jl_is_datatype(t) && jl_typetagis(x,((jl_datatype_t*)t)->smalltag << 4))
+        return 1;
+    // every instance of a type is an instance of its wrapper
+    if (jl_is_unionall(t) && !jl_is_type(x) && ((jl_datatype_t*)jl_typeof(x))->name->wrapper == t)
         return 1;
     if (jl_is_typeapp(t))
         jl_error("internal error: TypeApp in jl_isa");

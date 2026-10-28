@@ -1011,6 +1011,8 @@ end
     @test nothing in d
     @test true    in d
     @test false   in d
+    @test_throws InexactError Set{Bool}([1, 0, 2])
+    @test_throws InexactError union!(Set{Bool}(), [1, 0, 2])
 
     for X = (Int8, Int16, Int32, Int64)
         @test Base.max_values(Union{Nothing, X}) == (sizeof(X) < sizeof(Int) ?

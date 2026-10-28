@@ -508,6 +508,10 @@ end
     @test findfirst([0x62, 0x63, 0x64], A) == 102:104
     @test findlast([0x63, 0x64], A) == 103:104
     @test findall([0x62, 0x63], A) == [102:103]
+    p = OffsetDenseArrays.OffsetDenseArray([0x62, 0x63], 5)
+    @test findfirst(p, A) == findlast(p, A) == 102:103
+    @test findnext(p, A, 101) == findprev(p, A, 109) == 102:103
+    @test findfirst(p, [0x61, 0x62, 0x63]) == 2:3
 
     @test findfirst(iszero, A) === nothing
     A = OffsetDenseArrays.OffsetDenseArray([0x01, 0x02, 0x00, 0x03], -100)
