@@ -534,6 +534,10 @@ end
 @test Meta.isidentifier(Symbol("x1"))
 @test !Meta.isidentifier(Symbol("x.1"))
 @test !Meta.isidentifier(Symbol("1x"))
+@test !Meta.isidentifier("\x80")
+@test !Meta.isidentifier("a\xffb")
+@test !Meta.isoperator("'\x80")
+@test sprint(show, Symbol("\x80")) == "Symbol(\"\\x80\")"
 
 # issue #32408: Printing of names which are invalid identifiers
 # Invalid identifiers which need `var` quoting:
