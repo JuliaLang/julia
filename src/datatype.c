@@ -461,8 +461,8 @@ JL_DLLEXPORT int jl_stored_inline(jl_value_t *eltype)
 // with k = 1 for one immediate member, 2 for two, 3 for three or four. Tags
 // are odd so that the low two bits answer pointer-vs-immediate without knowing
 // the union type, by the same rule the GC applies to JL_GC_PUSH roots; k is
-// only needed to decode a payload. Heap pointers have their low 3 bits clear,
-// which bounds k by 3. The encoding is documented ABI, see
+// only needed to decode a payload. Capping k at 3 keeps 61 payload bits; a
+// wider tag would fit the encoding. The encoding is documented ABI, see
 // doc/src/devdocs/taggedwords.md.
 
 // eligible as an immediate member (nbits bound vs. k is checked by the caller)
