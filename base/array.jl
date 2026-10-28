@@ -3264,7 +3264,7 @@ end
 end
 @eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}, l::Integer) where {T}
     dims = (Int(l),)
-    ref = _wrap(memoryref(m), (l,))
+    ref = _wrap(memoryref(m), dims)
     $(Expr(:new, :(Array{T, 1}), :ref, :dims))
 end
 @eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}) where {T}
