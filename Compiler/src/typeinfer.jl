@@ -444,7 +444,7 @@ end
 # A cache without native code needs the source of every compileable signature, or
 # loading it means inferring them all again. Caches with native code drop it on save.
 keep_source_for_output(mi::MethodInstance) =
-    ccall(:jl_generating_output, Cint, ()) != 0 && isa_compileable_sig(mi)
+    ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().outputo == C_NULL && isa_compileable_sig(mi)
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo)
     def = mi.def
