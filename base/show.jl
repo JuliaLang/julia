@@ -1833,10 +1833,7 @@ function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, quote_le
 end
 
 
-# show a normal (non-operator) function call, e.g. f(x, y) or A[z]
-# kw: `=` expressions are parsed with head `kw` in this context
-function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool)
-    op, cl = expr_calls[head]
+function show_callee(io::IO, head, func, indent, quote_level)
     if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
             (isa(func, Symbol) && !is_valid_identifier(func)) ||
             (isa(func, Expr) && (func.head === :. || func.head === :curly || func.head === :macroname)) ||
@@ -1848,6 +1845,13 @@ function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool)
         show_unquoted(io, func, indent, 0, quote_level)
         print(io, ')')
     end
+end
+
+# show a normal (non-operator) function call, e.g. f(x, y) or A[z]
+# kw: `=` expressions are parsed with head `kw` in this context
+function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool)
+    op, cl = expr_calls[head]
+    show_callee(io, head, func, indent, quote_level)
     if head === :(.)
         print(io, '.')
     end
@@ -2123,7 +2127,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         head === :typed_vcat || head === :typed_hcat || head === :typed_ncat
         # print the type and defer to the untyped case
         if head === :typed_vcat || head === :typed_hcat || head === :typed_ncat
-            show_unquoted(io, args[1], indent, prec, quote_level)
+            show_callee(io, head, args[1], indent, quote_level)
             if head === :typed_vcat
                 head = :vcat
             elseif head === :typed_hcat
@@ -2244,7 +2248,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     # comprehensions
     elseif head === :typed_comprehension && nargs == 2
-        show_unquoted(io, args[1], indent, 0, quote_level)
+        show_callee(io, head, args[1], indent, quote_level)
         print(io, '[')
         show_generator(io, args[2], indent, quote_level)
         print(io, ']')

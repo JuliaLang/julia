@@ -1198,6 +1198,13 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T, N}, indices::Vararg{$Int, N})")
 @test_repr "Expr(:quote, Expr(:typed_hcat, Expr(:\$, :a), 1))"
 @test_repr repr(Expr(:quote, Expr(:typed_vcat, Expr(:$, :a), 1)))
 @test_repr repr(Expr(:quote, Expr(:typed_hcat, Expr(:$, :a), 1)))
+@test_repr "(a + b)[1 2]"
+@test_repr "(-a)[1;]"
+@test_repr "(a + b)[1;; 2]"
+@test string(Meta.parse("(a + b)[1 2]")) == "(a + b)[1 2]"
+@test_repr "(a + b)[x for x = xs]"
+@test_repr "(-a)[x for x = xs]"
+@test_repr "T[x for x = xs]"
 
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
