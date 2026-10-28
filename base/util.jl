@@ -538,7 +538,6 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
     return unsafe_crc32c(buf, readbytes!(io, buf, min(nb, length(buf))), crc)
 end
 _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
-_crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
 _crc32c(x::UInt128, crc::UInt32=0x00000000) =
     ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, x, 16)
 _crc32c(x::UInt64, crc::UInt32=0x00000000) =
