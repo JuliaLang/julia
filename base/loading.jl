@@ -723,11 +723,11 @@ function env_project_file(env::String)::Union{Bool,String}
 end
 
 function base_project(project_file)
-    home_dir = abspath(homedir())
+    home_dir = joinpath(abspath(homedir()), "")
     project_dir = abspath(dirname(project_file))
     current_dir = project_dir
     # Only stop at home boundary if we started under home
-    started_in_home = startswith(project_dir, home_dir)
+    started_in_home = startswith(joinpath(project_dir, ""), home_dir)
 
     while true
         parent_dir = dirname(current_dir)
@@ -736,7 +736,7 @@ function base_project(project_file)
             return nothing
         end
         # Stop if we started in home and have now left it
-        if started_in_home && !startswith(parent_dir, home_dir)
+        if started_in_home && !startswith(joinpath(parent_dir, ""), home_dir)
             return nothing
         end
 
