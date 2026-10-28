@@ -4335,9 +4335,11 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
         assert(jl_is_concrete_immutable(jt) && "This type shouldn't have been unboxed.");
         Type *t = julia_type_to_llvm(ctx, jt);
         assert(!type_is_ghost(t)); // ghost values should have been handled by vinfo.constant above!
-        box = _boxed_special(ctx, vinfo, t);
-        if (!box) {
-            bool do_promote = vinfo.promotion_point;
+        auto new_box = [&]() JL_CANSAFEPOINT -> Value* {
+            Value *box = _boxed_special(ctx, vinfo, t);
+            if (box)
+                return box;
+            bool do_promote = vinfo.promotion_point && !vinfo.Vboxed;
             if (do_promote && is_promotable && vinfo.inline_roots.empty()) {
                 IRBuilderBase::InsertPointGuard IP(ctx.builder);
                 ctx.builder.SetInsertPoint(vinfo.promotion_point);
@@ -4360,7 +4362,13 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
                 setName(ctx.emission_context, box, arg_typename);
                 init_bits_cgval(ctx, box, vinfo);
             }
-        }
+            return box;
+        };
+        // a value split out of a union may still have the box it came in
+        if (vinfo.Vboxed)
+            box = emit_guarded_test(ctx, ctx.builder.CreateIsNull(vinfo.Vboxed), vinfo.Vboxed, new_box);
+        else
+            box = new_box();
     }
     return box;
 }

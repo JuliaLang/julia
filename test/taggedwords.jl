@@ -591,7 +591,7 @@ end
     nd = similar(ns)
     copymem(nd, ns)
     @test all(i -> nd[i] === ns[i], 1:4)
-    @test_broken (@allocated copymem(nd, ns)) == 0
+    @test (@allocated copymem(nd, ns)) == 0
 
     function sum_imm(mem::Memory{Union{Widest1, String}})
         s = UInt(0)

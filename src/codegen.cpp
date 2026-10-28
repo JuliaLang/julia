@@ -2900,6 +2900,15 @@ static inline jl_cgval_t update_julia_type(jl_codectx_t &ctx, const jl_cgval_t &
                 CreateTrap(ctx.builder);
             return jl_cgval_t();
         }
+        if (v.Vboxed) {
+            // keep the box only where it holds this value, so that boxing the
+            // value again can reuse it
+            jl_cgval_t ret(v, typ, NULL);
+            Value *isboxed = ctx.builder.CreateICmpEQ(v.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()),
+                    UNION_BOX_MARKER | get_box_tindex((jl_datatype_t*)typ, v.typ)));
+            ret.Vboxed = ctx.builder.CreateSelect(isboxed, v.Vboxed, Constant::getNullValue(ctx.types().T_prjlvalue));
+            return ret;
+        }
     }
     return jl_cgval_t(v, typ, NULL);
 }
