@@ -38,7 +38,7 @@ or_any(x::Bool, y::Bool) = (x | y)::Bool
 ## foldl && mapfoldl
 
 function mapfoldl_impl(f::F, op::OP, nt, itr) where {F,OP}
-    op′, itr′ = _xfadjoint(_bottomrf(f, op), itr)
+    op′, itr′ = _xfadjoint(BottomRF(op), Generator(f, itr))
     return foldl_impl(op′, nt, itr′)
 end
 
@@ -73,7 +73,8 @@ struct _InitialValue end
     BottomRF(rf) -> rf′
 
 "Bottom" reducing function.  This is a thin wrapper around the `op` argument
-passed to `foldl`-like functions for handling the initial invocation to call
+passed to `foldl`-like functions, and any mapping of the elements (see
+`_mappingrf`), for handling the initial invocation to call
 [`reduce_first`](@ref).
 """
 struct BottomRF{T}
@@ -97,8 +98,15 @@ end
 
 @inline (op::MappingRF)(acc, x) = op.rf(acc, op.f(x))
 
-_bottomrf(f::F, op::OP) where {F,OP} = BottomRF(MappingRF(f, op))
-_bottomrf(::typeof(identity), op::OP) where {OP} = BottomRF(op)
+"""
+    _mappingrf(f, rf) -> rf′
+
+Same as `MappingRF(f, rf)`, except that a mapping applied directly to a `BottomRF`
+goes inside it, so that its `reduce_first` and `reduce_empty` calls reach
+`mapreduce_first` and `mapreduce_empty` with the bare `f` and `op`.
+"""
+_mappingrf(f::F, rf) where {F} = MappingRF(f, rf)
+_mappingrf(f::F, rf::BottomRF) where {F} = BottomRF(MappingRF(f, rf.rf))
 
 """
     FilteringRF(f, rf) -> rf′
@@ -155,7 +163,7 @@ _xfadjoint_unwrap(itr) = itr, identity
 function _xfadjoint_unwrap(itr::Generator)
     itr′, wrap = _xfadjoint_unwrap(itr.iter)
     itr.f === identity && return itr′, wrap
-    return itr′, wrap ∘ Fix1(MappingRF, itr.f)
+    return itr′, wrap ∘ Fix1(_mappingrf, itr.f)
 end
 function _xfadjoint_unwrap(itr::Filter)
     itr′, wrap = _xfadjoint_unwrap(itr.itr)
@@ -201,7 +209,7 @@ foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 ## foldr & mapfoldr
 
 function mapfoldr_impl(f, op, nt, itr)
-    op′, itr′ = _xfadjoint(_bottomrf(f, FlipArgs(op)), _reverse_iter(itr))
+    op′, itr′ = _xfadjoint(BottomRF(FlipArgs(op)), Generator(f, _reverse_iter(itr)))
     return foldl_impl(op′, nt, itr′)
 end
 
@@ -360,6 +368,7 @@ reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:BitUnsignedSmall} = one(UI
 
 reduce_empty(op::BottomRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
 reduce_empty(op::MappingRF, ::Type{T}) where {T} = mapreduce_empty(op.f, op.rf, T)
+reduce_empty(op::MappingRF{<:Any,<:FlipArgs}, ::Type{T}) where {T} = mapreduce_empty(op.f, op.rf.f, T)
 reduce_empty(op::FilteringRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
 reduce_empty(op::FlatteningRF, ::Type{T}) where {T} = reduce_empty(op.rf, eltype(T))
 reduce_empty(op::FlipArgs, ::Type{T}) where {T} = reduce_empty(op.f, T)
@@ -424,6 +433,7 @@ reduce_first(::typeof(mul_prod), x::BitUnsignedSmall) = UInt(x)
 reduce_first(::typeof(vcat), x) = vcat(x)
 reduce_first(::typeof(hcat), x) = hcat(x)
 reduce_first(op::MappingRF, x) = mapreduce_first(op.f, op.rf, x)
+reduce_first(op::MappingRF{<:Any,<:FlipArgs}, x) = mapreduce_first(op.f, op.rf.f, x)
 reduce_first(op::FlipArgs, x) = reduce_first(op.f, x)
 
 """

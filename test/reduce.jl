@@ -95,14 +95,18 @@ end
 @test mapreduce(abs2, max, Float64[]) === 0.0
 @test mapreduce(abs, max, Float64[]) === 0.0
 @test mapreduce(abs, max, Set{Float64}()) === 0.0
+@test mapfoldr(abs, max, Float64[]) === 0.0
+@test foldl(max, Iterators.map(abs, Float64[])) === 0.0
 @test_throws "reducing over an empty collection is not allowed" mapreduce(abs2, &, Float64[])
 @test_throws str -> !occursin("Closest candidates are", str) mapreduce(abs2, &, Float64[])
 @test_throws "reducing over an empty collection is not allowed" mapreduce(abs2, |, Float64[])
 
-# mapfoldl uses mapreduce_first
+# mapfoldl and mapfoldr use mapreduce_first
 struct MapReduceFirstTag end
 Base.mapreduce_first(::typeof(abs), ::typeof(+), ::MapReduceFirstTag) = 0
 @test mapfoldl(abs, +, [MapReduceFirstTag()]) === 0
+@test mapfoldr(abs, +, [MapReduceFirstTag()]) === 0
+@test foldl(+, Iterators.map(abs, [MapReduceFirstTag()])) === 0
 
 # mapreduce() type stability
 @test typeof(mapreduce(*, +, Int8[10])) ===
