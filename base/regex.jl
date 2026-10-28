@@ -928,4 +928,7 @@ julia> match(r"Test "^2, "Test Test ")
 RegexMatch("Test Test ")
 ```
 """
-^(r::Regex, i::Integer) = Regex(string("(?:", r.pattern, close_paren(r), "{$i}"), r.compile_options, r.match_options)
+function ^(r::Regex, i::Integer)
+    i < 0 && throw(ArgumentError(lazy"can't repeat a regex $i times"))
+    Regex(string("(?:", r.pattern, close_paren(r), "{$i}"), r.compile_options, r.match_options)
+end

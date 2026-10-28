@@ -222,6 +222,8 @@
         @test_throws ArgumentError r"a" * Regex("b", Base.DEFAULT_COMPILER_OPTS, Base.DEFAULT_MATCH_OPTS & ~Base.PCRE.NO_UTF_CHECK)
 
         @test r"this|that"^2 == r"(?:this|that){2}"
+        n = -1
+        @test_throws ArgumentError r"a"^n
 
         r = r"a  # the letter a"x
         @test match(r * "b", "ab").match == "ab"
