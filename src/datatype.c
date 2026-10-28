@@ -447,9 +447,8 @@ JL_DLLEXPORT int jl_stored_inline(jl_value_t *eltype)
     return jl_islayout_inline(eltype, &fsz, &al);
 }
 
-// Tagged words: on 64-bit platforms, a union mixing reference components
-// with 1..4 small primitive ("immediate") components is stored as a
-// single 64-bit word:
+// Tagged words: a union mixing reference components with 1..4 small
+// primitive ("immediate") components is stored as a single pointer-sized word:
 //
 //     word == 0                  #undef
 //     word != 0, low bits 00     untagged jl_value_t* (component from heap type tag)
@@ -461,15 +460,17 @@ JL_DLLEXPORT int jl_stored_inline(jl_value_t *eltype)
 // with k = 1 for one immediate component, 2 for two, 3 for three or four. Tags
 // are odd so that the low two bits answer pointer-vs-immediate without knowing
 // the union type, by the same rule the GC applies to JL_GC_PUSH roots; k is
-// only needed to decode a payload. Capping k at 3 keeps 61 payload bits; a
-// wider tag would fit the encoding. The encoding is documented ABI, see
-// doc/src/devdocs/taggedwords.md.
+// only needed to decode a payload. Capping k at 3 keeps 61 payload bits (29 on
+// 32-bit platforms); a wider tag would fit the encoding. The encoding is
+// documented ABI, see doc/src/devdocs/taggedwords.md.
+
+#define TAGGED_WORD_BITS (8 * sizeof(uintptr_t))
 
 // eligible as an immediate component (nbits bound vs. k is checked by the caller)
 STATIC_INLINE int can_be_immediate_component(jl_value_t *t) JL_NOTSAFEPOINT
 {
     return jl_is_datatype(t) && ((jl_datatype_t*)t)->isprimitivetype &&
-           jl_datatype_nbits((jl_datatype_t*)t) <= 63;
+           jl_datatype_nbits((jl_datatype_t*)t) < TAGGED_WORD_BITS;
 }
 
 // tag width k for the given number of immediate components
@@ -498,9 +499,6 @@ unsigned jl_tagged_word_tagwidth(jl_value_t *u) JL_NOTSAFEPOINT
 // (jl_field_istagged / arrayelem_istagged), which is the source of truth.
 JL_DLLEXPORT int jl_is_tagged_uniontype(jl_value_t *u) JL_CANSAFEPOINT
 {
-#ifndef _P64
-    return 0;
-#else
     if (!jl_is_uniontype(u))
         return 0;
     unsigned n = jl_count_union_components(u);
@@ -522,11 +520,10 @@ JL_DLLEXPORT int jl_is_tagged_uniontype(jl_value_t *u) JL_CANSAFEPOINT
     unsigned k = tag_width(nimm);
     for (unsigned i = 0; i < n; i++) {
         jl_value_t *t = jl_nth_union_component(u, i);
-        if (can_be_immediate_component(t) && jl_datatype_nbits((jl_datatype_t*)t) > 64 - k)
+        if (can_be_immediate_component(t) && jl_datatype_nbits((jl_datatype_t*)t) > TAGGED_WORD_BITS - k)
             return 0;
     }
     return 1;
-#endif
 }
 
 // the i-th (0-based) immediate component of union `u`, i.e. the component

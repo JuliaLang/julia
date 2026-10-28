@@ -1622,7 +1622,7 @@ static size_t jl_static_show_tagged_word(JL_STREAM *out, uintptr_t w, jl_value_t
     jl_datatype_t *t = jl_nth_immediate_component(u, (unsigned)((w & (((uintptr_t)1 << k) - 1)) >> 1));
     if (t == NULL) // corrupt word; static show must survive it
         return jl_printf(out, "#<taggedword %p>", (void*)w);
-    uint64_t payload = (uint64_t)w >> k;
+    uintptr_t payload = w >> k;
     return jl_static_show_x_(out, (jl_value_t*)&payload, t, depth, ctx);
 }
 

@@ -1061,7 +1061,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, 
             else if (jl_is_tagged_uniontype(ty)) {
                 // a tagged word; access goes through typed loads/stores
                 // keyed on its low bits, never through this slot as a tracked pointer
-                latypes.push_back(getInt64Ty(ctxt));
+                latypes.push_back(bitstype_to_llvm((jl_value_t*)jl_long_type, ctxt));
                 isvector = false;
                 isarray = false;
                 allghost = false;
@@ -2804,7 +2804,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         if (FailOrder == AtomicOrdering::Release)
             FailOrder = AtomicOrdering::Monotonic;
         nb = isboxed ? sizeof(void*) : jl_datatype_size(jltype);
-        // tagged words lower to i64, so CountTrackedPointers misses them
+        // tagged words lower to integers, so CountTrackedPointers misses them
         tracked_pointers = isboxed || CountTrackedPointers(elty).count > 0 || type_has_taggedwords(jltype);
         if (!isboxed && Order != AtomicOrdering::NotAtomic && !elty->isIntOrPtrTy()) {
             intcast_eltyp = elty;
@@ -3598,7 +3598,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         return ghostValue(ctx, jfty);
     // TODO: direct codegen for tagged words; decode through the runtime for
     // now (throws UndefRefError for the zero word). That includes the #undef check
-    // of an inline value whose first pointer is a tagged word, which is an i64 to LLVM.
+    // of an inline value whose first pointer is a tagged word, an integer to LLVM.
     if (jl_is_tagged_uniontype(jfty) ||
         (!jl_field_isptr(jt, idx) && type_has_taggedwords(jfty) && field_may_be_null(strct, jt, idx))) {
         Value *fld = ctx.builder.CreateCall(prepare_call(jlgetnthfieldchecked_func),

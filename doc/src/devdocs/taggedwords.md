@@ -1,8 +1,8 @@
 # Tagged word Union Optimizations
 
-On 64-bit platforms, a field or `Memory` element whose type is a `Union` mixing
-*reference* components with a few small *primitive* components is stored as a
-single 64-bit *tagged word*: a value of a reference component as a plain object
+A field or `Memory` element whose type is a `Union` mixing *reference*
+components with a few small *primitive* components is stored as a single
+pointer-sized *tagged word*: a value of a reference component as a plain object
 pointer, a value of a primitive component as the value itself plus a few tag
 bits. Storing or loading a small primitive value then involves no allocation
 and no pointer chasing. This complements the [isbits Union
@@ -19,14 +19,15 @@ only code that accesses the words directly relies on the encoding.
 ## Which unions qualify
 
 The components of a union type `U` are the types it is made of
-(`Base.uniontypes(U)`, or `jl_nth_union_component` in C). Each component `T` is
-of one of two kinds:
+(`Base.uniontypes(U)`, or `jl_nth_union_component` in C). With `W` the word
+size in bits (`Sys.WORD_SIZE`), each component `T` is of one of two kinds:
 
-* an *immediate component*, if `T` is a primitive type of at most 63 bits
-  (`Core.bitsizeof(T) <= 63`), such as `Int32`, `Char` or `Float32`;
+* an *immediate component*, if `T` is a primitive type of at most `W - 1` bits
+  (`Core.bitsizeof(T) < W`), such as `Int16` or `Bool`, and on 64-bit
+  platforms also `Int32`, `Char` or `Float32`;
 * a *reference component* otherwise: mutable and abstract types, singletons
   such as `Nothing`, immutable structs, and wider primitive types such as
-  `Int64`.
+  `Int`.
 
 A union `U` is stored as a tagged word exactly when all of the following hold
 (checked by `jl_is_tagged_uniontype`):
@@ -37,18 +38,15 @@ A union `U` is stored as a tagged word exactly when all of the following hold
    described in [isbits Union Optimizations](isbitsunionarrays.md).
 2. `U` has at most 4 immediate components. This limit is an implementation
    choice.
-3. Every immediate component `T` satisfies `Core.bitsizeof(T) <= 64 - k`, with
+3. Every immediate component `T` satisfies `Core.bitsizeof(T) <= W - k`, with
    `k` the number of tag bits, given in the next section.
-
-On 32-bit platforms no union is stored as a tagged word: the payload would
-shrink to at most 31 bits, which excludes `Int32`, `Float32` and `Char`.
 
 `@atomic` fields and `AtomicMemory` elements use the same layout; a tagged word
 is one aligned word, so plain word atomics apply.
 
 ## The encoding
 
-Each field or element stored as a tagged word occupies one 8-byte,
+Each field or element stored as a tagged word occupies one pointer-sized,
 pointer-aligned word. The word holds either a *reference*, a pointer to the
 object, or an *immediate*, the value itself. The low two bits tell them apart
 without knowing the union type: a reference has both low bits clear, and every
@@ -56,19 +54,19 @@ tag is odd.
 
 | immediate components | k (tag bits) | tags       | payload bits |
 |:--------------------:|:------------:|:-----------|:------------:|
-| 1                    | 1            | 1          | 63           |
-| 2                    | 2            | 1, 3       | 62           |
-| 3–4                  | 3            | 1, 3, 5, 7 | 61           |
+| 1                    | 1            | 1          | W - 1        |
+| 2                    | 2            | 1, 3       | W - 2        |
+| 3–4                  | 3            | 1, 3, 5, 7 | W - 3        |
 
 * `word == 0` — `#undef` (fields and fresh `Memory` elements start undefined,
   as boxed fields do).
 * `word != 0` and low two bits clear — a reference, an untagged `jl_value_t*`.
-  Heap objects are at least 8-byte aligned, so both low bits of a reference are
+  Objects are at least 4-byte aligned, so both low bits of a reference are
   clear; the component is identified by the pointee's type tag.
 * bit 0 set — an immediate: the `i`-th immediate component (0-based, in
   `jl_nth_union_component` order) has tag `2i + 1`, and
 
-      word == (zext(value, 64) << k) | (2i + 1)
+      word == (zext(value, W) << k) | (2i + 1)
 
   with the bits above `k + bitsizeof` zero.
 * low bits `10` — reserved for future immediate encodings; no union
@@ -95,11 +93,12 @@ dereferences pointer-table entries skips any word that fails
 `ntaggedwords > 0` tells codegen that the type needs runtime handling.
 
 The fielddesc entry of a field stored as a tagged word reports `isptr = 0` and
-size 8; there is no selector byte, and `jl_field_istagged` recognizes the field
-by its word appearing in the pointer table. `Memory{U}` uses the element kind
-`arrayelem_istagged` (reported as `3` by `Base.datatype_arrayelem`), with
-element size 8, one pointer per element and no trailing selector bytes;
-memoryrefs are ordinary pointer-based refs.
+the size of a pointer; there is no selector byte, and `jl_field_istagged`
+recognizes the field by its word appearing in the pointer table. `Memory{U}`
+uses the element kind `arrayelem_istagged` (reported as `3` by
+`Base.datatype_arrayelem`), with pointer-sized elements, one pointer per
+element and no trailing selector bytes; memoryrefs are ordinary pointer-based
+refs.
 
 From Julia, `Base.istaggedunion(U)` reports whether `U` gets this layout, and
 `Base.datatype_ntaggedwords(T)` counts the tagged words among

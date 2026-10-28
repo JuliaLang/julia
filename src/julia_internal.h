@@ -1057,23 +1057,17 @@ STATIC_INLINE uintptr_t jl_tagged_word_encode(jl_value_t *u, jl_value_t *rhs JL_
     jl_datatype_t *rty = (jl_datatype_t*)jl_typeof(rhs);
     unsigned idx;
     if (!jl_immediate_component_index(u, rty, &idx)) {
-        assert(((uintptr_t)rhs & 7) == 0);
+        assert(jl_tagged_word_isptr((uintptr_t)rhs));
         return (uintptr_t)rhs;
     }
     unsigned k = jl_tagged_word_tagwidth(u);
-    // primitive sizes are alignment-rounded, hence powers of two
-    uint64_t bits;
-    switch (jl_datatype_size(rty)) {
-    case 1: bits = *(const uint8_t*)rhs; break;
-    case 2: bits = *(const uint16_t*)rhs; break;
-    case 4: bits = *(const uint32_t*)rhs; break;
-    default: assert(jl_datatype_size(rty) == 8); bits = *(const uint64_t*)rhs; break;
-    }
+    // an immediate component is narrower than a word, so its alignment-rounded
+    // size fits in one too
+    uintptr_t bits = 0;
+    memcpy(&bits, rhs, jl_datatype_size(rty));
     // trailing padding bits of an odd-bit primitive are undefined; canonicalize
-    unsigned nbits = jl_datatype_nbits(rty);
-    if (nbits < 64)
-        bits &= (((uint64_t)1 << nbits) - 1);
-    return (uintptr_t)((bits << k) | (2 * idx + 1));
+    bits &= ((uintptr_t)1 << jl_datatype_nbits(rty)) - 1;
+    return (bits << k) | (2 * idx + 1);
 }
 
 // store a value of a component type of union `u` into tagged word `slot`, which
@@ -1099,7 +1093,7 @@ STATIC_INLINE jl_value_t *jl_tagged_word_decode(jl_value_t *u, uintptr_t w) JL_C
     unsigned k = jl_tagged_word_tagwidth(u);
     jl_datatype_t *t = jl_nth_immediate_component(u, (unsigned)((w & (((uintptr_t)1 << k) - 1)) >> 1));
     assert(t != NULL);
-    uint64_t payload = (uint64_t)w >> k;
+    uintptr_t payload = w >> k;
     return jl_new_bits((jl_value_t*)t, &payload);
 }
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_module_t *module,
