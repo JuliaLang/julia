@@ -3446,8 +3446,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         // "Flush" the mark stack before flipping the reset_age bit
         // so that the objects are not incorrectly reset.
         gc_mark_and_steal(ptls);
-        // Objects only reachable from `to_finalize` are dead once their
-        // finalizers run; don't count them as promoted.
+        // Objects only reachable from `to_finalize` are usually dead once
+        // their finalizers run; don't count them as promoted. The rare one
+        // that outlives its finalizer is then never counted, since it is old
+        // after this sweep, but it still counts towards heap growth.
         gc_sync_all_caches(ptls);
         int64_t scanned_before_to_finalize = scanned_bytes;
         // Conservative marking relies on age to tell allocated objects
