@@ -133,6 +133,7 @@ end
 function setup_chnl_and_tasks(exec_func, ntasks, batch_size=nothing)
     if isa(ntasks, Function)
         nt = ntasks()::Int
+        nt < 0 && throw(ArgumentError(lazy"ntasks function must return a nonnegative integer. ntasks()=$nt"))
         # start at least one worker task.
         if nt == 0
             nt = 1
