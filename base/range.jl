@@ -989,10 +989,14 @@ function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
 end
 unsafe_getindex(r::LinRange, i::Integer) = lerpi(i-oneunit(i), r.lendiv, r.start, r.stop)
 
-function lerpi(j::Integer, d::Integer, a::T, b::T) where T
-    t = j/d # ∈ [0,1]
-    # compute approximately fma(t, b, -fma(t, a, a))
-    return T((1-t)*a + t*b)
+lerpi(j::Integer, d::Integer, a::T, b::T) where {T} = T(_lerp.(j/d, a, b))
+
+function _lerp(t, a, b)
+    s = one(t)
+    a, b = s*a, s*b
+    Δ = b - a
+    x = ifelse(isfinite(Δ), a + t*Δ, (s-t)*a + t*b)
+    return ifelse(t == s, b, x)
 end
 
 # non-scalar indexing
