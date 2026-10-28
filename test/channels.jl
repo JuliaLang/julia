@@ -771,8 +771,8 @@ end
             end
         end
 
-        @testset "observing $name" for (name, sig) in (("SIGTERM", Base.SIGTERM), ("SIGHUP", Base.SIGHUP),
-                                                       ("SIGINT", Base.SIGINT))
+        # not SIGTERM: its exit can hang if it lands while the child is still compiling (#64410)
+        @testset "observing $name" for (name, sig) in (("SIGHUP", Base.SIGHUP), ("SIGINT", Base.SIGINT))
             script = """
                 Base.exit_on_sigint(false)
                 s = Base.SignalCondition(_ -> Core.println("observed"), $sig)
