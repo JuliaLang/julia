@@ -1697,6 +1697,8 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
                 JL_LOCK_NOGC(&image_remset_lock);
                 arraylist_push(&image_remset, (void*)ptr);
                 JL_UNLOCK_NOGC(&image_remset_lock);
+                if (jl_typetagis(ptr, jl_weakref_type))
+                    small_arraylist_push(&ptls->gc_tls_common.heap.weak_refs, (void*)ptr);
 #ifdef _OS_WINDOWS_
                 SetLastError(last_error);
 #endif
