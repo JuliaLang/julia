@@ -1112,6 +1112,11 @@ end
     @test Iterators.peel(1:10)[2] |> collect == 2:10
     @test Iterators.peel(x^2 for x in 2:4)[1] == 4
     @test Iterators.peel(x^2 for x in 2:4)[2] |> collect == [9, 16]
+    let (x, r) = Iterators.peel(Iterators.take(Iterators.Stateful([1, 2, 3]), 1))
+        @test x == 1
+        @test isempty(r)
+        @test collect(r) == Int[]
+    end
 end
 
 @testset "last for iterators" begin
