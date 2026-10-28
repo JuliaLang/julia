@@ -2453,13 +2453,13 @@ precompile_test_harness("Image WeakRef") do load_path
     invokelatest() do
         ImageWeakRef.set!()
         GC.gc(true)
-        @test ImageWeakRef.cleared()
+        @test ImageWeakRef.cleared() skip=!Base.USING_STOCK_GC
         ImageWeakRef.sethold!()
         GC.gc(false); GC.gc(true); GC.gc(false)
         @test ImageWeakRef.holds()
         ImageWeakRef.held[] = nothing
         GC.gc(true); GC.gc(true)
-        @test ImageWeakRef.cleared()
+        @test ImageWeakRef.cleared() skip=!Base.USING_STOCK_GC
     end
 end
 
