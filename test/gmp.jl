@@ -352,6 +352,7 @@ end
         @test digits(n; base, pad) == digits(N; base, pad) == digits(UInt8, N; base, pad)
         @test digits(-n; base, pad) == digits(-N; base, pad)
         @test digits!(Vector{Int}(undef, pad), n; base) == digits!(Vector{Int}(undef, pad), N; base)
+        @test digits!(view(zeros(Int, pad+1), 1:pad), n; base) == digits!(view(zeros(Int, pad+1), 1:pad), N; base)
     end
     @test digits(UInt8, n; base=1<<8) == digits(UInt8, N; base=1<<8)
     @test digits(UInt16, n; base=1<<16) == digits(UInt16, N; base=1<<16)
