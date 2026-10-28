@@ -173,6 +173,9 @@ sockets_watchdog_timer = Timer(_ -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"
     @test_throws ArgumentError parse(IPv4, "256.256.256.256")
     # too many fields
     @test_throws ArgumentError parse(IPv6, "256:256:256:256:256:256:256:256:256:256:256:256")
+    @test_throws ArgumentError parse(IPv6, "")
+    @test_throws ArgumentError parse(IPv6, ":::")
+    @test_throws ArgumentError parse(IPv6, "::::")
 
     @test_throws ArgumentError parse(IPv6, "1::2::3")
     @test_throws ArgumentError parse(IPv6, "::1:2::")
