@@ -12,7 +12,7 @@ const _shell_display_special = shell_special * "{}"
 (@doc raw"""
     rstrip_shell(s::AbstractString)
 
-Strip trailing whitespace from a shell command string, while respecting a trailing backslash followed by a space ("\\ ").
+Strip trailing whitespace from a shell command string, while respecting a trailing backslash followed by a whitespace character (e.g. "\\ ").
 
 ```jldoctest
 julia> Base.rstrip_shell("echo 'Hello World' \\ ")
@@ -26,7 +26,7 @@ function rstrip_shell(s::AbstractString)
     c_old = nothing
     for (i, c) in Iterators.reverse(pairs(s))
         i::Int; c::AbstractChar
-        ((c == '\\') && c_old == ' ') && return SubString(s, 1, i+1)
+        ((c == '\\') && c_old !== nothing) && return SubString(s, 1, nextind(s, i))
         isspace(c) || return SubString(s, 1, i)
         c_old = c
     end
