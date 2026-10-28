@@ -835,6 +835,39 @@ end
             end
         end
 
+        @testset "wakes with no other active handle" begin
+            # Like a trimmed program, which has no Ctrl-C listener to keep the event loop polling.
+            script = """
+                unref(h::Ptr{Cvoid}, ::Ptr{Cvoid}) = ccall(:uv_unref, Cvoid, (Ptr{Cvoid},), h)
+                Base.iolock_begin()
+                ccall(:uv_walk, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+                    Base.eventloop(), @cfunction(unref, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid})), C_NULL)
+                Base.iolock_end()
+                s = Base.SignalCondition(Base.SIGTERM; intercept=true)
+                println("ready")
+                wait(s)
+                println("woke")
+                """
+            errfile = tempname()
+            p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $script`, stderr=errfile), "r")
+            watchdog = Timer(60) do _
+                kill(p, Base.SIGKILL)
+            end
+            try
+                @test readline(p) == "ready"
+                kill(p, Base.SIGTERM)
+                @test readline(p) == "woke"
+                wait(p)
+                @test success(p)
+            finally
+                close(watchdog)
+                kill(p, Base.SIGKILL)
+                wait(p)
+                success(p) || print(stderr, read(errfile, String))
+                rm(errfile, force=true)
+            end
+        end
+
         @testset "an ignored signal stays ignored" begin
             script = """
                 ccall(:signal, Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Base.SIGHUP, Ptr{Cvoid}(1)) # SIG_IGN
