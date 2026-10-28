@@ -149,7 +149,7 @@ function uuid5(ns::UUID, name::String)
         nsbytes[idx] = nsv >> 120
         nsv = nsv << 8
     end
-    hash_result = SHA.sha1(append!(nsbytes, convert(Vector{UInt8}, codeunits(unescape_string(name)))))
+    hash_result = SHA.sha1(append!(nsbytes, codeunits(name)))
     # set version number to 5
     hash_result[7] = (hash_result[7] & 0x0F) | (0x50)
     hash_result[9] = (hash_result[9] & 0x3F) | (0x80)
