@@ -556,6 +556,7 @@ let cmd = ["foo=bar", "baz"]
     @test Base.shell_escape(`$cmd`) == "foo=bar baz"
     @test Base.shell_escape_posixly(`$cmd`) == "'foo=bar' baz"
 end
+@test Base.shell_escape_posixly("done", "x", "done") == "'done' x done"
 
 
 @test Base.shell_split("\"\\\\\"") == ["\\"]

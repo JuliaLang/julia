@@ -486,7 +486,8 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
                     break
                 end
             end
-            if isword
+            if isword && !(first && arg in ("case", "do", "done", "elif", "else", "esac", "fi", "for",
+                                            "if", "in", "then", "until", "while", "function", "select", "time"))
                 have_single && (arg = replace(arg, '\'' => "\\'"))
                 have_double && (arg = replace(arg, '"' => "\\\""))
                 print(io, arg)
