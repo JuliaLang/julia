@@ -205,6 +205,10 @@ end
 @test_repr "(!x)↑!a"
 @test_repr "(!x).a"
 @test_repr "(!x)::a"
+@test_repr ".-x"
+@test_repr "f(.+x, .~y)"
+@test_repr "(.-x)^a"
+@test_repr ".-(-1)"
 
 # invalid UTF-8 strings
 @test_repr "\"\\ud800\""
