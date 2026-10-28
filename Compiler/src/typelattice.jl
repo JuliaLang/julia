@@ -433,11 +433,10 @@ end
         a = Bool
     elseif isa(b, ConditionalT)
         if isa(a, Const) && isa(a.val, Bool)
-           if (a.val === true && b.thentype === Any && b.elsetype === Bottom) ||
-              (a.val === false && b.elsetype === Any && b.thentype === Bottom)
-               # this Conditional contains distinctly no lattice information, and is simply an alternative representation of the Const Bool used for internal tracking purposes
-               return true
-           end
+            thentype, elsetype = a.val ? (Any, Bottom) : (Bottom, Any)
+            a = isa(b, Conditional) ? Conditional(b.slot, b.ssadef, thentype, elsetype) :
+                                      InterConditional(b.slot, thentype, elsetype)
+            return issubconditional(lattice, a, b)
         end
         return false
     end
