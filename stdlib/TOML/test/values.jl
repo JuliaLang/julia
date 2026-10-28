@@ -92,6 +92,12 @@ end
     @test failval("__0"    , Internals.ErrUnexpectedStartOfValue)
     @test failval("1_0_"   , Internals.ErrTrailingUnderscoreNumber)
     @test failval("1_0__0" , Internals.ErrUnderscoreNotSurroundedByDigits)
+
+    # A base prefix must be followed by a digit of that base
+    for s in ("0o8", "0b2", "0x-1", "0b:00", "0x")
+        @test failval(s, Internals.ErrGenericValueError)
+    end
+    @test failval("0x.5", Internals.ErrGenericValueError) # no hex floats
 end
 
 
