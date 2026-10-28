@@ -164,7 +164,8 @@ function init_depot_path()
         # backwards compatibility: if JULIA_DEPOT_PATH only contains empty entries
         # (e.g., JULIA_DEPOT_PATH=':'), make sure to use the default depot
         if pushfirst_default
-            pushfirst!(DEPOT_PATH, joinpath(homedir(), ".julia"))
+            default = joinpath(homedir(), ".julia")
+            pushfirst!(filter!(!=(default), DEPOT_PATH), default)
         end
     else
         push!(DEPOT_PATH, joinpath(homedir(), ".julia"))
