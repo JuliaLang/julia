@@ -803,6 +803,8 @@ end
                     wait(p)
                     @test success(p)
                 else
+                    # The callback runs before the signal ends the process.
+                    @test readline(p) == "observed"
                     wait(p)
                     @test p.termsignal == sig
                 end
@@ -811,6 +813,38 @@ end
                 kill(p, Base.SIGKILL)
                 wait(p)
                 p.termsignal == sig || success(p) || print(stderr, read(errfile, String))
+                rm(errfile, force=true)
+            end
+        end
+
+        @testset "a second $name does not wait for the callback" for (name, sig) in
+                (("SIGTERM", Base.SIGTERM), ("SIGHUP", Base.SIGHUP))
+            script = """
+                Base.SignalCondition($sig) do _
+                    println("stuck")
+                    sleep(600)
+                end
+                println("ready")
+                sleep(600)
+                """
+            errfile = tempname()
+            p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $script`, stderr=errfile), "r")
+            watchdog = Timer(300) do _
+                kill(p, Base.SIGKILL)
+            end
+            try
+                @test readline(p) == "ready"
+                kill(p, sig)
+                @test readline(p) == "stuck"
+                @test process_running(p)
+                kill(p, sig)
+                wait(p)
+                @test p.termsignal == sig
+            finally
+                close(watchdog)
+                kill(p, Base.SIGKILL)
+                wait(p)
+                p.termsignal == sig || print(stderr, read(errfile, String))
                 rm(errfile, force=true)
             end
         end

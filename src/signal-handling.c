@@ -848,14 +848,46 @@ static _Atomic(int) signal_watchers[JL_MAX_WATCHED_SIGNAL + 1];
 static _Atomic(int) signal_interceptors[JL_MAX_WATCHED_SIGNAL + 1];
 static _Atomic(int) signal_pending[JL_MAX_WATCHED_SIGNAL + 1];
 
-// Safe to call from a signal handler. Returns whether the signal's usual effect should be skipped.
-static int jl_notify_signal_watchers(int sig) JL_NOTSAFEPOINT
+// A signal that would end the process first waits for the observing conditions to run.
+enum {
+    JL_SIGNAL_DEFER_NONE,
+    JL_SIGNAL_DEFER_WAITING, // not yet seen by the event loop
+    JL_SIGNAL_DEFER_RUNNING, // the observers are running
+    JL_SIGNAL_DEFER_RESUMED, // the observers are done, so the next delivery takes effect
+};
+static _Atomic(int) signal_deferred[JL_MAX_WATCHED_SIGNAL + 1];
+
+enum {
+    JL_SIGNAL_PROCEED,     // take the usual effect now
+    JL_SIGNAL_INTERCEPTED, // skip the usual effect
+    JL_SIGNAL_DEFERRED,    // take the usual effect once the observers are done
+};
+
+// Safe to call from a signal handler. `defer` says that the usual effect ends the process.
+static int jl_notify_signal_watchers(int sig, int defer) JL_NOTSAFEPOINT
 {
-    if (sig <= 0 || sig > JL_MAX_WATCHED_SIGNAL || jl_atomic_load_acquire(&signal_watchers[sig]) == 0)
-        return 0;
+    if (sig <= 0 || sig > JL_MAX_WATCHED_SIGNAL)
+        return JL_SIGNAL_PROCEED;
+    // The observers have already seen this delivery.
+    if (jl_atomic_load_relaxed(&signal_deferred[sig]) == JL_SIGNAL_DEFER_RESUMED) {
+        jl_atomic_store_relaxed(&signal_deferred[sig], JL_SIGNAL_DEFER_NONE);
+        return JL_SIGNAL_PROCEED;
+    }
+    if (jl_atomic_load_acquire(&signal_watchers[sig]) == 0)
+        return JL_SIGNAL_PROCEED;
+    int action = JL_SIGNAL_PROCEED;
+    if (jl_atomic_load_relaxed(&signal_interceptors[sig]) > 0) {
+        action = JL_SIGNAL_INTERCEPTED;
+    }
+    else if (defer) {
+        // A second delivery while the observers run takes effect at once.
+        int expected = JL_SIGNAL_DEFER_NONE;
+        if (jl_atomic_cmpswap(&signal_deferred[sig], &expected, JL_SIGNAL_DEFER_WAITING))
+            action = JL_SIGNAL_DEFERRED;
+    }
     jl_atomic_store_release(&signal_pending[sig], 1);
     jl_wake_signal_watchers();
-    return jl_atomic_load_relaxed(&signal_interceptors[sig]) > 0;
+    return action;
 }
 
 #if defined(_WIN32)
@@ -891,6 +923,20 @@ JL_DLLEXPORT void jl_signal_watch_stop(int sig, int intercept)
     if (jl_atomic_fetch_add(&signal_watchers[sig], -1) == 1 &&
             jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_signal_watch_uninstall(sig);
+}
+
+// Called from the event loop. Returns whether `sig` waits for its observers, which must then
+// resume it.
+JL_DLLEXPORT int jl_signal_take_deferred(int sig)
+{
+    int expected = JL_SIGNAL_DEFER_WAITING;
+    return jl_atomic_cmpswap(&signal_deferred[sig], &expected, JL_SIGNAL_DEFER_RUNNING);
+}
+
+// Every deferred signal ends the process, so this does not return when the signal is delivered.
+JL_DLLEXPORT void jl_signal_resume(int sig)
+{
+    jl_signal_watch_resume(sig);
 }
 
 // Returns a signal that arrived since it was last returned, or 0 if there is none.
