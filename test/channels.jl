@@ -702,7 +702,6 @@ end
         @test_throws EOFError wait(s)
         close(s)
     end
-    @test_throws ArgumentError Base.SignalCondition(Base.SIGINT; intercept=true)
     @test_throws ArgumentError Base.SignalCondition(-1)
     @test_throws ArgumentError Base.SignalCondition(typemax(Int))
     if Sys.islinux()
@@ -720,15 +719,18 @@ end
     if Sys.iswindows()
         @test_throws ArgumentError Base.SignalCondition(Base.SIGTERM)
         for sig in (Base.SIGINT, 21, Base.SIGHUP, Base.SIGWINCH)
-            s = Base.SignalCondition(sig; intercept = sig != Base.SIGINT)
+            s = Base.SignalCondition(sig; intercept=true)
             @test isopen(s)
             close(s)
         end
     end
     if !Sys.iswindows()
         # SIGTERM goes through the runtime's signal thread, SIGHUP through a handler.
-        @testset "intercepting $name" for (name, sig) in (("SIGTERM", Base.SIGTERM), ("SIGHUP", Base.SIGHUP))
+        @testset "intercepting $name" for (name, sig) in (("SIGTERM", Base.SIGTERM), ("SIGHUP", Base.SIGHUP),
+                                                          ("SIGINT", Base.SIGINT))
             script = """
+                # so that the usual effect of SIGINT is to exit, as for the others
+                Base.exit_on_sigint(true)
                 n = Ref(0)
                 s = Base.SignalCondition($sig; intercept=true) do _
                     n[] += 1
@@ -757,7 +759,9 @@ end
                 kill(p, sig)
                 @test readline(p) == "got 2"
                 # A pending signal would skip exit cleanup.
-                @test readline(p) == "closed, pending: 0"
+                pending = readline(p)
+                # On macOS Julia keeps a handler for SIGINT instead of ignoring it, so it stays pending.
+                (Sys.isapple() && sig == Base.SIGINT) || @test pending == "closed, pending: 0"
                 # With the condition closed, the signal has its usual effect again.
                 kill(p, sig)
                 wait(p)
