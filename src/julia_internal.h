@@ -1025,9 +1025,9 @@ int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *
 // Tagged words (see the description above jl_is_tagged_uniontype in
 // datatype.c)
 JL_DLLEXPORT int jl_is_tagged_uniontype(jl_value_t *u) JL_CANSAFEPOINT;
-unsigned jl_tagged_word_tagwidth(jl_value_t *u) JL_NOTSAFEPOINT;
-jl_datatype_t *jl_nth_immediate_component(jl_value_t *u JL_PROPAGATES_ROOT, unsigned i) JL_NOTSAFEPOINT;
-int jl_immediate_component_index(jl_value_t *u, jl_datatype_t *t, unsigned *idx) JL_NOTSAFEPOINT;
+JL_DLLEXPORT unsigned jl_tagged_word_tagwidth(jl_value_t *u) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_datatype_t *jl_nth_immediate_component(jl_value_t *u JL_PROPAGATES_ROOT, unsigned i) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_immediate_component_index(jl_value_t *u, jl_datatype_t *t, unsigned *idx) JL_NOTSAFEPOINT;
 
 // Access discipline for tagged words: they may hold a reference, so they
 // follow the boxed-field rules - readers use a relaxed atomic load, plain

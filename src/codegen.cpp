@@ -1733,8 +1733,9 @@ static bool jl_is_pointerfree(jl_value_t* t)
     return layout && layout->npointers == 0;
 }
 
-// whether the layout embeds tagged words, which codegen currently only
-// handles through the runtime
+// whether the layout embeds tagged words, which codegen accesses itself only
+// as a field of a heap object or as a Memory element (emit_tagged_load and
+// emit_tagged_store); other uses go through the runtime
 static bool type_has_taggedwords(jl_value_t *t)
 {
     if (!jl_is_datatype(t))
@@ -4517,8 +4518,8 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (idx != -1) {
             jl_value_t *ft = jl_field_type(uty, idx);
             if (jl_is_tagged_uniontype(ft) && op != StoreKind::Set) {
-                // TODO: direct codegen for tagged words; only plain
-                // stores are handled, the rest goes through the generic builtin
+                // TODO: direct codegen for swap/modify/replace/setonce of a
+                // tagged word; the generic builtin handles them
                 return false;
             }
             if (!jl_field_isptr(uty, idx) && type_has_taggedwords(ft)) {
@@ -4653,8 +4654,9 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     mty_dt = jl_field_type_concrete((jl_datatype_t*)mty_dt, 1);
     if (kind != (jl_value_t*)jl_not_atomic_sym && kind != (jl_value_t*)jl_atomic_sym)
         return false;
-    if (((jl_datatype_t*)mty_dt)->layout->ntaggedwords > 0)
-        return false; // TODO: direct codegen for tagged words
+    if (!memory_has_codegen(((jl_datatype_t*)mty_dt)->layout, ety) ||
+        (((jl_datatype_t*)mty_dt)->layout->flags.arrayelem_istagged && op != StoreKind::Set))
+        return false; // other tagged word operations take the generic builtin path
 
     const jl_cgval_t &cmp = has_cmp ? argv[2] : undefval;
     enum jl_memory_order order = jl_memory_order_notatomic;
@@ -4790,6 +4792,13 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     AtomicOrdering FailOrder = (needlock || fail_order <= jl_memory_order_notatomic)
                         ? AtomicOrdering::NotAtomic
                         : get_llvm_atomic_order(fail_order);
+    if (layout->flags.arrayelem_istagged) {
+        assert(op == StoreKind::Set);
+        emit_tagged_store(ctx, emit_memoryref_mem(ctx, ref, layout), emit_memoryref_ptr(ctx, ref, layout),
+                          val, ety, memorybuf_aliasinfo(ctx, layout), Order);
+        *ret = val;
+        return true;
+    }
     Value *ptr = nullptr;
     Value *ptindex = nullptr;
     Value *lock = nullptr;
@@ -5128,8 +5137,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             mty_dt = jl_field_type_concrete((jl_datatype_t*)mty_dt, 1);
             if (kind != (jl_value_t*)jl_not_atomic_sym && kind != (jl_value_t*)jl_atomic_sym)
                 return false;
-            if (((jl_datatype_t*)mty_dt)->layout->ntaggedwords > 0)
-                return false; // TODO: direct codegen for tagged words
+            if (!memory_has_codegen(((jl_datatype_t*)mty_dt)->layout, ety))
+                return false;
             enum jl_memory_order order = jl_memory_order_unspecified;
             const std::string fname = "memoryrefget";
             {
@@ -5192,6 +5201,12 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 if (isStrongerThanMonotonic(Order))
                     ctx.builder.CreateFence(Order);
             }
+            else if (layout->flags.arrayelem_istagged) {
+                *ret = emit_tagged_load(ctx, emit_memoryref_ptr(ctx, ref, layout), ety,
+                        memorybuf_aliasinfo(ctx, layout),
+                        Order == AtomicOrdering::NotAtomic ? AtomicOrdering::Unordered : Order,
+                        maybenull, nullptr);
+            }
             else if (isunion) {
                 assert(!isatomic && !needlock);
                 Value *V = emit_memoryref_FCA(ctx, ref, layout);
@@ -5248,11 +5263,12 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         jl_value_t *mty_dt = jl_unwrap_unionall(ref.typ);
         if (jl_is_genericmemoryref_type(mty_dt) && jl_is_concrete_type(mty_dt)) {
             jl_value_t *kind = jl_tparam0(mty_dt);
+            jl_value_t *ety = jl_tparam1(mty_dt);
             mty_dt = jl_field_type_concrete((jl_datatype_t*)mty_dt, 1);
             if (kind != (jl_value_t*)jl_not_atomic_sym && kind != (jl_value_t*)jl_atomic_sym)
                 return false;
-            if (((jl_datatype_t*)mty_dt)->layout->ntaggedwords > 0)
-                return false; // TODO: direct codegen for tagged words
+            if (!memory_has_codegen(((jl_datatype_t*)mty_dt)->layout, ety))
+                return false;
             enum jl_memory_order order = jl_memory_order_unspecified;
             const std::string fname = "memoryref_isassigned";
             {
@@ -5290,8 +5306,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             bool isboxed = layout->flags.arrayelem_isboxed;
             if (isboxed || layout->first_ptr >= 0) {
                 bool needlock = layout->flags.arrayelem_islocked;
+                bool istagged = layout->flags.arrayelem_istagged;
                 AtomicOrdering Order = (needlock || order <= jl_memory_order_notatomic)
-                                        ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic)
+                                        ? (isboxed || istagged ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic)
                                         : get_llvm_atomic_order(order);
                 PHINode *result = nullptr;
                 if (oob) {

@@ -481,7 +481,7 @@ STATIC_INLINE unsigned tag_width(unsigned nimmediate) JL_NOTSAFEPOINT
 
 // tag width k of a union already known (from layout metadata) to be tagged;
 // unlike jl_is_tagged_uniontype this never computes layouts (no safepoints)
-unsigned jl_tagged_word_tagwidth(jl_value_t *u) JL_NOTSAFEPOINT
+JL_DLLEXPORT unsigned jl_tagged_word_tagwidth(jl_value_t *u) JL_NOTSAFEPOINT
 {
     unsigned n = jl_count_union_components(u);
     unsigned nimm = 0;
@@ -528,7 +528,7 @@ JL_DLLEXPORT int jl_is_tagged_uniontype(jl_value_t *u) JL_CANSAFEPOINT
 
 // the i-th (0-based) immediate component of union `u`, i.e. the component
 // whose values are encoded with tag 2*i + 1
-jl_datatype_t *jl_nth_immediate_component(jl_value_t *u, unsigned i) JL_NOTSAFEPOINT
+JL_DLLEXPORT jl_datatype_t *jl_nth_immediate_component(jl_value_t *u, unsigned i) JL_NOTSAFEPOINT
 {
     unsigned n = jl_count_union_components(u);
     for (unsigned j = 0; j < n; j++) {
@@ -541,7 +541,7 @@ jl_datatype_t *jl_nth_immediate_component(jl_value_t *u, unsigned i) JL_NOTSAFEP
 
 // immediate component index of exactly `t` in union `u` (0 if `t` is a
 // reference component)
-int jl_immediate_component_index(jl_value_t *u, jl_datatype_t *t, unsigned *idx) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_immediate_component_index(jl_value_t *u, jl_datatype_t *t, unsigned *idx) JL_NOTSAFEPOINT
 {
     if (!can_be_immediate_component((jl_value_t*)t))
         return 0;

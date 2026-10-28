@@ -5,6 +5,7 @@
 # for the encoding.
 
 using Test
+using InteractiveUtils: code_llvm
 
 const W = Sys.WORD_SIZE
 
@@ -429,7 +430,169 @@ end
     end
 end
 
-@testset "no allocation on the immediate path" begin
+mutable struct MNI  # references to small components carry their union index
+    x::Union{Nothing, Int16, Int, String}
+    MNI() = new()
+    MNI(x) = new(x)
+end
+
+mutable struct MK3  # tag width 3: four immediates of different kinds
+    x::Union{Bool, Int8, Float16, UInt16, String}
+end
+
+getx(m) = m.x
+setx!(m, v) = (m.x = v; nothing)
+setx_any!(m, @nospecialize(v)) = (m.x = v; nothing)
+copyx!(a, b) = (a.x = b.x; nothing)
+rawx(m) = GC.@preserve m unsafe_load(convert(Ptr{UInt}, pointer_from_objref(m)))
+llvm(f, types) = sprint(io -> code_llvm(io, f, types; debuginfo=:none))
+getm(mem, i) = mem[i]
+setm!(mem, i, v) = (mem[i] = v; nothing)
+setm_any!(mem, i, @nospecialize(v)) = (mem[i] = v; nothing)
+isas(mem, i) = isassigned(mem, i)
+
+@testset "codegen: fields" begin
+    @test !occursin("get_nth_field", llvm(getx, (MTU,)))
+    @test !occursin("store_tagged_word", llvm(setx!, (MTU, Int16)))
+
+    m = MTU()
+    @test_throws UndefRefError getx(m)
+    s = "ab" * "c"
+    for v in (Int16(0), Int16(-1), typemin(Int16), typemax(Int16), s)
+        setx!(m, v)
+        @test getx(m) === v
+        setx_any!(m, v)
+        @test getx(m) === v
+        m2 = MTU()
+        copyx!(m2, m)
+        @test getx(m2) === v
+    end
+    # an immediate boxed by a dynamic caller is stored unboxed
+    setx_any!(m, Int16(42))
+    @test rawx(m) == UInt(42) << 1 | 1
+
+    # isa branches on the decoded union index, for references too
+    kind(m) = (x = m.x; x isa Nothing ? 0 : x isa Int16 ? 1 : x isa Int ? 2 : 3)
+    n = MNI()
+    @test_throws UndefRefError kind(n)
+    for (v, k) in ((nothing, 0), (Int16(-5), 1), (typemin(Int), 2), ("s" * "t", 3))
+        setx!(n, v)
+        @test kind(n) == k
+        @test getx(n) === v
+        setx_any!(n, v)
+        @test kind(n) == k
+        n2 = MNI()
+        copyx!(n2, n)
+        @test getx(n2) === v
+    end
+    # a split union value whose small reference component still needs a box
+    pick!(m, c, i::Int) = (m.x = c ? i : i % Int16; nothing)
+    pick!(n, true, 7)
+    @test getx(n) === 7
+    pick!(n, false, 7)
+    @test getx(n) === Int16(7)
+    picknothing!(m, c, i::Int) = (m.x = c ? i : nothing; nothing)
+    picknothing!(n, true, 8)
+    @test getx(n) === 8
+    picknothing!(n, false, 8)
+    @test getx(n) === nothing
+
+    # every kind of immediate keeps its bits
+    k3 = MK3(false)
+    for v in (true, false, Int8(-128), Float16(-0.0), reinterpret(Float16, 0x7e01), typemax(UInt16), "k" * "3")
+        setx!(k3, v)
+        @test getx(k3) === v
+        setx_any!(k3, v)
+        @test getx(k3) === v
+    end
+    p = MPrim(Int8(0))
+    for v in (Int8(-2), typemin(Int32), typemax(Int32), typemin(Int))
+        setx!(p, v)
+        @test getx(p) === v
+    end
+    # the widest payload, through `new` and a load from an immutable struct
+    mkstu(x) = STU(x)
+    for u in (UInt(0), typemax(UInt) >> 1)
+        @test UInt(getx(mkstu(Widest1(u)))) == u
+    end
+end
+
+@testset "codegen: Memory" begin
+    mem = Memory{Union{Nothing, Int16, Int, String}}(undef, 2)
+    @test !occursin("memoryrefget", llvm(getm, (typeof(mem), Int)))
+    @test !occursin("memoryrefset", llvm(setm!, (typeof(mem), Int, Int16)))
+    @test_throws UndefRefError getm(mem, 1)
+    @test !isas(mem, 1)
+    for v in (nothing, Int16(3), typemax(Int), "m" * "em")
+        setm!(mem, 1, v)
+        @test isas(mem, 1)
+        @test getm(mem, 1) === v
+        setm_any!(mem, 2, v)
+        @test getm(mem, 2) === v
+    end
+
+    amem = AtomicMemory{Union{Int16, String}}(undef, 1)
+    agetm(m, i) = @atomic m[i]
+    asetm!(m, i, v) = (@atomic m[i] = v; nothing)
+    asetm!(amem, 1, Int16(5))
+    @test agetm(amem, 1) === Int16(5)
+    asetm!(amem, 1, "a" * "b")
+    @test agetm(amem, 1) == "ab"
+end
+
+@testset "codegen: no allocation for immediates" begin
+    function sumfield(ms)
+        s = 0
+        for m in ms
+            x = m.x
+            x isa Int16 && (s += x)
+        end
+        s
+    end
+    function setfield(ms)
+        for (i, m) in enumerate(ms)
+            m.x = i % Int16
+        end
+    end
+    function summem(mem)
+        s = 0
+        for i in eachindex(mem)
+            x = mem[i]
+            x isa Int16 && (s += x)
+        end
+        s
+    end
+    function setmem(mem)
+        for i in eachindex(mem)
+            mem[i] = i % Int16
+        end
+    end
+    function copymem(dst, src)
+        for i in eachindex(src)
+            dst[i] = src[i]
+        end
+    end
+    ms = [MTU(i % Int16) for i in 1:1000]
+    mem = Memory{Union{Int16, String}}(undef, 1000)
+    setmem(mem)
+    dst = similar(mem)
+    setfield(ms)
+    copymem(dst, mem)
+    @test sumfield(ms) == summem(mem) == summem(dst) == 500500
+    @test (@allocated sumfield(ms)) == 0
+    @test (@allocated setfield(ms)) == 0
+    @test (@allocated summem(mem)) == 0
+    @test (@allocated setmem(mem)) == 0
+    @test (@allocated copymem(dst, mem)) == 0
+
+    # references to small components are copied, not boxed again
+    ns = Memory{Union{Nothing, Int16, Int, String}}(undef, 4)
+    ns[1] = nothing; ns[2] = Int16(1); ns[3] = typemax(Int); ns[4] = "x" * "y"
+    nd = similar(ns)
+    copymem(nd, ns)
+    @test all(i -> nd[i] === ns[i], 1:4)
+    @test_broken (@allocated copymem(nd, ns)) == 0
+
     function sum_imm(mem::Memory{Union{Widest1, String}})
         s = UInt(0)
         for i in eachindex(mem)
@@ -440,11 +603,40 @@ end
         end
         s
     end
-    mem = Memory{Union{Widest1, String}}(undef, 100)
+    wmem = Memory{Union{Widest1, String}}(undef, 100)
     for i in 1:100
-        mem[i] = Widest1(UInt(i))
+        wmem[i] = Widest1(UInt(i))
     end
-    @test sum_imm(mem) == UInt(5050)
-    # note: allocation-freedom of this loop arrives with the codegen fast
-    # paths; for now only correctness is asserted
+    @test sum_imm(wmem) == UInt(5050)
+    @test (@allocated sum_imm(wmem)) == 0
+end
+
+@testset "codegen: write barrier" begin
+    # fresh strings stored by compiled code into old parents survive a young
+    # collection only through the remembered set
+    function fillmem!(mem, r)
+        for i in eachindex(mem)
+            mem[i] = isodd(i) ? i % Int16 : string("m", r, "_", i)
+        end
+    end
+    function fillfields!(ms, r)
+        for i in eachindex(ms)
+            ms[i].x = isodd(i) ? i % Int16 : string("f", r, "_", i)
+        end
+    end
+    mem = Memory{Union{Int16, String}}(undef, 500)
+    ms = [MTU() for _ in 1:500]
+    GC.gc(true); GC.gc(true)  # promote the parents
+    bad = 0
+    for r in 1:10
+        fillmem!(mem, r)
+        fillfields!(ms, r)
+        GC.gc(false)
+        for _ in 1:20_000; Ref(rand(UInt64)); end  # reuse whatever was freed
+        for i in eachindex(mem)
+            mem[i] == (isodd(i) ? i % Int16 : string("m", r, "_", i)) || (bad += 1)
+            ms[i].x == (isodd(i) ? i % Int16 : string("f", r, "_", i)) || (bad += 1)
+        end
+    end
+    @test bad == 0
 end
