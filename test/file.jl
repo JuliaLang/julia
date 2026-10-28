@@ -660,7 +660,7 @@ function multiple_uv_errors(pfx::AbstractString, codes::AbstractVector{<:Integer
     return [Base._UVError(pfx, code) for code in codes]
 end
 
-read_linux_id_map_max(file) = parse(Int, split(strip(read(file, String)), " ", keepempty = false)[end]) % Cint
+read_linux_id_map_max(file) = parse(Int64, split(strip(read(file, String)), " ", keepempty = false)[end]) % Cint
 if !Sys.iswindows()
     # chown will give an error if the user does not have permissions to change files
     uid = Libc.geteuid()
