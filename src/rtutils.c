@@ -894,7 +894,8 @@ static size_t jl_static_show_symbol(JL_STREAM *out, jl_sym_t *name) JL_NOTSAFEPO
 
 // `jl_static_show()` cannot call `jl_subtype()`, for the GC reasons
 // explained in the comment on `jl_static_show_x_()`, below.
-// This function checks if `vt <: Function` without triggering GC.
+// This function checks if `vt <: Function` without triggering GC,
+// by following only the type-names (see `jl_typename_super`).
 static int jl_static_is_function_(jl_datatype_t *vt) JL_NOTSAFEPOINT {
     if (!jl_function_type) {  // Make sure there's a Function type defined.
         return 0;
@@ -910,7 +911,7 @@ static int jl_static_is_function_(jl_datatype_t *vt) JL_NOTSAFEPOINT {
         } else if (vt == jl_function_type) {
             return 1;
         }
-        vt = vt->super;
+        vt = jl_typename_super(vt->name);
         _iter_count += 1;
     }
     return 0;

@@ -790,10 +790,9 @@ static int datatype_may_contain_types(jl_datatype_t *d) JL_NOTSAFEPOINT
     while (d != jl_any_type) {
         if (d == jl_anytype_type)
             return 1;
-        // raw read: a deferred (unset) supertype conservatively proves nothing
-        d = d->super;
+        d = jl_typename_super(d->name);
         if (d == NULL)
-            return 1;
+            return 1; // definition in progress
     }
     return 0;
 }
@@ -3113,7 +3112,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             return 1;
         jl_datatype_t *xd = (jl_datatype_t*)ux, *yd = (jl_datatype_t*)uy;
         while (xd != NULL && xd != jl_any_type && xd->name != yd->name) {
-            xd = jl_datatype_compute_super(xd);
+            xd = jl_get_super(xd);
         }
         if (xd == jl_any_type)
             return 0;
@@ -3239,7 +3238,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         if (y == (jl_value_t*)jl_any_type) return 1;
         jl_datatype_t *xd = (jl_datatype_t*)x, *yd = (jl_datatype_t*)y;
         while (xd != jl_any_type && xd->name != yd->name) {
-            jl_datatype_t *xsuper = jl_datatype_compute_super(xd);
+            jl_datatype_t *xsuper = jl_get_super(xd);
             if (xsuper == NULL) {
                 assert(xd->parameters && jl_is_typename(xd->name));
                 jl_errorf("circular type parameter constraint in definition of %s", jl_symbol_name(xd->name->name));
@@ -5754,7 +5753,7 @@ static jl_value_t *intersect_sub_datatype(jl_datatype_t *xd, jl_datatype_t *yd, 
     // if that attempt fails, then return bottom
     // otherwise return xd (finish_unionall will later handle propagating those constraints)
     assert(e->Loffset == 0);
-    jl_datatype_t *xdsuper = jl_datatype_compute_super(xd);
+    jl_datatype_t *xdsuper = jl_get_super(xd);
     if (xdsuper == NULL)
         return jl_bottom_type; // definition in progress
     jl_value_t *isuper = R ? intersect((jl_value_t*)yd, (jl_value_t*)xdsuper, e, param) :
@@ -6310,11 +6309,11 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
         }
         if (param == PARAM_INVARIANT) return jl_bottom_type;
         while (xd != NULL && xd != jl_any_type && xd->name != yd->name)
-            xd = jl_datatype_compute_super(xd);
+            xd = jl_get_super(xd);
         if (xd == NULL || xd == jl_any_type) {
             xd = (jl_datatype_t*)x;
             while (yd != NULL && yd != jl_any_type && yd->name != xd->name)
-                yd = jl_datatype_compute_super(yd);
+                yd = jl_get_super(yd);
             if (yd == NULL || yd == jl_any_type)
                 return jl_bottom_type;
             return intersect_sub_datatype((jl_datatype_t*)y, xd, e, 1, param);
@@ -7633,7 +7632,7 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
                     return 0;
                 return ascore > bscore || adiag > bdiag;
             }
-            tta = jl_datatype_compute_super(tta); super = 1;
+            tta = jl_get_super(tta); super = 1;
             if (tta == NULL)
                 return 0; // definition in progress
         }
