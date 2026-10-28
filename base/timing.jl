@@ -63,8 +63,8 @@ struct GC_Num
     total_sweep_page_walk_time::Int64
     # Total time spent in madvise calls during sweeping phase across all GCs in nanoseconds
     total_sweep_madvise_time::Int64
-    # Total time spent in the serial part of sweeping non-pool memory (foreign objects, the oldest
-    # generation of big objects) across all GCs in nanoseconds
+    # Total time spent in the serial part of sweeping big objects (the oldest generation,
+    # and all of them when swept serially) across all GCs in nanoseconds
     total_sweep_free_mallocd_memory_time::Int64
     # Total time spent in marking phase across all GCs in nanoseconds
     total_mark_time::Int64
