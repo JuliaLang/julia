@@ -531,7 +531,8 @@ end
   Behaves like applying `n` times `nextind` for `n==1`. The only difference
   is that if `n` is so large that applying `nextind` would reach `ncodeunits(str)+1` then
   each remaining iteration increases the returned value by `1`. This means that in this
-  case `nextind` can return a value greater than `ncodeunits(str)+1`.
+  case `nextind` can return a value greater than `ncodeunits(str)+1`
+  (saturating at `typemax(Int)` instead of overflowing).
 
 * Case `n == 0`
 
@@ -569,7 +570,8 @@ function nextind(s::AbstractString, i::Int, n::Int)
     while n > 0 && i < z
         @inbounds n -= isvalid(s, i += 1)::Bool
     end
-    return i + n
+    # saturate instead of overflowing for huge `n` such as `typemax(Int)`
+    return n > typemax(Int) - i ? typemax(Int) : i + n
 end
 
 ## string index iteration type ##
