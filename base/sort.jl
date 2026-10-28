@@ -247,7 +247,7 @@ const FastRangeOrderings = Union{DirectOrdering,Lt{typeof(<)},ReverseOrdering{Lt
 function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
-    if lt(o, x, f)
+    if isempty(a) || lt(o, x, f)
         0
     elseif h == 0 || !lt(o, x, l)
         length(a)
@@ -260,7 +260,7 @@ end
 function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
-    if !lt(o, f, x)
+    if isempty(a) || !lt(o, f, x)
         1
     elseif h == 0 || lt(o, l, x)
         length(a) + 1
@@ -273,7 +273,7 @@ end
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
-    if lt(o, x, f)
+    if isempty(a) || lt(o, x, f)
         0
     elseif h == 0 || !lt(o, x, l)
         length(a)
@@ -289,7 +289,7 @@ end
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
-    if !lt(o, f, x)
+    if isempty(a) || !lt(o, f, x)
         1
     elseif h == 0 || lt(o, l, x)
         length(a) + 1

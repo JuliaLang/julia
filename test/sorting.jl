@@ -1341,6 +1341,14 @@ end
         end
     end
 
+    @testset "empty ranges" begin
+        for r in (1:0, 5:4, 1:-1:2, 1.0:0.0, 1.0:-1.0:2.0), x in (0, 1, 2, 5), rev in (false, true)
+            @test searchsortedfirst(r, x; rev) === 1
+            @test searchsortedlast(r, x; rev) === 0
+            @test searchsorted(r, x; rev) === 1:0
+        end
+    end
+
     @testset "ranges issue #44102, PR #50365" begin
         # range sorting test for different Ordering parameter combinations
         @test searchsorted(-1000.0:1:1000, -0.0) === 1001:1000
