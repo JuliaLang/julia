@@ -154,7 +154,7 @@ function plaininline(io::IO, md::Code)
         print(io, s, Base.startswith(md.code, "`") ? " " : "")
         print(io, md.code, endswith(md.code, "`") ? " " : "", s)
     else
-        print(io, "`", md.code, "`")
+        print(io, "`", isempty(md.code) ? " " : md.code, "`")
     end
 end
 

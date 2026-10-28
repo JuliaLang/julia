@@ -98,6 +98,10 @@ end
     md = Markdown.parse(text)
     @test text == Markdown.plain(md)
 
+    md = Markdown.parse("a ` ` b")
+    @test md == MD(Paragraph(["a ", Code(""), " b"]))
+    @test Markdown.parse(Markdown.plain(md)) == md
+
     @test md"""
     ````julia
     foo()
