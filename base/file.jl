@@ -690,12 +690,12 @@ end
 function temp_cleanup_purge_prelocked(force::Bool)
     filter!(TEMP_CLEANUP) do (path, asap)
         try
-            ispath(path) || return false
+            ispath(lstat(path)) || return false
             if force || asap
                 prepare_for_deletion(path)
                 rm(path, recursive=true, force=true)
             end
-            return ispath(path)
+            return ispath(lstat(path))
         catch ex
             @warn """
                 Failed to clean up temporary path $(repr(path))
@@ -712,7 +712,7 @@ function temp_cleanup_purge_all()
     may_need_gc = Ref(false)
     @lock TEMP_CLEANUP_LOCK filter!(TEMP_CLEANUP) do (path, _)
         try
-            ispath(path) || return false
+            ispath(lstat(path)) || return false
             may_need_gc[] = true
             return true
         catch ex
@@ -789,7 +789,7 @@ function _tempname(parent::AbstractString, suffix::AbstractString, max_tries::In
     filename = nothing
     for _ in 1:max_tries
         filename = string(prefix, _rand_filename(), suffix)
-        if ispath(filename)
+        if ispath(lstat(filename))
             filename = nothing
         else
             break
@@ -957,7 +957,7 @@ function mktemp(fn::Function, parent::AbstractString=tempdir())
         temp_cleanup_forget(tmp_path)
         try
             close(tmp_io)
-            ispath(tmp_path) && rm(tmp_path)
+            ispath(lstat(tmp_path)) && rm(tmp_path)
         catch ex
             @error "mktemp cleanup" _group=:file exception=(ex, catch_backtrace())
             # might be possible to remove later
@@ -985,7 +985,7 @@ function mktempdir(fn::Function, parent::AbstractString=tempdir();
     finally
         temp_cleanup_forget(tmpdir)
         try
-            if ispath(tmpdir)
+            if ispath(lstat(tmpdir))
                 prepare_for_deletion(tmpdir)
                 rm(tmpdir, recursive=true)
             end

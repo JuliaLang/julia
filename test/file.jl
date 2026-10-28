@@ -228,6 +228,19 @@ end
 @testset "tempname with suffix" begin
     @test !isfile(tempname(suffix = "_foo.txt"))
 end
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+    @testset "tempname skips dangling symlinks" begin
+        mktempdir() do d
+            Base.Libc.srand(0x12345678)
+            candidate = joinpath(d, "jl_" * Base.Filesystem._rand_filename())
+            symlink("missing-target", candidate)
+            Base.Libc.srand(0x12345678)
+            @test_throws ErrorException tempname(d; max_tries=1, cleanup=false)
+            Base.Libc.srand(0x12345678)
+            @test tempname(d; max_tries=2, cleanup=false) != candidate
+        end
+    end
+end
 
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
 
@@ -438,6 +451,32 @@ no_error_logging(f::Function) =
         # now all the temps are gone
         for t in temps
             @test !ispath(t)
+        end
+    end
+end
+
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+    @testset "temp cleanup removes dangling symlinks" begin
+        mktempdir() do d
+            p = mktemp(d) do p, io
+                close(io)
+                rm(p)
+                symlink("missing-target", p)
+                p
+            end
+            @test !islink(p)
+            p = mktempdir(d) do p
+                rm(p)
+                symlink("missing-target", p)
+                p
+            end
+            @test !islink(p)
+            with_temp_cleanup(3) do
+                p = tempname(d)
+                symlink("missing-target", p)
+                Base.Filesystem.temp_cleanup_purge_all()
+                @test !islink(p)
+            end
         end
     end
 end
