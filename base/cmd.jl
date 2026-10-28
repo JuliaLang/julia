@@ -310,6 +310,8 @@ ignorestatus(cmd::CmdRedirect) =
 Mark a command object so that it will be run in a new process group, allowing it to outlive the julia process, and not have Ctrl-C interrupts passed to it.
 """
 detach(cmd::Cmd) = Cmd(cmd; detach=true)
+detach(cmd::Union{OrCmds,ErrOrCmds,AndCmds}) = typeof(cmd)(detach(cmd.a), detach(cmd.b))
+detach(cmd::CmdRedirect) = CmdRedirect(detach(cmd.cmd), cmd.handle, cmd.stream_no, cmd.readable)
 
 # like String(s), but throw an error if s contains NUL, since
 # libuv requires NUL-terminated strings

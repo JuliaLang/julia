@@ -752,6 +752,11 @@ end
 # make sure Cmd is nestable
 @test string(Cmd(Cmd(`ls`, detach=true))) == "`ls`"
 
+let p = detach(pipeline(pipeline(truecmd, stderr=truecmd) & truecmd, stdout=devnull))
+    @test all(c -> c.flags & Base.UV_PROCESS_DETACHED != 0, (p.cmd.a.a, p.cmd.a.b, p.cmd.b))
+    @test success(p)
+end
+
 # equality tests for Cmd
 @test Base.Cmd(``) == Base.Cmd(``)
 @test Base.Cmd(`lsof -i :9090`) == Base.Cmd(`lsof -i :9090`)
