@@ -4536,7 +4536,8 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 // TODO: attempt better codegen for approximate types
                 bool isboxed = jl_field_isptr(uty, idx);
                 bool isatomic = jl_field_isatomic(uty, idx);
-                bool needlock = isatomic && !isboxed && jl_datatype_size(jl_field_type(uty, idx)) > MAX_ATOMIC_SIZE;
+                bool needlock = isatomic && !isboxed && !jl_is_tagged_uniontype(ft) &&
+                                jl_datatype_size(ft) > MAX_ATOMIC_SIZE;
                 *ret = jl_cgval_t();
                 if (isatomic == (order == jl_memory_order_notatomic)) {
                     std::string msg(fname);

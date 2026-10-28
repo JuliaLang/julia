@@ -191,6 +191,14 @@ end
     got = @atomicreplace a.x Int16(3) => Int16(4)
     @test got.success
     @test (@atomic a.x) === Int16(4)
+
+    # compiled
+    getat(a) = @atomic a.x
+    setat!(a, v) = (@atomic a.x = v; nothing)
+    setat!(a, "at" * "om")
+    @test getat(a) == "atom"
+    setat!(a, Int16(-3))
+    @test getat(a) === Int16(-3)
 end
 
 @testset "Memory and Array" begin
