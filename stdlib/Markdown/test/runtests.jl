@@ -245,6 +245,8 @@ end
     @test length(doc[2].items[2][2].items) === 2
     @test doc[2].items[2][2].items[1][1].content[1] == "three"
     @test doc[2].items[2][2].items[2][1].content[1] == "four"
+
+    @test Markdown.parse("12345678901234567890. item")[1] isa Markdown.Paragraph
 end
 
 @testset "Links" begin
