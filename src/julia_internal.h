@@ -1023,12 +1023,7 @@ JL_DLLEXPORT jl_value_t *jl_nth_union_component(jl_value_t *v JL_PROPAGATES_ROOT
 int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *nth) JL_NOTSAFEPOINT;
 
 // Tagged words (see the description above jl_is_tagged_uniontype in
-// datatype.c). Layout is baked into system images, so the master switch must
-// be a compile-time constant.
-#ifndef JL_TAGGED_WORD_LAYOUT
-#define JL_TAGGED_WORD_LAYOUT 1
-#endif
-
+// datatype.c)
 JL_DLLEXPORT int jl_is_tagged_uniontype(jl_value_t *u) JL_CANSAFEPOINT;
 unsigned jl_tagged_word_tagwidth(jl_value_t *u) JL_NOTSAFEPOINT;
 jl_datatype_t *jl_nth_immediate_component(jl_value_t *u JL_PROPAGATES_ROOT, unsigned i) JL_NOTSAFEPOINT;

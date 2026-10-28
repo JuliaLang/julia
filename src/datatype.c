@@ -498,7 +498,7 @@ unsigned jl_tagged_word_tagwidth(jl_value_t *u) JL_NOTSAFEPOINT
 // (jl_field_istagged / arrayelem_istagged), which is the source of truth.
 JL_DLLEXPORT int jl_is_tagged_uniontype(jl_value_t *u) JL_CANSAFEPOINT
 {
-#if !defined(_P64) || !JL_TAGGED_WORD_LAYOUT
+#ifndef _P64
     return 0;
 #else
     if (!jl_is_uniontype(u))

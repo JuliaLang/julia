@@ -6,8 +6,7 @@
 
 using Test
 
-const TAGGED_ENABLED = Sys.WORD_SIZE == 64 &&
-    Base.istaggedunion(Union{Int32, String})
+const TAGGED_ENABLED = Sys.WORD_SIZE == 64
 
 primitive type UInt63 63 end
 UInt63(x::UInt64) = Core.Intrinsics.trunc_int(UInt63, x)
