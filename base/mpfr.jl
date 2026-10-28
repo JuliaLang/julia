@@ -1235,6 +1235,8 @@ function setprecision(f::Function, ::Type{T}, prec::Integer; kws...) where T
 end
 
 function setprecision(f::Function, ::Type{BigFloat}, prec::Integer; base::Integer=2)
+    base > 1 || throw(DomainError(base, "`base` cannot be less than 2."))
+    prec > 0 || throw(DomainError(prec, "`precision` cannot be less than 1."))
     Base.ScopedValues.@with(CURRENT_PRECISION => _convert_precision_from_base(prec, base), f())
 end
 setprecision(f, ::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(setprecision, (f, Union{}, slurp...)))
