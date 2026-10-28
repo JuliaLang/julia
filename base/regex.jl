@@ -687,16 +687,11 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
                 nb += write(io, SUB_CHAR)
                 i = nextind(repl, next_i)
             elseif isdigit(repl[next_i])
-                group = parse(Int, repl[next_i])
                 i = nextind(repl, next_i)
-                while i <= e
-                    if isdigit(repl[i])
-                        group = 10group + parse(Int, repl[i])
-                        i = nextind(repl, i)
-                    else
-                        break
-                    end
+                while i <= e && isdigit(repl[i])
+                    i = nextind(repl, i)
                 end
+                group = parse(Int, SubString(repl, next_i, prevind(repl, i)))
                 nb += _write_capture(io, group, str, r, re)
             elseif repl[next_i] == GROUP_CHAR
                 i = nextind(repl, next_i)

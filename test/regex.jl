@@ -155,6 +155,7 @@
         replace("ab", r"(a)" => s"\g<>"))
     # test replace with 2-digit substitution group
     @test replace(("0" ^ 9) * "1", Regex(("(0)" ^ 9) * "(1)") => s"10th group: \10") == "10th group: 1"
+    @test_throws OverflowError replace("ab", r"(a)" => s"[\18446744073709551617]")
 
     # Proper unicode handling
     @test  match(r"∀∀", "∀x∀∀∀").match == "∀∀"
