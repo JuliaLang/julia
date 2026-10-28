@@ -355,6 +355,11 @@ end
     end
     @test digits(UInt8, n; base=1<<8) == digits(UInt8, N; base=1<<8)
     @test digits(UInt16, n; base=1<<16) == digits(UInt16, N; base=1<<16)
+    for base in (10, 16, 64)
+        @test_throws InexactError digits(UInt8, big(-7); base)
+        @test digits(Integer, big(-7); base) == [-7]
+    end
+    @test digits!(Integer[0], big(-7)) == [-7]
 end
 
 # serialization (#5133)

@@ -775,7 +775,7 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
 end
 
 function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:Integer}
-    if base ≥ 2
+    if base ≥ 2 && (T <: Signed || !isnegative(n))
         if base ≤ 62
             # fast path using mpz_get_str via string(n; base)
             s = codeunits(string(n; base))
