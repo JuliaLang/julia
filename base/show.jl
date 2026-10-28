@@ -3193,7 +3193,7 @@ alignment(io::IO, x::Number) = (alignment_from_show(io, x), 0)
 alignment(io::IO, x::Integer) = (alignment_from_show(io, x), 0)
 function alignment(io::IO, x::Real)
     s = sprint(show, x, context=nocolor(io), sizehint=0)
-    m = match(r"^(.*?)((?:[\.eEfF].*)?)$", s)
+    m = match(r"^(.*?)((?:(?:[\.eE]|(?<=\d)[fF]).*)?)$", s)
     m === nothing ? (textwidth(s), 0) :
                     (textwidth(m.captures[1]), textwidth(m.captures[2]))
 end
