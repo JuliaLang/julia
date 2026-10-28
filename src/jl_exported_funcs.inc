@@ -274,7 +274,6 @@
     XX(jl_isa) \
     XX(jl_isa_compileable_sig) \
     XX(jl_islayout_inline) \
-    XX(jl_uniontype_istagged) \
     XX(jl_istopmod) \
     XX(jl_is_binding_deprecated) \
     XX(jl_is_char_signed) \
@@ -290,6 +289,7 @@
     XX(jl_is_memdebug) \
     XX(jl_is_not_broken_subtype) \
     XX(jl_is_operator) \
+    XX(jl_is_tagged_uniontype) \
     XX(jl_is_task_started) \
     XX(jl_is_unary_and_binary_operator) \
     XX(jl_is_unary_operator) \

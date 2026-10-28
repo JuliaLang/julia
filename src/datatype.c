@@ -479,7 +479,7 @@ STATIC_INLINE unsigned tag_width(unsigned nimmediate) JL_NOTSAFEPOINT
 }
 
 // tag width k of a union already known (from layout metadata) to be tagged;
-// unlike jl_uniontype_istagged this never computes layouts (no safepoints)
+// unlike jl_is_tagged_uniontype this never computes layouts (no safepoints)
 unsigned jl_tagged_word_tagwidth(jl_value_t *u) JL_NOTSAFEPOINT
 {
     unsigned n = jl_count_union_components(u);
@@ -492,12 +492,11 @@ unsigned jl_tagged_word_tagwidth(jl_value_t *u) JL_NOTSAFEPOINT
     return tag_width(nimm);
 }
 
-// If `u` is stored as a tagged word, return 1 and report the immediate member
-// count and the tag width k; return 0 for every other type (all-or-nothing:
-// a union that exceeds the tag budget falls back to the boxed layout).
+// whether `u` is a union stored as a tagged word (all-or-nothing: a union
+// that exceeds the tag budget falls back to the boxed layout).
 // May compute member layouts; at access time, prefer the layout metadata
 // (jl_field_istagged / arrayelem_istagged), which is the source of truth.
-JL_DLLEXPORT int jl_uniontype_istagged(jl_value_t *u, unsigned *nimmediate, unsigned *tagwidth) JL_CANSAFEPOINT
+JL_DLLEXPORT int jl_is_tagged_uniontype(jl_value_t *u) JL_CANSAFEPOINT
 {
 #if !defined(_P64) || !JL_TAGGED_WORD_LAYOUT
     return 0;
@@ -526,10 +525,6 @@ JL_DLLEXPORT int jl_uniontype_istagged(jl_value_t *u, unsigned *nimmediate, unsi
         if (can_be_immediate_member(t) && jl_datatype_nbits((jl_datatype_t*)t) > 64 - k)
             return 0;
     }
-    if (nimmediate)
-        *nimmediate = nimm;
-    if (tagwidth)
-        *tagwidth = k;
     return 1;
 #endif
 }
@@ -664,7 +659,7 @@ static void jl_get_genericmemory_layout(jl_datatype_t *st) JL_CANSAFEPOINT
     size_t elsz = 0, al = 1;
     int isunboxed = jl_islayout_inline(eltype, &elsz, &al) && (kind != (jl_value_t*)jl_atomic_sym || jl_is_datatype(eltype));
     int isunion = isunboxed && jl_is_uniontype(eltype);
-    int istagged = !isunboxed && jl_uniontype_istagged(eltype, NULL, NULL);
+    int istagged = !isunboxed && jl_is_tagged_uniontype(eltype);
     int haspadding = 1; // we may want to eventually actually compute this more precisely
     int isbitsegal = 0;
     int nfields = 0; // aka jl_is_layout_opaque
@@ -934,7 +929,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     ntagged += ((jl_datatype_t*)layout_fld)->layout->ntaggedwords;
                 }
             }
-            else if (jl_uniontype_istagged(fld, NULL, NULL)) {
+            else if (jl_is_tagged_uniontype(fld)) {
                 // stored as a single tagged word; #undef is the zero word
                 fsz = sizeof(void*);
                 al = fsz;
@@ -1015,7 +1010,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     pointers[ptr_i++] = offset + jl_ptr_offset((jl_datatype_t*)layout_fld, j);
                 }
             }
-            else if (jl_uniontype_istagged(fld, NULL, NULL)) {
+            else if (jl_is_tagged_uniontype(fld)) {
                 pointers[ptr_i++] = offset;
             }
         }

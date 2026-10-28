@@ -4516,7 +4516,7 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         if (idx != -1) {
             jl_value_t *ft = jl_field_type(uty, idx);
-            if (jl_is_uniontype(ft) && jl_uniontype_istagged(ft, NULL, NULL) && op != StoreKind::Set) {
+            if (jl_is_tagged_uniontype(ft) && op != StoreKind::Set) {
                 // TODO: direct codegen for tagged words; only plain
                 // stores are handled, the rest goes through the generic builtin
                 return false;
@@ -5891,8 +5891,7 @@ isdefined_unknown_idx:
         else if (!field_may_be_null(obj, stt, fieldidx)) {
             *ret = mark_julia_const(ctx, jl_true);
         }
-        else if (jl_is_uniontype(jl_field_type(stt, fieldidx)) &&
-                 jl_uniontype_istagged(jl_field_type(stt, fieldidx), NULL, NULL)) {
+        else if (jl_is_tagged_uniontype(jl_field_type(stt, fieldidx))) {
             // a tagged word is defined iff it is nonzero
             if (obj.constant) {
                 *ret = mark_julia_const(ctx, jl_field_isdefined(obj.constant, fieldidx) ? jl_true : jl_false);

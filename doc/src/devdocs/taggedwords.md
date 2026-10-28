@@ -12,7 +12,7 @@ on the encoding described here.
 ## Which unions qualify
 
 A union `U` is stored as a tagged word exactly when all of the following
-hold (checked by `jl_uniontype_istagged`; all-or-nothing — when any check
+hold (checked by `jl_is_tagged_uniontype`; all-or-nothing — when any check
 fails, the union keeps its usual layout):
 
 1. The union is **not** storable inline: at least one member is a

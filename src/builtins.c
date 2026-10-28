@@ -645,7 +645,7 @@ JL_CALLABLE(jl_f_sizeof)
         int isinline = jl_uniontype_size(x, &elsize);
         if (isinline)
             return jl_box_long(elsize);
-        if (jl_uniontype_istagged(x, NULL, NULL))
+        if (jl_is_tagged_uniontype(x))
             return jl_box_long(sizeof(void*)); // one tagged word
         if (!jl_is_datatype(x))
             jl_error("Argument is an abstract type and does not have a definite size.");

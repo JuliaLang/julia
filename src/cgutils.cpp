@@ -1058,7 +1058,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, 
                 lty = JuliaType::get_prjlvalue_ty(ctxt);
                 isvector = false;
             }
-            else if (jl_is_uniontype(ty) && jl_uniontype_istagged(ty, NULL, NULL)) {
+            else if (jl_is_tagged_uniontype(ty)) {
                 // a tagged word; access goes through typed loads/stores
                 // keyed on its low bits, never through this slot as a tracked pointer
                 latypes.push_back(getInt64Ty(ctxt));
@@ -3307,7 +3307,7 @@ static bool field_may_be_null(const jl_cgval_t &strct, jl_datatype_t *stt, size_
         return false;
     jl_value_t *ft = jl_field_type(stt, idx);
     if (!jl_field_isptr(stt, idx) && !jl_type_hasptr(ft) &&
-        !(jl_is_uniontype(ft) && jl_uniontype_istagged(ft, NULL, NULL)))
+        !jl_is_tagged_uniontype(ft))
         return false;
     if (strct.constant) {
         if ((jl_is_immutable(stt) || jl_field_isconst(stt, idx)) && jl_field_isdefined(strct.constant, idx))
@@ -3599,7 +3599,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
     // TODO: direct codegen for tagged words; decode through the runtime for
     // now (throws UndefRefError for the zero word). That includes the #undef check
     // of an inline value whose first pointer is a tagged word, which is an i64 to LLVM.
-    if ((jl_is_uniontype(jfty) && jl_uniontype_istagged(jfty, NULL, NULL)) ||
+    if (jl_is_tagged_uniontype(jfty) ||
         (!jl_field_isptr(jt, idx) && type_has_taggedwords(jfty) && field_may_be_null(strct, jt, idx))) {
         Value *fld = ctx.builder.CreateCall(prepare_call(jlgetnthfieldchecked_func),
                 { boxed(ctx, strct), ConstantInt::get(ctx.types().T_size, idx) });
@@ -4610,7 +4610,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
     bool isboxed = jl_field_isptr(sty, idx0);
     unsigned align = jl_field_align(sty, idx0);
     bool maybe_null = field_may_be_null(strct, sty, idx0);
-    if (!isboxed && jl_is_uniontype(jfty) && jl_uniontype_istagged(jfty, NULL, NULL)) {
+    if (!isboxed && jl_is_tagged_uniontype(jfty)) {
         // TODO: direct codegen for tagged words; encode through the
         // runtime for now. Other operations take the generic builtin path.
         assert(op == StoreKind::Set);
@@ -4894,7 +4894,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         for (size_t i = nargs; i < nf; i++) {
             if (!jl_field_isptr(sty, i) && jl_is_uniontype(jl_field_type(sty, i))) {
                 const jl_aliasinfo_t &ai = strctinfo.aliasinfo;
-                if (jl_uniontype_istagged(jl_field_type(sty, i), NULL, NULL)) {
+                if (jl_is_tagged_uniontype(jl_field_type(sty, i))) {
                     // the zero word is #undef
                     auto *store = ctx.builder.CreateAlignedStore(
                             ConstantInt::get(ctx.types().T_size, 0),
