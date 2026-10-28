@@ -72,6 +72,10 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
         munmap(stk, bufsz);
         return MAP_FAILED;
     }
+#  if defined(_OS_LINUX_) && defined(MADV_NOHUGEPAGE)
+    // with THP, every touched stack would take a whole huge page
+    madvise(stk, bufsz, MADV_NOHUGEPAGE);
+#  endif
 # endif
 
     jl_atomic_fetch_add_relaxed(&num_stack_mappings, 1);
