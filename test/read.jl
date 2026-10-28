@@ -740,6 +740,10 @@ Base.readline(s::ReadLineIO; keep::Bool=false) = readline(s.b; keep)
         copyline(out, CopyUntilIO(IOBuffer("ab\r\ncd")))
         @test read(seekstart(out), String) == "abz"
     end
+    let out = IOBuffer()
+        copyline(IOContext(out), CopyUntilIO(IOBuffer("x\r\r\ny")))
+        @test String(take!(out)) == "x\r"
+    end
     @test collect(eachline(ReadLineIO(IOBuffer("ab\ncd")))) == ["ab", "cd"]
 end
 
