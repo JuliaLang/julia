@@ -188,6 +188,11 @@ sockets_watchdog_timer = Timer(_ -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"
     @test_throws ArgumentError parse(IPv6, "::00001")
     @test parse(IPv6, "::0001") == IPv6(1)
 
+    @test_throws ArgumentError parse(IPv6, ":1")
+    @test_throws ArgumentError parse(IPv6, "1:")
+    @test_throws ArgumentError parse(IPv6, ":1:2")
+    @test_throws ArgumentError parse(IPv6, "1:2:")
+
     @test_throws ArgumentError IPv4(-1)
     @test_throws ArgumentError IPv4(typemax(UInt32) + Int64(1))
     @test IPv4(big(1)) == ip"0.0.0.1"
