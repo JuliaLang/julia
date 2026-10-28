@@ -365,7 +365,7 @@ end
     @test all(A[5:15:120] .== -1)
     @test @inferred(strides(sA)) == (1,3,15)
     @test stride(sA,3) == 15
-    @test stride(sA,4) == 120
+    @test stride(sA,4) == 136
     test_bounds(sA)
     sA = view(A, 1:3, 1:5, 5)
     sA[1:3,1:5] .= -2
@@ -376,6 +376,7 @@ end
     @test all(A[:,:,5] .== 4)
     @test @inferred(strides(sA)) == (1,3)
     test_bounds(sA)
+    @test stride(view(A, 1, 2, 3), 1) == 1
     sA = view(A, 1:3, 3:3, 2:5)
     @test size(sA) == (3,1,4)
     @test axes(sA) === (Base.OneTo(3), Base.OneTo(1), Base.OneTo(4))
