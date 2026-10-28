@@ -313,7 +313,7 @@ List(xs...) = List(vcat(xs...))
 isordered(list::List) = list.ordered >= 0
 
 const BULLETS = r"^ {0,3}(\*|\+|-)( |$)"
-const NUM_OR_BULLETS = r"^ {0,3}(\*|\+|-|(\d+)(\.|\)))( |$)"
+const NUM_OR_BULLETS = r"^ {0,3}(\*|\+|-|([0-9]+)(\.|\)))( |$)"
 
 @breaking true ->
 function list(stream::IO, block::MD)
@@ -328,10 +328,10 @@ function list(stream::IO, block::MD)
                 -1, Regex("^ {0,3}(\\$(m.captures[1]))( |\$)")
             elseif m.captures[3] == "."
                 # An ordered list with `1. ` style numbering.
-                Base.parse(Int, something(m.captures[2])), r"^ {0,3}(\d+)\.( |$)"
+                Base.parse(Int, something(m.captures[2])), r"^ {0,3}([0-9]+)\.( |$)"
             elseif m.captures[3] == ")"
                 # An ordered list with `1) ` style numbering.
-                Base.parse(Int, something(m.captures[2])), r"^ {0,3}(\d+)\)( |$)"
+                Base.parse(Int, something(m.captures[2])), r"^ {0,3}([0-9]+)\)( |$)"
             else
                 # Failed to match any list marker. This branch shouldn't actually be needed
                 # since the `NUM_OR_BULLETS` regex should cover this, but we include it
