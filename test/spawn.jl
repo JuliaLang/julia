@@ -525,6 +525,11 @@ end
 @test Base.shell_split("foo\\ bar baz") == ["foo bar", "baz"]
 @test Base.shell_split("'foo bar' baz") == ["foo bar", "baz"]
 @test Base.shell_split("\"foo bar\" baz") == ["foo bar", "baz"]
+@test Base.shell_split("a\\ ") == ["a "]
+@test Base.shell_split("a\\\t") == ["a\t"]
+@test Base.shell_split("a\\\u00a0 ") == ["a\u00a0"]
+@test Base.shell_split("a\\\r") == ["a"]
+@test Base.shell_split("a\\\r\n") == ["a"]
 
 # "Over quoted"
 @test Base.shell_split("'foo\\ bar' baz") == ["foo\\ bar", "baz"]
