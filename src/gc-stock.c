@@ -683,13 +683,27 @@ static void sweep_list_of_oldest_bigvals(bigval_t *young) JL_NOTSAFEPOINT
     first->prev = young;
 }
 
+STATIC_INLINE int gc_sweep_big_serially(void) JL_NOTSAFEPOINT
+{
+#ifdef MEMDEBUG
+    // Tasks are big objects in this mode. All stack sweeps must finish before
+    // their objects are freed or their mark bits are reset, including when a
+    // task's stack belongs to a different thread than the task object.
+    return 1;
+#else
+    // Keep external free callbacks on a single thread. GC_TIME also needs a
+    // serial sweep within gc_time_big_start/end for its shared counters.
+    return GC_TIME_ENABLED || gc_cblist_notify_external_free != NULL;
+#endif
+}
+
 // The per-thread young lists were already swept (in parallel) by
-// sweep_per_thread_loop, unless external free callbacks are registered.
+// sweep_per_thread_loop, unless gc_sweep_big_serially() requires otherwise.
 static void sweep_big(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     if (GC_TIME_ENABLED)
         gc_time_big_start();
-    if (gc_cblist_notify_external_free != NULL) {
+    if (gc_sweep_big_serially()) {
         for (int i = 0; i < gc_n_threads; i++) {
             jl_ptls_t ptls2 = gc_all_tls_states[i];
             if (ptls2 != NULL)
@@ -1259,7 +1273,7 @@ static void sweep_per_thread_loop(void) JL_NOTSAFEPOINT
     //            if (stkbuf)
     //                push(free_stacks[sz], stkbuf)
     size_t freed_bytes = 0, nfreed = 0;
-    int sweep_big_serially = gc_cblist_notify_external_free != NULL;
+    int sweep_big_serially = gc_sweep_big_serially();
     jl_atomic_fetch_add(&gc_n_threads_sweeping_per_thread, 1);
     while (1) {
         int i = jl_atomic_fetch_add_relaxed(&gc_ptls_sweep_idx, -1);
@@ -1270,8 +1284,8 @@ static void sweep_per_thread_loop(void) JL_NOTSAFEPOINT
             continue;
         assert(gc_n_threads != 0);
         sweep_malloced_memory_ptls(ptls2, &freed_bytes, &nfreed);
-        // external free callbacks have always been invoked from a single
-        // thread; keep sweeping big objects serially (in sweep_big) for them
+        // Some configurations require a serial big-object sweep after all
+        // stack sweeps have finished (see gc_sweep_big_serially).
         if (!sweep_big_serially)
             sweep_list_of_young_bigvals(ptls2->gc_tls.heap.young_generation_of_bigvals);
         // free half of stacks that remain unused since last sweep (or all
