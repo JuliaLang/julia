@@ -874,6 +874,16 @@ namedtup = (;a=1, b=2, c=3)
     end
 end
 
+@testset "`Base.split_rest` only splits the rest after the iteration state" begin
+    @test Base.split_rest((1, 2, 3), 1, 2) === ((2,), (3,))
+    @test_throws ArgumentError Base.split_rest((1, 2, 3), 2, 3)
+    @test_throws ArgumentError Base.split_rest((x = 1, y = 2, z = 3), 2, 3)
+    mid(t) = ((a, b..., c) = t; (a, b, c))
+    @test mid((1, 2)) === (1, (), 2)
+    @test_throws ArgumentError mid((1,))
+    @test_throws ArgumentError mid((x = 1,))
+end
+
 # Make sure that tuple iteration is foldable
 @test Core.Compiler.is_foldable(Base.infer_effects(iterate, Tuple{NTuple{4, Float64}, Int}))
 @test Core.Compiler.is_foldable(Base.infer_effects(eltype, Tuple{Tuple}))
