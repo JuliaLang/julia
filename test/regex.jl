@@ -112,6 +112,8 @@
         @test haskey(m, :a)
         @test haskey(m, "b")
         @test !haskey(m, "foo")
+        @test !haskey(m, "a\0b")
+        @test_throws ErrorException m["a\0b"]
         @test (m[:a], m[:c], m["b"]) == ("x", "y", "z")
         @test Tuple(m) == ("x", "y", "z")
         @test NamedTuple(m) == (a="x", c="y", b="z")
