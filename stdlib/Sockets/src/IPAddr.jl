@@ -243,7 +243,9 @@ parseipv6fields(fields) = parseipv6fields(fields,8)
 function parse(::Type{IPv6}, str::AbstractString)
     count("::", str; overlap=true) > 1 && throw(ArgumentError("IPv6 address may contain at most one \"::\""))
     fields = split(str,':')
-    if length(fields) > 8
+    if length(fields) < 3
+        throw(ArgumentError("too few fields in IPv6 address"))
+    elseif length(fields) > 8
         throw(ArgumentError("too many fields in IPv6 address"))
     elseif length(fields) == 8
         return IPv6(parseipv6fields(fields))
