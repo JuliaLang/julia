@@ -209,8 +209,8 @@ isbitsunion(u::Type) = u isa Union && allocatedinline(u)
     Base.istaggedunion(::Type{T})
 
 Return whether a type is a Union stored as a single tagged 64-bit word: a mix
-of reference members with up to four small primitive members whose values are
-encoded immediately in the word's payload bits.
+of reference components with up to four small primitive components, whose
+values are encoded in the word itself.
 """
 istaggedunion(@nospecialize u) =
     ccall(:jl_is_tagged_uniontype, Cint, (Any,), u) != Cint(0)

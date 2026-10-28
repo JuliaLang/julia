@@ -1619,7 +1619,7 @@ static size_t jl_static_show_tagged_word(JL_STREAM *out, uintptr_t w, jl_value_t
     if (jl_tagged_word_isptr(w))
         return jl_static_show_x(out, (jl_value_t*)w, depth, ctx);
     unsigned k = jl_tagged_word_tagwidth(u);
-    jl_datatype_t *t = jl_nth_immediate_member(u, (unsigned)((w & (((uintptr_t)1 << k) - 1)) >> 1));
+    jl_datatype_t *t = jl_nth_immediate_component(u, (unsigned)((w & (((uintptr_t)1 << k) - 1)) >> 1));
     if (t == NULL) // corrupt word; static show must survive it
         return jl_printf(out, "#<taggedword %p>", (void*)w);
     uint64_t payload = (uint64_t)w >> k;

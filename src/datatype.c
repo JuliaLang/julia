@@ -447,32 +447,32 @@ JL_DLLEXPORT int jl_stored_inline(jl_value_t *eltype)
     return jl_islayout_inline(eltype, &fsz, &al);
 }
 
-// Tagged words: on 64-bit platforms, a union mixing reference-only
-// members with 1..4 small primitive ("immediate") members is stored as a
+// Tagged words: on 64-bit platforms, a union mixing reference components
+// with 1..4 small primitive ("immediate") components is stored as a
 // single 64-bit word:
 //
 //     word == 0                  #undef
-//     word != 0, low bits 00     untagged jl_value_t* (member from heap type tag)
-//     low bit 1                  immediate; the i-th immediate member (0-based,
+//     word != 0, low bits 00     untagged jl_value_t* (component from heap type tag)
+//     low bit 1                  immediate; the i-th immediate component (0-based,
 //                                in union component order) has tag 2*i + 1 and
 //                                word == (zext(value) << k) | tag
 //     low bits 10                reserved
 //
-// with k = 1 for one immediate member, 2 for two, 3 for three or four. Tags
+// with k = 1 for one immediate component, 2 for two, 3 for three or four. Tags
 // are odd so that the low two bits answer pointer-vs-immediate without knowing
 // the union type, by the same rule the GC applies to JL_GC_PUSH roots; k is
 // only needed to decode a payload. Capping k at 3 keeps 61 payload bits; a
 // wider tag would fit the encoding. The encoding is documented ABI, see
 // doc/src/devdocs/taggedwords.md.
 
-// eligible as an immediate member (nbits bound vs. k is checked by the caller)
-STATIC_INLINE int can_be_immediate_member(jl_value_t *t) JL_NOTSAFEPOINT
+// eligible as an immediate component (nbits bound vs. k is checked by the caller)
+STATIC_INLINE int can_be_immediate_component(jl_value_t *t) JL_NOTSAFEPOINT
 {
     return jl_is_datatype(t) && ((jl_datatype_t*)t)->isprimitivetype &&
            jl_datatype_nbits((jl_datatype_t*)t) <= 63;
 }
 
-// tag width k for the given number of immediate members
+// tag width k for the given number of immediate components
 STATIC_INLINE unsigned tag_width(unsigned nimmediate) JL_NOTSAFEPOINT
 {
     return nimmediate == 1 ? 1 : nimmediate == 2 ? 2 : 3;
@@ -485,7 +485,7 @@ unsigned jl_tagged_word_tagwidth(jl_value_t *u) JL_NOTSAFEPOINT
     unsigned n = jl_count_union_components(u);
     unsigned nimm = 0;
     for (unsigned i = 0; i < n; i++) {
-        if (can_be_immediate_member(jl_nth_union_component(u, i)))
+        if (can_be_immediate_component(jl_nth_union_component(u, i)))
             nimm++;
     }
     assert(nimm > 0 && nimm <= 4);
@@ -494,7 +494,7 @@ unsigned jl_tagged_word_tagwidth(jl_value_t *u) JL_NOTSAFEPOINT
 
 // whether `u` is a union stored as a tagged word (all-or-nothing: a union
 // that exceeds the tag budget falls back to the boxed layout).
-// May compute member layouts; at access time, prefer the layout metadata
+// May compute component layouts; at access time, prefer the layout metadata
 // (jl_field_istagged / arrayelem_istagged), which is the source of truth.
 JL_DLLEXPORT int jl_is_tagged_uniontype(jl_value_t *u) JL_CANSAFEPOINT
 {
@@ -507,46 +507,46 @@ JL_DLLEXPORT int jl_is_tagged_uniontype(jl_value_t *u) JL_CANSAFEPOINT
     unsigned nimm = 0, nptr = 0;
     for (unsigned i = 0; i < n; i++) {
         jl_value_t *t = jl_nth_union_component(u, i);
-        if (can_be_immediate_member(t))
+        if (can_be_immediate_component(t))
             nimm++;
         else
             nptr++;
     }
     if (nimm == 0 || nimm > 4 || nptr == 0)
         return 0;
-    // a union that is storable inline (e.g. mixing bits members with ghost
-    // singletons like Nothing) keeps the selector-byte layout
+    // a union that is storable inline (e.g. mixing bits components with
+    // zero-size singletons like Nothing) keeps the selector-byte layout
     size_t fsz = 0, al = 0;
     if (jl_islayout_inline(u, &fsz, &al))
         return 0;
     unsigned k = tag_width(nimm);
     for (unsigned i = 0; i < n; i++) {
         jl_value_t *t = jl_nth_union_component(u, i);
-        if (can_be_immediate_member(t) && jl_datatype_nbits((jl_datatype_t*)t) > 64 - k)
+        if (can_be_immediate_component(t) && jl_datatype_nbits((jl_datatype_t*)t) > 64 - k)
             return 0;
     }
     return 1;
 #endif
 }
 
-// the i-th (0-based) immediate member of union `u`, i.e. the member
+// the i-th (0-based) immediate component of union `u`, i.e. the component
 // whose values are encoded with tag 2*i + 1
-jl_datatype_t *jl_nth_immediate_member(jl_value_t *u, unsigned i) JL_NOTSAFEPOINT
+jl_datatype_t *jl_nth_immediate_component(jl_value_t *u, unsigned i) JL_NOTSAFEPOINT
 {
     unsigned n = jl_count_union_components(u);
     for (unsigned j = 0; j < n; j++) {
         jl_value_t *t = jl_nth_union_component(u, j);
-        if (can_be_immediate_member(t) && i-- == 0)
+        if (can_be_immediate_component(t) && i-- == 0)
             return (jl_datatype_t*)t;
     }
     return NULL;
 }
 
-// immediate member index of exactly `t` in union `u` (0 if `t` is a
-// reference-stored member)
-int jl_immediate_member_index(jl_value_t *u, jl_datatype_t *t, unsigned *idx) JL_NOTSAFEPOINT
+// immediate component index of exactly `t` in union `u` (0 if `t` is a
+// reference component)
+int jl_immediate_component_index(jl_value_t *u, jl_datatype_t *t, unsigned *idx) JL_NOTSAFEPOINT
 {
-    if (!can_be_immediate_member((jl_value_t*)t))
+    if (!can_be_immediate_component((jl_value_t*)t))
         return 0;
     unsigned n = jl_count_union_components(u), imm = 0;
     for (unsigned j = 0; j < n; j++) {
@@ -555,7 +555,7 @@ int jl_immediate_member_index(jl_value_t *u, jl_datatype_t *t, unsigned *idx) JL
             *idx = imm;
             return 1;
         }
-        if (can_be_immediate_member(c))
+        if (can_be_immediate_component(c))
             imm++;
     }
     return 0;
@@ -937,7 +937,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                 zeroinit = 1;
                 npointers++;
                 ntagged++;
-                // TODO: bits-comparable when every reference member is pointer-egal
+                // TODO: bits-comparable when every reference component is pointer-egal
                 isbitsegal = 0;
             }
             else {

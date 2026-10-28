@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Tagged words: on 64-bit platforms, a Union mixing reference members
-# with 1..4 small primitive members is stored as one tagged word. See
+# Tagged words: on 64-bit platforms, a Union mixing reference components
+# with 1..4 small primitive components is stored as one tagged word. See
 # doc/src/devdocs/taggedwords.md for the encoding.
 
 using Test
@@ -32,20 +32,20 @@ istagged(u) = Base.istaggedunion(u)
     @test istagged(Union{Float32, String})
     @test !istagged(Union{Int32, Nothing})           # all-inline: selector layout wins
     @test istagged(Union{Int32, Nothing, String})    # singleton rides along as a reference
-    @test istagged(Union{Int32, AbstractString})     # abstract members are references
+    @test istagged(Union{Int32, AbstractString})     # abstract components are references
     @test istagged(Union{Int8, Int16, String})       # k = 2
     @test istagged(Union{Int8, Int16, Int32, String})  # k = 3, 3 immediates
     @test istagged(Union{Int8, Int16, Int32, UInt32, String}) # k = 3, 4 immediates
     @test istagged(Union{UInt62, UInt61, String})    # 62 <= 64 - 2
 
-    # not tagged: no immediate fits / no reference member / too many immediates
+    # not tagged: no immediate fits / no reference component / too many immediates
     @test !istagged(Union{Int64, String})            # 64 > 63
     @test !istagged(Union{Float64, String})
     @test !istagged(Union{Ptr{Cvoid}, String})
     @test !istagged(Union{Int8, Int16})              # all-isbits stays selector-based
     @test !istagged(Union{Int8, Int16, Int32, UInt32, UInt16, String}) # 5 immediates
     @test !istagged(Union{UInt63, UInt62, String})   # 63 > 64 - 2, all-or-nothing
-    @test !istagged(Union{String, Nothing})          # no immediate member
+    @test !istagged(Union{String, Nothing})          # no immediate component
     @test Base.isbitsunion(Union{Int8, Int16})       # unchanged
 
     # layout introspection
@@ -402,7 +402,7 @@ end
     GC.@preserve m begin
         w = unsafe_load(convert(Ptr{UInt64}, pointer_from_objref(m)))
         @test w & 1 == 1              # immediate
-        @test w >> 1 == UInt64(21)    # payload for the single immediate member
+        @test w >> 1 == UInt64(21)    # payload for the single immediate component
     end
     s = "abc" * "d"
     m.x = s

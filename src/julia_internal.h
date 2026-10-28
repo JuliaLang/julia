@@ -1031,8 +1031,8 @@ int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *
 
 JL_DLLEXPORT int jl_is_tagged_uniontype(jl_value_t *u) JL_CANSAFEPOINT;
 unsigned jl_tagged_word_tagwidth(jl_value_t *u) JL_NOTSAFEPOINT;
-jl_datatype_t *jl_nth_immediate_member(jl_value_t *u JL_PROPAGATES_ROOT, unsigned i) JL_NOTSAFEPOINT;
-int jl_immediate_member_index(jl_value_t *u, jl_datatype_t *t, unsigned *idx) JL_NOTSAFEPOINT;
+jl_datatype_t *jl_nth_immediate_component(jl_value_t *u JL_PROPAGATES_ROOT, unsigned i) JL_NOTSAFEPOINT;
+int jl_immediate_component_index(jl_value_t *u, jl_datatype_t *t, unsigned *idx) JL_NOTSAFEPOINT;
 
 // Access discipline for tagged words: they may hold a reference, so they
 // follow the boxed-field rules - readers use a relaxed atomic load, plain
@@ -1056,12 +1056,12 @@ STATIC_INLINE void jl_gc_wb_tagged(const void *parent, void *slot, uintptr_t w) 
     jl_gc_wb(parent, slot, jl_tagged_word_isptr(w) ? (void*)w : NULL);
 }
 
-// encode a value of a member type of union `u` into its tagged word
+// encode a value of a component type of union `u` into its tagged word
 STATIC_INLINE uintptr_t jl_tagged_word_encode(jl_value_t *u, jl_value_t *rhs JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
     jl_datatype_t *rty = (jl_datatype_t*)jl_typeof(rhs);
     unsigned idx;
-    if (!jl_immediate_member_index(u, rty, &idx)) {
+    if (!jl_immediate_component_index(u, rty, &idx)) {
         assert(((uintptr_t)rhs & 7) == 0);
         return (uintptr_t)rhs;
     }
@@ -1081,7 +1081,7 @@ STATIC_INLINE uintptr_t jl_tagged_word_encode(jl_value_t *u, jl_value_t *rhs JL_
     return (uintptr_t)((bits << k) | (2 * idx + 1));
 }
 
-// store a value of a member type of union `u` into tagged word `slot`, which
+// store a value of a component type of union `u` into tagged word `slot`, which
 // `parent` owns, without any mutability or type checking
 STATIC_INLINE void jl_tagged_word_store(jl_value_t *parent, _Atomic(uintptr_t) *slot, jl_value_t *u,
                                         jl_value_t *rhs JL_MAYBE_UNROOTED, int isatomic) JL_NOTSAFEPOINT
@@ -1102,7 +1102,7 @@ STATIC_INLINE jl_value_t *jl_tagged_word_decode(jl_value_t *u, uintptr_t w) JL_C
         return (jl_value_t*)w;
     assert(w & 1); // words ending in 10 are reserved
     unsigned k = jl_tagged_word_tagwidth(u);
-    jl_datatype_t *t = jl_nth_immediate_member(u, (unsigned)((w & (((uintptr_t)1 << k) - 1)) >> 1));
+    jl_datatype_t *t = jl_nth_immediate_component(u, (unsigned)((w & (((uintptr_t)1 << k) - 1)) >> 1));
     assert(t != NULL);
     uint64_t payload = (uint64_t)w >> k;
     return jl_new_bits((jl_value_t*)t, &payload);

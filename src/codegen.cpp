@@ -4410,7 +4410,7 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
 
     // can compare any concrete immutable by bits, except for UnionAll, which
     // has a special non-bits based egal, and for types embedding tagged
-    // words, whose reference members compare by contents, not by word
+    // words, whose reference components compare by contents, not by word
     bool justbits1 = jl_is_concrete_immutable(rt1) && !jl_is_kind(rt1) && !type_has_taggedwords(rt1);
     bool justbits2 = jl_is_concrete_immutable(rt2) && !jl_is_kind(rt2) && !type_has_taggedwords(rt2);
     if (justbits1 || justbits2) { // whether this type is unique'd by value
