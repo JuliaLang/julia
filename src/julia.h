@@ -732,6 +732,7 @@ typedef struct {
         // metadata bit only for GenericMemory eltype layout
         uint16_t arrayelem_isboxed : 1;
         uint16_t arrayelem_isunion : 1;
+        uint16_t arrayelem_istagged : 1; // element is a tagged word
         uint16_t arrayelem_isatomic : 1;
         uint16_t arrayelem_islocked : 1;
         // If set, this type's egality can be determined entirely by comparing
@@ -740,8 +741,6 @@ typedef struct {
         // trailing bits of `size` that are not part of the value (primitive types);
         // bounded by 8 * (MAX_ALIGN - 1) + 7
         uint16_t unused_bits : 7;
-        // metadata bit only for GenericMemory eltype layout: element is a tagged word
-        uint16_t arrayelem_istagged : 1;
     } flags;
     // union {
     //     jl_fielddesc8_t field8[nfields];

@@ -246,10 +246,10 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
     flddesc->flags.fielddesc_type = fielddesc_type;
     flddesc->flags.arrayelem_isboxed = (arrayelem & 1) != 0;
     flddesc->flags.arrayelem_isunion = (arrayelem & 2) != 0;
+    flddesc->flags.arrayelem_istagged = (arrayelem & 16) != 0;
     flddesc->flags.arrayelem_isatomic = (arrayelem & 4) != 0;
     flddesc->flags.arrayelem_islocked = (arrayelem & 8) != 0;
     flddesc->flags.unused_bits = unused_bits;
-    flddesc->flags.arrayelem_istagged = (arrayelem & 16) != 0;
     flddesc->npointers = npointers;
     flddesc->first_ptr = first_ptr;
     flddesc->ntaggedwords = ntaggedwords;
@@ -1222,9 +1222,9 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     layout->flags.unused_bits = 0;
     layout->flags.arrayelem_isboxed = 0;
     layout->flags.arrayelem_isunion = 0;
+    layout->flags.arrayelem_istagged = 0;
     layout->flags.arrayelem_isatomic = 0;
     layout->flags.arrayelem_islocked = 0;
-    layout->flags.arrayelem_istagged = 0;
     jl_fielddescdyn_t * desc =
       (jl_fielddescdyn_t *) ((char *)layout + sizeof(*layout));
     desc->markfunc = markfunc;

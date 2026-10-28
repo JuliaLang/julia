@@ -633,11 +633,11 @@ struct DataTypeLayout
     # fielddesc_type : 2;
     # arrayelem_isboxed : 1;
     # arrayelem_isunion : 1;
+    # arrayelem_istagged : 1;
     # arrayelem_isatomic : 1;
     # arrayelem_islocked : 1;
     # isbitsegal : 1;
     # unused_bits : 7;
-    # arrayelem_istagged : 1;
 end
 
 function DataTypeLayout(dt::DataType)
@@ -712,7 +712,7 @@ This may not be the case if the type contains pointers to other values whose ega
 independent of their identity (e.g. immutable structs, some types, etc.).
 """
 datatype_isbitsegal(dt::DataType) = (@_foldable_meta; datatype_isbitsegal(DataTypeLayout(dt)))
-datatype_isbitsegal(dtl::DataTypeLayout) = (dtl.flags & (1<<7)) != 0
+datatype_isbitsegal(dtl::DataTypeLayout) = (dtl.flags & (1<<8)) != 0
 
 """
     Base.datatype_nfields(dt::DataType)::UInt32
@@ -777,7 +777,7 @@ Can be called on any `isconcretetype`, but only meaningful on `Memory`.
 """
 datatype_arrayelem(dt::DataType) = (@_foldable_meta; datatype_arrayelem(DataTypeLayout(dt)))
 datatype_arrayelem(dtl::DataTypeLayout) =
-    (dtl.flags & (1 << 15)) != 0 ? 3 : Int((dtl.flags >> 3) & 3)
+    (dtl.flags & (1 << 5)) != 0 ? 3 : Int((dtl.flags >> 3) & 3)
 
 datatype_layoutsize(dt::DataType) = (@_foldable_meta; datatype_layoutsize(DataTypeLayout(dt)))
 datatype_layoutsize(dtl::DataTypeLayout) = dtl.size % Int
