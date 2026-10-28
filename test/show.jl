@@ -193,6 +193,7 @@ end
 # Exponentiation (>= operator_precedence(:^)) and unary operators
 @test_repr "(-1)^a"
 @test_repr "(-2.1)^-1"
+@test_repr "(-0.0)^2"
 @test_repr "(-x)^a"
 @test_repr "(-a)^-1"
 @test_repr "(!x)↑!a"
