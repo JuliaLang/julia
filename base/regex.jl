@@ -877,7 +877,8 @@ end
 
 *(r::Regex) = r # avoids wrapping r in a useless subpattern
 
-wrap_string(r::Regex, unshared::UInt32) = string("(?", regex_opts_str(r.compile_options & unshared), ':', r.pattern, ')')
+wrap_string(r::Regex, unshared::UInt32) = string("(?", regex_opts_str(r.compile_options & unshared), ':', r.pattern, close_paren(r))
+close_paren(r::Regex) = iszero(r.compile_options & (PCRE.EXTENDED | PCRE.EXTENDED_MORE)) && !occursin(r"\\Q|\(\?", r.pattern) ? ")" : "\\E(?x)\n)"
 # if s contains raw"\E", split '\' and 'E' within two distinct \Q...\E groups:
 wrap_string(s::AbstractString, ::UInt32) =  string("\\Q", replace(s, raw"\E" => raw"\\E\QE"), "\\E")
 wrap_string(s::AbstractChar, ::UInt32) = string("\\Q", s, "\\E")
@@ -927,4 +928,4 @@ julia> match(r"Test "^2, "Test Test ")
 RegexMatch("Test Test ")
 ```
 """
-^(r::Regex, i::Integer) = Regex(string("(?:", r.pattern, "){$i}"), r.compile_options, r.match_options)
+^(r::Regex, i::Integer) = Regex(string("(?:", r.pattern, close_paren(r), "{$i}"), r.compile_options, r.match_options)

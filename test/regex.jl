@@ -222,6 +222,21 @@
         @test_throws ArgumentError r"a" * Regex("b", Base.DEFAULT_COMPILER_OPTS, Base.DEFAULT_MATCH_OPTS & ~Base.PCRE.NO_UTF_CHECK)
 
         @test r"this|that"^2 == r"(?:this|that){2}"
+
+        r = r"a  # the letter a"x
+        @test match(r * "b", "ab").match == "ab"
+        @test match(r * r"b"x, "ab").match == "ab"
+        @test match(r^2, "aa").match == "aa"
+
+        r = r"a(?-x)"x
+        @test match(r * "b", "ab").match == "ab"
+        @test match(r^2, "aa").match == "aa"
+
+        for r in (r"(?x)a # the letter a", r"a\Q"x, r"a\Q",
+                  Regex("a  # the letter a", Base.DEFAULT_COMPILER_OPTS | Base.PCRE.EXTENDED_MORE, Base.DEFAULT_MATCH_OPTS))
+            @test match(r * "b", "ab").match == "ab"
+            @test match(r^2, "aa").match == "aa"
+        end
     end
 
     @testset "iterate" begin
