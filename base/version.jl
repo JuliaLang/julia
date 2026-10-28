@@ -62,7 +62,7 @@ struct VersionNumber
             if ident isa Integer
                 ident >= 0 || throw(ArgumentError("invalid negative pre-release identifier: $ident"))
             else
-                if !occursin(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
+                if !occursin(VERSION_IDENT_REGEX, ident) ||
                     isempty(ident) && !(length(pre)==1 && isempty(bld))
                     throw(ArgumentError("invalid pre-release identifier: $(repr(ident))"))
                 end
@@ -72,7 +72,7 @@ struct VersionNumber
             if ident isa Integer
                 ident >= 0 || throw(ArgumentError("invalid negative build identifier: $ident"))
             else
-                if !occursin(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
+                if !occursin(VERSION_IDENT_REGEX, ident) ||
                     isempty(ident) && length(bld)!=1
                     throw(ArgumentError("invalid build identifier: $(repr(ident))"))
                 end
@@ -112,21 +112,27 @@ show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
 
 Broadcast.broadcastable(v::VersionNumber) = Ref(v)
 
+const VERSION_IDENT_REGEX = r"^
+    (?:[0-9A-Za-z-]*                        # letters, digits and hyphens
+       [A-Za-z-]                            # at least one non-digit, since all-digit identifiers are integers
+       [0-9A-Za-z-]*)?                      # or empty
+\z"x
+
 const VERSION_REGEX = r"^
-    v?                                      # prefix        (optional)
-    (\d+)                                   # major         (required)
-    (?:\.(\d+))?                            # minor         (optional)
-    (?:\.(\d+))?                            # patch         (optional)
+    [vV]?                                   # prefix        (optional)
+    ([0-9]+)                                # major         (required)
+    (?:\.([0-9]+))?                         # minor         (optional)
+    (?:\.([0-9]+))?                         # patch         (optional)
     (?:(-)|                                 # pre-release   (optional)
-    ([a-z][0-9a-z-]*(?:\.[0-9a-z-]+)*|-(?:[0-9a-z-]+\.)*[0-9a-z-]+)?
+    ([A-Za-z][0-9A-Za-z-]*(?:\.[0-9A-Za-z-]+)*|-(?:[0-9A-Za-z-]+\.)*[0-9A-Za-z-]+)?
     (?:(\+)|
-    (?:\+((?:[0-9a-z-]+\.)*[0-9a-z-]+))?    # build         (optional)
+    (?:\+((?:[0-9A-Za-z-]+\.)*[0-9A-Za-z-]+))?    # build         (optional)
     ))
-$"ix
+\z"x
 
 function split_idents(s::AbstractString)
     idents = eachsplit(s, '.')
-    pidents = Union{UInt64,String}[occursin(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident) for ident in idents]
+    pidents = Union{UInt64,String}[occursin(r"^[0-9]+\z", ident) ? parse(UInt64, ident) : String(ident) for ident in idents]
     return tuple(pidents...)::VerTuple
 end
 
