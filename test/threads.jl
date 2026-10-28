@@ -702,6 +702,33 @@ end
     @test fetch(@async(@ccall(jl_get_num_stack_mappings()::Cint))) >= 2
 end
 
+@testset "idle task stacks are given back" begin
+    script = """
+        nmap() = @ccall jl_get_num_stack_mappings()::Cint
+        function burst(n)
+            ev = Base.Event()
+            ts = [Threads.@spawn wait(ev) for _ in 1:n]
+            while count(istaskstarted, ts) < n
+                yield()
+            end
+            notify(ev)
+            foreach(wait, ts)
+        end
+        start = nmap()
+        burst(100); GC.gc(false)
+        pooled = nmap() - start
+        for _ in 1:4
+            GC.gc()
+        end
+        print(pooled, " ", nmap() - start)
+        """
+    pooled, idle = parse.(Int, split(readchomp(`$(Base.julia_cmd()) --startup-file=no -t 4 -e $script`)))
+    # stacks larger than the largest pool (e.g. with sanitizers) are not pooled
+    if pooled >= 50
+        @test idle <= pooled ÷ 3
+    end
+end
+
 @testset "Base.Threads docstrings" begin
     @test isempty(Docs.undocumented_names(Threads))
 end

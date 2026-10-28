@@ -1018,6 +1018,7 @@ JL_DLLEXPORT void jl_gc_mmtk_sweep_stack_pools(void)
 JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     jl_gc_mmtk_sweep_stack_pools();
+    gc_trim_shared_free_stacks();
     sweep_mtarraylist_buffers();
 }
 

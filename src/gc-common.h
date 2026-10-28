@@ -236,8 +236,12 @@ extern int gc_logging_enabled;
 
 // number of stacks to always keep available per pool
 #define MIN_STACK_MAPPINGS_PER_POOL 5
+// number of stacks a thread keeps in its own pool; the rest go to a shared pool
+#define MAX_LOCAL_STACKS_PER_POOL 16
 
 void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
+void gc_share_free_stacks(small_arraylist_t *al, unsigned pool_id, size_t n) JL_NOTSAFEPOINT;
+void gc_trim_shared_free_stacks(void) JL_NOTSAFEPOINT;
 void sweep_mtarraylist_buffers(void) JL_NOTSAFEPOINT;
 
 int gc_slot_to_fieldidx(void *_obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT;
