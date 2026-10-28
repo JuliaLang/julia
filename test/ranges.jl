@@ -2359,6 +2359,9 @@ end
     r2 = r[false:true:true]
     @test r2 == collect(r)[false:true:true]
     @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 2
+    s = StepRange(true, -1, false)
+    @test r[s] == collect(r)[collect(s)] == [1]
+    @test Base.IdentityUnitRange(r)[s] == [1]
     @test_throws BoundsError r[true:true:false]
     @test_throws BoundsError r[true:true:true]
 
