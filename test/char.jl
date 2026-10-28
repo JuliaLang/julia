@@ -384,6 +384,12 @@ end
     @test isuppercase(c[1]) == isuppercase(c[2]) == false # issue #54343
 end
 
+@testset "show chars above U+10FFFF (#54396)" begin
+    @test repr(Char(0x110000)) == "'\\xf4\\x90\\x80\\x80'"
+    @test repr(Char(0x1fffff)) == "'\\xf7\\xbf\\xbf\\xbf'"
+    @test Meta.parse(repr(Char(0x110000))) === Char(0x110000)
+end
+
 @testset "More fallback tests" begin
     @test length(ASCIIChar('x')) == 1
     @test firstindex(ASCIIChar('x')) == 1
