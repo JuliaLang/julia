@@ -24,9 +24,13 @@
 _colon(::Ordered, ::Any, start::T, step, stop::T) where {T} = StepRange(start, step, stop)
 # for T<:Union{Float16,Float32,Float64} see twiceprecision.jl
 _colon(::Ordered, ::ArithmeticRounds, start::T, step, stop::T) where {T} =
-    StepRangeLen(start, step, convert(Integer, fld(stop - start, step)) + 1)
+    StepRangeLen(start, step, _colon_length(start, step, stop))
 _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
-    StepRangeLen(start, step, convert(Integer, fld(stop - start, step)) + 1)
+    StepRangeLen(start, step, _colon_length(start, step, stop))
+function _colon_length(start, step, stop)
+    len = convert(Integer, fld(stop - start, step)) + 1
+    return max(zero(len), len)
+end
 
 const _RangeWrappingInteger = Union{
     Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}
