@@ -402,7 +402,7 @@ int jl_type_mappable_to_c(jl_value_t *ty)
         return 1; // as boxed
     if (jl_is_structtype(ty))
         return jl_has_fixed_layout((jl_datatype_t*)ty) && ((jl_datatype_t*)ty)->name->atomicfields == NULL &&
-               !(((jl_datatype_t*)ty)->layout != NULL && ((jl_datatype_t*)ty)->layout->ntaggedptrs > 0);
+               !(((jl_datatype_t*)ty)->layout != NULL && ((jl_datatype_t*)ty)->layout->ntaggedwords > 0);
     if (jl_is_primitivetype(ty))
         return 1; // as isbits
     if (ty == (jl_value_t*)jl_any_type || ty == (jl_value_t*)jl_bottom_type || jl_is_abstract_ref_type(ty))

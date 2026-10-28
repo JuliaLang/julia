@@ -569,7 +569,7 @@ fn get_stack_addr(addr: Address, offset: isize, lb: u64, ub: u64) -> Address {
     }
 }
 
-// A pointer-table slot may be a tagged union word, which references an object
+// A pointer-table slot may be a tagged word, which references an object
 // only when its low two bits are clear (jl_tagged_word_isptr); immediates are
 // skipped. Moving plans store a plain pointer, which keeps the encoding.
 #[inline(always)]

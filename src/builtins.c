@@ -185,7 +185,7 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
         jl_value_t *af = ((jl_value_t**)a)[offs];
         jl_value_t *bf = ((jl_value_t**)b)[offs];
         if (af != bf) {
-            // #undef, or a tagged union immediate, which is canonical
+            // #undef, or an immediate, which is canonical
             if (!jl_tagged_word_isptr((uintptr_t)af) || !jl_tagged_word_isptr((uintptr_t)bf))
                 return 0;
             if (!jl_egal(af, bf))
@@ -646,7 +646,7 @@ JL_CALLABLE(jl_f_sizeof)
         if (isinline)
             return jl_box_long(elsize);
         if (jl_uniontype_istagged(x, NULL, NULL))
-            return jl_box_long(sizeof(void*)); // one tagged union word
+            return jl_box_long(sizeof(void*)); // one tagged word
         if (!jl_is_datatype(x))
             jl_error("Argument is an abstract type and does not have a definite size.");
     }

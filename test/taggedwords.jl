@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Tagged union layout: on 64-bit platforms, a Union mixing reference members
+# Tagged words: on 64-bit platforms, a Union mixing reference members
 # with 1..4 small primitive members is stored as one tagged word. See
-# doc/src/devdocs/taggedunions.md for the encoding.
+# doc/src/devdocs/taggedwords.md for the encoding.
 
 using Test
 
@@ -51,13 +51,13 @@ istagged(u) = Base.istaggedunion(u)
     # layout introspection
     @test sizeof(Union{Int32, String}) == 8
     struct TU1; x::Union{Int32, String}; end
-    @test Base.datatype_ntaggedptrs(TU1) == 1
+    @test Base.datatype_ntaggedwords(TU1) == 1
     @test Base.datatype_npointers(TU1) == 1      # tagged words are pointers in the layout
     @test !Base.datatype_pointerfree(TU1)
     @test sizeof(TU1) == 8
     @test Base.datatype_arrayelem(Memory{Union{Int32, String}}) == 3
     struct TUNest; a::Int8; b::TU1; c::String; end
-    @test Base.datatype_ntaggedptrs(TUNest) == 1
+    @test Base.datatype_ntaggedwords(TUNest) == 1
     @test Base.datatype_npointers(TUNest) == 2
     @test fieldoffset(TUNest, 2) == 8
 end
@@ -229,7 +229,7 @@ end
     @test_throws ArgumentError Base.unsafe_wrap(Memory{Union{UInt63, String}},
                                                 convert(Ptr{Union{UInt63, String}}, C_NULL), 0)
 
-    # struct elements containing tagged slots
+    # struct elements containing tagged words
     memS = Memory{STU}(undef, 3)
     memS[1] = STU(UInt63(UInt64(21)))
     memS[2] = STU("el" * "2")
@@ -263,7 +263,7 @@ end
         end
     end
 
-    # old parent, young child: remembered set through the tagged slot
+    # old parent, young child: remembered set through the tagged word
     holder = MTU(Int32(0))
     GC.gc(true); GC.gc(true)  # promote holder
     holder.x = "young" * string(rand(1:10))
@@ -271,7 +271,7 @@ end
     GC.gc(false)
     @test holder.x === ys
 
-    # multi_wb path: store an immutable struct containing a tagged slot
+    # multi_wb path: store an immutable struct containing a tagged word
     memS = Memory{STU}(undef, 4)
     GC.gc(true); GC.gc(true)
     memS[1] = STU("young" * "1")
@@ -279,8 +279,8 @@ end
     @test memS[1].x == "young1"
 
     # same, but into an old mutable parent's inline field: the barrier has to
-    # see the conditional reference inside the stored value, not just the
-    # unconditional pointers. Needs a heap of its own, since a young sweep is
+    # see the reference in the tagged word inside the stored value, not just
+    # the plain pointers. Needs a heap of its own, since a young sweep is
     # what exposes a missing remset entry.
     let script = """
         primitive type U63 63 end
@@ -350,7 +350,7 @@ end
     @test o2.post == "post"
     @test o2 === Outer(Int8(1), STU("inner"), "post")
 
-    # closures capturing tagged-union-typed values
+    # closures capturing values of a union stored as a tagged word
     function makeclosure(u::Union{Int32, String})
         () -> u
     end

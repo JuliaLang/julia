@@ -203,10 +203,10 @@ static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v) JL_CANS
     }
 }
 
-// In a type holding tagged union words, each pointer slot also carries its raw
+// In a type holding tagged words, each pointer slot also carries its raw
 // word when that is an immediate (zero otherwise), since an immediate is not an
 // encodable value. Returns what remains to be encoded as the slot's value.
-static jl_value_t *write_tagged_slot_word(jl_ircode_state *s, jl_value_t *e) JL_NOTSAFEPOINT
+static jl_value_t *write_tagged_word(jl_ircode_state *s, jl_value_t *e) JL_NOTSAFEPOINT
 {
     uintptr_t imm = jl_tagged_word_isptr((uintptr_t)e) ? 0 : (uintptr_t)e;
     ios_write(s->s, (const char*)&imm, sizeof(imm));
@@ -227,7 +227,7 @@ static void jl_encode_memory_slice(jl_ircode_state *s, jl_genericmemory_t *mem, 
     else if (layout->first_ptr >= 0) {
         uint16_t elsz = layout->size;
         size_t j, np = layout->npointers;
-        int tagged = layout->ntaggedptrs > 0;
+        int tagged = layout->ntaggedwords > 0;
         const char *data = (const char*)mem->ptr + offset * elsz;
         for (i = 0; i < len; i++) {
             const char *start = data;
@@ -238,7 +238,7 @@ static void jl_encode_memory_slice(jl_ircode_state *s, jl_genericmemory_t *mem, 
                     ios_write(s->s, start, (const char*)fld - start);
                 jl_value_t *e = (jl_value_t*)*fld;
                 if (tagged)
-                    e = write_tagged_slot_word(s, e);
+                    e = write_tagged_word(s, e);
                 JL_GC_PROMISE_ROOTED(e);
                 jl_encode_value(s, e);
                 start = (const char*)&fld[1];
@@ -529,7 +529,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal)
 
         char *data = (char*)jl_data_ptr(v);
         size_t i, j, np = t->layout->npointers;
-        int tagged = t->layout->ntaggedptrs > 0;
+        int tagged = t->layout->ntaggedwords > 0;
         uint32_t nf = t->layout->nfields;
         char *last = data;
         for (i = 0, j = 0; i < nf+1; i++) {
@@ -542,7 +542,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal)
                         ios_write(s->s, last, prevptr - last);
                     jl_value_t *e = *(jl_value_t**)prevptr;
                     if (tagged)
-                        e = write_tagged_slot_word(s, e);
+                        e = write_tagged_word(s, e);
                     JL_GC_PROMISE_ROOTED(e);
                     jl_encode_value(s, e);
                     last = prevptr + sizeof(jl_value_t*);
@@ -623,7 +623,7 @@ static jl_genericmemory_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t
         char *data = (char*)m->ptr;
         uint16_t elsz = layout->size;
         size_t j, np = layout->npointers;
-        int tagged = layout->ntaggedptrs > 0;
+        int tagged = layout->ntaggedwords > 0;
         for (i = 0; i < numel; i++) {
             char *start = data;
             for (j = 0; j < np; j++) {
@@ -773,7 +773,7 @@ static jl_value_t *jl_decode_value_any(jl_ircode_state *s) JL_CANSAFEPOINT
         jl_set_typetagof(v, dt->smalltag, 0);
     char *data = (char*)jl_data_ptr(v);
     size_t i, np = dt->layout->npointers;
-    int tagged = dt->layout->ntaggedptrs > 0;
+    int tagged = dt->layout->ntaggedwords > 0;
     char *start = data;
     if (np) {
         if (sz > 0)

@@ -486,7 +486,7 @@ JL_DLLEXPORT int jl_running_on_valgrind(void)
 static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTSAFEPOINT
 {
     if (!jl_tagged_word_isptr((uintptr_t)v))
-        return 0; // #undef, or a tagged union immediate
+        return 0; // #undef, or an immediate
     // ignore items that are given a special relocation representation
     if (s->incremental && jl_object_in_image(v))
         return 0;
@@ -1766,7 +1766,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                                     record_uniquing(s, fld, fld_pos);
                                     fld = NULL; // relocation offset (none)
                                 }
-                                // #undef and tagged union immediates are written as is
+                                // #undef and immediates are written as is
                                 memcpy(&f->buf[fld_pos], &fld, sizeof(fld));
                             }
                         }
@@ -1915,7 +1915,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                     record_uniquing(s, fld, fld_pos);
                     fld = NULL; // relocation offset (none)
                 }
-                // #undef and tagged union immediates are written as is
+                // #undef and immediates are written as is
                 memcpy(&f->buf[fld_pos], &fld, sizeof(fld));
             }
 
@@ -3049,21 +3049,21 @@ JL_DLLEXPORT void jl_set_precompile_field_replace(jl_value_t *val, jl_value_t *f
     jl_value_t *ft = jl_field_type_concrete(st, idxval);
     if (!jl_isa(newval, ft))
         jl_type_error("setfield!", ft, newval);
-    // replaced pointers are kept in a pointer hash table, which cannot hold a
-    // tagged union immediate (the smallest one equals HT_NOTFOUND)
+    // replaced pointers are kept in a pointer hash table, which cannot hold an
+    // immediate (the smallest one equals HT_NOTFOUND)
     int has_immediate = 0;
     if (jl_is_uniontype(ft) && jl_field_istagged(st, idxval)) {
         uintptr_t w = jl_tagged_word_encode(ft, newval);
         has_immediate = w != 0 && !jl_tagged_word_isptr(w);
     }
-    else if (!jl_field_isptr(st, idxval) && jl_is_datatype(ft) && ((jl_datatype_t*)ft)->layout->ntaggedptrs > 0) {
+    else if (!jl_field_isptr(st, idxval) && jl_is_datatype(ft) && ((jl_datatype_t*)ft)->layout->ntaggedwords > 0) {
         for (size_t j = 0; j < ((jl_datatype_t*)ft)->layout->npointers; j++) {
             uintptr_t w = ((uintptr_t*)newval)[jl_ptr_offset((jl_datatype_t*)ft, j)];
             has_immediate |= w != 0 && !jl_tagged_word_isptr(w);
         }
     }
     if (has_immediate)
-        jl_errorf("cannot replace field %zu of %s with a value holding a tagged union immediate",
+        jl_errorf("cannot replace field %zu of %s with a value holding an immediate",
                   idxval + 1, jl_symbol_name(st->name->name));
     JL_LOCK(&precompile_field_replace_lock);
     if (precompile_field_replace == NULL) {

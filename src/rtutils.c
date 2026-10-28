@@ -1610,7 +1610,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     return n;
 }
 
-// show one tagged union word in place, without allocating
+// show one tagged word in place, without allocating
 static size_t jl_static_show_tagged_word(JL_STREAM *out, uintptr_t w, jl_value_t *u,
                                          struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT
 {
@@ -1618,8 +1618,8 @@ static size_t jl_static_show_tagged_word(JL_STREAM *out, uintptr_t w, jl_value_t
         return jl_printf(out, "#<undef>");
     if (jl_tagged_word_isptr(w))
         return jl_static_show_x(out, (jl_value_t*)w, depth, ctx);
-    unsigned k = jl_tagged_union_kbits(u);
-    jl_datatype_t *t = jl_nth_tagged_member(u, (unsigned)((w & (((uintptr_t)1 << k) - 1)) >> 1));
+    unsigned k = jl_tagged_word_tagwidth(u);
+    jl_datatype_t *t = jl_nth_immediate_member(u, (unsigned)((w & (((uintptr_t)1 << k) - 1)) >> 1));
     if (t == NULL) // corrupt word; static show must survive it
         return jl_printf(out, "#<taggedword %p>", (void*)w);
     uint64_t payload = (uint64_t)w >> k;

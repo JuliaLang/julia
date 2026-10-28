@@ -146,7 +146,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_ptr_to_genericmemory(jl_value_t *mtype, void
     int isunion = layout->flags.arrayelem_isunion;
     if (isboxed)
         elsz = sizeof(void*);
-    if (isunion || layout->ntaggedptrs > 0)
+    if (isunion || layout->ntaggedwords > 0)
         jl_exceptionf(jl_argumenterror_type,
                       "unsafe_wrap: unspecified layout for union element type");
     if (((uintptr_t)data) & ((align > JL_HEAP_ALIGNMENT ? JL_HEAP_ALIGNMENT : align) - 1))

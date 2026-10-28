@@ -626,7 +626,7 @@ struct DataTypeLayout
     nfields::UInt32
     npointers::UInt32
     firstptr::Int32
-    ntaggedptrs::UInt32
+    ntaggedwords::UInt32
     alignment::UInt16
     flags::UInt16
     # haspadding : 1;
@@ -685,7 +685,7 @@ function aligned_sizeof(@nospecialize T::Type)
         al = datatype_alignment(T)
         return LLT_ALIGN(Core.sizeof(T), al)
     end
-    # boxed values and tagged unions both occupy one pointer-sized word
+    # boxed values and tagged words both occupy one pointer-sized word
     return Core.sizeof(Ptr{Cvoid})
 end
 
@@ -733,13 +733,13 @@ datatype_npointers(dt::DataType) = (@_foldable_meta; datatype_npointers(DataType
 datatype_npointers(dtl::DataTypeLayout) = dtl.npointers
 
 """
-    Base.datatype_ntaggedptrs(dt::DataType)::Int
+    Base.datatype_ntaggedwords(dt::DataType)::Int
 
-Return how many of the pointers in the layout of a datatype are tagged union words,
+Return how many of the pointers in the layout of a datatype are tagged words,
 which may hold an immediate value instead of a reference.
 """
-datatype_ntaggedptrs(dt::DataType) = (@_foldable_meta; datatype_ntaggedptrs(DataTypeLayout(dt)))
-datatype_ntaggedptrs(dtl::DataTypeLayout) = dtl.ntaggedptrs
+datatype_ntaggedwords(dt::DataType) = (@_foldable_meta; datatype_ntaggedwords(DataTypeLayout(dt)))
+datatype_ntaggedwords(dtl::DataTypeLayout) = dtl.ntaggedwords
 
 """
     Base.datatype_pointerfree(dt::DataType)::Bool
@@ -773,7 +773,7 @@ Can be called on any `isconcretetype`, but only meaningful on `Memory`.
 0 = inlinealloc
 1 = isboxed
 2 = isbitsunion
-3 = tagged union word
+3 = tagged word
 """
 datatype_arrayelem(dt::DataType) = (@_foldable_meta; datatype_arrayelem(DataTypeLayout(dt)))
 datatype_arrayelem(dtl::DataTypeLayout) =

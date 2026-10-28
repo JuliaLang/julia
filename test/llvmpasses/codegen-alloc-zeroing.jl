@@ -102,7 +102,7 @@ end
 # CHECK-SAME: [ "julia.gc_alloc_zeroinit"(i64 8, i64 24) ]
 emit(make_svec, Any, Any, Any)
 
-# COM: Test 9: a tagged union word holds a conditional reference, so it needs
+# COM: Test 9: a tagged word may hold a reference, so it needs
 # COM: the same zeroing: storing an immediate boxes it first, and that
 # COM: allocation is a safepoint
 struct TestStructTagged

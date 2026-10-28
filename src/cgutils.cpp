@@ -1059,7 +1059,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, 
                 isvector = false;
             }
             else if (jl_is_uniontype(ty) && jl_uniontype_istagged(ty, NULL, NULL)) {
-                // a tagged union word; access goes through typed loads/stores
+                // a tagged word; access goes through typed loads/stores
                 // keyed on its low bits, never through this slot as a tracked pointer
                 latypes.push_back(getInt64Ty(ctxt));
                 isvector = false;
@@ -2804,8 +2804,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         if (FailOrder == AtomicOrdering::Release)
             FailOrder = AtomicOrdering::Monotonic;
         nb = isboxed ? sizeof(void*) : jl_datatype_size(jltype);
-        // tagged union words lower to i64, so CountTrackedPointers misses them
-        tracked_pointers = isboxed || CountTrackedPointers(elty).count > 0 || type_has_taggedunion(jltype);
+        // tagged words lower to i64, so CountTrackedPointers misses them
+        tracked_pointers = isboxed || CountTrackedPointers(elty).count > 0 || type_has_taggedwords(jltype);
         if (!isboxed && Order != AtomicOrdering::NotAtomic && !elty->isIntOrPtrTy()) {
             intcast_eltyp = elty;
             elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb);
@@ -2925,7 +2925,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         store_ai.decorateInst(store);
         instr = store;
     }
-    else if (op == StoreKind::Modify && modifyop && !needlock && Order != AtomicOrdering::NotAtomic && !isboxed && realelty == elty && !intcast && elty->isIntegerTy() && !jl_type_hasptr(jltype) && !type_has_taggedunion(jltype)) {
+    else if (op == StoreKind::Modify && modifyop && !needlock && Order != AtomicOrdering::NotAtomic && !isboxed && realelty == elty && !intcast && elty->isIntegerTy() && !jl_type_hasptr(jltype) && !type_has_taggedwords(jltype)) {
         // emit this only if we have a possibility of optimizing it
         if (Order == AtomicOrdering::Unordered)
             Order = AtomicOrdering::Monotonic;
@@ -3596,11 +3596,11 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
     }
     if (type_is_ghost(julia_type_to_llvm(ctx, jfty)))
         return ghostValue(ctx, jfty);
-    // TODO: direct codegen for tagged union words; decode through the runtime for
+    // TODO: direct codegen for tagged words; decode through the runtime for
     // now (throws UndefRefError for the zero word). That includes the #undef check
     // of an inline value whose first pointer is a tagged word, which is an i64 to LLVM.
     if ((jl_is_uniontype(jfty) && jl_uniontype_istagged(jfty, NULL, NULL)) ||
-        (!jl_field_isptr(jt, idx) && type_has_taggedunion(jfty) && field_may_be_null(strct, jt, idx))) {
+        (!jl_field_isptr(jt, idx) && type_has_taggedwords(jfty) && field_may_be_null(strct, jt, idx))) {
         Value *fld = ctx.builder.CreateCall(prepare_call(jlgetnthfieldchecked_func),
                 { boxed(ctx, strct), ConstantInt::get(ctx.types().T_size, idx) });
         return mark_julia_type(ctx, fld, true, jfty);
@@ -4611,7 +4611,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
     unsigned align = jl_field_align(sty, idx0);
     bool maybe_null = field_may_be_null(strct, sty, idx0);
     if (!isboxed && jl_is_uniontype(jfty) && jl_uniontype_istagged(jfty, NULL, NULL)) {
-        // TODO: direct codegen for tagged union words; encode through the
+        // TODO: direct codegen for tagged words; encode through the
         // runtime for now. Other operations take the generic builtin path.
         assert(op == StoreKind::Set);
         ctx.builder.CreateCall(prepare_call(jlstoretaggedword_func),
