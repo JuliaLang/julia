@@ -4262,6 +4262,9 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
         return 1;
     if (jl_typetagof(x) < (jl_max_tags << 4) && jl_is_datatype(t) && jl_typetagis(x,((jl_datatype_t*)t)->smalltag << 4))
         return 1;
+    // every instance of a type is an instance of its wrapper
+    if (jl_is_unionall(t) && !jl_is_type(x) && ((jl_datatype_t*)jl_typeof(x))->name->wrapper == t)
+        return 1;
     if (jl_is_typeapp(t))
         jl_error("internal error: TypeApp in jl_isa");
     if (jl_is_type(x)) {
