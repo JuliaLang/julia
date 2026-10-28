@@ -1322,6 +1322,8 @@ timesofar("binary comparison")
         @check_bit_operation selectdim(b1, 1, m) SubArray{Bool, 0}
     end
     @check_bit_operation selectdim(b1, 1, :) SubArray{Bool, 1}
+    @test circshift!(falses(0), 1) == falses(0)
+    @test circshift!(falses(0), falses(0), 1) == falses(0)
 end
 
 timesofar("datamove")
