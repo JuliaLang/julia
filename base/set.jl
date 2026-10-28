@@ -541,7 +541,7 @@ function _hashed_allunique(C)
     return true
 end
 
-allunique(::Union{AbstractSet,AbstractDict}) = true
+allunique(::Union{Set,BitSet,Dict,KeySet{<:Any,<:Dict}}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
@@ -655,7 +655,7 @@ function allequal(itr)
     return all(isequal(a), rest)
 end
 
-allequal(c::Union{AbstractSet,AbstractDict}) = length(c) <= 1
+allequal(c::Union{Set,BitSet,Dict,KeySet{<:Any,<:Dict}}) = length(c) <= 1
 
 allequal(r::AbstractRange) = iszero(step(r)) || length(r) <= 1
 
