@@ -1062,8 +1062,10 @@ function parse_number_or_date_start(l::Parser)
             # Consume remaining digits, then check for ':' or '-'.
             accept_batch(l, isdigit)
             if peek(l) == ':'
+                parsed_sign && return ParserError(ErrParsingDateTime)
                 return parse_local_time(l)
             elseif peek(l) == '-'
+                parsed_sign && return ParserError(ErrParsingDateTime)
                 return parse_datetime(l)
             else
                 return ParserError(ErrLeadingZeroNotAllowedInteger)
@@ -1090,8 +1092,10 @@ function parse_number_or_date_start(l::Parser)
     if !read_underscore
         # No underscores in date / times
         if peek(l) == '-'
+            parsed_sign && return ParserError(ErrParsingDateTime)
             return parse_datetime(l)
         elseif peek(l) == ':'
+            parsed_sign && return ParserError(ErrParsingDateTime)
             return parse_local_time(l)
         end
     end
