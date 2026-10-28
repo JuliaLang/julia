@@ -187,34 +187,11 @@ static kern_return_t profiler_segv_handler(
     mach_msg_type_number_t *new_stateCnt);
 #endif
 
-// Create a fake function that describes the register manipulations in jl_noreturn_call_in_state
+// A fake function that describes the register manipulations in jl_noreturn_call_in_state
 // The callee-saved registers still may get smashed (by the cdecl fptr), since we didn't explicitly copy all of the
 // state to the stack (to build a real sigreturn frame).
-__attribute__((naked, used)) void jl_fake_signal_return(void)
-{
-#if defined(_CPU_X86_64_)
-__asm__(
-    "  .cfi_signal_frame\n"
-    "  .cfi_def_cfa %rsp, 0\n" // CFA here uses %rsp directly
-    "  .cfi_offset %rip, 0\n" // previous value of %rip at CFA
-    "  .cfi_offset %rsp, 8\n" // previous value of %rsp at CFA
-    "  ud2\n"
-    "  ud2\n"
-);
-#elif defined(_CPU_AARCH64_)
-__asm__(
-    "  .cfi_signal_frame\n"
-    "  .cfi_def_cfa sp, 0\n" // use sp as fp here
-    // This is not quite valid, since the AArch64 DWARF spec lacks the ability to define how to restore the LR register correctly,
-    // so normally libunwind implementations on linux detect this function specially and hack around the invalid info:
-    // https://github.com/llvm/llvm-project/commit/c82deed6764cbc63966374baf9721331901ca958
-    "  .cfi_offset lr, 0\n"
-    "  .cfi_offset sp, 8\n"
-    "  brk #1\n"
-    "  brk #1\n"
-);
-#endif
-}
+// Defined in arch/<arch>/macos_call_frame_unwind.S
+extern void jl_fake_signal_return(void);
 
 // Optimized version of `jl_call_in_state` that avoids saving most CPU registers.
 static void jl_noreturn_call_in_state(host_thread_state_t *state, void (*fptr)(void), uintptr_t arg0, uintptr_t arg1) JL_NOTSAFEPOINT
@@ -237,6 +214,8 @@ static void jl_noreturn_call_in_state(host_thread_state_t *state, void (*fptr)(v
     *(uintptr_t*)sp = (uintptr_t)&jl_fake_signal_return + 1;
     state->__rsp = sp; // set stack pointer
     state->__rip = (uint64_t)fptr; // "call" the function
+    // the interrupted code may have set the direction flag, which C code expects clear
+    state->__rflags &= ~0x400;
     state->__rdi = arg0;
     state->__rsi = arg1;
 #elif defined(_CPU_AARCH64_)
@@ -328,26 +307,8 @@ static void mach_safepoint_trampoline(jl_ptls_t ptls) JL_CANSAFEPOINT
     // and nothing arms the sigint page anymore.)
 }
 
-#if defined(_CPU_AARCH64_)
-__attribute__((naked, used)) static void jl_mach_restore_trigger(void)
-{
-    __asm__(
-        "  adrp x16, _jl_mach_restore_page@PAGE\n"
-        "  ldr x16, [x16, _jl_mach_restore_page@PAGEOFF]\n"
-        "  ldr x17, [x16]\n"  // EXC_BAD_ACCESS here
-        "  brk #1\n"          // should never reach here
-    );
-}
-#elif defined(_CPU_X86_64_)
-__attribute__((naked, used)) static void jl_mach_restore_trigger(void)
-{
-    __asm__(
-        "  movq _jl_mach_restore_page(%rip), %r11\n"
-        "  movq (%r11), %r11\n"  // EXC_BAD_ACCESS here
-        "  ud2\n"                // should never reach here
-    );
-}
-#endif
+// Defined in arch/<arch>/macos_restore_trigger.S
+extern void jl_mach_restore_trigger(void);
 
 // Set up state to call fptr(arg0) on the target thread.
 static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void),
@@ -370,6 +331,8 @@ static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void),
     *(uintptr_t*)sp = (uintptr_t)&jl_mach_restore_trigger;
     state->__rsp = sp;
     state->__rip = (uint64_t)fptr;
+    // the interrupted code may have set the direction flag, which C code expects clear
+    state->__rflags &= ~0x400;
     state->__rdi = arg0;
 #elif defined(_CPU_AARCH64_)
     uintptr_t sp = state->__sp;
