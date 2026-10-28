@@ -284,28 +284,15 @@ GC.enable(true); GC.gc(false) # incremental collection
 @test typeof(dims54422) == Vector{Any}
 @test isempty(dims54422)
 
-#this forces a an memory to be made by wrapping a malloc and then a string wrapping that memory. This should force a copy to avoid mixing allocators.
-mktemp() do path, io
-    write(path, "JuliaLang is a GitHub organization.JuliaLang is a GitHub
-  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
-  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
-  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
-  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
-  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
-  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
-  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
-  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
-  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
-  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
-  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
-  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
-  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
-  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
-  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
-  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
-  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
-  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.");
-    readline(path)
+# A line longer than `jl_readuntil`'s 80-byte inline buffer is read into a libc-malloc'd
+# buffer that becomes a `Memory` owned by the GC. Converting that to a `String` must copy
+# rather than take ownership, since strings are freed with the GC's allocator.
+let line = repeat("JuliaLang is a GitHub organization.", 100)
+    mktemp() do path, io
+        write(io, line, "\n")
+        close(io)
+        @test readline(path) == line
+    end
 end
 
 GC.gc()
