@@ -2405,6 +2405,35 @@ end
     end
 end
 
+@testset "workspace lookup from a sibling of home" begin
+    mktempdir() do root
+        member = joinpath(root, "home2", "member")
+        mkpath(joinpath(root, "home"))
+        mkpath(member)
+        workspace_project = joinpath(root, "Project.toml")
+        write(workspace_project, "[workspace]\nprojects = [\"home2/member\"]\n")
+        write(joinpath(member, "Project.toml"), "name = \"Member\"\n")
+        withenv("HOME" => joinpath(root, "home"), "USERPROFILE" => joinpath(root, "home")) do
+            @test Base.base_project(joinpath(member, "Project.toml")) == workspace_project
+        end
+    end
+end
+
+@testset "workspace lookup with a trailing separator in home" begin
+    mktempdir() do root
+        home = joinpath(root, "home")
+        member = joinpath(home, "member")
+        mkpath(member)
+        write(joinpath(root, "Project.toml"), "[workspace]\nprojects = [\"home\"]\n")
+        write(joinpath(home, "Project.toml"), "[workspace]\nprojects = [\"member\"]\n")
+        write(joinpath(member, "Project.toml"), "name = \"Member\"\n")
+        withenv("HOME" => joinpath(home, ""), "USERPROFILE" => joinpath(home, "")) do
+            @test Base.base_project(joinpath(member, "Project.toml")) == joinpath(home, "Project.toml")
+            @test Base.base_project(joinpath(home, "Project.toml")) === nothing
+        end
+    end
+end
+
 @testset "project path handling" begin
     old_load_path = copy(LOAD_PATH)
     try
