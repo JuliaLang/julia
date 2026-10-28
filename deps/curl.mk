@@ -17,6 +17,10 @@ ifeq ($(USE_SYSTEM_NGHTTP2), 0)
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/nghttp2
 endif
 
+ifeq ($(USE_SYSTEM_ZSTD), 0)
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/zstd
+endif
+
 ifneq ($(USE_BINARYBUILDER_CURL),1)
 CURL_LDFLAGS := $(RPATH_ESCAPED_ORIGIN) -Wl,-rpath,$(build_shlibdir)
 
@@ -46,7 +50,7 @@ CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON) \
 	--without-gssapi --without-brotli
 # A few things we actually enable
 CURL_CONFIGURE_FLAGS += --enable-versioned-symbols \
-	--with-libssh2=${build_prefix} --with-zlib=${build_prefix} --with-nghttp2=${build_prefix}
+	--with-libssh2=${build_prefix} --with-zlib=${build_prefix} --with-zstd=${build_prefix} --with-nghttp2=${build_prefix}
 
 # We use different TLS libraries on different platforms.
 #   On Windows, we use schannel
