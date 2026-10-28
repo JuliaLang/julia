@@ -334,7 +334,7 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         env == "@." && return current_project()
         env == "@temp" && return mktempdir()
         env == "@stdlib" && return Sys.STDLIB
-        if startswith(env, "@script")
+        if env == "@script" || startswith(env, "@script/") || (Sys.iswindows() && startswith(env, "@script\\"))
             program_file = JLOptions().program_file
             program_file = program_file != C_NULL ? unsafe_string(program_file) : nothing
             isnothing(program_file) && return nothing # User did not pass a script
