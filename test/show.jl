@@ -1096,6 +1096,10 @@ end
 
 # Issue 14121
 @test_repr "(A'x)'"
+@test_repr "(-1)'"
+@test_repr "(-1.5)'ᵀ"
+@test_repr "-(-1)"
+@test_repr "-(-0.0)"
 
 
 # issue #14481
