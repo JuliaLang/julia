@@ -299,7 +299,7 @@ function _isequal_normalized!(s1::AbstractString, s2::AbstractString,
 
             # decomposed chars must be sorted in ascending order of combining class,
             # which means we need to keep fetching chars until we get to non-combining
-            (iszero(combining_class(d[n])) || isnothing(state)) && break # non-combining
+            (iszero(n) || iszero(combining_class(d[n])) || isnothing(state)) && break # non-combining
             offset = n
         end
 
@@ -332,14 +332,14 @@ function _isequal_normalized!(s1::AbstractString, s2::AbstractString,
     n1 = n2 = 0 # lengths of codepoint buffers
     j1 = j2 = 1 # indices in d1, d2
     while true
-        if j1 > n1
-            i1 === nothing && return i2 === nothing && j2 > n2
+        while j1 > n1 && i1 !== nothing
             j1, n1, i1 = decompose_next_chars!(i1, d1, options, s1)
         end
-        if j2 > n2
-            i2 === nothing && return false
+        while j2 > n2 && i2 !== nothing
             j2, n2, i2 = decompose_next_chars!(i2, d2, options, s2)
         end
+        j1 > n1 && return j2 > n2
+        j2 > n2 && return false
         d1[j1] == d2[j2] || return false
         j1 += 1; j2 += 1
     end
