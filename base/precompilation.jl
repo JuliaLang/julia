@@ -967,6 +967,7 @@ end
 function scan_deps!(stack, could_be_cycle, cycles, pkg, dmap)
     push!(stack, pkg)
     cycle = nothing
+    reaches_cycle = false
     for dep in dmap[pkg]
         if dep in stack
             # Created fresh cycle
@@ -976,19 +977,15 @@ function scan_deps!(stack, could_be_cycle, cycles, pkg, dmap)
             end
         elseif scan_pkg!(stack, could_be_cycle, cycles, dep, dmap)
             # Reaches an existing cycle
-            could_be_cycle[pkg] = true
-            pop!(stack)
-            return true
+            reaches_cycle = true
         end
     end
     pop!(stack)
     if cycle !== nothing
         push!(cycles, cycle)
-        could_be_cycle[pkg] = true
-        return true
     end
-    could_be_cycle[pkg] = false
-    return false
+    could_be_cycle[pkg] = reaches_cycle || cycle !== nothing
+    return could_be_cycle[pkg]
 end
 
 # restrict to dependencies of given packages

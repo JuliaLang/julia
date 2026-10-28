@@ -5416,6 +5416,14 @@ end
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
 end
 
+@testset "every connected dependency cycle is reported" begin
+    X, Y, Z, W = Base.PkgId("X"), Base.PkgId("Y"), Base.PkgId("Z"), Base.PkgId("W")
+    dmap = Dict(Y => [X], X => [Y, Z], Z => [W], W => [Z])
+    cycles = Vector{Base.PkgId}[]
+    @test Base.Precompilation.scan_pkg!(Base.PkgId[], Dict{Base.PkgId,Bool}(), cycles, Y, dmap)
+    @test Set(Set.(cycles)) == Set([Set([X, Y]), Set([Z, W])])
+end
+
 finish_precompile_test!()
 if original_num_precompile_tasks === nothing
     delete!(ENV, "JULIA_NUM_PRECOMPILE_TASKS")
