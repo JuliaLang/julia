@@ -459,7 +459,7 @@ for (T, trans, real) in [(:Symmetric, :transpose, :identity), (:(Hermitian{<:Uni
             if n != size(B, 2)
                 throw(DimensionMismatch("A has dimensions $(size(A)) but B has dimensions $(size(B))"))
             end
-
+            iszero(n) && return zero(dot(zero(eltype(A)), zero(eltype(B))))
             dotprod = zero(dot(first(A), first(B)))
             @inbounds if A.uplo == 'U' && B.uplo == 'U'
                 for j in 1:n
@@ -524,12 +524,13 @@ for f in (:+, :-)
     end
 end
 
-*(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
+mul(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
 
 function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
     require_one_based_indexing(x, y)
     n = length(x)
     (n == length(y) == size(A, 1)) || throw(DimensionMismatch())
+    iszero(n) && return zero(dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y))))
     data = A.data
     r = dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
     iszero(n) && return r

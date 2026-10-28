@@ -881,7 +881,8 @@ function dot(x::AbstractArray, y::AbstractArray)
         throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(length(y))."))
     end
     if lx == 0
-        return dot(zero(eltype(x)), zero(eltype(y)))
+        # make sure the returned result equals exactly the zero element
+        return zero(dot(zero(eltype(x)), zero(eltype(y))))
     end
     s = zero(dot(first(x), first(y)))
     for (Ix, Iy) in zip(eachindex(x), eachindex(y))
@@ -922,6 +923,8 @@ dot(x, A, y) = dot(x, A*y) # generic fallback for cases that are not covered by 
 
 function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
     (axes(x)..., axes(y)...) == axes(A) || throw(DimensionMismatch())
+    # outermost zero call to avoid spurious sign ambiguity (like 0.0 - 0.0im)
+    any(isempty, (x, y)) && return zero(dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y))))
     T = typeof(dot(first(x), first(A), first(y)))
     s = zero(T)
     i₁ = first(eachindex(x))
@@ -1633,7 +1636,7 @@ julia> det(M)
 function det(A::AbstractMatrix{T}) where {T}
     if istriu(A) || istril(A)
         S = promote_type(T, typeof((one(T)*zero(T) + zero(T))/one(T)))
-        return convert(S, det(UpperTriangular(A)))
+        return prod(Base.Fix1(convert, S), @view A[diagind(A)]; init=one(S))
     end
     return det(lu(A; check = false))
 end

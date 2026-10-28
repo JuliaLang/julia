@@ -734,4 +734,18 @@ end
     @test 23.0 === @ccall $(dot_sym)(2::Int, [2.0, 3.0]::Ref{Cdouble}, 1::Int, [4.0, 5.0]::Ref{Cdouble}, 1::Int)::Cdouble
 end
 
+# Verify that `lbt_get_config()` reflects mutations to libblastrampoline state
+# even when those mutations bypass the `BLAS.lbt_forward` wrapper (e.g. raw
+# `ccall`s from JLL `__init__` blocks).
+@testset "lbt_get_config reflects raw-ccall mutations" begin
+    cfg0 = BLAS.lbt_get_config()
+    libpath = first(cfg0.loaded_libs).libname
+
+    # Mutation via raw ccall (bypassing the wrapper, as JLLs do).
+    ccall((:lbt_forward, BLAS.libblastrampoline), Int32,
+          (Cstring, Int32, Int32, Cstring),
+          libpath, Int32(0), Int32(0), C_NULL)
+    @test length(BLAS.lbt_get_config().loaded_libs) == length(cfg0.loaded_libs)
+end
+
 end # module TestBLAS

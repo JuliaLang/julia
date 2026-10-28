@@ -5219,3 +5219,26 @@ end
 @test Core.Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}}, Float64 ]) === Tuple{Int, UnitRange{Int}, Float64}
 @test Core.Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}}, Float64, Tuple{2} ]) === Union{}
 @test Base.return_types(Tuple{Tuple{Int, Vararg{Pair{Any, Union{}}}}},) do x; Returns(true)(x...); end |> only === Bool
+
+# https://github.com/JuliaLang/julia/issues/53590
+func53590(b) = b ? Int : Float64
+function issue53590(b1, b2)
+    T1 = func53590(b1)
+    T2 = func53590(b2)
+    return typejoin(T1, T2)
+end
+@test issue53590(true, true) == Int
+@test issue53590(true, false) == Real
+@test issue53590(false, false) == Float64
+@test issue53590(false, true) == Real
+
+# `@nospecializeinfer` widens the specialization to a vararg signature, which must not be used
+# for the union-split cases of a const-prop'd kwcall
+Base.@nospecializeinfer function f53590_nsi(x, @nospecialize(xs...); kw=nothing)
+    global g53590_kw = kw
+    return kw
+end
+issue53590_nsi(a, b, c::Bool) = f53590_nsi(1, a, b; kw = c ? 1 : nothing)
+@test only(code_typed(issue53590_nsi, (Int,Int,Bool))) isa Pair
+@test issue53590_nsi(1, 2, true) === 1
+@test issue53590_nsi(1, 2, false) === nothing

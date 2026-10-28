@@ -84,9 +84,9 @@ function structured_broadcast_alloc(bc, ::Type{Bidiagonal}, ::Type{ElType}, n) w
     return Bidiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n1), uplo)
 end
 structured_broadcast_alloc(bc, ::Type{SymTridiagonal}, ::Type{ElType}, n) where {ElType} =
-    SymTridiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n-1))
+    SymTridiagonal(Array{ElType}(undef, n),Array{ElType}(undef, max(0,n-1)))
 structured_broadcast_alloc(bc, ::Type{Tridiagonal}, ::Type{ElType}, n) where {ElType} =
-    Tridiagonal(Array{ElType}(undef, n-1),Array{ElType}(undef, n),Array{ElType}(undef, n-1))
+    Tridiagonal(Array{ElType}(undef, max(0,n-1)),Array{ElType}(undef, n),Array{ElType}(undef, max(0,n-1)))
 structured_broadcast_alloc(bc, ::Type{LowerTriangular}, ::Type{ElType}, n) where {ElType} =
     LowerTriangular(Array{ElType}(undef, n, n))
 structured_broadcast_alloc(bc, ::Type{UpperTriangular}, ::Type{ElType}, n) where {ElType} =

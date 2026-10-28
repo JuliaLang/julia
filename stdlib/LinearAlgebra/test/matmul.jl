@@ -581,23 +581,24 @@ end
     @test dot(Z, Z) == convert(elty, 34.0)
 end
 
-dot1(x, y) = invoke(dot, Tuple{Any,Any}, x, y)
-dot2(x, y) = invoke(dot, Tuple{AbstractArray,AbstractArray}, x, y)
 @testset "generic dot" begin
+    dot1(x, y) = invoke(dot, Tuple{Any,Any}, x, y)
+    dot2(x, y) = invoke(dot, Tuple{AbstractArray,AbstractArray}, x, y)
     AA = [1+2im 3+4im; 5+6im 7+8im]
     BB = [2+7im 4+1im; 3+8im 6+5im]
     for A in (copy(AA), view(AA, 1:2, 1:2)), B in (copy(BB), view(BB, 1:2, 1:2))
         @test dot(A, B) == dot(vec(A), vec(B)) == dot1(A, B) == dot2(A, B) == dot(float.(A), float.(B))
-        @test dot(Int[], Int[]) == 0 == dot1(Int[], Int[]) == dot2(Int[], Int[])
-        @test_throws MethodError dot(Any[], Any[])
-        @test_throws MethodError dot1(Any[], Any[])
-        @test_throws MethodError dot2(Any[], Any[])
-        for n1 = 0:2, n2 = 0:2, d in (dot, dot1, dot2)
-            if n1 != n2
-                @test_throws DimensionMismatch d(1:n1, 1:n2)
-            else
-                @test d(1:n1, 1:n2) ≈ norm(1:n1)^2
-            end
+    end
+    @test dot(Int[], Int[]) == 0 == dot1(Int[], Int[]) == dot2(Int[], Int[])
+    @test dot(ComplexF64[], Float64[]) === dot(ComplexF64[;;], Float64[;;]) === zero(ComplexF64)
+    @test_throws MethodError dot(Any[], Any[])
+    @test_throws MethodError dot1(Any[], Any[])
+    @test_throws MethodError dot2(Any[], Any[])
+    for n1 = 0:2, n2 = 0:2, d in (dot, dot1, dot2)
+        if n1 != n2
+            @test_throws DimensionMismatch d(1:n1, 1:n2)
+        else
+            @test d(1:n1, 1:n2) ≈ norm(1:n1)^2
         end
     end
 end
@@ -857,11 +858,23 @@ Base.:*(x::Float64, a::A32092) = x * a.x
 end
 
 @testset "strong zero" begin
-    @testset for α in Any[false, 0.0, 0], n in 1:4
-        C = ones(n, n)
-        A = fill!(zeros(n, n), NaN)
-        B = ones(n, n)
+    @testset for α in Any[false, 0.0, 0], n in 1:4, T in (Float16, Float64)
+        C = ones(T, n)
+        A = fill(T(NaN), n, n)
+        B = ones(T, n)
         @test mul!(copy(C), A, B, α, 1.0) == C
+        C = ones(T, n, n)
+        B = ones(T, n, n)
+        @test mul!(copy(C), A, B, α, 1.0) == C
+    end
+    @testset for α in Any[false, 0.0, 0], β in Any[false, 0.0, 0], n in 1:4, T in (Float16, Float64)
+        C = fill(T(NaN), n)
+        A = fill(T(NaN), n, n)
+        B = fill(T(NaN), n)
+        @test iszero(mul!(copy(C), A, B, α, β))
+        C = fill(T(NaN), n, n)
+        B = fill(T(NaN), n, n)
+        @test iszero(mul!(copy(C), A, B, α, β))
     end
 end
 

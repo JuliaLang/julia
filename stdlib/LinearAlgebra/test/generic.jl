@@ -15,6 +15,9 @@ using .Main.OffsetArrays
 isdefined(Main, :DualNumbers) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "DualNumbers.jl"))
 using .Main.DualNumbers
 
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
+
 Random.seed!(123)
 
 n = 5 # should be odd
@@ -81,6 +84,18 @@ n = 5 # should be odd
 
     @testset "det with nonstandard Number type" begin
         elty <: Real && @test det(Dual.(triu(A), zero(A))) isa Dual
+    end
+    if elty <: Int
+        @testset "det no overflow - triangular" begin
+            A = diagm([typemax(elty), typemax(elty)])
+            @test det(A) == det(float(A))
+        end
+    end
+    @testset "det with units - triangular" begin
+        for dim in 0:4
+            A = diagm(Furlong.(ones(elty, dim)))
+            @test det(A) == Furlong{dim}(one(elty))
+        end
     end
 end
 
@@ -617,6 +632,10 @@ end
         @test dot(x, B, y) ≈ dot(B'x, y)
         @test dot(x, B', y) ≈ dot(B*x, y)
         elty <: Real && @test dot(x, transpose(B), y) ≈ dot(x, transpose(B)*y)
+    end
+    for (m, n) in ((0, 0), (1, 0), (0, 1))
+        v = zeros(ComplexF64, m); a = zeros(ComplexF64, m, n); w = zeros(Float64, n)
+        @test dot(v, a, w) === zero(ComplexF64)
     end
 end
 

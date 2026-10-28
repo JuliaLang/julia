@@ -33,7 +33,8 @@ export GitError
             EMISMATCH       = Cint(-33), # hashsum mismatch in object
             EINDEXDIRTY     = Cint(-34), # unsaved changes in the index would be overwritten
             EAPPLYFAIL      = Cint(-35), # patch application failed
-            EOWNER          = Cint(-36)) # the object is not owned by the current user
+            EOWNER          = Cint(-36), # the object is not owned by the current user
+            TIMEOUT         = Cint(-37)) # The operation timed out
 
 @enum(Class, None,
              NoMemory,
@@ -69,7 +70,9 @@ export GitError
              Patch,
              WorkTree,
              SHA1,
-             HTTP)
+             HTTP,
+             Internal,
+             Grafts)
 
 struct ErrorStruct
     message::Ptr{UInt8}
