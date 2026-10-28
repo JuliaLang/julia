@@ -895,6 +895,7 @@ end
         "$s" => [default; bundled],
         "$tmp$s" => [tmp; bundled],
         "$s$tmp" => [default; bundled; tmp],
+        "$s$default" => [default; bundled],
         )
     for (env, result) in pairs(cases)
         script = "DEPOT_PATH == $(repr(result)) || error(\"actual depot \" * join(DEPOT_PATH,':') * \" does not match expected depot \" * join($(repr(result)), ':'))"
