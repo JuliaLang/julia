@@ -1833,8 +1833,9 @@ function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, quote_le
 end
 
 
-function show_callee(io::IO, head, func, indent, quote_level)
-    if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
+function show_callee(io::IO, head, func, indent, quote_level, func_args=())
+    if (isa(func, Symbol) && func !== :(:) &&
+            !(isoperator(func) && (head === :. || (func in uni_ops || func === :&) && any(a -> is_expr(a, :parameters) || is_expr(a, :kw), func_args)))) ||
             (isa(func, Symbol) && !is_valid_identifier(func)) ||
             (isa(func, Expr) && (func.head === :. || func.head === :curly || func.head === :macroname)) ||
             isa(func, GlobalRef) ||
@@ -1851,7 +1852,7 @@ end
 # kw: `=` expressions are parsed with head `kw` in this context
 function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool)
     op, cl = expr_calls[head]
-    show_callee(io, head, func, indent, quote_level)
+    show_callee(io, head, func, indent, quote_level, func_args)
     if head === :(.)
         print(io, '.')
     end
