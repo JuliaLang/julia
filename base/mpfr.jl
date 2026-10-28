@@ -490,6 +490,15 @@ round(::Type{T}, x::BigFloat) where T<:Integer = round(T, x, rounding_raw(BigFlo
 round(::Type{Integer}, x::BigFloat, r::RoundingMode) = round(BigInt, x, r)
 round(::Type{Integer}, x::BigFloat, r::MPFRRoundingMode) = round(BigInt, x, r)
 
+# rounding `10^k` up keeps the comparison exact at `x`'s precision
+function Base._abs_ge_exp10(x::BigFloat, k::Int)
+    setprecision(BigFloat, max(precision(x), 4)) do
+        setrounding(BigFloat, RoundUp) do
+            abs(x) >= BigFloat(10)^k
+        end
+    end
+end
+
 function Bool(x::BigFloat)
     iszero(x) && return false
     isone(x) && return true

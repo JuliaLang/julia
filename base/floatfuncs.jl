@@ -133,12 +133,25 @@ hidigit(x::Integer, base) = ndigits0z(x, base)
 function hidigit(x::AbstractFloat, base)
     iszero(x) && return 0
     if base == 10
-        return 1 + floor(Int, log10(abs(x)))
+        y = log10(abs(x))
+        k = floor(Int, y)
+        # `log10` rounds the floats just below `10^k` up to exactly `k`, so decide that case exactly
+        y == k && return k + _abs_ge_exp10(x, k)
+        return 1 + k
     elseif base == 2
         return 1 + exponent(x)
     else
         return 1 + floor(Int, log(base, abs(x)))
     end
+end
+function _abs_ge_exp10(x::AbstractFloat, k::Int)
+    if x isa IEEEFloat && -22 <= k <= 22
+        # `10.0^abs(k)` is exact, and `fma` rounds `abs(x) * 10^-k - 1` once, so its sign is exact
+        a = Float64(abs(x))
+        p = 10.0^abs(k)
+        return k >= 0 ? a >= p : fma(a, p, -1.0) >= 0
+    end
+    return Rational{BigInt}(abs(x)) >= (big(10)//1)^k
 end
 hidigit(x::Real, base) = hidigit(float(x), base)
 
