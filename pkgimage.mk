@@ -24,7 +24,7 @@ print-depot-path:
 
 STDLIBS := ArgTools Artifacts Base64 CRC32c FileWatching Libdl NetworkOptions SHA Serialization \
 		   GMP_jll LLVMLibUnwind_jll LibUV_jll LibUnwind_jll OpenSSL_jll OpenLibm_jll PCRE2_jll \
-		   Zlib_jll dSFMT_jll libLLVM_jll libblastrampoline_jll OpenBLAS_jll Printf Random Tar \
+		   Zlib_jll Zstd_jll dSFMT_jll libLLVM_jll libblastrampoline_jll OpenBLAS_jll Printf Random Tar \
 		   LibSSH2_jll MPFR_jll LinearAlgebra Dates Distributed Future LibGit2 Profile SparseArrays UUIDs \
 		   SharedArrays TOML Test LibCURL Downloads Pkg Dates LazyArtifacts Sockets Unicode Markdown \
 		   InteractiveUtils REPL DelimitedFiles
@@ -88,6 +88,7 @@ $(eval $(call pkgimg_builder,nghttp2_jll,Artifacts Libdl))
 $(eval $(call pkgimg_builder,OpenLibm_jll,Artifacts Libdl))
 $(eval $(call sysimg_builder,PCRE2_jll,Artifacts Libdl))
 $(eval $(call sysimg_builder,Zlib_jll,Artifacts Libdl))
+$(eval $(call pkgimg_builder,Zstd_jll,Libdl))
 $(eval $(call pkgimg_builder,dSFMT_jll,Artifacts Libdl))
 $(eval $(call pkgimg_builder,libLLVM_jll,Artifacts Libdl))
 $(eval $(call sysimg_builder,libblastrampoline_jll,Artifacts Libdl))
