@@ -999,6 +999,17 @@ end
 
 getindex(r::AbstractRange, ::Colon) = copy(r)
 
+function _empty_stop(start, step)
+    if step > zero(step)
+        stop = start - oneunit(step)
+        stop < start && return stop
+    else
+        stop = start + oneunit(step)
+        stop > start && return stop
+    end
+    throw(OverflowError(LazyString("cannot represent an empty range starting at ", start)))
+end
+
 function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integer}
     @inline
     @boundscheck checkbounds(r, s)
@@ -1009,7 +1020,7 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integ
         f = first(r)
         start = oftype(f, f + first(s) - firstindex(r))
         len = length(s)
-        stop = oftype(f, _range_wrapping_add(start, len - oneunit(len)))
+        stop = oftype(f, isempty(s) ? _empty_stop(start, step(r)) : _range_wrapping_add(start, len - oneunit(len)))
         return range(start, stop)
     end
 end
@@ -1025,14 +1036,14 @@ function getindex(r::AbstractUnitRange, s::StepRange{T}) where {T<:Integer}
     @boundscheck checkbounds(r, s)
 
     if T === Bool
-        len = Int(last(s))
+        len = count(s)
         return range(first(s) ? first(r) : last(r), step=oneunit(eltype(r)), length=len)
     else
         f = first(r)
         start = oftype(f, f + s.start - firstindex(r))
         st = step(s)
         len = length(s)
-        stop = oftype(f, start + (len - oneunit(len)) * (iszero(len) ? copysign(oneunit(st), st) : st))
+        stop = oftype(f, isempty(s) ? _empty_stop(start, st) : start + (len - oneunit(len)) * st)
         return range(start, stop; step=st)
     end
 end
@@ -1056,8 +1067,7 @@ function getindex(r::StepRange, s::AbstractRange{T}) where {T<:Integer}
         start = oftype(f, f + (fs - firstindex(r)) * st)
         st *= step(s)
         len = length(s)
-        # mimic steprange_last_empty here, to try to avoid overflow
-        stop = oftype(f, start + (len - oneunit(len)) * (iszero(len) ? copysign(oneunit(st), st) : st))
+        stop = oftype(f, isempty(s) ? _empty_stop(start, st) : start + (len - oneunit(len)) * st)
         return range(start, stop; step=st)
     end
 end

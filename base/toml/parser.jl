@@ -927,6 +927,7 @@ function parse_array(l::Parser{Dates})::Err{Vector} where Dates
     elseif T === Union{}
         new = Any[]
     elseif (T === TOMLDict) || (T === BigInt) || (T === UInt128) || (T === Int128) || (T <: Vector) ||
+        (T === Date) || (T === Time) || (T === DateTime) ||
         (Dates !== nothing && ((T === Dates.Date) || (T === Dates.Time) || (T === Dates.DateTime)))
         # do nothing, leave as Vector{Any}
         new = array
@@ -1042,15 +1043,18 @@ function parse_number_or_date_start(l::Parser)
         elseif accept(l, 'x')
             parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_hex)
-            ate && return parse_hex(l, contains_underscore)
+            ate || return ParserError(ErrGenericValueError)
+            return parse_hex(l, contains_underscore)
         elseif accept(l, 'o')
             parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_oct)
-            ate && return parse_oct(l, contains_underscore)
+            ate || return ParserError(ErrGenericValueError)
+            return parse_oct(l, contains_underscore)
         elseif accept(l, 'b')
             parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_binary)
-            ate && return parse_bin(l, contains_underscore)
+            ate || return ParserError(ErrGenericValueError)
+            return parse_bin(l, contains_underscore)
         elseif accept(l, isdigit)
             # Could be a local time (00:30) or a zero-padded date (0001-01-01).
             # Consume remaining digits, then check for ':' or '-'.

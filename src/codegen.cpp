@@ -2010,7 +2010,7 @@ struct JL_GC_TRACKED_TYPE jl_cgval_t {
     Value *V; // may be of type T* or T, or set to NULL if ghost (or if the value has not been initialized yet, for a variable definition)
     // For unions, we may need to keep a reference to the boxed part individually.
     // If this is non-NULL, then, at runtime, we satisfy the invariant that (for the corresponding
-    // runtime values) if `(TIndex | UNION_BOX_MARKER) != 0`, then `Vboxed == V` (by value).
+    // runtime values) if `(TIndex & UNION_BOX_MARKER) != 0`, then `Vboxed == V` (by value).
     // For convenience, we also set this value of isboxed values, in which case
     // it is equal (at compile time) to V.
 
@@ -2108,8 +2108,10 @@ struct JL_GC_TRACKED_TYPE jl_cgval_t {
         promotion_point(v.promotion_point),
         promotion_ssa(v.promotion_ssa)
     {
-        if (Vboxed)
+        if (Vboxed) {
             assert(Vboxed->getType() == JuliaType::get_prjlvalue_ty(Vboxed->getContext()));
+            assert(V);
+        }
         // this constructor expects we had a badly or equivalently typed version
         // make sure we aren't discarding the actual type information
         if (v.TIndex) {
@@ -2142,7 +2144,7 @@ struct JL_GC_TRACKED_TYPE jl_cgval_t {
                 allunbox = true;
             }
             assert(v.TIndex || inline_roots.size() == inline_roots_count);
-            if (V == nullptr && constant == nullptr && !isghost && (inline_roots_count == 0 || (!tindex && !justpointers)))
+            if (V == nullptr && constant == nullptr && !isghost && !tindex && !justpointers)
                 *this = jl_cgval_t(); // no data to populate this value
             else if (inline_roots_count < inline_roots.size())
                 inline_roots.truncate(inline_roots_count); // drop excess roots
@@ -6944,6 +6946,9 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r) J
                         decay_derived(ctx, ptr_phi),
                         decay_derived(ctx, phi));
                 }
+                else {
+                    ptr = decay_derived(ctx, ptr_phi);
+                }
             }
             jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, ai, jl_gc_roots_t(ArrayRef(roots)));
             val.Vboxed = ptr_phi;
@@ -7374,7 +7379,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
 #ifdef GC_BARRIER_ON_TASKS
             emit_write_barrier(ctx, get_current_task(ctx), scope_ptr, scope_to_restore);
 #else
-            // No barrier required: old Tasks are implicitly in the GC remset
+            // No barrier required: the running task is kept in the GC remset
 #endif
             ctx.alias().mutab_nonconst.decorateInst(
                 ctx.builder.CreateAlignedStore(scope_to_restore, scope_ptr, ctx.types().alignof_ptr));
@@ -10810,7 +10815,7 @@ static jl_llvm_functions_t
                 // Barrier is needed to snapshot scope value before replacement
                 emit_write_barrier(ctx, get_current_task(ctx), scope_ptr, scope_boxed);
 #else
-                // No barrier required: old Tasks are implicitly in the GC remset
+                // No barrier required: the running task is kept in the GC remset
 #endif
                 StoreInst *scope_store = ctx.builder.CreateAlignedStore(scope_boxed, scope_ptr, ctx.types().alignof_ptr);
                 ctx.alias().mutab_nonconst.decorateInst(current_scope);
