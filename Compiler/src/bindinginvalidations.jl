@@ -90,6 +90,7 @@ export_affecting_partition_flags(bpart::Core.BindingPartition) =
 
 function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core.BindingPartition, new_bpart::Core.BindingPartition, new_max_world::UInt)
     gr = b.globalref
+    image_binding_replaced() && drain_pending_image_scans!()
 
     (_, ileaf) = walk_binding_partition(b, invalidated_bpart, new_max_world, false)
     (_, nleaf) = walk_binding_partition(b, new_bpart, new_max_world+1, false)
@@ -175,9 +176,51 @@ invalidate_code_for_globalref!(gr::GlobalRef, invalidated_bpart::Core.BindingPar
 function scan_new_method!(method::Method, world::UInt, image_backedges_only::Bool)
     isdefined(method, :source) || return
     isa(method.source, MaybeCompressed) || return
-    if image_backedges_only && !has_image_globalref(method)
+    if image_backedges_only
+        has_image_globalref(method) || return
+        # The binding backedges this scan installs are only read once an image binding has
+        # been replaced, so leave the source compressed until then.
+        defer_image_scan!(method, world)
         return
     end
+    _scan_method_source!(method, world, image_backedges_only)
+end
+
+# Methods whose image GlobalRefs still need binding backedges, as a list of
+# `(method, world, rest)` tuples (or `nothing`), pushed and taken without a lock.
+mutable struct PendingImageScans
+    @atomic head::Any
+end
+const PENDING_IMAGE_SCANS = PendingImageScans(nothing)
+
+image_binding_replaced() = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) != typemax(UInt)
+
+function defer_image_scan!(method::Method, world::UInt)
+    @atomic method.did_scan_source |= 0x1
+    old = @atomic PENDING_IMAGE_SCANS.head
+    while true
+        old, ok = @atomicreplace PENDING_IMAGE_SCANS.head old => (method, world, old)
+        ok && break
+    end
+    nothing
+end
+
+# Install the binding backedges of every deferred method. Only `invalidate_code_for_globalref!`
+# calls this, and only while holding the `world_counter_lock` (taken by every caller of
+# `jl_replace_binding_locked`), so drains never overlap: the backedges of every method pushed
+# before the lock was taken are installed before any of them is read. A load racing with the
+# first replacement may still push afterwards; the next invalidation drains it, just as a
+# scan running concurrently with that replacement would have added its backedges too late.
+function drain_pending_image_scans!()
+    pending = @atomicswap PENDING_IMAGE_SCANS.head = nothing
+    while pending !== nothing
+        method, world, pending = pending::Tuple{Method, UInt, Any}
+        _scan_method_source!(method, world, true)
+    end
+    nothing
+end
+
+function _scan_method_source!(method::Method, world::UInt, image_backedges_only::Bool)
     src = _uncompressed_ir(method)
     mod = method.module
     foreachgr(src) do gr::GlobalRef

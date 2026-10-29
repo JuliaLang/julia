@@ -366,6 +366,44 @@ let test_code =
     @test success(pipeline(`$(Base.julia_cmd()) -e $test_code`; stderr))
 end
 
+# Test that binding backedges of loaded methods, deferred while no image binding has been
+# replaced, are installed before the first such replacement is invalidated
+let test_code =
+    """
+    using Test
+    @assert unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
+    include("precompile_utils.jl")
+
+    precompile_test_harness("deferred binding backedges") do load_path
+        write(joinpath(load_path, "DeferredBackedgesA.jl"),
+              "module DeferredBackedgesA
+                 const read_me = 1
+                 const delete_me = 2
+               end")
+        Base.compilecache(Base.PkgId("DeferredBackedgesA"))
+        write(joinpath(load_path, "DeferredBackedgesB.jl"),
+              "module DeferredBackedgesB
+                 import DeferredBackedgesA
+                 @eval f() = (\\\$(GlobalRef(DeferredBackedgesA, :read_me)); \\\$(GlobalRef(DeferredBackedgesA, :read_me)))
+               end")
+        Base.compilecache(Base.PkgId("DeferredBackedgesB"))
+        @eval using DeferredBackedgesA, DeferredBackedgesB
+        invokelatest() do
+            b = convert(Core.Binding, GlobalRef(DeferredBackedgesA, :read_me))
+            nbackedges() = ccall(:jl_binding_backedges_length, Csize_t, (Any,), b)
+            @test Base.has_image_globalref(only(methods(DeferredBackedgesB.f)))
+            @test nbackedges() == 0
+            Base.delete_binding(DeferredBackedgesA, :delete_me)
+            @test nbackedges() == 1
+            @test (@atomic Base.Compiler.ReinferUtils.PENDING_IMAGE_SCANS.head) === nothing
+        end
+    end
+
+    finish_precompile_test!()
+    """
+    @test success(pipeline(`$(Base.julia_cmd()) -e $test_code`; stderr))
+end
+
 # Test the binding-partition machinery across the precompile boundary: cached code
 # whose resolved global reads froze a binding partition must revalidate at load across
 # a flag-only (`export`) partition flip, and must be invalidated when its binding is
