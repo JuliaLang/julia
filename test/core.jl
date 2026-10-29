@@ -8097,6 +8097,12 @@ end
 @test string((B40050(),)) == "($B40050(),)"
 @test isbitstype(Tuple{B40050})
 
+# a fieldless instantiation made during its own definition gets a layout
+struct E40050{T} <: Ref{E40050{Int}}
+end
+@test isdefined(E40050{Int}, :types)
+@test E40050{Int}() === E40050{Int}.instance
+
 # issue #41654
 struct X41654 <: Ref{X41654}
 end

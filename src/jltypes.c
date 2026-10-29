@@ -4341,28 +4341,24 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
         }
     }
 
-    if (t->types != jl_emptysvec) {
-        for (j = 0; j < jl_array_nrows(partial); j++) {
-            jl_datatype_t *ndt = (jl_datatype_t*)jl_array_ptr_ref(partial, j);
-            if (ndt == NULL)
-                continue;
-            for (i = 0; i < n; i++)
-                env[i].val = jl_svecref(ndt->parameters, i);
-            // Push ndt onto the stack for cycle detection.
-            // This is important for mutually recursive types: if a field type
-            // of ndt references ndt (directly or indirectly), we need ndt on
-            // the stack so lookup_type_stack can find it and return the
-            // in-progress type instead of recursing infinitely.
-            jl_typestack_t ndt_top = { ndt, &top, 0 };
-            jl_publish_fieldtypes(ndt, inst_ftypes(t->types, &env[n - 1], &ndt_top, typecache_region_held() == NULL));
-            if (ndt->isconcretetype) { // cacheable
-                jl_compute_field_offsets(ndt);
-            }
-            jl_array_ptr_set(partial, j, NULL);
+    assert(t->types != jl_emptysvec || jl_field_names(t) == jl_emptysvec);
+    for (j = 0; j < jl_array_nrows(partial); j++) {
+        jl_datatype_t *ndt = (jl_datatype_t*)jl_array_ptr_ref(partial, j);
+        if (ndt == NULL)
+            continue;
+        for (i = 0; i < n; i++)
+            env[i].val = jl_svecref(ndt->parameters, i);
+        // Push ndt onto the stack for cycle detection.
+        // This is important for mutually recursive types: if a field type
+        // of ndt references ndt (directly or indirectly), we need ndt on
+        // the stack so lookup_type_stack can find it and return the
+        // in-progress type instead of recursing infinitely.
+        jl_typestack_t ndt_top = { ndt, &top, 0 };
+        jl_publish_fieldtypes(ndt, inst_ftypes(t->types, &env[n - 1], &ndt_top, typecache_region_held() == NULL));
+        if (ndt->isconcretetype) { // cacheable
+            jl_compute_field_offsets(ndt);
         }
-    }
-    else {
-        assert(jl_field_names(t) == jl_emptysvec);
+        jl_array_ptr_set(partial, j, NULL);
     }
     jl_gc_write(t->name, t->name->partial, jl_array_t, NULL);
 }
