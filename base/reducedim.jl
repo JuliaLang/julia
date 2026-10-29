@@ -1081,7 +1081,16 @@ for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
 
         $(_fname)(A, dims::D; kw...) where {D} = $(_fname)(identity, A, dims; kw...)
-        $(_fname)(f, A, dims::D; kw...) where {D} = mapreduce($mapf, $(op), A; dims=dims, kw...)
+    end
+    if fname in (:any, :all)
+        # `any` and `all` of an empty collection are `false` and `true` whatever `f` is, so
+        # seed the (empty) chains explicitly: `mapreduce_empty` has no value for a general `f`
+        @eval function $(_fname)(f, A, dims::D) where {D}
+            isempty(A) && return mapreduce($mapf, $(op), A; dims=dims, init=$(fname === :all))
+            return mapreduce($mapf, $(op), A; dims=dims)
+        end
+    else
+        @eval $(_fname)(f, A, dims::D; kw...) where {D} = mapreduce($mapf, $(op), A; dims=dims, kw...)
     end
 end
 
