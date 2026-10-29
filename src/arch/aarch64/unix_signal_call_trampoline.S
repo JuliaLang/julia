@@ -21,21 +21,28 @@
     .globl CNAME(jl_fake_signal_return)
     HIDDEN(jl_fake_signal_return)
     DEBUGINFO(jl_fake_signal_return)
-    .p2align 2
+    .p2align 4                  // as the start of the .text of the C file it was in
 CNAME(jl_fake_signal_return):
     .cfi_startproc
     .cfi_signal_frame
-    // Mark as end of stack until frame is set up
-    .cfi_undefined x30
-    // x0 points to signal_ctx_pc in ptls (followed by signal_ctx_sp, signal_ctx_fptr, signal_ctx_arg)
+    // x0 points to signal_ctx_pc in ptls (followed by signal_ctx_sp, signal_ctx_fptr, signal_ctx_arg).
+    // The CFA is the interrupted sp throughout, as unwinders that take the
+    // caller's sp to be the CFA need (libunwind, despite a rule for sp).
+    // Until the frame below is built, through x0:
+    // CFA = [x0 + 8] (DW_CFA_def_cfa_expression: DW_OP_breg0 8, DW_OP_deref)
+    // lr (the pc) at [x0] (DW_CFA_expression: DW_OP_breg0 0)
+    .cfi_escape 0x0f, 0x03, 0x70, 0x08, 0x06
+    .cfi_escape 0x10, 0x1e, 0x02, 0x70, 0x00
     ldp     x1, x2, [x0]        // load pc (x1) and sp (x2)
     stp     x29, x1, [sp, #-32]! // frame record {x29, pc}
     str     x2, [sp, #16]       // and sp above it
     mov     x29, sp
-    .cfi_def_cfa x29, 32
-    .cfi_offset x29, -32
-    .cfi_offset lr, -24         // previous lr (pc)
-    .cfi_offset sp, -16
+    // From here, through the frame:
+    // CFA = [x29 + 16] (DW_CFA_def_cfa_expression: DW_OP_breg29 16, DW_OP_deref)
+    // x29 at [x29] and lr (the pc) at [x29 + 8] (DW_CFA_expression: DW_OP_breg29 0 / 8)
+    .cfi_escape 0x0f, 0x03, 0x8d, 0x10, 0x06
+    .cfi_escape 0x10, 0x1d, 0x02, 0x8d, 0x00
+    .cfi_escape 0x10, 0x1e, 0x02, 0x8d, 0x08
     // This is not quite valid, since the AArch64 DWARF spec lacks the ability to define how to restore the LR register correctly,
     // so normally libunwind implementations on linux detect this function specially and hack around the invalid info:
     // https://github.com/llvm/llvm-project/commit/c82deed6764cbc63966374baf9721331901ca958
