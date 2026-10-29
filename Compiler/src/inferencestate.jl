@@ -326,6 +326,7 @@ mutable struct InferenceState{I<:AbstractInterpreter}
     parentid::Int # index into callstack of the parent frame that originally added this frame (call cycle_parent to extract the current parent of the SCC)
     frameid::Int # index into callstack at which this object is found (or zero, if this is not a cached frame and has no parent)
     cycleid::Int # index into the callstack of the topmost frame in the cycle (all frames in the same cycle share the same cycleid)
+    limited_results::Union{Nothing,IdDict{MethodInstance,Any}} # only used on `callstack[1]`, see `limited_results`
 
     #= results =#
     result::InferenceResult # remember where to put the result
@@ -431,7 +432,7 @@ mutable struct InferenceState{I<:AbstractInterpreter}
             mi, valid_worlds, mod, sptypes, slottypes, src, cfg, spec_info,
             currbb, currpc, ip, handler_info, ssavalue_uses, bb_states, bb_saw_latestworld, ssavaluetypes, ssaflags, edges, stmt_info,
             tasks, pclimitations, limitations, cycle_backedges, callstack, parentid, frameid, cycleid,
-            result, unreachable, bestguess, exc_bestguess, ipo_effects,
+            nothing, result, unreachable, bestguess, exc_bestguess, ipo_effects,
             _time_ns(), 0.0, 0, 0,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
             interp)

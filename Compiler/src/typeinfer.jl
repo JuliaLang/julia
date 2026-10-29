@@ -1318,6 +1318,58 @@ function completed_inference_result(interp::AbstractInterpreter, frame::Inferenc
     return LocalInferenceResult(result, proof, get_inference_world(interp))
 end
 
+struct LimitedCallResult
+    rt::LimitedAccuracy
+    exct::Any
+    effects::Effects
+    proof::LocalInferenceProof
+end
+
+# A tombstoned result whose return type is limited only by frames that are still
+# being inferred would be inferred again, with the same limited outcome, by every
+# other caller below those frames. Reuse it while all of its causes are still on the
+# callstack; the caller still receives the `LimitedAccuracy`, so it is not cached either.
+# The results are kept on the bottom frame of the callstack: once it is popped, none of
+# the causes can be on the callstack anymore.
+function limited_results(sv::InferenceState)
+    callstack = sv.callstack
+    isempty(callstack) && return nothing
+    root = callstack[1]
+    root isa InferenceState || return nothing
+    results = root.limited_results
+    results === nothing && (results = root.limited_results = IdDict{MethodInstance,Any}())
+    return results
+end
+
+function lookup_limited_result(caller::AbsIntState, mi::MethodInstance)
+    caller isa InferenceState || return nothing
+    results = limited_results(caller)
+    results === nothing && return nothing
+    limited = get(results, mi, nothing)
+    limited === nothing && return nothing
+    limited = limited::LimitedCallResult
+    stack = caller.callstack
+    for causes in (limited.rt.causes, limited.exct isa LimitedAccuracy ? limited.exct.causes : nothing)
+        causes === nothing && continue
+        for cause in causes
+            id = cause.frameid
+            (1 <= id <= length(stack) && stack[id] === cause) || return nothing
+        end
+    end
+    return limited
+end
+
+function return_limited_result(interp::AbstractInterpreter, caller::AbsIntState, method::Method,
+                               limited::LimitedCallResult, edgecycle::Bool, edgelimited::Bool,
+                               edgerecursed::Bool)
+    add_inference_proof!(caller.edges, limited.proof)
+    update_valid_age!(caller, get_inference_world(interp), proof_worlds(limited.proof))
+    effects = limited.effects
+    return Future(MethodCallResult(interp, caller, method, limited.rt,
+        refine_exception_type(limited.exct, effects), effects, nothing,
+        edgecycle, edgelimited, edgerecursed; force_edgecycle=false, needs_mi_edge=true))
+end
+
 function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, result::InferenceResult,
                                     method::Method, edge_ci::Union{Nothing,CodeInstance},
                                     edgecycle::Bool, edgelimited::Bool, edgerecursed::Bool)
@@ -1340,6 +1392,14 @@ function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, 
                     Core.svec(internal_result_edges(frame)...))
                 add_inference_proof!(caller.edges, proof)
                 update_valid_age!(caller, get_inference_world(interp), proof_worlds(proof))
+                rt = frame.bestguess
+                if rt isa LimitedAccuracy && caller isa InferenceState
+                    results = limited_results(caller)
+                    if results !== nothing
+                        results[result.linfo] = LimitedCallResult(
+                            rt, frame.exc_bestguess, result.ipo_effects, proof)
+                    end
+                end
             end
             effects = result.ipo_effects # effects are adjusted already within `finish` for ipo_effects
             if !iszero(frame.cache_mode & CACHE_MODE_GLOBAL) && isdefined(result, :ci)
@@ -1414,6 +1474,13 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         frame = resolve_call_cycle!(interp, mi, caller)
     end
     if frame === false
+        if cache_mode == CACHE_MODE_GLOBAL
+            limited = lookup_limited_result(caller, mi)
+            if limited !== nothing
+                return return_limited_result(interp, caller, method, limited,
+                    edgecycle, edgelimited, edgerecursed)
+            end
+        end
         # completely new, but check again after reserving in the engine
         if cache_mode == CACHE_MODE_GLOBAL
             reserve_start = _time_ns() # subtract engine_reserve (thread-synchronization) time from callers to avoid double-counting
