@@ -1140,7 +1140,7 @@ jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *pare
 int setonce_bits(jl_datatype_t *rty, char *p, jl_value_t *owner, jl_value_t *rhs, enum atomic_kind isatomic);
 JL_DLLEXPORT void jl_store_tagged_word(jl_value_t *parent, size_t offset, jl_value_t *u, jl_value_t *rhs, int isatomic) JL_NOTSAFEPOINT;
 jl_value_t *swap_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *parent, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
-jl_value_t *modify_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
+jl_value_t *modify_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_value_t *op_target) JL_CANSAFEPOINT;
 jl_value_t *replace_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *parent, jl_value_t *expected, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
 int setonce_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *parent, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n) JL_CANSAFEPOINT;

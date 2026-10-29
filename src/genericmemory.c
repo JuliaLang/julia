@@ -575,7 +575,7 @@ jl_value_t *jl_memoryrefmodify(jl_genericmemoryref_t m, jl_value_t *op, jl_value
         return modify_value(eltype, (_Atomic(jl_value_t*)*)data, owner, op, rhs, isatomic, op_target);
     }
     if (layout->flags.arrayelem_istagged)
-        return modify_tagged(eltype, (_Atomic(uintptr_t)*)data, owner, op, rhs, isatomic);
+        return modify_tagged(eltype, (_Atomic(uintptr_t)*)data, owner, op, rhs, isatomic, op_target);
     size_t fsz = layout->size;
     uint8_t *psel = NULL;
     if (layout->flags.arrayelem_isunion) {

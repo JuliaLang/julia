@@ -2230,7 +2230,7 @@ jl_value_t *swap_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *paren
     return rv;
 }
 
-jl_value_t *modify_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic)
+jl_value_t *modify_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_value_t *op_target)
 {
     uintptr_t r = isatomic ? jl_atomic_load(p) : jl_atomic_load_relaxed(p);
     jl_value_t **args;
@@ -2241,7 +2241,7 @@ jl_value_t *modify_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *par
             jl_throw(jl_undefref_exception);
         args[0] = rv;
         args[1] = rhs;
-        jl_value_t *y = jl_apply_generic(op, args, 2);
+        jl_value_t *y = jl_apply_modifyop(op, args, op_target);
         args[1] = y;
         if (!jl_isa(y, ty))
             jl_type_error(jl_is_genericmemory(parent) ? "memoryrefmodify!" : "modifyfield!", ty, y);
@@ -2455,7 +2455,7 @@ jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_valu
         return modify_value(ty, (_Atomic(jl_value_t*)*)p, v, op, rhs, isatomic, op_target);
     }
     else if (jl_is_uniontype(ty) && jl_field_istagged(st, i)) {
-        return modify_tagged(ty, (_Atomic(uintptr_t)*)p, v, op, rhs, isatomic);
+        return modify_tagged(ty, (_Atomic(uintptr_t)*)p, v, op, rhs, isatomic, op_target);
     }
     else {
         uint8_t *psel = jl_is_uniontype(ty) ? (uint8_t*)&p[jl_field_size(st, i) - 1] : NULL;
