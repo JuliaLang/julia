@@ -391,6 +391,18 @@ end
     @test summarysize_roundtrips()
 end
 
+@testset "Ref conversion" begin
+    T = Union{Int16, String}
+    s = "ab" * "c"
+    for r in (Ref{T}(s), Ref(T[s], 1))
+        GC.@preserve r @test Base.unsafe_convert(Ptr{Cvoid}, r) == pointer_from_objref(s)
+    end
+    # an immediate has no box to point to
+    for r in (Ref{T}(Int16(5)), Ref(T[Int16(5)], 1))
+        @test_throws ArgumentError Base.unsafe_convert(Ptr{Cvoid}, r)
+    end
+end
+
 struct STI
     x::Union{Int16, String}
 end

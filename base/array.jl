@@ -215,6 +215,12 @@ values are encoded in the word itself.
 istaggedunion(@nospecialize u) =
     ccall(:jl_is_tagged_uniontype, Cint, (Any,), u) != Cint(0)
 
+# a tagged word holds a reference only when its low two bits are clear; an
+# immediate has no box
+tagged_word_isref(w::UInt) = w & 3 == 0
+throw_unboxed_address(@nospecialize(b::Ref)) = (@noinline; throw(ArgumentError(LazyString(
+    "cannot take the address of a value of type ", typeof(b[]), " stored without a box"))))
+
 unsetindex!(A::Array, i::Integer) = unsetindex!(A, to_index(i))
 function unsetindex!(A::Array, i::Int)
     @inline

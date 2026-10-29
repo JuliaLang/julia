@@ -18,7 +18,8 @@ Compiler/Runtime improvements
   such fields were previously stored as a pointer to a boxed value, which C code should
   not have relied upon. Elements of such arrays can no longer be accessed with
   `jl_array_ptr_ref`, `jl_genericmemory_ptr_ref` or their `_set` counterparts; read them
-  with `jl_genericmemoryref` instead ([#62918]).
+  with `jl_genericmemoryref` instead. Converting a `Ref{T}` of such a union `T` to a
+  pointer throws an `ArgumentError` while it holds a primitive value ([#62918]).
 
 Command-line option changes
 ---------------------------
