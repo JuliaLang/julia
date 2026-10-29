@@ -413,9 +413,13 @@ Although it may result in some differences, a debug build can be built much
 quicker by bootstrapping from a release build:
 
 ```sh
-$ make julia-src-release julia-sysbase-release
-$ make julia-sysimg-debug CROSS_BOOTSTRAP_JULIA=$PWD/usr/bin/julia CROSS_BOOTSTRAP_SYSBASE=$PWD/usr/lib/julia/sysbase.so
+$ make julia-sysbase-release
+$ make debug CROSS_BOOTSTRAP_JULIA=$PWD/usr/bin/julia CROSS_BOOTSTRAP_SYSBASE=$PWD/usr/lib/julia/sysbase.so
 ```
+
+Note that `CROSS_BOOTSTRAP_JULIA` and `CROSS_BOOTSTRAP_SYSBASE` are used only to
+build `julia-sysimg-debug`. Later steps, such as Base cache generation and stdlib
+precompilation, use the newly built debug executable.
 
 ## Building 32-bit Julia on a 64-bit machine
 
