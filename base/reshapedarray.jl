@@ -12,29 +12,6 @@ ReshapedArray(parent::AbstractArray{T}, dims::NTuple{N,Int}, mi) where {T,N} = R
 # IndexLinear ReshapedArray
 const ReshapedArrayLF{T,N,P<:AbstractArray} = ReshapedArray{T,N,P,Tuple{}}
 
-# Fast iteration on ReshapedArrays: use the parent iterator
-struct ReshapedArrayIterator{I,M}
-    iter::I
-    mi::NTuple{M,SignedMultiplicativeInverse{Int}}
-end
-ReshapedArrayIterator(A::ReshapedArray) = _rs_iterator(parent(A), A.mi)
-function _rs_iterator(P, mi::NTuple{M}) where M
-    iter = eachindex(P)
-    ReshapedArrayIterator{typeof(iter),M}(iter, mi)
-end
-
-struct ReshapedIndex{T}
-    parentindex::T
-end
-
-# eachindex(A::ReshapedArray) = ReshapedArrayIterator(A)  # TODO: uncomment this line
-@inline function iterate(R::ReshapedArrayIterator, i...)
-    item, inext = iterate(R.iter, i...)
-    ReshapedIndex(item), inext
-end
-length(R::ReshapedArrayIterator) = length(R.iter)
-eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedIndex{eltype(I)} : Any
-
 @noinline throw_dmrsa(dims, len) =
     throw(DimensionMismatch(LazyString("new dimensions ", dims, " must be consistent with array length ", len)))
 
@@ -288,12 +265,6 @@ end
     @boundscheck checkbounds(A, indices...)
     _unsafe_getindex(A, indices...)
 end
-@inline function getindex(A::ReshapedArray, index::ReshapedIndex)
-    @boundscheck checkbounds(parent(A), index.parentindex)
-    @inbounds ret = parent(A)[index.parentindex]
-    ret
-end
-
 @inline function _unsafe_getindex(A::ReshapedArray{T,N}, indices::Vararg{Int,N}) where {T,N}
     axp = axes(A.parent)
     i = offset_if_vec(_sub2ind(size(A), indices...), axp)
@@ -313,12 +284,6 @@ end
     @boundscheck checkbounds(A, indices...)
     _unsafe_setindex!(A, val, indices...)
 end
-@inline function setindex!(A::ReshapedArray, val, index::ReshapedIndex)
-    @boundscheck checkbounds(parent(A), index.parentindex)
-    @inbounds parent(A)[index.parentindex] = val
-    val
-end
-
 @inline function _unsafe_setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Int,N}) where {T,N}
     axp = axes(A.parent)
     i = offset_if_vec(_sub2ind(size(A), indices...), axp)
@@ -330,7 +295,6 @@ end
 const ReshapedRange{T,N,A<:AbstractRange} = ReshapedArray{T,N,A,Tuple{}}
 setindex!(A::ReshapedRange, val, index::Int) = _rs_setindex!_err()
 setindex!(A::ReshapedRange{T,N}, val, indices::Vararg{Int,N}) where {T,N} = _rs_setindex!_err()
-setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 
 @noinline _rs_setindex!_err() = error("indexed assignment fails for a reshaped range; consider calling collect")
 

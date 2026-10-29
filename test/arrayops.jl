@@ -124,7 +124,6 @@ end
         @test length(r) == 3
         @test r[1] == 2
         @test r[3,1] == 4
-        @test r[Base.ReshapedIndex(CartesianIndex((1,2)))] == 3
         @test parent(reshape(r, (1,3))) === r.parent === s
         @test parentindices(r) == (1:1, 1:3)
         @test reshape(r, (3,)) === r
@@ -143,7 +142,6 @@ end
         @test length(r) == 3
         @test r[1] == 2
         @test r[3,1] == 5
-        @test r[Base.ReshapedIndex(CartesianIndex((1,2)))] == 3
         @test parent(reshape(r, (1,3))) === r.parent === s
         @test parentindices(r) == (1:1, 1:3)
         @test reshape(r, (3,)) === r
@@ -255,7 +253,7 @@ end
 
 @testset "setindex! on a reshaped range" begin
     a = reshape(1:20, 5, 4)
-    for idx in ((3,), (2,2), (Base.ReshapedIndex(1),))
+    for idx in ((3,), (2,2))
         try
             a[idx...] = 7
             error("wrong error")
@@ -312,8 +310,6 @@ end
     @test a[6] == 6
     a[3,2] = -2
     a[6] = -3
-    a[Base.ReshapedIndex(5)] = -4
-    @test b[5] == -4
     @test b[6] == -3
     @test b[7] == -2
     b = reinterpret(Int, a)
