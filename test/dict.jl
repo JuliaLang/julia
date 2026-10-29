@@ -398,6 +398,11 @@ end
     str = String(take!(io))
     @test str == "Dict{$(Int), String}()"
     close(io)
+
+    @test !occursin('…', repr(Dict(i => i for i in 1:10); context = :limit => true))
+    s11 = repr(Dict(i => i for i in 1:11); context = :limit => true)
+    @test count("=>", s11) == 10
+    @test endswith(s11, "…)")
 end
 
 
