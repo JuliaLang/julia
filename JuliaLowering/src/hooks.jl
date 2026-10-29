@@ -21,7 +21,7 @@ function _core_lowering_hook(@nospecialize(code), mod::Module, file::String,
     local st0, st1 = nothing, nothing
     try
         st0 = code isa Expr ? expr_to_est(code, LineNumberNode(line, file)) : code
-        if head(st0) === :toplevel || head(st0) === :module
+        if head(st0) in (:toplevel, :module, :error, :incomplete)
             return Core.svec(code)
         end
         st0 = rebase_layers(st0, mod)

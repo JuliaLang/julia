@@ -13,43 +13,73 @@ function MacroExpansionContext(st, world, recursive)
         world, recursive)
 end
 
-function collect_unquoted!(ctx, unquoted, ex, depth)
-    if head(ex) == :$ && depth == 0
-        # children(ex) is usually length 1, but for double interpolation it may
-        # be longer and the children may contain :... expressions. Wrapping
-        # in a tuple groups the arguments together correctly in those cases.
-        push!(unquoted, @ast ctx ex [:tuple children(ex)...])
-    else
-        inner_depth = head(ex) == :quote ? depth + 1 :
-                      head(ex) == :$     ? depth - 1 :
-                      depth
-        for e in children(ex)
-            collect_unquoted!(ctx, unquoted, e, inner_depth)
-        end
-    end
-    return unquoted
+# Used to briefly have Syntax quoted in Expr, since syntax_to_expr is needed for
+# proper linenode placement, but each `($ x)` should be Syntax for provenance.
+mutable struct ExprQuote
+    const syntax::Syntax
 end
 
-# TODO: Implementing interpolations with a macro could give us better provenance
-function expand_quote(ctx, st)
-    unquoted = SyntaxList()
-    collect_unquoted!(ctx, unquoted, st, 0)
-    # not just optimizations; expected e.g. in `(. mod (quote field))`
-    if head(st) === :value
-        @jl_assert isempty(unquoted) st
-        st
-    elseif head(st) === :$
+function replace_unquoted(eqset, st, d)
+    d2 = head(st) == :quote ? d + 1 : head(st) == :$ ? d - 1 : d
+    cs = Syntax[]
+    found = false
+    for c in children(st)
+        if head(c) === :$ && d2 == 0
+            found = true
+            for cc in children(c)
+                eq = ExprQuote(cc)
+                push!(cs, @ast(_, cc, eq::value))
+                push!(eqset, eq)
+            end
+        else
+            c2, c_found = replace_unquoted(eqset, c, d2)
+            push!(cs, c2)
+            found |= c_found
+        end
+    end
+    (found ? @mknode(st; children=cs) : st), found
+end
+
+function exprquote_inert(prov, @nospecialize(x))
+    if x isa Symbol
+        @ast _ prov [:inert String(x)::identifier]
+    elseif x isa LineNumberNode || !Base.isa_ast_node(x)
+        @ast _ prov x::value
+    else
+        @ast _ prov [:copyast expr_to_est(QuoteNode(x))]
+    end
+end
+
+# Code constructing `ex`, or `nothing` if `ex` contains no unquoted expressions
+function exprquote_builder(eqset, prov, @nospecialize(ex))
+    if ex isa ExprQuote && ex in eqset
+        ex.syntax
+    elseif ex isa Expr
+        cs = Any[exprquote_builder(eqset, prov, a) for a in ex.args]
+        all(isnothing, cs) && return nothing
+        args = Syntax[isnothing(c) ? exprquote_inert(prov, a) : c
+                      for (c, a) in zip(cs, ex.args)]
+        @ast _ prov [:call [:core "_expr"::identifier]
+                     [:inert String(ex.head)::identifier] args...]
+    elseif ex isa QuoteNode
+        c = exprquote_builder(eqset, prov, ex.value)
+        isnothing(c) ? nothing :
+            @ast _ prov [:call [:core "QuoteNode"::identifier] c]
+    end
+end
+
+function expand_exprquote(ctx, st)
+    if head(st) === :$
         numchildren(st) != 1 && throw(LoweringError(
             st, raw"More than one value in bare `$` expression"))
         head(st[1]) === :... && throw(LoweringError(
             st, raw"unexpected `...` in bare `$` expression"))
-        @ast ctx st st[1]
-    elseif head(st) === :identifier && st.mod === nothing
-        @jl_assert isempty(unquoted) st
-        @ast ctx st [:inert st]
-    else
-        @ast ctx st [:call interpolate_expr::value [:inert st] unquoted...]
+        return st[1]
     end
+    eqset = Set{ExprQuote}() # theoretically ExprQuote can show up in input
+    st2, _ = replace_unquoted(eqset, st, 0)
+    ex = est_to_expr(st2)
+    isempty(eqset) ? exprquote_inert(st, ex) : exprquote_builder(eqset, st, ex)
 end
 
 function collect_syntaxunquote!(ctx, unquoted, st, depth)
@@ -355,7 +385,7 @@ function expand_forms_1(ctx::MacroExpansionContext, st::SyntaxTree)
         if numchildren(st) !== 1
             throw(LoweringError(st, "`quote` requires one argument"))
         end
-        expand_forms_1(ctx, expand_quote(ctx, st[1]))
+        expand_forms_1(ctx, expand_exprquote(ctx, st[1]))
     elseif k === :syntaxquote
         if numchildren(st) !== 1
             throw(LoweringError(st, "`syntaxquote` requires one argument"))

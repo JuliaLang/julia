@@ -4330,15 +4330,9 @@ end
 # Expand docstring-annotated expressions
 
 function isquotedmacrocall(ex)
-    head(ex) == :call || return false
-    numchildren(ex) == 3 || return false
-    let (f, ex) = (ex[1], ex[3])
-        head(f) == :value || return false
-        head(ex) == :inert || return false
-        f.value === interpolate_expr || return false
-        head(ex[1]) == :macrocall || return false
-        return true
-    end
+    head(ex) == :copyast && numchildren(ex) == 1 || return false
+    head(ex[1]) == :inert && numchildren(ex) == 1 || return false
+    head(ex[1][1]) == :macrocall
 end
 
 function expand_doc(ctx, ex, docex)
@@ -4681,13 +4675,17 @@ end
     ctx_out = DesugaringContext(sl, Bindings(), Dict{Int, IdTag}(), world)
     vr = valid_st1(ex)
     # surface only one error until we have pretty-printing for multiple
-    if !vr.ok
-        throw(LoweringError(vr.errors[1].sts, vr.errors[1].msgs, false))
+    if !validation_ok(vr)
+        errors = validation_errors(vr)
+        throw(LoweringError(errors[1].sts, errors[1].msgs, false))
     end
     ex_out = expand_forms_2(ctx_out, est_to_dst(ex))
     if DEBUG
         vr = valid_st2(ex_out)
-        !vr.ok && throw(LoweringError(vr.errors[1].sts, vr.errors[1].msgs, true))
+        if !validation_ok(vr)
+            errors = validation_errors(vr)
+            throw(LoweringError(errors[1].sts, errors[1].msgs, true))
+        end
     end
     ctx_out, ex_out
 end
