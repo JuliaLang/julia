@@ -262,6 +262,7 @@ function @main(args::Vector{String})::Cint
 
     user_library_ccall() # prints as a side effect
     lazy_library_ccall()
+    println(Core.stdout, "symbols: ", repr(:sym), " ", repr(Symbol("a b")), " ", repr(:(::)))
 
     Base.donotdelete(reshape([1,2,3],:,1,1))
 
