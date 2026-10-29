@@ -1034,6 +1034,7 @@ int equiv_type(jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT;
 int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout, int freevars) JL_NOTSAFEPOINT;
 jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type) JL_CANSAFEPOINT;
 jl_datatype_t *jl_lookup_or_cache_type_(jl_datatype_t *dt, int *isnew) JL_CANSAFEPOINT;
+jl_svec_t *jl_publish_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, jl_svec_t *types) JL_NOTSAFEPOINT;
 jl_value_t *jl_lookup_foreignsymbol(jl_value_t *v) JL_CANSAFEPOINT;
 void jl_cache_type_(jl_datatype_t *type) JL_CANSAFEPOINT;
 void jl_cache_type_if_absent(jl_datatype_t *type) JL_CANSAFEPOINT;

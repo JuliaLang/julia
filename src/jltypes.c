@@ -3254,14 +3254,14 @@ static jl_value_t *inst_datatype_complete(jl_datatype_t *dt, jl_datatype_t *ndt,
         assert(ftypes != jl_emptysvec || jl_field_names(ndt) == jl_emptysvec);
         assert(ftypes == jl_emptysvec || !ndt->name->abstract);
         if (ftypes == jl_emptysvec) {
-            ndt->types = ftypes;
+            jl_publish_fieldtypes(ndt, ftypes);
         }
         else if (cacheable) {
             // recursively instantiate the types of the fields
             if (dt->types == NULL)
-                jl_gc_write(ndt, ndt->types, jl_svec_t, compute_fieldtypes_(ndt, stack, cacheable && !defer, dcache));
+                compute_fieldtypes_(ndt, stack, cacheable && !defer, dcache);
             else
-                jl_gc_write(ndt, ndt->types, jl_svec_t, inst_ftypes(ftypes, env, stack, cacheable && !defer, dcache));
+                jl_publish_fieldtypes(ndt, inst_ftypes(ftypes, env, stack, cacheable && !defer, dcache));
         }
     }
 
@@ -3793,8 +3793,22 @@ static jl_svec_t *compute_fieldtypes_(jl_datatype_t *st JL_PROPAGATES_ROOT, void
         env[i].prev = i == 0 ? NULL : &env[i - 1];
     }
     jl_typestack_t top = { st, (jl_typestack_t*)stack, 0 };
-    jl_gc_write(st, st->types, jl_svec_t, inst_ftypes(wt->types, &env[n - 1], &top, cacheable, dcache));
-    return st->types;
+    return jl_publish_fieldtypes(st, inst_ftypes(wt->types, &env[n - 1], &top, cacheable, dcache));
+}
+
+// Set the field types of `st` unless they are already set, and return the ones
+// it keeps. Field types are filled in lazily (`jl_get_fieldtypes`) and published
+// by the instantiation or the loader that made `st`, so several writers can race
+// on the same type: they compute equal values, and the compare-and-swap keeps a
+// single winner
+jl_svec_t *jl_publish_fieldtypes(jl_datatype_t *st, jl_svec_t *types)
+{
+    _Atomic(jl_svec_t*) *typesp = (_Atomic(jl_svec_t*)*)&st->types;
+    jl_svec_t *unset = NULL;
+    jl_gc_wb(st, (void*)typesp, types);
+    if (jl_atomic_cmpswap(typesp, &unset, types))
+        return types;
+    return unset;
 }
 
 JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack, int cacheable)
@@ -3886,14 +3900,13 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t, jl_deferred_typecache_t *dca
                 continue;
             for (i = 0; i < n; i++)
                 env[i].val = jl_svecref(ndt->parameters, i);
-            assert(ndt->types == NULL);
             // Push ndt onto the stack for cycle detection.
             // This is important for mutually recursive types: if a field type
             // of ndt references ndt (directly or indirectly), we need ndt on
             // the stack so lookup_type_stack can find it and return the
             // in-progress type instead of recursing infinitely.
             jl_typestack_t ndt_top = { ndt, &top, 0 };
-            jl_gc_write(ndt, ndt->types, jl_svec_t, inst_ftypes(t->types, &env[n - 1], &ndt_top, dcache == NULL, dcache));
+            jl_publish_fieldtypes(ndt, inst_ftypes(t->types, &env[n - 1], &ndt_top, dcache == NULL, dcache));
             if (ndt->isconcretetype) { // cacheable
                 jl_compute_field_offsets(ndt);
             }

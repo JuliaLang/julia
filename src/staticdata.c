@@ -4548,11 +4548,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             jl_datatype_t *newdt = (jl_datatype_t*)table[i];
             assert(*(void**)dt == (void*)newdt);
             jl_svec_t *types = ((jl_datatype_t*)dt)->types;
-            if (types != NULL) {
-                jl_svec_t *unset = NULL;
-                jl_gc_wb(newdt, (void*)&newdt->types, types);
-                jl_atomic_cmpswap((_Atomic(jl_svec_t*)*)&newdt->types, &unset, types);
-            }
+            if (types != NULL)
+                jl_publish_fieldtypes(newdt, types);
         }
     }
     // we should never see these pointers again, so scramble their memory, so any attempt to look at them crashes
