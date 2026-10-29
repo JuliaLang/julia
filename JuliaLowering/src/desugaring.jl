@@ -4682,8 +4682,10 @@ end
     ex_out = expand_forms_2(ctx_out, est_to_dst(ex))
     if DEBUG
         vr = valid_st2(ex_out)
-        !validation_ok(vr) && throw(LoweringError(
-            errors[1].sts, errors[1].msgs, true))
+        if !validation_ok(vr)
+            errors = validation_errors(vr)
+            throw(LoweringError(errors[1].sts, errors[1].msgs, true))
+        end
     end
     ctx_out, ex_out
 end

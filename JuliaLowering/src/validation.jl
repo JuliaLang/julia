@@ -35,15 +35,12 @@ end
 
 
 @inline function Base.var"&"(vr1::ValidationResult, vr2::ValidationResult)
-    if validation_ok(vr1)
-        vr2
-    elseif validation_ok(vr2)
-        vr1
-    else
-        e1 = validation_errors(vr1)
-        e2 = validation_errors(vr2)
-        ValidationResult(isnothing(e1) ? e2 : isnothing(e2) ? e1 : union(e1, e2))
-    end
+    e1 = validation_errors(vr1)
+    e2 = validation_errors(vr2)
+    !isnothing(e1) && !isnothing(e2) ? ValidationResult(union(e1, e2)) :
+        !isnothing(e1) ? vr1 :
+        !isnothing(e2) ? vr2 :
+        validation_ok(vr1) && validation_ok(vr2) ? pass() : unknown()
 end
 
 # Note that this, unlike `&`, is only a true `|` in the case that at least one
