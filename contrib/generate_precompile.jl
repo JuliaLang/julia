@@ -242,7 +242,7 @@ Base.print_time_imports_report_init(Base)
 throw(InterruptException())
 """
 
-julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
+julia_exepath() = Base.unsafe_string(Base.JLOptions().julia_bin)
 
 Artifacts = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("56f22d72-fd6d-98f1-02f0-08ddc0907c33"), "Artifacts"),
