@@ -211,6 +211,14 @@ STATIC_INLINE void jl_gc_init_malloc(void) JL_NOTSAFEPOINT
 #endif
 }
 
+// GC threads free but never allocate; mimalloc needs a thread heap to reuse those pages.
+STATIC_INLINE void jl_gc_init_thread_malloc(void) JL_NOTSAFEPOINT
+{
+#ifdef MIMALLOC_ENABLED
+    mi_thread_init();
+#endif
+}
+
 #define malloc_cache_align(sz) jl_malloc_aligned_wrapper(sz, JL_CACHE_BYTE_ALIGNMENT)
 #define realloc_cache_align(p, sz, oldsz) jl_realloc_aligned_wrapper(p, sz, oldsz, JL_CACHE_BYTE_ALIGNMENT)
 #define malloc_page_align(sz) jl_malloc_aligned_wrapper(sz, jl_getpagesize())
