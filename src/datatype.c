@@ -2235,11 +2235,10 @@ jl_value_t *modify_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *par
     uintptr_t r = isatomic ? jl_atomic_load(p) : jl_atomic_load_relaxed(p);
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 2);
+    args[0] = jl_tagged_word_decode(ty, r);
     while (1) {
-        jl_value_t *rv = jl_tagged_word_decode(ty, r);
-        if (__unlikely(rv == NULL))
+        if (__unlikely(args[0] == NULL))
             jl_throw(jl_undefref_exception);
-        args[0] = rv;
         args[1] = rhs;
         jl_value_t *y = jl_apply_modifyop(op, args, op_target);
         args[1] = y;
@@ -2249,6 +2248,8 @@ jl_value_t *modify_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *par
         jl_gc_wb_tagged(parent, p, w);
         if (isatomic ? jl_atomic_cmpswap(p, &r, w) : jl_atomic_cmpswap_release(p, &r, w))
             break;
+        // root the word just observed: decoding a reference does not allocate
+        args[0] = jl_tagged_word_decode(ty, r);
         jl_gc_safepoint();
     }
     // args[0] == old (decoded), args[1] == y (new)
