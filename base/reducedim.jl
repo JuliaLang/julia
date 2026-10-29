@@ -291,9 +291,6 @@ end
 mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted) =
     (_mapreducedim!(f, op, R, A); R)
 
-reducedim!(op, R::AbstractArray{RT}, A::AbstractArrayOrBroadcasted) where {RT} =
-    mapreducedim!(identity, op, R, A)
-
 """
     mapreduce(f, op, A::AbstractArray...; dims=:, [init])
 
