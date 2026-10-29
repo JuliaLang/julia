@@ -1023,6 +1023,18 @@ using Test
         end
         @test isbitstype(TG_SuperSelf{Int})
         @test isbitstype(Tuple{TG_SuperSelf{Int}, TG_SuperSelfUser})
+        # layouts wait for the field types of the instantiations made while
+        # resolving the group, and for its members' inlining flags
+        @eval typegroup
+            struct TG_OrderP; a::TG_OrderQ{Int}; end
+            struct TG_OrderQ{T}; x::T; r::TG_OrderR{T}; end
+            struct TG_OrderR{T}; y::T; z::TG_OrderS{T}; end
+            struct TG_OrderS{T}; w::T; end
+            struct TG_OrderU; a::TG_OrderQ{Int8}; b::TG_OrderR{Int8}; end
+        end
+        @test isbitstype(TG_OrderP) && sizeof(TG_OrderP) == 3 * sizeof(Int)
+        @test isbitstype(TG_OrderS{Int8}) && isbitstype(TG_OrderU)
+        @test sizeof(TG_OrderU) == 5 && fieldoffset(TG_OrderU, 2) == 3
         # a key without a stable hash is found among many deferred types
         @eval typegroup
             struct TG_ManyDeferred

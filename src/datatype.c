@@ -2941,7 +2941,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
         // is still NULL (set in step 4), so jl_has_fixed_layout returns false
         // regardless, preventing premature layout computation. Keeping
         // isconcretetype at its correct value ensures that the layout computed
-        // in step 5b gets the correct isbitstype flag. Types instantiated
+        // in step 6 gets the correct isbitstype flag. Types instantiated
         // during resolution that reference the group are kept out of the
         // global type caches (recorded in the region) and are published in
         // step 8, only once the group is validated.
@@ -3059,7 +3059,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             }
         }
 
-        // Step 5b: Process field attributes and compute layouts
+        // Step 5b: Process field attributes
         for (size_t i = 0; i < n; i++) {
             jl_svec_t *info = (jl_svec_t*)jl_svecref(struct_infos, i);
             jl_svec_t *fattrs = (jl_svec_t*)jl_svecref(info, 2);
@@ -3074,17 +3074,12 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             jl_process_field_attrs(fattrs, fnames, mutabl, 1, &atomicfields, &constfields);
             dt->name->atomicfields = atomicfields;
             dt->name->constfields = constfields;
-
-            if (dt->types != NULL) {
-                jl_compute_field_offsets(dt);
-            }
-
-            jl_precompute_memoized_dt(dt, 0);
-            jl_maybe_allocate_singleton_instance(dt);
             JL_GC_POP();
         }
 
-        // Step 6: Reinstantiate inner types
+        // Step 5c: Reinstantiate inner types: the instantiations made while
+        // resolving the field types get theirs before any layout is computed,
+        // since a layout computes the layouts of its fields
         for (size_t i = 0; i < n; i++) {
             jl_datatype_t *dt = unwrap_to_datatype(results[i]);
             JL_GC_PUSH1(&dt);
@@ -3096,6 +3091,19 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                 JL_GC_POP();
                 jl_rethrow();
             }
+            JL_GC_POP();
+        }
+
+        // Step 6: Compute layouts
+        for (size_t i = 0; i < n; i++) {
+            jl_datatype_t *dt = unwrap_to_datatype(results[i]);
+            JL_GC_PUSH1(&dt);
+            if (dt->types != NULL) {
+                jl_compute_field_offsets(dt);
+            }
+
+            jl_precompute_memoized_dt(dt, 0);
+            jl_maybe_allocate_singleton_instance(dt);
             JL_GC_POP();
         }
     }
