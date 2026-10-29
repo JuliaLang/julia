@@ -2248,7 +2248,8 @@ jl_value_t *modify_tagged(jl_value_t *ty, _Atomic(uintptr_t) *p, jl_value_t *par
         jl_gc_wb_tagged(parent, p, w);
         if (isatomic ? jl_atomic_cmpswap(p, &r, w) : jl_atomic_cmpswap_release(p, &r, w))
             break;
-        // root the word just observed: decoding a reference does not allocate
+        // root the word just observed; decoding allocates only for an
+        // immediate, which holds no reference a collection could free
         args[0] = jl_tagged_word_decode(ty, r);
         jl_gc_safepoint();
     }
