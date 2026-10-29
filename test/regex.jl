@@ -167,6 +167,11 @@
     @test_throws(ErrorException("PCRE.exec error: $(Base.PCRE.err_message(Base.PCRE.ERROR_UTF8_ERR6))"),
         match(r"(*UTF).+"a, "Dü\xefsseldorf"))
 
+    # match data is freed and the error rethrown when matching throws
+    @test_throws InexactError match(r"a", "a", 0)
+    @test_throws InexactError occursin(r"a", "a"; offset=-1)
+    @test_throws ErrorException match(r"a", "a", 3)
+
     # Regex behaves like a scalar in broadcasting
     @test occursin.(r"Hello", ["Hello", "World"]) == [true, false]
 
