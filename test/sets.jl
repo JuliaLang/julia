@@ -1085,6 +1085,10 @@ end
     @test Base.copymutable(A) == copy(A)
     @test_throws TypeError push!(IdSet{Int}(), "a string")
     @test_throws TypeError IdSet{Bool}(Any[1, 2, true, false])
+    a, b = IdSet{Int}([1]), IdSet{Float64}([1.0])
+    @test union(a, b) isa IdSet{Real} && length(union(a, b)) == 2
+    @test symdiff(a, b) isa IdSet{Real} && length(symdiff(a, b)) == 2
+    @test collect(intersect(a, 1.0:2.0)) == [1]
 end
 
 @testset "⊊, ⊋" begin
