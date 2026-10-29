@@ -2794,10 +2794,9 @@ JL_CALLABLE(jl_f__typebody)
         if (dt->types != NULL)
             jl_errorf("Internal Error: Expected type fields to be unset");
         jl_gc_write(dt, dt->types, jl_svec_t, (jl_svec_t*)ft);
-        // If a supertype can reference the same type, then we may not be
-        // able to compute the layout of the object before needing to
-        // publish it, so we must assume it cannot be inlined, if that
-        // check passes, then we also still need to check the fields too.
+        // a field that reaches the same type cannot be inlined; outside a
+        // typegroup, neither can a supertype that does: the types built from
+        // it while it was evaluated already have their layouts
         if (!dt->name->mutabl && (nf == 0 || !references_name((jl_value_t*)dt->super, dt->name, 0, 1))) {
             int mayinlinealloc = 1;
             size_t i;

@@ -3027,20 +3027,17 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             jl_datatype_t *dt = unwrap_to_datatype(results[i]);
             if (!mutabl && dt->types != NULL) {
                 size_t nf = jl_svec_len(dt->types);
+                int mayinlinealloc = 1;
                 if (n == 1) {
                     // Single-struct group (ordinary struct definitions): only
-                    // self-references are possible, so mirror `_typebody!`
-                    // exactly. references_name has the precise affects_layout
+                    // self-references are possible, so mirror the field check
+                    // of `_typebody!`. references_name has the precise affects_layout
                     // handling required for e.g. circular type parameters that
                     // do not affect the layout (issue #33954).
-                    if (nf == 0 || !references_name((jl_value_t*)dt->super, dt->name, 0, 1)) {
-                        int mayinlinealloc = 1;
-                        for (size_t j = 0; j < nf && mayinlinealloc; j++) {
-                            jl_value_t *fld = jl_svecref(dt->types, j);
-                            if (references_name(fld, dt->name, 1, 1))
-                                mayinlinealloc = 0;
-                        }
-                        dt->name->mayinlinealloc = mayinlinealloc;
+                    for (size_t j = 0; j < nf && mayinlinealloc; j++) {
+                        jl_value_t *fld = jl_svecref(dt->types, j);
+                        if (references_name(fld, dt->name, 1, 1))
+                            mayinlinealloc = 0;
                     }
                 }
                 else {
@@ -3051,20 +3048,14 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                     // visited set) instead.
                     htable_t visited;
                     htable_new(&visited, 8);
-                    int super_refs = is_typename_reachable((jl_value_t*)dt->super, dt->name, &visited);
-                    htable_free(&visited);
-                    if (nf == 0 || !super_refs) {
-                        htable_new(&visited, 8);
-                        int mayinlinealloc = 1;
-                        for (size_t j = 0; j < nf && mayinlinealloc; j++) {
-                            jl_value_t *fld = jl_svecref(dt->types, j);
-                            if (is_typename_reachable(fld, dt->name, &visited))
-                                mayinlinealloc = 0;
-                        }
-                        htable_free(&visited);
-                        dt->name->mayinlinealloc = mayinlinealloc;
+                    for (size_t j = 0; j < nf && mayinlinealloc; j++) {
+                        jl_value_t *fld = jl_svecref(dt->types, j);
+                        if (is_typename_reachable(fld, dt->name, &visited))
+                            mayinlinealloc = 0;
                     }
+                    htable_free(&visited);
                 }
+                dt->name->mayinlinealloc = mayinlinealloc;
             }
         }
 

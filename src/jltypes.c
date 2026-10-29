@@ -2113,10 +2113,10 @@ static void region_finish(jl_deferred_typecache_t *r, jl_datatype_t *ndt, int le
         low = region_low(r, (jl_value_t*)jl_atomic_load_relaxed((_Atomic(jl_datatype_t*)*)&ndt->super), low);
         low = region_low(r, (jl_value_t*)ndt->types, low);
     }
-    // for a type that depends on a typegroup, the layout is computed at
-    // publication: the group's types are still incomplete here, and computing
-    // it now would bake in wrong assumptions (cf. #40050)
-    if (!defer && ndt->layout == NULL && ndt->types != NULL && ndt->isconcretetype)
+    // for a type that depends on one still in progress (or on a typegroup),
+    // the layout is computed at publication, once that one has its own: now
+    // it would bake in wrong assumptions (cf. #40050)
+    if (!defer && low >= level && ndt->layout == NULL && ndt->types != NULL && ndt->isconcretetype)
         jl_compute_field_offsets(ndt);
     if (low >= level) {
         region_layouts(r, mark, level);
@@ -3702,9 +3702,6 @@ static jl_value_t *inst_datatype_complete(jl_datatype_t *dt, jl_datatype_t *ndt,
     }
 
     // the caller publishes a cacheable result (`region_finish`)
-    // XXX: if the stack was used, this will publish in the wrong order,
-    // leading to incorrect layouts and data races (#40050: the A{T} should be
-    // an isbitstype singleton of size 0)
     return (jl_value_t*)ndt;
 }
 

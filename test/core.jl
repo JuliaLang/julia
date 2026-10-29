@@ -8090,7 +8090,7 @@ struct B41503{j,k} <: AbstractArray{A41503{B41503{Any,k}},Any}
     l::k
 end
 @test !isbitstype(B41503{Any,Any})
-@test_broken isbitstype(B41503{Any,Int})
+@test isbitstype(B41503{Any,Int})
 
 struct B40050 <: Ref{Tuple{B40050}}
 end
@@ -8102,6 +8102,19 @@ struct E40050{T} <: Ref{E40050{Int}}
 end
 @test isdefined(E40050{Int}, :types)
 @test E40050{Int}() === E40050{Int}.instance
+
+# a supertype mentioning the type does not prevent inlining it
+struct V40050{T} <: Ref{Tuple{V40050{T},Int}}
+    x::T
+end
+@test isbitstype(Tuple{V40050{Int8},Int})
+@test fieldoffset(Tuple{V40050{Int8},Int}, 2) == 8
+@test isbitstype(V40050{Int8})
+let S = Core._structtype(@__MODULE__, :S40050, Core.svec(), Core.svec(:x), Core.svec(), false, 1)
+    Core._setsuper!(S, Ref{Tuple{S,Int}})
+    Core._typebody!(S, Core.svec(Int8))
+    @test isbitstype(S) == isbitstype(Tuple{S,Int})
+end
 
 # issue #41654
 struct X41654 <: Ref{X41654}

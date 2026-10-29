@@ -1015,6 +1015,14 @@ using Test
             struct TG_LayoutOwner; h::TG_LayoutHit{TG_LayoutOwner}; end
         end
         @test sizeof(Tuple{TG_LayoutHit{TG_LayoutOwner}, Int}) == sizeof(Tuple{TG_LayoutHit{Int}, Int})
+        # ... and one made while an instantiation it embeds is in progress,
+        # since a supertype mentioning the type does not prevent inlining it
+        @eval typegroup
+            struct TG_SuperSelf{T} <: Ref{Tuple{TG_SuperSelf{Int}, TG_SuperSelfUser}}; x::T; end
+            struct TG_SuperSelfUser; g::TG_SuperSelf{Float64}; end
+        end
+        @test isbitstype(TG_SuperSelf{Int})
+        @test isbitstype(Tuple{TG_SuperSelf{Int}, TG_SuperSelfUser})
         # a key without a stable hash is found among many deferred types
         @eval typegroup
             struct TG_ManyDeferred
