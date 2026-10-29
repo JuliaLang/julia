@@ -1013,7 +1013,7 @@ end
 which(@nospecialize(argtypes::Tuple)) = which(to_tuple_type(argtypes))
 
 """
-    which(module::Module, symbo::Symbol)
+    which(module::Module, symbol::Symbol)
 
 Return the module in which the binding for the variable referenced by `symbol` in `module` was created.
 """

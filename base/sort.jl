@@ -1079,7 +1079,7 @@ end
 ScratchQuickSort(next::Algorithm=SMALL_ALGORITHM) = ScratchQuickSort(missing, missing, next)
 ScratchQuickSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}) = ScratchQuickSort(lo, hi, SMALL_ALGORITHM)
 ScratchQuickSort(lo::Union{Integer, Missing}, next::Algorithm=SMALL_ALGORITHM) = ScratchQuickSort(lo, lo, next)
-ScratchQuickSort(r::OrdinalRange, next::Algorithm=SMALL_ALGORITHM) = ScratchQuickSort(first(r), last(r), next)
+ScratchQuickSort(r::OrdinalRange, next::Algorithm=SMALL_ALGORITHM) = ScratchQuickSort(minmax(first(r), last(r))..., next)
 
 # select a pivot, partition v[lo:hi] according
 # to the pivot, and store the result in t[lo:hi].
@@ -2545,9 +2545,9 @@ function _partialquicksort!(v::AbstractVector, lo::Integer, hi::Integer, a::Part
         end
         j = partition!(v, lo, hi, o)
 
-        if j <= first(a.k)
+        if j <= min(first(a.k), last(a.k))
             lo = j+1
-        elseif j >= last(a.k)
+        elseif j >= max(first(a.k), last(a.k))
             hi = j-1
         else
             # recurse on the smaller chunk

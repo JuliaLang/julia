@@ -1326,7 +1326,12 @@ JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls
 
 void jl_gc_notify_task_resume(jl_task_t *task) JL_NOTSAFEPOINT
 {
-    // do nothing
+    // The task is about to run and mutate its stack without write barriers:
+    // make sure it is in the remset (see the task case in `gc_mark_outrefs`).
+    // Only the task-switch call needs this; a task that was already running
+    // stays in the remset, and the calls made while GC-safe must not touch it.
+    if (task != NULL && jl_atomic_load_relaxed(&jl_current_task->ptls->gc_state) == JL_GC_STATE_UNSAFE)
+        jl_gc_wb_object(task);
 }
 
 static void gc_pool_sync_nfree(jl_gc_pagemeta_t *pg, jl_taggedvalue_t *last) JL_NOTSAFEPOINT
@@ -1692,6 +1697,8 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
                 JL_LOCK_NOGC(&image_remset_lock);
                 arraylist_push(&image_remset, (void*)ptr);
                 JL_UNLOCK_NOGC(&image_remset_lock);
+                if (jl_typetagis(ptr, jl_weakref_type))
+                    small_arraylist_push(&ptls->gc_tls_common.heap.weak_refs, (void*)ptr);
 #ifdef _OS_WINDOWS_
                 SetLastError(last_error);
 #endif
@@ -2254,7 +2261,7 @@ STATIC_INLINE void gc_mark_memory16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl
 
 // Mark gc frame
 STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroots, uintptr_t offset,
-                   uintptr_t lb, uintptr_t ub) JL_NOTSAFEPOINT
+                   uintptr_t lb, uintptr_t ub, uintptr_t *nptr) JL_NOTSAFEPOINT
 {
     jl_gc_markqueue_t *mq = &ptls->gc_tls.mark_queue;
     jl_value_t *new_obj;
@@ -2294,7 +2301,7 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
                 if (new_obj < (jl_value_t*)((uintptr_t)jl_max_tags << 4))
                     continue;
             }
-            gc_try_claim_and_push(mq, new_obj, NULL);
+            gc_try_claim_and_push(mq, new_obj, nptr);
             gc_heap_snapshot_record_frame_to_object_edge(s, new_obj);
         }
         jl_gcframe_t *sprev = (jl_gcframe_t *)gc_read_stack(&s->prev, offset, lb, ub);
@@ -2310,7 +2317,7 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
 }
 
 // Mark exception stack
-STATIC_INLINE void gc_mark_excstack(jl_ptls_t ptls, jl_excstack_t *excstack, size_t itr) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_mark_excstack(jl_ptls_t ptls, jl_excstack_t *excstack, size_t itr, uintptr_t *nptr) JL_NOTSAFEPOINT
 {
     jl_gc_markqueue_t *mq = &ptls->gc_tls.mark_queue;
     jl_value_t *new_obj;
@@ -2327,14 +2334,14 @@ STATIC_INLINE void gc_mark_excstack(jl_ptls_t ptls, jl_excstack_t *excstack, siz
             size_t njlvals = jl_bt_num_jlvals(bt_entry);
             for (size_t jlval_index = 0; jlval_index < njlvals; jlval_index++) {
                 new_obj = jl_bt_entry_jlvalue(bt_entry, jlval_index);
-                gc_try_claim_and_push(mq, new_obj, NULL);
+                gc_try_claim_and_push(mq, new_obj, nptr);
                 gc_heap_snapshot_record_frame_to_object_edge(bt_entry, new_obj);
             }
         }
         // The exception comes last - mark it
         new_obj = jl_excstack_exception(excstack, itr);
         itr = jl_excstack_next(excstack, itr);
-        gc_try_claim_and_push(mq, new_obj, NULL);
+        gc_try_claim_and_push(mq, new_obj, nptr);
         gc_heap_snapshot_record_frame_to_object_edge(excstack, new_obj);
     }
 }
@@ -2562,6 +2569,17 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     // TODO: synthetic node for stack data (how big is it?)
                 }
         #endif
+                const jl_datatype_layout_t *layout = jl_task_type->layout;
+                assert(layout->flags.fielddesc_type == JL_FIELDDESC_8);
+                assert(layout->nfields > 0);
+                uint32_t npointers = layout->npointers;
+                // A task's stack and exception stack are written without a write barrier,
+                // so a task that is running keeps itself in the remset. A suspended task
+                // only stays there if it references young objects; it is put back by
+                // `jl_gc_notify_task_resume` when it is next switched to. Task scanner
+                // callbacks don't report young references, so keep the task then too.
+                uintptr_t nptr = (npointers << 2) | (bits & GC_OLD) |
+                                 (ta->ptls != NULL || gc_cblist_task_scanner != NULL);
                 jl_gcframe_t *s = ta->gcstack;
                 size_t nroots;
                 uintptr_t offset = 0;
@@ -2581,7 +2599,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     nroots = gc_read_stack(&s->nroots, offset, lb, ub);
                     gc_heap_snapshot_record_task_to_frame_edge(ta, s);
                     assert(nroots <= UINT32_MAX);
-                    gc_mark_stack(ptls, s, (uint32_t)nroots, offset, lb, ub);
+                    gc_mark_stack(ptls, s, (uint32_t)nroots, offset, lb, ub, &nptr);
                 }
                 if (ta->excstack) {
                     jl_excstack_t *excstack = ta->excstack;
@@ -2590,17 +2608,11 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     gc_setmark_buf(ptls, excstack, bits,
                                     sizeof(jl_excstack_t) +
                                         sizeof(uintptr_t) * excstack->reserved_size);
-                    gc_mark_excstack(ptls, excstack, itr);
+                    gc_mark_excstack(ptls, excstack, itr, &nptr);
                 }
-                const jl_datatype_layout_t *layout = jl_task_type->layout;
-                assert(layout->flags.fielddesc_type == JL_FIELDDESC_8);
-                assert(layout->nfields > 0);
-                uint32_t npointers = layout->npointers;
                 char *obj8_parent = (char *)ta;
                 uint8_t *obj8_begin = (uint8_t *)jl_dt_layout_ptrs(layout);
                 uint8_t *obj8_end = obj8_begin + npointers;
-                // assume tasks always reference young objects: set lowest bit
-                uintptr_t nptr = (npointers << 2) | 1 | bits;
                 new_obj = gc_mark_obj8(ptls, obj8_parent, obj8_begin, obj8_end, nptr);
                 if (new_obj != NULL) {
                     if (!remset_object)

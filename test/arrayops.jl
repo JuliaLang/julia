@@ -3529,6 +3529,7 @@ end
     @test_throws DimensionMismatch Base.wrap(Array, mem, (10, 10))
     @test Base.wrap(Array, mem, (5,)) == ones(Int, 5)
     @test Base.wrap(Array, mem, 2) == ones(Int, 2)
+    @test Base.wrap(Array, mem, UInt(2)) == ones(Int, 2)
     @test Base.wrap(Array, memref, 10) == ones(Int, 10)
     @test Base.wrap(Array, memref, (2,2,2)) == ones(Int,2,2,2)
     @test Base.wrap(Array, mem, (5, 2)) == ones(Int, 5, 2)

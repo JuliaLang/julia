@@ -1505,6 +1505,8 @@ void jl_safepoint_take_sleep_lock(jl_ptls_t ptls) JL_NOTSAFEPOINT JL_NOTSAFEPOIN
 void jl_safepoint_exclude_gc_begin(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
 void jl_safepoint_exclude_gc_end(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
 void jl_wake_libuv(void) JL_NOTSAFEPOINT;
+void jl_init_signal_watchers(uv_async_cb cb);
+void jl_wake_signal_watchers(void) JL_NOTSAFEPOINT;
 void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT;
 int jl_abandon_try_commit(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void JL_NORETURN jl_abandon_task_cb(void) JL_CANSAFEPOINT;

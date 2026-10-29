@@ -151,6 +151,8 @@
     # test replace with invalid substitution group pattern
     @test_throws(ErrorException("Bad replacement string: \\gg1>"),
         replace("s", r"(?<g1>.)" => s"\gg1>"))
+    @test_throws(ErrorException("Bad replacement string: \\g<>"),
+        replace("ab", r"(a)" => s"\g<>"))
     # test replace with 2-digit substitution group
     @test replace(("0" ^ 9) * "1", Regex(("(0)" ^ 9) * "(1)") => s"10th group: \10") == "10th group: 1"
 
