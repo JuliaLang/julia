@@ -640,3 +640,25 @@ end
     end
     @test bad == 0
 end
+
+# Int16 sorts after the 127 small components codegen's union index can name
+const BigU = Union{(Val{i} for i in 1:130)..., Int16, String}
+mutable struct MBig
+    x::BigU
+end
+getbig(m) = m.x
+setbig!(m, v) = (m.x = v; nothing)
+getbigm(mem) = mem[1]
+setbigm!(mem, v) = (mem[1] = v; nothing)
+
+@testset "codegen: more components than the union index" begin
+    @test istagged(BigU)
+    m = MBig(Int16(7))
+    mem = Memory{BigU}(undef, 1)
+    for v in (Int16(-3), "s", Val(129))
+        setbig!(m, v)
+        @test getbig(m) === v
+        setbigm!(mem, v)
+        @test getbigm(mem) === v
+    end
+end

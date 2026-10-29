@@ -4382,10 +4382,16 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
 // type such as Int) also carries that component's index. A store encodes an
 // immediate without boxing it.
 
-// whether codegen accesses the tagged words of union `ut` itself: a decoded
-// reference brings no inline roots, so no small component may hold pointers
+// whether codegen accesses the tagged words of union `ut` itself: every
+// immediate needs a union index, which runs out after 127 small components,
+// and a decoded reference brings no inline roots, so no small component may
+// hold pointers
 static bool tagged_union_has_codegen(jl_value_t *ut)
 {
+    for (unsigned i = 0; jl_datatype_t *jt = jl_nth_immediate_component(ut, i); i++) {
+        if (get_box_tindex(jt, ut) == 0)
+            return false;
+    }
     bool allunbox;
     size_t nbytes, align, min_align, inline_roots;
     union_alloca_type((jl_uniontype_t*)ut, allunbox, nbytes, align, min_align, inline_roots);
