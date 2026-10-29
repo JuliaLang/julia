@@ -500,6 +500,7 @@ end
         @test reverse(reverse(T(1):T(10))) == T(1):T(10)
         @test reverse(reverse(typemin(T):typemax(T))) == typemin(T):typemax(T)
         @test reverse(reverse(typemin(T):2:typemax(T))) == typemin(T):2:typemax(T)
+        @test reverse(StepRangeLen(T(1), T(2), 3)) == T[5, 3, 1]
     end
     @testset "intersect" begin
         @test intersect(1:5, 2:3) === 2:3
