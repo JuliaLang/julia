@@ -205,11 +205,11 @@ begin
         ci = mi.cache
         @test isdefined(ci, :next)
         @test ci.owner === InvalidationTesterToken()
-        @test_broken ci.max_world == typemax(UInt)
+        @test ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
         @test ci.owner === nothing
-        @test_broken ci.max_world == typemax(UInt)
+        @test ci.max_world == typemax(UInt)
     end
 
     @test isnothing(pr48932_caller(42))
@@ -313,11 +313,11 @@ begin take!(GLOBAL_BUFFER)
         ci = mi.cache
         @test isdefined(ci, :next)
         @test ci.owner === InvalidationTesterToken()
-        @test_broken ci.max_world == typemax(UInt)
+        @test ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
         @test ci.owner === nothing
-        @test_broken ci.max_world == typemax(UInt)
+        @test ci.max_world == typemax(UInt)
     end
     @test isnothing(pr48932_caller_unuse(42))
     @test "foo" == String(take!(GLOBAL_BUFFER))
@@ -553,4 +553,111 @@ let M = LimitedResultBackedges
         @test !isempty(cis)
         @test all(ci -> ci.max_world == typemax(UInt), cis)
     end
+end
+
+# A new method must invalidate a caller that invokes or inlines an uninformative call.
+module UninformativeCommit
+    global CALLEE = identity
+    @noinline uninf_invoke(@nospecialize x) = CALLEE(x)
+    @inline uninf_inline(x) = CALLEE(x)
+    invoke_caller(v::Vector{Any}) = uninf_invoke(v[1])
+    inline_caller(v::Vector{Any}) = uninf_inline(v[1])
+end
+let tester_ci(f) = let ci = Base.method_instance(f, (Vector{Any},)).cache
+        @test ci.owner === InvalidationTesterToken()
+        ci
+    end
+    @test only(Base.return_types(UninformativeCommit.invoke_caller, (Vector{Any},);
+        interp=InvalidationTester())) === Any
+    @test only(Base.return_types(UninformativeCommit.inline_caller, (Vector{Any},);
+        interp=InvalidationTester())) === Any
+    @test tester_ci(UninformativeCommit.invoke_caller).max_world == typemax(UInt)
+    @test tester_ci(UninformativeCommit.inline_caller).max_world == typemax(UInt)
+
+    @eval UninformativeCommit uninf_invoke(x::Int) = "specific"
+    @eval UninformativeCommit uninf_inline(x::Int) = "specific"
+    @test tester_ci(UninformativeCommit.invoke_caller).max_world != typemax(UInt)
+    @test tester_ci(UninformativeCommit.inline_caller).max_world != typemax(UInt)
+end
+
+# A call with an `Any` result but partly known effects keeps its edges. Here those effects
+# let the optimizer delete the call.
+module UninformativeEffects
+    flag::Bool = true
+    @noinline callee(x) = flag ? x : throw(x)
+    function caller(v::Vector{Any})
+        try
+            callee(v[1])
+        catch
+        end
+        nothing
+    end
+end
+let M = UninformativeEffects, interp = InvalidationTester()
+    Base.return_types(M.caller, (Vector{Any},); interp)
+    ci = Base.method_instance(M.caller, (Vector{Any},)).cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+    @eval M callee(x::Int) = x
+    @test ci.max_world != typemax(UInt)
+end
+
+# The `Nothing` split is folded by concrete evaluation, so a new method for it must
+# invalidate the caller.
+module UninformativeFold
+    Base.@assume_effects :foldable @noinline callee(x) = Base.inferencebarrier(identity)(1)
+    @noinline callee(x::Integer) = Base.inferencebarrier(identity)(x)
+    caller(v::Vector{Union{Nothing,Integer}}) = callee(v[1])
+end
+let M = UninformativeFold, interp = InvalidationTester()
+    Base.return_types(M.caller, (Vector{Union{Nothing,Integer}},); interp)
+    ci = Base.method_instance(M.caller, (Vector{Union{Nothing,Integer}},)).cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+    @eval M callee(::Nothing) = 2
+    @test ci.max_world != typemax(UInt)
+end
+
+# A new method for the split that stays dynamic must not invalidate the caller.
+module UninformativeFoldOtherSplit
+    Base.@assume_effects :foldable @noinline callee(x) = Base.inferencebarrier(identity)(1)
+    @noinline callee(x::Integer) = Base.inferencebarrier(identity)(x)
+    caller(v::Vector{Union{Nothing,Integer}}) = callee(v[1])
+end
+let M = UninformativeFoldOtherSplit, interp = InvalidationTester()
+    Base.return_types(M.caller, (Vector{Union{Nothing,Integer}},); interp)
+    ci = Base.method_instance(M.caller, (Vector{Union{Nothing,Integer}},)).cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+    @eval M callee(::Int8) = 3
+    @test ci.max_world == typemax(UInt)
+end
+
+# A return type query exposes the inferred result as a value, so it needs the edge.
+module UninformativeReturnType
+    @noinline callee(x) = Base.inferencebarrier(identity)(x)
+end
+@eval UninformativeReturnType caller() = $(Compiler.return_type)(callee, Tuple{Any})
+let M = UninformativeReturnType, interp = InvalidationTester()
+    Base.return_types(M.caller, (); interp)
+    ci = Base.method_instance(M.caller, ()).cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+    @eval M callee(x) = 1
+    @test ci.max_world != typemax(UInt)
+end
+
+# The same holds when the uninformative call is nested inside the queried call.
+module UninformativeReturnTypeApply
+    @noinline callee(x) = Base.inferencebarrier(identity)(x)
+end
+@eval UninformativeReturnTypeApply caller() =
+    $(Compiler.return_type)(Core._apply_iterate, Tuple{typeof(iterate), typeof(callee), Tuple{Any}})
+let M = UninformativeReturnTypeApply, interp = InvalidationTester()
+    Base.return_types(M.caller, (); interp)
+    ci = Base.method_instance(M.caller, ()).cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+    @eval M callee(x) = 1
+    @test ci.max_world != typemax(UInt)
 end
