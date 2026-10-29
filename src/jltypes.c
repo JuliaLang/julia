@@ -1765,7 +1765,8 @@ static jl_typestack_t *typecache_stack_held(void) JL_NOTSAFEPOINT
 // it to other threads, which read `super` and the cache without the lock. It
 // carries no `types` except for tuples (the caller
 // publishes them once the image is relocated); `super` is unset
-// in the image and stays so, computed lazily. The lookup compares keys by
+// in the image until the loader publishes the stored one, or is computed
+// lazily before that. The lookup compares keys by
 // subtyping, which may compute a lazy supertype that instantiates this very
 // key: the copy stands for it on the instantiation stack meanwhile, so that
 // instantiation adopts the copy instead of creating the type. So does the
