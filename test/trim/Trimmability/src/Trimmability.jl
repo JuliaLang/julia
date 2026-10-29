@@ -262,6 +262,8 @@ function @main(args::Vector{String})::Cint
 
     user_library_ccall() # prints as a side effect
     lazy_library_ccall()
+    versions = Dict(v"1.2.3" => "a", VersionNumber(length(args), 0, 0, ("rc", UInt64(1))) => "b")
+    println(Core.stdout, "versions: ", versions[v"2.0.0-rc.1"], " ", versions[v"1.2.3"])
 
     Base.donotdelete(reshape([1,2,3],:,1,1))
 
