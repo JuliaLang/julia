@@ -1250,8 +1250,9 @@ JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
 STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 {
     // parent and ptr isa jl_value_t*
-    if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 /* GC_OLD_MARKED */ && // parent is old and not in remset
-                   (jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) == 0)) // ptr is young
+    if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 /* GC_OLD_MARKED */ &&
+                   (jl_astaggedvalue(parent)->bits.in_image ||
+                    (jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) == 0)))
         jl_gc_queue_root((jl_value_t*)parent);
 }
 
@@ -1269,7 +1270,7 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_
     // ptr is an immutable object
     if (__likely(jl_astaggedvalue(parent)->bits.gc != 3))
         return; // parent is young or in remset
-    if (__likely(jl_astaggedvalue(ptr)->bits.gc == 3))
+    if (__likely(jl_astaggedvalue(ptr)->bits.gc == 3 && !jl_astaggedvalue(parent)->bits.in_image))
         return; // ptr is old and not in remset (thus it does not point to young)
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(ptr);
     const jl_datatype_layout_t *ly = dt->layout;
