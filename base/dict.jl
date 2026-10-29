@@ -12,11 +12,11 @@ function show(io::IO, t::AbstractDict{K,V}) where V where K
         first = true
         n = 0
         for pair in t
+            limit && n >= 10 && (print(io, "…"); break)
             first || print(io, ", ")
             first = false
             show(recur_io, pair)
             n+=1
-            limit && n >= 10 && (print(io, "…"); break)
         end
     end
     print(io, ')')
