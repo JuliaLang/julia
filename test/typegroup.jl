@@ -439,6 +439,28 @@ using Test
         @test TG_SuperRefA <: AbstractVector{TG_SuperRefB}
     end
 
+    @testset "member supertypes are unset until resolved" begin
+        abstract type TG_UnsetAbs end
+        abstract type TG_UnsetA{T} end
+        abstract type TG_UnsetBounded{T <: TG_UnsetAbs} end
+        # building the Union asks whether the in-progress member is an `Int`
+        typegroup
+            struct TG_UnsetUnionA <: TG_UnsetA{Union{TG_UnsetUnionB, Int}} end
+            struct TG_UnsetUnionB <: TG_UnsetAbs
+                a::TG_UnsetUnionA
+            end
+        end
+        @test supertype(TG_UnsetUnionA) === TG_UnsetA{Union{TG_UnsetUnionB, Int}}
+        # a bound checked before the member's supertype is set is not
+        # reported as violated
+        @test_throws "circular type parameter constraint" @eval typegroup
+            struct TG_UnsetEarlyA <: TG_UnsetBounded{TG_UnsetEarlyB} end
+            struct TG_UnsetEarlyB <: TG_UnsetAbs
+                a::TG_UnsetEarlyA
+            end
+        end
+    end
+
     @testset "self-referential supertype parameter" begin
         # Node{T} <: AbstractVector{Node{T}} -- type references itself in supertype params
         typegroup

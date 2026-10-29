@@ -3246,6 +3246,9 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         while (xd != jl_any_type && xd->name != yd->name) {
             jl_datatype_t *xsuper = jl_get_super(xd);
             if (xsuper == NULL) {
+                // definition in progress: its supertypes are all abstract
+                if (!yd->name->abstract)
+                    return 0;
                 assert(xd->parameters && jl_is_typename(xd->name));
                 jl_errorf("circular type parameter constraint in definition of %s", jl_symbol_name(xd->name->name));
             }

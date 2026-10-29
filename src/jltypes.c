@@ -3225,8 +3225,7 @@ static jl_value_t *inst_datatype_complete(jl_datatype_t *dt, jl_datatype_t *ndt,
     }
     else if (!in_definition) {
         // from the declaration, not from `dt`: it may be a template whose own
-        // supertype is deferred (unset), or was computed while the definition
-        // still held a placeholder
+        // supertype is deferred (unset)
         jl_value_t *super = inst_declared_super(primarydt, ndt, stack, check, nothrow, dcache);
         if (nothrow && super == NULL)
             return NULL;
@@ -3888,9 +3887,14 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t, jl_deferred_typecache_t *dca
         if (ndt == NULL)
             continue;
         assert(jl_unwrap_unionall(ndt->name->wrapper) == (jl_value_t*)t);
-        // a plain write: during a typegroup definition, a lazy computation may
-        // have stored one made from the `Any` placeholder
-        jl_gc_write(ndt, ndt->super, jl_datatype_t, (jl_datatype_t*)inst_declared_super(t, ndt, &top, 1, 0, dcache));
+        // one made after the supertype was declared is kept: it came from the
+        // same declaration
+        if (jl_atomic_load_relaxed((_Atomic(jl_datatype_t*)*)&ndt->super) == NULL) {
+            jl_value_t *super = inst_declared_super(t, ndt, &top, 1, 0, dcache);
+            jl_datatype_t *unset = NULL;
+            jl_gc_wb(ndt, (void*)&ndt->super, super);
+            jl_atomic_cmpswap((_Atomic(jl_datatype_t*)*)&ndt->super, &unset, (jl_datatype_t*)super);
+        }
     }
 
     if (t->types != jl_emptysvec) {

@@ -2875,8 +2875,8 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             jl_gc_write(tn, tn->names, jl_svec_t, fieldnames);
             tn->n_uninitialized = (int32_t)(jl_svec_len(fieldnames) - min_initialized);
 
-            // Set up initial values
-            datatypes[i]->super = jl_any_type;
+            // Set up initial values. `super` stays NULL until step 3: it is
+            // what marks the definition as in progress
             datatypes[i]->parameters = jl_emptysvec;
             datatypes[i]->types = NULL;
 
@@ -2948,12 +2948,20 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             JL_GC_POP();
         }
 
-        // Step 3: Resolve supertypes (after wrapper UnionAlls are set up)
+        // Step 3: Resolve supertypes (after wrapper UnionAlls are set up).
+        // A member without a declared supertype is given `Any` first, so the
+        // declarations resolved after see its final supertype.
+        for (size_t i = 0; i < n; i++) {
+            jl_svec_t *info = (jl_svec_t*)jl_svecref(struct_infos, i);
+            jl_value_t *super = jl_svecref(info, 5);
+            if (super == jl_nothing || super == NULL || super == (jl_value_t*)jl_any_type)
+                datatypes[i]->super = jl_any_type;
+        }
         for (size_t i = 0; i < n; i++) {
             jl_tvar_t *tv = (jl_tvar_t*)jl_svecref(typevars, i);
             jl_svec_t *info = (jl_svec_t*)jl_svecref(struct_infos, i);
             jl_value_t *super = jl_svecref(info, 5);
-            if (super != jl_nothing && super != NULL) {
+            if (datatypes[i]->super == NULL) {
                 const char *type_name = jl_symbol_name(tv->name);
                 jl_value_t *resolved_super = NULL;
                 JL_GC_PUSH3(&tv, &super, &resolved_super);
