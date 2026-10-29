@@ -3379,9 +3379,6 @@ static jl_value_t *inst_datatype_complete(jl_datatype_t *dt, jl_datatype_t *ndt,
     }
 
     // the caller publishes a cacheable result (`region_finish`)
-    // XXX: if the stack was used, this will publish in the wrong order,
-    // leading to incorrect layouts and data races (#40050: the A{T} should be
-    // an isbitstype singleton of size 0)
     return (jl_value_t*)ndt;
 }
 
