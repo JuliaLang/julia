@@ -4578,7 +4578,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ex2 = @ast ctx ex [:block
             [:assert "toplevel_only"::symbol [:syntaxinert ex]]
             [:(=) tmp [:call
-             eval::value
+                at_eval_hook::value
                 # a macro expanding to toplevel does not change the eval module,
                 # but does change the name resolution module
                 ctx.layer.mod::value
