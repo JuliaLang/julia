@@ -20,8 +20,7 @@
     .p2align 2
 CNAME(jl_start_fiber_on_stack):
     .cfi_startproc
-    .cfi_undefined 1
-    .cfi_return_column 1
+    .cfi_undefined ra
     // a0 = stack_top, a1 = fn
     mv      sp, a0
     mv      ra, zero            // Clear return address register

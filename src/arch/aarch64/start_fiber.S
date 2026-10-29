@@ -20,8 +20,7 @@
     .p2align 2
 CNAME(jl_start_fiber_on_stack):
     .cfi_startproc
-    .cfi_undefined 1
-    .cfi_return_column 1
+    .cfi_undefined x30
     // x0 = stack_top, x1 = fn
     mov     sp, x0
     mov     x29, xzr            // Clear frame pointer (x29)

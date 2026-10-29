@@ -19,8 +19,7 @@
     DEBUGINFO(jl_start_fiber_on_stack)
 CNAME(jl_start_fiber_on_stack):
     .cfi_startproc
-    .cfi_undefined 1
-    .cfi_return_column 1
+    .cfi_undefined eip
     CET_START()
     movl    4(%esp), %eax       // stack_top
     movl    8(%esp), %ecx       // fn

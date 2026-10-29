@@ -22,8 +22,7 @@
     .p2align 2
 CNAME(jl_start_fiber_on_stack):
     .cfi_startproc
-    .cfi_undefined 1
-    .cfi_return_column 1
+    .cfi_undefined lr
     // r0 = stack_top, r1 = fn
     mov     sp, r0
     mov     lr, #0              // Clear link register (lr)

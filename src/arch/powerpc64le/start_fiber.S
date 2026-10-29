@@ -23,8 +23,7 @@
     .p2align 2
 CNAME(jl_start_fiber_on_stack):
     .cfi_startproc
-    .cfi_undefined 1
-    .cfi_return_column 1
+    .cfi_undefined lr
     // r3 = stack_top, r4 = fn
     // Move stack (-0x30 for initial stack frame) to stack pointer
     addi    1, 3, -0x30

@@ -20,8 +20,6 @@
 CNAME(jl_start_fiber_on_stack):
     .cfi_startproc
     .cfi_undefined rip
-    .cfi_undefined rbp
-    .cfi_return_column rbp
     CET_START()
     // rdi = stack_top, rsi = fn
     movq    %rdi, %rsp

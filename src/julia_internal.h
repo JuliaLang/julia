@@ -170,25 +170,27 @@ static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT 
 #else
 // wipe out the call-stack unwind capability beyond this function
 // (we are noreturn, so it is not a total lie)
-// N.B. these directives apply to whichever function the code ends up in, so
+// An undefined return address marks the end of the call chain (DWARF 5, 6.4.4).
+// This takes effect where the directive is, after the prologue: before it, the
+// return address is wherever the function was entered with it, which is zero
+// for start_task (see arch/<arch>/start_fiber.S) and the real caller elsewhere.
+// N.B. this directive applies to whichever function the code ends up in, so
 // every function using CFI_NORETURN must be NOINLINE: inlined into a caller,
-// `.cfi_return_column` rebinds the caller's whole FDE to a CIE whose return
-// address register is undefined, and unwinding through any suspended task
-// switch stops there (the PGO+ThinLTO macOS aarch64 build inlined
-// jl_start_fiber_set into ctx_switch and jl_start_fiber_swap).
+// unwinding through any suspended task switch would stop there (the PGO+ThinLTO
+// macOS aarch64 build inlined jl_start_fiber_set into ctx_switch and
+// jl_start_fiber_swap).
 #if defined(_CPU_X86_64_)
-// per nongnu libunwind: "x86_64 ABI specifies that end of call-chain is marked with a NULL RBP or undefined return address"
-// so we do all 3, to be extra certain of it
-#define CFI_NORETURN \
-    asm volatile ("\t.cfi_undefined rip"); \
-    asm volatile ("\t.cfi_undefined rbp"); \
-    asm volatile ("\t.cfi_return_column rbp");
+#define CFI_NORETURN asm volatile ("\t.cfi_undefined rip");
+#elif defined(_CPU_X86_)
+#define CFI_NORETURN asm volatile ("\t.cfi_undefined eip");
+#elif defined(_CPU_AARCH64_)
+#define CFI_NORETURN asm volatile ("\t.cfi_undefined x30");
+#elif defined(_CPU_ARM_) || defined(_CPU_PPC64_) || defined(_CPU_PPC_)
+#define CFI_NORETURN asm volatile ("\t.cfi_undefined lr");
+#elif defined(_CPU_RISCV64_)
+#define CFI_NORETURN asm volatile ("\t.cfi_undefined ra");
 #else
-    // per nongnu libunwind: "DWARF spec says undefined return address location means end of stack"
-    // we use whatever happens to be register 1 on this platform for this
-#define CFI_NORETURN \
-    asm volatile ("\t.cfi_undefined 1"); \
-    asm volatile ("\t.cfi_return_column 1");
+#error "CFI_NORETURN: the return address register of this CPU is not known"
 #endif
 #endif
 
