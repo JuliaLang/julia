@@ -440,8 +440,8 @@ end
         @test isempty(findall(in(UInt8(200):UInt8(255)), Int8(-128):Int8(127)))
         @test isempty(findall(in(Int8(-128):Int8(-128)), Int8(0):Int8(-1):Int8(-10)))
         @test isempty(findall(in(UInt64(1):UInt64(5)), UInt64(10):UInt64(20)))
-        @test isempty(findall(in((5 * 10^18):(6 * 10^18)), (-5 * 10^18):(-4 * 10^18)))
-        @test findall(in(0:10), typemin(Int64):4:typemax(Int64)) == 2305843009213693953:1:2305843009213693955
+        @test isempty(findall(in((typemax(Int64) - 10):typemax(Int64)), typemin(Int64):(typemin(Int64) + 10)))
+        @test findall(in(Int32(0):Int32(10)), typemin(Int32):Int32(4):typemax(Int32)) == 536870913:1:536870915
 
         let vals_i8  = Int8[-128, -127, -100, -50, -1, 0, 1, 50, 100, 126, 127],
             vals_u8  = UInt8[0, 1, 2, 50, 100, 127, 128, 200, 254, 255],
