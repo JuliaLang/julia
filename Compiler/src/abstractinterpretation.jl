@@ -598,20 +598,20 @@ end
 
 function conditional_argtype(𝕃ᵢ::AbstractLattice, @nospecialize(rt), @nospecialize(sig),
                              argtypes::Vector{Any}, i::Int)
-    if isa(rt, InterConditional) && rt.slot == i
-        return rt
-    else
-        argt = widenslotwrapper(argtypes[i])
-        if isvarargtype(argt)
-            @assert fieldcount(sig) == i
-            argt = unwrapva(argt)
-        end
-        thentype = elsetype = tmeet(𝕃ᵢ, argt, fieldtype(sig, i))
-        condval = maybe_extract_const_bool(rt)
-        condval === true && (elsetype = Bottom)
-        condval === false && (thentype = Bottom)
-        return InterConditional(i, thentype, elsetype)
+    argt = widenslotwrapper(argtypes[i])
+    if isvarargtype(argt)
+        @assert fieldcount(sig) == i
+        argt = unwrapva(argt)
     end
+    argt = tmeet(𝕃ᵢ, argt, fieldtype(sig, i))
+    if isa(rt, InterConditional) && rt.slot == i
+        return InterConditional(i, tmeet(𝕃ᵢ, rt.thentype, widenconst(argt)), tmeet(𝕃ᵢ, rt.elsetype, widenconst(argt)))
+    end
+    thentype = elsetype = argt
+    condval = maybe_extract_const_bool(rt)
+    condval === true && (elsetype = Bottom)
+    condval === false && (thentype = Bottom)
+    return InterConditional(i, thentype, elsetype)
 end
 
 function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{MethodMatchTarget},
