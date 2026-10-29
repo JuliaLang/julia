@@ -1,0 +1,88 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ian Butterworth <i.r.butterworth@gmail.com>
+Date: Thu, 29 Oct 2026 05:05:38 -0400
+Subject: [PATCH] Add mdb_env_release_locks() to remove SysV semaphores before
+ exit
+
+With System V semaphores (MDB_USE_SYSV_SEM, used on Apple platforms
+with MDB_USE_ROBUST), the semaphore set of an environment is removed
+only by mdb_env_close(), and only by its last user. A process that
+exits without closing the environment leaks the set until reboot, and
+once the system-wide limit is reached every mdb_env_open() fails with
+ENOSPC.
+
+Closing the environment at exit is not always possible, because it
+releases the memory map that earlier transactions returned buffers
+into. mdb_env_release_locks() does only the semaphore part of
+mdb_env_close(): if this process can take the exclusive file lock, it
+removes the set. No transaction may be started afterwards. On other
+lock backends it does nothing. lmdb.h defines
+MDB_HAVE_ENV_RELEASE_LOCKS so that callers can also build against an
+unpatched LMDB.
+---
+ libraries/liblmdb/lmdb.h | 14 ++++++++++++++
+ libraries/liblmdb/mdb.c  | 23 +++++++++++++++++++++++
+ 2 files changed, 37 insertions(+)
+
+diff --git a/libraries/liblmdb/lmdb.h b/libraries/liblmdb/lmdb.h
+index b7733c1..3f8054f 100644
+--- a/libraries/liblmdb/lmdb.h
++++ b/libraries/liblmdb/lmdb.h
+@@ -903,6 +903,20 @@ int  mdb_env_sync(MDB_env *env, int force);
+ 	 */
+ void mdb_env_close(MDB_env *env);
+ 
++	/** @brief Release the environment's lock resources ahead of process exit.
++	 *
++	 * Where LMDB locks with System V semaphores, the semaphore set outlives the
++	 * process unless #mdb_env_close() removes it. This removes the set if no
++	 * other process is using the environment, without releasing the memory map,
++	 * so buffers returned by earlier transactions stay valid. No transaction
++	 * may be started on the environment afterwards. On other lock backends this
++	 * does nothing.
++	 * @param[in] env An environment handle returned by #mdb_env_create()
++	 * @return A non-zero error value on failure and 0 on success.
++	 */
++int  mdb_env_release_locks(MDB_env *env);
++#define MDB_HAVE_ENV_RELEASE_LOCKS 1
++
+ 	/** @brief Set environment flags.
+ 	 *
+ 	 * This may be used to set some flags in addition to those from
+diff --git a/libraries/liblmdb/mdb.c b/libraries/liblmdb/mdb.c
+index 9cfb1b7..32bf2e2 100644
+--- a/libraries/liblmdb/mdb.c
++++ b/libraries/liblmdb/mdb.c
+@@ -6679,6 +6679,29 @@ mdb_env_close_active(MDB_env *env, int excl)
+ 	env->me_flags &= ~(MDB_ENV_ACTIVE|MDB_ENV_TXKEY);
+ }
+ 
++int ESECT
++mdb_env_release_locks(MDB_env *env)
++{
++	int rc = MDB_SUCCESS;
++#ifdef MDB_USE_SYSV_SEM
++	int excl = 0;
++
++	if (!env || !(env->me_flags & MDB_ENV_ACTIVE) || !env->me_txns ||
++		env->me_rmutex->semid == -1)
++		return MDB_SUCCESS;
++	/* Same as mdb_env_close(): only the last user removes the set */
++	if (mdb_env_excl_lock(env, &excl) == 0 && excl > 0) {
++		if (semctl(env->me_rmutex->semid, 0, IPC_RMID) < 0)
++			rc = ErrCode();
++	}
++	env->me_rmutex->semid = -1;
++	env->me_wmutex->semid = -1;
++#else
++	(void)env;
++#endif
++	return rc;
++}
++
+ void ESECT
+ mdb_env_close(MDB_env *env)
+ {
+-- 
+2.43.0
+

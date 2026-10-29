@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <shared_mutex>
 
 #include <llvm/ADT/FunctionExtras.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
@@ -75,6 +76,7 @@ protected:
     bool updateATime(MDBTxn &Txn, const Hash &H, int64_t Time, bool Fresh);
     bool maybeEvictLRU(MDBTxn &Txn, size_t RoomFor);
     size_t dbiSize(MDBTxn &Txn, MDB_dbi Dbi);
+    MDBTxn beginTxn(unsigned Flags = 0) JL_NOTSAFEPOINT;
 
 private:
     std::atomic<bool> Initialized = false;
@@ -86,6 +88,9 @@ private:
     uv_thread_t WriterThread;
     bool Started = false;
     std::atomic<bool> Exiting = false;
+    // held shared to start a transaction, and exclusively at exit to remove the semaphores
+    std::shared_mutex TxnLock;
+    bool LocksReleased = false; // guarded by TxnLock
     // Non-null MemoryBuffer -> cache miss, want to write new entry
     // Null MemoryBuffer     -> cache hit, want to update atime
     std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> ObjQueue;
