@@ -389,6 +389,15 @@ end
     buf = IOBuffer()
     Base.show(buf, MIME"text/plain"(), Memory{Union{Int16, String}}(undef, 2))
     @test summarysize_roundtrips()
+
+    # an immediate element is no object of its own
+    mem = Memory{Union{Int16, String}}(undef, 10)
+    undefsize = (Base.summarysize(mem), Base.summarysize(mem; count=true))
+    fill!(mem, Int16(1000))
+    @test (Base.summarysize(mem), Base.summarysize(mem; count=true)) == undefsize
+    s = "payload" * "!"
+    mem[1] = s
+    @test Base.summarysize(mem) == undefsize[1] + Base.summarysize(s)
 end
 
 @testset "Ref conversion" begin
