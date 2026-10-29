@@ -624,17 +624,14 @@ add_tfunc(Core.bitsizeof, 1, 1, bitsizeof_tfunc, 1)
     x = unwrap_unionall(xt)
     isconstType(x) && return Const(nfields(type_parameter(x)))
     if isa(x, DataType) && !isabstracttype(x)
-        if x.name === Tuple.name
-            isvatuple(x) && return Int
-            return Const(length(x.types))
-        elseif x.name === _NAMEDTUPLE_NAME
+        if x.name === _NAMEDTUPLE_NAME
             length(x.parameters) == 2 || return Int
             names = x.parameters[1]
             isa(names, Tuple{Vararg{Symbol}}) || return nfields_tfunc(𝕃, rewrap_unionall(x.parameters[2], xt))
             return Const(length(names))
-        else
-            return Const(isdefined(x, :types) ? length(x.types) : length(x.name.names))
         end
+        n = datatype_fieldcount(x)
+        return n === nothing ? Int : Const(n)
     end
     if isa(x, Union)
         na = nfields_tfunc(𝕃, unwraptv(x.a))
