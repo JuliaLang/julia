@@ -1845,7 +1845,7 @@ cat_ndims(a) = 0
 cat_ndims(a::AbstractArray) = ndims(a)
 
 cat_indices(A, d) = OneTo(1)
-cat_indices(A::AbstractArray, d) = axes(A, d)
+cat_indices(A::AbstractArray, d) = OneTo(size(A, d))
 
 cat_similar(A, ::Type{T}, shape::Tuple) where T = Array{T}(undef, shape)
 cat_similar(A, ::Type{T}, shape::Vector) where T = Array{T}(undef, shape...)
