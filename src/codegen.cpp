@@ -7315,7 +7315,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
 #ifdef GC_BARRIER_ON_TASKS
             emit_write_barrier(ctx, get_current_task(ctx), scope_ptr, scope_to_restore);
 #else
-            // No barrier required: the running task is kept in the GC remset
+            // No barrier required: old Tasks are implicitly in the GC remset
 #endif
             ctx.alias().mutab_nonconst.decorateInst(
                 ctx.builder.CreateAlignedStore(scope_to_restore, scope_ptr, ctx.types().alignof_ptr));
@@ -10751,7 +10751,7 @@ static jl_llvm_functions_t
                 // Barrier is needed to snapshot scope value before replacement
                 emit_write_barrier(ctx, get_current_task(ctx), scope_ptr, scope_boxed);
 #else
-                // No barrier required: the running task is kept in the GC remset
+                // No barrier required: old Tasks are implicitly in the GC remset
 #endif
                 StoreInst *scope_store = ctx.builder.CreateAlignedStore(scope_boxed, scope_ptr, ctx.types().alignof_ptr);
                 ctx.alias().mutab_nonconst.decorateInst(current_scope);

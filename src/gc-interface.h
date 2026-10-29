@@ -169,8 +169,7 @@ JL_DLLEXPORT const char* jl_gc_active_impl(void) JL_NOTSAFEPOINT;
 // It still needs to be annotated with JL_DLLEXPORT since it is called from Rust by MMTk.
 JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 // Notify the GC that a task is resuming execution on a mutator thread. From here on the
-// task's stack is mutated without any barriers. Besides the task switch, this is also called
-// when a thread resumes after a GC, possibly while it is still in a GC-safe region.
+// task's stack is mutated without any barriers.
 void jl_gc_notify_task_resume(struct _jl_task_t *task) JL_NOTSAFEPOINT;
 
 // ========================================================================= //
@@ -309,7 +308,7 @@ void jl_gc_notify_image_alloc(const char* img_data, size_t len) JL_NOTSAFEPOINT;
 //      GC_BARRIER_SNAPSHOT: barriers must observe references before they are overwritten.
 // GC_BARRIER_FIELD_PRECISE: barriers are field-precise, so whole-object barriers are potentially expensive.
 //      GC_BARRIER_ON_TASKS: stores into the current task require a barrier (the collector does
-//                           not keep the running task remembered).
+//                           not implicitly remember tasks).
 
 // Write barrier slow-path. If a generational collector is used,
 // it may enqueue an old object into the remembered set of the calling thread.
@@ -331,8 +330,8 @@ STATIC_INLINE void jl_gc_wb(const void *parent, void *slot, const void *ptr) JL_
 // last safepoint so it is guaranteed young
 STATIC_INLINE void jl_gc_wb_fresh(const void *parent, void *slot, const void *ptr) JL_NOTSAFEPOINT;
 // Annotates that a write barrier can (possibly) be elided: the store writes a field of the
-// current task (parent == jl_current_task). Only a GC that keeps the running task remembered
-// may elide it (see GC_BARRIER_ON_TASKS).
+// current task (parent == jl_current_task). Only a GC that implicitly remembers tasks may
+// elide it (see GC_BARRIER_ON_TASKS).
 STATIC_INLINE void jl_gc_wb_current_task(const void *parent, void *slot, const void *ptr) JL_NOTSAFEPOINT;
 // Annotates that a write barrier can (possibly) be elided: `ptr` is known to be an old object
 STATIC_INLINE void jl_gc_wb_knownold(const void *parent, void *slot, const void *ptr) JL_NOTSAFEPOINT;
