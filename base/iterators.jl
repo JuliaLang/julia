@@ -821,7 +821,7 @@ take_iteratorsize(a) = HasLength()
 take_iteratorsize(::SizeUnknown) = SizeUnknown()
 IteratorSize(::Type{Take{I}}) where {I} = take_iteratorsize(IteratorSize(I))
 length(t::Take) = _min_length(t.xs, 1:t.n, IteratorSize(t.xs), HasLength())
-isdone(t::Take) = isdone(t.xs)
+isdone(t::Take) = (t.n <= 0) | isdone(t.xs)
 isdone(t::Take, state) = (state[1] <= 0) | isdone(t.xs, tail(state)...)
 
 @propagate_inbounds function iterate(it::Take, state=(it.n,))
