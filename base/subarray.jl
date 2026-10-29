@@ -452,10 +452,6 @@ compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError(LazyS
 
 elsize(::Type{<:SubArray{<:Any,<:Any,P}}) where {P} = elsize(P)
 
-iscontiguous(A::SubArray) = iscontiguous(typeof(A))
-iscontiguous(::Type{<:SubArray}) = false
-iscontiguous(::Type{<:FastContiguousSubArray}) = true
-
 first_index(V::FastSubArray) = V.offset1 + V.stride1 * firstindex(V) # cached for fast linear SubArrays
 first_index(V::SubArray) = compute_linindex(parent(V), V.indices)
 
