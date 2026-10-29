@@ -2853,6 +2853,10 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     auto emit_store_pre_barrier = [&](Value *r, const jl_cgval_t &rhs) JL_CANSAFEPOINT {
         if (parent == NULL || !tracked_pointers)
             return;
+        // the multibarrier misses references in tagged words, integers to
+        // LLVM; emit_f_opfield and memory_has_codegen leave such stores to the
+        // runtime
+        assert(isboxed || !type_has_taggedwords(jltype));
         if (isboxed) {
             // Insertion-barrier optimization: skip when the new value is perm-allocated.
             // Invalid under SATB (GC_BARRIER_SNAPSHOT), which must snapshot the old value.
