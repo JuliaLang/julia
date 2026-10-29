@@ -257,6 +257,8 @@ function artifact_path(hash::SHA1; honor_overrides::Bool=true)
     return first(possible_paths)
 end
 
+Base.string(dir::Base.Libc.Libdl.LazyArtifactDir) = artifact_path(dir.artifact_hash)
+
 """
     artifact_exists(hash::SHA1; honor_overrides::Bool=true)
 
