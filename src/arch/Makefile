@@ -57,6 +57,8 @@ unix_signal_call_trampoline_DEPS := $(STEP_DEPS)
 win_setjmp_ASM := $(SRCDIR)/$(ASM_ARCH)/win_setjmp.S
 win_restore_trigger_ASM := $(SRCDIR)/$(ASM_ARCH)/win_restore_trigger.S
 macos_signal_ASM := $(SRCDIR)/$(ASM_ARCH)/macos_call_frame_unwind.S $(SRCDIR)/$(ASM_ARCH)/macos_restore_trigger.S
+macos_signal_FLAGS := $(STEP_FLAGS)
+macos_signal_DEPS := $(STEP_DEPS)
 trampolines_ASM := $(JULIAHOME)/cli/arch/$(ASM_ARCH)/trampolines.S
 # libraries a test links against (the trampolines forward into another library,
 # as libjulia does into libjulia-internal)

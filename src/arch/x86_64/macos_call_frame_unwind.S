@@ -17,6 +17,7 @@
     .text
     .globl CNAME(jl_fake_signal_return)
     HIDDEN(jl_fake_signal_return)
+    .p2align 4, 0x90
 CNAME(jl_fake_signal_return):
     .cfi_startproc
     .cfi_signal_frame

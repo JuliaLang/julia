@@ -21,9 +21,22 @@
     .text
     .globl CNAME(jl_mach_restore_trigger)
     HIDDEN(jl_mach_restore_trigger)
+    .p2align 4, 0x90
 CNAME(jl_mach_restore_trigger):
+    // The unwind info describes the interrupted code's frame from the thread
+    // state saved at rsp (_STRUCT_X86_THREAD_STATE64), where the function that
+    // returns here left it.
+    .cfi_startproc
+    .cfi_signal_frame
+    // CFA = the saved rsp, [rsp + 56] (DW_CFA_def_cfa_expression: DW_OP_breg7 56, DW_OP_deref)
+    // rip at [rsp + 128] (DW_CFA_expression: DW_OP_breg7 128)
+    .cfi_escape 0x0f, 0x03, 0x77, 0x38, 0x06
+    .cfi_escape 0x10, 0x10, 0x03, 0x77, 0x80, 0x01
+    nop                         // the return address is past this (&jl_mach_restore_trigger + 1), so that
+                                // unwinders that look up a return address less one find this function
     movq    CNAME(jl_mach_restore_page)(%rip), %r11
     movq    (%r11), %r11        // EXC_BAD_ACCESS here
     ud2                         // should never reach here
+    .cfi_endproc
 
 #endif

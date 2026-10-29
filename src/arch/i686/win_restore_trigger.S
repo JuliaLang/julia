@@ -19,6 +19,8 @@
 
     .text
     .globl CNAME(jl_win_restore_trigger)
+    DEBUGINFO(CNAME(jl_win_restore_trigger))
+    .p2align 4                  // as the start of the .text of the C file it was in
 CNAME(jl_win_restore_trigger):
     movl    CNAME(jl_win_restore_page), %eax
     movl    (%eax), %eax        // EXCEPTION_ACCESS_VIOLATION here
