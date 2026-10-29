@@ -7595,7 +7595,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         // have exactly the runtime type object, not an `==`-equal rep (#61323)
         if (is_uniquerep_Type(ty) &&
                 jl_is_datatype(jl_some_Type_T(ty)) &&
-                jl_is_concrete_type(jl_some_Type_T(ty))) {
+                jl_is_concrete_type(jl_some_Type_T(ty)) &&
+                jl_some_Type_T(ty) != (jl_value_t*)jl_unionall_type) { // hidden fields, use `jl_new_structv`
             jl_value_t *tp0 = jl_some_Type_T(ty);
             assert(nargs <= jl_datatype_nfields(tp0) + 1);
             jl_cgval_t res = emit_new_struct(ctx, tp0, nargs - 1, ArrayRef<jl_cgval_t>(argv).drop_front(), is_promotable);
