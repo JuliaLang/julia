@@ -4134,6 +4134,7 @@ void jl_parallel_gc_threadfun(void *arg)
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
     JL_GC_PROMISE_ROOTED(ct);
+    jl_gc_init_thread_malloc();
     (void)jl_atomic_fetch_add_relaxed(&n_threads_running, -1);
     // wait for all threads
     jl_gc_state_set(ptls, JL_GC_PARALLEL_COLLECTOR_THREAD, JL_GC_STATE_UNSAFE);
@@ -4175,6 +4176,7 @@ void jl_concurrent_gc_threadfun(void *arg)
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
     JL_GC_PROMISE_ROOTED(ct);
+    jl_gc_init_thread_malloc();
     (void)jl_atomic_fetch_add_relaxed(&n_threads_running, -1);
     // wait for all threads
     jl_gc_state_set(ptls, JL_GC_CONCURRENT_COLLECTOR_THREAD, JL_GC_STATE_UNSAFE);
