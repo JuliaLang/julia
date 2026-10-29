@@ -173,19 +173,58 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Int32, Tuple{typeof(trim_ccall_st
     end
 end
 
-# verification should fail if an imprecise library type blocks dispatch resolution
+# verification should fail if the library is not a constant: it may hold a different
+# library at run time, whether its type is imprecise or not
 global loose_trim_lib = static_trim_lib
 trim_ccall_loose_lib() = ccall((:jl_getpid, loose_trim_lib), Int32, ())
+global typed_trim_lib::StaticTrimLib = static_trim_lib
+trim_ccall_typed_lib() = ccall((:jl_getpid, typed_trim_lib), Int32, ())
+trim_cglobal_loose_lib() = cglobal((:jl_n_threads, loose_trim_lib))
 
-let infos = typeinf_ext_toplevel(Any[Core.svec(Int32, Tuple{typeof(trim_ccall_loose_lib)})],
+for (f, rt) in ((trim_ccall_loose_lib, Int32), (trim_ccall_typed_lib, Int32),
+                (trim_cglobal_loose_lib, Ptr{Cvoid}))
+    infos = typeinf_ext_toplevel(Any[Core.svec(rt, Tuple{typeof(f)})],
                                  [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
     errors, parents = get_verify_typeinf_trim(infos)
     (warn, desc) = only(errors)
     @test !warn
     @test desc isa CallMissing
-    @test desc.desc == "unresolved dlopen for ccall / cglobal"
+    @test desc.desc == "non-constant library for ccall / cglobal"
     repr = sprint(verify_print_error, desc, parents, warn)
-    @test occursin("unresolved dlopen for ccall / cglobal", repr)
+    @test occursin("non-constant library for ccall / cglobal", repr)
+end
+
+# a library name may be a non-constant global, if typed as one
+global trim_libname::String = static_trim_libname
+trim_ccall_named_lib() = ccall((:jl_getpid, trim_libname), Int32, ())
+global trim_libsym::Symbol = Symbol(static_trim_libname)
+trim_ccall_sym_lib() = ccall((:jl_getpid, trim_libsym), Int32, ())
+trim_ccall_const_named_lib() = ccall((:jl_getpid, static_trim_libname), Int32, ())
+
+for f in (trim_ccall_named_lib, trim_ccall_sym_lib, trim_ccall_const_named_lib)
+    infos = typeinf_ext_toplevel(Any[Core.svec(Int32, Tuple{typeof(f)})],
+                                 [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+    errors, _ = get_verify_typeinf_trim(infos)
+    @test isempty(errors)
+end
+
+# verification should fail if the symbol name is not a constant, since there is no symbol to
+# link to natively
+global trim_symname::Symbol = :jl_getpid
+trim_ccall_loose_name() = ccall((trim_symname, static_trim_libname), Int32, ())
+trim_ccall_loose_name_nolib() = ccall((trim_symname,), Int32, ())
+trim_cglobal_loose_name() = cglobal((trim_symname, static_trim_libname))
+
+for (f, rt) in ((trim_ccall_loose_name, Int32), (trim_ccall_loose_name_nolib, Int32),
+                (trim_cglobal_loose_name, Ptr{Cvoid}))
+    infos = typeinf_ext_toplevel(Any[Core.svec(rt, Tuple{typeof(f)})],
+                                 [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+    errors, parents = get_verify_typeinf_trim(infos)
+    (warn, desc) = only(errors)
+    @test !warn
+    @test desc isa CallMissing
+    @test desc.desc == "non-constant name for ccall / cglobal"
+    @test occursin("non-constant name for ccall / cglobal", sprint(verify_print_error, desc, parents, warn))
 end
 
 # `LazyLibrary` on-load callbacks are called dynamically, but `--trim` compiles every

@@ -2039,19 +2039,50 @@ function _libdl_dlopen()
     return dlopen_fn
 end
 
+# The type of an element of a foreigncall / foreignglobal spec (see `jl_lookup_foreignsymbol`)
+function foreignsymbol_eltype(@nospecialize(x), ci::CodeInfo)
+    x isa Core.BindingPartition && return partition_rt(x)
+    x isa GlobalRef && return globalref_rt(x, ci)
+    x isa QuoteNode && return Const(x.value)
+    (x isa Expr || x isa SSAValue || x isa Argument || x isa SlotNumber) && return Any
+    return Const(x)
+end
+
+# The types of the name and library (or `nothing`) of a foreigncall / foreignglobal spec, or
+# `nothing` for a function pointer
+function foreignsymbol_type(@nospecialize(spec), ci::CodeInfo)
+    if isexpr(spec, :tuple) && 1 <= length(spec.args) <= 2
+        name_type = foreignsymbol_eltype(spec.args[1], ci)
+        library_type = length(spec.args) == 2 ? foreignsymbol_eltype(spec.args[2], ci) : nothing
+        return (name_type, library_type)
+    elseif spec isa Tuple && 1 <= length(spec) <= 2
+        return (Const(spec[1]), length(spec) == 2 ? Const(spec[2]) : nothing)
+    elseif spec isa QuoteNode || spec isa Union{String,Symbol}
+        return (foreignsymbol_eltype(spec, ci), nothing)
+    end
+    return nothing
+end
+
 # Returns the type of library that a foreigncall / foreignglobal spec (aka foreignsymbol)
 # makes the runtime `dlopen(lib)` on first use, or `nothing` if no such call is made
-function foreign_library_type(@nospecialize(spec), ci::CodeInfo, sptypes::Vector{VarState})
-    if isexpr(spec, :tuple) && length(spec.args) >= 2
-        lib = spec.args[2]
-    elseif spec isa Tuple && length(spec) >= 2
-        lib = spec[2]
-    else # either using a function pointer or an invalid foreigncall - no dlopen applies
-        return nothing
-    end
-    library_type = argextype_widened(lib, ci, sptypes)
+function foreign_library_type(@nospecialize(spec), ci::CodeInfo)
+    types = foreignsymbol_type(spec, ci)
+    types === nothing && return nothing # a function pointer
+    library_type = types[2]
+    library_type === nothing && return nothing
+    library_type = widenconst(library_type)
     library_type <: Union{Symbol,String} && return nothing # resolved natively by the runtime
     return library_type
+end
+
+# Whether the library of a foreigncall / foreignglobal spec is a constant or a name
+function foreign_library_resolved(@nospecialize(spec), ci::CodeInfo)
+    types = foreignsymbol_type(spec, ci)
+    types === nothing && return true # a function pointer
+    library_type = types[2]
+    library_type === nothing && return true
+    library_type isa Const && return true
+    return widenconst(library_type) <: Union{Symbol,String}
 end
 
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
@@ -2100,7 +2131,7 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
         if enqueue_unprepared_invokes && (isexpr(stmt, :foreigncall) || isexpr(stmt, :foreignglobal))
             # Enqueue (in this world) for `--trim`, but not otherwise since
             # this callback is relatively unlikely to run in any given world
-            library_type = foreign_library_type(stmt.args[1], ci, sptypes)
+            library_type = foreign_library_type(stmt.args[1], ci)
             dlopen_fn = library_type === nothing ? nothing : _libdl_dlopen()
             if dlopen_fn !== nothing
                 atype = Tuple{typeof(dlopen_fn), library_type}
