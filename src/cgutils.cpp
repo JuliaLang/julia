@@ -4582,7 +4582,8 @@ static Value *emit_tagged_encode(jl_codectx_t &ctx, const jl_cgval_t &rhs, jl_va
     return word;
 }
 
-// store `rhs` into the tagged word of union type `ut` at `ptr`, owned by `parent`
+// store `rhs` into the tagged word of union type `ut` at `ptr`, owned by
+// `parent`, which is null if the store needs no write barrier
 static void emit_tagged_store(jl_codectx_t &ctx, Value *parent, Value *ptr, const jl_cgval_t &rhs,
                               jl_value_t *ut, const jl_aliasinfo_t &ai, AtomicOrdering Order)
 {
@@ -4593,9 +4594,10 @@ static void emit_tagged_store(jl_codectx_t &ctx, Value *parent, Value *ptr, cons
 #ifdef GC_BARRIER_SNAPSHOT
     // the old word may be a reference whatever is stored; this barrier ignores
     // the child
-    emit_write_barrier(ctx, parent, ptr, ref ? ref : Constant::getNullValue(ctx.types().T_prjlvalue));
+    if (parent)
+        emit_write_barrier(ctx, parent, ptr, ref ? ref : Constant::getNullValue(ctx.types().T_prjlvalue));
 #else
-    if (ref && ref_maybe_null) {
+    if (parent && ref && ref_maybe_null) {
         // the barrier loads the child's tag, so skip it for an immediate
         BasicBlock *wbBB = BasicBlock::Create(ctx.builder.getContext(), "tagged_wb", ctx.f);
         BasicBlock *postBB = BasicBlock::Create(ctx.builder.getContext(), "post_tagged_wb", ctx.f);
@@ -4605,7 +4607,7 @@ static void emit_tagged_store(jl_codectx_t &ctx, Value *parent, Value *ptr, cons
         ctx.builder.CreateBr(postBB);
         ctx.builder.SetInsertPoint(postBB);
     }
-    else if (ref) {
+    else if (parent && ref) {
         emit_write_barrier(ctx, parent, ptr, ref);
     }
 #endif
@@ -4878,7 +4880,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         // other operations take the generic builtin path
         assert(op == StoreKind::Set);
         if (tagged_union_has_codegen(jfty)) {
-            emit_tagged_store(ctx, boxed(ctx, strct), addr, rhs, jfty, ai, Order);
+            emit_tagged_store(ctx, wb ? boxed(ctx, strct) : nullptr, addr, rhs, jfty, ai, Order);
             return rhs;
         }
         ctx.builder.CreateCall(prepare_call(jlstoretaggedword_func),
@@ -5180,12 +5182,12 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         // TODO: verify that nargs <= nf (currently handled by front-end)
         for (size_t i = 0; i < nargs; i++) {
             jl_cgval_t rhs = argv[i];
+            jl_value_t *ft = jl_svecref(sty->types, i);
             bool need_wb; // set to true if the store might cause the allocation of a box newer than the struct
-            if (jl_field_isptr(sty, i))
+            if (jl_field_isptr(sty, i) || jl_is_tagged_uniontype(ft))
                 need_wb = !rhs.isboxed;
             else
                 need_wb = false;
-            jl_value_t *ft = jl_svecref(sty->types, i);
             emit_typecheck(ctx, rhs, ft, "new"); // n.b. ty argument must be concrete
             rhs = update_julia_type(ctx, rhs, ft);
             if (rhs.typ == jl_bottom_type)

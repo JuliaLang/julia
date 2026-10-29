@@ -477,6 +477,12 @@ isas(mem, i) = isassigned(mem, i)
 @testset "codegen: fields" begin
     @test !occursin("get_nth_field", llvm(getx, (MTU,)))
     @test !occursin("store_tagged_word", llvm(setx!, (MTU, Int16)))
+    # `new` stores into a fresh object, which needs no write barrier unless
+    # encoding allocates a box
+    unopt(f, types) = sprint(io -> code_llvm(io, f, types; debuginfo=:none, optimize=false))
+    @test !occursin("write_barrier", unopt(MTU, (String,)))
+    mknni(c, i::Int) = MNI(c ? i : i % Int16)
+    @test occursin("write_barrier", unopt(mknni, (Bool, Int)))
 
     m = MTU()
     @test_throws UndefRefError getx(m)
