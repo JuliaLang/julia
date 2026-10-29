@@ -351,6 +351,8 @@ struct jl_ccall_spec_t {
     void *lib;        // the library, if known statically
     // Otherwise, the svec (fn,) or (fn, lib) to evaluate (permanently rooted)
     jl_value_t *target;
+    // The library, if a constant other than a name (permanently rooted)
+    jl_value_t *lib_obj;
     // Keeps the stub apart from others for the same symbol (0 if not)
     uint64_t site;
     // The calling convention of the calls
@@ -359,10 +361,10 @@ struct jl_ccall_spec_t {
 
 template<>
 struct llvm::DenseMapInfo<jl_ccall_spec_t> {
-    using T = std::tuple<const char *, void *, jl_value_t *, uint64_t, unsigned>;
+    using T = std::tuple<const char *, void *, jl_value_t *, jl_value_t *, uint64_t, unsigned>;
     using I = DenseMapInfo<T>;
     static inline T to(jl_ccall_spec_t t) {
-        return {t.func, t.lib, t.target, t.site, t.cc};
+        return {t.func, t.lib, t.target, t.lib_obj, t.site, t.cc};
     }
 
     static unsigned getHashValue(const jl_ccall_spec_t &Val) { return I::getHashValue(to(Val)); }
@@ -413,8 +415,8 @@ public:
     std::string make_name(StringRef orig_name) JL_NOTSAFEPOINT;
 
     StringRef get_call_target(jl_code_instance_t *ci, bool specsig, bool always_inline) JL_CANSAFEPOINT;
-    Function *get_ccall_target(const char *f_name, void *f_lib,
-                               jl_value_t *target, uint64_t site, CallingConv::ID cc);
+    Function *get_ccall_target(const char *f_name, void *f_lib, jl_value_t *target,
+                               jl_value_t *lib_obj, uint64_t site, CallingConv::ID cc);
 
     // Discard all the context that will be invalidated when we compile the
     // module.  The context and module will be moved to the jl_emitted_output_t.
@@ -432,6 +434,8 @@ public:
     SmallVector<std::pair<jl_code_instance_t *, GlobalVariable *>, 0> external_fns;
     // foreign symbol -> LLVM function declaration
     DenseMap<jl_ccall_spec_t, Function *> ccall_targets;
+    // foreign symbol -> cglobal address cache
+    DenseMap<jl_ccall_spec_t, GlobalVariable *> cglobal_slots;
 
     SmallVector<cfunc_decl_t,0> cfuncs;
     std::map<void*, GlobalVariable*> global_targets;
@@ -447,12 +451,6 @@ public:
     DenseMap<std::pair<StringRef, StringRef>, DISubprogram*> inlined_subprograms;
     std::map<jl_datatype_t*, Type*> llvmtypes;
     DenseMap<Constant*, GlobalVariable*> mergedConstants;
-    // The caches of cglobal addresses (see runtime_sym_gv), by library and name:
-    // for NULL (RTLD_DEFAULT) and the special libraries (JL_EXE_LIBNAME, ...),
-    // and for the others.
-    typedef StringMap<GlobalVariable *> SymMapGV;
-    SymMapGV symMapSpecial[4];
-    StringMap<SymMapGV> symMapLib;
     SmallVector<std::unique_ptr<Module>, 0> llvmcall_modules;
 
     // inputs
