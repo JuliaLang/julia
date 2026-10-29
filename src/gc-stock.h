@@ -646,12 +646,12 @@ NOINLINE void jl_gc_free_page(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT;
 #endif
 
 // GC_TIME || GC_FINAL_STATS
-void gc_settime_premark_end(void);
-void gc_settime_postmark_end(void);
+void gc_settime_premark_end(void) JL_NOTSAFEPOINT;
+void gc_settime_postmark_end(void) JL_NOTSAFEPOINT;
 
 // GC_FINAL_STATS
-void gc_final_count_page(size_t pg_cnt);
-void gc_final_pause_end(int64_t t0, int64_t tend);
+void gc_final_count_page(size_t pg_cnt) JL_NOTSAFEPOINT;
+void gc_final_pause_end(int64_t t0, int64_t tend) JL_NOTSAFEPOINT;
 
 // GC_TIME
 void gc_time_pool_start(void) JL_NOTSAFEPOINT;
@@ -666,21 +666,21 @@ void gc_time_count_mallocd_memory(int bits) JL_NOTSAFEPOINT;
 void gc_time_mallocd_memory_end(void) JL_NOTSAFEPOINT;
 
 void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
-                        int64_t perm_scanned_bytes);
+                        int64_t perm_scanned_bytes) JL_NOTSAFEPOINT;
 void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
                          int64_t live_bytes, int64_t estimate_freed,
-                         int sweep_full);
+                         int sweep_full) JL_NOTSAFEPOINT;
 void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
                      uint64_t freed, uint64_t live, uint64_t interval,
                      uint64_t pause, uint64_t ttsp, uint64_t mark,
-                     uint64_t sweep);
+                     uint64_t sweep) JL_NOTSAFEPOINT;
 void gc_heuristics_summary(
         uint64_t old_alloc_diff, uint64_t alloc_mem,
         uint64_t old_mut_time, uint64_t alloc_time,
         uint64_t old_freed_diff, uint64_t gc_mem,
         uint64_t old_pause_time, uint64_t gc_time,
         int thrash_counter, const char *reason,
-        uint64_t current_heap, uint64_t target_heap);
+        uint64_t current_heap, uint64_t target_heap) JL_NOTSAFEPOINT;
 
 // MEMFENCE
 void gc_verify_tags(void) JL_NOTSAFEPOINT;
