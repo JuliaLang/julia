@@ -2,6 +2,7 @@ use crate::api::mmtk_object_is_managed_by_mmtk;
 use crate::julia_types::*;
 use crate::slots::JuliaVMSlot;
 use crate::slots::OffsetSlot;
+use crate::slots::TaggedSlot;
 use crate::JULIA_BUFF_TAG;
 use memoffset::offset_of;
 use mmtk::util::{Address, ObjectReference};
@@ -569,21 +570,20 @@ fn get_stack_addr(addr: Address, offset: isize, lb: u64, ub: u64) -> Address {
     }
 }
 
-// A pointer-table slot may be a tagged word, which references an object
-// only when its low two bits are clear (jl_tagged_word_isptr); immediates are
-// skipped. Moving plans store a plain pointer, which keeps the encoding.
+// A pointer-table slot may be a tagged word, whose immediates the slot skips.
+// Moving plans store a plain pointer, which keeps the encoding.
 #[inline(always)]
 pub fn process_pointer_table_slot<EV: SlotVisitor<JuliaVMSlot>>(closure: &mut EV, slot: Address) {
-    let w = unsafe { slot.load::<usize>() };
-    if w & 3 == 0 {
-        process_slot(closure, slot);
-    }
+    visit_slot(closure, JuliaVMSlot::Tagged(TaggedSlot::from_address(slot)));
 }
 
 #[inline(always)]
 pub fn process_slot<EV: SlotVisitor<JuliaVMSlot>>(closure: &mut EV, slot: Address) {
-    let simple_slot = SimpleSlot::from_address(slot);
+    visit_slot(closure, JuliaVMSlot::Simple(SimpleSlot::from_address(slot)));
+}
 
+#[inline(always)]
+fn visit_slot<EV: SlotVisitor<JuliaVMSlot>>(closure: &mut EV, slot: JuliaVMSlot) {
     #[cfg(debug_assertions)]
     {
         use mmtk::vm::slot::Slot;
@@ -591,17 +591,17 @@ pub fn process_slot<EV: SlotVisitor<JuliaVMSlot>>(closure: &mut EV, slot: Addres
         if PRINT_OBJ_TYPE {
             println!(
                 "\tprocess slot = {:?} - {:?}\n",
-                simple_slot,
-                simple_slot.load()
+                slot,
+                slot.load()
             );
         }
 
-        if let Some(objref) = simple_slot.load() {
+        if let Some(objref) = slot.load() {
             debug_assert!(
                 mmtk::memory_manager::is_in_mmtk_spaces(objref),
                 "Object {:?} in slot {:?} is not mapped address",
                 objref,
-                simple_slot
+                slot
             );
 
             let raw_addr_usize = objref.to_raw_address().as_usize();
@@ -611,12 +611,12 @@ pub fn process_slot<EV: SlotVisitor<JuliaVMSlot>>(closure: &mut EV, slot: Addres
                 raw_addr_usize % 16 == 0 || raw_addr_usize % 8 == 0,
                 "Object {:?} in slot {:?} is not aligned to 8 or 16",
                 objref,
-                simple_slot
+                slot
             );
         }
     }
 
-    closure.visit_slot(JuliaVMSlot::Simple(simple_slot));
+    closure.visit_slot(slot);
 }
 
 #[inline(always)]
