@@ -1163,9 +1163,7 @@ end
             </li>
             </ol>
             <ul>
-            <li>
-            <p>one</p>
-            </li>
+            <li>one</li>
             </ul>
             <p>two</p>
             <ul>
@@ -1178,10 +1176,8 @@ end
             </li>
             </ul>
             <ul>
-            <li>
-            <pre><code>foo
-            </code></pre>
-            </li>
+            <li><pre><code>foo
+            </code></pre></li>
             </ul>
             <ol>
             <li>foo</li>
@@ -1415,6 +1411,9 @@ end
     @test md[2].loose
     @test md[4].loose
     @test !md[6].loose
+    md = Markdown.parse("- a\n- b\n\nText")
+    @test !md[1].loose
+    @test Markdown.html(md) == "<ul>\n<li>a</li>\n<li>b</li>\n</ul>\n<p>Text</p>\n"
 end
 
 @testset "issue #29995" begin

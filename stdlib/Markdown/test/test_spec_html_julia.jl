@@ -10,7 +10,7 @@ using Markdown
 # pass, and a single `@test_broken` at the bottom of this file stands in for
 # the whole set. If the `now_passing` test fails, some examples were fixed:
 # rerun regenerate_test_spec.jl and commit the regenerated files.
-known_broken = BitSet([2, 4, 5, 6, 7, 9, 17, 22, 23, 24, 32, 33, 34, 41, 46, 55, 60, 61, 79, 81, 82, 83, 87, 93, 95, 106, 118, 121, 124, 126, 127, 128, 131, 132, 133, 135, 136, 137, 138, 139, 143, 146, 147, 148, 175, 192, 193, 194, 195, 196, 198, 200, 202, 203, 204, 205, 206, 207, 208, 210, 214, 215, 216, 217, 218, 226, 232, 233, 237, 238, 247, 250, 251, 254, 255, 257, 260, 263, 266, 267, 271, 276, 278, 280, 285, 286, 287, 288, 290, 291, 292, 293, 294, 295, 296, 298, 299, 300, 304, 307, 308, 310, 311, 312, 313, 315, 317, 318, 319, 320, 321, 323, 325, 326, 329, 330, 331, 332, 333, 334, 335, 336, 339, 340, 342, 347, 349, 352, 354, 367, 368, 369, 373, 380, 389, 392, 407, 408, 409, 413, 414, 415, 416, 417, 418, 419, 425, 426, 427, 430, 431, 432, 437, 440, 442, 443, 444, 445, 446, 447, 449, 452, 454, 455, 456, 457, 458, 459, 464, 465, 466, 467, 468, 471, 472, 473, 474, 475, 476, 477, 480, 481, 482, 486, 488, 489, 492, 493, 494, 498, 499, 500, 503, 505, 506, 508, 509, 510, 515, 518, 519, 520, 521, 524, 525, 526, 527, 528, 529, 530, 531, 532, 533, 534, 535, 536, 537, 538, 539, 540, 541, 542, 543, 544, 545, 549, 550, 553, 554, 555, 556, 557, 558, 559, 560, 561, 562, 563, 564, 565, 566, 567, 568, 569, 570, 571, 572, 573, 574, 575, 576, 577, 579, 580, 582, 583, 584, 585, 586, 587, 588, 589, 591, 592, 593, 597, 598, 599, 601, 626, 633, 635, 636, 637, 638, 642, 643, 644, 645])
+known_broken = BitSet([2, 4, 5, 6, 7, 9, 17, 22, 23, 24, 32, 33, 34, 41, 46, 55, 60, 61, 79, 81, 82, 83, 87, 93, 95, 106, 118, 121, 124, 126, 127, 128, 131, 132, 133, 135, 136, 137, 138, 139, 143, 146, 147, 148, 175, 192, 193, 194, 195, 196, 198, 200, 202, 203, 204, 205, 206, 207, 208, 210, 214, 215, 216, 217, 218, 226, 232, 233, 237, 238, 247, 250, 251, 254, 257, 263, 266, 267, 271, 276, 278, 280, 285, 286, 287, 288, 290, 291, 292, 293, 294, 295, 296, 298, 299, 300, 304, 307, 310, 311, 312, 313, 315, 317, 318, 319, 320, 321, 323, 329, 330, 331, 332, 333, 334, 335, 336, 339, 340, 342, 347, 349, 352, 354, 367, 368, 369, 373, 380, 389, 392, 407, 408, 409, 413, 414, 415, 416, 417, 418, 419, 425, 426, 427, 430, 431, 432, 437, 440, 442, 443, 444, 445, 446, 447, 449, 452, 454, 455, 456, 457, 458, 459, 464, 465, 466, 467, 468, 471, 472, 473, 474, 475, 476, 477, 480, 481, 482, 486, 488, 489, 492, 493, 494, 498, 499, 500, 503, 505, 506, 508, 509, 510, 515, 518, 519, 520, 521, 524, 525, 526, 527, 528, 529, 530, 531, 532, 533, 534, 535, 536, 537, 538, 539, 540, 541, 542, 543, 544, 545, 549, 550, 553, 554, 555, 556, 557, 558, 559, 560, 561, 562, 563, 564, 565, 566, 567, 568, 569, 570, 571, 572, 573, 574, 575, 576, 577, 579, 580, 582, 583, 584, 585, 586, 587, 588, 589, 591, 592, 593, 597, 598, 599, 601, 626, 633, 635, 636, 637, 638, 642, 643, 644, 645])
 now_passing = Int[]
 
 
@@ -1895,12 +1895,12 @@ end
     actual = Markdown.html(md)
     expected == actual && push!(now_passing, 254)
 
-    # Example 255 (known broken)
+    # Example 255
     input = "- one\n\n two\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>one</li>\n</ul>\n<p>two</p>\n"
     actual = Markdown.html(md)
-    expected == actual && push!(now_passing, 255)
+    @test expected == actual
 
     # Example 256
     input = "- one\n\n  two\n"
@@ -1930,12 +1930,12 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 260 (known broken)
+    # Example 260
     input = ">>- one\n>>\n  >  > two\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<blockquote>\n<blockquote>\n<ul>\n<li>one</li>\n</ul>\n<p>two</p>\n</blockquote>\n</blockquote>\n"
     actual = Markdown.html(md)
-    expected == actual && push!(now_passing, 260)
+    @test expected == actual
 
     # Example 261
     input = "-one\n\n2.two\n"
@@ -2273,12 +2273,12 @@ end
     actual = Markdown.html(md)
     expected == actual && push!(now_passing, 307)
 
-    # Example 308 (known broken)
+    # Example 308
     input = "- foo\n- bar\n\n<!-- -->\n\n- baz\n- bim\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>foo</li>\n<li>bar</li>\n</ul>\n<!-- -->\n<ul>\n<li>baz</li>\n<li>bim</li>\n</ul>\n"
     actual = Markdown.html(md)
-    expected == actual && push!(now_passing, 308)
+    @test expected == actual
 
     # Example 309
     input = "-   foo\n\n    notcode\n\n-   foo\n\n<!-- -->\n\n    code\n"
@@ -2392,19 +2392,19 @@ end
     actual = Markdown.html(md)
     @test expected == actual
 
-    # Example 325 (known broken)
+    # Example 325
     input = "* foo\n  * bar\n\n  baz\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>\n<p>foo</p>\n<ul>\n<li>bar</li>\n</ul>\n<p>baz</p>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    expected == actual && push!(now_passing, 325)
+    @test expected == actual
 
-    # Example 326 (known broken)
+    # Example 326
     input = "- a\n  - b\n  - c\n\n- d\n  - e\n  - f\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<ul>\n<li>\n<p>a</p>\n<ul>\n<li>b</li>\n<li>c</li>\n</ul>\n</li>\n<li>\n<p>d</p>\n<ul>\n<li>e</li>\n<li>f</li>\n</ul>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    expected == actual && push!(now_passing, 326)
+    @test expected == actual
 
 end
 
