@@ -97,8 +97,6 @@ When there are multiple inputs to `broadcast`, `DefaultArrayStyle` "loses" to an
 struct DefaultArrayStyle{N} <: AbstractArrayStyle{N} end
 DefaultArrayStyle(::Val{N}) where N = DefaultArrayStyle{N}()
 DefaultArrayStyle{M}(::Val{N}) where {N,M} = DefaultArrayStyle{N}()
-const DefaultVectorStyle = DefaultArrayStyle{1}
-const DefaultMatrixStyle = DefaultArrayStyle{2}
 BroadcastStyle(::Type{<:AbstractArray{T,N}}) where {T,N} = DefaultArrayStyle{N}()
 BroadcastStyle(::Type{T}) where {T} = DefaultArrayStyle{ndims(T)}()
 
