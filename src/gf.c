@@ -187,7 +187,10 @@ static int jl_is_builtinfunc(jl_method_t *m)
 
 
 // get or create the MethodInstance for a specialization
-static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PROPAGATES_ROOT, jl_value_t *type, jl_svec_t *sparams, jl_method_instance_t *mi_insert) JL_CANSAFEPOINT
+// Entries in `distinct` (if given) are known to differ from `type` and are not
+// compared against it; a new unhashed entry is added to it.
+static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PROPAGATES_ROOT, jl_value_t *type, jl_svec_t *sparams,
+                                                            jl_method_instance_t *mi_insert, htable_t *distinct) JL_CANSAFEPOINT
 {
     if (jl_is_builtinfunc(m))
         return jl_atomic_load_relaxed(&m->unspecialized); // handle builtin methods
@@ -236,6 +239,8 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
                 jl_method_instance_t *mi = jl_atomic_load_relaxed(&data[i]);
                 if ((jl_value_t*)mi == jl_nothing)
                     break;
+                if (distinct && ptrhash_has(distinct, mi))
+                    continue;
                 if (jl_types_equal(mi->specTypes, type)) {
                     if (locked)
                         JL_UNLOCK(&m->writelock);
@@ -248,6 +253,9 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
         }
     }
     jl_method_instance_t *mi = mi_insert ? mi_insert : jl_get_specialized(m, type, sparams);
+    jl_atomic_fetch_or_relaxed(&mi->flags, JL_MI_FLAGS_MASK_SPECIALIZATION);
+    if (distinct && !hv)
+        ptrhash_put(distinct, mi, mi);
     if (specializations == (jl_value_t*)jl_emptysvec) {
         jl_gc_write_atomic(m, m->specializations, jl_value_t, (jl_value_t*)mi, release);
     }
@@ -325,7 +333,12 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
 
 JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m JL_PROPAGATES_ROOT, jl_value_t *type, jl_svec_t *sparams)
 {
-    return jl_specializations_get_linfo_(m, type, sparams, NULL);
+    return jl_specializations_get_linfo_(m, type, sparams, NULL, NULL);
+}
+
+jl_method_instance_t *jl_specializations_get_linfo_distinct(jl_method_t *m JL_PROPAGATES_ROOT, jl_value_t *type, jl_svec_t *sparams, htable_t *distinct)
+{
+    return jl_specializations_get_linfo_(m, type, sparams, NULL, distinct);
 }
 
 jl_method_instance_t *jl_specializations_get_or_insert(jl_method_instance_t *mi)
@@ -333,7 +346,7 @@ jl_method_instance_t *jl_specializations_get_or_insert(jl_method_instance_t *mi)
     jl_method_t *m = mi->def.method;
     jl_value_t *type = mi->specTypes;
     jl_svec_t *sparams = mi->sparam_vals;
-    return jl_specializations_get_linfo_(m, type, sparams, mi);
+    return jl_specializations_get_linfo_(m, type, sparams, mi, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_specializations_lookup(jl_method_t *m, jl_value_t *type) JL_CANSAFEPOINT

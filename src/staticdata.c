@@ -1622,6 +1622,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                     write_pointerfield(s, mi->def.value);
                     write_pointerfield(s, mi->specTypes);
                     write_pointerfield(s, (jl_value_t*)mi->sparam_vals);
+                    write_uint(f, jl_atomic_load_relaxed(&mi->flags) & JL_MI_FLAGS_MASK_SPECIALIZATION);
                     continue;
                 }
                 else if (jl_is_datatype(v)) {
@@ -4607,6 +4608,10 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     }
     JL_UNLOCK(&typecache_lock); // Might GC
     jl_safepoint_resume_all_threads(ct); // TODO: move this later to also protect MethodInstance allocations, but we would need to acquire all jl_specializations_get_linfo and jl_module_globalref locks, which is hard
+    // The image's new MethodInstances that were among the specializations when it was built
+    // are unique, so they need not be compared against each other.
+    htable_t new_mis;
+    htable_new(&new_mis, 0);
     // Perform fixups: things like updating world ages, inserting methods & specializations, etc.
     for (size_t i = 0; i < s.uniquing_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.uniquing_objs.items[i];
@@ -4639,7 +4644,9 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                 arraylist_push(&cleanup_list, (void*)obj);
                 jl_value_t *specTypes = obj[1];
                 jl_value_t *sparams = obj[2];
-                newobj = (jl_value_t*)jl_specializations_get_linfo((jl_method_t*)m, specTypes, (jl_svec_t*)sparams);
+                int listed = ((uintptr_t*)obj)[3] != 0;
+                newobj = (jl_value_t*)jl_specializations_get_linfo_distinct((jl_method_t*)m, specTypes, (jl_svec_t*)sparams,
+                                                                              listed ? &new_mis : NULL);
                 obj[0] = newobj;
             }
         }
@@ -4664,12 +4671,13 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     }
     arraylist_free(&s.uniquing_types);
     arraylist_free(&s.uniquing_objs);
+    htable_free(&new_mis);
     for (size_t i = 0; i < cleanup_list.len; i++) {
         void *item = cleanup_list.items[i];
         jl_taggedvalue_t *o = jl_astaggedvalue(item);
         jl_value_t *t = jl_typeof(item);
         if (t == (jl_value_t*)jl_method_instance_type)
-            memset(o, 0xba, sizeof(jl_value_t*) * 3); // only specTypes and sparams fields stored
+            memset(o, 0xba, sizeof(jl_value_t*) * 3); // stored as def/specTypes/sparams/flag
         else if (t == (jl_value_t*)jl_binding_type)
             memset(o, 0xba, sizeof(jl_value_t*) * 3); // stored as mod/name
         o->bits.in_image = 1;

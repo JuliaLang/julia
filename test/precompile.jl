@@ -4678,6 +4678,68 @@ precompile_test_harness("pkgimage type cache dedup") do dir
     end
 end
 
+precompile_test_harness("pkgimage MethodInstance dedup without type hash") do dir
+    # `Vector{<:Union{Missing, T}}` gives specialization signatures without a type hash,
+    # which are looked up by `==`. Two unrelated images carry the same new ones.
+    for name in ("UnhashedSpecsA", "UnhashedSpecsB")
+        write(joinpath(dir, "$name.jl"),
+              """
+              module $name
+              struct W{T}
+                  v::Vector{<:Union{Missing, T}}
+              end
+              k(w::W) = (length(w.v), size(w.v), axes(w.v), isempty(w.v))
+              for T in (Int8, Int16, Int32, Int64, Float32, Float64)
+                  precompile(k, (W{T},))
+              end
+              end
+              """)
+        Base.compilecache(Base.PkgId(name))
+    end
+    @eval using UnhashedSpecsA
+    @eval using UnhashedSpecsB
+    invokelatest() do
+        for f in (length, size, axes, isempty), T in (Int8, Int16, Int32, Int64, Float32, Float64)
+            sig = Tuple{typeof(f), Vector{<:Union{Missing, T}}}
+            @test sig.hash == 0
+            m = which(f, Tuple{Vector{Union{Missing, T}}})
+            @test count(mi -> mi.specTypes == sig, Base.specializations(m)) == 1
+        end
+        @test UnhashedSpecsB.k(UnhashedSpecsB.W{Int8}(Int8[1, 2])) == (2, (2,), (Base.OneTo(2),), false)
+    end
+end
+
+precompile_test_harness("pkgimage dedup of MethodInstances not among the specializations") do dir
+    # MethodInstances that were never inserted into the specializations need not be unique,
+    # here two with `==` (but not `===`) signatures in the same image.
+    write(joinpath(dir, "UnlistedMIs.jl"),
+          """
+          module UnlistedMIs
+          const U = Union{Nothing, Int8}
+          function mk(@nospecialize(sig))
+              mi = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ())
+              mi.def = which(length, Tuple{Vector{Int}})
+              mi.specTypes = sig
+              mi.sparam_vals = Core.svec(U)
+              return mi
+          end
+          const MIS = (mk(Tuple{typeof(length), Vector{S} where S<:U}),
+                       mk(Tuple{typeof(length), Vector{S} where S<:Union{Nothing, Int16}}),
+                       mk(Tuple{typeof(length), Vector{T} where T<:U}))
+          end
+          """)
+    Base.compilecache(Base.PkgId("UnlistedMIs"))
+    @eval using UnlistedMIs
+    invokelatest() do
+        MIS = UnlistedMIs.MIS
+        @test all(mi -> mi.specTypes.hash == 0, MIS)
+        @test MIS[1] === MIS[3]
+        @test MIS[1] !== MIS[2]
+        m = which(length, Tuple{Vector{Int}})
+        @test count(mi -> mi.specTypes == MIS[1].specTypes, Base.specializations(m)) == 1
+    end
+end
+
 # Interactive precompile output has to keep its colors: a TTY's implied `:color` must survive
 # the driver's conversion of a raw stream to `IOContext{IO}` (#62970 dropped it). Run a real
 # precompile in a child whose stderr is a pty and look for the color escapes in its output.
