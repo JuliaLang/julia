@@ -186,8 +186,12 @@ cd(@__DIR__) do
         Distributed.remotecall_eval(Main, workers(), revise_init_expr)
     end
 
+    disk = diskstat()
+    tmpdisk = diskstat(tempdir())
     println("""
         Running parallel tests with:
+          gethostname() = $(Libc.gethostname())
+          BUILDKITE_AGENT_NAME = $(get(ENV, "BUILDKITE_AGENT_NAME", "(not set)"))
           getpid() = $(getpid())
           nworkers() = $(nworkers())
           nthreads(:interactive) = $(Threads.threadpoolsize(:interactive))
@@ -195,6 +199,10 @@ cd(@__DIR__) do
           Sys.CPU_THREADS = $(Sys.CPU_THREADS)
           Sys.total_memory() = $(Base.format_bytes(Sys.total_memory()))
           Sys.free_memory() = $(Base.format_bytes(Sys.free_memory()))
+          diskstat().total = $(Base.format_bytes(disk.total))
+          diskstat().available = $(Base.format_bytes(disk.available))
+          diskstat(tempdir()).total = $(Base.format_bytes(tmpdisk.total))
+          diskstat(tempdir()).available = $(Base.format_bytes(tmpdisk.available))
           Sys.uptime() = $(Sys.uptime()) ($(round(Sys.uptime() / (60 * 60), digits=1)) hours)
         """)
 
