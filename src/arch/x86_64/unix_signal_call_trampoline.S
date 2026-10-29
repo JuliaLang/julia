@@ -21,23 +21,29 @@
     .globl CNAME(jl_fake_signal_return)
     HIDDEN(jl_fake_signal_return)
     DEBUGINFO(jl_fake_signal_return)
+    .p2align 4                  // as the start of the .text of the C file it was in
 CNAME(jl_fake_signal_return):
     .cfi_startproc
     .cfi_signal_frame
-    // Mark as end of stack until frame is set up
-    .cfi_undefined %rip
-    .cfi_undefined %rsp
-    // rdi points to signal_ctx_pc in ptls (followed by signal_ctx_sp, signal_ctx_fptr, signal_ctx_arg)
+    // rdi points to signal_ctx_pc in ptls (followed by signal_ctx_sp, signal_ctx_fptr, signal_ctx_arg).
+    // The CFA is the interrupted sp throughout (so that no unwinder needs to
+    // follow a rule for sp). Until the frame below is built, through rdi:
+    // CFA = [rdi + 8] (DW_CFA_def_cfa_expression: DW_OP_breg5 8, DW_OP_deref)
+    // rip at [rdi] (DW_CFA_expression: DW_OP_breg5 0)
+    .cfi_escape 0x0f, 0x03, 0x75, 0x08, 0x06
+    .cfi_escape 0x10, 0x10, 0x02, 0x75, 0x00
     pushq   (%rdi)              // push pc (signal_ctx_pc), as the return address
-    .cfi_def_cfa %rsp, 8
-    .cfi_offset %rip, -8
     pushq   %rbp                // frame record {rbp, pc}
-    .cfi_def_cfa_offset 16
-    .cfi_offset %rbp, -16
+    // rbp at [rsp] (DW_CFA_expression: DW_OP_breg7 0)
+    .cfi_escape 0x10, 0x06, 0x02, 0x77, 0x00
     movq    %rsp, %rbp
-    .cfi_def_cfa_register %rbp
     pushq   8(%rdi)             // push sp (signal_ctx_sp)
-    .cfi_offset %rsp, -24
+    // From here, through the frame:
+    // CFA = [rbp - 8] (DW_CFA_def_cfa_expression: DW_OP_breg6 -8, DW_OP_deref)
+    // rip at [rbp + 8] and rbp at [rbp] (DW_CFA_expression: DW_OP_breg6 8 / 0)
+    .cfi_escape 0x0f, 0x03, 0x76, 0x78, 0x06
+    .cfi_escape 0x10, 0x10, 0x02, 0x76, 0x08
+    .cfi_escape 0x10, 0x06, 0x02, 0x76, 0x00
     pushq   16(%rdi)            // push fptr (signal_ctx_fptr), leaving the stack aligned
     movq    24(%rdi), %rdi      // restore original rdi from signal_ctx_arg
     cld                         // the interrupted code may have set the direction flag
