@@ -986,6 +986,40 @@ using Test
         end
         @test !isdefined(@__MODULE__, :TG_CacheFail)
         @test stale_tuple_cache_refs(:TG_CacheFail) == 0
+
+        # ... nor through a supertype computed lazily during the resolution
+        # (here by the bound check of `B`), which caches the next level
+        @eval abstract type TG_LazyA{X} end
+        @eval abstract type TG_LazyB{X<:TG_LazyA} end
+        @test_throws Exception @eval typegroup
+            struct TG_LazyFail{T} <: TG_LazyA{TG_LazyFail{Tuple{T}}}
+                x::TG_LazyFail{Tuple{Int}}
+                y::TG_LazyB{TG_LazyFail{Tuple{Int}}}
+            end
+            struct TG_LazyFailBad
+                x::1
+            end
+        end
+        # an instantiation of a member made during the resolution gets its
+        # layout once the group is complete
+        @eval typegroup
+            struct TG_LayoutUser; x::Tuple{TG_LayoutMember{Int}, Int}; end
+            struct TG_LayoutMember{T}; b::T; end
+        end
+        @test isbitstype(Tuple{TG_LayoutMember{Int}, Int})
+        @test isbitstype(TG_LayoutUser)
+        # ... also one made while an instantiation of a member is in progress
+        @eval typegroup
+            struct TG_LayoutRef{T} <: Ref{Tuple{TG_LayoutHit{T}, Int}}; x::Int; end
+            struct TG_LayoutHit{T}; x::NTuple{3, Int}; r::TG_LayoutRef{T}; end
+            struct TG_LayoutOwner; h::TG_LayoutHit{TG_LayoutOwner}; end
+        end
+        @test sizeof(Tuple{TG_LayoutHit{TG_LayoutOwner}, Int}) == sizeof(Tuple{TG_LayoutHit{Int}, Int})
+
+        @test !isdefined(@__MODULE__, :TG_LazyFail)
+        tn = TG_LazyA.body.name
+        @test !any(t -> t isa DataType && any(p -> p isa DataType && p.name.name === :TG_LazyFail, t.parameters),
+                   [tn.cache..., tn.linearcache...])
     end
 
 end
