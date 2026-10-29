@@ -80,16 +80,12 @@ failures_valid = [
     "valid/spec-1.1.0/common-27.toml",
     "valid/spec-1.1.0/common-29.toml",
     "valid/spec-1.1.0/common-12.toml",
-    "valid/spec-1.1.0/common-16.toml",
-    "valid/spec-1.1.0/common-19.toml",
     "valid/spec-example-1-compact.toml",
     "valid/spec-example-1.toml",
     "valid/string/ends-in-whitespace-escape.toml",
     "valid/string/hex-escape.toml",
     "valid/string/multiline-empty.toml",
-    "valid/string/multiline-quotes.toml",
     "valid/string/multiline.toml",
-    "valid/string/raw-multiline.toml",
 ]
 
 n_files_valid = 0

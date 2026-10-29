@@ -189,30 +189,27 @@ end
     @test failval("\"x\\\r\ny\"", Internals.ErrInvalidEscapeCharacter)
     @test testval("\"\"\"x\\\ny\"\"\"", "xy")
 
-    #=
-    Found these examples of string tests somewhere
-    quot0=""" """    # valid
-    quot1=""" """"   # valid
-    quot2=""" """""  # valid
-    quot3=""" """""" # invalid
-    apos0=''' '''    # valid
-    apos1=''' ''''   # valid
-    apos2=''' '''''  # valid
-    apos3=''' '''''' # invalid
-
-    quot4=""""""     # valid (6 in a row, empty string)
-    quot5="""" """   # valid
-    quot6=""""" """  # valid
-    quot7="""""" """ # invalid
-    apos4=''''''     # valid (6 in a row, empty string)
-    apos5='''' '''   # valid
-    apos6=''''' '''  # valid
-    apos7='''''' ''' # invalid
-
-    quot8="""""\""""""     # valid (5 at start, 6 at end)
-    quot9="""""\"""\"""""" # valid (3 in the middle 5 at start, 6 at end)
-
-    =#
+    # Quotes next to the delimiters of multiline strings
+    @test testval("\"\"\" \"\"\"",                    " ")
+    @test testval("\"\"\" \"\"\"\"",                  " \"")
+    @test testval("\"\"\" \"\"\"\"\"",                " \"\"")
+    @test failval("\"\"\" \"\"\"\"\"\"",              Internals.ErrExpectedNewLineKeyValue)
+    @test testval("''' '''",                          " ")
+    @test testval("''' ''''",                         " '")
+    @test testval("''' '''''",                        " ''")
+    @test failval("''' ''''''",                       Internals.ErrExpectedNewLineKeyValue)
+    @test testval("\"\"\"\"\"\"",                     "")
+    @test testval("\"\"\"\" \"\"\"",                  "\" ")
+    @test testval("\"\"\"\"\" \"\"\"",                "\"\" ")
+    @test failval("\"\"\"\"\"\" \"\"\"",              Internals.ErrExpectedNewLineKeyValue)
+    @test testval("''''''",                           "")
+    @test testval("'''' '''",                         "' ")
+    @test testval("''''' '''",                        "'' ")
+    @test failval("'''''' '''",                       Internals.ErrExpectedNewLineKeyValue)
+    @test testval("\"\"\"\"\"\\\"\"\"\"\"\"",         "\"\"\"\"\"")
+    @test testval("\"\"\"\"\"\\\"\"\"\\\"\"\"\"\"\"", "\"\"\"\"\"\"\"\"")
+    @test testval("'''x''''",                         "x'")
+    @test testval("\"\"\"q\"\"\"\"",                  "q\"")
 end
 
 @testset "Array" begin

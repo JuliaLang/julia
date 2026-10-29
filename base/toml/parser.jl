@@ -1403,8 +1403,9 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
         end
         next_slash = peek(l) == '\\'
         if !next_slash
-            # TODO: Doesn't handle values with e.g. format `""""str""""`
             if accept(l, q) && (!multiline || (accept(l, q) && accept(l, q)))
+                # Up to two more quotes belong to the string, e.g. `'''x''''` is "x'"
+                multiline && accept(l, q) && accept(l, q)
                 push!(l.chunks, start_chunk:(l.prevpos-offset-1))
                 return take_chunks(l, contains_backslash)
             end
