@@ -48,7 +48,9 @@ istagged(u) = Base.istaggedunion(u)
     @test Base.isbitsunion(Union{Int8, Int16})       # unchanged
 
     # layout introspection
-    @test sizeof(Union{Int16, String}) == sizeof(Int)
+    # as for any union with a reference component, at runtime and in inference
+    @test_throws ErrorException sizeof(Union{Int16, String})
+    @test Base.infer_return_type(() -> sizeof(Union{Int16, String})) === Union{}
     struct TU1; x::Union{Int16, String}; end
     @test Base.datatype_ntaggedwords(TU1) == 1
     @test Base.datatype_npointers(TU1) == 1      # tagged words are pointers in the layout
