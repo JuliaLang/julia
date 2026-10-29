@@ -7,7 +7,7 @@
 # architecture or operating system, cross-compile and run the tests under an
 # emulator, e.g.
 #
-#     make -C src/arch test ARCH=aarch64 CC=aarch64-linux-gnu-gcc \
+#     make -C src/arch test XC_HOST=aarch64-linux-gnu OS=Linux \
 #         TEST_RUNNER="qemu-aarch64 -L /usr/aarch64-linux-gnu"
 #     make -C src/arch test XC_HOST=x86_64-w64-mingw32 TEST_RUNNER=wine
 #
@@ -33,10 +33,27 @@ else ifneq ($(OS),Darwin)
 TEST_CFLAGS += -Wl,-z,noexecstack
 endif
 
+# The tests of unwinding also unwind with the libunwind Julia's profiler uses
+# (LLVM's on macOS), installed for the target by deps/ as for the build (with
+# the zlib it needs on Linux), into a prefix of their own.
+ifneq ($(filter Linux Darwin,$(OS)),)
+UNWIND_DEP := $(if $(filter Darwin,$(OS)),llvmunwind,unwind)
+UNWIND_PREFIX := $(abspath $(BUILDDIR))/libunwind-$(BB_TRIPLET)
+STEP_DEPS := $(UNWIND_PREFIX)/manifest/$(UNWIND_DEP)
+STEP_FLAGS := -DARCHTEST_LIBUNWIND -idirafter $(UNWIND_PREFIX)/include \
+	-L$(UNWIND_PREFIX)/lib -Wl,-rpath,$(UNWIND_PREFIX)/lib -lunwind
+endif
+
 # test name -> the assembly it tests (an architecture without that file only
-# builds the test's skip path)
+# builds the test's skip path), and the headers it includes
 start_fiber_ASM := $(SRCDIR)/$(ASM_ARCH)/start_fiber.S
+start_fiber_HDRS := $(SRCDIR)/cfi_noreturn.h $(SRCDIR)/test/archstep.h
+start_fiber_FLAGS := $(STEP_FLAGS)
+start_fiber_DEPS := $(STEP_DEPS)
 unix_signal_call_trampoline_ASM := $(SRCDIR)/$(ASM_ARCH)/unix_signal_call_trampoline.S
+unix_signal_call_trampoline_HDRS := $(SRCDIR)/test/archstep.h
+unix_signal_call_trampoline_FLAGS := $(STEP_FLAGS)
+unix_signal_call_trampoline_DEPS := $(STEP_DEPS)
 win_setjmp_ASM := $(SRCDIR)/$(ASM_ARCH)/win_setjmp.S
 win_restore_trigger_ASM := $(SRCDIR)/$(ASM_ARCH)/win_restore_trigger.S
 macos_signal_ASM := $(SRCDIR)/$(ASM_ARCH)/macos_call_frame_unwind.S $(SRCDIR)/$(ASM_ARCH)/macos_restore_trigger.S
@@ -45,6 +62,9 @@ trampolines_ASM := $(JULIAHOME)/cli/arch/$(ASM_ARCH)/trampolines.S
 # as libjulia does into libjulia-internal)
 OTHER_LIB := $(BUILDDIR)/libarchtest_other.$(SHLIB_EXT)
 trampolines_LIBS := $(OTHER_LIB)
+trampolines_HDRS := $(SRCDIR)/test/archstep.h
+trampolines_FLAGS := $(STEP_FLAGS)
+trampolines_DEPS := $(STEP_DEPS)
 ifeq ($(OS),Darwin)
 TEST_LIB_FLAGS := -L$(BUILDDIR) -Wl,-rpath,@loader_path
 else ifneq ($(OS),WINNT)
@@ -61,6 +81,13 @@ else
 TESTS := start_fiber unix_signal_call_trampoline trampolines
 endif
 TEST_BINS := $(TESTS:%=$(BUILDDIR)/test_%$(EXE))
+# The tests of unwinding from every instruction also run with the C code built
+# without frame pointers, which leaves only the unwind info to find its callers
+# (not on ARM, where they check only frame pointers).
+ifeq ($(OS),Linux)
+NOFP_TESTS := $(if $(filter arm%,$(ARCH)),,$(filter start_fiber unix_signal_call_trampoline trampolines,$(TESTS)))
+endif
+TEST_BINS += $(NOFP_TESTS:%=$(BUILDDIR)/test_%_nofp$(EXE))
 # On ARM, C code may be ARM or Thumb code (the BinaryBuilder toolchains build
 # ARM code, some distribution compilers Thumb code by default), and the assembly
 # must work with either: build each test both ways.
@@ -69,14 +96,22 @@ TEST_MODE_CFLAGS := -marm
 TEST_BINS += $(TESTS:%=$(BUILDDIR)/test_%_thumb$(EXE))
 endif
 
+ifneq ($(STEP_DEPS),)
+$(STEP_DEPS):
+	@$(MAKE) -C $(JULIAHOME)/deps install-$(UNWIND_DEP) $(if $(filter Linux,$(OS)),install-zlib) \
+		build_prefix=$(UNWIND_PREFIX) $(if $(XC_HOST),XC_HOST=$(XC_HOST) OS=$(OS))
+endif
+
 $(OTHER_LIB): $(SRCDIR)/test/trampolines_other_lib.c
 	@$(call PRINT_CC, $(CC) $(TEST_CFLAGS) -shared -fPIC $< -o $@)
 
 .SECONDEXPANSION:
-$(BUILDDIR)/test_%_thumb$(EXE): $(SRCDIR)/test/%.c $(SRCDIR)/test/archtest.h $(SRCDIR)/common.h $$(wildcard $$($$*_ASM)) $$($$*_LIBS)
-	@$(call PRINT_CC, $(CC) $(TEST_CFLAGS) -mthumb $< $(wildcard $($*_ASM)) $($*_LIBS) $(if $($*_LIBS),$(TEST_LIB_FLAGS)) -o $@)
-$(BUILDDIR)/test_%$(EXE): $(SRCDIR)/test/%.c $(SRCDIR)/test/archtest.h $(SRCDIR)/common.h $$(wildcard $$($$*_ASM)) $$($$*_LIBS)
-	@$(call PRINT_CC, $(CC) $(TEST_CFLAGS) $(TEST_MODE_CFLAGS) $< $(wildcard $($*_ASM)) $($*_LIBS) $(if $($*_LIBS),$(TEST_LIB_FLAGS)) -o $@)
+$(BUILDDIR)/test_%_nofp$(EXE): $(SRCDIR)/test/%.c $(SRCDIR)/test/archtest.h $(SRCDIR)/common.h $$($$*_HDRS) $$(wildcard $$($$*_ASM)) $$($$*_LIBS) $$($$*_DEPS)
+	@$(call PRINT_CC, $(CC) $(TEST_CFLAGS) $(TEST_MODE_CFLAGS) -fomit-frame-pointer -DARCHTEST_NO_FP $< $(wildcard $($*_ASM)) $($*_LIBS) $(if $($*_LIBS),$(TEST_LIB_FLAGS)) $($*_FLAGS) -o $@)
+$(BUILDDIR)/test_%_thumb$(EXE): $(SRCDIR)/test/%.c $(SRCDIR)/test/archtest.h $(SRCDIR)/common.h $$($$*_HDRS) $$(wildcard $$($$*_ASM)) $$($$*_LIBS) $$($$*_DEPS)
+	@$(call PRINT_CC, $(CC) $(TEST_CFLAGS) -mthumb $< $(wildcard $($*_ASM)) $($*_LIBS) $(if $($*_LIBS),$(TEST_LIB_FLAGS)) $($*_FLAGS) -o $@)
+$(BUILDDIR)/test_%$(EXE): $(SRCDIR)/test/%.c $(SRCDIR)/test/archtest.h $(SRCDIR)/common.h $$($$*_HDRS) $$(wildcard $$($$*_ASM)) $$($$*_LIBS) $$($$*_DEPS)
+	@$(call PRINT_CC, $(CC) $(TEST_CFLAGS) $(TEST_MODE_CFLAGS) $< $(wildcard $($*_ASM)) $($*_LIBS) $(if $($*_LIBS),$(TEST_LIB_FLAGS)) $($*_FLAGS) -o $@)
 
 # A test passes if it exits successfully and reports it (a crash under an
 # emulator does not always show in the exit status).
@@ -89,5 +124,6 @@ test: $(TEST_BINS)
 
 clean:
 	rm -f $(TEST_BINS) $(OTHER_LIB)
+	rm -rf $(BUILDDIR)/libunwind-*
 
 .PHONY: test clean
