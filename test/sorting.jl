@@ -1336,6 +1336,61 @@ end
         @test searchsorted(reverse(-1000.0:1:1000), -0.0, rev=true) === 1002:1001
         @test searchsorted(reverse(-1000.0:1:1000), -0.0; lt=<, rev=true) === 1001:1001
     end
+
+    @testset "narrow and mixed integer ranges (issue #64453)" begin
+        @test searchsortedfirst(Int8(-100):Int8(100), Int8(50)) === 151
+        @test searchsortedlast(Int8(-100):Int8(100), Int8(50)) === 151
+        @test searchsortedfirst(Int8(100):Int8(-1):Int8(-100), Int8(-50), Reverse) === 151
+        @test searchsortedlast(Int8(100):Int8(-1):Int8(-100), Int8(-50), Reverse) === 151
+        @test searchsortedfirst(UInt8(200):Int8(-2):UInt8(10), UInt8(15), Reverse) === 94
+        @test searchsortedlast(UInt8(200):Int8(-2):UInt8(10), UInt8(15), Reverse) === 93
+
+        vals_i8 = Int8[-128, -127, -100, -50, -1, 0, 1, 50, 100, 126, 127]
+        vals_u8 = UInt8[0, 1, 2, 50, 100, 127, 128, 200, 254, 255]
+        xs_mixed = Any[vals_i8..., vals_u8..., -128.5, -99.5, 0.0, 50.5, 127.5, 255.5, -200, 300]
+
+        for a in vals_i8, b in vals_i8
+            @test all(xs_mixed) do x
+                r = a:b
+                v = collect(r)
+                searchsortedfirst(r, x) === searchsortedfirst(v, x) &&
+                searchsortedlast(r, x) === searchsortedlast(v, x) &&
+                all((Int8(1), Int8(2), Int8(50), Int8(127))) do s
+                    rs = a:s:b
+                    vs = collect(rs)
+                    searchsortedfirst(rs, x) === searchsortedfirst(vs, x) &&
+                    searchsortedlast(rs, x) === searchsortedlast(vs, x)
+                end &&
+                all((Int8(-128), Int8(-127), Int8(-50), Int8(-2), Int8(-1))) do s
+                    rs = a:s:b
+                    vs = collect(rs)
+                    searchsortedfirst(rs, x, Reverse) === searchsortedfirst(vs, x, Reverse) &&
+                    searchsortedlast(rs, x, Reverse) === searchsortedlast(vs, x, Reverse)
+                end
+            end
+        end
+
+        for a in vals_u8, b in vals_u8
+            @test all(xs_mixed) do x
+                r = a:b
+                v = collect(r)
+                searchsortedfirst(r, x) === searchsortedfirst(v, x) &&
+                searchsortedlast(r, x) === searchsortedlast(v, x) &&
+                all((Int8(1), Int8(2), Int8(50), Int8(127), UInt8(1), UInt8(50), UInt8(255))) do s
+                    rs = a:s:b
+                    vs = collect(rs)
+                    searchsortedfirst(rs, x) === searchsortedfirst(vs, x) &&
+                    searchsortedlast(rs, x) === searchsortedlast(vs, x)
+                end &&
+                all((Int8(-128), Int8(-50), Int8(-2), Int8(-1))) do s
+                    rs = a:s:b
+                    vs = collect(rs)
+                    searchsortedfirst(rs, x, Reverse) === searchsortedfirst(vs, x, Reverse) &&
+                    searchsortedlast(rs, x, Reverse) === searchsortedlast(vs, x, Reverse)
+                end
+            end
+        end
+    end
 end
 # The "searchsorted" testset is at the end of the file because it is slow.
 

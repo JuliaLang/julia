@@ -1292,32 +1292,16 @@ function intersect(r1::AbstractRange, r2::AbstractRange, r3::AbstractRange, r::A
     i
 end
 
-_unsigned(x::Integer) = x
-let BitSigned = Union{Int8, Int16, Int32, Int64, Int128} # for bootstrapping
-    global _unsigned(x::BitSigned) = unsigned(x)
-end
-
 # _findin (the index of intersection)
 function _findin(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer})
     fspan = first(span)
     lspan = last(span)
-    fr = first(r)
-    lr = last(r)
-    sr = step(r)
-    len = length(r)
-    L = typeof(len)
-    if isempty(r) || isempty(span) || (sr > 0 ? (lr < fspan || fr > lspan) : (fr < fspan || lr > lspan))
-        ifirst = 1
-        ilast = zero(L)
-    elseif sr > 0
-        ifirst = fr >= fspan ? 1 : (cld(_unsigned(fspan-fr), uabs(sr)) % L) + 1
-        ilast = lr <= lspan ? len : len - (cld(_unsigned(lr-lspan), uabs(sr)) % L)
-    elseif sr < 0
-        ifirst = fr <= lspan ? 1 : (cld(_unsigned(fr-lspan), uabs(sr)) % L) + 1
-        ilast = lr >= fspan ? len : len - (cld(_unsigned(fspan-lr), uabs(sr)) % L)
+    if step(r) >= 0
+        ifirst = searchsortedfirst(r, fspan)
+        ilast = searchsortedlast(r, lspan)
     else
-        ifirst = 1
-        ilast = len
+        ifirst = searchsortedfirst(r, lspan, Reverse)
+        ilast = searchsortedlast(r, fspan, Reverse)
     end
     r isa AbstractUnitRange ? (ifirst:ilast) : (ifirst:1:ilast)
 end
