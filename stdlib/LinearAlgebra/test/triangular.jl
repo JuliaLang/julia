@@ -1029,6 +1029,46 @@ Base.getindex(A::MyTriangular, i::Int, j::Int) = A.data[i,j]
     end
 end
 
+@testset "log with banded parents and with NaN" begin
+    # the logarithm fills the upper triangle, which a banded parent can't hold
+    B = Bidiagonal([1.0, 100, 3], [5.0, 2], :U)
+    for A in (UpperTriangular(B), UnitUpperTriangular(B), Tridiagonal([0.0, 0], [1.0, 100, 3], [5.0, 2]))
+        @test log(A) ≈ log(Matrix(A))
+    end
+    # NaNs propagate into the result instead of throwing
+    for T in (Float64, ComplexF64)
+        L = log(UpperTriangular(T[1 2 3; 0 NaN 4; 0 0 5]))
+        @test isnan(L[2,2]) && isnan(L[1,2]) && isnan(L[2,3])
+        @test L[1,1] == 0 && L[3,3] ≈ log(5)
+        L = log(UpperTriangular(T[1 NaN 3; 0 2 4; 0 0 5]))
+        @test isnan(L[1,2]) && isnan(L[1,3])
+        @test diag(L) ≈ log.([1, 2, 5])
+    end
+end
+
+@testset "log doesn't read the parent below the diagonal" begin
+    # log_quasitriu overwrites a copy of its argument, and the square roots in it read the parent
+    # of that copy below the diagonal, which held what the parent of the argument stores there;
+    # this gave NaNs or wrong results
+    A = UpperTriangular(Matrix(Bidiagonal(fill(1.5, 200), fill(0.1, 199), :U)))
+    for _ in 1:3
+        L = log(A)
+        @test all(isfinite, L)
+        @test exp(Matrix(L)) ≈ A
+    end
+    for A0 in (A, UnitUpperTriangular(A), UpperTriangular(Bidiagonal([1.0, 2], [3.0], :U)))
+        @test iszero(tril(parent(LinearAlgebra._log_quasitriu_copy(Float64, A0)), -1))
+    end
+    # the result doesn't depend on what is stored below the diagonal of the parent
+    for d in (1.5, -1.5)
+        M = Matrix(Bidiagonal(fill(d, 200), fill(0.1, 199), :U))
+        Mnan = copy(M)
+        Mnan[CartesianIndices(M)[[i > j for i in 1:200, j in 1:200]]] .= NaN
+        @test isequal(log(UpperTriangular(Mnan)), log(UpperTriangular(M)))
+        @test isequal(log(UnitUpperTriangular(Mnan)), log(UnitUpperTriangular(M)))
+    end
+end
+
 @testset "eigvecs and eigen don't overwrite the parent" begin
     for T in (Float64, ComplexF64), TT in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
         M = T[1 2 3; 4 5 6; 7 8 10]

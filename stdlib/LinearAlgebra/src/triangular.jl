@@ -1697,17 +1697,11 @@ log(A::UnitLowerTriangular) = copy(transpose(log(copy(transpose(A)))))
 
 function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
     # allocate real A if log(A) will be real and complex A otherwise
-    n = checksquare(A0)
+    checksquare(A0)
     if isreal(A0) && (!istriu(A0) || !any(x -> real(x) < zero(real(T)), diag(A0)))
-        A = T <: Complex ? real(A0) : copy(A0)
+        A = _log_quasitriu_copy(real(T), A0)
     else
-        A = T <: Complex ? copy(A0) : complex(A0)
-    end
-    if A0 isa UnitUpperTriangular
-        A = UpperTriangular(parent(A))
-        @inbounds for i in 1:n
-            A[i,i] = 1
-        end
+        A = _log_quasitriu_copy(complex(T), A0)
     end
     Y0 = _log_quasitriu!(A0, A)
     # return complex result for complex input
@@ -1719,6 +1713,11 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
         return Y
     end
 end
+# The copy of A0 that _log_quasitriu! overwrites. For a triangular A0, it is upper triangular with
+# dense storage, also if the parent of A0 is banded, since the logarithm fills the upper triangle,
+# and it has zeros below the diagonal, which _sqrt_quasitriu! reads in the parent.
+_log_quasitriu_copy(::Type{S}, A0::Union{UpperTriangular,UnitUpperTriangular}) where {S} = UpperTriangular(Matrix{S}(A0))
+_log_quasitriu_copy(::Type{S}, A0::AbstractMatrix) where {S} = Matrix{S}(A0)
 # type-stable implementation of log_quasitriu
 # A is a copy of A0 that is overwritten while computing the result. It has the same eltype
 # as the result.
@@ -1987,24 +1986,26 @@ function _pow_superdiag_quasitriu!(A, A0, p)
         end
         Ak = t(A0[k,k])
         Akp1 = t(A0[k+1,k+1])
+        A0kkp1 = t(A0[k,k+1])
 
         Akp = Ak^p
         Akp1p = Akp1^p
 
         if Ak == Akp1
-            A[k,k+1] = p * A0[k,k+1] * Ak^(p-1)
+            A[k,k+1] = p * A0kkp1 * Ak^(p-1)
         elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak) || iszero(Akp1 + Ak)
-            A[k,k+1] = A0[k,k+1] * (Akp1p - Akp) / (Akp1 - Ak)
+            A[k,k+1] = A0kkp1 * (Akp1p - Akp) / (Akp1 - Ak)
         else
             logAk = log(Ak)
             logAkp1 = log(Akp1)
             z = (Akp1 - Ak)/(Akp1 + Ak)
             if abs(z) > 1
-                A[k,k+1] = A0[k,k+1] * (Akp1p - Akp) / (Akp1 - Ak)
+                A[k,k+1] = A0kkp1 * (Akp1p - Akp) / (Akp1 - Ak)
             else
                 w = atanh(z) + im * pi * (unw(logAkp1-logAk) - unw(log1p(z)-log1p(-z)))
                 dd = 2 * exp(p*(logAk+logAkp1)/2) * sinh(p*w) / (Akp1 - Ak);
-                A[k,k+1] = A0[k,k+1] * dd
+                # for a real A, dd is real, unless an entry is NaN
+                A[k,k+1] = A0kkp1 * (t <: Real ? real(dd) : dd)
             end
         end
         k += 1
