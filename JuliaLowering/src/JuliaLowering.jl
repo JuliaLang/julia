@@ -4,7 +4,9 @@ baremodule JuliaLowering
 using Base
 
 # bug with baremodules
-Base.set_syntax_version(JuliaLowering, v"1.14")
+if isdefinedglobal(Base, :set_syntax_version)
+    Base.set_syntax_version(JuliaLowering, v"1.14")
+end
 
 # We define a separate _include() for use in this module to avoid mixing method
 # tables with the public `JuliaLowering.include()` API
@@ -12,11 +14,13 @@ const _include = Base.IncludeInto(JuliaLowering)
 
 if parentmodule(JuliaLowering) === Base
     using Base.JuliaSyntax
+    const BaseSyntax = Base.BaseSyntax
 else
     using JuliaSyntax
+    using BaseSyntax: BaseSyntax
 end
 
-using Base: ScopeLayer, SyntaxContext, SourceCode, SourceRef, Syntax, MacroContext,
+using .BaseSyntax: ScopeLayer, SyntaxContext, SourceCode, SourceRef, Syntax, MacroContext,
     SourceAttrType, head, flattened_provenance, sourceref, unexpanded_sourceref,
     mapchildren, provenance, JL_NEW_EDITION, JL_OLD_EDITION, DEBUG_LOWERING,
     is_base_layer, base_layer, escape_layer, remove_scope, fill_context,

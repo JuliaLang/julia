@@ -27,3 +27,12 @@ function fl_lower(ex, mod::Module, filename::String="none",
     ccall(:jl_fl_lower, Any, (Any, Any, Ptr{UInt8}, Cint, Csize_t, Cint),
           ex, mod, filename, lineno, world, warn)
 end
+
+function fl_toplevel_eval(mod::Module, @nospecialize(x))
+    ex = if x isa Syntax
+        Expr(:toplevel, first_linenode(x), syntax_to_expr(x))
+    else
+        x
+    end
+    ccall(:jl_toplevel_eval, Any, (Any, Any), mod, ex)
+end
