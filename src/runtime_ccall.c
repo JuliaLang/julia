@@ -176,6 +176,53 @@ void *jl_bind_foreignsymbol_slot(jl_plt_entry_t *entry) JL_CANSAFEPOINT_ENTER_LE
     return target;
 }
 
+// The default link policy, and the policies of library objects (as pairs lib, policy)
+static int foreign_link_policy_default = JL_FOREIGN_LINK_RUNTIME;
+static jl_array_t *foreign_link_policies JL_GLOBALLY_ROOTED = NULL;
+
+JL_DLLEXPORT void jl_set_default_foreign_link_policy(int policy) JL_NOTSAFEPOINT
+{
+    foreign_link_policy_default = policy;
+}
+
+JL_DLLEXPORT void jl_set_foreign_link_policy(jl_value_t *lib, int policy) JL_CANSAFEPOINT
+{
+    jl_value_t *boxed = jl_box_long(policy);
+    jl_value_t *fresh = NULL;
+    JL_GC_PUSH2(&boxed, &fresh);
+    if (foreign_link_policies == NULL) {
+        fresh = (jl_value_t*)jl_alloc_vec_any(0);
+        foreign_link_policies = (jl_array_t*)jl_as_global_root(fresh, 1);
+    }
+    jl_array_t *policies = foreign_link_policies;
+    size_t i;
+    for (i = 0; i < jl_array_nrows(policies); i += 2) {
+        if (jl_egal(jl_array_ptr_ref(policies, i), lib))
+            break;
+    }
+    if (i < jl_array_nrows(policies)) {
+        jl_array_ptr_set(policies, i + 1, boxed);
+    }
+    else {
+        jl_array_ptr_1d_push(policies, lib);
+        jl_array_ptr_1d_push(policies, boxed);
+    }
+    JL_GC_POP();
+}
+
+// The link policy for the library object `lib` (NULL or `nothing` for none)
+JL_DLLEXPORT int jl_get_foreign_link_policy(jl_value_t *lib) JL_NOTSAFEPOINT
+{
+    jl_array_t *policies = foreign_link_policies;
+    if (lib != NULL && lib != jl_nothing && policies != NULL) {
+        for (size_t i = 0; i < jl_array_nrows(policies); i += 2) {
+            if (jl_egal(jl_array_ptr_ref(policies, i), lib))
+                return (int)jl_unbox_long(jl_array_ptr_ref(policies, i + 1));
+        }
+    }
+    return foreign_link_policy_default;
+}
+
 // miscellany
 
 JL_DLLEXPORT

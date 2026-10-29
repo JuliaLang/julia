@@ -1765,6 +1765,14 @@ JL_DLLEXPORT void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err, 
 #define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name) JL_CANSAFEPOINT;
 JL_DLLEXPORT void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name) JL_CANSAFEPOINT;
+// How AOT codegen links a foreign symbol with a constant name
+enum jl_foreign_link_policy_t {
+    JL_FOREIGN_LINK_RUNTIME = 0, // look up at run time
+    JL_FOREIGN_LINK_NATIVE = 1,  // leave to the system linker
+};
+JL_DLLEXPORT void jl_set_default_foreign_link_policy(int policy) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_set_foreign_link_policy(jl_value_t *lib, int policy) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_get_foreign_link_policy(jl_value_t *lib) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     jl_value_t *fobj, jl_datatype_t *result, htable_t *cache, jl_svec_t *fill,
     void *(*init_trampoline)(void *tramp, void **nval),

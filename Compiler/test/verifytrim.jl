@@ -282,3 +282,44 @@ let roots = trim_on_load_roots()
     @test occursin("ParametricTrimOnLoad", desc.desc)
     @test !occursin("(::TrimOnLoad)", desc.desc)
 end
+
+# the record of the foreign symbols that an image uses
+const record_bundled_lib = Base.Libc.Libdl.LazyLibrary(
+    Base.Libc.Libdl.BundledLazyLibraryPath("libtrimrecord.so"))
+record_bundled() = ccall((:trim_record_f, record_bundled_lib), Cint, ())
+record_named() = ccall((:trim_record_g, "libtrimrecord"), Cint, ())
+record_typed_name() = ccall((:trim_record_h, trim_libname), Cint, ())
+record_cglobal() = cglobal((:trim_record_v, record_bundled_lib))
+const record_artifact_lib = Base.Libc.Libdl.LazyLibrary(Base.Libc.Libdl.LazyLibraryPath(
+    Base.Libc.Libdl.LazyArtifactDir(Base.SHA1("0123456789abcdef0123456789abcdef01234567")),
+    "lib", "libtrimrecord.so"))
+record_artifact() = ccall((:trim_record_a, record_artifact_lib), Cint, ())
+record_unlocated() = ccall((:trim_record_u, static_trim_lib), Cint, ())
+
+let path = tempname(), seen = Any[]
+    # written by a hook, with the code that is compiled
+    Compiler.add_codegen_input_hook!(function (codeinfos)
+        push!(seen, codeinfos)
+        Compiler.TrimOutputHooks.record_foreign_symbols(path, codeinfos)
+    end)
+    try
+        infos = typeinf_ext_toplevel(Any[Core.svec(Cint, Tuple{typeof(record_bundled)}),
+                                         Core.svec(Cint, Tuple{typeof(record_named)}),
+                                         Core.svec(Cint, Tuple{typeof(record_typed_name)}),
+                                         Core.svec(Ptr{Cvoid}, Tuple{typeof(record_cglobal)}),
+                                         Core.svec(Cint, Tuple{typeof(record_artifact)}),
+                                         Core.svec(Cint, Tuple{typeof(record_unlocated)})],
+                                     [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+        @test only(seen) === infos
+        record = read(path, String)
+        @test occursin("""{"kind": "ccall", "name": "trim_record_f", "library": {"bundled": "libtrimrecord.so"}}""", record)
+        @test occursin("""{"kind": "ccall", "name": "trim_record_g", "library": {"name": "libtrimrecord"}}""", record)
+        @test occursin("""{"kind": "ccall", "name": "trim_record_h", "library": {"name": null}}""", record)
+        @test occursin("""{"kind": "cglobal", "name": "trim_record_v", "library": {"bundled": "libtrimrecord.so"}}""", record)
+        @test occursin("""{"kind": "ccall", "name": "trim_record_a", "library": {"artifact": {"hash": "0123456789abcdef0123456789abcdef01234567", "path": "lib/libtrimrecord.so"}}}""", record)
+        @test occursin(r"""{"kind": "ccall", "name": "trim_record_u", "library": {"unresolved": "[^"]*StaticTrimLib"}}""", record)
+    finally
+        pop!(Compiler.codegen_input_hooks)
+        rm(path; force=true)
+    end
+end

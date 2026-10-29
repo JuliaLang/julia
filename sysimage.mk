@@ -108,7 +108,7 @@ COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/strings/lazy.jl \
 		base/traits.jl \
 		base/tuple.jl)
-COMPILER_SRCS += $(shell find $(JULIAHOME)/Compiler/src -name \*.jl -and -not -name verifytrim.jl -and -not -name show.jl)
+COMPILER_SRCS += $(shell find $(JULIAHOME)/Compiler/src -name \*.jl -and -not -name verifytrim.jl -and -not -name trimoutputhooks.jl -and -not -name show.jl)
 # Julia-based compiler frontend is bootstrapped into Base for now
 COMPILER_FRONTEND_SRCS = $(shell find $(JULIAHOME)/JuliaSyntax/src $(JULIAHOME)/JuliaLowering/src -name \*.jl)
 # sort these to remove duplicates
@@ -116,7 +116,8 @@ BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl -and -not -name s
                     $(shell find $(BUILDROOT)/base -name \*.jl  -and -not -name sysimg.jl)) \
 			 $(COMPILER_FRONTEND_SRCS) \
              $(JULIAHOME)/Compiler/src/ssair/show.jl \
-             $(JULIAHOME)/Compiler/src/verifytrim.jl
+             $(JULIAHOME)/Compiler/src/verifytrim.jl \
+             $(JULIAHOME)/Compiler/src/trimoutputhooks.jl
 STDLIB_SRCS := $(JULIAHOME)/base/sysimg.jl $(SYSIMG_STDLIBS_SRCS)
 RELBUILDROOT := $(call rel_path,$(JULIAHOME)/base,$(BUILDROOT)/base)/ # <-- make sure this always has a trailing slash
 RELDATADIR := $(call rel_path,$(JULIAHOME)/base,$(build_datarootdir))/ # <-- make sure this always has a trailing slash

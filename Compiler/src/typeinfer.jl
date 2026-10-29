@@ -2085,6 +2085,21 @@ function foreign_library_resolved(@nospecialize(spec), ci::CodeInfo)
     return widenconst(library_type) <: Union{Symbol,String}
 end
 
+# Functions called with the code of an AOT image before it is compiled, and their worlds
+const codegen_input_hooks = Any[]
+
+"""
+    add_codegen_input_hook!(f)
+
+Call `f(codeinfos)` in the current world with the code of each AOT image before it is
+compiled. `codeinfos` holds each `CodeInstance` followed by its `CodeInfo`, and a `svec(rt,
+sig)` for each `ccallable` alias. `f` must not modify them.
+"""
+function add_codegen_input_hook!(@nospecialize(f))
+    push!(codegen_input_hooks, (get_world_counter(), f))
+    return nothing
+end
+
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
 function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vector{VarState};
                          invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
@@ -2415,6 +2430,10 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
 
     if trim_mode != TRIM_NO && trim_mode != TRIM_UNSAFE
         verify_typeinf_trim(codeinfos, trim_mode == TRIM_UNSAFE_WARN)
+    end
+
+    for (world, f) in codegen_input_hooks
+        Core._call_in_world(world, f, codeinfos)
     end
 
     # Build the ordered list of CodeInstances to store in the image's method
