@@ -112,13 +112,22 @@ function ld(; strict_definitions::Bool = false)
         default_args = `$default_args -syslibroot $(private_libdir())`
     else
         flavor = "gnu"
-        # From `gcc -shared -Wl,--verbose`; `-z defs` added to enforce that all symbols
-        # the pkgimage references are resolvable at link time (catches regressions early
-        # instead of deferring to first-call crashes at runtime).
+        # From `gcc -shared -Wl,--verbose`
         # `--discard-locals` drops assembler-local `.L` labels, which RISC-V objects carry
         # in their symbol tables (every `auipc` pair has one) and which profilers would
         # otherwise report instead of the enclosing function.
-        default_args = `--build-id --eh-frame-hdr --hash-style=gnu --as-needed -z relro -z defs --discard-locals`
+        default_args = `--build-id --eh-frame-hdr --hash-style=gnu --as-needed -z relro --discard-locals`
+        # Sanitizer runtimes are provided by the main executable, so instrumented
+        # images must leave their runtime callbacks undefined until load time.
+        # Otherwise, enforce that all symbols an image references are resolvable at link
+        # time (catches regressions early instead of deferring to first-call crashes at runtime).
+        opts = Base.JLOptions()
+        target_sanitized = opts.target_sanitize_memory != 0 ||
+                           opts.target_sanitize_thread != 0 ||
+                           opts.target_sanitize_address != 0
+        if !target_sanitized
+            default_args = `$default_args -z defs`
+        end
         if !isempty(Base.COMPRESS_PKGIMAGE_DEBUG_SECTIONS)
             default_args = `$default_args --compress-debug-sections=$(Base.COMPRESS_PKGIMAGE_DEBUG_SECTIONS)`
         end
