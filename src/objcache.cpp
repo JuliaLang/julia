@@ -215,12 +215,15 @@ void ObjCache::initDB()
     checkMDB(mdb_env_set_mapsize(Env, OBJCACHE_CAPACITY * 2));
     llvm::sys::fs::create_directories(*CachePath);
     if (int Err = mdb_env_open(Env, CachePath->c_str(), MDB_NOSYNC | MDB_NOTLS, 0640)) {
-        // These two are expected conditions, not errors: record them so the
+        // These are expected conditions, not errors: record them so the
         // REPL banner can explain why the cache is disabled.
         if (Err == MDB_REMOTE_FS)
             DisabledNotice = "the cache directory is on a network filesystem";
         else if (Err == MDB_PIDNS_MISMATCH)
             DisabledNotice = "it is in use by a process in a different pid namespace";
+        // on Apple this is usually the SysV semaphore limit, not a full disk
+        else if (Err == ENOSPC)
+            DisabledNotice = "no space is left for its lock file or semaphores";
         // EPERM/EACCES: sandboxes (e.g. sandbox-exec on macOS CI) may deny
         // access to the SysV semaphores LMDB uses on Apple platforms; the
         // cache cannot work in such environments, so disable it quietly.
