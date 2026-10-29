@@ -2847,7 +2847,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
     // `typecache_lock` until then, so that every instantiation nested in the
     // resolution, including the lazy ones, finds it.
     jl_deferred_typecache_t dcache;
-    jl_typegroup_region_begin(&dcache);
+    jl_typecache_region_begin(&dcache);
 
     htable_t subst_map;
     htable_new(&subst_map, n);
@@ -3008,7 +3008,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
     }
     JL_CATCH {
         htable_free(&subst_map);
-        jl_typegroup_region_end(&dcache, 0);
+        jl_typecache_region_end(&dcache, 0);
         JL_GC_POP();
         jl_rethrow();
     } }
@@ -3109,7 +3109,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
         }
     }
     JL_CATCH {
-        jl_typegroup_region_end(&dcache, 0);
+        jl_typecache_region_end(&dcache, 0);
         JL_GC_POP();
         jl_rethrow();
     } }
@@ -3171,38 +3171,40 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                     results[i] = old;
             }
         }
+
+        // Step 8: Publish what the region deferred: the types that reference the
+        // group, and the lazily computed supertypes and field types that do.
+        // Drop any that reference a discarded duplicate (equivalent redefinition
+        // kept the old type), so no unpublished type ever leaks into the global
+        // caches. The layouts of the rest may fail, so they precede publishing any.
+        {
+            htable_t discarded;
+            htable_new(&discarded, 0);
+            size_t ndiscarded = 0;
+            for (size_t i = 0; i < n; i++) {
+                jl_datatype_t *dt = unwrap_to_datatype(results[i]);
+                if (dt != datatypes[i]) {
+                    ptrhash_put(&discarded, datatypes[i], datatypes[i]);
+                    ptrhash_put(&discarded, datatypes[i]->name, datatypes[i]->name);
+                    ndiscarded++;
+                }
+            }
+            for (size_t j = 0; ndiscarded != 0 && j < dcache.lows.len; j++) {
+                jl_value_t *e = jl_array_ptr_ref(dcache.list, j);
+                if (e != NULL && type_references_any(e, &discarded))
+                    jl_typegroup_region_drop(&dcache, j);
+            }
+            htable_free(&discarded);
+        }
+        jl_typecache_region_layouts(&dcache);
     }
     JL_CATCH {
-        jl_typegroup_region_end(&dcache, 0);
+        jl_typecache_region_end(&dcache, 0);
         JL_GC_POP();
         jl_rethrow();
     } }
 
-    // Step 8: Publish what the region deferred: the types that reference the
-    // group, and the lazily computed supertypes and field types that do.
-    // Drop any that reference a discarded duplicate (equivalent redefinition
-    // kept the old type), so no unpublished type ever leaks into the global
-    // caches.
-    {
-        htable_t discarded;
-        htable_new(&discarded, 0);
-        size_t ndiscarded = 0;
-        for (size_t i = 0; i < n; i++) {
-            jl_datatype_t *dt = unwrap_to_datatype(results[i]);
-            if (dt != datatypes[i]) {
-                ptrhash_put(&discarded, datatypes[i], datatypes[i]);
-                ptrhash_put(&discarded, datatypes[i]->name, datatypes[i]->name);
-                ndiscarded++;
-            }
-        }
-        for (size_t j = 0; ndiscarded != 0 && j < dcache.lows.len; j++) {
-            jl_value_t *e = jl_array_ptr_ref(dcache.list, j);
-            if (e != NULL && type_references_any(e, &discarded))
-                jl_typegroup_region_drop(&dcache, j);
-        }
-        htable_free(&discarded);
-    }
-    jl_typegroup_region_end(&dcache, 1);
+    jl_typecache_region_end(&dcache, 1);
 
     // Build result tuple
     jl_value_t *result = jl_f_tuple(NULL, results, n);

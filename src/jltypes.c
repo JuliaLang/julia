@@ -1730,6 +1730,8 @@ static jl_typestack_t *typecache_stack_held(void) JL_NOTSAFEPOINT
 static jl_deferred_typecache_t *typecache_region = NULL;
 // the `list` of every region: one exists at a time, and it ends empty
 jl_array_t *jl_typecache_region_list JL_GLOBALLY_ROOTED = NULL;
+// the length of `list` from which its datatypes are indexed by hash
+#define REGION_INDEX_MIN 32
 
 static jl_deferred_typecache_t *typecache_region_held(void) JL_NOTSAFEPOINT
 {
@@ -1755,8 +1757,10 @@ static void region_dirty(jl_deferred_typecache_t *r, int level) JL_NOTSAFEPOINT
     if (level >= r->dirty)
         return;
     size_t i, end = r->frames.len;
-    if (region_clean(r))
+    if (region_clean(r)) {
         htable_new(&r->pending, 0);
+        htable_new(&r->writes, 0);
+    }
     else
         end = r->dirty - 1;
     for (i = level > 0 ? level - 1 : 0; i < end; i++)
@@ -1774,6 +1778,7 @@ static void region_pop(jl_deferred_typecache_t *r, int level) JL_NOTSAFEPOINT
         return;
     r->written.len = 0;
     htable_free(&r->pending);
+    htable_free(&r->writes);
     r->dirty = REGION_NONE;
 }
 
@@ -1786,10 +1791,71 @@ static int region_frame_level(jl_deferred_typecache_t *r, jl_datatype_t *t) JL_N
     return 0;
 }
 
+// the slot of an entry of the index since committed or dropped
+#define REGION_INDEX_GONE ((void*)(uintptr_t)1)
+
+// Whether lookups of the key of `dt` go by hash: as in the cache, only a key
+// with a stable hash (`typekey_hash`) does, and then it is `dt->hash`
+static int region_hashed(jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    return typekey_hash(dt->name, jl_svec_data(dt->parameters), jl_svec_len(dt->parameters), 0) != 0;
+}
+
+static void region_index_insert(jl_deferred_typecache_t *r, jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    if (!region_hashed(dt))
+        return;
+    size_t mask = r->indexsz - 1, i = dt->hash & mask;
+    while (r->index[i] != NULL && r->index[i] != REGION_INDEX_GONE)
+        i = (i + 1) & mask;
+    if (r->index[i] == NULL)
+        r->nindexed++;
+    r->index[i] = dt;
+}
+
+static void region_index_remove(jl_deferred_typecache_t *r, jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    if (r->index == NULL)
+        return;
+    size_t mask = r->indexsz - 1;
+    for (size_t i = dt->hash & mask; r->index[i] != NULL; i = (i + 1) & mask) {
+        if (r->index[i] == dt) {
+            r->index[i] = REGION_INDEX_GONE;
+            return;
+        }
+    }
+}
+
+// Index the datatypes of the list anew
+static void region_reindex(jl_deferred_typecache_t *r) JL_NOTSAFEPOINT
+{
+    size_t i, len = r->lows.len;
+    free(r->index);
+    r->indexgen++;
+    r->indexsz = next_power_of_two(4 * len);
+    r->index = (void**)calloc_s(r->indexsz * sizeof(void*));
+    r->nindexed = 0;
+    for (i = 0; i < len; i++) {
+        jl_datatype_t *e = (jl_datatype_t*)jl_array_ptr_ref(r->list, i);
+        if (e != NULL && jl_is_datatype(e))
+            region_index_insert(r, e);
+    }
+}
+
+static void region_unindex(jl_deferred_typecache_t *r) JL_NOTSAFEPOINT
+{
+    free(r->index);
+    r->index = NULL;
+    r->indexsz = r->nindexed = 0;
+    r->indexgen++;
+}
+
 static void region_init(jl_deferred_typecache_t *r) JL_NOTSAFEPOINT
 {
     r->list = jl_typecache_region_list;
     r->dirty = REGION_NONE;
+    r->index = NULL;
+    r->indexsz = r->nindexed = r->indexgen = 0;
     arraylist_new(&r->lows, 0);
     arraylist_new(&r->frames, 0);
     arraylist_new(&r->written, 0);
@@ -1797,8 +1863,11 @@ static void region_init(jl_deferred_typecache_t *r) JL_NOTSAFEPOINT
 
 static void region_free(jl_deferred_typecache_t *r) JL_NOTSAFEPOINT
 {
-    if (!region_clean(r))
+    if (!region_clean(r)) {
         htable_free(&r->pending);
+        htable_free(&r->writes);
+    }
+    region_unindex(r);
     arraylist_free(&r->lows);
     arraylist_free(&r->frames);
     arraylist_free(&r->written);
@@ -1850,22 +1919,51 @@ static void region_defer(jl_deferred_typecache_t *r, jl_value_t *v, int low) JL_
         r->list = jl_typecache_region_list = jl_alloc_vec_any(0);
     jl_array_ptr_1d_push(r->list, v);
     arraylist_push(&r->lows, (void*)(uintptr_t)low);
-    if (jl_is_datatype(v))
+    if (jl_is_datatype(v)) {
+        jl_datatype_t *dt = (jl_datatype_t*)v;
         ptrhash_put(&r->pending, v, region_encode(low));
+        if (r->index != NULL ? 2 * (r->nindexed + 1) > r->indexsz : r->lows.len > REGION_INDEX_MIN)
+            region_reindex(r);
+        else if (r->index != NULL)
+            region_index_insert(r, dt);
+    }
+    else {
+        jl_value_t *t = jl_svecref(v, 0);
+        ptrhash_put(&r->writes, region_write_key(t, jl_is_svec(jl_svecref(v, 1))), v);
+    }
     JL_GC_POP();
 }
 
-// Look up a type in the region. A linear scan is fine: it holds only the types
-// that depend on one still in progress
+// Look up a type in the region: a linear scan while it holds few, since it
+// holds only the types that depend on one still in progress, else by hash
 static jl_value_t *lookup_deferred_type(jl_deferred_typecache_t *r, jl_typename_t *tn, jl_value_t **key, size_t n) JL_CANSAFEPOINT
 {
-    if (r == NULL || region_clean(r))
+restart:
+    if (r == NULL || region_clean(r) || r->lows.len == 0)
         return NULL;
+    unsigned hv = r->index == NULL ? 0 : typekey_hash(tn, key, n, 0);
+    if (hv != 0) {
+        size_t gen = r->indexgen, mask = r->indexsz - 1;
+        for (size_t i = hv & mask; r->index[i] != NULL; i = (i + 1) & mask) {
+            jl_datatype_t *e = (jl_datatype_t*)r->index[i];
+            if (e == REGION_INDEX_GONE || e->hash != hv || e->name != tn)
+                continue;
+            if (typekey_eq(e, key, n))
+                return (jl_value_t*)e;
+            if (r->indexgen != gen) // `typekey_eq` added entries, and rebuilt it
+                goto restart;
+        }
+        return NULL;
+    }
     // `typekey_eq` may add entries; the ones scanned stay put meanwhile
+    size_t gen = r->indexgen;
     for (size_t j = 0; j < r->lows.len; j++) {
         jl_datatype_t *e = (jl_datatype_t*)jl_array_ptr_ref(r->list, j);
-        if (e != NULL && jl_is_datatype(e) && e->name == tn && jl_svec_len(e->parameters) == n && typekey_eq(e, key, n))
+        if (e != NULL && jl_is_datatype(e) && e->name == tn && jl_svec_len(e->parameters) == n &&
+                (r->index == NULL || !region_hashed(e)) && typekey_eq(e, key, n))
             return (jl_value_t*)e;
+        if (r->indexgen != gen) // it built the index, which the rest must be looked up in
+            goto restart;
     }
     return NULL;
 }
@@ -1876,12 +1974,8 @@ static jl_value_t *region_pending_write(jl_deferred_typecache_t *r, jl_datatype_
 {
     if (r == NULL || region_clean(r))
         return NULL;
-    for (size_t j = 0; j < r->lows.len; j++) {
-        jl_value_t *e = jl_array_ptr_ref(r->list, j);
-        if (e != NULL && jl_is_svec(e) && jl_svecref(e, 0) == (jl_value_t*)t && jl_is_svec(jl_svecref(e, 1)) == types)
-            return jl_svecref(e, 1);
-    }
-    return NULL;
+    jl_value_t *w = (jl_value_t*)ptrhash_get(&r->writes, region_write_key(t, types));
+    return w == HT_NOTFOUND ? NULL : jl_svecref(w, 1);
 }
 
 // Whether the lazily computed supertype or field types `v` of `t` must wait in
@@ -1928,8 +2022,15 @@ static void region_undo(jl_deferred_typecache_t *r, size_t wmark) JL_NOTSAFEPOIN
 // Remove the entry `e` of the list from the lookups of the region
 static void region_forget(jl_deferred_typecache_t *r, jl_value_t *e) JL_NOTSAFEPOINT
 {
-    if (jl_is_datatype(e))
+    if (jl_is_datatype(e)) {
         ptrhash_remove(&r->pending, e);
+        region_index_remove(r, (jl_datatype_t*)e);
+    }
+    else {
+        void *key = region_write_key(jl_svecref(e, 0), jl_is_svec(jl_svecref(e, 1)));
+        assert(ptrhash_get(&r->writes, key) == (void*)e); // one pending write per slot
+        ptrhash_remove(&r->writes, key);
+    }
 }
 
 static void region_publish(jl_value_t *e) JL_CANSAFEPOINT
@@ -1984,6 +2085,8 @@ static void region_remove(jl_deferred_typecache_t *r, size_t mark, int level, in
     }
     jl_array_del_end(r->list, r->lows.len - j);
     r->lows.len = j;
+    if (j == 0)
+        region_unindex(r);
 }
 
 // Compute the layouts of the entries from `mark` on at `level` or above before
@@ -2034,7 +2137,7 @@ static void region_finish(jl_deferred_typecache_t *r, jl_datatype_t *ndt, int le
     }
 }
 
-void jl_typegroup_region_begin(jl_deferred_typecache_t *r)
+void jl_typecache_region_begin(jl_deferred_typecache_t *r)
 {
     JL_LOCK(&typecache_lock); // Might GC
     assert(typecache_region == NULL);
@@ -2060,18 +2163,21 @@ void jl_typegroup_region_drop(jl_deferred_typecache_t *r, size_t i)
     }
 }
 
-// Publish the entries of a typegroup's region that are not NULL, if `publish`,
-// and close it
-void jl_typegroup_region_end(jl_deferred_typecache_t *r, int publish)
+// Compute the layouts of the types a region of level 0 (a typegroup's, or the
+// image loader's) waits to publish. They may fail, so this precedes
+// `jl_typecache_region_end` (and can go before what must not)
+void jl_typecache_region_layouts(jl_deferred_typecache_t *r)
+{
+    assert(typecache_region == r && r->frames.len == 0);
+    region_layouts(r, 0, 0);
+}
+
+// Publish the entries of a region of level 0 that are not NULL, if `publish`
+// (after `jl_typecache_region_layouts`), and close it
+void jl_typecache_region_end(jl_deferred_typecache_t *r, int publish)
 {
     assert(typecache_region == r && r->frames.len == 0);
     JL_TRY {
-        // first the layouts, which may fail, so that nothing is published then
-        for (size_t i = 0; publish && i < r->lows.len; i++) {
-            jl_datatype_t *t = (jl_datatype_t*)jl_array_ptr_ref(r->list, i);
-            if (t != NULL && jl_is_datatype(t) && t->layout == NULL && t->types != NULL && t->isconcretetype)
-                jl_compute_field_offsets(t);
-        }
         for (size_t i = 0; publish && i < r->lows.len; i++) {
             jl_value_t *e = jl_array_ptr_ref(r->list, i);
             if (e != NULL)
@@ -2079,7 +2185,7 @@ void jl_typegroup_region_end(jl_deferred_typecache_t *r, int publish)
         }
     }
     JL_CATCH {
-        jl_typegroup_region_end(r, 0);
+        jl_typecache_region_end(r, 0);
         jl_rethrow();
     }
     if (r->lows.len != 0)
@@ -2089,52 +2195,57 @@ void jl_typegroup_region_end(jl_deferred_typecache_t *r, int publish)
     JL_UNLOCK(&typecache_lock); // Might GC
 }
 
-// For the image loader, which holds `typecache_lock`: return the cached type
-// with the key of the image object `dt` (whose name and parameters are already
-// unique), else a fresh copy of `dt`, cached now and reported through `isnew`.
-// The copy gets the `instance` of `dt` (allocated here if the image left
-// `jl_nothing`) before the lookup, since a type adopting it there may publish
-// it to other threads, which read `super` and the cache without the lock. It
-// carries no `types` except for tuples (the caller
-// publishes them once the image is relocated); `super` is unset
-// in the image until the loader publishes the stored one, or is computed
-// lazily before that. The lookup compares keys by
-// subtyping, which may compute a lazy supertype that instantiates this very
-// key: the copy stands for it on the instantiation stack meanwhile, so that
-// instantiation adopts the copy instead of creating the type. So does the
-// lookup that `jl_cache_type_` repeats to place it
-jl_datatype_t *jl_lookup_or_cache_type_(jl_datatype_t *dt, int *isnew)
+// For the image loader, inside the region it holds (`jl_typecache_region_begin`):
+// return the type with the key of the image object `dt` (whose name and parameters
+// are already unique), cached or waiting in the region, else a fresh copy of `dt`,
+// reported through `isnew`, which waits in the region at level 0 until the loader
+// publishes it, with whatever is built meanwhile that mentions it. The copy gets
+// the `instance` of `dt` (allocated here once the copy is new, if the image left
+// `jl_nothing`: none until then, so the sentinel is never seen). It
+// carries no `types` except for tuples (the caller sets them once the image is
+// relocated); `super` is unset in the image until the loader publishes the stored
+// one, or is computed lazily before that. The lookup compares keys by subtyping,
+// which may compute a lazy supertype that instantiates this very key: the copy
+// stands for it on the instantiation stack meanwhile, as a type of level 0, so
+// that instantiation adopts the copy instead of creating the type
+jl_datatype_t *jl_lookup_or_defer_type_(jl_datatype_t *dt, int *isnew)
 {
-    assert(jl_mutex_held(&typecache_lock));
+    jl_deferred_typecache_t *r = typecache_region_held();
+    assert(r != NULL && r->dirty == 0);
     jl_datatype_t *newdt = jl_new_uninitialized_datatype();
     JL_GC_PUSH1(&newdt);
     jl_astaggedvalue(newdt)->bits.gc = GC_OLD;
     *newdt = *dt;
-    jl_value_t *instance = dt->instance;
-    if (instance == jl_nothing)
-        instance = jl_gc_permobj(jl_current_task->ptls, 0, newdt, 0);
-    newdt->instance = instance;
+    if (dt->instance == jl_nothing)
+        newdt->instance = NULL;
     if (dt->name != jl_tuple_typename && dt->name != jl_namedtuple_typename)
         newdt->types = NULL;
+    jl_svec_t *p = newdt->parameters;
+    ptrhash_put(&r->pending, newdt, region_encode(0));
     jl_typestack_t *saved = typecache_stack;
     jl_typestack_t top = { newdt, saved, 0 };
     typecache_stack = &top;
     jl_datatype_t *lkup = NULL;
     JL_TRY {
         lkup = jl_lookup_cache_type_(newdt);
+        if (lkup == NULL)
+            lkup = (jl_datatype_t*)lookup_deferred_type(r, newdt->name, jl_svec_data(p), jl_svec_len(p));
         if (lkup == NULL) {
-            jl_cache_type_(newdt);
+            region_defer(r, (jl_value_t*)newdt, 0);
             lkup = newdt;
         }
     }
     JL_CATCH {
         typecache_stack = saved;
+        ptrhash_remove(&r->pending, newdt);
         jl_rethrow();
     }
     typecache_stack = saved;
     *isnew = lkup == newdt;
-    if (*isnew)
-        dt->instance = instance;
+    if (*isnew && dt->instance == jl_nothing)
+        newdt->instance = dt->instance = jl_gc_permobj(jl_current_task->ptls, 0, newdt, 0);
+    if (!*isnew) // nothing adopted it: the lookups that missed this key found it nowhere either
+        ptrhash_remove(&r->pending, newdt);
     JL_GC_POP();
     return lkup;
 }

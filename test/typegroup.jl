@@ -1015,6 +1015,16 @@ using Test
             struct TG_LayoutOwner; h::TG_LayoutHit{TG_LayoutOwner}; end
         end
         @test sizeof(Tuple{TG_LayoutHit{TG_LayoutOwner}, Int}) == sizeof(Tuple{TG_LayoutHit{Int}, Int})
+        # a key without a stable hash is found among many deferred types
+        @eval typegroup
+            struct TG_ManyDeferred
+                $([:($(Symbol(:f, k))::NTuple{$k, TG_ManyDeferred}) for k in 1:40]...)
+                a::Vector{Union{Int, TG_ManyDeferred}}
+                b::Vector{Union{Int, TG_ManyDeferred}}
+            end
+            struct TG_ManyDeferredUser; x::TG_ManyDeferred; end
+        end
+        @test fieldtype(TG_ManyDeferred, :a) === fieldtype(TG_ManyDeferred, :b)
 
         @test !isdefined(@__MODULE__, :TG_LazyFail)
         tn = TG_LazyA.body.name
