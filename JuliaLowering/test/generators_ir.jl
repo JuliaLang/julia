@@ -209,7 +209,7 @@ LoweringError:
 13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
     slots: [slot₁/#self#(!read) slot₂/#unused#(!read)]
-    1   (call JuliaLowering.interpolate_expr (inert (return x)))
+    1   (copyast (inert (return x)))
     2   (return %₁)
 14  latestworld
 15  (= slot₁/#-># %₇)
