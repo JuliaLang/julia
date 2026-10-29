@@ -221,23 +221,14 @@ function isless(a::VersionNumber, b::VersionNumber)
     return false
 end
 
-# `hash(t, h)` of a prerelease or build tuple, as a loop: their length is not known to
-# inference, so `hash(::Tuple, ::UInt)` would be a dynamic call (unresolvable for --trim)
-@inline function hash_ident(t::VerTuple, h::UInt)
-    h ⊻= tuplehash_seed
-    for i in length(t):-1:1
-        h = hash(t[i], h)
-    end
-    return h
-end
-
 function hash(v::VersionNumber, h::UInt)
     h ⊻= 0x8ff4ffdb75f9fede % UInt
     h = hash(v.major, h)
     h = hash(v.minor, h)
     h = hash(v.patch, h)
-    h = hash_ident(v.prerelease, ~h)
-    h = hash_ident(v.build, ~h)
+    # the length of these tuples is not known to inference: a loop keeps the calls resolvable for --trim
+    h = _hash_tuple(v.prerelease, ~h)
+    h = _hash_tuple(v.build, ~h)
 end
 
 lowerbound(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch, ("",), ())
