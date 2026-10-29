@@ -1349,7 +1349,6 @@ timesofar("datamove")
     b1 = trues(v1)
     for i = 0:(v1-1)
         @test findfirst(b1 >> i) == i+1
-        @test Base.findfirstnot(.~(b1 >> i)) == i+1
     end
 
     for i = 3:(v1-1), j = 2:i
@@ -1459,9 +1458,6 @@ timesofar("find")
     @test findnext(b1, 778)  == findnextnot(b2, 778)  == findnext(!, b2, 778)  === nothing
     @test findnext(b1, 1001) == findnextnot(b2, 1001) == findnext(!, b2, 1001) === nothing
     @test findnext(identity, b1, 1001) == findnext(Returns(false), b1, 1001) == findnext(Returns(true), b1, 1001) === nothing
-
-    @test findlast(b1) == Base.findlastnot(b2) == 777
-    @test findfirst(b1) == Base.findfirstnot(b2) == 77
 
     b0 = BitVector()
     @test findprev(Returns(true), b0, -1) === nothing

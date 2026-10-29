@@ -3019,8 +3019,6 @@ end
 
     @test accumulate(min, [1, 2, 5, -1, 3, -2]) == [1, 1, 1, -1, -1, -2]
     @test accumulate(max, [1, 2, 5, -1, 3, -2]) == [1, 2, 5, 5, 5, 5]
-    @test Base.accumulate_pairwise(min, [1, 2, 5, -1, 3, -2]) == [1, 1, 1, -1, -1, -2]
-    @test Base.accumulate_pairwise(max, [1, 2, 5, -1, 3, -2]) == [1, 2, 5, 5, 5, 5]
 
     @test accumulate(max, [1 0; 0 1], dims=1) == [1 0; 1 1]
     @test accumulate(max, [1 0; 0 1], dims=2) == [1 1; 0 1]

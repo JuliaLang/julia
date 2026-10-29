@@ -35,12 +35,6 @@ function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector)
     return result
 end
 
-function accumulate_pairwise(op, v::AbstractVector{T}) where T
-    out = similar(v, _accumulate_promote_op(op, v))
-    return accumulate_pairwise!(op, out, v)
-end
-
-
 """
     cumsum!(B, A; dims::Integer)
 

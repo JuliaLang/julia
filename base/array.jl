@@ -40,7 +40,6 @@ const RangeIndex = Union{<:BitInteger, AbstractRange{<:BitInteger}}
 const DimOrInd = Union{Integer, AbstractUnitRange}
 const IntOrInd = Union{Int, AbstractUnitRange}
 const DimsOrInds{N} = NTuple{N,DimOrInd}
-const NeedsShaping = Union{Tuple{Integer,Vararg{Integer}}, Tuple{OneTo,Vararg{OneTo}}}
 
 """
     Array{T,N} <: AbstractArray{T,N}
@@ -184,8 +183,6 @@ function vect(X...)
     T = promote_typeof(X...)
     return T[X...]
 end
-
-asize_from(a::Array, n) = n > ndims(a) ? () : (size(a,n), asize_from(a, n+1)...)
 
 allocatedinline(@nospecialize T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
 
