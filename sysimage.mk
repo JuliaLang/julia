@@ -1,6 +1,7 @@
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BUILDDIR := .
 JULIAHOME := $(SRCDIR)
+SYSIMAGE_BUILD := 1
 include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/stdlib/stdlib.mk
 
