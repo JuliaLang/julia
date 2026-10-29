@@ -902,6 +902,9 @@ checkbounds(::Type{Bool}, A::AbstractArray, i::LogicalIndex) = checkbounds(Bool,
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i::LogicalIndex) = checkindex(Bool, inds, i.mask)
 checkindex(::Type{Bool}, inds::Tuple, i::LogicalIndex) = checkindex(Bool, inds, i.mask)
 
+setindex!(A::Array, X::AbstractArray, I::LogicalIndex{Int}) =
+    (@_propagate_inbounds_meta; _setindex!(IndexStyle(A), A, X, I))
+
 ## Boundscheck for AbstractArray{Bool}
 # Disallow linear indexing with AbstractArray{Bool}
 checkbounds(::Type{Bool}, A::AbstractArray, i::AbstractArray{Bool}) =

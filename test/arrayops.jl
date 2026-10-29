@@ -3401,6 +3401,16 @@ end
     end
 end
 
+@testset "setindex! with a LogicalIndex from to_indices (#64386)" begin
+    A = zeros(4)
+    A[only(to_indices(A, ([true, false, true, false],)))] = [1.0, 2.0]
+    @test A == [1.0, 0.0, 2.0, 0.0]
+    B = zeros(2, 2)
+    B[only(to_indices(B, (BitMatrix([1 0; 0 1]),)))] = [1.0, 2.0]
+    @test B == [1.0 0.0; 0.0 2.0]
+    @test_throws DimensionMismatch A[only(to_indices(A, ([true, false, true, false],)))] = [1.0]
+end
+
 @testset "conditionally-throwing version of `checkbounds` should return `nothing` if it returns" begin
     # can not just set `typ = Any` because that would include the predicate (non-throwing) methods of `checkbounds`, because `Type{Bool} <: Any`
     for typ in (AbstractString, AbstractArray, Base.AbstractBroadcasted)
