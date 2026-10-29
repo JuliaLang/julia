@@ -1,6 +1,61 @@
 use enum_map::Enum;
 use mmtk::util::ObjectReference;
 
+/// Preserve errno and Windows last-error across MMTk calls, including finalizers.
+/// The guarded operation must stay on the current thread.
+pub(crate) struct PreserveErrno {
+    errno_ptr: *mut libc::c_int,
+    errno: libc::c_int,
+    #[cfg(windows)]
+    last_error: u32,
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+unsafe fn errno_location() -> *mut libc::c_int {
+    libc::__errno_location()
+}
+#[cfg(any(target_os = "macos", target_os = "freebsd"))]
+unsafe fn errno_location() -> *mut libc::c_int {
+    libc::__error()
+}
+#[cfg(windows)]
+unsafe fn errno_location() -> *mut libc::c_int {
+    extern "C" {
+        fn _errno() -> *mut libc::c_int;
+    }
+    _errno()
+}
+
+#[cfg(windows)]
+extern "system" {
+    fn GetLastError() -> u32;
+    fn SetLastError(code: u32);
+}
+
+impl PreserveErrno {
+    pub(crate) fn new() -> Self {
+        unsafe {
+            let errno_ptr = errno_location();
+            PreserveErrno {
+                errno_ptr,
+                errno: *errno_ptr,
+                #[cfg(windows)]
+                last_error: GetLastError(),
+            }
+        }
+    }
+}
+
+impl Drop for PreserveErrno {
+    fn drop(&mut self) {
+        unsafe {
+            #[cfg(windows)]
+            SetLastError(self.last_error);
+            *self.errno_ptr = self.errno;
+        }
+    }
+}
+
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, Enum, PartialEq, Hash, Eq)]
 pub enum RootLabel {

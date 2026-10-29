@@ -31,12 +31,11 @@ end
 #---------------------
 1   TestMod.rhs
 2   (call top.indexed_iterate %₁ 1)
-3   (= slot₂/x (call core.getfield %₂ 1))
-4   (= slot₁/iterstate (call core.getfield %₂ 2))
-5   slot₁/iterstate
-6   (call top.indexed_iterate %₁ 2 %₅)
-7   (= slot₃/y (call core.getfield %₆ 1))
-8   (return core.nothing)
+3   (= slot₁/x (call core.getfield %₂ 1))
+4   (= slot₃/ (call core.getfield %₂ 2))
+5   (call top.indexed_iterate %₁ 2 slot₃/)
+6   (= slot₂/y (call core.getfield %₅ 1))
+7   (return core.nothing)
 
 ########################################
 # let syntax with named tuple on lhs creates locals for the unpacked vars
@@ -70,26 +69,26 @@ end
 1   (call core.svec)
 2   (call core.svec)
 3   (call core.svec)
-4   (call JuliaLowering.eval_closure_type TestMod :#f##0 %₁ %₂ %₃)
+4   (call JuliaLowering.eval_closure_type TestMod :#f#f##0 %₁ %₂ %₃)
 5   latestworld
-6   TestMod.#f##0
+6   TestMod.#f#f##0
 7   (new %₆)
-8   (= slot₁/f %₇)
-9   TestMod.#f##0
-10  (call core.svec %₉)
-11  (call core.svec)
-12  SourceLocation::1:4
-13  (call core.svec %₁₀ %₁₁ %₁₂)
-14  (call core.define_method TestMod core.nothing %₁₃
+8   TestMod.#f#f##0
+9   (call core.svec %₈)
+10  (call core.svec)
+11  SourceLocation:1
+12  (call core.svec %₉ %₁₀ %₁₁)
+13  (call core.define_method TestMod core.nothing %₁₂
     --- code_info
     slots: [slot₁/#self#(!read)]
     1   TestMod.body
     2   (return %₁)
-15  latestworld
+14  latestworld
+15  (= slot₁/f %₇)
 16  (return core.nothing)
 
 ########################################
-# Error: Invalid `let` var with K"::"
+# Error: Invalid `let` var with :(::)
 let f[]::T = rhs
 end
 #---------------------
@@ -146,7 +145,7 @@ end
 5   (call core.TypeEqOf %₄)
 6   (call core.svec %₅ core.Any)
 7   (call core.svec)
-8   SourceLocation::3:5
+8   SourceLocation:3
 9   (call core.svec %₆ %₇ %₈)
 10  (call core.define_method TestMod TestMod.f %₉
     --- code_info
@@ -200,20 +199,21 @@ end
 5   (call core.TypeEqOf %₄)
 6   (call core.svec %₅ %₃)
 7   (call core.svec %₃)
-8   SourceLocation::1:1
+8   SourceLocation:1
 9   (call core.svec %₆ %₇ %₈)
 10  (call core.define_method TestMod TestMod.f %₉
     --- code_info
     slots: [slot₁/#self#(!read) slot₂/z]
     1   (call core.apply_type top.Dict core.Symbol core.Any)
     2   (call %₁)
-    3   (gotoifnot true label₅)
-    4   (call top.setindex! %₂ slot₂/z :z)
-    5   (isdefined static_parameter₁)
-    6   (gotoifnot %₅ label₉)
-    7   static_parameter₁
-    8   (call top.setindex! %₂ %₇ :T)
-    9   (return %₂)
+    3   (isdefined slot₂/z)
+    4   (gotoifnot %₃ label₆)
+    5   (call top.setindex! %₂ slot₂/z :z)
+    6   (isdefined static_parameter₁)
+    7   (gotoifnot %₆ label₁₀)
+    8   static_parameter₁
+    9   (call top.setindex! %₂ %₈ :T)
+    10  (return %₂)
 11  latestworld
 12  TestMod.f
 13  (return %₁₂)
@@ -397,9 +397,10 @@ end
 #---------------------
 1   1
 2   (= slot₁/x %₁)
-3   (call core.isdefinedglobal TestMod :y)
-4   (call core.tuple true %₃)
-5   (return %₄)
+3   (isdefined slot₁/x)
+4   (call core.isdefinedglobal TestMod :y)
+5   (call core.tuple %₃ %₄)
+6   (return %₅)
 
 ########################################
 # Global function defined inside let (let over lambda)
@@ -419,7 +420,7 @@ end
 9   (call core.TypeEqOf %₈)
 10  (call core.svec %₉ core.Any)
 11  (call core.svec)
-12  SourceLocation::2:11
+12  SourceLocation:2
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- code_info
     slots: [slot₁/#self#(!read) slot₂/y]
@@ -439,7 +440,7 @@ end
 24  (call core.TypeEqOf %₂₃)
 25  (call core.svec %₂₄)
 26  (call core.svec)
-27  SourceLocation::3:11
+27  SourceLocation:3
 28  (call core.svec %₂₅ %₂₆ %₂₇)
 29  --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
@@ -475,7 +476,7 @@ end
 9   (call core.TypeEqOf %₈)
 10  (call core.svec %₉)
 11  (call core.svec)
-12  SourceLocation::2:11
+12  SourceLocation:2
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]

@@ -22,7 +22,7 @@ $(BUILDDIR)/$(ZSTD_SRC_DIR)/build-compiled: $(BUILDDIR)/$(ZSTD_SRC_DIR)/build-co
 $(eval $(call staged-install, \
 	zstd,$(ZSTD_SRC_DIR), \
 	MAKE_INSTALL,$(ZSTD_BUILD_OPTS) MT=1,, \
-	$(INSTALL_NAME_CMD)libzstd.$(SHLIB_EXT) $(build_private_libexecdir)/libzstd.$(SHLIB_EXT)))
+	$(INSTALL_NAME_CMD)libzstd.$(SHLIB_EXT) $(build_shlibdir)/libzstd.$(SHLIB_EXT)))
 
 clean-zstd:
 	-rm -f $(BUILDDIR)/$(ZSTD_SRC_DIR)/build-configured $(BUILDDIR)/$(ZSTD_SRC_DIR)/build-compiled

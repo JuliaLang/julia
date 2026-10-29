@@ -113,6 +113,7 @@ JL_DLLEXPORT void jl_init_options(void) JL_NOTSAFEPOINT
                         0,    // startup file
                         JL_OPTIONS_COMPILE_DEFAULT, // compile_enabled
                         0,    // code_coverage
+                        JL_COVERAGE_MODE_HIT, // code_coverage_mode
                         0,    // malloc_log
                         NULL, // tracked_path
                         2,    // opt_level
@@ -183,11 +184,11 @@ static const char opts[]  =
     // startup options
     " -P, --project[={<dir>|@temp|@.|@script[<rel>]}]  Set <dir> as the active project/environment.\n"
     "                                               Or, create a temporary environment with `@temp`\n"
-    "                                               The default @. option will search through parent\n"
-    "                                               directories until a Project.toml or JuliaProject.toml\n"
-    "                                               file is found. @script is similar, but searches up\n"
-    "                                               from the programfile or a path relative to\n"
-    "                                               programfile.\n"
+    "                                               If no value is given, @. is used, which searches\n"
+    "                                               through parent directories until a Project.toml or\n"
+    "                                               JuliaProject.toml file is found. @script is similar,\n"
+    "                                               but searches up from the programfile or a path\n"
+    "                                               relative to programfile.\n"
     " -J, --sysimage <file>                         Start up with the given system image file\n"
     " -H, --home <dir>                              Set location of `julia` executable\n"
     " --startup-file={yes*|no}                      Load `JULIA_DEPOT_PATH/config/startup.jl`; \n"
@@ -244,7 +245,9 @@ static const char opts[]  =
     // interactive options
     " -i, --interactive                             Interactive mode; REPL runs and\n"
     "                                               `isinteractive()` is true.\n"
-    " -q, --quiet                                   Quiet startup: no banner, suppress REPL warnings\n"
+    " -q, --quiet                                   Quiet startup: no banner, suppress REPL warnings,\n"
+    "                                               and no report of precompilation that loading a\n"
+    "                                               package triggers outside the REPL\n"
     " --banner={yes|no|short|auto*}                 Enable or disable startup banner\n"
     " --color={yes|no|auto*}                        Enable or disable color text\n"
     " --history-file={yes*|no}                      Load or save history\n\n"
@@ -281,15 +284,18 @@ static const char opts[]  =
 #endif
 
     // instrumentation options
-    " --code-coverage[={none*|user|all}]            Count executions of source lines (omitting setting is\n"
+    " --code-coverage[={none*|user|all}]            Record coverage for source lines (omitting setting is\n"
     "                                               equivalent to `user`)\n"
-    " --code-coverage=@<path>                       Count executions but only in files that fall under\n"
-    "                                               the given file path/directory. The `@` prefix is\n"
+    " --code-coverage=@<path>                       Record coverage only for files that fall under the\n"
+    "                                               given file path/directory. The `@` prefix is\n"
     "                                               required to select this option. A `@` with no path\n"
     "                                               will track the current directory.\n"
 
     " --code-coverage=tracefile.info                Append coverage information to the LCOV tracefile\n"
     "                                               (filename supports format tokens)\n"
+    " --code-coverage-mode={hit*|count}             Record whether each line ran (`hit`, the default)\n"
+    "                                               or collect execution counts (`count`, which may be\n"
+    "                                               approximate when code runs on multiple threads)\n"
 // TODO: These TOKENS are defined in `runtime_ccall.cpp`. A more verbose `--help` should include that list here.
     " --track-allocation[={none*|user|all}]         Count bytes allocated by each source line (omitting\n"
     "                                               setting is equivalent to `user`)\n"
@@ -307,7 +313,8 @@ static const char opts[]  =
     "                                               than the given value. The value may be specified as a\n"
     "                                               number of bytes, optionally in units of: B,\n"
     "                                               K (kibibytes), M (mebibytes), G (gibibytes),\n"
-    "                                               T (tebibytes), or % (percentage of physical memory).\n\n"
+    "                                               T (tebibytes), or % (percentage of physical memory,\n"
+    "                                               or of the cgroup memory limit if lower).\n\n"
 ;
 
 static const char opts_hidden[] =
@@ -391,6 +398,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_startup_file,
            opt_compile,
            opt_code_coverage,
+           opt_code_coverage_mode,
            opt_track_allocation,
            opt_check_bounds,
            opt_output_unopt_bc,
@@ -471,6 +479,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "startup-file",    required_argument, 0, opt_startup_file },
         { "compile",         required_argument, 0, opt_compile },
         { "code-coverage",   optional_argument, 0, opt_code_coverage },
+        { "code-coverage-mode", required_argument, 0, opt_code_coverage_mode },
         { "track-allocation",optional_argument, 0, opt_track_allocation },
         { "optimize",        optional_argument, 0, 'O' },
         { "min-optlevel",    optional_argument, 0, opt_optlevel_min },
@@ -831,6 +840,14 @@ restart_switch:
             else {
                 codecov = JL_LOG_USER;
             }
+            break;
+        case opt_code_coverage_mode:
+            if (!strcmp(optarg, "hit"))
+                jl_options.code_coverage_mode = JL_COVERAGE_MODE_HIT;
+            else if (!strcmp(optarg, "count"))
+                jl_options.code_coverage_mode = JL_COVERAGE_MODE_COUNT;
+            else
+                jl_errorf("julia: invalid argument to --code-coverage-mode (%s)", optarg);
             break;
         case opt_track_allocation:
             if (optarg != NULL) {

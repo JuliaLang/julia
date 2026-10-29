@@ -678,12 +678,18 @@ end
     primitive type RUInt23 23 end
     primitive type RUInt63 63 end
 
-    @test Base.ispacked(RUInt24)
-    @test Base.ispacked(RUInt40)
-    @test Base.ispacked(RUInt48)
-    @test !Base.datatype_haspadding(RUInt24)
-    @test !Base.datatype_haspadding(RUInt40)
-    @test !Base.datatype_haspadding(RUInt48)
+    @test !Base.ispacked(RUInt24)
+    @test !Base.ispacked(RUInt40)
+    @test !Base.ispacked(RUInt48)
+    @test Base.datatype_haspadding(RUInt24)
+    @test Base.datatype_haspadding(RUInt40)
+    @test Base.datatype_haspadding(RUInt48)
+    @test Base.non_padding_bytes(RUInt24) == Bool[1, 1, 1, 0]
+    @test Base.non_padding_bytes(RUInt40) == Bool[1, 1, 1, 1, 1, 0, 0, 0]
+    @test Base.non_padding_bytes(RUInt48) == Bool[1, 1, 1, 1, 1, 1, 0, 0]
+    # a partial byte is neither value nor padding
+    @test_throws ArgumentError Base.non_padding_bytes(RUInt17)
+    @test_throws ArgumentError Base.packedsize(RUInt17)
     @test Base.packedsize(RUInt24) == 3
     @test Base.packedsize(RUInt40) == 5
     @test Base.packedsize(RUInt48) == 6
@@ -723,7 +729,7 @@ end
 
     # Dense odd-bit arrays use allocation-size strides and reject byte reinterpretation.
     for (T, W, storage_size, allocation_size) in (
-        (RUInt23, UInt32, 3, 4),
+        (RUInt23, UInt32, 4, 4),
         (RUInt63, UInt64, 8, 8),
     )
         values = Core.Intrinsics.trunc_int.(T, W[1, 2, 3])
@@ -879,4 +885,93 @@ end
     end
     @test !Base.array_subpadding(T_5, S_1_3)
     @test !Base.array_subpadding(S_1_3, T_5)
+end
+
+@testset "issue #63305" begin
+    a = ones(UInt64, 2)
+    b = reinterpret(UInt8, reinterpret(reshape, UInt16, a))
+    c = collect(b)
+    @test c[5] == b[5] == 0x00
+    @test vec(c) == reinterpret(UInt8, a)
+    r = reinterpret(reshape, Int8, OffsetArray(reinterpret(reshape, UInt8, UInt16[0x0201, 0x0403, 0x0605]), 0, 0))
+    @test map(identity, r) == Int8[1 3 5; 2 4 6]
+end
+
+@testset "nested reshaped reinterpret (#64160)" begin
+    a = UInt32[0x04030201, 0x08070605, 0x0c0b0a09]
+    b = reinterpret(reshape, UInt16, a)
+    c = @inferred reinterpret(reshape, UInt8, b)
+    @test size(c) == (2, 2, 3)
+    @test c == reinterpret(reshape, UInt8, collect(b))
+    @test collect(c) == reshape(UInt8.(1:12), 2, 2, 3)
+    @test c[2, 1, 3] == 0x0a
+    c[1, 2, 3] = 0xff
+    @test a == UInt32[0x04030201, 0x08070605, 0x0cff0a09]
+    @test reinterpret(reshape, UInt32, b) === a
+    @test reinterpret(reshape, UInt16, b) === b
+    @test reinterpret(reshape, UInt16, c) === b
+    @test_throws ArgumentError reinterpret(reshape, UInt32, c)
+    @test_throws ArgumentError reinterpret(reshape, UInt64, reinterpret(reshape, UInt16, UInt32[1 2 3; 4 5 6]))
+
+    x = UInt8.(reshape(1:8, 2, 2, 2))
+    y = @inferred reinterpret(reshape, UInt32, reinterpret(reshape, UInt16, x))
+    @test y == collect(y) == UInt32[0x04030201, 0x08070605]
+    y[2] = 0x0d0c0b0a
+    @test x[:, :, 2] == UInt8[0x0a 0x0c; 0x0b 0x0d]
+
+    a = UInt64[1]
+    b = reinterpret(reshape, Tuple{UInt8,UInt32}, a)
+    @test reinterpret(reshape, UInt32, b) === reinterpret(reshape, UInt32, a)
+end
+
+@testset "BitArray from and into a reshaped reinterpret" begin
+    X = reinterpret(reshape, Bool, UInt16[0x0001, 0x0100, 0x0101])
+    @test BitArray(X) == Bool[1 0 1; 0 1 1]
+    @test copyto!(falses(2, 3), X) == Bool[1 0 1; 0 1 1]
+    @test all(nextind(X, a) == b for (a, b) in zip(eachindex(X), Iterators.drop(eachindex(X), 1)))
+    @test all(prevind(X, b) == a for (a, b) in zip(eachindex(X), Iterators.drop(eachindex(X), 1)))
+end
+
+@testset "pointer indexing with an offset axis" begin
+    M = collect(Int8.(reshape(1:16, 4, 4)))
+    R = reinterpret(reshape, Int32, view(M, :, Base.IdentityUnitRange(2:3)))
+    @test axes(R) == (Base.IdentityUnitRange(2:3),)
+    @test R[2] == reinterpret(Int32, M[:, 2])[1]
+    @test R[3] == reinterpret(Int32, M[:, 3])[1]
+    R[3] = 0
+    @test M[:, 3] == zeros(Int8, 4)
+    @test M[:, [1, 2, 4]] == reshape(Int8.([1:8; 13:16]), 4, 3)
+end
+
+@testset "reshaped reinterpret through a pass-through wrapper with offset axes" begin
+    v = UInt32[0x04030201, 0x08070605, 0x0c0b0a09]
+    O = OffsetArray(reinterpret(reshape, UInt8, v), 0, 10)
+    @test sum(O) == sum(collect(O)) == 78
+    @test maximum(O) == 0x0c
+    O = OffsetArray(reinterpret(reshape, UInt8, v), 5, 10)
+    @test sum(O) == sum(collect(O)) == 78
+    w = zeros(UInt32, 3)
+    copyto!(OffsetArray(reinterpret(reshape, UInt8, w), 5, 10), reshape(UInt8.(1:12), 4, 3))
+    @test w == v
+
+    big = UInt32[0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d, 0xaaaaaaaa, 0xbbbbbbbb]
+    R = reinterpret(reshape, UInt16, OffsetArray(view(big, 1:4), 2))
+    O = OffsetArray(R, 0, 0)
+    @test sum(O) == sum(R)
+    copyto!(O, zeros(UInt16, 2, 4))
+    @test big == UInt32[0, 0, 0, 0, 0xaaaaaaaa, 0xbbbbbbbb]
+    src = UInt16[1 3 5 7; 2 4 6 8]
+    copyto!(O, src)
+    @test [O[i, j] for i in 1:2, j in 3:6] == src
+    @test big[5:6] == UInt32[0xaaaaaaaa, 0xbbbbbbbb]
+
+    m = UInt32[1 2; 3 4]
+    R3 = reinterpret(reshape, UInt8, OffsetArray(m, 5, -2))
+    O3 = OffsetArray(R3, 0, 0, 0)
+    @test sum(O3) == sum(R3) == 10
+    fill!(O3, 0x01)
+    @test all(==(0x01010101), m)
+    src3 = reshape(UInt8.(1:16), 4, 2, 2)
+    copyto!(O3, src3)
+    @test [O3[i, j, k] for i in 1:4, j in 6:7, k in -1:0] == src3
 end

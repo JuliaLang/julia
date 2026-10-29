@@ -104,6 +104,9 @@ vals = Any[
     OffsetArray([1 3; 2 4], -2, 2),
     OffsetArray(1:4, 0),
     OffsetArray([1 3; 2 4], 0, 0),
+    # issue #63659
+    Base.IdentityUnitRange(2:20),
+    OffsetArray(1:20, typemax(Int) - 20),
     'a':'e', ['a', 'b', 'c', 'd', 'e'],
     # check that hash is still consistent with heterogeneous arrays for which - is defined
     # for some pairs and not others
@@ -174,6 +177,19 @@ for a in vals
 end
 
 @test hash(SubString("--hello--",3,7)) == hash("hello")
+@testset "hashing aligned String data" begin
+    # hash(::String) relies on String data being aligned to sizeof(Int), also in the sysimage
+    for s in (Base.libllvm_version_string, String(rand(UInt8, 100_000)),
+              String(take!(IOBuffer(rand(UInt8, 100)))))
+        @test UInt(pointer(s)) % sizeof(Int) == 0
+    end
+    for n in 0:200
+        s = String(rand(UInt8, n))
+        @test UInt(pointer(s)) % sizeof(Int) == 0
+        # a SubString at an odd offset is hashed with unaligned loads
+        @test hash(s) == hash(SubString("-" * s, 2))
+    end
+end
 @test hash(:(X.x)) == hash(:(X.x))
 @test hash(:(X.x)) != hash(:(X.y))
 
@@ -294,11 +310,11 @@ end
 
 struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
 @test AUnionParam.body.hash == 0
-@test Base._jl_type_cache_hash(Type{AUnionParam}) != 0
-@test Base._jl_type_cache_hash(Type{AUnionParam{<:Union{Float32,Float64}}}) == 0
+@test Base._jl_type_hash(Type{AUnionParam}) != 0
+@test Base._jl_type_hash(Type{AUnionParam{<:Union{Float32,Float64}}}) == 0
 @test Type{AUnionParam{<:Union{Nothing,Float32,Float64}}} === Type{AUnionParam}
-@test Base._jl_type_cache_hash(Type{AUnionParam.body}) == 0
-@test Base._jl_type_cache_hash(Type{Base.Broadcast.Broadcasted}) != 0
+@test Base._jl_type_hash(Type{AUnionParam.body}) == 0
+@test Base._jl_type_hash(Type{Base.Broadcast.Broadcasted}) != 0
 
 
 @testset "issue 50628" begin
@@ -349,4 +365,12 @@ end
         hash_generator = Base.hash_bytes(a, UInt64(Base.HASH_SEED), Base.HASH_SECRET)
         @test hash_generator === hash_pointer
     end
+end
+
+@testset "PartialStruct hash consistent with ==" begin
+    ps(t, f) = Core.PartialStruct(t, Any[f...])
+    @test hash(ps(Tuple{Int,Float64}, (Int, Float64))) ==
+          hash(ps(Tuple{Int,Float64}, (Int, Float64)))
+    @test hash(ps(Tuple{Int,Float64}, (Int, Float64))) !=
+          hash(ps(Tuple{Int,Float64}, (Int, Int)))
 end

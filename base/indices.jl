@@ -92,7 +92,8 @@ particular, [`eachindex`](@ref) creates an iterator whose type depends
 on the setting of this trait.
 """
 IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
-IndexStyle(::Type{Union{}}, slurp...) = IndexLinear()
+IndexStyle(::Type{Union{}}) = IndexLinear()
+IndexStyle(::Type{Union{}}, slurp...) = throw(MethodError(IndexStyle, (Union{}, slurp...)))
 IndexStyle(::Type{<:AbstractArray}) = IndexCartesian()
 IndexStyle(::Type{<:Array}) = IndexLinear()
 IndexStyle(::Type{<:AbstractRange}) = IndexLinear()
@@ -202,6 +203,7 @@ function promote_shape(a::Indices, b::Indices)
 end
 
 function throw_setindex_mismatch(X, I)
+    @noinline
     if length(I) == 1
         throw(DimensionMismatch("tried to assign $(length(X)) elements to $(I[1]) destinations"))
     else
@@ -209,72 +211,20 @@ function throw_setindex_mismatch(X, I)
     end
 end
 
-# check for valid sizes in A[I...] = X where X <: AbstractArray
-# we want to allow dimensions that are equal up to permutation, but only
-# for permutations that leave array elements in the same linear order.
-# those are the permutations that preserve the order of the non-singleton
-# dimensions.
-function setindex_shape_check(X::AbstractArray, I::Integer...)
-    @inline
-    li = ndims(X)
-    lj = length(I)
-    i = j = 1
-    while true
-        ii = length(axes(X,i))
-        jj = I[j]
-        if i == li || j == lj
-            while i < li
-                i += 1
-                ii *= length(axes(X,i))
-            end
-            while j < lj
-                j += 1
-                jj *= I[j]
-            end
-            if ii != jj
-                throw_setindex_mismatch(X, I)
-            end
-            return
-        end
-        if ii == jj
-            i += 1
-            j += 1
-        elseif ii == 1
-            i += 1
-        elseif jj == 1
-            j += 1
-        else
-            throw_setindex_mismatch(X, I)
-        end
-    end
-end
-
-setindex_shape_check(X::AbstractArray) =
-    (length(X)==1 || throw_setindex_mismatch(X,()))
-
 setindex_shape_check(X::AbstractArray, i::Integer) =
     (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check(X::AbstractArray{<:Any, 0}, i::Integer...) =
-    (length(X) == prod(i) || throw_setindex_mismatch(X, i))
+_shapes_match(::Tuple{}, ::Tuple{}) = true
+_shapes_match(a::Tuple, ::Tuple{}) = all(isone, a)
+_shapes_match(::Tuple{}, b::Tuple) = all(isone, b)
+_shapes_match(a::Tuple, b::Tuple) = first(a) == first(b) && _shapes_match(tail(a), tail(b))
 
-setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer) =
-    (length(X)==i || throw_setindex_mismatch(X, (i,)))
-
-setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer, j::Integer) =
-    (length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
-
-function setindex_shape_check(X::AbstractArray{<:Any,2}, i::Integer, j::Integer)
-    if length(X) != i*j
-        throw_setindex_mismatch(X, (i,j))
-    end
-    sx1 = length(axes(X,1))
-    if !(i == 1 || i == sx1 || sx1 == 1)
-        throw_setindex_mismatch(X, (i,j))
-    end
+function setindex_shape_check(X::AbstractArray, shape::Tuple{Vararg{Integer}})
+    matches = (ndims(X) == 1 || length(shape) == 1) ? length(X) == prod(shape) : _shapes_match(size(X), shape)
+    matches || throw_setindex_mismatch(X, shape)
 end
 
-setindex_shape_check(::Any...) =
+setindex_shape_check(::Any, ::Tuple) =
     throw(ArgumentError("indexed assignment with a single value to possibly many locations is not supported; perhaps use broadcasting `.=` instead?"))
 
 # convert to a supported index type (array or Int)
@@ -357,8 +307,12 @@ julia> to_indices(A, (1,2)) # no shape checking
 (1, 2)
 ```
 """
-to_indices(A, I::Tuple) = (@inline; to_indices(A, axes(A), I))
+to_indices(A, I::Tuple) = (@inline; _to_indices(A, _drop_zerodim(I), I))
 to_indices(A, I::Tuple{Any}) = (@inline; to_indices(A, (eachindex(IndexLinear(), A),), I))
+_to_indices(A, ::Tuple, I::Tuple) = (@inline; to_indices(A, axes(A), I))
+_to_indices(A, J::Tuple{Any}, ::Tuple) = (@inline; to_indices(A, J))
+_drop_zerodim(::Tuple{}) = ()
+_drop_zerodim(I::Tuple) = (@inline; (I[1], _drop_zerodim(tail(I))...))
 # In simple cases, we know that we don't need to use axes(A), optimize those.
 # Having this here avoids invalidations from multidimensional.jl: to_indices(A, I::Tuple{Vararg{Union{Integer, CartesianIndex}}})
 to_indices(A, I::Tuple{}) = ()
@@ -441,7 +395,7 @@ end
 function getindex(S::IdentityUnitRange, i::StepRange{Bool})
     @inline
     @boundscheck checkbounds(S, i)
-    range(first(i) ? first(S) : last(S), length = last(i), step = Int(step(i)))
+    range(first(i) ? first(S) : last(S), length = count(i), step = Int(step(i)))
 end
 # Indexing with offset ranges should preserve the axes of the indices
 # however, this is only really possible in general with OffsetArrays.
@@ -560,7 +514,7 @@ end
 function getindex(iter::LinearIndices, i::AbstractRange{<:Integer})
     @inline
     @boundscheck checkbounds(iter, i)
-    @inbounds isa(iter, LinearIndices{1}) ? iter.indices[1][i] : (first(iter):last(iter))[i]
+    @inbounds isa(iter, LinearIndices{1}) ? axes1(iter.indices[1])[i] : (first(iter):last(iter))[i]
 end
 copy(iter::LinearIndices) = iter
 # More efficient iteration — predominantly for non-vector LinearIndices

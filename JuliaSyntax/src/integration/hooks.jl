@@ -3,6 +3,12 @@
 
 const _has_v1_6_hooks  = VERSION >= v"1.6"
 const _has_v1_10_hooks = isdefined(Core, :_setparser!)
+const _has_v1_14_version_hooks = isdefined(Base, :VERSION_EDITION)
+const VERSION_EDITION = @static if _has_v1_14_version_hooks
+    Base.VERSION_EDITION
+else
+    (Int(VERSION.major), Int(VERSION.minor))
+end
 
 struct ErrorSpec
     child_idx::Int
@@ -163,7 +169,8 @@ end
 # Debug log file for dumping parsed code
 const _debug_log = Ref{Union{Nothing,IO}}(nothing)
 
-function core_parser_hook(code, filename::String, lineno::Int, offset::Int, options::Symbol; syntax_version = v"1.13")
+function core_parser_hook(code, filename::String, lineno::Int, offset::Int,
+                          options::Symbol, edition::Tuple{Int, Int})
     try
         # TODO: Check that we do all this input wrangling without copying the
         # code buffer
@@ -185,7 +192,7 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
             write(_debug_log[], code)
         end
 
-        stream = ParseStream(code, offset+1; version = syntax_version)
+        stream = ParseStream(code, offset+1; version=VersionNumber(edition))
         if options === :statement || options === :atom
             # To copy the flisp parser driver:
             # * Parsing atoms      consumes leading trivia
@@ -299,11 +306,89 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
     end
 end
 
+@static if _has_v1_14_version_hooks
+    _make_error_ex(prov, tag, value) = @mknode(
+        prov;
+        head=(tag === :none ? :error : :incomplete),
+        children=Syntax[@mknode(prov; head=:value, value, children=nothing)])
+    _nested_error(x::Syntax) = head(x) === :error ? x :
+        for c in children(x)
+            e = _nested_error(c)
+            e === nothing || return e
+        end
+
+    function new_core_parser_hook(code, filename::String, lineno::Int, offset::Int,
+                                  options::Symbol, edition::Tuple{Int, Int})
+        try
+            if !(code isa String || code isa SubString || code isa Vector{UInt8})
+                code = Base.invokelatest(String, code)
+            end
+
+            stream = ParseStream(code, offset+1; version=VersionNumber(edition))
+            if options === :statement || options === :atom
+                bump_trivia(stream)
+                if peek(stream) == K"EndMarker"
+                    return nothing, last_byte(stream)
+                end
+            end
+            parse!(stream; rule=options)
+            if options === :statement
+                bump_trivia(stream; skip_newlines=false)
+                if peek(stream) == K"NewlineWs"
+                    bump(stream)
+                end
+            end
+
+            ex = build_tree(Syntax, stream; filename=filename, first_line=lineno)
+            if any_error(stream)
+                pos_before_comments = last_non_whitespace_byte(stream)
+                errspec = first_tree_error(stream)
+                tag = _incomplete_tag(errspec, pos_before_comments)
+                exc = ParseError(stream, filename=filename, first_line=lineno,
+                                 incomplete_tag=tag)
+                msg = sprint(showerror, exc)
+                ex = if options === :all
+                    # Lift error and remove all :toplevel args after err
+                    # (consumers don't handle nested errors)
+                    cs = Syntax[]
+                    for c in children(ex)
+                        err = _nested_error(c)
+                        if err === nothing
+                            push!(cs, c)
+                        else
+                            push!(cs, _make_error_ex(
+                                err, tag, Meta.ParseError(msg, exc)))
+                            break
+                        end
+                    end
+                    @mknode(ex; children=cs)
+                else
+                    _make_error_ex(ex, tag, Meta.ParseError(msg, exc))
+                end
+            end
+            return ex, last_byte(stream)
+        catch exc
+            @error("""JuliaSyntax parser failed — falling back to flisp!
+                      This is not your fault. Please submit a bug report to https://github.com/JuliaLang/julia""",
+                   exception=(exc,catch_backtrace()),
+                   offset=offset,
+                   code=code)
+
+            fl_ex, fl_off = _fl_parse_hook(code, filename, lineno, offset, options)
+            fl_ex = Base.expr_to_syntax(fl_ex, LineNumberNode(lineno, filename))
+            return fl_ex, fl_off
+        end
+    end
+end
+
 # Core._parse gained a `lineno` argument in
 # https://github.com/JuliaLang/julia/pull/43876
 # Prior to this, the following signature was needed:
 function core_parser_hook(code, filename, offset, options)
     core_parser_hook(code, filename, 1, offset, options)
+end
+function core_parser_hook(code, filename, lineno, offset, options)
+    core_parser_hook(code, filename, lineno, offset, options, VERSION_EDITION)
 end
 
 if _has_v1_10_hooks
@@ -331,23 +416,15 @@ use `enable_in_core!(false)`.
 Keyword arguments:
 * `freeze_world_age` - Use a fixed world age for the parser to prevent
   recompilation of the parser due to any user-defined methods (default `true`).
-* `debug_filename` - File name of parser debug log (defaults to `nothing` or
-  the value of `ENV["JULIA_SYNTAX_DEBUG_FILE"]`).
 """
-function enable_in_core!(enable=true; freeze_world_age = true,
-        debug_filename   = get(ENV, "JULIA_SYNTAX_DEBUG_FILE", nothing))
+function enable_in_core!(enable=true; freeze_world_age = true)
     if !_has_v1_6_hooks
         error("Cannot use JuliaSyntax as the main Julia parser in Julia version $VERSION < 1.6")
     end
-    if enable && !isnothing(debug_filename)
-        _debug_log[] = open(debug_filename, "w")
-    elseif !enable && !isnothing(_debug_log[])
-        close(_debug_log[])
-        _debug_log[] = nothing
-    end
     if enable
+        hook = _has_v1_14_version_hooks ? new_core_parser_hook : core_parser_hook
         world_age = freeze_world_age ? Base.get_world_counter() : typemax(UInt)
-        _set_core_parse_hook(fix_world_age(core_parser_hook, world_age))
+        _set_core_parse_hook(fix_world_age(hook, world_age))
     else
         @assert !isnothing(_default_system_parser)
         _set_core_parse_hook(_default_system_parser)
@@ -355,13 +432,14 @@ function enable_in_core!(enable=true; freeze_world_age = true,
     nothing
 end
 
-
 #-------------------------------------------------------------------------------
 # Tools to call the reference flisp parser
 #
 # Call the flisp parser
 function _fl_parse_hook(code, filename, lineno, offset, options)
-    @static if VERSION >= v"1.8.0-DEV.1370" # https://github.com/JuliaLang/julia/pull/43876
+    @static if _has_v1_14_version_hooks
+        Base.fl_parse(code, filename, lineno, offset, options, VERSION_EDITION)
+    elseif VERSION >= v"1.8.0-DEV.1370" # https://github.com/JuliaLang/julia/pull/43876
         return Core.Compiler.fl_parse(code, filename, lineno, offset, options)
     elseif _has_v1_6_hooks
         return Core.Compiler.fl_parse(code, filename, offset, options)

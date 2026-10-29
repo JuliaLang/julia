@@ -295,7 +295,19 @@ types exist in lowered form:
 
   * `GlobalRef`
 
-    Refers to global variable `name` in module `mod`.
+    Refers to global variable `name` in module `mod`. A `GlobalRef` appears in the IR as a
+    reference to a binding that has not (yet) been resolved to any particular binding partition.
+
+  * `Core.BindingPartition`
+
+    Refers to a specific binding partition of a `GlobalRef`. A `BindingPartition` in the IR encodes
+    an optimized access to a `GlobalRef`. A `BindingPartition` can recover its owning `Core.Binding`
+    (and thus its `name`/`mod` and current value) by walking the circular partition chain to its end.
+    This form is used only where that owner is the binding the source named; a read through an
+    import is emitted as a `Core.getglobal_partition` call instead, which carries the access as a
+    `GlobalRef` so an `UndefVarError` names what the source asked for rather than the import target.
+    A `BindingPartition` may also appear nested inside a `foreigncall`/`foreignglobal` target
+    tuple, in place of the `GlobalRef` naming the library.
 
   * `SSAValue`
 
@@ -321,13 +333,21 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
     Function call (static dispatch). `args[1]` is the MethodInstance to call, `args[2:end]` are the
     arguments (including the function that is being called, at `args[2]`).
 
+  * `invoke_modify`
+
+    Read-modify-write call (`modifyfield!`, `modifyglobal!` or its resolved form
+    `Core.modifyglobal_partition`, `Core.memoryrefmodify!`, or the `atomic_pointermodify`
+    intrinsic) whose reduce function is statically dispatched. `args[1]`
+    is the CodeInstance for that function, `args[2:end]` are as for the `call`.
+
   * `static_parameter`
 
     Reference a static parameter by index.
 
   * `=`
 
-    Assignment. In the IR, the first argument is always a `SlotNumber` or a `GlobalRef`.
+    Assignment. In the IR, the first argument must be a `SlotNumber`, a `GlobalRef`, or a
+    `Core.BindingPartition`. For the latter two, equivalent to a call to `setglobal!` or `Core.setglobal_partition`, respectively.
 
   * `method`
 
@@ -474,6 +494,27 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
     Marks the end of the a loop. Contains metadata that is passed to `LowerSimdLoop` to either mark
     the inner loop of `@simd` expression, or to propagate information to LLVM loop passes.
 
+  * `gc_preserve_begin`
+
+    Part of the implementation of [`GC.@preserve`](@ref). The arguments are values to keep rooted
+    (alive) until the matching `gc_preserve_end`. Yields a token which is consumed by
+    `gc_preserve_end`. See also [Keeping values alive in the absence of uses](@ref).
+
+  * `gc_preserve_end`
+
+    Ends the region started by a `gc_preserve_begin`. `args[1]` is the token from the associated
+    `gc_preserve_begin`.
+
+  * `aliasscope`
+
+    Part of the implementation of `Base.Experimental.@aliasscope`. Has no arguments. Starts a region
+    (ended by the matching `popaliasscope`) in which the compiler may assume that `Const` arrays are
+    not modified through stores within the region. Regions may be nested.
+
+  * `popaliasscope`
+
+    Ends the region started by the innermost `aliasscope`. Has no arguments.
+
   * `copyast`
 
     Part of the implementation of quasi-quote. The argument is a surface syntax AST that is simply
@@ -492,7 +533,11 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
       * `args[1]` : name
 
-        The expression that'll be parsed for the foreign function.
+        The expression that'll be parsed for the foreign function. When it names a library as
+        well as a symbol, it is an `Expr(:tuple, name, library)`. That tuple is not an operand
+        position, and it has special semantics (it accepts non-constant `GlobalRef`, as well as
+        `Core.BindingPartition` after optimizations run, and evaluates it an unspecified number of
+        times in at least one world encountered at runtime).
 
       * `args[2]::Type` : RT
 

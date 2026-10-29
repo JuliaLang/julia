@@ -6,6 +6,7 @@
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
+#include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/SmallSet.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SetVector.h>
@@ -132,17 +133,19 @@ private:
     ssize_t getGCAllocSize(Instruction *I);
     void pushInstruction(Instruction *I);
 
-    void insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert);
-    // insert llvm.lifetime.* calls for `ptr` with size `sz` based on the use of `orig`.
-    void insertLifetime(Value *ptr, Constant *sz, Instruction *orig);
+    void insertLifetimeEnd(Value *ptr, Instruction *insert);
+    // insert llvm.lifetime.* calls for `ptr` based on the use of `orig`.
+    void insertLifetime(Value *ptr, Instruction *orig);
 
     void checkInst(CallInst *I);
 
     void replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
                                  Instruction *orig_i, Instruction *new_i);
+    void removeWriteBarrierUse(CallInst *call, Instruction *val);
     void removeAlloc(CallInst *orig_inst);
     void moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocFnKind allockind);
     void initializeAlloca(IRBuilder<> &prolog_builder, AllocaInst *buff, AllocFnKind allockind);
+    bool forwardMemoryData(CallInst *orig_inst, Value *data);
     void splitOnStack(CallInst *orig_inst);
     void optimizeTag(CallInst *orig_inst);
 
@@ -222,7 +225,13 @@ void Optimizer::optimizeAll()
         auto item = worklist.pop_back_val();
         auto orig = item.first;
         size_t sz = item.second;
+        bool is_memory = orig->getCalledOperand() == pass.alloc_memory_func;
         checkInst(orig);
+        // Escape analysis does not follow the data pointer of a Memory, so keep the layout of
+        // one that is loaded from. `moveToStack` forwards the data pointer, which lets SROA
+        // split it afterwards.
+        if (is_memory && use_info.hasload)
+            use_info.addrescaped = true;
         if (use_info.escaped) {
             REMARK([&]() {
                 std::string str;
@@ -381,6 +390,8 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
     auto call = dyn_cast<CallInst>(I);
     if (!call)
         return -1;
+    if (auto sz = pass.getInlineMemorySize(call))
+        return *sz;
     if (call->getCalledOperand() != pass.alloc_obj_func)
         return -1;
     assert(call->arg_size() == 3);
@@ -409,7 +420,7 @@ void Optimizer::checkInst(CallInst *I)
     });
 }
 
-void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
+void Optimizer::insertLifetimeEnd(Value *ptr, Instruction *insert)
 {
     BasicBlock::iterator it(insert);
     BasicBlock::iterator begin(insert->getParent()->begin());
@@ -428,34 +439,22 @@ void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
         }
         break;
     }
-#if JL_LLVM_VERSION >= 220000
-    // LLVM 22 dropped the size operand from the lifetime intrinsics.
-    (void)sz;
     CallInst::Create(pass.lifetime_end, {ptr}, "", insert->getIterator());
-#elif JL_LLVM_VERSION >= 200000
-    CallInst::Create(pass.lifetime_end, {sz, ptr}, "", insert->getIterator());
-#else
-    CallInst::Create(pass.lifetime_end, {sz, ptr}, "", insert);
-#endif
 }
 
-void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
+void Optimizer::insertLifetime(Value *ptr, Instruction *orig)
 {
-#if JL_LLVM_VERSION >= 220000
-    // LLVM 22 dropped the size operand from the lifetime intrinsics.
-    (void)sz;
-    CallInst::Create(pass.lifetime_start, {ptr}, "", orig->getIterator());
-#elif JL_LLVM_VERSION >= 200000
-    CallInst::Create(pass.lifetime_start, {sz, ptr}, "", orig->getIterator());
-#else
-    CallInst::Create(pass.lifetime_start, {sz, ptr}, "", orig);
-#endif
     BasicBlock *def_bb = orig->getParent();
-    std::set<BasicBlock*> bbs{def_bb};
     auto &DT = getDomTree();
+    if (!DT.isReachableFromEntry(def_bb))
+        return;
+    CallInst::Create(pass.lifetime_start, {ptr}, "", orig->getIterator());
+    std::set<BasicBlock*> bbs{def_bb};
+    SmallDenseMap<BasicBlock*, unsigned, 4> nuses;
     // Collect all BB where the allocation is live
     for (auto use: use_info.uses) {
         auto bb = use->getParent();
+        ++nuses[bb];
         if (!bbs.insert(bb).second)
             continue;
         if (pred_empty(bb))
@@ -557,13 +556,25 @@ void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
             first_dead.push_back(bb->getTerminator());
         }
         else {
-            for (auto it = bb->rbegin(), end = bb->rend(); it != end; ++it) {
-                if (use_info.uses.count(&*it)) {
-                    --it;
-                    first_dead.push_back(&*it);
+            auto remaining = nuses.lookup(bb);
+            Instruction *last = nullptr;
+            auto fwd = bb == def_bb ? std::next(orig->getIterator()) : bb->begin();
+            auto bwd = bb->end();
+            while (remaining) {
+                assert(fwd != bwd);
+                if (use_info.uses.count(&*fwd) && --remaining == 0) {
+                    last = &*fwd;
+                    break;
+                }
+                ++fwd;
+                --bwd;
+                if (use_info.uses.count(&*bwd)) {
+                    last = &*bwd;
                     break;
                 }
             }
+            if (last)
+                first_dead.push_back(last->getNextNode());
         }
     }
     bbs.clear();
@@ -582,11 +593,11 @@ void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
             // Otherwise, there could be use that we don't track
             // before hitting the next safepoint.
             if (!DT.dominates(orig, bb)) {
-                insertLifetimeEnd(ptr, sz, &*bb->getFirstInsertionPt());
+                insertLifetimeEnd(ptr, &*bb->getFirstInsertionPt());
                 continue;
             }
             else if (auto insert = getFirstSafepoint(bb)) {
-                insertLifetimeEnd(ptr, sz, insert);
+                insertLifetimeEnd(ptr, insert);
                 continue;
             }
         }
@@ -598,7 +609,7 @@ void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
             for (; it != end; ++it) {
                 auto insert = &*it;
                 if (isSafepoint(insert)) {
-                    insertLifetimeEnd(ptr, sz, insert);
+                    insertLifetimeEnd(ptr, insert);
                     safepoint_found = true;
                     break;
                 }
@@ -634,35 +645,39 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
     // and compute the new name mangling schema
     SmallVector<Type*, 4> overloadTys;
     {
-        SmallVector<Intrinsic::IITDescriptor, 8> Table;
-        getIntrinsicInfoTableEntries(ID, Table);
-        ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
-        auto res = Intrinsic::matchIntrinsicSignature(newfType, TableRef, overloadTys);
-        assert(res == Intrinsic::MatchIntrinsicTypes_Match);
-        (void)res;
-        bool matchvararg = !Intrinsic::matchIntrinsicVarArg(newfType->isVarArg(), TableRef);
-        assert(matchvararg);
-        (void)matchvararg;
+        bool valid = Intrinsic::isSignatureValid(ID, newfType, overloadTys);
+        assert(valid);
+        (void)valid;
     }
-#if JL_LLVM_VERSION >= 200000
     auto newF = Intrinsic::getOrInsertDeclaration(call->getModule(), ID, overloadTys);
-#else
-    auto newF = Intrinsic::getDeclaration(call->getModule(), ID, overloadTys);
-#endif
     assert(newF->getFunctionType() == newfType);
     newF->setCallingConv(call->getCallingConv());
-#if JL_LLVM_VERSION >= 200000
     auto newCall = CallInst::Create(newF, args, "", call->getIterator());
-#else
-    auto newCall = CallInst::Create(newF, args, "", call);
-#endif
     newCall->setTailCallKind(call->getTailCallKind());
     auto old_attrs = call->getAttributes();
-    newCall->setAttributes(AttributeList::get(pass.getLLVMContext(), getFnAttrs(old_attrs),
-                                              getRetAttrs(old_attrs), {}));
+    newCall->setAttributes(AttributeList::get(pass.getLLVMContext(), old_attrs.getFnAttrs(),
+                                              old_attrs.getRetAttrs(), {}));
     newCall->setDebugLoc(call->getDebugLoc());
     call->replaceAllUsesWith(newCall);
     call->eraseFromParent();
+}
+
+void Optimizer::removeWriteBarrierUse(CallInst *call, Instruction *val)
+{
+    bool isDestination = call->getArgOperand(0) == val;
+    if (pass.isFieldWriteBarrier(call->getCalledOperand())) {
+        for (unsigned i = pass.field_wb_slot_arg; i < call->arg_size(); i += 2)
+            isDestination |= call->getArgOperand(i) == val;
+    }
+    if (isDestination) {
+        ++RemovedWriteBarriers;
+        call->eraseFromParent();
+    }
+    else {
+        // The allocation does not escape, but other fields covered by this
+        // barrier may still be written. Drop only the eliminated child.
+        call->replaceUsesOfWith(val, Constant::getNullValue(val->getType()));
+    }
 }
 
 void Optimizer::initializeAlloca(IRBuilder<> &prolog_builder, AllocaInst *buff, AllocFnKind allockind)
@@ -674,6 +689,118 @@ void Optimizer::initializeAlloca(IRBuilder<> &prolog_builder, AllocaInst *buff, 
     const DataLayout &DL = F.getParent()->getDataLayout();
     prolog_builder.CreateMemSet(buff, ConstantInt::get(Type::getInt8Ty(prolog_builder.getContext()), 0), DL.getTypeAllocSize(T), buff->getAlign());
 
+}
+
+// Forward the loads of the data pointer of the inline Memory `orig_inst` to `data`, and if
+// nothing else may read it, remove the stores of it: a header pointing into the alloca keeps
+// SROA from splitting it. Returns whether the caller still has to store the data pointer.
+// Gives up on anything that may write the field other than a plain store of the inline data
+// address. Accesses through the loaded data pointer aren't followed: reaching the header
+// through it would be out of bounds.
+bool Optimizer::forwardMemoryData(CallInst *orig_inst, Value *data)
+{
+    const DataLayout &DL = *pass.DL;
+    const uint64_t ptr_offset = offsetof(jl_genericmemory_t, ptr);
+    const uint64_t ptr_size = DL.getPointerSize();
+    const uint64_t unknown = UINT64_MAX;
+    auto overlaps = [&] (uint64_t offset, uint64_t size) {
+        if (offset == unknown)
+            return true;
+        if (offset >= ptr_offset + ptr_size)
+            return false;
+        return size == unknown || ptr_offset < offset + size;
+    };
+    SmallVector<LoadInst*, 4> loads;
+    SmallVector<StoreInst*, 4> stores;          // stores to the data pointer field
+    SmallPtrSet<StoreInst*, 4> stored_data;     // stores of the data pointer
+    bool stored_other = false;                  // some other pointer into the object is stored
+    bool may_read = false;
+    SmallVector<std::pair<Instruction*, uint64_t>, 8> worklist{{orig_inst, 0}};
+    while (!worklist.empty()) {
+        auto [inst, offset] = worklist.pop_back_val();
+        for (Use &use: inst->uses()) {
+            auto user = cast<Instruction>(use.getUser());
+            if (auto load = dyn_cast<LoadInst>(user)) {
+                if (offset == ptr_offset && load->getType() == data->getType() && !load->isVolatile())
+                    loads.push_back(load);
+                else if (overlaps(offset, DL.getTypeStoreSize(load->getType())))
+                    may_read = true;
+            }
+            else if (auto store = dyn_cast<StoreInst>(user)) {
+                if (use.getOperandNo() != StoreInst::getPointerOperandIndex()) {
+                    if (offset == JL_GENERICMEMORY_INLINE_DATA_OFFSET)
+                        stored_data.insert(store);
+                    else
+                        stored_other = true;
+                }
+                else if (offset == ptr_offset && store->isSimple() &&
+                         store->getValueOperand()->getType() == data->getType())
+                    stores.push_back(store);
+                else if (overlaps(offset, DL.getTypeStoreSize(store->getValueOperand()->getType())))
+                    return true;
+            }
+            else if (auto gep = dyn_cast<GetElementPtrInst>(user)) {
+                APInt gep_offset(DL.getIndexTypeSizeInBits(gep->getType()), 0);
+                int64_t new_offset = -1;
+                if (offset != unknown && gep->accumulateConstantOffset(DL, gep_offset))
+                    new_offset = (int64_t)offset + gep_offset.getSExtValue();
+                worklist.push_back({gep, new_offset >= 0 ? (uint64_t)new_offset : unknown});
+            }
+            else if (isa<AddrSpaceCastInst>(user) || isa<BitCastInst>(user)) {
+                worklist.push_back({user, offset});
+            }
+            else if (auto call = dyn_cast<CallInst>(user)) {
+                auto callee = call->getCalledOperand();
+                if (callee == pass.pointer_from_objref_func) {
+                    worklist.push_back({call, offset});
+                }
+                else if (callee == pass.gc_loaded_func) {
+                    // The parent operand only roots the object; the result aliases the derived one.
+                    if (use.getOperandNo() == 1)
+                        worklist.push_back({call, offset});
+                }
+                else if (auto MI = dyn_cast<MemIntrinsic>(call)) {
+                    auto len = dyn_cast<ConstantInt>(MI->getLength());
+                    if (overlaps(offset, len ? len->getZExtValue() : unknown)) {
+                        if (use.getOperandNo() == 0)
+                            return true;
+                        may_read = true;
+                    }
+                }
+                else if (!(callee == pass.typeof_func || pass.isWriteBarrierFunc(callee) ||
+                           callee == pass.gc_preserve_begin_func || call->isBundleOperand(&use) ||
+                           call->isLifetimeStartOrEnd())) {
+                    return true;
+                }
+            }
+            else {
+                return true;
+            }
+        }
+    }
+    // Only forward if every store to the field writes the inline data address.
+    for (auto store: stores) {
+        if (!stored_data.contains(store))
+            return true;
+    }
+    for (auto load: loads) {
+        for (auto user: make_early_inc_range(load->users())) {
+            auto call = dyn_cast<CallInst>(user);
+            if (call && call->getCalledOperand() == pass.gc_loaded_func) {
+                // `data` points into the alloca, which needs no root
+                IRBuilder<> builder(call);
+                call->replaceAllUsesWith(builder.CreateAddrSpaceCast(data, call->getType()));
+                call->eraseFromParent();
+            }
+        }
+        load->replaceAllUsesWith(data);
+        load->eraseFromParent();
+    }
+    if (may_read || stored_other || stored_data.size() != stores.size())
+        return true;
+    for (auto store: stores)
+        store->eraseFromParent();
+    return false;
 }
 
 // This function should not erase any safepoint so that the lifetime marker can find and cache
@@ -721,10 +848,23 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
         buff->setAlignment(align);
         ptr = cast<Instruction>(buff);
     }
-    insertLifetime(ptr, ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), sz), orig_inst);
+    insertLifetime(ptr, orig_inst);
     if (sz != 0 && !has_ref) { // TODO: fix has_ref case too
         IRBuilder<> builder(orig_inst);
         initializeAlloca(builder, buff, allockind);
+    }
+    if (orig_inst->getCalledOperand() == pass.alloc_memory_func) {
+        // Initialize the header like the allocation would have; the data was zeroed above.
+        assert(!has_ref && (allockind & AllocFnKind::Uninitialized) == AllocFnKind::Unknown);
+        IRBuilder<> builder(orig_inst);
+        auto T_int8 = builder.getInt8Ty();
+        auto length_field = builder.CreateConstInBoundsGEP1_64(T_int8, buff, offsetof(jl_genericmemory_t, length));
+        builder.CreateAlignedStore(orig_inst->getArgOperand(3), length_field, Align(sizeof(void*)));
+        auto data = builder.CreateConstInBoundsGEP1_64(T_int8, buff, JL_GENERICMEMORY_INLINE_DATA_OFFSET);
+        if (forwardMemoryData(orig_inst, data)) {
+            auto ptr_field = builder.CreateConstInBoundsGEP1_64(T_int8, buff, offsetof(jl_genericmemory_t, ptr));
+            builder.CreateAlignedStore(data, ptr_field, Align(sizeof(void*)));
+        }
     }
     Instruction *new_inst = cast<Instruction>(ptr);
     new_inst->copyMetadata(*orig_inst);
@@ -802,9 +942,8 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
                 }
                 return;
             }
-            if (pass.write_barrier_func == callee) {
-                ++RemovedWriteBarriers;
-                call->eraseFromParent();
+            if (pass.isWriteBarrierFunc(callee)) {
+                removeWriteBarrierUse(call, orig_i);
                 return;
             }
             if (auto intrinsic = dyn_cast<IntrinsicInst>(call)) {
@@ -824,11 +963,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
             SmallVector<Value *, 4> IdxOperands(gep->idx_begin(), gep->idx_end());
             auto new_gep = GetElementPtrInst::Create(gep->getSourceElementType(),
                                                      new_i, IdxOperands,
-#if JL_LLVM_VERSION >= 200000
                                                      gep->getName(), gep->getIterator());
-#else
-                                                     gep->getName(), gep);
-#endif
             new_gep->setIsInBounds(gep->isInBounds());
             new_gep->takeName(gep);
             new_gep->copyMetadata(*gep);
@@ -908,9 +1043,8 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
                 call->eraseFromParent();
                 return;
             }
-            if (pass.write_barrier_func == callee) {
-                ++RemovedWriteBarriers;
-                call->eraseFromParent();
+            if (pass.isWriteBarrierFunc(callee)) {
+                removeWriteBarrierUse(call, orig_i);
                 return;
             }
             if (auto II = dyn_cast<IntrinsicInst>(call)) {
@@ -1019,7 +1153,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         slot.slot = prolog_builder.CreateAlloca(allocty);
         slot.slot->setAlignment(align);
         IRBuilder<> builder(orig_inst);
-        insertLifetime(slot.slot, ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), field.size), orig_inst);
+        insertLifetime(slot.slot, orig_inst);
         if (field.hasobjref) {
             // alloca must be promotable for PromoteMemToReg below
             if ((use_info.allockind & AllocFnKind::Uninitialized) == AllocFnKind::Unknown)
@@ -1203,7 +1337,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                                 else {
                                     uint64_t intval;
                                     memset(&intval, val, 8);
-                                    Constant *val = ConstantInt::get(pass.DL->getIntPtrType(builder.getContext(), pass.T_prjlvalue->getAddressSpace()), intval);
+                                    Constant *val = ConstantInt::get(pass.DL->getIntPtrType(builder.getContext(), pass.T_prjlvalue->getAddressSpace()), intval, /*IsSigned=*/false, /*ImplicitTrunc=*/true);
                                     val = ConstantExpr::getIntToPtr(val, JuliaType::get_pjlvalue_ty(builder.getContext()));
                                     ptr = ConstantExpr::getAddrSpaceCast(val, pass.T_prjlvalue);
                                 }
@@ -1233,9 +1367,8 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 call->eraseFromParent();
                 return;
             }
-            if (pass.write_barrier_func == callee) {
-                ++RemovedWriteBarriers;
-                call->eraseFromParent();
+            if (pass.isWriteBarrierFunc(callee)) {
+                removeWriteBarrierUse(call, orig_i);
                 return;
             }
             if (pass.gc_preserve_begin_func == callee) {
@@ -1287,11 +1420,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 bundle = OperandBundleDef("jl_roots", std::move(operands));
                 break;
             }
-#if JL_LLVM_VERSION >= 200000
             auto new_call = CallInst::Create(call, bundles, call->getIterator());
-#else
-            auto new_call = CallInst::Create(call, bundles, call);
-#endif
             new_call->takeName(call);
             call->replaceAllUsesWith(new_call);
             call->eraseFromParent();
@@ -1331,29 +1460,21 @@ cleanup:
 bool AllocOpt::doInitialization(Module &M)
 {
     initAll(M);
-    if (!alloc_obj_func)
+    if (!alloc_obj_func && !alloc_memory_func)
         return false;
 
     DL = &M.getDataLayout();
 
-#if JL_LLVM_VERSION >= 200000
     lifetime_start = Intrinsic::getOrInsertDeclaration(&M, Intrinsic::lifetime_start, { PointerType::get(M.getContext(), DL->getAllocaAddrSpace()) });
-#else
-    lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { PointerType::get(M.getContext(), DL->getAllocaAddrSpace()) });
-#endif
-#if JL_LLVM_VERSION >= 200000
     lifetime_end = Intrinsic::getOrInsertDeclaration(&M, Intrinsic::lifetime_end, { PointerType::get(M.getContext(), DL->getAllocaAddrSpace()) });
-#else
-    lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { PointerType::get(M.getContext(), DL->getAllocaAddrSpace()) });
-#endif
 
     return true;
 }
 
 bool AllocOpt::runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT)
 {
-    if (!alloc_obj_func) {
-        LLVM_DEBUG(dbgs() << "AllocOpt: no alloc_obj function found, skipping pass\n");
+    if (!alloc_obj_func && !alloc_memory_func) {
+        LLVM_DEBUG(dbgs() << "AllocOpt: no allocation function found, skipping pass\n");
         return false;
     }
     Optimizer optimizer(F, *this, std::move(GetDT));

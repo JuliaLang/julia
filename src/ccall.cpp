@@ -80,8 +80,7 @@ static bool runtime_sym_gvs(jl_codectx_t &ctx, const native_sym_arg_t &symarg,
     // If f_name isn't constant or f_lib_expr is present but f_lib is not,
     // emit a local cache for sym, but do not cache lib
     if (!((f_lib || symarg.f_lib_expr == NULL) && f_name)) {
-        std::string name = "dynccall_";
-        name += std::to_string(jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1));
+        std::string name = ctx.emission_context.make_name("dynccall_");
         Module *M = jl_Module;
         auto T_pvoidfunc = getPointerTy(M->getContext());
         lib = nullptr;
@@ -112,14 +111,12 @@ static bool runtime_sym_gvs(jl_codectx_t &ctx, const native_sym_arg_t &symarg,
         symMap = &ctx.emission_context.symMapDefault;
     }
     else {
-        std::string name = "ccalllib_";
-        name += llvm::sys::path::filename(f_lib);
-        name += std::to_string(jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1));
+        std::string name = ctx.emission_context.make_name("ccalllib_", llvm::sys::path::filename(f_lib));
         runtime_lib = true;
         auto &libgv = ctx.emission_context.libMapGV[f_lib];
         if (libgv.first == NULL) {
             libptrgv = new GlobalVariable(*M, getPointerTy(M->getContext()), false,
-                                          GlobalVariable::ExternalLinkage,
+                                          ctx.emission_context.imaging_mode ? GlobalVariable::ExternalLinkage : GlobalVariable::InternalLinkage,
                                           Constant::getNullValue(getPointerTy(M->getContext())), name);
             libgv.first = libptrgv;
         }
@@ -131,13 +128,10 @@ static bool runtime_sym_gvs(jl_codectx_t &ctx, const native_sym_arg_t &symarg,
 
     GlobalVariable *&llvmgv = (*symMap)[f_name];
     if (llvmgv == NULL) {
-        std::string name = "ccall_";
-        name += f_name;
-        name += "_";
-        name += std::to_string(jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1));
+        std::string name = ctx.emission_context.make_name("ccall_", f_name);
         auto T_pvoidfunc = getPointerTy(M->getContext());
         llvmgv = new GlobalVariable(*M, T_pvoidfunc, false,
-                                    GlobalVariable::ExternalLinkage,
+                                    ctx.emission_context.imaging_mode ? GlobalVariable::ExternalLinkage : GlobalVariable::InternalLinkage,
                                     Constant::getNullValue(T_pvoidfunc), name);
     }
 
@@ -202,7 +196,7 @@ static Value *runtime_sym_lookup(
             libname = ConstantExpr::getIntToPtr(ConstantInt::get(emission_context.DL.getIntPtrType(irbuilder.getContext()), (uintptr_t)symarg.f_lib), getPointerTy(irbuilder.getContext()));
         Value *nameval = stringConstPtr(emission_context, irbuilder, symarg.f_name);
         auto lookup = irbuilder.CreateCall(prepare_call_in(jl_builderModule(irbuilder), jldlsym_func),
-                    { libname, nameval, libptrgv });
+                    { libname, nameval, generic_global_ptr(libptrgv) });
         llvmf = lookup;
         setName(emission_context, llvmf, symarg.f_name + StringRef(".found"));
     }
@@ -273,9 +267,9 @@ static GlobalVariable *emit_plt_thunk(
     }
     std::string fname;
     if (symarg.f_name)
-        raw_string_ostream(fname) << "jlplt_" << symarg.f_name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
+        fname = ctx.emission_context.make_name("jlplt_", symarg.f_name);
     else
-        raw_string_ostream(fname) << "jldynplt_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
+        fname = ctx.emission_context.make_name("jldynplt_");
     Function *plt = Function::Create(functype,
                                      GlobalVariable::PrivateLinkage,
                                      fname, M);
@@ -284,7 +278,7 @@ static GlobalVariable *emit_plt_thunk(
         plt->setCallingConv(cc);
     auto T_pvoidfunc = getPointerTy(M->getContext());
     GlobalVariable *got = new GlobalVariable(*M, T_pvoidfunc, false,
-                                             shared ? GlobalVariable::ExternalLinkage : GlobalVariable::PrivateLinkage,
+                                             (shared && ctx.emission_context.imaging_mode) ? GlobalVariable::ExternalLinkage : GlobalVariable::PrivateLinkage,
                                              plt,
                                              fname + "_got");
     if (shared) {
@@ -312,7 +306,7 @@ static GlobalVariable *emit_plt_thunk(
     // NoReturn function can trigger LLVM verifier error when declared as
     // MustTail since other passes might replace the `ret` with
     // `unreachable` (LLVM should probably accept `unreachable`).
-    if (hasFnAttr(attrs, Attribute::NoReturn)) {
+    if (attrs.hasFnAttr(Attribute::NoReturn)) {
         irbuilder.CreateUnreachable();
     }
     else {
@@ -522,7 +516,7 @@ static Value *runtime_apply_type_env(jl_codectx_t &ctx, jl_value_t *ty) JL_CANSA
         emit_ptrgep(ctx, maybe_decay_tracked(ctx, ctx.spvals_ptr), sizeof(jl_svec_t))
     };
     auto call = ctx.builder.CreateCall(prepare_call(jlapplytype_func), ArrayRef<Value*>(args));
-    addRetAttr(call, Attribute::getWithAlignment(ctx.builder.getContext(), Align(16)));
+    call->addRetAttr(Attribute::getWithAlignment(ctx.builder.getContext(), Align(16)));
     return call;
 }
 
@@ -911,9 +905,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     // Make sure to find a unique name
     std::string ir_name;
     while (true) {
-        raw_string_ostream(ir_name)
-            << (ctx.f->getName().str()) << "u"
-            << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
+        ir_name = ctx.emission_context.make_name(ctx.f->getName().str() + "u");
         if (jl_Module->getFunction(ir_name) == NULL)
             break;
     }
@@ -1189,7 +1181,8 @@ static Value *box_ccall_result(jl_codectx_t &ctx, Value *result, Value *runtime_
 {
     // XXX: need to handle parameterized zero-byte types (singleton)
     const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
-    unsigned nb = DL.getTypeStoreSize(result->getType());
+    result = zext_struct_helper(ctx, result, julia_memory_access_type(result->getType(), rt));
+    unsigned nb = DL.getTypeAllocSize(result->getType());
     unsigned align = sizeof(void*); // Allocations are at least pointer aligned
     jl_aliasinfo_t ai = jl_is_mutable(rt) ? ctx.alias().mutab : ctx.alias().immut;
     Value *strct = emit_allocobj(ctx, nb, runtime_dt, true, align);
@@ -1324,18 +1317,19 @@ std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
             }
             if (jl_is_primitivetype(tti) && t->isIntegerTy()) {
                 // see pull req #978. need to annotate signext/zeroext for
-                // small integer arguments.
+                // small integer arguments. Small means narrower than 32 bits,
+                // as for `_BitInt(N)` in C, although `sizeof` rounds up to 4.
                 jl_datatype_t *bt = (jl_datatype_t*)tti;
-                size_t sz = jl_datatype_size(bt);
-                if (sz < 4) {
+                if (jl_datatype_size(bt) == 4 && ctx->TargetTriple.isRISCV64()) {
+                    // RISC-V sign-extends all 32-bit arguments to XLEN, and clang
+                    // counts any type stored in 4 bytes as 32-bit here.
+                    ab.addAttribute(Attribute::SExt);
+                }
+                else if (jl_datatype_nbits(bt) < 32) {
                     if (jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type))
                         ab.addAttribute(Attribute::SExt);
                     else
                         ab.addAttribute(Attribute::ZExt);
-                }
-                else if (sz == 4 && ctx->TargetTriple.isRISCV64()) {
-                    // RISC-V sign-extends all 32-bit arguments to XLEN.
-                    ab.addAttribute(Attribute::SExt);
                 }
             }
         }
@@ -1611,7 +1605,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         if (jl_is_long(argi_root))
             continue;
         jl_cgval_t arg_root = emit_expr(ctx, argi_root);
-        gc_uses.append(get_gc_roots_for(ctx, arg_root));
+        // the callee only sees copies of the arguments (see julia_to_native), never this storage
+        gc_uses.append(get_gc_roots_for(ctx, arg_root, /*storage_used*/false));
     }
 
     // Peel the cancellation-guard operands (handler_fn, state) prepended
@@ -1760,6 +1755,15 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 wait_inst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "wfe",
                                                 "~{memory}", true);
             ctx.builder.CreateCall(wait_inst);
+            JL_GC_POP();
+            return ghostValue(ctx, jl_nothing_type);
+        } else if (ctx.emission_context.TargetTriple.isRISCV64()) {
+            if (is_libjulia_func(jl_cpu_pause)) {
+                auto pauseinst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false),
+                                                ".insn i 0x0F, 0, x0, x0, 0x010", "~{memory}", true);
+                ctx.builder.CreateCall(pauseinst);
+            }
+            // jl_cpu_suspend has no RISC-V equivalent and stays a no-op
             JL_GC_POP();
             return ghostValue(ctx, jl_nothing_type);
         } else {
@@ -2218,17 +2222,20 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             bool f_extern = f_name.consume_front("extern ");
             llvmf = NULL;
             if (f_extern) {
-                llvmf = jl_Module->getOrInsertFunction(f_name, functype).getCallee();
-                if (!isa<Function>(llvmf) || cast<Function>(llvmf)->isIntrinsic() || cast<Function>(llvmf)->getFunctionType() != functype)
-                    llvmf = NULL;
+                // An "extern" name is never allowed to be an intrinsic. Check that
+                // before creating the declaration: `getOrInsertFunction` on an
+                // overloaded intrinsic's base name would leave an ill-formed
+                // (unmangled) intrinsic declaration behind in the module even
+                // though we go on to reject the call.
+                if (!f_name.starts_with("llvm.")) {
+                    llvmf = jl_Module->getOrInsertFunction(f_name, functype).getCallee();
+                    if (!isa<Function>(llvmf) || cast<Function>(llvmf)->isIntrinsic() || cast<Function>(llvmf)->getFunctionType() != functype)
+                        llvmf = NULL;
+                }
             }
             else if (f_name.starts_with("llvm.")) {
                 // compute and verify auto-mangling for intrinsic name
-#if JL_LLVM_VERSION >= 200000
                 auto ID = Intrinsic::lookupIntrinsicID(f_name);
-#else
-                auto ID = Function::lookupIntrinsicID(f_name);
-#endif
                 std::string foreign_msg;
                 if (is_foreign_target_intrinsic(ctx, ID, f_name, foreign_msg)) {
                     emit_error(ctx, foreign_msg);
@@ -2238,18 +2245,9 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     // Accumulate an array of overloaded types for the given intrinsic
                     // and compute the new name mangling schema
                     SmallVector<Type*, 4> overloadTys;
-                    SmallVector<Intrinsic::IITDescriptor, 8> Table;
-                    getIntrinsicInfoTableEntries(ID, Table);
-                    ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
-                    auto res = Intrinsic::matchIntrinsicSignature(functype, TableRef, overloadTys);
-                    if (res == Intrinsic::MatchIntrinsicTypes_Match) {
-                        bool matchvararg = !Intrinsic::matchIntrinsicVarArg(functype->isVarArg(), TableRef);
-                        if (matchvararg) {
-#if JL_LLVM_VERSION >= 200000
+                    if (Intrinsic::isSignatureValid(ID, functype, overloadTys)) {
+                        {
                             Function *intrinsic = Intrinsic::getOrInsertDeclaration(jl_Module, ID, overloadTys);
-#else
-                            Function *intrinsic = Intrinsic::getDeclaration(jl_Module, ID, overloadTys);
-#endif
                             assert(intrinsic->getFunctionType() == functype);
                             if (intrinsic->getName() == f_name || Intrinsic::getBaseName(ID) == f_name)
                                 llvmf = intrinsic;
@@ -2402,8 +2400,10 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     else if (sret) {
         jlretboxed = sretboxed;
         if (!jlretboxed) {
-            // something alloca'd above is SSA
-            if (static_rt)
+            // something alloca'd above is SSA. A primitive is reloaded instead,
+            // keeping only its value bits: a C function returning `_BitInt(N)`
+            // leaves the bits above N unspecified.
+            if (static_rt && !jl_is_primitivetype(rt))
                 return mark_julia_slot(result, rt, NULL, ctx.alias().stack);
             ++SRetCCalls;
             result = ctx.builder.CreateLoad(zext_struct_type(sretty), result);

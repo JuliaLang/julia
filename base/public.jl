@@ -22,8 +22,27 @@ public
     ImmutableDict,
     OneTo,
     Pairs,
+    SignalCondition,
     LogRange,
     UUID,
+
+# signals
+    SIGHUP,
+    SIGINT,
+    SIGQUIT,
+    SIGKILL,
+    SIGUSR1,
+    SIGUSR2,
+    SIGPIPE,
+    SIGALRM,
+    SIGTERM,
+    SIGCHLD,
+    SIGCONT,
+    SIGWINCH,
+    SIGINFO,
+    sigrtmin,
+    sigrtmax,
+    signal_name,
 
 # Semaphores
     Semaphore,
@@ -90,6 +109,9 @@ public
     uabs,
     mul_hi,
 
+# Numbers
+    decompose,
+
 # C interface
     cconvert,
     unsafe_convert,
@@ -101,6 +123,7 @@ public
 # Macros
     @assume_effects,
     @constprop,
+    @cpu_supports,
     @locals,
     @propagate_inbounds,
     @__doc__,

@@ -53,6 +53,8 @@ void libsupport_init(void)
         setlocale(LC_ALL, "");
         // but use locale-independent numeric formats (for parsing)
         setlocale(LC_NUMERIC, "C");
+        // and locale-independent collation
+        setlocale(LC_COLLATE, "C");
         // and try to specify ASCII or UTF-8 (preferred) for our Libc and Cstring functions
         char *ctype = setlocale(LC_CTYPE, NULL);
         if (ctype) {

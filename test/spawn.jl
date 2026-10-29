@@ -547,6 +547,10 @@ let cmd = ["foo bar", "baz", "a'b", "a\"b", "a\"b\"c", "-L/usr/+", "a=b", "``", 
     @test Base.shell_escape_posixly(`$cmd`) ==
         """'foo bar' baz a\\'b a\\"b 'a"b"c' -L/usr/+ a=b '``' '\$' '&&' '' z"""
 end
+let cmd = ["~", "~/x", "~root", "a~", "~'q"]
+    @test string(`$cmd`) == """`'~' '~/x' '~root' a~ "~'q"`"""
+    @test eval(Meta.parse(string(`$cmd`))) == `$cmd`
+end
 let cmd = ["foo=bar", "baz"]
     @test string(`$cmd`) == "`foo=bar baz`"
     @test Base.shell_escape(`$cmd`) == "foo=bar baz"
@@ -565,6 +569,15 @@ end
 @test `foo~` == Cmd(["foo~"])        # ~ end-word: no expansion
 @test `'~'` == Cmd(["~"])            # ~ in single quotes: no expansion
 @test `"~"` == Cmd(["~"])            # ~ in double quotes: no expansion
+@test `~'root'` == Cmd(["~root"])    # quoted user name: no expansion
+@test `~"x"/a` == Cmd(["~x/a"])
+@test `~\x` == Cmd(["~x"])
+@test `~x'y'` == Cmd(["~xy"])
+@test samepath(only(`~/'a b'`.exec), joinpath(homedir(), "a b"))  # quote after the slash
+@test samepath(only(`~\
+    /a`.exec), joinpath(homedir(), "a"))
+@test `~\
+    x'y'` == Cmd(["~xy"])
 @test Base.shell_split("~/foo") == ["~/foo"]  # shell_split does not expand ~
 if !Sys.iswindows()
     me = Sys.username()
@@ -626,6 +639,16 @@ mktempdir() do dir
     run(`$echocmd interp > $outfile`)
     @test read(outfile, String) == "interp\n"
 
+    buf = IOBuffer()
+    run(`$echocmd tobuf > $buf`)
+    @test String(take!(buf)) == "tobuf\n"
+    @test read(`$catcmd < $(IOBuffer("frombuf"))`, String) == "frombuf"
+    open(outfile, "w") do io
+        run(`$echocmd tofile > $io`)
+    end
+    @test read(outfile, String) == "tofile\n"
+    @test (`$echocmd hi > $devnull`).handle === devnull
+
     # Interpolated arg in pipe
     word = "interp_arg"
     @test read(`$echocmd $word | $catcmd`, String) == "interp_arg\n"
@@ -678,6 +701,17 @@ mktempdir() do dir
     # simple command in shell mode still works
     shell_mode_run("$echostr simple > $outstr")
     @test read(outfile, String) == "simple\n"
+    # shell mode preserves a Cmd's env and dir. The redirect is inside the command
+    # because `cmd > file` is a CmdRedirect, which repl_cmd runs without the shell
+    # wrapping under test; `global` is needed as shell_mode_run interpolates via eval.
+    if !Sys.iswindows()
+        global envcmd = Cmd(`$shcmd -c "echo \$HOWLONG > $outstr"`, env=("HOWLONG" => "ever!",))
+        shell_mode_run("\$envcmd")
+        @test read(outfile, String) == "ever!\n"
+        global dircmd = Cmd(`$shcmd -c "pwd > $outstr"`, dir=dir)
+        shell_mode_run("\$dircmd")
+        @test samefile(strip(read(outfile, String)), dir)
+    end
 end
 
 let roundtrip(s) = first(Base.shell_split(Base.shell_escape(s))) == s
@@ -745,6 +779,14 @@ if !Sys.iswindows()
     @test string(cmd_uid) == "setuid(`echo test`, 1001)"
     cmd_both = setuid(setgid(`echo test`, 1000), 1001)
     @test string(cmd_both) == "setgid(setuid(`echo test`, 1001), 1000)"
+end
+
+# Cmd equality and hashing take CPU affinity into account
+let a = setcpuaffinity(`ls`, [1]), b = `ls`
+    @test a != b
+    @test hash(a) != hash(b)
+    @test a == setcpuaffinity(`ls`, [1])
+    @test hash(a) == hash(setcpuaffinity(`ls`, [1]))
 end
 
 # test redaction of sensitive env vars in Cmd display
@@ -823,6 +865,7 @@ end
         @test !contains(s, "secret123")
         @test contains(s, "PATH=/usr/bin")
     end
+    # JET.@test_call show(::IOBuffer, ::Cmd)
 end
 
 # test for interpolation of Cmd
@@ -910,6 +953,34 @@ let p = run(`$sleepcmd 100`, wait=false)
     wait(p)
     # Should not throw if already dead
     kill(p)
+end
+
+@testset "signal numbers and names" begin
+    if !Sys.iswindows()
+        for name in (:SIGHUP, :SIGINT, :SIGQUIT, :SIGKILL, :SIGUSR1, :SIGUSR2, :SIGPIPE, :SIGALRM,
+                     :SIGTERM, :SIGCHLD, :SIGCONT, :SIGWINCH, :SIGINFO)
+            name === :SIGINFO && !Sys.isbsd() && continue
+            @test Base.signal_name(getglobal(Base, name)) == String(name)
+        end
+    end
+    @test Base.signal_name(0) === nothing
+    @test Base.signal_name(typemax(Int)) === nothing
+    if Sys.islinux()
+        @test 32 < Base.sigrtmin() < Base.sigrtmax()
+        @test Base.signal_name(Base.sigrtmin() + 2) == "SIGRTMIN+2"
+    elseif Sys.isapple() || Sys.iswindows()
+        @test_throws ErrorException Base.sigrtmin()
+    end
+end
+
+# `kill` by process ID
+let p = run(`$sleepcmd 100`, wait=false)
+    kill(getpid(p), 0) # only checks that the process exists
+    @test_throws Base.IOError kill(getpid(p), typemax(Cint))
+    kill(getpid(p))
+    wait(p)
+    @test !success(p)
+    @test_throws Base.IOError kill(getpid(p))
 end
 
 # Second return of shell_parse

@@ -5,9 +5,11 @@ include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/llvm-ver.make
 
 
-HEADERS := $(addprefix $(SRCDIR)/,jl_exports.h loader.h dl-cache.h) $(addprefix $(JULIAHOME)/src/,julia_fasttls.h jloptions.h support/platform.h support/dirpath.h jl_exported_data.inc jl_exported_funcs.inc)
+HEADERS := $(addprefix $(SRCDIR)/,jl_exports.h loader.h dl-cache.h) $(addprefix $(JULIAHOME)/src/,julia_fasttls.h jloptions.h support/platform.h support/dirpath.h jl_exported_data.inc jl_exported_data_defs.inc jl_exported_funcs.inc)
 
-LOADER_CFLAGS = $(JCFLAGS) -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir) -ffreestanding
+# Clang omits unwind tables with -ffreestanding, leaving only .debug_frame, which
+# `make install` may compress (see COMPRESS_DEBUG_SECTIONS).
+LOADER_CFLAGS = $(JCFLAGS) -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir) -ffreestanding -fasynchronous-unwind-tables
 LOADER_LIBPATHS = -L$(build_shlibdir) -L$(build_libdir)
 LOADER_LDFLAGS = $(JLDFLAGS) -ffreestanding $(LOADER_LIBPATHS)
 
@@ -67,7 +69,7 @@ LIB_OBJS := $(BUILDDIR)/loader_lib.o $(BUILDDIR)/loader_symbol_probe.o $(BUILDDI
 LIB_DOBJS := $(BUILDDIR)/loader_lib.dbg.obj $(BUILDDIR)/loader_symbol_probe.dbg.obj $(BUILDDIR)/loader_library_probe.dbg.obj
 
 # If this is an architecture that supports dynamic linking, link in a trampoline definition
-ifneq (,$(wildcard $(SRCDIR)/trampolines/trampolines_$(ARCH).S))
+ifneq (,$(wildcard $(SRCDIR)/arch/$(ARCH)/trampolines.S))
 LIB_OBJS += $(BUILDDIR)/loader_trampolines.o
 LIB_DOBJS += $(BUILDDIR)/loader_trampolines.dbg.obj
 endif
@@ -84,9 +86,9 @@ $(BUILDDIR)/loader_exe.o : $(SRCDIR)/loader_exe.c $(HEADERS) $(JULIAHOME)/VERSIO
 	@$(call PRINT_CC, $(CC) $(SHIPFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
 $(BUILDDIR)/loader_exe.dbg.obj : $(SRCDIR)/loader_exe.c $(HEADERS) $(JULIAHOME)/VERSION
 	@$(call PRINT_CC, $(CC) $(DEBUGFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
-$(BUILDDIR)/loader_trampolines.o : $(SRCDIR)/trampolines/trampolines_$(ARCH).S $(HEADERS) $(SRCDIR)/trampolines/common.h
+$(BUILDDIR)/loader_trampolines.o : $(SRCDIR)/arch/$(ARCH)/trampolines.S $(HEADERS) $(JULIAHOME)/src/arch/common.h
 	@$(call PRINT_CC, $(CC) $(SHIPFLAGS) $(LOADER_CFLAGS) $< -c -o $@)
-$(BUILDDIR)/loader_trampolines.dbg.obj : $(SRCDIR)/trampolines/trampolines_$(ARCH).S $(HEADERS) $(SRCDIR)/trampolines/common.h
+$(BUILDDIR)/loader_trampolines.dbg.obj : $(SRCDIR)/arch/$(ARCH)/trampolines.S $(HEADERS) $(JULIAHOME)/src/arch/common.h
 	@$(call PRINT_CC, $(CC) $(DEBUGFLAGS) $(LOADER_CFLAGS) $< -c -o $@)
 $(BUILDDIR)/loader_library_probe.o : $(SRCDIR)/loader_library_probe.c $(HEADERS) $(JULIAHOME)/VERSION
 	@$(call PRINT_CC, $(CC) -DJL_LIBRARY_EXPORTS $(SHIPFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
@@ -98,7 +100,7 @@ $(BUILDDIR)/loader_symbol_probe.dbg.obj : $(SRCDIR)/loader_symbol_probe.c $(HEAD
 	@$(call PRINT_CC, $(CC) -DJL_LIBRARY_EXPORTS $(DEBUGFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
 
 # Debugging target to help us see what kind of code is being generated for our trampolines
-dump-trampolines: $(SRCDIR)/trampolines/trampolines_$(ARCH).S
+dump-trampolines: $(SRCDIR)/arch/$(ARCH)/trampolines.S
 	$(CC) $(SHIPFLAGS) $(LOADER_CFLAGS) $< -S | sed -E 's/ ((%%)|;) /\n/g' | sed -E 's/.global/\n.global/g'
 
 DIRS = $(build_bindir) $(build_libdir)
@@ -146,34 +148,42 @@ VERSIONSCRIPT := -Wl,--version-script=$(BUILDDIR)/julia.expmap
 endif
 
 ifeq ($(OS),WINNT)
-# On Windows we need to strip out exported functions from the generated import library.
-STRIP_EXPORTED_FUNCS := $(shell $(CPP_STDOUT) -I$(JULIAHOME)/src $(SRCDIR)/list_strip_symbols.h)
+# The import library of the loader must not offer the runtime entry points that
+# the loader forwards, or libjulia-internal would resolve its own calls through
+# them. Build it from the linker's export definition with those left out, rather
+# than editing the import library afterwards: not every linker writes one that
+# objcopy can rewrite.
+# 1: the shared library being linked
+define implib_from_def
+	$(CPP_STDOUT) -P -I$(JULIAHOME)/src $(SRCDIR)/list_strip_symbols.h > $(BUILDDIR)/$(notdir $1).strip && \
+	awk 'NR == FNR { for (i = 1; i <= NF; i++) omit[$$i] = 1; next } !($$1 in omit)' $(BUILDDIR)/$(notdir $1).strip $(BUILDDIR)/$(notdir $1).def > $(BUILDDIR)/$(notdir $1).stripped.def && \
+	$(DLLTOOL) -m $(DLLTOOL_MACHINE) -D $(notdir $1) -d $(BUILDDIR)/$(notdir $1).stripped.def -l $(build_libdir)/$(notdir $1).a
+endef
+DEF_FLAGS = --output-def $(BUILDDIR)/$(notdir $1).def
 endif
 
 $(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_OBJS) $(SRCDIR)/list_strip_symbols.h $(BUILDDIR)/julia.expmap | $(build_shlibdir) $(build_libdir)
 	@$(call PRINT_LINK, $(call link-dll,$@, \
-		$(call IMPLIB_FLAGS,$@.tmp) $(JLDFLAGS), \
+		$(call DEF_FLAGS,$@) $(JLDFLAGS), \
 		$(LIB_OBJS) $(LOADER_LDFLAGS), \
-		$(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -shared $(SHIPFLAGS) $(RPATH_LIB), \
-		$(LIB_OBJS) $(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT))))
+		$(CC) $(LOADER_CFLAGS) -shared $(SHIPFLAGS) $(RPATH_LIB), \
+		$(LIB_OBJS) $(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT)) $(call LTO_OBJECT_PATH,$(BUILDDIR)/$(notdir $@))))
 	@$(INSTALL_NAME_CMD)libjulia.$(JL_MAJOR_SHLIB_EXT) $@
-	@$(DSYMUTIL) $@
+	@$(call dsymutil,$@)
 ifeq ($(OS), WINNT)
-	@# Note that if the objcopy command starts getting too long, we can use `@file` to read
-	@# command-line options from `file` instead.
-	@$(call PRINT_ANALYZE, $(OBJCOPY) $(build_libdir)/$(notdir $@).tmp.a $(STRIP_EXPORTED_FUNCS) $(build_libdir)/$(notdir $@).a && rm $(build_libdir)/$(notdir $@).tmp.a)
+	@$(call PRINT_ANALYZE, $(call implib_from_def,$@))
 endif
 
 $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_DOBJS) $(SRCDIR)/list_strip_symbols.h $(BUILDDIR)/julia.expmap | $(build_shlibdir) $(build_libdir)
 	@$(call PRINT_LINK, $(call link-dll,$@, \
-		$(call IMPLIB_FLAGS,$@.tmp) $(JLDFLAGS), \
+		$(call DEF_FLAGS,$@) $(JLDFLAGS), \
 		$(LIB_DOBJS) $(LOADER_LDFLAGS), \
-		$(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -shared $(DEBUGFLAGS) $(RPATH_LIB), \
-		$(LIB_DOBJS) $(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia-debug.$(JL_MAJOR_SHLIB_EXT))))
+		$(CC) $(LOADER_CFLAGS) -shared $(DEBUGFLAGS) $(RPATH_LIB), \
+		$(LIB_DOBJS) $(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia-debug.$(JL_MAJOR_SHLIB_EXT)) $(call LTO_OBJECT_PATH,$(BUILDDIR)/$(notdir $@))))
 	@$(INSTALL_NAME_CMD)libjulia-debug.$(JL_MAJOR_SHLIB_EXT) $@
-	@$(DSYMUTIL) $@
+	@$(call dsymutil,$@)
 ifeq ($(OS), WINNT)
-	@$(call PRINT_ANALYZE, $(OBJCOPY) $(build_libdir)/$(notdir $@).tmp.a $(STRIP_EXPORTED_FUNCS) $(build_libdir)/$(notdir $@).a && rm $(build_libdir)/$(notdir $@).tmp.a)
+	@$(call PRINT_ANALYZE, $(call implib_from_def,$@))
 endif
 
 ifneq ($(OS), WINNT)
@@ -205,9 +215,11 @@ $(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in $(JULIAHOME)/VERSION
 	mv $$TMPFILE $@
 
 clean: | $(CLEAN_TARGETS)
+	rm -rf $(BUILDDIR)/*.lto
 	rm -f $(BUILDDIR)/*.o $(BUILDDIR)/*.dbg.obj
 	rm -f $(build_bindir)/julia*
 	rm -f $(BUILDDIR)/julia.expmap
+	rm -f $(BUILDDIR)/*.def $(BUILDDIR)/*.strip
 	rm -f $(BUILDDIR)/Info.plist*
 
 .PHONY: clean release debug julia-release julia-debug

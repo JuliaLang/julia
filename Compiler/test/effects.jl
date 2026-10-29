@@ -280,6 +280,15 @@ end |> Compiler.is_consistent
 @test Base.infer_effects() do
     Maybe{Some{Base.RefValue{Int}}}()
 end |> Compiler.is_consistent
+# the field type of an uninitialized inline field may have no layout
+mutable struct UninitSubArray{T<:Real}
+    a::Int
+    v::SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true}
+    UninitSubArray{T}(a) where {T<:Real} = new{T}(a)
+end
+@test Base.infer_return_type((Any,)) do T
+    UninitSubArray{T}(1)
+end == UninitSubArray
 let f() = Maybe{String}()[]
     @test Base.return_types() do
         f() # this call should be concrete evaluated
@@ -920,6 +929,32 @@ end |> Compiler.is_foldable_nothrow
 end
 @test Compiler.is_foldable(Base.infer_effects(ImmutRef, Tuple{Any}))
 
+# Test that :new and :splatnew of a `Type{T}`-typed value are not `:nothrow`, since the value
+# may be a `UnionAll` rep that is `==` to `T`, which they reject (#61323)
+struct NewTypeEqRep{T}
+    x::T
+end
+@eval new_typeeq_rep(T::Type{NewTypeEqRep{Int}}, x::Int) = ($(Expr(:new, :T, :x)); nothing)
+@eval splatnew_typeeq_rep(T::Type{NewTypeEqRep{Int}}, x::Int) = ($(Expr(:splatnew, :T, :((x,)))); nothing)
+@eval splatnew_const_typeeq_rep(T::Type{NewTypeEqRep{Int}}) = ($(Expr(:splatnew, :T, :((1,)))); nothing)
+# `Core.apply_type(Union, T)` returns `T` itself, which is not necessarily a `DataType`
+@eval Base.@nospecializeinfer apply_union_typeeq_rep(@nospecialize(T::Type{NewTypeEqRep{Int}}), x::Int) =
+    ($(Expr(:new, :(Core.apply_type(Union, T)), :x)); nothing)
+let S = (NewTypeEqRep{T} where Int<:T<:Int)
+    @test S == NewTypeEqRep{Int} && S isa Type{NewTypeEqRep{Int}}
+    for f in Any[new_typeeq_rep, splatnew_typeeq_rep]
+        @test f(NewTypeEqRep{Int}, 1) === nothing
+        @test_throws TypeError f(S, 1)
+        @test !Compiler.is_nothrow(Base.infer_effects(f, (Type{NewTypeEqRep{Int}}, Int)))
+        @test Compiler.is_nothrow(Base.infer_effects(f, (Core.TypeEgal{NewTypeEqRep{Int}}, Int)))
+    end
+    @test !Compiler.is_nothrow(Base.infer_effects(splatnew_const_typeeq_rep, (Type{NewTypeEqRep{Int}},); optimize=false))
+    @test Compiler.is_nothrow(Base.infer_effects(splatnew_const_typeeq_rep, (Core.TypeEgal{NewTypeEqRep{Int}},); optimize=false))
+    @test apply_union_typeeq_rep(NewTypeEqRep{Int}, 1) === nothing
+    @test_throws TypeError apply_union_typeeq_rep(S, 1)
+    @test !Compiler.is_nothrow(Base.infer_effects(apply_union_typeeq_rep, (Type{NewTypeEqRep{Int}}, Int); optimize=true))
+end
+
 @test Compiler.is_foldable_nothrow(Base.infer_effects(typejoin, ()))
 
 # nothrow-ness of subtyping operations
@@ -1226,8 +1261,8 @@ callgetfield_inbounds(x, f) = @inbounds callgetfield2(x, f)
       Compiler.ALWAYS_FALSE
 
 # noub modeling for memory ops
-let (memoryrefnew, memoryrefget, memoryref_isassigned, memoryrefset!) =
-        (Core.memoryrefnew, Core.memoryrefget, Core.memoryref_isassigned, Core.memoryrefset!)
+let (memoryrefnew, memoryrefget, const_memoryrefget, memoryref_isassigned, memoryrefset!) =
+        (Core.memoryrefnew, Core.memoryrefget, Core.const_memoryrefget, Core.memoryref_isassigned, Core.memoryrefset!)
     function builtin_effects(@nospecialize xs...)
         interp = Compiler.NativeInterpreter()
         𝕃 = Compiler.typeinf_lattice(interp)
@@ -1248,6 +1283,10 @@ let (memoryrefnew, memoryrefget, memoryref_isassigned, memoryrefset!) =
     @test Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Int]))
     @test !Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Vararg{Bool}]))
     @test !Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Vararg{Any}]))
+    # `Core.const_memoryrefget` (loads of `Base.Experimental.Const`, #63129) has the same effects
+    @test Compiler.is_noub(builtin_effects(const_memoryrefget, Any[MemoryRef,Symbol,Core.Const(true)]))
+    @test !Compiler.is_noub(builtin_effects(const_memoryrefget, Any[MemoryRef,Symbol,Core.Const(false)]))
+    @test Compiler.is_effect_free(builtin_effects(const_memoryrefget, Any[MemoryRef,Symbol,Bool]))
     @test Compiler.is_noub(builtin_effects(memoryref_isassigned, Any[MemoryRef,Symbol,Core.Const(true)]))
     @test !Compiler.is_noub(builtin_effects(memoryref_isassigned, Any[MemoryRef,Symbol,Core.Const(false)]))
     @test !Compiler.is_noub(builtin_effects(memoryref_isassigned, Any[MemoryRef,Symbol,Bool]))
@@ -1512,6 +1551,14 @@ let effects = Base.infer_effects(bitsizeof_int)
     @test Compiler.is_foldable_nothrow(effects)
     @test Compiler.is_inaccessiblememonly(effects)
 end
+bitsizeof_struct() = (Core.bitsizeof(Pair{Int32,Int16}); nothing)
+@test !Compiler.is_nothrow(Base.infer_effects(bitsizeof_struct))
+@test_throws ErrorException bitsizeof_struct()
+# intrinsics on a primitive `UnionAll` such as `Ptr`, which has no `Core.bitsizeof`
+for f in (p -> Core.Intrinsics.bitcast(UInt, p), p -> Core.Intrinsics.trunc_int(UInt8, p),
+          Core.Intrinsics.bswap_int)
+    @test Base.infer_effects(f, (Ptr,)) isa Compiler.Effects
+end
 
 # Core._svec_ref effects modeling (required for external abstract interpreter that doesn't run optimization)
 let effects = Base.infer_effects((Core.SimpleVector,Int); optimize=false) do svec, i
@@ -1630,4 +1677,96 @@ let effects = Base.infer_effects(Core._task, (Function, Int))
     @test Compiler.is_terminates(effects)
     @test !Compiler.is_notaskstate(effects)
     @test Compiler.is_noub(effects)
+end
+
+# `Base.Experimental.Const` indexing goes through `Core.const_memoryrefget` (#63129) and must
+# keep the effects of the corresponding `Array` indexing
+let CT = Base.Experimental.Const{Float64,2}
+    @test Compiler.is_noub_if_noinbounds(Base.infer_effects(getindex, (CT, Int)))
+    @test Compiler.is_effect_free(Base.infer_effects(getindex, (CT, Int)))
+    @test Compiler.is_effect_free(Base.infer_effects(getindex, (CT, Int, Int)))
+end
+
+# Every `*_partition` builtin the reformulation pass emits must have its effects modeled by
+# `builtin_effects`, so that re-deriving the flags of a reformulated statement is no more
+# pessimistic than the `getglobal`/`setglobal!` it replaced.
+module PartitionEffects
+    const c = 42
+    global g::Int = 1
+end
+let 𝕃 = Compiler.SimpleInferenceLattice.instance,
+    Const = Compiler.Const,
+    part(name) = Base.lookup_binding_partition(Base.get_world_counter(),
+                     convert(Core.Binding, GlobalRef(PartitionEffects, name)))
+    for f in (Core.getglobal_partition, Core.setglobal_partition, Core.swapglobal_partition,
+              Core.replaceglobal_partition, Core.setglobalonce_partition,
+              Core.isdefinedglobal_partition, Core.depwarn_binding)
+        @test f in Compiler._EFFECTS_KNOWN_BUILTINS
+    end
+
+    effects = Compiler.builtin_effects(𝕃, Core.getglobal_partition,
+        Any[Const(GlobalRef(PartitionEffects, :c)), Const(part(:c)), Const(:monotonic)], Int)
+    @test Compiler.is_effect_free(effects)
+    @test Compiler.is_consistent(effects)
+    @test !Compiler.is_nothrow(effects) # the memory order argument may be invalid
+    effects = Compiler.builtin_effects(𝕃, Core.getglobal_partition,
+        Any[Const(GlobalRef(PartitionEffects, :g)), Const(part(:g)), Const(:monotonic)], Int)
+    @test Compiler.is_effect_free(effects)
+    @test !Compiler.is_consistent(effects)
+    # Only a plain store is `:consistent`; the read-modify-write forms return the old value.
+    for f in (Core.setglobal_partition, Core.swapglobal_partition, Core.replaceglobal_partition,
+              Core.setglobalonce_partition)
+        effects = Compiler.builtin_effects(𝕃, f, Any[Const(part(:g)), Int], Int)
+        @test !Compiler.is_effect_free(effects)
+        @test Compiler.is_consistent(effects) === (f === Core.setglobal_partition)
+    end
+    Base.deprecate(PartitionEffects, :c)
+    effects = Compiler.builtin_effects(𝕃, Core.getglobal_partition,
+        Any[Const(GlobalRef(PartitionEffects, :c)), Const(part(:c)), Const(:monotonic)], Int)
+    @test !Compiler.is_effect_free(effects)
+    Base.deprecate(PartitionEffects, :c, 0)
+end
+
+# reading a `const` field of a mutable object is consistent
+mutable struct ConstFieldEffects
+    const a::Union{String, Nothing}
+    b::Union{String, Nothing}
+    const p::Ptr{Cvoid}
+end
+const const_field_effects = ConstFieldEffects("a", "b", C_NULL)
+@test Compiler.is_consistent(Base.infer_effects(x -> x.a, (ConstFieldEffects,)))
+@test Compiler.is_consistent(Base.infer_effects(x -> x.p, (ConstFieldEffects,)))
+@test !Compiler.is_consistent(Base.infer_effects(x -> x.b, (ConstFieldEffects,)))
+@test Compiler.is_foldable_nothrow(Base.infer_effects(() -> const_field_effects.a, ()))
+@test !Compiler.is_consistent(Base.infer_effects(() -> const_field_effects.b, ()))
+abstract type AbstractConstFieldEffects end
+@test !Compiler.is_consistent(Base.infer_effects(x -> getfield(x, 1), (Any,)))
+@test !Compiler.is_consistent(Base.infer_effects(x -> x.a, (AbstractConstFieldEffects,)))
+# `Memory` and `MemoryRef` data pointers are relocated by staticdata.c
+@test !Compiler.is_consistent(Base.infer_effects(x -> getfield(x, :ptr), (Memory{Int},)))
+@test !Compiler.is_consistent(Base.infer_effects(x -> getfield(x, :ptr_or_offset), (MemoryRef{Int},)))
+let 𝕃 = Compiler.SimpleInferenceLattice.instance
+    effects = Compiler.builtin_effects(𝕃, getfield, Any[Memory{Int}, Compiler.Const(:ptr)], Ptr{Cvoid})
+    @test Compiler.is_consistent_if_inaccessiblememonly(effects)
+    @test Compiler.is_inaccessiblemem_or_argmemonly(effects)
+    effects = Compiler.builtin_effects(𝕃, getfield, Any[Core.TypeName, Compiler.Const(:constfields)], Ptr{Cvoid})
+    @test !Compiler.is_consistent(effects)
+    @test Compiler.is_inaccessiblemem_or_argmemonly(effects)
+end
+
+# reading a field that never changes accesses no mutable memory
+@test Compiler.is_inaccessiblememonly(Base.infer_effects(x -> x.a, (ConstFieldEffects,)))
+@test !Compiler.is_inaccessiblememonly(Base.infer_effects(x -> x.b, (ConstFieldEffects,)))
+@test Compiler.is_inaccessiblememonly(Base.infer_effects(x -> getfield(x, 1), (Tuple{Vector{Int}},)))
+@test !Compiler.is_inaccessiblememonly(Base.infer_effects(x -> getfield(x, :ptr), (Memory{Int},)))
+
+# relocated pointer fields are not folded from constant objects
+const relocatable_mem = Memory{Int}(undef, 2)
+const relocatable_refs = (memoryref(relocatable_mem, 1), memoryref(relocatable_mem, 2))
+relocatable_ptr(m) = m.ptr
+@test !fully_eliminated(() -> relocatable_mem.ptr, ())
+@test !fully_eliminated(() -> relocatable_ptr(relocatable_mem), ())
+@test !fully_eliminated(() -> getfield(relocatable_refs[1], :ptr_or_offset), ())
+@test !any(get_code(c -> getfield(c ? relocatable_refs[1] : relocatable_refs[2], :ptr_or_offset), (Bool,))) do x
+    x isa PhiNode && any(v -> v isa Ptr, x.values)
 end

@@ -491,8 +491,15 @@ unaffected: cancellation reaches `t` only through its own governing token
 
 Throws a `ConcurrencyViolationError` if `t` is the currently running task, to prevent deadlocks.
 """
-wait(t::Task; throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    wait(t, check_cancel_arg(cancel); throw)
+function wait(t::Task; throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    # An explicit token is checked here, the scoped one only if the wait blocks.
+    cancel = precheck_cancel_arg(cancel)
+    istaskdone(t) || return wait(t, resolve_cancel_token(cancel); throw)
+    if throw && istaskfailed(t)
+        Core.throw(TaskFailedException(t))
+    end
+    nothing
+end
 @noinline function wait(t::Task, tok::MaybeToken; throw=true)
     # Inlining a blocking call buys nothing; this also keeps the inlineable `fetch(::Task)` small.
     _wait(t, tok)
@@ -646,14 +653,10 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
         end
     end
 
-    # Park on all remaining tasks at once through a single multi-slot wait
-    # entry - one flat waitable per pending task (duplicates share a slot)
-    # plus the governing cancellation source. Each completion notify claims
-    # the entry through the standard wake-claim protocol; the registrations
-    # stay in place across re-parks, so the loop re-arms (`repark!`)
-    # instead of re-registering after every completion, and the driver's
-    # membership-qualified rechecks make the arm-then-suspend sound while
-    # this bookkeeping runs unarmed.
+    # Re-run `park!` for pending tasks after each wake: the previous park
+    # may have stopped at a completed task, and notifications while unarmed
+    # can consume registrations. Keep registrations for pending tasks, but
+    # synchronize with completed tasks' notifiers before reusing their slots.
     ct = current_task()
     src = cancel_source(tok)
     src === nothing || checkcancel(src)
@@ -663,12 +666,10 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
     end
     src === nothing || push!(ws, SourceWait(src, 0x00))
     w = acquire_wait_entry!(ct, ws)
-    parked = park!(ws, w, false)
     while true
-        # suspend only when the park armed (a `false` park/re-park means a
-        # waitable fired - a completion, or the source - and the driver
-        # already dequeued the fired slot)
-        parked && wait_safe_interrupt(ws, w)
+        # suspend only when the park armed (a `false` park means a waitable
+        # fired - a completion, or the source - and the self-claim won)
+        park!(ws, w, false) && wait_safe_interrupt(ws, w)
         # the fired-source outcome (and, level-triggered, any cancelled
         # state) delivers here: withdraw and throw
         if src !== nothing && iscancelled(src)
@@ -681,6 +682,7 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
             done && continue
             t = tasks[i]
             if istaskdone(t)
+                wait_dequeue!(DoneWait(t), w, WAKE_WITHDRAWN)
                 done_mask[i] = true
                 exception |= istaskfailed(t)
                 nremaining -= 1
@@ -689,7 +691,11 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
         if nremaining == 0 || (!all && any(done_mask)) || (exception && failfast)
             break
         end
-        parked = repark!(ws, w)
+        empty!(ws)
+        for (i, done) in enumerate(done_mask)
+            done || push!(ws, DoneWait(tasks[i]))
+        end
+        src === nothing || push!(ws, SourceWait(src, 0x00))
     end
     withdraw!(ws, w)
 
@@ -1209,6 +1215,18 @@ function popfirst!(W::IntrusiveLinkedListSynchronized)
         unlock(W.lock)
     end
 end
+# Like `popfirst!`, but return `nothing` if `W` is empty. The emptiness check
+# and the pop happen atomically under `W.lock`.
+function trypopfirst!(W::IntrusiveLinkedListSynchronized)
+    isempty(W) && return nothing
+    lock(W.lock)
+    try
+        q = waitqueue(W)
+        return isempty(q) ? nothing : popfirst!(q)
+    finally
+        unlock(W.lock)
+    end
+end
 function list_deletefirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
@@ -1350,6 +1368,19 @@ true
 
 julia> istaskdone(b)
 true
+```
+
+A task that is blocked in [`wait`](@ref) can be woken with a value, which is then returned
+by `wait` in that task:
+```jldoctest
+julia> t = Task(() -> 2 * wait());
+
+julia> schedule(t); yield(); # `t` starts and blocks in `wait()`
+
+julia> schedule(t, 21);
+
+julia> fetch(t)
+42
 ```
 """
 function schedule(t::Task, @nospecialize(arg); error=false)
@@ -1566,9 +1597,23 @@ function wait_forever()
     end
 end
 
-const get_sched_task = OncePerThread{Task}() do
-    Task(wait_forever)
+function _new_sched_task()
+    ct = current_task()
+    rngState0 = ct.rngState0
+    rngState1 = ct.rngState1
+    rngState2 = ct.rngState2
+    rngState3 = ct.rngState3
+    rngState4 = ct.rngState4
+    t = Task(wait_forever)
+    ct.rngState0 = rngState0
+    ct.rngState1 = rngState1
+    ct.rngState2 = rngState2
+    ct.rngState3 = rngState3
+    ct.rngState4 = rngState4
+    return t
 end
+
+const get_sched_task = OncePerThread{Task}(_new_sched_task)
 
 function ensure_rescheduled(othertask::Task)
     ct = current_task()
@@ -1604,8 +1649,9 @@ function discard_stale_workqueue_task(t::Task)
 end
 
 function trypoptask(W::StickyWorkqueue)
-    while !isempty(W)
-        t = popfirst!(W)
+    while true
+        t = trypopfirst!(W)
+        t === nothing && break
         if t._state !== task_state_runnable
             discard_stale_workqueue_task(t)
             continue
@@ -1645,10 +1691,12 @@ function wait()
         # the current task, so that an asynchronously thrown InterruptException
         # is delivered to a task that can observe it, rather than swallowed by
         # the internal scheduler task (#58689).
-        sched_task = get_sched_task()
-        if ct !== sched_task && ct_done
-            istaskdone(sched_task) && (sched_task = @task wait())
-            return yieldto(sched_task)
+        if ct_done
+            sched_task = get_sched_task()
+            if ct !== sched_task
+                istaskdone(sched_task) && (sched_task = _new_sched_task())
+                return yieldto(sched_task)
+            end
         end
         task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
     end

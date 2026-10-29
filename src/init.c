@@ -278,7 +278,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
     }
 
     jl_print_gc_stats(JL_STDERR);
-    if (jl_options.code_coverage)
+    // an image-generating process instruments the image, not itself
+    if (jl_options.code_coverage && !jl_generating_output())
         jl_write_coverage_data(jl_options.output_code_coverage);
     if (jl_options.malloc_log)
         jl_write_malloc_log();
@@ -622,6 +623,11 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
 
     jl_gc_enable(1);
 
+    // Writing a sysimage infers code and later needs it again to emit it. Keep it
+    // until then; it is dropped again before the image is serialized.
+    if (jl_options.outputo && !jl_options.incremental)
+        jl_set_precompile_keep_ir(1);
+
     if ((sysimage.kind != JL_IMAGE_KIND_NONE) &&
             (!jl_generating_output() || jl_options.incremental) && jl_module_init_order) {
         jl_array_t *init_order = jl_module_init_order;
@@ -672,6 +678,8 @@ JL_DLLEXPORT jl_cgparams_t jl_default_cgparams = {
 #else
         /* sanitize_address */ 0,
 #endif
+        /* unique_names */ 0,
+        /* debug_info_inline_scopes */ 0, // later !jl_generating_output() in release builds
 };
 
 static void init_global_mutexes(void) JL_NOTSAFEPOINT {

@@ -160,7 +160,13 @@ template <typename T>
 static void jl_profile_atomic(T f) JL_NOTSAFEPOINT
 {
     int havelock = jl_lock_profile_wr();
+    // Hidden from the thread-safety analysis: asserting a try-lock succeeded
+    // makes clang's try-lock tracking disagree with the `if (havelock)` below,
+    // and it disagrees differently depending on the clang version and on how
+    // the C library spells assert(). See llvm/llvm-project#211973.
+#ifndef __clang_safetyanalysis__
     assert(havelock);
+#endif
 #ifndef _OS_WINDOWS_
     sigset_t sset;
     sigset_t oset;
@@ -533,16 +539,15 @@ static int lookup_pointer(
         }
         else {
             int havelock = jl_lock_profile_wr();
+#ifndef __clang_safetyanalysis__
+            // see the comment in jl_profile_atomic
             assert(havelock); // we got it earlier on this thread, so we can get it again
+#endif
             if (havelock) {
                 auto lineinfo = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
                 jl_unlock_profile_wr();
-#if JL_LLVM_VERSION < 210000
-                info = std::move(lineinfo);
-#else
                 if (lineinfo)
                     info = std::move(*lineinfo);
-#endif
             }
         }
 
@@ -604,10 +609,10 @@ static int lookup_pointer(
 #if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
 
 void JITDebugInfoRegistry::libc_frames_t::libc_register_frame(const char *Entry) {
-    frame_register_func libc_register_frame_ = jl_atomic_load_relaxed(&this->libc_register_frame_);
+    frame_register_func libc_register_frame_ = this->libc_register_frame_.load(std::memory_order_relaxed);
     if (!libc_register_frame_) {
         libc_register_frame_ = (void(*)(void*))dlsym(RTLD_NEXT, "__register_frame");
-        jl_atomic_store_release(&this->libc_register_frame_, libc_register_frame_);
+        this->libc_register_frame_.store(libc_register_frame_, std::memory_order_release);
     }
     assert(libc_register_frame_);
     jl_profile_atomic([&]() JL_NOTSAFEPOINT {
@@ -617,10 +622,10 @@ void JITDebugInfoRegistry::libc_frames_t::libc_register_frame(const char *Entry)
 }
 
 void JITDebugInfoRegistry::libc_frames_t::libc_deregister_frame(const char *Entry) {
-    frame_register_func libc_deregister_frame_  = jl_atomic_load_relaxed(&this->libc_deregister_frame_);
+    frame_register_func libc_deregister_frame_  = this->libc_deregister_frame_.load(std::memory_order_relaxed);
     if (!libc_deregister_frame_) {
         libc_deregister_frame_ = (void(*)(void*))dlsym(RTLD_NEXT, "__deregister_frame");
-        jl_atomic_store_release(&this->libc_deregister_frame_, libc_deregister_frame_);
+        this->libc_deregister_frame_.store(libc_deregister_frame_, std::memory_order_release);
     }
     assert(libc_deregister_frame_);
     jl_profile_atomic([&]() JL_NOTSAFEPOINT {
@@ -764,6 +769,12 @@ static inline void ignoreError(T &err) JL_NOTSAFEPOINT
 #if !defined(NDEBUG) // Needed only with LLVM assertion build
     consumeError(err.takeError());
 #endif
+}
+
+// Malformed DWARF should not add LLVM diagnostics to Julia's backtrace output.
+static void ignoreDWARFDiag(llvm::Error E) JL_NOTSAFEPOINT
+{
+    consumeError(std::move(E));
 }
 
 static void get_function_name_and_base(llvm::object::SectionRef Section, std::map<uintptr_t, StringRef, std::greater<size_t>> *symbolmap,
@@ -1069,7 +1080,9 @@ static jl_object_file_entry_t find_object_file(uint64_t fbase, StringRef fname) 
             slide = -fbase;
         }
 
-        auto context = DWARFContext::create(*debugobj).release();
+        auto context = DWARFContext::create(*debugobj,
+                DWARFContext::ProcessDebugRelocations::Process, nullptr, "",
+                ignoreDWARFDiag, ignoreDWARFDiag).release();
         auto binary = errorobj->takeBinary();
         binary.first.release();
         binary.second.release();
@@ -1092,7 +1105,14 @@ static object::SectionRef getModuleSectionForAddress(const object::ObjectFile *o
   for (object::SectionRef Sec : obj->sections()) {
       if (!Sec.isText() || Sec.isVirtual())
           continue;
-      if (Address >= Sec.getAddress() && Address < Sec.getAddress() + Sec.getSize())
+      uint64_t Size = Sec.getSize();
+      // A dSYM keeps the section headers but not their contents, and LLVM clamps
+      // the size of a section that extends past the end of the file, so use the
+      // size from the header instead (https://github.com/llvm/llvm-project/pull/197286).
+      if (auto *MO = dyn_cast<const object::MachOObjectFile>(obj))
+          Size = MO->is64Bit() ? MO->getSection64(Sec.getRawDataRefImpl()).size
+                               : MO->getSection(Sec.getRawDataRefImpl()).size;
+      if (Address >= Sec.getAddress() && Address < Sec.getAddress() + Size)
           return Sec;
   }
   return object::SectionRef();
@@ -1315,7 +1335,9 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
             *Section = *std::next(lazyobject->object->section_begin(), fit->second.SectionIndex);
             if (context) {
                 if (lazyobject->context == nullptr)
-                    lazyobject->context = DWARFContext::create(*lazyobject->object);
+                    lazyobject->context = DWARFContext::create(*lazyobject->object,
+                            DWARFContext::ProcessDebugRelocations::Process, nullptr, "",
+                            ignoreDWARFDiag, ignoreDWARFDiag);
                 *context = lazyobject->context.get();
             }
         }

@@ -4,6 +4,7 @@
 
 #include "llvm/ADT/SmallSet.h"
 #include <llvm/ADT/MapVector.h>
+#include <llvm/ADT/StringExtras.h>
 #include <llvm/ADT/StringSet.h>
 #include <llvm/Support/AllocatorBase.h>
 
@@ -20,11 +21,7 @@
 #include <llvm/ExecutionEngine/JITEventListener.h>
 
 #include <llvm/Passes/PassBuilder.h>
-#if JL_LLVM_VERSION >= 220000
 #  include <llvm/Plugins/PassPlugin.h>
-#else
-#  include <llvm/Passes/PassPlugin.h>
-#endif
 #include <llvm/Passes/StandardInstrumentations.h>
 
 #include <llvm/Target/TargetMachine.h>
@@ -309,7 +306,7 @@ struct jl_codegen_call_target_t {
     // neither = unused
 };
 
-// reification of a call to jl_jit_abi_convert, so that it isn't necessary to parse the Modules to recover this info
+// reification of a call to jl_jit_abi_converter, so that it isn't necessary to parse the Modules to recover this info
 struct cfunc_decl_t {
     jl_abi_t abi;
     llvm::GlobalVariable *cfuncdata;
@@ -321,6 +318,9 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx,
 
 typedef std::list<std::tuple<std::string, std::string, unsigned int>> CallFrames;
 
+// Generates names by appending a per-prefix counter to a prefix. Prefixes must
+// not end in a digit, or different prefixes could produce the same name (`f`
+// with 20 and `f2` with 0 both give `f20`).
 class jl_name_counter_t {
 public:
     template<class... Ts>
@@ -329,6 +329,7 @@ public:
         std::string name;
         raw_string_ostream s{name};
         (s << ... << args);
+        assert(name.empty() || !isDigit(name.back()));
         unsigned n = counter[name]++;
         s << n;
         return name;
@@ -350,6 +351,7 @@ struct jl_linker_info_t {
     DenseMap<std::pair<jl_code_instance_t *, std::underlying_type_t<jl_invoke_api_t>>, orc::SymbolStringPtr>
         call_targets;
     DenseMap<void *, orc::SymbolStringPtr> global_targets;
+    DenseMap<_Atomic(uint64_t) *, orc::SymbolStringPtr> coverage_counters;
 };
 
 struct jl_emitted_output_t {
@@ -402,9 +404,16 @@ public:
 
     SmallVector<cfunc_decl_t,0> cfuncs;
     std::map<void*, GlobalVariable*> global_targets;
+    // Module-local coverage counter globals, keyed by their runtime slots.
+    DenseMap<_Atomic(uint64_t) *, GlobalVariable*> coverage_counters;
+    // Imaging-mode coverage counter globals keyed by (interned filename, line),
+    // and whether the location is user code. Insertion-ordered so the emitted
+    // image coverage table is reproducible.
+    MapVector<std::pair<const char*, int>, std::pair<GlobalVariable*, bool>> image_coverage_counters;
     jl_array_t *temporary_roots = nullptr;
     SmallSet<jl_value_t *, 8> temporary_roots_set;
     std::map<jl_datatype_t*, DIType*> ditypes;
+    DenseMap<std::pair<StringRef, StringRef>, DISubprogram*> inlined_subprograms;
     std::map<jl_datatype_t*, Type*> llvmtypes;
     DenseMap<Constant*, GlobalVariable*> mergedConstants;
     // Map from symbol name (in a certain library) to its GV in sysimg and the
@@ -476,11 +485,6 @@ enum CompilationPolicy {
     Extern = 1,
 };
 
-Function *jl_cfunction_object(jl_value_t *f, jl_value_t *rt, jl_tupletype_t *argt,
-    jl_codegen_output_t &out);
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void *jl_jit_abi_convert(jl_task_t *ct, jl_abi_t from_abi, _Atomic(void*) *fptr, _Atomic(size_t) *last_world, void *data);
 std::string emit_abi_dispatcher(jl_codegen_output_t &out, jl_abi_t from_abi, jl_code_instance_t *codeinst, Value *invoke) JL_CANSAFEPOINT;
 std::string emit_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, jl_code_instance_t *codeinst, Value *target, bool target_specsig) JL_CANSAFEPOINT;
 std::string emit_abi_constreturn(jl_codegen_output_t &out, jl_abi_t from_abi, jl_value_t *rettype_const) JL_CANSAFEPOINT;
@@ -586,6 +590,7 @@ struct JITObjectInfo {
     std::unique_ptr<object::ObjectFile> Object;
     StringMap<uint64_t> SectionLoadAddresses;
     std::unique_ptr<jl_linker_info_t> LinkerInfo;
+    SmallVector<std::pair<_Atomic(uint64_t) *, jitlink::Symbol *>, 0> CoverageCounters;
 };
 
 class JLDebuginfoPlugin : public orc::ObjectLinkingLayer::Plugin {
@@ -626,11 +631,7 @@ private:
     template <typename AnyT>
     static void verifyResource(AnyT &resource) JL_NOTSAFEPOINT { }
     static void verifyResource(orc::ThreadSafeContext &context) JL_NOTSAFEPOINT {
-#if JL_LLVM_VERSION < 210000
-        assert(context.getContext());
-#else
         context.withContextDo([](LLVMContext *ctx) { assert(ctx); });
-#endif
     }
 public:
     typedef orc::ObjectLinkingLayer ObjLayerT;
@@ -818,6 +819,12 @@ public:
     int objCacheKVEnabled() JL_CANSAFEPOINT_ENTER_LEAVE {
         return OCache.kvEnabled();
     }
+    int64_t objCachePrune(int64_t Cutoff) JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.prune(Cutoff);
+    }
+    std::string objCacheCompact(const char *Dir) JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.compact(Dir);
+    }
 
     jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {
         return dump_emitted_mi_name_stream;
@@ -970,11 +977,7 @@ static inline const char *jl_symbol_prefix(jl_symbol_prefix_t type,
 // NewPM
 #include "passes.h"
 
-#if JL_LLVM_VERSION >= 180000
 CodeGenOptLevel CodeGenOptLevelFor(int optlevel) JL_NOTSAFEPOINT;
-#else
-CodeGenOpt::Level CodeGenOptLevelFor(int optlevel) JL_NOTSAFEPOINT;
-#endif
 
 void jl_jit_add_bytes(size_t bytes) JL_NOTSAFEPOINT;
 

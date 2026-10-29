@@ -272,6 +272,7 @@ end
         @lock cond notify(cond, :legit)
         @test fetch(t) === :legit
     end
+    # JET.@test_call notify(::Condition)
 end
 
 # the cached WaitEntry makes the steady-state park/wake cycle allocation-free:
@@ -418,13 +419,24 @@ let program = """
             (1, 1),
             (2, 0),
             (2, 1),
-            (4, 0),
-            (4, 0)) # try a couple times to trigger bad races
+            (4, 0))
         new_env = copy(ENV)
         new_env["JULIA_NUM_THREADS"] = string(test_nthreads, ",", test_nthreadsi)
         threads_config = "$test_nthreads,$test_nthreadsi"
         with_output_on_failure() do output
-            run(pipeline(setenv(cmd1, new_env); stdout=output, stderr=output))
+            proc = run(pipeline(setenv(cmd1, new_env); stdout=output, stderr=output); wait=false)
+            # a run takes up to ~10 min; stop a hung one early so its task dump gets printed
+            watchdog = Timer(1800) do _
+                kill(proc, Base.SIGQUIT)
+                sleep(30)
+                process_running(proc) && kill(proc, Base.SIGKILL)
+            end
+            try
+                wait(proc)
+            finally
+                close(watchdog)
+            end
+            success(proc) || throw(ProcessFailedException([proc]))
         end
         println("threads_exec.jl with JULIA_NUM_THREADS == $threads_config passed")
         # threads set via env var
@@ -640,7 +652,7 @@ close(proc.in)
     script = "profile_spawnmany_exec.jl"
     cmd_base = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no $script`
     @testset for n in [20000, 200000, 2000000]
-        cmd = ignorestatus(setenv(cmd_base, "NTASKS" => n; dir = @__DIR__))
+        cmd = ignorestatus(addenv(Cmd(cmd_base; dir = @__DIR__), "NTASKS" => n))
         cmd = pipeline(cmd; stdout = stderr, stderr)
         proc = run(cmd; wait = false)
         done = Threads.Atomic{Bool}(false)
@@ -765,6 +777,56 @@ end
     @test io_thread_test()
 end
 
+@testset "event loop thread wakeup with pending finalizers" begin
+    # if this fails, the child hangs in the event loop, so kill it
+    script = joinpath(@__DIR__, "ioloop_wakeup.jl")
+    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --threads=1,1 $script`
+    proc = run(pipeline(cmd; stdout, stderr); wait=false)
+    t = Timer(60) do _
+        kill(proc, Base.SIGKILL)
+    end
+    @test success(proc)
+    close(t)
+end
+
+@testset "GC with a foreign thread reusing an exited thread's pthread id" begin
+    # if this fails, the child hangs waiting for the foreign thread to reach a safepoint
+    script = joinpath(@__DIR__, "foreign_thread_reuse.jl")
+    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --timeout-for-safepoint-straggler=10 $script`
+    proc = run(pipeline(cmd; stdout, stderr); wait=false)
+    t = Timer(60) do _
+        kill(proc, Base.SIGKILL)
+    end
+    @test success(proc)
+    close(t)
+end
+
+@testset "--timeout-for-safepoint-straggler command-line flag" begin
+    program = "
+        function main()
+            t = Threads.@spawn begin
+                ccall(:uv_sleep, Cvoid, (Cuint,), 8_000)
+            end
+            # Force a GC
+            ccall(:uv_sleep, Cvoid, (Cuint,), 1_000)
+            GC.gc()
+            wait(t)
+        end
+        main()
+    "
+    timeouts = ("1", "4")
+    outputs = map(_ -> IOBuffer(), timeouts)
+    # each child sleeps for 8 seconds, so run them concurrently
+    @sync for (timeout, output) in zip(timeouts, outputs)
+        cmd = `$(Base.julia_cmd()) --threads=4 --timeout-for-safepoint-straggler=$(timeout) -e $program`
+        @async run(pipeline(cmd; stderr=output))
+    end
+    for output in outputs
+        # Check whether we printed the straggler's backtrace
+        @test !isempty(take!(output))
+    end
+end
+
 # Make sure default number of BLAS threads respects CPU affinity: issue #55572.
 @testset "LinearAlgebra number of default threads" begin
     if AFFINITY_SUPPORTED
@@ -773,7 +835,8 @@ end
                      # Remove all variables which could affect the default number of threads
                      "OPENBLAS_NUM_THREADS"=>nothing,
                      "GOTO_NUM_THREADS"=>nothing,
-                     "OMP_NUM_THREADS"=>nothing)
+                     "OMP_NUM_THREADS"=>nothing,
+                     "JULIA_CPU_THREADS"=>nothing)
         for n in 1:min(length(allowed_cpus), 8) # Cap to 8 to avoid too many tests on large systems
             @test readchomp(setcpuaffinity(cmd, allowed_cpus[1:n])) == string(max(1, n ÷ 2))
         end

@@ -711,6 +711,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
                     i > e && replace_err(repl)
                 end
                 groupname = SubString(repl, groupstart, prevind(repl, i))
+                isempty(groupname) && replace_err(repl)
                 if all(isdigit, groupname)
                     group = parse(Int, groupname)
                 elseif re isa RegexAndMatchData

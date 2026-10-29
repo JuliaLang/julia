@@ -190,13 +190,22 @@ struct CodegenParams
     """
     unique_names::Cint
 
+    """
+    If enabled, retain inlined function scopes in LLVM debug information. Enabled
+    by default so consumers of the emitted IR can reconstruct inlined frames.
+    Julia's internal codegen parameters disable this for image generation in release
+    builds, since its own backtraces reconstruct these frames from CodeInstance debuginfo.
+    """
+    debug_info_inline_scopes::Cint
+
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames::Bool=true, debug_info_kind::Cint = default_debug_info_kind(),
                    debug_info_level::Cint = Cint(JLOptions().debug_level), safepoint_on_entry::Bool=true,
                    gcstack_arg::Bool=true, use_jlplt::Bool=true, force_emit_all::Bool=false,
                    sanitize_memory::Bool=false, sanitize_thread::Bool=false, sanitize_address::Bool=false,
-                   unique_names::Bool=false)
+                   unique_names::Bool=false,
+                   debug_info_inline_scopes::Bool=true)
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
@@ -204,7 +213,7 @@ struct CodegenParams
             debug_info_level, Cint(safepoint_on_entry),
             Cint(gcstack_arg), Cint(use_jlplt), Cint(force_emit_all),
             Cint(sanitize_memory), Cint(sanitize_thread), Cint(sanitize_address),
-            Cint(unique_names))
+            Cint(unique_names), Cint(debug_info_inline_scopes))
     end
 end
 
@@ -966,7 +975,7 @@ function _which(@nospecialize(tt::Type);
         raise && error("no unique matching method found for the specified argument types")
         return nothing
     end
-    return match
+    return match::Core.MethodMatch
 end
 
 """
@@ -1004,15 +1013,15 @@ end
 which(@nospecialize(argtypes::Tuple)) = which(to_tuple_type(argtypes))
 
 """
-    which(module, symbol)
+    which(module::Module, symbol::Symbol)
 
 Return the module in which the binding for the variable referenced by `symbol` in `module` was created.
 """
-function which(m::Module, s::Symbol)
-    if !isdefined(m, s)
-        error("\"$s\" is not defined in module $m")
+function which(mdl::Module, symbol::Symbol)
+    if !isdefinedglobal(mdl, symbol)
+        error("\"$symbol\" is not defined in module $mdl")
     end
-    return binding_module(m, s)
+    return binding_module(mdl, symbol)
 end
 
 # function reflection
@@ -1130,13 +1139,20 @@ function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_c
 end
 
 """
-    fbody = bodyfunction(basemethod::Method)
+    fbody = bodyfunction(basemethod::Method; world::UInt=Base.get_world_counter())
 
 Find the keyword "body function" (the function that contains the body of the method
 as written, called after all missing keyword-arguments have been assigned default values).
 `basemethod` is the method you obtain via [`which`](@ref) or [`methods`](@ref).
+
+The binding of the body function is looked up in the world age given by `world`, which
+defaults to the current world counter.
+
+!!! compat "Julia 1.14"
+    The `world` keyword argument requires Julia 1.14 or later. Before Julia 1.14,
+    the binding was looked up in the world age of the calling task.
 """
-function bodyfunction(basemethod::Method)
+function bodyfunction(basemethod::Method; world::UInt=get_world_counter())
     fmod = parentmodule(basemethod)
     # The lowered code for `basemethod` should look like
     #   %1 = mkw(kwvalues..., #self#, args...)
@@ -1149,7 +1165,7 @@ function bodyfunction(basemethod::Method)
             fsym = callexpr.args[1]
             while true
                 if isa(fsym, Symbol)
-                    return getfield(fmod, fsym)
+                    return invoke_in_world(world, getglobal, fmod, fsym)
                 elseif isa(fsym, GlobalRef)
                     if fsym.mod === Core && fsym.name === :_apply
                         fsym = callexpr.args[2]
@@ -1157,9 +1173,9 @@ function bodyfunction(basemethod::Method)
                         fsym = callexpr.args[3]
                     end
                     if isa(fsym, Symbol)
-                        return getfield(fmod, fsym)::Function
+                        return invoke_in_world(world, getglobal, fmod, fsym)::Function
                     elseif isa(fsym, GlobalRef)
-                        return getfield(fsym.mod, fsym.name)::Function
+                        return invoke_in_world(world, getglobal, fsym.mod, fsym.name)::Function
                     elseif isa(fsym, Core.SSAValue)
                         fsym = ast.code[fsym.id]
                     else
@@ -1224,53 +1240,38 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         min = Ref{UInt}(typemin(UInt))
         max = Ref{UInt}(typemax(UInt))
         has_ambig = Ref{Int32}(0)
-        ms = collect(Core.MethodMatch, _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector)
+        ms = _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector{Any}
         has_ambig[] == 0 && return false
-        if !ambiguous_bottom
-            filter!(ms) do m::Core.MethodMatch
-                return !has_bottom_parameter(m.spec_types)
-            end
-        end
         # if ml-matches reported the existence of an ambiguity over their
         # intersection, see if both m1 and m2 seem to be involved in it
-        # (if one was fully dominated by a different method, we want to will
+        # (if one was fully dominated by a different method, we want to
         # report the other ambiguous pair)
-        have_m1 = have_m2 = false
-        for match in ms
-            m = match.method
-            m === m1 && (have_m1 = true)
-            m === m2 && (have_m2 = true)
+        function involves_both(ms)
+            have_m1 = have_m2 = false
+            for match in ms
+                m = (match::Core.MethodMatch).method
+                m === m1 && (have_m1 = true)
+                m === m2 && (have_m2 = true)
+            end
+            return have_m1 && have_m2
         end
-        if !have_m1 || !have_m2
-            # ml-matches did not need both methods to expose the reported ambiguity
-            return false
-        end
+        nms = length(ms)
         if !ambiguous_bottom
-            # since we're intentionally ignoring certain ambiguities (via the
-            # filter call above), see if we can now declare the intersection fully
-            # covered even though it is partially ambiguous over Union{} as a type
-            # parameter somewhere
-            minmax = nothing
-            for match in ms
-                m = match.method
-                match.fully_covers || continue
-                if minmax === nothing || morespecific(m, minmax)
-                    minmax = m
-                end
+            filter!(ms) do m
+                return !has_bottom_parameter((m::Core.MethodMatch).spec_types)
             end
-            if minmax === nothing || minmax == m1 || minmax == m2
-                return true
+        end
+        # ml-matches did not need both methods to expose the reported ambiguity
+        involves_both(ms) || return false
+        if length(ms) != nms
+            # If we intentionally removed certain ambiguities (via the
+            # filter call above), re-run the runtime's match sort on the
+            # remaining matches and see if the solution is still holding an ambiguity
+            # and m1 and m2 are both still reported in the solution.
+            if ccall(:jl_sort_method_matches, Cint, (Any, Cint), ms, true) == 0
+                return false
             end
-            for match in ms
-                m = match.method
-                m === minmax && continue
-                if !morespecific(minmax, m)
-                    if match.fully_covers || !morespecific(m, minmax)
-                        return true
-                    end
-                end
-            end
-            return false
+            involves_both(ms) || return false
         end
         return true
     end

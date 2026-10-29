@@ -81,6 +81,11 @@ end
     @test unsafe_trunc(Int128, Float16(3)) === Int128(3)
     # `unsafe_trunc` of `NaN` can be any value, see #56582
     @test unsafe_trunc(Int16, NaN16) isa Int16 # #18771
+    for T in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128), x in (-Inf16, Inf16, NaN16)
+        @test_throws InexactError trunc(T, x)
+    end
+    @test trunc(Int32, -floatmax(Float16)) === Int32(-65504)
+    @test trunc(Int128, floatmax(Float16)) === Int128(65504)
 end
 @testset "fma and muladd" begin
     @test fma(Float16(0.1),Float16(0.9),Float16(0.5)) ≈ fma(0.1,0.9,0.5)

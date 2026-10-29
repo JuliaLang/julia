@@ -63,15 +63,20 @@ function record_invoke_edge!(invokes::IdDict{Any,Vector{Any}},
                              @nospecialize(signature), @nospecialize(target))
     signatures = get!(Vector{Any}, invokes, target)
     for previous in signatures
-        previous == signature && return false
+        if isa(previous, Type) && isa(signature, Type)
+            previous == signature && return false
+        elseif previous == signature
+            return false
+        end
     end
     push!(signatures, signature)
     return true
 end
 
-function _materialize_inference_edges!(edges::Vector{Any}, source,
+# `source` is typed so that the recursion on `edge.edges` does not widen it to `Any`
+function _materialize_inference_edges!(edges::Vector{Any}, source::Union{Vector{Any},SimpleVector},
                                        seen_proofs::IdSet{LocalInferenceProof},
-                                       standalone::IdSet{Any},
+                                       standalone::IdDict{Any,Bool},
                                        invokes::IdDict{Any,Vector{Any}})
     i = 1
     while i <= length(source)
@@ -82,6 +87,18 @@ function _materialize_inference_edges!(edges::Vector{Any}, source,
             push!(seen_proofs, edge)
             _materialize_inference_edges!(
                 edges, edge.edges, seen_proofs, standalone, invokes)
+        elseif edge isa PossiblyAmbiguous
+            @assert i < length(source)
+            target = source[i + 1]
+            if target isa Int
+                push!(edges, edge)
+                i += 1
+            else
+                i += 2
+                haskey(standalone, target) && continue
+                standalone[target] = true
+                push!(edges, edge, target)
+            end
         elseif edge isa Int
             # Encoded lookup groups are positional: `nmatches, atype, matches...`.
             # Preserve each complete group, while recording its targets so an
@@ -92,18 +109,20 @@ function _materialize_inference_edges!(edges::Vector{Any}, source,
             for j = i:last
                 push!(edges, source[j])
             end
-            for j = i + 2:last
-                target = source[j]
-                if target isa Union{Method,MethodInstance,CodeInstance,Core.Binding}
-                    push!(standalone, target)
+            if !(i > 1 && source[i - 1] isa PossiblyAmbiguous)
+                for j = i + 2:last
+                    target = source[j]
+                    if target isa Union{Method,MethodInstance,CodeInstance,Core.Binding}
+                        standalone[target] = false
+                    end
                 end
             end
             i = last + 1
         elseif edge isa Union{Method,MethodInstance,CodeInstance,Core.Binding}
             i += 1
-            edge in standalone && continue
-            push!(standalone, edge)
-            push!(edges, edge)
+            seen = haskey(standalone, edge)
+            standalone[edge] = false
+            seen || push!(edges, edge)
         else
             # Everything else is an invoke signature paired with its target. Keep
             # distinct signatures, and deduplicate only the identical pair.
@@ -117,7 +136,7 @@ function _materialize_inference_edges!(edges::Vector{Any}, source,
     return nothing
 end
 
-function materialize_inference_edges(source)
+function materialize_inference_edges(source::Union{Vector{Any},SimpleVector})
     has_local_proof = false
     for edge in source
         if edge isa LocalInferenceProof
@@ -130,8 +149,38 @@ function materialize_inference_edges(source)
     end
     edges = Any[]
     sizehint!(edges, length(source))
+    standalone = IdDict{Any,Bool}()
     _materialize_inference_edges!(edges, source,
-        IdSet{LocalInferenceProof}(), IdSet{Any}(), IdDict{Any,Vector{Any}}())
+        IdSet{LocalInferenceProof}(), standalone, IdDict{Any,Vector{Any}}())
+    i = 1
+    while i < length(edges)
+        if edges[i] isa PossiblyAmbiguous && !(edges[i + 1] isa Int) && !standalone[edges[i + 1]]
+            deleteat!(edges, i)
+        else
+            i += 1
+        end
+    end
+    # A flattened proof certifies its CI with an identity `invoke` edge (`m.sig`, see
+    # `add_inference_proof!`). Where the same target is also a dispatch edge here, that
+    # edge already fails whenever the identity edge would (`m` being replaced), so drop
+    # the pair.
+    i = 1
+    while i <= length(edges)
+        edge = edges[i]
+        if edge isa Int
+            i += 2 + abs(edge)
+        elseif edge isa Union{Method,MethodInstance,CodeInstance,Core.Binding,PossiblyAmbiguous}
+            i += 1
+        else
+            target = edges[i + 1]
+            if target isa Union{MethodInstance,CodeInstance} && haskey(standalone, target) &&
+                    edge === ((target isa CodeInstance ? get_ci_mi(target) : target).def::Method).sig
+                deleteat!(edges, i:i+1)
+            else
+                i += 2
+            end
+        end
+    end
     return Core.svec(edges...)
 end
 
@@ -199,8 +248,8 @@ function method_match_edge(info::MethodMatchInfo, i::Int, mi_edge::Bool)
         specialize_method(match) : match.method
 end
 
-function has_encoded_lookup(edges::Vector{Any}, info::MethodMatchInfo,
-                            encoded_nmatches::Int, mi_edge::Bool)
+function find_encoded_lookup(edges::Vector{Any}, info::MethodMatchInfo,
+                             encoded_nmatches::Int, mi_edge::Bool)
     i = 1
     while i <= length(edges)
         entry = edges[i]
@@ -216,14 +265,14 @@ function has_encoded_lookup(edges::Vector{Any}, info::MethodMatchInfo,
                         break
                     end
                 end
-                matches && return true
+                matches && return i
             end
             i = next_i
         else
             i += 1
         end
     end
-    return false
+    return 0
 end
 
 function add_method_match_proofs!(edges::Vector{Any}, info::MethodMatchInfo,
@@ -249,6 +298,7 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
         end
     end
     nmatches = length(info.results)
+    possibly_ambiguous = any_ambig(info)
     if nmatches == length(info.edges) == 1 && fully_covering(info)
         # try the optimized format for the representation, if possible and applicable
         # if this doesn't succeed, the backedge will be less precise,
@@ -262,7 +312,7 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
             mi = edge.def::MethodInstance
         end
         if mi.specTypes === m.spec_types
-            add_one_edge!(edges, edge)
+            add_one_edge!(edges, edge, possibly_ambiguous)
             add_result_proof!(edges, info.call_results[1], edge)
             return nothing
         end
@@ -270,7 +320,9 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
     # add check for whether this lookup already existed in the edges list
     # encode nmatches as negative if fully_covers is false
     encoded_nmatches = fully_covering(info) ? nmatches : -nmatches
-    if !has_encoded_lookup(edges, info, encoded_nmatches, mi_edge)
+    groupidx = find_encoded_lookup(edges, info, encoded_nmatches, mi_edge)
+    if groupidx == 0
+        possibly_ambiguous && push!(edges, PossiblyAmbiguous())
         push!(edges, encoded_nmatches, info.atype)
         for i = 1:nmatches
             edge = method_match_edge(info, i, mi_edge)
@@ -279,11 +331,22 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
             end
             push!(edges, edge)
         end
+    elseif !possibly_ambiguous
+        remove_possibly_ambiguous!(edges, groupidx)
     end
     add_method_match_proofs!(edges, info, mi_edge)
     nothing
 end
-function add_one_edge!(edges::Vector{Any}, edge::MethodInstance)
+
+function remove_possibly_ambiguous!(edges::Vector{Any}, i::Int)
+    # upgrade to an edge that is not possibly-ambiguous (stronger)
+    if i > 1 && edges[i - 1] isa PossiblyAmbiguous
+        deleteat!(edges, i - 1)
+    end
+    return nothing
+end
+
+function add_one_edge!(edges::Vector{Any}, edge::MethodInstance, possibly_ambiguous::Bool=false)
     i = 1
     while i <= length(edges)
         edgeᵢ = edges[i]
@@ -291,14 +354,16 @@ function add_one_edge!(edges::Vector{Any}, edge::MethodInstance)
         edgeᵢ isa CodeInstance && (edgeᵢ = get_ci_mi(edgeᵢ))
         edgeᵢ isa MethodInstance || (i += 1; continue)
         if edgeᵢ === edge && !(i > 1 && edges[i-1] isa Type)
+            possibly_ambiguous || remove_possibly_ambiguous!(edges, i)
             return # found existing covered edge
         end
         i += 1
     end
+    possibly_ambiguous && push!(edges, PossiblyAmbiguous())
     push!(edges, edge)
     nothing
 end
-function add_one_edge!(edges::Vector{Any}, edge::CodeInstance)
+function add_one_edge!(edges::Vector{Any}, edge::CodeInstance, possibly_ambiguous::Bool=false)
     i = 1
     while i <= length(edges)
         edgeᵢ_orig = edgeᵢ = edges[i]
@@ -309,9 +374,11 @@ function add_one_edge!(edges::Vector{Any}, edge::CodeInstance)
             if edgeᵢ_orig isa MethodInstance
                 # found edge we can upgrade
                 edges[i] = edge
+                possibly_ambiguous || remove_possibly_ambiguous!(edges, i)
                 return
             elseif edgeᵢ_orig === edge
                 # Only the identical CodeInstance certifies the same inference proof.
+                possibly_ambiguous || remove_possibly_ambiguous!(edges, i)
                 return
             end
             # Different CodeInstances for the same MethodInstance may certify
@@ -320,6 +387,7 @@ function add_one_edge!(edges::Vector{Any}, edge::CodeInstance)
         end
         i += 1
     end
+    possibly_ambiguous && push!(edges, PossiblyAmbiguous())
     push!(edges, edge)
     nothing
 end
@@ -548,6 +616,7 @@ function add_inlining_edge!(edges::Vector{Any}, edge::MethodInstance)
         end
         edgeᵢ isa CodeInstance && (edgeᵢ = edgeᵢ.def)
         if edgeᵢ isa MethodInstance && edgeᵢ === edge
+            remove_possibly_ambiguous!(edges, i)
             return # found existing covered edge
         end
         i += 1
@@ -574,10 +643,12 @@ function add_inlining_edge!(edges::Vector{Any}, edge::CodeInstance)
         if edgeᵢ isa MethodInstance && edgeᵢ === edge.def
             # found edge we can upgrade
             edges[i] = edge
+            remove_possibly_ambiguous!(edges, i)
             return
         end
         if edgeᵢ === edge
             # found the identical existing edge
+            remove_possibly_ambiguous!(edges, i)
             return
         end
         # A distinct CodeInstance for the same MethodInstance may carry a
@@ -679,6 +750,7 @@ add_edges_impl(::Vector{Any}, ::FinalizerInfo) = nothing
 Represents a resolved call of one of:
  - `modifyfield!(obj, name, op, x, [order])`
  - `modifyglobal!(mod, var, op, x, order)`
+ - `Core.modifyglobal_partition(partition, op, x, [order])`
  - `memoryrefmodify!(memref, op, x, order, boundscheck)`
  - `Intrinsics.atomic_pointermodify(ptr, op, x, order)`
 

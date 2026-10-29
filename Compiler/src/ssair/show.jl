@@ -137,7 +137,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
         skip_ftype = (length(sig) == 0) # doesn't exist...
         skip_ftype = skip_ftype || (
             # ... or, f prints as a user-accessible value...
-            (f isa GlobalRef) &&
+            (f isa GlobalRef || f isa Core.BindingPartition) &&
             # ... and matches the value of the singleton type of the invoked MethodInstance
             (singleton_type(ft) === singleton_type(sig[1]) !== nothing)
         )
@@ -398,6 +398,13 @@ function debuginfo_file1(debuginfo::Union{DebugInfo,DebugInfoStream})
     return :var"<unknown>"
 end
 
+function debuginfo_file(di::Union{DebugInfo,DebugInfoStream})
+    while di.linetable isa DebugInfo
+        di = di.linetable
+    end
+    return debuginfo_file1(di)
+end
+
 # utility function to extract the first line number and file of a block of code
 function debuginfo_firstline(di::DebugInfoStream)
     if di.linetable isa DebugInfo
@@ -410,7 +417,7 @@ function debuginfo_firstline(di::DebugInfoStream)
 end
 function debuginfo_firstline(di::DebugInfo)
     firstline = ccall(:jl_cdi_firstline_all, Int32, (Any,), di)
-    debuginfo_file1(di), firstline
+    debuginfo_file(di), firstline
 end
 
 struct LineInfoNode
@@ -573,7 +580,7 @@ function DILineInfoPrinter(debuginfo, def, showtypes::Bool=false)
                     context_depth[] += 1
                     nctx != 1 && printstyled(io, started ? "│" : "┌", color=linecolor)
                 end
-                printstyled(io, " @ ", frame.file, color=linecolor)
+                printstyled(io, " @ ", Base.fixup_stdlib_path(String(frame.file)), color=linecolor)
                 if frame.line != typemax(frame.line) && frame.line != 0
                     printstyled(io, ":", frame.line, color=linecolor)
                 end
@@ -585,7 +592,7 @@ function DILineInfoPrinter(debuginfo, def, showtypes::Bool=false)
                         method_name(frame) === method || break
                         nctx += 1
                         push!(context, frame)
-                        printstyled(io, " @ ", frame.file, ":", frame.line, color=linecolor)
+                        printstyled(io, " @ ", Base.fixup_stdlib_path(String(frame.file)), ":", frame.line, color=linecolor)
                     end
                 end
                 println(io)

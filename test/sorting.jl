@@ -137,6 +137,12 @@ end
             @test partialsortperm(a, i, rev=true) == (11 - i)
         end
     end
+    # descending ranges on inputs large enough to partition
+    w = [4, 5, 2, 1, 1, 4, 4, 4, 2, 4, 5, 5, 3, 3, 2, 2, 4, 5, 2, 2, 5, 5]
+    for r in (5:-1:3, 9:-2:3, 20:-1:1)
+        @test partialsort(w, r) == sort(w)[r]
+        @test w[partialsortperm(w, r)] == sort(w)[r]
+    end
     @test_throws ArgumentError partialsortperm!([1,2], [2,3,1], 1:2)
 end
 
@@ -322,6 +328,9 @@ end
         @test !issorted(b)
         @test !issorted(c, by=x->1/x)
         @test !issorted(d, rev=true)
+    end
+    let k = 30:-1:10
+        @test sort(a, alg=PartialQuickSort(k))[k] == sort(a)[k]
     end
 
     @test partialsort([3,6,30,1,9], 2, rev=true) == 9
@@ -983,6 +992,18 @@ end
         @test !issorted(v[1:2000])
         @test !issorted(v[2001:4000])
         @test !issorted(v)
+    end
+
+    # out-of-range lo/hi must throw rather than silently corrupt memory (#63215)
+    for alg in [MergeSort, QuickSort, InsertionSort, PartialQuickSort(1:5),
+                Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+        w = rand(10)
+        @test_throws BoundsError sort!(w, 1, 11, alg, Base.Forward)
+        @test_throws BoundsError sort!(w, 0, 10, alg, Base.Forward)
+        @test_throws BoundsError sort!(w, 1, 2000, alg, Base.Forward)
+        @test_throws BoundsError sort!(w, 1, 2000, alg, Base.Forward, similar(w))
+        @test sort!(w, 11, 10, alg, Base.Forward) === w # empty range is fine
+        @test issorted(sort!(w, 1, 10, alg, Base.Forward))
     end
 end
 

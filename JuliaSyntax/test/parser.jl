@@ -83,6 +83,10 @@ tests = [
         "f(x) where S where U = 1" =>  "(function-= (where (where (call f x) S) U) 1)"
         "(f(x)::T) where S = 1" =>  "(function-= (where (parens (::-i (call f x) T)) S) 1)"
         "f(x) = 1 = 2"    =>  "(function-= (call f x) (= 1 2))" # Should be a warning!
+        "f() = function (;x=1) end" =>  "(function-= (call f) (function (tuple-p (parameters (= x 1))) (block)))"
+        "f(x)::T = function (;y) end" =>  "(function-= (::-i (call f x) T) (function (tuple-p (parameters y)) (block)))"
+        "f(x) where T = function (;y) end" =>  "(function-= (where (call f x) T) (function (tuple-p (parameters y)) (block)))"
+        "f() = function (" =>  "(function-= (call f) (function (tuple-p (error-t)) (block (error)) (error-t)))"
         # Suffixed operators don't form compound assignments (matching the
         # reference parser): `+₁` is parsed as the operator, leaving a stray `=`
         "a +₁= b" =>  "(call-i a +₁ (error =))"
@@ -752,6 +756,8 @@ tests = [
         "function (x=1) end"   =>  "(function (tuple-p (= x 1)) (block))"
         "function (;x=1) end"  =>  "(function (tuple-p (parameters (= x 1))) (block))"
         "function (f(x),) end" =>  "(function (tuple-p-, (call f x)) (block))"
+        "function (f(x);) end" =>  "(function (tuple-p (call f x) (parameters)) (block))"
+        "function (f(x); y) end" => "(function (tuple-p (call f x) (parameters y)) (block))"
         "function (@f(x);) end" => "(function (tuple-p (macrocall-p (macro_name f) x) (parameters)) (block))"
         "function (@f(x)...) end" =>  "(function (tuple-p (... (macrocall-p (macro_name f) x))) (block))"
         "function (@f(x)) end" =>  "(function (error (tuple-p (macrocall-p (macro_name f) x))) (block))"
@@ -803,6 +809,7 @@ tests = [
         "function (x*y ) end" => "(function (parens (call-i x * y)) (block))"
         # body
         "function f() \n a \n b end"  =>  "(function (call f) (block a b))"
+        "function f() \n function (;x=1) end \n end" =>  "(function (call f) (block (function (tuple-p (parameters (= x 1))) (block))))"
         "function f() end"       =>  "(function (call f) (block))"
         # Macrocall as sig
         ((v=v"1.12",), "function @callmemacro(a::Int) \n 1 \n end") => "(function (macrocall-p (macro_name callmemacro) (::-i a Int)) (block 1))"

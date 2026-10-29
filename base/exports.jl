@@ -26,7 +26,7 @@ export Core,
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
     fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!, setfieldonce!,
-    nfields, throw, tuple, ===, isdefined,
+    nfields, throw, tuple, ===, isdefined, bitsizeof,
     # access to globals
     getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!, isdefinedglobal,
     # ifelse, sizeof    # not exported, to avoid conflicting with Base
@@ -988,6 +988,7 @@ export
     ctime,
     diskstat,
     download,
+    eachentry,
     filemode,
     filesize,
     gperm,

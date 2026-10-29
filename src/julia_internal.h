@@ -33,8 +33,12 @@
 #include <sys/time.h>
 #endif
 
+// Windows exports are selected by the linker; Clang's hidden visibility would
+// exclude these symbols even when they match the export map.
+#ifndef _OS_WINDOWS_
 // pragma visibility is more useful than -fvisibility
 #pragma GCC visibility push(hidden)
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -110,8 +114,8 @@ static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT 
 #ifndef _OS_WINDOWS_
     #if defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_WASM_)
         #define MAX_ALIGN 8
-    #elif defined(_CPU_AARCH64_) || defined(_CPU_RISCV64_) || (JL_LLVM_VERSION >= 180000 && (defined(_CPU_X86_64_) || defined(_CPU_X86_)) || (JL_LLVM_VERSION >= 200000 && defined(_CPU_PPC64_)))
-    // int128 is 16 bytes aligned on aarch64 and riscv, and on x86 with LLVM >= 18 and on ppc64 with LLVM >= 20
+    #elif defined(_CPU_AARCH64_) || defined(_CPU_RISCV64_) || defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_PPC64_)
+    // int128 is 16 bytes aligned on aarch64, riscv, x86 and ppc64
         #define MAX_ALIGN 16
     #elif defined(_P64)
     // Generically we assume MAX_ALIGN is sizeof(void*)
@@ -120,11 +124,7 @@ static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT 
         #define MAX_ALIGN 4
     #endif
 #else
-    #if JL_LLVM_VERSION >= 180000
         #define MAX_ALIGN 16
-    #else
-        #define MAX_ALIGN 8
-    #endif
 #endif
 
 #ifndef alignof
@@ -159,14 +159,23 @@ static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT 
 #if defined(_CPU_X86_64_)
     // install the unhandled exception handler at the top of our stack
     // to call directly into our personality handler
+// N.B. do not switch sections here: with function sections, which LTO turns on,
+// the rest of the function would be emitted away from its own section, leaving
+// the entry point running off the end of a prologue.
 #define CFI_NORETURN \
-    asm volatile ("\t.seh_handler __julia_personality, @except\n\t.text");
+    asm volatile ("\t.seh_handler __julia_personality, @except");
 #else
 #define CFI_NORETURN
 #endif
 #else
 // wipe out the call-stack unwind capability beyond this function
 // (we are noreturn, so it is not a total lie)
+// N.B. these directives apply to whichever function the code ends up in, so
+// every function using CFI_NORETURN must be NOINLINE: inlined into a caller,
+// `.cfi_return_column` rebinds the caller's whole FDE to a CIE whose return
+// address register is undefined, and unwinding through any suspended task
+// switch stops there (the PGO+ThinLTO macOS aarch64 build inlined
+// jl_start_fiber_set into ctx_switch and jl_start_fiber_swap).
 #if defined(_CPU_X86_64_)
 // per nongnu libunwind: "x86_64 ABI specifies that end of call-chain is marked with a NULL RBP or undefined return address"
 // so we do all 3, to be extra certain of it
@@ -290,8 +299,9 @@ extern uv_mutex_t bt_data_prof_lock;
 #define PROFILE_STATE_THREAD_SLEEPING (2)
 #define PROFILE_STATE_WALL_TIME_PROFILING (3)
 void jl_profile_task(void) JL_NOTSAFEPOINT;
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+#if defined(_OS_WINDOWS_)
 JL_DLLEXPORT void jl_set_profile_abort_ptr(_Atomic(int) *abort_ptr) JL_NOTSAFEPOINT;
+void jl_profile_prefault_tls(void) JL_NOTSAFEPOINT;
 #endif
 
 // number of cycles since power-on
@@ -343,9 +353,10 @@ static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
     gettimeofday(&tv, NULL);
     return (int64_t)(tv.tv_sec) * 1000000 + tv.tv_usec;
 #elif defined(_CPU_RISCV64_)
-    // taken from https://github.com/google/benchmark/blob/3b3de69400164013199ea448f051d94d7fc7d81f/src/cycleclock.h#L190
+    // Linux may restrict user access to `cycle`. Use the fixed-frequency `time`
+    // counter, which is also used by the vDSO and is readable from user mode.
     uint64_t ret;
-    __asm__ volatile("rdcycle %0" : "=r"(ret));
+    __asm__ volatile("rdtime %0" : "=r"(ret));
     return ret;
 #elif defined(_CPU_PPC64_)
     // This returns a time-base, which is not always precisely a cycle-count.
@@ -386,26 +397,6 @@ STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
     return a;  // identity hashing seems to work well enough here
 }
 
-
-// this is a version of memcpy that preserves atomic memory ordering
-// which makes it safe to use for objects that can contain memory references
-// without risk of creating pointers out of thin air
-// TODO: replace with LLVM's llvm.memmove.element.unordered.atomic.p0i8.p0i8.i32
-//       aka `__llvm_memmove_element_unordered_atomic_8` (for 64 bit)
-static inline void memmove_refs(_Atomic(void*) *dstp, _Atomic(void*) *srcp, size_t n) JL_NOTSAFEPOINT
-{
-    size_t i;
-    if (dstp < srcp || dstp > srcp + n) {
-        for (i = 0; i < n; i++) {
-            jl_atomic_store_release(dstp + i, jl_atomic_load_relaxed(srcp + i));
-        }
-    }
-    else {
-        for (i = 0; i < n; i++) {
-            jl_atomic_store_release(dstp + n - i - 1, jl_atomic_load_relaxed(srcp + n - i - 1));
-        }
-    }
-}
 
 static inline void memassign_safe(int hasptr, char *dst, const jl_value_t *src, size_t nb) JL_NOTSAFEPOINT
 {
@@ -533,7 +524,6 @@ extern JL_DLLEXPORT size_t jl_hugepage_size;
 extern JL_DLLEXPORT jl_value_t *jl_typeinf_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_value_t *jl_compile_and_emit_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT size_t jl_typeinf_world;
-extern JL_DLLEXPORT size_t jl_lowering_world;
 extern JL_DLLEXPORT jl_value_t *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
 extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 
@@ -685,6 +675,14 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_align8(unsigned sz) JL_NOTSAFE
 #define GC_MAX_SZCLASS (2032-sizeof(void*))
 static_assert(ARRAY_CACHE_ALIGN_THRESHOLD > GC_MAX_SZCLASS, "");
 
+// A GenericMemory whose data fits a GC pool together with its header is allocated as a single
+// object, with the data at this offset. Larger ones get their data from `jl_gc_managed_malloc`.
+#define JL_GENERICMEMORY_INLINE_DATA_OFFSET LLT_ALIGN(sizeof(jl_genericmemory_t), JL_SMALL_BYTE_ALIGNMENT)
+STATIC_INLINE int jl_genericmemory_data_inline(size_t nbytes) JL_NOTSAFEPOINT
+{
+    return nbytes <= GC_MAX_SZCLASS - JL_GENERICMEMORY_INLINE_DATA_OFFSET;
+}
+
 /* Programming style note: When using jl_gc_alloc, do not JL_GC_PUSH it into a
  * gc frame, until it has been fully initialized. An uninitialized value in a
  * gc frame can crash upon encountering the first safepoint. By delaying use of
@@ -718,10 +716,11 @@ const extern uint64_t _jl_buff_tag[3];
 #define jl_buff_tag ((uintptr_t)LLT_ALIGN((uintptr_t)&_jl_buff_tag[1],16))
 JL_DLLEXPORT uintptr_t jl_get_buff_tag(void) JL_NOTSAFEPOINT;
 
-typedef void jl_gc_tracked_buffer_t; // For the benefit of the static analyzer
+// A GC-allocated buffer, tracked by the static analyzer
+typedef struct JL_GC_TRACKED_TYPE _jl_gc_tracked_buffer_t jl_gc_tracked_buffer_t;
 STATIC_INLINE jl_gc_tracked_buffer_t *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz) JL_CANSAFEPOINT
 {
-    return jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
+    return (jl_gc_tracked_buffer_t*)jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
 }
 
 jl_value_t *jl_permbox8(jl_datatype_t *t, uintptr_t tag, uint8_t x) JL_NOTSAFEPOINT;
@@ -818,9 +817,16 @@ typedef union {
 #define SOURCE_MODE_NOT_REQUIRED            0x0
 #define SOURCE_MODE_ABI                     0x1
 
+// dispatch_status bits.
+// - LATEST_WHICH: invoke of this mi's exact specTypes yields exactly this result.
+// - LATEST_ONLY: dispatch of this mi's exact specTypes yields only this result);
+//   the corresponding Method-level fact is the method's `interferences` set being empty.
+// - NO_LOSERS: this method is not strictly morespecific than any method it
+//   intersects (its strict out-neighborhood is empty, the opposite pole from an
+//   empty interference set, which means it beats everything it intersects).
 #define METHOD_SIG_LATEST_WHICH             0b0001
 #define METHOD_SIG_LATEST_ONLY              0b0010
-#define METHOD_SIG_PRECOMPILE_MANY          0b0100
+#define METHOD_SIG_NO_LOSERS                0b0100
 
 void jl_init_engine(void) JL_NOTSAFEPOINT;
 void jl_engine_sweep(jl_ptls_t *gc_all_tls_states) JL_NOTSAFEPOINT;
@@ -838,6 +844,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t
 JL_DLLEXPORT jl_code_instance_t *jl_get_method_uninferred(
         jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_value_t *rettype,
         size_t min_world, size_t max_world, jl_debuginfo_t *di, jl_svec_t *edges) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_ci_replace_nulldebuginfo(jl_code_instance_t *ci, jl_debuginfo_t *di) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_mi_cache_has_ci(jl_method_instance_t *mi, jl_code_instance_t *ci) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_callptr_t *invoke, void **specptr, int waitcompile) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *srcs) JL_CANSAFEPOINT;
@@ -942,8 +949,6 @@ int nroots_with_key(jl_method_t *m, uint64_t key) JL_NOTSAFEPOINT;
 
 int jl_valid_type_param(jl_value_t *v);
 
-JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t nargs);
-
 void JL_NORETURN jl_method_error(jl_value_t *F, jl_value_t **args, size_t na, size_t world) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_exceptionf(jl_datatype_t *exception_type, const char *fmt, ...) JL_CANSAFEPOINT;
 
@@ -955,6 +960,9 @@ JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t) JL_CANSAFEPOINT;
 JL_CALLABLE(jl_f_tuple) JL_CANSAFEPOINT;
 void jl_install_default_signal_handlers(void) JL_NOTSAFEPOINT;
 void restore_signals(void) JL_NOTSAFEPOINT;
+#ifndef _OS_WINDOWS_
+void jl_exit_with_parent(pid_t parent) JL_NOTSAFEPOINT;
+#endif
 void jl_install_thread_signal_handler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_wakeup_thread_from_foreign(int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_membarrier(void) JL_NOTSAFEPOINT;
@@ -963,7 +971,7 @@ extern _Atomic(int) jl_sigint_dispatch_pending;
 extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream) JL_CANSAFEPOINT;
 
-typedef struct jl_typeenv_t {
+typedef struct JL_GC_TRACKED_TYPE jl_typeenv_t {
     jl_tvar_t *var;
     jl_value_t *val;
     struct jl_typeenv_t *prev;
@@ -979,19 +987,18 @@ enum atomic_kind {
 };
 
 JL_DLLEXPORT int jl_has_intersect_type_not_kind(jl_value_t *t);
-int jl_has_intersect_kind_not_type(jl_value_t *t);
-int jl_subtype_invariant(jl_value_t *a, jl_value_t *b, int ta);
+int jl_is_typeofbottom_param(jl_value_t *t) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_has_concrete_subtype(jl_value_t *typ);
 jl_tupletype_t *jl_inst_arg_tuple_type(jl_value_t *arg1, jl_value_t **args, size_t nargs, int leaf) JL_CANSAFEPOINT;
 jl_tupletype_t *jl_lookup_arg_tuple_type(jl_value_t *arg1 JL_PROPAGATES_ROOT, jl_value_t **args, size_t nargs, int leaf) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype) JL_CANSAFEPOINT;
 void jl_method_table_activate(jl_typemap_entry_t *newentry) JL_CANSAFEPOINT;
+void jl_method_table_invalidate_deferred(jl_array_t *deferred, size_t max_world) JL_CANSAFEPOINT;
 jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype) JL_CANSAFEPOINT;
 jl_method_t *jl_mk_builtin_func(jl_datatype_t *dt, jl_sym_t *name, jl_fptr_args_t fptr) JL_CANSAFEPOINT JL_GC_DISABLED;
 int jl_obviously_unequal(jl_value_t *a, jl_value_t *b);
 int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_rewrap_free_typevars(jl_value_t *t, jl_array_t *pre);
 int jl_has_fixed_layout(jl_datatype_t *t) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_struct_try_layout(jl_datatype_t *dt) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_type_mappable_to_c(jl_value_t *ty) JL_CANSAFEPOINT;
@@ -1046,14 +1053,15 @@ void jl_cache_type_if_absent(jl_datatype_t *type) JL_CANSAFEPOINT;
 jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz) JL_CANSAFEPOINT;
 void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic) JL_NOTSAFEPOINT;
 jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
-jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *op, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
+jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_value_t *op_target) JL_CANSAFEPOINT;
+jl_value_t *jl_apply_modifyop(jl_value_t *op, jl_value_t **args, jl_value_t *op_target) JL_CANSAFEPOINT;
 jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *expected, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
 int set_nth_fieldonce(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
 jl_value_t *swap_bits(jl_value_t *ty, char *v, uint8_t *psel, jl_value_t *parent, jl_value_t *rhs, enum atomic_kind isatomic) JL_CANSAFEPOINT;
-jl_value_t *replace_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *expected, jl_value_t *rhs, int isatomic, jl_module_t *mod, jl_sym_t *name) JL_CANSAFEPOINT;
+jl_value_t *replace_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *expected, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
 jl_value_t *replace_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *parent, jl_value_t *expected, jl_value_t *rhs, enum atomic_kind isatomic) JL_CANSAFEPOINT;
-jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_binding_t *b, jl_module_t *mod, jl_sym_t *name) JL_CANSAFEPOINT;
-jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, enum atomic_kind isatomic) JL_CANSAFEPOINT;
+jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_value_t *op_target) JL_CANSAFEPOINT;
+jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, enum atomic_kind isatomic, jl_value_t *op_target) JL_CANSAFEPOINT;
 int setonce_bits(jl_datatype_t *rty, char *p, jl_value_t *owner, jl_value_t *rhs, enum atomic_kind isatomic);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n) JL_CANSAFEPOINT;
 jl_value_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module, size_t new_world) JL_CANSAFEPOINT;
@@ -1065,8 +1073,7 @@ jl_array_t *jl_get_loaded_modules(void) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree) JL_CANSAFEPOINT;
 int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT;
 
-jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs, const char *msg) JL_CANSAFEPOINT;
-void jl_binding_set_type(jl_binding_t *b, jl_module_t *mod, jl_sym_t *sym, jl_value_t *ty);
+jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_binding_partition_t *bpart, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs, const char *msg) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(1) JL_MAYBE_UNROOTED, enum jl_partition_kind, size_t new_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, const char *fname) JL_CANSAFEPOINT;
@@ -1108,14 +1115,17 @@ jl_value_t *jl_eval_global_var(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *e, s
 JL_DLLEXPORT jl_value_t *jl_eval_globalref(jl_globalref_t *g, size_t world) JL_CANSAFEPOINT;
 jl_value_t *jl_get_globalref_value(jl_globalref_t *gr, size_t world) JL_CANSAFEPOINT;
 jl_value_t *jl_get_global_value(jl_module_t *m, jl_sym_t *var, size_t world) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_get_binding_partition_value(jl_binding_partition_t *bpart JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_get_binding_partition_boundp(jl_binding_partition_t *bpart) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_get_binding_partition_leaf_value(jl_binding_partition_t *bpart JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_leaf_partition_depwarn(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_binding_partition_t *jl_get_leaf_binding_partition(jl_binding_partition_t *bpart JL_PROPAGATES_ROOT, size_t world, int depwarn) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT;
 jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src) JL_CANSAFEPOINT;
 jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_code_info_t *src,
                                           jl_svec_t *sparam_vals) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT;
-jl_value_t *jl_call_scm_on_ast_and_loc(const char *funcname, jl_value_t *expr,
-                                       jl_module_t *inmodule, const char *file, int line) JL_CANSAFEPOINT;
 int jl_isa_ast_node(jl_value_t *e) JL_NOTSAFEPOINT;
 
 jl_method_instance_t *jl_builtin_method_lookup(jl_value_t *builtin) JL_CANSAFEPOINT;
@@ -1128,7 +1138,8 @@ JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup_worlds(jl_value_t *types, jl_value_
 JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
                                              size_t world, size_t *min_valid, size_t *max_valid, int *ambig) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup_worlds(jl_value_t *types, jl_value_t *mt, size_t world, size_t *min_world, size_t *max_world);
-
+jl_value_t *jl_invoke_target(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_value_t *target) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_invoke_modify(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_value_t *op_target) JL_CANSAFEPOINT;
 
 jl_datatype_t *jl_nth_argument_datatype(jl_value_t *argtypes JL_PROPAGATES_ROOT, int n) JL_NOTSAFEPOINT;
 jl_typename_t *jl_nth_argument_datatypename(jl_value_t *argtypes JL_PROPAGATES_ROOT, int n) JL_NOTSAFEPOINT;
@@ -1137,8 +1148,6 @@ JL_DLLEXPORT jl_value_t *jl_argument_datatypename(jl_value_t *argt JL_PROPAGATES
 JL_DLLEXPORT jl_methtable_t *jl_method_table_for(
     jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_methcache_t *jl_method_cache_for(
-    jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-jl_methtable_t *jl_kwmethod_table_for(
     jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 jl_methcache_t *jl_kwmethod_cache_for(
     jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
@@ -1155,6 +1164,7 @@ void jl_check_field_types(jl_svec_t *ftypes, jl_sym_t *type_name);
 void jl_module_run_initializer(jl_module_t *m) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_binding_deprecation_warning(jl_binding_t *b) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_binding_depwarn(jl_binding_t *b) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b JL_PROPAGATES_ROOT,
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, enum jl_partition_kind kind, size_t new_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b JL_PROPAGATES_ROOT,
@@ -1185,8 +1195,23 @@ STATIC_INLINE int jl_bkind_is_some_explicit_import(enum jl_partition_kind kind) 
     return kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED;
 }
 
+// Whether the partition's restriction is another `jl_binding_t` that an access must still
+// walk to. Its negation is a leaf partition: one whose restriction is the binding's own value or declared type,
+// so an access needs no further resolution.
+// Equivalently, this is `jl_bkind_is_some_import(kind) && !jl_bkind_is_some_constant(kind)`.
+STATIC_INLINE int jl_bkind_is_some_binding_import(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
+    return kind == PARTITION_KIND_IMPLICIT_GLOBAL || jl_bkind_is_some_explicit_import(kind);
+}
+
 STATIC_INLINE int jl_bkind_is_some_guard(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
     return kind == PARTITION_KIND_FAILED || kind == PARTITION_KIND_GUARD;
+}
+
+// Whether the partition is a global variable: one accessed through the binding's own value
+// slot (typed for PARTITION_KIND_GLOBAL, `Any` for a weakly-declared one). Every other kind
+// has its value stored on the partition itself (a constant, a guard) or by another binding (an import).
+STATIC_INLINE int jl_bkind_is_some_global(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
+    return kind == PARTITION_KIND_GLOBAL || kind == PARTITION_KIND_DECLARED;
 }
 
 STATIC_INLINE int jl_bkind_is_some_implicit(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
@@ -1213,16 +1238,11 @@ size_t jl_carried_binding_flags(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition_with_hint(jl_binding_t *b JL_PROPAGATES_ROOT, jl_binding_partition_t *previous_part, size_t world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
-JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition_all(jl_binding_t *b JL_PROPAGATES_ROOT, size_t min_world, size_t max_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT jl_binding_t *jl_binding_partition_owner(jl_binding_partition_t *bpart JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 
-struct restriction_kind_pair {
-    jl_binding_t *binding_if_global;
-    jl_value_t *restriction;
-    enum jl_partition_kind kind;
-    int maybe_depwarn;
-};
-JL_DLLEXPORT int jl_get_binding_leaf_partitions_restriction_kind(jl_binding_t *b JL_PROPAGATES_ROOT, struct restriction_kind_pair *rkp, size_t min_world, size_t max_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
-JL_DLLEXPORT jl_value_t *jl_get_binding_leaf_partitions_value_if_const(jl_binding_t *b JL_PROPAGATES_ROOT, int *maybe_depwarn, size_t min_world, size_t max_world) JL_CANSAFEPOINT;
+// The value of a primordial constant binding, or NULL if `b` is not one.
+JL_DLLEXPORT jl_value_t *jl_binding_primordial_const(jl_binding_t *b JL_PROPAGATES_ROOT) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
+
 void check_safe_newbinding(jl_module_t *m, jl_sym_t *var) JL_CANSAFEPOINT;
 
 STATIC_INLINE int is10digit(char c) JL_NOTSAFEPOINT
@@ -1339,7 +1359,7 @@ void jl_init_intrinsic_properties(void) JL_GC_DISABLED JL_NOTSAFEPOINT;
 void jl_init_staticdata(void) JL_NOTSAFEPOINT;
 // TypeApp: immutable struct with head::Any, param::Any
 // Represents a single lazy type application step (like UnionAll for where bindings).
-typedef struct {
+typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_value_t *head;
     jl_value_t *param;
@@ -1349,7 +1369,8 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
 // Type predicate for TypeApp (inline: called per type node on hot type-query paths)
 STATIC_INLINE int jl_is_typeapp(jl_value_t *v) JL_NOTSAFEPOINT
 {
-    return jl_typeapp_type != NULL && jl_typeis(v, jl_typeapp_type);
+    // TypeApp has no small type tag, so its tag is the type pointer itself
+    return jl_typetagis(v, jl_typeapp_type) && jl_typeapp_type != NULL;
 }
 void jl_init_tasks(void) JL_GC_DISABLED JL_NOTSAFEPOINT;
 void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo) JL_NOTSAFEPOINT;
@@ -1359,9 +1380,6 @@ void jl_init_uv(void) JL_NOTSAFEPOINT;
 void jl_init_box_caches(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_init_options(void) JL_NOTSAFEPOINT;
 
-void jl_set_base_ctx(char *__stk);
-
-extern JL_DLLEXPORT ssize_t jl_tls_offset;
 extern JL_DLLEXPORT const int jl_tls_elf_support;
 void jl_init_threading(void) JL_NOTSAFEPOINT;
 void jl_start_threads(void) JL_CANSAFEPOINT;
@@ -1407,6 +1425,8 @@ void jl_safepoint_take_sleep_lock(jl_ptls_t ptls) JL_NOTSAFEPOINT JL_NOTSAFEPOIN
 void jl_safepoint_exclude_gc_begin(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
 void jl_safepoint_exclude_gc_end(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
 void jl_wake_libuv(void) JL_NOTSAFEPOINT;
+void jl_init_signal_watchers(uv_async_cb cb);
+void jl_wake_signal_watchers(void) JL_NOTSAFEPOINT;
 void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT;
 int jl_abandon_try_commit(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void JL_NORETURN jl_abandon_task_cb(void) JL_CANSAFEPOINT;
@@ -1414,6 +1434,8 @@ void JL_NORETURN jl_abandon_task_cb(void) JL_CANSAFEPOINT;
 void jl_set_pgcstack(jl_gcframe_t **) JL_NOTSAFEPOINT;
 #if defined(_OS_WINDOWS_)
 typedef DWORD jl_pgcstack_key_t;
+#elif defined(_OS_DARWIN_)
+typedef pthread_key_t jl_pgcstack_key_t;
 #else
 typedef jl_gcframe_t ***(*jl_pgcstack_key_t)(void) JL_NOTSAFEPOINT;
 #endif
@@ -1428,6 +1450,16 @@ void jl_gc_safe_enter_from_nonmutator(jl_ptls_t ptls) JL_CANSAFEPOINT_LEAVE;
 
 // Query if this object is perm-allocated in an image.
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
+// The linkage blob (image) owning `v`, or -1 for an object of no image.
+JL_DLLEXPORT size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
+// The world in which `blob` activated its methods if it is `image`, the sysimage, or a dependency of `image`, else 0.
+JL_DLLEXPORT size_t jl_linkage_blob_dep_world(size_t image, size_t blob) JL_NOTSAFEPOINT;
+// The world since which every method on the typenames of `sig` in `mt` came from `image` or one of its dependencies, else 0.
+JL_DLLEXPORT size_t jl_sig_contributors_world(jl_value_t *sig, jl_methtable_t *mt, size_t image) JL_CANSAFEPOINT;
+void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array_t *record, size_t image, jl_array_t *deferred) JL_CANSAFEPOINT;
+// The ext_backinterferences of a method: It is the back direction of `interferences`, computed for external methods during incremental precompile.
+JL_DLLEXPORT jl_value_t *jl_get_ext_backinterferences(jl_method_t *method) JL_NOTSAFEPOINT;
+extern JL_DLLEXPORT jl_genericmemory_t *jl_ext_backinterferences JL_GLOBALLY_ROOTED;
 // GC configuration baked into generated code; must match between an image and the runtime that loads it.
 JL_DLLEXPORT const char *jl_gc_image_abi(void) JL_NOTSAFEPOINT;
 
@@ -1476,9 +1508,6 @@ JL_DLLEXPORT uint32_t jl_module_next_counter(jl_module_t *m) JL_NOTSAFEPOINT;
 jl_tupletype_t *arg_type_tuple(jl_value_t *arg1, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT;
-
-JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
-                                  size_t lineno, size_t offset, jl_value_t *options, jl_module_t *inmodule) JL_CANSAFEPOINT;
 
 //--------------------------------------------------
 // Backtraces
@@ -1612,9 +1641,9 @@ typedef struct {
     CONTEXT context;
 } bt_cursor_t;
 #endif
-extern uv_mutex_t jl_dll_notify_lock;
+extern JL_DLLEXPORT uv_mutex_t jl_dll_notify_lock;
 extern JL_DLLEXPORT uv_mutex_t jl_in_stackwalk;
-void jl_profile_process_dll_events(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_profile_process_dll_events(void) JL_NOTSAFEPOINT;
 #elif !defined(JL_DISABLE_LIBUNWIND)
 // This gives unwind only local unwinding options ==> faster code
 #  define UNW_LOCAL_ONLY
@@ -1674,7 +1703,7 @@ JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_data,
 
 // Exception stack: a stack of pairs of (exception,raw_backtrace).
 // The stack may be traversed and accessed with the functions below.
-struct _jl_excstack_t { // typedef in julia.h
+struct JL_GC_TRACKED_TYPE _jl_excstack_t { // typedef in julia.h
     size_t top;
     size_t reserved_size;
     // Pack all stack entries into a growable buffer to amortize allocation
@@ -1760,15 +1789,15 @@ JL_DLLEXPORT extern void *jl_RTLD_DEFAULT_handle;
 
 #if defined(_OS_WINDOWS_)
 JL_DLLEXPORT extern const char *jl_crtdll_basename;
-extern void *jl_ntdll_handle;
-extern void *jl_kernel32_handle;
-extern void *jl_crtdll_handle;
-extern void *jl_winsock_handle;
+JL_DLLEXPORT extern void *jl_ntdll_handle;
+JL_DLLEXPORT extern void *jl_kernel32_handle;
+JL_DLLEXPORT extern void *jl_crtdll_handle;
+JL_DLLEXPORT extern void *jl_winsock_handle;
 void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT;
 #endif
 
 JL_DLLEXPORT void *jl_get_library_(const char *f_lib, int throw_err) JL_CANSAFEPOINT;
-void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err, int close) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err, int close) JL_NOTSAFEPOINT;
 #define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd) JL_CANSAFEPOINT;
 JL_DLLEXPORT void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name) JL_CANSAFEPOINT;
@@ -1802,6 +1831,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerref(jl_value_t *p, jl_value_t *order) 
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *order);
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_value_t *order) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify_invoke(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order, jl_value_t *op_target) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *x, jl_value_t *expected, jl_value_t *success_order, jl_value_t *failure_order) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty) JL_CANSAFEPOINT; // deprecated
 JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v) JL_CANSAFEPOINT; // deprecated
@@ -1886,10 +1916,22 @@ JL_DLLEXPORT jl_value_t *jl_copysign_float(jl_value_t *a, jl_value_t *b) JL_CANS
 JL_DLLEXPORT jl_value_t *jl_flipsign_int(jl_value_t *a, jl_value_t *b) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *a);
+JL_DLLEXPORT jl_value_t *jl_cpu_supports(jl_value_t *feat);
 JL_DLLEXPORT int jl_stored_inline(jl_value_t *el_type) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy(jl_genericmemory_t *mem) JL_CANSAFEPOINT;
+jl_genericmemory_t *jl_genericmemory_copy(jl_genericmemory_t *mem) JL_CANSAFEPOINT;
+jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t *mem, void *data, size_t len) JL_CANSAFEPOINT;
+jl_genericmemoryref_t *jl_new_memoryref(jl_value_t *typ, jl_genericmemory_t *mem, void *data) JL_CANSAFEPOINT;
+jl_value_t *jl_memoryrefget(jl_genericmemoryref_t m JL_PROPAGATES_ROOT, int isatomic) JL_CANSAFEPOINT;
+jl_value_t *jl_memoryref_isassigned(jl_genericmemoryref_t m, int isatomic) JL_GLOBALLY_ROOTED;
+jl_genericmemoryref_t jl_memoryrefindex(jl_genericmemoryref_t m JL_PROPAGATES_ROOT, size_t idx) JL_NOTSAFEPOINT;
+void jl_memoryrefset(jl_genericmemoryref_t m, jl_value_t *v JL_ROOTED_BY_ARG(0) JL_MAYBE_UNROOTED, int isatomic) JL_CANSAFEPOINT;
+void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic);
+jl_value_t *jl_memoryrefswap(jl_genericmemoryref_t m, jl_value_t *v, int isatomic) JL_CANSAFEPOINT;
+jl_value_t *jl_memoryrefmodify(jl_genericmemoryref_t m, jl_value_t *op, jl_value_t *v, int isatomic, jl_value_t *op_target) JL_CANSAFEPOINT;
+jl_value_t *jl_memoryrefreplace(jl_genericmemoryref_t m, jl_value_t *expected, jl_value_t *v, int isatomic) JL_CANSAFEPOINT;
+jl_value_t *jl_memoryrefsetonce(jl_genericmemoryref_t m, jl_value_t *v, int isatomic) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT uintptr_t jl_object_id_(uintptr_t tv, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT;
@@ -1919,7 +1961,8 @@ void smallintset_empty(const jl_genericmemory_t *a) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_genericmemory_t *jl_idset_rehash(jl_genericmemory_t *keys, jl_genericmemory_t *idxs, size_t newsz) JL_CANSAFEPOINT;
 JL_DLLEXPORT ssize_t jl_idset_peek_bp(jl_genericmemory_t *keys, jl_genericmemory_t *idxs, jl_value_t *key) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_idset_get(jl_genericmemory_t *keys JL_PROPAGATES_ROOT, jl_genericmemory_t *idxs, jl_value_t *key) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_genericmemory_t *jl_idset_put_key(jl_genericmemory_t *keys, jl_value_t *key, ssize_t *newidx) JL_CANSAFEPOINT;
+size_t jl_idset_max(jl_genericmemory_t *keys) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_genericmemory_t *jl_idset_put_key(jl_genericmemory_t *keys, jl_value_t *key, size_t *max, ssize_t *newidx) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_genericmemory_t *jl_idset_put_idx(jl_genericmemory_t *keys, jl_genericmemory_t *idxs, ssize_t idx) JL_CANSAFEPOINT;
 JL_DLLEXPORT ssize_t jl_idset_pop(jl_genericmemory_t *keys, jl_genericmemory_t *idxs, jl_value_t *key) JL_NOTSAFEPOINT;
 
@@ -1964,14 +2007,14 @@ STATIC_INLINE jl_typemap_entry_t *jl_typemap_assoc_exact(
 typedef int (*jl_typemap_visitor_fptr)(jl_typemap_entry_t *l, void *closure) JL_CANSAFEPOINT;
 int jl_typemap_visitor(jl_typemap_t *a, jl_typemap_visitor_fptr fptr, void *closure) JL_CANSAFEPOINT;
 
-struct typemap_intersection_env;
+struct JL_GC_TRACKED_TYPE typemap_intersection_env;
 typedef int (*jl_typemap_intersection_visitor_fptr)(jl_typemap_entry_t *l, struct typemap_intersection_env *closure) JL_CANSAFEPOINT;
-struct typemap_intersection_env {
+struct JL_GC_TRACKED_TYPE typemap_intersection_env {
     // input values
     jl_typemap_intersection_visitor_fptr const fptr; // fptr to call on a match
     jl_value_t *const type; // type to match
     jl_value_t *const va; // the tparam0 for the vararg in type, if applicable (or NULL)
-    size_t search_slurp;
+    size_t search_bottom;
     // output values
     size_t min_valid;
     size_t max_valid;
@@ -1981,9 +2024,11 @@ struct typemap_intersection_env {
     int emptiness_only; // if set, `ti` and `env` are not materialized (`ti` is only a
                         // nonempty/bottom placeholder); the callback may consume just
                         // the match verdict and `issubty`
+    int (*entry_filter)(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure) JL_NOTSAFEPOINT;
+                        // if set, entries for which this returns 0 are skipped before any intersection
 };
 int jl_typemap_intersection_visitor(jl_typemap_t *a, int offs, struct typemap_intersection_env *closure) JL_CANSAFEPOINT;
-void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure);
+void typemap_bottom_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure) JL_CANSAFEPOINT;
 
 // -- simplevector.c -- //
 
@@ -2145,7 +2190,6 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 // This prevents `ct` from returning via error handlers or other unintentional
 // means by destroying some old state before we start destroying that state in atexit hooks.
 void post_boot_hooks(void) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t *mem, void *data, size_t len) JL_CANSAFEPOINT;
 int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity) JL_NOTSAFEPOINT;
 JL_CALLABLE(jl_f_opaque_closure_call) JL_CANSAFEPOINT;
 uint_t bindingkey_hash(size_t idx, jl_value_t *data);
@@ -2167,12 +2211,41 @@ jl_value_t *simple_union(jl_value_t *a, jl_value_t *b) JL_CANSAFEPOINT;
 jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi) JL_CANSAFEPOINT;
 int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion) JL_CANSAFEPOINT;
 void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_path_is_tracked_by(const char *path, const char *tracked) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_coverage_enabled_for(jl_module_t *m, const char *filename) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_coverage_visit_line(const char *filename, size_t len, int line) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int line) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
+JL_DLLEXPORT _Atomic(uint64_t) *jl_coverage_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_coverage_register_counter(_Atomic(uint64_t) *slot, _Atomic(uint64_t) *counter) JL_NOTSAFEPOINT;
+
+// Coverage instrumentation of an image (jl_image_coverage_config): none, or
+// the mode of the counters compiled into every statement of the image.
+#define JL_IMAGE_COVERAGE_NONE  0
+#define JL_IMAGE_COVERAGE_HIT   1
+#define JL_IMAGE_COVERAGE_COUNT 2
+// Coverage counters compiled into an image (sysimage or pkgimage), exposed by
+// the image as the `jl_image_coverage` symbol.
+typedef struct {
+    const char *file;
+    _Atomic(uint64_t) *counter;
+    int32_t line;
+    uint32_t flags; // JL_IMAGE_COVERAGE_ENTRY_*
+} jl_image_coverage_entry_t;
+#define JL_IMAGE_COVERAGE_ENTRY_USER 1 // the location is user code
+typedef struct {
+    uint32_t config; // JL_IMAGE_COVERAGE_HIT or JL_IMAGE_COVERAGE_COUNT
+    uint64_t nentries;
+    const jl_image_coverage_entry_t *entries;
+} jl_image_coverage_t;
+int jl_register_image_coverage(const void *table, int is_sysimg) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_codeinst_coverage_compatible(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint8_t jl_image_coverage_config(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_match_cache_coverage(uint8_t requested, uint8_t actual) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint8_t jl_sysimage_coverage_config(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_coverage_plain_image_accepted(uint64_t hi, uint64_t lo);
+JL_DLLEXPORT void jl_coverage_accept_plain_image(uint64_t hi, uint64_t lo);
+JL_DLLEXPORT _Atomic(uint64_t) *jl_malloc_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
 JL_DLLEXPORT NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
 JL_DLLEXPORT NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
 JL_DLLEXPORT NOINLINE int failed_to_unwind_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
@@ -2267,6 +2340,7 @@ JL_DLLIMPORT void *jl_emit_native(jl_array_t *codeinfos, jl_array_t *ci_order, L
 JL_DLLIMPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         ios_t *z, uint32_t checksum, const char *unpack_func, jl_emission_params_t *params);
+JL_DLLIMPORT void jl_free_native(void *native_code);
 JL_DLLIMPORT void jl_get_llvm_gvs(void *native_code, size_t *num_els, void **gvs);
 JL_DLLIMPORT void jl_get_llvm_gv_inits(void *native_code, size_t *num_els, void **inits);
 JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, size_t *num_els,
@@ -2292,7 +2366,9 @@ JL_DLLIMPORT void jl_jit_unregister_ci(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
 }
 #endif
 
+#ifndef _OS_WINDOWS_
 #pragma GCC visibility pop
+#endif
 
 
 #ifdef USE_DTRACE

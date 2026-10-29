@@ -160,55 +160,26 @@ Creating a point/patch release consists of several distinct steps.
 
 ## Backporting commits
 
-Some pull requests are labeled "backport pending x.y", e.g. "backport pending 0.6".
-This designates that the next subsequent release tagged from the release-x.y branch
+Some pull requests are labeled `backport x.y`, e.g. `backport 1.13`.
+This designates that the next release tagged from the release-x.y branch
 should include the commit(s) in that pull request.
-Once the pull request is merged into master, each of the commits should be [cherry
-picked](https://git-scm.com/docs/git-cherry-pick) to a dedicated branch that will
-ultimately be merged into release-x.y.
+Once the pull request is merged into master, its commits are cherry-picked onto the
+`backports-release-x.y` branch, which will ultimately be merged into release-x.y.
 
-### Creating a backports branch
-
-First, create a new branch based on release-x.y.
-The typical convention for Julia branches is to prefix the branch name with your
-initials if it's intended to be a personal branch.
-For the sake of example, we'll say that the author of the branch is Jane Smith.
+Most of this is done by [Backporter](https://github.com/KristofferC/Backporter), which
+also maintains a checklist of backported and still-pending pull requests in the pull
+request associated with `backports-release-x.y`.
+Commits that do not apply cleanly are backported by hand with
 
 ```
-git fetch origin
-git checkout release-x.y
-git rebase origin/release-x.y
-git checkout -b js/backport-x.y
+git cherry-pick -x <sha>
 ```
 
-This ensures that your local copy of release-x.y is up to date with origin before
-you create a new branch from it.
-
-### Cherry picking commits
-
-Now we do the actual backporting.
-Find all merged pull requests labeled "backport pending x.y" in the GitHub web UI.
-For each of these, scroll to the bottom where it says "someperson merged commit
-`123abc` into `master` XX minutes ago".
-Note that the commit name is a link; if you click it, you'll be shown the contents
-of the commit.
-If this page shows that `123abc` is a merge commit, go back to the PR page---we
-don't want merge commits, we want the actual commits.
-However, if this does not show a merge commit, it means that the PR was squash-merged.
-In that case, use the git SHA of the commit, listed next to commit on this page.
-
-Once you have the SHA of the commit, cherry-pick it onto the backporting branch:
-
-```
-git cherry-pick -x -e <sha>
-```
-
-There may be conflicts which need to be resolved manually.
-Once conflicts are resolved (if applicable), add a reference to the GitHub pull
-request that introduced the commit in the body of the commit message.
-
-After all of the relevant commits are on the backports branch, push the branch to
-GitHub.
+resolving conflicts as needed.
+The `-x` flag records the original commit in the message, which is how Backporter
+recognizes the commit as backported.
+See [Contributing to patch releases](@ref) for what to cherry-pick and how to contribute
+a manual backport.
 
 ## Checking for performance regressions
 
@@ -276,8 +247,10 @@ After you have ensured that
 * the backported commits do not break any registered packages,
 
 then the backport branch is ready to be merged into release-x.y.
-Once it's merged, go through and remove the "backport pending x.y" label from all pull
-requests containing the commits that have been backported.
+Once it's merged, remove the `backport x.y` label from all pull requests whose commits
+have been backported.
+Backporter's audit mode does this; it is available as the manually triggered
+`Backport Label Audit` GitHub Actions workflow.
 Do not remove the label from PRs that have not been backported.
 
 The release-x.y branch should now contain all of the new commits.

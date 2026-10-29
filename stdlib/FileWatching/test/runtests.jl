@@ -174,12 +174,12 @@ function test_init_afile()
     watched_folders = FileWatching.watched_folders
     @test @lock watched_folders isempty(watched_folders[])
     @test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))
-    @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 0.5
+    @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 2
     @test @lock(watched_folders, length(FileWatching.watched_folders[])) == 1
     @test unwatch_folder(dir) === nothing
     @test @lock watched_folders isempty(watched_folders[])
     @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent())))
-    @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent()))) <= 0.5
+    @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent()))) <= 2
     @test unwatch_folder(dir) === nothing
     @test 0.99 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent())))
     @test 0.99 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent())))

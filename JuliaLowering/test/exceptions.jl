@@ -349,6 +349,23 @@ end
 """) == (1,2)
 
 @testset "continue/break and finally" for maybe_catch in ("", "catch _", "catch _\nelse")
+    # break value should be evaluated before finally
+    @test JuliaLowering.include_string(test_mod, """
+    function f_break_value_finally()
+        x = 1
+        @label blk begin
+            try
+                break blk x
+            $maybe_catch
+            finally
+                x = 2
+            end
+        end
+    end
+    f_break_value_finally()
+    """) == 1
+    @test isempty(current_exceptions())
+
     # continue in try -> finally block -> loop-cont
     @test JuliaLowering.include_string(test_mod, """
     let out = []
@@ -461,46 +478,43 @@ end
     """) == [("try", 1)]
     @test isempty(current_exceptions())
 
-    # TODO: commented out to avoid polluting the exception stack; need to port
-    # https://github.com/JuliaLang/julia/pull/55876
+    # error in try -> continue in finally -> loop-cont
+    @test JuliaLowering.include_string(test_mod, """
+    let out = []
+        for x in [1,2,3]
+            try
+                push!(out, ("try", x))
+                error()
+            $maybe_catch
+            finally
+                continue
+                push!(out, ("finally", x))
+            end
+            push!(out, ("bad", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("try", 2), ("try", 3)]
+    @test isempty(current_exceptions())
 
-    # # error in try -> continue in finally -> loop-cont
-    # @test JuliaLowering.include_string(test_mod, """
-    # let out = []
-    #     for x in [1,2,3]
-    #         try
-    #             push!(out, ("try", x))
-    #             error()
-    #         $maybe_catch
-    #         finally
-    #             continue
-    #             push!(out, ("finally", x))
-    #         end
-    #         push!(out, ("bad", x))
-    #     end
-    #     out
-    # end
-    # """) == [("try", 1), ("try", 2), ("try", 3)]
-    # @test isempty(current_exceptions())
-    #
-    # # error in try -> break in finally -> loop-exit
-    # @test JuliaLowering.include_string(test_mod, """
-    # let out = []
-    #     for x in [1,2,3]
-    #         try
-    #             push!(out, ("try", x))
-    #             error()
-    #         $maybe_catch
-    #         finally
-    #             break
-    #             push!(out, ("finally", x))
-    #         end
-    #         push!(out, ("bad", x))
-    #     end
-    #     out
-    # end
-    # """) == [("try", 1)]
-    # @test isempty(current_exceptions())
+    # error in try -> break in finally -> loop-exit
+    @test JuliaLowering.include_string(test_mod, """
+    let out = []
+        for x in [1,2,3]
+            try
+                push!(out, ("try", x))
+                error()
+            $maybe_catch
+            finally
+                break
+                push!(out, ("finally", x))
+            end
+            push!(out, ("bad", x))
+        end
+        out
+    end
+    """) == [("try", 1)]
+    @test isempty(current_exceptions())
 
     # (nested) continue in try -> finally block -> loop-cont
     @test JuliaLowering.include_string(test_mod, """
@@ -552,61 +566,106 @@ end
     end
     """) == [("try", 1), ("finally", 1), ("try2", 1), ("finally2", 1)]
     @test isempty(current_exceptions())
+
+    @test jl_eval(test_mod, """let r = nothing
+        try
+            1
+        finally
+            r = (((x::T) where T) -> 1)
+        end
+        r(2)
+    end""") == 1
 end
 
-@testset "goto from try/catch/else with finally" begin
-    # Test that @goto from try block with finally is prevented
-    @test_throws JuliaLowering.LoweringError r"goto from a try/finally block is not permitted" JuliaLowering.include_string(test_mod, """
-    function f()
-        try
-            @goto skip
-        finally
-            println("cleanup")
+    @testset "valid uses of @goto" for run in (JuliaLowering.include_string,
+                                               fl_eval)
+        # no finally block
+        @test run(test_mod, """let v = []
+            try
+                @goto lab
+                push!(v, 1)
+            catch e
+            else
+            end
+            @label lab
+            v
         end
-        @label skip
-    end
-    """) broken=true
+        """) == []
+        @test run(test_mod, """let v = []
+            try
+                error()
+            catch e
+                @goto lab
+                push!(v, 1)
+            else
+            end
+            @label lab
+            v, length(current_exceptions())
+        end
+        """) == ([], 0)
+        @test run(test_mod, """let v = []
+            try
+            catch e
+            else
+                @goto lab
+                push!(v, 1)
+            end
+            @label lab
+            v
+        end
+        """) == []
 
-    # Test that @goto from catch block with finally is prevented
-    @test_throws JuliaLowering.LoweringError r"goto from a catch/finally block is not permitted" JuliaLowering.include_string(test_mod, """
-    function f()
-        try
-            error()
-        catch
-            @goto skip
-        finally
-            println("cleanup")
+        # with finally, but clearly not skipping it
+        @test run(test_mod, """let v = []
+            try
+                @goto lab
+                push!(v, 1)
+                @label lab
+            catch e
+            else
+            finally
+            end
+            v
         end
-        @label skip
-    end
-    """) broken=true
-
-    # Test that @goto from else block with finally is prevented
-    @test_throws JuliaLowering.LoweringError r"goto from an else/finally block is not permitted" JuliaLowering.include_string(test_mod, """
-    function f()
-        try
-        catch
-        else
-            @goto skip
-        finally
-            println("cleanup")
+        """) == []
+        @test run(test_mod, """let v = []
+            try
+                error()
+            catch e
+                @goto lab
+                push!(v, 1)
+                @label lab
+            else
+            finally
+            end
+            v
         end
-        @label skip
-    end
-    """) broken=true
-
-    # Test that @goto within try/catch/else is allowed when there's no finally
-    @test JuliaLowering.include_string(test_mod, """
-    function f()
-        try
-            @goto skip
-        catch
+        """) == []
+        @test run(test_mod, """let v = []
+            try
+            catch e
+            else
+                @goto lab
+                push!(v, 1)
+                @label lab
+            finally
+            end
+            v
         end
-        @label skip
-        return 42
+        """) == []
+        # broken in flisp, will be broken in JL: finally blocks are cloned
+        # @test run(test_mod, """let v = []
+        #     try
+        #     catch e
+        #     else
+        #     finally
+        #         @goto lab
+        #         push!(v, 1)
+        #         @label lab
+        #     end
+        #     v
+        # end
+        # """) == []
     end
-    f()
-    """) == 42
-end
 
 end

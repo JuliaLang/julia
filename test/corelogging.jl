@@ -89,6 +89,8 @@ end
     @test kwargs[:b] === 2.0
 end
 
+__repl_entry_logtest(f) = f()
+
 @testset "Log message exception handling" begin
     # Exceptions in message creation are caught by default
     @test_logs (Error, Test.Ignored(), Test.Ignored(), :logevent_error) catch_exceptions=true @info "foo $(1÷0)"
@@ -112,6 +114,13 @@ end
         y = "the y"
         @test_logs (Info,"the msg") logmsg()
         @test only(collect_test_logs(logmsg)[1]).kwargs[:x] === "the y"
+    end
+    # backtraces of logging failures drop driver and logging machinery frames
+    for logmsg in (function() local msg; @info msg end, function() @info "foo $(1÷0)" end)
+        record = only(collect_test_logs(() -> __repl_entry_logtest(logmsg), catch_exceptions=true)[1])
+        bt = record.kwargs[:exception][2]::Vector{Base.StackTraces.StackFrame}
+        @test !isempty(bt)
+        @test !any(fr -> fr.func in (:logging_error, :backtrace, :__repl_entry_logtest, :collect_test_logs), bt)
     end
 end
 @testset "Log message handle_message exception handling" begin

@@ -53,12 +53,8 @@ export
 
 public TerminalMenus
 
-import Base:
-    AbstractDisplay,
-    display,
-    show,
-    AnyDict,
-    ==
+import Base: AbstractDisplay, display, show, AnyDict, ==,
+    Syntax, syntax_to_expr, expr_to_syntax, syntax_name, head, children, @mknode
 
 _displaysize(io::IO) = displaysize(io)::Tuple{Int,Int}
 
@@ -69,6 +65,60 @@ abstract type AbstractREPL end
 include("options.jl")
 include("StylingPasses.jl")
 using .StylingPasses
+
+# OSC 133/633 lifecycle markers:
+# A: prompt starts; B: prompt ends and command input starts;
+# C: command execution/output starts; D: command finishes, optionally with an exit status
+# (0 for success, 1 for an error; no status for input cancelled or left empty).
+# VS Code's OSC 633 also supports E to report the explicit command line.
+struct SemanticPromptMarkers
+    prompt_start::String
+    prompt_end::String
+    command_start::String
+    command_finish::String
+    command_finish_ok::String
+    command_finish_error::String
+    command_line::Union{Nothing,String}
+end
+
+# FinalTerm semantic prompt protocol:
+# https://iterm2.com/documentation-escape-codes.html
+const OSC_133_MARKERS = SemanticPromptMarkers(
+    "\e]133;A\a", "\e]133;B\a", "\e]133;C\a", "\e]133;D\a",
+    "\e]133;D;0\a", "\e]133;D;1\a", nothing,
+)
+# VS Code shell integration protocol:
+# https://code.visualstudio.com/docs/terminal/shell-integration#_supported-escape-sequences
+const OSC_633_MARKERS = SemanticPromptMarkers(
+    "\e]633;A\a", "\e]633;B\a", "\e]633;C\a", "\e]633;D\a",
+    "\e]633;D;0\a", "\e]633;D;1\a", "\e]633;E;",
+)
+
+semantic_prompt_markers(::AbstractREPL) = nothing
+default_semantic_prompt_markers() =
+    get(ENV, "TERM_PROGRAM", "") == "vscode" ? OSC_633_MARKERS : OSC_133_MARKERS
+
+function serialize_vscode_osc_message(message::AbstractString)
+    io = IOBuffer()
+    for byte in codeunits(message)
+        if byte == UInt8('\\')
+            write(io, "\\\\")
+        elseif byte == UInt8(';') || byte <= 0x20
+            write(io, "\\x", string(byte, base=16, pad=2))
+        else
+            write(io, byte)
+        end
+    end
+    return String(take!(io))
+end
+
+function write_semantic_command_line(
+    repl::AbstractREPL, markers::SemanticPromptMarkers, line::AbstractString,
+)
+    markers.command_line === nothing && return
+    write(terminal(repl), markers.command_line, serialize_vscode_osc_message(line), '\a')
+    return
+end
 
 function histsearch end # To work around circular dependency
 
@@ -106,8 +156,6 @@ histsearch(args...) = runsearch(args...)
 
 include("Pkg_beforeload.jl")
 
-@nospecialize # use only declared type signatures
-
 answer_color(::AbstractREPL) = ""
 
 const JULIA_PROMPT = "julia> "
@@ -122,13 +170,21 @@ mutable struct REPLBackend
     response_channel::Channel{Any}
     "flag indicating the state of this backend"
     in_eval::Bool
-    "transformation functions to apply before evaluating expressions"
+    "functions (Syntax->Syntax) to apply before evaluating expressions"
+    syntax_transforms::Vector{Any}
+    """
+    functions to apply before evaluating expressions.  Note that this degrades
+    provenance (functions are expected to accept and produce Expr with Any
+    leaves); use syntax_transforms instead.
+    """
     ast_transforms::Vector{Any}
     "current backend task"
     backend_task::Task
 
-    REPLBackend(repl_channel, response_channel, in_eval, ast_transforms=copy(repl_ast_transforms)) =
-        new(repl_channel, response_channel, in_eval, ast_transforms)
+    REPLBackend(repl_channel, response_channel, in_eval,
+                ast_transforms=copy(repl_ast_transforms),
+                syntax_transforms=copy(repl_syntax_transforms)) =
+        new(repl_channel, response_channel, in_eval, syntax_transforms, ast_transforms)
 end
 REPLBackend() = REPLBackend(Channel(1), Channel(1), false)
 
@@ -148,6 +204,20 @@ function destroy(ref::REPLBackendRef, state::Task)
     close(ref.response_channel)
 end
 
+function _softscope(s::Syntax)
+    h = head(s)
+    if h === :toplevel
+        @mknode(s; children=Syntax[_softscope(c) for c in children(s)])
+    elseif h in (:module, :error, :incomplete, :thunk)
+        s
+    else
+        @mknode(s; head=:block, children=Syntax[
+            @mknode(s; head=:softscope, children=Syntax[expr_to_syntax(true, s)]), s])
+    end
+end
+
+# the Syntax method should suffice, but ecosystem uses REPL.softscope, so keep
+# the old method around.
 """
     softscope(ex)
 
@@ -155,23 +225,8 @@ Return a modified version of the parsed expression `ex` that uses
 the REPL's "soft" scoping rules for global syntax blocks.
 """
 function softscope(@nospecialize ex)
-    if ex isa Expr
-        h = ex.head
-        if h === :toplevel
-            ex′ = Expr(h)
-            map!(softscope, resize!(ex′.args, length(ex.args)), ex.args)
-            return ex′
-        elseif h in (:meta, :import, :using, :export, :module, :error, :incomplete, :thunk)
-            return ex
-        elseif h === :global && all(x->isa(x, Symbol), ex.args)
-            return ex
-        else
-            return Expr(:block, Expr(:softscope, true), ex)
-        end
-    end
-    return ex
+    syntax_to_expr(_softscope(expr_to_syntax(ex)))
 end
-
 # Temporary alias until Documenter updates
 const softscope! = softscope
 
@@ -191,11 +246,8 @@ end
 
 retrieve_modules(::Module, ::Any) = (nothing,)
 function retrieve_modules(current_module::Module, mod_name::Symbol)
-    mod = try
-        getproperty(current_module, mod_name)
-    catch
-        return (nothing,)
-    end
+    mod = isdefinedglobal(current_module, mod_name) ?
+        getproperty(current_module, mod_name) : nothing
     return (mod isa Module ? mod : nothing,)
 end
 retrieve_modules(current_module::Module, mod_name::QuoteNode) = retrieve_modules(current_module, mod_name.value)
@@ -221,7 +273,7 @@ function add_locals!(locals, ast::Symbol)
     return nothing
 end
 
-function collect_names_to_warn!(warnings, locals, current_module::Module, ast)
+function collect_names_to_warn!(warnings, locals, current_module::Module, @nospecialize ast)
     ast isa Expr || return
 
     # don't recurse through module definitions
@@ -289,7 +341,7 @@ function collect_qualified_access_warnings(current_mod, ast)
 end
 
 function warn_on_non_owning_accesses(current_mod, ast)
-    warnings = collect_qualified_access_warnings(current_mod, ast)
+    warnings = collect_qualified_access_warnings(current_mod, syntax_to_expr(ast))
     for (; outer_mod, mod, owner, name_being_accessed) in warnings
         print_qualified_access_warning(mod, owner, name_being_accessed)
     end
@@ -297,7 +349,9 @@ function warn_on_non_owning_accesses(current_mod, ast)
 end
 warn_on_non_owning_accesses(ast) = warn_on_non_owning_accesses(Base.active_module(), ast)
 
-const repl_ast_transforms = Any[softscope, warn_on_non_owning_accesses] # defaults for new REPL backends
+# defaults for new REPL backends
+const repl_ast_transforms = Any[]
+const repl_syntax_transforms = Any[_softscope, warn_on_non_owning_accesses]
 
 # Allows an external package to add hooks into the code loading.
 # The hook should take a Vector{Symbol} of package names and
@@ -305,25 +359,21 @@ const repl_ast_transforms = Any[softscope, warn_on_non_owning_accesses] # defaul
 # to e.g. install packages on demand
 const install_packages_hooks = Any[]
 
-# N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
-# We need to do this for both the actual eval and macroexpand, since the latter can cause custom macro
-# code to run (and error).
-__repl_entry_lower_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Cint}) =
-    Core._lower(ast, mod, unsafe_string(toplevel_file[]), Int(toplevel_line[]))[1]
-__repl_entry_eval_expanded_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Cint}) =
-    ccall(:jl_toplevel_eval_flex, Any, (Any, Any, Cint, Cint, Ptr{Ptr{UInt8}}, Ptr{Cint}), mod, ast, 1, 1, toplevel_file, toplevel_line)
+# N.B.: Any functions starting with __repl_entry cut off backtraces when
+# printing in the REPL.
+__repl_entry_eval(mod, s) = invokelatest(Core.eval, mod, s)
 
-function toplevel_eval_with_hooks(mod::Module, @nospecialize(ast), toplevel_file=Ref{Ptr{UInt8}}(Base.unsafe_convert(Ptr{UInt8}, :REPL)), toplevel_line=Ref{Cint}(1))
-    if !isexpr(ast, :toplevel)
-        ast = invokelatest(__repl_entry_lower_with_loc, mod, ast, toplevel_file, toplevel_line)
-        check_for_missing_packages_and_run_hooks(ast)
-        return invokelatest(__repl_entry_eval_expanded_with_loc, mod, ast, toplevel_file, toplevel_line)
+function toplevel_eval_with_hooks(mod::Module, s::Syntax)
+    if !(head(s) === :toplevel)
+        check_for_missing_packages_and_run_hooks(mod, s)
+        __repl_entry_eval(mod, s)
+    else
+        value = nothing
+        for c in children(s)
+            value = toplevel_eval_with_hooks(mod, c)
+        end
+        value
     end
-    local value=nothing
-    for i = 1:length(ast.args)
-        value = toplevel_eval_with_hooks(mod, ast.args[i], toplevel_file, toplevel_line)
-    end
-    return value
 end
 
 function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
@@ -338,8 +388,19 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 put!(backend.response_channel, Pair{Any, Bool}(lasterr, true); cancel=nothing)
             else
                 backend.in_eval = true
-                for xf in backend.ast_transforms
-                    ast = Base.invokelatest(xf, ast)
+                if !(ast isa Syntax)
+                    # should only be reachable by external packages
+                    ast = expr_to_syntax(ast)
+                end
+                if !isempty(backend.ast_transforms)
+                    expr = syntax_to_expr(ast)
+                    for xf in backend.ast_transforms
+                        expr = Base.invokelatest(xf, expr)
+                    end
+                    ast = expr_to_syntax(expr, Base.first_linenode(ast), ast.context)
+                end
+                for xf in backend.syntax_transforms
+                    ast = Base.invokelatest(xf, ast)::Syntax
                 end
                 value = toplevel_eval_with_hooks(mod, ast)
                 backend.in_eval = false
@@ -359,57 +420,52 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
     nothing
 end
 
-function check_for_missing_packages_and_run_hooks(ast)
-    isa(ast, Expr) || return
+function check_for_missing_packages_and_run_hooks(mod::Module, ast::Syntax)
     mods = modules_to_be_loaded(ast)
-    filter!(mod -> isnothing(Base.identify_package(String(mod))), mods) # keep missing modules
-    if !isempty(mods)
+    isempty(mods) && return
+    missing_mods = filter(m -> isnothing(Base.identify_package(String(m))), mods)
+    if !isempty(missing_mods)
         isempty(install_packages_hooks) && load_pkg()
         for f in install_packages_hooks
-            Base.invokelatest(f, mods) && return
+            Base.invokelatest(f, missing_mods) && break
         end
     end
+    # precompile everything the statement is about to load in one parallel session,
+    # rather than one session per package as the individual `require` calls would
+    Base.invokelatest(Base.Precompilation.precompile_for_loading, mod, mods)
 end
 
-function _modules_to_be_loaded!(ast::Expr, mods::Vector{Symbol})
-    function add!(ctx)
-        if ctx.head == :as
-            ctx = ctx.args[1]
+function _modules_to_be_loaded!(s::Syntax, mods::Vector{Symbol})
+    function add!(ctx::Syntax)
+        if head(ctx) == :as
+            ctx = ctx[1]
         end
-        if ctx.args[1] != :. # don't include local import `import .Foo`
-            push!(mods, ctx.args[1])
-        end
-    end
-    ast.head === :quote && return mods # don't search if it's not going to be run during this eval
-    if ast.head == :call
-        if length(ast.args) == 5 && ast.args[1] === GlobalRef(Base, :_eval_import)
-            ctx = ast.args[4]
-            if ctx isa QuoteNode # i.e. `Foo: bar`
-                ctx = ctx.value
-            else
-                ctx = ast.args[5].value
-            end
-            add!(ctx)
-        elseif length(ast.args) == 3 && ast.args[1] == GlobalRef(Base, :_eval_using)
-            add!(ast.args[3].value)
+        # exclude "using .foo" (. . foo), include "using foo.x" (. foo x)
+        if length(children(ctx)) > 0 && head(ctx[1]) === :identifier &&
+                syntax_name(ctx[1]) != "."
+            push!(mods, syntax_to_expr(ctx[1])::Symbol)
         end
     end
-    if ast.head !== :thunk
-        for arg in ast.args
-            if isexpr(arg, (:block, :if))
-                _modules_to_be_loaded!(arg, mods)
+    h = head(s)
+    if h in (:module, :error, :incomplete, :thunk, :quote, :syntaxquote, :macrocall,
+             :function)
+        return mods
+    elseif h in (:import, :using)
+        for c in children(s)
+            length(children(c)) > 0 && if head(c) === :(:)
+                add!(c[1])
+            elseif length(children(c)) > 0
+                add!(c)
             end
         end
     else
-        code = ast.args[1]
-        for arg in code.code
-            isa(arg, Expr) || continue
-            _modules_to_be_loaded!(arg, mods)
+        for c in children(s)
+            _modules_to_be_loaded!(c, mods)
         end
     end
 end
 
-function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
+function modules_to_be_loaded(ast::Syntax, mods::Vector{Symbol} = Symbol[])
     _modules_to_be_loaded!(ast, mods)
     filter!(mod::Symbol -> !in(mod, (:Base, :Main, :Core)), mods) # Exclude special non-package modules
     return unique(mods)
@@ -561,7 +617,7 @@ struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
     repl::Repl
 end
 
-function show_limited(io::IO, mime::MIME, x)
+function show_limited(io::IO, mime::MIME, @nospecialize x)
     try
         # We wrap in a LimitIO to limit the amount of printing.
         # We unpack `IOContext`s, since we will pass the properties on the outside.
@@ -575,7 +631,7 @@ function show_limited(io::IO, mime::MIME, x)
     end
 end
 
-function display(d::REPLDisplay, mime::MIME"text/plain", x)
+function display(d::REPLDisplay, mime::MIME"text/plain", @nospecialize x)
     x = Ref{Any}(x)
     with_repl_linfo(d.repl) do io
         io = IOContext(io, :limit => true, :module => Base.active_module(d)::Module)
@@ -597,9 +653,9 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
     return nothing
 end
 
-display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
+display(d::REPLDisplay, @nospecialize x) = display(d, MIME("text/plain"), x)
 
-show_repl(io::IO, mime::MIME"text/plain", x) = show(io, mime, x)
+show_repl(io::IO, mime::MIME"text/plain", @nospecialize x) = show(io, mime, x)
 
 function show_repl(io::IO, mime::MIME"text/plain", c::AbstractChar)
     show(io, mime, c) # Call the original Base.show
@@ -615,7 +671,7 @@ show_repl(io::IO, ::MIME"text/plain", ex::Expr) =
     print(io, JuliaSyntaxHighlighting.highlight(
         sprint(show, ex, context=IOContext(io, :color => false))))
 
-function print_response(repl::AbstractREPL, response, show_value::Bool, have_color::Bool)
+function print_response(repl::AbstractREPL, @nospecialize(response), show_value::Bool, have_color::Bool)
     repl.waserror = response[2]
     with_repl_linfo(repl) do io
         io = IOContext(io, :module => Base.active_module(repl)::Module)
@@ -625,8 +681,8 @@ function print_response(repl::AbstractREPL, response, show_value::Bool, have_col
 end
 
 # N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
-__repl_entry_display(val) = Base.invokelatest(display, val)
-__repl_entry_display(specialdisplay::Union{AbstractDisplay,Nothing}, val) = Base.invokelatest(display, specialdisplay, val)
+__repl_entry_display(@nospecialize val) = Base.invokelatest(display, val)
+__repl_entry_display(specialdisplay::Union{AbstractDisplay,Nothing}, @nospecialize val) = Base.invokelatest(display, specialdisplay, val)
 
 function __repl_entry_display_error(errio::IO, @nospecialize errval)
     # this will be set to true if types in the stacktrace are truncated
@@ -640,7 +696,7 @@ function __repl_entry_display_error(errio::IO, @nospecialize errval)
     return nothing
 end
 
-function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothing}, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
+function print_response(errio::IO, @nospecialize(response), backend::Union{REPLBackendRef,Nothing}, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
     Base.sigatomic_begin()
     val, iserr = response
     if !iserr
@@ -648,15 +704,15 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
         try
             if val !== nothing && show_value
                 Base.sigatomic_end() # allow display to be interrupted
-                val_to_show = val
+                val_to_show = Ref{Any}(val)
                 val2, iserr = if specialdisplay === nothing
                     # display calls may require being run on the main thread
                     call_on_backend(backend) do
-                        __repl_entry_display(val_to_show)
+                        __repl_entry_display(val_to_show[])
                     end
                 else
                     call_on_backend(backend) do
-                        __repl_entry_display(specialdisplay, val_to_show)
+                        __repl_entry_display(specialdisplay, val_to_show[])
                     end
                 end
                 Base.sigatomic_begin()
@@ -795,7 +851,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
                     end
                 end
                 ast = parse_repl_input_line(line, repl)
-                (isa(ast,Expr) && ast.head === :incomplete) || break
+                (isa(ast, Syntax) && head(ast) === :incomplete) || break
             end
             if !isempty(line)
                 response = eval_on_backend(ast, backend)
@@ -833,6 +889,7 @@ mutable struct LineEditREPL <: AbstractREPL
     options::Options
     mistate::Union{MIState,Nothing}
     last_shown_line_infos::Vector{Tuple{String,Int}}
+    semantic_prompt_markers::SemanticPromptMarkers
     interface::ModalInterface
     backendref::REPLBackendRef
     frontend_task::Task
@@ -845,7 +902,7 @@ mutable struct LineEditREPL <: AbstractREPL
             opts.beep_colors = [""]
         end
         r = new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,pkg_color,history_file,in_shell,
-            in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[])
+            in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[], default_semantic_prompt_markers())
         r.prompt_ready_event = nothing
         r
     end
@@ -855,6 +912,8 @@ specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t
 hascolor(r::LineEditREPL) = r.hascolor
+semantic_prompt_markers(r::LineEditREPL) =
+    r.options.semantic_prompts ? r.semantic_prompt_markers : nothing
 
 LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
     LineEditREPL(t, hascolor,
@@ -1184,12 +1243,22 @@ function parse_repl_input_line(line::String, repl; kwargs...)
     # in that case, but let's just be consistent on the off chance that the active module tries
     # to `include(Main, ...)` or similar.
     @Base.ScopedValues.with Base.MainInclude.main_parser=>Base.parser_for_active_project() Base.parse_input_line(line;
-        mod=Base.active_module(repl), kwargs...)
+        mod=Base.active_module(repl), type=Syntax, kwargs...)
 end
 
 function return_callback(s)
-    ast = parse_repl_input_line(takestring!(copy(LineEdit.buffer(s))), s; depwarn=false)
-    return !(isa(ast, Expr) && ast.head === :incomplete)
+    function incomplete(line)
+        ast = parse_repl_input_line(line, s; depwarn=false)
+        return isa(ast, Syntax) && head(ast) === :incomplete
+    end
+    buf = LineEdit.buffer(s)
+    incomplete(takestring!(copy(buf))) && return false
+    # Behave as if automatically inserted closing brackets after the cursor weren't there,
+    # i.e. continue on a new line if the input is incomplete without them (e.g. `[|]`)
+    n = sizeof(LineEdit.auto_closed_after_cursor(s))
+    n == 0 && return true
+    pos = position(buf)
+    return !incomplete(LineEdit.content(buf, 0 => pos) * LineEdit.content(buf, pos + n => buf.size))
 end
 
 find_hist_file() = get(ENV, "JULIA_HISTORY",
@@ -1200,7 +1269,7 @@ backend(r::AbstractREPL) = hasproperty(r, :backendref) && isdefined(r, :backendr
 
 
 # Keep request and response channels paired across asynchronous interrupts.
-function exchange_on_backend(backend::REPLBackendRef, request)
+function exchange_on_backend(backend::REPLBackendRef, @nospecialize request)
     # A response can be stale if an interrupt lands after enqueueing but before
     # `sent` is recorded.
     while isready(backend.response_channel)
@@ -1243,12 +1312,20 @@ end
 
 function respond(f, repl, main; pass_empty::Bool = false, suppress_on_semicolon::Bool = true)
     return function do_respond(s::MIState, buf, ok::Bool)
+        current_mode = LineEdit.mode(s)
+        markers = current_mode isa Prompt ? LineEdit.semantic_prompt_markers(current_mode) : nothing
         if !ok
+            if markers !== nothing
+                write(terminal(repl), markers.command_finish)
+            end
             return transition(s, :abort)
         end
         line = String(take!(buf)::Vector{UInt8})
         if !isempty(line) || pass_empty
             reset(repl)
+            if markers !== nothing
+                write(terminal(repl), markers.command_start)
+            end
             local response
             try
                 ast = Base.invokelatest(f, line)
@@ -1257,7 +1334,22 @@ function respond(f, repl, main; pass_empty::Bool = false, suppress_on_semicolon:
                 response = Pair{Any, Bool}(current_exceptions(), true)
             end
             hide_output = suppress_on_semicolon && ends_with_semicolon(line)
-            print_response(repl, response, !hide_output, hascolor(repl))
+            try
+                print_response(repl, response, !hide_output, hascolor(repl))
+            finally
+                if markers !== nothing
+                    # VS Code documents E between B and C, but without its nonce an
+                    # untrusted command-line report gets replaced when execution starts.
+                    # Send E just before D instead, relying on VS Code's implementation:
+                    # setCommandLine updates the current command, which
+                    # handleCommandFinished then promotes to a completed command.
+                    write_semantic_command_line(repl, markers, line)
+                    marker = response[2] ? markers.command_finish_error : markers.command_finish_ok
+                    write(terminal(repl), marker)
+                end
+            end
+        elseif markers !== nothing
+            write(terminal(repl), markers.command_finish)
         end
         prepare_next(repl)
         reset_state(s)
@@ -1285,8 +1377,8 @@ function mode_keymap(julia_prompt::Prompt)
                 end
             end
         else
-            buf = LineEdit.buffer(s)
-            if LineEdit.try_remove_paired_delimiter(buf)
+            if LineEdit.options(LineEdit.state(s)).auto_insert_closing_bracket &&
+                    LineEdit.try_remove_paired_delimiter(s)
                 return LineEdit.refresh_line(s)
             end
             LineEdit.edit_backspace(s)
@@ -1383,8 +1475,9 @@ function setup_interface(
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to helpmode function
-        on_done = respond(line::String->helpmode(outstream(repl), line, Base.active_module(repl)),
-                          repl, julia_prompt, pass_empty=true, suppress_on_semicolon=false))
+        on_done = respond(line::String->expr_to_syntax(
+            helpmode(outstream(repl), line, Base.active_module(repl))),
+           repl, julia_prompt, pass_empty=true, suppress_on_semicolon=false))
 
 
     # Set up shell mode
@@ -1402,7 +1495,7 @@ function setup_interface(
             if Meta.isexpr(cmd_ex, :tuple)
                 cmd_ex = :(Base.cmd_gen($cmd_ex))
             end
-            Expr(:call, :(Base.repl_cmd), cmd_ex, outstream(repl))
+            expr_to_syntax(Expr(:call, :(Base.repl_cmd), cmd_ex, outstream(repl)))
         end,
         sticky = true)
 
@@ -1414,7 +1507,7 @@ function setup_interface(
         (repl.envcolors ? Base.input_color : repl.input_color) : "",
         repl = repl,
         complete = LineEdit.EmptyCompletionProvider(),
-        on_done = respond(line->nothing, repl, julia_prompt),
+        on_done = respond(line->expr_to_syntax(nothing), repl, julia_prompt),
         on_enter = function (s::MIState)
                 # This is hit when the user tries to execute a command before the real Pkg mode has been
                 # switched to. Ok to do this even if Pkg is loading on the other task because of the loading lock.
@@ -1539,14 +1632,10 @@ function setup_interface(
                 end
                 Base.errormonitor(t_replswitch)
             else
-                # Use bracket insertion if enabled, otherwise just insert
-                if repl.options.auto_insert_closing_bracket
-                    buf = LineEdit.buffer(s)
-                    if !eof(buf) && LineEdit.peek(buf, Char) == ']'
-                        LineEdit.edit_move_right(buf)
-                    else
-                        edit_insert(buf, ']')
-                    end
+                # Move over an auto-inserted `]`, otherwise insert
+                buf = LineEdit.buffer(s)
+                if repl.options.auto_insert_closing_bracket && LineEdit.skip_closing_bracket(buf, '[', ']')
+                    LineEdit.edit_move_right(buf)
                     LineEdit.refresh_line(s)
                 else
                     edit_insert(s, ']')
@@ -1685,9 +1774,9 @@ function setup_interface(
                     LineEdit.commit_line(s)
                     # execute the statement
                     terminal = LineEdit.terminal(s) # This is slightly ugly but ok for now
-                    raw!(terminal, false) && disable_bracketed_paste(terminal)
+                    LineEdit.leave_input_mode(terminal)
                     @invokelatest LineEdit.mode(s).on_done(s, LineEdit.buffer(s), true)
-                    raw!(terminal, true) && enable_bracketed_paste(terminal)
+                    LineEdit.enter_input_mode(terminal)
                     LineEdit.push_undo(s) # when the last line is incomplete
                 end
                 oldpos = pos
@@ -1753,6 +1842,10 @@ function setup_interface(
     return ModalInterface(allprompts)
 end
 
+# A write to a hung-up terminal fails with EIO (Linux) or ENXIO (FreeBSD).
+terminal_gone(@nospecialize e) =
+    e isa Base.IOError && e.code in (Base.UV_EIO, Base.UV_ENXIO, Base.UV_EPIPE)
+
 function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     repl.frontend_task = current_task()
     d = REPLDisplay(repl)
@@ -1770,7 +1863,13 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     if isdefined(repl, :prompt_ready_event) && repl.prompt_ready_event !== nothing
         repl.mistate.prompt_ready_event = repl.prompt_ready_event
     end
-    run_interface(terminal(repl), interface, repl.mistate)
+    try
+        run_interface(terminal(repl), interface, repl.mistate)
+    catch e
+        # The terminal went away (e.g. its window was closed): end the session
+        # like ^D does, rather than failing on the next write to it.
+        terminal_gone(e) || rethrow()
+    end
     # Terminate Backend
     put!(backend.repl_channel, (nothing, -1))
     dopushdisplay && popdisplay(d)
@@ -1830,6 +1929,7 @@ function banner(io::IO = stdout; short = false)
         end
     end
 
+    version = Base.version_with_build_variant()
     commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
 
     if get(io, :color, false)::Bool
@@ -1843,7 +1943,7 @@ function banner(io::IO = stdout; short = false)
 
         if short
             print(io,"""
-              $(d3)o$(tx)  | Version $(VERSION)$(commit_date)
+              $(d3)o$(tx)  | Version $(version)$(commit_date)
              $(d2)o$(tx) $(d4)o$(tx) | $(commit_string)
             """)
         else
@@ -1852,7 +1952,7 @@ function banner(io::IO = stdout; short = false)
               $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
                $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
               $(jl)| | | | | | |/ _` |$(tx)  |
-              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
+              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(version)$(commit_date)
              $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
             $(jl)|__/$(tx)                   |
 
@@ -1861,7 +1961,7 @@ function banner(io::IO = stdout; short = false)
     else
         if short
             print(io,"""
-              o  |  Version $(VERSION)$(commit_date)
+              o  |  Version $(version)$(commit_date)
              o o |  $(commit_string)
             """)
         else
@@ -1871,7 +1971,7 @@ function banner(io::IO = stdout; short = false)
               (_)     | (_) (_)    |
                _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
               | | | | | | |/ _` |  |
-              | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
+              | | |_| | | | (_| |  |  Version $(version)$(commit_date)
              _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
             |__/                   |
 

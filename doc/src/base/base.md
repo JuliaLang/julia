@@ -227,6 +227,7 @@ Base.isfieldatomic
 
 ```@docs
 Base.sizeof(::Type)
+Core.bitsizeof
 Base.isconcretetype
 Base.isbits
 Base.isbitstype
@@ -355,6 +356,23 @@ Base.success
 Base.process_running
 Base.process_exited
 Base.kill(::Base.Process, ::Integer)
+Base.kill(::Integer, ::Integer)
+Base.SIGHUP
+Base.SIGINT
+Base.SIGQUIT
+Base.SIGKILL
+Base.SIGUSR1
+Base.SIGUSR2
+Base.SIGPIPE
+Base.SIGALRM
+Base.SIGTERM
+Base.SIGCHLD
+Base.SIGCONT
+Base.SIGWINCH
+Base.SIGINFO
+Base.sigrtmin
+Base.sigrtmax
+Base.signal_name
 Base.Sys.set_process_title
 Base.Sys.get_process_title
 Base.ignorestatus
@@ -404,6 +422,8 @@ Base.Sys.free_physical_memory
 Base.Sys.total_physical_memory
 Base.Sys.uptime
 Base.Sys.sysimage_target
+Base.Sys.matched_sysimage_target
+Base.@cpu_supports
 Base.Sys.isjsvm
 Base.Sys.loadavg
 Base.Sys.isexecutable
@@ -473,6 +493,8 @@ Base.Timer(::Function, ::Real)
 Base.Timer
 Base.AsyncCondition
 Base.AsyncCondition(::Function)
+Base.SignalCondition
+Base.SignalCondition(::Function, ::Integer)
 ```
 
 ## Reflection

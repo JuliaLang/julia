@@ -82,13 +82,6 @@
     (io.set-lineno! io lineno)
     (parse-all- io filename)))
 
-(define (jl-parse-file filename (lineno 1))
-  (trycatch
-    (let ((io (open-input-string str)))
-      (io.set-lineno! io lineno)
-      (parse-all- io filename))
-    (lambda (e) #f)))
-
 ;; lowering entry points
 
 ; find the first line number in this expression, before we might eliminate them

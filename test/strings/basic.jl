@@ -590,7 +590,10 @@ end
             (0x110000, false)
         )
         @test isvalid(Char, val) == pass
+        # no value has type `Union{}`
+        @test !isvalid(Union{}, val)
     end
+    @test !isvalid(Union{}, 'a')
     for (val, pass) in (
             ("\x00", true),
             ("\x7f", true),
@@ -927,6 +930,8 @@ end
         @test nextind(s, 16, 1) == 17
         @test nextind(s, 16, 2) == 18
         @test nextind(s, 16, 3) == 19
+        @test nextind(s, 0, typemax(Int)) == typemax(Int)
+        @test nextind(s, 16, typemax(Int)) == typemax(Int)
         @test_throws BoundsError nextind(s, 17)
         @test_throws BoundsError nextind(s, 17, 0)
         @test_throws BoundsError nextind(s, 17, 1)
@@ -970,6 +975,11 @@ end
     @test last(s, 4) == "ϵ²>0"
     @test last(s, length(s)) == s
     @test last(s, length(s)+1) == s
+    # issue #64143
+    for t in (s, GenericString(s))
+        @test first(t, typemax(Int)) == s
+        @test last(t, typemax(Int)) == s
+    end
 end
 
 @testset "invalid code point" begin
@@ -1285,6 +1295,9 @@ end
 
     @test lazy"$(Float64(pi))"c == "3.14159" # :compact=>true
     @test lazy"$(collect(1:1000))"c == repr(collect(1:1000), context=:limit=>true) # :limit=>true
+
+    # Bound allocations for construction and first materialization of a short lazy string.
+    @test @allocations(String(lazy"item: $(1000)")) <= 7
 end
 
 @testset "String Effects" begin

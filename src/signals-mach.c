@@ -51,8 +51,10 @@ static void attach_exception_port(thread_port_t thread, int segv_only);
 
 static mach_port_t segv_port = 0;
 
-// Dedicated PROT_NONE page for the kernel-assisted restore trigger.
-void *jl_mach_restore_page = NULL;
+// Dedicated PROT_NONE page for the kernel-assisted restore trigger. Only the
+// assembly of jl_mach_restore_trigger refers to it by name, which LTO cannot
+// see, so mark it used to keep it from being internalized.
+__attribute__((used)) void *jl_mach_restore_page = NULL;
 
 // Maximum float state count (in natural_t units) across all supported flavors.
 #if defined(_CPU_X86_64_)
@@ -185,37 +187,14 @@ static kern_return_t profiler_segv_handler(
     mach_msg_type_number_t *new_stateCnt);
 #endif
 
-// Create a fake function that describes the register manipulations in jl_noreturn_call_in_state
+// A fake function that describes the register manipulations in jl_noreturn_call_in_state
 // The callee-saved registers still may get smashed (by the cdecl fptr), since we didn't explicitly copy all of the
 // state to the stack (to build a real sigreturn frame).
-__attribute__((naked, used)) void jl_fake_signal_return(void)
-{
-#if defined(_CPU_X86_64_)
-__asm__(
-    "  .cfi_signal_frame\n"
-    "  .cfi_def_cfa %rsp, 0\n" // CFA here uses %rsp directly
-    "  .cfi_offset %rip, 0\n" // previous value of %rip at CFA
-    "  .cfi_offset %rsp, 8\n" // previous value of %rsp at CFA
-    "  ud2\n"
-    "  ud2\n"
-);
-#elif defined(_CPU_AARCH64_)
-__asm__(
-    "  .cfi_signal_frame\n"
-    "  .cfi_def_cfa sp, 0\n" // use sp as fp here
-    // This is not quite valid, since the AArch64 DWARF spec lacks the ability to define how to restore the LR register correctly,
-    // so normally libunwind implementations on linux detect this function specially and hack around the invalid info:
-    // https://github.com/llvm/llvm-project/commit/c82deed6764cbc63966374baf9721331901ca958
-    "  .cfi_offset lr, 0\n"
-    "  .cfi_offset sp, 8\n"
-    "  brk #1\n"
-    "  brk #1\n"
-);
-#endif
-}
+// Defined in arch/<arch>/macos_call_frame_unwind.S
+extern void jl_fake_signal_return(void);
 
 // Optimized version of `jl_call_in_state` that avoids saving most CPU registers.
-static void jl_noreturn_call_in_state(host_thread_state_t *state, void (*fptr)(void), uintptr_t arg0, uintptr_t arg1)
+static void jl_noreturn_call_in_state(host_thread_state_t *state, void (*fptr)(void), uintptr_t arg0, uintptr_t arg1) JL_NOTSAFEPOINT
 {
 #ifdef _CPU_X86_64_
     uintptr_t sp = state->__rsp;
@@ -235,6 +214,8 @@ static void jl_noreturn_call_in_state(host_thread_state_t *state, void (*fptr)(v
     *(uintptr_t*)sp = (uintptr_t)&jl_fake_signal_return + 1;
     state->__rsp = sp; // set stack pointer
     state->__rip = (uint64_t)fptr; // "call" the function
+    // the interrupted code may have set the direction flag, which C code expects clear
+    state->__rflags &= ~0x400;
     state->__rdi = arg0;
     state->__rsi = arg1;
 #elif defined(_CPU_AARCH64_)
@@ -313,7 +294,7 @@ static void jl_throw_in_state(jl_ptls_t ptls2, host_thread_state_t *state, jl_va
 // Mach exception handler for a safepoint hit. This uses the same codepath
 // as the Unix signal handler (jl_set_gc_and_wait), so the faulting thread
 // participates in GC synchronization directly.
-static void mach_safepoint_trampoline(jl_ptls_t ptls)
+static void mach_safepoint_trampoline(jl_ptls_t ptls) JL_CANSAFEPOINT
 {
     // note: jl_current_task cannot be used here, since __thread variables
     //       may already be destroyed during thread teardown
@@ -326,30 +307,12 @@ static void mach_safepoint_trampoline(jl_ptls_t ptls)
     // and nothing arms the sigint page anymore.)
 }
 
-#if defined(_CPU_AARCH64_)
-__attribute__((naked, used)) static void jl_mach_restore_trigger(void)
-{
-    __asm__(
-        "  adrp x16, _jl_mach_restore_page@PAGE\n"
-        "  ldr x16, [x16, _jl_mach_restore_page@PAGEOFF]\n"
-        "  ldr x17, [x16]\n"  // EXC_BAD_ACCESS here
-        "  brk #1\n"          // should never reach here
-    );
-}
-#elif defined(_CPU_X86_64_)
-__attribute__((naked, used)) static void jl_mach_restore_trigger(void)
-{
-    __asm__(
-        "  movq _jl_mach_restore_page(%rip), %r11\n"
-        "  movq (%r11), %r11\n"  // EXC_BAD_ACCESS here
-        "  ud2\n"                // should never reach here
-    );
-}
-#endif
+// Defined in arch/<arch>/macos_restore_trigger.S
+extern void jl_mach_restore_trigger(void);
 
 // Set up state to call fptr(arg0) on the target thread.
 static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void),
-                             uintptr_t arg0, const void *float_state)
+                             uintptr_t arg0, const void *float_state) JL_NOTSAFEPOINT
 {
     size_t float_size = jl_mach_float_state_info.count * sizeof(natural_t);
     size_t total_size = sizeof(host_thread_state_t) + float_size;
@@ -368,6 +331,8 @@ static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void),
     *(uintptr_t*)sp = (uintptr_t)&jl_mach_restore_trigger;
     state->__rsp = sp;
     state->__rip = (uint64_t)fptr;
+    // the interrupted code may have set the direction flag, which C code expects clear
+    state->__rflags &= ~0x400;
     state->__rdi = arg0;
 #elif defined(_CPU_AARCH64_)
     uintptr_t sp = state->__sp;
@@ -385,7 +350,7 @@ static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void),
 #endif
 }
 
-static void segv_handler(int sig, siginfo_t *info, void *context)
+static void segv_handler(int sig, siginfo_t *info, void *context) JL_CANSAFEPOINT
 {
     assert(sig == SIGSEGV || sig == SIGBUS);
     jl_jmp_buf *saferestore = jl_get_safe_restore();
@@ -444,6 +409,11 @@ kern_return_t catch_mach_exception_raise_state_identity(
     for (int16_t tid = 0; tid < nthreads; tid++) {
         jl_ptls_t _ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
         if (_ptls2 == NULL)
+            continue;
+        // Skip exited threads, whose pthread id may have been reused.
+        // No profile lock is needed: the faulting thread is already stopped,
+        // so an id reused during this scan cannot belong to it.
+        if (jl_atomic_load_relaxed(&_ptls2->current_task) == NULL)
             continue;
         if (pthread_mach_thread_np(_ptls2->system_id) == thread) {
             ptls2 = _ptls2;
@@ -561,7 +531,7 @@ static void attach_exception_port(thread_port_t thread, int segv_only)
     HANDLE_MACH_ERROR("thread_set_exception_ports", ret);
 }
 
-static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx) JL_NOTSAFEPOINT
+static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER_CONDITIONAL(1)
 {
     if (tid < 0 || tid >= jl_atomic_load_acquire(&jl_n_threads))
         return 0;
@@ -586,7 +556,7 @@ static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx) J
     return 1;
 }
 
-static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
+static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx) JL_NOTSAFEPOINT_ENTER_CONDITIONAL(1)
 {
     (void)timeout;
     host_thread_state_t state;
@@ -597,7 +567,7 @@ static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *c
     return 1;
 }
 
-void jl_thread_resume(int tid)
+void jl_thread_resume(int tid) JL_NO_SAFEPOINT_ANALYSIS
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
@@ -819,7 +789,7 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     pthread_mutex_unlock(&ctx_rewrite_lock);
 }
 
-static void jl_exit_thread0_cb(int signo)
+static void jl_exit_thread0_cb(int signo) JL_CANSAFEPOINT
 {
     jl_fprint_critical_error(ios_safe_stderr, signo, 0, NULL, jl_current_task);
     jl_atexit_hook(128);
@@ -849,8 +819,7 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
     ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
     HANDLE_MACH_ERROR("thread_set_state", ret);
 
-    ret = thread_resume(thread);
-    HANDLE_MACH_ERROR("thread_resume", ret);
+    jl_thread_resume(0);
 }
 
 static int profile_started = 0;
@@ -913,7 +882,7 @@ static kern_return_t profiler_segv_handler(
 #endif
 
 // WARNING: we are unable to handle sigsegv while the dlsymlock is held
-static int jl_lock_profile_mach(int dlsymlock)
+static int jl_lock_profile_mach(int dlsymlock) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER
 {
     jl_lock_profile();
     // workaround for old keymgr bugs
@@ -930,7 +899,7 @@ static int jl_lock_profile_mach(int dlsymlock)
     return keymgr_locked;
 }
 
-static void jl_unlock_profile_mach(int dlsymlock, int keymgr_locked)
+static void jl_unlock_profile_mach(int dlsymlock, int keymgr_locked) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE
 {
     if (dlsymlock && _dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
         _dyld_atfork_parent();

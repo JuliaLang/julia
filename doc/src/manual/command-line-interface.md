@@ -175,7 +175,7 @@ The following is a complete list of command-line switches available when launchi
 |`-v`, `--version`                      |Display version information|
 |`-h`, `--help`                         |Print command-line options (this message)|
 |`--help-hidden`                        |Print uncommon options not shown by `-h`|
-|`-P`, `--project[={<dir>\|@temp\|@.}]` |Set `<dir>` as the active project/environment. Or, create a temporary environment with `@temp`. The default `@.` option will search through parent directories until a `Project.toml` or `JuliaProject.toml` file is found.|
+|`-P`, `--project[={<dir>\|@temp\|@.}]` |Set `<dir>` as the active project/environment. Or, create a temporary environment with `@temp`. If no value is given, `@.` is used, which searches through parent directories until a `Project.toml` or `JuliaProject.toml` file is found.|
 |`-J`, `--sysimage <file>`              |Start up with the given system image file|
 |`-H`, `--home <dir>`                   |Set location of `julia` executable|
 |`--startup-file={yes*\|no}`            |Load `JULIA_DEPOT_PATH/config/startup.jl`; if [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable is unset, load `~/.julia/config/startup.jl`|
@@ -192,7 +192,7 @@ The following is a complete list of command-line switches available when launchi
 |`-p`, `--procs {N\|auto}`              |Integer value N launches N additional local worker processes; `auto` launches as many workers as the number of local CPU threads (logical cores)|
 |`--machine-file <file>`                |Run processes on hosts listed in `<file>`|
 |`-i`, `--interactive`                  |Interactive mode; REPL runs and `isinteractive()` is true|
-|`-q`, `--quiet`                        |Quiet startup: no banner, suppress REPL warnings|
+|`-q`, `--quiet`                        |Quiet startup: no banner, suppress REPL warnings, and no report of precompilation that loading a package triggers outside the REPL. `Base.julia_cmd` passes it on to child processes.|
 |`--banner={yes\|no\|short\|auto*}`     |Enable or disable startup banner|
 |`--color={yes\|no\|auto*}`             |Enable or disable color text|
 |`--history-file={yes*\|no}`            |Load or save history|
@@ -207,14 +207,15 @@ The following is a complete list of command-line switches available when launchi
 |`--check-bounds={yes\|no\|auto*}`      |Emit bounds checks always, never, or respect `@inbounds` declarations ($)|
 |`--math-mode={ieee\|user*}`            |Always follow `ieee` floating point semantics or respect `@fastmath` declarations|
 |`--polly={yes*\|no}`                   |Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)|
-|`--code-coverage[={none*\|user\|all}]` |Count executions of source lines (omitting setting is equivalent to `user`)|
-|`--code-coverage=@<path>`              |Count executions but only in files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
+|`--code-coverage[={none*\|user\|all}]` |Record coverage for source lines (omitting setting is equivalent to `user`). Full coverage of Base itself requires a system image built with coverage counters (`JULIA_COVERAGE_IMAGES=1`).|
+|`--code-coverage=@<path>`              |Record coverage only for files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
 |`--code-coverage=tracefile.info`       |Append coverage information to the LCOV tracefile (filename supports format tokens).|
+|`--code-coverage-mode={hit*\|count}`   |Record whether each line ran (`hit`, the default) or its execution count (`count`, which may be approximate when code runs on multiple threads)|
 |`--track-allocation[={none*\|user\|all}]` |Count bytes allocated by each source line (omitting setting is equivalent to "user")|
 |`--track-allocation=@<path>`           |Count bytes but only in files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
 |`--task-metrics={yes\|no*}`             |Enable the collection of per-task metrics|
 |`--bug-report=KIND`                    |Launch a bug report session. It can be used to start a REPL, run a script, or evaluate expressions. It first tries to use BugReporting.jl installed in current environment and falls back to the latest compatible BugReporting.jl if not. For more information, see `--bug-report=help`.|
-|`--heap-size-hint=<size>`              |Forces garbage collection if memory usage is higher than the given value. The value may be specified as a number of bytes, optionally in units of KB, MB, GB, or TB, or as a percentage of physical memory with %. See [Memory Management and Garbage Collection](@ref man-memory-management) for more details.|
+|`--heap-size-hint=<size>`              |Forces garbage collection if memory usage is higher than the given value. The value may be specified as a number of bytes, optionally in units of KB, MB, GB, or TB, or as a percentage of physical memory (or of the cgroup memory limit, if lower) with %. See [Memory Management and Garbage Collection](@ref man-memory-management) for more details.|
 |`--compile={yes*\|no\|all\|min}`       |Enable or disable JIT compiler, or request exhaustive or minimal compilation|
 |`--output-o <name>`                    |Generate an object file (including system image data)|
 |`--output-ji <name>`                   |Generate a system image data file (.ji)|
@@ -240,3 +241,10 @@ Note that options of the form `--option[=...]` can **not** be specified as `--op
     In Julia 1.0, the default `--project=@.` option did not search up from the root
     directory of a Git repository for the `Project.toml` file. From Julia 1.1 forward, it
     does.
+
+For `--code-coverage=@<path>`, the path filters the report. Package images carry
+instrumentation independently of the selected path, and newly compiled or
+interpreted code is instrumented as for `--code-coverage=user`. Compatible
+instrumented system images can also contribute Base and Core coverage under the
+path; an ordinary system image does not supply those counters. See
+[Coverage instrumentation](@ref) for building instrumented system images.

@@ -927,10 +927,11 @@ function parse_array(l::Parser{Dates})::Err{Vector} where Dates
     elseif T === Union{}
         new = Any[]
     elseif (T === TOMLDict) || (T === BigInt) || (T === UInt128) || (T === Int128) || (T <: Vector) ||
+        (T === Date) || (T === Time) || (T === DateTime) ||
         (Dates !== nothing && ((T === Dates.Date) || (T === Dates.Time) || (T === Dates.DateTime)))
         # do nothing, leave as Vector{Any}
         new = array
-    else @assert false "unexpected type" end
+    else error("unexpected type") end
     push!(l.static_arrays, new)
     return new
 end
@@ -1042,15 +1043,18 @@ function parse_number_or_date_start(l::Parser)
         elseif accept(l, 'x')
             parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_hex)
-            ate && return parse_hex(l, contains_underscore)
+            ate || return ParserError(ErrGenericValueError)
+            return parse_hex(l, contains_underscore)
         elseif accept(l, 'o')
             parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_oct)
-            ate && return parse_oct(l, contains_underscore)
+            ate || return ParserError(ErrGenericValueError)
+            return parse_oct(l, contains_underscore)
         elseif accept(l, 'b')
             parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_binary)
-            ate && return parse_bin(l, contains_underscore)
+            ate || return ParserError(ErrGenericValueError)
+            return parse_bin(l, contains_underscore)
         elseif accept(l, isdigit)
             # Could be a local time (00:30) or a zero-padded date (0001-01-01).
             # Consume remaining digits, then check for ':' or '-'.
@@ -1249,7 +1253,7 @@ function parse_datetime(l)
     return try_return_datetime(l, year, month, day, h, m, s, ms)
 end
 
-function try_return_datetime(p::Parser{Dates}, year, month, day, h, m, s, ms) where Dates
+function try_return_datetime(::Parser{Dates}, year, month, day, h, m, s, ms) where Dates
     if Dates !== nothing
         try
             return Dates.DateTime(year, month, day, h, m, s, ms)
@@ -1262,7 +1266,7 @@ function try_return_datetime(p::Parser{Dates}, year, month, day, h, m, s, ms) wh
     end
 end
 
-function try_return_date(p::Parser{Dates}, year, month, day) where Dates
+function try_return_date(::Parser{Dates}, year, month, day) where Dates
     if Dates !== nothing
         try
             return Dates.Date(year, month, day)
@@ -1286,7 +1290,7 @@ function parse_local_time(l::Parser)
     return try_return_time(l, h, m, s, ms)
 end
 
-function try_return_time(p::Parser{Dates}, h, m, s, ms) where Dates
+function try_return_time(::Parser{Dates}, h, m, s, ms) where Dates
     if Dates !== nothing
         try
             return Dates.Time(h, m, s, ms)

@@ -59,6 +59,8 @@ isvalid(c::AbstractChar) = !ismalformed(c) & !isoverlong(c) & ((c ≤ '\ud7ff') 
 isvalid(::Type{<:AbstractChar}, c::Unsigned) = ((c ≤  0xd7ff ) | ( 0xe000  ≤ c) & (c ≤  0x10ffff ))
 isvalid(::Type{T}, c::Integer) where {T<:AbstractChar}  = isvalid(T, Unsigned(c))
 isvalid(::Type{<:AbstractChar}, c::AbstractChar)     = isvalid(c)
+isvalid(::Type{Union{}}, value) = false
+isvalid(::Type{Union{}}, slurp...) = throw(MethodError(isvalid, (Union{}, slurp...)))
 
 # utf8 category constants
 const UTF8PROC_CATEGORY_CN = 0
@@ -375,7 +377,7 @@ function category_code(c::AbstractChar)
 end
 
 function category_code(x::Integer)
-    x ≤ 0x10ffff ? (@assume_effects :foldable :nothrow @ccall utf8proc_category(UInt32(x)::UInt32)::Cint) : Cint(30)
+    0 ≤ x ≤ 0x10ffff ? (@assume_effects :foldable :nothrow @ccall utf8proc_category(UInt32(x)::UInt32)::Cint) : Cint(30)
 end
 
 # more human-readable representations of the category code
@@ -598,7 +600,11 @@ ispunct(c::AbstractChar) = UTF8PROC_CATEGORY_PC <= category_code(c) <= UTF8PROC_
 
 Tests whether a character is any whitespace character. Includes ASCII characters '\\t',
 '\\n', '\\v', '\\f', '\\r', and ' ', Latin-1 character U+0085, and characters in Unicode
-category Zs.
+categories Zs, Zl and Zp. This is the Unicode `White_Space` property.
+
+!!! compat "Julia 1.14"
+    Before Julia 1.14, U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR), the
+    only characters in categories Zl and Zp, were not considered whitespace.
 
 # Examples
 ```jldoctest
@@ -617,7 +623,7 @@ true
 """
 @inline isspace(c::AbstractChar) =
     c == ' ' || '\t' <= c <= '\r' || c == '\u85' ||
-    '\ua0' <= c && category_code(c) == UTF8PROC_CATEGORY_ZS
+    '\ua0' <= c && UTF8PROC_CATEGORY_ZS <= category_code(c) <= UTF8PROC_CATEGORY_ZP
 
 """
     isprint(c::AbstractChar)::Bool

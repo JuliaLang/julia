@@ -14,8 +14,6 @@
 
 #include "julia.h"
 
-static constexpr std::nullopt_t None = std::nullopt;
-
 enum AddressSpace {
     Generic = 0,
     Tracked = 10,
@@ -93,6 +91,29 @@ namespace JuliaType {
     static inline auto get_voidfunc_ty(llvm::LLVMContext &C) {
         return llvm::FunctionType::get(llvm::Type::getVoidTy(C), /*isVarArg*/false);
     }
+}
+
+// Shared by codegen and passes that create write barrier declarations.
+static inline llvm::AttributeList getWriteBarrierAttributes(llvm::LLVMContext &C)
+{
+    using namespace llvm;
+    AttrBuilder FnAttrs(C);
+    // The barrier inspects the parent's and children's headers, and it must
+    // stay ordered after the store it guards: a store may not be sunk past
+    // a later safepoint (see add_fn_attrs_for_effects in codegen.cpp), and
+    // reading the slot's memory here pins the store above the barrier.
+    auto effects = MemoryEffects::inaccessibleMemOnly() | MemoryEffects::argMemOnly(ModRefInfo::Ref);
+#ifdef GC_BARRIER_SNAPSHOT
+    // Snapshot barriers read old fields, including out-of-line object storage.
+    effects |= MemoryEffects::readOnly();
+#endif
+    FnAttrs.addMemoryAttr(effects);
+    FnAttrs.addAttribute(Attribute::NoUnwind);
+    FnAttrs.addAttribute(Attribute::NoRecurse);
+    AttrBuilder ParentAttrs(C);
+    ParentAttrs.addAttribute(Attribute::ReadOnly);
+    return AttributeList::get(C, AttributeSet::get(C, FnAttrs), AttributeSet(),
+                             {AttributeSet::get(C, ParentAttrs)});
 }
 
 // return how many Tracked pointers are in T (count > 0),
@@ -182,16 +203,59 @@ static inline bool isTBAA(llvm::MDNode *TBAA, std::initializer_list<const char*>
     return false;
 }
 
-// Check if this is a load from an immutable value. The easiest way to do so is
-// to look at the AA metadata and see if it derives from jtbaa_immut.
-static inline bool isLoadFromImmut(llvm::LoadInst *LI)
+// The '!alias.scope' domain naming which of codegen's memory regions an access may touch.
+#define JL_REGION_DOMAIN_NAME "jnoalias"
+
+// The regions in whose domain a base object cannot stop referencing a tracked
+// pointer stored in them while the base is live.
+static inline bool isRootedRegionName(llvm::StringRef name)
 {
-    if (LI->getMetadata(llvm::LLVMContext::MD_invariant_load))
+    return name == "jnoalias_immutdata" || name == "jnoalias_mutconstdata";
+}
+
+// Whether the object rooting the address `LI` loads from also roots the loaded value
+// -- so that late-gc-lowering may refine the loaded pointer to the load's pointer
+// operand instead of giving it a gc-frame slot of its own.
+//
+// This asks whether the slot is ever overwritten, so that what the base references
+// here is fixed for as long as it lives. The region records that ('!alias.scope'), the
+// access tag ('!tbaa') does not. A load qualifies if its scopes in the
+// region domain are nonempty and all rooted.
+static inline bool isLoadFromRootedRegion(llvm::LoadInst *LI)
+{
+    using namespace llvm;
+    // Constant memory never changes, so the base can never stop referencing what is
+    // stored here, wherever it lives. This is also the only leg that fires on foreign
+    // IR carrying no region metadata.
+    if (LI->getMetadata(LLVMContext::MD_invariant_load))
         return true;
-    llvm::MDNode *TBAA = LI->getMetadata(llvm::LLVMContext::MD_tbaa);
-    if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype"}))
-        return true;
-    return false;
+    MDNode *scopes = LI->getMetadata(LLVMContext::MD_alias_scope);
+    if (!scopes)
+        return false;
+    bool found = false;
+    for (const MDOperand &op : scopes->operands()) {
+        MDNode *scope = dyn_cast_or_null<MDNode>(op.get());
+        if (!scope)
+            continue;
+        AliasScopeNode snode(scope);
+        const MDNode *domain = snode.getDomain();
+        if (!domain || domain->getNumOperands() < 1)
+            continue;
+        MDString *domain_name = dyn_cast<MDString>(domain->getOperand(0));
+        if (!domain_name || domain_name->getString() != JL_REGION_DOMAIN_NAME)
+            continue;
+        // A scope is named either by its string key in operand 0 ({name, domain})
+        // or, when a self-reference keys it, by a trailing name operand
+        // ({self, domain, name}); AliasScopeNode reads the latter.
+        StringRef name = snode.getName();
+        if (name.empty())
+            if (MDString *key = dyn_cast<MDString>(scope->getOperand(0)))
+                name = key->getString();
+        if (name.empty() || !isRootedRegionName(name))
+            return false; // may reside in a region that can drop the reference
+        found = true;
+    }
+    return found;
 }
 
 static inline bool isConstGV(llvm::GlobalVariable *gv)
@@ -322,83 +386,8 @@ static inline llvm::Value *emit_gc_safe_leave(llvm::IRBuilder<> &builder, llvm::
     return emit_gc_state_set(builder, T_size, ptls, state, old_state, final);
 }
 
-// Compatibility shims for LLVM attribute APIs that were renamed in LLVM 14.
-//
-// Once we no longer support LLVM < 14, these can be mechanically removed by
-// translating foo(Bar, …) into Bar->foo(…) resp. Bar.foo(…).
 namespace {
 using namespace llvm;
-
-inline void addFnAttr(CallInst *Target, Attribute::AttrKind Attr)
-{
-    Target->addFnAttr(Attr);
-}
-
-template<class T, class A>
-inline void addRetAttr(T *Target, A Attr)
-{
-    Target->addRetAttr(Attr);
-}
-
-inline void addAttributeAtIndex(Function *F, unsigned Index, Attribute Attr)
-{
-    F->addAttributeAtIndex(Index, Attr);
-}
-
-inline AttributeSet getFnAttrs(const AttributeList &Attrs)
-{
-    return Attrs.getFnAttrs();
-}
-
-inline AttributeSet getRetAttrs(const AttributeList &Attrs)
-{
-    return Attrs.getRetAttrs();
-}
-
-inline bool hasFnAttr(const AttributeList &L, Attribute::AttrKind Kind)
-{
-    return L.hasFnAttr(Kind);
-}
-
-inline AttributeList addAttributeAtIndex(const AttributeList &L, LLVMContext &C,
-                                         unsigned Index, Attribute::AttrKind Kind)
-{
-    return L.addAttributeAtIndex(C, Index, Kind);
-}
-
-inline AttributeList addAttributeAtIndex(const AttributeList &L, LLVMContext &C,
-                                         unsigned Index, Attribute Attr)
-{
-    return L.addAttributeAtIndex(C, Index, Attr);
-}
-
-inline AttributeList addAttributesAtIndex(const AttributeList &L, LLVMContext &C,
-                                          unsigned Index, const AttrBuilder &Builder)
-{
-    return L.addAttributesAtIndex(C, Index, Builder);
-}
-
-inline AttributeList addFnAttribute(const AttributeList &L, LLVMContext &C,
-                                    Attribute::AttrKind Kind)
-{
-    return L.addFnAttribute(C, Kind);
-}
-
-inline AttributeList addRetAttribute(const AttributeList &L, LLVMContext &C,
-                                     Attribute::AttrKind Kind)
-{
-    return L.addRetAttribute(C, Kind);
-}
-
-inline bool hasAttributesAtIndex(const AttributeList &L, unsigned Index)
-{
-    return L.hasAttributesAtIndex(Index);
-}
-
-inline Attribute getAttributeAtIndex(const AttributeList &L, unsigned Index, Attribute::AttrKind Kind)
-{
-    return L.getAttributeAtIndex(Index, Kind);
-}
 
 // Iterate through uses of a particular type.
 // Recursively scan through `ConstantExpr` and `ConstantAggregate` use.

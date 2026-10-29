@@ -166,7 +166,10 @@ end
     @test Base.front((1, 2.0, "three", :four)) === (1, 2.0, "three")
 
     let t = ntuple(identity, Val(40))
-        @test Base.front(t) === ntuple(identity, Val(39))
+        @test @inferred(Base.front(t)) === ntuple(identity, Val(39))
+    end
+    let t = (1.0, ntuple(identity, Val(33))...)
+        @test @inferred(Base.front(t)) === (1.0, ntuple(identity, Val(32))...)
     end
 end
 
@@ -868,6 +871,12 @@ namedtup = (;a=1, b=2, c=3)
                 @test Base.infer_return_type(f, Tuple{T}) <: Tuple{Tuple{Any, Any}, Tuple{Any, Any, Any}}
             end
         end
+    end
+end
+
+@testset "`Base.split_rest` with negative `n`" begin
+    for itr in (Any[1, 2, 3], [1, 2, 3], trues(3), view([1, 2, 3], :), (a=1, b=2), "abc", (x for x in 1:3))
+        @test_throws ArgumentError Base.split_rest(itr, -1)
     end
 end
 

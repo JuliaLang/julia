@@ -27,18 +27,42 @@ The process of [creating a patch release](https://docs.julialang.org/en/v1/devdo
    next prerelease patch version, e.g. as in [this pull request](https://github.com/JuliaLang/julia/pull/37724).
 
 Step 2 above, i.e. backporting commits to the `backports-release-X.Y` branch, has largely
-been automated via [`Backporter`](https://github.com/KristofferC/Backporter): Backporter
-searches for merged pull requests with the relevant `backport-X.Y` tag, and attempts to
-cherry-pick the commits from those pull requests onto the `backports-release-X.Y` branch.
-Some commits apply successfully without intervention, others not so much. The latter
-commits require "manual" backporting, with which help is generally much appreciated.
-Backporter generates a report identifying those commits it managed to backport automatically
-and those that require manual backporting; this report is usually copied into the first
-post of the pull request associated with `backports-release-X.Y` and maintained as
-additional commits are automatically and/or manually backported.
+been automated via [`Backporter`](https://github.com/KristofferC/Backporter). A pull request
+is marked for backporting by adding the `backport X.Y` label. Backporter searches for merged
+pull requests carrying that label and cherry-picks their commits onto `backports-release-X.Y`.
+Some commits apply cleanly without intervention, others do not. The latter require "manual"
+backporting, with which help is generally much appreciated.
 
-When contributing a manual backport, if you have the necessary permissions, please push the
-backport directly to the `backports-release-X.Y` branch. If you lack the relevant
-permissions, please open a pull request against the `backports-release-X.Y` branch with the
-manual backport. Once the manual backport is live on the `backports-release-X.Y` branch,
-please remove the `backport-X.Y` tag from the originating pull request for the commits.
+Backporter maintains a checklist in the first post of the pull request associated with
+`backports-release-X.Y` (between `<!-- BACKPORTER:BEGIN -->` and `<!-- BACKPORTER:END -->`
+markers), listing the pull requests it backported, those that need a manual backport, and
+labeled pull requests that are not merged yet. The checklist is regenerated from the state
+of the branch on every run, so it does not need to be edited by hand.
+
+## Manual backports
+
+Backporter recognizes a pull request as already backported when a commit on
+`backports-release-X.Y`
+
+- has the pull request number in its subject line, e.g. `Fix foo (#12345)`, or
+- has a `(cherry picked from commit <sha>)` trailer naming the merge commit or one of the
+  pull request's commits, or
+- carries the same patch as one of the pull request's commits.
+
+A manual backport made with `git cherry-pick -x <sha>` that keeps the original subject
+line satisfies the first two, whether it reaches the branch by direct push or by merging a
+separate pull request.
+
+If you have the necessary permissions, push the manual backport directly to the
+`backports-release-X.Y` branch. Otherwise open a pull request against
+`backports-release-X.Y`, based on its current tip (the branch may be rebased or
+force-pushed while backports are collected), and mention the original pull request in
+the title, e.g. `[release-X.Y] Fix foo (#12345)`. Nothing else is required: no comment on
+the backports pull request, and no edit of its checklist; Backporter picks up the change
+the next time it runs.
+
+The `backport X.Y` label is removed once the backport has been released, i.e. once the
+commit is on `release-X.Y`. Backporter's audit mode (`--audit --apply`) does this, and is
+available to maintainers as the manually triggered `Backport Label Audit` GitHub Actions
+workflow. Removing the label by hand after the manual backport is on
+`backports-release-X.Y` is harmless but not necessary.

@@ -1,6 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='CancellationLowering' -S %s | FileCheck %s
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='CancellationLowering' -S %s | FileCheck %s
 
 ; NOTE: the CHECK lines assume a 64-bit non-Windows host (the jl_reset_ctx_t
 ; field offsets 8/16/24 and the two-argument setjmp form); the llvmpasses
@@ -11,6 +11,7 @@ declare ptr @julia.get_pgcstack()
 declare void @some_unsafe_call()
 declare void @some_safe_call()
 declare ptr @julia.gc_alloc_obj(ptr, i64, ptr)
+declare ptr @julia.gc_alloc_memory(ptr, i64, ptr, i64, i1)
 declare ptr @ijl_box_int64(i64)
 declare ptr @ijl_apply_generic(ptr, ptr, i32)
 declare i32 @tail_target(ptr)
@@ -37,7 +38,7 @@ entry:
 ; buffer writes from being reordered above the unpublish. A GC safepoint is
 ; emitted while the buffer is unpublished.
 ; CHECK: cancel_establish:
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: fence syncscope("singlethread") seq_cst
 ; CHECK: call void @julia.safepoint(ptr %safepoint)
 ; The sp discriminator word is stamped first; then the task's gcstack and eh
@@ -56,7 +57,7 @@ entry:
 ; CHECK: cancel_pt_cont:
 ; CHECK-NEXT: %{{.*}} = phi i32 [ 0, %entry ], [ %{{.*}}, %cancel_establish ]
 ; CHECK-NOT: call i32 @julia.cancellation_point()
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: ret i32
   %pgcstack = call ptr @julia.get_pgcstack()
   %result = call i32 @julia.cancellation_point()
@@ -76,12 +77,12 @@ entry:
 ; CHECK: call i32 @{{.*}}setjmp
 ; CHECK-NEXT: store atomic volatile ptr %cancel_ucontext, ptr %reset_ctx_ptr release
 ; The unsafe call should have reset_ctx = NULL (plus the fence) before it
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: fence syncscope("singlethread") seq_cst
 ; CHECK-NEXT: call void @some_unsafe_call()
 ; Also reset_ctx = NULL before the return (no fence needed: an early clear
 ; only drops a delivery)
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: ret void
   %pgcstack = call ptr @julia.get_pgcstack()
   %result = call i32 @julia.cancellation_point()
@@ -102,7 +103,7 @@ entry:
 ; The safe call should NOT have reset_ctx = NULL before it
 ; CHECK: call void @some_safe_call(), !julia.reset_safe
 ; But reset_ctx = NULL should be before the return
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: ret void
   %pgcstack = call ptr @julia.get_pgcstack()
   %result = call i32 @julia.cancellation_point()
@@ -146,7 +147,7 @@ entry:
 ; CHECK: %reset_ctx_ptr = getelementptr i8, ptr %current_task
 ; CHECK: %obj = call ptr @julia.gc_alloc_obj({{.*}}), !julia.reset_region
 ; CHECK-NEXT: call void @some_safe_call(), !julia.reset_safe
-; CHECK-NEXT: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK-NEXT: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: fence syncscope("singlethread") seq_cst
 ; CHECK-NEXT: %box = call ptr @ijl_box_int64(i64 %v)
 ; CHECK: %obj2 = call ptr @julia.gc_alloc_obj({{.*}}){{$}}
@@ -171,12 +172,30 @@ entry:
 ; CHECK-NEXT: store atomic volatile ptr %cancel_ucontext, ptr %reset_ctx_ptr release
 ; CHECK: cancel_pt_cont:
 ; CHECK: %obj = call ptr @julia.gc_alloc_obj({{.*}}), !julia.reset_region
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: ret ptr %obj
   %pgcstack = call ptr @julia.get_pgcstack()
   %result = call i32 @julia.cancellation_point()
   %obj = call ptr @julia.gc_alloc_obj(ptr %pgcstack, i64 16, ptr null)
   ret ptr %obj
+}
+
+; A Memory allocation is only lowered to a reset-safe entry point if its size is
+; known to fit inline. Otherwise the region is closed before the call to the
+; runtime, even when the allocation is tagged reset_safe.
+define ptr @test_memory_alloc_in_region(i64 %n) {
+entry:
+; CHECK-LABEL: @test_memory_alloc_in_region
+; CHECK: call i32 @{{.*}}setjmp
+; CHECK: %small = call ptr @julia.gc_alloc_memory({{.*}}), !julia.reset_region
+; CHECK-NEXT: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
+; CHECK-NEXT: fence syncscope("singlethread") seq_cst
+; CHECK-NEXT: %large = call ptr @julia.gc_alloc_memory({{.*}}), !julia.reset_safe
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %result = call i32 @julia.cancellation_point()
+  %small = call ptr @julia.gc_alloc_memory(ptr %pgcstack, i64 32, ptr null, i64 4, i1 false)
+  %large = call ptr @julia.gc_alloc_memory(ptr %pgcstack, i64 %n, ptr null, i64 %n, i1 false), !julia.reset_safe !0
+  ret ptr %small
 }
 
 ; Even a reset_safe-tagged call is an unsafe point when it is
@@ -188,7 +207,7 @@ entry:
 ; CHECK-LABEL: @test_tagged_implicit_still_unsafe
 ; CHECK: call i32 @{{.*}}setjmp
 ; CHECK-NEXT: store atomic volatile ptr %cancel_ucontext, ptr %reset_ctx_ptr release
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: fence syncscope("singlethread") seq_cst
 ; CHECK-NEXT: %r = call ptr @ijl_apply_generic
   %pgcstack = call ptr @julia.get_pgcstack()
@@ -206,10 +225,10 @@ entry:
 ; CHECK-LABEL: @test_atomic_store_unsafe
 ; CHECK: call i32 @{{.*}}setjmp
 ; CHECK-NEXT: store atomic volatile ptr %cancel_ucontext, ptr %reset_ctx_ptr release
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: fence syncscope("singlethread") seq_cst
 ; CHECK-NEXT: store atomic i64 0, ptr %lock release
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: ret void
   %pgcstack = call ptr @julia.get_pgcstack()
   %result = call i32 @julia.cancellation_point()
@@ -224,13 +243,13 @@ entry:
 ; CHECK-LABEL: @test_atomic_rmw_unsafe
 ; CHECK: call i32 @{{.*}}setjmp
 ; CHECK-NEXT: store atomic volatile ptr %cancel_ucontext, ptr %reset_ctx_ptr release
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: fence syncscope("singlethread") seq_cst
 ; CHECK-NEXT: cmpxchg ptr %lock, i64 0, i64 1 acq_rel monotonic
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: fence syncscope("singlethread") seq_cst
 ; CHECK-NEXT: atomicrmw add ptr %counter, i64 1 seq_cst
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: ret void
   %pgcstack = call ptr @julia.get_pgcstack()
   %result = call i32 @julia.cancellation_point()
@@ -247,10 +266,10 @@ entry:
 ; CHECK-LABEL: @test_volatile_load_unsafe
 ; CHECK: call i32 @{{.*}}setjmp
 ; CHECK-NEXT: store atomic volatile ptr %cancel_ucontext, ptr %reset_ctx_ptr release
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: fence syncscope("singlethread") seq_cst
 ; CHECK-NEXT: %v = load volatile i64, ptr %mmio
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: ret i64 %v
   %pgcstack = call ptr @julia.get_pgcstack()
   %result = call i32 @julia.cancellation_point()
@@ -266,9 +285,9 @@ define i32 @test_musttail(ptr %arg) {
 entry:
 ; CHECK-LABEL: @test_musttail
 ; CHECK: call i32 @{{.*}}setjmp
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: fence syncscope("singlethread") seq_cst
-; CHECK-NEXT: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK-NEXT: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: %r = musttail call i32 @tail_target(ptr %arg)
 ; CHECK-NEXT: ret i32 %r
   %pgcstack = call ptr @julia.get_pgcstack()
@@ -286,7 +305,7 @@ entry:
 ; CHECK: call i32 @{{.*}}setjmp
 ; CHECK-NEXT: store atomic volatile ptr %cancel_ucontext, ptr %reset_ctx_ptr release
 ; CHECK: cancel_pt_cont:
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: %r = musttail call i32 @tail_target(ptr %arg), !julia.reset_safe
 ; CHECK-NEXT: ret i32 %r
   %pgcstack = call ptr @julia.get_pgcstack()
@@ -306,10 +325,10 @@ entry:
 ; CHECK: store i64 1, ptr %p
 ; CHECK-NEXT: call void @some_unsafe_call()
 ; CHECK: call i32 @{{.*}}setjmp
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: fence syncscope("singlethread") seq_cst
 ; CHECK-NEXT: store i64 2, ptr %p
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: ret void
   %pgcstack = call ptr @julia.get_pgcstack()
   store i64 1, ptr %p
@@ -328,7 +347,7 @@ entry:
 ; CHECK: call i32 @{{.*}}setjmp
 ; CHECK-NEXT: store atomic volatile ptr %cancel_ucontext, ptr %reset_ctx_ptr release
 ; CHECK: cancel_pt_cont:
-; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr monotonic
 ; CHECK-NEXT: %r = musttail call ptr @julia.pointer_from_objref(ptr addrspace(11) %obj)
 ; CHECK-NEXT: ret ptr %r
   %pgcstack = call ptr @julia.get_pgcstack()

@@ -107,6 +107,8 @@ isassigned(B::BitArray, i::Int) = 1 <= i <= length(B)
 
 IndexStyle(::Type{<:BitArray}) = IndexLinear()
 
+dataids(B::BitArray) = dataids(B.chunks)
+
 ## aux functions ##
 
 const _msk64 = ~UInt64(0)
@@ -709,26 +711,26 @@ function _unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
     lc = length(Bc)
     last_chunk_len = _mod64(length(B)-1)+1
 
+    lx = length(X)
+    c = 0
     Xi = first(eachindex(X))
-    lastXi = last(eachindex(X))
     for i = 1:lc
         @inbounds Imsk = Ic[i]
         @inbounds C = Bc[i]
         u = UInt64(1)
         for _ = 1:(i < lc ? 64 : last_chunk_len)
             if Imsk & u != 0
-                Xi > lastXi && throw_setindex_mismatch(X, count(I))
+                c == lx && throw_setindex_mismatch(X, count(I))
                 @inbounds x = convert(Bool, X[Xi])
                 C = ifelse(x, C | u, C & ~u)
                 Xi = nextind(X, Xi)
+                c += 1
             end
             u <<= 1
         end
         @inbounds Bc[i] = C
     end
-    if Xi != nextind(X, lastXi)
-        throw_setindex_mismatch(X, count(I))
-    end
+    c == lx || throw_setindex_mismatch(X, count(I))
     return B
 end
 
@@ -798,13 +800,14 @@ function sizehint!(B::BitVector, sz::Integer)
     return B
 end
 
-resize!(B::BitVector, n::Integer) = _resize_int!(B, Int(n))
-function _resize_int!(B::BitVector, n::Int)
+resize!(B::BitVector, n::Integer; first::Bool=false) = _resize_int!(B, Int(n), first)
+function _resize_int!(B::BitVector, n::Int, first::Bool)
     n0 = length(B)
     n == n0 && return B
     n >= 0 || throw(BoundsError(B, n))
     if n < n0
-        deleteat!(B, n+1:n0)
+        r = first ? (1:n0-n) : (n+1:n0)
+        deleteat!(B, r)
         return B
     end
     Bc = B.chunks
@@ -813,6 +816,9 @@ function _resize_int!(B::BitVector, n::Int)
     if k1 > k0
         _growend!(Bc, k1 - k0)
         Bc[end] = UInt64(0)
+    end
+    if first
+        copy_chunks!(Bc, 1 + n - n0, Bc, 1, n0)
     end
     B.len = n
     return B
@@ -1121,7 +1127,7 @@ function splice!(B::BitVector, r::Union{AbstractUnitRange{Int}, Integer}, ins)
     Bins = BitVector(undef, length(ins))
     i = 1
     for x in ins
-        Bins[i] = Bool(x)
+        Bins[i] = x
         i += 1
     end
     return splice!(B, r, Bins)
@@ -1200,6 +1206,15 @@ end
 function (==)(A::BitArray, B::BitArray)
     size(A) != size(B) && return false
     return A.chunks == B.chunks
+end
+
+function cmp(A::BitVector, B::BitVector)
+    Ac, Bc = A.chunks, B.chunks
+    @inbounds for i in 1:min(length(Ac), length(Bc))
+        d = xor(Ac[i], Bc[i])
+        iszero(d) || return iszero(Bc[i] & d & -d) ? 1 : -1
+    end
+    return cmp(length(A), length(B))
 end
 
 
@@ -1412,6 +1427,7 @@ function _circshift_int!(dest::BitVector, src::BitVector, i::Int)
     i = Int(i)
     length(dest) == length(src) || throw(ArgumentError("destination and source should be of same size"))
     n = length(dest)
+    n == 0 && return dest
     i %= n
     i == 0 && return (src === dest ? src : copyto!(dest, src))
     Bc = (src === dest ? copy(src.chunks) : src.chunks)

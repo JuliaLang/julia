@@ -64,7 +64,22 @@ ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(BOLT_BUILDDIR)/build-configured: | $(build_prefix)/manifest/zlib
 endif
 
-$(BOLT_BUILDDIR)/build-configured: $(SRCCACHE)/$(BOLT_SRC_DIR)/source-extracted
+# Backport of llvm/llvm-project#215415, which the BOLT_jll build also carries:
+# without it, BOLT cannot rewrite a ThinLTO-built libLLVM on AArch64.
+$(SRCCACHE)/$(BOLT_SRC_DIR)/BOLT-aarch64-adr-relaxation-non-simple.patch-applied: $(SRCCACHE)/$(BOLT_SRC_DIR)/source-extracted
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/BOLT-aarch64-adr-relaxation-non-simple.patch
+	echo 1 > $@
+
+# Backport of llvm/llvm-project#226076, which the BOLT_jll build also carries:
+# without it, rewriting debug info corrupts units with forward DW_FORM_ref_udata
+# references, such as those GNU as generates for libgcc's AArch64 lse.S.
+$(SRCCACHE)/$(BOLT_SRC_DIR)/BOLT-dwarf-ref-udata-forward-refs.patch-applied: $(SRCCACHE)/$(BOLT_SRC_DIR)/BOLT-aarch64-adr-relaxation-non-simple.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/BOLT-dwarf-ref-udata-forward-refs.patch
+	echo 1 > $@
+
+$(BOLT_BUILDDIR)/build-configured: $(SRCCACHE)/$(BOLT_SRC_DIR)/BOLT-dwarf-ref-udata-forward-refs.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 		$(CMAKE) $(SRCCACHE)/$(BOLT_SRC_DIR)/llvm $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(BOLT_BUILD_CMAKE) \
@@ -87,20 +102,22 @@ BOLT_INSTALL = \
 	cd $1 && mkdir -p $2$$(build_depsbindir) && \
 	$$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P tools/bolt/cmake_install.cmake
 
+# Use the same target names as the BinaryBuilder install below (and the name of
+# BOLT.version), so that `make install-BOLT` works for either kind of build.
 $(eval $(call staged-install, \
-	bolt,$$(BOLT_SRC_DIR)/build, \
+	BOLT,$$(BOLT_SRC_DIR)/build, \
 	BOLT_INSTALL,,,))
 
-clean-bolt:
+clean-BOLT:
 	-rm -f $(BOLT_BUILDDIR)/build-configured $(BOLT_BUILDDIR)/build-compiled
 	-if [ -d $(BOLT_BUILDDIR) ]; then $(MAKE) -C $(BOLT_BUILDDIR) clean; fi
 
-get-bolt: $(BOLT_SRC_FILE)
-extract-bolt: $(SRCCACHE)/$(BOLT_SRC_DIR)/source-extracted
-configure-bolt: $(BOLT_BUILDDIR)/build-configured
-compile-bolt: $(BOLT_BUILDDIR)/build-compiled
-fastcheck-bolt: #none
-check-bolt: $(BOLT_BUILDDIR)/build-checked
+get-BOLT: $(BOLT_SRC_FILE)
+extract-BOLT: $(SRCCACHE)/$(BOLT_SRC_DIR)/source-extracted
+configure-BOLT: $(BOLT_BUILDDIR)/build-configured
+compile-BOLT: $(BOLT_BUILDDIR)/build-compiled
+fastcheck-BOLT: #none
+check-BOLT: $(BOLT_BUILDDIR)/build-checked
 
 else # USE_BINARYBUILDER_BOLT
 

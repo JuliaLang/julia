@@ -209,12 +209,7 @@ Core.DebugInfo(di::DebugInfoStream, nstmts::Int) =
         ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), di.firstline, di.codelocs, nstmts)::String)
 
 function getdebugidx(debuginfo::DebugInfo, pc::Int)
-    if debuginfo.linetable isa String
-        # drop provenance for compatibility
-        ((pc <= 0 ? -1 : source_location(debuginfo, pc).line), 0, 0)
-    else
-        ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo, pc)
-    end
+    ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo, pc)
 end
 
 function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
@@ -496,6 +491,10 @@ struct IRCode
         di = ir.debuginfo
         @assert di.codelocs === stmts.line
         return new(stmts, ir.argtypes, ir.sptypes, di, cfg, new_nodes, ir.meta, ir.valid_worlds)
+    end
+    # The same IR restricted to a narrower `valid_worlds` (see `reformulate_globals_pass!`).
+    function IRCode(ir::IRCode, valid_worlds::WorldRange)
+        return new(ir.stmts, ir.argtypes, ir.sptypes, ir.debuginfo, ir.cfg, ir.new_nodes, ir.meta, valid_worlds)
     end
     global function copy(ir::IRCode)
         di = ir.debuginfo
@@ -1559,6 +1558,17 @@ struct Refined
     Refined(@nospecialize(val)) = new(val)
 end
 
+
+# Whether `gr` names a primordial constant: a constant binding of `Core` or `Core.Intrinsics`
+# (a builtin, intrinsic, or core type) covering world age 1. The runtime keeps these immutable,
+# so a read needs no edge and codegen can embed the value.
+function world1_const(gr::GlobalRef)
+    (gr.mod === Core || gr.mod === Core.Intrinsics) || return false
+    b = convert(Core.Binding, gr)
+    isdefined(b, :partitions) || return false
+    return binding_kind(lookup_binding_partition(UInt(1), b)) === PARTITION_KIND_CONST
+end
+
 function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instruction, idx::Int, processed_idx::Int, active_bb::Int, do_rename_ssa::Bool)
     stmt = inst[:stmt]
     (; result, ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
@@ -1577,6 +1587,19 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         result[result_idx][:stmt] = GotoNode(label)
         result_idx += 1
     elseif isa(stmt, GlobalRef)
+        # Fold GlobalRef inline only when it is a world1_constant,
+        # otherwise it should be a BindingPartition before this transformation.
+        total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+        flag = result[result_idx][:flag]
+        if has_flag(flag, total_flags) && world1_const(stmt)
+            ssa_rename[idx] = stmt
+        else
+            ssa_rename[idx] = SSAValue(result_idx)
+            result[result_idx][:stmt] = stmt
+            result_idx += 1
+        end
+    elseif isa(stmt, Core.BindingPartition)
+        # A constant binding can be moved into argument position.
         total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
         flag = result[result_idx][:flag]
         if has_flag(flag, total_flags)
@@ -1685,7 +1708,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 ssa_rename[idx] = pi_val
                 return result_idx
             end
-        elseif !isa(pi_val, AnySSAValue) && !isa(pi_val, GlobalRef)
+        elseif !isa(pi_val, AnySSAValue) && !isa(pi_val, GlobalRef) && !isa(pi_val, Core.BindingPartition)
             pi_val′ = isa(pi_val, QuoteNode) ? pi_val.value : pi_val
             stmttyp = stmt.typ
             if isa(stmttyp, Const) ? pi_val′ === stmttyp.val : typeof(pi_val′) === stmttyp
@@ -1816,7 +1839,7 @@ function may_replace_phi(values::Vector{Any}, phi_bb::BasicBlock, idx::Int)
     # unnecessary when DCE can remove those dead loops entirely, so this is
     # just to be safe.
     v = values[1]
-    before_def = isa(v, OldSSAValue) && idx < v.id
+    before_def = isa(v, OldSSAValue)
     return !before_def
 end
 
@@ -2192,7 +2215,7 @@ function just_fixup!(compact::IncrementalCompact, new_new_nodes_offset::Union{In
 end
 
 simple_dce!(compact::IncrementalCompact) = simple_dce!(null_dce_callback, compact)
-function simple_dce!(callback::Function, compact::IncrementalCompact)
+function simple_dce!(callback::T, compact::IncrementalCompact) where {T<:Function}
     # Perform simple DCE for unused values
     @assert isempty(compact.new_new_used_ssas) # just_fixup! wasn't run?
     extra_worklist = Int[]

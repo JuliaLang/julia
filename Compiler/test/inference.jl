@@ -158,7 +158,7 @@ let
     Compiler.assign_parentchild!(child, outer)
 
     mresult = Compiler._schedule_edge_infer_task!(
-        outer, child, child.result, child_mi.def, nothing, false, false)
+        outer, child, child.result, child_mi.def, nothing, false, false, false)
     @test Compiler.doworkloop(interp, outer)
     @test isready(mresult)
     scheduled = mresult[]
@@ -223,7 +223,7 @@ let
 
     resize!(outer.callstack, 1)
     mresult = Compiler._schedule_edge_infer_task!(
-        outer, child, child.result, child_mi.def, nothing, false, false)
+        outer, child, child.result, child_mi.def, nothing, false, false, false)
 
     @test Compiler.typeinf(interp, outer)
     @test isready(mresult)
@@ -399,6 +399,17 @@ end
         @test Compiler.materialize_inference_edges(invoke_root.edges) ==
             Core.svec(atype, ci1)
 
+        # a flattened identity edge is redundant with a dispatch edge to the same target
+        identity_leaf = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(match.method.sig, ci1))
+        @test Compiler.materialize_inference_edges(Core.svec(ci1, identity_leaf)) ==
+            Core.svec(ci1)
+        @test Compiler.materialize_inference_edges(Core.svec(identity_leaf, ci1)) ==
+            Core.svec(ci1)
+        # but a different CodeInstance of the same MethodInstance may carry another proof
+        @test Compiler.materialize_inference_edges(Core.svec(ci2, identity_leaf)) ==
+            Core.svec(ci2, match.method.sig, ci1)
+
         encoded_leaf = Compiler.LocalInferenceProof(
             Compiler.WorldRange(world), Core.svec(1, atype, ci1))
         standalone_leaf = Compiler.LocalInferenceProof(
@@ -407,6 +418,14 @@ end
             Compiler.WorldRange(world), Core.svec(encoded_leaf, standalone_leaf))
         @test Compiler.materialize_inference_edges(encoded_root.edges) ==
             Core.svec(1, atype, ci1)
+
+        # a possibly-ambiguous group does not replace a later edge to the same target
+        possibly_ambiguous_leaf = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(Core.PossiblyAmbiguous(), 1, atype, ci1))
+        possibly_ambiguous_root = Compiler.LocalInferenceProof(
+            Compiler.WorldRange(world), Core.svec(possibly_ambiguous_leaf, standalone_leaf))
+        @test Compiler.materialize_inference_edges(possibly_ambiguous_root.edges) ==
+            Core.svec(Core.PossiblyAmbiguous(), 1, atype, ci1, ci1)
 
         regular_inf = Compiler.InferenceResult(mi, Compiler.typeinf_lattice(interp))
         regular_inf.result = Int
@@ -558,6 +577,42 @@ end
         @test Compiler.getedge(Compiler.InvokeCallInfo(ci1, match, nothing, atype), 1) === ci1
         @test Compiler.getedge(Compiler.OpaqueClosureCallInfo(ci2, match, nothing), 1) === ci2
         @test Compiler.getedge(Compiler.VirtualMethodMatchInfo(split), 2) === ci2
+    end
+
+    @testset "possibly-ambiguous edges" begin
+        pa = Core.PossiblyAmbiguous()
+        edges = Any[]
+        Compiler.add_one_edge!(edges, mi, true)
+        Compiler.add_one_edge!(edges, mi, true)
+        @test edges == Any[pa, mi]
+        # an edge that is not possibly ambiguous takes over the record
+        Compiler.add_one_edge!(edges, mi)
+        @test edges == Any[mi]
+        Compiler.add_one_edge!(edges, mi, true)
+        @test edges == Any[mi]
+
+        edges = Any[pa, mi]
+        Compiler.add_one_edge!(edges, ci1, true)
+        @test edges == Any[pa, ci1]
+        Compiler.add_one_edge!(edges, ci1)
+        @test edges == Any[ci1]
+
+        # an inlined call is not possibly ambiguous
+        edges = Any[pa, mi]
+        Compiler.add_inlining_edge!(edges, mi)
+        @test edges == Any[mi]
+        edges = Any[pa, mi]
+        Compiler.add_inlining_edge!(edges, ci1)
+        @test edges == Any[ci1]
+
+        # the same rule holds when inference proofs are flattened
+        proof(edges...) = Compiler.LocalInferenceProof(Compiler.WorldRange(world), Core.svec(edges...))
+        flatten(proofs...) = Compiler.materialize_inference_edges(Core.svec(proofs...))
+        @test flatten(proof(pa, ci1), proof(ci1)) == Core.svec(ci1)
+        @test flatten(proof(ci1), proof(pa, ci1)) == Core.svec(ci1)
+        @test flatten(proof(pa, ci1), proof(pa, ci1)) == Core.svec(pa, ci1)
+        @test flatten(proof(pa, ci1), proof(1, atype, ci1)) == Core.svec(ci1, 1, atype, ci1)
+        @test flatten(proof(1, atype, ci1), proof(pa, ci1)) == Core.svec(1, atype, ci1)
     end
 
     @testset "encoded groups are immutable units" begin
@@ -1996,6 +2051,8 @@ function find_call(code::Core.CodeInfo, @nospecialize(func), narg)
                 end
             elseif isa(farg, Core.SSAValue)
                 farg = Compiler.widenconst(code.ssavaluetypes[farg.id])
+            elseif isa(farg, Core.BindingPartition)
+                farg = typeof(Base.partition_restriction(farg))
             else
                 farg = typeof(farg)
             end
@@ -2226,6 +2283,28 @@ let nfields_tfunc(@nospecialize xs...) =
     @test sizeof_tfunc(Type{Ptr}) === Const(sizeof(Ptr))
     @test bitsizeof_tfunc(Type{BitsizeofUInt17}) === Const(17)
     @test bitsizeof_tfunc(DataType) === Int
+    @test bitsizeof_tfunc(Core.TypeEgal{BitsizeofUInt17}) === Const(17)
+    @test bitsizeof_tfunc(BitsizeofUInt17) === Const(17)
+    @test bitsizeof_tfunc(Const(0x01)) === Const(8)
+    @test bitsizeof_tfunc(Const(Pair{Int32,Int16})) === Int
+    @test bitsizeof_tfunc(Core.TypeEgal{Union{Int8,Int16}}) === Int
+    @test bitsizeof_tfunc(Tuple{Int}) === Int
+    bitsizeof_nothrow(@nospecialize xs...) = Compiler.bitsizeof_nothrow(xs...)
+    @test bitsizeof_nothrow(Const(Int))
+    @test bitsizeof_nothrow(Const(1.0))
+    @test bitsizeof_nothrow(Core.TypeEgal{BitsizeofUInt17})
+    @test bitsizeof_nothrow(Union{Int8, Ptr, Core.TypeEgal{Float32}})
+    @test !bitsizeof_nothrow(Type{BitsizeofUInt17})
+    @test !bitsizeof_nothrow(Const(Ptr))
+    @test !bitsizeof_nothrow(Core.TypeEgal{Ptr})
+    @test !bitsizeof_nothrow(Const(Pair{Int32,Int16}))
+    @test !bitsizeof_nothrow(Core.TypeEgal{Tuple{Int}})
+    @test !bitsizeof_nothrow(Core.TypeEgal{Union{Int8,Int16}})
+    @test !bitsizeof_nothrow(Const("abc"))
+    @test !bitsizeof_nothrow(String)
+    @test !bitsizeof_nothrow(Union{Int, String})
+    @test !bitsizeof_nothrow(DataType)
+    @test !bitsizeof_nothrow(Any)
     @test !sizeof_nothrow(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}})
     @test sizeof_nothrow(Union{Ptr, Int, Core.TypeEgal{Ptr{Int8}}, Core.TypeEgal{Int}})
     @test sizeof_nothrow(Const(Ptr))
@@ -2382,9 +2461,10 @@ g23024(TT::Tuple{DataType}) = f23024(TT[1], v23024)
 
 @test !Compiler.isconstType(Type{typeof(Union{})}) # could be Core.TypeofBottom or Type{Union{}} at runtime
 @test !isa(Compiler.getfield_tfunc(Compiler.fallback_lattice, Type{Core.TypeofBottom}, Compiler.Const(:name)), Compiler.Const)
-# values of `Type{typeof(Union{})}` include `UnionAll` spellings (#33136), so
-# `supertype(::UnionAll)` is applicable too; the egal-pinned type stays precise
-@test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Any, Type{Core.AnyType}]
+# values of `Type{typeof(Union{})}` include `UnionAll` spellings (#33136) and the
+# `TypeEq` `Type{Union{}}`, so `supertype(::UnionAll)` and `supertype(::TypeEq)` are
+# applicable too; the egal-pinned type stays precise
+@test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Core.TypeEgal{Core.AnyType}, Any, Type{Core.AnyType}]
 @test Base.return_types(supertype, (Core.TypeEgal{typeof(Union{})},)) == Any[Core.TypeEgal{Core.AnyType}]
 
 # issue #23685
@@ -2804,6 +2884,23 @@ let S = (Union{T, U} where {T<:Int, U<:Int})
     @test fapply61323(S) === 1
     @test call_type_int61323(fapply61323, S) === 1
     @test Base.return_types(fapply61323, (Type{Int},)) == Any[Int]
+    # only `DataType` reps have the fields of `DataType`, while `UnionAll` and `Union`
+    # reps reach the fields of their own types
+    getvar61323(x) = getfield(x, :var)
+    getfield1_61323(x) = getfield(x, 1)
+    @test call_type_int61323(getvar61323, S) isa TypeVar
+    @test call_type_int61323(getfield1_61323, S) isa TypeVar
+    @test Base.infer_return_type(getvar61323, (Type{Int},)) == TypeVar
+    @test Base.infer_return_type(getvar61323, (Core.TypeEgal{Int},)) == Union{}
+    @test TypeVar <: Base.infer_return_type(getfield1_61323, (Type{Int},))
+    @test Union{} != Base.infer_return_type(supertype, (Type{Int},))
+    let 𝕃 = Compiler.fallback_lattice
+        @test Compiler.getfield_tfunc(𝕃, Type{Int}, Compiler.Const(:name)) === Compiler.Const(Int.name)
+        @test Compiler.getfield_tfunc(𝕃, Type{Int}, Compiler.Const(:super)) === Type{Signed}
+        @test Compiler.getfield_tfunc(𝕃, Type{Int}, Compiler.Const(:foo)) === Union{}
+        @test Compiler.getfield_tfunc(𝕃, Type{Int}, Compiler.Const(1.0)) === Union{}
+    end
+    @test Base.infer_return_type(x -> getfield(x, 1.0), (Type{Int},)) == Union{}
 end
 
 # Defined type-valued static parameters should retain egality so DataType
@@ -3132,19 +3229,151 @@ let 𝕃ᵢ = Compiler.InferenceLattice(Compiler.MustAliasesLattice(Compiler.Bas
 
     @test (MustAlias(2, 0, AliasableField{Any}, 1, Int) ⊑ Int)
     @test !(Int ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Int))
-    @test (Int ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Any))
-    @test (Const(42) ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Int))
+    # for soundness, ⊑ requires both alias and type information to be more narrow
+    @test !(Int ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Any))
+    @test !(Const(42) ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Int))
+    @test (Union{} ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Int))
     @test !(MustAlias(2, 0, AliasableField{Any}, 1, Any) ⊑ Int)
     @test tmerge(MustAlias(2, 0, AliasableField{Any}, 1, Any), Const(nothing)) === Any
     @test tmerge(MustAlias(2, 0, AliasableField{Any}, 1, Int), Const(nothing)) === Union{Int,Nothing}
     @test tmerge(Const(nothing), MustAlias(2, 0, AliasableField{Any}, 1, Any)) === Any
     @test tmerge(Const(nothing), MustAlias(2, 0, AliasableField{Any}, 1, Int)) === Union{Int,Nothing}
+    # merging two aliases of the same field (same slot, slot definition and field) keeps the
+    # alias, with the merged field type
+    let m = tmerge(MustAlias(2, 0, AliasableField{Any}, 1, Int), MustAlias(2, 0, AliasableField{Any}, 1, Nothing))
+        @test m isa MustAlias && m.slot == 2 && m.ssadef == 0 && m.fldidx == 1 && m.fldtyp === Union{Int,Nothing}
+    end
+    # different slot definitions or fields merge as their field types
+    @test tmerge(MustAlias(2, 1, AliasableField{Any}, 1, Int), MustAlias(2, 2, AliasableField{Any}, 1, Nothing)) === Union{Int,Nothing}
+    @test tmerge(MustAlias(2, 0, AliasableFields{Any,Any}, 1, Int), MustAlias(2, 0, AliasableFields{Any,Any}, 2, Nothing)) === Union{Int,Nothing}
+    # so do different container types, since the merged container type has no definite field layout
+    @test tmerge(MustAlias(2, 0, AliasableField{Any}, 1, Int), MustAlias(2, 0, AliasableFields{Any,Any}, 1, Nothing)) === Union{Int,Nothing}
     tmerge(Const(AbstractVector{<:Any}), Const(AbstractVector{T} where {T}))  # issue #56913
     @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Const(Bool)) === Const(true)
     @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Type{Bool}) === Const(true)
     @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Int), Type{Bool}) === Const(false)
     @test ifelse_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Int, Int) === Int
     @test ifelse_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Int), Int, Int) === Union{}
+
+    # `tmeet` with a type narrows the field type and keeps the alias, or gives `Union{}` if
+    # they are disjoint, or just the field type if it is already constant
+    let m = Compiler.tmeet(𝕃ᵢ, MustAlias(2, 0, AliasableField{Any}, 1, Union{Int,String}), Integer)
+        @test m isa MustAlias && m.slot == 2 && m.fldidx == 1 && m.fldtyp === Int
+    end
+    @test Compiler.tmeet(𝕃ᵢ, MustAlias(2, 0, AliasableField{Any}, 1, Int), String) === Union{}
+    @test Compiler.tmeet(𝕃ᵢ, MustAlias(2, 0, AliasableField{Any}, 1, Union{Int,Nothing}), Nothing) === Nothing
+
+    # a limited field type makes the constructor return that `LimitedAccuracy`, without the alias
+    let causes = Compiler.IdSet{Compiler.InferenceState}()
+        l = MustAlias(2, 0, AliasableField{Any}, 1, Compiler.LimitedAccuracy(Int, causes))
+        @test l isa Compiler.LimitedAccuracy && l.typ === Int
+    end
+
+    # `narrow_mustalias(x, y)` gives the alias `y` with field type `x`
+    let alias = MustAlias(2, 0, AliasableField{Any}, 1, Union{Int,String})
+        narrow(@nospecialize(x), @nospecialize(y) = alias) = Compiler.narrow_mustalias(𝕃ᵢ, x, y)
+        # `Union{}`, constants and slot wrappers are not narrowed
+        for x in Any[Union{}, Const(1), Nothing,
+                     alias, MustAlias(3, 0, AliasableField{Any}, 1, Int), Conditional(2, 0, Int, String)]
+            @test narrow(x) === x
+        end
+        # a narrowed result keeps the limitation of `x` and of `y`
+        causes = Compiler.IdSet{Compiler.InferenceState}()
+        l = narrow(Compiler.LimitedAccuracy(Int, causes))
+        @test l isa Compiler.LimitedAccuracy && l.typ == MustAlias(2, 0, AliasableField{Any}, 1, Int)
+        l = narrow(Int, Compiler.LimitedAccuracy(alias, causes))
+        @test l isa Compiler.LimitedAccuracy && l.typ == MustAlias(2, 0, AliasableField{Any}, 1, Int)
+        # `x` gets the alias even if it is not ⊑ the field type
+        @test narrow(Float64) == MustAlias(2, 0, AliasableField{Any}, 1, Float64)
+    end
+end
+
+# https://github.com/JuliaLang/julia/issues/63677
+struct Box63677
+    a::Union{Int,String}
+end
+pick63677(b, s) = isempty(s) ? b.a : s
+f63677(x, y) = typeof(x) === typeof(y)
+g63677(b, s) = f63677(b.a, pick63677(b, s))
+@test only(code_typed(g63677, (Box63677, String))).first.code[end] != ReturnNode(true) # not folded
+@test !g63677(Box63677(1), "y")
+
+# an alias of an earlier definition of a slot must not be merged into an alias of its
+# current definition
+@noinline function stale_alias_join(b1::AliasableField{Union{Int,String}}, b2::AliasableField{Union{Int,String}},
+                                    c1::Bool, c2::Bool)
+    y = b1
+    x = getfield(y, :f)
+    y = b2
+    if c1
+        x = getfield(y, :f)
+    elseif c2
+        x = getfield(y, :f)
+    else
+        Base.donotdelete(x) # `x` still is the field of `b1` here
+    end
+    if (x::Union{Int,String}) isa Int
+        return getfield(y, :f)
+    end
+    return 0
+end
+let T = AliasableField{Union{Int,String}}
+    @test Base.infer_return_type(stale_alias_join, (T, T, Bool, Bool)) == Union{Int,String}
+    @test stale_alias_join(T(1), T("s"), false, false) == "s"
+end
+
+# an alias doesn't hide the value of a field that is known to be constant
+@test Base.infer_return_type((AliasableField{Bool},)) do a
+    x = a.f
+    if x === true
+        return x ? 1 : "unreachable"
+    end
+    return 2
+end === Int
+check_aliased_field(a, v) = (x = a.f; x === v || throw("unexpected"); x)
+@test Base.infer_return_type((AliasableField{Bool},)) do a
+    return check_aliased_field(a, true) ? 1 : "unreachable"
+end === Int
+
+# call-site refinement of a slot holding an alias
+takes_int_only(::Int) = nothing
+@test Base.infer_return_type((AliasableField{Union{Int,String}},)) do a
+    x = a.f
+    takes_int_only(x)
+    return x
+end === Int
+@test Base.infer_return_type((AliasableField{Union{Int,String}},)) do a
+    x = a.f
+    y = x
+    takes_int_only(x)
+    return y
+end === Int
+
+# `conditional_change` on a slot holding a limited alias narrows the field type, and keeps
+# both the alias and the limitation
+let 𝕃ᵢ = Compiler.typeinf_lattice(Compiler.NativeInterpreter())
+    causes = Compiler.IdSet{Compiler.InferenceState}()
+    alias = MustAlias(2, 0, AliasableField{Any}, 1, Any)
+    state = Compiler.VarTable(undef, 3)
+    for i = 1:3
+        state[i] = Compiler.VarState(i == 3 ? Compiler.LimitedAccuracy(alias, causes) : Any, 0, false)
+    end
+    refinement = Compiler.conditional_change(𝕃ᵢ, state, Conditional(3, 0, Int, Any), :then)
+    @test refinement isa Compiler.StateRefinement
+    @test refinement.newtyp isa Compiler.LimitedAccuracy && refinement.newtyp.causes == causes
+    let newtyp = Compiler.ignorelimited(refinement.newtyp)
+        @test newtyp isa MustAlias && newtyp.slot == 2 && newtyp.fldtyp === Int
+    end
+    # a kind type (from `isa(x, DataType)`) narrows an alias slot the same way
+    let typealias = MustAlias(2, 0, AliasableField{Type}, 1, Type)
+        state[3] = Compiler.VarState(typealias, 0, false)
+        refinement = Compiler.conditional_change(𝕃ᵢ, state, Conditional(3, 0, DataType, Type), :then)
+        @test refinement.newtyp == MustAlias(2, 0, AliasableField{Type}, 1, DataType)
+    end
+    # a slot with a limited plain type keeps its limitation when narrowed
+    state[3] = Compiler.VarState(Compiler.LimitedAccuracy(Union{Int,String}, causes), 0, false)
+    refinement = Compiler.conditional_change(𝕃ᵢ, state, Conditional(3, 0, Int, String), :then)
+    @test refinement.newtyp isa Compiler.LimitedAccuracy && refinement.newtyp.typ === Int
 end
 
 maybeget_mustalias_tmerge(x::AliasableField) = x.f
@@ -3281,6 +3510,14 @@ _merge_same_aliases2(a) = (@assert isa(a.f, Nothing); a.f) # ::MustAlias(a, Cons
 @test Base.return_types((Bool,AliasableField,)) do b, a
     return merge_same_aliases(b, a) # ::Union{Int,Nothing}
 end |> only === Union{Nothing,Int}
+_merge_same_aliases3(a) = (@assert isa(a.f, String); a.f) # ::MustAlias(a, Const(:f1), String)
+merge_same_aliases_nonconst(b, a) = b ? _merge_same_aliases1(a) : _merge_same_aliases3(a) # MustAlias(a, Const(:f1), Union{Int,String})
+@test Base.return_types((Bool,AliasableField,)) do b, a
+    if isa(merge_same_aliases_nonconst(b, a), Int)
+        return a.f # ::Int
+    end
+    return 0
+end |> only === Int
 
 # call-site refinement
 isaint(a) = isa(a, Int)
@@ -3340,6 +3577,41 @@ from_interconditional_check22(::Union{Int,String}, y) = isa(y, Int)
     end
     return 0
 end |> only === Int
+
+# a field alias is a different refinement target from its parent slot (JuliaLang/julia#63981)
+from_interconditional_check31(x::AliasableField, _) = isa(x.f, Int)
+@test Base.infer_return_type((AliasableField{Any},)) do x
+    if from_interconditional_check31(x, x.f)
+        return x.f
+    end
+    return nothing
+end === Union{Int,Nothing}
+from_interconditional_check32(_, x::AliasableField) = isa(x.f, Int)
+@test Base.infer_return_type((AliasableField{Any},)) do x
+    if from_interconditional_check32(x.f, x)
+        return x.f
+    end
+    return nothing
+end === Union{Int,Nothing}
+issue63981_mk(x) = (; status = x > 0 ? :a : :b, n = x)
+issue63981_f(nt, _) = nt.status === :a
+@test Base.infer_return_type((Int,)) do x
+    nt = issue63981_mk(x)
+    return issue63981_f(nt, nt.n)
+end === Bool
+
+# refine the aliased field when the argument is a slot holding a `MustAlias` of a field
+# whose type isn't a `Type`
+from_interconditional_check41_mk(c) = (; f = (; s = c ? :a : :b, n = 1))
+from_interconditional_check41(y) = y.s === :a
+@test Base.infer_return_type((Bool,)) do c
+    x = from_interconditional_check41_mk(c)
+    y = x.f
+    if from_interconditional_check41(y)
+        return Val(x.f.s)
+    end
+    return nothing
+end === Union{Val{:a},Nothing}
 
 # prioritize constraints on slot objects
 # https://github.com/aviatesk/JET.jl/issues/509
@@ -4780,7 +5052,8 @@ end
 for badf in [getfield_const_typename_bad1, getfield_const_typename_bad2]
     local badf
     local code = code_typed(badf, Tuple{})[1].first.code
-    @test Meta.isexpr(code[1], :call)
+    # the invalid `getfield` call is not constant-folded away
+    @test any(x -> Meta.isexpr(x, :call), code)
     @test code[end] === Core.ReturnNode()
     @test_throws TypeError badf()
 end
@@ -5086,6 +5359,46 @@ end == Int
         end
         return nothing
     end == Union{Nothing, String}
+    @test Base.infer_return_type((Any, Any)) do a, b
+        x = a; y = b
+        x, y = y, x
+        if b isa Int
+            return y
+        end
+        return nothing
+    end == Any
+    @test Base.infer_return_type((Any, Any)) do a, b
+        x = a; y = b
+        x, y = y, x
+        typeassert(b, Int)
+        return y
+    end == Any
+    # after the swap, `x` does hold `b` and should still be refined
+    @test Base.infer_return_type((Any, Any)) do a, b
+        x = a; y = b
+        x, y = y, x
+        if b isa Int
+            return x
+        end
+        return nothing
+    end == Union{Nothing, Int}
+    @test Base.infer_return_type((Any, Any, Bool)) do a, b, c
+        x = a
+        y = b
+        y, z = x, (c && (x = 1; true); y)
+        if x isa Int
+            return y
+        end
+        return nothing
+    end == Any
+    @test Base.infer_return_type((Any,)) do a
+        x = y = identity(a)
+        z = x
+        if x isa Int
+            return z
+        end
+        return nothing
+    end == Union{Nothing, Int}
     # typeassert-based refinement should also propagate to aliases
     @test Base.infer_return_type((Any,)) do x
         y = x
@@ -5438,9 +5751,10 @@ function call_func_itr(func, itr)
 end
 
 global inline_checker = c -> c # untyped global, a call of this func will prevent inlining
-# if `f` is inlined, `GlobalRef(m, :inline_checker)` should appear within the body of `invokef`
+# if `f` is inlined, a read of `inline_checker` should appear within the body of `invokef`
 function is_inline_checker(@nospecialize stmt)
-    isa(stmt, GlobalRef) && stmt.name === :inline_checker
+    (isa(stmt, GlobalRef) && stmt.name === :inline_checker) ||
+        (isa(stmt, Core.BindingPartition) && Base.partition_owner(stmt).globalref.name === :inline_checker)
 end
 
 function func_nospecialized(@nospecialize a)
@@ -6090,11 +6404,20 @@ end
 
 # Test that a function-wise `@max_methods` works as expected
 Base.Experimental.@max_methods 1 function f_max_methods end
-f_max_methods(x::Int) = 1
-f_max_methods(x::Float64) = 2
+f_max_methods(x::Int; k=1) = 1
+f_max_methods(x::Float64; k=1) = 2
+f_max_methods(x; k=1) = 3
 g_max_methods(x) = f_max_methods(x)
-@test only(Base.return_types(g_max_methods, Tuple{Int})) === Int
-@test only(Base.return_types(g_max_methods, Tuple{Any})) === Any
+@test Base.infer_return_type(g_max_methods, Tuple{Int}) === Int
+@test Base.infer_return_type(g_max_methods, Tuple{Any}) === Any
+@test Base.infer_return_type(x -> f_max_methods(x...), Tuple{Tuple{Int}}) === Int
+@test Base.infer_return_type(x -> f_max_methods(x...), Tuple{Tuple{Any}}) === Any
+@test Base.infer_return_type(x -> f_max_methods(x; k=2), Tuple{Int}) === Int
+@test Base.infer_return_type(x -> f_max_methods(x; k=2), Tuple{Any}) === Any
+@test Base.infer_return_type(x -> applicable(f_max_methods, x) ? 1 : nothing, Tuple{Int}) === Int
+@test Base.infer_return_type(x -> applicable(f_max_methods, x) ? 1 : nothing, Tuple{Any}) === Union{Nothing,Int}
+@test Base.infer_return_type(x -> applicable(f_max_methods, x; k=2) ? 1 : nothing, Tuple{Int}) === Int
+@test Base.infer_return_type(x -> applicable(f_max_methods, x; k=2) ? 1 : nothing, Tuple{Any}) === Union{Nothing,Int}
 
 # Test that `Core.TypeName.concrete_only` makes inference give up at call sites with
 # non-concrete argument types while keeping concrete call sites precise
@@ -7110,6 +7433,60 @@ struct NewExctInference
 end
 @test Base.infer_exception_type(NewExctInference, (Float64,)) == TypeError
 
+# exception types of atomic intrinsics (#63357)
+function atomic_load_invalid_order(p::Ptr{Int})
+    try
+        unsafe_load(p, :release)
+        return false
+    catch e
+        return e isa ConcurrencyViolationError
+    end
+end
+function atomic_fence_invalid_order()
+    try
+        Core.Intrinsics.atomic_fence(:unordered, :system)
+        return nothing
+    catch e
+        return e
+    end
+end
+@testset "exception types of atomic intrinsics" begin
+    buf = Int[0]
+    @test GC.@preserve buf atomic_load_invalid_order(pointer(buf))
+    @test Base.infer_return_type(atomic_fence_invalid_order, ()) >: ConcurrencyViolationError
+    @test atomic_fence_invalid_order() isa ConcurrencyViolationError
+
+    # the inferred exception type must cover what is thrown at run time, and only widen
+    # to `Any` when the call involves arbitrary code
+    U = Union{ConcurrencyViolationError, TypeError, ErrorException}
+    for (f, E, maxexct) in Any[
+            (p -> unsafe_load(p, :release), ConcurrencyViolationError, U),
+            (p -> unsafe_load(p, Base.inferencebarrier(:release)::Symbol), ConcurrencyViolationError, Any),
+            (p -> unsafe_store!(p, 1, :acquire), ConcurrencyViolationError, U),
+            (p -> unsafe_swap!(p, 1, :unordered), ConcurrencyViolationError, U),
+            (p -> unsafe_modify!(p, +, 1, :unordered), ConcurrencyViolationError, Any),
+            (p -> unsafe_replace!(p, 0, 1, :sequentially_consistent, :release), ConcurrencyViolationError, U),
+            (p -> unsafe_replace!(p, 0, 1, :monotonic, :acquire), ConcurrencyViolationError, U),
+            (p -> Core.Intrinsics.atomic_fence(:unordered, :system), ConcurrencyViolationError, U),
+            (p -> Core.Intrinsics.atomic_fence(:acquire, :invalid), ErrorException, U),
+            (p -> Core.Intrinsics.atomic_pointerref(p, 1), TypeError, U),
+            (p -> Core.Intrinsics.atomic_pointerset(p, 1.0, :release), TypeError, U),
+            (p -> unsafe_load(Ptr{NTuple{3,UInt8}}(p), :acquire), ErrorException, U)]
+        exct = Base.infer_exception_type(f, (Ptr{Int},))
+        @test E <: exct <: maxexct
+        ex = try
+            GC.@preserve buf f(pointer(buf))
+            nothing
+        catch e
+            e
+        end
+        @test ex isa E
+        @test ex isa exct
+    end
+    @test Compiler.builtin_exct(Compiler.SimpleInferenceLattice.instance,
+        Core.Intrinsics.atomic_pointermodify, Any[Ptr{Int}, typeof(+), Int, Symbol], Pair{Int,Int}) === Any
+end
+
 # semi-concrete interpretation accuracy
 # https://github.com/JuliaLang/julia/issues/50037
 @inline countvars50037(bitflags::Int, var::Int) = bitflags >> 0
@@ -7547,6 +7924,44 @@ end === Int
 @test Base.infer_return_type((String,)) do x
     swapglobal!(@__MODULE__, :swapglobal!_xxx, x)
 end === Union{}
+# a swap does both a load and store, so its order is validated once for both
+@test Base.infer_exception_type((Int,)) do x
+    swapglobal!(@__MODULE__, :swapglobal!_xxx, x, :unordered)
+end >: ConcurrencyViolationError
+@test !(Base.infer_exception_type((Int,)) do x
+    swapglobal!(@__MODULE__, :swapglobal!_xxx, x, :acquire_release)
+end >: ConcurrencyViolationError)
+
+# `replaceglobal!` reads the binding it writes, so it can throw `UndefVarError`
+@test Base.infer_exception_type((Module,)) do m
+    replaceglobal!(m, :swapglobal!_xxx, 1, 2)
+end >: UndefVarError
+# the `desired` value is type-checked before the comparison, so a bad store never returns
+@test Base.infer_return_type((String,)) do x
+    replaceglobal!(@__MODULE__, :swapglobal!_xxx, 1, x)
+end === Union{}
+@test Base.infer_return_type((Int,)) do x
+    replaceglobal!(@__MODULE__, :swapglobal!_xxx, 1, x)
+end === ccall(:jl_apply_cmpswap_type, Any, (Any,), Int)
+# a store through an import throws before anything is read, so no old value is returned
+module RMWGlobalImportSource
+    global rmwglobal_imported::Int = 1
+    global rmwglobal_used::Int = 2
+end
+import .RMWGlobalImportSource: rmwglobal_imported
+using .RMWGlobalImportSource: rmwglobal_used
+@test Base.infer_return_type((Int,)) do x
+    replaceglobal!(@__MODULE__, :rmwglobal_imported, 1, x)
+end === Union{}
+@test Base.infer_exception_type((Int,)) do x
+    replaceglobal!(@__MODULE__, :rmwglobal_imported, 1, x)
+end >: ErrorException
+@test Base.infer_return_type((Int,)) do x
+    swapglobal!(@__MODULE__, :rmwglobal_used, x)
+end === Union{}
+@test Base.infer_exception_type((Int,)) do x
+    swapglobal!(@__MODULE__, :rmwglobal_used, x)
+end >: ErrorException
 
 @newinterp AssumeBindingsStaticInterp
 Compiler.InferenceParams(::AssumeBindingsStaticInterp) = Compiler.InferenceParams(; assume_bindings_static=true)
@@ -7627,6 +8042,19 @@ global invalid_setglobal!_exct_modeling::Int
 @test Base.infer_exception_type((Float64,)) do x
     setglobal!(@__MODULE__, :invalid_setglobal!_exct_modeling, x)
 end == TypeError
+# a store by an unknown name may still reach a typed global that rejects the value
+@test Base.infer_exception_type((Module, Symbol, Float64)) do m, s, x
+    setglobal!(m, s, x)
+end === Union{ErrorException, TypeError}
+@test Base.infer_exception_type((Module, Symbol, Float64)) do m, s, x
+    setglobalonce!(m, s, x)
+end === Union{ErrorException, TypeError}
+@test Base.infer_exception_type((Module, Symbol, Float64)) do m, s, x
+    swapglobal!(m, s, x)
+end === Union{ErrorException, TypeError, UndefVarError}
+@test Base.infer_exception_type((Module, Symbol, Float64)) do m, s, x
+    replaceglobal!(m, s, 1, x)
+end === Union{ErrorException, TypeError, UndefVarError}
 
 # Issue #58257 - Hang in inference during BindingPartition resolution
 module A58257
@@ -7645,6 +8073,290 @@ A58257.get!      # Creates binding partition in A, N+1:∞
 A58257.B58257.get!    # Creates binding partition in A.B, N+1:∞
 Base.invoke_in_world(A58257.B58257.age, getglobal, A58257, :get!) # Expands binding partition in A through <N
 @test Base.infer_return_type(A58257.f) == typeof(Base.get!) # Attempt to lookup A.B in world age N hangs
+
+# Tests for `reformulate_globals_pass!`.
+module ReformGlobals
+    global g::Int = 0
+    getg() = g
+    setg!(v) = setglobal!(ReformGlobals, :g, v)
+end
+let readcode = code_typed(ReformGlobals.getg, ())[1][1].code,
+    writecode = code_typed(ReformGlobals.setg!, (Int,))[1][1].code
+    # the read is reformulated to a bare partition, with no `GlobalRef` left over
+    @test any(x -> isa(x, Core.BindingPartition), readcode)
+    @test !any(x -> isa(x, GlobalRef), readcode)
+    # the store reformulates to `BindingPartition = value`, even though `global g::Int`
+    # creates a one-world `PARTITION_KIND_DECLARED` partition just before the `= 0`
+    # assignment: the write must resolve the typed-global partition.
+    @test any(x -> Meta.isexpr(x, :(=)) && isa(x.args[1], Core.BindingPartition), writecode)
+end
+# The `load_consistent` bound must still span flag-only (`public`/`export`) partition
+# changes, so adding an `export` does not needlessly invalidate the store.
+module ReformGlobalsExport
+    global g::Int = 0
+    getg() = g
+    setg!(v) = setglobal!(ReformGlobalsExport, :g, v)
+    export g
+end
+let setg! = ReformGlobalsExport.setg!
+    b = convert(Core.Binding, GlobalRef(ReformGlobalsExport, :g))
+    exported_min = Base.lookup_binding_partition(Base.get_world_counter(), b).min_world
+    writeci = code_typed(setg!, (Int,))[1][1]
+    # store still reformulates
+    @test any(x -> Meta.isexpr(x, :(=)) && isa(x.args[1], Core.BindingPartition), writeci.code)
+    # and its validity spans back across the `export` flag-only partition boundary
+    @test writeci.min_world < exported_min
+end
+# A user-inserted `BindingPartition` should get handled the same as `GlobalRef` in IR.
+module ReformGlobalsSplice
+    global gdecl::Int # declared but unassigned: reading it throws UndefVarError
+end
+let b = convert(Core.Binding, GlobalRef(ReformGlobalsSplice, :gdecl)),
+    part = Base.lookup_binding_partition(Base.get_world_counter(), b),
+    readpart = @eval function ()
+        v = $(part)
+        return v
+    end
+    effects = Base.infer_effects(readpart, ())
+    @test !Compiler.is_consistent(effects)
+    @test !Compiler.is_nothrow(effects)
+    @test Base.infer_return_type(readpart, ()) == Int
+    @test Base.infer_exception_type(readpart, ()) == UndefVarError
+    @test_throws UndefVarError readpart()
+end
+# The partition queries may be handed a non-leaf (import) partition, whose restriction is
+# another binding rather than a value or a declared type: the `Core.*_partition` builtins are
+# ordinary functions, and a `Core.BindingPartition` can be spliced into hand-built code. Such
+# an access is resolved by an import walk at the calling world, and inference has no edge to
+# cover that walk, so it answers conservatively -- exactly as for an unresolved global read.
+module ReformGlobalsImport
+    module Inner
+        export gi
+        global gi::Int = 5
+        const ci = identity
+    end
+    using .Inner
+    import .Inner: ci
+end
+let b = convert(Core.Binding, GlobalRef(ReformGlobalsImport, :gi)),
+    part = Base.lookup_binding_partition(Base.get_world_counter(), b),
+    readpart = @eval function ()
+        v = $(part)
+        return v
+    end
+    @test !Compiler.is_leaf_partition(part)
+    @test Compiler.partition_singleton(part) === nothing
+    @test Compiler.partition_rt(part) === Any
+    @test Compiler.partition_rt_widened(part) === Any
+    @test Base.infer_return_type(readpart, ()) === Any
+    @test Base.infer_exception_type(readpart, ()) === UndefVarError
+    @test !Compiler.is_nothrow(Base.infer_effects(readpart, ()))
+    @test readpart() === 5
+end
+# Inference does not walk an imported partition in value position -- it has no edge to
+# cover the world-dependent walk -- so the callee stays dynamic even though the import
+# currently resolves to a constant. It must still run.
+let b = convert(Core.Binding, GlobalRef(ReformGlobalsImport, :ci)),
+    part = Base.lookup_binding_partition(Base.get_world_counter(), b),
+    callpart = @eval function (x)
+        f = $(part)
+        return f(x)
+    end
+    @test !Compiler.is_leaf_partition(part)
+    @test Compiler.partition_singleton(part) === nothing
+    @test callpart(42) === 42
+end
+
+# A read through an import still freezes its leaf, but as the call form carrying the source
+# `GlobalRef`: a bare partition would name the module the binding was imported from in the
+# `UndefVarError`, not the one the source asked for.
+module ReformGlobalsImportName
+    module Inner
+        export gu
+        global gu::Int          # declared, never assigned
+    end
+    using .Inner
+    getgu() = gu
+end
+let code = code_typed(ReformGlobalsImportName.getgu, ())[1][1].code
+    @test !any(x -> isa(x, Core.BindingPartition), code)
+    @test any(code) do x
+        Meta.isexpr(x, :call) && x.args[1] === GlobalRef(Core, :getglobal_partition) &&
+            x.args[2] === QuoteNode(GlobalRef(ReformGlobalsImportName, :gu)) &&
+            isa(x.args[3], QuoteNode) && isa(x.args[3].value, Core.BindingPartition)
+    end
+    # the frozen partition is still the leaf, so no import walk happens at run time
+    part = only(x.args[3].value for x in code
+                if Meta.isexpr(x, :call) && x.args[1] === GlobalRef(Core, :getglobal_partition))
+    @test Compiler.is_leaf_partition(part)
+    @test Base.partition_owner(part) === convert(Core.Binding, GlobalRef(ReformGlobalsImportName.Inner, :gu))
+    # and the error names the module the source asked for, as the unoptimized read does
+    err = try; ReformGlobalsImportName.getgu(); catch e; e; end
+    @test err isa UndefVarError && err.var === :gu && err.scope === ReformGlobalsImportName
+    err2 = try; getglobal(ReformGlobalsImportName, :gu); catch e; e; end
+    @test err2 isa UndefVarError && err2.var === :gu && err2.scope === ReformGlobalsImportName
+end
+# The same read in operand position: an operand slot cannot hold a call, so the call form is
+# inserted as its own statement and its value used, keeping the partition frozen.
+module ReformGlobalsImportOperand
+    module Inner
+        export go
+        global go::Int          # declared, never assigned
+    end
+    using .Inner
+    useo() = identity(go)
+end
+let code = code_typed(ReformGlobalsImportOperand.useo, ())[1][1].code
+    @test any(code) do x
+        Meta.isexpr(x, :call) && x.args[1] === GlobalRef(Core, :getglobal_partition) &&
+            x.args[2] === QuoteNode(GlobalRef(ReformGlobalsImportOperand, :go)) &&
+            isa(x.args[3], QuoteNode) && isa(x.args[3].value, Core.BindingPartition)
+    end
+    err = try; ReformGlobalsImportOperand.useo(); catch e; e; end
+    @test err isa UndefVarError && err.var === :go && err.scope === ReformGlobalsImportOperand
+end
+# An imported *constant* is always defined, so it has no error to misname and keeps the
+# bare-partition form.
+module ReformGlobalsImportConst
+    module Inner
+        export cu
+        const cu = 42
+    end
+    using .Inner
+    getcu() = cu
+end
+@test ReformGlobalsImportConst.getcu() === 42
+
+# An atomic order inference cannot prove constant does not keep an access on the runtime
+# path: it rides along on the reformulated node as an ordinary operand, which the
+# `Core.*_partition` builtin validates exactly as the access it replaces would. Only the
+# inlined access is given up (codegen falls back to a generic builtin call), not the frozen
+# partition or its invalidation edge.
+module ReformGlobalsOrder
+    global g::Int = 0
+    getg(o) = getglobal(ReformGlobalsOrder, :g, o)
+    setg!(v, o) = setglobal!(ReformGlobalsOrder, :g, v, o)
+    swapg!(v, o) = swapglobal!(ReformGlobalsOrder, :g, v, o)
+    replaceg!(c, v, o, fo) = replaceglobal!(ReformGlobalsOrder, :g, c, v, o, fo)
+    onceg!(v, o) = setglobalonce!(ReformGlobalsOrder, :g, v, o)
+    definedg(o) = isdefinedglobal(ReformGlobalsOrder, :g, true, o)
+    # a literal `nothing` operand: an invalid order, not an absent one
+    @eval setgnothing!(v) = setglobal!(ReformGlobalsOrder, :g, v, $(nothing))
+end
+# the sole reformulated `Core.<name>` call in the optimized code of `f(tt...)`
+function only_partition_call(@nospecialize(f), @nospecialize(tt::Tuple), name::Symbol)
+    code = code_typed(f, tt)[1][1].code
+    return only(x for x in code
+                if Meta.isexpr(x, :call) && x.args[1] === GlobalRef(Core, name))
+end
+is_frozen_partition(@nospecialize x) = isa(x, QuoteNode) && isa(x.value, Core.BindingPartition)
+let M = ReformGlobalsOrder
+    # every access still freezes its partition, with the unproven order as an operand
+    read = only_partition_call(M.getg, (Symbol,), :getglobal_partition)
+    @test is_frozen_partition(read.args[3]) && read.args[4] === Core.Argument(2)
+    store = only_partition_call(M.setg!, (Int,Symbol), :setglobal_partition)
+    @test is_frozen_partition(store.args[2]) && store.args[4] === Core.Argument(3)
+    swap = only_partition_call(M.swapg!, (Int,Symbol), :swapglobal_partition)
+    @test is_frozen_partition(swap.args[2]) && swap.args[4] === Core.Argument(3)
+    repl = only_partition_call(M.replaceg!, (Int,Int,Symbol,Symbol), :replaceglobal_partition)
+    @test is_frozen_partition(repl.args[2]) && repl.args[5] === Core.Argument(4) &&
+        repl.args[6] === Core.Argument(5)
+    once = only_partition_call(M.onceg!, (Int,Symbol), :setglobalonce_partition)
+    @test is_frozen_partition(once.args[2]) && once.args[4] === Core.Argument(3)
+    defined = only_partition_call(M.definedg, (Symbol,), :isdefinedglobal_partition)
+    @test is_frozen_partition(defined.args[2]) && defined.args[3] === Core.Argument(2)
+    # a `nothing` order is carried as an order, not mistaken for an absent argument
+    setnothing = only_partition_call(M.setgnothing!, (Int,), :setglobal_partition)
+    @test is_frozen_partition(setnothing.args[2]) && setnothing.args[4] === QuoteNode(nothing)
+    # and every forwarded order is validated as the access it replaced would validate it
+    @test M.getg(:acquire) === 0
+    @test_throws ConcurrencyViolationError M.getg(:not_atomic)
+    @test_throws TypeError M.getg(1)
+    @test M.setg!(3, :release) === 3
+    @test M.getg(:monotonic) === 3
+    @test_throws ConcurrencyViolationError M.setg!(4, :acquire)
+    @test_throws TypeError M.setg!(4, 1)
+    @test_throws TypeError M.setgnothing!(4)
+    @test M.swapg!(4, :acquire_release) === 3
+    @test M.replaceg!(4, 5, :acquire_release, :monotonic) === (old = 4, success = true)
+    @test !M.onceg!(6, :release)
+    @test M.definedg(:acquire)
+    @test_throws ConcurrencyViolationError M.definedg(:not_atomic)
+    @test M.getg(:acquire) === 5
+end
+
+# `modifyglobal!` reformulates like the other stores, in both the plain call form and the
+# `:invoke_modify` form the inliner gives it: the module and name become the frozen partition,
+# and an `:invoke_modify` keeps the reduce function's code instance so codegen still calls the
+# specialized op. A store that does not resolve names no partition, so it is left alone.
+module ReformGlobalsModify
+    module Inner
+        export mi
+        global mi::Int = 0
+    end
+    using .Inner                # a store to `mi` is an error, so it never resolves
+    global g::Int = 0
+    addg!(v) = modifyglobal!(ReformGlobalsModify, :g, +, v)
+    addmi!(v) = modifyglobal!(ReformGlobalsModify, :mi, +, v)
+    addgop!(op, v) = modifyglobal!(ReformGlobalsModify, :g, op, v)
+end
+# the callee is the `GlobalRef` the reformulation writes, or the builtin itself for a call
+# whose callee inlining already resolved
+is_modify_partition_callee(@nospecialize callee) =
+    callee === GlobalRef(Core, :modifyglobal_partition) || callee === Core.modifyglobal_partition
+is_modify_partition_call(@nospecialize x) =
+    iscall(is_modify_partition_callee, x) ||
+    (Meta.isexpr(x, :invoke_modify) && is_modify_partition_callee(x.args[2]))
+# the sole reformulated modify statement in the optimized code of `f(tt...)`
+only_modify_call(@nospecialize(f), @nospecialize(tt::Tuple)) =
+    only(x for x in code_typed(f, tt)[1][1].code if is_modify_partition_call(x))
+let M = ReformGlobalsModify
+    # a constant reduce function is statically dispatched, so the node keeps its code
+    # instance, and the resolved store names the frozen partition
+    inv = only_modify_call(M.addg!, (Int,))
+    @test Meta.isexpr(inv, :invoke_modify) && isa(inv.args[1], Core.CodeInstance)
+    @test is_frozen_partition(inv.args[3]) && inv.args[5] === Core.Argument(2)
+    # a store that does not resolve is left on the runtime path, code instance and all
+    unrescode = code_typed(M.addmi!, (Int,))[1][1].code
+    unres = only(x for x in unrescode if Meta.isexpr(x, :invoke_modify))
+    @test !any(is_modify_partition_call, unrescode)
+    @test isa(unres.args[1], Core.CodeInstance)
+    # a reduce function that is not statically dispatched has no code instance, so the store
+    # reformulates as a plain call
+    dyn = only_modify_call(M.addgop!, (Any,Int))
+    @test Meta.isexpr(dyn, :call) && is_frozen_partition(dyn.args[2])
+    # and each form runs, enforcing the declared type as `modifyglobal!` does
+    @test Base.infer_return_type(M.addg!, (Int,)) === Pair{Int,Int}
+    @test M.addg!(2) === (0 => 2)
+    # the resolved store records exactly one edge to the binding it froze
+    b = convert(Core.Binding, GlobalRef(M, :g))
+    @test count(==(b), collect(Base.method_instance(M.addg!, (Int,)).cache.edges)) == 1
+    @test M.addgop!(+, 5) === (2 => 7)
+    @test M.addgop!(-, 7) === (7 => 0)
+    @test_throws TypeError M.addgop!((_, _) -> 1.5, 1)
+    @test_throws "cannot assign a value to imported variable" M.addmi!(1)
+    @test M.Inner.mi === 0
+    # the builtin is modeled by `abstract_modifyop!`, like `modifyglobal!`: it takes the
+    # declared type from the frozen partition, and its reduce function is inlined the same
+    # way (so a hand-written call becomes an `:invoke_modify` too)
+    callpart = @eval v -> Core.modifyglobal_partition($(QuoteNode(inv.args[3].value)), +, v)
+    @test Base.infer_return_type(callpart, (Int,)) === Pair{Int,Int}
+    @test Meta.isexpr(only_modify_call(callpart, (Int,)), :invoke_modify)
+    @test callpart(3) === (0 => 3)
+    @test M.g === 3
+end
+
+# There should be exactly one edge to `g`, even though it is referenced twice.
+module ReformGlobalsEdges
+    global g::Int = 0
+    getgg() = g + g
+end
+let f = ReformGlobalsEdges.getgg
+    @test f() === 0
+    ci = Base.method_instance(f, ()).cache
+    b = convert(Core.Binding, GlobalRef(ReformGlobalsEdges, :g))
+    @test count(==(b), collect(ci.edges)) == 1
+end
 
 function tt57873(a::Vector{String}, pref)
     ret = String[]
@@ -7703,6 +8415,21 @@ end
 @test Float64 <: Base.infer_return_type(issue55548, (Int,))
 @test issue55548(Int64(0)) === 1.0
 
+# a `Conditional` on a since-reassigned slot must not be forwarded to const-prop as a
+# constraint on the slot's new value
+_stale_cond_pair(a, b) = (a, b)
+stale_cond1(c, n) = (h = (c && n === nothing); n = 1; _stale_cond_pair(n, h)[2] ? 1 : "")
+stale_cond2(n) = (h = n isa Nothing; n = 1; _stale_cond_pair(n, h)[2] ? 1 : "")
+stale_cond3(n) = _stale_cond_pair(n === nothing, (n = 1; n))[1] ? 1 : ""
+@test Base.infer_return_type(stale_cond1, (Bool, Nothing)) == Union{Int, String}
+@test Base.infer_return_type(stale_cond2, (Union{Nothing,Int},)) == Union{Int, String}
+@test Base.infer_return_type(stale_cond3, (Union{Nothing,Int},)) == Union{Int, String}
+@test stale_cond1(true, nothing) === 1
+# nor be applied to the slot's new value by the `Core.ifelse` refinement for builtins
+stale_cond4(n, m) = (h = n isa Int; n = m; Core.ifelse(h, n, 0))
+@test Base.infer_return_type(stale_cond4, (Union{Nothing,Int}, Union{Nothing,Int})) == Union{Nothing, Int}
+@test stale_cond4(1, nothing) === nothing
+
 # issue #60883: conditional propagation through wrapper functions
 mutable struct A60883
     a::Int
@@ -7721,6 +8448,41 @@ throwconditional(c, x) = c ? throw(x isa Int) : throw(x isa Float64)
 @test Base.infer_exception_type((Bool, Any)) do c, x
     throwconditional(c, x)
 end == Bool
+
+# A frame owned by another inference cache must not trigger sourceless cached-edge reuse.
+recursed_edge_cache_owner61177(x::Int) = x + 1
+let
+    world = Base.get_world_counter()
+    owner_a, owner_b = Ref(nothing), Ref(nothing)
+    interp_a = Compiler.NativeInterpreter(world;
+        inf_params=Compiler.InferenceParams(; cache_owner=owner_a))
+    interp_b = Compiler.NativeInterpreter(world;
+        inf_params=Compiler.InferenceParams(; cache_owner=owner_b))
+    target_mi = Base.method_instance(recursed_edge_cache_owner61177, (Int,))
+    target_ci = Core.CodeInstance(target_mi, owner_b, Int, Any,
+        nothing, nothing, zero(Int32), UInt(1), typemax(UInt), zero(UInt32),
+        nothing, nothing, Core.svec())
+    Compiler.code_cache(interp_b)[target_mi] = target_ci
+
+    caller = Compiler.InferenceState(
+        Compiler.InferenceResult(target_mi, Compiler.typeinf_lattice(interp_a)),
+        :global, interp_a)
+    Compiler.add_curr_ssaflag!(caller, Compiler.IR_FLAG_INLINE)
+    reinferred = Compiler.abstract_call_method(interp_b, target_mi.def, target_mi.specTypes,
+        Core.svec(), false, Compiler.StmtInfo(true, false), caller)
+    @test !isready(reinferred)
+    @test caller.callstack[end].cache_mode == Compiler.CACHE_MODE_LOCAL
+end
+
+# issue #61177: effects of a recursive `@inline` function must not degrade on re-inference
+f61177(@nospecialize x) = x isa Int ? @inline(f61177(x + 1)) + x : 0
+let eff = Base.infer_effects(f61177)
+    @test Compiler.is_consistent(eff)
+    @test Compiler.is_effect_free(eff)
+    @test Compiler.is_nothrow(eff)
+    @test !Compiler.is_terminates(eff)
+    @test eff == Base.infer_effects(f61177)
+end
 
 # issue #60715
 let
@@ -7747,6 +8509,8 @@ f60252(f, nt::NamedTuple) = NamedTuple{keys(nt)}(f(v) for v in values(nt))
 @inferred f60252(identity, (a=1, b=2))
 f60252_2(t::Tuple) = NamedTuple{(:a, :b), typeof(t)}(t)
 @test Base.infer_return_type(f60252_2, (Tuple{Vararg{Int64}},)) == @NamedTuple{a::Int64, b::Int64}
+f60252_3(::Type{T}) where {T<:Tuple{Any}} = NamedTuple{(), T}(())
+@test Base.infer_return_type(f60252_3, (Type{T} where T<:Tuple{Any},)) === Union{}
 
 # perform post const-prop' concrete evaluation when effects are further improved by const-prop'
 @noinline function concrete_eval_eligible_if_false(x::Float64, n::Int, y::Bool)
@@ -7860,5 +8624,61 @@ function splatted_task_invoke(@nospecialize(rest::Tuple))
     return fetch(schedule(t))
 end
 @test Base.infer_return_type(splatted_task_invoke, (Tuple,)) === Tuple{}
+
+# `invoke` with a signature narrower than the method signature must keep the
+# runtime `TypeError` check: the call is neither `nothrow` nor inlinable unless
+# the argument types are known to satisfy the requested signature.
+invoke_narrower_target(::Integer) = 1
+invoke_narrower(x::Integer) = invoke(invoke_narrower_target, Tuple{Int}, x)
+invoke_covered(x::Int) = invoke(invoke_narrower_target, Tuple{Integer}, x)
+@testset "invoke with a signature narrower than the method signature" begin
+    @test Base.infer_return_type(invoke_narrower, (Integer,)) === Int
+    @test Base.infer_exception_type(invoke_narrower, (Integer,)) === TypeError
+    @test !Compiler.is_nothrow(Base.infer_effects(invoke_narrower, (Integer,)))
+    @test !fully_eliminated(invoke_narrower, (Integer,))
+    @test_throws TypeError invoke_narrower(big(1))
+    @test invoke_narrower(1) === 1
+    # when the argument types are known to satisfy the requested signature,
+    # the call is still fully covered
+    @test Base.infer_exception_type(invoke_covered, (Int,)) === Union{}
+    @test Compiler.is_nothrow(Base.infer_effects(invoke_covered, (Int,)))
+    @test fully_eliminated(invoke_covered, (Int,); retval=1)
+end
+
+# JuliaLang/julia#63351: merging vararg-tuple `PartialStruct`s must keep the trailing `Vararg`
+issue63351(c, xs) = c ? (1, :a, xs...) : (2, :a, xs...)
+@testset "tmerge of vararg-tuple `PartialStruct`s" begin
+    @test Base.infer_return_type(issue63351, (Bool, Vector{Any})) == Tuple{Int, Symbol, Vararg{Any}}
+    @test issue63351(true, Any[3]) === (1, :a, 3)
+end
+
+# irinterp must visit every reachable block even when block numbers are not in
+# topological order: once constant folding kills the fall-through path into a join
+# block, that block may be reachable only through a jump from a higher-numbered block (#63136)
+struct IRInterpScanDual{V}
+    value::V
+    partial::V
+end
+Base.one(x::IRInterpScanDual{V}) where {V} = IRInterpScanDual(one(V), zero(V))
+Base.:*(x::IRInterpScanDual, y::IRInterpScanDual) = IRInterpScanDual(x.value*y.value, x.partial*y.value + y.partial*x.value)
+Base.:*(x::IRInterpScanDual, y::Int) = IRInterpScanDual(x.value*y, x.partial*y)
+@inline function Base.:^(x::IRInterpScanDual, y::Int)
+    v = x.value
+    p = (y == 0 || x.partial == 0) ? x.partial * 0 : x.partial * y * v^(y-1)
+    return IRInterpScanDual(v^y, p)
+end
+@inline irinterp_scan_derivative(f, x) = f(IRInterpScanDual(x, one(x))).partial
+irinterp_scan_square(t) = t^2
+irinterp_scan_d1(t) = irinterp_scan_derivative(irinterp_scan_square, t)
+irinterp_scan_d2(t) = irinterp_scan_derivative(irinterp_scan_d1, t)
+@test Base.infer_return_type(irinterp_scan_d2, (Int,)) === Int
+@test irinterp_scan_d2(2) == 2
+
+# irinterp must keep splats precise after the optimizer turns them into `Core.svec` calls
+const SPLAT_SVEC_NAMES = ntuple(i -> Symbol(:a, i), 33)
+@inline splat_svec_inner(names, vals...) = NamedTuple{names}(vals)
+@inline splat_svec_outer(names, vals::Tuple) = splat_svec_inner(names, vals...)
+splat_svec_caller(vals) = splat_svec_outer(SPLAT_SVEC_NAMES, vals)
+@test Base.infer_return_type(splat_svec_caller, (NTuple{33,Int},)) === NamedTuple{SPLAT_SVEC_NAMES, NTuple{33,Int}}
 
 end # module inference

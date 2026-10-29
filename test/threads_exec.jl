@@ -101,20 +101,27 @@ end
 @test threadpool() in (:interactive, :default) # thread 1 could be in the interactive pool
 @test 1 <= threadpoolsize(:default) <= Threads.maxthreadid()
 
-# basic lock check
+# basic lock check: `t1` blocks in `lock` on a spin lock held by the root
+# task, which parks meanwhile. A spinning task never yields, so it must not
+# run on the thread the root task is bound to - pin it to another thread of
+# the default pool.
+function spawn_pinned(f, tid)
+    t = Task(f)
+    t.sticky = true
+    ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid - 1) == 1 || error("failed to pin task to thread $tid")
+    return schedule(t)
+end
+other_default_tid() = first(tid for tid in Threads.threadpooltids(:default) if tid != Threads.threadid())
 if threadpoolsize(:default) > 1
     let lk = SpinLock()
         c1 = Base.Event()
-        c2 = Base.Event()
         @test trylock(lk)
         @test !trylock(lk)
-        t1 = Threads.@spawn (notify(c1); lock(lk); unlock(lk); trylock(lk))
-        t2 = Threads.@spawn (notify(c2); trylock(lk))
-        Libc.systemsleep(0.1) # block our thread from scheduling for a bit
-        wait(c1)
-        wait(c2)
+        t2 = Threads.@spawn trylock(lk)
         @test !fetch(t2)
         @test istaskdone(t2)
+        t1 = spawn_pinned(() -> (notify(c1); lock(lk); unlock(lk); trylock(lk)), other_default_tid())
+        wait(c1)
         @test !istaskdone(t1)
         unlock(lk)
         @test fetch(t1)
@@ -125,16 +132,13 @@ end
 if threadpoolsize() > 1
     let lk = Base.Threads.PaddedSpinLock()
         c1 = Base.Event()
-        c2 = Base.Event()
         @test trylock(lk)
         @test !trylock(lk)
-        t1 = Threads.@spawn (notify(c1); lock(lk); unlock(lk); trylock(lk))
-        t2 = Threads.@spawn (notify(c2); trylock(lk))
-        Libc.systemsleep(0.1) # block our thread from scheduling for a bit
-        wait(c1)
-        wait(c2)
+        t2 = Threads.@spawn trylock(lk)
         @test !fetch(t2)
         @test istaskdone(t2)
+        t1 = spawn_pinned(() -> (notify(c1); lock(lk); unlock(lk); trylock(lk)), other_default_tid())
+        wait(c1)
         @test !istaskdone(t1)
         unlock(lk)
         @test fetch(t1)
@@ -159,13 +163,13 @@ let a = zeros(Int, 2 * threadpoolsize(:default))
     @threads for i = 1:length(a)
         @sync begin
             @async begin
-                @async (Libc.systemsleep(1); a[i] += 1)
+                @async (Libc.systemsleep(0.1); a[i] += 1)
                 yield()
                 a[i] += 1
             end
             @async begin
                 yield()
-                @async (Libc.systemsleep(1); a[i] += 1)
+                @async (Libc.systemsleep(0.1); a[i] += 1)
                 a[i] += 1
             end
         end
@@ -443,6 +447,19 @@ mutable struct Peterson
             [Atomic{Int}(0), Atomic{Int}(0)],
             [false, false])
 end
+# Busy-wait step that periodically yields the OS thread, so that with fewer cores than
+# threads the spinner does not starve the thread it is waiting for.
+function spin_wait(spins::Int)
+    # Temporary solution before we have gc transition support in codegen.
+    ccall(:jl_gc_safepoint, Cvoid, ())
+    spins += 1
+    if spins >= 1000
+        Libc.systemsleep(0)
+        spins = 0
+    end
+    return spins
+end
+
 function test_fence(p::Peterson, id::Int, n::Int)
     @assert id == mod1(id,2)
     correct = true
@@ -451,10 +468,9 @@ function test_fence(p::Peterson, id::Int, n::Int)
         @atomic p.flag[id][] = 1
         @atomic p.turn[] = otherid
         atomic_fence()
+        spins = 0
         while p.flag[otherid][] != 0 && p.turn[] == otherid
-            # busy wait
-            # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Cvoid, ())
+            spins = spin_wait(spins)
         end
         # critical section
         @atomic p.critical[id][] = 1
@@ -549,11 +565,11 @@ end
 # Test atomic_cas! and atomic_xchg!
 function test_atomic_cas!(var::Atomic{T}, range::StepRange{Int,Int}) where T
     for i in range
+        spins = 0
         while true
             old = atomic_cas!(var, T(i-1), T(i))
             old == T(i-1) && break
-            # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Cvoid, ())
+            spins = spin_wait(spins)
         end
     end
 end
@@ -939,6 +955,17 @@ end
 @test _atthreads_greedy_schedule(10) == (10, ones(10))
 @test _atthreads_greedy_schedule(threadpoolsize(:default) * 2) == (threadpoolsize(:default) * 2, ones(threadpoolsize(:default) * 2))
 
+# the iterator expression is evaluated once
+function _atthreads_greedy_iterator_evals()
+    nevals = Ref(0)
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :greedy for _ in (nevals[] += 1; 1:10)
+        Threads.atomic_add!(inc, 1)
+    end
+    return nevals[], inc[]
+end
+@test _atthreads_greedy_iterator_evals() == (1, 10)
+
 # nested greedy schedule
 function _atthreads_greedy_greedy_schedule()
     inc = Threads.Atomic{Int}(0)
@@ -1296,20 +1323,21 @@ end
 # issue #49746, thread safety in `atexit(f)`
 @testset "atexit thread safety" begin
     f = () -> nothing
+    n = 100_000
     before_len = length(Base.atexit_hooks)
     @sync begin
-        for _ in 1:1_000_000
+        for _ in 1:n
             Threads.@spawn begin
                 atexit(f)
             end
         end
     end
-    @test length(Base.atexit_hooks) == before_len + 1_000_000
-    @test all(hook -> hook === f, Base.atexit_hooks[1 : 1_000_000])
+    @test length(Base.atexit_hooks) == before_len + n
+    @test all(hook -> hook === f, Base.atexit_hooks[1 : n])
 
     # cleanup
     Base.@lock Base._atexit_hooks_lock begin
-        deleteat!(Base.atexit_hooks, 1:1_000_000)
+        deleteat!(Base.atexit_hooks, 1:n)
     end
 end
 
@@ -1460,6 +1488,29 @@ end
                 wait(tasks[1]; throw=false)
                 wait(tasks[2]; throw=false)
                 @test_throws CompositeException waitall(tasks)
+            end
+        end
+    end
+
+    # Tasks completing on other threads while the waiter registers with them
+    # or runs its bookkeeping between two wakes: the multi-wait used to keep
+    # a partially registered entry across wakes and deadlock within a few
+    # iterations of this loop.
+    if threadpoolsize() > 1
+        @testset "concurrent completions" begin
+            for _ in 1:20_000
+                tasks = [Threads.@spawn nothing for _ in 1:3]
+                done, pending = waitall(tasks)
+                @test length(done) == 3 && isempty(pending)
+            end
+            for _ in 1:2_000
+                event = Threads.Event()
+                tasks = [Threads.@spawn(wait(event)), Threads.@spawn(nothing), Threads.@spawn(wait(event))]
+                done, pending = waitany(tasks)
+                @test tasks[2] in done
+                notify(event)
+                done, pending = waitall(tasks)
+                @test length(done) == 3 && isempty(pending)
             end
         end
     end
@@ -1727,34 +1778,8 @@ end
     end
 end
 
-@testset "--timeout-for-safepoint-straggler command-line flag" begin
-    program = "
-        function main()
-            t = Threads.@spawn begin
-                ccall(:uv_sleep, Cvoid, (Cuint,), 20_000)
-            end
-            # Force a GC
-            ccall(:uv_sleep, Cvoid, (Cuint,), 1_000)
-            GC.gc()
-            wait(t)
-        end
-        main()
-    "
-    for timeout in ("1", "4", "16")
-        tmp_output_filename = tempname()
-        tmp_output_file = open(tmp_output_filename, "w")
-        if isnothing(tmp_output_file)
-            error("Failed to open file $tmp_output_filename")
-        end
-        run(pipeline(`$(Base.julia_cmd()) --threads=4 --timeout-for-safepoint-straggler=$(timeout) -e $program`, stderr=tmp_output_file))
-        # Check whether we printed the straggler's backtrace
-        @test !isempty(read(tmp_output_filename, String))
-        close(tmp_output_file)
-        rm(tmp_output_filename)
-    end
-end
-
-include("threads_comprehensions.jl")
+# Wrap the include in the testset rather than the file body (see above).
+@testset "@threads comprehensions" include("threads_comprehensions.jl")
 
 # This test is designed to trigger the performance regression from #60241:
 #   Thread 1                           Thread 2

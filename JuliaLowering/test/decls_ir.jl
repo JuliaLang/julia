@@ -4,18 +4,17 @@ begin
     local x::T = 1
 end
 #---------------------
-1   (newvar slot₁/x)
-2   1
-3   TestMod.T
-4   (= slot₂/tmp %₂)
-5   (call core.isa slot₂/tmp %₃)
-6   (gotoifnot %₅ label₈)
-7   (goto label₁₀)
-8   (call top.convert %₃ slot₂/tmp)
-9   (= slot₂/tmp (call core.typeassert %₈ %₃))
-10  slot₂/tmp
-11  (= slot₁/x %₁₀)
-12  (return %₂)
+1   1
+2   TestMod.T
+3   (= slot₂/tmp %₁)
+4   (call core.isa slot₂/tmp %₂)
+5   (gotoifnot %₄ label₇)
+6   (goto label₉)
+7   (call top.convert %₂ slot₂/tmp)
+8   (= slot₂/tmp (call core.typeassert %₇ %₂))
+9   slot₂/tmp
+10  (= slot₁/x %₉)
+11  (return %₁)
 
 ########################################
 # Local declarations outside a scope could be disallowed
@@ -86,13 +85,13 @@ const xx = 10
 const xx::T = 10
 #---------------------
 1   TestMod.T
-2   (= slot₁/tmp 10)
-3   (call core.isa slot₁/tmp %₁)
+2   (= slot₁/ 10)
+3   (call core.isa slot₁/ %₁)
 4   (gotoifnot %₃ label₆)
 5   (goto label₈)
-6   (call top.convert %₁ slot₁/tmp)
-7   (= slot₁/tmp (call core.typeassert %₆ %₁))
-8   slot₁/tmp
+6   (call top.convert %₁ slot₁/)
+7   (= slot₁/ (call core.typeassert %₆ %₁))
+8   slot₁/
 9   (call core.declare_const TestMod :xx %₈)
 10  latestworld
 11  (return %₈)
@@ -380,7 +379,7 @@ end
 4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any)
 6   (call core.svec)
-7   SourceLocation::1:1
+7   SourceLocation:1
 8   (call core.svec %₅ %₆ %₇)
 9   (call core.define_method TestMod TestMod.f %₈
     --- code_info

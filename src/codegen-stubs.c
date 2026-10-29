@@ -66,7 +66,7 @@ JL_DLLEXPORT void jl_emit_codeinsts_to_jit_fallback(jl_code_instance_t **codeins
         if (jl_is_code_info(inferred))
             continue;
         if (jl_is_svec(src->edges)) {
-            jl_gc_write_atomic(codeinst, codeinst->inferred, jl_value_t, (jl_value_t*)src->edges, release);
+            jl_gc_write_atomic(codeinst, codeinst->edges, jl_svec_t, (jl_svec_t*)src->edges, release);
         }
         jl_gc_write_atomic(codeinst, codeinst->debuginfo, jl_debuginfo_t, src->debuginfo, release);
         jl_gc_write_atomic(codeinst, codeinst->inferred, jl_value_t, (jl_value_t*)src, release);
@@ -123,6 +123,16 @@ JL_DLLEXPORT int jl_objcache_kv_enabled_fallback(void)
     return 0;
 }
 
+JL_DLLEXPORT int64_t jl_objcache_prune_fallback(int64_t cutoff)
+{
+    return 0;
+}
+
+JL_DLLEXPORT const char *jl_objcache_compact_fallback(const char *dir)
+{
+    return "the native code cache is not available";
+}
+
 JL_DLLEXPORT void jl_jit_register_ci_fallback(jl_code_instance_t *ci)
 {
 }
@@ -142,6 +152,10 @@ JL_DLLEXPORT void jl_dump_emitted_mi_name_fallback(void *s)
 {
 }
 
+JL_DLLEXPORT void jl_set_debuginfo_source_paths_fallback(jl_value_t *map)
+{
+}
+
 JL_DLLEXPORT void jl_dump_llvm_opt_fallback(void *s)
 {
 }
@@ -157,6 +171,8 @@ JL_DLLEXPORT void jl_get_function_id_fallback(void *native_code, jl_code_instanc
 JL_DLLEXPORT void *jl_get_llvm_function_fallback(void *native_code, uint32_t idx) UNAVAILABLE
 
 JL_DLLEXPORT LLVMOrcThreadSafeModuleRef jl_get_llvm_module_fallback(void *native_code) UNAVAILABLE
+
+JL_DLLEXPORT void jl_free_native_fallback(void *native_code) UNAVAILABLE
 
 JL_DLLEXPORT void *jl_type_to_llvm_fallback(jl_value_t *jt, LLVMContextRef llvmctxt, bool_t *isboxed) UNAVAILABLE
 

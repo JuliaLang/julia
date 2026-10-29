@@ -1,6 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaLICM' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='JuliaLICM' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
 ; COM: This file contains functions that currently do not trigger allocations to be hoisted out of loops
 ; COM: i.e. they are missed optimizations
@@ -69,7 +69,7 @@ return:
 
 
 
-declare void @julia.write_barrier({}*, ...)
+declare void @julia.object_write_barrier({}*, ...)
 
 declare {}*** @julia.get_pgcstack()
 

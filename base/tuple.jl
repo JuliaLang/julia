@@ -253,9 +253,10 @@ function split_rest(itr, n::Int, state...)
 end
 _split_rest(itr, n::Int) = _split_rest(collect(itr), n)
 function _check_length_split_rest(len, n)
-    len < n && throw(ArgumentError(
-        "The iterator only contains $len elements, but at least $n were requested."
-    ))
+    n < 0 && throw(ArgumentError(LazyString("n cannot be negative: ", n)))
+    len < n && throw(ArgumentError(LazyString(
+        "The iterator only contains ", len, " elements, but at least ", n, " were requested."
+    )))
 end
 function _split_rest(a::Union{AbstractArray, Core.SimpleVector}, n::Int)
     _check_length_split_rest(length(a), n)
@@ -379,8 +380,16 @@ end
 
 function front(t::Any32)
     n = length(t) - 1
-    r = ntuple(i -> getfield(t, i), n)
-    return r::Tuple{Vararg{eltype(typeof(t))}}
+    r = ntuple(i -> getfield(t, i), n)::Tuple{Vararg{eltype(typeof(t))}}
+    return r::_front_type(typeof(t))
+end
+
+# Preserve inference without recursively rebuilding the tuple.
+function _front_type(@nospecialize T::Type{<:Tuple})
+    @_foldable_meta
+    (T isa DataType && !isvatuple(T)) || return Tuple
+    params = (T::DataType).parameters
+    return Tuple{params[1:(length(params)::Int - 1)]...}
 end
 
 function map(f, t::Any32)

@@ -44,7 +44,7 @@ using .JuliaSyntax:
 
 if VERSION < v"1.6"
     # Compat stuff which might not be in Base for older versions
-    using JuliaSyntax: isnothing, only, peek
+    using JuliaSyntax: isnothing, only
 end
 
 function toks(str)
@@ -422,9 +422,9 @@ function parse_sexpr(code)
     st = ParseStream(code)
     pos_stack = ParseStreamPosition[]
     while true
-        k = peek(st)
+        k = JuliaSyntax.peek(st)
         if k == K"("
-            push!(pos_stack, position(st))
+            push!(pos_stack, JuliaSyntax.position(st))
             bump(st, TRIVIA_FLAG)
         elseif k == K")"
             if isempty(pos_stack)
@@ -463,7 +463,14 @@ function _Meta_parse_string(text::AbstractString, filename::AbstractString,
     if index < 1 || index > ncodeunits(text) + 1
         throw(BoundsError(text, index))
     end
-    ex, offset::Int = JuliaSyntax.core_parser_hook(text, filename, lineno, index-1, options)
+    if isdefined(Base, :Syntax)
+        # The hook installed by `enable_in_core!` here returns `Syntax`
+        ex, offset::Int = JuliaSyntax.new_core_parser_hook(
+            text, filename, lineno, index-1, options, JuliaSyntax.VERSION_EDITION)
+        ex isa Base.Syntax && (ex = Base.syntax_to_expr(ex))
+    else
+        ex, offset = JuliaSyntax.core_parser_hook(text, filename, lineno, index-1, options)
+    end
     ex, offset+1
 end
 

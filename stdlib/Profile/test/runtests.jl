@@ -129,6 +129,28 @@ test_has_task_profiler_sample_in_buffer()
     end
 end
 
+@testset "task profiling after an adopted thread exits" begin
+    # an exited adopted thread leaves its ptls behind with a NULL root task
+    script = """
+        using Profile
+        function run_foreign_thread()
+            tid = Ref{UInt}(0)
+            cf = @cfunction(p -> (Threads.threadid(); nothing), Cvoid, (Ptr{Cvoid},))
+            err = @ccall uv_thread_create(tid::Ptr{UInt}, cf::Ptr{Cvoid}, C_NULL::Ptr{Cvoid})::Cint
+            err == 0 || Base.uv_error("uv_thread_create", err)
+            gc_state = @ccall jl_gc_safe_enter()::Int8
+            err = @ccall uv_thread_join(tid::Ptr{UInt})::Cint
+            @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+            err == 0 || Base.uv_error("uv_thread_join", err)
+        end
+        run_foreign_thread()
+        @assert current_task() in @ccall jl_live_tasks()::Vector{Any}
+        @profile_walltime sum(sin, 1:10^7)
+        print("done")
+        """
+    @test read(`$(Base.julia_cmd()) --startup-file=no -e $script`, String) == "done"
+end
+
 Profile.clear()
 
 @profile busywait(1, 20)
@@ -294,13 +316,11 @@ end
     end
     _, fdictc = Profile.flatten(Profile.retrieve()...)
     Base.update_stackframes_callback[] = identity
-    function getline(sfs)
-        for sf in sfs
-            sf.func === :busywait && return sf.line
-        end
-        nothing
-    end
-    @test getline(values(fdictc)) == getline(values(fdict0)) + 2
+    # several busywait frames can be sampled, so compare all of them
+    getlines(sfs) = sort!(unique!([sf.line for sf in sfs if sf.func === :busywait]))
+    lines0 = getlines(values(fdict0))
+    @test !isempty(lines0)
+    @test getlines(values(fdictc)) == lines0 .+ 2
 end
 
 import InteractiveUtils

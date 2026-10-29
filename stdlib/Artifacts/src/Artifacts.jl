@@ -602,7 +602,7 @@ function __artifact_str(__module__, artifacts_toml, name, path_tail, artifact_di
     error("Artifact $(repr(name)) was not found by looking in the $(path_str)$suggestion_str")
 end
 
-raw"""
+@doc raw"""
     split_artifact_slash(name::String)
 
 Splits an artifact indexing string by path delimiters, isolates the first path element,

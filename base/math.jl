@@ -882,14 +882,15 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
         xu = (xu & ~exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
         return reinterpret(T, xu)
     else # subnormal case
-        if k <= -significand_bits(T) # underflow
+        # results with k == -significand_bits(T) are at least nextfloat(zero(T))/2, so may round up
+        if k <= -significand_bits(T) - 1 # underflow
             # overflow, for the case of integer overflow in n + k
             e > 50000 && return flipsign(T(Inf), x)
             return flipsign(T(0.0), x)
         end
-        k += significand_bits(T)
-        # z = T(2.0) ^ (-significand_bits(T))
-        z = reinterpret(T, rem(exponent_bias(T)-significand_bits(T), uinttype(T)) << significand_bits(T))
+        k += significand_bits(T) + 1
+        # z = T(2.0) ^ (-significand_bits(T) - 1)
+        z = reinterpret(T, rem(exponent_bias(T)-significand_bits(T)-1, uinttype(T)) << significand_bits(T))
         xu = (xu & ~exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
         return z*reinterpret(T, xu)
     end
@@ -904,6 +905,9 @@ For a normalized floating-point number `x`, this corresponds to the exponent of 
 
 Throws a `DomainError` when `x` is zero, infinite, or [`NaN`](@ref).
 For any other non-subnormal floating-point number `x`, this corresponds to the exponent bits of `x`.
+
+!!! compat "Julia 1.14"
+    Calling `exponent` on a `Bool` requires Julia 1.14 or later.
 
 See also [`signbit`](@ref), [`significand`](@ref), [`frexp`](@ref), [`issubnormal`](@ref), [`log2`](@ref), [`ldexp`](@ref).
 # Examples
@@ -984,6 +988,14 @@ function exponent(x::Base.BitInteger)
     iszero(x) && throw(DomainError(x, "cannot be zero"))
     ux = Base.uabs(x)
     return 8sizeof(ux) - leading_zeros(ux) - 1
+end
+
+function exponent(x::Bool)
+    if x
+        0
+    else
+        throw(DomainError(x, "cannot be zero"))
+    end
 end
 
 """

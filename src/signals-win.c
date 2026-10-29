@@ -49,7 +49,7 @@ void __cdecl crt_sig_handler(int sig, int num)
     case SIGINT:
         signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler);
         if (!jl_ignore_sigint()) {
-            if (exit_on_sigint)
+            if (jl_sigint_get_policy() == JL_SIGINT_EXIT)
                 jl_exit(130); // 128 + SIGINT
             // This handler runs synchronously on the raising thread. If that
             // is a GC-unsafe Julia mutator, the request path's GC exclusion
@@ -58,14 +58,17 @@ void __cdecl crt_sig_handler(int sig, int num)
             // then holds off any new collection while the sources are
             // touched).
             jl_task_t *ct = jl_get_current_task();
+            int delivered;
             if (ct != NULL && ct->ptls != NULL) {
                 int8_t gc_state = jl_gc_safe_enter(ct->ptls);
-                jl_sigint_request_cancellation();
+                delivered = jl_sigint_request_cancellation();
                 jl_gc_safe_leave(ct->ptls, gc_state);
             }
             else {
-                jl_sigint_request_cancellation();
+                delivered = jl_sigint_request_cancellation();
             }
+            if (!delivered)
+                jl_exit(130); // 128 + SIGINT
         }
         break;
     default: // SIGSEGV, SIGTERM, SIGILL, SIGABRT
@@ -208,7 +211,10 @@ static SRWLOCK ctx_rewrite_lock = SRWLOCK_INIT;
 // before any frame-based SEH search, so the synthetic frame needs no unwind
 // information.)
 
-static void *jl_win_restore_page = NULL;
+// Only the assembly of jl_win_restore_trigger refers to this by name, which
+// LTO cannot see, so keep it external and marked used: otherwise it is
+// internalized away and the stub is left with an undefined reference.
+__attribute__((used)) void *jl_win_restore_page = NULL;
 
 static inline int jl_addr_is_win_restore_trigger(uintptr_t addr)
 {
@@ -219,24 +225,8 @@ static inline int jl_addr_is_win_restore_trigger(uintptr_t addr)
 // The return target rigged under the trampoline. An asm stub (rather than a
 // C function) so that no prologue moves Rsp before the faulting read: at the
 // fault, Rsp still points just below the saved CONTEXT.
+// Defined in arch/<arch>/win_restore_trigger.S
 extern void jl_win_restore_trigger(void);
-#if defined(_CPU_X86_64_)
-__asm__(
-    "  .globl jl_win_restore_trigger\n"
-    "jl_win_restore_trigger:\n"
-    "  movq jl_win_restore_page(%rip), %r11\n"
-    "  movq (%r11), %r11\n" // EXCEPTION_ACCESS_VIOLATION here
-    "  ud2\n"               // should never reach here
-);
-#elif defined(_CPU_X86_)
-__asm__(
-    "  .globl _jl_win_restore_trigger\n"
-    "_jl_win_restore_trigger:\n"
-    "  movl _jl_win_restore_page, %eax\n"
-    "  movl (%eax), %eax\n" // EXCEPTION_ACCESS_VIOLATION here
-    "  ud2\n"               // should never reach here
-);
-#endif
 
 // Runs on the interrupted thread with the interrupted CONTEXT saved on the
 // stack below: invoke the registered cancellation handler with its
@@ -264,6 +254,8 @@ static void jl_win_call_in_context(CONTEXT *ctx, void (*fptr)(void), uintptr_t a
     ctx->Rsp = sp;
     ctx->Rip = (uintptr_t)fptr;
     ctx->Rcx = arg0;
+    // the interrupted code may have set the direction flag, which C code expects clear
+    ctx->EFlags &= ~0x400;
 #elif defined(_CPU_X86_)
     uintptr_t sp = (uintptr_t)ctx->Esp;
     sp = (sp - sizeof(CONTEXT)) & ~(uintptr_t)15;
@@ -275,6 +267,8 @@ static void jl_win_call_in_context(CONTEXT *ctx, void (*fptr)(void), uintptr_t a
     *(uintptr_t*)sp = (uintptr_t)&jl_win_restore_trigger;
     ctx->Esp = sp;
     ctx->Eip = (uintptr_t)fptr;
+    // the interrupted code may have set the direction flag, which C code expects clear
+    ctx->EFlags &= ~0x400;
 #endif
 }
 
@@ -510,6 +504,16 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
 
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
+    // libuv reports these console events as the same signals.
+    int watched = wsig == CTRL_C_EVENT ? SIGINT :
+                  wsig == CTRL_BREAK_EVENT ? SIGBREAK :
+                  wsig == CTRL_CLOSE_EVENT ? SIGHUP : 0;
+    if (jl_notify_signal_watchers(watched)) {
+        // windows ends the process once this returns, so give the watcher time to run
+        if (wsig == CTRL_CLOSE_EVENT)
+            Sleep(INFINITE);
+        return 1;
+    }
     int sig;
     //windows signals use different numbers from unix (raise)
     switch(wsig) {
@@ -519,12 +523,11 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
         default: sig = SIGTERM; break;
     }
     if (!jl_ignore_sigint()) {
-        if (exit_on_sigint)
+        if (jl_sigint_get_policy() == JL_SIGINT_EXIT)
             jl_exit(128 + sig); // 128 + SIGINT
         if (sig == SIGINT) {
-            // Deliver the press through the cancellation system (see
-            // jl_sigint_request_cancellation).
-            jl_sigint_request_cancellation();
+            if (!jl_sigint_request_cancellation())
+                jl_exit(128 + sig);
         }
         else {
             // Close/logoff/shutdown (and Ctrl+Break): a termination
@@ -582,6 +585,12 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
         default:
             break;
         }
+    }
+    else if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION &&
+             jl_get_safe_restore()) {
+        // Also honor unwind recovery on unmanaged threads, such as the profiler.
+        jl_throw_in_ctx(NULL, NULL, ExceptionInfo->ContextRecord);
+        return EXCEPTION_CONTINUE_EXECUTION;
     }
     ios_t full_error, summary;
     ios_mem(&full_error, 0);
@@ -684,6 +693,10 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
     static int recursion = 0;
     if (recursion++)
         exit(1);
+    else if (ct == NULL)
+        // Avoid Julia teardown on an unmanaged thread: the profiler may have
+        // faulted with a thread suspended that the atexit hooks need to run.
+        jl_raise(SIGSEGV);
     else
         jl_exit(1);
 }
@@ -693,11 +706,58 @@ JL_DLLEXPORT void jl_install_sigint_handler(void)
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 }
 
+// libuv reports these console events as signals.
+JL_DLLEXPORT int jl_signal_is_reserved(int sig)
+{
+    return !(sig == SIGINT || sig == SIGBREAK || sig == SIGHUP || sig == SIGWINCH);
+}
+
+// Console resizes come only from libuv, which reports them to its own signal watchers.
+static uv_signal_t *winch_signal;
+
+static void winch_cb(uv_signal_t *handle, int sig)
+{
+    jl_notify_signal_watchers(sig);
+}
+
+static int jl_signal_watch_install(int sig)
+{
+    if (sig != SIGWINCH)
+        return 0;
+    if (winch_signal == NULL) {
+        // Allocated, because closing all handles at exit frees them.
+        winch_signal = (uv_signal_t*)malloc_s(sizeof(uv_signal_t));
+        int err = uv_signal_init(jl_io_loop, winch_signal);
+        if (err != 0) {
+            free(winch_signal);
+            winch_signal = NULL;
+            return err;
+        }
+        uv_unref((uv_handle_t*)winch_signal);
+    }
+    return uv_signal_start(winch_signal, winch_cb, SIGWINCH);
+}
+
+static void jl_signal_watch_uninstall(int sig)
+{
+    if (sig == SIGWINCH)
+        uv_signal_stop(winch_signal);
+}
+
+JL_DLLEXPORT int jl_sigrtmin(void)
+{
+    return -1;
+}
+
+JL_DLLEXPORT int jl_sigrtmax(void)
+{
+    return -1;
+}
+
 static TIMECAPS timecaps;
 static HANDLE hBtThread = 0;
 static uv_cond_t bt_data_prof_cond = CONDITION_VARIABLE_INIT;
 
-#ifdef _CPU_X86_64_
 // Callback data structure for profile timeout
 typedef struct {
     _Atomic(int) *abort_ptr;
@@ -715,7 +775,6 @@ static void CALLBACK profile_timeout_cb(PVOID lpParam, BOOLEAN TimerOrWaitFired)
         }
     }
 }
-#endif
 
 static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
 {
@@ -776,6 +835,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
         jl_safe_fprintf(ios_safe_stderr, "failed to create profile watchdog timer queue.\n");
         abort();
     }
+    jl_profile_prefault_tls();
     while (1) {
         DWORD timeout_ms = nsecprof / (GIGA / 1000);
         Sleep(timeout_ms > 0 ? timeout_ms : 1);
@@ -806,7 +866,6 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 }
 
                 // Set up timeout handler for stackwalk
-#ifdef _CPU_X86_64_
                 _Atomic(int) abort_profiling = 0;
                 profile_timeout_data_t timeout_data;
                 timeout_data.abort_ptr = &abort_profiling;
@@ -819,10 +878,16 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                     // Failed to register wait, proceed without timeout protection
                     hTimer = NULL;
                 }
-#endif
 
-                if (!jl_thread_suspend(tid, &c))
+                if (!jl_thread_suspend(tid, &c)) {
+                    // Retire the watchdog with the sample it was armed for:
+                    // left running it fires against a later iteration's
+                    // window and resumes a thread nobody suspended.
+                    jl_set_profile_abort_ptr(NULL);
+                    if (hTimer != NULL)
+                        DeleteTimerQueueTimer(hTimerQueue, hTimer, INVALID_HANDLE_VALUE);
                     continue;
+                }
 
                 jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
                 jl_task_t *t2 = jl_atomic_load_relaxed(&ptls->current_task);
@@ -838,7 +903,6 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                             profile_bt_size_max - profile_bt_size_cur - 1, 0);
                 }
 
-#ifdef _CPU_X86_64_
                 // Clear abort pointer from TLS
                 jl_set_profile_abort_ptr(NULL);
                 if (timeout_data.tid != -1)
@@ -846,9 +910,6 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 // Wait for callback to complete or cancel before continuing
                 if (hTimer != NULL)
                     DeleteTimerQueueTimer(hTimerQueue, hTimer, INVALID_HANDLE_VALUE);
-#else
-                jl_thread_resume(tid);
-#endif
 
                 // META_OFFSET_THREADID store threadid but add 1 as 0 is preserved to indicate end of block
                 profile_bt_data_prof[profile_bt_size_cur++].uintptr = tid + 1;

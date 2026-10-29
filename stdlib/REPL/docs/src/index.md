@@ -220,6 +220,25 @@ and the current REPL mode you were in. The history searcher reads this log file 
 Multiple REPLs can write to this file at once, and every time you begin a search the newest history is fetched.
 Use of this file can be disabled at startup by passing the `--history-file=no` flag to Julia.
 
+## Terminal integration
+
+The interactive REPL emits OSC 133 semantic prompt markers. Terminals that support these markers
+can identify prompts, input, and output, enabling features such as navigating between prompts and
+selecting a command's output. Unsupported terminals ignore the markers.
+In the VS Code integrated terminal, the REPL also reports the exact command line so that commands
+can be copied together with their output.
+
+Output from background tasks while the REPL is waiting for input is not bracketed by command
+markers, so terminals may associate it with the prompt rather than the command that started the task.
+
+Semantic prompt markers can be disabled in `startup.jl`:
+
+```julia
+atreplinit() do repl
+    repl.options.semantic_prompts = false
+end
+```
+
 ## Key bindings
 
 The Julia REPL makes great use of key bindings. Several control-key bindings were already introduced
@@ -397,6 +416,24 @@ julia> Stri[TAB]
 StridedArray    StridedMatrix    StridedVecOrMat  StridedVector    String
 ```
 
+When completing a name qualified by a module, names that are [public](@ref modules) in that
+module (exported or declared with `public`) are listed first, followed by its other names under an
+`Internal:` header:
+
+```julia-repl
+julia> Base.Iterators.[TAB][TAB]
+Reverse     Stateful    accumulate  countfrom   cycle
+drop        dropwhile   enumerate   filter      findeach
+flatmap     flatten     map         nth         partition
+peel        product     repeated    rest        reverse
+take        takewhile   zip
+Internal:
+Accumulate                 Base                       Count
+Cycle                      Drop                       DropWhile
+Enumerate                  Filter                     Flatten
+⋮
+```
+
 The tab key can also be used to substitute LaTeX math symbols with their Unicode equivalents,
 and get a list of LaTeX matches as well:
 
@@ -434,7 +471,8 @@ julia> α="\alpha[TAB]"   # LaTeX completion also works in strings
 julia> α="α"
 ```
 
-A full list of tab-completions can be found in the [Unicode Input](@ref) section of the manual.
+Full lists of tab-completions can be found in the [Unicode Input](@ref) and
+[Emoji Input](@ref) sections of the manual.
 
 Completion of paths works for strings and julia's shell mode:
 

@@ -378,15 +378,17 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
                     const char *cxxpath = libstdcxxprobe();
                     if (cxxpath) {
                         void *cxx_handle = dlopen(cxxpath, RTLD_LAZY);
-                        (void)cxx_handle;
-                        const char *dlr = dlerror();
-                        if (dlr) {
-                            jl_loader_print_stderr("ERROR: Unable to dlopen(cxxpath) in parent!\n");
-                            jl_loader_print_stderr3("Message: ", dlr, "\n");
-                            exit(1);
+                        if (cxx_handle == NULL) {
+                            const char *dlr = dlerror();
+                            // The probed library turned out not to be loadable
+                            // after all; fall back to our bundled libstdc++.
+                            jl_loader_print_stderr("WARNING: Unable to load probed system libstdc++:\n");
+                            jl_loader_print_stderr3("Message: ", dlr ? dlr : "unknown error", "\n");
+                        }
+                        else {
+                            probe_successful = 1;
                         }
                         free((void *)cxxpath);
-                        probe_successful = 1;
                     }
                 }
                 // If the probe rejected the system libstdc++ (or didn't find one!)
@@ -456,7 +458,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
         (*jl_codegen_exported_func_addrs[symbol_idx]) = addr;
     }
     // Next, if we're on Linux/FreeBSD, set up fast TLS.
-#if !defined(_OS_WINDOWS_) && !defined(_OS_OPENBSD_)
+#if !defined(_OS_WINDOWS_) && !defined(_OS_DARWIN_) && !defined(_OS_OPENBSD_)
     void (*jl_pgcstack_setkey)(void*, void*(*)(void)) = lookup_symbol(libjulia_internal, "jl_pgcstack_setkey");
     if (jl_pgcstack_setkey == NULL) {
         jl_loader_print_stderr("ERROR: Cannot find jl_pgcstack_setkey() function within libjulia-internal!\n");

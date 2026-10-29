@@ -987,19 +987,9 @@ function pi_on_argument(x)
     end
     return -2
 end
-let code = code_typed(pi_on_argument, Tuple{Any})[1].first.code,
-    nisa = 0, found_pi = false
-    for stmt in code
-        if Meta.isexpr(stmt, :call)
-            callee = stmt.args[1]
-            if (callee === isa || callee === :isa || (isa(callee, GlobalRef) &&
-                                                      callee.name === :isa))
-                nisa += 1
-            end
-        elseif stmt === Core.PiNode(Core.Argument(2), Core.Argument)
-            found_pi = true
-        end
-    end
+let src = code_typed(pi_on_argument, Tuple{Any})[1].first
+    nisa = count(iscall((src, isa)), src.code)
+    found_pi = any(==(Core.PiNode(Core.Argument(2), Core.Argument)), src.code)
     @test nisa == 1
     @test found_pi
 end
@@ -2163,6 +2153,15 @@ let src = code_typed1(()) do
     end
     @test count(iscall((src, isdefined)), src.code) == 0
 end
+
+# eliminating a `setfield!` must keep its return value
+sroa_setfield_return(y::Int) = setfield!(Ref(0), :x, y)
+let src = code_typed1(sroa_setfield_return, (Int,))
+    @test !any(iscall((src, setfield!)), src.code)
+    @test src.code[end] == ReturnNode(Argument(2))
+end
+@test sroa_setfield_return(42) == 42
+
 # We should successfully fold the default values of a ScopedValue
 const svalconstprop = ScopedValue(1)
 foosvalconstprop() = svalconstprop[]
@@ -2255,4 +2254,31 @@ let src = code_typed1((Bool,)) do cond
     @test !any(iscall((src, getfield)), src.code)
     # the lifting cache should deduplicate: only 1 phi for `p.x`, not 2
     @test count(x -> isa(x, Core.PhiNode), src.code) == 1
+end
+
+function inserted_phi_goto(x)
+    r = Ref{Any}(x)
+    if false
+        @label a
+        return r[]
+    end
+    r[] += 1
+    r[] * 100
+    @goto a
+end
+function inserted_phi_collatz(n, ::Val{skipcheck}) where skipcheck
+    st = Ref{Any}(n)
+    k = Ref{Any}(0)
+    skipcheck && @goto step
+    @label check
+    st[] == 1 && return k[]
+    @label step
+    st[] = iseven(st[]) ? st[] ÷ 2 : 3st[] + 1
+    k[] += 1
+    @goto check
+end
+@testset "#53011: forward reference from inserted phi" begin
+    @test inserted_phi_goto(15) == 16
+    @test code_typed1(inserted_phi_collatz, (Int, Val{true})) isa CodeInfo
+    @test inserted_phi_collatz(6, Val(true)) == 8
 end

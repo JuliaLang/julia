@@ -2,9 +2,7 @@
 
 function is_known_call(@nospecialize(x), @nospecialize(func), ir::Union{IRCode,IncrementalCompact})
     isexpr(x, :call) || return false
-    arg = x.args[1]
-    isa(arg, GlobalRef) && return globalref_singleton(arg, ir) === func
-    return singleton_type(argextype(arg, ir)) === func
+    return _global_call_singleton(x.args[1], ir) === func
 end
 
 function is_known_invoke_or_call(@nospecialize(x), @nospecialize(func), ir::Union{IRCode,IncrementalCompact})
@@ -12,9 +10,7 @@ function is_known_invoke_or_call(@nospecialize(x), @nospecialize(func), ir::Unio
     (isinvoke || isexpr(x, :call)) || return false
     narg = isinvoke ? 2 : 1
     length(x.args) < narg && return false
-    arg = x.args[narg]
-    isa(arg, GlobalRef) && return globalref_singleton(arg, ir) === func
-    return singleton_type(argextype(arg, ir)) === func
+    return _global_call_singleton(x.args[narg], ir) === func
 end
 
 struct SSAUse
@@ -230,7 +226,7 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa::AnySSAVa
                 is_old(compact, defssa) && (def = OldSSAValue(def.id))
             end
             defssa = def
-        elseif isa(def, Union{PhiNode, PhiCNode, GlobalRef})
+        elseif isa(def, Union{PhiNode, PhiCNode, GlobalRef, Core.BindingPartition})
             return defssa
         else
             new_def = walker_callback(def, defssa)
@@ -482,7 +478,7 @@ function lift_leaves(compact::IncrementalCompact, field::Int,
             end
         elseif isa(leaf, QuoteNode)
             leaf = leaf.value
-        elseif isa(leaf, GlobalRef)
+        elseif isa(leaf, GlobalRef) || isa(leaf, Core.BindingPartition)
             typ = argextype(leaf, compact)
             if isa(typ, Const)
                 leaf = typ.val
@@ -493,6 +489,7 @@ function lift_leaves(compact::IncrementalCompact, field::Int,
             return nothing
         end
         ismutable(leaf) && return nothing
+        is_relocatable_ptr_field(Const(leaf), Const(field)) && return nothing
         isdefined(leaf, field) || return nothing
         val = getfield(leaf, field)
         is_inlineable_constant(val) || return nothing
@@ -1203,22 +1200,9 @@ end
 # and if possible refines the nothrowness of the new expr based on it.
 function pattern_match_typeof(compact::IncrementalCompact, typ::DataType, fidx::Int,
                               @nospecialize(Targ), @nospecialize(farg))
-    isa(Targ, SSAValue) || return false
-
-    Tdef = compact[Targ][:stmt]
-    is_known_call(Tdef, Core.apply_type, compact) || return false
-    length(Tdef.args) ≥ 2 || return false
-
-    applyT = argextype(Tdef.args[2], compact)
-    isa(applyT, Const) || return false
-
-    applyT = applyT.val
-    tvars = Any[]
-    while isa(applyT, UnionAll)
-        applyTvar = applyT.var
-        applyT = applyT.body
-        push!(tvars, applyTvar)
-    end
+    def = apply_type_unionall_def(Targ, compact)
+    def === nothing && return false
+    Tdef, applyT, tvars = def
 
     @assert applyT.name === typ.name
     fT = fieldtype(applyT, fidx)
@@ -2025,7 +2009,8 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
                 # verify this statement won't throw, otherwise it can't be eliminated safely
                 setfield_ssa = SSAValue(didx)
                 if is_nothrow(ir, setfield_ssa)
-                    ir[setfield_ssa][:stmt] = nothing
+                    # `setfield!` returns the stored value, which may still be used
+                    ir[setfield_ssa][:stmt] = val_for_def_expr(ir, didx, fidx)
                 else
                     # We can't eliminate this statement, because it might still
                     # throw an error, but we can mark it as effect-free since we

@@ -42,7 +42,6 @@ hash(w::WeakRef, h::UInt) = hash(w.value, h)
 
 # Types can't be deleted, so marking as total allows the compiler to look up the hash
 @noinline _jl_type_hash(T::Type) = @assume_effects :total ccall(:jl_type_hash, UInt, (Any,), T)
-@noinline _jl_type_cache_hash(T::Type) = @assume_effects :total ccall(:jl_type_cache_hash, UInt, (Any,), T)
 hash(T::Type, h::UInt) = hash(_jl_type_hash(T), h)
 hash(@nospecialize(data), h::UInt) = hash(objectid(data), h)
 
@@ -282,17 +281,32 @@ end
 
 hash(x::Symbol) = objectid(x)
 
+const hashgr_seed = 0xe19bede84d316c06 % UInt
+const hashps_seed = 0xee5c84c1439961a8 % UInt
+hash(x::GlobalRef, h::UInt) = hash(x.name, hash(x.mod, h ⊻ hashgr_seed))
+function hash(x::PartialStruct, h::UInt)
+    h ⊻= hashps_seed
+    h = hash(x.typ, h)
+    h = hash(x.undefs, h)
+    h = hash(x.fields, h)
+    return h
+end
 
-load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
-    unsafe_load(convert(Ptr{T}, ptr + i - 1))
 
+load_le(::Type{T}, ptr::Ptr{UInt8}, i, align::Int=1) where {T <: Union{UInt32, UInt64}} =
+    pointerref(convert(Ptr{T}, ptr + i - 1), 1, align)
+
+# `A` is a known power-of-two alignment of `ptr`. Only the loads at multiples of 8 bytes from
+# `ptr` can use it; the overlapping reads of the tail may be misaligned.
 @assume_effects :terminates_globally function hash_bytes(
         ptr::Ptr{UInt8},
         n::Int,
         seed::UInt64,
-        secret::NTuple{4, UInt64}
-    )
+        secret::NTuple{4, UInt64},
+        ::Val{A}=Val(1)
+    ) where {A}
     # Adapted with gratitude from [rapidhash](https://github.com/Nicoshev/rapidhash)
+    align = min(A, 8)
     buflen = UInt64(n)
     seed = seed ⊻ hash_mix(seed ⊻ secret[3], secret[2])
 
@@ -304,10 +318,10 @@ load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
         if buflen ≥ 4
             seed ⊻= buflen
             if buflen ≥ 8
-                a = load_le(UInt64, ptr, 1)
+                a = load_le(UInt64, ptr, 1, align)
                 b = load_le(UInt64, ptr, n - 7)
             else
-                a = UInt64(load_le(UInt32, ptr, 1))
+                a = UInt64(load_le(UInt32, ptr, 1, align))
                 b = UInt64(load_le(UInt32, ptr, n - 3))
             end
         elseif buflen > 0
@@ -321,16 +335,16 @@ load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
             see2 = seed
             while i > 48
                 seed = hash_mix(
-                    load_le(UInt64, ptr, pos) ⊻ secret[1],
-                    load_le(UInt64, ptr, pos + 8) ⊻ seed
+                    load_le(UInt64, ptr, pos, align) ⊻ secret[1],
+                    load_le(UInt64, ptr, pos + 8, align) ⊻ seed
                 )
                 see1 = hash_mix(
-                    load_le(UInt64, ptr, pos + 16) ⊻ secret[2],
-                    load_le(UInt64, ptr, pos + 24) ⊻ see1
+                    load_le(UInt64, ptr, pos + 16, align) ⊻ secret[2],
+                    load_le(UInt64, ptr, pos + 24, align) ⊻ see1
                 )
                 see2 = hash_mix(
-                    load_le(UInt64, ptr, pos + 32) ⊻ secret[3],
-                    load_le(UInt64, ptr, pos + 40) ⊻ see2
+                    load_le(UInt64, ptr, pos + 32, align) ⊻ secret[3],
+                    load_le(UInt64, ptr, pos + 40, align) ⊻ see2
                 )
                 pos += 48
                 i -= 48
@@ -340,13 +354,13 @@ load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
         end
         if i > 16
             seed = hash_mix(
-                load_le(UInt64, ptr, pos) ⊻ secret[3],
-                load_le(UInt64, ptr, pos + 8) ⊻ seed
+                load_le(UInt64, ptr, pos, align) ⊻ secret[3],
+                load_le(UInt64, ptr, pos + 8, align) ⊻ seed
             )
             if i > 32
                 seed = hash_mix(
-                    load_le(UInt64, ptr, pos + 16) ⊻ secret[3],
-                    load_le(UInt64, ptr, pos + 24) ⊻ seed
+                    load_le(UInt64, ptr, pos + 16, align) ⊻ secret[3],
+                    load_le(UInt64, ptr, pos + 24, align) ⊻ seed
                 )
             end
         end
@@ -634,5 +648,7 @@ end
 
 hash(data::AbstractString, h::UInt) =
     hash_bytes(utf8units(data), UInt64(h), HASH_SECRET) % UInt
+# String data follows the length field of a 4-byte-aligned object
 @assume_effects :total hash(data::String, h::UInt) =
-    GC.@preserve data hash_bytes(pointer(data), sizeof(data), UInt64(h), HASH_SECRET) % UInt
+    GC.@preserve data hash_bytes(
+        pointer(data), sizeof(data), UInt64(h), HASH_SECRET, Val(sizeof(Int))) % UInt

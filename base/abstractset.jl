@@ -106,7 +106,7 @@ function union!(s::AbstractSet{T}, itr) where T
     haslength(itr) && sizehint!(s, length(s) + Int(length(itr))::Int; shrink = false)
     for x in itr
         push!(s, x)
-        length(s) == max_values(T) && break
+        eltype(itr) <: T && length(s) == max_values(T) && break
     end
     return s
 end

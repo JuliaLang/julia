@@ -106,6 +106,8 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
     function redirect_word_expr(word)
         if length(word) == 1 && isa(word[1], AbstractString)
             return String(word[1])
+        elseif length(word) == 1
+            return Expr(:call, GlobalRef(Base, :cmd_redirect_target), word[1])
         else
             return Expr(:call, GlobalRef(Base, :cmd_interpolate), word...)
         end
@@ -172,7 +174,7 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
             fd = nothing
             if !word_has_special && length(arg) == 1 && isa(arg[1], AbstractString) &&
                     !isempty(arg[1]::AbstractString) && all(isdigit, arg[1]::AbstractString)
-                fd = parse(Int, arg[1]::AbstractString)
+                fd = parse(Int, String(arg[1]::AbstractString)::String)
                 empty!(arg)
                 word_has_special = false
             elseif !isempty(arg)
@@ -246,6 +248,19 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                 while !isempty(st)
                     nxt = peek(st)::P
                     nc = nxt[2]
+                    if nc == '\\' && nextind(s, nxt[1]) <= lastindex(s) && s[nextind(s, nxt[1])] in ('\n', '\r')
+                        # A line continuation joins the lines without ending the user name.
+                        push_nonempty!(user_parts, s[user_lit_start:prevind(s, nxt[1])])
+                        popfirst!(st)
+                        if popfirst!(st)[2] == '\r' && !isempty(st) && (peek(st)::P)[2] == '\n'
+                            popfirst!(st)
+                        end
+                        while !isempty(st) && (peek(st)::P)[2] in (' ', '\t')
+                            popfirst!(st)
+                        end
+                        user_lit_start = something(peek(st), (lastindex(s) + 1) => '\0').first
+                        continue
+                    end
                     (nc == '/' || isspace(nc) || nc == '\'' || nc == '"' || nc == '\\' ||
                      nc == '|' || nc == '<' || nc == '>') && break
                     if nc == '$'
@@ -262,10 +277,14 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                 end
                 user_end = something(peek(st), (lastindex(s) + 1) => '\0').first
                 push_nonempty!(user_parts, s[user_lit_start:prevind(s, user_end)])
-                if isempty(user_parts)
+                if !isempty(st) && (peek(st)::P)[2] in ('\'', '"', '\\')
+                    # As in POSIX shells, a quoted character before the first `/` disables expansion.
+                    push!(arg, "~")
+                    append!(arg, user_parts)
+                elseif isempty(user_parts)
                     push!(arg, :(expanduser("~")))
-                elseif length(user_parts) == 1 && isa(user_parts[1], AbstractString)
-                    push!(arg, :(expanduser($("~" * user_parts[1]))))
+                elseif length(user_parts) == 1 && (u = user_parts[1]; u isa AbstractString)
+                    push!(arg, :(expanduser($("~" * u))))
                 else
                     push!(arg, :(let _u = string($(user_parts...)); isempty(_u) ? "~" : expanduser(string('~', _u)) end))
                 end

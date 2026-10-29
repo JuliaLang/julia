@@ -30,6 +30,13 @@ function open_fake_pty()
 
         fdm = ccall(:posix_openpt, Cint, (Cint,), O_RDWR | O_NOCTTY)
         fdm == -1 && error("Failed to open ptm")
+        # Keep the master out of spawned processes: a child holding a copy
+        # would keep the terminal alive after we close ours, so it would never
+        # see the hangup (and an interactive child would never exit).
+        # (`posix_openpt` does not portably accept `O_CLOEXEC`.)
+        F_SETFD, FD_CLOEXEC = 2, 1
+        rc = ccall(:fcntl, Cint, (Cint, Cint, Cint...), fdm, F_SETFD, FD_CLOEXEC)
+        rc != 0 && error("fcntl(F_SETFD, FD_CLOEXEC) failed")
         rc = ccall(:grantpt, Cint, (Cint,), fdm)
         rc != 0 && error("grantpt failed")
         rc = ccall(:unlockpt, Cint, (Cint,), fdm)

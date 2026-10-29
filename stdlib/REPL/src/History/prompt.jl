@@ -85,7 +85,7 @@ function create_prompt(events::Channel{Symbol}, term, prefix::String = "\e[90m",
     # Share the main REPL's terminal_properties so that DA1/OSC responses
     # parsed by the keymap during history search update the same object.
     istate.terminal_properties = terminal_properties
-    pstate = istate.mode_state[prompt]
+    pstate = istate.mode_state[prompt]::REPL.LineEdit.PromptState
     (; term, prompt, istate, pstate)
 end
 
@@ -95,13 +95,12 @@ end
 Drive the prompt input loop until confirm, save, or abort.
 
 Emits `:edit`, `:confirm`, `:save`, or `:abort` into `events`,
-manages raw mode and bracketed paste, and cleans up on exit.
+manages the terminal input mode, and cleans up on exit.
 """
 function runprompt!((; term, prompt, pstate, istate), events::Channel{Symbol},
                     terminal_properties::REPL.LineEdit.TerminalProperties)
     Base.reseteof(term)
-    REPL.LineEdit.raw!(term, true)
-    REPL.LineEdit.enable_bracketed_paste(term)
+    REPL.LineEdit.enter_input_mode(term)
     try
         pstate.ias = REPL.LineEdit.InputAreaState(0, 0)
         REPL.LineEdit.refresh_multi_line(term, pstate)
@@ -137,8 +136,7 @@ function runprompt!((; term, prompt, pstate, istate), events::Channel{Symbol},
             end
         end
     finally
-        REPL.LineEdit.raw!(term, false) &&
-            REPL.LineEdit.disable_bracketed_paste(term)
+        REPL.LineEdit.leave_input_mode(term)
     end
 end
 
@@ -215,8 +213,8 @@ function savedest(term::Base.Terminals.TTYTerminal, props::REPL.LineEdit.Termina
                 end
             elseif esc_state === :csi
                 if ichar == '?'
-                    # DA1 response (\e[?...c): blocking read until 'c'
-                    REPL.LineEdit.receive_da1!(props, inp)
+                    # DA1 response or palette notification: blocking read to its final byte
+                    REPL.LineEdit.receive_private_csi!(props, term)
                     esc_state = :none
                 elseif UInt8(ichar) >= 0x40 && UInt8(ichar) <= 0x7e
                     # CSI final byte, sequence complete

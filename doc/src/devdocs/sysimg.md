@@ -8,9 +8,6 @@ as many platforms as possible, so as to give vastly improved startup times. On s
 not ship with a precompiled system image file, one can be generated from the source files shipped
 in Julia's `DATAROOTDIR/julia/base` folder.
 
-Julia will by default generate its system image on half of the available system threads. This
-may be controlled by the [`JULIA_IMAGE_THREADS`](@ref JULIA_IMAGE_THREADS) environment variable.
-
 This operation is useful for multiple reasons. A user may:
 
   * Build a precompiled shared library system image on a platform that did not ship with one, thereby
@@ -21,6 +18,32 @@ This operation is useful for multiple reasons. A user may:
 
 The [`PackageCompiler.jl` package](https://github.com/JuliaLang/PackageCompiler.jl) contains convenient
 wrapper functions to automate this process.
+
+## Coverage instrumentation
+
+Set `JULIA_COVERAGE_IMAGES=1` in `Make.user` before building Julia to compile
+`hit`-mode coverage counters into the system image and the bundled package
+images. Coverage runs in `hit` mode then reuse the native code instead of
+recompiling it in each process. This configuration is intended for coverage
+CI: the images retain instrumentation overhead even when coverage is disabled,
+and cached inference effects can differ from those of an ordinary build.
+
+Like `--check-bounds`, coverage uses the system image as built, without
+invalidating its native code at startup. For newly compiled and interpreted
+code, `@<path>` uses the same instrumentation policy as `user`: Base and Core
+code are excluded. The path filters reports, not compilation. Compatible image
+counters can still report Base and Core locations under the selected path;
+relative Base filenames are resolved against the installed Base source directory.
+Complete coverage of Base requires suitable instrumented images and `all` for
+newly compiled Base code.
+An instrumented image carries counters for every statement, and the requested
+scope selects which of them contribute to the report. The counters contribute
+only when their mode can serve the request: count counters can serve hit mode,
+but hit counters cannot serve count mode. An ordinary system image has no
+counters. Package images are selected separately by their instrumentation flags.
+Allocation tracking retains its per-method recompilation fallback because
+images carry no allocation counters. Image generation does not record coverage
+hits for its own precompile workload.
 
 ## [System image optimized for multiple microarchitectures](@id sysimg-multi-versioning)
 
@@ -78,13 +101,13 @@ As an example, at the time of this writing, the following string is used in the 
 the official `x86_64` Julia binaries downloadable from julialang.org:
 
 ```
-generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)
+generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1);x86-64-v4,-rdrnd,base(1)
 ```
 
-This creates a system image with three separate targets; one for a generic `x86_64`
+This creates a system image with four separate targets; one for a generic `x86_64`
 processor, one with a `sandybridge` ISA (explicitly excluding `xsaveopt`) that explicitly
-clones all functions, and one targeting the `haswell` ISA, based off of the `sandybridge`
-sysimg version, and also excluding `rdrnd`. When a Julia implementation loads the
+clones all functions, and two targeting the `haswell` and `x86-64-v4` ISAs, based off of
+the `sandybridge` version, both excluding `rdrnd`. When a Julia implementation loads the
 generated sysimg, it will check the host processor for matching CPU capability flags,
 enabling the highest ISA level possible. Note that the base level (`generic`) requires
 the `cx16` instruction, which is disabled in some virtualization software and must be

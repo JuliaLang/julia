@@ -40,6 +40,9 @@
 #ifdef HAVE_KEVENT
 #include <sys/event.h>
 #endif
+#ifdef _OS_FREEBSD_
+#include <sys/procctl.h>
+#endif
 
 // 8M signal stack, same as default stack size (though we barely use this)
 static const size_t sig_stack_size = 8 * 1024 * 1024;
@@ -68,86 +71,12 @@ static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf, int val);
 
 #if !defined(_OS_DARWIN_)
 extern void jl_fake_signal_return(void);
-// Create a trampoline function that does the stack manipulations for jl_call_in_ctx/jl_call_in_state
+// A trampoline function that does the stack manipulations for jl_call_in_ctx/jl_call_in_state
 // The callee-saved registers still may get smashed (by the cdecl fptr), since we didn't explicitly copy all of the
 // state to the stack (to build a real sigreturn frame).
-#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || defined(_OS_OPENBSD_)) && defined(_CPU_X86_64_)
-__asm__(
-    "  .type jl_fake_signal_return, @function\n"
-    "jl_fake_signal_return:\n"
-    "  .cfi_startproc\n"
-    "  .cfi_signal_frame\n"
-    // Mark as end of stack until frame is set up
-    "  .cfi_undefined %rip\n"
-    "  .cfi_undefined %rsp\n"
-    // rdi points to signal_ctx_pc in ptls (followed by signal_ctx_sp, signal_ctx_fptr, signal_ctx_arg)
-    "  pushq (%rdi)\n"        // push pc (signal_ctx_pc)
-    "  pushq 8(%rdi)\n"       // push sp (signal_ctx_sp)
-    // stack layout: [sp, pc] (pc at higher address, like return address after call)
-    "  .cfi_def_cfa %rsp, 8\n"
-    "  .cfi_offset %rip, 0\n"  // previous %rip at CFA+0 (pc slot at rsp+8)
-    "  .cfi_offset %rsp, -8\n" // previous %rsp at CFA-8 (sp slot at rsp+0)
-    "  pushq 16(%rdi)\n"      // push fptr (signal_ctx_fptr)
-    "  .cfi_def_cfa %rsp, 16\n"
-    "  movq 24(%rdi), %rdi\n" // restore original rdi from signal_ctx_arg
-    "  subq $8, %rsp\n"       // align stack to 16 bytes
-    "  .cfi_def_cfa %rsp, 24\n"
-    "  callq *8(%rsp)\n"      // call fptr
-    "  ud2\n"                 // unreachable
-    "  .cfi_endproc\n"
-    "  .size jl_fake_signal_return, .-jl_fake_signal_return\n"
-);
-
-#elif (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && defined(_CPU_X86_)
-__asm__(
-    "  .type jl_fake_signal_return, @function\n"
-    "jl_fake_signal_return:\n"
-    "  .cfi_startproc\n"
-    "  .cfi_signal_frame\n"
-    // Mark as end of stack until frame is set up
-    "  .cfi_undefined 1\n"
-    // eax points to signal_ctx_pc in ptls (followed by signal_ctx_sp, signal_ctx_fptr, signal_ctx_arg)
-    "  pushl (%eax)\n"        // push pc (signal_ctx_pc)
-    "  pushl 4(%eax)\n"       // push sp (signal_ctx_sp)
-    // stack layout: [sp, pc] (pc at higher address, like return address after call)
-    "  .cfi_def_cfa %esp, 4\n"
-    "  .cfi_offset %eip, 0\n"  // previous %eip at CFA+0 (pc slot at esp+4)
-    "  .cfi_offset %esp, -4\n" // previous %esp at CFA-4 (sp slot at esp+0)
-    "  pushl 8(%eax)\n"       // push fptr (signal_ctx_fptr)
-    "  .cfi_def_cfa %esp, 8\n"
-    "  movl 12(%eax), %eax\n" // restore original eax from signal_ctx_arg
-    "  subl $4, %esp\n"       // align stack to 16 bytes
-    "  .cfi_def_cfa %esp, 12\n"
-    "  calll *4(%esp)\n"      // call fptr
-    "  ud2\n"                 // unreachable
-    "  .cfi_endproc\n"
-    "  .size jl_fake_signal_return, .-jl_fake_signal_return\n"
-);
-#elif (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && defined(_CPU_AARCH64_)
-__asm__(
-    "  .type jl_fake_signal_return, @function\n"
-    "jl_fake_signal_return:\n"
-    "  .cfi_startproc\n"
-    "  .cfi_signal_frame\n"
-    // Mark as end of stack until frame is set up
-    "  .cfi_undefined 1\n"
-    // x0 points to signal_ctx_pc in ptls (followed by signal_ctx_sp, signal_ctx_fptr, signal_ctx_arg)
-    "  ldp x1, x2, [x0]\n"      // load pc (x1) and sp (x2)
-    "  stp x2, x1, [sp, #-16]!\n" // push sp and pc (sp at lower addr, pc at higher addr)
-    // stack layout: [sp, pc] (pc at higher address, like return address after call)
-    "  .cfi_def_cfa sp, 16\n"
-    "  .cfi_offset lr, -8\n"   // previous lr (pc) at CFA-8 (pc slot at sp+8)
-    "  .cfi_offset sp, -16\n"  // previous sp at CFA-16 (sp slot at sp+0)
-    // This is not quite valid, since the AArch64 DWARF spec lacks the ability to define how to restore the LR register correctly,
-    // so normally libunwind implementations on linux detect this function specially and hack around the invalid info:
-    // https://github.com/llvm/llvm-project/commit/c82deed6764cbc63966374baf9721331901ca958
-    "  ldp x1, x2, [x0, #16]\n" // load fptr (x1) and saved x0 (x2)
-    "  mov x0, x2\n"           // restore original x0
-    "  blr x1\n"               // call fptr
-    "  brk #1\n"               // unreachable
-    "  .cfi_endproc\n"
-    "  .size jl_fake_signal_return, .-jl_fake_signal_return\n"
-);
+#if ((defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || defined(_OS_OPENBSD_)) && defined(_CPU_X86_64_)) || \
+    ((defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && (defined(_CPU_X86_) || defined(_CPU_AARCH64_)))
+// Defined in arch/<arch>/unix_signal_call_trampoline.S
 #else
 extern void JL_NORETURN jl_fake_signal_return(void)
 {
@@ -467,7 +396,7 @@ int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
 }
 
 #if defined(_OS_LINUX_) && (defined(_CPU_X86_64_) || defined(_CPU_X86_))
-int is_write_fault(void *context) {
+int is_write_fault(void *context, void *addr) {
     ucontext_t *ctx = (ucontext_t*)context;
     return exc_reg_is_write_fault(ctx->uc_mcontext.gregs[REG_ERR]);
 }
@@ -478,7 +407,7 @@ struct linux_aarch64_ctx_header {
 };
 const uint32_t linux_esr_magic = 0x45535201;
 
-int is_write_fault(void *context) {
+int is_write_fault(void *context, void *addr) {
     ucontext_t *ctx = (ucontext_t*)context;
     struct linux_aarch64_ctx_header *extra =
         (struct linux_aarch64_ctx_header *)ctx->uc_mcontext.__reserved;
@@ -492,7 +421,7 @@ int is_write_fault(void *context) {
     return 0;
 }
 #elif defined(_OS_FREEBSD_) && (defined(_CPU_X86_64_) || defined(_CPU_X86_))
-int is_write_fault(void *context) {
+int is_write_fault(void *context, void *addr) {
     ucontext_t *ctx = (ucontext_t*)context;
     return exc_reg_is_write_fault(ctx->uc_mcontext.mc_err);
 }
@@ -500,17 +429,68 @@ int is_write_fault(void *context) {
 // FreeBSD seems not to expose a means of accessing ESR via `ucontext_t` on AArch64.
 // TODO: Is there an alternative approach that can be taken? ESR may become accessible
 // in a future release though.
-int is_write_fault(void *context) {
+int is_write_fault(void *context, void *addr) {
     return 0;
 }
 #elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
-int is_write_fault(void *context) {
+int is_write_fault(void *context, void *addr) {
     struct sigcontext *ctx = (struct sigcontext *)context;
     return exc_reg_is_write_fault(ctx->sc_err);
 }
+#elif defined(_OS_LINUX_) && defined(_CPU_RISCV64_)
+// The riscv64 `mcontext_t` only carries the integer and floating-point register
+// files; the trap cause (`scause`) is not exposed to user space. Instead, classify
+// the instruction that faulted: a write fault can only come from a store, a
+// store-conditional, an atomic memory operation, or a cache-block zero. Loads,
+// reservations and instruction fetches are not writes.
+int is_write_fault(void *context, void *addr) {
+    ucontext_t *ctx = (ucontext_t*)context;
+    const uint16_t *pc = (const uint16_t*)ctx->uc_mcontext.__gregs[REG_PC];
+    // An instruction-fetch fault can point at either halfword. Do not read an
+    // inaccessible PC or interpret non-executable memory as a store instruction.
+    if ((uintptr_t)addr - (uintptr_t)pc < 4)
+        return 0;
+    // Instructions are only guaranteed to be 2-byte aligned when the compressed
+    // extension is in use, so fetch the encoding as halfwords.
+    uint16_t lo = pc[0];
+    if ((lo & 0x3) != 0x3) {
+        // 16-bit compressed encoding: quadrant in bits [1:0], funct3 in bits [15:13].
+        // The store forms are C.FSD/C.SW/C.SD (quadrant 0) and their
+        // stack-pointer-relative counterparts C.FSDSP/C.SWSP/C.SDSP (quadrant 2),
+        // all of which have funct3 >= 5. Zcb adds C.SB/C.SH in quadrant 0 under
+        // funct3 == 4, distinguished from C.LBU/C.LH/C.LHU by bit 11.
+        unsigned quadrant = lo & 0x3;
+        unsigned funct3 = (lo >> 13) & 0x7;
+        if (quadrant == 0x1)
+            return 0;
+        if (funct3 >= 5)
+            return 1;
+        return quadrant == 0x0 && funct3 == 4 && (lo & 0x0800) != 0;
+    }
+    if ((lo & 0x1f) == 0x1f)
+        return 0; // 48-bit or longer encoding; none defined that store
+    uint32_t insn = lo | ((uint32_t)pc[1] << 16);
+    unsigned opcode = insn & 0x7f;
+    switch (opcode) {
+    case 0x23: // STORE: SB/SH/SW/SD
+    case 0x27: // STORE-FP: FSH/FSW/FSD, and the vector stores
+        return 1;
+    case 0x2f: { // AMO: LR is a load, SC and every AMO* write
+        unsigned funct5 = insn >> 27;
+        return funct5 != 0x02; // LR.W/LR.D
+    }
+    case 0x0f: { // MISC-MEM: only CBO.ZERO (funct3 == 2, imm == 4) writes
+        unsigned funct3 = (insn >> 12) & 0x7;
+        unsigned imm = insn >> 20;
+        return funct3 == 2 && imm == 4;
+    }
+    default:
+        return 0;
+    }
+}
 #else
 #pragma message("Implement this query for consistent PROT_NONE handling")
-int is_write_fault(void *context) {
+int is_write_fault(void *context, void *addr) {
     return 0;
 }
 #endif
@@ -535,7 +515,7 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context) JL_
         sigdie_handler(sig, info, context);
         return;
     }
-    if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && jl_addr_is_safepoint((uintptr_t)info->si_addr) && !is_write_fault(context)) {
+    if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && jl_addr_is_safepoint((uintptr_t)info->si_addr) && !is_write_fault(context, info->si_addr)) {
         jl_set_gc_and_wait(ct);
         // (vestigial thread-0 gate from the old sigint force-throw, which
         // is now delivered through the cancellation system instead - see
@@ -566,7 +546,7 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context) JL_
         jl_safe_printf("ERROR: Signal stack overflow, exit\n");
         jl_raise(sig);
     }
-    else if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && is_write_fault(context)) {  // writing to read-only memory (e.g., mmap)
+    else if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && is_write_fault(context, info->si_addr)) {  // writing to read-only memory (e.g., mmap)
         jl_throw_in_ctx(ct, jl_readonlymemory_exception, sig, context);
     }
     else {
@@ -1085,11 +1065,43 @@ const static int sigwait_sigs[] = {
     0
 };
 
+// The process whose exit should terminate ours, if any
+static pid_t exit_with_parent_pid = 0;
+
 static void jl_sigsetset(sigset_t *sset)
 {
     sigemptyset(sset);
     for (const int *sig = sigwait_sigs; *sig; sig++)
         sigaddset(sset, *sig);
+}
+
+// Terminate this process when `parent` exits. This is best-effort: we keep
+// running if the platform does not support it, if setting it up fails, or if
+// Julia does not handle signals. Must be called before any threads are started.
+void jl_exit_with_parent(pid_t parent) JL_NOTSAFEPOINT
+{
+    if (jl_options.handle_signals != JL_OPTIONS_HANDLE_SIGNALS_ON)
+        return;
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+    // have the kernel send SIGUSR1 when our parent exits, and keep it blocked
+    // until the signal listener waits for it
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, SIGUSR1);
+    if (pthread_sigmask(SIG_BLOCK, &sset, NULL) != 0)
+        return;
+#if defined(_OS_LINUX_)
+    if (prctl(PR_SET_PDEATHSIG, SIGUSR1) != 0)
+        return;
+#else
+    int sig = SIGUSR1;
+    if (procctl(P_PID, 0, PROC_PDEATHSIG_CTL, &sig) != 0)
+        return;
+#endif
+    exit_with_parent_pid = parent;
+#elif defined(HAVE_KEVENT)
+    exit_with_parent_pid = parent;
+#endif
 }
 
 #ifdef HAVE_KEVENT
@@ -1109,6 +1121,15 @@ static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
         // Installing SIG_IGN for SIGINT can race with its handler installation.
         signal(sig, sig == SIGINT ? sigint_handler : SIG_IGN);
     }
+}
+
+// Returns whether the parent already exited before we started watching it, in
+// which case registering fails or no exit event will be delivered.
+static int kqueue_parent(int sigqueue, struct kevent *ev)
+{
+    EV_SET(ev, exit_with_parent_pid, EVFILT_PROC, EV_ADD, NOTE_EXIT, 0, NULL);
+    return (kevent(sigqueue, ev, 1, NULL, 0, NULL) != 0 && errno == ESRCH) ||
+           getppid() != exit_with_parent_pid;
 }
 #endif
 
@@ -1224,6 +1245,127 @@ static void do_profile(void) JL_NOTSAFEPOINT
 }
 #endif
 
+JL_DLLEXPORT int jl_signal_is_reserved(int sig)
+{
+    switch (sig) {
+    case SIGILL:
+    case SIGABRT:
+    case SIGFPE:
+    case SIGSEGV:
+    case SIGBUS:
+    case SIGTRAP:
+    case SIGSYS:
+    case SIGPIPE:
+    case SIGCHLD: // libuv uses it to reap child processes
+    case SIGKILL:
+    case SIGSTOP:
+#if !defined(HAVE_MACH)
+    case SIGUSR2: // thread suspension
+#endif
+        return 1;
+    default:
+#ifdef SIGRTMIN
+        // Signals below SIGRTMIN are kept by the C library or unused.
+        if (sig >= 32 && sig < SIGRTMIN)
+            return 1;
+#endif
+#ifdef SIGRTMAX
+        // FreeBSD's NSIG counts only the old signals, not the real-time ones.
+        return sig <= 0 || sig > SIGRTMAX;
+#else
+        return sig <= 0 || sig >= NSIG;
+#endif
+    }
+}
+
+static int is_sigwait_sig(int sig)
+{
+    for (const int *s = sigwait_sigs; *s; s++) {
+        if (*s == sig)
+            return 1;
+    }
+    return 0;
+}
+
+// What was installed for each watched signal before the handler below.
+static struct sigaction saved_handlers[JL_MAX_WATCHED_SIGNAL + 1];
+
+// without an embedder, the previous action is the default or an inherited SIG_IGN
+static void run_saved_handler(int sig)
+{
+    struct sigaction *prev = &saved_handlers[sig];
+    if (!(prev->sa_flags & SA_SIGINFO) && prev->sa_handler == SIG_IGN)
+        return;
+    switch (sig) {
+    case SIGCONT:
+    case SIGURG:
+    case SIGWINCH:
+        return; // the default is to do nothing
+    }
+    // Take the default action, such as exiting, by raising the signal again without a handler.
+    struct sigaction dfl, ours;
+    memset(&dfl, 0, sizeof(dfl));
+    sigemptyset(&dfl.sa_mask);
+    dfl.sa_handler = SIG_DFL;
+    sigaction(sig, &dfl, &ours);
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, sig);
+    raise(sig);
+    pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
+    // Only reached if the default action stopped the process and it was resumed.
+    pthread_sigmask(SIG_BLOCK, &sset, NULL);
+    sigaction(sig, &ours, NULL);
+}
+
+static void signal_watch_handler(int sig)
+{
+    int last_errno = errno;
+    if (!jl_notify_signal_watchers(sig))
+        run_saved_handler(sig);
+    errno = last_errno;
+}
+
+// The signal thread already gets the signals it waits for, so only the others need a handler.
+static int jl_signal_watch_install(int sig)
+{
+    if (is_sigwait_sig(sig))
+        return 0;
+    struct sigaction act;
+    memset(&act, 0, sizeof(act));
+    sigemptyset(&act.sa_mask);
+    act.sa_handler = signal_watch_handler;
+    act.sa_flags = SA_RESTART | SA_ONSTACK;
+    if (sigaction(sig, &act, &saved_handlers[sig]) != 0)
+        return -errno;
+    return 0;
+}
+
+static void jl_signal_watch_uninstall(int sig)
+{
+    if (!is_sigwait_sig(sig))
+        sigaction(sig, &saved_handlers[sig], NULL);
+}
+
+// SIGRTMIN and SIGRTMAX can be run-time values, so they cannot be Julia constants.
+JL_DLLEXPORT int jl_sigrtmin(void)
+{
+#ifdef SIGRTMIN
+    return SIGRTMIN;
+#else
+    return -1;
+#endif
+}
+
+JL_DLLEXPORT int jl_sigrtmax(void)
+{
+#ifdef SIGRTMAX
+    return SIGRTMAX;
+#else
+    return -1;
+#endif
+}
+
 static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 {
     sigset_t sset;
@@ -1234,6 +1376,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #endif
 #ifdef HAVE_KEVENT
     struct kevent ev;
+    int parent_gone = 0;
     int sigqueue = kqueue();
     if (sigqueue == -1) {
         perror("signal kqueue");
@@ -1246,13 +1389,23 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             for (const int *sig = sigwait_sigs; *sig; sig++)
                 signal(*sig, SIG_DFL);
         }
+        else if (exit_with_parent_pid) {
+            parent_gone = kqueue_parent(sigqueue, &ev);
+        }
     }
 #endif
     while (1) {
         sig = 0;
         errno = 0;
+        int parent_exited = 0;
 #ifdef HAVE_KEVENT
-        if (sigqueue != -1) {
+        if (parent_gone) {
+            // exit as if terminated, as we would on the parent's exit event
+            parent_gone = 0;
+            sig = SIGTERM;
+            parent_exited = 1;
+        }
+        else if (sigqueue != -1) {
             int nevents = kevent(sigqueue, NULL, 0, &ev, 1, NULL);
             if (nevents == -1) {
                 if (errno == EINTR)
@@ -1266,7 +1419,9 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                     signal(*sig, SIG_DFL);
                 continue;
             }
-            sig = ev.ident;
+            // exit as if terminated when our parent exits
+            parent_exited = ev.filter == EVFILT_PROC;
+            sig = parent_exited ? SIGTERM : ev.ident;
         }
         else
 #endif
@@ -1281,6 +1436,15 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 continue;
             sig = SIGABRT; // this branch can't occur, unless we had stack memory corruption of sset
         }
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+        // exit as if terminated when our parent exits.
+        // Linux also sends this when the thread that spawned us exits, in which case
+        // another thread of the parent adopts us and we handle it as a normal SIGUSR1.
+        if (sig == SIGUSR1 && exit_with_parent_pid && getppid() != exit_with_parent_pid) {
+            sig = SIGTERM;
+            parent_exited = 1;
+        }
+#endif
         profile = 0;
 #ifndef HAVE_MACH
 #if defined(HAVE_TIMER)
@@ -1292,18 +1456,18 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #endif
 #endif
 #endif
+        if (sig == SIGINT && jl_ignore_sigint())
+            continue;
+        // Watchers do not see a parent's exit, which must always end this process.
+        if (!profile && !parent_exited && jl_notify_signal_watchers(sig))
+            continue;
 
         if (sig == SIGINT) {
-            if (jl_ignore_sigint()) {
-                continue;
-            }
-            else if (exit_on_sigint) {
+            if (jl_sigint_get_policy() == JL_SIGINT_EXIT ||
+                    !jl_sigint_request_cancellation()) {
                 critical = 1;
             }
             else {
-                // Deliver the press through the cancellation system (see
-                // jl_sigint_request_cancellation).
-                jl_sigint_request_cancellation();
                 continue;
             }
         }
@@ -1599,7 +1763,11 @@ static void jl_thread_suspend_membarrier(void) JL_NOTSAFEPOINT
     // jl_thread_suspend tries to interrupt the thread for up to 1 second,
     // so we retry in a loop until it succeeds or we determine the thread
     // is no longer alive.
+    jl_task_t *ct = jl_get_current_task();
+    int16_t self_tid = ct == NULL ? -1 : jl_atomic_load_relaxed(&ct->tid);
     for (int tid = 0; tid < jl_atomic_load_acquire(&jl_n_threads); tid++) {
+        if (tid == self_tid)
+            continue; // the calling thread is synchronized by program order
         while (!jl_thread_suspend(tid, &ctx)) {
             jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
             jl_task_t *ct2 = ptls2 ? jl_atomic_load_relaxed(&ptls2->current_task) : NULL;
@@ -1618,10 +1786,10 @@ next_thread:;
 // This is a common fallback based on the observation that `mprotect` happens to
 // issue the necessary memory barriers. However, there is no spec that
 // guarantees this behavior. On AArch64, it is known not to work on either
-// Linux or FreeBSD, so we don't use it there. However, we use it as a fallback
-// here for older versions of Linux and FreeBSD on x86 where we know that it
-// happens to work.
-#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_)
+// Linux or FreeBSD, and nothing establishes that it works on RISC-V, so we don't use
+// it there. However, we use it as a fallback here for older versions of Linux and
+// FreeBSD on x86 where we know that it happens to work.
+#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_) && !defined(_CPU_RISCV64_)
 static pthread_mutex_t mprotect_barrier_lock = PTHREAD_MUTEX_INITIALIZER;
 static _Atomic(uint64_t) *mprotect_barrier_page = NULL;
 // Returns 1 on success, 0 on failure (e.g. mlock fails)
@@ -1671,7 +1839,7 @@ static void jl_mprotect_membarrier(void) JL_NOTSAFEPOINT
     assert(result == 0);
     (void)result;
 }
-#endif // !_CPU_AARCH64_ && !_CPU_ARM_
+#endif // !_CPU_AARCH64_ && !_CPU_ARM_ && !_CPU_RISCV64_
 
 // Membarrier implementation selection
 enum membarrier_implementation {
@@ -1718,8 +1886,8 @@ static enum membarrier_implementation jl_init_membarrier(void) JL_NOTSAFEPOINT {
         }
     }
 #endif
-    // The mprotect fallback is known not to work on AArch64, so skip it there
-#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_)
+    // The mprotect fallback is only known to work on x86
+#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_) && !defined(_CPU_RISCV64_)
     if (jl_init_mprotect_membarrier()) {
         jl_atomic_store_relaxed(&membarrier_impl, MEMBARRIER_IMPLEMENTATION_MPROTECT);
         return MEMBARRIER_IMPLEMENTATION_MPROTECT;
@@ -1744,7 +1912,7 @@ JL_DLLEXPORT void jl_membarrier(void) JL_NOTSAFEPOINT {
         break;
     }
 #endif
-#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_)
+#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_) && !defined(_CPU_RISCV64_)
     case MEMBARRIER_IMPLEMENTATION_MPROTECT:
         jl_mprotect_membarrier();
         break;
@@ -1756,4 +1924,5 @@ JL_DLLEXPORT void jl_membarrier(void) JL_NOTSAFEPOINT {
         abort();
     }
 }
+
 #endif // !_OS_DARWIN_

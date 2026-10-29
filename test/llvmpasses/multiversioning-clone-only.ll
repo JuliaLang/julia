@@ -1,6 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaMultiVersioning' -S %s | FileCheck %s --allow-unused-prefixes=false --check-prefixes=CHECK,OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%{shlibext} -passes='JuliaMultiVersioning' -S %s | FileCheck %s --allow-unused-prefixes=false --check-prefixes=CHECK,OPAQUE
 
 ; CHECK: @jl_gvar_base = hidden constant i64 0
 ; CHECK: @jl_gvar_offsets = hidden constant [0 x i32] zeroinitializer

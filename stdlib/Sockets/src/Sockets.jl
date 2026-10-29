@@ -34,7 +34,7 @@ export
 import Base: isless, show, print, parse, bind, alloc_buf_hook, _uv_hook_close
 
 using Base: LibuvStream, LibuvServer, PipeEndpoint, @handle_as, uv_error, associate_julia_struct, uvfinalize,
-    notify_error, uv_req_data, uv_req_set_data, preserve_handle, unpreserve_handle, _UVError, IOError,
+    notify_error, uv_req_set_data, preserve_handle, unpreserve_handle, _UVError, IOError,
     eventloop, StatusUninit, StatusInit, StatusConnecting, StatusOpen, StatusClosing, StatusClosed, StatusActive,
     preserve_handle, unpreserve_handle, iolock_begin, iolock_end,
     uv_status_string, check_open, OS_HANDLE, RawFD,
@@ -230,9 +230,10 @@ const UV_UDP_PARTIAL = 2
 
 # Indicates if SO_REUSEADDR will be set when binding the handle in uv_udp_bind. This sets
 # the SO_REUSEPORT socket flag on the BSDs and OS X. On other Unix platforms, it sets the
-# SO_REUSEADDR flag. What that means is that multiple threads or processes can bind to the
-# same address without error (provided they all set the flag) but only the last one to bind
-# will receive any traffic, in effect "stealing" the port from the previous listener.
+# SO_REUSEADDR flag. Either way, multiple sockets can bind to the same address without error
+# (provided they all set the flag). Broadcast and multicast traffic reaches all of them, but
+# which one receives unicast traffic is up to the kernel: Linux picks the last to bind, while
+# macOS picks the first for wildcard addresses and the last for specific ones.
 const UV_UDP_REUSEADDR = 4
 
 ##
@@ -255,8 +256,11 @@ end
 Bind `socket` to the given `host:port`. Note that `0.0.0.0` will listen on all devices.
 
 * The `ipv6only` parameter disables dual stack mode. If `ipv6only=true`, only an IPv6 stack is created.
-* If `reuseaddr=true`, multiple threads or processes can bind to the same address without error
-  if they all set `reuseaddr=true`, but only the last to bind will receive any traffic.
+* For a `UDPSocket`, `reuseaddr=true` allows multiple sockets to bind the same address and
+  port, provided they all set it. Broadcast and multicast datagrams are delivered to every one
+  of them, but which socket receives unicast datagrams depends on the platform: on Linux it is
+  the last one to bind, while on macOS a wildcard bind (`0.0.0.0` or `::`) delivers them to
+  the first. Do not rely on `reuseaddr` to take over a port from another listener.
 """
 function bind(sock::Union{TCPServer, UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only = false, reuseaddr = false, kws...)
     if sock.status != StatusInit
@@ -307,7 +311,7 @@ function setopt(sock::UDPSocket; multicast_loop=nothing, multicast_ttl=nothing, 
         error("Cannot set options on uninitialized socket")
     end
     if multicast_loop !== nothing
-        uv_error("multicast_loop", ccall(:uv_udp_set_multicast_loop, Cint, (Ptr{Cvoid}, Cint), sock.handle, multicast_loop) < 0)
+        uv_error("multicast_loop", ccall(:uv_udp_set_multicast_loop, Cint, (Ptr{Cvoid}, Cint), sock.handle, multicast_loop))
     end
     if multicast_ttl !== nothing
         uv_error("multicast_ttl", ccall(:uv_udp_set_multicast_ttl, Cint, (Ptr{Cvoid}, Cint), sock.handle, multicast_ttl))
@@ -328,7 +332,7 @@ end
 Read a UDP packet from the specified socket, and return the bytes received. This call blocks.
 """
 function recv(sock::UDPSocket; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
-    addr, data = recvfrom(sock; cancel)
+    _, data = recvfrom(sock; cancel)
     return data
 end
 
@@ -392,7 +396,7 @@ function recvfrom(sock::UDPSocket; cancel::Base.CancelTokenArg=Base.DEFAULT_CANC
     end
 end
 
-alloc_buf_hook(sock::UDPSocket, size::UInt) = (Libc.malloc(size), Int(size)) # size is always 64k from libuv
+alloc_buf_hook(::UDPSocket, size::UInt) = (Libc.malloc(size), Int(size)) # size is always 64k from libuv
 
 function uv_recvcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid}, addr::Ptr{Cvoid}, flags::Cuint)
     sock = @handle_as handle UDPSocket
@@ -424,7 +428,7 @@ function uv_recvcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid}, addr::P
                 port = ntoh(ccall(:jl_sockaddr_port4, UInt16, (Ptr{Cvoid},), addr))
             elseif ccall(:jl_sockaddr_is_ip6, Cint, (Ptr{Cvoid},), addr) == 1
                 tmp = Ref{UInt128}(0)
-                scope_id = ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ptr{UInt128}), addr, tmp)
+                ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ptr{UInt128}), addr, tmp)
                 host = IPv6(ntoh(tmp[]))
                 port = ntoh(ccall(:jl_sockaddr_port6, UInt16, (Ptr{Cvoid},), addr))
             end
@@ -710,7 +714,9 @@ function trylisten(sock::LibuvServer; backlog::Integer=BACKLOG_DEFAULT)
     check_open(sock)
     err = ccall(:uv_listen, Cint, (Ptr{Cvoid}, Cint, Ptr{Cvoid}),
                 sock, backlog, @cfunction(uv_connectioncb, Cvoid, (Ptr{Cvoid}, Cint)))
-    sock.status = StatusActive
+    if err == 0
+        sock.status = StatusActive
+    end
     iolock_end()
     return err
 end

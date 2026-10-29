@@ -718,6 +718,12 @@ end
     @test_throws BoundsError (3:6)[5]
     @test (@inferred (0:2:10)[7:6]) === 12:2:11
     @test_throws BoundsError (0:2:10)[7:7]
+    @test_throws OverflowError (typemin(Int):typemin(Int)+5)[1:0]
+    @test_throws OverflowError (UInt8(0):UInt8(10))[1:0]
+    @test_throws OverflowError (typemin(Int):typemin(Int)+5)[1:1:0]
+    @test_throws OverflowError (UInt(0):UInt(1):UInt(10))[1:0]
+    @test_throws OverflowError (typemax(Int):-1:typemax(Int)-5)[1:0]
+    @test (Date(2000):Day(1):Date(2001))[1:0] === Date(2000):Day(1):Date(1999, 12, 31)
 
     for start in [true], stop in [true, false]
         @test (@inferred (start:stop)[1:0]) === true:false
@@ -1478,7 +1484,7 @@ end
 end
 
 @testset "PR 12200 and related" begin
-    for _r in (1:2:100, 1:100, 1f0:2f0:100f0, 1.0:2.0:100.0,
+    for _r in (1:2:100, 1:100, 1f0:2f0:100f0, 1.0:2.0:100.0, LinRange(1, 10, 10),
                range(1, stop=100, length=10), range(1f0, stop=100f0, length=10))
         float_r = float(_r)
         big_r = broadcast(big, _r)
@@ -1694,6 +1700,17 @@ end
     r = range(Float16(0.1094), stop=Float16(0.9697), length=300)
     @test r[1] == Float16(0.1094)
     @test r[end] == Float16(0.9697)
+end
+@testset "Float16 ranges start at their start value" begin
+    a, st, b = Float16(-0.31), Float16(0.18), Float16(2.932)
+    @test first(a:st:b) === a
+    @test first(range(a, step=st, length=10)) === a
+    @test first(StepRangeLen{Float16}(a:st:b)) === a
+    for i in -999:7:999, j in 1:13:300
+        a, st = Float16(i / 100), Float16(j / 100)
+        @test first(a:st:Float16(a + 5st)) === a
+        @test first(range(a, step=st, length=5)) === a
+    end
 end
 
 # issue #20382
@@ -2342,6 +2359,9 @@ end
     r2 = r[false:true:true]
     @test r2 == collect(r)[false:true:true]
     @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 2
+    s = StepRange(true, -1, false)
+    @test r[s] == collect(r)[collect(s)] == [1]
+    @test Base.IdentityUnitRange(r)[s] == [1]
     @test_throws BoundsError r[true:true:false]
     @test_throws BoundsError r[true:true:true]
 

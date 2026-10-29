@@ -249,6 +249,15 @@ begin
         # A single `store_backedges` invocation should de-duplicate any of the
         # edges it is adding.
         @test N′ - N == 1
+
+        # Long edge lists take a different (hashed) path: the same MethodInstance seen
+        # plainly and via `invoke` (which stores its signature alongside the caller)
+        # should each be added once.
+        invokesig = Tuple{typeof(deduped_callee), Int}
+        long_edges = Core.svec(invokesig, callee_mi, callee_mi, invokesig, callee_mi, fill(callee_mi, 80)...)
+        Core.Compiler.store_backedges(ci, long_edges)
+        N″ = length(callee_mi.backedges)
+        @test N″ - N′ == 3
     end
 end
 
@@ -462,4 +471,86 @@ let mi = Base.method_instance(co_caller, (COBox,))
     ci = mi.cache
     @test ci.owner === InvalidationTesterToken()
     @test ci.max_world == typemax(UInt)
+end
+
+# Unit tests for `Compiler.ReinferUtils`
+# --------------------------------------------------------
+
+module BindingRevalidationTest
+    module Flagged
+        const x = 1
+    end
+    module Provider
+        export only_via_using
+        const only_via_using = 2
+    end
+    module Consumer
+    end
+end
+
+# An `export`/`public` flip repartitions a binding without changing what any lookup of it
+# finds, so the access range must still span it.
+let gr = GlobalRef(BindingRevalidationTest.Flagged, :x)
+    b = convert(Core.Binding, gr)
+    w1 = Base.get_world_counter()
+    r1, _ = Compiler.binding_access_range(gr, Compiler.WorldWithRange(w1, Compiler.WorldRange(UInt(1), w1)), false)
+    p1 = b.partitions.min_world
+    Base.set_binding_visibility!(BindingRevalidationTest.Flagged, :x, :export)
+    w2 = Base.get_world_counter()
+    # A new partition really was created ...
+    @test b.partitions.min_world > p1
+    # ... but the access range is unchanged, because the flip does not change the access key.
+    r2, _ = Compiler.binding_access_range(gr, Compiler.WorldWithRange(w2, Compiler.WorldRange(UInt(1), w2)), false)
+    @test Compiler.min_world(r2) == Compiler.min_world(r1)
+end
+
+# A binding that has never been resolved is not short-circuited to "unchanged": the
+# revalidation predicate resolves it, and judges the resolution it gets.
+let RU = Compiler.ReinferUtils
+    gr = GlobalRef(BindingRevalidationTest.Consumer, :only_via_using)
+    b = convert(Core.Binding, gr)
+    @test !isdefined(b, :partitions)
+    @eval BindingRevalidationTest.Consumer using ..Provider
+    @test RU.binding_changed_since_require_world(b, Base.get_world_counter())
+end
+
+# A binding untouched since the require world is unchanged, via the cheap fast path.
+let RU = Compiler.ReinferUtils
+    b = convert(Core.Binding, GlobalRef(Base, :sin))
+    @test b.partitions.min_world <= Base.get_require_world()
+    @test !RU.binding_changed_since_require_world(b, Base.get_world_counter())
+end
+
+# A result with limited accuracy is never cached, and every new caller infers it again.
+# Its CodeInstance must not be registered as a backedge, or each caller adds another one.
+# Here the inner `memo` call is widened against the outer one, which limits the cycle
+# `p` <-> `q` in between (issue #63933).
+module LimitedResultBackedges
+    struct Box{T}
+        x::T
+    end
+    struct Holder
+        b::Box
+    end
+    @noinline call(f) = f()
+    @noinline memo(f) = call(f)
+    inner(b::Box) = memo(() -> b.x)
+    p(x::Int, h::Holder) = x < 0 ? q(x, h) : 0
+    q(x::Int, h::Holder) = x < -1 ? p(x, h) : inner(h.b)
+    caller1(h::Holder) = memo(() -> p(1, h))
+    caller2(h::Holder) = memo(() -> p(2, h))
+end
+let M = LimitedResultBackedges
+    for caller in (M.caller1, M.caller2)
+        Base.return_types(caller, (M.Holder,); interp=InvalidationTester())
+    end
+    for callee in (M.p, M.q)
+        mi = Base.method_instance(callee, (Int, M.Holder))
+        @test !isdefined(mi, :cache)
+        cis = filter(mi.backedges) do edge
+            edge isa Core.CodeInstance && edge.owner === InvalidationTesterToken()
+        end
+        @test !isempty(cis)
+        @test all(ci -> ci.max_world == typemax(UInt), cis)
+    end
 end

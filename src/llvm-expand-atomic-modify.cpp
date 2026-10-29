@@ -11,7 +11,6 @@
 #include <llvm-c/Types.h>
 
 #include <llvm/Analysis/InstSimplifyFolder.h>
-#include <llvm/CodeGen/AtomicExpandUtils.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/InstIterator.h>
@@ -147,24 +146,26 @@ namespace {
 struct ReplacementIRBuilder
     : IRBuilder<InstSimplifyFolder, IRBuilderCallbackInserter> {
   MDNode *MMRAMD = nullptr;
+  MDNode *PCSectionsMD = nullptr;
 
   // Preserves the DebugLoc from I, and preserves still valid metadata.
   // Enable StrictFP builder mode when appropriate.
   explicit ReplacementIRBuilder(Instruction *I, const DataLayout &DL)
       : IRBuilder(I->getContext(), InstSimplifyFolder(DL),
                   IRBuilderCallbackInserter(
-                      [this](Instruction *I) { addMMRAMD(I); })) {
+                      [this](Instruction *I) { addMetadata(I); })) {
     SetInsertPoint(I);
-    this->CollectMetadataToCopy(I, {LLVMContext::MD_pcsections});
     if (BB->getParent()->getAttributes().hasFnAttr(Attribute::StrictFP))
       this->setIsFPConstrained(true);
 
     MMRAMD = I->getMetadata(LLVMContext::MD_mmra);
+    PCSectionsMD = I->getMetadata(LLVMContext::MD_pcsections);
   }
 
-  void addMMRAMD(Instruction *I) {
+  void addMetadata(Instruction *I) {
     if (canInstructionHaveMMRAs(*I))
       I->setMetadata(LLVMContext::MD_mmra, MMRAMD);
+    I->setMetadata(LLVMContext::MD_pcsections, PCSectionsMD);
   }
 };
 }  // anonymous namespace
@@ -297,10 +298,8 @@ static std::variant<AtomicRMWInst::BinOp,bool> patternMatchAtomicRMWOp(Value *Ol
             return AtomicRMWInst::Min;
           case Intrinsic::umin:
             return AtomicRMWInst::UMin;
-#if JL_LLVM_VERSION >= 200000
           case Intrinsic::usub_sat:
            return AtomicRMWInst::USubSat;
-#endif
         }
       }
     }

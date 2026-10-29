@@ -8,7 +8,7 @@
             @test JL.core_lowering_hook(s, test_mod) == Core.svec(s)
         end
 
-        for ast_type in (Expr, JL.SyntaxTree)
+        for ast_type in (Expr, SyntaxTree)
             ex = parsestmt(ast_type, "[1,2,3] .+= 1")
             out = JL.core_lowering_hook(ex, test_mod)
             @test out isa Core.SimpleVector && out[1] isa Expr
@@ -22,14 +22,8 @@
         @test Core.eval(test_mod, lwr) === 2
     end
 
-    function jeval(str)
-        prog = parseall(Expr, str)
-        try
-            JL.activate!()
-            return Core.eval(test_mod, prog)
-        finally
-            JL.activate!(false)
-        end
+    jeval(str) = with_lowering(true) do
+        Core.eval(test_mod, parseall(Expr, str))
     end
     @testset "integration: `JuliaLowering.activate!`" begin
         out = jeval("global asdf = 1")
@@ -78,18 +72,29 @@
         @test isdefined(test_mod.M5.M5_inner, :asdf)
 
         @test jeval("Base.@propagate_inbounds @inline meta_double_quote_issue(x) = x") isa Function
+
+        # Errors use flisp's exception types (although this may change)
+        jeval("macro throws_in_expansion(); error(\"in macro\"); end")
+        err = try; jeval("@throws_in_expansion"); catch e; e; end
+        @test err isa LoadError && err.error == ErrorException("in macro")
+        err = try; jeval("function f_dup_arg(x, x) end"); catch e; e; end
+        @test err isa ErrorException && startswith(err.msg, "syntax: ")
     end
 
     @testset "(AI) `include_string` with `mapexpr`" begin
         seen = Any[]
-        out = JL.include_string(ex -> (push!(seen, ex); ex), Module(:MapexprSeen),
+        local test_mod = Module(:MapexprSeen)
+        out = JL.include_string(ex -> (push!(seen, ex); ex), test_mod,
                                 "aa = 1\n\nbb = aa + 1\nbb*10", "none")
-        @test seen == [Meta.parse("aa = 1"), Meta.parse("bb = aa + 1"), Meta.parse("bb*10")]
+        @test seen == [Meta.parse("aa = 1"; mod=test_mod),
+                       Meta.parse("bb = aa + 1"; mod=test_mod),
+                       Meta.parse("bb*10"; mod=test_mod)]
         @test out === 20
 
+        local test_mod = Module(:MapexprCmp)
         function mapexpr_sees(code)
             seen = Any[]
-            JL.include_string(ex -> (push!(seen, ex); nothing), Module(:MapexprCmp),
+            JL.include_string(ex -> (push!(seen, ex); nothing), test_mod,
                               code, "none")
             only(seen)
         end
@@ -97,12 +102,13 @@
                      "@inline h(a) = a", "\"doc\" k(a) = a", "using Base.Threads",
                      "const cc = 1", "a.b = 2", "x[1] = 2", "if p; q; else; r; end",
                      "macro mmm(); end")
-            @test mapexpr_sees(code) == Meta.parse(code)
+            @test mapexpr_sees(code) == Meta.parse(code; mod=test_mod)
         end
 
         # Three vs four arg module form (may later be deprecated, but macros
         # shouldn't get confused by this while it's here)
-        @test mapexpr_sees("module MMM; end") == Meta.parse("module MMM; end")
+        @test mapexpr_sees("module MMM; end") ==
+            Meta.parse("module MMM; end"; mod=test_mod)
 
         out = JL.include_string(ex -> Expr(:module, true, :Renamed, ex.args[end]),
                                 Module(:MapexprModule), "module Orig; yy = 1; end", "none")
@@ -135,15 +141,18 @@
         @test JL.include_string(noop, m, "f(x) = x + 1\nf(2)", "none") === 3
         @test JL.include_string(noop, m, "macro mm(); 7; end\n@mm", "none") === 7
 
-        # `expr_compat_mode` still applies
-        @test JL.include_string(noop, Module(:MapexprCompat),
-                                """
-                                macro plus1(ex)
-                                    :(\$(esc(ex)) + 1)
-                                end
-                                qq = 10
-                                @plus1 qq
-                                """, "none"; expr_compat_mode=true) === 11
+        # the module's syntax edition still applies
+        let m = Module(:MapexprCompat)
+            Base.set_syntax_version(m, JL_OLD_EDITION)
+            @test JL.include_string(noop, m,
+                                    """
+                                    macro plus1(ex)
+                                        :(\$(esc(ex)) + 1)
+                                    end
+                                    qq = 10
+                                    @plus1 qq
+                                    """, "none") === 11
+        end
 
         # Errors in the included code and in `mapexpr` itself both propagate
         @test_throws "boom" JL.include_string(noop, Module(:MapexprErr),

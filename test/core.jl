@@ -42,7 +42,7 @@ for (T, c) in (
         (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :flags, :time_compile]),
         (Core.Method, [:primary_world, :did_scan_source, :dispatch_status, :interferences]),
         (Core.MethodInstance, [:cache, :flags, :dispatch_status, :precompile]),
-        (Core.MethodTable, [:defs]),
+        (Core.MethodTable, [:defs, :contributors]),
         (Core.MethodCache, [:leafcache, :cache, :var""]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
@@ -433,6 +433,29 @@ end  |> only == Core.TypeEgal{typejoin(Int, UInt, Float64)}
 @test typejoin(Core.TypeEgal{Int}, Type{String}) === Type
 @test ccall(:jl_types_struct_equiv, Cint, (Any, Any), Int, Int) == 1
 @test ccall(:jl_types_struct_equiv, Cint, (Any, Any), Int, String) == 0
+
+# issue #62897: `Type{v}` with a non-type parameter is constructible (like 1.13), so the
+# `T` field of `TypeEq` must be declared `Any` — a narrower field type would let inference
+# unsoundly assume the parameter is a type or TypeVar.
+@test fieldtype(Core.TypeEq, :T) === Any
+@test Base.type_parameter(Type{setindex!}) === setindex!
+@test Base.type_parameter(Type{1}) === 1
+@test Base.type_parameter(Type{:sym}) === :sym
+
+# `Type{K}` for a kind `K` holds only `K` itself (and types equal to it), not every
+# instance of `K`, so `isa` must not reduce to a check of `typeof(x)` in a union
+isa_type_datatype(@nospecialize x) = isa(x, Union{Type{DataType}, Int})
+isa_egal_union(@nospecialize x) = isa(x, Union{Core.TypeEgal{Union}, Int})
+isa_type_anytype(@nospecialize x) = isa(x, Union{Type{Core.AnyType}, Int})
+for (f, T, members) in ((isa_type_datatype, Union{Type{DataType}, Int}, (DataType,)),
+                        (isa_egal_union, Union{Core.TypeEgal{Union}, Int}, (Union,)),
+                        (isa_type_anytype, Union{Type{Core.AnyType}, Int}, (Core.AnyType, Type)))
+    for x in (DataType, Union, UnionAll, Core.AnyType, Type, Int, Float64, 1, 1.0)
+        expected = x === 1 || any(m -> x === m, members)
+        @test isa(x, T) === expected
+        @test f(x) === expected
+    end
+end
 
 # `isType` covers both type-object kinds; use split predicates when exactness matters.
 @test Base.isType(Type{Int})
@@ -5952,6 +5975,13 @@ end
 # issue #19963
 @test_nowarn ccall(:jl_free, Cvoid, (Ptr{Cvoid},), C_NULL)
 
+# jl_calloc with zero element size must not divide by zero
+@test_nowarn begin
+    local p
+    p = ccall(:jl_calloc, Ptr{Cvoid}, (Csize_t, Csize_t), 4, 0)
+    ccall(:jl_free, Cvoid, (Ptr{Cvoid},), p)
+end
+
 # Wrong string size on 64bits for large string.
 if Sys.WORD_SIZE == 64
     @noinline function test_large_string20360(slot)
@@ -6513,6 +6543,18 @@ mutable struct ANonIsBitsType
     v::Int64
 end
 @test Base.uniontypes(Union{Int64, ANonIsBitsType}) == Base.uniontypes(Union{ANonIsBitsType, Int64})
+# components differing only in value parameters
+@test Union{Val{1}, Val{2}} === Union{Val{2}, Val{1}}
+@test Union{Val{:a}, Val{:b}} === Union{Val{:b}, Val{:a}}
+@test Union{Val{true}, Val{false}} === Union{Val{false}, Val{true}}
+@test Union{Val{1.0}, Val{2.0}} === Union{Val{2.0}, Val{1.0}}
+@test Union{Val{'a'}, Val{'b'}} === Union{Val{'b'}, Val{'a'}}
+@test Union{Val{1}, Val{:a}} === Union{Val{:a}, Val{1}}
+@test Union{Val{1}, Val{:a}, Val{1.0}} === Union{Val{1.0}, Val{:a}, Val{1}}
+@test Base.uniontypes(Union{Val{1}, Val{-1}, Val{256}}) == Any[Val{-1}, Val{1}, Val{256}]
+@test Base.uniontypes(Union{Val{:b}, Val{:a}}) == Any[Val{:a}, Val{:b}]
+@test Base.uniontypes(Union{Val{:a}, Val{1}}) == Any[Val{1}, Val{:a}]
+@test Union{Pair{Val{1}, Val{2}}, Pair{Val{2}, Val{1}}} === Union{Pair{Val{2}, Val{1}}, Pair{Val{1}, Val{2}}}
 
 # issue 18933
 module GlobalDef18933
@@ -6897,6 +6939,15 @@ for U in unboxedunions
             @test A[1] === initvalue2(F2)
             @test typeof(A[end]) === F2
 
+            A = U[initvalue2(F2) for i = 1:len]
+            resize!(A, 1; first=true)
+            @test length(A) === 1
+            @test A[1] === initvalue2(F2)
+            resize!(A, len; first=true)
+            @test length(A) === len
+            @test A[end] === initvalue2(F2)
+            @test typeof(A[end]) === F2
+
             # deleteat!
             F = Base.uniontypes(U)[2]
             A = U[rand(F(1):F(len)) for i = 1:len]
@@ -7102,7 +7153,7 @@ setindex!(A, missing, 2)
 setindex!(A, 0x03, 3)
 setindex!(A, missing, 4)
 setindex!(A, 0x05, 5)
-Base._growat!(A, 1, 1)
+resize!(A, 6; first=true)
 
 @test getindex(A, 1) === missing
 @test getindex(A, 2) === 0x01
@@ -7112,7 +7163,7 @@ Base._growat!(A, 1, 1)
 @test getindex(A, 6) === 0x05
 
 # grow_at_beg 2
-Base._growat!(A, 1, 1)
+resize!(A, 7; first=true)
 @test getindex(A, 1) === missing
 @test getindex(A, 2) === missing
 @test getindex(A, 3) === 0x01
@@ -7133,7 +7184,7 @@ Base._growat!(A, 2, 1)
 @test getindex(A, 8) === 0x05
 
 # grow_at_beg 9
-Base._growat!(A, 1, 1)
+resize!(A, 9; first=true)
 @test getindex(A, 1) === missing
 @test getindex(A, 2) === missing
 @test getindex(A, 3) === missing
@@ -7189,6 +7240,11 @@ Base._growat!(A, 2, 3)
 @test getindex(A, 8) === missing
 @test getindex(A, 9) === missing
 @test getindex(A, 10) === 0x05
+
+resize!(A, 2; first=true)
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === 0x05
+@test length(A) === 2
 
 # grow_at_beg 3
 A = Vector{Union{Missing, UInt8}}(undef, 1048577)
@@ -8213,6 +8269,8 @@ primitive type P36104 8 end
 const orig_P36104 = P36104
 primitive type P36104 16 end
 @test P36104 !== orig_P36104
+primitive type P36104 12 end # same size as 16 bits
+@test Core.bitsizeof(P36104) == 12
 
 # Malformed invoke
 f_bad_invoke(x::Int) = invoke(x, (Any,), x)
@@ -8686,6 +8744,15 @@ let spec = only(methods(g47476)).specializations::Core.SimpleVector
     @test any(mi -> mi !== nothing && Base.isvatuple(mi.specTypes), spec)
     @test all(mi -> mi === nothing || !Base.has_free_typevars(mi.specTypes), spec)
 end
+
+# issue #63844: inferring a caller also infers the call's compilation signature,
+# which leaves `N` undetermined; the call must not dispatch to that MethodInstance
+f63844(::Union{Int, NTuple{N,Int}}...) where {N} = N
+@test f63844(1, 2, 3, 4, 5, 6, (7, 8)) === 2
+caller63844() = f63844(1, 2, 3, 4, 5, 6, (7, 8))
+code_typed(caller63844, ())
+@test f63844(1, 2, 3, 4, 5, 6, (7, 8)) === 2
+@test caller63844() === 2
 
 f48950(::Union{Int,d}, ::Union{c,Nothing}...) where {c,d} = 1
 @test f48950(1, 1, 1) == 1
@@ -9169,8 +9236,14 @@ end
 #58434 bitsegal comparison of oddly sized fields
 primitive type ByteString58434 (18 * 8) end
 
-@test Base.datatype_isbitsegal(Tuple{ByteString58434}) == false
+@test Base.datatype_haspadding(Tuple{ByteString58434})
 @test Base.datatype_haspadding(Tuple{ByteString58434}) == !Base.ispacked(Tuple{ByteString58434})
+# padding must not affect egality or hashing
+let mk = t -> reinterpret(ByteString58434, t), x = ntuple(i -> UInt8(i), 18)
+    @test mk(x) === mk(x)
+    @test mk(x) !== mk(ntuple(i -> UInt8(i == 18 ? 0 : i), 18))
+    @test objectid(mk(x)) == objectid(mk(x))
+end
 
 # #60659 - Behavior of using'd ambiguous bindings
 module AmbiguousUsing60659
@@ -9406,4 +9479,23 @@ let A = Issue61347.A, S2 = Issue61347.S2
     @test supertype(lazy) isa Type # forcing accessor
     @test isdefined(lazy, :super)
     @test getfield(lazy, :super) === supertype(lazy)
+end
+
+# Method tables and dispatch caches keep their entries in insertion-ordered dicts that
+# grow by appending. Every entry must stay reachable as a dict grows through many sizes.
+module OrderedDictGrowth
+    const Ts = [(@eval struct $(Symbol(:T, i)) end; @eval $(Symbol(:T, i))) for i in 1:300]
+    f(x) = 0
+    for (i, T) in enumerate(Ts)
+        @eval f(::$T) = $i
+    end
+    g(x) = typeof(x)
+end
+@testset "dispatch through growing method caches" begin
+    Ts = OrderedDictGrowth.Ts
+    @test all(i -> Base.invokelatest(OrderedDictGrowth.f, Ts[i]()) == i, eachindex(Ts))
+    @test all(i -> Base.invokelatest(OrderedDictGrowth.g, Ts[i]()) === Ts[i], eachindex(Ts))
+    # again, now from the filled caches
+    @test all(i -> Base.invokelatest(OrderedDictGrowth.f, Ts[i]()) == i, eachindex(Ts))
+    @test all(i -> Base.invokelatest(OrderedDictGrowth.g, Ts[i]()) === Ts[i], eachindex(Ts))
 end
