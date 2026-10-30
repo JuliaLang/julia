@@ -1060,19 +1060,10 @@ JL_DLLEXPORT void* jl_gc_get_owner_address_to_mmtk(void* m) {
     return (void*)jl_genericmemory_data_owner_field_addr(m);
 }
 
-// same as jl_genericmemory_how but with JL_DLLEXPORT
-// we should probably inline this in Rust
+// Export the shared ownership decoder for the Rust scanner.
 JL_DLLEXPORT size_t jl_gc_genericmemory_how(void *arg) JL_NOTSAFEPOINT
 {
-    jl_genericmemory_t* m = (jl_genericmemory_t*)arg;
-    if (m->ptr == (void*)((char*)m + 16)) // JL_SMALL_BYTE_ALIGNMENT (from julia_internal.h)
-        return JL_GENERICMEMORY_INLINED;
-    jl_value_t *owner = jl_genericmemory_data_owner_field(m);
-    if (owner == (jl_value_t*)m)
-        return JL_GENERICMEMORY_GCMANAGED;
-    if (owner == NULL)
-        return JL_GENERICMEMORY_MALLOCD;
-    return JL_GENERICMEMORY_STRINGOWNED;
+    return jl_genericmemory_how((jl_genericmemory_t*)arg);
 }
 
 // ========================================================================= //

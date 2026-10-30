@@ -1480,8 +1480,13 @@ else
 endif
 
 ifeq ($(WITH_MIMALLOC), 1)
+ifeq ($(USE_SYSTEM_MIMALLOC), 1)
+MIMALLOC := $(LOCALBASE)/lib/libmimalloc.a
+MIMALLOC_INC := $(LOCALBASE)/include
+else
 MIMALLOC := $(build_libdir)/libmimalloc.a
 MIMALLOC_INC := $(build_includedir)
+endif
 JCFLAGS += -DMIMALLOC_ENABLED
 JCXXFLAGS += -DMIMALLOC_ENABLED
 else

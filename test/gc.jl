@@ -306,6 +306,16 @@ let
     GC.gc()
 end
 
+# The GC must scan objects stored in libc-owned buffers, including with MMTk.
+let a = unsafe_wrap(Array, Ptr{Any}(Libc.calloc(1, sizeof(Ptr{Cvoid}))), 1; own=true)
+    for i in 1:3
+        a[1] = Ref(i)
+        GC.gc()
+        @test a[1][] == i
+    end
+end
+GC.gc()
+
 # `jl_malloc`/`jl_free` are installed as allocator hooks by C libraries (e.g. SuiteSparse)
 # that may already hold libc-allocated memory, so they must be interchangeable with libc.
 let p = Libc.malloc(16)
