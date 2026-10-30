@@ -1361,6 +1361,11 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         Compiler.@zone "CC: INSERT_BACKEDGES" begin
             ReinferUtils.insert_backedges_typeinf(internal_methods)
         end
+        # When writing an image, also compile the specializations that the package's
+        # precompile workload reached by dynamic dispatch
+        if generating_output()
+            ccall(:jl_apply_compile_hints, Cvoid, (Any,), sv[4]::Vector{Any})
+        end
         # collect the `__init__` reports to print after this package's timing is taken, so
         # that any compilation for the printing isn't attributed to this package
         init_reports = timing_imports ? Tuple{Module, Int, UInt64, UInt64, UInt64}[] : nothing

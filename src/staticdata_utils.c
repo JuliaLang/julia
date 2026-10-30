@@ -116,6 +116,105 @@ JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
     JL_UNLOCK(&newly_inferred_mutex);
 }
 
+// MethodInstances whose code a tagged precompile workload compiled, while that code
+// belongs to another image (e.g. it was inferred, but not compiled, by a dependency).
+// `jl_compile_method_internal` marks the CodeInstance `precompile`, but this cache does not
+// save that CodeInstance, so without native code it would not record that the workload
+// needed the code compiled. These are saved as compile hints instead: when the cache is
+// loaded by a process writing an image, the hinted specializations are marked `precompile`
+// again, so that they get compiled into that image.
+jl_array_t *jl_workload_compiled JL_GLOBALLY_ROOTED = NULL;
+
+void jl_push_workload_compiled(jl_code_instance_t *ci)
+{
+    if (newly_inferred == NULL || !jl_atomic_load_relaxed(&jl_tag_newly_inferred_enabled))
+        return;
+    if (!jl_object_in_image((jl_value_t*)ci))
+        return; // saved by this cache along with its `precompile` flag, if needed
+    jl_method_instance_t *mi = jl_get_ci_mi(ci);
+    JL_LOCK(&newly_inferred_mutex);
+    if (newly_inferred != NULL) {
+        if (jl_workload_compiled == NULL)
+            jl_workload_compiled = jl_alloc_vec_any(0);
+        jl_array_ptr_1d_push(jl_workload_compiled, (jl_value_t*)mi);
+    }
+    JL_UNLOCK(&newly_inferred_mutex);
+}
+
+static jl_array_t *jl_compute_compile_hints(void)
+{
+    jl_array_t *hints = jl_alloc_vec_any(0);
+    if (jl_workload_compiled == NULL)
+        return hints;
+    JL_GC_PUSH1(&hints);
+    size_t n = jl_array_nrows(jl_workload_compiled);
+    htable_t seen;
+    htable_new(&seen, n);
+    for (size_t i = 0; i < n; i++) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(jl_workload_compiled, i);
+        if (!jl_is_method(mi->def.value))
+            continue;
+        int dispatch_status = jl_atomic_load_relaxed(&mi->def.method->dispatch_status);
+        if (!(dispatch_status & METHOD_SIG_LATEST_WHICH))
+            continue; // ignore replaced methods
+        void **bp = ptrhash_bp(&seen, mi);
+        if (*bp != HT_NOTFOUND)
+            continue;
+        *bp = (void*)mi;
+        jl_array_ptr_1d_push(hints, (jl_value_t*)mi);
+    }
+    htable_free(&seen);
+    JL_GC_POP();
+    return hints;
+}
+
+// Hinted MethodInstances that had no code to mark, e.g. because their CodeInstance failed
+// validation when its cache was loaded. A system image build infers them before emitting.
+jl_array_t *jl_pending_compile_hints JL_GLOBALLY_ROOTED = NULL;
+
+// Mark the code of each hinted MethodInstance as worth compiling into the image being
+// written. If it was invalidated in the meantime, image emission infers it again.
+JL_DLLEXPORT void jl_apply_compile_hints(jl_array_t *hints)
+{
+    if (!jl_generating_output())
+        return;
+    size_t n = jl_array_nrows(hints);
+    for (size_t i = 0; i < n; i++) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(hints, i);
+        jl_code_instance_t *ci = jl_atomic_load_relaxed(&mi->cache);
+        int marked = 0;
+        for (; ci != NULL; ci = jl_atomic_load_relaxed(&ci->next)) {
+            if (ci->owner == jl_nothing) {
+                if (jl_atomic_load_relaxed(&ci->invoke) != jl_fptr_const_return)
+                    jl_atomic_store_relaxed(&ci->precompile, 1);
+                marked = 1;
+            }
+        }
+        // incremental images only emit code for their own worklist, so this is only
+        // needed when writing a system image
+        if (!marked && !jl_options.incremental) {
+            JL_LOCK(&newly_inferred_mutex);
+            if (jl_pending_compile_hints == NULL)
+                jl_pending_compile_hints = jl_alloc_vec_any(0);
+            jl_array_ptr_1d_push(jl_pending_compile_hints, (jl_value_t*)mi);
+            JL_UNLOCK(&newly_inferred_mutex);
+        }
+    }
+}
+
+static void jl_compile_pending_compile_hints(void)
+{
+    if (jl_pending_compile_hints == NULL)
+        return;
+    size_t world = jl_atomic_load_acquire(&jl_world_counter);
+    size_t n = jl_array_nrows(jl_pending_compile_hints);
+    for (size_t i = 0; i < n; i++) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(jl_pending_compile_hints, i);
+        jl_compile_method_instance(mi, NULL, world);
+    }
+    jl_pending_compile_hints = NULL;
+}
+
 // Null `CodeInstance.inferred` for native-owned CIs where it is still a raw
 // `CodeInfo` left by `jl_precompile_keep_ir`. These are non-inlineable methods
 // whose IR is otherwise discarded, retained only long enough for

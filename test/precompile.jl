@@ -1239,6 +1239,74 @@ precompile_test_harness("precompiletools") do dir
     end
 end
 
+# Code that a precompile workload compiles is marked `precompile`, but when that code
+# belongs to another image (here: inferred, and not compiled, in `CompileHintsDep`) a cache
+# without native code cannot record that. It is saved as a compile hint instead, so that a
+# process writing an image (e.g. a system image built from such caches) compiles it as well.
+precompile_test_harness("workload compile hints") do dir
+    write(joinpath(dir, "CompileHintsDep.jl"),
+        """
+        module CompileHintsDep
+            struct Tagged
+                x::Int
+            end
+            struct Untagged
+                x::Int
+            end
+            first_x(v) = v[1].x
+            # infers (and inlines) `getindex` for these types without compiling it
+            precompile(first_x, (Vector{Tagged},))
+            precompile(first_x, (Vector{Untagged},))
+        end
+        """
+    )
+    write(joinpath(dir, "CompileHintsA.jl"),
+        """
+        module CompileHintsA
+            using CompileHintsDep: Tagged, Untagged
+            let
+                ccall(:jl_tag_newly_inferred_enable, Cvoid, ())
+                Base.inferencebarrier([Tagged(1)])[1]
+                ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
+            end
+            Base.inferencebarrier([Untagged(1)])[1]
+        end
+        """
+    )
+    write(joinpath(dir, "CompileHintsB.jl"),
+        """
+        module CompileHintsB
+            using CompileHintsDep, CompileHintsA
+
+            function has_precompile(@nospecialize(tt))
+                for mi in Base.specializations(which(tt))
+                    mi.specTypes == tt || continue
+                    ci = isdefined(mi, :cache) ? mi.cache : nothing
+                    while ci !== nothing
+                        ci.owner === nothing && ci.precompile && return true
+                        ci = isdefined(ci, :next) ? ci.next : nothing
+                    end
+                end
+                return false
+            end
+
+            # this process writes an image, so the hints of `CompileHintsA` were applied
+            const tagged = has_precompile(Tuple{typeof(getindex), Vector{CompileHintsDep.Tagged}, Int})
+            const untagged = has_precompile(Tuple{typeof(getindex), Vector{CompileHintsDep.Untagged}, Int})
+        end
+        """
+    )
+    testcode = """
+        insert!(LOAD_PATH, 1, $(repr(dir)))
+        insert!(DEPOT_PATH, 1, $(repr(dir)))
+        using CompileHintsB
+        # hints are only applied when writing an image
+        runtime = CompileHintsB.has_precompile(Tuple{typeof(getindex), Vector{CompileHintsB.CompileHintsDep.Tagged}, Int})
+        (CompileHintsB.tagged, CompileHintsB.untagged, runtime)
+    """
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no --pkgimages=no -E $(testcode)`) == repr((true, false, false))
+end
+
 # `@cfunction` must be able to re-enter the interpreter as needed, even if codegen is not available
 precompile_test_harness("cfunction without codegen") do dir
     write(joinpath(dir, "CFunc61949A.jl"),
