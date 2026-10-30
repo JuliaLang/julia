@@ -1,4 +1,4 @@
 LINEARALGEBRA_BRANCH = mb/ReduceReuse♻
-LINEARALGEBRA_SHA1 = 5d7bed6eb41b260ee15f9d5da121235e6c3111c0
+LINEARALGEBRA_SHA1 = 1342c9e7f55a91954cb230eb15e08f2b86ffd0f9
 LINEARALGEBRA_GIT_URL := https://github.com/mbauman/LinearAlgebra.jl.git
 LINEARALGEBRA_TAR_URL = https://api.github.com/repos/mbauman/LinearAlgebra.jl/tarball/$1

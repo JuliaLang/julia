@@ -1,4 +1,4 @@
 STATISTICS_BRANCH = mb/reduce-reuse-recycle
-STATISTICS_SHA1 = 0474e0c70623d5d20f42c1a7f2643a551e120f5e
+STATISTICS_SHA1 = db1af2568d2e87dcd78e76d4ef40951cd1744185
 STATISTICS_GIT_URL := https://github.com/mbauman/Statistics.jl.git
 STATISTICS_TAR_URL = https://api.github.com/repos/mbauman/Statistics.jl/tarball/$1
