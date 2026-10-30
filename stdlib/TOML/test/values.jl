@@ -184,6 +184,11 @@ end
     # Invalid: \x with invalid hex digits
     @test failval("\"\\xG0\"", Internals.ErrInvalidUnicodeScalar)
 
+    # Line-ending backslash is only valid in multiline basic strings
+    @test failval("\"x\\\ny\"", Internals.ErrInvalidEscapeCharacter)
+    @test failval("\"x\\\r\ny\"", Internals.ErrInvalidEscapeCharacter)
+    @test testval("\"\"\"x\\\ny\"\"\"", "xy")
+
     #=
     Found these examples of string tests somewhere
     quot0=""" """    # valid
