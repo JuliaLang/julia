@@ -11272,6 +11272,9 @@ void emit_always_inline(jl_codegen_output_t &out,
                 if (decls.invoke)
                     decls.invoke->setLinkage(linkage);
                 decls.specptr->setLinkage(linkage);
+                // only force inlining of the copy emitted for inlining here, not
+                // of a definition that is also emitted for its own sake
+                decls.specptr->addFnAttr(Attribute::AlwaysInline);
             }
 
             // TODO: jl_promote_method_roots?
