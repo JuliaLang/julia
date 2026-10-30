@@ -789,6 +789,18 @@ end
     close(t)
 end
 
+@testset "event loop thread wakeup after a libuv worker takes the iolock" begin
+    # if this fails, the child hangs with a `@threadcall` completion stuck in the event loop
+    script = joinpath(@__DIR__, "threadcall_iolock_wakeup.jl")
+    cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no --threads=2,0 $script`
+    proc = run(pipeline(cmd; stdout, stderr); wait=false)
+    t = Timer(60) do _
+        kill(proc, Base.SIGKILL)
+    end
+    @test success(proc)
+    close(t)
+end
+
 @testset "GC with a foreign thread reusing an exited thread's pthread id" begin
     # if this fails, the child hangs waiting for the foreign thread to reach a safepoint
     script = joinpath(@__DIR__, "foreign_thread_reuse.jl")
