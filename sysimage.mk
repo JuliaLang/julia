@@ -58,8 +58,8 @@ endif
 endef
 
 ifneq ($(CROSS_BOOTSTRAP_SYSBASE),)
-JULIA_SYSBASE_release := $(CROSS_BOOTSTRAP_SYSBASE)
-JULIA_SYSBASE_debug := $(CROSS_BOOTSTRAP_SYSBASE)
+JULIA_SYSBASE_release := $(CROSS_BOOTSTRAP_SYSBASE).$(SHLIB_EXT)
+JULIA_SYSBASE_debug := $(CROSS_BOOTSTRAP_SYSBASE).$(SHLIB_EXT)
 else
 JULIA_SYSBASE_release := $(build_private_libdir)/sysbase.$(SHLIB_EXT)
 JULIA_SYSBASE_debug := $(build_private_libdir)/sysbase-debug.$(SHLIB_EXT)
