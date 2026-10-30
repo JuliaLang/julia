@@ -861,11 +861,10 @@ static size_t jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFE
     size_t freed_bytes;
     if (jl_genericmemory_how(m) == JL_GENERICMEMORY_LIBCALLOCATED) {
         size_t elsz = ((jl_datatype_t*)jl_typetagof(m))->layout->size;
-        freed_bytes = m->length * elsz;
-        assert(freed_bytes != 0);
+        freed_bytes = m->length * elsz; // may be 0, e.g. `unsafe_wrap(Array, p, 0; own=true)`
         free(d);
     } else {
-        freed_bytes = memory_block_usable_size(d, isaligned);
+        freed_bytes = gc_managed_block_usable_size(d, isaligned);
         assert(freed_bytes != 0);
         if (isaligned)
             jl_free_aligned_wrapper(d);
@@ -4483,7 +4482,7 @@ JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
 // free passes the same size, and avoids looking up the block (slow on macOS).
 void *jl_gc_counted_malloc_(size_t sz, int usable)
 {
-    void *data = jl_malloc_wrapper(sz);
+    void *data = malloc(sz);
     jl_task_t *ct = jl_get_current_task();
     if (data != NULL && ct != NULL) {
         if (usable)
@@ -4501,7 +4500,7 @@ void *jl_gc_counted_malloc_(size_t sz, int usable)
 
 void *jl_gc_counted_calloc_(size_t nm, size_t sz, int usable)
 {
-    void *data = jl_calloc_wrapper(nm, sz);
+    void *data = calloc(nm, sz);
     jl_task_t *ct = jl_get_current_task();
     if (data != NULL && ct != NULL) {
         sz = usable ? memory_block_usable_size(data, 0) : nm * sz;
@@ -4523,11 +4522,11 @@ void *jl_gc_counted_realloc_(void *p, size_t old, size_t sz, int usable)
     int freeing = p != NULL && sz == 0;
     void *data;
     if (freeing) {
-        jl_free_wrapper(p);
+        free(p);
         data = NULL;
     }
     else {
-        data = jl_realloc_wrapper(p, sz);
+        data = realloc(p, sz);
     }
     jl_task_t *ct = jl_get_current_task();
     if ((data != NULL || freeing) && ct != NULL) {
@@ -4563,7 +4562,7 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 {
-    jl_free_wrapper(p);
+    free(p);
     jl_task_t *ct = jl_get_current_task();
     if (p != NULL && ct != NULL)
         jl_batch_accum_free_size(ct->ptls, sz);
@@ -4607,7 +4606,7 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
     if (b == NULL)
         jl_throw(jl_memory_exception);
 
-    size_t allocated_bytes = memory_block_usable_size(b, 1);
+    size_t allocated_bytes = gc_managed_block_usable_size(b, 1);
     assert(allocated_bytes >= allocsz);
     jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd,
         jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + allocated_bytes);
