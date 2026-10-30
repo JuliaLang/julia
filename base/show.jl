@@ -709,7 +709,7 @@ function typealias_candidates(mod::Module)
     cached !== nothing && cached.first == world && return cached.second
     candidates = Symbol[]
     for name in unsorted_names(mod; all=true, imported=true)
-        startswith(String(name), '#') && continue
+        unsafe_load(unsafe_convert(Ptr{UInt8}, name)) == UInt8('#') && continue
         if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
             alias = getglobal(mod, name)
             if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias)
