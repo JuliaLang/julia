@@ -474,6 +474,24 @@ static void expandAtomicModifyToCmpXchg(CallInst &Modify,
           // the load.
           if (RMW->use_empty())
             RMW->moveBeforePreserving(Modify.getIterator());
+          if (!Ty->isIntegerTy()) {
+            // `or` is integer-only: emit it on the equivalent integer type and
+            // bitcast the loaded value back (happens e.g. when an FP op folds
+            // to an identity, like fadd x, -0.0)
+            IntegerType *ITy = Builder.getIntNTy(Ty->getPrimitiveSizeInBits().getFixedValue());
+            Builder.SetInsertPoint(RMW);
+            AtomicRMWInst *IRMW = Builder.CreateAtomicRMW(AtomicRMWInst::Or, Ptr,
+                ConstantInt::getNullValue(ITy), Alignment, Ordering, SSID);
+            IRMW->copyMetadata(Modify);
+            Value *Cast = Builder.CreateBitCast(IRMW, Ty);
+            if (NewVal == RMW)
+              NewVal = Cast;
+            OldVal = Cast;
+            RMW->replaceAllUsesWith(Cast);
+            RMW->eraseFromParent();
+            Builder.SetInsertPoint(&Modify);
+            break;
+          }
           Val = ConstantInt::getNullValue(Ty);
         }
         RMW->setOperation(RMWOp);

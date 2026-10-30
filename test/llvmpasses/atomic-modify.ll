@@ -98,6 +98,10 @@ define i8 @mulcall.i8(i8 %x, i8 %y) {
     ret i8 %z
 }
 
+define double @id.f64(double %x) {
+    ret double %x
+}
+
 define double @fmax.f64(double %x, double %y) {
     %z = call double @llvm.maxnum.f64(double %y, double %x)
     ret double %z
@@ -362,6 +366,17 @@ top:
   ret i8 %oldval
 }
 
+define double @mod_f64_faddfence(ptr %a) {
+; CHECK-LABEL: @mod_f64_faddfence
+; CHECK: [[old:%.*]] = atomicrmw or ptr %a, i64 0 release, align 8
+; CHECK-NEXT: [[oldval:%.*]] = bitcast i64 [[old]] to double
+; CHECK-NEXT: ret double [[oldval]]
+top:
+  %oldnew = call {double, double} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.f64(ptr align(8) %a, ptr @fadd.f64, i8 5, i8 1, double -0.0)
+  %oldval = extractvalue {double, double} %oldnew, 0
+  ret double %oldval
+}
+
 define double @mod_f64_fmul(ptr %a, double %b) {
 ; CHECK-LABEL: @mod_f64_fmul
 ; CHECK-NOT: call
@@ -459,4 +474,15 @@ top:
   %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @mulcall.i8, i8 5, i8 1, i8 %b)
   %newval = extractvalue {i8, i8} %oldnew, 1
   ret i8 %newval
+}
+
+define {double, double} @mod_f64_idpair(ptr %a) {
+; CHECK-LABEL: @mod_f64_idpair
+; CHECK: [[old:%.*]] = atomicrmw or ptr %a, i64 0 release, align 8
+; CHECK-NEXT: [[oldval:%.*]] = bitcast i64 [[old]] to double
+; CHECK-NEXT: [[pair:%.*]] = insertvalue { double, double } undef, double [[oldval]], 0
+; CHECK-NEXT: insertvalue { double, double } [[pair]], double [[oldval]], 1
+top:
+  %oldnew = call {double, double} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.f64(ptr align(8) %a, ptr @id.f64, i8 5, i8 1)
+  ret {double, double} %oldnew
 }
