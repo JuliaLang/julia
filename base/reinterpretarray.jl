@@ -1,10 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Gives a reinterpreted view (of element type T) of the underlying array (of element type S).
+    ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T,N}
+
+Array type typically returned by [`reinterpret(T, a)`](@ref reinterpret) for an array `a`: a
+reinterpreted view (of element type `T`) of the parent array `a` (of type `A` with element
+type `S`).
 If the size of `T` differs from the size of `S`, the array will be compressed/expanded in
-the first dimension. The variant `reinterpret(reshape, T, a)` instead adds or consumes the first dimension
-depending on the ratio of element sizes.
+the first dimension. The variant `reinterpret(reshape, T, a)` (with `IsReshaped == true`)
+instead adds or consumes the first dimension depending on the ratio of element sizes.
 """
 struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T, N}
     parent::A
