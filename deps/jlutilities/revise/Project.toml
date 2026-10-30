@@ -6,4 +6,4 @@ Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 [sources]
 JuliaInterpreter = {rev = "0c3adb4859401971b3b1040e5767bdc2d9414d08", url = "https://github.com/JuliaDebug/JuliaInterpreter.jl.git"}
 LoweredCodeUtils = {rev = "6f5c109b054a9f5c04aa042e6fe958fd4cd4f6b7", url = "https://github.com/JuliaDebug/LoweredCodeUtils.jl.git"}
-Revise = {rev = "3abb43f1c6ff7f9a8cd42de08817fa7e5f7c9f09", url = "https://github.com/timholy/Revise.jl.git"}
+Revise = {rev = "9b1b6116291160ab49cf937045c3a9e5d24254d0", url = "https://github.com/mlechu/Revise.jl.git"}
