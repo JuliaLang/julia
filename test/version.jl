@@ -92,6 +92,11 @@ using Random
 @test tryparse(VersionNumber, "1.2.3-\u212a") === nothing
 @test tryparse(VersionNumber, "١.2.3") === nothing
 @test tryparse(VersionNumber, "V1.2.3") == v"1.2.3"
+@test tryparse(VersionNumber, "99999999999.2.3") === nothing
+@test tryparse(VersionNumber, "1.99999999999.3") === nothing
+@test tryparse(VersionNumber, "1.2.3-99999999999999999999") === nothing
+@test tryparse(VersionNumber, "1.2.3+99999999999999999999") === nothing
+@test_throws ArgumentError parse(VersionNumber, "99999999999.2.3")
 
 # show
 io = IOBuffer()
