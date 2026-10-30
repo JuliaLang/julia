@@ -403,6 +403,32 @@ end
     end
 end
 
+# issue #54920
+@testset "reducedim issue with abs on Complex{Int} (#54920)" begin
+    let A = Complex{Int}[1+2im 3+4im; 5+6im 7+8im]
+        @test maximum(abs, A, dims=(1, 2)) == [maximum(abs, A);;]
+        @test eltype(maximum(abs, A, dims=(1, 2))) === Float64
+        @test maximum(abs2, A, dims=(1, 2)) == [maximum(abs2, A);;]
+        @test eltype(maximum(abs2, A, dims=(1, 2))) === Int
+        @test minimum(abs, A, dims=(1, 2)) == [minimum(abs, A);;]
+        @test eltype(minimum(abs, A, dims=(1, 2))) === Float64
+    end
+    for T in (Int8, Int16, Int32, Int64, BigInt)
+        A = Complex{T}[3+4im]
+        @test maximum(abs, A, dims=1) == reshape([float(T)(5)], 1)
+        @test eltype(maximum(abs, A, dims=1)) === typeof(float(T)(5))
+    end
+    let A = Complex{Int}[]
+        @test eltype(maximum(abs, reshape(A, 0, 1), dims=2)) === Float64
+        @test eltype(maximum(abs2, reshape(A, 0, 1), dims=2)) === Int
+    end
+    let A = Union{Complex{Int}, Missing}[1+2im missing; 3+4im 5+6im]
+        @test isequal(maximum(abs, A, dims=1), Union{Float64, Missing}[5.0 missing])
+        @test isequal(maximum(abs2, A, dims=1), Union{Int, Missing}[25 missing])
+        @test isequal(maximum(abs, A, dims=2), reshape(Union{Float64, Missing}[missing, abs(5+6im)], 2, 1))
+    end
+end
+
 @testset "NaN in findmin/findmax/minimum/maximum" begin
     A = [1.0 NaN 6.0;
          NaN 2.0 4.0]

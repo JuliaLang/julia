@@ -59,10 +59,17 @@ reducedim_initarray(A::AbstractArrayOrBroadcasted, region, init::T) where {T} = 
 promote_union(T::Union) = promote_type(promote_union(T.a), promote_union(T.b))
 promote_union(T) = T
 
+_realtype(T::Union) = Union{_realtype(T.a), _realtype(T.b)}
 _realtype(::Type{<:Complex}) = Real
 _realtype(::Type{Complex{T}}) where T<:Real = T
 _realtype(T::Type) = T
-_realtype(::Union{typeof(abs),typeof(abs2)}, T) = _realtype(T)
+_realtype(f, T::Union) = Union{_realtype(f, T.a), _realtype(f, T.b)}
+_realtype(::typeof(abs2), T::Union) = Union{_realtype(abs2, T.a), _realtype(abs2, T.b)}
+_realtype(::typeof(abs), T::Union) = Union{_realtype(abs, T.a), _realtype(abs, T.b)}
+_realtype(::typeof(abs2), T) = _realtype(T)
+_realtype(::typeof(abs), ::Type{<:Complex}) = Real
+_realtype(::typeof(abs), ::Type{Complex{T}}) where T<:Real = typeof(abs(zero(Complex{T})))
+_realtype(::typeof(abs), T) = _realtype(T)
 _realtype(::Any, T) = T
 
 function reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::AbstractArray, region)
