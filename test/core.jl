@@ -9213,8 +9213,10 @@ end
 @test M57638_3.x === 1
 
 @testset "no unnecessary methods for comparison functions with generically correct and performant fallback methods" begin
-    @test (isone ∘ length ∘ methods)(>, Tuple{Any, Any})
-    @test (isone ∘ length ∘ methods)(>=, Tuple{Any, Any})
+    # only count Base's methods: tests that ran earlier on this worker may have added others
+    base_methods(f) = filter(m -> m.module === Base, methods(f, Tuple{Any, Any}))
+    @test (isone ∘ length ∘ base_methods)(>)
+    @test (isone ∘ length ∘ base_methods)(>=)
 end
 
 module GlobalBindingMulti
