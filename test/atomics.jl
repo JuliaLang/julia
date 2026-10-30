@@ -1532,3 +1532,27 @@ if Base.JLOptions().depwarn == 2
     @test (@atomic a[]) == 5
     @test (@atomic a[] += 1) == 6   # atomic read-modify-write replacement for `a[] += 1`
 end
+
+# values allocated by the op stay rooted when it is inlined into the atomic modify
+mutable struct ModifyPayload
+    x::Int
+end
+@noinline function alloc_modify_payload(y)
+    p = ModifyPayload(y)
+    finalizer(p -> (p.x = -1), p)
+    return p
+end
+@noinline modify_collect() = GC.gc(true)
+function modify_gc_op(x, y)
+    obj = alloc_modify_payload(y)
+    modify_collect()
+    return obj.x
+end
+@noinline modify_gc!(p::Ptr{Int}, y::Int) = Core.Intrinsics.atomic_pointermodify(p, modify_gc_op, y, :monotonic)
+let r = Ref(0)
+    GC.@preserve r begin
+        p = Base.unsafe_convert(Ptr{Int}, r)
+        @test modify_gc!(p, 1) === Pair(0, 1)
+        @test modify_gc!(p, 2) === Pair(1, 2)
+    end
+end

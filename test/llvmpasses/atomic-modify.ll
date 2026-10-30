@@ -7,6 +7,8 @@ declare {double, double} @julia.atomicmodify.f64(ptr, ptr, i8, i8, ...)
 declare double @llvm.maxnum.f64(double %Val0, double %Val1)
 declare ptr @julia.get_pgcstack()
 declare void @throw_err() noreturn
+declare void @collect()
+declare ptr addrspace(10) @allocate()
 
 define i8 @add.i8(i8 %x, i8 %y) {
     %z = add i8 %x, %y
@@ -350,4 +352,41 @@ top:
   %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @idstore.i8, i8 5, i8 1, ptr %a)
   %oldval = extractvalue {i8, i8} %oldnew, 0
   ret i8 %oldval
+}
+
+define i8 @mod_i8_xchgnested(ptr %a, ptr %q) {
+; CHECK-LABEL: @mod_i8_xchgnested
+; CHECK-NOT: atomicrmw xchg
+; CHECK: [[newval:%.*]] = call i8 @xchgnested.i8(i8 %loaded, ptr %q)
+; CHECK: cmpxchg ptr %a, i8 %loaded, i8 [[newval]]
+top:
+  %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @xchgnested.i8, i8 5, i8 1, ptr %q)
+  %newval = extractvalue {i8, i8} %oldnew, 1
+  ret i8 %newval
+}
+
+; defined after its user, so that its own julia.atomicmodify is not expanded yet
+define i8 @xchgnested.i8(i8 %x, ptr %q) {
+    %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %q, ptr @add.i8, i8 5, i8 1, i8 1)
+    %n = extractvalue {i8, i8} %oldnew, 1
+    ret i8 %n
+}
+
+define i8 @mod_i8_xchgroots(ptr %a) {
+; CHECK-LABEL: @mod_i8_xchgroots
+; CHECK-NOT: atomicrmw xchg
+; CHECK: [[newval:%.*]] = call i8 @xchgroots.i8(i8 %loaded)
+; CHECK: cmpxchg ptr %a, i8 %loaded, i8 [[newval]]
+top:
+  %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @xchgroots.i8, i8 5, i8 1)
+  %newval = extractvalue {i8, i8} %oldnew, 1
+  ret i8 %newval
+}
+
+; %obj needs a GC root across the call to @collect
+define i8 @xchgroots.i8(i8 %x) {
+    %obj = call ptr addrspace(10) @allocate()
+    call void @collect()
+    %v = load i8, ptr addrspace(10) %obj
+    ret i8 %v
 }

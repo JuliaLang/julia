@@ -29,6 +29,7 @@
 
 #include "julia.h"
 #include "julia_assert.h"
+#include "llvm-codegen-shared.h"
 
 #define DEBUG_TYPE "expand-atomic-modify"
 #undef DEBUG
@@ -214,12 +215,44 @@ static bool canReorderWithRMW(Instruction &Target, bool verifyop)
   return !(mayRead && Target.mayWriteToMemory());
 }
 
+// This pass runs after GC lowering, so only inline code that does not need
+// it: julia intrinsics may not have been lowered yet if the op comes later in
+// the module (or, like a nested julia.atomicmodify, will not be expanded by
+// this run), and allocas may hold a lowered GC frame. Also reject an op that
+// both creates GC-tracked values and makes calls (any call, unless
+// AllowCalls), since a call may be a safepoint at which those values, which
+// nothing roots, get collected. Values passed in as arguments are rooted by
+// the caller. julia.get_pgcstack is fine, since it is lowered later, by
+// LowerPTLS.
+static bool canInlineLate(Function &F, bool AllowCalls)
+{
+  if (F.isDeclaration() || F.isInterposable())
+    return false;
+  bool HasCalls = false;
+  bool HasRoots = false;
+  for (auto &I : instructions(F)) {
+    if (isa<AllocaInst>(I))
+      return false;
+    if (CountTrackedPointers(I.getType()).count > 0)
+      HasRoots = true;
+    if (auto *CB = dyn_cast<CallBase>(&I)) {
+      Function *Callee = CB->getCalledFunction();
+      if (Callee && (Callee->isIntrinsic() || Callee->getName() == "julia.get_pgcstack"))
+        continue;
+      if (!AllowCalls || (Callee && Callee->getName().starts_with("julia.")))
+        return false;
+      HasCalls = true;
+    }
+  }
+  return !(HasCalls && HasRoots);
+}
+
 static std::variant<AtomicRMWInst::BinOp,bool> patternMatchAtomicRMWOp(Value *Old, Use **ValOp, Value *RetVal)
 {
   bool verifyop = RetVal == nullptr;
   assert(verifyop ? isa<Argument>(Old) : isa<AtomicRMWInst>(Old));
   Function *Op = verifyop ? cast<Argument>(Old)->getParent() : nullptr;
-  if (verifyop && (Op->isDeclaration() || Op->isInterposable() || Op->isIntrinsic()))
+  if (verifyop && (Op->isIntrinsic() || !canInlineLate(*Op, true)))
     return false;
    // TODO: peek forward from Old through any trivial casts which don't affect the instruction (e.g. i64 to f64 and back)
   if (RetVal == nullptr) {
