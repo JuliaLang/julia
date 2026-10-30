@@ -30,6 +30,7 @@ iterable type.
 Base.iterate
 Base.IteratorSize
 Base.IteratorEltype
+Base.Generator
 ```
 
 Fully implemented by:

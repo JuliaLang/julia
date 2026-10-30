@@ -61,10 +61,6 @@ mutable struct ScopeResolutionContext <: AbstractLoweringContext
     const scopes::Vector{ScopeInfo}
     # Current stack of scopes to look for names in, innermost scope last
     const scope_stack::Vector{ScopeId}
-    # Usually, globals in the top scope are ignored.  This is a subset that may
-    # be assigned to without the `global` keyword in soft scopes due to being
-    # assigned to at top level, or passing the defined-and-owned-global check.
-    const soft_assignable_globals::Set{NameKey}
     # We want any one (module, name) pair to use one binding, even across
     # hygiene layers or with GlobalRefs (which don't enter scope.vars and don't
     # affect name resolution), so store them here.
@@ -137,19 +133,26 @@ function explicit_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
     end
 end
 
+# Get-or-create a global binding without explicitly declaring it
+function get_global_binding!(ctx, ex)
+    nk = NameKey(ex)
+    mod = syntax_module(ex)
+    is_internal = ex.context.internal || getmeta(ex, :is_internal, false)::Bool
+    get!(ctx.globals, (mod, nk.name)) do
+        _new_binding(ctx.bindings, ex, nk.name, :global; mod, is_internal).id
+    end
+end
+
 function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol;
                            is_nospecialize::Bool=false,
                            is_specialize::Bool=false,
                            is_ambiguous_local::Bool=false)
     nk = NameKey(ex)
-    is_internal = ex.context.internal ||
-        getmeta(ex, :is_internal, false)::Bool
     if bk === :global
-        mod = syntax_module(ex)
-        bid = get!(ctx.globals, (mod, nk.name)) do
-            _new_binding(ctx.bindings, ex, nk.name, bk; mod, is_internal).id
-        end
+        bid = get_global_binding!(ctx, ex)
     else
+        is_internal = ex.context.internal ||
+            getmeta(ex, :is_internal, false)::Bool
         @jl_assert ex.mod === nothing ex
         bid = _new_binding(ctx.bindings, ex, nk.name, bk;
                          is_internal, is_nospecialize, is_specialize,
@@ -333,30 +336,26 @@ function enter_scope!(ctx, ex)
             hygienic_toplevel = !is_base_layer(sc) && sc.layer !== ctx.layer
             if is_toplevel_thunk && !hygienic_toplevel
                 # top-level assignments in no scope and no expansion
-                push!(ctx.soft_assignable_globals, vk)
                 declare_in_scope!(ctx, top_scope(ctx), ex, :global)
             elseif scope.is_permeable && !hygienic_toplevel &&
                 is_defined_and_owned_global(
                     syntax_module(sc), Symbol(vk.name), ctx.world)
                 # special soft scope rules: existing global variables are assigned to
-                if ctx.enable_soft_scopes
-                    push!(ctx.soft_assignable_globals, vk)
-                    declare_in_scope!(ctx, top_scope(ctx), ex, :global)
-                else
+                if !ctx.enable_soft_scopes
                     declare_in_scope!(ctx, scope, ex, :local; is_ambiguous_local=true)
                 end
             else
                 declare_in_scope!(ctx, scope, ex, :local)
             end
         elseif b.kind === :global
-            if is_toplevel_thunk
-                # assign-existing and make visible to soft scope
-                push!(ctx.soft_assignable_globals, vk)
-            elseif !isnothing(resolve_name(ctx, ex; exclude_toplevel_globals=true)) ||
-                (ctx.enable_soft_scopes && scope.is_permeable &&
-                vk in ctx.soft_assignable_globals)
-                # assign-existing-global if this is an explicit global that
-                # isn't at top level, or if the soft scope exception applies
+            # Assign to existing global if one of (1) we're at top level, (2)
+            # the global is not from top level, (3) the global is from top level
+            # but we're in a soft permeable scope
+            sc = ex.context
+            hygienic_toplevel = !is_base_layer(sc) && sc.layer !== ctx.layer
+            if is_toplevel_thunk ||
+                !isnothing(resolve_name(ctx, ex; exclude_toplevel_globals=true)) ||
+                (ctx.enable_soft_scopes && scope.is_permeable && !hygienic_toplevel)
             else
                 declare_in_scope!(ctx, scope, ex, :local;
                                   is_ambiguous_local=scope.is_permeable)
@@ -391,8 +390,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         b = resolve_name(ctx, ex)
         # Unresolved names are assumed global
         if isnothing(b)
-            gid = declare_in_scope!(ctx, top_scope(ctx), ex, :global)
-            b = get_binding(ctx, gid)
+            b = get_binding(ctx, get_global_binding!(ctx, ex))
         end
         # Body-level @nospecialize sets :nospecialize metadata on identifiers.
         # Propagate this to the binding so the slot gets the nospecialize flag.
@@ -941,7 +939,7 @@ enclosing lambda form and information about variables captured by closures.
     ctx2 = ScopeResolutionContext(ctx.layer, ctx.bindings,
                                   Dict{ScopeLayer, Int}(),
                                   Vector{ScopeInfo}(), Vector{ScopeId}(),
-                                  Set{NameKey}(), Dict(), Dict{IdTag, IdTag}(),
+                                  Dict(), Dict{IdTag, IdTag}(),
                                   Dict{IdTag, Vector{IdTag}}(),
                                   enable_soft_scopes,
                                   world)

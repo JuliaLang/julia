@@ -85,6 +85,12 @@ import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, ge
 ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Compiler,
     (0x807dbc54_b67e_4c79, 0x8afb_eafe4df6f2e1))
 
+# Syntax evolution bug: unset in bare modules (TODO).  This surfaces only when
+# Compiler.jl is loaded as a standalone package.
+if isdefined(Base, :end_base_include) && isdefined(Base, :set_syntax_version)
+    Base.set_syntax_version(Compiler, Base.VersionNumber(1, 14))
+end
+
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!
 const swapproperty! = Core.swapfield!
@@ -163,12 +169,6 @@ if !isdefined(Base, :end_base_include)
     end
 else
     using Base: @show
-end
-
-# JuliaSyntax doesn't support syntax evolution in bare modules via Project.toml
-# This surfaces only when Compiler.jl is loaded as a standalone package.
-if isdefined(Base, :end_base_include) && isdefined(Base, :set_syntax_version)
-    Base.set_syntax_version(Compiler, Base.VersionNumber(1, 14))
 end
 
 include("cicache.jl")

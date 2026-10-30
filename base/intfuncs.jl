@@ -226,7 +226,8 @@ julia> gcdx(15, 12, 20)
     Bézout coefficients that are computed by the extended Euclidean algorithm.
     (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.)
     For signed integers, these coefficients `u` and `v` are minimal in
-    the sense that ``|u| < |b/d|`` and ``|v| < |a/d|``. Furthermore,
+    the sense that ``|u| <= |b/d|`` and ``|v| <= |a/d|`` (with strict inequality
+    when ``|b| > d`` and ``|a| > d``, respectively). Furthermore,
     the signs of `u` and `v` are chosen so that `d` is positive.
     For unsigned integers, the coefficients `u` and `v` might be near
     their `typemax`, and the identity then holds only via the unsigned

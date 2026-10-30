@@ -153,44 +153,7 @@ static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT 
 #  define JL_USE_IFUNC 0
 #endif
 
-// If we've smashed the stack, (and not just normal NORETURN)
-// this will smash stack-unwind too
-#ifdef _OS_WINDOWS_
-#if defined(_CPU_X86_64_)
-    // install the unhandled exception handler at the top of our stack
-    // to call directly into our personality handler
-// N.B. do not switch sections here: with function sections, which LTO turns on,
-// the rest of the function would be emitted away from its own section, leaving
-// the entry point running off the end of a prologue.
-#define CFI_NORETURN \
-    asm volatile ("\t.seh_handler __julia_personality, @except");
-#else
-#define CFI_NORETURN
-#endif
-#else
-// wipe out the call-stack unwind capability beyond this function
-// (we are noreturn, so it is not a total lie)
-// N.B. these directives apply to whichever function the code ends up in, so
-// every function using CFI_NORETURN must be NOINLINE: inlined into a caller,
-// `.cfi_return_column` rebinds the caller's whole FDE to a CIE whose return
-// address register is undefined, and unwinding through any suspended task
-// switch stops there (the PGO+ThinLTO macOS aarch64 build inlined
-// jl_start_fiber_set into ctx_switch and jl_start_fiber_swap).
-#if defined(_CPU_X86_64_)
-// per nongnu libunwind: "x86_64 ABI specifies that end of call-chain is marked with a NULL RBP or undefined return address"
-// so we do all 3, to be extra certain of it
-#define CFI_NORETURN \
-    asm volatile ("\t.cfi_undefined rip"); \
-    asm volatile ("\t.cfi_undefined rbp"); \
-    asm volatile ("\t.cfi_return_column rbp");
-#else
-    // per nongnu libunwind: "DWARF spec says undefined return address location means end of stack"
-    // we use whatever happens to be register 1 on this platform for this
-#define CFI_NORETURN \
-    asm volatile ("\t.cfi_undefined 1"); \
-    asm volatile ("\t.cfi_return_column 1");
-#endif
-#endif
+#include "arch/cfi_noreturn.h"
 
 #if defined(HAVE_SSP) && (defined(_OS_DARWIN_) || defined(_OS_FREEBSD_))
 // This is provided by libSystem on Darwin and libc on FreeBSD, and imported
@@ -220,6 +183,10 @@ static uv_loop_t *const unused_uv_loop_arg = (uv_loop_t *)0xBAD10;
 
 extern jl_mutex_t jl_uv_mutex;
 extern _Atomic(int) jl_uv_n_waiters;
+// Set when a thread finds the event loop idle before it sleeps. Cleared before the
+// scheduler runs the loop, and by jl_iolock_end when it wakes the event loop thread.
+// Protected by jl_uv_mutex.
+extern int jl_uv_loop_unwatched;
 
 // Global data structures for accessing symbols and other globals
 #include "jl_internal_data.inc"
@@ -1427,6 +1394,7 @@ void jl_safepoint_exclude_gc_end(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
 void jl_wake_libuv(void) JL_NOTSAFEPOINT;
 void jl_init_signal_watchers(uv_async_cb cb);
 void jl_wake_signal_watchers(void) JL_NOTSAFEPOINT;
+void jl_wake_io_loop_thread(void) JL_NOTSAFEPOINT;
 void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT;
 int jl_abandon_try_commit(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void JL_NORETURN jl_abandon_task_cb(void) JL_CANSAFEPOINT;

@@ -2133,6 +2133,10 @@ end
     @test str == "α+β=15"
     str = GC.@preserve buffer unsafe_string(Cwstring(pointer(buffer)))
     @test str == "α+β=15"
+    cw = Cwstring(Ptr{Cwchar_t}(C_NULL))
+    @test Ptr{Cvoid}(cw) === Ptr{Cvoid}(C_NULL)
+    @test convert(Ptr{Cvoid}, cw) === Ptr{Cvoid}(C_NULL)
+    @test_throws "must be NUL terminated" Base.cconvert(Cwstring, Cwchar_t[])
 end
 
 # issue #36458

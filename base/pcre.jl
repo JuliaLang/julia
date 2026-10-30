@@ -218,14 +218,21 @@ end
 
 function exec_r(re, subject, offset, options)
     match_data = create_match_data(re)
-    ans = exec(re, subject, offset, options, match_data)
-    free_match_data(match_data)
-    return ans
+    try
+        return exec(re, subject, offset, options, match_data)
+    finally
+        free_match_data(match_data)
+    end
 end
 
 function exec_r_data(re, subject, offset, options)
     match_data = create_match_data(re)
-    ans = exec(re, subject, offset, options, match_data)
+    ans = try
+        exec(re, subject, offset, options, match_data)
+    catch
+        free_match_data(match_data)
+        rethrow()
+    end
     return ans, match_data
 end
 

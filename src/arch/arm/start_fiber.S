@@ -7,7 +7,7 @@
 // the new task's stack and &start_task, which must not return. Task switching
 // uses it only when JL_TASK_SWITCH_ASM is defined (src/julia_threads.h), i.e.
 // not on Windows. The unwind info marks the end of the call chain like
-// CFI_NORETURN (src/julia_internal.h).
+// CFI_NORETURN (src/arch/cfi_noreturn.h).
 
 #include "../common.h"
 
@@ -22,8 +22,7 @@
     .p2align 2
 CNAME(jl_start_fiber_on_stack):
     .cfi_startproc
-    .cfi_undefined 1
-    .cfi_return_column 1
+    .cfi_undefined lr
     // r0 = stack_top, r1 = fn
     mov     sp, r0
     mov     lr, #0              // Clear link register (lr)

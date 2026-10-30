@@ -15,6 +15,7 @@
 
 #define XX(name) \
 .global CNAME(name) SEP \
+DEBUGINFO(name) SEP \
 .cfi_startproc SEP \
 .p2align    2 SEP \
  CNAME(name)##: SEP \
@@ -22,6 +23,7 @@
     ld t3, %pcrel_lo(CNAME(name))(t3) SEP \
     jr t3 SEP \
 .cfi_endproc SEP \
+EXPORT(name) SEP \
 
 JL_RUNTIME_EXPORTED_FUNCS(XX)
 JL_CODEGEN_EXPORTED_FUNCS(XX)
