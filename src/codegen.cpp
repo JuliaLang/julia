@@ -10987,7 +10987,7 @@ static jl_llvm_functions_t
                 continue;
             ctx.builder.SetInsertPoint(FromBB->getTerminator());
             // PHI is undef on this branch. But still may need to put a valid pointer in place.
-            Value *RTindex = TindexN ? PoisonValue::get(getInt8Ty(ctx.builder.getContext())) : NULL;
+            Value *RTindex = TindexN ? UndefValue::get(getInt8Ty(ctx.builder.getContext())) : NULL;
             if (VN) {
                 Value *undef = undef_value_for_type(VN->getType());
                 VN->addIncoming(undef, FromBB);
