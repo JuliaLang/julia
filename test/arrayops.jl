@@ -2803,6 +2803,9 @@ end
     @test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=1) == [1 2; 4 6]
     @test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=2) == [1 3; 3 7]
     @test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=3) == [1 2; 3 4]
+
+    @test_throws ArgumentError cumsum([1, 2, 3], dims=0)
+    @test_throws ArgumentError cumsum!(Vector{Int}(undef, 3), [1, 2, 3], dims=-1)
 end
 @testset "issue #18363" begin
     @test_throws DimensionMismatch cumsum!([0,0], 1:4)
