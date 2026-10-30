@@ -545,8 +545,6 @@ Sampler(RNG::Type{<:AbstractRNG}, str::AbstractString, n::Val{Inf}) = Sampler(RN
 Sampler(RNG::Type{<:AbstractRNG}, str::AbstractString, ::Val{1}) =
     SamplerSimple(str, Sampler(RNG, 1:_lastindex(str), Val(Inf)))
 
-isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(GC.@preserve s unsafe_load(pointer(s), i))
-isvalid_unsafe(s::AbstractString, i) = isvalid(s, i)
 _lastindex(s::String) = sizeof(s)
 _lastindex(s::AbstractString) = lastindex(s)
 
@@ -554,7 +552,7 @@ function rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractString,<:Sampler})::
     str = sp[]
     while true
         pos = rand(rng, sp.data)
-        isvalid_unsafe(str, pos) && return str[pos]
+        isvalid(str, pos) && return str[pos]
     end
 end
 

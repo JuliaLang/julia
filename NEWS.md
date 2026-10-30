@@ -463,6 +463,12 @@ See the [Pkg changelog](https://github.com/JuliaLang/Pkg.jl/blob/master/CHANGELO
   and `TOML.print` can write them back out via its new `comments` keyword argument. This allows
   modifying a TOML file without losing its comments ([#62672]).
 
+#### UUIDs
+
+* `uuid5` now hashes the bytes of `name` as specified by RFC 4122, instead of first processing
+  backslash escape sequences in it with `unescape_string`. This changes the result for names
+  containing a backslash, which previously could also throw an `ArgumentError`.
+
 External dependencies
 ---------------------
 
