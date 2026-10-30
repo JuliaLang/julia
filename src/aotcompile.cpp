@@ -3604,8 +3604,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
             );
             workers = compute_image_thread_count();
             shards = compute_image_shard_count(module_info, workers);
-            if (!use_cache)
-                workers = std::min(workers, shards);
+            workers = std::min(workers, shards);
             if (jobserver.active() && workers > 1) {
                 // `shards` is the partition count and `workers` the concurrency
                 // ceiling; add_output rations the actual pool size from the
