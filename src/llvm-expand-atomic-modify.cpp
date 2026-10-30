@@ -499,6 +499,17 @@ static void expandAtomicModifyToCmpXchg(CallInst &Modify,
         return ModifyOp;
       },
       CreateWeakCmpXchg);
+    // the op was not convertible to an atomicrmw, but still inline its body
+    // into the loop rather than leaving an opaque call in it
+    Function *Callee = ModifyOp->getCalledFunction();
+    if (Callee && canInlineLate(*Callee, false)) {
+      assert(NewVal == ModifyOp);
+      FreezeInst *TrackReturn = Builder.Insert(new FreezeInst(ModifyOp));
+      InlineFunctionInfo IFI;
+      if (InlineFunction(*ModifyOp, IFI).isSuccess())
+        NewVal = TrackReturn->getOperand(0);
+      TrackReturn->eraseFromParent();
+    }
   }
 
   for (auto user : make_early_inc_range(Modify.users())) {
