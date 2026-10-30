@@ -123,17 +123,11 @@ static_assert(sizeof(pool_sizes) == JL_N_STACK_POOLS * sizeof(pool_sizes[0]), "J
 static small_arraylist_t shared_free_stacks[JL_N_STACK_POOLS];
 // stacks in each shared pool that stayed unused since the last trim
 static size_t shared_free_stacks_lowwater[JL_N_STACK_POOLS];
-static _Atomic(int) shared_free_stacks_lock;
+static uv_mutex_t shared_free_stacks_lock;
 
-static void lock_shared_free_stacks(void) JL_NOTSAFEPOINT
+void jl_init_shared_free_stacks(void) JL_NOTSAFEPOINT
 {
-    while (jl_atomic_exchange(&shared_free_stacks_lock, 1))
-        jl_cpu_pause();
-}
-
-static void unlock_shared_free_stacks(void) JL_NOTSAFEPOINT
-{
-    jl_atomic_store_release(&shared_free_stacks_lock, 0);
+    uv_mutex_init(&shared_free_stacks_lock);
 }
 
 // `stkbuf` may still be the stack this thread is running on (see
@@ -152,9 +146,9 @@ static void push_free_stack(jl_ptls_t ptls, unsigned pool_id, void *stkbuf) JL_N
     size_t *lowwater = &ptls->gc_tls_common.heap.free_stacks_lowwater[pool_id];
     if (*lowwater > 0)
         (*lowwater)--;
-    lock_shared_free_stacks();
+    uv_mutex_lock(&shared_free_stacks_lock);
     small_arraylist_push(&shared_free_stacks[pool_id], oldest);
-    unlock_shared_free_stacks();
+    uv_mutex_unlock(&shared_free_stacks_lock);
 }
 
 // Move the `n` oldest stacks of a thread's pool to the shared pool
@@ -162,7 +156,7 @@ void gc_share_free_stacks(small_arraylist_t *al, unsigned pool_id, size_t n) JL_
 {
     if (n == 0)
         return;
-    lock_shared_free_stacks();
+    uv_mutex_lock(&shared_free_stacks_lock);
     small_arraylist_t *shared = &shared_free_stacks[pool_id];
     // they already went unused in the thread's pool, so they join the idle
     // stacks at the bottom of the shared pool
@@ -178,7 +172,7 @@ void gc_share_free_stacks(small_arraylist_t *al, unsigned pool_id, size_t n) JL_
         for (size_t i = 0; i < n; i++)
             free_stack(al->items[i], pool_sizes[pool_id]);
     }
-    unlock_shared_free_stacks();
+    uv_mutex_unlock(&shared_free_stacks_lock);
     memmove(al->items, al->items + n, (al->len - n) * sizeof(void*));
     al->len -= n;
 }
@@ -271,14 +265,14 @@ JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPO
                 *lowwater = pool->len;
         }
         else {
-            lock_shared_free_stacks();
+            uv_mutex_lock(&shared_free_stacks_lock);
             small_arraylist_t *shared = &shared_free_stacks[pool_id];
             if (shared->len > 0) {
                 stk = small_arraylist_pop(shared);
                 if (shared->len < shared_free_stacks_lowwater[pool_id])
                     shared_free_stacks_lowwater[pool_id] = shared->len;
             }
-            unlock_shared_free_stacks();
+            uv_mutex_unlock(&shared_free_stacks_lock);
         }
     }
     else {

@@ -4217,6 +4217,7 @@ void jl_gc_init(void)
     arraylist_new(&to_finalize, 0);
     arraylist_new(&big_weak_corpses, 0);
     uv_mutex_init(&gc_big_sweep_lock);
+    jl_init_shared_free_stacks();
     jl_atomic_store_relaxed(&gc_heap_stats.heap_target, default_collect_interval);
     if (jl_options.hard_heap_limit != 0) {
         jl_atomic_store_relaxed(&gc_heap_stats.heap_target, jl_options.hard_heap_limit);

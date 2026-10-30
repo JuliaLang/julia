@@ -83,6 +83,7 @@ void jl_gc_init(void) {
     arraylist_new(&finalizer_list_marked, 0);
     small_arraylist_new(&orphaned_weak_processing_list, 0);
     uv_mutex_init(&orphaned_weak_processing_lock);
+    jl_init_shared_free_stacks();
     gc_num.interval = default_collect_interval;
     gc_num.allocd = 0;
     gc_num.max_pause = 0;
