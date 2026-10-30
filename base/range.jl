@@ -1294,14 +1294,40 @@ end
 
 # _findin (the index of intersection)
 function _findin(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer})
+    if !(eltype(r) <: Union{BitInteger, Bool} && eltype(span) <: Union{BitInteger, Bool})
+        return _findin_general(r, span)
+    end
     fspan = first(span)
     lspan = last(span)
-    if step(r) >= 0
+    fr = first(r)
+    lr = last(r)
+    if isempty(r) || isempty(span) || max(fr, lr) < fspan || min(fr, lr) > lspan
+        return r isa AbstractUnitRange ? (1:0) : (1:1:0)
+    elseif step(r) >= 0
         ifirst = searchsortedfirst(r, fspan)
         ilast = searchsortedlast(r, lspan)
     else
         ifirst = searchsortedfirst(r, lspan, Reverse)
         ilast = searchsortedlast(r, fspan, Reverse)
+    end
+    r isa AbstractUnitRange ? (ifirst:ilast) : (ifirst:1:ilast)
+end
+
+function _findin_general(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer})
+    fspan = first(span)
+    lspan = last(span)
+    fr = first(r)
+    lr = last(r)
+    sr = step(r)
+    if sr > 0
+        ifirst = fr >= fspan ? 1 : cld(fspan-fr, sr)+1
+        ilast = lr <= lspan ? length(r) : length(r) - cld(lr-lspan, sr)
+    elseif sr < 0
+        ifirst = fr <= lspan ? 1 : cld(lspan-fr, sr)+1
+        ilast = lr >= fspan ? length(r) : length(r) - cld(lr-fspan, sr)
+    else
+        ifirst = fr >= fspan ? 1 : length(r)+1
+        ilast = fr <= lspan ? length(r) : 0
     end
     r isa AbstractUnitRange ? (ifirst:ilast) : (ifirst:1:ilast)
 end

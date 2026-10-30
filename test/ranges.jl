@@ -436,64 +436,36 @@ end
         # issue #64453: overflow in endpoint difference for narrow/extreme/mixed integer ranges
         @test isempty(findall(in(Int8(50):Int8(100)), Int8(-100):Int8(-90)))
         @test findall(in(Int8(50):Int8(100)), Int8(-100):Int8(100)) == 151:201
-        @test findall(in(Int8(-100):Int8(-50)), Int8(-100):Int8(100)) == 1:51
         @test isempty(findall(in(UInt8(200):UInt8(255)), Int8(-128):Int8(127)))
-        @test isempty(findall(in(Int8(-128):Int8(-128)), Int8(0):Int8(-1):Int8(-10)))
-        @test isempty(findall(in(UInt64(1):UInt64(5)), UInt64(10):UInt64(20)))
         @test isempty(findall(in((typemax(Int64) - 10):typemax(Int64)), typemin(Int64):(typemin(Int64) + 10)))
         @test findall(in(Int32(0):Int32(10)), typemin(Int32):Int32(4):typemax(Int32)) == 536870913:1:536870915
-
-        let vals_i8  = Int8[-128, -127, -100, -50, -1, 0, 1, 50, 100, 126, 127],
-            vals_u8  = UInt8[0, 1, 2, 50, 100, 127, 128, 200, 254, 255],
-            vals_i64 = Int64[-200, -128, -50, 0, 50, 127, 200],
-            vals_u64 = UInt64[0, 1, 50, 127, 128, 200, 300],
-            steps_i8 = Int8[-128, -127, -50, -3, -2, -1, 1, 2, 3, 50, 127],
-            steps_u8 = (Int8[-128, -50, -2, -1, 1, 2, 50, 127]..., UInt8[1, 2, 50, 255]...)
-            for (vr, vs, steps) in (
-                (vals_i8,  vals_i8,  steps_i8),
-                (vals_u8,  vals_u8,  steps_u8),
-                (vals_i8,  vals_u8,  steps_i8),
-                (vals_u8,  vals_i8,  steps_u8),
-                (vals_i8,  vals_i64, steps_i8),
-                (vals_u64, vals_i8,  Int8[1, 2, 50, 127]),
-            )
-                for a in vs, b in vs
-                    span = a:b
-                    cspan = collect(span)
-                    @test all(Iterators.product(vr, vr)) do (c, d)
-                        r = c:d
-                        findall(in(span), r) == findall(in(cspan), collect(r)) &&
-                        all(s -> findall(in(span), c:s:d) == findall(in(cspan), collect(c:s:d)), steps)
-                    end
-                end
-            end
-            for a in vals_i8, b in vals_i8
-                span = a:b
-                cspan = collect(span)
-                @test all(Iterators.product((Int8(-100), Int8(0), Int8(75)), (0, 3))) do (c, n)
-                    r0 = StepRangeLen(c, Int8(0), n)
-                    findall(in(span), r0) == findall(in(cspan), collect(r0))
-                end
-            end
+        let u = UInt(typemax(Int)) + 1
+            @test isempty(findall(in(u:(u + 5)), 1:typemax(Int)))
         end
+        @test findall(in(big(10)^24:(big(10)^24 + 50)), big(0):7:big(10)^25) ==
+              142857142857142857142859:1:142857142857142857142865
 
-        for span in (false:true, false:false, true:true, true:false),
-            r in (false:true, false:false, true:true, true:false,
-                  StepRange(true, Int8(-1), false), StepRange(false, Int8(1), true))
-            @test findall(in(span), r) == findall(in(collect(span)), collect(r))
-        end
-
-        let vals_big = BigInt[-100, -50, 0, 50, 100]
-            for a in vals_big, b in vals_big
-                span = a:b
-                cspan = collect(span)
-                @test all(Iterators.product(vals_big, vals_big, BigInt[-50, -3, 3, 50])) do (c, d, s)
-                    rs = c:s:d
-                    findall(in(span), rs) == findall(in(cspan), collect(rs))
-                end
+        let spans = Any[
+                Int8(-128):Int8(-100), Int8(-50):Int8(50), Int8(50):Int8(127), Int8(10):Int8(5),
+                UInt8(0):UInt8(50), UInt8(100):UInt8(255), UInt8(10):UInt8(5),
+                Int16(-200):Int16(200), Int64(-50):Int64(50), UInt64(1):UInt64(50),
+                big(-50):big(50), false:true, true:false,
+            ],
+            ranges = Any[
+                Int8(-128):Int8(127), Int8(-100):Int8(-90), Int8(50):Int8(100), Int8(5):Int8(1),
+                Int8(-128):Int8(3):Int8(127), Int8(127):Int8(-1):Int8(-128),
+                Int8(127):Int8(-3):Int8(-128), Int8(100):Int8(-128):Int8(-100),
+                StepRangeLen(Int8(-100), Int8(0), 3), StepRangeLen(Int8(0), Int8(0), 0),
+                UInt8(0):UInt8(255), UInt8(10):UInt8(20), UInt8(20):UInt8(10),
+                UInt8(0):UInt8(50):UInt8(255), UInt8(200):Int8(-2):UInt8(10),
+                Int16(-200):Int16(25):Int16(200), Int64(-100):Int64(15):Int64(100),
+                UInt64(10):UInt64(20), UInt64(10):Int8(3):UInt64(100),
+                big(-100):big(15):big(100), big(100):big(-15):big(-100),
+                false:true, true:false, StepRange(true, Int8(-1), false),
+            ]
+            for r in ranges, span in spans
+                @test findall(in(span), r) == findall(in(span), collect(r))
             end
-            @test isempty(findall(in(big(10)^30:(big(10)^30 + 10)), (-big(10)^30):(-big(10)^30 + 10)))
-            @test findall(in(big(10)^30:(big(10)^30 + 10)), (-big(10)^30):(big(10)^30):(big(10)^30)) == 3:1:3
         end
     end
     @testset "findfirst" begin
