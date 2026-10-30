@@ -661,10 +661,6 @@ void gc_time_big_start(void) JL_NOTSAFEPOINT;
 void gc_time_count_big(int old_bits, int bits) JL_NOTSAFEPOINT;
 void gc_time_big_end(void) JL_NOTSAFEPOINT;
 
-void gc_time_mallocd_memory_start(void) JL_NOTSAFEPOINT;
-void gc_time_count_mallocd_memory(int bits) JL_NOTSAFEPOINT;
-void gc_time_mallocd_memory_end(void) JL_NOTSAFEPOINT;
-
 void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
                         int64_t perm_scanned_bytes) JL_NOTSAFEPOINT;
 void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
