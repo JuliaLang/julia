@@ -434,6 +434,13 @@ static void expandAtomicModifyToCmpXchg(CallInst &Modify,
         } else {
           // convert to an atomic fence of the form: atomicrmw or %ptr, 0
           assert(RMWOp == AtomicRMWInst::Or);
+          // The op returned the loaded value unchanged. Unless the inlined op
+          // body still uses it, move RMW down to the original call site, so
+          // that the body runs first: it may throw, in which case nothing
+          // must be stored, and its own memory effects must be visible to
+          // the load.
+          if (RMW->use_empty())
+            RMW->moveBeforePreserving(Modify.getIterator());
           Val = ConstantInt::getNullValue(Ty);
         }
         RMW->setOperation(RMWOp);

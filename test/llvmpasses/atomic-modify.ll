@@ -72,6 +72,11 @@ define i8 @xchgthrow.i8(i8 %x, i8 %y) {
     unreachable
 }
 
+define i8 @idstore.i8(i8 %x, ptr %p) {
+    store i8 42, ptr %p
+    ret i8 %x
+}
+
 define double @fmax.f64(double %x, double %y) {
     %z = call double @llvm.maxnum.f64(double %y, double %x)
     ret double %z
@@ -332,6 +337,17 @@ define i8 @mod_i8_xchgthrow(ptr %a, i8 %b) {
 ; CHECK: cmpxchg ptr %a
 top:
   %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @xchgthrow.i8, i8 5, i8 1, i8 %b)
+  %oldval = extractvalue {i8, i8} %oldnew, 0
+  ret i8 %oldval
+}
+
+define i8 @mod_i8_idstore(ptr %a) {
+; CHECK-LABEL: @mod_i8_idstore
+; CHECK: store i8 42, ptr %a
+; CHECK-NEXT: %0 = atomicrmw or ptr %a, i8 0 release, align 1
+; CHECK-NEXT: ret i8 %0
+top:
+  %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @idstore.i8, i8 5, i8 1, ptr %a)
   %oldval = extractvalue {i8, i8} %oldnew, 0
   ret i8 %oldval
 }
