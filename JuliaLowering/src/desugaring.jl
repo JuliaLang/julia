@@ -3493,11 +3493,11 @@ function rewrite_ctor_sig(ctx, sig, tname, global_tname, struct_typevars, wheres
         # recognize `(_::(Type{X{T}} where T))(...)` as an inner-style
         # constructor for X (rewrite it to `X{T}(...) where T`)
         ([:call [:(::) _ [:where _...]] args...], when=begin
-             t, inner_wheres = flatten_wheres(ex[1][2])
+             t, inner_wheres = flatten_wheres(sig[1][2])
              isempty(wheres) && head(t) === :curly && t[1].value === "Type"
          end) -> let
              append!(wheres, inner_wheres)
-             ex2 = @ast ctx ex [:call t[2] args...]
+             ex2 = @ast ctx sig [:call t[2] args...]
              return rewrite_ctor_sig(
                  ctx, ex2, tname, global_tname, struct_typevars, wheres)
         end
