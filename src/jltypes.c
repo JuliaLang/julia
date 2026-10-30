@@ -1174,86 +1174,101 @@ static unsigned typekeyvalue_hash(jl_typename_t *tn, jl_value_t *key1, jl_value_
 static jl_value_t *extract_wrapper(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT JL_GLOBALLY_ROOTED;
 
 /* returns val if key is in hash, otherwise NULL */
-static jl_datatype_t *lookup_type_set(jl_svec_t *cache, jl_value_t **key, size_t n, uint_t hv) JL_CANSAFEPOINT
+// A comparison may compute a lazy supertype, which can insert into this cache: an
+// insert lands later in this probe, but a rehash (which always grows the table)
+// moves every entry, so reload the cache every step and restart the probe on one.
+static jl_datatype_t *lookup_type_set(jl_typename_t *tn, jl_value_t **key, size_t n, uint_t hv) JL_CANSAFEPOINT
 {
-    size_t sz = jl_svec_len(cache);
-    if (sz == 0)
-        return NULL;
-    size_t maxprobe = max_probe(sz);
-    _Atomic(jl_datatype_t*) *tab = (_Atomic(jl_datatype_t*)*)jl_svec_data(cache);
-    size_t index = h2index(hv, sz);
-    size_t orig = index;
-    size_t iter = 0;
-    do {
-        jl_datatype_t *val = jl_atomic_load_relaxed(&tab[index]);
-        if ((jl_value_t*)val == jl_nothing)
+    while (1) {
+        jl_svec_t *cache = jl_atomic_load_relaxed(&tn->cache);
+        size_t sz = jl_svec_len(cache);
+        if (sz == 0)
             return NULL;
-        if (val->hash == hv && typekey_eq(val, key, n))
-            return val;
-        index = (index + 1) & (sz - 1);
-        iter++;
-    } while (iter <= maxprobe && index != orig);
-    return NULL;
+        size_t maxprobe = max_probe(sz);
+        size_t index = h2index(hv, sz);
+        size_t orig = index;
+        size_t iter = 0;
+        do {
+            jl_datatype_t *val = jl_atomic_load_relaxed(&((_Atomic(jl_datatype_t*)*)jl_svec_data(cache))[index]);
+            if ((jl_value_t*)val == jl_nothing)
+                return NULL;
+            if (val->hash == hv && typekey_eq(val, key, n))
+                return val;
+            cache = jl_atomic_load_relaxed(&tn->cache);
+            if (jl_svec_len(cache) != sz)
+                break; // rehashed: restart the probe in the new table
+            index = (index + 1) & (sz - 1);
+            iter++;
+        } while (iter <= maxprobe && index != orig);
+        if (jl_svec_len(cache) == sz)
+            return NULL;
+    }
 }
 
 /* returns val if key is in hash, otherwise NULL */
-static jl_datatype_t *lookup_type_setvalue(jl_svec_t *cache, jl_value_t *key1, jl_value_t **key, size_t n, uint_t hv, int leaf) JL_CANSAFEPOINT
+static jl_datatype_t *lookup_type_setvalue(jl_typename_t *tn, jl_value_t *key1, jl_value_t **key, size_t n, uint_t hv, int leaf) JL_CANSAFEPOINT
 {
-    size_t sz = jl_svec_len(cache);
-    if (sz == 0)
-        return NULL;
-    size_t maxprobe = max_probe(sz);
-    _Atomic(jl_datatype_t*) *tab = (_Atomic(jl_datatype_t*)*)jl_svec_data(cache);
-    size_t index = h2index(hv, sz);
-    size_t orig = index;
-    size_t iter = 0;
-    do {
-        jl_datatype_t *val = jl_atomic_load_relaxed(&tab[index]);
-        if ((jl_value_t*)val == jl_nothing)
+    while (1) {
+        jl_svec_t *cache = jl_atomic_load_relaxed(&tn->cache);
+        size_t sz = jl_svec_len(cache);
+        if (sz == 0)
             return NULL;
-        if (val->hash == hv && typekeyvalue_eq(val, key1, key, n, leaf))
-            return val;
-        index = (index + 1) & (sz - 1);
-        iter++;
-    } while (iter <= maxprobe && index != orig);
-    return NULL;
+        size_t maxprobe = max_probe(sz);
+        size_t index = h2index(hv, sz);
+        size_t orig = index;
+        size_t iter = 0;
+        do {
+            jl_datatype_t *val = jl_atomic_load_relaxed(&((_Atomic(jl_datatype_t*)*)jl_svec_data(cache))[index]);
+            if ((jl_value_t*)val == jl_nothing)
+                return NULL;
+            if (val->hash == hv && typekeyvalue_eq(val, key1, key, n, leaf))
+                return val;
+            cache = jl_atomic_load_relaxed(&tn->cache);
+            if (jl_svec_len(cache) != sz)
+                break; // rehashed: restart the probe in the new table
+            index = (index + 1) & (sz - 1);
+            iter++;
+        } while (iter <= maxprobe && index != orig);
+        if (jl_svec_len(cache) == sz)
+            return NULL;
+    }
 }
 
-// look up a type in a cache by binary or linear search.
+// look up a type in a cache by linear search.
 // if found, returns the index of the found item. if not found, returns
 // ~n, where n is the index where the type should be inserted.
-static ssize_t lookup_type_idx_linear(jl_svec_t *cache, jl_value_t **key, size_t n) JL_CANSAFEPOINT
+// A comparison may compute a lazy supertype, which can append to (or regrow) this
+// cache, so reload it every step: entries are only appended, and keep their index.
+static ssize_t lookup_type_idx_linear(jl_typename_t *tn, jl_value_t **key, size_t n) JL_CANSAFEPOINT
 {
     if (n == 0)
         return -1;
-    _Atomic(jl_datatype_t*) *data = (_Atomic(jl_datatype_t*)*)jl_svec_data(cache);
-    size_t cl = jl_svec_len(cache);
-    ssize_t i;
-    for (i = 0; i < cl; i++) {
-        jl_datatype_t *tt = jl_atomic_load_relaxed(&data[i]);
+    for (size_t i = 0; ; i++) {
+        jl_svec_t *cache = jl_atomic_load_relaxed(&tn->linearcache);
+        if (i >= jl_svec_len(cache))
+            return ~(ssize_t)i;
+        jl_datatype_t *tt = jl_atomic_load_relaxed(&((_Atomic(jl_datatype_t*)*)jl_svec_data(cache))[i]);
         if ((jl_value_t*)tt == jl_nothing)
-            return ~i;
+            return ~(ssize_t)i;
         if (typekey_eq(tt, key, n))
             return i;
     }
-    return ~cl;
 }
 
-static ssize_t lookup_type_idx_linearvalue(jl_svec_t *cache, jl_value_t *key1, jl_value_t **key, size_t n) JL_CANSAFEPOINT
+static ssize_t lookup_type_idx_linearvalue(jl_typename_t *tn, jl_value_t *key1, jl_value_t **key, size_t n) JL_CANSAFEPOINT
 {
     if (n == 0)
         return -1;
-    _Atomic(jl_datatype_t*) *data = (_Atomic(jl_datatype_t*)*)jl_svec_data(cache);
-    size_t cl = jl_svec_len(cache);
-    ssize_t i;
-    for (i = 0; i < cl; i++) {
-        jl_datatype_t *tt = jl_atomic_load_relaxed(&data[i]);
+    for (size_t i = 0; ; i++) {
+        jl_svec_t *cache = jl_atomic_load_relaxed(&tn->linearcache);
+        if (i >= jl_svec_len(cache))
+            return ~(ssize_t)i;
+        jl_datatype_t *tt = jl_atomic_load_relaxed(&((_Atomic(jl_datatype_t*)*)jl_svec_data(cache))[i]);
         if ((jl_value_t*)tt == jl_nothing)
-            return ~i;
+            return ~(ssize_t)i;
         if (typekeyvalue_eq(tt, key1, key, n, 1))
             return i;
     }
-    return ~cl;
 }
 
 static jl_value_t *lookup_type(jl_typename_t *tn JL_PROPAGATES_ROOT, jl_value_t **key, size_t n) JL_CANSAFEPOINT
@@ -1261,13 +1276,11 @@ static jl_value_t *lookup_type(jl_typename_t *tn JL_PROPAGATES_ROOT, jl_value_t 
     JL_TIMING(TYPE_CACHE_LOOKUP, TYPE_CACHE_LOOKUP);
     unsigned hv = typekey_hash(tn, key, n, 0);
     if (hv) {
-        jl_svec_t *cache = jl_atomic_load_relaxed(&tn->cache);
-        return (jl_value_t*)lookup_type_set(cache, key, n, hv);
+        return (jl_value_t*)lookup_type_set(tn, key, n, hv);
     }
     else {
-        jl_svec_t *linearcache = jl_atomic_load_relaxed(&tn->linearcache);
-        ssize_t idx = lookup_type_idx_linear(linearcache, key, n);
-        return (idx < 0) ? NULL : jl_svecref(linearcache, idx);
+        ssize_t idx = lookup_type_idx_linear(tn, key, n);
+        return (idx < 0) ? NULL : jl_svecref(jl_atomic_load_relaxed(&tn->linearcache), idx);
     }
 }
 
@@ -1276,14 +1289,12 @@ static jl_value_t *lookup_typevalue(jl_typename_t *tn, jl_value_t *key1, jl_valu
     JL_TIMING(TYPE_CACHE_LOOKUP, TYPE_CACHE_LOOKUP);
     unsigned hv = typekeyvalue_hash(tn, key1, key, n, leaf);
     if (hv) {
-        jl_svec_t *cache = jl_atomic_load_relaxed(&tn->cache);
-        return (jl_value_t*)lookup_type_setvalue(cache, key1, key, n, hv, leaf);
+        return (jl_value_t*)lookup_type_setvalue(tn, key1, key, n, hv, leaf);
     }
     else {
         assert(leaf);
-        jl_svec_t *linearcache = jl_atomic_load_relaxed(&tn->linearcache);
-        ssize_t idx = lookup_type_idx_linearvalue(linearcache, key1, key, n);
-        return (idx < 0) ? NULL : jl_svecref(linearcache, idx);
+        ssize_t idx = lookup_type_idx_linearvalue(tn, key1, key, n);
+        return (idx < 0) ? NULL : jl_svecref(jl_atomic_load_relaxed(&tn->linearcache), idx);
     }
 }
 
@@ -1404,7 +1415,7 @@ void jl_cache_type_(jl_datatype_t *type)
         cache_insert_type_set(type, hv);
     }
     else {
-        ssize_t idx = lookup_type_idx_linear(jl_atomic_load_relaxed(&type->name->linearcache), key, n);
+        ssize_t idx = lookup_type_idx_linear(type->name, key, n);
         assert(idx < 0);
         cache_insert_type_linear(type, ~idx);
     }
