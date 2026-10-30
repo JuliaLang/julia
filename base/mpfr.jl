@@ -262,7 +262,7 @@ setrounding(f::Function, ::Type{BigFloat}, r::RoundingMode) =
 Create an arbitrary precision floating point number from `x`, with precision
 `precision`. The `rounding` argument specifies the direction in which the result should be
 rounded if the conversion cannot be done exactly. If not provided, these are set by the current global values.
-The default precision is 256 bits unless changed with [`setprecision`](@ref).
+The precision is initially set to 256 bits. Use [`setprecision`](@ref) to change the default.
 
 `BigFloat(x::Real)` is the same as `convert(BigFloat,x)`, except if `x` itself is already
 `BigFloat`, in which case it will return a value with the precision set to the current

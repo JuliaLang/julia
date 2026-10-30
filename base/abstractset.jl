@@ -205,7 +205,6 @@ intersect!(s::AbstractSet, itr) =
 Construct the set of distinct elements in `s` but not in any of the iterables in `itrs`.
 If `s` is not an `AbstractSet` (e.g. an array), the result is a `Vector` without duplicates
 that maintains the order in which elements first appear in `s`.
-The result will have the same element type as `s`.
 
 See also [`setdiff!`](@ref), [`union`](@ref), [`intersect`](@ref).
 

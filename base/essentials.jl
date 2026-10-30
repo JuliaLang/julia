@@ -519,10 +519,15 @@ Transform an indexable container into a Dictionary-view of the same data.
 Modifying the key-space of the underlying data may invalidate this object.
 
 This is the type returned by [`pairs`](@ref) for arrays, tuples and named tuples,
-and the type of keyword arguments collected with `kwargs...`. Its keys are those
-of the wrapped container and `values(p)` returns the container itself. Entries can
-be read like those of other `AbstractDict`s, and `p[key] = value` writes through to
-the container if it supports `setindex!`, but keys cannot be added or removed.
+and the type of keyword arguments collected with `kwargs...`. `keys(p)` iterates
+over the keys selected from the container's key space. For arrays, `pairs(A)` uses
+linear indices for vectors and Cartesian indices otherwise;
+`pairs(IndexLinear(), A)` always uses linear indices.
+`values(p)` returns the container itself. Entries can be read like those of other
+`AbstractDict`s. `p[key]` indexes the container directly, so it accepts any key
+supported by the container, while `haskey(p, key)` only consults `keys(p)`.
+`p[key] = value` writes through to the container if it supports `setindex!`, but
+keys cannot be added or removed.
 Use e.g. `Dict(p)` for an independent mutable copy, or `NamedTuple(kwargs)` to get
 keyword arguments as a `NamedTuple`.
 
@@ -1202,9 +1207,10 @@ end
 
 Return `Val{c}()`, which contains no run-time data. Types like this can be used to
 pass the information between functions through the value `c`, which must be a valid type
-parameter, such as an `isbits` value, a `Symbol`, a type, or a `Module`. The intent of this
-construct is to be able to dispatch on constants directly (at compile time) without having
-to test the value of the constant at run time.
+parameter, such as an `isbits` value, a `Symbol`, a type, a `Module`, or a tuple of
+`isbits` values or symbols. The intent of this construct is to be able to dispatch on
+constants directly (at compile time) without having to test the value of the constant
+at run time.
 
 !!! compat "Julia 1.10"
     Using a `Module` as `c` requires at least Julia 1.10.

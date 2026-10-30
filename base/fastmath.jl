@@ -148,8 +148,7 @@ The transformation is purely syntactic: calls to supported functions and operato
 such as `+` or `sin` in `expr` are replaced with calls to their counterparts in
 `Base.FastMath` (e.g. `Base.FastMath.sin_fast`), regardless of what these names
 refer to in the current scope. For arguments without a fast-math implementation,
-these fall back to the `Base` functions (e.g. `Base.sin`), so a different function
-that happens to be named `sin` will not be called.
+these fall back to the `Base` functions (e.g. `Base.sin`).
 
 # Examples
 ```jldoctest
