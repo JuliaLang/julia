@@ -17,7 +17,7 @@ JLDFLAGS += $(LINK_LDFLAGS) $(JL_LDFLAGS)
 FLAGS_COMMON := \
 	-D_GNU_SOURCE -I$(BUILDDIR) -I$(SRCDIR) \
 	-I$(SRCDIR)/flisp -I$(SRCDIR)/support \
-	-I$(LIBUV_INC) -I$(MIMALLOC_INC) -I$(build_includedir) \
+	-I$(LIBUV_INC) $(addprefix -I,$(MIMALLOC_INC)) -I$(build_includedir) \
 	-I$(JULIAHOME)/deps/valgrind
 FLAGS_COMMON += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer $(JL_VISIBILITY_FLAGS) -fno-common \
 		 -Wno-comment -Wpointer-arith -Wundef
