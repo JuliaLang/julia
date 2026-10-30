@@ -177,7 +177,14 @@ JL_DLLEXPORT void jl_iolock_end(void) JL_CANSAFEPOINT
         jl_uv_loop_unwatched = 0;
         jl_wake_io_loop_thread();
     }
+    // a thread outside the thread pools never returns to the scheduler, so it must hand
+    // the event loop back to any pool thread that went to sleep because we held the iolock
+    jl_task_t *ct = jl_current_task;
+    int handoff = jl_uv_mutex.count == 1 && jl_threadpoolid(jl_atomic_load_relaxed(&ct->tid)) == -1;
     JL_UV_UNLOCK();
+    // after the unlock, so a thread that saw the iolock held is already marked sleeping
+    if (handoff)
+        jl_wake_io_loop_thread();
 }
 
 
