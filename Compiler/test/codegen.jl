@@ -1536,3 +1536,22 @@ memory_zeroinit_merge(row, names) = collect(getfield(row, nm) for nm in names)
     @test memory_zeroinit_merge(row, (:a, :b, :c)) == [1, 4.0, "7"]
     @test memory_zeroinit_merge(row, (:b, :b, :b)) == [4.0, 4.0, 4.0]
 end
+
+function missing_edge_union_tag(c::Bool, d::Bool, e::Bool)
+    local x
+    if c
+        x = e ? nothing : missing
+    end
+    if d
+        x = 1
+    end
+    return (c | d) ? x : 0
+end
+let llvm = get_llvm(missing_edge_union_tag, Tuple{Bool, Bool, Bool}, true, false, false)
+    @test occursin(r"%tindex_phi\d* = phi i8", llvm)
+    @test !occursin(r"%tindex_phi\d* = phi i8 [^\n]*poison", llvm)
+end
+@test missing_edge_union_tag(false, false, true) === 0
+@test missing_edge_union_tag(false, true, false) === 1
+@test missing_edge_union_tag(true, false, false) === missing
+@test missing_edge_union_tag(true, false, true) === nothing
