@@ -414,7 +414,7 @@ quicker by bootstrapping from a release build:
 
 ```sh
 $ make julia-sysbase-release
-$ make debug CROSS_BOOTSTRAP_JULIA=$PWD/usr/bin/julia CROSS_BOOTSTRAP_SYSBASE=$PWD/usr/lib/julia/sysbase.so
+$ make debug CROSS_BOOTSTRAP_JULIA=$PWD/usr/bin/julia CROSS_BOOTSTRAP_SYSBASE=$PWD/usr/lib/julia/sysbase
 ```
 
 Note that `CROSS_BOOTSTRAP_JULIA` and `CROSS_BOOTSTRAP_SYSBASE` are used only to
