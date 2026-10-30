@@ -59,6 +59,12 @@ Standard library changes
 
 #### TOML
 
+#### UUIDs
+
+* `uuid5` now hashes the bytes of `name` as specified by RFC 4122, instead of first processing
+  backslash escape sequences in it with `unescape_string`. This changes the result for names
+  containing a backslash, which previously could also throw an `ArgumentError`.
+
 External dependencies
 ---------------------
 
