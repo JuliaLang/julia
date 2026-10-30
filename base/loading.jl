@@ -1106,18 +1106,7 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
     return nothing
 end
 
-function is_v1_format_manifest(raw_manifest::Dict{String})
-    if haskey(raw_manifest, "manifest_format")
-        mf = raw_manifest["manifest_format"]
-        if mf isa Dict{String} && haskey(mf, "uuid")
-            # the off-chance where an old format manifest has a dep called "manifest_format"
-            return true
-        end
-        return false
-    else
-        return true
-    end
-end
+is_v1_format_manifest(raw_manifest::Dict{String}) = !haskey(raw_manifest, "manifest_format")
 
 # returns a deps list for both old and new manifest formats
 function get_deps(raw_manifest::Dict)
