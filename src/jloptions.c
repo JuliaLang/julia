@@ -359,8 +359,7 @@ static const char opts_hidden[] =
     " --trace-compile-timing                        If --trace-compile is enabled show how long each took\n"
     "                                               to compile in ms\n"
     " --task-metrics={yes|no*}                      Enable collection of per-task timing data.\n"
-    " --image-codegen                               Force generate code in imaging mode\n"
-    " --permalloc-pkgimg={yes|no*}                  Copy the data section of package images into memory\n\n"
+    " --image-codegen                               Force generate code in imaging mode\n\n"
 
     " --trim={no*|safe|unsafe|unsafe-warn}          Build a sysimage including only code provably\n"
     "                                               reachable from methods marked by calling\n"

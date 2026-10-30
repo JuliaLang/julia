@@ -445,24 +445,20 @@ precompile_test_harness(false) do dir
     cachedir2 = joinpath(dir2, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachefile = joinpath(cachedir, "$Foo_module.ji")
     @test isfile(cachefile)
-    do_pkgimg = Base.JLOptions().use_pkgimages == 1 && Base.JLOptions().permalloc_pkgimg == 1
-    if do_pkgimg ||  Base.JLOptions().use_pkgimages == 0
-        if do_pkgimg
-            ocachefile = Base.ocachefile_from_cachefile(cachefile)::String
-            @test isfile(ocachefile)
-            let foo_ptr = Libdl.dlopen(ocachefile::String, RTLD_NOLOAD)
-                f35014_ptr = Libdl.dlsym(foo_ptr, :f35014)
-                @test ccall(f35014_ptr, Int32, (Int32,), 3) == 4
-                f35014_other_ptr = Libdl.dlsym(foo_ptr, :f35014_other)
-                @test ccall(f35014_other_ptr, Int32, (Int32,), 3) == 4
-            end
-        else
-            ocachefile = nothing
+    if Base.JLOptions().use_pkgimages == 1
+        ocachefile = Base.ocachefile_from_cachefile(cachefile)::String
+        @test isfile(ocachefile)
+        let foo_ptr = Libdl.dlopen(ocachefile::String, RTLD_NOLOAD)
+            f35014_ptr = Libdl.dlsym(foo_ptr, :f35014)
+            @test ccall(f35014_ptr, Int32, (Int32,), 3) == 4
+            f35014_other_ptr = Libdl.dlsym(foo_ptr, :f35014_other)
+            @test ccall(f35014_other_ptr, Int32, (Int32,), 3) == 4
         end
+    elseif Base.JLOptions().use_pkgimages == 0
         # use _require_from_serialized to ensure that the test fails if
         # the module doesn't reload from the image:
         @test_logs (:warn, "Replacing module `$Foo_module`") begin
-            m = Base._require_from_serialized(Base.PkgId(Foo), cachefile, ocachefile, Foo_file)
+            m = Base._require_from_serialized(Base.PkgId(Foo), cachefile, nothing, Foo_file)
             @test isa(m, Module)
         end
     end
