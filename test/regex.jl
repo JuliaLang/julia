@@ -112,6 +112,8 @@
         @test haskey(m, :a)
         @test haskey(m, "b")
         @test !haskey(m, "foo")
+        @test !haskey(m, "a\0b")
+        @test_throws ErrorException m["a\0b"]
         @test (m[:a], m[:c], m["b"]) == ("x", "y", "z")
         @test Tuple(m) == ("x", "y", "z")
         @test NamedTuple(m) == (a="x", c="y", b="z")
@@ -155,6 +157,7 @@
         replace("ab", r"(a)" => s"\g<>"))
     # test replace with 2-digit substitution group
     @test replace(("0" ^ 9) * "1", Regex(("(0)" ^ 9) * "(1)") => s"10th group: \10") == "10th group: 1"
+    @test_throws OverflowError replace("ab", r"(a)" => s"[\18446744073709551617]")
 
     # Proper unicode handling
     @test  match(r"∀∀", "∀x∀∀∀").match == "∀∀"
@@ -227,6 +230,23 @@
         @test_throws ArgumentError r"a" * Regex("b", Base.DEFAULT_COMPILER_OPTS, Base.DEFAULT_MATCH_OPTS & ~Base.PCRE.NO_UTF_CHECK)
 
         @test r"this|that"^2 == r"(?:this|that){2}"
+        n = -1
+        @test_throws ArgumentError r"a"^n
+
+        r = r"a  # the letter a"x
+        @test match(r * "b", "ab").match == "ab"
+        @test match(r * r"b"x, "ab").match == "ab"
+        @test match(r^2, "aa").match == "aa"
+
+        r = r"a(?-x)"x
+        @test match(r * "b", "ab").match == "ab"
+        @test match(r^2, "aa").match == "aa"
+
+        for r in (r"(?x)a # the letter a", r"a\Q"x, r"a\Q",
+                  Regex("a  # the letter a", Base.DEFAULT_COMPILER_OPTS | Base.PCRE.EXTENDED_MORE, Base.DEFAULT_MATCH_OPTS))
+            @test match(r * "b", "ab").match == "ab"
+            @test match(r^2, "aa").match == "aa"
+        end
     end
 
     @testset "iterate" begin

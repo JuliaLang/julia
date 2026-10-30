@@ -687,16 +687,11 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
                 nb += write(io, SUB_CHAR)
                 i = nextind(repl, next_i)
             elseif isdigit(repl[next_i])
-                group = parse(Int, repl[next_i])
                 i = nextind(repl, next_i)
-                while i <= e
-                    if isdigit(repl[i])
-                        group = 10group + parse(Int, repl[i])
-                        i = nextind(repl, i)
-                    else
-                        break
-                    end
+                while i <= e && isdigit(repl[i])
+                    i = nextind(repl, i)
                 end
+                group = parse(Int, SubString(repl, next_i, prevind(repl, i)))
                 nb += _write_capture(io, group, str, r, re)
             elseif repl[next_i] == GROUP_CHAR
                 i = nextind(repl, next_i)
@@ -877,7 +872,8 @@ end
 
 *(r::Regex) = r # avoids wrapping r in a useless subpattern
 
-wrap_string(r::Regex, unshared::UInt32) = string("(?", regex_opts_str(r.compile_options & unshared), ':', r.pattern, ')')
+wrap_string(r::Regex, unshared::UInt32) = string("(?", regex_opts_str(r.compile_options & unshared), ':', r.pattern, close_paren(r))
+close_paren(r::Regex) = iszero(r.compile_options & (PCRE.EXTENDED | PCRE.EXTENDED_MORE)) && !occursin(r"\\Q|\(\?", r.pattern) ? ")" : "\\E(?x)\n)"
 # if s contains raw"\E", split '\' and 'E' within two distinct \Q...\E groups:
 wrap_string(s::AbstractString, ::UInt32) =  string("\\Q", replace(s, raw"\E" => raw"\\E\QE"), "\\E")
 wrap_string(s::AbstractChar, ::UInt32) = string("\\Q", s, "\\E")
@@ -927,4 +923,7 @@ julia> match(r"Test "^2, "Test Test ")
 RegexMatch("Test Test ")
 ```
 """
-^(r::Regex, i::Integer) = Regex(string("(?:", r.pattern, "){$i}"), r.compile_options, r.match_options)
+function ^(r::Regex, i::Integer)
+    i < 0 && throw(ArgumentError(lazy"can't repeat a regex $i times"))
+    Regex(string("(?:", r.pattern, close_paren(r), "{$i}"), r.compile_options, r.match_options)
+end

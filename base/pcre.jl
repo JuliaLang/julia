@@ -244,6 +244,7 @@ function create_match_data(re)
 end
 
 function substring_number_from_name(re, name)
+    name isa AbstractString && contains(name, '\0') && return Int(ERROR_NOSUBSTRING)
     n = ccall((:pcre2_substring_number_from_name_8, PCRE_LIB), Cint,
                (Ptr{Cvoid}, Cstring), re, name)
     return Int(n)

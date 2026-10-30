@@ -484,6 +484,12 @@ isequal_normalized_naive(s1, s2; kws...) = normalize(s1; kws...) == normalize(s2
     @test isequal_normalized("no\u00EBl", "noel", stripmark=true)
     @test isequal_normalized("no\u00EBl", "NOEL", stripmark=true, casefold=true)
     @test isequal_normalized("\u00B5\u0302m", "\u03BC\u0302m", chartransform=julia_chartransform)
+    @test isequal_normalized("noe\u0308l", "noel", stripmark=true)
+    @test isequal_normalized("cafe\u0301", "cafe", stripmark=true)
+    @test isequal_normalized("e", "e\u0301", stripmark=true)
+    @test isequal_normalized("\u0301", "", stripmark=true)
+    @test !isequal_normalized("cafe\u0301", "cafee", stripmark=true)
+    @test !isequal_normalized("a\u0301", "aa", stripmark=true)
 
     # issue #52408
     @testset "Sorting combining characters" begin
