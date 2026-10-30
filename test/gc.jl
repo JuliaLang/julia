@@ -296,3 +296,21 @@ let line = repeat("JuliaLang is a GitHub organization.", 100)
 end
 
 GC.gc()
+
+# Buffers handed to the GC with `own=true` come from libc and may be empty.
+let
+    a = unsafe_wrap(Array, Ptr{Float64}(Libc.malloc(16)), 0; own=true)
+    b = unsafe_wrap(Array, Ptr{Nothing}(Libc.malloc(16)), 3; own=true)
+    @test isempty(a) && length(b) == 3
+    a = b = nothing
+    GC.gc()
+end
+
+# `jl_malloc`/`jl_free` are installed as allocator hooks by C libraries (e.g. SuiteSparse)
+# that may already hold libc-allocated memory, so they must be interchangeable with libc.
+let p = Libc.malloc(16)
+    p = ccall(:jl_realloc, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), p, 4096)
+    ccall(:jl_free, Cvoid, (Ptr{Cvoid},), p)
+    Libc.free(ccall(:jl_malloc, Ptr{Cvoid}, (Csize_t,), 16))
+    @test true
+end

@@ -796,11 +796,10 @@ static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPO
     size_t freed_bytes;
     if (jl_genericmemory_how(m) == JL_GENERICMEMORY_LIBCALLOCATED) {
         size_t elsz = ((jl_datatype_t*)jl_typetagof(m))->layout->size;
-        freed_bytes = m->length * elsz;
-        assert(freed_bytes != 0);
+        freed_bytes = m->length * elsz; // may be 0, e.g. `unsafe_wrap(Array, p, 0; own=true)`
         free(d);
     } else {
-        freed_bytes = memory_block_usable_size(d, isaligned);
+        freed_bytes = gc_managed_block_usable_size(d, isaligned);
         assert(freed_bytes != 0);
         if (isaligned)
             jl_free_aligned_wrapper(d);
@@ -1302,7 +1301,7 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_task_t *ct = jl_current_task;
-    void *data = jl_malloc_wrapper(sz);
+    void *data = malloc(sz);
     if (data != NULL && pgcstack != NULL && ct->world_age) {
         jl_ptls_t ptls = ct->ptls;
         malloc_maybe_collect(ptls, sz);
@@ -1315,7 +1314,7 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_task_t *ct = jl_current_task;
-    void *data = jl_calloc_wrapper(nm, sz);
+    void *data = calloc(nm, sz);
     if (data != NULL && pgcstack != NULL && ct->world_age) {
         jl_ptls_t ptls = ct->ptls;
         malloc_maybe_collect(ptls, nm * sz);
@@ -1328,7 +1327,7 @@ JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_task_t *ct = jl_current_task;
-    jl_free_wrapper(p);
+    free(p);
     if (pgcstack != NULL && ct->world_age) {
         jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, -sz);
     }
@@ -1344,7 +1343,7 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
         // wraps around when shrinking, which subtracts `old - sz` as intended
         jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, sz - old);
     }
-    return jl_realloc_wrapper(p, sz);
+    return realloc(p, sz);
 }
 
 void *jl_gc_perm_alloc_nolock(jl_ptls_t ptls, size_t sz, int zero, unsigned align, unsigned offset) JL_NOTSAFEPOINT
