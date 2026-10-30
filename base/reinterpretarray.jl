@@ -991,7 +991,7 @@ function _totuple(T::Type{All32{E,N}}, itr::Union{Array,Memory}) where {E,N}
     len = N + 32
     length(itr) >= len || _totuple_err(T)
     if isbitstype(E) && eltype(itr) === E
-        v = length(itr) == len ? itr : view(itr, 1:len)
+        v = length(itr) == len ? vec(itr) : view(itr, 1:len)
         return @inbounds reinterpret(T, v)[1]
     end
     elts = collect(E, Iterators.take(itr, len))
