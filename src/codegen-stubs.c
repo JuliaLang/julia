@@ -156,6 +156,10 @@ JL_DLLEXPORT void jl_set_debuginfo_source_paths_fallback(jl_value_t *map)
 {
 }
 
+JL_DLLEXPORT void jl_set_image_package_roots_fallback(jl_value_t *roots)
+{
+}
+
 JL_DLLEXPORT void jl_dump_llvm_opt_fallback(void *s)
 {
 }

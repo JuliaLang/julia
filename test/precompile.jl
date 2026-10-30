@@ -2552,7 +2552,7 @@ precompile_test_harness("Image object cache") do load_path
         log = joinpath(cachedir, "log")
         # build the package image, and count the units found in and missing
         # from the cache
-        function build()
+        function build(pkg=pkg)
             seen = isfile(log) ? countlines(log) : 0
             withenv("JULIA_OBJCACHE" => nothing, "JULIA_OBJCACHE_IMAGES" => nothing,
                     "JULIA_OBJCACHE_PATH" => cachedir, "JULIA_OBJCACHE_LOG" => log) do
@@ -2578,6 +2578,27 @@ precompile_test_harness("Image object cache") do load_path
         @test (@eval ObjectCacheTest.g(2)) == 6
         @test (@eval ObjectCacheTest.f(2)) == 3
         @test (@eval ObjectCacheTest.h([1.0, 2.0])) == 5.0
+
+        # moving the package, as a new version does in the depot, keeps all of its code cached
+        moved = Base.PkgId("ObjectCacheMoved")
+        srcdir = joinpath(load_path, "ObjectCacheMoved", "src")
+        mkpath(srcdir)
+        write(joinpath(srcdir, "ObjectCacheMoved.jl"), """
+            module ObjectCacheMoved
+            f(x) = x + 1
+            precompile(f, (Int,))
+            end
+            """)
+        misses, hits = build(moved)
+        @test misses > 0 && hits == 0
+        other = mktempdir()
+        mv(joinpath(load_path, "ObjectCacheMoved"), joinpath(other, "ObjectCacheMoved"))
+        pushfirst!(LOAD_PATH, other)
+        try
+            @test build(moved) == (0, misses)
+        finally
+            popfirst!(LOAD_PATH)
+        end
     end
 end
 
