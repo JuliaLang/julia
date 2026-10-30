@@ -2132,14 +2132,14 @@ end
             [[deps.CovDep]]
             deps = ["Printf"]
             path = $(repr(depdir))
-            syntax.julia_version = "$(VERSION.major).$(VERSION.minor)"
+            syntax.julia_version = "$(join(Base.LATEST_STABLE_EDITION, '.'))"
             uuid = "7d5e6c1a-3f0b-4e8e-9d6c-1a2b3c4d5e6f"
             version = "0.1.0"
 
             [[deps.CovTop]]
             deps = ["CovDep"]
             path = $(repr(topdir))
-            syntax.julia_version = "$(VERSION.major).$(VERSION.minor)"
+            syntax.julia_version = "$(join(Base.LATEST_STABLE_EDITION, '.'))"
             uuid = "0b9d4d0e-6a43-4c86-9d2b-3c8e1f7a5b42"
             version = "0.1.0"
 
@@ -2552,8 +2552,8 @@ module M58272_to end
         @test invokelatest(getglobal, (@eval (using Versioned2; Versioned2)), :ver) == v"1.14"
         # Inherited from compat.julia = "1.13-2"
         @test invokelatest(getglobal, (@eval (using Versioned3; Versioned3)), :ver) == v"1.13"
-        # No syntax.julia_version, falls back to current VERSION
-        @test invokelatest(getglobal, (@eval (using Versioned4; Versioned4)), :ver) == VersionNumber(VERSION.major, VERSION.minor)
+        # No syntax.julia_version, falls back to LATEST_STABLE_EDITION
+        @test invokelatest(getglobal, (@eval (using Versioned4; Versioned4)), :ver) == VersionNumber(Base.LATEST_STABLE_EDITION...)
         # Inherited from compat.julia = "1.14-2"
         @test invokelatest(getglobal, (@eval (using Versioned5; Versioned5)), :ver) == v"1.14"
     finally

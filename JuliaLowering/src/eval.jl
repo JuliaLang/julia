@@ -915,9 +915,9 @@ function include_string(mapexpr::Function, mod::Module, code::AbstractString,
                         filename::AbstractString)
     version = if invokelatest(isdefined, mod, Symbol("#_internal_julia_parse"))
         vp = invokelatest(getglobal, mod, Symbol("#_internal_julia_parse"))
-        vp isa Base.VersionedParse ? vp.edition : Base.VERSION_EDITION
+        vp isa Base.VersionedParse ? vp.edition : Base.LATEST_STABLE_EDITION
     else
-        Base.VERSION_EDITION
+        Base.LATEST_STABLE_EDITION
     end
     st = parseall(SyntaxTree, code; filename, version=VersionNumber(version),
                   ignore_warnings=true)
