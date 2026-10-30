@@ -1851,7 +1851,7 @@ julia> v[p]
 ```
 """
 partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
-    partialsortperm!(similar(Vector{eltype(k)}, axes(v,1)), v, k; kwargs...)
+    partialsortperm!(similar(Vector{keytype(v)}, axes(v,1)), v, k; kwargs...)
 
 """
     partialsortperm!(ix, v, k; by=identity, lt=isless, rev=false)
