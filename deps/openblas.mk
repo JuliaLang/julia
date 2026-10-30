@@ -165,17 +165,17 @@ LAPACK_MFLAGS := NOOPT="$(FFLAGS) $(JFFLAGS) $(USE_BLAS_FFLAGS) -O0" \
     OPTS="$(FFLAGS) $(JFFLAGS) $(USE_BLAS_FFLAGS)" FORTRAN="$(FC)" \
     LOADER="$(FC)" BLASLIB="$(RPATH_ESCAPED_ORIGIN) $(LIBBLAS)"
 
-$(SRCCACHE)/lapack-$(LAPACK_VER).tar.gz: | $(SRCCACHE)
+$(SRCCACHE)/lapack-$(LAPACK_VER).tgz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://www.netlib.org/lapack/$(notdir $@)
 
-$(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted: $(SRCCACHE)/lapack-$(LAPACK_VER).tar.gz
+$(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz
 	$(JLCHECKSUM) $<
 	mkdir -p $(BUILDDIR)
 	cd $(BUILDDIR) && $(TAR) -zxf $<
 	cp $(dir $@)INSTALL/make.inc.gfortran $(dir $@)make.inc
 	echo 1 > $@
 
-checksum-lapack: $(SRCCACHE)/lapack-$(LAPACK_VER).tar.gz
+checksum-lapack: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz
 	$(JLCHECKSUM) $<
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
@@ -210,10 +210,10 @@ clean-lapack:
 	-$(MAKE) -C $(BUILDDIR)/lapack-$(LAPACK_VER) clean
 
 distclean-lapack:
-	rm -rf $(SRCCACHE)/lapack-$(LAPACK_VER).tar.gz $(BUILDDIR)/lapack-$(LAPACK_VER)
+	rm -rf $(SRCCACHE)/lapack-$(LAPACK_VER).tgz $(BUILDDIR)/lapack-$(LAPACK_VER)
 
 
-get-lapack: $(SRCCACHE)/lapack-$(LAPACK_VER).tar.gz
+get-lapack: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz
 extract-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted
 configure-lapack: extract-lapack
 compile-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled
