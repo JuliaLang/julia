@@ -290,6 +290,39 @@ static std::pair<std::string, std::string> resolve_source_path(StringRef file) J
     return {};
 }
 
+// (root, name) of each loaded package, longest root first, set while building a package image
+static std::mutex image_package_roots_lock;
+static SmallVector<std::pair<std::string, std::string>, 0> image_package_roots;
+
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_set_image_package_roots_impl(jl_value_t *roots)
+{
+    std::lock_guard<std::mutex> guard(image_package_roots_lock);
+    image_package_roots.clear();
+    size_t n = jl_svec_len(roots);
+    for (size_t i = 0; i + 1 < n; i += 2)
+        image_package_roots.emplace_back(jl_string_data(jl_svecref(roots, i)),
+                                         jl_string_data(jl_svecref(roots, i + 1)));
+    std::stable_sort(image_package_roots.begin(), image_package_roots.end(),
+                     [](auto &a, auto &b) { return a.first.size() > b.first.size(); });
+}
+
+// names a package file as Name/path/in/package, so that neither the depot nor the
+// version slug changes the image and cached code is reused across both
+static std::optional<std::string> image_package_path(StringRef file) JL_NOTSAFEPOINT
+{
+    std::lock_guard<std::mutex> guard(image_package_roots_lock);
+    for (auto &[root, name] : image_package_roots) {
+        if (file.size() <= root.size() || !file.starts_with(root) ||
+            !sys::path::is_separator(file[root.size()]))
+            continue;
+        SmallString<256> path(name);
+        sys::path::append(path, file.substr(root.size() + 1));
+        return std::string(path);
+    }
+    return {};
+}
+
 extern "C" {
 
 #include "builtin_proto.h"
@@ -9347,7 +9380,8 @@ static jl_datatype_t *compute_va_type(jl_value_t *sig, size_t nreq) JL_CANSAFEPO
 }
 
 // Code that is JIT-compiled can refer to the installed sources by absolute path.
-// Images keep the recorded paths, as they may be relocated or used on another machine.
+// Images keep the recorded paths, as they may be relocated or used on another machine,
+// except that package files are named relative to their package.
 // Only Base and Core record paths relative to `base`; a relative name in user code
 // (e.g. from `include_string`) must not be resolved to an unrelated Base file.
 static DIFile *get_difile(jl_codectx_t &ctx, DIBuilder &dbuilder, StringRef file, bool is_user_code)
@@ -9356,6 +9390,10 @@ static DIFile *get_difile(jl_codectx_t &ctx, DIBuilder &dbuilder, StringRef file
         auto [dir, name] = resolve_source_path(file);
         if (!dir.empty())
             return dbuilder.createFile(name, dir);
+    }
+    else if (ctx.emission_context.imaging_mode) {
+        if (auto path = image_package_path(file))
+            return dbuilder.createFile(*path, ".");
     }
     return dbuilder.createFile(file, ".");
 }

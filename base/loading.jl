@@ -1352,6 +1352,20 @@ function init_debuginfo_source_paths()
     ccall(:jl_set_debuginfo_source_paths, Cvoid, (Any,), Core.svec(paths...))
 end
 
+# Image debug info names package files relative to their package, so the image
+# does not depend on the depot path or the version slug.
+function set_image_package_roots(mods)
+    roots = Dict{String,String}()
+    for m in mods
+        path = pathof(m)
+        path === nothing && continue
+        dir = dirname(path)
+        basename(dir) == "src" || continue
+        roots[dirname(dir)] = String(nameof(m))
+    end
+    ccall(:jl_set_image_package_roots, Cvoid, (Any,), Core.svec(Iterators.flatten(roots)...))
+end
+
 function cache_file_entry(pkg::PkgId)
     uuid = pkg.uuid
     return joinpath(
@@ -3648,6 +3662,7 @@ function include_package_for_output(pkg::PkgId, input::String, edition::Tuple{In
     # check that the package defined the expected module so we can give a nice error message if not
     m = maybe_root_module(pkg)
     m isa Module || check_package_module_loaded_error(pkg)
+    keep_ir && set_image_package_roots(Any[loaded_modules_array()..., m])
 
     # Re-populate the runtime's newly-inferred array, which will be included
     # in the output. We removed it above to avoid including any code we may
