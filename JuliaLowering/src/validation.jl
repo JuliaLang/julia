@@ -739,8 +739,8 @@ vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     [:identifier] -> vst1_ident(vcx, st; lhs=true) &
         (!is_dotted_operator(syntax_name(st)) ? pass() :
         @fail(st, "dotted operator is not a valid function name"))
-    [:. _ _] ->
-        vst1_calldecl_dot_name(vcx, st)
+    [:. _ _] -> vcx.toplevel ? vst1_calldecl_dot_name(vcx, st) :
+        @fail(st, "global method definition must be placed at top level, or use eval")
     [:curly [:value] tvs...] -> allv(vst1, vcx, tvs)
     [:curly t tvs...] -> vst1_calldecl_name(vcx, t) & allv(vst1, vcx, tvs)
     ([:(::) _...], when=!vcx.toplevel) ->
