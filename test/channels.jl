@@ -677,6 +677,211 @@ end
     @test t.interval == 0.5
 end
 
+@testset "SignalCondition" begin
+    @test_throws ArgumentError Base.SignalCondition(Base.SIGKILL)
+    Sys.iswindows() || @test_throws ArgumentError Base.SignalCondition(Base.SIGCHLD)
+    @test_throws ArgumentError Base.SignalCondition(0)
+    let s = Base.SignalCondition(Base.SIGWINCH)
+        @test repr(s) == "SignalCondition(SIGWINCH ($(Base.SIGWINCH)), open)"
+        close(s)
+        @test repr(s) == "SignalCondition(SIGWINCH ($(Base.SIGWINCH)), closed)"
+    end
+    let s = Base.SignalCondition(Base.SIGWINCH; intercept=true)
+        @test repr(s) == "SignalCondition(SIGWINCH ($(Base.SIGWINCH)), intercept, open)"
+        close(s)
+    end
+    let s = Base.SignalCondition(Base.SIGWINCH)
+        t = @async try
+            wait(s)
+        catch e
+            e
+        end
+        yield()
+        close(s)
+        @test fetch(t) isa EOFError
+        @test_throws EOFError wait(s)
+        close(s)
+    end
+    @test_throws ArgumentError Base.SignalCondition(Base.SIGINT; intercept=true)
+    @test_throws ArgumentError Base.SignalCondition(-1)
+    @test_throws ArgumentError Base.SignalCondition(typemax(Int))
+    if Sys.islinux()
+        @test_throws ArgumentError Base.SignalCondition(32)
+        @test_throws ArgumentError Base.SignalCondition(Base.sigrtmax() + 1)
+        # Without intercepting, the signal would end this process.
+        s = Base.SignalCondition(Base.sigrtmin() + 1; intercept=true)
+        t = @async wait(s)
+        kill(getpid(), Base.sigrtmin() + 1)
+        @test timedwait(() -> istaskdone(t), 60) === :ok
+        close(s)
+    elseif Sys.isapple()
+        @test_throws ArgumentError Base.SignalCondition(32)
+    end
+    if Sys.iswindows()
+        @test_throws ArgumentError Base.SignalCondition(Base.SIGTERM)
+        for sig in (Base.SIGINT, 21, Base.SIGHUP, Base.SIGWINCH)
+            s = Base.SignalCondition(sig; intercept = sig != Base.SIGINT)
+            @test isopen(s)
+            close(s)
+        end
+    end
+    if !Sys.iswindows()
+        # SIGTERM goes through the runtime's signal thread, SIGHUP through a handler.
+        @testset "intercepting $name" for (name, sig) in (("SIGTERM", Base.SIGTERM), ("SIGHUP", Base.SIGHUP))
+            script = """
+                n = Ref(0)
+                s = Base.SignalCondition($sig; intercept=true) do _
+                    n[] += 1
+                    println("got ", n[])
+                end
+                println("ready")
+                while n[] < 2
+                    sleep(0.01)
+                end
+                close(s)
+                sleep(0.1)
+                set = zeros(UInt8, 128)
+                ccall(:sigpending, Cint, (Ptr{UInt8},), set)
+                println("closed, pending: ", ccall(:sigismember, Cint, (Ptr{UInt8}, Cint), set, $sig))
+                sleep(600)
+                """
+            errfile = tempname()
+            p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $script`, stderr=errfile), "r")
+            watchdog = Timer(300) do _
+                kill(p, Base.SIGKILL)
+            end
+            try
+                @test readline(p) == "ready"
+                kill(p, sig)
+                @test readline(p) == "got 1"
+                kill(p, sig)
+                @test readline(p) == "got 2"
+                # A pending signal would skip exit cleanup.
+                @test readline(p) == "closed, pending: 0"
+                # With the condition closed, the signal has its usual effect again.
+                kill(p, sig)
+                wait(p)
+                @test p.termsignal == sig
+            finally
+                close(watchdog)
+                kill(p, Base.SIGKILL)
+                wait(p)
+                p.termsignal == sig || print(stderr, read(errfile, String))
+                rm(errfile, force=true)
+            end
+        end
+
+        # not SIGTERM: its exit can hang if it lands while the child is still compiling (#64410)
+        @testset "observing $name" for (name, sig) in (("SIGHUP", Base.SIGHUP), ("SIGINT", Base.SIGINT))
+            script = """
+                Base.exit_on_sigint(false)
+                s = Base.SignalCondition(_ -> Core.println("observed"), $sig)
+                try
+                    # The interrupt can arrive while this print still waits for its write.
+                    println("ready")
+                    sleep(600)
+                catch e
+                    # The interrupt cancels the rest of this statement, so avoid cancellation points.
+                    Core.println(e isa Base.CancellationRequest ? "interrupted" : "unexpected")
+                end
+                """
+            errfile = tempname()
+            p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $script`, stderr=errfile), "r")
+            watchdog = Timer(300) do _
+                kill(p, Base.SIGKILL)
+            end
+            try
+                @test readline(p) == "ready"
+                # Observing leaves the usual effect in place.
+                kill(p, sig)
+                if sig == Base.SIGINT
+                    @test sort!([readline(p), readline(p)]) == ["interrupted", "observed"]
+                    wait(p)
+                    @test success(p)
+                else
+                    wait(p)
+                    @test p.termsignal == sig
+                end
+            finally
+                close(watchdog)
+                kill(p, Base.SIGKILL)
+                wait(p)
+                p.termsignal == sig || success(p) || print(stderr, read(errfile, String))
+                rm(errfile, force=true)
+            end
+        end
+
+        @testset "exit from the callback" begin
+            script = """
+                Base.SignalCondition(_ -> exit(3), Base.SIGTERM; intercept=true)
+                println("ready")
+                sleep(600)
+                """
+            errfile = tempname()
+            p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $script`, stderr=errfile), "r")
+            watchdog = Timer(300) do _
+                kill(p, Base.SIGKILL)
+            end
+            try
+                @test readline(p) == "ready"
+                kill(p, Base.SIGTERM)
+                wait(p)
+                @test p.exitcode == 3
+                @test read(errfile, String) == ""
+            finally
+                close(watchdog)
+                kill(p, Base.SIGKILL)
+                rm(errfile, force=true)
+            end
+        end
+
+        @testset "an ignored signal stays ignored" begin
+            script = """
+                ccall(:signal, Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Base.SIGHUP, Ptr{Cvoid}(1)) # SIG_IGN
+                s = Base.SignalCondition(Base.SIGHUP)
+                t = @async wait(s)
+                ccall(:raise, Cint, (Cint,), Base.SIGHUP)
+                wait(t)
+                close(s)
+                ccall(:raise, Cint, (Cint,), Base.SIGHUP)
+                println("alive")
+                """
+            @test readchomp(`$(Base.julia_cmd()) --startup-file=no -e $script`) == "alive"
+        end
+
+        @testset "--handle-signals=no" begin
+            # Julia leaves the signal alone, so it still has its default effect.
+            script = """
+                Base.SignalCondition(Base.SIGHUP; intercept=true)
+                ccall(:raise, Cint, (Cint,), Base.SIGHUP)
+                sleep(600)
+                """
+            p = run(pipeline(`$(Base.julia_cmd()) --startup-file=no --handle-signals=no -e $script`), wait=false)
+            watchdog = Timer(300) do _
+                kill(p, Base.SIGKILL)
+            end
+            try
+                wait(p)
+                @test p.termsignal == Base.SIGHUP
+            finally
+                close(watchdog)
+            end
+        end
+
+        @testset "several conditions on one signal" begin
+            # SIGWINCH does nothing by default, so it is safe to send to this process.
+            a = Base.SignalCondition(Base.SIGWINCH)
+            b = Base.SignalCondition(Base.SIGWINCH)
+            ta = @async wait(a)
+            tb = @async wait(b)
+            kill(getpid(), Base.SIGWINCH)
+            @test timedwait(() -> istaskdone(ta) && istaskdone(tb), 60) === :ok
+            close(a)
+            close(b)
+        end
+    end
+end
+
 # trying to `schedule` a finished task
 let t = @async nothing
     wait(t)

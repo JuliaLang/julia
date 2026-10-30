@@ -47,6 +47,8 @@ using Base.MathConstants
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
     # issue 26823
     @test_throws InexactError rationalize(Int, NaN)
+    @test_throws InexactError Rational{BigInt}(NaN)
+    @test_throws InexactError Rational(big(NaN))
     # issue 32569
     @test_throws OverflowError 1 // typemin(Int)
     @test_throws ArgumentError 0 // 0
@@ -182,6 +184,8 @@ using Base.MathConstants
     @test_throws DivideError -1//0 + 1//0
     @test Int128(1)//0 + 1//0 isa Rational{Int128}
     @test 1//0 + Int128(1)//0 isa Rational{Int128}
+    @test 0x1//0x0 - 0x1//0x1 === 0x1//0x0
+    @test -%(0x1//0x0, 0x1//0x1) === 0x1//0x0
 
     # inf division by a negative number flips the sign (#63456)
     @test (-1//0) // -1 === 1//0
@@ -941,4 +945,13 @@ end
     @test_throws OverflowError rationalize(UInt, -r)
     @test rationalize(BigInt, r) == Rational{BigInt}(r) == r
     @test rationalize(Int64, big(r)) == r
+end
+
+@testset "rationalize(Union{}, x) throws MethodError" begin
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    for x in (1.5, 3//2, 1, pi, 1.5 + 2.5im)
+        @test_throws MethodError(rationalize, (Union{}, x)) rationalize(Union{}, x)
+        @test_throws MethodError(rationalize, (Union{}, x)) rationalize(Union{}, x; tol = 0.1)
+        @test which(rationalize, (Type{Union{}}, typeof(x))).sig == Tuple{typeof(rationalize), Type{Union{}}, Vararg}
+    end
 end

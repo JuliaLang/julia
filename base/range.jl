@@ -999,6 +999,17 @@ end
 
 getindex(r::AbstractRange, ::Colon) = copy(r)
 
+function _empty_stop(start, step)
+    if step > zero(step)
+        stop = start - oneunit(step)
+        stop < start && return stop
+    else
+        stop = start + oneunit(step)
+        stop > start && return stop
+    end
+    throw(OverflowError(LazyString("cannot represent an empty range starting at ", start)))
+end
+
 function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integer}
     @inline
     @boundscheck checkbounds(r, s)
@@ -1009,7 +1020,7 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integ
         f = first(r)
         start = oftype(f, f + first(s) - firstindex(r))
         len = length(s)
-        stop = oftype(f, _range_wrapping_add(start, len - oneunit(len)))
+        stop = oftype(f, isempty(s) ? _empty_stop(start, step(r)) : _range_wrapping_add(start, len - oneunit(len)))
         return range(start, stop)
     end
 end
@@ -1025,14 +1036,14 @@ function getindex(r::AbstractUnitRange, s::StepRange{T}) where {T<:Integer}
     @boundscheck checkbounds(r, s)
 
     if T === Bool
-        len = Int(last(s))
+        len = count(s)
         return range(first(s) ? first(r) : last(r), step=oneunit(eltype(r)), length=len)
     else
         f = first(r)
         start = oftype(f, f + s.start - firstindex(r))
         st = step(s)
         len = length(s)
-        stop = oftype(f, start + (len - oneunit(len)) * (iszero(len) ? copysign(oneunit(st), st) : st))
+        stop = oftype(f, isempty(s) ? _empty_stop(start, st) : start + (len - oneunit(len)) * st)
         return range(start, stop; step=st)
     end
 end
@@ -1056,8 +1067,7 @@ function getindex(r::StepRange, s::AbstractRange{T}) where {T<:Integer}
         start = oftype(f, f + (fs - firstindex(r)) * st)
         st *= step(s)
         len = length(s)
-        # mimic steprange_last_empty here, to try to avoid overflow
-        stop = oftype(f, start + (len - oneunit(len)) * (iszero(len) ? copysign(oneunit(st), st) : st))
+        stop = oftype(f, isempty(s) ? _empty_stop(start, st) : start + (len - oneunit(len)) * st)
         return range(start, stop; step=st)
     end
 end
@@ -1161,6 +1171,7 @@ end
 function ==(r::Union{StepRange{T},StepRangeLen{T,T}}, s::Union{StepRange{T},StepRangeLen{T,T}}) where {T}
     isempty(r) && return isempty(s)
     _has_length_one(r) && return _has_length_one(s) & (first(r) == first(s))
+    iszero(step(r)) && return iszero(step(s)) && (first(r) == first(s)) && (length(r) == length(s))
     (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 end
 
@@ -1433,12 +1444,13 @@ end
 collect(r::AbstractRange) = Array(r)
 
 _reverse(r::OrdinalRange, ::Colon) = (:)(last(r), negate(step(r)), first(r))
-function _reverse(r::StepRangeLen, ::Colon)
+function _reverse(r::StepRangeLen{T,R,<:Any,L}, ::Colon) where {T,R,L}
     # If `r` is empty, `length(r) - r.offset + 1 will be nonpositive hence
     # invalid. As `reverse(r)` is also empty, any offset would work so we keep
     # `r.offset`
     offset = isempty(r) ? r.offset : length(r)-r.offset+1
-    return typeof(r)(r.ref, negate(r.step), length(r), offset)
+    step = negate(r.step)
+    return StepRangeLen{T,R,typeof(step),L}(r.ref, step, length(r), offset)
 end
 _reverse(r::LinRange{T}, ::Colon) where {T} = typeof(r)(r.stop, r.start, length(r))
 

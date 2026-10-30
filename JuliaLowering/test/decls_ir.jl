@@ -4,18 +4,17 @@ begin
     local x::T = 1
 end
 #---------------------
-1   (newvar slot₁/x)
-2   1
-3   TestMod.T
-4   (= slot₂/tmp %₂)
-5   (call core.isa slot₂/tmp %₃)
-6   (gotoifnot %₅ label₈)
-7   (goto label₁₀)
-8   (call top.convert %₃ slot₂/tmp)
-9   (= slot₂/tmp (call core.typeassert %₈ %₃))
-10  slot₂/tmp
-11  (= slot₁/x %₁₀)
-12  (return %₂)
+1   1
+2   TestMod.T
+3   (= slot₂/tmp %₁)
+4   (call core.isa slot₂/tmp %₂)
+5   (gotoifnot %₄ label₇)
+6   (goto label₉)
+7   (call top.convert %₂ slot₂/tmp)
+8   (= slot₂/tmp (call core.typeassert %₇ %₂))
+9   slot₂/tmp
+10  (= slot₁/x %₉)
+11  (return %₁)
 
 ########################################
 # Local declarations outside a scope could be disallowed

@@ -105,6 +105,26 @@ if Sys.isunix()
         @test occursin("==== Thread ", err_s)
         @test occursin("==== Done", err_s)
     end
+
+    # issue #50743
+    @testset "abort backtrace reaches Julia" begin
+        script = """
+            mutable struct RLimit
+                cur::Int64
+                max::Int64
+            end
+            const RLIMIT_CORE = 4 # from /usr/include/sys/resource.h
+            ccall(:setrlimit, Cint, (Cint, Ref{RLimit}), RLIMIT_CORE, Ref(RLimit(0, 0)))
+            @noinline abort_from_julia() = ccall(:abort, Cvoid, ())
+            abort_from_julia()
+        """
+        exename = `$(Base.julia_cmd()) --startup-file=no --color=no --compile=yes -g1`
+        errp = PipeBuffer()
+        p = run(pipeline(ignorestatus(`$exename -e $script`), stderr=errp))
+        err_s = read(errp, String)
+        @test Base.process_signaled(p) && p.termsignal == 6 # SIGABRT
+        @test occursin("abort_from_julia at none:", err_s)
+    end
 end
 
 @testset "julia_cmd" begin
@@ -206,6 +226,15 @@ end
         @test v[1] == true  # exits with 0
         @test occursin("Available CPU targets:", v[2])
         @test occursin("Host CPU:", v[2])
+    end
+
+    # Test an incompatible `cpu_target` names the missing features
+    if Sys.ARCH === :x86_64
+        let v = readchomperrors(`$(Base.julia_cmd(; cpu_target="native,-sse2")) --startup-file=no -e ''`)
+            @test !v[1]
+            @test occursin("Unable to find compatible target in cached code image. It was compiled for", v[3])
+            @test occursin(r"lacks: [^.]*\bsse2\b", v[3])
+        end
     end
 end
 

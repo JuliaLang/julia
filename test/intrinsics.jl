@@ -471,6 +471,15 @@ let x = UInt63(0xc000_ba98_8765_4321), y = Int63(-1)
     end
 end
 
+# bitsizeof is only defined for primitive types and their instances
+@test Core.bitsizeof(true) == 8
+@test Core.bitsizeof(C_NULL) == Sys.WORD_SIZE
+for x in (Pair{Int32,Int16}, Tuple{UInt63}, Tuple{}, (), nothing, "abc", :abc, zeros(UInt8, 3),
+          Memory{UInt8}(undef, 3), Union{Int8,Int16}, Ptr, Integer, Union{}, DataType)
+    @test_throws ErrorException Core.bitsizeof(x)
+end
+@test_throws "Type Pair is not a primitive type" Core.bitsizeof(Pair{Int32,Int16})
+
 # test nonsensical valid conversions and errors
 
 compiled_addi(x, y) = Core.Intrinsics.add_int(x, y)
@@ -568,6 +577,25 @@ let vals = Any[Int8(-128), Int16(-32768), typemin(Int32), typemax(Int32), typemi
         compiled = n isa Signed ? compiled_sitofp : compiled_uitofp
         @test compiled(Core.BFloat16, n) === Base.invokelatest(cvt, Core.BFloat16, n)
     end
+end
+# 128-bit integer <-> Float16 conversions may lower to libcalls (e.g. `__floattihf`)
+@noinline compiled_fptosi_f16(::Type{T}, x) where {T} = Core.Intrinsics.fptosi(T, x)
+@noinline compiled_fptoui_f16(::Type{T}, x) where {T} = Core.Intrinsics.fptoui(T, x)
+for n in Int128[0, 3, 2049, 2051, 65504, 65519, 65520, 65536, typemax(Int128)]
+    @test compiled_sitofp(Float16, n) === Float16(n)
+    @test compiled_sitofp(Float16, -n) === Float16(-n)
+    @test compiled_uitofp(Float16, UInt128(n)) === Float16(UInt128(n))
+end
+@test compiled_sitofp(Float16, typemin(Int128)) === -Inf16
+@test compiled_uitofp(Float16, typemax(UInt128)) === Inf16
+# LLVM miscompiles negative f16 -> i128 on Win64 with avx512fp16 (zero-extends the i64 result):
+# llvm/llvm-project#230703, fix in llvm/llvm-project#230779
+fptosi_f16_i128_broken = Sys.iswindows() && Sys.ARCH === :x86_64 &&
+    occursin("+avx512fp16", ccall(:jl_get_cpu_features, String, ()))
+for x in Float16[0, 0.5, 2.5, 5, 2049, 65504]
+    @test compiled_fptosi_f16(Int128, x) === trunc(Int128, x)
+    @test compiled_fptosi_f16(Int128, -x) === trunc(Int128, -x) broken=(fptosi_f16_i128_broken && x >= 1)
+    @test compiled_fptoui_f16(UInt128, x) === trunc(UInt128, x)
 end
 @static if Sys.ARCH === :x86_64 || Sys.ARCH === :i686
     script = """
@@ -1108,4 +1136,10 @@ primitive type UIntN256 <: Unsigned 256 end
     end
     @test !runtime_cpu_supports(Symbol(""))
     @test !runtime_cpu_supports(Symbol("sse2,not_a_real_feature"))
+    # Code for any target must use the runtime's hard-float calling convention (lp64d)
+    @static if Sys.ARCH === :riscv64
+        for cpu in ("generic", "generic-rv64")
+            @test :d in CPUID._cpu_model_features(cpu)
+        end
+    end
 end

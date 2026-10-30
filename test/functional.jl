@@ -44,6 +44,7 @@ end
 # TODO: @test_throws isequal(filter(x->x+1, [0 1 2 3 2 1 0]), [2, 3, 2])
 @test isequal(filter(x->(x>10), [0 1 2 3 2 1 0]), [])
 @test isequal(filter((ss)->length(ss)==3, ["abcd", "efg", "hij", "klmn", "opq"]), ["efg", "hij", "opq"])
+@test filter(x -> x == 1, view(Any[1 2; 3 4], 1:0, 1:2)) == Any[]
 
 # numbers
 @test size(collect(1)) == size(1)

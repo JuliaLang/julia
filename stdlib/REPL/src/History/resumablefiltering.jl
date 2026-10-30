@@ -10,7 +10,7 @@ struct ConditionSet{S}
     modes::Vector{SubString{S}}
 end
 
-ConditionSet{S}() where {S} = ConditionSet{S}([], [], [], [], [], [], [])
+ConditionSet{S}() where {S} = ConditionSet{S}(ntuple(_ -> SubString{S}[], 7)...)
 
 """
     FILTER_SEPARATOR
@@ -219,10 +219,10 @@ struct FilterSpec
     modes::Vector{Symbol}
 end
 
-FilterSpec() = FilterSpec([], [], [], [])
+FilterSpec() = FilterSpec(String[], String[], Regex[], Symbol[])
 
 function FilterSpec(cset::ConditionSet)
-    spec = FilterSpec([], [], [], [])
+    spec = FilterSpec()
     for term in cset.exacts
         push!(spec.exacts, String(term))
     end

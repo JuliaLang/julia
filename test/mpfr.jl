@@ -18,6 +18,13 @@ import Base.MPFR
         @test precision(x) == 10
         @test x == big"1.1015625"
     end
+    # embedded NUL must not throw from the Cstring conversion
+    @test tryparse(BigFloat, "1\0") === nothing
+    # out-of-range bases must throw instead of tripping an MPFR assertion
+    for b in (-2, 1, 63)
+        @test_throws ArgumentError tryparse(BigFloat, "1"; base=b)
+        @test_throws ArgumentError parse(BigFloat, "1"; base=b)
+    end
 
     @test typeof(BigFloat(typemax(Int8))) == BigFloat
     @test typeof(BigFloat(typemax(Int16))) == BigFloat
@@ -500,6 +507,13 @@ Base.setprecision(::Type{DeprecatedSetprecType}, p::Integer) = (_deprec_setprec[
 @testset "deprecated setprecision(f, ::Type, prec) fallback" begin
     @test_deprecated setprecision(() -> precision(DeprecatedSetprecType), DeprecatedSetprecType, 5)
     @test _deprec_setprec[] == 10   # precision was restored afterwards
+end
+@testset "setprecision(f, Union{}, prec) throws MethodError" begin
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    f = () -> 1
+    @test_throws MethodError(setprecision, (f, Union{}, 5)) setprecision(f, Union{}, 5)
+    @test_throws MethodError(setprecision, (f, Union{}, 5)) setprecision(f, Union{}, 5; base = 10)
+    @test which(setprecision, (typeof(f), Type{Union{}}, Int)).sig == Tuple{typeof(setprecision), Any, Type{Union{}}, Vararg}
 end
 @testset "isinteger" begin
     @test !isinteger(BigFloat(1.2))

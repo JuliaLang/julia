@@ -77,6 +77,7 @@ signed(::Type{UInt32}) = Int32
 signed(::Type{UInt64}) = Int64
 signed(::Type{UInt128}) = Int128
 signed(::Type{T}) where {T<:Signed} = T
+signed(::Type{Union{}}, slurp...) = throw(MethodError(signed, (Union{}, slurp...)))
 
 ## integer comparisons ##
 
@@ -331,12 +332,11 @@ function mod(x::T, y::T) where T<:Integer
     y == -1 && return T(0)   # avoid potential overflow in fld
     return x - fld(x, y) * y
 end
-# For fixed-width integers the subtraction and product above wrap on valid
-# inputs (`fld(x, y)*y` lies in `(x - y, x + y]`, e.g. `mod(typemin(Int), 3)`)
-# and the result is correct only through the double wrap-cancellation.
+# Correcting the truncated remainder is cheaper than `x - fld(x, y) * y`, and cannot overflow:
+# the correction only applies when `r` and `y` have opposite signs.
 function mod(x::T, y::T) where T<:BitSigned
-    y == -1 && return T(0)   # avoid potential overflow in fld
-    return x -% fld(x, y) *% y
+    r = rem(x, y)
+    return r + ifelse(signbit(r ⊻ y) & (r != 0), y, zero(T))
 end
 function mod(x::BitSigned, y::Unsigned)
     remval = rem(x, y) # correct iff  remval>=0
@@ -701,6 +701,7 @@ mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
 mod(x, ::Type{Union{}}, slurp...) = throw(MethodError(mod, (x, Union{}, slurp...)))
 
 unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
+unsafe_trunc(::Type{Union{}}, slurp...) = throw(MethodError(unsafe_trunc, (Union{}, slurp...)))
 
 ## integer construction ##
 

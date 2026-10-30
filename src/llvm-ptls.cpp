@@ -37,7 +37,8 @@ namespace {
 
 struct LowerPTLS {
     LowerPTLS(Module &M, bool imaging_mode = false, bool tls_getters = false)
-        : imaging_mode(imaging_mode), tls_getters(tls_getters), M(&M), TargetTriple(M.getTargetTriple())
+        : imaging_mode(imaging_mode), tls_getters(tls_getters), M(&M), TargetTriple(M.getTargetTriple()),
+          inline_tls(TargetTriple.isOSDarwin() ? TargetTriple.isAArch64() : (bool)jl_tls_elf_support)
     {}
 
     bool run(bool *CFGModified);
@@ -46,6 +47,8 @@ private:
     const bool tls_getters;
     Module *M;
     Triple TargetTriple;
+    // whether `emit_pgcstack_tp` can read the frame-stack slot for this target
+    const bool inline_tls;
     MDNode *tbaa_const{nullptr};
     MDNode *tbaa_gcframe{nullptr};
     FunctionType *FT_pgcstack_getter{nullptr};
@@ -106,7 +109,10 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
         // (need to generate one or two `add` with shift) so let llvm emit
         // the add for now.
         const char *asm_str;
-        if (TargetTriple.isAArch64()) {
+        if (TargetTriple.isAArch64() && TargetTriple.isOSDarwin()) {
+            // the slot is in the pthread key array; see `JL_TLS_LOAD_ASM`
+            asm_str = "mrs $0, tpidrro_el0\n\tand $0, $0, #-8";
+        } else if (TargetTriple.isAArch64()) {
             asm_str = "mrs $0, tpidr_el0";
         } else if (TargetTriple.isARM()) {
             asm_str = "mrc p15, 0, $0, c13, c0, 3";
@@ -211,15 +217,16 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
 
     if (imaging_mode) {
         IRBuilder<> builder(pgcstack);
-        if (jl_tls_elf_support) {
-            // if (offset != 0)
+        if (inline_tls) {
+            // if (offset != -1)
             //     pgcstack = tp + offset; // fast
             // else
             //     pgcstack = getter();    // slow
+            // (0 is a valid offset: on RISC-V the executable's TLS block starts at tp.)
             auto offset = builder.CreateLoad(T_size, pgcstack_offset);
             offset->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
             offset->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), {}));
-            auto cmp = builder.CreateICmpNE(offset, Constant::getNullValue(offset->getType()));
+            auto cmp = builder.CreateICmpNE(offset, Constant::getAllOnesValue(offset->getType()));
             MDBuilder MDB(pgcstack->getContext());
             SmallVector<uint32_t, 2> Weights{9, 1};
             TerminatorInst *fastTerm;
@@ -269,7 +276,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         }
         set_pgcstack_attrs(pgcstack);
     }
-    else if (!tls_getters && jl_tls_offset != -1) {
+    else if (!tls_getters && jl_tls_offset != -1 && inline_tls) {
         pgcstack->replaceAllUsesWith(emit_pgcstack_tp(nullptr, pgcstack));
         pgcstack->eraseFromParent();
     }
@@ -304,7 +311,7 @@ bool LowerPTLS::run(bool *CFGModified)
             if (imaging_mode) {
                 pgcstack_func_slot = create_hidden_global(T_pgcstack_getter, "jl_pgcstack_func_slot");
                 pgcstack_key_slot = create_hidden_global(T_size, "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)
-                // n.b. not named `jl_tls_offset`, to avoid clashing with the libjulia-internal
+                // n.b. not named `jl_tls_offset`, to avoid clashing with the libjulia
                 // variable of that name when the image is linked statically with the runtime
                 pgcstack_offset = create_hidden_global(T_size, "jl_image_tls_offset");
             }

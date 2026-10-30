@@ -31,6 +31,45 @@ end
 # are not actually materialized as call instructions.
 strip_debug_calls(ir) = replace(ir, r"call void @llvm\.dbg\.declare.*\n" => "", r"call void @llvm\.dbg\.value.*\n" => "")
 
+# Inline debug scopes follow CodegenParams, whose default retains them even
+# when Julia's internal codegen parameters disable them for image generation.
+@inline inner_scope(x) = x + 1
+outer_scope(x) = inner_scope(x)
+@testset "Inline debug scopes" begin
+    @test Base.CodegenParams().debug_info_inline_scopes == 1
+    for scopes in (false, true)
+        params = Base.CodegenParams(debug_info_level=Cint(1), debug_info_inline_scopes=scopes)
+        ir = sprint(io -> code_llvm(io, outer_scope, (Int,); raw=true,
+                                   dump_module=true, optimize=false, params))
+        @test occursin("inlinedAt:", ir) == scopes
+    end
+
+    # IR consumers retain inline scopes during precompilation, independently of
+    # Julia's internal parameters for generating the package image.
+    mktempdir() do dir
+        write(joinpath(dir, "InlineScopesDefault.jl"), """
+            module InlineScopesDefault
+            using InteractiveUtils
+            const scopes = Base.CodegenParams().debug_info_inline_scopes
+            const internal_scopes = unsafe_load(
+                cglobal(:jl_default_cgparams, Base.CodegenParams)).debug_info_inline_scopes
+            @inline inner_scope(x) = x + 1
+            outer_scope(x) = inner_scope(x)
+            const has_inline_scopes = occursin("inlinedAt:", sprint(io ->
+                code_llvm(io, outer_scope, (Int,); raw=true, dump_module=true, optimize=false,
+                          params=Base.CodegenParams(debug_info_level=Cint(1)))))
+            end
+            """)
+        cmd = `$(Base.julia_cmd()) --startup-file=no --compiled-modules=yes --pkgimages=yes
+               -e 'using InlineScopesDefault; print((InlineScopesDefault.scopes,
+                   InlineScopesDefault.internal_scopes, InlineScopesDefault.has_inline_scopes))'`
+        sep = Sys.iswindows() ? ";" : ":"
+        env = ("JULIA_DEPOT_PATH" => dir * sep, "JULIA_LOAD_PATH" => dir * sep * "@stdlib")
+        asserts = ccall(:jl_is_assertsbuild, Int8, ()) != 0
+        @test readchomp(addenv(cmd, env...)) == string((1, Int(asserts), true))
+    end
+end
+
 if !is_debug_build && opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
     @test !occursin(" call ", strip_debug_calls(get_llvm(identity, Tuple{String})))
@@ -672,6 +711,20 @@ end
     end
     @test f6(true)
     @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f6, Tuple{Bool}, true, false, false))
+
+    # nor do pointer-free values, whether in a stack slot or passed by reference
+    function f7(r)
+        val = r[]
+        GC.@preserve val begin end
+        return val
+    end
+    @test f7(Ref(1+2im)) == 1+2im
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f7, Tuple{Base.RefValue{Complex{Int}}}, true, false, false))
+    function f8(val)
+        GC.@preserve val begin end
+        return val
+    end
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f8, Tuple{Some{Int}}, true, false, false))
 end
 
 # issue #32843
@@ -1213,6 +1266,20 @@ let io = IOBuffer()
     @test occursin("julia.field_write_barrier", str)
 end
 
+# No write barrier on an object allocated since the last safepoint
+mutable struct FreshBarrierBox
+    x::Any
+end
+fresh_barrier(y) = (b = FreshBarrierBox(nothing); b.x = y; b)
+aged_barrier(y) = (b = FreshBarrierBox(nothing); GC.safepoint(); b.x = y; b)
+if opt_level > 0
+    @test !occursin("queue_root", get_llvm(fresh_barrier, Tuple{Any}))
+    # MMTk lowers write barriers without `jl_gc_queue_root`
+    @static if Base.USING_STOCK_GC
+        @test occursin("queue_root", get_llvm(aged_barrier, Tuple{Any}))
+    end
+end
+
 # Aggregate barriers identify the stored payload's references, including locked elements.
 struct FieldBarrierElement
     tag::Int
@@ -1293,6 +1360,81 @@ function union_phi_inline_roots(x::Bool)
     end
 end
 @test union_phi_inline_roots(true) === ("Q8", 1)
+
+# issue #64090
+function filter_singleton_types(t)
+    out = Any[]
+    for x in Iterators.filter(x -> x isa Val, t)
+        push!(out, typeof(x))
+    end
+    out
+end
+function narrow_union_with_bits_member(t, i, j, k::Int, c::Bool)
+    x = c ? t[i] : t[j]
+    y = x isa Tuple ? k : x
+    typeof(y)
+end
+function narrow_union_in_try_slot(t, i)
+    local x
+    try
+        x = t[i]
+        error("jump")
+    catch
+    end
+    y = x isa Val ? x : Val(:c)
+    typeof(y)
+end
+struct NumberSetting
+    value::Number
+end
+lookup_setting(s::NumberSetting, key::Symbol) =
+    key === :value ? s.value : key === :none ? nothing : (key, :alias)
+function last_int_setting(s, keys)
+    last = nothing
+    try
+        for key in keys
+            key === :stop && error("stop")
+            v = lookup_setting(s, key)
+            v isa Union{Nothing,Int} || continue
+            last = v
+        end
+    catch
+    end
+    last
+end
+function last_simple_setting(s, key)
+    result = 0
+    try
+        v = lookup_setting(s, key)
+        if v isa Union{Nothing,Int,Tuple{Symbol,Symbol}}
+            result = v
+        end
+        error("jump")
+    catch
+    end
+    result
+end
+@testset "#64090" begin
+    @test filter_singleton_types((Val(:b), Val(:a), (:x, :y))) == [Val{:b}, Val{:a}]
+    @test collect(Iterators.filter(x -> x isa Val, (Val(:b), Val(:a), (:x, :y)))) == [Val(:b), Val(:a)]
+
+    t = (nothing, missing, (:x, :y))
+    @test narrow_union_with_bits_member(t, 1, 1, 5, true) === Nothing
+    @test narrow_union_with_bits_member(t, 2, 2, 5, false) === Missing
+    @test narrow_union_with_bits_member(t, 3, 3, 5, true) === Int
+
+    t = (Val(:b), Val(:a), (:x, :y))
+    @test narrow_union_in_try_slot(t, 1) === Val{:b}
+    @test narrow_union_in_try_slot(t, 2) === Val{:a}
+    @test narrow_union_in_try_slot(t, 3) === Val{:c}
+
+    s = NumberSetting(12345)
+    @test last_int_setting(s, (:value, :pair, :stop)) === 12345
+    @test last_int_setting(s, (:none, :stop)) === nothing
+    @test last_simple_setting(s, :value) === 12345
+    @test last_simple_setting(s, :none) === nothing
+    @test last_simple_setting(s, :pair) === (:pair, :alias)
+end
 
 mutable struct AnyBoxEA val::Any end
 function preserve_any_ea(x)
@@ -1384,4 +1526,13 @@ const const_svec_ref = Core.svec(1, "a", :b)
     @test const_svec_ref_test(3) === :b
     @test_throws BoundsError(const_svec_ref, 0) const_svec_ref_test(0)
     @test_throws BoundsError(const_svec_ref, 4) const_svec_ref_test(4)
+end
+
+# LLVM can merge allocations of arrays whose element types differ in whether they need zeroing
+memory_zeroinit_merge(row, names) = collect(getfield(row, nm) for nm in names)
+@testset "merged Memory allocations" begin
+    row = (a=1, b=4.0, c="7")
+    @test memory_zeroinit_merge(row, (:c, :a, :b)) == ["7", 1, 4.0]
+    @test memory_zeroinit_merge(row, (:a, :b, :c)) == [1, 4.0, "7"]
+    @test memory_zeroinit_merge(row, (:b, :b, :b)) == [4.0, 4.0, 4.0]
 end

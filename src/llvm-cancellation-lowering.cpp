@@ -111,6 +111,17 @@ struct CancellationLowering : public JuliaPassContext {
     bool runOnFunction(Function &F);
 
 private:
+    // Allocations that FinalLowerGC lowers to a reset-safe entry point. A Memory allocation
+    // only qualifies if its size is known to fit inline; otherwise it becomes a call to
+    // `jl_alloc_genericmemory_unchecked`, which is not reset-safe.
+    bool isResetSafeAlloc(CallInst *CI) const {
+        Value *Callee = CI->getCalledOperand();
+        return (alloc_obj_func && Callee == alloc_obj_func) || getInlineMemorySize(CI);
+    }
+    bool isRuntimeMemoryAlloc(CallInst *CI) const {
+        return alloc_memory_func && CI->getCalledOperand() == alloc_memory_func && !getInlineMemorySize(CI);
+    }
+
     // Compute reset_ctx_ptr once in entry block
     // If insertAfter is provided, insert after that instruction
     // Otherwise insert at the beginning of the entry block (after allocas)
@@ -344,7 +355,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
         // the unpublish by any later pass.
         Value *null_ptr0 = ConstantPointerNull::get(cast<PointerType>(PtrTy));
         StoreInst *unpub = Builder.CreateAlignedStore(null_ptr0, reset_ctx_ptr, Align(sizeof(void*)), /*isVolatile*/true);
-        unpub->setOrdering(AtomicOrdering::Release);
+        unpub->setOrdering(AtomicOrdering::Monotonic);
         setResetSafeMetadata(unpub);
         Builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SyncScope::SingleThread);
 
@@ -545,7 +556,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
                 // when it is implicitly-inserted runtime machinery (the tag
                 // describes the source statement's IPO contract, not the
                 // runtime frames implementing it).
-                if (!hasResetSafeMetadata(CI) || isImplicitRuntimeCall(CI)) {
+                if (!hasResetSafeMetadata(CI) || isImplicitRuntimeCall(CI) || isRuntimeMemoryAlloc(CI)) {
                     // Also skip intrinsic calls that are known safe
                     Function *Callee = CI->getCalledFunction();
                     if (Callee && Callee->isIntrinsic()) {
@@ -579,7 +590,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
                     // unpublish the region around the operation and
                     // republish it on the way out (so the region even
                     // survives the operation).
-                    if (Callee && (Callee == alloc_obj_func || isWriteBarrierFunc(Callee)))
+                    if (isResetSafeAlloc(CI) || isWriteBarrierFunc(Callee))
                         continue;
                     UnsafePoints.push_back(CI);
                 }
@@ -610,7 +621,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
 
         Value *null_ptr = ConstantPointerNull::get(cast<PointerType>(PtrTy));
         StoreInst *store = Builder.CreateAlignedStore(null_ptr, reset_ctx_ptr, Align(sizeof(void*)), /*isVolatile*/true);
-        store->setOrdering(AtomicOrdering::Release);
+        store->setOrdering(AtomicOrdering::Monotonic);
         setResetSafeMetadata(store);
         Builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SyncScope::SingleThread);
     }
@@ -654,7 +665,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
                 InsertPt = MTC;
             IRBuilder<> Builder(InsertPt);
             StoreInst *store = Builder.CreateAlignedStore(null_ptr, reset_ctx_ptr, Align(sizeof(void*)), /*isVolatile*/true);
-            store->setOrdering(AtomicOrdering::Release);
+            store->setOrdering(AtomicOrdering::Monotonic);
             setResetSafeMetadata(store);
             ++ResetCtxClearsInserted;
         }
@@ -683,7 +694,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
                 Function *Callee = CI->getCalledFunction();
                 if (!Callee)
                     continue;
-                if (region_open && (Callee == alloc_obj_func || isWriteBarrierFunc(Callee))) {
+                if (region_open && (isResetSafeAlloc(CI) || isWriteBarrierFunc(Callee))) {
                     CI->setMetadata("julia.reset_region", MDNode::get(F.getContext(), {}));
                     Changed = true;
                 }

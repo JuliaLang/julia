@@ -209,12 +209,7 @@ Core.DebugInfo(di::DebugInfoStream, nstmts::Int) =
         ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), di.firstline, di.codelocs, nstmts)::String)
 
 function getdebugidx(debuginfo::DebugInfo, pc::Int)
-    if debuginfo.linetable isa String
-        # drop provenance for compatibility
-        ((pc <= 0 ? -1 : source_location(debuginfo, pc).line), 0, 0)
-    else
-        ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo, pc)
-    end
+    ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo, pc)
 end
 
 function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
@@ -1844,7 +1839,7 @@ function may_replace_phi(values::Vector{Any}, phi_bb::BasicBlock, idx::Int)
     # unnecessary when DCE can remove those dead loops entirely, so this is
     # just to be safe.
     v = values[1]
-    before_def = isa(v, OldSSAValue) && idx < v.id
+    before_def = isa(v, OldSSAValue)
     return !before_def
 end
 

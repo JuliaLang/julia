@@ -1838,7 +1838,7 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
             jl_datatype_t *uw = typ->name == x->name ? y : typ; // substitution occurs here
             jl_value_t *wrapper = uw->name->wrapper;
             jl_datatype_t *w = (jl_datatype_t*)jl_unwrap_unionall(wrapper);
-            jl_svec_t *sv = jl_alloc_svec_uninit(jl_svec_len(uw->parameters));
+            jl_svec_t *sv = jl_alloc_svec(jl_svec_len(uw->parameters));
             JL_GC_PUSH1(&sv);
             jl_value_t **vals = jl_svec_data(sv);
             // no JL_GC_PUSHARGS(vals, ...) since GC is already aware of sv
@@ -1849,7 +1849,7 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
                 vals[i_firstnewparam] = firstnewparam;
             }
             for (size_t i = i_firstnewparam+1; i < nparams; i++) { // insert the remaining parameters
-                vals[i] = jl_substitute_datatype(jl_svecref(typ->parameters, i), x, y);
+                jl_svecset(sv, i, jl_substitute_datatype(jl_svecref(typ->parameters, i), x, y));
             }
             if (jl_is_tuple_type(wrapper)) {
                 // special case for tuples, since the wrapper (Tuple) does not have as
@@ -3678,13 +3678,13 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_methtable_type->super = jl_any_type;
     jl_methtable_type->parameters = jl_emptysvec;
     jl_methtable_type->name->n_uninitialized = 0;
-    jl_methtable_type->name->names = jl_perm_symsvec(5, "defs", "cache", "name", "module", "backedges");
-    const static uint32_t methtable_constfields[1] = { 0b01110 };
-    const static uint32_t methtable_atomicfields[1] = { 0b00001 };
+    jl_methtable_type->name->names = jl_perm_symsvec(6, "defs", "cache", "name", "module", "backedges", "contributors");
+    const static uint32_t methtable_constfields[1] = { 0b001110 };
+    const static uint32_t methtable_atomicfields[1] = { 0b100001 };
     jl_methtable_type->name->constfields = methtable_constfields;
     jl_methtable_type->name->atomicfields = methtable_atomicfields;
     jl_precompute_memoized_dt(jl_methtable_type, 1);
-    jl_methtable_type->types = jl_svec(5, jl_any_type, jl_methcache_type, jl_symbol_type, jl_any_type /*jl_module_type*/, jl_any_type);
+    jl_methtable_type->types = jl_svec(6, jl_any_type, jl_methcache_type, jl_symbol_type, jl_any_type /*jl_module_type*/, jl_any_type, jl_any_type);
 
     jl_symbol_type->name = jl_new_typename_in(jl_symbol("Symbol"), core, 0, 1);
     jl_symbol_type->name->wrapper = (jl_value_t*)jl_symbol_type;
@@ -4047,6 +4047,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_table->module = core;
     jl_atomic_store_relaxed(&jl_method_table->cache->leafcache, (jl_genericmemory_t*)jl_an_empty_memory_any);
     jl_method_table->backedges = (jl_genericmemory_t*)jl_an_empty_memory_any;
+    jl_atomic_store_relaxed(&jl_method_table->contributors, (jl_genericmemory_t*)jl_an_empty_memory_any);
     jl_atomic_store_relaxed(&core->bindingkeyset, (jl_genericmemory_t*)jl_an_empty_memory_any);
     // export own name, so "using Foo" makes "Foo" itself visible
     jl_set_initial_const(core, core->name, (jl_value_t*)core, 1);

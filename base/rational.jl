@@ -340,6 +340,7 @@ function rationalize(::Type{T}, x::Integer; kvs...) where {T<:Integer}
     end
     return Rational{T}(x)
 end
+rationalize(::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(rationalize, (Union{}, slurp...)))
 
 
 """
@@ -431,7 +432,7 @@ end
 
 function -(x::Rational, y::Rational)
     xp, _ = promote(x, y)::NTuple{2,Rational}
-    if isinf(x) && x == -y
+    if isinf(x) && isinf(y) && x != y
         return xp
     end
     xd, yd = divgcd(promote(x.den, y.den)...)
@@ -440,7 +441,7 @@ end
 
 function -%(x::Rational, y::Rational)
     xp, yp = promote(x, y)::NTuple{2,Rational}
-    if isinf(x) && x == -y
+    if isinf(x) && isinf(y) && x != y
         return xp
     end
     xd, yd = divgcd(promote(x.den, y.den)...)

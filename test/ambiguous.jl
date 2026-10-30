@@ -542,6 +542,8 @@ end
             (complex, (Union{},), Union{}),
             (real, (Union{},), Union{}),
             (float, (Union{},), Union{}),
+            (Base.hastypemax, (Union{},), false),
+            (isvalid, (Union{}, 0x41), false),
             (IndexStyle, (Union{},), IndexLinear()),
             (Base.BroadcastStyle, (Union{},), Base.Broadcast.Unknown()),
             (Base.OrderStyle, (Union{},), Base.Ordered()),
@@ -926,6 +928,43 @@ let ambig = Ref{Int32}(0)
     @test ms[4].method === which(ambig10, (Vararg{Number},))
 end
 
+# A pair of methods can be unordered where they overlap without contesting
+# anything inside a given query.
+module AmbigDisjointInQuery
+struct Q <: Number end
+f(a::T, b::T) where {T} = 1
+f(a::T, b::T) where {T<:Real} = 2
+f(a::Real, b::Real) = 3
+f(a, b::Q) = 4
+f(a::Q, b::Q) = 5 # resolves the pair where it does overlap
+end
+let ambig = Ref{Int32}(0), f = AmbigDisjointInQuery.f, Q = AmbigDisjointInQuery.Q
+    @test !Base.morespecific(which(f, (Any, Q)), which(f, (String, String)))
+    @test !Base.morespecific(which(f, (String, String)), which(f, (Any, Q)))
+    ms = Base._methods_by_ftype(Tuple{typeof(f), Int, Any}, nothing, -1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test length(ms) == 3
+    @test ambig[] == 0
+    @test f(1, Q()) == 4
+    @test f(1, 1) == 2
+    @test f(Q(), Q()) == 5
+end
+
+# The same holds when only the signatures, and not the match regions, show the
+# pair to be disjoint.
+module AmbigDiagInQuery
+abstract type A end
+g(::Type{Union{}}, x...) = 0
+g(::Type{T}, x::T) where {T} = 1
+g(::Type{T}, x) where {T<:A} = 2
+end
+let ambig = Ref{Int32}(0), g = AmbigDiagInQuery.g
+    m1, m2 = which(g, (Type{Int}, Int)), which(g, (Type{AmbigDiagInQuery.A}, Int))
+    @test !Base.morespecific(m1, m2) && !Base.morespecific(m2, m1)
+    ms = Base._methods_by_ftype(Tuple{typeof(g), Type{<:Function}, Function}, nothing, -1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test length(ms) == 2
+    @test ambig[] == 0
+end
+
 # issue #62262: an ambiguity can be resolved by the union of several more
 # specific methods, without any single method covering the intersection
 module Ambig62262
@@ -1172,7 +1211,7 @@ let verify_call = Base.Compiler.ReinferUtils.verify_call,
     sig = Tuple{typeof(f), Union{Int,Char}, Vararg{Union{Int,String}}},
     expecteds = Core.svec(mE2, mC, mD)
     # the unchanged recorded state revalidates
-    let (minw, maxw) = verify_call(sig, expecteds, 1, 3, Base.get_world_counter(), true, #=possibly_ambiguous=#false, Base.Compiler.ReinferUtils.VerifyMethodWorkspace())
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 3, Base.get_world_counter(), true, #=possibly_ambiguous=#false, Base.Compiler.ReinferUtils.VerifyMethodWorkspace(), #=image=#typemax(UInt))
         @test maxw == typemax(UInt)
     end
     # A newcomer that strictly beats an expected method but is resolved by the
@@ -1183,7 +1222,7 @@ let verify_call = Base.Compiler.ReinferUtils.verify_call,
     mN = which(f, Tuple{Integer, Vararg{String}})
     @test Base.morespecific(mC, mN) && Base.morespecific(mN, mE2)
     @test isempty(mC.interferences) && typeintersect(sig, mN.sig) <: mC.sig
-    let (minw, maxw) = verify_call(sig, expecteds, 1, 3, Base.get_world_counter(), true, #=possibly_ambiguous=#false, Base.Compiler.ReinferUtils.VerifyMethodWorkspace())
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 3, Base.get_world_counter(), true, #=possibly_ambiguous=#false, Base.Compiler.ReinferUtils.VerifyMethodWorkspace(), #=image=#typemax(UInt))
         @test maxw == typemax(UInt)
     end
 end
@@ -1227,7 +1266,7 @@ let verify_call = Base.Compiler.ReinferUtils.verify_call,
                                     Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
         @test length(ms) == 4 && ambig[] == 1
     end
-    let (minw, maxw) = verify_call(sig, expecteds, 1, 3, Base.get_world_counter(), true, #=possibly_ambiguous=#false, Base.Compiler.ReinferUtils.VerifyMethodWorkspace())
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 3, Base.get_world_counter(), true, #=possibly_ambiguous=#false, Base.Compiler.ReinferUtils.VerifyMethodWorkspace(), #=image=#typemax(UInt))
         @test maxw == 0
     end
 end
@@ -1245,7 +1284,7 @@ let verify_call = Base.Compiler.ReinferUtils.verify_call,
     mS = which(g, Tuple{Integer, Any}),
     sig = Tuple{typeof(g), Int, Any},
     expecteds = Core.svec(mS)
-    let (minw, maxw) = verify_call(sig, expecteds, 1, 1, Base.get_world_counter(), true, #=possibly_ambiguous=#false, Base.Compiler.ReinferUtils.VerifyMethodWorkspace())
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 1, Base.get_world_counter(), true, #=possibly_ambiguous=#false, Base.Compiler.ReinferUtils.VerifyMethodWorkspace(), #=image=#typemax(UInt))
         @test maxw == typemax(UInt)
     end
     VerifyCallAmbig.eval(:(g(x, y::String) = 2))
@@ -1256,7 +1295,7 @@ let verify_call = Base.Compiler.ReinferUtils.verify_call,
                                     Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
         @test length(ms) == 1 && (ms[1]::Core.MethodMatch).method === mS && ambig[] == 1
     end
-    let (minw, maxw) = verify_call(sig, expecteds, 1, 1, Base.get_world_counter(), true, #=possibly_ambiguous=#false, Base.Compiler.ReinferUtils.VerifyMethodWorkspace())
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 1, Base.get_world_counter(), true, #=possibly_ambiguous=#false, Base.Compiler.ReinferUtils.VerifyMethodWorkspace(), #=image=#typemax(UInt))
         @test maxw == 0
     end
 end
@@ -1284,7 +1323,7 @@ let verify_call = Base.Compiler.ReinferUtils.verify_call,
     sig = Tuple{typeof(q), Type{T}} where T<:VerifyCallSlurp.QA,
     expecteds = Core.svec(mS, mA)
     # the unchanged recorded state revalidates
-    let (minw, maxw) = verify_call(sig, expecteds, 1, 2, Base.get_world_counter(), true, #=possibly_ambiguous=#false, Base.Compiler.ReinferUtils.VerifyMethodWorkspace())
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 2, Base.get_world_counter(), true, #=possibly_ambiguous=#false, Base.Compiler.ReinferUtils.VerifyMethodWorkspace(), #=image=#typemax(UInt))
         @test maxw == typemax(UInt)
     end
     VerifyCallSlurp.eval(:(q(::Type{<:QB}) = 2))
@@ -1299,7 +1338,7 @@ let verify_call = Base.Compiler.ReinferUtils.verify_call,
                                     Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
         @test length(ms) == 2 && ambig[] == 0
     end
-    let (minw, maxw) = verify_call(sig, expecteds, 1, 2, Base.get_world_counter(), true, #=possibly_ambiguous=#false, Base.Compiler.ReinferUtils.VerifyMethodWorkspace())
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 2, Base.get_world_counter(), true, #=possibly_ambiguous=#false, Base.Compiler.ReinferUtils.VerifyMethodWorkspace(), #=image=#typemax(UInt))
         @test maxw == typemax(UInt)
     end
     # the fallback would also revalidate this edge (the pruned match set is
@@ -1319,7 +1358,7 @@ let verify_call = Base.Compiler.ReinferUtils.verify_call,
     uA = which(u, Tuple{Type{VerifyCallSlurp.UA}}),
     sig = Tuple{typeof(u), Type{T}} where T<:VerifyCallSlurp.UA,
     expecteds = Core.svec(uA)
-    let (minw, maxw) = verify_call(sig, expecteds, 1, 1, Base.get_world_counter(), true, #=possibly_ambiguous=#false, Base.Compiler.ReinferUtils.VerifyMethodWorkspace())
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 1, Base.get_world_counter(), true, #=possibly_ambiguous=#false, Base.Compiler.ReinferUtils.VerifyMethodWorkspace(), #=image=#typemax(UInt))
         @test maxw == typemax(UInt)
     end
     VerifyCallSlurp.eval(:(u(::Type{<:UB}) = 2))
@@ -1328,11 +1367,11 @@ let verify_call = Base.Compiler.ReinferUtils.verify_call,
                                     Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
         @test length(ms) == 1 && ambig[] == 1
     end
-    let (minw, maxw) = verify_call(sig, expecteds, 1, 1, Base.get_world_counter(), true, #=possibly_ambiguous=#false, Base.Compiler.ReinferUtils.VerifyMethodWorkspace())
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 1, Base.get_world_counter(), true, #=possibly_ambiguous=#false, Base.Compiler.ReinferUtils.VerifyMethodWorkspace(), #=image=#typemax(UInt))
         @test maxw == 0
     end
     # an edge recorded as possibly ambiguous already accounts for the ambiguity
-    let (minw, maxw) = verify_call(sig, expecteds, 1, 1, Base.get_world_counter(), true, #=possibly_ambiguous=#true, Base.Compiler.ReinferUtils.VerifyMethodWorkspace())
+    let (minw, maxw) = verify_call(sig, expecteds, 1, 1, Base.get_world_counter(), true, #=possibly_ambiguous=#true, Base.Compiler.ReinferUtils.VerifyMethodWorkspace(), #=image=#typemax(UInt))
         @test maxw == typemax(UInt)
     end
 end

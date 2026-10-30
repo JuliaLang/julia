@@ -7,7 +7,7 @@
 #-------------------------------------------------------------------------------
 # Functions/types used by code emitted from lowering, but not called by it directly
 
-@inline function _invoke_in_world(w::UInt, f::F, @nospecialize(args...)) where {F}
+@inline function _invoke_in_world(w::UInt, @nospecialize(f), @nospecialize(args...))
     if ccall(:jl_is_in_pure_context, Int8, ()) != 0
         # Similar to `Base.invoke_in_world` but also works inside generated-function
         # expansion (see `jl_code_for_staged`)
@@ -25,37 +25,6 @@ const _lowering_world = Ref{UInt}(0)
         w == 0 || return _invoke_in_world(w, f, args...)
     end
     return invokelatest(f, args...)
-end
-
-function __interpolate_expr(@nospecialize(ex), depth, @nospecialize(vals::Tuple), val_i)
-    if ex isa QuoteNode
-        out = __interpolate_expr(Expr(:inert, ex.value), depth, vals, val_i)
-        QuoteNode(only(out.args))
-    elseif !(ex isa Expr)
-        ex
-    else
-        inner_depth = ex.head == :quote ? depth + 1 :
-            ex.head == :$ ? depth - 1 : depth
-        cs_out = Any[]
-        for e in ex.args
-            if e isa Expr && e.head == :$ && inner_depth == 0
-                tup = vals[val_i[] += 1]::Tuple
-                for v in tup
-                    push!(cs_out, v)
-                end
-            else
-                push!(cs_out, __interpolate_expr(e, inner_depth, vals, val_i))
-            end
-        end
-        Expr(ex.head, cs_out...)
-    end
-end
-function _interpolate_expr(@nospecialize(ex), @nospecialize(values::Tuple))
-    @jl_assert !Meta.isexpr(ex, :$) (expr_to_est(ex), "expand_quote should handle this")
-    __interpolate_expr(ex, 0, values, Ref(0))
-end
-@noinline function interpolate_expr(@nospecialize(ex), @nospecialize(values...))
-    return _interpolate_expr(ex, values)
 end
 
 function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
@@ -95,19 +64,22 @@ end
 #--------------------------------------------------
 # Functions called by closure conversion
 function eval_closure_type(mod::Module, closure_type_name::Symbol,
-                           capt_sp, field_names, field_is_box)
+                           capt_sp, field_names, field_is_box,
+                           field_is_nospec=nothing)
     type_params = Core.TypeVar[]
     field_types = []
     for name in capt_sp
         push!(type_params, Core.TypeVar(name))
     end
-    for (name, isbox) in zip(field_names, field_is_box)
-        if !isbox
+    for (i, (name, isbox)) in enumerate(zip(field_names, field_is_box))
+        if isbox
+            push!(field_types, Core.Box)
+        elseif !isnothing(field_is_nospec) && field_is_nospec[i]
+            push!(field_types, Any)
+        else
             T = Core.TypeVar(Symbol(name, "_type"))
             push!(type_params, T)
             push!(field_types, T)
-        else
-            push!(field_types, Core.Box)
         end
     end
     type = Core._structtype(mod, closure_type_name,
@@ -293,9 +265,12 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     # Note that we expand in `tls_world_age()` (see Core.GeneratedFunctionStub)
     world = Base.tls_world_age()
 
-    # Lower the generated code in the lowering world
-    return invoke_in_lowering_world(_lower_generated_code, g, source, sc,
-                                   __module__, world, ex0)
+    return try
+        invoke_in_lowering_world(_lower_generated_code, g, source, sc,
+                                 __module__, world, ex0)
+    catch exc
+        rethrow(to_compatible_exception(exc))
+    end
 end
 
 function _lower_generated_code(g::GeneratedFunctionStub, source::Method,

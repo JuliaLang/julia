@@ -253,6 +253,7 @@ end
         versioninfo(buf, verbose=true)
         ver = read(buf, String)
         @test startswith(ver, "Julia Version $VERSION")
+        @test startswith(ver, "Julia Version $(Base.version_with_build_variant())\n")
         @test occursin("Environment:", ver)
 
         let exename = `$(Base.julia_cmd()) --startup-file=no`,

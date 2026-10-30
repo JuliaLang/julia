@@ -156,8 +156,6 @@ histsearch(args...) = runsearch(args...)
 
 include("Pkg_beforeload.jl")
 
-@nospecialize # use only declared type signatures
-
 answer_color(::AbstractREPL) = ""
 
 const JULIA_PROMPT = "julia> "
@@ -209,7 +207,7 @@ end
 function _softscope(s::Syntax)
     h = head(s)
     if h === :toplevel
-        @mknode(s; children=map(_softscope, children(s)))
+        @mknode(s; children=Syntax[_softscope(c) for c in children(s)])
     elseif h in (:module, :error, :incomplete, :thunk)
         s
     else
@@ -275,7 +273,7 @@ function add_locals!(locals, ast::Symbol)
     return nothing
 end
 
-function collect_names_to_warn!(warnings, locals, current_module::Module, ast)
+function collect_names_to_warn!(warnings, locals, current_module::Module, @nospecialize ast)
     ast isa Expr || return
 
     # don't recurse through module definitions
@@ -619,7 +617,7 @@ struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
     repl::Repl
 end
 
-function show_limited(io::IO, mime::MIME, x)
+function show_limited(io::IO, mime::MIME, @nospecialize x)
     try
         # We wrap in a LimitIO to limit the amount of printing.
         # We unpack `IOContext`s, since we will pass the properties on the outside.
@@ -633,7 +631,7 @@ function show_limited(io::IO, mime::MIME, x)
     end
 end
 
-function display(d::REPLDisplay, mime::MIME"text/plain", x)
+function display(d::REPLDisplay, mime::MIME"text/plain", @nospecialize x)
     x = Ref{Any}(x)
     with_repl_linfo(d.repl) do io
         io = IOContext(io, :limit => true, :module => Base.active_module(d)::Module)
@@ -655,9 +653,9 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
     return nothing
 end
 
-display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
+display(d::REPLDisplay, @nospecialize x) = display(d, MIME("text/plain"), x)
 
-show_repl(io::IO, mime::MIME"text/plain", x) = show(io, mime, x)
+show_repl(io::IO, mime::MIME"text/plain", @nospecialize x) = show(io, mime, x)
 
 function show_repl(io::IO, mime::MIME"text/plain", c::AbstractChar)
     show(io, mime, c) # Call the original Base.show
@@ -673,7 +671,7 @@ show_repl(io::IO, ::MIME"text/plain", ex::Expr) =
     print(io, JuliaSyntaxHighlighting.highlight(
         sprint(show, ex, context=IOContext(io, :color => false))))
 
-function print_response(repl::AbstractREPL, response, show_value::Bool, have_color::Bool)
+function print_response(repl::AbstractREPL, @nospecialize(response), show_value::Bool, have_color::Bool)
     repl.waserror = response[2]
     with_repl_linfo(repl) do io
         io = IOContext(io, :module => Base.active_module(repl)::Module)
@@ -683,8 +681,8 @@ function print_response(repl::AbstractREPL, response, show_value::Bool, have_col
 end
 
 # N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
-__repl_entry_display(val) = Base.invokelatest(display, val)
-__repl_entry_display(specialdisplay::Union{AbstractDisplay,Nothing}, val) = Base.invokelatest(display, specialdisplay, val)
+__repl_entry_display(@nospecialize val) = Base.invokelatest(display, val)
+__repl_entry_display(specialdisplay::Union{AbstractDisplay,Nothing}, @nospecialize val) = Base.invokelatest(display, specialdisplay, val)
 
 function __repl_entry_display_error(errio::IO, @nospecialize errval)
     # this will be set to true if types in the stacktrace are truncated
@@ -698,7 +696,7 @@ function __repl_entry_display_error(errio::IO, @nospecialize errval)
     return nothing
 end
 
-function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothing}, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
+function print_response(errio::IO, @nospecialize(response), backend::Union{REPLBackendRef,Nothing}, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
     Base.sigatomic_begin()
     val, iserr = response
     if !iserr
@@ -706,15 +704,15 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
         try
             if val !== nothing && show_value
                 Base.sigatomic_end() # allow display to be interrupted
-                val_to_show = val
+                val_to_show = Ref{Any}(val)
                 val2, iserr = if specialdisplay === nothing
                     # display calls may require being run on the main thread
                     call_on_backend(backend) do
-                        __repl_entry_display(val_to_show)
+                        __repl_entry_display(val_to_show[])
                     end
                 else
                     call_on_backend(backend) do
-                        __repl_entry_display(specialdisplay, val_to_show)
+                        __repl_entry_display(specialdisplay, val_to_show[])
                     end
                 end
                 Base.sigatomic_begin()
@@ -1255,9 +1253,12 @@ function return_callback(s)
     end
     buf = LineEdit.buffer(s)
     incomplete(takestring!(copy(buf))) && return false
-    # The input may only be complete thanks to automatically inserted closing brackets after
-    # the cursor, so continue on a new line if it isn't without them (e.g. `[|]`)
-    return !(LineEdit.only_auto_closed_after_cursor(s) && incomplete(LineEdit.before_cursor(buf)))
+    # Behave as if automatically inserted closing brackets after the cursor weren't there,
+    # i.e. continue on a new line if the input is incomplete without them (e.g. `[|]`)
+    n = sizeof(LineEdit.auto_closed_after_cursor(s))
+    n == 0 && return true
+    pos = position(buf)
+    return !incomplete(LineEdit.content(buf, 0 => pos) * LineEdit.content(buf, pos + n => buf.size))
 end
 
 find_hist_file() = get(ENV, "JULIA_HISTORY",
@@ -1268,7 +1269,7 @@ backend(r::AbstractREPL) = hasproperty(r, :backendref) && isdefined(r, :backendr
 
 
 # Keep request and response channels paired across asynchronous interrupts.
-function exchange_on_backend(backend::REPLBackendRef, request)
+function exchange_on_backend(backend::REPLBackendRef, @nospecialize request)
     # A response can be stale if an interrupt lands after enqueueing but before
     # `sent` is recorded.
     while isready(backend.response_channel)
@@ -1928,6 +1929,7 @@ function banner(io::IO = stdout; short = false)
         end
     end
 
+    version = Base.version_with_build_variant()
     commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
 
     if get(io, :color, false)::Bool
@@ -1941,7 +1943,7 @@ function banner(io::IO = stdout; short = false)
 
         if short
             print(io,"""
-              $(d3)o$(tx)  | Version $(VERSION)$(commit_date)
+              $(d3)o$(tx)  | Version $(version)$(commit_date)
              $(d2)o$(tx) $(d4)o$(tx) | $(commit_string)
             """)
         else
@@ -1950,7 +1952,7 @@ function banner(io::IO = stdout; short = false)
               $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
                $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
               $(jl)| | | | | | |/ _` |$(tx)  |
-              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
+              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(version)$(commit_date)
              $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
             $(jl)|__/$(tx)                   |
 
@@ -1959,7 +1961,7 @@ function banner(io::IO = stdout; short = false)
     else
         if short
             print(io,"""
-              o  |  Version $(VERSION)$(commit_date)
+              o  |  Version $(version)$(commit_date)
              o o |  $(commit_string)
             """)
         else
@@ -1969,7 +1971,7 @@ function banner(io::IO = stdout; short = false)
               (_)     | (_) (_)    |
                _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
               | | | | | | |/ _` |  |
-              | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
+              | | |_| | | | (_| |  |  Version $(version)$(commit_date)
              _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
             |__/                   |
 

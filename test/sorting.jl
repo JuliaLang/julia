@@ -137,7 +137,16 @@ end
             @test partialsortperm(a, i, rev=true) == (11 - i)
         end
     end
+    # descending ranges on inputs large enough to partition
+    w = [4, 5, 2, 1, 1, 4, 4, 4, 2, 4, 5, 5, 3, 3, 2, 2, 4, 5, 2, 2, 5, 5]
+    for r in (5:-1:3, 9:-2:3, 20:-1:1)
+        @test partialsort(w, r) == sort(w)[r]
+        @test w[partialsortperm(w, r)] == sort(w)[r]
+    end
     @test_throws ArgumentError partialsortperm!([1,2], [2,3,1], 1:2)
+    # index vector must hold all indices of v, regardless of eltype(k)
+    @test partialsortperm([300:-1:1;], Int8(3)) === 298
+    @test partialsortperm([300:-1:1;], UInt8(1):UInt8(2)) == [300, 299]
 end
 
 # exercise the codepath in searchsorted* methods for ranges that check for zero step range
@@ -322,6 +331,9 @@ end
         @test !issorted(b)
         @test !issorted(c, by=x->1/x)
         @test !issorted(d, rev=true)
+    end
+    let k = 30:-1:10
+        @test sort(a, alg=PartialQuickSort(k))[k] == sort(a)[k]
     end
 
     @test partialsort([3,6,30,1,9], 2, rev=true) == 9

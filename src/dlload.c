@@ -226,14 +226,17 @@ static JL_NO_SANITIZE dlopen_prototype resolve_dlopen(void) JL_CANCALLBACK
     if (jl_running_under_sanitizer(/*recheck*/0)) {
         static dlopen_prototype real_dlopen = NULL;
         if (!real_dlopen) {
-            real_dlopen = (dlopen_prototype)dlsym(RTLD_NEXT, "dlopen");
-            if (!real_dlopen)
+            dlopen_prototype fptr = (dlopen_prototype)dlsym(RTLD_NEXT, "dlopen");
+            if (!fptr)
                 return NULL;
-            void *libdl_handle = real_dlopen("libdl.so.2", RTLD_NOW | RTLD_NOLOAD);
-            assert(libdl_handle);
-            real_dlopen = (dlopen_prototype)dlsym(libdl_handle, "dlopen");
-            dlclose(libdl_handle);
-            assert(real_dlopen);
+            // Since glibc 2.34, dlopen lives in libc and libdl.so.2 may not be loaded
+            void *libdl_handle = fptr("libdl.so.2", RTLD_NOW | RTLD_NOLOAD);
+            if (libdl_handle) {
+                fptr = (dlopen_prototype)dlsym(libdl_handle, "dlopen");
+                dlclose(libdl_handle);
+                assert(fptr);
+            }
+            real_dlopen = fptr;
         }
         // The real interceptors check the validity of the string here, but let's
         // just skip that for the time being.

@@ -123,6 +123,16 @@ JL_DLLEXPORT int jl_objcache_kv_enabled_fallback(void)
     return 0;
 }
 
+JL_DLLEXPORT int64_t jl_objcache_prune_fallback(int64_t cutoff)
+{
+    return 0;
+}
+
+JL_DLLEXPORT const char *jl_objcache_compact_fallback(const char *dir)
+{
+    return "the native code cache is not available";
+}
+
 JL_DLLEXPORT void jl_jit_register_ci_fallback(jl_code_instance_t *ci)
 {
 }
@@ -161,6 +171,8 @@ JL_DLLEXPORT void jl_get_function_id_fallback(void *native_code, jl_code_instanc
 JL_DLLEXPORT void *jl_get_llvm_function_fallback(void *native_code, uint32_t idx) UNAVAILABLE
 
 JL_DLLEXPORT LLVMOrcThreadSafeModuleRef jl_get_llvm_module_fallback(void *native_code) UNAVAILABLE
+
+JL_DLLEXPORT void jl_free_native_fallback(void *native_code) UNAVAILABLE
 
 JL_DLLEXPORT void *jl_type_to_llvm_fallback(jl_value_t *jt, LLVMContextRef llvmctxt, bool_t *isboxed) UNAVAILABLE
 

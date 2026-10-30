@@ -598,6 +598,16 @@ end
 @test_throws ArgumentError test_mod.S9((1,))
 @test_throws ArgumentError test_mod.S9((1,2,3))
 
+# Nested `new` calls (issue #14477)
+@test JuliaLowering.include_string(test_mod, """
+struct S14477
+    fld::S14477
+    S14477() = new(new())
+end
+inner_fld_isdefined() = isdefined(S14477().fld, :fld)
+(isdefined(S14477(), :fld), inner_fld_isdefined())
+""") == (true, false)
+
 # Test cases from
 # https://github.com/JuliaLang/julia/issues/36104
 # https://github.com/JuliaLang/julia/pull/36121

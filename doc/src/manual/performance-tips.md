@@ -935,12 +935,15 @@ end
 ```
 The `let` block creates a new variable `r` whose scope is only the
 inner function. The second technique recovers full language performance
-in the presence of captured variables. Note that this is a rapidly
+in the presence of captured variables.
+
+This is a rapidly
 evolving aspect of the compiler, and it is likely that future releases
 will not require this degree of programmer annotation to attain performance.
 In the meantime, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
-insertion of `let` statements as in `abmult3`.
+insertion of `let` statements as in `abmult3`. [`Test.detect_closure_boxes`]
+allows finding boxing automatically in lowered code.
 
 #### Use `@__FUNCTION__` for recursive closures
 

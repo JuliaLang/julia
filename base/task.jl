@@ -491,8 +491,15 @@ unaffected: cancellation reaches `t` only through its own governing token
 
 Throws a `ConcurrencyViolationError` if `t` is the currently running task, to prevent deadlocks.
 """
-wait(t::Task; throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    wait(t, check_cancel_arg(cancel); throw)
+function wait(t::Task; throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    # An explicit token is checked here, the scoped one only if the wait blocks.
+    cancel = precheck_cancel_arg(cancel)
+    istaskdone(t) || return wait(t, resolve_cancel_token(cancel); throw)
+    if throw && istaskfailed(t)
+        Core.throw(TaskFailedException(t))
+    end
+    nothing
+end
 @noinline function wait(t::Task, tok::MaybeToken; throw=true)
     # Inlining a blocking call buys nothing; this also keeps the inlineable `fetch(::Task)` small.
     _wait(t, tok)
@@ -1208,6 +1215,18 @@ function popfirst!(W::IntrusiveLinkedListSynchronized)
         unlock(W.lock)
     end
 end
+# Like `popfirst!`, but return `nothing` if `W` is empty. The emptiness check
+# and the pop happen atomically under `W.lock`.
+function trypopfirst!(W::IntrusiveLinkedListSynchronized)
+    isempty(W) && return nothing
+    lock(W.lock)
+    try
+        q = waitqueue(W)
+        return isempty(q) ? nothing : popfirst!(q)
+    finally
+        unlock(W.lock)
+    end
+end
 function list_deletefirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
@@ -1630,8 +1649,9 @@ function discard_stale_workqueue_task(t::Task)
 end
 
 function trypoptask(W::StickyWorkqueue)
-    while !isempty(W)
-        t = popfirst!(W)
+    while true
+        t = trypopfirst!(W)
+        t === nothing && break
         if t._state !== task_state_runnable
             discard_stale_workqueue_task(t)
             continue

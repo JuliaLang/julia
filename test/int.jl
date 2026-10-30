@@ -315,6 +315,12 @@ end
         @test -one(S) % Unsigned % Signed === -one(S)
         @test ~one(U) % Signed % Unsigned === ~one(U)
     end
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    for f in (signed, unsigned)
+        @test_throws MethodError(f, (Union{},)) f(Union{})
+        @test_throws MethodError(f, (Union{}, 1)) f(Union{}, 1)
+        @test which(f, (Type{Union{}},)).sig == Tuple{typeof(f), Type{Union{}}, Vararg}
+    end
 end
 
 @testset "typemin typemax" begin

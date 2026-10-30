@@ -681,20 +681,14 @@ JL_CALLABLE(jl_f_bitsizeof)
 {
     JL_NARGS(bitsizeof, 1, 1);
     jl_value_t *x = args[0];
-    if (jl_is_unionall(x) || jl_is_uniontype(x))
-        return jl_box_long(jl_unbox_long(jl_f_sizeof(F, args, 1)) * 8);
-    if (jl_is_datatype(x)) {
-        jl_datatype_t *dx = (jl_datatype_t*)x;
-        if (jl_is_primitivetype(dx))
-            return jl_box_long(jl_datatype_nbits(dx));
-        return jl_box_long(jl_unbox_long(jl_f_sizeof(F, args, 1)) * 8);
-    }
-    if (x == jl_bottom_type)
-        jl_error("The empty type does not have a definite size since it does not have instances.");
-    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
-    if (jl_is_primitivetype(dt))
-        return jl_box_long(jl_datatype_nbits(dt));
-    return jl_box_long(jl_unbox_long(jl_f_sizeof(F, args, 1)) * 8);
+    // Only primitive types have a bit size: for anything else, padding bits could be
+    // counted or excluded, and either choice would be hard to revise once relied upon.
+    jl_value_t *t = jl_is_type(x) ? x : jl_typeof(x);
+    if (!jl_is_datatype(t))
+        jl_error("Only a primitive DataType or an instance of one has a bit size.");
+    if (!jl_is_primitivetype(t))
+        jl_errorf("Type %s is not a primitive type and has no bit size.", jl_typename_str(t));
+    return jl_box_long(jl_datatype_nbits((jl_datatype_t*)t));
 }
 
 JL_CALLABLE(jl_f_issubtype)
@@ -934,11 +928,12 @@ JL_CALLABLE(jl_f__apply_iterate)
             _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + al, extra);
             assert(newargs != NULL); // inform GCChecker that we didn't write a NULL here
             for (j = 0; j < al; j++) {
-                newargs[n++] = jl_svecref(t, j);
-                // GC Note: here we assume that the return value of `jl_svecref`
-                //          will not be young if `arg_heap` becomes old
-                //          since they are allocated before `arg_heap`. Otherwise,
-                //          we need to add write barrier for !onstack
+                jl_value_t *val = jl_svecref(t, j);
+                if (arg_heap)
+                    jl_gc_write(arg_heap, newargs[n], jl_value_t, val);
+                else
+                    newargs[n] = val;
+                n++;
             }
         }
         else if (jl_is_tuple(ai) || jl_is_namedtuple(ai)) {

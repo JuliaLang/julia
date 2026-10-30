@@ -614,7 +614,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
         else
             if needs_value && !isnothing(try_val)
-                emit_assignment(ctx, ex, try_result, try_val)
+                emit_assignment(ctx, try_val, try_result, try_val)
             end
             emit(ctx, @ast ctx ex [:leave handler_token])
         end
@@ -629,7 +629,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         else_val = compile(ctx, else_block, needs_value, in_tail_pos)
         if !in_tail_pos
             if needs_value && !isnothing(else_val)
-                emit_assignment(ctx, ex, try_result, else_val)
+                emit_assignment(ctx, else_val, try_result, else_val)
             end
         end
     end
@@ -684,7 +684,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         push!(ctx.catch_token_stack, handler_token)
         catch_val = compile(ctx, catch_block, needs_value, in_tail_pos)
         if !isnothing(try_result) && !isnothing(catch_val)
-            emit_assignment(ctx, ex, try_result, catch_val)
+            emit_assignment(ctx, catch_val, try_result, catch_val)
         end
         if !in_tail_pos
             emit(ctx, @ast ctx ex [:pop_exception handler_token])
@@ -705,7 +705,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = head(ex)
     if k == :bindingid || k == :value || k == :nothing ||
             k == :inert || k == :syntaxinert || k == :top ||
-            k == :core || k == :symbol ||
+            k == :core || k == :symbol || k == :copyast ||
             k == :sourcelocation || k == :static_eval ||
             k == :foreignsymbol || k == :static_parameter
         ex1 = ex
@@ -890,10 +890,10 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
             nothing
         else
-            val = needs_value && new_local_binding(ctx, ex, "if_val")
+            val = needs_value && new_local_binding(ctx, ex, "")
             v1 = compile(ctx, ex[2], needs_value, in_tail_pos)
             if needs_value
-                emit_assignment(ctx, ex, val, v1)
+                emit_assignment(ctx, something(v1, ex), val, v1)
             end
             if has_else || needs_value
                 end_label = make_label(ctx, ex)
@@ -908,7 +908,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
                 nothing_(ctx, ex)
             end
             if needs_value
-                emit_assignment(ctx, ex, val, v2)
+                emit_assignment(ctx, something(v2, ex), val, v2)
             end
             if !isnothing(end_label)
                 emit(ctx, end_label)

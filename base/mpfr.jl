@@ -405,7 +405,9 @@ function _opposite_round(r::MPFRRoundingMode)
 end
 
 function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=_precision_with_base_2(BigFloat), rounding::MPFRRoundingMode=rounding_raw(BigFloat))
+    base == 0 || 2 <= base <= 62 || throw(ArgumentError(lazy"invalid base: base must be 2 ≤ base ≤ 62, got $base"))
     !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s); base, precision, rounding)
+    Base.containsnul(s) && return nothing
     z = BigFloat(precision=precision)
     err = ccall((:mpfr_set_str, libmpfr), Int32, (Ref{BigFloat}, Cstring, Int32, MPFRRoundingMode), z, s, base, rounding)
     err == 0 ? z : nothing
@@ -563,7 +565,7 @@ big(::Type{<:AbstractFloat}) = BigFloat
 big(x::AbstractFloat) = convert(BigFloat, x)
 
 function Rational{BigInt}(x::AbstractFloat)
-    isnan(x) && return zero(BigInt) // zero(BigInt)
+    isnan(x) && throw(InexactError(:Rational, Rational{BigInt}, x))
     isinf(x) && return copysign(one(BigInt),x) // zero(BigInt)
     iszero(x) && return zero(BigInt) // one(BigInt)
     s = max(precision(x) - exponent(x), 0)
@@ -1214,6 +1216,7 @@ end
 function setprecision(f::Function, ::Type{BigFloat}, prec::Integer; base::Integer=2)
     Base.ScopedValues.@with(CURRENT_PRECISION => _convert_precision_from_base(prec, base), f())
 end
+setprecision(f, ::Type{Union{}}, slurp...; kwargs...) = throw(MethodError(setprecision, (f, Union{}, slurp...)))
 
 setprecision(f::Function, prec::Integer; base::Integer=2) = setprecision(f, BigFloat, prec; base)
 

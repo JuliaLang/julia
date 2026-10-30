@@ -105,13 +105,6 @@ struct MustAlias
 end
 MustAlias(var::SlotNumber, ssadef::Int, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp)) =
     MustAlias(slot_id(var), ssadef, vartyp, fldidx, fldtyp)
-MustAlias(alias::MustAlias;
-    slot::Int = alias.slot,
-    ssadef::Int = alias.ssadef,
-    @nospecialize(vartyp = alias.vartyp),
-    fldidx::Int = alias.fldidx,
-    @nospecialize(fldtyp = alias.fldtyp)) =
-    MustAlias(slot, ssadef, vartyp, fldidx, fldtyp)
 
 const AnyMustAlias = Union{MustAlias,InterMustAlias}
 function InterMustAlias(alias::MustAlias)
@@ -120,19 +113,15 @@ function InterMustAlias(alias::MustAlias)
     limited isa LimitedAccuracy && return limited
     InterMustAlias(alias.slot, alias.vartyp, alias.fldidx, alias.fldtyp)
 end
-InterMustAlias(alias::InterMustAlias;
-    slot::Int = alias.slot,
-    @nospecialize(vartyp = alias.vartyp),
-    fldidx::Int = alias.fldidx,
-    @nospecialize(fldtyp = alias.fldtyp)) =
-    InterMustAlias(slot, vartyp, fldidx, fldtyp)
-(::Type{AnyMustAlias})(alias::AnyMustAlias;
-    slot::Int = alias.slot,
-    @nospecialize(vartyp = alias.vartyp),
-    fldidx::Int = alias.fldidx,
-    @nospecialize(fldtyp = alias.fldtyp)) =
-    alias isa MustAlias ? MustAlias(alias; slot, vartyp, fldidx, fldtyp) :
-                          InterMustAlias(alias; slot, vartyp, fldidx, fldtyp)
+
+# Return an alias of the same field as `alias`, with `vartyp` and `fldtyp` replaced.
+# Not a constructor method: `InterMustAlias` is a `Core` type shared by all `Compiler`s.
+update_mustalias(alias::MustAlias;
+    @nospecialize(vartyp = alias.vartyp), @nospecialize(fldtyp = alias.fldtyp)) =
+    MustAlias(alias.slot, alias.ssadef, vartyp, alias.fldidx, fldtyp)
+update_mustalias(alias::InterMustAlias;
+    @nospecialize(vartyp = alias.vartyp), @nospecialize(fldtyp = alias.fldtyp)) =
+    InterMustAlias(alias.slot, vartyp, alias.fldidx, fldtyp)
 
 struct PartialTypeVar
     tv::TypeVar
@@ -314,6 +303,12 @@ end
     end
     return typ
 end
+@nospecializeinfer function widenwrappedmustalias(@nospecialize typ)
+    if isa(typ, LimitedAccuracy)
+        return LimitedAccuracy(widenmustalias(typ.typ), typ.causes)
+    end
+    return widenmustalias(typ)
+end
 
 @nospecializeinfer function isalreadyconst(@nospecialize t)
     isa(t, Const) && return true
@@ -370,7 +365,7 @@ end
 end
 
 function issubalias(a::AnyMustAlias, b::AnyMustAlias)
-    return a.slot == b.slot && a.fldidx == b.fldidx &&
+    return is_same_alias(a, b) &&
         a.vartyp ⊑ b.vartyp && a.fldtyp ⊑ b.fldtyp
 end
 
@@ -388,8 +383,10 @@ is_same_alias(@nospecialize(a), @nospecialize(b)) = false
     typ === Bottom && return x # Union{} is maximally narrow
     isa(typ, AnyMustAlias) && return x # do not attempt to intersect alias information
     isa(typ, AnyConditional) && return x # ... or other wrappers
+    # keep a known value as is, like the `getfield` case of `abstract_call_builtin`
+    isalreadyconst(typ) && return x
     # this is an intersection with `y`, so keep the limitations of both
-    return narrow_limited_typ(narrow_limited_typ(AnyMustAlias(alias; fldtyp = typ), x), y)
+    return narrow_limited_typ(narrow_limited_typ(update_mustalias(alias; fldtyp = typ), x), y)
 end
 
 # LimitedAccuracy
@@ -692,7 +689,7 @@ end
         end
         return v
     end
-    tmeet(widenlattice(lattice), widenconst(v), t)
+    tmeet(widenlattice(lattice), widenconst_split(v), t)
 end
 
 @nospecializeinfer function tmeet(lattice::ConditionalsLattice, @nospecialize(v), @nospecialize(t::AnyType))
@@ -707,10 +704,12 @@ end
 
 @nospecializeinfer function tmeet(𝕃::AnyMustAliasesLattice, @nospecialize(v), @nospecialize(t::AnyType))
     if is_valid_lattice_norec(𝕃, v)
-        # The value still is the aliased field, so keep the alias and meet the field type
+        # The value still is the aliased field, so meet the field type and keep the alias,
+        # unless the field value is now known
         fldtyp = tmeet(widenlattice(𝕃), v.fldtyp, t)
         fldtyp === Bottom && return Bottom
-        return AnyMustAlias(v; fldtyp)
+        isalreadyconst(fldtyp) && return fldtyp
+        return update_mustalias(v; fldtyp)
     end
     return tmeet(widenlattice(𝕃), v, t)
 end
@@ -748,6 +747,21 @@ widenconst(t::PartialTask) = Task
 widenconst(::TypeVar) = error("unhandled TypeVar")
 widenconst(::TypeofVararg) = error("unhandled Vararg")
 widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")
+
+"""
+    widenconst_split(x) -> t::Type
+
+`widenconst(x)` for an `x` whose lattice element type is not known statically.
+Checks for the common lattice elements first, so that the call avoids a dynamic dispatch
+in the common case.
+"""
+function widenconst_split(@nospecialize x)
+    isa(x, AnyType) && return x
+    isa(x, Const) && return widenconst(x)
+    isa(x, PartialStruct) && return widenconst(x)
+    isa(x, AnyConditional) && return Bool
+    return widenconst(x)
+end
 
 ####################
 # state management #

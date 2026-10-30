@@ -1970,6 +1970,13 @@ JuliaOJIT::JuliaOJIT()
         { mangle("__truncsfhf2"),   { mangle("julia__gnu_f2h_ieee"),  JITSymbolFlags::Exported } },
         { mangle("__truncdfhf2"),   { mangle("julia__truncdfhf2"),    JITSymbolFlags::Exported } },
 #endif
+#ifdef __SIZEOF_INT128__
+        // Unlike the routines above, these use the hard-float half ABI on x86_64 Darwin too
+        { mangle("__floattihf"),    { mangle("julia__floattihf"),     JITSymbolFlags::Exported } },
+        { mangle("__floatuntihf"),  { mangle("julia__floatuntihf"),   JITSymbolFlags::Exported } },
+        { mangle("__fixhfti"),      { mangle("julia__fixhfti"),       JITSymbolFlags::Exported } },
+        { mangle("__fixunshfti"),   { mangle("julia__fixunshfti"),    JITSymbolFlags::Exported } },
+#endif
         // BFloat16 conversion routines
         { mangle("__truncsfbf2"),   { mangle("julia__truncsfbf2"),    JITSymbolFlags::Exported } },
         { mangle("__truncdfbf2"),   { mangle("julia__truncdfbf2"),    JITSymbolFlags::Exported } },
@@ -2845,6 +2852,21 @@ extern "C" JL_DLLEXPORT_CODEGEN
 int jl_objcache_kv_enabled_impl(void) JL_CANSAFEPOINT_ENTER_LEAVE
 {
     return jl_ExecutionEngine->objCacheKVEnabled();
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
+int64_t jl_objcache_prune_impl(int64_t cutoff) JL_CANSAFEPOINT_ENTER_LEAVE
+{
+    return jl_ExecutionEngine->objCachePrune(cutoff);
+}
+
+// Returns null on success, or a description of the error.
+extern "C" JL_DLLEXPORT_CODEGEN
+const char *jl_objcache_compact_impl(const char *dir) JL_CANSAFEPOINT_ENTER_LEAVE
+{
+    static thread_local std::string Err;
+    Err = jl_ExecutionEngine->objCacheCompact(dir);
+    return Err.empty() ? nullptr : Err.c_str();
 }
 
 // API for adding bytes to record being owned by the JIT

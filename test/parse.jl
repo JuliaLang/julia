@@ -353,6 +353,49 @@ end
     @test_throws ArgumentError parse(Int, "2", base = 63)
 end
 
+@testset "Bool parsing" begin
+    P = Base.Parsers
+    for (s, x) in (("true", true), ("false", false), ("0", false), ("1", true), ("0001", true),
+                   ("2", P.OVERFLOW), ("10", P.OVERFLOW), ("256", P.OVERFLOW), ("", P.INVALID),
+                   ("True", P.INVALID), ("FALSE", P.INVALID), (" true", P.INVALID),
+                   ("true ", P.INVALID), ("truee", P.INVALID), ("tru", P.INVALID),
+                   ("+1", P.INVALID), ("-0", P.INVALID), ("0x1", P.INVALID))
+        @test P.parsevalue(Bool, codeunits(s)) === x
+        @test P.parsevalue(Bool, view(codeunits("<$s>"), 2:ncodeunits(s) + 1)) === x
+    end
+    @test P.parsevalue(Bool, codeunits("01"); base = 2) === true
+    @test P.parsevalue(Bool, codeunits("a"); base = 16) === P.OVERFLOW
+    @test_throws ArgumentError P.parsevalue(Bool, codeunits("1"); base = 1)
+    # `parse` keeps its grammar around the bytes and its error messages
+    for (s, x) in (("true", true), ("false", false), ("01", true), (" true\n", true),
+                   ("0x1", true), ("0b0", false), ("2", nothing), ("tru", nothing),
+                   ("True", nothing))
+        for str in (s, SubString("<$s>", 2, ncodeunits(s) + 1), GenericString(s),
+                    StringView(codeunits(s)))
+            @test tryparse(Bool, str) === x
+        end
+    end
+    @test parse(Bool, "1"; base = 2) === true
+    @test tryparse(Bool, "1a"; base = 16) === nothing
+    @test_throws "invalid Bool representation: \"tru\"" parse(Bool, "tru")
+    @test_throws "invalid Bool representation: \"2\"" parse(Bool, "2")
+    # `parse` reads characters and `parsevalue` bytes; without whitespace or a prefix they agree
+    chars = ('0', '1', '2', 'a', 'e', 'f', 't', 'x', '+', '١')
+    strs = [[join(cs) for n in 1:3 for cs in Iterators.product(ntuple(_ -> chars, n)...)];
+            ["true", "false"]]
+    @test all(Iterators.product(strs, (2, 10, 16, 36))) do (s, base)
+        x = P.parsevalue(Bool, codeunits(s); base)
+        return (x isa Bool ? x : nothing) === tryparse(Bool, s; base)
+    end
+    # DelimitedFiles parses a cell `s[i:j]` of a whole file `s`
+    @test Base.tryparse_internal(Bool, "x,1 ", 3, 4, 0, false) === true
+    @test Base.tryparse_internal(Bool, "x,0x0", 3, 5, 0, false) === false
+    @test Base.tryparse_internal(Bool, "1,x", 3, 3, 0, false) === nothing
+    @test Base.tryparse_internal(Bool, "1,", 3, 2, 0, false) === nothing
+    @test_throws "invalid Bool representation: \"2\"" Base.tryparse_internal(Bool, "x,2", 3, 3,
+                                                                            0, true)
+end
+
 @testset "issue #42616" begin
     @test tryparse(Bool, "") === nothing
     @test tryparse(Bool, " ") === nothing
@@ -503,6 +546,44 @@ end
             @test tryparse(Float64, str) === y
         end
     end
+end
+
+# A string whose code units are not bytes
+struct UInt16CodeUnitString <: AbstractString
+    s::String
+end
+Base.codeunit(::UInt16CodeUnitString) = UInt16
+Base.iterate(x::UInt16CodeUnitString, i::Int = 1) = iterate(x.s, i)
+
+@testset "UUID parsing" begin
+    P = Base.Parsers
+    rng = Xoshiro(2)
+    for _ in 1:1000
+        u = Base.UUID(rand(rng, UInt128))
+        s = string(u)
+        for str in (s, uppercase(s), SubString("<$s>", 2, 37), GenericString(s),
+                    StringView(codeunits(s)))
+            @test tryparse(Base.UUID, str) === u
+        end
+        @test P.parsevalue(Base.UUID, view(codeunits("<$s>"), 2:37)) === u
+    end
+    s = "0123abcd-4567-89ef-ABCD-0123456789Ef"
+    @test parse(Base.UUID, s) === Base.UUID(0x0123abcd456789efabcd0123456789ef)
+    # each position with a byte just outside the hex digits, a space, a dash or a digit,
+    # except those that leave a valid UUID
+    for k in 1:36, c in ('/', ':', '@', 'G', '`', 'g', '-', ' ', '\x7f', '\xff', '0')
+        (s[k] == '-' ? c == '-' : c == '0') && continue
+        t = s[1:k-1] * c * s[k+1:end]
+        @test P.parsevalue(Base.UUID, codeunits(t)) === P.INVALID
+        @test tryparse(Base.UUID, t) === nothing
+    end
+    for t in ("", s[1:35], s * "0", "{$s}", s[1:8] * s[10:end] * "0")
+        @test tryparse(Base.UUID, t) === nothing
+    end
+    @test_throws "Malformed UUID string: \"x\"" parse(Base.UUID, "x")
+    # a string whose code units are not bytes is read as UTF-8
+    @test tryparse(Base.UUID, UInt16CodeUnitString(s)) === parse(Base.UUID, s)
+    @test tryparse(Base.UUID, UInt16CodeUnitString("é" * s[3:end])) === nothing
 end
 
 # parsing complex numbers (#22250)

@@ -818,9 +818,9 @@ function _resize_int!(B::BitVector, n::Int, first::Bool)
     if k1 > k0
         _growend!(Bc, k1 - k0)
         Bc[end] = UInt64(0)
-        if first
-            copy_chunks!(Bc, 1 + n - n0, Bc, 1, n0)
-        end
+    end
+    if first
+        copy_chunks!(Bc, 1 + n - n0, Bc, 1, n0)
     end
     B.len = n
     return B
@@ -1210,6 +1210,15 @@ function (==)(A::BitArray, B::BitArray)
     return A.chunks == B.chunks
 end
 
+function cmp(A::BitVector, B::BitVector)
+    Ac, Bc = A.chunks, B.chunks
+    @inbounds for i in 1:min(length(Ac), length(Bc))
+        d = xor(Ac[i], Bc[i])
+        iszero(d) || return iszero(Bc[i] & d & -d) ? 1 : -1
+    end
+    return cmp(length(A), length(B))
+end
+
 
 ## Data movement ##
 
@@ -1420,6 +1429,7 @@ function _circshift_int!(dest::BitVector, src::BitVector, i::Int)
     i = Int(i)
     length(dest) == length(src) || throw(ArgumentError("destination and source should be of same size"))
     n = length(dest)
+    n == 0 && return dest
     i %= n
     i == 0 && return (src === dest ? src : copyto!(dest, src))
     Bc = (src === dest ? copy(src.chunks) : src.chunks)

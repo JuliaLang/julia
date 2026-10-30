@@ -502,6 +502,7 @@ end
 
 @test isqrt(big(4)) == 2
 @test isqrt(big(5)) == 2
+@test_throws DomainError isqrt(big(-4))
 
 
 @testset "Exponentiation operator" begin
@@ -716,6 +717,19 @@ e = Rational{BigInt}(12345678901234567890123456789, 1234567890222222221211111110
         @test Base.GMP.MPQ.cmp(b, a) ==  1
         @test Base.GMP.MPQ.cmp(a, b) == -1
         @test Base.GMP.MPQ.cmp(a, a) ==  0
+    end
+
+    @testset "cmp sign and infinities (#64179, #64180)" begin
+        @test cmp(big(0)//1, big(2)^200//1) === -1
+        @test cmp(big(2)^200//1, big(0)//1) === 1
+        @test cmp(big(2)^100//3, big(5)//7) === 1
+        @test cmp(big(1)//0, big(1)//2) === 1
+        @test cmp(big(1)//2, big(1)//0) === -1
+        @test cmp(-(big(1)//0), big(-3)//1) === -1
+        vals = (-1//0, -7//2, -1//3, 0//1, 2//5, 9//1, 1//0)
+        for x in vals, y in vals
+            @test cmp(big(x), big(y)) === cmp(x, y)
+        end
     end
 
     @testset "division errors" begin

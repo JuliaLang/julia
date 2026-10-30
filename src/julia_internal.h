@@ -153,44 +153,7 @@ static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT 
 #  define JL_USE_IFUNC 0
 #endif
 
-// If we've smashed the stack, (and not just normal NORETURN)
-// this will smash stack-unwind too
-#ifdef _OS_WINDOWS_
-#if defined(_CPU_X86_64_)
-    // install the unhandled exception handler at the top of our stack
-    // to call directly into our personality handler
-// N.B. do not switch sections here: with function sections, which LTO turns on,
-// the rest of the function would be emitted away from its own section, leaving
-// the entry point running off the end of a prologue.
-#define CFI_NORETURN \
-    asm volatile ("\t.seh_handler __julia_personality, @except");
-#else
-#define CFI_NORETURN
-#endif
-#else
-// wipe out the call-stack unwind capability beyond this function
-// (we are noreturn, so it is not a total lie)
-// N.B. these directives apply to whichever function the code ends up in, so
-// every function using CFI_NORETURN must be NOINLINE: inlined into a caller,
-// `.cfi_return_column` rebinds the caller's whole FDE to a CIE whose return
-// address register is undefined, and unwinding through any suspended task
-// switch stops there (the PGO+ThinLTO macOS aarch64 build inlined
-// jl_start_fiber_set into ctx_switch and jl_start_fiber_swap).
-#if defined(_CPU_X86_64_)
-// per nongnu libunwind: "x86_64 ABI specifies that end of call-chain is marked with a NULL RBP or undefined return address"
-// so we do all 3, to be extra certain of it
-#define CFI_NORETURN \
-    asm volatile ("\t.cfi_undefined rip"); \
-    asm volatile ("\t.cfi_undefined rbp"); \
-    asm volatile ("\t.cfi_return_column rbp");
-#else
-    // per nongnu libunwind: "DWARF spec says undefined return address location means end of stack"
-    // we use whatever happens to be register 1 on this platform for this
-#define CFI_NORETURN \
-    asm volatile ("\t.cfi_undefined 1"); \
-    asm volatile ("\t.cfi_return_column 1");
-#endif
-#endif
+#include "arch/cfi_noreturn.h"
 
 #if defined(HAVE_SSP) && (defined(_OS_DARWIN_) || defined(_OS_FREEBSD_))
 // This is provided by libSystem on Darwin and libc on FreeBSD, and imported
@@ -220,6 +183,10 @@ static uv_loop_t *const unused_uv_loop_arg = (uv_loop_t *)0xBAD10;
 
 extern jl_mutex_t jl_uv_mutex;
 extern _Atomic(int) jl_uv_n_waiters;
+// Set when a thread finds the event loop idle before it sleeps. Cleared before the
+// scheduler runs the loop, and by jl_iolock_end when it wakes the event loop thread.
+// Protected by jl_uv_mutex.
+extern int jl_uv_loop_unwatched;
 
 // Global data structures for accessing symbols and other globals
 #include "jl_internal_data.inc"
@@ -675,6 +642,14 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_align8(unsigned sz) JL_NOTSAFE
 #define GC_MAX_SZCLASS (2032-sizeof(void*))
 static_assert(ARRAY_CACHE_ALIGN_THRESHOLD > GC_MAX_SZCLASS, "");
 
+// A GenericMemory whose data fits a GC pool together with its header is allocated as a single
+// object, with the data at this offset. Larger ones get their data from `jl_gc_managed_malloc`.
+#define JL_GENERICMEMORY_INLINE_DATA_OFFSET LLT_ALIGN(sizeof(jl_genericmemory_t), JL_SMALL_BYTE_ALIGNMENT)
+STATIC_INLINE int jl_genericmemory_data_inline(size_t nbytes) JL_NOTSAFEPOINT
+{
+    return nbytes <= GC_MAX_SZCLASS - JL_GENERICMEMORY_INLINE_DATA_OFFSET;
+}
+
 /* Programming style note: When using jl_gc_alloc, do not JL_GC_PUSH it into a
  * gc frame, until it has been fully initialized. An uninitialized value in a
  * gc frame can crash upon encountering the first safepoint. By delaying use of
@@ -985,6 +960,7 @@ jl_tupletype_t *jl_inst_arg_tuple_type(jl_value_t *arg1, jl_value_t **args, size
 jl_tupletype_t *jl_lookup_arg_tuple_type(jl_value_t *arg1 JL_PROPAGATES_ROOT, jl_value_t **args, size_t nargs, int leaf) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype) JL_CANSAFEPOINT;
 void jl_method_table_activate(jl_typemap_entry_t *newentry) JL_CANSAFEPOINT;
+void jl_method_table_invalidate_deferred(jl_array_t *deferred, size_t max_world) JL_CANSAFEPOINT;
 jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype) JL_CANSAFEPOINT;
 jl_method_t *jl_mk_builtin_func(jl_datatype_t *dt, jl_sym_t *name, jl_fptr_args_t fptr) JL_CANSAFEPOINT JL_GC_DISABLED;
 int jl_obviously_unequal(jl_value_t *a, jl_value_t *b);
@@ -1371,7 +1347,6 @@ void jl_init_uv(void) JL_NOTSAFEPOINT;
 void jl_init_box_caches(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_init_options(void) JL_NOTSAFEPOINT;
 
-extern JL_DLLEXPORT ssize_t jl_tls_offset;
 extern JL_DLLEXPORT const int jl_tls_elf_support;
 void jl_init_threading(void) JL_NOTSAFEPOINT;
 void jl_start_threads(void) JL_CANSAFEPOINT;
@@ -1417,6 +1392,9 @@ void jl_safepoint_take_sleep_lock(jl_ptls_t ptls) JL_NOTSAFEPOINT JL_NOTSAFEPOIN
 void jl_safepoint_exclude_gc_begin(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
 void jl_safepoint_exclude_gc_end(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
 void jl_wake_libuv(void) JL_NOTSAFEPOINT;
+void jl_init_signal_watchers(uv_async_cb cb);
+void jl_wake_signal_watchers(void) JL_NOTSAFEPOINT;
+void jl_wake_io_loop_thread(void) JL_NOTSAFEPOINT;
 void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT;
 int jl_abandon_try_commit(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void JL_NORETURN jl_abandon_task_cb(void) JL_CANSAFEPOINT;
@@ -1424,6 +1402,8 @@ void JL_NORETURN jl_abandon_task_cb(void) JL_CANSAFEPOINT;
 void jl_set_pgcstack(jl_gcframe_t **) JL_NOTSAFEPOINT;
 #if defined(_OS_WINDOWS_)
 typedef DWORD jl_pgcstack_key_t;
+#elif defined(_OS_DARWIN_)
+typedef pthread_key_t jl_pgcstack_key_t;
 #else
 typedef jl_gcframe_t ***(*jl_pgcstack_key_t)(void) JL_NOTSAFEPOINT;
 #endif
@@ -1438,6 +1418,16 @@ void jl_gc_safe_enter_from_nonmutator(jl_ptls_t ptls) JL_CANSAFEPOINT_LEAVE;
 
 // Query if this object is perm-allocated in an image.
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
+// The linkage blob (image) owning `v`, or -1 for an object of no image.
+JL_DLLEXPORT size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
+// The world in which `blob` activated its methods if it is `image`, the sysimage, or a dependency of `image`, else 0.
+JL_DLLEXPORT size_t jl_linkage_blob_dep_world(size_t image, size_t blob) JL_NOTSAFEPOINT;
+// The world since which every method on the typenames of `sig` in `mt` came from `image` or one of its dependencies, else 0.
+JL_DLLEXPORT size_t jl_sig_contributors_world(jl_value_t *sig, jl_methtable_t *mt, size_t image) JL_CANSAFEPOINT;
+void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array_t *record, size_t image, jl_array_t *deferred) JL_CANSAFEPOINT;
+// The ext_backinterferences of a method: It is the back direction of `interferences`, computed for external methods during incremental precompile.
+JL_DLLEXPORT jl_value_t *jl_get_ext_backinterferences(jl_method_t *method) JL_NOTSAFEPOINT;
+extern JL_DLLEXPORT jl_genericmemory_t *jl_ext_backinterferences JL_GLOBALLY_ROOTED;
 // GC configuration baked into generated code; must match between an image and the runtime that loads it.
 JL_DLLEXPORT const char *jl_gc_image_abi(void) JL_NOTSAFEPOINT;
 
@@ -2002,6 +1992,8 @@ struct JL_GC_TRACKED_TYPE typemap_intersection_env {
     int emptiness_only; // if set, `ti` and `env` are not materialized (`ti` is only a
                         // nonempty/bottom placeholder); the callback may consume just
                         // the match verdict and `issubty`
+    int (*entry_filter)(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure) JL_NOTSAFEPOINT;
+                        // if set, entries for which this returns 0 are skipped before any intersection
 };
 int jl_typemap_intersection_visitor(jl_typemap_t *a, int offs, struct typemap_intersection_env *closure) JL_CANSAFEPOINT;
 void typemap_bottom_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure) JL_CANSAFEPOINT;
@@ -2316,6 +2308,7 @@ JL_DLLIMPORT void *jl_emit_native(jl_array_t *codeinfos, jl_array_t *ci_order, L
 JL_DLLIMPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         ios_t *z, uint32_t checksum, const char *unpack_func, jl_emission_params_t *params);
+JL_DLLIMPORT void jl_free_native(void *native_code);
 JL_DLLIMPORT void jl_get_llvm_gvs(void *native_code, size_t *num_els, void **gvs);
 JL_DLLIMPORT void jl_get_llvm_gv_inits(void *native_code, size_t *num_els, void **inits);
 JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, size_t *num_els,
