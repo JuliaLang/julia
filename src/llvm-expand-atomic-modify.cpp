@@ -193,6 +193,14 @@ static bool canReorderWithRMW(Instruction &Target, bool verifyop)
     for (auto &I : BB) {
       if (&I == &Target)
         continue;
+      // julia.get_pgcstack reads thread-local state and never writes memory, but
+      // is declared without attributes when not lowered to an argument (non-swiftcc
+      // ABI, used by reflection); don't let it defeat the scan.
+      if (auto *CI = dyn_cast<CallInst>(&I)) {
+        Function *Callee = CI->getCalledFunction();
+        if (Callee && Callee->getName() == "julia.get_pgcstack")
+          continue;
+      }
       if (I.mayWriteToMemory())
         return false;
       if (!mayRead) {

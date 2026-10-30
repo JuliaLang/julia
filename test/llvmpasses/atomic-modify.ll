@@ -5,6 +5,7 @@
 declare {i8, i8} @julia.atomicmodify.i8(ptr, ptr, i8, i8, ...)
 declare {double, double} @julia.atomicmodify.f64(ptr, ptr, i8, i8, ...)
 declare double @llvm.maxnum.f64(double %Val0, double %Val1)
+declare ptr @julia.get_pgcstack()
 
 define i8 @add.i8(i8 %x, i8 %y) {
     %z = add i8 %x, %y
@@ -57,6 +58,12 @@ define i8 @xchgshl.i8(i8 %x, i8 %y) {
 define double @fadd.f64(double %x, double %y) {
     %z = fadd double %y, %x
     ret double %z
+}
+
+define i8 @add.i8.pgcstack(i8 %x, i8 %y) {
+    %pgcstack = call ptr @julia.get_pgcstack()
+    %z = add i8 %x, %y
+    ret i8 %z
 }
 
 define double @fmax.f64(double %x, double %y) {
@@ -299,6 +306,16 @@ define i8 @mod_i8_indirect3(ptr %a, i8 %b) {
 ; CHECK: ret i8 %0
 top:
   %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @2, i8 5, i8 1, i8 %b, ptr @0)
+  %oldval = extractvalue {i8, i8} %oldnew, 0
+  ret i8 %oldval
+}
+
+define i8 @mod_i8_add_pgcstack(ptr %a, i8 %b) {
+; CHECK-LABEL: @mod_i8_add_pgcstack
+; CHECK: %0 = atomicrmw add ptr %a, i8 %b release, align 1
+; CHECK: ret i8 %0
+top:
+  %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @add.i8.pgcstack, i8 5, i8 1, i8 %b)
   %oldval = extractvalue {i8, i8} %oldnew, 0
   ret i8 %oldval
 }
