@@ -1171,6 +1171,7 @@ end
 function ==(r::Union{StepRange{T},StepRangeLen{T,T}}, s::Union{StepRange{T},StepRangeLen{T,T}}) where {T}
     isempty(r) && return isempty(s)
     _has_length_one(r) && return _has_length_one(s) & (first(r) == first(s))
+    iszero(step(r)) && return iszero(step(s)) && (first(r) == first(s)) && (length(r) == length(s))
     (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 end
 
