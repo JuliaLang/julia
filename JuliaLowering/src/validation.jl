@@ -1082,7 +1082,8 @@ vst1_splat_or_val(vcx, st) = @stm st begin
 end
 
 vst1_generator(vcx, st) = let
-    vcx = with(vcx; return_ok=false, toplevel=false, in_gscope=false, in_loop=false)
+    vcx = with(vcx; return_ok=false, toplevel=false, in_gscope=false,
+               in_loop=false, in_symblock=false)
     @stm st begin
         [:generator _] -> @fail(st, "`generator` requires >=2 args")
         [:generator val [:filter cond is...]] ->
