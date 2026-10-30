@@ -12,6 +12,7 @@ use mmtk::{
 pub enum JuliaVMSlot {
     Simple(SimpleSlot),
     Offset(OffsetSlot),
+    Tagged(TaggedSlot),
     /// A root reported as the object it points to, as the VM cannot (or does not) give us the location
     /// of the root. MMTk never stores to it, as the build does not move objects.
     #[cfg(feature = "non_moving")]
@@ -25,6 +26,7 @@ impl Slot for JuliaVMSlot {
         match self {
             JuliaVMSlot::Simple(e) => e.load(),
             JuliaVMSlot::Offset(e) => e.load(),
+            JuliaVMSlot::Tagged(e) => e.load(),
             #[cfg(feature = "non_moving")]
             JuliaVMSlot::RootNode(o) => Some(*o),
         }
@@ -34,6 +36,7 @@ impl Slot for JuliaVMSlot {
         match self {
             JuliaVMSlot::Simple(e) => e.store(object),
             JuliaVMSlot::Offset(e) => e.store(object),
+            JuliaVMSlot::Tagged(e) => e.store(object),
             #[cfg(feature = "non_moving")]
             JuliaVMSlot::RootNode(o) => {
                 panic!("Root node {} moved to {} in a non-moving build", o, object)
@@ -47,6 +50,7 @@ impl std::fmt::Debug for JuliaVMSlot {
         match self {
             Self::Simple(e) => write!(f, "{}", e.as_address()),
             Self::Offset(e) => write!(f, "{}+{}", e.slot_address(), e.offset),
+            Self::Tagged(e) => write!(f, "tagged {}", e.as_address()),
             #[cfg(feature = "non_moving")]
             Self::RootNode(o) => write!(f, "root node {}", o),
         }
@@ -98,6 +102,43 @@ impl Slot for OffsetSlot {
         let begin = object.to_raw_address();
         let middle = begin + self.offset;
         unsafe { (*self.slot_addr).store(middle, atomic::Ordering::Relaxed) }
+    }
+}
+
+/// A pointer-table slot, which may hold a tagged word: a reference only when its low two bits are
+/// clear (jl_tagged_word_isptr). The word is classified as loaded, as a mutator may store an
+/// immediate between two loads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct TaggedSlot {
+    slot_addr: *mut Atomic<Address>,
+}
+
+unsafe impl Send for TaggedSlot {}
+unsafe impl Sync for TaggedSlot {}
+
+impl TaggedSlot {
+    pub fn from_address(address: Address) -> Self {
+        Self {
+            slot_addr: address.to_mut_ptr(),
+        }
+    }
+
+    pub fn as_address(&self) -> Address {
+        Address::from_mut_ptr(self.slot_addr)
+    }
+}
+
+impl Slot for TaggedSlot {
+    fn load(&self) -> Option<ObjectReference> {
+        let word = unsafe { (*self.slot_addr).load(atomic::Ordering::Relaxed) };
+        if word.as_usize() & 3 != 0 {
+            return None;
+        }
+        ObjectReference::from_raw_address(word)
+    }
+
+    fn store(&self, object: ObjectReference) {
+        unsafe { (*self.slot_addr).store(object.to_raw_address(), atomic::Ordering::Relaxed) }
     }
 }
 

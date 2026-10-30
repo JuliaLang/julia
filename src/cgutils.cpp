@@ -1058,6 +1058,15 @@ static Type *_julia_struct_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, 
                 lty = JuliaType::get_prjlvalue_ty(ctxt);
                 isvector = false;
             }
+            else if (jl_is_tagged_uniontype(ty)) {
+                // a tagged word; access goes through typed loads/stores
+                // keyed on its low bits, never through this slot as a tracked pointer
+                latypes.push_back(bitstype_to_llvm((jl_value_t*)jl_long_type, ctxt));
+                isvector = false;
+                isarray = false;
+                allghost = false;
+                continue;
+            }
             else if (jl_is_uniontype(ty)) {
                 // pick an Integer type size such that alignment will generally be correct,
                 // and always end with an Int8 (selector byte).
@@ -2688,6 +2697,11 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
 static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, const jl_cgval_t &modifyop, jl_value_t *jltype, Type *elty, jl_cgval_t rhs, const Twine &fname, bool gcstack_arg) JL_CANSAFEPOINT;
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
         const jl_aliasinfo_t &dst_ai, const jl_cgval_t &src, Value *tindex, Value *skip, bool isVolatile=false) JL_CANSAFEPOINT;
+static bool tagged_union_has_codegen(jl_value_t *ut) JL_CANSAFEPOINT;
+static jl_cgval_t emit_tagged_load(jl_codectx_t &ctx, Value *ptr, jl_value_t *ut, const jl_aliasinfo_t &ai,
+                                   AtomicOrdering Order, bool maybe_null, Value **nullcheck) JL_CANSAFEPOINT;
+static void emit_tagged_store(jl_codectx_t &ctx, Value *parent, Value *ptr, const jl_cgval_t &rhs,
+                              jl_value_t *ut, const jl_aliasinfo_t &ai, AtomicOrdering Order) JL_CANSAFEPOINT;
 
 static jl_cgval_t typed_store(jl_codectx_t &ctx,
         Value *ptr, jl_cgval_t rhs, jl_cgval_t cmpop,
@@ -2795,7 +2809,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         if (FailOrder == AtomicOrdering::Release)
             FailOrder = AtomicOrdering::Monotonic;
         nb = isboxed ? sizeof(void*) : jl_datatype_size(jltype);
-        tracked_pointers = isboxed || CountTrackedPointers(elty).count > 0;
+        // tagged words lower to integers, so CountTrackedPointers misses them
+        tracked_pointers = isboxed || CountTrackedPointers(elty).count > 0 || type_has_taggedwords(jltype);
         if (!isboxed && Order != AtomicOrdering::NotAtomic && !elty->isIntOrPtrTy()) {
             intcast_eltyp = elty;
             elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb);
@@ -2838,6 +2853,10 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     auto emit_store_pre_barrier = [&](Value *r, const jl_cgval_t &rhs) JL_CANSAFEPOINT {
         if (parent == NULL || !tracked_pointers)
             return;
+        // the multibarrier misses references in tagged words, integers to
+        // LLVM; emit_f_opfield and memory_has_codegen leave such stores to the
+        // runtime
+        assert(isboxed || !type_has_taggedwords(jltype));
         if (isboxed) {
             // Insertion-barrier optimization: skip when the new value is perm-allocated.
             // Invalid under SATB (GC_BARRIER_SNAPSHOT), which must snapshot the old value.
@@ -2915,7 +2934,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         store_ai.decorateInst(store);
         instr = store;
     }
-    else if (op == StoreKind::Modify && modifyop && !needlock && Order != AtomicOrdering::NotAtomic && !isboxed && realelty == elty && !intcast && elty->isIntegerTy() && !jl_type_hasptr(jltype)) {
+    else if (op == StoreKind::Modify && modifyop && !needlock && Order != AtomicOrdering::NotAtomic && !isboxed && realelty == elty && !intcast && elty->isIntegerTy() && !jl_type_hasptr(jltype) && !type_has_taggedwords(jltype)) {
         // emit this only if we have a possibility of optimizing it
         if (Order == AtomicOrdering::Unordered)
             Order = AtomicOrdering::Monotonic;
@@ -3295,7 +3314,9 @@ static bool field_may_be_null(const jl_cgval_t &strct, jl_datatype_t *stt, size_
     size_t nfields = jl_datatype_nfields(stt);
     if (idx < nfields - (unsigned)stt->name->n_uninitialized)
         return false;
-    if (!jl_field_isptr(stt, idx) && !jl_type_hasptr(jl_field_type(stt, idx)))
+    jl_value_t *ft = jl_field_type(stt, idx);
+    if (!jl_field_isptr(stt, idx) && !jl_type_hasptr(ft) &&
+        !jl_is_tagged_uniontype(ft))
         return false;
     if (strct.constant) {
         if ((jl_is_immutable(stt) || jl_field_isconst(stt, idx)) && jl_field_isdefined(strct.constant, idx))
@@ -3584,6 +3605,23 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
     }
     if (type_is_ghost(julia_type_to_llvm(ctx, jfty)))
         return ghostValue(ctx, jfty);
+    bool istagged = jl_is_tagged_uniontype(jfty);
+    if (istagged && strct.inline_roots.empty() && strct.ispointer() && tagged_union_has_codegen(jfty)) {
+        size_t byte_offset = jl_field_offset(jt, idx);
+        Value *addr = emit_ptrgep(ctx, data_pointer(ctx, strct), byte_offset);
+        return emit_tagged_load(ctx, addr, jfty, best_field_aliasinfo(ctx, strct, jt, idx, byte_offset),
+                order <= jl_memory_order_notatomic ? AtomicOrdering::Unordered : get_llvm_atomic_order(order),
+                field_may_be_null(strct, jt, idx), nullcheck);
+    }
+    // Otherwise decode through the runtime (throws UndefRefError for the zero
+    // word). That includes the #undef check of an inline value whose first
+    // pointer is a tagged word, an integer to LLVM.
+    if (istagged ||
+        (!jl_field_isptr(jt, idx) && type_has_taggedwords(jfty) && field_may_be_null(strct, jt, idx))) {
+        Value *fld = ctx.builder.CreateCall(prepare_call(jlgetnthfieldchecked_func),
+                { boxed(ctx, strct), ConstantInt::get(ctx.types().T_size, idx) });
+        return mark_julia_type(ctx, fld, true, jfty);
+    }
     Value *needlock = nullptr;
     if (isatomic && !jl_field_isptr(jt, idx) && jl_datatype_size(jfty) > MAX_ATOMIC_SIZE) {
         assert(strct.isboxed);
@@ -4301,9 +4339,11 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
         assert(jl_is_concrete_immutable(jt) && "This type shouldn't have been unboxed.");
         Type *t = julia_type_to_llvm(ctx, jt);
         assert(!type_is_ghost(t)); // ghost values should have been handled by vinfo.constant above!
-        box = _boxed_special(ctx, vinfo, t);
-        if (!box) {
-            bool do_promote = vinfo.promotion_point;
+        auto new_box = [&]() JL_CANSAFEPOINT -> Value* {
+            Value *box = _boxed_special(ctx, vinfo, t);
+            if (box)
+                return box;
+            bool do_promote = vinfo.promotion_point && !vinfo.Vboxed;
             if (do_promote && is_promotable && vinfo.inline_roots.empty()) {
                 IRBuilderBase::InsertPointGuard IP(ctx.builder);
                 ctx.builder.SetInsertPoint(vinfo.promotion_point);
@@ -4326,9 +4366,260 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
                 setName(ctx.emission_context, box, arg_typename);
                 init_bits_cgval(ctx, box, vinfo);
             }
-        }
+            return box;
+        };
+        // a value split out of a union may still have the box it came in
+        if (vinfo.Vboxed)
+            box = emit_guarded_test(ctx, ctx.builder.CreateIsNull(vinfo.Vboxed), vinfo.Vboxed, new_box);
+        else
+            box = new_box();
     }
     return box;
+}
+
+// --- tagged words (doc/src/devdocs/taggedwords.md) ---
+//
+// A loaded tagged word becomes a split union over its union type: TIndex names
+// an immediate component, whose value is copied to a stack slot, or is
+// UNION_BOX_MARKER for a reference, kept in Vboxed. As for any split union, a
+// reference to a small component (a singleton such as Nothing, or an isbits
+// type such as Int) also carries that component's index. A store encodes an
+// immediate without boxing it.
+
+// whether codegen accesses the tagged words of union `ut` itself: every
+// immediate needs a union index, which runs out after 127 small components,
+// and a decoded reference brings no inline roots, so no small component may
+// hold pointers
+static bool tagged_union_has_codegen(jl_value_t *ut)
+{
+    for (unsigned i = 0; jl_datatype_t *jt = jl_nth_immediate_component(ut, i); i++) {
+        if (get_box_tindex(jt, ut) == 0)
+            return false;
+    }
+    bool allunbox;
+    size_t nbytes, align, min_align, inline_roots;
+    union_alloca_type((jl_uniontype_t*)ut, allunbox, nbytes, align, min_align, inline_roots);
+    return inline_roots == 0;
+}
+
+// whether codegen accesses the elements of Memory{ety} with `layout` itself;
+// elements embedding tagged words in a struct go through the runtime
+static bool memory_has_codegen(const jl_datatype_layout_t *layout, jl_value_t *ety) JL_CANSAFEPOINT
+{
+    if (layout->ntaggedwords == 0)
+        return true;
+    return layout->flags.arrayelem_istagged && tagged_union_has_codegen(ety);
+}
+
+static jl_cgval_t emit_tagged_load(jl_codectx_t &ctx, Value *ptr, jl_value_t *ut, const jl_aliasinfo_t &ai,
+                                   AtomicOrdering Order, bool maybe_null, Value **nullcheck)
+{
+    Type *T_size = ctx.types().T_size;
+    IntegerType *T_int8 = getInt8Ty(ctx.builder.getContext());
+    // one load yields kind and payload together; as a tracked pointer it roots
+    // a reference, and the GC skips an immediate
+    LoadInst *word = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, ptr, ctx.types().alignof_ptr);
+    word->setOrdering(Order);
+    ai.decorateInst(word);
+    setName(ctx.emission_context, word, "tagged_word");
+    if (maybe_null)
+        null_pointer_check(ctx, word, nullcheck);
+    Value *bits = ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, word), T_size);
+    Value *isref = ctx.builder.CreateIsNull(ctx.builder.CreateAnd(bits, ConstantInt::get(T_size, 3)));
+    Value *box = ctx.builder.CreateSelect(isref, word, Constant::getNullValue(ctx.types().T_prjlvalue));
+
+    // tag 2i + 1 selects immediate component i, whose index a table packed one
+    // byte per component gives
+    unsigned k = jl_tagged_word_tagwidth(ut);
+    uint32_t table = 0;
+    size_t payload_size = 0;
+    for (unsigned i = 0; jl_datatype_t *jt = jl_nth_immediate_component(ut, i); i++) {
+        table |= get_box_tindex(jt, ut) << (8 * i);
+        payload_size = std::max(payload_size, (size_t)jl_datatype_size(jt));
+    }
+    Value *i = ctx.builder.CreateLShr(ctx.builder.CreateAnd(bits, ConstantInt::get(T_size, (1 << k) - 1)), 1);
+    Value *imm_tindex = ctx.builder.CreateTrunc(
+            ctx.builder.CreateLShr(ConstantInt::get(T_size, table), ctx.builder.CreateShl(i, 3)), T_int8);
+
+    Value *ref_tindex = ConstantInt::get(T_int8, UNION_BOX_MARKER);
+    Value *tag = nullptr;
+    unsigned counter = 0;
+    for_each_uniontype_small(
+            [&](unsigned idx, jl_datatype_t *jt) JL_CANSAFEPOINT {
+                unsigned imm;
+                if (jl_immediate_component_index(ut, jt, &imm))
+                    return;
+                if (!tag)
+                    tag = emit_typeof(ctx, box, /*maybenull*/true, /*justtag*/true);
+                Value *cmp = ctx.builder.CreateICmpEQ(emit_tagfrom(ctx, jt), tag);
+                ref_tindex = ctx.builder.CreateSelect(cmp, ConstantInt::get(T_int8, UNION_BOX_MARKER | idx), ref_tindex);
+            },
+            ut,
+            counter);
+    Value *tindex = ctx.builder.CreateSelect(isref, ref_tindex, imm_tindex);
+
+    // the payload is the value zero-extended, so its low bytes hold any immediate
+    bool allunbox;
+    size_t min_align, nbytes, inline_roots;
+    AllocaInst *slot = try_emit_union_alloca(ctx, (jl_uniontype_t*)ut, allunbox, min_align, nbytes, inline_roots);
+    assert(slot && inline_roots == 0 && payload_size <= nbytes);
+    Value *payload = ctx.builder.CreateTrunc(ctx.builder.CreateLShr(bits, k),
+            Type::getIntNTy(ctx.builder.getContext(), 8 * payload_size));
+    ctx.builder.CreateAlignedStore(payload, slot, slot->getAlign());
+    Value *V = ctx.builder.CreateSelect(isref, decay_derived(ctx, box), decay_derived(ctx, slot));
+    jl_cgval_t ret = mark_julia_slot(V, ut, tindex, union_slot_aliasinfo(ctx, ut));
+    ret.Vboxed = box;
+    return ret;
+}
+
+// the tagged word holding immediate `v` of component `jt`, as an integer
+static Value *emit_tagged_immediate(jl_codectx_t &ctx, const jl_cgval_t &v, jl_datatype_t *jt,
+                                    unsigned k, unsigned tag) JL_CANSAFEPOINT
+{
+    Type *lt = julia_type_to_llvm(ctx, (jl_value_t*)jt);
+    Value *bits = emit_unbox(ctx, lt, v);
+    if (!lt->isIntegerTy())
+        bits = ctx.builder.CreateBitCast(bits, Type::getIntNTy(ctx.builder.getContext(), lt->getPrimitiveSizeInBits()));
+    // zero-extending from the value's own width leaves the bits above it clear
+    bits = ctx.builder.CreateZExt(bits, ctx.types().T_size);
+    return ctx.builder.CreateOr(ctx.builder.CreateShl(bits, k), ConstantInt::get(ctx.types().T_size, tag));
+}
+
+// The tagged word encoding `rhs`, a value of a component of union `ut`. It is
+// a tracked pointer even for an immediate: an integer would leave a reference
+// unrooted wherever LLVM moves the conversion. Sets `*ref` to the reference for
+// the write barrier (null for an immediate) and `*ref_maybe_null` if that is
+// only known at runtime.
+static Value *emit_tagged_encode(jl_codectx_t &ctx, const jl_cgval_t &rhs, jl_value_t *ut,
+                                 Value **ref, bool *ref_maybe_null) JL_CANSAFEPOINT
+{
+    IntegerType *T_int8 = getInt8Ty(ctx.builder.getContext());
+    unsigned k = jl_tagged_word_tagwidth(ut);
+    auto as_word = [&](Value *imm) JL_CANSAFEPOINT {
+        return track_pjlvalue(ctx, ctx.builder.CreateIntToPtr(imm, ctx.types().T_pjlvalue));
+    };
+    *ref_maybe_null = false;
+    jl_value_t *rt = rhs.constant ? jl_typeof(rhs.constant) : rhs.typ;
+    if (jl_is_concrete_type(rt)) {
+        unsigned i;
+        if (jl_immediate_component_index(ut, (jl_datatype_t*)rt, &i)) {
+            *ref = nullptr;
+            return as_word(emit_tagged_immediate(ctx, rhs, (jl_datatype_t*)rt, k, 2 * i + 1));
+        }
+        *ref = boxed(ctx, rhs);
+        return *ref;
+    }
+
+    // otherwise switch on the union index, which names every immediate
+    jl_cgval_t v = convert_julia_type_to_union(ctx, rhs, ut, false);
+    if (v.typ == jl_bottom_type) {
+        *ref = nullptr;
+        return UndefValue::get(ctx.types().T_prjlvalue);
+    }
+    Value *tindex = ctx.builder.CreateAnd(v.TIndex, ConstantInt::get(T_int8, 0x7f));
+    BasicBlock *refBB = BasicBlock::Create(ctx.builder.getContext(), "tagged_ref", ctx.f);
+    BasicBlock *postBB = BasicBlock::Create(ctx.builder.getContext(), "post_tagged", ctx.f);
+    SwitchInst *sw = ctx.builder.CreateSwitch(tindex, refBB);
+    SmallVector<std::pair<Value*, BasicBlock*>, 4> words;
+    SmallBitVector skip(1, true); // box_union skips the immediates and an existing box
+    for (unsigned i = 0; jl_datatype_t *jt = jl_nth_immediate_component(ut, i); i++) {
+        unsigned idx = get_box_tindex(jt, ut);
+        if (skip.size() <= idx)
+            skip.resize(idx + 1);
+        skip[idx] = true;
+        if (!jl_subtype((jl_value_t*)jt, rhs.typ))
+            continue;
+        BasicBlock *immBB = BasicBlock::Create(ctx.builder.getContext(), "tagged_immediate", ctx.f);
+        sw->addCase(ConstantInt::get(T_int8, idx), immBB);
+        ctx.builder.SetInsertPoint(immBB);
+        Value *w = as_word(emit_tagged_immediate(ctx, update_julia_type(ctx, v, (jl_value_t*)jt), jt, k, 2 * i + 1));
+        words.push_back({w, ctx.builder.GetInsertBlock()});
+        ctx.builder.CreateBr(postBB);
+    }
+    size_t nimm = words.size();
+
+    // a reference is the existing box, or a new one for an unboxed small component
+    ctx.builder.SetInsertPoint(refBB);
+    Value *box = nullptr;
+    if (v.isboxed) {
+        box = v.Vboxed;
+    }
+    else {
+        bool anysmallref = false;
+        unsigned counter = 0;
+        for_each_uniontype_small(
+                [&](unsigned idx, jl_datatype_t*) JL_CANSAFEPOINT {
+                    if (idx >= skip.size() || !skip[idx])
+                        anysmallref = true;
+                },
+                v.typ,
+                counter);
+        if (anysmallref)
+            box = box_union(ctx, v, skip);
+        if (v.Vboxed) {
+            Value *isboxed = ctx.builder.CreateIsNotNull(
+                    ctx.builder.CreateAnd(v.TIndex, ConstantInt::get(T_int8, UNION_BOX_MARKER)));
+            box = box ? ctx.builder.CreateSelect(isboxed, v.Vboxed, box) : v.Vboxed;
+        }
+    }
+    if (box) {
+        words.push_back({box, ctx.builder.GetInsertBlock()});
+        ctx.builder.CreateBr(postBB);
+    }
+    else {
+        ctx.builder.CreateUnreachable();
+    }
+
+    ctx.builder.SetInsertPoint(postBB);
+    PHINode *word = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, words.size());
+    for (auto &w : words)
+        word->addIncoming(w.first, w.second);
+    if (!box || nimm == 0) {
+        *ref = box;
+        return word;
+    }
+    PHINode *refphi = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, words.size());
+    for (size_t j = 0; j < words.size(); j++)
+        refphi->addIncoming(j < nimm ? Constant::getNullValue(ctx.types().T_prjlvalue) : box, words[j].second);
+    *ref = refphi;
+    *ref_maybe_null = true;
+    return word;
+}
+
+// store `rhs` into the tagged word of union type `ut` at `ptr`, owned by
+// `parent`, which is null if the store needs no write barrier
+static void emit_tagged_store(jl_codectx_t &ctx, Value *parent, Value *ptr, const jl_cgval_t &rhs,
+                              jl_value_t *ut, const jl_aliasinfo_t &ai, AtomicOrdering Order)
+{
+    Value *ref;
+    bool ref_maybe_null;
+    Value *word = emit_tagged_encode(ctx, rhs, ut, &ref, &ref_maybe_null);
+    // pre-write barrier, as in typed_store
+#ifdef GC_BARRIER_SNAPSHOT
+    // the old word may be a reference whatever is stored; this barrier ignores
+    // the child
+    if (parent)
+        emit_write_barrier(ctx, parent, ptr, ref ? ref : Constant::getNullValue(ctx.types().T_prjlvalue));
+#else
+    if (parent && ref && ref_maybe_null) {
+        // the barrier loads the child's tag, so skip it for an immediate
+        BasicBlock *wbBB = BasicBlock::Create(ctx.builder.getContext(), "tagged_wb", ctx.f);
+        BasicBlock *postBB = BasicBlock::Create(ctx.builder.getContext(), "post_tagged_wb", ctx.f);
+        ctx.builder.CreateCondBr(null_pointer_cmp(ctx, ref), wbBB, postBB);
+        ctx.builder.SetInsertPoint(wbBB);
+        emit_write_barrier(ctx, parent, ptr, ref);
+        ctx.builder.CreateBr(postBB);
+        ctx.builder.SetInsertPoint(postBB);
+    }
+    else if (parent && ref) {
+        emit_write_barrier(ctx, parent, ptr, ref);
+    }
+#endif
+    // a plain store of a word that may hold a reference releases, as for a
+    // boxed field
+    StoreInst *store = ctx.builder.CreateAlignedStore(word, ptr, ctx.types().alignof_ptr);
+    store->setOrdering(Order == AtomicOrdering::NotAtomic ? AtomicOrdering::Release : Order);
+    ai.decorateInst(store);
 }
 
 // copy src to dest, if src is justbits. if skip is true, the value of dest is undefined
@@ -4589,6 +4880,20 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
     bool isboxed = jl_field_isptr(sty, idx0);
     unsigned align = jl_field_align(sty, idx0);
     bool maybe_null = field_may_be_null(strct, sty, idx0);
+    if (!isboxed && jl_is_tagged_uniontype(jfty)) {
+        // other operations take the generic builtin path
+        assert(op == StoreKind::Set);
+        if (tagged_union_has_codegen(jfty)) {
+            emit_tagged_store(ctx, wb ? boxed(ctx, strct) : nullptr, addr, rhs, jfty, ai, Order);
+            return rhs;
+        }
+        ctx.builder.CreateCall(prepare_call(jlstoretaggedword_func),
+                { boxed(ctx, strct), ConstantInt::get(ctx.types().T_size, byte_offset),
+                  literal_pointer_val(ctx, jfty), boxed(ctx, rhs),
+                  ConstantInt::get(getInt32Ty(ctx.builder.getContext()),
+                                   Order == AtomicOrdering::NotAtomic ? 0 : 1) });
+        return rhs;
+    }
     Value *ptindex = nullptr;
     if (!isboxed && jl_is_uniontype(jfty)) {
         size_t fsz1 = jl_field_size(sty, idx0) - 1;
@@ -4862,6 +5167,15 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         for (size_t i = nargs; i < nf; i++) {
             if (!jl_field_isptr(sty, i) && jl_is_uniontype(jl_field_type(sty, i))) {
                 const jl_aliasinfo_t &ai = strctinfo.aliasinfo;
+                if (jl_is_tagged_uniontype(jl_field_type(sty, i))) {
+                    // the zero word is #undef
+                    auto *store = ctx.builder.CreateAlignedStore(
+                            ConstantInt::get(ctx.types().T_size, 0),
+                            emit_ptrgep(ctx, strct, jl_field_offset(sty, i)),
+                            Align(sizeof(void*)));
+                    ai.decorateInst(store);
+                    continue;
+                }
                 auto *store = ctx.builder.CreateAlignedStore(
                         ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0),
                         emit_ptrgep(ctx, strct, jl_field_offset(sty, i) + jl_field_size(sty, i) - 1),
@@ -4872,12 +5186,12 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         // TODO: verify that nargs <= nf (currently handled by front-end)
         for (size_t i = 0; i < nargs; i++) {
             jl_cgval_t rhs = argv[i];
+            jl_value_t *ft = jl_svecref(sty->types, i);
             bool need_wb; // set to true if the store might cause the allocation of a box newer than the struct
-            if (jl_field_isptr(sty, i))
+            if (jl_field_isptr(sty, i) || jl_is_tagged_uniontype(ft))
                 need_wb = !rhs.isboxed;
             else
                 need_wb = false;
-            jl_value_t *ft = jl_svecref(sty->types, i);
             emit_typecheck(ctx, rhs, ft, "new"); // n.b. ty argument must be concrete
             rhs = update_julia_type(ctx, rhs, ft);
             if (rhs.typ == jl_bottom_type)

@@ -484,6 +484,8 @@ JL_DLLEXPORT int jl_running_on_valgrind(void)
 
 static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTSAFEPOINT
 {
+    if (!jl_tagged_word_isptr((uintptr_t)v))
+        return 0; // #undef, or an immediate
     // ignore items that are given a special relocation representation
     if (s->incremental && jl_object_in_image(v))
         return 0;
@@ -569,7 +571,7 @@ static jl_value_t *get_replaceable_field(jl_value_t **addr, int mutabl) JL_CANSA
     jl_value_t *fld = (jl_value_t*)ptrhash_get(&field_replace, addr);
     if (fld == HT_NOTFOUND) {
         fld = *addr;
-        if (mutabl && fld && jl_is_cpointer_type(jl_typeof(fld)) && jl_unbox_voidpointer(fld) != NULL && jl_unbox_voidpointer(fld) != (void*)(uintptr_t)-1) {
+        if (mutabl && jl_tagged_word_isptr((uintptr_t)fld) && jl_is_cpointer_type(jl_typeof(fld)) && jl_unbox_voidpointer(fld) != NULL && jl_unbox_voidpointer(fld) != (void*)(uintptr_t)-1) {
             void **nullval = ptrhash_bp(&nullptrs, (void*)jl_typeof(fld));
             if (*nullval == HT_NOTFOUND) {
                 void *C_NULL = NULL;
@@ -1757,12 +1759,14 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                                 size_t offset = i * elsz + jl_ptr_offset(t, j) * sizeof(jl_value_t*);
                                 jl_value_t *fld = get_replaceable_field((jl_value_t**)&data[offset], 1);
                                 size_t fld_pos = reloc_offset + headersize + offset;
-                                if (fld != NULL) {
+                                if (jl_tagged_word_isptr((uintptr_t)fld)) {
                                     arraylist_push(&s->relocs_list, (void*)(uintptr_t)fld_pos); // relocation location
                                     arraylist_push(&s->relocs_list, (void*)backref_id(s, fld, s->link_ids_relocs)); // relocation target
                                     record_uniquing(s, fld, fld_pos);
+                                    fld = NULL; // relocation offset (none)
                                 }
-                                memset(&f->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
+                                // #undef and immediates are written as is
+                                memcpy(&f->buf[fld_pos], &fld, sizeof(fld));
                             }
                         }
                     }
@@ -1904,12 +1908,14 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 int mutabl = !jl_field_isconst(t, fldidx - 1);
                 jl_value_t *fld = get_replaceable_field((jl_value_t**)&data[offset], mutabl);
                 size_t fld_pos = offset + reloc_offset;
-                if (fld != NULL) {
+                if (jl_tagged_word_isptr((uintptr_t)fld)) {
                     arraylist_push(&s->relocs_list, (void*)(uintptr_t)(fld_pos)); // relocation location
                     arraylist_push(&s->relocs_list, (void*)backref_id(s, fld, s->link_ids_relocs)); // relocation target
                     record_uniquing(s, fld, fld_pos);
+                    fld = NULL; // relocation offset (none)
                 }
-                memset(&f->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
+                // #undef and immediates are written as is
+                memcpy(&f->buf[fld_pos], &fld, sizeof(fld));
             }
 
             // Need do a tricky fieldtype walk an record all memoryref we find inlined in this value
@@ -3042,6 +3048,22 @@ JL_DLLEXPORT void jl_set_precompile_field_replace(jl_value_t *val, jl_value_t *f
     jl_value_t *ft = jl_field_type_concrete(st, idxval);
     if (!jl_isa(newval, ft))
         jl_type_error("setfield!", ft, newval);
+    // replaced pointers are kept in a pointer hash table, which cannot hold an
+    // immediate (the smallest one equals HT_NOTFOUND)
+    int has_immediate = 0;
+    if (jl_is_uniontype(ft) && jl_field_istagged(st, idxval)) {
+        uintptr_t w = jl_tagged_word_encode(ft, newval);
+        has_immediate = w != 0 && !jl_tagged_word_isptr(w);
+    }
+    else if (!jl_field_isptr(st, idxval) && jl_is_datatype(ft) && ((jl_datatype_t*)ft)->layout->ntaggedwords > 0) {
+        for (size_t j = 0; j < ((jl_datatype_t*)ft)->layout->npointers; j++) {
+            uintptr_t w = ((uintptr_t*)newval)[jl_ptr_offset((jl_datatype_t*)ft, j)];
+            has_immediate |= w != 0 && !jl_tagged_word_isptr(w);
+        }
+    }
+    if (has_immediate)
+        jl_errorf("cannot replace field %zu of %s with a value holding an immediate",
+                  idxval + 1, jl_symbol_name(st->name->name));
     JL_LOCK(&precompile_field_replace_lock);
     if (precompile_field_replace == NULL) {
         precompile_field_replace = jl_alloc_svec(3);
@@ -3210,6 +3232,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             char *fldaddr = (char*)val + offs;
             if (jl_field_isptr(st, field)) {
                 record_field_change((jl_value_t**)fldaddr, newval);
+            }
+            else if (jl_is_uniontype(jl_field_type_concrete(st, field)) && jl_field_istagged(st, field)) {
+                uintptr_t w = jl_tagged_word_encode(jl_field_type_concrete(st, field), newval);
+                record_field_change((jl_value_t**)fldaddr, (jl_value_t*)w);
             }
             else if (jl_field_size(st, field) > 0) {
                 // replace the bits

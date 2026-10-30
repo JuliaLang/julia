@@ -138,6 +138,8 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
         else {
             jl_datatype_t *ft = (jl_datatype_t*)jl_field_type_concrete(dt, f);
             if (jl_is_uniontype(ft)) {
+                if (jl_field_istagged(dt, f))
+                    continue; // compared with the pointers below
                 size_t idx = jl_field_size(dt, f) - 1;
                 uint8_t asel = ((uint8_t*)ao)[idx];
                 uint8_t bsel = ((uint8_t*)bo)[idx];
@@ -183,7 +185,8 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
         jl_value_t *af = ((jl_value_t**)a)[offs];
         jl_value_t *bf = ((jl_value_t**)b)[offs];
         if (af != bf) {
-            if (af == NULL || bf == NULL)
+            // #undef, or an immediate, which is canonical
+            if (!jl_tagged_word_isptr((uintptr_t)af) || !jl_tagged_word_isptr((uintptr_t)bf))
                 return 0;
             if (!jl_egal(af, bf))
                 return 0;
@@ -522,6 +525,17 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
         else {
             jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type_concrete(dt, f);
             if (jl_is_uniontype(fieldtype)) {
+                if (jl_field_istagged(dt, f)) {
+                    uintptr_t w = *(uintptr_t*)vo;
+                    if (jl_tagged_word_isptr(w))
+                        u = jl_object_id((jl_value_t*)w);
+                    else if (w == 0)
+                        u = 0; // #undef
+                    else
+                        u = bits_hash(&w, sizeof(w)); // immediates are canonical
+                    h = bitmix(h, u);
+                    continue;
+                }
                 uint8_t sel = ((uint8_t*)vo)[jl_field_size(dt, f) - 1];
                 fieldtype = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)fieldtype, sel);
             }

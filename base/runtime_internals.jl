@@ -626,17 +626,18 @@ struct DataTypeLayout
     nfields::UInt32
     npointers::UInt32
     firstptr::Int32
+    ntaggedwords::UInt32
     alignment::UInt16
     flags::UInt16
     # haspadding : 1;
     # fielddesc_type : 2;
     # arrayelem_isboxed : 1;
     # arrayelem_isunion : 1;
+    # arrayelem_istagged : 1;
     # arrayelem_isatomic : 1;
     # arrayelem_islocked : 1;
     # isbitsegal : 1;
     # unused_bits : 7;
-    # padding : 1;
 end
 
 function DataTypeLayout(dt::DataType)
@@ -684,6 +685,7 @@ function aligned_sizeof(@nospecialize T::Type)
         al = datatype_alignment(T)
         return LLT_ALIGN(Core.sizeof(T), al)
     end
+    # boxed values and tagged words both occupy one pointer-sized word
     return Core.sizeof(Ptr{Cvoid})
 end
 
@@ -710,7 +712,7 @@ This may not be the case if the type contains pointers to other values whose ega
 independent of their identity (e.g. immutable structs, some types, etc.).
 """
 datatype_isbitsegal(dt::DataType) = (@_foldable_meta; datatype_isbitsegal(DataTypeLayout(dt)))
-datatype_isbitsegal(dtl::DataTypeLayout) = (dtl.flags & (1<<7)) != 0
+datatype_isbitsegal(dtl::DataTypeLayout) = (dtl.flags & (1<<8)) != 0
 
 """
     Base.datatype_nfields(dt::DataType)::UInt32
@@ -729,6 +731,15 @@ Return the number of pointers in the layout of a datatype.
 """
 datatype_npointers(dt::DataType) = (@_foldable_meta; datatype_npointers(DataTypeLayout(dt)))
 datatype_npointers(dtl::DataTypeLayout) = dtl.npointers
+
+"""
+    Base.datatype_ntaggedwords(dt::DataType)::Int
+
+Return how many of the pointers in the layout of a datatype are tagged words,
+which may hold an immediate value instead of a reference.
+"""
+datatype_ntaggedwords(dt::DataType) = (@_foldable_meta; datatype_ntaggedwords(DataTypeLayout(dt)))
+datatype_ntaggedwords(dtl::DataTypeLayout) = dtl.ntaggedwords
 
 """
     Base.datatype_pointerfree(dt::DataType)::Bool
@@ -762,9 +773,11 @@ Can be called on any `isconcretetype`, but only meaningful on `Memory`.
 0 = inlinealloc
 1 = isboxed
 2 = isbitsunion
+3 = tagged word
 """
 datatype_arrayelem(dt::DataType) = (@_foldable_meta; datatype_arrayelem(DataTypeLayout(dt)))
-datatype_arrayelem(dtl::DataTypeLayout) = (dtl.flags >> 3) & 3
+datatype_arrayelem(dtl::DataTypeLayout) =
+    (dtl.flags & (1 << 5)) != 0 ? 3 : Int((dtl.flags >> 3) & 3)
 
 datatype_layoutsize(dt::DataType) = (@_foldable_meta; datatype_layoutsize(DataTypeLayout(dt)))
 datatype_layoutsize(dtl::DataTypeLayout) = dtl.size % Int

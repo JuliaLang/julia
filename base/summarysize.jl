@@ -92,6 +92,13 @@ function summarysize(obj;
                         val = get_nth_pointer(elt, p)
                     end
                 end
+            elseif istaggedunion(T)
+                # reading an immediate element would box it
+                nf = length(x)
+                w = atomic_pointerref(Ptr{UInt}(pointer(x, i)), :monotonic)
+                if w != 0 && tagged_word_isref(w)
+                    val = unsafe_pointer_to_objref(Ptr{Cvoid}(w))
+                end
             else
                 nf = length(x)
                 if @inbounds @inline isassigned(x, i)

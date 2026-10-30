@@ -119,7 +119,8 @@ STATIC_INLINE void jl_gc_genericmemory_copy_ptr(const jl_value_t *owner, char *d
             for (uint32_t j = 0; j < ly->npointers; j++) {
                 size_t offset = jl_ptr_offset(dt, j);
                 void *val = jl_atomic_load_relaxed(dest_p + i * stride + offset);
-                if (val && !(jl_astaggedvalue(val)->bits.gc & 1 /* GC_MARKED */)) {
+                // skip #undef and immediates (jl_tagged_word_isptr)
+                if (val && ((uintptr_t)val & 3) == 0 && !(jl_astaggedvalue(val)->bits.gc & 1 /* GC_MARKED */)) {
                     jl_gc_queue_root(owner);
                     return;
                 }

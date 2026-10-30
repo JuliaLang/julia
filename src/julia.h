@@ -722,8 +722,9 @@ typedef enum {
 typedef struct {
     uint32_t size;
     uint32_t nfields;
-    uint32_t npointers; // number of pointers embedded inside
+    uint32_t npointers; // number of pointers embedded inside, tagged words included
     int32_t first_ptr; // index of the first pointer (or -1)
+    uint32_t ntaggedwords; // how many of those pointers are tagged words, which may hold an immediate
     uint16_t alignment; // strictest alignment over all fields
     struct { // combine these fields into a struct so that we can take addressof them
         uint16_t haspadding : 1; // has internal undefined bytes
@@ -731,6 +732,7 @@ typedef struct {
         // metadata bit only for GenericMemory eltype layout
         uint16_t arrayelem_isboxed : 1;
         uint16_t arrayelem_isunion : 1;
+        uint16_t arrayelem_istagged : 1; // element is a tagged word
         uint16_t arrayelem_isatomic : 1;
         uint16_t arrayelem_islocked : 1;
         // If set, this type's egality can be determined entirely by comparing
@@ -739,7 +741,6 @@ typedef struct {
         // trailing bits of `size` that are not part of the value (primitive types);
         // bounded by 8 * (MAX_ALIGN - 1) + 7
         uint16_t unused_bits : 7;
-        uint16_t padding : 1;
     } flags;
     // union {
     //     jl_fielddesc8_t field8[nfields];
@@ -1795,6 +1796,25 @@ static inline uint32_t jl_ptr_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
         assert(ly->flags.fielddesc_type == JL_FIELDDESC_32);
         return ((const uint32_t*)ptrs)[i];
     }
+}
+
+// whether the i-th field is stored as a tagged word: a non-pointer field
+// whose word appears in the pointer table (callers additionally check that the
+// field type is a Union, since an inline struct field may start with a pointer
+// at the same offset)
+static inline int jl_field_istagged(jl_datatype_t *st, size_t i) JL_NOTSAFEPOINT
+{
+    const jl_datatype_layout_t *ly = st->layout; // NOT jl_datatype_layout(st)
+    if (ly->ntaggedwords == 0 || jl_field_isptr(st, i))
+        return 0;
+    uint32_t offs = jl_field_offset(st, i);
+    if (offs % sizeof(void*) != 0)
+        return 0;
+    for (uint32_t j = 0; j < ly->npointers; j++) {
+        if (jl_ptr_offset(st, j) == offs / sizeof(void*))
+            return 1;
+    }
+    return 0;
 }
 
 static inline int jl_field_isatomic(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
