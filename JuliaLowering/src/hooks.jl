@@ -6,12 +6,12 @@ Becomes `Core._lower()` upon activating JuliaLowering.
 Returns an svec with the lowered code (usually expr) as its first element, and
 (until integration is less experimental) whatever we want after it
 """
-function core_lowering_hook(@nospecialize(code), mod::Module, file::String="none",
+function core_lowering_hook(mod::Module, @nospecialize(code), file::String="none",
                             line::Int=0, world::UInt=typemax(Csize_t), warn::Bool=false)
-    return invoke_in_lowering_world(_core_lowering_hook, code, mod, file, line, world, warn)
+    return invoke_in_lowering_world(_core_lowering_hook, mod, code, file, line, world, warn)
 end
 
-function _core_lowering_hook(@nospecialize(code), mod::Module, file::String,
+function _core_lowering_hook(mod::Module, @nospecialize(code), file::String,
                              line::Int, world::UInt, warn::Bool)
     if !(code isa SyntaxTree || code isa Expr)
         # e.g. LineNumberNode, integer...
@@ -38,12 +38,6 @@ function _core_lowering_hook(@nospecialize(code), mod::Module, file::String,
         else
             rethrow(to_compatible_exception(exc))
         end
-
-        # TODO: Re-enable flisp fallback once we're done collecting errors
-        # @error("JuliaLowering failed — falling back to flisp!",
-        #        exception=(exc,catch_backtrace()),
-        #        code=code, file=file, line=line, mod=mod)
-        # return Base.fl_lower(code, mod, file, line, world, warn)
     end
 end
 

@@ -5,12 +5,12 @@
         # Non-AST types are often sent through lowering
         stuff = Any[LineNumberNode(1), 123, 123.123, true, "foo", test_mod]
         for s in stuff
-            @test JL.core_lowering_hook(s, test_mod) == Core.svec(s)
+            @test JL.core_lowering_hook(test_mod, s) == Core.svec(s)
         end
 
         for ast_type in (Expr, SyntaxTree)
             ex = parsestmt(ast_type, "[1,2,3] .+= 1")
-            out = JL.core_lowering_hook(ex, test_mod)
+            out = JL.core_lowering_hook(test_mod, ex)
             @test out isa Core.SimpleVector && out[1] isa Expr
             val = Core.eval(test_mod, out[1])
             @test val == [2,3,4]
@@ -18,7 +18,7 @@
 
         # file argument mismatch with embedded linenumbernodes shouldn't crash
         ex = Expr(:block, LineNumberNode(111), :(x = 1), LineNumberNode(222), :(x + 1))
-        lwr = JuliaLowering.core_lowering_hook(ex, test_mod, "foo.jl", 333)[1]
+        lwr = JuliaLowering.core_lowering_hook(test_mod, ex, "foo.jl", 333)[1]
         @test Core.eval(test_mod, lwr) === 2
     end
 

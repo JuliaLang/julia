@@ -1164,7 +1164,7 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule,
 }
 
 // warn: Print any lowering warnings returned; otherwise ignore
-JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_value_t *expr, jl_module_t *inmodule,
+JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_module_t *inmodule, jl_value_t *expr,
                                      const char *filename, int line, size_t world, bool_t warn) JL_CANSAFEPOINT
 {
     JL_TIMING(LOWERING, LOWERING);
@@ -1215,20 +1215,20 @@ JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_value_t *expr, jl_module_t *inmodule,
 
 // Main C entry point to lowering.  Calls jl_fl_lower during bootstrap, and
 // Core._lower otherwise (this is also jl_fl_lower unless we have JuliaLowering)
-JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
+JL_DLLEXPORT jl_value_t *jl_lower(jl_module_t *inmodule, jl_value_t *expr,
                                   const char *filename, int line, size_t world, bool_t warn)
 {
     jl_value_t *julia_lower = NULL;
     if ((!julia_lower || julia_lower == jl_nothing) && jl_core_module)
         julia_lower = jl_get_global_value(jl_core_module, jl_symbol("_lower"), jl_current_task->world_age);
     if (!julia_lower || julia_lower == jl_nothing) {
-        return jl_fl_lower(expr, inmodule, filename, line, world, warn);
+        return jl_fl_lower(inmodule, expr, filename, line, world, warn);
     }
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 7);
     args[0] = julia_lower;
-    args[1] = expr;
-    args[2] = (jl_value_t*)inmodule;
+    args[1] = (jl_value_t*)inmodule;
+    args[2] = expr;
     args[3] = jl_cstr_to_string(filename);
     args[4] = jl_box_long(line);
     args[5] = jl_box_ulong(world);

@@ -1846,7 +1846,7 @@ quoted(@nospecialize(x)) = isa_ast_node(x) ? QuoteNode(x) : x
 # Implementation of generated functions
 function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool, loc::LineNumberNode)
     ci = ccall(:jl_fl_lower, Any, (Any, Any, Ptr{UInt8}, Csize_t, Csize_t, Cint),
-               ex, defmod, loc.file, loc.line, typemax(Csize_t), 0)[1]
+               defmod, ex, loc.file, loc.line, typemax(Csize_t), 0)[1]
     if !isa(ci, CodeInfo)
         if isa(ci, Expr) && ci.head === :error
             msg = ci.args[1]

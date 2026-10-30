@@ -272,7 +272,7 @@ Takes the expression `x` and returns an equivalent expression in lowered form
 for executing in module `m`.
 See also [`code_lowered`](@ref).
 """
-lower(m::Module, @nospecialize(x)) = Core._lower(x, m, "none", 0, typemax(Csize_t), false)[1]
+lower(m::Module, @nospecialize(x)) = Core._lower(m, x, "none", 0, typemax(Csize_t), false)[1]
 
 """
     @lower [m] x

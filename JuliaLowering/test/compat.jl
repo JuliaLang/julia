@@ -557,7 +557,7 @@ end
         Expr(:block,
             Expr(:(=), Expr(:ssavalue, 0), Expr(:call, GlobalRef(Core, :typeof), :x)),
             Expr(:return, Expr(:ssavalue, 0))))
-    out = JL.core_lowering_hook(lambda, test_mod)
+    out = JL.core_lowering_hook(test_mod, lambda)
     @test out isa Core.SimpleVector && out[1] isa Core.CodeInfo
 end
 

@@ -429,7 +429,7 @@ end
 
 function fl_lower(mod::Module, x::Expr)
     with_flisp() do
-        Base.fl_lower(x, mod, @__FILE__, @__LINE__, Base.get_world_counter())[1]
+        Base.fl_lower(mod, x, @__FILE__, @__LINE__, Base.get_world_counter())[1]
     end
 end
 

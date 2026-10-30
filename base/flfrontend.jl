@@ -22,10 +22,10 @@ function fl_parse(text::AbstractString, filename::AbstractString, lineno,
     fl_parse(String(text), String(filename), lineno, offset, options, edition)
 end
 
-function fl_lower(ex, mod::Module, filename::String="none",
+function fl_lower(mod::Module, @nospecialize(ex), filename::String="none",
                   lineno::Int=0, world::UInt=typemax(Csize_t), warn::Bool=false)
     ccall(:jl_fl_lower, Any, (Any, Any, Ptr{UInt8}, Cint, Csize_t, Cint),
-          ex, mod, filename, lineno, world, warn)
+          mod, ex, filename, lineno, world, warn)
 end
 
 function fl_toplevel_eval(mod::Module, @nospecialize(x))

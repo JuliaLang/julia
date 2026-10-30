@@ -1461,7 +1461,7 @@ function _defaultctors(@nospecialize(ty), functionloc)
         lambda = Expr(:lambda, argnames,
             Expr(:block, functionloc, Expr(:return, new_expr)))
         ci = ccall(:jl_lower, Any, (Any, Any, Ptr{UInt8}, UInt, UInt, Int32),
-                   lambda, mod, src_file, src_line, sub_int(UInt(0), UInt(1)), Int32(0))[1]
+                   mod, lambda, src_file, src_line, sub_int(UInt(0), UInt(1)), Int32(0))[1]
 
         # Build argdata: svec(svec(Type{ty}, ft1, ft2, ...), svec(tvars...), functionloc)
         atypes_arr = Array{Any,1}(Core.undef, n + 1)
@@ -1530,7 +1530,7 @@ function _defaultctors(@nospecialize(ty), functionloc)
     lambda = Expr(:lambda, argnames,
         Expr(:block, functionloc, body_args...))
     ci = ccall(:jl_lower, Any, (Any, Any, Ptr{UInt8}, UInt, UInt, Int32),
-               lambda, mod, src_file, src_line, sub_int(UInt(0), UInt(1)), Int32(0))[1]
+               mod, lambda, src_file, src_line, sub_int(UInt(0), UInt(1)), Int32(0))[1]
 
     # Build argdata: svec(svec(UnionAll...Type{dt}..., Any, Any, ...), svec(), functionloc)
     inner_atypes_arr = Array{Any,1}(Core.undef, n + 1)
