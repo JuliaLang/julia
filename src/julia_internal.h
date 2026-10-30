@@ -1023,6 +1023,7 @@ void jl_typegroup_region_drop(jl_deferred_typecache_t *region, size_t i) JL_NOTS
 void jl_typecache_region_layouts(jl_deferred_typecache_t *region) JL_CANSAFEPOINT;
 void jl_typecache_region_end(jl_deferred_typecache_t *region, int publish) JL_CANSAFEPOINT;
 void jl_reinstantiate_inner_types(jl_datatype_t *t) JL_CANSAFEPOINT;
+void jl_finish_inner_types(jl_datatype_t *t) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_datatype_super(jl_datatype_t *dt) JL_CANSAFEPOINT;
 // The supertype of `dt`, computed on first use if it was deferred; NULL while the

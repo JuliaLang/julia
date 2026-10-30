@@ -8102,6 +8102,14 @@ struct E40050{T} <: Ref{E40050{Int}}
 end
 @test isdefined(E40050{Int}, :types)
 @test E40050{Int}() === E40050{Int}.instance
+@test Base.ismutationfree(E40050{Int}) && Base.isidentityfree(E40050{Int})
+@test Base.isidentityfree(Val{1})
+struct G40050{T} <: Ref{G40050{Vector{T}}}
+    x::Int
+end
+let g = Base.unwrap_unionall(G40050).super.parameters[1] # made during the definition
+    @test Base.ismutationfree(g) && Base.isidentityfree(g)
+end
 
 # a supertype mentioning the type does not prevent inlining it
 struct V40050{T} <: Ref{Tuple{V40050{T},Int}}

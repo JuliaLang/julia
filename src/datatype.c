@@ -661,14 +661,15 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         return;
     }
     int isbitstype = st->isconcretetype && st->name->mayinlinealloc;
-    int ismutationfree = !w->layout || !jl_is_layout_opaque(w->layout);
-    int isidentityfree = !st->name->mutabl;
     // If layout doesn't depend on type parameters, it's stored in st->name->wrapper
     // and reused by all subtypes.
     if (w->layout) {
         st->layout = w->layout;
         st->zeroinit = w->zeroinit;
         st->has_concrete_subtype = w->has_concrete_subtype;
+        // `st` may have been made before `w` had its flags
+        st->ismutationfree = w->ismutationfree;
+        st->isidentityfree = w->isidentityfree;
         if (!jl_is_layout_opaque(st->layout)) { // e.g. jl_simplevector_type
             st->isbitstype = isbitstype && st->layout->npointers == 0;
             jl_maybe_allocate_singleton_instance(st);
@@ -676,6 +677,8 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         return;
     }
     assert(st->types && w->types);
+    int ismutationfree = 1;
+    int isidentityfree = !st->name->mutabl;
     size_t i, nfields = jl_svec_len(st->types);
     assert(st->name->n_uninitialized <= nfields);
     if (nfields == 0) {
@@ -3101,6 +3104,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             if (dt->types != NULL) {
                 jl_compute_field_offsets(dt);
             }
+            jl_finish_inner_types(dt);
 
             jl_precompute_memoized_dt(dt, 0);
             jl_maybe_allocate_singleton_instance(dt);

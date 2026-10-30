@@ -4358,7 +4358,23 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
         if (region == NULL && ndt->isconcretetype)
             jl_compute_field_offsets(ndt);
         assert(region == NULL || !ndt->isconcretetype || ptrhash_get(&region->pending, ndt) != HT_NOTFOUND);
-        jl_array_ptr_set(partial, j, NULL);
+        // a non-concrete one takes the layout of `t`, which is computed next
+        if (ndt->isconcretetype)
+            jl_array_ptr_set(partial, j, NULL);
+    }
+}
+
+// Once `t` has its layout, give it to the instantiations made during its
+// definition that take it, as it is given to those made afterwards
+void jl_finish_inner_types(jl_datatype_t *t)
+{
+    jl_array_t *partial = t->name->partial;
+    if (partial == NULL)
+        return;
+    for (size_t j = 0; t->layout && j < jl_array_nrows(partial); j++) {
+        jl_datatype_t *ndt = (jl_datatype_t*)jl_array_ptr_ref(partial, j);
+        if (ndt != NULL && ndt->layout == NULL)
+            jl_compute_field_offsets(ndt);
     }
     jl_gc_write(t->name, t->name->partial, jl_array_t, NULL);
 }
@@ -5480,6 +5496,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_uniontype_type->ismutationfree = 1;
     jl_intersect_type->ismutationfree = 1;
     jl_unionall_type->ismutationfree = 1;
+    jl_typeeq_type->ismutationfree = 1;
+    jl_typeegal_type->ismutationfree = 1;
     assert(((jl_datatype_t*)jl_array_any_type)->ismutationfree == 0);
     assert(((jl_datatype_t*)jl_array_uint8_type)->ismutationfree == 0);
 
