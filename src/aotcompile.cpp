@@ -1627,13 +1627,26 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     return partitions;
 }
 
+namespace {
+// The julia function and the code instance that a function of the image was
+// emitted for.
+struct UnitOwner {
+    std::pair<const void*, const void*> function;
+    const void *ci;
+};
+}
+
+// A function whose code weighs more than this is split by code instance.
+// The limit does not depend on the thread count, so the units stay the same.
+constexpr size_t jl_image_max_unit_weight = 30000;
+
 // Split a module into units for the object cache. Each unit holds the code of
 // one julia function, given by `methods` as the module and name of the method
 // for the functions of code instances, so that a change to a function only
 // invalidates the cached objects for that function. The other functions are small thunks and share a unit. The globals
 // without code are cheap to compile and are collected into one uncached unit,
 // which is returned first.
-static SmallVector<Partition, 0> partitionUnits(Module &M, const DenseMap<const Function*, std::pair<const void*, const void*>> &methods)
+static SmallVector<Partition, 0> partitionUnits(Module &M, const DenseMap<const Function*, UnitOwner> &methods)
 {
     DenseMap<GlobalValue *, unsigned> fvars, gvars;
     get_fvars_gvars(M, fvars, gvars);
@@ -1645,13 +1658,39 @@ static SmallVector<Partition, 0> partitionUnits(Module &M, const DenseMap<const 
     // their wrappers come from the same source, so they mostly change
     // together, and compiling a module has a fixed cost that is large next to
     // a small function.
+    // A function with many large specializations is split up by code
+    // instance instead. As one unit, it would be compiled on one thread long
+    // after the others had finished.
+    std::map<std::pair<const void*, const void*>, std::set<unsigned>> function_roots;
+    for (unsigned i = 0; i < partitioner.nodes.size(); ++i) {
+        auto F = dyn_cast<Function>(partitioner.nodes[i].GV);
+        if (!F)
+            continue;
+        auto owner = methods.find(F);
+        if (owner != methods.end())
+            function_roots[owner->second.function].insert(partitioner.find(i));
+    }
+    std::set<std::pair<const void*, const void*>> split_functions;
+    for (auto &[function, roots] : function_roots) {
+        size_t weight = 0;
+        for (unsigned root : roots)
+            weight += partitioner.nodes[root].weight;
+        if (weight > jl_image_max_unit_weight)
+            split_functions.insert(function);
+    }
     std::map<std::pair<const void*, const void*>, unsigned> groups;
     for (unsigned i = 0; i < partitioner.nodes.size(); ++i) {
         auto F = dyn_cast<Function>(partitioner.nodes[i].GV);
         if (!F)
             continue;
-        auto method = methods.find(F);
-        auto it = groups.try_emplace(method == methods.end() ? std::make_pair(nullptr, nullptr) : method->second, i);
+        auto owner = methods.find(F);
+        std::pair<const void*, const void*> group{nullptr, nullptr};
+        if (owner != methods.end()) {
+            group = owner->second.function;
+            if (split_functions.count(group))
+                group = {owner->second.ci, nullptr};
+        }
+        auto it = groups.try_emplace(group, i);
         if (!it.second)
             partitioner.merge(i, it.first->second);
     }
@@ -2826,7 +2865,7 @@ struct UnitOutputs {
 template<typename ModuleReleasedFunc>
 static UnitOutputs add_output_units(Module &M, TargetMachine &TM, unsigned workers,
                                     JobserverClient *jobserver, ObjCache &cache,
-                                    const DenseMap<const Function*, std::pair<const void*, const void*>> &methods,
+                                    const DenseMap<const Function*, UnitOwner> &methods,
                                     ModuleReleasedFunc module_released)
 {
     uint64_t start = jl_hrtime();
@@ -3614,7 +3653,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
         // Group the code by the function it belongs to: all its methods are
         // usually in one place in the source, and fewer, larger units cost
         // less to compile.
-        DenseMap<const Function*, std::pair<const void*, const void*>> methods;
+        DenseMap<const Function*, UnitOwner> methods;
         for (auto &[ci, ids] : data->jl_fvar_map) {
             jl_value_t *def = jl_get_ci_mi(ci)->def.value;
             std::pair<const void*, const void*> method{def, nullptr};
@@ -3622,7 +3661,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                 method = {((jl_method_t*)def)->module, ((jl_method_t*)def)->name};
             for (int32_t id : {(int32_t)std::get<0>(ids), (int32_t)std::get<1>(ids)}) {
                 if (id > 0)
-                    methods[cast<Function>(data->jl_sysimg_fvars[id - 1])] = method;
+                    methods[cast<Function>(data->jl_sysimg_fvars[id - 1])] = {method, ci};
             }
         }
         auto units = add_output_units(dataM, *SourceTM, workers, text_jobserver, image_cache, methods,
