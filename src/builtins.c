@@ -2878,6 +2878,7 @@ JL_CALLABLE(jl_f__typebody)
     }
     if (jl_is_structtype(dt))
         jl_compute_field_offsets(dt);
+    jl_finish_inner_types(dt);
     return args[0];
 }
 
