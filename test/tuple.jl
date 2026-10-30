@@ -101,6 +101,7 @@ end
         @test NTuple{40,Float64}(m) === ntuple(i -> Float64(i), Val(40))
         @test_throws ArgumentError NTuple{40,Float64}(Memory{Float64}(undef, 39))
     end
+    @test NTuple{40,Float64}(reshape(collect(1.0:40.0), 5, 8)) === ntuple(i -> Float64(i), Val(40))
 
     @test Tuple{Vararg{Float32}}(Float64[1,2,3]) === (1.0f0, 2.0f0, 3.0f0)
     @test Tuple{Int,Vararg{Float32}}(Float64[1,2,3]) === (1, 2.0f0, 3.0f0)
