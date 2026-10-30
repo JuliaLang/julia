@@ -181,12 +181,14 @@ function _find_loaded(re::Regex)
     error("no loaded shared object matching $re")
 end
 
-function link_image_cmd(path, out; is_sysimage::Bool = false)
+function link_image_cmd(path, out; is_sysimage::Bool = false, debug_runtime::Bool = isdebugbuild())
     PRIVATE_LIBDIR = "-L$(private_libdir())"
     LIBDIR = "-L$(libdir())"
     SHLIBDIR = "-L$(shlibdir())"
     LIBS = String[]
-    if isdebugbuild()
+    # `debug_runtime` describes the runtime the produced image will be loaded
+    # by, which may differ from this process when cross-bootstrapping.
+    if debug_runtime
         push!(LIBS, "-ljulia-debug")
         push!(LIBS, "-ljulia-internal-debug")
     else
@@ -204,7 +206,7 @@ function link_image_cmd(path, out; is_sysimage::Bool = false)
         append!(LIBS,     String["-lpthread", "-ladvapi32", "-lshell32", "-luser32"])
         append!(crtbegin, String[_find_static("dllcrt2.o"), _find_static("crtbegin.o")])
         append!(crtend,   String[_find_static("crtend.o")])
-        isdebugbuild() && push!(LIBS, "-lssp")
+        debug_runtime && push!(LIBS, "-lssp")
         append!(LIBS,     String["-lmingwex", "-lmsvcrt-os", "-lmingw32", "-lmingwex", "-lmsvcrt-os"])
     elseif Sys.isapple()
         # From `clang -dynamiclib -Wl,-v`
@@ -228,8 +230,8 @@ function link_image_cmd(path, out; is_sysimage::Bool = false)
 end
 
 function link_image(path, out, internal_stderr::IO=stderr, internal_stdout::IO=stdout;
-                    is_sysimage::Bool = false)
-    run(link_image_cmd(path, out; is_sysimage), Base.DevNull(), internal_stderr, internal_stdout)
+                    is_sysimage::Bool = false, debug_runtime::Bool = isdebugbuild())
+    run(link_image_cmd(path, out; is_sysimage, debug_runtime), Base.DevNull(), internal_stderr, internal_stdout)
 end
 
 
