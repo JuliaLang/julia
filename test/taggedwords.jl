@@ -46,6 +46,12 @@ istagged(u) = Base.istaggedunion(u)
     @test !istagged(Union{Widest1, Widest2, String}) # W - 1 > W - 2, all-or-nothing
     @test !istagged(Union{String, Nothing})          # no immediate component
     @test Base.isbitsunion(Union{Int8, Int16})       # unchanged
+    small_bits_union = Union{(Val{i} for i in 1:125)..., Int16}
+    large_bits_union = Union{(Val{i} for i in 1:126)..., Int16}
+    @test Base.isbitsunion(small_bits_union)
+    @test !istagged(small_bits_union)
+    @test all(isbitstype, Base.uniontypes(large_bits_union))
+    @test istagged(large_bits_union)
 
     # layout introspection
     # as for any union with a reference component, at runtime and in inference
@@ -689,5 +695,55 @@ setbigm!(mem, v) = (mem[1] = v; nothing)
         @test getbig(m) === v
         setbigm!(mem, v)
         @test getbigm(mem) === v
+    end
+end
+
+# The 128th small component cannot be represented in a union index.
+const LimitU = Union{(Val{i} for i in 1:126)..., Int16, String}
+const EdgeU = Union{(Val{i} for i in 1:127)..., Int16, String}
+mutable struct MLimit
+    x::LimitU
+end
+mutable struct MEdge
+    x::EdgeU
+end
+mutable struct AMEdge
+    @atomic x::EdgeU
+end
+edgekind(m) = m.x isa Int16
+edgekindmem(m) = m[1] isa Int16
+edgecopy!(dst, src) = (dst.x = src.x; nothing)
+edgecopymem!(dst, src) = (dst[1] = src[1]; nothing)
+edgeatomiccopy!(dst, src) = (@atomic dst.x = (@atomic src.x); nothing)
+edgeatomiccopymem!(dst, src) = (@atomic dst[1] = (@atomic src[1]); nothing)
+limitkind(m) = m.x isa Int16
+
+@testset "codegen: union index boundary" begin
+    @test limitkind(MLimit(Int16(7)))
+    @test !occursin("get_nth_field", llvm(limitkind, (MLimit,)))
+    m = MEdge(Int16(7))
+    mem = Memory{EdgeU}(undef, 1)
+    mem[1] = Int16(7)
+    @test edgekind(m)
+    @test edgekindmem(mem)
+    dst = MEdge("s")
+    dstmem = Memory{EdgeU}(undef, 1)
+    a = AMEdge(Int16(7))
+    adst = AMEdge("s")
+    amem = AtomicMemory{EdgeU}(undef, 1)
+    adstmem = AtomicMemory{EdgeU}(undef, 1)
+    for v in (Int16(-3), "s", Val(127))
+        m.x = v
+        mem[1] = v
+        @atomic a.x = v
+        @atomic amem[1] = v
+        edgecopy!(dst, m)
+        edgecopymem!(dstmem, mem)
+        edgeatomiccopy!(adst, a)
+        edgeatomiccopymem!(adstmem, amem)
+        @test dst.x === v
+        @test dstmem[1] === v
+        @test (@atomic adst.x) === v
+        @test (@atomic adstmem[1]) === v
     end
 end

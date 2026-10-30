@@ -1199,7 +1199,7 @@ static bool for_each_uniontype_small(
         jl_value_t *ty,
         unsigned &counter) JL_CANSAFEPOINT
 {
-    if (counter > 127)
+    if (counter >= UNION_BOX_MARKER - 1)
         return false;
     if (jl_is_uniontype(ty)) {
         bool allunbox = for_each_uniontype_small(f, ((jl_uniontype_t*)ty)->a, counter);
