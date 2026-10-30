@@ -127,13 +127,23 @@ end
 timesofar("conversions")
 
 @testset "Promotions for size $sz" for (sz, T) in allsizes
+    N = length(sz)
     @test isequal(promote(falses(sz...), zeros(sz...)),
                  (zeros(sz...), zeros(sz...)))
     @test isequal(promote(trues(sz...), ones(sz...)),
                  (ones(sz...), ones(sz...)))
-    @test promote_type(BitArray{length(sz)}, Array{Float64,length(sz)}) == Array{Float64,length(sz)}
-    @test promote_type(Array{Bool,length(sz)}, BitArray{length(sz)}) == Array{Bool,length(sz)}
-    @test [falses(sz...), zeros(sz...)] isa Vector{Array{Float64,length(sz)}}
+    @test promote_type(T, Array{Float64,N}) == Array{Float64,N}
+    @test [falses(sz...), zeros(sz...)] isa Vector{Array{Float64,N}}
+    # Neither container has to widen its eltype, so the `BitArray` is kept.
+    @test promote_type(T, Array{Bool,N}) == T
+    @test promote_type(Array{Bool,N}, T) == T
+    @test promote(falses(sz...), fill(true, sz...)) isa Tuple{T,T}
+    @test promote_type(T, Array{Any,N}) == Array{Any,N}
+    @test [falses(sz...), Array{Any,N}(zeros(sz...))] isa Vector{Array{Any,N}}
+    # Eltypes without a common promotion leave both containers alone, as for `Array`/`Array`.
+    @test promote_type(T, Array{String,N}) == (AbstractArray{S,N} where S)
+    ex = (@test_throws ErrorException promote(falses(sz...), fill("", sz...))).value
+    @test startswith(ex.msg, "promotion of types Bit")
     ae = falses(1, sz...)
     ex = (@test_throws ErrorException promote(ae, ones(sz...))).value
     @test startswith(ex.msg, "promotion of types Bit")
