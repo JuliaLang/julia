@@ -200,7 +200,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         vst1_iter(vcx, iter1) &
         vst1(with(vcx; in_loop=true, in_gscope=false), body)
     [:while cond body] ->
-        vst1(vcx, cond) &
+        vst1(with(vcx; in_loop=true), cond) &
         vst1(with(vcx; in_loop=true, in_gscope=false), body)
     [:tuple _...] ->
         vst1_tuple(vcx, st)
