@@ -223,12 +223,9 @@ static std::variant<AtomicRMWInst::BinOp,bool> patternMatchAtomicRMWOp(Value *Ol
     return false;
    // TODO: peek forward from Old through any trivial casts which don't affect the instruction (e.g. i64 to f64 and back)
   if (RetVal == nullptr) {
-    if (Old->use_empty()) {
-      if (ValOp) *ValOp = nullptr;
-      return AtomicRMWInst::Xchg;
-    }
-    if (!Old->hasOneUse())
-      return false;
+    // find the unique return first: a helper with no return always throws
+    // (e.g. the modify type check for a type-unstable op) and must not be
+    // converted to a raw atomicrmw, even if it ignores the loaded value
     ReturnInst *Ret = nullptr;
     for (auto &BB : *Op) {
       if (isa<ReturnInst>(BB.getTerminator())) {
@@ -238,6 +235,12 @@ static std::variant<AtomicRMWInst::BinOp,bool> patternMatchAtomicRMWOp(Value *Ol
       }
     }
     if (Ret == nullptr)
+      return false;
+    if (Old->use_empty()) {
+      if (ValOp) *ValOp = nullptr;
+      return AtomicRMWInst::Xchg;
+    }
+    if (!Old->hasOneUse())
       return false;
     // Now examine the instruction list
     RetVal = Ret->getReturnValue();
