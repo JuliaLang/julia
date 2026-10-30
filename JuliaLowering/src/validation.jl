@@ -696,8 +696,11 @@ vst1_function_calldecl(vcx, st) = @stm st begin
         vst1_function_calldecl(vcx, callex) &
         allv(vst1_typevar_decl, with(vcx; readable_underscore=true), tds)
     [:(::) callex rt] ->
-        vst1_simple_calldecl(vcx, callex) & vst1(vcx, rt)
-    _ -> vst1_simple_calldecl(vcx, st)
+        vst1_simple_calldecl(vcx, st[1]) & vst1(vcx, rt)
+    [:call _...] -> vst1_simple_calldecl(vcx, st)
+    # anonymous function syntax `function (x); end` or `function (x...); end` is
+    # subject to bad-arglist rules (block, etc.)
+    _ -> vst1_lam_lhs(vcx, st) | @fail(st, "malformed `call` in function decl")
 end
 
 vst1_simple_calldecl(vcx, st) = @stm st begin
@@ -707,9 +710,7 @@ vst1_simple_calldecl(vcx, st) = @stm st begin
         vst1_calldecl_kws(vcx, st[2])
     [:call f ps...] -> vst1_calldecl_name(vcx, f) &
         _calldecl_positionals(vcx, ps, false)
-    # anonymous function syntax `function (x); end` or `function (x...); end` is
-    # subject to bad-arglist rules (block, etc.)
-    _ ->  vst1_lam_lhs(vcx, st) | @fail(st, "malformed `call` in function decl")
+    _ -> @fail(st, "expected `call` expression")
 end
 
 vst1_macro(vcx, st) = @stm st begin
