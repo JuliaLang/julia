@@ -118,6 +118,12 @@ that the loop is idle before parking: it takes the iolock with a trylock and
 releases it without running finalizers. If the iolock is busy, it retries instead
 of parking.
 
+The thread that armed a handle may not go to sleep for a long time, though, for
+example when the tasks of its pool keep yielding to each other. So when the check
+finds the loop idle, it also sets `jl_uv_loop_unwatched` under the iolock, and the
+scheduler clears it before it runs `uv_run`. A thread that leaves work in the loop
+while the flag is set clears it and wakes `io_loop_tid` from `jl_iolock_end`.
+
 [`IoLoopWake.tla`](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/scheduler-wakeup/IoLoopWake.tla)
 models this handoff outside threaded regions, including iolock contention and
 finalizers that take the iolock before the loop runs and after its unlock. It
