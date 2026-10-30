@@ -1,4 +1,4 @@
-test_mod = Module()
+test_mod = @newmod()
 
 @test isempty(current_exceptions())
 
@@ -261,7 +261,7 @@ end
 #-------------------------------------------------------------------------------
 @testset "try/finally" begin
 
-test_mod = Module()
+test_mod = @newmod()
 
 @test JuliaLowering.include_string(test_mod, """
 let x = -1
