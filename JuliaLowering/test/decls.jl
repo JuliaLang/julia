@@ -1056,6 +1056,32 @@ end
 
 end
 
+@testset "`let _ = ...` scoping" for binding in ["_ = 1", "_::Int = 1"]
+    local test_mod = Module()
+    jl_eval(test_mod, """
+    let $binding
+        let_ph_leak = 2
+    end
+    """)
+    @test !Base.invokelatest(isdefined, test_mod, :let_ph_leak)
+    @test jl_eval(test_mod, """
+    function let_ph()
+        let $binding
+            z = 1
+        end
+        @isdefined(z)
+    end
+    let_ph()
+    """) === false
+    @test jl_eval(test_mod, """
+    g = 0
+    let $binding
+        g = 1
+    end
+    g
+    """) === 0
+end
+
 @testset "(AI) reassigned local with `<:`-bounded declared type" begin
     # A declared type containing a `<:` bound desugars to a `TypeVar(...)`
     # construction bound to an SSA value.  The declared type is re-evaluated at

@@ -1621,7 +1621,7 @@ function expand_let(ctx, ex)
             rhs = binding[2]
             if is_identifier_like(lhs)
                 if head(lhs) === :placeholder
-                    blk = @ast ctx binding [:block rhs blk]
+                    blk = @ast ctx binding [:block rhs [:scope_block(ex) scope_type blk]]
                 else
                     blk = @ast ctx binding [:block
                         tmp := rhs
@@ -1640,7 +1640,7 @@ function expand_let(ctx, ex)
                 elseif head(var) === :placeholder
                     # do a typeassert/convert here? (this falls through flisp as
                     # a typed global...)
-                    blk = @ast ctx binding [:block rhs blk]
+                    blk = @ast ctx binding [:block rhs [:scope_block(ex) scope_type blk]]
                 else
                     blk = @ast ctx binding [:block
                         tmp := rhs
