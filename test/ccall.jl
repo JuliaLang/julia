@@ -2403,3 +2403,9 @@ const sym = :ZSTD_versionString
 get_zstd_version() = prefix * unsafe_string(ccall((sym, libzstd), Cstring, ()))
 @test startswith(get_zstd_version(), "Zstd")
 end
+
+@testset "@ccallable rejects non-method definitions" begin
+    for ex in (:(function f end), :(f = 1), :(f::Int = 1))
+        @test_throws "expected method definition in @ccallable" Base.expand_ccallable(nothing, :Int, ex)
+    end
+end
