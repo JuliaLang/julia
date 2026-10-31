@@ -1193,6 +1193,10 @@ end
     @test cmd.env == ["a=b=c"]
     cmd = addenv(cmd, "b"=>"b")
     @test issetequal(cmd.env, ["b=b", "a=b=c"])
+    # names starting with a multi-byte character
+    cmd = addenv(setenv(``, "é" => "1"), "A" => "2"; inherit=false)
+    @test issetequal(cmd.env, ["é=1", "A=2"])
+    @test addenv(``, ["éa=1"], inherit=false).env == ["éa=1"]
 end
 
 @testset "setenv with dir (with tests for #42131)" begin
