@@ -4041,7 +4041,7 @@ const JI_PAYLOAD_END_OFFSET = 168 # the source text of a package image follows i
 function isvalid_cache_header(f::IOStream)
     flags = Ref{UInt32}()
     checksum = Ref{UInt32}()
-    err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}, Ptr{UInt64}), f.ios, flags, checksum, Ref{Int64}(), Ref{Int64}(), Ref{UInt64}())
+    err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}, Ptr{UInt64}, Ptr{Int64}), f.ios, flags, checksum, Ref{Int64}(), Ref{Int64}(), Ref{UInt64}(), Ref{Int64}())
 
     if err == 0 && (flags[] & JI_FLAG_PKGIMAGE == 0)
         @debug "Cache header was for a system image"
@@ -4257,7 +4257,7 @@ function _parse_cache_header(f::IO, cachefile::AbstractString)
     @assert totbytes == 0 "header of cache file appears to be corrupt (totbytes == $(totbytes))"
     # read the list of modules that are required to be present during loading
     required_modules = read_module_list(f, true)
-    l = read(f, Int32)
+    l = read(f, UInt32)
     clone_targets = read(f, l)
     pos = position(f)
     srctextpos = read(seek(f, JI_PAYLOAD_END_OFFSET), Int64)

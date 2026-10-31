@@ -447,11 +447,6 @@ typedef enum {
     JL_SYMBOL_SPECPTR_IMG,
 } jl_symbol_prefix_t;
 
-static inline int jl_jlcall_specptr_is_native(jl_invoke_api_t type) JL_NOTSAFEPOINT
-{
-    return type == JL_INVOKE_ARGS || type == JL_INVOKE_SPARAM || type == JL_INVOKE_SPECSIG;
-}
-
 static inline jl_invoke_api_t jl_callptr_invoke_api(jl_callptr_t ptr) JL_NOTSAFEPOINT
 {
     if (ptr == jl_fptr_args_addr)
