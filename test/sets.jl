@@ -883,6 +883,9 @@ end
     @test replace!(x->2x, Set([3, 6])) == Set([6, 12])
     @test replace!(x->2x, Set([1:20;])) == Set([2:2:40;])
     @test replace!(kv -> (2kv[1] => kv[2]), Dict(1=>2, 2=>4, 4=>8, 8=>16)) == Dict(2=>2, 4=>4, 8=>8, 16=>16)
+    @test replace(x->x+1, BitSet([1, 2])) == BitSet([2, 3])
+    @test replace(BitSet([1, 2]), 1=>2, 2=>1) == BitSet([1, 2])
+    @test replace(x->x+1, Base.IdSet{Int}([1, 2])) == Base.IdSet{Int}([2, 3])
 
     # avoid recursive call issue #25384
     @test_throws MethodError replace!("")
