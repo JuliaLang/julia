@@ -6707,6 +6707,26 @@ Base.@constprop :aggressive type_level_recurse2(x...) = type_level_recurse1(x...
 type_level_recurse_entry() = Val{type_level_recurse1(1)}()
 @test Base.infer_return_type(type_level_recurse_entry, (); interp=RecurseInterpreter()) == Val{1}
 
+# No method instance is inferred twice here: a frame reuses the limited results of its
+# callees while it is in progress, rather than inferring a limited callee (and its whole
+# limited subtree) again for each call.
+module LimitedResultReuse
+    c(x, b::Bool) = b ? x : (t((x,), b), t((x,), b))
+    t(x, b::Bool) = c(x, b)
+end
+@newinterp LimitedResultReuseInterp
+function Compiler.finish!(interp::LimitedResultReuseInterp, caller::Compiler.InferenceState,
+                          validation_world::UInt, time_before::UInt64)
+    Compiler.is_constproped(caller) || push!(interp.meta, caller.linfo)
+    return @invoke Compiler.finish!(interp::Compiler.AbstractInterpreter,
+        caller::Compiler.InferenceState, validation_world::UInt, time_before::UInt64)
+end
+let inferred = Core.MethodInstance[]
+    Base.infer_return_type(LimitedResultReuse.c, (Int, Bool);
+        interp=LimitedResultReuseInterp(inferred))
+    @test allunique(inferred)
+end
+
 # Test that inference doesn't give up if it can potentially refine effects,
 # even if the return type is Any.
 f_no_bail_effects_any(x::Any) = x
