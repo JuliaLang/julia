@@ -4897,6 +4897,15 @@ function stale_prefs(prefs_blob::String)
     return false
 end
 
+# Whether the source file `cached` recorded in a cache is `path`, possibly reached through
+# symlinks. `samefile` would also accept a hardlink, such as the identical entry file of
+# another version of the package, whose cache was compiled from that version's sources.
+function same_source_path(cached::String, path::String)
+    cached == path && return true
+    ispath(cached) && ispath(path) || return false
+    return realpath(cached) == realpath(path)
+end
+
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; kwargs...)
@@ -5085,12 +5094,12 @@ end
 
         # now check if this file's content hash has changed relative to its source files
         if stalecheck
-            if !samefile(includes[1].filename, modspec.path)
+            if !same_source_path(includes[1].filename, modspec.path)
                 # In certain cases the path rewritten by `fixup_stdlib_path` may
                 # point to an unreadable directory, make sure we can `stat` the
                 # file before comparing it with `modspec.path`.
                 stdlib_path = fixup_stdlib_path(includes[1].filename)
-                if !(isreadable(stdlib_path) && samefile(stdlib_path, modspec.path))
+                if !(isreadable(stdlib_path) && same_source_path(stdlib_path, modspec.path))
                     @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $(modspec.path)"
                     record_reason(reasons, :source_path_changed)
                     return true # cache file was compiled from a different path
