@@ -587,8 +587,8 @@ function rename_nodes!(domtree::DomTree, rename_bb::Vector{BBNumber})
     old_nodes = copy(domtree.nodes)
     for (old_bb, new_bb) in enumerate(rename_bb)
         if new_bb != -1
-            domtree.idoms_bb[new_bb] = (new_bb == 1) ?
-                0 : rename_bb[old_idoms_bb[old_bb]]
+            old_idom = old_idoms_bb[old_bb]
+            domtree.idoms_bb[new_bb] = old_idom == 0 ? 0 : rename_bb[old_idom]
             domtree.nodes[new_bb] = old_nodes[old_bb]
             map!(i -> rename_bb[i],
                  domtree.nodes[new_bb].children,
@@ -618,9 +618,11 @@ function rename_nodes!(D::DFSTree, rename_bb::Vector{BBNumber})
     for (old_bb, new_bb) in enumerate(rename_bb)
         if new_bb != -1
             D.to_pre[new_bb] = old_to_pre[old_bb]
-            D.from_pre[old_to_pre[old_bb]] = new_bb
             D.to_post[new_bb] = old_to_post[old_bb]
-            D.from_post[old_to_post[old_bb]] = new_bb
+            if old_to_pre[old_bb] != 0
+                D.from_pre[old_to_pre[old_bb]] = new_bb
+                D.from_post[old_to_post[old_bb]] = new_bb
+            end
 
             # Keep track of highest BB number to resize arrays with
             if new_bb > max_new_bb
