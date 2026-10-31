@@ -711,7 +711,8 @@ function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
         end
     end
     expform = ise || (isg && !(-4 < pt <= prec))
-    n2 = n + (expform ? 4 : 0) + (prec > 0 || hash) + (neg || (plus | space)) +
+    expdigits = expform ? max(ndigits(pt - 1), 2) : 0
+    n2 = n + (expform ? 2 + expdigits : 0) + (prec > 0 || hash) + (neg || (plus | space)) +
         (isf && pt >= n ? prec + 1 : 0)
     if !leftalign && !zero && n2 < width
         # pad left w/ spaces
@@ -750,15 +751,11 @@ function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
         buf[pos] = exp < 0 ? UInt8('-') : UInt8('+')
         pos += 1
         exp = abs(exp)
-        if exp < 10
-            buf[pos] = UInt8('0')
-            buf[pos + 1] = 48 + exp
-            pos += 2
-        else
-            buf[pos] = 48 + div(exp, 10)
-            buf[pos + 1] = 48 + rem(exp, 10)
-            pos += 2
+        for i = expdigits-1:-1:0
+            buf[pos + i] = 48 + rem(exp, 10)
+            exp = div(exp, 10)
         end
+        pos += expdigits
     elseif pt <= 0
         buf[pos] = UInt8('0')
         buf[pos + 1] = UInt8('.')

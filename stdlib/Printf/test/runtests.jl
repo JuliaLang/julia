@@ -1210,12 +1210,12 @@ end
 @testset "generic float fallback" begin
     for f in ("%f", "%.2f", "%.0f", "%#.0f", "%+f", "% f", "%e", "%.3e", "%E", "%+.1e", "%#.0e",
               "%g", "%G", "%.3g", "%#.3g"),
-        x in (1.5, -2.25, 12.0, 123456.789, 0.000123, 1e-7, 3.0e12)
+        x in (1.5, -2.25, 12.0, 123456.789, 0.000123, 1e-7, 3.0e12, 1e100, -1e-100)
         fmt = Printf.Format(f)
         @test Printf.format(fmt, DigitsNumber(x)) == Printf.format(fmt, x)
     end
     for f in ("%10.3f", "%-10.3f", "%010.2f", "%+010.2f", "%12.2e", "%-12.2e", "%012.2e"),
-        x in (1.5, -2.25, 123456.789, 3.0e12)
+        x in (1.5, -2.25, 123456.789, 3.0e12, 1e100)
         fmt = Printf.Format(f)
         @test Printf.format(fmt, DigitsNumber(x)) == Printf.format(fmt, x)
     end
