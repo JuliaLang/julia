@@ -1864,3 +1864,57 @@ end
     @test_throws ErrorException("too many parameters for type `Array`: expected 2, got 4") Array{1,2,3,4}
     @test_throws ErrorException("too many parameters for type `BitArray`: expected 1, got 2") BitArray{1,2}
 end
+
+module KeywordSuggestions
+    struct Marker end
+    scaled(x; scale = 1) = x * scale
+    slurpy(x::Marker; scale = 1, kws...) = (x, scale, kws)
+end
+
+@testset "keyword argument suggestions" begin
+    shown(f; color::Bool) = sprint(showerror, try f() catch err; err end; context = :color => color)
+    highlighted(name::String) = string(Base.text_colors[Base.error_color()], name)
+
+    # the candidate list draws the declared keyword a misspelled one resembles in the error color
+    @test occursin(highlighted("scale"), shown(() -> KeywordSuggestions.scaled(2; scal = 5); color = true))
+
+    # without color the candidate list is unchanged
+    @test occursin("; scale) got unsupported keyword argument \"scal\"",
+                   shown(() -> KeywordSuggestions.scaled(2; scal = 5); color = false))
+
+    # a name resembling nothing on offer highlights nothing
+    @test !occursin(highlighted("scale"), shown(() -> KeywordSuggestions.scaled(2; bogus = 5); color = true))
+
+    # a method slurping keywords accepts every name, so none of them is misspelled
+    @test !occursin(highlighted("scale"), shown(() -> KeywordSuggestions.slurpy(1; scal = 1); color = true))
+end
+
+module UndefVarSuggestions
+    thing_one = 1
+end
+
+module UndefVarExporter
+    export exported_thing
+    exported_thing = 1
+end
+
+module UndefVarUsings
+    using ..UndefVarExporter
+end
+
+@testset "undefined variable suggestions" begin
+    @test occursin("Did you mean `thing_one`?",
+                   sprint(showerror, try UndefVarSuggestions.thing_two catch err; err end))
+
+    # a name resembling nothing in scope draws no suggestion
+    @test !occursin("Did you mean",
+                    sprint(showerror, try UndefVarSuggestions.zzqqxxvvwwyy catch err; err end))
+
+    # names exported by Base need no qualification, so they are offered too
+    @test occursin("Did you mean `isnothing`?",
+                   sprint(showerror, try UndefVarSuggestions.isnohting catch err; err end))
+
+    # names exported by a `using` module need no qualification either
+    @test occursin("Did you mean `exported_thing`?",
+                   sprint(showerror, try UndefVarUsings.exported_thin catch err; err end))
+end
