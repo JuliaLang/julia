@@ -397,37 +397,54 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len)
    than using the hardware instructions.  This computes a little-endian
    CRC32c, equivalent to the little-endian CRC of the SSE4.2 or ARMv8 instructions,
    regardless of the endianness of the machine this is running on.  */
+/* Fold the eight-byte word at `p` into the crc (slicing-by-8). Table offsets are computed in
+   bytes, which saves a shift per lookup on targets without scaled-index addressing. */
+static inline uint32_t crc32c_sw_word(uint32_t crc, const char *p)
+{
+    const char *t = (const char*)crc32c_table;
+#define CRC32C_TAB(k, off) (*(const uint32_t*)(t + (k) * 1024 + (off)))
+#ifdef _P64
+    uint64_t x = crc ^ *(const uint64_t*)p;
+    return CRC32C_TAB(7, (x << 2) & 0x3fc) ^ CRC32C_TAB(6, (x >> 6) & 0x3fc) ^
+           CRC32C_TAB(5, (x >> 14) & 0x3fc) ^ CRC32C_TAB(4, (x >> 22) & 0x3fc) ^
+           CRC32C_TAB(3, (x >> 30) & 0x3fc) ^ CRC32C_TAB(2, (x >> 38) & 0x3fc) ^
+           CRC32C_TAB(1, (x >> 46) & 0x3fc) ^ CRC32C_TAB(0, (x >> 56) << 2);
+#else
+    uint32_t lo = crc ^ ((const uint32_t*)p)[0];
+    uint32_t hi = ((const uint32_t*)p)[1];
+    return CRC32C_TAB(7, (lo << 2) & 0x3fc) ^ CRC32C_TAB(6, (lo >> 6) & 0x3fc) ^
+           CRC32C_TAB(5, (lo >> 14) & 0x3fc) ^ CRC32C_TAB(4, (lo >> 22) & 0x3fc) ^
+           CRC32C_TAB(3, (hi << 2) & 0x3fc) ^ CRC32C_TAB(2, (hi >> 6) & 0x3fc) ^
+           CRC32C_TAB(1, (hi >> 14) & 0x3fc) ^ CRC32C_TAB(0, (hi >> 24) << 2);
+#endif
+#undef CRC32C_TAB
+}
+
+/* Compute the crc of two adjacent blocks of `block` bytes as independent streams and combine
+   them, which lets an in-order core overlap the table lookups of both. */
+#define CRC32C_SW_2WAY(block, zeros)                                            \
+    while (len >= (block) * 2) {                                                \
+        uint32_t crc1 = 0;                                                      \
+        for (size_t i = 0; i < (block); i += 8) {                               \
+            crc = crc32c_sw_word(crc, buf + i);                                 \
+            crc1 = crc32c_sw_word(crc1, buf + (block) + i);                     \
+        }                                                                       \
+        crc = crc32c_shift(zeros, crc) ^ crc1;                                  \
+        buf += (block) * 2;                                                     \
+        len -= (block) * 2;                                                     \
+    }
+
 JL_DLLEXPORT uint32_t jl_crc32c_sw(uint32_t crci, const char *buf, size_t len)
 {
-    uintptr_t crc = crci ^ 0xffffffff;
+    uint32_t crc = crci ^ 0xffffffff;
     while (len && ((uintptr_t)buf & 7) != 0) {
         crc = crc32c_table[0][(crc ^ *buf++) & 0xff] ^ (crc >> 8);
         len--;
     }
+    CRC32C_SW_2WAY(LONG, crc32c_long)
+    CRC32C_SW_2WAY(SHORT, crc32c_short)
     while (len >= 8) {
-#ifdef _P64
-        crc ^= *(uint64_t*)buf;
-        crc = crc32c_table[7][crc & 0xff] ^
-            crc32c_table[6][(crc >> 8) & 0xff] ^
-            crc32c_table[5][(crc >> 16) & 0xff] ^
-            crc32c_table[4][(crc >> 24) & 0xff] ^
-            crc32c_table[3][(crc >> 32) & 0xff] ^
-            crc32c_table[2][(crc >> 40) & 0xff] ^
-            crc32c_table[1][(crc >> 48) & 0xff] ^
-            crc32c_table[0][crc >> 56];
-#else
-        uint32_t *p = (uint32_t*)buf;
-        crc ^= p[0];
-        uint32_t hi = p[1];
-        crc = crc32c_table[7][crc & 0xff] ^
-            crc32c_table[6][(crc >> 8) & 0xff] ^
-            crc32c_table[5][(crc >> 16) & 0xff] ^
-            crc32c_table[4][(crc >> 24) & 0xff] ^
-            crc32c_table[3][hi & 0xff] ^
-            crc32c_table[2][(hi >> 8) & 0xff] ^
-            crc32c_table[1][(hi >> 16) & 0xff] ^
-            crc32c_table[0][hi >> 24];
-#endif
+        crc = crc32c_sw_word(crc, buf);
         buf += 8;
         len -= 8;
     }
@@ -435,7 +452,7 @@ JL_DLLEXPORT uint32_t jl_crc32c_sw(uint32_t crci, const char *buf, size_t len)
         crc = crc32c_table[0][(crc ^ *buf++) & 0xff] ^ (crc >> 8);
         len--;
     }
-    return (uint32_t)crc ^ 0xffffffff;
+    return crc ^ 0xffffffff;
 }
 
 /*****************************************************************************/
