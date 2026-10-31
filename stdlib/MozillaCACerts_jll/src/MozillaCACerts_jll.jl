@@ -4,7 +4,6 @@
 
 baremodule MozillaCACerts_jll
 using Base
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]

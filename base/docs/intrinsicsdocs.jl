@@ -1,0 +1,311 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
+"""
+    Core.IR
+
+The `Core.IR` module exports the IR object model.
+"""
+Core.IR
+
+"""
+    Core.IntrinsicFunction <: Core.Builtin <: Function
+
+The `Core.IntrinsicFunction` type defines some basic primitives for what defines the
+abilities and behaviors of a Julia program
+"""
+Core.IntrinsicFunction
+
+"""
+    Core.Intrinsics
+
+The `Core.Intrinsics` module holds the `Core.IntrinsicFunction` objects.
+"""
+Core.Intrinsics
+
+"""
+    Core.memorynew(::Type{T} where T <: GenericMemory, n::Int)
+
+Construct an uninitialized [`GenericMemory`](@ref) of length `n`.
+
+See also [`Memory`](@ref Core.Memory), [`Memory{T}(undef, n)`](@ref Core.Memory(::UndefInitializer, ::Int)).
+"""
+Core.memorynew
+
+"""
+    Core.memoryrefnew(::GenericMemory)
+    Core.memoryrefnew(::GenericMemoryRef, index::Int, [boundscheck::Bool])
+
+Return a `GenericMemoryRef` for a `GenericMemory`. See [`memoryref`](@ref).
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+"""
+Core.memoryrefnew
+
+"""
+    Core.memoryrefoffset(::GenericMemoryRef)
+
+Return the offset index that was used to construct the `MemoryRef`. See [`memoryref`](@ref).
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+"""
+Core.memoryrefoffset
+
+"""
+    Core.memoryrefget(::GenericMemoryRef, ordering::Symbol, boundscheck::Bool)
+
+Return the value stored at the `MemoryRef`, throwing a `BoundsError` if the `Memory` is empty. See `ref[]`.
+The memory ordering specified must be compatible with the `isatomic` parameter.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+"""
+Core.memoryrefget
+
+"""
+    Core.const_memoryrefget(::GenericMemoryRef, ordering::Symbol, boundscheck::Bool)
+
+Same as [`Core.memoryrefget`](@ref), but additionally promises that the memory being read is
+not modified by any store inside the enclosing `Base.Experimental.@aliasscope` region.
+Used to implement indexing of `Base.Experimental.Const`. Loads emitted by plain
+[`Core.memoryrefget`](@ref) make no such promise.
+
+!!! compat "Julia 1.14"
+    This function requires Julia 1.14 or later.
+"""
+Core.const_memoryrefget
+
+"""
+    Core.memoryrefset!(::GenericMemoryRef, value, ordering::Symbol, boundscheck::Bool)
+
+Store the value to the `MemoryRef`, throwing a `BoundsError` if the `Memory` is empty. See `ref[] = value`.
+The memory ordering specified must be compatible with the `isatomic` parameter.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+"""
+Core.memoryrefset!
+
+"""
+    Core.memoryref_isassigned(::GenericMemoryRef, ordering::Symbol, boundscheck::Bool)
+
+Return whether there is a value stored at the `MemoryRef`, returning false if the `Memory`
+is empty. See [`isassigned(::Base.RefValue)`](@ref), [`Core.memoryrefget`](@ref).
+The memory ordering specified must be compatible with the `isatomic` parameter.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+"""
+Core.memoryref_isassigned
+
+"""
+    Core.memoryrefswap!(::GenericMemoryRef, value, ordering::Symbol, boundscheck::Bool)
+
+Atomically perform the operations to simultaneously get and set a `MemoryRef` value.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`swapproperty!`](@ref Base.swapproperty!), [`Core.memoryrefset!`](@ref).
+"""
+Core.memoryrefswap!
+
+"""
+    Core.memoryrefmodify!(::GenericMemoryRef, op, value, ordering::Symbol, boundscheck::Bool)::Pair
+
+Atomically perform the operations to get and set a `MemoryRef` value after applying
+the function `op`.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`modifyproperty!`](@ref Base.modifyproperty!), [`Core.memoryrefset!`](@ref).
+"""
+Core.memoryrefmodify!
+
+"""
+    Core.memoryrefreplace!(::GenericMemoryRef, expected, desired,
+                           success_order::Symbol, fail_order::Symbol=success_order, boundscheck::Bool) -> (; old, success::Bool)
+
+Atomically perform the operations to get and conditionally set a `MemoryRef` value.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`replaceproperty!`](@ref Base.replaceproperty!), [`Core.memoryrefset!`](@ref).
+"""
+Core.memoryrefreplace!
+
+"""
+    Core.memoryrefsetonce!(::GenericMemoryRef, value,
+                           success_order::Symbol, fail_order::Symbol=success_order, boundscheck::Bool) -> success::Bool
+
+Atomically perform the operations to set a `MemoryRef` to
+a given value, only if it was previously not set.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`setpropertyonce!`](@ref Base.replaceproperty!), [`Core.memoryrefset!`](@ref).
+"""
+Core.memoryrefsetonce!
+
+
+"""
+    Core.Intrinsics.pointerref(p::Ptr{T}, i::Int, align::Int)
+
+Load a value of type `T` from the address of the `i`th element (1-indexed)
+starting at `p`. This is equivalent to the C expression `p[i-1]`.
+
+The alignment must be a power of two, or 0, indicating the default alignment
+for `T`. If `p[i-1]` is out of bounds, invalid, or is not aligned, the behavior
+is undefined. An alignment of 1 is always safe.
+
+See also [`unsafe_load`](@ref).
+"""
+Core.Intrinsics.pointerref
+
+"""
+    Core.Intrinsics.pointerset(p::Ptr{T}, x::T, i::Int, align::Int)
+
+Store a value of type `T` to the address of the `i`th element (1-indexed)
+starting at `p`.  This is equivalent to the C expression `p[i-1] = x`.
+
+The alignment must be a power of two, or `0`, indicating the default alignment
+for `T`. If `p[i-1]` is out of bounds, invalid, or is not aligned, the behavior
+is undefined. An alignment of 1 is always safe.
+
+See also [`unsafe_store!`](@ref).
+"""
+Core.Intrinsics.pointerset
+
+"""
+    Core.Intrinsics.atomic_pointerref(pointer::Ptr{T}, order::Symbol) --> T
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
+
+See [`unsafe_load`](@ref Base.unsafe_load).
+"""
+Core.Intrinsics.atomic_pointerref
+
+"""
+    Core.Intrinsics.atomic_pointerset(pointer::Ptr{T}, new::T, order::Symbol) --> pointer
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
+
+See [`unsafe_store!`](@ref Base.unsafe_store!).
+"""
+Core.Intrinsics.atomic_pointerset
+
+"""
+    Core.Intrinsics.atomic_pointerswap(pointer::Ptr{T}, new::T, order::Symbol) --> old
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
+
+See [`unsafe_swap!`](@ref Base.unsafe_swap!).
+"""
+Core.Intrinsics.atomic_pointerswap
+
+"""
+    Core.Intrinsics.atomic_pointermodify(pointer::Ptr{T}, function::(old::T,arg::S)->T, arg::S, order::Symbol) --> old
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
+
+See [`unsafe_modify!`](@ref Base.unsafe_modify!).
+"""
+Core.Intrinsics.atomic_pointermodify
+
+"""
+    Core.Intrinsics.atomic_pointerreplace(pointer::Ptr{T}, expected::Any, new::T, success_order::Symbol, failure_order::Symbol) --> (old, cmp)
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
+
+See [`unsafe_replace!`](@ref Base.unsafe_replace!).
+"""
+Core.Intrinsics.atomic_pointerreplace
+
+"""
+    Core.getglobal_partition(access::GlobalRef, partition::Core.BindingPartition, order::Symbol)
+
+Read the value from the global binding named by a binding partition, using the memory `order`.
+`access` is the `GlobalRef` the read was written as, and names the binding if the read throws
+an `UndefVarError` -- as [`getglobal`](@ref) reports the module and name it was given, rather
+than the binding an import resolved to.
+
+If `partition` is an import (its restriction is another binding rather than a value or a
+declared type), it is followed to the leaf partition of the access at the current world, as
+[`getglobal`](@ref) would for the importing module and name. The partitions the compiler
+freezes into code are already leaves, so no walk happens there.
+
+A deprecation the walk reaches warns as it would for [`getglobal`](@ref), but `partition`
+itself does not: having named a partition, the caller owns its deprecation, and can ask for it
+with [`Core.depwarn_binding`](@ref).
+"""
+Core.getglobal_partition
+
+"""
+    Core.setglobal_partition(partition::Core.BindingPartition, value, [order::Symbol])
+
+Store to the global binding named by a resolved binding partition, as
+[`setglobal!`](@ref) does for a module and name.
+
+Unlike the read builtins, the store targets the partition's own binding and follows no
+import: assigning to a name imported from another module is an error, exactly as it is for
+[`setglobal!`](@ref).
+"""
+Core.setglobal_partition
+
+"""
+    Core.swapglobal_partition(partition::Core.BindingPartition, value, [order::Symbol])
+
+Store to the global binding named by a resolved binding partition and return its old value,
+as [`swapglobal!`](@ref) does for a module and name.
+"""
+Core.swapglobal_partition
+
+"""
+    Core.modifyglobal_partition(partition::Core.BindingPartition, op, value, [order::Symbol])
+
+Read the global binding named by a resolved binding partition, store `op(old, value)` back to
+it, and return the pair `old => new`, as [`modifyglobal!`](@ref) does for a module and name.
+"""
+Core.modifyglobal_partition
+
+"""
+    Core.replaceglobal_partition(partition::Core.BindingPartition, expected, desired, [order::Symbol, [failorder::Symbol]])
+
+Store to the global binding named by a resolved binding partition if it currently holds
+`expected`, as [`replaceglobal!`](@ref) does for a module and name.
+"""
+Core.replaceglobal_partition
+
+"""
+    Core.setglobalonce_partition(partition::Core.BindingPartition, value, [order::Symbol, [failorder::Symbol]])
+
+Store to the global binding named by a resolved binding partition if it is not already
+defined, as [`setglobalonce!`](@ref) does for a module and name.
+"""
+Core.setglobalonce_partition
+
+"""
+    Core.isdefinedglobal_partition(partition::Core.BindingPartition, order::Symbol)
+
+Return whether the global binding named by a binding partition has a defined value, using the
+memory `order`. An import partition is followed to its leaf, as for
+[`Core.getglobal_partition`](@ref), making this the `allow_import=true` query.
+"""
+Core.isdefinedglobal_partition
+
+"""
+    Core.depwarn_binding(binding::Core.Binding)
+
+Emit a deprecation warning naming `binding` if the command line argument
+`--depwarn` is enabled and throwing under `--depwarn=error`.
+"""
+Core.depwarn_binding

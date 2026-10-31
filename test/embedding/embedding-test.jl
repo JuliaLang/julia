@@ -21,6 +21,7 @@ end
     close(err.in)
     out_task = @async readlines(out)
     @test readline(err) == "MethodError: no method matching this_function_has_no_methods()"
+    @test readline(err) == "The function `this_function_has_no_methods` exists, but no method is defined for this combination of argument types."
     @test success(p)
     lines = fetch(out_task)
     @test length(lines) == 11
@@ -30,6 +31,6 @@ end
     @test lines[4] == "sqrt(2.0) in C: 1.414214e+00"
     @test lines[9] == "called bar"
     @test lines[10] == "calling new bar"
-    @test lines[11] == "      From worker 2:\tTaking over the world..."
-    @test readline(err) == "exception caught from C"
+    @test lines[11] == " From worker 2:\tTaking over the world..."
+    @test "exception caught from C" in readlines(err)
 end

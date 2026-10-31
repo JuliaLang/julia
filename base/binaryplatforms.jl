@@ -26,7 +26,8 @@ system, libc implementation, etc...  It is, at its heart, a key-value mapping of
 `"os" => "windows"`, etc...).  `Platform` objects are extensible in that the tag mapping
 is open for users to add their own mappings to, as long as the mappings do not conflict
 with the set of reserved tags: `arch`, `os`, `os_version`, `libc`, `call_abi`,
-`libgfortran_version`, `libstdcxx_version`, `cxxstring_abi` and `julia_version`.
+`libgfortran_version`, `libstdcxx_version`, `cxxlib`, `cxxlib_version`,
+`cxxstring_abi` and `julia_version`.
 
 Valid tags and values are composed of alphanumeric and period characters.  All tags and
 values will be lowercased when stored to reduce variation.
@@ -64,29 +65,17 @@ struct Platform <: AbstractPlatform
                 continue
             end
 
-            # Normalize things that are known to be version numbers so that comparisons are easy.
-            # Note that in our effort to be extremely compatible, we actually allow something that
-            # doesn't parse nicely into a VersionNumber to persist, but if `validate_strict` is
-            # set to `true`, it will cause an error later on.
-            if tag ∈ ("libgfortran_version", "libstdcxx_version", "os_version")
-                if isa(value, VersionNumber)
-                    value = string(value)
-                elseif isa(value, String)
-                    v = tryparse(VersionNumber, value)
-                    if isa(v, VersionNumber)
-                        value = string(v)
-                    end
-                end
-            end
-
-            # Use `add_tag!()` to add the tag to our collection of tags
-            add_tag!(tags, tag, string(value)::String)
+            add_platform_tag!(tags, tag, value)
         end
 
         # Auto-map call_abi and libc where necessary:
         if os == "linux" && !haskey(tags, "libc")
             # Default to `glibc` on Linux
             tags["libc"] = "glibc"
+        end
+        if os == "windows" && !haskey(tags, "libc")
+            # Default to `msvcrt` on Windows
+            tags["libc"] = "msvcrt"
         end
         if os == "linux" && arch ∈ ("armv7l", "armv6l") && "call_abi" ∉ keys(tags)
             # default `call_abi` to `eabihf` on 32-bit ARM
@@ -124,6 +113,43 @@ tagvalue(v::Union{String,VersionNumber,Nothing}) = v
 tagvalue(v::Symbol) = String(v)
 tagvalue(v::AbstractString) = convert(String, v)::String
 
+function add_platform_tag!(tags::Dict{String,String}, tag::String, value::Union{String,VersionNumber,Nothing})
+    tag = lowercase(tag)
+
+    # Drop `nothing` values; this means feature is not present or use default value.
+    if value === nothing
+        return nothing
+    end
+
+    # For compatibility, libstdcxx_version counts as both cxxlib=libstdcxx and
+    # cxxlib_version, but don't override an explicit existing cxxlib tag (the
+    # verifier will check for inconsistencies).
+    if tag == "libstdcxx_version"
+        haskey(tags, "cxxlib") || add_tag!(tags, "cxxlib", "libstdcxx")
+        tag = "cxxlib_version"
+    elseif tag == "cxxstring_abi"
+        # Implies cxxlib=libstdcxx for compatibility
+        haskey(tags, "cxxlib") || add_tag!(tags, "cxxlib", "libstdcxx")
+    end
+
+    # Normalize things that are known to be version numbers so that comparisons are easy.
+    # Note that in our effort to be extremely compatible, we actually allow something that
+    # doesn't parse nicely into a VersionNumber to persist, but if `validate_strict` is
+    # set to `true`, it will cause an error later on.
+    if tag ∈ ("libgfortran_version", "cxxlib_version", "os_version")
+        if isa(value, VersionNumber)
+            value = string(value)
+        elseif isa(value, String)
+            v = tryparse(VersionNumber, value)
+            if isa(v, VersionNumber)
+                value = string(v)
+            end
+        end
+    end
+
+    return add_tag!(tags, tag, string(value)::String)
+end
+
 # Simple tag insertion that performs a little bit of validation
 function add_tag!(tags::Dict{String,String}, tag::String, value::String)
     # I know we said only alphanumeric and dots, but let's be generous so that we can expand
@@ -151,13 +177,13 @@ tags(p::Platform) = p.tags
 Base.getindex(p::AbstractPlatform, k::String) = getindex(tags(p), k)
 Base.haskey(p::AbstractPlatform, k::String) = haskey(tags(p), k)
 function Base.setindex!(p::AbstractPlatform, v::String, k::String)
-    add_tag!(tags(p), k, v)
+    add_platform_tag!(tags(p), k, v)
     return p
 end
 
 # Hash definition to ensure that it's stable
 function Base.hash(p::Platform, h::UInt)
-    h += 0x506c6174666f726d % UInt
+    h ⊻= 0x506c6174666f726d % UInt
     h = hash(p.tags, h)
     h = hash(p.compare_strategies, h)
     return h
@@ -170,23 +196,23 @@ end
 
 
 # Allow us to easily serialize Platform objects
-function Base.repr(p::Platform; context=nothing)
-    str = string(
-        "Platform(",
-        repr(arch(p)),
-        ", ",
-        repr(os(p)),
-        "; ",
-        join(("$(k) = $(repr(v))" for (k, v) in tags(p) if k ∉ ("arch", "os")), ", "),
-        ")",
-    )
+function Base.show(io::IO, p::Platform)
+    print(io, "Platform(")
+    show(io, arch(p))
+    print(io, ", ")
+    show(io, os(p))
+    print(io, "; ")
+    # Sort tags so that the output does not depend on `Dict` iteration order
+    other_tags = sort!(filter!(kv -> kv[1] ∉ ("arch", "os"), collect(tags(p))); by=first)
+    join(io, ("$(k) = $(repr(v))" for (k, v) in other_tags), ", ")
+    print(io, ")")
 end
 
 # Make showing the platform a bit more palatable
-function Base.show(io::IO, p::Platform)
+function Base.show(io::IO, ::MIME"text/plain", p::Platform)
     str = string(platform_name(p), " ", arch(p))
     # Add on all the other tags not covered by os/arch:
-    other_tags = sort(collect(filter(kv -> kv[1] ∉ ("os", "arch"), tags(p))))
+    other_tags = sort!(filter!(kv -> kv[1] ∉ ("os", "arch"), collect(tags(p))))
     if !isempty(other_tags)
         str = string(str, " {", join([string(k, "=", v) for (k, v) in other_tags], ", "), "}")
     end
@@ -196,11 +222,11 @@ end
 function validate_tags(tags::Dict)
     throw_invalid_key(k) = throw(ArgumentError("Key \"$(k)\" cannot have value \"$(tags[k])\""))
     # Validate `arch`
-    if tags["arch"] ∉ ("x86_64", "i686", "armv7l", "armv6l", "aarch64", "powerpc64le")
+    if tags["arch"] ∉ ("x86_64", "i686", "armv7l", "armv6l", "aarch64", "powerpc64le", "riscv64")
         throw_invalid_key("arch")
     end
     # Validate `os`
-    if tags["os"] ∉ ("linux", "macos", "freebsd", "windows")
+    if tags["os"] ∉ ("linux", "macos", "freebsd", "openbsd", "windows")
         throw_invalid_key("os")
     end
     # Validate `os`/`arch` combination
@@ -219,6 +245,10 @@ function validate_tags(tags::Dict)
         if tags["libc"] ∉ ("glibc", "musl")
             throw_libc_mismatch()
         end
+    elseif tags["os"] == "windows"
+        if tags["libc"] ∉ ("msvcrt", "ucrt")
+            throw_libc_mismatch()
+        end
     else
         # Nothing else is allowed to have a `libc` entry
         if haskey(tags, "libc")
@@ -229,7 +259,7 @@ function validate_tags(tags::Dict)
     # Validate `os`/`arch`/`call_abi` combination
     throw_call_abi_mismatch() = throw(ArgumentError("Invalid os/arch/call_abi combination: $(tags["os"])/$(tags["arch"])/$(tags["call_abi"])"))
     if tags["os"] == "linux" && tags["arch"] ∈ ("armv7l", "armv6l")
-        # If an ARM linux has does not have `call_abi` set to something valid, be sad.
+        # If an ARM linux does not have `call_abi` set to something valid, be sad.
         if !haskey(tags, "call_abi") || tags["call_abi"] ∉ ("eabihf", "eabi")
             throw_call_abi_mismatch()
         end
@@ -246,14 +276,19 @@ function validate_tags(tags::Dict)
         throw_version_number("libgfortran_version")
     end
 
-    # Validate `cxxstring_abi` is one of the two valid options:
-    if "cxxstring_abi" in keys(tags) && tags["cxxstring_abi"] ∉ ("cxx03", "cxx11")
+    # Validate `cxxlib` is one of the valid options.
+    if haskey(tags, "cxxlib") && tags["cxxlib"] ∉ ("libstdcxx", "libcxx")
+        throw_invalid_key("cxxlib")
+    end
+
+    # Validate `cxxstring_abi` is one of the two valid options and only used with libstdc++.
+    if haskey(tags, "cxxstring_abi") && (tags["cxxstring_abi"] ∉ ("cxx03", "cxx11") || !haskey(tags, "cxxlib") || tags["cxxlib"] != "libstdcxx")
         throw_invalid_key("cxxstring_abi")
     end
 
-    # Validate `libstdcxx_version` is a parsable `VersionNumber`
-    if "libstdcxx_version" in keys(tags) && tryparse(VersionNumber, tags["libstdcxx_version"]) === nothing
-        throw_version_number("libstdcxx_version")
+    # Validate `cxxlib_version` is a parsable `VersionNumber`
+    if haskey(tags, "cxxlib_version") && tryparse(VersionNumber, tags["cxxlib_version"]) === nothing
+        throw_version_number("cxxlib_version")
     end
 end
 
@@ -272,6 +307,9 @@ function get_compare_strategy(p::Platform, key::String, default = compare_defaul
 end
 get_compare_strategy(p::AbstractPlatform, key::String, default = compare_default) = default
 
+# Tags for which absence is meaningful: a platform without the tag only matches
+# platforms that also lack it (rather than acting as a wildcard).
+const strict_presence_tags = ("sanitize",)
 
 
 """
@@ -308,7 +346,7 @@ function compare_version_cap(a::String, b::String, a_requested::Bool, b_requeste
         return a == b
     end
 
-    # Otherwise, do the comparison between the the single version cap and the single version:
+    # Otherwise, do the comparison between the single version cap and the single version:
     if a_requested
         return b <= a
     else
@@ -333,8 +371,8 @@ function HostPlatform(p::AbstractPlatform)
     if haskey(p, "os_version")
         set_compare_strategy!(p, "os_version", compare_version_cap)
     end
-    if haskey(p, "libstdcxx_version")
-        set_compare_strategy!(p, "libstdcxx_version", compare_version_cap)
+    if haskey(p, "cxxlib") && p["cxxlib"] == "libstdcxx" && haskey(p, "cxxlib_version")
+        set_compare_strategy!(p, "cxxlib_version", compare_version_cap)
     end
     return p
 end
@@ -377,8 +415,10 @@ function os()
         return "windows"
     elseif Sys.isapple()
         return "macos"
-    elseif Sys.isbsd()
+    elseif Sys.isfreebsd()
         return "freebsd"
+    elseif Sys.isopenbsd()
+        return "openbsd"
     else
         return "linux"
     end
@@ -399,6 +439,7 @@ julia> libc(Platform("aarch64", "linux"; libc="musl"))
 "musl"
 
 julia> libc(Platform("i686", "Windows"))
+"msvcrt"
 ```
 """
 libc(p::AbstractPlatform) = get(tags(p), "libc", nothing)
@@ -424,6 +465,7 @@ const platform_names = Dict(
     "macos" => "macOS",
     "windows" => "Windows",
     "freebsd" => "FreeBSD",
+    "openbsd" => "OpenBSD",
     nothing => "Unknown",
 )
 
@@ -456,9 +498,19 @@ libgfortran_version(p::AbstractPlatform) = VNorNothing(tags(p), "libgfortran_ver
     libstdcxx_version(p::AbstractPlatform)
 
 Get the libstdc++ version dictated by this `Platform` object, or `nothing` if no
-compatibility bound is imposed.
+compatibility bound is imposed.  This is a compatibility accessor for
+`cxxlib = "libstdcxx"` platforms with a `cxxlib_version`.
 """
-libstdcxx_version(p::AbstractPlatform) = VNorNothing(tags(p), "libstdcxx_version")
+function libstdcxx_version(p::AbstractPlatform)
+    platform_tags = tags(p)
+    if haskey(platform_tags, "libstdcxx_version")
+        return VNorNothing(platform_tags, "libstdcxx_version")
+    end
+    if get(platform_tags, "cxxlib", nothing) == "libstdcxx"
+        return VNorNothing(platform_tags, "cxxlib_version")
+    end
+    return nothing
+end
 
 """
     cxxstring_abi(p::AbstractPlatform)
@@ -494,7 +546,7 @@ julia> wordsize(Platform("x86_64", "macos"))
 wordsize(p::AbstractPlatform) = (arch(p) ∈ ("i686", "armv6l", "armv7l")) ? 32 : 64
 
 """
-    triplet(p::AbstractPlatform; exclude_tags::Vector{String})
+    triplet(p::AbstractPlatform)
 
 Get the target triplet for the given `Platform` object as a `String`.
 
@@ -519,19 +571,30 @@ function triplet(p::AbstractPlatform)
     )
 
     # Tack on optional compiler ABI flags
-    if libgfortran_version(p) !== nothing
-        str = string(str, "-libgfortran", libgfortran_version(p).major)
+    libgfortran_version_ = libgfortran_version(p)
+    if libgfortran_version_ !== nothing
+        str = string(str, "-libgfortran", libgfortran_version_.major)
     end
-    if cxxstring_abi(p) !== nothing
-        str = string(str, "-", cxxstring_abi(p))
+    cxxstring_abi_ = cxxstring_abi(p)
+    if cxxstring_abi_ !== nothing
+        str = string(str, "-", cxxstring_abi_)
     end
-    if libstdcxx_version(p) !== nothing
-        str = string(str, "-libstdcxx", libstdcxx_version(p).patch)
+    libstdcxx_version_ = libstdcxx_version(p)
+    if libstdcxx_version_ !== nothing
+        str = string(str, "-libstdcxx", libstdcxx_version_.patch)
     end
 
-    # Tack on all extra tags
-    for (tag, val) in tags(p)
+    # Tack on all extra tags, sorted so that the output does not depend on `Dict` iteration order
+    for (tag, val) in sort!(collect(tags(p)); by=first)
         if tag ∈ ("os", "arch", "libc", "call_abi", "libgfortran_version", "libstdcxx_version", "cxxstring_abi", "os_version")
+            continue
+        end
+        if tag == "cxxlib" && val == "libstdcxx" && (cxxstring_abi_ !== nothing || libstdcxx_version_ !== nothing)
+            # Implied by above
+            continue
+        end
+        if tag == "cxxlib_version" && get(tags(p), "cxxlib", nothing) == "libstdcxx"
+            # Emitted as a libstdcxx compatibility tag above
             continue
         end
         str = string(str, "-", tag, "+", val)
@@ -550,7 +613,7 @@ function os_str(p::AbstractPlatform)
             return "-apple-darwin"
         end
     elseif os(p) == "windows"
-        return "-w64-mingw32"
+        return "-w64"
     elseif os(p) == "freebsd"
         osvn = os_version(p)
         if osvn !== nothing
@@ -558,6 +621,8 @@ function os_str(p::AbstractPlatform)
         else
             return "-unknown-freebsd"
         end
+    elseif os(p) == "openbsd"
+        return "-unknown-openbsd"
     else
         return "-unknown"
     end
@@ -570,6 +635,10 @@ function libc_str(p::AbstractPlatform)
         return ""
     elseif lc === "glibc"
         return "-gnu"
+    elseif lc === "msvcrt"
+        return "-mingw32"
+    elseif lc === "ucrt"
+        return "-ucrt-mingw32"
     else
         return string("-", lc)
     end
@@ -583,7 +652,8 @@ Sys.isapple(p::AbstractPlatform) = os(p) == "macos"
 Sys.islinux(p::AbstractPlatform) = os(p) == "linux"
 Sys.iswindows(p::AbstractPlatform) = os(p) == "windows"
 Sys.isfreebsd(p::AbstractPlatform) = os(p) == "freebsd"
-Sys.isbsd(p::AbstractPlatform) = os(p) ∈ ("freebsd", "macos")
+Sys.isopenbsd(p::AbstractPlatform) = os(p) == "openbsd"
+Sys.isbsd(p::AbstractPlatform) = os(p) ∈ ("freebsd", "openbsd", "macos")
 Sys.isunix(p::AbstractPlatform) = Sys.isbsd(p) || Sys.islinux(p)
 
 const arch_mapping = Dict(
@@ -593,6 +663,7 @@ const arch_mapping = Dict(
     "armv7l" => "arm(v7l)?", # if we just see `arm-linux-gnueabihf`, we assume it's `armv7l`
     "armv6l" => "armv6l",
     "powerpc64le" => "p(ower)?pc64le",
+    "riscv64" => "(rv64|riscv64)",
 )
 # Keep this in sync with `CPUID.ISAs_by_family`
 # These are the CPUID side of the microarchitectures targeted by GCC flags in BinaryBuilder.jl
@@ -612,13 +683,6 @@ const arch_march_isa_mapping = let
             "avx2" => get_set("x86_64", "haswell"),
             "avx512" => get_set("x86_64", "skylake_avx512"),
         ],
-        "armv6l" => [
-            "arm1176jzfs" => get_set("armv6l", "arm1176jzfs"),
-        ],
-        "armv7l" => [
-            "armv7l" => get_set("armv7l", "armv7l"),
-            "neonvfpv4" => get_set("armv7l", "armv7l+neon+vfpv4"),
-        ],
         "aarch64" => [
             "armv8_0" => get_set("aarch64", "armv8.0-a"),
             "armv8_1" => get_set("aarch64", "armv8.1-a"),
@@ -626,19 +690,22 @@ const arch_march_isa_mapping = let
             "a64fx" => get_set("aarch64", "a64fx"),
             "apple_m1" => get_set("aarch64", "apple_m1"),
         ],
-        "powerpc64le" => [
-            "power8" => get_set("powerpc64le", "power8"),
-        ]
+        "riscv64" => [
+            "riscv64" => get_set("riscv64", "riscv64"),
+        ],
     )
 end
 const os_mapping = Dict(
     "macos" => "-apple-darwin[\\d\\.]*",
     "freebsd" => "-(.*-)?freebsd[\\d\\.]*",
-    "windows" => "-w64-mingw32",
+    "openbsd" => "-(.*-)?openbsd[\\d\\.]*",
+    "windows" => "-w64",
     "linux" => "-(.*-)?linux",
 )
 const libc_mapping = Dict(
     "libc_nothing" => "",
+    "ucrt"  => "-ucrt-mingw32",
+    "msvcrt" => "-mingw32", # We default to msvcrt for plain -mingw32 on Windows
     "glibc" => "-gnu",
     "musl" => "-musl",
 )
@@ -663,18 +730,12 @@ const libstdcxx_version_mapping = Dict{String,String}(
     "libstdcxx" => "-libstdcxx\\d+",
 )
 
-"""
-    parse(::Type{Platform}, triplet::AbstractString)
-
-Parses a string platform triplet back into a `Platform` object.
-"""
-function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = false)
+const triplet_regex = let
     # Helper function to collapse dictionary of mappings down into a regex of
     # named capture groups joined by "|" operators
     c(mapping) = string("(",join(["(?<$k>$v)" for (k, v) in mapping], "|"), ")")
 
-    # We're going to build a mondo regex here to parse everything:
-    triplet_regex = Regex(string(
+    Regex(string(
         "^",
         # First, the core triplet; arch/os/libc/call_abi
         c(arch_mapping),
@@ -689,7 +750,14 @@ function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = f
         "(?<tags>(?:-[^-]+\\+[^-]+)*)?",
         "\$",
     ))
+end
 
+"""
+    parse(::Type{Platform}, triplet::AbstractString)
+
+Parses a string platform triplet back into a `Platform` object.
+"""
+function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = false)
     m = match(triplet_regex, triplet)
     if m !== nothing
         # Helper function to find the single named field within the giant regex
@@ -741,10 +809,13 @@ function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = f
         end
         os_version = nothing
         if os == "macos"
-            os_version = extract_os_version("macos", r".*darwin([\d\.]+)"sa)
+            os_version = extract_os_version("macos", r".*darwin([\d.]+)"sa)
         end
         if os == "freebsd"
             os_version = extract_os_version("freebsd", r".*freebsd([\d.]+)"sa)
+        end
+        if os == "openbsd"
+            os_version = extract_os_version("openbsd", r".*openbsd([\d.]+)"sa)
         end
         tags["os_version"] = os_version
 
@@ -783,6 +854,17 @@ function platform_dlext(p::AbstractPlatform = HostPlatform())
     end
 end
 
+# Not general purpose, just for parse_dl_name_version
+function _this_os_name()
+    if Sys.iswindows()
+        return "windows"
+    elseif Sys.isapple()
+        return "macos"
+    else
+        return "other"
+    end
+end
+
 """
     parse_dl_name_version(path::String, platform::AbstractPlatform)
 
@@ -792,19 +874,37 @@ this function returns `"libfoo", v"3.2"`.  If the path name is not a
 valid dynamic library, this method throws an error.  If no soversion
 can be extracted from the filename, as in "libbar.so" this method
 returns `"libbar", nothing`.
+
+A soversion may carry a trailing tag, as Julia's own LLVM does; the tag is not part of the
+name and is not reported.
+
+# Examples
+```jldoctest
+julia> parse_dl_name_version("lib/libfoo.so.3.2", "linux")
+("libfoo", v"3.2.0")
+
+julia> parse_dl_name_version("libbar.so", "linux")
+("libbar", nothing)
+
+julia> parse_dl_name_version("libLLVM.so.21.1jl", "linux")
+("libLLVM", v"21.1.0")
+```
 """
-function parse_dl_name_version(path::String, os::String)
+function parse_dl_name_version(path::String, os::String=_this_os_name())
     # Use an extraction regex that matches the given OS
+    # A tag may follow the soversion (`libLLVM.so.21.1jl`), but only after a version.
     local dlregex
+    # Keep this up to date with _this_os_name
     if os == "windows"
-        # On Windows, libraries look like `libnettle-6.dll`
-        dlregex = r"^(.*?)(?:-((?:[\.\d]+)*))?\.dll$"sa
+        # On Windows, libraries look like `libnettle-6.dll`.
+        # Stay case-insensitive, the suffix might be `.DLL`.
+        dlregex = r"^(.*?)(?:-(?:((?:[\.\d]+)+)([A-Za-z][\w\.]*)?)?)?\.dll$"isa
     elseif os == "macos"
         # On OSX, libraries look like `libnettle.6.3.dylib`
-        dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"sa
+        dlregex = r"^(.*?)(?:((?:\.[\d]+)+)([A-Za-z][\w\-]*)?)?\.dylib$"sa
     else
-        # On Linux and FreeBSD, libraries look like `libnettle.so.6.3.0`
-        dlregex = r"^(.*?)\.so((?:\.[\d]+)*)$"sa
+        # On Linux and other BSDs, libraries look like `libnettle.so.6.3.0`
+        dlregex = r"^(.*?)\.so(?:((?:\.[\d]+)+)([A-Za-z][\w\-]*)?)?$"sa
     end
 
     m = match(dlregex, basename(path))
@@ -824,25 +924,71 @@ function parse_dl_name_version(path::String, os::String)
 end
 
 # Adapter for `AbstractString`
-function parse_dl_name_version(path::AbstractString, os::AbstractString)
+function parse_dl_name_version(path::AbstractString, os::AbstractString=_this_os_name())
     return parse_dl_name_version(string(path)::String, string(os)::String)
+end
+
+function get_csl_member(member::Symbol)
+    # If CompilerSupportLibraries_jll is a stdlib, we can just grab things from it
+    csl_pkgids = filter(pkgid -> pkgid.name == "CompilerSupportLibraries_jll", keys(Base.loaded_modules))
+    if !isempty(csl_pkgids)
+        CSL_mod = Base.loaded_modules[first(csl_pkgids)]
+
+        # This can fail during bootstrap, so we skip in that case.
+        if isdefined(CSL_mod, member)
+            return getproperty(CSL_mod, member)
+        end
+    end
+
+    return nothing
+end
+
+
+function _get_libgfortran_path()
+    # If CompilerSupportLibraries_jll is a stdlib, we can just directly ask for
+    # the path here, without checking `dllist()`:
+    libgfortran_path = get_csl_member(:libgfortran_path)
+    if libgfortran_path !== nothing
+        return libgfortran_path::String
+    end
+
+    # Otherwise, look for it having already been loaded by something
+    libgfortran_paths = filter!(x -> occursin("libgfortran", x), Libdl.dllist())
+    if !isempty(libgfortran_paths)
+        return first(libgfortran_paths)::String
+    end
+
+    # One day, I hope to not be linking against libgfortran in base Julia
+    return nothing
+end
+
+function _get_libstdcxx_handle()
+    # If CompilerSupportLibraries_jll is a stdlib, we can just directly open it
+    libstdcxx = get_csl_member(:libstdcxx)
+    if libstdcxx !== nothing
+        return nothing
+    end
+
+    # Otherwise, look for it having already been loaded by something
+    libstdcxx_paths = filter!(x -> occursin("libstdc++", x), Libdl.dllist())
+    if !isempty(libstdcxx_paths)
+        return Libdl.dlopen(first(libstdcxx_paths), Libdl.RTLD_NOLOAD)::Ptr{Cvoid}
+    end
+
+    # One day, I hope to not be linking against libstdc++ in base Julia
+    return nothing
 end
 
 """
     detect_libgfortran_version()
 
 Inspects the current Julia process to determine the libgfortran version this Julia is
-linked against (if any).
+linked against (if any).  Returns `nothing` if no libgfortran version dependence is
+detected.
 """
 function detect_libgfortran_version()
-    libgfortran_paths = filter(x -> occursin("libgfortran", x), Libdl.dllist())
-    if isempty(libgfortran_paths)
-        # One day, I hope to not be linking against libgfortran in base Julia
-        return nothing
-    end
-    libgfortran_path = first(libgfortran_paths)
-
-    name, version = parse_dl_name_version(libgfortran_path, os())
+    libgfortran_path = _get_libgfortran_path()
+    _, version = parse_dl_name_version(libgfortran_path, os())
     if version === nothing
         # Even though we complain about this, we allow it to continue in the hopes that
         # we shall march on to a BRIGHTER TOMORROW.  One in which we are not shackled
@@ -865,24 +1011,18 @@ it is linked against (if any).  `max_minor_version` is the latest version in the
 3.4 series of GLIBCXX where the search is performed.
 """
 function detect_libstdcxx_version(max_minor_version::Int=30)
-    libstdcxx_paths = filter(x -> occursin("libstdc++", x), Libdl.dllist())
-    if isempty(libstdcxx_paths)
-        # This can happen if we were built by clang, so we don't link against
-        # libstdc++ at all.
-        return nothing
-    end
-
     # Brute-force our way through GLIBCXX_* symbols to discover which version we're linked against
-    hdl = Libdl.dlopen(first(libstdcxx_paths))::Ptr{Cvoid}
-    # Try all GLIBCXX versions down to GCC v4.8:
-    # https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html
-    for minor_version in max_minor_version:-1:18
-        if Libdl.dlsym(hdl, "GLIBCXX_3.4.$(minor_version)"; throw_error=false) !== nothing
-            Libdl.dlclose(hdl)
-            return VersionNumber("3.4.$(minor_version)")
+    libstdcxx = _get_libstdcxx_handle()
+
+    if libstdcxx !== nothing
+        # Try all GLIBCXX versions down to GCC v4.8:
+        # https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html
+        for minor_version in max_minor_version:-1:18
+            if Libdl.dlsym(libstdcxx, "GLIBCXX_3.4.$(minor_version)"; throw_error=false) !== nothing
+                return VersionNumber("3.4.$(minor_version)")
+            end
         end
     end
-    Libdl.dlclose(hdl)
     return nothing
 end
 
@@ -897,14 +1037,14 @@ between Julia and LLVM; they must match.
 """
 function detect_cxxstring_abi()
     # First, if we're not linked against libstdc++, then early-exit because this doesn't matter.
-    libstdcxx_paths = filter(x -> occursin("libstdc++", x), Libdl.dllist())
+    libstdcxx_paths = filter!(x -> occursin("libstdc++", x), Libdl.dllist())
     if isempty(libstdcxx_paths)
         # We were probably built by `clang`; we don't link against `libstdc++`` at all.
         return nothing
     end
 
     function open_libllvm(f::Function)
-        for lib_name in ("libLLVM-14jl", "libLLVM", "LLVM", "libLLVMSupport")
+        for lib_name in (Base.libllvm_name, "libLLVM", "LLVM", "libLLVMSupport")
             hdl = Libdl.dlopen_e(lib_name)
             if hdl != C_NULL
                 try
@@ -931,15 +1071,16 @@ function detect_cxxstring_abi()
 end
 
 """
-    host_triplet()
+    host_triplet(build_triplet::String = Base.BUILD_TRIPLET, ext_tags::String = Base.BUILD_EXT_TAGS)
 
 Build host triplet out of `Sys.MACHINE` and various introspective utilities that
 detect compiler ABI values such as `libgfortran_version`, `libstdcxx_version` and
 `cxxstring_abi`.  We do this without using any `Platform` tech as it must run before
-we have much of that built.
+we have much of that built.  Extended tags recorded by the build (e.g. `-sanitize+address`)
+are appended after the compiler ABI tags, as the triplet grammar requires.
 """
-function host_triplet()
-    str = Base.BUILD_TRIPLET
+function host_triplet(build_triplet::String = Base.BUILD_TRIPLET, ext_tags::String = Base.BUILD_EXT_TAGS)
+    str = build_triplet
 
     if !occursin("-libgfortran", str)
         libgfortran_version = detect_libgfortran_version()
@@ -961,6 +1102,9 @@ function host_triplet()
             str = string(str, "-libstdcxx", libstdcxx_version.patch)
         end
     end
+
+    # Add on any extended tags recorded by the build
+    str = string(str, ext_tags)
 
     # Add on julia_version extended tag
     if !occursin("-julia_version+", str)
@@ -1000,14 +1144,22 @@ The reserved tags `os_version` and `libstdcxx_version` use this mechanism to pro
 bounded version constraints, where an artifact can specify that it was built using APIs
 only available in macOS `v"10.11"` and later, or an artifact can state that it requires
 a libstdc++ that is at least `v"3.4.22"`, etc...
+
+Keys present in only one of `a` or `b` are normally ignored, with the exception of the
+`sanitize` tag: a sanitized platform (e.g. `x86_64-linux-gnu-sanitize+memory`) never
+matches a platform without a `sanitize` tag, since instrumented and uninstrumented
+binaries cannot be mixed.
 """
 function platforms_match(a::AbstractPlatform, b::AbstractPlatform)
     for k in union(keys(tags(a)::Dict{String,String}), keys(tags(b)::Dict{String,String}))
         ak = get(tags(a), k, nothing)
         bk = get(tags(b), k, nothing)
 
-        # Only continue if both `ak` and `bk` are not `nothing`
+        # A tag missing from one side acts as a wildcard, except for strict tags
         if ak === nothing || bk === nothing
+            if k in strict_presence_tags
+                return false
+            end
             continue
         end
 
@@ -1016,19 +1168,19 @@ function platforms_match(a::AbstractPlatform, b::AbstractPlatform)
 
         # Throw an error if `a` and `b` have both set non-default comparison strategies for `k`
         # and they're not the same strategy.
-        if a_comp != compare_default && b_comp != compare_default && a_comp != b_comp
+        if a_comp !== compare_default && b_comp !== compare_default && a_comp !== b_comp
             throw(ArgumentError("Cannot compare Platform objects with two different non-default comparison strategies for the same key \"$(k)\""))
         end
 
         # Select the custom comparator, if we have one.
         comparator = a_comp
-        if b_comp != compare_default
+        if b_comp !== compare_default
             comparator = b_comp
         end
 
         # Call the comparator, passing in which objects requested this comparison (one, the other, or both)
         # For some comparators this doesn't matter, but for non-symmetrical comparisons, it does.
-        if !(comparator(ak, bk, a_comp == comparator, b_comp == comparator)::Bool)
+        if !(@invokelatest(comparator(ak, bk, a_comp === comparator, b_comp === comparator))::Bool)
             return false
         end
     end
@@ -1067,14 +1219,30 @@ function select_platform(download_info::Dict, platform::AbstractPlatform = HostP
         return nothing
     end
 
-    # At this point, we may have multiple possibilities.  E.g. if, in the future,
-    # Julia can be built without a direct dependency on libgfortran, we may match
-    # multiple tarballs that vary only within their libgfortran ABI.  To narrow it
-    # down, we just sort by triplet, then pick the last one.  This has the effect
-    # of generally choosing the latest release (e.g. a `libgfortran5` tarball
-    # rather than a `libgfortran3` tarball)
-    p = last(sort(ps, by = p -> triplet(p)))
-    return download_info[p]
+    # At this point, we may have multiple possibilities.  We now engage a multi-
+    # stage selection algorithm, where we first sort the matches by how complete
+    # the match is, e.g. preferring matches where the intersection of tags is
+    # equal to the union of the tags:
+    function match_loss(a, b)
+        a_tags = Set(keys(tags(a)))
+        b_tags = Set(keys(tags(b)))
+        return length(union(a_tags, b_tags)) - length(intersect(a_tags, b_tags))
+    end
+
+    # We prefer these better matches, and secondarily reverse-sort by triplet so
+    # as to generally choose the latest release (e.g. a `libgfortran5` tarball
+    # over a `libgfortran3` tarball).
+    sort!(ps, lt = (a, b) -> begin
+        loss_a = match_loss(a, platform)
+        loss_b = match_loss(b, platform)
+        if loss_a != loss_b
+            return loss_a < loss_b
+        end
+        return triplet(a) > triplet(b)
+    end)
+
+    # @invokelatest here to not get invalidated by new defs of `==(::Function, ::Function)`
+    return @invokelatest getindex(download_info, first(ps))
 end
 
 # precompiles to reduce latency (see https://github.com/JuliaLang/julia/pull/43990#issuecomment-1025692379)

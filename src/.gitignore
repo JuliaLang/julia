@@ -5,12 +5,16 @@
 /*.lib
 /*.pdb
 /*.exp
+/*.lto
 
 /boot.j.inc
 /julia_flisp.boot
 /julia_flisp.boot.inc
 /flisp.boot.inc
+/jl_data_globals_defs.inc
 /jl_internal_funcs.inc
+/jl_codegen_hash.inc*
+/jl_static_codegen_fallbacks.inc
 
 /libjulia-debug.a
 /libjulia-debug.so
@@ -24,5 +28,5 @@
 /base/
 
 # Clang compilation database
-/compile_commands*.json
+compile_commands*.json
 .clangd/

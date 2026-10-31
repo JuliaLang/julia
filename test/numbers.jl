@@ -133,6 +133,18 @@ end
         @test (min(NaN,Inf), min(NaN,-Inf), min(-NaN,Inf), min(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
         @test minmax(-Inf,NaN) ≣ (min(-Inf,NaN), max(-Inf,NaN))
     end
+    for S in Base.BitInteger_types, T in Base.BitInteger_types
+        xvals = S <: Signed ? [typemin(S), -one(S), zero(S), one(S), typemax(S)] : [zero(S), one(S), typemax(S)]
+        yvals = T <: Signed ? [typemin(T), -one(T), zero(T), one(T), typemax(T)] : [zero(T), one(T), typemax(T)]
+        for x in xvals, y in yvals
+            z = @inferred min(x, y)
+            @test z <= x && z <= y && z in (x, y)
+            z = @inferred max(x, y)
+            @test z >= x && z >= y && z in (x, y)
+            z = @inferred minmax(x, y)
+            @test z == (min(x, y), max(x, y))
+        end
+    end
 end
 @testset "Base._extrema_rf for float" begin
     for T in (Float16, Float32, Float64, BigFloat)
@@ -144,17 +156,18 @@ end
             z = ordered[min(i1,j1)], ordered[max(i2,j2)]
             @test Base._extrema_rf(x, y) === z
         end
+        # a NaN operand wins, but its sign is not preserved: the sign of a NaN
+        # result is non-deterministic, so compare with `isequal` rather than `===`
         for i in 1:2, j1 in 1:6, j2 in 1:6 # unordered test (only 1 NaN)
             x = unorded[i] , unorded[i]
             y = ordered[j1], ordered[j2]
-            @test Base._extrema_rf(x, y) === x
-            @test Base._extrema_rf(y, x) === x
+            @test Base._extrema_rf(x, y) ≣ x
+            @test Base._extrema_rf(y, x) ≣ x
         end
         for i in 1:2, j in 1:2 # unordered test (2 NaNs)
             x = unorded[i], unorded[i]
             y = unorded[j], unorded[j]
-            z = Base._extrema_rf(x, y)
-            @test z === x || z === y
+            @test Base._extrema_rf(x, y) ≣ x
         end
     end
 end
@@ -243,6 +256,11 @@ end
     @test muladd(big(1//1),2,3) == big(1//1)*2+3
     @test muladd(1.0,2,3) == 1.0*2+3
     @test muladd(big(1.0),2,3) == big(1.0)*2+3
+    @test muladd(Inf, false, 3) === 3.0
+    @test muladd(Inf, true, 3) === Inf
+    @test muladd(false, NaN, 3) === 3.0
+    @test muladd(true, NaN, 3) === NaN
+    @test muladd(true, true, 3) === 4
 end
 # lexing typemin(Int64)
 @test (-9223372036854775808)^1 == -9223372036854775808
@@ -262,7 +280,7 @@ end
 
 # GMP allocation overflow should not cause crash
 if Base.GMP.ALLOC_OVERFLOW_FUNCTION[] && sizeof(Int) > 4
-  @test_throws OutOfMemoryError BigInt(2)^(typemax(Culong))
+    @test_throws OutOfMemoryError BigInt(2)^(typemax(Culong))
 end
 
 # exponentiating with a negative base
@@ -652,14 +670,14 @@ end
     @test eltype(copysign(-1//2,-1//2)) <: Rational
 
     # Verify type stability with rational (x is positive)
-    @test eltype(copysign(-1//2,1)) <: Rational
-    @test eltype(copysign(-1//2,BigInt(1))) <: Rational
-    @test eltype(copysign(-1//2,1.0)) <: Rational
-    @test eltype(copysign(-1//2,1//2)) <: Rational
-    @test eltype(copysign(-1//2,-1)) <: Rational
-    @test eltype(copysign(-1//2,-BigInt(1))) <: Rational
-    @test eltype(copysign(-1//2,-1.0)) <: Rational
-    @test eltype(copysign(-1//2,-1//2)) <: Rational
+    @test eltype(copysign(1//2,1)) <: Rational
+    @test eltype(copysign(1//2,BigInt(1))) <: Rational
+    @test eltype(copysign(1//2,1.0)) <: Rational
+    @test eltype(copysign(1//2,1//2)) <: Rational
+    @test eltype(copysign(1//2,-1)) <: Rational
+    @test eltype(copysign(1//2,-BigInt(1))) <: Rational
+    @test eltype(copysign(1//2,-1.0)) <: Rational
+    @test eltype(copysign(1//2,-1//2)) <: Rational
 
     # test x = NaN
     @test isnan(copysign(0/0,1))
@@ -679,6 +697,9 @@ end
     @test copysign(big(-1), 0x02) == 1
     @test copysign(big(-1.0), 0x02) == 1.0
     @test copysign(-1//2, 0x01) == 1//2
+
+    # Verify overflow is checked with rational
+    @test_throws OverflowError copysign(typemin(Int)//1, 1)
 end
 
 @testset "isnan/isinf/isfinite" begin
@@ -826,6 +847,28 @@ end
     @test cmp(isless, NaN, 1) == 1
     @test cmp(isless, 1, NaN) == -1
     @test cmp(isless, NaN, NaN) == 0
+end
+@testset "ispositive/isnegative" begin
+    for T in [Base.uniontypes(Base.BitInteger)..., Bool, Rational{Int}, BigInt, Base.uniontypes(Base.IEEEFloat)..., BigFloat, Missing]
+        values = T[zero(T), one(T)]
+        if T <: AbstractFloat
+            push!(values, Inf, NaN) # also check Infs and NaNs
+        elseif T <: Rational
+            push!(values, 1//0) # also check Infs
+        end
+        @testset "$T" begin
+            for value in values
+                # https://github.com/JuliaLang/julia/pull/53677#discussion_r1534044582
+                # Use eval to explicitly show expressions when they fail
+                @eval begin
+                    @test ispositive($value) === ($value > 0)
+                    @test ispositive(-$value) === (-$value > 0)
+                    @test isnegative($value) === ($value < 0)
+                    @test isnegative(-$value) === (-$value < 0)
+                end
+            end
+        end
+    end
 end
 @testset "Float vs Integer comparison" begin
     for x=-5:5, y=-5:5
@@ -1111,10 +1154,30 @@ end
 end
 
 @testset "Irrational zero and one" begin
-    @test one(pi) === true
-    @test zero(pi) === false
-    @test one(typeof(pi)) === true
-    @test zero(typeof(pi)) === false
+    for i in (π, ℯ, γ, catalan)
+        @test one(i) === true
+        @test zero(i) === false
+        @test one(typeof(i)) === true
+        @test zero(typeof(i)) === false
+    end
+end
+
+@testset "Irrational iszero, isfinite, isinteger, and isone" begin
+    for i in (π, ℯ, γ, catalan)
+        @test !iszero(i)
+        @test !isone(i)
+        @test !isinteger(i)
+        @test isfinite(i)
+    end
+end
+
+@testset "Irrational promote_type" begin
+    for T in (Float16, Float32, Float64)
+        for i in (π, ℯ, γ, catalan)
+            @test T(2.0) * i ≈ T(2.0) * T(i)
+            @test T(2.0) * i isa T
+        end
+    end
 end
 
 @testset "Irrationals compared with Irrationals" begin
@@ -1135,6 +1198,8 @@ end
 end
 
 @testset "Irrationals compared with Rationals and Floats" begin
+    @test pi != Float64(pi)
+    @test Float64(pi) != pi
     @test Float64(pi,RoundDown) < pi
     @test Float64(pi,RoundUp) > pi
     @test !(Float64(pi,RoundDown) > pi)
@@ -1153,6 +1218,7 @@ end
     @test nextfloat(big(pi)) > pi
     @test !(prevfloat(big(pi)) > pi)
     @test !(nextfloat(big(pi)) < pi)
+    @test big(typeof(pi)) == BigFloat
 
     @test 2646693125139304345//842468587426513207 < pi
     @test !(2646693125139304345//842468587426513207 > pi)
@@ -1168,6 +1234,17 @@ Base.@irrational i46051 4863.185427757 1548big(pi)
     # issue #46051
     @test sprint(show, "text/plain", i46051) == "i46051 = 4863.185427757..."
 end
+
+@testset "Irrational round, float, ceil" begin
+    using .MathConstants
+    @test round(π) === 3.0
+    @test round(Int, ℯ) === 3
+    @test floor(ℯ) === 2.0
+    @test floor(Int, φ) === 1
+    @test ceil(γ) === 1.0
+    @test ceil(Int, catalan) === 1
+end
+
 @testset "issue #6365" begin
     for T in (Float32, Float64)
         for i = 9007199254740992:9007199254740996
@@ -1558,36 +1635,44 @@ end
         end
     end
 
-    for x=0:5, y=1:5
-        @test div(UInt(x),UInt(y)) == div(x,y)
-        @test div(UInt(x),y) == div(x,y)
-        @test div(x,UInt(y)) == div(x,y)
-        @test div(UInt(x),-y) == reinterpret(UInt,div(x,-y))
-        @test div(-x,UInt(y)) == div(-x,y)
+    @test isnan(mod(NaN, Inf))
+    @test isnan(mod(NaN, -Inf))
+    for x=0:5
+        @test mod(x, Inf) == x
+        @test mod(x, -Inf) == x
+        @test mod(-x, Inf) == -x
+        @test mod(-x, -Inf) == -x
+        for y=1:5
+            @test div(UInt(x),UInt(y)) == div(x,y)
+            @test div(UInt(x),y) == div(x,y)
+            @test div(x,UInt(y)) == div(x,y)
+            @test div(UInt(x),-y) == reinterpret(UInt,div(x,-y))
+            @test div(-x,UInt(y)) == div(-x,y)
 
-        @test fld(UInt(x),UInt(y)) == fld(x,y)
-        @test fld(UInt(x),y) == fld(x,y)
-        @test fld(x,UInt(y)) == fld(x,y)
-        @test fld(UInt(x),-y) == reinterpret(UInt,fld(x,-y))
-        @test fld(-x,UInt(y)) == fld(-x,y)
+            @test fld(UInt(x),UInt(y)) == fld(x,y)
+            @test fld(UInt(x),y) == fld(x,y)
+            @test fld(x,UInt(y)) == fld(x,y)
+            @test fld(UInt(x),-y) == reinterpret(UInt,fld(x,-y))
+            @test fld(-x,UInt(y)) == fld(-x,y)
 
-        @test cld(UInt(x),UInt(y)) == cld(x,y)
-        @test cld(UInt(x),y) == cld(x,y)
-        @test cld(x,UInt(y)) == cld(x,y)
-        @test cld(UInt(x),-y) == reinterpret(UInt,cld(x,-y))
-        @test cld(-x,UInt(y)) == cld(-x,y)
+            @test cld(UInt(x),UInt(y)) == cld(x,y)
+            @test cld(UInt(x),y) == cld(x,y)
+            @test cld(x,UInt(y)) == cld(x,y)
+            @test cld(UInt(x),-y) == reinterpret(UInt,cld(x,-y))
+            @test cld(-x,UInt(y)) == cld(-x,y)
 
-        @test rem(UInt(x),UInt(y)) == rem(x,y)
-        @test rem(UInt(x),y) == rem(x,y)
-        @test rem(x,UInt(y)) == rem(x,y)
-        @test rem(UInt(x),-y) == rem(x,-y)
-        @test rem(-x,UInt(y)) == rem(-x,y)
+            @test rem(UInt(x),UInt(y)) == rem(x,y)
+            @test rem(UInt(x),y) == rem(x,y)
+            @test rem(x,UInt(y)) == rem(x,y)
+            @test rem(UInt(x),-y) == rem(x,-y)
+            @test rem(-x,UInt(y)) == rem(-x,y)
 
-        @test mod(UInt(x),UInt(y)) == mod(x,y)
-        @test mod(UInt(x),y) == mod(x,y)
-        @test mod(x,UInt(y)) == mod(x,y)
-        @test mod(UInt(x),-y) == mod(x,-y)
-        @test mod(-x,UInt(y)) == mod(-x,y)
+            @test mod(UInt(x),UInt(y)) == mod(x,y)
+            @test mod(UInt(x),y) == mod(x,y)
+            @test mod(x,UInt(y)) == mod(x,y)
+            @test mod(UInt(x),-y) == mod(x,-y)
+            @test mod(-x,UInt(y)) == mod(-x,y)
+        end
     end
 
     @test div(typemax(UInt64)  , 1) ==  typemax(UInt64)
@@ -1701,6 +1786,63 @@ end
         @test fld(+1.1, 0.1) == div(+1.1, 0.1, RoundDown) == floor(big(+1.1)/big(0.1)) == +11.0
         @test cld(-1.1, 0.1) == div(-1.1, 0.1, RoundUp)   ==  ceil(big(-1.1)/big(0.1)) == -11.0
         @test fld(-1.1, 0.1) == div(-1.1, 0.1, RoundDown) == floor(big(-1.1)/big(0.1)) == -12.0
+    end
+    @testset "issue #49450" begin
+        @test div(514, Float16(0.75)) === Float16(685)
+        @test fld(514, Float16(0.75)) === Float16(685)
+        @test cld(515, Float16(0.75)) === Float16(687)
+
+        @test cld(1, Float16(0.000999)) === Float16(1001)
+        @test cld(2, Float16(0.001999)) === Float16(1001)
+        @test cld(3, Float16(0.002934)) === Float16(1023)
+        @test cld(4, Float16(0.003998)) === Float16(1001)
+        @test fld(5, Float16(0.004925)) === Float16(1015)
+
+        @test div(4_194_307, Float32(0.75)) === Float32(5_592_409)
+        @test fld(4_194_307, Float32(0.75)) === Float32(5_592_409)
+        @test cld(4_194_308, Float32(0.75)) === Float32(5_592_411)
+
+        @test fld(5, Float32(6.556511e-7)) === Float32(7_626_007)
+        @test fld(10, Float32(1.3113022e-6)) === Float32(7_626_007)
+        @test fld(11, Float32(1.4305115e-6)) === Float32(7_689_557)
+        @test cld(16, Float32(2.8014183e-6)) === Float32(5_711_393)
+        @test cld(17, Float32(2.2053719e-6)) === Float32(7_708_451)
+
+        @test fld(1.5046328f-36, -3.3409559485880944e-52) === -4.503599545179259e15
+        @test cld(1.5046328f-36, -3.3409559485880944e-52) === -4.503599545179258e15
+
+        @test fld(9007199254740994.0, 3.0) === 3002399751580331.0
+        @test cld(9007199254740994.0, 3.0) === 3002399751580332.0
+
+        @test fld(2.0^52, 1.5) === 3.00239975158033e15
+        @test cld(2.0^52, 1.5) === 3.002399751580331e15
+
+        @test fld(1.0, 1.1102230246251568e-16) === 9.00719925474099e15
+        @test cld(1.0, 1.1102230246251568e-16) === 9.007199254740991e15
+
+        @test fld(5.368709120000001e8, 5.960464521947985e-8) === 9.007199187632128e15
+        @test cld(5.368709120000001e8, 5.960464521947985e-8) === 9.007199187632129e15
+
+        @test fld(1.6856322854563416e16, 3.8274770451988434) === 4.40402977091864e15
+        @test cld(1.6856322854563416e16, 3.8274770451988434) === 4.404029770918641e15
+
+        Random.seed!(123)
+        for T in (Float16, Float32, Float64, BigFloat)
+            p = precision(T)
+            for e in T(2).^(-6:2), s1 in (+1, -1), s2 in (+1, -1), r in 1:5
+                z = rand(T)
+                x = s1 * ldexp(1 + rand(T), rand(0:p))
+                y = s2 * z * eps(x/z) / e
+                _fld, _cld = e ≤ 1 ? (fld, cld) : (/, /)
+                if T == BigFloat
+                    @test fld(x, y) == T(setprecision(() -> _fld(x, y), p + 16))
+                    @test cld(x, y) == T(setprecision(() -> _cld(x, y), p + 16))
+                else
+                    @test fld(x, y) == T(_fld(widen(x), widen(y)))
+                    @test cld(x, y) == T(_cld(widen(x), widen(y)))
+                end
+            end
+        end
     end
 end
 @testset "return types" begin
@@ -1933,6 +2075,12 @@ end
     @test 0x1p-1022 == floatmin()
     @test 0x1.fffffffffffffp1023 == floatmax()
     @test isinf(nextfloat(0x1.fffffffffffffp1023))
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    for f in (eps, floatmin, floatmax)
+        @test_throws MethodError(f, (Union{},)) f(Union{})
+        @test_throws MethodError(f, (Union{}, 1)) f(Union{}, 1)
+        @test which(f, (Type{Union{}},)).sig == Tuple{typeof(f), Type{Union{}}, Vararg}
+    end
 end
 @testset "issue #1308" begin
     @test string(~UInt128(0), base = 16) == "f"^32
@@ -2123,6 +2271,10 @@ end
     @test nextfloat(Inf32) === Inf32
     @test prevfloat(-Inf32) === -Inf32
     @test isequal(nextfloat(NaN32), NaN32)
+    @test nextfloat(1.0, UInt(5)) == nextfloat(1.0, 5)
+    @test prevfloat(1.0, UInt(5)) == prevfloat(1.0, 5)
+    @test nextfloat(0.0, typemax(UInt64)) == Inf
+    @test prevfloat(0.0, typemax(UInt64)) == -Inf
 end
 @testset "issue #16206" begin
     @test prevfloat(Inf) == 1.7976931348623157e308
@@ -2155,11 +2307,36 @@ for T = (UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64,UInt128,Int128)
     end
 end
 
-@testset "Irrational/Bool multiplication" begin
+@testset "Bool multiplication" begin
     @test false*pi === 0.0
     @test pi*false === 0.0
     @test true*pi === Float64(pi)
     @test pi*true === Float64(pi)
+
+    @test false*Inf === 0.0
+    @test Inf*false === 0.0
+    @test true*Inf === Inf
+    @test Inf*true === Inf
+
+    @test false*NaN === 0.0
+    @test NaN*false === 0.0
+    @test true*NaN === NaN
+    @test NaN*true === NaN
+
+    @test false*-Inf === -0.0
+    @test -Inf*false === -0.0
+    @test true*-Inf === -Inf
+    @test -Inf*true === -Inf
+
+    @test false*1//0 === 0//1
+    @test 1//0*false === 0//1
+    @test true*1//0 === 1//0
+    @test 1//0*true === 1//0
+
+    @test false*-1//0 === 0//1
+    @test -1//0*false === 0//1
+    @test true*-1//0 === -1//0
+    @test -1//0*true === -1//0
 end
 # issue #5492
 @test -0.0 + false === -0.0
@@ -2219,9 +2396,7 @@ end
 @test_throws ErrorException reinterpret(Int, 0x01)
 
 @testset "issue #12832" begin
-    @test_throws ErrorException reinterpret(Float64, Complex{Int64}(1))
-    @test_throws ErrorException reinterpret(Float64, ComplexF32(1))
-    @test_throws ErrorException reinterpret(ComplexF32, Float64(1))
+    @test_throws ArgumentError reinterpret(Float64, Complex{Int64}(1))
     @test_throws ErrorException reinterpret(Int32, false)
 end
 # issue #41
@@ -2264,6 +2439,17 @@ end
 @test_throws InexactError convert(Int16, big(2)^100)
 @test_throws InexactError convert(Int, typemax(UInt))
 
+@testset "infinity to integer conversion" begin
+    for T in (
+        UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Int128, BigInt
+    )
+        for S in (Float16, Float32, Float64, BigFloat)
+            @test_throws InexactError convert(T, typemin(S))
+            @test_throws InexactError convert(T, typemax(S))
+        end
+    end
+end
+
 @testset "issue #9789" begin
     @test_throws InexactError convert(Int8, typemax(UInt64))
     @test_throws InexactError convert(Int16, typemax(UInt64))
@@ -2280,10 +2466,15 @@ let x = big(-0.0)
     @test signbit(x) && !signbit(abs(x))
 end
 
-@testset "mod1 and fld1" begin
+@testset "mod1 and cld" begin
     @test all(x -> (m=mod1(x,3); 0<m<=3), -5:+5)
-    @test all(x -> x == (fld1(x,3)-1)*3 + mod1(x,3), -5:+5)
-    @test all(x -> fldmod1(x,3) == (fld1(x,3), mod1(x,3)), -5:+5)
+    @test all(x -> x == (cld(x,3)-1)*3 + mod1(x,3), -5:+5)
+    @test all(x -> cldmod1(x,3) == (cld(x,3), mod1(x,3)), -5:+5)
+    # the legacy names promote mixed arguments first, unlike `cld`
+    @test fld1(0x05, -3) === -1
+    @test fldmod1(0x05, -3) === (-1, -1)
+    @test fld1(0x05, 3) === 2
+    @test_throws InexactError fld1(UInt(5), -3)
 end
 #Issue #5570
 @test map(x -> Int(mod1(UInt(x),UInt(5))), 0:15) == [5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5]
@@ -2318,8 +2509,8 @@ end
 
 function allsubtypes!(m::Module, x::DataType, sts::Set)
     for s in names(m, all = true)
-        if isdefined(m, s) && !Base.isdeprecated(m, s)
-            t = getfield(m, s)
+        if isdefinedglobal(m, s) && !Base.isdeprecated(m, s)
+            t = getglobal(m, s)
             if isa(t, Type) && t <: x && t != Union{}
                 push!(sts, t)
             elseif isa(t, Module) && t !== m && nameof(t) === s && parentmodule(t) === m
@@ -2477,25 +2668,54 @@ Base.:(==)(x::TestNumber, y::TestNumber) = x.inner == y.inner
 Base.abs(x::TestNumber) = TestNumber(abs(x.inner))
 @test abs2(TestNumber(3+4im)) == TestNumber(25)
 
+@testset "mul_hi" begin
+    n = 1000
+    ground_truth(x, y) = ((widen(x)*y) >> (8*sizeof(typeof(x)))) % typeof(x)
+    for T in [UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Int128]
+        for trait1 in [typemin, typemax]
+            for trait2 in [typemin, typemax]
+                x, y = trait1(T), trait2(T)
+                @test Base.mul_hi(x, y) === ground_truth(x, y)
+            end
+        end
+        for (x, y) in zip(rand(T, n), rand(T, n))
+            @test Base.mul_hi(x, y) === ground_truth(x, y)
+        end
+    end
+end
+
 @testset "multiplicative inverses" begin
     function testmi(numrange, denrange)
         for d in denrange
             d == 0 && continue
             fastd = Base.multiplicativeinverse(d)
             for n in numrange
+                d == -1 && n == typemin(typeof(n)) && continue
                 @test div(n,d) == div(n,fastd)
             end
         end
     end
     testmi(-1000:1000, -100:100)
-    testmi(typemax(Int)-1000:typemax(Int), -100:100)
-    testmi(typemin(Int)+1:typemin(Int)+1000, -100:100)
     @test_throws ArgumentError Base.multiplicativeinverse(0)
-    testmi(map(UInt32, 0:1000), map(UInt32, 1:100))
-    testmi(typemax(UInt32)-UInt32(1000):typemax(UInt32), map(UInt32, 1:100))
+    for T in [Int8, Int16, Int32, Int64, Int128]
+        testmi(map(T, typemin(T)+1:typemin(T)+100), map(T, -50:50))
+    end
+    for T in [UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Int128]
+        testmi(map(T, typemax(T)-50:typemax(T)), map(T, 1:50))
+        testmi(rand(T, 50), rand(T, 50))
+        @test_throws ArgumentError Base.multiplicativeinverse(T(0))
+    end
+
+    # Division overflow is not handled
+    T = Int8
+    fastd = Base.multiplicativeinverse(T(-1))
+    @test_throws DivideError div(typemin(T), T(-1))
+    # does not throw:
+    # @test_throws div(typemin(T), fastd)
     # test broadcasting works.
     @test div.(3, Base.multiplicativeinverse(3)) == 1
 end
+
 @testset "ndims/indices/size/length" begin
     @test ndims(1) == 0
     @test ndims(Integer) == 0
@@ -2577,22 +2797,30 @@ end
     @test rem(T(1), T(2), RoundDown)    == 1
     @test rem(T(1), T(2), RoundUp)      == -1
     @test rem(T(1), T(2), RoundFromZero) == -1
+    @test rem(T(1), T(2), RoundNearestTiesUp) == -1
+    @test rem(T(1), T(2), RoundNearestTiesAway) == -1
     @test rem(T(1.5), T(2), RoundToZero)  == 1.5
     @test rem(T(1.5), T(2), RoundNearest) == -0.5
     @test rem(T(1.5), T(2), RoundDown)    == 1.5
     @test rem(T(1.5), T(2), RoundUp)      == -0.5
     @test rem(T(1.5), T(2), RoundFromZero) == -0.5
+    @test rem(T(1.5), T(2), RoundNearestTiesUp) == -0.5
+    @test rem(T(1.5), T(2), RoundNearestTiesAway) == -0.5
     @test rem(T(-1), T(2), RoundToZero)  == -1
     @test rem(T(-1), T(2), RoundNearest) == -1
     @test rem(T(-1), T(2), RoundDown)    == 1
     @test rem(T(-1), T(2), RoundUp)      == -1
     @test rem(T(-1), T(2), RoundFromZero) == 1
+    @test rem(T(-1), T(2), RoundNearestTiesUp) == -1
+    @test rem(T(-1), T(2), RoundNearestTiesAway) == 1
     @test rem(T(-1.5), T(2), RoundToZero)  == -1.5
     @test rem(T(-1.5), T(2), RoundNearest) == 0.5
     @test rem(T(-1.5), T(2), RoundDown)    == 0.5
     @test rem(T(-1.5), T(2), RoundUp)      == -1.5
     @test rem(T(-1.5), T(2), RoundFromZero) == 0.5
-    for mode in [RoundToZero, RoundNearest, RoundDown, RoundUp, RoundFromZero]
+    @test rem(T(-1.5), T(2), RoundNearestTiesUp) == 0.5
+    @test rem(T(-1.5), T(2), RoundNearestTiesAway) == 0.5
+    for mode in [RoundToZero, RoundNearest, RoundDown, RoundUp, RoundFromZero, RoundNearestTiesUp, RoundNearestTiesAway]
         @test isnan(rem(T(1), T(0), mode))
         @test isnan(rem(T(Inf), T(2), mode))
         @test isnan(rem(T(1), T(NaN), mode))
@@ -2603,6 +2831,8 @@ end
     @test isequal(rem(nextfloat(typemin(T)), T(2), RoundDown),     0.0)
     @test isequal(rem(nextfloat(typemin(T)), T(2), RoundUp),      -0.0)
     @test isequal(rem(nextfloat(typemin(T)), T(2), RoundFromZero), 0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundNearestTiesUp), -0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundNearestTiesAway), 0.0)
 end
 
 @testset "rem for $T RoundNearest" for T in (Int8, Int16, Int32, Int64, Int128)
@@ -2653,7 +2883,7 @@ end
     @test divrem(a,-(a-20), RoundDown) == (div(a,-(a-20), RoundDown), rem(a,-(a-20), RoundDown))
 end
 
-@testset "rem2pi $T" for T in (Float16, Float32, Float64, BigFloat)
+@testset "rem2pi $T" for T in (Float16, Float32, Float64, BigFloat, Int8, Int16, Int32, Int64, Int128)
     @test rem2pi(T(1), RoundToZero)  == 1
     @test rem2pi(T(1), RoundNearest) == 1
     @test rem2pi(T(1), RoundDown)    == 1
@@ -2698,11 +2928,15 @@ end
     @test rem2pi(T(-13), RoundUp)      ≈ -13+4π
 end
 
-@testset "PR #36420 $T" for T in (Float16, Float32, Float64)
+@testset "PR #36420 $T" for T in (Float16, Float32, Float64, BigFloat)
+    nan = reinterpret(Float64, reinterpret(UInt64, NaN) | rand(UInt64))
     for r in (RoundToZero, RoundNearest, RoundDown, RoundUp)
-        for x in (Inf, -Inf, NaN, -NaN)
+        for x in (Inf, -Inf, NaN, -NaN, nan)
             @test isnan(rem2pi(T(x), r))
             @test rem2pi(T(x), r) isa T
+            if isnan(x) && T !== BigFloat
+                @test rem2pi(T(x), r) === T(x)
+            end
         end
     end
 end
@@ -2736,6 +2970,20 @@ Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
     @test [2,4,8].^-2 == [0.25, 0.0625, 0.015625]
     @test [2, 4, 8].^-2 .* 4 == [1.0, 0.25, 0.0625] # nested literal_pow
     @test ℯ^-2 == exp(-2) ≈ inv(ℯ^2) ≈ (ℯ^-1)^2 ≈ sqrt(ℯ^-4)
+
+    if Int === Int32
+        p = 2147483647
+        @test x^p == 1
+        @test x^2147483647 == 2
+        @test (@fastmath x^p) == 1
+        @test (@fastmath x^2147483647) == 2
+    elseif Int === Int64
+        p = 9223372036854775807
+        @test x^p == 1
+        @test x^9223372036854775807 == 2
+        @test (@fastmath x^p) == 1
+        @test (@fastmath x^9223372036854775807) == 2
+    end
 end
 module M20889 # do we get the expected behavior without importing Base.^?
     using Test
@@ -2806,48 +3054,36 @@ end
 @test inv(3//4) === 4//3 === 1 / (3//4) === 1 // (3//4)
 
 # issues #23244 & #23250
-@testset "convert preserves NaN payloads" begin
+@testset "convert of NaN" begin
+    # A NaN must convert to a NaN of the target type. Whether the sign and payload
+    # survive is not specified: neither Julia nor LLVM promises it, and RISC-V hardware
+    # returns the canonical NaN from every conversion (see #56672).
+    isnanof(::Type{T}, x) where {T} = x isa T && isnan(x)
     @testset "smallest NaNs" begin
-        @test convert(Float32,  NaN16) ===  NaN32
-        @test convert(Float32, -NaN16) === -NaN32
-        @test convert(Float64,  NaN16) ===  NaN64
-        @test convert(Float64, -NaN16) === -NaN64
-        @test convert(Float16,  NaN32) ===  NaN16
-        @test convert(Float16, -NaN32) === -NaN16
-        @test convert(Float64,  NaN32) ===  NaN64
-        @test convert(Float64, -NaN32) === -NaN64
-        @test convert(Float32,  NaN64) ===  NaN32
-        @test convert(Float32, -NaN64) === -NaN32
-        @test convert(Float16,  NaN64) ===  NaN16
-        @test convert(Float16, -NaN64) === -NaN16
+        for (F, G) in ((Float32, Float16), (Float64, Float16), (Float16, Float32),
+                       (Float64, Float32), (Float32, Float64), (Float16, Float64))
+            @test isnanof(F, convert(F,  G(NaN)))
+            @test isnanof(F, convert(F, -G(NaN)))
+        end
     end
 
     @testset "largest NaNs" begin
-        @test convert(Float32, reinterpret(Float16, typemax(UInt16))) ===
-              reinterpret(Float32, typemax(UInt32) >> 13 << 13)
-        @test convert(Float64, reinterpret(Float16, typemax(UInt16))) ===
-              reinterpret(Float64, typemax(UInt64) >> 42 << 42)
-        @test convert(Float16, reinterpret(Float32, typemax(UInt32))) ===
-              reinterpret(Float16, typemax(UInt16) >> 00 << 00)
-        @test convert(Float64, reinterpret(Float32, typemax(UInt32))) ===
-              reinterpret(Float64, typemax(UInt64) >> 29 << 29)
-        @test convert(Float32, reinterpret(Float64, typemax(UInt64))) ===
-              reinterpret(Float32, typemax(UInt32) >> 00 << 00)
-        @test convert(Float16, reinterpret(Float64, typemax(UInt64))) ===
-              reinterpret(Float16, typemax(UInt16) >> 00 << 00)
+        @test isnanof(Float32, convert(Float32, reinterpret(Float16, typemax(UInt16))))
+        @test isnanof(Float64, convert(Float64, reinterpret(Float16, typemax(UInt16))))
+        @test isnanof(Float16, convert(Float16, reinterpret(Float32, typemax(UInt32))))
+        @test isnanof(Float64, convert(Float64, reinterpret(Float32, typemax(UInt32))))
+        @test isnanof(Float32, convert(Float32, reinterpret(Float64, typemax(UInt64))))
+        @test isnanof(Float16, convert(Float16, reinterpret(Float64, typemax(UInt64))))
     end
 
     @testset "random NaNs" begin
         nans = AbstractFloat[NaN16, NaN32, NaN64]
         F = [Float16, Float32, Float64]
         U = [UInt16, UInt32, UInt64]
-        sig = [11, 24, 53]
         for i = 1:length(F), j = 1:length(F)
             for _ = 1:100
                 nan = reinterpret(F[i], rand(U[i]) | reinterpret(U[i], nans[i]))
-                z = sig[i] - sig[j]
-                nan′ = i <= j ? nan : reinterpret(F[i], reinterpret(U[i], nan) >> z << z)
-                @test convert(F[i], convert(F[j], nan)) === nan′
+                @test isnanof(F[i], convert(F[i], convert(F[j], nan)))
             end
         end
     end
@@ -2860,10 +3096,19 @@ end
     @test log(π,ComplexF32(2)) isa ComplexF32
 end
 
+@testset "irrational promotion shouldn't recurse without bound, issue #51001" begin
+    for s ∈ (:π, :ℯ)
+        T = Irrational{s}
+        @test promote_type(Complex{T}, T) <: Complex
+        @test promote_type(T, Complex{T}) <: Complex
+    end
+end
+
 @testset "printing non finite floats" begin
     let float_types = Set()
         allsubtypes!(Base, AbstractFloat, float_types)
         allsubtypes!(Core, AbstractFloat, float_types)
+        filter!(!isequal(Core.BFloat16), float_types)   # defined externally
         @test !isempty(float_types)
 
         for T in float_types
@@ -2948,6 +3193,20 @@ end
         @test true == ceil(Bool, 0.6)
         @test false == ceil(Bool, -0.7)
     end
+end
+
+Base.@irrational irrational_1548_pi 4863.185427757 1548big(pi)
+Base.@irrational irrational_inv_1548_pi 1/big(irrational_1548_pi)
+@testset "@irrational" begin
+    @test irrational_1548_pi ≈ 1548big(pi)
+    @test Float64(irrational_1548_pi) == 1548π
+    @test irrational_1548_pi ≈ 1548pi
+    @test irrational_1548_pi != 1548pi
+
+    @test irrational_inv_1548_pi ≈ inv(1548big(pi))
+    @test Float64(irrational_inv_1548_pi) == 1/(1548π)
+    @test irrational_inv_1548_pi ≈ inv(1548pi)
+    @test irrational_inv_1548_pi != inv(1548pi)
 end
 
 @testset "modf" begin
@@ -3071,4 +3330,98 @@ end
         @test isequal(rem(-Float32(0x1p127), -Float32(0x3p-126)), -Float32(0x1p-125))
     end
 
+end
+
+@testset "FP(inf) == inf" begin
+    # Iterate through all pairs of FP types
+    fp_types = (Float16, Float32, Float64, BigFloat)
+    for F ∈ fp_types, G ∈ fp_types, f ∈ (typemin, typemax)
+        i = f(F)
+        @test i == G(i)
+    end
+end
+
+@testset "small int FP conversion" begin
+    fp_types = (Float16, Float32, Float64, BigFloat)
+    m = Int(maxintfloat(Float16))
+    for F ∈ fp_types, G ∈ fp_types, n ∈ (-m):m
+        @test n == G(F(n)) == F(G(n))
+    end
+end
+
+@testset "`precision`" begin
+    Fs = (Float16, Float32, Float64, BigFloat)
+
+    @testset "type vs instance" begin
+        @testset "F: $F" for F ∈ Fs
+            @test precision(F) == precision(one(F))
+            @test precision(F, base = 2) == precision(one(F), base = 2)
+            @test precision(F, base = 3) == precision(one(F), base = 3)
+        end
+    end
+
+    @testset "`precision` of `Union` shouldn't recur infinitely, #52909" begin
+        @testset "i: $i" for i ∈ eachindex(Fs)
+            @testset "j: $j" for j ∈ (i + 1):lastindex(Fs)
+                S = Fs[i]
+                T = Fs[j]
+                @test_throws MethodError precision(Union{S,T})
+                @test_throws MethodError precision(Union{S,T}, base = 3)
+            end
+        end
+    end
+
+    @testset "`precision` of `Union{}`" begin
+        # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+        @test_throws MethodError(precision, (Union{},)) precision(Union{})
+        @test_throws MethodError(precision, (Union{},)) precision(Union{}, base = 3)
+        @test which(precision, (Type{Union{}},)).sig == Tuple{typeof(precision), Type{Union{}}, Vararg}
+    end
+end
+
+@testset "irrational special values" begin
+    for v ∈ (π, ℯ, γ, catalan, φ)
+        @test v === typemin(v) === typemax(v)
+    end
+end
+
+@testset "irrational negative integer power (#61284)" begin
+    p = -2 # test non literal power
+    for x in (π, ℯ, γ, catalan, φ)
+        @test x^p == float(x)^p
+    end
+end
+
+@testset "rem rounded to nearest w/wo ties (#60916)" begin
+    Random.seed!(123)
+    setprecision(BigFloat, 64) do
+        for T in (Float16, Float32, Float64, BigFloat)
+            p = precision(T) + 1
+            step = T === BigFloat ? 3 : 1
+            for e1 in 0:p, e2 in e1-p:step:p+e1, s1 in (+1, -1), s2 in (+1, -1)
+                x = ldexp(s1*rand(T), e1)
+                y = ldexp(s2*rand(T), e2)
+                rd = rem(x, y, RoundDown)
+                ru = rem(x, y, RoundUp)
+                if abs(rd) != abs(ru)
+                    # no tie
+                    nearest = abs(rd) < abs(ru) ? rd : ru
+                    @test isequal(rem(x, y, RoundNearestTiesUp), nearest)
+                    @test isequal(rem(x, y, RoundNearestTiesAway), nearest)
+                    @test isequal(rem(x, y, RoundNearest), nearest)
+                    # try to find close x,y pair such that there is a tie
+                    y = Base.truncbits(y, trunc(Int, p/4))
+                    q = round(x/y, RoundFromZero)
+                    x = q*y + y/2
+                    rd = rem(x, y, RoundDown)
+                    ru = rem(x, y, RoundUp)
+                end
+                if abs(rd) == abs(ru)
+                    # tie
+                    @test rem(x, y, RoundNearestTiesUp) == rem(x, y, RoundUp)
+                    @test rem(x, y, RoundNearestTiesAway) == rem(x, y, RoundFromZero)
+                end
+            end
+        end
+    end
 end

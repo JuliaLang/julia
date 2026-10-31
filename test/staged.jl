@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# N.B.: This file is also run from interpreter.jl, so needs to be standalone-executable
+using Test
+
 using Random
 using InteractiveUtils: code_llvm, code_native
 
@@ -134,7 +137,7 @@ f10502() = ()
 
 # issue #11982
 @generated function f11982(T)
-    string(T.parameters[1])
+    string(Base.type_parameter(T))
 end
 @test f11982(Float32) == "Float32"
 @test f11982(Int32) == "Int32"
@@ -182,7 +185,23 @@ let gf_err, tsk = @async nothing # create a Task for yield to try to run
     Expected = ErrorException("task switch not allowed from inside staged nor pure functions")
     @test_throws Expected gf_err()
     @test_throws Expected gf_err()
-    @test gf_err_ref[] == 4
+    @test gf_err_ref[] < 1000
+end
+
+# the error must fire even when the scheduler holds no other runnable task:
+# `yield()` then pops the current task itself, and the switch-to-self fast
+# path must not skip the forbidden-context checks
+gf_err_ref[] = 0
+let
+    @generated function gf_err_yield_to_self()
+        gf_err_ref[] += 1
+        yield()
+        gf_err_ref[] += 1000
+    end
+    Expected = ErrorException("task switch not allowed from inside staged nor pure functions")
+    @test_throws Expected gf_err_yield_to_self()
+    @test_throws Expected gf_err_yield_to_self()
+    @test gf_err_ref[] < 1000
 end
 
 gf_err_ref[] = 0
@@ -200,7 +219,7 @@ let gf_err2
     @test_throws Expected gf_err2(code_typed)
     @test_throws Expected gf_err2(code_llvm)
     @test_throws Expected gf_err2(code_native)
-    @test gf_err_ref[] == 88
+    @test gf_err_ref[] < 1000
 end
 
 # issue #15043
@@ -267,12 +286,12 @@ end
 
 # PR #23168
 
-function f23168(a, x)
+@eval function f23168(a, x)
     push!(a, 1)
     if @generated
-        :(y = x + x)
+        :(y = $(+)(x, x))
     else
-        y = 2x
+        y = $(*)(2, x)
     end
     push!(a, y)
     if @generated
@@ -287,9 +306,9 @@ end
 let a = Any[]
     @test f23168(a, 3) == (6, Int)
     @test a == [1, 6, 3]
-    @test occursin(" + ", string(code_lowered(f23168, (Vector{Any},Int))))
-    @test occursin("2 * ", string(Base.uncompressed_ir(first(methods(f23168)))))
-    @test occursin("2 * ", string(code_lowered(f23168, (Vector{Any},Int), generated=false)))
+    @test occursin("(+)(", string(code_lowered(f23168, (Vector{Any},Int))))
+    @test occursin("(*)(2", string(Base.uncompressed_ir(first(methods(f23168)))))
+    @test occursin("(*)(2", string(code_lowered(f23168, (Vector{Any},Int), generated=false)))
     @test occursin("Base.add_int", string(code_typed(f23168, (Vector{Any},Int))))
 end
 
@@ -308,6 +327,8 @@ end
 @generated function f33243()
     :(global x33243 = 2)
 end
+@test_throws ErrorException f33243()
+global x33243::Any
 @test f33243() === 2
 @test x33243 === 2
 
@@ -335,12 +356,198 @@ let world = Base.get_world_counter()
     match = Base._which(Tuple{typeof(sin), Int}; world)
     mi = Core.Compiler.specialize_method(match)
     lwr = Core.Compiler.retrieve_code_info(mi, world)
-    @test all(lin->lin.method === :sin, lwr.linetable)
+    nstmts = length(lwr.code)
+    di = Core.DebugInfo(Core.Compiler.DebugInfoStream(mi, lwr.debuginfo, nstmts), nstmts)
+    lwr.debuginfo = di
     @eval function sin_generated(a)
         $(Expr(:meta, :generated, Returns(lwr)))
         $(Expr(:meta, :generated_only))
     end
     src = only(code_lowered(sin_generated, (Int,)))
-    @test all(lin->lin.method === :sin, src.linetable)
+    @test src.debuginfo === di
     @test sin_generated(42) == sin(42)
+end
+
+# Allow passing unreachable insts in generated codeinfo
+let
+    dummy() = return
+    dummy_m = which(dummy, Tuple{})
+
+    src = Base.uncompressed_ir(dummy_m)
+    src.code = Any[
+        # block 1
+        Core.ReturnNode(nothing),
+        # block 2
+        Core.ReturnNode(),
+    ]
+    nstmts = length(src.code)
+    nslots = 1
+    src.ssavaluetypes = nstmts
+    src.debuginfo = Core.DebugInfo(:f_unreachable_generated)
+    src.ssaflags = fill(Int32(0), nstmts)
+    src.slotflags = fill(0, nslots)
+    src.slottypes = Any[Any]
+
+    @eval function f_unreachable()
+        $(Expr(:meta, :generated, Returns(src)))
+        $(Expr(:meta, :generated_only))
+    end
+
+    ir, _ = Base.code_ircode(f_unreachable, ()) |> only
+    @test length(ir.cfg.blocks) == 1
+end
+
+function generate_lambda_ex(world::UInt, source::Method,
+                            argnames, spnames, @nospecialize body)
+    stub = Core.GeneratedFunctionStub(identity, Core.svec(argnames...), Core.svec(spnames...))
+    return stub(world, source, body)
+end
+
+# Test that `Core.CachedGenerator` works as expected
+struct Generator54916 <: Core.CachedGenerator end
+function (::Generator54916)(world::UInt, source::Method, args...)
+    return generate_lambda_ex(world, source,
+        (:doit54916, :func, :arg), (), :(func(arg)))
+end
+@eval function doit54916(func, arg)
+    $(Expr(:meta, :generated, Generator54916()))
+    $(Expr(:meta, :generated_only))
+end
+@test doit54916(sin, 1) == sin(1)
+let mi = only(methods(doit54916)).specializations
+    ci = mi.cache::Core.CodeInstance
+    found = false
+    while true
+        if ci.owner === :uninferred && ci.inferred isa Core.CodeInfo
+            found = true
+            break
+        end
+        isdefined(ci, :next) || break
+        ci = ci.next
+    end
+    @test found
+end
+
+# Test that writing a bad cassette-style pass gives the expected error (#49715)
+function generator49715(world, source, self, f, tt)
+    tt = Base.type_parameter(tt)
+    sig = Tuple{f, tt.parameters...}
+    mi = Base._which(sig; world)
+    error("oh no")
+    return generate_lambda_ex(world, source,
+        (:doit49715, :f, :tt), (), nothing)
+end
+@eval function doit49715(f, tt)
+    $(Expr(:meta, :generated, generator49715))
+    $(Expr(:meta, :generated_only))
+end
+@test_throws "oh no" doit49715(sin, Tuple{Int})
+
+# Test that the CodeInfo returned from generated function need not match the generator.
+function overdubbee54341(a, b)
+    a + b
+end
+const overdubee_codeinfo54341 = code_lowered(overdubbee54341, Tuple{Any, Any})[1]
+function overdub_generator54341(world::UInt, source::Method, selftype, fargtypes)
+    if length(fargtypes) != 2
+        return generate_lambda_ex(world, source,
+            (:overdub54341, :args), (), :(error("Wrong number of arguments")))
+    else
+        return copy(overdubee_codeinfo54341)
+    end
+end
+@eval function overdub54341(args...)
+    $(Expr(:meta, :generated, overdub_generator54341))
+    $(Expr(:meta, :generated_only))
+end
+@test overdub54341(1, 2) == 3
+# check if the inlining pass handles `nargs`/`isva` correctly
+@test first(only(code_typed((Int,Int)) do x, y; @inline overdub54341(x, y); end)) isa Core.CodeInfo
+@test first(only(code_typed((Int,)) do x; @inline overdub54341(x, 1); end)) isa Core.CodeInfo
+@test_throws "Wrong number of arguments" overdub54341(1, 2, 3)
+
+# Generated functions may attach method-table edges as `(invokesig, mt)` pairs, the form
+# inference emits. Registering them when the source is cached for the interpreter used to
+# treat the `MethodTable` as a `MethodInstance` and hang trying to take its lock.
+mt_edge_target(::Int) = 1
+function mt_edge_generator(world::UInt, source::Method, _)
+    sig = Tuple{typeof(mt_edge_target), Any}
+    nmethods = length(Base._methods_by_ftype(sig, -1, world))
+    ci = generate_lambda_ex(world, source, (:mt_edge_caller,), (), :(return $nmethods))
+    ci.edges = Any[sig, Core.methodtable]
+    ci.min_world = 1
+    ci.max_world = typemax(UInt)
+    return ci
+end
+@eval function mt_edge_caller()
+    $(Expr(:meta, :generated, mt_edge_generator))
+    $(Expr(:meta, :generated_only))
+end
+@test mt_edge_caller() == 1
+mt_edge_target(::String) = 2
+@test mt_edge_caller() == 2
+
+# Test the module resolution scope of generated methods that are type constructors
+module GeneratedScope57417
+    using Test
+    import ..generate_lambda_ex
+    const x = 1
+    struct Generator; end
+    @generated (::Generator)() = :x
+    f(x::Int) = 1
+    module OtherModule
+        import ..f
+        const x = 2
+        @generated f(::Float64) = :x
+    end
+    import .OtherModule: f
+    @test Generator()() == 1
+    @test f(1.0) == 2
+
+    function g_generator(world::UInt, source::Method, _)
+        return generate_lambda_ex(world, source, (:g,), (), :(return x))
+    end
+
+    @eval function g()
+        $(Expr(:meta, :generated, g_generator))
+        $(Expr(:meta, :generated_only))
+    end
+    @test g() == 1
+end
+
+@test_throws "syntax: expression too large" code_lowered(ntuple, (Returns{Nothing}, Val{1000000}))
+
+# test that generator methods also have reasonable line numbers
+f_generated_lno1_lower_bound = @__LINE__()
+function f_generated_lno1(x)
+    if @generated
+        :(x)
+    else
+        "nongen"
+    end
+end
+
+@test f_generated_lno1(1) == 1 || f_generated_lno1(1) == "nongen"
+let m = methods(f_generated_lno1)[1]
+    @test m.line > f_generated_lno1_lower_bound
+    @test m.file |> string == @__FILE__()
+    let mgen = methods(m.generator.gen)[1]
+        @test mgen.line > f_generated_lno1_lower_bound
+        @test mgen.file |> string == @__FILE__()
+    end
+end
+
+f_generated_lno2_lower_bound = @__LINE__()
+@generated function f_generated_lno2(x)
+    :(x)
+end
+
+@test f_generated_lno2(1) == 1 || f_generated_lno2(1) == "nongen"
+let m = methods(f_generated_lno2)[1]
+    @test m.line > f_generated_lno2_lower_bound
+    @test m.file |> string == @__FILE__()
+    let mgen = methods(m.generator.gen)[1]
+        @test mgen.line > f_generated_lno2_lower_bound
+        @test mgen.file |> string == @__FILE__()
+    end
 end

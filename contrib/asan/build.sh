@@ -5,10 +5,9 @@
 # Usage:
 #     contrib/asan/build.sh <path> [<make_targets>...]
 #
-# Build ASAN-enabled julia.  Given a workspace directory <path>, build
-# ASAN-enabled julia in <path>/asan.  Required toolss are install under
-# <path>/toolchain.  This scripts also takes optional <make_targets> arguments
-# which are passed to `make`.  The default make target is `debug`.
+# Build ASAN-enabled julia in <path>/asan. Required tools are installed under
+# <path>/toolchain. Optional <make_targets> are passed to `make`; the default
+# target is `release`.
 
 set -ue
 
@@ -40,7 +39,7 @@ if [ ! -d "$TOOLCHAIN" ]; then
     cp "$HERE/Make.user.tools"  "$TOOLCHAIN/Make.user"
 fi
 
-make -C "$TOOLCHAIN/deps" install-clang install-llvm-tools
+make -C "$TOOLCHAIN/deps" install-clang install-llvm-tools install-patchelf
 
 echo
 echo "Building Julia..."

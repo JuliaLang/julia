@@ -1,5 +1,118 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Internal changes mechanism.
+# Instructions for Julia Core Developers:
+# 1. When making a breaking change that is known to be depended upon by an
+#    important and closely coupled package, decide on a unique `change_name`
+#    for your PR and add it to the list below. In general, it is better to
+#    err on the side of caution and assign a `change_name` even if it is not
+#    clear that it is required. `change_name`s may also be assigned after the
+#    fact in a separate PR. (Note that this may cause packages to misbehave
+#    on versions in between the change and the assignment of the `change_name`,
+#    but this is often still better than the alternative of misbehaving on unknown
+#    versions).
+
+# Instructions for Release Managers:
+# 1. Upon tagging any release, clear the list of internal changes.
+# 2. Upon tagging an -alpha version
+#    a. On master, set __next_removal_version to v"1.(x+1)-alpha"
+#    b. On the release branch, set __next_removal_version to v"1.x" (no -alpha)
+# 3. Upon tagging a release candidate, clear the list of internal changes and
+#    set __next_removal_version to `nothing`.
+const __next_removal_version = v"1.12-alpha"
+const __internal_changes_list = (
+    :invertedlinetables,
+    :codeinforefactor,
+    :miuninferredrm,
+    :codeinfonargs, #54341
+    :ocnopartial,
+    :printcodeinfocalls,
+    :syntacticccall, #59165
+    :svectvar, #61645
+    :syntacticcglobal, #61709
+    # Add new change names above this line
+)
+
+if !isempty(__internal_changes_list)
+    if VERSION == __next_removal_version
+        error("You have tagged a new release without clearing the internal changes list.")
+    end
+elseif __next_removal_version === nothing
+    error("You have tagged a new release candidate without clearing the internal changes list.")
+end
+
+"""
+    __has_internal_change(version_or::VersionNumber, change_name::Symbol)
+
+Some Julia packages have known dependencies on Julia internals (e.g. for introspection of
+internal julia datastructures). To ease the co-development of such packages with julia,
+a `change_name` is assigned on a best-effort basis or when explicitly requested.
+This `change_name` can be used to probe whether or not the particular pre-release build of julia has
+a particular change. In particular this function tests change scheduled for `version_or`
+is present in our current julia build, either because our current version
+is greater than `version_or` or because we're running a pre-release build that
+includes the change.
+
+Using this mechanism is a superior alternative to commit-number based `VERSION`
+comparisons, which can be brittle during pre-release stages when there are multiple
+actively developed branches.
+
+The list of changes is cleared twice during the release process:
+1. With the release of the first alpha
+2. For the first release candidate
+
+No new `change_name`s will be added during release candidates or bugfix releases
+(so in particular on any released version, the list of changes will be empty and
+`__has_internal_change` will always be equivalent to a version comparison.
+
+# Example
+
+Julia version `v"1.12.0-DEV.173"` changed the internal representation of line number debug info.
+Several debugging packages have custom code to display this information and need to be changed
+accordingly. In previous practice, this would often be accomplished with something like the following
+```
+@static if VERSION > v"1.12.0-DEV.173"
+    # Code to handle new format
+else
+    # Code to handle old format
+end
+```
+
+However, because such checks cannot be introduced until a VERSION number is assigned
+(which also automatically pushes out the change to all nightly users), there was a builtin period
+of breakage. With `__has_internal_change`, this can instead be written as:
+
+```
+@static if __has_internal_change(v"1.12-alpha", :invertedlinenames)
+    # Code to handle new format
+else
+    # Code to handle old format
+end
+```
+
+To find out the correct version to use as the first argument, you may use
+`Base.__next_removal_version`, which is set to the next version number in which
+the list of changes will be cleared.
+
+The primary advantage of this approach is that it allows a new version of the
+package to be tagged and released *in advance* of the break on the nightly
+build, thus ensuring continuity of package operation for nightly users.
+
+!!! warning
+
+    This functionality is intended to help package developers which make use of
+    internal julia functionality. Doing so is explicitly discouraged unless absolutely
+    required and comes with the explicit understanding that the package will break.
+    In particular, this is not a generic feature-testing mechanism, but only a
+    simple, courtesy coordination mechanism for changes that are known (or found) to
+    be breaking a package depending on julia internals.
+"""
+function __has_internal_change(version_or::VersionNumber, change_name::Symbol)
+    VERSION > version_or && return true
+    change_name in __internal_changes_list
+end
+export __has_internal_change
+
 # Deprecated functions and objects
 #
 # Please add new deprecations at the bottom of the file.
@@ -10,9 +123,7 @@
 # and of exporting the function.
 #
 # For more complex cases, move the body of the deprecated method in this file,
-# and call depwarn() directly from inside it. The symbol depwarn() expects is
-# the name of the function, which is used to ensure that the deprecation warning
-# is only printed the first time for each call place.
+# and call depwarn() directly from inside it.
 
 """
     @deprecate old new [export_old=true]
@@ -22,6 +133,8 @@ with the specified signature in the process.
 
 To prevent `old` from being exported, set `export_old` to `false`.
 
+See also [`Base.depwarn()`](@ref).
+
 !!! compat "Julia 1.5"
     As of Julia 1.5, functions defined by `@deprecate` do not print warning when `julia`
     is run without the `--depwarn=yes` flag set, as the default value of `--depwarn` option
@@ -29,11 +142,11 @@ To prevent `old` from being exported, set `export_old` to `false`.
 
 # Examples
 ```jldoctest
-julia> @deprecate old(x) new(x)
-old (generic function with 1 method)
+julia> @deprecate old_export(x) new(x)
+old_export (generic function with 1 method)
 
-julia> @deprecate old(x) new(x) false
-old (generic function with 1 method)
+julia> @deprecate old_public(x) new(x) false
+old_public (generic function with 1 method)
 ```
 
 Calls to `@deprecate` without explicit type-annotations will define
@@ -80,6 +193,7 @@ macro deprecate(old, new, export_old=true)
         newcall = sprint(show_unquoted, new)
         # if old.head is a :where, step down one level to the :call to avoid code duplication below
         callexpr = old.head === :call ? old : old.args[1]
+        maybe_export = nothing
         if callexpr.head === :call
             fnexpr = callexpr.args[1]
             if fnexpr isa Expr && fnexpr.head === :curly
@@ -91,34 +205,60 @@ macro deprecate(old, new, export_old=true)
                 else
                     cannot_export_nonsymbol()
                 end
-            else
-                maybe_export = nothing
             end
         else
             error("invalid usage of @deprecate")
         end
-        Expr(:toplevel,
-            maybe_export,
-            :($(esc(old)) = begin
-                  $meta
-                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(fnexpr))).name.mt.name)
-                  $(esc(new))
-              end))
+        ex = :($(esc(old)) = begin
+            $meta
+            depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(fnexpr))).name.singletonname)
+            $(esc(new))
+        end)
+        Expr(:toplevel, maybe_export, replace_linenums!(ex, __source__))
     else
         if export_old && !(old isa Symbol)
             cannot_export_nonsymbol()
         end
+        ex = :(function $(esc(old))(args...; kwargs...)
+            $meta
+            depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.singletonname)
+            $(esc(new))(args...; kwargs...)
+        end)
         Expr(:toplevel,
             export_old ? Expr(:export, esc(old)) : nothing,
-            :(function $(esc(old))(args...; kwargs...)
-                  $meta
-                  depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
-                  $(esc(new))(args...; kwargs...)
-              end))
+            replace_linenums!(ex, __source__))
     end
 end
 
-function depwarn(msg, funcsym; force::Bool=false)
+"""
+    Base.depwarn(msg::String, funcsym::Symbol; force=false)
+
+Print `msg` as a deprecation warning. The symbol `funcsym` should be the name
+of the calling function, which is used to ensure that the deprecation warning is
+only printed the first time for each call place. Set `force=true` to force the
+warning to always be shown, even if Julia was started with `--depwarn=no` (the
+default).
+
+See also [`@deprecate`](@ref).
+
+# Examples
+```julia
+function deprecated_func()
+    Base.depwarn("Don't use `deprecated_func()`!", :deprecated_func)
+
+    1 + 1
+end
+```
+"""
+@nospecializeinfer function depwarn(msg, funcsym; force::Bool=false)
+    @nospecialize
+    # N.B. With this use of `@invokelatest`, we're preventing the addition of backedges from
+    # callees, such as `convert`, to this user-facing method. This approach is designed to
+    # enhance the resilience of packages that utilize `depwarn` against invalidation.
+    return @invokelatest _depwarn(msg, funcsym, force)
+end
+@nospecializeinfer function _depwarn(msg, funcsym, force::Bool)
+    @nospecialize
     opts = JLOptions()
     if opts.depwarn == 2
         throw(ErrorException(msg))
@@ -178,6 +318,31 @@ end
 
 deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Cvoid, (Any, Any, Cint), m, s, flag)
 
+"""
+    @deprecate_binding old new [export_old=true] [dep_message] [constant=true]
+
+Deprecate the binding `old`, making it an alias for `new` and printing a deprecation warning
+on access to `old` (when `julia` is run with `--depwarn=yes`). This is for deprecating a
+renamed or relocated global/constant, whereas [`@deprecate`](@ref) is for deprecating methods.
+
+`old` must be a symbol and `new` the replacement it forwards to. By default `old` is defined
+as a `const`; pass `false` for `constant` to define it as a non-constant global instead.
+
+To prevent `old` from being exported, set `export_old` to `false`. A custom `dep_message`
+string (printed after "<module>.old is deprecated") may be given.
+
+See also [`@deprecate`](@ref) and [`Base.depwarn`](@ref).
+
+# Examples
+```jldoctest
+julia> const dep_new = 42;
+
+julia> Base.@deprecate_binding dep_old dep_new false;
+
+julia> dep_old
+42
+```
+"""
 macro deprecate_binding(old, new, export_old=true, dep_message=:nothing, constant=true)
     dep_message === :nothing && (dep_message = ", use $new instead.")
     return Expr(:toplevel,
@@ -205,7 +370,7 @@ macro deprecate_moved(old, new, export_old=true)
         "Run `Pkg.add(\"", new, "\")` to install it, restart Julia,\n",
         "and then run `using ", new, "` to load it.")
     return Expr(:toplevel,
-        :($eold(args...; kwargs...) = error($emsg)),
+        replace_linenums!(:($eold(args...; kwargs...) = error($emsg)), __source__),
         export_old ? Expr(:export, eold) : nothing,
         Expr(:call, :deprecate, __module__, Expr(:quote, old), 2))
 end
@@ -215,6 +380,7 @@ end
 @deprecate one(i::CartesianIndex)                    oneunit(i)
 @deprecate one(I::Type{CartesianIndex{N}}) where {N} oneunit(I)
 
+import .MPFR: BigFloat
 @deprecate BigFloat(x, prec::Int)                               BigFloat(x; precision=prec)
 @deprecate BigFloat(x, prec::Int, rounding::RoundingMode)       BigFloat(x, rounding; precision=prec)
 @deprecate BigFloat(x::Real, prec::Int)                         BigFloat(x; precision=prec)
@@ -271,14 +437,10 @@ getindex(match::Core.MethodMatch, field::Int) =
 # these were internal functions, but some packages seem to be relying on them
 tuple_type_head(T::Type) = fieldtype(T, 1)
 tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
-function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
-    @_foldable_meta
+@assume_effects :foldable tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S =
     Tuple{S, T.parameters...}
-end
-function parameter_upper_bound(t::UnionAll, idx)
-    @_foldable_meta
-    return rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
-end
+@assume_effects :foldable parameter_upper_bound(t::UnionAll, idx) =
+    rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
 
 # these were internal functions, but some packages seem to be relying on them
 @deprecate cat_shape(dims, shape::Tuple{}, shapes::Tuple...) cat_shape(dims, shapes) false
@@ -299,7 +461,8 @@ const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
 
 # the plan is to eventually overload getproperty to access entries of the dict
 @noinline function getproperty(x::Pairs, s::Symbol)
-    depwarn("use values(kwargs) and keys(kwargs) instead of kwargs.data and kwargs.itr", :getproperty, force=true)
+    s == :data && depwarn("use values(kwargs) instead of kwargs.data", :getproperty, force=true)
+    s == :itr && depwarn("use keys(kwargs) instead of kwargs.itr", :getproperty, force=true)
     return getfield(x, s)
 end
 
@@ -384,3 +547,204 @@ macro pure(ex)
 end
 
 # END 1.10 deprecations
+
+# BEGIN 1.11 deprecations
+
+# these were never a part of the public API and so they can be removed without deprecation
+# in a minor release but we're being nice and trying to avoid transient breakage.
+@deprecate permute!!(a, p::AbstractVector{<:Integer}) permute!(a, p) false
+@deprecate invpermute!!(a, p::AbstractVector{<:Integer}) invpermute!(a, p) false
+
+# END 1.11 deprecations
+
+# BEGIN 1.12 deprecations
+
+@deprecate isbindingresolved(m::Module, var::Symbol) true false
+
+"""
+    isbindingresolved(m::Module, s::Symbol) -> Bool
+
+Return whether the binding of a symbol in a module is resolved.
+
+See also [`isexported`](@ref), [`ispublic`](@ref), [`isdeprecated`](@ref).
+
+```jldoctest
+julia> module Mod
+           foo() = 17
+       end
+Mod
+
+julia> Base.isbindingresolved(Mod, :foo)
+true
+```
+
+!!! warning
+    This function is deprecated. The concept of binding "resolvedness" was removed in Julia 1.12.
+    The function now always returns `true`.
+"""
+isbindingresolved
+
+# Some packages call this function
+function to_power_type(x::Number)
+    T = promote_type(typeof(x), typeof(x*x))
+    convert(T, x)
+end
+to_power_type(x) = oftype(x*x, x)
+
+# END 1.12 deprecations
+
+# BEGIN 1.13 deprecations
+
+@deprecate merge(combine::Callable, d::AbstractDict, others::AbstractDict...) mergewith(combine, d, others...)
+
+# end 1.13 deprecations
+
+# BEGIN 1.14 deprecations
+
+# These operators are new in 1.14, but these fallback methods are added for
+# compatibility while packages adjust to defining both operators, to allow
+# Base and other packages to start using these.
+*%(a::T, b::T) where {T} = *(a, b)
++%(a::T, b::T) where {T} = +(a, b)
+-%(a::T, b::T) where {T} = -(a, b)
+
+*%(a::T, b::T) where {T<:IEEEFloat} = throw(MethodError(*%, (a, b)))
++%(a::T, b::T) where {T<:IEEEFloat} = throw(MethodError(+%, (a, b)))
+-%(a::T, b::T) where {T<:IEEEFloat} = throw(MethodError(-%, (a, b)))
+
+# Revise calls this
+function explicit_manifest_entry_path(args...)
+    spec = explicit_manifest_entry_load_spec(args...)
+    spec === nothing && return nothing
+    return spec.path
+end
+
+# These functions get called from generated functions a lot where printing causes errors. We have the following options:
+# 1. Use ordinary depwarn. This breaks generated functions that use these deprecations, defeating the point.
+# 2. Always error in generated functions. This would probably be best (the depwarn would run at expansion time),
+#    but it completely breaks inference of these generated functions and some of them are important.
+# 3. Never print a warning in generated functions (but do throw the error if --depwarn=error).
+#
+# We choose option 3. It's not ideal, because users that never use --depwarn=error will never see the warning,
+# but it's the least bad tradeoff among the lot.
+function depwarn_if_not_pure(args...)
+    opts = JLOptions()
+    opts.depwarn != 2 && ccall(:jl_is_in_pure_context, Bool, ()) && return
+    depwarn(args...)
+end
+
+@noinline function getproperty(x::TypeEq, s::Symbol)
+    if s === :parameters
+        depwarn_if_not_pure("accessing `Type.parameters` is deprecated; use `Base.type_parameter(x)` instead", :getproperty)
+        return Core.svec(type_parameter(x))
+    elseif s === :name
+        depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
+        return Core.AnyType.name
+    elseif s === :hash
+        depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_hash(x)` instead", :getproperty)
+        return reinterpret(Int32, UInt32(_jl_type_hash(x)))
+    end
+    return getfield(x, s)
+end
+
+@noinline function typename(x::TypeEq)
+    depwarn_if_not_pure("calling `typename` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :typename)
+    return Core.AnyType.name
+end
+
+@noinline function nameof(x::TypeEq)
+    depwarn_if_not_pure("calling `nameof` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :nameof)
+    return :Type
+end
+
+@noinline function parentmodule(x::TypeEq)
+    depwarn_if_not_pure("calling `parentmodule` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :parentmodule)
+    return Core
+end
+
+@noinline function isabstracttype(x::TypeEq)
+    depwarn_if_not_pure("calling `isabstracttype` on a `Type{...}` is deprecated; `Type{}` is now a kind. If for detection, use `Base.isType(x)`.", :isabstracttype)
+    return true
+end
+
+@noinline function getproperty(x::Core.TypeEgal, s::Symbol)
+    if s === :parameters
+        depwarn_if_not_pure("accessing `Type.parameters` is deprecated; use `Base.type_parameter(x)` instead", :getproperty)
+        return Core.svec(type_parameter(x))
+    elseif s === :name
+        depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
+        return Core.AnyType.name
+    elseif s === :hash
+        depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_hash(x)` instead", :getproperty)
+        return reinterpret(Int32, UInt32(_jl_type_hash(x)))
+    end
+    return getfield(x, s)
+end
+
+@noinline function typename(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `typename` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :typename)
+    return Core.AnyType.name
+end
+
+@noinline function nameof(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `nameof` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :nameof)
+    return :Type
+end
+
+@noinline function parentmodule(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `parentmodule` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :parentmodule)
+    return Core
+end
+
+@noinline function isabstracttype(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `isabstracttype` on a `Type{...}` is deprecated; `Type{}` is now a kind. If for detection, use `Base.isType(x)`.", :isabstracttype)
+    return true
+end
+
+@deprecate SubString{T}(s::T, i::Int, j::Int, ::Val{:noshift}) where {T <: AbstractString} begin
+    @boundscheck if !(i == j == 0)
+        si, sj = i + 1, prevind(s, j + i + 1)
+        @inbounds isvalid(s, si) || string_index_err(s, si)
+        @inbounds isvalid(s, sj) || string_index_err(s, sj)
+    end
+    @inbounds raw_substring(s, i + 1, j)
+end
+
+# This method is slightly different because it returns a SubString{SubString},
+# therefore it requires an explicit SubString{T}(ss) call at the end.
+# We discourage creating substrings of substrings, but the deprecated method
+# allowed it.
+@deprecate SubString{T}(s::T, i::Int, j::Int, ::Val{:noshift}) where {T <: SubString} begin
+    @boundscheck if !(i == j == 0)
+        si, sj = i + 1, prevind(s, j + i + 1)
+        @inbounds isvalid(s, si) || string_index_err(s, si)
+        @inbounds isvalid(s, sj) || string_index_err(s, sj)
+    end
+    ss = @inbounds raw_substring(s, i + 1, j)
+    SubString{T}(ss)
+end
+
+@deprecate _unsetindex!(A) Base.unsetindex!(A) false
+@deprecate _unsetindex!(A, i) Base.unsetindex!(A, i) false
+
+# `a[] = v` on a `Threads.Atomic` (the `setindex!` form) is a footgun: read-modify-write
+# expressions such as `a[] += 1` look atomic but expand to a separate non-atomic load and
+# store. Steer users to the explicit `@atomic` form. This is written by hand rather than
+# with `@deprecate` so the message can name the hazard and avoid the macro-expansion
+# artifact `@deprecate` would embed in the suggested replacement.
+# ## This is not yet enabled (deprecated) due to the need to transition a couple stdlibs to this form (or another equivalent form).
+function setindex!(x::Threads.Atomic, v)
+    # depwarn(lazy"`a[] = v` on a `Threads.Atomic` is deprecated because read-modify-write uses like `a[] += 1` are not atomic; use `@atomic a[] = v` (or `@atomic a[] += 1`, `Threads.atomic_add!`, ...) instead.", :setindex!)
+    return @atomic x[] = v
+end
+
+# The `*_domain_error` helpers were replaced by `Math.throw_finite_domainerror` in #62842,
+# but some packages call them directly. Not deprecated, just kept for compatibility.
+@eval Math begin
+    @noinline sin_domain_error(x) = throw_finite_domainerror(:sin, x)
+    @noinline cos_domain_error(x) = throw_finite_domainerror(:cos, x)
+    @noinline sincos_domain_error(x) = throw_finite_domainerror(:sincos, x)
+    @noinline tan_domain_error(x) = throw_finite_domainerror(:tan, x)
+end
+
+# END 1.14 deprecations

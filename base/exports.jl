@@ -1,5 +1,44 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Re-exports from `Core`
+export Core,
+    # key types
+    Any, TypeEq, DataType, Vararg, NTuple,
+    Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
+    AbstractArray, DenseArray, NamedTuple, Pair,
+    # special objects
+    Function, Method, Module, Symbol, Task, UndefInitializer, undef, WeakRef, VecElement,
+    Array, Memory, MemoryRef, AtomicMemory, AtomicMemoryRef, GenericMemory, GenericMemoryRef,
+    # numeric types
+    Number, Real, Integer, Bool, Ref, Ptr,
+    AbstractFloat, Float16, Float32, Float64,
+    Signed, Int, Int8, Int16, Int32, Int64, Int128,
+    Unsigned, UInt, UInt8, UInt16, UInt32, UInt64, UInt128,
+    # string types
+    AbstractChar, Char, AbstractString, String, IO,
+    # errors
+    ErrorException, BoundsError, DivideError, DomainError, Exception,
+    InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
+    OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
+    TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
+    UndefKeywordError, ConcurrencyViolationError, FieldError,
+    # AST representation
+    Expr, QuoteNode, LineNumberNode, GlobalRef,
+    # object model functions
+    fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!, setfieldonce!,
+    nfields, throw, tuple, ===, isdefined, bitsizeof,
+    # access to globals
+    getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!, isdefinedglobal,
+    # ifelse, sizeof    # not exported, to avoid conflicting with Base
+    # type reflection
+    <:, typeof, isa, typeassert,
+    # method reflection
+    applicable, invoke,
+    # constants
+    nothing, Main,
+    # backwards compatibility
+    arrayref, arrayset, arraysize, const_arrayref
+
 export
 # Modules
     Meta,
@@ -58,6 +97,7 @@ export
     IOBuffer,
     IOStream,
     LinRange,
+    Lockable,
     Irrational,
     LazyString,
     Matrix,
@@ -65,9 +105,13 @@ export
     Missing,
     NTuple,
     IdDict,
+    IdSet,
     OrdinalRange,
     Pair,
     PartialQuickSort,
+    OncePerProcess,
+    OncePerTask,
+    OncePerThread,
     PermutedDimsArray,
     QuickSort,
     Rational,
@@ -94,6 +138,7 @@ export
     StridedVector,
     SubArray,
     SubString,
+    StringView,
     SubstitutionString,
     Timer,
     UnitRange,
@@ -183,8 +228,11 @@ export
     ÷,
     &,
     *,
+    *%,
     +,
+    +%,
     -,
+    -%,
     /,
     //,
     <,
@@ -276,6 +324,7 @@ export
     fld1,
     fldmod,
     fldmod1,
+    cldmod1,
     flipsign,
     float,
     tryparse,
@@ -294,7 +343,9 @@ export
     isinf,
     isinteger,
     isnan,
+    isnegative,
     isodd,
+    ispositive,
     ispow2,
     isqrt,
     isreal,
@@ -405,12 +456,14 @@ export
     indexin,
     argmax,
     argmin,
+    insertdims,
     invperm,
     invpermute!,
     isassigned,
     isperm,
     issorted,
     last,
+    logrange,
     mapslices,
     max,
     maximum!,
@@ -532,6 +585,7 @@ export
     getkey,
     haskey,
     in,
+    in!,
     intersect!,
     intersect,
     isdisjoint,
@@ -546,6 +600,7 @@ export
     mapfoldl,
     mapfoldr,
     mapreduce,
+    memoryref,
     merge!,
     mergewith!,
     merge,
@@ -590,9 +645,11 @@ export
     codepoint,
     codeunit,
     codeunits,
+    ctruncate,
     digits,
     digits!,
     eachsplit,
+    eachrsplit,
     escape_string,
     hex2bytes,
     hex2bytes!,
@@ -613,6 +670,7 @@ export
     join,
     lpad,
     lstrip,
+    ltruncate,
     ncodeunits,
     ndigits,
     nextind,
@@ -625,9 +683,11 @@ export
     rpad,
     rsplit,
     rstrip,
+    rtruncate,
     split,
     string,
     strip,
+    takestring!,
     textwidth,
     thisind,
     titlecase,
@@ -701,6 +761,8 @@ export
     yield,
     yieldto,
     wait,
+    waitany,
+    waitall,
     timedwait,
     asyncmap,
     asyncmap!,
@@ -709,6 +771,7 @@ export
 # channels
     take!,
     put!,
+    isfull,
     isready,
     fetch,
     bind,
@@ -748,9 +811,11 @@ export
     swapproperty!,
     modifyproperty!,
     replaceproperty!,
+    setpropertyonce!,
     fieldoffset,
     fieldname,
     fieldnames,
+    fieldindex,
     fieldcount,
     fieldtypes,
     hasfield,
@@ -777,6 +842,7 @@ export
     gensym,
     @kwdef,
     macroexpand,
+    macroexpand!,
     @macroexpand1,
     @macroexpand,
     parse,
@@ -801,6 +867,7 @@ export
     @invoke,
     invokelatest,
     @invokelatest,
+    @world,
 
 # loading source files
     __precompile__,
@@ -820,11 +887,14 @@ export
     exit,
     ntuple,
     splat,
+    tap,
+    unsplat,
 
 # I/O and events
     close,
     closewrite,
     countlines,
+    DirEntry,
     eachline,
     readeach,
     eof,
@@ -857,6 +927,8 @@ export
     readline,
     readlines,
     readuntil,
+    copyuntil,
+    copyline,
     redirect_stdio,
     redirect_stderr,
     redirect_stdin,
@@ -873,6 +945,7 @@ export
     unsafe_read,
     unsafe_write,
     write,
+    writepartial,
 
 # multimedia I/O
     AbstractDisplay,
@@ -915,6 +988,7 @@ export
     ctime,
     diskstat,
     download,
+    eachentry,
     filemode,
     filesize,
     gperm,
@@ -922,6 +996,7 @@ export
     isblockdev,
     ischardev,
     isdir,
+    isexecutable,
     isfifo,
     isfile,
     islink,
@@ -964,6 +1039,8 @@ export
     setenv,
     addenv,
     setcpuaffinity,
+    setuid,
+    setgid,
     success,
     withenv,
 
@@ -979,8 +1056,11 @@ export
     reenable_sigint,
     unsafe_copyto!,
     unsafe_load,
+    unsafe_modify!,
     unsafe_pointer_to_objref,
+    unsafe_replace!,
     unsafe_store!,
+    unsafe_swap!,
 
 # implemented in Random module
     rand,
@@ -992,6 +1072,7 @@ export
     @__DIR__,
     @__LINE__,
     @__MODULE__,
+    @__FUNCTION__,
     @int128_str,
     @uint128_str,
     @big_str,
@@ -1004,6 +1085,7 @@ export
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
     @NamedTuple,
+    @Kwargs,
     @lazy_str, # lazy string
 
     # documentation
@@ -1022,6 +1104,7 @@ export
     @elapsed,
     @allocated,
     @allocations,
+    @lock_conflicts,
 
     # tasks
     @sync,
@@ -1034,6 +1117,7 @@ export
     @gensym,
     @eval,
     @deprecate,
+    @deprecate_binding,
 
     # performance annotations
     @boundscheck,
@@ -1050,10 +1134,13 @@ export
     @atomic,
     @atomicswap,
     @atomicreplace,
+    @atomiconce,
     @__dot__,
     @enum,
     @label,
     @goto,
     @view,
     @views,
-    @static
+    @static,
+
+    @main

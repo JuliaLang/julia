@@ -90,31 +90,26 @@ f(x) = (y = h(x); y)
 trace = (try; f(3); catch; stacktrace(catch_backtrace()); end)[1:3]
 can_inline = Bool(Base.JLOptions().can_inline)
 for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false))
-    @test frame.func === typeof(func).name.mt.name
-    #@test get(frame.linfo).def === which(func, (Any,)).func
-    #@test get(frame.linfo).specTypes === Tuple{typeof(func), Int}
-    # line
+    @test frame.func === typeof(func).name.singletonname
+    @test frame.linfo.def.module === which(func, (Any,)).module
+    @test frame.linfo.def === which(func, (Any,))
+    @test frame.linfo.specTypes === Tuple{typeof(func), Int}
     @test frame.file === Symbol(@__FILE__)
     @test !frame.from_c
     @test frame.inlined === inlined
 end
 end
 
-let src = Meta.lower(Main, quote let x = 1 end end).args[1]::Core.CodeInfo,
-    li = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ()),
-    sf
-
-    setfield!(li, :uninferred, src, :monotonic)
-    li.specTypes = Tuple{}
-    li.def = @__MODULE__
+let src = Meta.lower(Main, quote let x = 1 end end).args[1]::Core.CodeInfo
+    li = ccall(:jl_method_instance_for_thunk, Ref{Core.MethodInstance}, (Any, Any), src, @__MODULE__)
     sf = StackFrame(:a, :b, 3, li, false, false, 0)
     repr = string(sf)
     @test repr == "Toplevel MethodInstance thunk at b:3"
 end
-let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
+let li = only(methods(fieldtype)).unspecialized,
     sf = StackFrame(:a, :b, 3, li, false, false, 0),
     repr = string(sf)
-    @test repr == "fieldtype(...) at b:3"
+    @test repr == "fieldtype(::Vararg{Any}) at b:3"
 end
 
 let ctestptr = cglobal((:ctest, "libccalltest")),
@@ -139,7 +134,7 @@ module StackTracesTestMod
     filtered_stacktrace() = StackTraces.remove_frames!(stacktrace(), StackTracesTestMod)
 end
 
-# Test that `removes_frames!` can correctly remove frames from within the module
+# Test that `remove_frames!` can correctly remove frames from within the module
 trace = StackTracesTestMod.unfiltered_stacktrace()
 @test occursin("unfiltered_stacktrace", string(trace))
 
@@ -156,6 +151,22 @@ catch
     bt = stacktrace(catch_backtrace())
 end
 @test bt[1].line == topline+4
+end
+
+# Accidental incorrect phi block computation in interpreter
+global global_false_bool = false
+let bt, topline = @__LINE__
+    try
+        let
+            global read_write_global_bt_test, global_false_bool
+            if global_false_bool
+            end
+            (read_write_global_bt_test, (read_write_global_bt_test=2;))
+        end
+    catch
+        bt = stacktrace(catch_backtrace())
+    end
+    @test bt[1].line == topline+6
 end
 
 # issue #28990
@@ -190,4 +201,210 @@ let bt
         bt = stacktrace(catch_backtrace())
     end
     @test any(s->startswith(string(s), "f33065(x::Float32, y::Float32; b::Float64, a::String, c::"), bt)
+end
+
+struct F49231{a,b,c,d,e,f,g} end
+(::F49231)(a,b,c) = error("oops")
+
+@testset "type_depth_limit" begin
+    tdl = Base.type_depth_limit
+
+    str = repr(typeof(view([1, 2, 3], 1:2)))
+    @test tdl(str, 0, maxdepth = 1) == "SubArray{…}"
+    @test tdl(str, 0, maxdepth = 2) == "SubArray{$Int, 1, Vector{…}, Tuple{…}, true}"
+    @test tdl(str, 0, maxdepth = 3) == "SubArray{$Int, 1, Vector{$Int}, Tuple{UnitRange{…}}, true}"
+    @test tdl(str, 0, maxdepth = 4) == "SubArray{$Int, 1, Vector{$Int}, Tuple{UnitRange{$Int}}, true}"
+    @test tdl(str, 3) == "SubArray{…}"
+    @test tdl(str, 44) == "SubArray{…}"
+    @test tdl(str, 45) == "SubArray{$Int, 1, Vector{…}, Tuple{…}, true}"
+    @test tdl(str, 59) == "SubArray{$Int, 1, Vector{…}, Tuple{…}, true}"
+    @test tdl(str, 60) == "SubArray{$Int, 1, Vector{$Int}, Tuple{UnitRange{…}}, true}"
+    @test tdl(str, 100) == "SubArray{$Int, 1, Vector{$Int}, Tuple{UnitRange{$Int}}, true}"
+
+    str = repr(Vector{V} where V<:AbstractVector{T} where T<:Real)
+    @test tdl(str, 0, maxdepth = 1) == "Vector{…} where {…}"
+    @test tdl(str, 0, maxdepth = 2) == "Vector{V} where {T<:Real, V<:AbstractVector{…}}"
+    @test tdl(str, 0, maxdepth = 3) == "Vector{V} where {T<:Real, V<:AbstractVector{T}}"
+    @test tdl(str, 20) == "Vector{…} where {…}"
+    @test tdl(str, 46) == "Vector{…} where {…}"
+    @test tdl(str, 47) == "Vector{V} where {T<:Real, V<:AbstractVector{T}}"
+
+    str = "F49231{Vector,Val{('}','}')},Vector{Vector{Vector{Vector}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}"
+    @test tdl(str, 105) == "F49231{Vector,Val{('}','}')},Vector{Vector{Vector{…}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}"
+    @test tdl(str, 85) == "F49231{Vector,Val{…},Vector{…},Tuple{…},Int,Int,Int}"
+
+    # Stacktrace
+    a = UInt8(81):UInt8(160)
+    b = view(a, 1:64)
+    c = reshape(b, (8, 8))
+    d = reinterpret(reshape, Float64, c)
+    sqrteach(a) = [sqrt(x) for x in a]
+    st = try
+        sqrteach(d)
+    catch e
+        stacktrace(catch_backtrace())
+    end
+    str = sprint(Base.show_backtrace, st, context = (:limit=>true, :stacktrace_types_limited => Ref(false), :color=>true, :displaysize=>(50,105)))
+    @test contains(str, "[5] \e[0m\e[1mcollect_to!\e[22m\e[0m\e[1m(\e[22m\e[90mdest\e[39m::\e[0mVector\e[90m{…}\e[39m, \e[90mitr\e[39m::\e[0mBase.Generator\e[90m{…}\e[39m, \e[90moffs\e[39m::\e[0m$Int, \e[90mst\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
+
+    st = try
+        F49231{Vector,Val{'}'},Vector{Vector{Vector{Vector}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}()(1,2,3)
+    catch e
+        stacktrace(catch_backtrace())
+    end
+    str = sprint(Base.show_backtrace, st, context = (:limit=>true, :stacktrace_types_limited => Ref(false), :color=>true, :displaysize=>(50,132)))
+    @test contains(str, "[2] \e[0m\e[1m(::$F49231{Vector, Val{…}, Vector{…}, NTuple{…}, $Int, $Int, $Int})\e[22m\e[0m\e[1m(\e[22m\e[90ma\e[39m::\e[0m$Int, \e[90mb\e[39m::\e[0m$Int, \e[90mc\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
+end
+
+# 33457: generator/comprehension lambda should, at the very least, not surface a
+# nonsense frame
+let st = nothing
+    try
+        [undef_var for _ in 1:10]
+    catch _
+        st = stacktrace(catch_backtrace())
+    end
+    @testset for frame in st
+        @test frame.line > 0
+        @test frame.file != :none
+    end
+end
+
+let st = nothing
+    try
+        collect(undef_var for _ in 1:10)
+    catch _
+        st = stacktrace(catch_backtrace())
+    end
+    @testset for frame in st
+        @test frame.line > 0
+        @test frame.file != :none
+    end
+end
+
+@testset "Base.StackTraces docstrings" begin
+    @test isempty(Docs.undocumented_names(StackTraces))
+end
+
+@testset "Dispatch backtraces" begin
+    # Check that it's possible to capture a backtrace upon entrance to inference
+    # This test ensures that SnoopCompile will continue working
+    # See in particular SnoopCompile/SnoopCompileCore/src/snoop_inference.jl
+    # and the "diagnostics" devdoc.
+    @noinline callee(x::Int) = sin(x)
+    caller(x) = invokelatest(callee, x)
+
+    @test sin(0) == 0  # force compilation of sin(::Int)
+    dispatch_backtraces = []
+    ccall(:jl_set_inference_entrance_backtraces, Cvoid, (Any,), dispatch_backtraces)
+    caller(3)
+    ccall(:jl_set_inference_entrance_backtraces, Cvoid, (Any,), nothing)
+    ln = @__LINE__() - 2
+    fl = Symbol(@__FILE__())
+    @test length(dispatch_backtraces) == 4  # 2 ci-backtrace pairs, stored as 4 separate elements
+    mcallee, mcaller = only(methods(callee)), only(methods(caller))
+    # Extract pairs from the flattened array format: ci at odd indices, backtrace at even indices
+    pairs = [(dispatch_backtraces[i], dispatch_backtraces[i+1]) for i in 1:2:length(dispatch_backtraces)]
+    @test any(pairs) do (ci, trace)
+        # trace is a SimpleVector from jl_backtrace_from_here, need to reformat before stacktrace
+        bt = Base._reformat_bt(trace[1], trace[2])
+        ci.def.def === mcallee && any(stacktrace(bt)) do sf
+            sf.file == fl && sf.line == ln
+        end
+    end
+    @test any(pairs) do (ci, trace)
+        # trace is a SimpleVector from jl_backtrace_from_here, need to reformat before stacktrace
+        bt = Base._reformat_bt(trace[1], trace[2])
+        ci.def.def === mcaller && any(stacktrace(bt)) do sf
+            sf.file == fl && sf.line == ln
+        end
+    end
+end
+
+global f_parent1_line::Int, f_inner1_line::Int, f_innermost1_line::Int
+function f_parent1(a)
+    x = a
+    return begin
+        @inline f_inner1(x)
+    end
+end; f_parent1_line = (@__LINE__) - 2
+function f_inner1(a)
+    x = a
+    return @inline f_innermost1(x)
+end; f_inner1_line = (@__LINE__) - 1
+f_innermost1(x) = x > 0 ? @noinline(sin(x)) : error("x is negative")
+f_innermost1_line = (@__LINE__) - 1
+let st = try
+        f_parent1(-1)
+    catch err
+        stacktrace(catch_backtrace())
+    end
+    @test any(st) do sf
+        sf.func === :f_parent1 && sf.line == f_parent1_line && sf.linfo isa Core.MethodInstance
+    end
+    @test any(st) do sf
+        sf.func === :f_inner1 && sf.line == f_inner1_line && sf.linfo isa Core.MethodInstance && sf.inlined
+    end
+    @test any(st) do sf
+        sf.func === :f_innermost1 && sf.line == f_innermost1_line && sf.linfo isa Core.MethodInstance && sf.inlined
+    end
+end
+
+global f_parent2_line::Int, f_inner2_line::Int, f_innermost2_line::Int
+function f_parent2(a)
+    x = identity(a)
+    return begin
+        @inline f_inner2(x)
+    end
+end; f_parent2_line = (@__LINE__) - 2
+function f_inner2(a)
+    x = identity(a)
+    return @inline f_innermost2(x)
+end; f_inner2_line = (@__LINE__) - 1
+f_innermost2(x) = x > 0 ? @noinline(sin(x)) : error("x is negative")
+f_innermost2_line = (@__LINE__) - 1
+let st = try
+        f_parent2(-1)
+    catch err
+        stacktrace(catch_backtrace())
+    end
+    @test any(st) do sf
+        sf.func === :f_parent2 && sf.line == f_parent2_line && sf.linfo isa Core.MethodInstance
+    end
+    @test any(st) do sf
+        sf.func === :f_inner2 && sf.line == f_inner2_line && sf.linfo isa Core.MethodInstance && sf.inlined
+    end
+    @test any(st) do sf
+        sf.func === :f_innermost2 && sf.line == f_innermost2_line && sf.linfo isa Core.MethodInstance && sf.inlined
+    end
+end
+
+@inline f_inner3(x) = x > 0 ? x : error("neg: $x")
+function f_parent3(a, b, c, d)
+    s = 0
+    @noinline begin   # keep `+` as invokes so codelocs has `to=0` entries
+        s += a; s += b; s += c; s += d
+    end
+    return f_inner3(s)
+end
+let st = try f_parent3(1, 2, 3, -10) catch; stacktrace(catch_backtrace()) end
+    sf = only(filter(sf -> sf.func === :f_inner3 && sf.inlined, st))
+    @test sf.linfo isa Core.MethodInstance
+    @test sf.linfo.def === which(f_inner3, (Int,))
+end
+
+# The generated inner method has no source location of its own.
+macro wrap_in_closure(f)
+    body = f.args[2]
+    inner = Expr(:function, :(inner()), Expr(:block, Expr(:meta, :inline), body))
+    esc(Expr(:function, f.args[1], Expr(:block, __source__, inner, :inner)))
+end
+@wrap_in_closure function f_wrapped4()
+    error("boom")
+end
+f_wrapped4_line = (@__LINE__) - 2
+let st = try f_wrapped4()() catch; stacktrace(catch_backtrace()) end
+    sf = st[findfirst(sf -> sf.line == f_wrapped4_line, st)]
+    @test sf.file === Symbol(@__FILE__)
+    @test sf.linfo.def === only(methods(f_wrapped4()))
 end

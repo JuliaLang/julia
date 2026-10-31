@@ -7,6 +7,14 @@ ifneq ($(USE_BINARYBUILDER_LLVM), 1)
 LLVM_GIT_URL:=https://github.com/JuliaLang/llvm-project.git
 LLVM_TAR_URL=https://api.github.com/repos/JuliaLang/llvm-project/tarball/$1
 $(eval $(call git-external,llvm,LLVM,CMakeLists.txt,,$(SRCCACHE)))
+# LLVM's tarball contains symlinks to non-existent targets. This breaks the
+# the default msys strategy `deepcopy` symlink strategy. To workaround this,
+# switch to `native` which tries native windows symlinks (possible if the
+# machine is in developer mode) - or if not, falls back to cygwin-style
+# symlinks. We don't particularly care either way - we just need to symlinks
+# to succeed. We could guard this by a uname check, but it's harmless elsewhere,
+# so let's not incur the additional overhead.
+$(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted: export MSYS=$(MSYS_NONEXISTENT_SYMLINK_TARGET_FIX)
 
 LLVM_BUILDDIR := $(BUILDDIR)/$(LLVM_SRC_DIR)
 LLVM_BUILDDIR_withtype := $(LLVM_BUILDDIR)/build_$(LLVM_BUILDTYPE)
@@ -38,7 +46,7 @@ LLVM_ENABLE_PROJECTS :=
 LLVM_EXTERNAL_PROJECTS :=
 LLVM_ENABLE_RUNTIMES :=
 ifeq ($(BUILD_LLVM_CLANG), 1)
-LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);clang
+LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);clang;clang-tools-extra
 LLVM_ENABLE_RUNTIMES := $(LLVM_ENABLE_RUNTIMES);compiler-rt
 endif
 ifeq ($(USE_POLLY), 1)
@@ -60,6 +68,10 @@ ifeq ($(BUILD_LLD), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);lld
 endif
 
+# Remove ; if it's the first character
+ifneq ($(LLVM_ENABLE_RUNTIMES),)
+	LLVM_ENABLE_RUNTIMES := $(patsubst ;%,%,$(LLVM_ENABLE_RUNTIMES))
+endif
 
 LLVM_LIB_FILE := libLLVMCodeGen.a
 
@@ -70,7 +82,13 @@ LLVM_EXPERIMENTAL_TARGETS :=
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
 LLVM_CPPFLAGS :=
-LLVM_LDFLAGS :=
+# Find our zlib/zstd when linking against libLLVM with a sysroot toolchain: `-L` for
+# lld, `-rpath-link` for GNU ld (which does not search `-L` paths for the dependencies
+# of shared libraries). The latter is ELF-only, as in Make.inc's RPATH.
+LLVM_LDFLAGS := "-L$(build_shlibdir)"
+ifeq (,$(filter $(OS),WINNT emscripten Darwin))
+LLVM_LDFLAGS += "-Wl,-rpath-link,$(build_shlibdir)"
+endif
 LLVM_CMAKE :=
 
 LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
@@ -86,22 +104,22 @@ endif
 LLVM_CMAKE += -DLLVM_WINDOWS_PREFER_FORWARD_SLASH=False
 
 # Allow adding LLVM specific flags
-LLVM_CFLAGS += $(CFLAGS)
-LLVM_CXXFLAGS += $(CXXFLAGS)
+LLVM_CFLAGS += $(CFLAGS) $(BOLT_CFLAGS)
+LLVM_CXXFLAGS += $(CXXFLAGS) $(BOLT_CFLAGS)
 LLVM_CPPFLAGS += $(CPPFLAGS)
 LLVM_LDFLAGS += $(LDFLAGS)
+LLVM_LDFLAGS += $(BOLT_LDFLAGS)
 LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
 LLVM_CMAKE += -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD:STRING="$(LLVM_EXPERIMENTAL_TARGETS)"
 LLVM_CMAKE += -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_HOST_TRIPLE="$(or $(XC_HOST),$(BUILD_MACHINE))"
-LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=ON -DZLIB_LIBRARY="$(build_prefix)/lib"
-LLVM_CMAKE += -DCOMPILER_RT_ENABLE_IOS=OFF -DCOMPILER_RT_ENABLE_WATCHOS=OFF -DCOMPILER_RT_ENABLE_TVOS=OFF
+LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=FORCE_ON -DZLIB_ROOT="$(build_prefix)"
+LLVM_CMAKE += -DLLVM_ENABLE_ZSTD=FORCE_ON -DZSTD_ROOT="$(build_prefix)"
 ifeq ($(USE_POLLY_ACC),1)
 LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
 endif
-LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
-LLVM_CMAKE += -DLLVM_UTILS_INSTALL_DIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
+LLVM_CMAKE += -DCMAKE_INSTALL_BINDIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
 LLVM_CMAKE += -DLLVM_INCLUDE_UTILS=ON -DLLVM_INSTALL_UTILS=ON
-LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_ENABLE_BINDINGS=OFF -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_HISTEDIT_H=Off -DHAVE_LIBEDIT=Off
+LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_ENABLE_BINDINGS=OFF -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_LIBEDIT=Off -DLLVM_ENABLE_LIBEDIT=OFF
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_CMAKE += -DLLVM_ENABLE_ASSERTIONS:BOOL=ON
 endif # LLVM_ASSERTIONS
@@ -110,6 +128,17 @@ LLVM_CPPFLAGS += -D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE
 endif # OS == WINNT
 ifneq ($(HOSTCC),$(CC))
 LLVM_CMAKE += -DCROSS_TOOLCHAIN_FLAGS_NATIVE="-DCMAKE_C_COMPILER=$$(which $(HOSTCC));-DCMAKE_CXX_COMPILER=$$(which $(HOSTCXX))"
+endif
+# Build the tools that run during the build, e.g. tablegen, for the build
+# machine. (Windows does this in CMAKE_COMMON.)
+ifneq ($(XC_HOST),)
+ifneq ($(OS),WINNT)
+LLVM_CMAKE += -DCMAKE_SYSTEM_NAME=$(OS) -DCMAKE_SYSTEM_PROCESSOR=$(ARCH)
+endif
+endif
+# Where clang looks for its default configuration files (clang.cfg etc).
+ifneq ($(CLANG_CONFIG_FILE_SYSTEM_DIR),)
+LLVM_CMAKE += -DCLANG_CONFIG_FILE_SYSTEM_DIR=$(CLANG_CONFIG_FILE_SYSTEM_DIR)
 endif
 ifeq ($(OS), emscripten)
 LLVM_CMAKE += -DCMAKE_TOOLCHAIN_FILE=$(EMSCRIPTEN)/cmake/Modules/Platform/Emscripten.cmake -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_BUILD_TOOLS=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_ENABLE_THREADS=OFF -DLLVM_BUILD_UTILS=OFF
@@ -133,7 +162,7 @@ endif # USE_PERF_JITEVENTS
 
 ifeq ($(BUILD_LLDB),1)
 ifeq ($(USECLANG),0)
-LLVM_CXXFLAGS += -std=c++0x
+LLVM_CXXFLAGS += -std=c++17
 endif # USECLANG
 ifeq ($(LLDB_DISABLE_PYTHON),1)
 LLVM_CXXFLAGS += -DLLDB_DISABLE_PYTHON
@@ -182,6 +211,11 @@ endif
 
 ifeq ($(fPIC),)
 LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
+else
+ifeq ($(OS),FreeBSD)
+    # On FreeBSD, we must force even statically-linked code to have -fPIC
+    LLVM_CMAKE += -DCMAKE_POSITION_INDEPENDENT_CODE=TRUE
+endif
 endif
 
 LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \
@@ -189,6 +223,11 @@ LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \
 ifeq ($(OS),Darwin)
 # Explicitly use the default for -mmacosx-version-min=10.9 and later
 LLVM_CMAKE += -DLLVM_ENABLE_LIBCXX=ON
+# LLVM archives its static libraries with Xcode's libtool, which cannot index
+# LTO bitcode from a different LLVM; allow using e.g. llvm-libtool-darwin.
+ifneq ($(LLVM_LIBTOOL),)
+LLVM_CMAKE += -DCMAKE_LIBTOOL="$(LLVM_LIBTOOL)"
+endif
 endif
 
 ifeq ($(BUILD_LLVM_CLANG),0)
@@ -203,6 +242,12 @@ endif
 
 LLVM_CMAKE += -DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS)" \
 	-DCMAKE_SHARED_LINKER_FLAGS="$(LLVM_LDFLAGS)"
+ifeq ($(OS),Darwin)
+# Build-tree tools such as tblgen link against the bundled zlib and zstd, whose
+# install names are `@rpath/...`, so they need a build rpath to find them.
+# CMake replaces it with the install rpath on install.
+LLVM_CMAKE += -DCMAKE_BUILD_RPATH="$(build_shlibdir)"
+endif
 
 # change the SONAME of Julia's private LLVM
 # i.e. libLLVM-14jl.so
@@ -210,11 +255,14 @@ LLVM_CMAKE += -DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS)" \
 LLVM_CMAKE += -DLLVM_VERSION_SUFFIX:STRING="jl"
 LLVM_CMAKE += -DLLVM_SHLIB_SYMBOL_VERSION:STRING="JL_LLVM_$(LLVM_VER_SHORT)"
 
+# Change the default bug report URL to Julia's issue tracker
+LLVM_CMAKE += -DBUG_REPORT_URL="https://github.com/julialang/julia"
+
 # Apply version-specific LLVM patches sequentially
 LLVM_PATCH_PREV :=
 define LLVM_PATCH
 $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/source-extracted | $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
-	cd $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm && patch -p1 < $$(SRCDIR)/patches/$1.patch
+	cd $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm && patch -p1 -f < $$(SRCDIR)/patches/$1.patch
 	echo 1 > $$@
 # declare that applying any patch must re-run the compile step
 $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
@@ -223,7 +271,7 @@ endef
 
 define LLVM_PROJ_PATCH
 $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/source-extracted | $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
-	cd $$(SRCCACHE)/$$(LLVM_SRC_DIR) && patch -p1 < $$(SRCDIR)/patches/$1.patch
+	cd $$(SRCCACHE)/$$(LLVM_SRC_DIR) && patch -p1 -f < $$(SRCDIR)/patches/$1.patch
 	echo 1 > $$@
 # declare that applying any patch must re-run the compile step
 $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
@@ -234,10 +282,31 @@ ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zlib
 endif
 
-# NOTE: LLVM 12 and 13 have their patches applied to JuliaLang/llvm-project
+ifeq ($(USE_SYSTEM_ZSTD), 0)
+$(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zstd
+endif
+
+# LLVM's configure checks link against libraries installed by csl.
+$(LLVM_BUILDDIR_withtype)/build-configured: | install-csl
+
 
 # declare that all patches must be applied before running ./configure
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV)
+
+# Apply Julia's specific patches if requested, e.g. if not using Julia's fork of LLVM.
+ifeq ($(LLVM_APPLY_JULIA_PATCHES), 1)
+# Download Julia's patchset.
+$(BUILDDIR)/julia-patches.patch:
+	$(JLDOWNLOAD) $@ $(LLVM_JULIA_DIFF_GITHUB_REPO)/compare/$(LLVM_BASE_REF)...$(LLVM_JULIA_REF).diff
+
+# Apply the patch.
+$(SRCCACHE)/$(LLVM_SRC_DIR)/julia-patches.patch-applied: $(BUILDDIR)/julia-patches.patch $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted
+	cd $(SRCCACHE)/$(LLVM_SRC_DIR) && patch -p1 -f < $(realpath $<)
+	echo 1 > $@
+
+# Require application of Julia's patchset before configuring LLVM.
+$(LLVM_BUILDDIR_withtype)/build-configured: | $(SRCCACHE)/$(LLVM_SRC_DIR)/julia-patches.patch-applied
+endif
 
 $(LLVM_BUILDDIR_withtype)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
@@ -247,6 +316,12 @@ $(LLVM_BUILDDIR_withtype)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-e
 	echo 1 > $@
 
 $(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured
+ifeq ($(OS),WINNT)
+ifeq ($(USEGCC),1)
+	echo "LLVM source build is currently known to fail using GCC due to exceeded export table limits. Try clang."
+	exit 1
+endif
+endif
 	cd $(LLVM_BUILDDIR_withtype) && \
 		$(if $(filter $(CMAKE_GENERATOR),make), \
 		  $(MAKE), \
@@ -260,16 +335,70 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
+ifeq ($(OS),Darwin)
+ifneq ($(BUILD_LLVM_CLANG), 1)
+# The LLVM runtimes build of compiler-rt requires clang, so build the builtins
+# standalone with the host compiler instead. Only the host architecture is built,
+# and not the kernel extension variant, which Julia does not use: building several
+# arm64 variants in parallel races on the generated outline atomics.
+LLVM_COMPILERRT_BUILDDIR := $(LLVM_BUILDDIR)/build_compiler-rt
+ifeq ($(ARCH),aarch64)
+LLVM_COMPILERRT_ARCH := arm64
+else
+LLVM_COMPILERRT_ARCH := $(ARCH)
+endif
+
+$(LLVM_COMPILERRT_BUILDDIR)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted
+	mkdir -p $(dir $@)
+	cd $(dir $@) && \
+		$(CMAKE) $(SRCCACHE)/$(LLVM_SRC_DIR)/compiler-rt/lib/builtins $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) \
+			-DCMAKE_BUILD_TYPE=Release -DCOMPILER_RT_STANDALONE_BUILD=ON \
+			-DCMAKE_OSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN) \
+			-DCOMPILER_RT_ENABLE_IOS=OFF -DCOMPILER_RT_ENABLE_WATCHOS=OFF \
+			-DCOMPILER_RT_ENABLE_TVOS=OFF -DCOMPILER_RT_ENABLE_XROS=OFF \
+			-DDARWIN_osx_BUILTIN_ARCHS=$(LLVM_COMPILERRT_ARCH) -DDARWIN_osx_SKIP_CC_KEXT=ON
+	echo 1 > $@
+
+$(LLVM_COMPILERRT_BUILDDIR)/build-compiled: $(LLVM_COMPILERRT_BUILDDIR)/build-configured
+	cd $(dir $@) && \
+		$(if $(filter $(CMAKE_GENERATOR),make), \
+		  $(MAKE), \
+		  $(CMAKE) --build .)
+	echo 1 > $@
+
+$(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_COMPILERRT_BUILDDIR)/build-compiled
+endif
+endif
+
+# CMake runs on the build host, even when targeting Windows from Unix.
+# MSYS2 excludes CMAKE_INSTALL_PREFIX from conversion; LLVM's prefix is absolute.
+ifeq ($(BUILD_OS),WINNT)
+LLVM_INSTALL_PREFIX = $(call cygpath_w,$1)
+else
+LLVM_INSTALL_PREFIX = $1
+endif
+
 LLVM_INSTALL = \
-	cd $1 && mkdir -p $2$$(build_depsbindir) && \
-	cp -r $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit $2$$(build_depsbindir)/ && \
-	$$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
+	cd $1 && mkdir -p $2$$(build_depsbindir)/lit && \
+	cp $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit/*.py $2$$(build_depsbindir)/lit/ && \
+	cp $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit/*.toml $2$$(build_depsbindir)/lit/ && \
+	cp -r $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit/lit $2$$(build_depsbindir)/lit/ && \
+	$$(CMAKE) -DCMAKE_INSTALL_PREFIX="$$(call LLVM_INSTALL_PREFIX,$2$$(build_prefix))" -P cmake_install.cmake
 ifeq ($(OS), WINNT)
-LLVM_INSTALL += && cp $2$$(build_shlibdir)/$(LLVM_SHARED_LIB_NAME).dll $2$$(build_depsbindir)
+# CMAKE_INSTALL_BINDIR puts the DLL in build_depsbindir alongside the tools,
+# but Julia loads it out of build_shlibdir, so it has to be in both places.
+# Staged installs have no directory there yet, and cp would make the DLL one.
+LLVM_INSTALL += && mkdir -p $2$$(build_shlibdir) && cp $2$$(build_depsbindir)/$(LLVM_SHARED_LIB_NAME).dll $2$$(build_shlibdir)
 endif
 ifeq ($(OS),Darwin)
 # https://github.com/JuliaLang/julia/issues/29981
 LLVM_INSTALL += && ln -s libLLVM.dylib $2$$(build_shlibdir)/libLLVM-$$(LLVM_VER_SHORT).dylib
+# compiler-rt is required for linking sysimages on Darwin
+ifeq ($(BUILD_LLVM_CLANG), 1)
+LLVM_INSTALL += && install -m 0644 $2$$(build_prefix)/lib/clang/$$(LLVM_VER_MAJ)/lib/darwin/libclang_rt.osx.a $2$$(build_libdir)/libclang_rt.osx.a
+else
+LLVM_INSTALL += && install -m 0644 $$(abspath $$(LLVM_COMPILERRT_BUILDDIR))/lib/darwin/libclang_rt.osx.a $2$$(build_libdir)/libclang_rt.osx.a
+endif
 endif
 
 $(eval $(call staged-install, \
@@ -278,7 +407,7 @@ $(eval $(call staged-install, \
 
 clean-llvm:
 	-rm -f $(LLVM_BUILDDIR_withtype)/build-configured $(LLVM_BUILDDIR_withtype)/build-compiled
-	-$(MAKE) -C $(LLVM_BUILDDIR_withtype) clean
+	-if [ -d $(LLVM_BUILDDIR_withtype) ]; then $(MAKE) -C $(LLVM_BUILDDIR_withtype) clean; fi
 
 get-llvm: $(LLVM_SRC_FILE)
 extract-llvm: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted
@@ -288,7 +417,7 @@ fastcheck-llvm: #none
 check-llvm: $(LLVM_BUILDDIR_withtype)/build-checked
 
 ifeq ($(USE_INTEL_JITEVENTS),1)
-extract-llvm: $(SRCCACHE)/$(ITTAPI_SRC_DIR)/source-extracted
+$(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted: $(SRCCACHE)/$(ITTAPI_SRC_DIR)/source-extracted
 endif
 
 #todo: LLVM make check target is broken on julia.mit.edu (and really slow elsewhere)
@@ -316,6 +445,21 @@ $(eval $(call bb-install,llvm,LLVM,false,true))
 $(eval $(call bb-install,lld,LLD,false,true))
 $(eval $(call bb-install,clang,CLANG,false,true))
 $(eval $(call bb-install,llvm-tools,LLVM_TOOLS,false,true))
+
+# work-around for Yggdrasil packaging bug (https://github.com/JuliaPackaging/Yggdrasil/pull/11231)
+$(build_prefix)/manifest/llvm-tools uninstall-llvm-tools: \
+	TAR:=$(TAR) --exclude=llvm-config.exe
+
+ifeq ($(OS),Darwin)
+# compiler-rt is required for linking sysimages on Darwin
+$(eval $(call bb-install,compilerrt,COMPILERRT,false,false))
+$(build_libdir)/libclang_rt.osx.a: $(build_prefix)/manifest/compilerrt
+	mv $(build_libdir)/darwin/libclang_rt.osx.a $@
+	touch $@
+	rm -rf $(build_libdir)/darwin
+install-compilerrt: $(build_libdir)/libclang_rt.osx.a
+install-llvm: install-compilerrt
+endif
 
 endif # USE_BINARYBUILDER_LLVM
 

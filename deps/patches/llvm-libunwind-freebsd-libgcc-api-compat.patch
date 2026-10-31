@@ -16,7 +16,7 @@ single FDE. I suspect this was just an Apple bug, compensated by Apple-
 specific code in LLVM.
 
 See lib/ExecutionEngine/RuntimeDyld/RTDyldMemoryManager.cpp and
-http://lists.llvm.org/pipermail/llvm-dev/2013-April/061737.html
+https://lists.llvm.org/pipermail/llvm-dev/2013-April/061737.html
 for more detail.
 
 This change is based on the LLVM RTDyldMemoryManager.cpp. It should

@@ -239,6 +239,13 @@ if bc_opt != bc_off
     @test_throws BoundsError BadVector20469([1,2,3])[:]
 end
 
+# Accumulate: do not set inbounds context for user-supplied functions
+if bc_opt != bc_off
+    Base.@propagate_inbounds op58200(a, b) = (1, 2)[a] + (1, 2)[b]
+    @test_throws BoundsError accumulate(op58200, 1:10)
+    @test_throws BoundsError Base.accumulate_pairwise(op58200, 1:10)
+end
+
 # Ensure iteration over arrays is vectorizable
 function g27079(X)
     r = 0
@@ -248,14 +255,16 @@ function g27079(X)
     r
 end
 
-@test occursin("vector.reduce.add", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
+# rv64gc has no vector registers, so the loop stays scalar there
+if Sys.ARCH !== :riscv64
+    @test occursin("vector.reduce.add", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
+end
 
 # Boundschecking removal of indices with different type, see #40281
 getindex_40281(v, a, b, c) = @inbounds getindex(v, a, b, c)
-typed_40281 = sprint((io, args...) -> code_warntype(io, args...; optimize=true), getindex_40281, Tuple{Array{Float64, 3}, Int, UInt8, Int})
+llvm_40281 = sprint((io, args...) -> code_llvm(io, args...; optimize=true), getindex_40281, Tuple{Array{Float64, 3}, Int, UInt8, Int})
 if bc_opt == bc_default || bc_opt == bc_off
-    @test occursin("arrayref(false", typed_40281)
-    @test !occursin("arrayref(true", typed_40281)
+    @test !occursin("call void @ijl_bounds_error_ints", llvm_40281)
 end
 
 # Given this is a sub-processed test file, not using @testsets avoids
@@ -282,7 +291,6 @@ begin # Pass inbounds meta to getindex on CartesianIndices (#42115)
     end
 end
 
-
 # Test that --check-bounds=off doesn't permit const prop of indices into
 # function that are not dynamically reachable (the same test for @inbounds
 # is in the compiler tests).
@@ -293,5 +301,123 @@ function f_boundscheck_elim(n)
     ntuple(x->getfield(sin, x), n)
 end
 @test Tuple{} <: code_typed(f_boundscheck_elim, Tuple{Int})[1][2]
+
+# https://github.com/JuliaArrays/StaticArrays.jl/issues/1155
+@test Base.return_types() do
+    typeintersect(Int, Integer)
+end |> only === Core.TypeEgal{Int}
+
+if bc_opt == bc_default
+    # Array/Memory escape analysis
+    function no_allocate(T::Type{<:Union{Memory}})
+        v = T(undef, 2)
+        v[1] = 2
+        v[2] = 3
+        return v[1] + v[2]
+    end
+    function test_alloc(::Type{T}; broken=false) where T
+        @test (@allocated no_allocate(T)) == 0 broken=broken
+    end
+    for T in [Memory] # This requires changing the pointer_from_objref to something llvm sees through
+        for ET in [Int, Float32, Union{Int, Float64}]
+            no_allocate(T{ET}) #compile
+            test_alloc(T{ET})
+        end
+    end
+    function f() # this was causing a bug on an in progress version of #55913.
+        m = Memory{Float64}(undef, 4)
+        m .= 1.0
+        s = 0.0
+        for x ∈ m
+            s += x
+        end
+        s
+    end
+    @test f() === 4.0
+    function confuse_alias_analysis()
+       mem0 = Memory{Int}(undef, 1)
+       mem1 = Memory{Int}(undef, 1)
+       @inbounds mem0[1] = 3
+       for width in 1:2
+            @inbounds mem1[1] = mem0[1]
+            mem0 = mem1
+       end
+       mem0[1]
+    end
+    @test confuse_alias_analysis() == 3
+    @test (@allocated confuse_alias_analysis()) == 0
+    function no_alias_prove(n)
+        m1 = Memory{Int}(undef,n)
+        m2 = Memory{Int}(undef,n)
+        m1 === m2
+    end
+    no_alias_prove5() = no_alias_prove(5)
+    no_alias_prove5()
+    @test (@allocated no_alias_prove5()) == 0
+    # the lengths of these arrays only become constant during LLVM optimization
+    function copy_small()
+        a = [1.0, 2.0, 3.0]
+        b = copy(a)
+        b[2] = 5.0
+        return a[2] + b[2]
+    end
+    function add_small()
+        a = [1, 2, 3]
+        b = a + a
+        return b[1] + b[2] + b[3]
+    end
+    function column_small()
+        A = reshape([1.0:9.0;], 3, 3)
+        c = A[:, 2]
+        return c[1] + c[2] + c[3]
+    end
+    @test copy_small() === 7.0
+    @test (@allocated copy_small()) == 0
+    @test add_small() === 12
+    @test (@allocated add_small()) == 0
+    @test column_small() === 15.0
+    @test (@allocated column_small()) == 0
+    # escaping copies must stay valid across a GC
+    escaping_copies() = (copy([1.0, 2.0]), copy(Union{Int,Nothing}[1, nothing]), copy(Any[1, "x"]))
+    copies = escaping_copies()
+    GC.gc(true)
+    @test copies[1] == [1.0, 2.0]
+    @test isequal(copies[2], [1, nothing])
+    @test isequal(copies[3], [1, "x"])
+    # including when their data is too large to be allocated inline
+    large_copies() = (copy(collect(1.0:300.0)), copy(Any[1:300;]))
+    copies = large_copies()
+    GC.gc(true)
+    @test copies[1] == 1.0:300.0
+    @test copies[2] == 1:300
+    # references in a fresh Memory start out unassigned, with inline data and without
+    fresh_memories(ns) = [Memory{Any}(undef, n) for n in ns]
+    mems = fresh_memories(240:520)
+    GC.gc(true)
+    @test map(length, mems) == 240:520
+    @test all(m -> !any(i -> isassigned(m, i), eachindex(m)), mems)
+end
+
+@testset "automatic boundscheck elision for iteration on some important types" begin
+    if bc_opt != bc_on
+        @test !contains(sprint(code_llvm, iterate, (Memory{UInt8}, Int)), "unreachable")
+
+        @test !contains(sprint(code_llvm, iterate, (Vector{UInt8}, Int)), "unreachable")
+        @test !contains(sprint(code_llvm, iterate, (Matrix{UInt8}, Int)), "unreachable")
+        @test !contains(sprint(code_llvm, iterate, (Array{UInt8,3}, Int)), "unreachable")
+
+        @test !contains(sprint(code_llvm, iterate, (SubArray{Float64, 1, Vector{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}}, true}, Int)), "unreachable")
+        @test !contains(sprint(code_llvm, iterate, (SubArray{Float64, 2, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, true}, Int)), "unreachable")
+        @test !contains(sprint(code_llvm, iterate, (SubArray{Float64, 2, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, UnitRange{Int64}}, true}, Int)), "unreachable")
+
+        @test !contains(sprint(code_llvm, iterate, (Base.CodeUnits{UInt8,String}, Int)), "unreachable")
+    end
+end
+
+@testset "nonscalar setindex! checks the shape under @inbounds" begin
+    inbounds_setindex!(A, X, I) = (@inbounds A[I] = X; A)
+    @test_throws DimensionMismatch view(zeros(6), 2:5)[1:4] = [1]
+    @test_throws DimensionMismatch inbounds_setindex!(zeros(6), [1.0], 1:4)
+end
 
 end

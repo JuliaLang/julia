@@ -7,14 +7,16 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 
-JL_DLLEXPORT jl_svec_t *(ijl_svec)(size_t n, ...)
+JL_DLLEXPORT jl_svec_t *(ijl_svec)(size_t n, ...) JL_ROOTED_VARARGS
 {
     va_list args;
     if (n == 0) return jl_emptysvec;
     va_start(args, n);
     jl_svec_t *jv = jl_alloc_svec_uninit(n);
-    for (size_t i = 0; i < n; i++)
-        jl_svecset(jv, i, va_arg(args, jl_value_t*));
+    for (size_t i = 0; i < n; i++) {
+        jl_value_t *v = va_arg(args, jl_value_t*);
+        jl_gc_write_fresh(jv, jl_svec_data(jv)[i], jl_value_t, v);
+    }
     va_end(args);
     return jv;
 }
@@ -22,7 +24,9 @@ JL_DLLEXPORT jl_svec_t *(ijl_svec)(size_t n, ...)
 jl_svec_t *(jl_perm_symsvec)(size_t n, ...)
 {
     if (n == 0) return jl_emptysvec;
-    jl_svec_t *jv = (jl_svec_t*)jl_gc_permobj((n + 1) * sizeof(void*), jl_simplevector_type);
+    jl_task_t *ct = jl_current_task;
+    jl_svec_t *jv = (jl_svec_t*)jl_gc_permobj(ct->ptls, (n + 1) * sizeof(void*), jl_simplevector_type, 0);
+    jl_set_typetagof(jv, jl_simplevector_tag, jl_astaggedvalue(jv)->bits.gc);
     jl_svec_set_len_unsafe(jv, n);
     va_list args;
     va_start(args, n);
@@ -32,24 +36,45 @@ jl_svec_t *(jl_perm_symsvec)(size_t n, ...)
     return jv;
 }
 
-JL_DLLEXPORT jl_svec_t *jl_svec1(void *a)
+JL_DLLEXPORT jl_svec_t *jl_svec1(
+    void *a JL_ROOTED_BY_RETURN)
 {
     jl_task_t *ct = jl_current_task;
     jl_svec_t *v = (jl_svec_t*)jl_gc_alloc(ct->ptls, sizeof(void*) * 2,
                                            jl_simplevector_type);
+    jl_set_typetagof(v, jl_simplevector_tag, 0);
     jl_svec_set_len_unsafe(v, 1);
     jl_svec_data(v)[0] = (jl_value_t*)a;
     return v;
 }
 
-JL_DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b)
+JL_DLLEXPORT jl_svec_t *jl_svec2(
+    void *a JL_ROOTED_BY_RETURN,
+    void *b JL_ROOTED_BY_RETURN)
 {
     jl_task_t *ct = jl_current_task;
     jl_svec_t *v = (jl_svec_t*)jl_gc_alloc(ct->ptls, sizeof(void*) * 3,
                                            jl_simplevector_type);
+    jl_set_typetagof(v, jl_simplevector_tag, 0);
     jl_svec_set_len_unsafe(v, 2);
     jl_svec_data(v)[0] = (jl_value_t*)a;
     jl_svec_data(v)[1] = (jl_value_t*)b;
+    return v;
+}
+
+JL_DLLEXPORT jl_svec_t *jl_svec3(
+    void *a JL_ROOTED_BY_RETURN,
+    void *b JL_ROOTED_BY_RETURN,
+    void *c JL_ROOTED_BY_RETURN)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_svec_t *v = (jl_svec_t*)jl_gc_alloc(ct->ptls, sizeof(void*) * 4,
+                                           jl_simplevector_type);
+    jl_set_typetagof(v, jl_simplevector_tag, 0);
+    jl_svec_set_len_unsafe(v, 3);
+    jl_svec_data(v)[0] = (jl_value_t*)a;
+    jl_svec_data(v)[1] = (jl_value_t*)b;
+    jl_svec_data(v)[2] = (jl_value_t*)c;
     return v;
 }
 
@@ -57,8 +82,12 @@ JL_DLLEXPORT jl_svec_t *jl_alloc_svec_uninit(size_t n)
 {
     jl_task_t *ct = jl_current_task;
     if (n == 0) return jl_emptysvec;
-    jl_svec_t *jv = (jl_svec_t*)jl_gc_alloc(ct->ptls, (n + 1) * sizeof(void*),
-                                            jl_simplevector_type);
+    size_t allocsz;
+    if (__builtin_add_overflow(n, (size_t)1, &allocsz) ||
+        __builtin_mul_overflow(allocsz, sizeof(void *), &allocsz))
+        jl_throw(jl_memory_exception);
+    jl_svec_t *jv = (jl_svec_t*)jl_gc_alloc(ct->ptls, allocsz, jl_simplevector_type);
+    jl_set_typetagof(jv, jl_simplevector_tag, 0);
     jl_svec_set_len_unsafe(jv, n);
     return jv;
 }
@@ -75,7 +104,7 @@ JL_DLLEXPORT jl_svec_t *jl_svec_copy(jl_svec_t *a)
 {
     size_t n = jl_svec_len(a);
     jl_svec_t *c = jl_alloc_svec_uninit(n);
-    memmove_refs((void**)jl_svec_data(c), (void**)jl_svec_data(a), n);
+    memmove_refs((_Atomic(void*)*)jl_svec_data(c), (_Atomic(void*)*)jl_svec_data(a), n);
     return c;
 }
 
@@ -91,11 +120,4 @@ JL_DLLEXPORT jl_svec_t *jl_svec_fill(size_t n, jl_value_t *x)
 JL_DLLEXPORT size_t (jl_svec_len)(jl_svec_t *t) JL_NOTSAFEPOINT
 {
     return jl_svec_len(t);
-}
-
-JL_DLLEXPORT jl_value_t *jl_svec_ref(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i)
-{
-    jl_value_t *v = jl_svecref(t, (size_t)i);
-    assert(v != NULL);
-    return v;
 }

@@ -21,8 +21,8 @@ end
     @test convert(Union{Nothing, Missing}, nothing) === nothing
     @test convert(Union{Missing, Nothing, Float64}, 1) === 1.0
 
-    @test_throws MethodError convert(Missing, 1)
-    @test_throws MethodError convert(Union{Nothing, Missing}, 1)
+    @test_throws ErrorException("cannot convert a value to missing for assignment") convert(Missing, 1)
+    @test_throws ErrorException("cannot convert a value to missing for assignment") convert(Union{Nothing, Missing}, 1)
     @test_throws MethodError convert(Union{Int, Missing}, "a")
 end
 
@@ -80,7 +80,16 @@ end
     @test isapprox(missing, 1.0, atol=1e-6) === missing
     @test isapprox(1.0, missing, rtol=1e-6) === missing
 
-    @test !any(T -> T === Union{Missing,Bool}, Base.return_types(isequal, Tuple{Any,Any}))
+    # Only assert the methods shipped with Base and the stdlibs: test files
+    # that ran earlier in the same process may have added their own isequal
+    # methods (e.g. arrayops' totally_not_five26034), and what those infer
+    # depends on the session's accumulated method tables, not on `missing`.
+    let ms = collect(methods(isequal, Tuple{Any,Any})),
+        rts = Base.return_types(isequal, Tuple{Any,Any})
+        @test all(zip(ms, rts)) do (m, rt)
+            Base.moduleroot(parentmodule(m)) === Main || rt === Bool
+        end
+    end
 end
 
 @testset "arithmetic operators" begin
@@ -92,20 +101,20 @@ end
     end
 
     # All arithmetic operators return missing when operating on two missing's
-    # All arithmetic operators return missing when operating on a scalar and an missing
-    # All arithmetic operators return missing when operating on an missing and a scalar
+    # All arithmetic operators return missing when operating on a scalar and a missing
+    # All arithmetic operators return missing when operating on a missing and a scalar
     for f in arithmetic_operators
         @test ismissing(f(missing, missing))
         @test ismissing(f(1, missing))
         @test ismissing(f(missing, 1))
     end
 
-    @test ismissing(min(missing, missing))
-    @test ismissing(max(missing, missing))
-    for f in [min, max]
+    for (f, result) in ((min, missing), (max, missing), (minmax, (missing, missing)))
+        @test f(missing, missing) === result
+        @test f(missing) === result
         for arg in ["", "a", 1, -1.0, [2]]
-            @test ismissing(f(missing, arg))
-            @test ismissing(f(arg, missing))
+            @test f(missing, arg) === result
+            @test f(arg, missing) === result
         end
     end
 end
@@ -114,8 +123,8 @@ end
     two_argument_functions = [atan, hypot, log]
 
     # All two-argument functions return missing when operating on two missing's
-    # All two-argument functions return missing when operating on a scalar and an missing
-    # All two-argument functions return missing when operating on an missing and a scalar
+    # All two-argument functions return missing when operating on a scalar and a missing
+    # All two-argument functions return missing when operating on a missing and a scalar
     for f in two_argument_functions
         @test ismissing(f(missing, missing))
         @test ismissing(f(1, missing))
@@ -560,6 +569,12 @@ end
             sm = skipmissing(oa)
             @test sum(sm) == 0
         end
+
+        # `mapreduce_impl` returns the reduced value itself even for an imprecisely inferred
+        # array, rather than the `Union{Nothing,Some}` result of the `SkipMissing` helper
+        @test Base.infer_return_type((Any, Int)) do A, n
+            Base.mapreduce_impl(x -> x isa Pair, &, A, 1, n)
+        end === Bool
     end
 
     @testset "filter" begin
@@ -596,7 +611,7 @@ end
     @test @coalesce(missing) === missing
 
     @test @coalesce(1, error("failed")) === 1
-    @test_throws ErrorException @coalesce(missing, error("failed"))
+    @test_throws ErrorException("failed") @coalesce(missing, error("failed"))
 end
 
 mutable struct Obj; x; end
@@ -615,8 +630,7 @@ mutable struct Obj; x; end
 end
 
 @testset "showerror missing function" begin
-    me = try missing(1) catch e e end
-    @test sprint(showerror, me) == "MethodError: objects of type Missing are not callable"
+    @test_throws "MethodError: objects of type Missing are not callable" missing(1)
 end
 
 @testset "sort and sortperm with $(eltype(X))" for (X, P, RP) in
@@ -643,4 +657,37 @@ end
     @test isequal(sort(X, alg=MergeSort, rev=true), XRP)
 end
 
-sortperm(reverse([NaN, missing, NaN, missing]))
+@test (sortperm(reverse([NaN, missing, NaN, missing])); true)
+
+# use LazyString for MissingException to get the better effects
+for func in (round, ceil, floor, trunc)
+    @testset let func = func
+        @test Core.Compiler.is_foldable(Base.infer_effects(func, (Type{Int},Union{Int,Missing})))
+    end
+end
+
+@testset "Custom Missing type" begin
+    struct NewMissing end
+    Base.ismissing(::NewMissing) = true
+    Base.coalesce(x::NewMissing, y...) = coalesce(y...)
+    Base.isless(::NewMissing, ::NewMissing) = false
+    Base.isless(::NewMissing, ::Any) = false
+    Base.isless(::Any, ::NewMissing) = true
+    Base.isequal(::NewMissing, ::Missing) = true
+    Base.isequal(::Missing, ::NewMissing) = true
+    arr = [missing 1 2 3 missing 10 11 12 missing]
+    newarr = Union{Int, NewMissing}[ismissing(v) ? NewMissing() : v for v in arr]
+
+    @test all(skipmissing(arr) .== skipmissing(newarr))
+    @test all(eachindex(skipmissing(arr)) .== eachindex(skipmissing(newarr)))
+    @test all(keys(skipmissing(arr)) .== keys(skipmissing(newarr)))
+    @test_broken sum(skipmissing(arr)) == sum(skipmissing(newarr))
+    @test filter(>(10), skipmissing(arr)) == filter(>(10), skipmissing(newarr))
+    @test isequal(sort(vec(arr)), sort(vec(newarr)))
+
+    @test_throws MissingException skipmissing(newarr)[findfirst(ismissing, newarr)]
+    @test coalesce(NewMissing(), 1) == coalesce(NewMissing(), NewMissing(), 1) == 1
+    @test coalesce(NewMissing()) === coalesce(NewMissing(), NewMissing()) === missing
+    @test @coalesce(NewMissing(), 1) == @coalesce(NewMissing(), NewMissing(), 1) == 1
+    @test @coalesce(NewMissing()) === @coalesce(NewMissing(), NewMissing()) === missing
+end

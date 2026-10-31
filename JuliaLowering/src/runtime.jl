@@ -1,0 +1,410 @@
+# Runtime support for
+# 1. Functions called by the code emitted from lowering
+# 2. Introspecting Julia's state during lowering
+#
+# These should probably all move to `Core` at some point.
+
+#-------------------------------------------------------------------------------
+# Functions/types used by code emitted from lowering, but not called by it directly
+
+@inline function _invoke_in_world(w::UInt, @nospecialize(f), @nospecialize(args...))
+    if ccall(:jl_is_in_pure_context, Int8, ()) != 0
+        # Similar to `Base.invoke_in_world` but also works inside generated-function
+        # expansion (see `jl_code_for_staged`)
+        return Core._call_in_world_total(w, f, args...)
+    end
+    return Base.invoke_in_world(w, f, args...)
+end
+
+# World set with `activate!`, or 0
+const _lowering_world = Ref{UInt}(0)
+
+@inline function invoke_in_lowering_world(f::F, @nospecialize(args...)) where {F}
+    w = _lowering_world[]
+    @static if VERSION >= v"1.14.0-DEV.2635"
+        w == 0 || return _invoke_in_world(w, f, args...)
+    end
+    return invokelatest(f, args...)
+end
+
+function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
+    is_leaf(st) && return st
+    k = head(st)
+    inner_depth = k == :syntaxquote ? depth + 1 :
+        k == :syntaxunquote ? depth - 1 : depth
+    cs_out = SyntaxList()
+    for c in children(st)
+        if head(c) == :syntaxunquote && inner_depth == 0
+            tup = vals[val_i[] += 1]::Tuple
+            @jl_assert numchildren(c) == 1 st
+            @jl_assert head(c[1]) === :... || length(tup) == 1 st
+            for v in tup
+                v2 = !(v isa SyntaxTree) ? expr_to_est(v, c) : v
+                push!(cs_out, v2)
+            end
+        else
+            push!(cs_out, __interpolate_syntax(c, inner_depth, vals, val_i))
+        end
+    end
+    @mknode(st; children=cs_out)
+end
+function _interpolate_syntax(st::SyntaxTree, @nospecialize(vals::Tuple))
+    # TODO: copy probably not required if immutable
+    st = mktree(st)
+    val_i = Ref(0)
+    out = __interpolate_syntax((@ast _ st [:none st]), 0, vals, val_i)
+    @jl_assert val_i[] == length(vals) st
+    @jl_assert numchildren(out) == 1 st
+    out[1]
+end
+@noinline function interpolate_syntax(st::SyntaxTree, @nospecialize(vals...))
+    return invoke_in_lowering_world(_interpolate_syntax, st, vals)::SyntaxTree
+end
+
+#--------------------------------------------------
+# Functions called by closure conversion
+function eval_closure_type(mod::Module, closure_type_name::Symbol,
+                           capt_sp, field_names, field_is_box,
+                           field_is_nospec=nothing)
+    type_params = Core.TypeVar[]
+    field_types = []
+    for name in capt_sp
+        push!(type_params, Core.TypeVar(name))
+    end
+    for (i, (name, isbox)) in enumerate(zip(field_names, field_is_box))
+        if isbox
+            push!(field_types, Core.Box)
+        elseif !isnothing(field_is_nospec) && field_is_nospec[i]
+            push!(field_types, Any)
+        else
+            T = Core.TypeVar(Symbol(name, "_type"))
+            push!(type_params, T)
+            push!(field_types, T)
+        end
+    end
+    type = Core._structtype(mod, closure_type_name,
+                            Core.svec(type_params...),
+                            Core.svec(field_names...),
+                            Core.svec(),
+                            false,
+                            length(field_names))
+    Core._setsuper!(type, Core.Function)
+    Core.declare_const(mod, closure_type_name, type)
+    Core._typebody!(type, Core.svec(field_types...))
+    type
+end
+
+# Interpolate captured local variables into the CodeInfo for a global method
+function replace_captured_locals(ci_in::Core.CodeInfo, locals::Core.SimpleVector)
+    ci = copy(ci_in)
+    for (i, ex) in enumerate(ci.code)
+        ci.code[i] = _replace_captured_locals(ex, locals)
+    end
+    ci
+end
+function _replace_captured_locals(@nospecialize(e), locals)
+    if e isa Expr
+        if e.head === :captured_local
+            v = locals[e.args[1]::Int]
+            isa_lowering_ast_node(v) ? QuoteNode(v) : v
+        else
+            # could possibly limit to foreigncall
+            Expr(e.head, Any[_replace_captured_locals(a, locals) for a in e.args]...)
+        end
+    elseif e isa QuoteNode
+        QuoteNode(_replace_captured_locals(e.value, locals))
+    else
+        e
+    end
+end
+
+#--------------------------------------------------
+# Functions which create modules or mutate their bindings
+
+# For partial compatibility with older julia (JETLS)
+const _Base_has_eval_import = isdefined(Base, :_eval_import)
+const _has_jl_module_public = VERSION >= v"1.14.0-DEV.1556"
+
+function eval_import(imported::Bool, to::Module, from::Union{Expr, Nothing}, paths::Expr...)
+    if _Base_has_eval_import
+        Base._eval_import(imported, to, from, paths...)
+    else
+        head = imported ? :import : :using
+        ex = isnothing(from) ?
+            Expr(head, paths...) :
+            Expr(head, Expr(Symbol(":"), from, paths...))
+        Core.eval(to, ex)
+    end
+end
+
+function eval_using(to::Module, path::Expr)
+    if _Base_has_eval_import
+        Base._eval_using(to, path)
+    else
+        Core.eval(to, Expr(:using, path))
+    end
+end
+
+function eval_public(mod::Module, is_exported::Bool, identifiers::Vector{String})
+    if _has_jl_module_public
+        syms = Symbol[Symbol(x) for x in identifiers]
+        ccall(:jl_module_public, Cvoid, (Any, Ptr{Any}, Csize_t, Cint),
+              mod, syms, length(syms), is_exported)
+    else
+        Core.eval(mod, Expr((is_exported ? :export : :public),
+                            map(Symbol, identifiers)...))
+    end
+end
+
+#--------------------------------------------------
+# Docsystem integration
+function _bind_func_docs!(f, docstr, method_metadata::Core.SimpleVector)
+    mod = parentmodule(f)
+    bind = Base.Docs.Binding(mod, nameof(f))
+    full_sig = method_metadata[1]
+    arg_sig = Tuple{full_sig[2:end]...}
+    lineno = method_metadata[3]
+    metadata = Dict{Symbol, Any}(
+        :linenumber => lineno.line,
+        :module => mod,
+    )
+    if !isnothing(lineno.file)
+        push!(metadata, :path => string(lineno.file))
+    end
+    Docs.doc!(mod, bind, Base.Docs.docstr(docstr, metadata), arg_sig)
+end
+
+function bind_docs!(f::Function, docstr, method_metadata::Core.SimpleVector)
+    _bind_func_docs!(f, docstr, method_metadata)
+end
+
+# Document constructors
+function bind_docs!(::Type{Type{T}}, docstr, method_metadata::Core.SimpleVector) where T
+    _bind_func_docs!(T, docstr, method_metadata)
+end
+
+function bind_docs!(type::Type, docstr, method_metadata::Core.SimpleVector)
+    _bind_func_docs!(type, docstr, method_metadata)
+end
+
+function bind_docs!(type::Type, docstr, lineno::LineNumberNode; field_docs=Core.svec())
+    mod = parentmodule(type)
+    bind = Base.Docs.Binding(mod, nameof(type))
+    metadata = Dict{Symbol, Any}(
+        :linenumber => lineno,
+        :module => mod,
+    )
+    if !isnothing(lineno.file)
+        push!(metadata, :path => string(lineno.file))
+    end
+    if !isempty(field_docs)
+        fd = Dict{Symbol, Any}()
+        fns = fieldnames(type)
+        for i = 1:2:length(field_docs)
+            fd[fns[field_docs[i]]] = field_docs[i+1]
+        end
+        metadata[:fields] = fd
+    end
+    Docs.doc!(mod, bind, Base.Docs.docstr(docstr, metadata), Union{})
+end
+
+"""
+Called in the unfortunate cases (call, ., identifier) where docstrings change
+the semantics of the expressions they annotate, no longer requiring the
+expression to execute.
+"""
+function bind_static_docs!(mod::Module, name::Symbol, docstr, lnn::LineNumberNode, sigtypes::Type)
+    metadata = Dict{Symbol, Any}(
+        :linenumber => lnn.line,
+        :module => mod,
+        :path => string(something(lnn.file, :var"")),
+    )
+    bind = Base.Docs.Binding(mod, name)
+    Docs.doc!(mod, bind, Base.Docs.docstr(docstr, metadata), sigtypes)
+end
+
+#--------------------------------------------------
+# Runtime support infrastructure for `@generated`
+
+# An alternative to Core.GeneratedFunctionStub which works on SyntaxTree rather
+# than Expr.
+struct GeneratedFunctionStub
+    syntax_context::SyntaxContext
+    gen::Function
+    srcref::Union{LineNumberNode,SourceRef}
+    argnames::Core.SimpleVector
+    spnames::Core.SimpleVector
+end
+
+function _gen_args_from_syms(ctx, src, args, sc)
+    out = SyntaxList()
+    for a in args
+        push!(out, @mknode(;head=:identifier, value=string(a::Symbol),
+                           context=sc, source=src))
+    end
+    out
+end
+
+# Call the `@generated` code generator function and wrap the results of the
+# expression into a CodeInfo.
+#
+# `args` passed into stub by the Julia runtime are (parent_func, static_params..., arg_types...)
+function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize args...)
+    # Some of the lowering pipeline from lower() and the pass-specific setup is
+    # re-implemented here because generated functions are very much (but not
+    # entirely) like macro expansion.
+    #
+    # TODO: Reduce duplication where possible.
+
+    __module__ = source.module
+    sc = g.syntax_context
+
+    # Run code generator - this acts like a macro expander
+    ex0 = g.gen(sc, args...)
+
+    # Note that we expand in `tls_world_age()` (see Core.GeneratedFunctionStub)
+    world = Base.tls_world_age()
+
+    return try
+        invoke_in_lowering_world(_lower_generated_code, g, source, sc,
+                                 __module__, world, ex0)
+    catch exc
+        rethrow(to_compatible_exception(exc))
+    end
+end
+
+function _lower_generated_code(g::GeneratedFunctionStub, source::Method,
+                               sc::SyntaxContext, __module__::Module,
+                               world::UInt, @nospecialize(ex0))
+    if ex0 isa Expr
+        ex0 = expr_to_est(ex0, LineNumberNode(Int(source.line), source.file))
+    end
+    # TODO: the above is possible with interpolated `return`, matching flisp,
+    # but we want to throw an error like below
+    if !(ex0 isa SyntaxTree)
+        ex0 isa Expr && throw(LoweringError(
+            ex0, "implicit expr->syntaxtree: may later be allowed, but is probably a mistake today"))
+        ex0 = expr_to_est(ex0, g.srcref, sc)
+    end
+
+    @jl_assert base_layer(sc).mod == __module__ ex0
+    ex0 = fill_context(ex0, sc)
+    ctx1 = MacroExpansionContext(ex0, world, true)
+    ex0 = @ast _ ex0 [:generated_lambda
+        [:block _gen_args_from_syms(ctx1, ex0, g.argnames, sc)...]
+        [:block _gen_args_from_syms(ctx1, ex0, g.spnames, sc)...]
+        ex0
+    ]
+    ex1 = expand_forms_1(ctx1, ex0)
+    ctx2, ex2 = expand_forms_2(ex1, world)
+    ctx3, ex3 = resolve_scopes(ctx2, ex2)
+    ctx4, ex4 = convert_closures(ctx3, ex3)
+    _ctx5, ex5 = linearize_ir(ctx4, ex4)
+    ci = to_lowered_expr(ex5)
+    @assert ci isa Core.CodeInfo
+
+    # See GeneratedFunctionStub code in base/expr.jl
+    ci.isva = source.isva
+    code = ci.code
+    bindings = IdSet{Core.Binding}()
+    for i = 1:length(code)
+        stmt = code[i]
+        if isa(stmt, GlobalRef)
+            push!(bindings, convert(Core.Binding, stmt))
+        end
+    end
+    if !isempty(bindings)
+        ci.edges = Core.svec(bindings...)
+    end
+
+    return ci
+end
+
+
+#-------------------------------------------------------------------------------
+# The following functions are called directly by lowering to inspect Julia's state.
+
+# Get the binding for `name` if one is already resolved in module `mod`. Note
+# that we cannot use `isdefined(::Module, ::Symbol)` here, because that causes
+# binding resolution which is a massive side effect we must avoid in lowering.
+function _get_module_binding(mod::Module, name::Symbol; create::Bool=false)
+    b = @ccall jl_get_module_binding(mod::Module, name::Symbol, create::Cint)::Ptr{Core.Binding}
+    b == C_NULL ? nothing : unsafe_pointer_to_objref(b)
+end
+
+_module_binding_i_taken(mod::Module, basename::AbstractString, i::Int) =
+    _get_module_binding(mod, Symbol(basename, "##", i); create=false) !== nothing
+
+# Reserve a global binding named "$basename##$i" in module `mod` for some
+# free `i`.  We could scan 0:n here, but we instead try exponentially
+# increasing `i` and backwards binary search to achieve `log(n)` performance
+#
+# TODO: Remove the use of this where possible. Currently this is used within
+# lowering to create unique global names for keyword function bodies and
+# closure types as a more local alternative to current-julia-module-counter.
+# However, we should ideally defer it to eval-time to make lowering itself
+# completely non-mutating.
+function reserve_module_binding_i(mod::Module, basename::AbstractString)
+    hi = 0
+    while _module_binding_i_taken(mod, basename, hi)
+        hi = 2hi + 1
+    end
+    lo = hi == 0 ? 0 : (hi - 1) ÷ 2 + 1
+    while lo < hi
+        mid = (lo + hi) ÷ 2
+        if _module_binding_i_taken(mod, basename, mid)
+            lo = mid + 1
+        else
+            hi = mid
+        end
+    end
+    name = "$basename##$hi"
+    # TODO: Fix the race condition here: We should really hold the Module's
+    # binding lock during this test-and-set type operation. But the binding
+    # lock is only accessible from C. See also the C code in
+    # `fl_module_unique_name`.
+    _get_module_binding(mod, Symbol(name); create=true)
+    return name
+end
+
+# Even less likely to be deterministic than the above, but necessary to avoid
+# quadratic behaviour where flisp doesn't already have it.  See
+# `fl_module_unique_name`
+function module_unique_name(mod::Module)
+    @static if VERSION < v"1.14.0-DEV.3063"
+        # (JETLS) jl_module_next_counter is not exported before 1.14.0-DEV.3063
+        reserve_module_binding_i(mod, "")[3:end]
+    else
+        string(@ccall(jl_module_next_counter(mod::Module)::UInt32))
+    end
+end
+function module_unique_name(mod::Module, funcname::AbstractString)
+    occursin('#', funcname) ? module_unique_name(mod) :
+        reserve_module_binding_i(mod, funcname)
+end
+
+# Return true if a `name` is defined in and *by* the module `mod`.
+# Has no side effects, unlike isdefined()
+#
+# (This should do what fl_defined_julia_global does for flisp lowering)
+function is_defined_and_owned_global(mod, name, world::UInt=Base.get_world_counter())
+    return _invoke_in_world(world, Base.binding_kind, mod, name) === Base.PARTITION_KIND_GLOBAL
+end
+
+function lookup_method_instance(@nospecialize(func), args::Vector{Any}, world::Integer)
+    allargs = Any[func]
+    append!(allargs, args)
+    mi = @ccall jl_method_lookup(allargs::Ptr{Any}, length(allargs)::Csize_t,
+                                 world::Csize_t)::Ptr{Cvoid}
+    return mi == C_NULL ? nothing : unsafe_pointer_to_objref(mi)
+end
+
+# Like `Base.methods()` but with world age support
+function methods_in_world(func, arg_sig, world, err_ex)
+    out = Base._methods(func, arg_sig, -1, world)
+    @jl_assert(out isa Vector{Any},
+               (err_ex, string(
+                   "Base._methods returned non-vector;",
+                   " bad world age provided? (", world, ")")))
+    out::Vector{Any}
+end

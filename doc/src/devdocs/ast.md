@@ -119,9 +119,17 @@ parses as `(macrocall (|.| Core '@doc) (line) "some docs" (= (call f x) (block x
 | `import Base: x`    | `(import (: (. Base) (. x)))`                |
 | `import Base: x, y` | `(import (: (. Base) (. x) (. y)))`          |
 | `export a, b`       | `(export a b)`                               |
+| `public a, b`       | `(public a b)`                               |
 
 `using` has the same representation as `import`, but with expression head `:using`
 instead of `:import`.
+
+To programmatically create a `public` statement, you can use `Expr(:public, :a, :b)` or,
+closer to regular code, `Meta.parse("public a, b")`. This approach is necessary due to
+[current limitations on `public`](@ref Export-lists). The `public` keyword is only
+recognized at the syntactic top level within a file (`parse_stmts`) or module. This
+restriction was implemented to prevent breaking existing code that used `public` as an
+identifier when it was introduced in Julia 1.11.
 
 ### Numbers
 
@@ -155,7 +163,7 @@ parses as:
 ```
 (if a (block (line 2) b)
     (elseif (block (line 3) c) (block (line 4) d)
-            (block (line 6 e))))
+            (block (line 6) e)))
 ```
 
 A `while` loop parses as `(while condition body)`.
@@ -228,9 +236,9 @@ These expressions are represented as `LineNumberNode`s in Julia.
 ### Macros
 
 Macro hygiene is represented through the expression head pair `escape` and `hygienic-scope`.
-The result of a macro expansion is automatically wrapped in `(hygienic-scope block module)`,
+The result of a macro expansion is automatically wrapped in `(hygienic-scope block module [lno])`,
 to represent the result of the new scope. The user can insert `(escape block)` inside
-to interpolate code from the caller.
+to interpolate code from the caller. The lno is the `__source__` argument of the macro, if included.
 
 
 ## Lowered form
@@ -254,11 +262,6 @@ types exist in lowered form:
     Identifies arguments and local variables by consecutive numbering. It has an
     integer-valued `id` field giving the slot index.
     The types of these slots can be found in the `slottypes` field of their `CodeInfo` object.
-    When a slot has different types at different uses and thus requires per-use type annotations,
-    they are converted to temporary `Core.Compiler.TypedSlot` object. This object has an
-    additional `typ` field as well as the `id` field. Note that `Core.Compiler.TypedSlot`
-    only appears in an unoptimized lowered form that is scheduled for optimization,
-    and it never appears elsewhere.
 
   * `Argument`
 
@@ -292,7 +295,19 @@ types exist in lowered form:
 
   * `GlobalRef`
 
-    Refers to global variable `name` in module `mod`.
+    Refers to global variable `name` in module `mod`. A `GlobalRef` appears in the IR as a
+    reference to a binding that has not (yet) been resolved to any particular binding partition.
+
+  * `Core.BindingPartition`
+
+    Refers to a specific binding partition of a `GlobalRef`. A `BindingPartition` in the IR encodes
+    an optimized access to a `GlobalRef`. A `BindingPartition` can recover its owning `Core.Binding`
+    (and thus its `name`/`mod` and current value) by walking the circular partition chain to its end.
+    This form is used only where that owner is the binding the source named; a read through an
+    import is emitted as a `Core.getglobal_partition` call instead, which carries the access as a
+    `GlobalRef` so an `UndefVarError` names what the source asked for rather than the import target.
+    A `BindingPartition` may also appear nested inside a `foreigncall`/`foreignglobal` target
+    tuple, in place of the `GlobalRef` naming the library.
 
   * `SSAValue`
 
@@ -318,13 +333,21 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
     Function call (static dispatch). `args[1]` is the MethodInstance to call, `args[2:end]` are the
     arguments (including the function that is being called, at `args[2]`).
 
+  * `invoke_modify`
+
+    Read-modify-write call (`modifyfield!`, `modifyglobal!` or its resolved form
+    `Core.modifyglobal_partition`, `Core.memoryrefmodify!`, or the `atomic_pointermodify`
+    intrinsic) whose reduce function is statically dispatched. `args[1]`
+    is the CodeInstance for that function, `args[2:end]` are as for the `call`.
+
   * `static_parameter`
 
     Reference a static parameter by index.
 
   * `=`
 
-    Assignment. In the IR, the first argument is always a `SlotNumber` or a `GlobalRef`.
+    Assignment. In the IR, the first argument must be a `SlotNumber`, a `GlobalRef`, or a
+    `Core.BindingPartition`. For the latter two, equivalent to a call to `setglobal!` or `Core.setglobal_partition`, respectively.
 
   * `method`
 
@@ -421,7 +444,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `new`
 
     Allocates a new struct-like object. First argument is the type. The [`new`](@ref) pseudo-function is lowered
-    to this, and the type is always inserted by the compiler.  This is very much an internal-only
+    to this, and the type is always inserted by the compiler. This is very much an internal-only
     feature, and does no checking. Evaluating arbitrary `new` expressions can easily segfault.
 
   * `splatnew`
@@ -436,16 +459,12 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
   * `the_exception`
 
-    Yields the caught exception inside a `catch` block, as returned by `jl_current_exception()`.
-
-  * `undefcheck`
-
-    Temporary node inserted by the compiler and will be processed in `type_lift_pass!`.
+    Yields the caught exception inside a `catch` block, as returned by `jl_current_exception(ct)`.
 
   * `enter`
 
     Enters an exception handler (`setjmp`). `args[1]` is the label of the catch block to jump to on
-    error.  Yields a token which is consumed by `pop_exception`.
+    error. Yields a token which is consumed by `pop_exception`.
 
   * `leave`
 
@@ -475,6 +494,27 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
     Marks the end of the a loop. Contains metadata that is passed to `LowerSimdLoop` to either mark
     the inner loop of `@simd` expression, or to propagate information to LLVM loop passes.
 
+  * `gc_preserve_begin`
+
+    Part of the implementation of [`GC.@preserve`](@ref). The arguments are values to keep rooted
+    (alive) until the matching `gc_preserve_end`. Yields a token which is consumed by
+    `gc_preserve_end`. See also [Keeping values alive in the absence of uses](@ref).
+
+  * `gc_preserve_end`
+
+    Ends the region started by a `gc_preserve_begin`. `args[1]` is the token from the associated
+    `gc_preserve_begin`.
+
+  * `aliasscope`
+
+    Part of the implementation of `Base.Experimental.@aliasscope`. Has no arguments. Starts a region
+    (ended by the matching `popaliasscope`) in which the compiler may assume that `Const` arrays are
+    not modified through stores within the region. Regions may be nested.
+
+  * `popaliasscope`
+
+    Ends the region started by the innermost `aliasscope`. Has no arguments.
+
   * `copyast`
 
     Part of the implementation of quasi-quote. The argument is a surface syntax AST that is simply
@@ -493,7 +533,11 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
       * `args[1]` : name
 
-        The expression that'll be parsed for the foreign function.
+        The expression that'll be parsed for the foreign function. When it names a library as
+        well as a symbol, it is an `Expr(:tuple, name, library)`. That tuple is not an operand
+        position, and it has special semantics (it accepts non-constant `GlobalRef`, as well as
+        `Core.BindingPartition` after optimizations run, and evaluates it an unspecified number of
+        times in at least one world encountered at runtime).
 
       * `args[2]::Type` : RT
 
@@ -507,9 +551,9 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
         The number of required arguments for a varargs function definition.
 
-      * `args[5]::QuoteNode{Symbol}` : calling convention
+      * `args[5]::QuoteNode{<:Union{Symbol,Tuple{Symbol,UInt16}, Tuple{Symbol,UInt16,Bool}}`: calling convention
 
-        The calling convention for the call.
+        The calling convention for the call, optionally with effects, and `gc_safe` (safe to execute concurrently to GC.).
 
       * `args[6:5+length(args[3])]` : arguments
 
@@ -528,17 +572,21 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
         The function signature of the opaque closure. Opaque closures don't participate in dispatch, but the input types can be restricted.
 
-      * `args[2]` : isva
-
-        Indicates whether the closure accepts varargs.
-
-      * `args[3]` : lb
+      * `args[2]` : lb
 
         Lower bound on the output type. (Defaults to `Union{}`)
 
-      * `args[4]` : ub
+      * `args[3]` : ub
 
         Upper bound on the output type. (Defaults to `Any`)
+
+      * `args[4]` : constprop
+
+        Indicates whether the opaque closure's identity may be used for constant
+        propagation. The `@opaque` macro enables this by default, but this will
+        cause additional inference which may be undesirable and prevents the
+        code from running during precompile.
+        If `args[4]` is a method, the argument is considered skipped.
 
       * `args[5]` : method
 
@@ -610,19 +658,13 @@ for important details on how to modify these fields safely.
 
   * `sparam_vals`
 
-    The values of the static parameters in `specTypes` indexed by `def.sparam_syms`. For the
-    `MethodInstance` at `Method.unspecialized`, this is the empty `SimpleVector`. But for a
-    runtime `MethodInstance` from the `MethodTable` cache, this will always be defined and
-    indexable.
-
-  * `uninferred`
-
-    The uncompressed source code for a toplevel thunk. Additionally, for a generated function,
-    this is one of many places that the source code might be found.
+    The values of the static parameters in `specTypes`.
+    For the `MethodInstance` at `Method.unspecialized`, this is the empty `SimpleVector`.
+    But for a runtime `MethodInstance` from the `MethodTable` cache, this will always be defined and indexable.
 
   * `backedges`
 
-    We store the reverse-list of cache dependencies for efficient tracking of incremental reanalysis/recompilation work that may be needed after a new method definitions.
+    We store the reverse-list of cache dependencies for efficient tracking of incremental reanalysis/recompilation work that may be needed after new method definitions.
     This works by keeping a list of the other `MethodInstance` that have been inferred or optimized to contain a possible call to this `MethodInstance`.
     Those optimization results might be stored somewhere in the `cache`, or it might have been the result of something we didn't want to cache, such as constant propagation.
     Thus we merge all of those backedges to various cache entries here (there's almost always only the one applicable cache entry with a sentinel value for max_world anyways).
@@ -631,11 +673,19 @@ for important details on how to modify these fields safely.
 
     Cache of `CodeInstance` objects that share this template instantiation.
 
+  * `precompile`
+
+    If set, this `MethodInstance` will be compiled and added to the output system image.
+
 ### CodeInstance
 
   * `def`
 
     The `MethodInstance` that this cache entry is derived from.
+
+  * `owner`
+
+    A token that represents the owner of this `CodeInstance`. Will use `jl_egal` to match.
 
 
   * `rettype`/`rettype_const`
@@ -648,7 +698,7 @@ for important details on how to modify these fields safely.
     May contain a cache of the inferred source for this function,
     or it could be set to `nothing` to just indicate `rettype` is inferred.
 
-  * `ftpr`
+  * `fptr`
 
     The generic jlcall entry point.
 
@@ -657,10 +707,10 @@ for important details on how to modify these fields safely.
     The ABI to use when calling `fptr`. Some significant ones include:
 
       * 0 - Not compiled yet
-      * 1 - JL_CALLABLE `jl_value_t *(*)(jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
+      * 1 - `JL_CALLABLE` `jl_value_t *(*)(jl_value_t *f, jl_value_t *args[nargs], uint32_t nargs)`
       * 2 - Constant (value stored in `rettype_const`)
-      * 3 - With Static-parameters forwarded `jl_value_t *(*)(jl_svec_t *sparams, jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
-      * 4 - Run in interpreter `jl_value_t *(*)(jl_method_instance_t *meth, jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
+      * 3 - With Static-parameters forwarded `jl_value_t *(*)(jl_svec_t *sparams, jl_value_t *f, jl_value_t *args[nargs], uint32_t nargs)`
+      * 4 - Run in interpreter `jl_value_t *(*)(jl_method_instance_t *meth, jl_value_t *f, jl_value_t *args[nargs], uint32_t nargs)`
 
   * `min_world` / `max_world`
 
@@ -668,10 +718,30 @@ for important details on how to modify these fields safely.
     If max_world is the special token value `-1`, the value is not yet known.
     It may continue to be used until we encounter a backedge that requires us to reconsider.
 
+  * Timing fields
+
+    - `time_infer_total`: Total cost of computing `inferred` originally as wall-time from start to finish.
+
+    - `time_infer_cache_saved`: The cost saved from `time_infer_total` by having caching.
+      Adding this to `time_infer_total` should give a stable estimate for comparing the cost
+      of two implementations or one implementation over time. This is generally an
+      over-estimate of the time to infer something, since the cache is frequently effective
+      at handling repeated work.
+
+    - `time_infer_self`: Self cost of julia inference for `inferred` (a portion of
+      `time_infer_total`). This is simply the incremental cost of compiling this one method,
+      if given a fully populated cache of all call targets, even including constant
+      inference results and LimitedAccuracy results, which generally are not in a cache.
+
+    - `time_compile`: Self cost of llvm JIT compilation (e.g. of computing `invoke` from
+      `inferred`). A total cost estimate can be computed by walking all of the `edges`
+      contents and summing those, while accounting for cycles and duplicates. (This field
+      currently does not include any measured AOT compile times.)
+
 
 ### CodeInfo
 
-A (usually temporary) container for holding lowered source code.
+A (usually temporary) container for holding lowered (and possibly inferred) source code.
 
   * `code`
 
@@ -699,39 +769,21 @@ A (usually temporary) container for holding lowered source code.
 
   * `ssaflags`
 
-    Statement-level flags for each expression in the function. Many of these are reserved, but not yet implemented:
+    Statement-level 32 bits flags for each expression in the function.
+    See the definition of `jl_code_info_t` in julia.h for more details.
 
-    * 0x01 << 0 = statement is marked as `@inbounds`
-    * 0x01 << 1 = statement is marked as `@inline`
-    * 0x01 << 2 = statement is marked as `@noinline`
-    * 0x01 << 3 = statement is within a block that leads to `throw` call
-    * 0x01 << 4 = statement may be removed if its result is unused, in particular it is thus be both pure and effect free
-    * 0x01 << 5-6 = <unused>
-    * 0x01 << 7 = <reserved> has out-of-band info
+These are only populated after inference (or by generated functions in some cases):
 
-  * `linetable`
+  * `debuginfo`
 
-    An array of source location objects
-
-  * `codelocs`
-
-    An array of integer indices into the `linetable`, giving the location associated
-    with each statement.
-
-Optional Fields:
-
-  * `slottypes`
-
-    An array of types for the slots.
+    An object to retrieve source information for each statements, see
+    [How to interpret line numbers in a `CodeInfo` object](@ref).
 
   * `rettype`
 
-    The inferred return type of the lowered form (IR). Default value is `Any`.
-
-  * `method_for_inference_limit_heuristics`
-
-    The `method_for_inference_heuristics` will expand the given method's generator if
-    necessary during inference.
+    The inferred return type of the lowered form (IR). Default value is `Any`. This is
+    mostly present for convenience, as (due to the way OpaqueClosures work) it is not
+    necessarily the rettype used by codegen.
 
   * `parent`
 
@@ -745,16 +797,19 @@ Optional Fields:
 
     The range of world ages for which this code was valid at the time when it had been inferred.
 
+Optional Fields:
+
+  * `slottypes`
+
+    An array of types for the slots.
+
+  * `method_for_inference_limit_heuristics`
+
+    The `method_for_inference_heuristics` will expand the given method's generator if
+    necessary during inference.
+
 
 Boolean properties:
-
-  * `inferred`
-
-    Whether this has been produced by type inference.
-
-  * `inlineable`
-
-    Whether this should be eligible for inlining.
 
   * `propagate_inbounds`
 
@@ -764,7 +819,7 @@ Boolean properties:
 
 `UInt8` settings:
 
-  * `constprop`
+  * `constprop`, `inlineable`
 
     * 0 = use heuristic
     * 1 = aggressive
@@ -780,3 +835,79 @@ Boolean properties:
     * 0x01 << 4 = the syntactic control flow within this method is guaranteed to terminate (`:terminates_locally`)
 
     See the documentation of `Base.@assume_effects` for more details.
+
+
+#### How to interpret line numbers in a `CodeInfo` object
+
+There are 2 common forms for this data: one used internally that compresses the data somewhat and one used in the compiler.
+They contain the same basic info, but the compiler version is all mutable while the version used internally is not.
+
+Many consumers may be able to call `Base.IRShow.buildLineInfoNode`,
+`Base.IRShow.append_scopes!`, or `Stacktraces.lookup(::InterpreterIP)` to avoid needing to
+(re-)implement these details specifically.
+
+The definitions of each of these are:
+
+```julia
+struct Core.DebugInfo
+    @noinline
+    def::Union{Method,MethodInstance,Symbol}
+    linetable::Union{Nothing,DebugInfo}
+    edges::SimpleVector{DebugInfo}
+    codelocs::String # compressed data
+end
+mutable struct Core.Compiler.DebugInfoStream
+    def::Union{Method,MethodInstance,Symbol}
+    linetable::Union{Nothing,DebugInfo}
+    edges::Vector{DebugInfo}
+    firstline::Int32 # the starting line for this block (specified by an index of 0)
+    codelocs::Vector{Int32} # for each statement:
+        # index into linetable (if defined), else a line number (in the file represented by def)
+        # then index into edges
+        # then index into edges[linetable]
+end
+```
+
+
+  * `def` : where this `DebugInfo` was defined (the `Method`, `MethodInstance`, or `Symbol` of file scope, for example)
+
+  * `linetable`
+
+    Another `DebugInfo` that this was derived from, which contains the actual line numbers,
+    such that this DebugInfo contains only the indexes into it. This avoids making copies,
+    as well as makes it possible to track how each individual statement transformed from
+    source to optimized, not just the separate line numbers. If `def` is not a Symbol, then
+    that object replaces the current function object for the metadata on what function is
+    conceptually being executed (e.g. think Cassette transforms here). The `codelocs` values
+    described below also are interpreted as an index into the `codelocs` in this object,
+    instead of being a line number itself.
+
+  * `edges` : Vector of the unique DebugInfo for every function inlined into this (which
+    recursively have the edges for everything inlined into them).
+
+  * `firstline` (when uncompressed to DebugInfoStream)
+
+    The line number associated with the `begin` statement (or other keyword such as
+    `function` or `quote`) that delineates where this code definition "starts".
+
+  * `codelocs` (when uncompressed to `DebugInfoStream`)
+
+    A vector of indices, with 3 values for each statement in the IR plus one for the
+    starting point of the block, that describe the stacktrace from that point:
+     1. the integer index into the `linetable.codelocs` field, giving the
+        original location associated with each statement (including its syntactic edges),
+        or zero indicating no change to the line number from the previously
+        executed statement (which is not necessarily syntactic or lexical prior),
+        or the line number itself if the `linetable` field is `nothing`.
+     2. the integer index into `edges`, giving the `DebugInfo` inlined there,
+        or zero if there are no edges.
+     3. (if entry 2 is non-zero) the integer index into `edges[].codelocs`,
+        to interpret recursively for each function in the inlining stack,
+        or zero indicating to use `edges[].firstline` as the line number.
+
+    Special codes include:
+     - `(zero, zero, *) `: no change to the line number or edges from the previous statement
+       (you may choose to interpret this either syntactically or lexically). The inlining
+       depth also might have changed, though most callers should ignore that.
+     - `(zero, non-zero, *)` : no line number, just edges (usually because of
+       macro-expansion into top-level code).

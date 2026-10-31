@@ -77,41 +77,43 @@ function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}
     iscolor = get(io, :color, false)::Bool
     try f(IOContext(buf, io), args...)
     finally
-        str = String(take!(buf))
-        if !iscolor
-            print(io, str)
-        else
-            bold && color === :bold && (color = :nothing)
-            italic && color === :italic && (color = :nothing)
-            underline && color === :underline && (color = :nothing)
-            blink && color === :blink && (color = :nothing)
-            reverse && color === :reverse && (color = :nothing)
-            hidden && color === :hidden && (color = :nothing)
-            enable_ansi  = get(text_colors, color, text_colors[:default]) *
-                               (bold ? text_colors[:bold] : "") *
-                               (italic ? text_colors[:italic] : "") *
-                               (underline ? text_colors[:underline] : "") *
-                               (blink ? text_colors[:blink] : "") *
-                               (reverse ? text_colors[:reverse] : "") *
-                               (hidden ? text_colors[:hidden] : "")
-
-            disable_ansi = (hidden ? disable_text_style[:hidden] : "") *
-                           (reverse ? disable_text_style[:reverse] : "") *
-                           (blink ? disable_text_style[:blink] : "") *
-                           (underline ? disable_text_style[:underline] : "") *
-                           (bold ? disable_text_style[:bold] : "") *
-                           (italic ? disable_text_style[:italic] : "") *
-                               get(disable_text_style, color, text_colors[:default])
-            first = true
-            for line in eachsplit(str, '\n')
-                first || print(buf, '\n')
-                first = false
-                isempty(line) && continue
-                print(buf, enable_ansi, line, disable_ansi)
-            end
-            print(io, String(take!(buf)))
-        end
+        str = takestring!(buf)
+        iscolor && (str = output_color_string(buf, str, color, bold, italic, underline, blink, reverse, hidden))
+        print(io, str)
     end
+end
+
+function output_color_string(buf::IOBuffer, str::String, @nospecialize(color::Union{Int, Symbol}),
+        bold::Bool, italic::Bool, underline::Bool, blink::Bool, reverse::Bool, hidden::Bool)
+    bold && color === :bold && (color = :nothing)
+    italic && color === :italic && (color = :nothing)
+    underline && color === :underline && (color = :nothing)
+    blink && color === :blink && (color = :nothing)
+    reverse && color === :reverse && (color = :nothing)
+    hidden && color === :hidden && (color = :nothing)
+    enable_ansi  = get(text_colors, color, text_colors[:default]) *
+                       (bold ? text_colors[:bold] : "") *
+                       (italic ? text_colors[:italic] : "") *
+                       (underline ? text_colors[:underline] : "") *
+                       (blink ? text_colors[:blink] : "") *
+                       (reverse ? text_colors[:reverse] : "") *
+                       (hidden ? text_colors[:hidden] : "")
+
+    disable_ansi = (hidden ? disable_text_style[:hidden] : "") *
+                   (reverse ? disable_text_style[:reverse] : "") *
+                   (blink ? disable_text_style[:blink] : "") *
+                   (underline ? disable_text_style[:underline] : "") *
+                   (bold ? disable_text_style[:bold] : "") *
+                   (italic ? disable_text_style[:italic] : "") *
+                       get(disable_text_style, color, text_colors[:default])
+    first = true
+    for line in eachsplit(str, '\n')
+        first || print(buf, '\n')
+        first = false
+        isempty(line) && continue
+        print(buf, enable_ansi, line, disable_ansi)
+    end
+    return takestring!(buf)
 end
 
 """
@@ -135,8 +137,8 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
 
 !!! compat "Julia 1.7"
     Keywords except `color` and `bold` were added in Julia 1.7.
-!!! compat "Julia 1.9"
-    Support for italic output was added in Julia 1.9.
+!!! compat "Julia 1.10"
+    Support for italic output was added in Julia 1.10.
 """
 @constprop :none printstyled(io::IO, msg...; bold::Bool=false, italic::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
     with_output_color(print, color, io, msg...; bold=bold, italic=italic, underline=underline, blink=blink, reverse=reverse, hidden=hidden)
@@ -144,15 +146,19 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
     printstyled(stdout, msg...; bold=bold, italic=italic, underline=underline, blink=blink, reverse=reverse, hidden=hidden, color=color)
 
 """
-    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR, julia_exename()); cpu_target)
+    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Union{Nothing,String}=nothing)
 
 Return a julia command similar to the one of the running process.
 Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
 `--compiled-modules`, `--pkgimages`, `--inline`, `--check-bounds`, `--optimize`, `--min-optlevel`, `-g`,
-`--code-coverage`, `--track-allocation`, `--color`, `--startup-file`, and `--depwarn`
-command line arguments that are not at their default values.
+`--code-coverage`, `--code-coverage-mode`, `--track-allocation`, `--color`, `--startup-file`,
+and `--depwarn` command line arguments that are not at their default values.
 
 Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notably not propagated currently.
+
+Unless set to `nothing`, the `cpu_target` keyword argument can be used to override the CPU target set for the running process.
+
+To get the julia command without propagated command line arguments, `julia_cmd()[1]` can be used.
 
 !!! compat "Julia 1.1"
     Only the `--cpu-target`, `--sysimage`, `--depwarn`, `--compile` and `--check-bounds` flags were propagated before Julia 1.1.
@@ -161,8 +167,7 @@ Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notab
     The flags `--color` and `--startup-file` were added in Julia 1.5.
 
 !!! compat "Julia 1.9"
-    The keyword argument `cpu_target` was added.
-
+    The keyword argument `cpu_target` was added in 1.9.
     The flag `--pkgimages` was added in Julia 1.9.
 """
 function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Union{Nothing,String} = nothing)
@@ -172,11 +177,11 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     end
     image_file = unsafe_string(opts.image_file)
     addflags = String[]
-    let compile = if opts.compile_enabled == 0
+    let compile = if opts.compile_enabled == JL_OPTIONS_COMPILE_OFF
                       "no"
-                  elseif opts.compile_enabled == 2
+                  elseif opts.compile_enabled == JL_OPTIONS_COMPILE_ALL
                       "all"
-                  elseif opts.compile_enabled == 3
+                  elseif opts.compile_enabled == JL_OPTIONS_COMPILE_MIN
                       "min"
                   else
                       "" # default = "yes"
@@ -203,6 +208,10 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     end
     opts.can_inline == 0 && push!(addflags, "--inline=no")
     opts.use_compiled_modules == 0 && push!(addflags, "--compiled-modules=no")
+    opts.use_compiled_modules == 2 && push!(addflags, "--compiled-modules=existing")
+    opts.use_compiled_modules == 3 && push!(addflags, "--compiled-modules=strict")
+    opts.use_pkgimages == 0 && push!(addflags, "--pkgimages=no")
+    opts.use_pkgimages == 2 && push!(addflags, "--pkgimages=existing")
     opts.opt_level == 2 || push!(addflags, "-O$(opts.opt_level)")
     opts.opt_level_min == 0 || push!(addflags, "--min-optlevel=$(opts.opt_level_min)")
     push!(addflags, "-g$(opts.debug_level)")
@@ -220,6 +229,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
             isempty(coverage_file) || push!(addflags, "--code-coverage=$coverage_file")
         end
     end
+    opts.code_coverage_mode == 1 && push!(addflags, "--code-coverage-mode=count")
     if opts.malloc_log == 1
         push!(addflags, "--track-allocation=user")
     elseif opts.malloc_log == 2
@@ -232,23 +242,23 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     elseif opts.color == 2
         push!(addflags, "--color=no")
     end
+    if opts.quiet != 0
+        push!(addflags, "-q")
+    end
     if opts.startupfile == 2
         push!(addflags, "--startup-file=no")
     end
     if opts.use_sysimage_native_code == 0
         push!(addflags, "--sysimage-native-code=no")
     end
-    if opts.use_pkgimages == 0
-        push!(addflags, "--pkgimages=no")
-    else
-        # If pkgimage is set, malloc_log and code_coverage should not
-        @assert opts.malloc_log == 0 && opts.code_coverage == 0
+    if opts.compress_sysimage == 1
+        push!(addflags, "--compress-sysimage=yes")
     end
-    return `$julia -C$cpu_target -J$image_file $addflags`
+    return `$julia -C $cpu_target -J$image_file $addflags`
 end
 
 function julia_exename()
-    if !Base.isdebugbuild()
+    if !isdebugbuild()
         return @static Sys.iswindows() ? "julia.exe" : "julia"
     else
         return @static Sys.iswindows() ? "julia-debug.exe" : "julia-debug"
@@ -266,19 +276,33 @@ will always be called.
 function securezero! end
 @noinline securezero!(a::AbstractArray{<:Number}) = fill!(a, 0)
 @noinline unsafe_securezero!(p::Ptr{T}, len::Integer=1) where {T} =
-    ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
+    memset(p, 0, len*sizeof(T))
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
 """
-    Base.getpass(message::AbstractString) -> Base.SecretBuffer
+    Base.getpass(message::AbstractString; with_suffix::Bool=true)::Base.SecretBuffer
 
 Display a message and wait for the user to input a secret, returning an `IO`
-object containing the secret.
+object containing the secret. If `with_suffix` is `true` (the default), the
+suffix `": "` will be appended to `message`.
 
 !!! info "Windows"
     Note that on Windows, the secret might be displayed as it is typed; see
     `Base.winprompt` for securely retrieving username/password pairs from a
     graphical interface.
+
+!!! compat "Julia 1.12"
+    The `with_suffix` keyword argument requires at least Julia 1.12.
+
+# Examples
+
+```julia-repl
+julia> Base.getpass("Secret")
+Secret: SecretBuffer("*******")
+
+julia> Base.getpass("Secret> "; with_suffix=false)
+Secret> SecretBuffer("*******")
+```
 """
 function getpass end
 
@@ -338,11 +362,13 @@ function with_raw_tty(f::Function, input::TTY)
     end
 end
 
-function getpass(input::TTY, output::IO, prompt::AbstractString)
+function getpass(input::TTY, output::IO, prompt::AbstractString; with_suffix::Bool=true)
     input === stdin || throw(ArgumentError("getpass only works for stdin"))
     with_raw_tty(stdin) do
-        print(output, prompt, ": ")
+        print(output, prompt)
+        with_suffix && print(output, ": ")
         flush(output)
+
         s = SecretBuffer()
         plen = 0
         while true
@@ -363,10 +389,10 @@ end
 
 # allow new getpass methods to be defined if stdin has been
 # redirected to some custom stream, e.g. in IJulia.
-getpass(prompt::AbstractString) = getpass(stdin, stdout, prompt)
+getpass(prompt::AbstractString; with_suffix::Bool=true) = getpass(stdin, stdout, prompt; with_suffix)
 
 """
-    prompt(message; default="") -> Union{String, Nothing}
+    prompt(message; default="")::Union{String, Nothing}
 
 Displays the `message` then waits for user input. Input is terminated when a newline (\\n)
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
@@ -374,7 +400,7 @@ then the user can enter just a newline character to select the `default`.
 
 See also `Base.winprompt` (for Windows) and `Base.getpass` for secure entry of passwords.
 
-# Example
+# Examples
 
 ```julia-repl
 julia> your_name = Base.prompt("Enter your name");
@@ -490,8 +516,10 @@ unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_
 
 _crc32c(a::NTuple{<:Any, UInt8}, crc::UInt32=0x00000000) =
     unsafe_crc32c(Ref(a), length(a) % Csize_t, crc)
-_crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
+
+function _crc32c(a::DenseUInt8OrInt8, crc::UInt32=0x00000000)
     unsafe_crc32c(a, length(a) % Csize_t, crc)
+end
 
 function _crc32c(s::Union{String, SubString{String}}, crc::UInt32=0x00000000)
     unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
@@ -511,7 +539,6 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
 end
 _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
-_crc32c(uuid::UUID, crc::UInt32=0x00000000) = _crc32c(uuid.value, crc)
 _crc32c(x::UInt128, crc::UInt32=0x00000000) =
     ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, x, 16)
 _crc32c(x::UInt64, crc::UInt32=0x00000000) =
@@ -563,24 +590,31 @@ Stacktrace:
 macro kwdef(expr)
     expr = macroexpand(__module__, expr) # to expand @static
     isexpr(expr, :struct) || error("Invalid usage of @kwdef")
-    T = expr.args[2]
+    _, T, fieldsblock = expr.args
     if T isa Expr && T.head === :<:
         T = T.args[1]
     end
 
-    params_ex = Expr(:parameters)
-    call_args = Any[]
+    fieldnames = Any[]
+    defvals = Any[]
+    extract_names_and_defvals_from_kwdef_fieldblock!(fieldsblock, fieldnames, defvals)
+    parameters = map(fieldnames, defvals) do fieldname, defval
+        if isnothing(defval)
+            return fieldname
+        else
+            return Expr(:kw, fieldname, defval)
+        end
+    end
 
-    _kwdef!(expr.args[3], params_ex.args, call_args)
     # Only define a constructor if the type has fields, otherwise we'll get a stack
     # overflow on construction
-    if !isempty(params_ex.args)
-        if T isa Symbol
-            sig = :(($(esc(T)))($params_ex))
-            call = :(($(esc(T)))($(call_args...)))
-            body = Expr(:block, __source__, call)
-            kwdefs = Expr(:function, sig, body)
-        elseif isexpr(T, :curly)
+    if !isempty(parameters)
+        T_no_esc = Meta.unescape(T)
+        if T_no_esc isa Symbol
+            sig = Expr(:call, T, Expr(:parameters, parameters...))
+            body = Expr(:block, __source__, Expr(:call, T, fieldnames...))
+            kwdefs = esc(Expr(:function, sig, body))
+        elseif isexpr(T_no_esc, :curly)
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
             #   S{A,B}(...) where {A<:AA,B<:BB} = ...
@@ -588,13 +622,13 @@ macro kwdef(expr)
             P = T.args[2:end]
             Q = Any[isexpr(U, :<:) ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
-            body1 = Expr(:block, __source__, :(($(esc(S)))($(call_args...))))
-            sig1 = :(($(esc(S)))($params_ex))
+            body1 = Expr(:block, __source__, Expr(:call, S, fieldnames...))
+            sig1 = Expr(:call, S, Expr(:parameters, parameters...))
             def1 = Expr(:function, sig1, body1)
-            body2 = Expr(:block, __source__, :(($(esc(SQ)))($(call_args...))))
-            sig2 = :(($(esc(SQ)))($params_ex) where {$(esc.(P)...)})
+            body2 = Expr(:block, __source__, Expr(:call, SQ, fieldnames...))
+            sig2 = :($(Expr(:call, SQ, Expr(:parameters, parameters...))) where {$(P...)})
             def2 = Expr(:function, sig2, body2)
-            kwdefs = Expr(:block, def1, def2)
+            kwdefs = esc(Expr(:block, def1, def2))
         else
             error("Invalid usage of @kwdef")
         end
@@ -602,68 +636,58 @@ macro kwdef(expr)
         kwdefs = nothing
     end
     return quote
-        Base.@__doc__ $(esc(expr))
+        $(esc(:($Base.@__doc__ $expr)))
         $kwdefs
     end
 end
 
 # @kwdef helper function
 # mutates arguments inplace
-function _kwdef!(blk, params_args, call_args)
-    for i in eachindex(blk.args)
-        ei = blk.args[i]
-        if ei isa Symbol
-            #  var
-            push!(params_args, ei)
-            push!(call_args, ei)
-        elseif ei isa Expr
-            is_atomic = ei.head === :atomic
-            ei = is_atomic ? first(ei.args) : ei # strip "@atomic" and add it back later
-            is_const = ei.head === :const
-            ei = is_const ? first(ei.args) : ei # strip "const" and add it back later
-            # Note: `@atomic const ..` isn't valid, but reconstruct it anyway to serve a nice error
-            if ei isa Symbol
-                # const var
-                push!(params_args, ei)
-                push!(call_args, ei)
-            elseif ei.head === :(=)
-                lhs = ei.args[1]
-                if lhs isa Symbol
-                    #  var = defexpr
-                    var = lhs
-                elseif lhs isa Expr && lhs.head === :(::) && lhs.args[1] isa Symbol
-                    #  var::T = defexpr
-                    var = lhs.args[1]
-                else
-                    # something else, e.g. inline inner constructor
-                    #   F(...) = ...
-                    continue
+function extract_names_and_defvals_from_kwdef_fieldblock!(block, names, defvals)
+    for (i, item) in pairs(block.args)
+        if isexpr(item, :block)
+            extract_names_and_defvals_from_kwdef_fieldblock!(item, names, defvals)
+        elseif item isa Expr && item.head in (:escape, :var"hygienic-scope")
+            n = length(names)
+            extract_names_and_defvals_from_kwdef_fieldblock!(item, names, defvals)
+            for j in n+1:length(defvals)
+                if !isnothing(defvals[j])
+                    defvals[j] = Expr(item.head, defvals[j])
                 end
-                defexpr = ei.args[2]  # defexpr
-                push!(params_args, Expr(:kw, var, esc(defexpr)))
-                push!(call_args, var)
-                lhs = is_const ? Expr(:const, lhs) : lhs
-                lhs = is_atomic ? Expr(:atomic, lhs) : lhs
-                blk.args[i] = lhs # overrides arg
-            elseif ei.head === :(::) && ei.args[1] isa Symbol
-                # var::Typ
-                var = ei.args[1]
-                push!(params_args, var)
-                push!(call_args, var)
-            elseif ei.head === :block
-                # can arise with use of @static inside type decl
-                _kwdef!(ei, params_args, call_args)
             end
+        else
+            def, name, defval = @something(def_name_defval_from_kwdef_fielddef(item), continue)
+            block.args[i] = def
+            push!(names, name)
+            push!(defvals, defval)
         end
     end
-    blk
+end
+
+function def_name_defval_from_kwdef_fielddef(kwdef)
+    if kwdef isa Symbol
+        return kwdef, kwdef, nothing
+    elseif isexpr(kwdef, :(::))
+        name, _ = kwdef.args
+        return kwdef, Meta.unescape(name), nothing
+    elseif isexpr(kwdef, :(=))
+        lhs, rhs = kwdef.args
+        def, name, _ = @something(def_name_defval_from_kwdef_fielddef(lhs), return nothing)
+        return def, name, rhs
+    elseif kwdef isa Expr && kwdef.head in (:const, :atomic)
+        def, name, defval = @something(def_name_defval_from_kwdef_fielddef(kwdef.args[1]), return nothing)
+        return Expr(kwdef.head, def), name, defval
+    elseif kwdef isa Expr && kwdef.head in (:escape, :var"hygienic-scope")
+        def, name, defval = @something(def_name_defval_from_kwdef_fielddef(kwdef.args[1]), return nothing)
+        return Expr(kwdef.head, def), name, isnothing(defval) ? defval : Expr(kwdef.head, defval)
+    end
 end
 
 # testing
 
 """
-    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_THREADS / 2),
-                  exit_on_error=false, revise=false, [seed])
+    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.EFFECTIVE_CPU_THREADS / 2),
+                  exit_on_error=false, revise=false, propagate_project=true, [seed], [julia_args::Cmd])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
 strings, using `ncores` processors. If `exit_on_error` is `false`, when one test
@@ -671,13 +695,17 @@ fails, all remaining tests in other files will still be run; they are otherwise 
 when `exit_on_error == true`.
 If `revise` is `true`, the `Revise` package is used to load any modifications to `Base` or
 to the standard libraries before running the tests.
+If `propagate_project` is true the current project is propagated to the test environment.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
+The argument `julia_args` can be used to pass custom `julia` command line flags to the test process.
 """
-function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
+function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.EFFECTIVE_CPU_THREADS / 2),
                   exit_on_error::Bool=false,
                   revise::Bool=false,
-                  seed::Union{BitInteger,Nothing}=nothing)
+                  propagate_project::Bool=false,
+                  seed::Union{BitInteger,Nothing}=nothing,
+                  julia_args::Cmd=``)
     if isa(tests,AbstractString)
         tests = split(tests)
     end
@@ -688,27 +716,24 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
     pathsep = Sys.iswindows() ? ";" : ":"
     ENV2["JULIA_DEPOT_PATH"] = string(mktempdir(; cleanup = true), pathsep) # make sure the default depots can be loaded
-    delete!(ENV2, "JULIA_LOAD_PATH")
+    ENV2["JULIA_LOAD_PATH"] = string("@", pathsep, "@stdlib")
+    ENV2["JULIA_TESTS"] = "true"
     delete!(ENV2, "JULIA_PROJECT")
+    project_flag = propagate_project ? `--project` : ``
     try
-        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,
+        run(setenv(`$(julia_cmd()) -q $julia_args $project_flag $(joinpath(Sys.BINDIR,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
         nothing
     catch
-        buf = PipeBuffer()
-        original_load_path = copy(Base.LOAD_PATH); empty!(Base.LOAD_PATH); pushfirst!(Base.LOAD_PATH, "@stdlib")
-        Base.require(Base, :InteractiveUtils).versioninfo(buf)
-        empty!(Base.LOAD_PATH); append!(Base.LOAD_PATH, original_load_path)
-        error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
-              "including error messages above and the output of versioninfo():\n$(read(buf, String))")
+        # evaluate versioninfo in the test environment so the listed env vars are the same
+        vinfo = read(setenv(`$(julia_cmd()) -e 'let InteractiveUtils = Base.require_stdlib(Base.PkgId(Base.UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils")); @invokelatest(InteractiveUtils.versioninfo()); end'`, ENV2), String)
+        msg = "A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
+              "including error messages above and the output of versioninfo():\n$(vinfo)"
+        if isinteractive()
+            error(msg)
+        else
+            print(stderr, "ERROR: ", msg)
+            exit(1)
+        end
     end
-end
-
-"""
-    isdebugbuild()
-
-Return `true` if julia is a debug version.
-"""
-function isdebugbuild()
-    return ccall(:jl_is_debugbuild, Cint, ()) != 0
 end

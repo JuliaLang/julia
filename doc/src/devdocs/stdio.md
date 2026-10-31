@@ -32,11 +32,11 @@ void jl_safe_printf(const char *str, ...);
 [`Base.stdin`](@ref), [`Base.stdout`](@ref) and [`Base.stderr`](@ref) are bound to the `JL_STD*` libuv
 streams defined in the runtime.
 
-Julia's `__init__()` function (in `base/sysimg.jl`) calls `reinit_stdio()` (in `base/stream.jl`)
+Julia's `__init__()` function (in `base/Base.jl`) calls `reinit_stdio()` (in `base/libuv.jl`)
 to create Julia objects for [`Base.stdin`](@ref), [`Base.stdout`](@ref) and [`Base.stderr`](@ref).
 
 `reinit_stdio()` uses [`ccall`](@ref) to retrieve pointers to `JL_STD*` and calls `jl_uv_handle_type()`
-to inspect the type of each stream.  It then creates a Julia `Base.IOStream`, `Base.TTY` or `Base.PipeEndpoint`
+to inspect the type of each stream. It then creates a Julia `Base.IOStream`, `Base.TTY` or `Base.PipeEndpoint`
 object to represent each stream, e.g.:
 
 ```
@@ -63,7 +63,7 @@ stream.jl: function write(s::IO, p::Ptr, nb::Integer)
 ## printf() during initialization
 
 The libuv streams relied upon by `jl_printf()` etc., are not available until midway through
-initialization of the runtime (see `init.c`, `init_stdio()`).  Error messages or warnings that
+initialization of the runtime (see `init.c`, `init_stdio()`). Error messages or warnings that
 need to be printed before this are routed to the standard C library `fwrite()` function by the
 following mechanism:
 
@@ -91,7 +91,7 @@ However, there is [one place](https://github.com/JuliaLang/julia/blob/master/src
 where femtolisp calls through to `jl_printf()` with a legacy `ios_t` stream.
 
 There is a hack in `ios.h` that makes the `ios_t.bm` field line up with the `uv_stream_t.type`
-and ensures that the values used for `ios_t.bm` to not overlap with valid `UV_HANDLE_TYPE` values.
+and ensures that the values used for `ios_t.bm` do not overlap with valid `UV_HANDLE_TYPE` values.
  This allows `uv_stream_t` pointers to point to `ios_t` streams.
 
 This is needed because `jl_printf()` caller `jl_static_show()` is passed an `ios_t` stream by

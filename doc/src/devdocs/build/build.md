@@ -16,7 +16,7 @@ variables.
 
 When compiled the first time, the build will automatically download
 pre-built [external
-dependencies](#required-build-tools-and-external-libraries). If you
+dependencies](#Required-Build-Tools-and-External-Libraries). If you
 prefer to build all the dependencies on your own, or are building on a system that cannot
 access the network during the build process, add the following in `Make.user`:
 
@@ -24,7 +24,7 @@ access the network during the build process, add the following in `Make.user`:
 USE_BINARYBUILDER=0
 ```
 
-Building Julia requires 5GiB if building all dependencies and approximately 4GiB of virtual memory.
+Building Julia requires 5GiB of disk space when building all dependencies and approximately 4GiB of virtual memory.
 
 To perform a parallel build, use `make -j N` and supply the maximum
 number of concurrent processes. If the defaults in the build do not work for you, and
@@ -39,9 +39,16 @@ directory mirror, with all of the necessary Makefiles to build Julia,
 in the specified directory. These builds will share the source files
 in Julia and `deps/srccache`. Each out-of-tree build directory can
 have its own `Make.user` file to override the global `Make.user` file
-in the top-level folder.
+in the top-level folder. After modifying the `Make.user` file if necessary,
+build using: `make -C <build-directory>`.
 
-If everything works correctly, you will see a Julia banner and an
+If everything works correctly, there will be a symlink to
+the julia executable in the build directory which can be run as:
+```sh
+./julia
+```
+The actual executable is in `<build-directory>/usr/bin`.
+After running this, you will see a Julia banner and an
 interactive prompt into which you can enter expressions for
 evaluation. (Errors related to libraries might be caused by old,
 incompatible libraries sitting around in your PATH. In this case, try
@@ -49,9 +56,9 @@ moving the `julia` directory earlier in the PATH). Note that most of
 the instructions above apply to unix systems.
 
 To run julia from anywhere you can:
-- add an alias (in `bash`: `echo "alias julia='/path/to/install/folder/bin/julia'" >> ~/.bashrc && source ~/.bashrc`), or
+- add an alias (in `bash`: `echo "alias julia='<build-directory>/usr/bin/julia'" >> ~/.bashrc && source ~/.bashrc`), or
 
-- add a soft link to the `julia` executable in the `julia` directory to `/usr/local/bin` (or any suitable directory already in your path), or
+- add a soft link to the `julia` executable in the `<build-directory>/usr/bin` directory to `/usr/local/bin` (or any suitable directory already in your path), or
 
 - add the `julia` directory to your executable path for this shell session (in `bash`: `export PATH="$(pwd):$PATH"` ; in `csh` or `tcsh`:
 `set path= ( $path $cwd )` ), or
@@ -59,6 +66,16 @@ To run julia from anywhere you can:
 - add the `julia` directory to your executable path permanently (e.g. in `.bash_profile`), or
 
 - write `prefix=/path/to/install/folder` into `Make.user` and then run `make install`. If there is a version of Julia already installed in this folder, you should delete it before running `make install`.
+
+Some of the options you can set to control the build of Julia are listed and documented at the beginning of the file `Make.inc`, but you should never edit it for this purpose, use `Make.user` instead.
+
+Julia's Makefiles define convenient automatic rules called `print-<VARNAME>` for printing the value of variables, replacing `<VARNAME>` with the name of the variable to print the value of.
+For example
+```console
+$ make print-JULIA_PRECOMPILE
+JULIA_PRECOMPILE=1
+```
+These rules are useful for debugging purposes.
 
 Now you should be able to run Julia like this:
 
@@ -138,29 +155,37 @@ Notes for various operating systems:
 Notes for various architectures:
 
 * [ARM](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/arm.md)
+* [RISC-V](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/riscv.md)
 
 ## Required Build Tools and External Libraries
 
 Building Julia requires that the following software be installed:
 
-- **[GNU make]**                — building dependencies.
-- **[gcc & g++][gcc]** (>= 5.1) or **[Clang][clang]** (>= 3.5, >= 6.0 for Apple Clang) — compiling and linking C, C++.
-- **[libatomic][gcc]**          — provided by **[gcc]** and needed to support atomic operations.
-- **[python]** (>=2.7)          — needed to build LLVM.
-- **[gfortran]**                — compiling and linking Fortran libraries.
-- **[perl]**                    — preprocessing of header files of libraries.
-- **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
-- **[m4]**                      — needed to build GMP.
-- **[awk]**                     — helper tool for Makefiles.
-- **[patch]**                   — for modifying source code.
-- **[cmake]** (>= 3.4.3)        — needed to build `libgit2`.
-- **[pkg-config]**              — needed to build `libgit2` correctly, especially for proxy support.
-- **[powershell]** (>= 3.0)     — necessary only on Windows.
-- **[which]**                   — needed for checking build dependencies.
+- **[GNU make](https://www.gnu.org/software/make)**                — building dependencies.
+- **[gcc & g++](https://gcc.gnu.org)** (>= 7.1) or **[Clang](https://clang.llvm.org)** (>= 5.0; Xcode >= 16 on macOS) — compiling and linking C, C++.
+  - On Linux with g++, the static version of libstdc++ is also required.  If it is unavailable, set `USE_RT_STATIC_LIBSTDCXX=0` in `Make.user`.
+- **[libatomic](https://gcc.gnu.org)**          — provided by **[gcc]** and needed to support atomic operations.
+- **[python](https://www.python.org/)** (>=2.7)          — needed to build LLVM.
+- **[gfortran](https://gcc.gnu.org/fortran/)**                — compiling and linking Fortran libraries.
+- **[perl](https://www.perl.org)**                    — preprocessing of header files of libraries.
+- **[wget](https://www.gnu.org/software/wget)**, **[curl](https://curl.se)**, or **[fetch](https://www.freebsd.org/cgi/man.cgi?fetch(1))** (FreeBSD) — to automatically download external libraries.
+- **[m4](https://www.gnu.org/software/m4)**                      — needed to build GMP.
+- **[awk](https://www.gnu.org/software/gawk)**                     — helper tool for Makefiles.
+- **[patch](https://www.gnu.org/software/patch)**                   — for modifying source code.
+- **[cmake](https://www.cmake.org)** (>= 3.4.3)        — needed to build `libgit2`.
+- **[pkg-config](https://www.freedesktop.org/wiki/Software/pkg-config/)**              — needed to build `libgit2` correctly, especially for proxy support.
+- **[powershell](https://docs.microsoft.com/en-us/powershell/scripting/wmf/overview)** (>= 3.0)     — necessary only on Windows.
+- **[which](https://carlowood.github.io/which/)**                   — needed for checking build dependencies.
+- **[diffutils](https://www.gnu.org/software/diffutils/)**                   - `cmp` is used by the makefiles
 
 On Debian-based distributions (e.g. Ubuntu), you can easily install them with `apt-get`:
 ```
-sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cmake pkg-config curl
+sudo apt-get install build-essential libatomic1 python3 gfortran perl wget m4 cmake pkg-config curl
+```
+
+On Red Hat-based distributions (e.g. Fedora, CentOS), you can install them with `yum`:
+```
+sudo dnf install gcc gcc-c++ gcc-gfortran python3 perl wget m4 cmake pkgconfig curl which diffutils libatomic libstdc++-static
 ```
 
 Julia uses the following external libraries, which are automatically
@@ -169,67 +194,79 @@ repository) and then compiled from source the first time you run
 `make`. The specific version numbers of these libraries that Julia
 uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/julia/blob/master/deps/):
 
-- **[LLVM]** (14.0 + [patches](https://github.com/JuliaLang/llvm-project)) — compiler infrastructure (see [note below](#llvm)).
-- **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
-- **[libuv]**  (custom fork) — portable, high-performance event-based I/O library.
-- **[OpenLibm]**             — portable libm library containing elementary math functions.
-- **[DSFMT]**                — fast Mersenne Twister pseudorandom number generator library.
-- **[OpenBLAS]**             — fast, open, and maintained [basic linear algebra subprograms (BLAS)]
-- **[LAPACK]**               — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
-- **[MKL]** (optional)       – OpenBLAS and LAPACK may be replaced by Intel's MKL library.
-- **[SuiteSparse]**          — library of linear algebra routines for sparse matrices.
-- **[PCRE]**                 — Perl-compatible regular expressions library.
-- **[GMP]**                  — GNU multiple precision arithmetic library, needed for `BigInt` support.
-- **[MPFR]**                 — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
-- **[libgit2]**              — Git linkable library, used by Julia's package manager.
-- **[curl]**                 — libcurl provides download and proxy support.
-- **[libssh2]**              — library for SSH transport, used by libgit2 for packages with SSH remotes.
-- **[mbedtls]**              — library used for cryptography and transport layer security, used by libssh2
-- **[utf8proc]**             — a library for processing UTF-8 encoded Unicode strings.
-- **[LLVM libunwind]**       — LLVM's fork of [libunwind], a library that determines the call-chain of a program.
-- **[ITTAPI]**               — Intel's Instrumentation and Tracing Technology and Just-In-Time API.
-
-[GNU make]:     https://www.gnu.org/software/make
-[patch]:        https://www.gnu.org/software/patch
-[wget]:         https://www.gnu.org/software/wget
-[m4]:           https://www.gnu.org/software/m4
-[awk]:          https://www.gnu.org/software/gawk
-[gcc]:          https://gcc.gnu.org
-[clang]:        https://clang.llvm.org
-[python]:       https://www.python.org/
-[gfortran]:     https://gcc.gnu.org/fortran/
-[curl]:         https://curl.haxx.se
-[fetch]:        https://www.freebsd.org/cgi/man.cgi?fetch(1)
-[perl]:         https://www.perl.org
-[cmake]:        https://www.cmake.org
-[OpenLibm]:     https://github.com/JuliaLang/openlibm
-[DSFMT]:        https://github.com/MersenneTwister-Lab/dSFMT
-[OpenBLAS]:     https://github.com/xianyi/OpenBLAS
-[LAPACK]:       https://www.netlib.org/lapack
-[MKL]:          https://software.intel.com/en-us/articles/intel-mkl
-[SuiteSparse]:  https://people.engr.tamu.edu/davis/suitesparse.html
-[PCRE]:         https://www.pcre.org
-[LLVM]:         https://www.llvm.org
-[LLVM libunwind]: https://github.com/llvm/llvm-project/tree/main/libunwind
-[FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
-[GMP]:          https://gmplib.org
-[MPFR]:         https://www.mpfr.org
-[libuv]:        https://github.com/JuliaLang/libuv
-[libgit2]:      https://libgit2.org/
-[utf8proc]:     https://julialang.org/utf8proc/
-[libunwind]:    https://www.nongnu.org/libunwind
-[libssh2]:      https://www.libssh2.org
-[mbedtls]:      https://tls.mbed.org/
-[pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
-[powershell]:   https://docs.microsoft.com/en-us/powershell/scripting/wmf/overview
-[which]:        https://carlowood.github.io/which/
-[ITTAPI]:       https://github.com/intel/ittapi
+- **[LLVM](https://www.llvm.org)** (23.1 + [patches](https://github.com/JuliaLang/llvm-project/tree/julia-release/23.x)) — compiler infrastructure (see [note below](#llvm)).
+- **[FemtoLisp](https://github.com/JeffBezanson/femtolisp)**            — packaged with Julia source, and used to implement the compiler front-end.
+- **[libuv](https://github.com/JuliaLang/libuv)**  (custom fork) — portable, high-performance event-based I/O library.
+- **[OpenLibm](https://github.com/JuliaLang/openlibm)**             — portable libm library containing elementary math functions.
+- **[DSFMT](https://github.com/MersenneTwister-Lab/dSFMT)**                — fast Mersenne Twister pseudorandom number generator library.
+- **[OpenBLAS](https://github.com/xianyi/OpenBLAS)**             — fast, open, and maintained [basic linear algebra subprograms (BLAS)]
+- **[LAPACK](https://www.netlib.org/lapack)**               — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
+- **[MKL](https://software.intel.com/en-us/articles/intel-mkl)** (optional)       – OpenBLAS and LAPACK may be replaced by Intel's MKL library.
+- **[SuiteSparse](https://people.engr.tamu.edu/davis/suitesparse.html)**          — library of linear algebra routines for sparse matrices.
+- **[PCRE](https://www.pcre.org)**                 — Perl-compatible regular expressions library.
+- **[GMP](https://gmplib.org)**                  — GNU multiple precision arithmetic library, needed for `BigInt` support.
+- **[MPFR](https://www.mpfr.org)**                 — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
+- **[libgit2](https://libgit2.org/)**              — Git linkable library, used by Julia's package manager.
+- **[curl](https://curl.se)**                 — libcurl provides download and proxy support.
+- **[libssh2](https://www.libssh2.org)**              — library for SSH transport, used by libgit2 for packages with SSH remotes.
+- **[OpenSSL](https://www.openssl.org/)**              — library used for cryptography and transport layer security, used by libgit2 and libssh2.
+- **[PicoSAT](https://github.com/JuliaLang/PicoSAT)**  — SAT solver, used by Julia's package manager to resolve package versions.
+- **[utf8proc](https://julialang.org/utf8proc/)**             — a library for processing UTF-8 encoded Unicode strings.
+- **[LLVM libunwind](https://www.nongnu.org/libunwind)**       — LLVM's fork of [libunwind], a library that determines the call-chain of a program.
+- **[ITTAPI](https://github.com/intel/ittapi)**               — Intel's Instrumentation and Tracing Technology and Just-In-Time API.
 
 ## Build dependencies
 
 If you already have one or more of these packages installed on your system, you can prevent Julia from compiling duplicates of these libraries by passing `USE_SYSTEM_...=1` to `make` or adding the line to `Make.user`. The complete list of possible flags can be found in `Make.inc`.
 
 Please be aware that this procedure is not officially supported, as it introduces additional variability into the installation and versioning of the dependencies, and is recommended only for system package maintainers. Unexpected compile errors may result, as the build system will do no further checking to ensure the proper packages are installed.
+
+### Building a dependency from a Git checkout
+
+Most dependencies are downloaded as prebuilt BinaryBuilder artifacts (`*_jll`), but many can instead be
+built from a Git checkout — useful for testing a patch or building against an unreleased upstream commit.
+This is driven by `git-external` in
+[`deps/tools/git-external.mk`](https://github.com/JuliaLang/julia/blob/master/deps/tools/git-external.mk).
+Set the following in `Make.user` (or on the `make` command line):
+
+```make
+# 1. prefer the source build over the prebuilt binary for this dep (or USE_BINARYBUILDER=0 for all)
+USE_BINARYBUILDER_LLVM = 0
+# 2. fetch the source with Git (DEPS_GIT=1 for all, or a space-separated list of names)
+DEPS_GIT = llvm
+# 3. optionally override the origin/branch/commit (defaults live in deps/<name>.version and .mk)
+LLVM_GIT_URL = https://github.com/JuliaLang/llvm-project.git
+LLVM_BRANCH = julia-release/23.x
+LLVM_SHA1 = $(LLVM_BRANCH)   # a branch name, tag, or explicit commit hash
+```
+
+`<NAME>` is the upper-cased dependency name (see `deps/*.mk`, e.g. `LLVM`, `LIBUV`). The branch and commit
+come from `<NAME>_BRANCH`/`<NAME>_SHA1` in `deps/<name>.version`. The checkout is a
+[`git worktree`](https://git-scm.com/docs/git-worktree) of a bare mirror cached at
+`deps/srccache/<name>.git` (so it shares that mirror's objects rather than being a full clone), living at
+`deps/srccache/<name>/` on a detached `HEAD` at `<NAME>_SHA1`.
+
+**Rebuilds** are keyed off `deps/<name>.version`: changing *or merely touching* it re-fetches and resets the
+checkout to `<NAME>_SHA1` and reinstalls the dependency. Each build step records progress in a marker file, so
+touching one (or a predecessor) forces that step and everything after it to rerun:
+
+ * `deps/<name>.version` — re-checkout to `<NAME>_SHA1` (`extract-<name>`) and reinstall (`install-<name>`)
+ * `deps/srccache/<name>/source-extracted` — reconfigure (`configure-<name>`)
+ * `deps/scratch/<name>/build-configured` — recompile (`compile-<name>`)
+ * `deps/scratch/<name>/build-compiled` — restage (`stage-<name>`)
+ * `usr/manifest/<name>` — the installed result (also `uninstall-<name>` / `reinstall-<name>`)
+
+`make version-check-<name>` runs on every build to warn when the checkout has local modifications or does not
+match `<NAME>_SHA1`, and `make distclean-<name>` removes the worktree and cached mirror. Not every dependency
+defines every step (e.g. header-only or install-only deps may have no `configure`/`compile` stage), so some of
+these markers and targets may be absent — check `deps/<name>.mk` for the ones a given dependency actually uses.
+
+**To edit in place**, treat `deps/srccache/<name>/` as an ordinary worktree: change files, commit, or `git
+checkout` another commit, then rebuild (`make compile-<name>` / `make install-<name>`). As long as you don't
+touch `deps/<name>.version`, the checkout is never reset to `<NAME>_SHA1`, so local edits survive rebuilds.
+Bumping `<NAME>_SHA1` to record a new commit triggers a fresh checkout on the next extract, but that checkout
+will fail if the worktree is dirty — this is intentional, so that uncommitted changes are never clobbered.
+Commit (or stash) your work first, then update `<NAME>_SHA1`.
 
 ### LLVM
 
@@ -238,11 +275,48 @@ The most complicated dependency is LLVM, for which we require additional patches
 For packaging Julia with LLVM, we recommend either:
  - bundling a Julia-only LLVM library inside the Julia package, or
  - adding the patches to the LLVM package of the distribution.
-   * A complete list of patches is available in `deps/llvm.mk`, and the patches themselves are in `deps/patches/`.
-   * The only Julia-specific patch is the lib renaming (`llvm-symver-jlprefix.patch`), which should _not_ be applied to a system LLVM.
+   * A complete list of patches is available on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/23.x` branch.
    * The remaining patches are all upstream bug fixes, and have been contributed into upstream LLVM.
 
-Using an unpatched or different version of LLVM will result in errors and/or poor performance. Though Julia can be built with newer LLVM versions, support for this should be regarded as experimental and not suitable for packaging.
+Using an unpatched or different version of LLVM will result in errors and/or poor performance.
+You can build a different version of LLVM from a remote Git repository with the following options in the `Make.user` file:
+
+```make
+# Force source build of LLVM
+USE_BINARYBUILDER_LLVM = 0
+# Use Git for fetching LLVM source code
+# this is either `1` to get all of them
+DEPS_GIT = 1
+# or a space-separated list of specific dependencies to download with git
+DEPS_GIT = llvm
+
+# Other useful options:
+#URL of the Git repository you want to obtain LLVM from:
+#  LLVM_GIT_URL = ...
+#Name of the alternate branch to clone from git
+#  LLVM_BRANCH = julia-16.0.6-0
+#SHA hash of the alternate commit to check out automatically
+#  LLVM_SHA1 = $(LLVM_BRANCH)
+#List of LLVM targets to build. It is strongly recommended to keep at least all the
+#default targets listed in `deps/llvm.mk`, even if you don't necessarily need all of them.
+#  LLVM_TARGETS = ...
+#Use ccache for faster recompilation in case you need to restart a build.
+#  USECCACHE = 1
+#  CMAKE_GENERATOR=Ninja
+#  LLVM_ASSERTIONS=1
+#  LLVM_DEBUG=Symbols
+```
+
+The various build phases are controlled by specific files:
+ * `deps/llvm.version` : touch or change to checkout a new version, `make get-llvm check-llvm`
+ * `deps/srccache/llvm/source-extracted` : result of `make extract-llvm`
+ * `deps/llvm/build_Release*/build-configured` : result of `make configure-llvm`
+ * `deps/llvm/build_Release*/build-configured` : result of `make compile-llvm`
+ * `usr-staging/llvm/build_Release*.tgz` : result of `make stage-llvm` (regenerate with `make reinstall-llvm`)
+ * `usr/manifest/llvm` : result of `make install-llvm` (regenerate with `make uninstall-llvm`)
+ * `make version-check-llvm` : runs every time to warn the user if there are local modifications
+
+Though Julia can be built with newer LLVM versions, support for this should be regarded as experimental and not suitable for packaging.
 
 ### libuv
 
@@ -251,6 +325,45 @@ Julia uses a custom fork of libuv. It is a small dependency, and can be safely b
 ### BLAS and LAPACK
 
 As a high-performance numerical language, Julia should be linked to a multi-threaded BLAS and LAPACK, such as OpenBLAS or ATLAS, which will provide much better performance than the reference `libblas` implementations which may be default on some systems.
+
+## Bounds-checked stdlib package images
+
+Normal builds include stdlib package images for the default bounds-checking mode.
+`make checkbounds-pkgimages` additionally creates a
+`julia-*.checkbounds.tar.gz` companion archive for `--check-bounds=yes`, using the
+same system image and CPU targets as the normal build. These additional caches
+are kept outside `usr`, so they are not included by `make binary-dist` or installers.
+Build the normal distribution before the companion archive: `make binary-dist`
+removes existing distribution archives.
+
+Without the companion, stdlibs are precompiled for `--check-bounds=yes` on first use
+and stored in the first depot, like any other package. The companion avoids this.
+It contains `share/julia/compiled`, so it can be used as an additional depot
+without modifying the Julia installation:
+
+```sh
+mkdir -p ~/julia-checkbounds
+tar -xzf julia-VERSION-PLATFORM.checkbounds.tar.gz -C ~/julia-checkbounds
+export JULIA_DEPOT_PATH=":$HOME/julia-checkbounds/share/julia"
+```
+
+The leading `:` (`;` on Windows) keeps the default depots in front of it; they are
+required, as they provide the stdlib sources the companion was built from. If you
+own the installation, for example an extracted tarball or a juliaup-managed version,
+you can instead extract the archive into its root (the directory containing `bin`
+and `share`), which adds files under `share/julia/compiled` without replacing the
+default images. Do not modify installations managed by a system package manager or
+signed application bundles such as `Julia.app`.
+
+Use the archive from the same build and platform, including the build
+variant; a matching major/minor version alone is insufficient. For nightlies,
+select the companion using the installed build's commit rather than downloading
+an independently resolved `latest` archive. Nightlies and releases publish the
+companion alongside the normal tarball, replacing its `.tar.gz` suffix with
+`.checkbounds.tar.gz`.
+
+Local builds can still bundle both configurations by setting
+`JULIA_CHECK_BOUNDS_PKGIMAGES=1` in `Make.user`, for example for coverage testing.
 
 ## Source distributions of releases
 
@@ -285,10 +398,29 @@ LLVM_ASSERTIONS=1
 
 Please note that assert builds of Julia will be slower than regular (non-assert) builds.
 
+Assert builds also compile the C/C++ runtime with full debug info (variables and types),
+whereas regular release builds only keep line tables. This is controlled by
+`RUNTIME_DEBUG_LEVEL` (1 or 2), which also defaults to 2 when `BOOTSTRAP_DEBUG_LEVEL` is
+set and can be set independently in `Make.user`.
+
+## Building a debug build of Julia
+
+A full debug build of Julia can be built with `make debug`.  This builds a debug
+version of `libjulia` and uses it to bootstrap the compiler, before creating a
+system image with debug symbols enabled.  This can take more than 15 minutes.
+
+Although it may result in some differences, a debug build can be built much
+quicker by bootstrapping from a release build:
+
+```sh
+$ make julia-src-release julia-sysbase-release
+$ make julia-sysimg-debug CROSS_BOOTSTRAP_JULIA=$PWD/usr/bin/julia CROSS_BOOTSTRAP_SYSBASE=$PWD/usr/lib/julia/sysbase.so
+```
+
 ## Building 32-bit Julia on a 64-bit machine
 
-Occasionally, bugs specific to 32-bit architectures may arise, and when this happens it is useful to be able to debug the problem on your local machine.  Since most modern 64-bit systems support running programs built for 32-bit ones, if you don't have to recompile Julia from source (e.g. you mainly need to inspect the behavior of a 32-bit Julia without having to touch the C code), you can likely use a 32-bit build of Julia for your system that you can obtain from the [official downloads page](https://julialang.org/downloads/).
-However, if you do need to recompile Julia from source one option is to use a Docker container of a 32-bit system.  At least for now, building a 32-bit version of Julia is relatively straightforward using [ubuntu 32-bit docker images](https://hub.docker.com/r/i386/ubuntu). In brief, after setting up `docker` here are the required steps:
+Occasionally, bugs specific to 32-bit architectures may arise, and when this happens it is useful to be able to debug the problem on your local machine. Since most modern 64-bit systems support running programs built for 32-bit ones, if you don't have to recompile Julia from source (e.g. you mainly need to inspect the behavior of a 32-bit Julia without having to touch the C code), you can likely use a 32-bit build of Julia for your system that you can obtain from the [official downloads page](https://julialang.org/downloads/).
+However, if you do need to recompile Julia from source one option is to use a Docker container of a 32-bit system. At least for now, building a 32-bit version of Julia is relatively straightforward using [ubuntu 32-bit docker images](https://hub.docker.com/r/i386/ubuntu). In brief, after setting up `docker` here are the required steps:
 
 ```sh
 $ docker pull i386/ubuntu
@@ -306,6 +438,24 @@ From this point, you should
 
 Then add all the [build dependencies](#required-build-tools-and-external-libraries), a console-based editor of your choice, `git`, and anything else you'll need (e.g., `gdb`, `rr`, etc). Pick a directory to work in and `git clone` Julia, check out the branch you wish to debug, and build Julia as usual.
 
+
+## Building Julia with MMTk GC
+
+Julia allows different GC implementations through a GC interface. GC is currently selected at build time,
+so switching between the stock GC and any other GC implementation requires rebuilding Julia.
+
+MMTk is one of the GCs integrated with this interface. The MMTk binding is built from source as part of the Julia build
+and requires a Rust toolchain. The simplest way to build Julia with MMTk is:
+```sh
+WITH_THIRD_PARTY_GC=mmtk make
+```
+
+An example of a more advanced configuration that customizes the plan / GC type is:
+```sh
+WITH_THIRD_PARTY_GC=mmtk MMTK_PLAN=StickyImmix MMTK_MOVING=0 MMTK_BUILD_MODE=release make
+```
+
+The default MMTk build uses the `StickyImmix` plan (similar to Julia's generational mark sweep), and a release build of the Rust binding. Further build options can be set either on the command line or in `Make.user`. For details, see [Julia + MMTk](../gc-mmtk.md).
 
 ## Update the version number of a dependency
 

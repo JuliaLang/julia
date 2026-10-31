@@ -1,0 +1,7 @@
+name = "Parent"
+uuid = "58cecb9c-f68a-426e-b92a-89d456ae7acc"
+version = "0.1.0"
+authors = ["Cody Tapscott <topolarity@tapscott.me>"]
+
+[deps]
+DepWithParentExt = "8a35c396-5ffc-40d2-b7ec-e8ed2248da32"

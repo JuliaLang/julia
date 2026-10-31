@@ -5,7 +5,22 @@ using Random, LinearAlgebra
 # For curmod_*
 include("testenv.jl")
 
-
+# re-register only the error hints that are being tested here,
+# but only if they aren't already registered (they are in the sysimage)
+function _register_if_missing(@nospecialize(handler), @nospecialize(exct::Type))
+    list = get(Base.Experimental._hint_handlers, Core.typename(exct), nothing)
+    if list === nothing || !any(((_, h),) -> h === handler, list)
+        Base.Experimental.register_error_hint(handler, exct)
+    end
+end
+_register_if_missing(Base.noncallable_number_hint_handler, MethodError)
+_register_if_missing(Base.string_concatenation_hint_handler, MethodError)
+_register_if_missing(Base.string_replace_hint_handler, MethodError)
+_register_if_missing(Base.methods_on_iterable, MethodError)
+_register_if_missing(Base.nonsetable_type_hint_handler, MethodError)
+_register_if_missing(Base.fielderror_listfields_hint_handler, FieldError)
+_register_if_missing(Base.fielderror_dict_hint_handler, FieldError)
+_register_if_missing(Base.apply_type_unionall_hint_handler, TypeError)
 @testset "SystemError" begin
     err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
     errs = sprint(Base.showerror, err)
@@ -66,7 +81,7 @@ Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, "")))
 Base.show_method_candidates(IOContext(buf, :color => true), Base.MethodError(method_c1,(1, 1, "")))
 
 mod_col = Base.text_colors[Base.STACKTRACE_FIXEDCOLORS[modul]]
-@test occursin("\n\n\e[0mClosest candidates are:\n\e[0m  method_c1(\e[91m::Float64\e[39m, \e[91m::AbstractString...\e[39m)\n\e[0m\e[90m   @\e[39m $mod_col$modul\e[39m \e[90m$dname$sep\e[39m\e[90m\e[4m$fname:$c1line\e[24m\e[39m\n", String(take!(buf)))
+@test occursin("\n\n\e[0mClosest candidates are:\n\e[0m  method_c1(\e[91m::Float64\e[39m\e[90m, \e[39m\e[91m::AbstractString...\e[39m)\n\e[0m\e[90m   @\e[39m $mod_col$modul\e[39m \e[90m$dname$sep\e[39m\e[90m\e[4m$fname:$c1line\e[24m\e[39m\n", String(take!(buf)))
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, "", "")))
 @test occursin("\n\nClosest candidates are:\n  method_c1(!Matched::Float64, ::AbstractString...)$cmod$cfile$c1line\n", String(take!(buf)))
 
@@ -74,8 +89,12 @@ Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, "", "")))
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1., "", "")))
 @test occursin("\n\nClosest candidates are:\n  method_c1(::Float64, ::AbstractString...)$cmod$cfile$c1line\n", String(take!(buf)))
 
-# Have no matches so should return empty
+# Have no matches, but still print up to 3
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, 1)))
+@test occursin("\n\nClosest candidates are:\n  method_c1(!Matched::Float64, !Matched::AbstractString...)$cmod$cfile$c1line\n", String(take!(buf)))
+
+function nomethodsfunc end
+Base.show_method_candidates(buf, Base.MethodError(nomethodsfunc,(1, 1, 1)))
 @test isempty(String(take!(buf)))
 
 # matches the implicit constructor -> convert method
@@ -92,8 +111,15 @@ method_c2(x::Int32, y::Float64) = true
 method_c2(x::Int32, y::Int32, z::Int32) = true
 method_c2(x::T, y::T, z::T) where {T<:Real} = true
 
-Base.show_method_candidates(buf, Base.MethodError(method_c2,(1., 1., 2)))
-@test occursin( "\n\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cmod$cfile$(c2line+2)\n  method_c2(::T, ::T, !Matched::T) where T<:Real$cmod$cfile$(c2line+5)\n  method_c2(!Matched::Int32, ::Any...)$cmod$cfile$(c2line+1)\n  ...\n", String(take!(buf)))
+let s
+    Base.show_method_candidates(buf, Base.MethodError(method_c2, (1., 1., 2)))
+    s = String(take!(buf))
+    @test occursin("\n\nClosest candidates are:\n  ", s)
+    @test occursin("\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cmod$cfile$(c2line+2)\n  ", s)
+    @test occursin("\n  method_c2(::T, ::T, !Matched::T) where T<:Real$cmod$cfile$(c2line+5)\n  ", s)
+    @test occursin("\n  method_c2(!Matched::Int32, ::Any...)$cmod$cfile$(c2line+1)\n  ", s)
+    @test occursin("\n  ...\n", s)
+end
 
 c3line = @__LINE__() + 1
 method_c3(x::Float64, y::Float64) = true
@@ -113,7 +139,62 @@ Base.show_method_candidates(buf, MethodError(method_c5,(Float64,)))
 @test occursin("\nClosest candidates are:\n  method_c5(::Type{Float64})$cmod$cfile$c5line", String(take!(buf)))
 
 Base.show_method_candidates(buf, MethodError(method_c5,(Int32,)))
-@test occursin("\nClosest candidates are:\n  method_c5(!Matched::Type{Float64})$cmod$cfile$c5line", String(take!(buf)))
+@test occursin("\nClosest candidates are:\n  method_c5(::Type{!Matched{Float64}})$cmod$cfile$c5line", String(take!(buf)))
+
+module Issue41061
+    struct InnerT{T,N} end
+    export AliasT
+    const AliasT{T} = InnerT{T,3}
+    f_nested(x::Vector{Vector{Float64}}) = 1
+    f_nt(x::@NamedTuple{a::Int64, b::String}) = 1
+    f_nt_mismatched(x::@NamedTuple{a::Int64}) = 1
+    f_alias(x::AliasT{Int64}) = 1
+    f_pair_str(x::Pair{Int64,Float64}, y::String) = 1
+    struct ThreeParam{A,B,C} end
+    f_three(::ThreeParam{Tuple{Float64}}) = 1
+    f_tup_tv(x::Tuple{Int64, T, Float64}) where T<:Real = 1
+    f_two_int(a::Int64, b::Int64) = 1
+end
+@testset "type diff highlighting (#41061)" begin
+    buf41061 = IOBuffer()
+    # Nested type mismatches highlight only the innermost differing subtree
+    Base.show_method_candidates(buf41061, MethodError(Issue41061.f_nested, ([Int64[1,2,3]],)))
+    @test occursin("::Vector{Vector{!Matched{Float64}}}", String(take!(buf41061)))
+    # Color: gray inner match, red inner mismatch, gray inter-arg comma into a wholly-matched arg
+    let io = IOContext(buf41061, :color => true)
+        Base.show_method_candidates(io, MethodError(Issue41061.f_pair_str,
+            (Pair{Int64,Int64}(1, 2), "A")))
+        s = String(take!(buf41061))
+        @test occursin("\e[90mInt64\e[39m\e[90m, \e[39m\e[91mFloat64\e[39m", s)
+        @test occursin("\e[90m, \e[39m\e[90m::String\e[39m", s)
+    end
+    # NamedTuple with matching field names diffs per-field
+    Base.show_method_candidates(buf41061, MethodError(Issue41061.f_nt, ((a=1.0, b=:x),)))
+    @test occursin("::@NamedTuple{a::!Matched{Int64}, b::!Matched{String}}", String(take!(buf41061)))
+    # NamedTuples with mismatched field names fall back to whole-arg highlight
+    Base.show_method_candidates(buf41061, MethodError(Issue41061.f_nt_mismatched, ((b=Int64(1),),)))
+    @test occursin("!Matched::@NamedTuple{a::Int64}", String(take!(buf41061)))
+    # Aliases in modules not visible from the IO context get qualified
+    Base.show_method_candidates(buf41061, MethodError(Issue41061.f_alias, (Issue41061.InnerT{Float64,3}(),)))
+    @test occursin("Issue41061.AliasT{!Matched{Int64}}", String(take!(buf41061)))
+    # Entire signature wrong: leaf bail wraps the entire `::Type` in error_color
+    let io = IOContext(buf41061, :color => true)
+        called = Issue41061.ThreeParam{Tuple{Char}, Dict{Int64,Int64}, Dict{Int64,Int64}}()
+        Base.show_method_candidates(io, MethodError(Issue41061.f_three, (called,)))
+        s = String(take!(buf41061))
+        @test occursin("\e[91m::", s)
+        @test occursin("ThreeParam{Tuple{Float64}}\e[39m", s)
+    end
+    # mismatched concrete element and TypeVar element each highlighted independently
+    Base.show_method_candidates(buf41061, MethodError(Issue41061.f_tup_tv, ((1.0, "x", 2.0),)))
+    @test occursin("::Tuple{!Matched{Int64}, !Matched{T}, Float64}) where T<:Real", String(take!(buf41061)))
+    # Trailing missing-arg comma renders gray, matching the main-loop separator
+    let io = IOContext(buf41061, :color => true)
+        Base.show_method_candidates(io, MethodError(Issue41061.f_two_int, (Int64(1),)))
+        s = String(take!(buf41061))
+        @test occursin("\e[90m::Int64\e[39m\e[90m, \e[39m\e[91m::Int64\e[39m", s)
+    end
+end
 
 mutable struct Test_type end
 test_type = Test_type()
@@ -164,9 +245,10 @@ error_out3 = String(take!(buf))
 @test occursin("method_c6(; x) got unsupported keyword argument \"y\"$cmod$cfile$(c6line + 1)", error_out)
 @test occursin("method_c6(!Matched::Any; y)$cmod$cfile$(c6line + 2)", error_out)
 @test occursin("method_c6(::Any; y) got unsupported keyword argument \"x\"$cmod$cfile$(c6line + 2)", error_out1)
-@test occursin("method_c6_in_module(; x) got unsupported keyword argument \"y\"$cmod$cfile$(c6mline + 2)", error_out2)
-@test occursin("method_c6_in_module(!Matched::Any; y)$cmod$cfile$(c6mline + 3)", error_out2)
-@test occursin("method_c6_in_module(::Any; y) got unsupported keyword argument \"x\"$cmod$cfile$(c6mline + 3)", error_out3)
+c6mmod = "\n   @ $(Base.parentmodule_before_main(TestKWError))"
+@test occursin("method_c6_in_module(; x) got unsupported keyword argument \"y\"$c6mmod$cfile$(c6mline + 2)", error_out2)
+@test occursin("method_c6_in_module(!Matched::Any; y)$c6mmod$cfile$(c6mline + 3)", error_out2)
+@test occursin("method_c6_in_module(::Any; y) got unsupported keyword argument \"x\"$c6mmod$cfile$(c6mline + 3)", error_out3)
 
 c7line = @__LINE__() + 1
 method_c7(a, b; kargs...) = a
@@ -197,22 +279,7 @@ Base.show_method_candidates(buf, try bad_vararg_decl("hello", 3) catch e e end)
 @test occursin("bad_vararg_decl(!Matched::$Int, ::Any...)", String(take!(buf)))
 
 macro except_str(expr, err_type)
-    return quote
-        let err = nothing
-            try
-                $(esc(expr))
-            catch err
-            end
-            err === nothing && error("expected failure, but no exception thrown")
-            @test typeof(err) === $(esc(err_type))
-            buf = IOBuffer()
-            showerror(buf, err)
-            String(take!(buf))
-        end
-    end
-end
-
-macro except_strbt(expr, err_type)
+    source_info = __source__
     errmsg = "expected failure, but no exception thrown for $expr"
     return quote
         let err = nothing
@@ -221,7 +288,29 @@ macro except_strbt(expr, err_type)
             catch err
             end
             err === nothing && error($errmsg)
-            @test typeof(err) === $(esc(err_type))
+            @testset let expr=$(repr(expr))
+                $(Expr(:macrocall, Symbol("@test"), source_info, :(typeof(err) === $(esc(err_type)))))
+            end
+            buf = IOBuffer()
+            showerror(buf, err)
+            String(take!(buf))
+        end
+    end
+end
+
+macro except_strbt(expr, err_type)
+    source_info = __source__
+    errmsg = "expected failure, but no exception thrown for $expr"
+    return quote
+        let err = nothing
+            try
+                $(esc(expr))
+            catch err
+            end
+            err === nothing && error($errmsg)
+            @testset let expr=$(repr(expr))
+                $(Expr(:macrocall, Symbol("@test"), source_info, :(typeof(err) === $(esc(err_type)))))
+            end
             buf = IOBuffer()
             showerror(buf, err, catch_backtrace())
             String(take!(buf))
@@ -230,6 +319,8 @@ macro except_strbt(expr, err_type)
 end
 
 macro except_stackframe(expr, err_type)
+    source_info = __source__
+    errmsg = "expected failure, but no exception thrown for $expr"
     return quote
        let err = nothing
            local st
@@ -238,8 +329,10 @@ macro except_stackframe(expr, err_type)
            catch err
                st = stacktrace(catch_backtrace())
            end
-           err === nothing && error("expected failure, but no exception thrown")
-           @test typeof(err) === $(esc(err_type))
+           err === nothing && error($errmsg)
+           @testset let expr=$(repr(expr))
+               $(Expr(:macrocall, Symbol("@test"), source_info, :(typeof(err) === $(esc(err_type)))))
+           end
            sprint(show, st[1])
        end
     end
@@ -270,6 +363,7 @@ err_str = @except_str 1 + 2 MethodError
 err_str = @except_str Float64[](1) MethodError
 @test !occursin("import Base.Array", err_str)
 
+global Array
 Array() = 1
 err_str = @except_str Array([1]) MethodError
 @test occursin("import Base.Array", err_str)
@@ -343,7 +437,7 @@ let undefvar
     err_str = @except_str Vector{Any}(undef, 1)[1] UndefRefError
     @test err_str == "UndefRefError: access to undefined reference"
     err_str = @except_str undefvar UndefVarError
-    @test err_str == "UndefVarError: `undefvar` not defined"
+    @test startswith(err_str, "UndefVarError: `undefvar` not defined in local scope")
     err_str = @except_str read(IOBuffer(), UInt8) EOFError
     @test err_str == "EOFError: read end of file"
     err_str = @except_str Dict()[:doesnotexist] KeyError
@@ -377,6 +471,8 @@ let err_str,
     @test occursin("MethodError: no method matching Bool()", err_str)
     err_str = @except_str :a() MethodError
     @test occursin("MethodError: objects of type Symbol are not callable", err_str)
+    err_str = @except_str missing(1) MethodError
+    @test occursin("MethodError: objects of type Missing are not callable", err_str)
     err_str = @except_str EightBitType() MethodError
     @test occursin("MethodError: no method matching $(curmod_prefix)EightBitType()", err_str)
     err_str = @except_str i() MethodError
@@ -390,7 +486,10 @@ let err_str,
     err_str = @except_str FunctionLike()() MethodError
     @test occursin("MethodError: no method matching (::$(curmod_prefix)FunctionLike)()", err_str)
     err_str = @except_str [1,2](1) MethodError
-    @test occursin("MethodError: objects of type Vector{$Int} are not callable\nUse square brackets [] for indexing an Array.", err_str)
+    @test occursin("MethodError: objects of type Vector{$Int} are not callable.\n"*
+        "In case you did not try calling it explicitly, check if a Vector{$Int}"*
+        " has been passed as an argument to a method that expects a callable instead.\n"*
+        "In case you're trying to index into the array, use square brackets [] instead of parentheses ().", err_str)
     # Issue 14940
     err_str = @except_str randn(1)() MethodError
     @test occursin("MethodError: objects of type Vector{Float64} are not callable", err_str)
@@ -408,7 +507,7 @@ let err_str
     @test occursin("For element-wise subtraction, use broadcasting with dot syntax: array .- scalar", err_str)
 end
 
-
+import Core: String
 method_defs_lineno = @__LINE__() + 1
 String() = throw(ErrorException("1"))
 (::String)() = throw(ErrorException("2"))
@@ -453,7 +552,7 @@ let err_str,
     @test startswith(sprint(show, which(StructWithUnionAllMethodDefs{<:Integer}, (Any,))),
                      "($(curmod_prefix)StructWithUnionAllMethodDefs{T} where T<:Integer)(x)")
     @test repr("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 1 method)"
-    @test repr("text/plain", Core.arraysize) == "arraysize (built-in function)"
+    @test repr("text/plain", Core.getfield) == "getfield (built-in function)"
 
     err_str = @except_stackframe String() ErrorException
     @test err_str == "String() at $sn:$(method_defs_lineno + 0)"
@@ -494,7 +593,7 @@ let
     @test (@macroexpand @fastmath +      ) == :(Base.FastMath.add_fast)
     @test (@macroexpand @fastmath min(1) ) == :(Base.FastMath.min_fast(1))
     let err = try; @macroexpand @doc "" f() = @x; catch ex; ex; end
-        @test err == UndefVarError(Symbol("@x"))
+        @test err == UndefVarError(Symbol("@x"), @__MODULE__)
     end
     @test (@macroexpand @seven_dollar $bar) == 7
     x = 2
@@ -524,8 +623,16 @@ end
     ex = :(@nest2b 42)
     @test _macroexpand1(ex) != macroexpand(M,ex)
     @test _macroexpand1(_macroexpand1(ex)) == macroexpand(M, ex)
-    @test (@macroexpand1 @nest2b 42) == _macroexpand1(ex)
+    @test (@macroexpand1 @nest2b 42) == _macroexpand1(:(@nest2b 42))
 end
+
+module TwoargMacroExpand
+macro modulecontext(); return __module__; end
+end
+@test (@__MODULE__) == @macroexpand TwoargMacroExpand.@modulecontext
+@test TwoargMacroExpand == @macroexpand TwoargMacroExpand @modulecontext
+@test (@__MODULE__) == @macroexpand1 TwoargMacroExpand.@modulecontext
+@test TwoargMacroExpand == @macroexpand1 TwoargMacroExpand @modulecontext
 
 foo_9965(x::Float64; w=false) = x
 foo_9965(x::Int) = 2x
@@ -542,17 +649,37 @@ foo_9965(x::Int) = 2x
     @test occursin("got unsupported keyword argument \"w\"", String(take!(io)))
 end
 
+@testset "MethodError with long types (#50803)" begin
+    a = view(reinterpret(reshape, UInt8, PermutedDimsArray(rand(5, 7), (2, 1))), 2:3, 2:4, 1:4) # a mildly-complex type
+    function f50803 end
+    ex50803 = try
+        f50803(a, a, a, a, a, a)
+    catch e
+        e
+    end::MethodError
+    tlf = Ref(false)
+    str = sprint(Base.showerror, ex50803; context=(:displaysize=>(1000, 120), :stacktrace_types_limited=>tlf))
+    @test tlf[]
+    @test occursin("::SubArray{…}", str)
+    tlf[] = false
+    str = sprint(Base.showerror, ex50803; context=(:displaysize=>(1000, 10000), :stacktrace_types_limited=>tlf))
+    @test !tlf[]
+    str = sprint(Base.showerror, ex50803; context=(:displaysize=>(1000, 120)))
+    @test !occursin("::SubArray{…}", str)
+end
+
 # Issue #20556
 import REPL
 module EnclosingModule
     abstract type AbstractTypeNoConstructors end
 end
 let
-    method_error = MethodError(EnclosingModule.AbstractTypeNoConstructors, ())
+    method_error = MethodError(EnclosingModule.AbstractTypeNoConstructors, (), Base.get_world_counter())
 
     # Test that it shows a special message when no constructors have been defined by the user.
-    @test sprint(showerror, method_error) ==
-        "MethodError: no constructors have been defined for $(EnclosingModule.AbstractTypeNoConstructors)"
+    @test startswith(sprint(showerror, method_error),
+        """MethodError: no constructors have been defined for $(EnclosingModule.AbstractTypeNoConstructors)
+           The type `$(EnclosingModule.AbstractTypeNoConstructors)` exists, but no method is defined for this combination of argument types when trying to construct it.""")
 
     # Does it go back to previous behaviour when there *is* at least
     # one constructor defined?
@@ -571,7 +698,7 @@ let
     end
 end
 
-@testset "show for manually thrown MethodError" begin
+@testset "show for MethodError with world age issue" begin
     global f21006
 
     f21006() = nothing
@@ -611,6 +738,66 @@ end
         @test startswith(str, "MethodError: no method matching f21006(::Tuple{})")
         @test !occursin("The applicable method may be too new", str)
     end
+
+    str = sprint(Base.showerror, MethodError(+, (1.0, 2.0)))
+    @test startswith(str, "MethodError: no method matching +(::Float64, ::Float64)")
+    @test occursin("This error has been manually thrown, explicitly", str)
+
+    str = sprint(Base.showerror, MethodError(+, (1.0, 2.0), Base.get_world_counter()))
+    @test startswith(str, "MethodError: no method matching +(::Float64, ::Float64)")
+    @test occursin("This error has been manually thrown, explicitly", str)
+
+    str = sprint(Base.showerror, MethodError(Core.kwcall, ((; a=3.0), +, 1.0, 2.0)))
+    @test startswith(str, "MethodError: no method matching +(::Float64, ::Float64; a::Float64)")
+    @test occursin("This error has been manually thrown, explicitly", str)
+
+    str = sprint(Base.showerror, MethodError(Core.kwcall, ((; a=3.0), +, 1.0, 2.0), Base.get_world_counter()))
+    @test startswith(str, "MethodError: no method matching +(::Float64, ::Float64; a::Float64)")
+    @test occursin("This method does not support all of the given keyword arguments", str)
+
+    @test_throws "MethodError: no method matching kwcall()" Core.kwcall()
+end
+
+# Issue #50200
+using Base.Experimental: @opaque
+@testset "show for MethodError with world age issue (kwarg)" begin
+    test_no_error(f) = @test f() === nothing
+    function test_worldage_error(f)
+        ex = try; f(); error("Should not have been reached") catch ex; ex; end
+        strex = sprint(Base.showerror, ex)
+        @test occursin("The applicable method may be too new", strex)
+        @test !occursin("!Matched::", sprint(Base.showerror, strex))
+    end
+
+    global callback50200
+
+    # First the no-kwargs version
+    callback50200 = (args...)->nothing
+    f = @opaque ()->callback50200()
+    test_no_error(f)
+    callback50200 = (args...)->nothing
+    test_worldage_error(f)
+
+    callback50200 = (args...; kwargs...)->nothing
+    f = @opaque ()->callback50200(;a=1)
+    test_no_error(f)
+    callback50200 = (args...; kwargs...)->nothing
+    test_worldage_error(f)
+end
+
+# suggest candidate methods on typename wrapper when parameterized call has no methods
+struct ParametricOuterBareInner{T}
+    x::T
+    ParametricOuterBareInner(x) = ParametricOuterBareInner{typeof(x)}(x)
+end
+let err_str
+    err_str = @except_str ParametricOuterBareInner{String}("abc") MethodError
+    @test occursin(
+        "Hint: constructors are defined for `$(curmod_prefix)ParametricOuterBareInner`, " *
+            "but not for `$(curmod_prefix)ParametricOuterBareInner{String}`",
+        err_str,
+    )
+    @test occursin("ParametricOuterBareInner(::Any)", err_str)
 end
 
 # Custom hints
@@ -633,7 +820,7 @@ let err_str
     @test occursin(Regex("MethodError: no method matching one\\(::.*HasNoOne; value::$(Int)\\)"), err_str)
     @test occursin("`one` doesn't take keyword arguments, that would be silly", err_str)
 end
-pop!(Base.Experimental._hint_handlers[MethodError])  # order is undefined, don't copy this
+pop!(Base.Experimental._hint_handlers[Core.typename(MethodError)])  # order is undefined, don't copy this
 
 function busted_hint(io, exc, notarg)  # wrong number of args
     print(io, "\nI don't have a hint for you, sorry")
@@ -645,16 +832,50 @@ catch ex
     io = IOBuffer()
     @test_logs (:error, "Hint-handler busted_hint for DomainError in $(@__MODULE__) caused an error") showerror(io, ex)
 end
-pop!(Base.Experimental._hint_handlers[DomainError])  # order is undefined, don't copy this
+pop!(Base.Experimental._hint_handlers[Core.typename(DomainError)])  # order is undefined, don't copy this
+
+# a throwing hint handler is reported once, rather than re-run when the logged
+# exception stack (which contains the hinted exception) is shown
+struct HintRecursionException <: Exception end
+Base.showerror(io::IO, ex::HintRecursionException) = Base.Experimental.show_error_hints(io, ex)
+Base.Experimental.register_error_hint((io, exc) -> error("busted"), HintRecursionException)
+try
+    throw(HintRecursionException())
+catch ex
+    logbuf = IOBuffer()
+    Base.CoreLogging.with_logger(Base.CoreLogging.ConsoleLogger(logbuf)) do
+        showerror(IOBuffer(), ex)
+    end
+    @test count("caused an error", String(take!(logbuf))) == 1
+end
+pop!(Base.Experimental._hint_handlers[Core.typename(HintRecursionException)])
 
 struct ANumber <: Number end
-let err_str
-    err_str = @except_str ANumber()(3 + 4) MethodError
+let err_str = @except_str ANumber()(3 + 4) MethodError
     @test occursin("objects of type $(curmod_prefix)ANumber are not callable", err_str)
     @test count(==("Maybe you forgot to use an operator such as *, ^, %, / etc. ?"), split(err_str, '\n')) == 1
     # issue 40478
     err_str = @except_str ANumber()(3 + 4) MethodError
     @test count(==("Maybe you forgot to use an operator such as *, ^, %, / etc. ?"), split(err_str, '\n')) == 1
+end
+
+let a = [1 2; 3 4];
+    err_str = @except_str (a[1][2] = 5) MethodError
+    @test occursin("\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ", err_str)
+    @test occursin("a[1, 2]", err_str)
+    @test occursin("rather than a[1][2]", err_str)
+end
+
+let d = Dict
+    err_str = @except_str (d[1] = 5) MethodError
+    @test occursin("\nYou attempted to index the type Dict, rather than an instance of the type. Make sure you create the type using its constructor: ", err_str)
+    @test occursin("d = Dict([...])", err_str)
+    @test occursin(" rather than d = Dict", err_str)
+end
+
+let s = Some("foo")
+    err_str = @except_str (s[] = "bar") MethodError
+    @test !occursin("You attempted to index the type String", err_str)
 end
 
 # Execute backtrace once before checking formatting, see #38858
@@ -668,13 +889,163 @@ backtrace()
     io = IOBuffer()
     Base.show_backtrace(io, bt)
     output = split(String(take!(io)), '\n')
-    @test lstrip(output[3])[1:3] == "[1]"
+    length(output) >= 8 || println(output) # for better errors when this fails
+    @test lstrip(output[3])[1] == '┌'
+    @test lstrip(lstrip(output[3])[4:end])[1:3] == "[1]"
     @test occursin("g28442", output[3])
-    @test lstrip(output[5])[1:3] == "[2]"
+    @test lstrip(output[5])[1] == '├'
+    @test lstrip(lstrip(output[5])[4:end])[1:3] == "[2]"
     @test occursin("f28442", output[5])
-    @test occursin("the last 2 lines are repeated 5000 more times", output[7])
-    @test lstrip(output[8])[1:7] == "[10003]"
+    is_windows_32_bit = Sys.iswindows() && (Sys.WORD_SIZE == 32)
+    if is_windows_32_bit
+        # These tests are currently broken (intermittently/non-determistically) on 32-bit Windows.
+        # https://github.com/JuliaLang/julia/issues/55900
+        # Instead of skipping them entirely, we skip one, and we loosen the other.
+
+        # Broken test: @test occursin("repeated 5001 times", output[7])
+        @test occursin("repeated ", output[7])
+        @test occursin(" times", output[7])
+
+        # Broken test: @test lstrip(output[8])[1:7] == "[10003]"
+        @test_broken false
+    else
+        @test occursin("repeated 5001 times", output[7])
+        @test lstrip(output[8])[1:7] == "[10003]"
+    end
 end
+
+@testset "Long stacktrace printing - nested repeated single frame" begin
+    f28442a(n) = n ≤ 0 ? (return backtrace()) : g28442a(n - 1)
+    g28442a(n) = 80 > n > 20 ? h28442a(n - 1) : f28442a(n - 1)
+    h28442a(n) = n % 10 == 0 ? g28442a(n - 1) : h28442a(n - 1)
+    bt = f28442a(100)
+    io = IOBuffer()
+    Base.show_backtrace(io, bt)
+    output = split(String(take!(io)), '\n')
+    length(output) >= 21 || println(output) # for better errors when this fails
+    @test startswith(lstrip(output[3]), "┌ ")
+    @test lstrip(lstrip(output[3])[4:end])[1:3] == "[1]"
+    @test occursin("f28442a", output[3])
+    @test startswith(lstrip(output[5]), "├ ")
+    @test lstrip(lstrip(output[5])[4:end])[1:3] == "[2]"
+    @test occursin("g28442a", output[5])
+
+    @test startswith(lstrip(output[8]), "┌┌ ")
+    @test occursin("h28442a", output[8])
+    @test startswith(lstrip(output[11]), "├ ")
+    @test occursin("g28442a", output[11])
+
+    @test startswith(lstrip(output[14]), "┌ ")
+    @test occursin("f28442a", output[14])
+    @test startswith(lstrip(output[16]), "├ ")
+    @test occursin("g28442a", output[16])
+
+    @test occursin("f28442a", output[19])
+
+    is_windows_32_bit = Sys.iswindows() && (Sys.WORD_SIZE == 32)
+    if is_windows_32_bit
+        # Assuming tests are broken on 32-bit Windows as above, no need to repeat loose tests here.
+    else
+        @test occursin("repeated 10 times", output[7])
+        @test lstrip(lstrip(output[8])[7:end])[1:4] == "[21]"
+        @test occursin("repeated 9 times", output[10])
+        @test lstrip(lstrip(output[11])[4:end])[1:4] == "[30]"
+        @test occursin("repeated 6 times", output[13])
+        @test lstrip(lstrip(output[14])[4:end])[1:4] == "[81]"
+        @test lstrip(lstrip(output[16])[4:end])[1:4] == "[82]"
+        @test lstrip(output[19])[1:5] == "[101]"
+        @test lstrip(output[21])[1:5] == "[102]"
+    end
+end
+
+@testset "Long stacktrace printing - nested cycles" begin
+    f28442b(n) = n ≤ 0 ? (return backtrace()) : g28442b(n - 1)
+    g28442b(n) = 80 > n > 60 || 40 > n > 20 ? h28442b(n - 1) : f28442b(n - 1)
+    h28442b(n) = g28442b(n - 1)
+    bt = f28442b(100)
+    io = IOBuffer()
+    Base.show_backtrace(io, bt)
+    output = split(String(take!(io)), '\n')
+    length(output) >= 21 || println(output) # for better errors when this fails
+    @test startswith(lstrip(output[3]), "┌┌ ")
+    @test lstrip(lstrip(output[3])[7:end])[1:3] == "[1]"
+    @test occursin("f28442b", output[3])
+    @test startswith(lstrip(output[5]), "├├ ")
+    @test lstrip(lstrip(output[5])[7:end])[1:3] == "[2]"
+    @test occursin("g28442b", output[5])
+
+    is_windows_32_bit = Sys.iswindows() && (Sys.WORD_SIZE == 32)
+    if is_windows_32_bit
+        # Assuming tests are broken on 32-bit Windows as above, no need to repeat loose tests here.
+    else
+        @test occursin("repeated 10 times", output[7])
+
+        @test startswith(lstrip(output[8]), "├┌ ")
+        @test occursin("h28442b", output[8])
+        @test lstrip(lstrip(output[8])[7:end])[1:4] == "[21]"
+        @test startswith(lstrip(output[10]), "├├ ")
+        @test occursin("g28442b", output[10])
+        @test lstrip(lstrip(output[10])[7:end])[1:4] == "[22]"
+        @test occursin("repeated 10 times", output[12])
+
+        # The outer cycle closes here, having stood for two turns of the two above
+        @test occursin("repeated 2 times", output[13])
+
+        @test startswith(lstrip(output[14]), "┌ ")
+        @test occursin("f28442b", output[14])
+        @test lstrip(lstrip(output[14])[4:end])[1:4] == "[81]"
+        @test startswith(lstrip(output[16]), "├ ")
+        @test occursin("g28442b", output[16])
+        @test lstrip(lstrip(output[16])[4:end])[1:4] == "[82]"
+        @test occursin("repeated 10 times", output[18])
+
+        @test occursin("f28442b", output[19])
+        @test lstrip(output[19])[1:5] == "[101]"
+        @test lstrip(output[21])[1:5] == "[102]"
+    end
+end
+
+@testset "Long stacktrace printing - cycle longer than two frames" begin
+    f59999(c) = g59999(c + 1)
+    g59999(c) = h59999(c + 1)
+    h59999(c) = c > 10000 ? (return backtrace()) : f59999(c + 1)
+    bt = f59999(1)
+    io = IOBuffer()
+    Base.show_backtrace(io, bt)
+    output = split(String(take!(io)), '\n')
+    length(output) >= 9 || println(output) # for better errors when this fails
+
+    # The bracket opens on the first frame of the repeating unit, not part way round it
+    @test lstrip(output[3])[1] == '┌'
+    @test lstrip(lstrip(output[3])[4:end])[1:3] == "[1]"
+    @test occursin("h59999", output[3])
+    @test lstrip(output[5])[1] == '├'
+    @test occursin("g59999", output[5])
+    @test lstrip(output[7])[1] == '├'
+    @test occursin("f59999", output[7])
+    @test occursin(r"repeated \d+ times", output[9])
+end
+
+@testset "Long stacktrace printing - cycle ending near the end of the trace" begin
+    #= Built by hand so the number of frames after the cycle is exact: thirteen turns of a
+    four-frame unit, then one frame. The bracket has to be closed within the trace. =#
+    frame59999(name) = Base.StackTraces.StackFrame(Symbol(name), Symbol("demo.jl"), 1)
+    trace = Any[[(frame59999("u$u"), 1) for _ ∈ 1:13 for u ∈ 1:4]...,
+                (frame59999("tail"), 1)]
+    @test length(trace) > Base.BIG_STACKTRACE_SIZE
+
+    io = IOBuffer()
+    Base.show_backtrace(io, trace)
+    output = split(String(take!(io)), '\n')
+
+    @test lstrip(output[3])[1] == '┌'
+    @test lstrip(lstrip(output[3])[4:end])[1:3] == "[1]"
+    @test occursin("u1", output[3])
+    # The cycle is closed, and what follows it is numbered past all of its repetitions
+    @test any(l -> occursin("repeated 13 times", l), output)
+    @test any(l -> occursin("[53] tail", l), output)
+end
+
 
 @testset "Line number correction" begin
     getbt() = backtrace()
@@ -700,6 +1071,150 @@ end
 # issue #30633
 @test_throws ArgumentError("invalid index: \"foo\" of type String") [1]["foo"]
 @test_throws ArgumentError("invalid index: nothing of type Nothing") [1][nothing]
+
+# issue #53618, pr #55165
+@testset "FieldErrorHints" begin
+    struct FieldFoo
+        a::Float32
+        b::Int
+    end
+    Base.propertynames(foo::FieldFoo) = (:a, :x, :y)
+
+    s = FieldFoo(1, 2)
+
+    test = @test_throws FieldError s.c
+
+    ex = test.value::FieldError
+
+    # Check error message first
+    errorMsg = sprint(Base.showerror, ex)
+    @test occursin("FieldError: type", errorMsg)
+    @test occursin("FieldFoo has no field `c`", errorMsg)
+    @test occursin("available fields: `a`, `b`", errorMsg)
+    @test occursin("Available properties: `x`, `y`", errorMsg)
+
+    d = Dict(s => 1)
+
+    for fld in fieldnames(Dict)
+        ex = try
+            getfield(d, fld)
+        catch e
+            print(e)
+        end
+        @test !(ex isa Type) || ex <: FieldError
+    end
+    test = @test_throws FieldError d.c
+
+    ex = test.value::FieldError
+
+    errorMsg = sprint(Base.showerror, ex)
+    @test occursin("FieldError: type Dict has no field `c`", errorMsg)
+    # Check hint message
+    hintExpected = "Did you mean to access dict values using key: `:c` ? Consider using indexing syntax dict[:c]\n"
+    @test occursin(hintExpected, errorMsg)
+
+    # abstract types have no fields to list, and the hint handler must not throw
+    ex = (@test_throws FieldError fieldtype(Integer, :a)).value::FieldError
+    errorMsg = @test_logs sprint(Base.showerror, ex)
+    @test errorMsg == "FieldError: type Integer has no field `a`"
+end
+
+module FieldErrorTest
+struct Point end
+p = Point()
+end
+
+@testset "FieldError with changing fields" begin
+    # https://discourse.julialang.org/t/better-error-message-for-modified-structs-in-julia-1-12/129265
+    err_str1 = @except_str FieldErrorTest.p.x FieldError
+    @test occursin("FieldErrorTest.Point", err_str1)
+    @eval FieldErrorTest struct Point{T}
+        x::T
+        y::T
+    end
+    err_str2 = @except_str FieldErrorTest.p.x FieldError
+    @test occursin("@world", err_str2)
+    @test occursin("FieldErrorTest.Point", err_str2)
+end
+
+# UndefVar error hints
+module A53000
+    export f
+    f() = 0.0
+end
+
+module C_outer_53000
+    import ..A53000: f
+    public f
+
+    module C_inner_53000
+    import ..C_outer_53000: f
+    export f
+    end
+end
+
+module D_53000
+    public f
+    f() = 1.0
+end
+
+C_inner_53000 = "I'm a decoy with the same name as C_inner_53000!"
+
+Base.Experimental.register_error_hint(Base.UndefVarError_hint, UndefVarError)
+
+@testset "undefvar error hints" begin
+    old_modules_order = Base.loaded_modules_order
+    append!(Base.loaded_modules_order, [A53000, C_outer_53000, C_outer_53000.C_inner_53000, D_53000])
+    test = @test_throws UndefVarError f
+    ex = test.value::UndefVarError
+    errormsg = sprint(Base.showerror, ex)
+    mod = @__MODULE__
+    @test occursin("Hint: a global variable of this name also exists in $mod.A53000.", errormsg)
+    @test occursin("Hint: a global variable of this name also exists in $mod.D_53000.", errormsg)
+    @test occursin("- Also declared public in $mod.C_outer_53000", errormsg)
+    @test occursin("- Also exported by $mod.C_outer_53000.C_inner_53000 (loaded but not imported in Main).", errormsg)
+    copy!(Base.loaded_modules_order, old_modules_order)
+end
+@testset " test the functionality of `UndefVarError_hint` against import clashes" begin
+    @eval module X
+        module A
+        export x
+        x = 1
+        end # A
+
+        module B
+        export x
+        x = 2
+        end # B
+
+        using .A, .B
+
+    end # X
+
+    expected_message = string("\nHint: It looks like two or more modules export different ",
+                              "bindings with this name, resulting in ambiguity. Try explicitly ",
+                              "importing it from a particular module, or qualifying the name ",
+                              "with the module it should come from.")
+    @test_throws expected_message X.x
+end
+
+# Module for UndefVarError world age testing
+module TestWorldAgeUndef end
+
+@testset "UndefVarError world age hint" begin
+    ex = try
+        TestWorldAgeUndef.newvar
+    catch e
+        e
+    end
+    @test ex isa UndefVarError
+
+    Core.eval(TestWorldAgeUndef, :(newvar = 42))
+
+    err_str = sprint(Base.showerror, ex)
+    @test occursin("The binding may be too new: running in world age", err_str)
+    @test occursin("while current world is", err_str)
+end
 
 # test showing MethodError with type argument
 struct NoMethodsDefinedHere; end
@@ -740,6 +1255,70 @@ for (func,str) in ((TestMethodShadow.:+,":+"), (TestMethodShadow.:(==),":(==)"),
     @test occursin("You may have intended to import Base.$str", sprint(Base.showerror, ex))
 end
 
+# Test hint for functions in modules of argument types (issue #58682)
+module TestModuleHint
+    struct Bar end
+    length(x::Bar) = 42
+end
+let ex = try
+        # Call Base.length on TestModuleHint.Bar - should suggest importing TestModuleHint.length
+        length(TestModuleHint.Bar())
+    catch e
+        e
+    end::MethodError
+    @test occursin("may have intended to extend", sprint(Base.showerror, ex))
+end
+
+module TestShadowedTypeHintA
+    struct Foo end
+    f(::Foo) = 1
+    g(::Foo, ::Int) = 1
+    diag(::Foo, x::T, y::T) where T = 1
+end
+module TestShadowedTypeHintB
+    struct Foo end
+end
+module TestShadowRedefA
+    module Sub
+        struct X end
+    end
+    f(::Sub.X) = 1
+    module Sub
+        struct X end
+    end
+end
+module TestShadowRedefB
+    struct Y; x; end
+    g(::Y) = 1
+    struct Y end
+end
+@testset "shadowed-type hint #41084" begin
+    ex = try TestShadowedTypeHintA.f(TestShadowedTypeHintB.Foo()) catch e; e end
+    s = sprint(Base.showerror, ex)
+    @test occursin("You may have intended `", s)
+    @test occursin("TestShadowedTypeHintA.Foo", s)
+    @test occursin("TestShadowedTypeHintB.Foo", s)
+
+    ex = try sin("a") catch e; e end
+    @test !occursin("You may have intended", sprint(Base.showerror, ex))
+
+    ex = try TestShadowedTypeHintA.g(TestShadowedTypeHintB.Foo(), "not an int") catch e; e end
+    @test !occursin("You may have intended", sprint(Base.showerror, ex))
+
+    ex = try TestShadowedTypeHintA.diag(TestShadowedTypeHintB.Foo(), 1, "x") catch e; e end
+    @test !occursin("You may have intended", sprint(Base.showerror, ex))
+
+    ex = try TestShadowRedefA.f(TestShadowRedefA.Sub.X()) catch e; e end
+    s = sprint(Base.showerror, ex)
+    @test occursin("appears to have been redefined", s)
+    @test !occursin("rather than", s)
+
+    ex = try TestShadowRedefB.g(TestShadowRedefB.Y()) catch e; e end
+    s = sprint(Base.showerror, ex)
+    @test occursin("appears to have been redefined", s)
+    @test !occursin("rather than", s)
+end
+
 # Test that implementation detail of include() is hidden from the user by default
 let bt = try
         @noinline include("testhelpers/include_error.jl")
@@ -749,6 +1328,46 @@ let bt = try
     bt_str = sprint(Base.show_backtrace, bt)
     @test occursin(" include(", bt_str)
     @test !occursin(" _include(", bt_str)
+end
+
+# Test that the code loading machinery is collapsed to the frame that entered it
+@testset "loading frames" begin
+    frame(func, file, line=1) = Base.StackTraces.StackFrame(Symbol(func), Symbol(file), line)
+    process(funcfiles) = Base.process_backtrace(Base.StackFrame[frame(f, fi) for (f, fi) in funcfiles])
+    funcs(trace) = [String(f.func) for (f, n) in trace]
+
+    # `using Foo` where the package cannot be found
+    @test funcs(process([("macro expansion", "loading.jl"), ("macro expansion", "lock.jl"),
+                         ("__require", "loading.jl"), ("require", "loading.jl"),
+                         ("eval_import_path", "module.jl"), ("_eval_using", "module.jl"),
+                         ("top-level scope", "none")])) == ["require", "top-level scope"]
+
+    # user code that errors while the package is being loaded must be kept
+    @test funcs(process([("inner", "BadPkg.jl"), ("top-level scope", "BadPkg.jl"),
+                         ("include", "Base.jl"), ("__require_prelocked", "loading.jl"),
+                         ("_require_prelocked", "loading.jl"), ("require", "loading.jl"),
+                         ("_eval_using", "module.jl"), ("top-level scope", "none")])) ==
+          ["inner", "top-level scope", "require", "top-level scope"]
+
+    # precompilation worker processes have no `require` frame, and the long
+    # `include_package_for_output` signature is not what we want to show
+    @test funcs(process([("inner", "BadPkg.jl"), ("top-level scope", "BadPkg.jl"),
+                         ("include", "Base.jl"), ("include_package_for_output", "loading.jl"),
+                         ("top-level scope", "stdin")])) ==
+          ["inner", "top-level scope", "include", "top-level scope"]
+
+    # runs without a loading entry point are left alone
+    @test funcs(process([("f", "user.jl"), ("invoke_in_world", "essentials.jl"),
+                         ("g", "user.jl")])) == ["f", "invoke_in_world", "g"]
+    @test funcs(process([("f", "user.jl"), ("include", "Base.jl"),
+                         ("top-level scope", "script.jl")])) ==
+          ["f", "include", "top-level scope"]
+
+    # opt out
+    withenv("JULIA_STACKTRACE_FULL_LOADING" => "true") do
+        @test length(process([("macro expansion", "loading.jl"), ("__require", "loading.jl"),
+                              ("require", "loading.jl"), ("top-level scope", "none")])) == 4
+    end
 end
 
 # Test backtrace printing
@@ -784,6 +1403,28 @@ let err = nothing
     end
 end
 
+# expands inline, without the `do`-block forms of `mktemp`/`redirect_stderr`: a
+# StackOverflowError is only reliably catchable from the interpreted top-level
+# `@testset` body, not from within a compiled closure
+macro capture_stack_overflow(ex)
+    return quote
+        local path, warning_output = mktemp()
+        local prev_stderr = stderr
+        redirect_stderr(warning_output)
+        local bt = try
+            $(esc(ex))
+        catch
+            catch_backtrace()
+        finally
+            redirect_stderr(prev_stderr)
+            close(warning_output)
+        end
+        local warning = read(path, String)
+        rm(path)
+        bt, warning
+    end
+end
+
 # issue #37587
 # TODO: enable on more platforms
 if (Sys.isapple() || Sys.islinux()) && Sys.ARCH === :x86_64
@@ -792,22 +1433,16 @@ if (Sys.isapple() || Sys.islinux()) && Sys.ARCH === :x86_64
     pair_repeater_b() = pair_repeater_a()
 
     @testset "repeated stack frames" begin
-        let bt = try
-                single_repeater()
-            catch
-                catch_backtrace()
-            end
+        let (bt, warning) = @capture_stack_overflow(single_repeater())
+            @test occursin("Warning: detected a stack overflow", warning)
             bt_str = sprint(Base.show_backtrace, bt)
-            @test occursin(r"repeats \d+ times", bt_str)
+            @test occursin(r"repeated \d+ times", bt_str)
         end
 
-        let bt = try
-                pair_repeater_a()
-            catch
-                catch_backtrace()
-            end
+        let (bt, warning) = @capture_stack_overflow(pair_repeater_a())
+            @test occursin("Warning: detected a stack overflow", warning)
             bt_str = sprint(Base.show_backtrace, bt)
-            @test occursin(r"the last 2 lines are repeated \d+ more times", bt_str)
+            @test occursin(r"repeated \d+ times", bt_str)
         end
     end
 end
@@ -913,14 +1548,21 @@ end
 
 for (expr, errmsg) in
     [
-        (:(struct Foo <: 1 end),       "can only subtype data types"),
+        (:(struct Foo <: 0x01 end),       "supertype must be a type, got a value of type `UInt8`"),
         (:(struct Foo <: Float64 end), "can only subtype abstract types"),
+        (:(struct Foo <: Dict end), "can only subtype abstract types"),
         (:(struct Foo <: Foo end),     "a type cannot subtype itself"),
         (:(struct Foo <: Tuple{Float64} end), "cannot subtype a tuple type"),
+        (:(struct Foo <: (Tuple{T} where T) end), "cannot subtype a tuple type"),
         (:(struct Foo <: NamedTuple{(:a,), Tuple{Int64}} end), "cannot subtype a named tuple type"),
+        (:(struct Foo <: NamedTuple end), "cannot subtype a named tuple type"),
         (:(struct Foo <: Type{Float64} end), "cannot add subtypes to Type"),
         (:(struct Foo <: Type{Float64} end), "cannot add subtypes to Type"),
         (:(struct Foo <: typeof(Core.apply_type) end), "cannot add subtypes to Core.Builtin"),
+        (:(struct Foo <: AbstractArray end), "supertype `AbstractArray{T, N}` has unbound type parameters"),
+        (:(struct Foo{T} <: AbstractArray{T} end), "supertype `AbstractArray{T, N}` has unbound type parameters"),
+        (:(struct Foo <: (AbstractArray{T, N} where T <: Integer where N) end), "supertype `AbstractArray{T<:Integer, N}` has unbound type parameters"),
+        (:(struct Foo <: Union{Int, Float64} end), "cannot subtype a Union type"),
     ]
     err = try @eval $expr
     catch e
@@ -932,6 +1574,50 @@ end
 let err_str
     err_str = @except_str "a" + "b" MethodError
     @test occursin("String concatenation is performed with *", err_str)
+end
+
+# https://github.com/JuliaLang/julia/issues/57613
+let err_str
+    err_str = @except_str replace!("abc", "a" => "1") MethodError
+    @test occursin("`String`s cannot be modified with `replace!`", err_str)
+    err_str = @except_str replace!(uppercase, "abc") MethodError
+    @test occursin("`String`s cannot be modified with `replace!`", err_str)
+    err_str = @except_str replace!((1, 2), 1 => 0) MethodError
+    @test !occursin("cannot be modified with `replace!`", err_str)
+end
+
+# https://github.com/JuliaLang/julia/issues/55745
+let err_str
+    err_str = @except_str +() MethodError
+    @test !occursin("String concatenation is performed with *", err_str)
+end
+
+struct MissingLength; end
+struct MissingSize; end
+Base.IteratorSize(::Type{MissingSize}) = Base.HasShape{2}()
+Base.iterate(::MissingLength) = nothing
+Base.iterate(::MissingSize) = nothing
+
+let err_str
+    expected = "Finding the minimum of an iterable is performed with `minimum`."
+    err_str = @except_str min([1,2,3]) MethodError
+    @test occursin(expected, err_str)
+    err_str = @except_str min((i for i in 1:3)) MethodError
+    @test occursin(expected, err_str)
+    expected = "Finding the maximum of an iterable is performed with `maximum`."
+    err_str = @except_str max([1,2,3]) MethodError
+    @test occursin(expected, err_str)
+
+    expected = "You may need to implement the `length` method or define `IteratorSize` for this type to be `SizeUnknown`."
+    err_str = @except_str length(MissingLength()) MethodError
+    @test occursin(expected, err_str)
+    err_str = @except_str collect(MissingLength()) MethodError
+    @test occursin(expected, err_str)
+    expected = "You may need to implement the `length` and `size` methods for `IteratorSize` `HasShape`."
+    err_str = @except_str size(MissingSize()) MethodError
+    @test occursin(expected, err_str)
+    err_str = @except_str collect(MissingSize()) MethodError
+    @test occursin(expected, err_str)
 end
 
 @testset "unused argument names" begin
@@ -950,40 +1636,231 @@ end
 
 f_internal_wrap(g, a; kw...) = error();
 @inline f_internal_wrap(a; kw...) = f_internal_wrap(identity, a; kw...);
-bt = try
-    f_internal_wrap(1)
-catch
-    catch_backtrace()
+let bt
+    @test try
+        f_internal_wrap(1)
+        false
+    catch
+        bt = catch_backtrace()
+        true
+    end
+    @test !occursin("#f_internal_wrap#", sprint(Base.show_backtrace, bt))
 end
-@test !occursin("#f_internal_wrap#", sprint(Base.show_backtrace, bt))
 
 g_collapse_pos(x, y=1.0, z=2.0) = error()
-bt = try
-    g_collapse_pos(1.0)
-catch
-    catch_backtrace()
+let bt
+    @test try
+        g_collapse_pos(1.0)
+        false
+    catch
+        bt = catch_backtrace()
+        true
+    end
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin("g_collapse_pos(x::Float64, y::Float64, z::Float64)", bt_str)
+    @test !occursin("g_collapse_pos(x::Float64)", bt_str)
 end
-bt_str = sprint(Base.show_backtrace, bt)
-@test occursin("g_collapse_pos(x::Float64, y::Float64, z::Float64)", bt_str)
-@test !occursin("g_collapse_pos(x::Float64)", bt_str)
 
 g_collapse_kw(x; y=2.0) = error()
-bt = try
-    g_collapse_kw(1.0)
-catch
-    catch_backtrace()
+let bt
+    @test try
+        g_collapse_kw(1.0)
+        false
+    catch
+        bt = catch_backtrace()
+        true
+    end
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin("g_collapse_kw(x::Float64; y::Float64)", bt_str)
+    @test !occursin("g_collapse_kw(x::Float64)", bt_str)
 end
-bt_str = sprint(Base.show_backtrace, bt)
-@test occursin("g_collapse_kw(x::Float64; y::Float64)", bt_str)
-@test !occursin("g_collapse_kw(x::Float64)", bt_str)
 
 g_collapse_pos_kw(x, y=1.0; z=2.0) = error()
-bt = try
-    g_collapse_pos_kw(1.0)
-catch
-    catch_backtrace()
+let bt
+    @test try
+        g_collapse_pos_kw(1.0)
+        false
+    catch
+        bt = catch_backtrace()
+        true
+    end
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin("g_collapse_pos_kw(x::Float64, y::Float64; z::Float64)", bt_str)
+    @test !occursin("g_collapse_pos_kw(x::Float64, y::Float64)", bt_str)
+    @test !occursin("g_collapse_pos_kw(x::Float64)", bt_str)
 end
-bt_str = sprint(Base.show_backtrace, bt)
-@test occursin("g_collapse_pos_kw(x::Float64, y::Float64; z::Float64)", bt_str)
-@test !occursin("g_collapse_pos_kw(x::Float64, y::Float64)", bt_str)
-@test !occursin("g_collapse_pos_kw(x::Float64)", bt_str)
+
+simplify_kwargs_type(pos; kws...) = (pos, sum(kws))
+let bt
+    res = try
+        simplify_kwargs_type(0; kw1=1.0, kw2="2.0")
+        false
+    catch
+        bt = catch_backtrace()
+        true
+    end
+    @test res
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin("simplify_kwargs_type(pos::$Int; kws::@Kwargs{kw1::Float64, kw2::String})", bt_str)
+end
+
+# the internal `Core.kwcall` sorter frame is hidden in favor of the demangled keyword method
+@noinline kwsorter_outer(; s = 4) = kwsorter_inner(s)
+@noinline kwsorter_inner(s) = error()
+@testset "kwcall frames" begin
+    # the trace also runs through the keyword calls of whatever invoked this test, so
+    # identify only the sorter frame belonging to `kwsorter_outer`
+    function iskwsorterframe(frame, @nospecialize(f))
+        code = frame.linfo isa Core.CodeInstance ? frame.linfo.def : frame.linfo
+        if code isa Core.MethodInstance
+            def = code.def
+            return def isa Method && def.name !== :kwcall &&
+                   def.sig <: Tuple{typeof(Core.kwcall),NamedTuple,typeof(f),Vararg}
+        end
+        return frame.func === :kwcall
+    end
+    bt = try
+        kwsorter_outer(s = 3)
+        nothing
+    catch
+        catch_backtrace()
+    end
+    @test bt !== nothing
+    st = stacktrace(bt)
+    # the raw trace contains the keyword sorter frame ...
+    @test count(frame -> iskwsorterframe(frame, kwsorter_outer), st) == 1
+    # ... which `process_backtrace` drops
+    @test !any(((frame, _),) -> iskwsorterframe(frame, kwsorter_outer), Base.process_backtrace(st))
+    # leaving the demangled keyword method as the only frame for `kwsorter_outer`
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin("kwsorter_outer(; s::$Int)", bt_str)
+    @test !occursin("kwcall", bt_str)
+    @test count(l -> occursin(r"\] kwsorter_outer\(", l), split(bt_str, '\n')) == 1
+
+    # Depending on the debug info available, the sorter frame carries a `MethodInstance`, a
+    # `CodeInstance`, or no code at all, so check every spelling rather than just the one
+    # this platform happens to produce.
+    kwframe = st[findfirst(frame -> iskwsorterframe(frame, kwsorter_outer), st)]
+    mi = kwframe.linfo isa Core.CodeInstance ? kwframe.linfo.def : kwframe.linfo
+    @test mi isa Core.MethodInstance
+    userframe = Base.StackTraces.StackFrame(:f, Symbol("user.jl"), 1)
+    kept(frame) = [f.func for (f, _) in Base.process_backtrace(Base.StackFrame[frame, userframe])]
+    @testset "linfo::$(nameof(typeof(linfo)))" for linfo in Any[mi, mi.cache]
+        # recognized by its signature, whichever way the code is attached
+        @test kept(Base.StackTraces.StackFrame(kwframe.func, kwframe.file, kwframe.line,
+                                               linfo, false, false, 0)) == [:f]
+    end
+    # with no code attached at all, the frame is recognized by name instead
+    @test kept(Base.StackTraces.StackFrame(:kwcall, Symbol("none"), 1)) == [:f]
+end
+
+# Test Base.print_with_compare in convert MethodErrors
+struct TypeCompareError{A,B} <: Exception end
+let e = @test_throws MethodError convert(TypeCompareError{Float64,1}, TypeCompareError{Float64,2}())
+    str = sprint(Base.showerror, e.value)
+    @test  occursin("TypeCompareError{Float64,2}", str)
+    @test  occursin("TypeCompareError{Float64,1}", str)
+    @test !occursin("TypeCompareError{Float64{},2}", str) # No {...} for types without params
+end
+
+@testset "InexactError for Inf16 should print '16' (#51087)" begin
+    @test sprint(showerror, InexactError(:UInt128, UInt128, Inf16)) == "InexactError: UInt128(Inf16)"
+
+    for IntType in [Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128]
+        IntStr = string(IntType)
+        for InfVal in Any[Inf, Inf16, Inf32, Inf64]
+            InfStr = repr(InfVal)
+            e = @test_throws InexactError IntType(InfVal)
+            str = sprint(Base.showerror, e.value)
+            @test occursin("InexactError: $IntStr($InfStr)", str)
+        end
+    end
+end
+
+# error message hint from PR #22647
+@test_throws "Many shells" cd("~")
+@test occursin("Many shells", sprint(showerror, Base.IOError("~", Base.UV_ENOENT)))
+
+# issue #47559"
+@test_throws("MethodError: no method matching invoke Returns(::Any, ::Val{N}) where N",
+             invoke(Returns, Tuple{Any,Val{N}} where N, 1, Val(1)))
+
+f33793(x::Float32, y::Float32) = 1
+@test_throws "\nClosest candidates are:\n  f33793(!Matched::Float32, !Matched::Float32)\n" f33793(Float64(0.0), Float64(0.0))
+
+# https://github.com/JuliaLang/julia/issues/56325
+let err_str
+    f56325 = x->x+1
+    err_str = @except_str f56325(1,2) MethodError
+    @test occursin("The anonymous function", err_str)
+end
+
+# Test that error hints catch abstract exception supertypes (issue #58367)
+
+module Hinterland
+
+abstract type AbstractHintableException <: Exception end
+struct ConcreteHintableException <: AbstractHintableException end
+gonnathrow() = throw(ConcreteHintableException())
+
+function Base.showerror(io::IO, exc::ConcreteHintableException)
+    print(io, "This is my exception")
+    Base.Experimental.show_error_hints(io, exc)
+end
+
+function __init__()
+    Base.Experimental.register_error_hint(ConcreteHintableException) do io, exc
+        print(io, "\nThis hint caught my concrete exception type")
+    end
+    Base.Experimental.register_error_hint(AbstractHintableException) do io, exc
+        print(io, "\nThis other hint caught my abstract exception supertype")
+    end
+end
+
+end
+
+@testset "Hints for abstract exception supertypes" begin
+    exc = try
+        Hinterland.gonnathrow()
+    catch e
+        e
+    end
+    exc_print = sprint(Base.showerror, exc)
+    @test occursin("This hint caught my concrete exception type", exc_print)
+    @test occursin("This other hint caught my abstract exception supertype", exc_print)
+end
+
+@testset "MemoryRef BoundsError summary" begin
+    mem = Memory{Int}(undef, 10)
+    ref = memoryref(mem, 9)
+    err_str = @except_str memoryref(ref, 3) BoundsError
+    @test occursin("MemoryRef", err_str)
+    @test occursin("2-element", err_str)
+    @test occursin(" at index [3]", err_str)
+
+    ref2 = memoryref(mem, 10)
+    err_str2 = @except_str memoryref(ref2, 2) BoundsError
+    @test occursin("MemoryRef", err_str2)
+    @test occursin("1-element", err_str2)
+
+    memA = AtomicMemory{Int}(undef, 4)
+    refA = memoryref(memA, 4)
+    err_strA = @except_str memoryref(refA, 2) BoundsError
+    @test occursin("AtomicMemoryRef", err_strA)
+    @test occursin("1-element", err_strA)
+end
+
+# issue #4507
+@testset "apply_type TypeError hint for non-parameterizable types" begin
+    for expr in (:(Int{1}), :(Int{}), :(BitVector{1}), :(BitVector{}))
+        @test_throws TypeError eval(expr)
+    end
+    @test occursin("Hint: `Int64` takes no type parameters", sprint(showerror, try Int64{1} catch e; e end))
+    @test occursin("Hint: `Int64` takes no type parameters", sprint(showerror, try Int64{} catch e; e end))
+    @test occursin("Hint: `BitVector` takes no type parameters", sprint(showerror, try BitVector{1} catch e; e end))
+    @test !occursin("Hint:", sprint(showerror, try Core.apply_type(5, 2) catch e; e end))
+    @test !occursin("Hint:", sprint(showerror, try Union{Int64,Float64}{Int64} catch e; e end))
+    @test !occursin("Hint:", sprint(showerror, try typeassert(Int64, UnionAll) catch e; e end))
+    @test_throws ErrorException("too many parameters for type `Array`: expected 2, got 4") Array{1,2,3,4}
+    @test_throws ErrorException("too many parameters for type `BitArray`: expected 1, got 2") BitArray{1,2}
+end

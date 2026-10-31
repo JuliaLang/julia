@@ -1,0 +1,959 @@
+# Lowering pass 3: scope and variable analysis
+struct ScopeInfo
+    # index into ctx.scopes
+    id::ScopeId
+    # 0 if top-level thunk
+    parent_id::ScopeId
+    # Own ID if lambda, else some parent ID
+    lambda_id::ScopeId
+    # Tree introducing this scope
+    node_id::SyntaxTree
+    # True in the top-level scope, and any neutral scope nested within it not
+    # protected by a hard scope.  Becomes soft if `ctx.enable_soft_scopes`.
+    is_permeable::Bool
+    # True for :method_defs and its non-lambda children where all new locals
+    # should participate in standard scope resolution, but then be associated
+    # with the top-level thunk by the end of this pass.
+    is_lifted::Bool
+    assignments::Dict{NameKey, SyntaxTree}
+    # Map from variable names to binding IDs for resolution.  Includes all
+    # locals, args, sparams, and explicit globals belonging to this scope.
+    # Variables captured from an outer scope are not included.
+    vars::Dict{NameKey,IdTag}
+    # See `LambdaBindings`. Nothing if not a lambda scope.  This is the final
+    # collecting place for locals going in to closure conversion.
+    locals_capt::Union{Nothing, Dict{IdTag,Bool}}
+end
+
+function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
+    id = length(ctx.scopes) + 1
+    k = head(ex)
+    if parent_id == 0
+        @jl_assert k === :lambda || k === :toplevel_lambda || k === :generated_lambda ex
+        lambda_id = id
+        is_permeable = k == :toplevel_lambda
+        is_lifted = false
+        lambda_bindings = Dict{IdTag, Bool}()
+    else
+        @jl_assert k === :lambda || k === :method_defs || k === :scope_block ex
+        parent = ctx.scopes[parent_id]
+        lambda_id = k === :lambda ? id : parent.lambda_id
+        is_permeable = (k === :scope_block &&
+            head(ex[1]) === :neutral_scope &&
+            parent_id != 0 && parent.is_permeable)
+        is_lifted = k === :method_defs ||
+            (k !== :lambda && parent.is_lifted)
+        lambda_bindings = k === :lambda ? Dict{IdTag, Bool}() : nothing
+    end
+    s = ScopeInfo(
+        id, parent_id, lambda_id, ex, is_permeable, is_lifted,
+        Dict{NameKey, SyntaxTree}(), Dict{NameKey,IdTag}(), lambda_bindings)
+    push!(ctx.scopes, s)
+    return s
+end
+
+mutable struct ScopeResolutionContext <: AbstractLoweringContext
+    const layer::ScopeLayer
+    const bindings::Bindings
+    # Purely for display and deterministic ordering of scope layers
+    const layer_ids::Dict{ScopeLayer, Int}
+    # Every lexical scope, indexed by ScopeId
+    const scopes::Vector{ScopeInfo}
+    # Current stack of scopes to look for names in, innermost scope last
+    const scope_stack::Vector{ScopeId}
+    # We want any one (module, name) pair to use one binding, even across
+    # hygiene layers or with GlobalRefs (which don't enter scope.vars and don't
+    # affect name resolution), so store them here.
+    const globals::Dict{Tuple{Module, String}, IdTag}
+    # Every static parameter corresponds to some typevar (top-level local)
+    # required to create this method
+    const sp_typevars::Dict{IdTag, IdTag}
+    # Typevars referenced in each typevar's bounds.  Closures capturing a static
+    # parameter must also capture the sparams of its typevar's dependencies
+    const tv_deps::Dict{IdTag, Vector{IdTag}}
+    const enable_soft_scopes::Bool
+    const world::UInt
+end
+
+function contains_softscope_marker(ex)
+    head(ex) == :softscope  && return true
+    needs_resolution(ex) && for c in children(ex)
+        contains_softscope_marker(c) && return true
+    end
+    return false
+end
+
+top_scope(ctx) = ctx.scopes[1]
+is_top_scope(scope::ScopeInfo) = scope.parent_id === 0
+enclosing_lambda(ctx, scope::ScopeInfo) = ctx.scopes[scope.lambda_id]
+parent(ctx, scope::ScopeInfo) = is_top_scope(scope) ? nothing :
+    ctx.scopes[scope.parent_id]
+
+_var_str(v) = v === :local ? "local variable" :
+    v === :global ? "global variable" :
+    v === :argument ? "argument" :
+    v === :destructured_arg ? "destructured argument" :
+    v === :typevar ? "typevar" :
+    v === :static_parameter ? "static parameter" : "unknown"
+
+# Declare `ex` in `scope`, unless a binding already exists with the same name in
+# scope, or `ex` is pre-resolved.  Throw an error if a name conflict occurs.
+# The rules for conflict: declaring a local (or global) twice with the same name
+# is a no-op, but doing so with an argument or static parameter is an error.  A
+# variable usually can't be two things in one scope, but flisp has quirks.
+function explicit_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
+    if head(ex) === :placeholder
+        return nothing
+    elseif ex.mod isa Module
+        new_k === :global || throw(LoweringError(
+            ex, "cannot use GlobalRef as local identifier"))
+        return nothing
+    end
+    bid = get(scope.vars, NameKey(ex), nothing)
+    old_k = isnothing(bid) ? nothing : get_binding(ctx, bid).kind
+    if isnothing(old_k)
+        if new_k === :argument
+            declare_in_scope!(ctx, scope, ex, :argument;
+                              is_nospecialize=getmeta(ex, :nospecialize, false),
+                              is_specialize=getmeta(ex, :specialize, false))
+        else
+            real_k = new_k === :destructured_arg ? :local : new_k
+            declare_in_scope!(ctx, scope, ex, real_k)
+        end
+    elseif old_k === new_k
+        (new_k === :global || new_k === :local) && return bid
+        throw(LoweringError(ex, "function $(_var_str(new_k)) name not unique"))
+    # See note in test/scopes.jl: "globals may overlap args or sparams"
+    # elseif new_k === :global && old_k in (:argument, :static_parameter)
+    #     declare_in_scope!(ctx, scope, ex, :global)
+    else
+        throw(LoweringError(ex, """
+        $(_var_str(new_k)) name `$(NameKey(ex).name)` conflicts with an \
+        existing $(_var_str(old_k)) from the same scope"""))
+    end
+end
+
+# Get-or-create a global binding without explicitly declaring it
+function get_global_binding!(ctx, ex)
+    nk = NameKey(ex)
+    mod = syntax_module(ex)
+    is_internal = ex.context.internal || getmeta(ex, :is_internal, false)::Bool
+    get!(ctx.globals, (mod, nk.name)) do
+        _new_binding(ctx.bindings, ex, nk.name, :global; mod, is_internal).id
+    end
+end
+
+function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol;
+                           is_nospecialize::Bool=false,
+                           is_specialize::Bool=false,
+                           is_ambiguous_local::Bool=false)
+    nk = NameKey(ex)
+    if bk === :global
+        bid = get_global_binding!(ctx, ex)
+    else
+        is_internal = ex.context.internal ||
+            getmeta(ex, :is_internal, false)::Bool
+        @jl_assert ex.mod === nothing ex
+        bid = _new_binding(ctx.bindings, ex, nk.name, bk;
+                         is_internal, is_nospecialize, is_specialize,
+                         is_ambiguous_local).id
+    end
+    if !(ex.mod isa Module)
+        scope.vars[nk] = bid
+    end
+    add_lambda_local!(ctx, scope, get_binding(ctx, bid))
+    return bid
+end
+
+function add_lambda_local!(ctx, scope::ScopeInfo, b)
+    if b.kind === :global || b.is_ssa
+        return
+    end
+    lam = scope.is_lifted ? top_scope(ctx) : enclosing_lambda(ctx, scope)
+    b.kind == :typevar && @jl_assert scope.is_lifted binding_ex(ctx, b)
+    @jl_assert !haskey(lam.locals_capt, b.id) (
+        binding_ex(ctx, b), "adding lambda local twice")
+    lam.locals_capt[b.id] = false
+    b.lambda_id = lam.id
+    nothing
+end
+
+function ensure_captured!(
+    ctx, b, scope::ScopeInfo=ctx.scopes[ctx.lambda_bindings.scope_id])
+    if b.kind === :global || b.kind === :typevar || b.is_ssa
+        return
+    elseif ctx.lifted && b.lambda_id == top_scope(ctx).id
+        # Not quite correct w.r.t. recursion, but as good as flisp
+        # `function g(::Val{x->2x}) end`
+        return
+    end
+    lam = enclosing_lambda(ctx, scope)
+    if !haskey(lam.locals_capt, b.id)
+        # assert is opaque closure, or b not static_parameter
+        b.is_captured = true
+        lam.locals_capt[b.id] = true
+        s2 = parent(ctx, lam)
+        @jl_assert !isnothing(s2) (
+            binding_ex(ctx, b),
+            "tried to capture local before declaration in any parent")
+        ensure_captured!(ctx, b, s2)
+    end
+    nothing
+end
+
+function needs_resolution(ex)
+    head(ex) === :identifier ||
+        !is_leaf(ex) && !is_quoted(ex) && head(ex) !== :toplevel && head(ex) !== :module
+end
+
+# Resolve a (sym, layer) in the current scope.  GlobalRefs may skip this step.
+function resolve_name(ctx, ex; exclude_toplevel_globals=false)
+    # TODO: probably want to cache these lookups
+    nk = NameKey(ex)
+    ex.mod isa Module || for sid in Iterators.reverse(ctx.scope_stack)
+        bid = get(ctx.scopes[sid].vars, nk, nothing)
+        isnothing(bid) && continue
+        b = get_binding(ctx, bid)
+        if b.kind === :typevar
+            # only visible to lifted scopes in the same lambda (we should only
+            # hit this when we filter sparams with `used_typevars`)
+            s0 = ctx.scopes[ctx.scope_stack[end]]
+            s0.is_lifted && ctx.scopes[sid].lambda_id == s0.lambda_id || continue
+        end
+        if !exclude_toplevel_globals || sid !== top_scope(ctx).id ||
+            b.kind !== :global || head(top_scope(ctx).node_id) !== :toplevel_lambda
+            return b
+        end
+    end
+    return nothing
+end
+
+# Collect typevar bindings referenced in `ex` (a resolved typevar bound)
+function _typevar_refs!(out, ctx, ex)
+    k = head(ex)
+    if k == :bindingid
+        b = get_binding(ctx, ex)
+        b.kind === :typevar && !(b.id in out) && push!(out, b.id)
+    elseif !is_leaf(ex) && needs_resolution(ex)
+        foreach(e->_typevar_refs!(out, ctx, e), children(ex))
+    end
+end
+
+function _record_layer!(ctx, ex)
+    ex.context.layer isa ScopeLayer || return
+    sl = ex.context.layer
+    get!(ctx.layer_ids, sl, length(ctx.layer_ids)+1)
+end
+
+function _find_scope_decls!(ctx, scope, ex)
+    k = head(ex)
+    _record_layer!(ctx, ex)
+    if k === :local && head(ex[1]) === :identifier
+        var_k = getmeta(ex, :is_destructured_arg, false) ?
+            :destructured_arg : :local
+        explicit_declare_in_scope!(ctx, scope, ex[1], var_k)
+    elseif k === :global && head(ex[1]) === :identifier
+        explicit_declare_in_scope!(ctx, scope, ex[1], :global)
+    elseif k === :function_decl
+        k1 = head(ex[1])
+        if k1 === :identifier
+            _record_layer!(ctx, ex[1])
+            ex[1].mod isa Module && return
+            get!(scope.assignments, NameKey(ex[1]), ex[1])
+        else
+            @jl_assert false (ex, "unknown kind in assignment")
+        end
+    elseif k === :(=) || k === :constdecl || k === :assign_or_constdecl_if_global
+        k1 = head(ex[1])
+        if k1 === :identifier
+            _record_layer!(ctx, ex[1])
+            ex[1].mod === nothing &&
+                get!(scope.assignments, NameKey(ex[1]), ex[1])
+        elseif k1 === :placeholder || k1 === :bindingid
+            # nothing to declare
+        else
+            @jl_assert false (ex, "unknown kind in assignment")
+        end
+        if !(k == :constdecl && numchildren(ex) == 1)
+            _find_scope_decls!(ctx, scope, ex[2])
+        end
+    elseif needs_resolution(ex) && k !== :scope_block && k !== :lambda && k !== :method_defs
+        for e in children(ex)
+            _find_scope_decls!(ctx, scope, e)
+        end
+    end
+    nothing
+end
+
+# Produce a complete ScopeInfo and add it to the stack of active scopes.  This
+# means finding all variables declared and used in the scope `ex` and generating
+# the (identifier,layer)=>binding_id mapping `scope.vars`
+function enter_scope!(ctx, ex)
+    @jl_assert head(ex) in (:lambda, :scope_block, :method_defs, :toplevel_lambda,
+                            :generated_lambda) ex
+    # Note that generated functions produce lambdas with this false
+    is_toplevel_thunk = head(ex) === :toplevel_lambda
+    parent_id = (is_toplevel_thunk || isempty(ctx.scope_stack)) ?
+        0 : ctx.scopes[ctx.scope_stack[end]].id
+    scope = ScopeInfo(ctx, parent_id, ex)
+
+    #---------------------------------------------------------------------------
+    # Find explicit decls that may influence assignment assignment resolution
+    if head(ex) in (:lambda, :toplevel_lambda, :generated_lambda)
+        for c in children(ex[1])
+            @jl_assert head(c) in (:identifier, :placeholder) c
+            explicit_declare_in_scope!(ctx, scope, c, :argument)
+        end
+        for c in children(ex[2])
+            head(c) === :placeholder && continue
+            @jl_assert head(c) === :identifier c
+            sp_id = explicit_declare_in_scope!(ctx, scope, c, :static_parameter)
+            p = parent(ctx, scope)
+            if !isnothing(p) # usually true, false for generated functions
+                ctx.sp_typevars[sp_id] = p.vars[NameKey(c)]
+            end
+        end
+        for c in children(ex)[3:end]
+            _find_scope_decls!(ctx, scope, c)
+        end
+    else
+        for c in children(ex)
+            _find_scope_decls!(ctx, scope, c)
+        end
+    end
+    push!(ctx.scope_stack, scope.id) # influences resolution below
+
+    #---------------------------------------------------------------------------
+    # Find assignment targets, possibly introducing implicit locals and globals
+    for (vk, ex) in sort!(collect(scope.assignments);
+                          by=x->let nk=x[1]; (nk.name, ctx.layer_ids[nk.layer]); end)
+        @jl_assert ex.mod === nothing ex
+        b = resolve_name(ctx, ex)
+        if b === nothing
+            sc = ex.context
+            # Top-level assignments are locals in hygienic expansions.  We may
+            # need to adjust this, as flisp makes them name-mangled globals.
+            hygienic_toplevel = !is_base_layer(sc) && sc.layer !== ctx.layer
+            if is_toplevel_thunk && !hygienic_toplevel
+                # top-level assignments in no scope and no expansion
+                declare_in_scope!(ctx, top_scope(ctx), ex, :global)
+            elseif scope.is_permeable && !hygienic_toplevel &&
+                is_defined_and_owned_global(
+                    syntax_module(sc), Symbol(vk.name), ctx.world)
+                # special soft scope rules: existing global variables are assigned to
+                if !ctx.enable_soft_scopes
+                    declare_in_scope!(ctx, scope, ex, :local; is_ambiguous_local=true)
+                end
+            else
+                declare_in_scope!(ctx, scope, ex, :local)
+            end
+        elseif b.kind === :global
+            # Assign to existing global if one of (1) we're at top level, (2)
+            # the global is not from top level, (3) the global is from top level
+            # but we're in a soft permeable scope
+            sc = ex.context
+            hygienic_toplevel = !is_base_layer(sc) && sc.layer !== ctx.layer
+            if is_toplevel_thunk ||
+                !isnothing(resolve_name(ctx, ex; exclude_toplevel_globals=true)) ||
+                (ctx.enable_soft_scopes && scope.is_permeable && !hygienic_toplevel)
+            else
+                declare_in_scope!(ctx, scope, ex, :local;
+                                  is_ambiguous_local=scope.is_permeable)
+            end
+        elseif b.kind === :static_parameter
+            throw(LoweringError(ex, "cannot overwrite a static parameter"))
+        elseif b.kind === :local || b.kind === :argument
+            # unambiguous assignment to existing variable
+        end
+    end
+
+    return scope
+end
+
+function add_local_decls!(ctx, stmts, srcref, scope)
+    # Add local decls to start of block so that closure conversion can
+    # initialize if necessary.
+    for id in sort!(collect(values(scope.vars)))
+        binfo = get_binding(ctx, id)
+        if binfo.kind == :local
+            push!(stmts, @ast ctx srcref [:local binding_ex(ctx, id)])
+        end
+    end
+end
+
+function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
+                         @nospecialize(scope::Union{Nothing, ScopeInfo}))
+    k = head(ex)
+    @jl_assert scope isa ScopeInfo || k === :lambda ||
+        k === :toplevel_lambda || k === :generated_lambda ex
+    if k == :identifier
+        b = resolve_name(ctx, ex)
+        # Unresolved names are assumed global
+        if isnothing(b)
+            b = get_binding(ctx, get_global_binding!(ctx, ex))
+        end
+        # Body-level @nospecialize sets :nospecialize metadata on identifiers.
+        # Propagate this to the binding so the slot gets the nospecialize flag.
+        if getmeta(ex, :nospecialize, false) && b.kind === :argument
+            b.is_nospecialize = true
+        end
+        if getmeta(ex, :is_called, false)
+            b.is_called = true
+        end
+        newleaf(ex, :bindingid, b.id)
+    elseif k === :bindingid
+        ex
+    elseif k == :softscope
+        newleaf(ex, :tombstone)
+    elseif !needs_resolution(ex)
+        ex
+    elseif k == :local
+        # Local declarations have a value of `nothing` according to flisp
+        # lowering.
+        # TODO: Should local decls be disallowed in value position?
+        @ast ctx ex (::nothing)
+    elseif k == :decl
+        ex_out = mapchildren(e->_resolve_scopes(ctx, e, scope), ex)
+        name = ex_out[1]
+        if head(name) != :placeholder
+            binfo = get_binding(ctx, name)
+            if binfo.kind == :global && !is_top_scope(enclosing_lambda(ctx, scope))
+                throw(LoweringError(ex, "type declarations for global variables must be at top level, not inside a function"))
+            end
+        end
+        id = ex_out[1]
+        if head(id) != :placeholder
+            binfo = get_binding(ctx, id)
+            if !isnothing(binfo.type) && binfo.kind !== :global
+                throw(LoweringError(ex, "multiple type declarations found for `$(binfo.name)`"))
+            end
+            binfo.type = ex_out[2]
+        end
+        ex_out
+    elseif k == :always_defined
+        resolve_name(ctx, ex[1]).is_always_defined = true
+        newleaf(ex, :tombstone)
+    elseif k === :lambda || k === :toplevel_lambda || k === :generated_lambda
+        # opaque closures are the exception
+        # scope isa ScopeInfo && @jl_assert scope.is_lifted ex
+        newscope = enter_scope!(ctx, ex)
+        arg_bindings = _resolve_scopes(ctx, ex[1], newscope)
+        sparam_bindings = SyntaxList()
+        for sp in children(ex[2])
+            head(sp) === :placeholder && continue
+            push!(sparam_bindings, _resolve_scopes(ctx, sp, newscope))
+        end
+        self_id = if numchildren(arg_bindings) === 0
+            0
+        elseif getmeta(ex[1][1], :is_kwcall_self, false)
+            syntax_id(arg_bindings[3])
+        else
+            syntax_id(arg_bindings[1])
+        end
+        body_stmts = SyntaxList()
+        add_local_decls!(ctx, body_stmts, ex, newscope)
+        body = _resolve_scopes(ctx, ex[3], newscope)
+        if head(body) == :block
+            append!(body_stmts, children(body))
+        else
+            push!(body_stmts, body)
+        end
+        ret_var = numchildren(ex) == 4 ?
+            _resolve_scopes(ctx, ex[4], newscope) : nothing
+        pop!(ctx.scope_stack)
+        @ast ctx ex [k
+            LambdaBindings(self_id, newscope.id, newscope.locals_capt)::lambdabindings
+            arg_bindings
+            [:block sparam_bindings...]
+            [:block body_stmts...]
+            ret_var
+        ]
+    elseif k == :scope_block
+        newscope = enter_scope!(ctx, ex)
+        stmts = SyntaxList()
+        add_local_decls!(ctx, stmts, ex, newscope)
+        for e in children(ex)[2:end]
+            push!(stmts, _resolve_scopes(ctx, e, newscope))
+        end
+        pop!(ctx.scope_stack)
+        @ast ctx ex [:block stmts...]
+    elseif k == :method_defs
+        newscope = enter_scope!(ctx, ex)
+        mname = _resolve_scopes(ctx, ex[1], scope)
+        tvs = SyntaxList()
+        for tv in children(ex[2]) # hack. flisp: replace-vars
+            rhs = _resolve_scopes(ctx, tv[2], newscope)
+            if head(tv[1]) === :placeholder
+                @ast ctx tv [:(=) tv[1] rhs]
+            else
+                bid = declare_in_scope!(ctx, newscope, tv[1], :typevar)
+                get_binding(ctx, bid).is_always_defined = true
+                deps = Vector{IdTag}()
+                _typevar_refs!(deps, ctx, rhs)
+                isempty(deps) || (ctx.tv_deps[bid] = deps)
+                push!(tvs, @ast ctx tv [:(=) binding_ex(ctx, bid) rhs])
+            end
+        end
+        stmts = SyntaxList()
+        add_local_decls!(ctx, stmts, ex, newscope)
+        push!(stmts, _resolve_scopes(ctx, ex[3], newscope))
+        pop!(ctx.scope_stack)
+        @ast ctx ex [:method_defs mname [:block tvs...] [:block stmts...]]
+    elseif k == :islocal
+        e1 = ex[1]
+        islocal = head(e1) == :identifier &&
+            let b = resolve_name(ctx, e1)
+                !isnothing(b) && b.kind !== :global
+            end
+        @ast ctx ex islocal::value
+    elseif k == :isglobal
+        e1 = ex[1]
+        isglobal = head(e1) == :identifier &&
+            let b = resolve_name(ctx, e1)
+                isnothing(b) || b.kind === :global
+            end
+        @ast ctx ex isglobal::value
+    elseif k == :locals
+        stmts = SyntaxList()
+        locals_dict = ssavar(ctx, ex, "locals_dict")
+        push!(stmts, @ast ctx ex [:(=)
+            locals_dict
+            [:call
+                [:call
+                    "apply_type"::core
+                    "Dict"::top
+                    "Symbol"::core
+                    "Any"::core
+                ]
+            ]
+        ])
+        seen = Set{String}()
+        for sid in Iterators.reverse(ctx.scope_stack)
+            for (nk, id) in sort!(collect(ctx.scopes[sid].vars); by=last)
+                binfo = get_binding(ctx, id)
+                # skip hygienic locals of macro expansions (TODO: would it be
+                # more useful to return this layer's locals instead of the base
+                # layer's?)
+                if binfo.kind == :global || binfo.is_internal ||
+                    binfo.kind == :typevar || nk.layer.escaped !== nothing ||
+                    binfo.name in seen
+                    continue
+                end
+                push!(seen, binfo.name)
+                binding = binding_ex(ctx, id)
+                push!(stmts, @ast ctx ex [:if
+                    [:isdefined binding]
+                    [:call
+                        "setindex!"::top
+                        locals_dict
+                        binding
+                        binfo.name::symbol
+                    ]
+                ])
+            end
+        end
+        push!(stmts, locals_dict)
+        @mknode(ex; head=:block, children=stmts)
+    elseif k == :thisfunction
+        lam = enclosing_lambda(ctx, scope::ScopeInfo).node_id
+        self_arg = lam[1][1]
+        for a in children(lam[1])
+            getmeta(a, :thisfunction_original, false) && (self_arg = a)
+        end
+        return _resolve_scopes(ctx, self_arg, scope)
+    elseif k == :assert
+        etype = extension_type(ex)
+        if etype == "require_existing_locals"
+            for v in ex[2:end]
+                b = resolve_name(ctx, v)
+                if isnothing(b) || !(b.kind in (:local, :argument))
+                    throw(LoweringError(v, "`outer` annotations must match with a local variable in an outer scope but no such variable was found"))
+                end
+            end
+        elseif etype == "global_toplevel_only"
+            if !is_top_scope(scope)
+                e = ex[2][1]
+                throw(LoweringError(e, "$(head(e)) is only allowed in global scope"))
+            end
+        elseif etype == "toplevel_only"
+            if !is_top_scope(enclosing_lambda(ctx, scope))
+                e = ex[2][1]
+                throw(LoweringError(e, "this syntax is only allowed in top level code"))
+            end
+        else
+            @jl_assert false (ex, "unknown syntax assertion")
+        end
+        newleaf(ex, :tombstone)
+    elseif k === :relayered_global
+        bid = get(scope.vars, NameKey(ex[1]), nothing)
+        !isnothing(bid) && let b = get_binding(ctx, bid)
+            b.kind !== :global && throw(LoweringError(ex, string(
+                "unhygienic global name `$(NameKey(ex[1]).name)` conflicts ",
+                "with an existing $(_var_str(b.kind))")))
+        end
+        newleaf(ex, :tombstone)
+    elseif k == :function_decl
+        resolved = mapchildren(e->_resolve_scopes(ctx, e, scope), ex)
+        name = resolved[1]
+        if head(name) == :bindingid
+            bk = get_binding(ctx, name).kind
+            if bk == :argument
+                throw(LoweringError(name, "Cannot add method to a function argument"))
+            elseif bk == :global && !is_top_scope(enclosing_lambda(ctx, scope))
+                throw(LoweringError(name, """
+                    Global method definition needs to be placed at the top \
+                    level, or use `eval()`"""))
+            end
+        end
+        resolved
+    elseif k == :constdecl
+        if !is_top_scope(enclosing_lambda(ctx, scope))
+            throw(LoweringError(ex, "unsupported `const` inside function"))
+        end
+        resolved = mapchildren(e->_resolve_scopes(ctx, e, scope), ex)
+        if head(resolved[1]) !== :placeholder
+            @jl_assert head(resolved[1]) === :bindingid resolved
+            if get_binding(ctx, syntax_id(resolved[1])).kind === :local
+                throw(LoweringError(ex, "unsupported `const` declaration on local variable"))
+            end
+        end
+        resolved
+    elseif k == :assign_or_constdecl_if_global
+        @jl_assert numchildren(ex) === 2 ex
+        id = _resolve_scopes(ctx, ex[1], scope)
+        assignment_kind =
+            head(id) === :placeholder ||
+            (get_binding(ctx, id).kind !== :global) ? :(=) : :constdecl
+        @ast ctx ex _resolve_scopes(ctx, [assignment_kind ex[1] ex[2]], scope)
+    elseif k === :global_if_global
+        out = _resolve_scopes(ctx, ex[1], scope)
+        get_binding(ctx, out).kind !== :global ? (@ast ctx ex (::tombstone)) :
+            @ast ctx ex [:global out]
+    else
+        mapchildren(e->_resolve_scopes(ctx, e, scope), ex)
+    end
+end
+
+function _resolve_scopes(ctx::ScopeResolutionContext, exs::AbstractVector, scope)
+    out = SyntaxList()
+    for e in exs
+        push!(out, _resolve_scopes(ctx, e, scope))
+    end
+    out
+end
+
+#-------------------------------------------------------------------------------
+# Sub-pass to compute additional information about variable usage as required
+# by closure conversion, etc
+struct ClosureBindings
+    name_stack::Vector{String}      # Names of functions the closure is nested within
+    lambdas::Vector{LambdaBindings} # Bindings for each method of the closure
+    capt_sp::Set{IdTag}
+end
+
+# `binding` is that in `function_decl`, `method_defs[1]`, `method[1]`,
+# `function_type[1]` when local
+struct ClosureKey
+    binding::IdTag
+    lam::ScopeId
+end
+
+ClosureBindings(name_stack) =
+    ClosureBindings(name_stack, Vector{LambdaBindings}(), Set{IdTag}())
+
+mutable struct VariableAnalysisContext <: AbstractLoweringContext
+    const layer::ScopeLayer
+    const bindings::Bindings
+    const scopes::Vector{ScopeInfo}
+    const lambda_bindings::LambdaBindings
+    const lifted::Bool
+    # Stack of method definitions for closure naming
+    const method_def_stack::Vector{SyntaxTree}
+    const closure_key_stack::Vector{ClosureKey}
+    # Collection of information about each closure, principally which methods
+    # are part of the closure (and hence captures).
+    const closure_bindings::Dict{ClosureKey,ClosureBindings}
+    const sp_typevars::Dict{IdTag, IdTag}
+    const tv_deps::Dict{IdTag, Vector{IdTag}}
+    # Prevents infinite loops when analyzing a binding's type
+    const types_in_analysis::Set{IdTag}
+end
+
+function init_closure_bindings!(ctx, fname)
+    bid = syntax_id(fname)
+    ck = closure_key(ctx, fname)
+    @jl_assert get_binding(ctx, bid).kind === :local fname
+    get!(ctx.closure_bindings, ck) do
+        name_stack = Vector{String}()
+        for parentname in ctx.method_def_stack
+            if head(parentname) == :bindingid
+                push!(name_stack, get_binding(ctx, parentname).name)
+            end
+        end
+        push!(name_stack, get_binding(ctx, bid).name)
+        ClosureBindings(name_stack)
+    end
+end
+
+# sparams, globals, and top-level locals interpolated into global methods are OK
+# (the last may or may not work intentionally)
+function static_eval_disallowed_binding(ctx, ex)
+    k = head(ex)
+    if k == :bindingid
+        b = get_binding(ctx, syntax_id(ex))
+        if b.kind != :global && b.kind != :static_parameter
+            lam = ctx.scopes[ctx.lambda_bindings.scope_id]
+            if is_top_scope(lam) ||
+                !(b.lambda_id == top_scope(ctx).id &&
+                enclosing_lambda(ctx, parent(ctx, lam)).id == top_scope(ctx).id)
+                return ex
+            end
+        end
+    elseif !is_leaf(ex) && !is_quoted(ex)
+        for e in children(ex)
+            r = static_eval_disallowed_binding(ctx, e)
+            if !isnothing(r)
+                return r
+            end
+        end
+    end
+    return nothing
+end
+
+function add_assign!(b::BindingInfo)
+    b.is_assigned_once = !b.is_assigned
+    b.is_assigned = true
+end
+
+# When a closure captures `T` and `T`'s typevar bound references `S`, it must
+# capture `S` too
+function expand_captured_sp_deps!(ctx, cb::ClosureBindings)
+    sps = copy(cb.capt_sp)
+    for lb in cb.lambdas, (id, is_capt) in lb.locals_capt
+        is_capt && get_binding(ctx, id).kind === :static_parameter && push!(sps, id)
+    end
+    todo = collect(sps)
+    while !isempty(todo)
+        sp = pop!(todo)
+        owner = ctx.scopes[get_binding(ctx, sp).lambda_id]
+        for dep_tv in get(ctx.tv_deps, ctx.sp_typevars[sp], ())
+            # The sparam for dep_tv in the same lambda that owns `sp`
+            dep_sp = nothing
+            for id in keys(owner.locals_capt)
+                b = get_binding(ctx, id)
+                if b.kind === :static_parameter &&
+                        get(ctx.sp_typevars, b.id, IdTag(0)) == dep_tv
+                    dep_sp = id
+                    break
+                end
+            end
+            isnothing(dep_sp) && throw(LoweringError(
+                binding_ex(ctx, dep_tv), "unimplemented capture in sparam bounds"))
+            dep_sp in sps && continue
+            push!(sps, dep_sp)
+            push!(cb.capt_sp, dep_sp)
+            ensure_captured!(ctx, get_binding(ctx, dep_sp))
+            push!(todo, dep_sp)
+        end
+    end
+end
+
+function closure_key(ctx, ex)
+    @jl_assert head(ex) === :bindingid ex
+    ClosureKey(syntax_id(ex), ctx.lambda_bindings.scope_id)
+end
+function current_closure_bindings(ctx)
+    isempty(ctx.closure_key_stack) && return nothing
+    get(ctx.closure_bindings, ctx.closure_key_stack[end], nothing)
+end
+
+# Update ctx.bindings metadata based on binding usage
+function analyze_variables!(ctx, ex)
+    k = head(ex)
+    if k == :bindingid
+        b = get_binding(ctx, ex)
+        b.is_read = true
+        # The type of typed locals is invisible in the previous pass,
+        # but is filled in here.
+        ensure_captured!(ctx, b)
+        @jl_assert (b.kind === :global || b.kind === :typevar || b.is_ssa ||
+            haskey(ctx.lambda_bindings.locals_capt, b.id) ||
+            (ctx.lifted && b.lambda_id == top_scope(ctx).id)) ex binding_ex(ctx, b.id)
+        if b.kind === :static_parameter && ctx.lifted
+            cb = current_closure_bindings(ctx)
+            isnothing(cb) || push!(cb.capt_sp, b.id)
+        end
+        if (b.kind === :local || b.kind === :argument) && !isnothing(b.type) &&
+            !(b.id in ctx.types_in_analysis)
+            push!(ctx.types_in_analysis, b.id)
+            analyze_variables!(ctx, binding_type_ex(ctx, b))
+            delete!(ctx.types_in_analysis, b.id)
+        end
+    elseif k == :identifier
+        @jl_assert false ex
+    elseif !needs_resolution(ex)
+        return
+    elseif k == :static_eval || k == :foreignsymbol
+        badvar = static_eval_disallowed_binding(ctx, ex[1])
+        if !isnothing(badvar)
+            default = k == :foreignsymbol ?
+                "function name and library expression" : "syntax"
+            name_hint = getmeta(ex, :name_hint, default)::String
+            throw(LoweringError(badvar, "$(name_hint) cannot reference local variable"))
+        end
+        analyze_variables!(ctx, ex[1])
+        return
+    elseif k == :local || k == :global
+        # Presence of BindingId within local/global is ignored.
+        return
+    elseif k == :(=)
+        lhs = ex[1]
+        if head(lhs) != :placeholder
+            b = get_binding(ctx, lhs)
+            add_assign!(b)
+            ensure_captured!(ctx, b)
+            if !isnothing(b.type)
+                # Assignments introduce a variable's type later during closure
+                # conversion, but we must model that explicitly here.
+                analyze_variables!(ctx, binding_type_ex(ctx, b))
+            end
+        end
+        analyze_variables!(ctx, ex[2])
+    elseif k == :function_decl
+        name = ex[1]
+        b = get_binding(ctx, name)
+        if b.kind === :local
+            init_closure_bindings!(ctx, name)
+        end
+        add_assign!(b)
+    elseif k == :function_type
+        if head(ex[1]) != :bindingid || get_binding(ctx, ex[1]).kind !== :local
+            analyze_variables!(ctx, ex[1])
+        end
+    elseif k == :constdecl && numchildren(ex) == 2
+        if head(ex[1]) !== :placeholder
+            b = get_binding(ctx, ex[1])
+            b.is_const = true
+            add_assign!(b)
+        end
+        analyze_variables!(ctx, ex[2])
+    elseif k == :call
+        name = ex[1]
+        if head(name) == :bindingid
+            get_binding(ctx, name).is_called = true
+        end
+        foreach(e->analyze_variables!(ctx, e), children(ex))
+    elseif k == :method_defs
+        push!(ctx.method_def_stack, ex[1])
+        is_closure = head(ex[1]) == :bindingid &&
+            get_binding(ctx, ex[1]).kind === :local
+        ctx2 = VariableAnalysisContext(
+            ctx.layer, ctx.bindings, ctx.scopes,
+            ctx.lambda_bindings, true, ctx.method_def_stack,
+            ctx.closure_key_stack,
+            ctx.closure_bindings, ctx.sp_typevars, ctx.tv_deps,
+            ctx.types_in_analysis)
+        if is_closure
+            push!(ctx.closure_key_stack, closure_key(ctx2, ex[1]))
+            cb = init_closure_bindings!(ctx2, ex[1])
+        end
+        analyze_variables!(ctx2, ex[2])
+        analyze_variables!(ctx2, ex[3])
+        if is_closure
+            # All captures are known now; close them over typevar-bound deps
+            expand_captured_sp_deps!(ctx2, cb)
+            pop!(ctx.closure_key_stack)
+        end
+        pop!(ctx.method_def_stack)
+    elseif k == :_opaque_closure
+        name = ex[1]
+        init_closure_bindings!(ctx, name)
+        push!(ctx.method_def_stack, name)
+        push!(ctx.closure_key_stack, closure_key(ctx, ex[1]))
+        analyze_variables!(ctx, ex[2])
+        analyze_variables!(ctx, ex[3])
+        analyze_variables!(ctx, ex[4])
+        analyze_variables!(ctx, ex[9])
+        pop!(ctx.method_def_stack)
+        pop!(ctx.closure_key_stack)
+    elseif k === :lambda || k === :toplevel_lambda || k === :generated_lambda
+        lbs = lambda_bindings(ex[1])
+        if !isempty(ctx.closure_key_stack)
+            # Record all lambdas for the same closure type in one place
+            ck = last(ctx.closure_key_stack)
+            if get_binding(ctx, ck.binding).kind === :local
+                push!(ctx.closure_bindings[ck].lambdas, lbs)
+            end
+        end
+        let ctx2 = VariableAnalysisContext(
+            ctx.layer, ctx.bindings, ctx.scopes,
+            lbs, false, ctx.method_def_stack,
+            ctx.closure_key_stack, ctx.closure_bindings,
+            ctx.sp_typevars, ctx.tv_deps, ctx.types_in_analysis)
+            foreach(e->analyze_variables!(ctx2, e), ex[4:end])
+        end
+    else
+        for e in children(ex)
+            analyze_variables!(ctx, e)
+        end
+    end
+    nothing
+end
+
+function warn_ambiguous_local(ctx, b)
+    n = b.name
+    loc = first_linenode(b.node_id)
+    msg = string("Assignment to `", n, "` in soft scope is ambiguous ",
+                 "because a global variable by the same name exists: ",
+                 "`", n, "` will be treated as a new local. ",
+                 "Disambiguate by using `local ", n, "` to suppress this warning or ",
+                 "`global ", n, "` to assign to the existing global variable.")
+    @warn msg _module=nothing _file=string(something(loc.file, :none)) _line=loc.line
+    nothing
+end
+
+function resolve_scopes(ctx::ScopeResolutionContext, ex)
+    if !(head(ex) in (:lambda, :toplevel_lambda, :generated_lambda))
+        # Wrap in a top level thunk if we're not already expanding a lambda.
+        # (Maybe this should be done elsewhere?)
+        ex = @ast ctx ex [:toplevel_lambda [:block] [:block] ex]
+    end
+    _resolve_scopes(ctx, ex, nothing)
+end
+
+"""
+This pass analyzes scopes and the names (locals/globals etc) used within them.
+
+Names of kind `:identifier` are transformed into binding identifiers of
+kind `:bindingid`. The associated `Bindings` table in the context records
+metadata about each binding.
+
+This pass also records the set of binding IDs used locally within the
+enclosing lambda form and information about variables captured by closures.
+"""
+@fzone "JL: resolve_scopes" function resolve_scopes(ctx::DesugaringContext, ex,
+                                                    warn::Bool=false;
+                                                    soft_scope::Union{Nothing,Bool}=nothing,
+                                                    world::UInt=ctx.world)
+    enable_soft_scopes = soft_scope !== nothing ? soft_scope : contains_softscope_marker(ex)
+    ctx2 = ScopeResolutionContext(ctx.layer, ctx.bindings,
+                                  Dict{ScopeLayer, Int}(),
+                                  Vector{ScopeInfo}(), Vector{ScopeId}(),
+                                  Dict(), Dict{IdTag, IdTag}(),
+                                  Dict{IdTag, Vector{IdTag}}(),
+                                  enable_soft_scopes,
+                                  world)
+    ex2 = resolve_scopes(ctx2, ex)
+    warn && !enable_soft_scopes && (Base.JLOptions().warn_scope == 1) &&
+        for b in ctx2.bindings.info
+            b.is_ambiguous_local && warn_ambiguous_local(ctx2, b)
+        end
+    ctx3 = VariableAnalysisContext(ctx2.layer, ctx2.bindings,
+                                   ctx2.scopes, lambda_bindings(ex2[1]), true,
+                                   SyntaxList(), Vector{ClosureKey}(),
+                                   Dict{ClosureKey,ClosureBindings}(),
+                                   ctx2.sp_typevars, ctx2.tv_deps, Set{IdTag}())
+    analyze_variables!(ctx3, ex2)
+    analyze_def_and_use!(ctx3, ex2)
+    ctx3, ex2
+end

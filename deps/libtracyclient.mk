@@ -10,12 +10,18 @@ LIBTRACYCLIENT_SRCCACHE := $(SRCCACHE)/$(LIBTRACYCLIENT_SRC_DIR)
 LIBTRACYCLIENT_CMAKE :=
 LIBTRACYCLIENT_CMAKE += -DBUILD_SHARED_LIBS=ON
 LIBTRACYCLIENT_CMAKE += -DTRACY_FIBERS=ON
-LIBTRACYCLIENT_CMAKE += -DTRACY_NO_BROADCAST=ON
 LIBTRACYCLIENT_CMAKE += -DTRACY_ONLY_LOCALHOST=ON
 LIBTRACYCLIENT_CMAKE += -DTRACY_NO_CODE_TRANSFER=ON
 LIBTRACYCLIENT_CMAKE += -DTRACY_NO_FRAME_IMAGE=ON
 LIBTRACYCLIENT_CMAKE += -DTRACY_NO_CRASH_HANDLER=ON
 LIBTRACYCLIENT_CMAKE += -DTRACY_ON_DEMAND=ON
+LIBTRACYCLIENT_CMAKE += -DTRACY_TIMER_FALLBACK=ON
+
+ifeq ($(WITH_TRACY_CALLSTACKS),1)
+LIBTRACYCLIENT_CMAKE += -DTRACY_CALLSTACK=32
+else
+LIBTRACYCLIENT_CMAKE += -DTRACY_NO_SAMPLING=ON
+endif
 
 $(LIBTRACYCLIENT_BUILDDIR)/cmake-patch-applied: $(LIBTRACYCLIENT_BUILDDIR)/source-extracted
 ifneq ($(OS),WINNT)
@@ -30,12 +36,7 @@ $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-freebsd-elfw.patch-applied: $(LIBTRACY
 		patch -p1 -f < $(SRCDIR)/patches/libTracyClient-freebsd-elfw.patch
 	echo 1 > $@
 
-$(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-no-crash-handler.patch-applied: $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-freebsd-elfw.patch-applied
-	cd $(LIBTRACYCLIENT_BUILDDIR) && \
-		patch -p1 -f < $(SRCDIR)/patches/libTracyClient-no-crash-handler.patch
-	echo 1 > $@
-
-$(LIBTRACYCLIENT_BUILDDIR)/build-configured: $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-no-crash-handler.patch-applied
+$(LIBTRACYCLIENT_BUILDDIR)/build-configured: $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-freebsd-elfw.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 		$(CMAKE) . $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(LIBTRACYCLIENT_CMAKE) \
@@ -51,12 +52,12 @@ $(LIBTRACYCLIENT_BUILDDIR)/build-compiled: $(LIBTRACYCLIENT_BUILDDIR)/build-conf
 
 $(eval $(call staged-install, \
 	libtracyclient,$$(LIBTRACYCLIENT_SRC_DIR), \
-	MAKE_INSTALL,,, \
+	CMAKE_INSTALL,,, \
 	$$(INSTALL_NAME_CMD)libtracyclient.$$(SHLIB_EXT) $$(build_shlibdir)/libtracyclient.$$(SHLIB_EXT)))
 
 clean-libtracyclient:
 	rm -rf $(LIBTRACYCLIENT_BUILDDIR)/build-configured $(LIBTRACYCLIENT_BUILDDIR)/build-compiled
-	-$(MAKE) -C $(LIBTRACYCLIENT_BUILDDIR) clean
+	-if [ -d $(LIBTRACYCLIENT_BUILDDIR) ]; then $(MAKE) -C $(LIBTRACYCLIENT_BUILDDIR) clean; fi
 
 get-libtracyclient: $(LIBTRACYCLIENT_SRC_FILE)
 extract-libtracyclient: $(LIBTRACYCLIENT_BUILDDIR)/source-extracted

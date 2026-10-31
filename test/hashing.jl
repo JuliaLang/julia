@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Random, LinearAlgebra, SparseArrays
+using Random, LinearAlgebra
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
@@ -8,7 +8,8 @@ types = Any[
     Bool,
     Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float32, Float64,
     Rational{Int8}, Rational{UInt8}, Rational{Int16}, Rational{UInt16},
-    Rational{Int32}, Rational{UInt32}, Rational{Int64}, Rational{UInt64}
+    Rational{Int32}, Rational{UInt32}, Rational{Int64}, Rational{UInt64},
+    BigFloat, BigInt, Rational{BigInt}
 ]
 vals = vcat(
     typemin(Int64),
@@ -36,6 +37,7 @@ for T = types[2:end], x = vals
     a = coerce(T, x)
     @test hash(a, zero(UInt)) == invoke(hash, Tuple{Real, UInt}, a, zero(UInt))
     @test hash(a, one(UInt)) == invoke(hash, Tuple{Real, UInt}, a, one(UInt))
+    @test hash(a) == hash(complex(a))
 end
 
 let collides = 0
@@ -51,8 +53,7 @@ let collides = 0
             collides += eq
         end
     end
-    # each pair of types has one collision for these values
-    @test collides <= (length(types) - 1)^2
+    @test collides <= 516
 end
 @test hash(0.0) != hash(-0.0)
 
@@ -88,13 +89,13 @@ vals = Any[
     Dict(42 => 101, 77 => 93), Dict{Any,Any}(42 => 101, 77 => 93),
     (1,2,3,4), (1.0,2.0,3.0,4.0), (1,3,2,4),
     ("a","b"), (SubString("a",1,1), SubString("b",1,1)),
+    join('c':'s'), SubString(join('a':'z'), 3, 19),
     # issue #6900
     Dict(x => x for x in 1:10),
     Dict(7=>7,9=>9,4=>4,10=>10,2=>2,3=>3,8=>8,5=>5,6=>6,1=>1),
     [], [1], [2], [1, 1], [1, 2], [1, 3], [2, 2], [1, 2, 2], [1, 3, 3],
-    zeros(2, 2), spzeros(2, 2), Matrix(1.0I, 2, 2), sparse(1.0I, 2, 2),
-    sparse(fill(1., 2, 2)), fill(1., 2, 2), sparse([0 0; 1 0]), [0 0; 1 0],
-    [-0. 0; -0. 0.], SparseMatrixCSC(2, 2, [1, 3, 3], [1, 2], [-0., -0.]),
+    zeros(2, 2), Matrix(1.0I, 2, 2), fill(1., 2, 2),
+    [-0. 0; -0. 0.],
     # issue #16364
     1:4, 1:1:4, 1:-1:0, 1.0:4.0, 1.0:1.0:4.0, range(1, stop=4, length=4),
     # issue #35597, when `LinearIndices` does not begin at 1
@@ -103,13 +104,16 @@ vals = Any[
     OffsetArray([1 3; 2 4], -2, 2),
     OffsetArray(1:4, 0),
     OffsetArray([1 3; 2 4], 0, 0),
+    # issue #63659
+    Base.IdentityUnitRange(2:20),
+    OffsetArray(1:20, typemax(Int) - 20),
     'a':'e', ['a', 'b', 'c', 'd', 'e'],
     # check that hash is still consistent with heterogeneous arrays for which - is defined
     # for some pairs and not others
     ["a", "b", 1, 2], ["a", 1, 2], ["a", "b", 2, 2], ["a", "a", 1, 2], ["a", "b", 2, 3]
 ]
 
-for a in vals, b in vals
+for (i, a) in enumerate(vals), b in vals[i:end]
     @test isequal(a,b) == (hash(a)==hash(b))
 end
 
@@ -141,13 +145,6 @@ vals = Any[
     [5 1; 0 0], [1 1; 0 1], [0 2; 3 0], [0 2; 4 6], [4 0; 0 1],
     [0 0 0; 0 0 0], [1 0 0; 0 0 1], [0 0 2; 3 0 0], [0 0 7; 6 1 2],
     [4 0 0; 3 0 1], [0 2 4; 6 0 0],
-    # various stored zeros patterns
-    sparse([1], [1], [0]), sparse([1], [1], [-0.0]),
-    sparse([1, 2], [1, 1], [-0.0, 0.0]), sparse([1, 2], [1, 1], [0.0, -0.0]),
-    sparse([1, 2], [1, 1], [-0.0, 0.0], 3, 1), sparse([1, 2], [1, 1], [0.0, -0.0], 3, 1),
-    sparse([1, 3], [1, 1], [-0.0, 0.0], 3, 1), sparse([1, 3], [1, 1], [0.0, -0.0], 3, 1),
-    sparse([1, 2, 3], [1, 1, 1], [-1, 0, 1], 3, 1), sparse([1, 2, 3], [1, 1, 1], [-1.0, -0.0, 1.0], 3, 1),
-    sparse([1, 3], [1, 1], [-1, 0], 3, 1), sparse([1, 2], [1, 1], [-1, 0], 3, 1)
 ]
 
 for a in vals
@@ -155,7 +152,6 @@ for a in vals
     @test hash(convert(Array{Any}, a)) == hash(b)
     @test hash(convert(Array{supertype(eltype(a))}, a)) == hash(b)
     @test hash(convert(Array{Float64}, a)) == hash(b)
-    @test hash(sparse(a)) == hash(b)
     if !any(x -> isequal(x, -0.0), a)
         @test hash(convert(Array{Int}, a)) == hash(b)
         if all(x -> typemin(Int8) <= x <= typemax(Int8), a)
@@ -169,20 +165,6 @@ end
 @test hash(Any[Int8(127), Int8(-128), 129, 130]) ==
     hash([127, -128, 129, 130]) != hash([127,  128, 129, 130])
 
-# Test hashing sparse matrix with type which does not support -
-struct CustomHashReal
-    x::Float64
-end
-Base.hash(x::CustomHashReal, h::UInt) = hash(x.x, h)
-Base.:(==)(x::CustomHashReal, y::Number) = x.x == y
-Base.:(==)(x::Number, y::CustomHashReal) = x == y.x
-Base.zero(::Type{CustomHashReal}) = CustomHashReal(0.0)
-Base.zero(x::CustomHashReal) = zero(CustomHashReal)
-
-let a = sparse([CustomHashReal(0), CustomHashReal(3), CustomHashReal(3)])
-    @test hash(a) == hash(Array(a))
-end
-
 vals = Any[
     0.0:0.1:0.3, 0.3:-0.1:0.0,
     0:-1:1, 0.0:-1.0:1.0, 0.0:1.1:10.0, -4:10,
@@ -195,14 +177,33 @@ for a in vals
 end
 
 @test hash(SubString("--hello--",3,7)) == hash("hello")
+@testset "hashing aligned String data" begin
+    # hash(::String) relies on String data being aligned to sizeof(Int), also in the sysimage
+    for s in (Base.libllvm_version_string, String(rand(UInt8, 100_000)),
+              String(take!(IOBuffer(rand(UInt8, 100)))))
+        @test UInt(pointer(s)) % sizeof(Int) == 0
+    end
+    for n in 0:200
+        s = String(rand(UInt8, n))
+        @test UInt(pointer(s)) % sizeof(Int) == 0
+        # a SubString at an odd offset is hashed with unaligned loads
+        @test hash(s) == hash(SubString("-" * s, 2))
+    end
+end
 @test hash(:(X.x)) == hash(:(X.x))
 @test hash(:(X.x)) != hash(:(X.y))
 
 @test hash([1,2]) == hash(view([1,2,3,4],1:2))
 
 let a = QuoteNode(1), b = QuoteNode(1.0)
-    @test (hash(a)==hash(b)) == (a==b)
+    @test hash(a) == hash(b)
+    @test a != b
 end
+let a = QuoteNode(:(1 + 2)), b = QuoteNode(:(1 + 2))
+    @test hash(a) == hash(b)
+    @test a == b
+end
+
 
 let a = Expr(:block, Core.SlotNumber(1)),
     b = Expr(:block, Core.SlotNumber(1)),
@@ -272,7 +273,9 @@ end
         )
 
         for a in vals, b in vals
-            @test isequal(a, b) == (Base.hash_64_32(a) == Base.hash_64_32(b))
+            ha = Base.hash_64_32(a)
+            hb = Base.hash_64_32(b)
+            @test isequal(a, b) == (ha == hb)
         end
     end
 
@@ -283,7 +286,9 @@ end
         )
 
         for a in vals, b in vals
-            @test isequal(a, b) == (Base.hash_32_32(a) == Base.hash_32_32(b))
+            ha = Base.hash_32_32(a)
+            hb = Base.hash_32_32(b)
+            @test isequal(a, b) == (ha == hb)
         end
     end
 end
@@ -294,4 +299,78 @@ if Sys.WORD_SIZE >= 64
         s = String('\0'^N);
         objectid(s)
     end
+end
+
+# Issue #49620
+let t1 = Tuple{AbstractVector,AbstractVector{<:Integer},UnitRange{<:Integer}},
+    t2 = Tuple{AbstractVector,AbstractVector{<:Integer},UnitRange{<:Integer}}
+    @test hash(t1) == hash(t2)
+    @test length(Set{Type}([t1, t2])) == 1
+end
+
+struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
+@test AUnionParam.body.hash == 0
+@test Base._jl_type_hash(Type{AUnionParam}) != 0
+@test Base._jl_type_hash(Type{AUnionParam{<:Union{Float32,Float64}}}) == 0
+@test Type{AUnionParam{<:Union{Nothing,Float32,Float64}}} === Type{AUnionParam}
+@test Base._jl_type_hash(Type{AUnionParam.body}) == 0
+@test Base._jl_type_hash(Type{Base.Broadcast.Broadcasted}) != 0
+
+
+@testset "issue 50628" begin
+    # test hashing of rationals that equal floats are equal to the float hash
+    @test hash(5//2) == hash(big(5)//2) == hash(2.5)
+    # test hashing of rational that are integers hash to the integer
+    @test hash(Int64(5)^25) == hash(big(5)^25) == hash(Int64(5)^25//1) == hash(big(5)^25//1)
+    # test integer/rational that don't fit in Float64 don't hash as Float64
+    @test hash(Int64(5)^25) != hash(5.0^25)
+    @test hash((Int64(5)//2)^25) == hash(big(5//2)^25)
+    # test integer/rational that don't fit in Float64 don't hash as Float64
+    @test hash((Int64(5)//2)^25) != hash(2.5^25)
+    # test hashing of rational with odd denominator
+    @test hash(5//3) == hash(big(5)//3)
+end
+
+@testset "`Pair`" begin
+    @test (@inferred hash(0 => 1)) === (@inferred hash(false => true))
+    @test hash(0 => 1, UInt(0)) != hash(0 => 1, UInt(1))
+    let (x, y, z) = (1, 3, 7)
+        h = UInt(9)
+        @test hash(x => (y => z), h) != hash((x => y) => z, h)
+    end
+end
+
+@testset "concrete eval type hash" begin
+    @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(hash, Tuple{Type{Int}, UInt}))
+
+    f(h...) = hash(Char, h...);
+    src = only(code_typed(f, Tuple{UInt}))[1]
+    @test count(stmt -> Meta.isexpr(stmt, :foreigncall), src.code) == 0
+end
+
+@testset "hash_bytes consistency" begin
+    # Test that hash_bytes(::Array), hash_bytes(Generator(identity, Array)), and hash_bytes(pointer(Array)) return the same values
+
+    for n in 0:1000
+        b = rand(UInt8, n)
+        a = Base.Generator(identity, b)
+
+        # Test hash_bytes(::Array) vs hash_bytes(pointer(Array))
+        hash_array = Base.hash_bytes(b, UInt64(Base.HASH_SEED), Base.HASH_SECRET)
+        hash_pointer = Base.hash_bytes(pointer(b), length(b), UInt64(Base.HASH_SEED), Base.HASH_SECRET)
+        @test hash_array isa UInt64
+        @test hash_array === hash_pointer
+
+        # Test hash_bytes(Generator(identity, Array)) vs hash_bytes(pointer(Array))
+        hash_generator = Base.hash_bytes(a, UInt64(Base.HASH_SEED), Base.HASH_SECRET)
+        @test hash_generator === hash_pointer
+    end
+end
+
+@testset "PartialStruct hash consistent with ==" begin
+    ps(t, f) = Core.PartialStruct(t, Any[f...])
+    @test hash(ps(Tuple{Int,Float64}, (Int, Float64))) ==
+          hash(ps(Tuple{Int,Float64}, (Int, Float64)))
+    @test hash(ps(Tuple{Int,Float64}, (Int, Float64))) !=
+          hash(ps(Tuple{Int,Float64}, (Int, Int)))
 end

@@ -9,6 +9,9 @@ PCRE_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
 ifeq ($(OS),emscripten)
 PCRE_CFLAGS += -fPIC
 PCRE_JIT = --disable-jit
+else ifeq ($(OS),OpenBSD)
+# jit will need RWX memory
+PCRE_JIT = --disable-jit
 else
 PCRE_JIT = --enable-jit
 endif
@@ -18,7 +21,7 @@ $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2: | $(SRCCACHE)
 
 $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) jxf $(notdir $<)
+	cd $(dir $<) && $(TAR) -jxf $(notdir $<)
 	echo 1 > $@
 
 checksum-pcre: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
@@ -50,7 +53,7 @@ $(eval $(call staged-install, \
 
 clean-pcre:
 	-rm -f $(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/pcre2-$(PCRE_VER) clean
+	-if [ -d $(BUILDDIR)/pcre2-$(PCRE_VER) ]; then $(MAKE) -C $(BUILDDIR)/pcre2-$(PCRE_VER) clean; fi
 
 distclean-pcre:
 	rm -rf $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2 $(SRCCACHE)/pcre2-$(PCRE_VER) $(BUILDDIR)/pcre2-$(PCRE_VER)

@@ -5,11 +5,12 @@
 """
     AsyncCondition()
 
-Create a async condition that wakes up tasks waiting for it
+Create an async condition that wakes up tasks waiting for it
 (by calling [`wait`](@ref) on the object)
 when notified from C by a call to `uv_async_send`.
-Waiting tasks are woken with an error when the object is closed (by [`close`](@ref)).
-Use [`isopen`](@ref) to check whether it is still active.
+Waiting tasks are woken with an [`EOFError`](@ref) when the object is closed (by [`close`](@ref)).
+Use [`isopen`](@ref) to check whether it is still active. A closed condition is inactive and will
+not wake up tasks.
 
 This provides an implicit acquire & release memory ordering between the sending and waiting threads.
 """
@@ -40,16 +41,21 @@ end
 """
     AsyncCondition(callback::Function)
 
-Create a async condition that calls the given `callback` function. The `callback` is passed one argument,
+Create an async condition that calls the given `callback` function. The `callback` is passed one argument,
 the async condition object itself.
 """
-function AsyncCondition(cb::Function)
-    async = AsyncCondition()
-    t = @task begin
-        unpreserve_handle(async)
-        while _trywait(async)
-            cb(async)
-            isopen(async) || return
+AsyncCondition(cb::Function) = run_callback_task(cb, AsyncCondition())
+
+function run_callback_task(cb::Function, async)
+    # Shielded like the `Timer` callback task below: this task owns the
+    # handle's lifetime and must survive a cancelled constructing scope.
+    t = ScopedValues.with(CANCEL_TOKEN => nothing) do
+        @task begin
+            unpreserve_handle(async)
+            while _trywait(async)
+                cb(async)
+                isopen(async) || return
+            end
         end
     end
     # here we are mimicking parts of _trywait, in coordination with task `t`
@@ -58,10 +64,168 @@ function AsyncCondition(cb::Function)
         if async.set
             schedule(t)
         else
-            _wait2(async.cond, t)
+            schedule_on_notify!(async.cond, t)
         end
     end
     return async
+end
+
+## signal notifications
+
+"""
+    SignalCondition(signum::Integer; intercept::Bool=false)
+
+Create a condition that wakes up tasks waiting for it (by calling [`wait`](@ref) on the
+object) when the process receives the signal `signum`, for example `Base.SIGHUP` or
+`Base.SIGWINCH`. Several deliveries that arrive before a waiting task runs are reported once.
+
+By default the condition only observes the signal, which still has its usual effect:
+`SIGTERM`, for instance, still exits Julia. Pass `intercept=true` to replace the usual
+effect. While any intercepting condition for `signum` is open, the signal only notifies the
+conditions, and closing the last one with [`close`](@ref) restores the usual effect. Some
+effects happen regardless: a stopped process still resumes on `SIGCONT`.
+
+To clean up when `SIGTERM` stops Julia, prefer [`atexit`](@ref) to intercepting the signal,
+since that exit runs the `atexit` hooks. Intercept it only when the program must decide for
+itself when to stop, and then end the handler with [`exit`](@ref).
+
+The signals that have a named constant in `Base` can be watched as follows:
+
+| Signal          | Linux      | macOS, BSD | Windows | Usual effect                          |
+|:--------------- |:---------- |:---------- |:------- |:------------------------------------- |
+| `Base.SIGHUP`   | yes        | yes        | yes     | exit                                  |
+| `Base.SIGINT`   | yes        | yes        | yes     | interrupt running code (see below)    |
+| `Base.SIGQUIT`  | yes        | yes        | no      | print backtraces and exit             |
+| `Base.SIGUSR1`  | yes        | yes        | no      | profile peek on Linux, exit on macOS  |
+| `Base.SIGUSR2`  | no         | macOS only | no      | exit                                  |
+| `Base.SIGALRM`  | yes        | yes        | no      | exit                                  |
+| `Base.SIGTERM`  | yes        | yes        | no      | exit                                  |
+| `Base.SIGCONT`  | yes        | yes        | no      | resume if stopped (always happens)    |
+| `Base.SIGWINCH` | yes        | yes        | yes     | none                                  |
+| `Base.SIGINFO`  | no         | yes        | no      | profile peek                          |
+
+Ctrl-C (`SIGINT`) interrupts running code through task cancellation (see
+[`CancellationToken`](@ref)), or exits a script. It can be observed but not intercepted, so
+that code relying on cancellation keeps working. If an intercepting condition's task cannot
+run, for example because other code never yields, then on Unix Ctrl-\\ (`SIGQUIT`) still
+stops Julia, unless `SIGQUIT` is also intercepted.
+
+The signals Julia itself relies on, such as `SIGSEGV`, `SIGPIPE`, `SIGCHLD` and `SIGUSR2`
+outside macOS, cannot be watched, nor can the signals that cannot be caught (`SIGKILL`, `SIGSTOP`).
+Watching one throws an `ArgumentError`.
+
+On Windows, libuv reports console events as signals: Ctrl+C as `SIGINT`, Ctrl+Break as
+`SIGBREAK` (21), closing the console as `SIGHUP`, and resizing it as `SIGWINCH`. No other
+signals are available there. While `SIGHUP` is intercepted, closing the console no longer exits
+Julia by itself, so the handler should call [`exit`](@ref); Windows ends the process a few
+seconds after the console closes in any case.
+
+Other signals can be watched by number. For real-time signals use
+`Base.sigrtmin() + n`, like `SIGRTMIN+n` in C (see [`Base.sigrtmin`](@ref)). The numbers of
+the rest, such as `SIGPROF`, differ between platforms; see `signal.h` or `man 7 signal`.
+Intercepting `SIGTSTP` stops Ctrl-Z from suspending Julia.
+
+Handling a signal needs the event loop to run, so a task busy in a loop that never yields
+delays it until it does.
+
+When Julia is started with `--handle-signals=no` it leaves all signals alone, so a condition
+can still be opened but is never notified.
+
+# Examples
+```julia
+term = Base.SignalCondition(Base.SIGTERM; intercept=true)
+Threads.@spawn begin
+    wait(term)
+    finish_current_job()
+    exit(0)
+end
+```
+
+!!! compat "Julia 1.14"
+    `SignalCondition` requires at least Julia 1.14.
+"""
+mutable struct SignalCondition
+    cond::ThreadSynchronizer
+    @atomic isopen::Bool
+    @atomic set::Bool
+    signum::Cint
+    intercept::Bool
+
+    function SignalCondition(signum::Integer; intercept::Bool=false)
+        if !(typemin(Cint) <= signum <= typemax(Cint)) ||
+                ccall(:jl_signal_is_reserved, Cint, (Cint,), signum) != 0
+            throw(ArgumentError("signal $signum cannot be watched"))
+        end
+        if intercept && signum == SIGINT
+            throw(ArgumentError("SIGINT cannot be intercepted, as Ctrl-C goes through task cancellation"))
+        end
+        this = new(ThreadSynchronizer(), true, false, signum, intercept)
+        iolock_begin()
+        err = ccall(:jl_signal_watch_start, Cint, (Cint, Cint, Ptr{Cvoid}),
+            signum, intercept, @cfunction(uv_signalcb, Cvoid, (Ptr{Cvoid},)))
+        err == 0 && push!(get!(Vector{SignalCondition}, SIGNAL_WATCHERS, this.signum), this)
+        iolock_end()
+        err == 0 || throw(_UVError("jl_signal_watch_start", err))
+        return this
+    end
+end
+
+# The open conditions for each signal, guarded by the IO lock. This also keeps them alive until closed.
+const SIGNAL_WATCHERS = Dict{Cint, Vector{SignalCondition}}()
+
+function close(s::SignalCondition)
+    iolock_begin()
+    if isopen(s)
+        @atomic :release s.isopen = false
+        watchers = SIGNAL_WATCHERS[s.signum]
+        deleteat!(watchers, findfirst(x -> x === s, watchers)::Int)
+        ccall(:jl_signal_watch_stop, Cvoid, (Cint, Cint), s.signum, s.intercept)
+    end
+    iolock_end()
+    @lock s.cond notify(s.cond, false)
+    nothing
+end
+
+function _trywait(s::SignalCondition, tok::MaybeToken)
+    lock(s.cond)
+    locked = true
+    try
+        while !s.set && isopen(s)
+            locked = false
+            wait(s.cond, tok)
+            locked = true
+        end
+        set = s.set
+        @atomic :monotonic s.set = false
+        return set
+    finally
+        locked && unlock(s.cond)
+    end
+end
+
+"""
+    SignalCondition(callback::Function, signum::Integer; intercept::Bool=false)
+
+Create a [`SignalCondition`](@ref) that calls `callback` when the process receives the
+signal `signum`. See there for what `intercept` does. Several deliveries that arrive before the callback runs are reported once,
+so the number of calls is not a count of signals. The `callback` is passed one argument, the
+condition object itself.
+
+# Examples
+```julia
+Base.SignalCondition(Base.SIGHUP; intercept=true) do _
+    reload_config()
+end
+```
+"""
+SignalCondition(cb::Function, signum::Integer; intercept::Bool=false) =
+    run_callback_task(cb, SignalCondition(signum; intercept))
+
+function show(io::IO, s::SignalCondition)
+    state = isopen(s) ? "open" : "closed"
+    name = signal_name(s.signum)
+    signal = name === nothing ? string(s.signum) : "$name ($(s.signum))"
+    print(io, "SignalCondition($signal", s.intercept ? ", intercept" : "", ", $state)")
 end
 
 ## timer-based notifications
@@ -73,8 +237,29 @@ Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on 
 
 Waiting tasks are woken after an initial delay of at least `delay` seconds, and then repeating after
 at least `interval` seconds again elapse. If `interval` is equal to `0`, the timer is only triggered
-once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use
-[`isopen`](@ref) to check whether a timer is still active.
+once. When closing (by [`close`](@ref)) either a repeating timer or a one-shot timer before it has
+triggered, waiting tasks are woken with an [`EOFError`](@ref). After a one-shot timer triggers, all
+subsequent calls to [`wait`](@ref) return immediately, even if it is closed.
+`delay` and `interval` have millisecond resolution: they are rounded up to a whole number of
+milliseconds, so the minimum nonzero `interval` is 1 millisecond (`interval = 0.001`).
+Use [`isopen`](@ref) to check whether a timer is still active. An inactive timer will not fire.
+Use `t.timeout` and `t.interval` to read the setup conditions of a `Timer` `t`.
+
+```julia-repl
+julia> t = Timer(1.0; interval=0.5)
+Timer (open, timeout: 1.0 s, interval: 0.5 s) @0x000000010f4e6e90
+
+julia> isopen(t)
+true
+
+julia> t.timeout
+1.0
+
+julia> close(t)
+
+julia> isopen(t)
+false
+```
 
 !!! note
     `interval` is subject to accumulating time skew. If you need precise events at a particular
@@ -84,12 +269,21 @@ once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with
     A `Timer` requires yield points to update its state. For instance, `isopen(t::Timer)` cannot be
     used to timeout a non-yielding while loop.
 
+!!! compat "Julia 1.12"
+    The `timeout` and `interval` readable properties were added in Julia 1.12.
+
+!!! compat "Julia 1.14"
+    Prior to Julia 1.14, only the first call to `wait` on a triggered one-shot timer returned,
+    and subsequent calls threw an `EOFError`.
+
 """
 mutable struct Timer
     @atomic handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
     @atomic isopen::Bool
     @atomic set::Bool
+    timeout_ms::UInt64
+    interval_ms::UInt64
 
     function Timer(timeout::Real; interval::Real = 0.0)
         timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
@@ -99,71 +293,158 @@ mutable struct Timer
         intervalms = ceil(UInt64, interval * 1000)
         loop = eventloop()
 
-        this = new(Libc.malloc(_sizeof_uv_timer), ThreadSynchronizer(), true, false)
+        this = new(Libc.malloc(_sizeof_uv_timer), ThreadSynchronizer(), true, false, timeoutms, intervalms)
         associate_julia_struct(this.handle, this)
         iolock_begin()
         err = ccall(:uv_timer_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), loop, this)
-        @assert err == 0
+        @assert err == 0 "failed to initialize timer"
         finalizer(uvfinalize, this)
         ccall(:uv_update_time, Cvoid, (Ptr{Cvoid},), loop)
         err = ccall(:uv_timer_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
             this, @cfunction(uv_timercb, Cvoid, (Ptr{Cvoid},)),
             timeoutms, intervalms)
-        @assert err == 0
+        @assert err == 0 "failed to start timer"
         iolock_end()
         return this
     end
+end
+function getproperty(t::Timer, f::Symbol)
+    if f == :timeout
+        t.timeout_ms == 0 && return 0.0
+        return (t.timeout_ms - 1) / 1000 # remove the +1ms compensation from the constructor
+    elseif f == :interval
+        return t.interval_ms / 1000
+    else
+        return getfield(t, f)
+    end
+end
+propertynames(::Timer) = (:handle, :cond, :isopen, :set, :timeout, :timeout_ms, :interval, :interval_ms)
+
+function show(io::IO, t::Timer)
+    state = isopen(t) ? "open" : "closed"
+    interval = t.interval
+    interval_str = interval > 0 ? ", interval: $(t.interval) s" : ""
+    print(io, "Timer ($state, timeout: $(t.timeout) s$interval_str) @0x$(string(convert(UInt, pointer_from_objref(t)), base = 16, pad = Sys.WORD_SIZE>>2))")
 end
 
 unsafe_convert(::Type{Ptr{Cvoid}}, t::Timer) = t.handle
 unsafe_convert(::Type{Ptr{Cvoid}}, async::AsyncCondition) = async.handle
 
-function _trywait(t::Union{Timer, AsyncCondition})
+# if this returns true, the object has been signaled
+# if this returns false, the object is closed
+# a cancellation of the governing token is thrown as a CancellationRequest
+_trywait(t::Union{Timer, AsyncCondition, SignalCondition}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    _trywait(t, resolve_cancel_token(cancel))
+function _trywait(t::Union{Timer, AsyncCondition}, tok::MaybeToken)
     set = t.set
     if set
         # full barrier now for AsyncCondition
-        t isa Timer || Core.Intrinsics.atomic_fence(:acquire_release)
+        t isa Timer || Core.Intrinsics.atomic_fence(:acquire_release, :system)
     else
-        t.isopen || return false
-        t.handle == C_NULL && return false
+        if !isopen(t)
+            # the :acquire read of isopen pairs with the :release store in uv_timercb, which
+            # sets `set` beforehand: a waiter observing the trigger-initiated close of a
+            # one-shot timer cannot miss the trigger on this recheck
+            set = t.set
+            if !set
+                close(t) # wait for the close to complete
+                return false
+            end
+        end
         iolock_begin()
         set = t.set
         if !set
             preserve_handle(t)
             lock(t.cond)
+            locked = true
             try
                 set = t.set
-                if !set && t.isopen && t.handle != C_NULL
+                while !set && t.handle != C_NULL # wait for set or handle, but not the isopen flag
                     iolock_end()
-                    set = wait(t.cond)
+                    locked = false
+                    ret = wait(t.cond, tok)
+                    locked = true
                     unlock(t.cond)
+                    locked = false
                     iolock_begin()
                     lock(t.cond)
+                    locked = true
+                    if ret isa Bool
+                        set = ret
+                        break
+                    end
+                    # A wakeup that did not come from this object's notify:
+                    # re-check the state and re-park.
+                    set = t.set
                 end
             finally
-                unlock(t.cond)
+                locked && unlock(t.cond)
                 unpreserve_handle(t)
             end
         end
         iolock_end()
     end
-    @atomic :monotonic t.set = false
+    if !(t isa Timer && iszero(t.interval_ms))
+        # if there are multiple waiters, an unspecified number may short-circuit past here
+        @atomic :monotonic t.set = false
+    end
     return set
 end
 
-function wait(t::Union{Timer, AsyncCondition})
-    _trywait(t) || throw(EOFError())
+waitqueue(t::Union{Timer, AsyncCondition, SignalCondition}) = waitqueue(t.cond)
+
+wait(t::Union{Timer, AsyncCondition, SignalCondition}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    wait(t, check_cancel_arg(cancel))
+function wait(t::Union{Timer, AsyncCondition, SignalCondition}, tok::MaybeToken)
+    ok = _trywait(t, tok)
+    @cancel_check(tok)
+    ok || throw(EOFError())
     nothing
 end
 
 
-isopen(t::Union{Timer, AsyncCondition}) = t.isopen && t.handle != C_NULL
+isopen(t::Union{Timer, AsyncCondition, SignalCondition}) = @atomic :acquire t.isopen
 
+"""
+    close(t::Union{Timer, AsyncCondition, SignalCondition})
+
+Close an object `t` and thus mark it as inactive. Once a timer or condition is inactive, it will not produce
+a new event.
+
+See also [`isopen`](@ref).
+"""
 function close(t::Union{Timer, AsyncCondition})
+    t.handle == C_NULL && !t.isopen && return # short-circuit path, :monotonic
     iolock_begin()
-    if isopen(t)
-        @atomic :monotonic t.isopen = false
-        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
+    if t.handle != C_NULL
+        if t.isopen
+            @atomic :release t.isopen = false
+            ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
+        end
+        # implement _trywait here without the auto-reset function, just waiting for the final close signal
+        preserve_handle(t)
+        lock(t.cond)
+        locked = true
+        try
+            while t.handle != C_NULL
+                iolock_end()
+                # close is the cleanup primitive: its (bounded) completion
+                # wait is shielded from cancellation
+                locked = false
+                wait(t.cond, nothing)
+                locked = true
+                unlock(t.cond)
+                locked = false
+                iolock_begin()
+                lock(t.cond)
+                locked = true
+            end
+        finally
+            locked && unlock(t.cond)
+            unpreserve_handle(t)
+        end
+    elseif t.isopen
+        @atomic :release t.isopen = false
     end
     iolock_end()
     nothing
@@ -176,8 +457,8 @@ function uvfinalize(t::Union{Timer, AsyncCondition})
         if t.handle != C_NULL
             disassociate_julia_struct(t.handle) # not going to call the usual close hooks anymore
             if t.isopen
-                @atomic :monotonic t.isopen = false
-                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle)
+                @atomic :release t.isopen = false
+                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle) # this will call Libc.free
             end
             @atomic :monotonic t.handle = C_NULL
             notify(t.cond, false)
@@ -192,8 +473,10 @@ end
 function _uv_hook_close(t::Union{Timer, AsyncCondition})
     lock(t.cond)
     try
-        @atomic :monotonic t.isopen = false
-        Libc.free(@atomicswap :monotonic t.handle = C_NULL)
+        handle = t.handle
+        @atomic :release t.isopen = false
+        @atomic :monotonic t.handle = C_NULL
+        Libc.free(handle)
         notify(t.cond, false)
     finally
         unlock(t.cond)
@@ -213,14 +496,32 @@ function uv_asynccb(handle::Ptr{Cvoid})
     nothing
 end
 
+# The runtime calls this on the event loop after it sees a watched signal.
+function uv_signalcb(::Ptr{Cvoid})
+    while (sig = ccall(:jl_signal_take_pending, Cint, ())) != 0
+        for s in get(SIGNAL_WATCHERS, sig, ())
+            @lock s.cond begin
+                @atomic :release s.set = true
+                notify(s.cond, true)
+            end
+        end
+    end
+    nothing
+end
+
 function uv_timercb(handle::Ptr{Cvoid})
     t = @handle_as handle Timer
     lock(t.cond)
     try
+        # this store must stay ordered before the :release store of isopen below, so that
+        # a waiter observing the close in _trywait is guaranteed to also observe `set`
         @atomic :monotonic t.set = true
         if ccall(:uv_timer_get_repeat, UInt64, (Ptr{Cvoid},), t) == 0
             # timer is stopped now
-            close(t)
+            if t.isopen
+                @atomic :release t.isopen = false
+                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
+            end
         end
         notify(t.cond, true)
     finally
@@ -230,20 +531,30 @@ function uv_timercb(handle::Ptr{Cvoid})
 end
 
 """
-    sleep(seconds)
+    sleep(seconds; cancel=Base.DEFAULT_CANCEL)
 
 Block the current task for a specified number of seconds. The minimum sleep time is 1
 millisecond or input of `0.001`.
+
+A cancellation of the governing token (by default the scoped token, see
+[`CancellationToken`](@ref)) interrupts the sleep by throwing the
+[`CancellationRequest`](@ref).
 """
-function sleep(sec::Real)
+function sleep(sec::Real; cancel::CancelTokenArg=DEFAULT_CANCEL)
     sec ≥ 0 || throw(ArgumentError("cannot sleep for $sec seconds"))
-    wait(Timer(sec))
+    tok = check_cancel_arg(cancel)
+    t = Timer(sec)
+    try
+        wait(t, tok)
+    finally
+        close(t)
+    end
     nothing
 end
 
 # timer with repeated callback
 """
-    Timer(callback::Function, delay; interval = 0)
+    Timer(callback::Function, delay; interval = 0, spawn::Union{Nothing,Bool}=nothing)
 
 Create a timer that runs the function `callback` at each timer expiration.
 
@@ -251,7 +562,14 @@ Waiting tasks are woken and the function `callback` is called after an initial d
 seconds, and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the
 callback is only run once. The function `callback` is called with a single argument, the timer
 itself. Stop a timer by calling `close`. The `callback` may still be run one final time, if the timer
-has already expired.
+has already expired. `delay` and `interval` are rounded up to a whole number of milliseconds.
+
+If `spawn` is `true`, the created task will be spawned, meaning that it will be allowed
+to move thread, which avoids the side-effect of forcing the parent task to get stuck to the thread
+it is on. If `spawn` is `nothing` (default), the task will be spawned if the parent task isn't sticky.
+
+!!! compat "Julia 1.12"
+    The `spawn` argument was introduced in Julia 1.12.
 
 # Examples
 
@@ -272,28 +590,36 @@ julia> begin
 3
 ```
 """
-function Timer(cb::Function, timeout::Real; interval::Real=0.0)
-    timer = Timer(timeout, interval=interval)
-    t = @task begin
-        unpreserve_handle(timer)
-        while _trywait(timer)
-            try
-                cb(timer)
-            catch err
-                write(stderr, "Error in Timer:\n")
-                showerror(stderr, err, catch_backtrace())
-                return
+function Timer(cb::Function, timeout; spawn::Union{Nothing,Bool}=nothing, kwargs...)
+    sticky = spawn === nothing ? current_task().sticky : !spawn
+    timer = Timer(timeout; kwargs...)
+    # The callback task carries the timer's lifetime (its preserve is
+    # balanced in the body): shield it from the constructing scope's
+    # cancellation token, so a cancelled scope can neither leak the preserve
+    # nor stop the timer - `close(timer)` is what ends it.
+    t = ScopedValues.with(CANCEL_TOKEN => nothing) do
+        @task begin
+            unpreserve_handle(timer)
+            while _trywait(timer)
+                try
+                    cb(timer)
+                catch err
+                    write(stderr, "Error in Timer:\n")
+                    showerror(stderr, err, catch_backtrace())
+                    return
+                end
+                isopen(timer) || return
             end
-            isopen(timer) || return
         end
     end
+    t.sticky = sticky
     # here we are mimicking parts of _trywait, in coordination with task `t`
     preserve_handle(timer)
     @lock timer.cond begin
         if timer.set
             schedule(t)
         else
-            _wait2(timer.cond, t)
+            schedule_on_notify!(timer.cond, t)
         end
     end
     return timer
@@ -302,11 +628,24 @@ end
 """
     timedwait(testcb, timeout::Real; pollint::Real=0.1)
 
-Waits until `testcb()` returns `true` or `timeout` seconds have passed, whichever is earlier.
+Wait until `testcb()` returns `true` or `timeout` seconds have passed, whichever is earlier.
 The test function is polled every `pollint` seconds. The minimum value for `pollint` is 0.001 seconds,
 that is, 1 millisecond.
 
 Return `:ok` or `:timed_out`.
+
+# Examples
+```jldoctest
+julia> cb() = (sleep(5); return);
+
+julia> t = @async cb();
+
+julia> timedwait(()->istaskdone(t), 1)
+:timed_out
+
+julia> timedwait(()->istaskdone(t), 6.5)
+:ok
+```
 """
 function timedwait(testcb, timeout::Real; pollint::Real=0.1)
     pollint >= 1e-3 || throw(ArgumentError("pollint must be ≥ 1 millisecond"))
@@ -320,10 +659,58 @@ function timedwait(testcb, timeout::Real; pollint::Real=0.1)
         if testcb()
             close(t)
             return :ok
-        elseif (time_ns() - start) > ns_timeout
+        elseif (time_ns() -% start) > ns_timeout
             close(t)
             break
         end
     end
     return :timed_out
+end
+
+## A deadline as a waitable (see base/park.jl): `TimeoutWait(dt)` in a
+## park's waitables wakes the wait with `:timed_out` after `dt` seconds.
+## Its enqueue - running inside `park!`, after the arm - starts the timer
+## and spawns the claimer task, which wakes the parked task through the
+## standard expected-entry claim CAS. That CAS is a *specific-wait* waker:
+## it is only sound against a fresh, single-use entry (which the entry
+## cache contract supplies automatically - any non-canonical waitable
+## shape gets a fresh entry), since entry identity is what scopes the
+## claim to this wait and not a later one of the same task. The claimed
+## waitq registration is left for the driver's lazy settle; the dequeue
+## closes the timer on every exit path.
+mutable struct TimeoutWait
+    const timeout::Float64
+    timer::Union{Timer, Nothing}
+    TimeoutWait(timeout::Real) = new(Float64(timeout), nothing)
+end
+
+function wait_enqueue!(x::TimeoutWait, w::WaitEntry, first::Bool)
+    ct = current_task()
+    timer = Timer(x.timeout)
+    x.timer = timer
+    t = Task() do
+        try
+            # not cancellable: internal mechanism; closing the timer wakes
+            # this task on every exit path of the governed wait
+            wait(timer; cancel=nothing)
+        catch e
+            # a closed timer means the wait ended first; do nothing
+            e isa EOFError && return
+            rethrow()
+        end
+        if (@atomicreplace ct.waiting_on w => nothing).success
+            schedule(ct, :timed_out)
+        end
+    end
+    t.sticky = false
+    Threads._spawn_set_thrpool(t, :interactive)
+    schedule(t)
+    return true
+end
+
+function wait_dequeue!(x::TimeoutWait, w::WaitEntry, why::UInt8)
+    timer = x.timer
+    timer === nothing || close(timer)
+    x.timer = nothing
+    return nothing
 end

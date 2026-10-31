@@ -10,7 +10,7 @@ OPENBLAS_BUILD_OPTS := CC="$(CC) $(SANITIZE_OPTS)" FC="$(FC) $(SANITIZE_OPTS)" L
 # Thread support
 ifeq ($(OPENBLAS_USE_THREAD), 1)
 OPENBLAS_BUILD_OPTS += USE_THREAD=1
-OPENBLAS_BUILD_OPTS += GEMM_MULTITHREADING_THRESHOLD=50
+OPENBLAS_BUILD_OPTS += GEMM_MULTITHREADING_THRESHOLD=400
 # Maximum number of threads for parallelism
 OPENBLAS_BUILD_OPTS += NUM_THREADS=512
 else
@@ -43,7 +43,7 @@ OPENBLAS_FFLAGS := $(JFFLAGS) $(USE_BLAS_FFLAGS)
 OPENBLAS_CFLAGS := -O2
 
 # Decide whether to build for 32-bit or 64-bit arch
-ifneq ($(BUILD_OS),$(OS))
+ifneq ($(XC_HOST),)
 OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 HOSTCC=$(HOSTCC) CROSS_SUFFIX=$(CROSS_COMPILE)
 endif
 ifeq ($(OS),WINNT)
@@ -90,22 +90,17 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied: $(BUILDDIR)/$(OP
 		patch -p1 -f < $(SRCDIR)/patches/openblas-winexit.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-cancellation.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied
 	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
-		patch -p1 -f < $(SRCDIR)/patches/openblas-ofast-power.patch
+		patch -p1 -f < $(SRCDIR)/patches/openblas-cancellation.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/neoverse-generic-kernels.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-default-allocator.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-cancellation.patch-applied
 	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
-		patch -p1 -f < $(SRCDIR)/patches/neoverse-generic-kernels.patch
+		patch -p1 -f < $(SRCDIR)/patches/openblas-default-allocator.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-power-test.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/neoverse-generic-kernels.patch-applied
-	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
-		patch -p1 -f < $(SRCDIR)/patches/openblas-power-test.patch
-	echo 1 > $@
-
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-power-test.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-default-allocator.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured
@@ -126,7 +121,7 @@ $(eval $(call staged-install, \
 
 clean-openblas:
 	-rm -f $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/$(OPENBLAS_SRC_DIR) clean
+	-if [ -d $(BUILDDIR)/$(OPENBLAS_SRC_DIR) ]; then $(MAKE) -C $(BUILDDIR)/$(OPENBLAS_SRC_DIR) clean; fi
 
 
 get-openblas: $(OPENBLAS_SRC_FILE)
@@ -155,17 +150,17 @@ LAPACK_MFLAGS := NOOPT="$(FFLAGS) $(JFFLAGS) $(USE_BLAS_FFLAGS) -O0" \
     OPTS="$(FFLAGS) $(JFFLAGS) $(USE_BLAS_FFLAGS)" FORTRAN="$(FC)" \
     LOADER="$(FC)" BLASLIB="$(RPATH_ESCAPED_ORIGIN) $(LIBBLAS)"
 
-$(SRCCACHE)/lapack-$(LAPACK_VER).tgz: | $(SRCCACHE)
+$(SRCCACHE)/lapack-$(LAPACK_VER).tar.gz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://www.netlib.org/lapack/$(notdir $@)
 
-$(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz
+$(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted: $(SRCCACHE)/lapack-$(LAPACK_VER).tar.gz
 	$(JLCHECKSUM) $<
 	mkdir -p $(BUILDDIR)
 	cd $(BUILDDIR) && $(TAR) -zxf $<
 	cp $(dir $@)INSTALL/make.inc.gfortran $(dir $@)make.inc
 	echo 1 > $@
 
-checksum-lapack: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz
+checksum-lapack: $(SRCCACHE)/lapack-$(LAPACK_VER).tar.gz
 	$(JLCHECKSUM) $<
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
@@ -197,13 +192,13 @@ $(eval $(call staged-install, \
 
 clean-lapack:
 	-rm -f $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled0 $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/lapack-$(LAPACK_VER) clean
+	-if [ -d $(BUILDDIR)/lapack-$(LAPACK_VER) ]; then $(MAKE) -C $(BUILDDIR)/lapack-$(LAPACK_VER) clean; fi
 
 distclean-lapack:
-	rm -rf $(SRCCACHE)/lapack-$(LAPACK_VER).tgz $(BUILDDIR)/lapack-$(LAPACK_VER)
+	rm -rf $(SRCCACHE)/lapack-$(LAPACK_VER).tar.gz $(BUILDDIR)/lapack-$(LAPACK_VER)
 
 
-get-lapack: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz
+get-lapack: $(SRCCACHE)/lapack-$(LAPACK_VER).tar.gz
 extract-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted
 configure-lapack: extract-lapack
 compile-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled

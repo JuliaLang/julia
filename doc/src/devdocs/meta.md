@@ -2,7 +2,7 @@
 
 In some circumstances, one might wish to provide hints or instructions that a given block of code
 has special properties: you might always want to inline it, or you might want to turn on special
-compiler optimization passes.  Starting with version 0.4, Julia has a convention that these instructions
+compiler optimization passes. Starting with version 0.4, Julia has a convention that these instructions
 can be placed inside a `:meta` expression, which is typically (but not necessarily) the first
 expression in the body of a function.
 
@@ -10,12 +10,13 @@ expression in the body of a function.
 `@inline` macro:
 
 ```julia
-macro inline(ex)
-    esc(isa(ex, Expr) ? pushmeta!(ex, :inline) : ex)
+macro inline(x)
+    return annotate_meta_def_or_block(x, :inline)
 end
 ```
 
-Here, `ex` is expected to be an expression defining a function. A statement like this:
+If `x` is an expression defining a function, `annotate_meta_def_or_block` adds `:inline` to its
+`:meta` expression using `Base.pushmeta!`. A statement like this:
 
 ```julia
 @inline function myfunction(x)
@@ -34,9 +35,23 @@ quote
 end
 ```
 
-`Base.pushmeta!(ex, :symbol, args...)` appends `:symbol` to the end of the `:meta` expression,
-creating a new `:meta` expression if necessary. If `args` is specified, a nested expression containing
-`:symbol` and these arguments is appended instead, which can be used to specify additional information.
+`Base.pushmeta!(ex, tag::Union{Symbol,Expr})` appends `:tag` to the end of the `:meta` expression,
+creating a new `:meta` expression if necessary.
+
+If `@inline` is instead applied to a call site or block, no `:meta` expression is created. The
+code is wrapped between `Expr(:inline, true)` and `Expr(:inline, false)`, so that
+`@inline x*(x+3)` gets turned into:
+
+```julia
+begin
+    Expr(:inline, true)
+    local val = x*(x+3)
+    Expr(:inline, false)
+    val
+end
+```
+
+`@noinline` works the same way, using `:noinline`.
 
 To use the metadata, you have to parse these `:meta` expressions. If your implementation can be
 performed within Julia, `Base.popmeta!` is very handy: `Base.popmeta!(body, :symbol)` will scan

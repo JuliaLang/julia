@@ -1,0 +1,417 @@
+# One per pass
+struct MacroExpansionContext <: AbstractLoweringContext
+    syntax_context::SyntaxContext
+    known_layers::Dict{ScopeLayer, Bool}
+    world::UInt
+    recursive::Bool
+end
+
+function MacroExpansionContext(st, world, recursive)
+    sc = st.context
+    MacroExpansionContext(
+        sc, Dict{ScopeLayer, Bool}(base_layer(sc)=>true),
+        world, recursive)
+end
+
+# Used to briefly have Syntax quoted in Expr, since syntax_to_expr is needed for
+# proper linenode placement, but each `($ x)` should be Syntax for provenance.
+mutable struct ExprQuote
+    const syntax::Syntax
+end
+
+function replace_unquoted(eqset, st, d)
+    d2 = head(st) == :quote ? d + 1 : head(st) == :$ ? d - 1 : d
+    cs = Syntax[]
+    found = false
+    for c in children(st)
+        if head(c) === :$ && d2 == 0
+            found = true
+            for cc in children(c)
+                eq = ExprQuote(cc)
+                push!(cs, @ast(_, cc, eq::value))
+                push!(eqset, eq)
+            end
+        else
+            c2, c_found = replace_unquoted(eqset, c, d2)
+            push!(cs, c2)
+            found |= c_found
+        end
+    end
+    (found ? @mknode(st; children=cs) : st), found
+end
+
+function exprquote_inert(prov, @nospecialize(x))
+    if x isa Symbol
+        @ast _ prov [:inert String(x)::identifier]
+    elseif x isa LineNumberNode || !Base.isa_ast_node(x)
+        @ast _ prov x::value
+    else
+        @ast _ prov [:copyast expr_to_est(QuoteNode(x))]
+    end
+end
+
+# Code constructing `ex`, or `nothing` if `ex` contains no unquoted expressions
+function exprquote_builder(eqset, prov, @nospecialize(ex))
+    if ex isa ExprQuote && ex in eqset
+        ex.syntax
+    elseif ex isa Expr
+        cs = Any[exprquote_builder(eqset, prov, a) for a in ex.args]
+        all(isnothing, cs) && return nothing
+        args = Syntax[isnothing(c) ? exprquote_inert(prov, a) : c
+                      for (c, a) in zip(cs, ex.args)]
+        @ast _ prov [:call [:core "_expr"::identifier]
+                     [:inert String(ex.head)::identifier] args...]
+    elseif ex isa QuoteNode
+        c = exprquote_builder(eqset, prov, ex.value)
+        isnothing(c) ? nothing :
+            @ast _ prov [:call [:core "QuoteNode"::identifier] c]
+    end
+end
+
+function expand_exprquote(ctx, st)
+    if head(st) === :$
+        numchildren(st) != 1 && throw(LoweringError(
+            st, raw"More than one value in bare `$` expression"))
+        head(st[1]) === :... && throw(LoweringError(
+            st, raw"unexpected `...` in bare `$` expression"))
+        return st[1]
+    end
+    eqset = Set{ExprQuote}() # theoretically ExprQuote can show up in input
+    st2, _ = replace_unquoted(eqset, st, 0)
+    ex = est_to_expr(st2)
+    isempty(eqset) ? exprquote_inert(st, ex) : exprquote_builder(eqset, st, ex)
+end
+
+function collect_syntaxunquote!(ctx, unquoted, st, depth)
+    if head(st) === :syntaxunquote && depth == 0
+        numchildren(st) !== 1 && throw(LoweringError(st, "malformed syntaxunquote"))
+        push!(unquoted, @ast ctx st[1] [:tuple st[1]])
+    else
+        inner_depth = head(st) == :syntaxquote ? depth + 1 :
+                      head(st) == :syntaxunquote ? depth - 1 : depth
+        for c in children(st)
+            collect_syntaxunquote!(ctx, unquoted, c, inner_depth)
+        end
+    end
+    unquoted
+end
+
+# compared to quote: (1) no need for a copy when no unquotes, since output
+# should be immutable.  (2) we do not optimize (syntaxquote (syntaxunquote x))
+# -> x, since x may not be a SyntaxTree
+function expand_syntaxquote(ctx, st)
+    if head(st) === :syntaxunquote
+        numchildren(st) != 1 && throw(LoweringError(
+            st, raw"More than one value in bare `syntaxunquote` expression"))
+        head(st[1]) === :... && throw(LoweringError(
+            st, raw"unexpected `...` in bare `syntaxunquote` expression"))
+    end
+    unquoted = collect_syntaxunquote!(ctx, SyntaxList(), st, 0)
+    length(unquoted) == 0 ? @ast(ctx, st, [:syntaxinert st]) :
+        @ast ctx st [:call interpolate_syntax::value
+                 [:syntaxinert st] unquoted...]
+end
+
+struct MacroExpansionError <: Exception
+    context::Union{Nothing,MacroContext}
+    ex::SyntaxTree
+    msg::String
+    "Error that occurred inside the macro function call (`nothing` if no inner exception)"
+    err
+    MacroExpansionError(
+        context::Union{Nothing,MacroContext}, ex::SyntaxTree, msg::AbstractString,
+        @nospecialize err = nothing
+    ) = new(context, ex, msg, err)
+end
+
+function MacroExpansionError(ex::SyntaxTree, msg::AbstractString)
+    MacroExpansionError(nothing, ex, msg)
+end
+
+function Base.showerror(io::IO, exc::MacroExpansionError)
+    print(io, "MacroExpansionError")
+    ctx = exc.context
+    if !isnothing(ctx)
+        # Use `Expr` formatting to pretty print the macro name for now -
+        # there's quite a lot of special cases. We could alternatively consider
+        # calling sourcetext() though that won't work well if it's a
+        # synthetically-generated macro name path.
+        macname_str = string(Expr(
+            :macrocall, est_to_expr(ctx.macrocall[1]), nothing))
+        print(io, " while expanding ", macname_str,
+              " in module ", syntax_module(ctx.macrocall))
+    end
+    print(io, ":\n")
+    src = sourceref(exc.ex)
+    if src isa LineNumberNode
+        highlight(io, src, note=exc.msg)
+    else
+        fb = first_byte(src)
+        lb = last_byte(src)
+        byterange = fb:lb
+        highlight(io, JuliaSyntax.SourceFile(src.code), byterange, note=exc.msg)
+    end
+    if !isnothing(exc.err)
+        print(io, "\nCaused by:\n")
+        showerror(io, exc.err)
+    end
+end
+
+function _eval_dot(world::UInt, ex::SyntaxTree)
+    if head(ex) === :. && numchildren(ex) == 2
+        lhs = _eval_dot(world, ex[1])
+        lhs isa Module || return nothing
+        rhs = head(ex[2]) === :inert ? ex[2][1] : ex[2]
+        (head(rhs) === :identifier || head(rhs) === :symbol) || return nothing
+        _invoke_in_world(world, getproperty, lhs, Symbol(syntax_name(rhs)))
+    elseif head(ex) === :value
+        ex.value
+    elseif head(ex) === :identifier
+        _invoke_in_world(world, getproperty,
+                         syntax_module(ex), Symbol(syntax_name(ex)))
+    else
+        nothing
+    end
+end
+
+# If macroexpand(ex[1]) is an identifier or dot-expression, we can simply grab
+# it from the correct module in ctx.world.  Otherwise, we need to eval arbitrary
+# code (which, TODO: does not use the correct world age, and it isn't clear the
+# language is meant to support this).
+function eval_macro_name(ctx, mctx::MacroContext, st0::SyntaxTree)
+    st = expand_forms_1(ctx, st0)
+    try
+        ed = _eval_dot(ctx.world, st)
+        if !isnothing(ed)
+            ed
+        else
+            # `ex` might contain a nontrivial mix of scopes so we can't just
+            # `eval()` it, as it's already been partially lowered by this point.
+            # Instead, we repeat the latter parts of `lower()` here.
+            mod = syntax_module(st)::Module
+            ctx2, st2 = expand_forms_2(st, ctx.world)
+            ctx3, st3 = resolve_scopes(ctx2, st2)
+            ctx4, st4 = convert_closures(ctx3, st3)
+            _ctx5, st5 = linearize_ir(ctx4, st4)
+            expr_form  = to_lowered_expr(st5)
+            ccall(:jl_toplevel_eval, Any, (Any, Any), mod, expr_form)
+        end
+    catch err
+        rethrow(MacroExpansionError(mctx, st, "Macro not found", err))
+    end
+end
+
+function _macrocall_expr_location(st::SyntaxTree)
+    @jl_assert head(st) === :macrocall st
+    if head(st[2]) === :value
+        loc = st[2].value
+        if loc isa MacroSource
+            loc
+        elseif loc isa LineNumberNode
+            # Some macros, e.g. @cmd, don't play nicely with file == nothing
+            isnothing(loc.file) ? LineNumberNode(loc.line, :var"") : loc
+        else
+            LineNumberNode(0, :var"")
+        end
+    elseif head(st[2]) === :version
+        loc = first_linenode(st)
+        @static isdefinedglobal(Core, :MacroSource) ? Core.MacroSource(loc, st[2].value) : loc
+    else
+        LineNumberNode(0, :var"")
+    end
+end
+
+function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
+    @jl_assert head(st) === :macrocall st
+    numchildren(st) >= 2 || throw(LoweringError(
+        st, "`macrocall` requires a macro name and source location"))
+    sc_in = st.context
+    macname = st[1]
+    mctx = MacroContext(st)
+    macfunc = eval_macro_name(ctx, mctx, macname)
+    raw_args = st[3:end]
+
+    # `ctx.world === typemax(UInt)` is our sentinel for "latest world"
+    macro_world = ctx.world === typemax(UInt) ? Base.get_world_counter() : ctx.world
+    has_new_macro = hasmethod(macfunc, Tuple{typeof(mctx), typeof.(raw_args)...}; world=macro_world)
+
+    if has_new_macro
+        macro_args = Any[mctx, raw_args...]
+        macro_mi = lookup_method_instance(macfunc, macro_args, macro_world)
+        expanded = try
+            _invoke_in_world(ctx.world, macfunc, macro_args...)
+        catch exc
+            rethrow(MacroExpansionError(mctx, st, "Error expanding macro", exc))
+        end
+        st_out = if expanded isa SyntaxTree
+            expanded
+        else
+            (expanded isa Expr || expanded isa Symbol) && throw(LoweringError(
+                st, "implicit expr->syntaxtree: may later be allowed, but is probably a mistake today"))
+            expr_to_est(expanded, st)
+        end
+    else
+        macro_loc = _macrocall_expr_location(st)
+        macro_lnn = macro_loc isa MacroSource ? macro_loc.lno : macro_loc
+        macro_args = Any[macro_loc, base_layer(ctx.syntax_context).mod]
+        for arg in raw_args
+            @jl_assert head(arg) !== :version arg # handled in EST conversion
+            push!(macro_args, est_to_expr(arg))
+        end
+        macro_mi = lookup_method_instance(macfunc, macro_args, macro_world)
+        st_out = try
+            _invoke_in_world(ctx.world, macfunc, macro_args...)
+        catch exc
+            if exc isa MethodError && exc.f === macfunc && !isempty(
+                methods_in_world(macfunc, Tuple{typeof(mctx), Vararg{Any}}, ctx.world, st))
+                # If the macro has at least some methods implemented in the
+                # new style, assume the user meant to call one of those
+                # rather than any old-style macro methods which might exist
+                exc = MethodError(macfunc, (mctx, raw_args...,), ctx.world)
+            end
+            rethrow(MacroExpansionError(mctx, st, "Error expanding macro", exc))
+        end
+        st_out = expr_to_est(st_out, macro_lnn)
+    end
+    # Module scope for the returned AST is the module where this particular
+    # method was defined (may be different from `parentmodule(macfunc)`)
+    mod_for_ast = macro_mi !== nothing ? macro_mi.def.module : parentmodule(macfunc)
+    sc2 = SyntaxContext(
+        ScopeLayer(mod_for_ast, sc_in.layer), st,
+        (has_new_macro ? JL_NEW_EDITION : JL_OLD_EDITION), false)
+    st_out2 = apply_expansion_layer(ctx, st_out, sc2, true, 0, 0)
+    st_out3 = !ctx.recursive ? st_out2 : expand_forms_1(ctx, st_out2)
+    has_new_macro || _note_32026_hack!(st_out3, sc2)
+    st_out3
+end
+
+function known_layer(ctx, sl::Union{Nothing, ScopeLayer})
+    isnothing(sl) && return false
+    get!(ctx.known_layers, sl) do
+        known_layer(ctx, sl.escaped)
+    end
+end
+
+"""
+When a macro expands, we add a fresh layer to all new syntax in the expansion.
+Any syntax that doesn't share a base layer with the top-level thunk is
+considered "new".  This is similar to racket's flip-scope operation, but
+simpler and less powerful (we lose any layer we overwrite, but we gain the
+invariant that all layers have the same root after every expansion, so
+`escape` is well-defined).
+
+Implementation notes:
+
+- `escape` in an argument of a macrocall cannot be resolved to a layer, since we
+  must expand to know whether (old) more escapes will surround it or (new) the
+  macro moves the escape to another layer.
+
+- `escape` nodes coming in usually have no layer (old expansion).  New
+  expansions can't create escapes, but can pass an argument containing `escape`
+  through, and arguments must have full context.  Thus, if we see `escape` with
+  any context, we know the layer is uniform, and is the layer we want to escape
+  from, so we remove inner context. (if there's an an old macro requiring
+  caller-side `esc(arg)`, the new macro must also bump `esc(arg)`'s layer.)
+
+- We could try some shortcuts in module/toplevel, but note that macrocall/quote
+  need full context (a macro may extract an arbitrary child), and even when
+  `done`, module/toplevel may contain syntax with arbitrary layers that we must
+  clean up now (later, we lose the base layer used to detect new syntax)
+"""
+function apply_expansion_layer(ctx, st::SyntaxTree, sc_in::SyntaxContext, done,
+                               qdepth, sqdepth)
+    @jl_assert known_layer(ctx, base_layer(sc_in)) st
+    sc0 = st.context
+    sc = sc0.layer === nothing || !known_layer(ctx, sc0.layer) ? sc_in : sc0
+    k = head(st)
+    absorb_esc = done && qdepth == 0 && sqdepth == 0
+    out = if is_leaf(st)
+        st.context !== sc ? @mknode(st; context=sc) : st
+    elseif k === :escape && absorb_esc
+        if numchildren(st) !== 1
+            throw(LoweringError(st, "`escape` requires one argument"))
+        elseif is_base_layer(sc)
+            throw(LoweringError(st, "`escape` node in outer context"))
+        elseif !is_flisp_compat(sc)
+            throw(LoweringError(st, "new macros should not use `escape`"))
+        end
+        st1 = isnothing(sc0.layer) ? st[1] : remove_scope(st[1])
+        apply_expansion_layer(
+            ctx, st1, escape_layer(sc, false), true, qdepth, sqdepth)
+    elseif k === Symbol("hygienic-scope") && absorb_esc
+        if !(2 <= numchildren(st) <= 3)
+            throw(LoweringError(st, "`hygienic-scope` requires 2-3 children"))
+        elseif head(st[2]) !== :value || !(st[2].value isa Module)
+            throw(LoweringError(st, "`hygienic-scope` arg 2: expected Module"))
+        elseif !is_flisp_compat(sc)
+            throw(LoweringError(st, "new macros should not use `hygienic-scope`"))
+        end
+        new_sl = ScopeLayer(st[2].value::Module, sc.layer)
+        st1 = isnothing(sc0.layer) ? st[1] : remove_scope(st[1])
+        sc2 = SyntaxContext(new_sl, sc.unexpanded, sc.edition, sc.internal)
+        apply_expansion_layer(ctx, st1, sc2, true, qdepth, sqdepth)
+    else
+        done2 = done && k !== :macrocall && k !== :inert && k !== :syntaxinert
+        qdepth2 = qdepth + (k === :quote ? 1 : k === :$ ? -1 : 0)
+        sqdepth2 = sqdepth + (k === :syntaxquote ? 1 : k === :syntaxunquote ? -1 : 0)
+        @mknode(st; context=sc, children=mapsyntax(c->apply_expansion_layer(
+            ctx, c, sc_in, done2, qdepth2, sqdepth2), children(st)))
+    end
+    out
+end
+
+"""
+Expands macros and quote/interpolation forms.
+"""
+function expand_forms_1(ctx::MacroExpansionContext, st::SyntaxTree)
+    k = head(st)
+    if is_leaf(st)
+        st
+    elseif k === :macrocall
+        expand_macro(ctx, st)
+    elseif (k === :do && numchildren(st) == 2 && head(st[1]) === :macrocall &&
+        head(st[2]) === :->)
+        mac_ex = @ast ctx st [
+            :macrocall
+            st[1][1] # mac name
+            st[1][2] # loc
+            st[2]    # do-lambda
+            children(st[1])[3:end]...
+        ]
+        expand_macro(ctx, mac_ex)
+    elseif k === :inert || k === :syntaxinert || k === :toplevel || k === :module
+        st
+    elseif k === :quote
+        if numchildren(st) !== 1
+            throw(LoweringError(st, "`quote` requires one argument"))
+        end
+        expand_forms_1(ctx, expand_exprquote(ctx, st[1]))
+    elseif k === :syntaxquote
+        if numchildren(st) !== 1
+            throw(LoweringError(st, "`syntaxquote` requires one argument"))
+        end
+        expand_forms_1(ctx, expand_syntaxquote(ctx, st[1]))
+    elseif k === :escape || k === Symbol("hygienic-scope")
+        expand_forms_1(
+            ctx, apply_expansion_layer(ctx, st, st.context, true, 0, 0))
+    else
+        mapchildren(c->expand_forms_1(ctx, c), st)
+    end
+end
+
+function assert_expandable(st, l=base_layer(st.context))
+    @jl_assert st.context.layer isa ScopeLayer (st, "expected a scope layer")
+    @jl_assert base_layer(st.context) == l (st, "expected consistent layer")
+    !is_leaf(st) && for c in children(st)
+        assert_expandable(c, l)
+    end
+end
+
+@fzone "JL: macroexpand" function expand_forms_1(
+    st::SyntaxTree, world::UInt, recursive::Bool)
+
+    DEBUG && assert_expandable(st)
+    ctx = MacroExpansionContext(st, world, recursive)
+    st_out = expand_forms_1(ctx, st)
+    return st_out
+end

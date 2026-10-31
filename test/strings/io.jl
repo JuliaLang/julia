@@ -156,6 +156,20 @@
         @test "aaa \\g \\n" == unescape_string(str, ['g', 'n'])
     end
     @test Base.escape_raw_string(raw"\"\\\"\\-\\") == "\\\"\\\\\\\"\\\\-\\\\"
+    @test Base.escape_raw_string(raw"`\`\\-\\") == "\`\\\`\\\\-\\\\"
+    @test Base.escape_raw_string(raw"\"\\\"\\-\\", '`') == "\"\\\"\\\\-\\\\"
+    @test Base.escape_raw_string(raw"`\`\\-\\", '`') == "\\\`\\\\\\\`\\\\-\\\\"
+    @test Base.escape_raw_string(raw"some`string") == "some`string"
+    @test Base.escape_raw_string(raw"some\"string", '`') == "some\"string"
+    @test Base.escape_raw_string(raw"some`string\\") == "some`string\\\\"
+    @test Base.escape_raw_string(raw"some\"string\\", '`') == "some\"string\\\\"
+    @test Base.escape_raw_string(raw"some\"string") == "some\\\"string"
+    @test Base.escape_raw_string(raw"some`string", '`') == "some\\`string"
+
+    # ascii and fullhex flags:
+    @test escape_string("\u00e4\u00f6\u00fc") == "\u00e4\u00f6\u00fc"
+    @test escape_string("\u00e4\u00f6\u00fc", ascii=true) == "\\ue4\\uf6\\ufc"
+    @test escape_string("\u00e4\u00f6\u00fc", ascii=true, fullhex=true) == "\\u00e4\\u00f6\\u00fc"
 end
 @testset "join()" begin
     @test join([]) == join([],",") == ""
@@ -320,4 +334,47 @@ end
     @test string(2.f0, 2.0) == "2.02.0"
     # test empty args
     @test string() == ""
+end
+
+@testset "`string`/`print` of many argument types resolve statically" begin
+    # For an exact signature (what `--trim` compiles), each argument's `print` must
+    # be resolved at compile time even when the arguments span more distinct types
+    # than inference keeps in a merged union.
+    function isdynamic_call(stmt)
+        Meta.isexpr(stmt, :call) || return false
+        f = stmt.args[1]
+        f isa GlobalRef && (f = getglobal(f.mod, f.name))
+        f isa Core.BindingPartition &&
+            (f = Core.getglobal_partition(Base.partition_owner(f).globalref, f, :unordered))
+        return !(f isa Core.Builtin || f isa Core.IntrinsicFunction)
+    end
+    args = ("got ", 1:3, " vs ", 1, " with ", 2.5, " and ", :s, " and ", 'c')
+    expected = "got 1:3 vs 1 with 2.5 and s and c"
+    @test string(args...) == expected
+    @test sprint(print, args...) == expected
+    T = typeof(args)
+    for (f, sig) in ((Base.print_to_string, T), (print, Tuple{IOBuffer, T.parameters...}))
+        src, _ = only(code_typed(f, sig))
+        @test !any(isdynamic_call, src.code)
+    end
+    # arguments of unknown type still take the dynamic path
+    v = Any[args...]
+    @test string(v...) == expected
+    @test sprint(print, v...) == expected
+end
+
+module StringsIOStringReturnTypesTestModule
+    struct S end
+    Base.joinpath(::S) = S()
+end
+
+@testset "`string` return types" begin
+    @test all(T -> T <: AbstractString, Base.return_types(string))
+end
+
+@testset "type stable `join` (#55389)" begin
+    itr = ("foo" for _ in 1:100)
+    @test Base.return_types(join, (typeof(itr),))[] == String
+    @test Base.infer_return_type(join, (Tuple{String,Vararg{String}}, Char)) == String
+    @test Base.infer_return_type(join, (Tuple{Vararg{String}}, String, String)) == String
 end

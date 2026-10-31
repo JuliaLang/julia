@@ -1,0 +1,192 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
+# tests that interpreter matches codegen
+include("setup_Compiler.jl")
+
+using Test
+using Core.IR
+
+# test that interpreter correctly handles PhiNodes (#29262)
+let m = Meta.@lower 1 + 1
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::CodeInfo
+    src.code = Any[
+        # block 1
+        QuoteNode(:a),
+        QuoteNode(:b),
+        GlobalRef(@__MODULE__, :test29262),
+        GotoIfNot(SSAValue(3), 6),
+        # block 2
+        PhiNode(Int32[4], Any[SSAValue(1)]),
+        PhiNode(Int32[4, 5], Any[SSAValue(2), SSAValue(5)]),
+        ReturnNode(SSAValue(6)),
+    ]
+    nstmts = length(src.code)
+    src.ssavaluetypes = nstmts
+    src.ssaflags = fill(zero(UInt32), nstmts)
+    src.debuginfo = Core.DebugInfo(:none)
+    Compiler.verify_ir(Compiler.inflate_ir(src))
+    global test29262 = true
+    @test :a === @eval $m
+    global test29262 = false
+    @test :b === @eval $m
+end
+
+let m = Meta.@lower 1 + 1
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::CodeInfo
+    src.code = Any[
+        # block 1
+        QuoteNode(:a),
+        QuoteNode(:b),
+        QuoteNode(:c),
+        GlobalRef(@__MODULE__, :test29262),
+        # block 2
+        PhiNode(Int32[4, 16], Any[false, true]), # false, true
+        PhiNode(Int32[4, 16], Any[SSAValue(1), SSAValue(2)]), # :a, :b
+        PhiNode(Int32[4, 16], Any[SSAValue(3), SSAValue(6)]), # :c, :a
+        PhiNode(Int32[16], Any[SSAValue(7)]), # NULL, :c
+        # block 3
+        PhiNode(Int32[], Any[]), # NULL, NULL
+        PhiNode(Int32[17, 8], Any[true, SSAValue(4)]), # test29262, test29262, [true]
+        PhiNode(Int32[17], Vector{Any}(undef, 1)), # NULL, NULL
+        PhiNode(Int32[8], Vector{Any}(undef, 1)), # NULL, NULL
+        PhiNode(Int32[], Any[]), # NULL, NULL
+        PhiNode(Int32[17, 8], Any[SSAValue(2), SSAValue(8)]), # NULL, :c, [:b]
+        PhiNode(Int32[], Any[]), # NULL, NULL
+        GotoIfNot(SSAValue(5), 5),
+        # block 4
+        GotoIfNot(SSAValue(10), 9),
+        # block 5
+        Expr(:call, GlobalRef(Core, :tuple), SSAValue(6), SSAValue(7), SSAValue(8), SSAValue(14)),
+        ReturnNode(SSAValue(18)),
+    ]
+    nstmts = length(src.code)
+    src.ssavaluetypes = nstmts
+    src.ssaflags = fill(zero(UInt32), nstmts)
+    src.debuginfo = Core.DebugInfo(:none)
+    m.args[1] = copy(src)
+    Compiler.verify_ir(Compiler.inflate_ir(src))
+    global test29262 = true
+    @test (:b, :a, :c, :c) === @eval $m
+    m.args[1] = copy(src)
+    global test29262 = false
+    @test (:b, :a, :c, :b) === @eval $m
+end
+
+let m = Meta.@lower 1 + 1
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::CodeInfo
+    src.code = Any[
+        # block 1
+        QuoteNode(:a),
+        QuoteNode(:b),
+        GlobalRef(@__MODULE__, :test29262),
+        # block 2
+        EnterNode(12),
+        # block 3
+        UpsilonNode(),
+        UpsilonNode(),
+        UpsilonNode(SSAValue(2)),
+        GotoIfNot(SSAValue(3), 10),
+        # block 4
+        UpsilonNode(SSAValue(1)),
+        # block 5
+        Expr(:throw_undef_if_not, :expected, false),
+        ReturnNode(), # unreachable
+        # block 6
+        PhiCNode(Any[SSAValue(5), SSAValue(7), SSAValue(9)]), # NULL, :a, :b
+        PhiCNode(Any[SSAValue(6)]), # NULL
+        Expr(:pop_exception, SSAValue(4)),
+        # block 7
+        ReturnNode(SSAValue(12)),
+    ]
+    nstmts = length(src.code)
+    src.ssavaluetypes = nstmts
+    src.ssaflags = fill(zero(UInt32), nstmts)
+    src.debuginfo = Core.DebugInfo(:none)
+    Compiler.verify_ir(Compiler.inflate_ir(src))
+    global test29262 = true
+    @test :a === @eval $m
+    global test29262 = false
+    @test :b === @eval $m
+    @test isempty(current_exceptions())
+end
+
+# The interpreter must enforce the same memory-order rules as codegen.
+iscall_gr(x, name) = Meta.isexpr(x, :call) && x.args[1] == GlobalRef(Core, name)
+global exec_gp_g::Int = 1
+exec_gp_badread() = getglobal(@__MODULE__, :exec_gp_g, :not_atomic)
+exec_gp_badwrite() = setglobal!(@__MODULE__, :exec_gp_g, 5, :not_atomic)
+exec_gp_goodswap() = swapglobal!(@__MODULE__, :exec_gp_g, 7, :sequentially_consistent)
+let ci = code_typed(exec_gp_badread, ())[1][1]
+    @assert any(x -> iscall_gr(x, :getglobal_partition), ci.code)
+    @test_throws ConcurrencyViolationError exec_gp_badread()
+end
+let ci = code_typed(exec_gp_badwrite, ())[1][1]
+    @assert any(x -> iscall_gr(x, :setglobal_partition), ci.code)
+    @test_throws ConcurrencyViolationError exec_gp_badwrite()
+    @test exec_gp_g === 1 # the failed store must not have written
+end
+let ci = code_typed(exec_gp_goodswap, ())[1][1]
+    @assert any(x -> iscall_gr(x, :swapglobal_partition), ci.code)
+    @test exec_gp_goodswap() === 1 # swap returns the old value
+    @test exec_gp_g === 7
+end
+global exec_gp_def::Int = 3
+exec_gp_isdef() = isdefinedglobal(@__MODULE__, :exec_gp_def, true, :acquire)
+let ci = code_typed(exec_gp_isdef, ())[1][1]
+    @assert any(x -> iscall_gr(x, :isdefinedglobal_partition), ci.code)
+    @test exec_gp_isdef() === true
+end
+
+# An `:invoke_modify` node carries the reduce function's code instance (or method instance),
+# which the interpreter hands to the runtime to apply the reduce function through, for every
+# modify builtin; a hand-built thunk is always interpreted, so it exercises that.
+exec_im_op(a::Integer, b::Int) = a + b
+exec_im_op(a::Int, b::Int) = a * b
+exec_im_op(a::Float64, b::Int) = a - b
+const exec_im_target = Base.specialize_method(which(exec_im_op, (Integer, Int)),
+                                              Tuple{typeof(exec_im_op), Int, Int}, Core.svec())
+function exec_im_thunk(f, pre, post=())
+    m = Meta.@lower(1 + 1)
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::CodeInfo
+    src.code = Any[
+        Expr(:invoke_modify, exec_im_target, f, pre..., GlobalRef(@__MODULE__, :exec_im_op), 2, post...),
+        ReturnNode(SSAValue(1)),
+    ]
+    nstmts = length(src.code)
+    src.ssavaluetypes = nstmts
+    src.ssaflags = fill(zero(UInt32), nstmts)
+    src.debuginfo = Core.DebugInfo(:none)
+    return m
+end
+mutable struct ExecIMBox
+    x::Int
+    @atomic y::Int
+    z::Any
+end
+global exec_gp_m::Int = 2
+let b = ExecIMBox(3, 3, 3),
+    part = Base.lookup_binding_partition(Base.get_world_counter(),
+                                         convert(Core.Binding, GlobalRef(@__MODULE__, :exec_gp_m)))
+    @test (@eval $(exec_im_thunk(GlobalRef(Core, :modifyglobal_partition), (QuoteNode(part),)))) === (2 => 4)
+    @test exec_gp_m === 4
+    @test (@eval $(exec_im_thunk(GlobalRef(Core, :modifyglobal!), (@__MODULE__, QuoteNode(:exec_gp_m))))) === (4 => 6)
+    @test exec_gp_m === 6
+    @test (@eval $(exec_im_thunk(GlobalRef(Core, :modifyfield!), (b, QuoteNode(:x))))) === (3 => 5)
+    @test (@eval $(exec_im_thunk(GlobalRef(Core, :modifyfield!), (b, QuoteNode(:y)), (QuoteNode(:sequentially_consistent),)))) === (3 => 5)
+    @test (@eval $(exec_im_thunk(GlobalRef(Core, :modifyfield!), (b, QuoteNode(:z))))) === Pair{Any,Any}(3, 5)
+    mem = Memory{Int}(undef, 1)
+    mem[1] = 3
+    @test (@eval $(exec_im_thunk(GlobalRef(Core, :memoryrefmodify!), (memoryref(mem),), (QuoteNode(:not_atomic), false)))) === (3 => 5)
+    r = Ref(3)
+    GC.@preserve r begin
+        p = Base.unsafe_convert(Ptr{Int}, r)
+        @test (@eval $(exec_im_thunk(GlobalRef(Core.Intrinsics, :atomic_pointermodify), (p,), (QuoteNode(:sequentially_consistent),)))) === (3 => 5)
+    end
+end
+# the builtin names its target with a partition, and only that
+@test_throws TypeError Core.modifyglobal_partition(GlobalRef(@__MODULE__, :exec_gp_m), +, 1)
+@test exec_gp_m === 6

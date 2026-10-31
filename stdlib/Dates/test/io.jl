@@ -5,7 +5,7 @@ module IOTests
 using Test
 using Dates
 
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
 include(joinpath(BASE_TEST_PATH, "testhelpers", "withlocales.jl"))
 
 @testset "string/show representation of Date" begin
@@ -46,8 +46,17 @@ end
     end
 end
 
+# Adjacent tokens preserve the existing millisecond field; only `n` truncates to width.
+@testset "Fixed-width fractional formatting" begin
+    dt = DateTime(2026, 1, 1, 0, 0, 0, 123)
+    @test Dates.format(dt, dateformat"sS") == "1230"
+    @test Dates.format(dt, dateformat"ssS") == "1230"
+    @test Dates.format(dt, dateformat"nS") == "10"
+    @test Dates.format(dt, dateformat"nnS") == "120"
+end
+
 @testset "DateTime parsing" begin
-    # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
+    # Useful reference for different locales: https://library.princeton.edu/departments/tsd/katmandu/reference/months.html
 
     # Allow parsing of strings which are not representable as a TimeType
     str = "02/15/1996 25:00"
@@ -325,6 +334,23 @@ end
     # From Matt Bauman
     f = "yyyy-mm-ddTHH:MM:SS"
     @test Dates.DateTime("2014-05-28T16:46:04", f) == Dates.DateTime(2014, 5, 28, 16, 46, 04)
+
+    f = "yyyymmdd"
+    @test Dates.DateTime("20240521", f) == Dates.DateTime(2024, 5, 21)
+    @test Dates.DateTime("-20240521", f) == Dates.DateTime(-2024, 5, 21)
+    @test Dates.DateTime("+20240521", f) == Dates.DateTime(2024, 5, 21)
+    f = "YYYYmmdd"
+    @test Dates.DateTime("20240521", f) == Dates.DateTime(2024, 5, 21)
+    @test Dates.DateTime("-20240521", f) == Dates.DateTime(-2024, 5, 21)
+    @test Dates.DateTime("+20240521", f) == Dates.DateTime(2024, 5, 21)
+    f = "-yyyymmdd"
+    @test Dates.DateTime("-20240521", f) == Dates.DateTime(2024, 5, 21)
+    @test_throws ArgumentError Dates.DateTime("+20240521", f)
+    @test_throws ArgumentError Dates.DateTime("20240521", f)
+    f = "-YYYYmmdd"
+    @test Dates.DateTime("-20240521", f) == Dates.DateTime(2024, 5, 21)
+    @test_throws ArgumentError Dates.DateTime("+20240521", f)
+    @test_throws ArgumentError Dates.DateTime("20240521", f)
 end
 
 @testset "Error handling" begin
@@ -403,6 +429,17 @@ end
     @test_throws ArgumentError parse(Date, "Foo, 12 Nov 2016 07:45:36", Dates.RFC1123Format)
 end
 
+@testset "ISODateTimeFormat" begin
+    dt = Dates.DateTime(2024, 5, 21, 10, 57, 22)
+    neg_dt = Dates.DateTime(-2024, 5, 21, 10, 57, 22)
+    @test parse(Dates.DateTime, "2024-05-21T10:57:22", Dates.ISODateTimeFormat) == dt
+    @test parse(Dates.DateTime, "+2024-05-21T10:57:22", Dates.ISODateTimeFormat) == dt
+    @test parse(Dates.DateTime, "-2024-05-21T10:57:22", Dates.ISODateTimeFormat) == neg_dt
+
+    @test_throws ArgumentError parse(Dates.DateTime, "-", Dates.ISODateTimeFormat)
+    @test_throws ArgumentError parse(Dates.DateTime, "+", Dates.ISODateTimeFormat)
+end
+
 @testset "Issue 15195" begin
     f = "YY"
     @test Dates.format(Dates.Date(1999), f) == "1999"
@@ -470,6 +507,9 @@ end
 # Issue #44003
 @test tryparse(Dates.Date, "2017", Dates.DateFormat(".s")) === nothing
 
+# Issue #52989
+@test Dates.DateTime("2000") == Dates.DateTime(2000)
+
 @testset "parse milliseconds, Issue #22100" begin
     @test Dates.DateTime("2017-Mar-17 00:00:00.0000", "y-u-d H:M:S.s") == Dates.DateTime(2017, 3, 17)
     @test Dates.parse_components(".1", Dates.DateFormat(".s")) == [Dates.Millisecond(100)]
@@ -481,6 +521,51 @@ end
 
     # Ensure that no overflow occurs when using Int32 literals: Int32(10)^10
     @test Dates.parse_components("." * rpad(999, 10, '0'), Dates.DateFormat(".s")) == [Dates.Millisecond(999)]
+end
+
+@testset "fractional second code `n`" begin
+    # digits parse as a fraction of a second, down to nanosecond resolution
+    @test Dates.parse_components(".1", Dates.DateFormat(".n")) == [Dates.Nanosecond(100000000)]
+    @test Dates.parse_components(".123", Dates.DateFormat(".n")) == [Dates.Nanosecond(123000000)]
+    @test Dates.parse_components(".123456789", Dates.DateFormat(".n")) == [Dates.Nanosecond(123456789)]
+    @test Dates.parse_components(".1234567890", Dates.DateFormat(".n")) == [Dates.Nanosecond(123456789)]
+    @test_throws ArgumentError Dates.parse_components(".1234567891", Dates.DateFormat(".n"))
+    @test Dates.parse_components(".1" * "0"^72, Dates.DateFormat(".n")) ==
+        [Dates.Nanosecond(100000000)]
+    @test_throws ArgumentError Dates.parse_components(".123456789" * "0"^64 * "1", Dates.DateFormat(".n"))
+    # formatting strips trailing zeros, padded to at least the code width
+    @test Dates.format(Dates.Time(0, 0, 0, 500), "s") == "5"
+    @test Dates.format(Dates.Time(0, 0, 0, 500), "sss") == "500"
+    @test Dates.format(Dates.Time(0, 0, 0, 500), "n") == "5"
+    @test Dates.format(Dates.Time(0, 0, 0, 500), "nnnnnnnnn") == "500000000"
+    @test Dates.format(Dates.Time(0, 0, 0, 0, 0, 1), "n") == "000000001"
+    @test Dates.format(Dates.Time(0, 0, 0, 0, 0, 1), "nnn") == "000000001"
+    @test Dates.format(Dates.Time(0), "n") == "0"
+    @test Dates.format(Dates.Time(0), "nnn") == "000"
+    # fixed-width `n` fields truncate; `s` preserves its existing minimum-width behavior
+    fixed_ms = Dates.DateFormat("sSS")
+    fixed_ns = Dates.DateFormat("nnnSS")
+    fixed_ns9 = Dates.DateFormat("nnnnnnnnnSS")
+    @test Dates.format(Dates.Time(0, 0, 45, 123), fixed_ms) == "12345"
+    @test Dates.format(Dates.Time(0, 0, 45, 0, 0, 1), fixed_ns) == "00045"
+    @test Dates.format(Dates.Time(0, 0, 45, 0, 0, 1), fixed_ns9) == "00000000145"
+    @test Dates.Time(Dates.format(Dates.Time(0, 0, 45, 0, 0, 1), fixed_ns9), fixed_ns9) ==
+        Dates.Time(0, 0, 45, 0, 0, 1)
+    # DateTime can use `n` when the fraction is exactly representable in milliseconds
+    @test Dates.format(Dates.DateTime(2020, 1, 1, 0, 0, 0, 123), "n") == "123"
+    @test Dates.DateTime("2020-01-01T00:00:00.5", dateformat"yyyy-mm-dd\THH:MM:SS.n") ==
+        Dates.DateTime(2020, 1, 1, 0, 0, 0, 500)
+    @test tryparse(Dates.DateTime, "2020-01-01T00:00:00.000000001",
+                   dateformat"yyyy-mm-dd\THH:MM:SS.n") === nothing
+    @test_throws ArgumentError parse(Dates.DateTime, "2020-01-01T00:00:00.000000001",
+                                     dateformat"yyyy-mm-dd\THH:MM:SS.n")
+    # sub-millisecond times round-trip through the default format
+    t = Dates.Time(12, 0, 0, 123, 456, 789)
+    @test string(t) == "12:00:00.123456789"
+    @test Dates.Time(string(t)) == t
+    @test Dates.Time("12:00:00.5") == Dates.Time(12, 0, 0, 500)
+    @test Dates.Time("12:00:00.123") == Dates.Time(12, 0, 0, 123)
+    @test Dates.format(t, "HH:MM:SS.n") == "12:00:00.123456789"
 end
 
 @testset "Time Parsing" begin
@@ -570,8 +655,8 @@ end
 end
 
 @testset "Issue #10561, two-digit year parsing ambiguities" begin
-    # All two-digit dates (whether full or resulting from truncation, e.g. 2010 -> 10)
-    # encoded in two digit year format YY are parsed as year 00YY
+    # All dates encoded in two digit year format YY are parsed as year 00YY
+    # for as many digits are there are in the input string (at least two).
 
     for test_year in ("00", "01", "99", "2021")
         @test Date(test_year, dateformat"yy") == Date(parse(Int, test_year))
@@ -616,6 +701,11 @@ end
         @test tryparse(T, "") === nothing
         @test tryparse(T, "", DateFormat(fmt)) === nothing
     end
+end
+
+@testset "Issue #50328: parsing negative years" begin
+    @test Date("-2013-10-10") == Date(-2013, 10, 10)
+    @test Date("-2013") == Date(-2013, 01, 01)
 end
 
 end

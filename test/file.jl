@@ -26,11 +26,109 @@ let err = nothing
     end
 end
 
+@testset "readdir" begin
+    @test !ispath("does/not/exist")
+    @test !isdir("does/not/exist")
+    @test_throws Base.IOError readdir("does/not/exist")
+    @test_throws Base.IOError readdir("does/not/exist", DirEntry)
+
+    mktempdir() do dir
+        touch(joinpath(dir, "afile.txt"))
+        mkdir(joinpath(dir, "adir"))
+        touch(joinpath(dir, "adir", "bfile.txt"))
+        @test length(readdir(dir)) == 2
+        @test readdir(dir) == basename.(readdir(dir, DirEntry))
+        for p in readdir(dir, join=true)
+            if isdir(p)
+                @test only(readdir(p)) == "bfile.txt"
+            else
+                @test isfile(p)
+                @test p == joinpath(dir, "afile.txt")
+            end
+        end
+        for e in readdir(dir, DirEntry)
+            if isdir(e)
+                @test only(readdir(e)) == "bfile.txt"
+                @test basename(only(readdir(e, DirEntry))) == "bfile.txt"
+            else
+                @test isfile(e)
+                @test basename(e) == "afile.txt"
+            end
+        end
+    end
+end
+
+# eachentry: lazy single-pass iteration; default String, opt into DirEntry
+@testset "eachentry" begin
+    @test_throws Base.IOError iterate(eachentry("does/not/exist"))
+    @test_throws Base.IOError iterate(eachentry("does/not/exist", DirEntry))
+
+    mktempdir() do dir
+        touch(joinpath(dir, "afile.txt"))
+        mkdir(joinpath(dir, "adir"))
+        touch(joinpath(dir, "adir", "bfile.txt"))
+
+        # Default yields String names matching readdir
+        @test sort!(collect(eachentry(dir))) == sort!(readdir(dir))
+        # DirEntry form yields DirEntry objects matching readdir(dir, DirEntry)
+        @test sort!(basename.(collect(eachentry(dir, DirEntry)))) == sort!(readdir(dir))
+        # join=true yields full paths matching readdir(dir; join=true)
+        @test sort!(collect(eachentry(dir; join=true))) == sort!(readdir(dir; join=true))
+        joined = eachentry(dir; join=true) do paths
+            collect(paths)
+        end
+        @test sort!(joined) == sort!(readdir(dir; join=true))
+
+        # Iterator type and traits
+        it = eachentry(dir)
+        @test eltype(it) === String
+        @test Base.IteratorSize(it) === Base.SizeUnknown()
+        itD = eachentry(dir, DirEntry)
+        @test eltype(itD) === Base.Filesystem.DirEntry
+
+        # Single-pass: once consumed, cannot iterate again
+        for _ in it; end
+        @test_throws ArgumentError iterate(it)
+
+        # Short-circuit via break does not error and frees resources via finalizer/close
+        for e in eachentry(dir)
+            break
+        end
+        for e in eachentry(dir, DirEntry)
+            break
+        end
+
+        # Explicit close is idempotent and disallows further iteration
+        it2 = eachentry(dir)
+        close(it2)
+        close(it2)
+        @test_throws ArgumentError iterate(it2)
+
+        # do-block forms run and clean up
+        seen = eachentry(dir) do names
+            collect(names)
+        end
+        @test sort!(seen) == sort!(readdir(dir))
+        seenD = eachentry(dir, DirEntry) do entries
+            collect(basename(e) for e in entries)
+        end
+        @test sort!(seenD) == sort!(readdir(dir))
+
+        # Accepts a DirEntry as input
+        sub = only(e for e in readdir(dir, DirEntry) if isdir(e))
+        @test sort!(collect(eachentry(sub))) == ["bfile.txt"]
+        @test sort!(basename.(collect(eachentry(sub, DirEntry)))) == ["bfile.txt"]
+        @test sort!(collect(eachentry(sub; join=true))) == [joinpath(dir, "adir", "bfile.txt")]
+    end
+end
+
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     dirlink = joinpath(dir, "dirlink")
     symlink(subdir, dirlink)
     @test stat(dirlink) == stat(subdir)
     @test readdir(dirlink) == readdir(subdir)
+    @test basename.(readdir(dirlink, DirEntry)) == basename.(readdir(subdir, DirEntry))
+    @test realpath.(readdir(dirlink, DirEntry)) == realpath.(readdir(subdir, DirEntry))
 
     # relative link
     relsubdirlink = joinpath(subdir, "rel_subdirlink")
@@ -38,6 +136,8 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     symlink(reldir, relsubdirlink)
     @test stat(relsubdirlink) == stat(subdir2)
     @test readdir(relsubdirlink) == readdir(subdir2)
+    @test basename.(readdir(relsubdirlink, DirEntry)) == basename.(readdir(subdir2, DirEntry))
+    @test realpath.(readdir(relsubdirlink, DirEntry)) == realpath.(readdir(subdir2, DirEntry))
 
     # creation of symlink to directory that does not yet exist
     new_dir = joinpath(subdir, "new_dir")
@@ -56,6 +156,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     mkdir(new_dir)
     touch(foo_file)
     @test readdir(new_dir) == readdir(nedlink)
+    @test realpath.(readdir(new_dir, DirEntry)) == realpath.(readdir(nedlink, DirEntry))
 
     rm(foo_file)
     rm(new_dir)
@@ -123,6 +224,9 @@ end
         end
     end
     @test_throws ArgumentError tempname(randstring())
+end
+@testset "tempname with suffix" begin
+    @test !isfile(tempname(suffix = "_foo.txt"))
 end
 
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
@@ -253,13 +357,14 @@ no_error_logging(f::Function) =
         @test TEMP_CLEANUP_MAX[] == 3
         local t, f
         temps = String[]
+        npending = 0
         # mktemp is normally cleaned up on completion
         mktemp(d) do path, _
             @test isfile(path)
             t = path
         end
         @test !ispath(t)
-        @test length(TEMP_CLEANUP) == 0
+        @test length(TEMP_CLEANUP) == npending
         @test TEMP_CLEANUP_MAX[] == 3
         # mktemp when cleanup is prevented
         no_error_logging() do
@@ -270,19 +375,26 @@ no_error_logging(f::Function) =
                 t = path
             end
         end
+        # Make deleteable again
         chmod(d, 0o700)
         close(f)
-        @test isfile(t)
-        @test length(TEMP_CLEANUP) == 1
-        @test TEMP_CLEANUP_MAX[] == 3
-        push!(temps, t)
+        if Libc.geteuid() == 0
+            # Root can delete anything
+            @test !isfile(t)
+        else
+            npending += 1
+            @test isfile(t)
+            @test length(TEMP_CLEANUP) == npending
+            @test TEMP_CLEANUP_MAX[] == 3
+            push!(temps, t)
+        end
         # mktempdir is normally cleaned up on completion
         mktempdir(d) do path
             @test isdir(path)
             t = path
         end
         @test !ispath(t)
-        @test length(TEMP_CLEANUP) == 1
+        @test length(TEMP_CLEANUP) == npending
         @test TEMP_CLEANUP_MAX[] == 3
         # mktempdir when cleanup is prevented
         no_error_logging() do
@@ -294,16 +406,24 @@ no_error_logging(f::Function) =
                 t = path
             end
         end
+        # Make deleteable again
         chmod(d, 0o700)
         close(f)
-        @test isdir(t)
-        @test length(TEMP_CLEANUP) == 2
-        @test TEMP_CLEANUP_MAX[] == 3
-        push!(temps, t)
+        if Libc.geteuid() == 0
+            # Root can delete anything
+            @test !isdir(t)
+        else
+            @test isdir(t)
+            npending += 1
+            @test length(TEMP_CLEANUP) == npending
+            @test TEMP_CLEANUP_MAX[] == 3
+            push!(temps, t)
+        end
         # make one more temp file
         t = mktemp()[1]
+        npending += 1
         @test isfile(t)
-        @test length(TEMP_CLEANUP) == 3
+        @test length(TEMP_CLEANUP) == npending
         @test TEMP_CLEANUP_MAX[] == 3
         # nothing has been deleted yet
         for t in temps
@@ -312,8 +432,9 @@ no_error_logging(f::Function) =
         # another temp file triggers purge
         t = mktempdir()
         @test isdir(t)
-        @test length(TEMP_CLEANUP) == 2
-        @test TEMP_CLEANUP_MAX[] == 4
+        npending = 2
+        @test length(TEMP_CLEANUP) == npending
+        @test TEMP_CLEANUP_MAX[] == (Libc.geteuid() == 0 ? 3 : 4)
         # now all the temps are gone
         for t in temps
             @test !ispath(t)
@@ -355,7 +476,7 @@ chmod(file, filemode(file) | 0o222)
 @test filesize(file) == 0
 
 # issue #26685
-@test !isfile("http://google.com")
+@test !isfile("https://google.com")
 
 if Sys.iswindows()
     permissions = 0o444
@@ -368,27 +489,20 @@ if Sys.iswindows()
     @test filemode(file) & 0o777 == permissions
     chmod(dir, 0o666, recursive=true)  # Reset permissions in case someone wants to use these later
 else
-    function get_umask()
-        umask = ccall(:umask, UInt32, (UInt32,), 0)
-        ccall(:umask, UInt32, (UInt32,), umask)
-        return umask
-    end
-
     mktempdir() do tmpdir
-        umask = get_umask()
         tmpfile=joinpath(tmpdir, "tempfile.txt")
         tmpfile2=joinpath(tmpdir, "tempfile2.txt")
         touch(tmpfile)
         cp(tmpfile, tmpfile2)
-        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        @test filemode(tmpfile) == filemode(tmpfile2)
         rm(tmpfile2)
         chmod(tmpfile, 0o777)
         cp(tmpfile, tmpfile2)
-        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        @test filemode(tmpfile) == filemode(tmpfile2)
         rm(tmpfile2)
         chmod(tmpfile, 0o707)
         cp(tmpfile, tmpfile2)
-        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        @test filemode(tmpfile) == filemode(tmpfile2)
         rm(tmpfile2)
         linkfile=joinpath(dir, "tempfile.txt")
         symlink(tmpfile, linkfile)
@@ -413,6 +527,9 @@ function test_stat_error(stat::Function, pth)
     if stat === lstat && !(pth isa AbstractString)
         return # no lstat for fd handles
     end
+    if Libc.geteuid() == 0
+        return # root bypasses permission checks
+    end
     ex = try; stat(pth); false; catch ex; ex; end::Base.IOError
     @test ex.code == (pth isa AbstractString ? Base.UV_EACCES : Base.UV_EBADF)
     pth isa AbstractString || (pth = Base.INVALID_OS_HANDLE)
@@ -425,7 +542,7 @@ end
             touch("afile")
             try
                 # remove permission to access this folder
-                # to cause cause EACCESS-denied errors
+                # to cause EACCES-denied errors
                 @static if Sys.iswindows()
                     @test ccall((:ImpersonateAnonymousToken, "Advapi32.dll"), stdcall, Cint, (Libc.WindowsRawSocket,),
                                 ccall(:GetCurrentThread, Libc.WindowsRawSocket, ())) != 0
@@ -435,8 +552,7 @@ end
                 for pth in ("afile",
                             joinpath("afile", "not_file"),
                             SubString(joinpath(dir, "afile")),
-                            Base.RawFD(-1),
-                            -1)
+                            Base.RawFD(-1))
                     test_stat_error(stat, pth)
                     test_stat_error(lstat, pth)
                 end
@@ -453,6 +569,11 @@ end
     end
 end
 
+# Issue #51710 and PR #54855
+@test_throws MethodError stat(7)
+@test_throws MethodError ispath(false)
+@test_throws MethodError ispath(1)
+
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
 if Sys.iswindows()
@@ -460,7 +581,7 @@ if Sys.iswindows()
 else
     @test filesize(dir) > 0
 end
-# We need both: one to check passed time, one to comapare file's mtime()
+# We need both: one to check passed time, one to compare file's mtime()
 nowtime = time_ns() / 1e9
 nowwall = time()
 # Allow 10s skew in addition to the time it took us to actually execute this code
@@ -539,16 +660,23 @@ function multiple_uv_errors(pfx::AbstractString, codes::AbstractVector{<:Integer
     return [Base._UVError(pfx, code) for code in codes]
 end
 
+read_linux_id_map_max(file) = parse(Cuint, split(strip(read(file, String)), " ", keepempty = false)[end]) % Cint
 if !Sys.iswindows()
     # chown will give an error if the user does not have permissions to change files
     uid = Libc.geteuid()
     @test stat(file).uid == uid
     @test uid == Libc.getuid()
+    maxuid = maxgid = -1
+    # Containers may have restricted uid/gid ranges
+    if Sys.islinux() && isfile("/proc/self/uid_map")
+        maxuid = read_linux_id_map_max("/proc/self/uid_map")
+        maxgid = read_linux_id_map_max("/proc/self/gid_map")
+    end
     if uid == 0 # root user
-        chown(file, -2, -1)  # Change the file owner to nobody
-        @test stat(file).uid != 0
-        chown(file, 0, -2)  # Change the file group to nogroup (and owner back to root)
-        @test stat(file).gid != 0
+        chown(file, maxuid-1, -1)  # Change the file owner to nobody
+        @test maxuid == 1 || stat(file).uid != 0
+        chown(file, 0, maxgid-1)  # Change the file group to nogroup (and owner back to root)
+        @test maxgid == 1 || stat(file).gid != 0
         @test stat(file).uid == 0
         @test chown(file, -1, 0) == file
         @test stat(file).gid == 0
@@ -598,6 +726,17 @@ close(s)
 # This section tests temporary file and directory creation.           #
 #######################################################################
 
+@testset "invalid read/write flags" begin
+    @test try
+        open("this file is not expected to exist", read=false, write=false)
+        false
+    catch e
+        isa(e, SystemError) || rethrow()
+        @test endswith(sprint(showerror, e), "Invalid argument")
+        true
+    end
+end
+
 @testset "quoting filenames" begin
     @test try
         open("this file is not expected to exist")
@@ -620,15 +759,17 @@ end
     PATH_PREFIX = Sys.iswindows() ? "C:\\" : "/tmp/" * "x"^255   # we want a long path on UNIX so that we test buffer resizing in `tempdir`
     # Warning: On Windows uv_os_tmpdir internally calls GetTempPathW. The max string length for
     # GetTempPathW is 261 (including the implied trailing backslash), not the typical length 259.
-    # We thus use 260 (with implied trailing slash backlash this then gives 261 chars)
+    # We thus use 260 (with implied trailing slash backslash this then gives 261 chars)
     # NOTE: not the actual max path on UNIX, but true in the Windows case for this function.
     # NOTE: we subtract 9 to account for i = 0:9.
     MAX_PATH = (Sys.iswindows() ? 260 - length(PATH_PREFIX) : 255)  - 9
     for i = 0:9
         local tmp = joinpath(PATH_PREFIX, "x"^MAX_PATH * "123456789"[1:i])
-        @test withenv(var => tmp) do
-            tempdir()
-        end == tmp
+        no_error_logging() do
+            @test withenv(var => tmp) do
+                tempdir()
+            end == tmp
+        end
     end
 end
 
@@ -802,6 +943,303 @@ mktempdir() do tmpdir
     @test Base.samefile(a_stat, b_stat)
 
     rm(b_tmpdir)
+end
+
+@testset "rename" begin
+    # some of the windows specific behavior may be fixed in new versions of julia
+    mktempdir() do dir
+        # see if can make symlinks
+        local can_symlink = try
+            symlink("foo", joinpath(dir, "link"))
+            rm(joinpath(dir, "link"))
+            true
+        catch
+            false
+        end
+        local f1 = joinpath(dir, "file1")
+        local f2 = joinpath(dir, "file2")
+        local d1 = joinpath(dir, "dir1")
+        local d2 = joinpath(dir, "dir2")
+        local subd1f1 = joinpath(d1, "file1")
+        local subd1f2 = joinpath(d1, "file2")
+        local subd2f1 = joinpath(d2, "file1")
+        local subd2f2 = joinpath(d2, "file2")
+        local h1 = joinpath(dir, "hlink1")
+        local h2 = joinpath(dir, "hlink2")
+        local s1 = joinpath(dir, "slink1")
+        local s2 = joinpath(dir, "slink2")
+        @testset "renaming to non existing newpath in same directory" begin
+            # file, make sure isexecutable is copied
+            for mode in (0o644, 0o755)
+                write(f1, b"data")
+                chmod(f1, mode)
+                Base.rename(f1, f2)
+                @test !isfile(f1)
+                @test isfile(f2)
+                @test read(f2) == b"data"
+                if mode == 0o644
+                    @test !isexecutable(f2)
+                else
+                    @test isexecutable(f2)
+                end
+                rm(f2)
+            end
+            # empty directory
+            mkdir(d1)
+            Base.rename(d1, d2)
+            @test !isdir(d1)
+            @test isdir(d2)
+            @test isempty(readdir(d2))
+            rm(d2)
+            # non empty directory
+            mkdir(d1)
+            write(subd1f1, b"data")
+            chmod(subd1f1, 0o644)
+            write(subd1f2, b"exe")
+            chmod(subd1f2, 0o755)
+            Base.rename(d1, d2)
+            @test !isdir(d1)
+            @test isdir(d2)
+            @test read(subd2f1) == b"data"
+            @test read(subd2f2) == b"exe"
+            @test !isexecutable(subd2f1)
+            @test isexecutable(subd2f2)
+            rm(d2; recursive=true)
+            # hardlink
+            write(f1, b"data")
+            hardlink(f1, h1)
+            Base.rename(h1, h2)
+            @test isfile(f1)
+            @test !isfile(h1)
+            @test isfile(h2)
+            @test read(h2) == b"data"
+            write(h2, b"data2")
+            @test read(f1) == b"data2"
+            rm(h2)
+            rm(f1)
+            # symlink
+            if can_symlink
+                symlink("foo", s1)
+                Base.rename(s1, s2)
+                @test !islink(s1)
+                @test islink(s2)
+                @test readlink(s2) == "foo"
+                rm(s2)
+            end
+        end
+        @test isempty(readdir(dir)) # make sure everything got cleaned up
+
+        # Get the error code from failed rename, or nothing if it worked
+        function rename_errorcodes(oldpath, newpath)
+            try
+                Base.rename(oldpath, newpath)
+                nothing
+            catch e
+                e.code
+            end
+        end
+        @testset "errors" begin
+            # invalid paths
+            @test_throws ArgumentError Base.rename(f1*"\0", "")
+            @test Base.UV_ENOENT == rename_errorcodes("", "")
+            write(f1, b"data")
+            @test Base.UV_ENOENT == rename_errorcodes(f1, "")
+            @test read(f1) == b"data"
+            @test Base.UV_ENOENT == rename_errorcodes("", f1)
+            @test read(f1) == b"data"
+            @test Base.UV_ENOENT == rename_errorcodes(f2, f1)
+            @test read(f1) == b"data"
+            @test Base.UV_ENOENT == rename_errorcodes(f1, subd1f1)
+            @test read(f1) == b"data"
+            rm(f1)
+            # attempt to make a directory a subdirectory of itself
+            mkdir(d1)
+            if Sys.iswindows()
+                @test rename_errorcodes(d1, joinpath(d1, "subdir")) ∈ (Base.UV_EINVAL, Base.UV_EBUSY)
+            else
+                @test Base.UV_EINVAL == rename_errorcodes(d1, joinpath(d1, "subdir"))
+            end
+            rm(d1)
+            # rename to child of a file
+            mkdir(d1)
+            write(f2, "foo")
+            if Sys.iswindows()
+                @test Base.UV_EINVAL == rename_errorcodes(d1, joinpath(f2, "subdir"))
+            else
+                @test Base.UV_ENOTDIR == rename_errorcodes(d1, joinpath(f2, "subdir"))
+            end
+            # replace a file with a directory
+            if !Sys.iswindows()
+                @test Base.UV_ENOTDIR == rename_errorcodes(d1, f2)
+            else
+                # this should work on windows
+                Base.rename(d1, f2)
+                @test isdir(f2)
+                @test !ispath(d1)
+            end
+            rm(f2; force=true)
+            rm(d1; force=true)
+            # symlink loop
+            if can_symlink
+                symlink(s1, s2)
+                symlink(s2, s1)
+                @test Base.UV_ELOOP == rename_errorcodes(joinpath(s1, "foo"), f2)
+                write(f2, b"data")
+                @test Base.UV_ELOOP == rename_errorcodes(f2, joinpath(s1, "foo"))
+                rm(s1)
+                rm(s2)
+                rm(f2)
+            end
+            # newpath is a nonempty directory
+            mkdir(d1)
+            mkdir(d2)
+            write(subd2f1, b"data")
+            write(f1, b"otherdata")
+            if Sys.iswindows()
+                @test Base.UV_EACCES == rename_errorcodes(f1, d1)
+                @test Base.UV_EACCES == rename_errorcodes(f1, d2)
+                @test Base.UV_EACCES == rename_errorcodes(d1, d2)
+                @test Base.UV_EACCES == rename_errorcodes(subd2f1, d2)
+            else
+                @test Base.UV_EISDIR == rename_errorcodes(f1, d1)
+                @test Base.UV_EISDIR == rename_errorcodes(f1, d2)
+                @test rename_errorcodes(d1, d2) ∈ (Base.UV_ENOTEMPTY, Base.UV_EEXIST)
+                @test rename_errorcodes(subd2f1, d2) ∈ (Base.UV_ENOTEMPTY, Base.UV_EEXIST, Base.UV_EISDIR)
+            end
+            rm(f1)
+            rm(d1)
+            rm(d2; recursive=true)
+        end
+        @test isempty(readdir(dir)) # make sure everything got cleaned up
+
+        @testset "replacing existing file" begin
+            write(f2, b"olddata")
+            chmod(f2, 0o755)
+            write(f1, b"newdata")
+            chmod(f1, 0o644)
+            @test isexecutable(f2)
+            @test !isexecutable(f1)
+            Base.rename(f1, f2)
+            @test !ispath(f1)
+            @test read(f2) == b"newdata"
+            @test !isexecutable(f2)
+            rm(f2)
+        end
+
+        @testset "replacing file with itself" begin
+            write(f1, b"data")
+            Base.rename(f1, f1)
+            @test read(f1) == b"data"
+            hardlink(f1, h1)
+            Base.rename(f1, h1)
+            if Sys.iswindows()
+                # On Windows f1 gets deleted
+                @test !ispath(f1)
+            else
+                @test read(f1) == b"data"
+            end
+            @test read(h1) == b"data"
+            rm(h1)
+            rm(f1; force=true)
+        end
+
+        @testset "replacing existing file in different directories" begin
+            mkdir(d1)
+            mkdir(d2)
+            write(subd2f2, b"olddata")
+            chmod(subd2f2, 0o755)
+            write(subd1f1, b"newdata")
+            chmod(subd1f1, 0o644)
+            @test isexecutable(subd2f2)
+            @test !isexecutable(subd1f1)
+            Base.rename(subd1f1, subd2f2)
+            @test !ispath(subd1f1)
+            @test read(subd2f2) == b"newdata"
+            @test !isexecutable(subd2f2)
+            @test isdir(d1)
+            @test isdir(d2)
+            rm(d1; recursive=true)
+            rm(d2; recursive=true)
+        end
+
+        @testset "rename with open files" begin
+            # both open
+            write(f2, b"olddata")
+            write(f1, b"newdata")
+            open(f1) do handle1
+                open(f2) do handle2
+                    if Sys.iswindows()
+                        # currently this doesn't work on windows
+                        @test Base.UV_EBUSY == rename_errorcodes(f1, f2)
+                    else
+                        Base.rename(f1, f2)
+                        @test !ispath(f1)
+                        @test read(f2) == b"newdata"
+                    end
+                    # rename doesn't break already opened files
+                    @test read(handle1) == b"newdata"
+                    @test read(handle2) == b"olddata"
+                end
+            end
+            rm(f1; force=true)
+            rm(f2; force=true)
+
+            # oldpath open
+            write(f2, b"olddata")
+            write(f1, b"newdata")
+            open(f1) do handle1
+                if Sys.iswindows()
+                    # currently this doesn't work on windows
+                    @test Base.UV_EBUSY == rename_errorcodes(f1, f2)
+                else
+                    Base.rename(f1, f2)
+                    @test !ispath(f1)
+                    @test read(f2) == b"newdata"
+                end
+                # rename doesn't break already opened files
+                @test read(handle1) == b"newdata"
+            end
+            rm(f1; force=true)
+            rm(f2; force=true)
+
+            # newpath open
+            write(f2, b"olddata")
+            write(f1, b"newdata")
+            open(f2) do handle2
+                if Sys.iswindows()
+                    # currently this doesn't work on windows
+                    @test Base.UV_EACCES == rename_errorcodes(f1, f2)
+                else
+                    Base.rename(f1, f2)
+                    @test !ispath(f1)
+                    @test read(f2) == b"newdata"
+                end
+                # rename doesn't break already opened files
+                @test read(handle2) == b"olddata"
+            end
+            rm(f1; force=true)
+            rm(f2; force=true)
+        end
+
+        @testset "replacing empty directory with directory" begin
+            mkdir(d1)
+            mkdir(d2)
+            write(subd1f1, b"data")
+            if Sys.iswindows()
+                # currently this doesn't work on windows
+                @test Base.UV_EACCES == rename_errorcodes(d1, d2)
+                rm(d1; recursive=true)
+                rm(d2)
+            else
+                Base.rename(d1, d2)
+                @test isdir(d2)
+                @test read(subd2f1) == b"data"
+                @test !ispath(d1)
+                rm(d2; recursive=true)
+            end
+        end
+        @test isempty(readdir(dir)) # make sure everything got cleaned up
+    end
 end
 
 # issue #10506 #10434
@@ -1009,10 +1447,10 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         @test_throws(ArgumentError("'$nonexisting_src' is not a directory. Use `cp(src, dst)`"),
                      Base.cptree(nonexisting_src, dst; force=true, follow_symlinks=true))
         # cp
-        @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=false)
-        @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=true)
+        @test_throws Base._UVError("copyfile", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=false)
+        @test_throws Base._UVError("copyfile", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=true)
         # mv
-        @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) mv(nonexisting_src, dst; force=true)
+        @test_throws Base._UVError("rename($(repr(nonexisting_src)), $(repr(dst)))", Base.UV_ENOENT) mv(nonexisting_src, dst; force=true)
     end
 end
 
@@ -1062,7 +1500,7 @@ if !Sys.iswindows()
         stat_d_mv = stat(d_mv)
         # make sure d does not exist anymore
         @test !ispath(d)
-        # comare s, with d_mv
+        # compare s, with d_mv
         @test isfile(s) == isfile(d_mv)
         @test islink(s) == islink(d_mv)
         islink(s) && @test readlink(s) == readlink(d_mv)
@@ -1253,7 +1691,7 @@ let f = open(file, "w")
     if Sys.iswindows()
         f = RawFD(ccall(:_open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
     else
-        f = RawFD(ccall(:open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
+        f = RawFD(ccall(:open, Cint, (Cstring, Cint, UInt32...), file, Base.Filesystem.JL_O_RDONLY))
     end
     test_LibcFILE(Libc.FILE(f, Libc.modestr(true, false)))
 end
@@ -1412,6 +1850,13 @@ cd(dirwalk) do
         @test dirs == []
         @test files == ["foo"]
     end
+
+    # pwd() as default directory
+    for ((r1, d1, f1), (r2, d2, f2)) in zip(walkdir(), walkdir(pwd()))
+        @test r1 == r2
+        @test d1 == d2
+        @test f1 == f2
+    end
 end
 rm(dirwalk, recursive=true)
 
@@ -1425,6 +1870,10 @@ rm(dirwalk, recursive=true)
                 touch(randstring())
             end
             @test issorted(readdir())
+            @test issorted(readdir(DirEntry))
+            @test basename.(readdir(DirEntry)) == readdir()
+            @test joinpath.(readdir(DirEntry)) == readdir(join=true)
+            @test count(isfile, readdir(join=true)) == count(isfile, readdir(DirEntry))
         end
     end
 end
@@ -1449,7 +1898,7 @@ rm(dir)
 
 
 ##################
-# Return values of mkpath, mkdir, cp, mv and touch
+# Return values of mkpath, mkdir, cp, mv, rename and touch
 ####################
 mktempdir() do dir
     name1 = joinpath(dir, "apples")
@@ -1466,8 +1915,11 @@ mktempdir() do dir
     @test cp(name2, name1) == name1
     @test isfile(name1)
     @test isfile(name2)
+    @test Base.rename(name1, name2) == name2
+    @test !ispath(name1)
+    @test isfile(name2)
     namedir = joinpath(dir, "chalk")
-    namepath = joinpath(dir, "chalk","cheese","fresh")
+    namepath = joinpath(dir, "chalk", "cheese", "fresh")
     @test !ispath(namedir)
     @test mkdir(namedir) == namedir
     @test isdir(namedir)
@@ -1476,7 +1928,75 @@ mktempdir() do dir
     @test isdir(namepath)
     @test mkpath(namepath) == namepath
     @test isdir(namepath)
+    # issue 54826
+    namepath_dirpath = joinpath(dir, "x", "y", "z", "")
+    @test mkpath(namepath_dirpath) == namepath_dirpath
 end
+
+@testset "mv and cp do not destroy the source" begin
+    mktempdir() do dir
+        # a destination that contains the source is not removed
+        pkg = joinpath(dir, "pkg")
+        src = joinpath(pkg, "pkg-1.0")
+        mkpath(joinpath(src, "src"))
+        write(joinpath(src, "src", "a.jl"), "code")
+        @test_throws ArgumentError mv(src, pkg; force=true)
+        @test_throws ArgumentError cp(src, pkg; force=true)
+        @test read(joinpath(src, "src", "a.jl"), String) == "code"
+
+        # a directory is not moved or copied into itself
+        q = joinpath(dir, "q")
+        mkpath(joinpath(q, "sub"))
+        write(joinpath(q, "f"), "f")
+        for dst in (joinpath(q, "sub", "inner"), joinpath(q, "sub")), force in (false, true)
+            @test_throws ArgumentError mv(q, dst; force)
+            @test_throws ArgumentError cp(q, dst; force)
+        end
+        @test !ispath(joinpath(q, "sub", "inner"))
+        @test isdir(joinpath(q, "sub"))
+        @test read(joinpath(q, "f"), String) == "f"
+
+        if !Sys.iswindows()
+            # also through a symlinked path
+            link = joinpath(dir, "qlink")
+            symlink(q, link)
+            @test_throws ArgumentError cp(q, joinpath(link, "sub", "inner"))
+            @test !ispath(joinpath(q, "sub", "inner"))
+
+            # a symlink as the immediate parent of the destination
+            alias = joinpath(dir, "qalias")
+            symlink(q, alias)
+            @test_throws ArgumentError cp(q, joinpath(alias, "new"))
+            @test !ispath(joinpath(q, "new"))
+
+            # `..` after a symlink is resolved by the filesystem, not lexically
+            victim = joinpath(dir, "victim")
+            mkpath(joinpath(victim, "sub"))
+            write(joinpath(victim, "sub", "f"), "keep")
+            symlink(joinpath(victim, "sub"), joinpath(dir, "subalias"))
+            @test_throws ArgumentError cp(joinpath(dir, "subalias", "..", "sub"), victim; force=true)
+            # copying a symlink's target over a directory containing it
+            @test_throws ArgumentError cp(joinpath(dir, "subalias"), victim; force=true, follow_symlinks=true)
+            @test_throws ArgumentError Base.cptree(joinpath(dir, "subalias"), victim; force=true)
+            @test read(joinpath(victim, "sub", "f"), String) == "keep"
+
+            # allowed: removing a symlink to an ancestor leaves the source alone
+            up = joinpath(dir, "up")
+            symlink(dir, up)
+            @test cp(joinpath(q, "f"), up; force=true) == up
+            @test isfile(up) && !islink(up)
+            @test read(joinpath(q, "f"), String) == "f"
+            # allowed: a destination that only looks inside the source before resolving `..`
+            mkpath(joinpath(dir, "elsewhere", "child"))
+            symlink(joinpath(dir, "elsewhere", "child"), joinpath(q, "link"))
+            out = joinpath(q, "link", "..", "out")
+            @test cp(q, out) == out
+            @test isfile(joinpath(dir, "elsewhere", "out", "f"))
+        end
+    end
+end
+@test mkpath("") == ""
+@test mkpath("/") == "/"
 
 # issue #30588
 @test realpath(".") == realpath(pwd())
@@ -1524,8 +2044,10 @@ if !Sys.iswindows()
             @test !isdir(joinpath(d, "empty_outer"))
 
             # But a non-empty directory is not
-            @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true)
-            chmod(joinpath(d, "nonempty"), 0o777)
+            if Libc.geteuid() != 0 # root can override permissions
+                @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true)
+                chmod(joinpath(d, "nonempty"), 0o777)
+            end
             rm(joinpath(d, "nonempty"); recursive=true, force=true)
             @test !isdir(joinpath(d, "nonempty"))
         end
@@ -1580,6 +2102,26 @@ end
     end
 end
 
+@testset "pwd tests" begin
+    mktempdir() do dir
+        cd(dir) do
+            withenv("OLDPWD" => nothing) do
+                io = IOBuffer()
+                Base.repl_cmd(@cmd("cd"), io)
+                Base.repl_cmd(@cmd("cd -"), io)
+                @test realpath(pwd()) == realpath(dir)
+                if !Sys.iswindows()
+                    # Delete the working directory and check we can cd out of it
+                    # Cannot delete the working directory on Windows
+                    rm(dir)
+                    @test_throws Base._UVError("pwd()", Base.UV_ENOENT) pwd()
+                    Base.repl_cmd(@cmd("cd ~"), io)
+                end
+            end
+        end
+    end
+end
+
 @testset "readdir tests" begin
     ≛(a, b) = sort(a) == sort(b)
     mktempdir() do dir
@@ -1625,23 +2167,70 @@ end
     end
 end
 
-@testset "chmod/isexecutable" begin
+if Sys.isunix()
+    @testset "mkfifo" begin
+        mktempdir() do dir
+            path = Libc.mkfifo(joinpath(dir, "fifo"))
+            @sync begin
+                @async write(path, "hello")
+                cat_exec = `$(Base.julia_cmd()) --startup-file=no -e "write(stdout, read(ARGS[1]))"`
+                @test read(`$cat_exec $path`, String) == "hello"
+            end
+
+            existing_file = joinpath(dir, "existing")
+            write(existing_file, "")
+            @test_throws SystemError Libc.mkfifo(existing_file)
+        end
+    end
+else
+    @test_throws(
+        "mkfifo: Operation not supported",
+        Libc.mkfifo(joinpath(pwd(), "dummy_path")),
+    )
+end
+
+@testset "chmod/isexecutable/isreadable/iswritable" begin
     mktempdir() do dir
-        mkdir(joinpath(dir, "subdir"))
+        subdir = joinpath(dir, "subdir")
         fpath = joinpath(dir, "subdir", "foo")
 
-        # Test that we can actually set the executable bit on all platforms.
+        @test !ispath(subdir)
+        mkdir(subdir)
+        @test ispath(subdir)
+
+        @test !ispath(fpath)
         touch(fpath)
+        @test ispath(fpath)
+
+        # Test that we can actually set the executable/readable/writable bit on all platforms.
         chmod(fpath, 0o644)
         @test !Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test Sys.iswritable(fpath) skip=Sys.iswindows()
         chmod(fpath, 0o755)
         @test Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test Sys.iswritable(fpath) skip=Sys.iswindows()
+        chmod(fpath, 0o444)
+        @test !Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test !Sys.iswritable(fpath) skip=Libc.getuid() == 0
+        chmod(fpath, 0o244)
+        @test !Sys.isexecutable(fpath)
+        @test !Sys.isreadable(fpath) skip=(Sys.iswindows() || Libc.getuid() == 0)
+        @test Sys.iswritable(fpath) skip=Sys.iswindows()
 
         # Ensure that, on Windows, where inheritance is default,
         # chmod still behaves as we expect.
         if Sys.iswindows()
-            chmod(joinpath(dir, "subdir"), 0o666)
-            @test Sys.isexecutable(fpath)
+            chmod(subdir, 0o666)
+            @test !Sys.isexecutable(fpath)
+            # Possibly broken (or changed) by libuv commit 84896d52 which applies "other" permissions
+            # to all groups we are not a part of, affecting inherited permissions
+            # https://github.com/JuliaLang/libuv/commit/84896d522a51de50a8090fac56ec19740f5b603e
+            @test_broken Sys.isreadable(fpath)
+            @test_skip Sys.iswritable(fpath)
+            chmod(fpath, 0o777)
         end
 
         # Reset permissions to all at the end, so it can be deleted properly.
@@ -1661,6 +2250,38 @@ if Sys.iswindows()
     @test rm(tmp) === nothing
 end
 end
+
+# Unusually for structs, we test this explicitly because the fields of StatStruct
+# is part of its documentation, and therefore cannot change.
+@testset "StatStruct has promised fields" begin
+    f, io = mktemp()
+    s = stat(f)
+    @test s isa Base.StatStruct
+
+    @test s.desc isa Union{String, Base.OS_HANDLE}
+    @test s.size isa Int64
+    @test s.device isa UInt
+    @test s.inode isa UInt
+    @test s.mode isa UInt
+    @test s.nlink isa Int
+    @test s.uid isa UInt
+    @test s.gid isa UInt
+    @test s.rdev isa UInt
+    @test s.blksize isa Int64
+    @test s.blocks isa Int64
+    @test s.mtime isa Float64
+    @test s.ctime isa Float64
+
+    @test s === stat((f,))
+    @test s === lstat((f,))
+    @test s === stat(".", f)
+    @test s === lstat(".", f)
+end
+
+mutable struct URI50890; f::String; end
+Base.joinpath(x::URI50890) = URI50890(x.f)
+@test_throws "stat not implemented" stat(URI50890("."))
+@test_throws "lstat not implemented" lstat(URI50890("."))
 
 @testset "StatStruct show's extended details" begin
     f, io = mktemp()
@@ -1705,18 +2326,76 @@ end
         @test !isnothing(Base.Filesystem.getusername(s.uid))
         @test !isnothing(Base.Filesystem.getgroupname(s.gid))
     end
+    s = Base.Filesystem.StatStruct()
+    stat_show_str = sprint(show, s)
+    stat_show_str_multi = sprint(show, MIME("text/plain"), s)
+    @test startswith(stat_show_str, "StatStruct(\"\" ENOENT: ") && endswith(stat_show_str, ")")
+    @test startswith(stat_show_str_multi, "StatStruct for \"\"\n ENOENT: ") && !endswith(stat_show_str_multi, r"\s")
+    s = Base.Filesystem.StatStruct("my/test", Ptr{UInt8}(0), Int32(Base.UV_ENOTDIR))
+    stat_show_str = sprint(show, s)
+    stat_show_str_multi = sprint(show, MIME("text/plain"), s)
+    @test startswith(stat_show_str, "StatStruct(\"my/test\" ENOTDIR: ") && endswith(stat_show_str, ")")
+    @test startswith(stat_show_str_multi, "StatStruct for \"my/test\"\n ENOTDIR: ") && !endswith(stat_show_str_multi, r"\s")
 end
 
 @testset "diskstat() works" begin
-    # Sanity check assuming disk is smaller than 32PB
-    PB = Int64(2)^44
+    # Sanity check assuming disk is smaller than 32PiB
+    PiB = Int64(2)^50
 
     dstat = diskstat()
-    @test dstat.total < 32PB
+    @test dstat.total < 32PiB
     @test dstat.used + dstat.available == dstat.total
     @test occursin(r"^DiskStat\(total=\d+, used=\d+, available=\d+\)$", sprint(show, dstat))
     # Test diskstat(::AbstractString)
     dstat = diskstat(pwd())
-    @test dstat.total < 32PB
+    @test dstat.total < 32PiB
     @test dstat.used + dstat.available == dstat.total
+end
+
+@test Base.infer_return_type(stat, (String,)) == Base.Filesystem.StatStruct
+
+@testset "trylockfile" begin
+    mktempdir() do dir
+        path = joinpath(dir, "file")
+        write(path, "data")
+        fopen() = Base.Filesystem.open(path, Base.Filesystem.JL_O_RDWR)
+        # whether a lock can be taken from another process
+        other_process_locks() = readchomp(`$(Base.julia_cmd()) --startup-file=no -e '
+            using Base.Filesystem: open, JL_O_RDWR, trylockfile, unlockfile
+            f = open(ARGS[1], JL_O_RDWR)
+            taken = trylockfile(f)
+            # a lock released only by exit can linger on Windows
+            taken && unlockfile(f)
+            print(taken)' $path`) == "true"
+        files = Base.Filesystem.File[]
+        try
+            a = push!(files, fopen())[end]
+            b = push!(files, fopen())[end]
+            c = push!(files, fopen())[end]
+            @test Base.Filesystem.trylockfile(a; shared=true)
+            @test Base.Filesystem.trylockfile(b; shared=true)
+            @test !Base.Filesystem.trylockfile(c)
+            @test !other_process_locks()
+            # the file can still be read and renamed while it is locked
+            @test read(path, String) == "data"
+            mv(path, path * "2")
+            mv(path * "2", path)
+            Base.Filesystem.unlockfile(a)
+            @test !Base.Filesystem.trylockfile(c)
+            Base.Filesystem.unlockfile(b)
+            Base.Filesystem.unlockfile(b) # nothing to release
+            @test Base.Filesystem.trylockfile(c)
+            @test read(path, String) == "data"
+            @test !Base.Filesystem.trylockfile(a; shared=true)
+            @test !other_process_locks()
+            Base.Filesystem.unlockfile(c)
+            @test other_process_locks()
+            # and removed
+            @test Base.Filesystem.trylockfile(c)
+            rm(path)
+        finally
+            foreach(close, files)
+        end
+        @test_throws ArgumentError Base.Filesystem.trylockfile(files[1])
+    end
 end

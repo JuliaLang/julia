@@ -1,10 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-
+"""
+The `Printf` module provides formatted output functions similar to the C standard library's `printf`. It allows formatted printing to an output stream or to a string.
+"""
 module Printf
 
 using Base.Ryu
 
 export @printf, @sprintf
+
+public format, Format
 
 # format specifier categories
 const Ints = Union{Val{'d'}, Val{'i'}, Val{'u'}, Val{'x'}, Val{'X'}, Val{'o'}}
@@ -122,7 +126,6 @@ end
 
 # parse format string
 function Format(f::AbstractString)
-    isempty(f) && throw(InvalidFormatStringError("Format string must not be empty", f, 1, 1))
     bytes = codeunits(f)
     len = length(bytes)
     pos = 1
@@ -185,8 +188,8 @@ function Format(f::AbstractString)
             b = bytes[pos]
             pos += 1
         else
-            while b - UInt8('0') < 0x0a
-            width = 10 * width + (b - UInt8('0'))
+            while UInt8('0') <= b <= UInt8('9')
+                width = 10 * width + (b - UInt8('0'))
                 b = bytes[pos]
                 pos += 1
                 pos > len && break
@@ -209,7 +212,7 @@ function Format(f::AbstractString)
                     pos += 1
                 else
                     precision = 0
-                    while b - UInt8('0') < 0x0a
+                    while UInt8('0') <= b <= UInt8('9')
                         precision = 10precision + (b - UInt8('0'))
                         b = bytes[pos]
                         pos += 1
@@ -238,7 +241,7 @@ function Format(f::AbstractString)
         !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(InvalidFormatStringError("'$(Char(b))' is not a valid type specifier", f, last_percent_pos, pos-1))
         type = Val{Char(b)}
         if type <: Ints && precision > 0
-            # note - we should also set zero to false if dynamic precison > 0
+            # note - we should also set zero to false if dynamic precision > 0
             # this is taken care of in fmt() for Ints
             zero = false
         elseif (type <: Strings || type <: Chars) && !parsedprecdigits
@@ -294,11 +297,11 @@ end
 @inline function rmdynamic(spec::Spec{T}, args, argp) where {T}
     zero, width, precision = spec.zero, spec.width, spec.precision
     if spec.dynamic_width
-        width = args[argp]
+        width = args[argp]::Integer
         argp += 1
     end
     if spec.dynamic_precision
-        precision = args[argp]
+        precision = args[argp]::Integer
         if zero && T <: Ints && precision > 0
             zero = false
         end
@@ -307,12 +310,12 @@ end
     (Spec{T}(spec.leftalign, spec.plus, spec.space, zero, spec.hash, width, precision, false, false), argp)
 end
 
-@inline function fmt(buf, pos, args, argp, spec::Spec{T}) where {T}
+Base.@constprop :aggressive function fmt(buf, pos, args, argp, spec::Spec{T}) where {T}
     spec, argp = rmdynamic(spec, args, argp)
     (fmt(buf, pos, args[argp], spec), argp+1)
 end
 
-@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Chars}
+function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Chars}
     leftalign, width = spec.leftalign, spec.width
     c = Char(first(arg))
     w = textwidth(c)
@@ -333,7 +336,7 @@ end
 end
 
 # strings
-@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Strings}
+function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Strings}
     leftalign, hash, width, prec = spec.leftalign, spec.hash, spec.width, spec.precision
     str = string(arg)
     slen = textwidth(str)::Int + (hash ? arg isa AbstractString ? 2 : 1 : 0)
@@ -380,7 +383,7 @@ toint(x::Rational) = Integer(x)
 fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
     fmt(buf, pos, arg, floatfmt(spec))
 
-@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Ints}
+function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Ints}
     leftalign, plus, space, zero, hash, width, prec =
         spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
     bs = base(T)
@@ -485,8 +488,8 @@ tofloat(x::Base.IEEEFloat) = x
 tofloat(x::BigFloat) = x
 
 _snprintf(ptr, siz, str, arg) =
-    @ccall "libmpfr".mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
-                                   arg::Ref{BigFloat})::Cint
+    @ccall Base.MPFR.libmpfr.mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
+                                             arg::Ref{BigFloat})::Cint
 
 # Arbitrary constant for a maximum number of bytes we want to output for a BigFloat.
 # 8KiB seems like a reasonable default. Larger BigFloat representations should probably
@@ -494,7 +497,7 @@ _snprintf(ptr, siz, str, arg) =
 # seems like a dangerous thing to do.
 const __BIG_FLOAT_MAX__ = 8192
 
-@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
+function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
     leftalign, plus, space, zero, hash, width, prec =
         spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
     x = tofloat(arg)
@@ -593,7 +596,8 @@ const __BIG_FLOAT_MAX__ = 8192
                 newpos += 3
             else
                 if prec > -1
-                    s, p = frexp(x)
+                    # scale in Float64, since ldexp(s, 1 + sigbits) can overflow narrower types
+                    s, p = frexp(Float64(x))
                     sigbits = 4 * min(prec, 13)
                     s = 0.25 * round(ldexp(s, 1 + sigbits))
                     # ensure last 2 exponent bits either 01 or 10
@@ -651,8 +655,9 @@ const __BIG_FLOAT_MAX__ = 8192
         else
             # right aligned
             n = width - (newpos - pos)
-            if zero
-                ex = (arg < 0 || (plus | space)) + (T <: Union{Val{'a'}, Val{'A'}} ? 2 : 0)
+            if zero && isfinite(x)
+                # check the written sign rather than `arg < 0`, which is false for -0.0
+                ex = (buf[pos] == UInt8('-') || (plus | space)) + (T <: Union{Val{'a'}, Val{'A'}} ? 2 : 0)
                 so = pos + ex
                 len = (newpos - pos) - ex
                 copyto!(buf, so + n, buf, so, len)
@@ -869,7 +874,7 @@ end
 function plength(f::Spec{T}, x) where {T <: Chars}
     c = Char(first(x))
     w = textwidth(c)
-    return max(f.width, w) + (ncodeunits(c) - w)
+    return Base.checked_add(max(f.width, w), ncodeunits(c) - w)
 end
 
 plength(f::Spec{Pointer}, x) = max(f.width, 2 * sizeof(x) + 2)
@@ -877,22 +882,22 @@ plength(f::Spec{Pointer}, x) = max(f.width, 2 * sizeof(x) + 2)
 function plength(f::Spec{T}, x) where {T <: Strings}
     str = string(x)
     sw = textwidth(str)
-    p = f.precision == -1 ? (sw + (f.hash ? (x isa Symbol ? 1 : 2) : 0)) : f.precision
-    return max(f.width, p) + (sizeof(str) - sw)
+    p = f.precision == -1 ? Base.checked_add(sw, f.hash ? (x isa Symbol ? 1 : 2) : 0) : f.precision
+    return Base.checked_add(max(f.width, p), sizeof(str) - sw)
 end
 
 function plength(f::Spec{T}, x) where {T <: Ints}
     x2 = toint(x)
     return max(
         f.width,
-        f.precision + ndigits(x2, base=base(T), pad=1) + MAX_FMT_CHARS_WIDTH
+        Base.checked_add(f.precision, ndigits(x2, base=base(T), pad=1), MAX_FMT_CHARS_WIDTH)
     )
 end
 
 plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
-    max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + 0 + MAX_FMT_CHARS_WIDTH)
+    max(f.width, Base.checked_add(Int(f.hash), MAX_INTEGER_PART_WIDTH, MAX_FMT_CHARS_WIDTH))
 plength(f::Spec{T}, x) where {T <: Floats} =
-    max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + f.precision + MAX_FMT_CHARS_WIDTH)
+    max(f.width, Base.checked_add(Int(f.hash), MAX_INTEGER_PART_WIDTH, f.precision, MAX_FMT_CHARS_WIDTH))
 plength(::Spec{PositionCounter}, x) = 0
 
 @inline function computelen(substringranges, formats, args)
@@ -903,13 +908,13 @@ plength(::Spec{PositionCounter}, x) = 0
     Base.@nexprs 16 i -> begin
         if N >= i
             l, argp = plength(formats[i], args, argp)
-            len += l
+            len = Base.checked_add(len, l)
         end
     end
     if N > 16
         for i = 17:length(formats)
             l, argp = plength(formats[i], args, argp)
-            len += l
+            len = Base.checked_add(len, l)
         end
     end
     return len
@@ -928,7 +933,8 @@ for more details on C `printf` support.
 """
 function format end
 
-function format(io::IO, f::Format, args...) # => Nothing
+# Since it will specialize on `f`, which has a Tuple-type often of length(args), we might as well specialize on `args` too.
+function format(io::IO, f::Format, args::Vararg{Any,N}) where N # => Nothing
     f.numarguments == length(args) || argmismatch(f.numarguments, length(args))
     buf = Base.StringVector(computelen(f.substringranges, f.formats, args))
     pos = format(buf, 1, f, args...)
@@ -936,7 +942,7 @@ function format(io::IO, f::Format, args...) # => Nothing
     return
 end
 
-function format(f::Format, args...) # => String
+function format(f::Format, args::Vararg{Any,N}) where N # => String
     f.numarguments == length(args) || argmismatch(f.numarguments, length(args))
     buf = Base.StringVector(computelen(f.substringranges, f.formats, args))
     pos = format(buf, 1, f, args...)
@@ -975,7 +981,7 @@ Use shorter of decimal or scientific 1.23 1.23e+07
 julia> @printf "Use dynamic width and precision  %*.*f" 10 2 0.12345
 Use dynamic width and precision        0.12
 ```
-For a systematic specification of the format, see [here](https://www.cplusplus.com/reference/cstdio/printf/).
+For a systematic specification of the format, see [here](https://en.cppreference.com/w/c/io/fprintf).
 See also [`@sprintf`](@ref) to get the result as a `String` instead of it being printed.
 
 # Caveats

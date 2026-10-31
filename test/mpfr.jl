@@ -13,6 +13,18 @@ import Base.MPFR
           BigFloat(BigInt(12)) == BigFloat(BigFloat(12)) == parse(BigFloat,"12") ==
           parse(BigFloat,"12 ") == parse(BigFloat," 12") == parse(BigFloat," 12 ") ==
           BigFloat(Float32(12.)) == BigFloat(12//1) == BigFloat(SubString("12"))
+    # trailing whitespace must not drop the precision and rounding keywords
+    let x = tryparse(BigFloat, "1.1 "; precision=10, rounding=MPFR.MPFRRoundUp)
+        @test precision(x) == 10
+        @test x == big"1.1015625"
+    end
+    # embedded NUL must not throw from the Cstring conversion
+    @test tryparse(BigFloat, "1\0") === nothing
+    # out-of-range bases must throw instead of tripping an MPFR assertion
+    for b in (-2, 1, 63)
+        @test_throws ArgumentError tryparse(BigFloat, "1"; base=b)
+        @test_throws ArgumentError parse(BigFloat, "1"; base=b)
+    end
 
     @test typeof(BigFloat(typemax(Int8))) == BigFloat
     @test typeof(BigFloat(typemax(Int16))) == BigFloat
@@ -35,6 +47,9 @@ import Base.MPFR
 
     @test typeof(BigFloat(1//1)) == BigFloat
     @test typeof(BigFloat(one(Rational{BigInt}))) == BigFloat
+    rat = 1 // (big(2)^300 + 1)
+    @test BigFloat(rat, RoundDown) < rat < BigFloat(rat, RoundUp)
+    @test BigFloat(-rat, RoundUp) < -rat < BigFloat(-rat, RoundDown)
 
     # BigFloat constructor respects global precision when not specified
     let prec = precision(BigFloat) < 16 ? 256 : precision(BigFloat) ÷ 2
@@ -483,6 +498,23 @@ end
     # issue 15659
     @test (setprecision(53) do; big(1/3); end) < 1//3
 end
+# a throwaway precision type that reaches MPFR's deprecated generic
+# `setprecision(f, ::Type{T}, prec)` fallback
+struct DeprecatedSetprecType end
+const _deprec_setprec = Ref(10)
+Base.precision(::Type{DeprecatedSetprecType}) = _deprec_setprec[]
+Base.setprecision(::Type{DeprecatedSetprecType}, p::Integer) = (_deprec_setprec[] = p)
+@testset "deprecated setprecision(f, ::Type, prec) fallback" begin
+    @test_deprecated setprecision(() -> precision(DeprecatedSetprecType), DeprecatedSetprecType, 5)
+    @test _deprec_setprec[] == 10   # precision was restored afterwards
+end
+@testset "setprecision(f, Union{}, prec) throws MethodError" begin
+    # `Type{Union{}}` dispatches to its own method, which throws, instead of matching `Type{T}` methods
+    f = () -> 1
+    @test_throws MethodError(setprecision, (f, Union{}, 5)) setprecision(f, Union{}, 5)
+    @test_throws MethodError(setprecision, (f, Union{}, 5)) setprecision(f, Union{}, 5; base = 10)
+    @test which(setprecision, (typeof(f), Type{Union{}}, Int)).sig == Tuple{typeof(setprecision), Any, Type{Union{}}, Vararg}
+end
 @testset "isinteger" begin
     @test !isinteger(BigFloat(1.2))
     @test isinteger(BigFloat(12))
@@ -667,16 +699,19 @@ end
         @test string(parse(BigFloat, "0.1")) == "0.10000002"
         @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.9000015"
+        @test string(parse(BigFloat, "1e6")) == "1.0e6"
     end
     setprecision(40) do
         @test string(parse(BigFloat, "0.1")) == "0.10000000000002"
         @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999942"
+        @test string(parse(BigFloat, "1e6")) == "1.0e6"
     end
     setprecision(123) do
         @test string(parse(BigFloat, "0.1")) == "0.0999999999999999999999999999999999999953"
         @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999999999999999999999999999997"
+        @test string(parse(BigFloat, "1e6")) == "1.0e6"
     end
 end
 @testset "eps" begin
@@ -998,7 +1033,7 @@ end
 
     test_show_bigfloat(big"1.23456789", contains_e=false, starts="1.23")
     test_show_bigfloat(big"-1.23456789", contains_e=false, starts="-1.23")
-    test_show_bigfloat(big"2.3457645687563543266576889678956787e10000", starts="2.345", ends="e+10000")
+    test_show_bigfloat(big"2.3457645687563543266576889678956787e10000", starts="2.345", ends="e10000")
     test_show_bigfloat(big"-2.3457645687563543266576889678956787e-10000", starts="-2.345", ends="e-10000")
     test_show_bigfloat(big"42.0", contains_e=false, starts="42.0")
     test_show_bigfloat(big"420.0", contains_e=false, starts="420.0") # '0's have to be added on the right before point
@@ -1006,10 +1041,10 @@ end
     test_show_bigfloat(big"420000.0", contains_e=false, starts="420000.0")
     test_show_bigfloat(big"654321.0", contains_e=false, starts="654321.0")
     test_show_bigfloat(big"-654321.0", contains_e=false, starts="-654321.0")
-    test_show_bigfloat(big"6543210.0", contains_e=true, starts="6.5", ends="e+06")
+    test_show_bigfloat(big"6543210.0", contains_e=true, starts="6.5", ends="e6")
     test_show_bigfloat(big"0.000123", contains_e=false, starts="0.000123")
     test_show_bigfloat(big"-0.000123", contains_e=false, starts="-0.000123")
-    test_show_bigfloat(big"0.00001234", contains_e=true, starts="1.23", ends="e-05")
+    test_show_bigfloat(big"0.00001234", contains_e=true, starts="1.23", ends="e-5")
 
     for to_string in [string,
                       x->sprint(show, x),
@@ -1039,3 +1074,70 @@ end
         end
     end
 end
+
+@testset "issue #50642" begin
+    setprecision(BigFloat, 500) do
+        bf = big"1.4901162082026128889687591176485489397376143775948511e-07"
+        @test Float16(bf) == Float16(2.0e-7)
+    end
+end
+
+# PR #54284
+import Base.MPFR: clear_flags, had_underflow, had_overflow, had_divbyzero,
+    had_nan, had_inexact_exception, had_range_exception
+
+function all_flags_54284()
+    (
+        had_underflow(),
+        had_overflow(),
+        had_divbyzero(),
+        had_nan(),
+        had_inexact_exception(),
+        had_range_exception(),
+    )
+end
+@testset "MPFR flags" begin
+    let x, a = floatmin(BigFloat), b = floatmax(BigFloat), c = zero(BigFloat)
+        clear_flags()
+        @test !any(all_flags_54284())
+
+        x = a - a # normal
+        @test all_flags_54284() == (false, false, false, false, false, false)
+        x = 1 / c # had_divbyzero
+        @test all_flags_54284() == (false, false, true, false, false, false)
+        clear_flags()
+        x = nextfloat(a) - a # underflow
+        @test all_flags_54284() == (true, false, false, false, true, false)
+        clear_flags()
+        x = 1 / a # overflow
+        @test all_flags_54284() == (false, true, false, false, true, false)
+        clear_flags()
+        x = c / c # nan
+        @test all_flags_54284() == (false, false, false, true, false, false)
+        clear_flags()
+        x = prevfloat(BigFloat(1.0)) * 100 # inexact
+        @test all_flags_54284() == (false, false, false, false, true, false)
+        clear_flags()
+        try convert(Int, b); catch; end # range exception
+        @test all_flags_54284() == (false, false, false, false, false, true)
+        clear_flags()
+    end
+end
+
+@testset "BigFloatData truncation OOB read" begin
+    @testset "T: $T" for T ∈ (UInt8, UInt16, UInt32, UInt64, UInt128)
+        v = Base.MPFR.BigFloatData{T}(fill(typemax(T), 1 + Base.MPFR.offset_p_limbs))
+        @testset "bit_count: $bit_count" for bit_count ∈ (0:10:80)
+            @test Base.MPFR.truncated(UInt128, v, bit_count) isa Any
+        end
+    end
+end
+
+# BigFloatData is the Ref type for BigFloat in ccall:
+@testset "cconvert(Ref{BigFloat}, x)" begin
+    for x in (1.0, big"1.0", Ref(big"1.0"))
+        @test Base.cconvert(Ref{BigFloat}, x) isa Base.MPFR.BigFloatData
+    end
+end
+
+@test_throws FieldError BigFloat(1).notfield = 1

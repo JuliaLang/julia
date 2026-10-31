@@ -121,8 +121,7 @@ some degree of enforcement of a type's invariants.
 If any inner constructor method is defined, no default constructor method is provided: it is presumed
 that you have supplied yourself with all the inner constructors you need. The default constructor
 is equivalent to writing your own inner constructor method that takes all of the object's fields
-as parameters (constrained to be of the correct type, if the corresponding field has a type),
-and passes them to `new`, returning the resulting object:
+as parameters and passes them to `new`, returning the resulting object:
 
 ```jldoctest
 julia> struct Foo
@@ -134,8 +133,9 @@ julia> struct Foo
 ```
 
 This declaration has the same effect as the earlier definition of the `Foo` type without an explicit
-inner constructor method. The following two types are equivalent -- one with a default constructor,
-the other with an explicit constructor:
+inner constructor method. Note that `new` converts each argument to the declared type of the
+corresponding field, just like the default constructor does. The following two types behave the
+same way -- one with a default constructor, the other with an explicit constructor:
 
 ```jldoctest
 julia> struct T1
@@ -159,6 +159,11 @@ T1(1)
 julia> T2(1.0)
 T2(1)
 ```
+
+The one difference is that when any field has a declared type, two default constructor methods are
+generated (see [Composite Types](@ref)): `T1(x::Int64)` and `T1(x)`. Thanks to the first one, an outer
+constructor such as `T1(x::Real) = T1(round(Int64, x))` still works for `Int64` arguments, whereas the
+same definition for `T2` would call itself forever on `T2(1)`.
 
 It is good practice to provide as few inner constructor methods as possible: only those
 taking all arguments explicitly and enforcing essential error checking and transformation. Additional
@@ -244,8 +249,8 @@ ERROR: UndefRefError: access to undefined reference
 This avoids the need to continually check for `null` values. However, not all object fields are
 references. Julia considers some types to be "plain data", meaning all of their data is self-contained
 and does not reference other objects. The plain data types consist of primitive types (e.g. `Int`)
-and immutable structs of other plain data types. The initial contents of a plain data type is
-undefined:
+and immutable structs of other plain data types (see also: [`isbits`](@ref), [`isbitstype`](@ref)).
+The initial contents of a plain data type is undefined:
 
 ```julia-repl
 julia> struct HasPlain
@@ -293,6 +298,8 @@ Point{Float64}(1.0, 2.5)
 
 julia> Point(1,2.5) ## implicit T ##
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
+The type `Point` exists, but no method is defined for this combination of argument types when trying to construct it.
+
 Closest candidates are:
   Point(::T, ::T) where T<:Real at none:2
 
@@ -372,9 +379,12 @@ However, other similar calls still don't work:
 ```jldoctest parametric2
 julia> Point(1.5,2)
 ERROR: MethodError: no method matching Point(::Float64, ::Int64)
+The type `Point` exists, but no method is defined for this combination of argument types when trying to construct it.
 
 Closest candidates are:
   Point(::T, !Matched::T) where T<:Real
+   @ Main none:1
+  Point(!Matched::Int64, !Matched::Float64)
    @ Main none:1
 
 Stacktrace:
@@ -408,6 +418,29 @@ Thus, while the implicit type parameter constructors provided by default in Juli
 it is possible to make them behave in a more relaxed but sensible manner quite easily. Moreover,
 since constructors can leverage all of the power of the type system, methods, and multiple dispatch,
 defining sophisticated behavior is typically quite simple.
+
+### How `new` works in parametric constructors
+
+In the inner constructor of `Point`, `new(x,y)` is shorthand for `new{T}(x,y)`.
+**Inside the body of an inner constructor, the type parameters listed in the curly braces on the constructor name (e.g. the `T` parameter in `Point{T}(...)`) are implicitly forwarded to `new`**.
+You can also write the type parameters explicitly, which is equivalent:
+
+```jldoctest parametric2
+julia> struct Point2{T<:Real}
+           x::T
+           y::T
+           Point2{T}(x,y) where {T<:Real} = new{T}(x,y)  # explicit, same as new(x,y)
+       end
+
+julia> Point2{Float64}(1,2)
+Point2{Float64}(1.0, 2.0)
+```
+The explicit form becomes necessary when the type parameters for `new`
+differ from those of the enclosing inner constructor.
+For instance, if a type has two parameters like `MyType{T,S}` but the inner constructor is
+defined as `MyType{T}(...)`, then `new` would only receive `{T}` — not enough to
+determine the concrete type. In such cases you must write `new{T,S}(...)` explicitly.
+We will see an example of this in the [Disallowing explicit type parameters](@ref) section below.
 
 ## Case Study: Rational
 
@@ -491,6 +524,7 @@ operator, which provides a syntax for writing rationals (e.g. `1 ⊘ 2`). Julia'
 type uses the [`//`](@ref) operator for this purpose. Before these definitions, `⊘`
 is a completely undefined operator with only syntax and no meaning. Afterwards, it behaves just
 as described in [Rational Numbers](@ref) -- its entire behavior is defined in these few lines.
+Note that the infix use of `⊘` works because Julia has a set of symbols that are recognized to be infix operators.
 The first and most basic definition just makes `a ⊘ b` construct a `OurRational` by applying the
 `OurRational` constructor to `a` and `b` when they are integers. When one of the operands of `⊘`
 is already a rational number, we construct a new rational for the resulting ratio slightly differently;
@@ -514,14 +548,14 @@ of its arguments are complex integers, it will return an instance of `Complex{<:
 The interested reader should consider perusing the rest of [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl):
 it is short, self-contained, and implements an entire basic Julia type.
 
-## Outer-only constructors
+## Disallowing explicit type parameters
 
 As we have seen, a typical parametric type has inner constructors that are called when type parameters
 are known; e.g. they apply to `Point{Int}` but not to `Point`. Optionally, outer constructors
 that determine type parameters automatically can be added, for example constructing a `Point{Int}`
 from the call `Point(1,2)`. Outer constructors call inner constructors to actually
-make instances. However, in some cases one would rather not provide inner constructors, so
-that specific type parameters cannot be requested manually.
+make instances. However, in some cases one would rather not provide inner constructors that
+take type parameters, so that specific type parameters cannot be requested manually.
 
 For example, say we define a type that stores a vector along with an accurate representation of
 its sum:
@@ -555,6 +589,7 @@ julia> struct SummedArray{T<:Number,S<:Number}
 
 julia> SummedArray(Int32[1; 2; 3], Int32(6))
 ERROR: MethodError: no method matching SummedArray(::Vector{Int32}, ::Int32)
+The type `SummedArray` exists, but no method is defined for this combination of argument types when trying to construct it.
 
 Closest candidates are:
   SummedArray(::Vector{T}) where T
@@ -564,7 +599,42 @@ Stacktrace:
 [...]
 ```
 
-This constructor will be invoked by the syntax `SummedArray(a)`. The syntax `new{T,S}` allows
-specifying parameters for the type to be constructed, i.e. this call will return a `SummedArray{T,S}`.
-`new{T,S}` can be used in any constructor definition, but for convenience the parameters
-to `new{}` are automatically derived from the type being constructed when possible.
+This is still an inner constructor (it is defined inside the `struct` block and calls `new`),
+but since it is defined for the bare `SummedArray` rather than for `SummedArray{T,S}`, calls like
+`SummedArray{Int32,Int32}(...)` are not available.
+
+This is also the case where explicit type parameters on `new` are essential:
+the inner constructor name is bare `SummedArray` with no curly braces,
+so `new` has no type parameters to inherit (see
+[How `new` works in parametric constructors](@ref) above).
+The explicit `new{T,S}` tells Julia to construct a `SummedArray{T,S}`,
+where `T` comes from the element type of the input vector and `S` is computed as `widen(T)`.
+
+## Constructors are just callable objects
+
+An object of any type may be [made callable](@ref "Function-like objects") by defining a
+method. This includes types, i.e., objects of type [`Type`](@ref); and constructors may,
+in fact, be viewed as just callable type objects. For example, there are many methods
+defined on `Bool` and various supertypes of it:
+
+```@repl
+methods(Bool)
+```
+
+The usual constructor syntax is exactly equivalent to the function-like object
+syntax, so trying to define a method with each syntax will cause the first method
+to be overwritten by the next one:
+
+```jldoctest
+julia> struct S
+           f::Int
+       end
+
+julia> S() = S(7)
+S
+
+julia> (::Type{S})() = S(8)  # overwrites the previous constructor method
+
+julia> S()
+S(8)
+```

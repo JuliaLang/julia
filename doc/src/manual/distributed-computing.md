@@ -1,4 +1,4 @@
-# Multi-processing and Distributed Computing
+# Multiprocessing and Distributed Computing
 
 An implementation of distributed memory parallel computing is provided by module [`Distributed`](@ref man-distributed)
 as part of the standard library shipped with Julia.
@@ -48,7 +48,7 @@ Generally it makes sense for `n` to equal the number of CPU threads (logical cor
 argument implicitly loads module [`Distributed`](@ref man-distributed).
 
 
-```julia
+```julia-repl
 $ julia -p 2
 
 julia> r = remotecall(rand, 2, 2, 2)
@@ -58,7 +58,7 @@ julia> s = @spawnat 2 1 .+ fetch(r)
 Future(2, 1, 5, nothing)
 
 julia> fetch(s)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.18526  1.50912
  1.16296  1.60607
 ```
@@ -106,15 +106,17 @@ julia> s = @spawnat :any 1 .+ fetch(r)
 Future(3, 1, 5, nothing)
 
 julia> fetch(s)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.38854  1.9098
  1.20939  1.57158
 ```
 
 Note that we used `1 .+ fetch(r)` instead of `1 .+ r`. This is because we do not know where the
 code will run, so in general a [`fetch`](@ref) might be required to move `r` to the process
-doing the addition. In this case, [`@spawnat`](@ref) is smart enough to perform the computation
-on the process that owns `r`, so the [`fetch`](@ref) will be a no-op (no work is done).
+doing the addition. `:any` does not take into account where `r` lives (it simply cycles through
+the workers), so in this case the addition runs on process 3 and [`fetch`](@ref) copies the
+matrix from process 2. To avoid moving the data, run the computation on the process that owns
+`r` instead, e.g. `@spawnat 2 1 .+ fetch(r)`.
 
 (It is worth noting that [`@spawnat`](@ref) is not built-in but defined in Julia as a [macro](@ref man-macros).
 It is possible to define your own such constructs.)
@@ -122,25 +124,6 @@ It is possible to define your own such constructs.)
 An important thing to remember is that, once fetched, a [`Future`](@ref Distributed.Future) will cache its value
 locally. Further [`fetch`](@ref) calls do not entail a network hop. Once all referencing [`Future`](@ref Distributed.Future)s
 have fetched, the remote stored value is deleted.
-
-[`@async`](@ref) is similar to [`@spawnat`](@ref), but only runs tasks on the local process. We
-use it to create a "feeder" task for each process. Each task picks the next index that needs to
-be computed, then waits for its process to finish, then repeats until we run out of indices. Note
-that the feeder tasks do not begin to execute until the main task reaches the end of the [`@sync`](@ref)
-block, at which point it surrenders control and waits for all the local tasks to complete before
-returning from the function.
-As for v0.7 and beyond, the feeder tasks are able to share state via `nextidx` because
-they all run on the same process.
-Even if `Tasks` are scheduled cooperatively, locking may still be required in some contexts, as in
-[asynchronous I/O](@ref faq-async-io).
-This means context switches only occur at well-defined points: in this case,
-when [`remotecall_fetch`](@ref) is called. This is the current state of implementation and it may change
-for future Julia versions, as it is intended to make it possible to run up to N `Tasks` on M `Process`, aka
-[M:N Threading](https://en.wikipedia.org/wiki/Thread_(computing)#Models). Then a lock acquiring\releasing
-model for `nextidx` will be needed, as it is not safe to let multiple processes read-write a resource at
-the same time.
-
-
 
 ## [Code Availability and Loading Packages](@id code-availability)
 
@@ -153,12 +136,12 @@ julia> function rand2(dims...)
        end
 
 julia> rand2(2,2)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.153756  0.368514
  1.15119   0.918912
 
 julia> fetch(@spawnat :any rand2(2,2))
-ERROR: RemoteException(2, CapturedException(UndefVarError(Symbol("#rand2"))
+ERROR: RemoteException(2, CapturedException(UndefVarError(Symbol("#rand2"))))
 Stacktrace:
 [...]
 ```
@@ -186,7 +169,7 @@ end
 ```
 
 In order to refer to `MyType` across all processes, `DummyModule.jl` needs to be loaded on
-every process.  Calling `include("DummyModule.jl")` loads it only on a single process.  To
+every process. Calling `include("DummyModule.jl")` loads it only on a single process. To
 load it on every process, use the [`@everywhere`](@ref) macro (starting Julia with `julia -p
 2`):
 
@@ -197,8 +180,8 @@ loaded
       From worker 2:    loaded
 ```
 
-As usual, this does not bring `DummyModule` into scope on any of the process, which requires
-[`using`](@ref) or [`import`](@ref).  Moreover, when `DummyModule` is brought into scope on one process, it
+As usual, this does not bring `DummyModule` into scope on any of the processes, which requires
+[`using`](@ref) or [`import`](@ref). Moreover, when `DummyModule` is brought into scope on one process, it
 is not on any other:
 
 ```julia-repl
@@ -209,7 +192,7 @@ MyType(7)
 
 julia> fetch(@spawnat 2 MyType(7))
 ERROR: On worker 2:
-UndefVarError: `MyType` not defined
+UndefVarError: `MyType` not defined in `Main`
 ⋮
 
 julia> fetch(@spawnat 2 DummyModule.MyType(7))
@@ -262,7 +245,7 @@ as a programmatic means of adding, removing and querying the processes in a clus
 julia> using Distributed
 
 julia> addprocs(2)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  2
  3
 ```
@@ -270,10 +253,11 @@ julia> addprocs(2)
 Module [`Distributed`](@ref man-distributed) must be explicitly loaded on the master process before invoking [`addprocs`](@ref).
 It is automatically made available on the worker processes.
 
-Note that workers do not run a `~/.julia/config/startup.jl` startup script, nor do they synchronize
-their global state (such as global variables, new method definitions, and loaded modules) with any
-of the other running processes. You may use `addprocs(exeflags="--project")` to initialize a worker with
-a particular environment, and then `@everywhere using <modulename>` or `@everywhere include("file.jl")`.
+!!! note
+    Note that workers do not run a `~/.julia/config/startup.jl` startup script, nor do they synchronize
+    their global state (such as command-line switches, global variables, new method definitions, and loaded modules) with any
+    of the other running processes. You may use `addprocs(exeflags="--project")` to initialize a worker with
+    a particular environment, and then `@everywhere using <modulename>` or `@everywhere include("file.jl")`.
 
 Other types of clusters can be supported by writing your own custom `ClusterManager`, as described
 below in the [ClusterManagers](@ref) section.
@@ -332,7 +316,7 @@ Expressions executed remotely via [`@spawnat`](@ref), or closures specified for 
 a little differently compared to global bindings in other modules. Consider the following code
 snippet:
 
-```julia-repl
+```julia
 A = rand(10,10)
 remotecall_fetch(()->sum(A), 2)
 ```
@@ -432,7 +416,7 @@ julia> fetch(a)+fetch(b)
 
 This example demonstrates a powerful and often-used parallel programming pattern. Many iterations
 run independently over several processes, and then their results are combined using some function.
-The combination process is called a *reduction*, since it is generally tensor-rank-reducing: a
+The combination process is called a *reduction*, since it is generally dimensionality-reducing: a
 vector of numbers is reduced to a single number, or a matrix is reduced to a single row or column,
 etc. In code, this typically looks like the pattern `x = f(x,v[i])`, where `x` is the accumulator,
 `f` is the reduction function, and the `v[i]` are the elements being reduced. It is desirable
@@ -528,7 +512,7 @@ The remote object referred to by a [`Future`](@ref Distributed.Future) is stored
 [`RemoteChannel`](@ref), which is rewritable, can point to any type and size of channels, or any
 other implementation of an `AbstractChannel`.
 
-The constructor `RemoteChannel(f::Function, pid)()` allows us to construct references to channels
+The constructor `RemoteChannel(f::Function, pid)` allows us to construct references to channels
 holding more than one value of a specific type. `f` is a function executed on `pid` and it must
 return an `AbstractChannel`.
 
@@ -539,9 +523,72 @@ Methods [`put!`](@ref), [`take!`](@ref), [`fetch`](@ref), [`isready`](@ref) and 
 on a [`RemoteChannel`](@ref) are proxied onto the backing store on the remote process.
 
 [`RemoteChannel`](@ref) can thus be used to refer to user implemented `AbstractChannel` objects.
-A simple example of this is provided in `dictchannel.jl` in the
-[Examples repository](https://github.com/JuliaAttic/Examples), which uses a dictionary as its
-remote store.
+A simple example of this is the following `DictChannel` which uses a dictionary as its
+remote store:
+
+```jldoctest
+julia> struct DictChannel{T} <: AbstractChannel{T}
+           d::Dict
+           cond_take::Threads.Condition    # waiting for data to become available
+           DictChannel{T}() where {T} = new(Dict(), Threads.Condition())
+           DictChannel() = DictChannel{Any}()
+       end
+
+julia> begin
+       function Base.put!(D::DictChannel, k, v)
+           @lock D.cond_take begin
+               D.d[k] = v
+               notify(D.cond_take)
+           end
+           return D
+       end
+       function Base.take!(D::DictChannel, k)
+           @lock D.cond_take begin
+               v = fetch(D, k)
+               delete!(D.d, k)
+               return v
+           end
+       end
+       Base.isready(D::DictChannel) = @lock D.cond_take !isempty(D.d)
+       Base.isready(D::DictChannel, k) = @lock D.cond_take haskey(D.d, k)
+       function Base.fetch(D::DictChannel, k)
+           @lock D.cond_take begin
+               wait(D, k)
+               return D.d[k]
+           end
+       end
+       function Base.wait(D::DictChannel, k)
+           @lock D.cond_take begin
+               while !isready(D, k)
+                   wait(D.cond_take)
+               end
+           end
+       end
+       end;
+
+julia> d = DictChannel();
+
+julia> isready(d)
+false
+
+julia> put!(d, :k, :v);
+
+julia> isready(d, :k)
+true
+
+julia> fetch(d, :k)
+:v
+
+julia> wait(d, :k)
+
+julia> take!(d, :k)
+:v
+
+julia> isready(d, :k)
+false
+```
+
+
 
 
 ## Channels and RemoteChannels
@@ -593,15 +640,15 @@ julia> function make_jobs(n)
 
 julia> n = 12;
 
-julia> errormonitor(@async make_jobs(n)); # feed the jobs channel with "n" jobs
+julia> errormonitor(Threads.@spawn make_jobs(n)); # feed the jobs channel with "n" jobs
 
 julia> for p in workers() # start tasks on the workers to process requests in parallel
            remote_do(do_work, p, jobs, results)
        end
 
 julia> @elapsed while n > 0 # print out results
-           job_id, exec_time, where = take!(results)
-           println("$job_id finished in $(round(exec_time; digits=2)) seconds on worker $where")
+           job_id, exec_time, worker_id = take!(results)
+           println("$job_id finished in $(round(exec_time; digits=2)) seconds on worker $worker_id")
            global n = n - 1
        end
 1 finished in 0.18 seconds on worker 4
@@ -670,7 +717,7 @@ serialization/deserialization of data. Consequently, the call refers to the same
 as passed - no copies are created. This behavior is highlighted below:
 
 ```julia-repl
-julia> using Distributed;
+julia> using Distributed
 
 julia> rc = RemoteChannel(()->Channel(3));   # RemoteChannel created on local node
 
@@ -684,7 +731,7 @@ julia> for i in 1:3
 julia> result = [take!(rc) for _ in 1:3];
 
 julia> println(result);
-Array{Int64,1}[[3], [3], [3]]
+[[3], [3], [3]]
 
 julia> println("Num Unique objects : ", length(unique(map(objectid, result))));
 Num Unique objects : 1
@@ -703,7 +750,7 @@ julia> for i in 1:3
 julia> result = [take!(rc) for _ in 1:3];
 
 julia> println(result);
-Array{Int64,1}[[1], [2], [3]]
+[[1], [2], [3]]
 
 julia> println("Num Unique objects : ", length(unique(map(objectid, result))));
 Num Unique objects : 3
@@ -750,16 +797,18 @@ will always operate on copies of arguments.
 
 ## [Shared Arrays](@id man-shared-arrays)
 
-Shared Arrays use system shared memory to map the same array across many processes. While there
-are some similarities to a [`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl), the
-behavior of a [`SharedArray`](@ref) is quite different. In a [`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl),
-each process has local access to just a chunk of the data, and no two processes share the same
-chunk; in contrast, in a [`SharedArray`](@ref) each "participating" process has access to the
-entire array.  A [`SharedArray`](@ref) is a good choice when you want to have a large amount of
-data jointly accessible to two or more processes on the same machine.
+Shared Arrays use system shared memory to map the same array across many processes. A
+[`SharedArray`](@ref) is a good choice when you want to have a large amount of data jointly
+accessible to two or more processes on the same machine. Shared Array support is available via the
+module `SharedArrays`, which must be explicitly loaded on all participating workers.
 
-Shared Array support is available via module `SharedArrays` which must be explicitly loaded on
-all participating workers.
+A complementary data structure is provided by the external package
+[`DistributedArrays.jl`](https://github.com/JuliaParallel/DistributedArrays.jl) in the form of a
+`DArray`. While there are some similarities to a [`SharedArray`](@ref), the behavior of a
+[`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl) is quite different. In a
+[`SharedArray`](@ref), each "participating" process has access to the entire array; in contrast, in
+a [`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl), each process has local access
+to just a chunk of the data, and no two processes share the same chunk.
 
 [`SharedArray`](@ref) indexing (assignment and accessing values) works just as with regular arrays,
 and is efficient because the underlying memory is available to the local process. Therefore,
@@ -789,7 +838,7 @@ Here's a brief example:
 julia> using Distributed
 
 julia> addprocs(3)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  2
  3
  4
@@ -797,7 +846,7 @@ julia> addprocs(3)
 julia> @everywhere using SharedArrays
 
 julia> S = SharedArray{Int,2}((3,4), init = S -> S[localindices(S)] = repeat([myid()], length(localindices(S))))
-3×4 SharedArray{Int64,2}:
+3×4 SharedMatrix{Int64}:
  2  2  3  4
  2  3  3  4
  2  3  4  4
@@ -806,7 +855,7 @@ julia> S[3,2] = 7
 7
 
 julia> S
-3×4 SharedArray{Int64,2}:
+3×4 SharedMatrix{Int64}:
  2  2  3  4
  2  3  3  4
  2  7  4  4
@@ -818,7 +867,7 @@ you wish:
 
 ```julia-repl
 julia> S = SharedArray{Int,2}((3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = repeat([myid()], length( indexpids(S):length(procs(S)):length(S))))
-3×4 SharedArray{Int64,2}:
+3×4 SharedMatrix{Int64}:
  2  2  2  2
  3  3  3  3
  4  4  4  4
@@ -830,7 +879,7 @@ conflicts. For example:
 ```julia
 @sync begin
     for p in procs(S)
-        @async begin
+        Threads.@spawn begin
             remotecall_wait(fill!, p, S, p)
         end
     end
@@ -912,7 +961,7 @@ and one that delegates in chunks:
 julia> function advection_shared!(q, u)
            @sync begin
                for p in procs(q)
-                   @async remotecall_wait(advection_shared_chunk!, p, q, u)
+                   Threads.@spawn remotecall_wait(advection_shared_chunk!, p, q, u)
                end
            end
            q
@@ -1225,7 +1274,7 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
 All processes in a cluster share the same cookie which, by default, is a randomly generated string
 on the master process:
 
-  * [`cluster_cookie()`](@ref) returns the cookie, while `cluster_cookie(cookie)()` sets
+  * [`cluster_cookie()`](@ref) returns the cookie, while `cluster_cookie(cookie)` sets
     it and returns the new cookie.
   * All connections are authenticated on both sides to ensure that only workers started by the master
     are allowed to connect to each other.
@@ -1263,8 +1312,11 @@ in future releases.
 ## Noteworthy external packages
 
 Outside of Julia parallelism there are plenty of external packages that should be mentioned.
-For example [MPI.jl](https://github.com/JuliaParallel/MPI.jl) is a Julia wrapper for the `MPI` protocol, [Dagger.jl](https://github.com/JuliaParallel/Dagger.jl) provides functionality similar to Python's [Dask](https://dask.org/), and
-[DistributedArrays.jl](https://github.com/JuliaParallel/Distributedarrays.jl) provides array operations distributed across workers, as presented in [Shared Arrays](@ref).
+For example, [`MPI.jl`](https://github.com/JuliaParallel/MPI.jl) is a Julia wrapper for the `MPI`
+protocol, [`Dagger.jl`](https://github.com/JuliaParallel/Dagger.jl) provides functionality similar to
+Python's [Dask](https://dask.org/), and
+[`DistributedArrays.jl`](https://github.com/JuliaParallel/Distributedarrays.jl) provides array
+operations distributed across workers, as [outlined above](@ref man-shared-arrays).
 
 A mention must be made of Julia's GPU programming ecosystem, which includes:
 
@@ -1302,7 +1354,7 @@ julia> all(C .≈ 4*π)
 true
 
 julia> typeof(C)
-Array{Float64,1}
+Vector{Float64} (alias for Array{Float64, 1})
 
 julia> dB = distribute(B);
 
@@ -1314,7 +1366,7 @@ julia> all(dC .≈ 4*π)
 true
 
 julia> typeof(dC)
-DistributedArrays.DArray{Float64,1,Array{Float64,1}}
+DistributedArrays.DArray{Float64,1,Vector{Float64}}
 
 julia> cuB = CuArray(B);
 
@@ -1350,7 +1402,7 @@ function declaration, let's see if it works with the aforementioned datatypes:
 julia> M = [2. 1; 1 1];
 
 julia> v = rand(2)
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
 0.40395
 0.445877
 
@@ -1373,14 +1425,14 @@ julia> dv = distribute(v);
 julia> dC = power_method(dM, dv);
 
 julia> typeof(dC)
-Tuple{DistributedArrays.DArray{Float64,1,Array{Float64,1}},Float64}
+Tuple{DistributedArrays.DArray{Float64,1,Vector{Float64}},Float64}
 ```
 
 To end this short exposure to external packages, we can consider `MPI.jl`, a Julia wrapper
 of the MPI protocol. As it would take too long to consider every inner function, it would be better
 to simply appreciate the approach used to implement the protocol.
 
-Consider this toy script which simply calls each subprocess, instantiate its rank and when the master
+Consider this toy script which simply calls each subprocess, instantiates its rank and when the master
 process is reached, performs the ranks' sum
 
 ```julia

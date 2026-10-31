@@ -10,6 +10,7 @@ Base.Threads.nthreads
 Base.Threads.threadpool
 Base.Threads.nthreadpools
 Base.Threads.threadpoolsize
+Base.Threads.ngcthreads
 ```
 
 See also [Multi-Threading](@ref man-multithreading).
@@ -17,26 +18,42 @@ See also [Multi-Threading](@ref man-multithreading).
 ## Atomic operations
 
 ```@docs
+atomic
+```
+
+```@docs
 Base.@atomic
 Base.@atomicswap
 Base.@atomicreplace
+Base.@atomiconce
+Base.AtomicMemory
 ```
+
+There are also optional memory ordering parameters for the `unsafe` set of functions, that
+select the C/C++-compatible versions of these atomic operations, if that parameter is specified to
+[`unsafe_load`](@ref), [`unsafe_store!`](@ref), [`unsafe_swap!`](@ref), [`unsafe_replace!`](@ref), and [`unsafe_modify!`](@ref).
+
+### Atomic memory fences
+
+```@docs
+Base.Threads.atomic_fence
+Base.Threads.atomic_fence_heavy
+Base.Threads.atomic_fence_light
+```
+
+### Atomic values (`Threads.Atomic`)
 
 !!! note
-
-    The following APIs are fairly primitive, and will likely be exposed through an `unsafe_*`-like wrapper.
-
-```
-Core.Intrinsics.atomic_pointerref(pointer::Ptr{T}, order::Symbol) --> T
-Core.Intrinsics.atomic_pointerset(pointer::Ptr{T}, new::T, order::Symbol) --> pointer
-Core.Intrinsics.atomic_pointerswap(pointer::Ptr{T}, new::T, order::Symbol) --> old
-Core.Intrinsics.atomic_pointermodify(pointer::Ptr{T}, function::(old::T,arg::S)->T, arg::S, order::Symbol) --> old
-Core.Intrinsics.atomic_pointerreplace(pointer::Ptr{T}, expected::Any, new::T, success_order::Symbol, failure_order::Symbol) --> (old, cmp)
-```
+    [`Threads.Atomic`](@ref) is a standalone, [`Ref`](@ref)-like atomic cell. Like `Ref`, it is a
+    useful building block and is not going to be removed, but an `@atomic` field of a mutable struct
+    is usually preferable when you have the choice. The `Threads.atomic_*` functions below predate
+    the [`@atomic`](@ref Base.@atomic) macros and still work, but the macros are the recommended way
+    to operate on an atomic cell; see
+    [The `@atomic` reference interface](@ref man-atomic-reference) for how to translate them.
 
 !!! warning
-
-    The following APIs are deprecated, though support for them is likely to remain for several releases.
+    Storing into a `Threads.Atomic` with the plain `a[] = v` form is deprecated (since uses such as
+    `a[] += 1` look atomic but are not); use `@atomic a[] = v` instead.
 
 ```@docs
 Base.Threads.Atomic
@@ -50,7 +67,6 @@ Base.Threads.atomic_or!
 Base.Threads.atomic_xor!
 Base.Threads.atomic_max!
 Base.Threads.atomic_min!
-Base.Threads.atomic_fence
 ```
 
 ## ccall using a libuv threadpool (Experimental)
@@ -64,5 +80,15 @@ Base.@threadcall
 These building blocks are used to create the regular synchronization objects.
 
 ```@docs
+Base.Threads.AbstractSpinLock
 Base.Threads.SpinLock
+Base.Threads.PaddedSpinLock
+```
+
+## Task metrics (Experimental)
+
+```@docs
+Base.Experimental.task_metrics
+Base.Experimental.task_running_time_ns
+Base.Experimental.task_wall_time_ns
 ```

@@ -88,7 +88,7 @@ true
 ```
 
 The [`isless`](@ref) operator is another exception: `missing` is considered
-as greater than any other value. This operator is used by [`sort`](@ref),
+as greater than any other value. This operator is used by [`sort!`](@ref),
 which therefore places `missing` values after all other values:
 
 ```jldoctest
@@ -412,8 +412,7 @@ julia> isequal([1, 2, missing], [1, missing, 2])
 false
 ```
 
-Functions [`any`](@ref) and [`all`](@ref) also follow the rules of
-three-valued logic. Thus, returning `missing` when the result cannot be determined:
+Functions [`any`](@ref) and [`all`](@ref) also follow the rules of three-valued logic, thus returning `missing` when the result cannot be determined:
 
 ```jldoctest
 julia> all([true, missing])

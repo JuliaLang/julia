@@ -1,15 +1,15 @@
-# Package Images
+# [Package Images](@id pkgimages)
 
 Julia package images provide object (native code) caches for Julia packages.
 They are similar to Julia's [system image](@ref dev-sysimg) and support many of the same features.
-In fact the underlying serialization format is the same, and the system image is the base image that the package images are build against.
+In fact the underlying serialization format is the same, and the system image is the base image that the package images are built against.
 
 ## High-level overview
 
 Package images are shared libraries that contain both code and data. Like `.ji` cache files, they are generated per package. The data section contains both global data (global variables in the package) as well as the necessary metadata about what methods and types are defined by the package. The code section contains native objects that cache the final output of Julia's LLVM-based compiler.
 
 The command line option `--pkgimages=no` can be used to turn off object caching for this session. Note that this means that cache files have to likely be regenerated.
-See [`JULIA_MAX_NUM_PRECOMPILE_FILES`](@ref env-max-num-precompile-files) for the upper limit of variants Julia caches per default.
+See [`JULIA_MAX_NUM_PRECOMPILE_FILES`](@ref JULIA_MAX_NUM_PRECOMPILE_FILES) for the upper limit of variants Julia caches per default.
 
 !!! note
     While the package images present themselves as native shared libraries, they are only an approximation thereof. You will not be able to link against them from a native program and they must be loaded from Julia.
@@ -17,7 +17,7 @@ See [`JULIA_MAX_NUM_PRECOMPILE_FILES`](@ref env-max-num-precompile-files) for th
 
 ## Linking
 
-Since the package images contain native code, we must run a linker over them before we can use them. You can set the environment variable `JULIA_VERBOSE_LINKING` to `true` to make the package image linking process verbose.
+Since the package images contain native code, we must run a linker over them before we can use them. You can set the environment variable [`JULIA_VERBOSE_LINKING`](@ref JULIA_VERBOSE_LINKING) to `true` to make the package image linking process verbose.
 
 Furthermore, we cannot assume that the user has a working system linker installed. Therefore, Julia ships with LLD, the LLVM linker, to provide a working out of the box experience. In `base/linking.jl`, we implement a limited interface to be able to link package images on all supported platforms.
 
@@ -32,9 +32,11 @@ To avoid having to deal with `link.exe` we use `-flavor gnu`, effectively turnin
 Dynamic libraries on macOS need to link against `-lSystem`. On recent macOS versions, `-lSystem` is only available for linking when Xcode is available.
 To that effect we link with `-undefined dynamic_lookup`.
 
-## Package images optimized for multiple microarchitectures
-Similar to [multi-versioning](@ref sysimg-multi-versioning) for system images, package images support multi-versioning. If you are in a heterogenous environment, with a unified cache,
-you can set the environment variable `JULIA_CPU_TARGET=generic` to multi-version the object caches.
+## [Package images optimized for multiple microarchitectures](@id pkgimgs-multi-versioning)
+
+Similar to [multi-versioning](@ref sysimg-multi-versioning) for system images, package images support multi-versioning. This allows creating package caches that can run efficiently on different CPU architectures within the same environment.
+
+See the [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) environment variable for more information on how to set the CPU target for package images.
 
 ## Flags that impact package image creation and selection
 
@@ -47,3 +49,51 @@ that were created with different flags will be rejected.
 - `--pkgimages`: To allow running without object caching enabled.
 - `-O`, `--optimize`: Reject package images generated for a lower optimization level,
   but allow for higher optimization levels to be loaded.
+- `--code-coverage`, `--code-coverage-mode`: Whether the image carries coverage
+  counters, and their mode, is recorded in the cache identity. A `count` image
+  can serve `hit` mode. The coverage scope is not part of the identity: an
+  instrumented image carries counters for every statement, and the loading
+  process reports only those its scope selects (user code for `user`, files
+  under the tracked path for `@<path>`).
+
+Compatible coverage flags do not override dependency identity checks. Selecting
+a different image for an out-of-scope dependency can require rebuilding its
+dependents as well.
+
+Coverage runs create instrumented package-image variants alongside ordinary
+caches for every loaded package, independently of the requested scope. Thus
+`--code-coverage=@<path>` reuses the same images as `user` and `all`. An initial
+coverage run may need to precompile instrumented dependency images; subsequent
+runs can reuse them across selectors.
+
+Because `@<path>` only reports files under the tracked path, it can also use an
+ordinary image that contains no code from there, such as a bundled standard
+library image. An image only contains code from its own source files, from the
+package images it was built against, and from the system image. The loader
+therefore accepts an ordinary image when none of the package's source files are
+tracked, when every package dependency was accepted the same way (the image pins
+their build ids, so an instrumented dependency forces a rebuild of its
+dependents), and when the tracked path does not overlap the system image's
+sources. Code that names other files in its line information, for example
+through `include_string`, is not accounted for. Neither are system image sources
+of a relocated installation: the system image records the paths it was built
+from, so tracking the installed standard library sources is not detected as an
+overlap, but code from there is not reported under those paths either. With an
+instrumented system image, ordinary images may have been built against
+instrumented dependencies, so they are not used for coverage at all.
+
+The tracked path is part of the requested `Base.CacheFlags`, though not of the
+image's identity, so that a precompilation driver collecting no coverage itself,
+like the one `Pkg.test(coverage=true)` runs, judges the caches as the test
+process will. Precompilation workers inherit it to accept the same dependencies;
+the images they produce are instrumented as usual, but switching between
+`@<path>` and other selectors can rebuild dependents that were built against
+different dependency images.
+Instrumented package images also work with an ordinary system image. Reports
+include zero counts for instrumented lines that were not executed; precompilation
+workloads do not contribute hits.
+
+Without coverage, ordinary builds reject instrumented package images. A build
+with an instrumented system image also accepts package images with the same
+instrumentation as that system image. Allocation tracking always requires
+recompilation because images do not carry allocation counters.

@@ -2,124 +2,69 @@ SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BUILDDIR := .
 JULIAHOME := $(SRCDIR)
 include $(JULIAHOME)/Make.inc
+include $(JULIAHOME)/stdlib/stdlib.mk
 
-VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
+DEPOTDIR := $(build_prefix)/share/julia
+CHECKBOUNDS_DIR := $(BUILDROOT)/stdlib/checkbounds-$(JULIA_BUILD_MODE)
+CHECKBOUNDS_DEPOT := $(CHECKBOUNDS_DIR)/share/julia
 
-export JULIA_DEPOT_PATH := $(build_prefix)/share/julia
+# set some influential environment variables
+export JULIA_DEPOT_PATH := $(shell echo $(call cygpath_w,$(DEPOTDIR)))
+export JULIA_LOAD_PATH := @stdlib$(PATHSEP)$(shell echo $(call cygpath_w,$(JULIAHOME)/stdlib))
+unexport JULIA_PROJECT :=
+unexport JULIA_BINDIR :=
 
-$(JULIA_DEPOT_PATH):
+export JULIA_FALLBACK_REPL := true
+
+default: release
+release: $(BUILDDIR)/stdlib/release.image
+debug: $(BUILDDIR)/stdlib/debug.image
+all: release debug
+
+STDLIB_PKGIMAGE_CONFIGS := ``=>Base.CacheFlags(debug_level=2, opt_level=3)
+ifeq ($(JULIA_CHECK_BOUNDS_PKGIMAGES),1)
+STDLIB_PKGIMAGE_CONFIGS := $(STDLIB_PKGIMAGE_CONFIGS), ``=>Base.CacheFlags(check_bounds=1, debug_level=2, opt_level=3)
+endif
+
+$(DEPOTDIR)/compiled:
 	mkdir -p $@
 
 print-depot-path:
 	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e '@show Base.DEPOT_PATH')
 
-STDLIBS := ArgTools Artifacts Base64 CRC32c FileWatching Libdl NetworkOptions SHA Serialization \
-		   GMP_jll LLVMLibUnwind_jll LibUV_jll LibUnwind_jll MbedTLS_jll OpenLibm_jll PCRE2_jll \
-		   Zlib_jll dSFMT_jll libLLVM_jll libblastrampoline_jll OpenBLAS_jll Printf Random Tar \
-		   LibSSH2_jll MPFR_jll LinearAlgebra Dates Distributed Future LibGit2 Profile SparseArrays UUIDs \
-		   SharedArrays TOML Test LibCURL Downloads Pkg Dates LazyArtifacts Sockets Unicode Markdown \
-		   InteractiveUtils REPL DelimitedFiles
+# Store the requested configuration in the image stamp and force precompilation
+# when it changes. Empty stamps from older builds also need to be regenerated.
+.PHONY: FORCE
+FORCE:
+pkgimage_config_changed = $(if $(filter $(JULIA_CHECK_BOUNDS_PKGIMAGES),$(shell cat $(1) 2>/dev/null)),,FORCE)
 
-all-release: $(addprefix cache-release-, $(STDLIBS))
-all-debug:   $(addprefix cache-debug-, $(STDLIBS))
+# The precompile workers inherit the coverage configuration through `Base.CacheFlags`.
+$(BUILDDIR)/stdlib/%.image: $(JULIAHOME)/stdlib/Project.toml $(JULIAHOME)/stdlib/Manifest.toml $(INDEPENDENT_STDLIBS_SRCS) $(DEPOTDIR)/compiled
+	@$(call PRINT_JULIA, JULIA_CPU_TARGET="sysimage" $(call spawn,$(JULIA_EXECUTABLE)) $(JULIA_COVERAGE_IMAGE_FLAGS) --startup-file=no -e \
+		'Base.Precompilation.precompilepkgs(configs=[$(STDLIB_PKGIMAGE_CONFIGS)]; strict=true)')
+	echo '$(JULIA_CHECK_BOUNDS_PKGIMAGES)' > $@
 
-define pkgimg_builder
-$1_SRCS := $$(shell find $$(build_datarootdir)/julia/stdlib/$$(VERSDIR)/$1/src -name \*.jl) \
-    $$(wildcard $$(build_prefix)/manifest/$$(VERSDIR)/$1)
-$$(BUILDDIR)/stdlib/$1.release.image: $$($1_SRCS) $$(addsuffix .release.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2))
-	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.compilecache(Base.identify_package("$1"))')
-	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
-	touch $$@
-cache-release-$1: $$(BUILDDIR)/stdlib/$1.release.image
-$$(BUILDDIR)/stdlib/$1.debug.image: $$($1_SRCS) $$(addsuffix .debug.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2))
-	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.compilecache(Base.identify_package("$1"))')
-	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
-cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image
-.SECONDARY: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.debug.image
-endef
+$(BUILDDIR)/stdlib/release.image: $(build_private_libdir)/sys.$(SHLIB_EXT) \
+    $(call pkgimage_config_changed,$(BUILDDIR)/stdlib/release.image)
+$(BUILDDIR)/stdlib/debug.image: $(build_private_libdir)/sys-debug.$(SHLIB_EXT) \
+    $(call pkgimage_config_changed,$(BUILDDIR)/stdlib/debug.image)
 
-# Used to just define them in the dependency graph
-# reside in the system image
-define sysimg_builder
-$$(BUILDDIR)/stdlib/$1.release.image:
-	touch $$@
-cache-release-$1: $$(BUILDDIR)/stdlib/$1.release.image
-$$(BUILDDIR)/stdlib/$1.debug.image:
-	touch $$@
-cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image
-.SECONDARY: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.debug.image
-endef
+# Keep these caches out of the installed depot so binary-dist and installers
+# contain only the ordinary images. The second depot supplies relocatable
+# stdlib sources. Force regeneration so even builds that already bundle the
+# checked images produce a complete, independent companion.
+.PHONY: checkbounds-pkgimages
+checkbounds-pkgimages: $(BUILDDIR)/stdlib/checkbounds-$(JULIA_BUILD_MODE).image
+	cd $(CHECKBOUNDS_DIR) && $(TAR) -zcf $(abspath $(JULIA_BINARYDIST_FILENAME)).checkbounds.tar.gz share/julia/compiled
 
-# no dependencies
-$(eval $(call pkgimg_builder,MozillaCACerts_jll,))
-$(eval $(call sysimg_builder,ArgTools,))
-$(eval $(call sysimg_builder,Artifacts,))
-$(eval $(call sysimg_builder,Base64,))
-$(eval $(call sysimg_builder,CRC32c,))
-$(eval $(call sysimg_builder,FileWatching,))
-$(eval $(call sysimg_builder,Libdl,))
-$(eval $(call sysimg_builder,Logging,))
-$(eval $(call sysimg_builder,Mmap,))
-$(eval $(call sysimg_builder,NetworkOptions,))
-$(eval $(call sysimg_builder,SHA,))
-$(eval $(call sysimg_builder,Serialization,))
-$(eval $(call sysimg_builder,Sockets,))
-$(eval $(call sysimg_builder,Unicode,))
+$(BUILDDIR)/stdlib/checkbounds-$(JULIA_BUILD_MODE).image: $(BUILDDIR)/stdlib/$(JULIA_BUILD_MODE).image $(JULIAHOME)/pkgimage.mk
+	rm -rf $(CHECKBOUNDS_DIR)
+	mkdir -p $(CHECKBOUNDS_DEPOT)
+	@$(call PRINT_JULIA, JULIA_CPU_TARGET="sysimage" JULIA_DEPOT_PATH="$(call cygpath_w,$(CHECKBOUNDS_DEPOT))$(PATHSEP)$(call cygpath_w,$(DEPOTDIR))" $(call spawn,$(JULIA_EXECUTABLE)) $(JULIA_COVERAGE_IMAGE_FLAGS) --startup-file=no -e \
+		'Base.Precompilation.precompilepkgs(configs=[``=>Base.CacheFlags(check_bounds=1, debug_level=2, opt_level=3)]; strict=true, force_stdlibs=true)')
+	touch $@
 
-# 1-depth packages
-$(eval $(call pkgimg_builder,GMP_jll,Artifacts Libdl))
-$(eval $(call pkgimg_builder,LLVMLibUnwind_jll,Artifacts Libdl))
-$(eval $(call pkgimg_builder,LibUV_jll,Artifacts Libdl))
-$(eval $(call pkgimg_builder,LibUnwind_jll,Artifacts Libdl))
-$(eval $(call pkgimg_builder,MbedTLS_jll,Artifacts Libdl))
-$(eval $(call pkgimg_builder,nghttp2_jll,Artifacts Libdl))
-$(eval $(call pkgimg_builder,OpenLibm_jll,Artifacts Libdl))
-$(eval $(call pkgimg_builder,PCRE2_jll,Artifacts Libdl))
-$(eval $(call pkgimg_builder,Zlib_jll,Artifacts Libdl))
-$(eval $(call pkgimg_builder,dSFMT_jll,Artifacts Libdl))
-$(eval $(call pkgimg_builder,libLLVM_jll,Artifacts Libdl))
-$(eval $(call sysimg_builder,libblastrampoline_jll,Artifacts Libdl))
-$(eval $(call sysimg_builder,OpenBLAS_jll,Artifacts Libdl))
-$(eval $(call sysimg_builder,Markdown,Base64))
-$(eval $(call sysimg_builder,Printf,Unicode))
-$(eval $(call sysimg_builder,Random,Serialization SHA))
-$(eval $(call sysimg_builder,Tar,ArgTools,SHA))
-$(eval $(call pkgimg_builder,DelimitedFiles,Mmap))
-
-# 2-depth packages
-$(eval $(call pkgimg_builder,LLD_jll,Zlib_jll libLLVM_jll Artifacts Libdl))
-$(eval $(call pkgimg_builder,LibSSH2_jll,Artifacts Libdl MbedTLS_jll))
-$(eval $(call pkgimg_builder,MPFR_jll,Artifacts Libdl GMP_jll))
-$(eval $(call sysimg_builder,LinearAlgebra,Libdl libblastrampoline_jll OpenBLAS_jll))
-$(eval $(call sysimg_builder,Dates,Printf))
-$(eval $(call sysimg_builder,Distributed,Random Serialization Sockets))
-$(eval $(call sysimg_builder,Future,Random))
-$(eval $(call sysimg_builder,InteractiveUtils,Markdown))
-$(eval $(call sysimg_builder,LibGit2,NetworkOptions Printf SHA Base64))
-$(eval $(call sysimg_builder,Profile,Printf))
-$(eval $(call sysimg_builder,UUIDs,Random SHA))
-
-
- # 3-depth packages
- # LibGit2_jll
-$(eval $(call pkgimg_builder,LibCURL_jll,LibSSH2_jll nghttp2_jll MbedTLS_jll Zlib_jll Artifacts Libdl))
-$(eval $(call sysimg_builder,REPL,InteractiveUtils Markdown Sockets Unicode))
-$(eval $(call sysimg_builder,SharedArrays,Distributed Mmap Random Serialization))
-$(eval $(call sysimg_builder,TOML,Dates))
-$(eval $(call sysimg_builder,Test,Logging Random Serialization InteractiveUtils))
-
-# 4-depth packages
-$(eval $(call sysimg_builder,LibCURL,LibCURL_jll MozillaCACerts_jll))
-
-# 5-depth packages
-$(eval $(call sysimg_builder,Downloads,ArgTools FileWatching LibCURL NetworkOptions))
-
-# 6-depth packages
-$(eval $(call sysimg_builder,Pkg,Dates LibGit2 Libdl Logging Printf Random SHA UUIDs)) # Markdown REPL
-
-# 7-depth packages
-$(eval $(call sysimg_builder,LazyArtifacts,Artifacts Pkg))
-
-$(eval $(call pkgimg_builder,SparseArrays,Libdl LinearAlgebra Random Serialization))
-# SuiteSparse_jll
-# Statistics
+clean:
+	rm -rf $(BUILDROOT)/stdlib/checkbounds-release $(BUILDROOT)/stdlib/checkbounds-debug
+	rm -rf $(DEPOTDIR)/compiled
+	rm -f $(BUILDDIR)/stdlib/*.image

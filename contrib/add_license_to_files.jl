@@ -6,12 +6,12 @@
 # Option `old_license` to remove an existing license first in case one wants to change the
 # license text in the future.
 #
-# Checks also if somewhere else in the file the license text is found (`copy/past error`)
+# Checks also if somewhere else in the file the license text is found (`copy/paste error`)
 # and if possible deletes such lines - if other text is on the same line it raises an error.
 
 ### CONFIG HERE
 
-const print_result = true  # prints files which where not processed.
+const print_result = true  # prints files which were not processed.
 
 const rootdirs = [
     "../base",
@@ -46,10 +46,11 @@ const skipfiles = [
     "../src/abi_x86.cpp",
     "../src/abi_x86_64.cpp",
     "../src/disasm.cpp",
-    "../src/support/END.h",
-    "../src/support/ENTRY.amd64.h",
-    "../src/support/ENTRY.i387.h",
-    "../src/support/_setjmp.win32.S",
+    "../src/arch/i686/END.h",
+    "../src/arch/x86_64/END.h",
+    "../src/arch/x86_64/ENTRY.h",
+    "../src/arch/i686/ENTRY.h",
+    "../src/arch/i686/win_setjmp.S",
     "../src/support/MurmurHash3.c",
     "../src/support/MurmurHash3.h",
     "../src/support/asprintf.c",
@@ -103,7 +104,7 @@ license_linenum(line) = startswith(strip(line), "#!") ? 2 : 1
 
 # Collects all absolute file paths in rootdir inclusive subdirs
 function getfilespaths!(filepaths::Vector, rootdir::AbstractString)
-    isdir(rootdir) || error(string("`rootdir` must be an directory. "))
+    isdir(rootdir) || error(string("`rootdir` must be a directory. "))
     abs_rootdir = abspath(rootdir)
     for name in readdir(abs_rootdir)
         path = joinpath(abs_rootdir, name)

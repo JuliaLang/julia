@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Random
+using Base.Threads
 using Base: Experimental
 using Base: n_avail
 
@@ -12,6 +13,9 @@ using Base: n_avail
     end
     @test wait(a) == "success"
     @test fetch(t) == "finished"
+
+    # Test printing
+    @test repr(a) == "Condition()"
 end
 
 @testset "wait first behavior of wait on Condition" begin
@@ -36,10 +40,27 @@ end
     @test fetch(t) == "finished"
 end
 
+@testset "wait_with_timeout on Condition" begin
+    a = Threads.Condition()
+    @test @lock a Experimental.wait_with_timeout(a; timeout=0.1)==:timed_out
+    lock(a)
+    @spawn begin
+        @lock a notify(a)
+    end
+    @test try
+        Experimental.wait_with_timeout(a; timeout=2)
+        true
+    finally
+        unlock(a)
+    end
+end
+
 @testset "various constructors" begin
     c = Channel()
     @test eltype(c) == Any
     @test c.sz_max == 0
+    @test isempty(c) == true  # Nothing in it
+    @test isfull(c) == true   # But no more room
 
     c = Channel(1)
     @test eltype(c) == Any
@@ -48,6 +69,11 @@ end
     @test take!(c) == 1
     @test isready(c) == false
     @test eltype(Channel(1.0)) == Any
+
+    c = Channel(1)
+    @test isfull(c) == false
+    put!(c, 1)
+    @test isfull(c) == true
 
     c = Channel{Int}(1)
     @test eltype(c) == Int
@@ -106,6 +132,11 @@ end
     # Test that the task is using the multithreaded scheduler
     @test taskref[].sticky == false
     @test collect(c) == [0]
+end
+let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no channel_threadpool.jl`
+    new_env = copy(ENV)
+    new_env["JULIA_NUM_THREADS"] = "1,1"
+    run(pipeline(setenv(cmd, new_env), stdout = stdout, stderr = stderr))
 end
 
 @testset "multiple concurrent put!/take! on a channel for different sizes" begin
@@ -284,7 +315,7 @@ end
     @test timedwait(alwaysfalse, 0) === :timed_out
     @test_throws ArgumentError timedwait(alwaystrue, 0; pollint=0)
 
-    # Allowing a smaller positive `pollint` results in `timewait` hanging
+    # Allowing a smaller positive `pollint` results in `timedwait` hanging
     @test_throws ArgumentError timedwait(alwaystrue, 0, pollint=1e-4)
 
     # Callback passed in raises an exception
@@ -370,7 +401,7 @@ end
         """error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")""", output))
     # test for invalid state in Workqueue during yield
     t = @async nothing
-    t._state = 66
+    @atomic t._state = 66
     newstderr = redirect_stderr()
     try
         errstream = @async read(newstderr[1], String)
@@ -400,7 +431,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
-        cb = first(t.cond.waitq)
+        cb = first(t.cond.waitq).task::Task
         Libc.systemsleep(0.005)
         @test isopen(t)
         Base.process_events()
@@ -415,7 +446,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
-        cb = first(t.cond.waitq)
+        cb = first(t.cond.waitq).task::Task
         Libc.systemsleep(0.005)
         @test isopen(t)
         close(t)
@@ -429,18 +460,17 @@ end
         async = Base.AsyncCondition() do async
             tc[] += 1
         end
-        cb = first(async.cond.waitq)
+        cb = first(async.cond.waitq).task::Task
         @test isopen(async)
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-        ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-        @test isempty(Base.Workqueue)
         Base.process_events() # schedule event
         Sys.iswindows() && Base.process_events() # schedule event (windows?)
-        @test length(Base.Workqueue) == 1
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         @test tc[] == 0
         yield() # consume event
         @test tc[] == 1
+        ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+        Base.process_events()
         Sys.iswindows() && Base.process_events() # schedule event (windows?)
         yield() # consume event
         @test tc[] == 2
@@ -452,8 +482,8 @@ end
         Sys.iswindows() && Base.process_events() # schedule event (windows?)
         close(async) # and close
         @test !isopen(async)
-        @test tc[] == 2
-        @test tc[] == 2
+        @test tc[] == 3
+        @test tc[] == 3
         yield() # consume event & then close
         @test tc[] == 3
         sleep(0.1) # no further events
@@ -466,7 +496,7 @@ end
         async = Base.AsyncCondition() do async
             tc[] += 1
         end
-        cb = first(async.cond.waitq)
+        cb = first(async.cond.waitq).task::Task
         @test isopen(async)
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         Base.process_events() # schedule event
@@ -474,7 +504,7 @@ end
         close(async)
         @test !isopen(async)
         Base.process_events() # and close
-        @test tc[] == 0
+        @test tc[] == 1
         yield() # consume event & then close
         @test tc[] == 1
         sleep(0.1) # no further events
@@ -484,12 +514,35 @@ end
     end
 end
 
+struct CustomError <: Exception end
+
 @testset "check_channel_state" begin
     c = Channel(1)
     close(c)
     @test !isopen(c)
-    c.excp == nothing # to trigger the branch
+    c.excp === nothing # to trigger the branch
     @test_throws InvalidStateException Base.check_channel_state(c)
+
+    # Issue 52974 - closed channels with exceptions
+    # must be thrown on iteration, if channel is empty
+    c = Channel(2)
+    put!(c, 5)
+    close(c, CustomError())
+    @test take!(c) == 5
+    @test_throws CustomError iterate(c)
+
+    c = Channel(Inf)
+    put!(c, 1)
+    close(c)
+    @test take!(c) == 1
+    @test_throws InvalidStateException take!(c)
+    @test_throws InvalidStateException put!(c, 5)
+
+    c = Channel(3)
+    put!(c, 1)
+    close(c)
+    @test first(iterate(c)) == 1
+    @test isnothing(iterate(c))
 end
 
 # PR #36641
@@ -535,8 +588,58 @@ end
 # make sure 1-shot timers work
 let a = []
     Timer(t -> push!(a, 1), 0.01, interval = 0)
-    sleep(0.2)
-    @test a == [1]
+    @test timedwait(() -> a == [1], 10) === :ok
+end
+let a = []
+    Timer(t -> push!(a, 1), 0.01, interval = 0, spawn = true)
+    @test timedwait(() -> a == [1], 10) === :ok
+end
+
+@testset "wait after closing a one-shot Timer (#34366)" begin
+    t = Timer(600)
+    close(t) # test assumes that thread won't get preempted for 10 minutes...
+    @test_throws EOFError wait(t)
+
+    t = Timer(0)
+    @test wait(t) === nothing
+    @test wait(t) === nothing
+    close(t)
+    @test wait(t) === nothing
+
+    waiters = [Threads.@spawn wait(t) for _ in 1:8]
+    @test all(w -> fetch(w) === nothing, waiters)
+
+    for i in 1:100
+        t = Timer(isodd(i) ? 0 : 0.001)
+        racers = [Threads.@spawn begin
+                for _ in 1:rand(0:8)
+                    yield()
+                end
+                try
+                    wait(t)
+                    wait(t)
+                    true
+                catch e
+                    e isa EOFError || rethrow()
+                    false
+                end
+            end for _ in 1:4]
+        for _ in 1:rand(0:8)
+            yield()
+        end
+        close(t)
+        outcomes = map(fetch, racers)
+        @test all(outcomes) || !any(outcomes)
+    end
+
+    t = Timer(0, interval=600)
+    @test wait(t) === nothing
+    waiter = @task wait(t)
+    yield(waiter)
+    @test timedwait(() -> !isempty(t.cond.waitq) && first(t.cond.waitq).task === waiter, 10) === :ok
+    close(t)
+    @test_throws TaskFailedException wait(waiter)
+    @test waiter.result isa EOFError
 end
 
 # make sure that we don't accidentally create a one-shot timer
@@ -554,7 +657,7 @@ end
     e = @elapsed for i = 1:5
         wait(t)
     end
-    @test 1.5 > e >= 0.4
+    @test e >= 0.4
     @test a[] == 0
     nothing
 end
@@ -562,6 +665,221 @@ let a = Ref(0)
     make_unrooted_timer(a)
     GC.gc()
     @test a[] == 1
+end
+
+@testset "Timer properties" begin
+    t = Timer(1.0, interval = 0.5)
+    @test t.timeout == 1.0
+    @test t.interval == 0.5
+    close(t)
+    @test !isopen(t)
+    @test t.timeout == 1.0
+    @test t.interval == 0.5
+end
+
+@testset "SignalCondition" begin
+    @test_throws ArgumentError Base.SignalCondition(Base.SIGKILL)
+    Sys.iswindows() || @test_throws ArgumentError Base.SignalCondition(Base.SIGCHLD)
+    @test_throws ArgumentError Base.SignalCondition(0)
+    let s = Base.SignalCondition(Base.SIGWINCH)
+        @test repr(s) == "SignalCondition(SIGWINCH ($(Base.SIGWINCH)), open)"
+        close(s)
+        @test repr(s) == "SignalCondition(SIGWINCH ($(Base.SIGWINCH)), closed)"
+    end
+    let s = Base.SignalCondition(Base.SIGWINCH; intercept=true)
+        @test repr(s) == "SignalCondition(SIGWINCH ($(Base.SIGWINCH)), intercept, open)"
+        close(s)
+    end
+    let s = Base.SignalCondition(Base.SIGWINCH)
+        t = @async try
+            wait(s)
+        catch e
+            e
+        end
+        yield()
+        close(s)
+        @test fetch(t) isa EOFError
+        @test_throws EOFError wait(s)
+        close(s)
+    end
+    @test_throws ArgumentError Base.SignalCondition(Base.SIGINT; intercept=true)
+    @test_throws ArgumentError Base.SignalCondition(-1)
+    @test_throws ArgumentError Base.SignalCondition(typemax(Int))
+    if Sys.islinux()
+        @test_throws ArgumentError Base.SignalCondition(32)
+        @test_throws ArgumentError Base.SignalCondition(Base.sigrtmax() + 1)
+        # Without intercepting, the signal would end this process.
+        s = Base.SignalCondition(Base.sigrtmin() + 1; intercept=true)
+        t = @async wait(s)
+        kill(getpid(), Base.sigrtmin() + 1)
+        @test timedwait(() -> istaskdone(t), 60) === :ok
+        close(s)
+    elseif Sys.isapple()
+        @test_throws ArgumentError Base.SignalCondition(32)
+    end
+    if Sys.iswindows()
+        @test_throws ArgumentError Base.SignalCondition(Base.SIGTERM)
+        for sig in (Base.SIGINT, 21, Base.SIGHUP, Base.SIGWINCH)
+            s = Base.SignalCondition(sig; intercept = sig != Base.SIGINT)
+            @test isopen(s)
+            close(s)
+        end
+    end
+    if !Sys.iswindows()
+        # SIGTERM goes through the runtime's signal thread, SIGHUP through a handler.
+        @testset "intercepting $name" for (name, sig) in (("SIGTERM", Base.SIGTERM), ("SIGHUP", Base.SIGHUP))
+            script = """
+                n = Ref(0)
+                s = Base.SignalCondition($sig; intercept=true) do _
+                    n[] += 1
+                    println("got ", n[])
+                end
+                println("ready")
+                while n[] < 2
+                    sleep(0.01)
+                end
+                close(s)
+                sleep(0.1)
+                set = zeros(UInt8, 128)
+                ccall(:sigpending, Cint, (Ptr{UInt8},), set)
+                println("closed, pending: ", ccall(:sigismember, Cint, (Ptr{UInt8}, Cint), set, $sig))
+                sleep(600)
+                """
+            errfile = tempname()
+            p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $script`, stderr=errfile), "r")
+            watchdog = Timer(300) do _
+                kill(p, Base.SIGKILL)
+            end
+            try
+                @test readline(p) == "ready"
+                kill(p, sig)
+                @test readline(p) == "got 1"
+                kill(p, sig)
+                @test readline(p) == "got 2"
+                # A pending signal would skip exit cleanup.
+                @test readline(p) == "closed, pending: 0"
+                # With the condition closed, the signal has its usual effect again.
+                kill(p, sig)
+                wait(p)
+                @test p.termsignal == sig
+            finally
+                close(watchdog)
+                kill(p, Base.SIGKILL)
+                wait(p)
+                p.termsignal == sig || print(stderr, read(errfile, String))
+                rm(errfile, force=true)
+            end
+        end
+
+        # not SIGTERM: its exit can hang if it lands while the child is still compiling (#64410)
+        @testset "observing $name" for (name, sig) in (("SIGHUP", Base.SIGHUP), ("SIGINT", Base.SIGINT))
+            script = """
+                Base.exit_on_sigint(false)
+                s = Base.SignalCondition(_ -> Core.println("observed"), $sig)
+                try
+                    # The interrupt can arrive while this print still waits for its write.
+                    println("ready")
+                    sleep(600)
+                catch e
+                    # The interrupt cancels the rest of this statement, so avoid cancellation points.
+                    Core.println(e isa Base.CancellationRequest ? "interrupted" : "unexpected")
+                end
+                """
+            errfile = tempname()
+            p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $script`, stderr=errfile), "r")
+            watchdog = Timer(300) do _
+                kill(p, Base.SIGKILL)
+            end
+            try
+                @test readline(p) == "ready"
+                # Observing leaves the usual effect in place.
+                kill(p, sig)
+                if sig == Base.SIGINT
+                    @test sort!([readline(p), readline(p)]) == ["interrupted", "observed"]
+                    wait(p)
+                    @test success(p)
+                else
+                    wait(p)
+                    @test p.termsignal == sig
+                end
+            finally
+                close(watchdog)
+                kill(p, Base.SIGKILL)
+                wait(p)
+                p.termsignal == sig || success(p) || print(stderr, read(errfile, String))
+                rm(errfile, force=true)
+            end
+        end
+
+        @testset "exit from the callback" begin
+            script = """
+                Base.SignalCondition(_ -> exit(3), Base.SIGTERM; intercept=true)
+                println("ready")
+                sleep(600)
+                """
+            errfile = tempname()
+            p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $script`, stderr=errfile), "r")
+            watchdog = Timer(300) do _
+                kill(p, Base.SIGKILL)
+            end
+            try
+                @test readline(p) == "ready"
+                kill(p, Base.SIGTERM)
+                wait(p)
+                @test p.exitcode == 3
+                @test read(errfile, String) == ""
+            finally
+                close(watchdog)
+                kill(p, Base.SIGKILL)
+                rm(errfile, force=true)
+            end
+        end
+
+        @testset "an ignored signal stays ignored" begin
+            script = """
+                ccall(:signal, Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Base.SIGHUP, Ptr{Cvoid}(1)) # SIG_IGN
+                s = Base.SignalCondition(Base.SIGHUP)
+                t = @async wait(s)
+                ccall(:raise, Cint, (Cint,), Base.SIGHUP)
+                wait(t)
+                close(s)
+                ccall(:raise, Cint, (Cint,), Base.SIGHUP)
+                println("alive")
+                """
+            @test readchomp(`$(Base.julia_cmd()) --startup-file=no -e $script`) == "alive"
+        end
+
+        @testset "--handle-signals=no" begin
+            # Julia leaves the signal alone, so it still has its default effect.
+            script = """
+                Base.SignalCondition(Base.SIGHUP; intercept=true)
+                ccall(:raise, Cint, (Cint,), Base.SIGHUP)
+                sleep(600)
+                """
+            p = run(pipeline(`$(Base.julia_cmd()) --startup-file=no --handle-signals=no -e $script`), wait=false)
+            watchdog = Timer(300) do _
+                kill(p, Base.SIGKILL)
+            end
+            try
+                wait(p)
+                @test p.termsignal == Base.SIGHUP
+            finally
+                close(watchdog)
+            end
+        end
+
+        @testset "several conditions on one signal" begin
+            # SIGWINCH does nothing by default, so it is safe to send to this process.
+            a = Base.SignalCondition(Base.SIGWINCH)
+            b = Base.SignalCondition(Base.SIGWINCH)
+            ta = @async wait(a)
+            tb = @async wait(b)
+            kill(getpid(), Base.SIGWINCH)
+            @test timedwait(() -> istaskdone(ta) && istaskdone(tb), 60) === :ok
+            close(a)
+            close(b)
+        end
+    end
 end
 
 # trying to `schedule` a finished task
@@ -625,4 +943,52 @@ end
                                 try wait(t2) catch end
         @test n_avail(c) == 0
     end
+end
+
+@testset "Task properties" begin
+    f() = rand(2,2)
+    t = Task(f)
+    message = "Querying a Task's `scope` field is disallowed.\nThe private `Core.current_scope()` function is better, though still an implementation detail."
+    @test_throws ErrorException(message) t.scope
+    message = "Querying a Task's `invoked` field is disallowed because it is an implementation detail."
+    @test_throws ErrorException(message) t.invoked
+    message = "Setting a Task's `invoked` field directly is disallowed because it is an implementation detail."
+    @test_throws ErrorException(message) (t.invoked = nothing)
+    message = "Setting a Task's `result` field directly is disallowed. The result of a task is determined by the return value of its code; to pass a value to a suspended task, use `schedule(t, val)` or `yieldto(t, val)` instead."
+    @test_throws ErrorException(message) (t.result = 42)
+    @test t.state == :runnable
+end
+
+function _task(@nospecialize(f), stack::Int, @nospecialize(invoke))
+    t = Core._task(f, stack, invoke)
+    t.donenotify = Base.ThreadSynchronizer()
+    return t
+end
+@testset "Core._task with invoke arguments" begin
+    # Test _task with invoke Type argument
+    f1() = 43
+    f1(x...) = x
+    t1 = _task(f1, 0, Tuple{})
+    @test fetch(schedule(t1)) === 43
+    t1 = _task(f1, 0, Tuple{Vararg})
+    @test fetch(schedule(t1)) === ()
+    t1 = _task(f1, 0, Tuple{typeof(f1)})
+    schedule(t1)
+    @test_throws TaskFailedException fetch(t1)
+
+    # Test _task with Method argument
+    m = which(f1, (Vararg,))
+    t1 = _task(f1, 0, m)
+    @test fetch(schedule(t1)) === ()
+
+    # Test that _task validates argument types
+    @test_throws TypeError Core._task(f1, "invalid_size")
+    @test_throws TypeError Core._task(f1, "invalid_size", m)
+    @test_throws ArgumentError Core._task(f1, 0, m, 1)
+    @test_throws TypeError Core._task(f1, 0, "invalid")
+    @test_throws TypeError Core._task(f1, 0, Int)
+    @test_throws TypeError Core._task(f1, 0, nothing)
+    mi = only(Base.specializations(which(f1, ())))
+    @test mi isa Core.MethodInstance
+    @test_throws TypeError Core._task(f1, 0, mi)
 end

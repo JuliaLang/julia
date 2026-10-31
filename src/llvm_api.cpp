@@ -1,0 +1,113 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
+#undef DEBUG
+#include "llvm-version.h"
+#include "platform.h"
+
+#ifndef __STDC_LIMIT_MACROS
+#define __STDC_LIMIT_MACROS
+#define __STDC_CONSTANT_MACROS
+#endif
+
+#include "jitlayers.h"
+
+#include <llvm-c/Core.h>
+#include <llvm-c/Error.h>
+#include <llvm-c/Orc.h>
+#include <llvm-c/OrcEE.h>
+#include <llvm-c/TargetMachine.h>
+#include <llvm-c/Types.h>
+#include <llvm/Support/CBindingWrapping.h>
+#include <llvm/Support/MemoryBuffer.h>
+
+typedef struct JLOpaqueJuliaOJIT *JuliaOJITRef;
+typedef struct LLVMOrcOpaqueIRCompileLayer *LLVMOrcIRCompileLayerRef;
+
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(JuliaOJIT, JuliaOJITRef)
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::JITDylib, LLVMOrcJITDylibRef)
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ExecutionSession, LLVMOrcExecutionSessionRef)
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::SymbolStringPoolEntryUnsafe::PoolEntry,
+                                   LLVMOrcSymbolStringPoolEntryRef)
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::IRCompileLayer, LLVMOrcIRCompileLayerRef)
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::MaterializationResponsibility,
+                                   LLVMOrcMaterializationResponsibilityRef)
+
+extern "C" {
+
+JL_DLLEXPORT_CODEGEN JuliaOJITRef JLJITGetJuliaOJIT_impl(void)
+{
+    return wrap(jl_ExecutionEngine);
+}
+
+JL_DLLEXPORT_CODEGEN LLVMOrcExecutionSessionRef
+JLJITGetLLVMOrcExecutionSession_impl(JuliaOJITRef JIT)
+{
+    return wrap(&unwrap(JIT)->getExecutionSession());
+}
+
+JL_DLLEXPORT_CODEGEN LLVMOrcJITDylibRef
+JLJITCreateJITDylib_impl(JuliaOJITRef JIT, const char *Name)
+{
+    return wrap(&unwrap(JIT)->createJITDylib(Name));
+}
+
+JL_DLLEXPORT_CODEGEN LLVMErrorRef JLJITAddObjectFile_impl(
+    JuliaOJITRef JIT, LLVMOrcJITDylibRef JD, LLVMMemoryBufferRef ObjBuffer)
+{
+    return wrap(unwrap(JIT)->addObjectFile(
+        *unwrap(JD), std::unique_ptr<MemoryBuffer>(unwrap(ObjBuffer))));
+}
+
+JL_DLLEXPORT_CODEGEN LLVMErrorRef JLJITAddLLVMIRModule_impl(
+    JuliaOJITRef JIT, LLVMOrcJITDylibRef JD, LLVMOrcThreadSafeModuleRef TSM)
+{
+    std::unique_ptr<orc::ThreadSafeModule> TmpTSM(unwrap(TSM));
+    return wrap(unwrap(JIT)->addExternalModule(*unwrap(JD), std::move(*TmpTSM)));
+}
+
+JL_DLLEXPORT_CODEGEN LLVMErrorRef
+JLJITJDLookup_impl(JuliaOJITRef JIT, LLVMOrcJITDylibRef JD, LLVMOrcExecutorAddress *Result, const char *Name, int ExternalJDOnly) JL_CANSAFEPOINT
+{
+    auto Sym = unwrap(JIT)->findJDSymbol(*unwrap(JD), Name, ExternalJDOnly);
+    if (Sym) {
+        auto addr = Sym->getAddress();
+        *Result = orc::ExecutorAddr(addr).getValue();
+        return LLVMErrorSuccess;
+    }
+    else {
+        *Result = 0;
+        return wrap(Sym.takeError());
+    }
+}
+
+JL_DLLEXPORT_CODEGEN LLVMOrcSymbolStringPoolEntryRef
+JLJITMangleAndIntern_impl(JuliaOJITRef JIT, const char *Name)
+{
+    return wrap(orc::SymbolStringPoolEntryUnsafe::take(unwrap(JIT)->mangle(Name)).rawPtr());
+}
+
+JL_DLLEXPORT_CODEGEN const char *
+JLJITGetTripleString_impl(JuliaOJITRef JIT)
+{
+    return unwrap(JIT)->getTargetTriple().str().c_str();
+}
+
+JL_DLLEXPORT_CODEGEN char
+JLJITGetGlobalPrefix_impl(JuliaOJITRef JIT)
+{
+    return unwrap(JIT)->getDataLayout().getGlobalPrefix();
+}
+
+JL_DLLEXPORT_CODEGEN const char *
+JLJITGetDataLayoutString_impl(JuliaOJITRef JIT)
+{
+    return unwrap(JIT)->getDataLayout().getStringRepresentation().c_str();
+}
+
+JL_DLLEXPORT_CODEGEN LLVMOrcIRCompileLayerRef
+JLJITGetIRCompileLayer_impl(JuliaOJITRef JIT)
+{
+    return wrap(&unwrap(JIT)->getIRCompileLayer());
+}
+
+} // extern "C"

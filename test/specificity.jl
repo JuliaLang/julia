@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function args_morespecific(a, b)
-    sp = (ccall(:jl_type_morespecific, Cint, (Any,Any), a, b) != 0)
+    sp = Base.morespecific(a, b)
     if sp  # make sure morespecific(a,b) implies !morespecific(b,a)
-        @test ccall(:jl_type_morespecific, Cint, (Any,Any), b, a) == 0
+        @test !Base.morespecific(b, a)
     end
     return sp
 end
@@ -170,7 +170,7 @@ let A = Tuple{Ref, Tuple{T}} where T,
 end
 
 # issue #22339
-let A = Tuple{T, Array{T, 1}} where T,
+let A = Tuple{T, Vector{T}} where T,
     B = Tuple{T} where T,
     C = Tuple{T} where T<:AbstractFloat
     @test args_morespecific(B, A)
@@ -187,8 +187,8 @@ let x = Type{Union{Tuple{T}, Tuple{Ptr{T}, Ptr{T}, Any}} where T},
     y = Type{Union{Tuple{T}, Tuple{Array{T, N} where N, Any, Array{T, N} where N, Any, Any}} where T}
     @test !args_morespecific(x, y)
     @test !args_morespecific(y, x)
-    @test !args_morespecific(x.parameters[1], y.parameters[1])
-    @test !args_morespecific(y.parameters[1], x.parameters[1])
+    @test !args_morespecific(Base.type_parameter(x), Base.type_parameter(y))
+    @test !args_morespecific(Base.type_parameter(y), Base.type_parameter(x))
 end
 
 let A = Tuple{Array{T,N}, Vararg{Int,N}} where {T,N},
@@ -206,6 +206,18 @@ let A = Tuple{Vector, AbstractVector},
     @test args_morespecific(A, B)
     @test args_morespecific(B, C)
     @test args_morespecific(A, C)
+end
+
+# exemplify that `morespecific` is a non-transitive relation
+let A = Tuple{T, Vararg{T}} where T<:Integer,
+    B = Tuple{Integer, Vararg{String}},
+    C = Tuple{Integer, Vararg{Union{Int,String}}}
+    @test args_morespecific(A, B)
+    @test args_morespecific(B, C)
+    @test args_morespecific(C, A)  # not transitive: A ≻ B and B ≻ C, yet C ≻ A
+    @test !args_morespecific(B, A)
+    @test !args_morespecific(C, B)
+    @test !args_morespecific(A, C)
 end
 
 # issue #27361
@@ -310,4 +322,55 @@ let A = Tuple{Type{SubString{S}},AbstractString} where S<:AbstractString,
     @test  args_morespecific(A, B)
     @test  args_morespecific(B, C)
     @test  args_morespecific(A, C)
+end
+
+@test args_morespecific(Tuple{Type{Union{}}, Any}, Tuple{Any, Type{Union{}}})
+@test args_morespecific(Tuple{typeof(Union{}), Any}, Tuple{Any, Type{Union{}}})
+@test args_morespecific(Tuple{Type{Union{}}, Type{Union{}}, Any}, Tuple{Type{Union{}}, Any, Type{Union{}}})
+@test args_morespecific(Tuple{Type{Union{}}, Type{Union{}}, Any, Type{Union{}}}, Tuple{Type{Union{}}, Any, Type{Union{}}, Type{Union{}}})
+
+# PR #61915: a kind (e.g. `DataType`) is more specific than an unbounded `Type{T}`
+@test  args_morespecific(Tuple{DataType}, Tuple{Type{T}} where T)
+@test  args_morespecific(Tuple{Vararg{DataType}}, Tuple{Type{T}} where T)
+@test  args_morespecific(Tuple{UnionAll}, Tuple{Type{T}} where T)
+@test !args_morespecific(Tuple{DataType}, Tuple{Type{T}} where T<:Integer)
+@test  args_morespecific(Tuple{Type{T}} where T<:Integer, Tuple{DataType})
+@test  args_morespecific(Tuple{Type{Int}}, Tuple{DataType})
+# `Type{X}` is more specific than any kind, including the wrapper kinds of `Type{Int}`
+@test  args_morespecific(Tuple{Type{Type{Int}}}, Tuple{Core.TypeEq})
+@test !args_morespecific(Tuple{Core.TypeEq}, Tuple{Type{Type{Int}}})
+@test  args_morespecific(Tuple{Type{Core.TypeEgal{Int}}}, Tuple{Core.TypeEgal})
+@test !args_morespecific(Tuple{Core.TypeEgal}, Tuple{Type{Core.TypeEgal{Int}}})
+module WrapperKindSpecificity
+    f(::Type{Type{Int}}) = 1
+    f(::Core.TypeEq) = 2
+end
+@test WrapperKindSpecificity.f(Type{Int}) == 1
+@test WrapperKindSpecificity.f(Type{Float64}) == 2
+
+# a parameter that admits only `Union{}` ranks first however it is spelled, including a
+# typevar bounded by `Union{}` or `TypeofBottom` that is also used elsewhere, or a nested
+# `Type{<:T}` that is kept as a `UnionAll` (unlike `Type{<:Union{}}` itself)
+for bottom in (Tuple{Type{T}, Integer, Vector{T}} where T<:Union{},
+               Tuple{Type{<:T}, Integer} where T<:Union{},
+               Tuple{S, Integer} where S<:Type{<:Union{}},
+               Tuple{Type{T}, Integer, Vector{S}} where {S<:Union{}, T<:S},
+               Tuple{S, Integer, Vector{S}} where S<:Core.TypeofBottom,
+               Tuple{S, Integer} where S<:Type{Union{}},
+               Tuple{Union{Core.TypeofBottom, Type{T}}, Integer, Vector{T}} where T<:Union{},
+               Tuple{S, Integer, Vector{S}, Vector{T}} where {T<:Union{}, S<:Union{Core.TypeofBottom, Type{T}}})
+    other = Tuple{Type{<:AbstractString}, Int, Vararg{Vector{Union{}}}}
+    @test  args_morespecific(bottom, other)
+    @test !args_morespecific(other, bottom)
+end
+
+# requires assertions enabled
+let root = NTuple
+    N = root.var
+    T = root.body.var
+    x1 = root.body.body
+    x2 = Dict{T,Tuple{N}}
+    A = UnionAll(N, UnionAll(T, Tuple{Union{x1, x2}}))
+    B = Tuple{Union{UnionAll(N, UnionAll(T, x1)), UnionAll(N, UnionAll(T, x2))}}
+    @ccall jl_type_morespecific_no_subtype(A::Any, B::Any)::Cint
 end

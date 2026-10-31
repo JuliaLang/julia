@@ -363,6 +363,14 @@ QuoteNode
 
 `QuoteNode` can also be used for certain advanced metaprogramming tasks.
 
+Note that while it does not support `$`, it also does not prevent it, nor does
+it preserve the identity of the wrapped object:
+
+```jldoctest
+julia> b = 2; eval(Expr(:quote, QuoteNode(Expr(:$, :b))))
+:($(QuoteNode(2)))
+```
+
 ### Evaluating expressions
 
 Given an expression object, one can cause Julia to evaluate (execute) it at global scope using
@@ -379,7 +387,7 @@ julia> ex = :(a + b)
 :(a + b)
 
 julia> eval(ex)
-ERROR: UndefVarError: `b` not defined
+ERROR: UndefVarError: `b` not defined in `Main`
 [...]
 
 julia> a = 1; b = 2;
@@ -397,7 +405,7 @@ julia> ex = :(x = 1)
 :(x = 1)
 
 julia> x
-ERROR: UndefVarError: `x` not defined
+ERROR: UndefVarError: `x` not defined in `Main`
 
 julia> eval(ex)
 1
@@ -413,7 +421,7 @@ Since expressions are just `Expr` objects which can be constructed programmatica
 it is possible to dynamically generate arbitrary code which can then be run using [`eval`](@ref).
 Here is a simple example:
 
-```julia-repl
+```jldoctest
 julia> a = 1;
 
 julia> ex = Expr(:call, :+, a, :b)
@@ -629,6 +637,15 @@ julia> @showarg(1+1)
 
 julia> @showarg(println("Yo!"))
 :(println("Yo!"))
+
+julia> @showarg(1)        # Numeric literal
+1
+
+julia> @showarg("Yo!")    # String literal
+"Yo!"
+
+julia> @showarg("Yo! $("hello")")    # String with interpolation is an Expr rather than a String
+:("Yo! $("hello")")
 ```
 
 In addition to the given argument list, every macro is passed extra arguments named `__source__` and `__module__`.
@@ -702,7 +719,7 @@ user to optionally specify their own error message, instead of just printing the
 Just like in functions with a variable number of arguments ([Varargs Functions](@ref)), this is specified with an ellipses
 following the last argument:
 
-```jldoctest assert2
+```julia-repl assert2
 julia> macro assert(ex, msgs...)
            msg_body = isempty(msgs) ? ex : msgs[1]
            msg = string(msg_body)
@@ -806,10 +823,14 @@ result are classified as either local or global. A variable is considered local 
 to (and not declared global), declared local, or used as a function argument name. Otherwise,
 it is considered global. Local variables are then renamed to be unique (using the [`gensym`](@ref)
 function, which generates new symbols), and global variables are resolved within the macro definition
-environment. Therefore both of the above concerns are handled; the macro's locals will not conflict
-with any user variables, and `time_ns` and `println` will refer to the Julia Base definitions.
+environment. Therefore the macro's locals will not conflict with variables in the surrounding code,
+and `time_ns` and `println` will refer to the Julia Base definitions.
 
-One problem remains however. Consider the following use of this macro:
+However, these rules apply to *all* variables in the macro result, including those in the user
+expression `ex`. So if `ex` assigns to `t0`, that `t0` is renamed to the same unique symbol as the
+macro's own `t0`, and the user's assignment overwrites the macro's start time. Similarly, global
+variables in `ex` are resolved in the macro definition environment. Consider the following use
+of this macro:
 
 ```julia
 module MyModule
@@ -823,7 +844,8 @@ end
 
 Here the user expression `ex` is a call to `time_ns`, but not the same `time_ns` function that the macro
 uses. It clearly refers to `MyModule.time_ns`. Therefore we must arrange for the code in `ex` to
-be resolved in the macro call environment. This is done by "escaping" the expression with [`esc`](@ref):
+be resolved in the macro call environment. This is done by "escaping" the expression with [`esc`](@ref),
+which also solves the problem with `t0` above:
 
 ```julia
 macro time(ex)
@@ -834,7 +856,8 @@ end
 ```
 
 An expression wrapped in this manner is left alone by the macro expander and simply pasted into
-the output verbatim. Therefore it will be resolved in the macro call environment.
+the output verbatim. Therefore it will be resolved in the macro call environment, and its variables
+are not renamed, so they cannot clash with the macro's renamed locals.
 
 This escaping mechanism can be used to "violate" hygiene when necessary, in order to introduce
 or manipulate user variables. For example, the following macro sets `x` to zero in the call environment:
@@ -941,7 +964,7 @@ end
 
 ```
 
-for which we want to add a number of methods to. We can do this programmatically in the
+to which we want to add a number of methods. We can do this programmatically in the
 following loop:
 
 ```jldoctest mynumber-codegen
@@ -1340,8 +1363,7 @@ julia> function sub2ind_loop(dims::NTuple{N}, I::Integer...) where N
                ind = I[i]-1 + dims[i]*ind
            end
            return ind + 1
-       end
-sub2ind_loop (generic function with 1 method)
+       end;
 
 julia> sub2ind_loop((3, 5), 1, 2)
 4
@@ -1380,8 +1402,7 @@ julia> @generated function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
                ex = :(I[$i] - 1 + dims[$i] * $ex)
            end
            return :($ex + 1)
-       end
-sub2ind_gen (generic function with 1 method)
+       end;
 
 julia> sub2ind_gen((3, 5), 1, 2)
 4
@@ -1392,11 +1413,6 @@ julia> sub2ind_gen((3, 5), 1, 2)
 An easy way to find out is to extract the body into another (regular) function:
 
 ```jldoctest sub2ind_gen2
-julia> @generated function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
-           return sub2ind_gen_impl(dims, I...)
-       end
-sub2ind_gen (generic function with 1 method)
-
 julia> function sub2ind_gen_impl(dims::Type{T}, I...) where T <: NTuple{N,Any} where N
            length(I) == N || return :(error("partial indexing is unsupported"))
            ex = :(I[$N] - 1)
@@ -1404,8 +1420,14 @@ julia> function sub2ind_gen_impl(dims::Type{T}, I...) where T <: NTuple{N,Any} w
                ex = :(I[$i] - 1 + dims[$i] * $ex)
            end
            return :($ex + 1)
-       end
-sub2ind_gen_impl (generic function with 1 method)
+       end;
+
+julia> @generated function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
+           return sub2ind_gen_impl(dims, I...)
+       end;
+
+julia> sub2ind_gen((3, 5), 1, 2)
+4
 ```
 
 We can now execute `sub2ind_gen_impl` and examine the expression it returns:
@@ -1416,7 +1438,7 @@ julia> sub2ind_gen_impl(Tuple{Int,Int}, Int, Int)
 ```
 
 So, the method body that will be used here doesn't include a loop at all - just indexing into
-the two tuples, multiplication and addition/subtraction. All the looping is performed compile-time,
+the two tuples, multiplication and addition/subtraction. All the looping is performed at compile time,
 and we avoid looping during execution entirely. Thus, we only loop *once per type*, in this case
 once per `N` (except in edge cases where the function is generated more than once - see disclaimer
 above).
@@ -1434,25 +1456,34 @@ To solve this problem, the language provides syntax for writing normal, non-gene
 alternative implementations of generated functions.
 Applied to the `sub2ind` example above, it would look like this:
 
-```julia
-function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
-    if N != length(I)
-        throw(ArgumentError("Number of dimensions must match number of indices."))
-    end
-    if @generated
-        ex = :(I[$N] - 1)
-        for i = (N - 1):-1:1
-            ex = :(I[$i] - 1 + dims[$i] * $ex)
-        end
-        return :($ex + 1)
-    else
-        ind = I[N] - 1
-        for i = (N - 1):-1:1
-            ind = I[i] - 1 + dims[i]*ind
-        end
-        return ind + 1
-    end
-end
+```jldoctest sub2ind_gen_opt
+julia> function sub2ind_gen_impl(dims::Type{T}, I...) where T <: NTuple{N,Any} where N
+           ex = :(I[$N] - 1)
+           for i = (N - 1):-1:1
+               ex = :(I[$i] - 1 + dims[$i] * $ex)
+           end
+           return :($ex + 1)
+       end;
+
+julia> function sub2ind_gen_fallback(dims::NTuple{N}, I) where N
+           ind = I[N] - 1
+           for i = (N - 1):-1:1
+               ind = I[i] - 1 + dims[i]*ind
+           end
+           return ind + 1
+       end;
+
+julia> function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
+           length(I) == N || error("partial indexing is unsupported")
+           if @generated
+               return sub2ind_gen_impl(dims, I...)
+           else
+               return sub2ind_gen_fallback(dims, I)
+           end
+       end;
+
+julia> sub2ind_gen((3, 5), 1, 2)
+4
 ```
 
 Internally, this code creates two implementations of the function: a generated one where

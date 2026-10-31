@@ -14,7 +14,7 @@ end
 rst(io::IO, md::MD) = rst(io, md.content)
 
 function rst(io::IO, header::Header{l}) where l
-    s = rstinline(header.text)
+    s = sprint(rstinline, header.text)
     println(io, s)
     println(io, string("*=-~:.^"[l])^length(s))
     println(io)
@@ -23,10 +23,16 @@ end
 function rst(io::IO, code::Code)
     if code.language == "jldoctest"
         println(io, ".. doctest::\n")
-    elseif code.language != "rst"
+    elseif code.language in ("", "julia", "julia-repl")
         println(io, ".. code-block:: julia\n")
+    elseif code.language == "rst"
+    elseif code.language == "styled"
+        code = Code("", String(styled(code.code)))
+        println(io, "::\n")
+    else
+        println(io, "::\n")
     end
-    for l in lines(code.code)
+    for l in eachsplit(code.code, '\n')
         println(io, "    ", l)
     end
 end
@@ -38,11 +44,11 @@ end
 
 function rst(io::IO, list::List)
     for (i, item) in enumerate(list.items)
-        bullet = isordered(list) ? "$(i + list.ordered - 1). " : "* "
-        print(io, bullet)
+        list_marker = isordered(list) ? "$(i + list.ordered - 1). " : "* "
+        print(io, list_marker)
         lines = split(rstrip(sprint(rst, item)), '\n')
         for (n, line) in enumerate(lines)
-            print(io, (n == 1 || isempty(line)) ? "" : " "^length(bullet), line)
+            print(io, (n == 1 || isempty(line)) ? "" : " "^length(list_marker), line)
             n < length(lines) && println(io)
         end
         println(io)
@@ -84,13 +90,13 @@ function rst(io::IO, md::Admonition)
     println(io)
 end
 
-function rst(io::IO, md::HorizontalRule)
+function rst(io::IO, ::HorizontalRule)
     println(io, "–" ^ 5)
 end
 
 function rst(io::IO, l::LaTeX)
     println(io, ".. math::\n")
-    for line in lines(l.formula)
+    for line in eachsplit(l.formula, '\n')
         println(io, "    ", line)
     end
 end
@@ -105,7 +111,7 @@ function rstinline(io::IO, md...)
     wasCode = false
     for el in md
         wasCode && isa(el, AbstractString) && !Base.startswith(el, " ") && print(io, "\\ ")
-        wasCode = (isa(el, Code) || isa(el, LaTeX) || isa(el, Link)) && (wasCode = true)
+        wasCode = isa(el, Code) || isa(el, LaTeX) || isa(el, Link)
         rstinline(io, el)
     end
 end
@@ -134,7 +140,7 @@ rstinline(io::IO, md::Italic) = rstinline(io, "*", md.text, "*")
 
 rstinline(io::IO, md::Code) = print(io, "``", md.code, "``")
 
-rstinline(io::IO, br::LineBreak) = println(io)
+rstinline(io::IO, ::LineBreak) = println(io)
 
 rstinline(io::IO, l::LaTeX) = print(io, ":math:`", l.formula, "`")
 

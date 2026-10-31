@@ -1,10 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-original_depot_path = copy(Base.DEPOT_PATH)
-
 using Test
 
 # Tests for @__LINE__ inside and outside of macros
+# NOTE: the __LINE__ numbers for these first couple tests are significant, so
+# adding any lines here will make those tests fail
 @test (@__LINE__) == 8
 
 macro macro_caller_lineno()
@@ -33,6 +33,10 @@ end
 @test @nested_LINE_expansion() == ((@__LINE__() - 4, @__LINE__() - 12), @__LINE__())
 @test @nested_LINE_expansion2() == ((@__LINE__() - 5, @__LINE__() - 9), @__LINE__())
 
+original_depot_path = copy(Base.DEPOT_PATH)
+include("tempdepot.jl")
+include("precompile_utils.jl")
+
 loaded_files = String[]
 push!(Base.include_callbacks, (mod::Module, fn::String) -> push!(loaded_files, fn))
 include("test_sourcepath.jl")
@@ -60,7 +64,7 @@ let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no --co
     @test !endswith(s_dir, Base.Filesystem.path_separator)
 end
 
-@test Base.in_sysimage(Base.PkgId(Base.UUID("cf7118a7-6976-5b1a-9a39-7adc72f591a4"), "UUIDs"))
+@test Base.in_sysimage(Base.PkgId(Base.UUID("8f399da3-3557-5675-b5ff-fb832c97cbdb"), "Libdl"))
 @test Base.in_sysimage(Base.PkgId(Base.UUID("3a7fdc7e-7467-41b4-9f64-ea033d046d5b"), "NotAPackage")) == false
 
 ## Unit tests for safe file operations ##
@@ -76,6 +80,17 @@ mktempdir() do dir
             touch(true_filename)
             @test Base.isfile_casesensitive(true_filename)
             @test !Base.isfile_casesensitive(lowered_filename)
+
+            # check that case-sensitivity is preserved for relative paths with ghost directories.
+            # Windows resolves `..` before looking at the disk, so there the file exists; elsewhere it does not.
+            ghost_path = joinpath("nonexistent", "..", true_filename)
+            @test Base.isfile_casesensitive(ghost_path) == isfile(ghost_path) == Sys.iswindows()
+            @test !Base.isfile_casesensitive(joinpath("nonexistent", "..", lowered_filename))
+
+            # check that case-sensitivity is preserved for relative paths with real directories:
+            mkdir("realdir")
+            @test Base.isfile_casesensitive(joinpath("realdir", "..", true_filename))
+            @test !Base.isfile_casesensitive(joinpath("realdir", "..", lowered_filename))
 
             # check that case-sensitivity only applies to basename of a path:
             if isfile(lowered_filename) # case-insensitive filesystem
@@ -167,7 +182,7 @@ end
 
             @test root.uuid == root_uuid
             @test this.uuid == this_uuid
-            @test that == nothing
+            @test that === nothing
 
             write(project_file, """
             name = "Root"
@@ -180,8 +195,8 @@ end
             that = Base.identify_package("That")
 
             @test root.uuid == proj_uuid
-            @test this == nothing
-            @test that == nothing
+            @test this === nothing
+            @test that === nothing
         finally
             copy!(LOAD_PATH, old_load_path)
         end
@@ -213,8 +228,8 @@ end
             that = Base.identify_package("That")
 
             @test root.uuid == root_uuid
-            @test this == nothing
-            @test that == nothing
+            @test this === nothing
+            @test that === nothing
 
             @test Base.get_uuid_name(project_file, this_uuid) == "This"
         finally
@@ -222,7 +237,6 @@ end
         end
     end
 end
-
 
 ## functional testing of package identification, location & loading ##
 
@@ -233,8 +247,9 @@ watcher_counter = Ref(0)
 push!(Base.active_project_callbacks, () -> watcher_counter[] += 1)
 push!(Base.active_project_callbacks, () -> error("broken"))
 
+const testdefaultdepot = mkdepottempdir()
 push!(empty!(LOAD_PATH), joinpath(@__DIR__, "project"))
-append!(empty!(DEPOT_PATH), [mktempdir(), joinpath(@__DIR__, "depot")])
+append!(empty!(DEPOT_PATH), [testdefaultdepot, joinpath(@__DIR__, "depot")])
 @test watcher_counter[] == 0
 @test_logs (:error, r"active project callback .* failed") Base.set_active_project(nothing)
 @test watcher_counter[] == 1
@@ -271,10 +286,10 @@ end
         pkg = recurse_package(n...)
         @test pkg == PkgId(UUID(uuid), n[end])
         @test joinpath(@__DIR__, normpath(path)) == locate_package(pkg)
-        @test Base.compilecache_path(pkg, UInt64(0)) == Base.compilecache_path(pkg, UInt64(0))
+        @test Base.compilecache_path(pkg, "") == Base.compilecache_path(pkg, "")
     end
-    @test identify_package("Baz") == nothing
-    @test identify_package("Qux") == nothing
+    @test identify_package("Baz") === nothing
+    @test identify_package("Qux") === nothing
     @testset "equivalent package names" begin
          classes = [
             ["Foo"],
@@ -360,6 +375,20 @@ module NotPkgModule; end
         @test pkgdir(Foo.SubFoo1, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
         @test pkgdir(Foo.SubFoo2, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
         @test pkgdir(NotPkgModule, "src") === nothing
+    end
+
+    @testset "pkgdir of a bare module file" begin
+        mktempdir() do dir
+            write(joinpath(dir, "BareModFile.jl"), "__precompile__(false); module BareModFile end")
+            pushfirst!(LOAD_PATH, dir)
+            try
+                m = Base.require(Base.PkgId("BareModFile"))
+                @test pkgdir(m) === nothing
+                @test pkgversion(m) === nothing
+            finally
+                popfirst!(LOAD_PATH)
+            end
+        end
     end
 
     @testset "pkgversion" begin
@@ -458,8 +487,8 @@ function make_env(flat, root, roots, graph, paths, dummies)
     )
 end
 
-const depots = [mktempdir() for _ = 1:3]
-const envs = Dict{String,Any}()
+const depots = [mkdepottempdir() for _ = 1:3]
+const envs = Pair{String, Any}[]
 
 append!(empty!(DEPOT_PATH), depots)
 
@@ -553,7 +582,7 @@ for (flat, root, roots, graph) in graphs
         end
     end
 
-    envs[dir] = make_env(flat, root, roots, graph, paths, dummies)
+    push!(envs, dir => make_env(flat, root, roots, graph, paths, dummies))
 end
 
 # materialize dependency graphs as implicit environments (if possible)
@@ -586,7 +615,7 @@ for (flat, root, roots, graph) in graphs
         end
     end
 
-    envs[dir] = make_env(flat, root, roots, graph, paths, dummies)
+    push!(envs, dir => make_env(flat, root, roots, graph, paths, dummies))
 end
 
 ## use generated environments to test package loading ##
@@ -608,30 +637,38 @@ function test_find(
         where.uuid === nothing && continue
         deps = get(graph, where, Dict(where.name => where))
         for name in NAMES
-            id = identify_package(where, name)
-            @test id == get(deps, name, nothing)
-            path = id === nothing ? nothing : locate_package(id)
-            @test path == get(paths, id, nothing)
+            @testset let where=where, name=name
+                id = identify_package(where, name)
+                @test id == get(deps, name, nothing)
+                path = id === nothing ? nothing : locate_package(id)
+                @test path == get(paths, id, nothing)
+            end
         end
     end
 end
 
 @testset "find_package with one env in load path" begin
-    for (env, (_, _, roots, graph, paths)) in envs
-        push!(empty!(LOAD_PATH), env)
-        test_find(roots, graph, paths)
+    for idx in eachindex(envs)
+        @testset let idx=idx
+            (env, (_, _, roots, graph, paths)) = envs[idx]
+            push!(empty!(LOAD_PATH), env)
+            test_find(roots, graph, paths)
+        end
     end
 end
 
 @testset "find_package with two envs in load path" begin
-    for x = false:true,
-        (env1, (_, _, roots1, graph1, paths1)) in (x ? envs : rand(envs, 10)),
-        (env2, (_, _, roots2, graph2, paths2)) in (x ? rand(envs, 10) : envs)
-        push!(empty!(LOAD_PATH), env1, env2)
-        roots = merge(roots2, roots1)
-        graph = merge(graph2, graph1)
-        paths = merge(paths2, paths1)
-        test_find(roots, graph, paths)
+    for x = false:true, env1idx in (x ? (1:length(envs)) : rand(1:length(envs), 10)),
+                        env2idx in (x ? rand(1:length(envs), 10) : (1:length(envs)))
+        @testset let env1idx=env1idx, env2idx=env2idx
+            (env1, (_, _, roots1, graph1, paths1)) = envs[env1idx]
+            (env2, (_, _, roots2, graph2, paths2)) = envs[env2idx]
+            push!(empty!(LOAD_PATH), env1, env2)
+            roots = merge(roots2, roots1)
+            graph = merge(graph2, graph1)
+            paths = merge(paths2, paths1)
+            test_find(roots, graph, paths)
+        end
     end
 end
 
@@ -692,9 +729,117 @@ mktempdir() do dir
     mkpath(vpath)
     script = "@assert startswith(Base.active_project(), $(repr(vpath)))"
     cmd = `$(Base.julia_cmd()) --startup-file=no -e $(script)`
-    cmd = addenv(cmd, "JULIA_DEPOT_PATH" => dir)
+    cmd = addenv(cmd,
+        "JULIA_DEPOT_PATH" => dir,
+        "JULIA_LOAD_PATH" => Sys.iswindows() ? ";" : ":")
     cmd = pipeline(cmd; stdout, stderr)
     @test success(cmd)
+end
+
+function _with_empty_load_path(f::Function)
+    old_load_path = copy(Base.LOAD_PATH)
+    try
+        empty!(Base.LOAD_PATH)
+        f()
+    finally
+        append!(Base.LOAD_PATH, old_load_path)
+    end
+end
+old_act_proj = Base.ACTIVE_PROJECT[]
+function _with_activate(f::Function, project_file::Union{AbstractString, Nothing})
+    try
+        Base.ACTIVE_PROJECT[] = project_file
+        f()
+    finally
+        Base.ACTIVE_PROJECT[] = old_act_proj
+    end
+end
+function _activate_and_get_active_manifest_noarg(project_file::Union{AbstractString, Nothing})
+    _with_activate(project_file) do
+        Base.active_manifest()
+    end
+end
+
+@testset "Base.active_manifest()" begin
+    test_dir = @__DIR__
+    test_cases = [
+        (joinpath(test_dir, "TestPkg", "Project.toml"), joinpath(test_dir, "TestPkg", "Manifest.toml")),
+        (joinpath(test_dir, "project", "Project.toml"), joinpath(test_dir, "project", "Manifest.toml")),
+    ]
+
+    @testset "active_manifest() - no argument passed" begin
+        for (proj, expected_man) in test_cases
+            @test _activate_and_get_active_manifest_noarg(proj) == expected_man
+            # Base.active_manifest() should never return a file that doesn't exist:
+            @test isfile(_activate_and_get_active_manifest_noarg(proj))
+        end
+        mktempdir() do dir
+            proj = joinpath(dir, "Project.toml")
+
+            # If the project file doesn't exist, active_manifest() should return `nothing`:
+            @test _activate_and_get_active_manifest_noarg(proj) === nothing
+
+            # If the project file exists but the manifest file does not, active_manifest() should still return `nothing`:
+            touch(proj)
+            @test _activate_and_get_active_manifest_noarg(proj) === nothing
+
+            # If the project and manifest files both exist, active_manifest() should return the path to the manifest:
+            manif = joinpath(dir, "Manifest.toml")
+            touch(manif)
+            @test _activate_and_get_active_manifest_noarg(proj) == manif
+            # Base.active_manifest() should never return a file that doesn't exist:
+            @test isfile(_activate_and_get_active_manifest_noarg(proj))
+
+            # If the manifest file exists but the project file does not, active_manifest() should return `nothing`:
+            rm(proj)
+            @test _activate_and_get_active_manifest_noarg(proj) == nothing
+        end
+    end
+
+    @testset "active_manifest(proj::AbstractString)" begin
+        Base.ACTIVE_PROJECT[] = old_act_proj
+        for (proj, expected_man) in test_cases
+            @test Base.active_manifest(proj) == expected_man
+            # Base.active_manifest() should never return a file that doesn't exist:
+            @test isfile(Base.active_manifest(proj))
+        end
+        mktempdir() do dir
+            proj = joinpath(dir, "Project.toml")
+
+            # If the project file doesn't exist, active_manifest(proj) should return `nothing`:
+            @test Base.active_manifest(proj) === nothing
+
+            # If the project file exists but the manifest file does not, active_manifest(proj) should still return `nothing`:
+            touch(proj)
+            @test Base.active_manifest(proj) === nothing
+
+            # If the project and manifest files both exist, active_manifest(proj) should return the path to the manifest:
+            manif = joinpath(dir, "Manifest.toml")
+            touch(manif)
+            @test Base.active_manifest(proj) == manif
+            # Base.active_manifest() should never return a file that doesn't exist:
+            @test isfile(Base.active_manifest(proj))
+
+            # If the manifest file exists but the project file does not, active_manifest(proj) should return `nothing`:
+            rm(proj)
+            @test Base.active_manifest(proj) === nothing
+        end
+    end
+
+    @testset "ACTIVE_PROJECT[] is `nothing` => active_manifest() is nothing" begin
+        _with_activate(nothing) do; _with_empty_load_path() do
+            @test Base.active_manifest() === nothing
+            @test Base.active_manifest(nothing) === nothing
+        end; end
+    end
+
+    @testset "Project file does not exist => active_manifest() is nothing" begin
+        mktempdir() do dir
+            proj = joinpath(dir, "Project.toml")
+            @test Base.active_manifest(proj) === nothing
+            @test _activate_and_get_active_manifest_noarg(proj) === nothing
+        end
+    end
 end
 
 @testset "expansion of JULIA_LOAD_PATH" begin
@@ -719,16 +864,17 @@ end
 @testset "expansion of JULIA_DEPOT_PATH" begin
     s = Sys.iswindows() ? ';' : ':'
     tmp = "/this/does/not/exist"
-    DEFAULT = Base.append_default_depot_path!(String[])
+    default = joinpath(homedir(), ".julia")
+    bundled = Base.append_bundled_depot_path!(String[])
     cases = Dict{Any,Vector{String}}(
-        nothing => DEFAULT,
+        nothing => [default; bundled],
         "" => [],
-        "$s" => DEFAULT,
-        "$tmp$s" => [tmp; DEFAULT],
-        "$s$tmp" => [DEFAULT; tmp],
+        "$s" => [default; bundled],
+        "$tmp$s" => [tmp; bundled],
+        "$s$tmp" => [default; bundled; tmp],
         )
     for (env, result) in pairs(cases)
-        script = "DEPOT_PATH == $(repr(result)) || error()"
+        script = "DEPOT_PATH == $(repr(result)) || error(\"actual depot \" * join(DEPOT_PATH,':') * \" does not match expected depot \" * join($(repr(result)), ':'))"
         cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
         cmd = addenv(cmd, "JULIA_DEPOT_PATH" => env)
         cmd = pipeline(cmd; stdout, stderr)
@@ -746,15 +892,8 @@ end
 
 ## cleanup after tests ##
 
-for env in keys(envs)
+for (env, _) in envs
     rm(env, force=true, recursive=true)
-end
-for depot in depots
-    try
-        rm(depot, force=true, recursive=true)
-    catch err
-        @show err
-    end
 end
 
 append!(empty!(LOAD_PATH), saved_load_path)
@@ -762,6 +901,34 @@ append!(empty!(DEPOT_PATH), saved_depot_path)
 pop!(Base.active_project_callbacks)
 Base.set_active_project(saved_active_project)
 @test watcher_counter[] == 3
+
+# pkgversion should return cached version even after source is deleted
+@testset "pkgversion after source deletion" begin
+    mktempdir() do tmp
+        pkg_dir = joinpath(tmp, "DeletedPkg")
+        src_dir = joinpath(pkg_dir, "src")
+        mkpath(src_dir)
+        write(joinpath(pkg_dir, "Project.toml"), """
+            name = "DeletedPkg"
+            uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+            version = "4.5.6"
+            """)
+        write(joinpath(src_dir, "DeletedPkg.jl"), "module DeletedPkg end")
+        old_act_proj = Base.ACTIVE_PROJECT[]
+        pushfirst!(LOAD_PATH, "@")
+        try
+            Base.set_active_project(pkg_dir)
+            @eval using DeletedPkg
+            m = @__MODULE__
+            @test pkgversion(@invokelatest(m.DeletedPkg)) == v"4.5.6"
+            rm(pkg_dir; recursive=true)
+            @test pkgversion(@invokelatest(m.DeletedPkg)) == v"4.5.6"
+        finally
+            Base.set_active_project(old_act_proj)
+            popfirst!(LOAD_PATH)
+        end
+    end
+end
 
 # issue #28190
 module Foo28190; import Libdl; end
@@ -790,11 +957,25 @@ import .Foo28190.Libdl; import Libdl
     end
 end
 
+@testset "`::AbstractString` constraint on the path argument to `include`" begin
+    for m ∈ (NotPkgModule, evalfile("testhelpers/just_module.jl"))
+        @Core.latestworld
+        let i = m.include
+            @test !applicable(i, (nothing,))
+            @test !applicable(i, (identity, nothing,))
+            @test !hasmethod(i, Tuple{Nothing})
+            @test !hasmethod(i, Tuple{Function,Nothing})
+        end
+    end
+end
+
 @testset "`Base.project_names` and friends" begin
     # Some functions in Pkg assumes that these tuples have the same length
     n = length(Base.project_names)
-    @test length(Base.manifest_names) == n
     @test length(Base.preferences_names) == n
+
+    # there are two manifest names per project name
+    @test length(Base.manifest_names) == 2n
 end
 
 @testset "Manifest formats" begin
@@ -823,19 +1004,30 @@ end
     end
 end
 
-@testset "error message loading pkg bad module name" begin
+@testset "Manifest name preferential loading" begin
     mktempdir() do tmp
-        old_loadpath = copy(LOAD_PATH)
-        try
-            push!(LOAD_PATH, tmp)
-            write(joinpath(tmp, "BadCase.jl"), "module badcase end")
-            @test_logs (:warn, r"The call to compilecache failed.*") match_mode=:any begin
-                @test_throws ErrorException("package `BadCase` did not define the expected module `BadCase`, \
-                    check for typos in package module name") (@eval using BadCase)
-            end
-        finally
-            copy!(LOAD_PATH, old_loadpath)
+        proj = joinpath(tmp, "Project.toml")
+        touch(proj)
+        for man_name in (
+            "Manifest.toml",
+            "JuliaManifest.toml",
+            "Manifest-v$(VERSION.major).$(VERSION.minor).toml",
+            "JuliaManifest-v$(VERSION.major).$(VERSION.minor).toml"
+            )
+            touch(joinpath(tmp, man_name))
+            man = basename(Base.project_file_manifest_path(proj))
+            @test man == man_name
         end
+    end
+    mktempdir() do tmp
+        # check that another version isn't preferred
+        proj = joinpath(tmp, "Project.toml")
+        touch(proj)
+        touch(joinpath(tmp, "Manifest-v1.5.toml"))
+        @test Base.project_file_manifest_path(proj) === nothing
+        touch(joinpath(tmp, "Manifest.toml"))
+        man = basename(Base.project_file_manifest_path(proj))
+        @test man == "Manifest.toml"
     end
 end
 
@@ -941,6 +1133,190 @@ end
     end
 end
 
+@testset "Preferences blob" begin
+    # Tests for get_preferences_blob() and stale_prefs() - the serialization of
+    # compile-time preference observations into a TOML blob embedded in cache files.
+    pkg_uuid = uuid4()
+    pkg2_uuid = uuid4()
+    mktempdir() do dir
+        # Set up a project with preferences for two packages
+        write(joinpath(dir, "Project.toml"), """
+        [deps]
+        PkgA = "$(pkg_uuid)"
+        PkgB = "$(pkg2_uuid)"
+
+        [preferences.PkgA]
+        key1 = "val1"
+        key2 = 42
+
+        [preferences.PkgB]
+        flag = true
+        """)
+
+        old_load_path = copy(LOAD_PATH)
+        old_compiletime_prefs = Dict(k => copy(v) for (k, v) in Base.COMPILETIME_PREFERENCES)
+        try
+            copy!(LOAD_PATH, [joinpath(dir, "Project.toml")])
+            empty!(Base.COMPILETIME_PREFERENCES)
+
+            # Empty COMPILETIME_PREFERENCES → empty blob (fast-path)
+            @test Base.get_preferences_blob() == ""
+
+            # A queried+set preference appears in the main table
+            Base.record_compiletime_preference(pkg_uuid, "key1")
+            blob = Base.get_preferences_blob()
+            @test !isempty(blob)
+            parsed = Base.TOML.parse(Base.TOML.Parser{nothing}(blob))
+            @test parsed[string(pkg_uuid)]["key1"] == "val1"
+            @test !haskey(parsed, "unset")
+
+            # A queried+unset preference appears in the [unset] table
+            empty!(Base.COMPILETIME_PREFERENCES)
+            Base.record_compiletime_preference(pkg_uuid, "missing_key")
+            blob = Base.get_preferences_blob()
+            parsed = Base.TOML.parse(Base.TOML.Parser{nothing}(blob))
+            @test haskey(parsed, "unset")
+            @test "missing_key" in parsed["unset"][string(pkg_uuid)]
+            @test !haskey(get(parsed, string(pkg_uuid), Dict()), "missing_key")
+
+            # Mix of set and unset preferences for the same UUID
+            empty!(Base.COMPILETIME_PREFERENCES)
+            Base.record_compiletime_preference(pkg_uuid, "key1")
+            Base.record_compiletime_preference(pkg_uuid, "missing_key")
+            blob = Base.get_preferences_blob()
+            parsed = Base.TOML.parse(Base.TOML.Parser{nothing}(blob))
+            @test parsed[string(pkg_uuid)]["key1"] == "val1"
+            @test "missing_key" in parsed["unset"][string(pkg_uuid)]
+
+            # Multiple UUIDs are tracked independently
+            empty!(Base.COMPILETIME_PREFERENCES)
+            Base.record_compiletime_preference(pkg_uuid, "key1")
+            Base.record_compiletime_preference(pkg2_uuid, "flag")
+            blob = Base.get_preferences_blob()
+            parsed = Base.TOML.parse(Base.TOML.Parser{nothing}(blob))
+            @test parsed[string(pkg_uuid)]["key1"] == "val1"
+            @test parsed[string(pkg2_uuid)]["flag"] == true
+
+            # stale_prefs: empty blob is never stale
+            @test !Base.stale_prefs("")
+
+            # stale_prefs: set preference unchanged → not stale
+            empty!(Base.COMPILETIME_PREFERENCES)
+            Base.record_compiletime_preference(pkg_uuid, "key1")
+            blob = Base.get_preferences_blob()
+            @test !Base.stale_prefs(blob)
+
+            # stale_prefs: set preference value changed → stale
+            mktempdir() do dir2
+                write(joinpath(dir2, "Project.toml"), """
+                [deps]
+                PkgA = "$(pkg_uuid)"
+
+                [preferences.PkgA]
+                key1 = "different"
+                """)
+                copy!(LOAD_PATH, [joinpath(dir2, "Project.toml")])
+                @test Base.stale_prefs(blob)
+                copy!(LOAD_PATH, [joinpath(dir, "Project.toml")])
+            end
+
+            # stale_prefs: set preference becomes unset → stale
+            mktempdir() do dir2
+                write(joinpath(dir2, "Project.toml"), """
+                [deps]
+                PkgA = "$(pkg_uuid)"
+                """)
+                copy!(LOAD_PATH, [joinpath(dir2, "Project.toml")])
+                @test Base.stale_prefs(blob)
+                copy!(LOAD_PATH, [joinpath(dir, "Project.toml")])
+            end
+
+            # stale_prefs: unset preference still unset → not stale
+            empty!(Base.COMPILETIME_PREFERENCES)
+            Base.record_compiletime_preference(pkg_uuid, "missing_key")
+            blob_unset = Base.get_preferences_blob()
+            @test !Base.stale_prefs(blob_unset)
+
+            # stale_prefs: unset preference becomes set → stale
+            mktempdir() do dir2
+                write(joinpath(dir2, "Project.toml"), """
+                [deps]
+                PkgA = "$(pkg_uuid)"
+
+                [preferences.PkgA]
+                missing_key = "now_set"
+                """)
+                copy!(LOAD_PATH, [joinpath(dir2, "Project.toml")])
+                @test Base.stale_prefs(blob_unset)
+                copy!(LOAD_PATH, [joinpath(dir, "Project.toml")])
+            end
+
+            # hash collision test:
+            #   https://github.com/JuliaLang/julia/issues/59345#issue-3338450603
+            #
+            # `1`, `1.0`, and `true` are all `isequal` in Julia, so == / isequal / hash
+            # cannot distinguish these semantically distinct values, but the preferences
+            # system should distinguish them since they are clearly different objects
+            mktempdir() do dir_bool
+                write(joinpath(dir_bool, "Project.toml"), """
+                [deps]
+                PkgA = "$(pkg_uuid)"
+
+                [preferences.PkgA]
+                flag = true
+                """)
+                copy!(LOAD_PATH, [joinpath(dir_bool, "Project.toml")])
+                empty!(Base.COMPILETIME_PREFERENCES)
+                Base.record_compiletime_preference(pkg_uuid, "flag")
+                blob_bool = Base.get_preferences_blob()
+
+                mktempdir() do dir_int
+                    write(joinpath(dir_int, "Project.toml"), """
+                    [deps]
+                    PkgA = "$(pkg_uuid)"
+
+                    [preferences.PkgA]
+                    flag = 1
+                    """)
+                    copy!(LOAD_PATH, [joinpath(dir_int, "Project.toml")])
+                    @test Base.stale_prefs(blob_bool)
+                end
+                copy!(LOAD_PATH, [joinpath(dir, "Project.toml")])
+            end
+
+            # hash collision test (on ≥1.13, where hash(false, UInt(0)) == UInt(0))
+            #
+            # the old hash-based approach for preference invalidation would fail to detect
+            # the difference between `pref = false` and "no preference".
+            mktempdir() do dir2
+                write(joinpath(dir2, "Project.toml"), """
+                [deps]
+                PkgA = "$(pkg_uuid)"
+
+                [preferences.PkgA]
+                key1 = false
+                """)
+                copy!(LOAD_PATH, [joinpath(dir2, "Project.toml")])
+                empty!(Base.COMPILETIME_PREFERENCES)
+                Base.record_compiletime_preference(pkg_uuid, "key1")
+                blob_false = Base.get_preferences_blob()
+                mktempdir() do dir3
+                    write(joinpath(dir3, "Project.toml"), """
+                    [deps]
+                    PkgA = "$(pkg_uuid)"
+                    """)
+                    copy!(LOAD_PATH, [joinpath(dir3, "Project.toml")])
+                    @test Base.stale_prefs(blob_false)
+                end
+                copy!(LOAD_PATH, [joinpath(dir, "Project.toml")])
+            end
+        finally
+            copy!(LOAD_PATH, old_load_path)
+            empty!(Base.COMPILETIME_PREFERENCES)
+            merge!(Base.COMPILETIME_PREFERENCES, old_compiletime_prefs)
+        end
+    end
+end
 
 @testset "Loading with incomplete manifest/depot #45977" begin
     mktempdir() do tmp
@@ -992,7 +1368,7 @@ end
             write(joinpath(tmp, "Env1", "Manifest.toml"), """
             """)
             # Package in current env not present in manifest
-            pkg, env = Base.identify_package_env("Baz")
+            pkg, env = @lock Base.require_lock Base.identify_package_env("Baz")
             @test Base.locate_package(pkg, env) === nothing
         finally
             copy!(LOAD_PATH, old_load_path)
@@ -1002,27 +1378,48 @@ end
 end
 
 @testset "Extensions" begin
-    depot_path = mktempdir()
-    try
-        proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
+    test_ext = """
+    function test_ext(parent::Module, ext::Symbol)
+        _ext = Base.get_extension(parent, ext)
+        _ext isa Module || error("expected extension \$ext to be loaded")
+        _pkgdir = pkgdir(_ext)
+        _pkgdir == pkgdir(parent) !== nothing || error("unexpected extension \$ext pkgdir path: \$_pkgdir")
+        _pkgversion = pkgversion(_ext)
+        _pkgversion == pkgversion(parent) || error("unexpected extension \$ext version: \$_pkgversion")
+    end
+    """
+    depot_path = mkdepottempdir()
+    proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
 
-        function gen_extension_cmd(compile)
-            ```$(Base.julia_cmd()) $compile --startup-file=no -e '
-                begin
-                    push!(empty!(DEPOT_PATH), '$(repr(depot_path))')
-                    using HasExtensions
-                    Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
-                    HasExtensions.ext_loaded && error("ext_loaded set")
-                    using HasDepWithExtensions
-                    Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
-                    HasExtensions.ext_loaded || error("ext_loaded not set")
-                    HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
-                    HasDepWithExtensions.do_something() || error("do_something errored")
-                    using ExtDep2
-                    HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
-                end
-                '
-            ```
+    begin
+
+        function gen_extension_cmd(compile, distr=false)
+            load_distr = distr ? "using Distributed; addprocs(1)" : ""
+            ew = distr ? "@everywhere" : ""
+            cmd = """
+            $load_distr
+            begin
+                $ew $test_ext
+                $ew push!(empty!(DEPOT_PATH), $(repr(depot_path)))
+                using HasExtensions
+                $ew using HasExtensions
+                $ew Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
+                $ew HasExtensions.ext_loaded && error("ext_loaded set")
+                using HasDepWithExtensions
+                $ew using HasDepWithExtensions
+                $ew test_ext(HasExtensions, :Extension)
+                $ew Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
+                $ew HasExtensions.ext_loaded || error("ext_loaded not set")
+                $ew HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
+                $ew HasDepWithExtensions.do_something() || error("do_something errored")
+                using ExtDep2
+                $ew using ExtDep2
+                using ExtDep3
+                $ew using ExtDep3
+                $ew HasExtensions.ext_dep_loaded || error("ext_dep_loaded not set")
+            end
+            """
+            return `$(Base.julia_cmd()) $compile --startup-file=no -e $cmd`
         end
 
         for compile in (`--compiled-modules=no`, ``, ``) # Once when requiring precompilation, once where it is already precompiled
@@ -1034,6 +1431,12 @@ end
 
         sep = Sys.iswindows() ? ';' : ':'
 
+        cmd = gen_extension_cmd(``, true)
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep))
+        str = read(cmd, String)
+        @test !occursin("Error during loading of extension", str)
+        @test !occursin("ConcurrencyViolationError", str)
+
         # 48351
         cmd = gen_extension_cmd(``)
         cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([mktempdir(), proj], sep))
@@ -1044,8 +1447,6 @@ end
         envs = [joinpath(@__DIR__, "project", "Extensions", "EnvWithHasExtensionsv2"), joinpath(@__DIR__, "project", "Extensions", "EnvWithHasExtensions")]
         cmd = addenv(```$(Base.julia_cmd()) --startup-file=no -e '
         begin
-
-
             push!(empty!(DEPOT_PATH), '$(repr(depot_path))')
             using HasExtensions
             using ExtDep
@@ -1055,16 +1456,261 @@ end
         '
         ```, "JULIA_LOAD_PATH" => join(envs, sep))
         @test success(cmd)
-    finally
+
+        test_ext_proj = """
+        begin
+            $test_ext
+            using HasExtensions
+            using ExtDep
+            test_ext(HasExtensions, :Extension)
+            using ExtDep2
+            test_ext(HasExtensions, :ExtensionFolder)
+            using ExtDep3
+            test_ext(HasExtensions, :ExtensionDep)
+        end
+        """
+        for compile in (`--compiled-modules=no`, ``)
+            cmd_proj_ext = `$(Base.julia_cmd()) $compile --startup-file=no -e $test_ext_proj`
+            proj = joinpath(@__DIR__, "project", "Extensions")
+            cmd_proj_ext = addenv(cmd_proj_ext, "JULIA_LOAD_PATH" => join([joinpath(proj, "HasExtensions.jl"), joinpath(proj, "EnvWithDeps")], sep))
+            run(cmd_proj_ext)
+        end
+
+        # Look-ahead for `using A, B` in the REPL (#63185): the packages of the statement
+        # and the extensions they make loadable (including via already loaded triggers)
+        # are precompiled in one session, rather than one per package and extension.
+        # The REPL only runs on a tty, so drive a child on a fake pty.
+        if !Sys.iswindows()
+            isdefined(Main, :FakePTYs) || @eval Main include(joinpath(@__DIR__, "testhelpers", "FakePTYs.jl"))
+            proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
+            # run `lines` in a REPL child with an empty depot and return the transcript
+            function repl_transcript(lines)
+                output = ""
+                mkdepottempdir() do depot
+                    nENV = copy(ENV)
+                    nENV["JULIA_LOAD_PATH"] = join([proj, "@stdlib"], sep) # the REPL must be loadable
+                    nENV["JULIA_DEPOT_PATH"] = depot * sep # trailing separator appends the default depots
+                    nENV["TERM"] = "dumb"
+                    nENV["CI"] = "true" # plain precompile progress: one line per package, no redraws
+                    Main.FakePTYs.with_fake_pty() do pts, ptm
+                        # `--compiled-modules=yes` so an inherited `=no` cannot skip the look-ahead
+                        p = run(detach(setenv(`$(Base.julia_cmd()) --startup-file=no --color=no --compiled-modules=yes -q`, nENV)), pts, pts, pts, wait=false)
+                        Base.close_stdio(pts)
+                        readuntil(ptm, "julia> ", keep=true)
+                        for line in lines
+                            write(ptm, line, "\n")
+                            output *= readuntil(ptm, "julia> ", keep=true)
+                        end
+                        write(ptm, "exit()\n")
+                        try
+                            output *= read(ptm, String)
+                        catch ex
+                            # some platforms (such as linux) report EIO instead of EOF
+                            (ex isa Base.IOError && ex.code == Base.UV_EIO) || rethrow()
+                        end
+                        wait(p)
+                        @test success(p)
+                    end
+                end
+                return output
+            end
+            check_exts = "println(all(e -> Base.get_extension(HasExtensions, e) isa Module, (:Extension, :ExtensionDep, :ExtensionFolder)) ? \"lookahead ok\" : \"lookahead missing ext\")"
+
+            # a trigger is already loaded: `ExtensionFolder` needs `ExtDep2`
+            output = repl_transcript((
+                "Base.disable_parallel_precompile = false",
+                "using ExtDep2",
+                "using HasExtensions, ExtDep",
+                "using ExtDep3", # ExtensionDep was precompiled above; loads now with no new session
+                check_exts,
+            ))
+            @test occursin("lookahead ok", output)
+            # one session for `using ExtDep2`, one for everything `using HasExtensions, ExtDep`
+            # loads, extensions included (serially compiled extensions would show no session)
+            @test count("successfully precompiled", output) == 2
+            for name in ("✓ ExtDep2", "✓ HasExtensions", "✓ ExtDep", "✓ HasExtensions → Extension",
+                         "✓ HasExtensions → ExtensionDep", "✓ HasExtensions → ExtensionFolder")
+                @test occursin(name, output)
+            end
+
+            # the parent is already loaded: its extensions are batched with the triggers being loaded
+            output = repl_transcript((
+                "Base.disable_parallel_precompile = false",
+                "using HasExtensions",
+                "using ExtDep, ExtDep2",
+                "using ExtDep3",
+                check_exts,
+            ))
+            @test occursin("lookahead ok", output)
+            @test count("successfully precompiled", output) == 2
+            for name in ("✓ HasExtensions", "✓ ExtDep", "✓ ExtDep2", "✓ HasExtensions → Extension",
+                         "✓ HasExtensions → ExtensionFolder")
+                @test occursin(name, output)
+            end
+        end
+
+        # a name shared by two uuids in the load path keeps the uuid in loading messages
+        mktempdir() do dir
+            write(joinpath(dir, "Project.toml"), """
+            [deps]
+            Foo = "11111111-1111-1111-1111-111111111111"
+            """)
+            write(joinpath(dir, "Manifest.toml"), """
+            julia_version = "1.14.0-DEV"
+            manifest_format = "2.0"
+
+            [[deps.Foo]]
+            uuid = "11111111-1111-1111-1111-111111111111"
+            version = "1.0.0"
+            [[deps.Foo]]
+            uuid = "22222222-2222-2222-2222-222222222222"
+            version = "1.0.0"
+            [[deps.Bar]]
+            uuid = "33333333-3333-3333-3333-333333333333"
+            version = "1.0.0"
+            """)
+            old_load_path = copy(LOAD_PATH)
+            try
+                copy!(LOAD_PATH, [dir])
+                foo = Base.PkgId(Base.UUID("11111111-1111-1111-1111-111111111111"), "Foo")
+                @test Base.pkg_log_name(foo) == "Foo [11111111-1111-1111-1111-111111111111]"
+                @test Base.pkg_log_name(Base.PkgId(Base.UUID("33333333-3333-3333-3333-333333333333"), "Bar")) == "Bar"
+                @test Base.pkg_log_name(Base.PkgId(nothing, "Baz")) == "Baz"
+                @test Base.pkg_log_name(Base.PkgId(Base.uuid5(foo.uuid, "FooExt"), "FooExt"), foo) ==
+                    "Foo [11111111-1111-1111-1111-111111111111] → FooExt"
+            finally
+                copy!(LOAD_PATH, old_load_path)
+            end
+        end
+
+        # Extensions in implicit environments
+        old_load_path = copy(LOAD_PATH)
         try
-            rm(depot_path, force=true, recursive=true)
-        catch err
-            @show err
+            empty!(LOAD_PATH)
+            push!(LOAD_PATH, joinpath(@__DIR__, "project", "Extensions", "ImplicitEnv"))
+            pkgid_B = Base.PkgId(Base.uuid5(Base.identify_package("A").uuid, "BExt"), "BExt")
+            @test Base.identify_package(pkgid_B, "B") isa Base.PkgId
+        finally
+            copy!(LOAD_PATH, old_load_path)
+        end
+
+        # Extension with cycles in dependencies
+        code = """
+        using CyclicExtensions
+        Base.get_extension(CyclicExtensions, :ExtA) isa Module || error("expected extension to load")
+        Base.get_extension(CyclicExtensions, :ExtB) isa Module || error("expected extension to load")
+        CyclicExtensions.greet()
+        """
+        proj = joinpath(@__DIR__, "project", "Extensions", "CyclicExtensions")
+        cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => proj)
+        @test occursin("Hello Cycles!", String(read(cmd)))
+
+        # Extension-to-extension dependencies
+
+        mkdepottempdir() do depot # Parallel pre-compilation
+            code = """
+            Base.disable_parallel_precompile = false
+            using ExtToExtDependency
+            Base.get_extension(ExtToExtDependency, :ExtA) isa Module || error("expected extension to load")
+            Base.get_extension(ExtToExtDependency, :ExtAB) isa Module || error("expected extension to load")
+            ExtToExtDependency.greet()
+            """
+            proj = joinpath(@__DIR__, "project", "Extensions", "ExtToExtDependency")
+            cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+            cmd = addenv(cmd,
+                "JULIA_LOAD_PATH" => proj,
+                "JULIA_DEPOT_PATH" => depot * sep,
+            )
+            @test occursin("Hello ext-to-ext!", String(read(cmd)))
+        end
+        mkdepottempdir() do depot # Serial pre-compilation
+            code = """
+            Base.disable_parallel_precompile = true
+            using ExtToExtDependency
+            Base.get_extension(ExtToExtDependency, :ExtA) isa Module || error("expected extension to load")
+            Base.get_extension(ExtToExtDependency, :ExtAB) isa Module || error("expected extension to load")
+            ExtToExtDependency.greet()
+            """
+            proj = joinpath(@__DIR__, "project", "Extensions", "ExtToExtDependency")
+            cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+            cmd = addenv(cmd,
+                "JULIA_LOAD_PATH" => proj,
+                "JULIA_DEPOT_PATH" => depot * sep,
+            )
+            @test occursin("Hello ext-to-ext!", String(read(cmd)))
+        end
+
+        mkdepottempdir() do depot # Parallel pre-compilation
+            code = """
+            Base.disable_parallel_precompile = false
+            using CrossPackageExtToExtDependency
+            Base.get_extension(CrossPackageExtToExtDependency.CyclicExtensions, :ExtA) isa Module || error("expected extension to load")
+            Base.get_extension(CrossPackageExtToExtDependency, :ExtAB) isa Module || error("expected extension to load")
+            CrossPackageExtToExtDependency.greet()
+            """
+            proj = joinpath(@__DIR__, "project", "Extensions", "CrossPackageExtToExtDependency")
+            cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+            cmd = addenv(cmd,
+                "JULIA_LOAD_PATH" => proj,
+                "JULIA_DEPOT_PATH" => depot * sep,
+            )
+            @test occursin("Hello x-package ext-to-ext!", String(read(cmd)))
+        end
+        mkdepottempdir() do depot # Serial pre-compilation
+            code = """
+            Base.disable_parallel_precompile = true
+            using CrossPackageExtToExtDependency
+            Base.get_extension(CrossPackageExtToExtDependency.CyclicExtensions, :ExtA) isa Module || error("expected extension to load")
+            Base.get_extension(CrossPackageExtToExtDependency, :ExtAB) isa Module || error("expected extension to load")
+            CrossPackageExtToExtDependency.greet()
+            """
+            proj = joinpath(@__DIR__, "project", "Extensions", "CrossPackageExtToExtDependency")
+            cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+            cmd = addenv(cmd,
+                "JULIA_LOAD_PATH" => proj,
+                "JULIA_DEPOT_PATH" => depot * sep,
+            )
+            @test occursin("Hello x-package ext-to-ext!", String(read(cmd)))
+        end
+
+        # Extensions for "parent" dependencies
+        # (i.e. an `ExtAB`  where A depends on / loads B, but B provides the extension)
+
+        mkdepottempdir() do depot # Parallel pre-compilation
+            code = """
+            Base.disable_parallel_precompile = false
+            using Parent
+            Base.get_extension(getfield(Parent, :DepWithParentExt), :ParentExt) isa Module || error("expected extension to load")
+            Parent.greet()
+            """
+            proj = joinpath(@__DIR__, "project", "Extensions", "Parent.jl")
+            cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+            cmd = addenv(cmd,
+                "JULIA_LOAD_PATH" => proj,
+                "JULIA_DEPOT_PATH" => depot * sep,
+            )
+            @test occursin("Hello parent!", String(read(cmd)))
+        end
+        mkdepottempdir() do depot # Serial pre-compilation
+            code = """
+            Base.disable_parallel_precompile = true
+            using Parent
+            Base.get_extension(getfield(Parent, :DepWithParentExt), :ParentExt) isa Module || error("expected extension to load")
+            Parent.greet()
+            """
+            proj = joinpath(@__DIR__, "project", "Extensions", "Parent.jl")
+            cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+            cmd = addenv(cmd,
+                "JULIA_LOAD_PATH" => proj,
+                "JULIA_DEPOT_PATH" => depot * sep,
+            )
+            @test occursin("Hello parent!", String(read(cmd)))
         end
     end
 end
 
-pkgimage(val) = val == 1 ? `--pkgimage=yes` : `--pkgimage=no`
+pkgimage(val) = val == 1 ? `--pkgimages=yes` : `--pkgimages=no`
 opt_level(val) = `-O$val`
 debug_level(val) = `-g$val`
 inline(val) = val == 1 ? `--inline=yes` : `--inline=no`
@@ -1089,15 +1735,14 @@ end
     for (P, D, C, I, O) in Iterators.product(0:1, 0:2, 0:2, 0:1, 0:3)
         julia = joinpath(Sys.BINDIR, Base.julia_exename())
         script = """
-        using Test
         let
             cf = Base.CacheFlags()
             opts = Base.JLOptions()
-            @test cf.use_pkgimages == opts.use_pkgimages == $P
-            @test cf.debug_level == opts.debug_level == $D
-            @test cf.check_bounds == opts.check_bounds == $C
-            @test cf.inline == opts.can_inline == $I
-            @test cf.opt_level == opts.opt_level == $O
+            cf.use_pkgimages == opts.use_pkgimages == $P || error("use_pkgimages")
+            cf.debug_level == opts.debug_level == $D || error("debug_level")
+            cf.check_bounds == opts.check_bounds == $C || error("check_bounds")
+            cf.inline == opts.can_inline == $I || error("inline")
+            cf.opt_level == opts.opt_level == $O || error("opt_level")
         end
         """
         cmd = `$julia $(pkgimage(P)) $(opt_level(O)) $(debug_level(D)) $(check_bounds(C)) $(inline(I)) -e $script`
@@ -1110,49 +1755,971 @@ end
     @test cf.check_bounds == 3
     @test cf.inline
     @test cf.opt_level == 3
+    @test cf.coverage == 0
+    @test repr(cf) == "CacheFlags(; use_pkgimages=true, debug_level=3, check_bounds=3, inline=true, opt_level=3, coverage=0)"
 
-    io = PipeBuffer()
-    show(io, cf)
-    @test read(io, String) == "use_pkgimages = true, debug_level = 3, check_bounds = 3, inline = true, opt_level = 3"
+    # Round trip CacheFlags
+    @test parse(Base.CacheFlags, repr(cf)) == cf
+
+    # Image workers need only the counter mode, independent of report scope.
+    counted = Base.CacheFlags(cf; coverage=2)
+    @test repr(counted) == "CacheFlags(; use_pkgimages=true, debug_level=3, check_bounds=3, inline=true, opt_level=3, coverage=2, coverage_path=nothing)"
+    @test parse(Base.CacheFlags, repr(counted)) == counted
+    @test Base.translate_cache_flags(counted, cf) == ["--code-coverage=user", "--code-coverage-mode=count"]
+    @test Base.translate_cache_flags(Base.CacheFlags(cf; coverage=1), cf) == ["--code-coverage=user", "--code-coverage-mode=hit"]
+    @test Base.translate_cache_flags(cf, counted) == ["--code-coverage=none"]
+
+    # Counts can serve hit requests, but not the other way around.
+    for (requested, compatible) in ((1, (1, 2)), (2, (2,)))
+        req = Base.CacheFlags(cf; coverage=requested)
+        for actual in (0, 1, 2)
+            image = Base.CacheFlags(cf; coverage=actual)
+            @test Base.match_cache_coverage(req, image) == (actual in compatible)
+        end
+    end
 end
 
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
+
+module loaded_pkgid1 end
+module loaded_pkgid2 end
+module loaded_pkgid3 end
+module loaded_pkgid4 end
 
 @testset "loading deadlock detector" begin
     pkid1 = Base.PkgId("pkgid1")
     pkid2 = Base.PkgId("pkgid2")
     pkid3 = Base.PkgId("pkgid3")
     pkid4 = Base.PkgId("pkgid4")
+    build_id = UInt128(0)
     e = Base.Event()
-    @test nothing === @lock Base.require_lock Base.start_loading(pkid4)     # module pkgid4
-    @test nothing === @lock Base.require_lock Base.start_loading(pkid1)     # module pkgid1
+    @test nothing === @lock Base.require_lock Base.start_loading(pkid4, build_id, false)     # module pkgid4
+    @test nothing === @lock Base.require_lock Base.start_loading(pkid1, build_id, false)     # module pkgid1
     t1 = @async begin
-        @test nothing === @lock Base.require_lock Base.start_loading(pkid2) # @async module pkgid2; using pkgid1; end
+        @test nothing === @lock Base.require_lock Base.start_loading(pkid2, build_id, false) # @async module pkgid2; using pkgid1; end
         notify(e)
-        @test "loaded_pkgid1" == @lock Base.require_lock Base.start_loading(pkid1)
-        @lock Base.require_lock Base.end_loading(pkid2, "loaded_pkgid2")
+        @test loaded_pkgid1 == @lock Base.require_lock Base.start_loading(pkid1, build_id, false)
+        @lock Base.require_lock Base.end_loading(pkid2, loaded_pkgid2)
     end
     wait(e)
     reset(e)
     t2 = @async begin
-        @test nothing === @lock Base.require_lock Base.start_loading(pkid3) # @async module pkgid3; using pkgid2; end
+        @test nothing === @lock Base.require_lock Base.start_loading(pkid3, build_id, false) # @async module pkgid3; using pkgid2; end
         notify(e)
-        @test "loaded_pkgid2" == @lock Base.require_lock Base.start_loading(pkid2)
-        @lock Base.require_lock Base.end_loading(pkid3, "loaded_pkgid3")
+        @test loaded_pkgid2 == @lock Base.require_lock Base.start_loading(pkid2, build_id, false)
+        @lock Base.require_lock Base.end_loading(pkid3, loaded_pkgid3)
     end
     wait(e)
     reset(e)
-    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid3 -> pkgid2 -> pkgid1 -> pkgid3 && pkgid4"),
-        @lock Base.require_lock Base.start_loading(pkid3)).value            # try using pkgid3
-    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid4 -> pkgid4 && pkgid1"),
-        @lock Base.require_lock Base.start_loading(pkid4)).value            # try using pkgid4
-    @lock Base.require_lock Base.end_loading(pkid1, "loaded_pkgid1")        # end
-    @lock Base.require_lock Base.end_loading(pkid4, "loaded_pkgid4")        # end
+    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid3 using pkgid2 using pkgid1 using pkgid3 (while loading pkgid4)"),
+        @lock Base.require_lock Base.start_loading(pkid3, build_id, false)).value            # try using pkgid3
+    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid4 using pkgid4 (while loading pkgid1)"),
+        @lock Base.require_lock Base.start_loading(pkid4, build_id, false)).value            # try using pkgid4
+    @lock Base.require_lock Base.end_loading(pkid1, loaded_pkgid1)        # end
+    @lock Base.require_lock Base.end_loading(pkid4, loaded_pkgid4)        # end
     wait(t2)
     wait(t1)
 end
 
 @testset "Upgradable stdlibs" begin
     @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using DelimitedFiles'`)
+    @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using Statistics'`)
+end
+
+@testset "relocatable upgrades #51989" begin
+    function loading_test_success(cmd)
+        mktemp() do _, output
+            ok = success(pipeline(cmd; stdout=output, stderr=output))
+            if !ok
+                seekstart(output)
+                write(stderr, read(output))
+            end
+            return ok
+        end
+    end
+
+    mkdepottempdir() do depot
+        # realpath is needed because Pkg is used for one of the precompile paths below, and Pkg calls realpath on the
+        # project path so the cache file slug will be different if the tempdir is given as a symlink
+        # (which it often is on MacOS) which would break the test.
+
+        # Create fake `Foo.jl` package with two files:
+        foo_path = joinpath(depot, "dev", "Foo51989")
+        mkpath(joinpath(foo_path, "src"))
+        write(joinpath(foo_path, "src", "Foo51989.jl"),
+            """
+            module Foo51989
+            include("internal.jl")
+            end
+            """)
+        write(joinpath(foo_path, "src", "internal.jl"),
+            "const a = \"asd\"")
+        write(joinpath(foo_path, "Project.toml"),
+            """
+            name = "Foo51989"
+            uuid = "00000000-0000-0000-0000-000000000001"
+            version = "1.0.0"
+            """)
+        write(joinpath(foo_path, "Manifest.toml"),
+            """
+            julia_version = "1.13.0"
+            manifest_format = "2.0"
+
+            [[deps.Foo51989]]
+            path = "."
+            uuid = "00000000-0000-0000-0000-000000000001"
+            version = "1.0.0"
+            """)
+
+        # In our depot, `precompile` this `Foo` package.
+        @test loading_test_success(addenv(
+            `$(Base.julia_cmd()) --project=$foo_path --startup-file=no -e 'Base.Precompilation.precompilepkgs(["Foo51989"]); exit(0)'`,
+            "JULIA_DEPOT_PATH" => depot,
+        ))
+
+        # Get the size of the generated `.ji` file so that we can ensure that it gets altered
+        foo_compiled_path = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Foo51989")
+        cache_path = joinpath(foo_compiled_path, only(filter(endswith(".ji"), readdir(foo_compiled_path))))
+        cache_size = filesize(cache_path)
+
+        # Next, remove the dependence on `internal.jl` and delete it:
+        rm(joinpath(foo_path, "src", "internal.jl"))
+        open(joinpath(foo_path, "src", "Foo51989.jl"); write=true) do io
+            truncate(io, 0)
+            println(io, """
+            module Foo51989
+            end
+            """)
+        end
+
+        # Try to load `Foo`; this should trigger recompilation, not an error!
+        @test loading_test_success(addenv(
+            `$(Base.julia_cmd()) --project=$foo_path --startup-file=no -e 'using Foo51989; exit(0)'`,
+            "JULIA_DEPOT_PATH" => depot,
+        ))
+
+        # Ensure that there is still only one `.ji` file (it got replaced
+        # and the file size changed).
+        @test length(filter(endswith(".ji"), readdir(foo_compiled_path))) == 1
+        @test filesize(cache_path) != cache_size
+    end
+end
+
+@testset "Fallback for stdlib deps if manifest deps aren't found" begin
+    s = Sys.iswindows() ? ';' : ':'
+    mktempdir() do depot
+        # This manifest has a LibGit2 entry that is missing LibGit2_jll, which should be
+        # handled by falling back to the stdlib Project.toml for dependency truth.
+        badmanifest_test_dir = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps")
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir --startup-file=no -e 'using LibGit2'`,
+            "JULIA_DEPOT_PATH" => depot * s,
+        ))
+    end
+    mktempdir() do depot
+        # This manifest has a LibGit2 entry that has a LibGit2_jll with a git-tree-sha1
+        # which simulates an old manifest where LibGit2_jll was not a stdlib
+        badmanifest_test_dir2 = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps2")
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir2 --startup-file=no -e 'using LibGit2'`,
+            "JULIA_DEPOT_PATH" => depot * s,
+        ))
+    end
+    mkdepottempdir() do depot
+        # This manifest has a LibGit2 entry that is missing LibGit2_jll, and a LibGit2_jll entry
+        # with a git-tree-sha1, emulating an old manifest resolved when LibGit2_jll was a regular
+        # package. A copy of the stdlib is installed at that depot path so it is what gets loaded,
+        # which invalidates the bundled LibGit2 cache. The parallel precompiler then has to know
+        # that LibGit2 depends on LibGit2_jll although the manifest does not say so, otherwise
+        # its strict worker for LibGit2 fails (#63099)
+        badmanifest_test_dir3 = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps3")
+        jll_uuid = Base.UUID("e37daf67-58a4-590a-8e99-b0245dd2ffc5")
+        jll_copy = joinpath(depot, "packages", "LibGit2_jll", Base.version_slug(jll_uuid, Base.SHA1("1"^40)))
+        mkpath(dirname(jll_copy))
+        cp(joinpath(Sys.STDLIB, "LibGit2_jll"), jll_copy)
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir3 --startup-file=no -e 'using LibGit2'`,
+            "JULIA_DEPOT_PATH" => depot * s,
+        ))
+    end
+    mkdepottempdir() do depot
+        # Same for a dependency that is missing from the manifest altogether. Without the
+        # bundled stdlib caches in the depot path every stdlib in the chain has to be
+        # precompiled by the parallel precompiler, so its dependency graph has to include
+        # the stdlib deps the manifest does not list (#63099)
+        badmanifest_test_dir = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps")
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir --startup-file=no -e 'using LibGit2'`,
+            "JULIA_DEPOT_PATH" => depot,
+        ))
+        # and for the git-tree-sha1 entry that is not installed, so the stdlib gets loaded
+        badmanifest_test_dir2 = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps2")
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir2 --startup-file=no -e 'using LibGit2'`,
+            "JULIA_DEPOT_PATH" => depot,
+        ))
+    end
+    mkdepottempdir() do depot
+        # This manifest has a Statistics entry without its weakdeps and extensions, emulating
+        # a manifest from a version where SparseArraysExt did not exist yet. The extension
+        # has to be found from the stdlib Project.toml, both when loading and when building
+        # the precompilation dependency graph
+        badmanifest_test_dir4 = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps4")
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir4 --startup-file=no -e 'using Statistics, SparseArrays; exit(Base.get_extension(Statistics, :SparseArraysExt) === nothing ? 1 : 0)'`,
+            "JULIA_DEPOT_PATH" => depot * s,
+        ))
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir4 --startup-file=no -e 'Base.Precompilation.precompilepkgs(; io=devnull)'`,
+            "JULIA_DEPOT_PATH" => depot,
+        ))
+        ext_cache_dir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "SparseArraysExt")
+        @test isdir(ext_cache_dir) && !isempty(filter(endswith(".ji"), readdir(ext_cache_dir)))
+    end
+end
+
+@testset "code coverage disabled during precompilation" begin
+    mkdepottempdir() do depot
+        cov_test_dir = joinpath(depot, "CovTest.jl")
+        cp(joinpath(@__DIR__, "project", "deps", "CovTest.jl"), cov_test_dir)
+        cov_cache_dir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CovTest")
+        # Do not let an outer tracefile redirect .cov output.
+        cov_exename = Base.julia_cmd()[1]
+        function rm_cov_files()
+            for cov_file in filter(endswith(".cov"), readdir(joinpath(cov_test_dir, "src"), join=true))
+                rm(cov_file)
+            end
+            @test !cov_exists()
+        end
+        cov_files() = filter(endswith(".cov"), readdir(joinpath(cov_test_dir, "src"), join=true))
+        cov_exists() = !isempty(cov_files())
+        # whether any line was recorded as executed (a coverage-instrumented
+        # package image lists its lines with zero counts as soon as it is loaded)
+        function cov_hit()
+            for cov_file in cov_files()
+                hit = open(cov_file) do io
+                    any(eachline(io)) do line
+                        m = match(r"^\s*(\d+) ", line)
+                        m !== nothing && parse(Int, m[1]) > 0
+                    end
+                end
+                hit && return true
+            end
+            return false
+        end
+
+        rm_cov_files() # clear out any coverage files first
+        @test !cov_exists()
+
+        cd(cov_test_dir) do
+            # In our depot, precompile CovTest.jl with coverage on
+            @test success(addenv(
+                `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; exit(0)'`,
+                "JULIA_DEPOT_PATH" => depot,
+            ))
+            @test !isempty(filter(!endswith(".ji"), readdir(cov_cache_dir))) # check that object cache file(s) exists
+            @test !cov_hit()
+            rm_cov_files()
+
+            # same again but call foo(), which is in the pkgimage, and should generate coverage
+            @test success(addenv(
+                `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; foo(); exit(0)'`,
+                "JULIA_DEPOT_PATH" => depot,
+            ))
+            @test cov_hit()
+            rm_cov_files()
+
+            # same again but call bar(), which is NOT in the pkgimage, and should generate coverage
+            @test success(addenv(
+                `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; bar(); exit(0)'`,
+                "JULIA_DEPOT_PATH" => depot,
+            ))
+            @test cov_hit()
+            rm_cov_files()
+        end
+    end
+end
+
+@testset "CacheFlags coverage path" begin
+    cf = Base.CacheFlags(Base.CacheFlags(coverage=1); coverage_path="/a \"b\"")
+    @test parse(Base.CacheFlags, sprint(show, cf)) == cf
+    @test Core.eval(Base, Meta.parse(sprint(show, cf))) == cf
+    plain = Base.CacheFlags(cf; coverage_path=nothing)
+    @test plain.coverage_path === nothing
+    @test parse(Base.CacheFlags, sprint(show, plain)) == plain
+    @test Base.CacheFlags(cf; coverage=0).coverage_path === nothing
+    @test Base.CacheFlags(cf; opt_level=0).coverage_path == cf.coverage_path
+    # the path is no part of the cache's identity
+    @test Base.compilecache_path(Base.PkgId("Foo"), ""; flags=cf) == Base.compilecache_path(Base.PkgId("Foo"), ""; flags=plain)
+end
+
+# with an instrumented system image, path coverage cannot use plain caches
+@testset "path coverage uses plain caches without code from the tracked path" begin
+    Base.match_cache_coverage(Base.CacheFlags(coverage=0), Base.CacheFlags(coverage=1)) && return
+    mkdepottempdir() do depot
+        # tracked paths are compared as resolved, and macOS temp dirs sit behind a symlink
+        pkgs = joinpath(realpath(depot), "pkgs")
+        depdir = joinpath(pkgs, "CovDep")
+        topdir = joinpath(pkgs, "CovTop")
+        mkpath(joinpath(depdir, "src"))
+        mkpath(joinpath(topdir, "src"))
+        write(joinpath(depdir, "Project.toml"), """
+            name = "CovDep"
+            uuid = "7d5e6c1a-3f0b-4e8e-9d6c-1a2b3c4d5e6f"
+            version = "0.1.0"
+
+            [deps]
+            Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+            """)
+        write(joinpath(depdir, "src", "CovDep.jl"), """
+            module CovDep
+            using Printf
+            f(x) = @sprintf("%d", x)
+            end
+            """)
+        write(joinpath(topdir, "Project.toml"), """
+            name = "CovTop"
+            uuid = "0b9d4d0e-6a43-4c86-9d2b-3c8e1f7a5b42"
+            version = "0.1.0"
+
+            [deps]
+            CovDep = "7d5e6c1a-3f0b-4e8e-9d6c-1a2b3c4d5e6f"
+            """)
+        write(joinpath(topdir, "src", "CovTop.jl"), """
+            module CovTop
+            using CovDep
+            g(x) = CovDep.f(x)
+            precompile(g, (Int,))
+            end
+            """)
+        compiled = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)")
+        sep = Sys.iswindows() ? ';' : ':'
+        # the trailing separator keeps the bundled stdlib caches on the depot path
+        env = ("JULIA_DEPOT_PATH" => depot * sep, "JULIA_LOAD_PATH" => pkgs * sep * "@stdlib")
+        exename = Base.julia_cmd()[1]
+        covcmd(cov, code) = addenv(`$exename --startup-file=no --pkgimages=yes $cov -e $code`, env...)
+        ncaches(pkg) = count(endswith(".ji"), readdir(joinpath(compiled, pkg)))
+
+        @test success(covcmd(`--code-coverage=none`, "using CovTop"))
+        @test ncaches("CovDep") == ncaches("CovTop") == 1
+        # restoring a plain cache directly, bypassing the loader's checks, needs its approval
+        plaindep = only(filter(endswith(".ji"), readdir(joinpath(compiled, "CovDep"), join=true)))
+        restore = """
+            pkg = Base.identify_package("CovDep")
+            path = $(repr(plaindep))
+            r = @lock Base.require_lock Base._tryrequire_from_serialized(pkg, path, Base.ocachefile_from_cachefile(path))
+            exit(r isa Module ? 0 : occursin("coverage", sprint(showerror, r)) ? 2 : 1)
+            """
+        @test success(covcmd(`--code-coverage=none`, restore))
+        p = run(ignorestatus(covcmd(`--code-coverage=@$depdir`, restore)))
+        @test p.exitcode == 2
+        # tracking another path keeps using the plain caches
+        @test success(covcmd(`--code-coverage=@$(joinpath(depot, "elsewhere"))`, "using CovTop"))
+        @test ncaches("CovDep") == ncaches("CovTop") == 1
+        # a precompilation driver without coverage judges the caches for the requested
+        # path, as `Pkg.test(coverage=true)` does; the manifest's syntax versions match
+        # those of the load path above, so the caches are shared
+        envdir = joinpath(depot, "env")
+        mkpath(envdir)
+        write(joinpath(envdir, "Project.toml"), """
+            [deps]
+            CovTop = "0b9d4d0e-6a43-4c86-9d2b-3c8e1f7a5b42"
+            """)
+        write(joinpath(envdir, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.CovDep]]
+            deps = ["Printf"]
+            path = $(repr(depdir))
+            syntax.julia_version = "$(join(Base.LATEST_STABLE_EDITION, '.'))"
+            uuid = "7d5e6c1a-3f0b-4e8e-9d6c-1a2b3c4d5e6f"
+            version = "0.1.0"
+
+            [[deps.CovTop]]
+            deps = ["CovDep"]
+            path = $(repr(topdir))
+            syntax.julia_version = "$(join(Base.LATEST_STABLE_EDITION, '.'))"
+            uuid = "0b9d4d0e-6a43-4c86-9d2b-3c8e1f7a5b42"
+            version = "0.1.0"
+
+            [[deps.Printf]]
+            deps = ["Unicode"]
+            uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+
+            [[deps.Unicode]]
+            uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
+            """)
+        function driver(tracked)
+            code = """
+                flags = Cmd(["--code-coverage=@" * $(repr(tracked))])
+                probe = `\$(Base.julia_cmd()) \$flags --eval 'show(Base.CacheFlags())'`
+                cacheflags = parse(Base.CacheFlags, read(probe, String))
+                Base.Precompilation.precompilepkgs(["CovTop"]; configs = flags => cacheflags, io = devnull)
+                """
+            return addenv(`$exename --startup-file=no --pkgimages=yes --code-coverage=none --project=$envdir -e $code`,
+                          "JULIA_DEPOT_PATH" => depot * sep, "JULIA_LOAD_PATH" => "@" * sep * "@stdlib")
+        end
+        @test success(driver(joinpath(depot, "elsewhere")))
+        @test ncaches("CovDep") == ncaches("CovTop") == 1
+        @test success(driver(depdir))
+        @test ncaches("CovDep") == ncaches("CovTop") == 2
+        @test !isdir(joinpath(compiled, "Printf"))
+        # tracking a dependency instruments it and its dependents, but not the bundled Printf
+        @test success(covcmd(`--code-coverage=@$depdir`, "using CovTop; CovTop.g(1)"))
+        @test ncaches("CovDep") == ncaches("CovTop") == 2
+        @test !isdir(joinpath(compiled, "Printf"))
+        cov = filter(endswith(".cov"), readdir(joinpath(depdir, "src"), join=true))
+        @test occursin(r"^\s+1 f\(x\)"m, read(only(cov), String))
+        # code from the system image's sources can be part of any cache
+        @test success(covcmd(`--code-coverage=@$(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base"))`, "using Printf"))
+        @test isdir(joinpath(compiled, "Printf"))
+    end
+end
+
+@testset "command-line flags" begin
+    mkdepottempdir() do depot_path mktempdir() do dir
+        # generate a Parent.jl and Child.jl package, with Parent depending on Child
+        open(joinpath(dir, "Child.jl"), "w") do io
+            println(io, """
+                module Child
+                end""")
+        end
+        open(joinpath(dir, "Parent.jl"), "w") do io
+            println(io, """
+                module Parent
+                using Child
+                end""")
+        end
+
+        # helper function to load a package and return the output
+        function load_package(name, args=``)
+            code = "Base.disable_parallel_precompile = true; using $name"
+            cmd = addenv(`$(Base.julia_cmd()) -e $code $args`,
+                        "JULIA_LOAD_PATH" => dir,
+                        "JULIA_DEPOT_PATH" => depot_path,
+                        "JULIA_DEBUG" => "loading")
+
+            out = Base.PipeEndpoint()
+            log = @async read(out, String)
+            try
+                proc = run(pipeline(cmd, stdout=out, stderr=out))
+                @test success(proc)
+            catch
+                @show fetch(log)
+                rethrow()
+            end
+            return fetch(log)
+        end
+
+        log = load_package("Parent", `--compiled-modules=no --pkgimages=no`)
+        @test !occursin(r"Generating (cache|object cache) file", log)
+        @test !occursin(r"Loading (cache|object cache) file", log)
+
+
+        ## tests for `--compiled-modules`, which generates cache files
+
+        log = load_package("Child", `--compiled-modules=yes --pkgimages=no`)
+        @test occursin(r"Generating cache file for Child", log)
+        @test occursin(r"Loading cache file .+ for Child", log)
+
+        # with `--compiled-modules=existing` we should only precompile Child
+        log = load_package("Parent", `--compiled-modules=existing --pkgimages=no`)
+        @test !occursin(r"Generating cache file for Child", log)
+        @test occursin(r"Loading cache file .+ for Child", log)
+        @test !occursin(r"Generating cache file for Parent", log)
+        @test !occursin(r"Loading cache file .+ for Parent", log)
+
+        # the default is `--compiled-modules=yes`, which should now precompile Parent
+        log = load_package("Parent", `--pkgimages=no`)
+        @test !occursin(r"Generating cache file for Child", log)
+        @test occursin(r"Loading cache file .+ for Child", log)
+        @test occursin(r"Generating cache file for Parent", log)
+        @test occursin(r"Loading cache file .+ for Parent", log)
+
+
+        ## tests for `--pkgimages`, which generates object cache files
+
+        log = load_package("Child", `--compiled-modules=yes --pkgimages=yes`)
+        @test occursin(r"Generating object cache file for Child", log)
+        @test occursin(r"Loading object cache file .+ for Child", log)
+
+        # with `--pkgimages=existing` we should only generate code for Child
+        log = load_package("Parent", `--compiled-modules=yes --pkgimages=existing`)
+        @test !occursin(r"Generating object cache file for Child", log)
+        @test occursin(r"Loading object cache file .+ for Child", log)
+        @test !occursin(r"Generating object cache file for Parent", log)
+        @test !occursin(r"Loading object cache file .+ for Parent", log)
+
+        # the default is `--pkgimages=yes`, which should now generate code for Parent
+        log = load_package("Parent")
+        @test !occursin(r"Generating object cache file for Child", log)
+        @test occursin(r"Loading object cache file .+ for Child", log)
+        @test occursin(r"Generating object cache file for Parent", log)
+        @test occursin(r"Loading object cache file .+ for Parent", log)
+    end end
+end
+
+@testset "including non-existent file throws proper error #52462" begin
+    mkdepottempdir() do depot
+        project_path = joinpath(depot, "project")
+        mkpath(project_path)
+
+        # Create a `Foo.jl` package
+        foo_path = joinpath(depot, "dev", "Foo52462")
+        mkpath(joinpath(foo_path, "src"))
+        open(joinpath(foo_path, "src", "Foo52462.jl"); write=true) do io
+            println(io, """
+            module Foo52462
+            include("non-existent.jl")
+            end
+            """)
+        end
+        open(joinpath(foo_path, "Project.toml"); write=true) do io
+            println(io, """
+            name = "Foo52462"
+            uuid = "00000000-0000-0000-0000-000000000001"
+            version = "1.0.0"
+            """)
+        end
+
+        file = joinpath(depot, "dev", "non-existent.jl")
+        @test try
+            include(file); false
+        catch e
+            @test e isa SystemError
+            @test e.prefix == "opening file $(repr(file))"
+            true
+        end
+        touch(file)
+        @test include_dependency(file) === nothing
+        chmod(file, 0x000)
+
+        # same for include_dependency: #52063
+        dir = mktempdir() do dir
+            @test include_dependency(dir) === nothing
+            dir
+        end
+        @test try
+            include_dependency(dir); false
+        catch e
+            @test e isa SystemError
+            @test e.prefix == "opening file or folder $(repr(dir))"
+            true
+        end
+    end
+end
+
+@testset "-m" begin
+    rot13proj = joinpath(@__DIR__, "project", "Rot13")
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no --project=$rot13proj -m Rot13 --project nowhere ABJURER`) == "--cebwrpg abjurer NOWHERE "
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no --project=$rot13proj -m Rot13.Rot26 --project nowhere ABJURER`) == "--project nowhere ABJURER "
+end
+
+@testset "workspace loading" begin
+   old_load_path = copy(LOAD_PATH)
+   try
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject"))
+       @test Base.get_preferences()["value"] == 1
+       @test Base.get_preferences()["x"] == 1
+
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "sub"))
+       id = Base.identify_package("Devved")
+       @test isfile(Base.locate_package(id))
+       @test Base.identify_package("Devved2") === nothing
+       id3 = Base.identify_package("MyPkg")
+       @test isfile(Base.locate_package(id3))
+
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "PackageThatIsSub"))
+       id_pkg = Base.identify_package("PackageThatIsSub")
+       @test Base.identify_package(id_pkg, "Devved") === nothing
+       id_dev2 = Base.identify_package(id_pkg, "Devved2")
+       @test isfile(Base.locate_package(id_dev2))
+       id_mypkg = Base.identify_package("MyPkg")
+       @test isfile(Base.locate_package(id_mypkg))
+       id_dev = Base.identify_package(id_mypkg, "Devved")
+       @test isfile(Base.locate_package(id_dev))
+       @test Base.get_preferences()["value"] == 2
+       @test Base.get_preferences()["x"] == 1
+       @test Base.get_preferences()["y"] == 2
+
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "PackageThatIsSub", "test"))
+       id_pkg = Base.identify_package("PackageThatIsSub")
+       @test isfile(Base.locate_package(id_pkg))
+       @test Base.identify_package(id_pkg, "Devved") === nothing
+       id_dev2 = Base.identify_package(id_pkg, "Devved2")
+       @test isfile(Base.locate_package(id_dev2))
+       id_mypkg = Base.identify_package("MyPkg")
+       @test isfile(Base.locate_package(id_mypkg))
+       id_dev = Base.identify_package(id_mypkg, "Devved")
+       @test isfile(Base.locate_package(id_dev))
+       @test Base.get_preferences()["value"] == 3
+       @test Base.get_preferences()["x"] == 1
+       @test Base.get_preferences()["y"] == 2
+       @test Base.get_preferences()["z"] == 3
+
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "test"))
+       id_mypkg = Base.identify_package("MyPkg")
+       id_dev = Base.identify_package(id_mypkg, "Devved")
+       @test isfile(Base.locate_package(id_dev))
+       @test Base.identify_package("Devved2") === nothing
+
+       # Test that workspace projects can be specified with subfolder paths
+       # and that base_project searches upward through multiple directory levels
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "nested", "deep"))
+       proj_file = joinpath(@__DIR__, "project", "SubProject", "nested", "deep", "Project.toml")
+       base_proj = Base.base_project(proj_file)
+       @test base_proj == joinpath(@__DIR__, "project", "SubProject", "Project.toml")
+
+    finally
+       copy!(LOAD_PATH, old_load_path)
+    end
+end
+
+@testset "project path handling" begin
+    old_load_path = copy(LOAD_PATH)
+    try
+        push!(LOAD_PATH, joinpath(@__DIR__, "project", "ProjectPath"))
+        id_project = Base.identify_package("ProjectPath")
+        Base.locate_package(id_project)
+        @test Base.locate_package(id_project) == joinpath(@__DIR__, "project", "ProjectPath", "CustomPath.jl")
+
+        id_dep = Base.identify_package("ProjectPathDep")
+        @test Base.locate_package(id_dep) == joinpath(@__DIR__, "project", "ProjectPath", "ProjectPathDep", "CustomPath.jl")
+    finally
+        copy!(LOAD_PATH, old_load_path)
+    end
+end
+
+@testset "extension path computation name collision" begin
+    old_load_path = copy(LOAD_PATH)
+    try
+        empty!(LOAD_PATH)
+        push!(LOAD_PATH, joinpath(@__DIR__, "project", "Extensions", "ExtNameCollision_A"))
+        push!(LOAD_PATH, joinpath(@__DIR__, "project", "Extensions", "ExtNameCollision_B"))
+        ext_B = Base.PkgId(Base.uuid5(Base.identify_package("ExtNameCollision_B").uuid, "REPLExt"), "REPLExt")
+        @test Base.locate_package(ext_B) == joinpath(@__DIR__, "project",  "Extensions", "ExtNameCollision_B", "ext", "REPLExt.jl")
+    finally
+        copy!(LOAD_PATH, old_load_path)
+    end
+end
+
+@testset "require_stdlib loading duplication" begin
+    # Run with default bounds checking so that the bundled stdlib pkgimages are usable;
+    # the ones for `--check-bounds=yes` are not bundled by default.
+    depot_path = mkdepottempdir()
+    script = """
+    using Test
+    depot_path = $(repr(depot_path))
+    original_depot_path = copy(DEPOT_PATH)
+    push!(empty!(DEPOT_PATH), depot_path)
+    Base64_key = Base.PkgId(Base.UUID("2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"), "Base64")
+    Base.unreference_module(Base64_key)
+    cc = Base.compilecache(Base64_key)
+    sourcespec = Base.locate_package_load_spec(Base64_key)
+    @test Base.stale_cachefile(Base64_key, UInt128(0), sourcespec, cc[1]) !== true
+    empty!(DEPOT_PATH)
+    Base.require_stdlib(Base64_key)
+    push!(DEPOT_PATH, depot_path)
+    append!(DEPOT_PATH, original_depot_path)
+    oldloaded = @lock(Base.require_lock, length(get(Base.loaded_precompiles, Base64_key, Module[])))
+    Base.require(Base64_key)
+    @test @lock(Base.require_lock, length(get(Base.loaded_precompiles, Base64_key, Module[]))) == oldloaded
+    Base.unreference_module(Base64_key)
+    empty!(DEPOT_PATH)
+    push!(DEPOT_PATH, depot_path)
+    Base.require(Base64_key)
+    @test @lock(Base.require_lock, length(get(Base.loaded_precompiles, Base64_key, Module[]))) == oldloaded + 1
+    """
+    cmd = `$(Base.julia_cmd()) --check-bounds=auto --startup-file=no -e $script`
+    @test success(pipeline(cmd; stdout, stderr))
+end
+
+@testset "extension triggered by a dependency loaded with require_stdlib" begin
+    # The REPL loads Printf this way (through Dates) before any user code runs.
+    # Loading a package that depends on Printf must still trigger extensions on Printf.
+    depot_path = mkdepottempdir()
+    dir = mktempdir()
+    printf_uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+    for (name, uuid, extra, src) in (
+            ("A", "11111111-1111-1111-1111-111111111111",
+             "[deps]\nPrintf = \"$printf_uuid\"\n",
+             "module A\nusing Printf\nend\n"),
+            ("B", "22222222-2222-2222-2222-222222222222",
+             "[weakdeps]\nPrintf = \"$printf_uuid\"\n[extensions]\nBPrintfExt = \"Printf\"\n",
+             "module B\nend\n"))
+        mkpath(joinpath(dir, name, "src"))
+        write(joinpath(dir, name, "Project.toml"), "name = \"$name\"\nuuid = \"$uuid\"\nversion = \"0.1.0\"\n$extra")
+        write(joinpath(dir, name, "src", "$name.jl"), src)
+    end
+    mkpath(joinpath(dir, "B", "ext"))
+    write(joinpath(dir, "B", "ext", "BPrintfExt.jl"), "module BPrintfExt\nusing B, Printf\nend\n")
+    script = """
+    using Test
+    pushfirst!(LOAD_PATH, $(repr(dir)))
+    Printf_key = Base.PkgId(Base.UUID($(repr(printf_uuid))), "Printf")
+    Printf = Base.require_stdlib(Printf_key)
+    @test !haskey(Base.loaded_modules, Printf_key)
+    using B, A
+    @test get(Base.loaded_modules, Printf_key, nothing) === Printf
+    @test Base.get_extension(B, :BPrintfExt) isa Module
+    """
+    sep = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(`$(Base.julia_cmd()) --check-bounds=auto --startup-file=no -e $script`,
+                 "JULIA_DEPOT_PATH" => depot_path * sep)
+    # The first run loads A right after compiling it, and the second run loads it from the cache.
+    for _ in 1:2
+        @test success(pipeline(cmd; stdout, stderr))
+    end
+end
+
+@testset "dependency loaded with require_stdlib is checked against the environment" begin
+    # A manifest from before JuliaSyntaxHighlighting changed its UUID (#59365).
+    depot_path = mkdepottempdir()
+    dir = mktempdir()
+    write(joinpath(dir, "Project.toml"), """
+        [deps]
+        InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+        """)
+    write(joinpath(dir, "Manifest.toml"), """
+        manifest_format = "2.0"
+
+        [[deps.InteractiveUtils]]
+        deps = ["Markdown"]
+        uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+
+        [[deps.Markdown]]
+        deps = ["JuliaSyntaxHighlighting", "StyledStrings"]
+        uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
+
+        [[deps.JuliaSyntaxHighlighting]]
+        deps = ["StyledStrings"]
+        uuid = "dc6e5ff7-fb65-4e79-a425-ec3bc9c03011"
+
+        [[deps.StyledStrings]]
+        uuid = "f489334b-da3d-4c2e-b8f0-e476e12c162b"
+        """)
+    # Test itself depends on Markdown, so it cannot be loaded in this environment.
+    script = """
+    Markdown_key = Base.PkgId(Base.UUID("d6f4376e-aef5-505a-96c1-9c027394607a"), "Markdown")
+    Base.require_stdlib(Markdown_key)
+    loaded = try
+        @eval using InteractiveUtils
+        true
+    catch
+        false
+    end
+    exit(loaded || haskey(Base.loaded_modules, Markdown_key))
+    """
+    sep = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(`$(Base.julia_cmd()) --check-bounds=auto --startup-file=no --project=$dir -e $script`,
+                 "JULIA_DEPOT_PATH" => depot_path * sep, "JULIA_LOAD_PATH" => "@$(sep)@stdlib")
+    @test success(pipeline(cmd; stdout, stderr=devnull))
+end
+
+# Test `import Package as M`
+module M57965
+    import Random as R
+end
+@test M57965.R === Base.require(M57965, :Random)
+
+# #58272 - _eval_import accidentally reuses evaluated "from" path
+module M58272_1
+    const x = 1
+    module M58272_2
+        const y = 3
+        const x = 2
+    end
+end
+module M58272_to end
+@eval M58272_to import ..M58272_1: M58272_2.y, x
+@test @eval M58272_to x === 1
+
+@testset "Syntax Versioning" begin
+    old_load_path = copy(LOAD_PATH)
+    try
+        # Test implicit environments (packages loaded from directories)
+        push!(LOAD_PATH, joinpath(@__DIR__, "project", "SyntaxVersioning", "implicit"))
+        # Explicit syntax.julia_version = "1.13"
+        @test invokelatest(getglobal, (@eval (using Versioned1; Versioned1)), :ver) == v"1.13"
+        # Explicit syntax.julia_version = "1.14"
+        @test invokelatest(getglobal, (@eval (using Versioned2; Versioned2)), :ver) == v"1.14"
+        # Inherited from compat.julia = "1.13-2"
+        @test invokelatest(getglobal, (@eval (using Versioned3; Versioned3)), :ver) == v"1.13"
+        # No syntax.julia_version, falls back to LATEST_STABLE_EDITION
+        @test invokelatest(getglobal, (@eval (using Versioned4; Versioned4)), :ver) == VersionNumber(Base.LATEST_STABLE_EDITION...)
+        # Inherited from compat.julia = "1.14-2"
+        @test invokelatest(getglobal, (@eval (using Versioned5; Versioned5)), :ver) == v"1.14"
+    finally
+        copy!(LOAD_PATH, old_load_path)
+    end
+
+    # Test explicit environments (packages loaded from Manifest.toml)
+    old_load_path = copy(LOAD_PATH)
+    old_active_project = Base.ACTIVE_PROJECT[]
+    explicit_env = joinpath(@__DIR__, "project", "SyntaxVersioning", "explicit")
+    try
+        Base.ACTIVE_PROJECT[] = joinpath(explicit_env, "Project.toml")
+        empty!(LOAD_PATH)
+        push!(LOAD_PATH, "@")
+        # syntax.julia_version from Manifest = "1.13"
+        @test invokelatest(getglobal, (@eval (using VersionedDep1; VersionedDep1)), :ver) == v"1.13"
+        # syntax.julia_version from Manifest = "1.14"
+        @test invokelatest(getglobal, (@eval (using VersionedDep2; VersionedDep2)), :ver) == v"1.14"
+        # syntax.julia_version from Manifest = "1.0" should be clamped to "1.13"
+        @test invokelatest(getglobal, (@eval (using VersionedDep3; VersionedDep3)), :ver) == v"1.13"
+    finally
+        Base.ACTIVE_PROJECT[] = old_active_project
+        copy!(LOAD_PATH, old_load_path)
+    end
+
+    # Test that the selected project affects code evaluation in `Main` for both `-e` and scripts
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep1")) -e 'print((Base.Experimental.@VERSION).syntax)'`, String)) == v"1.13"
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep2")) -e 'print((Base.Experimental.@VERSION).syntax)'`, String)) == v"1.14"
+
+    syntax_version_script = joinpath(@__DIR__, "testhelpers", "print_syntax_version.jl")
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep1")) $syntax_version_script`, String)) == v"1.13"
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep2")) $syntax_version_script`, String)) == v"1.14"
+
+    function include_world_age()
+       m = @eval(module IncludeWorldAgeTest end)
+       @test_nowarn @test include_string(m, "Base.Experimental.@VERSION").syntax == (Base.Experimental.@VERSION).syntax
+       @test_nowarn @test Core.include(m, joinpath(@__DIR__, "testhelpers", "return_syntax_version.jl")) == (Base.Experimental.@VERSION).syntax
+       Base.set_syntax_version(m, v"1.13")
+       @test_nowarn @test include_string(m, "Base.Experimental.@VERSION").syntax == v"1.13"
+       @test_nowarn @test Core.include(m, joinpath(@__DIR__, "testhelpers", "return_syntax_version.jl")) == v"1.13"
+    end
+    include_world_age()
+
+    # A module parsed in a v"1.13" module should also be v"1.13"
+    let m = Module(:NoSlotParent)
+        Base.set_syntax_version(m, v"1.13")
+        include_string(m, "module NoSlot end")
+        noslot = invokelatest(getglobal, m, :NoSlot)
+        @test invokelatest(include_string, noslot, "Base.Experimental.@VERSION").syntax == v"1.13"
+    end
+end
+
+@testset "require_stdlib with isolated depot" begin
+    # Test that require_stdlib works with JULIA_DEPOT_PATH not including bundled depot
+    tmpdir = mktempdir()
+    try
+        script = "Base.require_stdlib(Base.PkgId(Base.UUID(\"2a0f44e3-6c83-55bd-87e4-b1978d98bd5f\"), \"Base64\")); println(\"SUCCESS\")"
+        # `--check-bounds=yes` stdlib pkgimages are not bundled by default
+        cmd = addenv(`$(Base.julia_cmd()) --check-bounds=auto --startup-file=no -e $script`, "JULIA_DEPOT_PATH" => tmpdir, "JULIA_DEBUG" => "loading")
+        out = PipeBuffer()
+        run(pipeline(cmd, stdout=out, stderr=out))
+        output = read(out, String)
+        # Should not precompile since it loads from bundled depot
+        @test contains(output, "Loading object cache file")
+        @test !contains(output, "Precompiling")
+        @test contains(output, "SUCCESS")
+    finally
+        rm(tmpdir; recursive=true, force=true)
+    end
+end
+
+@testset "CACHE_FETCH_HOOK" begin
+    mktempdir() do dir
+        # a minimal package to precompile/load in child processes
+        pkgdir = joinpath(dir, "CacheHookPkg")
+        mkpath(joinpath(pkgdir, "src"))
+        write(joinpath(pkgdir, "Project.toml"), """
+            name = "CacheHookPkg"
+            uuid = "b1e9525c-3f39-4e6a-b8b8-c1d9f8d1a001"
+            version = "0.1.0"
+            """)
+        write(joinpath(pkgdir, "src", "CacheHookPkg.jl"),
+              "module CacheHookPkg\nanswer() = 42\nend\n")
+
+        depot = joinpath(dir, "depot")
+        stash = joinpath(dir, "stash")
+        mkpath(stash)
+        listsep = Sys.iswindows() ? ";" : ":"
+        childenv = ["JULIA_DEPOT_PATH" => depot * listsep,
+                    "JULIA_LOAD_PATH" => pkgdir * listsep * "@stdlib"]
+        runchild(script) = run(addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`, childenv...))
+
+        # generate a genuine cachefile, then stash it away (leaving the depot
+        # cold). The stash/delete happens in *this* process: the child that
+        # loaded the package cannot remove its own pkgimage on Windows (mapped
+        # DLLs are locked while loaded)
+        runchild("using CacheHookPkg")
+        cachedir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CacheHookPkg")
+        @test isdir(cachedir)
+        for f in readdir(cachedir; join=true)
+            cp(f, joinpath(stash, basename(f)))
+        end
+        rm(cachedir; recursive=true)
+        @test !isempty(readdir(stash))
+
+        # a hook that restores the stashed files must satisfy loading with no
+        # local compile (exactly the stashed candidate files, hook hit once);
+        # exercised on both the parallel-driver and the serial path
+        fetch_script = serial -> """
+            Base.disable_parallel_precompile = $serial
+            hits = Ref(0)
+            Base.CACHE_FETCH_HOOK[] = function (pkg, sourcepath)
+                @assert pkg.name == "CacheHookPkg"
+                @assert isfile(sourcepath)
+                hits[] += 1
+                cachedir = joinpath(DEPOT_PATH[1], "compiled", "v\$(VERSION.major).\$(VERSION.minor)", pkg.name)
+                mkpath(cachedir)
+                for f in readdir($(repr(stash)); join=true)
+                    cp(f, joinpath(cachedir, basename(f)); force=true)
+                end
+                return true
+            end
+            using CacheHookPkg
+            @assert CacheHookPkg.answer() == 42
+            @assert hits[] == 1
+            cachedir = dirname(only(Base.find_all_in_cache_path(Base.identify_package("CacheHookPkg"))))
+            @assert sort(readdir(cachedir)) == sort(readdir($(repr(stash)))) # no extra (recompiled) files
+            """
+        @test success(runchild(fetch_script(false)))
+        rm(joinpath(depot, "compiled"); recursive=true, force=true)
+        @test success(runchild(fetch_script(true)))
+        rm(joinpath(depot, "compiled"); recursive=true, force=true)
+
+        # a hook serving garbage is harmless: normal compilation takes over
+        @test success(runchild("""
+            Base.CACHE_FETCH_HOOK[] = function (pkg, sourcepath)
+                cachedir = joinpath(DEPOT_PATH[1], "compiled", "v\$(VERSION.major).\$(VERSION.minor)", pkg.name)
+                mkpath(cachedir)
+                write(joinpath(cachedir, pkg.name * "_garbage.ji"), "not a cachefile")
+                return true
+            end
+            using CacheHookPkg
+            @assert CacheHookPkg.answer() == 42
+            """))
+        rm(joinpath(depot, "compiled"); recursive=true, force=true)
+
+        # a throwing hook is demoted to a miss
+        @test success(runchild("""
+            Base.CACHE_FETCH_HOOK[] = (pkg, sourcepath) -> error("boom")
+            using CacheHookPkg
+            @assert CacheHookPkg.answer() == 42
+            """))
+
+        # guards: reentrant invocation is refused, and the helper declines
+        # while generating output; both directly observable in-process
+        @test success(runchild("""
+            inner = Ref{Any}(:unset)
+            Base.CACHE_FETCH_HOOK[] = function (pkg, sourcepath)
+                if inner[] === :unset
+                    inner[] = :running
+                    inner[] = Base.maybe_fetch_cache(pkg, sourcepath)
+                end
+                return false
+            end
+            @assert Base.maybe_fetch_cache(Base.PkgId("Fake"), $(repr(joinpath(pkgdir, "src", "CacheHookPkg.jl")))) === false
+            @assert inner[] === false  # the nested call was refused by the guard
+            """))
+    end
 end

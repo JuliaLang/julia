@@ -6,12 +6,17 @@
 
 #include <llvm/ADT/SmallSet.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/Analysis/OptimizationRemarkEmitter.h>
 #include <llvm/IR/Instructions.h>
 
 #include <utility>
 #include <map>
 
 #include "llvm-pass-helpers.h"
+
+namespace llvm {
+    class Loop;
+}
 
 namespace jl_alloc {
 
@@ -45,6 +50,8 @@ namespace jl_alloc {
         bool hasaggr:1;
         bool multiloc:1;
         bool hasload:1;
+        // The alloc has a unboxed object at this offset.
+        bool hasunboxed:1;
         llvm::Type *elty;
         llvm::SmallVector<MemOp,4> accesses;
         Field(uint32_t size, llvm::Type *elty)
@@ -53,6 +60,7 @@ namespace jl_alloc {
               hasaggr(false),
               multiloc(false),
               hasload(false),
+              hasunboxed(false),
               elty(elty)
         {
         }
@@ -66,7 +74,7 @@ namespace jl_alloc {
         bool escaped:1;
         // Address is leaked to functions that doesn't care where the object is allocated.
         bool addrescaped:1;
-        // There are reader of the memory
+        // There are readers of the memory
         bool hasload:1;
         // There are uses in gc_preserve intrinsics or ccall roots
         bool haspreserve:1;
@@ -74,7 +82,7 @@ namespace jl_alloc {
         bool refload:1;
         // There are objects fields being stored
         bool refstore:1;
-        // There are typeof call
+        // There are typeof calls
         // This can be optimized without optimizing out the allocation itself
         bool hastypeof:1;
         // There are store/load/memset on this object with offset or size (or value for memset)
@@ -86,11 +94,16 @@ namespace jl_alloc {
         bool returned:1;
         // The object is used in an error function
         bool haserror:1;
+        // For checking attributes of "uninitialized" or "zeroed" or unknown
+        llvm::AllocFnKind allockind;
 
         // The alloc has a Julia object reference not in an explicit field.
         bool has_unknown_objref:1;
         // The alloc has an aggregate Julia object reference not in an explicit field.
         bool has_unknown_objrefaggr:1;
+
+        // The alloc has an unboxed object at an unknown offset.
+        bool has_unknown_unboxed:1;
 
         void reset()
         {
@@ -104,15 +117,18 @@ namespace jl_alloc {
             hasunknownmem = false;
             returned = false;
             haserror = false;
+            allockind = llvm::AllocFnKind::Unknown;
             has_unknown_objref = false;
             has_unknown_objrefaggr = false;
+            has_unknown_unboxed = false;
             uses.clear();
             preserves.clear();
             memops.clear();
         }
+        void dump(llvm::raw_ostream &OS);
         void dump();
         bool addMemOp(llvm::Instruction *inst, unsigned opno, uint32_t offset, llvm::Type *elty,
-                      bool isstore, const llvm::DataLayout &DL);
+                      bool isload, bool isstore, const llvm::DataLayout &DL);
         std::pair<const uint32_t,Field> &getField(uint32_t offset, uint32_t size, llvm::Type *elty);
         std::map<uint32_t,Field>::iterator findLowerField(uint32_t offset)
         {
@@ -132,20 +148,24 @@ namespace jl_alloc {
     };
 
     struct EscapeAnalysisOptionalArgs {
-        //A set of basic blocks to run escape analysis over. Uses outside these basic blocks
-        //will not be considered. Defaults to nullptr, which means all uses of the allocation
-        //are considered
-        const llvm::SmallPtrSetImpl<const llvm::BasicBlock*> *valid_set;
+        // Ignore uses outside this loop. nullptr means all uses are considered.
+        const llvm::Loop *valid_loop = nullptr;
+        llvm::OptimizationRemarkEmitter *ORE = nullptr;
 
         EscapeAnalysisOptionalArgs() = default;
 
-        EscapeAnalysisOptionalArgs &with_valid_set(decltype(valid_set) valid_set) {
-            this->valid_set = valid_set;
+        EscapeAnalysisOptionalArgs &with_valid_loop(decltype(valid_loop) valid_loop) {
+            this->valid_loop = valid_loop;
+            return *this;
+        }
+
+        EscapeAnalysisOptionalArgs &with_optimization_remark_emitter(decltype(ORE) ORE) {
+            this->ORE = ORE;
             return *this;
         }
     };
 
-    void runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options=EscapeAnalysisOptionalArgs());
+    void runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options=EscapeAnalysisOptionalArgs());
 }
 
 

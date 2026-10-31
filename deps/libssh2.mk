@@ -4,23 +4,25 @@ LIBSSH2_GIT_URL := https://github.com/libssh2/libssh2.git
 LIBSSH2_TAR_URL = https://api.github.com/repos/libssh2/libssh2/tarball/$1
 $(eval $(call git-external,libssh2,LIBSSH2,CMakeLists.txt,,$(SRCCACHE)))
 
-ifeq ($(USE_SYSTEM_MBEDTLS), 0)
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
+ifeq ($(USE_SYSTEM_OPENSSL), 0)
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/openssl
 endif
 
 LIBSSH2_OPTS := $(CMAKE_COMMON) -DBUILD_SHARED_LIBS=ON -DBUILD_EXAMPLES=OFF \
 		-DCMAKE_BUILD_TYPE=Release
 
-ifeq ($(OS),WINNT)
-LIBSSH2_OPTS += -DCRYPTO_BACKEND=WinCNG -DENABLE_ZLIB_COMPRESSION=OFF
-ifeq ($(BUILD_OS),WINNT)
-LIBSSH2_OPTS += -G"MSYS Makefiles"
-endif
-else
-LIBSSH2_OPTS += -DCRYPTO_BACKEND=mbedTLS -DENABLE_ZLIB_COMPRESSION=OFF
+ifneq ($(fPIC),)
+LIBSSH2_OPTS += -DCMAKE_C_FLAGS="-fPIC"
 endif
 
-ifneq (,$(findstring $(OS),Linux FreeBSD))
+ifeq ($(OS),WINNT)
+LIBSSH2_OPTS += -DCRYPTO_BACKEND=WinCNG -DENABLE_ZLIB_COMPRESSION=OFF
+else
+LIBSSH2_OPTS += -DCRYPTO_BACKEND=OpenSSL -DENABLE_ZLIB_COMPRESSION=OFF
+LIBSSH2_OPTS += -DOPENSSL_ROOT_DIR=$(build_prefix)
+endif
+
+ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 LIBSSH2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
@@ -30,30 +32,72 @@ endif
 
 LIBSSH2_SRC_PATH := $(SRCCACHE)/$(LIBSSH2_SRC_DIR)
 
- # Apply patch to fix v1.10.0 CVE (https://github.com/libssh2/libssh2/issues/649), drop with v1.11
-$(LIBSSH2_SRC_PATH)/libssh2-userauth-check.patch-applied: $(LIBSSH2_SRC_PATH)/source-extracted
-	cd $(LIBSSH2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libssh2-userauth-check.patch
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch-applied: $(LIBSSH2_SRC_PATH)/source-extracted
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch
 	echo 1 > $@
 
-# issue:   https://github.com/JuliaLang/julia/issues/45645#issuecomment-1153214379
-# fix pr:  https://github.com/libssh2/libssh2/pull/711
-$(LIBSSH2_SRC_PATH)/libssh2-fix-import-lib-name.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-userauth-check.patch-applied
-	cd $(LIBSSH2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libssh2-fix-import-lib-name.patch
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2025-15661.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2025-15661.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: \
-	$(LIBSSH2_SRC_PATH)/libssh2-fix-import-lib-name.patch-applied
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-55199.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2025-15661.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-55199.patch
+	echo 1 > $@
 
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-extracted
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-55200.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-55199.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-55200.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-58050-3449752.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-55200.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-58050-3449752.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-58051-a9758da.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-58050-3449752.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-58051-a9758da.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-unconst-backport.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-58051-a9758da.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-unconst-backport.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66032.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-unconst-backport.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-66032.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66033.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66032.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-66033.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66034.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66033.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-66034.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66035.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66034.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-66035.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/source-patched: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66035.patch-applied
+	echo 1 > $@
+
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-patched
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(CMAKE) $(dir $<) $(LIBSSH2_OPTS)
+	$(CMAKE) -G"Unix Makefiles" $(dir $<) $(LIBSSH2_OPTS)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured
-	$(MAKE) -C $(dir $<) libssh2
+	$(MAKE) -C $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-checked: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled
@@ -69,7 +113,7 @@ $(eval $(call staged-install, \
 
 clean-libssh2:
 	-rm -f $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/$(LIBSSH2_SRC_DIR) clean
+	-if [ -d $(BUILDDIR)/$(LIBSSH2_SRC_DIR) ]; then $(MAKE) -C $(BUILDDIR)/$(LIBSSH2_SRC_DIR) clean; fi
 
 
 get-libssh2: $(LIBSSH2_SRC_FILE)

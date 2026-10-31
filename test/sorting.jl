@@ -9,6 +9,12 @@ using Test
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
+@testset "Base.Sort docstrings" begin
+    undoc = Docs.undocumented_names(Base.Sort)
+    @test_broken isempty(undoc)
+    @test undoc == [:Algorithm, :Sort]
+end
+
 @testset "Order" begin
     @test Forward == ForwardOrdering()
     @test ReverseOrdering(Forward) == ReverseOrdering() == Reverse
@@ -88,6 +94,30 @@ end
         vcat(2000, (x:x+99 for x in 1900:-100:100)..., 1:99)
 end
 
+function tuple_sort_test(x)
+    @test issorted(sort(x))
+    length(x) > 9 && return # length > 9 uses a vector fallback
+    @test 0 == @allocated sort(x)
+end
+@testset "sort(::NTuple)" begin
+    @test sort(()) == ()
+    @test sort((9,8,3,3,6,2,0,8)) == (0,2,3,3,6,8,8,9)
+    @test sort((9,8,3,3,6,2,0,8), by=x->x÷3) == (2,0,3,3,8,6,8,9)
+    for i in 1:40
+        tuple_sort_test(rand(NTuple{i, Float64}))
+    end
+    @test_throws MethodError sort((1,2,3.0))
+    @test Base.infer_return_type(sort, Tuple{Tuple{Vararg{Int}}}) == Tuple{Vararg{Int}}
+end
+
+@testset "KeySet and ValueIterator" begin
+    x = Dict(rand() => randstring() for _ in 1:10)
+    x0 = deepcopy(x)
+    @test issorted(sort(keys(x))::Vector{Float64})
+    @test issorted(sort(values(x))::Vector{String})
+    @test x == x0
+end
+
 @testset "partialsort" begin
     @test partialsort([3,6,30,1,9],3) == 6
     @test partialsort([3,6,30,1,9],3:4) == [6,9]
@@ -107,7 +137,16 @@ end
             @test partialsortperm(a, i, rev=true) == (11 - i)
         end
     end
+    # descending ranges on inputs large enough to partition
+    w = [4, 5, 2, 1, 1, 4, 4, 4, 2, 4, 5, 5, 3, 3, 2, 2, 4, 5, 2, 2, 5, 5]
+    for r in (5:-1:3, 9:-2:3, 20:-1:1)
+        @test partialsort(w, r) == sort(w)[r]
+        @test w[partialsortperm(w, r)] == sort(w)[r]
+    end
     @test_throws ArgumentError partialsortperm!([1,2], [2,3,1], 1:2)
+    # index vector must hold all indices of v, regardless of eltype(k)
+    @test partialsortperm([300:-1:1;], Int8(3)) === 298
+    @test partialsortperm([300:-1:1;], UInt8(1):UInt8(2)) == [300, 299]
 end
 
 # exercise the codepath in searchsorted* methods for ranges that check for zero step range
@@ -292,6 +331,9 @@ end
         @test !issorted(b)
         @test !issorted(c, by=x->1/x)
         @test !issorted(d, rev=true)
+    end
+    let k = 30:-1:10
+        @test sort(a, alg=PartialQuickSort(k))[k] == sort(a)[k]
     end
 
     @test partialsort([3,6,30,1,9], 2, rev=true) == 9
@@ -575,6 +617,26 @@ end
     @test searchsortedfirst(o, 1.5) == 0
     @test searchsortedlast(o, 0) == firstindex(o) - 1
     @test searchsortedlast(o, 1.5) == -1
+
+    # Issue #56457
+    o2 = OffsetArray([2,2,3], typemax(Int)-3);
+    @test searchsorted(o2, 2) == firstindex(o2):firstindex(o2)+1
+
+    struct IdentityVector <: AbstractVector{Int}
+        lo::Int
+        hi::Int
+    end
+    function Base.getindex(s::IdentityVector, i::Int)
+        s.lo <= i <= s.hi || throw(BoundsError(s, i))
+        i
+    end
+    Base.axes(s::IdentityVector) = (s.lo:s.hi,)
+    Base.size(s::IdentityVector) = length.(axes(s))
+
+    o3 = IdentityVector(typemin(Int), typemin(Int)+5)
+    @test searchsortedfirst(o3, typemin(Int)+2) === typemin(Int)+2
+    @test searchsortedlast(o3, typemin(Int)+2) === typemin(Int)+2
+    @test searchsorted(o3, typemin(Int)+2) === typemin(Int)+2:typemin(Int)+2
 end
 
 function adaptive_sort_test(v; trusted=InsertionSort, kw...)
@@ -704,6 +766,7 @@ end
     safe_algs = [InsertionSort, MergeSort, Base.Sort.ScratchQuickSort(), Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
 
     n = 1000
+    Random.seed!(0x3588d23f15e74060);
     v = rand(1:5, n);
     s = sort(v);
 
@@ -721,8 +784,9 @@ end
     for alg in safe_algs
         @test sort(1:n, alg=alg, lt = (i,j) -> v[i]<=v[j]) == perm
     end
-    @test partialsort(1:n, 172, lt = (i,j) -> v[i]<=v[j]) == perm[172]
-    @test partialsort(1:n, 315:415, lt = (i,j) -> v[i]<=v[j]) == perm[315:415]
+    # Broken by the introduction of BracketedSort in #52006 which is unstable
+    # @test_broken partialsort(1:n, 172, lt = (i,j) -> v[i]<=v[j]) == perm[172] (sometimes passes due to RNG)
+    @test_broken partialsort(1:n, 315:415, lt = (i,j) -> v[i]<=v[j]) == perm[315:415]
 
     # lt can be very poorly behaved and sort will still permute its input in some way.
     for alg in safe_algs
@@ -753,6 +817,16 @@ end
         M = rand(n, n)
         @test sort(M; dims=2) == sort(M; dims=2, scratch)
         @test sort!(copy(M); dims=1) == sort!(copy(M); dims=1, scratch)
+    end
+end
+
+@testset "partialsort(x; scratch)" begin
+    for n in [1,10,100,1000]
+        v = rand(n)
+        scratch = [0.0]
+        k = n ÷ 2 + 1
+        @test partialsort(v, k) == partialsort(v, k; scratch)
+        @test partialsort!(copy(v), k) == partialsort!(copy(v), k; scratch)
     end
 end
 
@@ -791,9 +865,9 @@ end
     let
         requires_uint_mappable = Union{Base.Sort.RadixSort, Base.Sort.ConsiderRadixSort,
             Base.Sort.CountingSort, Base.Sort.ConsiderCountingSort,
-            typeof(Base.Sort.DEFAULT_STABLE.next.next.big.next.yes),
-            typeof(Base.Sort.DEFAULT_STABLE.next.next.big.next.yes.big),
-            typeof(Base.Sort.DEFAULT_STABLE.next.next.big.next.yes.big.next)}
+            typeof(Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS.next.next.next.big.next.yes),
+            typeof(Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS.next.next.next.big.next.yes.big),
+            typeof(Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS.next.next.next.big.next.yes.big.next)}
 
         function test_alg(kw, alg, float=true)
             for order in [Base.Forward, Base.Reverse, Base.By(x -> x^2)]
@@ -833,15 +907,18 @@ end
             end
         end
 
-        test_alg_rec(Base.DEFAULT_STABLE)
+        test_alg_rec(Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS)
     end
 end
 
 @testset "show(::Algorithm)" begin
-    @test eval(Meta.parse(string(Base.DEFAULT_STABLE))) === Base.DEFAULT_STABLE
-    lines = split(string(Base.DEFAULT_STABLE), '\n')
+    @test eval(Meta.parse(string(Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS))) === Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS
+    lines = split(string(Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS), '\n')
     @test 10 < maximum(length, lines) < 100
     @test 1 < length(lines) < 30
+
+    @test eval(Meta.parse(string(Base.DEFAULT_STABLE))) === Base.DEFAULT_STABLE
+    @test string(Base.DEFAULT_STABLE) == "Base.Sort.DefaultStable()"
 end
 
 @testset "Extensibility" begin
@@ -882,6 +959,20 @@ end
     end
     @test sort([1,2,3], alg=MySecondAlg()) == [9,9,9]
     @test all(sort(v, alg=Base.Sort.InitialOptimizations(MySecondAlg())) .=== vcat(fill(9, 100), fill(missing, 10)))
+
+    # Tuple extensions (custom alg)
+    @test_throws MethodError sort((1,2,3), alg=MyFirstAlg())
+    Base.Sort._sort(v::NTuple, ::MyFirstAlg, o::Base.Order.Ordering, kw) = (17,2,9)
+    @test sort((1,2,3), alg=MyFirstAlg()) == (17,2,9)
+
+    struct TupleFoo
+        x::Int
+    end
+
+    # Tuple extensions (custom type)
+    @test_throws MethodError sort(TupleFoo.((3,1,2)))
+    Base.Sort._sort(v::NTuple{N, TupleFoo}, ::Base.Sort.DefaultStable, o::Base.Order.Ordering, kw) where N = v
+    @test sort(TupleFoo.((3,1,2))) === TupleFoo.((3,1,2))
 end
 
 @testset "sort!(v, lo, hi, alg, order)" begin
@@ -904,6 +995,18 @@ end
         @test !issorted(v[1:2000])
         @test !issorted(v[2001:4000])
         @test !issorted(v)
+    end
+
+    # out-of-range lo/hi must throw rather than silently corrupt memory (#63215)
+    for alg in [MergeSort, QuickSort, InsertionSort, PartialQuickSort(1:5),
+                Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+        w = rand(10)
+        @test_throws BoundsError sort!(w, 1, 11, alg, Base.Forward)
+        @test_throws BoundsError sort!(w, 0, 10, alg, Base.Forward)
+        @test_throws BoundsError sort!(w, 1, 2000, alg, Base.Forward)
+        @test_throws BoundsError sort!(w, 1, 2000, alg, Base.Forward, similar(w))
+        @test sort!(w, 11, 10, alg, Base.Forward) === w # empty range is fine
+        @test issorted(sort!(w, 1, 10, alg, Base.Forward))
     end
 end
 
@@ -940,9 +1043,10 @@ end
 end
 
 @testset "ScratchQuickSort allocations on non-concrete eltype" begin
-    v = Vector{Union{Nothing, Bool}}(rand(Bool, 10000))
-    @test 4 == @allocations sort(v)
-    @test 4 == @allocations sort(v; alg=Base.Sort.ScratchQuickSort())
+    let v = Vector{Union{Nothing, Bool}}(rand(Bool, 10000))
+        @test 10 > @allocations sort(v)
+        @test 10 > @allocations sort(v; alg=Base.Sort.ScratchQuickSort())
+    end
     # it would be nice if these numbers were lower (1 or 2), but these
     # test that we don't have O(n) allocations due to type instability
 end
@@ -950,15 +1054,15 @@ end
 function test_allocs()
     v = rand(10)
     i = randperm(length(v))
-    @test 1 == @allocations sort(v)
+    @test 2 >= @allocations sort(v)
     @test 0 == @allocations sortperm!(i, v)
     @test 0 == @allocations sort!(i)
     @test 0 == @allocations sortperm!(i, v, rev=true)
-    @test 1 == @allocations sortperm(v, rev=true)
-    @test 1 == @allocations sortperm(v, rev=false)
+    @test 2 >= @allocations sortperm(v, rev=true)
+    @test 2 >= @allocations sortperm(v, rev=false)
     @test 0 == @allocations sortperm!(i, v, order=Base.Reverse)
-    @test 1 == @allocations sortperm(v)
-    @test 1 == @allocations sortperm(i, by=sqrt)
+    @test 2 >= @allocations sortperm(v)
+    @test 2 >= @allocations sortperm(i, by=sqrt)
     @test 0 == @allocations sort!(v, lt=(a, b) -> hash(a) < hash(b))
     sort!(Int[], rev=false) # compile
     @test 0 == @allocations sort!(i, rev=false)
@@ -978,6 +1082,91 @@ end
             reverse!(x)
         end
     end
+end
+
+struct MyArray49392{T, N} <: AbstractArray{T, N}
+    data::Array{T, N}
+end
+Base.size(A::MyArray49392) = size(A.data)
+Base.getindex(A::MyArray49392, i...) = getindex(A.data, i...)
+Base.setindex!(A::MyArray49392, v, i...) = setindex!(A.data, v, i...)
+Base.similar(A::MyArray49392, ::Type{T}, dims::Dims{N}) where {T, N} = MyArray49392(similar(A.data, T, dims))
+
+@testset "Custom matrices (#49392)" begin
+    x = rand(10, 10)
+    y = MyArray49392(copy(x))
+    @test all(sort!(y, dims=2) .== sort!(x,dims=2))
+end
+
+@testset "MissingOptimization fastpath for Perm ordering when lo:hi ≠ eachindex(v)" begin
+    v = [rand() < .5 ? missing : rand() for _ in 1:100]
+    ix = collect(1:100)
+    sort!(ix, 1, 10, Base.Sort.DEFAULT_STABLE, Base.Order.Perm(Base.Order.Forward, v))
+    @test issorted(v[ix[1:10]])
+end
+
+struct NonScalarIndexingOfWithoutMissingVectorAlg <: Base.Sort.Algorithm end
+function Base.Sort._sort!(v::AbstractVector, ::NonScalarIndexingOfWithoutMissingVectorAlg, o::Base.Order.Ordering, kw)
+    Base.Sort.@getkw lo hi
+    first_half = v[lo:lo+(hi-lo)÷2]
+    second_half = v[lo+(hi-lo)÷2+1:hi]
+    whole = v[lo:hi]
+    all(vcat(first_half, second_half) .=== whole) || error()
+    out = Base.Sort._sort!(whole, Base.Sort.DEFAULT_STABLE, o, (;kw..., lo=1, hi=length(whole)))
+    v[lo:hi] .= whole
+    out
+end
+
+@testset "Non-scalar indexing of WithoutMissingVector" begin
+    @testset "Unit test" begin
+        wmv = Base.Sort.WithoutMissingVector(Union{Missing, Int}[1, 7, 2, 9])
+        @test wmv[[1, 3]] == [1, 2]
+        @test wmv[1:3] == [1, 7, 2]
+    end
+    @testset "End to end" begin
+        alg = Base.Sort.InitialOptimizations(NonScalarIndexingOfWithoutMissingVectorAlg())
+        @test issorted(sort(rand(100); alg))
+        @test issorted(sort([rand() < .5 ? missing : randstring() for _ in 1:100]; alg))
+    end
+end
+
+struct DispatchLoopTestAlg <: Base.Sort.Algorithm end
+function Base.sort!(v::AbstractVector, lo::Integer, hi::Integer, ::DispatchLoopTestAlg, order::Base.Order.Ordering)
+    sort!(view(v, lo:hi); order)
+end
+@testset "Support dispatch from the old style to the new style and back" begin
+    @test issorted(sort!(rand(100), Base.Sort.InitialOptimizations(DispatchLoopTestAlg()), Base.Order.Forward))
+end
+
+# Pathologize 0 is a noop, pathologize 3 is fully pathological
+function pathologize!(x, level)
+    Base.require_one_based_indexing(x)
+    k2 = Int(cbrt(length(x))^2)
+    seed = hash(length(x), Int === Int64 ? 0x85eb830e0216012d : 0xae6c4e15)
+    for a in 1:level
+        seed = hash(a, seed)
+        x[mod.(hash.(1:k2, seed), range.(1:k2,lastindex(x)))] .= a
+    end
+    x
+end
+
+@testset "partialsort tests added for BracketedSort #52006" begin
+    for x in [pathologize!.(Ref(rand(Int, 1000)), 0:3); pathologize!.(Ref(rand(1000)), 0:3); [pathologize!(rand(Int, 1_000_000), 3)]]
+        @test partialsort(x, 1) == minimum(x)
+        @test partialsort(x, lastindex(x)) == maximum(x)
+        sx = sort(x)
+        for i in [1, 2, 4, 10, 11, 425, 500, 845, 991, 997, 999, 1000]
+            @test partialsort(x, i) == sx[i]
+        end
+        for i in [1:1, 1:2, 1:5, 1:8, 1:9, 1:11, 1:108, 135:812, 220:586, 363:368, 450:574, 458:597, 469:638, 487:488, 500:501, 584:594, 1000:1000]
+            @test partialsort(x, i) == sx[i]
+        end
+    end
+end
+
+@testset "partialsort! for UnwrappableSubArray with non-zero offset on 1.11 (#59569)" begin
+    a = reshape(6000:-1:1, 1000, :) |> collect;
+    @test partialsort!(view(copy(a), :, 6), 500:501) == [500, 501]
 end
 
 # This testset is at the end of the file because it is slow.
@@ -1139,6 +1328,16 @@ end
             @test searchsorted(v, 1, rev=true) == 3:3
             @test searchsorted(v, 0.1, rev=true) === 4:3
         end
+    end
+
+    @testset "ranges issue #44102, PR #50365" begin
+        # range sorting test for different Ordering parameter combinations
+        @test searchsorted(-1000.0:1:1000, -0.0) === 1001:1000
+        @test searchsorted(-1000.0:1:1000, -0.0; lt=<) === 1001:1001
+        @test searchsorted(-1000.0:1:1000, -0.0; lt=<, by=x->x) === 1001:1001
+        @test searchsorted(reverse(-1000.0:1:1000), -0.0; lt=<, by=-) === 1001:1001
+        @test searchsorted(reverse(-1000.0:1:1000), -0.0, rev=true) === 1002:1001
+        @test searchsorted(reverse(-1000.0:1:1000), -0.0; lt=<, rev=true) === 1001:1001
     end
 end
 # The "searchsorted" testset is at the end of the file because it is slow.

@@ -2,6 +2,12 @@
 
 import Base.StackTraces: lookup
 
+# Check that glibc's saved stack pointer can be demangled on supported targets.
+if Sys.islinux() && Sys.ARCH in (:i686, :x86_64, :armv7l, :aarch64) &&
+        Base.BinaryPlatforms.libc(Base.BinaryPlatforms.HostPlatform()) == "glibc"
+    @test ccall(:jl_ptr_demangle_available, Cint, ()) == 1
+end
+
 # Test location information for inlined code (ref issues #1334 #12544)
 module test_inline_bt
 using Test
@@ -196,6 +202,22 @@ end
 
 # Syntax error locations appear in backtraces
 let trace = try
+        eval(Expr(:error, 1))
+    catch
+        stacktrace(catch_backtrace())
+    end
+    @test trace[1].func === Symbol("top-level scope")
+end
+let trace = try
+        eval(Expr(:toplevel, LineNumberNode(3, :a_filename), Expr(:error, 1)))
+    catch
+        stacktrace(catch_backtrace())
+    end
+    @test trace[1].func === Symbol("top-level scope")
+    @test trace[1].file === :a_filename
+    @test trace[1].line == 3
+end
+let trace = try
         include_string(@__MODULE__,
             """
 
@@ -221,7 +243,7 @@ let trace = try
     end
     @test trace[1].func === Symbol("top-level scope")
     @test trace[1].file === :a_filename
-    @test trace[1].line == 2
+    @test trace[1].line in (2, 3)
 end
 
 # issue #45171
@@ -246,10 +268,14 @@ let code = """
                   if ip isa Base.InterpreterIP && ip.code isa Core.MethodInstance]
     num_fs = sum(meth_names .== :f29695)
     num_gs = sum(meth_names .== :g29695)
-    print(num_fs, ' ', num_gs)
+    if num_fs != 1000 || num_gs != 1000
+        Base.show_backtrace(stderr, bt)
+        error("Expected 1000 frames each, got \$num_fs, \$num_fs")
+    end
+    exit()
     """
 
-    @test read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String) == "1000 1000"
+    @test success(pipeline(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`; stderr))
 end
 
 # Test that modules make it into InterpreterIP for top-level code
@@ -269,6 +295,26 @@ let code = """
     bt_str = read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String)
     @test occursin(r"InterpreterIP in MethodInstance for .*A\.foo", bt_str)
     @test occursin("InterpreterIP in top-level CodeInfo for Main.A", bt_str)
+end
+
+# Interpreted method and generated function frames show their method
+module InterpFrames
+Base.Experimental.@compiler_options compile=min infer=false
+foo() = error("Expected")
+@generated gen(x) = :(error("Expected"))
+end
+# the method's own frame is outermost (a generated body comes as a macro expansion)
+function interp_frame(f)
+    bt = try f() catch; catch_backtrace() end
+    return last(lookup(bt[findfirst(ip -> ip isa Base.InterpreterIP, bt)]))
+end
+let sf = interp_frame(InterpFrames.foo)
+    @test sprint(show, sf) == "foo() at backtrace.jl:$(only(methods(InterpFrames.foo)).line)"
+    @test parentmodule(sf) === InterpFrames
+end
+let sf = interp_frame(() -> InterpFrames.gen(1))
+    @test sprint(show, sf) == "gen(x::$Int) at backtrace.jl:$(only(methods(InterpFrames.gen)).line)"
+    @test parentmodule(sf) === InterpFrames
 end
 
 """
@@ -355,4 +401,8 @@ end
     @test ptr2 < sp[2]
     @test sp[1] < ptr1
     @test all(diff(Int128.(UInt.(sp))) .> 0)
+end
+
+@testset "`lookup` return type inference" begin
+    @test Vector{StackTraces.StackFrame} === Base.infer_return_type(lookup)
 end

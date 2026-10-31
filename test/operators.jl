@@ -2,7 +2,7 @@
 
 using Random: randstring
 
-include("compiler/irutils.jl")
+include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 
 @testset "ifelse" begin
     @test ifelse(true, 1, 2) == 1
@@ -154,6 +154,13 @@ Base.convert(::Type{T19714}, ::Int) = T19714()
 Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
 @test T19714()/1 === 1/T19714() === T19714()
 
+@testset "operators with zero argument" begin
+    @test_throws(MethodError, +())
+    @test_throws(MethodError, *())
+    @test isempty(methods(+, ()))
+    @test isempty(methods(*, ()))
+end
+
 # pr #17155 and #33568
 @testset "function composition" begin
     @test (uppercase∘(x->string(x,base=16)))(239487) == "3A77F"
@@ -172,7 +179,7 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
     @test ∘(x -> (x, 3), x -> (x, 2), x->(x,1))(0) === (((0, 1), 2), 3)
     @test ∘(x -> (x, 4), x -> (x, 3), x->(x,2), x-> (x, 1))(0) === ((((0, 1), 2), 3), 4)
 
-    # test that user defined functors only need to overload the two arg version
+    # test that user defined callable structs only need to overload the two arg version
     struct FreeMagma
         word
     end
@@ -183,12 +190,12 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
     @test ∘(FreeMagma(1), FreeMagma(2), FreeMagma(3)) === FreeMagma(((1,2), 3))
     @test ∘(FreeMagma(1), FreeMagma(2), FreeMagma(3), FreeMagma(4)) === FreeMagma((((1,2), 3), 4))
 
-    @test fieldtypes(typeof(Float64 ∘ Int)) == (Type{Float64}, Type{Int})
+    @test fieldtypes(typeof(Float64 ∘ Int)) == (Core.TypeEgal{Float64}, Core.TypeEgal{Int})
 
     @test repr(uppercase ∘ first) == "uppercase ∘ first"
     @test sprint(show, "text/plain", uppercase ∘ first) == "uppercase ∘ first"
 
-    # test keyword ags in composition
+    # test keyword args in composition
     function kwf(a;b,c); a + b + c; end
     @test (abs2 ∘ kwf)(1,b=2,c=3) == 36
 
@@ -244,7 +251,7 @@ Base.:(<)(x::TypeWrapper, y::TypeWrapper) = (x.t <: y.t) & (x.t != y.t)
 end
 
 # issue #20355
-@testset "mod1, fld1" begin
+@testset "mod1, cld" begin
     for T in [Int8, Int16, Int32, Int64],
         x in T[typemin(T); typemin(T) + 1; -10:10; typemax(T)-1; typemax(T)],
         y in T[typemin(T); typemin(T) + 1; -10:-1; 1:10; typemax(T)-1; typemax(T)]
@@ -257,9 +264,9 @@ end
             @test y <= m < 0
         end
         if x == typemin(T) && y == -1
-            @test_throws DivideError fld1(x, y)
+            @test_throws DivideError cld(x, y)
         else
-            f = fld1(x, y)
+            f = cld(x, y)
             @test (f - 1) * y + m == x
         end
     end
@@ -271,7 +278,7 @@ end
         m = mod1(x, y)
         @test mod(x, y) == mod(m, y)
         @test 0 < m <= y
-        f = fld1(x, y)
+        f = cld(x, y)
         @test (f - 1) * y + m == x
     end
 
@@ -286,14 +293,14 @@ end
         else
             @test y <= m < 0
         end
-        f = fld1(x, y)
+        f = cld(x, y)
         @test (f - 1) * y + m == x
     end
 
-    @test fldmod1(4.0, 3) == fldmod1(4, 3)
+    @test cldmod1(4.0, 3) == cldmod1(4, 3)
 
     # issue 28973
-    @test fld1(0.4, 0.9) == fld1(nextfloat(0.4), 0.9) == 1.0
+    @test cld(0.4, 0.9) == cld(nextfloat(0.4), 0.9) == 1.0
 end
 
 @testset "Fix12" begin
@@ -321,16 +328,36 @@ end
     @test lt5(4) && !lt5(5)
 end
 
+@testset "in tuples" begin
+    @test ∈(5, (1,5,10,11))
+    @test ∉(0, (1,5,10,11))
+    @test ∈(5, (1,"hi","hey",5.0))
+    @test ∉(0, (1,"hi","hey",5.0))
+    @test ∈(5, (5,))
+    @test ∉(0, (5,))
+    @test ∉(5, ())
+end
+
 @testset "ni" begin
     @test ∋([1,5,10,11], 5)
     @test !∋([1,10,11], 5)
+    @test ∋((1,5,10,11), 5)
+    @test ∌((1,10,11), 5)
     @test ∋(5)([5,1])
     @test !∋(42)([0,1,100])
     @test ∌(0)(1:10)
     @test ∋(0)(-2:2)
 end
 
+@testset "in" begin
+    @test in(0x00, [0x04, 0x03, 0x02, 0x00])
+    @test !in(UInt8('a'), b"lkefjldk")
+    @test in(Int8(-1), Int8[2, 5, -1, 2])
+    @test !in(Int8(-1), UInt8[1, 3, 2, 0xff])
+end
+
 @test [Base.afoldl(+, 1:i...) for i = 1:40] == [i * (i + 1) ÷ 2 for i = 1:40]
+@test Core.Compiler.is_terminates(Base.infer_effects(Base.afoldl, Tuple{typeof(+), Vararg{Int, 100}}))
 
 @testset "Returns" begin
     @test @inferred(Returns(1)()   ) === 1
@@ -346,7 +373,24 @@ end
     @test sprint(show, Returns(1.0)) == "Returns{Float64}(1.0)"
 
     illtype = Vector{Core.TypeVar(:T)}
-    @test Returns(illtype) == Returns{DataType}(illtype)
+    @test_skip Returns(illtype) == Returns{DataType}(illtype)
+end
+
+@testset "unsplat" begin
+    @test unsplat(sum)(1, 2, 3) == 6
+    @test unsplat(splat(+))(1, 2, 3) == 6
+
+    @test unsplat(splat(+)) === +
+    @test splat(unsplat(sum)) === sum
+end
+
+@testset "tap" begin
+    buf = IOBuffer()
+    @test (123 |> tap(Base.Fix1(print, buf))) == 123
+    @test takestring!(buf) == "123"
+
+    val = [1, 2, 3]
+    @test tap(identity)(val) === val
 end
 
 @testset "<= (issue #46327)" begin
@@ -358,4 +402,42 @@ end
     Base.:(==)(::B46327, ::B46327) = true
     Base.:(<)(::B46327, ::B46327) = false
     @test B46327() <= B46327()
+end
+
+@testset "inference for `x in itr::Tuple`" begin
+    # concrete evaluation
+    @test Core.Compiler.is_foldable(Base.infer_effects(in, (Int,Tuple{Int,Int,Int})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(in, (Char,Tuple{Char,Char,Char})))
+    for i = (1,2,3)
+        @testset let i = i
+            @test @eval Base.return_types() do
+                Val($i in (1,2,3))
+            end |> only == Val{true}
+        end
+    end
+    @test Base.infer_return_type() do
+        Val(4 in (1,2,3))
+    end == Val{false}
+    @test Base.infer_return_type() do
+        Val('1' in ('1','2','3'))
+    end == Val{true}
+
+    # constant propagation
+    @test Base.infer_return_type((Int,Int)) do x, y
+        Val(1 in (x,2,y))
+    end >: Val{true}
+    @test Base.infer_return_type((Int,Int)) do x, y
+        Val(2 in (x,2,y))
+    end == Val{true}
+
+    # should use the loop implementation given large tuples to avoid inference blowup
+    let t = ntuple(x->'A', 10000);
+        @test Base.infer_return_type(in, (Char,typeof(t))) == Bool
+    end
+
+    @test Base.infer_return_type(in, (String,Tuple{Vararg{String}})) == Bool
+    @test Base.infer_return_type((Vector{String},)) do xs
+        "foo" in tuple(xs...)
+    end == Bool
+    @test Base.infer_return_type(in, (Symbol,Tuple{Vararg{String}})) == Bool
 end

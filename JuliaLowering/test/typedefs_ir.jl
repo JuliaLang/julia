@@ -1,0 +1,1346 @@
+########################################
+# where expression without type bounds
+A where X
+#---------------------
+1   (call core.TypeVar :X)
+2   (= slot₁/X %₁)
+3   TestMod.A
+4   (call core.UnionAll slot₁/X %₃)
+5   (return %₄)
+
+########################################
+# where expression with upper bound
+A where X <: UB
+#---------------------
+1   TestMod.UB
+2   (call core.TypeVar :X %₁)
+3   (= slot₁/X %₂)
+4   TestMod.A
+5   (call core.UnionAll slot₁/X %₄)
+6   (return %₅)
+
+########################################
+# where expression with lower bound
+A where X >: LB
+#---------------------
+1   TestMod.LB
+2   (call core.TypeVar :X %₁ core.Any)
+3   (= slot₁/X %₂)
+4   TestMod.A
+5   (call core.UnionAll slot₁/X %₄)
+6   (return %₅)
+
+########################################
+# where expression with both bounds
+A where LB <: X <: UB
+#---------------------
+1   TestMod.LB
+2   TestMod.UB
+3   (call core.TypeVar :X %₁ %₂)
+4   (= slot₁/X %₃)
+5   TestMod.A
+6   (call core.UnionAll slot₁/X %₅)
+7   (return %₆)
+
+########################################
+# where expression with braces
+A where {X, Y<:X}
+#---------------------
+1   (call core.TypeVar :X)
+2   (= slot₁/X %₁)
+3   (call core.TypeVar :Y slot₁/X)
+4   (= slot₂/Y %₃)
+5   TestMod.A
+6   (call core.UnionAll slot₂/Y %₅)
+7   (call core.UnionAll slot₁/X %₆)
+8   (return %₇)
+
+########################################
+# Equivalent nested where expression without braces
+A where Y<:X where X
+#---------------------
+1   (call core.TypeVar :X)
+2   (= slot₁/X %₁)
+3   (call core.TypeVar :Y slot₁/X)
+4   (= slot₂/Y %₃)
+5   TestMod.A
+6   (call core.UnionAll slot₂/Y %₅)
+7   (call core.UnionAll slot₁/X %₆)
+8   (return %₇)
+
+########################################
+# Error: bad type bounds
+A where f()
+#---------------------
+LoweringError:
+A where f()
+#       └─┘ ── expected type name or type bounds
+
+########################################
+# Error: bad type bounds
+A where X < Y < Z
+#---------------------
+LoweringError:
+A where X < Y < Z
+#       └───────┘ ── expected `lb <: type_name <: ub` or `ub >: type_name >: lb`
+
+########################################
+# Error: bad type bounds
+A where X <: f() <: Z
+#---------------------
+LoweringError:
+A where X <: f() <: Z
+#            └─┘ ── expected identifier
+
+########################################
+# Error: bad type bounds
+A where f() <: Y
+#---------------------
+LoweringError:
+A where f() <: Y
+#       └─┘ ── expected identifier
+
+########################################
+# Simple type application
+X{A,B,C}
+#---------------------
+1   TestMod.X
+2   TestMod.A
+3   TestMod.B
+4   TestMod.C
+5   (call core.apply_type %₁ %₂ %₃ %₄)
+6   (return %₅)
+
+########################################
+# Type with implicit where param upper bound
+X{<:A}
+#---------------------
+1   TestMod.A
+2   (call core.TypeVar :#T1 %₁)
+3   TestMod.X
+4   (call core.apply_type %₃ %₂)
+5   (call core.UnionAll %₂ %₄)
+6   (return %₅)
+
+########################################
+# Type with implicit where param lower bound
+X{>:A}
+#---------------------
+1   TestMod.A
+2   (call core.TypeVar :#T1 %₁ core.Any)
+3   TestMod.X
+4   (call core.apply_type %₃ %₂)
+5   (call core.UnionAll %₂ %₄)
+6   (return %₅)
+
+########################################
+# Type with several implicit where params
+X{S, <:A, T, >:B}
+#---------------------
+1   TestMod.A
+2   (call core.TypeVar :#T1 %₁)
+3   TestMod.B
+4   (call core.TypeVar :#T2 %₃ core.Any)
+5   TestMod.X
+6   TestMod.S
+7   TestMod.T
+8   (call core.apply_type %₅ %₆ %₂ %₇ %₄)
+9   (call core.UnionAll %₄ %₈)
+10  (call core.UnionAll %₂ %₉)
+11  (return %₁₀)
+
+########################################
+# Error: parameters in type application
+X{S, T; W}
+#---------------------
+LoweringError:
+X{S, T; W}
+#     └─┘ ── unexpected semicolon
+
+########################################
+# Error: assignment in type application
+X{S, T=w}
+#---------------------
+LoweringError:
+X{S, T=w}
+#   └──┘ ── assignment is not allowed in type parameter list
+
+########################################
+# Simple abstract type definition
+abstract type A end
+#---------------------
+1   (call core.declare_global TestMod :A false)
+2   latestworld
+3   (call core.svec)
+4   (call core._abstracttype TestMod :A %₃)
+5   (= slot₁/A %₄)
+6   (call core._setsuper! %₄ core.Any)
+7   (call core._typebody! slot₁/A)
+8   (call core.isdefinedglobal TestMod :A false)
+9   (gotoifnot %₈ label₁₄)
+10  TestMod.A
+11  (call core._equiv_typedef %₁₀ %₄)
+12  (gotoifnot %₁₁ label₁₄)
+13  (goto label₁₆)
+14  (call core.declare_const TestMod :A %₄)
+15  latestworld
+16  (return core.nothing)
+
+########################################
+# Abstract type definition with supertype
+abstract type A <: B end
+#---------------------
+1   (call core.declare_global TestMod :A false)
+2   latestworld
+3   (call core.svec)
+4   (call core._abstracttype TestMod :A %₃)
+5   (= slot₁/A %₄)
+6   TestMod.B
+7   (call core._setsuper! %₄ %₆)
+8   (call core._typebody! slot₁/A)
+9   (call core.isdefinedglobal TestMod :A false)
+10  (gotoifnot %₉ label₁₅)
+11  TestMod.A
+12  (call core._equiv_typedef %₁₁ %₄)
+13  (gotoifnot %₁₂ label₁₅)
+14  (goto label₁₇)
+15  (call core.declare_const TestMod :A %₄)
+16  latestworld
+17  (return core.nothing)
+
+########################################
+# Abstract type definition with multiple typevars
+abstract type A{X, Y <: X} end
+#---------------------
+1   (call core.declare_global TestMod :A false)
+2   latestworld
+3   (= slot₂/X (call core.TypeVar :X))
+4   (= slot₃/Y (call core.TypeVar :Y slot₂/X))
+5   (call core.svec slot₂/X slot₃/Y)
+6   (call core._abstracttype TestMod :A %₅)
+7   (= slot₁/A %₆)
+8   (call core._setsuper! %₆ core.Any)
+9   (call core._typebody! slot₁/A)
+10  (call core.isdefinedglobal TestMod :A false)
+11  (gotoifnot %₁₀ label₁₆)
+12  TestMod.A
+13  (call core._equiv_typedef %₁₂ %₆)
+14  (gotoifnot %₁₃ label₁₆)
+15  (goto label₁₈)
+16  (call core.declare_const TestMod :A %₆)
+17  latestworld
+18  (return core.nothing)
+
+########################################
+# Error: Abstract type definition with bad signature
+abstract type A() end
+#---------------------
+LoweringError:
+abstract type A() end
+#             └─┘ ── invalid type signature
+
+########################################
+# Error: Abstract type definition with bad signature
+abstract type A(){T} end
+#---------------------
+LoweringError:
+abstract type A(){T} end
+#             └─┘ ── expected identifier
+
+########################################
+# Error: Abstract type definition with bad signature
+abstract type A() <: B end
+#---------------------
+LoweringError:
+abstract type A() <: B end
+#             └─┘ ── expected identifier
+
+########################################
+# Error: Abstract type definition in function scope
+function f()
+    abstract type A end
+end
+#---------------------
+LoweringError:
+function f()
+    abstract type A end
+#   └─────────────────┘ ── this syntax is only allowed at top level
+end
+
+########################################
+# Simple primitive type definition
+primitive type P 8 end
+#---------------------
+1   (call core.declare_global TestMod :P false)
+2   latestworld
+3   (call core.svec)
+4   (call core._primitivetype TestMod :P %₃ 8)
+5   (= slot₁/P %₄)
+6   (call core._setsuper! %₄ core.Any)
+7   (call core._typebody! slot₁/P)
+8   (call core.isdefinedglobal TestMod :P false)
+9   (gotoifnot %₈ label₁₄)
+10  TestMod.P
+11  (call core._equiv_typedef %₁₀ %₄)
+12  (gotoifnot %₁₁ label₁₄)
+13  (goto label₁₆)
+14  (call core.declare_const TestMod :P %₄)
+15  latestworld
+16  (return core.nothing)
+
+########################################
+# Complex primitive type definition
+primitive type P{X,Y} <: Z 32 end
+#---------------------
+1   (call core.declare_global TestMod :P false)
+2   latestworld
+3   (= slot₂/X (call core.TypeVar :X))
+4   (= slot₃/Y (call core.TypeVar :Y))
+5   (call core.svec slot₂/X slot₃/Y)
+6   (call core._primitivetype TestMod :P %₅ 32)
+7   (= slot₁/P %₆)
+8   TestMod.Z
+9   (call core._setsuper! %₆ %₈)
+10  (call core._typebody! slot₁/P)
+11  (call core.isdefinedglobal TestMod :P false)
+12  (gotoifnot %₁₁ label₁₇)
+13  TestMod.P
+14  (call core._equiv_typedef %₁₃ %₆)
+15  (gotoifnot %₁₄ label₁₇)
+16  (goto label₁₉)
+17  (call core.declare_const TestMod :P %₆)
+18  latestworld
+19  (return core.nothing)
+
+########################################
+# Primitive type definition with computed size (should this be allowed??)
+primitive type P P_nbits() end
+#---------------------
+1   (call core.declare_global TestMod :P false)
+2   latestworld
+3   (call core.svec)
+4   TestMod.P_nbits
+5   (call %₄)
+6   (call core._primitivetype TestMod :P %₃ %₅)
+7   (= slot₁/P %₆)
+8   (call core._setsuper! %₆ core.Any)
+9   (call core._typebody! slot₁/P)
+10  (call core.isdefinedglobal TestMod :P false)
+11  (gotoifnot %₁₀ label₁₆)
+12  TestMod.P
+13  (call core._equiv_typedef %₁₂ %₆)
+14  (gotoifnot %₁₃ label₁₆)
+15  (goto label₁₈)
+16  (call core.declare_const TestMod :P %₆)
+17  latestworld
+18  (return core.nothing)
+
+########################################
+# Empty struct
+struct X
+end
+#---------------------
+1   (call core.declare_global TestMod :X false)
+2   latestworld
+3   (= slot₁/X (call core.TypeVar :X))
+4   (call core.svec)
+5   (call core.svec)
+6   (call core.svec)
+7   (call core.svec)
+8   (call core.svec %₄ %₅ %₆ false 0 core.Any %₇)
+9   (call core.isdefinedglobal TestMod :X false)
+10  (gotoifnot %₉ label₁₄)
+11  TestMod.X
+12  (= slot₂/ %₁₁)
+13  (goto label₁₅)
+14  (= slot₂/ core.nothing)
+15  slot₂/
+16  slot₁/X
+17  (call core.svec %₁₆)
+18  (call core.svec %₈)
+19  (call core.svec %₁₅)
+20  (call core.resolve_typegroup TestMod %₁₇ %₁₈ %₁₉)
+21  (= slot₁/X (call core.getfield %₂₀ 1))
+22  slot₁/X
+23  (call core.declare_const TestMod :X %₂₂)
+24  latestworld
+25  TestMod.X
+26  SourceLocation:1
+27  (call top._defaultctors %₂₅ %₂₆)
+28  latestworld
+29  (return core.nothing)
+
+########################################
+# Empty struct with empty ctor
+struct X
+    X() = new()
+end
+#---------------------
+1   (call core.declare_global TestMod :X false)
+2   latestworld
+3   (= slot₁/X (call core.TypeVar :X))
+4   (call core.svec)
+5   (call core.svec)
+6   (call core.svec)
+7   (call core.svec)
+8   (call core.svec %₄ %₅ %₆ false 0 core.Any %₇)
+9   (call core.isdefinedglobal TestMod :X false)
+10  (gotoifnot %₉ label₁₄)
+11  TestMod.X
+12  (= slot₂/ %₁₁)
+13  (goto label₁₅)
+14  (= slot₂/ core.nothing)
+15  slot₂/
+16  slot₁/X
+17  (call core.svec %₁₆)
+18  (call core.svec %₈)
+19  (call core.svec %₁₅)
+20  (call core.resolve_typegroup TestMod %₁₇ %₁₈ %₁₉)
+21  (= slot₁/X (call core.getfield %₂₀ 1))
+22  slot₁/X
+23  (call core.declare_const TestMod :X %₂₂)
+24  latestworld
+25  TestMod.X
+26  (call core.apply_type core.Type %₂₅)
+27  (call core.svec %₂₆)
+28  (call core.svec)
+29  SourceLocation:2
+30  (call core.svec %₂₇ %₂₈ %₂₉)
+31  (call core.define_method TestMod core.nothing %₃₀
+    --- code_info
+    slots: [slot₁/#ctor-self#]
+    1   slot₁/#ctor-self#
+    2   (new %₁)
+    3   (return %₂)
+32  latestworld
+33  (return core.nothing)
+
+########################################
+# Basic struct
+struct X
+    a
+    b::T
+    c
+end
+#---------------------
+1   (call core.declare_global TestMod :X false)
+2   latestworld
+3   (= slot₁/X (call core.TypeVar :X))
+4   (call core.svec)
+5   (call core.svec :a :b :c)
+6   (call core.svec)
+7   TestMod.T
+8   (call core.svec core.Any %₇ core.Any)
+9   (call core.svec %₄ %₅ %₆ false 3 core.Any %₈)
+10  (call core.isdefinedglobal TestMod :X false)
+11  (gotoifnot %₁₀ label₁₅)
+12  TestMod.X
+13  (= slot₂/ %₁₂)
+14  (goto label₁₆)
+15  (= slot₂/ core.nothing)
+16  slot₂/
+17  slot₁/X
+18  (call core.svec %₁₇)
+19  (call core.svec %₉)
+20  (call core.svec %₁₆)
+21  (call core.resolve_typegroup TestMod %₁₈ %₁₉ %₂₀)
+22  (= slot₁/X (call core.getfield %₂₁ 1))
+23  slot₁/X
+24  (call core.declare_const TestMod :X %₂₃)
+25  latestworld
+26  TestMod.X
+27  SourceLocation:1
+28  (call top._defaultctors %₂₆ %₂₇)
+29  latestworld
+30  (return core.nothing)
+
+########################################
+# Struct with supertype and type params
+struct X{U, S <: V <: T} <: Z
+end
+#---------------------
+1   (call core.declare_global TestMod :X false)
+2   latestworld
+3   (= slot₁/X (call core.TypeVar :X))
+4   (= slot₂/U (call core.TypeVar :U))
+5   TestMod.S
+6   TestMod.T
+7   (= slot₃/V (call core.TypeVar :V %₅ %₆))
+8   (call core.svec slot₂/U slot₃/V)
+9   (call core.svec)
+10  (call core.svec)
+11  TestMod.Z
+12  (call core.svec)
+13  (call core.svec %₈ %₉ %₁₀ false 0 %₁₁ %₁₂)
+14  (call core.isdefinedglobal TestMod :X false)
+15  (gotoifnot %₁₄ label₁₉)
+16  TestMod.X
+17  (= slot₄/ %₁₆)
+18  (goto label₂₀)
+19  (= slot₄/ core.nothing)
+20  slot₄/
+21  slot₁/X
+22  (call core.svec %₂₁)
+23  (call core.svec %₁₃)
+24  (call core.svec %₂₀)
+25  (call core.resolve_typegroup TestMod %₂₂ %₂₃ %₂₄)
+26  (= slot₁/X (call core.getfield %₂₅ 1))
+27  slot₁/X
+28  (call core.declare_const TestMod :X %₂₇)
+29  latestworld
+30  TestMod.X
+31  SourceLocation:1
+32  (call top._defaultctors %₃₀ %₃₁)
+33  latestworld
+34  (return core.nothing)
+
+########################################
+# Struct with const and atomic fields
+struct X
+    const a
+    @atomic b
+    const @atomic c
+end
+#---------------------
+1   (call core.declare_global TestMod :X false)
+2   latestworld
+3   (= slot₁/X (call core.TypeVar :X))
+4   (call core.svec)
+5   (call core.svec :a :b :c)
+6   (call core.svec 1 :const 2 :atomic 3 :atomic 3 :const)
+7   (call core.svec core.Any core.Any core.Any)
+8   (call core.svec %₄ %₅ %₆ false 3 core.Any %₇)
+9   (call core.isdefinedglobal TestMod :X false)
+10  (gotoifnot %₉ label₁₄)
+11  TestMod.X
+12  (= slot₂/ %₁₁)
+13  (goto label₁₅)
+14  (= slot₂/ core.nothing)
+15  slot₂/
+16  slot₁/X
+17  (call core.svec %₁₆)
+18  (call core.svec %₈)
+19  (call core.svec %₁₅)
+20  (call core.resolve_typegroup TestMod %₁₇ %₁₈ %₁₉)
+21  (= slot₁/X (call core.getfield %₂₀ 1))
+22  slot₁/X
+23  (call core.declare_const TestMod :X %₂₂)
+24  latestworld
+25  TestMod.X
+26  SourceLocation:1
+27  (call top._defaultctors %₂₅ %₂₆)
+28  latestworld
+29  (return core.nothing)
+
+########################################
+# Documented struct
+"""
+X docs
+"""
+struct X
+    "field a docs"
+    a
+    "field b docs"
+    b
+end
+#---------------------
+1   (newvar slot₁/val)
+2   (gotoifnot true label₃₂)
+3   (call core.declare_global TestMod :X false)
+4   latestworld
+5   (= slot₂/X (call core.TypeVar :X))
+6   (call core.svec)
+7   (call core.svec :a :b)
+8   (call core.svec)
+9   (call core.svec core.Any core.Any)
+10  (call core.svec %₆ %₇ %₈ false 2 core.Any %₉)
+11  (call core.isdefinedglobal TestMod :X false)
+12  (gotoifnot %₁₁ label₁₆)
+13  TestMod.X
+14  (= slot₃/ %₁₃)
+15  (goto label₁₇)
+16  (= slot₃/ core.nothing)
+17  slot₃/
+18  slot₂/X
+19  (call core.svec %₁₈)
+20  (call core.svec %₁₀)
+21  (call core.svec %₁₇)
+22  (call core.resolve_typegroup TestMod %₁₉ %₂₀ %₂₁)
+23  (= slot₂/X (call core.getfield %₂₂ 1))
+24  slot₂/X
+25  (call core.declare_const TestMod :X %₂₄)
+26  latestworld
+27  TestMod.X
+28  SourceLocation:5
+29  (call top._defaultctors %₂₇ %₂₈)
+30  latestworld
+31  (= slot₁/val core.nothing)
+32  (call Base.Docs.Binding TestMod :X)
+33  (call Core.svec "X docs\n")
+34  (call Pair{Symbol, Any} :a "field a docs")
+35  (call Pair{Symbol, Any} :b "field b docs")
+36  (call Dict{Symbol, Any} %₃₄ %₃₅)
+37  (call Pair :fields %₃₆)
+38  (call Dict{Symbol, Any} :path => "" :linenumber => 1 :module => TestMod %₃₇)
+39  (call Base.Docs.docstr %₃₃ %₃₈)
+40  TestMod.Union
+41  (call core.apply_type %₄₀)
+42  (call Base.Docs.doc! TestMod %₃₂ %₃₉ %₄₁)
+43  (gotoifnot true label₄₆)
+44  slot₁/val
+45  (return %₄₄)
+46  (return core.nothing)
+
+########################################
+# Struct with outer constructor
+struct X{U}
+    x::U
+end
+#---------------------
+1   (call core.declare_global TestMod :X false)
+2   latestworld
+3   (= slot₁/X (call core.TypeVar :X))
+4   (= slot₂/U (call core.TypeVar :U))
+5   (call core.svec slot₂/U)
+6   (call core.svec :x)
+7   (call core.svec)
+8   (call core.svec slot₂/U)
+9   (call core.svec %₅ %₆ %₇ false 1 core.Any %₈)
+10  (call core.isdefinedglobal TestMod :X false)
+11  (gotoifnot %₁₀ label₁₅)
+12  TestMod.X
+13  (= slot₃/ %₁₂)
+14  (goto label₁₆)
+15  (= slot₃/ core.nothing)
+16  slot₃/
+17  slot₁/X
+18  (call core.svec %₁₇)
+19  (call core.svec %₉)
+20  (call core.svec %₁₆)
+21  (call core.resolve_typegroup TestMod %₁₈ %₁₉ %₂₀)
+22  (= slot₁/X (call core.getfield %₂₁ 1))
+23  slot₁/X
+24  (call core.declare_const TestMod :X %₂₃)
+25  latestworld
+26  TestMod.X
+27  SourceLocation:1
+28  (call top._defaultctors %₂₆ %₂₇)
+29  latestworld
+30  (return core.nothing)
+
+########################################
+# Struct with outer constructor where one typevar is constrained by the other
+# See https://github.com/JuliaLang/julia/issues/27269)
+struct X{T, S <: Vector{T}}
+    v::Vector{S}
+end
+#---------------------
+1   (call core.declare_global TestMod :X false)
+2   latestworld
+3   (= slot₁/X (call core.TypeVar :X))
+4   (= slot₂/T (call core.TypeVar :T))
+5   TestMod.Vector
+6   (call core.apply_type_or_typeapp %₅ slot₂/T)
+7   (= slot₃/S (call core.TypeVar :S %₆))
+8   (call core.svec slot₂/T slot₃/S)
+9   (call core.svec :v)
+10  (call core.svec)
+11  TestMod.Vector
+12  (call core.apply_type_or_typeapp %₁₁ slot₃/S)
+13  (call core.svec %₁₂)
+14  (call core.svec %₈ %₉ %₁₀ false 1 core.Any %₁₃)
+15  (call core.isdefinedglobal TestMod :X false)
+16  (gotoifnot %₁₅ label₂₀)
+17  TestMod.X
+18  (= slot₄/ %₁₇)
+19  (goto label₂₁)
+20  (= slot₄/ core.nothing)
+21  slot₄/
+22  slot₁/X
+23  (call core.svec %₂₂)
+24  (call core.svec %₁₄)
+25  (call core.svec %₂₁)
+26  (call core.resolve_typegroup TestMod %₂₃ %₂₄ %₂₅)
+27  (= slot₁/X (call core.getfield %₂₆ 1))
+28  slot₁/X
+29  (call core.declare_const TestMod :X %₂₈)
+30  latestworld
+31  TestMod.X
+32  SourceLocation:1
+33  (call top._defaultctors %₃₁ %₃₂)
+34  latestworld
+35  (return core.nothing)
+
+########################################
+# User defined inner constructors and helper functions for structs without type params
+struct X
+    x
+    f() = new(1)
+    X() = f() # this X() captures `f` (in flisp, as a Box :-/ )
+    X(x) = new(x)
+    X(y,z)::ReallyXIPromise = new(y+z)
+    """
+    Docs for X constructor
+    """
+    X(a,b,c) = new(a)
+end
+#---------------------
+1   (call core.declare_global TestMod :X false)
+2   latestworld
+3   (= slot₁/X (call core.TypeVar :X))
+4   (call core.svec)
+5   (call core.svec :x)
+6   (call core.svec)
+7   (call core.svec core.Any)
+8   (call core.svec %₄ %₅ %₆ false 1 core.Any %₇)
+9   (call core.isdefinedglobal TestMod :X false)
+10  (gotoifnot %₉ label₁₄)
+11  TestMod.X
+12  (= slot₃/ %₁₁)
+13  (goto label₁₅)
+14  (= slot₃/ core.nothing)
+15  slot₃/
+16  slot₁/X
+17  (call core.svec %₁₆)
+18  (call core.svec %₈)
+19  (call core.svec %₁₅)
+20  (call core.resolve_typegroup TestMod %₁₇ %₁₈ %₁₉)
+21  (= slot₁/X (call core.getfield %₂₀ 1))
+22  slot₁/X
+23  (call core.declare_const TestMod :X %₂₂)
+24  latestworld
+25  (call core.svec)
+26  (call core.svec)
+27  (call core.svec)
+28  (call JuliaLowering.eval_closure_type TestMod :#f#f##0 %₂₅ %₂₆ %₂₇)
+29  latestworld
+30  TestMod.#f#f##0
+31  (new %₃₀)
+32  TestMod.#f#f##0
+33  (call core.svec %₃₂)
+34  (call core.svec)
+35  SourceLocation:3
+36  (call core.svec %₃₃ %₃₄ %₃₅)
+37  (call core.define_method TestMod core.nothing %₃₆
+    --- code_info
+    slots: [slot₁/#self#(!read)]
+    1   TestMod.X
+    2   (new %₁ 1)
+    3   (return %₂)
+38  latestworld
+39  (= slot₂/f %₃₁)
+40  TestMod.X
+41  (call core.apply_type core.Type %₄₀)
+42  (call core.svec %₄₁)
+43  (call core.svec)
+44  SourceLocation:4
+45  (call core.svec %₄₂ %₄₃ %₄₄)
+46  --- code_info
+    slots: [slot₁/#ctor-self#(!read)]
+    1   (captured_local 1)
+    2   (call %₁)
+    3   (return %₂)
+47  (call core.svec slot₂/f)
+48  (call JuliaLowering.replace_captured_locals %₄₆ %₄₇)
+49  (call core.define_method TestMod core.nothing %₄₅ %₄₈)
+50  latestworld
+51  TestMod.X
+52  (call core.apply_type core.Type %₅₁)
+53  (call core.svec %₅₂ core.Any)
+54  (call core.svec)
+55  SourceLocation:5
+56  (call core.svec %₅₃ %₅₄ %₅₅)
+57  (call core.define_method TestMod core.nothing %₅₆
+    --- code_info
+    slots: [slot₁/#ctor-self# slot₂/x]
+    1   slot₁/#ctor-self#
+    2   (new %₁ slot₂/x)
+    3   (return %₂)
+58  latestworld
+59  TestMod.X
+60  (call core.apply_type core.Type %₅₉)
+61  (call core.svec %₆₀ core.Any core.Any)
+62  (call core.svec)
+63  SourceLocation:6
+64  (call core.svec %₆₁ %₆₂ %₆₃)
+65  (call core.define_method TestMod core.nothing %₆₄
+    --- code_info
+    slots: [slot₁/#ctor-self# slot₂/y slot₃/z slot₄/tmp(!read)]
+    1   TestMod.ReallyXIPromise
+    2   slot₁/#ctor-self#
+    3   TestMod.+
+    4   (call %₃ slot₂/y slot₃/z)
+    5   (= slot₄/tmp (new %₂ %₄))
+    6   (call core.isa slot₄/tmp %₁)
+    7   (gotoifnot %₆ label₉)
+    8   (goto label₁₁)
+    9   (call top.convert %₁ slot₄/tmp)
+    10  (= slot₄/tmp (call core.typeassert %₉ %₁))
+    11  slot₄/tmp
+    12  (return %₁₁)
+66  latestworld
+67  TestMod.X
+68  (call core.apply_type core.Type %₆₇)
+69  (call core.svec %₆₈ core.Any core.Any core.Any)
+70  (call core.svec)
+71  SourceLocation:10
+72  (call core.svec %₆₉ %₇₀ %₇₁)
+73  (call core.define_method TestMod core.nothing %₇₂
+    --- code_info
+    slots: [slot₁/#ctor-self# slot₂/a slot₃/b(!read) slot₄/c(!read)]
+    1   slot₁/#ctor-self#
+    2   (new %₁ slot₂/a)
+    3   (return %₂)
+74  latestworld
+75  (return core.nothing)
+
+########################################
+# User defined inner constructors and helper functions for structs with type params
+struct X{S,T}
+    x
+    X{A,B}() = new(1)
+    X{U,V}() where {U,V} = new(1)
+    f() = new{A,B}(1)
+end
+#---------------------
+1   (call core.declare_global TestMod :X false)
+2   latestworld
+3   (= slot₁/X (call core.TypeVar :X))
+4   (= slot₂/S (call core.TypeVar :S))
+5   (= slot₃/T (call core.TypeVar :T))
+6   (call core.svec slot₂/S slot₃/T)
+7   (call core.svec :x)
+8   (call core.svec)
+9   (call core.svec core.Any)
+10  (call core.svec %₆ %₇ %₈ false 1 core.Any %₉)
+11  (call core.isdefinedglobal TestMod :X false)
+12  (gotoifnot %₁₁ label₁₆)
+13  TestMod.X
+14  (= slot₅/ %₁₃)
+15  (goto label₁₇)
+16  (= slot₅/ core.nothing)
+17  slot₅/
+18  slot₁/X
+19  (call core.svec %₁₈)
+20  (call core.svec %₁₀)
+21  (call core.svec %₁₇)
+22  (call core.resolve_typegroup TestMod %₁₉ %₂₀ %₂₁)
+23  (= slot₁/X (call core.getfield %₂₂ 1))
+24  slot₁/X
+25  (call core.declare_const TestMod :X %₂₄)
+26  latestworld
+27  TestMod.X
+28  TestMod.A
+29  TestMod.B
+30  (call core.apply_type %₂₇ %₂₈ %₂₉)
+31  (call core.apply_type core.Type %₃₀)
+32  (call core.svec %₃₁)
+33  (call core.svec)
+34  SourceLocation:3
+35  (call core.svec %₃₂ %₃₃ %₃₄)
+36  (call core.define_method TestMod core.nothing %₃₅
+    --- code_info
+    slots: [slot₁/#ctor-self#]
+    1   slot₁/#ctor-self#
+    2   (new %₁ 1)
+    3   (return %₂)
+37  latestworld
+38  (call core.TypeVar :U)
+39  (call core.TypeVar :V)
+40  TestMod.X
+41  (call core.apply_type %₄₀ %₃₈ %₃₉)
+42  (call core.apply_type core.Type %₄₁)
+43  (call core.svec %₄₂)
+44  (call core.svec %₃₈ %₃₉)
+45  SourceLocation:4
+46  (call core.svec %₄₃ %₄₄ %₄₅)
+47  (call core.define_method TestMod core.nothing %₄₆
+    --- code_info
+    slots: [slot₁/#ctor-self#]
+    1   slot₁/#ctor-self#
+    2   (new %₁ 1)
+    3   (return %₂)
+48  latestworld
+49  (call core.svec)
+50  (call core.svec)
+51  (call core.svec)
+52  (call JuliaLowering.eval_closure_type TestMod :#f#f##1 %₄₉ %₅₀ %₅₁)
+53  latestworld
+54  TestMod.#f#f##1
+55  (new %₅₄)
+56  TestMod.#f#f##1
+57  (call core.svec %₅₆)
+58  (call core.svec)
+59  SourceLocation:5
+60  (call core.svec %₅₇ %₅₈ %₅₉)
+61  (call core.define_method TestMod core.nothing %₆₀
+    --- code_info
+    slots: [slot₁/#self#(!read)]
+    1   TestMod.X
+    2   TestMod.A
+    3   TestMod.B
+    4   (call core.apply_type %₁ %₂ %₃)
+    5   (new %₄ 1)
+    6   (return %₅)
+62  latestworld
+63  (= slot₄/f %₅₅)
+64  latestworld
+65  (return core.nothing)
+
+########################################
+# new() calls with splats; `Any` fields
+struct X
+    x
+    y
+    X(xs) = new(xs...)
+end
+#---------------------
+1   (call core.declare_global TestMod :X false)
+2   latestworld
+3   (= slot₁/X (call core.TypeVar :X))
+4   (call core.svec)
+5   (call core.svec :x :y)
+6   (call core.svec)
+7   (call core.svec core.Any core.Any)
+8   (call core.svec %₄ %₅ %₆ false 2 core.Any %₇)
+9   (call core.isdefinedglobal TestMod :X false)
+10  (gotoifnot %₉ label₁₄)
+11  TestMod.X
+12  (= slot₂/ %₁₁)
+13  (goto label₁₅)
+14  (= slot₂/ core.nothing)
+15  slot₂/
+16  slot₁/X
+17  (call core.svec %₁₆)
+18  (call core.svec %₈)
+19  (call core.svec %₁₅)
+20  (call core.resolve_typegroup TestMod %₁₇ %₁₈ %₁₉)
+21  (= slot₁/X (call core.getfield %₂₀ 1))
+22  slot₁/X
+23  (call core.declare_const TestMod :X %₂₂)
+24  latestworld
+25  TestMod.X
+26  (call core.apply_type core.Type %₂₅)
+27  (call core.svec %₂₆ core.Any)
+28  (call core.svec)
+29  SourceLocation:4
+30  (call core.svec %₂₇ %₂₈ %₂₉)
+31  (call core.define_method TestMod core.nothing %₃₀
+    --- code_info
+    slots: [slot₁/#ctor-self# slot₂/xs]
+    1   slot₁/#ctor-self#
+    2   (call core._apply_iterate top.iterate core.tuple slot₂/xs)
+    3   (splatnew %₁ %₂)
+    4   (return %₃)
+32  latestworld
+33  (return core.nothing)
+
+########################################
+# new() calls with splats; typed fields
+struct X{T}
+    x::T
+    y::A
+    X{T}(xs) where {T} = new(xs...)
+end
+#---------------------
+1   (call core.declare_global TestMod :X false)
+2   latestworld
+3   (= slot₁/X (call core.TypeVar :X))
+4   (= slot₂/T (call core.TypeVar :T))
+5   (call core.svec slot₂/T)
+6   (call core.svec :x :y)
+7   (call core.svec)
+8   TestMod.A
+9   (call core.svec slot₂/T %₈)
+10  (call core.svec %₅ %₆ %₇ false 2 core.Any %₉)
+11  (call core.isdefinedglobal TestMod :X false)
+12  (gotoifnot %₁₁ label₁₆)
+13  TestMod.X
+14  (= slot₃/ %₁₃)
+15  (goto label₁₇)
+16  (= slot₃/ core.nothing)
+17  slot₃/
+18  slot₁/X
+19  (call core.svec %₁₈)
+20  (call core.svec %₁₀)
+21  (call core.svec %₁₇)
+22  (call core.resolve_typegroup TestMod %₁₉ %₂₀ %₂₁)
+23  (= slot₁/X (call core.getfield %₂₂ 1))
+24  slot₁/X
+25  (call core.declare_const TestMod :X %₂₄)
+26  latestworld
+27  (call core.TypeVar :T)
+28  TestMod.X
+29  (call core.apply_type %₂₈ %₂₇)
+30  (call core.apply_type core.Type %₂₉)
+31  (call core.svec %₃₀ core.Any)
+32  (call core.svec %₂₇)
+33  SourceLocation:4
+34  (call core.svec %₃₁ %₃₂ %₃₃)
+35  (call core.define_method TestMod core.nothing %₃₄
+    --- code_info
+    slots: [slot₁/#ctor-self# slot₂/xs slot₃/ slot₄/]
+    1   (call core._apply_iterate top.iterate core.tuple slot₂/xs)
+    2   (call core.nfields %₁)
+    3   (call top.ult_int %₂ 2)
+    4   (gotoifnot %₃ label₇)
+    5   (call top.ArgumentError "too few arguments in `new` (expected 2)")
+    6   (call core.throw %₅)
+    7   (call top.ult_int 2 %₂)
+    8   (gotoifnot %₇ label₁₁)
+    9   (call top.ArgumentError "too many arguments in `new` (expected 2)")
+    10  (call core.throw %₉)
+    11  slot₁/#ctor-self#
+    12  (call core.fieldtype %₁₁ 1)
+    13  (= slot₃/ (call core.getfield %₁ 1))
+    14  (call core.isa slot₃/ %₁₂)
+    15  (gotoifnot %₁₄ label₁₇)
+    16  (goto label₁₈)
+    17  (= slot₃/ (call top.convert %₁₂ slot₃/))
+    18  slot₃/
+    19  (call core.fieldtype %₁₁ 2)
+    20  (= slot₄/ (call core.getfield %₁ 2))
+    21  (call core.isa slot₄/ %₁₉)
+    22  (gotoifnot %₂₁ label₂₄)
+    23  (goto label₂₅)
+    24  (= slot₄/ (call top.convert %₁₉ slot₄/))
+    25  slot₄/
+    26  (new %₁₁ %₁₈ %₂₅)
+    27  (return %₂₆)
+36  latestworld
+37  (return core.nothing)
+
+########################################
+# Error: new doesn't accept keywords
+struct X
+    X() = new(a=1)
+end
+#---------------------
+LoweringError:
+struct X
+    X() = new(a=1)
+#             └─┘ ── `new` does not accept keyword arguments
+end
+
+########################################
+# Error: new doesn't accept keywords (params block)
+struct X
+    X() = new(; a=1)
+end
+#---------------------
+LoweringError:
+struct X
+    X() = new(; a=1)
+#             └───┘ ── `new` does not accept keyword arguments
+end
+
+########################################
+# Error: User defined inner constructors without enough type params {A}
+struct X{S,T}
+    X() = new{A}()
+end
+#---------------------
+LoweringError:
+struct X{S,T}
+    X() = new{A}()
+#         └────┘ ── too few type parameters specified in `new{...}`
+end
+
+########################################
+# Error: User defined inner constructors without enough type params {}
+struct X{S,T}
+    X() = new{}()
+end
+#---------------------
+LoweringError:
+struct X{S,T}
+    X() = new{}()
+#         └───┘ ── too few type parameters specified in `new{...}`
+end
+
+########################################
+# Error: User defined inner constructors without enough type params
+struct X{S,T}
+    X{A}() = new()
+end
+#---------------------
+LoweringError:
+struct X{S,T}
+    X{A}() = new()
+#            └─┘ ── too few type parameters specified in `new`
+end
+
+########################################
+# Error: User defined inner constructors with too many type params
+struct X{S,T}
+    X() = new{A,B,C}()
+end
+#---------------------
+LoweringError:
+struct X{S,T}
+    X() = new{A,B,C}()
+#         └────────┘ ── too many type parameters specified in `new{...}`
+end
+
+########################################
+# Error: Struct not at top level
+function f()
+    struct X
+    end
+end
+#---------------------
+LoweringError:
+function f()
+#   ┌───────
+    struct X
+    end
+#─────┘ ── this syntax is only allowed at top level
+end
+
+########################################
+# Constructor with type parameter
+A{<:Real}() = A(1)
+#---------------------
+1   TestMod.Real
+2   (call core.TypeVar :#T1 %₁)
+3   TestMod.A
+4   (call core.apply_type %₃ %₂)
+5   (call core.UnionAll %₂ %₄)
+6   (call core.TypeEqOf %₅)
+7   (call core.svec %₆)
+8   (call core.svec)
+9   SourceLocation:1
+10  (call core.svec %₇ %₈ %₉)
+11  (call core.define_method TestMod core.nothing %₁₀
+    --- code_info
+    slots: [slot₁/#self#(!read)]
+    1   TestMod.A
+    2   (call %₁ 1)
+    3   (return %₂)
+12  latestworld
+13  (return core.nothing)
+
+########################################
+# Inner constructor with local variable shadowing type parameter
+# Type parameter T should NOT be boxed or captured.
+# See https://github.com/aviatesk/JETLS.jl/issues/508
+struct ShadowTypeParam{T}
+    x::T
+    function ShadowTypeParam(x)
+        T = typeof(x)
+        return new{T}(x)
+    end
+end
+#---------------------
+1   (call core.declare_global TestMod :ShadowTypeParam false)
+2   latestworld
+3   (= slot₁/ShadowTypeParam (call core.TypeVar :ShadowTypeParam))
+4   (= slot₂/T (call core.TypeVar :T))
+5   (call core.svec slot₂/T)
+6   (call core.svec :x)
+7   (call core.svec)
+8   (call core.svec slot₂/T)
+9   (call core.svec %₅ %₆ %₇ false 1 core.Any %₈)
+10  (call core.isdefinedglobal TestMod :ShadowTypeParam false)
+11  (gotoifnot %₁₀ label₁₅)
+12  TestMod.ShadowTypeParam
+13  (= slot₃/ %₁₂)
+14  (goto label₁₆)
+15  (= slot₃/ core.nothing)
+16  slot₃/
+17  slot₁/ShadowTypeParam
+18  (call core.svec %₁₇)
+19  (call core.svec %₉)
+20  (call core.svec %₁₆)
+21  (call core.resolve_typegroup TestMod %₁₈ %₁₉ %₂₀)
+22  (= slot₁/ShadowTypeParam (call core.getfield %₂₁ 1))
+23  slot₁/ShadowTypeParam
+24  (call core.declare_const TestMod :ShadowTypeParam %₂₃)
+25  latestworld
+26  TestMod.ShadowTypeParam
+27  (call core.apply_type core.Type %₂₆)
+28  (call core.svec %₂₇ core.Any)
+29  (call core.svec)
+30  SourceLocation:3
+31  (call core.svec %₂₈ %₂₉ %₃₀)
+32  (call core.define_method TestMod core.nothing %₃₁
+    --- code_info
+    slots: [slot₁/#ctor-self#(!read) slot₂/x slot₃/ slot₄/T(single_assign)]
+    1   TestMod.typeof
+    2   (= slot₄/T (call %₁ slot₂/x))
+    3   TestMod.ShadowTypeParam
+    4   (call core.apply_type %₃ slot₄/T)
+    5   (call core.fieldtype %₄ 1)
+    6   slot₂/x
+    7   (= slot₃/ %₆)
+    8   (call core.isa slot₃/ %₅)
+    9   (gotoifnot %₈ label₁₁)
+    10  (goto label₁₂)
+    11  (= slot₃/ (call top.convert %₅ slot₃/))
+    12  slot₃/
+    13  (new %₄ %₁₂)
+    14  (return %₁₃)
+33  latestworld
+34  (return core.nothing)
+
+########################################
+# Basic typegroup
+typegroup
+    struct A
+        b::B
+    end
+    struct B
+        a::A
+    end
+end
+#---------------------
+1   (call core.declare_global TestMod :A false)
+2   latestworld
+3   (call core.declare_global TestMod :B false)
+4   latestworld
+5   (= slot₁/A (call core.TypeVar :A))
+6   (= slot₂/B (call core.TypeVar :B))
+7   (call core.svec)
+8   (call core.svec :b)
+9   (call core.svec)
+10  slot₂/B
+11  (call core.svec %₁₀)
+12  (call core.svec %₇ %₈ %₉ false 1 core.Any %₁₁)
+13  (call core.svec)
+14  (call core.svec :a)
+15  (call core.svec)
+16  slot₁/A
+17  (call core.svec %₁₆)
+18  (call core.svec %₁₃ %₁₄ %₁₅ false 1 core.Any %₁₇)
+19  (call core.isdefinedglobal TestMod :A false)
+20  (gotoifnot %₁₉ label₂₄)
+21  TestMod.A
+22  (= slot₃/ %₂₁)
+23  (goto label₂₅)
+24  (= slot₃/ core.nothing)
+25  slot₃/
+26  (call core.isdefinedglobal TestMod :B false)
+27  (gotoifnot %₂₆ label₃₁)
+28  TestMod.B
+29  (= slot₄/ %₂₈)
+30  (goto label₃₂)
+31  (= slot₄/ core.nothing)
+32  slot₄/
+33  slot₁/A
+34  slot₂/B
+35  (call core.svec %₃₃ %₃₄)
+36  (call core.svec %₁₂ %₁₈)
+37  (call core.svec %₂₅ %₃₂)
+38  (call core.resolve_typegroup TestMod %₃₅ %₃₆ %₃₇)
+39  (= slot₁/A (call core.getfield %₃₈ 1))
+40  slot₁/A
+41  (call core.declare_const TestMod :A %₄₀)
+42  latestworld
+43  (= slot₂/B (call core.getfield %₃₈ 2))
+44  slot₂/B
+45  (call core.declare_const TestMod :B %₄₄)
+46  latestworld
+47  TestMod.A
+48  SourceLocation:2
+49  (call top._defaultctors %₄₇ %₄₈)
+50  TestMod.B
+51  SourceLocation:5
+52  (call top._defaultctors %₅₀ %₅₁)
+53  latestworld
+54  (return core.nothing)
+
+########################################
+# Typegroup with supertype and apply_type_or_typeapp replacement
+typegroup
+    struct A <: AbstractVector{B}
+        b::Union{Nothing, B}
+    end
+    struct B
+        a::A
+    end
+end
+#---------------------
+1   (call core.declare_global TestMod :A false)
+2   latestworld
+3   (call core.declare_global TestMod :B false)
+4   latestworld
+5   (= slot₁/A (call core.TypeVar :A))
+6   (= slot₂/B (call core.TypeVar :B))
+7   (call core.svec)
+8   (call core.svec :b)
+9   (call core.svec)
+10  TestMod.AbstractVector
+11  slot₂/B
+12  (call core.apply_type_or_typeapp %₁₀ %₁₁)
+13  TestMod.Union
+14  TestMod.Nothing
+15  slot₂/B
+16  (call core.apply_type_or_typeapp %₁₃ %₁₄ %₁₅)
+17  (call core.svec %₁₆)
+18  (call core.svec %₇ %₈ %₉ false 1 %₁₂ %₁₇)
+19  (call core.svec)
+20  (call core.svec :a)
+21  (call core.svec)
+22  slot₁/A
+23  (call core.svec %₂₂)
+24  (call core.svec %₁₉ %₂₀ %₂₁ false 1 core.Any %₂₃)
+25  (call core.isdefinedglobal TestMod :A false)
+26  (gotoifnot %₂₅ label₃₀)
+27  TestMod.A
+28  (= slot₃/ %₂₇)
+29  (goto label₃₁)
+30  (= slot₃/ core.nothing)
+31  slot₃/
+32  (call core.isdefinedglobal TestMod :B false)
+33  (gotoifnot %₃₂ label₃₇)
+34  TestMod.B
+35  (= slot₄/ %₃₄)
+36  (goto label₃₈)
+37  (= slot₄/ core.nothing)
+38  slot₄/
+39  slot₁/A
+40  slot₂/B
+41  (call core.svec %₃₉ %₄₀)
+42  (call core.svec %₁₈ %₂₄)
+43  (call core.svec %₃₁ %₃₈)
+44  (call core.resolve_typegroup TestMod %₄₁ %₄₂ %₄₃)
+45  (= slot₁/A (call core.getfield %₄₄ 1))
+46  slot₁/A
+47  (call core.declare_const TestMod :A %₄₆)
+48  latestworld
+49  (= slot₂/B (call core.getfield %₄₄ 2))
+50  slot₂/B
+51  (call core.declare_const TestMod :B %₅₀)
+52  latestworld
+53  TestMod.A
+54  SourceLocation:2
+55  (call top._defaultctors %₅₃ %₅₄)
+56  TestMod.B
+57  SourceLocation:5
+58  (call top._defaultctors %₅₆ %₅₇)
+59  latestworld
+60  (return core.nothing)
+
+########################################
+# Error: Duplicate field name in struct
+struct A; x; x; end
+#---------------------
+LoweringError:
+struct A; x; x; end
+#            ╙ ── duplicate field name
+
+########################################
+# Error: Duplicate field name with different types
+struct A; x::Int; x::String; end
+#---------------------
+LoweringError:
+struct A; x::Int; x::String; end
+#                 ╙ ── duplicate field name
+
+########################################
+# Error: Duplicate field name in mutable struct
+mutable struct A; x; y; x; end
+#---------------------
+LoweringError:
+mutable struct A; x; y; x; end
+#                       ╙ ── duplicate field name

@@ -1,5 +1,12 @@
 name = "Mmap"
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
+version = "1.11.0"
+
+[syntax]
+julia_version = "1.14"
+
+[deps]
+Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

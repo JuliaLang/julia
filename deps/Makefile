@@ -22,9 +22,9 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 # additionally all targets should be listed in the getall target for easier off-line compilation
 # if you are adding a new target, it can help to copy an similar, existing target
 #
-# autoconf configure-driven scripts: pcre unwind gmp mpfr patchelf libuv curl
+# autoconf configure-driven scripts: pcre unwind gmp mpfr patchelf libuv curl openssl
 # custom Makefile rules: openlibm dsfmt libsuitesparse lapack blastrampoline openblas utf8proc objconv libwhich
-# CMake libs: llvm llvmunwind libgit2 libssh2 mbedtls libtracyclient
+# CMake libs: llvm llvmunwind libgit2 libssh2 libtracyclient
 #
 # downloadable via git: llvm-svn, libuv, libopenlibm, utf8proc, libgit2, libssh2, libtracyclient
 #
@@ -36,14 +36,17 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-DEP_LIBS :=
-
 ifeq ($(USE_SYSTEM_LIBBLASTRAMPOLINE), 0)
 DEP_LIBS += blastrampoline
 endif
 
-ifeq ($(USE_SYSTEM_CSL), 0)
+# We need to run this whether or not USE_SYSTEM_CSL is set.
+# If it is, this target copies the system CSLs into the location our
+# build system expects.
 DEP_LIBS += csl
+
+ifeq ($(SANITIZE), 1)
+DEP_LIBS += sanitizers
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 0)
@@ -60,16 +63,20 @@ ifeq ($(OS), Linux)
 DEP_LIBS += unwind
 else ifeq ($(OS), FreeBSD)
 DEP_LIBS += unwind
+else ifeq ($(OS), OpenBSD)
+DEP_LIBS += llvmunwind
 else ifeq ($(OS), Darwin)
 DEP_LIBS += llvmunwind
 endif
 endif
 endif
 
-ifneq (,$(findstring $(OS),Linux FreeBSD))
+PATCHELF_MANIFEST :=
+ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 ifeq ($(USE_SYSTEM_PATCHELF), 0)
 DEP_LIBS += patchelf
 PATCHELF:=$(build_depsbindir)/patchelf
+PATCHELF_MANIFEST:=$(build_prefix)/manifest/patchelf
 else
 PATCHELF:=patchelf
 endif
@@ -87,6 +94,8 @@ endif
 ifeq ($(USE_SYSTEM_DSFMT), 0)
 DEP_LIBS += dsfmt
 endif
+
+DEP_LIBS += cpufeatures
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
 DEP_LIBS += llvm
@@ -113,9 +122,8 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 DEP_LIBS += gmp
 endif
 
-ifeq ($(USE_SYSTEM_LIBGIT2), 0)
-ifeq ($(USE_SYSTEM_MBEDTLS), 0)
-DEP_LIBS += mbedtls
+ifeq ($(USE_SYSTEM_OPENSSL), 0)
+DEP_LIBS += openssl
 endif
 
 ifeq ($(USE_SYSTEM_LIBSSH2), 0)
@@ -130,17 +138,22 @@ ifeq ($(USE_SYSTEM_CURL), 0)
 DEP_LIBS += curl
 endif
 
+ifeq ($(USE_SYSTEM_LIBGIT2), 0)
 DEP_LIBS += libgit2
-endif # USE_SYSTEM_LIBGIT2
+endif
+
+ifeq ($(USE_SYSTEM_LIBPICOSAT), 0)
+DEP_LIBS += libpicosat
+endif
 
 ifeq ($(USE_SYSTEM_MPFR), 0)
 DEP_LIBS += mpfr
 endif
 
-ifeq ($(USE_GPL_LIBS), 1)
+# Only some of the modules in SuiteSparse are GPL.
+# xref: `remove-libsuitesparse-gpl-lib` in libsuitesparse.mk
 ifeq ($(USE_SYSTEM_LIBSUITESPARSE), 0)
 DEP_LIBS += libsuitesparse
-endif
 endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 0)
@@ -149,6 +162,14 @@ endif
 
 ifeq ($(USE_SYSTEM_ZLIB), 0)
 DEP_LIBS += zlib
+endif
+
+ifeq ($(USE_SYSTEM_ZSTD), 0)
+DEP_LIBS += zstd
+endif
+
+ifeq ($(USE_SYSTEM_LMDB), 0)
+DEP_LIBS += lmdb
 endif
 
 ifeq ($(USE_SYSTEM_P7ZIP), 0)
@@ -165,6 +186,13 @@ ifeq ($(WITH_ITTAPI),1)
 DEP_LIBS += ittapi
 endif
 
+ifeq ($(WITH_NVTX),1)
+DEP_LIBS += nvtx
+endif
+
+ifneq ($(WITH_TERMINFO),0)
+DEP_LIBS += terminfo
+endif
 
 # Only compile standalone LAPACK if we are not using OpenBLAS.
 # OpenBLAS otherwise compiles LAPACK as part of its build.
@@ -187,8 +215,9 @@ DEP_LIBS_STAGED := $(DEP_LIBS)
 # list all targets
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
-	objconv mbedtls libssh2 nghttp2 curl libgit2 libwhich zlib p7zip csl \
-	libsuitesparse lld libtracyclient ittapi
+	objconv openssl libssh2 nghttp2 curl libgit2 libwhich zlib zstd lmdb p7zip libpicosat csl \
+	sanitizers libsuitesparse lld libtracyclient ittapi nvtx \
+	terminfo cpufeatures
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS),0)
@@ -222,8 +251,27 @@ distcleanall: $(addprefix distclean-, $(DEP_LIBS_ALL))
 	rm -rf $(build_prefix)
 getall: $(addprefix get-, $(DEP_LIBS_ALL))
 
+.PHONY: default
+.PHONY: get
+.PHONY: extract
+.PHONY: configure
+.PHONY: compile
+.PHONY: check
+.PHONY: fastcheck
+.PHONY: stage
+.PHONY: install
+.PHONY: version-check
+
+.PHONY: uninstall
+.PHONY: cleanall
+.PHONY: distcleanall
+.PHONY: getall
+
+include $(SRCDIR)/BOLT.mk
 include $(SRCDIR)/csl.mk
+include $(SRCDIR)/sanitizers.mk
 include $(SRCDIR)/ittapi.mk
+include $(SRCDIR)/nvtx.mk
 include $(SRCDIR)/llvm.mk
 include $(SRCDIR)/libuv.mk
 include $(SRCDIR)/pcre.mk
@@ -235,17 +283,22 @@ include $(SRCDIR)/openblas.mk
 include $(SRCDIR)/utf8proc.mk
 include $(SRCDIR)/libsuitesparse.mk
 include $(SRCDIR)/zlib.mk
+include $(SRCDIR)/zstd.mk
+include $(SRCDIR)/lmdb.mk
 include $(SRCDIR)/unwind.mk
 include $(SRCDIR)/gmp.mk
 include $(SRCDIR)/mpfr.mk
 include $(SRCDIR)/patchelf.mk
-include $(SRCDIR)/mbedtls.mk
+include $(SRCDIR)/cpufeatures.mk
+include $(SRCDIR)/openssl.mk
 include $(SRCDIR)/libssh2.mk
 include $(SRCDIR)/nghttp2.mk
 include $(SRCDIR)/curl.mk
 include $(SRCDIR)/libgit2.mk
+include $(SRCDIR)/libpicosat.mk
 include $(SRCDIR)/libwhich.mk
 include $(SRCDIR)/p7zip.mk
 include $(SRCDIR)/libtracyclient.mk
+include $(SRCDIR)/terminfo.mk
 
 include $(SRCDIR)/tools/uninstallers.mk

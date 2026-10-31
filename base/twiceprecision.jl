@@ -63,7 +63,7 @@ representation, even though it is exact from the standpoint of binary
 representation.
 
 Example:
-```julia-repl
+```jldoctest
 julia> 1.0 + 1.0001e-15
 1.000000000000001
 
@@ -94,7 +94,7 @@ numbers. Mathematically, `zhi + zlo = x * y`, where `zhi` contains the
 most significant bits and `zlo` the least significant.
 
 Example:
-```julia-repl
+```jldoctest
 julia> x = Float32(π)
 3.1415927f0
 
@@ -112,8 +112,8 @@ julia> Float64(hi) + Float64(lo)
 ```
 """
 function mul12(x::T, y::T) where {T<:AbstractFloat}
-    h = x * y
-    ifelse(iszero(h) | !isfinite(h), (h, h), canonicalize2(h, fma(x, y, -h)))
+    (h, l) = two_mul(x, y)
+    ifelse(!isfinite(h), (h, h), (h, l))
 end
 mul12(x::T, y::T) where {T} = (p = x * y; (p, zero(p)))
 mul12(x, y) = mul12(promote(x, y)...)
@@ -126,7 +126,7 @@ numbers. Mathematically, `zhi + zlo ≈ x / y`, where `zhi` contains the
 most significant bits and `zlo` the least significant.
 
 Example:
-```julia-repl
+```jldoctest
 julia> x, y = Float32(π), 3.1f0
 (3.1415927f0, 3.1f0)
 
@@ -200,14 +200,12 @@ end
 
 TwicePrecision{T}(x::T) where {T} = TwicePrecision{T}(x, zero(T))
 
+TwicePrecision{T}(x::TwicePrecision{T}) where {T} = x
+
 function TwicePrecision{T}(x) where {T}
-    xT = convert(T, x)
+    xT = T(x)
     Δx = x - xT
     TwicePrecision{T}(xT, T(Δx))
-end
-
-function TwicePrecision{T}(x::TwicePrecision) where {T}
-    TwicePrecision{T}(x.hi, x.lo)
 end
 
 TwicePrecision{T}(i::Integer) where {T<:AbstractFloat} =
@@ -254,7 +252,7 @@ nbitslen(r::StepRangeLen) = nbitslen(eltype(r), length(r), r.offset)
 nbitslen(::Type{T}, len, offset) where {T<:IEEEFloat} =
     min(cld(precision(T), 2), nbitslen(len, offset))
 # The +1 here is for safety, because the precision of the significand
-# is 1 bit higher than the number that are explicitly stored.
+# is 1 bit higher than the number that is explicitly stored.
 nbitslen(len, offset) = len < 2 ? 0 : top_set_bit(max(offset-1, len-offset) - 1) + 1
 
 eltype(::Type{TwicePrecision{T}}) where {T} = T
@@ -264,8 +262,7 @@ promote_rule(::Type{TwicePrecision{R}}, ::Type{TwicePrecision{S}}) where {R,S} =
 promote_rule(::Type{TwicePrecision{R}}, ::Type{S}) where {R,S<:Number} =
     TwicePrecision{promote_type(R,S)}
 
-(::Type{T})(x::TwicePrecision) where {T<:Number} = T(x.hi + x.lo)::T
-TwicePrecision{T}(x::Number) where {T} = TwicePrecision{T}(T(x), zero(T))
+(::Type{T})(x::TwicePrecision) where {T<:Number} = (T(x.hi) + T(x.lo))::T
 
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision{T}) where {T} = x
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision) where {T} =
@@ -281,6 +278,7 @@ big(x::TwicePrecision) = big(x.hi) + big(x.lo)
 
 -(x::TwicePrecision) = TwicePrecision(-x.hi, -x.lo)
 
+zero(x::TwicePrecision) = zero(typeof(x))
 function zero(::Type{TwicePrecision{T}}) where {T}
     z = zero(T)
     TwicePrecision{T}(z, z)
@@ -407,8 +405,10 @@ function (:)(start::T, step::T, stop::T) where T<:IEEEFloat
             m = maxintfloat(T, Int)
             if den != 0 && abs(start*den) <= m && abs(step*den) <= m &&  # will round succeed?
                     rem(den, start_d) == 0 && rem(den, step_d) == 0      # check lcm overflow
-                start_n = round(Int, start*den)
-                step_n = round(Int, step*den)
+                # scale the rationals exactly: start*den can round to a different
+                # integer when T has little precision (e.g. Float16)
+                start_n *= div(den, start_d)
+                step_n *= div(den, step_d)
                 len = max(0, Int(div(den*stop_n - stop_d*start_n + step_n*stop_d, step_n*stop_d)))
                 # Integer ops could overflow, so check that this makes sense
                 if isbetween(start, start + (len-1)*step, stop + step/2) &&
@@ -457,8 +457,8 @@ function range_start_step_length(a::T, st::T, len::Integer) where T<:IEEEFloat
         m = maxintfloat(T, Int)
         if abs(den*a) <= m && abs(den*st) <= m &&
                 rem(den, start_d) == 0 && rem(den, step_d) == 0
-            start_n = round(Int, den*a)
-            step_n = round(Int, den*st)
+            start_n *= div(den, start_d)
+            step_n *= div(den, step_d)
             return floatrange(T, start_n, step_n, len, den)
         end
     end
@@ -479,9 +479,7 @@ end
 # This assumes that r.step has already been split so that (0:len-1)*r.step.hi is exact
 function unsafe_getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, i::Integer) where T
     # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add12
-    @inline
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    u = i - r.offset
+    u = oftype(r.offset, i) - r.offset
     shift_hi, shift_lo = u*r.step.hi, u*r.step.lo
     x_hi, x_lo = add12(r.ref.hi, shift_hi)
     T(x_hi + (x_lo + (shift_lo + r.ref.lo)))
@@ -489,7 +487,7 @@ end
 
 function _getindex_hiprec(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision}, i::Integer)
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    u = i - r.offset
+    u = oftype(r.offset, i) - r.offset
     shift_hi, shift_lo = u*r.step.hi, u*r.step.lo
     x_hi, x_lo = add12(r.ref.hi, shift_hi)
     x_hi, x_lo = add12(x_hi, x_lo + (shift_lo + r.ref.lo))
@@ -575,8 +573,8 @@ function _convertSRL(::Type{StepRangeLen{T,R,S,L}}, r::AbstractRange{U}) where {
         m = maxintfloat(T, Int)
         if den != 0 && abs(f*den) <= m && abs(s*den) <= m &&
                 rem(den, start_d) == 0 && rem(den, step_d) == 0
-            start_n = round(Int, f*den)
-            step_n = round(Int, s*den)
+            start_n *= div(den, start_d)
+            step_n *= div(den, step_d)
             return floatrange(T, start_n, step_n, L(length(r)), den)
         end
     end
@@ -620,7 +618,7 @@ function sum(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision})
     # Add in contributions of ref
     ref = r.ref * l
     sm_hi, sm_lo = add12(s_hi, ref.hi)
-    add12(sm_hi, sm_lo + ref.lo)[1]
+    add12(sm_hi, sm_lo + s_lo + ref.lo)[1]
 end
 
 # sum(1:n) as a product of two integers
@@ -653,8 +651,8 @@ function range_start_stop_length(start::T, stop::T, len::Integer) where {T<:IEEE
         return steprangelen_hp(T, start, zero(T), 0, len, 1)
     end
     # Attempt to find exact rational approximations
-    start_n, start_d = rat(start)
-    stop_n, stop_d = rat(stop)
+    _, start_d = rat(start)
+    _, stop_d = rat(stop)
     if start_d != 0 && stop_d != 0
         den = lcm_unchecked(start_d, stop_d)
         m = maxintfloat(T, Int)
@@ -790,3 +788,19 @@ _tp_prod(t::TwicePrecision) = t
     x.hi < y.hi || ((x.hi == y.hi) & (x.lo < y.lo))
 
 isbetween(a, x, b) = a <= x <= b || b <= x <= a
+
+# These functions exist for use in LogRange:
+
+_exp_allowing_twice64(x::Number) = exp(x)
+_exp_allowing_twice64(x::TwicePrecision{Float64}) = Math.exp_impl(x.hi, x.lo, Val(:ℯ))
+
+# No error on negative x, and for NaN/Inf this returns junk:
+function _log_twice64_unchecked(x::Float64)
+    xu = reinterpret(UInt64, x)
+    if xu < (UInt64(1)<<52) # x is subnormal
+        xu = reinterpret(UInt64, x * 0x1p52) # normalize x
+        xu &= ~sign_mask(Float64)
+        xu -%= (UInt64(52) << 52) # mess with the exponent
+    end
+    TwicePrecision(Math._log_ext(xu)...)
+end

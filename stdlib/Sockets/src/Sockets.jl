@@ -31,10 +31,10 @@ export
     IPv4,
     IPv6
 
-import Base: isless, show, print, parse, bind, convert, isreadable, iswritable, alloc_buf_hook, _uv_hook_close
+import Base: isless, show, print, parse, bind, alloc_buf_hook, _uv_hook_close
 
 using Base: LibuvStream, LibuvServer, PipeEndpoint, @handle_as, uv_error, associate_julia_struct, uvfinalize,
-    notify_error, uv_req_data, uv_req_set_data, preserve_handle, unpreserve_handle, _UVError, IOError,
+    notify_error, uv_req_set_data, preserve_handle, unpreserve_handle, _UVError, IOError,
     eventloop, StatusUninit, StatusInit, StatusConnecting, StatusOpen, StatusClosing, StatusClosed, StatusActive,
     preserve_handle, unpreserve_handle, iolock_begin, iolock_end,
     uv_status_string, check_open, OS_HANDLE, RawFD,
@@ -107,6 +107,8 @@ if OS_HANDLE != RawFD
     TCPSocket(fd::RawFD) = TCPSocket(Libc._get_osfhandle(fd))
 end
 
+Base.fd(sock::TCPSocket) = Base._fd(sock)
+
 
 mutable struct TCPServer <: LibuvServer
     handle::Ptr{Cvoid}
@@ -139,6 +141,8 @@ function TCPServer(; delay=true)
     return tcp
 end
 
+Base.fd(server::TCPServer) = Base._fd(server)
+
 """
     accept(server[, client])
 
@@ -146,7 +150,8 @@ Accepts a connection on the given server and returns a connection to the client.
 uninitialized client stream may be provided, in which case it will be used instead of
 creating a new stream.
 """
-accept(server::TCPServer) = accept(server, TCPSocket())
+accept(server::TCPServer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
+    accept(server, TCPSocket(); cancel)
 
 function accept(callback, server::LibuvServer)
     task = @async try
@@ -199,6 +204,8 @@ end
 
 show(io::IO, stream::UDPSocket) = print(io, typeof(stream), "(", uv_status_string(stream), ")")
 
+Base.fd(sock::UDPSocket) = Base._fd(sock)
+
 function _uv_hook_close(sock::UDPSocket)
     lock(sock.cond)
     try
@@ -214,7 +221,7 @@ end
 # Disables dual stack mode.
 const UV_TCP_IPV6ONLY = 1
 
-# Disables dual stack mode. Only available when using ipv6 binf
+# Disables dual stack mode. Only available when using ipv6 bind
 const UV_UDP_IPV6ONLY = 1
 
 # Indicates message was truncated because read buffer was too small. The
@@ -223,9 +230,10 @@ const UV_UDP_PARTIAL = 2
 
 # Indicates if SO_REUSEADDR will be set when binding the handle in uv_udp_bind. This sets
 # the SO_REUSEPORT socket flag on the BSDs and OS X. On other Unix platforms, it sets the
-# SO_REUSEADDR flag. What that means is that multiple threads or processes can bind to the
-# same address without error (provided they all set the flag) but only the last one to bind
-# will receive any traffic, in effect "stealing" the port from the previous listener.
+# SO_REUSEADDR flag. Either way, multiple sockets can bind to the same address without error
+# (provided they all set the flag). Broadcast and multicast traffic reaches all of them, but
+# which one receives unicast traffic is up to the kernel: Linux picks the last to bind, while
+# macOS picks the first for wildcard addresses and the last for specific ones.
 const UV_UDP_REUSEADDR = 4
 
 ##
@@ -248,8 +256,11 @@ end
 Bind `socket` to the given `host:port`. Note that `0.0.0.0` will listen on all devices.
 
 * The `ipv6only` parameter disables dual stack mode. If `ipv6only=true`, only an IPv6 stack is created.
-* If `reuseaddr=true`, multiple threads or processes can bind to the same address without error
-  if they all set `reuseaddr=true`, but only the last to bind will receive any traffic.
+* For a `UDPSocket`, `reuseaddr=true` allows multiple sockets to bind the same address and
+  port, provided they all set it. Broadcast and multicast datagrams are delivered to every one
+  of them, but which socket receives unicast datagrams depends on the platform: on Linux it is
+  the last one to bind, while on macOS a wildcard bind (`0.0.0.0` or `::`) delivers them to
+  the first. Do not rely on `reuseaddr` to take over a port from another listener.
 """
 function bind(sock::Union{TCPServer, UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only = false, reuseaddr = false, kws...)
     if sock.status != StatusInit
@@ -300,7 +311,7 @@ function setopt(sock::UDPSocket; multicast_loop=nothing, multicast_ttl=nothing, 
         error("Cannot set options on uninitialized socket")
     end
     if multicast_loop !== nothing
-        uv_error("multicast_loop", ccall(:uv_udp_set_multicast_loop, Cint, (Ptr{Cvoid}, Cint), sock.handle, multicast_loop) < 0)
+        uv_error("multicast_loop", ccall(:uv_udp_set_multicast_loop, Cint, (Ptr{Cvoid}, Cint), sock.handle, multicast_loop))
     end
     if multicast_ttl !== nothing
         uv_error("multicast_ttl", ccall(:uv_udp_set_multicast_ttl, Cint, (Ptr{Cvoid}, Cint), sock.handle, multicast_ttl))
@@ -320,8 +331,8 @@ end
 
 Read a UDP packet from the specified socket, and return the bytes received. This call blocks.
 """
-function recv(sock::UDPSocket)
-    addr, data = recvfrom(sock)
+function recv(sock::UDPSocket; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    _, data = recvfrom(sock; cancel)
     return data
 end
 
@@ -337,7 +348,8 @@ Read a UDP packet from the specified socket, returning a tuple of `(host_port, d
     Prior to Julia version 1.3, the first returned value was an address (`IPAddr`).
     In version 1.3 it was changed to an `InetAddr`.
 """
-function recvfrom(sock::UDPSocket)
+function recvfrom(sock::UDPSocket; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    tok = Base.check_cancel_arg(cancel)
     iolock_begin()
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
     if sock.status != StatusInit && sock.status != StatusOpen && sock.status != StatusActive
@@ -352,18 +364,39 @@ function recvfrom(sock::UDPSocket)
     end
     sock.status = StatusActive
     lock(sock.recvnotify)
+    locked = true
     iolock_end()
     try
         From = Union{InetAddr{IPv4}, InetAddr{IPv6}}
         Data = Vector{UInt8}
-        from, data = wait(sock.recvnotify)::Tuple{From, Data}
+        locked = false
+        from, data = wait(sock.recvnotify, tok)::Tuple{From, Data}
+        locked = true
         return (from, data)
+    catch
+        # A cancelled (or otherwise interrupted) wait must not leave
+        # continuous reception running with nobody waiting: a datagram
+        # arriving after this unwind would be consumed by the callback and
+        # dropped (`recvnotify` is edge-triggered), starving the next
+        # recvfrom. Mirror the callback's stop logic; the iolock must be
+        # (re)taken first - iolock before recvnotify is the callback's lock
+        # order (a wait-throw released this frame's level already).
+        locked && (unlock(sock.recvnotify); locked = false)
+        iolock_begin()
+        lock(sock.recvnotify)
+        locked = true
+        if sock.status == StatusActive && isempty(sock.recvnotify)
+            sock.status = StatusOpen
+            ccall(:uv_udp_recv_stop, Cint, (Ptr{Cvoid},), sock)
+        end
+        iolock_end()
+        rethrow()
     finally
-        unlock(sock.recvnotify)
+        locked && unlock(sock.recvnotify)
     end
 end
 
-alloc_buf_hook(sock::UDPSocket, size::UInt) = (Libc.malloc(size), Int(size)) # size is always 64k from libuv
+alloc_buf_hook(::UDPSocket, size::UInt) = (Libc.malloc(size), Int(size)) # size is always 64k from libuv
 
 function uv_recvcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid}, addr::Ptr{Cvoid}, flags::Cuint)
     sock = @handle_as handle UDPSocket
@@ -395,7 +428,7 @@ function uv_recvcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid}, addr::P
                 port = ntoh(ccall(:jl_sockaddr_port4, UInt16, (Ptr{Cvoid},), addr))
             elseif ccall(:jl_sockaddr_is_ip6, Cint, (Ptr{Cvoid},), addr) == 1
                 tmp = Ref{UInt128}(0)
-                scope_id = ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ptr{UInt128}), addr, tmp)
+                ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ptr{UInt128}), addr, tmp)
                 host = IPv6(ntoh(tmp[]))
                 port = ntoh(ccall(:jl_sockaddr_port6, UInt16, (Ptr{Cvoid},), addr))
             end
@@ -412,13 +445,21 @@ function uv_recvcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid}, addr::P
     nothing
 end
 
+# completion callback for UDP sends: like Base.uv_writecb_task, but delivers
+# the raw status (a UDP send has no partial write count)
+function uv_sendcb_task(req::Ptr{Cvoid}, status::Cint)
+    t = Base._claim_uvreq_waiter(req)
+    t === nothing || schedule(t, status)
+    nothing
+end
+
 function _send_async(sock::UDPSocket, ipaddr::Union{IPv4, IPv6}, port::UInt16, buf)
     req = Libc.malloc(Base._sizeof_uv_udp_send)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
     host_in = Ref(hton(ipaddr.host))
     err = ccall(:jl_udp_send, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, UInt16, Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Ptr{Cvoid}, Cint),
                 req, sock, hton(port), host_in, buf, sizeof(buf),
-                @cfunction(Base.uv_writecb_task, Cvoid, (Ptr{Cvoid}, Cint)),
+                @cfunction(uv_sendcb_task, Cvoid, (Ptr{Cvoid}, Cint)),
                 ipaddr isa IPv6)
     if err < 0
         Libc.free(req)
@@ -432,45 +473,39 @@ end
 
 Send `msg` over `socket` to `host:port`.
 """
-function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg)
+function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg;
+              cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
     iolock_begin()
     if sock.status != StatusInit && sock.status != StatusOpen && sock.status != StatusActive
         error("UDPSocket is not initialized and open")
     end
+    src = Base.cancel_source(Base.resolve_cancel_token(cancel))
+    # entry check: throw before handing anything to libuv
+    Base._iolocked_checkcancel(src)
     uvw = _send_async(sock, ipaddr, UInt16(port), msg)
-    ct = current_task()
-    preserve_handle(ct)
-    Base.sigatomic_begin()
-    uv_req_set_data(uvw, ct)
-    iolock_end()
-    status = try
-        Base.sigatomic_end()
-        wait()::Cint
-    finally
-        Base.sigatomic_end()
-        iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
-        if uv_req_data(uvw) != C_NULL
-            # uvw is still alive,
-            # so make sure we won't get spurious notifications later
-            uv_req_set_data(uvw, C_NULL)
-        else
-            # done with uvw
-            Libc.free(uvw)
-        end
-        iolock_end()
-        unpreserve_handle(ct)
-    end
+    # A UDP send request itself cannot be cancelled, so an interrupted wait
+    # detaches it, with `msg` rooted until its completion callback frees it.
+    status = Base._wait_uvreq(src, sock, uvw, false, msg)::Cint
     uv_error("send", status)
     nothing
 end
 
 
 #from `connect`
-function uv_connectcb(conn::Ptr{Cvoid}, status::Cint)
+function uv_connectcb_tcp(conn::Ptr{Cvoid}, status::Cint)
     hand = ccall(:jl_uv_connect_handle, Ptr{Cvoid}, (Ptr{Cvoid},), conn)
-    sock = @handle_as hand LibuvStream
+    sock = @handle_as hand TCPSocket
+    connectcb(conn, status, hand, sock)
+end
+
+function uv_connectcb_pipe(conn::Ptr{Cvoid}, status::Cint)
+    hand = ccall(:jl_uv_connect_handle, Ptr{Cvoid}, (Ptr{Cvoid},), conn)
+    sock = @handle_as hand PipeEndpoint
+    connectcb(conn, status, hand, sock)
+end
+
+function connectcb(conn::Ptr{Cvoid}, status::Cint, hand::Ptr{Cvoid}, sock::LibuvStream)
     lock(sock.cond)
     try
         if status >= 0 # success
@@ -502,7 +537,7 @@ function connect!(sock::TCPSocket, host::Union{IPv4, IPv6}, port::Integer)
     end
     host_in = Ref(hton(host.host))
     uv_error("connect", ccall(:jl_tcp_connect, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, UInt16, Ptr{Cvoid}, Cint),
-                              sock, host_in, hton(UInt16(port)), @cfunction(uv_connectcb, Cvoid, (Ptr{Cvoid}, Cint)),
+                              sock, host_in, hton(UInt16(port)), @cfunction(uv_connectcb_tcp, Cvoid, (Ptr{Cvoid}, Cint)),
                               host isa IPv6))
     sock.status = StatusConnecting
     iolock_end()
@@ -511,23 +546,28 @@ end
 
 connect!(sock::TCPSocket, addr::InetAddr) = connect!(sock, addr.host, addr.port)
 
-function wait_connected(x::LibuvStream)
+function wait_connected(x::LibuvStream, tok::Base.MaybeToken=Base.default_cancel_token())
     iolock_begin()
     check_open(x)
     isopen(x) || x.readerror === nothing || throw(x.readerror)
     preserve_handle(x)
     lock(x.cond)
+    locked = true
     try
         while x.status == StatusConnecting
             iolock_end()
-            wait(x.cond)
+            locked = false
+            wait(x.cond, tok)
+            locked = true
             unlock(x.cond)
+            locked = false
             iolock_begin()
             lock(x.cond)
+            locked = true
         end
         isopen(x) || x.readerror === nothing || throw(x.readerror)
     finally
-        unlock(x.cond)
+        locked && unlock(x.cond)
         unpreserve_handle(x)
     end
     iolock_end()
@@ -541,13 +581,16 @@ end
 
 Connect to the host `host` on port `port`.
 """
-connect(sock::TCPSocket, port::Integer) = connect(sock, localhost, port)
-connect(port::Integer) = connect(localhost, port)
+connect(sock::TCPSocket, port::Integer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
+    connect(sock, localhost, port; cancel)
+connect(port::Integer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) = connect(localhost, port; cancel)
 
 # Valid connect signatures for TCP
-connect(host::AbstractString, port::Integer) = connect(TCPSocket(), host, port)
-connect(addr::IPAddr, port::Integer) = connect(TCPSocket(), addr, port)
-connect(addr::InetAddr) = connect(TCPSocket(), addr)
+connect(host::AbstractString, port::Integer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
+    connect(TCPSocket(), host, port; cancel)
+connect(addr::IPAddr, port::Integer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
+    connect(TCPSocket(), addr, port; cancel)
+connect(addr::InetAddr; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) = connect(TCPSocket(), addr; cancel)
 
 function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     if sock.status != StatusInit
@@ -558,16 +601,37 @@ function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     return sock
 end
 
-function connect(sock::LibuvStream, args...)
+function connect(sock::LibuvStream, args::Vararg{Any, N}; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) where {N}
+    tok = Base.check_cancel_arg(cancel)
     connect!(sock, args...)
-    wait_connected(sock)
+    wait_connected(sock, tok)
+    return sock
+end
+
+# Hostname connect performs a DNS lookup first: the operation's resolved
+# token (or explicit shield) must govern that wait too, not just the final
+# connection wait, so thread it rather than let getaddrinfo default to the
+# ambient scope.
+function connect(sock::TCPSocket, host::AbstractString, port::Integer;
+                 cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    tok = Base.check_cancel_arg(cancel)
+    if sock.status != StatusInit
+        error("TCPSocket is not in initialization state")
+    end
+    ipaddr = getaddrinfo(host; cancel=tok)
+    connect!(sock, ipaddr, port)
+    wait_connected(sock, tok)
     return sock
 end
 
 """
     nagle(socket::Union{TCPServer, TCPSocket}, enable::Bool)
 
-Enables or disables Nagle's algorithm on a given TCP server or socket.
+Nagle's algorithm batches multiple small TCP packets into larger
+ones. This can improve throughput but worsen latency. Nagle's algorithm
+is enabled by default. This function sets whether Nagle's algorithm is
+active on a given TCP server or socket. The opposite option is called
+`TCP_NODELAY` in other languages.
 
 !!! compat "Julia 1.3"
     This function requires Julia 1.3 or later.
@@ -650,7 +714,9 @@ function trylisten(sock::LibuvServer; backlog::Integer=BACKLOG_DEFAULT)
     check_open(sock)
     err = ccall(:uv_listen, Cint, (Ptr{Cvoid}, Cint, Ptr{Cvoid}),
                 sock, backlog, @cfunction(uv_connectioncb, Cvoid, (Ptr{Cvoid}, Cint)))
-    sock.status = StatusActive
+    if err == 0
+        sock.status = StatusActive
+    end
     iolock_end()
     return err
 end
@@ -676,7 +742,8 @@ function accept_nonblock(server::TCPServer)
     return client
 end
 
-function accept(server::LibuvServer, client::LibuvStream)
+function accept(server::LibuvServer, client::LibuvStream; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    tok = Base.check_cancel_arg(cancel)
     iolock_begin()
     if server.status != StatusActive && server.status != StatusClosing && server.status != StatusClosed
         throw(ArgumentError("server not connected, make sure \"listen\" has been called"))
@@ -692,10 +759,13 @@ function accept(server::LibuvServer, client::LibuvStream)
         preserve_handle(server)
         lock(server.cond)
         iolock_end()
+        locked = true
         try
-            wait(server.cond)
+            locked = false
+            wait(server.cond, tok)
+            locked = true
         finally
-            unlock(server.cond)
+            locked && unlock(server.cond)
             unpreserve_handle(server)
         end
         iolock_begin()
@@ -770,7 +840,7 @@ end
 """
     leave_multicast_group(sock::UDPSocket, group_addr, interface_addr = nothing)
 
-Remove a socket from  a particular multicast group defined by `group_addr`.
+Remove a socket from a particular multicast group defined by `group_addr`.
 If `interface_addr` is given, specifies a particular interface for multi-homed
 systems.  Use `join_multicast_group()` to enable reception of a group.
 """
@@ -787,11 +857,14 @@ function leave_multicast_group(sock::UDPSocket, group_addr::IPAddr,
 end
 
 """
-    getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr, UInt16)
+    getsockname(sock::Union{TCPServer, TCPSocket, UDPSocket}) -> (IPAddr, UInt16)
 
 Get the IP address and port that the given socket is bound to.
+
+!!! compat "Julia 1.14"
+    `UDPSocket` support requires Julia 1.14.
 """
-getsockname(sock::Union{TCPSocket, TCPServer}) = _sockname(sock, true)
+getsockname(sock::Union{TCPSocket, TCPServer, UDPSocket}) = _sockname(sock, true)
 
 
 """
@@ -809,7 +882,11 @@ function _sockname(sock, self=true)
     rfamily = Ref{Cuint}(0)
 
     iolock_begin()
-    if self
+    if sock isa UDPSocket
+        r = ccall(:jl_udp_getsockname, Int32,
+                (Ptr{Cvoid}, Ref{Cushort}, Ptr{Cvoid}, Ref{Cuint}),
+                sock.handle, rport, raddress, rfamily)
+    elseif self
         r = ccall(:jl_tcp_getsockname, Int32,
                 (Ptr{Cvoid}, Ref{Cushort}, Ptr{Cvoid}, Ref{Cuint}),
                 sock.handle, rport, raddress, rfamily)

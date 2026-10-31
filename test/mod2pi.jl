@@ -26,7 +26,7 @@
 # 3.14159265359, -3.14159265359
 # pi/16*k +/- 0.00001 for k in [-20:20] # to cover all quadrants
 # numerators of continuous fraction approximations to pi
-#   see http://oeis.org/A002485
+#   see https://oeis.org/A002485
 #   (reason: for max cancellation, we want x = k*pi + eps for small eps, so x/k ≈ pi)
 
 testCases = [
@@ -172,7 +172,7 @@ function testModPi()
             oldDiff  = min(oldDiff, abs(xDivisor - oldDiff)) # we are being generous here:
             # if xOld happens to end up "on the wrong side of 0", eg
             # if xSoln = 3.14 (correct), but xOld reports 0.01,
-            # we don't take the long way around the circle of 3.14 - 0.01, but the short way of 3.1415.. - (3.14 - 0.1)
+            # we don't take the long way around the circle of 3.14 - 0.01, but the short way of 3.1415.. - (3.14 - 0.01)
             push!(errsNew,abs(newDiff))
             push!(errsOld,abs(oldDiff))
         end

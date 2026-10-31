@@ -7,7 +7,7 @@ using Base: something
 const DEFAULT_PAYLOAD = CredentialPayload(allow_ssh_agent=false, allow_git_helpers=false)
 
 """
-Emulates the LibGit2 credential loop to allows testing of the credential_callback function
+Emulates the LibGit2 credential loop to allow testing of the credential_callback function
 without having to authenticate against a real server.
 """
 function credential_loop(

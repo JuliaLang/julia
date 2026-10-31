@@ -1,5 +1,4 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-
 module FakePTYs
 
 if Sys.iswindows()
@@ -24,28 +23,33 @@ function open_fake_pty()
         close(pts)
         pts = fds
         # convert pts handle to a TTY
-        #fds = pts.handle
-        #pts.status = Base.StatusClosed
-        #pts.handle = C_NULL
-        #pts = Base.TTY(fds, Base.StatusOpen)
+        #pts = open(fds)::Base.TTY
     else
         O_RDWR = Base.Filesystem.JL_O_RDWR
         O_NOCTTY = Base.Filesystem.JL_O_NOCTTY
 
         fdm = ccall(:posix_openpt, Cint, (Cint,), O_RDWR | O_NOCTTY)
         fdm == -1 && error("Failed to open ptm")
+        # Keep the master out of spawned processes: a child holding a copy
+        # would keep the terminal alive after we close ours, so it would never
+        # see the hangup (and an interactive child would never exit).
+        # (`posix_openpt` does not portably accept `O_CLOEXEC`.)
+        F_SETFD, FD_CLOEXEC = 2, 1
+        rc = ccall(:fcntl, Cint, (Cint, Cint, Cint...), fdm, F_SETFD, FD_CLOEXEC)
+        rc != 0 && error("fcntl(F_SETFD, FD_CLOEXEC) failed")
         rc = ccall(:grantpt, Cint, (Cint,), fdm)
         rc != 0 && error("grantpt failed")
         rc = ccall(:unlockpt, Cint, (Cint,), fdm)
         rc != 0 && error("unlockpt")
 
-        fds = ccall(:open, Cint, (Ptr{UInt8}, Cint),
+        fds = ccall(:open, Cint, (Ptr{UInt8}, Cint, UInt32...),
             ccall(:ptsname, Ptr{UInt8}, (Cint,), fdm), O_RDWR | O_NOCTTY)
         pts = RawFD(fds)
 
         # pts = fdio(fds, true)
-        # pts = Base.Filesystem.File(RawFD(fds))
-        # pts = Base.TTY(RawFD(fds); readable = false)
+        # pts = Base.Filesystem.File(pts)
+        # pts = Base.TTY(pts)
+        # pts = Base.open(pts)
         ptm = Base.TTY(RawFD(fdm))
     end
     return pts, ptm

@@ -1,0 +1,667 @@
+########################################
+# Simple call
+f(x, y)
+#---------------------
+1   TestMod.f
+2   TestMod.x
+3   TestMod.y
+4   (call %₁ %₂ %₃)
+5   (return %₄)
+
+########################################
+# Keyword calls
+f(x; a=1, b=2)
+#---------------------
+1   (call core.tuple :a :b)
+2   (call core.apply_type core.NamedTuple %₁)
+3   (call core.tuple 1 2)
+4   (call %₂ %₃)
+5   TestMod.f
+6   TestMod.x
+7   (call core.kwcall %₄ %₅ %₆)
+8   (return %₇)
+
+########################################
+# Keyword call with only splats for kws
+f(; ks1..., ks2...)
+#---------------------
+1   (call core.NamedTuple)
+2   TestMod.ks1
+3   (call top.merge %₁ %₂)
+4   TestMod.ks2
+5   (call top.merge %₃ %₄)
+6   (call top.isempty %₅)
+7   (gotoifnot %₆ label₁₁)
+8   TestMod.f
+9   (call %₈)
+10  (return %₉)
+11  TestMod.f
+12  (call core.kwcall %₅ %₁₁)
+13  (return %₁₂)
+
+########################################
+# Error: Call with repeated keywords
+f(x; a=1, a=2)
+#---------------------
+LoweringError:
+f(x; a=1, a=2)
+#         ╙ ── Repeated keyword argument name
+
+########################################
+# literal_pow lowering
+x^42
+#---------------------
+1   TestMod.^
+2   TestMod.x
+3   (call core.apply_type top.Val 42)
+4   (call %₃)
+5   (call top.literal_pow %₁ %₂ %₄)
+6   (return %₅)
+
+########################################
+# almost but not quite literal_pow lowering :)
+x^42.0
+#---------------------
+1   TestMod.^
+2   TestMod.x
+3   (call %₁ %₂ 42.0)
+4   (return %₃)
+
+########################################
+# Error: Call with no function name
+@ast_ [:call]
+#---------------------
+LoweringError:
+ at line 1: malformed `call`
+
+Expression:
+  (call)
+
+########################################
+# Simple broadcast
+x .* y .+ f.(z)
+#---------------------
+1   TestMod.+
+2   TestMod.*
+3   TestMod.x
+4   TestMod.y
+5   (call top.broadcasted %₂ %₃ %₄)
+6   TestMod.f
+7   TestMod.z
+8   (call top.broadcasted %₆ %₇)
+9   (call top.broadcasted %₁ %₅ %₈)
+10  (call top.materialize %₉)
+11  (return %₁₀)
+
+########################################
+# Broadcast with unary function calls
+.+x
+#---------------------
+1   TestMod.+
+2   TestMod.x
+3   (call top.broadcasted %₁ %₂)
+4   (call top.materialize %₃)
+5   (return %₄)
+
+########################################
+# Broadcast with short circuit operators
+x .&& y .|| z
+#---------------------
+1   TestMod.x
+2   TestMod.y
+3   (call top.broadcasted top.andand %₁ %₂)
+4   TestMod.z
+5   (call top.broadcasted top.oror %₃ %₄)
+6   (call top.materialize %₅)
+7   (return %₆)
+
+########################################
+# Scalar comparison chain
+x < y(1) < z
+#---------------------
+1   TestMod.<
+2   TestMod.x
+3   TestMod.y
+4   (call %₃ 1)
+5   (call %₁ %₂ %₄)
+6   (gotoifnot %₅ label₁₁)
+7   TestMod.<
+8   TestMod.z
+9   (call %₇ %₄ %₈)
+10  (return %₉)
+11  (return false)
+
+########################################
+# Broadcasted comparison chain
+x .< y(1) .< z
+#---------------------
+1   TestMod.<
+2   TestMod.x
+3   TestMod.y
+4   (call %₃ 1)
+5   (call top.broadcasted %₁ %₂ %₄)
+6   TestMod.<
+7   TestMod.z
+8   (call top.broadcasted %₆ %₄ %₇)
+9   (call top.broadcasted top.& %₅ %₈)
+10  (call top.materialize %₉)
+11  (return %₁₀)
+
+########################################
+# Mixed scalar / broadcasted comparison chain
+a < b < c(1) .< d .< e
+#---------------------
+1   TestMod.c
+2   (call %₁ 1)
+3   TestMod.<
+4   TestMod.a
+5   TestMod.b
+6   (call %₃ %₄ %₅)
+7   (gotoifnot %₆ label₁₂)
+8   TestMod.<
+9   TestMod.b
+10  (= slot₁/ (call %₈ %₉ %₂))
+11  (goto label₁₃)
+12  (= slot₁/ false)
+13  slot₁/
+14  TestMod.<
+15  TestMod.d
+16  (call top.broadcasted %₁₄ %₂ %₁₅)
+17  (call top.broadcasted top.& %₁₃ %₁₆)
+18  TestMod.<
+19  TestMod.d
+20  TestMod.e
+21  (call top.broadcasted %₁₈ %₁₉ %₂₀)
+22  (call top.broadcasted top.& %₁₇ %₂₁)
+23  (call top.materialize %₂₂)
+24  (return %₂₃)
+
+########################################
+# Mixed scalar / broadcasted comparison chain
+a .< b .< c < d < e
+#---------------------
+1   TestMod.<
+2   TestMod.a
+3   TestMod.b
+4   (call top.broadcasted %₁ %₂ %₃)
+5   TestMod.<
+6   TestMod.b
+7   TestMod.c
+8   (call top.broadcasted %₅ %₆ %₇)
+9   (call top.broadcasted top.& %₄ %₈)
+10  TestMod.<
+11  TestMod.c
+12  TestMod.d
+13  (call %₁₀ %₁₁ %₁₂)
+14  (gotoifnot %₁₃ label₂₀)
+15  TestMod.<
+16  TestMod.d
+17  TestMod.e
+18  (= slot₁/ (call %₁₅ %₁₆ %₁₇))
+19  (goto label₂₁)
+20  (= slot₁/ false)
+21  slot₁/
+22  (call top.broadcasted top.& %₉ %₂₁)
+23  (call top.materialize %₂₂)
+24  (return %₂₃)
+
+########################################
+# Comparison chain fused with other broadcasting
+x .+ (a .< b .< c)
+#---------------------
+1   TestMod.+
+2   TestMod.x
+3   TestMod.<
+4   TestMod.a
+5   TestMod.b
+6   (call top.broadcasted %₃ %₄ %₅)
+7   TestMod.<
+8   TestMod.b
+9   TestMod.c
+10  (call top.broadcasted %₇ %₈ %₉)
+11  (call top.broadcasted top.& %₆ %₁₀)
+12  (call top.broadcasted %₁ %₂ %₁₁)
+13  (call top.materialize %₁₂)
+14  (return %₁₃)
+
+########################################
+# Dotted comparison chain after short circuiting scalar comparison (https://github.com/JuliaLang/julia/issues/62454)
+1 < 0 < 2 < identity(3) .< 4
+#---------------------
+1   TestMod.identity
+2   (call %₁ 3)
+3   TestMod.<
+4   (call %₃ 1 0)
+5   (gotoifnot %₄ label₁₂)
+6   TestMod.<
+7   (call %₆ 0 2)
+8   (gotoifnot %₇ label₁₂)
+9   TestMod.<
+10  (= slot₁/ (call %₉ 2 %₂))
+11  (goto label₁₃)
+12  (= slot₁/ false)
+13  slot₁/
+14  TestMod.<
+15  (call top.broadcasted %₁₄ %₂ 4)
+16  (call top.broadcasted top.& %₁₃ %₁₅)
+17  (call top.materialize %₁₆)
+18  (return %₁₇)
+
+########################################
+# Broadcast with literal_pow
+x.^3
+#---------------------
+1   TestMod.^
+2   TestMod.x
+3   (call core.apply_type top.Val 3)
+4   (call %₃)
+5   (call top.broadcasted top.literal_pow %₁ %₂ %₄)
+6   (call top.materialize %₅)
+7   (return %₆)
+
+########################################
+# Broadcast with keywords
+f.(x, y, z = 1; w = 2)
+#---------------------
+1   (call core.tuple :z :w)
+2   (call core.apply_type core.NamedTuple %₁)
+3   (call core.tuple 1 2)
+4   (call %₂ %₃)
+5   TestMod.f
+6   TestMod.x
+7   TestMod.y
+8   (call core.kwcall %₄ top.broadcasted_kwsyntax %₅ %₆ %₇)
+9   (call top.materialize %₈)
+10  (return %₉)
+
+########################################
+# Broadcast with unary dot syntax
+(.+)(x,y)
+#---------------------
+1   TestMod.+
+2   TestMod.x
+3   TestMod.y
+4   (call top.broadcasted %₁ %₂ %₃)
+5   (call top.materialize %₄)
+6   (return %₅)
+
+########################################
+# Trivial in-place broadcast update
+x .= y
+#---------------------
+1   TestMod.x
+2   TestMod.y
+3   (call top.broadcasted top.identity %₂)
+4   (call top.materialize! %₁ %₃)
+5   (return %₁)
+
+########################################
+# Fused in-place broadcast update
+x .= y .+ z
+#---------------------
+1   TestMod.x
+2   TestMod.+
+3   TestMod.y
+4   TestMod.z
+5   (call top.broadcasted %₂ %₃ %₄)
+6   (call top.materialize! %₁ %₅)
+7   (return %₁)
+
+########################################
+# In-place broadcast update with property assignment on left hand side
+x.prop .= y
+#---------------------
+1   TestMod.x
+2   (call top.dotgetproperty %₁ :prop)
+3   TestMod.y
+4   (call top.broadcasted top.identity %₃)
+5   (call top.materialize! %₂ %₄)
+6   (return %₂)
+
+########################################
+# In-place broadcast update with ref on left hand side
+x[i,end] .= y
+#---------------------
+1   TestMod.x
+2   TestMod.i
+3   (call top.lastindex %₁ 2)
+4   (call top.dotview %₁ %₂ %₃)
+5   TestMod.y
+6   (call top.broadcasted top.identity %₅)
+7   (call top.materialize! %₄ %₆)
+8   (return %₄)
+
+########################################
+# <: as a function call
+x <: y
+#---------------------
+1   TestMod.<:
+2   TestMod.x
+3   TestMod.y
+4   (call %₁ %₂ %₃)
+5   (return %₄)
+
+########################################
+# >: as a function call
+x >: y
+#---------------------
+1   TestMod.>:
+2   TestMod.x
+3   TestMod.y
+4   (call %₁ %₂ %₃)
+5   (return %₄)
+
+########################################
+# --> as a function call
+x --> y
+#---------------------
+1   TestMod.-->
+2   TestMod.x
+3   TestMod.y
+4   (call %₁ %₂ %₃)
+5   (return %₄)
+
+########################################
+# basic ccall
+ccall(:strlen, Csize_t, (Cstring,), "asdfg")
+#---------------------
+1   TestMod.Cstring
+2   (call top.cconvert %₁ "asdfg")
+3   (call top.unsafe_convert %₁ %₂)
+4   (foreigncall :strlen (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₃ %₂)
+5   (return %₄)
+
+########################################
+# ccall with library name as a global var
+ccall((:strlen, libc), Csize_t, (Cstring,), "asdfg")
+#---------------------
+1   TestMod.Cstring
+2   (call top.cconvert %₁ "asdfg")
+3   (call top.unsafe_convert %₁ %₂)
+4   (foreigncall (foreignsymbol (tuple (inert strlen) TestMod.libc)) (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₃ %₂)
+5   (return %₄)
+
+########################################
+# ccall with a calling convention
+ccall(:foo, stdcall, Csize_t, ())
+#---------------------
+1   (foreigncall :foo (static_eval TestMod.Csize_t) (static_eval (call core.svec)) 0 :stdcall)
+2   (return %₁)
+
+########################################
+# ccall with Any args become core.Any and don't need conversion or GC roots
+ccall(:foo, stdcall, Csize_t, (Any,), x)
+#---------------------
+1   core.Any
+2   TestMod.x
+3   (foreigncall :foo (static_eval TestMod.Csize_t) (static_eval (call core.svec core.Any)) 0 :stdcall %₂)
+4   (return %₃)
+
+########################################
+# ccall with variable as function name (must eval to a pointer)
+ccall(ptr, Csize_t, (Cstring,), "asdfg")
+#---------------------
+1   TestMod.Cstring
+2   (call top.cconvert %₁ "asdfg")
+3   TestMod.ptr
+4   (call top.unsafe_convert %₁ %₂)
+5   (foreigncall %₃ (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₄ %₂)
+6   (return %₅)
+
+########################################
+# ccall with varargs
+ccall(:printf, Cint, (Cstring, Cstring...), "%s = %s\n", "2 + 2", "5")
+#---------------------
+1   TestMod.Cstring
+2   TestMod.Cstring
+3   TestMod.Cstring
+4   (call top.cconvert %₁ "%s = %s\n")
+5   (call top.cconvert %₂ "2 + 2")
+6   (call top.cconvert %₃ "5")
+7   (call top.unsafe_convert %₁ %₄)
+8   (call top.unsafe_convert %₂ %₅)
+9   (call top.unsafe_convert %₃ %₆)
+10  (foreigncall :printf (static_eval TestMod.Cint) (static_eval (call core.svec TestMod.Cstring TestMod.Cstring TestMod.Cstring)) 1 :ccall %₇ %₈ %₉ %₄ %₅ %₆)
+11  (return %₁₀)
+
+########################################
+# Error: ccall with too few arguments
+ccall(:foo, Csize_t)
+#---------------------
+LoweringError:
+ccall(:foo, Csize_t)
+└──────────────────┘ ── too few arguments to ccall
+
+########################################
+# Error: ccall with calling conv and too few arguments
+ccall(:foo, thiscall, Csize_t)
+#---------------------
+LoweringError:
+ccall(:foo, thiscall, Csize_t)
+└────────────────────────────┘ ── too few arguments to ccall with calling convention specified
+
+########################################
+# Error: ccall without tuple for argument types
+ccall(:foo, Csize_t, Cstring)
+#---------------------
+LoweringError:
+ccall(:foo, Csize_t, Cstring)
+#                    └─────┘ ── ccall argument types must be a tuple; try `(T,)`
+
+########################################
+# Error: ccall without tuple for argument types
+ccall(:foo, (Csize_t,), "arg")
+#---------------------
+LoweringError:
+ccall(:foo, (Csize_t,), "arg")
+#           └────────┘ ── ccall argument types must be a tuple; try `(T,)` and check if you specified a correct return type
+
+########################################
+# Error: ccall with library name which is a local variable
+let libc = "libc"
+    ccall((:strlen, libc), Csize_t, (Cstring,), "asdfg")
+end
+#---------------------
+LoweringError:
+let libc = "libc"
+    ccall((:strlen, libc), Csize_t, (Cstring,), "asdfg")
+#                   └──┘ ── function name and library expression cannot reference local variable
+end
+
+########################################
+# Error: ccall with return type which is a local variable
+let Csize_t = 1
+    ccall(:strlen, Csize_t, (Cstring,), "asdfg")
+end
+#---------------------
+LoweringError:
+let Csize_t = 1
+    ccall(:strlen, Csize_t, (Cstring,), "asdfg")
+#                  └─────┘ ── ccall return type cannot reference local variable
+end
+
+########################################
+# Error: ccall with argument type which is a local variable
+let Cstring = 1
+    ccall(:strlen, Csize_t, (Cstring,), "asdfg")
+end
+#---------------------
+LoweringError:
+let Cstring = 1
+    ccall(:strlen, Csize_t, (Cstring,), "asdfg")
+#                            └─────┘ ── ccall argument type cannot reference local variable
+end
+
+########################################
+# Error: ccall with too few arguments
+ccall(:strlen, Csize_t, (Cstring,))
+#---------------------
+LoweringError:
+ccall(:strlen, Csize_t, (Cstring,))
+└─────────────────────────────────┘ ── Too few arguments in ccall compared to argument types
+
+########################################
+# Error: ccall with too many arguments
+ccall(:strlen, Csize_t, (Cstring,), "asdfg", "blah")
+#---------------------
+LoweringError:
+ccall(:strlen, Csize_t, (Cstring,), "asdfg", "blah")
+└──────────────────────────────────────────────────┘ ── More arguments than types in ccall
+
+########################################
+# Error: ccall varargs with too few args
+ccall(:foo, Csize_t, (Cstring...,), "asdfg")
+#---------------------
+LoweringError:
+ccall(:foo, Csize_t, (Cstring...,), "asdfg")
+#                     └────────┘ ── C ABI prohibits vararg without one required argument
+
+########################################
+# Error: ccall with multiple varargs
+ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
+#---------------------
+LoweringError:
+ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
+#                     └────────┘ ── only the trailing ccall argument type should have `...`
+
+########################################
+# cglobal special support for (sym, lib) tuple
+# unlike flisp we outline the tuple and allow constant propagation to put it
+# back before codegen generates code for `cglobal`
+cglobal((:sym, lib), Int)
+#---------------------
+1   TestMod.Int
+2   (call core.apply_type top.Ptr %₁)
+3   (foreignglobal (foreignsymbol (tuple (inert sym) TestMod.lib)))
+4   (call top.bitcast %₂ %₃)
+5   (return %₄)
+
+########################################
+# cglobal - non-tuple expressions in first arg are lowered as normal
+cglobal(f(), Int)
+#---------------------
+1   TestMod.Int
+2   (call core.apply_type top.Ptr %₁)
+3   TestMod.f
+4   (call %₃)
+5   (foreignglobal %₄)
+6   (call top.bitcast %₂ %₅)
+7   (return %₆)
+
+########################################
+# Error: cglobal too many arguments
+cglobal(:sym, Int, blah)
+#---------------------
+LoweringError:
+cglobal(:sym, Int, blah)
+└──────────────────────┘ ── cglobal must have one or two arguments
+
+########################################
+# Error: assigning to `cglobal`
+cglobal = 10
+#---------------------
+LoweringError:
+cglobal = 10
+└─────┘ ── invalid syntax in left-hand side of assignment
+
+########################################
+# Error: assigning to `ccall`
+ccall = 10
+#---------------------
+LoweringError:
+ccall = 10
+└───┘ ── invalid syntax in left-hand side of assignment
+
+########################################
+# Error: assigning to `var"ccall"`
+var"ccall" = 10
+#---------------------
+LoweringError:
+var"ccall" = 10
+#   └───┘ ── invalid syntax in left-hand side of assignment
+
+########################################
+# Error: Invalid function name ccall
+function ccall()
+end
+#---------------------
+LoweringError:
+function ccall()
+#        └───┘ ── ccall is a reserved identifier
+end
+
+########################################
+# Error: Invalid function name ccall
+function A.ccall()
+end
+#---------------------
+LoweringError:
+function A.ccall()
+#          └───┘ ── ccall is a reserved identifier
+end
+
+########################################
+# Error: Invalid function name ccall
+function ccall{<:T}()
+end
+#---------------------
+LoweringError:
+function ccall{<:T}()
+#        └───┘ ── ccall is a reserved identifier
+end
+
+########################################
+# Nested splat: simple case
+tuple((xs...)...)
+#---------------------
+1   TestMod.tuple
+2   (call core.tuple top.iterate %₁)
+3   TestMod.xs
+4   (call core._apply_iterate top.iterate core._apply_iterate %₂ %₃)
+5   (return %₄)
+
+########################################
+# Nested splat: with mixed arguments
+tuple(a, (xs...)..., b)
+#---------------------
+1   TestMod.tuple
+2   TestMod.a
+3   (call core.tuple %₂)
+4   (call core.tuple top.iterate %₁ %₃)
+5   TestMod.xs
+6   TestMod.b
+7   (call core.tuple %₆)
+8   (call core.tuple %₇)
+9   (call core._apply_iterate top.iterate core._apply_iterate %₄ %₅ %₈)
+10  (return %₉)
+
+########################################
+# Nested splat: multiple nested splats
+tuple((xs...)..., (ys...)...)
+#---------------------
+1   TestMod.tuple
+2   (call core.tuple top.iterate %₁)
+3   TestMod.xs
+4   TestMod.ys
+5   (call core._apply_iterate top.iterate core._apply_iterate %₂ %₃ %₄)
+6   (return %₅)
+
+########################################
+# Nested splat: triple nesting
+tuple(((xs...)...)...)
+#---------------------
+1   TestMod.tuple
+2   (call core.tuple top.iterate %₁)
+3   (call core.tuple top.iterate core._apply_iterate %₂)
+4   TestMod.xs
+5   (call core._apply_iterate top.iterate core._apply_iterate %₃ %₄)
+6   (return %₅)
+
+########################################
+# Error: Standalone splat expression
+(xs...)
+#---------------------
+LoweringError:
+(xs...)
+#└───┘ ── unexpected `...`
+splatting can only be done into a `call`, `tuple`, `curly`, or array-like expression

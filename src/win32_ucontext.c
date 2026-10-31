@@ -26,9 +26,6 @@ JL_DLLEXPORT EXCEPTION_DISPOSITION NTAPI __julia_personality(
 
     EXCEPTION_DISPOSITION rval;
     switch (jl_exception_handler(&ExceptionInfo)) {
-        case EXCEPTION_EXECUTE_HANDLER:
-            rval = ExceptionExecuteHandler;
-            break;
         case EXCEPTION_CONTINUE_EXECUTION:
             rval = ExceptionContinueExecution;
             break;
@@ -62,6 +59,8 @@ void jl_makecontext(win32_ucontext_t *ucp, void (*func)(void))
     Registration[0].Handler = &__julia_personality;
     Registration[1].Next = (PEXCEPTION_REGISTRATION_RECORD)0xFFFFFFFF;
     Registration[1].Handler = UnHandler;
+#else
+#error jl_makecontext not defined for CPU type
 #endif
     stack_top -= sizeof(void*);
     *(void**)stack_top = 0; // push rta

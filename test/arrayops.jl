@@ -93,12 +93,28 @@ using Dates
 
     @test_throws DimensionMismatch reshape(1:3, 4)
 
+    # Generic reshape must reject dimensions whose product overflows.
+    overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+    @test_throws ArgumentError reshape(view([1, 2], :), 3, overflow_dim)
+
     # issue #23107
     a = [1,2,3]
     @test typeof(a)(a) !== a
     @test Array(a) !== a
     @test Array{eltype(a)}(a) !== a
     @test Vector(a) !== a
+end
+@testset "effect inference for `reshape` for `Array`" begin
+    for Arr ∈ (Array{<:Any, 0}, Vector, Matrix, Array{<:Any, 3})
+        for Shape ∈ (Tuple{Int}, Tuple{Int, Int})
+            effects = Base.infer_effects(reshape, Tuple{Arr{Float32}, Shape})
+            @test Base.Compiler.is_effect_free(effects)
+            @test Base.Compiler.is_terminates(effects)
+            @test Base.Compiler.is_notaskstate(effects)
+            @test Base.Compiler.is_noub(effects)
+            @test Base.Compiler.is_nortcall(effects)
+        end
+    end
 end
 @testset "reshaping SubArrays" begin
     a = Array(reshape(1:5, 1, 5))
@@ -115,7 +131,10 @@ end
         @test convert(Array{Int,1}, r) == [2,3,4]
         @test_throws MethodError convert(Array{Int,2}, r)
         @test convert(Array{Int}, r) == [2,3,4]
-        @test Base.unsafe_convert(Ptr{Int}, r) == Base.unsafe_convert(Ptr{Int}, s)
+        let rc = Base.cconvert(Ptr{Int}, r), rs = Base.cconvert(Ptr{Int}, s)
+            @test rc == rs
+            @test Base.unsafe_convert(Ptr{Int}, rc) == Base.unsafe_convert(Ptr{Int}, rs)
+        end
         @test isa(r, StridedArray)  # issue #22411
     end
     @testset "linearslow" begin
@@ -131,6 +150,7 @@ end
         @test convert(Array{Int,1}, r) == [2,3,5]
         @test_throws MethodError convert(Array{Int,2}, r)
         @test convert(Array{Int}, r) == [2,3,5]
+        # @test_throws ErrorException Base.cconvert(Ptr{Int}, r) broken=true
         @test_throws ErrorException Base.unsafe_convert(Ptr{Int}, r)
         r[2] = -1
         @test a[3] == -1
@@ -182,6 +202,15 @@ end
     sizehint!(A, 5)
     @test length(A) == 5
     @test A == [1:5;]
+
+    for n in (0, 10)
+        A = [1:100;]
+        empty!(A)
+        @test sizehint!(A, n; first=true) === A
+        @test isempty(A)
+        pushfirst!(A, 1)
+        @test A == [1]
+    end
 end
 @testset "reshape with colon" begin
     # Reshape with an omitted dimension
@@ -303,6 +332,47 @@ end
     @test_throws ArgumentError dropdims(a, dims=3)
     @test_throws ArgumentError dropdims(a, dims=4)
     @test_throws ArgumentError dropdims(a, dims=6)
+
+    h1 = HeterogeneousAxisArray(rand(4, 1))
+    h2 = HeterogeneousAxisArray(rand(1, 4))
+    @test size(dropdims(h1, dims=2)) == (4,)
+    @test size(dropdims(h2, dims=1)) == (4,)
+
+    @testset "insertdims" begin
+        a = rand(8, 7)
+        @test @inferred(insertdims(a, dims=1)) == @inferred(insertdims(a, dims=(1,))) == reshape(a, (1, 8, 7))
+        @test @inferred(insertdims(a, dims=3))  == @inferred(insertdims(a, dims=(3,))) == reshape(a, (8, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 3)))  == reshape(a, (1, 8, 1, 7))
+        @test @inferred(insertdims(a, dims=(1, 2, 3)))  == reshape(a, (1, 1, 1, 8, 7))
+        @test @inferred(insertdims(a, dims=(1, 4)))  == reshape(a, (1, 8, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 3, 5)))  == reshape(a, (1, 8, 1, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 2, 4, 6)))  == reshape(a, (1, 1, 8, 1, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 3, 4, 6)))  == reshape(a, (1, 8, 1, 1, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 4, 6, 3)))  == reshape(a, (1, 8, 1, 1, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 3, 5, 6)))  == reshape(a, (1, 8, 1, 7, 1, 1))
+        @test_throws ArgumentError insertdims(a, dims=(1, 1, 2, 3))
+        @test_throws ArgumentError insertdims(a, dims=(1, 2, 2, 3))
+        @test_throws ArgumentError insertdims(a, dims=(1, 2, 3, 3))
+        @test_throws UndefKeywordError insertdims(a)
+        @test_throws ArgumentError insertdims(a, dims=0)
+        @test_throws ArgumentError insertdims(a, dims=(1, 2, 1))
+        @test_throws ArgumentError insertdims(a, dims=4)
+        @test_throws ArgumentError insertdims(a, dims=6)
+        A = reshape(1:6, 2, 3)
+        @test_throws ArgumentError insertdims(A, dims=(2, 2))
+        D = insertdims(A, dims=())
+        @test size(D) == size(A)
+        @test D == A
+        E = ones(2, 3, 4)
+        F = insertdims(E, dims=(2, 4, 6))
+        @test size(F) == (2, 1, 3, 1, 4, 1)
+        # insertdims and dropdims are inverses
+        b = rand(1,1,1,5,1,1,7)
+        for dims in [1, (1,), 2, (2,), 3, (3,), (1,3), (1,2,3), (1,2), (1,3,5), (1,2,5,6), (1,3,5,6), (1,3,5,6), (1,6,5,3)]
+            @test dropdims(insertdims(a; dims); dims) == a
+            @test insertdims(dropdims(b; dims); dims) == b
+        end
+    end
 
     sz = (5,8,7)
     A = reshape(1:prod(sz),sz...)
@@ -463,6 +533,36 @@ end
         @test vc == [v[1:(i-1)]; 5; v[i:end]]
     end
     @test_throws BoundsError insert!(v, 5, 5)
+
+    # test that data is copied when there is plenty of room to do so
+    v = empty!(collect(1:100))
+    pushfirst!(v, 1)
+    @test length(v.ref.mem) == 100
+
+    # test that insert! at position 1 doesn't allocate for empty arrays with capacity (issue #58640)
+    v = empty!(Vector{Int}(undef, 5))
+    insert!(v, 1, 10)
+    @test v == [10]
+    @test length(v.ref.mem) == 5
+
+    # test that moving data within the same memory doesn't leave stale references behind (issue #63739)
+    nassigned(v) = count(i -> isassigned(v.ref.mem, i), eachindex(v.ref.mem))
+    v = Any[]
+    for r in 1:20
+        for i in 1:48
+            push!(v, Ref(r))
+        end
+        @test nassigned(v) == length(v)
+        for i in 1:48
+            popfirst!(v)
+        end
+        @test nassigned(v) == 0
+    end
+    v = resize!(Any[1:100;], 10)
+    pushfirst!(v, 0)
+    @test length(v.ref.mem) == 100
+    @test v == 0:10
+    @test nassigned(v) == 11
 end
 
 @testset "popat!(::Vector, i, [default])" begin
@@ -558,32 +658,32 @@ end
     @test findall(!, m) == [k for (k,v) in pairs(m) if !v]
     @test findfirst(!iszero, a) == 2
     @test findfirst(a.==0) == 1
-    @test findfirst(a.==5) == nothing
+    @test findfirst(a.==5) === nothing
     @test findfirst(Dict(1=>false, 2=>true)) == 2
-    @test findfirst(Dict(1=>false)) == nothing
+    @test findfirst(Dict(1=>false)) === nothing
     @test findfirst(isequal(3), [1,2,4,1,2,3,4]) == 6
     @test findfirst(!isequal(1), [1,2,4,1,2,3,4]) == 2
     @test findfirst(isodd, [2,4,6,3,9,2,0]) == 4
-    @test findfirst(isodd, [2,4,6,2,0]) == nothing
+    @test findfirst(isodd, [2,4,6,2,0]) === nothing
     @test findnext(!iszero,a,4) == 4
     @test findnext(!iszero,a,5) == 6
     @test findnext(!iszero,a,1) == 2
     @test findnext(isequal(1),a,4) == 6
-    @test findnext(isequal(5),a,4) == nothing
+    @test findnext(isequal(5),a,4) === nothing
     @test findlast(!iszero, a) == 8
     @test findlast(a.==0) == 5
-    @test findlast(a.==5) == nothing
-    @test findlast(false) == nothing # test non-AbstractArray findlast
+    @test findlast(a.==5) === nothing
+    @test findlast(false) === nothing # test non-AbstractArray findlast
     @test findlast(isequal(3), [1,2,4,1,2,3,4]) == 6
     @test findlast(isodd, [2,4,6,3,9,2,0]) == 5
-    @test findlast(isodd, [2,4,6,2,0]) == nothing
+    @test findlast(isodd, [2,4,6,2,0]) === nothing
     @test findprev(!iszero,a,4) == 4
     @test findprev(!iszero,a,5) == 4
-    @test findprev(!iszero,a,1) == nothing
+    @test findprev(!iszero,a,1) === nothing
     @test findprev(isequal(1),a,4) == 2
     @test findprev(isequal(1),a,8) == 6
     @test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
-    @test findprev(isodd, [2,4,5,3,9,2,0], 2) == nothing
+    @test findprev(isodd, [2,4,5,3,9,2,0], 2) === nothing
     @test findfirst(isequal(0x00), [0x01, 0x00]) == 2
     @test findlast(isequal(0x00), [0x01, 0x00]) == 2
     @test findnext(isequal(0x00), [0x00, 0x01, 0x00], 2) == 3
@@ -603,6 +703,15 @@ end
 
     @testset "issue 43078" begin
         @test_throws TypeError findall([1])
+    end
+
+    @testset "issue #46425" begin
+        counter = 0
+        function pred46425(x)
+            counter += 1
+            counter < 4 && x
+        end
+        @test findall(pred46425, [false, false, true, true]) == [3]
     end
 end
 @testset "find with Matrix" begin
@@ -728,6 +837,9 @@ end
     v = [1,2,3]
     @test permutedims(v) == [1 2 3]
 
+    zd = fill(0)
+    @test permutedims(zd, ()) == zd
+
     x = PermutedDimsArray([1 2; 3 4], (2, 1))
     @test size(x) == (2, 2)
     @test copy(x) == [1 3; 2 4]
@@ -781,6 +893,14 @@ end
     oa = OffsetVector(copy(a), -1)
     @test circshift!(oa, 1) === oa
     @test oa == circshift(OffsetVector(a, -1), 1)
+
+    # 1d circshift! (#53554)
+    a = []
+    @test circshift!(a, 1) === a
+    @test circshift!(a, 1) == []
+    a = [1:5;]
+    @test circshift!(a, 10) === a
+    @test circshift!(a, 10) == 1:5
 end
 
 @testset "circcopy" begin
@@ -845,6 +965,12 @@ end
     @test isequal(cumsum(A,dims=3),A3)
     @test repeat([1,2,3,4], UInt32(1)) == [1,2,3,4]
     @test repeat([1 2], UInt32(2)) == repeat([1 2], UInt32(2), UInt32(1))
+
+    # Repeated array dimensions must be checked before allocating and filling the result.
+    overflow_count = Int(typemax(UInt) ÷ 3 + 1)
+    @test_throws OverflowError repeat([1, 2, 3], overflow_count)
+    @test_throws OverflowError repeat([1, 2, 3], inner=overflow_count)
+    @test_throws OverflowError repeat(reshape(1:9, 3, 3), overflow_count, 1)
 
     # issue 20564
     @test_throws MethodError repeat(1, 2, 3)
@@ -1170,6 +1296,18 @@ end
         @test setdiff((1, 2), (3, 2)) == [1]
         @test symdiff((1, 2), (3, 2)) == [1, 3]
     end
+
+    @testset "setdiff preserves element type of first argument" begin
+        @test setdiff([1, 2, 3], [1.0, 2.0]) isa Vector{Int}
+        @test setdiff([1.0, 2.0, 3.0], [1, 2]) isa Vector{Float64}
+        @test setdiff(['a', 'b', 'c'], [98]) isa Vector{Char}
+        @test setdiff([1, 2], [1.0, 2.0]) isa Vector{Int}
+    end
+    @testset "intersect promotes element types of arguments" begin
+        @test intersect([1, 2, 3], [1.0, 2.0]) isa Vector{Float64}
+        @test intersect([1.0, 2.0, 3.0], [1, 2]) isa Vector{Float64}
+        @test intersect(['a', 'b', 'c'], Int[]) isa Vector{Any}
+    end
 end
 
 @testset "mapslices" begin
@@ -1239,6 +1377,10 @@ end
     @test @inferred(mapslices(hcat, [1 2; 3 4], dims=1)) == [1 2; 3 4] # previously an error, now allowed
     @test mapslices(identity, [1 2; 3 4], dims=(2,2)) == [1 2; 3 4] # previously an error
     @test_broken @inferred(mapslices(identity, [1 2; 3 4], dims=(2,2))) == [1 2; 3 4]
+
+    # type inference in mapslices
+    a_ = @inferred (a -> mapslices(identity, reshape(a, size(a)..., 1, 1), dims=(3,4)))(a)
+    @test a_ == reshape(a, size(a)..., 1, 1)
 end
 
 @testset "single multidimensional index" begin
@@ -1340,6 +1482,13 @@ end
     @test @views mightalias(B[1:2], A[1:2])
     @test @views !mightalias(B[1:end÷2], A[end÷2+1:end])
 
+    C = trues(5,4)
+    @test mightalias(C, reshape(C,10,2))
+    b = BitVector([1, 0, 0, 0])
+    r = reshape(b, 2, 2)
+    b[2:4] .= @view r[1:3]
+    @test b == [1, 1, 0, 0]
+
     AA = [[1],[2]]
     @test @views mightalias(AA, AA[:])
     @test @views mightalias(AA[:], AA[:])
@@ -1347,6 +1496,14 @@ end
 end
 
 @testset "lexicographic comparison" begin
+    @testset "zero-dimensional" begin
+        vals = (0, 0.0, 1, 1.0)
+        for l ∈ vals
+            for r ∈ vals
+                @test cmp(fill(l), fill(r)) == cmp(l, r)
+            end
+        end
+    end
     @test cmp([1.0], [1]) == 0
     @test cmp([1], [1.0]) == 0
     @test cmp([1, 1], [1, 1]) == 0
@@ -1359,6 +1516,18 @@ end
     @test cmp([UInt8(1), UInt8(0)], [UInt8(0), UInt8(0)]) == 1
     @test cmp([UInt8(1), UInt8(0)], [UInt8(1), UInt8(0)]) == 0
     @test cmp([UInt8(0), UInt8(0)], [UInt8(1), UInt8(1)]) == -1
+
+    x = [1, 2, 3]
+    y = OffsetVector(x, -1)
+    @test cmp(x, y) == 1
+    @test cmp(y, x) == -1
+    @test !isless(x, y)
+    @test isless(y, x)
+
+    y2 = OffsetVector([1, 2, 3], 0)
+    @test cmp(x, y2) == 0
+    @test !isless(x, y2)
+    @test !isless(y2, x)
 end
 
 @testset "sort on arrays" begin
@@ -1431,6 +1600,15 @@ end
         5 7
     ]
     @test sortslices(B, dims=(1,3)) == B
+end
+
+@testset "sortslices inference (#52019)" begin
+    x = rand(3, 2)
+    @inferred sortslices(x, dims=1)
+    @inferred sortslices(x, dims=(2,))
+    x = rand(1, 2, 3)
+    @inferred sortslices(x, dims=(1,2))
+    @inferred sortslices(x, dims=3, by=sum)
 end
 
 @testset "fill" begin
@@ -1546,6 +1724,8 @@ end
     @test_throws BoundsError deleteat!(a, [1,13])
     @test_throws ArgumentError deleteat!(a, [3,2]) # not sorted
     @test_throws BoundsError deleteat!(a, 5:20)
+    @test_throws BoundsError deleteat!(a, 1:typemax(Int))
+    @test_throws BoundsError deleteat!(a, 2:typemax(Int))
     @test_throws BoundsError deleteat!(a, Bool[])
     @test_throws BoundsError deleteat!(a, [true])
     @test_throws BoundsError deleteat!(a, falses(11))
@@ -1676,6 +1856,12 @@ end
     end
 end
 
+@testset "reverse zero dims" begin
+    a = fill(3)
+    @test a == reverse(a)
+    @test a === reverse!(a)
+end
+
 @testset "isdiag, istril, istriu" begin
     # Scalar
     @test isdiag(3)
@@ -1749,6 +1935,12 @@ end
     A = [1,2]
     @test append!(A, A) == [1,2,1,2]
     @test prepend!(A, A) == [1,2,1,2,1,2,1,2]
+    A = collect(1:5)
+    @test prepend!(A, view(A, 4:5)) == [4,5,1,2,3,4,5]
+    A = collect(1:5)
+    @test prepend!(A, view(A, 5:-1:1)) == [5,4,3,2,1,1,2,3,4,5]
+    A = Any[1,2,3]
+    @test prepend!(A, view(A, 2:3)) == Any[2,3,1,2,3]
 
     # iterators with length:
     @test append!([1,2], (9,8)) == [1,2,9,8] == push!([1,2], (9,8)...)
@@ -1773,6 +1965,32 @@ end
     # offset array
     @test append!([1,2], OffsetArray([9,8], (-3,))) == [1,2,9,8]
     @test prepend!([1,2], OffsetArray([9,8], (-3,))) == [9,8,1,2]
+
+    # Error recovery
+    A = [1, 2]
+    @test_throws MethodError append!(A, [1, 2, "hi"])
+    @test A == [1, 2, 1, 2]
+
+    oA = OffsetVector(A, 0:3)
+    @test_throws InexactError append!(oA, [1, 2, 3.01])
+    @test oA == OffsetVector([1, 2, 1, 2, 1, 2], 0:5)
+
+    @test_throws InexactError append!(A, (x for x in [1, 2, 3.1]))
+    @test A == [1, 2, 1, 2, 1, 2, 1, 2]
+
+    @test_throws InexactError append!(A, (x for x in [1, 2, 3.1] if isfinite(x)))
+    @test A == [1, 2, 1, 2, 1, 2, 1, 2, 1, 2]
+
+    @test_throws MethodError prepend!(A, [1, 2, "hi"])
+    @test A == [2, 1, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2]
+
+    A = [1, 2]
+    @test_throws InexactError prepend!(A, (x for x in [1, 2, 3.1]))
+    @test A == [2, 1, 1, 2]
+
+    A = [1, 2]
+    @test_throws InexactError prepend!(A, (x for x in [1, 2, 3.1] if isfinite(x)))
+    @test A == [2, 1, 1, 2]
 end
 
 let A = [1,2]
@@ -2013,6 +2231,7 @@ end
 
     I1 = CartesianIndex((2,3,0))
     I2 = CartesianIndex((-1,5,2))
+    @test +I1 == I1
     @test -I1 == CartesianIndex((-2,-3,0))
     @test I1 + I2 == CartesianIndex((1,8,2))
     @test I2 + I1 == CartesianIndex((1,8,2))
@@ -2085,7 +2304,7 @@ end
 
 # All we really care about is that we have an optimized
 # implementation, but the seed is a useful way to check that.
-@test hash(CartesianIndex()) == Base.IteratorsMD.cartindexhash_seed
+@test hash(CartesianIndex()) == Base.IteratorsMD.cartindexhash_seed ⊻ Base.HASH_SEED
 @test hash(CartesianIndex(1, 2)) != hash((1, 2))
 
 @testset "itr, iterate" begin
@@ -2115,6 +2334,8 @@ R = CartesianIndices((3,0))
     @test @inferred(eachindex(Base.IndexLinear(), a, b)) == 1:4
     @test @inferred(eachindex(a, b)) == CartesianIndices((2,2))
     @test @inferred(eachindex(a, a)) == 1:4
+    @test @inferred(eachindex(a, a, a)) == 1:4
+    @test @inferred(eachindex(a, a, b)) == CartesianIndices((2,2))
     @test_throws DimensionMismatch eachindex(a, rand(3,3))
     @test_throws DimensionMismatch eachindex(b, rand(3,3))
 end
@@ -2196,6 +2417,29 @@ end
     @test_throws BoundsError copyto!(a,b)
     @test_throws ArgumentError copyto!(a,2:3,1:3,b,1:5,2:7)
     @test_throws ArgumentError LinearAlgebra.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
+
+    # Copy bounds must be validated without overflowing their end indices.
+    @test_throws BoundsError copyto!(zeros(UInt8, 2), Int8(2), ones(UInt8, 2), Int8(2), typemax(Int8))
+    @test_throws BoundsError copyto!(view(zeros(Int, 2), :), 2, Iterators.repeated(1, typemax(Int)))
+    @test_throws BoundsError copyto!(view(zeros(Int, 2), :), Int8(2), Iterators.repeated(1), 1, typemax(Int8))
+    @test_throws BoundsError copyto!(view(zeros(Int, 2), :), Int8(2), view(ones(Int, 2), :), Int8(2), typemax(Int8))
+
+    # Memory to Memory, with the same and with different element types
+    for S in (Int, Float64, Any)
+        dest = Memory{Float64}(undef, 2)
+        src = Memory{S}(undef, 3); fill!(src, 1)
+        @test_throws BoundsError copyto!(dest, src)
+        @test_throws BoundsError copyto!(dest, 1, src, 1, 3)
+        @test_throws BoundsError copyto!(dest, 2, src, 1, 2)
+        @test_throws BoundsError copyto!(dest, 1, src, 3, 2)
+        @test_throws BoundsError copyto!(dest, 0, src, 1, 1)
+        @test_throws BoundsError copyto!(dest, 1, src, 0, 1)
+        @test_throws ArgumentError copyto!(dest, 1, src, 1, -1)
+        @test copyto!(dest, 0, src, 0, 0) === dest
+        src[3] = 2
+        @test copyto!(dest, Int8(1), src, Int8(2), Int8(2)) === dest
+        @test dest == [1.0, 2.0]
+    end
 end
 
 @testset "empty copyto!" begin
@@ -2210,7 +2454,7 @@ end
 
 module RetTypeDecl
     using Test
-    import Base: +, *, broadcast, convert
+    import Base: +, *, muladd, broadcast, convert
 
     struct MeterUnits{T,P} <: Number
         val::T
@@ -2223,6 +2467,7 @@ module RetTypeDecl
     (+)(x::MeterUnits{T,pow}, y::MeterUnits{T,pow}) where {T,pow} = MeterUnits{T,pow}(x.val+y.val)
     (*)(x::Int, y::MeterUnits{T,pow}) where {T,pow} = MeterUnits{typeof(x*one(T)),pow}(x*y.val)
     (*)(x::MeterUnits{T,1}, y::MeterUnits{T,1}) where {T} = MeterUnits{T,2}(x.val*y.val)
+    muladd(x::MeterUnits{T,1}, y::MeterUnits{T,1}, z::MeterUnits{T,2}) where {T} = MeterUnits{T,2}(muladd(x.val, y.val, z.val))
     broadcast(::typeof(*), x::MeterUnits{T,1}, y::MeterUnits{T,1}) where {T} = MeterUnits{T,2}(x.val*y.val)
     convert(::Type{MeterUnits{T,pow}}, y::Real) where {T,pow} = MeterUnits{T,pow}(convert(T,y))
 
@@ -2231,6 +2476,7 @@ module RetTypeDecl
     @test @inferred(broadcast(*,m,[m,m])) == [m2,m2]
     @test @inferred(broadcast(*,[m,m],m)) == [m2,m2]
     @test @inferred([m 2m; m m]*[m,m]) == [3m2,2m2]
+    @test @inferred([m 2m; m m]*[m 2m; m m]) == [3m2 4m2; 2m2 3m2]
     @test @inferred(broadcast(*,[m m],[m,m])) == [m2 m2; m2 m2]
 end
 
@@ -2254,6 +2500,7 @@ end
     @test IndexStyle(selectdim(A, 1, 1)) == IndexStyle(view(A, 1, :, :)) == IndexLinear()
     @test IndexStyle(selectdim(A, 2, 1)) == IndexStyle(view(A, :, 1, :)) == IndexCartesian()
     @test IndexStyle(selectdim(A, 3, 1)) == IndexStyle(view(A, :, :, 1)) == IndexLinear()
+    @test selectdim(A, 2, CartesianIndex(1, 1)) == view(A, :, CartesianIndex(1, 1), :)
 end
 
 # row/column/slice iterator tests
@@ -2270,7 +2517,7 @@ end
     M = [1 2 3; 4 5 6; 7 8 9]
     @test eachrow(M) == eachslice(M, dims = 1) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
     @test eachcol(M) == eachslice(M, dims = 2) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
-    @test_throws DimensionMismatch eachslice(M, dims = 4)
+    @test eachslice(M, dims = 4) == [[1 2 3; 4 5 6; 7 8 9;;;]]
 
     SR = @inferred eachrow(M)
     @test SR[2] isa eltype(SR)
@@ -2335,6 +2582,32 @@ end
         @test_throws BoundsError A[2,3] = [4,5]
         @test_throws BoundsError A[2,3] .= [4,5]
     end
+
+    @testset "trailing dimensions" begin
+        v = collect(1:3)
+
+        S2  = eachslice(v; dims = 2, drop=true)
+        @test S2 isa AbstractSlices{<:AbstractVector, 1}
+        @test size(S2) == (1,)
+        @test S2[1] == v
+
+        S2K = eachslice(v; dims = 2, drop=false)
+        @test S2K isa AbstractSlices{<:AbstractVector, 2}
+        @test size(S2K) == (1,1)
+        @test S2K[1,1] == v
+
+        M = reshape(1:6, 2, 3)
+
+        S13 = eachslice(M; dims = (1,3))
+        @test size(S13) == (2,1)
+        @test S13[2,1] == M[2,:,1]
+
+        S13K = eachslice(M; dims = (1,3), drop=false)
+        @test size(S13K) == (2,1,1)
+        @test S13K[1,1,1] == M[1,:]
+        @test S13K[2,1,1] == M[2,:]
+    end
+
 end
 
 ###
@@ -2499,10 +2772,14 @@ end
 # issue #14482
 @inferred map(Int8, Int[0])
 
+# map with a constructor over an abstract eltype infers a concrete array type
+@test @inferred(map(Float64, Any[1, 2.0])) == [1.0, 2.0]
+@test @inferred(collect(Iterators.map(Float64, Any[1, 2.0]))) == [1.0, 2.0]
+
 # make sure @inbounds isn't used too much
-mutable struct OOB_Functor{T}; a::T; end
-(f::OOB_Functor)(i::Int) = f.a[i]
-let f = OOB_Functor([1,2])
+mutable struct OOB_Callable{T}; a::T; end
+(f::OOB_Callable)(i::Int) = f.a[i]
+let f = OOB_Callable([1,2])
     @test_throws BoundsError map(f, [1,2,3,4,5])
 end
 
@@ -2526,6 +2803,9 @@ end
     @test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=1) == [1 2; 4 6]
     @test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=2) == [1 3; 3 7]
     @test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=3) == [1 2; 3 4]
+
+    @test_throws ArgumentError cumsum([1, 2, 3], dims=0)
+    @test_throws ArgumentError cumsum!(Vector{Int}(undef, 3), [1, 2, 3], dims=-1)
 end
 @testset "issue #18363" begin
     @test_throws DimensionMismatch cumsum!([0,0], 1:4)
@@ -2533,7 +2813,7 @@ end
     @test cumsum(Any[1, 2.3]) == [1, 3.3] == cumsum(Real[1, 2.3])::Vector{Real}
     @test cumsum([true,true,true]) == [1,2,3]
     @test cumsum(0x00:0xff)[end] === UInt(255*(255+1)÷2) # no overflow
-    @test accumulate(+, 0x00:0xff)[end] === 0x80         # overflow
+    @test accumulate(+%, 0x00:0xff)[end] === 0x80         # overflow
     @test_throws InexactError cumsum!(similar(0x00:0xff), 0x00:0xff) # overflow
 
     @test cumsum([[true], [true], [false]])::Vector{Vector{Int}} == [[1], [2], [2]]
@@ -2556,29 +2836,36 @@ function f15894(d)
     s
 end
 @test f15894(fill(1, 100)) == 100
+@test (@nexprs 2 i -> "_i_: $i") == "_i_: 2"
 end
 
 @testset "sign, conj[!], ~" begin
-    local A, B, C
-    A = [-10,0,3]
-    B = [-10.0,0.0,3.0]
-    C = [1,im,0]
+    let A, B, C, D, E # Suppress :latestworld to get good inference for the allocations test
+        A = [-10,0,3]
+        B = [-10.0,0.0,3.0]
+        C = [1,im,0]
 
-    @test sign.(A) == [-1,0,1]
-    @test sign.(B) == [-1,0,1]
-    @test typeof(sign.(A)) == Vector{Int}
-    @test typeof(sign.(B)) == Vector{Float64}
+        @test sign.(A) == [-1,0,1]
+        @test sign.(B) == [-1,0,1]
+        @test typeof(sign.(A)) == Vector{Int}
+        @test typeof(sign.(B)) == Vector{Float64}
 
-    @test conj(A) == A
-    @test conj!(copy(A)) == A
-    @test conj(B) == A
-    @test conj(C) == [1,-im,0]
-    @test typeof(conj(A)) == Vector{Int}
-    @test typeof(conj(B)) == Vector{Float64}
-    @test typeof(conj(C)) == Vector{Complex{Int}}
+        @test conj(A) == A
+        @test conj!(copy(A)) == A
+        @test conj(B) == A
+        @test conj(C) == [1,-im,0]
+        @test typeof(conj(A)) == Vector{Int}
+        @test typeof(conj(B)) == Vector{Float64}
+        @test typeof(conj(C)) == Vector{Complex{Int}}
+        D = [C copy(C); copy(C) copy(C)]
+        @test conj(D) == conj!(copy(D))
+        E = [D, copy(D)]
+        @test conj(E) == conj!(copy(E))
+        @test (@allocations conj!(E)) == 0
 
-    @test .~A == [9,-1,-4]
-    @test typeof(.~A) == Vector{Int}
+        @test .~A == [9,-1,-4]
+        @test typeof(.~A) == Vector{Int}
+    end
 end
 
 # @inbounds is expression-like, returning its value; #15558
@@ -2691,6 +2978,17 @@ end
     @test size(a) ==  size(b) == (9,8,7,6,5,4,3,2,1)
     @test all(x -> x isa U, a)
     @test all(x -> x isa U, b)
+    # dims as a single tuple (issue introduced by #57692)
+    a = Array{Union{T, U}}(U(), (10,))
+    b = Vector{Union{T, U}}(U(), (10,))
+    @test size(a) == size(b) == (10,)
+    @test all(x -> x isa U, a)
+    @test all(x -> x isa U, b)
+    a = Array{Union{T, U}}(U(), (2, 3))
+    b = Matrix{Union{T, U}}(U(), (2, 3))
+    @test size(a) == size(b) == (2, 3)
+    @test all(x -> x isa U, a)
+    @test all(x -> x isa U, b)
 end
 
 @testset "diff" begin
@@ -2715,7 +3013,7 @@ end
 end
 
 @testset "accumulate, accumulate!" begin
-    @test accumulate(+, [1,2,3]) == [1, 3, 6]
+    @test accumulate(+, [1, 2, 3]) == [1, 3, 6]
     @test accumulate(min, [1 2; 3 4], dims=1) == [1 2; 1 2]
     @test accumulate(max, [1 2; 3 0], dims=2) == [1 2; 3 3]
     @test accumulate(+, Bool[]) == Int[]
@@ -2732,12 +3030,19 @@ end
     @test accumulate(min, [1 0; 0 1], dims=1) == [1 0; 0 0]
     @test accumulate(min, [1 0; 0 1], dims=2) == [1 0; 0 0]
 
+    @test accumulate(+, [1, 2, 3], dims=1, init=1) == [2, 4, 7]
+    @test accumulate(*, [1, 4, 2], dims=1, init=2) == [2, 8, 16]
+
     @test accumulate(min, [3 2 1; 3 2 1], dims=2) == [3 2 1; 3 2 1]
     @test accumulate(min, [3 2 1; 3 2 1], dims=2, init=2) == [2 2 1; 2 2 1]
+    @test accumulate(+, [1 2; 3 4], dims=3, init=10) == [11 12; 13 14]
+    @test accumulate(*, ['a' 'b'], dims=3) == ["a" "b"]
+    @test accumulate(+, fill(1), dims=1, init=10) == fill(11)
+    @test accumulate(+, [1, 2], dims=typemax(Int)) == [1, 2]
 
     @test isa(accumulate(+, Int[]), Vector{Int})
     @test isa(accumulate(+, Int[]; init=1.), Vector{Float64})
-    @test accumulate(+, [1,2]; init=1) == [2, 4]
+    @test accumulate(+, [1, 2]; init=1) == [2, 4]
     arr = randn(4)
     @test accumulate(*, arr; init=1) ≈ accumulate(*, arr)
 
@@ -2781,7 +3086,7 @@ end
 
     # asymmetric operation
     op(x,y) = 2x+y
-    @test accumulate(op, [10,20, 30]) == [10, op(10, 20), op(op(10, 20), 30)] == [10, 40, 110]
+    @test accumulate(op, [10, 20, 30]) == [10, op(10, 20), op(op(10, 20), 30)] == [10, 40, 110]
     @test accumulate(op, [10 20 30], dims=2) == [10 op(10, 20) op(op(10, 20), 30)] == [10 40 110]
 
     #25506
@@ -2790,6 +3095,33 @@ end
     @inferred accumulate(*, String[])
     @test accumulate(*, ['a' 'b'; 'c' 'd'], dims=1) == ["a" "b"; "ac" "bd"]
     @test accumulate(*, ['a' 'b'; 'c' 'd'], dims=2) == ["a" "ab"; "c" "cd"]
+
+    # #53438
+    v = [(1, 2), (3, 4)]
+    @test_throws MethodError accumulate(+, v)
+    @test_throws MethodError cumsum(v)
+    @test_throws MethodError cumprod(v)
+    @test_throws MethodError accumulate(+, v; init=(0, 0))
+    @test_throws MethodError accumulate(+, v; dims=1, init=(0, 0))
+
+    # Some checks to ensure we're identifying the widest needed eltype
+    # as identified in PR 53461
+    @testset "Base._accumulate_promote_op" begin
+        # A somewhat contrived example where each call to `foo`
+        # will return a different type
+        foo(x::Bool, y::Int)::Int = x + y
+        foo(x::Int, y::Int)::Float64 = x + y
+        foo(x::Float64, y::Int)::ComplexF64 = x + y * im
+        foo(x::ComplexF64, y::Int)::String = string(x, "+", y)
+
+        v = collect(1:5)
+        @test Base._accumulate_promote_op(foo, v; init=true) === Base._accumulate_promote_op(foo, v) == Union{Float64, String, ComplexF64}
+        @test Base._accumulate_promote_op(/, v) === Base._accumulate_promote_op(/, v; init=0) == Float64
+        @test Base._accumulate_promote_op(+, v) === Base._accumulate_promote_op(+, v; init=0) === Int
+        @test Base._accumulate_promote_op(+, v; init=0.0) === Float64
+        @test Base._accumulate_promote_op(+, Union{Int, Missing}[v...]) === Union{Int, Missing}
+        @test Base._accumulate_promote_op(+, Union{Int, Nothing}[v...]) === Union{Int, Nothing}
+    end
 end
 
 struct F21666{T <: Base.ArithmeticStyle}
@@ -2798,7 +3130,7 @@ end
 
 Base.ArithmeticStyle(::Type{F21666{T}}) where {T} = T()
 Base.:+(x::F, y::F) where {F <: F21666} = F(x.x + y.x)
-Float64(x::F21666) = Float64(x.x)
+Base.Float64(x::F21666) = Float64(x.x)
 @testset "Exactness of cumsum # 21666" begin
     # test that cumsum uses more stable algorithm
     # for types with unknown/rounding arithmetic
@@ -3025,6 +3357,70 @@ end
     @test setindex!(zeros(2,2), fill(1.0), CI0, 1, 1) == [1.0 0.0; 0.0 0.0]
 end
 
+@testset "setindex! at mismatched shapes" begin
+    idx_options = (
+        1,
+        1:1,
+        2:2,
+        1:0,
+        1:3,
+        [1,2,3],
+        [1 2 3],
+        [1;2;;;],
+        OffsetArray(1:3, -1),
+    )
+    A = zeros(3, 3, 3)
+    seen = Set{UInt}()
+    for (i, j, k) in Iterators.product(Iterators.repeated(idx_options, 3)...)
+        id = hash(sort([i, j, k]; by=hash))
+        in!(id, seen) && continue
+        for I in ((i, j, k), (k, j, i))
+            # don't test scalar setindex here
+            all(x -> x isa Int, I) && continue
+
+            X = ones((length(i) for i in I if i != 1)...)
+            X_trail = reshape(X, size(X)..., 1)
+            X_prepend = reshape(X, 1, size(X)...)
+            vX = vec(X)
+            cX = reshape(vX, length(vX), 1)
+            oX = OffsetArray(X, (size(X) .- 2*(ndims(X) - 1))...)
+
+            for _X in (X, X_trail, X_prepend, vX, cX, oX)
+                AI = view(A, I...)
+
+                if ((isone(ndims(_X)) || isone(ndims(AI))) && (length(_X) == length(AI))) ||
+                    all(d -> size(_X, d) == size(AI, d), 1:max(ndims(_X), ndims(AI)))
+                    @test any(isone, setindex!(A, _X, I...)) || isempty(_X)
+                    fill!(A, 0)
+                    @test any(isone, setindex!(A, _X, I..., 1)) || isempty(_X)
+                    fill!(A, 0)
+                else
+                    @test_throws DimensionMismatch setindex!(A, _X, I...)
+                    @test_throws DimensionMismatch setindex!(A, _X, I..., 1)
+                    @test_throws DimensionMismatch setindex!(A, _X, I..., :)
+                end
+            end
+        end
+    end
+end
+
+@testset "setindex! with a LogicalIndex from to_indices (#64386)" begin
+    A = zeros(4)
+    A[only(to_indices(A, ([true, false, true, false],)))] = [1.0, 2.0]
+    @test A == [1.0, 0.0, 2.0, 0.0]
+    B = zeros(2, 2)
+    B[only(to_indices(B, (BitMatrix([1 0; 0 1]),)))] = [1.0, 2.0]
+    @test B == [1.0 0.0; 0.0 2.0]
+    @test_throws DimensionMismatch A[only(to_indices(A, ([true, false, true, false],)))] = [1.0]
+end
+
+@testset "conditionally-throwing version of `checkbounds` should return `nothing` if it returns" begin
+    # can not just set `typ = Any` because that would include the predicate (non-throwing) methods of `checkbounds`, because `Type{Bool} <: Any`
+    for typ in (AbstractString, AbstractArray, Base.AbstractBroadcasted)
+        @test Base.infer_return_type(checkbounds, Tuple{typ, Vararg}) <: Nothing
+    end
+end
+
 # Throws ArgumentError for negative dimensions in Array
 @test_throws ArgumentError fill('a', -10)
 
@@ -3078,6 +3474,28 @@ end
         "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, \"bad index\"]"
 end
 
+@testset "return type inference of function that calls `length(::Array)`" begin
+    f(x) = length(x)
+    @test Int === Base.infer_return_type(f, Tuple{Array})
+end
+
+@testset "return type inference of `sizeof(::Array)`" begin
+    @test isconcretetype(Base.infer_return_type(sizeof, Tuple{Array}))
+end
+
+@testset "return type inference of `getindex(::Array, ::Colon)`" begin
+    f = a -> a[:]
+    @test Vector == Base.infer_return_type(f, Tuple{Array})
+    @test Vector{Float32} === Base.infer_return_type(f, Tuple{Array{Float32}})
+end
+
+@testset "return type inference of linear `eachindex` for `Array` and `Memory`" begin
+    f = a -> eachindex(IndexLinear(), a)
+    for typ in (Array, Memory, Union{Array, Memory})
+        @test isconcretetype(Base.infer_return_type(f, Tuple{typ}))
+    end
+end
+
 @testset "inference of Union{T,Nothing} arrays 26771" begin
     f(a) = (v = [1, nothing]; [v[x] for x in a])
     @test only(Base.return_types(f, (Int,))) === Union{Array{Int,0}, Array{Nothing,0}}
@@ -3116,4 +3534,46 @@ end
         c = view(b, 1:1, 1:1)
         @test c + zero(c) == c
     end
+end
+
+@testset "Wrapping Memory into Arrays" begin
+    mem = Memory{Int}(undef, 10) .= 1
+    memref = memoryref(mem)
+    @test_throws DimensionMismatch Base.wrap(Array, mem, (10, 10))
+    @test Base.wrap(Array, mem, (5,)) == ones(Int, 5)
+    @test Base.wrap(Array, mem, 2) == ones(Int, 2)
+    @test Base.wrap(Array, mem, UInt(2)) == ones(Int, 2)
+    @test Base.wrap(Array, memref, 10) == ones(Int, 10)
+    @test Base.wrap(Array, memref, (2,2,2)) == ones(Int,2,2,2)
+    @test Base.wrap(Array, mem, (5, 2)) == ones(Int, 5, 2)
+
+    memref2 = memoryref(mem, 3)
+    @test Base.wrap(Array, memref2, (5,)) == ones(Int, 5)
+    @test Base.wrap(Array, memref2, 2) == ones(Int, 2)
+    @test Base.wrap(Array, memref2, (2,2,2)) == ones(Int,2,2,2)
+    @test Base.wrap(Array, memref2, (3, 2)) == ones(Int, 3, 2)
+    @test_throws DimensionMismatch Base.wrap(Array, memref2, 9)
+    @test_throws DimensionMismatch Base.wrap(Array, memref2, 10)
+end
+
+@testset "Memory size" begin
+    len = 5
+    mem = Memory{Int}(undef, len)
+    @test size(mem, 1) == len
+    @test size(mem, 0x1) == len
+    @test size(mem, 2) == 1
+    @test size(mem, 0x2) == 1
+end
+
+@testset "MemoryRef" begin
+    mem = Memory{Float32}(undef, 3)
+    ref = memoryref(mem, 2)
+    @test parent(ref) === mem
+    @test Base.memoryindex(ref) === 2
+
+    # Test for zero-sized structs
+    mem = Memory{Nothing}(undef, 10)
+    ref = memoryref(mem, 8)
+    @test parent(ref) === mem
+    @test Base.memoryindex(ref) === 8
 end

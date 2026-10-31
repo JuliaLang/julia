@@ -1,0 +1,1590 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
+# data structures
+# ===============
+
+mutable struct BitSetBoundedMinPrioritySet <: AbstractSet{Int}
+    elems::BitSet
+    min::Int
+    # Stores whether min is exact or a lower bound
+    # If exact, it is not set in elems
+    min_exact::Bool
+    max::Int
+end
+
+function BitSetBoundedMinPrioritySet(max::Int)
+    bs = BitSet()
+    bs.offset = 0
+    BitSetBoundedMinPrioritySet(bs, max+1, true, max)
+end
+
+@noinline function _advance_bsbmp!(bsbmp::BitSetBoundedMinPrioritySet)
+    @assert !bsbmp.min_exact
+    bsbmp.min = _bits_findnext(bsbmp.elems.bits, bsbmp.min)::Int
+    bsbmp.min < 0 && (bsbmp.min = bsbmp.max + 1)
+    bsbmp.min_exact = true
+    delete!(bsbmp.elems, bsbmp.min)
+    return nothing
+end
+
+function isempty(bsbmp::BitSetBoundedMinPrioritySet)
+    if bsbmp.min > bsbmp.max
+        return true
+    end
+    bsbmp.min_exact && return false
+    _advance_bsbmp!(bsbmp)
+    return bsbmp.min > bsbmp.max
+end
+
+function popfirst!(bsbmp::BitSetBoundedMinPrioritySet)
+    bsbmp.min_exact || _advance_bsbmp!(bsbmp)
+    m = bsbmp.min
+    m > bsbmp.max && throw(ArgumentError("BitSetBoundedMinPrioritySet must be non-empty"))
+    bsbmp.min = m+1
+    bsbmp.min_exact = false
+    return m
+end
+
+function push!(bsbmp::BitSetBoundedMinPrioritySet, idx::Int)
+    if idx <= bsbmp.min
+        if bsbmp.min_exact && bsbmp.min < bsbmp.max && idx != bsbmp.min
+            push!(bsbmp.elems, bsbmp.min)
+        end
+        bsbmp.min = idx
+        bsbmp.min_exact = true
+        return nothing
+    end
+    push!(bsbmp.elems, idx)
+    return nothing
+end
+
+function in(idx::Int, bsbmp::BitSetBoundedMinPrioritySet)
+    if bsbmp.min_exact && idx == bsbmp.min
+        return true
+    end
+    return idx in bsbmp.elems
+end
+
+iterate(bsbmp::BitSetBoundedMinPrioritySet, s...) = iterate(bsbmp.elems, s...)
+
+function append!(bsbmp::BitSetBoundedMinPrioritySet, itr)
+    for val in itr
+        push!(bsbmp, val)
+    end
+end
+
+mutable struct TwoPhaseVectorView <: AbstractVector{Int}
+    const data::Vector{Int}
+    count::Int
+    const range::UnitRange{Int}
+end
+size(tpvv::TwoPhaseVectorView) = (tpvv.count,)
+function getindex(tpvv::TwoPhaseVectorView, i::Int)
+    checkbounds(tpvv, i)
+    @inbounds tpvv.data[first(tpvv.range) + i - 1]
+end
+function push!(tpvv::TwoPhaseVectorView, v::Int)
+    tpvv.count += 1
+    tpvv.data[first(tpvv.range) + tpvv.count - 1] = v
+    return nothing
+end
+
+"""
+    mutable struct TwoPhaseDefUseMap
+
+This struct is intended as a memory- and GC-pressure-efficient mechanism
+for incrementally computing def-use maps. The idea is that the def-use map
+is constructed in two passes over the IR. In the first, we simply count the
+number of uses, computing the number of uses for each def as well as the
+total number of uses. In the second pass, we actually fill in the def-use
+information.
+
+The idea is that either of these two phases can be combined with other useful
+work that needs to scan the instruction stream anyway, while avoiding the
+significant allocation pressure of e.g. allocating an array for every SSA value
+or attempting to dynamically move things around as new uses are discovered.
+
+The def-use map is presented as a vector of vectors. For every def, indexing
+into the map will return a vector of uses.
+"""
+mutable struct TwoPhaseDefUseMap <: AbstractVector{TwoPhaseVectorView}
+    ssa_uses::Vector{Int}
+    data::Vector{Int}
+    complete::Bool
+end
+
+function complete!(tpdum::TwoPhaseDefUseMap)
+    cumsum = 0
+    for i = 1:length(tpdum.ssa_uses)
+        this_val = cumsum + 1
+        cumsum += tpdum.ssa_uses[i]
+        tpdum.ssa_uses[i] = this_val
+    end
+    resize!(tpdum.data, cumsum)
+    fill!(tpdum.data, 0)
+    tpdum.complete = true
+end
+
+function TwoPhaseDefUseMap(nssas::Int)
+    ssa_uses = zeros(Int, nssas)
+    data = Int[]
+    complete = false
+    return TwoPhaseDefUseMap(ssa_uses, data, complete)
+end
+
+function count!(tpdum::TwoPhaseDefUseMap, arg::SSAValue)
+    @assert !tpdum.complete
+    tpdum.ssa_uses[arg.id] += 1
+end
+
+function kill_def_use!(tpdum::TwoPhaseDefUseMap, def::Int, use::Int)
+    if !tpdum.complete
+        tpdum.ssa_uses[def] -= 1
+    else
+        range = tpdum.ssa_uses[def]:(def == length(tpdum.ssa_uses) ? length(tpdum.data) : (tpdum.ssa_uses[def + 1] - 1))
+        # TODO: Sorted
+        useidx = findfirst(idx->tpdum.data[idx] == use, range)
+        @assert useidx !== nothing
+        idx = range[useidx]
+        while idx < lastindex(range)
+            ndata = tpdum.data[idx+1]
+            ndata == 0 && break
+            tpdum.data[idx] = ndata
+            idx += 1
+        end
+        tpdum.data[idx] = 0
+    end
+end
+kill_def_use!(tpdum::TwoPhaseDefUseMap, def::SSAValue, use::Int) =
+    kill_def_use!(tpdum, def.id, use)
+
+function getindex(tpdum::TwoPhaseDefUseMap, idx::Int)
+    @assert tpdum.complete
+    range = tpdum.ssa_uses[idx]:(idx == length(tpdum.ssa_uses) ? length(tpdum.data) : (tpdum.ssa_uses[idx + 1] - 1))
+    # TODO: Make logarithmic
+    nelems = 0
+    for i in range
+        tpdum.data[i] == 0 && break
+        nelems += 1
+    end
+    return TwoPhaseVectorView(tpdum.data, nelems, range)
+end
+
+mutable struct LazyCFGReachability
+    ir::IRCode
+    reachability::CFGReachability
+    LazyCFGReachability(ir::IRCode) = new(ir)
+end
+function get!(x::LazyCFGReachability)
+    isdefined(x, :reachability) && return x.reachability
+    domtree = construct_domtree(x.ir)
+    return x.reachability = CFGReachability(x.ir.cfg, domtree)
+end
+
+mutable struct LazyGenericDomtree{IsPostDom}
+    ir::IRCode
+    domtree::GenericDomTree{IsPostDom}
+    LazyGenericDomtree{IsPostDom}(ir::IRCode) where {IsPostDom} = new{IsPostDom}(ir)
+end
+function get!(x::LazyGenericDomtree{IsPostDom}) where {IsPostDom}
+    isdefined(x, :domtree) && return x.domtree
+    return @zone "CC: DOMTREE_2" x.domtree = IsPostDom ?
+        construct_postdomtree(x.ir) :
+        construct_domtree(x.ir)
+end
+
+const LazyDomtree = LazyGenericDomtree{false}
+const LazyPostDomtree = LazyGenericDomtree{true}
+
+# InferenceState
+# ==============
+
+"""
+    const VarTable = Vector{VarState}
+
+The extended lattice that maps local variables to inferred type represented as `AbstractLattice`.
+Each index corresponds to the `id` of `SlotNumber` which identifies each local variable.
+Note that `InferenceState` will maintain multiple `VarTable`s at each SSA statement
+to enable flow-sensitive analysis.
+"""
+const VarTable = Vector{VarState}
+
+"""
+    BBEntryState
+
+Bundles the per-basic-block variable-type table ([`VarTable`](@ref)) and slot-alias table
+(`Vector{Int}`) into a single value. This ensures that both components are always present or
+absent together.
+"""
+struct BBEntryState
+    vartable::VarTable
+    aliases::Vector{Int}
+end
+
+struct StatementState
+    vtypes::Union{VarTable,Nothing}
+    saw_latestworld::Bool
+end
+
+const CACHE_MODE_NULL     = 0x00      # not cached, optimization optional
+const CACHE_MODE_GLOBAL   = 0x01 << 0 # cached globally, optimization required
+const CACHE_MODE_LOCAL    = 0x01 << 1 # cached locally, optimization required
+
+abstract type Handler end
+get_enter_idx(handler::Handler) = get_enter_idx_impl(handler)::Int
+
+mutable struct TryCatchFrame <: Handler
+    exct
+    scopet
+    const enter_idx::Int
+    scope_uses::Vector{Int}
+    TryCatchFrame(@nospecialize(exct), @nospecialize(scopet), enter_idx::Int) =
+        new(exct, scopet, enter_idx)
+end
+TryCatchFrame(stmt::EnterNode, pc::Int) =
+    TryCatchFrame(Bottom, isdefined(stmt, :scope) ? Bottom : nothing, pc)
+get_enter_idx_impl((; enter_idx)::TryCatchFrame) = enter_idx
+
+struct SimpleHandler <: Handler
+    enter_idx::Int
+end
+SimpleHandler(::EnterNode, pc::Int) = SimpleHandler(pc)
+get_enter_idx_impl((; enter_idx)::SimpleHandler) = enter_idx
+
+struct HandlerInfo{T<:Handler}
+    handlers::Vector{T}
+    handler_at::Vector{Tuple{Int,Int}} # tuple of current (handler, exception stack) value at the pc
+end
+
+struct WorldWithRange
+    this::UInt
+    valid_worlds::WorldRange
+    function WorldWithRange(world::UInt, valid_worlds::WorldRange)
+        if !(world in valid_worlds)
+            error("invalid age range update")
+        end
+        return new(world, valid_worlds)
+    end
+end
+
+intersect(world::WorldWithRange, valid_worlds::WorldRange) =
+    WorldWithRange(world.this, intersect(world.valid_worlds, valid_worlds))
+
+# `InferenceState` and `IRInterpretationState` are defined together in a `typegroup`
+# block so each can reference the other in its `callstack` field type. They are not
+# meant to be subtyped from outside, so rather than introducing an abstract supertype
+# the shared `AbsIntState{I}` is a `Union` type alias (defined further below).
+typegroup
+
+mutable struct InferenceState{I<:AbstractInterpreter}
+    #= information about this method instance =#
+    linfo::MethodInstance
+    valid_worlds::WorldRange
+    mod::Module
+    sptypes::Vector{VarState}
+    slottypes::Vector{Any}
+    src::CodeInfo
+    cfg::CFG
+    spec_info::SpecInfo
+
+    #= intermediate states for local abstract interpretation =#
+    currbb::Int
+    currpc::Int
+    ip::BitSet#=TODO BoundedMinPrioritySet=# # current active instruction pointers
+    handler_info::Union{Nothing,HandlerInfo{TryCatchFrame}}
+    ssavalue_uses::SSAUses # ssavalue sparsity and restart info
+    # Per-basic-block entry state. `nothing` if the BB has not been analyzed yet.
+    # Populated lazily during the main inference loop by `update_bbstate!`, which merges
+    # the current exit state into each successor. Both the variable-type table and the
+    # slot-alias table are bundled together in a `BBEntryState` so that the type system
+    # guarantees they are always in sync.
+    #
+    # Slot alias tracking:
+    # `aliases[i] == j` means slot `i` currently holds the same value as slot `j`.
+    # `aliases[i] == 0` means slot `i` is not known to be aliased to any other slot.
+    # The table is always kept "flat": aliases always point directly to the root slot, not
+    # through a chain, so a single lookup suffices to find all aliases of a given slot.
+    # The working alias table for the BB currently being analyzed is kept as a local
+    # variable `slot_aliases` in `typeinf_local` (analogous to `currstate`).
+    # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
+    bb_states::Vector{Union{Nothing,BBEntryState}}
+
+    bb_saw_latestworld::Vector{Bool}
+    ssavaluetypes::Vector{Any}
+    ssaflags::Vector{UInt32}
+    edges::Vector{Any}
+    stmt_info::Vector{CallInfo}
+
+    #= intermediate states for interprocedural abstract interpretation =#
+    tasks::Vector{WorkThunk}
+    pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
+    limitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on return
+    cycle_backedges::Vector{Tuple{InferenceState{I}, Int}} # call-graph backedges connecting from callee to caller
+
+    # IPO tracking of in-process work, shared with all frames given AbstractInterpreter
+    callstack::Vector{Union{InferenceState{I},IRInterpretationState{I}}}
+    parentid::Int # index into callstack of the parent frame that originally added this frame (call cycle_parent to extract the current parent of the SCC)
+    frameid::Int # index into callstack at which this object is found (or zero, if this is not a cached frame and has no parent)
+    cycleid::Int # index into the callstack of the topmost frame in the cycle (all frames in the same cycle share the same cycleid)
+
+    #= results =#
+    result::InferenceResult # remember where to put the result
+    unreachable::BitSet # statements that were found to be statically unreachable
+    bestguess #::Type
+    exc_bestguess
+    ipo_effects::Effects
+    time_start::UInt64
+    time_caches::Float64
+    time_paused::UInt64
+    time_self_ns::UInt64
+
+    #= flags =#
+    # Whether to restrict inference of abstract call sites to avoid excessive work
+    # Set by default for toplevel frame.
+    restrict_abstract_call_sites::Bool
+    cache_mode::UInt8 # TODO move this to InferenceResult?
+    insert_coverage::Bool
+
+    # The interpreter that created this inference state. Not looked at by
+    # NativeInterpreter. But other interpreters may use this to detect cycles.
+    # Stored as the abstract supertype to keep reads boxed (the type parameter
+    # `I` lets callers narrow with `frame.interp::I` only at the specific call
+    # sites that need concrete dispatch, without propagating concrete unboxed
+    # values through every method that takes `interp`).
+    interp::AbstractInterpreter
+
+    # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
+    function InferenceState{I}(result::InferenceResult, src::CodeInfo, cache_mode::UInt8,
+                               interp::I) where {I<:AbstractInterpreter}
+        mi = result.linfo
+        world = get_inference_world(interp)
+        if world == typemax(UInt)
+            error("Entering inference from a generated function with an invalid world")
+        end
+        def = mi.def
+        mod = isa(def, Method) ? def.module : def
+        sptypes = sptypes_from_meth_instance(mi)
+        code = src.code::Vector{Any}
+        cfg = compute_basic_blocks(code)
+        spec_info = SpecInfo(src)
+
+        currbb = currpc = 1
+        ip = BitSet(1) # TODO BitSetBoundedMinPrioritySet(1)
+        handler_info = ComputeTryCatch{TryCatchFrame}()(code)
+        nssavalues = src.ssavaluetypes::Int
+        ssavalue_uses = find_ssavalue_uses(code, nssavalues)
+        nstmts = length(code)
+        edges = []
+        stmt_info = CallInfo[ NoCallInfo() for _ = 1:nstmts ]
+
+        nslots = length(src.slotflags)
+        slottypes = Vector{Any}(undef, nslots)
+        bb_saw_latestworld = Bool[false for _ = 1:length(cfg.blocks)]
+        bb_vartable1 = VarTable(undef, nslots)
+        bb_states = Union{Nothing,BBEntryState}[nothing for _ = 1:length(cfg.blocks)]
+        bb_states[1] = BBEntryState(bb_vartable1, zeros(Int, nslots))
+        argtypes = result.argtypes
+
+        argtypes = va_process_argtypes(typeinf_lattice(interp), argtypes, src.nargs, src.isva, mi)
+
+        nargtypes = length(argtypes)
+        for i = 1:nslots
+            argtyp = (i > nargtypes) ? Bottom : argtypes[i]
+            if argtyp === Bool && has_conditional(typeinf_lattice(interp))
+                argtyp = Conditional(i, #= ssadef =# 0, Const(true), Const(false))
+            end
+            slottypes[i] = argtyp
+            bb_vartable1[i] = VarState(argtyp, #= ssadef =# 0, i > nargtypes)
+        end
+        src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for _ = 1:nssavalues ]
+        ssaflags = copy(src.ssaflags)
+
+        unreachable = BitSet()
+        pclimitations = IdSet{InferenceState}()
+        limitations = IdSet{InferenceState}()
+        cycle_backedges = Tuple{InferenceState{I},Int}[]
+        callstack = Union{InferenceState{I},IRInterpretationState{I}}[]
+        tasks = WorkThunk[]
+
+        valid_worlds = WorldRange(1, get_world_counter())
+        bestguess = Bottom
+        exc_bestguess = Bottom
+        ipo_effects = EFFECTS_TOTAL
+
+        insert_coverage = should_insert_coverage(mod, src.debuginfo)
+        if insert_coverage
+            ipo_effects = Effects(ipo_effects; effect_free = ALWAYS_FALSE)
+        end
+
+        if def isa Method
+            nonoverlayed = is_nonoverlayed(def) ? ALWAYS_TRUE :
+                is_effect_overridden(def, :consistent_overlay) ? CONSISTENT_OVERLAY :
+                ALWAYS_FALSE
+            ipo_effects = Effects(ipo_effects; nonoverlayed)
+        end
+
+        restrict_abstract_call_sites = isa(def, Module)
+
+        parentid = frameid = cycleid = 0
+
+        this = new(
+            mi, valid_worlds, mod, sptypes, slottypes, src, cfg, spec_info,
+            currbb, currpc, ip, handler_info, ssavalue_uses, bb_states, bb_saw_latestworld, ssavaluetypes, ssaflags, edges, stmt_info,
+            tasks, pclimitations, limitations, cycle_backedges, callstack, parentid, frameid, cycleid,
+            result, unreachable, bestguess, exc_bestguess, ipo_effects,
+            _time_ns(), 0.0, 0, 0,
+            restrict_abstract_call_sites, cache_mode, insert_coverage,
+            interp)
+
+        # some more setups
+        if !iszero(cache_mode & CACHE_MODE_GLOBAL)
+            push!(callstack, this)
+            this.cycleid = this.frameid = length(callstack)
+        end
+
+        # Apply generated function restrictions
+        if src.min_world != 1 || src.max_world != typemax(UInt)
+            # From generated functions
+            update_valid_age!(this, world, WorldRange(src.min_world, src.max_world))
+        end
+
+        return this
+    end
+end
+
+# TODO add `result::InferenceResult` and put the irinterp result into the inference cache?
+mutable struct IRInterpretationState{I<:AbstractInterpreter}
+    const spec_info::SpecInfo
+    const ir::IRCode
+    const mi::MethodInstance
+    valid_worlds::WorldRange
+    curridx::Int
+    time_caches::Float64
+    time_paused::UInt64
+    const argtypes_refined::Vector{Bool}
+    const sptypes::Vector{VarState}
+    const tpdum::TwoPhaseDefUseMap
+    const ssa_refined::BitSet
+    const lazyreachability::LazyCFGReachability
+    const tasks::Vector{WorkThunk}
+    const edges::Vector{Any}
+    callstack::Vector{Union{InferenceState{I},IRInterpretationState{I}}}
+    frameid::Int
+    parentid::Int
+    interp::AbstractInterpreter # see comment on `InferenceState.interp`
+
+    function IRInterpretationState{I}(
+            interp::I, spec_info::SpecInfo, ir::IRCode,
+            mi::MethodInstance, argtypes::Vector{Any}, min_world::UInt, max_world::UInt
+        ) where {I<:AbstractInterpreter}
+        curridx = 1
+        given_argtypes = Vector{Any}(undef, length(argtypes))
+        for i = 1:length(given_argtypes)
+            given_argtypes[i] = widenslotwrapper(argtypes[i])
+        end
+        if isa(mi.def, Method)
+            argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
+                for i = 1:length(given_argtypes)]
+        else
+            argtypes_refined = Bool[false for _ = 1:length(given_argtypes)]
+        end
+        empty!(ir.argtypes)
+        append!(ir.argtypes, given_argtypes)
+        tpdum = TwoPhaseDefUseMap(length(ir.stmts))
+        ssa_refined = BitSet()
+        lazyreachability = LazyCFGReachability(ir)
+        valid_worlds = WorldRange(min_world, max_world == typemax(UInt) ? get_world_counter() : max_world)
+        if !(get_inference_world(interp) in valid_worlds)
+            error("invalid age range update")
+        end
+        tasks = WorkThunk[]
+        edges = Any[]
+        callstack = Union{InferenceState{I},IRInterpretationState{I}}[]
+        return new{I}(spec_info, ir, mi, valid_worlds,
+                curridx, 0.0, 0, argtypes_refined, ir.sptypes, tpdum,
+                ssa_refined, lazyreachability, tasks, edges, callstack, 0, 0, interp)
+    end
+end
+
+end # typegroup
+
+gethandler(frame::InferenceState, pc::Int=frame.currpc) = gethandler(frame.handler_info, pc)
+gethandler(::Nothing, ::Int) = nothing
+function gethandler(handler_info::HandlerInfo, pc::Int)
+    handler_idx = handler_info.handler_at[pc][1]
+    handler_idx == 0 && return nothing
+    return handler_info.handlers[handler_idx]
+end
+
+is_nonoverlayed(m::Method) = !isdefined(m, :external_mt)
+is_nonoverlayed(interp::AbstractInterpreter) = !isoverlayed(method_table(interp))
+isoverlayed(::MethodTableView) = error("unsatisfied MethodTableView interface")
+isoverlayed(::InternalMethodTable) = false
+isoverlayed(::OverlayMethodTable) = true
+isoverlayed(mt::CachedMethodTable) = isoverlayed(mt.table)
+
+is_inferred(sv::InferenceState) = is_inferred(sv.result)
+is_inferred(result::InferenceResult) = result.result !== nothing
+
+was_reached(sv::InferenceState, pc::Int) = sv.ssavaluetypes[pc] !== NOT_FOUND
+
+struct ComputeTryCatch{T<:Handler} end
+
+const compute_trycatch = ComputeTryCatch{SimpleHandler}()
+
+(compute_trycatch::ComputeTryCatch{SimpleHandler})(ir::IRCode) =
+    compute_trycatch(ir.stmts.stmt, ir.cfg.blocks)
+
+"""
+    (::ComputeTryCatch{Handler})(code[, bbs]) -> handler_info::Union{Nothing,HandlerInfo{Handler}}
+    const compute_trycatch = ComputeTryCatch{SimpleHandler}()
+
+Given the code of a function, compute, at every statement, the current
+try/catch handler, and the current exception stack top. This function returns a `HandlerInfo` with:
+
+    1. `handler_info.handler_at`: A statement length vector of tuples
+       `(catch_handler, exception_stack)`, which are indices into `handlers`
+
+    2. `handler_info.handlers`: A `Handler` vector of handlers
+"""
+function (::ComputeTryCatch{Handler})(code::Vector{Any}, bbs::Union{Vector{BasicBlock},Nothing}=nothing) where Handler
+    # The goal initially is to record the frame like this for the state at exit:
+    # 1: (enter 3) # == 0
+    # 3: (expr)    # == 1
+    # 3: (leave %1) # == 1
+    # 4: (expr)    # == 0
+    # then we can find all `try`s by walking backwards from :enter statements,
+    # and all `catch`es by looking at the statement after the :enter
+    n = length(code)
+    ip = BitSet()
+    ip.offset = 0 # for _bits_findnext
+    push!(ip, n + 1)
+    handler_info = nothing
+
+    # start from all :enter statements and record the location of the try
+    for pc = 1:n
+        stmt = code[pc]
+        if isa(stmt, EnterNode)
+            (;handlers, handler_at) = handler_info =
+                (handler_info === nothing ? HandlerInfo{Handler}(Handler[], fill((0, 0), n)) : handler_info)
+            l = stmt.catch_dest
+            (bbs !== nothing) && (l != 0) && (l = first(bbs[l].stmts))
+            push!(handlers, Handler(stmt, pc))
+            handler_id = length(handlers)
+            handler_at[pc + 1] = (handler_id, 0)
+            push!(ip, pc + 1)
+            if l != 0
+                handler_at[l] = (0, handler_id)
+                push!(ip, l)
+            end
+        end
+    end
+
+    if handler_info === nothing
+        return nothing
+    end
+
+    # now forward those marks to all :leave statements
+    (;handlers, handler_at) = handler_info
+    while true
+        # make progress on the active ip set
+        pc = _bits_findnext(ip.bits, 0)::Int
+        pc > n && break
+        while true # inner loop optimizes the common case where it can run straight from pc to pc + 1
+            pc´ = pc + 1 # next program-counter (after executing instruction)
+            delete!(ip, pc)
+            cur_stacks = handler_at[pc]
+            @assert cur_stacks != (0, 0) "unbalanced try/catch"
+            stmt = code[pc]
+            if isa(stmt, GotoNode)
+                pc´ = stmt.label
+                (bbs !== nothing) && (pc´ = first(bbs[pc´].stmts))
+            elseif isa(stmt, GotoIfNot)
+                l = stmt.dest::Int
+                (bbs !== nothing) && (l = first(bbs[l].stmts))
+                if handler_at[l] != cur_stacks
+                    @assert handler_at[l][1] == 0 || handler_at[l][1] == cur_stacks[1] "unbalanced try/catch"
+                    handler_at[l] = cur_stacks
+                    push!(ip, l)
+                end
+            elseif isa(stmt, ReturnNode)
+                @assert !isdefined(stmt, :val) || cur_stacks[1] == 0 "unbalanced try/catch"
+                break
+            elseif isa(stmt, EnterNode)
+                l = stmt.catch_dest
+                (bbs !== nothing) && (l != 0) && (l = first(bbs[l].stmts))
+                # We assigned a handler number above. Here we just merge that
+                # with our current handler information.
+                if l != 0
+                    handler_at[l] = (cur_stacks[1], handler_at[l][2])
+                end
+                cur_stacks = (handler_at[pc´][1], cur_stacks[2])
+            elseif isa(stmt, Expr)
+                head = stmt.head
+                if head === :leave
+                    l = 0
+                    for j = 1:length(stmt.args)
+                        arg = stmt.args[j]
+                        if arg === nothing
+                            continue
+                        else
+                            enter_stmt = code[(arg::SSAValue).id]
+                            if enter_stmt === nothing
+                                continue
+                            end
+                            @assert isa(enter_stmt, EnterNode) "malformed :leave"
+                        end
+                        l += 1
+                    end
+                    cur_hand = cur_stacks[1]
+                    for _ = 1:l
+                        cur_hand = handler_at[get_enter_idx(handlers[cur_hand])][1]
+                    end
+                    cur_stacks = (cur_hand, cur_stacks[2])
+                    cur_stacks == (0, 0) && break
+                elseif head === :pop_exception
+                    cur_stacks = (cur_stacks[1], handler_at[(stmt.args[1]::SSAValue).id][2])
+                    cur_stacks == (0, 0) && break
+                end
+            end
+
+            pc´ > n && break # can't proceed with the fast-path fall-through
+            if handler_at[pc´] != cur_stacks
+                handler_at[pc´] = cur_stacks
+            elseif !in(pc´, ip)
+                break  # already visited
+            end
+            pc = pc´
+        end
+    end
+
+    @assert first(ip) == n + 1
+    return handler_info
+end
+
+# check if coverage mode is enabled
+should_insert_coverage(mod::Module, debuginfo::DebugInfo) = should_instrument(mod, debuginfo, true)
+
+function should_instrument(mod::Module, debuginfo::DebugInfo, only_if_affects_optimizer::Bool=false)
+    instrumentation_enabled(mod, only_if_affects_optimizer) && return true
+    # an instrumented image covers every path (see instrumentation_enabled)
+    generating_output() && return false
+    JLOptions().malloc_log == 3 || return false
+    # Path-specific allocation tracking: instrument methods with a matching source file.
+    return _should_instrument(debuginfo)
+end
+
+_should_instrument(loc::Symbol) = is_file_tracked(loc)
+_should_instrument(loc::Method) = _should_instrument(loc.file)
+_should_instrument(loc::MethodInstance) = _should_instrument(loc.def)
+_should_instrument(::Module) = false
+_should_instrument(::Nothing) = false
+function _should_instrument(info::DebugInfo)
+    linetable = info.linetable
+    # a byte-precise linetable is a compressed `String` that carries no file
+    # information of its own; only recurse into nested `DebugInfo`
+    linetable isa DebugInfo && _should_instrument(linetable) && return true
+    _should_instrument(info.def) && return true
+    return false
+end
+
+function InferenceState(result::InferenceResult, cache_mode::UInt8, interp::AbstractInterpreter)
+    # prepare an InferenceState object for inferring lambda
+    world = get_inference_world(interp)
+    mi = result.linfo
+    src = retrieve_code_info(mi, world)
+    src === nothing && return nothing
+    maybe_validate_code(mi, src, "lowered")
+    return InferenceState(result, src, cache_mode, interp)
+end
+InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::UInt8, interp::I) where {I<:AbstractInterpreter} =
+    InferenceState{I}(result, src, cache_mode, interp)
+InferenceState(result::InferenceResult, cache_mode::Symbol, interp::AbstractInterpreter) =
+    InferenceState(result, convert_cache_mode(cache_mode), interp)
+InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::Symbol, interp::AbstractInterpreter) =
+    InferenceState(result, src, convert_cache_mode(cache_mode), interp)
+
+function convert_cache_mode(cache_mode::Symbol)
+    if cache_mode === :global
+        return CACHE_MODE_GLOBAL
+    elseif cache_mode === :local
+        return CACHE_MODE_LOCAL
+    elseif cache_mode === :no
+        return CACHE_MODE_NULL
+    end
+    error("unexpected `cache_mode` is given")
+end
+
+# How the type filling a position is compared against the method parameter,
+# which determines when an occurrence of a static parameter there pins it:
+#  * `MATCH_EGAL`: the position must be equal to the instantiated parameter
+#    (an invariant slot), so any successful match determines the variable.
+#  * `MATCH_INHABITED`: the position is filled by an inhabited type `X`
+#    (possibly abstract), which contributes only a lower bound: it pins the
+#     variable up to type equality, but only when the variable's declared
+#    lower bound is `Union{}`.
+#  * `MATCH_TYPEOF`: the position is filled by `typeof` of an argument — a
+#    concrete inhabited type.
+const MATCH_EGAL      = 0
+const MATCH_INHABITED = 1
+const MATCH_TYPEOF    = 2
+
+"""
+    constrains_var(var::TypeVar, t, match::Int, nonempty_vararg::Bool=false)
+
+Check if `var` will be constrained to have a definite value when the position
+`t` (a signature body under `var`'s binder) is filled according to `match`
+(`MATCH_EGAL`, `MATCH_INHABITED`, or `MATCH_TYPEOF`); see the `MATCH_*`
+constants for what each match kind means.
+
+Subtyping pins a variable through two channels (`eff_constrained` in
+`subtype.c`): an invariant occurrence (`MATCH_EGAL`, matched by type equality)
+and a covariant occurrence (`MATCH_TYPEOF`, filled with a `typeof`-produced
+argument type).
+
+`MATCH_INHABITED` is a refinement based on filtering out non-inhabited types
+(notably `Union{}`) when the field must be inhabited (because the constructor
+inhabits it).
+
+`constrains_var` is a conservative static approximation of that dynamic rule.
+In particular an invariant (`MATCH_EGAL`) `Union` arm is always treated as
+absorbable (`Union{T,Int}` matched against `Int` does not pin `T`), even when
+it is disjoint from the other arms so that every match either exposes it or
+pins `var = Union{}` by absorbing it. Per issues #58427 and #59023: a parameter
+that some match pins only as `Union{}` is still worth reporting since it may be
+reachable with `invoke` and is consistent with the covariant occurrence rule.
+
+`nonempty_vararg` credits the signature's own trailing `Vararg` as if it
+matched at least one argument (it is not propagated into nested positions,
+where an empty tuple can always occur); it is an assumption the caller must
+justify (see `Test.detect_unbound_args`).
+
+`inhabited_params` assumes that no invariant type parameter position of the
+matching arguments is filled with `Union{}`, so that an occurrence of an inner
+variable there always pins it to an inhabited type (see `pin_grade`), and the
+descent through an inner variable's upper bound is also taken for
+`MATCH_INHABITED` positions: a `Type{<:T}` slot then pins `T` even though the
+call `f(Union{})` would not.
+"""
+function constrains_var(var::TypeVar, @nospecialize(t), match::Int, nonempty_vararg::Bool=false,
+                        inhabited_params::Bool=false)
+    if t === var
+        # equality pins unconditionally; a lower-bound contribution pins only
+        # when nothing else can union into the least solution
+        return match === MATCH_EGAL || var.lb === Union{}
+    end
+    while t isa UnionAll
+        # only a concrete `typeof` argument (or any inhabited type, under
+        # `inhabited_params`) can carry the pin through an inner variable's
+        # range; the cheap occurs-check gates the `pin_grade` body traversal
+        # just for performance since constrains_var would be false
+        if (match === MATCH_TYPEOF || (match === MATCH_INHABITED && inhabited_params)) &&
+                t.var.lb === Union{} && has_typevar(t.var.ub, var)
+            pin = pin_grade(t.var, t.body, nonempty_vararg, inhabited_params)
+            # an inhabited (possibly abstract) type filling this position can
+            # pin the inner variable at most as inhabited
+            match === MATCH_INHABITED && (pin = min(pin, PIN_INHABITED))
+            if pin == PIN_TYPEOF && constrains_var(var, t.var.ub, MATCH_TYPEOF, false, inhabited_params)
+                return true
+            elseif pin == PIN_INHABITED && constrains_var(var, t.var.ub, MATCH_INHABITED, false, inhabited_params)
+                return true
+            end
+        end
+        if t.var === var
+            # `var` is rebound: occurrences below belong to the inner variable
+            return false
+        end
+        # other occurrences in the bounds of `t.var` do not reliably pin `var`
+        t = t.body
+    end
+    if t isa Union
+        # each arm is individually reachable, so every arm must pin `var`; an
+        # `MATCH_EGAL` arm the other arms can absorb pins nothing, but when
+        # absorption is impossible the assignments it admits pin `var`, possibly
+        # only as `var = Union{}` (issue #58427), which we deliberately still
+        # report — so in both cases require every arm to pin `var`, accepting
+        # the false positive for arms every match must expose (issue #59023)
+        return constrains_var(var, t.a, match, false, inhabited_params) &&
+               constrains_var(var, t.b, match, false, inhabited_params)
+    end
+    if isTypeEq(t) # TypeEgal cannot constrain (or contain) a parameter
+        return constrains_var(var, type_parameter(t), MATCH_EGAL, false, inhabited_params)
+    end
+    t isa DataType || return false
+    if t.name === Tuple.name
+        for p in t.parameters
+            if p isa Core.TypeofVararg
+                # the argument count pins `N` exactly (including zero)
+                isdefined(p, :N) && constrains_var(var, p.N, match, false, inhabited_params) && return true
+                if match === MATCH_TYPEOF && nonempty_vararg && isdefined(p, :T)
+                    constrains_var(var, p.T, MATCH_TYPEOF, false, inhabited_params) && return true
+                end
+            else
+                constrains_var(var, p, match, false, inhabited_params) && return true
+            end
+        end
+    else
+        for p in t.parameters
+            constrains_var(var, p, MATCH_EGAL, false, inhabited_params) && return true
+        end
+    end
+    return false
+end
+
+# How strongly the position(s) of `v` in `t` pin its value, for every call:
+#  * `PIN_TYPEOF`: `v` takes a `typeof`-produced argument type — a concrete
+#    type, in particular not `Union{}` and without free type variables. This
+#    holds for a required covariant argument slot (directly, under nested
+#    `Tuple`s, or in all arms of a `Union`), or as the sole upper bound of
+#    another variable in such a slot.
+#  * `PIN_INHABITED`: `v` takes an *inhabited* type (not `Union{}`), though
+#    possibly an abstract one: `v` is an invariant parameter of a constructor
+#    in a required covariant slot, and that constructor declares a field of
+#    exactly that parameter's type which every inner constructor initializes,
+#    so a value of the parameter type must exist inside the argument.
+#  * `PIN_NONE`: neither is guaranteed; `v` may be `Union{}` (e.g. `Type{v}`
+#    positions matched by the argument `Union{}`, or invariant parameters
+#    without such a field), leaving its bounds unconstraining.
+# With `inhabited_params`, any invariant parameter occurrence of `v` (at any
+# depth, in any constructor) is assumed to be filled with an inhabited type,
+# so it grades `PIN_INHABITED` without the field requirement.
+const PIN_NONE = 0
+const PIN_INHABITED = 1
+const PIN_TYPEOF = 2
+
+function pin_grade(v::TypeVar, @nospecialize(t), nonempty_vararg::Bool=false, inhabited_params::Bool=false)
+    # Implementation note: a covariant occurrence of `v` reports `PIN_TYPEOF`
+    # (concrete typeof value) computed in isolation. Strictly this over-reports
+    # when `v` also occurs elsewhere. We don't take the minimum (that would
+    # need a non-local scan of all of `v`'s occurrences), because the
+    # over-grade never changes a `constrains_var` result: `PIN_TYPEOF` vs
+    # `PIN_INHABITED` is consumed only by the triangular descent that pins an
+    # outer variable `W` appearing in `v`'s upper bound, and either (1) `v.ub`
+    # is a structured type mentioning `W` (`v<:Vector{W}`, `v<:Type{W}`) — the
+    # only place concreteness is load-bearing; or (2) `v.ub` is `W` or a
+    # `Union`, where concreteness is not needed (`v<:W` gives `W = v`, defined;
+    # `v<:Union{...W...}` is handled by the union-arm rule regardless of grade).
+    t === v && return PIN_TYPEOF
+    grade = PIN_NONE
+    while t isa UnionAll
+        if t.var.ub === v && t.var.lb === Union{}
+            # `v` is exactly the sole upper bound of `t.var`, so the least
+            # solution for `v` is `t.var`'s value, pinned at the same grade: a
+            # concrete `t.var` (`PIN_TYPEOF`) makes `v` concrete, an
+            # inhabited-but-abstract one (`PIN_INHABITED`) makes `v` inhabited
+            # (mirroring the two-grade handling in `constrains_var`)
+            g = pin_grade(t.var, t.body, nonempty_vararg, inhabited_params)
+            g == PIN_TYPEOF && return PIN_TYPEOF
+            grade = max(grade, g)
+        end
+        # `v` is rebound below: deeper occurrences belong to the inner variable,
+        # but the where-clauses peeled so far still count
+        t.var === v && return grade
+        t = t.body
+    end
+    if t isa Union
+        # a where-clause position (`grade`) pins on its own; the union itself
+        # pins only if every arm does
+        return max(grade, min(pin_grade(v, t.a, false, inhabited_params),
+                              pin_grade(v, t.b, false, inhabited_params)))
+    end
+    if isTypeEq(t)
+        # a `Type{X}` position is filled by a type, `Union{}` included
+        inhabited_params || return grade
+        return max(grade, min(PIN_INHABITED, pin_grade(v, type_parameter(t), false, inhabited_params)))
+    end
+    t isa DataType || return grade
+    isabstracttype(t) && !inhabited_params && return grade
+    if t.name === Tuple.name
+        for p in t.parameters
+            if p isa Core.TypeofVararg
+                if nonempty_vararg && isdefined(p, :T)
+                    grade = max(grade, pin_grade(v, p.T, false, inhabited_params))
+                end
+            else
+                grade = max(grade, pin_grade(v, p, false, inhabited_params))
+            end
+            grade == PIN_TYPEOF && break
+        end
+        return grade
+    end
+    for i in 1:length(t.parameters)
+        p = t.parameters[i]
+        if p === v
+            if inhabited_params || some_field_requires_inhabited_param(t, i)
+                return max(grade, PIN_INHABITED)
+            end
+        elseif inhabited_params
+            # a nested invariant position is filled by a type, so it pins at
+            # most as inhabited even where `v` occurs covariantly inside
+            g = min(PIN_INHABITED, pin_grade(v, p, false, inhabited_params))
+            g == PIN_INHABITED && return max(grade, g)
+        end
+    end
+    return grade
+end
+
+# Whether the `i`-th type parameter of `t`'s is constrained to be inhabited
+# by being the declared type of one of its always-initialized fields, such
+# that instances are guaranteed to contain a value of it.
+function some_field_requires_inhabited_param(t::DataType, i::Int)
+    base = unwrap_unionall(t.name.wrapper)::DataType
+    tv = base.parameters[i]
+    tv isa TypeVar || return false
+    ftypes = datatype_fieldtypes(base)
+    for j in 1:datatype_min_ninitialized(base)
+        ftypes[j] === tv && return true
+    end
+    return false
+end
+
+const EMPTY_SPTYPES = VarState[]
+
+function type_sptype_to_egal(@nospecialize(ty))
+    isType(ty) || return ty
+    p = type_parameter(ty)
+    p isa Type && !has_free_typevars(p) || return ty
+    return Core.TypeEgal{p}
+end
+
+function type_value_to_egal(@nospecialize(v), @nospecialize(fallback))
+    v isa Type || return fallback
+    has_free_typevars(v) && return fallback
+    return Core.TypeEgal{v}
+end
+
+# Compute the abstract value `ty` for a sparam whose inferred env entry carries
+# a TypeVar (either the sig's own `vᵢ` for unspecialized MIs, or a possibly
+# narrowed `output_tvar` from subtyping). First try to sharpen via
+# `arg::Type{vᵢ}` / `Vararg{_,vᵢ}` patterns in `sigtypes`; otherwise fall back
+# to `Type{output_tvar}` rewrapped against free typevars of `specTypes`.
+function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.SimpleVector,
+                         @nospecialize(specTypes), v_egal::Bool=false)
+    for j = 1:length(sigtypes)
+        sⱼ = sigtypes[j]
+        if isType(sⱼ) && type_parameter(sⱼ) === vᵢ
+            # `arg::Type{T}` pins the sparam to the arg's type
+            return fieldtype(specTypes, j)
+        elseif (va = va_from_vatuple(sⱼ)) !== nothing
+            # `::Tuple{.., Vararg{_,vᵢ}}` means `vᵢ` is the Int length
+            if isdefined(va, :N) && va.N === vᵢ
+                return Int
+            end
+        end
+    end
+    if Any === output_tvar.ub && Bottom === output_tvar.lb
+        # `Bottom <: T <: Any` additionally allows non-Type tvars
+        return Any
+    end
+    if output_tvar.lb === output_tvar.ub
+        lb = output_tvar.lb
+        # `TypeVar` bounds are declared `Union{TypeVar, Type}`, so a pinned
+        # plain value (which would be egal-keyed and `Const`-able) cannot occur.
+        @assert isa(lb, Union{Type, TypeVar})
+        # A pinned TypeVar compares by identity (`==` is `===` for TypeVars),
+        # but denotes a stable object only when it is free in `specTypes` (part
+        # of the call's own types, which is what the runtime sparam read
+        # yields); one that would get rewrapped below stands for a different
+        # binding per instantiation and stays `==`-known.
+        if isa(lb, TypeVar) && is_free_typevar_in_spec(lb, specTypes)
+            return Const(lb)
+        end
+        # `X <: T <: X` pins the var to `X` up to type equality: an `S == X` rep
+        # argument also matches this MethodInstance and would bind the var to `S`
+        # (#61323)
+        ty = rewrap_free_typevars(TypeEq{lb}, find_free_typevars(specTypes))
+        return v_egal ? type_value_to_egal(lb, ty) : ty
+    end
+    return rewrap_free_typevars(TypeEq{output_tvar}, find_free_typevars(specTypes))
+end
+
+function type_arg_parameter(@nospecialize(t))
+    t = unwrap_unionall(t)
+    isType(t) || return nothing
+    return type_parameter(t)
+end
+
+function has_invariant_sparam_occurrence(@nospecialize(t), v::TypeVar)
+    t = unwrap_unionall(t)
+    t isa DataType || return false
+    t.name === Tuple.name && return false
+    for p in t.parameters
+        has_typevar(p, v) && return true
+    end
+    return false
+end
+
+# TODO: This analysis should move into subtyping, which already has this
+# information when it computes the env: it knows for each binding whether the
+# matched position determines the value by identity. Propagate that outwards
+# (alongside the `svec(tvar, constrained)` markers) instead of re-deriving it
+# syntactically here.
+function sparam_definitely_egal_from_spec(v::TypeVar, sigtypes::Core.SimpleVector,
+                                          @nospecialize(specTypes))
+    spec = unwrap_unionall(specTypes)
+    spec isa DataType || return false
+    for i = 1:min(length(sigtypes), length(spec.parameters))
+        sigarg = sigtypes[i]
+        specarg = spec.parameters[i]
+        sigarg_unwrapped = unwrap_unionall(sigarg)
+        if sigarg_unwrapped === v
+            isdispatchelem(specarg) && return true
+            continue
+        end
+        if sigarg_unwrapped isa TypeVar && has_invariant_sparam_occurrence(sigarg_unwrapped.ub, v)
+            return true
+        end
+        if has_invariant_sparam_occurrence(sigarg, v)
+            return true
+        end
+        sig_type_arg = type_arg_parameter(sigarg)
+        sig_type_arg === nothing && continue
+        if sig_type_arg === v
+            specarg isa Core.TypeEgal && return true
+            continue
+        end
+        if sig_type_arg isa TypeVar && has_invariant_sparam_occurrence(sig_type_arg.ub, v)
+            return true
+        end
+        has_invariant_sparam_occurrence(sig_type_arg, v) && return true
+    end
+    return false
+end
+
+function is_free_typevar_in_spec(v::TypeVar, @nospecialize(specTypes))
+    for tv in find_free_typevars(specTypes)
+        tv === v && return true
+    end
+    return false
+end
+
+function sptypes_from_meth_instance(mi::MethodInstance)
+    def = mi.def
+    isa(def, Method) || return EMPTY_SPTYPES # toplevel
+    sig = def.sig
+    # mi is unspecialized: no subtyping has run, so we don't have the
+    # `svec(tvar, constrained)` markers that specialized env entries carry.
+    isempty(mi.sparam_vals) && return sptypes_from_unspecialized(sig)
+    sigtypes = (unwrap_unionall(sig)::DataType).parameters
+    spvals = mi.sparam_vals
+    nvals = length(spvals)
+    sptypes = Vector{VarState}(undef, nvals)
+    temp = sig
+    for i = 1:nvals
+        v = spvals[i]
+        undef = true
+        # An `svec(inner, constrained)` marker from subtyping/intersection
+        # means the sparam value is uncertain; `inner` is either the env
+        # TypeVar (carrying identity and bounds) or a DataType with free
+        # typevars (when the var got pinned to a value that still contains
+        # call-site tvars). `constrained` is true iff every concrete subtype
+        # of the call site will pin this var to a definite value.
+        v_tvar = nothing
+        v_constrained = false
+        if isa(v, SimpleVector)
+            v_inner = v[1]
+            v_constrained = v[2]::Bool
+            if isa(v_inner, TypeVar)
+                v_tvar = v_inner
+            else
+                # DataType-with-free-tvars case: route through the generic
+                # `has_free_typevars(v)` path by unwrapping.
+                v = v_inner
+            end
+        end
+        if v isa TypeVar && is_free_typevar_in_spec(v, mi.specTypes)
+            # A plain TypeVar env entry that is free in `specTypes` is the exact
+            # runtime value of this sparam (bound from a typevar embedded in the
+            # call's argument types); TypeVars compare by identity, so `Const(v)`
+            # — not `Type{v}` — is its precise abstraction.
+            ty = Const(v)
+            undef = false
+            v_egal = false
+        elseif v_tvar !== nothing || has_free_typevars(v)
+            vᵢ = (temp::UnionAll).var
+            if v_tvar !== nothing
+                v_egal = sparam_definitely_egal_from_spec(vᵢ, sigtypes, mi.specTypes)
+                ty = sptype_for_tvar(vᵢ, v_tvar, sigtypes, mi.specTypes, v_egal)
+            else
+                ty = rewrap_free_typevars(TypeEq{v}, find_free_typevars(mi.specTypes))
+                v_egal = false
+            end
+            undef = !v_constrained && !constrains_var(vᵢ, temp.body, MATCH_TYPEOF)
+        elseif isvarargtype(v)
+            # this parameter came from `func(..., ::Vararg{T,v})`,
+            # so the type is known to be `Int`
+            ty = Int
+            undef = false
+            v_egal = false
+        else
+            ty = Const(v)
+            undef = false
+            v_egal = false
+        end
+        if !undef && v_egal
+            ty = type_sptype_to_egal(ty)
+        end
+        sptypes[i] = VarState(ty, typemin(Int), undef)
+        temp = (temp::UnionAll).body
+    end
+    return sptypes
+end
+
+# Separate path for unspecialized MIs (empty `sparam_vals`): no subtyping has
+# run, so we can't use the svec-wrapped env entries produced by intersection.
+function sptypes_from_unspecialized(@nospecialize sig)
+    isa(sig, UnionAll) || return EMPTY_SPTYPES
+    nvals = unionall_depth(sig)
+    sptypes = Vector{VarState}(undef, nvals)
+    params = (unwrap_unionall(sig)::DataType).parameters
+    temp = sig
+    for i = 1:nvals
+        vᵢ = (temp::UnionAll).var
+        ty = sptype_for_tvar(vᵢ, vᵢ, params, sig)
+        undef = !constrains_var(vᵢ, (temp::UnionAll).body, MATCH_TYPEOF)
+        sptypes[i] = VarState(ty, typemin(Int), undef)
+        temp = (temp::UnionAll).body
+    end
+    return sptypes
+end
+
+function sp_at_idx(sig::UnionAll, idx::Int)
+    while idx != 1
+        sig = sig.body::UnionAll
+        idx -= 1
+    end
+    return sig.var
+end
+
+function va_from_vatuple(@nospecialize(t))
+    @_foldable_meta
+    t = unwrap_unionall(t)
+    if isa(t, DataType)
+        n = length(t.parameters)
+        if n > 0
+            va = t.parameters[n]
+            if isvarargtype(va)
+               return va
+            end
+        end
+    end
+    return nothing
+end
+
+_topmod(sv::InferenceState) = _topmod(frame_module(sv))
+
+function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize(new), frame::InferenceState)
+    ssavaluetypes = frame.ssavaluetypes
+    old = ssavaluetypes[ssa_id]
+    if old === NOT_FOUND || !is_lattice_equal(𝕃ᵢ, new, old)
+        ssavaluetypes[ssa_id] = new
+        W = frame.ip
+        for r in frame.ssavalue_uses[ssa_id]
+            if was_reached(frame, r)
+                usebb = block_for_inst(frame.cfg, r)
+                if usebb != frame.currbb || r < ssa_id
+                    push!(W, usebb)
+                end
+            end
+        end
+    end
+    return nothing
+end
+
+function narguments(sv::InferenceState, include_va::Bool=true)
+    nargs = Int(sv.src.nargs)
+    if !include_va
+        nargs -= sv.src.isva
+    end
+    return nargs
+end
+
+# IRInterpretationState
+# =====================
+# (the struct itself is defined in the `typegroup` block alongside `InferenceState`)
+
+IRInterpretationState(interp::I, spec_info::SpecInfo, ir::IRCode,
+                      mi::MethodInstance, argtypes::Vector{Any},
+                      min_world::UInt, max_world::UInt) where {I<:AbstractInterpreter} =
+    IRInterpretationState{I}(interp, spec_info, ir, mi, argtypes, min_world, max_world)
+
+function IRInterpretationState(
+        interp::AbstractInterpreter, codeinst::CodeInstance, mi::MethodInstance,
+        argtypes::Vector{Any}, @nospecialize(src),
+        valid_worlds::WorldRange = WorldRange(codeinst.min_world, codeinst.max_world)
+    )
+    @assert get_ci_mi(codeinst) === mi "method instance is not synced with code instance"
+    if isa(src, String)
+        src = _uncompressed_ir(codeinst, src)
+    else
+        isa(src, CodeInfo) || return nothing
+    end
+    spec_info = SpecInfo(src)
+    ir = inflate_ir(src, mi)
+    argtypes = va_process_argtypes(optimizer_lattice(interp), argtypes, src.nargs, src.isva, mi)
+    return IRInterpretationState(interp, spec_info, ir, mi, argtypes,
+                                 first(valid_worlds), last(valid_worlds))
+end
+
+# AbsIntState
+# ===========
+
+const AbsIntState{I<:AbstractInterpreter} = Union{InferenceState{I}, IRInterpretationState{I}}
+
+function print_callstack(frame::AbsIntState)
+    print("=================== Callstack: ==================\n")
+    frames = frame.callstack
+    for idx = (frame.frameid == 0 ? 0 : 1):length(frames)
+        sv = (idx == 0 ? frame : frames[idx])
+        idx == frame.frameid && print("*")
+        print("[")
+        print(idx)
+        if sv isa InferenceState && !isa(sv.interp, NativeInterpreter)
+            print(", ")
+            print(typeof(sv.interp))
+        end
+        print("] ")
+        print(frame_instance(sv))
+        is_cached(sv) || print("  [not globally cached]")
+        sv.parentid == idx - 1 || print(" [parent=", sv.parentid, "]")
+        isempty(callers_in_cycle(sv)) || print(" [cycle=", sv.cycleid, "]")
+        println()
+        @assert sv.frameid == idx
+    end
+    print("================= End callstack ==================\n")
+end
+
+frame_instance(sv::InferenceState) = sv.linfo
+frame_instance(sv::IRInterpretationState) = sv.mi
+
+function frame_module(sv::AbsIntState)
+    mi = frame_instance(sv)
+    def = mi.def
+    isa(def, Module) && return def
+    return def.module
+end
+
+frame_parent(sv::AbsIntState) = sv.parentid == 0 ? nothing : sv.callstack[sv.parentid]
+
+function cycle_parent(sv::InferenceState)
+    sv.parentid == 0 && return nothing
+    callstack = sv.callstack
+    sv = callstack[sv.cycleid]::InferenceState
+    sv.parentid == 0 && return nothing
+    return callstack[sv.parentid]
+end
+cycle_parent(sv::IRInterpretationState) = frame_parent(sv)
+
+
+# add the orphan child to the parent and the parent to the child
+function assign_parentchild!(child::InferenceState{I}, parent::AbsIntState{I}) where {I<:AbstractInterpreter}
+    @assert child.frameid in (0, 1)
+    child.callstack = callstack = parent.callstack
+    child.parentid = parent.frameid
+    push!(callstack, child)
+    child.cycleid = child.frameid = length(callstack)
+    nothing
+end
+function assign_parentchild!(child::IRInterpretationState{I}, parent::AbsIntState{I}) where {I<:AbstractInterpreter}
+    @assert child.frameid in (0, 1)
+    child.callstack = callstack = parent.callstack
+    child.parentid = parent.frameid
+    push!(callstack, child)
+    child.frameid = length(callstack)
+    nothing
+end
+
+function is_constproped(sv::InferenceState)
+    (;overridden_by_const) = sv.result
+    return overridden_by_const !== nothing
+end
+is_constproped(::IRInterpretationState) = true
+
+is_cached(sv::InferenceState) = !iszero(sv.cache_mode & CACHE_MODE_GLOBAL)
+is_cached(::IRInterpretationState) = false
+
+spec_info(sv::InferenceState) = sv.spec_info
+spec_info(sv::IRInterpretationState) = sv.spec_info
+
+propagate_inbounds(sv::AbsIntState) = spec_info(sv).propagate_inbounds
+method_for_inference_limit_heuristics(sv::AbsIntState) = spec_info(sv).method_for_inference_limit_heuristics
+
+function is_effect_overridden(sv::AbsIntState, effect::Symbol)
+    if is_effect_overridden(frame_instance(sv), effect)
+        return true
+    elseif is_effect_overridden(decode_statement_effects_override(sv), effect)
+        return true
+    end
+    return false
+end
+function is_effect_overridden(mi::MethodInstance, effect::Symbol)
+    def = mi.def
+    return isa(def, Method) && is_effect_overridden(def, effect)
+end
+is_effect_overridden(method::Method, effect::Symbol) = is_effect_overridden(decode_effects_override(method.purity), effect)
+is_effect_overridden(override::EffectsOverride, effect::Symbol) = getfield(override, effect)
+
+has_conditional(𝕃::AbstractLattice, ::InferenceState) = has_conditional(𝕃)
+has_conditional(::AbstractLattice, ::IRInterpretationState) = false
+has_mustalias(𝕃::AbstractLattice, ::InferenceState) = has_mustalias(𝕃)
+has_mustalias(::AbstractLattice, ::IRInterpretationState) = false
+
+# work towards converging the valid age range for sv
+function update_valid_age!(sv::AbsIntState, world, valid_worlds::WorldRange)
+    valid_worlds = intersect(sv.valid_worlds, valid_worlds)
+    if !(world in valid_worlds)
+        error("invalid age range update")
+    end
+    sv.valid_worlds = valid_worlds
+    return valid_worlds
+end
+
+"""
+    AbsIntStackUnwind(sv::AbsIntState)
+
+Iterate through all callers of the given `AbsIntState` in the abstract interpretation stack
+(including the given `AbsIntState` itself), visiting children before their parents (i.e.
+ascending the tree from the given `AbsIntState`).
+Note that cycles may be visited in any order.
+"""
+struct AbsIntStackUnwind{I<:AbstractInterpreter}
+    callstack::Vector{AbsIntState{I}}
+    AbsIntStackUnwind(sv::AbsIntState{I}) where {I<:AbstractInterpreter} = new{I}(sv.callstack)
+end
+function iterate(unw::AbsIntStackUnwind, frame::Int=length(unw.callstack))
+    frame == 0 && return nothing
+    return (unw.callstack[frame], frame - 1)
+end
+
+struct AbsIntCycle{I<:AbstractInterpreter}
+    frames::Vector{AbsIntState{I}}
+    cycleid::Int
+    cycletop::Int
+end
+iterate(unw::AbsIntCycle) = unw.cycleid == 0 ? nothing : (unw.frames[unw.cycletop], unw.cycletop)
+function iterate(unw::AbsIntCycle, frame::Int)
+    frame == unw.cycleid && return nothing
+    return (unw.frames[frame - 1], frame - 1)
+end
+
+"""
+    callers_in_cycle(sv::AbsIntState)
+
+Iterate through all callers of the given `AbsIntState` in the abstract
+interpretation stack (including the given `AbsIntState` itself) that are part
+of the same cycle, only if it is part of a cycle with multiple frames.
+"""
+function callers_in_cycle(sv::InferenceState)
+    callstack = sv.callstack
+    cycletop = cycleid = sv.cycleid
+    while cycletop < length(callstack)
+        frame = callstack[cycletop + 1]
+        frame isa InferenceState || break
+        frame.cycleid == cycleid || break
+        cycletop += 1
+    end
+    return AbsIntCycle(callstack, cycletop == cycleid ? 0 : cycleid, cycletop)
+end
+callers_in_cycle(sv::IRInterpretationState) = AbsIntCycle(sv.callstack, 0, 0)
+
+get_curr_ssaflag(sv::InferenceState) = sv.ssaflags[sv.currpc]
+get_curr_ssaflag(sv::IRInterpretationState) = sv.ir.stmts[sv.curridx][:flag]
+
+has_curr_ssaflag(sv::InferenceState, flag::UInt32) = has_flag(sv.ssaflags[sv.currpc], flag)
+has_curr_ssaflag(sv::IRInterpretationState, flag::UInt32) = has_flag(sv.ir.stmts[sv.curridx][:flag], flag)
+
+function set_curr_ssaflag!(sv::InferenceState, flag::UInt32, mask::UInt32=typemax(UInt32))
+    curr_flag = sv.ssaflags[sv.currpc]
+    sv.ssaflags[sv.currpc] = (curr_flag & ~mask) | flag
+    nothing
+end
+
+add_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.ssaflags[sv.currpc] |= flag
+add_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = add_flag!(sv.ir.stmts[sv.curridx], flag)
+
+sub_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.ssaflags[sv.currpc] &= ~flag
+sub_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sub_flag!(sv.ir.stmts[sv.curridx], flag)
+
+function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects)
+    if effects.effect_free === EFFECT_FREE_GLOBALLY
+        # This tracks the global effects
+        effects = Effects(effects; effect_free=ALWAYS_TRUE)
+    end
+    caller.ipo_effects = merge_effects(caller.ipo_effects, effects)
+    nothing
+end
+merge_effects!(::AbstractInterpreter, ::IRInterpretationState, ::Effects) = return
+
+decode_statement_effects_override(sv::InferenceState) = decode_statement_effects_override(sv.src.ssaflags[sv.currpc])
+decode_statement_effects_override(::IRInterpretationState) = decode_statement_effects_override(UInt32(0))
+
+struct InferenceLoopState
+    rt
+    effects::Effects
+    function InferenceLoopState(@nospecialize(rt), effects::Effects)
+        new(rt, effects)
+    end
+end
+
+bail_out_toplevel_call(::AbstractInterpreter, sv::InferenceState) = sv.restrict_abstract_call_sites
+bail_out_toplevel_call(::AbstractInterpreter, ::IRInterpretationState) = false
+
+bail_out_call(::AbstractInterpreter, state::InferenceLoopState, ::InferenceState) =
+    state.rt === Any && !is_foldable(state.effects)
+bail_out_call(::AbstractInterpreter, state::InferenceLoopState, ::IRInterpretationState) =
+    state.rt === Any && !is_foldable(state.effects)
+
+bail_out_apply(::AbstractInterpreter, state::InferenceLoopState, ::InferenceState) =
+    state.rt === Any
+bail_out_apply(::AbstractInterpreter, state::InferenceLoopState, ::IRInterpretationState) =
+    state.rt === Any
+
+add_remark!(::AbstractInterpreter, ::InferenceState, _remark) = return
+add_remark!(::AbstractInterpreter, ::IRInterpretationState, _remark) = return
+
+function get_max_methods(interp::AbstractInterpreter, @nospecialize(f), sv::AbsIntState)
+    fmax = get_max_methods_for_func(f)
+    fmax !== nothing && return fmax
+    return get_max_methods(interp, sv)
+end
+function get_max_methods(interp::AbstractInterpreter, @nospecialize(f))
+    fmax = get_max_methods_for_func(f)
+    fmax !== nothing && return fmax
+    return get_max_methods(interp)
+end
+function get_max_methods(interp::AbstractInterpreter, sv::AbsIntState)
+    mmax = get_max_methods_for_module(sv)
+    mmax !== nothing && return mmax
+    return get_max_methods(interp)
+end
+get_max_methods(interp::AbstractInterpreter) = InferenceParams(interp).max_methods
+
+function get_max_methods_for_func(@nospecialize(f))
+    if f !== nothing
+        fmm = typeof(f).name.max_methods
+        fmm !== UInt8(0) && return Int(fmm)
+    end
+    return nothing
+end
+
+max_methods_callee(@nospecialize(f), argtypes::Vector{Any}) =
+    f === Core.kwcall && length(argtypes) >= 3 ? singleton_type(argtypes[3]) : f
+
+# Whether `f` is marked to only allow inference of call sites with fully concrete
+# argument types. `f === nothing` means the callee value is unknown.
+function is_concrete_only(@nospecialize(f))
+    f === nothing && return false
+    isa(f, DataType) && return f.name.concrete_only
+    return typeof(f).name.concrete_only
+end
+
+get_max_methods_for_module(sv::AbsIntState) = get_max_methods_for_module(frame_module(sv))
+function get_max_methods_for_module(mod::Module)
+    max_methods = ccall(:jl_get_module_max_methods, Cint, (Any,), mod) % Int
+    max_methods < 0 && return nothing
+    return max_methods
+end
+
+"""
+    Future{T}
+
+Assign-once delayed return value for a value of type `T`, similar to RefValue{T}.
+Can be constructed in one of three ways:
+
+1. With an immediate as `Future{T}(val)`
+2. As an assign-once storage location with `Future{T}()`. Assigned (once) using `f[] = val`.
+3. As a delayed computation with `Future{T}(callback, dep, interp, sv)` to have
+   `sv` arrange to call the `callback` with the result of `dep` when it is ready.
+
+Use `isready` to check if the value is ready, and `getindex` to get the value.
+"""
+struct Future{T}
+    later::Union{Nothing,RefValue{T}}
+    now::Union{Nothing,T}
+    function Future{T}() where {T}
+        later = RefValue{T}()
+        @assert !isassigned(later) "Future{T}() is not allowed for inlinealloc T"
+        new{T}(later, nothing)
+    end
+    Future{T}(x) where {T} = new{T}(nothing, x)
+    Future(x::T) where {T} = new{T}(nothing, x)
+end
+isready(f::Future) = f.later === nothing || isassigned(f.later)
+getindex(f::Future{T}) where {T} = (later = f.later; later === nothing ? f.now::T : later[])
+function setindex!(f::Future, v)
+    later = something(f.later)
+    @assert !isassigned(later)
+    later[] = v
+    return f
+end
+convert(::Type{Future{T}}, x) where {T} = Future{T}(x) # support return type conversion
+convert(::Type{Future{T}}, x::Future) where {T} = x::Future{T}
+function Future{T}(f, immediate::Bool, interp::AbstractInterpreter, sv::AbsIntState) where {T}
+    if immediate
+        return Future{T}(f(interp, sv))
+    else
+        @assert Core._hasmethod(Tuple{Core.Typeof(f), typeof(interp), typeof(sv)})
+        result = Future{T}()
+        push!(sv.tasks, function (interp, sv)
+            result[] = f(interp, sv)
+            return true
+        end)
+        return result
+    end
+end
+function Future{T}(f, prev::Future{S}, interp::AbstractInterpreter, sv::AbsIntState) where {T, S}
+    later = prev.later
+    if later === nothing
+        return Future{T}(f(prev[], interp, sv))
+    else
+        @assert Core._hasmethod(Tuple{Core.Typeof(f), S, typeof(interp), typeof(sv)})
+        result = Future{T}()
+        @assert !isa(sv, InferenceState) || sv.interp::typeof(interp) === interp
+        push!(sv.tasks, function (interp, sv)
+            result[] = f(later[], interp, sv) # capture just later, instead of all of prev
+            return true
+        end)
+        return result
+    end
+end
+
+"""
+    doworkloop(args...)
+
+Run a task inside the abstract interpreter, returning false if there are none.
+Tasks will be run in DFS post-order tree order, such that all child tasks will
+be run in the order scheduled, prior to running any subsequent tasks. This
+allows tasks to generate more child tasks, which will be run before anything else.
+Each task will be run repeatedly when returning `false`, until it returns `true`.
+"""
+function doworkloop(interp::AbstractInterpreter, sv::AbsIntState)
+    tasks = sv.tasks
+    prev = length(tasks)
+    prevcallstack = length(sv.callstack)
+    prev == 0 && return false
+    task = pop!(tasks)
+    # pass the field (already boxed) rather than `interp`, which may be a concrete
+    # immutable that this dynamic call would box again
+    completed = task(sv.interp, sv)
+    tasks = sv.tasks # allow dropping gc root over the previous call
+    completed isa Bool || throw(TypeError(:return, "", Bool, task)) # print the task on failure as part of the error message, instead of just "@ workloop:line"
+    if !completed
+        @assert (length(tasks) >= prev || length(sv.callstack) > prevcallstack) "Task did not complete, but also did not create any child tasks"
+        push!(tasks, task)
+    end
+    # efficient post-order visitor: items pushed are executed in reverse post order such
+    # that later items are executed before earlier ones, but are fully executed
+    # (including any dependencies scheduled by them) before going on to the next item
+    reverse!(tasks, #=start=#prev)
+    return true
+end
+
+
+#macro workthunk(name::Symbol, body)
+#    name = esc(name)
+#    body = esc(body)
+#    return replace_linenums!(
+#        :(function $name($(esc(interp)), $(esc(sv)))
+#              $body
+#          end), __source__)
+#end

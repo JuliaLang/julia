@@ -3,6 +3,20 @@
 using Test, Profile, Serialization, Logging
 using Base.StackTraces: StackFrame
 
+function with_output_on_failure(f)
+    mktemp() do _, child_stderr
+        try
+            return f(child_stderr)
+        catch
+            seekstart(child_stderr)
+            write(stderr, read(child_stderr))
+            rethrow()
+        end
+    end
+end
+
+@test isempty(Test.detect_closure_boxes(Profile))
+
 @test_throws "The profiling data buffer is not initialized. A profile has not been requested this session." Profile.print()
 
 Profile.clear()
@@ -15,51 +29,148 @@ let iobuf = IOBuffer()
     end
 end
 
+# Burn CPU time in Julia code rather than in `time_ns`. Most of a tight `time_ns` loop is
+# spent inside the kernel's vDSO `clock_gettime`, and on some kernels (e.g. Ubuntu's arm64
+# builds) libunwind cannot unwind out of that function. Samples taken there then carry no
+# Julia frames at all, and if every sample lands there the printing tests below see an
+# empty profile. The iteration count is hidden from inference so the call cannot be
+# constant-folded, and the result is kept alive with `donotdelete` so the loop cannot
+# be optimized away.
+@noinline function spin(n)
+    s = zero(UInt)
+    for i in 1:n
+        s = s ⊻ (UInt(i) + (s << 1))
+    end
+    return s
+end
+
 @noinline function busywait(t, n_tries)
     iter = 0
     init_data = Profile.len_data()
     while iter < n_tries && Profile.len_data() == init_data
         iter += 1
         tend = time_ns() + 1e9 * t
-        while time_ns() < tend end
-    end
-end
-
-busywait(0, 0) # compile
-@profile busywait(1, 20)
-
-let r = Profile.retrieve()
-    mktemp() do path, io
-        serialize(io, r)
-        close(io)
-        open(path) do io
-            @test isa(deserialize(io), Tuple{Vector{UInt},Dict{UInt64,Vector{Base.StackTraces.StackFrame}}})
+        while time_ns() < tend
+            Base.donotdelete(spin(Base.compilerbarrier(:const, 100_000)))
         end
     end
 end
 
-let iobuf = IOBuffer()
-    Profile.print(iobuf, format=:tree, C=true)
+@noinline function sleeping_tasks(ch::Channel)
+    for _ in 1:100
+        Threads.@spawn take!(ch)
+    end
+    sleep(10)
+end
+
+function test_profile()
+    let r = Profile.retrieve()
+        mktemp() do path, io
+            serialize(io, r)
+            close(io)
+            open(path) do io
+                @test isa(deserialize(io), Tuple{Vector{UInt},Dict{UInt64,Vector{Base.StackTraces.StackFrame}}})
+            end
+        end
+    end
+end
+
+function test_has_task_profiler_sample_in_buffer()
+    let r = Profile.retrieve()
+        mktemp() do path, io
+            serialize(io, r)
+            close(io)
+            open(path) do io
+                all = deserialize(io)
+                data = all[1]
+                startframe = length(data)
+                for i in startframe:-1:1
+                    (startframe - 1) >= i >= (startframe - (Profile.nmeta + 1)) && continue # skip metadata (it's read ahead below) and extra block end NULL IP
+                    if Profile.is_block_end(data, i)
+                        thread_sleeping_state = data[i - Profile.META_OFFSET_SLEEPSTATE]
+                        @test thread_sleeping_state == 0x3
+                    end
+                end
+            end
+        end
+    end
+end
+
+busywait(0, 0) # compile
+
+@profile_walltime busywait(1, 20)
+test_profile()
+
+Profile.clear()
+
+ch = Channel(1)
+@profile_walltime sleeping_tasks(ch)
+test_profile()
+close(ch)
+test_has_task_profiler_sample_in_buffer()
+
+@testset "Profile.print() groupby options on a task profile" begin
+    data, lidict = Profile.retrieve()
+    # the task profiler records -1 as the thread id of a task that isn't running on one,
+    # which the grouped report has to tolerate. Such a sample isn't guaranteed to occur
+    # naturally (#62575), so mark one that way.
+    data = copy(data)
+    block_end = findfirst(i -> Profile.is_block_end(data, i), eachindex(data))
+    @test block_end !== nothing
+    data[block_end - Profile.META_OFFSET_THREADID] = reinterpret(UInt, -1)
+    iobuf = IOBuffer()
+    with_logger(NullLogger()) do
+        @testset for format in [:flat, :tree]
+            @testset for groupby in Any[:none, :thread, :task, [:thread, :task], [:task, :thread]]
+                Profile.print(iobuf, data, lidict; groupby, format)
+                @test !isempty(String(take!(iobuf)))
+            end
+        end
+    end
+end
+
+@testset "task profiling after an adopted thread exits" begin
+    # an exited adopted thread leaves its ptls behind with a NULL root task
+    script = """
+        using Profile
+        function run_foreign_thread()
+            tid = Ref{UInt}(0)
+            cf = @cfunction(p -> (Threads.threadid(); nothing), Cvoid, (Ptr{Cvoid},))
+            err = @ccall uv_thread_create(tid::Ptr{UInt}, cf::Ptr{Cvoid}, C_NULL::Ptr{Cvoid})::Cint
+            err == 0 || Base.uv_error("uv_thread_create", err)
+            gc_state = @ccall jl_gc_safe_enter()::Int8
+            err = @ccall uv_thread_join(tid::Ptr{UInt})::Cint
+            @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+            err == 0 || Base.uv_error("uv_thread_join", err)
+        end
+        run_foreign_thread()
+        @assert current_task() in @ccall jl_live_tasks()::Vector{Any}
+        @profile_walltime sum(sin, 1:10^7)
+        print("done")
+        """
+    @test read(`$(Base.julia_cmd()) --startup-file=no -e $script`, String) == "done"
+end
+
+Profile.clear()
+
+@profile busywait(1, 20)
+test_profile()
+
+# test printing options
+for options in ((format=:tree, C=true),
+                (format=:tree, maxdepth=2),
+                (format=:flat, C=true),
+                (),
+                (format=:flat, sortedby=:count),
+                (format=:tree, recur=:flat),
+               )
+    iobuf = IOBuffer()
+    Profile.print(iobuf; options...)
     str = String(take!(iobuf))
     @test !isempty(str)
-    truncate(iobuf, 0)
-    Profile.print(iobuf, format=:tree, maxdepth=2)
-    str = String(take!(iobuf))
-    @test !isempty(str)
-    truncate(iobuf, 0)
-    Profile.print(iobuf, format=:flat, C=true)
-    str = String(take!(iobuf))
-    @test !isempty(str)
-    truncate(iobuf, 0)
-    Profile.print(iobuf)
-    @test !isempty(String(take!(iobuf)))
-    truncate(iobuf, 0)
-    Profile.print(iobuf, format=:flat, sortedby=:count)
-    @test !isempty(String(take!(iobuf)))
-    Profile.print(iobuf, format=:tree, recur=:flat)
-    str = String(take!(iobuf))
-    @test !isempty(str)
-    truncate(iobuf, 0)
+    file, _ = mktemp()
+    Profile.print(file; options...)
+    @test filesize(file) > 0
 end
 
 @testset "Profile.print() groupby options" begin
@@ -73,6 +184,40 @@ end
                 end
             end
         end
+    end
+end
+
+@testset "printing and callers regressions" begin
+    iobuf = IOBuffer()
+    # synthetic single-sample profile on thread 1, so group contents are deterministic
+    fake_data = Profile.add_fake_meta(UInt64[1, 0])
+    fake_lidict = Dict{UInt64,Vector{StackFrame}}(UInt64(1) => [StackFrame(:f1, :file1, 1, nothing, false, false, 0)])
+    if !Sys.iswindows() # avoid the multi-thread-profiling-unsupported warning
+        # no "no samples" warning when every group has samples
+        @test_logs min_level=Logging.Warn Profile.print(iobuf, fake_data, fake_lidict, groupby = :thread)
+    end
+    # a threads filter that matches no samples must be honored under groupby=:task
+    @test_logs (:warn, r"There were no samples collected in one or more groups") match_mode=:any begin
+        Profile.print(iobuf, fake_data, fake_lidict, groupby = :task, threads = 999:1000)
+    end
+    @test_throws ArgumentError Profile.print(iobuf, groupby = :bogus)
+    # callers must accept default (metadata-bearing) profile data
+    @test Profile.callers("busywait") isa Vector
+    let (data, lidict) = Profile.retrieve()
+        @test Profile.callers("busywait", data, lidict) isa Vector
+    end
+    # data saved on a host with a different word size is accepted (`UInt` there may
+    # not be `UInt` here), rather than hitting a MethodError
+    @test Profile.getdict(UInt32[1, 0]) isa Profile.LineInfoDict
+    @test Profile.getdict(UInt64[1, 0]) isa Profile.LineInfoDict
+end
+
+@testset "init while profiling errors" begin
+    Profile.start_timer()
+    try
+        @test_throws "profiling is running" Profile.init(n = 10^6, delay = 0.01)
+    finally
+        Profile.stop_timer()
     end
 end
 
@@ -117,6 +262,20 @@ end
 @test z == 10
 end
 
+@testset "@profile no scope" begin
+    @profile no_scope_57858_1 = 1
+    @test @isdefined no_scope_57858_1
+    Profile.clear()
+
+    @profile_walltime no_scope_57858_1 = 1
+    @test @isdefined no_scope_57858_1
+    Profile.clear()
+
+    Profile.Allocs.@profile no_scope_57858_2 = 1
+    @test @isdefined no_scope_57858_2
+    Profile.Allocs.clear()
+end
+
 @testset "setting sample count and delay in init" begin
     n_, delay_ = Profile.init()
     n_original = n_
@@ -157,13 +316,60 @@ end
     end
     _, fdictc = Profile.flatten(Profile.retrieve()...)
     Base.update_stackframes_callback[] = identity
-    function getline(sfs)
-        for sf in sfs
-            sf.func === :busywait && return sf.line
-        end
-        nothing
+    # several busywait frames can be sampled, so compare all of them
+    getlines(sfs) = sort!(unique!([sf.line for sf in sfs if sf.func === :busywait]))
+    lines0 = getlines(values(fdict0))
+    @test !isempty(lines0)
+    @test getlines(values(fdictc)) == lines0 .+ 2
+end
+
+import InteractiveUtils
+
+@generated function compile_takes_1_second(x)
+    t = time_ns()
+    while time_ns() < t + 1e9
+        # busy wait for 1 second
     end
-    @test getline(values(fdictc)) == getline(values(fdict0)) + 2
+    return :(x)
+end
+@testset "Module short names" begin
+    Profile.clear()
+    @profile begin
+        @eval compile_takes_1_second(1) # to increase chance of profiling hitting compilation code
+        InteractiveUtils.peakflops()
+    end
+    io = IOBuffer()
+    ioc = IOContext(io, :displaysize=>(1000,1000))
+    Profile.print(ioc, C=true)
+    str = String(take!(io))
+    slash = Sys.iswindows() ? "\\" : "/"
+    @test occursin("@Compiler" * slash, str)
+    @test occursin("@Base" * slash, str)
+    @test occursin("@InteractiveUtils" * slash, str)
+    @test occursin("@LinearAlgebra" * slash, str)
+    @test occursin("@juliasrc" * slash, str)
+    @test occursin("@julialib" * slash, str)
+end
+
+function run_with_watchdog(cmd, timeout=600)
+    p = open(cmd)
+    t = Timer(timeout) do t
+        # should be under 10 seconds normally, so give it 10 minutes then report failure
+        # n.b.: it was observed in an interactive CI session that a 2 minute timeout is not
+        #       sufficient when the machine is under extremely high load which happens
+        #       regularly when executing other tests in parallel with Profile
+        println("KILLING debuginfo registration test BY PROFILE TEST WATCHDOG\n")
+        println("This should not happen. Please report this at https://github.com/JuliaLang/julia/issues/60306")
+        kill(p, Base.SIGQUIT)
+        sleep(30)
+        kill(p, Base.SIGQUIT)
+        sleep(30)
+        kill(p, Base.SIGKILL)
+    end
+    s = read(p, String)
+    close(t)
+    close(p)
+    success(p) ? s : ""
 end
 
 # Profile deadlocking in compilation (debuginfo registration)
@@ -178,20 +384,25 @@ let cmd = Base.julia_cmd()
         println("done")
         print(Profile.len_data())
         """
-    p = open(`$cmd -e $script`)
-    t = Timer(120) do t
-        # should be under 10 seconds, so give it 2 minutes then report failure
-        println("KILLING BY PROFILE TEST WATCHDOG\n")
-        kill(p, Base.SIGTERM)
-        sleep(10)
-        kill(p, Base.SIGKILL)
-    end
-    s = read(p, String)
-    close(t)
-    @test success(p)
+    # use multiple threads here to ensure that profiling works with threading
+    s = run_with_watchdog(`$cmd -t2 -e $script`)
     @test !isempty(s)
     @test occursin("done", s)
     @test parse(Int, split(s, '\n')[end]) > 100
+end
+
+# Thread suspend deadlock - run many times (#60042)
+@test_skip let cmd = Base.julia_cmd()
+    script = """
+        using Profile
+        @profile println("done")
+        """
+    good = true
+    for i=1:100
+        s = run_with_watchdog(`$cmd -t2 -e $script`, 5)
+        good &= occursin("done", s)
+    end
+    good
 end
 
 if Sys.isbsd() || Sys.islinux()
@@ -200,18 +411,24 @@ if Sys.isbsd() || Sys.islinux()
             script = """
                 print(stderr, "started\n")
                 eof(stdin)
-                close(t)
                 """
-            iob = Base.BufferStream()
+            iob = Base.BufferStream() # make an unbounded buffer, so we can just read after waiting for exit
             notify_exit = Base.PipeEndpoint()
-            p = run(pipeline(`$cmd -e $script`, stdin=notify_exit, stderr=iob, stdout=devnull), wait=false)
+            p = run(`$cmd -e $script`, notify_exit, devnull, iob, wait=false)
+            eof = @async try # set up a monitor task to set EOF on iob after p exits
+                wait(p)
+            finally
+                closewrite(iob)
+            end
             t = Timer(120) do t
                 # should be under 10 seconds, so give it 2 minutes then report failure
-                println("KILLING BY PROFILE TEST WATCHDOG\n")
-                kill(p, Base.SIGTERM)
-                sleep(10)
+                println("KILLING siginfo/sigusr1 test BY PROFILE TEST WATCHDOG\n")
+                kill(p, Base.SIGQUIT)
+                sleep(30)
+                kill(p, Base.SIGQUIT)
+                sleep(30)
                 kill(p, Base.SIGKILL)
-                close(p)
+                close(notify_exit)
             end
             try
                 s = readuntil(iob, "started", keep=true)
@@ -230,17 +447,18 @@ if Sys.isbsd() || Sys.islinux()
                     @test occursin("Overhead ╎", s)
                 end
                 close(notify_exit) # notify test finished
-                s = read(iob, String) # consume test output
-                wait(p) # wait for test completion
+                wait(eof) # wait for test completion
+                s = read(iob, String) # consume test output from buffer
                 close(t)
             catch
                 close(notify_exit)
+                wait(eof) # wait for test completion
                 errs = read(iob, String) # consume test output
                 isempty(errs) || println("CHILD STDERR after test failure: ", errs)
-                wait(p) # wait for test completion
                 close(t)
                 rethrow()
             end
+            @test success(p)
         end
     end
 end
@@ -278,20 +496,136 @@ end
     @test only(node.down).first == lidict[8]
 end
 
+# the elements of the flat `"<key>":[...]` array of a .heapsnapshot. Every field is
+# emitted as an unsigned decimal, and e.g. an edge's `name_or_index` can be typemax(UInt).
+# Also used by heapsnapshot_reassemble.jl, which runs under MMTk too.
+function snapshot_array(sshot::AbstractString, key::AbstractString)
+    start = last(findfirst("\"$key\":[", sshot)) + 1
+    section = strip(sshot[start:findnext(==(']'), sshot, start)-1])
+    return isempty(section) ? UInt[] : parse.(UInt, split(section, ','))
+end
+
+# FIXME: Issue #57103: heap snapshots are currently not supported in MMTk
+@static if Base.USING_STOCK_GC
 @testset "HeapSnapshot" begin
-    tmpdir = mktempdir()
-    fname = cd(tmpdir) do
-        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+    mktempdir() do tmpdir
+        # ensure that we can prevent redacting data
+        fname = cd(tmpdir) do
+            read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; print(Profile.take_heap_snapshot(; redact_data=false))"`, String)
+        end
+
+        @test isfile(fname)
+
+        sshot = read(fname, String)
+        @test sshot != ""
+        @test contains(sshot, "redact_this")
+
+        rm(fname)
+
+        # ensure that string data is redacted by default
+        fname = cd(tmpdir) do
+            read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; print(Profile.take_heap_snapshot())"`, String)
+        end
+
+        @test isfile(fname)
+
+        sshot = read(fname, String)
+        @test sshot != ""
+        @test !contains(sshot, "redact_this")
+
+        rm(fname)
     end
 
-    @test isfile(fname)
+    # a readonly current directory should fall back to saving in tempdir
+    # (the readonly bit on a directory doesn't prevent file creation on windows, and root bypasses it)
+    @static if !Sys.iswindows()
+        if ccall(:geteuid, Cuint, ()) != 0
+            @testset "default save when current directory is readonly" begin
+                mktempdir() do tmpdir
+                    fname = cd(tmpdir) do
+                        chmod(tmpdir, 0o555)
+                        try
+                            cmd = `$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`
+                            with_output_on_failure() do child_stderr
+                                read(pipeline(cmd; stderr=child_stderr), String)
+                            end
+                        finally
+                            chmod(tmpdir, 0o777)
+                        end
+                    end
+                    @test !occursin(tmpdir, fname) # should not be in the readonly dir
+                    @test isfile(fname)
+                    open(fname) do fs
+                        @test readline(fs) != ""
+                    end
+                    rm(fname)
+                end
+            end
+        end
+    end
 
-    open(fname) do fs
+    @testset "save with custom dir" begin
+        mktempdir() do tmpdir
+            fname = read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot(dir=ARGS[1]))" $tmpdir`, String)
+            @test occursin(tmpdir, fname)
+            @test isfile(fname)
+            open(fname) do fs
+                @test readline(fs) != ""
+            end
+        end
+    end
+end
+
+# the documented streaming workflow: stream the parts, assemble offline, clean up
+@testset "HeapSnapshot streaming workflow" begin
+    mktempdir() do tmpdir
+        prefix = joinpath(tmpdir, "streamed")
+        run(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; Profile.take_heap_snapshot(ARGS[1]; streaming=true)" $prefix`)
+        part_files = [string(prefix, ext) for ext in (".metadata.json", ".nodes", ".edges", ".strings")]
+        @test all(isfile, part_files)
+
+        out_file = string(prefix, ".heapsnapshot")
+        Profile.HeapSnapshot.assemble_snapshot(prefix, out_file)
+        sshot = read(out_file, String)
+        @test sshot != ""
+
+        # structural check: the node/edge arrays must have the expected number of fields
+        node_count = parse(Int, match(r"\"node_count\":(\d+)", sshot).captures[1])
+        edge_count = parse(Int, match(r"\"edge_count\":(\d+)", sshot).captures[1])
+        @test node_count > 0
+        @test edge_count > 0
+        @test length(snapshot_array(sshot, "nodes")) == 7 * node_count
+        @test length(snapshot_array(sshot, "edges")) == 3 * edge_count
+
+        Profile.HeapSnapshot.cleanup_streamed_files(prefix)
+        @test !any(isfile, part_files)
+    end
+end
+
+@testset "take_heap_snapshot to an IO stream" begin
+    mktempdir() do tmpdir
+        out_file = joinpath(tmpdir, "io_method.heapsnapshot")
+        run(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; open(io -> Profile.take_heap_snapshot(io, true), ARGS[1], \"w\")" $out_file`)
+        @test filesize(out_file) > 0
+    end
+end
+end
+
+@testset "PageProfile" begin
+    fname = "$(getpid())_$(time_ns())"
+    fpath = joinpath(tempdir(), fname)
+    Profile.take_page_profile(fpath)
+    open(fpath) do fs
         @test readline(fs) != ""
     end
-
-    rm(fname)
-    rm(tmpdir, force = true, recursive = true)
+    rm(fpath)
 end
 
 include("allocs.jl")
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Profile)
+    @test_broken isempty(undoc)
+    @test undoc == [:Allocs]
+end
+include("heapsnapshot_reassemble.jl")

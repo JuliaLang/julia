@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-#if !defined(_OS_WINDOWS_)
+#if !defined(_OS_WINDOWS_) && !defined(__OpenBSD__)
 // This code path should be used for systems that support the strtod_l function
 
 // Cache locale object
@@ -40,7 +40,7 @@ JL_DLLEXPORT float jl_strtof_c(const char *nptr, char **endptr)
 
 #else
 // This code path should be used for systems that do not support the strtod_l function
-// Currently this is MinGW/Windows
+// Currently this is MinGW/Windows and OpenBSD
 
 // The following code is derived from the Python function _PyOS_ascii_strtod
 // see https://github.com/python/cpython/blob/master/Python/pystrtod.c

@@ -1,7 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
-import Libdl
+using Libdl
+
+@test isempty(Test.detect_closure_boxes(Libdl))
 
 # these could fail on an embedded installation
 # but for now, we don't handle that case
@@ -26,8 +28,15 @@ end
 # library handle pointer must not be NULL
 @test_throws ArgumentError Libdl.dlsym(C_NULL, :foo)
 @test_throws ArgumentError Libdl.dlsym_e(C_NULL, :foo)
+@test_throws ArgumentError Libdl.dlpath(C_NULL)
 
-cd(@__DIR__) do
+# dlsym can only return nothing when throw_error=false.
+@testset "dlsym return type inference ($S)" for S in (Symbol, String)
+    @test Base.infer_return_type(Libdl.dlsym, Tuple{Ptr{Cvoid}, S}) === Ptr{Cvoid}
+    @test Base.infer_return_type(Tuple{Ptr{Cvoid}, S}) do hnd, s
+        Libdl.dlsym(hnd, s; throw_error=false)
+    end === Union{Nothing, Ptr{Cvoid}}
+end
 
 # Find the library directory by finding the path of libjulia-internal (or libjulia-internal-debug,
 # as the case may be) to get the private library directory
@@ -41,6 +50,15 @@ elseif Base.isdebugbuild()
     dirname(abspath(Libdl.dlpath("libjulia-internal-debug")))
 else
     dirname(abspath(Libdl.dlpath("libjulia-internal")))
+end
+
+# libjulia-internal is a shared library here, so it reports its own path
+let p = ccall(:jl_get_libjulia_internal_path, Cstring, ())
+    @test p != C_NULL
+    Sys.iswindows() && Libc.free(p)
+end
+if !Base.DARWIN_FRAMEWORK
+    @test realpath(Base.Libc.Libdl.private_shlibdir()) == realpath(private_libdir)
 end
 
 @test !isempty(Libdl.find_library(["libccalltest"], [private_libdir]))
@@ -227,7 +245,7 @@ mktempdir() do dir
     # Add an absurdly long entry to the load path to verify it doesn't lead to a buffer overflow
     push!(Base.DL_LOAD_PATH, joinpath(dir, join(rand('a':'z', 10000))))
 
-    # Add the temporary directors to load path by absolute path
+    # Add the temporary directory to load path by absolute path
     push!(Base.DL_LOAD_PATH, dir)
 
     # Test that we can now open that file
@@ -267,4 +285,115 @@ mktempdir() do dir
     end
 end
 
+## Tests for LazyLibrary
+# Path piece whose `string()` records that it was resolved, to check that `show` stays lazy
+mutable struct ResolvingPiece
+    resolved::Bool
+end
+Base.string(p::ResolvingPiece) = (p.resolved = true; "dir")
+
+@testset "LazyLibrary" begin
+    lclf_path = joinpath(private_libdir, "libccalllazyfoo.$(Libdl.dlext)")
+    lclb_path = joinpath(private_libdir, "libccalllazybar.$(Libdl.dlext)")
+
+    # Ensure that our modified copy of `libccalltest` is not currently loaded
+    @test !any(contains.(dllist(), lclf_path))
+    @test !any(contains.(dllist(), lclb_path))
+
+    # Create a `LazyLibrary` structure that loads `libccalllazybar`
+    global lclf_loaded = false
+    global lclb_loaded = false
+
+    # We don't provide `dlclose()` on `LazyLibrary`'s since it is dangerous, you have to manage it yourself:
+    function close_libs()
+        global lclf_loaded = false
+        global lclb_loaded = false
+        if libccalllazybar.handle != C_NULL
+            dlclose(libccalllazybar.handle)
+        end
+        if libccalllazyfoo.handle != C_NULL
+            dlclose(libccalllazyfoo.handle)
+        end
+        @atomic libccalllazyfoo.handle = C_NULL
+        @atomic libccalllazybar.handle = C_NULL
+        @test !any(contains.(dllist(), lclf_path))
+        @test !any(contains.(dllist(), lclb_path))
+    end
+
+    let libccalllazyfoo = LazyLibrary(lclf_path; on_load_callback=() -> global lclf_loaded = true),
+        libccalllazybar = LazyLibrary(lclb_path; dependencies=[libccalllazyfoo], on_load_callback=() -> global lclb_loaded = true)
+        eval(:(const libccalllazyfoo = $libccalllazyfoo))
+        eval(:(const libccalllazybar = $libccalllazybar))
+    end
+    Core.@latestworld
+
+    # Creating `LazyLibrary` doesn't actually load anything
+    @test !lclf_loaded
+    @test !lclb_loaded
+
+    # Explicitly calling `dlopen()` does:
+    dlopen(libccalllazybar)
+    @test lclf_loaded
+    @test lclb_loaded
+    close_libs()
+
+    # Test that the library gets loaded when you use `ccall()`
+    compiled_bar() = ccall((:bar, libccalllazybar), Cint, (Cint,), 2)
+    @test ccall((:bar, libccalllazybar), Cint, (Cint,), 2) == compiled_bar() == 6
+    @test lclf_loaded
+    @test lclb_loaded
+    close_libs()
+
+    # Test that `@ccall` works:
+    @test @ccall(libccalllazybar.bar(2::Cint)::Cint) == 6
+    @test lclf_loaded
+    @test lclb_loaded
+    close_libs()
+
+    # Test that `dlpath()` works
+    @test dlpath(libccalllazybar) == realpath(string(libccalllazybar.path))
+    @test lclf_loaded
+    close_libs()
+
+    # Test that `cglobal()` works, both compiled and runtime emulation
+    compiled_cglobal() = cglobal((:bar, libccalllazybar))
+    @test cglobal((:bar, libccalllazybar)) === compiled_cglobal() === dlsym(dlopen(libccalllazybar), :bar)
+    @test lclf_loaded
+    close_libs()
+
+    # Test that we can use lazily-evaluated library names:
+    libname = LazyLibraryPath(private_libdir, "libccalllazyfoo.$(Libdl.dlext)")
+    lazy_name_lazy_lib = LazyLibrary(libname)
+    @test dlpath(lazy_name_lazy_lib) == realpath(string(libname))
+
+    # Test that `show` is compact and does not resolve the lazy path
+    @test repr(libccalllazyfoo) == "LazyLibrary($(repr(lclf_path)))"
+    @test repr(libname) == "LazyLibraryPath($(repr(private_libdir)), $(repr("libccalllazyfoo.$(Libdl.dlext)")))"
+    @test repr(lazy_name_lazy_lib) == "LazyLibrary($(repr(libname)))"
+    @test repr(LazyLibrary(BundledLazyLibraryPath("libfoo.$(Libdl.dlext)"))) ==
+        "LazyLibrary($(repr("libfoo.$(Libdl.dlext)")))"
+    let piece = ResolvingPiece(false),
+        lazy_path = LazyLibraryPath(piece, "libfoo.$(Libdl.dlext)")
+        @test repr(lazy_path) == "LazyLibraryPath($(repr(piece)), $(repr("libfoo.$(Libdl.dlext)")))"
+        @test !piece.resolved
+        @test string(lazy_path) == joinpath("dir", "libfoo.$(Libdl.dlext)")
+        @test piece.resolved
+    end
+
+    # Test parallel loading doesn't return C_NULL (issue #60378)
+    script = """
+    using Libdl
+    ll = LazyLibrary(ARGS[1])
+    handles = Vector{Ptr{Cvoid}}(undef, 10)
+    @sync for i in 1:10
+        Threads.@spawn handles[i] = dlopen(ll)
+    end
+    @assert all(h -> h != C_NULL, handles) "Some handles were C_NULL"
+    @assert all(h -> h == handles[1], handles) "Handles were not all equal"
+    """
+    @test success(run(`$(Base.julia_cmd()) -t4 -e $script $lclf_path`))
+end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Libdl))
 end

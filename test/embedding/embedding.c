@@ -14,6 +14,14 @@ double my_c_sqrt(double x)
     return sqrt(x);
 }
 
+#ifdef _OS_WINDOWS_
+__declspec(dllexport) __cdecl
+#endif
+int pgcstack_agrees(void)
+{
+    return jl_get_pgcstack_inline() == jl_get_pgcstack();
+}
+
 jl_value_t *checked_eval_string(const char* code)
 {
     jl_value_t *result = jl_eval_string(code);
@@ -49,6 +57,14 @@ int main()
         exit(1);
     }
 
+    // the inline frame-stack lookup behind JL_GC_PUSH*, here and in another task
+    if (!pgcstack_agrees() ||
+        !jl_unbox_bool(checked_eval_string("fetch(Threads.@spawn ccall(:pgcstack_agrees, Cint, ()) != 0)"))) {
+        jl_printf(jl_stderr_stream(), "jl_get_pgcstack_inline() disagrees with jl_get_pgcstack()\n");
+        jl_atexit_hook(1);
+        exit(1);
+    }
+
     {
         // Accessing the return value
 
@@ -61,7 +77,7 @@ int main()
     {
         // Same as above but with function handle (more flexible)
 
-        jl_function_t *func = jl_get_function(jl_base_module, "sqrt");
+        jl_value_t *func = jl_get_function(jl_base_module, "sqrt");
         jl_value_t* argument = jl_box_float64(2.0);
         jl_value_t* ret = jl_call1(func, argument);
         double retDouble = jl_unbox_float64(ret);
@@ -86,17 +102,17 @@ int main()
         // (aka, is gc-rooted until) the program reaches the corresponding JL_GC_POP()
         JL_GC_PUSH1(&x);
 
-        double* xData = jl_array_data(x);
+        double* xData = jl_array_data(x, double);
 
         size_t i;
-        for (i = 0; i < jl_array_len(x); i++)
+        for (i = 0; i < jl_array_nrows(x); i++)
             xData[i] = i;
 
-        jl_function_t *func  = jl_get_function(jl_base_module, "reverse!");
+        jl_value_t *func  = jl_get_function(jl_base_module, "reverse!");
         jl_call1(func, (jl_value_t*) x);
 
         printf("x = [");
-        for (i = 0; i < jl_array_len(x); i++)
+        for (i = 0; i < jl_array_nrows(x); i++)
             printf("%e ", xData[i]);
         printf("]\n");
         fflush(stdout);
@@ -109,7 +125,7 @@ int main()
 
         checked_eval_string("my_func(x) = 2 * x");
 
-        jl_function_t *func = jl_get_function(jl_main_module, "my_func");
+        jl_value_t *func = jl_get_function(jl_main_module, "my_func");
         jl_value_t* arg = jl_box_float64(5.0);
         double ret = jl_unbox_float64(jl_call1(func, arg));
 
@@ -190,6 +206,12 @@ int main()
         // Main.include and Main.eval exist (#28825)
         checked_eval_string("include(\"include_and_eval.jl\")");
         checked_eval_string("f28825()");
+    }
+
+    {
+        // jl_typeof works (#50714)
+        jl_value_t *v = checked_eval_string("sqrt(2.0)");
+        jl_value_t *t = jl_typeof(v);
     }
 
     JL_TRY {

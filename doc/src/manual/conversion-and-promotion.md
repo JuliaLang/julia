@@ -165,6 +165,7 @@ constructor.
 Such a definition might look like this:
 
 ```julia
+import Base: convert
 convert(::Type{MyType}, x) = MyType(x)
 ```
 
@@ -194,6 +195,8 @@ convert(::Type{T}, x::T) where {T<:Number} = x
 ```
 
 Similar definitions exist for `AbstractString`, [`AbstractArray`](@ref), and [`AbstractDict`](@ref).
+
+
 
 ## Promotion
 
@@ -258,7 +261,7 @@ to a common numeric type for arithmetic operations -- it just happens automatica
 definitions of catch-all promotion methods for a number of other arithmetic and mathematical functions
 in [`promotion.jl`](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl), but beyond
 that, there are hardly any calls to `promote` required in Julia Base. The most
-common usages of `promote` occur in outer constructors methods, provided for convenience, to allow
+common usages of `promote` occur in outer constructor methods, provided for convenience, to allow
 constructor calls with mixed types to delegate to an inner type with fields promoted to an appropriate
 common type. For example, recall that [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl)
 provides the following outer constructor method:
@@ -291,6 +294,7 @@ another type object, such that instances of the argument types will be promoted 
 type. Thus, by defining the rule:
 
 ```julia
+import Base: promote_rule
 promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 ```
 
@@ -336,6 +340,7 @@ Finally, we finish off our ongoing case study of Julia's rational number type, w
 sophisticated use of the promotion mechanism with the following promotion rules:
 
 ```julia
+import Base: promote_rule
 promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
 promote_rule(::Type{Rational{T}}, ::Type{Rational{S}}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
 promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat} = promote_type(T,S)

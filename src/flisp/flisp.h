@@ -158,7 +158,7 @@ value_t fl_cons(fl_context_t *fl_ctx, value_t a, value_t b) JL_NOTSAFEPOINT;
 value_t fl_list2(fl_context_t *fl_ctx, value_t a, value_t b) JL_NOTSAFEPOINT;
 value_t fl_listn(fl_context_t *fl_ctx, size_t n, ...) JL_NOTSAFEPOINT;
 value_t symbol(fl_context_t *fl_ctx, const char *str) JL_NOTSAFEPOINT;
-char *symbol_name(fl_context_t *fl_ctx, value_t v);
+char *symbol_name(fl_context_t *fl_ctx, value_t v) JL_NOTSAFEPOINT;
 int fl_is_keyword_name(const char *str, size_t len);
 value_t alloc_vector(fl_context_t *fl_ctx, size_t n, int init);
 size_t llength(value_t v);
@@ -328,6 +328,7 @@ typedef float    fl_float_t;
 typedef value_t (*builtin_t)(fl_context_t*, value_t*, uint32_t);
 
 value_t cvalue(fl_context_t *fl_ctx, fltype_t *type, size_t sz) JL_NOTSAFEPOINT;
+value_t cprim(fl_context_t *fl_ctx, fltype_t *type, size_t sz) JL_NOTSAFEPOINT;
 value_t cvalue_no_finalizer(fl_context_t *fl_ctx, fltype_t *type, size_t sz) JL_NOTSAFEPOINT;
 void add_finalizer(fl_context_t *fl_ctx, cvalue_t *cv);
 void cv_autorelease(fl_context_t *fl_ctx, cvalue_t *cv);
@@ -377,8 +378,6 @@ void assign_global_builtins(fl_context_t *fl_ctx, const builtinspec_t *b) JL_NOT
 
 /* builtins */
 value_t fl_hash(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
-value_t cvalue_byte(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
-value_t cvalue_wchar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
 
 void fl_init(fl_context_t *fl_ctx, size_t initial_heapsize) JL_NOTSAFEPOINT;
 int fl_load_system_image(fl_context_t *fl_ctx, value_t ios);

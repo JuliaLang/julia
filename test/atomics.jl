@@ -6,6 +6,8 @@ import Base: copy
 
 const ReplaceType = ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T
 
+replaceresult(T, old, success) = ReplaceType{T}((old, success))
+
 mutable struct ARefxy{T}
     @atomic x::T
     y::T
@@ -23,26 +25,42 @@ mutable struct Refxy{T}
 end
 
 modname = String(nameof(@__MODULE__))
-@test_throws ErrorException("invalid redefinition of constant $modname.ARefxy") @eval mutable struct ARefxy{T}
+const orig_Refxy = Refxy
+const orig_ARefxy = ARefxy
+mutable struct ARefxy{T}
     @atomic x::T
     @atomic y::T
 end
-@test_throws ErrorException("invalid redefinition of constant $modname.ARefxy") @eval mutable struct ARefxy{T}
+@test orig_ARefxy !== ARefxy
+const ARefxy = orig_ARefxy
+mutable struct ARefxy{T}
     x::T
     y::T
 end
-@test_throws ErrorException("invalid redefinition of constant $modname.ARefxy") @eval mutable struct ARefxy{T}
+@test orig_ARefxy !== ARefxy
+const ARefxy = orig_ARefxy
+mutable struct ARefxy{T}
     x::T
     @atomic y::T
 end
-@test_throws ErrorException("invalid redefinition of constant $modname.Refxy") @eval mutable struct Refxy{T}
+@test orig_ARefxy !== ARefxy
+const ARefxy = orig_ARefxy
+mutable struct Refxy{T}
     x::T
     @atomic y::T
 end
+@test orig_Refxy !== Refxy
+const Refxy = orig_Refxy
 
 copy(r::Union{Refxy,ARefxy}) = typeof(r)(r.x, r.y)
 function add(x::T, y)::T where {T}; x + y; end
 swap(x, y) = y
+
+struct UndefComplex{T}
+    re::T
+    im::T
+end
+Base.convert(T::Type{<:UndefComplex}, S) = T(S, 0)
 
 let T1 = Refxy{NTuple{3,UInt8}},
     T2 = ARefxy{NTuple{3,UInt8}}
@@ -60,10 +78,13 @@ end
 
 # check that very large types are getting locks
 let (x, y) = (Complex{Int128}(10, 30), Complex{Int128}(20, 40))
-    ar = ARefxy(x, y)
     r = Refxy(x, y)
+    ar = ARefxy(x, y)
+    mr = AtomicMemory{Pair{typeof(x),typeof(y)}}(undef, 20)
     @test 64 == sizeof(r) < sizeof(ar)
-    @test sizeof(r) == sizeof(ar) - Int(fieldoffset(typeof(ar), 1))
+    @test sizeof(ar) == sizeof(r) + Int(fieldoffset(typeof(ar), 1))
+    @test_broken Base.elsize(mr) == sizeof(ar)
+    @test sizeof(mr) == length(mr) * (sizeof(r) + 16)
 end
 
 struct PadIntA <: Number # internal padding
@@ -81,13 +102,17 @@ primitive type Int24 <: Signed 24 end # integral padding
 Int24(x::Int) = Core.Intrinsics.trunc_int(Int24, x)
 Base.Int(x::PadIntB) = x.a + (Int(x.b) << 8) + (Int(x.c) << 16)
 Base.:(+)(x::PadIntA, b::Int) = PadIntA(x.b + b)
+Base.:(==)(x::PadIntA, b::Int) = x == PadIntA(b)
 Base.:(+)(x::PadIntB, b::Int) = PadIntB(Int(x) + b)
 Base.:(+)(x::Int24, b::Int) = Core.Intrinsics.add_int(x, Int24(b))
 Base.show(io::IO, x::PadIntA) = print(io, "PadIntA(", x.b, ")")
 Base.show(io::IO, x::PadIntB) = print(io, "PadIntB(", Int(x), ")")
 Base.show(io::IO, x::Int24) = print(io, "Int24(", Core.Intrinsics.zext_int(Int, x), ")")
 
+## Fields
+
 @noinline function _test_field_operators(r)
+    GC.gc(false)
     r = r[]
     TT = fieldtype(typeof(r), :x)
     T = typeof(getfield(r, :x))
@@ -116,6 +141,7 @@ test_field_operators(ARefxy{Any}(123_10, 123_20))
 test_field_operators(ARefxy{Union{Nothing,Int}}(123_10, nothing))
 test_field_operators(ARefxy{Complex{Int32}}(123_10, 123_20))
 test_field_operators(ARefxy{Complex{Int128}}(123_10, 123_20))
+test_field_operators(ARefxy{Complex{Real}}(123_10, 123_20))
 test_field_operators(ARefxy{PadIntA}(123_10, 123_20))
 test_field_operators(ARefxy{PadIntB}(123_10, 123_20))
 #FIXME: test_field_operators(ARefxy{Int24}(123_10, 123_20))
@@ -123,6 +149,7 @@ test_field_operators(ARefxy{Float64}(123_10, 123_20))
 
 @noinline function _test_field_orderings(r, x, y)
     @nospecialize x y
+    GC.gc(false)
     r = r[]
     TT = fieldtype(typeof(r), :x)
 
@@ -264,6 +291,26 @@ test_field_operators(ARefxy{Float64}(123_10, 123_20))
     @test replacefield!(r, :x, x, y, :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((x, true))
     @test replacefield!(r, :x, x, y, :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((y, x === y))
     @test replacefield!(r, :x, y, x, :sequentially_consistent) === ReplaceType{TT}((y, true))
+
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") setfieldonce!(r, :x, x, :u, :not_atomic)
+    @test_throws ConcurrencyViolationError("setfieldonce!: atomic field cannot be written non-atomically") setfieldonce!(r, :x, x)
+    @test_throws ConcurrencyViolationError("setfieldonce!: atomic field cannot be written non-atomically") setfieldonce!(r, :x, y, :not_atomic, :not_atomic)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") setfieldonce!(r, :x,  x, :unordered, :not_atomic)
+    @test_throws ConcurrencyViolationError("setfieldonce!: atomic field cannot be accessed non-atomically") setfieldonce!(r, :x, x, :monotonic, :not_atomic)
+    @test_throws ConcurrencyViolationError("setfieldonce!: atomic field cannot be accessed non-atomically") setfieldonce!(r, :x, x, :acquire, :not_atomic)
+    @test_throws ConcurrencyViolationError("setfieldonce!: atomic field cannot be accessed non-atomically") setfieldonce!(r, :x, x, :release, :not_atomic)
+    @test_throws ConcurrencyViolationError("setfieldonce!: atomic field cannot be accessed non-atomically") setfieldonce!(r, :x, x, :acquire_release, :not_atomic)
+    @test_throws ConcurrencyViolationError("setfieldonce!: atomic field cannot be accessed non-atomically") setfieldonce!(r, :x, x, :sequentially_consistent, :not_atomic)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") setfieldonce!(r, :x, x, :not_atomic, :u)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") setfieldonce!(r, :x, x, :not_atomic, :unordered)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") setfieldonce!(r, :x, x, :not_atomic, :monotonic)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") setfieldonce!(r, :x, x, :not_atomic, :acquire)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") setfieldonce!(r, :x, x, :not_atomic, :release)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") setfieldonce!(r, :x, x, :not_atomic, :acquire_release)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") setfieldonce!(r, :x, x, :not_atomic, :sequentially_consistent)
+    @test setfieldonce!(r, :x, y, :sequentially_consistent, :sequentially_consistent) === false
+    @test setfieldonce!(r, :x, y, :sequentially_consistent, :sequentially_consistent) === false
+    @test setfieldonce!(r, :x, x, :sequentially_consistent) === false
     nothing
 end
 @noinline function test_field_orderings(r, x, y)
@@ -284,15 +331,12 @@ test_field_orderings(ARefxy{Any}(true, false), true, false)
 test_field_orderings(ARefxy{Union{Nothing,Missing}}(nothing, missing), nothing, missing)
 test_field_orderings(ARefxy{Union{Nothing,Int}}(nothing, 123_1), nothing, 123_1)
 test_field_orderings(Complex{Int128}(10, 30), Complex{Int128}(20, 40))
+test_field_orderings(Complex{Real}(10.5, 30.5), Complex{Real}(20.5, 40.5))
+test_field_orderings(Complex{Rational{Integer}}(10, 30), Complex{Rational{Integer}}(20, 40))
+test_field_orderings(Pair{NTuple{3,Float64},NTuple{3,Real}}((10.5,11.5,12.5), (30.5,40.5,50.5)), Pair{NTuple{3,Float64},NTuple{3,Real}}((110.5,111.5,112.5), (130.5,140.5,150.5)))
 test_field_orderings(10.0, 20.0)
 test_field_orderings(NaN, Inf)
 
-struct UndefComplex{T}
-    re::T
-    im::T
-    UndefComplex{T}() where {T} = new{T}()
-end
-Base.convert(T::Type{<:UndefComplex}, S) = T()
 @noinline function _test_field_undef(r)
     r = r[]
     TT = fieldtype(typeof(r), :x)
@@ -318,9 +362,32 @@ test_field_undef(ARefxy{Union{Nothing,Integer}})
 test_field_undef(ARefxy{UndefComplex{Any}})
 test_field_undef(ARefxy{UndefComplex{UndefComplex{Any}}})
 
+@noinline function _test_once_undef(r)
+    r = r[]
+    TT = fieldtype(typeof(r), :x)
+    x = convert(TT, 12345_10)
+    @test_throws UndefRefError getfield(r, :x)
+    @test setfieldonce!(r, :x, x, :sequentially_consistent) === true
+    @test getfield(r, :x, :sequentially_consistent) === x
+    @test setfieldonce!(r, :x, convert(TT, 12345_20), :sequentially_consistent) === false
+    nothing
+end
+
+@noinline function test_once_undef(TT)
+    _test_once_undef(Ref(TT()))
+    _test_once_undef(Ref{Any}(TT()))
+    nothing
+end
+
+test_once_undef(ARefxy{BigInt})
+test_once_undef(ARefxy{Any})
+test_once_undef(ARefxy{Union{Nothing,Integer}})
+test_once_undef(ARefxy{UndefComplex{Any}})
+test_once_undef(ARefxy{UndefComplex{UndefComplex{Any}}})
+
 @test_throws ErrorException @macroexpand @atomic foo()
 @test_throws ErrorException @macroexpand @atomic foo += bar
-@test_throws ErrorException @macroexpand @atomic foo += bar
+@test_throws ErrorException @macroexpand @atomic foo +%= bar
 @test_throws ErrorException @macroexpand @atomic foo = bar
 @test_throws ErrorException @macroexpand @atomic foo()
 @test_throws ErrorException @macroexpand @atomic foo(bar)
@@ -344,6 +411,13 @@ let a = ARefxy(1, -1)
     @test 5 === @atomic a.x += 2
     @test 4 === @atomic :monotonic a.x -= 1
     @test 12 === @atomic :monotonic a.x *= 3
+
+    # Wrapping update operators lower through the atomic update path too.
+    @test typemax(Int) === @atomic :monotonic a.x = typemax(Int)
+    @test typemin(Int) === @atomic a.x +%= 1
+    @test typemax(Int) === @atomic :monotonic a.x -%= 1
+    @test -2 === @atomic :monotonic a.x *%= 2
+    @test 12 === @atomic :monotonic a.x = 12
 
     @test 12 === @atomic a.x
     @test (12 => 13) === @atomic a.x + 1
@@ -374,6 +448,106 @@ let a = ARefxy(1, -1)
     @test_throws ConcurrencyViolationError @atomicreplace :monotonic :acquire a.x xchg
 end
 
+function _test_atomic_get_set_swap_modify(T, x, y, z)
+    @testset "atomic get,set,swap,modify" begin
+        mem = AtomicMemory{T}(undef, 2)
+        @test_throws CanonicalIndexError mem[1] = 3
+
+        @test Base.setindex_atomic!(mem, Base.default_access_order(mem), x, 1) == x
+        @test mem[1] == x
+        @test Base.setindex_atomic!(mem, Base.default_access_order(mem), y, 2) == y
+        @test mem[2] == y
+
+        idx = UInt32(2)
+
+        @test (@atomic mem[1]) == x
+        @test (@atomic mem[idx]) == y
+
+        (old, new) = (mem[idx], z)
+        # old and new are intentionally of different types to test inner conversion
+        @test (@atomic mem[idx] = new) == new
+        @test mem[idx] == new
+        @atomic mem[idx] = old
+
+        @test (@atomicswap mem[idx] = new) == old
+        @test mem[idx] == new
+        @atomic mem[idx] = old
+
+        try
+            old + new
+            @test (@atomic mem[idx] += new) == old + new
+            @test mem[idx] == old + new
+            @atomic mem[idx] = old
+        catch err
+            if !(err isa MethodError)
+                rethrow(err)
+            end
+        end
+    end
+end
+
+let mem = AtomicMemory{Int}(undef, 1)
+    @atomic mem[1] = typemax(Int)
+    @test (@atomic mem[1] +%= 1) == typemin(Int)
+    @test (@atomic :monotonic mem[1] -%= 1) == typemax(Int)
+    @test (@atomic :monotonic mem[1] *%= 2) == -2
+end
+
+function _test_atomic_setonce_replace(T, initial, desired)
+    @testset "atomic setonce,replace" begin
+        mem = AtomicMemory{T}(undef, 2)
+        if isassigned(mem, 2)
+            @test (@atomiconce mem[2] = initial) == false
+            @atomic mem[2] = initial
+        else
+            @test (@atomiconce mem[2] = initial) == true
+            @test mem[2] == initial
+            @test (@atomiconce mem[2] = desired) == false
+            @test mem[2] == initial
+            @test !isassigned(mem, 1)
+        end
+
+        idx = UInt(2)
+
+        expected = @atomic mem[idx]
+        @test (@atomicreplace mem[idx] expected => desired) == (old=expected, success=true)
+        @test mem[idx] == desired
+
+        @atomic mem[idx] = expected
+        @test (@atomicreplace mem[idx] desired => desired) == (old=expected, success=false)
+        @test mem[idx] == expected
+
+        @atomic mem[idx] = expected
+        @test (@atomicreplace mem[idx] Pair(expected, desired)) == (old=expected, success=true)
+        @test mem[idx] == desired
+
+        @atomic mem[idx] = expected
+        @test (@atomicreplace mem[idx] Pair(desired, desired)) == (old=initial, success=false)
+        @test mem[idx] == expected
+    end
+end
+@testset "@atomic with AtomicMemory" begin
+
+    _test_atomic_get_set_swap_modify(Float64, rand(), rand(), 10)
+    _test_atomic_get_set_swap_modify(PadIntA, 123_1, 123_2, 10)
+    _test_atomic_get_set_swap_modify(Union{Nothing,Int}, 123_1, nothing, 10)
+    _test_atomic_get_set_swap_modify(Union{Nothing,Int}, 123_1, 234_5, 10)
+    _test_atomic_get_set_swap_modify(Vector{BigInt}, BigInt[1, 2, 3], BigInt[1, 2], [2, 4])
+
+    _test_atomic_setonce_replace(Float64, rand(), 42)
+    _test_atomic_setonce_replace(PadIntA, 123_1, 123_2)
+    _test_atomic_setonce_replace(Union{Nothing,Int}, 123_1, nothing)
+    _test_atomic_setonce_replace(Vector{BigInt}, BigInt[1, 2], [3, 4])
+    _test_atomic_setonce_replace(String, "abc", "cab")
+end
+
+let a = ARefxy{Union{Nothing,Integer}}()
+    @test_throws ConcurrencyViolationError @atomiconce :not_atomic a.x = 2
+    @test true === @atomiconce a.x = 1
+    @test 1 === @atomic a.x
+    @test false === @atomiconce a.x = 2
+end
+
 # atomic getfield with boundcheck
 # via codegen
 getx(a, boundcheck) = getfield(a, :x, :sequentially_consistent, boundcheck)
@@ -384,3 +558,977 @@ ans = getfield(ARefxy{Any}(42, 42), :x, :sequentially_consistent, true)
 @test ans == 42
 ans = getfield(ARefxy{Any}(42, 42), :x, :sequentially_consistent, false)
 @test ans == 42
+
+
+## Globals
+
+# the optimizer is terrible at handling PhiC nodes, so this must be a function
+# generator with a custom inlining here of r, instead of being able to assume
+# the inlining pass can inline a constant value correctly
+function gen_test_global_operators(@nospecialize r)
+    M = @__MODULE__
+    return quote
+        TT = Core.get_binding_type($M, $r)
+        T = typeof(getglobal($M, $r))
+        @test getglobal($M, $r, :sequentially_consistent) === T(123_10)
+        @test setglobal!($M, $r, T(123_1), :sequentially_consistent) === T(123_1)
+        @test getglobal($M, $r, :sequentially_consistent) === T(123_1)
+        @test replaceglobal!($M, $r, 123_1 % UInt, T(123_30), :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((T(123_1), false))
+        @test replaceglobal!($M, $r, T(123_1), T(123_30), :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((T(123_1), true))
+        @test getglobal($M, $r, :sequentially_consistent) === T(123_30)
+        @test replaceglobal!($M, $r, T(123_1), T(123_1), :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((T(123_30), false))
+        @test getglobal($M, $r, :sequentially_consistent) === T(123_30)
+        @test modifyglobal!($M, $r, add, 1, :sequentially_consistent) === Pair{TT,TT}(T(123_30), T(123_31))
+        @test modifyglobal!($M, $r, add, 1, :sequentially_consistent) === Pair{TT,TT}(T(123_31), T(123_32))
+        @test getglobal($M, $r, :sequentially_consistent) === T(123_32)
+        @test swapglobal!($M, $r, T(123_1), :sequentially_consistent) === T(123_32)
+        @test getglobal($M, $r, :sequentially_consistent) === T(123_1)
+    end
+end
+@noinline function test_global_operators(T::Type)
+    r = Symbol("g1_$T")
+    @eval global $r::$T = 123_10
+    invokelatest(@eval(() -> $(gen_test_global_operators(QuoteNode(r)))))
+    r = Symbol("g2_$T")
+    @eval global $r::$T = 123_10
+    invokelatest(@eval(r -> $(gen_test_global_operators(:r))), r)
+    nothing
+end
+test_global_operators(Int)
+test_global_operators(Any)
+test_global_operators(Union{Nothing,Int})
+test_global_operators(Complex{Int32})
+test_global_operators(Complex{Int128})
+test_global_operators(Complex{Real})
+test_global_operators(PadIntA)
+test_global_operators(PadIntB)
+#FIXME: test_global_operators(Int24)
+test_global_operators(Float64)
+
+function gen_test_global_orderings(@nospecialize r)
+    M = @__MODULE__
+    return quote
+        @nospecialize x y
+        TT = Core.get_binding_type($M, $r)
+
+        @test getglobal($M, $r) === x
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") getglobal($M, $r, :u)
+        @test_throws ConcurrencyViolationError("getglobal: module binding cannot be read non-atomically") getglobal($M, $r, :not_atomic)
+        @test getglobal($M, $r, :unordered) === x
+        @test getglobal($M, $r, :monotonic) === x
+        @test getglobal($M, $r, :acquire) === x
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") getglobal($M, $r, :release) === x
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") getglobal($M, $r, :acquire_release) === x
+        @test getglobal($M, $r, :sequentially_consistent) === x
+        @test isdefined($M, $r)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") isdefined($M, $r, :u)
+        @test_throws ConcurrencyViolationError("isdefined: module binding cannot be accessed non-atomically") isdefined($M, $r, :not_atomic)
+        @test isdefined($M, $r, :unordered)
+        @test isdefined($M, $r, :monotonic)
+        @test isdefined($M, $r, :acquire)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") isdefined($M, $r, :release)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") isdefined($M, $r, :acquire_release)
+        @test isdefined($M, $r, :sequentially_consistent)
+
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") setglobal!($M, $r, y, :u)
+        @test_throws ConcurrencyViolationError("setglobal!: module binding cannot be written non-atomically") setglobal!($M, $r, y, :not_atomic)
+        @test getglobal($M, $r) === x
+        @test setglobal!($M, $r, y) === y
+        @test setglobal!($M, $r, y, :unordered) === y
+        @test setglobal!($M, $r, y, :monotonic) === y
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") setglobal!($M, $r, y, :acquire) === y
+        @test setglobal!($M, $r, y, :release) === y
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") setglobal!($M, $r, y, :acquire_release) === y
+        @test setglobal!($M, $r, y, :sequentially_consistent) === y
+        @test getglobal($M, $r) === y
+
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") swapglobal!($M, $r, x, :u)
+        @test_throws ConcurrencyViolationError("swapglobal!: module binding cannot be written non-atomically") swapglobal!($M, $r, x, :not_atomic)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") swapglobal!($M, $r, x, :unordered) === y
+        @test swapglobal!($M, $r, x, :monotonic) === y
+        @test swapglobal!($M, $r, x, :acquire) === x
+        @test swapglobal!($M, $r, x, :release) === x
+        @test swapglobal!($M, $r, x, :acquire_release) === x
+        @test swapglobal!($M, $r, x, :sequentially_consistent) === x
+        @test swapglobal!($M, $r, x) === x
+
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") modifyglobal!($M, $r, swap, x, :u)
+        @test_throws ConcurrencyViolationError("modifyglobal!: module binding cannot be written non-atomically") modifyglobal!($M, $r, swap, x, :not_atomic)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") modifyglobal!($M, $r, swap, x, :unordered)
+        @test modifyglobal!($M, $r, swap, x, :monotonic) === Pair{TT,TT}(x, x)
+        @test modifyglobal!($M, $r, swap, x, :acquire) === Pair{TT,TT}(x, x)
+        @test modifyglobal!($M, $r, swap, x, :release) === Pair{TT,TT}(x, x)
+        @test modifyglobal!($M, $r, swap, x, :acquire_release) === Pair{TT,TT}(x, x)
+        @test modifyglobal!($M, $r, swap, x, :sequentially_consistent) === Pair{TT,TT}(x, x)
+        @test modifyglobal!($M, $r, swap, x) === Pair{TT,TT}(x, x)
+
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") replaceglobal!($M, $r, x, x, :u, :not_atomic)
+        @test_throws ConcurrencyViolationError("replaceglobal!: module binding cannot be written non-atomically") replaceglobal!($M, $r, y, x, :not_atomic, :not_atomic)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") replaceglobal!($M, $r, x, x, :unordered, :not_atomic)
+        @test_throws ConcurrencyViolationError("replaceglobal!: module binding cannot be accessed non-atomically") replaceglobal!($M, $r, x, x, :monotonic, :not_atomic)
+        @test_throws ConcurrencyViolationError("replaceglobal!: module binding cannot be accessed non-atomically") replaceglobal!($M, $r, x, x, :acquire, :not_atomic)
+        @test_throws ConcurrencyViolationError("replaceglobal!: module binding cannot be accessed non-atomically") replaceglobal!($M, $r, x, x, :release, :not_atomic)
+        @test_throws ConcurrencyViolationError("replaceglobal!: module binding cannot be accessed non-atomically") replaceglobal!($M, $r, x, x, :acquire_release, :not_atomic)
+        @test_throws ConcurrencyViolationError("replaceglobal!: module binding cannot be accessed non-atomically") replaceglobal!($M, $r, x, x, :sequentially_consistent, :not_atomic)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") replaceglobal!($M, $r, x, x, :not_atomic, :u)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") replaceglobal!($M, $r, x, x, :not_atomic, :unordered)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") replaceglobal!($M, $r, x, x, :not_atomic, :monotonic)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") replaceglobal!($M, $r, x, x, :not_atomic, :acquire)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") replaceglobal!($M, $r, x, x, :not_atomic, :release)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") replaceglobal!($M, $r, x, x, :not_atomic, :acquire_release)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") replaceglobal!($M, $r, x, x, :not_atomic, :sequentially_consistent)
+        @test replaceglobal!($M, $r, x, y, :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((x, true))
+        @test replaceglobal!($M, $r, x, y, :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((y, x === y))
+        @test replaceglobal!($M, $r, y, x, :sequentially_consistent) === ReplaceType{TT}((y, true))
+        @test replaceglobal!($M, $r, x, x) === ReplaceType{TT}((x, true))
+
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") setglobalonce!($M, $r, x, :u, :not_atomic)
+        @test_throws ConcurrencyViolationError("setglobalonce!: module binding cannot be written non-atomically") setglobalonce!($M, $r, y, :not_atomic, :not_atomic)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") setglobalonce!($M, $r,  x, :unordered, :not_atomic)
+        @test_throws ConcurrencyViolationError("setglobalonce!: module binding cannot be accessed non-atomically") setglobalonce!($M, $r, x, :monotonic, :not_atomic)
+        @test_throws ConcurrencyViolationError("setglobalonce!: module binding cannot be accessed non-atomically") setglobalonce!($M, $r, x, :acquire, :not_atomic)
+        @test_throws ConcurrencyViolationError("setglobalonce!: module binding cannot be accessed non-atomically") setglobalonce!($M, $r, x, :release, :not_atomic)
+        @test_throws ConcurrencyViolationError("setglobalonce!: module binding cannot be accessed non-atomically") setglobalonce!($M, $r, x, :acquire_release, :not_atomic)
+        @test_throws ConcurrencyViolationError("setglobalonce!: module binding cannot be accessed non-atomically") setglobalonce!($M, $r, x, :sequentially_consistent, :not_atomic)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") setglobalonce!($M, $r, x, :not_atomic, :u)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") setglobalonce!($M, $r, x, :not_atomic, :unordered)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") setglobalonce!($M, $r, x, :not_atomic, :monotonic)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") setglobalonce!($M, $r, x, :not_atomic, :acquire)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") setglobalonce!($M, $r, x, :not_atomic, :release)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") setglobalonce!($M, $r, x, :not_atomic, :acquire_release)
+        @test_throws ConcurrencyViolationError("invalid atomic ordering") setglobalonce!($M, $r, x, :not_atomic, :sequentially_consistent)
+        @test setglobalonce!($M, $r, x) === false
+        @test setglobalonce!($M, $r, y, :sequentially_consistent, :sequentially_consistent) === false
+        @test setglobalonce!($M, $r, y, :sequentially_consistent, :sequentially_consistent) === false
+        @test setglobalonce!($M, $r, x, :sequentially_consistent) === false
+    end
+end
+@noinline function test_global_orderings(T::Type, x, y)
+    @nospecialize
+    r = Symbol("h1_$T")
+    @eval global $r::$T = $(QuoteNode(x))
+    invokelatest(@eval((x, y) -> $(gen_test_global_orderings(QuoteNode(r)))), x, y)
+    r = Symbol("h2_$T")
+    @eval global $r::$T = $(QuoteNode(x))
+    invokelatest(@eval((r, x, y) -> $(gen_test_global_orderings(:r))), r, x, y)
+    nothing
+end
+test_global_orderings(Int, 10, 20)
+test_global_orderings(Bool, true, false)
+test_global_orderings(String, "hi", "bye")
+test_global_orderings(Symbol, :hi, :bye)
+test_global_orderings(Nothing, nothing, nothing)
+test_global_orderings(Any, 123_10, 123_20)
+test_global_orderings(Any, true, false)
+test_global_orderings(Union{Nothing,Missing}, nothing, missing)
+test_global_orderings(Union{Nothing,Int}, nothing, 123_1)
+test_global_orderings(Complex{Int128}, Complex{Int128}(10, 30), Complex{Int128}(20, 40))
+test_global_orderings(Complex{Real}, Complex{Real}(10.5, 30.5), Complex{Real}(20.5, 40.5))
+test_global_orderings(Float64, 10.0, 20.0)
+test_global_orderings(Float64, NaN, Inf)
+
+function gen_test_global_undef(@nospecialize r)
+    M = @__MODULE__
+    return quote
+        TT = Core.get_binding_type($M, $r)
+        x = convert(TT, 12345_10)
+        @test_throws UndefVarError getglobal($M, $r)
+        @test_throws UndefVarError getglobal($M, $r, :sequentially_consistent)
+        @test_throws UndefVarError modifyglobal!($M, $r, add, 1, :sequentially_consistent)
+        @test_throws (TT === Any ? UndefVarError : Union{TypeError,ErrorException}) replaceglobal!($M, $r, 1, 1.0, :sequentially_consistent) # TODO: should this be TypeError or ErrorException
+        @test_throws UndefVarError replaceglobal!($M, $r, 1, x, :sequentially_consistent)
+        @test_throws UndefVarError getglobal($M, $r, :sequentially_consistent)
+        @test_throws UndefVarError swapglobal!($M, $r, x, :sequentially_consistent)
+        @test getglobal($M, $r, :sequentially_consistent) === x === getglobal($M, $r)
+    end
+end
+@noinline function test_global_undef(T)
+    r = Symbol("u1_$T")
+    @eval global $r::$T
+    invokelatest(@eval(() -> $(gen_test_global_undef(QuoteNode(r)))))
+    r = Symbol("u2_$T")
+    @eval global $r::$T
+    invokelatest(@eval(r -> $(gen_test_global_undef(:r))), r)
+    nothing
+end
+test_global_undef(BigInt)
+test_global_undef(Any)
+test_global_undef(Union{Nothing,Integer})
+test_global_undef(UndefComplex{Any})
+test_global_undef(UndefComplex{UndefComplex{Any}})
+test_global_undef(Int)
+
+# the read-modify-write builtins resolve the binding for writing, which never follows
+# imports, so a store through an import fails before any value is read
+module ImportedGlobalSource
+    global imported_x::Int = 1
+    global used_x::Int = 2
+end
+import .ImportedGlobalSource: imported_x
+using .ImportedGlobalSource: used_x
+for r in (:imported_x, :used_x)
+    @test_throws ErrorException swapglobal!(@__MODULE__, r, 3)
+    @test_throws ErrorException swapglobal!(@__MODULE__, r, 3, :sequentially_consistent)
+    @test_throws ErrorException replaceglobal!(@__MODULE__, r, 1, 3)
+    @test_throws ErrorException replaceglobal!(@__MODULE__, r, 1, 3, :sequentially_consistent)
+    @test_throws ErrorException replaceglobal!(@__MODULE__, r, -1, 3) # `expected` is never compared
+end
+@test getglobal(ImportedGlobalSource, :imported_x) === 1
+@test getglobal(ImportedGlobalSource, :used_x) === 2
+
+function gen_test_globalonce(@nospecialize r)
+    M = @__MODULE__
+    return quote
+        TT = Core.get_binding_type($M, $r)
+        x = convert(TT, 12345_10)
+        @test_throws UndefVarError getglobal($M, $r)
+        @test setglobalonce!($M, $r, x, :sequentially_consistent) === true
+        @test getglobal($M, $r, :sequentially_consistent) === x
+        @test setglobalonce!($M, $r, convert(TT, 12345_20), :sequentially_consistent) === false
+    end
+end
+@noinline function test_globalonce(T)
+    r = Symbol("o1_$T")
+    @eval global $r::$T
+    invokelatest(@eval(() -> $(gen_test_globalonce(QuoteNode(r)))))
+    r = Symbol("o2_$T")
+    @eval global $r::$T
+    invokelatest(@eval(r -> $(gen_test_globalonce(:r))), r)
+    nothing
+end
+test_globalonce(BigInt)
+test_globalonce(Any)
+test_globalonce(Union{Nothing,Integer})
+test_globalonce(UndefComplex{Any})
+test_globalonce(UndefComplex{UndefComplex{Any}})
+test_globalonce(Int)
+
+# Test the untyped `global x`, particularly with the compiled versions which use the fallback path.
+module DeclaredGlobalCompiled
+    global declared_rmw
+    setonce(v) = setglobalonce!(@__MODULE__, :declared_rmw, v)
+    modify(v) = modifyglobal!(@__MODULE__, :declared_rmw, +, v)
+    swap(v) = swapglobal!(@__MODULE__, :declared_rmw, v)
+    replace(x, v) = replaceglobal!(@__MODULE__, :declared_rmw, x, v)
+end
+let M = DeclaredGlobalCompiled
+    @test_throws UndefVarError M.modify(1)
+    @test M.setonce(1) === true
+    @test M.setonce(2) === false
+    @test M.modify(1) === Pair{Any,Any}(1, 2)
+    @test M.swap("x") === 2
+    @test M.replace("x", 3) === replaceresult(Any, "x", true)
+    @test getglobal(M, :declared_rmw) === 3
+end
+
+# An untyped `global x` declaration leaves no restriction on the binding partition, so its
+# declared type is `Any`. The read-modify-write builtins must read that as `Any` to form the result type.
+module DeclaredGlobal
+    global declared_rmw
+end
+let M = DeclaredGlobal
+    @test Core.get_binding_type(M, :declared_rmw) === Any
+    @test_throws UndefVarError modifyglobal!(M, :declared_rmw, +, 1)
+    @test setglobalonce!(M, :declared_rmw, 1) === true
+    @test modifyglobal!(M, :declared_rmw, +, 1) === Pair{Any,Any}(1, 2)
+    @test swapglobal!(M, :declared_rmw, "x") === 2
+    @test replaceglobal!(M, :declared_rmw, "x", 3) === replaceresult(Any, "x", true)
+    @test getglobal(M, :declared_rmw) === 3
+end
+
+# test macroexpansions
+global x::Int
+let a = @__MODULE__
+    @test_throws ConcurrencyViolationError @atomiconce :not_atomic a.x = 2
+    @test true === @atomiconce a.x = 1
+    @test 1 === @atomic a.x
+    @test false === @atomiconce a.x = 2
+end
+let a = @__MODULE__
+    @test 1 === @atomic a.x
+    @test 2 === @atomic :sequentially_consistent a.x = 2
+    @test 3 === @atomic :monotonic a.x = 3
+    local four = 4
+    @test 4 === @atomic :monotonic a.x = four
+    @test 3 === @atomic :monotonic a.x = four - 1
+    @test_throws ConcurrencyViolationError @atomic :not_atomic a.x = 2
+    @test_throws ConcurrencyViolationError @atomic :not_atomic a.x
+    @test_throws ConcurrencyViolationError @atomic :not_atomic a.x += 1
+
+    @test 3 === @atomic :monotonic a.x
+    @test 5 === @atomic a.x += 2
+    @test 4 === @atomic :monotonic a.x -= 1
+    @test 12 === @atomic :monotonic a.x *= 3
+
+    @test typemax(Int) === @atomic :monotonic a.x = typemax(Int)
+    @test typemin(Int) === @atomic a.x +%= 1
+    @test typemax(Int) === @atomic :monotonic a.x -%= 1
+    @test -2 === @atomic :monotonic a.x *%= 2
+    @test 12 === @atomic :monotonic a.x = 12
+
+    @test 12 === @atomic a.x
+    @test (12 => 13) === @atomic a.x + 1
+    @test (13 => 15) === @atomic :monotonic a.x + 2
+    @test (15 => 19) === @atomic a.x max 19
+    @test (19 => 20) === @atomic :monotonic a.x max 20
+    @test_throws ConcurrencyViolationError @atomic :not_atomic a.x + 1
+    @test_throws ConcurrencyViolationError @atomic :not_atomic a.x max 30
+
+    @test 20 === @atomic a.x
+    @test 20 === @atomicswap a.x = 1
+    @test 1 === @atomicswap :monotonic a.x = 2
+    @test_throws ConcurrencyViolationError @atomicswap :not_atomic a.x = 1
+
+    @test 2 === @atomic a.x
+    @test ReplaceType{Int}((2, true)) === @atomicreplace a.x 2 => 1
+    @test ReplaceType{Int}((1, false)) === @atomicreplace :monotonic a.x 2 => 1
+    @test ReplaceType{Int}((1, false)) === @atomicreplace :monotonic :monotonic a.x 2 => 1
+    @test_throws ConcurrencyViolationError @atomicreplace :not_atomic a.x 1 => 2
+    @test_throws ConcurrencyViolationError @atomicreplace :monotonic :acquire a.x 1 => 2
+
+    @test 1 === @atomic a.x
+    xchg = 1 => 2
+    @test ReplaceType{Int}((1, true)) === @atomicreplace a.x xchg
+    @test ReplaceType{Int}((2, false)) === @atomicreplace :monotonic a.x xchg
+    @test ReplaceType{Int}((2, false)) === @atomicreplace :acquire_release :monotonic a.x xchg
+    @test_throws ConcurrencyViolationError @atomicreplace :not_atomic a.x xchg
+    @test_throws ConcurrencyViolationError @atomicreplace :monotonic :acquire a.x xchg
+end
+
+## Memory
+
+using InteractiveUtils
+using Core: memoryrefget, memoryrefset!, memoryrefunset!, memoryrefswap!, memoryrefreplace!, memoryrefmodify!, memoryrefsetonce!, memoryref_isassigned
+
+@noinline function _test_memory_operators(r)
+    r = r[]
+    TT = eltype(r)
+    T = typeof(r[])
+    @test memoryrefget(r, :sequentially_consistent, true) === T(123_10)
+    @test memoryrefset!(r, T(123_1), :sequentially_consistent, true) === T(123_1)
+    @test memoryrefget(r, :sequentially_consistent, true) === T(123_1)
+    @test memoryrefreplace!(r, 123_1 % UInt, T(123_30), :sequentially_consistent, :sequentially_consistent, true) === ReplaceType{TT}((T(123_1), false))
+    @test memoryrefreplace!(r, T(123_1), T(123_30), :sequentially_consistent, :sequentially_consistent, true) === ReplaceType{TT}((T(123_1), true))
+    @test memoryrefget(r, :sequentially_consistent, true) === T(123_30)
+    @test memoryrefreplace!(r, T(123_1), T(123_1), :sequentially_consistent, :sequentially_consistent, true) === ReplaceType{TT}((T(123_30), false))
+    @test memoryrefget(r, :sequentially_consistent, true) === T(123_30)
+    @test memoryrefmodify!(r, add, 1, :sequentially_consistent, true) === Pair{TT,TT}(T(123_30), T(123_31))
+    @test memoryrefmodify!(r, add, 1, :sequentially_consistent, true) === Pair{TT,TT}(T(123_31), T(123_32))
+    @test memoryrefget(r, :sequentially_consistent, true) === T(123_32)
+    @test memoryrefswap!(r, T(123_1), :sequentially_consistent, true) === T(123_32)
+    @test memoryrefget(r, :sequentially_consistent, true) === T(123_1)
+    nothing
+end
+@noinline function test_memory_operators(T::Type)
+    x = convert(T, 123_10)
+    r = GenericMemoryRef(AtomicMemory{T}(undef, 1))
+    memoryrefset!(r, x, :unordered, true) # @atomic r[] = x
+    _test_memory_operators(Ref(r))
+    r = GenericMemoryRef(AtomicMemory{T}(undef, 1))
+    memoryrefset!(r, x, :unordered, true) # @atomic r[] = x
+    _test_memory_operators(Ref{Any}(r))
+    nothing
+end
+test_memory_operators(Int)
+test_memory_operators(Any)
+test_memory_operators(Union{Nothing,Int})
+test_memory_operators(Complex{Int32})
+test_memory_operators(Complex{Int128})
+test_memory_operators(Complex{Real})
+test_memory_operators(PadIntA)
+test_memory_operators(PadIntB)
+#FIXME: test_memory_operators(Int24)
+test_memory_operators(Float64)
+
+@noinline function _test_memory_orderings(xr, yr, x, y)
+    @nospecialize x y
+    xr = xr[]
+    yr = yr[]
+    TT = eltype(yr)
+    @test TT == eltype(xr)
+
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefget(xr, :u, true)
+    @test_throws ConcurrencyViolationError("memoryrefget: atomic memory cannot be accessed non-atomically") memoryrefget(xr, :not_atomic, true)
+    @test memoryrefget(xr, :unordered, true) === x
+    @test memoryrefget(xr, :monotonic, true) === x
+    @test memoryrefget(xr, :acquire, true) === x
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefget(xr, :release, true) === x
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefget(xr, :acquire_release, true) === x
+    @test memoryrefget(xr, :sequentially_consistent, true) === x
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryref_isassigned(xr, :u, true)
+    @test_throws ConcurrencyViolationError("memoryref_isassigned: atomic memory cannot be accessed non-atomically") memoryref_isassigned(xr, :not_atomic, true)
+    @test memoryref_isassigned(xr, :unordered, true)
+    @test memoryref_isassigned(xr, :monotonic, true)
+    @test memoryref_isassigned(xr, :acquire, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryref_isassigned(xr, :release, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryref_isassigned(xr, :acquire_release, true)
+    @test memoryref_isassigned(xr, :sequentially_consistent, true)
+
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefget(yr, :u, true)
+    @test memoryrefget(yr, :not_atomic, true) === y
+    @test_throws ConcurrencyViolationError("memoryrefget: non-atomic memory cannot be accessed atomically") memoryrefget(yr, :unordered, true)
+    @test_throws ConcurrencyViolationError("memoryrefget: non-atomic memory cannot be accessed atomically") memoryrefget(yr, :monotonic, true)
+    @test_throws ConcurrencyViolationError("memoryrefget: non-atomic memory cannot be accessed atomically") memoryrefget(yr, :acquire, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefget(yr, :release, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefget(yr, :acquire_release, true)
+    @test_throws ConcurrencyViolationError("memoryrefget: non-atomic memory cannot be accessed atomically") memoryrefget(yr, :sequentially_consistent, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryref_isassigned(yr, :u, true)
+    @test memoryref_isassigned(yr, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("memoryref_isassigned: non-atomic memory cannot be accessed atomically") memoryref_isassigned(yr, :unordered, true)
+    @test_throws ConcurrencyViolationError("memoryref_isassigned: non-atomic memory cannot be accessed atomically") memoryref_isassigned(yr, :monotonic, true)
+    @test_throws ConcurrencyViolationError("memoryref_isassigned: non-atomic memory cannot be accessed atomically") memoryref_isassigned(yr, :acquire, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryref_isassigned(yr, :release, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryref_isassigned(yr, :acquire_release, true)
+    @test_throws ConcurrencyViolationError("memoryref_isassigned: non-atomic memory cannot be accessed atomically") memoryref_isassigned(yr, :sequentially_consistent, true)
+
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefset!(xr, y, :u, true)
+    @test_throws ConcurrencyViolationError("memoryrefset!: atomic memory cannot be written non-atomically") memoryrefset!(xr, y, :not_atomic, true)
+    @test memoryrefget(xr, :unordered, true) === x
+    @test memoryrefset!(xr, y, :unordered, true) === y
+    @test memoryrefset!(xr, y, :monotonic, true) === y
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefset!(xr, y, :acquire, true) === y
+    @test memoryrefset!(xr, y, :release, true) === y
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefset!(xr, y, :acquire_release, true) === y
+    @test memoryrefset!(xr, y, :sequentially_consistent, true) === y
+    @test memoryrefget(xr, :unordered, true) === y
+
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefset!(yr, x, :u, true)
+    @test_throws ConcurrencyViolationError("memoryrefset!: non-atomic memory cannot be written atomically") memoryrefset!(yr, x, :unordered, true)
+    @test_throws ConcurrencyViolationError("memoryrefset!: non-atomic memory cannot be written atomically") memoryrefset!(yr, x, :monotonic, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefset!(yr, x, :acquire, true)
+    @test_throws ConcurrencyViolationError("memoryrefset!: non-atomic memory cannot be written atomically") memoryrefset!(yr, x, :release, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefset!(yr, x, :acquire_release, true)
+    @test_throws ConcurrencyViolationError("memoryrefset!: non-atomic memory cannot be written atomically") memoryrefset!(yr, x, :sequentially_consistent, true)
+    @test memoryrefget(yr, :not_atomic, true) === y
+    @test memoryrefset!(yr, x, :not_atomic, true) === x
+    @test memoryrefset!(yr, x, :not_atomic, true) === x
+    @test memoryrefget(yr, :not_atomic, true) === x
+
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefswap!(yr, y, :u, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefswap!(yr, y, :unordered, true)
+    @test_throws ConcurrencyViolationError("memoryrefswap!: non-atomic memory cannot be written atomically") memoryrefswap!(yr, y, :monotonic, true)
+    @test_throws ConcurrencyViolationError("memoryrefswap!: non-atomic memory cannot be written atomically") memoryrefswap!(yr, y, :acquire, true)
+    @test_throws ConcurrencyViolationError("memoryrefswap!: non-atomic memory cannot be written atomically") memoryrefswap!(yr, y, :release, true)
+    @test_throws ConcurrencyViolationError("memoryrefswap!: non-atomic memory cannot be written atomically") memoryrefswap!(yr, y, :acquire_release, true)
+    @test_throws ConcurrencyViolationError("memoryrefswap!: non-atomic memory cannot be written atomically") memoryrefswap!(yr, y, :sequentially_consistent, true)
+    @test memoryrefswap!(yr, y, :not_atomic, true) === x
+
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefmodify!(yr, swap, y, :u, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefmodify!(yr, swap, y, :unordered, true)
+    @test_throws ConcurrencyViolationError("memoryrefmodify!: non-atomic memory cannot be written atomically") memoryrefmodify!(yr, swap, y, :monotonic, true)
+    @test_throws ConcurrencyViolationError("memoryrefmodify!: non-atomic memory cannot be written atomically") memoryrefmodify!(yr, swap, y, :acquire, true)
+    @test_throws ConcurrencyViolationError("memoryrefmodify!: non-atomic memory cannot be written atomically") memoryrefmodify!(yr, swap, y, :release, true)
+    @test_throws ConcurrencyViolationError("memoryrefmodify!: non-atomic memory cannot be written atomically") memoryrefmodify!(yr, swap, y, :acquire_release, true)
+    @test_throws ConcurrencyViolationError("memoryrefmodify!: non-atomic memory cannot be written atomically") memoryrefmodify!(yr, swap, y, :sequentially_consistent, true)
+    @test memoryrefmodify!(yr, swap, x, :not_atomic, true) === Pair{TT,TT}(y, x)
+
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefreplace!(yr, y, y, :u, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefreplace!(yr, y, y, :unordered, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("memoryrefreplace!: non-atomic memory cannot be written atomically") memoryrefreplace!(yr, y, y, :monotonic, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("memoryrefreplace!: non-atomic memory cannot be written atomically") memoryrefreplace!(yr, y, y, :acquire, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("memoryrefreplace!: non-atomic memory cannot be written atomically") memoryrefreplace!(yr, y, y, :release, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("memoryrefreplace!: non-atomic memory cannot be written atomically") memoryrefreplace!(yr, y, y, :acquire_release, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("memoryrefreplace!: non-atomic memory cannot be written atomically") memoryrefreplace!(yr, y, y, :sequentially_consistent, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefreplace!(yr, y, y, :not_atomic, :u, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefreplace!(yr, y, y, :not_atomic, :unordered, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefreplace!(yr, y, y, :not_atomic, :monotonic, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefreplace!(yr, y, y, :not_atomic, :acquire, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefreplace!(yr, y, y, :not_atomic, :release, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefreplace!(yr, y, y, :not_atomic, :acquire_release, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefreplace!(yr, y, y, :not_atomic, :sequentially_consistent, true)
+    @test memoryrefreplace!(yr, x, y, :not_atomic, :not_atomic, true) === ReplaceType{TT}((x, true))
+    @test memoryrefreplace!(yr, x, y, :not_atomic, :not_atomic, true) === ReplaceType{TT}((y, x === y))
+    @test memoryrefreplace!(yr, y, y, :not_atomic, :not_atomic, true) === ReplaceType{TT}((y, true))
+
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefswap!(xr, x, :u, true)
+    @test_throws ConcurrencyViolationError("memoryrefswap!: atomic memory cannot be written non-atomically") memoryrefswap!(xr, x, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefswap!(xr, x, :unordered, true) === y
+    @test memoryrefswap!(xr, x, :monotonic, true) === y
+    @test memoryrefswap!(xr, x, :acquire, true) === x
+    @test memoryrefswap!(xr, x, :release, true) === x
+    @test memoryrefswap!(xr, x, :acquire_release, true) === x
+    @test memoryrefswap!(xr, x, :sequentially_consistent, true) === x
+
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefmodify!(xr, swap, x, :u, true)
+    @test_throws ConcurrencyViolationError("memoryrefmodify!: atomic memory cannot be written non-atomically") memoryrefmodify!(xr, swap, x, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefmodify!(xr, swap, x, :unordered, true)
+    @test memoryrefmodify!(xr, swap, x, :monotonic, true) === Pair{TT,TT}(x, x)
+    @test memoryrefmodify!(xr, swap, x, :acquire, true) === Pair{TT,TT}(x, x)
+    @test memoryrefmodify!(xr, swap, x, :release, true) === Pair{TT,TT}(x, x)
+    @test memoryrefmodify!(xr, swap, x, :acquire_release, true) === Pair{TT,TT}(x, x)
+    @test memoryrefmodify!(xr, swap, x, :sequentially_consistent, true) === Pair{TT,TT}(x, x)
+
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefreplace!(xr, x, x, :u, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("memoryrefreplace!: atomic memory cannot be written non-atomically") memoryrefreplace!(xr, y, x, :not_atomic, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefreplace!(xr, x, x, :unordered, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("memoryrefreplace!: atomic memory cannot be accessed non-atomically") memoryrefreplace!(xr, x, x, :monotonic, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("memoryrefreplace!: atomic memory cannot be accessed non-atomically") memoryrefreplace!(xr, x, x, :acquire, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("memoryrefreplace!: atomic memory cannot be accessed non-atomically") memoryrefreplace!(xr, x, x, :release, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("memoryrefreplace!: atomic memory cannot be accessed non-atomically") memoryrefreplace!(xr, x, x, :acquire_release, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("memoryrefreplace!: atomic memory cannot be accessed non-atomically") memoryrefreplace!(xr, x, x, :sequentially_consistent, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefreplace!(xr, x, x, :not_atomic, :u, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefreplace!(xr, x, x, :not_atomic, :unordered, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefreplace!(xr, x, x, :not_atomic, :monotonic, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefreplace!(xr, x, x, :not_atomic, :acquire, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefreplace!(xr, x, x, :not_atomic, :release, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefreplace!(xr, x, x, :not_atomic, :acquire_release, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefreplace!(xr, x, x, :not_atomic, :sequentially_consistent, true)
+    @test memoryrefreplace!(xr, x, y, :sequentially_consistent, :sequentially_consistent, true) === ReplaceType{TT}((x, true))
+    @test memoryrefreplace!(xr, x, y, :sequentially_consistent, :sequentially_consistent, true) === ReplaceType{TT}((y, x === y))
+    @test memoryrefreplace!(xr, y, x, :sequentially_consistent, :sequentially_consistent, true) === ReplaceType{TT}((y, true))
+
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefsetonce!(xr, x, :u, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("memoryrefsetonce!: atomic memory cannot be written non-atomically") memoryrefsetonce!(xr, y, :not_atomic, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefsetonce!(xr,  x, :unordered, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("memoryrefsetonce!: atomic memory cannot be accessed non-atomically") memoryrefsetonce!(xr, x, :monotonic, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("memoryrefsetonce!: atomic memory cannot be accessed non-atomically") memoryrefsetonce!(xr, x, :acquire, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("memoryrefsetonce!: atomic memory cannot be accessed non-atomically") memoryrefsetonce!(xr, x, :release, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("memoryrefsetonce!: atomic memory cannot be accessed non-atomically") memoryrefsetonce!(xr, x, :acquire_release, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("memoryrefsetonce!: atomic memory cannot be accessed non-atomically") memoryrefsetonce!(xr, x, :sequentially_consistent, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefsetonce!(xr, x, :not_atomic, :u, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefsetonce!(xr, x, :not_atomic, :unordered, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefsetonce!(xr, x, :not_atomic, :monotonic, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefsetonce!(xr, x, :not_atomic, :acquire, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefsetonce!(xr, x, :not_atomic, :release, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefsetonce!(xr, x, :not_atomic, :acquire_release, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefsetonce!(xr, x, :not_atomic, :sequentially_consistent, true)
+    @test memoryrefsetonce!(xr, y, :sequentially_consistent, :sequentially_consistent, true) === false
+    @test memoryrefsetonce!(xr, y, :sequentially_consistent, :sequentially_consistent, true) === false
+    @test memoryrefsetonce!(xr, x, :sequentially_consistent, :sequentially_consistent, true) === false
+    nothing
+end
+@noinline function test_memory_orderings(T::Type, x, y)
+    @nospecialize
+    xr = GenericMemoryRef(AtomicMemory{T}(undef, 2), 2)
+    memoryrefset!(xr, x, :unordered, true) # @atomic xr[2] = x
+    yr = GenericMemoryRef(Memory{T}(undef, 2), 2)
+    yr[] = y
+    GC.gc(false)
+    _test_memory_orderings(Ref(xr), Ref(yr), x, y)
+    xr = GenericMemoryRef(AtomicMemory{T}(undef, 2), 2)
+    memoryrefset!(xr, x, :unordered, true) # @atomic xr[2] = x
+    yr = GenericMemoryRef(Memory{T}(undef, 2), 2)
+    yr[] = y
+    GC.gc(false)
+    _test_memory_orderings(Ref{Any}(xr), Ref{Any}(yr), x, y)
+    nothing
+end
+@noinline test_memory_orderings(x, y) = (@nospecialize; test_memory_orderings(typeof(x), x, y))
+test_memory_orderings(10, 20)
+test_memory_orderings(true, false)
+test_memory_orderings("hi", "bye")
+test_memory_orderings(:hi, :bye)
+test_memory_orderings(nothing, nothing)
+test_memory_orderings(Any, 123_10, 123_20)
+test_memory_orderings(Any, true, false)
+test_memory_orderings(Union{Nothing,Missing}, nothing, missing)
+test_memory_orderings(Union{Nothing,Int}, nothing, 123_1)
+test_memory_orderings(Complex{Int128}(10, 30), Complex{Int128}(20, 40))
+test_memory_orderings(Complex{Real}(10.5, 30.5), Complex{Real}(20.5, 40.5))
+test_memory_orderings(Pair{NTuple{3,Float64},NTuple{3,Real}}((10.5,11.5,12.5), (30.5,40.5,50.5)), Pair{NTuple{3,Float64},NTuple{3,Real}}((110.5,111.5,112.5), (130.5,140.5,150.5)))
+test_memory_orderings(10.0, 20.0)
+test_memory_orderings(NaN, Inf)
+
+@noinline function _test_memory_undef(r)
+    r = r[]
+    TT = eltype(r)
+    x = convert(TT, 12345_10)
+    @test_throws UndefRefError memoryrefget(r, :sequentially_consistent, true)
+    @test_throws UndefRefError memoryrefmodify!(r, add, 1, :sequentially_consistent, true)
+    @test_throws (TT === Any ? UndefRefError : TypeError) memoryrefreplace!(r, 1, 1.0, :sequentially_consistent, :sequentially_consistent, true)
+    @test_throws UndefRefError memoryrefreplace!(r, 1, x, :sequentially_consistent, :sequentially_consistent, true)
+    @test_throws UndefRefError memoryrefget(r, :sequentially_consistent, true)
+    @test_throws UndefRefError memoryrefswap!(r, x, :sequentially_consistent, true)
+    @test memoryrefget(r, :sequentially_consistent, true) === x
+    nothing
+end
+@noinline function test_memory_undef(T)
+    r = GenericMemoryRef(AtomicMemory{T}(undef, 1))
+    _test_memory_undef(Ref(r))
+    r = GenericMemoryRef(AtomicMemory{T}(undef, 1))
+    _test_memory_undef(Ref{Any}(r))
+    nothing
+end
+test_memory_undef(BigInt)
+test_memory_undef(Any)
+test_memory_undef(Union{Nothing,Integer})
+test_memory_undef(UndefComplex{Any})
+test_memory_undef(UndefComplex{UndefComplex{Any}})
+
+# memoryrefunset! — every scenario below is exercised twice: once with `Ref(r)`
+# (the memref's type stays concrete, so emit_f_opmemory in src/codegen.cpp lowers
+# the call inline), and once with `Ref{Any}(r)` (the memref's static type is Any,
+# so codegen bails and the call falls through to jl_f_memoryrefunset in
+# src/builtins.c → jl_memoryrefunset in src/genericmemory.c). The two paths share
+# their per-layout logic; running both ensures they stay in lockstep across every
+# supported Memory layout.
+
+# memoryrefunset! on undefable element types: slot becomes undefined after clearing
+@noinline function _test_memory_unset(r)
+    r = r[]
+    @test memoryref_isassigned(r, :sequentially_consistent, true)
+    @test memoryrefunset!(r, :sequentially_consistent, true) === nothing
+    @test !memoryref_isassigned(r, :sequentially_consistent, true)
+    @test_throws UndefRefError memoryrefget(r, :sequentially_consistent, true)
+    # repeated unset on an already-cleared slot is a no-op
+    @test memoryrefunset!(r, :sequentially_consistent, true) === nothing
+    @test !memoryref_isassigned(r, :sequentially_consistent, true)
+    nothing
+end
+@noinline function test_memory_unset(T::Type)
+    x = convert(T, 12345_10)
+    r = GenericMemoryRef(AtomicMemory{T}(undef, 1))
+    memoryrefset!(r, x, :unordered, true)
+    _test_memory_unset(Ref(r))
+    r = GenericMemoryRef(AtomicMemory{T}(undef, 1))
+    memoryrefset!(r, x, :unordered, true)
+    _test_memory_unset(Ref{Any}(r))
+    nothing
+end
+test_memory_unset(Any)
+test_memory_unset(BigInt)
+test_memory_unset(Union{Nothing,Integer})
+test_memory_unset(UndefComplex{Any})
+test_memory_unset(UndefComplex{UndefComplex{Any}})
+
+# memoryrefunset! on non-atomic memory
+@noinline function _test_memory_unset_notatomic(r)
+    r = r[]
+    @test memoryref_isassigned(r, :not_atomic, true)
+    @test memoryrefunset!(r, :not_atomic, true) === nothing
+    @test !memoryref_isassigned(r, :not_atomic, true)
+    @test_throws UndefRefError memoryrefget(r, :not_atomic, true)
+    nothing
+end
+@noinline function test_memory_unset_notatomic(T::Type)
+    x = convert(T, 12345_10)
+    r = GenericMemoryRef(Memory{T}(undef, 1))
+    memoryrefset!(r, x, :not_atomic, true)
+    _test_memory_unset_notatomic(Ref(r))
+    r = GenericMemoryRef(Memory{T}(undef, 1))
+    memoryrefset!(r, x, :not_atomic, true)
+    _test_memory_unset_notatomic(Ref{Any}(r))
+    nothing
+end
+test_memory_unset_notatomic(Any)
+test_memory_unset_notatomic(BigInt)
+test_memory_unset_notatomic(UndefComplex{Any})
+test_memory_unset_notatomic(UndefComplex{UndefComplex{Any}})
+
+# memoryrefunset! on bits-only memory or isbits-union memory: no-op since the
+# slot has no GC pointers to clear (first_ptr < 0 for plain bits, isunion for the
+# union case). Both layouts hit the early-return branches in jl_memoryrefunset
+# and the matching `isunion || layout->first_ptr < 0` short-circuit in codegen.
+@noinline function _test_memory_unset_noop(r, val)
+    @nospecialize val
+    r = r[]
+    @test memoryref_isassigned(r, :not_atomic, true)
+    @test memoryrefunset!(r, :not_atomic, true) === nothing
+    @test memoryref_isassigned(r, :not_atomic, true)
+    @test memoryrefget(r, :not_atomic, true) === val
+    nothing
+end
+@noinline function test_memory_unset_noop(T::Type, val)
+    @nospecialize val
+    r = GenericMemoryRef(Memory{T}(undef, 1)); r[] = val
+    _test_memory_unset_noop(Ref(r), val)
+    r = GenericMemoryRef(Memory{T}(undef, 1)); r[] = val
+    _test_memory_unset_noop(Ref{Any}(r), val)
+    nothing
+end
+test_memory_unset_noop(Int, 42)
+test_memory_unset_noop(Float64, 3.14)
+test_memory_unset_noop(Complex{Int32}, Complex{Int32}(1, 2))
+test_memory_unset_noop(Union{Int8,Float64}, 1.5)
+
+# memoryrefunset! ordering validation, mirroring the memoryrefset! patterns
+@noinline function _test_memory_unset_orderings(xr, yr)
+    xr = xr[]
+    yr = yr[]
+    # atomic memory: invalid orderings and non-atomic order should error
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefunset!(xr, :u, true)
+    @test_throws ConcurrencyViolationError("memoryrefunset!: atomic memory cannot be written non-atomically") memoryrefunset!(xr, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefunset!(xr, :acquire, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefunset!(xr, :acquire_release, true)
+    # atomic memory: valid store orderings clear the slot
+    @test memoryref_isassigned(xr, :unordered, true)
+    @test memoryrefunset!(xr, :unordered, true) === nothing
+    @test !memoryref_isassigned(xr, :unordered, true)
+    @test memoryrefunset!(xr, :monotonic, true) === nothing
+    @test memoryrefunset!(xr, :release, true) === nothing
+    @test memoryrefunset!(xr, :sequentially_consistent, true) === nothing
+
+    # non-atomic memory: invalid orderings and atomic orders should error
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefunset!(yr, :u, true)
+    @test_throws ConcurrencyViolationError("memoryrefunset!: non-atomic memory cannot be written atomically") memoryrefunset!(yr, :unordered, true)
+    @test_throws ConcurrencyViolationError("memoryrefunset!: non-atomic memory cannot be written atomically") memoryrefunset!(yr, :monotonic, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefunset!(yr, :acquire, true)
+    @test_throws ConcurrencyViolationError("memoryrefunset!: non-atomic memory cannot be written atomically") memoryrefunset!(yr, :release, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefunset!(yr, :acquire_release, true)
+    @test_throws ConcurrencyViolationError("memoryrefunset!: non-atomic memory cannot be written atomically") memoryrefunset!(yr, :sequentially_consistent, true)
+    # non-atomic memory: :not_atomic is the only valid ordering
+    @test memoryref_isassigned(yr, :not_atomic, true)
+    @test memoryrefunset!(yr, :not_atomic, true) === nothing
+    @test !memoryref_isassigned(yr, :not_atomic, true)
+    nothing
+end
+@noinline function test_memory_unset_orderings(T::Type, x)
+    @nospecialize x
+    xr = GenericMemoryRef(AtomicMemory{T}(undef, 1))
+    memoryrefset!(xr, x, :unordered, true)
+    yr = GenericMemoryRef(Memory{T}(undef, 1))
+    yr[] = x
+    GC.gc(false)
+    _test_memory_unset_orderings(Ref(xr), Ref(yr))
+    xr = GenericMemoryRef(AtomicMemory{T}(undef, 1))
+    memoryrefset!(xr, x, :unordered, true)
+    yr = GenericMemoryRef(Memory{T}(undef, 1))
+    yr[] = x
+    GC.gc(false)
+    _test_memory_unset_orderings(Ref{Any}(xr), Ref{Any}(yr))
+    nothing
+end
+test_memory_unset_orderings(Any, 12345_10)
+test_memory_unset_orderings(BigInt, big(12345_10))
+test_memory_unset_orderings(Union{Nothing,Integer}, 12345_10)
+
+# memoryrefunset! out-of-bounds: must throw BoundsError on empty memory unless @inbounds
+@noinline function _test_memory_unset_oob(r)
+    r = r[]
+    @test_throws BoundsError memoryrefunset!(r, :not_atomic, true)
+    nothing
+end
+let r = GenericMemoryRef(Memory{Any}(undef, 0))
+    _test_memory_unset_oob(Ref(r))
+    _test_memory_unset_oob(Ref{Any}(r))
+end
+
+# memoryrefunset! on a struct with multiple inline-allocated pointers must clear
+# *every* pointer in the slot, not just the one checked by memoryref_isassigned
+# (which only inspects first_ptr). Read the raw memory directly to verify.
+struct TwoInlinePtr;   a::Any; b::Any;         end
+struct ThreeInlinePtr; a::Any; b::Any; c::Any; end
+function raw_element_ptrs(mem::GenericMemory)
+    elsz = sizeof(eltype(mem))
+    nptrs = elsz ÷ sizeof(Ptr{Cvoid})
+    # Locked AtomicMemory slots are larger than sizeof(eltype): each slot is prefixed
+    # by a mutex word padded to JL_SMALL_BYTE_ALIGNMENT. Skip that prefix.
+    slot_overhead = length(mem) > 0 ? (sizeof(mem) ÷ length(mem) - elsz) : 0
+    base = Ptr{UInt}(pointer(mem)) + slot_overhead
+    return ntuple(i -> unsafe_load(base, i), nptrs)
+end
+# Ordering is passed via Val so the codegen path still sees a constant symbol
+# (emit_f_opmemory requires `ord.constant` to be set).
+@noinline function _test_memory_unset_multiptr(rref, mem, ::Val{ordering}) where {ordering}
+    r = rref[]
+    @test all(!iszero, raw_element_ptrs(mem))
+    @test memoryref_isassigned(r, ordering, true)
+    @test memoryrefunset!(r, ordering, true) === nothing
+    @test !memoryref_isassigned(r, ordering, true)
+    @test_throws UndefRefError memoryrefget(r, ordering, true)
+    @test all(iszero, raw_element_ptrs(mem))
+    nothing
+end
+function test_memory_unset_multiptr(::Type{T}, ::Type{MemT}, ::Val{ordering}) where {T, MemT<:GenericMemory{<:Any,T}, ordering}
+    mem = MemT(undef, 1)
+    objs = Any[Ref(i) for i in 1:fieldcount(T)]
+    r = GenericMemoryRef(mem)
+    memoryrefset!(r, T(objs...), ordering, true)
+    GC.@preserve objs _test_memory_unset_multiptr(Ref(r), mem, Val(ordering))
+    mem = MemT(undef, 1)
+    objs = Any[Ref(i) for i in 1:fieldcount(T)]
+    r = GenericMemoryRef(mem)
+    memoryrefset!(r, T(objs...), ordering, true)
+    GC.@preserve objs _test_memory_unset_multiptr(Ref{Any}(r), mem, Val(ordering))
+    nothing
+end
+# non-atomic memory: clears via memset
+test_memory_unset_multiptr(TwoInlinePtr,   Memory{TwoInlinePtr},         Val(:not_atomic))
+test_memory_unset_multiptr(ThreeInlinePtr, Memory{ThreeInlinePtr},       Val(:not_atomic))
+# atomic memory with element size <= MAX_POINTERATOMIC_SIZE: clears via jl_atomic_store_bits
+test_memory_unset_multiptr(TwoInlinePtr,   AtomicMemory{TwoInlinePtr},   Val(:unordered))
+# atomic memory with element size > MAX_POINTERATOMIC_SIZE: clears via lock + memset
+test_memory_unset_multiptr(ThreeInlinePtr, AtomicMemory{ThreeInlinePtr}, Val(:unordered))
+
+# Test the public atomic unsetindex! overloads for memory references and memory.
+@testset "unsetindex_atomic!" begin
+    for (T, value) in Any[(Any, "value"), (Float32, 1.0f0)]
+        mem = AtomicMemory{T}(undef, 3)
+        ref = memoryref(mem, 2)
+        for order in [:unordered, :monotonic, :release, :sequentially_consistent]
+            # Unset the ref
+            @atomic :monotonic mem[2] = value
+            @test isassigned(ref) == isassigned(mem, 2) == true
+            @test Base.unsetindex_atomic!(ref, order) === ref
+            if T === Any
+                @test isassigned(ref) == isassigned(mem, 2) == false
+                @test_throws UndefRefError ref[]
+                @test_throws UndefRefError @atomic :monotonic mem[2]
+            else
+                @test isassigned(ref) == isassigned(mem, 2) == true
+                @test ref[] isa T
+                @test((@atomic :monotonic mem[2]) isa T)
+            end
+
+            # Unset the mem
+            @atomic :monotonic mem[2] = value
+            @test isassigned(ref) == isassigned(mem, 2) == true
+            @test Base.unsetindex_atomic!(mem, order, 2) === mem
+            if T === Any
+                @test isassigned(ref) == isassigned(mem, 2) == false
+                @test_throws UndefRefError ref[]
+                @test_throws UndefRefError @atomic :monotonic mem[2]
+            else
+                @test isassigned(ref) == isassigned(mem, 2) == true
+                @test ref[] isa T
+                @test((@atomic :monotonic mem[2]) isa T)
+            end
+        end
+    end
+
+    mem = AtomicMemory{Any}(undef, 1)
+    @atomic :monotonic mem[1] = "value"
+    ref = memoryref(mem, 1)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(ref, :acquire)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(ref, :acquire_release)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(ref, :not_atomic)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(mem, :acquire, 1)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(mem, :acquire_release, 1)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(mem, :not_atomic, 1)
+    @test_throws BoundsError Base.unsetindex_atomic!(mem, :release, 0)
+end
+
+@noinline function _test_once_undef(r)
+    r = r[]
+    TT = eltype(r)
+    x = convert(TT, 12345_10)
+    @test_throws UndefRefError memoryrefget(r, :sequentially_consistent, true)
+    @test memoryrefsetonce!(r, x, :sequentially_consistent, :sequentially_consistent, true) === true
+    @test memoryrefget(r, :sequentially_consistent, true) === x
+    @test memoryrefsetonce!(r, convert(TT, 12345_20), :sequentially_consistent, :sequentially_consistent, true) === false
+    nothing
+end
+@noinline function test_once_undef(T)
+    r = GenericMemoryRef(AtomicMemory{T}(undef, 1))
+    _test_once_undef(Ref(r))
+    r = GenericMemoryRef(AtomicMemory{T}(undef, 1))
+    _test_once_undef(Ref{Any}(r))
+    nothing
+end
+test_once_undef(BigInt)
+test_once_undef(Any)
+test_once_undef(Union{Nothing,Integer})
+test_once_undef(UndefComplex{Any})
+test_once_undef(UndefComplex{UndefComplex{Any}})
+
+mutable struct Atomic57190
+    @atomic x::Int
+end
+
+
+function add_one57190!()
+    @atomic (Atomic57190(0).x) += 1
+end
+
+@test add_one57190!() == 1
+
+# A field reached only by a read-modify-write gets a stack slot when `AllocOpt` splits
+# the non-escaping allocation
+mutable struct Atomic52575
+    @atomic x::Int
+    y::Int
+end
+replace52575!() = (r = Atomic52575(1, 2); @atomicreplace r.x 1 => 2)
+@test replace52575!() === (old = 1, success = true)
+modify52575!() = (r = Atomic52575(1, 2); @atomic r.x += 10)
+@test modify52575!() === 11
+swap52575!() = (r = Atomic52575(1, 2); @atomicswap r.x = 5)
+@test swap52575!() === 1
+mutable struct AtomicAny52575
+    @atomic x::Any
+    y::Any
+end
+replaceany52575!() = (r = AtomicAny52575(1, 2); @atomicreplace r.x 1 => 2)
+@test replaceany52575!() == (old = 1, success = true)
+
+# An atomically loaded field that inlines an immutable with GC pointers stays rooted while
+# the loaded value is passed by reference, even after the field is overwritten.
+# https://github.com/JuliaLang/julia/issues/63320
+mutable struct AtomicRootObj
+    x::Int
+end
+struct AtomicRootWrap
+    obj::AtomicRootObj
+end
+mutable struct AtomicRootBox
+    @atomic wrap::AtomicRootWrap
+end
+const atomic_root_finalized = Ref(false)
+@noinline atomic_root_use(wrap::AtomicRootWrap) = wrap.obj.x
+function atomic_root_check(box::AtomicRootBox)
+    wrap = @atomic box.wrap
+    atomic_root_use(wrap)
+    @atomic box.wrap = AtomicRootWrap(AtomicRootObj(0))
+    GC.gc(); GC.gc()
+    alive = !atomic_root_finalized[]
+    return alive && atomic_root_use(wrap) == 42
+end
+let obj = AtomicRootObj(42)
+    finalizer(_ -> (atomic_root_finalized[] = true), obj)
+    global atomic_root_box = AtomicRootBox(AtomicRootWrap(obj))
+end
+@test atomic_root_check(atomic_root_box)
+
+# Test atomic Float16 operations at all optimization levels (GlobalISel miscompile on AArch64)
+# See https://github.com/JuliaLang/julia/pull/54140#issuecomment-2855794363
+for opt in 0:3
+    @test success(run(```$(Base.julia_cmd()) --startup-file=no -O$opt -e '
+        a = Threads.Atomic{Float16}(Float16(0))
+        @atomic a[] = Float16(1.5)
+        @assert a[] === Float16(1.5) "atomic Float16 store failed: got \$(a[]) expected 1.5 (opt level = -O$(Base.JLOptions().opt_level))"
+        @atomic a[] = Float16(3.25)
+        @assert a[] === Float16(3.25) "atomic Float16 store failed: got \$(a[]) expected 3.25 (opt level = -O$(Base.JLOptions().opt_level))"
+    '```))
+end
+
+# Reference (`x[]`) form of the `@atomic` family of macros on `Threads.Atomic`
+@testset "Atomic reference indexing" begin
+    @testset for ref in [Threads.Atomic{Int}(0), Threads.Atomic{Any}(0)]
+        T, = typeof(ref).parameters
+        @test (@atomic ref[]) == 0
+        @test (@atomic :monotonic ref[]) == 0
+        @test (@atomic ref[] = 1) == 1
+        @test (@atomicreplace ref[] 1 => 2) == replaceresult(T, 1, true)
+        @test (@atomicreplace ref[] 1 => 2) == replaceresult(T, 2, false)
+        @test (@atomicreplace :monotonic ref[] 2 => 3) == replaceresult(T, 2, true)
+        @test (@atomicreplace :acquire_release :monotonic ref[] 3 => 4) ==
+              replaceresult(T, 3, true)
+        xchg = 4 => 5
+        @test (@atomicreplace ref[] xchg) == replaceresult(T, 4, true)
+        @test (@atomic ref[] += 1) == (@atomic ref[]) == 6
+        @test (@atomic :monotonic ref[] += 1) == (@atomic ref[]) == 7
+        @test (@atomic ref[] + 1) == (7 => 8)
+        @test (@atomic :monotonic ref[] + 1) == (8 => 9)
+        @test (@atomicswap ref[] = 10) == 9
+        @test (@atomicswap :monotonic ref[] = 11) == 10
+    end
+    # storing a value that must be converted to the element type
+    ref = Threads.Atomic{Int}(0)
+    @test (@atomic ref[] = 0x2) == 2
+    @test (@atomic ref[]) === 2
+    @test (@atomicswap ref[] = 0x3) === 2
+    @test (@atomicreplace ref[] 3 => 0x4) == replaceresult(Int, 3, true)
+    @test (@atomic ref[]) === 4
+end
+
+# The plain `x[] = v` store form is deprecated in favor of `@atomic x[] = v`,
+# because read-modify-write uses such as `x[] += 1` are silently non-atomic.
+# The Base test suite runs with `--depwarn=error`, so the deprecated call throws.
+if Base.JLOptions().depwarn == 2
+    a = Threads.Atomic{Int}(0)
+    @test_throws "deprecated" (a[] = 5) broken=true
+    @test_broken (@atomic a[]) == 0 # nothing stored: it errored before the store
+    @atomic a[] = 5                 # the supported replacement
+    @test (@atomic a[]) == 5
+    @test (@atomic a[] += 1) == 6   # atomic read-modify-write replacement for `a[] += 1`
+end

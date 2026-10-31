@@ -1,0 +1,4 @@
+[deps]
+MyPkg = "0cafdeb2-d7a2-40d0-8d22-4411fcc2c4ee"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Devved = "cbce3a6e-7a3d-4e84-8e6d-b87208df7599"

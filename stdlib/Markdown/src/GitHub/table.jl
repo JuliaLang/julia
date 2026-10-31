@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-mutable struct Table
+mutable struct Table <: MarkdownElement
     rows::Vector{Vector{Any}}
     align::Vector{Symbol}
 end
@@ -23,7 +23,7 @@ function rowlength!(row, len)
     return row
 end
 
-const default_align = :r
+const default_align = :l
 
 function parsealign(row)
     align = Symbol[]
@@ -55,7 +55,7 @@ function github_table(stream::IO, md::MD)
             end
         end
         length(rows) <= 1 && return false
-        push!(md, Table(rows, align))
+        push!(md, Table(rows, align::Vector{Symbol}))
         return true
     end
 end
@@ -64,7 +64,7 @@ function html(io::IO, md::Table)
     withtag(io, :table) do
         for (i, row) in enumerate(md.rows)
             withtag(io, :tr) do
-                for (j, c) in enumerate(md.rows[i])
+                for (j, c) in enumerate(row)
                     alignment = md.align[j]
                     alignment = alignment === :l ? "left" : alignment === :r ? "right" : "center"
                      withtag(io, i == 1 ? :th : :td, ("align", alignment)) do
@@ -105,7 +105,7 @@ _dash(width, align) =
 
 function plain(io::IO, md::Table)
     cells = mapmap(md.rows) do each
-        replace(plaininline(each), "|" => "\\|")
+        replace(sprint(plaininline, each), "|" => "\\|")
     end
     padcells!(cells, md.align, len = length, min = 3)
     for i = axes(cells,1)
@@ -138,17 +138,17 @@ function rst(io::IO, md::Table)
     end
 end
 
-function term(io::IO, md::Table, columns)
+function term(io::IO, md::Table, _)
     margin_str = " "^margin
-    cells = mapmap(x -> terminline_string(io, x), md.rows)
-    padcells!(cells, md.align, len = ansi_length)
+    cells = mapmap(x -> annotprint(terminline, x), md.rows)
+    padcells!(cells, md.align, len = textwidth)
     for i = 1:length(cells)
         print(io, margin_str)
         join(io, cells[i], " ")
         if i == 1
             println(io)
             print(io, margin_str)
-            join(io, ["–"^ansi_length(cells[i][j]) for j = 1:length(cells[1])], " ")
+            join(io, ["–"^textwidth(cells[i][j]) for j = 1:length(cells[1])], " ")
         end
         i < length(cells) && println(io)
     end

@@ -5,7 +5,7 @@ manifest_format = "2.0"
 project_hash = "caa716752e6dff3d77c3de929ebbb5d2024d04ef"
 
 [[deps.ExtDep]]
-deps = ["SomePackage"]
+deps = ["SomePackage", "SomeOtherPackage"]
 path = "../ExtDep.jl"
 uuid = "fa069be4-f60b-4d4c-8b95-f8008775090c"
 version = "0.1.0"
@@ -18,6 +18,11 @@ weakdeps = ["ExtDep"]
 
     [deps.HasExtensions.extensions]
     Extension2 = "ExtDep"
+
+[[deps.SomeOtherPackage]]
+path = "../SomeOtherPackage"
+uuid = "178f68a2-4498-45ee-a775-452b36359b63"
+version = "0.1.0"
 
 [[deps.SomePackage]]
 path = "../SomePackage"

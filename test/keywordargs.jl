@@ -389,8 +389,24 @@ f41416(a...="a"; b=true) = (b, a)
 @test f41416(3; b=false) === (false, (3,))
 
 Core.kwcall(i::Int) = "hi $i"
-let m = first(methods(Core.kwcall, (Any,typeof(kwf1),Vararg)))
+let m = first(methods(Core.kwcall, (NamedTuple,typeof(kwf1),Vararg)))
     @test m.name === :kwf1
     @test Core.kwcall(1) == "hi 1"
     @test which(Core.kwcall, (Int,)).name === :kwcall
 end
+
+# issue #50518
+function f50518(xs...=["a", "b", "c"]...; debug=false)
+    return xs[1]
+end
+@test f50518() == f50518(;debug=false) == "a"
+
+# issue #62277
+struct Issue62277
+    S::Vector{Symbol}
+    Issue62277(s::Vector{Symbol}; cached=false) = new(s)
+end
+Issue62277(s::AbstractVector{<:Union{Char,AbstractString,Symbol}}; cached=false) =
+    Issue62277(Symbol.(s); cached)
+@test Issue62277([:a, :b]; cached=false).S == [:a, :b]
+@test Issue62277(['a', 'b']).S == [:a, :b]

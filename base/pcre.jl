@@ -4,12 +4,18 @@
 
 module PCRE
 
-import ..RefValue
+import ..RefValue, ..DenseUTF8String
 
 # include($BUILDROOT/base/pcre_h.jl)
-include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "pcre_h.jl"))
+include(string(Base.BUILDROOT, "pcre_h.jl"))
 
-const PCRE_LIB = "libpcre2-8"
+if Sys.iswindows()
+    const PCRE_LIB = "libpcre2-8-0.dll"
+elseif Sys.isapple()
+    const PCRE_LIB = "@rpath/libpcre2-8.0.dylib"
+else
+    const PCRE_LIB = "libpcre2-8.so.0"
+end
 
 function create_match_context()
     JIT_STACK_START_SIZE = 32768
@@ -24,19 +30,19 @@ function create_match_context()
     return ctx
 end
 
-THREAD_MATCH_CONTEXTS::Vector{Ptr{Cvoid}} = [C_NULL]
+global THREAD_MATCH_CONTEXTS::Vector{Ptr{Cvoid}} = [C_NULL]
 
-PCRE_COMPILE_LOCK = nothing
+global PCRE_COMPILE_LOCK::Threads.SpinLock
 
 _tid() = Int(ccall(:jl_threadid, Int16, ())) + 1
-_mth() = Int(Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads, Cint), :acquire))
+_mth() = Threads.maxthreadid()
 
 function get_local_match_context()
     tid = _tid()
     ctxs = THREAD_MATCH_CONTEXTS
     if length(ctxs) < tid
         # slow path to allocate it
-        l = PCRE_COMPILE_LOCK::Threads.SpinLock
+        l = PCRE_COMPILE_LOCK
         lock(l)
         try
             ctxs = THREAD_MATCH_CONTEXTS
@@ -196,29 +202,41 @@ function err_message(errno::Integer)
     return GC.@preserve buffer unsafe_string(pointer(buffer))
 end
 
-function exec(re, subject, offset, options, match_data)
-    if !(subject isa Union{String,SubString{String}})
-        subject = String(subject)
-    end
-    rc = ccall((:pcre2_match_8, PCRE_LIB), Cint,
-               (Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Csize_t, UInt32, Ptr{Cvoid}, Ptr{Cvoid}),
-               re, subject, ncodeunits(subject), offset, options, match_data, get_local_match_context())
-    # rc == -1 means no match, -2 means partial match.
+match_subject(subject::DenseUTF8String) = subject
+match_subject(subject) = String(subject)::String
+
+# pcre2_match's return code: >= 0 for a match, -1 for none, -2 for a partial match, below
+# that an error. The arguments are converted already, so this does not throw.
+function match_rc(re, subject, offset::Csize_t, options::UInt32, match_data, context)
+    return ccall((:pcre2_match_8, PCRE_LIB), Cint,
+                 (Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Csize_t, UInt32, Ptr{Cvoid}, Ptr{Cvoid}),
+                 re, subject, ncodeunits(subject), offset, options, match_data, context)
+end
+
+function match_result(rc)
     rc < -2 && error("PCRE.exec error: $(err_message(rc))")
     return rc >= 0
 end
 
+exec(re, subject, offset, options, match_data) =
+    match_result(match_rc(re, match_subject(subject), Csize_t(offset), UInt32(options), match_data, get_local_match_context()))
+
+# Everything that can throw happens before the match data is allocated or after it is
+# freed, so it never leaks, without a try on every match
 function exec_r(re, subject, offset, options)
+    s, off, opts, context = match_subject(subject), Csize_t(offset), UInt32(options), get_local_match_context()
     match_data = create_match_data(re)
-    ans = exec(re, subject, offset, options, match_data)
+    rc = match_rc(re, s, off, opts, match_data, context)
     free_match_data(match_data)
-    return ans
+    return match_result(rc)
 end
 
 function exec_r_data(re, subject, offset, options)
+    s, off, opts, context = match_subject(subject), Csize_t(offset), UInt32(options), get_local_match_context()
     match_data = create_match_data(re)
-    ans = exec(re, subject, offset, options, match_data)
-    return ans, match_data
+    rc = match_rc(re, s, off, opts, match_data, context)
+    rc < -2 && free_match_data(match_data)
+    return match_result(rc), match_data
 end
 
 function create_match_data(re)

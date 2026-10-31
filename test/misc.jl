@@ -5,6 +5,9 @@ include("testhelpers/withlocales.jl")
 
 # Tests that do not really go anywhere else
 
+# Modify when (intentionally) changing the number of boxes in Base methods
+@test length(Test.detect_closure_boxes(Base)) == 3
+
 # test @assert macro
 @test_throws AssertionError (@assert 1 == 2)
 @test_throws AssertionError (@assert false)
@@ -51,7 +54,7 @@ let
         @test occursin("random_object", ex.msg)
     end
 end
-# if the second argument is an expression, c
+# if the second argument is an expression, call it to generate the error message
 let deepthought(x, y) = 42
     try
         @assert 1 == 2 string("the answer to the ultimate question: ",
@@ -129,6 +132,46 @@ let l = ReentrantLock()
     @test_throws ErrorException unlock(l)
 end
 
+# Lockable{T, L<:AbstractLock}
+using Base: Lockable
+let
+    @test Base.isexported(Base, :Lockable)
+    lockable = Lockable(Dict("foo" => "hello"), ReentrantLock())
+    # note field access is non-public
+    @test lockable.value["foo"] == "hello"
+    @test @lock(lockable, lockable[]["foo"]) == "hello"
+    lock(lockable) do d
+        @test d["foo"] == "hello"
+    end
+    lock(lockable) do d
+        d["foo"] = "goodbye"
+    end
+    @test lockable.value["foo"] == "goodbye"
+    @lock lockable begin
+        @test lockable[]["foo"] == "goodbye"
+    end
+    l = trylock(lockable)
+    try
+        @test l
+    finally
+        unlock(lockable)
+    end
+    # Test 1-arg constructor
+    lockable2 = Lockable(Dict("foo" => "hello"))
+    @test lockable2.lock isa ReentrantLock
+    @test @lock(lockable2, lockable2[]["foo"]) == "hello"
+end
+
+@testset "`show` for ReentrantLock" begin
+    l = ReentrantLock()
+    @test repr(l) == "ReentrantLock()"
+    @test repr("text/plain", l) == "ReentrantLock() (unlocked)"
+    @lock l begin
+        @test startswith(repr("text/plain", l), "ReentrantLock() (locked by current Task (")
+    end
+    @test repr("text/plain", l) == "ReentrantLock() (unlocked)"
+end
+
 for l in (Threads.SpinLock(), ReentrantLock())
     @test get_finalizers_inhibited() == 0
     @test lock(get_finalizers_inhibited, l) == 1
@@ -197,6 +240,24 @@ end
     @test all(<=(sem_size), history)
     @test all(>=(0), history)
     @test history[end] == 0
+
+    # macro form
+    clock = Threads.Atomic{Int}(1)
+    occupied = Threads.Atomic{Int}(0)
+    history = fill!(Vector{Int}(undef, 2n), -1)
+    @sync for _ in 1:n
+        @async begin
+            @test Base.@acquire s begin
+                history[Threads.atomic_add!(clock, 1)] = Threads.atomic_add!(occupied, 1) + 1
+                sleep(rand(0:0.01:0.1))
+                history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
+                return :resultvalue
+            end === :resultvalue
+        end
+    end
+    @test all(<=(sem_size), history)
+    @test all(>=(0), history)
+    @test history[end] == 0
 end
 
 # task switching
@@ -221,12 +282,14 @@ let c = Ref(0),
     @test c[] == 100
 end
 
-@test_throws ErrorException("deadlock detected: cannot wait on current task") wait(current_task())
+@test_throws ConcurrencyViolationError("deadlock detected: cannot wait on current task") wait(current_task())
+
+@test_throws ConcurrencyViolationError("Cannot yield to currently running task!") yield(current_task())
 
 # issue #41347
 let t = @async 1
     wait(t)
-    @test_throws ErrorException yield(t)
+    @test_throws ConcurrencyViolationError yield(t)
 end
 
 let t = @async error(42)
@@ -265,6 +328,9 @@ let
     stats = @timed sin(1)
     @test stats.value == sin(1)
     @test isa(stats.time, Real) && stats.time >= 0
+    @test isa(stats.compile_time, Real) && stats.compile_time >= 0
+    @test isa(stats.recompile_time, Real) && stats.recompile_time >= 0
+    @test stats.compile_time <= stats.time
 
     # The return type of gcstats was changed in Julia 1.4 (# 34147)
     # Test that the 1.0 API still works
@@ -286,25 +352,43 @@ v11801, t11801 = @timed sin(1)
 @test names(@__MODULE__, all = true) == names_before_timing
 
 redirect_stdout(devnull) do # suppress time prints
+
 # Accepted @time argument formats
 @test @time true
 @test @time "message" true
+@test @time 1 true
 let msg = "message"
     @test @time msg true
 end
 let foo() = "message"
     @test @time foo() true
 end
+let foo() = 1
+    @test @time foo() true
+end
 
 # Accepted @timev argument formats
 @test @timev true
 @test @timev "message" true
+@test @timev 1 true
 let msg = "message"
     @test @timev msg true
 end
 let foo() = "message"
     @test @timev foo() true
 end
+let foo() = 1
+    @test @timev foo() true
+end
+
+# this is internal, but used for easy testing
+@test sprint(Base.time_print, 1e9) == "  1.000000 seconds"
+@test sprint(Base.time_print, 1e9, 111, 0, 222) == "  1.000000 seconds (222 allocations: 111 bytes)"
+@test sprint(Base.time_print, 1e9, 111, 0.5e9, 222) == "  1.000000 seconds (222 allocations: 111 bytes, 50.00% gc time)"
+@test sprint(Base.time_print, 1e9, 111, 0, 222, 333) == "  1.000000 seconds (222 allocations: 111 bytes, 333 lock conflicts)"
+@test sprint(Base.time_print, 1e9, 0, 0, 0, 333) == "  1.000000 seconds (333 lock conflicts)"
+@test sprint(Base.time_print, 1e9, 111, 0, 222, 333, 0.25e9) == "  1.000000 seconds (222 allocations: 111 bytes, 333 lock conflicts, 25.00% compilation time)"
+@test sprint(Base.time_print, 1e9, 111, 0.5e9, 222, 333, 0.25e9, 0.175e9) == "  1.000000 seconds (222 allocations: 111 bytes, 50.00% gc time, 333 lock conflicts, 25.00% compilation time: 70% of which was recompilation)"
 
 # @showtime
 @test @showtime true
@@ -418,12 +502,12 @@ begin
     local second = @capture_stdout @time @eval calldouble2(1.0)
 
     # these functions were not recompiled
-    local matches = collect(eachmatch(r"(\d+(?:\.\d+)?)%", first))
+    local matches = collect(eachmatch(r"(\d+(?:\.\d+)?)% compilation", first))
     @test length(matches) == 1
     @test parse(Float64, matches[1][1]) > 0.0
     @test parse(Float64, matches[1][1]) <= 100.0
 
-    matches = collect(eachmatch(r"(\d+(?:\.\d+)?)%", second))
+    matches = collect(eachmatch(r"(\d+(?:\.\d+)?)% compilation", second))
     @test length(matches) == 1
     @test parse(Float64, matches[1][1]) > 0.0
     @test parse(Float64, matches[1][1]) <= 100.0
@@ -497,7 +581,7 @@ struct ambigconvert; end # inject a problematic `convert` method to ensure it st
 Base.convert(::Any, v::ambigconvert) = v
 
 import Base.summarysize
-@test summarysize(Core) > (summarysize(Core.Compiler) + Base.summarysize(Core.Intrinsics)) > Core.sizeof(Core)
+@test summarysize(Core) > Base.summarysize(Core.Intrinsics) > Core.sizeof(Core)
 @test summarysize(Base) > 100_000 * sizeof(Ptr)
 
 let R = Ref{Any}(nothing), depth = 10^6
@@ -537,6 +621,29 @@ end
 
 # issue #44780
 @test summarysize(BigInt(2)^1000) > summarysize(BigInt(2))
+
+# issue #53061
+mutable struct S53061
+    x::Union{Float64, Tuple{Float64, Float64}}
+    y::Union{Float64, Tuple{Float64, Float64}}
+end
+let s = S53061[S53061(rand(), (rand(),rand())) for _ in 1:10^4]
+    @test allequal(summarysize(s) for i in 1:10)
+end
+struct Z53061
+    x::S53061
+    y::Int64
+end
+let z = Z53061[Z53061(S53061(rand(), (rand(),rand())), 0) for _ in 1:10^4]
+    @test allequal(summarysize(z) for i in 1:10)
+    # broken on i868 linux. issue #54895
+    @test abs(summarysize(z) - 640000)/640000 <= 0.01 broken = Sys.WORD_SIZE == 32 && Sys.islinux()
+end
+
+# issue #57506
+let len = 100, m1 = Memory{UInt8}(1:len), m2 = Memory{Union{Nothing,UInt8}}(1:len)
+    @test summarysize(m2) == summarysize(m1) + len
+end
 
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 
@@ -1058,7 +1165,7 @@ Base.setindex!(xs::InvokeXs2, @nospecialize(v::Any), idx::Int) = xs.xs[idx] = v
         @test @invoke(f2(1::Real)) === Integer
     end
 
-    # when argment's type annotation is omitted, it should be specified as `Core.Typeof(x)`
+    # when argument's type annotation is omitted, it should be specified as `Core.Typeof(x)`
     let f(_) = Any
         f(x::Integer) = Integer
         @test f(1) === Integer
@@ -1130,18 +1237,15 @@ include("testenv.jl")
 
 let flags = Cmd(filter(a->!occursin("depwarn", a), collect(test_exeflags)))
     local cmd = `$test_exename $flags --depwarn=yes deprecation_exec.jl`
-
-    if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
-        error("Deprecation test failed, cmd : $cmd")
-    end
+    run(cmd, devnull)
 end
 
 # PR #23664, make sure names don't get added to the default `Main` workspace
 @test readlines(`$(Base.julia_cmd()) --startup-file=no -e 'foreach(println, names(Main))'`) == ["Base","Core","Main"]
 
 # issue #26310
-@test_warn "could not import" Core.eval(@__MODULE__, :(import .notdefined_26310__))
-@test_warn "could not import" Core.eval(Main,        :(import ........notdefined_26310__))
+@test_warn "undeclared at import time" Core.eval(@__MODULE__, :(import .notdefined_26310__))
+@test_warn "undeclared at import time" Core.eval(Main,        :(import ........notdefined_26310__))
 @test_nowarn Core.eval(Main, :(import .Main))
 @test_nowarn Core.eval(Main, :(import ....Main))
 
@@ -1284,10 +1388,63 @@ end
     end
 end
 
+module KwdefWithEsc
+    const Int1 = Int
+    const val1 = 42
+    macro define_struct()
+        quote
+            @kwdef struct $(esc(:Struct))
+                a
+                b = val1
+                c::Int1
+                d::Int1 = val1
+
+                $(esc(quote
+                    e
+                    f = val2
+                    g::Bool1
+                    h::Bool1 = val2
+                end))
+
+                $(esc(:(i = val2)))
+                $(esc(:(j::Bool1)))
+                $(esc(:(k::Bool1 = val2)))
+
+                l::$(esc(:Bool1))
+                m::$(esc(:Bool1)) = $(esc(:val2))
+
+                n = $(esc(:val2))
+                o::Int1 = $(esc(:val2))
+
+                $(esc(:p))
+                $(esc(:q)) = val1
+                $(esc(:s))::Int1
+                $(esc(:t))::Int1 = val1
+            end
+        end
+    end
+end
+
+module KwdefWithEsc_TestModule
+    using ..KwdefWithEsc
+    const Bool1 = Bool
+    const val2 = true
+    KwdefWithEsc.@define_struct()
+end
+@test isdefined(KwdefWithEsc_TestModule, :Struct)
+@test fieldnames(KwdefWithEsc_TestModule.Struct) ==
+    (:a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o, :p, :q, :s, :t)
+@test fieldtypes(KwdefWithEsc_TestModule.Struct) ==
+    (Any, Any, Int, Int, Any, Any, Bool, Bool, Any, Bool, Bool, Bool, Bool, Any,
+     Int, Any, Any, Int, Int)
+@test KwdefWithEsc_TestModule.Struct(
+    ; a='a',c=0,e='e',g=true,j=true,l=true,p='p',s=0) isa KwdefWithEsc_TestModule.Struct
+
 @testset "exports of modules" begin
-    for (_, mod) in Base.loaded_modules
+    @testset "$mod" for (_, mod) in Base.loaded_modules
         mod === Main && continue # Main exports everything
-        for v in names(mod)
+        @testset "$v" for v in names(mod)
+            isdefined(mod, v) || @error "missing $v in $mod"
             @test isdefined(mod, v)
         end
     end
@@ -1298,6 +1455,11 @@ end
     b = Base.UUID("2832b20a-2ad5-46e9-abb1-2d20c8c31dd3")
     @test isless(b, a)
     @test sort([a, b]) == [b, a]
+end
+
+@testset "UUID display" begin
+    a = Base.UUID("dbd321ed-e87e-4f33-9511-65b7d01cdd55")
+    @test repr(a) == "$(Base.UUID)(\"dbd321ed-e87e-4f33-9511-65b7d01cdd55\")"
 end
 
 @testset "Libc.rand" begin
@@ -1324,7 +1486,8 @@ end
 @test_throws ErrorException finalizer(x->nothing, 1)
 @test_throws ErrorException finalizer(C_NULL, 1)
 
-
+# FIXME: Issue #57103 Test is specific to Stock GC
+@static if Base.USING_STOCK_GC
 @testset "GC utilities" begin
     GC.gc()
     GC.gc(true); GC.gc(false)
@@ -1335,12 +1498,15 @@ end
         open(tmppath, "w") do tmpio
             redirect_stderr(tmpio) do
                 GC.enable_logging(true)
+                @test GC.logging_enabled()
                 GC.gc()
                 GC.enable_logging(false)
+                @test !GC.logging_enabled()
             end
         end
         @test occursin("GC: pause", read(tmppath, String))
     end
+end
 end
 
 @testset "fieldtypes Module" begin
@@ -1353,9 +1519,9 @@ end
 end
 
 # Test that read fault on a prot-none region does not incorrectly give
-# ReadOnlyMemoryEror, but rather crashes the program
+# ReadOnlyMemoryError, but rather crashes the program
 const MAP_ANONYMOUS_PRIVATE = Sys.isbsd() ? 0x1002 : 0x22
-let script = :(
+let script = """
         let ptr = Ptr{Cint}(ccall(:jl_mmap, Ptr{Cvoid},
                                   (Ptr{Cvoid}, Csize_t, Cint, Cint, Cint, Int),
                                   C_NULL, 16*1024, 0, $MAP_ANONYMOUS_PRIVATE, -1, 0))
@@ -1365,27 +1531,98 @@ let script = :(
                 println(e)
             end
         end
-    )
+    """
     cmd = if Sys.isunix()
         # Set the maximum core dump size to 0 to keep this expected crash from
         # producing a (and potentially overwriting an existing) core dump file
-        `sh -c "ulimit -c 0; $(Base.shell_escape(Base.julia_cmd())) -e '$script'"`
+        `sh -c "ulimit -c 0; $(Base.shell_escape(Base.julia_cmd())) -e $(Base.shell_escape(script))"`
     else
-        `$(Base.julia_cmd()) -e '$script'`
+        `$(Base.julia_cmd()) -e $script`
     end
-    @test !success(cmd)
+    p = run(ignorestatus(cmd), devnull, stdout, devnull)
+    if p.termsignal == 0
+        Sys.isunix() ? @test(p.exitcode ∈ (128+7, 128+10, 128+11)) : @test(p.exitcode != 0) # expect SIGBUS (7 on BSDs or 10 on Linux) or SIGSEGV (11)
+    else
+        @test(p.termsignal ∈ (7, 10, 11))
+    end
 end
 
 # issue #41656
-@test success(`$(Base.julia_cmd()) -e 'isempty(x) = true'`)
+run(`$(Base.julia_cmd()) -e 'isempty(x) = true'`)
+
+function treshape59278(X::AbstractArray, n, m)
+    Y = reshape(X, n, m)
+    Y .= 1.0
+    return X
+end
+
+# a function that allocates iff no constprop
+@inline maybealloc59278(n, _) = ntuple(i->rand(), n)
+
+# allocates once per iteration; the result escapes so it cannot be optimized away
+const alloc_sink_fastpath = Ref{Any}(nothing)
+@noinline function allocs_inlined_fastpath(n)
+    for i in 1:n
+        alloc_sink_fastpath[] = Ref{Int}(i)
+    end
+    nothing
+end
 
 @testset "Base/timing.jl" begin
     @test Base.jit_total_bytes() >= 0
 
-    # sanity check `@allocations` returns what we expect in some very simple cases
-    @test (@allocations "a") == 0
-    @test (@allocations "a" * "b") == 0 # constant propagation
-    @test (@allocations "a" * Base.inferencebarrier("b")) == 1
+    # sanity check `@allocations` returns what we expect in some very simple cases.
+    @test (() -> @allocations "a")() == 0
+    "a" * Base.inferencebarrier("b")
+    @test (() -> @allocations "a" * Base.inferencebarrier("b"))() == 1
+    # test that you can grab the value from @allocated
+    @allocated _x = 1+2
+    @test _x === 3
+
+    # test `@allocated` works for dotted operations
+    @test (@allocated 1 .+ 1) == 0
+
+    n, m = 10, 20
+    X = rand(n, m)
+    treshape59278(X, n, m)
+    # test that @allocated and @allocations are consistent about whether anything was
+    # allocated in a case where the compiler can sometimes remove an allocation
+    # https://github.com/JuliaLang/julia/issues/58634#issuecomment-2940840651
+    @test ((@allocated treshape59278(X, n, m))==0) == ((@allocations treshape59278(X, n, m))==0)
+    # TODO: would be nice to have but not yet reliable
+    #@test ((@allocated begin treshape59278(X, n, m) end)==0) == ((@allocations begin treshape59278(X, n, m) end)==0)
+
+    # test that `@allocations` counts the expected number of allocations (even on fastpaths)
+    @test (@allocations allocs_inlined_fastpath(1000)) >= 1000
+
+    # test that all wrapped allocations are counted and constprop is not done
+    @test (@allocated @noinline maybealloc59278(10, [])) > (@allocated maybealloc59278(10, 0)) > 0
+    # but if you wrap it in another function it can be constprop'd
+    @test (@allocated (()->maybealloc59278(10, []))()) == 0
+
+    _lock_conflicts, _nthreads = eval(Meta.parse(read(`$(Base.julia_cmd()) -tauto -E '
+        _lock_conflicts = @lock_conflicts begin
+            l = ReentrantLock()
+            Threads.@threads for i in 1:Threads.nthreads()
+                 lock(l) do
+                    sleep(1)
+                end
+            end
+        end
+        _lock_conflicts,Threads.nthreads()
+    '`, String)))
+    @test _lock_conflicts > 0 skip=(_nthreads < 2) # can only test if the worker can multithread
+
+    # Test the output of `format_bytes()`
+    inputs = [(factor * (Int64(1000)^e),binary) for binary in (false,true), factor in (1,2), e in 0:6][:]
+    expected_output = ["1 byte", "1 byte", "2 bytes", "2 bytes", "1000 bytes", "1000 bytes", "2.000 kB", "1.953 KiB",
+                        "1000.000 kB", "976.562 KiB", "2.000 MB", "1.907 MiB", "1000.000 MB", "953.674 MiB",
+                        "2.000 GB", "1.863 GiB", "1000.000 GB", "931.323 GiB", "2.000 TB", "1.819 TiB",
+                        "1000.000 TB", "909.495 TiB", "2.000 PB", "1.776 PiB", "1000.000 PB", "888.178 PiB",
+                        "2000.000 PB", "1776.357 PiB"]
+    for ((n, binary), expected) in zip(inputs, expected_output)
+        @test Base.format_bytes(n; binary) == expected
+    end
 end
 
 @testset "in_finalizer" begin
@@ -1401,4 +1638,274 @@ end
     end)
     GC.gc(true); yield()
     @test in_fin[]
+end
+
+@testset "Base docstrings" begin
+    undoc = Docs.undocumented_names(Base)
+    @test_broken isempty(undoc)
+    @test isempty(setdiff(undoc, [:BufferStream, :CanonicalIndexError, :CapturedException, :Filesystem, :IOServer, :InvalidStateException, :Order, :PipeEndpoint, :ScopedValues, :Sort, :TTY, :AtomicMemoryRef, :Exception, :GenericMemoryRef, :GlobalRef, :IO, :AnyType, :LineNumberNode, :MemoryRef, :Method, :SegmentationFault, :TypeEq, :TypeVar, :arrayref, :arrayset, :arraysize, :const_arrayref]))
+end
+
+exported_names(m) = filter(s -> Base.isexported(m, s), names(m))
+@testset "Base re-exports Core" begin
+    @test issubset(exported_names(Core), exported_names(Base))
+end
+
+@testset "Base.Libc docstrings" begin
+    @test isempty(Docs.undocumented_names(Libc))
+end
+
+@testset "Silenced missed transformations" begin
+    # Ensure the WarnMissedTransformationsPass is not on by default
+    src = """
+        @noinline iteration(i) = (@show(i); return nothing)
+        @eval function loop_unroll_full_fail(N)
+            for i in 1:N
+              iteration(i)
+              \$(Expr(:loopinfo, (Symbol("llvm.loop.unroll.full"), 1)))
+          end
+       end
+       loop_unroll_full_fail(3)
+    """
+    out_err = mktemp() do _, f
+        run(`$(Base.julia_cmd()) -e "$src"`, devnull, devnull, f)
+        seekstart(f)
+        read(f, String)
+    end
+    @test !occursin("loop not unrolled", out_err)
+end
+
+let errs = IOBuffer()
+    run(`$(Base.julia_cmd()) -e '
+        using Test
+        @test !isempty(Core.methodtable.backedges)
+        Base.Experimental.disable_new_worlds()
+        @test_throws "disable_new_worlds" @eval f() = 1
+        @test isempty(Core.methodtable.backedges)
+        @test_throws "disable_new_worlds" Base.delete_method(which(+, (Int, Int)))
+        @test 1+1 == 2
+        using Dates
+        '`, devnull, stdout, errs)
+    @test occursin("disable_new_worlds", String(take!(errs)))
+end
+
+# every library the runtime loads from this installation must be declared
+@testset "Base.Linking.runtime_libraries" begin
+    libs = Base.Linking.runtime_libraries()
+    @test !isempty(libs)
+    @test allunique(libs)
+    @test all(isabspath, libs)
+    @test all(isfile, libs)
+    root = normpath(Sys.BINDIR, "..")
+    @test all(p -> startswith(p, root), libs)
+    for name in ("libjulia", "libjulia-internal")
+        name = Base.isdebugbuild() ? name * "-debug" : name
+        @test any(p -> first(Base.BinaryPlatforms.parse_dl_name_version(basename(p))) == name, libs)
+    end
+    nocodegen = Base.Linking.runtime_libraries(; optional_components=())
+    @test issubset(nocodegen, libs)
+    @test !any(p -> startswith(basename(p), "libLLVM") || startswith(basename(p), "libjulia-codegen"), nocodegen)
+    # unknown components are rejected
+    @test_throws ArgumentError Base.Linking.runtime_libraries(; optional_components=(:codgen,))
+
+    # `library_files` matches whole names, not prefixes
+    internal = "libjulia-internal" * (Base.isdebugbuild() ? "-debug" : "")
+    @test !isempty(Base.Linking.library_files(internal))
+    @test issubset(Base.Linking.library_files(internal), libs)
+    @test Base.Linking.library_files("libthis-is-not-shipped-anywhere") == String[]
+    @test allunique(Base.Linking.library_files(["libjulia", "libjulia"]))
+    for name in ("libz", "libgmp", "libjulia")
+        files = basename.(Base.Linking.library_files(name))
+        @test all(f -> Base.BinaryPlatforms.parse_dl_name_version(f)[1] == name, files)
+    end
+
+    # a missing required library is an error
+    listings = Base.Linking.library_listings()
+    @test_throws "installation is incomplete" Base.Linking.resolve_libraries(["libnope"], String[], listings)
+
+    # a fresh process, so libraries other tests loaded (e.g. `libccalltest`) don't count
+    script = """
+        declared = Set(basename.(Base.Linking.runtime_libraries()))
+        root = normpath(Sys.BINDIR, "..")
+        image = normpath(Base.unsafe_string(Base.JLOptions().image_file))
+        for lib in Base.Libc.Libdl.dllist()
+            occursin(string('.', Base.Libc.Libdl.dlext), basename(lib)) || continue
+            path = normpath(lib)
+            startswith(path, root) || continue # provided by the system, not ours to ship
+            path == image && continue # the system image is not a runtime library
+            basename(path) in declared || println(path)
+        end
+    """
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no -e $script`) == ""
+end
+
+@testset "`@constprop`, `@assume_effects` handling of an unknown setting" begin
+    for x ∈ ("constprop", "assume_effects")
+        try
+            eval(Meta.parse("Base.@$x :unknown f() = 3"))
+            error("unexpectedly reached")
+        catch e
+            e::LoadError
+            @test e.error isa ArgumentError
+        end
+    end
+end
+
+# Interrupt (SIGINT/Ctrl-C) delivery: an interrupt must reach user code, not be
+# swallowed by (or crash) the internal scheduler task (issue #58689).
+if Sys.islinux()
+    const SYS_rrcall_check_presence = 1008
+    running_under_rr() = 0 == ccall(:syscall, Int,
+        (Int, Int, Int, Int, Int, Int, Int),
+        SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0)
+else
+    running_under_rr() = false
+end
+# rr emulates signal delivery and does not interrupt blocking syscalls the way a
+# real SIGINT does, so these tests do not pass under it (the sleeping subprocess
+# never observes the InterruptException).
+if !Sys.iswindows() && !running_under_rr()
+    # "Internal Task ERROR" is uppercased by `emphasize` when color is off
+    has_internal_err(s) = occursin(r"internal task error"i, s)
+    expect_output(output, pat; timeout=60) =
+        timedwait(() -> occursin(pat, output[]), timeout) === :ok
+    # The bare executable, not julia_cmd(): these tests probe SIGINT delivery,
+    # not the flag matrix, and the suite's `--check-bounds=yes` would make the
+    # child recompile the code paths whose timing they depend on.
+    interrupt_test_exe() = joinpath(Sys.BINDIR, Base.julia_exename())
+    function spawn_interrupt_test_repl()
+        exe = interrupt_test_exe()
+        cmd = addenv(`$exe -q -i --startup-file=no`, Dict("TERM" => "dumb"))
+        pts, ptm = Main.FakePTYs.open_fake_pty()
+        p = run(cmd, pts, pts, pts; wait=false)
+        Base.close_stdio(pts)
+        output = Ref("")
+        @async try
+            while !eof(ptm)
+                output[] *= String(readavailable(ptm))
+            end
+        catch
+        end
+        return p, ptm, output
+    end
+    function cleanup_interrupt_test_repl(p, ptm)
+        process_running(p) && kill(p, Base.SIGKILL)
+        close(ptm)
+        wait(p)
+    end
+
+    @testset "SIGINT at idle REPL prompt" begin
+        p, ptm, output = spawn_interrupt_test_repl()
+        try
+            @test expect_output(output, "julia>")
+            write(ptm, "println(\"READY_\", 1+1)\n")
+            @test expect_output(output, "READY_2")
+            sleep(2) # best-effort: let the thread park; the checks below do not depend on it
+            kill(p, 2) # SIGINT
+            # SIGINT aborts any in-flight input line, so retry with distinct markers
+            alive = false
+            # generous horizon: this asserts the session SURVIVES the press,
+            # not its latency - a cold session (first spawns after a build,
+            # slow CI hosts) can lag the first responses behind compilation
+            for attempt in 1:4
+                write(ptm, "println(\"CHECK$(attempt)_\", 1+1)\n")
+                if expect_output(output, "CHECK$(attempt)_2"; timeout=30)
+                    alive = true
+                    break
+                end
+            end
+            if !alive && process_running(p)
+                # collect diagnostics into the CI log: SIGQUIT makes the
+                # session dump all task backtraces onto the pty
+                kill(p, 3)
+                sleep(10)
+                println(stderr, "idle-SIGINT session unresponsive; transcript tail:\n",
+                        last(output[], 16000))
+            end
+            @test alive
+            @test process_running(p)
+            @test !has_internal_err(output[])
+        finally
+            cleanup_interrupt_test_repl(p, ptm)
+        end
+    end
+
+    @testset "SIGINT during REPL evaluation of a sleep loop" begin
+        p, ptm, output = spawn_interrupt_test_repl()
+        try
+            @test expect_output(output, "julia>")
+            # compile the error-display path up front; on a loaded machine doing it
+            # lazily can delay the InterruptException output past the timeout below
+            write(ptm, "error(\"warmup_display\")\n")
+            # the pty echoes the input line (which also contains "warmup_display"),
+            # so wait for the error display to finish and the prompt to return
+            @test expect_output(output, r"ERROR.*warmup_display.*julia>"s)
+            # the marker is split so the pty echo of the input line does not match it
+            write(ptm, "println(\"LOOP\", \"START\"); while true; sleep(0.05); end\n")
+            @test expect_output(output, "LOOPSTART")
+            # ^C is delivered as a cancellation request (InterruptException is
+            # what packages may still rethrow it as); a single SIGINT can be
+            # missed on a loaded machine, so resend until it surfaces
+            interrupted = false
+            for _ in 1:5
+                kill(p, 2) # SIGINT
+                if expect_output(output, r"InterruptException|CancellationRequest"; timeout=10)
+                    interrupted = true
+                    break
+                end
+            end
+            @test interrupted
+            @test !has_internal_err(output[])
+            @test process_running(p)
+            write(ptm, "println(\"CHECK_\", 1+1)\n")
+            @test expect_output(output, "CHECK_2"; timeout=30)
+        finally
+            cleanup_interrupt_test_repl(p, ptm)
+        end
+    end
+
+    @testset "SIGINT to a non-interactive process blocked in sleep" begin
+        # Synchronize on a readiness marker printed from user code (proving the
+        # runtime is up and the SIGINT handler is armed) rather than a racy fixed
+        # sleep. See the "SIGINFO/SIGUSR1 profile triggering" test in
+        # stdlib/Profile for the same pattern.
+        script = """
+            println(stderr, "READY")
+            sleep(600)
+            """
+        iob = Base.BufferStream() # unbounded buffer, so we can read after exit
+        p = run(`$(interrupt_test_exe()) --startup-file=no -e $script`, devnull, devnull, iob; wait=false)
+        reader = @async try # monitor task to set EOF on iob after p exits
+            wait(p)
+        finally
+            closewrite(iob)
+        end
+        try
+            @test readline(iob) == "READY"
+            # A press can be missed (even 1.11 needed a 2nd SIGINT here), so
+            # resend until the interrupt visibly arrives: the child starts
+            # reporting it on stderr, or exits. Stop pressing then - a repeat
+            # press would only cancel the report in progress - and allow the
+            # report and exit a generous amount of time on a loaded machine.
+            arrived() = bytesavailable(iob) > 0 || process_exited(p)
+            for _ in 1:5
+                kill(p, 2) # SIGINT
+                timedwait(arrived, 10) === :ok && break
+            end
+            @test arrived()
+            @test timedwait(() -> process_exited(p), 120) === :ok
+            process_running(p) && kill(p, Base.SIGKILL) # so the reader below terminates
+            wait(reader) # wait for iob to reach EOF
+            err = read(iob, String)
+            # ^C is delivered as a cancellation request (InterruptException is
+            # what packages may still rethrow it as). If an early press was only
+            # slow to show, a later one may still cancel the report itself - the
+            # fallback note is an acceptable outcome.
+            @test occursin(r"InterruptException|CancellationRequest|displaying the error report failed", err)
+            @test !has_internal_err(err)
+        finally
+            process_running(p) && kill(p, Base.SIGKILL)
+            wait(p)
+        end
+    end
 end

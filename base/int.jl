@@ -77,6 +77,7 @@ signed(::Type{UInt32}) = Int32
 signed(::Type{UInt64}) = Int64
 signed(::Type{UInt128}) = Int128
 signed(::Type{T}) where {T<:Signed} = T
+signed(::Type{Union{}}, slurp...) = throw(MethodError(signed, (Union{}, slurp...)))
 
 ## integer comparisons ##
 
@@ -87,6 +88,11 @@ signed(::Type{T}) where {T<:Signed} = T
 (+)(x::T, y::T) where {T<:BitInteger} = add_int(x, y)
 (*)(x::T, y::T) where {T<:BitInteger} = mul_int(x, y)
 
+(-%)(x::BitInteger)                    = neg_int(x)
+(-%)(x::T, y::T) where {T<:BitInteger} = sub_int(x, y)
+(+%)(x::T, y::T) where {T<:BitInteger} = add_int(x, y)
+(*%)(x::T, y::T) where {T<:BitInteger} = mul_int(x, y)
+
 negate(x) = -x
 negate(x::Unsigned) = -convert(Signed, x)
 #widenegate(x) = -convert(widen(signed(typeof(x))), x)
@@ -96,8 +102,46 @@ inv(x::Integer) = float(one(x)) / float(x)
 # skip promotion for system integer types
 (/)(x::BitInteger, y::BitInteger) = float(x) / float(y)
 
+
 """
-    isodd(x::Number) -> Bool
+    mul_hi(a::T, b::T) where {T<:Base.Integer}
+
+Return the higher half of the product of `a` and `b` where `T` is a fixed size integer.
+
+# Examples
+```jldoctest
+julia> Base.mul_hi(12345678987654321, 123456789)
+82624
+
+julia> (widen(12345678987654321) * 123456789) >> 64
+82624
+
+julia> Base.mul_hi(0xff, 0xff)
+0xfe
+```
+"""
+function mul_hi(a::T, b::T) where {T<:Integer}
+    ((widen(a)*b) >>> Base.top_set_bit(-1 % T)) % T
+end
+
+function mul_hi(a::UInt128, b::UInt128)
+    shift = sizeof(a)*4
+    mask = typemax(UInt128) >> shift
+    a1, a2 = a >>> shift, a & mask
+    b1, b2 = b >>> shift, b & mask
+    a1b1, a1b2, a2b1, a2b2 = a1*b1, a1*b2, a2*b1, a2*b2
+    carry = ((a1b2 & mask) + (a2b1 & mask) + (a2b2 >>> shift)) >>> shift
+    a1b1 + (a1b2 >>> shift) + (a2b1 >>> shift) + carry
+end
+
+function mul_hi(a::Int128, b::Int128)
+    shift = sizeof(a)*8 - 1
+    t1, t2 = (a >> shift) & b % UInt128, (b >> shift) & a % UInt128
+    (mul_hi(a % UInt128, b % UInt128) -% t1 -% t2) % Int128
+end
+
+"""
+    isodd(x::Number)::Bool
 
 Return `true` if `x` is an odd integer (that is, an integer not divisible by 2), and `false` otherwise.
 
@@ -117,7 +161,7 @@ isodd(n::Number) = isreal(n) && isodd(real(n))
 isodd(n::Real) = isinteger(n) && !iszero(rem(Integer(n), 2))
 
 """
-    iseven(x::Number) -> Bool
+    iseven(x::Number)::Bool
 
 Return `true` if `x` is an even integer (that is, an integer divisible by 2), and `false` otherwise.
 
@@ -138,6 +182,8 @@ iseven(n::Real) = isinteger(n) && iszero(rem(Integer(n), 2))
 
 signbit(x::Integer) = x < 0
 signbit(x::Unsigned) = false
+
+isnegative(x::Unsigned) = false
 
 flipsign(x::T, y::T) where {T<:BitSigned} = flipsign_int(x, y)
 flipsign(x::BitSigned, y::BitSigned) = flipsign_int(promote(x, y)...) % typeof(x)
@@ -164,7 +210,7 @@ when `abs` is applied to the minimum representable value of a signed
 integer. That is, when `x == typemin(typeof(x))`, `abs(x) == x < 0`,
 not `-x` as might be expected.
 
-See also: [`abs2`](@ref), [`unsigned`](@ref), [`sign`](@ref).
+See also: [`abs2`](@ref), [`unsigned`](@ref), [`sign`](@ref), [`Base.uabs`](@ref), [`Base.Checked.checked_abs`](@ref).
 
 # Examples
 ```jldoctest
@@ -250,7 +296,7 @@ end
 The reduction of `x` modulo `y`, or equivalently, the remainder of `x` after floored
 division by `y`, i.e. `x - y*fld(x,y)` if computed without intermediate rounding.
 
-The result will have the same sign as `y`, and magnitude less than `abs(y)` (with some
+The result will have the same sign as `y` if `isfinite(y)`, and magnitude less than `abs(y)` (with some
 exceptions, see note below).
 
 !!! note
@@ -259,7 +305,7 @@ exceptions, see note below).
     type, and so rounding error may occur. In particular, if the exact result is very
     close to `y`, then it may be rounded to `y`.
 
-See also: [`rem`](@ref), [`div`](@ref), [`fld`](@ref), [`mod1`](@ref), [`invmod`](@ref).
+See also: [`rem`](@ref), [`fld`](@ref), [`mod1`](@ref), [`fldmod`](@ref), [`invmod`](@ref).
 
 ```jldoctest
 julia> mod(8, 3)
@@ -286,8 +332,21 @@ function mod(x::T, y::T) where T<:Integer
     y == -1 && return T(0)   # avoid potential overflow in fld
     return x - fld(x, y) * y
 end
-mod(x::BitSigned, y::Unsigned) = rem(y + unsigned(rem(x, y)), y)
-mod(x::Unsigned, y::Signed) = rem(y + signed(rem(x, y)), y)
+# Correcting the truncated remainder is cheaper than `x - fld(x, y) * y`, and cannot overflow:
+# the correction only applies when `r` and `y` have opposite signs.
+function mod(x::T, y::T) where T<:BitSigned
+    r = rem(x, y)
+    return r + ifelse(signbit(r ⊻ y) & (r != 0), y, zero(T))
+end
+function mod(x::BitSigned, y::Unsigned)
+    remval = rem(x, y) # correct iff  remval>=0
+    # the addition re-wraps the negative remainder into the unsigned domain
+    return unsigned(remval +% (remval<zero(remval))*y)
+end
+function mod(x::Unsigned, y::Signed)
+    remval =  signed(rem(x, y)) #remval>0 so correct iff y>0 or remval==0
+    return remval + (!iszero(remval) && y<zero(y))*y
+end
 mod(x::T, y::T) where {T<:Unsigned} = rem(x, y)
 
 # Don't promote integers for div/rem/mod since there is no danger of overflow,
@@ -399,7 +458,7 @@ bswap(x::Union{Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}) =
     bswap_int(x)
 
 """
-    count_ones(x::Integer) -> Integer
+    count_ones(x::Integer)::Integer
 
 Number of ones in the binary representation of `x`.
 
@@ -415,7 +474,7 @@ julia> count_ones(Int32(-1))
 count_ones(x::BitInteger) = (ctpop_int(x) % Int)::Int
 
 """
-    leading_zeros(x::Integer) -> Integer
+    leading_zeros(x::Integer)::Integer
 
 Number of zeros leading the binary representation of `x`.
 
@@ -428,7 +487,7 @@ julia> leading_zeros(Int32(1))
 leading_zeros(x::BitInteger) = (ctlz_int(x) % Int)::Int
 
 """
-    trailing_zeros(x::Integer) -> Integer
+    trailing_zeros(x::Integer)::Integer
 
 Number of zeros trailing the binary representation of `x`.
 
@@ -441,7 +500,7 @@ julia> trailing_zeros(2)
 trailing_zeros(x::BitInteger) = (cttz_int(x) % Int)::Int
 
 """
-    count_zeros(x::Integer) -> Integer
+    count_zeros(x::Integer)::Integer
 
 Number of zeros in the binary representation of `x`.
 
@@ -457,7 +516,7 @@ julia> count_zeros(-1)
 count_zeros(x::Integer) = count_ones(~x)
 
 """
-    leading_ones(x::Integer) -> Integer
+    leading_ones(x::Integer)::Integer
 
 Number of ones leading the binary representation of `x`.
 
@@ -470,7 +529,7 @@ julia> leading_ones(UInt32(2 ^ 32 - 2))
 leading_ones(x::Integer) = leading_zeros(~x)
 
 """
-    trailing_ones(x::Integer) -> Integer
+    trailing_ones(x::Integer)::Integer
 
 Number of ones trailing the binary representation of `x`.
 
@@ -483,7 +542,7 @@ julia> trailing_ones(3)
 trailing_ones(x::Integer) = trailing_zeros(~x)
 
 """
-    top_set_bit(x::Integer) -> Integer
+    top_set_bit(x::Integer)::Integer
 
 The number of bits in `x`'s binary representation, excluding leading zeros.
 
@@ -514,12 +573,29 @@ top_set_bit(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
 (<=)(x::T, y::T) where {T<:BitSigned}   = sle_int(x, y)
 (<=)(x::T, y::T) where {T<:BitUnsigned} = ule_int(x, y)
 
-==(x::BitSigned,   y::BitUnsigned) = (x >= 0) & (unsigned(x) == y)
-==(x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x == unsigned(y))
-<( x::BitSigned,   y::BitUnsigned) = (x <  0) | (unsigned(x) <  y)
-<( x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x <  unsigned(y))
-<=(x::BitSigned,   y::BitUnsigned) = (x <  0) | (unsigned(x) <= y)
-<=(x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x <= unsigned(y))
+==(x::BitSigned, y::BitUnsigned) = y == x
+<(x::BitSigned, y::BitUnsigned) = !(y <= x)
+<=(x::BitSigned, y::BitUnsigned) = !(y < x)
+
+for op in (:(==), :<, :<=)
+    @eval function $op(x::BitUnsigned, y::BitSigned)
+        if Core.sizeof(x) < Core.sizeof(y)
+            $op(typeof(y)(x), y)
+        else
+            (y >= 0) & $op(x, unsigned(y) % typeof(x))
+        end
+    end
+end
+
+function max(x::S, y::T) where {S <: BitInteger, T <: BitInteger}
+    R = promote_type(S, T)
+    ifelse(x < y, y % R, x % R)
+end
+
+min(x::S, y::BitUnsigned) where S <: BitSigned = ifelse(x < y, x, y % S)
+min(x::BitUnsigned, y::T) where T <: BitSigned = ifelse(x < y, x % T, y)
+
+minmax(x::BitInteger, y::BitInteger) = (min(x, y), max(x, y))
 
 ## integer shifts ##
 
@@ -587,37 +663,32 @@ julia> bitstring(bitrotate(0b01110010, 8))
 bitrotate(x::T, k::Integer) where {T <: BitInteger} =
     (x << ((sizeof(T) << 3 - 1) & k)) | (x >>> ((sizeof(T) << 3 - 1) & -k))
 
-# @doc isn't available when running in Core at this point.
-# Tuple syntax for documentation two function signatures at the same time
-# doesn't work either at this point.
-if nameof(@__MODULE__) === :Base
-    for fname in (:mod, :rem)
-        @eval @doc """
-            rem(x::Integer, T::Type{<:Integer}) -> T
-            mod(x::Integer, T::Type{<:Integer}) -> T
-            %(x::Integer, T::Type{<:Integer}) -> T
+for fname in (:mod, :rem)
+    @eval @doc """
+        rem(x::Integer, T::Type{<:Integer})::T
+        mod(x::Integer, T::Type{<:Integer})::T
+        %(x::Integer, T::Type{<:Integer})::T
 
-        Find `y::T` such that `x` ≡ `y` (mod n), where n is the number of integers representable
-        in `T`, and `y` is an integer in `[typemin(T),typemax(T)]`.
-        If `T` can represent any integer (e.g. `T == BigInt`), then this operation corresponds to
-        a conversion to `T`.
+    Find `y::T` such that `x` ≡ `y` (mod n), where n is the number of integers representable
+    in `T`, and `y` is an integer in `[typemin(T),typemax(T)]`.
+    If `T` can represent any integer (e.g. `T == BigInt`), then this operation corresponds to
+    a conversion to `T`.
 
-        # Examples
-        ```jldoctest
-        julia> x = 129 % Int8
-        -127
+    # Examples
+    ```jldoctest
+    julia> x = 129 % Int8
+    -127
 
-        julia> typeof(x)
-        Int8
+    julia> typeof(x)
+    Int8
 
-        julia> x = 129 % BigInt
-        129
+    julia> x = 129 % BigInt
+    129
 
-        julia> typeof(x)
-        BigInt
-        ```
-        """ $fname(x::Integer, T::Type{<:Integer})
-    end
+    julia> typeof(x)
+    BigInt
+    ```
+    """ $fname(x::Integer, T::Type{<:Integer})
 end
 
 rem(x::T, ::Type{T}) where {T<:Integer} = x
@@ -625,73 +696,12 @@ rem(x::Signed, ::Type{Unsigned}) = x % unsigned(typeof(x))
 rem(x::Unsigned, ::Type{Signed}) = x % signed(typeof(x))
 rem(x::Integer, T::Type{<:Integer}) = convert(T, x)  # `x % T` falls back to `convert`
 rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
+rem(x, ::Type{Union{}}, slurp...) = throw(MethodError(rem, (x, Union{}, slurp...)))
 mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
+mod(x, ::Type{Union{}}, slurp...) = throw(MethodError(mod, (x, Union{}, slurp...)))
 
 unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
-
-"""
-    trunc([T,] x)
-    trunc(x; digits::Integer= [, base = 10])
-    trunc(x; sigdigits::Integer= [, base = 10])
-
-`trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
-is less than or equal to the absolute value of `x`.
-
-`trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
-not representable.
-
-Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
-
-See also: [`%`](@ref rem), [`floor`](@ref), [`unsigned`](@ref), [`unsafe_trunc`](@ref).
-
-# Examples
-```jldoctest
-julia> trunc(2.22)
-2.0
-
-julia> trunc(-2.22, digits=1)
--2.2
-
-julia> trunc(Int, -2.22)
--2
-```
-"""
-function trunc end
-
-"""
-    floor([T,] x)
-    floor(x; digits::Integer= [, base = 10])
-    floor(x; sigdigits::Integer= [, base = 10])
-
-`floor(x)` returns the nearest integral value of the same type as `x` that is less than or
-equal to `x`.
-
-`floor(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
-not representable.
-
-Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
-"""
-function floor end
-
-"""
-    ceil([T,] x)
-    ceil(x; digits::Integer= [, base = 10])
-    ceil(x; sigdigits::Integer= [, base = 10])
-
-`ceil(x)` returns the nearest integral value of the same type as `x` that is greater than or
-equal to `x`.
-
-`ceil(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is not
-representable.
-
-Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
-"""
-function ceil end
-
-round(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
-trunc(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
-floor(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
- ceil(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
+unsafe_trunc(::Type{Union{}}, slurp...) = throw(MethodError(unsafe_trunc, (Union{}, slurp...)))
 
 ## integer construction ##
 
@@ -711,7 +721,7 @@ ERROR: LoadError: ArgumentError: invalid base 10 digit '.' in "123456789123.4"
 [...]
 ```
 """
-macro int128_str(s)
+macro int128_str(s::String)
     return parse(Int128, s)
 end
 
@@ -731,7 +741,7 @@ ERROR: LoadError: ArgumentError: invalid base 10 digit '-' in "-123456789123"
 [...]
 ```
 """
-macro uint128_str(s)
+macro uint128_str(s::String)
     return parse(UInt128, s)
 end
 
@@ -754,18 +764,28 @@ julia> big"_"
 ERROR: ArgumentError: invalid number format _ for BigInt or BigFloat
 [...]
 ```
+
+!!! warning
+    Using `@big_str` for constructing [`BigFloat`](@ref) values may not result
+    in the behavior that might be naively expected: as a macro, `@big_str`
+    obeys the global precision ([`setprecision`](@ref)) and rounding mode
+    ([`setrounding`](@ref)) settings as they are at *load time*. Thus, a
+    function like `() -> precision(big"0.3")` returns a constant whose value
+    depends on the value of the precision at the point when the function is
+    defined, **not** at the precision at the time when the function is called.
 """
-macro big_str(s)
+macro big_str(s::String)
     message = "invalid number format $s for BigInt or BigFloat"
     throw_error =  :(throw(ArgumentError($message)))
     if '_' in s
-        # remove _ in s[2:end-1]
-        bf = IOBuffer(maxsize=lastindex(s))
+        # remove _ in s[2:end-1].
+        # Do not allow '_' right before or after dot.
+        bf = IOBuffer(sizehint=ncodeunits(s))
         c = s[1]
         print(bf, c)
         is_prev_underscore = (c == '_')
         is_prev_dot = (c == '.')
-        for c in SubString(s, 2, lastindex(s)-1)
+        for c in SubString(s, nextind(s, 1), prevind(s, lastindex(s)))
             c != '_' && print(bf, c)
             c == '_' && is_prev_dot && return throw_error
             c == '.' && is_prev_underscore && return throw_error
@@ -773,7 +793,7 @@ macro big_str(s)
             is_prev_dot = (c == '.')
         end
         print(bf, s[end])
-        s = String(take!(bf))
+        s = unsafe_takestring!(bf)
     end
     n = tryparse(BigInt, s)
     n === nothing || return n
@@ -804,10 +824,12 @@ promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 """
     typemin(T)
+    typemin(::T)
 
-The lowest value representable by the given (real) numeric DataType `T`.
+The lowest value representable by the given (real) numeric type `T`.
+The argument can alternatively be an instance of `T`.
 
-See also: [`floatmin`](@ref), [`typemax`](@ref), [`eps`](@ref).
+See also: [`floatmin`](@ref), [`maxintfloat`](@ref), [`typemax`](@ref), [`eps`](@ref).
 
 # Examples
 ```jldoctest
@@ -823,18 +845,23 @@ julia> typemin(Float16)
 julia> typemin(Float32)
 -Inf32
 
-julia> nextfloat(-Inf32)  # smallest finite Float32 floating point number
--3.4028235f38
+julia> floatmin(Float32)  # smallest positive finite Float32 floating point number
+1.1754944f-38
+
+julia> nextfloat(-Inf32) == -floatmax(Float32)  # equivalent ways of getting the lowest finite Float32 floating point number
+true
 ```
 """
 function typemin end
 
 """
     typemax(T)
+    typemax(::T)
 
-The highest value representable by the given (real) numeric `DataType`.
+The highest value representable by the given (real) numeric type `T`.
+The argument can alternatively be an instance of `T`.
 
-See also: [`floatmax`](@ref), [`typemin`](@ref), [`eps`](@ref).
+See also: [`floatmax`](@ref), [`maxintfloat`](@ref), [`typemin`](@ref), [`eps`](@ref).
 
 # Examples
 ```jldoctest
@@ -850,7 +877,7 @@ Inf
 julia> typemax(Float32)
 Inf32
 
-julia> floatmax(Float32)  # largest finite Float32 floating point number
+julia> floatmax(Float32)  # largest positive finite Float32 floating point number
 3.4028235f38
 ```
 """
@@ -876,6 +903,8 @@ typemax(::Type{UInt64}) = 0xffffffffffffffff
 @eval typemax(::Type{UInt128}) = $(bitcast(UInt128, convert(Int128, -1)))
 @eval typemin(::Type{Int128} ) = $(convert(Int128, 1) << 127)
 @eval typemax(::Type{Int128} ) = $(bitcast(Int128, typemax(UInt128) >> 1))
+typemin(::Type{Union{}}, slurp...) = throw(MethodError(typemin, (Union{}, slurp...)))
+typemax(::Type{Union{}}, slurp...) = throw(MethodError(typemax, (Union{}, slurp...)))
 
 
 widen(::Type{Int8}) = Int16
@@ -892,7 +921,7 @@ widen(::Type{UInt64}) = UInt128
 # |x|<=2^(k-1), |y|<=2^k-1   =>   |x*y|<=2^(2k-1)-1
 widemul(x::Signed,y::Unsigned) = widen(x) * signed(widen(y))
 widemul(x::Unsigned,y::Signed) = signed(widen(x)) * widen(y)
-# multplication by Bool doesn't require widening
+# multiplication by Bool doesn't require widening
 widemul(x::Bool,y::Bool) = x * y
 widemul(x::Bool,y::Number) = x * y
 widemul(x::Number,y::Bool) = x * y
@@ -907,13 +936,13 @@ if Core.sizeof(Int) == 4
 
         u0 = u & 0xffffffff; u1 = u >> 32
         v0 = v & 0xffffffff; v1 = v >> 32
-        w0 = u0 * v0
-        t = reinterpret(UInt64, u1) * v0 + (w0 >>> 32)
+        w0 = u0 *% v0
+        t = reinterpret(UInt64, u1) *% v0 +% (w0 >>> 32)
         w2 = reinterpret(Int64, t) >> 32
-        w1 = u0 * reinterpret(UInt64, v1) + (t & 0xffffffff)
-        hi = u1 * v1 + w2 + (reinterpret(Int64, w1) >> 32)
-        lo = w0 & 0xffffffff + (w1 << 32)
-        return Int128(hi) << 64 + Int128(lo)
+        w1 = u0 *% reinterpret(UInt64, v1) +% (t & 0xffffffff)
+        hi = u1 *% v1 +% w2 +% (reinterpret(Int64, w1) >> 32)
+        lo = (w0 & 0xffffffff) +% (w1 << 32)
+        return (Int128(hi) << 64) +% Int128(lo)
     end
 
     function widemul(u::UInt64, v::UInt64)
@@ -922,13 +951,13 @@ if Core.sizeof(Int) == 4
 
         u0 = u & 0xffffffff; u1 = u >>> 32
         v0 = v & 0xffffffff; v1 = v >>> 32
-        w0 = u0 * v0
-        t = u1 * v0 + (w0 >>> 32)
+        w0 = u0 *% v0
+        t = u1 *% v0 +% (w0 >>> 32)
         w2 = t >>> 32
-        w1 = u0 * v1 + (t & 0xffffffff)
-        hi = u1 * v1 + w2 + (w1 >>> 32)
-        lo = w0 & 0xffffffff + (w1 << 32)
-        return UInt128(hi) << 64 + UInt128(lo)
+        w1 = u0 *% v1 +% (t & 0xffffffff)
+        hi = u1 *% v1 +% w2 +% (w1 >>> 32)
+        lo = (w0 & 0xffffffff) +% (w1 << 32)
+        return (UInt128(hi) << 64) +% UInt128(lo)
     end
 
     function *(u::Int128, v::Int128)
@@ -937,9 +966,9 @@ if Core.sizeof(Int) == 4
         lolo = widemul(u0, v0)
         lohi = widemul(reinterpret(Int64, u0), v1)
         hilo = widemul(u1, reinterpret(Int64, v0))
-        t = reinterpret(UInt128, hilo) + (lolo >>> 64)
-        w1 = reinterpret(UInt128, lohi) + (t & 0xffffffffffffffff)
-        return Int128(lolo & 0xffffffffffffffff) + reinterpret(Int128, w1) << 64
+        t = reinterpret(UInt128, hilo) +% (lolo >>> 64)
+        w1 = reinterpret(UInt128, lohi) +% (t & 0xffffffffffffffff)
+        return Int128(lolo & 0xffffffffffffffff) +% (reinterpret(Int128, w1) << 64)
     end
 
     function *(u::UInt128, v::UInt128)
@@ -948,9 +977,9 @@ if Core.sizeof(Int) == 4
         lolo = widemul(u0, v0)
         lohi = widemul(u0, v1)
         hilo = widemul(u1, v0)
-        t = hilo + (lolo >>> 64)
-        w1 = lohi + (t & 0xffffffffffffffff)
-        return (lolo & 0xffffffffffffffff) + UInt128(w1) << 64
+        t = hilo +% (lolo >>> 64)
+        w1 = lohi +% (t & 0xffffffffffffffff)
+        return (lolo & 0xffffffffffffffff) +% (UInt128(w1) << 64)
     end
 
     function _setbit(x::UInt128, i)
@@ -1060,7 +1089,7 @@ else
 end
 
 # issue #15489: since integer ops are unchecked, they shouldn't check promotion
-for op in (:+, :-, :*, :&, :|, :xor)
+for op in (:+, :-, :*, :&, :|, :xor, Symbol("+%"), Symbol("-%"), Symbol("*%"))
     @eval function $op(a::Integer, b::Integer)
         T = promote_typeof(a, b)
         aT, bT = a % T, b % T

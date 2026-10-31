@@ -22,6 +22,12 @@ end
     @test maxintfloat(Float32, Int32) === maxintfloat(Float32)
     @test maxintfloat(Float64, Int16) === 32767.0
     @test maxintfloat(Float64, Int64) === maxintfloat(Float64)
+    # `Type{Union{}}` dispatches to its own methods, which throw, instead of matching `Type{T}` methods
+    for args in ((Union{},), (Union{}, Int), (Float64, Union{}), (Union{}, Union{}))
+        @test_throws MethodError(maxintfloat, args) maxintfloat(args...)
+    end
+    @test which(maxintfloat, (Type{Union{}}, Type{Int})).sig == Tuple{typeof(maxintfloat), Type{Union{}}, Vararg}
+    @test which(maxintfloat, (Type{Float64}, Type{Union{}})).sig == Tuple{typeof(maxintfloat), Any, Type{Union{}}, Vararg}
 end
 
 @testset "isinteger" begin
@@ -94,6 +100,7 @@ end
         @test float(typeof(x)) == typeof(float(x))
         @test float(typeof(complex(x, x))) == typeof(float(complex(x, x)))
     end
+    @test_throws ErrorException("`float` not defined on abstractly-typed arrays; please convert to a more specific type") float(Real[])
 end
 
 @testset "significant digits" begin
@@ -139,9 +146,10 @@ end
 end
 
 @testset "literal pow matches runtime pow matches optimized pow" begin
-    two = 2
-    @test 1.0000000105367122^2 == 1.0000000105367122^two
-    @test 1.0041504f0^2 == 1.0041504f0^two
+    let two = 2
+        @test 1.0000000105367122^2 == 1.0000000105367122^two
+        @test 1.0041504f0^2 == 1.0041504f0^two
+    end
 
     function g2(start, two, N)
         x = start
@@ -192,11 +200,13 @@ end
     finv(x) = f(x, -1)
     f2(x) = f(x, 2)
     f3(x) = f(x, 3)
-    x = 1.0000000105367122
-    @test x^2 == f(x, 2) == f2(x) == x*x == Float64(big(x)*big(x))
-    @test x^3 == f(x, 3) == f3(x) == x*x*x == Float64(big(x)*big(x)*big(x))
-    x = 1.000000007393669
-    @test x^-1 == f(x, -1) == finv(x) == 1/x == inv(x) == Float64(1/big(x)) == Float64(inv(big(x)))
+    let x = 1.0000000105367122
+        @test x^2 == f(x, 2) == f2(x) == x*x == Float64(big(x)*big(x))
+        @test x^3 == f(x, 3) == f3(x) == x*x*x == Float64(big(x)*big(x)*big(x))
+    end
+    let x = 1.000000007393669
+        @test x^-1 == f(x, -1) == finv(x) == 1/x == inv(x) == Float64(1/big(x)) == Float64(inv(big(x)))
+    end
 end
 
 @testset "curried approximation" begin
@@ -208,4 +218,223 @@ end
 @testset "isnan for Number" begin
     struct CustomNumber <: Number end
     @test !isnan(CustomNumber())
+end
+
+@testset "isapprox with dimensionful numbers" begin
+    isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
+    using .Main.Furlongs
+    x = Furlong(1.0)
+    # the default `atol = 0` must not be compared with the dimensionful `rtol*max(|x|, |y|)`
+    @test isapprox(x, Furlong(1.0 + 1e-10); rtol=1e-8)
+    @test !isapprox(x, Furlong(1.0 + 1e-6); rtol=1e-8)
+    @test isapprox(x, x; rtol=0)
+    @test !isapprox(x, Furlong(2.0); rtol=0)
+    @test isapprox(Furlong(0.0), Furlong(-0.0); rtol=1e-8)
+    @test isapprox(Furlong(1), Furlong(1); rtol=0)
+    # the absolute tolerance has the units of the compared numbers
+    @test isapprox(x, Furlong(1.0 + 1e-10); atol=Furlong(1e-8))
+    @test !isapprox(x, Furlong(1.0 + 1e-6); atol=Furlong(1e-8))
+    @test isapprox(Furlong(0.0), Furlong(1e-10); atol=Furlong(1e-8))
+    @test isapprox(x, Furlong(1.0 + 1e-6); atol=Furlong(1e-8), rtol=1e-5)
+    # the default relative tolerance is that of the dimensionless `one(x)`
+    @test Base.rtoldefault(typeof(x)) === Base.rtoldefault(Float64)
+    @test Base.rtoldefault(Furlong{2,Float32}) === Base.rtoldefault(Float32)
+    @test Base.rtoldefault(x, x, Furlong(1e-8)) === 0.0
+    @test x ≈ Furlong(1.0 + 1e-10)
+    @test x ≉ Furlong(1.0 + 1e-6)
+    @test Furlong(0.0) ≈ Furlong(-0.0)
+    @test Furlong(3) ≈ Furlong(3)
+    @test !(x ≈ Furlong(2.0))
+    # incompatible numbers (dimensionful vs. dimensionless, or different dimensions) throw
+    @test_throws ErrorException isapprox(x, 1.0)
+    @test_throws ErrorException isapprox(1.0, x)
+    @test_throws ErrorException isapprox(x, Furlong{2}(1.0))
+    @test_throws ErrorException x ≈ 0
+    @test_throws ErrorException isapprox(x, 1.0; rtol=1e-8)
+    # so does an absolute tolerance with the wrong units (unless the numbers are equal)
+    @test_throws MethodError isapprox(x, Furlong(2.0); atol=1e-8)
+    @test_throws MethodError isapprox(x, Furlong(1.0 + 1e-10); atol=Furlong{2}(1e-8))
+    # a `Number` type without a distinct multiplicative identity has no default
+    struct NoDefaultRtol <: Number end
+    Base.one(::Type{NoDefaultRtol}) = NoDefaultRtol()
+    @test_throws MethodError Base.rtoldefault(NoDefaultRtol)
+end
+
+@testset "isapprox and integer overflow" begin
+    for T in (Int8, Int16, Int32)
+        T === Int && continue
+        @test !isapprox(typemin(T), T(0))
+        @test !isapprox(typemin(T), unsigned(T)(0))
+        @test !isapprox(typemin(T), 0)
+        @test !isapprox(typemin(T), T(0), atol=0.99)
+        @test !isapprox(typemin(T), unsigned(T)(0), atol=0.99)
+        @test !isapprox(typemin(T), 0, atol=0.99)
+        @test !isapprox(typemin(T), T(0), atol=1)
+        @test !isapprox(typemin(T), unsigned(T)(0), atol=1)
+        @test !isapprox(typemin(T), 0, atol=1)
+
+        @test !isapprox(typemin(T)+T(10), T(10))
+        @test !isapprox(typemin(T)+T(10), unsigned(T)(10))
+        @test !isapprox(typemin(T)+T(10), 10)
+        @test !isapprox(typemin(T)+T(10), T(10), atol=0.99)
+        @test !isapprox(typemin(T)+T(10), unsigned(T)(10), atol=0.99)
+        @test !isapprox(typemin(T)+T(10), 10, atol=0.99)
+        @test !isapprox(typemin(T)+T(10), T(10), atol=1)
+        @test !isapprox(typemin(T)+T(10), unsigned(T)(10), atol=1)
+        @test !isapprox(typemin(T)+T(10), 10, atol=1)
+
+        @test isapprox(typemin(T), 0.0, rtol=1)
+    end
+    for T in (Int, Int64, Int128)
+        @test !isapprox(typemin(T), T(0))
+        @test !isapprox(typemin(T), unsigned(T)(0))
+        @test !isapprox(typemin(T), T(0), atol=0.99)
+        @test !isapprox(typemin(T), unsigned(T)(0), atol=0.99)
+        @test !isapprox(typemin(T), T(0), atol=1)
+        @test !isapprox(typemin(T), unsigned(T)(0), atol=1)
+
+        @test !isapprox(typemin(T)+T(10), T(10))
+        @test !isapprox(typemin(T)+T(10), unsigned(T)(10))
+        @test !isapprox(typemin(T)+T(10), T(10), atol=0.99)
+        @test !isapprox(typemin(T)+T(10), unsigned(T)(10), atol=0.99)
+        @test !isapprox(typemin(T)+T(10), T(10), atol=1)
+        @test !isapprox(typemin(T)+T(10), unsigned(T)(10), atol=1)
+
+        @test isapprox(typemin(T), 0.0, rtol=1)
+    end
+end
+
+@testset "isapprox and unsigned integers" begin
+    for T in Base.BitUnsigned_types
+        # Test also combinations of different integer types
+        W = widen(T)
+        # The order of the operands for difference between unsigned integers is
+        # very important, test both combinations.
+        @test isapprox(T(42), T(42); rtol=T(0), atol=0.5)
+        @test isapprox(T(42), W(42); rtol=T(0), atol=0.5)
+        @test !isapprox(T(0), T(1); rtol=T(0), atol=0.5)
+        @test !isapprox(T(1), T(0); rtol=T(0), atol=0.5)
+        @test isapprox(T(1), T(3); atol=T(2))
+        @test isapprox(T(4), T(2); atol=T(2))
+        @test isapprox(T(1), W(3); atol=T(2))
+        @test isapprox(T(4), W(2); atol=T(2))
+        @test isapprox(T(5), T(7); atol=typemax(T))
+        @test isapprox(T(8), T(6); atol=typemax(T))
+        @test isapprox(T(1), T(2); rtol=1)
+        @test isapprox(T(6), T(3); rtol=1)
+        @test isapprox(T(1), W(2); rtol=1)
+        @test isapprox(T(6), W(3); rtol=1)
+        @test !isapprox(typemin(T), typemax(T))
+        @test !isapprox(typemax(T), typemin(T))
+        @test !isapprox(typemin(T), typemax(T); atol=typemax(T)-T(1))
+        @test !isapprox(typemax(T), typemin(T); atol=typemax(T)-T(1))
+        @test isapprox(typemin(T), typemax(T); atol=typemax(T))
+        @test isapprox(typemax(T), typemin(T); atol=typemax(T))
+    end
+end
+
+@testset "isapprox(x, x) for integers agrees with the `Number` method" begin
+    # Equal inputs compare equal even with NaN or negative tolerances.
+    tolerances = (0, 1, 0.5, 1e-8, Inf, NaN, -1)
+    for T in (Base.BitInteger_types..., BigInt)
+        for x in (T(0), T(5), T === BigInt ? BigInt(1) << 200 : typemax(T))
+            for atol in tolerances, rtol in tolerances
+                @test isapprox(x, x; atol, rtol) ==
+                      invoke(isapprox, Tuple{Number,Number}, x, x; atol, rtol) == true
+            end
+        end
+    end
+    @test isapprox(0, 0; rtol=Inf)
+    @test isapprox(5, 5; atol=NaN)
+end
+
+@testset "isapprox for integers is exact" begin
+    # Check extreme values and mixed integer types against exact BigInt arithmetic.
+    testvals(::Type{Bool}) = (false, true)
+    testvals(::Type{BigInt}) = (-(big(1) << 200), big(-1), big(0), big(1), big(1) << 200)
+    testvals(T) = unique(T[typemin(T), typemin(T)+one(T), zero(T), one(T), T(10),
+                           typemax(T)-one(T), typemax(T)])
+    values = Any[v for T in (Bool, Base.BitInteger_types..., BigInt) for v in testvals(T)]
+
+    @test all(x -> Base.uabs(x) == abs(big(x)), values)
+
+    wrongdiff, wrongatol, wrongrtol = [], [], []
+    for x in values, y in values
+        bx, by = big(x), big(y)
+        d = abs(bx - by)
+        d == Base._uabsdiff(x, y) || push!(wrongdiff, (x, y))
+        for atol in (0, 1, 1000)
+            isapprox(x, y; atol) == (d <= atol) || push!(wrongatol, (x, y, atol))
+        end
+        for rtol in (1, 2, 3)
+            isapprox(x, y; rtol) == (d <= rtol * max(abs(bx), abs(by))) ||
+                push!(wrongrtol, (x, y, rtol))
+        end
+    end
+    @test isempty(wrongdiff)
+    @test isempty(wrongatol)
+    @test isempty(wrongrtol)
+
+    # Tolerances at and just below the exact distance.
+    for T in (Int8, Int16, Int32, Int64, Int128)
+        U = unsigned(T)
+        @test isapprox(typemin(T), U(0); atol=big(2)^(8*sizeof(T)-1))
+        @test !isapprox(typemin(T), U(0); atol=big(2)^(8*sizeof(T)-1) - 1)
+        @test isapprox(typemin(T), typemax(U); atol=big(2)^(8*sizeof(T)-1) + typemax(U))
+        @test !isapprox(typemin(T), typemax(U); atol=big(2)^(8*sizeof(T)-1) + typemax(U) - 1)
+        @test isapprox(typemin(T), T(0); rtol=1)
+    end
+
+    # Distances larger than the common unsigned type.
+    for T in (Int8, Int16, Int32, Int64, Int128)
+        U = unsigned(T)
+        @test !isapprox(typemin(T), typemax(U); atol=typemax(U))
+        @test !isapprox(typemax(U), typemin(T); atol=typemax(U))
+        @test !isapprox(typemin(T), typemax(U); atol=NaN)
+        @test isapprox(typemin(T), typemax(U); atol=Inf)
+        @test isapprox(typemin(T), typemax(U); atol=big(typemax(U)) + big(2)^(8*sizeof(T)-1))
+    end
+    # Overflowing relative-tolerance products.
+    for T in Base.BitInteger_types
+        @test isapprox(zero(T), typemax(T); rtol=3)
+        @test isapprox(typemax(T), zero(T); rtol=typemax(T))
+        T <: Signed && @test isapprox(typemin(T), zero(T); rtol=2)
+    end
+
+    let x = Ref{Int128}(typemin(Int128)), y = Ref{UInt128}(typemax(UInt128))
+        carried() = isapprox(x[], y[]; atol=1.0)
+        carried()
+        @test @allocated(carried()) == 0
+    end
+end
+
+@testset "Conversion from floating point to unsigned integer near extremes (#51063)" begin
+    @test_throws InexactError UInt32(4.2949673f9)
+    @test_throws InexactError UInt64(1.8446744f19)
+    @test_throws InexactError UInt64(1.8446744073709552e19)
+    @test_throws InexactError UInt128(3.402823669209385e38)
+end
+
+@testset "Conversion from floating point to integer near extremes (exhaustive)" begin
+    for Ti in Base.BitInteger_types, Tf in (Float16, Float32, Float64), x in (typemin(Ti), typemax(Ti))
+        y = Tf(x)
+        for i in -3:3
+            z = nextfloat(y, i)
+
+            result = isfinite(z) ? round(BigInt, z) : error
+            result = result !== error && typemin(Ti) <= result <= typemax(Ti) ? result : error
+
+            if result === error
+                @test_throws InexactError round(Ti, z)
+                @test_throws InexactError Ti(z)
+            else
+                @test result == round(Ti, z)
+                if isinteger(z)
+                    @test result == Ti(z)
+                else
+                    @test_throws InexactError Ti(z)
+                end
+            end
+        end
+    end
 end

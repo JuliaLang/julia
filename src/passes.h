@@ -9,96 +9,137 @@
 
 using namespace llvm;
 
+namespace llvm { class TargetMachine; }
+
 // Function Passes
-struct DemoteFloat16 : PassInfoMixin<DemoteFloat16> {
-    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
-    static bool isRequired() { return true; }
-};
-
-struct CombineMulAdd : PassInfoMixin<CombineMulAdd> {
+struct DemoteFloat16Pass : RequiredPassInfoMixin<DemoteFloat16Pass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
 };
 
-struct LateLowerGC : PassInfoMixin<LateLowerGC> {
-    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
-    static bool isRequired() { return true; }
-};
-
-struct AllocOptPass : PassInfoMixin<AllocOptPass> {
+struct LateLowerGCPass : RequiredPassInfoMixin<LateLowerGCPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
 };
 
-struct PropagateJuliaAddrspacesPass : PassInfoMixin<PropagateJuliaAddrspacesPass> {
+struct AllocOptPass : OptionalPassInfoMixin<AllocOptPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
-    static bool isRequired() { return true; }
 };
 
-struct LowerExcHandlers : PassInfoMixin<LowerExcHandlers> {
+struct PropagateJuliaAddrspacesPass : RequiredPassInfoMixin<PropagateJuliaAddrspacesPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
-    static bool isRequired() { return true; }
 };
 
-struct GCInvariantVerifierPass : PassInfoMixin<GCInvariantVerifierPass> {
+
+struct GCInvariantVerifierPass : RequiredPassInfoMixin<GCInvariantVerifierPass> {
     bool Strong;
     GCInvariantVerifierPass(bool Strong = false) JL_NOTSAFEPOINT : Strong(Strong) {}
 
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
-    static bool isRequired() { return true; }
 };
+
+struct FinalLowerGCPass : RequiredPassInfoMixin<FinalLowerGCPass> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
+};
+
+struct CancellationLoweringPass : RequiredPassInfoMixin<CancellationLoweringPass> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
+};
+
+struct ExpandAtomicModifyPass : OptionalPassInfoMixin<ExpandAtomicModifyPass> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
+};
+
 
 // Module Passes
-struct CPUFeatures : PassInfoMixin<CPUFeatures> {
-    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
-    static bool isRequired() { return true; }
-};
-
-struct RemoveNI : PassInfoMixin<RemoveNI> {
+struct CPUFeaturesPass : RequiredPassInfoMixin<CPUFeaturesPass> {
+    const TargetMachine *TM;
+    explicit CPUFeaturesPass(const TargetMachine *TM = nullptr) JL_NOTSAFEPOINT : TM(TM) {}
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
 };
 
-struct LowerSIMDLoop : PassInfoMixin<LowerSIMDLoop> {
+struct RemoveNIPass : RequiredPassInfoMixin<RemoveNIPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
 };
 
-struct FinalLowerGCPass : PassInfoMixin<FinalLowerGCPass> {
-    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
-    static bool isRequired() { return true; }
-};
-
-struct MultiVersioning : PassInfoMixin<MultiVersioning> {
+struct MultiVersioningPass : RequiredPassInfoMixin<MultiVersioningPass> {
     bool external_use;
-    MultiVersioning(bool external_use = false) : external_use(external_use) {}
+    MultiVersioningPass(bool external_use = false) JL_NOTSAFEPOINT : external_use(external_use) {}
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
-    static bool isRequired() { return true; }
 };
 
-struct RemoveJuliaAddrspacesPass : PassInfoMixin<RemoveJuliaAddrspacesPass> {
+struct RemoveJuliaAddrspacesPass : RequiredPassInfoMixin<RemoveJuliaAddrspacesPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
-    static bool isRequired() { return true; }
 };
 
-struct RemoveAddrspacesPass : PassInfoMixin<RemoveAddrspacesPass> {
+struct RemoveAddrspacesPass : RequiredPassInfoMixin<RemoveAddrspacesPass> {
     std::function<unsigned(unsigned)> ASRemapper;
     RemoveAddrspacesPass() JL_NOTSAFEPOINT;
     RemoveAddrspacesPass(std::function<unsigned(unsigned)> ASRemapper) JL_NOTSAFEPOINT : ASRemapper(std::move(ASRemapper)) {}
     ~RemoveAddrspacesPass() JL_NOTSAFEPOINT = default;
 
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
-    static bool isRequired() { return true; }
 };
 
-struct LowerPTLSPass : PassInfoMixin<LowerPTLSPass> {
+struct LowerPTLSPass : RequiredPassInfoMixin<LowerPTLSPass> {
     bool imaging_mode;
-    LowerPTLSPass(bool imaging_mode=false) JL_NOTSAFEPOINT : imaging_mode(imaging_mode) {}
+    bool tls_getters;
+    LowerPTLSPass(bool imaging_mode=false, bool tls_getters=false) JL_NOTSAFEPOINT : imaging_mode(imaging_mode), tls_getters(tls_getters) {}
 
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
-    static bool isRequired() { return true; }
 };
 
 // Loop Passes
-struct JuliaLICMPass : PassInfoMixin<JuliaLICMPass> {
+struct JuliaLICMPass : OptionalPassInfoMixin<JuliaLICMPass> {
     PreservedAnalyses run(Loop &L, LoopAnalysisManager &AM,
                           LoopStandardAnalysisResults &AR, LPMUpdater &U) JL_NOTSAFEPOINT;
 };
+
+struct LowerSIMDLoopPass : OptionalPassInfoMixin<LowerSIMDLoopPass> {
+    PreservedAnalyses run(Loop &L, LoopAnalysisManager &AM,
+                          LoopStandardAnalysisResults &AR, LPMUpdater &U) JL_NOTSAFEPOINT;
+};
+
+#define MODULE_MARKER_PASS(NAME) \
+    struct NAME##MarkerPass : RequiredPassInfoMixin<NAME##MarkerPass> { \
+        PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT { return PreservedAnalyses::all(); } \
+    };
+
+#define FUNCTION_MARKER_PASS(NAME) \
+    struct NAME##MarkerPass : RequiredPassInfoMixin<NAME##MarkerPass> { \
+        PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT { return PreservedAnalyses::all(); } \
+    };
+
+#define LOOP_MARKER_PASS(NAME) \
+    struct NAME##MarkerPass : RequiredPassInfoMixin<NAME##MarkerPass> { \
+        PreservedAnalyses run(Loop &L, LoopAnalysisManager &AM, \
+                              LoopStandardAnalysisResults &AR, LPMUpdater &U) JL_NOTSAFEPOINT { \
+            return PreservedAnalyses::all(); \
+        } \
+    };
+
+// These are useful for debugging with --print-before/after
+MODULE_MARKER_PASS(BeforeOptimization)
+MODULE_MARKER_PASS(BeforeEarlySimplification)
+MODULE_MARKER_PASS(AfterEarlySimplification)
+MODULE_MARKER_PASS(BeforeEarlyOptimization)
+MODULE_MARKER_PASS(AfterEarlyOptimization)
+FUNCTION_MARKER_PASS(BeforeLoopOptimization)
+LOOP_MARKER_PASS(BeforeLICM)
+LOOP_MARKER_PASS(AfterLICM)
+LOOP_MARKER_PASS(BeforeLoopSimplification)
+LOOP_MARKER_PASS(AfterLoopSimplification)
+FUNCTION_MARKER_PASS(AfterLoopOptimization)
+FUNCTION_MARKER_PASS(BeforeScalarOptimization)
+FUNCTION_MARKER_PASS(AfterScalarOptimization)
+FUNCTION_MARKER_PASS(BeforeVectorization)
+FUNCTION_MARKER_PASS(AfterVectorization)
+MODULE_MARKER_PASS(BeforeIntrinsicLowering)
+MODULE_MARKER_PASS(AfterIntrinsicLowering)
+MODULE_MARKER_PASS(BeforeCleanup)
+MODULE_MARKER_PASS(AfterCleanup)
+MODULE_MARKER_PASS(AfterOptimization)
+
+bool verifyLLVMIR(const Module &M) JL_NOTSAFEPOINT;
+bool verifyLLVMIR(const Function &F) JL_NOTSAFEPOINT;
+bool verifyLLVMIR(const Loop &L) JL_NOTSAFEPOINT;
 
 #endif

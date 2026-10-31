@@ -1,0 +1,206 @@
+diff -ru gmp-6.3.0/gmp-h.in gmp-6.3.0.new/gmp-h.in
+--- gmp-6.3.0/gmp-h.in	2023-07-29 09:42:16
++++ gmp-6.3.0.new/gmp-h.in	2023-12-29 15:33:34
+@@ -487,6 +487,12 @@
+ 				      void *(**) (void *, size_t, size_t),
+ 				      void (**) (void *, size_t)) __GMP_NOTHROW;
+ 
++#define mp_set_alloc_overflow_function __gmp_set_alloc_overflow_function
++__GMP_DECLSPEC void mp_set_alloc_overflow_function (void (*) (void)) __GMP_NOTHROW;
++
++#define mp_get_alloc_overflow_function __gmp_get_alloc_overflow_function
++__GMP_DECLSPEC void mp_get_alloc_overflow_function (void (**) (void)) __GMP_NOTHROW;
++
+ #define mp_bits_per_limb __gmp_bits_per_limb
+ __GMP_DECLSPEC extern const int mp_bits_per_limb;
+ 
+diff -ru gmp-6.3.0/gmp-impl.h gmp-6.3.0.new/gmp-impl.h
+--- gmp-6.3.0/gmp-impl.h	2023-07-29 09:42:16
++++ gmp-6.3.0.new/gmp-impl.h	2023-12-30 16:02:36
+@@ -58,6 +58,8 @@
+    short can be 24, 32, 46 or 64 bits, and different for ushort.  */
+ 
+ #include <limits.h>
++#include <stdio.h>
++#include <stdlib.h>
+ 
+ /* For fat.h and other fat binary stuff.
+    No need for __GMP_ATTRIBUTE_PURE or __GMP_NOTHROW, since functions
+@@ -699,14 +701,22 @@
+ __GMP_DECLSPEC extern void * (*__gmp_allocate_func) (size_t);
+ __GMP_DECLSPEC extern void * (*__gmp_reallocate_func) (void *, size_t, size_t);
+ __GMP_DECLSPEC extern void   (*__gmp_free_func) (void *, size_t);
++__GMP_DECLSPEC extern void   (*__gmp_alloc_overflow_func)(void);
+ 
+ __GMP_DECLSPEC void *__gmp_default_allocate (size_t);
+ __GMP_DECLSPEC void *__gmp_default_reallocate (void *, size_t, size_t);
+ __GMP_DECLSPEC void __gmp_default_free (void *, size_t);
++__GMP_DECLSPEC void __gmp_default_alloc_overflow (void);
+ 
+ #define __GMP_ALLOCATE_FUNC_TYPE(n,type) \
+   ((type *) (*__gmp_allocate_func) ((n) * sizeof (type)))
+ #define __GMP_ALLOCATE_FUNC_LIMBS(n)   __GMP_ALLOCATE_FUNC_TYPE (n, mp_limb_t)
++#define __GMP_ALLOC_OVERFLOW_FUNC()                              \
++  do {                                                           \
++    (*__gmp_alloc_overflow_func) ();                             \
++    fprintf (stderr, "unexpected return from alloc_overflow\n"); \
++    abort ();                                                    \
++  } while (0)
+ 
+ #define __GMP_REALLOCATE_FUNC_TYPE(p, old_size, new_size, type)		\
+   ((type *) (*__gmp_reallocate_func)					\
+diff -ru gmp-6.3.0/memory.c gmp-6.3.0.new/memory.c
+--- gmp-6.3.0/memory.c	2023-07-29 09:42:16
++++ gmp-6.3.0.new/memory.c	2023-12-29 15:43:27
+@@ -37,6 +37,7 @@
+ void * (*__gmp_allocate_func) (size_t) = __gmp_default_allocate;
+ void * (*__gmp_reallocate_func) (void *, size_t, size_t) = __gmp_default_reallocate;
+ void   (*__gmp_free_func) (void *, size_t) = __gmp_default_free;
++void   (*__gmp_alloc_overflow_func) (void) = __gmp_default_alloc_overflow;
+ 
+ 
+ /* Default allocation functions.  In case of failure to allocate/reallocate
+@@ -142,4 +143,11 @@
+   }
+ #endif
+   free (blk_ptr);
++}
++
++void
++__gmp_default_alloc_overflow(void)
++{
++    fprintf (stderr, "gmp: overflow in mpz type\n");
++    abort();
+ }
+diff -ru gmp-6.3.0/mp_get_fns.c gmp-6.3.0.new/mp_get_fns.c
+--- gmp-6.3.0/mp_get_fns.c	2023-07-29 09:42:16
++++ gmp-6.3.0.new/mp_get_fns.c	2023-12-29 15:43:27
+@@ -45,3 +45,11 @@
+   if (free_func != NULL)
+     *free_func = __gmp_free_func;
+ }
++
++void
++mp_get_alloc_overflow_function(
++        void (**alloc_overflow_func) (void)) __GMP_NOTHROW
++{
++  if (alloc_overflow_func != NULL)
++    *alloc_overflow_func = __gmp_alloc_overflow_func;
++}
+diff -ru gmp-6.3.0/mp_set_fns.c gmp-6.3.0.new/mp_set_fns.c
+--- gmp-6.3.0/mp_set_fns.c	2023-07-29 09:42:16
++++ gmp-6.3.0.new/mp_set_fns.c	2023-12-29 15:43:27
+@@ -47,3 +47,12 @@
+   __gmp_reallocate_func = realloc_func;
+   __gmp_free_func = free_func;
+ }
++
++void
++mp_set_alloc_overflow_function(
++             void (*alloc_overflow_func) (void)) __GMP_NOTHROW
++{
++  if (alloc_overflow_func == 0)
++    alloc_overflow_func = __gmp_default_alloc_overflow;
++  __gmp_alloc_overflow_func = alloc_overflow_func;
++}
+diff -ru gmp-6.3.0/mpz/init2.c gmp-6.3.0.new/mpz/init2.c
+--- gmp-6.3.0/mpz/init2.c	2023-07-29 09:42:17
++++ gmp-6.3.0.new/mpz/init2.c	2023-12-30 12:22:34
+@@ -41,7 +41,7 @@
+   if (sizeof (unsigned long) > sizeof (int)) /* param vs _mp_size field */
+     {
+       if (UNLIKELY (new_alloc > INT_MAX))
+-	MPZ_OVERFLOW;
++	__GMP_ALLOC_OVERFLOW_FUNC ();
+     }
+ 
+   PTR(x) = __GMP_ALLOCATE_FUNC_LIMBS (new_alloc);
+diff -ru gmp-6.3.0/mpz/realloc.c gmp-6.3.0.new/mpz/realloc.c
+--- gmp-6.3.0/mpz/realloc.c	2023-07-29 09:42:17
++++ gmp-6.3.0.new/mpz/realloc.c	2023-12-30 12:22:47
+@@ -42,12 +42,12 @@
+   if (sizeof (mp_size_t) == sizeof (int))
+     {
+       if (UNLIKELY (new_alloc > ULONG_MAX / GMP_NUMB_BITS))
+-	MPZ_OVERFLOW;
++	__GMP_ALLOC_OVERFLOW_FUNC ();
+     }
+   else
+     {
+       if (UNLIKELY (new_alloc > INT_MAX))
+-	MPZ_OVERFLOW;
++	__GMP_ALLOC_OVERFLOW_FUNC ();
+     }
+ 
+   if (ALLOC (m) == 0)
+diff -ru gmp-6.3.0/mpz/realloc2.c gmp-6.3.0.new/mpz/realloc2.c
+--- gmp-6.3.0/mpz/realloc2.c	2023-07-29 09:42:17
++++ gmp-6.3.0.new/mpz/realloc2.c	2023-12-30 12:22:59
+@@ -42,7 +42,7 @@
+   if (sizeof (unsigned long) > sizeof (int)) /* param vs _mp_size field */
+     {
+       if (UNLIKELY (new_alloc > INT_MAX))
+-	MPZ_OVERFLOW;
++	__GMP_ALLOC_OVERFLOW_FUNC ();
+     }
+ 
+   if (ALLOC (m) == 0)
+diff -ru gmp-6.3.0/tal-reent.c gmp-6.3.0.new/tal-reent.c
+--- gmp-6.3.0/tal-reent.c	2023-07-29 09:42:17
++++ gmp-6.3.0.new/tal-reent.c	2023-12-30 12:19:40
+@@ -61,6 +61,10 @@
+ 
+   total_size = size + HSIZ;
+   p = __GMP_ALLOCATE_FUNC_TYPE (total_size, char);
++  if (!p)
++    {
++      __GMP_ALLOC_OVERFLOW_FUNC ();
++    }
+   P->size = total_size;
+   P->next = *markp;
+   *markp = P;
+diff -ru gmp-6.3.0/tests/mpz/t-pow.c gmp-6.3.0.new/tests/mpz/t-pow.c
+--- gmp-6.3.0/tests/mpz/t-pow.c	2023-07-29 09:42:17
++++ gmp-6.3.0.new/tests/mpz/t-pow.c	2023-12-30 15:57:58
+@@ -194,6 +194,33 @@
+   mpz_clear (want);
+ }
+ 
++jmp_buf env;
++
++void
++alloc_overflow_handler (void)
++{
++  longjmp(env, 1);
++}
++
++void
++check_overflow (void)
++{
++  mpz_t x;
++  mpz_init (x);
++  int overflow_intercepted = 0;
++  if (setjmp (env) == 0) {
++    mp_set_alloc_overflow_function (&alloc_overflow_handler);
++    mpz_ui_pow_ui (x, 3, 7625597484987LL);
++  } else {
++    ++overflow_intercepted;
++  }
++  if (overflow_intercepted != 1) {
++    printf ("overflow not intercepted\n");
++    abort ();
++  }
++  mpz_clear (x);
++}
++
+ int
+ main (int argc, char **argv)
+ {
+@@ -211,6 +238,7 @@
+ 
+   check_various ();
+   check_random (reps);
++  check_overflow ();
+ 
+   tests_end ();
+   exit (0);

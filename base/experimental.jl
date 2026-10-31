@@ -9,7 +9,8 @@
 """
 module Experimental
 
-using Base: Threads, sync_varname
+using Base: Threads, ScopedValues, sync_varname, is_function_def
+using Base: GenericCondition
 using Base.Meta
 
 """
@@ -28,22 +29,28 @@ end
 Base.IndexStyle(::Type{<:Const}) = IndexLinear()
 Base.size(C::Const) = size(C.a)
 Base.axes(C::Const) = axes(C.a)
-@eval Base.getindex(A::Const, i1::Int) =
-    (Base.@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1))
-@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =
-  (Base.@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+Base.@assume_effects :noub_if_noinbounds function Base.getindex(A::Const, i::Int)
+    @inline
+    @boundscheck Base.checkbounds(A.a, i)
+    return Core.const_memoryrefget(Core.memoryrefnew(getfield(A.a, :ref), i, false), :not_atomic, false)
+end
+function Base.getindex(A::Const, i1::Int, i2::Int, I::Int...)
+    @inline
+    @boundscheck Base.checkbounds(A.a, i1, i2, I...) # generally _to_linear_index requires bounds checking
+    return @inbounds A[Base._to_linear_index(A.a, i1, i2, I...)]
+end
 
 """
     @aliasscope expr
 
-Allows the compiler to assume that all `Const`s are not being modified through stores
+Allow the compiler to assume that all `Const`s are not being modified through stores
 within this scope, even if the compiler can't prove this to be the case.
 
 !!! warning
     Experimental API. Subject to change without deprecation.
 """
 macro aliasscope(body)
-    sym = gensym()
+    sym = :aliasscope_result
     quote
         $(Expr(:aliasscope))
         $sym = $(esc(body))
@@ -53,31 +60,47 @@ macro aliasscope(body)
 end
 
 
-function sync_end(c::Channel{Any})
+function sync_end(c::Channel{Any}, src::Union{Nothing, Base.CancellationTokenSource}=nothing)
     if !isready(c)
         # there must be at least one item to begin with
         close(c)
         return
     end
     nremaining::Int = 0
-    while true
-        event = take!(c)
-        if event === :__completion__
-            nremaining -= 1
-            if nremaining == 0
-                break
-            end
-        else
-            nremaining += 1
-            schedule(Task(()->begin
-                try
-                    wait(event)
-                    put!(c, :__completion__)
-                catch e
-                    close(c, e)
+    try
+        while true
+            event = take!(c)
+            if event === :__completion__
+                nremaining -= 1
+                if nremaining == 0
+                    break
                 end
-            end))
+            else
+                nremaining += 1
+                # The watcher must survive cancellation of the enclosing
+                # scope to deliver the completion (the `cancel` keyword is
+                # part of the waitable interface).
+                schedule(Task(()->begin
+                    try
+                        wait(event; cancel = nothing)
+                        put!(c, :__completion__; cancel = nothing)
+                    catch e
+                        close(c, e)
+                    end
+                end))
+            end
         end
+    catch e
+        # Per this macro's contract the exception (a child failure delivered
+        # via `close(c, e)`, or a cancellation of this block's scope) is
+        # rethrown immediately - we do not wait for the children to finish
+        # dying, but we cancel the block's own source so that all children
+        # observe the cancellation through the token tree.
+        if src !== nothing
+            e isa Base.CancellationRequest ? Base.cancel!(src, e) : Base.cancel!(src)
+        end
+        close(c, e isa Exception ? e : ErrorException("sync_end interrupted"))
+        rethrow()
     end
     close(c)
     nothing
@@ -86,20 +109,34 @@ end
 """
     Experimental.@sync
 
-Wait until all lexically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `@distributed`
+Wait until all lexically-enclosed uses of [`@async`](@ref), [`@spawn`](@ref Threads.@spawn),
+`Distributed.@spawnat` and `Distributed.@distributed`
 are complete, or at least one of them has errored. The first exception is immediately
-rethrown. It is the responsibility of the user to cancel any still-running operations
-during error handling.
+rethrown; the block's cancellation scope is cancelled at the same time, so
+still-running operations spawned within observe the failure through their
+cancellation points rather than running unsupervised (they are not awaited).
+
+!!! Note
+    This is different to [`@sync`](@ref) in that errors from wrapped tasks are thrown immediately,
+    potentially before all tasks have returned.
 
 !!! Note
     This interface is experimental and subject to change or removal without notice.
 """
 macro sync(block)
     var = esc(sync_varname)
+    # like Base.@sync, the block runs in a new dynamic scope carrying the
+    # token of a fresh cancellation source; on the fail-fast path (and on
+    # cancellation from outside) the source is cancelled, reaching all
+    # children through the token tree without awaiting them
+    scoped_block = Expr(:tryfinally, esc(block), nothing,
+        :(Base.Scope(Core.current_scope()::Union{Nothing, Base.Scope},
+                     Base.CANCEL_TOKEN => Base.CancellationToken(var"#sync_src#"))))
     quote
-        let $var = Channel(Inf)
-            v = $(esc(block))
-            sync_end($var)
+        let var"#sync_src#" = Base.CancellationTokenSource(Base.default_cancel_token()),
+            $var = Channel(Inf)
+            v = $scoped_block
+            sync_end($var, var"#sync_src#")
             v
         end
     end
@@ -141,7 +178,7 @@ code to resort to runtime dispatch instead.
 Supported values are `1`, `2`, `3`, `4`, and `default` (currently equivalent to `3`).
 """
 macro max_methods(n::Int)
-    0 < n < 5 || error("We must have that `1 <= max_methods <= 4`, but `max_methods = $n`.")
+    1 <= n <= 4 || error("We must have that `1 <= max_methods <= 4`, but `max_methods = $n`.")
     return Expr(:meta, :max_methods, n)
 end
 
@@ -154,13 +191,13 @@ for max_methods. This setting is global for the entire generic function (or more
 the MethodTable).
 """
 macro max_methods(n::Int, fdef::Expr)
-    0 < n <= 255 || error("We must have that `1 <= max_methods <= 255`, but `max_methods = $n`.")
+    1 <= n <= 255 || error("We must have that `1 <= max_methods <= 255`, but `max_methods = $n`.")
     (fdef.head === :function && length(fdef.args) == 1) || error("Second argument must be a function forward declaration")
     return :(typeof($(esc(fdef))).name.max_methods = $(UInt8(n)))
 end
 
 """
-    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={yes,no} max_methods={default,1,2,3,...}
+    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={true,false} max_methods={default,1,2,3,4}
 
 Set compiler options for code in the enclosing module. Options correspond directly to
 command-line options with the same name, where applicable. The following options
@@ -193,7 +230,7 @@ macro compiler_options(args...)
             elseif ex.args[1] === :max_methods
                 a = ex.args[2]
                 a = a === :default ? 3 :
-                  a isa Int ? ((0 < a < 5) ? a : error("We must have that `1 <= max_methods <= 4`, but `max_methods = $a`.")) :
+                  a isa Int ? ((1 <= a <= 4) ? a : error("We must have that `1 <= max_methods <= 4`, but `max_methods = $a`.")) :
                   error("invalid argument to \"max_methods\" option")
                 push!(opts.args, Expr(:meta, :max_methods, a))
             else
@@ -252,7 +289,7 @@ When issuing a hint, the output should typically start with `\\n`.
 If you define custom exception types, your `showerror` method can
 support hints by calling [`Experimental.show_error_hints`](@ref).
 
-# Example
+# Examples
 
 ```
 julia> module Hinter
@@ -278,6 +315,7 @@ Then if you call `Hinter.only_int` on something that isn't an `Int` (thereby tri
 ```
 julia> Hinter.only_int(1.0)
 ERROR: MethodError: no method matching only_int(::Float64)
+The function `only_int` exists, but no method is defined for this combination of argument types.
 Did you mean to call `any_number`?
 Closest candidates are:
     ...
@@ -291,18 +329,21 @@ Closest candidates are:
     `if isdefined(Base.Experimental, :register_error_hint) ... end` block.
 """
 function register_error_hint(@nospecialize(handler), @nospecialize(exct::Type))
-    list = get!(Vector{Any}, _hint_handlers, exct)
-    push!(list, handler)
+    list = get!(Vector{Any}, _hint_handlers, Core.typename(exct))
+    push!(list, (exct, handler))
     return nothing
 end
 
-const _hint_handlers = IdDict{Type,Vector{Any}}()
+const _hint_handlers = IdDict{Core.TypeName,Vector{Any}}()
+# set while reporting a failed hint handler, so that showing the logged exception
+# stack (which may contain the exception being hinted) cannot re-run the handler
+const _hints_disabled = ScopedValues.ScopedValue(false)
 
 """
     Experimental.show_error_hints(io, ex, args...)
 
 Invoke all handlers from [`Experimental.register_error_hint`](@ref) for the particular
-exception type `typeof(ex)`. `args` must contain any other arguments expected by
+exception type `typeof(ex)` and all of its supertypes. `args` must contain any other arguments expected by
 the handler for that type.
 
 !!! compat "Julia 1.5"
@@ -311,15 +352,24 @@ the handler for that type.
     This interface is experimental and subject to change or removal without notice.
 """
 function show_error_hints(io, ex, args...)
-    hinters = get(_hint_handlers, typeof(ex), nothing)
-    isnothing(hinters) && return
-    for handler in hinters
-        try
-            Base.invokelatest(handler, io, ex, args...)
-        catch err
-            tn = typeof(handler).name
-            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error"
+    @nospecialize
+    _hints_disabled[] && return
+    ex_supertype = typeof(ex)
+    while ex_supertype != Any
+        hinters = get(_hint_handlers, Core.typename(ex_supertype), Any[])
+        for (exct, handler) in hinters
+            ex isa exct || continue
+            try
+                # TODO: deal with handlers accepting different signatures?
+                @invokelatest handler(io, ex, args...)
+            catch
+                tn = typeof(handler).name
+                ScopedValues.@with _hints_disabled => true begin
+                    @error "Hint-handler $handler for $(ex_supertype) in $(tn.module) caused an error" exception=current_exceptions()
+                end
+            end
         end
+        ex_supertype = supertype(ex_supertype)
     end
 end
 
@@ -327,27 +377,125 @@ end
 include("opaque_closure.jl")
 
 """
-    Experimental.@overlay mt [function def]
+    Base.Experimental.@overlay mt def
+    Base.Experimental.@overlay mt begin defs... end
 
 Define a method and add it to the method table `mt` instead of to the global method table.
 This can be used to implement a method override mechanism. Regular compilation will not
 consider these methods, and you should customize the compilation flow to look in these
-method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
+method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)). The block form
+overlays every definition in the block; definitions may carry docstrings and other macros.
 
+!!! note
+    Please be aware that when defining overlay methods using `@overlay`, it is not necessary
+    to have an original method that corresponds exactly in terms of how the method dispatches.
+    This means that the method overlay mechanism enabled by `@overlay` is not implemented by
+    replacing the methods themselves, but through an additional and prioritized method
+    lookup during the method dispatch.
+
+    Considering this, it is important to understand that in compilations using an overlay
+    method table like the following, the method dispatched by `callx(x)` is not the regular
+    method `callx(::Float64)`, but the overlay method `callx(x::Real)`:
+    ```julia
+    callx(::Real) = :real
+    @overlay SOME_OVERLAY_MT callx(::Real) = :overlay_real
+    callx(::Float64) = :float64
+
+    # some overlay callsite
+    let x::Float64
+        callx(x) #> :overlay_real
+    end
+    ```
 """
 macro overlay(mt, def)
-    def = macroexpand(__module__, def) # to expand @inline, @generated, etc
-    if !isexpr(def, [:function, :(=)])
-        error("@overlay requires a function Expr")
-    end
-    if isexpr(def.args[1], :call)
-        def.args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1])
-    elseif isexpr(def.args[1], :where)
-        def.args[1].args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1].args[1])
+    inner = Base.unwrap_macrocalls(def)
+    if isexpr(inner, :block)
+        # `@overlay mt begin ... end`: overlay every definition in the block
+        for arg in inner.args
+            isa(arg, LineNumberNode) && continue
+            innerarg = Base.unwrap_macrocalls(arg)
+            is_function_def(innerarg) || error("@overlay requires a function definition")
+            overlay_def!(mt, innerarg)
+        end
     else
-        error("@overlay requires a function Expr")
+        is_function_def(inner) || error("@overlay requires a function definition")
+        overlay_def!(mt, inner)
     end
-    esc(def)
+    return esc(def)
+end
+
+"""
+    Base.Experimental.@consistent_overlay mt def
+
+This macro operates almost identically to [`Base.Experimental.@overlay`](@ref), defining a
+new overlay method. The key difference with this macro is that it informs the compiler that
+the invocation of the overlay method it defines is `:consistent` with a regular,
+non-overlayed method call.
+
+More formally, when evaluating a generic function call ``f(x)`` at a specific world age
+``i``, if a regular method call ``fᵢ(x)`` is redirected to an overlay method call ``fᵢ′(x)``
+defined by this macro, ``fᵢ(x)`` and ``fᵢ′(x)`` are considered `:consistent` if the following
+conditions are met:
+- If ``fᵢ(x)`` returns a value ``y``, then ``fᵢ′(x)`` also returns some value ``yᵢ``, and ``y ≡ yᵢ`` holds.
+- If ``fᵢ(x)`` throws an exception, then ``fᵢ′(x)`` also throws some exception.
+
+For a detailed definition of `:consistent`-cy, consult the corresponding section in
+[`Base.@assume_effects`](@ref).
+
+!!! note
+    Note that the requirements for `:consistent`-cy include not only that the return values
+    are egal, but also that the manner of termination is the same. However, it's important
+    to be aware that when they throw exceptions, the exceptions themselves don't necessarily
+    have to be egal. In other words, if ``fᵢ(x)`` throws an exception, ``fᵢ′(x)`` is
+    required to also throw one, but the exact exceptions may differ.
+
+!!! note
+    Please note that the `:consistent`-cy requirement applies not to method itself but to
+    _method invocation_. This means that for the use of `@consistent_overlay`, it is
+    necessary for method invocations with the native regular compilation and those with
+    a compilation with overlay method table to be `:consistent`.
+
+    For example, it is important to understand that, `@consistent_overlay` can be used like
+    the following:
+    ```julia
+    callsin(x::Real) = x < 0 ? error(x) : sin(x)
+    @consistent_overlay SOME_OVERLAY_MT callsin(x::Float64) =
+        x < 0 ? error_somehow(x) : sin(x)
+    ```
+    However, be aware that this `@consistent_overlay` will immediately become invalid if a
+    new method for `callsin` is defined subsequently, such as:
+    ```julia
+    callsin(x::Float64) = cos(x)
+    ```
+
+    This specifically implies that the use of `@consistent_overlay` should be restricted as
+    much as possible to cases where a regular method with a concrete signature is replaced
+    by an overlay method with the same concrete signature.
+
+    This constraint is closely related to the note in [`Base.Experimental.@overlay`](@ref);
+    you are advised to consult that as well.
+"""
+macro consistent_overlay(mt, def)
+    inner = Base.unwrap_macrocalls(def)
+    is_function_def(inner) || error("@consistent_overlay requires a function definition")
+    overlay_def!(mt, inner)
+    override = Base.EffectsOverride(; consistent_overlay=true)
+    Base.pushmeta!(def::Expr, Base.form_purity_expr(override))
+    return esc(def)
+end
+
+function overlay_def!(mt, @nospecialize ex)
+    arg1 = ex.args[1]
+    if isexpr(arg1, :call)
+        arg1.args[1] = Expr(:overlay, mt, arg1.args[1])
+    elseif isexpr(arg1, :(::))
+        overlay_def!(mt, arg1)
+    elseif isexpr(arg1, :where)
+        overlay_def!(mt, arg1)
+    else
+        error("@overlay requires a function definition")
+    end
+    return ex
 end
 
 let new_mt(name::Symbol, mod::Module) = begin
@@ -360,12 +508,356 @@ let new_mt(name::Symbol, mod::Module) = begin
 end
 
 """
-    Experimental.@MethodTable(name)
+    Base.Experimental.@MethodTable name
 
 Create a new MethodTable in the current module, bound to `name`. This method table can be
-used with the [`Experimental.@overlay`](@ref) macro to define methods for a function without
-adding them to the global method table.
+used with the [`Base.Experimental.@overlay`](@ref) macro to define methods for a function
+without adding them to the global method table.
 """
 :@MethodTable
 
+"""
+    Experimental.@make_all_arithmetic_checked
+
+This macro defines methods that overwrite the base definition of basic arithmetic (`+`, `-`, `*`),
+to use their checked variants instead. Explicitly overflowing arithmetic operators (`+%`, `-%`, `*%`)
+are not affected.
+
+!!! warning
+    This macro is temporary and will likely be replaced by a more complete mechanism in the
+    future. It is subject to change or removal without notice.
+"""
+macro make_all_arithmetic_checked()
+    esc(quote
+        Base.:(-)(x::Base.BitInteger)                         = Base.Checked.checked_neg(x)
+        Base.:(-)(x::Base.Int, y::Base.Int)                    = Base.Checked.checked_sub(x, y)
+        Base.:(-)(x::T, y::T) where {T<:Base.BitInteger}       = Base.Checked.checked_sub(x, y)
+        Base.:(+)(x::Base.Int, y::Base.Int)                    = Base.Checked.checked_add(x, y)
+        Base.:(+)(x::T, y::T) where {T<:Base.BitInteger}       = Base.Checked.checked_add(x, y)
+        Base.:(*)(x::T, y::T) where {T<:Base.BitInteger}       = Base.Checked.checked_mul(x, y)
+    end)
 end
+
+"""
+    Base.Experimental.make_io_thread()
+
+Create a new thread that will run the Julia IO loop. This can potentially reduce the latency of some
+IO operations as they no longer depend on the main thread to run it. This does mean that code that uses
+this as implicit synchronization needs to be checked for correctness.
+"""
+function make_io_thread()
+    tid = UInt[0]
+    threadwork = @cfunction function(arg::Ptr{Cvoid})
+            current_task().donenotify = Base.ThreadSynchronizer() #TODO: Should this happen by default in adopt thread?
+            Base.errormonitor(current_task()) # this may not go particularly well if the IO loop is dead, but try anyways
+            @ccall jl_set_io_loop_tid((Threads.threadid() - 1)::Int16)::Cvoid
+            wait() # spin uv_run as long as needed
+            nothing
+        end Cvoid (Ptr{Cvoid},)
+    err = @ccall uv_thread_create(tid::Ptr{UInt}, threadwork::Ptr{Cvoid}, C_NULL::Ptr{Cvoid})::Cint
+    err == 0 || Base.uv_error("uv_thread_create", err)
+    @ccall uv_thread_detach(tid::Ptr{UInt})::Cint
+    err == 0 || Base.uv_error("uv_thread_detach", err)
+    # n.b. this does not wait for the thread to start or to take ownership of the event loop
+end
+
+"""
+    Base.Experimental.entrypoint(f, argtypes::Tuple)
+
+Mark a method for inclusion when the `--trim` option is specified.
+"""
+function entrypoint(@nospecialize(f), @nospecialize(argtypes::Tuple))
+    entrypoint(Tuple{Core.Typeof(f), argtypes...})
+end
+
+function entrypoint(@nospecialize(argt::Type))
+    # Only add to entrypoint list if we're generating output and in trim mode
+    if ccall(:jl_generating_output, Cint, ()) != 0
+        Base.Compiler.add_entrypoint(argt)
+    end
+    nothing
+end
+
+"""
+    Base.Experimental.disable_new_worlds()
+
+Mark that no new worlds (methods additions, deletions, etc) are permitted to be created at
+any future time, allowing for lower latencies for some operations and slightly lower memory
+usage, by eliminating the tracking of those possible invalidation.
+"""
+disable_new_worlds() = ccall(:jl_disable_new_worlds, Cvoid, ())
+
+### Task metrics
+
+"""
+    Base.Experimental.task_metrics(::Bool)
+
+Enable or disable the collection of per-task metrics.
+A `Task` created when `Base.Experimental.task_metrics(true)` is in effect will have
+[`Base.Experimental.task_running_time_ns`](@ref) and [`Base.Experimental.task_wall_time_ns`](@ref)
+timing information available.
+
+!!! note
+    Task metrics can be enabled at start-up via the `--task-metrics=yes` command line option.
+"""
+function task_metrics(b::Bool)
+    if b
+        ccall(:jl_task_metrics_enable, Cvoid, ())
+    else
+        ccall(:jl_task_metrics_disable, Cvoid, ())
+    end
+    return nothing
+end
+
+"""
+    Base.Experimental.task_running_time_ns(t::Task)::Union{UInt64, Nothing}
+
+Return the total nanoseconds that the task `t` has spent running.
+This metric is only updated when `t` yields or completes unless `t` is the current task, in
+which it will be updated continuously.
+See also [`Base.Experimental.task_wall_time_ns`](@ref).
+
+Return `nothing` if task timings are not enabled.
+See [`Base.Experimental.task_metrics`](@ref).
+
+!!! note "This metric is from the Julia scheduler"
+    A task may be running on an OS thread that is descheduled by the OS
+    scheduler, this time still counts towards the metric.
+
+!!! compat "Julia 1.12"
+    This method was added in Julia 1.12.
+"""
+function task_running_time_ns(t::Task=current_task())
+    t.metrics_enabled || return nothing
+    if t == current_task()
+        # These metrics fields can't update while we're running.
+        # But since we're running we need to include the time since we last started running!
+        return t.running_time_ns +% (time_ns() -% t.last_started_running_at)
+    else
+        return t.running_time_ns
+    end
+end
+
+"""
+    Base.Experimental.task_wall_time_ns(t::Task)::Union{UInt64, Nothing}
+
+Return the total nanoseconds that the task `t` was runnable.
+This is the time since the task first entered the run queue until the time at which it
+completed, or until the current time if the task has not yet completed.
+See also [`Base.Experimental.task_running_time_ns`](@ref).
+
+Return `nothing` if task timings are not enabled.
+See [`Base.Experimental.task_metrics`](@ref).
+
+!!! compat "Julia 1.12"
+    This method was added in Julia 1.12.
+"""
+function task_wall_time_ns(t::Task=current_task())
+    t.metrics_enabled || return nothing
+    start_at = t.first_enqueued_at
+    start_at == 0 && return UInt64(0)
+    end_at = t.finished_at
+    end_at == 0 && return time_ns() -% start_at
+    return end_at -% start_at
+end
+
+# wait_with_timeout
+#
+# A version of `wait(c::Condition)` that additionally allows the
+# specification of a timeout. This is experimental as it will likely
+# be dropped when a cancellation framework is added.
+#
+# Implemented as a `park!` over the condition, the governing cancellation
+# source, and a `Base.TimeoutWait` deadline (see base/park.jl and
+# base/asyncevent.jl): the deadline's claimer arbitrates against notifies
+# and interrupters through the single wake-claim CAS on the waiting
+# task's `waiting_on`, and the non-canonical waitable shape makes the
+# entry cache hand out a fresh, single-use entry - which is exactly what
+# makes the deadline's specific-wait claim sound.
+
+"""
+    wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
+
+Wait for [`notify`](@ref) on `c` and return the `val` parameter passed to `notify`.
+
+If the keyword `first` is set to `true`, the waiter will be put _first_
+in line to wake up on `notify`. Otherwise, `wait` has first-in-first-out (FIFO) behavior.
+
+If `timeout` is specified, cancel the `wait` when it expires and return
+`:timed_out`. The minimum value for `timeout` is 0.001 seconds, i.e. 1
+millisecond.
+"""
+function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0,
+                           cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    tok = Base.check_cancel_arg(cancel)
+    src = Base.cancel_source(tok)
+    ct = current_task()
+    if timeout > 0.0
+        tw = Base.TimeoutWait(timeout)
+        ws = src === nothing ? (c, tw) : (c, Base.SourceWait(src, 0x00), tw)
+    else
+        ws = src === nothing ? (c,) : (c, Base.SourceWait(src, 0x00))
+    end
+    # non-canonical shapes get a fresh entry - exactly what makes the
+    # deadline claimer's specific-wait CAS sound
+    w = Base.acquire_wait_entry!(ct, ws)
+    if !Base.park!(ws, w, first)
+        Base.withdraw!(ws, w, Base.WAKE_FIRED)
+        src === nothing || Base.checkcancel(src)
+        error("park fired without a cancelled source")
+    end
+    lockstate = Base.unlockall(c.lock)
+    r = try
+        Base.wait_safe_interrupt(ws, w)
+    catch
+        Base.relockall(c.lock, lockstate)
+        rethrow()
+    end
+    Base.relockall(c.lock, lockstate)
+    Base.withdraw!(ws, w, Base.WAKE_VALUE)   # closes the timer, retires
+    return r
+end
+
+"""
+    Base.Experimental.@reexport using Module
+
+Automatically re-export all exported names from a module when using it.
+
+# Examples
+
+```jldoctest
+julia> module A
+           export foo
+           foo() = "foo from A"
+       end
+A
+
+julia> module B
+           using Base.Experimental: @reexport
+           @reexport using ..A
+           # Now B exports foo, even though it's defined in A
+       end
+B
+
+julia> using .B
+
+julia> foo()
+"foo from A"
+```
+
+!!! warning
+    This interface is experimental and subject to change or removal without notice.
+"""
+macro reexport(ex)
+    if !Meta.isexpr(ex, :using) || isempty(ex.args)
+        error("@reexport must be used with a `using` statement, e.g., `@reexport using MyModule`")
+    end
+
+    # Check for `using Foo: x, y` syntax (not supported)
+    if any(arg -> Meta.isexpr(arg, :(:)), ex.args)
+        error("@reexport does not support `using Module: names` syntax")
+    end
+
+    # Generate _eval_using calls for each module in the using statement
+    calls = Expr(:block)
+    for mod_path in ex.args
+        push!(calls.args, :($(Core._eval_using)($(__module__), $(QuoteNode(mod_path)), $(Base.JL_MODULE_USING_REEXPORT))))
+    end
+    push!(calls.args, Expr(:latestworld))
+    push!(calls.args, :nothing)
+
+    return esc(calls)
+end
+
+function Base.set_syntax_version(m::Module, edition::Tuple{Int, Int})
+    parser = Base.VersionedParse(edition)
+    Core.declare_const(m, Symbol("#_internal_julia_parse"), parser)
+    nothing
+end
+Base.set_syntax_version(mod, e::VersionNumber) =
+    Base.set_syntax_version(mod, Base.EditionNumber(e))
+
+"""
+    Base.Experimental.@set_syntax_version ver
+
+Sets the syntax version of the current module to `ver`. This overrides settings of `syntax.julia_version` or
+`compat.julia` from Project.toml.
+
+!!! compat "Julia 1.14"
+    This macro was added in Julia 1.14.
+
+!!! warning
+    The new syntax version will take effect only for code parsed after the *invocation* of the result of the macro
+    expansion. This may be unintuitive if the macro is used inside a module body, as the entire module will be parsed
+    before any statements therein are executed, e.g. consider.
+
+    ```
+    @set_syntax_version v"1.13"
+    module ChangeSyntax
+        @set_syntax_version v"1.14"
+        expr1 # Parsed with syntax version 1.13
+     # The call itself is parsed with syntax version 1.13, but the included code is parsed with syntax version 1.14
+        include_string(ChangeSyntax, "expr2")
+        expr3 # Parsed with syntax version 1.13
+    end
+    ```
+
+    For this reason, the Project.toml mechanism is strongly preferred for packages.
+    However, this macro may be useful for scripts or the REPL.
+
+!!! warning
+    This interface is experimental and subject to change or removal without notice.
+"""
+macro set_syntax_version(ver)
+    Expr(:call, Base.set_syntax_version, __module__, esc(ver))
+end
+
+"""
+    Base.Experimental.@VERSION ver
+
+This macro provides access to parser (and possibly in the future other frontend component) language version
+information. In particular, `(@VERSION).syntax` provides the syntax version used to parse the location where the macro is invoked.
+
+!!! compat "Julia 1.14"
+    This macro was added in Julia 1.14.
+
+!!! note
+    Calls to this macro have special handling in the parser and the name `@VERSION` is mandatory. At this time, other macros do not
+    have access to source syntax version information.
+"""
+function var"@VERSION"(__source__::Union{LineNumberNode, Core.MacroSource}, __module__::Module)
+    # This macro has special handling in the parser, which puts the current syntax
+    # version into __source__.
+    if isa(__source__, LineNumberNode)
+        return :((; syntax = v"1.13", runtime = VERSION))
+    else
+        return :((; syntax = $(__source__.syntax_ver), runtime = VERSION))
+    end
+end
+
+"""
+    Base.Experimental.prune_objcache(dir::AbstractString; age::Real=7*24*60*60) -> Int
+
+Remove the entries of the native code cache that were not used within the last `age`
+seconds, then write a copy of the cache without its free space to `dir`, which must not
+already hold a cache. Return the number of entries removed, or `nothing` if the cache is
+disabled.
+
+The cache file never shrinks by itself. To save a small cache, for example between CI jobs,
+save the copy in `dir`, either directly as a `JULIA_OBJCACHE_PATH` directory or with its
+`data.mdb` moved over the one in the cache once no Julia process is using it.
+
+!!! warning
+    This interface is experimental and subject to change or removal without notice.
+"""
+function prune_objcache(dir::AbstractString; age::Real=7*24*60*60)
+    ccall(:jl_objcache_kv_enabled, Cint, ()) == 0 && return nothing
+    # waiting for the database's write lock and copying it can take a while, so let GC run
+    removed = @ccall gc_safe=true jl_objcache_prune((floor(Int64, time() - age))::Int64)::Int64
+    removed < 0 && error("could not prune the native code cache")
+    err = @ccall gc_safe=true jl_objcache_compact(dir::Cstring)::Cstring
+    err == C_NULL || error("could not copy the native code cache to ", dir, ": ", unsafe_string(err))
+    return Int(removed)
+end
+
+end # module

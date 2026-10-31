@@ -4,7 +4,7 @@
 # This is used for tab substitution in the REPL.
 
 # The initial symbol listing was generated from the W3C symbol mapping file:
-#         http://www.w3.org/Math/characters/unicode.xml
+#         https://www.w3.org/Math/characters/unicode.xml
 # by the following Julia script:
 #=
 import REPL
@@ -60,7 +60,7 @@ open(fname) do f
         x = map(s -> rstrip(s, [' ','\t','\n']),
                 split(replace(L, r"[{}\"]+" => "\t"), "\t"))
         c = Char(parse(Int, x[2], base = 16))
-        if (Base.is_id_char(c) || Base.isoperator(Symbol(c))) &&
+        if (Base.Meta.is_id_char(c) || Base.isoperator(Symbol(c))) &&
            string(c) ∉ latex_strings && !isascii(c)
             tabcomname = escape_string(x[3])
             if startswith(tabcomname, "\\\\math")
@@ -100,6 +100,7 @@ const latex_symbols = Dict(
 
 # manual additions:
 
+    "\\zwj" => "\u200D",
     "\\sqrt" => "\u221A",
     "\\cbrt" => "\u221B",
     "\\female" => "♀",
@@ -118,6 +119,59 @@ const latex_symbols = Dict(
     "\\to" => "→",
     "\\euler" => "ℯ",
     "\\ohm" => "Ω",
+    "\\escape" => "⎋",
+    "\\xmark" => "✗",
+
+# manually added arrows
+
+    "\\leftblackarrow" => "⬅",
+    "\\upblackarrow" => "⬆",
+    "\\rightblackarrow" => "➡",
+    "\\downblackarrow" => "⬇",
+    "\\curvearrowrightdown" => "⤵",
+    "\\curvearrowrightup" => "⤴",
+    "\\curvearrowdownleft" => "⤶",
+    "\\curvearrowdownright" => "⤷",
+
+    # Music Symbols
+    # Music Symbols - Accidentals
+    "\\flatflat" => "𝄫",
+    "\\sharpsharp" => "𝄪",
+    # Music Symbols - Codas
+    "\\leftrepeatsign" => "𝄆",
+    "\\rightrepeatsign" => "𝄇",
+    "\\dalsegno" => "𝄉",
+    "\\dacapo" => "𝄊",
+    "\\segno" => "𝄋",
+    "\\coda" => "𝄌",
+    # Music Symbols - Clefs
+    "\\clefg" => "𝄞",
+    "\\clefg8va" => "𝄟",
+    "\\clefg8vb" => "𝄠",
+    "\\clefc" => "𝄡",
+    "\\cleff" => "𝄢",
+    "\\cleff8va" => "𝄣",
+    "\\cleff8vb" => "𝄤",
+     # Music Symbols - Rests
+    "\\restmulti" => "𝄺",
+    "\\restwhole" => "𝄻",
+    "\\resthalf" => "𝄼",
+    "\\restquarter" => "𝄽",
+    "\\rest8th" => "𝄾",
+    "\\rest16th" => "𝄿",
+    "\\rest32th" => "𝅀",
+    "\\rest64th" => "𝅁",
+    "\\rest128th" => "𝅂",
+    # Music Symbols - Notes
+    "\\notedoublewhole" => "𝅜",
+    "\\notewhole" => "𝅝",
+    "\\notehalf" => "𝅗𝅥",
+    "\\notequarter" => "𝅘𝅥",
+    "\\note8th" => "𝅘𝅥𝅮",
+    "\\note16th" => "𝅘𝅥𝅯",
+    "\\note32th" => "𝅘𝅥𝅰",
+    "\\note64th" => "𝅘𝅥𝅱",
+    "\\note128th" => "𝅘𝅥𝅲",
 
     # Superscripts
     "\\^0" => "⁰",
@@ -151,6 +205,7 @@ const latex_symbols = Dict(
     "\\^n" => "ⁿ",
     "\\^o" => "ᵒ",
     "\\^p" => "ᵖ",
+    "\\^q" => "𐞥",
     "\\^r" => "ʳ",
     "\\^s" => "ˢ",
     "\\^t" => "ᵗ",
@@ -162,8 +217,10 @@ const latex_symbols = Dict(
     "\\^z" => "ᶻ",
     "\\^A" => "ᴬ",
     "\\^B" => "ᴮ",
+    "\\^C" => "ꟲ",
     "\\^D" => "ᴰ",
     "\\^E" => "ᴱ",
+    "\\^F" => "ꟳ",
     "\\^G" => "ᴳ",
     "\\^H" => "ᴴ",
     "\\^I" => "ᴵ",
@@ -174,6 +231,7 @@ const latex_symbols = Dict(
     "\\^N" => "ᴺ",
     "\\^O" => "ᴼ",
     "\\^P" => "ᴾ",
+    "\\^Q" => "ꟴ",
     "\\^R" => "ᴿ",
     "\\^T" => "ᵀ",
     "\\^U" => "ᵁ",
@@ -207,6 +265,8 @@ const latex_symbols = Dict(
     "\\_+" => "₊",
     "\\_-" => "₋",
     "\\_=" => "₌",
+    "\\_<" => "˱",
+    "\\_>" => "˲",
     "\\_(" => "₍",
     "\\_)" => "₎",
     "\\_a" => "ₐ",
@@ -225,13 +285,17 @@ const latex_symbols = Dict(
     "\\_t" => "ₜ",
     "\\_u" => "ᵤ",
     "\\_v" => "ᵥ",
+    "\\_w" => "₝",
     "\\_x" => "ₓ",
+    "\\_y" => "₞",
+    "\\_z" => "₟",
     "\\_schwa" => "ₔ",
     "\\_beta" => "ᵦ",
     "\\_gamma" => "ᵧ",
     "\\_rho" => "ᵨ",
     "\\_phi" => "ᵩ",
     "\\_chi" => "ᵪ",
+    "\\_pgamma" => "𝿐",
 
     # Misc. Math and Physics
     "\\ldots" => "…",
@@ -432,8 +496,10 @@ const latex_symbols = Dict(
     "\\pertenthousand" => "‱",
     "\\prime" => "′",
     "\\backprime" => "‵",
-    "\\guilsinglleft" => "‹",
+    "\\guilsinglleft" => "‹", # note: \guil* quote names follow the LaTeX csquotes package
     "\\guilsinglright" => "›",
+    "\\guillemotleft" => "«",
+    "\\guillemotright" => "»",
     "\\nolinebreak" => "\u2060",
     "\\pes" => "₧",
     "\\dddot" => "⃛",
@@ -473,6 +539,7 @@ const latex_symbols = Dict(
     "\\mapsto" => "↦",
     "\\hookleftarrow" => "↩",
     "\\hookrightarrow" => "↪",
+    "\\hookunderrightarrow" => "🢲",
     "\\looparrowleft" => "↫",
     "\\looparrowright" => "↬",
     "\\leftrightsquigarrow" => "↭",
@@ -982,17 +1049,16 @@ const latex_symbols = Dict(
     "\\droang" => "̚",  # left angle above (non-spacing)
     "\\wideutilde" => "̰",  # under tilde accent (multiple characters and non-spacing)
     "\\not" => "̸",  # combining long solidus overlay
-    "\\upMu" => "Μ",  # capital mu, greek
-    "\\upNu" => "Ν",  # capital nu, greek
-    "\\upOmicron" => "Ο",  # capital omicron, greek
-    "\\upepsilon" => "ε",  # rounded small epsilon, greek
-    "\\upomicron" => "ο",  # small omicron, greek
-    "\\upvarbeta" => "ϐ",  # rounded small beta, greek
-    "\\upoldKoppa" => "Ϙ",  # greek letter archaic koppa
-    "\\upoldkoppa" => "ϙ",  # greek small letter archaic koppa
-    "\\upstigma" => "ϛ",  # greek small letter stigma
-    "\\upkoppa" => "ϟ",  # greek small letter koppa
-    "\\upsampi" => "ϡ",  # greek small letter sampi
+    "\\Mu" => "Μ",  # capital mu, greek
+    "\\Nu" => "Ν",  # capital nu, greek
+    "\\Omicron" => "Ο",  # capital omicron, greek
+    "\\omicron" => "ο",  # small omicron, greek
+    "\\varbeta" => "ϐ",  # rounded small beta, greek
+    "\\oldKoppa" => "Ϙ",  # greek letter archaic koppa
+    "\\oldkoppa" => "ϙ",  # greek small letter archaic koppa
+    "\\stigma" => "ϛ",  # greek small letter stigma
+    "\\koppa" => "ϟ",  # greek small letter koppa
+    "\\sampi" => "ϡ",  # greek small letter sampi
     "\\tieconcat" => "⁀",  # character tie, z notation sequence concatenation
     "\\leftharpoonaccent" => "⃐",  # combining left harpoon above
     "\\rightharpoonaccent" => "⃑",  # combining right harpoon above
@@ -1570,7 +1636,9 @@ const latex_symbols = Dict(
     "\\bsimilarleftarrow" => "\u2b41",  # reverse tilde operator above leftwards arrow
     "\\leftarrowbackapprox" => "\u2b42",  # leftwards arrow above reverse almost equal to
     "\\rightarrowgtr" => "\u2b43",  # rightwards arrow through greater-than
-    "\\rightarrowsupset" => "\u2b44",  # rightwards arrow through subset
+    "\\leftarrowless" => "\u2977",  # leftwards arrow through less-than
+    "\\rightarrowsupset" => "\u2b44",  # rightwards arrow through superset
+    "\\leftarrowsubset" => "\u297a",  # leftwards arrow through subset
     "\\LLeftarrow" => "\u2b45",  # leftwards quadruple arrow
     "\\RRightarrow" => "\u2b46",  # rightwards quadruple arrow
     "\\bsimilarrightarrow" => "\u2b47",  # reverse tilde operator above rightwards arrow
@@ -2619,10 +2687,10 @@ const latex_symbols = Dict(
     "\\4/5" => "⅘", # vulgar fraction four fifths
     "\\1/6" => "⅙", # vulgar fraction one sixth
     "\\5/6" => "⅚", # vulgar fraction five sixths
-    "\\1/8" => "⅛", # vulgar fraction one eigth
-    "\\3/8" => "⅜", # vulgar fraction three eigths
-    "\\5/8" => "⅝", # vulgar fraction five eigths
-    "\\7/8" => "⅞", # vulgar fraction seventh eigths
+    "\\1/8" => "⅛", # vulgar fraction one eighth
+    "\\3/8" => "⅜", # vulgar fraction three eighths
+    "\\5/8" => "⅝", # vulgar fraction five eighths
+    "\\7/8" => "⅞", # vulgar fraction seven eighths
     "\\1/" => "⅟", # fraction numerator one
     "\\0/3" => "↉", # vulgar fraction zero thirds
     "\\1/4" => "¼", # vulgar fraction one quarter

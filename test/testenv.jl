@@ -17,6 +17,8 @@ if !@isdefined(testenv_defined)
         push!(test_exeflags.exec, "--check-bounds=yes")
         push!(test_exeflags.exec, "--startup-file=no")
         push!(test_exeflags.exec, "--depwarn=error")
+        # keep reports of precompilation triggered by loading out of the test logs
+        push!(test_exeflags.exec, "-q")
     end
     if haskey(ENV, "JULIA_TEST_EXTRA_EXEFLAGS")
         append!(test_exeflags.exec, Base.shell_split(ENV["JULIA_TEST_EXTRA_EXEFLAGS"]))
@@ -35,9 +37,68 @@ if !@isdefined(testenv_defined)
         const rr_exename = ``
     end
 
+    const test_relocated_depot = haskey(ENV, "RELOCATEDEPOT")
+
+    # OS pids of the workers spawned by `addprocs_with_testenv`, recorded at
+    # spawn time (while the worker is guaranteed healthy) so that the teardown
+    # hook in runtests.jl can signal workers that have hung in the meantime.
+    const worker_ospids = Dict{Int, Int}()
+
+    # Best-effort enumeration of the direct children of `pid`.
+    function child_pids(pid::Integer)
+        children = Int[]
+        try
+            # On Linux, read /proc. Elsewhere, ask pgrep.
+            if Sys.islinux()
+                for tid in readdir("/proc/$pid/task")
+                    append!(children, parse.(Int, split(read("/proc/$pid/task/$tid/children", String))))
+                end
+            else
+                # `pgrep -P` exits non-zero when there are no matches
+                append!(children, parse.(Int, split(read(ignorestatus(`pgrep -P $pid`), String))))
+            end
+        catch
+            # the process may have exited already; return what we have
+        end
+        return children
+    end
+
+    # Best-effort enumeration of the live descendants (children, grandchildren, ...)
+    # of `pid`, ordered parents-before-children.
+    function descendant_pids(pid::Integer)
+        pids = Int[]
+        queue = Int[pid]
+        while !isempty(queue)
+            children = child_pids(popfirst!(queue))
+            append!(pids, children)
+            append!(queue, children)
+        end
+        return pids
+    end
+
     function addprocs_with_testenv(X; rr_allowed=true, kwargs...)
         exename = rr_allowed ? `$rr_exename $test_exename` : test_exename
-        addprocs(X; exename=exename, exeflags=test_exeflags, kwargs...)
+        if X isa Integer
+            heap_size=round(Int,(Sys.total_memory()/(1024^2)/(X+1)))
+            push!(test_exeflags.exec, "--heap-size-hint=$(heap_size)M")
+        end
+        # starting many workers on a loaded machine can exceed the default 60 s
+        timeout = get(ENV, "JULIA_WORKER_TIMEOUT", "300")
+        procs = withenv("JULIA_WORKER_TIMEOUT" => timeout) do
+            addprocs(X; exename=exename, exeflags=test_exeflags, kwargs...)
+        end
+        for w in procs
+            worker_ospids[w] = remotecall_fetch(getpid, w)
+        end
+        return procs
+    end
+
+    function rmprocs_with_testenv(pids...; kwargs...)
+        result = rmprocs(pids...; kwargs...)
+        for p in pids, q in (p isa Integer ? (p,) : p)
+            delete!(worker_ospids, q)
+        end
+        return result
     end
 
     const curmod = @__MODULE__

@@ -1,7 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base: findprevnot, findnextnot
-using Random, LinearAlgebra, Test
+using Random, Test, LinearAlgebra # Ideally, these tests should not depend on LinearAlgebra
+
+isdefined(Main, :SizedArrays) || @eval Main include("testhelpers/SizedArrays.jl")
+using .Main.SizedArrays
+
+struct ConvertsToBool
+    b::Bool
+end
+Base.convert(::Type{Bool}, x::ConvertsToBool) = x.b
 
 tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(x->tc(x...), [zip(r1,r2)...])
 tc(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) where {N} = true
@@ -12,12 +20,11 @@ tc(r1,r2) = false
 
 bitcheck(b::BitArray) = Test._check_bitarray_consistency(b)
 bitcheck(x) = true
-bcast_setindex!(b, x, I...) = (b[I...] .= x; b)
 
 function check_bitop_call(ret_type, func, args...; kwargs...)
     r2 = func(map(x->(isa(x, BitArray) ? Array(x) : x), args)...; kwargs...)
     r1 = func(args...; kwargs...)
-    ret_type ≢ nothing && (@test isa(r1, ret_type) || @show ret_type, typeof(r1))
+    ret_type ≢ nothing && @test isa(r1, ret_type) context=(; ret_type, actual=typeof(r1))
     @test tc(r1, r2)
     @test isequal(r1, r2)
     @test bitcheck(r1)
@@ -30,6 +37,9 @@ macro check_bit_operation(ex)
     @assert Meta.isexpr(ex, :call)
     Expr(:call, :check_bitop_call, nothing, map(esc, ex.args)...)
 end
+
+bcast_setindex!(b, x, I...) = (b[I...] .= x; b)
+
 
 let t0 = time_ns()
     global timesofar
@@ -82,6 +92,25 @@ allsizes = [((), BitArray{0}), ((v1,), BitVector),
     @test !isassigned(b, length(b) + 1)
 end
 
+@testset "trues and falses with custom axes" begin
+    for ax in ((SizedArrays.SOneTo(2),), (SizedArrays.SOneTo(2), Base.OneTo(2)))
+        t = trues(ax)
+        if all(x -> x isa SizedArrays.SOneTo, ax)
+            @test t isa SizedArrays.SizedArray && parent(t) isa BitArray
+        else
+            @test t isa BitArray
+        end
+        @test all(t)
+
+        f = falses(ax)
+        if all(x -> x isa SizedArrays.SOneTo, ax)
+            @test t isa SizedArrays.SizedArray && parent(t) isa BitArray
+        else
+            @test t isa BitArray
+        end
+        @test !any(f)
+    end
+end
 
 @testset "Conversions for size $sz" for (sz, T) in allsizes
     b1 = rand!(falses(sz...))
@@ -134,6 +163,8 @@ timesofar("promotions")
     end
 
     @testset "copyto!" begin
+        # BitArray copy bounds must not wrap their computed end indices.
+        @test_throws BoundsError copyto!(falses(2), Int8(2), trues(2), Int8(2), typemax(Int8))
         let b1 = trues(1)
             @test all(copyto!(b1, []))
         end
@@ -180,6 +211,32 @@ timesofar("promotions")
         @check_bit_operation resize!(b1, v1 ÷ 2) BitVector
         gr(b) = (resize!(b, v1)[(v1÷2):end] .= 1; b)
         @check_bit_operation gr(b1) BitVector
+
+        # Chunk rounding and reshape products must remain valid at the Int limit.
+        @test Base.num_bit_chunks(typemax(Int)) == div(typemax(Int), 64) + 1
+        overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+        @test_throws ArgumentError reshape(trues(2), 3, overflow_dim)
+
+        b1 = bitrand(v1)
+        @test_throws BoundsError resize!(b1, -1; first=true)
+        b2 = copy(b1)
+        @test resize!(b1, v1+100; first=true)[end-v1+1:end] == b2
+        @test resize!(b1, v1+200)[end-100-v1+1:end-100] == b2
+
+        b1 = bitrand(128)
+        b2 = copy(b1)
+        @test resize!(b1, 256; first=true)[end-128+1:end] == b2
+        b2 = copy(b1)
+        @test resize!(b1, 300; first=true)[end-256+1:end] == b2
+        b2 = copy(b1)
+        @test resize!(b1, 340; first=true)[end-300+1:end] == b2
+        b2 = copy(b1)
+        @test resize!(b1, 404; first=true)[end-340+1:end] == b2
+
+        b1 = bitrand(32)
+        b2 = copy(b1)
+        resize!(b1, 63; first=true)
+        @test b1[32:63] == b2
     end
 
     @testset "sizeof (issue #7515)" begin
@@ -202,6 +259,10 @@ timesofar("utils")
             @test b1 == b2
         end
     end
+
+    # BitArray constructors must reject dimensions whose product overflows.
+    overflow_dim = Int(typemax(UInt) ÷ 3 + 1)
+    @test_throws ArgumentError BitMatrix(undef, 3, overflow_dim)
 
     @testset "constructors from iterables" begin
         for g in ((x%7==3 for x = 1:v1),
@@ -566,6 +627,21 @@ timesofar("constructors")
         @check_bit_operation setindex!(b1, b2, n1-m1+1:n1, t2) BitMatrix
         @check_bit_operation setindex!(b1, b2, k1, t2)         BitMatrix
     end
+
+    @testset "logical setindex! with an empty Cartesian-indexed value" begin
+        b = falses(4)
+        @test_throws DimensionMismatch b[BitVector([1, 1, 1, 0])] = PermutedDimsArray(Array{Bool}(undef, 2, 0), (2, 1))
+        e = falses(1, 2, 1, 0)
+        @test setindex!(e, view(zeros(3, 3, 3), 2:1, 2:2, 2:2), falses(1, 2, 1, 0)) === e
+    end
+
+    @testset "stored values convert with convert(Bool, x)" begin
+        x = [ConvertsToBool(true), ConvertsToBool(false)]
+        @test setindex!(falses(3), x, 2:3) == [false, true, false]
+        @test fill!(view(falses(3), 2:3), x[1]) == [true, true]
+        @test (B = falses(2, 2); fill!(view(B, 1:2, 2), x[1]); B) == [false true; false true]
+        @test (b = falses(3); splice!(b, 2:3, Tuple(x)); b) == [false, true, false]
+    end
 end
 
 timesofar("indexing")
@@ -844,6 +920,26 @@ timesofar("dequeue")
 end
 
 timesofar("unary arithmetic")
+
+# Check that same-size BitArray broadcasts of ops with a chunk-level equivalent take the chunked path.
+@testset "chunked broadcast bit operations" begin
+    b1 = bitrand(130)
+    b2 = bitrand(130)
+    dest = similar(b1)
+    chunked(f, args...) = Base.Broadcast.ischunkedbroadcast(dest,
+        convert(Base.Broadcast.Broadcasted{Nothing},
+            Base.Broadcast.instantiate(Base.Broadcast.broadcasted(f, args...))))
+
+    for f in (!, ~, identity)
+        @test chunked(f, b1)
+    end
+    for f in (&, |, xor, nand, nor, *, min, max, ==, !=, <, <=, >, >=)
+        @test chunked(f, b1, b2)
+    end
+    @test chunked(nand, b1, Base.Broadcast.broadcasted(!, b2))
+    @test (dest .= b1 .== (==).(true)) == falses(130)
+    @test (dest .= b1 .!= (!=).(true)) == trues(130)
+end
 
 @testset "Binary arithmetic operators" begin
     @testset "Matrix{Bool}/Matrix{Bool}" begin
@@ -1168,6 +1264,14 @@ timesofar("binary arithmetic")
     @check_bit_operation broadcast(!=, b1, b2) BitMatrix
     @check_bit_operation broadcast(<, b1, b2) BitMatrix
     @check_bit_operation broadcast(<=, b1, b2) BitMatrix
+
+    v1, v2 = falses(100), trues(100)
+    @test cmp(v1, v2) == -1
+    @test cmp(v2, v1) == 1
+    @test cmp(v1, v1) == 0
+    @test isless(v1, v2)
+    @test !isless(v2, v1)
+    @test isless(falses(10), falses(20))
 end
 
 timesofar("binary comparison")
@@ -1218,6 +1322,8 @@ timesofar("binary comparison")
         @check_bit_operation selectdim(b1, 1, m) SubArray{Bool, 0}
     end
     @check_bit_operation selectdim(b1, 1, :) SubArray{Bool, 1}
+    @test circshift!(falses(0), 1) == falses(0)
+    @test circshift!(falses(0), falses(0), 1) == falses(0)
 end
 
 timesofar("datamove")
@@ -1335,11 +1441,11 @@ timesofar("find")
     @test findprev(b1, 777)  == findprevnot(b2, 777)  == findprev(!, b2, 777)  == 777
     @test findprev(b1, 776)  == findprevnot(b2, 776)  == findprev(!, b2, 776)  == 77
     @test findprev(b1, 77)   == findprevnot(b2, 77)   == findprev(!, b2, 77)   == 77
-    @test findprev(b1, 76)   == findprevnot(b2, 76)   == findprev(!, b2, 76)   == nothing
-    @test findprev(b1, -1)   == findprevnot(b2, -1)   == findprev(!, b2, -1)   == nothing
-    @test findprev(identity, b1, -1) == nothing
-    @test findprev(Returns(false), b1, -1) == nothing
-    @test findprev(Returns(true), b1, -1) == nothing
+    @test findprev(b1, 76)   == findprevnot(b2, 76)   == findprev(!, b2, 76)   === nothing
+    @test findprev(b1, -1)   == findprevnot(b2, -1)   == findprev(!, b2, -1)   === nothing
+    @test findprev(identity, b1, -1) === nothing
+    @test findprev(Returns(false), b1, -1) === nothing
+    @test findprev(Returns(true), b1, -1) === nothing
     @test_throws BoundsError findnext(b1, -1)
     @test_throws BoundsError findnextnot(b2, -1)
     @test_throws BoundsError findnext(!, b2, -1)
@@ -1350,28 +1456,28 @@ timesofar("find")
     @test findnext(b1, 77)   == findnextnot(b2, 77)   == findnext(!, b2, 77)   == 77
     @test findnext(b1, 78)   == findnextnot(b2, 78)   == findnext(!, b2, 78)   == 777
     @test findnext(b1, 777)  == findnextnot(b2, 777)  == findnext(!, b2, 777)  == 777
-    @test findnext(b1, 778)  == findnextnot(b2, 778)  == findnext(!, b2, 778)  == nothing
-    @test findnext(b1, 1001) == findnextnot(b2, 1001) == findnext(!, b2, 1001) == nothing
-    @test findnext(identity, b1, 1001) == findnext(Returns(false), b1, 1001) == findnext(Returns(true), b1, 1001) == nothing
+    @test findnext(b1, 778)  == findnextnot(b2, 778)  == findnext(!, b2, 778)  === nothing
+    @test findnext(b1, 1001) == findnextnot(b2, 1001) == findnext(!, b2, 1001) === nothing
+    @test findnext(identity, b1, 1001) == findnext(Returns(false), b1, 1001) == findnext(Returns(true), b1, 1001) === nothing
 
     @test findlast(b1) == Base.findlastnot(b2) == 777
     @test findfirst(b1) == Base.findfirstnot(b2) == 77
 
     b0 = BitVector()
-    @test findprev(Returns(true), b0, -1) == nothing
+    @test findprev(Returns(true), b0, -1) === nothing
     @test_throws BoundsError findprev(Returns(true), b0, 1)
     @test_throws BoundsError findnext(Returns(true), b0, -1)
-    @test findnext(Returns(true), b0, 1) == nothing
+    @test findnext(Returns(true), b0, 1) === nothing
 
     b1 = falses(10)
     @test findprev(Returns(true), b1, 5) == 5
     @test findnext(Returns(true), b1, 5) == 5
-    @test findprev(Returns(true), b1, -1) == nothing
-    @test findnext(Returns(true), b1, 11) == nothing
-    @test findprev(Returns(false), b1, 5) == nothing
-    @test findnext(Returns(false), b1, 5) == nothing
-    @test findprev(Returns(false), b1, -1) == nothing
-    @test findnext(Returns(false), b1, 11) == nothing
+    @test findprev(Returns(true), b1, -1) === nothing
+    @test findnext(Returns(true), b1, 11) === nothing
+    @test findprev(Returns(false), b1, 5) === nothing
+    @test findnext(Returns(false), b1, 5) === nothing
+    @test findprev(Returns(false), b1, -1) === nothing
+    @test findnext(Returns(false), b1, 11) === nothing
     @test_throws BoundsError findprev(Returns(true), b1, 11)
     @test_throws BoundsError findnext(Returns(true), b1, -1)
 
@@ -1393,7 +1499,7 @@ timesofar("find")
     for l = [1, 63, 64, 65, 127, 128, 129]
         f = falses(l)
         t = trues(l)
-        @test findprev(f, l) == findprevnot(t, l) == nothing
+        @test findprev(f, l) == findprevnot(t, l) === nothing
         @test findprev(t, l) == findprevnot(f, l) == l
         b1 = falses(l)
         b1[end] = true
@@ -1487,6 +1593,22 @@ timesofar("reductions")
         end
     end
 
+    # Constant maps preserve destination bits beyond the input collection.
+    @testset "map! with a longer destination" begin
+        for l in [0, 1, 63, 64, 65, 127, 128, 129]
+            src = bitrand(l)
+            dest = trues(l + 65)
+            @test map!(zero, dest, src) === dest
+            @test dest == vcat(falses(l), trues(65))
+
+            dest = falses(l + 65)
+            @test map!(one, dest, src) === dest
+            @test dest == vcat(trues(l), falses(65))
+        end
+        @test_throws DimensionMismatch map!(zero, falses(1), bitrand(2))
+        @test_throws DimensionMismatch map!(one, falses(1), bitrand(2))
+    end
+
     @testset "Issue #17970" begin
         A17970 = [1,2,3] .== [3,2,1]
         B17970 = map(x -> x ? 1 : 2, A17970)
@@ -1500,7 +1622,7 @@ timesofar("reductions")
     |<------------------b2(l)------>|    extra_l     |
     |<------------------b3(l)------>|
     |<------------------b4(l+extra_l)--------------->|
-    |<--------------desk_inbetween-------->| extra÷2 |
+    |<--------------dest_inbetween-------->| extra÷2 |
     =#
     @testset "Issue #47011, map! over unequal length bitarray" begin
         for l = [0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
@@ -1538,6 +1660,39 @@ timesofar("reductions")
                 end
             end
         end
+    end
+
+    @testset "binary bitwise map shape and chunks" begin
+        @test axes(map(&, trues(2, 2), trues(4))) == axes(map(&, fill(true, 2, 2), fill(true, 4)))
+        @test_throws DimensionMismatch map(&, trues(2, 2), trues(2, 1))
+
+        A = falses(130)
+        A[[1, 3, 64, 65, 129]] .= true
+        B = falses(64)
+        B[[2, 3, 63]] .= true
+        for (X, Y) in ((A, B), (B, A))
+            expected = BitVector(map(&, Vector{Bool}(X), Vector{Bool}(Y)))
+            @test map(&, X, Y) == expected
+            dest = trues(70)
+            @test map!(&, dest, X, Y) === dest
+            @test dest == [expected; trues(6)]
+        end
+    end
+
+    @testset "Issue #50780, map! bitarray map! where dest aliases source" begin
+        a = BitVector([1,0])
+        b = map(!, a)
+        map!(!, a, a) # a .= !.a
+        @test a == b == BitVector([0,1])
+
+        a = BitVector([1,0])
+        c = map(|, a, b)
+        map!(|, a, a, b)
+        @test c == a == BitVector([1, 1])
+
+        a = BitVector([1,0])
+        map!(|, b, a, b)
+        @test c == b == BitVector([1, 1])
     end
 end
 
@@ -1603,69 +1758,6 @@ timesofar("permutedims")
 end
 
 timesofar("cat")
-
-@testset "Linear algebra" begin
-    b1 = bitrand(v1)
-    b2 = bitrand(v1)
-    @check_bit_operation dot(b1, b2) Int
-
-    b1 = bitrand(n1, n2)
-    @test_throws ArgumentError tril(b1, -n1 - 2)
-    @test_throws ArgumentError tril(b1, n2)
-    @test_throws ArgumentError triu(b1, -n1)
-    @test_throws ArgumentError triu(b1, n2 + 2)
-    for k in (-n1 - 1):(n2 - 1)
-        @check_bit_operation tril(b1, k) BitMatrix
-    end
-    for k in (-n1 + 1):(n2 + 1)
-        @check_bit_operation triu(b1, k) BitMatrix
-    end
-
-    for sz = [(n1,n1), (n1,n2), (n2,n1)], (f,isf) = [(tril,istril), (triu,istriu)]
-        b1 = bitrand(sz...)
-        @check_bit_operation isf(b1) Bool
-        b1 = f(bitrand(sz...))
-        @check_bit_operation isf(b1) Bool
-    end
-
-    b1 = bitrand(n1,n1)
-    b1 .|= copy(b1')
-    @check_bit_operation issymmetric(b1) Bool
-    @check_bit_operation ishermitian(b1) Bool
-
-    b1 = bitrand(n1)
-    b2 = bitrand(n2)
-    @check_bit_operation kron(b1, b2) BitVector
-
-    b1 = bitrand(s1, s2)
-    b2 = bitrand(s3, s4)
-    @check_bit_operation kron(b1, b2) BitMatrix
-
-    b1 = bitrand(v1)
-    @check_bit_operation diff(b1) Vector{Int}
-
-    b1 = bitrand(n1, n2)
-    @check_bit_operation diff(b1, dims=1) Matrix{Int}
-    @check_bit_operation diff(b1, dims=2) Matrix{Int}
-
-    b1 = bitrand(n1, n1)
-    @test ((svdb1, svdb1A) = (svd(b1), svd(Array(b1)));
-            svdb1.U == svdb1A.U && svdb1.S == svdb1A.S && svdb1.V == svdb1A.V)
-    @test ((qrb1, qrb1A) = (qr(b1), qr(Array(b1)));
-            Matrix(qrb1.Q) == Matrix(qrb1A.Q) && qrb1.R == qrb1A.R)
-
-    b1 = bitrand(v1)
-    @check_bit_operation diagm(0 => b1) BitMatrix
-
-    b1 = bitrand(v1)
-    b2 = bitrand(v1)
-    @check_bit_operation diagm(-1 => b1, 1 => b2) BitMatrix
-
-    b1 = bitrand(n1, n1)
-    @check_bit_operation diag(b1)
-end
-
-timesofar("linalg")
 
 @testset "findmax, findmin" begin
     b1 = trues(0)
@@ -1824,7 +1916,7 @@ end
         @test which(fill!, (typeof(viewvector), Bool)).sig == Tuple{typeof(fill!), SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}}}, Any}
         @test which(fill!, (typeof(viewarray), Bool)).sig == Tuple{typeof(fill!), SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}, Vararg{Union{Int,AbstractUnitRange{Int}}}}}, Any}
         fill!(viewvector, false)
-        fill!(viewarray, false)
+        @test fill!(viewarray, false) === viewarray
         @test all(bitvector[rangein] .== false)
         @test all(bitvector[rangeout] .== true)
         @test all(bitarray[rangein, rangein] .== false)

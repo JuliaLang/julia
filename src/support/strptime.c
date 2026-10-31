@@ -47,6 +47,18 @@ typedef _locale_t locale_t;
 #define _current_locale() NULL
 #define localtime_r(timep, result) (localtime_s(result, timep) ? NULL : result)
 
+/*
+ * Newer mingw-w64 redirects the _tzname macro to a CRT symbol (__tzname,
+ * i.e. __imp___tzname) that the bundled msvcrt import library does not
+ * export, breaking the link when the host headers are newer than that
+ * library. For non-UCRT targets, restore the classic dllimport _tzname[]
+ * declaration, whose __imp__tzname symbol the bundled library does provide.
+ */
+#if !defined(_UCRT)
+#undef _tzname
+__MINGW_IMPORT char *_tzname[2];
+#endif
+
 __declspec(dllexport) char *
 strptime(const char *buf, const char *fmt, struct tm *tm);
 __declspec(dllexport) char *
@@ -134,7 +146,7 @@ static const char * const nadt[5] = {
 
 /*
  * Table to determine the ordinal date for the start of a month.
- * Ref: http://en.wikipedia.org/wiki/ISO_week_date
+ * Ref: https://en.wikipedia.org/wiki/ISO_week_date
  */
 static const int start_of_month[2][13] = {
 	/* non-leap year */
@@ -147,7 +159,7 @@ static const int start_of_month[2][13] = {
  * Calculate the week day of the first day of a year. Valid for
  * the Gregorian calendar, which began Sept 14, 1752 in the UK
  * and its colonies. Ref:
- * http://en.wikipedia.org/wiki/Determination_of_the_day_of_the_week
+ * https://en.wikipedia.org/wiki/Determination_of_the_day_of_the_week
  */
 
 static int
@@ -515,7 +527,7 @@ literal:
 			 *          Nautical/Military
 			 * [A-IL-M] = -1 ... -9 (J not used)
 			 * [N-Y]  = +1 ... +12
-			 * Note: J maybe used to denote non-nautical
+			 * Note: J may be used to denote non-nautical
 			 *       local time
 			 */
 			if (mandatory)
@@ -667,7 +679,7 @@ loadzone:
 				offs /= 100;
 				if (i >= SECSPERMIN)
 					goto out;
-				/* Convert minutes into decimal */
+				/* Convert minutes into seconds */
 				offs = offs * SECSPERHOUR + i * SECSPERMIN;
 				break;
 			default:

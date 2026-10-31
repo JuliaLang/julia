@@ -19,7 +19,7 @@ The default behavior in Julia when types are omitted is to allow values to be of
 one can write many useful Julia functions without ever explicitly using types. When additional
 expressiveness is needed, however, it is easy to gradually introduce explicit type annotations
 into previously "untyped" code. Adding annotations serves three primary purposes: to take advantage
-of Julia's powerful multiple-dispatch mechanism,  to improve human readability, and to catch
+of Julia's powerful multiple-dispatch mechanism, to improve human readability, and to catch
 programmer errors.
 
 Describing Julia in the lingo of [type systems](https://en.wikipedia.org/wiki/Type_system), it
@@ -31,8 +31,11 @@ each other: all concrete types are final and may only have abstract types as the
 While this might at first seem unduly restrictive, it has many beneficial consequences with surprisingly
 few drawbacks. It turns out that being able to inherit behavior is much more important than being
 able to inherit structure, and inheriting both causes significant difficulties in traditional
-object-oriented languages. Other high-level aspects of Julia's type system that should be mentioned
-up front are:
+object-oriented languages. While concrete types do have abstract subtypes, there are only two examples of this
+([`Union{}`](@ref man-abstract-types) and [`Type{T}`](@ref man-typet-type)) and additional subtypes
+of concrete types cannot be declared.
+
+Other high-level aspects of Julia's type system that should be mentioned up front are:
 
   * There is no division between object and non-object values: all values in Julia are true objects
     having a type that belongs to a single, fully connected type graph, all nodes of which are equally
@@ -57,9 +60,9 @@ kinds of programming, however, become clearer, simpler, faster and more robust w
 The `::` operator can be used to attach type annotations to expressions and variables in programs.
 There are two primary reasons to do this:
 
-1. As an assertion to help confirm that your program works the way you expect,
+1. As an assertion to help confirm that your program works the way you expect, and
 2. To provide extra type information to the compiler, which can then improve performance in some
-   cases
+   cases.
 
 When appended to an expression computing a value, the `::` operator is read as "is an instance
 of". It can be used anywhere to assert that the value of the expression on the left is an instance
@@ -110,7 +113,7 @@ x::Int8 = 10   # as the left-hand side of an assignment
 
 and applies to the whole current scope, even before the declaration.
 
-As of Julia 1.8, type declarations can now be used in global scope i.e.
+As of Julia 1.8, type declarations can now be used in global scope i.e.,
 type annotations can be added to global variables to make accessing them type stable.
 ```julia
 julia> x::Int = 10
@@ -182,7 +185,7 @@ When no supertype is given, the default supertype is `Any` -- a predefined abstr
 all objects are instances of and all types are subtypes of. In type theory, `Any` is commonly
 called "top" because it is at the apex of the type graph. Julia also has a predefined abstract
 "bottom" type, at the nadir of the type graph, which is written as `Union{}`. It is the exact
-opposite of `Any`: no object is an instance of `Union{}` and all types are supertypes of `Union{}`.
+opposite of `Any`: no object is an instance of `Union{}` and all types (including concrete types) are supertypes of `Union{}`.
 
 Let's consider some of the abstract types that make up Julia's numerical hierarchy:
 
@@ -293,14 +296,26 @@ primitive type «name» «bits» end
 primitive type «name» <: «supertype» «bits» end
 ```
 
-The number of bits indicates how much storage the type requires and the name gives the new type
-a name. A primitive type can optionally be declared to be a subtype of some supertype. If a supertype
-is omitted, then the type defaults to having `Any` as its immediate supertype. The declaration
-of [`Bool`](@ref) above therefore means that a boolean value takes eight bits to store, and has
-[`Integer`](@ref) as its immediate supertype. Currently, only sizes that are multiples of
-8 bits are supported and you are likely to experience LLVM bugs with sizes other than those used above.
-Therefore, boolean values, although they really need just a single bit, cannot be declared to be any
-smaller than eight bits.
+The number of bits gives the declared logical width of the primitive type, and the name gives the
+new type a name. A primitive type can optionally be declared to be a subtype of some supertype. If a
+supertype is omitted, then the type defaults to having `Any` as its immediate supertype. The
+declaration of [`Bool`](@ref) above therefore means that a boolean value has a logical width of eight
+bits, and has [`Integer`](@ref) as its immediate supertype. A primitive type of `N` bits keeps
+its value in the first `cld(N, 8)` bytes. Its alignment is that of the smallest of `Int8`,
+`Int16`, `Int32` and `Int64` that holds those bytes, or that of `Int128` if none does, and
+`sizeof(T)` rounds the value bytes up to a multiple of that alignment; it always equals
+`Base.elsize(Array{T})`. Up to 64 bits this is the layout the platform's C ABI gives
+`_BitInt(N)`. Wider types can differ: x86-64 aligns `_BitInt(128)` to 8 bytes, but
+`primitive type T 128 end`, like `UInt128` and C's `unsigned __int128`, to 16; so `_BitInt(136)`
+takes 24 bytes where a 136-bit primitive type takes 32. Bits past the declared width are padding
+and take no part in comparison or hashing. Use [`bitsizeof(T)`](@ref bitsizeof) to query the declared logical
+width — for `primitive type T 24 end`, `bitsizeof(T)` is 24 while `sizeof(T)` is 4.
+
+Non-byte primitive widths are accepted, but remain an expert-only feature. They are more likely to
+expose compiler, runtime, or ABI bugs than the standard built-in primitive widths, and arrays store
+each element in `sizeof(T)` bytes rather than packing bits. Therefore, boolean values, although
+they really need just a single bit, should still use the built-in eight-bit [`Bool`](@ref) unless
+you are deliberately working with these expert-only semantics.
 
 The types [`Bool`](@ref), [`Int8`](@ref) and [`UInt8`](@ref) all have identical representations:
 they are eight-bit chunks of memory. Since Julia's type system is nominative, however, they
@@ -467,7 +482,7 @@ To recap, two essential properties define immutability in Julia:
   * It is not permitted to modify the value of an immutable type.
     * For bits types this means that the bit pattern of a value once set will never change
       and that value is the identity of a bits type.
-    * For composite  types, this means that the identity of the values of its fields will
+    * For composite types, this means that the identity of the values of its fields will
       never change. When the fields are bits types, that means their bits will never change,
       for fields whose values are mutable types like arrays, that means the fields will
       always refer to the same mutable value even though that mutable value's content may
@@ -504,6 +519,50 @@ julia> baz.b = 2.0
 ERROR: setfield!: const field .b of type Baz cannot be changed
 [...]
 ```
+
+## Mutually Recursive Types
+
+Because Julia's top level scope is procedural, types defined later in a file are not available for
+earlier field types. This is generally not a problem if types are written in the order they are
+used, but of course this does not work if there are cycles in the field type definitions:
+
+```julia
+struct Node
+    edges::Vector{Edge} # Error: Edge not defined
+end
+struct Edge
+    from::Node
+    to::Node
+end
+```
+
+The `typegroup` block solves this by introducing temporary variables for all structs
+defined therein at the top of the block and then atomically defining them all together
+at the end of the block.
+
+```jldoctest recursivetypes
+julia> typegroup
+           struct Node
+               edges::Vector{Edge}
+           end
+           struct Edge
+               from::Node
+               to::Node
+           end
+       end
+
+julia> fieldtype(Node, :edges)
+Vector{Edge} (alias for Array{Edge, 1})
+```
+
+!!! note
+    Only `struct` or `mutable struct` definitions are allowed inside a `typegroup` block;
+    All other declarations, including method definitions are disallowed (Inner constructor
+    definitions are allowed inside the `struct` definition and will semantically run
+    after all types have been atomically instantiated).
+
+!!! compat "Julia 1.14"
+    The `typegroup` keyword requires at least Julia 1.14.
 
 ## [Declared Types](@id man-declared-types)
 
@@ -713,10 +772,12 @@ For the default constructor, exactly one argument must be supplied for each fiel
 ```jldoctest pointtype
 julia> Point{Float64}(1.0)
 ERROR: MethodError: no method matching Point{Float64}(::Float64)
+The type `Point{Float64}` exists, but no method is defined for this combination of argument types when trying to construct it.
 [...]
 
-julia> Point{Float64}(1.0,2.0,3.0)
+julia> Point{Float64}(1.0, 2.0, 3.0)
 ERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
+The type `Point{Float64}` exists, but no method is defined for this combination of argument types when trying to construct it.
 [...]
 ```
 
@@ -748,6 +809,7 @@ to `Point` have the same type. When this isn't the case, the constructor will fa
 ```jldoctest pointtype
 julia> Point(1,2.5)
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
+The type `Point` exists, but no method is defined for this combination of argument types when trying to construct it.
 
 Closest candidates are:
   Point(::T, !Matched::T) where T
@@ -1093,13 +1155,13 @@ julia> const T1 = Array{Array{T, 1} where T, 1}
 Vector{Vector} (alias for Array{Array{T, 1} where T, 1})
 
 julia> const T2 = Array{Array{T, 1}, 1} where T
-Array{Vector{T}, 1} where T
+Vector{Vector{T}} where T (alias for Array{Array{T, 1}, 1} where T)
 ```
 
 Type `T1` defines a 1-dimensional array of 1-dimensional arrays; each
 of the inner arrays consists of objects of the same type, but this type may vary from one inner array to the next.
 On the other hand, type `T2` defines a 1-dimensional array of 1-dimensional arrays all of whose inner arrays must have the
-same type.  Note that `T2` is an abstract type, e.g., `Array{Array{Int,1},1} <: T2`, whereas `T1` is a concrete type. As a consequence, `T1` can be constructed with a zero-argument constructor `a=T1()` but `T2` cannot.
+same type. Note that `T2` is an abstract type, e.g., `Array{Array{Int,1},1} <: T2`, whereas `T1` is a concrete type. As a consequence, `T1` can be constructed with a zero-argument constructor `a=T1()` but `T2` cannot.
 
 There is a convenient syntax for naming such types, similar to the short form of function
 definition syntax:
@@ -1303,6 +1365,9 @@ julia> WrapType(Float64) # sharpened constructor, note more precise Type{Float64
 WrapType{Type{Float64}}(Float64)
 ```
 
+This behavior of `Type{Float64}` is an example of an abstract type subtyping a
+concrete type (here `DataType`).
+
 ## Type Aliases
 
 Sometimes it is convenient to introduce a new name for an already expressible type.
@@ -1337,6 +1402,16 @@ type -- either [`Int32`](@ref) or [`Int64`](@ref).
 [`AbstractFloat`](@ref). Unlike with integer registers, where the size of `Int`
 reflects the size of a native pointer on that machine, the floating point register sizes
 are specified by the IEEE-754 standard.)
+
+Type aliases may be parametrized:
+
+```jldoctest
+julia> const Family{T} = Set{T}
+Set
+
+julia> Family{Char} === Set{Char}
+true
+```
 
 ## Operations on Types
 
@@ -1402,15 +1477,17 @@ is raised:
 
 ```jldoctest; filter = r"Closest candidates.*"s
 julia> supertype(Union{Float64,Int64})
-ERROR: MethodError: no method matching supertype(::Type{Union{Float64, Int64}})
+ERROR: MethodError: no method matching supertype(::Core.TypeEgal{Union{Float64, Int64}})
+The function `supertype` exists, but no method is defined for this combination of argument types.
+
 Closest candidates are:
 [...]
 ```
 
 ## [Custom pretty-printing](@id man-custom-pretty-printing)
 
-Often, one wants to customize how instances of a type are displayed.  This is accomplished by
-overloading the [`show`](@ref) function.  For example, suppose we define a type to represent
+Often, one wants to customize how instances of a type are displayed. This is accomplished by
+overloading the [`show`](@ref) function. For example, suppose we define a type to represent
 complex numbers in polar form:
 
 ```jldoctest polartype
@@ -1465,13 +1542,13 @@ julia> [Polar(3, 4.0), Polar(4.0,5.3)]
  4.0 * exp(5.3im)
 ```
 
-where the single-line `show(io, z)` form is still used for an array of `Polar` values.   Technically,
-the REPL calls `display(z)` to display the result of executing a line, which defaults to `show(stdout, MIME("text/plain"), z)`,
-which in turn defaults to `show(stdout, z)`, but you should *not* define new [`display`](@ref)
+where the single-line `show(io, z)` form is still used for an array of `Polar` values. Technically,
+the REPL calls `display(z)` to display the result `z` of executing a line, which defaults to `show(io, MIME("text/plain"), z)` (where `io` is an [`IOContext`](@ref) wrapper around [`stdout`](@ref)),
+which in turn defaults to `show(io, z)`, but you should *not* define new [`display`](@ref)
 methods unless you are defining a new multimedia display handler (see [Multimedia I/O](@ref Multimedia-I/O)).
 
 Moreover, you can also define `show` methods for other MIME types in order to enable richer display
-(HTML, images, etcetera) of objects in environments that support this (e.g. IJulia).   For example,
+(HTML, images, etcetera) of objects in environments that support this (e.g. IJulia). For example,
 we can define formatted HTML display of `Polar` objects, with superscripts and italics, via:
 
 ```jldoctest polartype
@@ -1493,9 +1570,9 @@ julia> show(stdout, "text/html", Polar(3.0,4.0))
 ```
 
 As a rule of thumb, the single-line `show` method should print a valid Julia expression for creating
-the shown object.  When this `show` method contains infix operators, such as the multiplication
+the shown object. When this `show` method contains infix operators, such as the multiplication
 operator (`*`) in our single-line `show` method for `Polar` above, it may not parse correctly when
-printed as part of another object.  To see this, consider the expression object (see [Program
+printed as part of another object. To see this, consider the expression object (see [Program
 representation](@ref)) which takes the square of a specific instance of our `Polar` type:
 
 ```jldoctest polartype
@@ -1509,7 +1586,7 @@ julia> print(:($a^2))
 
 Because the operator `^` has higher precedence than `*` (see [Operator Precedence and Associativity](@ref)), this
 output does not faithfully represent the expression `a ^ 2` which should be equal to `(3.0 *
-exp(4.0im)) ^ 2`.  To solve this issue, we must make a custom method for `Base.show_unquoted(io::IO,
+exp(4.0im)) ^ 2`. To solve this issue, we must make a custom method for `Base.show_unquoted(io::IO,
 z::Polar, indent::Int, precedence::Int)`, which is called internally by the expression object when
 printing:
 
@@ -1529,7 +1606,7 @@ julia> :($a^2)
 ```
 
 The method defined above adds parentheses around the call to `show` when the precedence of the
-calling operator is higher than or equal to the precedence of multiplication.  This check allows
+calling operator is higher than or equal to the precedence of multiplication. This check allows
 expressions which parse correctly without the parentheses (such as `:($a + 2)` and `:($a == 2)`) to
 omit them when printing:
 
@@ -1572,11 +1649,24 @@ julia> [Polar(3, 4.0) Polar(4.0,5.3)]
 See the [`IOContext`](@ref) documentation for a list of common properties which can be used
 to adjust printing.
 
+### Output-function summary
+
+Here is a brief summary of the different output functions in Julia and how they are related.
+Most new types should only need to define `show` methods, if anything.
+
+* [`display(x)`](@ref) tells the current environment to display `x` in whatever way it thinks best. (This might even be a graphical display in something like a Jupyter or Pluto notebook.) By default (e.g. in scripts or in the text REPL), it calls `show(io, "text/plain", x)`, or equivalently `show(io, MIME"text/plain"(), x)`, for an appropriate `io` stream. (In the REPL, `io` is an [`IOContext`](@ref) wrapper around [`stdout`](@ref).) The REPL uses `display` to output the result of an evaluated expression.
+* The 3-argument [`show(io, ::MIME"text/plain", x)`](@ref) method performs verbose pretty-printing of `x`. By default (if no 3-argument method is defined for `typeof(x)`), it calls the 2-argument `show(io, x)`. It is called by the 2-argument `repr("text/plain", x)`. Other 3-argument `show` methods can be defined for additional MIME types as discussed above, to enable richer display of `x` in some interactive environments.
+* The 2-argument [`show(io, x)`](@ref) is the default simple text representation of `x`. It is called by the 1-argument [`repr(x)`](@ref), and is typically the format you might employ to input `x` into Julia. The 1-argument `show(x)` calls `show(stdout, x)`.
+* [`print(io, x)`](@ref) by default calls `show(io, x)`, but a few types have a distinct `print` format — most notably, when `x` is a string, `print` outputs the raw text whereas `show` outputs an escaped string enclosed in quotation marks. The 1-argument `print(x)` calls `print(stdout, x)`. `print` is also called by [`string(x)`](@ref).  See also [`println`](@ref) (to append a newline) and [`printstyled`](@ref) (to add colors etc.), both of which call `print`.
+* [`write(io, x)`](@ref), if it is defined (it generally has *no* default definition for new types), writes a "raw" binary representation of `x` to `io`, e.g. an `x::Int32` will be written as 4 bytes.
+
+It is also helpful to be familiar with the metadata that can be attached to an `io` stream by an [`IOContext`](@ref) wrapper. For example, the REPL sets the `:limit => true` flag from `display` for an evaluated expression, in order to limit the output to fit in the terminal; you can query this flag with `get(io, :limit, false)`. And when displaying an object contained within, for example, a multi-column matrix, the `:compact => true` flag could be set, which you can query with `get(io, :compact, false)`.
+
 ## "Value types"
 
 In Julia, you can't dispatch on a *value* such as `true` or `false`. However, you can dispatch
 on parametric types, and Julia allows you to include "plain bits" values (Types, Symbols, Integers,
-floating-point numbers, tuples, etc.) as type parameters.  A common example is the dimensionality
+floating-point numbers, tuples, etc.) as type parameters. A common example is the dimensionality
 parameter in `Array{T,N}`, where `T` is a type (e.g., [`Float64`](@ref)) but `N` is just an `Int`.
 
 You can create your own custom types that take values as parameters, and use them to control dispatch
@@ -1594,7 +1684,7 @@ julia> Val(x) = Val{x}()
 Val
 ```
 
-There is no more to the implementation of `Val` than this.  Some functions in Julia's standard
+There is no more to the implementation of `Val` than this. Some functions in Julia's standard
 library accept `Val` instances as arguments, and you can also use it to write your own functions.
  For example:
 
@@ -1617,7 +1707,7 @@ a *type*, i.e., use `foo(Val(:bar))` rather than `foo(Val{:bar})`.
 
 It's worth noting that it's extremely easy to mis-use parametric "value" types, including `Val`;
 in unfavorable cases, you can easily end up making the performance of your code much *worse*.
- In particular, you would never want to write actual code as illustrated above.  For more information
+ In particular, you would never want to write actual code as illustrated above. For more information
 about the proper (and improper) uses of `Val`, please read [the more extensive discussion in the performance tips](@ref man-performance-value-type).
 
 [^1]: "Small" is defined by the `max_union_splitting` configuration, which currently defaults to 4.

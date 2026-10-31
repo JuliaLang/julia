@@ -1,5 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
 
@@ -32,7 +33,7 @@ static inline int lt_ptr(void *a, void *b)
     return (uintptr_t)a < (uintptr_t)b;
 }
 
-/* align pointer to full word if mis-aligned */
+/* align pointer to full word if misaligned */
 static inline void *align_ptr(void *p)
 {
     uintptr_t u = (uintptr_t)p;
@@ -219,7 +220,6 @@ static uint64_t xorshift_rng(void)
 }
 
 static treap_t *bigvals;
-static size_t bigval_startoffset;
 
 // Hooks to allocate and free external objects (bigval_t's).
 
@@ -404,22 +404,23 @@ void stk_push(jl_value_t *s, jl_value_t *v)
     check_stack("push", s);
     dynstack_t *stk = *(dynstack_t **)s;
     if (stk->size < stk->capacity) {
+        jl_gc_wb((jl_value_t *)stk, (void *)&stk->data[stk->size], v);
         stk->data[stk->size++] = v;
-        jl_gc_wb((jl_value_t *)stk, v);
     }
     else {
         dynstack_t *newstk = allocate_stack_mem(stk->capacity * 3 / 2 + 1);
         newstk->size = stk->size;
+        jl_gc_wb_object((jl_value_t *)newstk);
         memcpy(newstk->data, stk->data, sizeof(jl_value_t *) * stk->size);
-        *(dynstack_t **)s = newstk;
         newstk->data[newstk->size++] = v;
         jl_gc_schedule_foreign_sweepfunc(ptls, (jl_value_t *)(newstk));
-        jl_gc_wb_back((jl_value_t *)newstk);
-        jl_gc_wb(s, (jl_value_t *)newstk);
+        // The replaced stack pointer is the field at offset 0 of `s`.
+        jl_gc_wb(s, (void *)s, (jl_value_t *)newstk);
+        *(dynstack_t **)s = newstk;
     }
 }
 
-// Return top value from `s`. Raise error if not empty.
+// Return top value from `s`. Raise error if empty.
 
 jl_value_t *stk_top(jl_value_t *s)
 {
@@ -428,7 +429,7 @@ jl_value_t *stk_top(jl_value_t *s)
     return stk->data[stk->size - 1];
 }
 
-// Pop a value from `s` and return it. Raise error if not empty.
+// Pop a value from `s` and return it. Raise error if empty.
 
 jl_value_t *stk_pop(jl_value_t *s)
 {
@@ -592,6 +593,79 @@ void abort_with_error(int full)
     abort();
 }
 
+static volatile int tagged_root_fins_ran = 0;
+
+static void tagged_root_finalizer(void *o)
+{
+    (void)o;
+    tagged_root_fins_ran++;
+}
+
+static void check_fins_ran(int expected, const char *ctx)
+{
+    if (tagged_root_fins_ran == expected)
+        return;
+    fprintf(stderr, "%s: %d finalizers ran, expected %d\n", ctx,
+            tagged_root_fins_ran, expected);
+    exit(1);
+}
+
+// Tagged immediates must not prevent neighboring roots from being marked.
+// Their finalizers should run only after the roots are popped.
+static void test_tagged_immediate_roots(void)
+{
+    // Set a high payload bit on either 32-bit or 64-bit platforms.
+    const uintptr_t large_imm = (uintptr_t)1 << (sizeof(uintptr_t) * CHAR_BIT - 4);
+
+    // Put live roots after tagged values at both even and odd indices.
+    // Treating an immediate as a finalizer entry would skip the next root.
+    {
+        jl_value_t **args;
+        JL_GC_PUSHARGS(args, 6);
+        args[0] = (jl_value_t *)0x5;                // tag 0b01, even slot
+        args[1] = jl_box_int64(42424242);
+        args[2] = (jl_value_t *)0x6;                // tag 0b10, even slot
+        args[3] = (jl_value_t *)0x5;                // tag 0b01, odd slot
+        args[4] = jl_box_int64(43434343);
+        args[5] = (jl_value_t *)(large_imm | 0x1);  // last slot
+        jl_gc_add_ptr_finalizer(ptls, args[1], (void *)tagged_root_finalizer);
+        jl_gc_add_ptr_finalizer(ptls, args[4], (void *)tagged_root_finalizer);
+        jl_gc_collect(JL_GC_FULL);
+        check_fins_ran(0, "JL_GC_PUSHARGS frame, small tagged immediates");
+
+        // Large payloads must not be mistaken for object pointers either.
+        args[0] = (jl_value_t *)(large_imm | 0x1);
+        args[2] = (jl_value_t *)(large_imm | 0x2);
+        args[3] = (jl_value_t *)(large_imm | 0x1);
+        jl_gc_collect(JL_GC_FULL);
+        check_fins_ran(0, "JL_GC_PUSHARGS frame, large tagged immediates");
+        JL_GC_POP();
+    }
+    jl_gc_collect(JL_GC_FULL);
+    check_fins_ran(2, "after JL_GC_PUSHARGS frame was popped");
+    tagged_root_fins_ran = 0;
+
+    // Indirect-layout frame (JL_GC_PUSH3): locals holding tagged immediates.
+    {
+        jl_value_t *tagged = (jl_value_t *)0x5;
+        jl_value_t *obj = NULL;
+        jl_value_t *tagged2 = (jl_value_t *)0x6;
+        JL_GC_PUSH3(&tagged, &obj, &tagged2);
+        obj = jl_box_int64(24242424);
+        jl_gc_add_ptr_finalizer(ptls, obj, (void *)tagged_root_finalizer);
+        jl_gc_collect(JL_GC_FULL);
+        check_fins_ran(0, "JL_GC_PUSH frame, small tagged immediates");
+
+        tagged = (jl_value_t *)(large_imm | 0x1);
+        tagged2 = (jl_value_t *)(large_imm | 0x2);
+        jl_gc_collect(JL_GC_FULL);
+        check_fins_ran(0, "JL_GC_PUSH frame, large tagged immediates");
+        JL_GC_POP();
+    }
+    jl_gc_collect(JL_GC_FULL);
+    check_fins_ran(1, "after JL_GC_PUSH frame was popped");
+}
+
 int main()
 {
     // Install callbacks. This should happen before `jl_init()` and
@@ -599,6 +673,13 @@ int main()
 
     jl_gc_set_cb_notify_external_alloc(alloc_bigval, 1);
     jl_gc_set_cb_notify_external_free(free_bigval, 1);
+
+    // single threaded mode
+    // Note: with -t1,1 a signal 10 occurs in task_scanner
+    jl_options.nthreadpools = 1;
+    jl_options.nthreads = 1;
+    int16_t ntpp[] = {jl_options.nthreads};
+    jl_options.nthreads_per_pool = ntpp;
 
     jl_init();
     if (jl_gc_enable_conservative_gc_support() < 0)
@@ -642,8 +723,6 @@ int main()
             module,
             jl_symbol("StackDataLarge"),
             (jl_value_t *)datatype_stack_external);
-    // Remember the offset of external objects
-    bigval_startoffset = jl_gc_external_obj_hdr_size();
     // Run the actual tests
     checked_eval_string(
             "let dir = dirname(unsafe_string(Base.JLOptions().julia_bin))\n"
@@ -655,6 +734,12 @@ int main()
             "module LocalTest\n"
             "  include(\"LocalTest.jl\")\n"
             "end");
+
+    // The conservative task scanner would find the frame slots on this stack by
+    // itself and keep their objects alive, so disable it for this test.
+    jl_gc_set_cb_task_scanner(task_scanner, 0);
+    test_tagged_immediate_roots();
+    jl_gc_set_cb_task_scanner(task_scanner, 1);
 }
 
 #ifdef __cplusplus
