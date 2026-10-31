@@ -53,6 +53,7 @@ len_only_iterable = (1,2,3,4,5)
 @test_throws ArgumentError asyncmap(identity, 1:10; batch_size=0)
 @test_throws ArgumentError asyncmap(identity, 1:10; batch_size="10")
 @test_throws ArgumentError asyncmap(identity, 1:10; ntasks="10")
+@test_throws ArgumentError asyncmap(identity, 1:10; ntasks=() -> -1)
 
 # Check that we throw a `CapturedException` holding the stacktrace if `f` throws
 f42105(i) = i == 5 ? error("captured") :  i
