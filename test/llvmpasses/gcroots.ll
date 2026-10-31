@@ -339,6 +339,68 @@ top:
     ret void
 }
 
+define void @gc_preserve_branch_end({} addrspace(10)** %p1, {} addrspace(10)** %p2, i1 %c) {
+; CHECK-LABEL: @gc_preserve_branch_end
+; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 3
+top:
+    %pgcstack = call {}*** @julia.get_pgcstack()
+    %v1 = load {} addrspace(10)*, {} addrspace(10)** %p1
+    %v2 = load {} addrspace(10)*, {} addrspace(10)** %p2
+    %tok1 = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* %v1)
+    %tok2 = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* %v2)
+    br i1 %c, label %L1, label %L2
+L1:
+    call void @llvm.julia.gc_preserve_end(token %tok1)
+; OPAQUE: store ptr addrspace(10) %v2,
+    call void @jl_safepoint()
+    br label %done
+L2:
+    call void @llvm.julia.gc_preserve_end(token %tok2)
+; OPAQUE: store ptr addrspace(10) %v1,
+    call void @jl_safepoint()
+    br label %done
+done:
+    ret void
+}
+
+define void @gc_preserve_join(i64 %a, i1 %c) {
+; CHECK-LABEL: @gc_preserve_join
+top:
+    %pgcstack = call {}*** @julia.get_pgcstack()
+    %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+    %tok = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* %v)
+    br i1 %c, label %L1, label %done
+L1:
+    call void @llvm.julia.gc_preserve_end(token %tok)
+    br label %done
+done:
+; OPAQUE: store ptr addrspace(10) %v,
+    call void @jl_safepoint()
+    ret void
+}
+
+declare void @may_throw()
+declare i32 @__gcc_personality_v0(...)
+
+define void @gc_preserve_invoke_end({} addrspace(10)** %p) personality ptr @__gcc_personality_v0 {
+; CHECK-LABEL: @gc_preserve_invoke_end
+top:
+    %pgcstack = call {}*** @julia.get_pgcstack()
+    %v = load {} addrspace(10)*, {} addrspace(10)** %p
+    %tok = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* %v)
+    invoke void @may_throw() [ "preserve"(token %tok) ]
+        to label %normal unwind label %unwind
+normal:
+; OPAQUE-NOT: store ptr addrspace(10) %v,
+    call void @jl_safepoint()
+    ret void
+unwind:
+    %lp = landingpad { ptr, i32 } cleanup
+; OPAQUE: store ptr addrspace(10) %v,
+    call void @jl_safepoint()
+    ret void
+}
+
 
 @gv1 = external global {}*
 @gv2 = external global {} addrspace(10)*
