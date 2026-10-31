@@ -262,6 +262,7 @@ end
         @test findprev("", s, 0) === 1:0
         @test findprev("", s, n + 1) === n+1:n
         @test_throws BoundsError findprev("", s, n + 2)
+        @test_throws BoundsError findprev("", s, -1)
     end
     @test findlast("", GenericString("")) === 1:0
 end
