@@ -2184,11 +2184,11 @@ end
         open(ji_file) do io
             flags = Ref{UInt32}()
             checksum = Ref{UInt32}()
-            payload_end = Ref{Int64}()
-            loader_start = Ref{Int64}()
             preferred_base = Ref{UInt64}()
             payload_start = Ref{Int64}()
-            err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}, Ptr{UInt64}, Ptr{Int64}), io.ios, flags, checksum, payload_end, loader_start, preferred_base, payload_start)
+            payload_size = Ref{Int64}()
+            mapped_size = Ref{Int64}()
+            err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{UInt64}, Ptr{Int64}, Ptr{Int64}, Ptr{Int64}), io.ios, flags, checksum, preferred_base, payload_start, payload_size, mapped_size)
             @test err == 0
             @test flags[] & Base.JI_FLAG_PKGIMAGE != 0
             @test (flags[] & Base.JI_FLAG_SPLIT != 0) == native

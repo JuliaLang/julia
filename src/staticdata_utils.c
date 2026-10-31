@@ -674,14 +674,14 @@ typedef struct {
     uint64_t offset, size;
 } jl_image_section_t;
 
-// The section table at the end of the header (see doc/src/devdocs/sysimg.md)
+// The end of the header, ending with the section table, which is in the order of the sections in
+// the payload and whose offsets are relative to the payload (see doc/src/devdocs/sysimg.md)
 typedef struct {
-    uint64_t heap_size;              // the heap starts at the header's payload_start
+    uint64_t heap_size;              // the heap starts the payload
     uint64_t pointer_free_offset;    // a heap offset
-    jl_image_section_t specials, gvars;
     uint64_t gvar_objects;
-    jl_image_section_t imports, binds, slides, fixup_types, fixup_objs, placeholders, strtab, fptrs;
     uint64_t world, typeinf_world, gensym_counter;
+    jl_image_section_t fptrs, imports, binds, slides, fixup_types, fixup_objs, specials, gvars, placeholders, strtab;
 } jl_image_sections_t;
 
 // The header has a fixed size, with every field at a fixed offset, so that the loader can
@@ -694,10 +694,9 @@ typedef struct {
 #define JI_COMPAT_OFFSET 24
 #define JI_COMPAT_SIZE 128
 #define JI_PREFERRED_BASE_OFFSET 152
-#define JI_LOADER_START_OFFSET 160
-#define JI_PAYLOAD_END_OFFSET 168
-#define JI_PAYLOAD_START_OFFSET 176
-#define JI_SECTIONS_OFFSET 184
+#define JI_PAYLOAD_START_OFFSET 160
+#define JI_PAYLOAD_SIZE_OFFSET 168
+#define JI_SECTIONS_OFFSET 176
 #define JI_HEADER_SIZE (JI_SECTIONS_OFFSET + sizeof(jl_image_sections_t))
 
 // This .ji is for an incremental image and not a system image.
@@ -715,8 +714,8 @@ static int jl_image_compat(char compat[JI_COMPAT_SIZE]) JL_NOTSAFEPOINT
     return n >= 0 && n < JI_COMPAT_SIZE;
 }
 
-// Write the header, leaving the checksum, the preferred base and the payload bounds to be filled
-// in once the payload has been written
+// Write the header, leaving the checksum, the preferred base, the payload bounds and the section table
+// to be filled in once the payload has been written
 static void write_header(ios_t *s, uint32_t flags) JL_CANSAFEPOINT
 {
     char compat[JI_COMPAT_SIZE];
@@ -733,9 +732,8 @@ static void write_header(ios_t *s, uint32_t flags) JL_CANSAFEPOINT
     write_uint32(s, 0); // checksum of the payload (build_id.hi)
     ios_write(s, compat, JI_COMPAT_SIZE);
     write_uint64(s, 0); // preferred_base
-    write_uint64(s, 0); // loader_start
-    write_uint64(s, 0); // payload_end
     write_uint64(s, 0); // payload_start
+    write_uint64(s, 0); // payload_size
     jl_image_sections_t h = {0};
     ios_write(s, (char*)&h, sizeof(h));
     assert(ios_pos(s) == JI_HEADER_SIZE);
@@ -1022,7 +1020,7 @@ static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *depmods) JL_CANSAF
 }
 
 // Read and check the header, leaving `s` just past it
-JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint32_t *checksum, int64_t *payload_end, int64_t *loader_start, uint64_t *preferred_base, int64_t *payload_start) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint32_t *checksum, uint64_t *preferred_base, int64_t *payload_start, int64_t *payload_size, int64_t *heap_size) JL_NOTSAFEPOINT
 {
     char header[JI_HEADER_SIZE];
     if (ios_readall(s, header, JI_HEADER_SIZE) != JI_HEADER_SIZE)
@@ -1040,13 +1038,11 @@ JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint32_t *chec
         return -1;
     memcpy(checksum, header + JI_CHECKSUM_OFFSET, sizeof(*checksum));
     memcpy(preferred_base, header + JI_PREFERRED_BASE_OFFSET, sizeof(*preferred_base));
-    uint64_t start, end, heap;
-    memcpy(&start, header + JI_LOADER_START_OFFSET, sizeof(start));
-    memcpy(&end, header + JI_PAYLOAD_END_OFFSET, sizeof(end));
-    memcpy(&heap, header + JI_PAYLOAD_START_OFFSET, sizeof(heap));
-    *loader_start = (int64_t)start;
-    *payload_end = (int64_t)end;
-    *payload_start = (int64_t)heap;
+    memcpy(payload_start, header + JI_PAYLOAD_START_OFFSET, sizeof(*payload_start));
+    memcpy(payload_size, header + JI_PAYLOAD_SIZE_OFFSET, sizeof(*payload_size));
+    jl_image_sections_t h;
+    memcpy(&h, header + JI_SECTIONS_OFFSET, sizeof(h));
+    *heap_size = h.heap_size;
     return 0;
 }
 
