@@ -932,3 +932,14 @@ end
     @test parent(B) == A0
     @test axes(B) == Base.IdentityUnitRange.((-10:-9, 9:10))
 end
+
+@testset "cat with offset axes (#64433)" begin
+    x = OffsetVector([1, 2], 3:4)
+    @test cat(x, [3, 4]; dims=1) == [1, 2, 3, 4]
+    @test cat(x, [3, 4]; dims=(1, 2)) == [1 0; 2 0; 0 3; 0 4]
+    @test cat(x, [3, 4]; dims=1) == vcat(x, [3, 4])
+    M = OffsetArray([1 2; 3 4], 0:1, 5:6)
+    @test cat(M, [5 6; 7 8]; dims=2) == [1 2 5 6; 3 4 7 8]
+    @test cat(M, [5 6; 7 8]; dims=2) == hcat(M, [5 6; 7 8])
+    @test cat(M, M; dims=(1, 2)) == [1 2 0 0; 3 4 0 0; 0 0 1 2; 0 0 3 4]
+end
