@@ -175,6 +175,14 @@ end
     copyline(b, a; keep=false)
     Base.shred!(a)
     @test take!(b) == b"xxabcdexxx"
+
+    # Only the copied line's own newline is removed, never earlier bytes of `out`
+    s = Base.BufferStream(); closewrite(s)
+    b = IOBuffer(); write(b, "a\n")
+    @test take!(copyline(b, s)) == b"a\n"
+    s = Base.BufferStream(); write(s, "\n"); closewrite(s)
+    b = IOBuffer(); write(b, "ab\r")
+    @test take!(copyline(b, s)) == b"ab\r"
 end
 
 @testset "take!" begin
