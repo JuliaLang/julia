@@ -432,6 +432,39 @@ end
             r = 15:-2:-38
             @test findall(in(span), r) == 1:6
         end
+
+        # issue #64453: overflow in endpoint difference for narrow/extreme/mixed integer ranges
+        @test isempty(findall(in(Int8(50):Int8(100)), Int8(-100):Int8(-90)))
+        @test findall(in(Int8(50):Int8(100)), Int8(-100):Int8(100)) == 151:201
+        @test isempty(findall(in(UInt8(200):UInt8(255)), Int8(-128):Int8(127)))
+        @test isempty(findall(in((typemax(Int64) - 10):typemax(Int64)), typemin(Int64):(typemin(Int64) + 10)))
+        @test findall(in(Int32(0):Int32(10)), typemin(Int32):Int32(4):typemax(Int32)) == 536870913:1:536870915
+        let u = UInt(typemax(Int)) + 1
+            @test isempty(findall(in(u:(u + 5)), 1:typemax(Int)))
+        end
+
+        let spans = Any[
+                Int8(-128):Int8(-100), Int8(-50):Int8(50), Int8(50):Int8(127), Int8(10):Int8(5),
+                UInt8(0):UInt8(50), UInt8(100):UInt8(255), UInt8(10):UInt8(5),
+                Int16(-200):Int16(200), Int64(-50):Int64(50), UInt64(1):UInt64(50),
+                big(-50):big(50), false:true, true:false,
+            ],
+            ranges = Any[
+                Int8(-128):Int8(127), Int8(-100):Int8(-90), Int8(50):Int8(100), Int8(5):Int8(1),
+                Int8(-128):Int8(3):Int8(127), Int8(127):Int8(-1):Int8(-128),
+                Int8(127):Int8(-3):Int8(-128), Int8(100):Int8(-128):Int8(-100),
+                StepRangeLen(Int8(-100), Int8(0), 3), StepRangeLen(Int8(0), Int8(0), 0),
+                UInt8(0):UInt8(255), UInt8(10):UInt8(20), UInt8(20):UInt8(10),
+                UInt8(0):UInt8(50):UInt8(255), UInt8(200):Int8(-2):UInt8(10),
+                Int16(-200):Int16(25):Int16(200), Int64(-100):Int64(15):Int64(100),
+                UInt64(10):UInt64(20), UInt64(10):Int8(3):UInt64(100),
+                big(-100):big(15):big(100), big(100):big(-15):big(-100),
+                false:true, true:false, StepRange(true, Int8(-1), false),
+            ]
+            for r in ranges, span in spans
+                @test findall(in(span), r) == findall(in(span), collect(r))
+            end
+        end
     end
     @testset "findfirst" begin
         @test findfirst(==(1), Base.IdentityUnitRange(-1:1)) == 1

@@ -5,7 +5,7 @@ module Sort
 using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing, uinttype, tail,
-    sub_with_overflow, add_with_overflow, BitSigned, BitIntegerType, top_set_bit
+    sub_with_overflow, add_with_overflow, BitSigned, BitIntegerType, top_set_bit, uabs
 
 import Base:
     sort,
@@ -279,9 +279,9 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrde
         length(a)
     else
         if !(o isa ReverseOrdering)
-            fld(floor(Integer, x) - f, h) + 1
+            fld(maybe_unsigned(floor(Integer, x) - f), uabs(h)) + 1
         else
-            fld(ceil(Integer, x) - f, h) + 1
+            fld(maybe_unsigned(f - ceil(Integer, x)), uabs(h)) + 1
         end
     end
 end
@@ -295,9 +295,9 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrd
         length(a) + 1
     else
         if !(o isa ReverseOrdering)
-            cld(ceil(Integer, x) - f, h) + 1
+            cld(maybe_unsigned(ceil(Integer, x) - f), uabs(h)) + 1
         else
-            cld(floor(Integer, x) - f, h) + 1
+            cld(maybe_unsigned(f - floor(Integer, x)), uabs(h)) + 1
         end
     end
 end
