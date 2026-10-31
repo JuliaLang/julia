@@ -199,6 +199,10 @@ end
             @test Artifacts.query_override(SHA1(hc)) === nothing
             @test artifact_hash("single", artifacts_toml; pkg_uuid=uuid) == SHA1(hc)
             @test Artifacts.query_override(SHA1(hc)) == joinpath(depot, "artifacts", he)
+
+            load_overrides(force=true)
+            select_downloadable_artifacts(Artifacts.load_artifacts_toml(artifacts_toml), artifacts_toml; pkg_uuid=uuid)
+            @test Artifacts.query_override(SHA1(hc)) == joinpath(depot, "artifacts", he)
         end
     end
 end

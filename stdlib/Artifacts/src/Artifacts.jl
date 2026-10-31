@@ -461,6 +461,7 @@ function select_downloadable_artifacts(artifact_dict::Dict, artifacts_toml::Stri
                                        platform::AbstractPlatform = HostPlatform(),
                                        pkg_uuid::Union{Nothing,Base.UUID} = nothing,
                                        include_lazy::Bool = false)
+    process_overrides(artifact_dict, pkg_uuid)
     artifacts = Dict{String,Any}()
     for name in keys(artifact_dict)
         # Get the metadata about this name for the requested platform
