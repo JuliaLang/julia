@@ -127,6 +127,26 @@ function String(v::Vector{UInt8})
 end
 
 """
+    String(iterable)::String
+
+Create a `String` from `iterable`. `Char(x)::Char` is called on each element of the iterable to create the resulting string's constituent characters.
+
+# Examples
+```jldoctest
+julia> String(Iterators.map(c -> c+1, "Hello, world"))
+"Ifmmp-!xpsme"
+
+julia> String(Iterators.take("Hello, world", 5))
+"Hello"
+```
+
+!!! compat "Julia 1.14"
+    This method requires Julia 1.14 or later.
+"""
+String(iter) = sprint(io -> foreach(c -> write(io, Char(c)::Char), iter))
+
+
+"""
     unsafe_takestring(m::Memory{UInt8})::String
 
 Create a `String` from `m`, changing the interpretation of the contents of `m`.
