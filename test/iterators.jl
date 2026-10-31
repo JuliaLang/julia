@@ -1286,3 +1286,29 @@ end == Vector{Int}
     # a greedy algorithm
     @test_throws MethodError last(zip(Iterators.filter(x -> x > 0, -5:5), Iterators.filter(x -> x % 2 == 0, -5:5)))  # (5, 4)
 end
+
+struct FibonacciIndices
+    last::NTuple{2, Int}
+    length::Int
+end
+Base.length((; length)::FibonacciIndices) = length
+Base.keytype(::Type{FibonacciIndices}) = NTuple{2, Int}
+Base.firstindex(::FibonacciIndices) = (1, 1)
+Base.lastindex((; last)::FibonacciIndices) = last
+Base.nextind(::FibonacciIndices, (i, j)) = (j, i+j)
+Base.prevind(::FibonacciIndices, (i, j)) = (j-i, i)
+
+@testset "generic eachindex" begin
+    f = FibonacciIndices((5, 8), 5)
+    @test length(eachindex(f)) == 5
+    @test eltype(eachindex(f)) == NTuple{2, Int}
+
+    expected = [(1, 1), (1, 2), (2, 3), (3, 5), (5, 8)]
+    fwd = collect(eachindex(f))
+    @test fwd == expected
+    @test fwd isa Vector{NTuple{2, Int}}
+
+    bwd = collect(Iterators.reverse(eachindex(f)))
+    @test bwd == reverse(expected)
+    @test bwd isa Vector{NTuple{2, Int}}
+end
