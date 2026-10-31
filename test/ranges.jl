@@ -2141,6 +2141,22 @@ end
     @test reverse(reverse(1.0:0.0)) === 1.0:0.0
 end
 
+@testset "issue #64408: empty ranges with non-IEEEFloat types" begin
+    for r in (BigFloat(1):BigFloat(-1), BigFloat(1):BigFloat(1):BigFloat(-1),
+              BigFloat(-1):BigFloat(-1):BigFloat(1),
+              range(BigFloat(1), BigFloat(-1); step=1),
+              range(BigFloat(1); stop=BigFloat(-1), step=BigFloat(1)))
+        @test isempty(r)
+        @test length(r) == 0
+        @test eltype(r) == BigFloat
+        @test collect(r) == BigFloat[]
+    end
+    @test BigFloat(1):BigFloat(0) == BigFloat[]
+    @test BigFloat(-1):BigFloat(1) == BigFloat[-1, 0, 1]
+    @test BigFloat(1):BigFloat(-1):BigFloat(-1) == BigFloat[1, 0, -1]
+    @test length(BigFloat(1):BigFloat(1)) == 1
+end
+
 @testset "Issue #30944 ranges with non-IEEEFloat types" begin
     # We want to test the creation of a range with BigFloat start or step
     @test range(big(1.0), length=10) == big(1.0):1:10
