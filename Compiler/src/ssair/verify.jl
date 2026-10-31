@@ -264,7 +264,6 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 raise_error()
             end
         elseif isa(terminator, EnterNode)
-            @label enter_check
             if length(block.succs) == 1
                 if terminator.catch_dest != 0
                     @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
@@ -276,16 +275,6 @@ function verify_ir(ir::IRCode, print::Bool=true,
             end
         else
             if length(block.succs) != 1 || block.succs[1] != idx + 1
-                # As a special case, we allow extra statements in the BB of an :enter
-                # statement, until we can do proper CFG manipulations during compaction.
-                for stmt_idx in first(block.stmts):last(block.stmts)
-                    stmt = ir[SSAValue(stmt_idx)][:stmt]
-                    if isa(stmt, EnterNode)
-                        terminator = stmt
-                        @goto enter_check
-                    end
-                    isa(stmt, PhiNode) || break
-                end
                 termidx = last(block.stmts)
                 stmttyp = ir.stmts[termidx][:type]
                 if isempty(block.succs) && stmttyp == Union{}
