@@ -2187,11 +2187,11 @@ end
             # Even though the prompt has styling passes, they shouldn't be applied
             write(stdin_write, "function # SENTINEL5")
             s = readuntil(stdout_read, "# SENTINEL5", keep=true)
-            # With style_input=false, there should be no color codes from syntax highlighting
-            # (there may still be prompt color codes, but not within the input text)
-            lines = split(s, '\n')
-            # The last line should contain just "function" without color codes around it
-            @test occursin("function", s)
+            # the input may be drawn in pieces split by cursor moves, so read it from the buffer
+            @test buffercontents(LineEdit.buffer(repl.mistate)) == "function # SENTINEL5"
+            # after the prompt, the only SGR codes allowed are the prompt's resets
+            input_text = split(s, "julia> ", keepempty=false)[end]
+            @test !occursin(r"\e\[(?!0?m)[0-9;]*m", input_text)
 
             write(stdin_write, "\x03")  # Ctrl-C to cancel
             write(stdin_write, '\x04')  # Exit
