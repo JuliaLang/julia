@@ -83,7 +83,7 @@ function parse_mapping(mapping::String, name::String, override_file::String)
     return mapping
 end
 function parse_mapping(mapping::Dict{String, Any}, name::String, override_file::String)
-    return Dict{String, Any}(k => parse_mapping(v, name, override_file) for (k, v) in mapping)
+    return Dict{String, Any}(k => parse_mapping(v, k, override_file) for (k, v) in mapping)
 end
 # Fallthrough for invalid Overrides.toml files
 parse_mapping(mapping, name::String, override_file::String) = nothing
@@ -168,6 +168,10 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
 
                 # For each name in the mapping, update appropriately
                 for (name, override_value) in mapping
+                    if !isa(override_value, Union{String, SHA1})
+                        @error("Invalid override in '$(override_file)': failed to parse entry `$(name)` for UUID '$(k)'")
+                        continue
+                    end
                     # If the mapping for this name is the empty string, un-override it
                     if override_value isa String && isempty(override_value)
                         delete!(overrides_uuid[uuid], name)

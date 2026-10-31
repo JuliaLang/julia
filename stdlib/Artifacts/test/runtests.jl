@@ -123,7 +123,7 @@ end
         # The first depot wins, and an empty string removes an override from a later depot
         write_overrides_toml(high, Dict(
             h2 => "",
-            string(uuid) => Dict("a" => h3, "b" => ""),
+            string(uuid) => Dict("a" => h3, "b" => "", "bad" => "relative/path", "num" => 1, "nested" => Dict("x" => p1)),
             "not-a-hash" => p1,
             h4 => "relative/path",
             "not-a-uuid" => Dict("a" => p1),
@@ -136,6 +136,10 @@ end
                 (:error, r"failed to parse entry `4{40}`"),
                 (:error, r"Invalid UUID 'not-a-uuid'"),
                 (:error, r"failed to parse entry `5{40}`"),
+                (:error, r"entry 'bad' must map to an absolute path or SHA1 hash"),
+                (:error, r"failed to parse entry `bad` for UUID 'd57dbccd-ca19-4d82-b9b8-9d660942965b'"),
+                (:error, r"failed to parse entry `num` for UUID"),
+                (:error, r"failed to parse entry `nested` for UUID"),
                 match_mode=:any,
                 load_overrides(force=true))
             @test overrides[:hash] == Dict(SHA1(h1) => p1)
