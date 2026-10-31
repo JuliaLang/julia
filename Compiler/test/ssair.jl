@@ -199,6 +199,173 @@ let code = Any[
     @test_throws ["IR verification failed.", "Code location: "] Compiler.verify_ir(ir, false)
 end
 
+# Test that the verifier rejects each kind of malformed IR, and says why
+function verifier_output(f)
+    return mktemp() do path, io
+        err = redirect_stdio(; stdout=io, stderr=io) do
+            try
+                f()
+            catch err
+                err
+            end
+        end
+        flush(io)
+        return err, read(path, String)
+    end
+end
+function set_bb_stmts!(ir::Compiler.IRCode, bb::Int, first::Int, last::Int)
+    (; preds, succs) = ir.cfg.blocks[bb]
+    ir.cfg.blocks[bb] = BasicBlock(Compiler.StmtRange(first, last), preds, succs)
+    return ir
+end
+function retarget_edge!(ir::Compiler.IRCode, from::Int, old::Int, new::Int)
+    blocks = ir.cfg.blocks
+    replace!(blocks[from].succs, old => new)
+    filter!(!=(from), blocks[old].preds)
+    push!(blocks[new].preds, from)
+    return ir
+end
+tuple_call(args...) = Expr(:call, GlobalRef(Core, :tuple), args...)
+branch_ir() = make_ircode(Any[GotoIfNot(true, 3), ReturnNode(1), ReturnNode(2)])
+enter_ir() = make_ircode(Any[EnterNode(3), ReturnNode(1), ReturnNode(2)])
+modified(f, ir::Compiler.IRCode=branch_ir()) = (f(ir); ir)
+let cases = Pair{String,Compiler.IRCode}[
+        "CFG index length (0) does not correspond to # of blocks 3" =>
+            modified(ir -> empty!(ir.cfg.index)),
+        "IR type length is invalid 4 / 3" => modified(ir -> push!(ir.stmts.type, Any)),
+        "IR info length is invalid 4 / 3" => modified(ir -> push!(ir.stmts.info, Compiler.NoCallInfo())),
+        "IR line length is invalid 10 / 9" => modified(ir -> push!(ir.stmts.line, 0)),
+        "IR flag length is invalid 4 / 3" => modified(ir -> push!(ir.stmts.flag, 0x0)),
+        "Predecessor 9 of block 2 out of bounds for IR" =>
+            modified(ir -> push!(ir.cfg.blocks[2].preds, 9)),
+        "Predecessor 2 of block 3 not in successor list" =>
+            modified(ir -> push!(ir.cfg.blocks[3].preds, 2)),
+        "Double edge from 1 to 2 not correctly accounted" =>
+            modified(ir -> (ir.cfg.blocks[1].succs .= 2; empty!(ir.cfg.blocks[3].preds))),
+        "Successor 9 of block 2 out of bounds for IR" =>
+            modified(ir -> push!(ir.cfg.blocks[2].succs, 9)),
+        "Successor 3 of block 2 not in predecessor list" =>
+            modified(ir -> push!(ir.cfg.blocks[2].succs, 3)),
+        "First statement of BB 3 (0) out of bounds for IR (length=3)" =>
+            modified(ir -> set_bb_stmts!(ir, 3, 0, 3)),
+        "Last statement of BB 3 (9) out of bounds for IR (length=3)" =>
+            modified(ir -> set_bb_stmts!(ir, 3, 3, 9)),
+        "End of BB 1 (1) is not one less than CFG index (3)" =>
+            modified(ir -> (ir.cfg.index[1] = 3)),
+        "First statement of BB 2 (3) does not match end of previous (1)" =>
+            modified(ir -> (set_bb_stmts!(ir, 2, 3, 3); ir.cfg.index[2] = 4)),
+        "Block 2 ends in return or unreachable, but has successors" =>
+            modified(ir -> (push!(ir.cfg.blocks[2].succs, 3); push!(ir.cfg.blocks[3].preds, 2))),
+        "does not match GotoNode terminator (3)" =>
+            modified(ir -> retarget_edge!(ir, 1, 3, 2),
+                make_ircode(Any[GotoNode(3), ReturnNode(1), ReturnNode(2)])),
+        "Block 1 terminator forms a double edge to block 2" =>
+            make_ircode(Any[GotoIfNot(true, 2), ReturnNode(1)]; verify=false),
+        "does not match GotoIfNot terminator" => modified(ir -> retarget_edge!(ir, 1, 3, 1)),
+        "does not match :enter terminator" =>
+            modified(ir -> (filter!(!=(3), ir.cfg.blocks[1].succs); empty!(ir.cfg.blocks[3].preds)),
+                enter_ir()),
+        "does not match :enter terminator" => modified(ir -> (ir.stmts.stmt[1] = EnterNode(2)), enter_ir()),
+        "does not match fall-through terminator %2" =>
+            modified(ir -> retarget_edge!(ir, 2, 3, 1),
+                make_ircode(Any[GotoIfNot(true, 3), tuple_call(), ReturnNode(1)])),
+        "End of last BB 1 does not match last IR statement 2" =>
+            modified(ir -> (empty!(ir.cfg.index); resize!(ir.cfg.blocks, 1)),
+                make_ircode(Any[ReturnNode(1), ReturnNode(2)])),
+        "φ node 4 is not at the beginning of the basic block 3" =>
+            make_ircode(Any[GotoIfNot(true, 3), GotoNode(3), tuple_call(),
+                PhiNode(Int32[1, 2], Any[1, 2]), ReturnNode(SSAValue(4))]; verify=false),
+        "Edge list φ node 3 in bb 3 not unique (double edge?)" =>
+            make_ircode(Any[GotoIfNot(true, 3), GotoNode(3),
+                PhiNode(Int32[1, 1], Any[1, 2]), ReturnNode(SSAValue(3))]; verify=false),
+        "of φ node 3 not in predecessor list" =>
+            modified(ir -> (ir.stmts.stmt[3] = PhiNode(Int32[1, 3], Any[1, 2])),
+                make_ircode(Any[GotoIfNot(true, 3), GotoNode(3),
+                    PhiNode(Int32[1, 2], Any[1, 2]), ReturnNode(SSAValue(3))])),
+        # a non-φ statement among the φ nodes is checked like an operand
+        "Left over slot detected in converted IR" =>
+            make_ircode(Any[GotoIfNot(true, 3), GotoNode(3), PhiNode(Int32[1, 2], Any[1, 2]),
+                SlotNumber(2), PhiNode(Int32[1, 2], Any[1, 2]), tuple_call(),
+                ReturnNode(SSAValue(3))]; verify=false),
+        "Operand 1 of PhiC node 1 must be an SSA Value." =>
+            make_ircode(Any[PhiCNode(Any[1]), ReturnNode(1)]; verify=false),
+        "Operand 1 of PhiC node 2 must reference an Upsilon node." =>
+            make_ircode(Any[tuple_call(), PhiCNode(Any[SSAValue(1)]), ReturnNode(1)]; verify=false),
+        "Terminator 1 in bb 1 is not the last statement in the block" =>
+            modified(ir -> (ir.stmts.stmt[1] = ReturnNode(2)),
+                make_ircode(Any[tuple_call(), ReturnNode(1)])),
+        "Explicit terminators (other than ReturnNode) must have `Any` type" =>
+            modified(ir -> (ir.stmts.type[1] = Int), make_ircode(Any[GotoNode(2), ReturnNode(1)])),
+        "Assignment should have been removed during SSA conversion" =>
+            make_ircode(Any[Expr(:(=), SSAValue(1), 1), ReturnNode(1)]; verify=false),
+        "malformed isdefined" =>
+            make_ircode(Any[Expr(:isdefined, Argument(1), 1, 2), ReturnNode(1)]; verify=false),
+        "malformed throw_undef_if_not" =>
+            make_ircode(Any[Expr(:throw_undef_if_not, :x, true, 1, 2), ReturnNode(1)]; verify=false),
+        "Def (5) points to non-existent new node" =>
+            make_ircode(Any[tuple_call(SSAValue(5)), ReturnNode(1)]; verify=false),
+        "Def (2) does not dominate use (1) in same BB" =>
+            make_ircode(Any[tuple_call(SSAValue(2)), tuple_call(), ReturnNode(1)]; verify=false),
+        "Basic Block 2 does not dominate block 3 (tried to use value %2 at %4)" =>
+            make_ircode(Any[GotoIfNot(true, 4), tuple_call(), ReturnNode(1),
+                tuple_call(SSAValue(2)), ReturnNode(1)]; verify=false),
+        "At statement %2: Invalid use of value statement or terminator %1" =>
+            make_ircode(Any[GotoNode(2), tuple_call(SSAValue(1)), ReturnNode(1)]; verify=false),
+        "At statement %1: Left over SSA marker" =>
+            make_ircode(Any[tuple_call(Compiler.OldSSAValue(1)), ReturnNode(1)]; verify=false),
+        "At statement %1: Left over SSA marker" =>
+            make_ircode(Any[tuple_call(NewSSAValue(1)), ReturnNode(1)]; verify=false),
+    ]
+    @testset "$msg" for (msg, ir) in cases
+        err, out = verifier_output(() -> Compiler.verify_ir(ir))
+        @test err isa ErrorException && startswith(err.msg, "IR verification failed.")
+        @test occursin(msg, out)
+    end
+end
+# Test that the error names the method instance, and that the IR is printed
+let ir = modified(ir -> push!(ir.cfg.blocks[2].succs, 3)),
+    mi = Base.method_instance(identity, (Int,))
+    err, out = verifier_output() do
+        Compiler.verify_ir(ir, true, false, Compiler.SimpleInferenceLattice.instance, mi)
+    end
+    @test occursin("Method instance: $mi", err.msg)
+    @test occursin("goto #3 if not true", out)
+end
+# Test that a debuginfo edge index with no matching edge is reported
+let di = Compiler.DebugInfoStream(Int32[0, 0, 0, 0, 1, 0])
+    @test verifier_output(() -> Compiler.verify_linetable(di, 2)) ==
+        (nothing, "Malformed debuginfo index into edges\n")
+end
+
+# Test unusual IR that the verifier accepts
+let cases = Compiler.IRCode[
+        # a block ending in a call known to throw may have no successors
+        modified(make_ircode(Any[GotoIfNot(true, 3), tuple_call(), ReturnNode(1)])) do ir
+            empty!(ir.cfg.blocks[2].succs)
+            filter!(!=(2), ir.cfg.blocks[3].preds)
+            ir.stmts.type[2] = Union{}
+        end,
+        # a φ edge from an unreachable block
+        make_ircode(Any[GotoNode(3), GotoNode(3), PhiNode(Int32[1, 2], Any[1, 2]),
+            ReturnNode(SSAValue(3))]; verify=false),
+        # globals that are only tested for definedness, and a GC preserve token
+        make_ircode(Any[Expr(:isdefined, GlobalRef(Main, :undefined_global_verify_ir)),
+            Expr(:throw_undef_if_not, GlobalRef(Main, :undefined_global_verify_ir), SSAValue(1)),
+            Expr(:gc_preserve_begin), Expr(:gc_preserve_end, SSAValue(3)), ReturnNode(1)];
+            verify=false),
+        # a constant of a top module, as lowering emits it
+        make_ircode(Any[tuple_call(GlobalRef(Base, :pi)), ReturnNode(1)]),
+        # a use of a node that is still pending insertion
+        modified(make_ircode(Any[tuple_call(), tuple_call(), ReturnNode(1)])) do ir
+            new = Compiler.insert_node!(ir, 2, Compiler.NewInstruction(tuple_call(), Any))
+            ir.stmts.stmt[2] = tuple_call(new)
+        end,
+    ]
+    for ir in cases
+        @test Compiler.verify_ir(ir) === nothing
+    end
+end
+
 # Issue #29107
 let code = Any[
         # Block 1
@@ -399,6 +566,114 @@ let cfg = CFG(BasicBlock[
     Compiler.cfg_insert_edge!(cfg, 1, 3)
     Compiler.domtree_insert_edge!(domtree, cfg.blocks, 1, 3)
     @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
+end
+
+function cfg_from_succs(succs::Vector{Vector{Int}})
+    preds = [Int[] for _ in succs]
+    for (from, bb_succs) in pairs(succs), to in bb_succs
+        push!(preds[to], from)
+    end
+    return CFG(BasicBlock[make_bb(preds[bb], succs[bb]) for bb in eachindex(succs)], Int[])
+end
+function same_as_fresh_domtree(domtree, blocks::Vector{BasicBlock})
+    fresh = Compiler.construct_domtree(blocks)
+    domtree.idoms_bb == fresh.idoms_bb == Compiler.naive_idoms(blocks) || return false
+    for bb in eachindex(blocks)
+        Compiler.bb_unreachable(fresh, bb) && continue
+        domtree.nodes[bb].level == fresh.nodes[bb].level || return false
+        sort(domtree.nodes[bb].children) == sort(fresh.nodes[bb].children) || return false
+    end
+    return true
+end
+
+# Test that toggling any edge of a small CFG twice, updating the dominator tree
+# incrementally each time, matches recomputing the tree
+let graphs = [
+        [[3, 2], [5], [4], [6], Int[], [5, 3]],
+        [[2, 3], [4, 5], [4], [5], Int[]],
+        [[2], [3, 4], [2], Int[], [4]], # block 5 is unreachable
+        [[5, 6], Int[], [3], [2], [4, 2], [2, 5]],
+    ]
+    failures = Tuple{Vector{Vector{Int}},Int,Int}[]
+    for succs in graphs
+        cfg = cfg_from_succs(succs)
+        domtree = Compiler.construct_domtree(cfg)
+        for from in eachindex(succs), to in 2:length(succs), _ in 1:2
+            if to in cfg.blocks[from].succs
+                Compiler.cfg_delete_edge!(cfg, from, to)
+                Compiler.domtree_delete_edge!(domtree, cfg.blocks, from, to)
+            else
+                Compiler.cfg_insert_edge!(cfg, from, to)
+                Compiler.domtree_insert_edge!(domtree, cfg.blocks, from, to)
+            end
+            same_as_fresh_domtree(domtree, cfg.blocks) || push!(failures, (succs, from, to))
+        end
+    end
+    @test isempty(failures)
+end
+
+# Test a CFG large enough for path compression to use its worklist
+let n = 40
+    succs = [bb < n ? [bb + 1] : [2] for bb in 1:n]
+    push!(succs[10], 30)
+    push!(succs[25], 5)
+    cfg = cfg_from_succs(succs)
+    domtree = Compiler.construct_domtree(cfg)
+    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks)
+    Compiler.cfg_delete_edge!(cfg, 25, 5)
+    Compiler.domtree_delete_edge!(domtree, cfg.blocks, 25, 5)
+    @test same_as_fresh_domtree(domtree, cfg.blocks)
+end
+
+# Test dominator queries on the CFG of the dynamic update test above
+let cfg = cfg_from_succs([[3, 2], [5], [4], [6], Int[], [5, 3]])
+    domtree = Compiler.construct_domtree(cfg)
+    @test Compiler.nearest_common_dominator(domtree, 4, 6) == 4
+    @test Compiler.nearest_common_dominator(domtree, 6, 4) == 4
+    @test Compiler.nearest_common_dominator(domtree, 2, 6) == 1
+    @test Compiler.nearest_common_dominator(domtree, 5, 5) == 5
+    @test Compiler.nearest_common_dominator(domtree, 0, 3) == 0
+    @test Compiler.nearest_common_dominator(domtree, 3, 0) == 0
+    postdomtree = Compiler.construct_postdomtree(cfg)
+    @test Compiler.nearest_common_dominator(postdomtree, 3, 6) == 6
+    @test Compiler.nearest_common_dominator(postdomtree, 2, 3) == 5
+    function dominated_blocks(root)
+        bbs = Int[]
+        for bb in Compiler.dominated(domtree, root)
+            push!(bbs, bb)
+        end
+        return sort!(bbs)
+    end
+    @test dominated_blocks(1) == 1:6
+    @test dominated_blocks(2) == [2]
+    @test dominated_blocks(3) == [3, 4, 6]
+end
+
+# Test that renaming the blocks of a dominator tree, and dropping an unreachable
+# one, gives the tree of the renamed CFG
+let succs = [[3, 2], [5], [4], [6], Int[], [5, 3], [6]],
+    rename = [1, 6, 2, 5, 4, 3, -1]
+    domtree = Compiler.construct_domtree(cfg_from_succs(succs))
+    renamed_succs = Vector{Vector{Int}}(undef, 6)
+    for (old, new) in pairs(rename)
+        new == -1 || (renamed_succs[new] = rename[succs[old]])
+    end
+    renamed = cfg_from_succs(renamed_succs)
+    Compiler.rename_nodes!(domtree, rename)
+    fresh = Compiler.construct_domtree(renamed)
+    @test domtree.idoms_bb == [0, 1, 5, 1, 2, 1]
+    @test same_as_fresh_domtree(domtree, renamed.blocks)
+    @test domtree.dfs_tree.to_pre == fresh.dfs_tree.to_pre
+    @test domtree.dfs_tree.to_post == fresh.dfs_tree.to_post
+end
+
+# Test that copies of a DFS tree are equal to it but share no storage with it
+let dfs = Compiler.construct_domtree(cfg_from_succs([[3, 2], [5], [4], [6], Int[], [5, 3]])).dfs_tree
+    fields(d) = (d.to_pre, d.from_pre, d.to_post, d.from_post, d.to_parent_pre)
+    for dfs′ in (Compiler.copy(dfs), Compiler.copy!(Compiler.DFSTree(0), dfs))
+        @test fields(dfs′) == fields(dfs)
+        @test !any(map(===, fields(dfs′), fields(dfs)))
+    end
 end
 
 # Issue #41975 - SSA conversion drops type check
