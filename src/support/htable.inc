@@ -93,6 +93,7 @@ static void **HTNAME##_lookup_bp_r_impl(htable_t *h, void *key,         \
         else                                                            \
             newsz = sz<<2;                                              \
         /*printf("trying to allocate %d words.\n", newsz); fflush(stdout);*/ \
+        assert(newsz >= HT_N_INLINE);                                   \
         tab = (void**)LLT_ALLOC(newsz*sizeof(void*));                   \
         if (tab == NULL)                                                \
             return NULL;                                                \

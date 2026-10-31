@@ -14,9 +14,6 @@ static void write_float64(ios_t *s, double x) JL_NOTSAFEPOINT
 // to look in the cache for it
 int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeof_sysimg)
 {
-    //if (jl_object_in_image(t))
-    //    return 0; // fast-path for rejection
-    assert(ptrhash_get(news, (void*)t) != (void*)t);
     if (ptrhash_has(news, (void*)t) || ptrhash_has(news, (void*)jl_typeof(t)))
         return 1;
     if (!(image_base < (char*)t && (char*)t <= image_base + sizeof_sysimg))
@@ -51,17 +48,10 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
         assert(jl_astaggedvalue(dt->name)->bits.in_image && "type_in_worklist mistake?");
         jl_datatype_t *super = dt->super;
         // fast-path: check if super is in news, since then we must be new also
-        // (it is also possible that super is indeterminate or NULL right now,
-        // waiting for `t` to be resolved, then will be determined later as
-        // soon as possible afterwards).
+        // (super is NULL while it refers to a placeholder that is not resolved yet)
         while (super != NULL && super != jl_any_type) {
-            void *entry = ptrhash_get(news, (void*)super);
-            if (entry != HT_NOTFOUND) {
-                if (entry != (void*)super)
-                    return 1;
-                // A self-mapping marks an unresolved forward reference.
-                break;
-            }
+            if (ptrhash_has(news, (void*)super))
+                return 1;
             if (!(image_base < (char*)super && (char*)super <= image_base + sizeof_sysimg))
                break; // the rest must all be non-new
             // otherwise super might be something that was not cached even though a later supertype might be
@@ -672,22 +662,15 @@ JL_DLLEXPORT uint8_t jl_match_cache_flags_current(uint8_t flags)
     return jl_match_cache_flags(jl_cache_flags(), flags);
 }
 
-// return char* from String field in Base.GIT_VERSION_INFO
-static const char *git_info_string(const char *fld) JL_CANSAFEPOINT
-{
-    static jl_value_t *GIT_VERSION_INFO = NULL;
-    if (!GIT_VERSION_INFO)
-        GIT_VERSION_INFO = jl_get_global(jl_base_module, jl_symbol("GIT_VERSION_INFO"));
-    jl_value_t *f = jl_get_field(GIT_VERSION_INFO, fld);
-    assert(jl_is_string(f));
-    return jl_string_data(f);
-}
+// Base.GIT_VERSION_INFO.commit, which package images must have been built with.  It is read
+// once the system image is restored, so that reading a header never reaches a safepoint.
+static const char *jl_git_commit = NULL;
 
-static const char *jl_git_commit(void) JL_CANSAFEPOINT
+static void jl_init_git_commit(void) JL_CANSAFEPOINT
 {
-    static const char *commit = NULL;
-    if (!commit) commit = git_info_string("commit");
-    return commit;
+    jl_value_t *info = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("GIT_VERSION_INFO")) : NULL;
+    if (info) // absent from the bootstrap images, which no package image is built against
+        jl_git_commit = jl_string_data(jl_get_field(info, "commit"));
 }
 
 
@@ -696,8 +679,22 @@ static const int JI_FORMAT_VERSION = 18;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 
+typedef struct {
+    uint64_t offset, size;
+} jl_image_section_t;
+
+// The section table at the end of the header (see doc/src/devdocs/sysimg.md)
+typedef struct {
+    uint64_t heap_size;              // the heap starts at the header's payload_start
+    uint64_t pointer_free_offset;    // a heap offset
+    jl_image_section_t specials, gvars;
+    uint64_t gvar_objects;
+    jl_image_section_t imports, binds, slides, fixup_types, fixup_objs, placeholders, strtab, fptrs;
+    uint64_t world, typeinf_world, gensym_counter;
+} jl_image_sections_t;
+
 // The header has a fixed size, with every field at a fixed offset, so that the loader can
-// find the preferred base address before mapping the image (see jl_image_preferred_base)
+// read it before the rest of the image
 #define JI_FORMAT_VERSION_OFFSET 8
 #define JI_BOM_OFFSET 10
 #define JI_POINTER_SIZE_OFFSET 12
@@ -706,9 +703,11 @@ static const uint16_t BOM = 0xFEFF; // byte-order marker
 #define JI_COMPAT_OFFSET 24
 #define JI_COMPAT_SIZE 128
 #define JI_PREFERRED_BASE_OFFSET 152
-#define JI_PAYLOAD_START_OFFSET 160
+#define JI_LOADER_START_OFFSET 160
 #define JI_PAYLOAD_END_OFFSET 168
-#define JI_HEADER_SIZE 176
+#define JI_PAYLOAD_START_OFFSET 176
+#define JI_SECTIONS_OFFSET 184
+#define JI_HEADER_SIZE (JI_SECTIONS_OFFSET + sizeof(jl_image_sections_t))
 
 // This .ji is for an incremental image and not a system image.
 static const uint32_t JI_FLAG_PKGIMAGE = 1 << 0;
@@ -717,19 +716,20 @@ static const uint32_t JI_FLAG_SPLIT = 1 << 1;
 
 // The strings an image must have been built with to be loaded by this Julia, separated by `;`
 // and padded with NUL.  Returns 0 if they do not fit.
-static int jl_image_compat(char compat[JI_COMPAT_SIZE], uint32_t flags) JL_CANSAFEPOINT
+static int jl_image_compat(char compat[JI_COMPAT_SIZE], uint32_t flags) JL_NOTSAFEPOINT
 {
+    assert(!(flags & JI_FLAG_PKGIMAGE) || jl_git_commit);
     memset(compat, 0, JI_COMPAT_SIZE);
     int n = snprintf(compat, JI_COMPAT_SIZE, "%s;%s;%s;%s%s%s", JL_BUILD_UNAME, JL_BUILD_ARCH,
                      JULIA_VERSION_STRING, jl_gc_image_abi(),
                      (flags & JI_FLAG_PKGIMAGE) ? ";" : "",
-                     (flags & JI_FLAG_PKGIMAGE) ? jl_git_commit() : "");
+                     (flags & JI_FLAG_PKGIMAGE) ? jl_git_commit : "");
     return n >= 0 && n < JI_COMPAT_SIZE;
 }
 
-// Write the header, leaving the checksum and payload bounds to be filled in once the payload
-// has been written
-static void write_header(ios_t *s, uint64_t preferred_base, uint32_t flags) JL_CANSAFEPOINT
+// Write the header, leaving the checksum, the preferred base and the payload bounds to be filled
+// in once the payload has been written
+static void write_header(ios_t *s, uint32_t flags) JL_CANSAFEPOINT
 {
     char compat[JI_COMPAT_SIZE];
     if (!jl_image_compat(compat, flags))
@@ -744,9 +744,12 @@ static void write_header(ios_t *s, uint64_t preferred_base, uint32_t flags) JL_C
     write_uint32(s, flags);
     write_uint32(s, 0); // checksum of the payload (build_id.hi)
     ios_write(s, compat, JI_COMPAT_SIZE);
-    write_uint64(s, preferred_base);
-    write_uint64(s, 0); // datastartpos
-    write_uint64(s, 0); // dataendpos
+    write_uint64(s, 0); // preferred_base
+    write_uint64(s, 0); // loader_start
+    write_uint64(s, 0); // payload_end
+    write_uint64(s, 0); // payload_start
+    jl_image_sections_t h = {0};
+    ios_write(s, (char*)&h, sizeof(h));
     assert(ios_pos(s) == JI_HEADER_SIZE);
 }
 
@@ -1031,7 +1034,7 @@ static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *depmods) JL_CANSAF
 }
 
 // Read and check the header, leaving `s` just past it
-JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint32_t *checksum, int64_t *dataendpos, int64_t *datastartpos, uint64_t *preferred_base) JL_CANSAFEPOINT
+JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint32_t *checksum, int64_t *payload_end, int64_t *loader_start, uint64_t *preferred_base, int64_t *payload_start) JL_NOTSAFEPOINT
 {
     char header[JI_HEADER_SIZE];
     if (ios_readall(s, header, JI_HEADER_SIZE) != JI_HEADER_SIZE)
@@ -1049,11 +1052,13 @@ JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint32_t *chec
         return -1;
     memcpy(checksum, header + JI_CHECKSUM_OFFSET, sizeof(*checksum));
     memcpy(preferred_base, header + JI_PREFERRED_BASE_OFFSET, sizeof(*preferred_base));
-    uint64_t start, end;
-    memcpy(&start, header + JI_PAYLOAD_START_OFFSET, sizeof(start));
+    uint64_t start, end, heap;
+    memcpy(&start, header + JI_LOADER_START_OFFSET, sizeof(start));
     memcpy(&end, header + JI_PAYLOAD_END_OFFSET, sizeof(end));
-    *datastartpos = (int64_t)start;
-    *dataendpos = (int64_t)end;
+    memcpy(&heap, header + JI_PAYLOAD_START_OFFSET, sizeof(heap));
+    *loader_start = (int64_t)start;
+    *payload_end = (int64_t)end;
+    *payload_start = (int64_t)heap;
     return 0;
 }
 

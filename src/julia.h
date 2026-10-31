@@ -2476,7 +2476,6 @@ typedef enum {
     JL_IMAGE_KIND_SO,
 } jl_image_kind_t;
 
-// A loaded, but unparsed .ji or .so image file
 typedef struct {
     jl_image_kind_t kind;
     const void *pointers; // jl_image_pointers_t *
@@ -2486,6 +2485,13 @@ typedef struct {
     uint32_t heap_checksum;
     bool_t is_split;
     const void *coverage; // jl_image_coverage_t *, if built with coverage counters
+    const char *heap;     // NULL if the .ji header failed verification
+    size_t heap_size;
+    uint32_t flags;
+    uint32_t checksum;
+    uint64_t preferred_base;
+    int64_t loader_start;
+    int64_t payload_start;
 } jl_image_buf_t;
 
 struct _jl_image_t;
