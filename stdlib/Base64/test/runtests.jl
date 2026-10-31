@@ -65,6 +65,11 @@ const longDecodedText = "name = \"Genie\"\nuuid = \"c43c736e-a2d1-11e8-161f-af95
     @test !isreadable(pipe) && !iswritable(pipe)
     @test isempty(read(pipe))
 
+    # readbytes! into an empty buffer grows it
+    data = UInt8[]
+    @test readbytes!(Base64DecodePipe(IOBuffer("SGVsbG8h")), data, 3) == 3
+    @test data == codeunits("Hel")
+
 
     # Encode to string and decode
     @test String(base64decode(base64encode(inputText))) == inputText
