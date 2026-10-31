@@ -51,6 +51,9 @@ Standard library changes
 
 #### REPL
 
+* Tab completion of keys after `x[` now works for any type with a `haskey` method, such as `NamedTuple`
+  and `RegexMatch`, not only `AbstractDict` ([#63457]).
+
 #### SharedArrays
 
 #### Sockets
