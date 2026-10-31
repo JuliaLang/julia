@@ -708,11 +708,14 @@ function searchhistory(interact::Function, entries::Vector{HistEntry};
     term = REPL.Terminals.TTYTerminal("dumb", input.out, IOContext(output.in, :displaysize => size), devnull)
     hist = HistoryFile()
     append!(hist.records, entries)
-    # Some escape codes go to the process output rather than to the terminal
-    search = @async redirect_stdout(() -> runsearch(hist, term, "", props), devnull)
+    search = @async runsearch(hist, term, "", props)
     shown = IOBuffer()
-    interact(keys -> write(input.in, keys),
-             text -> write(shown, readuntil(output.out, text, keep = true)))
+    function waitfor(text)
+        got = readuntil(output.out, text, keep = true)
+        write(shown, got)
+        endswith(got, text) || error("output ended before $(repr(text)) was displayed")
+    end
+    interact(keys -> write(input.in, keys), waitfor)
     result = fetch(search)
     close(output.in)
     close(input.in)
@@ -742,6 +745,15 @@ searchhistory(entries::Vector{HistEntry}, keys::String; kwargs...) =
         result, shown = searchhistory(entries, "\f\r")
         @test occursin("\e[H\e[2J", shown)
         @test result.text == "ls bar"
+        # Everything is drawn on the search terminal, not on the process output
+        mktemp() do path, io
+            redirect_stdout(io) do
+                searchhistory(entries, "\r")
+                searchhistory(entries, "\x19")
+            end
+            close(io)
+            @test read(path, String) == ""
+        end
     end
     @testset "Aborting" begin
         for keys in ("\x03", "\x04", "\a", "\e\e", "\e[A\t\x03")
