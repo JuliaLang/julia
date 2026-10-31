@@ -5,12 +5,10 @@ astr = "Hello, world.\n"
 u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 
 @testset "BoundsError for findnext/findprev" begin
-    # I think these should give error on 4 also, and "" is not treated
-    # consistently with SubString("",1,1), nor with Char[]
     for ind in (0, 5)
-        @test_throws BoundsError findnext(SubString("",1,1), "foo", ind)
-        @test_throws BoundsError findprev(SubString("",1,1), "foo", ind)
+        @test_throws BoundsError findnext(SubString("", 1, 0), "foo", ind)
     end
+    @test_throws BoundsError findprev(SubString("", 1, 0), "foo", 5)
 
     # Note: the commented out test will be enabled after fixes to make
     # sure that findnext/findprev are consistent
@@ -259,6 +257,14 @@ end
         @test findprev("", u8str, i) == i:i-1
     end
     @test findlast("", "") === 1:0
+    for s in (astr, u8str, GenericString(u8str))
+        n = ncodeunits(s)
+        @test findprev("", s, 0) === 1:0
+        @test findprev("", s, n + 1) === n+1:n
+        @test_throws BoundsError findprev("", s, n + 2)
+        @test_throws BoundsError findprev("", s, -1)
+    end
+    @test findlast("", GenericString("")) === 1:0
 end
 
 @testset "string forward search with a zero-char regex" begin
@@ -566,4 +572,48 @@ for T = (UInt, BigInt)
         @test findnext(isletter, astr, T(x)) isa Int
         @test findprev(isletter, astr, T(x)) isa Int
     end
+end
+
+# Substring search on string types other than String and SubString{String}
+@testset "generic string search" begin
+    u = "abxyαβxy"
+    for (s, t) in ((GenericString(u), identity), (u, GenericString))
+        @test findfirst(t("xy"), s) == 3:4
+        @test findnext(t("xy"), s, 4) == 9:10
+        @test findnext(t("y"), s, 10) == 10:10
+        @test findnext(t("αβ"), s, 1) == 5:7
+        @test findnext(t("zz"), s, 1) === nothing
+        @test findnext(t("xyz"), s, 9) === nothing
+        @test findnext(t("yα"), s, 1) == 4:5
+        @test findlast(t("xy"), s) == 9:10
+        @test findprev(t("xy"), s, 9) == 3:4
+        @test findprev(t("xy"), s, 3) === nothing
+        @test findprev(t("ab"), s, 2) == 1:2
+        @test findprev(t("ab"), s, 1) === nothing
+        @test findprev(t("abx"), s, 10) == 1:3
+        @test findprev(t("a"), s, 10) == 1:1
+        @test findprev(t("αβ"), s, 10) == 5:7
+        @test findprev(t("zz"), s, 10) === nothing
+        @test findall(t("xy"), s) == [3:4, 9:10]
+        @test findfirst(t(""), s) === 1:0
+        @test findnext(t(""), s, 11) === 11:10
+        @test findprev(t(""), s, 1) === 1:0
+        @test findprev(t(""), s, 10) === 10:9
+    end
+    @test findall(GenericString("aa"), "aaaa"; overlap=true) == [1:2, 2:3, 3:4]
+    let s = GenericString(u)
+        @test_throws BoundsError findnext("", s, 0)
+        @test_throws BoundsError findnext("", s, 12)
+        @test_throws StringIndexError findnext("βx", s, 6)
+        @test_throws StringIndexError findnext("βx", u, 6)
+        @test_throws StringIndexError findnext("βx", SubString(u, 1), 6)
+    end
+end
+
+@testset "byte vector backward search with an empty needle" begin
+    @test findprev(UInt8[], b"abc", 0) == 1:0
+    @test findprev(UInt8[], b"abc", 2) == 2:1
+    @test findprev(UInt8[], b"abc", 4) == 4:3
+    @test_throws BoundsError findprev(UInt8[], b"abc", 5)
+    @test_throws BoundsError findprev(UInt8[], b"abc", -1)
 end
