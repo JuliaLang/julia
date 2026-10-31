@@ -588,6 +588,8 @@ dest = OffsetArray(Matrix{Int}(undef, 4,4), (-1,1))
 circcopy!(dest, src)
 @test parent(dest) == [8 12 16 4; 5 9 13 1; 6 10 14 2; 7 11 15 3]
 @test dest[1:3,2:4] == src[1:3,2:4]
+dest = OffsetArray(zeros(Int, 2, 0), (1, 0))
+@test circcopy!(dest, zeros(Int, 2, 0)) === dest
 
 # reshape
 A = OffsetArray(rand(4,4), (-3,5))

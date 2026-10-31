@@ -1343,6 +1343,7 @@ function circcopy!(dest, src)
     if (szsrc = map(length, indssrc)) != (szdest = map(length, indsdest))
         throw(DimensionMismatch("src and dest must have the same sizes (got $szsrc and $szdest)"))
     end
+    isempty(src) && return dest
     shift = map((isrc, idest)->first(isrc)-first(idest), indssrc, indsdest)
     all(x->x==0, shift) && return copyto!(dest, src)
     _circcopy!(dest, (), indsdest, src, (), indssrc)
