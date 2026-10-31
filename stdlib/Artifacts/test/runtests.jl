@@ -341,6 +341,14 @@ end
     @test artifacts["socrates"]["git-tree-sha1"] == "43563e7631a7eafae1f9f8d9d332e3de44ad7239"
 
     @test select_downloadable_artifacts(joinpath(@__DIR__, "nonexistent.toml")) == Dict{String,Any}()
+
+    artifacts_toml = SubString(joinpath(@__DIR__, "Artifacts.toml"), 1)
+    artifacts = select_downloadable_artifacts(artifacts_toml; platform=armv7l_linux, include_lazy=true)
+    @test sort(collect(keys(artifacts))) == ["HelloWorldC", "socrates"]
+    @test artifacts["HelloWorldC"]["git-tree-sha1"] == "0a8e7b523ef6be31311aefe9983a488616e58201"
+    artifact_dict = Artifacts.load_artifacts_toml(artifacts_toml)
+    artifacts = select_downloadable_artifacts(artifact_dict, artifacts_toml; platform=armv7l_linux, include_lazy=true)
+    @test sort(collect(keys(artifacts))) == ["HelloWorldC", "socrates"]
 end
 
 @testset "artifact_meta()" begin

@@ -762,9 +762,9 @@ artifact_meta(name::AbstractString, artifact_dict::Dict, artifacts_toml::Abstrac
 artifact_hash(name::AbstractString, artifacts_toml::AbstractString; kwargs...) =
     artifact_hash(String(name)::String, String(artifacts_toml)::String; kwargs...)
 select_downloadable_artifacts(artifact_dict::Dict, artifacts_toml::AbstractString; kwargs...) =
-    select_downloadable_artifacts(artifact_dict, String(artifacts_toml)::String, kwargs...)
+    select_downloadable_artifacts(artifact_dict, String(artifacts_toml)::String; kwargs...)
 select_downloadable_artifacts(artifacts_toml::AbstractString; kwargs...) =
-    select_downloadable_artifacts(String(artifacts_toml)::String, kwargs...)
+    select_downloadable_artifacts(String(artifacts_toml)::String; kwargs...)
 find_artifacts_toml(path::AbstractString) =
     find_artifacts_toml(String(path)::String)
 split_artifact_slash(name::AbstractString) =
