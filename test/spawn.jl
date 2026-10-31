@@ -679,6 +679,10 @@ mktempdir() do dir
     run(`$echocmd '2' > $outfile`)
     @test read(outfile, String) == "2\n"
 
+    # Empty quoted word directly before > is still an argument
+    @test (`$echocmd ''>$devnull`).cmd == `$echocmd ''`
+    @test (`$echocmd ""> $devnull`).cmd == `$echocmd ""`
+
     # simple commands still return Cmd (not wrapped in pipeline)
     @test `$echocmd hello` isa Cmd
     @test Meta.isexpr(Base.shell_parse("echo hello")[1], :tuple)
