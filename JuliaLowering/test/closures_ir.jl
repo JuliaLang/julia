@@ -495,6 +495,18 @@ end
 17  (return %₁₆)
 
 ########################################
+# Error: Anonymous function syntax with `function` and a return type
+function (x)::Int
+    x*x
+end
+#---------------------
+LoweringError:
+function (x)::Int
+#        └─┘ ── expected `call` expression
+    x*x
+end
+
+########################################
 # `do` blocks
 f(x; a=1) do y
     y + 2
