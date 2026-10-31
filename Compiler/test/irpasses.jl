@@ -2087,7 +2087,7 @@ let code = Any[
         # block 1
         GotoNode(4), # skip
         # block 2
-        Expr(:leave, SSAValue(1)), # not domsorted - make sure we move it correctly
+        Expr(:leave, SSAValue(4)), # not domsorted - make sure we move it correctly
         # block 3
         ReturnNode(2),
         # block 4
@@ -2095,7 +2095,7 @@ let code = Any[
         # block 5
         GotoIfNot(Argument(1), 2),
         # block 6
-        Expr(:leave, SSAValue(1)),
+        Expr(:leave, SSAValue(4)),
         # block 7
         ReturnNode(1),
         # block 8

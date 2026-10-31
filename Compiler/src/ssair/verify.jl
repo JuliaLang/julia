@@ -19,8 +19,10 @@ if !isdefined(@__MODULE__, Symbol("@verify_error"))
         pushfirst!(arg.args, :println)
         arg.head = :call
         return esc(quote
-            $arg
-            maybe_show_ir(ir)
+            if print
+                $arg
+                maybe_show_ir(ir)
+            end
         end)
     end
 end
@@ -47,7 +49,10 @@ is_value_pos_expr_head(head::Symbol) = head === :static_parameter
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, printed_use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int,
     allow_frontend_forms::Bool, @nospecialize(raise_error))
     if isa(op, SSAValue)
-        op.id > 0 || @verify_error "Def ($(op.id)) is invalid in final IR"
+        if op.id <= 0
+            @verify_error "Def ($(op.id)) is invalid in final IR"
+            raise_error()
+        end
         if op.id > length(ir.stmts)
             if op.id - length(ir.stmts) > length(ir.new_nodes.info)
                 @verify_error "Def ($(op.id)) points to non-existent new node"
@@ -59,7 +64,10 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
         end
         if (def_bb == use_bb)
             if op.id > length(ir.stmts)
-                @assert ir.new_nodes.info[op.id - length(ir.stmts)].pos <= use_idx
+                if ir.new_nodes.info[op.id - length(ir.stmts)].pos > use_idx
+                    @verify_error "Def ($(op.id)) does not dominate use ($(use_idx)) in same BB"
+                    raise_error()
+                end
             else
                 if op.id >= use_idx
                     @verify_error "Def ($(op.id)) does not dominate use ($(use_idx)) in same BB"
@@ -259,7 +267,6 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 raise_error()
             end
         elseif isa(terminator, EnterNode)
-            @label enter_check
             if length(block.succs) == 1
                 if terminator.catch_dest != 0
                     @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
@@ -271,16 +278,6 @@ function verify_ir(ir::IRCode, print::Bool=true,
             end
         else
             if length(block.succs) != 1 || block.succs[1] != idx + 1
-                # As a special case, we allow extra statements in the BB of an :enter
-                # statement, until we can do proper CFG manipulations during compaction.
-                for stmt_idx in first(block.stmts):last(block.stmts)
-                    stmt = ir[SSAValue(stmt_idx)][:stmt]
-                    if isa(stmt, EnterNode)
-                        terminator = stmt
-                        @goto enter_check
-                    end
-                    isa(stmt, PhiNode) || break
-                end
                 termidx = last(block.stmts)
                 stmttyp = ir.stmts[termidx][:type]
                 if isempty(block.succs) && stmttyp == Union{}
@@ -393,6 +390,25 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 @verify_error "Explicit terminators (other than ReturnNode) must have `Any` type"
                 raise_error()
             end
+            if isexpr(stmt, :leave)
+                for i in 1:length(stmt.args)
+                    arg = stmt.args[i]
+                    if !isa(arg, Union{Nothing, SSAValue})
+                        @verify_error "Malformed :leave - Expected `Nothing` or SSAValue"
+                        raise_error()
+                    elseif isa(arg, SSAValue)
+                        enter_stmt = ir[arg::SSAValue][:stmt]
+                        if !isa(enter_stmt, Nothing) && !isa(enter_stmt, EnterNode)
+                            @verify_error "Malformed :leave - argument ssavalue should point to `nothing` or :enter"
+                            raise_error()
+                        end
+                    end
+                end
+            end
+            for op in userefs(stmt)
+                check_op(ir, domtree, op[], bb, idx, idx, print, false, 0,
+                    allow_frontend_forms, raise_error)
+            end
         else
             isforeigncall = false
             if isa(stmt, Expr)
@@ -433,20 +449,6 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     continue
                 elseif stmt.head === :foreigncall || stmt.head === :foreignglobal
                     isforeigncall = true
-                elseif stmt.head === :leave
-                    for i in 1:length(stmt.args)
-                        arg = stmt.args[i]
-                        if !isa(arg, Union{Nothing, SSAValue})
-                            @verify_error "Malformed :leave - Expected `Nothing` or SSAValue"
-                            raise_error()
-                        elseif isa(arg, SSAValue)
-                            enter_stmt = ir[arg::SSAValue][:stmt]
-                            if !isa(enter_stmt, Nothing) && !isa(enter_stmt, EnterNode)
-                                @verify_error "Malformed :leave - argument ssavalue should point to `nothing` or :enter"
-                                raise_error()
-                            end
-                        end
-                    end
                 end
             end
             n = 1
