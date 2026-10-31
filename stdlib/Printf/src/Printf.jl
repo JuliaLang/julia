@@ -706,13 +706,19 @@ function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
     end
     n, pt, neg = isf ? fix_dec(arg, prec, buf2) : ini_dec(arg, min(prec + ise, length(buf2) - 1), buf2)
     if isg && !hash
-        while buf2[n] == UInt8('0')
+        while n > 1 && buf2[n] == UInt8('0')
             n -= 1
         end
     end
     expform = ise || (isg && !(-4 < pt <= prec))
-    n2 = n + (expform ? 4 : 0) + (prec > 0 || hash) + (neg || (plus | space)) +
-        (isf && pt >= n ? prec + 1 : 0)
+    expdigits = expform ? max(ndigits(pt - 1), 2) : 0
+    # For `%g` the precision counts significant digits, and the integer part has used some of them
+    nzeros = isf ? prec : max(prec - pt, 0)
+    n2 = (neg || (plus | space)) + (
+        expform ? n + (n > 1 || hash) + 2 + expdigits :
+        pt <= 0 ? n + 2 - pt :
+        pt >= n ? pt + (hash || (isf && prec > 0) ? nzeros + 1 : 0) :
+        n + 1)
     if !leftalign && !zero && n2 < width
         # pad left w/ spaces
         for _ = 1:(width - n2)
@@ -750,15 +756,11 @@ function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
         buf[pos] = exp < 0 ? UInt8('-') : UInt8('+')
         pos += 1
         exp = abs(exp)
-        if exp < 10
-            buf[pos] = UInt8('0')
-            buf[pos + 1] = 48 + exp
-            pos += 2
-        else
-            buf[pos] = 48 + div(exp, 10)
-            buf[pos + 1] = 48 + rem(exp, 10)
-            pos += 2
+        for i = expdigits-1:-1:0
+            buf[pos + i] = 48 + rem(exp, 10)
+            exp = div(exp, 10)
         end
+        pos += expdigits
     elseif pt <= 0
         buf[pos] = UInt8('0')
         buf[pos + 1] = UInt8('.')
@@ -785,10 +787,9 @@ function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
         if hash || (isf && prec > 0)
             buf[pos] = UInt8('.')
             pos += 1
-            while prec > 0
+            for _ = 1:nzeros
                 buf[pos] = UInt8('0')
                 pos += 1
-                prec -= 1
             end
         end
     else
