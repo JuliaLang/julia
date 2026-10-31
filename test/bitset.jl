@@ -104,6 +104,9 @@ end
     # issue #23557 :
     @test_throws MethodError symdiff!(BitSet([1]), ['a']) # should not stack-overflow
     @test_throws MethodError symdiff!(BitSet([1, 2]),  [[1]]) # should not return BitSet([2])
+
+    @test symdiff!(BitSet([1]), [2, 2]) == BitSet([1, 2])
+    @test symdiff(BitSet([1]), [2, 2], [3, 3]) == BitSet([1, 2, 3])
 end
 
 @testset "copy, copy!, empty" begin
