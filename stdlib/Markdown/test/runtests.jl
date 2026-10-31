@@ -98,6 +98,10 @@ end
     md = Markdown.parse(text)
     @test text == Markdown.plain(md)
 
+    md = Markdown.parse("a ` ` b")
+    @test md == MD(Paragraph(["a ", Code(""), " b"]))
+    @test Markdown.parse(Markdown.plain(md)) == md
+
     @test md"""
     ````julia
     foo()
@@ -245,6 +249,8 @@ end
     @test length(doc[2].items[2][2].items) === 2
     @test doc[2].items[2][2].items[1][1].content[1] == "three"
     @test doc[2].items[2][2].items[2][1].content[1] == "four"
+
+    @test Markdown.parse("12345678901234567890. item")[1] isa Markdown.Paragraph
 end
 
 @testset "Links" begin
@@ -1289,6 +1295,12 @@ end
             \end{itemize}
             """
     @test expected == Markdown.latex(md)
+end
+
+@testset "non-ASCII digits are not list markers" begin
+    for s in ("۱. item", "１. item", "۱) item")
+        @test typeof.(Markdown.parse(s)) == [Markdown.Paragraph]
+    end
 end
 
 @testset "issue 20225, check this can print" begin
