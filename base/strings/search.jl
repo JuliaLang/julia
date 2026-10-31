@@ -709,7 +709,7 @@ function _rsearchindex(s::DenseUTF8String, t::DenseUTF8String, i::Integer)
     elseif lastindex(t) != 0
         j = i ≤ ncodeunits(s) ? nextind(s, i)-1 : i
         return _rsearchindex(codeunits(s), codeunits(t), j)
-    elseif i > sizeof(s) + 1
+    elseif i < 0 || i > sizeof(s) + 1
         throw(BoundsError(s, i))
     elseif i == 0
         return 1
