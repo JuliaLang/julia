@@ -283,3 +283,44 @@ end
 GC.enable(true); GC.gc(false) # incremental collection
 @test typeof(dims54422) == Vector{Any}
 @test isempty(dims54422)
+
+# A line longer than `jl_readuntil`'s 80-byte inline buffer is read into a libc-malloc'd
+# buffer that becomes a `Memory` owned by the GC. Converting that to a `String` must copy
+# rather than take ownership, since strings are freed with the GC's allocator.
+let line = repeat("JuliaLang is a GitHub organization.", 100)
+    mktemp() do path, io
+        write(io, line, "\n")
+        close(io)
+        @test readline(path) == line
+    end
+end
+
+GC.gc()
+
+# Buffers handed to the GC with `own=true` come from libc and may be empty.
+let
+    a = unsafe_wrap(Array, Ptr{Float64}(Libc.malloc(16)), 0; own=true)
+    b = unsafe_wrap(Array, Ptr{Nothing}(Libc.malloc(16)), 3; own=true)
+    @test isempty(a) && length(b) == 3
+    a = b = nothing
+    GC.gc()
+end
+
+# The GC must scan objects stored in libc-owned buffers, including with MMTk.
+let a = unsafe_wrap(Array, Ptr{Any}(Libc.calloc(1, sizeof(Ptr{Cvoid}))), 1; own=true)
+    for i in 1:3
+        a[1] = Ref(i)
+        GC.gc()
+        @test a[1][] == i
+    end
+end
+GC.gc()
+
+# `jl_malloc`/`jl_free` are installed as allocator hooks by C libraries (e.g. SuiteSparse)
+# that may already hold libc-allocated memory, so they must be interchangeable with libc.
+let p = Libc.malloc(16)
+    p = ccall(:jl_realloc, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), p, 4096)
+    ccall(:jl_free, Cvoid, (Ptr{Cvoid},), p)
+    Libc.free(ccall(:jl_malloc, Ptr{Cvoid}, (Csize_t,), 16))
+    @test true
+end

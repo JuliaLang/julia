@@ -214,7 +214,7 @@ int gc_disable_auto_full_sweep = 0; // when set, automatic full collections are 
 static int64_t live_bytes = 0;
 static int64_t promoted_bytes = 0;
 static int64_t last_live_bytes = 0; // live_bytes at last collection
-#ifdef __GLIBC__
+#if defined(__GLIBC__) || defined(MIMALLOC_ENABLED)
 // maxrss at last malloc_trim
 static int64_t last_trim_maxrss = 0;
 #endif
@@ -580,7 +580,7 @@ FORCE_INLINE size_t sweep_unlink_and_free_noaccount(bigval_t *v) JL_NOTSAFEPOINT
     memset(v, 0xbb, sz);
 #endif
     gc_invoke_callbacks(jl_gc_cb_notify_external_free_t, gc_cblist_notify_external_free, (v));
-    jl_free_aligned(v);
+    jl_free_aligned_wrapper(v);
     return sz;
 }
 
@@ -789,14 +789,22 @@ void jl_gc_reset_alloc_count(void)
 static size_t jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT
 {
     assert(jl_is_genericmemory(m));
-    assert(jl_genericmemory_how(m) == JL_GENERICMEMORY_GCMANAGED);
+    assert(jl_genericmemory_how(m) == JL_GENERICMEMORY_GCMANAGED ||
+           jl_genericmemory_how(m) == JL_GENERICMEMORY_LIBCALLOCATED);
     char *d = (char*)m->ptr;
-    size_t freed_bytes = memory_block_usable_size(d, isaligned);
-    assert(freed_bytes != 0);
-    if (isaligned)
-        jl_free_aligned(d);
-    else
+    size_t freed_bytes;
+    if (jl_genericmemory_how(m) == JL_GENERICMEMORY_LIBCALLOCATED) {
+        size_t elsz = ((jl_datatype_t*)jl_typetagof(m))->layout->size;
+        freed_bytes = m->length * elsz; // may be 0, e.g. `unsafe_wrap(Array, p, 0; own=true)`
         free(d);
+    } else {
+        freed_bytes = gc_managed_block_usable_size(d, isaligned);
+        assert(freed_bytes != 0);
+        if (isaligned)
+            jl_free_aligned_wrapper(d);
+        else
+            jl_free_wrapper(d);
+    }
     return freed_bytes;
 }
 
@@ -3798,13 +3806,17 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         }
     }
 
-#ifdef __GLIBC__
+#if defined(__GLIBC__) || defined(MIMALLOC_ENABLED)
     if (sweep_full) {
         // issue #30653
         // empirically, the malloc runaway seemed to occur within a growth gap
         // of about 20-25%
         if (jl_maxrss() > (last_trim_maxrss/4)*5) {
+#ifdef MIMALLOC_ENABLED
+            mi_collect(true);
+#else
             malloc_trim(0);
+#endif
             last_trim_maxrss = jl_maxrss();
         }
     }
@@ -4121,6 +4133,7 @@ void jl_parallel_gc_threadfun(void *arg)
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
     JL_GC_PROMISE_ROOTED(ct);
+    jl_gc_init_thread_malloc();
     (void)jl_atomic_fetch_add_relaxed(&n_threads_running, -1);
     // wait for all threads
     jl_gc_state_set(ptls, JL_GC_PARALLEL_COLLECTOR_THREAD, JL_GC_STATE_UNSAFE);
@@ -4162,6 +4175,7 @@ void jl_concurrent_gc_threadfun(void *arg)
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
     JL_GC_PROMISE_ROOTED(ct);
+    jl_gc_init_thread_malloc();
     (void)jl_atomic_fetch_add_relaxed(&n_threads_running, -1);
     // wait for all threads
     jl_gc_state_set(ptls, JL_GC_CONCURRENT_COLLECTOR_THREAD, JL_GC_STATE_UNSAFE);
@@ -4180,6 +4194,7 @@ void jl_concurrent_gc_threadfun(void *arg)
 // System-wide initializations
 void jl_gc_init(void)
 {
+    jl_gc_init_malloc();
     JL_MUTEX_INIT(&heapsnapshot_lock, "heapsnapshot_lock");
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
     JL_MUTEX_INIT(&image_remset_lock, "image_remset_lock");
@@ -4366,7 +4381,7 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
     if (b == NULL)
         jl_throw(jl_memory_exception);
 
-    size_t allocated_bytes = memory_block_usable_size(b, 1);
+    size_t allocated_bytes = gc_managed_block_usable_size(b, 1);
     assert(allocated_bytes >= allocsz);
     jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd,
         jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + allocated_bytes);

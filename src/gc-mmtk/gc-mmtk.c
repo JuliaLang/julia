@@ -76,6 +76,7 @@ static small_arraylist_t orphaned_weak_processing_list;
 static uv_mutex_t orphaned_weak_processing_lock;
 
 void jl_gc_init(void) {
+    jl_gc_init_malloc();
     // TODO: use jl_options.heap_size_hint to set MMTk's fixed heap size? (see issue: https://github.com/mmtk/mmtk-julia/issues/167)
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
 
@@ -790,14 +791,21 @@ static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPO
 {
     assert(jl_is_genericmemory(m));
     assert(jl_genericmemory_how(m) == JL_GENERICMEMORY_GCMANAGED ||
-           jl_genericmemory_how(m) == JL_GENERICMEMORY_MALLOCD);
+           jl_genericmemory_how(m) == JL_GENERICMEMORY_LIBCALLOCATED);
     char *d = (char*)m->ptr;
-    size_t freed_bytes = memory_block_usable_size(d, isaligned);
-    assert(freed_bytes != 0);
-    if (isaligned)
-        jl_free_aligned(d);
-    else
+    size_t freed_bytes;
+    if (jl_genericmemory_how(m) == JL_GENERICMEMORY_LIBCALLOCATED) {
+        size_t elsz = ((jl_datatype_t*)jl_typetagof(m))->layout->size;
+        freed_bytes = m->length * elsz; // may be 0, e.g. `unsafe_wrap(Array, p, 0; own=true)`
         free(d);
+    } else {
+        freed_bytes = gc_managed_block_usable_size(d, isaligned);
+        assert(freed_bytes != 0);
+        if (isaligned)
+            jl_free_aligned_wrapper(d);
+        else
+            jl_free_wrapper(d);
+    }
     gc_num.freed += freed_bytes;
     gc_num.freecall++;
 }
@@ -1052,19 +1060,10 @@ JL_DLLEXPORT void* jl_gc_get_owner_address_to_mmtk(void* m) {
     return (void*)jl_genericmemory_data_owner_field_addr(m);
 }
 
-// same as jl_genericmemory_how but with JL_DLLEXPORT
-// we should probably inline this in Rust
+// Export the shared ownership decoder for the Rust scanner.
 JL_DLLEXPORT size_t jl_gc_genericmemory_how(void *arg) JL_NOTSAFEPOINT
 {
-    jl_genericmemory_t* m = (jl_genericmemory_t*)arg;
-    if (m->ptr == (void*)((char*)m + 16)) // JL_SMALL_BYTE_ALIGNMENT (from julia_internal.h)
-        return JL_GENERICMEMORY_INLINED;
-    jl_value_t *owner = jl_genericmemory_data_owner_field(m);
-    if (owner == (jl_value_t*)m)
-        return JL_GENERICMEMORY_GCMANAGED;
-    if (owner == NULL)
-        return JL_GENERICMEMORY_MALLOCD;
-    return JL_GENERICMEMORY_STRINGOWNED;
+    return jl_genericmemory_how((jl_genericmemory_t*)arg);
 }
 
 // ========================================================================= //
